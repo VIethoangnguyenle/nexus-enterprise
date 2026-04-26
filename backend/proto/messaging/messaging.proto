@@ -1,0 +1,203 @@
+syntax = "proto3";
+
+package messaging;
+
+option go_package = "ngac-platform/proto/messaging";
+
+import "google/protobuf/timestamp.proto";
+
+service MessagingService {
+  // Channels
+  rpc CreateChannel(CreateChannelRequest) returns (Channel);
+  rpc ListChannels(ListChannelsRequest) returns (ChannelList);
+  rpc GetChannel(GetChannelRequest) returns (Channel);
+
+  // Channel members
+  rpc AddChannelMember(AddChannelMemberRequest) returns (Empty);
+  rpc RemoveChannelMember(RemoveChannelMemberRequest) returns (Empty);
+  rpc ListChannelMembers(ListChannelMembersRequest) returns (ChannelMemberList);
+
+  // Messages
+  rpc SendMessage(SendMessageRequest) returns (Message);
+  rpc GetMessages(GetMessagesRequest) returns (MessageList);
+
+  // Threads
+  rpc GetThread(GetThreadRequest) returns (MessageList);
+  rpc FindThreadsByEntity(FindThreadsByEntityRequest) returns (MessageList);
+
+  // DMs
+  rpc CreateDM(CreateDMRequest) returns (Channel);
+  rpc ListDMs(ListDMsRequest) returns (ChannelList);
+}
+
+// NotificationService manages user notifications across the platform.
+service NotificationService {
+  rpc ListNotifications(ListNotificationsRequest) returns (NotificationList);
+  rpc MarkRead(MarkReadRequest) returns (Empty);
+  rpc MarkAllRead(MarkAllReadRequest) returns (Empty);
+  rpc GetUnreadCount(GetUnreadCountRequest) returns (UnreadCountResponse);
+}
+
+message Empty {}
+
+message Channel {
+  string id = 1;
+  string name = 2;
+  string channel_type = 3;  // "workspace", "private", "dm"
+  string workspace_id = 4;
+  string ngac_oa_id = 5;
+  string ngac_ua_id = 6;
+  string created_by = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message CreateChannelRequest {
+  string name = 1;
+  string workspace_id = 2;
+  string user_id = 3;
+  string user_ngac_node_id = 4;
+  string channel_type = 5;
+}
+
+message ListChannelsRequest {
+  string workspace_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message GetChannelRequest {
+  string channel_id = 1;
+}
+
+message ChannelList {
+  repeated Channel channels = 1;
+}
+
+message AddChannelMemberRequest {
+  string channel_id = 1;
+  string requester_ngac_node_id = 2;
+  string target_ngac_node_id = 3;
+}
+
+message RemoveChannelMemberRequest {
+  string channel_id = 1;
+  string requester_ngac_node_id = 2;
+  string target_ngac_node_id = 3;
+}
+
+message ListChannelMembersRequest {
+  string channel_id = 1;
+}
+
+message ChannelMember {
+  string user_id = 1;
+  string username = 2;
+  string ngac_node_id = 3;
+}
+
+message ChannelMemberList {
+  repeated ChannelMember members = 1;
+}
+
+message SendMessageRequest {
+  string channel_id = 1;
+  string sender_id = 2;
+  string sender_ngac_node_id = 3;
+  string content = 4;
+  string message_type = 5;          // "user" (default), "system"
+  string parent_message_id = 6;     // Thread: reply to this message
+  string linked_entity_type = 7;    // "asset", "document", etc.
+  string linked_entity_id = 8;      // ID of the linked entity
+}
+
+message Message {
+  string id = 1;
+  string channel_id = 2;
+  string sender_id = 3;
+  string sender_name = 4;
+  string content = 5;
+  google.protobuf.Timestamp created_at = 6;
+  string message_type = 7;          // "user", "system"
+  string parent_message_id = 8;     // Non-empty if this is a thread reply
+  string linked_entity_type = 9;
+  string linked_entity_id = 10;
+  int32 reply_count = 11;           // Number of replies in thread
+}
+
+message GetMessagesRequest {
+  string channel_id = 1;
+  string user_ngac_node_id = 2;
+  string before = 3;  // cursor: timestamp string
+  int32 limit = 4;
+}
+
+message MessageList {
+  repeated Message messages = 1;
+  bool has_more = 2;
+}
+
+message GetThreadRequest {
+  string message_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message FindThreadsByEntityRequest {
+  string entity_type = 1;
+  string entity_id = 2;
+  string user_ngac_node_id = 3;
+}
+
+message CreateDMRequest {
+  string user_id = 1;
+  string user_ngac_node_id = 2;
+  string target_user_id = 3;
+  string target_ngac_node_id = 4;
+}
+
+message ListDMsRequest {
+  string user_ngac_node_id = 1;
+}
+
+// ============================================
+// Notification Messages
+// ============================================
+
+message Notification {
+  string id = 1;
+  string user_id = 2;
+  string type = 3;                   // "asset_requested", "asset_approved", "asset_assigned", "thread_reply", "mention"
+  string title = 4;
+  string body = 5;
+  string entity_type = 6;           // "asset", "asset_request", "message", etc.
+  string entity_id = 7;
+  bool read = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message ListNotificationsRequest {
+  string user_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message NotificationList {
+  repeated Notification notifications = 1;
+  int32 total = 2;
+  int32 unread_count = 3;
+}
+
+message MarkReadRequest {
+  string notification_id = 1;
+  string user_id = 2;
+}
+
+message MarkAllReadRequest {
+  string user_id = 1;
+}
+
+message GetUnreadCountRequest {
+  string user_id = 1;
+}
+
+message UnreadCountResponse {
+  int32 count = 1;
+}

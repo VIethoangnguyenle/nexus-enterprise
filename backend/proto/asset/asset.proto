@@ -1,0 +1,202 @@
+syntax = "proto3";
+
+package asset;
+
+option go_package = "ngac-platform/proto/asset";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+// AssetTypeService manages dynamic asset type definitions with custom fields and lifecycle.
+service AssetTypeService {
+  rpc CreateType(CreateTypeRequest) returns (AssetType);
+  rpc GetType(GetTypeRequest) returns (AssetType);
+  rpc ListTypes(ListTypesRequest) returns (AssetTypeList);
+  rpc UpdateTypeSchema(UpdateTypeSchemaRequest) returns (AssetType);
+}
+
+// AssetService manages asset instances — CRUD, lifecycle transitions, and history.
+service AssetService {
+  rpc CreateAsset(CreateAssetRequest) returns (Asset);
+  rpc GetAsset(GetAssetRequest) returns (Asset);
+  rpc ListAssets(ListAssetsRequest) returns (AssetList);
+  rpc UpdateAsset(UpdateAssetRequest) returns (Asset);
+  rpc DeleteAsset(DeleteAssetRequest) returns (Empty);
+
+  // Lifecycle
+  rpc TransitionAsset(TransitionRequest) returns (Asset);
+  rpc GetAvailableTransitions(GetTransitionsRequest) returns (TransitionList);
+  rpc GetAssetHistory(GetHistoryRequest) returns (TransitionHistoryList);
+}
+
+message Empty {}
+
+// ============================================
+// Asset Type Messages
+// ============================================
+
+message AssetType {
+  string id = 1;
+  string name = 2;
+  string description = 3;
+  string category = 4;
+  string workspace_id = 5;
+  string fields_schema = 6;        // JSON Schema string for custom fields
+  LifecycleDefinition lifecycle = 7;
+  string ngac_oa_id = 8;           // NGAC OA node for this type
+  int32 asset_count = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message LifecycleDefinition {
+  repeated string states = 1;
+  string initial_state = 2;
+  repeated TransitionRule transitions = 3;
+}
+
+message TransitionRule {
+  string from_state = 1;
+  string to_state = 2;
+  string operation = 3;            // Human-readable operation name (e.g., "approve")
+  string ngac_permission = 4;      // NGAC permission required for this transition
+}
+
+message CreateTypeRequest {
+  string name = 1;
+  string description = 2;
+  string category = 3;
+  string workspace_id = 4;
+  string user_ngac_node_id = 5;
+  string fields_schema = 6;        // JSON Schema string
+  LifecycleDefinition lifecycle = 7; // Optional — uses default if not set
+}
+
+message GetTypeRequest {
+  string type_id = 1;
+}
+
+message ListTypesRequest {
+  string workspace_id = 1;
+}
+
+message AssetTypeList {
+  repeated AssetType types = 1;
+}
+
+message UpdateTypeSchemaRequest {
+  string type_id = 1;
+  string user_ngac_node_id = 2;
+  string fields_schema = 3;
+}
+
+// ============================================
+// Asset Instance Messages
+// ============================================
+
+message Asset {
+  string id = 1;
+  string name = 2;
+  string type_id = 3;
+  string type_name = 4;
+  string workspace_id = 5;
+  string state = 6;
+  google.protobuf.Struct custom_fields = 7;
+  string assigned_to_user_id = 8;
+  string assigned_to_username = 9;
+  string ngac_node_id = 10;
+  string created_by = 11;
+  bool deleted = 12;
+  google.protobuf.Timestamp created_at = 13;
+  google.protobuf.Timestamp updated_at = 14;
+}
+
+message CreateAssetRequest {
+  string name = 1;
+  string type_id = 2;
+  string workspace_id = 3;
+  string user_id = 4;
+  string user_ngac_node_id = 5;
+  google.protobuf.Struct custom_fields = 6;
+}
+
+message GetAssetRequest {
+  string asset_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message ListAssetsRequest {
+  string workspace_id = 1;
+  string user_ngac_node_id = 2;
+  string type_id = 3;             // Optional filter
+  string state = 4;               // Optional filter
+  string assigned_to = 5;         // Optional filter
+  int32 limit = 6;
+  int32 offset = 7;
+}
+
+message AssetList {
+  repeated Asset assets = 1;
+  int32 total = 2;
+}
+
+message UpdateAssetRequest {
+  string asset_id = 1;
+  string user_ngac_node_id = 2;
+  string name = 3;                // Optional — only update if non-empty
+  google.protobuf.Struct custom_fields = 4;
+}
+
+message DeleteAssetRequest {
+  string asset_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+// ============================================
+// Lifecycle Messages
+// ============================================
+
+message TransitionRequest {
+  string asset_id = 1;
+  string user_id = 2;
+  string user_ngac_node_id = 3;
+  string action = 4;              // Operation name matching TransitionRule.operation
+  string comment = 5;
+}
+
+message GetTransitionsRequest {
+  string asset_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message AvailableTransition {
+  string action = 1;
+  string to_state = 2;
+  string ngac_permission = 3;
+}
+
+message TransitionList {
+  repeated AvailableTransition transitions = 1;
+  string current_state = 2;
+}
+
+message GetHistoryRequest {
+  string asset_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message TransitionRecord {
+  string id = 1;
+  string asset_id = 2;
+  string from_state = 3;
+  string to_state = 4;
+  string action = 5;
+  string actor_id = 6;
+  string actor_name = 7;
+  string comment = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message TransitionHistoryList {
+  repeated TransitionRecord records = 1;
+}

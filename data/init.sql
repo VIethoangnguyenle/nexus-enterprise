@@ -111,6 +111,119 @@ CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_channel_time ON messages(channel_id, created_at DESC);
 
 -- ============================================
+-- Messaging Thread Extensions
+-- ============================================
+
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS message_type  TEXT NOT NULL DEFAULT 'user' CHECK (message_type IN ('user', 'system'));
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS parent_message_id TEXT REFERENCES messages(id);
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS linked_entity_type TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS linked_entity_id TEXT;
+ALTER TABLE messages ADD COLUMN IF NOT EXISTS reply_count INT NOT NULL DEFAULT 0;
+
+CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(parent_message_id) WHERE parent_message_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_messages_entity ON messages(linked_entity_type, linked_entity_id) WHERE linked_entity_type IS NOT NULL;
+
+-- Thread participants — tracks who's subscribed to a thread
+CREATE TABLE IF NOT EXISTS thread_participants (
+    message_id  TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+    user_id     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    joined_at   TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (message_id, user_id)
+);
+
+-- ============================================
+-- Notification Tables (owned by Messaging Service)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id              TEXT PRIMARY KEY,
+    user_id         TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    type            TEXT NOT NULL,   -- "asset_requested", "asset_approved", "asset_assigned", "thread_reply", "mention"
+    title           TEXT NOT NULL,
+    body            TEXT NOT NULL DEFAULT '',
+    entity_type     TEXT,            -- "asset", "asset_request", "message", etc.
+    entity_id       TEXT,
+    read            BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id) WHERE read = FALSE;
+
+-- ============================================
+-- Asset Tables (owned by Asset Service)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS asset_types (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    description     TEXT NOT NULL DEFAULT '',
+    category        TEXT NOT NULL,
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id),
+    fields_schema   JSONB NOT NULL DEFAULT '{}',   -- JSON Schema for custom fields
+    lifecycle       JSONB NOT NULL DEFAULT '{}',   -- State machine definition
+    ngac_oa_id      TEXT REFERENCES ngac_nodes(id),
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(workspace_id, name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_asset_types_workspace ON asset_types(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_asset_types_category ON asset_types(workspace_id, category);
+
+CREATE TABLE IF NOT EXISTS assets (
+    id              TEXT PRIMARY KEY,
+    name            TEXT NOT NULL,
+    type_id         TEXT NOT NULL REFERENCES asset_types(id),
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id),
+    state           TEXT NOT NULL DEFAULT 'requested',
+    custom_fields   JSONB NOT NULL DEFAULT '{}',
+    assigned_to     TEXT REFERENCES users(id),
+    ngac_node_id    TEXT REFERENCES ngac_nodes(id),
+    created_by      TEXT NOT NULL REFERENCES users(id),
+    deleted         BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_assets_workspace ON assets(workspace_id) WHERE deleted = FALSE;
+CREATE INDEX IF NOT EXISTS idx_assets_type ON assets(type_id) WHERE deleted = FALSE;
+CREATE INDEX IF NOT EXISTS idx_assets_state ON assets(workspace_id, state) WHERE deleted = FALSE;
+CREATE INDEX IF NOT EXISTS idx_assets_assigned ON assets(assigned_to) WHERE assigned_to IS NOT NULL AND deleted = FALSE;
+
+CREATE TABLE IF NOT EXISTS asset_transitions (
+    id              TEXT PRIMARY KEY,
+    asset_id        TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    from_state      TEXT NOT NULL,
+    to_state        TEXT NOT NULL,
+    action          TEXT NOT NULL,
+    actor_id        TEXT NOT NULL REFERENCES users(id),
+    comment         TEXT NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_transitions_asset ON asset_transitions(asset_id, created_at);
+
+CREATE TABLE IF NOT EXISTS asset_requests (
+    id              TEXT PRIMARY KEY,
+    type_id         TEXT NOT NULL REFERENCES asset_types(id),
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id),
+    requester_id    TEXT NOT NULL REFERENCES users(id),
+    status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'fulfilled')),
+    justification   TEXT NOT NULL DEFAULT '',
+    quantity        INT NOT NULL DEFAULT 1,
+    assigned_asset_id TEXT REFERENCES assets(id),
+    approver_id     TEXT REFERENCES users(id),
+    approver_comment TEXT NOT NULL DEFAULT '',
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_requests_workspace ON asset_requests(workspace_id, status);
+CREATE INDEX IF NOT EXISTS idx_requests_requester ON asset_requests(requester_id);
+CREATE INDEX IF NOT EXISTS idx_requests_type ON asset_requests(type_id, status);
+
+-- ============================================
 -- Seed Data: Global NGAC Infrastructure
 -- ============================================
 
@@ -128,4 +241,3 @@ ON CONFLICT (child_id, parent_id) DO NOTHING;
 INSERT INTO ngac_associations (id, ua_id, oa_id, operations) VALUES
   ('assoc-pub-read', 'ua-public-users', 'oa-public-docs', ARRAY['read'])
 ON CONFLICT (ua_id, oa_id) DO UPDATE SET operations = ARRAY['read'];
-

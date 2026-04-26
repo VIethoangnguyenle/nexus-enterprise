@@ -1,0 +1,92 @@
+syntax = "proto3";
+
+package asset;
+
+option go_package = "ngac-platform/proto/asset";
+
+import "google/protobuf/timestamp.proto";
+import "proto/asset/asset.proto";
+
+service AssetRequestService {
+  rpc CreateRequest(CreateAssetRequestReq) returns (AssetRequest);
+  rpc ApproveRequest(ApproveRequestReq) returns (AssetRequest);
+  rpc RejectRequest(RejectRequestReq) returns (AssetRequest);
+  rpc AssignAsset(AssignAssetReq) returns (AssetRequest);
+  rpc ReturnAsset(ReturnAssetReq) returns (Empty);
+  rpc ListRequests(ListRequestsReq) returns (AssetRequestList);
+  rpc GetRequest(GetRequestReq) returns (AssetRequest);
+}
+
+
+message AssetRequest {
+  string id = 1;
+  string type_id = 2;
+  string type_name = 3;
+  string workspace_id = 4;
+  string requester_id = 5;
+  string requester_name = 6;
+  string status = 7;               // "pending", "approved", "rejected", "fulfilled"
+  string justification = 8;
+  int32 quantity = 9;
+  string assigned_asset_id = 10;
+  string approver_id = 11;
+  string approver_name = 12;
+  string approver_comment = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+}
+
+message CreateAssetRequestReq {
+  string type_id = 1;
+  string workspace_id = 2;
+  string user_id = 3;
+  string user_ngac_node_id = 4;
+  string justification = 5;
+  int32 quantity = 6;
+}
+
+message ApproveRequestReq {
+  string request_id = 1;
+  string user_id = 2;
+  string user_ngac_node_id = 3;
+  string comment = 4;
+}
+
+message RejectRequestReq {
+  string request_id = 1;
+  string user_id = 2;
+  string user_ngac_node_id = 3;
+  string reason = 4;
+}
+
+message AssignAssetReq {
+  string request_id = 1;
+  string asset_id = 2;
+  string user_id = 3;
+  string user_ngac_node_id = 4;
+}
+
+message ReturnAssetReq {
+  string asset_id = 1;
+  string user_id = 2;
+  string user_ngac_node_id = 3;
+}
+
+message ListRequestsReq {
+  string workspace_id = 1;
+  string user_id = 2;
+  string user_ngac_node_id = 3;
+  string status = 4;               // Optional filter
+  bool mine_only = 5;              // If true, only return user's own requests
+  int32 limit = 6;
+  int32 offset = 7;
+}
+
+message GetRequestReq {
+  string request_id = 1;
+}
+
+message AssetRequestList {
+  repeated AssetRequest requests = 1;
+  int32 total = 2;
+}

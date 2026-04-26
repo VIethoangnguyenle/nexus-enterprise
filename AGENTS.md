@@ -16,7 +16,7 @@ Project NGAC (Next Generation Access Control) là nền tảng quản lý tài l
 
 ```
                         ┌────────────┐
-                        │  Frontend  │ React + Vite + Zustand
+                        │  Frontend  │ Vite + TanStack Router + TanStack Query + Zustand
                         │    :80     │ Nginx reverse proxy
                         └─────┬──────┘
                               │ HTTP / WebSocket
@@ -25,26 +25,24 @@ Project NGAC (Next Generation Access Control) là nền tảng quản lý tài l
                         │   :8080    │ REST → gRPC proxy
                         └─────┬──────┘
                               │ gRPC (internal)
-          ┌───────────────────┼───────────────────┐
-          │                   │                   │
-     ┌────▼─────┐      ┌─────▼──────┐     ┌──────▼──────┐
-     │   Auth   │      │ Workspace  │     │  Document   │
-     │  :50052  │      │   :50053   │     │   :50054    │
-     └──────────┘      └─────┬──────┘     └─────────────┘
-                              │
-                       ┌──────▼──────┐
-                       │  Messaging  │ gRPC :50055 + WebSocket :8081
-                       └──────┬──────┘
-                              │
-                       ┌──────▼──────┐
-                       │   Policy    │ NGAC Graph Engine (PDP)
-                       │   :50051   │ Nguồn sự thật duy nhất cho access control
-                       └──────┬──────┘
-                              │
-                     ┌────────▼────────┐
-                     │   PostgreSQL    │ Shared database
-                     │     :5432      │ Schema per service domain
-                     └────────────────┘
+     ┌──────────┬─────────────┼─────────────┬──────────┐
+     │          │             │             │          │
+┌────▼───┐ ┌───▼────┐  ┌─────▼──────┐ ┌────▼───┐ ┌────▼───┐
+│  Auth  │ │ W.Space│  │  Document  │ │Messag. │ │ Asset  │
+│ :50052 │ │ :50053 │  │   :50054   │ │ :50055 │ │ :50056 │
+└────────┘ └────────┘  └────────────┘ └────┬───┘ └────────┘
+                                           │ WebSocket :8081
+                       ┌───────────────────┤
+                       │                   │
+                ┌──────▼──────┐     ┌──────▼──────┐
+                │   Policy    │     │    Redis    │ Pub/Sub, Cache, JWT Blacklist
+                │   :50051    │     │   :6379     │
+                └──────┬──────┘     └─────────────┘
+                       │
+              ┌────────▼────────┐   ┌─────────────┐
+              │   PostgreSQL    │   │  Redpanda   │ Kafka-compatible event bus
+              │     :5432       │   │   :9092     │
+              └─────────────────┘   └─────────────┘
 ```
 
 ### Quy tắc kiến trúc CỨNG (không thương lượng)
@@ -59,12 +57,47 @@ Project NGAC (Next Generation Access Control) là nền tảng quản lý tài l
 
 5. **JWT chứa `ngac_node_id`.** Mọi service downstream dùng node ID này để gọi Policy Service. Không query user table để lấy lại.
 
-6. **Mỗi service có module Go riêng.** Dùng `replace` directive trỏ về `../../proto`. Không share code giữa services trừ proto.
+6. **Mỗi service có module Go riêng.** Dùng `replace` directive trỏ về `../..` (root `backend/go.mod`). Không share code giữa services trừ proto.
+
+### Cấu trúc thư mục dự án
+
+```
+ngac/
+├── backend/                    # TẤT CẢ Go code
+│   ├── go.mod                     module "ngac-platform"
+│   ├── Makefile                   proto gen + build
+│   ├── proto/                     protobuf contracts
+│   │   ├── policy/
+│   │   ├── auth/
+│   │   ├── workspace/
+│   │   ├── document/
+│   │   ├── messaging/
+│   │   └── asset/
+│   └── services/                  microservices
+│       ├── policy/
+│       ├── auth/
+│       ├── workspace/
+│       ├── document/
+│       ├── messaging/
+│       ├── asset/
+│       └── gateway/
+├── frontend/                   # Vite + TanStack Router + TanStack Query
+│   └── src/
+│       ├── routes/                file-based routing (TanStack Router)
+│       ├── hooks/                 TanStack Query hooks
+│       ├── api/                   fetch wrappers
+│       ├── stores/                Zustand (UI-only: WebSocket, sidebar)
+│       ├── components/            shared components
+│       └── lib/                   QueryClient config
+├── data/                       # SQL init/seed
+├── docker-compose.yml
+└── Makefile                    # top-level, delegates to backend/
+```
 
 ### Cấu trúc thư mục chuẩn mỗi service
 
 ```
-services/{tên}/
+backend/services/{tên}/
 ├── cmd/
 │   └── main.go              # Entrypoint — chỉ wiring, không business logic
 ├── internal/
@@ -72,7 +105,7 @@ services/{tên}/
 │   │   └── server.go        # gRPC handler — mỏng, delegate xuống domain
 │   ├── domain/              # Business logic thuần — KHÔNG depend gRPC hay DB
 │   └── store/               # Database layer — KHÔNG depend domain
-├── go.mod
+├── go.mod                      replace ngac-platform => ../..
 ├── go.sum
 └── Dockerfile
 ```
@@ -86,7 +119,7 @@ services/{tên}/
 ### Trước khi viết code
 
 1. **Đọc file liên quan** — Hiểu code hiện tại của service bị ảnh hưởng
-2. **Kiểm tra proto** — Đảm bảo message types và field names đúng
+2. **Kiểm tra proto** — Đảm bảo message types và field names đúng (`backend/proto/`)
 3. **Đọc skills bắt buộc** — Xem `.agent/instructions.md` để biết skill nào cần đọc
 4. **Kiểm tra ảnh hưởng chéo** — Thay đổi này có ảnh hưởng service khác không?
 

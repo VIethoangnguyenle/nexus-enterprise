@@ -1,38 +1,25 @@
-.PHONY: proto proto-install build clean
+.PHONY: proto proto-install build clean dev
 
-# Install protoc-gen-go and protoc-gen-go-grpc
+# Delegate to backend Makefile
 proto-install:
-	go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-	go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	$(MAKE) -C backend proto-install
 
-# Generate Go code from proto files
 proto:
-	@echo "Generating proto files..."
-	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		proto/policy/policy.proto
-	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		proto/auth/auth.proto
-	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		proto/workspace/workspace.proto
-	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		proto/document/document.proto
-	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
-		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
-		proto/messaging/messaging.proto
-	@echo "Proto generation complete!"
+	$(MAKE) -C backend proto
 
-# Build all services
 build:
-	@for svc in gateway auth policy workspace document messaging; do \
-		echo "Building $$svc..."; \
-		cd services/$$svc && go build -o ../../bin/$$svc ./cmd/ && cd ../..; \
-	done
+	$(MAKE) -C backend build
 
-# Clean generated files
 clean:
-	rm -rf bin/
-	find proto -name "*.pb.go" -delete
+	$(MAKE) -C backend clean
+
+# Frontend dev
+dev-frontend:
+	cd frontend && npm run dev
+
+# Docker
+up:
+	docker compose up -d
+
+down:
+	docker compose down

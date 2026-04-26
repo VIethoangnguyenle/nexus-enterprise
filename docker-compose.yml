@@ -55,7 +55,7 @@ services:
 
   policy:
     build:
-      context: .
+      context: ./backend
       dockerfile: services/policy/Dockerfile
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
@@ -79,7 +79,7 @@ services:
 
   auth:
     build:
-      context: .
+      context: ./backend
       dockerfile: services/auth/Dockerfile
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
@@ -102,7 +102,7 @@ services:
 
   workspace:
     build:
-      context: .
+      context: ./backend
       dockerfile: services/workspace/Dockerfile
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
@@ -121,7 +121,7 @@ services:
 
   document:
     build:
-      context: .
+      context: ./backend
       dockerfile: services/document/Dockerfile
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
@@ -143,7 +143,7 @@ services:
 
   messaging:
     build:
-      context: .
+      context: ./backend
       dockerfile: services/messaging/Dockerfile
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
@@ -169,9 +169,34 @@ services:
       timeout: 3s
       retries: 10
 
+  asset:
+    build:
+      context: ./backend
+      dockerfile: services/asset/Dockerfile
+    environment:
+      DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
+      POLICY_SERVICE_ADDR: policy:50051
+      REDIS_URL: redis://redis:6379/3
+      KAFKA_BROKERS: redpanda:9092
+      GRPC_PORT: "50056"
+    ports:
+      - "50056:50056"
+    depends_on:
+      policy:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50056"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   gateway:
     build:
-      context: .
+      context: ./backend
       dockerfile: services/gateway/Dockerfile
     environment:
       AUTH_SERVICE_ADDR: auth:50052
@@ -180,6 +205,7 @@ services:
       DOCUMENT_SERVICE_ADDR: document:50054
       MESSAGING_SERVICE_ADDR: messaging:50055
       MESSAGING_WS_ADDR: messaging:8081
+      ASSET_SERVICE_ADDR: asset:50056
       JWT_SECRET: ngac-super-secret-key-change-in-production
       PORT: "8080"
     ports:
@@ -193,10 +219,12 @@ services:
         condition: service_healthy
       messaging:
         condition: service_healthy
+      asset:
+        condition: service_healthy
 
   frontend:
     build:
-      context: ./frontend
+      context: ./backend/frontend
     ports:
       - "3000:80"
     depends_on:

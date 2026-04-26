@@ -50,32 +50,60 @@ Khi code sử dụng thư viện samber, đọc skill tương ứng:
 
 ## Project Conventions
 
-### Tech Stack
+### Tech Stack — Backend
 - **Go version**: 1.26+
 - **Database driver**: `pgx/v5` (NOT sqlx, NOT GORM)
 - **Logging**: `log/slog` (migrate from `log.Printf`)
 - **Error handling**: stdlib `fmt.Errorf` with `%w`, `status.Errorf` at gRPC boundaries
 - **gRPC**: `google.golang.org/grpc` with interceptors
-- **Proto management**: `protoc` with `make proto`
+- **Proto management**: `protoc` with `cd backend && make proto`
+- **Infra**: Redis (Pub/Sub, cache, JWT blacklist), Redpanda/Kafka (events)
+
+### Tech Stack — Frontend
+- **Build**: Vite
+- **Routing**: TanStack Router (file-based, type-safe)
+- **Server state**: TanStack Query (queries, mutations, cache invalidation)
+- **Client state**: Zustand (UI-only: WebSocket, sidebar, modals)
+- **HTTP**: Native `fetch` (no axios)
+- **CSS**: Vanilla CSS (custom design system)
 
 ### Architecture Rules (from AGENTS.md)
+- All Go code lives under `backend/` — proto, services, go.mod
 - Policy Service is the ONLY PDP — no service decides access on its own
 - Services communicate via gRPC — no internal HTTP
 - Gateway is the ONLY external entry point
-- Proto is the contract — change `.proto` → `make proto` → update consumers
+- Proto is the contract — change `.proto` → `cd backend && make proto` → update consumers
 - JWT contains `ngac_node_id` — downstream services use this, never query user table
-- Each service has its own Go module with `replace` directive for proto
+- Each service has its own Go module with `replace ngac-platform => ../..`
+- Frontend uses TanStack Query for ALL server state — Zustand ONLY for UI state
+- WebSocket events bridge to TanStack Query via `queryClient.invalidateQueries()`
 
-### Service Structure
+### Backend Service Structure
 ```
-services/{name}/
+backend/services/{name}/
 ├── cmd/main.go           # Wiring only
 ├── internal/
 │   ├── grpc/server.go    # Thin handler, delegates to domain
 │   ├── domain/           # Business logic, no gRPC/DB deps
 │   └── store/            # Database layer, no domain deps
-├── go.mod
+├── go.mod                   replace ngac-platform => ../..
 └── Dockerfile
+```
+
+### Frontend Structure
+```
+frontend/src/
+├── routes/               # TanStack Router file-based routes
+│   ├── __root.tsx           root layout
+│   ├── _auth.tsx            auth layout (redirect if logged in)
+│   ├── _auth/login.tsx      login page
+│   ├── _workspace.tsx       workspace layout (Sidebar, Topbar, AuthGuard)
+│   └── _workspace/*.tsx     workspace pages
+├── hooks/                # TanStack Query hooks (useAssets, useDocuments, etc.)
+├── api/                  # fetch wrappers (client.ts, auth.ts, assets.ts, etc.)
+├── stores/               # Zustand stores (auth, ui, websocket)
+├── components/           # Shared components (Sidebar, NotificationBell)
+└── lib/query-client.ts   # QueryClient configuration
 ```
 
 ### Forbidden Patterns
@@ -132,7 +160,8 @@ main (production-ready)
 Types: `feat`, `fix`, `refactor`, `chore`, `docs`, `ci`, `test`, `perf`
 
 ### Rules
-- Every commit must build (`go build ./cmd/` passes)
+- Every commit must build (`cd backend/services/X && go build ./cmd/` passes)
+- Frontend must build (`cd frontend && npx vite build` passes)
 - One logical change per commit
 - Commit message in English, lowercase
 - Push after completing each logical unit of work
