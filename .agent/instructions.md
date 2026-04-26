@@ -10,6 +10,13 @@ Trước khi viết hoặc sửa bất kỳ dòng Go code nào, ĐỌC các skil
 2. **golang-error-handling** — Wrapping, single handling rule, slog
 3. **golang-naming** — Packages, functions, errors, enums
 
+### Always-Read Skills (TRƯỚC MỌI task Frontend code)
+
+Trước khi viết hoặc sửa bất kỳ file `.tsx`, `.ts` nào trong `frontend/`, ĐỌC skill này:
+
+1. **frontend-best-practices** — File conventions, TanStack Router/Query patterns, state management, component design, error handling, performance, styling, security
+
+
 ### Context-Triggered Skills
 
 Đọc thêm skill tương ứng khi task liên quan:
