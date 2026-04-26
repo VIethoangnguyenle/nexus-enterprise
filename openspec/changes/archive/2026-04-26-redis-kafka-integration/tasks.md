@@ -75,8 +75,8 @@
 
 ## 8. Git
 
-- [ ] 8.1 Commit `feat: add redis and redpanda to infrastructure, remove nats` (docker-compose + deps)
-- [ ] 8.2 Commit `feat(policy): add redis access decision cache with invalidation`
+- [x] 8.1 Commit `feat: add redis and redpanda to infrastructure, remove nats` (docker-compose + deps)
+- [x] 8.2 Commit `feat(policy): add redis access decision cache with invalidation`
 - [ ] 8.3 Commit `feat(auth): add jwt blacklist via redis`
 - [ ] 8.4 Commit `feat(messaging): add redis pub/sub for websocket horizontal scaling`
 - [ ] 8.5 Commit `feat(policy,messaging): add kafka event producers`
