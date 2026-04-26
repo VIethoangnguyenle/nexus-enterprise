@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package messaging;
+
+option go_package = "ngac-platform/proto/messaging";
+
+import "google/protobuf/timestamp.proto";
+
+service MessagingService {
+  // Channels
+  rpc CreateChannel(CreateChannelRequest) returns (Channel);
+  rpc ListChannels(ListChannelsRequest) returns (ChannelList);
+  rpc GetChannel(GetChannelRequest) returns (Channel);
+
+  // Channel members
+  rpc AddChannelMember(AddChannelMemberRequest) returns (Empty);
+  rpc RemoveChannelMember(RemoveChannelMemberRequest) returns (Empty);
+  rpc ListChannelMembers(ListChannelMembersRequest) returns (ChannelMemberList);
+
+  // Messages
+  rpc SendMessage(SendMessageRequest) returns (Message);
+  rpc GetMessages(GetMessagesRequest) returns (MessageList);
+
+  // DMs
+  rpc CreateDM(CreateDMRequest) returns (Channel);
+  rpc ListDMs(ListDMsRequest) returns (ChannelList);
+}
+
+message Empty {}
+
+message Channel {
+  string id = 1;
+  string name = 2;
+  string channel_type = 3;  // "workspace", "private", "dm"
+  string workspace_id = 4;
+  string ngac_oa_id = 5;
+  string ngac_ua_id = 6;
+  string created_by = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message CreateChannelRequest {
+  string name = 1;
+  string workspace_id = 2;
+  string user_id = 3;
+  string user_ngac_node_id = 4;
+  string channel_type = 5;
+}
+
+message ListChannelsRequest {
+  string workspace_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message GetChannelRequest {
+  string channel_id = 1;
+}
+
+message ChannelList {
+  repeated Channel channels = 1;
+}
+
+message AddChannelMemberRequest {
+  string channel_id = 1;
+  string requester_ngac_node_id = 2;
+  string target_ngac_node_id = 3;
+}
+
+message RemoveChannelMemberRequest {
+  string channel_id = 1;
+  string requester_ngac_node_id = 2;
+  string target_ngac_node_id = 3;
+}
+
+message ListChannelMembersRequest {
+  string channel_id = 1;
+}
+
+message ChannelMember {
+  string user_id = 1;
+  string username = 2;
+  string ngac_node_id = 3;
+}
+
+message ChannelMemberList {
+  repeated ChannelMember members = 1;
+}
+
+message SendMessageRequest {
+  string channel_id = 1;
+  string sender_id = 2;
+  string sender_ngac_node_id = 3;
+  string content = 4;
+}
+
+message Message {
+  string id = 1;
+  string channel_id = 2;
+  string sender_id = 3;
+  string sender_name = 4;
+  string content = 5;
+  google.protobuf.Timestamp created_at = 6;
+}
+
+message GetMessagesRequest {
+  string channel_id = 1;
+  string user_ngac_node_id = 2;
+  string before = 3;  // cursor: timestamp string
+  int32 limit = 4;
+}
+
+message MessageList {
+  repeated Message messages = 1;
+  bool has_more = 2;
+}
+
+message CreateDMRequest {
+  string user_id = 1;
+  string user_ngac_node_id = 2;
+  string target_user_id = 3;
+  string target_ngac_node_id = 4;
+}
+
+message ListDMsRequest {
+  string user_ngac_node_id = 1;
+}

@@ -1,0 +1,208 @@
+syntax = "proto3";
+
+package workspace;
+
+option go_package = "ngac-platform/proto/workspace";
+
+service WorkspaceService {
+  // Workspace CRUD
+  rpc CreateWorkspace(CreateWorkspaceRequest) returns (Workspace);
+  rpc ListWorkspaces(ListWorkspacesRequest) returns (WorkspaceList);
+  rpc GetWorkspace(GetWorkspaceRequest) returns (Workspace);
+
+  // Members
+  rpc InviteMember(InviteMemberRequest) returns (Empty);
+  rpc RemoveMember(RemoveMemberRequest) returns (Empty);
+  rpc ListMembers(ListMembersRequest) returns (MemberList);
+  rpc UpdateMemberRoles(UpdateMemberRolesRequest) returns (Empty);
+
+  // Ownership
+  rpc TransferOwnership(TransferOwnershipRequest) returns (Empty);
+  rpc AddOwner(AddOwnerRequest) returns (Empty);
+  rpc RemoveOwner(RemoveOwnerRequest) returns (Empty);
+
+  // Dynamic structure (roles, folders, permissions)
+  rpc CreateRole(CreateRoleRequest) returns (Role);
+  rpc ListRoles(ListRolesRequest) returns (RoleList);
+  rpc DeleteRole(DeleteRoleRequest) returns (Empty);
+
+  rpc CreateFolder(CreateFolderRequest) returns (Folder);
+  rpc ListFolders(ListFoldersRequest) returns (FolderList);
+  rpc DeleteFolder(DeleteFolderRequest) returns (Empty);
+
+  rpc CreatePermission(CreatePermissionRequest) returns (Permission);
+  rpc ListPermissions(ListPermissionsRequest) returns (PermissionList);
+  rpc DeletePermission(DeletePermissionRequest) returns (Empty);
+}
+
+message Empty {}
+
+message Workspace {
+  string id = 1;
+  string name = 2;
+  string pc_node_id = 3;
+  string owners_ua_id = 4;
+  string members_ua_id = 5;
+  string mgmt_oa_id = 6;
+  string documents_oa_id = 7;
+  string channels_oa_id = 8;
+  string created_by = 9;
+}
+
+message CreateWorkspaceRequest {
+  string name = 1;
+  string user_id = 2;
+  string user_ngac_node_id = 3;
+}
+
+message ListWorkspacesRequest {
+  string user_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message GetWorkspaceRequest {
+  string workspace_id = 1;
+}
+
+message WorkspaceList {
+  repeated Workspace workspaces = 1;
+}
+
+message InviteMemberRequest {
+  string workspace_id = 1;
+  string inviter_ngac_node_id = 2;
+  string target_user_id = 3;
+  string target_ngac_node_id = 4;
+  repeated string role_ids = 5;
+}
+
+message RemoveMemberRequest {
+  string workspace_id = 1;
+  string requester_ngac_node_id = 2;
+  string target_ngac_node_id = 3;
+}
+
+message ListMembersRequest {
+  string workspace_id = 1;
+}
+
+message Member {
+  string user_id = 1;
+  string username = 2;
+  string ngac_node_id = 3;
+  repeated Role roles = 4;
+  bool is_owner = 5;
+}
+
+message MemberList {
+  repeated Member members = 1;
+}
+
+message UpdateMemberRolesRequest {
+  string workspace_id = 1;
+  string requester_ngac_node_id = 2;
+  string target_ngac_node_id = 3;
+  repeated string role_ids = 4;
+}
+
+message TransferOwnershipRequest {
+  string workspace_id = 1;
+  string current_owner_ngac_node_id = 2;
+  string new_owner_ngac_node_id = 3;
+}
+
+message AddOwnerRequest {
+  string workspace_id = 1;
+  string requester_ngac_node_id = 2;
+  string target_ngac_node_id = 3;
+}
+
+message RemoveOwnerRequest {
+  string workspace_id = 1;
+  string requester_ngac_node_id = 2;
+  string target_ngac_node_id = 3;
+}
+
+message CreateRoleRequest {
+  string workspace_id = 1;
+  string requester_ngac_node_id = 2;
+  string name = 3;
+}
+
+message Role {
+  string id = 1;
+  string name = 2;
+  string ngac_node_id = 3;
+}
+
+message ListRolesRequest {
+  string workspace_id = 1;
+}
+
+message RoleList {
+  repeated Role roles = 1;
+}
+
+message DeleteRoleRequest {
+  string workspace_id = 1;
+  string requester_ngac_node_id = 2;
+  string role_id = 3;
+}
+
+message CreateFolderRequest {
+  string workspace_id = 1;
+  string requester_ngac_node_id = 2;
+  string name = 3;
+  string parent_oa_id = 4;
+}
+
+message Folder {
+  string id = 1;
+  string name = 2;
+  string ngac_node_id = 3;
+}
+
+message ListFoldersRequest {
+  string workspace_id = 1;
+}
+
+message FolderList {
+  repeated Folder folders = 1;
+}
+
+message DeleteFolderRequest {
+  string workspace_id = 1;
+  string requester_ngac_node_id = 2;
+  string folder_id = 3;
+}
+
+message CreatePermissionRequest {
+  string workspace_id = 1;
+  string requester_ngac_node_id = 2;
+  string ua_id = 3;
+  string oa_id = 4;
+  repeated string operations = 5;
+}
+
+message Permission {
+  string id = 1;
+  string ua_id = 2;
+  string ua_name = 3;
+  string oa_id = 4;
+  string oa_name = 5;
+  repeated string operations = 6;
+}
+
+message ListPermissionsRequest {
+  string workspace_id = 1;
+}
+
+message PermissionList {
+  repeated Permission permissions = 1;
+}
+
+message DeletePermissionRequest {
+  string workspace_id = 1;
+  string requester_ngac_node_id = 2;
+  string permission_id = 3;
+}

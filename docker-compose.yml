@@ -1,0 +1,176 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ngac
+      POSTGRES_USER: ngac
+      POSTGRES_PASSWORD: ngac_secret
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./data/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ngac"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nats:
+    image: nats:2.10-alpine
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: ["--http_port", "8222"]
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  policy:
+    build:
+      context: .
+      dockerfile: services/policy/Dockerfile
+    environment:
+      DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
+      GRPC_PORT: "50051"
+    ports:
+      - "50051:50051"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  auth:
+    build:
+      context: .
+      dockerfile: services/auth/Dockerfile
+    environment:
+      DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
+      POLICY_SERVICE_ADDR: policy:50051
+      JWT_SECRET: ngac-super-secret-key-change-in-production
+      GRPC_PORT: "50052"
+    ports:
+      - "50052:50052"
+    depends_on:
+      policy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50052"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  workspace:
+    build:
+      context: .
+      dockerfile: services/workspace/Dockerfile
+    environment:
+      DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
+      POLICY_SERVICE_ADDR: policy:50051
+      NATS_URL: nats://nats:4222
+      GRPC_PORT: "50053"
+    ports:
+      - "50053:50053"
+    depends_on:
+      policy:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50053"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  document:
+    build:
+      context: .
+      dockerfile: services/document/Dockerfile
+    environment:
+      DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
+      POLICY_SERVICE_ADDR: policy:50051
+      NATS_URL: nats://nats:4222
+      DATA_DIR: /data/documents
+      GRPC_PORT: "50054"
+    ports:
+      - "50054:50054"
+    volumes:
+      - docdata:/data/documents
+    depends_on:
+      policy:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50054"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  messaging:
+    build:
+      context: .
+      dockerfile: services/messaging/Dockerfile
+    environment:
+      DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
+      POLICY_SERVICE_ADDR: policy:50051
+      AUTH_SERVICE_ADDR: auth:50052
+      NATS_URL: nats://nats:4222
+      GRPC_PORT: "50055"
+      WS_PORT: "8081"
+    ports:
+      - "50055:50055"
+      - "8081:8081"
+    depends_on:
+      policy:
+        condition: service_healthy
+      nats:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50055"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  gateway:
+    build:
+      context: .
+      dockerfile: services/gateway/Dockerfile
+    environment:
+      AUTH_SERVICE_ADDR: auth:50052
+      POLICY_SERVICE_ADDR: policy:50051
+      WORKSPACE_SERVICE_ADDR: workspace:50053
+      DOCUMENT_SERVICE_ADDR: document:50054
+      MESSAGING_SERVICE_ADDR: messaging:50055
+      MESSAGING_WS_ADDR: messaging:8081
+      JWT_SECRET: ngac-super-secret-key-change-in-production
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      auth:
+        condition: service_healthy
+      workspace:
+        condition: service_healthy
+      document:
+        condition: service_healthy
+      messaging:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway
+
+volumes:
+  pgdata:
+  docdata:

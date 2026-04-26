@@ -1,0 +1,163 @@
+syntax = "proto3";
+
+package policy;
+
+option go_package = "ngac-platform/proto/policy";
+
+import "google/protobuf/timestamp.proto";
+
+service PolicyService {
+  // Access checks
+  rpc CheckAccess(CheckAccessRequest) returns (AccessDecision);
+
+  // Node CRUD
+  rpc CreateNode(CreateNodeRequest) returns (NGACNode);
+  rpc DeleteNode(DeleteNodeRequest) returns (Empty);
+  rpc GetNode(GetNodeRequest) returns (NGACNode);
+  rpc FindNodeByName(FindNodeByNameRequest) returns (NGACNode);
+  rpc GetNodesByType(GetNodesByTypeRequest) returns (NodeList);
+
+  // Assignments
+  rpc CreateAssignment(CreateAssignmentRequest) returns (Assignment);
+  rpc RemoveAssignment(RemoveAssignmentRequest) returns (Empty);
+  rpc IsAssigned(IsAssignedRequest) returns (BoolResponse);
+
+  // Associations
+  rpc CreateAssociation(CreateAssociationRequest) returns (Association);
+  rpc RemoveAssociation(RemoveAssociationRequest) returns (Empty);
+
+  // Graph queries
+  rpc GetAncestors(GetAncestorsRequest) returns (NodeList);
+  rpc GetDescendants(GetDescendantsRequest) returns (NodeList);
+  rpc GetChildren(GetChildrenRequest) returns (NodeList);
+  rpc GetParents(GetParentsRequest) returns (NodeList);
+
+  // Schema init and graph load
+  rpc InitSchema(Empty) returns (Empty);
+  rpc LoadGraph(Empty) returns (Empty);
+}
+
+message Empty {}
+
+message BoolResponse {
+  bool value = 1;
+}
+
+message NGACNode {
+  string id = 1;
+  string name = 2;
+  string node_type = 3;
+  map<string, string> properties = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message Assignment {
+  string id = 1;
+  string child_id = 2;
+  string parent_id = 3;
+}
+
+message Association {
+  string id = 1;
+  string ua_id = 2;
+  string oa_id = 3;
+  repeated string operations = 4;
+}
+
+message CheckAccessRequest {
+  string user_node_id = 1;
+  string object_node_id = 2;
+  string operation = 3;
+}
+
+message AccessDecision {
+  string decision = 1;
+  string user = 2;
+  string object = 3;
+  string operation = 4;
+  AccessExplanation explanation = 5;
+}
+
+message AccessExplanation {
+  repeated string path = 1;
+  string policy_class = 2;
+  repeated string user_attributes = 3;
+  repeated string object_attributes = 4;
+  string reason = 5;
+  repeated string constraints_checked = 6;
+  ConstraintDenial constraint_denied = 7;
+}
+
+message ConstraintDenial {
+  string name = 1;
+  string message = 2;
+}
+
+message CreateNodeRequest {
+  string name = 1;
+  string node_type = 2;
+  map<string, string> properties = 3;
+}
+
+message DeleteNodeRequest {
+  string node_id = 1;
+}
+
+message GetNodeRequest {
+  string node_id = 1;
+}
+
+message FindNodeByNameRequest {
+  string name = 1;
+  string node_type = 2;
+}
+
+message GetNodesByTypeRequest {
+  string node_type = 1;
+}
+
+message NodeList {
+  repeated NGACNode nodes = 1;
+}
+
+message CreateAssignmentRequest {
+  string child_id = 1;
+  string parent_id = 2;
+}
+
+message RemoveAssignmentRequest {
+  string child_id = 1;
+  string parent_id = 2;
+}
+
+message IsAssignedRequest {
+  string child_id = 1;
+  string parent_id = 2;
+}
+
+message CreateAssociationRequest {
+  string ua_id = 1;
+  string oa_id = 2;
+  repeated string operations = 3;
+}
+
+message RemoveAssociationRequest {
+  string ua_id = 1;
+  string oa_id = 2;
+}
+
+message GetAncestorsRequest {
+  string node_id = 1;
+}
+
+message GetDescendantsRequest {
+  string node_id = 1;
+}
+
+message GetChildrenRequest {
+  string node_id = 1;
+}
+
+message GetParentsRequest {
+  string node_id = 1;
+}

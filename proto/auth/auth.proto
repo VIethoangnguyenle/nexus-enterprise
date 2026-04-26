@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+package auth;
+
+option go_package = "ngac-platform/proto/auth";
+
+service AuthService {
+  rpc Register(RegisterRequest) returns (AuthResponse);
+  rpc Login(LoginRequest) returns (AuthResponse);
+  rpc GetUserByID(GetUserByIDRequest) returns (UserInfo);
+  rpc GetUserByNGACNodeID(GetUserByNGACNodeIDRequest) returns (UserInfo);
+  rpc ListUsers(ListUsersRequest) returns (UserListResponse);
+}
+
+message RegisterRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message AuthResponse {
+  string token = 1;
+  UserInfo user = 2;
+}
+
+message UserInfo {
+  string id = 1;
+  string username = 2;
+  string ngac_node_id = 3;
+}
+
+message GetUserByIDRequest {
+  string user_id = 1;
+}
+
+message GetUserByNGACNodeIDRequest {
+  string ngac_node_id = 1;
+}
+
+message ListUsersRequest {}
+
+message UserListResponse {
+  repeated UserInfo users = 1;
+}
