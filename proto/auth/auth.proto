@@ -7,6 +7,8 @@ option go_package = "ngac-platform/proto/auth";
 service AuthService {
   rpc Register(RegisterRequest) returns (AuthResponse);
   rpc Login(LoginRequest) returns (AuthResponse);
+  rpc RevokeToken(RevokeTokenRequest) returns (RevokeTokenResponse);
+  rpc IsTokenRevoked(IsTokenRevokedRequest) returns (IsTokenRevokedResponse);
   rpc GetUserByID(GetUserByIDRequest) returns (UserInfo);
   rpc GetUserByNGACNodeID(GetUserByNGACNodeIDRequest) returns (UserInfo);
   rpc ListUsers(ListUsersRequest) returns (UserListResponse);
@@ -45,4 +47,21 @@ message ListUsersRequest {}
 
 message UserListResponse {
   repeated UserInfo users = 1;
+}
+
+message RevokeTokenRequest {
+  string jti = 1;
+  int64 expires_at_unix = 2;
+}
+
+message RevokeTokenResponse {
+  bool revoked = 1;
+}
+
+message IsTokenRevokedRequest {
+  string jti = 1;
+}
+
+message IsTokenRevokedResponse {
+  bool revoked = 1;
 }

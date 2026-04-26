@@ -405,6 +405,190 @@ func (x *UserListResponse) GetUsers() []*UserInfo {
 	return nil
 }
 
+type RevokeTokenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Jti           string                 `protobuf:"bytes,1,opt,name=jti,proto3" json:"jti,omitempty"`
+	ExpiresAtUnix int64                  `protobuf:"varint,2,opt,name=expires_at_unix,json=expiresAtUnix,proto3" json:"expires_at_unix,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeTokenRequest) Reset() {
+	*x = RevokeTokenRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeTokenRequest) ProtoMessage() {}
+
+func (x *RevokeTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeTokenRequest.ProtoReflect.Descriptor instead.
+func (*RevokeTokenRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *RevokeTokenRequest) GetJti() string {
+	if x != nil {
+		return x.Jti
+	}
+	return ""
+}
+
+func (x *RevokeTokenRequest) GetExpiresAtUnix() int64 {
+	if x != nil {
+		return x.ExpiresAtUnix
+	}
+	return 0
+}
+
+type RevokeTokenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Revoked       bool                   `protobuf:"varint,1,opt,name=revoked,proto3" json:"revoked,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RevokeTokenResponse) Reset() {
+	*x = RevokeTokenResponse{}
+	mi := &file_proto_auth_auth_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RevokeTokenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RevokeTokenResponse) ProtoMessage() {}
+
+func (x *RevokeTokenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RevokeTokenResponse.ProtoReflect.Descriptor instead.
+func (*RevokeTokenResponse) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *RevokeTokenResponse) GetRevoked() bool {
+	if x != nil {
+		return x.Revoked
+	}
+	return false
+}
+
+type IsTokenRevokedRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Jti           string                 `protobuf:"bytes,1,opt,name=jti,proto3" json:"jti,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IsTokenRevokedRequest) Reset() {
+	*x = IsTokenRevokedRequest{}
+	mi := &file_proto_auth_auth_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IsTokenRevokedRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IsTokenRevokedRequest) ProtoMessage() {}
+
+func (x *IsTokenRevokedRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IsTokenRevokedRequest.ProtoReflect.Descriptor instead.
+func (*IsTokenRevokedRequest) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *IsTokenRevokedRequest) GetJti() string {
+	if x != nil {
+		return x.Jti
+	}
+	return ""
+}
+
+type IsTokenRevokedResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Revoked       bool                   `protobuf:"varint,1,opt,name=revoked,proto3" json:"revoked,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IsTokenRevokedResponse) Reset() {
+	*x = IsTokenRevokedResponse{}
+	mi := &file_proto_auth_auth_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IsTokenRevokedResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IsTokenRevokedResponse) ProtoMessage() {}
+
+func (x *IsTokenRevokedResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_auth_auth_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IsTokenRevokedResponse.ProtoReflect.Descriptor instead.
+func (*IsTokenRevokedResponse) Descriptor() ([]byte, []int) {
+	return file_proto_auth_auth_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *IsTokenRevokedResponse) GetRevoked() bool {
+	if x != nil {
+		return x.Revoked
+	}
+	return false
+}
+
 var File_proto_auth_auth_proto protoreflect.FileDescriptor
 
 const file_proto_auth_auth_proto_rawDesc = "" +
@@ -431,10 +615,21 @@ const file_proto_auth_auth_proto_rawDesc = "" +
 	"ngacNodeId\"\x12\n" +
 	"\x10ListUsersRequest\"8\n" +
 	"\x10UserListResponse\x12$\n" +
-	"\x05users\x18\x01 \x03(\v2\x0e.auth.UserInfoR\x05users2\xb4\x02\n" +
+	"\x05users\x18\x01 \x03(\v2\x0e.auth.UserInfoR\x05users\"N\n" +
+	"\x12RevokeTokenRequest\x12\x10\n" +
+	"\x03jti\x18\x01 \x01(\tR\x03jti\x12&\n" +
+	"\x0fexpires_at_unix\x18\x02 \x01(\x03R\rexpiresAtUnix\"/\n" +
+	"\x13RevokeTokenResponse\x12\x18\n" +
+	"\arevoked\x18\x01 \x01(\bR\arevoked\")\n" +
+	"\x15IsTokenRevokedRequest\x12\x10\n" +
+	"\x03jti\x18\x01 \x01(\tR\x03jti\"2\n" +
+	"\x16IsTokenRevokedResponse\x12\x18\n" +
+	"\arevoked\x18\x01 \x01(\bR\arevoked2\xc5\x03\n" +
 	"\vAuthService\x125\n" +
 	"\bRegister\x12\x15.auth.RegisterRequest\x1a\x12.auth.AuthResponse\x12/\n" +
-	"\x05Login\x12\x12.auth.LoginRequest\x1a\x12.auth.AuthResponse\x127\n" +
+	"\x05Login\x12\x12.auth.LoginRequest\x1a\x12.auth.AuthResponse\x12B\n" +
+	"\vRevokeToken\x12\x18.auth.RevokeTokenRequest\x1a\x19.auth.RevokeTokenResponse\x12K\n" +
+	"\x0eIsTokenRevoked\x12\x1b.auth.IsTokenRevokedRequest\x1a\x1c.auth.IsTokenRevokedResponse\x127\n" +
 	"\vGetUserByID\x12\x18.auth.GetUserByIDRequest\x1a\x0e.auth.UserInfo\x12G\n" +
 	"\x13GetUserByNGACNodeID\x12 .auth.GetUserByNGACNodeIDRequest\x1a\x0e.auth.UserInfo\x12;\n" +
 	"\tListUsers\x12\x16.auth.ListUsersRequest\x1a\x16.auth.UserListResponseB\x1aZ\x18ngac-platform/proto/authb\x06proto3"
@@ -451,7 +646,7 @@ func file_proto_auth_auth_proto_rawDescGZIP() []byte {
 	return file_proto_auth_auth_proto_rawDescData
 }
 
-var file_proto_auth_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_proto_auth_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_proto_auth_auth_proto_goTypes = []any{
 	(*RegisterRequest)(nil),            // 0: auth.RegisterRequest
 	(*LoginRequest)(nil),               // 1: auth.LoginRequest
@@ -461,25 +656,33 @@ var file_proto_auth_auth_proto_goTypes = []any{
 	(*GetUserByNGACNodeIDRequest)(nil), // 5: auth.GetUserByNGACNodeIDRequest
 	(*ListUsersRequest)(nil),           // 6: auth.ListUsersRequest
 	(*UserListResponse)(nil),           // 7: auth.UserListResponse
+	(*RevokeTokenRequest)(nil),         // 8: auth.RevokeTokenRequest
+	(*RevokeTokenResponse)(nil),        // 9: auth.RevokeTokenResponse
+	(*IsTokenRevokedRequest)(nil),      // 10: auth.IsTokenRevokedRequest
+	(*IsTokenRevokedResponse)(nil),     // 11: auth.IsTokenRevokedResponse
 }
 var file_proto_auth_auth_proto_depIdxs = []int32{
-	3, // 0: auth.AuthResponse.user:type_name -> auth.UserInfo
-	3, // 1: auth.UserListResponse.users:type_name -> auth.UserInfo
-	0, // 2: auth.AuthService.Register:input_type -> auth.RegisterRequest
-	1, // 3: auth.AuthService.Login:input_type -> auth.LoginRequest
-	4, // 4: auth.AuthService.GetUserByID:input_type -> auth.GetUserByIDRequest
-	5, // 5: auth.AuthService.GetUserByNGACNodeID:input_type -> auth.GetUserByNGACNodeIDRequest
-	6, // 6: auth.AuthService.ListUsers:input_type -> auth.ListUsersRequest
-	2, // 7: auth.AuthService.Register:output_type -> auth.AuthResponse
-	2, // 8: auth.AuthService.Login:output_type -> auth.AuthResponse
-	3, // 9: auth.AuthService.GetUserByID:output_type -> auth.UserInfo
-	3, // 10: auth.AuthService.GetUserByNGACNodeID:output_type -> auth.UserInfo
-	7, // 11: auth.AuthService.ListUsers:output_type -> auth.UserListResponse
-	7, // [7:12] is the sub-list for method output_type
-	2, // [2:7] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	3,  // 0: auth.AuthResponse.user:type_name -> auth.UserInfo
+	3,  // 1: auth.UserListResponse.users:type_name -> auth.UserInfo
+	0,  // 2: auth.AuthService.Register:input_type -> auth.RegisterRequest
+	1,  // 3: auth.AuthService.Login:input_type -> auth.LoginRequest
+	8,  // 4: auth.AuthService.RevokeToken:input_type -> auth.RevokeTokenRequest
+	10, // 5: auth.AuthService.IsTokenRevoked:input_type -> auth.IsTokenRevokedRequest
+	4,  // 6: auth.AuthService.GetUserByID:input_type -> auth.GetUserByIDRequest
+	5,  // 7: auth.AuthService.GetUserByNGACNodeID:input_type -> auth.GetUserByNGACNodeIDRequest
+	6,  // 8: auth.AuthService.ListUsers:input_type -> auth.ListUsersRequest
+	2,  // 9: auth.AuthService.Register:output_type -> auth.AuthResponse
+	2,  // 10: auth.AuthService.Login:output_type -> auth.AuthResponse
+	9,  // 11: auth.AuthService.RevokeToken:output_type -> auth.RevokeTokenResponse
+	11, // 12: auth.AuthService.IsTokenRevoked:output_type -> auth.IsTokenRevokedResponse
+	3,  // 13: auth.AuthService.GetUserByID:output_type -> auth.UserInfo
+	3,  // 14: auth.AuthService.GetUserByNGACNodeID:output_type -> auth.UserInfo
+	7,  // 15: auth.AuthService.ListUsers:output_type -> auth.UserListResponse
+	9,  // [9:16] is the sub-list for method output_type
+	2,  // [2:9] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_auth_auth_proto_init() }
@@ -493,7 +696,7 @@ func file_proto_auth_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_auth_auth_proto_rawDesc), len(file_proto_auth_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -21,6 +21,8 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	AuthService_Register_FullMethodName            = "/auth.AuthService/Register"
 	AuthService_Login_FullMethodName               = "/auth.AuthService/Login"
+	AuthService_RevokeToken_FullMethodName         = "/auth.AuthService/RevokeToken"
+	AuthService_IsTokenRevoked_FullMethodName      = "/auth.AuthService/IsTokenRevoked"
 	AuthService_GetUserByID_FullMethodName         = "/auth.AuthService/GetUserByID"
 	AuthService_GetUserByNGACNodeID_FullMethodName = "/auth.AuthService/GetUserByNGACNodeID"
 	AuthService_ListUsers_FullMethodName           = "/auth.AuthService/ListUsers"
@@ -32,6 +34,8 @@ const (
 type AuthServiceClient interface {
 	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*AuthResponse, error)
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*AuthResponse, error)
+	RevokeToken(ctx context.Context, in *RevokeTokenRequest, opts ...grpc.CallOption) (*RevokeTokenResponse, error)
+	IsTokenRevoked(ctx context.Context, in *IsTokenRevokedRequest, opts ...grpc.CallOption) (*IsTokenRevokedResponse, error)
 	GetUserByID(ctx context.Context, in *GetUserByIDRequest, opts ...grpc.CallOption) (*UserInfo, error)
 	GetUserByNGACNodeID(ctx context.Context, in *GetUserByNGACNodeIDRequest, opts ...grpc.CallOption) (*UserInfo, error)
 	ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*UserListResponse, error)
@@ -59,6 +63,26 @@ func (c *authServiceClient) Login(ctx context.Context, in *LoginRequest, opts ..
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AuthResponse)
 	err := c.cc.Invoke(ctx, AuthService_Login_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) RevokeToken(ctx context.Context, in *RevokeTokenRequest, opts ...grpc.CallOption) (*RevokeTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeTokenResponse)
+	err := c.cc.Invoke(ctx, AuthService_RevokeToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *authServiceClient) IsTokenRevoked(ctx context.Context, in *IsTokenRevokedRequest, opts ...grpc.CallOption) (*IsTokenRevokedResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IsTokenRevokedResponse)
+	err := c.cc.Invoke(ctx, AuthService_IsTokenRevoked_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -101,6 +125,8 @@ func (c *authServiceClient) ListUsers(ctx context.Context, in *ListUsersRequest,
 type AuthServiceServer interface {
 	Register(context.Context, *RegisterRequest) (*AuthResponse, error)
 	Login(context.Context, *LoginRequest) (*AuthResponse, error)
+	RevokeToken(context.Context, *RevokeTokenRequest) (*RevokeTokenResponse, error)
+	IsTokenRevoked(context.Context, *IsTokenRevokedRequest) (*IsTokenRevokedResponse, error)
 	GetUserByID(context.Context, *GetUserByIDRequest) (*UserInfo, error)
 	GetUserByNGACNodeID(context.Context, *GetUserByNGACNodeIDRequest) (*UserInfo, error)
 	ListUsers(context.Context, *ListUsersRequest) (*UserListResponse, error)
@@ -119,6 +145,12 @@ func (UnimplementedAuthServiceServer) Register(context.Context, *RegisterRequest
 }
 func (UnimplementedAuthServiceServer) Login(context.Context, *LoginRequest) (*AuthResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
+}
+func (UnimplementedAuthServiceServer) RevokeToken(context.Context, *RevokeTokenRequest) (*RevokeTokenResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeToken not implemented")
+}
+func (UnimplementedAuthServiceServer) IsTokenRevoked(context.Context, *IsTokenRevokedRequest) (*IsTokenRevokedResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IsTokenRevoked not implemented")
 }
 func (UnimplementedAuthServiceServer) GetUserByID(context.Context, *GetUserByIDRequest) (*UserInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUserByID not implemented")
@@ -182,6 +214,42 @@ func _AuthService_Login_Handler(srv interface{}, ctx context.Context, dec func(i
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(AuthServiceServer).Login(ctx, req.(*LoginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_RevokeToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).RevokeToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_RevokeToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).RevokeToken(ctx, req.(*RevokeTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AuthService_IsTokenRevoked_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsTokenRevokedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServiceServer).IsTokenRevoked(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AuthService_IsTokenRevoked_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServiceServer).IsTokenRevoked(ctx, req.(*IsTokenRevokedRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -254,6 +322,14 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Login",
 			Handler:    _AuthService_Login_Handler,
+		},
+		{
+			MethodName: "RevokeToken",
+			Handler:    _AuthService_RevokeToken_Handler,
+		},
+		{
+			MethodName: "IsTokenRevoked",
+			Handler:    _AuthService_IsTokenRevoked_Handler,
 		},
 		{
 			MethodName: "GetUserByID",

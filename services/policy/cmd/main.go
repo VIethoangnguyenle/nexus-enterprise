@@ -7,18 +7,21 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	pb "ngac-platform/proto/policy"
+	"ngac-platform/services/policy/internal/events"
 	pgrpc "ngac-platform/services/policy/internal/grpc"
 	"ngac-platform/services/policy/internal/ngac"
-	pb "ngac-platform/proto/policy"
 )
 
 func main() {
@@ -31,6 +34,8 @@ func main() {
 	defer cancel()
 
 	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
+	redisURL := envOr("REDIS_URL", "redis://localhost:6379/0")
+	kafkaBrokers := envOr("KAFKA_BROKERS", "localhost:19092")
 	port := envOr("GRPC_PORT", "50051")
 
 	pool, err := connectDB(ctx, dbURL)
@@ -58,6 +63,22 @@ func main() {
 	ce := ngac.NewConstraintEngine()
 	ce.Register(ngac.WeekdayOnlyConstraint)
 
+	rdb, err := connectRedis(ctx, redisURL)
+	if err != nil {
+		slog.Warn("redis unavailable, access caching disabled", "error", err)
+	}
+	if rdb != nil {
+		defer rdb.Close()
+	}
+
+	producer, err := events.NewProducer(strings.Split(kafkaBrokers, ","))
+	if err != nil {
+		slog.Warn("kafka unavailable, event streaming disabled", "error", err)
+	}
+	if producer != nil {
+		defer producer.Close()
+	}
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
 		slog.Error("failed to listen", "port", port, "error", err)
@@ -70,7 +91,7 @@ func main() {
 			recoveryInterceptor,
 		),
 	)
-	pb.RegisterPolicyServiceServer(srv, pgrpc.NewPolicyServer(store, ce))
+	pb.RegisterPolicyServiceServer(srv, pgrpc.NewPolicyServer(store, ce, rdb, producer))
 
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)
@@ -114,6 +135,21 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// connectRedis creates a Redis client from a URL and verifies connectivity.
+func connectRedis(ctx context.Context, redisURL string) (*redis.Client, error) {
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing redis url: %w", err)
+	}
+	rdb := redis.NewClient(opts)
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		rdb.Close()
+		return nil, fmt.Errorf("pinging redis: %w", err)
+	}
+	slog.Info("redis connected", "addr", opts.Addr, "db", opts.DB)
+	return rdb, nil
 }
 
 // connectDB creates a pgxpool with production-ready pool configuration.

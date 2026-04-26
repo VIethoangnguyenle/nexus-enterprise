@@ -3,8 +3,10 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
@@ -14,18 +16,20 @@ import (
 	policypb "ngac-platform/proto/policy"
 )
 
+// AuthServer handles authentication with optional Redis JWT blacklisting.
 type AuthServer struct {
 	pb.UnimplementedAuthServiceServer
 	store        *store.Store
 	policyClient policypb.PolicyServiceClient
+	rdb          *redis.Client
 }
 
-func NewAuthServer(s *store.Store, pc policypb.PolicyServiceClient) *AuthServer {
-	return &AuthServer{store: s, policyClient: pc}
+// NewAuthServer creates an AuthServer with optional Redis for JWT blacklisting.
+func NewAuthServer(s *store.Store, pc policypb.PolicyServiceClient, rdb *redis.Client) *AuthServer {
+	return &AuthServer{store: s, policyClient: pc, rdb: rdb}
 }
 
 func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.AuthResponse, error) {
-	// Check existing user
 	existing, _ := s.store.GetUserByUsername(ctx, req.Username)
 	if existing != nil {
 		return nil, status.Errorf(codes.AlreadyExists, "username already taken")
@@ -36,7 +40,6 @@ func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb
 		return nil, status.Errorf(codes.Internal, "hash password: %v", err)
 	}
 
-	// Create NGAC User node via Policy Service
 	userNode, err := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
 		Name: req.Username, NodeType: "U",
 		Properties: map[string]string{"type": "user"},
@@ -45,7 +48,6 @@ func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb
 		return nil, status.Errorf(codes.Internal, "create ngac node: %v", err)
 	}
 
-	// Assign to PublicUsers UA
 	publicUA, err := s.policyClient.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
 		Name: "PublicUsers", NodeType: "UA",
 	})
@@ -93,6 +95,41 @@ func (s *AuthServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.AuthR
 		Token: token,
 		User:  &pb.UserInfo{Id: user.ID, Username: user.Username, NgacNodeId: user.NGACNodeID},
 	}, nil
+}
+
+// RevokeToken adds a JWT ID to the Redis blacklist with TTL matching token expiry.
+func (s *AuthServer) RevokeToken(ctx context.Context, req *pb.RevokeTokenRequest) (*pb.RevokeTokenResponse, error) {
+	if s.rdb == nil {
+		return nil, status.Errorf(codes.Unavailable, "jwt blacklist unavailable: redis not connected")
+	}
+
+	remaining := time.Until(time.Unix(req.ExpiresAtUnix, 0))
+	if remaining <= 0 {
+		return &pb.RevokeTokenResponse{Revoked: true}, nil
+	}
+
+	key := jwtBlacklistKey(req.Jti)
+	if err := s.rdb.Set(ctx, key, "1", remaining).Err(); err != nil {
+		return nil, status.Errorf(codes.Internal, "blacklist token: %v", err)
+	}
+	return &pb.RevokeTokenResponse{Revoked: true}, nil
+}
+
+// IsTokenRevoked checks if a JWT ID exists in the blacklist.
+func (s *AuthServer) IsTokenRevoked(ctx context.Context, req *pb.IsTokenRevokedRequest) (*pb.IsTokenRevokedResponse, error) {
+	if s.rdb == nil {
+		return &pb.IsTokenRevokedResponse{Revoked: false}, nil
+	}
+
+	exists, err := s.rdb.Exists(ctx, jwtBlacklistKey(req.Jti)).Result()
+	if err != nil {
+		return &pb.IsTokenRevokedResponse{Revoked: false}, nil
+	}
+	return &pb.IsTokenRevokedResponse{Revoked: exists > 0}, nil
+}
+
+func jwtBlacklistKey(jti string) string {
+	return fmt.Sprintf("jwt:blacklist:%s", jti)
 }
 
 func (s *AuthServer) GetUserByID(ctx context.Context, req *pb.GetUserByIDRequest) (*pb.UserInfo, error) {

@@ -8,10 +8,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
@@ -21,6 +23,7 @@ import (
 	authpb "ngac-platform/proto/auth"
 	pb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/messaging/internal/events"
 	mgrpc "ngac-platform/services/messaging/internal/grpc"
 )
 
@@ -34,6 +37,8 @@ func main() {
 	defer cancel()
 
 	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
+	redisURL := envOr("REDIS_URL", "redis://localhost:6379/2")
+	kafkaBrokers := envOr("KAFKA_BROKERS", "localhost:19092")
 	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
 	authAddr := envOr("AUTH_SERVICE_ADDR", "localhost:50052")
 	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
@@ -61,7 +66,16 @@ func main() {
 	}
 	defer authConn.Close()
 
-	hub := mgrpc.NewHub()
+	rdb, err := connectRedis(ctx, redisURL)
+	if err != nil {
+		slog.Warn("redis unavailable, local-only hub", "error", err)
+	}
+	if rdb != nil {
+		defer rdb.Close()
+	}
+
+	hub := mgrpc.NewHub(rdb)
+	defer hub.Close()
 
 	// Start WebSocket server with graceful shutdown support
 	wsMux := http.NewServeMux()
@@ -87,6 +101,14 @@ func main() {
 		os.Exit(1)
 	}
 
+	producer, err := events.NewProducer(strings.Split(kafkaBrokers, ","))
+	if err != nil {
+		slog.Warn("kafka unavailable, event streaming disabled", "error", err)
+	}
+	if producer != nil {
+		defer producer.Close()
+	}
+
 	srv := grpc.NewServer(
 		grpc.ChainUnaryInterceptor(
 			loggingInterceptor,
@@ -98,6 +120,7 @@ func main() {
 		policypb.NewPolicyServiceClient(policyConn),
 		authpb.NewAuthServiceClient(authConn),
 		hub,
+		producer,
 	))
 
 	healthSrv := health.NewServer()
@@ -148,6 +171,21 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// connectRedis creates a Redis client from a URL and verifies connectivity.
+func connectRedis(ctx context.Context, redisURL string) (*redis.Client, error) {
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing redis url: %w", err)
+	}
+	rdb := redis.NewClient(opts)
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		rdb.Close()
+		return nil, fmt.Errorf("pinging redis: %w", err)
+	}
+	slog.Info("redis connected", "addr", opts.Addr, "db", opts.DB)
+	return rdb, nil
 }
 
 func connectDB(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
@@ -34,6 +35,7 @@ func main() {
 	defer cancel()
 
 	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
+	redisURL := envOr("REDIS_URL", "redis://localhost:6379/1")
 	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
 	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
 	port := envOr("GRPC_PORT", "50052")
@@ -57,6 +59,14 @@ func main() {
 
 	s := store.New(pool)
 
+	rdb, err := connectRedis(ctx, redisURL)
+	if err != nil {
+		slog.Warn("redis unavailable, jwt blacklist disabled", "error", err)
+	}
+	if rdb != nil {
+		defer rdb.Close()
+	}
+
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
 		slog.Error("failed to listen", "port", port, "error", err)
@@ -69,7 +79,7 @@ func main() {
 			recoveryInterceptor,
 		),
 	)
-	pb.RegisterAuthServiceServer(srv, agrpc.NewAuthServer(s, policyClient))
+	pb.RegisterAuthServiceServer(srv, agrpc.NewAuthServer(s, policyClient, rdb))
 
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)
@@ -90,6 +100,21 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// connectRedis creates a Redis client from a URL and verifies connectivity.
+func connectRedis(ctx context.Context, redisURL string) (*redis.Client, error) {
+	opts, err := redis.ParseURL(redisURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing redis url: %w", err)
+	}
+	rdb := redis.NewClient(opts)
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		rdb.Close()
+		return nil, fmt.Errorf("pinging redis: %w", err)
+	}
+	slog.Info("redis connected", "addr", opts.Addr, "db", opts.DB)
+	return rdb, nil
 }
 
 // connectDB creates a pgxpool with production-ready pool configuration.

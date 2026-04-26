@@ -15,6 +15,7 @@ import (
 	authpb "ngac-platform/proto/auth"
 	pb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/messaging/internal/events"
 )
 
 type MessagingServer struct {
@@ -23,10 +24,12 @@ type MessagingServer struct {
 	policyClient policypb.PolicyServiceClient
 	authClient   authpb.AuthServiceClient
 	hub          *Hub
+	producer     *events.Producer
 }
 
-func NewMessagingServer(db *pgxpool.Pool, pc policypb.PolicyServiceClient, ac authpb.AuthServiceClient, hub *Hub) *MessagingServer {
-	return &MessagingServer{db: db, policyClient: pc, authClient: ac, hub: hub}
+// NewMessagingServer creates the messaging gRPC handler with optional Kafka producer.
+func NewMessagingServer(db *pgxpool.Pool, pc policypb.PolicyServiceClient, ac authpb.AuthServiceClient, hub *Hub, producer *events.Producer) *MessagingServer {
+	return &MessagingServer{db: db, policyClient: pc, authClient: ac, hub: hub, producer: producer}
 }
 
 func (s *MessagingServer) CreateChannel(ctx context.Context, req *pb.CreateChannelRequest) (*pb.Channel, error) {
@@ -235,6 +238,8 @@ func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRe
 	if s.hub != nil {
 		s.hub.BroadcastToChannel(req.ChannelId, msg)
 	}
+
+	s.producer.PublishMessageSent(req.ChannelId, req.SenderId)
 
 	return msg, nil
 }

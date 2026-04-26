@@ -1,13 +1,15 @@
 package grpc
 
 import (
+	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 
 	pb "ngac-platform/proto/messaging"
 )
@@ -16,11 +18,16 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
 
+// Hub manages WebSocket clients and uses Redis pub/sub for cross-instance messaging.
 type Hub struct {
 	mu       sync.RWMutex
-	channels map[string]map[*Client]bool // channelID -> set of clients
+	channels map[string]map[*Client]bool
+	rdb      *redis.Client
+	ctx      context.Context
+	cancel   context.CancelFunc
 }
 
+// Client represents a connected WebSocket user.
 type Client struct {
 	conn       *websocket.Conn
 	userID     string
@@ -30,18 +37,35 @@ type Client struct {
 	send       chan []byte
 }
 
+// WSMessage is the wire format for WebSocket frames.
 type WSMessage struct {
-	Type      string `json:"type"`
-	ChannelID string `json:"channel_id,omitempty"`
-	Content   string `json:"content,omitempty"`
-	// Embedded message for broadcasts
-	Message *pb.Message `json:"message,omitempty"`
+	Type      string      `json:"type"`
+	ChannelID string      `json:"channel_id,omitempty"`
+	Content   string      `json:"content,omitempty"`
+	Message   *pb.Message `json:"message,omitempty"`
 }
 
-func NewHub() *Hub {
-	return &Hub{channels: make(map[string]map[*Client]bool)}
+// NewHub creates a Hub with optional Redis pub/sub for horizontal scaling.
+func NewHub(rdb *redis.Client) *Hub {
+	ctx, cancel := context.WithCancel(context.Background())
+	h := &Hub{
+		channels: make(map[string]map[*Client]bool),
+		rdb:      rdb,
+		ctx:      ctx,
+		cancel:   cancel,
+	}
+	if rdb != nil {
+		go h.subscribeRedis()
+	}
+	return h
 }
 
+// Close shuts down the Hub and its Redis subscription.
+func (h *Hub) Close() {
+	h.cancel()
+}
+
+// Subscribe adds a client to a local channel group.
 func (h *Hub) Subscribe(channelID string, client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -51,6 +75,7 @@ func (h *Hub) Subscribe(channelID string, client *Client) {
 	h.channels[channelID][client] = true
 }
 
+// Unsubscribe removes a client from a channel group.
 func (h *Hub) Unsubscribe(channelID string, client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -59,6 +84,7 @@ func (h *Hub) Unsubscribe(channelID string, client *Client) {
 	}
 }
 
+// UnsubscribeAll removes a client from all channels (on disconnect).
 func (h *Hub) UnsubscribeAll(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -67,28 +93,107 @@ func (h *Hub) UnsubscribeAll(client *Client) {
 	}
 }
 
+// BroadcastToChannel publishes to Redis (cross-instance) or local broadcast.
 func (h *Hub) BroadcastToChannel(channelID string, msg *pb.Message) {
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-
-	data, _ := json.Marshal(WSMessage{
+	data, err := json.Marshal(WSMessage{
 		Type:      "message",
 		ChannelID: channelID,
 		Message:   msg,
 	})
+	if err != nil {
+		slog.Error("failed to marshal broadcast message", "error", err)
+		return
+	}
 
+	if h.rdb != nil {
+		if err := h.rdb.Publish(h.ctx, redisChanKey(channelID), data).Err(); err != nil {
+			slog.Warn("redis publish failed, falling back to local", "error", err)
+			h.broadcastLocal(channelID, data)
+		}
+		return
+	}
+	h.broadcastLocal(channelID, data)
+}
+
+// broadcastLocal sends data to local WebSocket clients in a channel.
+func (h *Hub) broadcastLocal(channelID string, data []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	clients, ok := h.channels[channelID]
+	if !ok {
+		return
+	}
+	for client := range clients {
+		select {
+		case client.send <- data:
+		default:
+			close(client.send)
+			delete(clients, client)
+		}
+	}
+}
+
+// broadcastTyping sends typing indicator via Redis or local.
+func (h *Hub) broadcastTyping(channelID, username string, sender *Client) {
+	data, err := json.Marshal(WSMessage{
+		Type:      "typing",
+		ChannelID: channelID,
+		Content:   username,
+	})
+	if err != nil {
+		return
+	}
+
+	if h.rdb != nil {
+		if err := h.rdb.Publish(h.ctx, redisChanKey(channelID), data).Err(); err != nil {
+			slog.Warn("redis typing publish failed", "error", err)
+		}
+		return
+	}
+
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 	if clients, ok := h.channels[channelID]; ok {
-		for client := range clients {
-			select {
-			case client.send <- data:
-			default:
-				close(client.send)
-				delete(clients, client)
+		for other := range clients {
+			if other != sender {
+				select {
+				case other.send <- data:
+				default:
+				}
 			}
 		}
 	}
 }
 
+// subscribeRedis listens on channel:* pattern and delivers to local clients.
+func (h *Hub) subscribeRedis() {
+	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*")
+	defer pubsub.Close()
+
+	slog.Info("redis pub/sub subscriber started")
+
+	ch := pubsub.Channel()
+	for {
+		select {
+		case <-h.ctx.Done():
+			slog.Info("redis subscriber shutting down")
+			return
+		case msg, ok := <-ch:
+			if !ok {
+				return
+			}
+			channelID := msg.Channel[len("channel:"):]
+			h.broadcastLocal(channelID, []byte(msg.Payload))
+		}
+	}
+}
+
+func redisChanKey(channelID string) string {
+	return "channel:" + channelID
+}
+
+// WSClaims are JWT claims for WebSocket authentication.
 type WSClaims struct {
 	UserID     string `json:"user_id"`
 	Username   string `json:"username"`
@@ -96,9 +201,9 @@ type WSClaims struct {
 	jwt.RegisteredClaims
 }
 
+// HandleWebSocket returns an HTTP handler that upgrades to WebSocket.
 func (h *Hub) HandleWebSocket(jwtSecret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// Auth via query param
 		tokenStr := r.URL.Query().Get("token")
 		if tokenStr == "" {
 			http.Error(w, "missing token", http.StatusUnauthorized)
@@ -116,13 +221,17 @@ func (h *Hub) HandleWebSocket(jwtSecret string) http.HandlerFunc {
 
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
-			log.Printf("WebSocket upgrade error: %v", err)
+			slog.Warn("websocket upgrade failed", "error", err)
 			return
 		}
 
 		client := &Client{
-			conn: conn, userID: claims.UserID, username: claims.Username,
-			ngacNodeID: claims.NGACNodeID, hub: h, send: make(chan []byte, 256),
+			conn:       conn,
+			userID:     claims.UserID,
+			username:   claims.Username,
+			ngacNodeID: claims.NGACNodeID,
+			hub:        h,
+			send:       make(chan []byte, 256),
 		}
 
 		go client.writePump()
@@ -153,24 +262,7 @@ func (c *Client) readPump() {
 		case "unsubscribe":
 			c.hub.Unsubscribe(msg.ChannelID, c)
 		case "typing":
-			// Broadcast typing indicator
-			data, _ := json.Marshal(WSMessage{
-				Type:      "typing",
-				ChannelID: msg.ChannelID,
-				Content:   c.username,
-			})
-			c.hub.mu.RLock()
-			if clients, ok := c.hub.channels[msg.ChannelID]; ok {
-				for other := range clients {
-					if other != c {
-						select {
-						case other.send <- data:
-						default:
-						}
-					}
-				}
-			}
-			c.hub.mu.RUnlock()
+			c.hub.broadcastTyping(msg.ChannelID, c.username, c)
 		}
 	}
 }

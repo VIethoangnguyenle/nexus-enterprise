@@ -16,17 +16,42 @@ services:
       timeout: 5s
       retries: 10
 
-  nats:
-    image: nats:2.10-alpine
+  redis:
+    image: redis:7-alpine
     ports:
-      - "4222:4222"
-      - "8222:8222"
-    command: ["--http_port", "8222"]
+      - "6379:6379"
+    command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
+    volumes:
+      - redisdata:/data
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8222/healthz"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.18
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --memory 128M
+      - --reserve-memory 0M
+      - --overprovisioned
+      - --default-log-level=warn
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+      - "9644:9644"
+    volumes:
+      - redpandadata:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'HEALTHY' || rpk cluster health | grep -q 'healthy'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
 
   policy:
     build:
@@ -34,11 +59,17 @@ services:
       dockerfile: services/policy/Dockerfile
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
       GRPC_PORT: "50051"
     ports:
       - "50051:50051"
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50051"]
@@ -53,12 +84,15 @@ services:
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
+      REDIS_URL: redis://redis:6379/1
       JWT_SECRET: ngac-super-secret-key-change-in-production
       GRPC_PORT: "50052"
     ports:
       - "50052:50052"
     depends_on:
       policy:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50052"]
@@ -73,14 +107,11 @@ services:
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
-      NATS_URL: nats://nats:4222
       GRPC_PORT: "50053"
     ports:
       - "50053:50053"
     depends_on:
       policy:
-        condition: service_healthy
-      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50053"]
@@ -95,7 +126,6 @@ services:
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
-      NATS_URL: nats://nats:4222
       DATA_DIR: /data/documents
       GRPC_PORT: "50054"
     ports:
@@ -104,8 +134,6 @@ services:
       - docdata:/data/documents
     depends_on:
       policy:
-        condition: service_healthy
-      nats:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50054"]
@@ -121,7 +149,8 @@ services:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
       AUTH_SERVICE_ADDR: auth:50052
-      NATS_URL: nats://nats:4222
+      REDIS_URL: redis://redis:6379/2
+      KAFKA_BROKERS: redpanda:9092
       GRPC_PORT: "50055"
       WS_PORT: "8081"
     ports:
@@ -130,7 +159,9 @@ services:
     depends_on:
       policy:
         condition: service_healthy
-      nats:
+      redis:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50055"]
@@ -174,3 +205,5 @@ services:
 volumes:
   pgdata:
   docdata:
+  redisdata:
+  redpandadata:
