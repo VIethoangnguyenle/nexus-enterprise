@@ -3,73 +3,185 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"net"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/status"
 
-	"ngac-platform/services/policy/internal/ngac"
 	pgrpc "ngac-platform/services/policy/internal/grpc"
+	"ngac-platform/services/policy/internal/ngac"
 	pb "ngac-platform/proto/policy"
 )
 
 func main() {
-	ctx := context.Background()
+	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable"
-	}
-	port := os.Getenv("GRPC_PORT")
-	if port == "" {
-		port = "50051"
-	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	pool, err := pgxpool.New(ctx, dbURL)
+	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
+	port := envOr("GRPC_PORT", "50051")
+
+	pool, err := connectDB(ctx, dbURL)
 	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
 
 	graph := ngac.NewGraph()
 	store := ngac.NewStore(pool, graph)
 
-	// Initialize schema
 	if err := store.InitSchema(ctx); err != nil {
-		log.Fatalf("Failed to init schema: %v", err)
+		slog.Error("failed to init schema", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Schema initialized")
+	slog.Info("schema initialized")
 
-	// Load graph from DB
 	if err := store.LoadGraph(ctx); err != nil {
-		log.Fatalf("Failed to load graph: %v", err)
+		slog.Error("failed to load graph", "error", err)
+		os.Exit(1)
 	}
-	log.Printf("Graph loaded: %d nodes", len(graph.Nodes))
+	slog.Info("graph loaded", "nodes", len(graph.Nodes))
 
-	// Register constraint engine
 	ce := ngac.NewConstraintEngine()
 	ce.Register(ngac.WeekdayOnlyConstraint)
 
-	// Start gRPC server
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
+		slog.Error("failed to listen", "port", port, "error", err)
+		os.Exit(1)
 	}
 
-	srv := grpc.NewServer()
+	srv := grpc.NewServer(
+		grpc.ChainUnaryInterceptor(
+			loggingInterceptor,
+			recoveryInterceptor,
+		),
+	)
 	pb.RegisterPolicyServiceServer(srv, pgrpc.NewPolicyServer(store, ce))
 
-	// Register health check
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 
-	log.Printf("Policy Service listening on :%s", port)
+	// Graceful shutdown
+	go func() {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+		sig := <-sigCh
+		slog.Info("received shutdown signal", "signal", sig)
+
+		healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
+		cancel()
+
+		stopped := make(chan struct{})
+		go func() {
+			srv.GracefulStop()
+			close(stopped)
+		}()
+
+		select {
+		case <-stopped:
+			slog.Info("server stopped gracefully")
+		case <-time.After(15 * time.Second):
+			slog.Warn("graceful stop timed out, forcing stop")
+			srv.Stop()
+		}
+	}()
+
+	slog.Info("policy service listening", "port", port)
 	if err := srv.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+		slog.Error("server exited", "error", err)
+		os.Exit(1)
 	}
+}
+
+// envOr returns the environment variable value or a fallback default.
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
+}
+
+// connectDB creates a pgxpool with production-ready pool configuration.
+func connectDB(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
+	cfg, err := pgxpool.ParseConfig(dbURL)
+	if err != nil {
+		return nil, fmt.Errorf("parsing database url: %w", err)
+	}
+
+	cfg.MaxConns = 25
+	cfg.MinConns = 5
+	cfg.MaxConnLifetime = 5 * time.Minute
+	cfg.MaxConnIdleTime = 1 * time.Minute
+
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("creating connection pool: %w", err)
+	}
+
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("pinging database: %w", err)
+	}
+
+	return pool, nil
+}
+
+// loggingInterceptor logs every gRPC call with method, duration, and status code.
+func loggingInterceptor(
+	ctx context.Context,
+	req any,
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (any, error) {
+	start := time.Now()
+	resp, err := handler(ctx, req)
+	duration := time.Since(start)
+
+	code := status.Code(err)
+	attrs := []any{
+		"method", info.FullMethod,
+		"duration_ms", duration.Milliseconds(),
+		"code", code.String(),
+	}
+	if err != nil {
+		attrs = append(attrs, "error", err.Error())
+		slog.Warn("grpc call failed", attrs...)
+	} else {
+		slog.Debug("grpc call", attrs...)
+	}
+	return resp, err
+}
+
+// recoveryInterceptor catches panics in handlers and returns Internal error.
+func recoveryInterceptor(
+	ctx context.Context,
+	req any,
+	info *grpc.UnaryServerInfo,
+	handler grpc.UnaryHandler,
+) (resp any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered in grpc handler",
+				"method", info.FullMethod,
+				"panic", fmt.Sprintf("%v", r),
+			)
+			err = status.Errorf(2, "internal server error") // codes.Internal = 13
+		}
+	}()
+	return handler(ctx, req)
 }
