@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS documents (
     owner_id        TEXT REFERENCES users(id),
     ngac_node       TEXT REFERENCES ngac_nodes(id),
     workspace_id    TEXT REFERENCES workspaces(id),
+    status          TEXT NOT NULL DEFAULT 'draft',
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -131,9 +132,18 @@ CREATE TABLE IF NOT EXISTS thread_participants (
     PRIMARY KEY (message_id, user_id)
 );
 
--- ============================================
--- Notification Tables (owned by Messaging Service)
--- ============================================
+-- Channel members — denormalized for efficient DM lookup by member pair.
+-- NGAC graph remains the source of truth for access control.
+CREATE TABLE IF NOT EXISTS channel_members (
+    channel_id    TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+    ngac_node_id  TEXT NOT NULL,
+    joined_at     TIMESTAMPTZ DEFAULT NOW(),
+    PRIMARY KEY (channel_id, ngac_node_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_channel_members_node ON channel_members(ngac_node_id);
+
+
 
 CREATE TABLE IF NOT EXISTS notifications (
     id              TEXT PRIMARY KEY,
@@ -241,3 +251,57 @@ ON CONFLICT (child_id, parent_id) DO NOTHING;
 INSERT INTO ngac_associations (id, ua_id, oa_id, operations) VALUES
   ('assoc-pub-read', 'ua-public-users', 'oa-public-docs', ARRAY['read'])
 ON CONFLICT (ua_id, oa_id) DO UPDATE SET operations = ARRAY['read'];
+
+-- ============================================
+-- Drive Tables (owned by Drive Service)
+-- ============================================
+
+CREATE TABLE IF NOT EXISTS drive_items (
+    id              TEXT PRIMARY KEY,
+    workspace_id    TEXT NOT NULL REFERENCES workspaces(id),
+    drive_context   TEXT NOT NULL DEFAULT 'workspace' CHECK (drive_context IN ('workspace', 'channel', 'dm')),
+    drive_context_id TEXT,
+    parent_id       TEXT REFERENCES drive_items(id) ON DELETE CASCADE,
+    item_type       TEXT NOT NULL CHECK (item_type IN ('file', 'folder')),
+    name            TEXT NOT NULL,
+    mime_type       TEXT,
+    size_bytes      BIGINT,
+    object_key      TEXT,
+    storage_doc_id  TEXT,
+    ngac_node_id    TEXT NOT NULL,
+    owner_id        TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'pending', 'trashed', 'deleted')),
+    trashed_at      TIMESTAMPTZ,
+    created_at      TIMESTAMPTZ DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_drive_items_unique_name
+    ON drive_items(parent_id, name) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_drive_items_parent ON drive_items(parent_id) WHERE status = 'active';
+CREATE INDEX IF NOT EXISTS idx_drive_items_workspace ON drive_items(workspace_id, status);
+CREATE INDEX IF NOT EXISTS idx_drive_items_context ON drive_items(drive_context, drive_context_id) WHERE status = 'active';
+
+CREATE TABLE IF NOT EXISTS drive_shares (
+    id              TEXT PRIMARY KEY,
+    drive_item_id   TEXT NOT NULL REFERENCES drive_items(id) ON DELETE CASCADE,
+    share_type      TEXT NOT NULL CHECK (share_type IN ('user', 'role', 'workspace', 'public')),
+    target_ngac_id  TEXT,
+    target_label    TEXT,
+    operations      TEXT[] NOT NULL,
+    ngac_share_oa   TEXT NOT NULL,
+    created_by      TEXT NOT NULL,
+    created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_drive_shares_item ON drive_shares(drive_item_id);
+CREATE INDEX IF NOT EXISTS idx_drive_shares_target ON drive_shares(target_ngac_id) WHERE target_ngac_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS drive_quotas (
+    workspace_id    TEXT PRIMARY KEY REFERENCES workspaces(id),
+    max_bytes       BIGINT DEFAULT -1,
+    used_bytes      BIGINT DEFAULT 0,
+    max_files       INT DEFAULT -1,
+    used_files      INT DEFAULT 0,
+    updated_at      TIMESTAMPTZ DEFAULT NOW()
+);

@@ -21,6 +21,11 @@ func New(pool *pgxpool.Pool) *Store {
 	return &Store{pool: pool}
 }
 
+// DB returns the underlying connection pool for cross-service queries.
+func (s *Store) DB() *pgxpool.Pool {
+	return s.pool
+}
+
 // AssetType represents a user-defined asset type with custom fields schema and lifecycle.
 type AssetType struct {
 	ID           string

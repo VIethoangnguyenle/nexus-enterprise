@@ -19,481 +19,302 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	DocumentService_Upload_FullMethodName      = "/document.DocumentService/Upload"
-	DocumentService_Get_FullMethodName         = "/document.DocumentService/Get"
-	DocumentService_List_FullMethodName        = "/document.DocumentService/List"
-	DocumentService_Delete_FullMethodName      = "/document.DocumentService/Delete"
-	DocumentService_Approve_FullMethodName     = "/document.DocumentService/Approve"
-	DocumentService_Share_FullMethodName       = "/document.DocumentService/Share"
-	DocumentService_RevokeShare_FullMethodName = "/document.DocumentService/RevokeShare"
-	DocumentService_ListShares_FullMethodName  = "/document.DocumentService/ListShares"
-	DocumentService_Publish_FullMethodName     = "/document.DocumentService/Publish"
-	DocumentService_Unpublish_FullMethodName   = "/document.DocumentService/Unpublish"
-	DocumentService_CheckAccess_FullMethodName = "/document.DocumentService/CheckAccess"
+	DocumentStorageService_GetUploadURL_FullMethodName   = "/document.DocumentStorageService/GetUploadURL"
+	DocumentStorageService_ConfirmUpload_FullMethodName  = "/document.DocumentStorageService/ConfirmUpload"
+	DocumentStorageService_GetDownloadURL_FullMethodName = "/document.DocumentStorageService/GetDownloadURL"
+	DocumentStorageService_DeleteObject_FullMethodName   = "/document.DocumentStorageService/DeleteObject"
+	DocumentStorageService_CopyObject_FullMethodName     = "/document.DocumentStorageService/CopyObject"
+	DocumentStorageService_GetObjectInfo_FullMethodName  = "/document.DocumentStorageService/GetObjectInfo"
 )
 
-// DocumentServiceClient is the client API for DocumentService service.
+// DocumentStorageServiceClient is the client API for DocumentStorageService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type DocumentServiceClient interface {
-	Upload(ctx context.Context, in *UploadRequest, opts ...grpc.CallOption) (*Document, error)
-	Get(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*Document, error)
-	List(ctx context.Context, in *ListDocumentsRequest, opts ...grpc.CallOption) (*DocumentList, error)
-	Delete(ctx context.Context, in *DeleteDocumentRequest, opts ...grpc.CallOption) (*Empty, error)
-	Approve(ctx context.Context, in *ApproveDocumentRequest, opts ...grpc.CallOption) (*Document, error)
-	Share(ctx context.Context, in *ShareDocumentRequest, opts ...grpc.CallOption) (*ShareInfo, error)
-	RevokeShare(ctx context.Context, in *RevokeShareRequest, opts ...grpc.CallOption) (*Empty, error)
-	ListShares(ctx context.Context, in *ListSharesRequest, opts ...grpc.CallOption) (*ShareList, error)
-	Publish(ctx context.Context, in *PublishDocumentRequest, opts ...grpc.CallOption) (*Empty, error)
-	Unpublish(ctx context.Context, in *UnpublishDocumentRequest, opts ...grpc.CallOption) (*Empty, error)
-	CheckAccess(ctx context.Context, in *CheckDocAccessRequest, opts ...grpc.CallOption) (*DocAccessDecision, error)
+//
+// DocumentStorageService handles raw object storage operations via MinIO.
+// No NGAC awareness — access control is handled by the Drive Service.
+type DocumentStorageServiceClient interface {
+	// Presigned URL flow
+	GetUploadURL(ctx context.Context, in *GetUploadURLRequest, opts ...grpc.CallOption) (*GetUploadURLResponse, error)
+	ConfirmUpload(ctx context.Context, in *ConfirmUploadRequest, opts ...grpc.CallOption) (*ConfirmUploadResponse, error)
+	GetDownloadURL(ctx context.Context, in *GetDownloadURLRequest, opts ...grpc.CallOption) (*GetDownloadURLResponse, error)
+	// Object management
+	DeleteObject(ctx context.Context, in *DeleteObjectRequest, opts ...grpc.CallOption) (*Empty, error)
+	CopyObject(ctx context.Context, in *CopyObjectRequest, opts ...grpc.CallOption) (*CopyObjectResponse, error)
+	GetObjectInfo(ctx context.Context, in *GetObjectInfoRequest, opts ...grpc.CallOption) (*ObjectInfo, error)
 }
 
-type documentServiceClient struct {
+type documentStorageServiceClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewDocumentServiceClient(cc grpc.ClientConnInterface) DocumentServiceClient {
-	return &documentServiceClient{cc}
+func NewDocumentStorageServiceClient(cc grpc.ClientConnInterface) DocumentStorageServiceClient {
+	return &documentStorageServiceClient{cc}
 }
 
-func (c *documentServiceClient) Upload(ctx context.Context, in *UploadRequest, opts ...grpc.CallOption) (*Document, error) {
+func (c *documentStorageServiceClient) GetUploadURL(ctx context.Context, in *GetUploadURLRequest, opts ...grpc.CallOption) (*GetUploadURLResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Document)
-	err := c.cc.Invoke(ctx, DocumentService_Upload_FullMethodName, in, out, cOpts...)
+	out := new(GetUploadURLResponse)
+	err := c.cc.Invoke(ctx, DocumentStorageService_GetUploadURL_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *documentServiceClient) Get(ctx context.Context, in *GetDocumentRequest, opts ...grpc.CallOption) (*Document, error) {
+func (c *documentStorageServiceClient) ConfirmUpload(ctx context.Context, in *ConfirmUploadRequest, opts ...grpc.CallOption) (*ConfirmUploadResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Document)
-	err := c.cc.Invoke(ctx, DocumentService_Get_FullMethodName, in, out, cOpts...)
+	out := new(ConfirmUploadResponse)
+	err := c.cc.Invoke(ctx, DocumentStorageService_ConfirmUpload_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *documentServiceClient) List(ctx context.Context, in *ListDocumentsRequest, opts ...grpc.CallOption) (*DocumentList, error) {
+func (c *documentStorageServiceClient) GetDownloadURL(ctx context.Context, in *GetDownloadURLRequest, opts ...grpc.CallOption) (*GetDownloadURLResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DocumentList)
-	err := c.cc.Invoke(ctx, DocumentService_List_FullMethodName, in, out, cOpts...)
+	out := new(GetDownloadURLResponse)
+	err := c.cc.Invoke(ctx, DocumentStorageService_GetDownloadURL_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *documentServiceClient) Delete(ctx context.Context, in *DeleteDocumentRequest, opts ...grpc.CallOption) (*Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, DocumentService_Delete_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *documentServiceClient) Approve(ctx context.Context, in *ApproveDocumentRequest, opts ...grpc.CallOption) (*Document, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Document)
-	err := c.cc.Invoke(ctx, DocumentService_Approve_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *documentServiceClient) Share(ctx context.Context, in *ShareDocumentRequest, opts ...grpc.CallOption) (*ShareInfo, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ShareInfo)
-	err := c.cc.Invoke(ctx, DocumentService_Share_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *documentServiceClient) RevokeShare(ctx context.Context, in *RevokeShareRequest, opts ...grpc.CallOption) (*Empty, error) {
+func (c *documentStorageServiceClient) DeleteObject(ctx context.Context, in *DeleteObjectRequest, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
-	err := c.cc.Invoke(ctx, DocumentService_RevokeShare_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, DocumentStorageService_DeleteObject_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *documentServiceClient) ListShares(ctx context.Context, in *ListSharesRequest, opts ...grpc.CallOption) (*ShareList, error) {
+func (c *documentStorageServiceClient) CopyObject(ctx context.Context, in *CopyObjectRequest, opts ...grpc.CallOption) (*CopyObjectResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(ShareList)
-	err := c.cc.Invoke(ctx, DocumentService_ListShares_FullMethodName, in, out, cOpts...)
+	out := new(CopyObjectResponse)
+	err := c.cc.Invoke(ctx, DocumentStorageService_CopyObject_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *documentServiceClient) Publish(ctx context.Context, in *PublishDocumentRequest, opts ...grpc.CallOption) (*Empty, error) {
+func (c *documentStorageServiceClient) GetObjectInfo(ctx context.Context, in *GetObjectInfoRequest, opts ...grpc.CallOption) (*ObjectInfo, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, DocumentService_Publish_FullMethodName, in, out, cOpts...)
+	out := new(ObjectInfo)
+	err := c.cc.Invoke(ctx, DocumentStorageService_GetObjectInfo_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *documentServiceClient) Unpublish(ctx context.Context, in *UnpublishDocumentRequest, opts ...grpc.CallOption) (*Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, DocumentService_Unpublish_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *documentServiceClient) CheckAccess(ctx context.Context, in *CheckDocAccessRequest, opts ...grpc.CallOption) (*DocAccessDecision, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(DocAccessDecision)
-	err := c.cc.Invoke(ctx, DocumentService_CheckAccess_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// DocumentServiceServer is the server API for DocumentService service.
-// All implementations must embed UnimplementedDocumentServiceServer
+// DocumentStorageServiceServer is the server API for DocumentStorageService service.
+// All implementations must embed UnimplementedDocumentStorageServiceServer
 // for forward compatibility.
-type DocumentServiceServer interface {
-	Upload(context.Context, *UploadRequest) (*Document, error)
-	Get(context.Context, *GetDocumentRequest) (*Document, error)
-	List(context.Context, *ListDocumentsRequest) (*DocumentList, error)
-	Delete(context.Context, *DeleteDocumentRequest) (*Empty, error)
-	Approve(context.Context, *ApproveDocumentRequest) (*Document, error)
-	Share(context.Context, *ShareDocumentRequest) (*ShareInfo, error)
-	RevokeShare(context.Context, *RevokeShareRequest) (*Empty, error)
-	ListShares(context.Context, *ListSharesRequest) (*ShareList, error)
-	Publish(context.Context, *PublishDocumentRequest) (*Empty, error)
-	Unpublish(context.Context, *UnpublishDocumentRequest) (*Empty, error)
-	CheckAccess(context.Context, *CheckDocAccessRequest) (*DocAccessDecision, error)
-	mustEmbedUnimplementedDocumentServiceServer()
+//
+// DocumentStorageService handles raw object storage operations via MinIO.
+// No NGAC awareness — access control is handled by the Drive Service.
+type DocumentStorageServiceServer interface {
+	// Presigned URL flow
+	GetUploadURL(context.Context, *GetUploadURLRequest) (*GetUploadURLResponse, error)
+	ConfirmUpload(context.Context, *ConfirmUploadRequest) (*ConfirmUploadResponse, error)
+	GetDownloadURL(context.Context, *GetDownloadURLRequest) (*GetDownloadURLResponse, error)
+	// Object management
+	DeleteObject(context.Context, *DeleteObjectRequest) (*Empty, error)
+	CopyObject(context.Context, *CopyObjectRequest) (*CopyObjectResponse, error)
+	GetObjectInfo(context.Context, *GetObjectInfoRequest) (*ObjectInfo, error)
+	mustEmbedUnimplementedDocumentStorageServiceServer()
 }
 
-// UnimplementedDocumentServiceServer must be embedded to have
+// UnimplementedDocumentStorageServiceServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedDocumentServiceServer struct{}
+type UnimplementedDocumentStorageServiceServer struct{}
 
-func (UnimplementedDocumentServiceServer) Upload(context.Context, *UploadRequest) (*Document, error) {
-	return nil, status.Error(codes.Unimplemented, "method Upload not implemented")
+func (UnimplementedDocumentStorageServiceServer) GetUploadURL(context.Context, *GetUploadURLRequest) (*GetUploadURLResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUploadURL not implemented")
 }
-func (UnimplementedDocumentServiceServer) Get(context.Context, *GetDocumentRequest) (*Document, error) {
-	return nil, status.Error(codes.Unimplemented, "method Get not implemented")
+func (UnimplementedDocumentStorageServiceServer) ConfirmUpload(context.Context, *ConfirmUploadRequest) (*ConfirmUploadResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ConfirmUpload not implemented")
 }
-func (UnimplementedDocumentServiceServer) List(context.Context, *ListDocumentsRequest) (*DocumentList, error) {
-	return nil, status.Error(codes.Unimplemented, "method List not implemented")
+func (UnimplementedDocumentStorageServiceServer) GetDownloadURL(context.Context, *GetDownloadURLRequest) (*GetDownloadURLResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDownloadURL not implemented")
 }
-func (UnimplementedDocumentServiceServer) Delete(context.Context, *DeleteDocumentRequest) (*Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method Delete not implemented")
+func (UnimplementedDocumentStorageServiceServer) DeleteObject(context.Context, *DeleteObjectRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteObject not implemented")
 }
-func (UnimplementedDocumentServiceServer) Approve(context.Context, *ApproveDocumentRequest) (*Document, error) {
-	return nil, status.Error(codes.Unimplemented, "method Approve not implemented")
+func (UnimplementedDocumentStorageServiceServer) CopyObject(context.Context, *CopyObjectRequest) (*CopyObjectResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CopyObject not implemented")
 }
-func (UnimplementedDocumentServiceServer) Share(context.Context, *ShareDocumentRequest) (*ShareInfo, error) {
-	return nil, status.Error(codes.Unimplemented, "method Share not implemented")
+func (UnimplementedDocumentStorageServiceServer) GetObjectInfo(context.Context, *GetObjectInfoRequest) (*ObjectInfo, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetObjectInfo not implemented")
 }
-func (UnimplementedDocumentServiceServer) RevokeShare(context.Context, *RevokeShareRequest) (*Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method RevokeShare not implemented")
+func (UnimplementedDocumentStorageServiceServer) mustEmbedUnimplementedDocumentStorageServiceServer() {
 }
-func (UnimplementedDocumentServiceServer) ListShares(context.Context, *ListSharesRequest) (*ShareList, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListShares not implemented")
-}
-func (UnimplementedDocumentServiceServer) Publish(context.Context, *PublishDocumentRequest) (*Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method Publish not implemented")
-}
-func (UnimplementedDocumentServiceServer) Unpublish(context.Context, *UnpublishDocumentRequest) (*Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method Unpublish not implemented")
-}
-func (UnimplementedDocumentServiceServer) CheckAccess(context.Context, *CheckDocAccessRequest) (*DocAccessDecision, error) {
-	return nil, status.Error(codes.Unimplemented, "method CheckAccess not implemented")
-}
-func (UnimplementedDocumentServiceServer) mustEmbedUnimplementedDocumentServiceServer() {}
-func (UnimplementedDocumentServiceServer) testEmbeddedByValue()                         {}
+func (UnimplementedDocumentStorageServiceServer) testEmbeddedByValue() {}
 
-// UnsafeDocumentServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to DocumentServiceServer will
+// UnsafeDocumentStorageServiceServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to DocumentStorageServiceServer will
 // result in compilation errors.
-type UnsafeDocumentServiceServer interface {
-	mustEmbedUnimplementedDocumentServiceServer()
+type UnsafeDocumentStorageServiceServer interface {
+	mustEmbedUnimplementedDocumentStorageServiceServer()
 }
 
-func RegisterDocumentServiceServer(s grpc.ServiceRegistrar, srv DocumentServiceServer) {
-	// If the following call panics, it indicates UnimplementedDocumentServiceServer was
+func RegisterDocumentStorageServiceServer(s grpc.ServiceRegistrar, srv DocumentStorageServiceServer) {
+	// If the following call panics, it indicates UnimplementedDocumentStorageServiceServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&DocumentService_ServiceDesc, srv)
+	s.RegisterService(&DocumentStorageService_ServiceDesc, srv)
 }
 
-func _DocumentService_Upload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UploadRequest)
+func _DocumentStorageService_GetUploadURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUploadURLRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DocumentServiceServer).Upload(ctx, in)
+		return srv.(DocumentStorageServiceServer).GetUploadURL(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DocumentService_Upload_FullMethodName,
+		FullMethod: DocumentStorageService_GetUploadURL_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).Upload(ctx, req.(*UploadRequest))
+		return srv.(DocumentStorageServiceServer).GetUploadURL(ctx, req.(*GetUploadURLRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DocumentService_Get_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetDocumentRequest)
+func _DocumentStorageService_ConfirmUpload_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmUploadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DocumentServiceServer).Get(ctx, in)
+		return srv.(DocumentStorageServiceServer).ConfirmUpload(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DocumentService_Get_FullMethodName,
+		FullMethod: DocumentStorageService_ConfirmUpload_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).Get(ctx, req.(*GetDocumentRequest))
+		return srv.(DocumentStorageServiceServer).ConfirmUpload(ctx, req.(*ConfirmUploadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DocumentService_List_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListDocumentsRequest)
+func _DocumentStorageService_GetDownloadURL_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDownloadURLRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DocumentServiceServer).List(ctx, in)
+		return srv.(DocumentStorageServiceServer).GetDownloadURL(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DocumentService_List_FullMethodName,
+		FullMethod: DocumentStorageService_GetDownloadURL_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).List(ctx, req.(*ListDocumentsRequest))
+		return srv.(DocumentStorageServiceServer).GetDownloadURL(ctx, req.(*GetDownloadURLRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DocumentService_Delete_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteDocumentRequest)
+func _DocumentStorageService_DeleteObject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteObjectRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DocumentServiceServer).Delete(ctx, in)
+		return srv.(DocumentStorageServiceServer).DeleteObject(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DocumentService_Delete_FullMethodName,
+		FullMethod: DocumentStorageService_DeleteObject_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).Delete(ctx, req.(*DeleteDocumentRequest))
+		return srv.(DocumentStorageServiceServer).DeleteObject(ctx, req.(*DeleteObjectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DocumentService_Approve_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ApproveDocumentRequest)
+func _DocumentStorageService_CopyObject_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CopyObjectRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DocumentServiceServer).Approve(ctx, in)
+		return srv.(DocumentStorageServiceServer).CopyObject(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DocumentService_Approve_FullMethodName,
+		FullMethod: DocumentStorageService_CopyObject_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).Approve(ctx, req.(*ApproveDocumentRequest))
+		return srv.(DocumentStorageServiceServer).CopyObject(ctx, req.(*CopyObjectRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DocumentService_Share_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ShareDocumentRequest)
+func _DocumentStorageService_GetObjectInfo_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetObjectInfoRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(DocumentServiceServer).Share(ctx, in)
+		return srv.(DocumentStorageServiceServer).GetObjectInfo(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: DocumentService_Share_FullMethodName,
+		FullMethod: DocumentStorageService_GetObjectInfo_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).Share(ctx, req.(*ShareDocumentRequest))
+		return srv.(DocumentStorageServiceServer).GetObjectInfo(ctx, req.(*GetObjectInfoRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _DocumentService_RevokeShare_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RevokeShareRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DocumentServiceServer).RevokeShare(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DocumentService_RevokeShare_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).RevokeShare(ctx, req.(*RevokeShareRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DocumentService_ListShares_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListSharesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DocumentServiceServer).ListShares(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DocumentService_ListShares_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).ListShares(ctx, req.(*ListSharesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DocumentService_Publish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PublishDocumentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DocumentServiceServer).Publish(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DocumentService_Publish_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).Publish(ctx, req.(*PublishDocumentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DocumentService_Unpublish_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UnpublishDocumentRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DocumentServiceServer).Unpublish(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DocumentService_Unpublish_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).Unpublish(ctx, req.(*UnpublishDocumentRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _DocumentService_CheckAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CheckDocAccessRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(DocumentServiceServer).CheckAccess(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: DocumentService_CheckAccess_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(DocumentServiceServer).CheckAccess(ctx, req.(*CheckDocAccessRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-// DocumentService_ServiceDesc is the grpc.ServiceDesc for DocumentService service.
+// DocumentStorageService_ServiceDesc is the grpc.ServiceDesc for DocumentStorageService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var DocumentService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "document.DocumentService",
-	HandlerType: (*DocumentServiceServer)(nil),
+var DocumentStorageService_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "document.DocumentStorageService",
+	HandlerType: (*DocumentStorageServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Upload",
-			Handler:    _DocumentService_Upload_Handler,
+			MethodName: "GetUploadURL",
+			Handler:    _DocumentStorageService_GetUploadURL_Handler,
 		},
 		{
-			MethodName: "Get",
-			Handler:    _DocumentService_Get_Handler,
+			MethodName: "ConfirmUpload",
+			Handler:    _DocumentStorageService_ConfirmUpload_Handler,
 		},
 		{
-			MethodName: "List",
-			Handler:    _DocumentService_List_Handler,
+			MethodName: "GetDownloadURL",
+			Handler:    _DocumentStorageService_GetDownloadURL_Handler,
 		},
 		{
-			MethodName: "Delete",
-			Handler:    _DocumentService_Delete_Handler,
+			MethodName: "DeleteObject",
+			Handler:    _DocumentStorageService_DeleteObject_Handler,
 		},
 		{
-			MethodName: "Approve",
-			Handler:    _DocumentService_Approve_Handler,
+			MethodName: "CopyObject",
+			Handler:    _DocumentStorageService_CopyObject_Handler,
 		},
 		{
-			MethodName: "Share",
-			Handler:    _DocumentService_Share_Handler,
-		},
-		{
-			MethodName: "RevokeShare",
-			Handler:    _DocumentService_RevokeShare_Handler,
-		},
-		{
-			MethodName: "ListShares",
-			Handler:    _DocumentService_ListShares_Handler,
-		},
-		{
-			MethodName: "Publish",
-			Handler:    _DocumentService_Publish_Handler,
-		},
-		{
-			MethodName: "Unpublish",
-			Handler:    _DocumentService_Unpublish_Handler,
-		},
-		{
-			MethodName: "CheckAccess",
-			Handler:    _DocumentService_CheckAccess_Handler,
+			MethodName: "GetObjectInfo",
+			Handler:    _DocumentStorageService_GetObjectInfo_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

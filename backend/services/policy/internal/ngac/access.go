@@ -4,7 +4,9 @@ import (
 	"fmt"
 )
 
-// CheckAccess performs the NGAC access decision
+// CheckAccess performs the NGAC access decision using optimized bidirectional BFS.
+// Two single-pass BFS traversals collect user attributes + PCs and object attributes + PCs
+// simultaneously. Association matching uses early termination for best-case O(branching_factor).
 func (g *Graph) CheckAccess(userNodeID, objectNodeID, operation string) *AccessDecision {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
@@ -24,99 +26,38 @@ func (g *Graph) CheckAccess(userNodeID, objectNodeID, operation string) *AccessD
 		}
 	}
 
-	// 1. Find all UAs reachable from user (upward traversal)
-	userUAs := make(map[string]*NGACNode)
-	userUAs[userNodeID] = userNode // include the user node itself
-	visited := make(map[string]bool)
-	g.collectAncestorsOfType(userNodeID, NodeTypeUserAttribute, userUAs, visited)
+	// Single-pass BFS: collect UAs + PCs in one traversal (replaces 2 separate DFS calls)
+	userUAs, userPCs := g.bfsCollectAttributesAndPCs(userNodeID, NodeTypeUserAttribute)
 
-	// 2. Find all OAs reachable from object (upward traversal)
-	objectOAs := make(map[string]*NGACNode)
-	objectOAs[objectNodeID] = objectNode
-	visited = make(map[string]bool)
-	g.collectAncestorsOfType(objectNodeID, NodeTypeObjectAttr, objectOAs, visited)
+	// Single-pass BFS: collect OAs + PCs in one traversal (replaces 2 separate DFS calls)
+	objectOAs, objectPCs := g.bfsCollectAttributesAndPCs(objectNodeID, NodeTypeObjectAttr)
 
-	// 3. Find PCs reachable from user's UAs
-	userPCs := make(map[string]bool)
-	for uaID := range userUAs {
-		uaVisited := make(map[string]bool)
-		g.collectPCsReachable(uaID, userPCs, uaVisited)
-	}
+	// Collect names for explanation output
+	uaNames := g.collectNodeNames(userUAs, NodeTypeUserAttribute)
+	oaNames := g.collectNodeNames(objectOAs, NodeTypeObjectAttr)
 
-	// 4. Find PCs reachable from object's OAs
-	objectPCs := make(map[string]bool)
-	for oaID := range objectOAs {
-		oaVisited := make(map[string]bool)
-		g.collectPCsReachable(oaID, objectPCs, oaVisited)
-	}
+	// Find matching association with early termination
+	if assocMatch := g.findMatchingAssociation(userUAs, objectOAs, userPCs, objectPCs, operation); assocMatch != nil {
+		uaNode := g.Nodes[assocMatch.uaID]
+		oaNode := g.Nodes[assocMatch.oaID]
 
-	// 5. Find associations from any user UA to any object OA with the requested operation
-	var uaNames, oaNames []string
-	for _, n := range userUAs {
-		if n.NodeType == NodeTypeUserAttribute {
-			uaNames = append(uaNames, n.Name)
+		path := []string{
+			fmt.Sprintf("%s → %s (user attribute)", userNode.Name, uaNode.Name),
+			fmt.Sprintf("%s --[%s]--> %s (association)", uaNode.Name, operation, oaNode.Name),
+			fmt.Sprintf("%s → %s (object attribute)", objectNode.Name, oaNode.Name),
 		}
-	}
-	for _, n := range objectOAs {
-		if n.NodeType == NodeTypeObjectAttr {
-			oaNames = append(oaNames, n.Name)
-		}
-	}
 
-	for uaID := range userUAs {
-		assocs := g.uaToAssociations[uaID]
-		for _, assoc := range assocs {
-			// Check if this association's OA is in the object's OA set
-			if _, inOAs := objectOAs[assoc.OAID]; !inOAs {
-				continue
-			}
-
-			// Check if the operation is in the association
-			if !containsOp(assoc.Operations, operation) {
-				continue
-			}
-
-			// Check PC intersection: both user and object must share a PC
-			commonPC := ""
-			for pc := range userPCs {
-				if objectPCs[pc] {
-					commonPC = g.Nodes[pc].Name
-					break
-				}
-			}
-			if commonPC == "" {
-				// Check if PC_Global is in objectPCs (cross-tenant sharing)
-				for pc := range objectPCs {
-					if n := g.Nodes[pc]; n != nil && n.Name == "PC_Global" {
-						commonPC = "PC_Global"
-						break
-					}
-				}
-			}
-
-			if commonPC != "" {
-				uaNode := g.Nodes[uaID]
-				oaNode := g.Nodes[assoc.OAID]
-
-				path := []string{
-					fmt.Sprintf("%s → %s (user attribute)", userNode.Name, uaNode.Name),
-					fmt.Sprintf("%s --[%s]--> %s (association)", uaNode.Name, operation, oaNode.Name),
-					fmt.Sprintf("%s → %s (object attribute)", objectNode.Name, oaNode.Name),
-				}
-
-				return &AccessDecision{
-					Decision:  "ALLOW",
-					User:      userNode.Name,
-					Object:    objectNode.Name,
-					Operation: operation,
-					Explanation: AccessExplanation{
-						Path:             path,
-						PolicyClass:      commonPC,
-						UserAttributes:   uaNames,
-						ObjectAttributes: oaNames,
-					},
-				}
-			}
+		return &AccessDecision{
+			Decision:  "ALLOW",
+			User:      userNode.Name,
+			Object:    objectNode.Name,
+			Operation: operation,
+			Explanation: AccessExplanation{
+				Path:             path,
+				PolicyClass:      assocMatch.commonPC,
+				UserAttributes:   uaNames,
+				ObjectAttributes: oaNames,
+			},
 		}
 	}
 
@@ -133,40 +74,67 @@ func (g *Graph) CheckAccess(userNodeID, objectNodeID, operation string) *AccessD
 	}
 }
 
-func (g *Graph) collectAncestorsOfType(nodeID, nodeType string, result map[string]*NGACNode, visited map[string]bool) {
-	if visited[nodeID] {
-		return
-	}
-	visited[nodeID] = true
+// associationMatch holds the result of a successful association search.
+type associationMatch struct {
+	uaID     string
+	oaID     string
+	commonPC string
+}
 
-	if parents, ok := g.childToParents[nodeID]; ok {
-		for pid := range parents {
-			if n, ok := g.Nodes[pid]; ok {
-				if n.NodeType == nodeType {
-					result[pid] = n
+// findMatchingAssociation searches for an association granting the requested operation
+// from any user UA to any object OA, requiring at least one common Policy Class.
+// Returns on first match (early termination) instead of exhaustive search.
+func (g *Graph) findMatchingAssociation(
+	userUAs, objectOAs, userPCs, objectPCs map[string]bool,
+	operation string,
+) *associationMatch {
+	for uaID := range userUAs {
+		for _, assoc := range g.uaToAssociations[uaID] {
+			if !objectOAs[assoc.OAID] {
+				continue
+			}
+			if !containsOp(assoc.Operations, operation) {
+				continue
+			}
+			// PC intersection: both user and object must share at least one PC
+			if pc := findCommonPC(userPCs, objectPCs, g.Nodes); pc != "" {
+				return &associationMatch{
+					uaID:     uaID,
+					oaID:     assoc.OAID,
+					commonPC: pc,
 				}
-				g.collectAncestorsOfType(pid, nodeType, result, visited)
 			}
 		}
 	}
+	return nil
 }
 
-func (g *Graph) collectPCsReachable(nodeID string, pcs map[string]bool, visited map[string]bool) {
-	if visited[nodeID] {
-		return
+// findCommonPC returns the name of a common Policy Class between two PC sets.
+// Iterates over the smaller set for efficiency.
+func findCommonPC(userPCs, objectPCs map[string]bool, nodes map[string]*NGACNode) string {
+	smaller, larger := userPCs, objectPCs
+	if len(userPCs) > len(objectPCs) {
+		smaller, larger = objectPCs, userPCs
 	}
-	visited[nodeID] = true
-
-	if n, ok := g.Nodes[nodeID]; ok && n.NodeType == NodeTypePolicyClass {
-		pcs[nodeID] = true
-		return
-	}
-
-	if parents, ok := g.childToParents[nodeID]; ok {
-		for pid := range parents {
-			g.collectPCsReachable(pid, pcs, visited)
+	for pc := range smaller {
+		if larger[pc] {
+			if n := nodes[pc]; n != nil {
+				return n.Name
+			}
 		}
 	}
+	return ""
+}
+
+// collectNodeNames extracts node names of a specific type from a set of node IDs.
+func (g *Graph) collectNodeNames(nodeIDs map[string]bool, nodeType string) []string {
+	var names []string
+	for id := range nodeIDs {
+		if n := g.Nodes[id]; n != nil && n.NodeType == nodeType {
+			names = append(names, n.Name)
+		}
+	}
+	return names
 }
 
 func containsOp(ops []string, target string) bool {

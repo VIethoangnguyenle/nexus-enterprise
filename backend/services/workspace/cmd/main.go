@@ -11,15 +11,21 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
+	echomw "github.com/labstack/echo/v4/middleware"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	drivepb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	pb "ngac-platform/proto/workspace"
 	wgrpc "ngac-platform/services/workspace/internal/grpc"
+	"ngac-platform/services/workspace/internal/rest"
 )
 
 func main() {
@@ -33,7 +39,16 @@ func main() {
 
 	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
 	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
-	port := envOr("GRPC_PORT", "50053")
+	driveAddr := envOr("DRIVE_SERVICE_ADDR", "localhost:50057")
+	grpcPort := envOr("GRPC_PORT", "50053")
+	restPort := envOr("REST_PORT", "8080")
+	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
+
+	// MinIO configuration
+	minioEndpoint := envOr("MINIO_ENDPOINT", "localhost:9000")
+	minioAccessKey := envOr("MINIO_ACCESS_KEY", "ngac-admin")
+	minioSecretKey := envOr("MINIO_SECRET_KEY", "ngac-secret-key")
+	minioUseSSL := envOr("MINIO_USE_SSL", "false") == "true"
 
 	pool, err := connectDB(ctx, dbURL)
 	if err != nil {
@@ -49,9 +64,21 @@ func main() {
 	}
 	defer policyConn.Close()
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
+	// Initialize MinIO client
+	minioClient, err := minio.New(minioEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(minioAccessKey, minioSecretKey, ""),
+		Secure: minioUseSSL,
+	})
 	if err != nil {
-		slog.Error("failed to listen", "port", port, "error", err)
+		slog.Warn("failed to create minio client, continuing without bucket creation", "error", err)
+		minioClient = nil
+	} else {
+		slog.Info("minio client initialized", "endpoint", minioEndpoint)
+	}
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
+	if err != nil {
+		slog.Error("failed to listen", "port", grpcPort, "error", err)
 		os.Exit(1)
 	}
 
@@ -61,19 +88,46 @@ func main() {
 			recoveryInterceptor,
 		),
 	)
-	pb.RegisterWorkspaceServiceServer(srv, wgrpc.NewWorkspaceServer(pool, policypb.NewPolicyServiceClient(policyConn)))
+	// Connect to Drive Service (optional)
+	var driveClient drivepb.DriveServiceClient
+	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		slog.Warn("drive service unavailable, workspace drives disabled", "address", driveAddr, "error", err)
+	} else {
+		defer driveConn.Close()
+		driveClient = drivepb.NewDriveServiceClient(driveConn)
+	}
+
+	wsSrv := wgrpc.NewWorkspaceServer(pool, policypb.NewPolicyReadServiceClient(policyConn), policypb.NewPolicyWriteServiceClient(policyConn), minioClient, driveClient)
+	pb.RegisterWorkspaceServiceServer(srv, wsSrv)
 
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 
-	go gracefulShutdown(srv, healthSrv, cancel)
+	// REST server (client-facing)
+	e := echo.New()
+	e.HideBanner = true
+	e.Use(echomw.Logger())
+	e.Use(echomw.Recover())
+	restHandler := rest.NewHandler(wsSrv)
+	restHandler.RegisterRoutes(e, jwtSecret)
 
-	slog.Info("workspace service listening", "port", port)
-	if err := srv.Serve(lis); err != nil {
-		slog.Error("server exited", "error", err)
-		os.Exit(1)
-	}
+	// Start both servers
+	go func() {
+		slog.Info("workspace gRPC listening", "port", grpcPort)
+		if err := srv.Serve(lis); err != nil {
+			slog.Error("grpc server exited", "error", err)
+		}
+	}()
+	go func() {
+		slog.Info("workspace REST listening", "port", restPort)
+		if err := e.Start(fmt.Sprintf(":%s", restPort)); err != nil {
+			slog.Info("rest server stopped", "error", err)
+		}
+	}()
+
+	gracefulShutdown(srv, healthSrv, e, cancel)
 }
 
 func envOr(key, fallback string) string {
@@ -104,7 +158,7 @@ func connectDB(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, cancel context.CancelFunc) {
+func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, echoSrv *echo.Echo, cancel context.CancelFunc) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh
@@ -112,6 +166,10 @@ func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, cancel context
 
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer shutdownCancel()
+	echoSrv.Shutdown(shutdownCtx)
 
 	stopped := make(chan struct{})
 	go func() {
@@ -121,7 +179,7 @@ func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, cancel context
 	select {
 	case <-stopped:
 		slog.Info("server stopped gracefully")
-	case <-time.After(15 * time.Second):
+	case <-shutdownCtx.Done():
 		slog.Warn("graceful stop timed out, forcing stop")
 		srv.Stop()
 	}

@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package messaging;
+
+option go_package = "ngac-platform/proto/messaging";
+
+import "google/protobuf/timestamp.proto";
+
+// ═══════════════════════════════════════════════
+// CLIENT → SERVER envelope
+// ═══════════════════════════════════════════════
+
+message ClientEnvelope {
+  oneof payload {
+    AuthRequest        auth        = 1;
+    SubscribeRequest   subscribe   = 2;
+    UnsubscribeRequest unsubscribe = 3;
+    TypingRequest      typing      = 4;
+  }
+}
+
+message AuthRequest {
+  string token = 1;
+}
+
+message SubscribeRequest {
+  string channel_id = 1;
+}
+
+message UnsubscribeRequest {
+  string channel_id = 1;
+}
+
+message TypingRequest {
+  string channel_id = 1;
+}
+
+// ═══════════════════════════════════════════════
+// SERVER → CLIENT envelope
+// ═══════════════════════════════════════════════
+
+message ServerEnvelope {
+  oneof payload {
+    AuthResponse       auth_response  = 1;
+    ChatMessage        chat_message   = 2;
+    TypingEvent        typing_event   = 3;
+    NotificationEvent  notification   = 4;
+    UnreadCountEvent   unread_count   = 5;
+    ThreadReplyEvent   thread_reply   = 6;
+    AssetUpdatedEvent  asset_updated  = 7;
+    ErrorEvent         error          = 15;
+  }
+}
+
+message AuthResponse {
+  bool   ok      = 1;
+  string user_id = 2;
+  string reason  = 3;
+}
+
+message ChatMessage {
+  string id              = 1;
+  string channel_id      = 2;
+  string sender_id       = 3;
+  string sender_name     = 4;
+  string content         = 5;
+  google.protobuf.Timestamp created_at = 6;
+  string message_type    = 7;
+  string parent_message_id = 8;
+  int32  reply_count     = 9;
+}
+
+message TypingEvent {
+  string channel_id = 1;
+  string username   = 2;
+}
+
+message NotificationEvent {
+  string id          = 1;
+  string type        = 2;
+  string title       = 3;
+  string body        = 4;
+  string entity_type = 5;
+  string entity_id   = 6;
+}
+
+message UnreadCountEvent {
+  int32 count = 1;
+}
+
+message ThreadReplyEvent {
+  ChatMessage message          = 1;
+  string      parent_message_id = 2;
+}
+
+message AssetUpdatedEvent {
+  string asset_id  = 1;
+  string new_state = 2;
+}
+
+message ErrorEvent {
+  int32  code    = 1;
+  string message = 2;
+}

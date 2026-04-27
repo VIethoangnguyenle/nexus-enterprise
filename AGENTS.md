@@ -21,23 +21,26 @@ Project NGAC (Next Generation Access Control) là nền tảng quản lý tài l
                         └─────┬──────┘
                               │ HTTP / WebSocket
                         ┌─────▼──────┐
-                        │  Gateway   │ Chi router, JWT validation
-                        │   :8080    │ REST → gRPC proxy
+                        │  Traefik   │ Reverse proxy, CORS, path routing
+                        │  :80/:8082 │
                         └─────┬──────┘
-                              │ gRPC (internal)
-     ┌──────────┬─────────────┼─────────────┬──────────┐
-     │          │             │             │          │
-┌────▼───┐ ┌───▼────┐  ┌─────▼──────┐ ┌────▼───┐ ┌────▼───┐
-│  Auth  │ │ W.Space│  │  Document  │ │Messag. │ │ Asset  │
-│ :50052 │ │ :50053 │  │   :50054   │ │ :50055 │ │ :50056 │
-└────────┘ └────────┘  └────────────┘ └────┬───┘ └────────┘
-                                           │ WebSocket :8081
-                       ┌───────────────────┤
-                       │                   │
-                ┌──────▼──────┐     ┌──────▼──────┐
-                │   Policy    │     │    Redis    │ Pub/Sub, Cache, JWT Blacklist
-                │   :50051    │     │   :6379     │
-                └──────┬──────┘     └─────────────┘
+                              │ route by PathPrefix
+     ┌──────────┬─────────┬───┼───┬─────────┬──────────┐
+     │          │         │       │         │          │
+┌────▼───┐ ┌───▼────┐ ┌──▼──┐ ┌──▼───┐ ┌───▼──┐ ┌────▼───┐
+│  Auth  │ │ W.Space│ │Drive│ │Messag│ │Asset │ │  Doc   │
+│REST    │ │REST    │ │REST │ │REST  │ │REST  │ │REST    │
+│gRPC    │ │gRPC    │ │gRPC │ │gRPC  │ │gRPC  │ │gRPC   │
+│:50052  │ │:50053  │ │:50057│ │:50055│ │:50056│ │:50054  │
+└────────┘ └────────┘ └─────┘ └──┬───┘ └──────┘ └────────┘
+     Each service: Echo REST :8080 + gRPC
+                                  │ WebSocket :8081
+                       ┌──────────┤
+                       │          │
+                ┌──────▼──────┐  ┌▼────────────┐
+                │   Policy    │  │    Redis    │ Pub/Sub, Cache, JWT Blacklist
+                │   :50051    │  │   :6379     │
+                └──────┬──────┘  └─────────────┘
                        │
               ┌────────▼────────┐   ┌─────────────┐
               │   PostgreSQL    │   │  Redpanda   │ Kafka-compatible event bus
@@ -51,13 +54,13 @@ Project NGAC (Next Generation Access Control) là nền tảng quản lý tài l
 
 2. **Service giao tiếp qua gRPC.** Không HTTP nội bộ, không gọi DB của service khác, không shared memory.
 
-3. **Gateway là cửa duy nhất ra ngoài.** Mọi request từ client đi qua Gateway. Không service nào expose HTTP ra ngoài trừ Gateway và WebSocket của Messaging.
+3. **Không có Gateway monolith.** Mỗi service tự expose REST (Echo :8080) cho client + gRPC cho service-to-service. Traefik route theo path prefix trực tiếp tới từng service. CORS do Traefik xử lý.
 
 4. **Proto là contract.** Thay đổi `.proto` → phải `make proto` → phải cập nhật mọi service consume proto đó.
 
 5. **JWT chứa `ngac_node_id`.** Mọi service downstream dùng node ID này để gọi Policy Service. Không query user table để lấy lại.
 
-6. **Mỗi service có module Go riêng.** Dùng `replace` directive trỏ về `../..` (root `backend/go.mod`). Không share code giữa services trừ proto.
+6. **Mỗi service có module Go riêng.** Dùng `replace` directive trỏ về `../..` (root `backend/go.mod`). Share code chỉ qua `proto/`, `ngac/`, và `pkg/httputil/` package.
 
 ### Cấu trúc thư mục dự án
 
@@ -65,6 +68,8 @@ Project NGAC (Next Generation Access Control) là nền tảng quản lý tài l
 ngac/
 ├── backend/                    # TẤT CẢ Go code
 │   ├── go.mod                     module "ngac-platform"
+│   ├── ngac/                      shared constants package (types, ops, names)
+│   ├── pkg/httputil/              shared REST utilities (JWT middleware, error mapping)
 │   ├── Makefile                   proto gen + build
 │   ├── proto/                     protobuf contracts
 │   │   ├── policy/
@@ -72,6 +77,7 @@ ngac/
 │   │   ├── workspace/
 │   │   ├── document/
 │   │   ├── messaging/
+│   │   ├── drive/
 │   │   └── asset/
 │   └── services/                  microservices
 │       ├── policy/
@@ -79,8 +85,8 @@ ngac/
 │       ├── workspace/
 │       ├── document/
 │       ├── messaging/
-│       ├── asset/
-│       └── gateway/
+│       ├── drive/
+│       └── asset/
 ├── frontend/                   # Vite + TanStack Router + TanStack Query
 │   └── src/
 │       ├── routes/                file-based routing (TanStack Router)
@@ -94,23 +100,201 @@ ngac/
 └── Makefile                    # top-level, delegates to backend/
 ```
 
-### Cấu trúc thư mục chuẩn mỗi service
+### Cấu trúc thư mục chuẩn mỗi service (Clean Architecture)
 
 ```
 backend/services/{tên}/
 ├── cmd/
-│   └── main.go              # Entrypoint — chỉ wiring, không business logic
+│   └── main.go              # Entrypoint — CHỈ wiring, start REST + gRPC
 ├── internal/
+│   ├── rest/
+│   │   └── handler.go       # Echo REST handler — client-facing HTTP/JSON
 │   ├── grpc/
-│   │   └── server.go        # gRPC handler — mỏng, delegate xuống domain
-│   ├── domain/              # Business logic thuần — KHÔNG depend gRPC hay DB
-│   └── store/               # Database layer — KHÔNG depend domain
-├── go.mod                      replace ngac-platform => ../..
+│   │   └── server.go        # gRPC handler — service-to-service
+│   ├── domain/
+│   │   ├── service.go       # Business logic — orchestrate store + policy
+│   │   └── errors.go        # Sentinel errors (ErrNotFound, ErrAccessDenied...)
+│   └── store/
+│       ├── store.go         # Database layer — one method = one query
+│       └── models.go        # Internal DB models (KHÔNG dùng proto types)
+├── go.mod                      replace ngac-platform => ../...
 ├── go.sum
 └── Dockerfile
 ```
 
-**Nguyên tắc:** `cmd/` chỉ nối dây. `grpc/` chỉ dịch request/response. `domain/` chứa logic. `store/` chứa SQL. Các lớp không được import ngược.
+**Nguyên tắc dependency:**
+```
+cmd/ → rest/ + grpc/ → domain/ → store/
+          ↓       ↓         ↓
+       (echo)  (proto)   (proto, ngac/)
+
+KHÔNG BAO GIỜ import ngược: store/ ≠→ domain/ ≠→ rest/grpc/
+rest/ và grpc/ CÙNG delegate tới domain/ — không duplicate logic
+```
+
+---
+
+## Clean Architecture Rules
+
+Lấy cảm hứng từ [go-clean-arch v4](https://github.com/bxcodec/go-clean-arch), adapt cho NGAC microservices.
+
+### Rule 1: Handler — Thin, Parse → Validate → Delegate → Respond
+
+```go
+// MỌI gRPC handler method PHẢI theo template này
+func (s *Server) CreateChannel(ctx context.Context, req *pb.CreateChannelRequest) (*pb.Channel, error) {
+    // 1. VALIDATE — guard clauses, early return
+    if req.Name == "" {
+        return nil, status.Error(codes.InvalidArgument, "name required")
+    }
+    // 2. DELEGATE — single call to domain service
+    ch, err := s.svc.CreateChannel(ctx, domain.CreateChannelInput{...})
+    // 3. MAP ERROR — domain error → gRPC status
+    if err != nil {
+        return nil, mapError(err)
+    }
+    // 4. RESPOND
+    return ch, nil
+}
+```
+
+**Max 20 lines/method. Handler KHÔNG chứa: SQL, policy calls, for loops, business decisions.**
+
+### Rule 2: Domain — Orchestrate, Don't Execute
+
+```go
+func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb.Channel, error) {
+    // 1. Business validation
+    // 2. Policy check (delegate to policy service)
+    // 3. Create NGAC graph nodes
+    // 4. Persist (delegate to store)
+    // 5. Convert and return
+}
+```
+
+**Max 50 lines/method. Domain CÓ: logic, validation, policy calls, orchestration.**
+**Domain KHÔNG CÓ: SQL, HTTP/gRPC parsing, `status.Errorf`.**
+
+### Rule 3: Store — One Method = One Query
+
+```go
+// ✅ ĐÚNG
+func (s *Store) InsertChannel(ctx context.Context, ch *Channel) error { ... }  // 1 INSERT
+func (s *Store) GetChannel(ctx context.Context, id string) (*Channel, error) { ... }  // 1 SELECT
+func (s *Store) ListByWorkspace(ctx context.Context, wsID string) ([]*Channel, error) { ... }  // 1 SELECT
+
+// ❌ SAI: store method chứa business logic
+func (s *Store) GetActiveItems(...) ([]*Item, error) {
+    all, _ := s.getAll(...)
+    // FILTER IN GO = VIOLATION → filter phải ở SQL
+}
+```
+
+**Max 30 lines/method. Store CÓ: SQL, row scanning, error wrapping.**
+**Store KHÔNG CÓ: business logic, if/else decisions, policy calls.**
+
+### Rule 4: Nesting Depth — Maximum 3
+
+```go
+// ❌ FORBIDDEN: depth > 3
+if a {
+    if b {
+        if c {
+            if d {  // depth 4 — VIOLATION
+            }
+        }
+    }
+}
+
+// ✅ REQUIRED: early return
+if !a { return ErrA }
+if !b { return ErrB }
+if !c { return ErrC }
+// happy path at depth 1
+```
+
+**Nếu cần sâu hơn → TÁCH thành function riêng.**
+
+### Rule 5: Domain Sentinel Errors
+
+Mỗi service PHẢI có `domain/errors.go`:
+
+```go
+package domain
+
+var (
+    ErrNotFound      = errors.New("not found")
+    ErrAccessDenied  = errors.New("access denied")
+    ErrAlreadyExists = errors.New("already exists")
+    ErrInvalidInput  = errors.New("invalid input")
+)
+```
+
+Handler dịch domain errors → gRPC codes qua `mapError()`:
+
+```go
+func mapError(err error) error {
+    switch {
+    case errors.Is(err, domain.ErrNotFound):
+        return status.Error(codes.NotFound, err.Error())
+    case errors.Is(err, domain.ErrAccessDenied):
+        return status.Error(codes.PermissionDenied, err.Error())
+    default:
+        return status.Errorf(codes.Internal, "internal: %v", err)
+    }
+}
+```
+
+**Domain KHÔNG import `google.golang.org/grpc/status`. Domain trả domain errors, handler dịch.**
+
+### Rule 6: Interface at Consumer Side
+
+```go
+// Handler khai báo interface nó cần
+type ChannelService interface {
+    CreateChannel(ctx context.Context, in CreateChannelInput) (*pb.Channel, error)
+}
+
+// Domain khai báo interface cho store nó cần
+type ChannelStore interface {
+    InsertChannel(ctx context.Context, ch *Channel) error
+}
+```
+
+### Rule 7: No Hardcoded NGAC Strings
+
+```go
+// ❌ FORBIDDEN
+NodeType: "UA"
+Operation: "read"
+Name: fmt.Sprintf("%s_Owners", name)
+
+// ✅ REQUIRED — dùng ngac package
+NodeType: ngac.TypeUA
+Operation: ngac.OpRead
+Name: ngac.OwnersUAName(name)
+```
+
+### Rule 8: Query Optimization
+
+- KHÔNG `SELECT *` — luôn list columns
+- KHÔNG query trong loop — dùng `WHERE id = ANY($1)` hoặc JOIN
+- Luôn có `LIMIT` cho list queries
+- Cursor-based pagination, KHÔNG offset
+- Index mọi FK và column trong WHERE/ORDER BY
+
+### Rule 9: Store Models ≠ Proto Types
+
+```go
+// store/models.go — internal representation
+type Channel struct { ID, Name, Type string; CreatedAt time.Time }
+
+// domain/ — conversion
+func toProto(ch *store.Channel) *pb.Channel { ... }
+
+// ❌ SAI: proto types in store
+func (s *Store) Insert(ctx context.Context, ch *pb.Channel) error { ... }
+```
 
 ---
 
@@ -125,18 +309,44 @@ backend/services/{tên}/
 
 ### Khi viết code
 
-- **Function > 50 dòng → tách.** Không ngoại lệ. Function dài là function khó test.
-- **Error KHÔNG BAO GIỜ được nuốt.** Mọi error phải được wrap context: `fmt.Errorf("tên_operation: %w", err)`
+- **Handler > 20 dòng → sai.** Delegate xuống domain, không chứa logic.
+- **Domain > 50 dòng → tách.** Private helper method.
+- **Store > 30 dòng → tách.** Mỗi method một query.
+- **Nesting > 3 levels → tách function.** Early return trước.
+- **Error KHÔNG BAO GIỜ được nuốt.** Mọi error phải wrap: `fmt.Errorf("operation: %w", err)`
 - **Không `_ = someFunction()`.** Nếu function trả error, phải handle.
-- **Mỗi public function có comment** giải thích TẠI SAO nó tồn tại, không phải nó LÀM GÌ.
-- **Không TODO trong code.** Fix ngay hoặc tạo task trong OpenSpec. Code là nơi chạy, không phải nơi ghi nhớ.
-- **Dependency mới phải justify.** Trả lời: stdlib không đủ ở điểm nào? Package này có maintained không?
+- **Mỗi public function có comment** giải thích TẠI SAO nó tồn tại.
+- **Không TODO trong code.** Fix ngay hoặc tạo task trong OpenSpec.
+- **Dependency mới phải justify.** stdlib không đủ ở đâu?
 
 ### Sau khi viết code
 
 1. **Build service** — `go build ./cmd/` phải pass
 2. **Check cross-service** — Nếu thay đổi proto, build lại consumers
 3. **Verify logic** — Chạy test hoặc giải thích tại sao chưa có test
+4. **Verify layers** — Handler không có SQL? Domain không có `status.Errorf`? Store không có business logic?
+
+---
+
+## Forbidden Patterns
+
+| Pattern | Lý do |
+|---------|-------|
+| ❌ `init()` functions | Dùng explicit constructors |
+| ❌ `log.Fatal` in library code | Chỉ dùng trong `main()` |
+| ❌ `_ = someFunc()` | Always handle errors |
+| ❌ `fmt.Sprintf` + user input → SQL | Always parameterized queries |
+| ❌ `TODO` comments | Fix ngay hoặc tạo OpenSpec task |
+| ❌ ORM (GORM, ent) | Raw SQL + pgx |
+| ❌ `SELECT *` | List columns explicitly |
+| ❌ Query inside loop | Batch/IN/JOIN |
+| ❌ Nesting depth > 3 | Extract to function |
+| ❌ Handler > 20 lines | Delegate to domain |
+| ❌ `status.Errorf` in domain | Domain returns domain errors |
+| ❌ `s.db.Query` in handler | All DB through store layer |
+| ❌ Hardcoded NGAC strings | Use `ngac` package constants |
+| ❌ Proto types in store | Internal models + conversion |
+| ❌ Global state / package vars | Constructor injection |
 
 ---
 
@@ -180,17 +390,21 @@ Yêu cầu mới
 ┌─ Bước 2: Thiết kế ──────────────────────────┐
 │  4 câu hỏi sản phẩm. Kiến trúc diagram nếu │
 │  cần. Xác nhận với user nếu ambiguous.       │
+│  Verify: handler thin? domain orchestrates?  │
+│  store = pure SQL?                           │
 └──────────────────────────┬───────────────────┘
                            │
     ▼
 ┌─ Bước 3: Implement ─────────────────────────┐
-│  Code theo skills. Tuân thủ cấu trúc thư    │
-│  mục. Error handling đúng. Comments đúng.    │
+│  Code theo Clean Architecture rules.         │
+│  store/ trước → domain/ → grpc/ cuối.        │
+│  Sentinel errors. mapError(). Early return.  │
 └──────────────────────────┬───────────────────┘
                            │
     ▼
 ┌─ Bước 4: Verify ────────────────────────────┐
-│  Build pass. Cross-service check. Test nếu  │
-│  có. Giải thích thay đổi cho user.          │
+│  Build pass. Layer violations? Nesting > 3?  │
+│  Handler > 20 lines? Hardcoded strings?      │
+│  Cross-service check. Test nếu có.           │
 └──────────────────────────────────────────────┘
 ```

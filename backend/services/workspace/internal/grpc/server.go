@@ -3,12 +3,16 @@ package grpc
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/minio/minio-go/v7"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/ngac"
+	drivepb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	pb "ngac-platform/proto/workspace"
 )
@@ -16,63 +20,66 @@ import (
 type WorkspaceServer struct {
 	pb.UnimplementedWorkspaceServiceServer
 	db           *pgxpool.Pool
-	policyClient policypb.PolicyServiceClient
+	policyRead  policypb.PolicyReadServiceClient
+	policyWrite policypb.PolicyWriteServiceClient
+	minioClient  *minio.Client
+	driveClient  drivepb.DriveServiceClient
 }
 
-func NewWorkspaceServer(db *pgxpool.Pool, pc policypb.PolicyServiceClient) *WorkspaceServer {
-	return &WorkspaceServer{db: db, policyClient: pc}
+// NewWorkspaceServer creates a workspace handler. MinIO client for bucket creation, Drive client for root drive folder.
+func NewWorkspaceServer(db *pgxpool.Pool, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient, mc *minio.Client, dc drivepb.DriveServiceClient) *WorkspaceServer {
+	return &WorkspaceServer{db: db, policyRead: pr, policyWrite: pw, minioClient: mc, driveClient: dc}
 }
 
 func (s *WorkspaceServer) CreateWorkspace(ctx context.Context, req *pb.CreateWorkspaceRequest) (*pb.Workspace, error) {
-	pc, err := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: fmt.Sprintf("PC_%s", req.Name), NodeType: "PC",
+	pc, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.PCName(req.Name), NodeType: ngac.TypePC,
 		Properties: map[string]string{"workspace": req.Name},
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create PC: %v", err)
 	}
 
-	ownersUA, _ := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: fmt.Sprintf("%s_Owners", req.Name), NodeType: "UA",
+	ownersUA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.OwnersUAName(req.Name), NodeType: ngac.TypeUA,
 	})
-	membersUA, _ := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: fmt.Sprintf("%s_Members", req.Name), NodeType: "UA",
+	membersUA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.MembersUAName(req.Name), NodeType: ngac.TypeUA,
 	})
-	mgmtOA, _ := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: fmt.Sprintf("%s_Mgmt", req.Name), NodeType: "OA",
+	mgmtOA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.MgmtOAName(req.Name), NodeType: ngac.TypeOA,
 	})
-	docsOA, _ := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: fmt.Sprintf("%s_Documents", req.Name), NodeType: "OA",
+	docsOA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.DocumentsOAName(req.Name), NodeType: ngac.TypeOA,
 	})
-	draftOA, _ := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: fmt.Sprintf("%s_DraftDocs", req.Name), NodeType: "OA",
+	draftOA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.DraftDocsOAName(req.Name), NodeType: ngac.TypeOA,
 	})
-	approvedOA, _ := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: fmt.Sprintf("%s_ApprovedDocs", req.Name), NodeType: "OA",
+	approvedOA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.ApprovedDocsOAName(req.Name), NodeType: ngac.TypeOA,
 	})
-	channelsOA, _ := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: fmt.Sprintf("%s_Channels", req.Name), NodeType: "OA",
+	channelsOA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.ChannelsOAName(req.Name), NodeType: ngac.TypeOA,
 	})
 
 	// Assignments
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: ownersUA.Id, ParentId: pc.Id})
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: membersUA.Id, ParentId: pc.Id})
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: mgmtOA.Id, ParentId: pc.Id})
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: docsOA.Id, ParentId: pc.Id})
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: channelsOA.Id, ParentId: pc.Id})
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: draftOA.Id, ParentId: docsOA.Id})
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: approvedOA.Id, ParentId: docsOA.Id})
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: membersUA.Id, ParentId: ownersUA.Id})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: ownersUA.Id, ParentId: pc.Id})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: membersUA.Id, ParentId: pc.Id})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: mgmtOA.Id, ParentId: pc.Id})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: docsOA.Id, ParentId: pc.Id})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: channelsOA.Id, ParentId: pc.Id})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: draftOA.Id, ParentId: docsOA.Id})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: approvedOA.Id, ParentId: docsOA.Id})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: membersUA.Id, ParentId: ownersUA.Id})
 
-	allOps := []string{"read", "write", "approve", "upload", "share", "manage", "invite", "create_channel"}
-	s.policyClient.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ownersUA.Id, OaId: mgmtOA.Id, Operations: allOps})
-	s.policyClient.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ownersUA.Id, OaId: docsOA.Id, Operations: allOps})
-	s.policyClient.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ownersUA.Id, OaId: channelsOA.Id, Operations: allOps})
-	s.policyClient.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: membersUA.Id, OaId: docsOA.Id, Operations: []string{"read"}})
-	s.policyClient.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: membersUA.Id, OaId: channelsOA.Id, Operations: []string{"read", "write", "create_channel"}})
+	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ownersUA.Id, OaId: mgmtOA.Id, Operations: ngac.AllOwnerOps()})
+	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ownersUA.Id, OaId: docsOA.Id, Operations: ngac.AllOwnerOps()})
+	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ownersUA.Id, OaId: channelsOA.Id, Operations: ngac.AllOwnerOps()})
+	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: membersUA.Id, OaId: docsOA.Id, Operations: []string{ngac.OpRead}})
+	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: membersUA.Id, OaId: channelsOA.Id, Operations: ngac.MemberChannelOps()})
 
 	// Assign creator to Owners UA
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: req.UserNgacNodeId, ParentId: ownersUA.Id})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: req.UserNgacNodeId, ParentId: ownersUA.Id})
 
 	wsID := uuid.New().String()
 	_, err = s.db.Exec(ctx,
@@ -80,6 +87,35 @@ func (s *WorkspaceServer) CreateWorkspace(ctx context.Context, req *pb.CreateWor
 		wsID, req.Name, "", req.UserId, pc.Id)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "insert workspace: %v", err)
+	}
+
+	// Create MinIO bucket for this workspace (non-fatal if MinIO is unavailable)
+	if s.minioClient != nil {
+		bucketName := fmt.Sprintf("ws-%s", wsID)
+		err := s.minioClient.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
+		if err != nil {
+			// Check if bucket already exists (idempotent)
+			exists, errExists := s.minioClient.BucketExists(ctx, bucketName)
+			if errExists != nil || !exists {
+				slog.Warn("failed to create minio bucket", "bucket", bucketName, "error", err)
+			}
+		} else {
+			slog.Info("created minio bucket", "bucket", bucketName)
+		}
+	}
+
+	// Create workspace root drive folder (non-fatal if Drive Service unavailable)
+	if s.driveClient != nil {
+		_, driveErr := s.driveClient.CreateDriveForChannel(ctx, &drivepb.CreateDriveForChannelRequest{
+			WorkspaceId:     wsID,
+			ChannelId:       wsID,
+			ChannelName:     req.Name + "_Root",
+			ChannelNgacOaId: docsOA.Id,
+			ChannelNgacUaId: ownersUA.Id,
+		})
+		if driveErr != nil {
+			slog.Warn("failed to create workspace drive", "workspace", wsID, "error", driveErr)
+		}
 	}
 
 	return &pb.Workspace{
@@ -106,7 +142,7 @@ func (s *WorkspaceServer) ListWorkspaces(ctx context.Context, req *pb.ListWorksp
 	}
 	var accessible []*pb.Workspace
 	for _, w := range workspaces {
-		desc, err := s.policyClient.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: w.PcNodeId})
+		desc, err := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: w.PcNodeId})
 		if err != nil {
 			continue
 		}
@@ -135,11 +171,11 @@ func (s *WorkspaceServer) InviteMember(ctx context.Context, req *pb.InviteMember
 	if err != nil {
 		return nil, err
 	}
-	children, _ := s.policyClient.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
+	children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
 	var membersUAID string
 	if children != nil {
 		for _, n := range children.Nodes {
-			if n.NodeType == "UA" && fmt.Sprintf("%s_Members", ws.Name) == n.Name {
+			if n.NodeType == ngac.TypeUA && ngac.MembersUAName(ws.Name) == n.Name {
 				membersUAID = n.Id
 				break
 			}
@@ -148,7 +184,7 @@ func (s *WorkspaceServer) InviteMember(ctx context.Context, req *pb.InviteMember
 	if membersUAID == "" {
 		return nil, status.Errorf(codes.Internal, "members UA not found")
 	}
-	_, err = s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+	_, err = s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: req.TargetNgacNodeId, ParentId: membersUAID,
 	})
 	if err != nil {
@@ -159,11 +195,11 @@ func (s *WorkspaceServer) InviteMember(ctx context.Context, req *pb.InviteMember
 
 func (s *WorkspaceServer) RemoveMember(ctx context.Context, req *pb.RemoveMemberRequest) (*pb.Empty, error) {
 	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	desc, _ := s.policyClient.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
+	desc, _ := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
 	if desc != nil {
 		for _, n := range desc.Nodes {
-			if n.NodeType == "UA" {
-				s.policyClient.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+			if n.NodeType == ngac.TypeUA {
+				s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
 					ChildId: req.TargetNgacNodeId, ParentId: n.Id,
 				})
 			}
@@ -174,7 +210,7 @@ func (s *WorkspaceServer) RemoveMember(ctx context.Context, req *pb.RemoveMember
 
 func (s *WorkspaceServer) ListMembers(ctx context.Context, req *pb.ListMembersRequest) (*pb.MemberList, error) {
 	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	desc, _ := s.policyClient.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
+	desc, _ := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
 	seen := make(map[string]bool)
 	var members []*pb.Member
 	if desc != nil {
@@ -190,18 +226,18 @@ func (s *WorkspaceServer) ListMembers(ctx context.Context, req *pb.ListMembersRe
 
 func (s *WorkspaceServer) UpdateMemberRoles(ctx context.Context, req *pb.UpdateMemberRolesRequest) (*pb.Empty, error) {
 	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	desc, _ := s.policyClient.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
+	desc, _ := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
 	if desc != nil {
 		for _, n := range desc.Nodes {
-			if n.NodeType == "UA" {
-				s.policyClient.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+			if n.NodeType == ngac.TypeUA {
+				s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
 					ChildId: req.TargetNgacNodeId, ParentId: n.Id,
 				})
 			}
 		}
 	}
 	for _, roleID := range req.RoleIds {
-		s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: req.TargetNgacNodeId, ParentId: roleID,
 		})
 	}
@@ -210,18 +246,18 @@ func (s *WorkspaceServer) UpdateMemberRoles(ctx context.Context, req *pb.UpdateM
 
 func (s *WorkspaceServer) TransferOwnership(ctx context.Context, req *pb.TransferOwnershipRequest) (*pb.Empty, error) {
 	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	children, _ := s.policyClient.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
+	children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
 	var ownersUAID string
 	if children != nil {
 		for _, n := range children.Nodes {
-			if n.NodeType == "UA" && fmt.Sprintf("%s_Owners", ws.Name) == n.Name {
+			if n.NodeType == ngac.TypeUA && ngac.OwnersUAName(ws.Name) == n.Name {
 				ownersUAID = n.Id
 				break
 			}
 		}
 	}
 	if ownersUAID != "" {
-		s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: req.NewOwnerNgacNodeId, ParentId: ownersUAID,
 		})
 	}
@@ -236,18 +272,18 @@ func (s *WorkspaceServer) AddOwner(ctx context.Context, req *pb.AddOwnerRequest)
 
 func (s *WorkspaceServer) RemoveOwner(ctx context.Context, req *pb.RemoveOwnerRequest) (*pb.Empty, error) {
 	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	children, _ := s.policyClient.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
+	children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
 	var ownersUAID string
 	if children != nil {
 		for _, n := range children.Nodes {
-			if n.NodeType == "UA" && fmt.Sprintf("%s_Owners", ws.Name) == n.Name {
+			if n.NodeType == ngac.TypeUA && ngac.OwnersUAName(ws.Name) == n.Name {
 				ownersUAID = n.Id
 				break
 			}
 		}
 	}
 	if ownersUAID != "" {
-		ownerChildren, _ := s.policyClient.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ownersUAID})
+		ownerChildren, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ownersUAID})
 		userCount := 0
 		if ownerChildren != nil {
 			for _, n := range ownerChildren.Nodes {
@@ -259,7 +295,7 @@ func (s *WorkspaceServer) RemoveOwner(ctx context.Context, req *pb.RemoveOwnerRe
 		if userCount <= 1 {
 			return nil, status.Errorf(codes.FailedPrecondition, "cannot remove last owner")
 		}
-		s.policyClient.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+		s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
 			ChildId: req.TargetNgacNodeId, ParentId: ownersUAID,
 		})
 	}
@@ -268,21 +304,21 @@ func (s *WorkspaceServer) RemoveOwner(ctx context.Context, req *pb.RemoveOwnerRe
 
 func (s *WorkspaceServer) CreateRole(ctx context.Context, req *pb.CreateRoleRequest) (*pb.Role, error) {
 	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	node, err := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{Name: req.Name, NodeType: "UA"})
+	node, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: req.Name, NodeType: ngac.TypeUA})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create role: %v", err)
 	}
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: node.Id, ParentId: ws.PcNodeId})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: node.Id, ParentId: ws.PcNodeId})
 	return &pb.Role{Id: node.Id, Name: req.Name, NgacNodeId: node.Id}, nil
 }
 
 func (s *WorkspaceServer) ListRoles(ctx context.Context, req *pb.ListRolesRequest) (*pb.RoleList, error) {
 	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	children, _ := s.policyClient.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
+	children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
 	var roles []*pb.Role
 	if children != nil {
 		for _, n := range children.Nodes {
-			if n.NodeType == "UA" {
+			if n.NodeType == ngac.TypeUA {
 				roles = append(roles, &pb.Role{Id: n.Id, Name: n.Name, NgacNodeId: n.Id})
 			}
 		}
@@ -291,13 +327,13 @@ func (s *WorkspaceServer) ListRoles(ctx context.Context, req *pb.ListRolesReques
 }
 
 func (s *WorkspaceServer) DeleteRole(ctx context.Context, req *pb.DeleteRoleRequest) (*pb.Empty, error) {
-	s.policyClient.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: req.RoleId})
+	s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: req.RoleId})
 	return &pb.Empty{}, nil
 }
 
 func (s *WorkspaceServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequest) (*pb.Folder, error) {
 	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	node, err := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{Name: req.Name, NodeType: "OA"})
+	node, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: req.Name, NodeType: ngac.TypeOA})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create folder: %v", err)
 	}
@@ -305,17 +341,17 @@ func (s *WorkspaceServer) CreateFolder(ctx context.Context, req *pb.CreateFolder
 	if parentID == "" {
 		parentID = ws.PcNodeId
 	}
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: node.Id, ParentId: parentID})
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: node.Id, ParentId: parentID})
 	return &pb.Folder{Id: node.Id, Name: req.Name, NgacNodeId: node.Id}, nil
 }
 
 func (s *WorkspaceServer) ListFolders(ctx context.Context, req *pb.ListFoldersRequest) (*pb.FolderList, error) {
 	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	desc, _ := s.policyClient.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
+	desc, _ := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
 	var folders []*pb.Folder
 	if desc != nil {
 		for _, n := range desc.Nodes {
-			if n.NodeType == "OA" {
+			if n.NodeType == ngac.TypeOA {
 				folders = append(folders, &pb.Folder{Id: n.Id, Name: n.Name, NgacNodeId: n.Id})
 			}
 		}
@@ -324,12 +360,12 @@ func (s *WorkspaceServer) ListFolders(ctx context.Context, req *pb.ListFoldersRe
 }
 
 func (s *WorkspaceServer) DeleteFolder(ctx context.Context, req *pb.DeleteFolderRequest) (*pb.Empty, error) {
-	s.policyClient.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: req.FolderId})
+	s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: req.FolderId})
 	return &pb.Empty{}, nil
 }
 
 func (s *WorkspaceServer) CreatePermission(ctx context.Context, req *pb.CreatePermissionRequest) (*pb.Permission, error) {
-	assoc, err := s.policyClient.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
+	assoc, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
 		UaId: req.UaId, OaId: req.OaId, Operations: req.Operations,
 	})
 	if err != nil {

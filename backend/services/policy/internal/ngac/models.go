@@ -89,6 +89,12 @@ func IsValidNodeType(t string) bool {
 	return false
 }
 
+// nameTypeKey builds a composite key for the nameType index.
+// Enables O(1) node lookup by name+type instead of O(N) linear scan.
+func nameTypeKey(name, nodeType string) string {
+	return name + "\x00" + nodeType
+}
+
 func IsValidAssignment(childType, parentType string) bool {
 	allowed, ok := ValidAssignments[childType]
 	if !ok {

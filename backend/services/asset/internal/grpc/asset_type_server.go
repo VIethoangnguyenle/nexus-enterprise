@@ -19,12 +19,13 @@ import (
 type AssetTypeServer struct {
 	pb.UnimplementedAssetTypeServiceServer
 	store        *store.Store
-	policyClient policypb.PolicyServiceClient
+	policyRead  policypb.PolicyReadServiceClient
+	policyWrite policypb.PolicyWriteServiceClient
 }
 
 // NewAssetTypeServer creates the asset type gRPC handler.
-func NewAssetTypeServer(s *store.Store, pc policypb.PolicyServiceClient) *AssetTypeServer {
-	return &AssetTypeServer{store: s, policyClient: pc}
+func NewAssetTypeServer(s *store.Store, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient) *AssetTypeServer {
+	return &AssetTypeServer{store: s, policyRead: pr, policyWrite: pw}
 }
 
 func (s *AssetTypeServer) CreateType(ctx context.Context, req *pb.CreateTypeRequest) (*pb.AssetType, error) {
@@ -109,34 +110,21 @@ func (s *AssetTypeServer) UpdateTypeSchema(ctx context.Context, req *pb.UpdateTy
 // ensureNGACHierarchy creates the NGAC node hierarchy for a new asset type:
 // PC_AssetManagement → {ws}_Assets → {ws}_{category} → {ws}_{typeName}
 func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, workspaceID, category, typeName string) (string, error) {
-	// Find workspace name and PC
+	// Get workspace name and PC node ID from the database
 	var wsName, pcNodeID string
-	// Retrieve workspace info by querying the store's underlying DB.
-	// The store doesn't expose raw DB, so we use Policy Service graph queries instead.
-	// Find workspace's PC from NGAC nodes
-	ws, err := s.policyClient.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: fmt.Sprintf("WS_%s", workspaceID[:8]),
-		NodeType: "PC",
-	})
-	if err != nil {
-		// Fallback: try to find by listing PCs
-		ws = nil
-	}
-	if ws != nil {
-		pcNodeID = ws.Id
-		wsName = ws.Name
-	} else {
+	row := s.store.DB().QueryRow(ctx, "SELECT name, ngac_pc_id FROM workspaces WHERE id = $1", workspaceID)
+	if err := row.Scan(&wsName, &pcNodeID); err != nil {
 		wsName = "WS"
 		pcNodeID = ""
 	}
 
 	// Ensure PC_AssetManagement exists
-	assetsPC, err := s.policyClient.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
+	assetsPC, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
 		Name: "PC_AssetManagement", NodeType: "PC",
 	})
 	if err != nil {
 		// Create it
-		assetsPC, err = s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
+		assetsPC, err = s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
 			Name: "PC_AssetManagement", NodeType: "PC",
 			Properties: map[string]string{"scope": "asset_management"},
 		})
@@ -147,58 +135,71 @@ func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, workspaceID, 
 
 	// Ensure {ws}_Assets OA under PC_AssetManagement
 	assetsOAName := fmt.Sprintf("%s_Assets", wsName)
-	assetsOA, err := s.policyClient.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
+	assetsOA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
 		Name: assetsOAName, NodeType: "OA",
 	})
 	if err != nil {
-		assetsOA, err = s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
+		assetsOA, err = s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
 			Name: assetsOAName, NodeType: "OA",
 			Properties: map[string]string{"workspace_id": workspaceID},
 		})
 		if err != nil {
 			return "", fmt.Errorf("create %s OA: %w", assetsOAName, err)
 		}
-		s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: assetsOA.Id, ParentId: assetsPC.Id,
 		})
 	}
 
 	// Ensure category OA under Assets OA
 	categoryOAName := fmt.Sprintf("%s_%s", wsName, sanitizeName(category))
-	categoryOA, err := s.policyClient.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
+	categoryOA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
 		Name: categoryOAName, NodeType: "OA",
 	})
 	if err != nil {
-		categoryOA, err = s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
+		categoryOA, err = s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
 			Name: categoryOAName, NodeType: "OA",
 			Properties: map[string]string{"category": category, "workspace_id": workspaceID},
 		})
 		if err != nil {
 			return "", fmt.Errorf("create category OA %s: %w", categoryOAName, err)
 		}
-		s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: categoryOA.Id, ParentId: assetsOA.Id,
 		})
 	}
 
 	// Create type OA under category OA
 	typeOAName := fmt.Sprintf("%s_%s", wsName, sanitizeName(typeName))
-	typeOA, err := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
+	typeOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
 		Name: typeOAName, NodeType: "OA",
 		Properties: map[string]string{"asset_type": typeName, "workspace_id": workspaceID},
 	})
 	if err != nil {
 		return "", fmt.Errorf("create type OA %s: %w", typeOAName, err)
 	}
-	s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: typeOA.Id, ParentId: categoryOA.Id,
 	})
 
 	// Also assign to workspace PC if available for cross-PC visibility
 	if pcNodeID != "" {
-		s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: assetsOA.Id, ParentId: pcNodeID,
 		})
+
+		// Grant workspace owners full access to assets
+		children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: pcNodeID})
+		if children != nil {
+			for _, n := range children.Nodes {
+				if n.NodeType == "UA" {
+					allOps := []string{"read", "write", "approve", "assign", "manage", "dispose", "request"}
+					s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
+						UaId: n.Id, OaId: assetsOA.Id, Operations: allOps,
+					})
+				}
+			}
+		}
 	}
 
 	return typeOA.Id, nil

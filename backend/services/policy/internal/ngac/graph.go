@@ -18,6 +18,7 @@ type Graph struct {
 	parentToChildren map[string]map[string]bool // parentID -> set of childIDs
 	uaToAssociations map[string][]*Association  // uaID -> associations from this UA
 	oaToAssociations map[string][]*Association  // oaID -> associations to this OA
+	nameTypeIndex    map[string]*NGACNode       // "name\x00type" -> node for O(1) lookup
 }
 
 func NewGraph() *Graph {
@@ -29,21 +30,26 @@ func NewGraph() *Graph {
 		parentToChildren: make(map[string]map[string]bool),
 		uaToAssociations: make(map[string][]*Association),
 		oaToAssociations: make(map[string][]*Association),
+		nameTypeIndex:    make(map[string]*NGACNode),
 	}
 }
 
-// AddNode adds a node to the graph
+// AddNode adds a node to the graph and updates the name+type index.
 func (g *Graph) AddNode(node *NGACNode) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	g.Nodes[node.ID] = node
+	g.nameTypeIndex[nameTypeKey(node.Name, node.NodeType)] = node
 }
 
-// RemoveNode removes a node and all its edges
+// RemoveNode removes a node, all its edges, and cleans up the name+type index.
 func (g *Graph) RemoveNode(nodeID string) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
+	if node, ok := g.Nodes[nodeID]; ok {
+		delete(g.nameTypeIndex, nameTypeKey(node.Name, node.NodeType))
+	}
 	delete(g.Nodes, nodeID)
 
 	// Remove assignments where this node is child or parent
@@ -155,36 +161,105 @@ func (g *Graph) RemoveAssociationByID(id string) {
 	delete(g.Associations, id)
 }
 
-// GetAncestors returns all ancestors of a node (upward traversal through assignments)
+// GetAncestors returns all ancestors of a node using iterative BFS (upward traversal).
 func (g *Graph) GetAncestors(nodeID string) map[string]*NGACNode {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	result := make(map[string]*NGACNode)
-	visited := make(map[string]bool)
-	g.getAncestorsRecursive(nodeID, result, visited)
+	visited := map[string]bool{nodeID: true}
+	queue := []string{nodeID}
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		for pid := range g.childToParents[current] {
+			if visited[pid] {
+				continue
+			}
+			visited[pid] = true
+			if n, ok := g.Nodes[pid]; ok {
+				result[pid] = n
+				queue = append(queue, pid)
+			}
+		}
+	}
 	return result
 }
 
-// GetAncestorsWithPaths returns ancestors with the path taken to reach each
+// GetAncestorsWithPaths returns ancestors with the path taken to reach each.
 func (g *Graph) GetAncestorsWithPaths(nodeID string) map[string][]string {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
+	type pathEntry struct {
+		id   string
+		path []string
+	}
+
 	paths := make(map[string][]string)
-	visited := make(map[string]bool)
-	g.getAncestorPathsRecursive(nodeID, []string{}, paths, visited)
+	visited := map[string]bool{nodeID: true}
+
+	var startStep string
+	if node := g.Nodes[nodeID]; node != nil {
+		startStep = fmt.Sprintf("%s (%s)", node.Name, node.NodeType)
+	} else {
+		startStep = nodeID
+	}
+
+	queue := []pathEntry{{id: nodeID, path: []string{startStep}}}
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		for pid := range g.childToParents[current.id] {
+			if visited[pid] {
+				continue
+			}
+			visited[pid] = true
+
+			newPath := make([]string, len(current.path))
+			copy(newPath, current.path)
+			paths[pid] = newPath
+
+			var step string
+			if n := g.Nodes[pid]; n != nil {
+				step = fmt.Sprintf("%s (%s)", n.Name, n.NodeType)
+			} else {
+				step = pid
+			}
+			queue = append(queue, pathEntry{id: pid, path: append(newPath, step)})
+		}
+	}
 	return paths
 }
 
-// GetDescendants returns all descendants of a node (downward traversal)
+// GetDescendants returns all descendants of a node using iterative BFS (downward traversal).
 func (g *Graph) GetDescendants(nodeID string) map[string]*NGACNode {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
 
 	result := make(map[string]*NGACNode)
-	visited := make(map[string]bool)
-	g.getDescendantsRecursive(nodeID, result, visited)
+	visited := map[string]bool{nodeID: true}
+	queue := []string{nodeID}
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		for cid := range g.parentToChildren[current] {
+			if visited[cid] {
+				continue
+			}
+			visited[cid] = true
+			if n, ok := g.Nodes[cid]; ok {
+				result[cid] = n
+				queue = append(queue, cid)
+			}
+		}
+	}
 	return result
 }
 
@@ -248,16 +323,11 @@ func (g *Graph) GetNode(id string) *NGACNode {
 	return g.Nodes[id]
 }
 
-// FindNodeByName finds a node by name and type
+// FindNodeByName finds a node by name and type via O(1) index lookup.
 func (g *Graph) FindNodeByName(name, nodeType string) *NGACNode {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
-	for _, n := range g.Nodes {
-		if n.Name == name && n.NodeType == nodeType {
-			return n
-		}
-	}
-	return nil
+	return g.nameTypeIndex[nameTypeKey(name, nodeType)]
 }
 
 // IsAssigned checks if child is assigned to parent
@@ -298,59 +368,43 @@ func (g *Graph) canReach(current, target string, visited map[string]bool) bool {
 	return false
 }
 
-func (g *Graph) getAncestorsRecursive(nodeID string, result map[string]*NGACNode, visited map[string]bool) {
-	if visited[nodeID] {
-		return
-	}
-	visited[nodeID] = true
+// bfsCollectAttributesAndPCs performs a single-pass upward BFS from startID,
+// collecting all ancestor nodes of attrType and all reachable PolicyClass nodes.
+// This replaces the old pattern of separate collectAncestorsOfType + collectPCsReachable calls.
+func (g *Graph) bfsCollectAttributesAndPCs(startID, attrType string) (attrs map[string]bool, pcs map[string]bool) {
+	attrs = map[string]bool{startID: true}
+	pcs = make(map[string]bool)
+	visited := map[string]bool{startID: true}
+	queue := []string{startID}
 
-	if parents, ok := g.childToParents[nodeID]; ok {
-		for pid := range parents {
-			if n, ok := g.Nodes[pid]; ok {
-				result[pid] = n
-				g.getAncestorsRecursive(pid, result, visited)
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+
+		for pid := range g.childToParents[current] {
+			if visited[pid] {
+				continue
+			}
+			visited[pid] = true
+
+			node := g.Nodes[pid]
+			if node == nil {
+				continue
+			}
+
+			switch node.NodeType {
+			case attrType:
+				attrs[pid] = true
+				queue = append(queue, pid)
+			case NodeTypePolicyClass:
+				pcs[pid] = true
+				// PC is a DAG root — don't continue BFS above it
+			default:
+				queue = append(queue, pid)
 			}
 		}
 	}
-}
-
-func (g *Graph) getAncestorPathsRecursive(nodeID string, currentPath []string, paths map[string][]string, visited map[string]bool) {
-	if visited[nodeID] {
-		return
-	}
-	visited[nodeID] = true
-
-	node := g.Nodes[nodeID]
-	var step string
-	if node != nil {
-		step = fmt.Sprintf("%s (%s)", node.Name, node.NodeType)
-	} else {
-		step = nodeID
-	}
-	newPath := append(append([]string{}, currentPath...), step)
-
-	if parents, ok := g.childToParents[nodeID]; ok {
-		for pid := range parents {
-			paths[pid] = append([]string{}, newPath...)
-			g.getAncestorPathsRecursive(pid, newPath, paths, visited)
-		}
-	}
-}
-
-func (g *Graph) getDescendantsRecursive(nodeID string, result map[string]*NGACNode, visited map[string]bool) {
-	if visited[nodeID] {
-		return
-	}
-	visited[nodeID] = true
-
-	if children, ok := g.parentToChildren[nodeID]; ok {
-		for cid := range children {
-			if n, ok := g.Nodes[cid]; ok {
-				result[cid] = n
-				g.getDescendantsRecursive(cid, result, visited)
-			}
-		}
-	}
+	return attrs, pcs
 }
 
 func (g *Graph) removeAssignmentIndexes(a *Assignment) {

@@ -1,12 +1,37 @@
 services:
+  # ============================================
+  # Edge Proxy
+  # ============================================
+  traefik:
+    image: traefik:v3.2
+    command:
+      - --api.dashboard=true
+      - --api.insecure=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --ping=true
+      - --log.level=WARN
+    ports:
+      - "80:80"       # HTTP entrypoint
+      - "8082:8080"    # Traefik dashboard
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ============================================
+  # Data Stores
+  # ============================================
   postgres:
     image: postgres:16-alpine
     environment:
       POSTGRES_DB: ngac
       POSTGRES_USER: ngac
       POSTGRES_PASSWORD: ngac_secret
-    ports:
-      - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./data/init.sql:/docker-entrypoint-initdb.d/init.sql
@@ -18,8 +43,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
     command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     volumes:
       - redisdata:/data
@@ -41,9 +64,6 @@ services:
       - --default-log-level=warn
       - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
       - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
-    ports:
-      - "19092:19092"
-      - "9644:9644"
     volumes:
       - redpandadata:/var/lib/redpanda/data
     healthcheck:
@@ -53,6 +73,35 @@ services:
       retries: 15
       start_period: 30s
 
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ngac-admin
+      MINIO_ROOT_PASSWORD: ngac-secret-key
+    ports:
+      - "9000:9000"    # S3 API — direct access for presigned URLs
+      - "9001:9001"    # MinIO Console (debug only)
+    volumes:
+      - miniodata:/data
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.storage.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && PathPrefix(`/storage`)"
+      - "traefik.http.routers.storage.entrypoints=web"
+      - "traefik.http.routers.storage.priority=150"
+      - "traefik.http.middlewares.storage-strip.stripprefix.prefixes=/storage"
+      - "traefik.http.routers.storage.middlewares=cors-all@docker,storage-strip@docker"
+      - "traefik.http.services.storage.loadbalancer.server.port=9000"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ============================================
+  # Microservices
+  # ============================================
   policy:
     build:
       context: ./backend
@@ -62,8 +111,6 @@ services:
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
       GRPC_PORT: "50051"
-    ports:
-      - "50051:50051"
     depends_on:
       postgres:
         condition: service_healthy
@@ -73,6 +120,29 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  policy-read:
+    build:
+      context: ./backend
+      dockerfile: services/policy/Dockerfile.read
+    environment:
+      DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      GRPC_PORT: "50061"
+    deploy:
+      replicas: 2
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      policy:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50061"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -87,13 +157,19 @@ services:
       REDIS_URL: redis://redis:6379/1
       JWT_SECRET: ngac-super-secret-key-change-in-production
       GRPC_PORT: "50052"
-    ports:
-      - "50052:50052"
+      REST_PORT: "8080"
     depends_on:
       policy:
         condition: service_healthy
       redis:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/auth`) || PathPrefix(`/api/users`))"
+      - "traefik.http.routers.auth.entrypoints=web"
+      - "traefik.http.routers.auth.priority=110"
+      - "traefik.http.routers.auth.middlewares=cors-all@docker"
+      - "traefik.http.services.auth.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50052"]
       interval: 5s
@@ -107,12 +183,28 @@ services:
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ngac-admin
+      MINIO_SECRET_KEY: ngac-secret-key
+      MINIO_USE_SSL: "false"
       GRPC_PORT: "50053"
-    ports:
-      - "50053:50053"
+      REST_PORT: "8080"
+      JWT_SECRET: ngac-super-secret-key-change-in-production
+      DRIVE_SERVICE_ADDR: drive:50057
     depends_on:
       policy:
         condition: service_healthy
+      minio:
+        condition: service_healthy
+      drive:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.workspace.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && PathPrefix(`/api/workspaces`)"
+      - "traefik.http.routers.workspace.entrypoints=web"
+      - "traefik.http.routers.workspace.priority=100"
+      - "traefik.http.routers.workspace.middlewares=cors-all@docker"
+      - "traefik.http.services.workspace.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50053"]
       interval: 5s
@@ -125,16 +217,25 @@ services:
       dockerfile: services/document/Dockerfile
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
-      POLICY_SERVICE_ADDR: policy:50051
-      DATA_DIR: /data/documents
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ngac-admin
+      MINIO_SECRET_KEY: ngac-secret-key
+      MINIO_USE_SSL: "false"
+      MINIO_PUBLIC_ENDPOINT: zump-biz.vn:9000
       GRPC_PORT: "50054"
-    ports:
-      - "50054:50054"
-    volumes:
-      - docdata:/data/documents
+      REST_PORT: "8080"
+      JWT_SECRET: ngac-super-secret-key-change-in-production
+      DRIVE_SERVICE_ADDR: drive:50057
     depends_on:
-      policy:
+      minio:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.document.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/documents`) || PathRegexp(`/api/workspaces/[^/]+/documents`))"
+      - "traefik.http.routers.document.entrypoints=web"
+      - "traefik.http.routers.document.priority=120"
+      - "traefik.http.routers.document.middlewares=cors-all@docker"
+      - "traefik.http.services.document.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50054"]
       interval: 5s
@@ -153,9 +254,8 @@ services:
       KAFKA_BROKERS: redpanda:9092
       GRPC_PORT: "50055"
       WS_PORT: "8081"
-    ports:
-      - "50055:50055"
-      - "8081:8081"
+      REST_PORT: "8080"
+      DRIVE_SERVICE_ADDR: drive:50057
     depends_on:
       policy:
         condition: service_healthy
@@ -163,6 +263,25 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+      drive:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      # WebSocket router — priority 200 (highest)
+      - "traefik.http.routers.ws.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && PathPrefix(`/api/ws`)"
+      - "traefik.http.routers.ws.entrypoints=web"
+      - "traefik.http.routers.ws.priority=200"
+      - "traefik.http.routers.ws.service=ws"
+      - "traefik.http.middlewares.ws-strip.stripprefix.prefixes=/api"
+      - "traefik.http.routers.ws.middlewares=ws-strip@docker"
+      - "traefik.http.services.ws.loadbalancer.server.port=8081"
+      # REST router — channels, messages, DMs, threads, notifications
+      - "traefik.http.routers.messaging.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/channels`) || PathPrefix(`/api/messages`) || PathPrefix(`/api/dms`) || PathPrefix(`/api/threads`) || PathPrefix(`/api/notifications`) || PathRegexp(`/api/workspaces/[^/]+/channels`))"
+      - "traefik.http.routers.messaging.entrypoints=web"
+      - "traefik.http.routers.messaging.priority=120"
+      - "traefik.http.routers.messaging.service=messaging"
+      - "traefik.http.routers.messaging.middlewares=cors-all@docker"
+      - "traefik.http.services.messaging.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50055"]
       interval: 5s
@@ -179,8 +298,8 @@ services:
       REDIS_URL: redis://redis:6379/3
       KAFKA_BROKERS: redpanda:9092
       GRPC_PORT: "50056"
-    ports:
-      - "50056:50056"
+      REST_PORT: "8080"
+      JWT_SECRET: ngac-super-secret-key-change-in-production
     depends_on:
       policy:
         condition: service_healthy
@@ -188,50 +307,74 @@ services:
         condition: service_healthy
       redpanda:
         condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.asset.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/assets`) || PathPrefix(`/api/asset-types`) || PathPrefix(`/api/asset-requests`) || PathRegexp(`/api/workspaces/[^/]+/asset`))"
+      - "traefik.http.routers.asset.entrypoints=web"
+      - "traefik.http.routers.asset.priority=120"
+      - "traefik.http.routers.asset.middlewares=cors-all@docker"
+      - "traefik.http.services.asset.loadbalancer.server.port=8080"
     healthcheck:
       test: ["CMD", "/bin/grpc_health_probe", "-addr=:50056"]
       interval: 5s
       timeout: 3s
       retries: 10
 
-  gateway:
+  drive:
     build:
       context: ./backend
-      dockerfile: services/gateway/Dockerfile
+      dockerfile: services/drive/Dockerfile
     environment:
-      AUTH_SERVICE_ADDR: auth:50052
+      DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
-      WORKSPACE_SERVICE_ADDR: workspace:50053
+      POLICY_READ_SERVICE_ADDR: policy-read:50061
       DOCUMENT_SERVICE_ADDR: document:50054
-      MESSAGING_SERVICE_ADDR: messaging:50055
-      MESSAGING_WS_ADDR: messaging:8081
-      ASSET_SERVICE_ADDR: asset:50056
+      GRPC_PORT: "50057"
+      REST_PORT: "8080"
       JWT_SECRET: ngac-super-secret-key-change-in-production
-      PORT: "8080"
-    ports:
-      - "8080:8080"
     depends_on:
-      auth:
+      policy:
         condition: service_healthy
-      workspace:
+      policy-read:
         condition: service_healthy
       document:
         condition: service_healthy
-      messaging:
-        condition: service_healthy
-      asset:
-        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.drive.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/drive`) || PathRegexp(`/api/workspaces/[^/]+/drive`))"
+      - "traefik.http.routers.drive.entrypoints=web"
+      - "traefik.http.routers.drive.priority=120"
+      - "traefik.http.routers.drive.middlewares=cors-all@docker"
+      - "traefik.http.services.drive.loadbalancer.server.port=8080"
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50057"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
+  # ============================================
+  # Frontend
+  # ============================================
   frontend:
     build:
-      context: ./backend/frontend
-    ports:
-      - "3000:80"
+      context: ./frontend
     depends_on:
-      - gateway
+      - auth
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.frontend.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && PathPrefix(`/`)"
+      - "traefik.http.routers.frontend.entrypoints=web"
+      - "traefik.http.routers.frontend.priority=1"
+      - "traefik.http.services.frontend.loadbalancer.server.port=80"
+      # CORS middleware definition (used by all API routers)
+      - "traefik.http.middlewares.cors-all.headers.accesscontrolalloworiginlist=http://zump-biz.vn,http://localhost"
+      - "traefik.http.middlewares.cors-all.headers.accesscontrolallowmethods=GET,POST,PUT,DELETE,OPTIONS"
+      - "traefik.http.middlewares.cors-all.headers.accesscontrolallowheaders=Accept,Authorization,Content-Type"
+      - "traefik.http.middlewares.cors-all.headers.accesscontrolallowcredentials=true"
+      - "traefik.http.middlewares.cors-all.headers.accesscontrolmaxage=3600"
 
 volumes:
   pgdata:
-  docdata:
   redisdata:
   redpandadata:
+  miniodata:

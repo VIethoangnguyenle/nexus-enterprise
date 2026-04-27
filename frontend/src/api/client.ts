@@ -37,3 +37,25 @@ export class ApiError extends Error {
     this.name = 'ApiError'
   }
 }
+
+/** Authenticated FormData upload. Does NOT set Content-Type — browser handles multipart boundary. */
+export async function apiUpload<T>(path: string, body: FormData): Promise<T> {
+  const token = useAuthStore.getState().token
+  const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+
+  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', body, headers })
+
+  if (res.status === 401) {
+    useAuthStore.getState().logout()
+    throw new ApiError('Unauthorized', 401)
+  }
+
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new ApiError(data.error || data.message || res.statusText, res.status, data)
+  }
+
+  if (res.status === 204) return {} as T
+  return res.json()
+}
+

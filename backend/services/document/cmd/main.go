@@ -11,6 +11,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
+	echomw "github.com/labstack/echo/v4/middleware"
+	"github.com/minio/minio-go/v7"
+	"github.com/minio/minio-go/v7/pkg/credentials"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
@@ -18,8 +22,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "ngac-platform/proto/document"
-	policypb "ngac-platform/proto/policy"
+	drivepb "ngac-platform/proto/drive"
 	dgrpc "ngac-platform/services/document/internal/grpc"
+	"ngac-platform/services/document/internal/rest"
 )
 
 func main() {
@@ -32,9 +37,17 @@ func main() {
 	defer cancel()
 
 	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
-	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
-	dataDir := envOr("DATA_DIR", "/tmp/ngac-documents")
-	port := envOr("GRPC_PORT", "50054")
+	grpcPort := envOr("GRPC_PORT", "50054")
+	restPort := envOr("REST_PORT", "8080")
+	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
+	driveAddr := envOr("DRIVE_SERVICE_ADDR", "localhost:50057")
+
+	// MinIO configuration
+	minioEndpoint := envOr("MINIO_ENDPOINT", "localhost:9000")
+	minioAccessKey := envOr("MINIO_ACCESS_KEY", "ngac-admin")
+	minioSecretKey := envOr("MINIO_SECRET_KEY", "ngac-secret-key")
+	minioUseSSL := envOr("MINIO_USE_SSL", "false") == "true"
+	minioPublicEndpoint := envOr("MINIO_PUBLIC_ENDPOINT", "localhost/storage")
 
 	pool, err := connectDB(ctx, dbURL)
 	if err != nil {
@@ -43,16 +56,33 @@ func main() {
 	}
 	defer pool.Close()
 
-	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Initialize internal MinIO client (for server-side ops: StatObject, PutObject, CopyObject)
+	minioClient, err := minio.New(minioEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(minioAccessKey, minioSecretKey, ""),
+		Secure: minioUseSSL,
+	})
 	if err != nil {
-		slog.Error("failed to connect to policy service", "address", policyAddr, "error", err)
+		slog.Error("failed to create minio client", "endpoint", minioEndpoint, "error", err)
 		os.Exit(1)
 	}
-	defer policyConn.Close()
+	slog.Info("minio internal client initialized", "endpoint", minioEndpoint)
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
+	// Initialize presign MinIO client for generating presigned URLs with the public endpoint.
+	presignClient, err := minio.New(minioPublicEndpoint, &minio.Options{
+		Creds:        credentials.NewStaticV4(minioAccessKey, minioSecretKey, ""),
+		Secure:       false,
+		Region:       "us-east-1",
+		BucketLookup: minio.BucketLookupPath,
+	})
 	if err != nil {
-		slog.Error("failed to listen", "port", port, "error", err)
+		slog.Error("failed to create minio presign client", "endpoint", minioPublicEndpoint, "error", err)
+		os.Exit(1)
+	}
+	slog.Info("minio presign client initialized", "endpoint", minioPublicEndpoint)
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
+	if err != nil {
+		slog.Error("failed to listen", "port", grpcPort, "error", err)
 		os.Exit(1)
 	}
 
@@ -62,19 +92,45 @@ func main() {
 			recoveryInterceptor,
 		),
 	)
-	pb.RegisterDocumentServiceServer(srv, dgrpc.NewDocumentServer(pool, policypb.NewPolicyServiceClient(policyConn), dataDir))
+	pb.RegisterDocumentStorageServiceServer(srv, dgrpc.NewDocumentStorageServer(pool, minioClient, presignClient))
 
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 
-	go gracefulShutdown(srv, healthSrv, cancel)
-
-	slog.Info("document service listening", "port", port)
-	if err := srv.Serve(lis); err != nil {
-		slog.Error("server exited", "error", err)
-		os.Exit(1)
+	// Connect to Drive Service for legacy document endpoint proxying
+	var driveClient drivepb.DriveServiceClient
+	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		slog.Warn("drive service unavailable for document proxy", "address", driveAddr, "error", err)
+	} else {
+		defer driveConn.Close()
+		driveClient = drivepb.NewDriveServiceClient(driveConn)
 	}
+
+	// REST server (client-facing)
+	e := echo.New()
+	e.HideBanner = true
+	e.Use(echomw.Logger())
+	e.Use(echomw.Recover())
+	restHandler := rest.NewHandler(driveClient)
+	restHandler.RegisterRoutes(e, jwtSecret)
+
+	// Start both servers
+	go func() {
+		slog.Info("document gRPC listening", "port", grpcPort)
+		if err := srv.Serve(lis); err != nil {
+			slog.Error("grpc server exited", "error", err)
+		}
+	}()
+	go func() {
+		slog.Info("document REST listening", "port", restPort)
+		if err := e.Start(fmt.Sprintf(":%s", restPort)); err != nil {
+			slog.Info("rest server stopped", "error", err)
+		}
+	}()
+
+	gracefulShutdown(srv, healthSrv, e, cancel)
 }
 
 func envOr(key, fallback string) string {
@@ -105,7 +161,7 @@ func connectDB(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, cancel context.CancelFunc) {
+func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, echoSrv *echo.Echo, cancel context.CancelFunc) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh
@@ -113,6 +169,10 @@ func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, cancel context
 
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 	cancel()
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer shutdownCancel()
+	echoSrv.Shutdown(shutdownCtx)
 
 	stopped := make(chan struct{})
 	go func() {
@@ -122,7 +182,7 @@ func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, cancel context
 	select {
 	case <-stopped:
 		slog.Info("server stopped gracefully")
-	case <-time.After(15 * time.Second):
+	case <-shutdownCtx.Done():
 		slog.Warn("graceful stop timed out, forcing stop")
 		srv.Stop()
 	}

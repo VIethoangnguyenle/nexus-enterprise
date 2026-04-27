@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
+	echomw "github.com/labstack/echo/v4/middleware"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -21,7 +23,9 @@ import (
 	pb "ngac-platform/proto/auth"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/auth/internal/auth"
+	"ngac-platform/services/auth/internal/domain"
 	agrpc "ngac-platform/services/auth/internal/grpc"
+	"ngac-platform/services/auth/internal/rest"
 	"ngac-platform/services/auth/internal/store"
 )
 
@@ -38,7 +42,8 @@ func main() {
 	redisURL := envOr("REDIS_URL", "redis://localhost:6379/1")
 	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
 	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
-	port := envOr("GRPC_PORT", "50052")
+	grpcPort := envOr("GRPC_PORT", "50052")
+	restPort := envOr("REST_PORT", "8080")
 
 	auth.SetJWTSecret(jwtSecret)
 
@@ -55,9 +60,10 @@ func main() {
 		os.Exit(1)
 	}
 	defer policyConn.Close()
-	policyClient := policypb.NewPolicyServiceClient(policyConn)
+	policyRead := policypb.NewPolicyReadServiceClient(policyConn)
+	policyWrite := policypb.NewPolicyWriteServiceClient(policyConn)
 
-	s := store.New(pool)
+	st := store.New(pool)
 
 	rdb, err := connectRedis(ctx, redisURL)
 	if err != nil {
@@ -67,9 +73,13 @@ func main() {
 		defer rdb.Close()
 	}
 
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
+	// Domain service — shared by gRPC and REST handlers
+	svc := domain.NewService(st, policyRead, policyWrite)
+
+	// gRPC server (service-to-service)
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
 	if err != nil {
-		slog.Error("failed to listen", "port", port, "error", err)
+		slog.Error("failed to listen", "port", grpcPort, "error", err)
 		os.Exit(1)
 	}
 
@@ -79,19 +89,35 @@ func main() {
 			recoveryInterceptor,
 		),
 	)
-	pb.RegisterAuthServiceServer(srv, agrpc.NewAuthServer(s, policyClient, rdb))
+	pb.RegisterAuthServiceServer(srv, agrpc.NewAuthServer(svc, rdb))
 
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 
-	go gracefulShutdown(srv, healthSrv, cancel)
+	// REST server (client-facing)
+	e := echo.New()
+	e.HideBanner = true
+	e.Use(echomw.Logger())
+	e.Use(echomw.Recover())
+	restHandler := rest.NewHandler(svc)
+	restHandler.RegisterRoutes(e, jwtSecret)
 
-	slog.Info("auth service listening", "port", port)
-	if err := srv.Serve(lis); err != nil {
-		slog.Error("server exited", "error", err)
-		os.Exit(1)
-	}
+	// Start both servers
+	go func() {
+		slog.Info("auth gRPC listening", "port", grpcPort)
+		if err := srv.Serve(lis); err != nil {
+			slog.Error("grpc server exited", "error", err)
+		}
+	}()
+	go func() {
+		slog.Info("auth REST listening", "port", restPort)
+		if err := e.Start(fmt.Sprintf(":%s", restPort)); err != nil {
+			slog.Info("rest server stopped", "error", err)
+		}
+	}()
+
+	gracefulShutdown(srv, healthSrv, e, cancel)
 }
 
 // envOr returns the environment variable value or a fallback default.
@@ -139,8 +165,8 @@ func connectDB(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// gracefulShutdown waits for SIGINT/SIGTERM and drains in-flight RPCs.
-func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, cancel context.CancelFunc) {
+// gracefulShutdown waits for SIGINT/SIGTERM and drains in-flight requests.
+func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, echoSrv *echo.Echo, cancel context.CancelFunc) {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	sig := <-sigCh
@@ -149,6 +175,15 @@ func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, cancel context
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
 	cancel()
 
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer shutdownCancel()
+
+	// Shutdown Echo REST server
+	if err := echoSrv.Shutdown(shutdownCtx); err != nil {
+		slog.Warn("echo shutdown error", "error", err)
+	}
+
+	// Graceful stop gRPC server
 	stopped := make(chan struct{})
 	go func() {
 		srv.GracefulStop()
@@ -157,7 +192,7 @@ func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, cancel context
 	select {
 	case <-stopped:
 		slog.Info("server stopped gracefully")
-	case <-time.After(15 * time.Second):
+	case <-shutdownCtx.Done():
 		slog.Warn("graceful stop timed out, forcing stop")
 		srv.Stop()
 	}

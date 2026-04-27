@@ -1,0 +1,26 @@
+syntax = "proto3";
+
+package policy;
+
+option go_package = "ngac-platform/proto/policy";
+
+import "proto/policy/policy.proto";
+
+// PolicyReadService handles read-only operations against the NGAC graph.
+// Designed to run as stateless replicas behind a load balancer.
+service PolicyReadService {
+  // Access checks
+  rpc CheckAccess(CheckAccessRequest) returns (AccessDecision);
+
+  // Node queries (read-only)
+  rpc GetNode(GetNodeRequest) returns (NGACNode);
+  rpc FindNodeByName(FindNodeByNameRequest) returns (NGACNode);
+  rpc GetNodesByType(GetNodesByTypeRequest) returns (NodeList);
+  rpc IsAssigned(IsAssignedRequest) returns (BoolResponse);
+
+  // Graph traversal (read-only)
+  rpc GetAncestors(GetAncestorsRequest) returns (NodeList);
+  rpc GetDescendants(GetDescendantsRequest) returns (NodeList);
+  rpc GetChildren(GetChildrenRequest) returns (NodeList);
+  rpc GetParents(GetParentsRequest) returns (NodeList);
+}

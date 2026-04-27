@@ -61,7 +61,10 @@ func main() {
 	slog.Info("graph loaded", "nodes", len(graph.Nodes))
 
 	ce := ngac.NewConstraintEngine()
-	ce.Register(ngac.WeekdayOnlyConstraint)
+	if os.Getenv("ENABLE_WEEKDAY_CONSTRAINT") == "true" {
+		ce.Register(ngac.WeekdayOnlyConstraint)
+		slog.Info("weekday-only constraint enabled")
+	}
 
 	rdb, err := connectRedis(ctx, redisURL)
 	if err != nil {
@@ -91,7 +94,21 @@ func main() {
 			recoveryInterceptor,
 		),
 	)
-	pb.RegisterPolicyServiceServer(srv, pgrpc.NewPolicyServer(store, ce, rdb, producer))
+
+	// Legacy service (backward compatibility — will be deprecated after all consumers migrate)
+	policyServer := pgrpc.NewPolicyServer(store, ce, rdb, producer)
+	pb.RegisterPolicyServiceServer(srv, policyServer)
+
+	// CQRS: Read + Write services
+	cte := ngac.NewCTEEvaluator(pool)
+	materialized := ngac.NewMaterializedAccess(pool)
+	versionTracker := ngac.NewVersionTracker(pool)
+
+	readServer := pgrpc.NewReadServer(store, ce, rdb, cte, materialized, versionTracker)
+	pb.RegisterPolicyReadServiceServer(srv, readServer)
+
+	writeServer := pgrpc.NewWriteServer(store, rdb, producer, materialized, versionTracker)
+	pb.RegisterPolicyWriteServiceServer(srv, writeServer)
 
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)

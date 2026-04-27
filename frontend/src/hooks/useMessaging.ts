@@ -1,5 +1,5 @@
 import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
-import { messagingApi } from '../api/messaging'
+import { messagingApi, type CreateChannelInput } from '../api/messaging'
 import { queryClient } from '../lib/query-client'
 
 export const channelsQueryOptions = (wsId: string) =>
@@ -17,14 +17,18 @@ export function useThread(messageId: string) { return useQuery(threadQueryOption
 
 export function useSendMessage(channelId: string) {
   return useMutation({
-    mutationFn: (content: string) => messagingApi.sendMessage(channelId, content),
+    mutationFn: (params: string | { content: string; linkedEntity?: { type: string; id: string } }) => {
+      const content = typeof params === 'string' ? params : params.content
+      const linkedEntity = typeof params === 'string' ? undefined : params.linkedEntity
+      return messagingApi.sendMessage(channelId, content, linkedEntity)
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['messages', channelId] }),
   })
 }
 
 export function useCreateChannel(wsId: string) {
   return useMutation({
-    mutationFn: (data: any) => messagingApi.createChannel(wsId, data),
+    mutationFn: (data: CreateChannelInput) => messagingApi.createChannel(wsId, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['channels', wsId] }),
   })
 }

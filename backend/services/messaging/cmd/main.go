@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/labstack/echo/v4"
+	echomw "github.com/labstack/echo/v4/middleware"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -21,10 +23,14 @@ import (
 	"google.golang.org/grpc/status"
 
 	authpb "ngac-platform/proto/auth"
+	drivepb "ngac-platform/proto/drive"
 	pb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/messaging/internal/domain"
 	"ngac-platform/services/messaging/internal/events"
 	mgrpc "ngac-platform/services/messaging/internal/grpc"
+	"ngac-platform/services/messaging/internal/rest"
+	"ngac-platform/services/messaging/internal/store"
 )
 
 func main() {
@@ -41,9 +47,11 @@ func main() {
 	kafkaBrokers := envOr("KAFKA_BROKERS", "localhost:19092")
 	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
 	authAddr := envOr("AUTH_SERVICE_ADDR", "localhost:50052")
+	driveAddr := envOr("DRIVE_SERVICE_ADDR", "localhost:50057")
 	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
 	port := envOr("GRPC_PORT", "50055")
 	wsPort := envOr("WS_PORT", "8081")
+	restPort := envOr("REST_PORT", "8080")
 
 	pool, err := connectDB(ctx, dbURL)
 	if err != nil {
@@ -65,6 +73,14 @@ func main() {
 		os.Exit(1)
 	}
 	defer authConn.Close()
+
+	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		slog.Warn("drive service unavailable, channel drives disabled", "address", driveAddr, "error", err)
+	}
+	if driveConn != nil {
+		defer driveConn.Close()
+	}
 
 	rdb, err := connectRedis(ctx, redisURL)
 	if err != nil {
@@ -115,13 +131,22 @@ func main() {
 			recoveryInterceptor,
 		),
 	)
-	pb.RegisterMessagingServiceServer(srv, mgrpc.NewMessagingServer(
-		pool,
-		policypb.NewPolicyServiceClient(policyConn),
+	var driveClient drivepb.DriveServiceClient
+	if driveConn != nil {
+		driveClient = drivepb.NewDriveServiceClient(driveConn)
+	}
+
+	// Wire: Store → Domain → Handler
+	msgStore := store.NewStore(pool)
+	domainSvc := domain.NewService(
+		msgStore,
+		policypb.NewPolicyReadServiceClient(policyConn),
+		policypb.NewPolicyWriteServiceClient(policyConn),
 		authpb.NewAuthServiceClient(authConn),
-		hub,
-		producer,
-	))
+		driveClient,
+	)
+
+	pb.RegisterMessagingServiceServer(srv, mgrpc.NewMessagingServer(domainSvc, hub, producer))
 
 	notifSrv := mgrpc.NewNotificationServer(pool, hub)
 	pb.RegisterNotificationServiceServer(srv, notifSrv)
@@ -171,7 +196,21 @@ func main() {
 		}
 	}()
 
-	slog.Info("messaging service listening", "grpc_port", port, "ws_port", wsPort)
+	// REST server (client-facing)
+	e := echo.New()
+	e.HideBanner = true
+	e.Use(echomw.Logger())
+	e.Use(echomw.Recover())
+	restHandler := rest.NewHandler(domainSvc, nil) // TODO: wire NotificationStore
+	restHandler.RegisterRoutes(e, jwtSecret)
+	go func() {
+		slog.Info("messaging REST listening", "port", restPort)
+		if err := e.Start(fmt.Sprintf(":%s", restPort)); err != nil {
+			slog.Info("rest server stopped", "error", err)
+		}
+	}()
+
+	slog.Info("messaging service listening", "grpc_port", port, "ws_port", wsPort, "rest_port", restPort)
 	if err := srv.Serve(lis); err != nil {
 		slog.Error("server exited", "error", err)
 		os.Exit(1)

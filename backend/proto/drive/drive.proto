@@ -1,0 +1,246 @@
+syntax = "proto3";
+
+package drive;
+
+option go_package = "ngac-platform/proto/drive";
+
+import "google/protobuf/timestamp.proto";
+
+// DriveService provides Google Drive-like file organization, hierarchy,
+// NGAC-based access control, and sharing. Storage operations are delegated
+// to the DocumentStorageService.
+service DriveService {
+  // Folder operations
+  rpc CreateFolder(CreateFolderRequest) returns (DriveItem);
+  rpc ListFolder(ListFolderRequest) returns (DriveItemList);
+  rpc GetItem(GetItemRequest) returns (DriveItem);
+  rpc RenameItem(RenameItemRequest) returns (DriveItem);
+  rpc MoveItem(MoveItemRequest) returns (DriveItem);
+  rpc CopyItem(CopyItemRequest) returns (DriveItem);
+  rpc TrashItem(TrashItemRequest) returns (Empty);
+  rpc RestoreItem(RestoreItemRequest) returns (DriveItem);
+  rpc DeleteItem(DeleteItemRequest) returns (Empty);
+
+  // File upload/download (orchestrates DocumentStorageService)
+  rpc CreateFile(CreateFileRequest) returns (CreateFileResponse);
+  rpc ConfirmFile(ConfirmFileRequest) returns (DriveItem);
+  rpc GetDownloadURL(GetDownloadURLRequest) returns (GetDownloadURLResponse);
+
+  // Sharing
+  rpc CreateShare(CreateShareRequest) returns (ShareInfo);
+  rpc RevokeShare(RevokeShareRequest) returns (Empty);
+  rpc ListShares(ListSharesRequest) returns (ShareList);
+  rpc GetSharedWithMe(GetSharedWithMeRequest) returns (DriveItemList);
+
+  // Channel/DM drives
+  rpc CreateDriveForChannel(CreateDriveForChannelRequest) returns (DriveItem);
+  rpc GetChannelDrive(GetChannelDriveRequest) returns (DriveItem);
+
+  // Quotas
+  rpc GetQuota(GetQuotaRequest) returns (Quota);
+  rpc UpdateQuota(UpdateQuotaRequest) returns (Quota);
+}
+
+message Empty {}
+
+// DriveItem represents a file or folder in the drive hierarchy.
+message DriveItem {
+  string id = 1;
+  string workspace_id = 2;
+  string drive_context = 3;       // "workspace", "channel", "dm"
+  string drive_context_id = 4;    // channel_id or empty for workspace
+  string parent_id = 5;           // empty = drive root
+  string item_type = 6;           // "file" or "folder"
+  string name = 7;
+  string mime_type = 8;           // empty for folders
+  int64 size_bytes = 9;           // 0 for folders
+  string object_key = 10;         // MinIO path, empty for folders
+  string ngac_node_id = 11;
+  string owner_id = 12;
+  string owner_name = 13;
+  string status = 14;             // "active", "pending", "trashed"
+  google.protobuf.Timestamp created_at = 15;
+  google.protobuf.Timestamp updated_at = 16;
+}
+
+message DriveItemList {
+  repeated DriveItem items = 1;
+  // Breadcrumb path from root to current folder
+  repeated BreadcrumbEntry breadcrumb = 2;
+}
+
+message BreadcrumbEntry {
+  string id = 1;
+  string name = 2;
+}
+
+// --- Folder operations ---
+
+message CreateFolderRequest {
+  string workspace_id = 1;
+  string parent_id = 2;            // empty = workspace drive root
+  string name = 3;
+  string user_ngac_node_id = 4;
+  // For channel drives
+  string drive_context = 5;        // "workspace" or "channel"
+  string drive_context_id = 6;
+}
+
+message ListFolderRequest {
+  string workspace_id = 1;
+  string folder_id = 2;            // empty = drive root for workspace
+  string user_ngac_node_id = 3;
+  string drive_context = 4;
+  string drive_context_id = 5;
+}
+
+message GetItemRequest {
+  string item_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message RenameItemRequest {
+  string item_id = 1;
+  string new_name = 2;
+  string user_ngac_node_id = 3;
+}
+
+message MoveItemRequest {
+  string item_id = 1;
+  string new_parent_id = 2;
+  string user_ngac_node_id = 3;
+}
+
+message CopyItemRequest {
+  string item_id = 1;
+  string dest_parent_id = 2;
+  string dest_workspace_id = 3;
+  string dest_drive_context = 4;
+  string dest_drive_context_id = 5;
+  string user_id = 6;
+  string user_ngac_node_id = 7;
+}
+
+message TrashItemRequest {
+  string item_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message RestoreItemRequest {
+  string item_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message DeleteItemRequest {
+  string item_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+// --- File upload/download ---
+
+message CreateFileRequest {
+  string workspace_id = 1;
+  string parent_id = 2;            // folder to upload into
+  string name = 3;
+  string mime_type = 4;
+  int64 size_bytes = 5;
+  string user_id = 6;
+  string user_ngac_node_id = 7;
+  string drive_context = 8;
+  string drive_context_id = 9;
+}
+
+message CreateFileResponse {
+  string file_id = 1;
+  string upload_url = 2;
+  string object_key = 3;
+}
+
+message ConfirmFileRequest {
+  string file_id = 1;
+  string user_id = 2;
+  string user_ngac_node_id = 3;
+}
+
+message GetDownloadURLRequest {
+  string file_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message GetDownloadURLResponse {
+  string download_url = 1;
+  string filename = 2;
+  string mime_type = 3;
+  int64 size_bytes = 4;
+}
+
+// --- Sharing ---
+
+message CreateShareRequest {
+  string item_id = 1;
+  string share_type = 2;           // "user", "role", "workspace", "public"
+  string target_ngac_node_id = 3;  // empty for public shares
+  repeated string operations = 4;  // ["read"] or ["read", "write"]
+  string user_ngac_node_id = 5;    // requester (must have write access)
+}
+
+message ShareInfo {
+  string id = 1;
+  string drive_item_id = 2;
+  string share_type = 3;
+  string target_ngac_id = 4;
+  string target_label = 5;
+  repeated string operations = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message RevokeShareRequest {
+  string share_id = 1;
+  string user_ngac_node_id = 2;
+}
+
+message ListSharesRequest {
+  string item_id = 1;
+}
+
+message ShareList {
+  repeated ShareInfo shares = 1;
+}
+
+message GetSharedWithMeRequest {
+  string user_ngac_node_id = 1;
+}
+
+// --- Channel drives ---
+
+message CreateDriveForChannelRequest {
+  string workspace_id = 1;
+  string channel_id = 2;
+  string channel_name = 3;
+  string channel_ngac_oa_id = 4;   // channel's Content OA
+  string channel_ngac_ua_id = 5;   // channel's Members UA
+}
+
+message GetChannelDriveRequest {
+  string channel_id = 1;
+}
+
+// --- Quotas ---
+
+message GetQuotaRequest {
+  string workspace_id = 1;
+}
+
+message UpdateQuotaRequest {
+  string workspace_id = 1;
+  int64 max_bytes = 2;
+  int32 max_files = 3;
+}
+
+message Quota {
+  string workspace_id = 1;
+  int64 max_bytes = 2;
+  int64 used_bytes = 3;
+  int32 max_files = 4;
+  int32 used_files = 5;
+}

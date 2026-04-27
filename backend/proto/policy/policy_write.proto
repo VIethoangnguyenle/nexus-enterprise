@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package policy;
+
+option go_package = "ngac-platform/proto/policy";
+
+import "proto/policy/policy.proto";
+
+// PolicyWriteService handles graph mutations (singleton instance).
+// All write operations invalidate relevant caches and publish events.
+service PolicyWriteService {
+  // Node CRUD
+  rpc CreateNode(CreateNodeRequest) returns (NGACNode);
+  rpc DeleteNode(DeleteNodeRequest) returns (Empty);
+
+  // Assignments (containment edges)
+  rpc CreateAssignment(CreateAssignmentRequest) returns (Assignment);
+  rpc RemoveAssignment(RemoveAssignmentRequest) returns (Empty);
+
+  // Associations (permission edges)
+  rpc CreateAssociation(CreateAssociationRequest) returns (Association);
+  rpc RemoveAssociation(RemoveAssociationRequest) returns (Empty);
+
+  // Schema and graph lifecycle
+  rpc InitSchema(Empty) returns (Empty);
+  rpc LoadGraph(Empty) returns (Empty);
+}

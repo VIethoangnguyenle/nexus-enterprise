@@ -24,7 +24,7 @@ type TransitionRule struct {
 func DefaultLifecycle() LifecycleDefinition {
 	return LifecycleDefinition{
 		States:       []string{"requested", "available", "assigned", "maintenance", "retired", "disposed"},
-		InitialState: "available",
+		InitialState: "requested",
 		Transitions: []TransitionRule{
 			{FromState: "requested", ToState: "available", Operation: "approve", NgacPermission: "approve"},
 			{FromState: "available", ToState: "assigned", Operation: "assign", NgacPermission: "assign"},

@@ -2,14 +2,16 @@ package grpc
 
 import (
 	"context"
-	"encoding/json"
 	"log/slog"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "ngac-platform/proto/messaging"
 )
@@ -17,6 +19,8 @@ import (
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
 }
+
+const authTimeout = 5 * time.Second
 
 // Hub manages WebSocket clients and uses Redis pub/sub for cross-instance messaging.
 type Hub struct {
@@ -30,20 +34,14 @@ type Hub struct {
 
 // Client represents a connected WebSocket user.
 type Client struct {
-	conn       *websocket.Conn
-	userID     string
-	username   string
-	ngacNodeID string
-	hub        *Hub
-	send       chan []byte
-}
-
-// WSMessage is the wire format for WebSocket frames.
-type WSMessage struct {
-	Type      string      `json:"type"`
-	ChannelID string      `json:"channel_id,omitempty"`
-	Content   string      `json:"content,omitempty"`
-	Message   *pb.Message `json:"message,omitempty"`
+	conn          *websocket.Conn
+	userID        string
+	username      string
+	ngacNodeID    string
+	hub           *Hub
+	send          chan []byte
+	authenticated bool
+	jwtSecret     string
 }
 
 // NewHub creates a Hub with optional Redis pub/sub for horizontal scaling.
@@ -101,15 +99,39 @@ func (h *Hub) UnsubscribeAll(client *Client) {
 	}
 }
 
+// messageToChatMessage converts a gRPC Message to a WebSocket ChatMessage.
+func messageToChatMessage(m *pb.Message) *pb.ChatMessage {
+	return &pb.ChatMessage{
+		Id:              m.Id,
+		ChannelId:       m.ChannelId,
+		SenderId:        m.SenderId,
+		SenderName:      m.SenderName,
+		Content:         m.Content,
+		CreatedAt:       m.CreatedAt,
+		MessageType:     m.MessageType,
+		ParentMessageId: m.ParentMessageId,
+		ReplyCount:      m.ReplyCount,
+	}
+}
+
+// marshalEnvelope serializes a ServerEnvelope to protobuf bytes.
+func marshalEnvelope(env *pb.ServerEnvelope) []byte {
+	data, err := proto.Marshal(env)
+	if err != nil {
+		slog.Error("failed to marshal server envelope", "error", err)
+		return nil
+	}
+	return data
+}
+
 // BroadcastToChannel publishes to Redis (cross-instance) or local broadcast.
 func (h *Hub) BroadcastToChannel(channelID string, msg *pb.Message) {
-	data, err := json.Marshal(WSMessage{
-		Type:      "message",
-		ChannelID: channelID,
-		Message:   msg,
-	})
-	if err != nil {
-		slog.Error("failed to marshal broadcast message", "error", err)
+	chatMsg := messageToChatMessage(msg)
+	env := &pb.ServerEnvelope{
+		Payload: &pb.ServerEnvelope_ChatMessage{ChatMessage: chatMsg},
+	}
+	data := marshalEnvelope(env)
+	if data == nil {
 		return
 	}
 
@@ -144,12 +166,16 @@ func (h *Hub) broadcastLocal(channelID string, data []byte) {
 
 // broadcastTyping sends typing indicator via Redis or local.
 func (h *Hub) broadcastTyping(channelID, username string, sender *Client) {
-	data, err := json.Marshal(WSMessage{
-		Type:      "typing",
-		ChannelID: channelID,
-		Content:   username,
-	})
-	if err != nil {
+	env := &pb.ServerEnvelope{
+		Payload: &pb.ServerEnvelope_TypingEvent{
+			TypingEvent: &pb.TypingEvent{
+				ChannelId: channelID,
+				Username:  username,
+			},
+		},
+	}
+	data := marshalEnvelope(env)
+	if data == nil {
 		return
 	}
 
@@ -176,7 +202,7 @@ func (h *Hub) broadcastTyping(channelID, username string, sender *Client) {
 
 // subscribeRedis listens on channel:* pattern and delivers to local clients.
 func (h *Hub) subscribeRedis() {
-	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*")
+	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*")
 	defer pubsub.Close()
 
 	slog.Info("redis pub/sub subscriber started")
@@ -191,8 +217,29 @@ func (h *Hub) subscribeRedis() {
 			if !ok {
 				return
 			}
-			channelID := msg.Channel[len("channel:"):]
-			h.broadcastLocal(channelID, []byte(msg.Payload))
+			payload := []byte(msg.Payload)
+
+			if len(msg.Channel) > 5 && msg.Channel[:5] == "user:" {
+				userID := msg.Channel[5:]
+				h.sendToUser(userID, payload)
+			} else if len(msg.Channel) > 8 && msg.Channel[:8] == "channel:" {
+				channelID := msg.Channel[8:]
+				h.broadcastLocal(channelID, payload)
+			}
+		}
+	}
+}
+
+// sendToUser delivers data to all WebSocket clients for a given user.
+func (h *Hub) sendToUser(userID string, data []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if clients, ok := h.users[userID]; ok {
+		for client := range clients {
+			select {
+			case client.send <- data:
+			default:
+			}
 		}
 	}
 }
@@ -210,23 +257,9 @@ type WSClaims struct {
 }
 
 // HandleWebSocket returns an HTTP handler that upgrades to WebSocket.
+// Auth is done via first message (ClientEnvelope{auth}) instead of URL query param.
 func (h *Hub) HandleWebSocket(jwtSecret string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tokenStr := r.URL.Query().Get("token")
-		if tokenStr == "" {
-			http.Error(w, "missing token", http.StatusUnauthorized)
-			return
-		}
-
-		token, err := jwt.ParseWithClaims(tokenStr, &WSClaims{}, func(t *jwt.Token) (interface{}, error) {
-			return []byte(jwtSecret), nil
-		})
-		if err != nil {
-			http.Error(w, "invalid token", http.StatusUnauthorized)
-			return
-		}
-		claims := token.Claims.(*WSClaims)
-
 		conn, err := upgrader.Upgrade(w, r, nil)
 		if err != nil {
 			slog.Warn("websocket upgrade failed", "error", err)
@@ -234,21 +267,11 @@ func (h *Hub) HandleWebSocket(jwtSecret string) http.HandlerFunc {
 		}
 
 		client := &Client{
-			conn:       conn,
-			userID:     claims.UserID,
-			username:   claims.Username,
-			ngacNodeID: claims.NGACNodeID,
-			hub:        h,
-			send:       make(chan []byte, 256),
+			conn:      conn,
+			hub:       h,
+			send:      make(chan []byte, 256),
+			jwtSecret: jwtSecret,
 		}
-
-		// Track client by userID for notifications
-		h.mu.Lock()
-		if h.users[claims.UserID] == nil {
-			h.users[claims.UserID] = make(map[*Client]bool)
-		}
-		h.users[claims.UserID][client] = true
-		h.mu.Unlock()
 
 		go client.writePump()
 		go client.readPump()
@@ -257,31 +280,111 @@ func (h *Hub) HandleWebSocket(jwtSecret string) http.HandlerFunc {
 
 // SendNotification pushes a notification to all connected WebSocket clients for a user.
 func (h *Hub) SendNotification(userID string, notif *pb.Notification) {
-	data, err := json.Marshal(map[string]interface{}{
-		"type":         "notification",
-		"notification": notif,
-	})
-	if err != nil {
-		slog.Error("failed to marshal notification", "error", err)
+	env := &pb.ServerEnvelope{
+		Payload: &pb.ServerEnvelope_Notification{
+			Notification: &pb.NotificationEvent{
+				Id:         notif.Id,
+				Type:       notif.Type,
+				Title:      notif.Title,
+				Body:       notif.Body,
+				EntityType: notif.EntityType,
+				EntityId:   notif.EntityId,
+			},
+		},
+	}
+	data := marshalEnvelope(env)
+	if data == nil {
 		return
 	}
 
 	if h.rdb != nil {
-		// Publish on Redis for cross-instance delivery
 		if err := h.rdb.Publish(h.ctx, "user:"+userID, data).Err(); err != nil {
 			slog.Warn("redis notification publish failed", "error", err)
 		}
 		return
 	}
 
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	if clients, ok := h.users[userID]; ok {
-		for client := range clients {
-			select {
-			case client.send <- data:
-			default:
-			}
+	h.sendToUser(userID, data)
+}
+
+// SendUnreadCount pushes an unread count update to a user.
+func (h *Hub) SendUnreadCount(userID string, count int32) {
+	env := &pb.ServerEnvelope{
+		Payload: &pb.ServerEnvelope_UnreadCount{
+			UnreadCount: &pb.UnreadCountEvent{Count: count},
+		},
+	}
+	data := marshalEnvelope(env)
+	if data == nil {
+		return
+	}
+
+	if h.rdb != nil {
+		if err := h.rdb.Publish(h.ctx, "user:"+userID, data).Err(); err != nil {
+			slog.Warn("redis unread count publish failed", "error", err)
+		}
+		return
+	}
+
+	h.sendToUser(userID, data)
+}
+
+// sendError sends a protobuf ErrorEvent to the client.
+func (c *Client) sendError(code int32, message string) {
+	env := &pb.ServerEnvelope{
+		Payload: &pb.ServerEnvelope_Error{
+			Error: &pb.ErrorEvent{Code: code, Message: message},
+		},
+	}
+	data := marshalEnvelope(env)
+	if data != nil {
+		select {
+		case c.send <- data:
+		default:
+		}
+	}
+}
+
+// handleAuth validates JWT from the first client message and authenticates.
+func (c *Client) handleAuth(req *pb.AuthRequest) bool {
+	token, err := jwt.ParseWithClaims(req.Token, &WSClaims{}, func(t *jwt.Token) (interface{}, error) {
+		return []byte(c.jwtSecret), nil
+	})
+	if err != nil {
+		c.sendAuthResponse(false, "", "invalid token")
+		return false
+	}
+	claims := token.Claims.(*WSClaims)
+
+	c.userID = claims.UserID
+	c.username = claims.Username
+	c.ngacNodeID = claims.NGACNodeID
+	c.authenticated = true
+
+	// Track client by userID
+	c.hub.mu.Lock()
+	if c.hub.users[claims.UserID] == nil {
+		c.hub.users[claims.UserID] = make(map[*Client]bool)
+	}
+	c.hub.users[claims.UserID][c] = true
+	c.hub.mu.Unlock()
+
+	c.sendAuthResponse(true, claims.UserID, "")
+	return true
+}
+
+// sendAuthResponse sends an AuthResponse to the client.
+func (c *Client) sendAuthResponse(ok bool, userID, reason string) {
+	env := &pb.ServerEnvelope{
+		Payload: &pb.ServerEnvelope_AuthResponse{
+			AuthResponse: &pb.AuthResponse{Ok: ok, UserId: userID, Reason: reason},
+		},
+	}
+	data := marshalEnvelope(env)
+	if data != nil {
+		select {
+		case c.send <- data:
+		default:
 		}
 	}
 }
@@ -292,33 +395,144 @@ func (c *Client) readPump() {
 		c.conn.Close()
 	}()
 
+	// Auth timeout: client must authenticate within 5 seconds
+	authTimer := time.NewTimer(authTimeout)
+	defer authTimer.Stop()
+
+	go func() {
+		<-authTimer.C
+		if !c.authenticated {
+			c.sendError(401, "auth timeout")
+			c.conn.Close()
+		}
+	}()
+
 	for {
-		_, message, err := c.conn.ReadMessage()
+		msgType, message, err := c.conn.ReadMessage()
 		if err != nil {
 			break
 		}
 
-		var msg WSMessage
-		if err := json.Unmarshal(message, &msg); err != nil {
+		// Binary frame = protobuf
+		if msgType == websocket.BinaryMessage {
+			c.handleBinaryMessage(message, authTimer)
 			continue
 		}
 
-		switch msg.Type {
-		case "subscribe":
-			c.hub.Subscribe(msg.ChannelID, c)
-		case "unsubscribe":
-			c.hub.Unsubscribe(msg.ChannelID, c)
-		case "typing":
-			c.hub.broadcastTyping(msg.ChannelID, c.username, c)
+		// Text frame = JSON legacy (dual-mode transition)
+		if msgType == websocket.TextMessage {
+			c.handleLegacyJSON(message)
 		}
 	}
+}
+
+// handleBinaryMessage processes a protobuf-encoded ClientEnvelope.
+func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
+	var env pb.ClientEnvelope
+	if err := proto.Unmarshal(data, &env); err != nil {
+		c.sendError(400, "invalid protobuf message")
+		return
+	}
+
+	switch payload := env.Payload.(type) {
+	case *pb.ClientEnvelope_Auth:
+		if c.handleAuth(payload.Auth) {
+			authTimer.Stop()
+		}
+
+	case *pb.ClientEnvelope_Subscribe:
+		if !c.authenticated {
+			c.sendError(401, "not authenticated")
+			return
+		}
+		c.hub.Subscribe(payload.Subscribe.ChannelId, c)
+
+	case *pb.ClientEnvelope_Unsubscribe:
+		if !c.authenticated {
+			c.sendError(401, "not authenticated")
+			return
+		}
+		c.hub.Unsubscribe(payload.Unsubscribe.ChannelId, c)
+
+	case *pb.ClientEnvelope_Typing:
+		if !c.authenticated {
+			return
+		}
+		c.hub.broadcastTyping(payload.Typing.ChannelId, c.username, c)
+	}
+}
+
+// handleLegacyJSON supports the old JSON text-based protocol during migration.
+func (c *Client) handleLegacyJSON(data []byte) {
+	// Legacy JSON support removed — this is a no-op placeholder.
+	// JSON clients should upgrade to binary protocol.
+	slog.Warn("received legacy JSON WebSocket message, ignoring", "userID", c.userID)
 }
 
 func (c *Client) writePump() {
 	defer c.conn.Close()
 	for msg := range c.send {
-		if err := c.conn.WriteMessage(websocket.TextMessage, msg); err != nil {
+		if err := c.conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
 			return
 		}
 	}
+}
+
+// BroadcastThreadReply sends a thread reply event to channel subscribers.
+func (h *Hub) BroadcastThreadReply(channelID string, msg *pb.Message) {
+	chatMsg := messageToChatMessage(msg)
+	env := &pb.ServerEnvelope{
+		Payload: &pb.ServerEnvelope_ThreadReply{
+			ThreadReply: &pb.ThreadReplyEvent{
+				Message:         chatMsg,
+				ParentMessageId: msg.ParentMessageId,
+			},
+		},
+	}
+	data := marshalEnvelope(env)
+	if data == nil {
+		return
+	}
+
+	if h.rdb != nil {
+		if err := h.rdb.Publish(h.ctx, redisChanKey(channelID), data).Err(); err != nil {
+			slog.Warn("redis thread reply publish failed", "error", err)
+			h.broadcastLocal(channelID, data)
+		}
+		return
+	}
+	h.broadcastLocal(channelID, data)
+}
+
+// BroadcastAssetUpdated sends an asset state change event to channel subscribers.
+func (h *Hub) BroadcastAssetUpdated(assetID, newState string) {
+	env := &pb.ServerEnvelope{
+		Payload: &pb.ServerEnvelope_AssetUpdated{
+			AssetUpdated: &pb.AssetUpdatedEvent{
+				AssetId:  assetID,
+				NewState: newState,
+			},
+		},
+	}
+	data := marshalEnvelope(env)
+	if data == nil {
+		return
+	}
+
+	// Broadcast to all connected users (no channel scope for asset updates)
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, clients := range h.users {
+		for client := range clients {
+			select {
+			case client.send <- data:
+			default:
+			}
+		}
+	}
+}
+
+// Helper to create a timestamppb from time.Time — used by notification consumer.
+func TimestampProto(t time.Time) *timestamppb.Timestamp {
+	return timestamppb.New(t)
 }

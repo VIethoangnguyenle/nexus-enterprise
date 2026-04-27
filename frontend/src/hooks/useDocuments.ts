@@ -5,11 +5,11 @@ import { queryClient } from '../lib/query-client'
 export const documentsQueryOptions = (wsId: string) =>
   queryOptions({ queryKey: ['documents', wsId], queryFn: () => documentApi.list(wsId), enabled: !!wsId })
 
-export function useDocuments(wsId: string) { return useQuery(documentsQueryOptions(wsId)) }
+export const documentQueryOptions = (id: string) =>
+  queryOptions({ queryKey: ['document', id], queryFn: () => documentApi.get(id), enabled: !!id })
 
-export function useDocument(id: string) {
-  return useQuery({ queryKey: ['document', id], queryFn: () => documentApi.get(id), enabled: !!id })
-}
+export function useDocuments(wsId: string) { return useQuery(documentsQueryOptions(wsId)) }
+export function useDocument(id: string) { return useQuery(documentQueryOptions(id)) }
 
 export function useDeleteDocument(wsId: string) {
   return useMutation({

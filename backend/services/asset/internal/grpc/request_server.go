@@ -17,13 +17,14 @@ import (
 type AssetRequestServer struct {
 	pb.UnimplementedAssetRequestServiceServer
 	store        *store.Store
-	policyClient policypb.PolicyServiceClient
+	policyRead  policypb.PolicyReadServiceClient
+	policyWrite policypb.PolicyWriteServiceClient
 	producer     *events.Producer
 }
 
 // NewAssetRequestServer creates the asset request gRPC handler.
-func NewAssetRequestServer(s *store.Store, pc policypb.PolicyServiceClient, p *events.Producer) *AssetRequestServer {
-	return &AssetRequestServer{store: s, policyClient: pc, producer: p}
+func NewAssetRequestServer(s *store.Store, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient, p *events.Producer) *AssetRequestServer {
+	return &AssetRequestServer{store: s, policyRead: pr, policyWrite: pw, producer: p}
 }
 
 func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAssetRequestReq) (*pb.AssetRequest, error) {
@@ -307,7 +308,7 @@ func (s *AssetRequestServer) GetRequest(ctx context.Context, req *pb.GetRequestR
 // ============================================
 
 func (s *AssetRequestServer) checkAccess(ctx context.Context, userNodeID, objectNodeID, operation string) error {
-	resp, err := s.policyClient.CheckAccess(ctx, &policypb.CheckAccessRequest{
+	resp, err := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
 		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
 	})
 	if err != nil {

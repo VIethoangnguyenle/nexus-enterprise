@@ -13,6 +13,12 @@ proto:
 		proto/policy/policy.proto
 	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		proto/policy/policy_read.proto
+	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		proto/policy/policy_write.proto
+	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		proto/auth/auth.proto
 	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
@@ -24,16 +30,21 @@ proto:
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		proto/messaging/messaging.proto
 	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
+		proto/messaging/ws.proto
+	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		proto/asset/asset.proto
 	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		proto/asset/asset_request.proto
+	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		proto/drive/drive.proto
 	@echo "Proto generation complete!"
 
 # Build all services
 build:
-	@for svc in gateway auth policy workspace document messaging asset; do \
+	@for svc in gateway auth policy workspace document messaging asset drive; do \
 		echo "Building $$svc..."; \
 		cd services/$$svc && go build -o ../../bin/$$svc ./cmd/ && cd ../..; \
 	done

@@ -58,37 +58,30 @@ func (*Empty) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{0}
 }
 
-type Document struct {
+type GetUploadURLRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Title         string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
-	Filename      string                 `protobuf:"bytes,3,opt,name=filename,proto3" json:"filename,omitempty"`
-	MimeType      string                 `protobuf:"bytes,4,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
-	OwnerId       string                 `protobuf:"bytes,5,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
-	OwnerName     string                 `protobuf:"bytes,6,opt,name=owner_name,json=ownerName,proto3" json:"owner_name,omitempty"`
-	NgacNodeId    string                 `protobuf:"bytes,7,opt,name=ngac_node_id,json=ngacNodeId,proto3" json:"ngac_node_id,omitempty"`
-	Status        string                 `protobuf:"bytes,8,opt,name=status,proto3" json:"status,omitempty"`
-	IsPublic      bool                   `protobuf:"varint,9,opt,name=is_public,json=isPublic,proto3" json:"is_public,omitempty"`
-	WorkspaceId   string                 `protobuf:"bytes,10,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	Filename      string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`
+	MimeType      string                 `protobuf:"bytes,3,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
+	DocId         string                 `protobuf:"bytes,4,opt,name=doc_id,json=docId,proto3" json:"doc_id,omitempty"` // caller-provided ID for the object key
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *Document) Reset() {
-	*x = Document{}
+func (x *GetUploadURLRequest) Reset() {
+	*x = GetUploadURLRequest{}
 	mi := &file_proto_document_document_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *Document) String() string {
+func (x *GetUploadURLRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*Document) ProtoMessage() {}
+func (*GetUploadURLRequest) ProtoMessage() {}
 
-func (x *Document) ProtoReflect() protoreflect.Message {
+func (x *GetUploadURLRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_document_document_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -100,115 +93,61 @@ func (x *Document) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use Document.ProtoReflect.Descriptor instead.
-func (*Document) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetUploadURLRequest.ProtoReflect.Descriptor instead.
+func (*GetUploadURLRequest) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{1}
 }
 
-func (x *Document) GetId() string {
-	if x != nil {
-		return x.Id
-	}
-	return ""
-}
-
-func (x *Document) GetTitle() string {
-	if x != nil {
-		return x.Title
-	}
-	return ""
-}
-
-func (x *Document) GetFilename() string {
-	if x != nil {
-		return x.Filename
-	}
-	return ""
-}
-
-func (x *Document) GetMimeType() string {
-	if x != nil {
-		return x.MimeType
-	}
-	return ""
-}
-
-func (x *Document) GetOwnerId() string {
-	if x != nil {
-		return x.OwnerId
-	}
-	return ""
-}
-
-func (x *Document) GetOwnerName() string {
-	if x != nil {
-		return x.OwnerName
-	}
-	return ""
-}
-
-func (x *Document) GetNgacNodeId() string {
-	if x != nil {
-		return x.NgacNodeId
-	}
-	return ""
-}
-
-func (x *Document) GetStatus() string {
-	if x != nil {
-		return x.Status
-	}
-	return ""
-}
-
-func (x *Document) GetIsPublic() bool {
-	if x != nil {
-		return x.IsPublic
-	}
-	return false
-}
-
-func (x *Document) GetWorkspaceId() string {
+func (x *GetUploadURLRequest) GetWorkspaceId() string {
 	if x != nil {
 		return x.WorkspaceId
 	}
 	return ""
 }
 
-func (x *Document) GetCreatedAt() *timestamppb.Timestamp {
+func (x *GetUploadURLRequest) GetFilename() string {
 	if x != nil {
-		return x.CreatedAt
+		return x.Filename
 	}
-	return nil
+	return ""
 }
 
-type UploadRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Title          string                 `protobuf:"bytes,1,opt,name=title,proto3" json:"title,omitempty"`
-	Filename       string                 `protobuf:"bytes,2,opt,name=filename,proto3" json:"filename,omitempty"`
-	MimeType       string                 `protobuf:"bytes,3,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
-	Content        []byte                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
-	UserId         string                 `protobuf:"bytes,5,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,6,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	WorkspaceId    string                 `protobuf:"bytes,7,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+func (x *GetUploadURLRequest) GetMimeType() string {
+	if x != nil {
+		return x.MimeType
+	}
+	return ""
 }
 
-func (x *UploadRequest) Reset() {
-	*x = UploadRequest{}
+func (x *GetUploadURLRequest) GetDocId() string {
+	if x != nil {
+		return x.DocId
+	}
+	return ""
+}
+
+type GetUploadURLResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UploadUrl     string                 `protobuf:"bytes,1,opt,name=upload_url,json=uploadUrl,proto3" json:"upload_url,omitempty"`
+	ObjectKey     string                 `protobuf:"bytes,2,opt,name=object_key,json=objectKey,proto3" json:"object_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetUploadURLResponse) Reset() {
+	*x = GetUploadURLResponse{}
 	mi := &file_proto_document_document_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *UploadRequest) String() string {
+func (x *GetUploadURLResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*UploadRequest) ProtoMessage() {}
+func (*GetUploadURLResponse) ProtoMessage() {}
 
-func (x *UploadRequest) ProtoReflect() protoreflect.Message {
+func (x *GetUploadURLResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_document_document_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -220,82 +159,47 @@ func (x *UploadRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use UploadRequest.ProtoReflect.Descriptor instead.
-func (*UploadRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetUploadURLResponse.ProtoReflect.Descriptor instead.
+func (*GetUploadURLResponse) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *UploadRequest) GetTitle() string {
+func (x *GetUploadURLResponse) GetUploadUrl() string {
 	if x != nil {
-		return x.Title
+		return x.UploadUrl
 	}
 	return ""
 }
 
-func (x *UploadRequest) GetFilename() string {
+func (x *GetUploadURLResponse) GetObjectKey() string {
 	if x != nil {
-		return x.Filename
+		return x.ObjectKey
 	}
 	return ""
 }
 
-func (x *UploadRequest) GetMimeType() string {
-	if x != nil {
-		return x.MimeType
-	}
-	return ""
+type ConfirmUploadRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	ObjectKey     string                 `protobuf:"bytes,2,opt,name=object_key,json=objectKey,proto3" json:"object_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *UploadRequest) GetContent() []byte {
-	if x != nil {
-		return x.Content
-	}
-	return nil
-}
-
-func (x *UploadRequest) GetUserId() string {
-	if x != nil {
-		return x.UserId
-	}
-	return ""
-}
-
-func (x *UploadRequest) GetUserNgacNodeId() string {
-	if x != nil {
-		return x.UserNgacNodeId
-	}
-	return ""
-}
-
-func (x *UploadRequest) GetWorkspaceId() string {
-	if x != nil {
-		return x.WorkspaceId
-	}
-	return ""
-}
-
-type GetDocumentRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId     string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *GetDocumentRequest) Reset() {
-	*x = GetDocumentRequest{}
+func (x *ConfirmUploadRequest) Reset() {
+	*x = ConfirmUploadRequest{}
 	mi := &file_proto_document_document_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetDocumentRequest) String() string {
+func (x *ConfirmUploadRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetDocumentRequest) ProtoMessage() {}
+func (*ConfirmUploadRequest) ProtoMessage() {}
 
-func (x *GetDocumentRequest) ProtoReflect() protoreflect.Message {
+func (x *ConfirmUploadRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_document_document_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -307,99 +211,99 @@ func (x *GetDocumentRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetDocumentRequest.ProtoReflect.Descriptor instead.
-func (*GetDocumentRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use ConfirmUploadRequest.ProtoReflect.Descriptor instead.
+func (*ConfirmUploadRequest) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{3}
 }
 
-func (x *GetDocumentRequest) GetDocumentId() string {
-	if x != nil {
-		return x.DocumentId
-	}
-	return ""
-}
-
-func (x *GetDocumentRequest) GetUserNgacNodeId() string {
-	if x != nil {
-		return x.UserNgacNodeId
-	}
-	return ""
-}
-
-type ListDocumentsRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId    string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *ListDocumentsRequest) Reset() {
-	*x = ListDocumentsRequest{}
-	mi := &file_proto_document_document_proto_msgTypes[4]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *ListDocumentsRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*ListDocumentsRequest) ProtoMessage() {}
-
-func (x *ListDocumentsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_document_document_proto_msgTypes[4]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use ListDocumentsRequest.ProtoReflect.Descriptor instead.
-func (*ListDocumentsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_document_document_proto_rawDescGZIP(), []int{4}
-}
-
-func (x *ListDocumentsRequest) GetWorkspaceId() string {
+func (x *ConfirmUploadRequest) GetWorkspaceId() string {
 	if x != nil {
 		return x.WorkspaceId
 	}
 	return ""
 }
 
-func (x *ListDocumentsRequest) GetUserNgacNodeId() string {
+func (x *ConfirmUploadRequest) GetObjectKey() string {
 	if x != nil {
-		return x.UserNgacNodeId
+		return x.ObjectKey
 	}
 	return ""
 }
 
-type DeleteDocumentRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId     string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+type ConfirmUploadResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SizeBytes     int64                  `protobuf:"varint,1,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	ContentType   string                 `protobuf:"bytes,2,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DeleteDocumentRequest) Reset() {
-	*x = DeleteDocumentRequest{}
+func (x *ConfirmUploadResponse) Reset() {
+	*x = ConfirmUploadResponse{}
+	mi := &file_proto_document_document_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfirmUploadResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfirmUploadResponse) ProtoMessage() {}
+
+func (x *ConfirmUploadResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_document_document_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfirmUploadResponse.ProtoReflect.Descriptor instead.
+func (*ConfirmUploadResponse) Descriptor() ([]byte, []int) {
+	return file_proto_document_document_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *ConfirmUploadResponse) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *ConfirmUploadResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+type GetDownloadURLRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	ObjectKey     string                 `protobuf:"bytes,2,opt,name=object_key,json=objectKey,proto3" json:"object_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDownloadURLRequest) Reset() {
+	*x = GetDownloadURLRequest{}
 	mi := &file_proto_document_document_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DeleteDocumentRequest) String() string {
+func (x *GetDownloadURLRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DeleteDocumentRequest) ProtoMessage() {}
+func (*GetDownloadURLRequest) ProtoMessage() {}
 
-func (x *DeleteDocumentRequest) ProtoReflect() protoreflect.Message {
+func (x *GetDownloadURLRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_document_document_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -411,47 +315,46 @@ func (x *DeleteDocumentRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DeleteDocumentRequest.ProtoReflect.Descriptor instead.
-func (*DeleteDocumentRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetDownloadURLRequest.ProtoReflect.Descriptor instead.
+func (*GetDownloadURLRequest) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{5}
 }
 
-func (x *DeleteDocumentRequest) GetDocumentId() string {
+func (x *GetDownloadURLRequest) GetWorkspaceId() string {
 	if x != nil {
-		return x.DocumentId
+		return x.WorkspaceId
 	}
 	return ""
 }
 
-func (x *DeleteDocumentRequest) GetUserNgacNodeId() string {
+func (x *GetDownloadURLRequest) GetObjectKey() string {
 	if x != nil {
-		return x.UserNgacNodeId
+		return x.ObjectKey
 	}
 	return ""
 }
 
-type ApproveDocumentRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId     string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+type GetDownloadURLResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DownloadUrl   string                 `protobuf:"bytes,1,opt,name=download_url,json=downloadUrl,proto3" json:"download_url,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ApproveDocumentRequest) Reset() {
-	*x = ApproveDocumentRequest{}
+func (x *GetDownloadURLResponse) Reset() {
+	*x = GetDownloadURLResponse{}
 	mi := &file_proto_document_document_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ApproveDocumentRequest) String() string {
+func (x *GetDownloadURLResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ApproveDocumentRequest) ProtoMessage() {}
+func (*GetDownloadURLResponse) ProtoMessage() {}
 
-func (x *ApproveDocumentRequest) ProtoReflect() protoreflect.Message {
+func (x *GetDownloadURLResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_document_document_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -463,49 +366,40 @@ func (x *ApproveDocumentRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ApproveDocumentRequest.ProtoReflect.Descriptor instead.
-func (*ApproveDocumentRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetDownloadURLResponse.ProtoReflect.Descriptor instead.
+func (*GetDownloadURLResponse) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{6}
 }
 
-func (x *ApproveDocumentRequest) GetDocumentId() string {
+func (x *GetDownloadURLResponse) GetDownloadUrl() string {
 	if x != nil {
-		return x.DocumentId
+		return x.DownloadUrl
 	}
 	return ""
 }
 
-func (x *ApproveDocumentRequest) GetUserNgacNodeId() string {
-	if x != nil {
-		return x.UserNgacNodeId
-	}
-	return ""
+type DeleteObjectRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	ObjectKey     string                 `protobuf:"bytes,2,opt,name=object_key,json=objectKey,proto3" json:"object_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-type ShareDocumentRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId     string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	TargetUaId     string                 `protobuf:"bytes,3,opt,name=target_ua_id,json=targetUaId,proto3" json:"target_ua_id,omitempty"`
-	Operations     []string               `protobuf:"bytes,4,rep,name=operations,proto3" json:"operations,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *ShareDocumentRequest) Reset() {
-	*x = ShareDocumentRequest{}
+func (x *DeleteObjectRequest) Reset() {
+	*x = DeleteObjectRequest{}
 	mi := &file_proto_document_document_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ShareDocumentRequest) String() string {
+func (x *DeleteObjectRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ShareDocumentRequest) ProtoMessage() {}
+func (*DeleteObjectRequest) ProtoMessage() {}
 
-func (x *ShareDocumentRequest) ProtoReflect() protoreflect.Message {
+func (x *DeleteObjectRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_document_document_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -517,65 +411,49 @@ func (x *ShareDocumentRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ShareDocumentRequest.ProtoReflect.Descriptor instead.
-func (*ShareDocumentRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use DeleteObjectRequest.ProtoReflect.Descriptor instead.
+func (*DeleteObjectRequest) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{7}
 }
 
-func (x *ShareDocumentRequest) GetDocumentId() string {
+func (x *DeleteObjectRequest) GetWorkspaceId() string {
 	if x != nil {
-		return x.DocumentId
+		return x.WorkspaceId
 	}
 	return ""
 }
 
-func (x *ShareDocumentRequest) GetUserNgacNodeId() string {
+func (x *DeleteObjectRequest) GetObjectKey() string {
 	if x != nil {
-		return x.UserNgacNodeId
+		return x.ObjectKey
 	}
 	return ""
 }
 
-func (x *ShareDocumentRequest) GetTargetUaId() string {
-	if x != nil {
-		return x.TargetUaId
-	}
-	return ""
+type CopyObjectRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	SrcWorkspaceId string                 `protobuf:"bytes,1,opt,name=src_workspace_id,json=srcWorkspaceId,proto3" json:"src_workspace_id,omitempty"`
+	SrcObjectKey   string                 `protobuf:"bytes,2,opt,name=src_object_key,json=srcObjectKey,proto3" json:"src_object_key,omitempty"`
+	DstWorkspaceId string                 `protobuf:"bytes,3,opt,name=dst_workspace_id,json=dstWorkspaceId,proto3" json:"dst_workspace_id,omitempty"`
+	DstObjectKey   string                 `protobuf:"bytes,4,opt,name=dst_object_key,json=dstObjectKey,proto3" json:"dst_object_key,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
-func (x *ShareDocumentRequest) GetOperations() []string {
-	if x != nil {
-		return x.Operations
-	}
-	return nil
-}
-
-type ShareInfo struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	DocumentId    string                 `protobuf:"bytes,2,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
-	TargetUaId    string                 `protobuf:"bytes,3,opt,name=target_ua_id,json=targetUaId,proto3" json:"target_ua_id,omitempty"`
-	TargetUaName  string                 `protobuf:"bytes,4,opt,name=target_ua_name,json=targetUaName,proto3" json:"target_ua_name,omitempty"`
-	Operations    []string               `protobuf:"bytes,5,rep,name=operations,proto3" json:"operations,omitempty"`
-	ShareOaId     string                 `protobuf:"bytes,6,opt,name=share_oa_id,json=shareOaId,proto3" json:"share_oa_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *ShareInfo) Reset() {
-	*x = ShareInfo{}
+func (x *CopyObjectRequest) Reset() {
+	*x = CopyObjectRequest{}
 	mi := &file_proto_document_document_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ShareInfo) String() string {
+func (x *CopyObjectRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ShareInfo) ProtoMessage() {}
+func (*CopyObjectRequest) ProtoMessage() {}
 
-func (x *ShareInfo) ProtoReflect() protoreflect.Message {
+func (x *CopyObjectRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_document_document_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -587,76 +465,61 @@ func (x *ShareInfo) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ShareInfo.ProtoReflect.Descriptor instead.
-func (*ShareInfo) Descriptor() ([]byte, []int) {
+// Deprecated: Use CopyObjectRequest.ProtoReflect.Descriptor instead.
+func (*CopyObjectRequest) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{8}
 }
 
-func (x *ShareInfo) GetId() string {
+func (x *CopyObjectRequest) GetSrcWorkspaceId() string {
 	if x != nil {
-		return x.Id
+		return x.SrcWorkspaceId
 	}
 	return ""
 }
 
-func (x *ShareInfo) GetDocumentId() string {
+func (x *CopyObjectRequest) GetSrcObjectKey() string {
 	if x != nil {
-		return x.DocumentId
+		return x.SrcObjectKey
 	}
 	return ""
 }
 
-func (x *ShareInfo) GetTargetUaId() string {
+func (x *CopyObjectRequest) GetDstWorkspaceId() string {
 	if x != nil {
-		return x.TargetUaId
+		return x.DstWorkspaceId
 	}
 	return ""
 }
 
-func (x *ShareInfo) GetTargetUaName() string {
+func (x *CopyObjectRequest) GetDstObjectKey() string {
 	if x != nil {
-		return x.TargetUaName
+		return x.DstObjectKey
 	}
 	return ""
 }
 
-func (x *ShareInfo) GetOperations() []string {
-	if x != nil {
-		return x.Operations
-	}
-	return nil
+type CopyObjectResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ObjectKey     string                 `protobuf:"bytes,1,opt,name=object_key,json=objectKey,proto3" json:"object_key,omitempty"`
+	SizeBytes     int64                  `protobuf:"varint,2,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ShareInfo) GetShareOaId() string {
-	if x != nil {
-		return x.ShareOaId
-	}
-	return ""
-}
-
-type RevokeShareRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId     string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	ShareOaId      string                 `protobuf:"bytes,3,opt,name=share_oa_id,json=shareOaId,proto3" json:"share_oa_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *RevokeShareRequest) Reset() {
-	*x = RevokeShareRequest{}
+func (x *CopyObjectResponse) Reset() {
+	*x = CopyObjectResponse{}
 	mi := &file_proto_document_document_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *RevokeShareRequest) String() string {
+func (x *CopyObjectResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*RevokeShareRequest) ProtoMessage() {}
+func (*CopyObjectResponse) ProtoMessage() {}
 
-func (x *RevokeShareRequest) ProtoReflect() protoreflect.Message {
+func (x *CopyObjectResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_document_document_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -668,53 +531,47 @@ func (x *RevokeShareRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use RevokeShareRequest.ProtoReflect.Descriptor instead.
-func (*RevokeShareRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use CopyObjectResponse.ProtoReflect.Descriptor instead.
+func (*CopyObjectResponse) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{9}
 }
 
-func (x *RevokeShareRequest) GetDocumentId() string {
+func (x *CopyObjectResponse) GetObjectKey() string {
 	if x != nil {
-		return x.DocumentId
+		return x.ObjectKey
 	}
 	return ""
 }
 
-func (x *RevokeShareRequest) GetUserNgacNodeId() string {
+func (x *CopyObjectResponse) GetSizeBytes() int64 {
 	if x != nil {
-		return x.UserNgacNodeId
+		return x.SizeBytes
 	}
-	return ""
+	return 0
 }
 
-func (x *RevokeShareRequest) GetShareOaId() string {
-	if x != nil {
-		return x.ShareOaId
-	}
-	return ""
-}
-
-type ListSharesRequest struct {
+type GetObjectInfoRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId    string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
+	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	ObjectKey     string                 `protobuf:"bytes,2,opt,name=object_key,json=objectKey,proto3" json:"object_key,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ListSharesRequest) Reset() {
-	*x = ListSharesRequest{}
+func (x *GetObjectInfoRequest) Reset() {
+	*x = GetObjectInfoRequest{}
 	mi := &file_proto_document_document_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ListSharesRequest) String() string {
+func (x *GetObjectInfoRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ListSharesRequest) ProtoMessage() {}
+func (*GetObjectInfoRequest) ProtoMessage() {}
 
-func (x *ListSharesRequest) ProtoReflect() protoreflect.Message {
+func (x *GetObjectInfoRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_document_document_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -726,39 +583,49 @@ func (x *ListSharesRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ListSharesRequest.ProtoReflect.Descriptor instead.
-func (*ListSharesRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetObjectInfoRequest.ProtoReflect.Descriptor instead.
+func (*GetObjectInfoRequest) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{10}
 }
 
-func (x *ListSharesRequest) GetDocumentId() string {
+func (x *GetObjectInfoRequest) GetWorkspaceId() string {
 	if x != nil {
-		return x.DocumentId
+		return x.WorkspaceId
 	}
 	return ""
 }
 
-type ShareList struct {
+func (x *GetObjectInfoRequest) GetObjectKey() string {
+	if x != nil {
+		return x.ObjectKey
+	}
+	return ""
+}
+
+type ObjectInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Shares        []*ShareInfo           `protobuf:"bytes,1,rep,name=shares,proto3" json:"shares,omitempty"`
+	ObjectKey     string                 `protobuf:"bytes,1,opt,name=object_key,json=objectKey,proto3" json:"object_key,omitempty"`
+	SizeBytes     int64                  `protobuf:"varint,2,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	ContentType   string                 `protobuf:"bytes,3,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"`
+	LastModified  *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=last_modified,json=lastModified,proto3" json:"last_modified,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *ShareList) Reset() {
-	*x = ShareList{}
+func (x *ObjectInfo) Reset() {
+	*x = ObjectInfo{}
 	mi := &file_proto_document_document_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ShareList) String() string {
+func (x *ObjectInfo) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ShareList) ProtoMessage() {}
+func (*ObjectInfo) ProtoMessage() {}
 
-func (x *ShareList) ProtoReflect() protoreflect.Message {
+func (x *ObjectInfo) ProtoReflect() protoreflect.Message {
 	mi := &file_proto_document_document_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -770,290 +637,35 @@ func (x *ShareList) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ShareList.ProtoReflect.Descriptor instead.
-func (*ShareList) Descriptor() ([]byte, []int) {
+// Deprecated: Use ObjectInfo.ProtoReflect.Descriptor instead.
+func (*ObjectInfo) Descriptor() ([]byte, []int) {
 	return file_proto_document_document_proto_rawDescGZIP(), []int{11}
 }
 
-func (x *ShareList) GetShares() []*ShareInfo {
+func (x *ObjectInfo) GetObjectKey() string {
 	if x != nil {
-		return x.Shares
-	}
-	return nil
-}
-
-type PublishDocumentRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId     string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *PublishDocumentRequest) Reset() {
-	*x = PublishDocumentRequest{}
-	mi := &file_proto_document_document_proto_msgTypes[12]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PublishDocumentRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PublishDocumentRequest) ProtoMessage() {}
-
-func (x *PublishDocumentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_document_document_proto_msgTypes[12]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PublishDocumentRequest.ProtoReflect.Descriptor instead.
-func (*PublishDocumentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_document_document_proto_rawDescGZIP(), []int{12}
-}
-
-func (x *PublishDocumentRequest) GetDocumentId() string {
-	if x != nil {
-		return x.DocumentId
+		return x.ObjectKey
 	}
 	return ""
 }
 
-func (x *PublishDocumentRequest) GetUserNgacNodeId() string {
+func (x *ObjectInfo) GetSizeBytes() int64 {
 	if x != nil {
-		return x.UserNgacNodeId
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *ObjectInfo) GetContentType() string {
+	if x != nil {
+		return x.ContentType
 	}
 	return ""
 }
 
-type UnpublishDocumentRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	DocumentId     string                 `protobuf:"bytes,1,opt,name=document_id,json=documentId,proto3" json:"document_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *UnpublishDocumentRequest) Reset() {
-	*x = UnpublishDocumentRequest{}
-	mi := &file_proto_document_document_proto_msgTypes[13]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *UnpublishDocumentRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*UnpublishDocumentRequest) ProtoMessage() {}
-
-func (x *UnpublishDocumentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_document_document_proto_msgTypes[13]
+func (x *ObjectInfo) GetLastModified() *timestamppb.Timestamp {
 	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use UnpublishDocumentRequest.ProtoReflect.Descriptor instead.
-func (*UnpublishDocumentRequest) Descriptor() ([]byte, []int) {
-	return file_proto_document_document_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *UnpublishDocumentRequest) GetDocumentId() string {
-	if x != nil {
-		return x.DocumentId
-	}
-	return ""
-}
-
-func (x *UnpublishDocumentRequest) GetUserNgacNodeId() string {
-	if x != nil {
-		return x.UserNgacNodeId
-	}
-	return ""
-}
-
-type CheckDocAccessRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	UserNgacNodeId   string                 `protobuf:"bytes,1,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	ObjectNgacNodeId string                 `protobuf:"bytes,2,opt,name=object_ngac_node_id,json=objectNgacNodeId,proto3" json:"object_ngac_node_id,omitempty"`
-	Operation        string                 `protobuf:"bytes,3,opt,name=operation,proto3" json:"operation,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
-}
-
-func (x *CheckDocAccessRequest) Reset() {
-	*x = CheckDocAccessRequest{}
-	mi := &file_proto_document_document_proto_msgTypes[14]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CheckDocAccessRequest) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CheckDocAccessRequest) ProtoMessage() {}
-
-func (x *CheckDocAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_document_document_proto_msgTypes[14]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CheckDocAccessRequest.ProtoReflect.Descriptor instead.
-func (*CheckDocAccessRequest) Descriptor() ([]byte, []int) {
-	return file_proto_document_document_proto_rawDescGZIP(), []int{14}
-}
-
-func (x *CheckDocAccessRequest) GetUserNgacNodeId() string {
-	if x != nil {
-		return x.UserNgacNodeId
-	}
-	return ""
-}
-
-func (x *CheckDocAccessRequest) GetObjectNgacNodeId() string {
-	if x != nil {
-		return x.ObjectNgacNodeId
-	}
-	return ""
-}
-
-func (x *CheckDocAccessRequest) GetOperation() string {
-	if x != nil {
-		return x.Operation
-	}
-	return ""
-}
-
-type DocAccessDecision struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Decision      string                 `protobuf:"bytes,1,opt,name=decision,proto3" json:"decision,omitempty"`
-	User          string                 `protobuf:"bytes,2,opt,name=user,proto3" json:"user,omitempty"`
-	Object        string                 `protobuf:"bytes,3,opt,name=object,proto3" json:"object,omitempty"`
-	Operation     string                 `protobuf:"bytes,4,opt,name=operation,proto3" json:"operation,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DocAccessDecision) Reset() {
-	*x = DocAccessDecision{}
-	mi := &file_proto_document_document_proto_msgTypes[15]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DocAccessDecision) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DocAccessDecision) ProtoMessage() {}
-
-func (x *DocAccessDecision) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_document_document_proto_msgTypes[15]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DocAccessDecision.ProtoReflect.Descriptor instead.
-func (*DocAccessDecision) Descriptor() ([]byte, []int) {
-	return file_proto_document_document_proto_rawDescGZIP(), []int{15}
-}
-
-func (x *DocAccessDecision) GetDecision() string {
-	if x != nil {
-		return x.Decision
-	}
-	return ""
-}
-
-func (x *DocAccessDecision) GetUser() string {
-	if x != nil {
-		return x.User
-	}
-	return ""
-}
-
-func (x *DocAccessDecision) GetObject() string {
-	if x != nil {
-		return x.Object
-	}
-	return ""
-}
-
-func (x *DocAccessDecision) GetOperation() string {
-	if x != nil {
-		return x.Operation
-	}
-	return ""
-}
-
-type DocumentList struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Documents     []*Document            `protobuf:"bytes,1,rep,name=documents,proto3" json:"documents,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *DocumentList) Reset() {
-	*x = DocumentList{}
-	mi := &file_proto_document_document_proto_msgTypes[16]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *DocumentList) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*DocumentList) ProtoMessage() {}
-
-func (x *DocumentList) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_document_document_proto_msgTypes[16]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use DocumentList.ProtoReflect.Descriptor instead.
-func (*DocumentList) Descriptor() ([]byte, []int) {
-	return file_proto_document_document_proto_rawDescGZIP(), []int{16}
-}
-
-func (x *DocumentList) GetDocuments() []*Document {
-	if x != nil {
-		return x.Documents
+		return x.LastModified
 	}
 	return nil
 }
@@ -1063,108 +675,65 @@ var File_proto_document_document_proto protoreflect.FileDescriptor
 const file_proto_document_document_proto_rawDesc = "" +
 	"\n" +
 	"\x1dproto/document/document.proto\x12\bdocument\x1a\x1fgoogle/protobuf/timestamp.proto\"\a\n" +
-	"\x05Empty\"\xd8\x02\n" +
-	"\bDocument\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
-	"\x05title\x18\x02 \x01(\tR\x05title\x12\x1a\n" +
-	"\bfilename\x18\x03 \x01(\tR\bfilename\x12\x1b\n" +
-	"\tmime_type\x18\x04 \x01(\tR\bmimeType\x12\x19\n" +
-	"\bowner_id\x18\x05 \x01(\tR\aownerId\x12\x1d\n" +
-	"\n" +
-	"owner_name\x18\x06 \x01(\tR\townerName\x12 \n" +
-	"\fngac_node_id\x18\a \x01(\tR\n" +
-	"ngacNodeId\x12\x16\n" +
-	"\x06status\x18\b \x01(\tR\x06status\x12\x1b\n" +
-	"\tis_public\x18\t \x01(\bR\bisPublic\x12!\n" +
-	"\fworkspace_id\x18\n" +
-	" \x01(\tR\vworkspaceId\x129\n" +
-	"\n" +
-	"created_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"\xdf\x01\n" +
-	"\rUploadRequest\x12\x14\n" +
-	"\x05title\x18\x01 \x01(\tR\x05title\x12\x1a\n" +
+	"\x05Empty\"\x88\x01\n" +
+	"\x13GetUploadURLRequest\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1b\n" +
-	"\tmime_type\x18\x03 \x01(\tR\bmimeType\x12\x18\n" +
-	"\acontent\x18\x04 \x01(\fR\acontent\x12\x17\n" +
-	"\auser_id\x18\x05 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x06 \x01(\tR\x0euserNgacNodeId\x12!\n" +
-	"\fworkspace_id\x18\a \x01(\tR\vworkspaceId\"`\n" +
-	"\x12GetDocumentRequest\x12\x1f\n" +
-	"\vdocument_id\x18\x01 \x01(\tR\n" +
-	"documentId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"d\n" +
-	"\x14ListDocumentsRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"c\n" +
-	"\x15DeleteDocumentRequest\x12\x1f\n" +
-	"\vdocument_id\x18\x01 \x01(\tR\n" +
-	"documentId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"d\n" +
-	"\x16ApproveDocumentRequest\x12\x1f\n" +
-	"\vdocument_id\x18\x01 \x01(\tR\n" +
-	"documentId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"\xa4\x01\n" +
-	"\x14ShareDocumentRequest\x12\x1f\n" +
-	"\vdocument_id\x18\x01 \x01(\tR\n" +
-	"documentId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\x12 \n" +
-	"\ftarget_ua_id\x18\x03 \x01(\tR\n" +
-	"targetUaId\x12\x1e\n" +
+	"\tmime_type\x18\x03 \x01(\tR\bmimeType\x12\x15\n" +
+	"\x06doc_id\x18\x04 \x01(\tR\x05docId\"T\n" +
+	"\x14GetUploadURLResponse\x12\x1d\n" +
 	"\n" +
-	"operations\x18\x04 \x03(\tR\n" +
-	"operations\"\xc4\x01\n" +
-	"\tShareInfo\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1f\n" +
-	"\vdocument_id\x18\x02 \x01(\tR\n" +
-	"documentId\x12 \n" +
-	"\ftarget_ua_id\x18\x03 \x01(\tR\n" +
-	"targetUaId\x12$\n" +
-	"\x0etarget_ua_name\x18\x04 \x01(\tR\ftargetUaName\x12\x1e\n" +
+	"upload_url\x18\x01 \x01(\tR\tuploadUrl\x12\x1d\n" +
 	"\n" +
-	"operations\x18\x05 \x03(\tR\n" +
-	"operations\x12\x1e\n" +
-	"\vshare_oa_id\x18\x06 \x01(\tR\tshareOaId\"\x80\x01\n" +
-	"\x12RevokeShareRequest\x12\x1f\n" +
-	"\vdocument_id\x18\x01 \x01(\tR\n" +
-	"documentId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\x12\x1e\n" +
-	"\vshare_oa_id\x18\x03 \x01(\tR\tshareOaId\"4\n" +
-	"\x11ListSharesRequest\x12\x1f\n" +
-	"\vdocument_id\x18\x01 \x01(\tR\n" +
-	"documentId\"8\n" +
-	"\tShareList\x12+\n" +
-	"\x06shares\x18\x01 \x03(\v2\x13.document.ShareInfoR\x06shares\"d\n" +
-	"\x16PublishDocumentRequest\x12\x1f\n" +
-	"\vdocument_id\x18\x01 \x01(\tR\n" +
-	"documentId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"f\n" +
-	"\x18UnpublishDocumentRequest\x12\x1f\n" +
-	"\vdocument_id\x18\x01 \x01(\tR\n" +
-	"documentId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"\x8f\x01\n" +
-	"\x15CheckDocAccessRequest\x12)\n" +
-	"\x11user_ngac_node_id\x18\x01 \x01(\tR\x0euserNgacNodeId\x12-\n" +
-	"\x13object_ngac_node_id\x18\x02 \x01(\tR\x10objectNgacNodeId\x12\x1c\n" +
-	"\toperation\x18\x03 \x01(\tR\toperation\"y\n" +
-	"\x11DocAccessDecision\x12\x1a\n" +
-	"\bdecision\x18\x01 \x01(\tR\bdecision\x12\x12\n" +
-	"\x04user\x18\x02 \x01(\tR\x04user\x12\x16\n" +
-	"\x06object\x18\x03 \x01(\tR\x06object\x12\x1c\n" +
-	"\toperation\x18\x04 \x01(\tR\toperation\"@\n" +
-	"\fDocumentList\x120\n" +
-	"\tdocuments\x18\x01 \x03(\v2\x12.document.DocumentR\tdocuments2\xc7\x05\n" +
-	"\x0fDocumentService\x125\n" +
-	"\x06Upload\x12\x17.document.UploadRequest\x1a\x12.document.Document\x127\n" +
-	"\x03Get\x12\x1c.document.GetDocumentRequest\x1a\x12.document.Document\x12>\n" +
-	"\x04List\x12\x1e.document.ListDocumentsRequest\x1a\x16.document.DocumentList\x12:\n" +
-	"\x06Delete\x12\x1f.document.DeleteDocumentRequest\x1a\x0f.document.Empty\x12?\n" +
-	"\aApprove\x12 .document.ApproveDocumentRequest\x1a\x12.document.Document\x12<\n" +
-	"\x05Share\x12\x1e.document.ShareDocumentRequest\x1a\x13.document.ShareInfo\x12<\n" +
-	"\vRevokeShare\x12\x1c.document.RevokeShareRequest\x1a\x0f.document.Empty\x12>\n" +
+	"object_key\x18\x02 \x01(\tR\tobjectKey\"X\n" +
+	"\x14ConfirmUploadRequest\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1d\n" +
 	"\n" +
-	"ListShares\x12\x1b.document.ListSharesRequest\x1a\x13.document.ShareList\x12<\n" +
-	"\aPublish\x12 .document.PublishDocumentRequest\x1a\x0f.document.Empty\x12@\n" +
-	"\tUnpublish\x12\".document.UnpublishDocumentRequest\x1a\x0f.document.Empty\x12K\n" +
-	"\vCheckAccess\x12\x1f.document.CheckDocAccessRequest\x1a\x1b.document.DocAccessDecisionB\x1eZ\x1cngac-platform/proto/documentb\x06proto3"
+	"object_key\x18\x02 \x01(\tR\tobjectKey\"Y\n" +
+	"\x15ConfirmUploadResponse\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x01 \x01(\x03R\tsizeBytes\x12!\n" +
+	"\fcontent_type\x18\x02 \x01(\tR\vcontentType\"Y\n" +
+	"\x15GetDownloadURLRequest\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1d\n" +
+	"\n" +
+	"object_key\x18\x02 \x01(\tR\tobjectKey\";\n" +
+	"\x16GetDownloadURLResponse\x12!\n" +
+	"\fdownload_url\x18\x01 \x01(\tR\vdownloadUrl\"W\n" +
+	"\x13DeleteObjectRequest\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1d\n" +
+	"\n" +
+	"object_key\x18\x02 \x01(\tR\tobjectKey\"\xb3\x01\n" +
+	"\x11CopyObjectRequest\x12(\n" +
+	"\x10src_workspace_id\x18\x01 \x01(\tR\x0esrcWorkspaceId\x12$\n" +
+	"\x0esrc_object_key\x18\x02 \x01(\tR\fsrcObjectKey\x12(\n" +
+	"\x10dst_workspace_id\x18\x03 \x01(\tR\x0edstWorkspaceId\x12$\n" +
+	"\x0edst_object_key\x18\x04 \x01(\tR\fdstObjectKey\"R\n" +
+	"\x12CopyObjectResponse\x12\x1d\n" +
+	"\n" +
+	"object_key\x18\x01 \x01(\tR\tobjectKey\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x02 \x01(\x03R\tsizeBytes\"X\n" +
+	"\x14GetObjectInfoRequest\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1d\n" +
+	"\n" +
+	"object_key\x18\x02 \x01(\tR\tobjectKey\"\xae\x01\n" +
+	"\n" +
+	"ObjectInfo\x12\x1d\n" +
+	"\n" +
+	"object_key\x18\x01 \x01(\tR\tobjectKey\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x02 \x01(\x03R\tsizeBytes\x12!\n" +
+	"\fcontent_type\x18\x03 \x01(\tR\vcontentType\x12?\n" +
+	"\rlast_modified\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\flastModified2\xde\x03\n" +
+	"\x16DocumentStorageService\x12M\n" +
+	"\fGetUploadURL\x12\x1d.document.GetUploadURLRequest\x1a\x1e.document.GetUploadURLResponse\x12P\n" +
+	"\rConfirmUpload\x12\x1e.document.ConfirmUploadRequest\x1a\x1f.document.ConfirmUploadResponse\x12S\n" +
+	"\x0eGetDownloadURL\x12\x1f.document.GetDownloadURLRequest\x1a .document.GetDownloadURLResponse\x12>\n" +
+	"\fDeleteObject\x12\x1d.document.DeleteObjectRequest\x1a\x0f.document.Empty\x12G\n" +
+	"\n" +
+	"CopyObject\x12\x1b.document.CopyObjectRequest\x1a\x1c.document.CopyObjectResponse\x12E\n" +
+	"\rGetObjectInfo\x12\x1e.document.GetObjectInfoRequest\x1a\x14.document.ObjectInfoB\x1eZ\x1cngac-platform/proto/documentb\x06proto3"
 
 var (
 	file_proto_document_document_proto_rawDescOnce sync.Once
@@ -1178,58 +747,41 @@ func file_proto_document_document_proto_rawDescGZIP() []byte {
 	return file_proto_document_document_proto_rawDescData
 }
 
-var file_proto_document_document_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_proto_document_document_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_proto_document_document_proto_goTypes = []any{
-	(*Empty)(nil),                    // 0: document.Empty
-	(*Document)(nil),                 // 1: document.Document
-	(*UploadRequest)(nil),            // 2: document.UploadRequest
-	(*GetDocumentRequest)(nil),       // 3: document.GetDocumentRequest
-	(*ListDocumentsRequest)(nil),     // 4: document.ListDocumentsRequest
-	(*DeleteDocumentRequest)(nil),    // 5: document.DeleteDocumentRequest
-	(*ApproveDocumentRequest)(nil),   // 6: document.ApproveDocumentRequest
-	(*ShareDocumentRequest)(nil),     // 7: document.ShareDocumentRequest
-	(*ShareInfo)(nil),                // 8: document.ShareInfo
-	(*RevokeShareRequest)(nil),       // 9: document.RevokeShareRequest
-	(*ListSharesRequest)(nil),        // 10: document.ListSharesRequest
-	(*ShareList)(nil),                // 11: document.ShareList
-	(*PublishDocumentRequest)(nil),   // 12: document.PublishDocumentRequest
-	(*UnpublishDocumentRequest)(nil), // 13: document.UnpublishDocumentRequest
-	(*CheckDocAccessRequest)(nil),    // 14: document.CheckDocAccessRequest
-	(*DocAccessDecision)(nil),        // 15: document.DocAccessDecision
-	(*DocumentList)(nil),             // 16: document.DocumentList
-	(*timestamppb.Timestamp)(nil),    // 17: google.protobuf.Timestamp
+	(*Empty)(nil),                  // 0: document.Empty
+	(*GetUploadURLRequest)(nil),    // 1: document.GetUploadURLRequest
+	(*GetUploadURLResponse)(nil),   // 2: document.GetUploadURLResponse
+	(*ConfirmUploadRequest)(nil),   // 3: document.ConfirmUploadRequest
+	(*ConfirmUploadResponse)(nil),  // 4: document.ConfirmUploadResponse
+	(*GetDownloadURLRequest)(nil),  // 5: document.GetDownloadURLRequest
+	(*GetDownloadURLResponse)(nil), // 6: document.GetDownloadURLResponse
+	(*DeleteObjectRequest)(nil),    // 7: document.DeleteObjectRequest
+	(*CopyObjectRequest)(nil),      // 8: document.CopyObjectRequest
+	(*CopyObjectResponse)(nil),     // 9: document.CopyObjectResponse
+	(*GetObjectInfoRequest)(nil),   // 10: document.GetObjectInfoRequest
+	(*ObjectInfo)(nil),             // 11: document.ObjectInfo
+	(*timestamppb.Timestamp)(nil),  // 12: google.protobuf.Timestamp
 }
 var file_proto_document_document_proto_depIdxs = []int32{
-	17, // 0: document.Document.created_at:type_name -> google.protobuf.Timestamp
-	8,  // 1: document.ShareList.shares:type_name -> document.ShareInfo
-	1,  // 2: document.DocumentList.documents:type_name -> document.Document
-	2,  // 3: document.DocumentService.Upload:input_type -> document.UploadRequest
-	3,  // 4: document.DocumentService.Get:input_type -> document.GetDocumentRequest
-	4,  // 5: document.DocumentService.List:input_type -> document.ListDocumentsRequest
-	5,  // 6: document.DocumentService.Delete:input_type -> document.DeleteDocumentRequest
-	6,  // 7: document.DocumentService.Approve:input_type -> document.ApproveDocumentRequest
-	7,  // 8: document.DocumentService.Share:input_type -> document.ShareDocumentRequest
-	9,  // 9: document.DocumentService.RevokeShare:input_type -> document.RevokeShareRequest
-	10, // 10: document.DocumentService.ListShares:input_type -> document.ListSharesRequest
-	12, // 11: document.DocumentService.Publish:input_type -> document.PublishDocumentRequest
-	13, // 12: document.DocumentService.Unpublish:input_type -> document.UnpublishDocumentRequest
-	14, // 13: document.DocumentService.CheckAccess:input_type -> document.CheckDocAccessRequest
-	1,  // 14: document.DocumentService.Upload:output_type -> document.Document
-	1,  // 15: document.DocumentService.Get:output_type -> document.Document
-	16, // 16: document.DocumentService.List:output_type -> document.DocumentList
-	0,  // 17: document.DocumentService.Delete:output_type -> document.Empty
-	1,  // 18: document.DocumentService.Approve:output_type -> document.Document
-	8,  // 19: document.DocumentService.Share:output_type -> document.ShareInfo
-	0,  // 20: document.DocumentService.RevokeShare:output_type -> document.Empty
-	11, // 21: document.DocumentService.ListShares:output_type -> document.ShareList
-	0,  // 22: document.DocumentService.Publish:output_type -> document.Empty
-	0,  // 23: document.DocumentService.Unpublish:output_type -> document.Empty
-	15, // 24: document.DocumentService.CheckAccess:output_type -> document.DocAccessDecision
-	14, // [14:25] is the sub-list for method output_type
-	3,  // [3:14] is the sub-list for method input_type
-	3,  // [3:3] is the sub-list for extension type_name
-	3,  // [3:3] is the sub-list for extension extendee
-	0,  // [0:3] is the sub-list for field type_name
+	12, // 0: document.ObjectInfo.last_modified:type_name -> google.protobuf.Timestamp
+	1,  // 1: document.DocumentStorageService.GetUploadURL:input_type -> document.GetUploadURLRequest
+	3,  // 2: document.DocumentStorageService.ConfirmUpload:input_type -> document.ConfirmUploadRequest
+	5,  // 3: document.DocumentStorageService.GetDownloadURL:input_type -> document.GetDownloadURLRequest
+	7,  // 4: document.DocumentStorageService.DeleteObject:input_type -> document.DeleteObjectRequest
+	8,  // 5: document.DocumentStorageService.CopyObject:input_type -> document.CopyObjectRequest
+	10, // 6: document.DocumentStorageService.GetObjectInfo:input_type -> document.GetObjectInfoRequest
+	2,  // 7: document.DocumentStorageService.GetUploadURL:output_type -> document.GetUploadURLResponse
+	4,  // 8: document.DocumentStorageService.ConfirmUpload:output_type -> document.ConfirmUploadResponse
+	6,  // 9: document.DocumentStorageService.GetDownloadURL:output_type -> document.GetDownloadURLResponse
+	0,  // 10: document.DocumentStorageService.DeleteObject:output_type -> document.Empty
+	9,  // 11: document.DocumentStorageService.CopyObject:output_type -> document.CopyObjectResponse
+	11, // 12: document.DocumentStorageService.GetObjectInfo:output_type -> document.ObjectInfo
+	7,  // [7:13] is the sub-list for method output_type
+	1,  // [1:7] is the sub-list for method input_type
+	1,  // [1:1] is the sub-list for extension type_name
+	1,  // [1:1] is the sub-list for extension extendee
+	0,  // [0:1] is the sub-list for field type_name
 }
 
 func init() { file_proto_document_document_proto_init() }
@@ -1243,7 +795,7 @@ func file_proto_document_document_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_document_document_proto_rawDesc), len(file_proto_document_document_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   17,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

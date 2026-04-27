@@ -21,13 +21,14 @@ import (
 type AssetServer struct {
 	pb.UnimplementedAssetServiceServer
 	store        *store.Store
-	policyClient policypb.PolicyServiceClient
+	policyRead  policypb.PolicyReadServiceClient
+	policyWrite policypb.PolicyWriteServiceClient
 	producer     *events.Producer
 }
 
 // NewAssetServer creates the asset gRPC handler.
-func NewAssetServer(s *store.Store, pc policypb.PolicyServiceClient, p *events.Producer) *AssetServer {
-	return &AssetServer{store: s, policyClient: pc, producer: p}
+func NewAssetServer(s *store.Store, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient, p *events.Producer) *AssetServer {
+	return &AssetServer{store: s, policyRead: pr, policyWrite: pw, producer: p}
 }
 
 func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetRequest) (*pb.Asset, error) {
@@ -66,7 +67,7 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 	}
 
 	// Create NGAC Object node for this asset
-	ngacNode, err := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
+	ngacNode, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
 		Name:     fmt.Sprintf("Asset_%s", req.Name),
 		NodeType: "O",
 		Properties: map[string]string{
@@ -80,7 +81,7 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 
 	// Assign asset O to type OA
 	if at.NgacOAID != "" {
-		s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: ngacNode.Id, ParentId: at.NgacOAID,
 		})
 	}
@@ -197,7 +198,7 @@ func (s *AssetServer) DeleteAsset(ctx context.Context, req *pb.DeleteAssetReques
 
 	// Remove NGAC assignments for the asset node
 	if asset.NgacNodeID != "" {
-		s.policyClient.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: asset.NgacNodeID})
+		s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: asset.NgacNodeID})
 	}
 
 	return &pb.Empty{}, nil
@@ -292,7 +293,7 @@ func (s *AssetServer) GetAvailableTransitions(ctx context.Context, req *pb.GetTr
 
 	// Filter by NGAC permissions — only show transitions the user can execute
 	for _, t := range allTransitions {
-		resp, _ := s.policyClient.CheckAccess(ctx, &policypb.CheckAccessRequest{
+		resp, _ := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
 			UserNodeId: req.UserNgacNodeId, ObjectNodeId: asset.NgacNodeID, Operation: t.NgacPermission,
 		})
 		if resp != nil && resp.Decision == "ALLOW" {
@@ -343,7 +344,7 @@ func (s *AssetServer) GetAssetHistory(ctx context.Context, req *pb.GetHistoryReq
 // ============================================
 
 func (s *AssetServer) checkAccess(ctx context.Context, userNodeID, objectNodeID, operation string) error {
-	resp, err := s.policyClient.CheckAccess(ctx, &policypb.CheckAccessRequest{
+	resp, err := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
 		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
 	})
 	if err != nil {

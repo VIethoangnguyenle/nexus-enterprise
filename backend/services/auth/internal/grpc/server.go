@@ -1,115 +1,102 @@
+// Package grpc provides thin gRPC handlers for the auth service.
+// Each method validates input, delegates to the domain layer, and maps errors.
+// No SQL, no business logic, no password hashing.
 package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"ngac-platform/services/auth/internal/auth"
-	"ngac-platform/services/auth/internal/store"
 	pb "ngac-platform/proto/auth"
-	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/auth/internal/domain"
 )
 
-// AuthServer handles authentication with optional Redis JWT blacklisting.
+// AuthService defines what the gRPC handler needs from the domain layer.
+type AuthService interface {
+	Register(ctx context.Context, username, password string) (*domain.AuthResponse, error)
+	Login(ctx context.Context, username, password string) (*domain.AuthResponse, error)
+	GetUserByID(ctx context.Context, userID string) (*domain.UserInfo, error)
+	GetUserByNGACNodeID(ctx context.Context, nodeID string) (*domain.UserInfo, error)
+	ListUsers(ctx context.Context) ([]domain.UserInfo, error)
+}
+
+// AuthServer handles gRPC auth requests.
 type AuthServer struct {
 	pb.UnimplementedAuthServiceServer
-	store        *store.Store
-	policyClient policypb.PolicyServiceClient
-	rdb          *redis.Client
+	svc *domain.Service
+	rdb *redis.Client
 }
 
-// NewAuthServer creates an AuthServer with optional Redis for JWT blacklisting.
-func NewAuthServer(s *store.Store, pc policypb.PolicyServiceClient, rdb *redis.Client) *AuthServer {
-	return &AuthServer{store: s, policyClient: pc, rdb: rdb}
+// NewAuthServer creates a gRPC handler backed by the domain service.
+func NewAuthServer(svc *domain.Service, rdb *redis.Client) *AuthServer {
+	return &AuthServer{svc: svc, rdb: rdb}
 }
 
+// Register delegates to domain.Service.Register.
 func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.AuthResponse, error) {
-	existing, _ := s.store.GetUserByUsername(ctx, req.Username)
-	if existing != nil {
-		return nil, status.Errorf(codes.AlreadyExists, "username already taken")
-	}
-
-	hash, err := auth.HashPassword(req.Password)
+	resp, err := s.svc.Register(ctx, req.Username, req.Password)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "hash password: %v", err)
+		return nil, mapError(err)
 	}
-
-	userNode, err := s.policyClient.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: req.Username, NodeType: "U",
-		Properties: map[string]string{"type": "user"},
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create ngac node: %v", err)
-	}
-
-	publicUA, err := s.policyClient.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: "PublicUsers", NodeType: "UA",
-	})
-	if err == nil && publicUA != nil {
-		s.policyClient.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: userNode.Id, ParentId: publicUA.Id,
-		})
-	}
-
-	userID := uuid.New().String()
-	if err := s.store.CreateUser(ctx, userID, req.Username, hash, userNode.Id); err != nil {
-		return nil, status.Errorf(codes.Internal, "create user: %v", err)
-	}
-
-	token, err := auth.GenerateToken(userID, req.Username, userNode.Id)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "generate token: %v", err)
-	}
-
-	return &pb.AuthResponse{
-		Token: token,
-		User:  &pb.UserInfo{Id: userID, Username: req.Username, NgacNodeId: userNode.Id},
-	}, nil
+	return toAuthResponse(resp), nil
 }
 
+// Login delegates to domain.Service.Login.
 func (s *AuthServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.AuthResponse, error) {
-	user, err := s.store.GetUserByUsername(ctx, req.Username)
+	resp, err := s.svc.Login(ctx, req.Username, req.Password)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "get user: %v", err)
+		return nil, mapError(err)
 	}
-	if user == nil {
-		return nil, status.Errorf(codes.NotFound, "invalid credentials")
-	}
-
-	if !auth.CheckPassword(req.Password, user.Password) {
-		return nil, status.Errorf(codes.Unauthenticated, "invalid credentials")
-	}
-
-	token, err := auth.GenerateToken(user.ID, user.Username, user.NGACNodeID)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "generate token: %v", err)
-	}
-
-	return &pb.AuthResponse{
-		Token: token,
-		User:  &pb.UserInfo{Id: user.ID, Username: user.Username, NgacNodeId: user.NGACNodeID},
-	}, nil
+	return toAuthResponse(resp), nil
 }
 
-// RevokeToken adds a JWT ID to the Redis blacklist with TTL matching token expiry.
+// GetUserByID delegates to domain.Service.GetUserByID.
+func (s *AuthServer) GetUserByID(ctx context.Context, req *pb.GetUserByIDRequest) (*pb.UserInfo, error) {
+	user, err := s.svc.GetUserByID(ctx, req.UserId)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return toUserInfo(user), nil
+}
+
+// GetUserByNGACNodeID delegates to domain.Service.GetUserByNGACNodeID.
+func (s *AuthServer) GetUserByNGACNodeID(ctx context.Context, req *pb.GetUserByNGACNodeIDRequest) (*pb.UserInfo, error) {
+	user, err := s.svc.GetUserByNGACNodeID(ctx, req.NgacNodeId)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return toUserInfo(user), nil
+}
+
+// ListUsers delegates to domain.Service.ListUsers.
+func (s *AuthServer) ListUsers(ctx context.Context, _ *pb.ListUsersRequest) (*pb.UserListResponse, error) {
+	users, err := s.svc.ListUsers(ctx)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	var resp []*pb.UserInfo
+	for _, u := range users {
+		resp = append(resp, &pb.UserInfo{Id: u.ID, Username: u.Username, NgacNodeId: u.NGACNodeID})
+	}
+	return &pb.UserListResponse{Users: resp}, nil
+}
+
+// RevokeToken adds a JWT ID to the Redis blacklist.
 func (s *AuthServer) RevokeToken(ctx context.Context, req *pb.RevokeTokenRequest) (*pb.RevokeTokenResponse, error) {
 	if s.rdb == nil {
-		return nil, status.Errorf(codes.Unavailable, "jwt blacklist unavailable: redis not connected")
+		return nil, status.Error(codes.Unavailable, "jwt blacklist unavailable")
 	}
-
 	remaining := time.Until(time.Unix(req.ExpiresAtUnix, 0))
 	if remaining <= 0 {
 		return &pb.RevokeTokenResponse{Revoked: true}, nil
 	}
-
-	key := jwtBlacklistKey(req.Jti)
-	if err := s.rdb.Set(ctx, key, "1", remaining).Err(); err != nil {
+	if err := s.rdb.Set(ctx, jwtBlacklistKey(req.Jti), "1", remaining).Err(); err != nil {
 		return nil, status.Errorf(codes.Internal, "blacklist token: %v", err)
 	}
 	return &pb.RevokeTokenResponse{Revoked: true}, nil
@@ -120,7 +107,6 @@ func (s *AuthServer) IsTokenRevoked(ctx context.Context, req *pb.IsTokenRevokedR
 	if s.rdb == nil {
 		return &pb.IsTokenRevokedResponse{Revoked: false}, nil
 	}
-
 	exists, err := s.rdb.Exists(ctx, jwtBlacklistKey(req.Jti)).Result()
 	if err != nil {
 		return &pb.IsTokenRevokedResponse{Revoked: false}, nil
@@ -132,36 +118,28 @@ func jwtBlacklistKey(jti string) string {
 	return fmt.Sprintf("jwt:blacklist:%s", jti)
 }
 
-func (s *AuthServer) GetUserByID(ctx context.Context, req *pb.GetUserByIDRequest) (*pb.UserInfo, error) {
-	user, err := s.store.GetUserByID(ctx, req.UserId)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "get user: %v", err)
+func toAuthResponse(r *domain.AuthResponse) *pb.AuthResponse {
+	return &pb.AuthResponse{
+		Token: r.Token,
+		User:  &pb.UserInfo{Id: r.UserID, Username: r.Username, NgacNodeId: r.NGACNodeID},
 	}
-	if user == nil {
-		return nil, status.Errorf(codes.NotFound, "user not found")
-	}
-	return &pb.UserInfo{Id: user.ID, Username: user.Username, NgacNodeId: user.NGACNodeID}, nil
 }
 
-func (s *AuthServer) GetUserByNGACNodeID(ctx context.Context, req *pb.GetUserByNGACNodeIDRequest) (*pb.UserInfo, error) {
-	user, err := s.store.GetUserByNGACNodeID(ctx, req.NgacNodeId)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "get user: %v", err)
-	}
-	if user == nil {
-		return nil, status.Errorf(codes.NotFound, fmt.Sprintf("user not found for ngac node %s", req.NgacNodeId))
-	}
-	return &pb.UserInfo{Id: user.ID, Username: user.Username, NgacNodeId: user.NGACNodeID}, nil
+func toUserInfo(u *domain.UserInfo) *pb.UserInfo {
+	return &pb.UserInfo{Id: u.ID, Username: u.Username, NgacNodeId: u.NGACNodeID}
 }
 
-func (s *AuthServer) ListUsers(ctx context.Context, _ *pb.ListUsersRequest) (*pb.UserListResponse, error) {
-	users, err := s.store.ListUsers(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list users: %v", err)
+func mapError(err error) error {
+	switch {
+	case errors.Is(err, domain.ErrInvalidCredentials):
+		return status.Error(codes.Unauthenticated, err.Error())
+	case errors.Is(err, domain.ErrUserExists):
+		return status.Error(codes.AlreadyExists, err.Error())
+	case errors.Is(err, domain.ErrNotFound):
+		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, domain.ErrInvalidInput):
+		return status.Error(codes.InvalidArgument, err.Error())
+	default:
+		return status.Errorf(codes.Internal, "internal: %v", err)
 	}
-	var resp []*pb.UserInfo
-	for _, u := range users {
-		resp = append(resp, &pb.UserInfo{Id: u.ID, Username: u.Username, NgacNodeId: u.NGACNodeID})
-	}
-	return &pb.UserListResponse{Users: resp}, nil
 }

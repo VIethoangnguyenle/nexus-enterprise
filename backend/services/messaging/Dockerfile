@@ -3,6 +3,8 @@ RUN apk add --no-cache git
 WORKDIR /app
 COPY go.mod go.sum ./
 COPY proto/ proto/
+COPY ngac/ ngac/
+COPY pkg/ pkg/
 COPY services/messaging/go.mod services/messaging/go.sum services/messaging/
 WORKDIR /app/services/messaging
 RUN go mod download

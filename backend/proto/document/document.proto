@@ -6,119 +6,82 @@ option go_package = "ngac-platform/proto/document";
 
 import "google/protobuf/timestamp.proto";
 
-service DocumentService {
-  rpc Upload(UploadRequest) returns (Document);
-  rpc Get(GetDocumentRequest) returns (Document);
-  rpc List(ListDocumentsRequest) returns (DocumentList);
-  rpc Delete(DeleteDocumentRequest) returns (Empty);
-  rpc Approve(ApproveDocumentRequest) returns (Document);
-  rpc Share(ShareDocumentRequest) returns (ShareInfo);
-  rpc RevokeShare(RevokeShareRequest) returns (Empty);
-  rpc ListShares(ListSharesRequest) returns (ShareList);
-  rpc Publish(PublishDocumentRequest) returns (Empty);
-  rpc Unpublish(UnpublishDocumentRequest) returns (Empty);
-  rpc CheckAccess(CheckDocAccessRequest) returns (DocAccessDecision);
+// DocumentStorageService handles raw object storage operations via MinIO.
+// No NGAC awareness — access control is handled by the Drive Service.
+service DocumentStorageService {
+  // Presigned URL flow
+  rpc GetUploadURL(GetUploadURLRequest) returns (GetUploadURLResponse);
+  rpc ConfirmUpload(ConfirmUploadRequest) returns (ConfirmUploadResponse);
+  rpc GetDownloadURL(GetDownloadURLRequest) returns (GetDownloadURLResponse);
+
+  // Object management
+  rpc DeleteObject(DeleteObjectRequest) returns (Empty);
+  rpc CopyObject(CopyObjectRequest) returns (CopyObjectResponse);
+  rpc GetObjectInfo(GetObjectInfoRequest) returns (ObjectInfo);
 }
 
 message Empty {}
 
-message Document {
-  string id = 1;
-  string title = 2;
-  string filename = 3;
-  string mime_type = 4;
-  string owner_id = 5;
-  string owner_name = 6;
-  string ngac_node_id = 7;
-  string status = 8;
-  bool is_public = 9;
-  string workspace_id = 10;
-  google.protobuf.Timestamp created_at = 11;
-}
+// --- Presigned URL flow ---
 
-message UploadRequest {
-  string title = 1;
+message GetUploadURLRequest {
+  string workspace_id = 1;
   string filename = 2;
   string mime_type = 3;
-  bytes content = 4;
-  string user_id = 5;
-  string user_ngac_node_id = 6;
-  string workspace_id = 7;
+  string doc_id = 4;              // caller-provided ID for the object key
 }
 
-message GetDocumentRequest {
-  string document_id = 1;
-  string user_ngac_node_id = 2;
+message GetUploadURLResponse {
+  string upload_url = 1;
+  string object_key = 2;
 }
 
-message ListDocumentsRequest {
+message ConfirmUploadRequest {
   string workspace_id = 1;
-  string user_ngac_node_id = 2;
+  string object_key = 2;
 }
 
-message DeleteDocumentRequest {
-  string document_id = 1;
-  string user_ngac_node_id = 2;
+message ConfirmUploadResponse {
+  int64 size_bytes = 1;
+  string content_type = 2;
 }
 
-message ApproveDocumentRequest {
-  string document_id = 1;
-  string user_ngac_node_id = 2;
+message GetDownloadURLRequest {
+  string workspace_id = 1;
+  string object_key = 2;
 }
 
-message ShareDocumentRequest {
-  string document_id = 1;
-  string user_ngac_node_id = 2;
-  string target_ua_id = 3;
-  repeated string operations = 4;
+message GetDownloadURLResponse {
+  string download_url = 1;
 }
 
-message ShareInfo {
-  string id = 1;
-  string document_id = 2;
-  string target_ua_id = 3;
-  string target_ua_name = 4;
-  repeated string operations = 5;
-  string share_oa_id = 6;
+// --- Object management ---
+
+message DeleteObjectRequest {
+  string workspace_id = 1;
+  string object_key = 2;
 }
 
-message RevokeShareRequest {
-  string document_id = 1;
-  string user_ngac_node_id = 2;
-  string share_oa_id = 3;
+message CopyObjectRequest {
+  string src_workspace_id = 1;
+  string src_object_key = 2;
+  string dst_workspace_id = 3;
+  string dst_object_key = 4;
 }
 
-message ListSharesRequest {
-  string document_id = 1;
+message CopyObjectResponse {
+  string object_key = 1;
+  int64 size_bytes = 2;
 }
 
-message ShareList {
-  repeated ShareInfo shares = 1;
+message GetObjectInfoRequest {
+  string workspace_id = 1;
+  string object_key = 2;
 }
 
-message PublishDocumentRequest {
-  string document_id = 1;
-  string user_ngac_node_id = 2;
-}
-
-message UnpublishDocumentRequest {
-  string document_id = 1;
-  string user_ngac_node_id = 2;
-}
-
-message CheckDocAccessRequest {
-  string user_ngac_node_id = 1;
-  string object_ngac_node_id = 2;
-  string operation = 3;
-}
-
-message DocAccessDecision {
-  string decision = 1;
-  string user = 2;
-  string object = 3;
-  string operation = 4;
-}
-
-message DocumentList {
-  repeated Document documents = 1;
+message ObjectInfo {
+  string object_key = 1;
+  int64 size_bytes = 2;
+  string content_type = 3;
+  google.protobuf.Timestamp last_modified = 4;
 }
