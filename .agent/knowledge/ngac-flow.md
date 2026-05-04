@@ -133,8 +133,10 @@ Từ cây này, hệ thống có thể trả lời mọi câu hỏi quyền:
 
 ## 6. Điều cần nhớ
 
-- Đồ thị NGAC được load vào bộ nhớ khi Policy service khởi động, nên kiểm tra quyền rất nhanh
+- Đồ thị NGAC được load **per-workspace** qua `ShardManager` với O(1) LRU eviction (doubly-linked list + index map). Shard được lazy-load khi có request và evict khi vượt `maxShards` (default 1000)
+- Global graph vẫn load vào bộ nhớ khi Policy service khởi động → fallback nếu shard chưa sẵn sàng
 - Mọi thay đổi (tạo node, gán, liên kết) đều lưu vào database VÀ cập nhật trong bộ nhớ
 - Thêm thành viên vào phòng ban = tạo 1 assignment mới → quyền có hiệu lực ngay
 - Xóa thành viên khỏi phòng ban = xóa 1 assignment → mất quyền ngay
 - Policy service có 2 phiên bản: Write (1 instance, cho thao tác sửa đổi) và Read (2 instances, cho kiểm tra quyền — vì đọc nhiều hơn ghi)
+- Kết quả quyết định sử dụng typed constants: `DecisionAllow` / `DecisionDeny` (không hardcode string)

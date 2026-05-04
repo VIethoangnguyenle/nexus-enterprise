@@ -46,7 +46,7 @@ Operations giữ tính **generic** (động từ). Context được xác định
 > [!CAUTION]
 > Đây là quyết định kiến trúc quan trọng nhất của hệ thống.
 
-**Evidence:** `backend/services/policy/internal/ngac/store.go:58`
+**Evidence:** `backend/services/policy/internal/ngac/pip_store.go:32`
 
 ```go
 // LoadGraph() chỉ load 4 loại, BỎ QUA 'O'
@@ -839,7 +839,7 @@ flowchart LR
 | `backend/ngac/ngac_ops.go`                              | 8 operations cố định             |
 | `backend/services/drive/internal/grpc/sharing.go`       | Share/Revoke implementation      |
 | `backend/services/drive/internal/grpc/server.go`        | Drive CRUD + checkAccess pattern |
-| `backend/services/policy/internal/ngac/store.go`        | LoadGraph — loại trừ node O      |
+| `backend/services/policy/internal/ngac/pip_store.go`        | LoadGraph — loại trừ node O      |
 | `backend/services/workspace/internal/domain/service.go` | Workspace graph creation         |
 | `backend/services/auth/internal/domain/service.go`      | User signup + PublicUsers        |
 | `data/migrations/007_tenant_schema_approval.sql`        | Approval schema + indexes        |
@@ -905,7 +905,7 @@ Graph mutation → CacheInvalidator.InvalidateForNodes(nodeIDs...)
   └─ Node unknown  → xóa both user + object prefix (safety)
 ```
 
-**Code reference**: `policy/internal/ngac/cache_invalidator.go` → `CacheInvalidator`
+**Code reference**: `policy/internal/ngac/epp_cache_invalidator.go` → `CacheInvalidator`
 
 **Ví dụ thực tế — VNPay**:
 
@@ -1012,7 +1012,7 @@ RETURNING version
 
 > **UPSERT + RETURNING** → atomic, không race condition khi nhiều WriteServer cùng mutation.
 
-**Code reference**: `policy/internal/ngac/version.go` → `VersionTracker.Increment()`
+**Code reference**: `policy/internal/ngac/epp_version.go` → `VersionTracker.Increment()`
 
 #### Ví dụ timeline version
 
@@ -1320,13 +1320,440 @@ Sau khi bị xóa/stale → CheckAccess tiếp theo sẽ:
 
 | File | Nội dung |
 |---|---|
-| `policy/internal/ngac/cache_invalidator.go` | Targeted invalidation logic |
+| `policy/internal/ngac/models.go` | Typed constants (DecisionAllow/Deny, NodeType*, ScopeGlobal, WorkspaceScope) |
+| `policy/internal/ngac/epp_cache_invalidator.go` | Targeted invalidation logic + `collectAndDelete()` DRY helper |
+| `policy/internal/ngac/epp_version.go` | Graph version tracking |
+| `policy/internal/ngac/pdp_decision_cache.go` | Cache key/scope prefix constants (`cacheKeyPrefix`, `scopeKeyPrefix`) |
+| `policy/internal/ngac/pdp_decision_engine.go` | PDP Decide() — flattened nesting, extracted methods |
+| `policy/internal/ngac/pip_shard_manager.go` | O(1) LRU via `container/list` + index map |
+| `policy/internal/ngac/pip_store.go` | PIP Store (LoadGraph, GetGraph — dead code removed) |
 | `policy/internal/metrics/metrics.go` | Prometheus metric definitions |
 | `policy/internal/grpc/read_server.go` | 3-layer cache CheckAccess + metrics |
-| `policy/internal/grpc/write_server.go` | Targeted invalidation on mutations |
-| `policy/internal/grpc/server.go` | Legacy server with shared CacheInvalidator |
-| `policy/cmd/main.go` | Wiring + Prometheus HTTP :9090 |
-| `policy/cmd/policy-read/main.go` | Prometheus HTTP :9091 |
+| `policy/internal/grpc/write_server.go` | Targeted invalidation on mutations + typed constants |
+
+---
+
+## 11. Tối ưu cấu trúc nội bộ (2026-05-04)
+
+> Các cải tiến **không thay đổi hành vi** — chỉ cải thiện performance, readability, maintainability.
+
+### 11.1 Nguyên tắc tổ chức file — NGAC Tier Naming
+
+Mỗi file trong `policy/internal/ngac/` được đặt tên theo tier NGAC mà nó thuộc về:
+
+| Prefix | Tier | Trách nhiệm | Ví dụ |
+|--------|------|-------------|-------|
+| `pap_` | Policy Administration Point | Thay đổi graph (tạo/xóa node, assignment, association) | `pap_graph.go`, `pap_store.go` |
+| `pdp_` | Policy Decision Point | Quyết định quyền (BFS, cache, CTE fallback) | `pdp_decision_engine.go`, `pdp_access.go` |
+| `pip_` | Policy Information Point | Đọc dữ liệu graph (load, shard, materialized) | `pip_store.go`, `pip_shard_manager.go` |
+| `epp_` | Event Processing Point | Phản ứng khi graph thay đổi (invalidation, versioning) | `epp_cache_invalidator.go`, `epp_version.go` |
+| *(none)* | Shared | Types, constants, helpers dùng chung | `models.go` |
+
+> **Lợi ích**: Mở folder → nhìn prefix → biết ngay trách nhiệm. Không cần đọc code để hiểu file làm gì.
+
+### 11.2 Typed Constants — Một nguồn sự thật
+
+**Vấn đề**: Chuỗi `"ALLOW"`, `"DENY"`, `"global"`, `"ngac:access:"` xuất hiện rải rác ở 7+ files. Nếu cần đổi format → phải grep toàn bộ codebase.
+
+**Giải pháp**: Tập trung tất cả vào `models.go` (decisions, scopes) và `pdp_decision_cache.go` (cache prefixes).
+
+| Loại | Constant | Thay thế cho |
+|------|----------|-------------|
+| Decision | `DecisionAllow`, `DecisionDeny` | `"ALLOW"`, `"DENY"` |
+| Scope | `ScopeGlobal` | `"global"` |
+| Scope helper | `WorkspaceScope(wsID)` | `fmt.Sprintf("ws:%s", wsID)` |
+| Cache key | `cacheKeyPrefix` | `"ngac:access:"` |
+| Cache key | `scopeKeyPrefix` | `"scopes:"` |
+
+> **Quy tắc**: Grep `"ALLOW"` hoặc `"DENY"` trong policy service → chỉ thấy ở `models.go` (nơi định nghĩa constant).
+
+### 11.3 Flow quyết định — Decide() Pipeline
+
+**Vấn đề**: Logic `Decide()` ban đầu lồng 6 tầng if — khó đọc, dễ sai khi thêm logic mới.
+
+**Giải pháp**: Tách thành pipeline 4 bước tuần tự:
+
+```
+CheckAccess Request
+  │
+  ├─ Step 1: resolveGraph()
+  │   → Shard (nếu có workspace_id) hoặc global graph
+  │
+  ├─ Step 2: graph.CheckAccess()
+  │   → BFS traversal trong bộ nhớ → ALLOW hoặc DENY
+  │
+  ├─ Step 3: tryCTEFallback()
+  │   → Nếu DENY vì "node not found" → thử CTE SQL
+  │   → Nếu CTE thành công → ALLOW + async load shard cho lần sau
+  │
+  └─ Step 4: checkProhibitions()
+      → Nếu ALLOW → kiểm tra deny overrides
+      → Prohibition match → đảo thành DENY
+```
+
+> **Nguyên tắc**: Mỗi step là 1 method riêng. `Decide()` chỉ là orchestrator — không chứa logic phức tạp.
+
+### 11.4 Shard Manager — Per-Workspace Graph Cache
+
+#### Ý tưởng cốt lõi
+
+Thay vì load toàn bộ graph của tất cả tenant vào 1 bộ nhớ (tốn RAM, chậm khởi động), mỗi workspace chỉ load graph **khi cần** (lazy loading) và giữ trong cache LRU.
+
+```
+Trước (1 global graph):
+  Service khởi động → load TẤT CẢ nodes từ DB → 1 graph khổng lồ
+
+Sau (per-workspace shard):
+  Service khởi động → global graph (fallback)
+  CheckAccess(ws:vnpay) → cache miss → load chỉ graph VNPay → cache
+  CheckAccess(ws:vnpay) → cache hit → trả graph ngay
+  CheckAccess(ws:fpt)   → cache miss → load chỉ graph FPT → cache
+```
+
+#### Flow: Shard Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Empty: ShardManager khởi tạo (cache rỗng)
+    Empty --> Loading: CheckAccess(ws:vnpay) — cache miss
+    Loading --> Cached: loadShard() thành công
+    Loading --> Empty: loadShard() lỗi (DB timeout)
+    Cached --> Cached: CheckAccess(ws:vnpay) — cache hit, promote LRU
+    Cached --> Invalidated: Graph mutation (CreateAssignment/RemoveAssignment)
+    Cached --> Evicted: Cache đầy + workspace này ít dùng nhất
+    Invalidated --> Loading: CheckAccess tiếp theo → reload từ DB
+    Evicted --> Loading: CheckAccess tiếp theo → reload từ DB
+```
+
+#### Ví dụ VNPay — loadShard() làm gì?
+
+Khi CheckAccess cho workspace VNPay lần đầu, ShardManager chạy quy trình:
+
+```
+loadShard("ws_vnpay")
+  │
+  ├─ Step 1: Tìm tenant PC
+  │   → SELECT id FROM ngac_nodes WHERE type='PC' AND workspace_id='ws_vnpay'
+  │   → Kết quả: PC_VNPay
+  │
+  ├─ Step 2: Tìm PC_Global (luôn include)
+  │   → SELECT id FROM ngac_nodes WHERE type='PC' AND scope='global'
+  │   → Kết quả: PC_Global
+  │
+  ├─ Step 3: Recursive CTE — tìm TẤT CẢ nodes thuộc PC_VNPay + PC_Global
+  │   → WITH RECURSIVE descendants AS (...)
+  │   → Kết quả: ~50 nodes (U, UA, OA thuộc VNPay)
+  │   ⚠️ KHÔNG load node O (file/document) — chỉ container (OA)
+  │
+  ├─ Step 4: Load assignments giữa các nodes trong shard
+  │   → SELECT ... FROM ngac_assignments WHERE child AND parent IN (shard nodes)
+  │
+  └─ Step 5: Load associations (UA → OA + operations)
+      → SELECT ... FROM ngac_associations WHERE ua_id IN (shard nodes)
+```
+
+**Kết quả**: 1 Graph hoàn chỉnh chỉ chứa dữ liệu VNPay — BFS chạy trên graph nhỏ hơn, nhanh hơn.
+
+#### Flow: CheckAccess qua ShardManager
+
+```mermaid
+flowchart TD
+    REQ["CheckAccess(userID, objectID, op, ws:vnpay)"]
+    
+    REQ --> SM{"ShardManager\ncache lookup"}
+    SM -->|cache HIT| PROMOTE["promote LRU\n(đánh dấu 'vừa dùng')"]
+    SM -->|cache MISS| LOAD["loadShard('ws_vnpay')\nRecursive CTE từ DB"]
+    
+    PROMOTE --> BFS["BFS trên shard graph"]
+    LOAD -->|thành công| STORE["Cache shard\n+ thêm vào LRU list"]
+    LOAD -->|thất bại| GLOBAL["Fallback: global graph"]
+    
+    STORE --> FULL{"Cache đầy?\n(shards >= maxShards)"}
+    FULL -->|có| EVICT["Evict workspace ít dùng nhất\n(LRU Front)"] --> BFS
+    FULL -->|không| BFS
+    
+    GLOBAL --> BFS_G["BFS trên global graph"]
+    BFS --> RESULT["ALLOW / DENY"]
+    BFS_G --> RESULT
+```
+
+#### Timeline cụ thể — 3 tenants, maxShards = 2
+
+> Giả sử: VNPay (30 nodes), FPT (25 nodes), Viettel (40 nodes). maxShards = 2.
+
+```
+════════════════════════════════════════════════════════════
+  T0: ShardManager khởi tạo
+════════════════════════════════════════════════════════════
+
+  Cache: [ rỗng ]              LRU: ← (head) ... (tail) →
+  Stats: hits=0, misses=0, evictions=0
+
+════════════════════════════════════════════════════════════
+  T1: CheckAccess(thanhttn, OA_KeToan, read, ws:vnpay)
+════════════════════════════════════════════════════════════
+
+  Cache lookup: ws_vnpay → MISS
+  → loadShard("ws_vnpay") → CTE → load 30 nodes
+  → Cache: { ws_vnpay: Graph(30 nodes) }
+  → LRU:   ws_vnpay
+  Stats: hits=0, misses=1
+
+════════════════════════════════════════════════════════════
+  T2: CheckAccess(nhanlt, OA_DevOps, read, ws:fpt)
+════════════════════════════════════════════════════════════
+
+  Cache lookup: ws_fpt → MISS
+  → loadShard("ws_fpt") → CTE → load 25 nodes
+  → Cache: { ws_vnpay, ws_fpt }
+  → LRU:   ws_vnpay ⇄ ws_fpt        (fpt ở cuối = mới nhất)
+  Stats: hits=0, misses=2
+
+════════════════════════════════════════════════════════════
+  T3: CheckAccess(thanhttn, OA_KeToan, write, ws:vnpay)
+════════════════════════════════════════════════════════════
+
+  Cache lookup: ws_vnpay → HIT ✓
+  → promoteInAccessOrder("ws_vnpay") → MoveToBack O(1)
+  → LRU:   ws_fpt ⇄ ws_vnpay        (vnpay chuyển lên cuối = mới nhất)
+  Stats: hits=1, misses=2
+
+════════════════════════════════════════════════════════════
+  T4: CheckAccess(dungnt, OA_Infra, read, ws:viettel)
+════════════════════════════════════════════════════════════
+
+  Cache lookup: ws_viettel → MISS
+  Cache đầy! (2 shards = maxShards)
+  → evictLRU() → xóa ws_fpt (ở đầu list = ít dùng nhất)
+
+  → loadShard("ws_viettel") → CTE → load 40 nodes
+  → Cache: { ws_vnpay, ws_viettel }
+  → LRU:   ws_vnpay ⇄ ws_viettel
+  Stats: hits=1, misses=3, evictions=1
+
+  ⚠️ ws_fpt bị evict vì ít dùng nhất.
+  Nếu FPT request tiếp → cache miss → reload từ DB.
+
+════════════════════════════════════════════════════════════
+  T5: Admin VNPay thêm nhân viên → CreateAssignment()
+════════════════════════════════════════════════════════════
+
+  WriteServer:
+    1. store.CreateAssignment() → DB + in-memory
+    2. shardManager.InvalidateShard("ws_vnpay")
+       → Xóa shard VNPay khỏi cache + LRU
+
+  → Cache: { ws_viettel }
+  → LRU:   ws_viettel
+  Stats: hits=1, misses=3, evictions=1
+
+  CheckAccess tiếp theo cho VNPay → MISS → reload shard mới
+  (bao gồm assignment vừa tạo)
+```
+
+#### Tại sao LRU phải O(1)?
+
+CheckAccess chạy **hàng trăm lần/giây** cho mỗi user action (list files, open folder). Mỗi lần CheckAccess hit shard cache → phải gọi `promoteInAccessOrder()` để LRU biết shard nào "vừa dùng".
+
+| | Slice-based (cũ) | Linked list + map (mới) |
+|---|---|---|
+| **Promote** | Scan toàn bộ slice tìm vị trí → O(N) | Map lookup → MoveToBack → O(1) |
+| **Evict** | Lấy đầu slice → O(1) | Lấy Front() → O(1) |
+| **Invalidate** | Scan tìm + xóa → O(N) | Map lookup → Remove → O(1) |
+| **N = 1000 shards** | **~1000 ops/access** | **~3 ops/access** |
+
+> **Trade-off**: 4x memory per entry (~64 vs ~16 bytes). Nhưng 1000 shards × 48 bytes chênh = **48KB** — negligible so với mỗi shard chứa hàng chục KB graph data.
+
+#### Khi nào shard bị invalidate?
+
+| Event | Invalidation | Lý do |
+|-------|-------------|-------|
+| `CreateAssignment` trong workspace X | `InvalidateShard(X)` | Graph thay đổi → shard cũ stale |
+| `RemoveAssignment` trong workspace X | `InvalidateShard(X)` | Quyền bị thu hồi |
+| `CreateAssociation` trong workspace X | `InvalidateShard(X)` | Permission mới |
+| `LoadGraph` (full reload) | `InvalidateAll()` | Toàn bộ graph thay đổi |
+| Cache đầy + shard ít dùng | `evictLRU()` | Giải phóng memory |
+
+
+
+#### Multi-PC trong 1 Workspace — Shard chứa gì?
+
+Mỗi workspace VNPay tạo ra đúng **1 tenant PC** (`PC_VNPay`). Nhưng hệ thống luôn có `PC_Global` cho shared resources (DMs, public docs, cross-workspace channels).
+
+→ Khi loadShard, **cả 2 PC đều được include** → shard chứa nodes thuộc cả PC_VNPay LẪN PC_Global.
+
+```
+loadShard("ws_vnpay")
+  → pcIDs = [PC_VNPay, PC_Global]
+  → Recursive CTE tìm TẤT CẢ nodes reachable từ 2 PC này
+
+Shard VNPay chứa:
+  ┌─ PC_VNPay ─────────────────────────────────────────┐
+  │  UA_Owners, UA_Members, OA_Docs, OA_Channels       │
+  │  UA_DVNH_Dept, OA_DVNH_Drive, UA_AppSrv1_Team      │
+  │  U_hoangnlv, U_namdx, U_nguyenntn, ...             │
+  └────────────────────────────────────────────────────┘
+  ┌─ PC_Global ────────────────────────────────────────┐
+  │  UA_PublicUsers, OA_PublicDocs                      │
+  │  U_hoangnlv (cũng thuộc PublicUsers)               │
+  │  U_trietvv (external user, chỉ có ở PC_Global)    │
+  └────────────────────────────────────────────────────┘
+```
+
+#### Quy tắc NIST: ALL-PC Intersection (objectPCs ⊆ userPCs)
+
+Khi CheckAccess chạy BFS trên shard, nó collect **tất cả PC mà user và object reach được**. Quy tắc NIST:
+
+> **ALLOW** khi và chỉ khi: Tất cả PC mà object reach được → user cũng reach được.
+> Nói cách khác: `objectPCs ⊆ userPCs`
+
+```mermaid
+flowchart TD
+    subgraph "BFS từ User"
+        U["U_hoangnlv"] --> UA_DVNH["UA_DVNH_Dept"]
+        UA_DVNH --> UA_MN["UA_MienNam"]
+        UA_MN --> UA_Members["UA_Members"]
+        UA_Members --> PC_V["PC_VNPay ✓"]
+        
+        U --> UA_PU["UA_PublicUsers"]
+        UA_PU --> PC_G["PC_Global ✓"]
+    end
+    
+    subgraph "BFS từ Object"
+        OA["OA_DVNH_Drive"] --> OA_RES["OA_DVNH_Resources"]
+        OA_RES --> OA_MN_R["OA_MienNam_Resources"]
+        OA_MN_R --> OA_DOCS["OA_Docs"]
+        OA_DOCS --> PC_V2["PC_VNPay ✓"]
+    end
+    
+    subgraph "Kết luận"
+        CHECK{"objectPCs ⊆ userPCs?"}
+        PC_V2 -->|"objectPCs = {PC_VNPay}"| CHECK
+        PC_V -->|"userPCs = {PC_VNPay, PC_Global}"| CHECK
+        CHECK -->|"{PC_VNPay} ⊆ {PC_VNPay, PC_Global} = true"| ALLOW["✅ ALLOW"]
+    end
+```
+
+#### Ví dụ 1: Internal user — 1 PC match đủ
+
+```
+hoangnlv muốn read DVNH_Drive
+
+BFS user:  hoangnlv → DVNH_Dept → MienNam → Members → PC_VNPay
+                     + hoangnlv → PublicUsers → PC_Global
+           → userPCs = {PC_VNPay, PC_Global}
+
+BFS object: DVNH_Drive → DVNH_Resources → MienNam_Resources → Docs → PC_VNPay
+           → objectPCs = {PC_VNPay}
+
+Check: {PC_VNPay} ⊆ {PC_VNPay, PC_Global} → ✅ TRUE
+Association: DVNH_Dept --[read,write,upload]--> DVNH_Resources → match!
+→ ALLOW
+```
+
+#### Ví dụ 2: External user — PC_Global bridge
+
+```
+trietvv (external) muốn read Share_OA (tài liệu share từ VNPay)
+
+⚠️ Share_OA là OA STANDALONE → chỉ gắn vào PC_Global, KHÔNG gắn vào PC_VNPay
+   (Nếu gắn vào cả 2 PC → external user sẽ bị DENY vì thiếu PC_VNPay)
+
+BFS user:  trietvv → PublicUsers → PC_Global
+           → userPCs = {PC_Global}
+
+BFS object: Share_OA → PC_Global
+           → objectPCs = {PC_Global}
+
+Check: {PC_Global} ⊆ {PC_Global} → ✅ TRUE
+Association: PublicUsers --[read]--> Share_OA → match!
+→ ALLOW
+```
+
+#### Ví dụ 3: External user — bị DENY vì multi-PC violation
+
+```
+trietvv (external) muốn read OA_DVNH_Drive (internal resource)
+
+BFS user:  trietvv → PublicUsers → PC_Global
+           → userPCs = {PC_Global}
+
+BFS object: DVNH_Drive → DVNH_Resources → ... → Docs → PC_VNPay
+           → objectPCs = {PC_VNPay}
+
+Check: {PC_VNPay} ⊆ {PC_Global} → ❌ FALSE (thiếu PC_VNPay!)
+→ DENY (không cần kiểm tra association)
+```
+
+> [!IMPORTANT]
+> **ALL-PC intersection kiểm tra TRƯỚC association matching.** Nếu PC check fail → DENY ngay, không scan associations. Đây là "rào chắn" đầu tiên — đảm bảo tenant isolation ngay cả khi có association nhầm.
+
+#### Flow tổng hợp: Multi-PC + Shard + CheckAccess
+
+```mermaid
+flowchart TD
+    REQ["CheckAccess(user, object, op, workspace)"]
+    
+    REQ --> SHARD["ShardManager.GetGraph(workspace)\nLoad shard chứa: tenant PC + PC_Global"]
+    
+    SHARD --> BFS_U["BFS ↑ từ User\nCollect: userUAs + userPCs"]
+    SHARD --> BFS_O["BFS ↑ từ Object\nCollect: objectOAs + objectPCs"]
+    
+    BFS_U --> PC_CHECK{"ALL-PC Check\nobjectPCs ⊆ userPCs?"}
+    BFS_O --> PC_CHECK
+    
+    PC_CHECK -->|"❌ Thiếu PC"| DENY_PC["DENY\n(PC barrier)"]
+    PC_CHECK -->|"✅ Đủ PC"| ASSOC{"Tìm Association\nuserUA → objectOA\nchứa operation?"}
+    
+    ASSOC -->|"❌ Không tìm thấy"| DENY_A["DENY\n(no association path)"]
+    ASSOC -->|"✅ Match"| PROHIB{"Prohibition check\n(deny override?)"}
+    
+    PROHIB -->|"Prohibition match"| DENY_P["DENY\n(prohibited)"]
+    PROHIB -->|"Không prohibition"| ALLOW["✅ ALLOW"]
+```
+
+#### Tại sao Share_OA phải standalone (chỉ PC_Global)?
+
+Khi VNPay share tài liệu cho user ngoài, hệ thống tạo `Share_OA` mới **chỉ gắn vào PC_Global**:
+
+```
+✅ Đúng: Share_OA → PC_Global (standalone)
+   → External user (PC_Global only) có thể access
+   → Internal user (PC_VNPay + PC_Global) cũng có thể access
+
+❌ Sai: Share_OA → OA_DVNH_Drive → ... → PC_VNPay
+   → objectPCs = {PC_VNPay} → external user thiếu PC_VNPay → DENY!
+```
+
+> **Nguyên tắc**: Cross-workspace sharing KHÔNG link vào cây tài liệu gốc. Tạo OA standalone dưới PC_Global → user chỉ cần có PC_Global là access được.
+
+### 11.5 DRY Cache Invalidation
+
+
+**Vấn đề**: 3 vòng lặp giống hệt nhau — mỗi vòng collect Redis keys theo pattern rồi pipeline DEL. Copy-paste khiến maintenance khó.
+
+**Giải pháp**: Gom thành 1 helper `collectAndDelete(ctx, pipe, patterns...)` nhận variadic patterns. Caller chỉ cần liệt kê patterns cần xóa.
+
+### 11.6 Dead Code — Boundary Violation
+
+| Đã xóa | Lý do |
+|--------|-------|
+| `GetUserByNGACNodeID()` trong PIP Store | Truy vấn bảng `users` — thuộc auth service, không thuộc policy. Callers phải dùng gRPC `auth.AuthService/GetUserByNGACNodeID` |
+
+> **Nguyên tắc**: Policy service chỉ đọc/ghi bảng `ngac_*`. Truy vấn bảng service khác = boundary violation.
+
+### 11.7 File rename map
+
+| Tên cũ | Tên mới |
+|--------|---------|
+| `store.go` | `pip_store.go` + `pap_store.go` |
+| `graph.go` | `pip_graph.go` + `pap_graph.go` |
+| `access.go` | `pdp_access.go` |
+| `decision_engine.go` | `pdp_decision_engine.go` |
+| `decision_cache.go` | `pdp_decision_cache.go` |
+| `cache_invalidator.go` | `epp_cache_invalidator.go` |
+| `invalidation.go` | `epp_invalidation.go` |
+| `version.go` | `epp_version.go` |
 
 ---
 
@@ -1342,4 +1769,5 @@ Sau khi bị xóa/stale → CheckAccess tiếp theo sẽ:
 | 2026-05-02 | **Mở rộng Section 5**: Sharing flow chi tiết — VNPay data examples, DB impact (5 SQL), CheckAccess 3 cases, Public vs User share, folder inheritance, revoke flow, code reference                 |
 | 2026-05-03 | **Section 10**: Performance & Cache Strategy — Targeted invalidation (CacheInvalidator), Prometheus metrics (6 metrics), 3-layer cache docs, scaling roadmap. Full flush chỉ cho LoadGraph + PC change |
 | 2026-05-03 | **Section 10.8-10.11**: Chi tiết Graph Version lifecycle, L2 Materialized vòng đời (lazy cache), End-to-End scenario thu hồi quyền VNPay, So sánh L1 vs L2 |
+| 2026-05-04 | **Section 11**: Code Optimization — Typed constants (models.go), Decide() nesting 6→2 levels, O(1) LRU (container/list), DRY collectAndDelete, dead code removal, NGAC tier file naming. Updated all code references |
 

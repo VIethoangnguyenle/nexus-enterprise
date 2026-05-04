@@ -171,4 +171,6 @@ NGAC linh hoạt hơn:
 - Muốn tạo quyền mới → tạo association (liên kết nhóm người ↔ nhóm tài nguyên)
 - Muốn thu hồi quyền → xóa assignment
 - Policy Class (PC) là "rào chắn" — quyền chỉ có hiệu lực khi cả 2 bên cùng thuộc 1 PC
-- Graph được load vào bộ nhớ khi khởi động → kiểm tra quyền rất nhanh (không query DB)
+- Graph được load **per-workspace** qua `ShardManager` LRU (O(1) via `container/list`). Global graph là fallback
+- Node types dùng typed constants: `NodeTypeUser("U")`, `NodeTypeUserAttribute("UA")`, `NodeTypeObjectAttr("OA")`, `NodeTypePolicyClass("PC")` — không hardcode strings
+- Decision outcomes: `DecisionAllow` / `DecisionDeny` — không dùng raw `"ALLOW"` / `"DENY"`

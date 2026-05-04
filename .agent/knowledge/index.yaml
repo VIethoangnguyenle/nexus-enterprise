@@ -109,3 +109,39 @@ NEW (confidence 0.5)
   last_seen: 2026-05-01
   created: 2026-05-01
   source: bootstrap
+
+- id: K-LEARN-001
+  type: pattern
+  name: typed-constants-over-strings
+  description: "Use typed constants (DecisionAllow, NodeTypeUser, ScopeGlobal) instead of raw strings in domain logic. Central definition in models.go, consumed across PDP/PIP/PAP/EPP layers. Grep for raw strings should only find the constant definitions."
+  tags: [go-backend, code-quality, ngac, policy]
+  applicability:
+    must_have: [go-backend, domain-logic]
+    must_not_have: [proto-generated]
+  lifecycle: validated
+  usage_mode: strict
+  tier: protected
+  confidence: 0.8
+  frequency: 1
+  impact: medium
+  last_seen: 2026-05-04
+  created: 2026-05-04
+  source: learn
+
+- id: K-LEARN-002
+  type: pattern
+  name: o1-lru-for-hot-path
+  description: "Use container/list + index map for O(1) LRU cache on hot paths. Slice-based LRU is O(N) promote — unacceptable when called on every access check. Memory trade-off (~4x per entry) is negligible vs latency gain."
+  tags: [go-backend, performance, ngac, cache]
+  applicability:
+    must_have: [hot-path, lru-cache]
+    must_not_have: []
+  lifecycle: validated
+  usage_mode: advisory
+  tier: standard
+  confidence: 0.8
+  frequency: 1
+  impact: high
+  last_seen: 2026-05-04
+  created: 2026-05-04
+  source: learn
