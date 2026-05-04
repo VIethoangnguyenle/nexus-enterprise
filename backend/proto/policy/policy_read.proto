@@ -5,12 +5,14 @@ package policy;
 option go_package = "ngac-platform/proto/policy";
 
 import "proto/policy/policy.proto";
+import "google/protobuf/timestamp.proto";
 
 // PolicyReadService handles read-only operations against the NGAC graph.
 // Designed to run as stateless replicas behind a load balancer.
 service PolicyReadService {
   // Access checks
   rpc CheckAccess(CheckAccessRequest) returns (AccessDecision);
+  rpc BatchCheckAccess(BatchCheckAccessRequest) returns (BatchAccessResult);
 
   // Node queries (read-only)
   rpc GetNode(GetNodeRequest) returns (NGACNode);
@@ -23,4 +25,27 @@ service PolicyReadService {
   rpc GetDescendants(GetDescendantsRequest) returns (NodeList);
   rpc GetChildren(GetChildrenRequest) returns (NodeList);
   rpc GetParents(GetParentsRequest) returns (NodeList);
+
+  // Scope resolution — returns leaf OA IDs the user can access for an operation.
+  // Used by approval/drive services for O(1) scope-based data filtering.
+  rpc ResolveAccessibleScopes(ResolveAccessibleScopesRequest) returns (ResolveAccessibleScopesResponse);
+
+  // Operations registry (read-only)
+  rpc ListOperations(Empty) returns (OperationList);
+
+  // Prohibitions (read-only)
+  rpc ListProhibitions(ListProhibitionsRequest) returns (ProhibitionList);
+}
+
+// ResolveAccessibleScopesRequest identifies a user and the operation to resolve.
+message ResolveAccessibleScopesRequest {
+  string user_node_id = 1;
+  string operation = 2;   // e.g. "read", "approve"
+}
+
+// ResolveAccessibleScopesResponse returns the set of leaf OA node IDs
+// the user has access to for the requested operation.
+message ResolveAccessibleScopesResponse {
+  repeated string scope_oa_ids = 1;
+  google.protobuf.Timestamp resolved_at = 2;  // for cache freshness
 }

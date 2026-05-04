@@ -1,262 +1,399 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useMemo } from 'react'
 import { useWorkspaces } from '../../hooks/useWorkspaces'
-import { useDriveFolder, useCreateFolder, useUploadFile, useTrashItem, useDriveQuota } from '../../hooks/useDrive'
+import { useDriveFolder, useCreateFolder, useUploadFile, useTrashItem, useDeleteItem, useRenameItem, useMoveItem } from '../../hooks/useDrive'
 import { driveApi, type DriveItem } from '../../api/drive'
+import { useDriveStore } from '../../stores/drive.store'
+import { DriveFileList } from '../../components/drive/DriveFileList'
+import { DriveContextPanel } from '../../components/drive/DriveContextPanel'
+import { DriveSidebar } from '../../components/drive/DriveSidebar'
+import { DriveFilterPills, matchesFileTypeFilter, type FileTypeFilter } from '../../components/drive/DriveFilterPills'
+import { DeleteConfirmDialog } from '../../components/drive/DeleteConfirmDialog'
+import { ShareDialog } from '../../components/drive/ShareDialog'
+import { ConfirmDialog } from '../../components/composites'
+import { MoveItemDialog } from '../../components/drive/MoveItemDialog'
 import { LoadingState } from '../../components/LoadingState'
 import { ErrorState } from '../../components/ErrorState'
 import { EmptyState } from '../../components/EmptyState'
-import { Button, Heading, Spinner, Text, Badge } from '../../components/primitives'
-import { Card } from '../../components/composites'
+import { Button, Spinner } from '../../components/primitives'
+import { ResponsiveDetailPanel } from '../../components/composites/ResponsiveDetailPanel'
+import { FolderPlus, Upload, FolderOpen, Plus, List, LayoutGrid, AlertTriangle, ChevronRight, Home } from 'lucide-react'
 
-export const Route = createFileRoute('/_workspace/drive')({ component: DrivePage })
+export const Route = createFileRoute('/_workspace/drive')({
+  component: DriveIndex,
+})
 
-function DrivePage() {
+/** Drive page — Stitch "Nexus Drive" design.
+ *  Layout: Sidebar | Main (Header + Breadcrumbs + Filters + Table | ContextPanel) */
+function DriveIndex() {
   const { data: wsData } = useWorkspaces()
   const wsId = wsData?.workspaces?.[0]?.id || ''
-  const [folderStack, setFolderStack] = useState<{ id: string; name: string }[]>([])
-  const currentFolderId = folderStack.length > 0 ? folderStack[folderStack.length - 1].id : undefined
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
+  const [fileTypeFilter, setFileTypeFilter] = useState<FileTypeFilter>('all')
 
-  const { data, isLoading, error, refetch } = useDriveFolder(wsId, currentFolderId)
+  const currentFolderId = useDriveStore((s) => s.currentFolderId)
+  const navigateToFolder = useDriveStore((s) => s.navigateToFolder)
+  const contextPanelOpen = useDriveStore((s) => s.contextPanelOpen)
+  const openContextPanel = useDriveStore((s) => s.openContextPanel)
+
+  const { data, isLoading, error, refetch } = useDriveFolder(wsId, currentFolderId ?? undefined)
   const createFolder = useCreateFolder(wsId)
   const uploadFile = useUploadFile(wsId)
   const trashItem = useTrashItem(wsId)
-  const { data: quota } = useDriveQuota(wsId)
+  const deleteItem = useDeleteItem(wsId)
+  const renameItem = useRenameItem(wsId)
+  const moveItem = useMoveItem(wsId)
+
+  // Dialog states
+  const [deleteTarget, setDeleteTarget] = useState<DriveItem | null>(null)
+  const [moveTarget, setMoveTarget] = useState<DriveItem | null>(null)
+  const [permanentDeleteTarget, setPermanentDeleteTarget] = useState<DriveItem | null>(null)
+  const [shareTarget, setShareTarget] = useState<DriveItem | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [showNewFolder, setShowNewFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
+  const [folderStack, setFolderStack] = useState<{ id: string; name: string }[]>([])
 
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorState title="Failed to load drive" message={error.message} onRetry={() => refetch()} />
+  const handleNavigate = useCallback((item: DriveItem) => {
+    if (item.item_type === 'folder') {
+      setFolderStack((prev) => [...prev, { id: item.id, name: item.name }])
+      navigateToFolder(item.id)
+    }
+  }, [navigateToFolder])
 
-  const items = data?.items || []
-  const folders = items.filter(i => i.item_type === 'folder')
-  const files = items.filter(i => i.item_type === 'file')
+  const handleBreadcrumb = useCallback((index: number) => {
+    if (index === -1) {
+      setFolderStack([])
+      navigateToFolder(null)
+    } else {
+      setFolderStack((prev) => prev.slice(0, index + 1))
+      navigateToFolder(folderStack[index].id)
+    }
+  }, [folderStack, navigateToFolder])
 
-  const navigateToFolder = (folder: DriveItem) => {
-    setFolderStack(prev => [...prev, { id: folder.id, name: folder.name }])
-  }
+  const handleDownload = useCallback(async (item: DriveItem) => {
+    const { download_url } = await driveApi.getDownloadUrl(item.id)
+    const a = document.createElement('a')
+    a.href = download_url
+    a.download = item.name
+    a.click()
+  }, [])
 
-  const navigateBack = (index: number) => {
-    setFolderStack(prev => prev.slice(0, index))
-  }
+  const handleRename = useCallback(async (item: DriveItem) => {
+    const newName = prompt('New name:', item.name)
+    if (newName && newName !== item.name) {
+      await renameItem.mutateAsync({ itemId: item.id, newName })
+    }
+  }, [renameItem])
+
+  const handleShare = useCallback((item: DriveItem) => {
+    setShareTarget(item)
+  }, [])
+
+  const handleTrash = useCallback((item: DriveItem) => {
+    setDeleteTarget(item)
+  }, [])
+
+  const handleConfirmDelete = useCallback(async (item: DriveItem) => {
+    await trashItem.mutateAsync(item.id)
+    setDeleteTarget(null)
+  }, [trashItem])
+
+  const handlePermanentDelete = useCallback((item: DriveItem) => {
+    setPermanentDeleteTarget(item)
+  }, [])
+
+  const handleConfirmPermanentDelete = useCallback(async (item: DriveItem) => {
+    await deleteItem.mutateAsync(item.id)
+    setPermanentDeleteTarget(null)
+  }, [deleteItem])
+
+  const handleMove = useCallback((item: DriveItem) => {
+    setMoveTarget(item)
+  }, [])
+
+  const handleConfirmMove = useCallback(async (item: DriveItem, destinationFolderId: string) => {
+    await moveItem.mutateAsync({ itemId: item.id, newParentId: destinationFolderId })
+    setMoveTarget(null)
+  }, [moveItem])
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return
-    await createFolder.mutateAsync({ name: newFolderName.trim(), parentId: currentFolderId })
+    await createFolder.mutateAsync({ name: newFolderName.trim(), parentId: currentFolderId ?? undefined })
     setNewFolderName('')
     setShowNewFolder(false)
   }
 
   const handleUpload = async () => {
-    const file = fileInputRef.current?.files?.[0]
-    if (!file) return
-    await uploadFile.mutateAsync({ file, parentId: currentFolderId })
+    const files = fileInputRef.current?.files
+    if (!files?.length) return
+    for (const file of Array.from(files)) {
+      await uploadFile.mutateAsync({ file, parentId: currentFolderId ?? undefined })
+    }
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  const handleDownload = async (item: DriveItem) => {
-    try {
-      const { download_url } = await driveApi.getDownloadUrl(item.id)
-      const a = document.createElement('a')
-      a.href = download_url
-      a.download = item.name
-      a.click()
-    } catch (err: any) {
-      console.error('Download failed:', err.message)
-    }
-  }
+  const items = data?.items || []
 
-  const handleTrash = async (itemId: string) => {
-    if (!confirm('Move to trash?')) return
-    await trashItem.mutateAsync(itemId)
-  }
+  // Apply client-side file type filter (folders always pass)
+  const filteredItems = useMemo(() => {
+    if (fileTypeFilter === 'all') return items
+    return items.filter((i) => i.item_type === 'folder' || matchesFileTypeFilter(i.mime_type, fileTypeFilter))
+  }, [items, fileTypeFilter])
 
-  const formatSize = (bytes: number) => {
-    if (!bytes || bytes <= 0) return '—'
-    if (bytes < 1024) return `${bytes} B`
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-    if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-  }
-
-  const getIcon = (item: DriveItem) => {
-    if (item.item_type === 'folder') return '📁'
-    const ext = item.name.split('.').pop()?.toLowerCase()
-    const iconMap: Record<string, string> = {
-      pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗',
-      ppt: '📙', pptx: '📙', zip: '🗜️', rar: '🗜️',
-      jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', svg: '🖼️',
-      mp4: '🎬', mov: '🎬', mp3: '🎵', wav: '🎵',
-      js: '📜', ts: '📜', go: '📜', py: '📜', rs: '📜',
-      md: '📝', txt: '📝', json: '📋', csv: '📊',
-    }
-    return iconMap[ext || ''] || '📄'
-  }
+  // Current folder label for header
+  const currentFolderLabel = folderStack.length > 0
+    ? folderStack[folderStack.length - 1].name
+    : 'All Files'
 
   return (
-    <div className="animate-fade-in">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <Heading as="h2">Drive</Heading>
-        <div className="flex items-center gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            id="drive-file-input"
-            className="text-sm text-text-secondary file:mr-2 file:py-1.5 file:px-3
-              file:rounded-[var(--radius-sm)] file:border file:border-border
-              file:bg-bg-glass file:text-text-primary file:text-sm file:cursor-pointer
-              file:transition-colors file:hover:bg-bg-hover"
-          />
-          <Button
-            id="drive-upload-btn"
-            onClick={handleUpload}
-            disabled={uploadFile.isPending}
-            size="md"
-          >
-            {uploadFile.isPending ? <><Spinner size="sm" /> Uploading...</> : '📤 Upload'}
-          </Button>
-          <Button
-            id="drive-new-folder-btn"
-            onClick={() => setShowNewFolder(true)}
-            size="md"
-            variant="outline"
-          >
-            📁 New Folder
-          </Button>
-        </div>
-      </div>
+    <div className="flex h-full">
+      {/* Drive Sidebar */}
+      <DriveSidebar
+        workspaceId={wsId}
+        onFolderSelect={(id) => {
+          navigateToFolder(id)
+          setFolderStack([])
+        }}
+        onNewFolder={() => setShowNewFolder(true)}
+        onUpload={() => fileInputRef.current?.click()}
+      />
+      <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleUpload} />
 
-      {/* Quota bar */}
-      {quota && quota.max_bytes > 0 && (
-        <div className="mb-4 flex items-center gap-3">
-          <div className="flex-1 h-1.5 bg-border rounded-full overflow-hidden">
-            <div
-              className="h-full bg-accent rounded-full transition-all"
-              style={{ width: `${Math.min((quota.used_bytes / quota.max_bytes) * 100, 100)}%` }}
-            />
-          </div>
-          <Text variant="caption" muted>
-            {formatSize(quota.used_bytes)} / {formatSize(quota.max_bytes)}
-          </Text>
-        </div>
-      )}
-
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1 mb-4 text-sm">
-        <button
-          onClick={() => navigateBack(0)}
-          className="text-accent hover:underline cursor-pointer bg-transparent border-none p-0"
-        >
-          Root
-        </button>
-        {folderStack.map((f, i) => (
-          <span key={f.id} className="flex items-center gap-1">
-            <span className="text-text-muted">/</span>
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-auto">
+        {/* Page header */}
+        <div className="px-5 md:px-7 pt-5 md:pt-6 pb-0">
+          {/* Breadcrumbs */}
+          <div className="flex items-center gap-1 text-[12.5px] mb-3">
             <button
-              onClick={() => navigateBack(i + 1)}
-              className={`bg-transparent border-none p-0 cursor-pointer
-                ${i === folderStack.length - 1 ? 'text-text-primary font-medium' : 'text-accent hover:underline'}`}
+              onClick={() => handleBreadcrumb(-1)}
+              className="text-on-surface-variant/70 hover:text-on-surface bg-transparent border-none cursor-pointer
+                transition-all duration-150 flex items-center gap-1 rounded-md px-1.5 py-0.5
+                hover:bg-surface-container"
             >
-              {f.name}
+              <Home size={13} strokeWidth={1.8} />
+              All Files
             </button>
-          </span>
-        ))}
+            {folderStack.map((folder, idx) => (
+              <span key={folder.id} className="flex items-center gap-1">
+                <ChevronRight size={11} className="text-on-surface-variant/30" />
+                <button
+                  onClick={() => handleBreadcrumb(idx)}
+                  className={`bg-transparent border-none cursor-pointer transition-all duration-150
+                    rounded-md px-1.5 py-0.5
+                    ${idx === folderStack.length - 1
+                      ? 'text-on-surface font-medium'
+                      : 'text-on-surface-variant/70 hover:text-on-surface hover:bg-surface-container'
+                    }`}
+                >
+                  {folder.name}
+                </button>
+              </span>
+            ))}
+          </div>
+
+          {/* Title + Actions */}
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-[20px] font-semibold text-on-surface tracking-[-0.01em] leading-tight">
+                {currentFolderLabel}
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowNewFolder(true)}
+                className="gap-1.5 rounded-lg h-8 text-[13px] border-outline-variant/60
+                  hover:border-outline-variant hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)]
+                  transition-all duration-150"
+              >
+                <Plus size={14} strokeWidth={2} />
+                <span className="hidden sm:inline">New Folder</span>
+              </Button>
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadFile.isPending}
+                size="sm"
+                className="gap-1.5 rounded-lg h-8 text-[13px]
+                  shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.12)]
+                  transition-all duration-150"
+              >
+                {uploadFile.isPending ? <Spinner size="sm" /> : <Upload size={14} strokeWidth={2} />}
+                <span className="hidden sm:inline">Upload</span>
+              </Button>
+
+              {/* View mode switcher */}
+              <div className="hidden md:flex items-center gap-0.5 bg-surface-container/60 rounded-lg p-0.5
+                border border-outline-variant/30">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`p-1.5 rounded-md border-none cursor-pointer transition-all duration-150
+                    ${viewMode === 'list'
+                      ? 'bg-surface-container-highest text-on-surface shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                      : 'text-on-surface-variant/60 hover:text-on-surface bg-transparent'
+                    }`}
+                  aria-label="List view"
+                >
+                  <List size={14} />
+                </button>
+                <button
+                  onClick={() => setViewMode('grid')}
+                  className={`p-1.5 rounded-md border-none cursor-pointer transition-all duration-150
+                    ${viewMode === 'grid'
+                      ? 'bg-surface-container-highest text-on-surface shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                      : 'text-on-surface-variant/60 hover:text-on-surface bg-transparent'
+                    }`}
+                  aria-label="Grid view"
+                >
+                  <LayoutGrid size={14} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* File type filter pills */}
+        <div className="px-5 md:px-7 pb-3">
+          <DriveFilterPills active={fileTypeFilter} onChange={setFileTypeFilter} />
+        </div>
+
+        {/* New folder inline form */}
+        {showNewFolder && (
+          <div className="mx-5 md:mx-7 mb-3 flex items-center gap-2.5 p-3 rounded-xl
+            border border-outline-variant/50 bg-surface-container-low/50
+            shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+              <FolderPlus size={16} className="text-amber-500" />
+            </div>
+            <input
+              autoFocus
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateFolder()
+                if (e.key === 'Escape') { setShowNewFolder(false); setNewFolderName('') }
+              }}
+              placeholder="Folder name"
+              className="flex-1 px-3 py-1.5 text-[13px] bg-surface-container-lowest border border-outline-variant/50
+                rounded-lg text-on-surface focus:outline-none focus:border-primary/40 transition-colors"
+            />
+            <Button size="sm" onClick={handleCreateFolder} disabled={createFolder.isPending}
+              className="rounded-lg h-8 text-[13px]">
+              {createFolder.isPending ? <Spinner size="sm" /> : 'Create'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setShowNewFolder(false); setNewFolderName('') }}
+              className="rounded-lg h-8 text-[13px]">
+              Cancel
+            </Button>
+          </div>
+        )}
+
+        {/* Content */}
+        {isLoading ? (
+          <LoadingState />
+        ) : error ? (
+          <ErrorState title="Failed to load drive" message={error.message} onRetry={() => refetch()} />
+        ) : filteredItems.length > 0 ? (
+          <DriveFileList
+            items={filteredItems}
+            onNavigate={handleNavigate}
+            onDownload={handleDownload}
+            onRename={handleRename}
+            onShare={handleShare}
+            onMove={handleMove}
+            onTrash={handleTrash}
+            onDelete={handlePermanentDelete}
+          />
+        ) : (
+          <div className="flex-1 flex flex-col min-h-0 px-4 md:px-6 pb-4">
+            <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl overflow-hidden flex flex-col flex-1
+              shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
+              {/* Empty state header */}
+              <div className="grid grid-cols-12 gap-3 px-4 h-10 items-center border-b border-outline-variant/50
+                bg-surface-container-low/50">
+                <div className="col-span-5">
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60">Name</span>
+                </div>
+                <div className="col-span-2 hidden md:block">
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60">Modified</span>
+                </div>
+                <div className="col-span-2 hidden md:block">
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60">Members</span>
+                </div>
+                <div className="col-span-2 hidden md:block">
+                  <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60">Size</span>
+                </div>
+              </div>
+              <div className="flex-1 flex items-center justify-center py-20">
+                <EmptyState
+                  icon={
+                    <div className="w-16 h-16 rounded-2xl bg-surface-container flex items-center justify-center mb-2">
+                      <FolderOpen size={32} className="text-on-surface-variant/25" strokeWidth={1.2} />
+                    </div>
+                  }
+                  title={currentFolderId ? 'This folder is empty' : 'Your Drive is empty'}
+                  description="Upload files or create folders to get started."
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* New folder inline form */}
-      {showNewFolder && (
-        <Card className="mb-4 p-3 flex items-center gap-2">
-          <span>📁</span>
-          <input
-            autoFocus
-            type="text"
-            value={newFolderName}
-            onChange={e => setNewFolderName(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && handleCreateFolder()}
-            placeholder="Folder name"
-            className="flex-1 px-2 py-1 text-sm bg-bg-glass border border-border rounded-[var(--radius-sm)]
-              text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-          />
-          <Button size="sm" onClick={handleCreateFolder} disabled={createFolder.isPending}>
-            {createFolder.isPending ? <Spinner size="sm" /> : 'Create'}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => { setShowNewFolder(false); setNewFolderName('') }}>
-            Cancel
-          </Button>
-        </Card>
+      {/* Context Panel — overlay on mobile, inline on desktop */}
+      {contextPanelOpen && (
+        <ResponsiveDetailPanel>
+          <DriveContextPanel />
+        </ResponsiveDetailPanel>
       )}
 
-      {/* Contents */}
-      {items.length > 0 ? (
-        <Card>
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                <th className="text-left px-4 py-2.5 text-[0.7rem] font-semibold text-text-muted uppercase tracking-wider border-b border-border">Name</th>
-                <th className="text-left px-4 py-2.5 text-[0.7rem] font-semibold text-text-muted uppercase tracking-wider border-b border-border">Type</th>
-                <th className="text-left px-4 py-2.5 text-[0.7rem] font-semibold text-text-muted uppercase tracking-wider border-b border-border">Size</th>
-                <th className="text-left px-4 py-2.5 text-[0.7rem] font-semibold text-text-muted uppercase tracking-wider border-b border-border">Modified</th>
-                <th className="text-left px-4 py-2.5 text-[0.7rem] font-semibold text-text-muted uppercase tracking-wider border-b border-border">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* Folders first */}
-              {folders.map(item => (
-                <tr
-                  key={item.id}
-                  className="border-b border-border/50 hover:bg-bg-hover transition-colors cursor-pointer"
-                  onDoubleClick={() => navigateToFolder(item)}
-                >
-                  <td className="px-4 py-3 text-sm font-medium text-text-primary flex items-center gap-2">
-                    <span>{getIcon(item)}</span>
-                    <button
-                      onClick={() => navigateToFolder(item)}
-                      className="text-text-primary hover:text-accent bg-transparent border-none p-0 cursor-pointer text-sm font-medium text-left"
-                    >
-                      {item.name}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3"><Badge variant="muted">Folder</Badge></td>
-                  <td className="px-4 py-3 text-sm text-text-muted">—</td>
-                  <td className="px-4 py-3 text-sm text-text-muted">
-                    {item.updated_at ? new Date(item.updated_at).toLocaleDateString() : ''}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Button variant="ghost" size="sm" onClick={() => handleTrash(item.id)} title="Trash">🗑️</Button>
-                  </td>
-                </tr>
-              ))}
-              {/* Then files */}
-              {files.map(item => (
-                <tr key={item.id} className="border-b border-border/50 hover:bg-bg-hover transition-colors">
-                  <td className="px-4 py-3 text-sm font-medium text-text-primary flex items-center gap-2">
-                    <span>{getIcon(item)}</span>
-                    <span>{item.name}</span>
-                  </td>
-                  <td className="px-4 py-3"><Badge variant="primary">{item.mime_type || 'File'}</Badge></td>
-                  <td className="px-4 py-3 text-sm text-text-muted">{formatSize(item.size_bytes)}</td>
-                  <td className="px-4 py-3 text-sm text-text-muted">
-                    {item.updated_at ? new Date(item.updated_at).toLocaleDateString() : ''}
-                  </td>
-                  <td className="px-4 py-3 flex items-center gap-1">
-                    <Button variant="ghost" size="sm" onClick={() => handleDownload(item)} title="Download">📥</Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleTrash(item.id)} title="Trash">🗑️</Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
-      ) : (
-        <EmptyState
-          icon="📂"
-          title={folderStack.length > 0 ? 'Folder is empty' : 'Drive is empty'}
-          description="Upload files or create folders to get started."
-        />
-      )}
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmDialog
+        item={deleteTarget}
+        isDeleting={trashItem.isPending}
+        onConfirm={handleConfirmDelete}
+        onClose={() => setDeleteTarget(null)}
+      />
+
+      {/* Permanent Delete Confirmation */}
+      <ConfirmDialog
+        open={!!permanentDeleteTarget}
+        onClose={() => setPermanentDeleteTarget(null)}
+        onConfirm={() => permanentDeleteTarget && handleConfirmPermanentDelete(permanentDeleteTarget)}
+        title={`Permanently delete ${permanentDeleteTarget?.item_type === 'folder' ? 'folder' : 'file'}`}
+        description={
+          <>
+            Are you sure you want to <strong>permanently delete</strong>{' '}
+            <span className="font-semibold text-on-surface">{permanentDeleteTarget?.name}</span>?
+          </>
+        }
+        warning="This action cannot be undone. The file will be permanently removed and cannot be recovered."
+        icon={<AlertTriangle size={22} className="text-error" />}
+        iconBg="bg-error-container"
+        confirmLabel="Delete permanently"
+        confirmVariant="error"
+        loading={deleteItem.isPending}
+      />
+
+      {/* Share Dialog */}
+      <ShareDialog
+        item={shareTarget}
+        workspaceId={wsId}
+        onClose={() => setShareTarget(null)}
+      />
+
+      {/* Move Item Dialog */}
+      <MoveItemDialog
+        item={moveTarget}
+        workspaceId={wsId}
+        isMoving={moveItem.isPending}
+        onConfirm={handleConfirmMove}
+        onClose={() => setMoveTarget(null)}
+      />
     </div>
   )
 }

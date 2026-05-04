@@ -1,5 +1,5 @@
 import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
-import { assetApi, type CreateAssetTypeInput, type CreateAssetInput, type CreateAssetRequestInput } from '../api/assets'
+import { assetApi, type CreateAssetTypeInput, type CreateAssetInput, type CreateAssetRequestInput, type AssetRequest } from '../api/assets'
 import { queryClient } from '../lib/query-client'
 
 export const assetTypesQueryOptions = (wsId: string) =>
@@ -69,16 +69,68 @@ export function useCreateAssetRequest(wsId: string) {
   })
 }
 
+/** Approve an asset request with optimistic status update. */
 export function useApproveRequest(wsId: string) {
   return useMutation({
     mutationFn: (id: string) => assetApi.approveRequest(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['asset-requests', wsId] }),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: ['asset-requests', wsId] })
+      const cache = queryClient.getQueryCache()
+      const queries = cache.findAll({ queryKey: ['asset-requests', wsId] })
+      const snapshots: { key: unknown[]; data: unknown }[] = []
+      for (const q of queries) {
+        const data = q.state.data as { requests: AssetRequest[]; total: number } | undefined
+        if (!data?.requests) continue
+        snapshots.push({ key: q.queryKey, data })
+        queryClient.setQueryData(q.queryKey, {
+          ...data,
+          requests: data.requests.map((r) =>
+            r.id === id ? { ...r, status: 'approved' } : r,
+          ),
+        })
+      }
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.snapshots) {
+        for (const s of context.snapshots) queryClient.setQueryData(s.key, s.data)
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-summary'] })
+    },
   })
 }
 
+/** Reject an asset request with optimistic status update. */
 export function useRejectRequest(wsId: string) {
   return useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => assetApi.rejectRequest(id, reason),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['asset-requests', wsId] }),
+    onMutate: async ({ id }) => {
+      await queryClient.cancelQueries({ queryKey: ['asset-requests', wsId] })
+      const cache = queryClient.getQueryCache()
+      const queries = cache.findAll({ queryKey: ['asset-requests', wsId] })
+      const snapshots: { key: unknown[]; data: unknown }[] = []
+      for (const q of queries) {
+        const data = q.state.data as { requests: AssetRequest[]; total: number } | undefined
+        if (!data?.requests) continue
+        snapshots.push({ key: q.queryKey, data })
+        queryClient.setQueryData(q.queryKey, {
+          ...data,
+          requests: data.requests.map((r) =>
+            r.id === id ? { ...r, status: 'rejected' } : r,
+          ),
+        })
+      }
+      return { snapshots }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.snapshots) {
+        for (const s of context.snapshots) queryClient.setQueryData(s.key, s.data)
+      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-summary'] })
+    },
   })
 }

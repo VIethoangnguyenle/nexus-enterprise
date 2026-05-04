@@ -1,0 +1,47 @@
+schema: spec-driven
+created: "2026-05-01T14:11:00+07:00"
+
+pipeline:
+  current_phase: dev
+  status: locked
+
+  phases:
+    ceo:
+      status: done
+      completed_at: "2026-05-01T14:13:00+07:00"
+      output: proposal.md
+    ba:
+      status: done
+      completed_at: "2026-05-01T14:16:00+07:00"
+      output: specs/
+    ux:
+      status: done
+      completed_at: "2026-05-01T14:26:00+07:00"
+      output: design.md
+    dev:
+      status: pending
+      completed_at: null
+      output: code
+      checkpoint: null
+    qc:
+      status: pending
+      completed_at: null
+      output: qa-memory.json
+
+  loops:
+    total: 0
+    max: 5
+    history: []
+
+  spec_lock:
+    locked_at: "2026-05-01T14:16:00+07:00"
+    locked_by: BA
+    spec_hash: 201b2c3c9ff47c50013005f01f1d474bd7f7fc12020f49847b0e47ffeb0e2def
+    file_hashes:
+      specs/approval-detail/spec.md: a3637ea6be0515360e13d27acee42d0ea8ae7f5f9cb6ab47191912bca2812cc1
+      specs/approval-list/spec.md: d9dd4044d2652fa9de91b6342918cee74298bd4ff892e4582b0bd4c4ecf41edc
+      specs/create-request/spec.md: 216ef39b351be039042958982c4c4b03cf258972a8b2cc4320348ca4f73ebf0f
+      specs/dynamic-form-fields/spec.md: ab0eac9bf2c849c3dda3ef0a36e501e5fc479fcf87a3b9db23a5154fcaeb5d8e
+      specs/overview.md: 67e7176826ce377e5443354adeb3c534df6966f7980f39884238e16309643d97
+      specs/template-management/spec.md: d90cf9fdd388445704075cebd8baf9ed2c0b39b3eaf02cd7a1584e73bf5516ff
+    unlock_count: 0

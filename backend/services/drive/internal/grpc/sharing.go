@@ -203,7 +203,8 @@ func (s *DriveServer) CreateDriveForChannel(ctx context.Context, req *pb.CreateD
 		ID: uuid.New().String(), WorkspaceID: req.WorkspaceId,
 		DriveContext: "channel", DriveContextID: req.ChannelId,
 		ItemType: "folder", Name: driveName,
-		NGACNodeID: driveOA.Id, OwnerID: "system", Status: "active",
+		NGACNodeID: driveOA.Id, ScopeOAID: driveOA.Id,
+		OwnerID: "system", Status: "active",
 	}
 	if err := s.store.InsertItem(ctx, item); err != nil {
 		return nil, status.Errorf(codes.Internal, "insert channel drive: %v", err)

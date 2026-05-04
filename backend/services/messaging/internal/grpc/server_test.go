@@ -17,7 +17,9 @@ import (
 	authpb "ngac-platform/proto/auth"
 	pb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/messaging/internal/domain"
 	grpcserver "ngac-platform/services/messaging/internal/grpc"
+	"ngac-platform/services/messaging/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -94,7 +96,9 @@ func setupTestServer(t *testing.T) (*grpcserver.MessagingServer, *pgxpool.Pool) 
 	}
 	t.Cleanup(func() { pool.Close() })
 
-	srv := grpcserver.NewMessagingServer(pool, &mockPolicyReadClient{}, &mockPolicyWriteClient{}, &mockAuthClient{}, nil, nil)
+	s := store.NewStore(pool)
+	svc := domain.NewService(s, &mockPolicyReadClient{}, &mockPolicyWriteClient{}, &mockAuthClient{}, nil)
+	srv := grpcserver.NewMessagingServer(svc, nil, nil)
 	return srv, pool
 }
 

@@ -24,8 +24,29 @@ interface DownloadURLResponse {
 }
 
 export const documentApi = {
-  list: (wsId: string) =>
-    apiFetch<{ documents: Document[] }>(`/workspaces/${wsId}/documents`),
+  /** Lists documents (proxied to Drive ListFolder — returns items not documents). */
+  list: async (wsId: string): Promise<{ documents: Document[] }> => {
+    const resp = await apiFetch<{ items?: any[] }>(`/workspaces/${wsId}/documents`)
+    const items = resp?.items || []
+    return {
+      documents: items
+        .filter(i => i.item_type === 'file' && i.status === 'active')
+        .map(i => ({
+          id: i.id,
+          title: i.name?.replace(/\.[^/.]+$/, '') || i.name,
+          filename: i.name,
+          mime_type: i.mime_type || '',
+          status: i.status || 'active',
+          owner_id: i.owner_id,
+          owner_name: i.owner_name,
+          ngac_node_id: i.ngac_node_id,
+          workspace_id: i.workspace_id,
+          created_at: i.created_at?.seconds
+            ? new Date(Number(i.created_at.seconds) * 1000).toISOString()
+            : i.created_at,
+        } as Document)),
+    }
+  },
 
   get: (id: string) =>
     apiFetch<Document>(`/documents/${id}`),

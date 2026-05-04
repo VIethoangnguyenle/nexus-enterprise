@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"ngac-platform/ngac"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/asset/internal/domain"
@@ -126,7 +127,7 @@ func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, workspaceID, 
 		// Create it
 		assetsPC, err = s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
 			Name: "PC_AssetManagement", NodeType: "PC",
-			Properties: map[string]string{"scope": "asset_management"},
+			Properties: map[string]string{"scope": "global"},
 		})
 		if err != nil {
 			return "", fmt.Errorf("create PC_AssetManagement: %w", err)
@@ -192,7 +193,7 @@ func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, workspaceID, 
 		children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: pcNodeID})
 		if children != nil {
 			for _, n := range children.Nodes {
-				if n.NodeType == "UA" {
+				if n.NodeType == ngac.TypeUA {
 					allOps := []string{"read", "write", "approve", "assign", "manage", "dispose", "request"}
 					s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
 						UaId: n.Id, OaId: assetsOA.Id, Operations: allOps,

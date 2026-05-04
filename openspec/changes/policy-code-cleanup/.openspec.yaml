@@ -1,0 +1,57 @@
+schema: spec-driven
+created: 2026-05-04
+
+pipeline:
+  current_phase: proposal
+  status: active
+  retry_count: 0
+  max_retries: 5
+
+  phases:
+    ceo:
+      status: done
+      completed_at: 2026-05-04T03:01:00Z
+      output: proposal.md
+    ba:
+      status: done
+      completed_at: 2026-05-04T03:01:00Z
+      output: specs/
+    user_checkpoint:
+      status: pending
+      completed_at: null
+      user_approved: false
+    sa:
+      status: pending
+      completed_at: null
+      output: architecture.md
+    ux:
+      status: skipped
+      completed_at: null
+      output: null
+    dev:
+      status: pending
+      completed_at: null
+      output: code
+      checkpoint: null
+    sa_verify:
+      status: pending
+      completed_at: null
+      output: sa-verify-report
+    qc:
+      status: pending
+      completed_at: null
+      output: qa-memory.json
+    polish:
+      status: pending
+      completed_at: null
+      rounds: 0
+      max_rounds: 2
+    learn:
+      status: pending
+      completed_at: null
+      triggered: false
+
+  artifact_versions:
+    proposal: 1
+    specs: 1
+    tasks: 1

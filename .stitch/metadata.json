@@ -1,0 +1,186 @@
+{
+  "name": "projects/14852434379132121789",
+  "projectId": "14852434379132121789",
+  "title": "Nexus Hub",
+  "deviceType": "DESKTOP",
+  "designTheme": {
+    "colorMode": "LIGHT",
+    "font": "MANROPE",
+    "roundness": "ROUND_EIGHT",
+    "customColor": "#004ac6",
+    "saturation": 3
+  },
+  "screens": {
+    "contacts-directory": {
+      "id": "426a5e2c0c384d7796849e1c34c66a16",
+      "sourceScreen": "projects/14852434379132121789/screens/426a5e2c0c384d7796849e1c34c66a16",
+      "title": "Contacts - Organization Directory (Lark Inspired)",
+      "width": 2560,
+      "height": 2048
+    },
+    "contacts-profile-popup": {
+      "id": "338dbbb254ce4f73971623afd03fb7e6",
+      "sourceScreen": "projects/14852434379132121789/screens/338dbbb254ce4f73971623afd03fb7e6",
+      "title": "Contacts - Profile Popup - Large Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "nexus-chat": {
+      "id": "9fffe37618be439780ff8c84c6f756bf",
+      "sourceScreen": "projects/14852434379132121789/screens/9fffe37618be439780ff8c84c6f756bf",
+      "title": "Nexus Chat - Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "engineering-dept": {
+      "id": "26f33990e1ab4ad6b88f28dea55cf859",
+      "sourceScreen": "projects/14852434379132121789/screens/26f33990e1ab4ad6b88f28dea55cf859",
+      "title": "Engineering Dept - Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "chat-tablet": {
+      "id": "6185080da8834dfab4607b559587084c",
+      "sourceScreen": "projects/14852434379132121789/screens/6185080da8834dfab4607b559587084c",
+      "title": "Chat - iPad/Tablet Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "dept-chat-tablet": {
+      "id": "60a990962f92445784c01e5637d508b1",
+      "sourceScreen": "projects/14852434379132121789/screens/60a990962f92445784c01e5637d508b1",
+      "title": "Dept Chat - iPad/Tablet Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "dept-chat-mobile": {
+      "id": "8249a28fc46741538f1a18a778d949d6",
+      "sourceScreen": "projects/14852434379132121789/screens/8249a28fc46741538f1a18a778d949d6",
+      "title": "Dept Chat - Mobile Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "chat-list-mobile": {
+      "id": "4b6ae2505ad04d8eaa96b8a800f6c3e4",
+      "sourceScreen": "projects/14852434379132121789/screens/4b6ae2505ad04d8eaa96b8a800f6c3e4",
+      "title": "Chat List - Mobile Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "drive-my-files": {
+      "id": "20c61af21ab745be86be38a3c04bc245",
+      "sourceScreen": "projects/14852434379132121789/screens/20c61af21ab745be86be38a3c04bc245",
+      "title": "Nexus Drive - My Files",
+      "width": 2560,
+      "height": 2048
+    },
+    "drive-shared": {
+      "id": "a98bcb54ea154ee8bd33154a6e86e3d1",
+      "sourceScreen": "projects/14852434379132121789/screens/a98bcb54ea154ee8bd33154a6e86e3d1",
+      "title": "Nexus Drive - Shared & Interactions",
+      "width": 2560,
+      "height": 2048
+    },
+    "drive-tablet": {
+      "id": "a50993f6cf5b4e96ad581a5917369618",
+      "sourceScreen": "projects/14852434379132121789/screens/a50993f6cf5b4e96ad581a5917369618",
+      "title": "Nexus Drive - iPad/Tablet",
+      "width": 2560,
+      "height": 2048
+    },
+    "drive-mobile": {
+      "id": "0e45a984227142c488541f8fdb202129",
+      "sourceScreen": "projects/14852434379132121789/screens/0e45a984227142c488541f8fdb202129",
+      "title": "Nexus Drive - My Files - Mobile",
+      "width": 2560,
+      "height": 2048
+    },
+    "login": {
+      "id": "c2ac854b2a1c498b8dc882c74ddbdb0f",
+      "sourceScreen": "projects/14852434379132121789/screens/c2ac854b2a1c498b8dc882c74ddbdb0f",
+      "title": "Login - Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "welcome-back": {
+      "id": "6622c1a48dcc40e69945eab56ad9284a",
+      "sourceScreen": "projects/14852434379132121789/screens/6622c1a48dcc40e69945eab56ad9284a",
+      "title": "Welcome Back - Nexus Enterprise",
+      "width": 2560,
+      "height": 2048
+    },
+    "verification": {
+      "id": "78f0520bcbab4d03928af09e1583dc8e",
+      "sourceScreen": "projects/14852434379132121789/screens/78f0520bcbab4d03928af09e1583dc8e",
+      "title": "Verification - Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "onboarding-1": {
+      "id": "42ce2979ffd04738ae4f4d2ca8db4921",
+      "sourceScreen": "projects/14852434379132121789/screens/42ce2979ffd04738ae4f4d2ca8db4921",
+      "title": "Onboarding Step 1 - Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "onboarding-2": {
+      "id": "f1d0df93ddb84ec4a8337c7b735cdb87",
+      "sourceScreen": "projects/14852434379132121789/screens/f1d0df93ddb84ec4a8337c7b735cdb87",
+      "title": "Onboarding Step 2 - Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "workspace-selection": {
+      "id": "0a4e176dfc7f4046b97d9aa9bad9ded0",
+      "sourceScreen": "projects/14852434379132121789/screens/0a4e176dfc7f4046b97d9aa9bad9ded0",
+      "title": "Workspace Selection - Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "workspace-tablet": {
+      "id": "ce809f68b0f04f7188a2531ed33384e1",
+      "sourceScreen": "projects/14852434379132121789/screens/ce809f68b0f04f7188a2531ed33384e1",
+      "title": "Workspace Selection - Tablet/iPad",
+      "width": 2560,
+      "height": 2048
+    },
+    "workspace-mobile": {
+      "id": "b0cf022c1c744c6f8db587decc3cc5ba",
+      "sourceScreen": "projects/14852434379132121789/screens/b0cf022c1c744c6f8db587decc3cc5ba",
+      "title": "Workspace Selection - Mobile",
+      "width": 2560,
+      "height": 2048
+    },
+    "approvals": {
+      "id": "55cbfca1cea54f968a25ac1548e16792",
+      "sourceScreen": "projects/14852434379132121789/screens/55cbfca1cea54f968a25ac1548e16792",
+      "title": "Approvals - Final",
+      "width": 2560,
+      "height": 2048
+    },
+    "approval-detail": {
+      "id": "7546030b1c364ca1aca39aed45dad60a",
+      "sourceScreen": "projects/14852434379132121789/screens/7546030b1c364ca1aca39aed45dad60a",
+      "title": "Approval Detail - Nexus Enterprise",
+      "width": 2560,
+      "height": 2048
+    },
+    "approval-dashboard": {
+      "id": "18367d7e4e124fbaa16e18446beddadd",
+      "sourceScreen": "projects/14852434379132121789/screens/18367d7e4e124fbaa16e18446beddadd",
+      "title": "Approval Dashboard - Nexus Enterprise",
+      "width": 2560,
+      "height": 2048
+    },
+    "workplace": {
+      "id": "0fe853a3e6394fe5aff3a937420b5c00",
+      "sourceScreen": "projects/14852434379132121789/screens/0fe853a3e6394fe5aff3a937420b5c00",
+      "title": "Workplace Marketplace",
+      "width": 2560,
+      "height": 2048
+    }
+  },
+  "metadata": {
+    "userRole": "OWNER"
+  }
+}

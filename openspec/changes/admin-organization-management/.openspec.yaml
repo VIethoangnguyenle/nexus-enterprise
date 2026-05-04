@@ -1,0 +1,81 @@
+schema: spec-driven
+created: 2026-05-02
+
+pipeline:
+  current_phase: dev
+  status: locked
+  retry_count: 0
+  max_retries: 5
+
+  phases:
+    ceo:
+      status: done
+      completed_at: 2026-05-02T05:43:00Z
+      output: proposal.md
+    ba:
+      status: done
+      completed_at: 2026-05-02T05:45:00Z
+      output: specs/
+    user_checkpoint:
+      status: in-progress
+      completed_at: null
+      user_approved: false
+    sa:
+      status: pending
+      completed_at: null
+      output: architecture.md
+    ux:
+      status: pending
+      completed_at: null
+      output: design.md
+    dev:
+      status: pending
+      completed_at: null
+      output: code
+      checkpoint: null
+    sa_verify:
+      status: pending
+      completed_at: null
+      output: sa-verify-report
+    qc:
+      status: pending
+      completed_at: null
+      output: qa-memory.json
+    polish:
+      status: pending
+      completed_at: null
+      rounds: 0
+      max_rounds: 2
+    learn:
+      status: pending
+      completed_at: null
+      triggered: false
+
+  session_dialogue:
+    decisions: 4
+    handoffs: 2
+    deviations: 0
+    red_flags: 0
+
+  loops:
+    total: 0
+    max: 5
+    history: []
+
+  artifact_versions:
+    proposal: 1
+    specs: 1
+    architecture: 1
+    design: 1
+    tasks: 1
+
+  spec_lock:
+    locked_at: 2026-05-02T05:45:00Z
+    locked_by: BA
+    spec_hash: 551aba2e974966099b9d232353eb610b5e7caa50bc2952ade3d653d18cde3d5f
+    file_hashes:
+      department-management: 0215851cb998592975a0a8b001a613984a4afbe8d60d0aa8db4b0e94d46bd8d1
+      role-management: 3974ccacfc33ad9590fee0c51d0c0d9c08a4478a59bfac1b6fb6d16e8467e90c
+      admin-navigation: b314bd9ef0ed6413faf76cc5fb1935e2a0c1d6c0e4276131ea76c275394efdec
+      user-management: d1c1139c7896d808a5aea2d7227cf22bb30a10920ac952fa7beeda5de6597e49
+    unlock_count: 0

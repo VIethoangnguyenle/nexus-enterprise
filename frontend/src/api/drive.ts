@@ -97,7 +97,7 @@ export const driveApi = {
   createFile: (wsId: string, filename: string, mimeType: string, sizeBytes: number, parentId?: string) =>
     apiFetch<CreateFileResponse>(`/workspaces/${wsId}/drive/files`, {
       method: 'POST',
-      body: JSON.stringify({ filename, mime_type: mimeType, size_bytes: sizeBytes, parent_id: parentId || '' }),
+      body: JSON.stringify({ name: filename, mime_type: mimeType, size_bytes: sizeBytes, parent_id: parentId || '' }),
     }),
 
   /** Step 2: Upload file directly to MinIO via presigned PUT URL. */
@@ -142,9 +142,9 @@ export const driveApi = {
   sharedWithMe: () =>
     apiFetch<{ items: DriveItem[] }>(`/drive/shared-with-me`),
 
-  // — Channel drives —
-  channelDrive: (channelId: string) =>
-    apiFetch<{ items: DriveItem[] }>(`/channels/${channelId}/drive`),
+  /** List drive items for a channel (uses Drive service ListRoot with context filter). */
+  channelDrive: (wsId: string, channelId: string) =>
+    apiFetch<{ items: DriveItem[] }>(`/workspaces/${wsId}/drive?drive_context=channel&drive_context_id=${channelId}`),
 
   // — Quota —
   getQuota: (wsId: string) =>

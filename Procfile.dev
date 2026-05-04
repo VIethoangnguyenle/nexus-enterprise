@@ -1,0 +1,17 @@
+# =============================================================================
+# NGAC Platform — Procfile for Overmind
+# =============================================================================
+# Usage:  make run          (foreground, logs in terminal)
+#         make dev-all      (background daemon)
+# Stop:   Ctrl+C            (foreground) or overmind stop (daemon)
+# =============================================================================
+
+policy:    bash -c 'set -a && source .env.dev && set +a && cd backend/services/policy && REDIS_URL=$REDIS_URL_POLICY GRPC_PORT=50051 exec /usr/local/go/bin/go run ./cmd/'
+auth:      bash -c 'set -a && source .env.dev && set +a && cd backend/services/auth && REDIS_URL=$REDIS_URL_AUTH GRPC_PORT=50052 REST_PORT=$AUTH_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
+workspace: bash -c 'set -a && source .env.dev && set +a && cd backend/services/workspace && GRPC_PORT=50053 REST_PORT=$WORKSPACE_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
+document:  bash -c 'set -a && source .env.dev && set +a && cd backend/services/document && GRPC_PORT=50054 REST_PORT=$DOCUMENT_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
+messaging: bash -c 'set -a && source .env.dev && set +a && cd backend/services/messaging && REDIS_URL=$REDIS_URL_MESSAGING GRPC_PORT=50055 REST_PORT=$MESSAGING_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
+asset:     bash -c 'set -a && source .env.dev && set +a && cd backend/services/asset && GRPC_PORT=50056 REST_PORT=$ASSET_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
+drive:     bash -c 'set -a && source .env.dev && set +a && cd backend/services/drive && GRPC_PORT=50057 REST_PORT=$DRIVE_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
+approval:  bash -c 'set -a && source .env.dev && set +a && cd backend/services/approval && POLICY_ADDR=$POLICY_SERVICE_ADDR GRPC_PORT=50058 REST_PORT=$APPROVAL_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
+frontend:  cd frontend && VITE_DEV_MODE=true npx vite --port 5173 --host

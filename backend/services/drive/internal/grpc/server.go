@@ -130,6 +130,18 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 		ChildId: folderNode.Id, ParentId: parentNGACID,
 	})
 
+	// Determine scope OA: inherit from parent, or use own OA for root-level folders
+	var scopeOAID string
+	if req.ParentId != "" {
+		parent, _ := s.store.GetItem(ctx, req.ParentId)
+		if parent != nil && parent.ScopeOAID != "" {
+			scopeOAID = parent.ScopeOAID
+		}
+	}
+	if scopeOAID == "" {
+		scopeOAID = folderNode.Id
+	}
+
 	item := &store.DriveItem{
 		ID:           uuid.New().String(),
 		WorkspaceID:  req.WorkspaceId,
@@ -139,6 +151,7 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 		ItemType:     "folder",
 		Name:         req.Name,
 		NGACNodeID:   folderNode.Id,
+		ScopeOAID:    scopeOAID,
 		OwnerID:      req.UserNgacNodeId,
 		Status:       "active",
 	}
@@ -227,8 +240,9 @@ func (s *DriveServer) CreateFile(ctx context.Context, req *pb.CreateFileRequest)
 		return nil, status.Errorf(codes.ResourceExhausted, "storage quota exceeded")
 	}
 
-	// Determine parent NGAC node
+	// Determine parent NGAC node and scope OA
 	var parentNGACID string
+	var parentScopeOAID string
 	if req.ParentId != "" {
 		parent, err := s.store.GetItem(ctx, req.ParentId)
 		if err != nil || parent == nil {
@@ -238,25 +252,19 @@ func (s *DriveServer) CreateFile(ctx context.Context, req *pb.CreateFileRequest)
 			return nil, err
 		}
 		parentNGACID = parent.NGACNodeID
+		parentScopeOAID = parent.ScopeOAID
 	} else {
 		root, err := s.ensureRoot(ctx, req.WorkspaceId, driveCtx, req.DriveContextId, req.UserNgacNodeId)
 		if err != nil {
 			return nil, err
 		}
 		parentNGACID = root.NGACNodeID
+		parentScopeOAID = root.ScopeOAID
 	}
 
-	// Create NGAC O node for file
-	fileNode, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: req.Name, NodeType: "O",
-		Properties: map[string]string{"type": "drive_file", "workspace_id": req.WorkspaceId},
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create file node: %v", err)
-	}
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: fileNode.Id, ParentId: parentNGACID,
-	})
+	// Files inherit the parent folder's OA node — no NGAC node created.
+	// checkAccess uses the folder OA for authorization.
+	fileNGACNodeID := parentNGACID
 
 	fileID := uuid.New().String()
 
@@ -282,7 +290,8 @@ func (s *DriveServer) CreateFile(ctx context.Context, req *pb.CreateFileRequest)
 		MimeType:       &mimeType,
 		SizeBytes:      &sizeBytes,
 		ObjectKey:      &uploadResp.ObjectKey,
-		NGACNodeID:     fileNode.Id,
+		NGACNodeID:     fileNGACNodeID,
+		ScopeOAID:      parentScopeOAID,
 		OwnerID:        req.UserId,
 		Status:         "pending",
 	}
@@ -396,18 +405,27 @@ func (s *DriveServer) MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*p
 		return nil, err
 	}
 
-	// NGAC: reassign node
-	if item.ParentID != nil {
-		old, _ := s.store.GetItem(ctx, *item.ParentID)
-		if old != nil {
-			s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
-				ChildId: item.NGACNodeID, ParentId: old.NGACNodeID,
-			})
+	// NGAC: only reassign node for folders (folders have their own OA node).
+	// Files don't have NGAC nodes — they inherit from parent folder.
+	if item.ItemType == "folder" {
+		if item.ParentID != nil {
+			old, _ := s.store.GetItem(ctx, *item.ParentID)
+			if old != nil {
+				s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+					ChildId: item.NGACNodeID, ParentId: old.NGACNodeID,
+				})
+			}
 		}
+		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+			ChildId: item.NGACNodeID, ParentId: dest.NGACNodeID,
+		})
 	}
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: item.NGACNodeID, ParentId: dest.NGACNodeID,
-	})
+
+	// For files: update NGACNodeID to inherit from new parent folder.
+	if item.ItemType == "file" {
+		item.NGACNodeID = dest.NGACNodeID
+		s.store.UpdateNGACNodeID(ctx, item.ID, dest.NGACNodeID)
+	}
 
 	newParent := req.NewParentId
 	if err := s.store.UpdateParent(ctx, item.ID, &newParent); err != nil {
@@ -436,17 +454,8 @@ func (s *DriveServer) CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*p
 		return nil, status.Errorf(codes.NotFound, "destination not found")
 	}
 
-	// Create new NGAC O node
-	newNode, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: src.Name, NodeType: "O",
-		Properties: map[string]string{"type": "drive_file", "workspace_id": req.DestWorkspaceId},
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create copy node: %v", err)
-	}
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: newNode.Id, ParentId: dest.NGACNodeID,
-	})
+	// Files inherit the destination folder's OA node — no NGAC node created.
+	copyNGACNodeID := dest.NGACNodeID
 
 	// MinIO server-side copy
 	newID := uuid.New().String()
@@ -469,7 +478,8 @@ func (s *DriveServer) CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*p
 		DriveContext: driveCtx, DriveContextID: req.DestDriveContextId,
 		ParentID: &destParent, ItemType: "file", Name: src.Name,
 		MimeType: src.MimeType, SizeBytes: src.SizeBytes, ObjectKey: &newKey,
-		NGACNodeID: newNode.Id, OwnerID: req.UserId, Status: "active",
+		NGACNodeID: copyNGACNodeID, ScopeOAID: dest.ScopeOAID,
+		OwnerID: req.UserId, Status: "active",
 	}
 	if err := s.store.InsertItem(ctx, newItem); err != nil {
 		return nil, status.Errorf(codes.Internal, "insert copy: %v", err)
@@ -525,8 +535,10 @@ func (s *DriveServer) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest)
 			if child.SizeBytes != nil {
 				s.store.DecrementQuota(ctx, child.WorkspaceID, *child.SizeBytes, 1)
 			}
-			s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: child.NGACNodeID})
+			// Files don't have their own NGAC nodes — no DeleteNode needed.
 		}
+		// Delete the folder's OA node from NGAC graph.
+		s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: item.NGACNodeID})
 	} else if item.ObjectKey != nil {
 		s.docStorage.DeleteObject(ctx, &docpb.DeleteObjectRequest{
 			WorkspaceId: item.WorkspaceID, ObjectKey: *item.ObjectKey,
@@ -534,9 +546,9 @@ func (s *DriveServer) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest)
 		if item.SizeBytes != nil {
 			s.store.DecrementQuota(ctx, item.WorkspaceID, *item.SizeBytes, 1)
 		}
+		// Files inherit parent OA — no NGAC node to delete.
 	}
 
-	s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: item.NGACNodeID})
 	s.store.DeleteItem(ctx, item.ID)
 	return &pb.Empty{}, nil
 }
@@ -573,7 +585,7 @@ func (s *DriveServer) ensureRoot(ctx context.Context, workspaceID, driveCtx, dri
 		}
 	}
 	if ngacNodeID == "" {
-		// Fallback: create a new OA node
+		// Fallback: create a new OA node under the workspace PC
 		node, nErr := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
 			Name: fmt.Sprintf("DriveRoot_%s", workspaceID[:8]), NodeType: "OA",
 		})
@@ -581,6 +593,13 @@ func (s *DriveServer) ensureRoot(ctx context.Context, workspaceID, driveCtx, dri
 			return nil, status.Errorf(codes.Internal, "create root node: %v", nErr)
 		}
 		ngacNodeID = node.Id
+
+		// Assign DriveRoot OA under workspace PC so files inherit access associations
+		if pcID != "" {
+			s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+				ChildId: ngacNodeID, ParentId: pcID,
+			})
+		}
 	}
 
 	contextID := driveCtxID
@@ -595,6 +614,7 @@ func (s *DriveServer) ensureRoot(ctx context.Context, workspaceID, driveCtx, dri
 		ItemType:       "folder",
 		Name:           "Root",
 		NGACNodeID:     ngacNodeID,
+		ScopeOAID:      ngacNodeID,
 		OwnerID:        userNodeID,
 		Status:         "active",
 	}

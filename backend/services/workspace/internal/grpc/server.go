@@ -1,385 +1,252 @@
+// Package grpc provides the gRPC handler for the workspace service.
+// Each method is thin: validate → delegate to domain → map error → respond.
 package grpc
 
 import (
 	"context"
-	"fmt"
-	"log/slog"
+	"errors"
 
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/minio/minio-go/v7"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"ngac-platform/ngac"
-	drivepb "ngac-platform/proto/drive"
-	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/workspace/internal/domain"
 	pb "ngac-platform/proto/workspace"
 )
 
+// WorkspaceDomainService defines operations the gRPC handler delegates to.
+type WorkspaceDomainService interface {
+	CreateWorkspace(ctx context.Context, in domain.CreateWorkspaceInput) (*domain.WorkspaceResult, error)
+	GetWorkspace(ctx context.Context, id string) (*domain.WorkspaceResult, error)
+	ListAccessibleWorkspaces(ctx context.Context, userNGACNodeID string) ([]*domain.WorkspaceResult, error)
+	InviteMember(ctx context.Context, wsID, targetNGACNodeID string) error
+	RemoveMember(ctx context.Context, wsID, targetNGACNodeID string) error
+	ListMembers(ctx context.Context, wsID string) ([]*domain.Member, error)
+	UpdateMemberRoles(ctx context.Context, wsID, targetNGACNodeID string, roleIDs []string) error
+	TransferOwnership(ctx context.Context, wsID, newOwnerNGACNodeID string) error
+	RemoveOwner(ctx context.Context, wsID, targetNGACNodeID string) error
+	CreateRole(ctx context.Context, wsID, roleName string) (*domain.Role, error)
+	ListRoles(ctx context.Context, wsID string) ([]*domain.Role, error)
+	DeleteRole(ctx context.Context, roleID string) error
+	CreateFolder(ctx context.Context, wsID, name, parentOaID string) (*domain.Folder, error)
+	ListFolders(ctx context.Context, wsID string) ([]*domain.Folder, error)
+	DeleteFolder(ctx context.Context, folderID string) error
+	CreatePermission(ctx context.Context, uaID, oaID string, ops []string) (*domain.Permission, error)
+}
+
+// WorkspaceServer implements the workspace gRPC service.
 type WorkspaceServer struct {
 	pb.UnimplementedWorkspaceServiceServer
-	db           *pgxpool.Pool
-	policyRead  policypb.PolicyReadServiceClient
-	policyWrite policypb.PolicyWriteServiceClient
-	minioClient  *minio.Client
-	driveClient  drivepb.DriveServiceClient
+	svc WorkspaceDomainService
 }
 
-// NewWorkspaceServer creates a workspace handler. MinIO client for bucket creation, Drive client for root drive folder.
-func NewWorkspaceServer(db *pgxpool.Pool, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient, mc *minio.Client, dc drivepb.DriveServiceClient) *WorkspaceServer {
-	return &WorkspaceServer{db: db, policyRead: pr, policyWrite: pw, minioClient: mc, driveClient: dc}
+// NewWorkspaceServer creates a workspace gRPC handler.
+func NewWorkspaceServer(svc WorkspaceDomainService) *WorkspaceServer {
+	return &WorkspaceServer{svc: svc}
 }
 
+// CreateWorkspace handles workspace creation.
 func (s *WorkspaceServer) CreateWorkspace(ctx context.Context, req *pb.CreateWorkspaceRequest) (*pb.Workspace, error) {
-	pc, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.PCName(req.Name), NodeType: ngac.TypePC,
-		Properties: map[string]string{"workspace": req.Name},
+	if req.Name == "" {
+		return nil, status.Error(codes.InvalidArgument, "name required")
+	}
+	res, err := s.svc.CreateWorkspace(ctx, domain.CreateWorkspaceInput{
+		Name: req.Name, UserID: req.UserId, UserNGACNodeID: req.UserNgacNodeId,
 	})
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create PC: %v", err)
+		return nil, mapError(err)
 	}
-
-	ownersUA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.OwnersUAName(req.Name), NodeType: ngac.TypeUA,
-	})
-	membersUA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.MembersUAName(req.Name), NodeType: ngac.TypeUA,
-	})
-	mgmtOA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.MgmtOAName(req.Name), NodeType: ngac.TypeOA,
-	})
-	docsOA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.DocumentsOAName(req.Name), NodeType: ngac.TypeOA,
-	})
-	draftOA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.DraftDocsOAName(req.Name), NodeType: ngac.TypeOA,
-	})
-	approvedOA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.ApprovedDocsOAName(req.Name), NodeType: ngac.TypeOA,
-	})
-	channelsOA, _ := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.ChannelsOAName(req.Name), NodeType: ngac.TypeOA,
-	})
-
-	// Assignments
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: ownersUA.Id, ParentId: pc.Id})
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: membersUA.Id, ParentId: pc.Id})
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: mgmtOA.Id, ParentId: pc.Id})
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: docsOA.Id, ParentId: pc.Id})
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: channelsOA.Id, ParentId: pc.Id})
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: draftOA.Id, ParentId: docsOA.Id})
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: approvedOA.Id, ParentId: docsOA.Id})
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: membersUA.Id, ParentId: ownersUA.Id})
-
-	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ownersUA.Id, OaId: mgmtOA.Id, Operations: ngac.AllOwnerOps()})
-	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ownersUA.Id, OaId: docsOA.Id, Operations: ngac.AllOwnerOps()})
-	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ownersUA.Id, OaId: channelsOA.Id, Operations: ngac.AllOwnerOps()})
-	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: membersUA.Id, OaId: docsOA.Id, Operations: []string{ngac.OpRead}})
-	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: membersUA.Id, OaId: channelsOA.Id, Operations: ngac.MemberChannelOps()})
-
-	// Assign creator to Owners UA
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: req.UserNgacNodeId, ParentId: ownersUA.Id})
-
-	wsID := uuid.New().String()
-	_, err = s.db.Exec(ctx,
-		"INSERT INTO workspaces (id, name, description, owner_id, ngac_pc_id) VALUES ($1, $2, $3, $4, $5)",
-		wsID, req.Name, "", req.UserId, pc.Id)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "insert workspace: %v", err)
-	}
-
-	// Create MinIO bucket for this workspace (non-fatal if MinIO is unavailable)
-	if s.minioClient != nil {
-		bucketName := fmt.Sprintf("ws-%s", wsID)
-		err := s.minioClient.MakeBucket(ctx, bucketName, minio.MakeBucketOptions{})
-		if err != nil {
-			// Check if bucket already exists (idempotent)
-			exists, errExists := s.minioClient.BucketExists(ctx, bucketName)
-			if errExists != nil || !exists {
-				slog.Warn("failed to create minio bucket", "bucket", bucketName, "error", err)
-			}
-		} else {
-			slog.Info("created minio bucket", "bucket", bucketName)
-		}
-	}
-
-	// Create workspace root drive folder (non-fatal if Drive Service unavailable)
-	if s.driveClient != nil {
-		_, driveErr := s.driveClient.CreateDriveForChannel(ctx, &drivepb.CreateDriveForChannelRequest{
-			WorkspaceId:     wsID,
-			ChannelId:       wsID,
-			ChannelName:     req.Name + "_Root",
-			ChannelNgacOaId: docsOA.Id,
-			ChannelNgacUaId: ownersUA.Id,
-		})
-		if driveErr != nil {
-			slog.Warn("failed to create workspace drive", "workspace", wsID, "error", driveErr)
-		}
-	}
-
-	return &pb.Workspace{
-		Id: wsID, Name: req.Name, PcNodeId: pc.Id,
-		OwnersUaId: ownersUA.Id, MembersUaId: membersUA.Id,
-		MgmtOaId: mgmtOA.Id, DocumentsOaId: docsOA.Id,
-		ChannelsOaId: channelsOA.Id, CreatedBy: req.UserId,
-	}, nil
+	return workspaceToProto(res), nil
 }
 
+// ListWorkspaces returns workspaces accessible to the calling user.
 func (s *WorkspaceServer) ListWorkspaces(ctx context.Context, req *pb.ListWorkspacesRequest) (*pb.WorkspaceList, error) {
-	rows, err := s.db.Query(ctx, "SELECT id, name, ngac_pc_id FROM workspaces ORDER BY created_at DESC")
+	results, err := s.svc.ListAccessibleWorkspaces(ctx, req.UserNgacNodeId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "query workspaces: %v", err)
+		return nil, mapError(err)
 	}
-	defer rows.Close()
-	var workspaces []*pb.Workspace
-	for rows.Next() {
-		var w pb.Workspace
-		if err := rows.Scan(&w.Id, &w.Name, &w.PcNodeId); err != nil {
-			return nil, err
-		}
-		workspaces = append(workspaces, &w)
+	var ws []*pb.Workspace
+	for _, r := range results {
+		ws = append(ws, workspaceToProto(r))
 	}
-	var accessible []*pb.Workspace
-	for _, w := range workspaces {
-		desc, err := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: w.PcNodeId})
-		if err != nil {
-			continue
-		}
-		for _, n := range desc.Nodes {
-			if n.Id == req.UserNgacNodeId {
-				accessible = append(accessible, w)
-				break
-			}
-		}
-	}
-	return &pb.WorkspaceList{Workspaces: accessible}, nil
+	return &pb.WorkspaceList{Workspaces: ws}, nil
 }
 
+// GetWorkspace retrieves a single workspace by ID.
 func (s *WorkspaceServer) GetWorkspace(ctx context.Context, req *pb.GetWorkspaceRequest) (*pb.Workspace, error) {
-	var w pb.Workspace
-	err := s.db.QueryRow(ctx, "SELECT id, name, ngac_pc_id FROM workspaces WHERE id = $1", req.WorkspaceId).
-		Scan(&w.Id, &w.Name, &w.PcNodeId)
+	res, err := s.svc.GetWorkspace(ctx, req.WorkspaceId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "workspace not found")
+		return nil, mapError(err)
 	}
-	return &w, nil
+	return workspaceToProto(res), nil
 }
 
+// InviteMember adds a user to a workspace.
 func (s *WorkspaceServer) InviteMember(ctx context.Context, req *pb.InviteMemberRequest) (*pb.Empty, error) {
-	ws, err := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	if err != nil {
-		return nil, err
-	}
-	children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
-	var membersUAID string
-	if children != nil {
-		for _, n := range children.Nodes {
-			if n.NodeType == ngac.TypeUA && ngac.MembersUAName(ws.Name) == n.Name {
-				membersUAID = n.Id
-				break
-			}
-		}
-	}
-	if membersUAID == "" {
-		return nil, status.Errorf(codes.Internal, "members UA not found")
-	}
-	_, err = s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: req.TargetNgacNodeId, ParentId: membersUAID,
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "assign member: %v", err)
+	if err := s.svc.InviteMember(ctx, req.WorkspaceId, req.TargetNgacNodeId); err != nil {
+		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
 }
 
+// RemoveMember removes a user from a workspace.
 func (s *WorkspaceServer) RemoveMember(ctx context.Context, req *pb.RemoveMemberRequest) (*pb.Empty, error) {
-	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	desc, _ := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
-	if desc != nil {
-		for _, n := range desc.Nodes {
-			if n.NodeType == ngac.TypeUA {
-				s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
-					ChildId: req.TargetNgacNodeId, ParentId: n.Id,
-				})
-			}
-		}
+	if err := s.svc.RemoveMember(ctx, req.WorkspaceId, req.TargetNgacNodeId); err != nil {
+		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
 }
 
+// ListMembers returns all members of a workspace.
 func (s *WorkspaceServer) ListMembers(ctx context.Context, req *pb.ListMembersRequest) (*pb.MemberList, error) {
-	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	desc, _ := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
-	seen := make(map[string]bool)
-	var members []*pb.Member
-	if desc != nil {
-		for _, n := range desc.Nodes {
-			if n.NodeType == "U" && !seen[n.Id] {
-				seen[n.Id] = true
-				members = append(members, &pb.Member{NgacNodeId: n.Id, Username: n.Name})
-			}
-		}
+	members, err := s.svc.ListMembers(ctx, req.WorkspaceId)
+	if err != nil {
+		return nil, mapError(err)
 	}
-	return &pb.MemberList{Members: members}, nil
+	var pbMembers []*pb.Member
+	for _, m := range members {
+		pbMembers = append(pbMembers, &pb.Member{NgacNodeId: m.NGACNodeID, Username: m.Username})
+	}
+	return &pb.MemberList{Members: pbMembers}, nil
 }
 
+// UpdateMemberRoles reassigns a user's roles in a workspace.
 func (s *WorkspaceServer) UpdateMemberRoles(ctx context.Context, req *pb.UpdateMemberRolesRequest) (*pb.Empty, error) {
-	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	desc, _ := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
-	if desc != nil {
-		for _, n := range desc.Nodes {
-			if n.NodeType == ngac.TypeUA {
-				s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
-					ChildId: req.TargetNgacNodeId, ParentId: n.Id,
-				})
-			}
-		}
-	}
-	for _, roleID := range req.RoleIds {
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: req.TargetNgacNodeId, ParentId: roleID,
-		})
+	if err := s.svc.UpdateMemberRoles(ctx, req.WorkspaceId, req.TargetNgacNodeId, req.RoleIds); err != nil {
+		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
 }
 
+// TransferOwnership adds a new owner to the workspace.
 func (s *WorkspaceServer) TransferOwnership(ctx context.Context, req *pb.TransferOwnershipRequest) (*pb.Empty, error) {
-	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
-	var ownersUAID string
-	if children != nil {
-		for _, n := range children.Nodes {
-			if n.NodeType == ngac.TypeUA && ngac.OwnersUAName(ws.Name) == n.Name {
-				ownersUAID = n.Id
-				break
-			}
-		}
-	}
-	if ownersUAID != "" {
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: req.NewOwnerNgacNodeId, ParentId: ownersUAID,
-		})
+	if err := s.svc.TransferOwnership(ctx, req.WorkspaceId, req.NewOwnerNgacNodeId); err != nil {
+		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
 }
 
+// AddOwner is an alias for TransferOwnership.
 func (s *WorkspaceServer) AddOwner(ctx context.Context, req *pb.AddOwnerRequest) (*pb.Empty, error) {
 	return s.TransferOwnership(ctx, &pb.TransferOwnershipRequest{
 		WorkspaceId: req.WorkspaceId, NewOwnerNgacNodeId: req.TargetNgacNodeId,
 	})
 }
 
+// RemoveOwner removes an owner from the workspace (fails if last owner).
 func (s *WorkspaceServer) RemoveOwner(ctx context.Context, req *pb.RemoveOwnerRequest) (*pb.Empty, error) {
-	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
-	var ownersUAID string
-	if children != nil {
-		for _, n := range children.Nodes {
-			if n.NodeType == ngac.TypeUA && ngac.OwnersUAName(ws.Name) == n.Name {
-				ownersUAID = n.Id
-				break
-			}
-		}
-	}
-	if ownersUAID != "" {
-		ownerChildren, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ownersUAID})
-		userCount := 0
-		if ownerChildren != nil {
-			for _, n := range ownerChildren.Nodes {
-				if n.NodeType == "U" {
-					userCount++
-				}
-			}
-		}
-		if userCount <= 1 {
-			return nil, status.Errorf(codes.FailedPrecondition, "cannot remove last owner")
-		}
-		s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
-			ChildId: req.TargetNgacNodeId, ParentId: ownersUAID,
-		})
+	if err := s.svc.RemoveOwner(ctx, req.WorkspaceId, req.TargetNgacNodeId); err != nil {
+		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
 }
 
+// CreateRole provisions a new role in a workspace.
 func (s *WorkspaceServer) CreateRole(ctx context.Context, req *pb.CreateRoleRequest) (*pb.Role, error) {
-	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	node, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: req.Name, NodeType: ngac.TypeUA})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create role: %v", err)
+	if req.Name == "" {
+		return nil, status.Error(codes.InvalidArgument, "name required")
 	}
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: node.Id, ParentId: ws.PcNodeId})
-	return &pb.Role{Id: node.Id, Name: req.Name, NgacNodeId: node.Id}, nil
+	role, err := s.svc.CreateRole(ctx, req.WorkspaceId, req.Name)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &pb.Role{Id: role.ID, Name: role.Name, NgacNodeId: role.NGACNodeID}, nil
 }
 
+// ListRoles returns all roles in a workspace.
 func (s *WorkspaceServer) ListRoles(ctx context.Context, req *pb.ListRolesRequest) (*pb.RoleList, error) {
-	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeId})
-	var roles []*pb.Role
-	if children != nil {
-		for _, n := range children.Nodes {
-			if n.NodeType == ngac.TypeUA {
-				roles = append(roles, &pb.Role{Id: n.Id, Name: n.Name, NgacNodeId: n.Id})
-			}
-		}
+	roles, err := s.svc.ListRoles(ctx, req.WorkspaceId)
+	if err != nil {
+		return nil, mapError(err)
 	}
-	return &pb.RoleList{Roles: roles}, nil
+	var pbRoles []*pb.Role
+	for _, r := range roles {
+		pbRoles = append(pbRoles, &pb.Role{Id: r.ID, Name: r.Name, NgacNodeId: r.NGACNodeID})
+	}
+	return &pb.RoleList{Roles: pbRoles}, nil
 }
 
+// DeleteRole removes a role from the NGAC graph.
 func (s *WorkspaceServer) DeleteRole(ctx context.Context, req *pb.DeleteRoleRequest) (*pb.Empty, error) {
-	s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: req.RoleId})
+	if err := s.svc.DeleteRole(ctx, req.RoleId); err != nil {
+		return nil, mapError(err)
+	}
 	return &pb.Empty{}, nil
 }
 
+// CreateFolder provisions a new folder in a workspace.
 func (s *WorkspaceServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequest) (*pb.Folder, error) {
-	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	node, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: req.Name, NodeType: ngac.TypeOA})
+	if req.Name == "" {
+		return nil, status.Error(codes.InvalidArgument, "name required")
+	}
+	f, err := s.svc.CreateFolder(ctx, req.WorkspaceId, req.Name, req.ParentOaId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create folder: %v", err)
+		return nil, mapError(err)
 	}
-	parentID := req.ParentOaId
-	if parentID == "" {
-		parentID = ws.PcNodeId
-	}
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: node.Id, ParentId: parentID})
-	return &pb.Folder{Id: node.Id, Name: req.Name, NgacNodeId: node.Id}, nil
+	return &pb.Folder{Id: f.ID, Name: f.Name, NgacNodeId: f.NGACNodeID}, nil
 }
 
+// ListFolders returns all folders in a workspace.
 func (s *WorkspaceServer) ListFolders(ctx context.Context, req *pb.ListFoldersRequest) (*pb.FolderList, error) {
-	ws, _ := s.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: req.WorkspaceId})
-	desc, _ := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeId})
-	var folders []*pb.Folder
-	if desc != nil {
-		for _, n := range desc.Nodes {
-			if n.NodeType == ngac.TypeOA {
-				folders = append(folders, &pb.Folder{Id: n.Id, Name: n.Name, NgacNodeId: n.Id})
-			}
-		}
+	folders, err := s.svc.ListFolders(ctx, req.WorkspaceId)
+	if err != nil {
+		return nil, mapError(err)
 	}
-	return &pb.FolderList{Folders: folders}, nil
+	var pbFolders []*pb.Folder
+	for _, f := range folders {
+		pbFolders = append(pbFolders, &pb.Folder{Id: f.ID, Name: f.Name, NgacNodeId: f.NGACNodeID})
+	}
+	return &pb.FolderList{Folders: pbFolders}, nil
 }
 
+// DeleteFolder removes a folder from the NGAC graph.
 func (s *WorkspaceServer) DeleteFolder(ctx context.Context, req *pb.DeleteFolderRequest) (*pb.Empty, error) {
-	s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: req.FolderId})
+	if err := s.svc.DeleteFolder(ctx, req.FolderId); err != nil {
+		return nil, mapError(err)
+	}
 	return &pb.Empty{}, nil
 }
 
+// CreatePermission creates an association (permission) between a UA and OA.
 func (s *WorkspaceServer) CreatePermission(ctx context.Context, req *pb.CreatePermissionRequest) (*pb.Permission, error) {
-	assoc, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
-		UaId: req.UaId, OaId: req.OaId, Operations: req.Operations,
-	})
+	p, err := s.svc.CreatePermission(ctx, req.UaId, req.OaId, req.Operations)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create permission: %v", err)
+		return nil, mapError(err)
 	}
-	return &pb.Permission{Id: assoc.Id, UaId: req.UaId, OaId: req.OaId, Operations: req.Operations}, nil
+	return &pb.Permission{Id: p.ID, UaId: p.UaID, OaId: p.OaID, Operations: p.Operations}, nil
 }
 
+// ListPermissions is a placeholder (not yet implemented).
 func (s *WorkspaceServer) ListPermissions(ctx context.Context, req *pb.ListPermissionsRequest) (*pb.PermissionList, error) {
 	return &pb.PermissionList{}, nil
 }
 
+// DeletePermission is a placeholder (not yet implemented).
 func (s *WorkspaceServer) DeletePermission(ctx context.Context, req *pb.DeletePermissionRequest) (*pb.Empty, error) {
-	// PermissionId is the association ID — would need to look up UA/OA from it
-	// For now, delete the association node directly
 	return &pb.Empty{}, nil
+}
+
+// workspaceToProto converts a domain result to proto.
+func workspaceToProto(r *domain.WorkspaceResult) *pb.Workspace {
+	return &pb.Workspace{
+		Id: r.ID, Name: r.Name, PcNodeId: r.PcNodeID,
+		OwnersUaId: r.OwnersUaID, MembersUaId: r.MembersUaID,
+		MgmtOaId: r.MgmtOaID, DocumentsOaId: r.DocumentsOaID,
+		ChannelsOaId: r.ChannelsOaID, CreatedBy: r.CreatedBy,
+	}
+}
+
+// mapError translates domain sentinel errors to gRPC status codes.
+func mapError(err error) error {
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, domain.ErrAccessDenied):
+		return status.Error(codes.PermissionDenied, err.Error())
+	case errors.Is(err, domain.ErrAlreadyExists):
+		return status.Error(codes.AlreadyExists, err.Error())
+	case errors.Is(err, domain.ErrInvalidInput):
+		return status.Error(codes.InvalidArgument, err.Error())
+	default:
+		return status.Errorf(codes.Internal, "internal: %v", err)
+	}
 }

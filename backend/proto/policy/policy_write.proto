@@ -21,6 +21,16 @@ service PolicyWriteService {
   rpc CreateAssociation(CreateAssociationRequest) returns (Association);
   rpc RemoveAssociation(RemoveAssociationRequest) returns (Empty);
 
+  // Prohibitions (deny overrides)
+  rpc CreateProhibition(CreateProhibitionRequest) returns (Prohibition);
+  rpc RemoveProhibition(RemoveProhibitionRequest) returns (Empty);
+
+  // Operations registry
+  rpc RegisterOperations(RegisterOperationsRequest) returns (RegisterOperationsResponse);
+
+  // External cache invalidation
+  rpc InvalidateCache(InvalidateCacheRequest) returns (InvalidateCacheResponse);
+
   // Schema and graph lifecycle
   rpc InitSchema(Empty) returns (Empty);
   rpc LoadGraph(Empty) returns (Empty);

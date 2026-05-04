@@ -36,12 +36,25 @@ func (s *Store) InsertChannel(ctx context.Context, ch *Channel) error {
 	return nil
 }
 
+// UpdateChannelName renames a channel.
+func (s *Store) UpdateChannelName(ctx context.Context, id, name string) error {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE channels SET name = $1 WHERE id = $2`, name, id)
+	if err != nil {
+		return fmt.Errorf("update channel name: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("channel not found")
+	}
+	return nil
+}
+
 // scanChannel scans a channel row from the standard column set.
 func scanChannel(row pgx.Row) (*Channel, error) {
 	ch := &Channel{}
 	var ca time.Time
 	err := row.Scan(&ch.ID, &ch.Name, &ch.ChannelType, &ch.WorkspaceID,
-		&ch.NGACOaID, &ch.NGACUaID, &ch.CreatedBy, &ca)
+		&ch.NGACOaID, &ch.NGACUaID, &ch.CreatedBy, &ca, &ch.MemberCount)
 	if err != nil {
 		return nil, err
 	}
@@ -49,13 +62,14 @@ func scanChannel(row pgx.Row) (*Channel, error) {
 	return ch, nil
 }
 
-const channelCols = `id, name, channel_type, COALESCE(workspace_id,''),
-	COALESCE(ngac_oa_id,''), COALESCE(ngac_ua_id,''), COALESCE(created_by,''), created_at`
+const channelCols = `c.id, c.name, c.channel_type, COALESCE(c.workspace_id,''),
+	COALESCE(c.ngac_oa_id,''), COALESCE(c.ngac_ua_id,''), COALESCE(c.created_by,''), c.created_at,
+	COALESCE((SELECT COUNT(*)::int FROM channel_members cm WHERE cm.channel_id = c.id), 0)`
 
 // GetChannel retrieves a single channel by ID.
 func (s *Store) GetChannel(ctx context.Context, id string) (*Channel, error) {
 	row := s.db.QueryRow(ctx,
-		`SELECT `+channelCols+` FROM channels WHERE id = $1`, id)
+		`SELECT `+channelCols+` FROM channels c WHERE c.id = $1`, id)
 	ch, err := scanChannel(row)
 	if err == pgx.ErrNoRows {
 		return nil, nil
@@ -66,8 +80,8 @@ func (s *Store) GetChannel(ctx context.Context, id string) (*Channel, error) {
 // ListChannelsByWorkspace returns non-DM channels for a workspace.
 func (s *Store) ListChannelsByWorkspace(ctx context.Context, workspaceID string) ([]*Channel, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT `+channelCols+` FROM channels
-		 WHERE workspace_id = $1 AND channel_type != 'dm'`, workspaceID)
+		`SELECT `+channelCols+` FROM channels c
+		 WHERE c.workspace_id = $1 AND c.channel_type != 'dm'`, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("list channels: %w", err)
 	}
@@ -78,7 +92,7 @@ func (s *Store) ListChannelsByWorkspace(ctx context.Context, workspaceID string)
 // ListAllDMs returns all DM channels (for filtering by membership).
 func (s *Store) ListAllDMs(ctx context.Context) ([]*Channel, error) {
 	rows, err := s.db.Query(ctx,
-		`SELECT `+channelCols+` FROM channels WHERE channel_type = 'dm'`)
+		`SELECT `+channelCols+` FROM channels c WHERE c.channel_type = 'dm'`)
 	if err != nil {
 		return nil, fmt.Errorf("list DMs: %w", err)
 	}
@@ -91,9 +105,9 @@ func (s *Store) ListAllDMs(ctx context.Context) ([]*Channel, error) {
 func (s *Store) FindDMByMembers(ctx context.Context, userNodeID, targetNodeID string) (*Channel, error) {
 	row := s.db.QueryRow(ctx,
 		`SELECT `+channelCols+`
-		 FROM channels
-		 WHERE channel_type = 'dm'
-		   AND id IN (
+		 FROM channels c
+		 WHERE c.channel_type = 'dm'
+		   AND c.id IN (
 		       SELECT channel_id FROM channel_members WHERE ngac_node_id = $1
 		       INTERSECT
 		       SELECT channel_id FROM channel_members WHERE ngac_node_id = $2
@@ -115,15 +129,26 @@ func (s *Store) InsertChannelMember(ctx context.Context, channelID, ngacNodeID s
 	return err
 }
 
-// GetWorkspaceName returns workspace name and PC node ID.
-func (s *Store) GetWorkspaceName(ctx context.Context, workspaceID string) (name, pcNodeID string, err error) {
-	err = s.db.QueryRow(ctx,
-		`SELECT name, ngac_pc_id FROM workspaces WHERE id = $1`, workspaceID).
-		Scan(&name, &pcNodeID)
+// Workspace holds workspace metadata needed for channel assignment.
+type Workspace struct {
+	ID       string
+	Name     string
+	PCNodeID string
+}
+
+// GetWorkspaceByID returns workspace metadata by ID.
+func (s *Store) GetWorkspaceByID(ctx context.Context, workspaceID string) (*Workspace, error) {
+	var ws Workspace
+	err := s.db.QueryRow(ctx,
+		`SELECT id, name, ngac_pc_id FROM workspaces WHERE id = $1`, workspaceID).
+		Scan(&ws.ID, &ws.Name, &ws.PCNodeID)
 	if err == pgx.ErrNoRows {
-		return "", "", nil
+		return nil, nil
 	}
-	return name, pcNodeID, err
+	if err != nil {
+		return nil, fmt.Errorf("get workspace: %w", err)
+	}
+	return &ws, nil
 }
 
 func collectChannels(rows pgx.Rows) ([]*Channel, error) {
@@ -132,7 +157,7 @@ func collectChannels(rows pgx.Rows) ([]*Channel, error) {
 		ch := &Channel{}
 		var ca time.Time
 		if err := rows.Scan(&ch.ID, &ch.Name, &ch.ChannelType, &ch.WorkspaceID,
-			&ch.NGACOaID, &ch.NGACUaID, &ch.CreatedBy, &ca); err != nil {
+			&ch.NGACOaID, &ch.NGACUaID, &ch.CreatedBy, &ca, &ch.MemberCount); err != nil {
 			return nil, err
 		}
 		ch.CreatedAt = ca
@@ -145,16 +170,23 @@ func collectChannels(rows pgx.Rows) ([]*Channel, error) {
 
 const messageCols = `m.id, m.channel_id, m.sender_id, COALESCE(u.username,''), m.content, m.created_at,
 	COALESCE(m.message_type,'user'), COALESCE(m.parent_message_id,''),
-	COALESCE(m.linked_entity_type,''), COALESCE(m.linked_entity_id,''), m.reply_count`
+	COALESCE(m.linked_entity_type,''), COALESCE(m.linked_entity_id,''), m.reply_count,
+	COALESCE(m.content_format,'markdown'), COALESCE(m.mentions, '{}')`
 
 // InsertMessage persists a new message row.
 func (s *Store) InsertMessage(ctx context.Context, msg *Message) error {
+	contentFormat := msg.ContentFormat
+	if contentFormat == "" {
+		contentFormat = "markdown"
+	}
 	_, err := s.db.Exec(ctx,
 		`INSERT INTO messages (id, channel_id, sender_id, content, message_type,
-		 parent_message_id, linked_entity_type, linked_entity_id, created_at)
-		 VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), $9)`,
+		 parent_message_id, linked_entity_type, linked_entity_id,
+		 content_format, mentions, created_at)
+		 VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), $9, $10, $11)`,
 		msg.ID, msg.ChannelID, msg.SenderID, msg.Content, msg.MessageType,
-		msg.ParentMessageID, msg.LinkedEntityType, msg.LinkedEntityID, msg.CreatedAt)
+		msg.ParentMessageID, msg.LinkedEntityType, msg.LinkedEntityID,
+		contentFormat, msg.Mentions, msg.CreatedAt)
 	if err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}
@@ -242,7 +274,8 @@ func scanMessages(rows pgx.Rows) ([]*Message, error) {
 		var ca time.Time
 		if err := rows.Scan(&m.ID, &m.ChannelID, &m.SenderID, &m.SenderName,
 			&m.Content, &ca, &m.MessageType, &m.ParentMessageID,
-			&m.LinkedEntityType, &m.LinkedEntityID, &m.ReplyCount); err != nil {
+			&m.LinkedEntityType, &m.LinkedEntityID, &m.ReplyCount,
+			&m.ContentFormat, &m.Mentions); err != nil {
 			return nil, err
 		}
 		m.CreatedAt = ca

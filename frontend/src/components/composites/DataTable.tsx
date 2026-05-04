@@ -12,34 +12,37 @@ interface DataTableProps<T> {
   data: T[]
   keyExtractor: (row: T) => string
   onRowClick?: (row: T) => void
+  selectedKey?: string | null
   emptyMessage?: string
   className?: string
 }
 
-/** Styled data table with optional clickable rows and empty state. */
+/** Dense data table — 36px rows, caption-ui headers, border-subtle dividers. */
 export function DataTable<T>({
   columns,
   data,
   keyExtractor,
   onRowClick,
+  selectedKey,
   emptyMessage = 'No data',
   className = '',
 }: DataTableProps<T>) {
   if (data.length === 0) {
     return (
-      <div className="text-center py-8 text-text-muted text-sm">{emptyMessage}</div>
+      <div className="text-center py-8 text-on-surface-variant text-small">{emptyMessage}</div>
     )
   }
 
   return (
+    <div className="overflow-x-auto">
     <table className={`w-full border-collapse ${className}`}>
       <thead>
-        <tr>
+        <tr className="bg-surface-container">
           {columns.map(col => (
             <th
               key={col.id}
-              className={`text-left px-4 py-2.5 text-[0.7rem] font-semibold text-text-muted
-                uppercase tracking-wider border-b border-border ${col.className ?? ''}`}
+              className={`text-left px-3 py-2 text-caption-ui text-on-surface-variant
+                uppercase tracking-wider border-b border-outline-variant ${col.className ?? ''}`}
             >
               {col.header}
             </th>
@@ -47,21 +50,27 @@ export function DataTable<T>({
         </tr>
       </thead>
       <tbody>
-        {data.map(row => (
-          <tr
-            key={keyExtractor(row)}
-            onClick={() => onRowClick?.(row)}
-            className={`border-b border-border/50 transition-colors duration-150
-              ${onRowClick ? 'cursor-pointer hover:bg-bg-hover' : ''}`}
-          >
-            {columns.map(col => (
-              <td key={col.id} className={`px-4 py-3 text-sm ${col.className ?? ''}`}>
-                {col.cell(row)}
-              </td>
-            ))}
-          </tr>
-        ))}
+        {data.map(row => {
+          const key = keyExtractor(row)
+          const isSelected = selectedKey === key
+          return (
+            <tr
+              key={key}
+              onClick={() => onRowClick?.(row)}
+              className={`border-b border-border-subtle transition-colors duration-instant h-9
+                ${onRowClick ? 'cursor-pointer' : ''}
+                ${isSelected ? 'bg-accent-bg' : 'hover:bg-surface-container-high'}`}
+            >
+              {columns.map(col => (
+                <td key={col.id} className={`px-3 py-1 text-small text-on-surface ${col.className ?? ''}`}>
+                  {col.cell(row)}
+                </td>
+              ))}
+            </tr>
+          )
+        })}
       </tbody>
     </table>
+    </div>
   )
 }

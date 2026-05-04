@@ -97,3 +97,54 @@ function AssetRequestForm() {
 5. **Hooks at the top** — before any conditional logic
 6. **No business logic in render** — extract to handlers or hooks
 7. **Key prop on every mapped element** — use stable IDs, not array index
+8. **Reuse before create** — see section below
+
+## Reuse Before Create (MANDATORY)
+
+> **Read full skill**: `.agent/skills/component-reuse-checklist/SKILL.md`
+
+Before creating ANY new component, you MUST complete the reuse checklist. This is a hard gate.
+
+### Quick Rules
+
+1. **Check `primitives/` first** → Button, Spinner, IconButton, Input, etc.
+2. **Check `composites/` second** → Modal, ConfirmDialog, AlertBanner, Tabs, etc.
+3. **Search for similar components** → `grep -r "pattern" src/components/`
+4. **Extend, don't duplicate** → Add a new variant/prop to existing component
+5. **Extract shared patterns** → If copy-pasting >5 lines, create a component
+
+### When Converting Stitch Designs
+
+Stitch exports raw HTML/CSS. You MUST map to existing components:
+
+| Stitch Element | React Component |
+|----------------|-----------------|
+| Button | `<Button variant="...">` |
+| Dialog/Modal | `<Modal>` compound |
+| Confirmation dialog | `<ConfirmDialog>` |
+| Alert/Warning banner | `<AlertBanner variant="...">` |
+| Loading spinner | `<Spinner size="...">` |
+| Close button (X) | `<IconButton icon={X}>` |
+
+### Forbidden
+
+```tsx
+// ❌ NEVER: inline modal shell
+<div className="fixed inset-0 z-50 flex items-center justify-center">
+  <div className="absolute inset-0 bg-black/40" />
+  <div className="bg-surface-container-lowest rounded-xl shadow-lg">
+    ...
+  </div>
+</div>
+
+// ✅ ALWAYS: use Modal compound
+<Modal onClose={onClose} size="md">
+  <Modal.Header onClose={onClose}>Title</Modal.Header>
+  <Modal.Body>...</Modal.Body>
+  <Modal.Actions>...</Modal.Actions>
+</Modal>
+```
+
+### Domain Component Size Limit
+
+A domain-specific component (e.g., `DeleteConfirmDialog`) that COMPOSES from primitives/composites should be **< 50 LOC**. If it's larger, you're probably not composing correctly — check the reuse checklist again.

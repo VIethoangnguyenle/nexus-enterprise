@@ -311,6 +311,7 @@ type CheckAccessRequest struct {
 	UserNodeId    string                 `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
 	ObjectNodeId  string                 `protobuf:"bytes,2,opt,name=object_node_id,json=objectNodeId,proto3" json:"object_node_id,omitempty"`
 	Operation     string                 `protobuf:"bytes,3,opt,name=operation,proto3" json:"operation,omitempty"`
+	WorkspaceId   *string                `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3,oneof" json:"workspace_id,omitempty"` // Optional: enables shard-based evaluation
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -362,6 +363,13 @@ func (x *CheckAccessRequest) GetObjectNodeId() string {
 func (x *CheckAccessRequest) GetOperation() string {
 	if x != nil {
 		return x.Operation
+	}
+	return ""
+}
+
+func (x *CheckAccessRequest) GetWorkspaceId() string {
+	if x != nil && x.WorkspaceId != nil {
+		return *x.WorkspaceId
 	}
 	return ""
 }
@@ -443,14 +451,17 @@ func (x *AccessDecision) GetExplanation() *AccessExplanation {
 }
 
 type AccessExplanation struct {
-	state              protoimpl.MessageState `protogen:"open.v1"`
-	Path               []string               `protobuf:"bytes,1,rep,name=path,proto3" json:"path,omitempty"`
-	PolicyClass        string                 `protobuf:"bytes,2,opt,name=policy_class,json=policyClass,proto3" json:"policy_class,omitempty"`
-	UserAttributes     []string               `protobuf:"bytes,3,rep,name=user_attributes,json=userAttributes,proto3" json:"user_attributes,omitempty"`
-	ObjectAttributes   []string               `protobuf:"bytes,4,rep,name=object_attributes,json=objectAttributes,proto3" json:"object_attributes,omitempty"`
-	Reason             string                 `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
-	ConstraintsChecked []string               `protobuf:"bytes,6,rep,name=constraints_checked,json=constraintsChecked,proto3" json:"constraints_checked,omitempty"`
-	ConstraintDenied   *ConstraintDenial      `protobuf:"bytes,7,opt,name=constraint_denied,json=constraintDenied,proto3" json:"constraint_denied,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Path  []string               `protobuf:"bytes,1,rep,name=path,proto3" json:"path,omitempty"`
+	// Deprecated: Marked as deprecated in proto/policy/policy.proto.
+	PolicyClass        string             `protobuf:"bytes,2,opt,name=policy_class,json=policyClass,proto3" json:"policy_class,omitempty"` // Use policy_classes instead
+	UserAttributes     []string           `protobuf:"bytes,3,rep,name=user_attributes,json=userAttributes,proto3" json:"user_attributes,omitempty"`
+	ObjectAttributes   []string           `protobuf:"bytes,4,rep,name=object_attributes,json=objectAttributes,proto3" json:"object_attributes,omitempty"`
+	Reason             string             `protobuf:"bytes,5,opt,name=reason,proto3" json:"reason,omitempty"`
+	ConstraintsChecked []string           `protobuf:"bytes,6,rep,name=constraints_checked,json=constraintsChecked,proto3" json:"constraints_checked,omitempty"`
+	ConstraintDenied   *ConstraintDenial  `protobuf:"bytes,7,opt,name=constraint_denied,json=constraintDenied,proto3" json:"constraint_denied,omitempty"`
+	ProhibitionDenied  *ProhibitionDenial `protobuf:"bytes,8,opt,name=prohibition_denied,json=prohibitionDenied,proto3" json:"prohibition_denied,omitempty"`
+	PolicyClasses      []string           `protobuf:"bytes,9,rep,name=policy_classes,json=policyClasses,proto3" json:"policy_classes,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -492,6 +503,7 @@ func (x *AccessExplanation) GetPath() []string {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in proto/policy/policy.proto.
 func (x *AccessExplanation) GetPolicyClass() string {
 	if x != nil {
 		return x.PolicyClass
@@ -530,6 +542,20 @@ func (x *AccessExplanation) GetConstraintsChecked() []string {
 func (x *AccessExplanation) GetConstraintDenied() *ConstraintDenial {
 	if x != nil {
 		return x.ConstraintDenied
+	}
+	return nil
+}
+
+func (x *AccessExplanation) GetProhibitionDenied() *ProhibitionDenial {
+	if x != nil {
+		return x.ProhibitionDenied
+	}
+	return nil
+}
+
+func (x *AccessExplanation) GetPolicyClasses() []string {
+	if x != nil {
+		return x.PolicyClasses
 	}
 	return nil
 }
@@ -1318,6 +1344,753 @@ func (x *GetParentsRequest) GetNodeId() string {
 	return ""
 }
 
+// BatchCheckAccess — resolve permissions for multiple objects in one call.
+type BatchCheckAccessRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserNodeId    string                 `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
+	ObjectIds     []string               `protobuf:"bytes,2,rep,name=object_ids,json=objectIds,proto3" json:"object_ids,omitempty"`
+	Operations    []string               `protobuf:"bytes,3,rep,name=operations,proto3" json:"operations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchCheckAccessRequest) Reset() {
+	*x = BatchCheckAccessRequest{}
+	mi := &file_proto_policy_policy_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchCheckAccessRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchCheckAccessRequest) ProtoMessage() {}
+
+func (x *BatchCheckAccessRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchCheckAccessRequest.ProtoReflect.Descriptor instead.
+func (*BatchCheckAccessRequest) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *BatchCheckAccessRequest) GetUserNodeId() string {
+	if x != nil {
+		return x.UserNodeId
+	}
+	return ""
+}
+
+func (x *BatchCheckAccessRequest) GetObjectIds() []string {
+	if x != nil {
+		return x.ObjectIds
+	}
+	return nil
+}
+
+func (x *BatchCheckAccessRequest) GetOperations() []string {
+	if x != nil {
+		return x.Operations
+	}
+	return nil
+}
+
+type BatchAccessResult struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// key = object_id, value = permissions for that object
+	Results       map[string]*ObjectPermissions `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchAccessResult) Reset() {
+	*x = BatchAccessResult{}
+	mi := &file_proto_policy_policy_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchAccessResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchAccessResult) ProtoMessage() {}
+
+func (x *BatchAccessResult) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchAccessResult.ProtoReflect.Descriptor instead.
+func (*BatchAccessResult) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *BatchAccessResult) GetResults() map[string]*ObjectPermissions {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+type ObjectPermissions struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// key = operation name (e.g. "write"), value = allowed
+	Permissions   map[string]bool `protobuf:"bytes,1,rep,name=permissions,proto3" json:"permissions,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ObjectPermissions) Reset() {
+	*x = ObjectPermissions{}
+	mi := &file_proto_policy_policy_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ObjectPermissions) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ObjectPermissions) ProtoMessage() {}
+
+func (x *ObjectPermissions) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ObjectPermissions.ProtoReflect.Descriptor instead.
+func (*ObjectPermissions) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *ObjectPermissions) GetPermissions() map[string]bool {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
+}
+
+type Prohibition struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	SubjectId     string                 `protobuf:"bytes,3,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	Operations    []string               `protobuf:"bytes,4,rep,name=operations,proto3" json:"operations,omitempty"`
+	TargetOaIds   []string               `protobuf:"bytes,5,rep,name=target_oa_ids,json=targetOaIds,proto3" json:"target_oa_ids,omitempty"`
+	Intersection  bool                   `protobuf:"varint,6,opt,name=intersection,proto3" json:"intersection,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Prohibition) Reset() {
+	*x = Prohibition{}
+	mi := &file_proto_policy_policy_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Prohibition) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Prohibition) ProtoMessage() {}
+
+func (x *Prohibition) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Prohibition.ProtoReflect.Descriptor instead.
+func (*Prohibition) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *Prohibition) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Prohibition) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Prohibition) GetSubjectId() string {
+	if x != nil {
+		return x.SubjectId
+	}
+	return ""
+}
+
+func (x *Prohibition) GetOperations() []string {
+	if x != nil {
+		return x.Operations
+	}
+	return nil
+}
+
+func (x *Prohibition) GetTargetOaIds() []string {
+	if x != nil {
+		return x.TargetOaIds
+	}
+	return nil
+}
+
+func (x *Prohibition) GetIntersection() bool {
+	if x != nil {
+		return x.Intersection
+	}
+	return false
+}
+
+type CreateProhibitionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	SubjectId     string                 `protobuf:"bytes,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	Operations    []string               `protobuf:"bytes,3,rep,name=operations,proto3" json:"operations,omitempty"`
+	TargetOaIds   []string               `protobuf:"bytes,4,rep,name=target_oa_ids,json=targetOaIds,proto3" json:"target_oa_ids,omitempty"`
+	Intersection  bool                   `protobuf:"varint,5,opt,name=intersection,proto3" json:"intersection,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateProhibitionRequest) Reset() {
+	*x = CreateProhibitionRequest{}
+	mi := &file_proto_policy_policy_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateProhibitionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateProhibitionRequest) ProtoMessage() {}
+
+func (x *CreateProhibitionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateProhibitionRequest.ProtoReflect.Descriptor instead.
+func (*CreateProhibitionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *CreateProhibitionRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateProhibitionRequest) GetSubjectId() string {
+	if x != nil {
+		return x.SubjectId
+	}
+	return ""
+}
+
+func (x *CreateProhibitionRequest) GetOperations() []string {
+	if x != nil {
+		return x.Operations
+	}
+	return nil
+}
+
+func (x *CreateProhibitionRequest) GetTargetOaIds() []string {
+	if x != nil {
+		return x.TargetOaIds
+	}
+	return nil
+}
+
+func (x *CreateProhibitionRequest) GetIntersection() bool {
+	if x != nil {
+		return x.Intersection
+	}
+	return false
+}
+
+type RemoveProhibitionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RemoveProhibitionRequest) Reset() {
+	*x = RemoveProhibitionRequest{}
+	mi := &file_proto_policy_policy_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RemoveProhibitionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RemoveProhibitionRequest) ProtoMessage() {}
+
+func (x *RemoveProhibitionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RemoveProhibitionRequest.ProtoReflect.Descriptor instead.
+func (*RemoveProhibitionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *RemoveProhibitionRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type ListProhibitionsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SubjectId     string                 `protobuf:"bytes,1,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"` // optional filter
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListProhibitionsRequest) Reset() {
+	*x = ListProhibitionsRequest{}
+	mi := &file_proto_policy_policy_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListProhibitionsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListProhibitionsRequest) ProtoMessage() {}
+
+func (x *ListProhibitionsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListProhibitionsRequest.ProtoReflect.Descriptor instead.
+func (*ListProhibitionsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *ListProhibitionsRequest) GetSubjectId() string {
+	if x != nil {
+		return x.SubjectId
+	}
+	return ""
+}
+
+type ProhibitionList struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Prohibitions  []*Prohibition         `protobuf:"bytes,1,rep,name=prohibitions,proto3" json:"prohibitions,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ProhibitionList) Reset() {
+	*x = ProhibitionList{}
+	mi := &file_proto_policy_policy_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProhibitionList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProhibitionList) ProtoMessage() {}
+
+func (x *ProhibitionList) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProhibitionList.ProtoReflect.Descriptor instead.
+func (*ProhibitionList) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *ProhibitionList) GetProhibitions() []*Prohibition {
+	if x != nil {
+		return x.Prohibitions
+	}
+	return nil
+}
+
+type ProhibitionDenial struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	ProhibitionName string                 `protobuf:"bytes,1,opt,name=prohibition_name,json=prohibitionName,proto3" json:"prohibition_name,omitempty"`
+	SubjectId       string                 `protobuf:"bytes,2,opt,name=subject_id,json=subjectId,proto3" json:"subject_id,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ProhibitionDenial) Reset() {
+	*x = ProhibitionDenial{}
+	mi := &file_proto_policy_policy_proto_msgTypes[32]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ProhibitionDenial) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ProhibitionDenial) ProtoMessage() {}
+
+func (x *ProhibitionDenial) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[32]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ProhibitionDenial.ProtoReflect.Descriptor instead.
+func (*ProhibitionDenial) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{32}
+}
+
+func (x *ProhibitionDenial) GetProhibitionName() string {
+	if x != nil {
+		return x.ProhibitionName
+	}
+	return ""
+}
+
+func (x *ProhibitionDenial) GetSubjectId() string {
+	if x != nil {
+		return x.SubjectId
+	}
+	return ""
+}
+
+type RegisterOperationsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Operations    []string               `protobuf:"bytes,1,rep,name=operations,proto3" json:"operations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterOperationsRequest) Reset() {
+	*x = RegisterOperationsRequest{}
+	mi := &file_proto_policy_policy_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterOperationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterOperationsRequest) ProtoMessage() {}
+
+func (x *RegisterOperationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterOperationsRequest.ProtoReflect.Descriptor instead.
+func (*RegisterOperationsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *RegisterOperationsRequest) GetOperations() []string {
+	if x != nil {
+		return x.Operations
+	}
+	return nil
+}
+
+type RegisterOperationsResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Registered    []string               `protobuf:"bytes,1,rep,name=registered,proto3" json:"registered,omitempty"`
+	AlreadyExists []string               `protobuf:"bytes,2,rep,name=already_exists,json=alreadyExists,proto3" json:"already_exists,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RegisterOperationsResponse) Reset() {
+	*x = RegisterOperationsResponse{}
+	mi := &file_proto_policy_policy_proto_msgTypes[34]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RegisterOperationsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RegisterOperationsResponse) ProtoMessage() {}
+
+func (x *RegisterOperationsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[34]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RegisterOperationsResponse.ProtoReflect.Descriptor instead.
+func (*RegisterOperationsResponse) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{34}
+}
+
+func (x *RegisterOperationsResponse) GetRegistered() []string {
+	if x != nil {
+		return x.Registered
+	}
+	return nil
+}
+
+func (x *RegisterOperationsResponse) GetAlreadyExists() []string {
+	if x != nil {
+		return x.AlreadyExists
+	}
+	return nil
+}
+
+type OperationList struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Operations    []string               `protobuf:"bytes,1,rep,name=operations,proto3" json:"operations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OperationList) Reset() {
+	*x = OperationList{}
+	mi := &file_proto_policy_policy_proto_msgTypes[35]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OperationList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OperationList) ProtoMessage() {}
+
+func (x *OperationList) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[35]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OperationList.ProtoReflect.Descriptor instead.
+func (*OperationList) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{35}
+}
+
+func (x *OperationList) GetOperations() []string {
+	if x != nil {
+		return x.Operations
+	}
+	return nil
+}
+
+type InvalidateCacheRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeIds       []string               `protobuf:"bytes,1,rep,name=node_ids,json=nodeIds,proto3" json:"node_ids,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InvalidateCacheRequest) Reset() {
+	*x = InvalidateCacheRequest{}
+	mi := &file_proto_policy_policy_proto_msgTypes[36]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InvalidateCacheRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InvalidateCacheRequest) ProtoMessage() {}
+
+func (x *InvalidateCacheRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[36]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InvalidateCacheRequest.ProtoReflect.Descriptor instead.
+func (*InvalidateCacheRequest) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{36}
+}
+
+func (x *InvalidateCacheRequest) GetNodeIds() []string {
+	if x != nil {
+		return x.NodeIds
+	}
+	return nil
+}
+
+func (x *InvalidateCacheRequest) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+type InvalidateCacheResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	L1KeysDeleted int32                  `protobuf:"varint,1,opt,name=l1_keys_deleted,json=l1KeysDeleted,proto3" json:"l1_keys_deleted,omitempty"`
+	L2RowsDeleted int32                  `protobuf:"varint,2,opt,name=l2_rows_deleted,json=l2RowsDeleted,proto3" json:"l2_rows_deleted,omitempty"`
+	NewVersion    int64                  `protobuf:"varint,3,opt,name=new_version,json=newVersion,proto3" json:"new_version,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *InvalidateCacheResponse) Reset() {
+	*x = InvalidateCacheResponse{}
+	mi := &file_proto_policy_policy_proto_msgTypes[37]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *InvalidateCacheResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*InvalidateCacheResponse) ProtoMessage() {}
+
+func (x *InvalidateCacheResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_proto_msgTypes[37]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use InvalidateCacheResponse.ProtoReflect.Descriptor instead.
+func (*InvalidateCacheResponse) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_proto_rawDescGZIP(), []int{37}
+}
+
+func (x *InvalidateCacheResponse) GetL1KeysDeleted() int32 {
+	if x != nil {
+		return x.L1KeysDeleted
+	}
+	return 0
+}
+
+func (x *InvalidateCacheResponse) GetL2RowsDeleted() int32 {
+	if x != nil {
+		return x.L2RowsDeleted
+	}
+	return 0
+}
+
+func (x *InvalidateCacheResponse) GetNewVersion() int64 {
+	if x != nil {
+		return x.NewVersion
+	}
+	return 0
+}
+
 var File_proto_policy_policy_proto protoreflect.FileDescriptor
 
 const file_proto_policy_policy_proto_rawDesc = "" +
@@ -1349,26 +2122,30 @@ const file_proto_policy_policy_proto_rawDesc = "" +
 	"\x05oa_id\x18\x03 \x01(\tR\x04oaId\x12\x1e\n" +
 	"\n" +
 	"operations\x18\x04 \x03(\tR\n" +
-	"operations\"z\n" +
+	"operations\"\xb3\x01\n" +
 	"\x12CheckAccessRequest\x12 \n" +
 	"\fuser_node_id\x18\x01 \x01(\tR\n" +
 	"userNodeId\x12$\n" +
 	"\x0eobject_node_id\x18\x02 \x01(\tR\fobjectNodeId\x12\x1c\n" +
-	"\toperation\x18\x03 \x01(\tR\toperation\"\xb3\x01\n" +
+	"\toperation\x18\x03 \x01(\tR\toperation\x12&\n" +
+	"\fworkspace_id\x18\x04 \x01(\tH\x00R\vworkspaceId\x88\x01\x01B\x0f\n" +
+	"\r_workspace_id\"\xb3\x01\n" +
 	"\x0eAccessDecision\x12\x1a\n" +
 	"\bdecision\x18\x01 \x01(\tR\bdecision\x12\x12\n" +
 	"\x04user\x18\x02 \x01(\tR\x04user\x12\x16\n" +
 	"\x06object\x18\x03 \x01(\tR\x06object\x12\x1c\n" +
 	"\toperation\x18\x04 \x01(\tR\toperation\x12;\n" +
-	"\vexplanation\x18\x05 \x01(\v2\x19.policy.AccessExplanationR\vexplanation\"\xb0\x02\n" +
+	"\vexplanation\x18\x05 \x01(\v2\x19.policy.AccessExplanationR\vexplanation\"\xa5\x03\n" +
 	"\x11AccessExplanation\x12\x12\n" +
-	"\x04path\x18\x01 \x03(\tR\x04path\x12!\n" +
-	"\fpolicy_class\x18\x02 \x01(\tR\vpolicyClass\x12'\n" +
+	"\x04path\x18\x01 \x03(\tR\x04path\x12%\n" +
+	"\fpolicy_class\x18\x02 \x01(\tB\x02\x18\x01R\vpolicyClass\x12'\n" +
 	"\x0fuser_attributes\x18\x03 \x03(\tR\x0euserAttributes\x12+\n" +
 	"\x11object_attributes\x18\x04 \x03(\tR\x10objectAttributes\x12\x16\n" +
 	"\x06reason\x18\x05 \x01(\tR\x06reason\x12/\n" +
 	"\x13constraints_checked\x18\x06 \x03(\tR\x12constraintsChecked\x12E\n" +
-	"\x11constraint_denied\x18\a \x01(\v2\x18.policy.ConstraintDenialR\x10constraintDenied\"@\n" +
+	"\x11constraint_denied\x18\a \x01(\v2\x18.policy.ConstraintDenialR\x10constraintDenied\x12H\n" +
+	"\x12prohibition_denied\x18\b \x01(\v2\x19.policy.ProhibitionDenialR\x11prohibitionDenied\x12%\n" +
+	"\x0epolicy_classes\x18\t \x03(\tR\rpolicyClasses\"@\n" +
 	"\x10ConstraintDenial\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\"\xce\x01\n" +
@@ -1417,7 +2194,76 @@ const file_proto_policy_policy_proto_rawDesc = "" +
 	"\x12GetChildrenRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\",\n" +
 	"\x11GetParentsRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId2\xaf\b\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"z\n" +
+	"\x17BatchCheckAccessRequest\x12 \n" +
+	"\fuser_node_id\x18\x01 \x01(\tR\n" +
+	"userNodeId\x12\x1d\n" +
+	"\n" +
+	"object_ids\x18\x02 \x03(\tR\tobjectIds\x12\x1e\n" +
+	"\n" +
+	"operations\x18\x03 \x03(\tR\n" +
+	"operations\"\xac\x01\n" +
+	"\x11BatchAccessResult\x12@\n" +
+	"\aresults\x18\x01 \x03(\v2&.policy.BatchAccessResult.ResultsEntryR\aresults\x1aU\n" +
+	"\fResultsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12/\n" +
+	"\x05value\x18\x02 \x01(\v2\x19.policy.ObjectPermissionsR\x05value:\x028\x01\"\xa1\x01\n" +
+	"\x11ObjectPermissions\x12L\n" +
+	"\vpermissions\x18\x01 \x03(\v2*.policy.ObjectPermissions.PermissionsEntryR\vpermissions\x1a>\n" +
+	"\x10PermissionsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\bR\x05value:\x028\x01\"\xb8\x01\n" +
+	"\vProhibition\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"subject_id\x18\x03 \x01(\tR\tsubjectId\x12\x1e\n" +
+	"\n" +
+	"operations\x18\x04 \x03(\tR\n" +
+	"operations\x12\"\n" +
+	"\rtarget_oa_ids\x18\x05 \x03(\tR\vtargetOaIds\x12\"\n" +
+	"\fintersection\x18\x06 \x01(\bR\fintersection\"\xb5\x01\n" +
+	"\x18CreateProhibitionRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1d\n" +
+	"\n" +
+	"subject_id\x18\x02 \x01(\tR\tsubjectId\x12\x1e\n" +
+	"\n" +
+	"operations\x18\x03 \x03(\tR\n" +
+	"operations\x12\"\n" +
+	"\rtarget_oa_ids\x18\x04 \x03(\tR\vtargetOaIds\x12\"\n" +
+	"\fintersection\x18\x05 \x01(\bR\fintersection\".\n" +
+	"\x18RemoveProhibitionRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"8\n" +
+	"\x17ListProhibitionsRequest\x12\x1d\n" +
+	"\n" +
+	"subject_id\x18\x01 \x01(\tR\tsubjectId\"J\n" +
+	"\x0fProhibitionList\x127\n" +
+	"\fprohibitions\x18\x01 \x03(\v2\x13.policy.ProhibitionR\fprohibitions\"]\n" +
+	"\x11ProhibitionDenial\x12)\n" +
+	"\x10prohibition_name\x18\x01 \x01(\tR\x0fprohibitionName\x12\x1d\n" +
+	"\n" +
+	"subject_id\x18\x02 \x01(\tR\tsubjectId\";\n" +
+	"\x19RegisterOperationsRequest\x12\x1e\n" +
+	"\n" +
+	"operations\x18\x01 \x03(\tR\n" +
+	"operations\"c\n" +
+	"\x1aRegisterOperationsResponse\x12\x1e\n" +
+	"\n" +
+	"registered\x18\x01 \x03(\tR\n" +
+	"registered\x12%\n" +
+	"\x0ealready_exists\x18\x02 \x03(\tR\ralreadyExists\"/\n" +
+	"\rOperationList\x12\x1e\n" +
+	"\n" +
+	"operations\x18\x01 \x03(\tR\n" +
+	"operations\"K\n" +
+	"\x16InvalidateCacheRequest\x12\x19\n" +
+	"\bnode_ids\x18\x01 \x03(\tR\anodeIds\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason\"\x8a\x01\n" +
+	"\x17InvalidateCacheResponse\x12&\n" +
+	"\x0fl1_keys_deleted\x18\x01 \x01(\x05R\rl1KeysDeleted\x12&\n" +
+	"\x0fl2_rows_deleted\x18\x02 \x01(\x05R\rl2RowsDeleted\x12\x1f\n" +
+	"\vnew_version\x18\x03 \x01(\x03R\n" +
+	"newVersion2\xaf\b\n" +
 	"\rPolicyService\x12A\n" +
 	"\vCheckAccess\x12\x1a.policy.CheckAccessRequest\x1a\x16.policy.AccessDecision\x129\n" +
 	"\n" +
@@ -1454,82 +2300,103 @@ func file_proto_policy_policy_proto_rawDescGZIP() []byte {
 	return file_proto_policy_policy_proto_rawDescData
 }
 
-var file_proto_policy_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_proto_policy_policy_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
 var file_proto_policy_policy_proto_goTypes = []any{
-	(*Empty)(nil),                    // 0: policy.Empty
-	(*BoolResponse)(nil),             // 1: policy.BoolResponse
-	(*NGACNode)(nil),                 // 2: policy.NGACNode
-	(*Assignment)(nil),               // 3: policy.Assignment
-	(*Association)(nil),              // 4: policy.Association
-	(*CheckAccessRequest)(nil),       // 5: policy.CheckAccessRequest
-	(*AccessDecision)(nil),           // 6: policy.AccessDecision
-	(*AccessExplanation)(nil),        // 7: policy.AccessExplanation
-	(*ConstraintDenial)(nil),         // 8: policy.ConstraintDenial
-	(*CreateNodeRequest)(nil),        // 9: policy.CreateNodeRequest
-	(*DeleteNodeRequest)(nil),        // 10: policy.DeleteNodeRequest
-	(*GetNodeRequest)(nil),           // 11: policy.GetNodeRequest
-	(*FindNodeByNameRequest)(nil),    // 12: policy.FindNodeByNameRequest
-	(*GetNodesByTypeRequest)(nil),    // 13: policy.GetNodesByTypeRequest
-	(*NodeList)(nil),                 // 14: policy.NodeList
-	(*CreateAssignmentRequest)(nil),  // 15: policy.CreateAssignmentRequest
-	(*RemoveAssignmentRequest)(nil),  // 16: policy.RemoveAssignmentRequest
-	(*IsAssignedRequest)(nil),        // 17: policy.IsAssignedRequest
-	(*CreateAssociationRequest)(nil), // 18: policy.CreateAssociationRequest
-	(*RemoveAssociationRequest)(nil), // 19: policy.RemoveAssociationRequest
-	(*GetAncestorsRequest)(nil),      // 20: policy.GetAncestorsRequest
-	(*GetDescendantsRequest)(nil),    // 21: policy.GetDescendantsRequest
-	(*GetChildrenRequest)(nil),       // 22: policy.GetChildrenRequest
-	(*GetParentsRequest)(nil),        // 23: policy.GetParentsRequest
-	nil,                              // 24: policy.NGACNode.PropertiesEntry
-	nil,                              // 25: policy.CreateNodeRequest.PropertiesEntry
-	(*timestamppb.Timestamp)(nil),    // 26: google.protobuf.Timestamp
+	(*Empty)(nil),                      // 0: policy.Empty
+	(*BoolResponse)(nil),               // 1: policy.BoolResponse
+	(*NGACNode)(nil),                   // 2: policy.NGACNode
+	(*Assignment)(nil),                 // 3: policy.Assignment
+	(*Association)(nil),                // 4: policy.Association
+	(*CheckAccessRequest)(nil),         // 5: policy.CheckAccessRequest
+	(*AccessDecision)(nil),             // 6: policy.AccessDecision
+	(*AccessExplanation)(nil),          // 7: policy.AccessExplanation
+	(*ConstraintDenial)(nil),           // 8: policy.ConstraintDenial
+	(*CreateNodeRequest)(nil),          // 9: policy.CreateNodeRequest
+	(*DeleteNodeRequest)(nil),          // 10: policy.DeleteNodeRequest
+	(*GetNodeRequest)(nil),             // 11: policy.GetNodeRequest
+	(*FindNodeByNameRequest)(nil),      // 12: policy.FindNodeByNameRequest
+	(*GetNodesByTypeRequest)(nil),      // 13: policy.GetNodesByTypeRequest
+	(*NodeList)(nil),                   // 14: policy.NodeList
+	(*CreateAssignmentRequest)(nil),    // 15: policy.CreateAssignmentRequest
+	(*RemoveAssignmentRequest)(nil),    // 16: policy.RemoveAssignmentRequest
+	(*IsAssignedRequest)(nil),          // 17: policy.IsAssignedRequest
+	(*CreateAssociationRequest)(nil),   // 18: policy.CreateAssociationRequest
+	(*RemoveAssociationRequest)(nil),   // 19: policy.RemoveAssociationRequest
+	(*GetAncestorsRequest)(nil),        // 20: policy.GetAncestorsRequest
+	(*GetDescendantsRequest)(nil),      // 21: policy.GetDescendantsRequest
+	(*GetChildrenRequest)(nil),         // 22: policy.GetChildrenRequest
+	(*GetParentsRequest)(nil),          // 23: policy.GetParentsRequest
+	(*BatchCheckAccessRequest)(nil),    // 24: policy.BatchCheckAccessRequest
+	(*BatchAccessResult)(nil),          // 25: policy.BatchAccessResult
+	(*ObjectPermissions)(nil),          // 26: policy.ObjectPermissions
+	(*Prohibition)(nil),                // 27: policy.Prohibition
+	(*CreateProhibitionRequest)(nil),   // 28: policy.CreateProhibitionRequest
+	(*RemoveProhibitionRequest)(nil),   // 29: policy.RemoveProhibitionRequest
+	(*ListProhibitionsRequest)(nil),    // 30: policy.ListProhibitionsRequest
+	(*ProhibitionList)(nil),            // 31: policy.ProhibitionList
+	(*ProhibitionDenial)(nil),          // 32: policy.ProhibitionDenial
+	(*RegisterOperationsRequest)(nil),  // 33: policy.RegisterOperationsRequest
+	(*RegisterOperationsResponse)(nil), // 34: policy.RegisterOperationsResponse
+	(*OperationList)(nil),              // 35: policy.OperationList
+	(*InvalidateCacheRequest)(nil),     // 36: policy.InvalidateCacheRequest
+	(*InvalidateCacheResponse)(nil),    // 37: policy.InvalidateCacheResponse
+	nil,                                // 38: policy.NGACNode.PropertiesEntry
+	nil,                                // 39: policy.CreateNodeRequest.PropertiesEntry
+	nil,                                // 40: policy.BatchAccessResult.ResultsEntry
+	nil,                                // 41: policy.ObjectPermissions.PermissionsEntry
+	(*timestamppb.Timestamp)(nil),      // 42: google.protobuf.Timestamp
 }
 var file_proto_policy_policy_proto_depIdxs = []int32{
-	24, // 0: policy.NGACNode.properties:type_name -> policy.NGACNode.PropertiesEntry
-	26, // 1: policy.NGACNode.created_at:type_name -> google.protobuf.Timestamp
+	38, // 0: policy.NGACNode.properties:type_name -> policy.NGACNode.PropertiesEntry
+	42, // 1: policy.NGACNode.created_at:type_name -> google.protobuf.Timestamp
 	7,  // 2: policy.AccessDecision.explanation:type_name -> policy.AccessExplanation
 	8,  // 3: policy.AccessExplanation.constraint_denied:type_name -> policy.ConstraintDenial
-	25, // 4: policy.CreateNodeRequest.properties:type_name -> policy.CreateNodeRequest.PropertiesEntry
-	2,  // 5: policy.NodeList.nodes:type_name -> policy.NGACNode
-	5,  // 6: policy.PolicyService.CheckAccess:input_type -> policy.CheckAccessRequest
-	9,  // 7: policy.PolicyService.CreateNode:input_type -> policy.CreateNodeRequest
-	10, // 8: policy.PolicyService.DeleteNode:input_type -> policy.DeleteNodeRequest
-	11, // 9: policy.PolicyService.GetNode:input_type -> policy.GetNodeRequest
-	12, // 10: policy.PolicyService.FindNodeByName:input_type -> policy.FindNodeByNameRequest
-	13, // 11: policy.PolicyService.GetNodesByType:input_type -> policy.GetNodesByTypeRequest
-	15, // 12: policy.PolicyService.CreateAssignment:input_type -> policy.CreateAssignmentRequest
-	16, // 13: policy.PolicyService.RemoveAssignment:input_type -> policy.RemoveAssignmentRequest
-	17, // 14: policy.PolicyService.IsAssigned:input_type -> policy.IsAssignedRequest
-	18, // 15: policy.PolicyService.CreateAssociation:input_type -> policy.CreateAssociationRequest
-	19, // 16: policy.PolicyService.RemoveAssociation:input_type -> policy.RemoveAssociationRequest
-	20, // 17: policy.PolicyService.GetAncestors:input_type -> policy.GetAncestorsRequest
-	21, // 18: policy.PolicyService.GetDescendants:input_type -> policy.GetDescendantsRequest
-	22, // 19: policy.PolicyService.GetChildren:input_type -> policy.GetChildrenRequest
-	23, // 20: policy.PolicyService.GetParents:input_type -> policy.GetParentsRequest
-	0,  // 21: policy.PolicyService.InitSchema:input_type -> policy.Empty
-	0,  // 22: policy.PolicyService.LoadGraph:input_type -> policy.Empty
-	6,  // 23: policy.PolicyService.CheckAccess:output_type -> policy.AccessDecision
-	2,  // 24: policy.PolicyService.CreateNode:output_type -> policy.NGACNode
-	0,  // 25: policy.PolicyService.DeleteNode:output_type -> policy.Empty
-	2,  // 26: policy.PolicyService.GetNode:output_type -> policy.NGACNode
-	2,  // 27: policy.PolicyService.FindNodeByName:output_type -> policy.NGACNode
-	14, // 28: policy.PolicyService.GetNodesByType:output_type -> policy.NodeList
-	3,  // 29: policy.PolicyService.CreateAssignment:output_type -> policy.Assignment
-	0,  // 30: policy.PolicyService.RemoveAssignment:output_type -> policy.Empty
-	1,  // 31: policy.PolicyService.IsAssigned:output_type -> policy.BoolResponse
-	4,  // 32: policy.PolicyService.CreateAssociation:output_type -> policy.Association
-	0,  // 33: policy.PolicyService.RemoveAssociation:output_type -> policy.Empty
-	14, // 34: policy.PolicyService.GetAncestors:output_type -> policy.NodeList
-	14, // 35: policy.PolicyService.GetDescendants:output_type -> policy.NodeList
-	14, // 36: policy.PolicyService.GetChildren:output_type -> policy.NodeList
-	14, // 37: policy.PolicyService.GetParents:output_type -> policy.NodeList
-	0,  // 38: policy.PolicyService.InitSchema:output_type -> policy.Empty
-	0,  // 39: policy.PolicyService.LoadGraph:output_type -> policy.Empty
-	23, // [23:40] is the sub-list for method output_type
-	6,  // [6:23] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	32, // 4: policy.AccessExplanation.prohibition_denied:type_name -> policy.ProhibitionDenial
+	39, // 5: policy.CreateNodeRequest.properties:type_name -> policy.CreateNodeRequest.PropertiesEntry
+	2,  // 6: policy.NodeList.nodes:type_name -> policy.NGACNode
+	40, // 7: policy.BatchAccessResult.results:type_name -> policy.BatchAccessResult.ResultsEntry
+	41, // 8: policy.ObjectPermissions.permissions:type_name -> policy.ObjectPermissions.PermissionsEntry
+	27, // 9: policy.ProhibitionList.prohibitions:type_name -> policy.Prohibition
+	26, // 10: policy.BatchAccessResult.ResultsEntry.value:type_name -> policy.ObjectPermissions
+	5,  // 11: policy.PolicyService.CheckAccess:input_type -> policy.CheckAccessRequest
+	9,  // 12: policy.PolicyService.CreateNode:input_type -> policy.CreateNodeRequest
+	10, // 13: policy.PolicyService.DeleteNode:input_type -> policy.DeleteNodeRequest
+	11, // 14: policy.PolicyService.GetNode:input_type -> policy.GetNodeRequest
+	12, // 15: policy.PolicyService.FindNodeByName:input_type -> policy.FindNodeByNameRequest
+	13, // 16: policy.PolicyService.GetNodesByType:input_type -> policy.GetNodesByTypeRequest
+	15, // 17: policy.PolicyService.CreateAssignment:input_type -> policy.CreateAssignmentRequest
+	16, // 18: policy.PolicyService.RemoveAssignment:input_type -> policy.RemoveAssignmentRequest
+	17, // 19: policy.PolicyService.IsAssigned:input_type -> policy.IsAssignedRequest
+	18, // 20: policy.PolicyService.CreateAssociation:input_type -> policy.CreateAssociationRequest
+	19, // 21: policy.PolicyService.RemoveAssociation:input_type -> policy.RemoveAssociationRequest
+	20, // 22: policy.PolicyService.GetAncestors:input_type -> policy.GetAncestorsRequest
+	21, // 23: policy.PolicyService.GetDescendants:input_type -> policy.GetDescendantsRequest
+	22, // 24: policy.PolicyService.GetChildren:input_type -> policy.GetChildrenRequest
+	23, // 25: policy.PolicyService.GetParents:input_type -> policy.GetParentsRequest
+	0,  // 26: policy.PolicyService.InitSchema:input_type -> policy.Empty
+	0,  // 27: policy.PolicyService.LoadGraph:input_type -> policy.Empty
+	6,  // 28: policy.PolicyService.CheckAccess:output_type -> policy.AccessDecision
+	2,  // 29: policy.PolicyService.CreateNode:output_type -> policy.NGACNode
+	0,  // 30: policy.PolicyService.DeleteNode:output_type -> policy.Empty
+	2,  // 31: policy.PolicyService.GetNode:output_type -> policy.NGACNode
+	2,  // 32: policy.PolicyService.FindNodeByName:output_type -> policy.NGACNode
+	14, // 33: policy.PolicyService.GetNodesByType:output_type -> policy.NodeList
+	3,  // 34: policy.PolicyService.CreateAssignment:output_type -> policy.Assignment
+	0,  // 35: policy.PolicyService.RemoveAssignment:output_type -> policy.Empty
+	1,  // 36: policy.PolicyService.IsAssigned:output_type -> policy.BoolResponse
+	4,  // 37: policy.PolicyService.CreateAssociation:output_type -> policy.Association
+	0,  // 38: policy.PolicyService.RemoveAssociation:output_type -> policy.Empty
+	14, // 39: policy.PolicyService.GetAncestors:output_type -> policy.NodeList
+	14, // 40: policy.PolicyService.GetDescendants:output_type -> policy.NodeList
+	14, // 41: policy.PolicyService.GetChildren:output_type -> policy.NodeList
+	14, // 42: policy.PolicyService.GetParents:output_type -> policy.NodeList
+	0,  // 43: policy.PolicyService.InitSchema:output_type -> policy.Empty
+	0,  // 44: policy.PolicyService.LoadGraph:output_type -> policy.Empty
+	28, // [28:45] is the sub-list for method output_type
+	11, // [11:28] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_proto_policy_policy_proto_init() }
@@ -1537,13 +2404,14 @@ func file_proto_policy_policy_proto_init() {
 	if File_proto_policy_policy_proto != nil {
 		return
 	}
+	file_proto_policy_policy_proto_msgTypes[5].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_policy_policy_proto_rawDesc), len(file_proto_policy_policy_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   26,
+			NumMessages:   42,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

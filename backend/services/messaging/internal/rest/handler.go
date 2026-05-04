@@ -9,18 +9,26 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"ngac-platform/pkg/httputil"
+	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/domain"
 )
+
+// Broadcaster pushes real-time events to WebSocket clients.
+type Broadcaster interface {
+	BroadcastToChannel(channelID string, msg *pb.Message)
+	BroadcastThreadReply(channelID string, msg *pb.Message)
+}
 
 // Handler serves messaging REST endpoints.
 type Handler struct {
 	svc     *domain.Service
 	notifSt domain.NotificationStore
+	hub     Broadcaster
 }
 
 // NewHandler creates a messaging REST handler.
-func NewHandler(svc *domain.Service, notifSt domain.NotificationStore) *Handler {
-	return &Handler{svc: svc, notifSt: notifSt}
+func NewHandler(svc *domain.Service, notifSt domain.NotificationStore, hub Broadcaster) *Handler {
+	return &Handler{svc: svc, notifSt: notifSt, hub: hub}
 }
 
 // RegisterRoutes mounts messaging endpoints on the Echo instance.
@@ -31,6 +39,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/workspaces/:id/channels", h.CreateChannel)
 	api.GET("/workspaces/:id/channels", h.ListChannels)
 	api.GET("/channels/:chId", h.GetChannel)
+	api.PATCH("/channels/:chId", h.UpdateChannel)
 
 	// Messages
 	api.POST("/channels/:chId/messages", h.SendMessage)
@@ -43,13 +52,42 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// Channel Members
 	api.POST("/channels/:chId/members", h.AddChannelMember)
 	api.GET("/channels/:chId/members", h.ListChannelMembers)
+	api.DELETE("/channels/:chId/members/:nodeId", h.RemoveChannelMember)
 
-	// Channel Drive
-	api.GET("/channels/:chId/drive", h.GetChannelDrive)
+
 
 	// DMs
 	api.POST("/dms", h.CreateDM)
 	api.GET("/dms", h.ListDMs)
+
+	// Reactions
+	api.POST("/messages/:msgId/reactions", h.AddReaction)
+	api.DELETE("/messages/:msgId/reactions/:emoji", h.RemoveReaction)
+	api.GET("/messages/:msgId/reactions", h.ListReactions)
+
+	// Pins
+	api.POST("/channels/:chId/pins", h.PinMessage)
+	api.DELETE("/channels/:chId/pins/:msgId", h.UnpinMessage)
+	api.GET("/channels/:chId/pins", h.ListPins)
+
+	// Read Receipts
+	api.POST("/channels/:chId/read", h.MarkChannelRead)
+	api.GET("/channels/unread", h.GetUnreadCounts)
+
+	// Search
+	api.GET("/channels/:chId/search", h.SearchMessages)
+
+	// Polls
+	api.POST("/channels/:chId/polls", h.CreatePoll)
+	api.POST("/polls/:pollId/vote", h.VotePoll)
+	api.DELETE("/polls/:pollId/vote", h.RemoveVote)
+	api.GET("/polls/:pollId", h.GetPoll)
+
+	// Tasks
+	api.POST("/channels/:chId/tasks", h.CreateTask)
+	api.PATCH("/tasks/:taskId", h.UpdateTask)
+	api.GET("/channels/:chId/tasks", h.ListTasks)
+
 
 	// Notifications
 	api.GET("/notifications", h.ListNotifications)
@@ -60,7 +98,10 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 
 // CreateChannel handles POST /api/workspaces/:id/channels.
 func (h *Handler) CreateChannel(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		Name        string `json:"name"`
 		ChannelType string `json:"channel_type"`
@@ -87,7 +128,10 @@ func (h *Handler) CreateChannel(c echo.Context) error {
 
 // ListChannels handles GET /api/workspaces/:id/channels.
 func (h *Handler) ListChannels(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	channels, err := h.svc.ListChannels(c.Request().Context(), c.Param("id"), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
@@ -104,13 +148,34 @@ func (h *Handler) GetChannel(c echo.Context) error {
 	return c.JSON(http.StatusOK, ch)
 }
 
+// UpdateChannel handles PATCH /api/channels/:chId.
+func (h *Handler) UpdateChannel(c echo.Context) error {
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	ch, err := h.svc.UpdateChannel(c.Request().Context(), c.Param("chId"), body.Name)
+	if err != nil {
+		return httputil.MapDomainError(err)
+	}
+	return c.JSON(http.StatusOK, ch)
+}
+
 // SendMessage handles POST /api/channels/:chId/messages.
 func (h *Handler) SendMessage(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
-		Content          string `json:"content"`
-		LinkedEntityType string `json:"linked_entity_type"`
-		LinkedEntityID   string `json:"linked_entity_id"`
+		Content          string   `json:"content"`
+		ContentFormat    string   `json:"content_format"`
+		Mentions         []string `json:"mentions"`
+		LinkedEntityType string   `json:"linked_entity_type"`
+		LinkedEntityID   string   `json:"linked_entity_id"`
+		ParentMessageID  string   `json:"parent_message_id"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
@@ -121,18 +186,30 @@ func (h *Handler) SendMessage(c echo.Context) error {
 		SenderID:         claims.UserID,
 		SenderNodeID:     claims.NGACNodeID,
 		Content:          body.Content,
+		ContentFormat:    body.ContentFormat,
+		Mentions:         body.Mentions,
+		ParentMessageID:  body.ParentMessageID,
 		LinkedEntityType: body.LinkedEntityType,
 		LinkedEntityID:   body.LinkedEntityID,
 	})
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
+
+	// Broadcast via WebSocket hub (fire-and-forget).
+	if h.hub != nil {
+		h.hub.BroadcastToChannel(c.Param("chId"), msg)
+	}
+
 	return c.JSON(http.StatusCreated, msg)
 }
 
 // GetMessages handles GET /api/channels/:chId/messages.
 func (h *Handler) GetMessages(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	before := c.QueryParam("before")
 	limitStr := c.QueryParam("limit")
 	limit := 50
@@ -169,7 +246,10 @@ func (h *Handler) FindThreadsByEntity(c echo.Context) error {
 
 // AddChannelMember handles POST /api/channels/:chId/members.
 func (h *Handler) AddChannelMember(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		NGACNodeID string `json:"ngac_node_id"`
 	}
@@ -192,19 +272,33 @@ func (h *Handler) ListChannelMembers(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"members": members})
 }
 
-// GetChannelDrive handles GET /api/channels/:chId/drive.
-// Returns the channel info which contains drive references.
-func (h *Handler) GetChannelDrive(c echo.Context) error {
-	ch, err := h.svc.GetChannel(c.Request().Context(), c.Param("chId"))
+// RemoveChannelMember handles DELETE /api/channels/:chId/members/:nodeId.
+func (h *Handler) RemoveChannelMember(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
 	if err != nil {
+		return err
+	}
+	channelID := c.Param("chId")
+	targetNodeID := c.Param("nodeId")
+	if targetNodeID == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "target node ID required")
+	}
+
+	_ = claims // JWT auth enforced, NGAC policy checked in domain
+	if err := h.svc.RemoveMember(c.Request().Context(), channelID, targetNodeID); err != nil {
 		return httputil.MapDomainError(err)
 	}
-	return c.JSON(http.StatusOK, ch)
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
+
+
 
 // CreateDM handles POST /api/dms.
 func (h *Handler) CreateDM(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		TargetUserID     string `json:"target_user_id"`
 		TargetNGACNodeID string `json:"target_ngac_node_id"`
@@ -222,7 +316,10 @@ func (h *Handler) CreateDM(c echo.Context) error {
 
 // ListDMs handles GET /api/dms.
 func (h *Handler) ListDMs(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	dms, err := h.svc.ListDMs(c.Request().Context(), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
@@ -232,7 +329,10 @@ func (h *Handler) ListDMs(c echo.Context) error {
 
 // ListNotifications handles GET /api/notifications.
 func (h *Handler) ListNotifications(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	notifs, err := h.notifSt.ListByUser(c.Request().Context(), claims.UserID)
 	if err != nil {
 		return httputil.MapDomainError(err)
@@ -250,7 +350,10 @@ func (h *Handler) MarkRead(c echo.Context) error {
 
 // MarkAllRead handles POST /api/notifications/read-all.
 func (h *Handler) MarkAllRead(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	if err := h.notifSt.MarkAllRead(c.Request().Context(), claims.UserID); err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -259,7 +362,10 @@ func (h *Handler) MarkAllRead(c echo.Context) error {
 
 // UnreadCount handles GET /api/notifications/unread-count.
 func (h *Handler) UnreadCount(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	count, err := h.notifSt.UnreadCount(c.Request().Context(), claims.UserID)
 	if err != nil {
 		return httputil.MapDomainError(err)

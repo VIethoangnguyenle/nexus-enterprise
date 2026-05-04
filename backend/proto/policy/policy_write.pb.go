@@ -24,7 +24,7 @@ var File_proto_policy_policy_write_proto protoreflect.FileDescriptor
 
 const file_proto_policy_policy_write_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/policy/policy_write.proto\x12\x06policy\x1a\x19proto/policy/policy.proto2\xfd\x03\n" +
+	"\x1fproto/policy/policy_write.proto\x12\x06policy\x1a\x19proto/policy/policy.proto2\xc0\x06\n" +
 	"\x12PolicyWriteService\x129\n" +
 	"\n" +
 	"CreateNode\x12\x19.policy.CreateNodeRequest\x1a\x10.policy.NGACNode\x126\n" +
@@ -33,45 +33,64 @@ const file_proto_policy_policy_write_proto_rawDesc = "" +
 	"\x10CreateAssignment\x12\x1f.policy.CreateAssignmentRequest\x1a\x12.policy.Assignment\x12B\n" +
 	"\x10RemoveAssignment\x12\x1f.policy.RemoveAssignmentRequest\x1a\r.policy.Empty\x12J\n" +
 	"\x11CreateAssociation\x12 .policy.CreateAssociationRequest\x1a\x13.policy.Association\x12D\n" +
-	"\x11RemoveAssociation\x12 .policy.RemoveAssociationRequest\x1a\r.policy.Empty\x12*\n" +
+	"\x11RemoveAssociation\x12 .policy.RemoveAssociationRequest\x1a\r.policy.Empty\x12J\n" +
+	"\x11CreateProhibition\x12 .policy.CreateProhibitionRequest\x1a\x13.policy.Prohibition\x12D\n" +
+	"\x11RemoveProhibition\x12 .policy.RemoveProhibitionRequest\x1a\r.policy.Empty\x12[\n" +
+	"\x12RegisterOperations\x12!.policy.RegisterOperationsRequest\x1a\".policy.RegisterOperationsResponse\x12R\n" +
+	"\x0fInvalidateCache\x12\x1e.policy.InvalidateCacheRequest\x1a\x1f.policy.InvalidateCacheResponse\x12*\n" +
 	"\n" +
 	"InitSchema\x12\r.policy.Empty\x1a\r.policy.Empty\x12)\n" +
 	"\tLoadGraph\x12\r.policy.Empty\x1a\r.policy.EmptyB\x1cZ\x1angac-platform/proto/policyb\x06proto3"
 
 var file_proto_policy_policy_write_proto_goTypes = []any{
-	(*CreateNodeRequest)(nil),        // 0: policy.CreateNodeRequest
-	(*DeleteNodeRequest)(nil),        // 1: policy.DeleteNodeRequest
-	(*CreateAssignmentRequest)(nil),  // 2: policy.CreateAssignmentRequest
-	(*RemoveAssignmentRequest)(nil),  // 3: policy.RemoveAssignmentRequest
-	(*CreateAssociationRequest)(nil), // 4: policy.CreateAssociationRequest
-	(*RemoveAssociationRequest)(nil), // 5: policy.RemoveAssociationRequest
-	(*Empty)(nil),                    // 6: policy.Empty
-	(*NGACNode)(nil),                 // 7: policy.NGACNode
-	(*Assignment)(nil),               // 8: policy.Assignment
-	(*Association)(nil),              // 9: policy.Association
+	(*CreateNodeRequest)(nil),          // 0: policy.CreateNodeRequest
+	(*DeleteNodeRequest)(nil),          // 1: policy.DeleteNodeRequest
+	(*CreateAssignmentRequest)(nil),    // 2: policy.CreateAssignmentRequest
+	(*RemoveAssignmentRequest)(nil),    // 3: policy.RemoveAssignmentRequest
+	(*CreateAssociationRequest)(nil),   // 4: policy.CreateAssociationRequest
+	(*RemoveAssociationRequest)(nil),   // 5: policy.RemoveAssociationRequest
+	(*CreateProhibitionRequest)(nil),   // 6: policy.CreateProhibitionRequest
+	(*RemoveProhibitionRequest)(nil),   // 7: policy.RemoveProhibitionRequest
+	(*RegisterOperationsRequest)(nil),  // 8: policy.RegisterOperationsRequest
+	(*InvalidateCacheRequest)(nil),     // 9: policy.InvalidateCacheRequest
+	(*Empty)(nil),                      // 10: policy.Empty
+	(*NGACNode)(nil),                   // 11: policy.NGACNode
+	(*Assignment)(nil),                 // 12: policy.Assignment
+	(*Association)(nil),                // 13: policy.Association
+	(*Prohibition)(nil),                // 14: policy.Prohibition
+	(*RegisterOperationsResponse)(nil), // 15: policy.RegisterOperationsResponse
+	(*InvalidateCacheResponse)(nil),    // 16: policy.InvalidateCacheResponse
 }
 var file_proto_policy_policy_write_proto_depIdxs = []int32{
-	0, // 0: policy.PolicyWriteService.CreateNode:input_type -> policy.CreateNodeRequest
-	1, // 1: policy.PolicyWriteService.DeleteNode:input_type -> policy.DeleteNodeRequest
-	2, // 2: policy.PolicyWriteService.CreateAssignment:input_type -> policy.CreateAssignmentRequest
-	3, // 3: policy.PolicyWriteService.RemoveAssignment:input_type -> policy.RemoveAssignmentRequest
-	4, // 4: policy.PolicyWriteService.CreateAssociation:input_type -> policy.CreateAssociationRequest
-	5, // 5: policy.PolicyWriteService.RemoveAssociation:input_type -> policy.RemoveAssociationRequest
-	6, // 6: policy.PolicyWriteService.InitSchema:input_type -> policy.Empty
-	6, // 7: policy.PolicyWriteService.LoadGraph:input_type -> policy.Empty
-	7, // 8: policy.PolicyWriteService.CreateNode:output_type -> policy.NGACNode
-	6, // 9: policy.PolicyWriteService.DeleteNode:output_type -> policy.Empty
-	8, // 10: policy.PolicyWriteService.CreateAssignment:output_type -> policy.Assignment
-	6, // 11: policy.PolicyWriteService.RemoveAssignment:output_type -> policy.Empty
-	9, // 12: policy.PolicyWriteService.CreateAssociation:output_type -> policy.Association
-	6, // 13: policy.PolicyWriteService.RemoveAssociation:output_type -> policy.Empty
-	6, // 14: policy.PolicyWriteService.InitSchema:output_type -> policy.Empty
-	6, // 15: policy.PolicyWriteService.LoadGraph:output_type -> policy.Empty
-	8, // [8:16] is the sub-list for method output_type
-	0, // [0:8] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	0,  // 0: policy.PolicyWriteService.CreateNode:input_type -> policy.CreateNodeRequest
+	1,  // 1: policy.PolicyWriteService.DeleteNode:input_type -> policy.DeleteNodeRequest
+	2,  // 2: policy.PolicyWriteService.CreateAssignment:input_type -> policy.CreateAssignmentRequest
+	3,  // 3: policy.PolicyWriteService.RemoveAssignment:input_type -> policy.RemoveAssignmentRequest
+	4,  // 4: policy.PolicyWriteService.CreateAssociation:input_type -> policy.CreateAssociationRequest
+	5,  // 5: policy.PolicyWriteService.RemoveAssociation:input_type -> policy.RemoveAssociationRequest
+	6,  // 6: policy.PolicyWriteService.CreateProhibition:input_type -> policy.CreateProhibitionRequest
+	7,  // 7: policy.PolicyWriteService.RemoveProhibition:input_type -> policy.RemoveProhibitionRequest
+	8,  // 8: policy.PolicyWriteService.RegisterOperations:input_type -> policy.RegisterOperationsRequest
+	9,  // 9: policy.PolicyWriteService.InvalidateCache:input_type -> policy.InvalidateCacheRequest
+	10, // 10: policy.PolicyWriteService.InitSchema:input_type -> policy.Empty
+	10, // 11: policy.PolicyWriteService.LoadGraph:input_type -> policy.Empty
+	11, // 12: policy.PolicyWriteService.CreateNode:output_type -> policy.NGACNode
+	10, // 13: policy.PolicyWriteService.DeleteNode:output_type -> policy.Empty
+	12, // 14: policy.PolicyWriteService.CreateAssignment:output_type -> policy.Assignment
+	10, // 15: policy.PolicyWriteService.RemoveAssignment:output_type -> policy.Empty
+	13, // 16: policy.PolicyWriteService.CreateAssociation:output_type -> policy.Association
+	10, // 17: policy.PolicyWriteService.RemoveAssociation:output_type -> policy.Empty
+	14, // 18: policy.PolicyWriteService.CreateProhibition:output_type -> policy.Prohibition
+	10, // 19: policy.PolicyWriteService.RemoveProhibition:output_type -> policy.Empty
+	15, // 20: policy.PolicyWriteService.RegisterOperations:output_type -> policy.RegisterOperationsResponse
+	16, // 21: policy.PolicyWriteService.InvalidateCache:output_type -> policy.InvalidateCacheResponse
+	10, // 22: policy.PolicyWriteService.InitSchema:output_type -> policy.Empty
+	10, // 23: policy.PolicyWriteService.LoadGraph:output_type -> policy.Empty
+	12, // [12:24] is the sub-list for method output_type
+	0,  // [0:12] is the sub-list for method input_type
+	0,  // [0:0] is the sub-list for extension type_name
+	0,  // [0:0] is the sub-list for extension extendee
+	0,  // [0:0] is the sub-list for field type_name
 }
 
 func init() { file_proto_policy_policy_write_proto_init() }

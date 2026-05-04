@@ -69,7 +69,7 @@ func (s *NotificationServer) ListNotifications(ctx context.Context, req *pb.List
 	}, nil
 }
 
-func (s *NotificationServer) MarkRead(ctx context.Context, req *pb.MarkReadRequest) (*pb.Empty, error) {
+func (s *NotificationServer) MarkRead(ctx context.Context, req *pb.MarkNotificationReadRequest) (*pb.Empty, error) {
 	_, err := s.db.Exec(ctx,
 		"UPDATE notifications SET read = TRUE WHERE id = $1 AND user_id = $2",
 		req.NotificationId, req.UserId,
@@ -80,7 +80,7 @@ func (s *NotificationServer) MarkRead(ctx context.Context, req *pb.MarkReadReque
 	return &pb.Empty{}, nil
 }
 
-func (s *NotificationServer) MarkAllRead(ctx context.Context, req *pb.MarkAllReadRequest) (*pb.Empty, error) {
+func (s *NotificationServer) MarkAllRead(ctx context.Context, req *pb.MarkAllNotificationsReadRequest) (*pb.Empty, error) {
 	_, err := s.db.Exec(ctx,
 		"UPDATE notifications SET read = TRUE WHERE user_id = $1 AND read = FALSE",
 		req.UserId,
@@ -91,7 +91,7 @@ func (s *NotificationServer) MarkAllRead(ctx context.Context, req *pb.MarkAllRea
 	return &pb.Empty{}, nil
 }
 
-func (s *NotificationServer) GetUnreadCount(ctx context.Context, req *pb.GetUnreadCountRequest) (*pb.UnreadCountResponse, error) {
+func (s *NotificationServer) GetUnreadCount(ctx context.Context, req *pb.GetNotificationUnreadCountRequest) (*pb.NotificationUnreadCountResponse, error) {
 	var count int32
 	err := s.db.QueryRow(ctx,
 		"SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND read = FALSE",
@@ -100,7 +100,7 @@ func (s *NotificationServer) GetUnreadCount(ctx context.Context, req *pb.GetUnre
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "get unread count: %v", err)
 	}
-	return &pb.UnreadCountResponse{Count: count}, nil
+	return &pb.NotificationUnreadCountResponse{Count: count}, nil
 }
 
 // CreateNotification inserts a notification and pushes to connected WebSocket.

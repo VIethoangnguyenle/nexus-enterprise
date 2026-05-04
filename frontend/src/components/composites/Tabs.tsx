@@ -13,12 +13,11 @@ interface TabsProps {
   className?: string
 }
 
-/** Horizontal tab bar with active state indicator. */
+/** Horizontal tab bar with accent bottom indicator. */
 export function Tabs({ tabs, activeId, onChange, className = '' }: TabsProps) {
   return (
     <div
-      className={`flex gap-0.5 bg-bg-glass border border-border rounded-[var(--radius-md)]
-        p-1 ${className}`}
+      className={`flex border-b border-outline-variant ${className}`}
       role="tablist"
     >
       {tabs.map(tab => (
@@ -27,15 +26,19 @@ export function Tabs({ tabs, activeId, onChange, className = '' }: TabsProps) {
           role="tab"
           aria-selected={tab.id === activeId}
           onClick={() => onChange(tab.id)}
-          className={`flex items-center gap-2 px-4 py-2 rounded-[var(--radius-sm)]
-            text-sm font-medium transition-all duration-200 cursor-pointer border-none
+          className={`flex items-center gap-2 px-4 py-2 text-small-ui
+            transition-colors duration-fast cursor-pointer border-none
+            bg-transparent relative focus-ring
             ${tab.id === activeId
-              ? 'bg-accent text-white shadow-[0_2px_8px_var(--color-accent-glow)]'
-              : 'bg-transparent text-text-secondary hover:text-text-primary'
+              ? 'text-on-surface font-semibold'
+              : 'text-on-surface-variant hover:text-on-surface'
             }`}
         >
           {tab.icon}
           {tab.label}
+          {tab.id === activeId && (
+            <span className="absolute bottom-0 left-2 right-2 h-0.5 bg-accent rounded-full" />
+          )}
         </button>
       ))}
     </div>

@@ -64,6 +64,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.PUT("/asset-types/:typeId/schema", h.UpdateAssetTypeSchema)
 
 	// Assets
+	api.GET("/workspaces/:id/assets/summary", h.GetAssetSummary)
 	api.POST("/workspaces/:id/assets", h.CreateAsset)
 	api.GET("/workspaces/:id/assets", h.ListAssets)
 	api.GET("/assets/:assetId", h.GetAsset)
@@ -83,6 +84,31 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/asset-requests/:reqId/reject", h.RejectAssetRequest)
 	api.POST("/asset-requests/:reqId/assign", h.AssignAsset)
 	api.POST("/assets/:assetId/return", h.ReturnAsset)
+}
+
+// --- Asset Summary ---
+
+// GetAssetSummary returns aggregate counts for the asset dashboard.
+func (h *Handler) GetAssetSummary(c echo.Context) error {
+	resp, err := h.assetSvc.ListAssets(c.Request().Context(), &pb.ListAssetsRequest{
+		WorkspaceId: c.Param("id"),
+	})
+	if err != nil {
+		return mapGRPCError(err)
+	}
+	total := len(resp.GetAssets())
+	var inUse, pending int
+	for _, a := range resp.GetAssets() {
+		switch a.GetState() {
+		case "in_use", "assigned":
+			inUse++
+		case "pending", "requested":
+			pending++
+		}
+	}
+	return c.JSON(http.StatusOK, map[string]int{
+		"total": total, "in_use": inUse, "pending": pending,
+	})
 }
 
 // --- Asset Types ---

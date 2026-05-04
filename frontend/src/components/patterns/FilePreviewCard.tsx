@@ -1,26 +1,13 @@
 import { useState } from 'react'
 import { driveApi, type DriveItem } from '../../api/drive'
 import { Spinner } from '../primitives'
+import { getFileIcon } from '../../lib/fileIcons'
+import { Download } from 'lucide-react'
 
 /** Accept either a full DriveItem or just fileId+filename for lightweight rendering from messages. */
 type FilePreviewCardProps =
   | { item: DriveItem; fileId?: never; filename?: never }
   | { fileId: string; filename: string; item?: never }
-
-/** Derives a display icon from a filename extension. */
-function getIcon(name: string): string {
-  const ext = name.split('.').pop()?.toLowerCase() || ''
-  const map: Record<string, string> = {
-    pdf: '📕', doc: '📘', docx: '📘', xls: '📗', xlsx: '📗', csv: '📊',
-    jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️', svg: '🖼️', webp: '🖼️',
-    mp4: '🎬', webm: '🎬', mov: '🎬',
-    mp3: '🎵', wav: '🎵', ogg: '🎵',
-    zip: '📦', rar: '📦', tar: '📦', gz: '📦',
-    js: '💻', ts: '💻', go: '💻', py: '💻', rs: '💻',
-    md: '📝', txt: '📝',
-  }
-  return map[ext] || '📄'
-}
 
 /** Formats byte count into a human-readable string. */
 function formatSize(bytes: number): string {
@@ -33,11 +20,14 @@ function formatSize(bytes: number): string {
 /** Inline file card for chat messages — shows icon, filename, size, and download action. */
 export function FilePreviewCard(props: FilePreviewCardProps) {
   const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
 
   const id = props.item?.id ?? props.fileId!
   const name = props.item?.name ?? props.filename!
   const sizeBytes = props.item?.size_bytes ?? 0
-  const icon = getIcon(name)
+  const mimeType = props.item?.mime_type
+  const fi = getFileIcon(name, mimeType)
+  const FileIcon = fi.icon
   const extension = name.split('.').pop()?.toUpperCase() || 'FILE'
 
   const handleDownload = async () => {
@@ -49,7 +39,8 @@ export function FilePreviewCard(props: FilePreviewCardProps) {
       a.download = name
       a.click()
     } catch (err: any) {
-      alert(`Download failed: ${err.message}`)
+      setDownloadError(err.message || 'Download failed')
+      setTimeout(() => setDownloadError(null), 5000)
     } finally {
       setDownloading(false)
     }
@@ -58,34 +49,36 @@ export function FilePreviewCard(props: FilePreviewCardProps) {
   return (
     <div
       id={`file-card-${id}`}
-      className="inline-flex items-center gap-3 bg-bg-glass border border-border/60
-        rounded-[var(--radius-md)] px-3 py-2.5 max-w-[340px] cursor-pointer
-        hover:border-accent/40 hover:bg-bg-hover hover:shadow-[0_2px_12px_var(--color-accent-glow)]
-        transition-all duration-200 group mt-1.5"
+      className="inline-flex items-center gap-3 bg-surface-container-low border border-outline-variant/40
+        rounded-lg px-3 py-2.5 max-w-xs cursor-pointer
+        hover:border-primary/30 hover:bg-surface-container
+        transition-all duration-150 group mt-1"
       onClick={handleDownload}
       role="button"
       tabIndex={0}
       onKeyDown={e => e.key === 'Enter' && handleDownload()}
     >
       {/* Icon */}
-      <div className="w-9 h-9 rounded-[var(--radius-sm)] flex items-center justify-center
-        bg-accent/10 text-lg flex-shrink-0 group-hover:bg-accent/20 transition-colors">
-        {downloading ? <Spinner size="sm" /> : icon}
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center
+        bg-primary/10 flex-shrink-0">
+        {downloading ? <Spinner size="sm" /> : <FileIcon size={18} color={fi.color} />}
       </div>
 
       {/* File info */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-text-primary m-0 truncate leading-tight">{name}</p>
-        <p className="text-xs text-text-muted m-0 mt-0.5">
-          {sizeBytes > 0 ? `${formatSize(sizeBytes)} · ` : ''}{extension} file
+        <p className="text-small font-medium text-on-surface m-0 truncate leading-tight">{name}</p>
+        <p className="text-micro text-on-surface-variant m-0">
+          {downloadError
+            ? <span className="text-error">{downloadError}</span>
+            : <>{sizeBytes > 0 ? `${formatSize(sizeBytes)} · ` : ''}{extension}</>}
         </p>
       </div>
 
-      {/* Download indicator */}
-      <div className="w-6 h-6 flex items-center justify-center rounded-full
-        text-text-muted opacity-0 group-hover:opacity-100
-        group-hover:text-accent transition-all duration-200 flex-shrink-0">
-        ⬇
+      {/* Download arrow */}
+      <div className="w-6 h-6 flex items-center justify-center rounded-md
+        text-on-surface-variant hover:text-primary hover:bg-primary/8
+        transition-all duration-150 flex-shrink-0">
+        <Download size={14} />
       </div>
     </div>
   )

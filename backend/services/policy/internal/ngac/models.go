@@ -11,17 +11,30 @@ const (
 	NodeTypePolicyClass   = "PC"
 )
 
-// Operations
+// Deny reasons — typed constants for PDP communication.
+// Used by access.go (producer) and decision_engine.go (consumer).
 const (
-	OpRead          = "read"
-	OpWrite         = "write"
-	OpApprove       = "approve"
-	OpUpload        = "upload"
-	OpShare         = "share"
-	OpManage        = "manage"
-	OpInvite        = "invite"
-	OpCreateChannel = "create_channel"
+	DenyReasonNodeNotFound  = "node_not_found"
+	DenyReasonNoAssociation = "no_association_path"
 )
+
+// Decision outcomes — used across PDP, cache, and gRPC layers.
+const (
+	DecisionAllow = "ALLOW"
+	DecisionDeny  = "DENY"
+)
+
+// Version scope constants — used by cache versioning and invalidation.
+const ScopeGlobal = "global"
+
+// WorkspaceScope returns the version scope key for a tenant workspace.
+func WorkspaceScope(wsID string) string {
+	return "ws:" + wsID
+}
+
+// Operations are dynamic — registered at runtime via RegisterOperations RPC.
+// Consumers define their own operations (e.g. "read", "approve", "transfer").
+// No hardcoded constants in the generic policy service.
 
 // NGACNode represents any node in the NGAC graph
 type NGACNode struct {
@@ -58,19 +71,18 @@ type AccessDecision struct {
 
 // AccessExplanation provides details about why access was granted or denied
 type AccessExplanation struct {
-	Path               []string          `json:"path,omitempty"`
-	PolicyClass        string            `json:"policy_class,omitempty"`
-	UserAttributes     []string          `json:"user_attributes,omitempty"`
-	ObjectAttributes   []string          `json:"object_attributes,omitempty"`
-	Reason             string            `json:"reason,omitempty"`
-	ConstraintsChecked []string          `json:"constraints_checked,omitempty"`
-	ConstraintDenied   *ConstraintDenial `json:"constraint_denied,omitempty"`
+	Path               []string           `json:"path,omitempty"`
+	PolicyClasses      []string           `json:"policy_classes,omitempty"`
+	UserAttributes     []string           `json:"user_attributes,omitempty"`
+	ObjectAttributes   []string           `json:"object_attributes,omitempty"`
+	Reason             string             `json:"reason,omitempty"`
+	ProhibitionDenied  *ProhibitionDenial `json:"prohibition_denied,omitempty"`
 }
 
-// ConstraintDenial details when a constraint blocked access
-type ConstraintDenial struct {
-	Name    string `json:"name"`
-	Message string `json:"message"`
+// ProhibitionDenial details when a prohibition denied access
+type ProhibitionDenial struct {
+	ProhibitionName string `json:"prohibition_name"`
+	SubjectID       string `json:"subject_id"`
 }
 
 // ValidAssignments defines which node type pairs are valid for assignments

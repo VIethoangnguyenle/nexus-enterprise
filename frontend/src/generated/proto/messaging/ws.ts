@@ -140,11 +140,65 @@ export interface ServerEnvelope {
          */
         assetUpdated: AssetUpdatedEvent;
     } | {
+        oneofKind: "reactionEvent";
+        /**
+         * @generated from protobuf field: messaging.ReactionEvent reaction_event = 8
+         */
+        reactionEvent: ReactionEvent;
+    } | {
+        oneofKind: "pinEvent";
+        /**
+         * @generated from protobuf field: messaging.PinEvent pin_event = 9
+         */
+        pinEvent: PinEvent;
+    } | {
+        oneofKind: "readReceipt";
+        /**
+         * @generated from protobuf field: messaging.ReadReceiptEvent read_receipt = 10
+         */
+        readReceipt: ReadReceiptEvent;
+    } | {
+        oneofKind: "pollVote";
+        /**
+         * @generated from protobuf field: messaging.PollVoteEvent poll_vote = 11
+         */
+        pollVote: PollVoteEvent;
+    } | {
+        oneofKind: "taskUpdate";
+        /**
+         * @generated from protobuf field: messaging.TaskUpdateEvent task_update = 12
+         */
+        taskUpdate: TaskUpdateEvent;
+    } | {
+        oneofKind: "driveObject";
+        /**
+         * @generated from protobuf field: messaging.DriveObjectEvent drive_object = 13
+         */
+        driveObject: DriveObjectEvent;
+    } | {
+        oneofKind: "drivePerm";
+        /**
+         * @generated from protobuf field: messaging.DrivePermEvent drive_perm = 14
+         */
+        drivePerm: DrivePermEvent;
+    } | {
         oneofKind: "error";
         /**
          * @generated from protobuf field: messaging.ErrorEvent error = 15
          */
         error: ErrorEvent;
+    } | {
+        oneofKind: "approvalEvent";
+        /**
+         * @generated from protobuf field: messaging.ApprovalEvent approval_event = 16
+         */
+        approvalEvent: ApprovalEvent;
+    } | {
+        oneofKind: "presenceEvent";
+        /**
+         * @generated from protobuf field: messaging.PresenceEvent presence_event = 17
+         */
+        presenceEvent: PresenceEvent;
     } | {
         oneofKind: undefined;
     };
@@ -206,6 +260,22 @@ export interface ChatMessage {
      * @generated from protobuf field: int32 reply_count = 9
      */
     replyCount: number;
+    /**
+     * @generated from protobuf field: string content_format = 10
+     */
+    contentFormat: string; // "markdown", "plain"
+    /**
+     * @generated from protobuf field: repeated string mentions = 11
+     */
+    mentions: string[]; // User IDs mentioned
+    /**
+     * @generated from protobuf field: string linked_entity_type = 12
+     */
+    linkedEntityType: string;
+    /**
+     * @generated from protobuf field: string linked_entity_id = 13
+     */
+    linkedEntityId: string;
 }
 /**
  * @generated from protobuf message messaging.TypingEvent
@@ -219,6 +289,23 @@ export interface TypingEvent {
      * @generated from protobuf field: string username = 2
      */
     username: string;
+}
+/**
+ * @generated from protobuf message messaging.PresenceEvent
+ */
+export interface PresenceEvent {
+    /**
+     * @generated from protobuf field: string user_id = 1
+     */
+    userId: string;
+    /**
+     * @generated from protobuf field: string username = 2
+     */
+    username: string;
+    /**
+     * @generated from protobuf field: string status = 3
+     */
+    status: string; // "online" or "offline"
 }
 /**
  * @generated from protobuf message messaging.NotificationEvent
@@ -284,6 +371,127 @@ export interface AssetUpdatedEvent {
      */
     newState: string;
 }
+// ═══════════════════════════════════════════════
+// NEW: Lark Chat Parity Events
+// ═══════════════════════════════════════════════
+
+/**
+ * @generated from protobuf message messaging.ReactionEvent
+ */
+export interface ReactionEvent {
+    /**
+     * @generated from protobuf field: string message_id = 1
+     */
+    messageId: string;
+    /**
+     * @generated from protobuf field: string channel_id = 2
+     */
+    channelId: string;
+    /**
+     * @generated from protobuf field: string user_id = 3
+     */
+    userId: string;
+    /**
+     * @generated from protobuf field: string username = 4
+     */
+    username: string;
+    /**
+     * @generated from protobuf field: string emoji = 5
+     */
+    emoji: string;
+    /**
+     * @generated from protobuf field: string action = 6
+     */
+    action: string; // "add" | "remove"
+}
+/**
+ * @generated from protobuf message messaging.PinEvent
+ */
+export interface PinEvent {
+    /**
+     * @generated from protobuf field: string channel_id = 1
+     */
+    channelId: string;
+    /**
+     * @generated from protobuf field: string message_id = 2
+     */
+    messageId: string;
+    /**
+     * @generated from protobuf field: string user_id = 3
+     */
+    userId: string;
+    /**
+     * @generated from protobuf field: string action = 4
+     */
+    action: string; // "pin" | "unpin"
+}
+/**
+ * @generated from protobuf message messaging.ReadReceiptEvent
+ */
+export interface ReadReceiptEvent {
+    /**
+     * @generated from protobuf field: string channel_id = 1
+     */
+    channelId: string;
+    /**
+     * @generated from protobuf field: string user_id = 2
+     */
+    userId: string;
+    /**
+     * @generated from protobuf field: string last_message_id = 3
+     */
+    lastMessageId: string;
+}
+/**
+ * @generated from protobuf message messaging.PollVoteEvent
+ */
+export interface PollVoteEvent {
+    /**
+     * @generated from protobuf field: string poll_id = 1
+     */
+    pollId: string;
+    /**
+     * @generated from protobuf field: string channel_id = 2
+     */
+    channelId: string;
+    /**
+     * @generated from protobuf field: string option_id = 3
+     */
+    optionId: string;
+    /**
+     * @generated from protobuf field: int32 vote_count = 4
+     */
+    voteCount: number;
+    /**
+     * @generated from protobuf field: int32 total_votes = 5
+     */
+    totalVotes: number;
+}
+/**
+ * @generated from protobuf message messaging.TaskUpdateEvent
+ */
+export interface TaskUpdateEvent {
+    /**
+     * @generated from protobuf field: string task_id = 1
+     */
+    taskId: string;
+    /**
+     * @generated from protobuf field: string channel_id = 2
+     */
+    channelId: string;
+    /**
+     * @generated from protobuf field: string status = 3
+     */
+    status: string;
+    /**
+     * @generated from protobuf field: string assignee_id = 4
+     */
+    assigneeId: string;
+    /**
+     * @generated from protobuf field: string title = 5
+     */
+    title: string;
+}
 /**
  * @generated from protobuf message messaging.ErrorEvent
  */
@@ -296,6 +504,73 @@ export interface ErrorEvent {
      * @generated from protobuf field: string message = 2
      */
     message: string;
+}
+// ═══════════════════════════════════════════════
+// Drive Events (realtime object + permission sync)
+// ═══════════════════════════════════════════════
+
+/**
+ * @generated from protobuf message messaging.DriveObjectEvent
+ */
+export interface DriveObjectEvent {
+    /**
+     * @generated from protobuf field: string event_type = 1
+     */
+    eventType: string; // "created" | "updated" | "deleted" | "moved"
+    /**
+     * @generated from protobuf field: string item_id = 2
+     */
+    itemId: string;
+    /**
+     * @generated from protobuf field: string parent_id = 3
+     */
+    parentId: string;
+    /**
+     * @generated from protobuf field: string workspace_id = 4
+     */
+    workspaceId: string;
+}
+/**
+ * @generated from protobuf message messaging.DrivePermEvent
+ */
+export interface DrivePermEvent {
+    /**
+     * @generated from protobuf field: string item_id = 1
+     */
+    itemId: string;
+    /**
+     * @generated from protobuf field: string workspace_id = 2
+     */
+    workspaceId: string;
+}
+// ═══════════════════════════════════════════════
+// Approval Events (realtime approval status sync)
+// ═══════════════════════════════════════════════
+
+/**
+ * @generated from protobuf message messaging.ApprovalEvent
+ */
+export interface ApprovalEvent {
+    /**
+     * @generated from protobuf field: string request_id = 1
+     */
+    requestId: string;
+    /**
+     * @generated from protobuf field: string status = 2
+     */
+    status: string; // "pending", "approved", "rejected"
+    /**
+     * @generated from protobuf field: string action = 3
+     */
+    action: string; // "created", "approved", "rejected", "step_advanced"
+    /**
+     * @generated from protobuf field: string actor_node_id = 4
+     */
+    actorNodeId: string;
+    /**
+     * @generated from protobuf field: string template_name = 5
+     */
+    templateName: string;
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class ClientEnvelope$Type extends MessageType<ClientEnvelope> {
@@ -576,7 +851,16 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
             { no: 5, name: "unread_count", kind: "message", oneof: "payload", T: () => UnreadCountEvent },
             { no: 6, name: "thread_reply", kind: "message", oneof: "payload", T: () => ThreadReplyEvent },
             { no: 7, name: "asset_updated", kind: "message", oneof: "payload", T: () => AssetUpdatedEvent },
-            { no: 15, name: "error", kind: "message", oneof: "payload", T: () => ErrorEvent }
+            { no: 8, name: "reaction_event", kind: "message", oneof: "payload", T: () => ReactionEvent },
+            { no: 9, name: "pin_event", kind: "message", oneof: "payload", T: () => PinEvent },
+            { no: 10, name: "read_receipt", kind: "message", oneof: "payload", T: () => ReadReceiptEvent },
+            { no: 11, name: "poll_vote", kind: "message", oneof: "payload", T: () => PollVoteEvent },
+            { no: 12, name: "task_update", kind: "message", oneof: "payload", T: () => TaskUpdateEvent },
+            { no: 13, name: "drive_object", kind: "message", oneof: "payload", T: () => DriveObjectEvent },
+            { no: 14, name: "drive_perm", kind: "message", oneof: "payload", T: () => DrivePermEvent },
+            { no: 15, name: "error", kind: "message", oneof: "payload", T: () => ErrorEvent },
+            { no: 16, name: "approval_event", kind: "message", oneof: "payload", T: () => ApprovalEvent },
+            { no: 17, name: "presence_event", kind: "message", oneof: "payload", T: () => PresenceEvent }
         ]);
     }
     create(value?: PartialMessage<ServerEnvelope>): ServerEnvelope {
@@ -633,10 +917,64 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
                         assetUpdated: AssetUpdatedEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).assetUpdated)
                     };
                     break;
+                case /* messaging.ReactionEvent reaction_event */ 8:
+                    message.payload = {
+                        oneofKind: "reactionEvent",
+                        reactionEvent: ReactionEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).reactionEvent)
+                    };
+                    break;
+                case /* messaging.PinEvent pin_event */ 9:
+                    message.payload = {
+                        oneofKind: "pinEvent",
+                        pinEvent: PinEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).pinEvent)
+                    };
+                    break;
+                case /* messaging.ReadReceiptEvent read_receipt */ 10:
+                    message.payload = {
+                        oneofKind: "readReceipt",
+                        readReceipt: ReadReceiptEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).readReceipt)
+                    };
+                    break;
+                case /* messaging.PollVoteEvent poll_vote */ 11:
+                    message.payload = {
+                        oneofKind: "pollVote",
+                        pollVote: PollVoteEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).pollVote)
+                    };
+                    break;
+                case /* messaging.TaskUpdateEvent task_update */ 12:
+                    message.payload = {
+                        oneofKind: "taskUpdate",
+                        taskUpdate: TaskUpdateEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).taskUpdate)
+                    };
+                    break;
+                case /* messaging.DriveObjectEvent drive_object */ 13:
+                    message.payload = {
+                        oneofKind: "driveObject",
+                        driveObject: DriveObjectEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).driveObject)
+                    };
+                    break;
+                case /* messaging.DrivePermEvent drive_perm */ 14:
+                    message.payload = {
+                        oneofKind: "drivePerm",
+                        drivePerm: DrivePermEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).drivePerm)
+                    };
+                    break;
                 case /* messaging.ErrorEvent error */ 15:
                     message.payload = {
                         oneofKind: "error",
                         error: ErrorEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).error)
+                    };
+                    break;
+                case /* messaging.ApprovalEvent approval_event */ 16:
+                    message.payload = {
+                        oneofKind: "approvalEvent",
+                        approvalEvent: ApprovalEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).approvalEvent)
+                    };
+                    break;
+                case /* messaging.PresenceEvent presence_event */ 17:
+                    message.payload = {
+                        oneofKind: "presenceEvent",
+                        presenceEvent: PresenceEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).presenceEvent)
                     };
                     break;
                 default:
@@ -672,9 +1010,36 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
         /* messaging.AssetUpdatedEvent asset_updated = 7; */
         if (message.payload.oneofKind === "assetUpdated")
             AssetUpdatedEvent.internalBinaryWrite(message.payload.assetUpdated, writer.tag(7, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.ReactionEvent reaction_event = 8; */
+        if (message.payload.oneofKind === "reactionEvent")
+            ReactionEvent.internalBinaryWrite(message.payload.reactionEvent, writer.tag(8, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.PinEvent pin_event = 9; */
+        if (message.payload.oneofKind === "pinEvent")
+            PinEvent.internalBinaryWrite(message.payload.pinEvent, writer.tag(9, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.ReadReceiptEvent read_receipt = 10; */
+        if (message.payload.oneofKind === "readReceipt")
+            ReadReceiptEvent.internalBinaryWrite(message.payload.readReceipt, writer.tag(10, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.PollVoteEvent poll_vote = 11; */
+        if (message.payload.oneofKind === "pollVote")
+            PollVoteEvent.internalBinaryWrite(message.payload.pollVote, writer.tag(11, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.TaskUpdateEvent task_update = 12; */
+        if (message.payload.oneofKind === "taskUpdate")
+            TaskUpdateEvent.internalBinaryWrite(message.payload.taskUpdate, writer.tag(12, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.DriveObjectEvent drive_object = 13; */
+        if (message.payload.oneofKind === "driveObject")
+            DriveObjectEvent.internalBinaryWrite(message.payload.driveObject, writer.tag(13, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.DrivePermEvent drive_perm = 14; */
+        if (message.payload.oneofKind === "drivePerm")
+            DrivePermEvent.internalBinaryWrite(message.payload.drivePerm, writer.tag(14, WireType.LengthDelimited).fork(), options).join();
         /* messaging.ErrorEvent error = 15; */
         if (message.payload.oneofKind === "error")
             ErrorEvent.internalBinaryWrite(message.payload.error, writer.tag(15, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.ApprovalEvent approval_event = 16; */
+        if (message.payload.oneofKind === "approvalEvent")
+            ApprovalEvent.internalBinaryWrite(message.payload.approvalEvent, writer.tag(16, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.PresenceEvent presence_event = 17; */
+        if (message.payload.oneofKind === "presenceEvent")
+            PresenceEvent.internalBinaryWrite(message.payload.presenceEvent, writer.tag(17, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -760,7 +1125,11 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
             { no: 6, name: "created_at", kind: "message", T: () => Timestamp },
             { no: 7, name: "message_type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 8, name: "parent_message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 9, name: "reply_count", kind: "scalar", T: 5 /*ScalarType.INT32*/ }
+            { no: 9, name: "reply_count", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
+            { no: 10, name: "content_format", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 11, name: "mentions", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ },
+            { no: 12, name: "linked_entity_type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 13, name: "linked_entity_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<ChatMessage>): ChatMessage {
@@ -773,6 +1142,10 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
         message.messageType = "";
         message.parentMessageId = "";
         message.replyCount = 0;
+        message.contentFormat = "";
+        message.mentions = [];
+        message.linkedEntityType = "";
+        message.linkedEntityId = "";
         if (value !== undefined)
             reflectionMergePartial<ChatMessage>(this, message, value);
         return message;
@@ -808,6 +1181,18 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
                     break;
                 case /* int32 reply_count */ 9:
                     message.replyCount = reader.int32();
+                    break;
+                case /* string content_format */ 10:
+                    message.contentFormat = reader.string();
+                    break;
+                case /* repeated string mentions */ 11:
+                    message.mentions.push(reader.string());
+                    break;
+                case /* string linked_entity_type */ 12:
+                    message.linkedEntityType = reader.string();
+                    break;
+                case /* string linked_entity_id */ 13:
+                    message.linkedEntityId = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -848,6 +1233,18 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
         /* int32 reply_count = 9; */
         if (message.replyCount !== 0)
             writer.tag(9, WireType.Varint).int32(message.replyCount);
+        /* string content_format = 10; */
+        if (message.contentFormat !== "")
+            writer.tag(10, WireType.LengthDelimited).string(message.contentFormat);
+        /* repeated string mentions = 11; */
+        for (let i = 0; i < message.mentions.length; i++)
+            writer.tag(11, WireType.LengthDelimited).string(message.mentions[i]);
+        /* string linked_entity_type = 12; */
+        if (message.linkedEntityType !== "")
+            writer.tag(12, WireType.LengthDelimited).string(message.linkedEntityType);
+        /* string linked_entity_id = 13; */
+        if (message.linkedEntityId !== "")
+            writer.tag(13, WireType.LengthDelimited).string(message.linkedEntityId);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -913,6 +1310,69 @@ class TypingEvent$Type extends MessageType<TypingEvent> {
  * @generated MessageType for protobuf message messaging.TypingEvent
  */
 export const TypingEvent = new TypingEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class PresenceEvent$Type extends MessageType<PresenceEvent> {
+    constructor() {
+        super("messaging.PresenceEvent", [
+            { no: 1, name: "user_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "username", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "status", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<PresenceEvent>): PresenceEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.userId = "";
+        message.username = "";
+        message.status = "";
+        if (value !== undefined)
+            reflectionMergePartial<PresenceEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: PresenceEvent): PresenceEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string user_id */ 1:
+                    message.userId = reader.string();
+                    break;
+                case /* string username */ 2:
+                    message.username = reader.string();
+                    break;
+                case /* string status */ 3:
+                    message.status = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: PresenceEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string user_id = 1; */
+        if (message.userId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.userId);
+        /* string username = 2; */
+        if (message.username !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.username);
+        /* string status = 3; */
+        if (message.status !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.status);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.PresenceEvent
+ */
+export const PresenceEvent = new PresenceEvent$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class NotificationEvent$Type extends MessageType<NotificationEvent> {
     constructor() {
@@ -1157,6 +1617,385 @@ class AssetUpdatedEvent$Type extends MessageType<AssetUpdatedEvent> {
  */
 export const AssetUpdatedEvent = new AssetUpdatedEvent$Type();
 // @generated message type with reflection information, may provide speed optimized methods
+class ReactionEvent$Type extends MessageType<ReactionEvent> {
+    constructor() {
+        super("messaging.ReactionEvent", [
+            { no: 1, name: "message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "user_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "username", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "emoji", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 6, name: "action", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<ReactionEvent>): ReactionEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.messageId = "";
+        message.channelId = "";
+        message.userId = "";
+        message.username = "";
+        message.emoji = "";
+        message.action = "";
+        if (value !== undefined)
+            reflectionMergePartial<ReactionEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: ReactionEvent): ReactionEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string message_id */ 1:
+                    message.messageId = reader.string();
+                    break;
+                case /* string channel_id */ 2:
+                    message.channelId = reader.string();
+                    break;
+                case /* string user_id */ 3:
+                    message.userId = reader.string();
+                    break;
+                case /* string username */ 4:
+                    message.username = reader.string();
+                    break;
+                case /* string emoji */ 5:
+                    message.emoji = reader.string();
+                    break;
+                case /* string action */ 6:
+                    message.action = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: ReactionEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string message_id = 1; */
+        if (message.messageId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.messageId);
+        /* string channel_id = 2; */
+        if (message.channelId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.channelId);
+        /* string user_id = 3; */
+        if (message.userId !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.userId);
+        /* string username = 4; */
+        if (message.username !== "")
+            writer.tag(4, WireType.LengthDelimited).string(message.username);
+        /* string emoji = 5; */
+        if (message.emoji !== "")
+            writer.tag(5, WireType.LengthDelimited).string(message.emoji);
+        /* string action = 6; */
+        if (message.action !== "")
+            writer.tag(6, WireType.LengthDelimited).string(message.action);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.ReactionEvent
+ */
+export const ReactionEvent = new ReactionEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class PinEvent$Type extends MessageType<PinEvent> {
+    constructor() {
+        super("messaging.PinEvent", [
+            { no: 1, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "user_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "action", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<PinEvent>): PinEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.channelId = "";
+        message.messageId = "";
+        message.userId = "";
+        message.action = "";
+        if (value !== undefined)
+            reflectionMergePartial<PinEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: PinEvent): PinEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string channel_id */ 1:
+                    message.channelId = reader.string();
+                    break;
+                case /* string message_id */ 2:
+                    message.messageId = reader.string();
+                    break;
+                case /* string user_id */ 3:
+                    message.userId = reader.string();
+                    break;
+                case /* string action */ 4:
+                    message.action = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: PinEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string channel_id = 1; */
+        if (message.channelId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.channelId);
+        /* string message_id = 2; */
+        if (message.messageId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.messageId);
+        /* string user_id = 3; */
+        if (message.userId !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.userId);
+        /* string action = 4; */
+        if (message.action !== "")
+            writer.tag(4, WireType.LengthDelimited).string(message.action);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.PinEvent
+ */
+export const PinEvent = new PinEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class ReadReceiptEvent$Type extends MessageType<ReadReceiptEvent> {
+    constructor() {
+        super("messaging.ReadReceiptEvent", [
+            { no: 1, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "user_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "last_message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<ReadReceiptEvent>): ReadReceiptEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.channelId = "";
+        message.userId = "";
+        message.lastMessageId = "";
+        if (value !== undefined)
+            reflectionMergePartial<ReadReceiptEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: ReadReceiptEvent): ReadReceiptEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string channel_id */ 1:
+                    message.channelId = reader.string();
+                    break;
+                case /* string user_id */ 2:
+                    message.userId = reader.string();
+                    break;
+                case /* string last_message_id */ 3:
+                    message.lastMessageId = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: ReadReceiptEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string channel_id = 1; */
+        if (message.channelId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.channelId);
+        /* string user_id = 2; */
+        if (message.userId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.userId);
+        /* string last_message_id = 3; */
+        if (message.lastMessageId !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.lastMessageId);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.ReadReceiptEvent
+ */
+export const ReadReceiptEvent = new ReadReceiptEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class PollVoteEvent$Type extends MessageType<PollVoteEvent> {
+    constructor() {
+        super("messaging.PollVoteEvent", [
+            { no: 1, name: "poll_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "option_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "vote_count", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
+            { no: 5, name: "total_votes", kind: "scalar", T: 5 /*ScalarType.INT32*/ }
+        ]);
+    }
+    create(value?: PartialMessage<PollVoteEvent>): PollVoteEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.pollId = "";
+        message.channelId = "";
+        message.optionId = "";
+        message.voteCount = 0;
+        message.totalVotes = 0;
+        if (value !== undefined)
+            reflectionMergePartial<PollVoteEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: PollVoteEvent): PollVoteEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string poll_id */ 1:
+                    message.pollId = reader.string();
+                    break;
+                case /* string channel_id */ 2:
+                    message.channelId = reader.string();
+                    break;
+                case /* string option_id */ 3:
+                    message.optionId = reader.string();
+                    break;
+                case /* int32 vote_count */ 4:
+                    message.voteCount = reader.int32();
+                    break;
+                case /* int32 total_votes */ 5:
+                    message.totalVotes = reader.int32();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: PollVoteEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string poll_id = 1; */
+        if (message.pollId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.pollId);
+        /* string channel_id = 2; */
+        if (message.channelId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.channelId);
+        /* string option_id = 3; */
+        if (message.optionId !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.optionId);
+        /* int32 vote_count = 4; */
+        if (message.voteCount !== 0)
+            writer.tag(4, WireType.Varint).int32(message.voteCount);
+        /* int32 total_votes = 5; */
+        if (message.totalVotes !== 0)
+            writer.tag(5, WireType.Varint).int32(message.totalVotes);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.PollVoteEvent
+ */
+export const PollVoteEvent = new PollVoteEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class TaskUpdateEvent$Type extends MessageType<TaskUpdateEvent> {
+    constructor() {
+        super("messaging.TaskUpdateEvent", [
+            { no: 1, name: "task_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "status", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "assignee_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "title", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<TaskUpdateEvent>): TaskUpdateEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.taskId = "";
+        message.channelId = "";
+        message.status = "";
+        message.assigneeId = "";
+        message.title = "";
+        if (value !== undefined)
+            reflectionMergePartial<TaskUpdateEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: TaskUpdateEvent): TaskUpdateEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string task_id */ 1:
+                    message.taskId = reader.string();
+                    break;
+                case /* string channel_id */ 2:
+                    message.channelId = reader.string();
+                    break;
+                case /* string status */ 3:
+                    message.status = reader.string();
+                    break;
+                case /* string assignee_id */ 4:
+                    message.assigneeId = reader.string();
+                    break;
+                case /* string title */ 5:
+                    message.title = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: TaskUpdateEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string task_id = 1; */
+        if (message.taskId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.taskId);
+        /* string channel_id = 2; */
+        if (message.channelId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.channelId);
+        /* string status = 3; */
+        if (message.status !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.status);
+        /* string assignee_id = 4; */
+        if (message.assigneeId !== "")
+            writer.tag(4, WireType.LengthDelimited).string(message.assigneeId);
+        /* string title = 5; */
+        if (message.title !== "")
+            writer.tag(5, WireType.LengthDelimited).string(message.title);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.TaskUpdateEvent
+ */
+export const TaskUpdateEvent = new TaskUpdateEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
 class ErrorEvent$Type extends MessageType<ErrorEvent> {
     constructor() {
         super("messaging.ErrorEvent", [
@@ -1211,3 +2050,208 @@ class ErrorEvent$Type extends MessageType<ErrorEvent> {
  * @generated MessageType for protobuf message messaging.ErrorEvent
  */
 export const ErrorEvent = new ErrorEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class DriveObjectEvent$Type extends MessageType<DriveObjectEvent> {
+    constructor() {
+        super("messaging.DriveObjectEvent", [
+            { no: 1, name: "event_type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "item_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "parent_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<DriveObjectEvent>): DriveObjectEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.eventType = "";
+        message.itemId = "";
+        message.parentId = "";
+        message.workspaceId = "";
+        if (value !== undefined)
+            reflectionMergePartial<DriveObjectEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: DriveObjectEvent): DriveObjectEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string event_type */ 1:
+                    message.eventType = reader.string();
+                    break;
+                case /* string item_id */ 2:
+                    message.itemId = reader.string();
+                    break;
+                case /* string parent_id */ 3:
+                    message.parentId = reader.string();
+                    break;
+                case /* string workspace_id */ 4:
+                    message.workspaceId = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: DriveObjectEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string event_type = 1; */
+        if (message.eventType !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.eventType);
+        /* string item_id = 2; */
+        if (message.itemId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.itemId);
+        /* string parent_id = 3; */
+        if (message.parentId !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.parentId);
+        /* string workspace_id = 4; */
+        if (message.workspaceId !== "")
+            writer.tag(4, WireType.LengthDelimited).string(message.workspaceId);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.DriveObjectEvent
+ */
+export const DriveObjectEvent = new DriveObjectEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class DrivePermEvent$Type extends MessageType<DrivePermEvent> {
+    constructor() {
+        super("messaging.DrivePermEvent", [
+            { no: 1, name: "item_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<DrivePermEvent>): DrivePermEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.itemId = "";
+        message.workspaceId = "";
+        if (value !== undefined)
+            reflectionMergePartial<DrivePermEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: DrivePermEvent): DrivePermEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string item_id */ 1:
+                    message.itemId = reader.string();
+                    break;
+                case /* string workspace_id */ 2:
+                    message.workspaceId = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: DrivePermEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string item_id = 1; */
+        if (message.itemId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.itemId);
+        /* string workspace_id = 2; */
+        if (message.workspaceId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.workspaceId);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.DrivePermEvent
+ */
+export const DrivePermEvent = new DrivePermEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class ApprovalEvent$Type extends MessageType<ApprovalEvent> {
+    constructor() {
+        super("messaging.ApprovalEvent", [
+            { no: 1, name: "request_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "status", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "action", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "actor_node_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "template_name", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<ApprovalEvent>): ApprovalEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.requestId = "";
+        message.status = "";
+        message.action = "";
+        message.actorNodeId = "";
+        message.templateName = "";
+        if (value !== undefined)
+            reflectionMergePartial<ApprovalEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: ApprovalEvent): ApprovalEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string request_id */ 1:
+                    message.requestId = reader.string();
+                    break;
+                case /* string status */ 2:
+                    message.status = reader.string();
+                    break;
+                case /* string action */ 3:
+                    message.action = reader.string();
+                    break;
+                case /* string actor_node_id */ 4:
+                    message.actorNodeId = reader.string();
+                    break;
+                case /* string template_name */ 5:
+                    message.templateName = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: ApprovalEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string request_id = 1; */
+        if (message.requestId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.requestId);
+        /* string status = 2; */
+        if (message.status !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.status);
+        /* string action = 3; */
+        if (message.action !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.action);
+        /* string actor_node_id = 4; */
+        if (message.actorNodeId !== "")
+            writer.tag(4, WireType.LengthDelimited).string(message.actorNodeId);
+        /* string template_name = 5; */
+        if (message.templateName !== "")
+            writer.tag(5, WireType.LengthDelimited).string(message.templateName);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.ApprovalEvent
+ */
+export const ApprovalEvent = new ApprovalEvent$Type();

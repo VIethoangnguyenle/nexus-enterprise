@@ -58,7 +58,14 @@ type CreateChannelInput struct {
 
 // CreateChannel creates a channel with NGAC nodes, permissions, and optional drive.
 func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb.Channel, error) {
-	contentOA, membersUA, err := s.createChannelNGACNodes(ctx, in.Name)
+	// Normalize channel type: "group" maps to "workspace" for DB constraint.
+	if in.ChannelType == "group" {
+		in.ChannelType = "workspace"
+	}
+
+	chID := uuid.New().String()
+
+	contentOA, membersUA, err := s.createChannelNGACNodes(ctx, chID)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +76,6 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb
 
 	s.grantChannelAccess(ctx, membersUA.Id, contentOA.Id, in.UserNodeID)
 
-	chID := uuid.New().String()
 	ch := &store.Channel{
 		ID:          chID,
 		Name:        in.Name,
@@ -93,16 +99,17 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb
 }
 
 // createChannelNGACNodes creates the Content OA and Members UA for a channel.
-func (s *Service) createChannelNGACNodes(ctx context.Context, chName string) (*policypb.NGACNode, *policypb.NGACNode, error) {
+// Uses channel ID for naming to prevent collisions.
+func (s *Service) createChannelNGACNodes(ctx context.Context, chID string) (*policypb.NGACNode, *policypb.NGACNode, error) {
 	contentOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.ChannelContentOAName(chName), NodeType: ngac.TypeOA,
+		Name: ngac.ChannelContentOAName(chID), NodeType: ngac.TypeOA,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("create channel content OA: %w", err)
 	}
 
 	membersUA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.ChannelMembersUAName(chName), NodeType: ngac.TypeUA,
+		Name: ngac.ChannelMembersUAName(chID), NodeType: ngac.TypeUA,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("create channel members UA: %w", err)
@@ -118,12 +125,17 @@ func (s *Service) assignChannelToWorkspace(ctx context.Context, workspaceID, con
 		return s.assignToGlobalPC(ctx, contentOAID, membersUAID)
 	}
 
-	wsName, pcNodeID, err := s.store.GetWorkspaceName(ctx, workspaceID)
-	if err != nil || pcNodeID == "" {
+	// Find workspace's Channels OA by workspace ID (not name).
+	ws, err := s.store.GetWorkspaceByID(ctx, workspaceID)
+	if err != nil || ws == nil {
 		return fmt.Errorf("workspace lookup failed: %w", err)
 	}
 
-	channelsOAID := s.findChildByName(ctx, pcNodeID, ngac.ChannelsOAName(wsName), ngac.TypeOA)
+	// Try ID-based naming first (new convention), fallback to name-based (legacy).
+	channelsOAID := s.findChildByName(ctx, ws.PCNodeID, ngac.ChannelsOAName(workspaceID), ngac.TypeOA)
+	if channelsOAID == "" {
+		channelsOAID = s.findChildByName(ctx, ws.PCNodeID, ngac.ChannelsOAName(ws.Name), ngac.TypeOA)
+	}
 	if channelsOAID != "" {
 		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: contentOAID, ParentId: channelsOAID,
@@ -131,7 +143,7 @@ func (s *Service) assignChannelToWorkspace(ctx context.Context, workspaceID, con
 	}
 
 	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: membersUAID, ParentId: pcNodeID,
+		ChildId: membersUAID, ParentId: ws.PCNodeID,
 	})
 
 	return nil
@@ -204,6 +216,21 @@ func (s *Service) ListChannels(ctx context.Context, workspaceID, userNodeID stri
 	return s.filterAccessible(ctx, channels, userNodeID), nil
 }
 
+// UpdateChannel renames a channel. Returns the updated channel proto.
+func (s *Service) UpdateChannel(ctx context.Context, channelID, name string) (*pb.Channel, error) {
+	if name == "" {
+		return nil, fmt.Errorf("channel name cannot be empty")
+	}
+	if err := s.store.UpdateChannelName(ctx, channelID, name); err != nil {
+		return nil, fmt.Errorf("update channel: %w", err)
+	}
+	ch, err := s.store.GetChannel(ctx, channelID)
+	if err != nil || ch == nil {
+		return nil, fmt.Errorf("get updated channel: %w", err)
+	}
+	return channelToProto(ch), nil
+}
+
 // ListDMs returns DM channels the user has access to.
 func (s *Service) ListDMs(ctx context.Context, userNodeID string) ([]*pb.Channel, error) {
 	channels, err := s.store.ListAllDMs(ctx)
@@ -267,6 +294,8 @@ type SendMessageInput struct {
 	SenderID         string
 	SenderNodeID     string
 	Content          string
+	ContentFormat    string
+	Mentions         []string
 	MessageType      string
 	ParentMessageID  string
 	LinkedEntityType string
@@ -292,11 +321,17 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 	}
 
 	now := time.Now()
+	contentFormat := in.ContentFormat
+	if contentFormat == "" {
+		contentFormat = "markdown"
+	}
 	msg := &store.Message{
 		ID:               uuid.New().String(),
 		ChannelID:        in.ChannelID,
 		SenderID:         in.SenderID,
 		Content:          in.Content,
+		ContentFormat:    contentFormat,
+		Mentions:         in.Mentions,
 		MessageType:      msgType,
 		ParentMessageID:  in.ParentMessageID,
 		LinkedEntityType: in.LinkedEntityType,
@@ -344,6 +379,8 @@ func (s *Service) GetMessages(ctx context.Context, channelID, userNodeID, before
 		return nil, fmt.Errorf("get messages: %w", err)
 	}
 
+	s.EnrichMessagesWithMetadata(ctx, msgs, channelID)
+
 	return &pb.MessageList{
 		Messages: messagesToProto(msgs),
 		HasMore:  hasMore,
@@ -356,6 +393,12 @@ func (s *Service) GetThread(ctx context.Context, messageID string) (*pb.MessageL
 	if err != nil {
 		return nil, fmt.Errorf("get thread: %w", err)
 	}
+
+	// Enrich with reactions and pin status; thread messages share the parent's channel.
+	if len(msgs) > 0 {
+		s.EnrichMessagesWithMetadata(ctx, msgs, msgs[0].ChannelID)
+	}
+
 	return &pb.MessageList{Messages: messagesToProto(msgs)}, nil
 }
 
@@ -448,7 +491,7 @@ func (s *Service) checkAccess(ctx context.Context, userNodeID, objectNodeID, ope
 		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
 	})
 	if resp != nil && resp.Decision == ngac.DecisionDeny {
-		return fmt.Errorf("access denied: %s on %s", operation, objectNodeID)
+		return fmt.Errorf("%w: %s on %s", ErrAccessDenied, operation, objectNodeID)
 	}
 	return nil
 }
@@ -474,10 +517,21 @@ func channelToProto(ch *store.Channel) *pb.Channel {
 		NgacUaId:    ch.NGACUaID,
 		CreatedBy:   ch.CreatedBy,
 		CreatedAt:   timestamppb.New(ch.CreatedAt),
+		Topic:       ch.Topic,
+		Description: ch.Description,
+		MemberCount: ch.MemberCount,
 	}
 }
 
 func messageToProto(m *store.Message) *pb.Message {
+	var reactions []*pb.ReactionGroup
+	for _, rg := range m.Reactions {
+		reactions = append(reactions, &pb.ReactionGroup{
+			Emoji:   rg.Emoji,
+			Count:   rg.Count,
+			UserIds: rg.UserIDs,
+		})
+	}
 	return &pb.Message{
 		Id:               m.ID,
 		ChannelId:        m.ChannelID,
@@ -489,6 +543,10 @@ func messageToProto(m *store.Message) *pb.Message {
 		LinkedEntityType: m.LinkedEntityType,
 		LinkedEntityId:   m.LinkedEntityID,
 		ReplyCount:       m.ReplyCount,
+		ContentFormat:    m.ContentFormat,
+		Mentions:         m.Mentions,
+		Reactions:        reactions,
+		IsPinned:         m.IsPinned,
 		CreatedAt:        timestamppb.New(m.CreatedAt),
 	}
 }

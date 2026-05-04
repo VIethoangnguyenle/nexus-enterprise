@@ -16,7 +16,9 @@ import (
 
 	policypb "ngac-platform/proto/policy"
 	pb "ngac-platform/proto/workspace"
+	"ngac-platform/services/workspace/internal/domain"
 	grpcserver "ngac-platform/services/workspace/internal/grpc"
+	"ngac-platform/services/workspace/internal/store"
 )
 
 // ---------------------------------------------------------------------------
@@ -105,7 +107,9 @@ func setupTestServer(t *testing.T) (*grpcserver.WorkspaceServer, *pgxpool.Pool) 
 
 	pr := &mockPolicyReadClient{}
 	pw := newMockPolicyWriteClient(pool)
-	srv := grpcserver.NewWorkspaceServer(pool, pr, pw, nil)
+	s := store.New(pool)
+	svc := domain.NewService(s, nil, pr, pw, nil, nil)
+	srv := grpcserver.NewWorkspaceServer(svc)
 	return srv, pool
 }
 

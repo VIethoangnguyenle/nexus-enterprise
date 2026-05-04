@@ -19,15 +19,19 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PolicyReadService_CheckAccess_FullMethodName    = "/policy.PolicyReadService/CheckAccess"
-	PolicyReadService_GetNode_FullMethodName        = "/policy.PolicyReadService/GetNode"
-	PolicyReadService_FindNodeByName_FullMethodName = "/policy.PolicyReadService/FindNodeByName"
-	PolicyReadService_GetNodesByType_FullMethodName = "/policy.PolicyReadService/GetNodesByType"
-	PolicyReadService_IsAssigned_FullMethodName     = "/policy.PolicyReadService/IsAssigned"
-	PolicyReadService_GetAncestors_FullMethodName   = "/policy.PolicyReadService/GetAncestors"
-	PolicyReadService_GetDescendants_FullMethodName = "/policy.PolicyReadService/GetDescendants"
-	PolicyReadService_GetChildren_FullMethodName    = "/policy.PolicyReadService/GetChildren"
-	PolicyReadService_GetParents_FullMethodName     = "/policy.PolicyReadService/GetParents"
+	PolicyReadService_CheckAccess_FullMethodName             = "/policy.PolicyReadService/CheckAccess"
+	PolicyReadService_BatchCheckAccess_FullMethodName        = "/policy.PolicyReadService/BatchCheckAccess"
+	PolicyReadService_GetNode_FullMethodName                 = "/policy.PolicyReadService/GetNode"
+	PolicyReadService_FindNodeByName_FullMethodName          = "/policy.PolicyReadService/FindNodeByName"
+	PolicyReadService_GetNodesByType_FullMethodName          = "/policy.PolicyReadService/GetNodesByType"
+	PolicyReadService_IsAssigned_FullMethodName              = "/policy.PolicyReadService/IsAssigned"
+	PolicyReadService_GetAncestors_FullMethodName            = "/policy.PolicyReadService/GetAncestors"
+	PolicyReadService_GetDescendants_FullMethodName          = "/policy.PolicyReadService/GetDescendants"
+	PolicyReadService_GetChildren_FullMethodName             = "/policy.PolicyReadService/GetChildren"
+	PolicyReadService_GetParents_FullMethodName              = "/policy.PolicyReadService/GetParents"
+	PolicyReadService_ResolveAccessibleScopes_FullMethodName = "/policy.PolicyReadService/ResolveAccessibleScopes"
+	PolicyReadService_ListOperations_FullMethodName          = "/policy.PolicyReadService/ListOperations"
+	PolicyReadService_ListProhibitions_FullMethodName        = "/policy.PolicyReadService/ListProhibitions"
 )
 
 // PolicyReadServiceClient is the client API for PolicyReadService service.
@@ -39,6 +43,7 @@ const (
 type PolicyReadServiceClient interface {
 	// Access checks
 	CheckAccess(ctx context.Context, in *CheckAccessRequest, opts ...grpc.CallOption) (*AccessDecision, error)
+	BatchCheckAccess(ctx context.Context, in *BatchCheckAccessRequest, opts ...grpc.CallOption) (*BatchAccessResult, error)
 	// Node queries (read-only)
 	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*NGACNode, error)
 	FindNodeByName(ctx context.Context, in *FindNodeByNameRequest, opts ...grpc.CallOption) (*NGACNode, error)
@@ -49,6 +54,13 @@ type PolicyReadServiceClient interface {
 	GetDescendants(ctx context.Context, in *GetDescendantsRequest, opts ...grpc.CallOption) (*NodeList, error)
 	GetChildren(ctx context.Context, in *GetChildrenRequest, opts ...grpc.CallOption) (*NodeList, error)
 	GetParents(ctx context.Context, in *GetParentsRequest, opts ...grpc.CallOption) (*NodeList, error)
+	// Scope resolution — returns leaf OA IDs the user can access for an operation.
+	// Used by approval/drive services for O(1) scope-based data filtering.
+	ResolveAccessibleScopes(ctx context.Context, in *ResolveAccessibleScopesRequest, opts ...grpc.CallOption) (*ResolveAccessibleScopesResponse, error)
+	// Operations registry (read-only)
+	ListOperations(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*OperationList, error)
+	// Prohibitions (read-only)
+	ListProhibitions(ctx context.Context, in *ListProhibitionsRequest, opts ...grpc.CallOption) (*ProhibitionList, error)
 }
 
 type policyReadServiceClient struct {
@@ -63,6 +75,16 @@ func (c *policyReadServiceClient) CheckAccess(ctx context.Context, in *CheckAcce
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AccessDecision)
 	err := c.cc.Invoke(ctx, PolicyReadService_CheckAccess_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *policyReadServiceClient) BatchCheckAccess(ctx context.Context, in *BatchCheckAccessRequest, opts ...grpc.CallOption) (*BatchAccessResult, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchAccessResult)
+	err := c.cc.Invoke(ctx, PolicyReadService_BatchCheckAccess_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -149,6 +171,36 @@ func (c *policyReadServiceClient) GetParents(ctx context.Context, in *GetParents
 	return out, nil
 }
 
+func (c *policyReadServiceClient) ResolveAccessibleScopes(ctx context.Context, in *ResolveAccessibleScopesRequest, opts ...grpc.CallOption) (*ResolveAccessibleScopesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ResolveAccessibleScopesResponse)
+	err := c.cc.Invoke(ctx, PolicyReadService_ResolveAccessibleScopes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *policyReadServiceClient) ListOperations(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*OperationList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(OperationList)
+	err := c.cc.Invoke(ctx, PolicyReadService_ListOperations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *policyReadServiceClient) ListProhibitions(ctx context.Context, in *ListProhibitionsRequest, opts ...grpc.CallOption) (*ProhibitionList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ProhibitionList)
+	err := c.cc.Invoke(ctx, PolicyReadService_ListProhibitions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // PolicyReadServiceServer is the server API for PolicyReadService service.
 // All implementations must embed UnimplementedPolicyReadServiceServer
 // for forward compatibility.
@@ -158,6 +210,7 @@ func (c *policyReadServiceClient) GetParents(ctx context.Context, in *GetParents
 type PolicyReadServiceServer interface {
 	// Access checks
 	CheckAccess(context.Context, *CheckAccessRequest) (*AccessDecision, error)
+	BatchCheckAccess(context.Context, *BatchCheckAccessRequest) (*BatchAccessResult, error)
 	// Node queries (read-only)
 	GetNode(context.Context, *GetNodeRequest) (*NGACNode, error)
 	FindNodeByName(context.Context, *FindNodeByNameRequest) (*NGACNode, error)
@@ -168,6 +221,13 @@ type PolicyReadServiceServer interface {
 	GetDescendants(context.Context, *GetDescendantsRequest) (*NodeList, error)
 	GetChildren(context.Context, *GetChildrenRequest) (*NodeList, error)
 	GetParents(context.Context, *GetParentsRequest) (*NodeList, error)
+	// Scope resolution — returns leaf OA IDs the user can access for an operation.
+	// Used by approval/drive services for O(1) scope-based data filtering.
+	ResolveAccessibleScopes(context.Context, *ResolveAccessibleScopesRequest) (*ResolveAccessibleScopesResponse, error)
+	// Operations registry (read-only)
+	ListOperations(context.Context, *Empty) (*OperationList, error)
+	// Prohibitions (read-only)
+	ListProhibitions(context.Context, *ListProhibitionsRequest) (*ProhibitionList, error)
 	mustEmbedUnimplementedPolicyReadServiceServer()
 }
 
@@ -180,6 +240,9 @@ type UnimplementedPolicyReadServiceServer struct{}
 
 func (UnimplementedPolicyReadServiceServer) CheckAccess(context.Context, *CheckAccessRequest) (*AccessDecision, error) {
 	return nil, status.Error(codes.Unimplemented, "method CheckAccess not implemented")
+}
+func (UnimplementedPolicyReadServiceServer) BatchCheckAccess(context.Context, *BatchCheckAccessRequest) (*BatchAccessResult, error) {
+	return nil, status.Error(codes.Unimplemented, "method BatchCheckAccess not implemented")
 }
 func (UnimplementedPolicyReadServiceServer) GetNode(context.Context, *GetNodeRequest) (*NGACNode, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNode not implemented")
@@ -204,6 +267,15 @@ func (UnimplementedPolicyReadServiceServer) GetChildren(context.Context, *GetChi
 }
 func (UnimplementedPolicyReadServiceServer) GetParents(context.Context, *GetParentsRequest) (*NodeList, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetParents not implemented")
+}
+func (UnimplementedPolicyReadServiceServer) ResolveAccessibleScopes(context.Context, *ResolveAccessibleScopesRequest) (*ResolveAccessibleScopesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ResolveAccessibleScopes not implemented")
+}
+func (UnimplementedPolicyReadServiceServer) ListOperations(context.Context, *Empty) (*OperationList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListOperations not implemented")
+}
+func (UnimplementedPolicyReadServiceServer) ListProhibitions(context.Context, *ListProhibitionsRequest) (*ProhibitionList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListProhibitions not implemented")
 }
 func (UnimplementedPolicyReadServiceServer) mustEmbedUnimplementedPolicyReadServiceServer() {}
 func (UnimplementedPolicyReadServiceServer) testEmbeddedByValue()                           {}
@@ -240,6 +312,24 @@ func _PolicyReadService_CheckAccess_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(PolicyReadServiceServer).CheckAccess(ctx, req.(*CheckAccessRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PolicyReadService_BatchCheckAccess_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchCheckAccessRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyReadServiceServer).BatchCheckAccess(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyReadService_BatchCheckAccess_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyReadServiceServer).BatchCheckAccess(ctx, req.(*BatchCheckAccessRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -388,6 +478,60 @@ func _PolicyReadService_GetParents_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PolicyReadService_ResolveAccessibleScopes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ResolveAccessibleScopesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyReadServiceServer).ResolveAccessibleScopes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyReadService_ResolveAccessibleScopes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyReadServiceServer).ResolveAccessibleScopes(ctx, req.(*ResolveAccessibleScopesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PolicyReadService_ListOperations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyReadServiceServer).ListOperations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyReadService_ListOperations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyReadServiceServer).ListOperations(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PolicyReadService_ListProhibitions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListProhibitionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyReadServiceServer).ListProhibitions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyReadService_ListProhibitions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyReadServiceServer).ListProhibitions(ctx, req.(*ListProhibitionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // PolicyReadService_ServiceDesc is the grpc.ServiceDesc for PolicyReadService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -398,6 +542,10 @@ var PolicyReadService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CheckAccess",
 			Handler:    _PolicyReadService_CheckAccess_Handler,
+		},
+		{
+			MethodName: "BatchCheckAccess",
+			Handler:    _PolicyReadService_BatchCheckAccess_Handler,
 		},
 		{
 			MethodName: "GetNode",
@@ -430,6 +578,18 @@ var PolicyReadService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetParents",
 			Handler:    _PolicyReadService_GetParents_Handler,
+		},
+		{
+			MethodName: "ResolveAccessibleScopes",
+			Handler:    _PolicyReadService_ResolveAccessibleScopes_Handler,
+		},
+		{
+			MethodName: "ListOperations",
+			Handler:    _PolicyReadService_ListOperations_Handler,
+		},
+		{
+			MethodName: "ListProhibitions",
+			Handler:    _PolicyReadService_ListProhibitions_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

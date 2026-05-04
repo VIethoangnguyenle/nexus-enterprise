@@ -1,0 +1,82 @@
+schema: spec-driven
+created: 2026-05-03
+
+pipeline:
+  current_phase: user-checkpoint
+  status: locked
+  retry_count: 0
+  max_retries: 5
+
+  phases:
+    ceo:
+      status: done
+      completed_at: 2026-05-03T15:15:00Z
+      output: proposal.md
+    ba:
+      status: done
+      completed_at: 2026-05-03T15:18:00Z
+      output: specs/
+    user_checkpoint:
+      status: pending
+      completed_at: null
+      user_approved: false
+    sa:
+      status: pending
+      completed_at: null
+      output: architecture.md
+    ux:
+      status: skipped
+      completed_at: null
+      output: null
+    dev:
+      status: pending
+      completed_at: null
+      output: code
+      checkpoint: null
+    sa_verify:
+      status: pending
+      completed_at: null
+      output: sa-verify-report
+    qc:
+      status: pending
+      completed_at: null
+      output: qa-memory.json
+    polish:
+      status: pending
+      completed_at: null
+      rounds: 0
+      max_rounds: 2
+    learn:
+      status: pending
+      completed_at: null
+      triggered: false
+
+  session_dialogue:
+    decisions: 3
+    handoffs: 1
+    deviations: 0
+    red_flags: 0
+
+  loops:
+    total: 0
+    max: 5
+    history: []
+
+  artifact_versions:
+    proposal: 1
+    specs: 1
+    architecture: 1
+    design: 0
+    tasks: 1
+
+  spec_lock:
+    locked_at: 2026-05-03T15:18:00Z
+    locked_by: ba
+    spec_hash: 0cdcf4f9aef1f6500b7abf88e2caa139f744d2ab3ee060888a45700545527b7a
+    file_hashes:
+      decouple-domain: de76ec9ae68b54bed2accf4061d80700c16c996aea61161261f782e93f615d3a
+      dynamic-operations: bdc2d0caba178a82f57766a3e5fb337a55869415713ee5c770b1442b99cd0e01
+      invalidate-cache: 6d742fd5bbb69317266bbc85a1e247a5601a640331b35026e50d9609481ffe72
+      prohibitions: 2fd2b99ca270ceb91f72ecb034bb7f4285cb57e2a9820cdd6fbbecd525feab50
+      self-contained-schema: ff25609c2f60194853409204317296d7139dff2a6d0f24a4e2ab78e25ad8c440
+    unlock_count: 0

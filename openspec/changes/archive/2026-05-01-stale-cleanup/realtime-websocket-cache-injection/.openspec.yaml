@@ -1,0 +1,49 @@
+schema: spec-driven
+created: 2026-05-01T15:15:00+07:00
+
+pipeline:
+  current_phase: ux
+  status: locked
+
+  phases:
+    ceo:
+      status: done
+      completed_at: 2026-05-01T15:16:30+07:00
+      output: proposal.md
+    ba:
+      status: done
+      completed_at: 2026-05-01T15:18:30+07:00
+      output: specs/
+    ux:
+      status: pending
+      completed_at: null
+      output: design.md
+    dev:
+      status: pending
+      completed_at: null
+      output: code
+      checkpoint: null
+    qc:
+      status: pending
+      completed_at: null
+      output: qa-memory.json
+
+  loops:
+    total: 0
+    max: 5
+    history: []
+
+  spec_lock:
+    locked_at: 2026-05-01T15:18:30+07:00
+    locked_by: BA
+    spec_hash: 41e5565147960e536820539896153a591b3aa1c2d9d46d70fbcdc372e1843f26
+    file_hashes:
+      specs/cleanup/spec.md: fe5e9993c23d8876ca5b6ab9273fbaf202e202dd28d4bf0c580ab1968468db2b
+      specs/mutation-optimistic/spec.md: b2ad78564b6808fa6d2a6dbf6f32ccdb0abda2669f5e995883cd74204d2bd07a
+      specs/overview.md: 27e36a10f09f4aa0e2b3f79c7100781603a0947bd1109456406786e22b550826
+      specs/ws-drive-injection/spec.md: cabdc04be1ba6a19283d7572b2fc953c96f382a9a5059655bfd74023201d6264
+      specs/ws-pin-injection/spec.md: 604a06a7ec51e39d0c75de92e7c80bc8767ea27bd114c383c0ca304436d39b19
+      specs/ws-poll-injection/spec.md: aab2ee9fd20df9fa5ea232809d13af56720208ec9de47f12c8ef4e9402bbc912
+      specs/ws-reaction-injection/spec.md: 8719e151d5db20ceabad22a24642a22056ebe06888deb3470da511991b42e7fd
+      specs/ws-task-injection/spec.md: 34685bfd64b0fdb4d02f4c8a78cf1148ab0906a6bb4a2d33b4edc20a324282fa
+    unlock_count: 0

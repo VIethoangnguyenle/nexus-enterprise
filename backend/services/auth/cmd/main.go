@@ -21,7 +21,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "ngac-platform/proto/auth"
+	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
+	workspacepb "ngac-platform/proto/workspace"
 	"ngac-platform/services/auth/internal/auth"
 	"ngac-platform/services/auth/internal/domain"
 	agrpc "ngac-platform/services/auth/internal/grpc"
@@ -41,6 +43,8 @@ func main() {
 	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
 	redisURL := envOr("REDIS_URL", "redis://localhost:6379/1")
 	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
+	workspaceAddr := envOr("WORKSPACE_SERVICE_ADDR", "localhost:50053")
+	messagingAddr := envOr("MESSAGING_SERVICE_ADDR", "localhost:50055")
 	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
 	grpcPort := envOr("GRPC_PORT", "50052")
 	restPort := envOr("REST_PORT", "8080")
@@ -63,6 +67,26 @@ func main() {
 	policyRead := policypb.NewPolicyReadServiceClient(policyConn)
 	policyWrite := policypb.NewPolicyWriteServiceClient(policyConn)
 
+	// Workspace gRPC client (for auto-provisioning on register)
+	var wsClient workspacepb.WorkspaceServiceClient
+	wsConn, err := grpc.NewClient(workspaceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		slog.Warn("workspace service unavailable, auto-provision disabled", "address", workspaceAddr, "error", err)
+	} else {
+		defer wsConn.Close()
+		wsClient = workspacepb.NewWorkspaceServiceClient(wsConn)
+	}
+
+	// Messaging gRPC client (for auto-provisioning #general channel)
+	var msgClient messagingpb.MessagingServiceClient
+	msgConn, err := grpc.NewClient(messagingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		slog.Warn("messaging service unavailable, auto-provision disabled", "address", messagingAddr, "error", err)
+	} else {
+		defer msgConn.Close()
+		msgClient = messagingpb.NewMessagingServiceClient(msgConn)
+	}
+
 	st := store.New(pool)
 
 	rdb, err := connectRedis(ctx, redisURL)
@@ -74,7 +98,7 @@ func main() {
 	}
 
 	// Domain service — shared by gRPC and REST handlers
-	svc := domain.NewService(st, policyRead, policyWrite)
+	svc := domain.NewService(st, rdb, policyRead, policyWrite, wsClient, msgClient)
 
 	// gRPC server (service-to-service)
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))

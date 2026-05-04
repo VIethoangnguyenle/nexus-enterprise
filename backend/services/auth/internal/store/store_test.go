@@ -48,7 +48,7 @@ func insertTestUser(t *testing.T, s *store.Store, pool *pgxpool.Pool) (id, usern
 	)
 	require.NoError(t, err)
 
-	err = s.CreateUser(context.Background(), id, username, "$2a$10$fakehash000000000000000000000000000000000000", ngacNodeID)
+	err = s.CreateUser(context.Background(), id, username, "$2a$10$fakehash000000000000000000000000000000000000", ngacNodeID, "", "", "", "")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

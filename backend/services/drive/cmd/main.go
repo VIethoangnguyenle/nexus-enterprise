@@ -72,7 +72,7 @@ func main() {
 	e.HideBanner = true
 	e.Use(echomw.Logger())
 	e.Use(echomw.Recover())
-	restHandler := rest.NewHandler(srv)
+	restHandler := rest.NewHandler(srv, policypb.NewPolicyReadServiceClient(policyReadConn))
 	restHandler.RegisterRoutes(e, jwtSecret)
 
 	// Start both servers

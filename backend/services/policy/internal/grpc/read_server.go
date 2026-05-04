@@ -15,147 +15,100 @@ import (
 	"ngac-platform/services/policy/internal/ngac"
 )
 
-const readCacheTTL = 30 * time.Second
-
-// ReadServer implements PolicyReadService with a 3-layer cache:
-//   - L1: Redis (microsecond decisions, 30s TTL)
-//   - L2: Materialized access table (millisecond, version-checked)
-//   - L3: SQL CTE (full graph traversal, always correct)
+// ReadServer implements PolicyReadService.
+// Access evaluation is fully delegated to AccessEvaluator (cache orchestrator + PDP).
+// This struct handles only proto conversion and graph query RPCs.
 type ReadServer struct {
 	pb.UnimplementedPolicyReadServiceServer
 	store        *ngac.Store
-	constraint   *ngac.ConstraintEngine
-	rdb          *redis.Client
-	cte          *ngac.CTEEvaluator
-	materialized *ngac.MaterializedAccess
-	version      *ngac.VersionTracker
+	rdb          *redis.Client // used only by ResolveAccessibleScopes (scope caching)
+	evaluator    *ngac.AccessEvaluator
+	operations   *ngac.OperationStore
+	prohibitions *ngac.ProhibitionStore
 }
 
-// NewReadServer creates a PolicyReadService with 3-layer caching.
+// NewReadServer creates a PolicyReadService with decoupled access evaluation.
 func NewReadServer(
 	store *ngac.Store,
-	constraint *ngac.ConstraintEngine,
 	rdb *redis.Client,
-	cte *ngac.CTEEvaluator,
-	materialized *ngac.MaterializedAccess,
-	version *ngac.VersionTracker,
+	evaluator *ngac.AccessEvaluator,
+	operations *ngac.OperationStore,
+	prohibitions *ngac.ProhibitionStore,
 ) *ReadServer {
 	return &ReadServer{
 		store:        store,
-		constraint:   constraint,
 		rdb:          rdb,
-		cte:          cte,
-		materialized: materialized,
-		version:      version,
+		evaluator:    evaluator,
+		operations:   operations,
+		prohibitions: prohibitions,
 	}
 }
 
-// CheckAccess evaluates access via 3-layer cache: L1 Redis → L2 Materialized → L3 CTE.
+// CheckAccess evaluates access via the AccessEvaluator (L1 Redis → L2 Materialized → L3 BFS/CTE + prohibitions).
 func (s *ReadServer) CheckAccess(ctx context.Context, req *pb.CheckAccessRequest) (*pb.AccessDecision, error) {
-	cacheKey := accessCacheKey(req.UserNodeId, req.ObjectNodeId, req.Operation)
-
-	// L1: Redis cache
-	if s.rdb != nil {
-		if cached, err := s.getRedisCache(ctx, cacheKey); err == nil {
-			return cached, nil
-		}
+	accessReq := ngac.AccessRequest{
+		UserNodeID:   req.UserNodeId,
+		ObjectNodeID: req.ObjectNodeId,
+		Operation:    req.Operation,
 	}
-
-	// L2: Materialized access table
-	if s.materialized != nil && s.version != nil {
-		if decision, err := s.checkMaterialized(ctx, req); err == nil && decision != nil {
-			s.setRedisCache(ctx, cacheKey, decision)
-			return decision, nil
-		}
+	if req.WorkspaceId != nil {
+		accessReq.WorkspaceID = *req.WorkspaceId
 	}
-
-	// L3: Compute via in-memory graph (fast path) or CTE (fallback)
-	resp := s.computeAccess(req)
-
-	// Populate L2 + L1
-	s.populateCaches(ctx, req, cacheKey, resp)
-
-	return resp, nil
+	decision := s.evaluator.Evaluate(ctx, accessReq)
+	return decisionToProto(decision), nil
 }
 
-// checkMaterialized attempts L2 lookup with version freshness check.
-func (s *ReadServer) checkMaterialized(ctx context.Context, req *pb.CheckAccessRequest) (*pb.AccessDecision, error) {
-	currentVersion, err := s.version.GetVersion(ctx, "global")
-	if err != nil {
-		return nil, err
+// BatchCheckAccess resolves permissions for multiple objects and operations in
+// a single RPC. Reuses the 3-layer cached CheckAccess path for each pair.
+func (s *ReadServer) BatchCheckAccess(ctx context.Context, req *pb.BatchCheckAccessRequest) (*pb.BatchAccessResult, error) {
+	if req.UserNodeId == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_node_id required")
 	}
 
-	cached, err := s.materialized.Lookup(ctx, req.UserNodeId, req.ObjectNodeId, req.Operation, currentVersion)
-	if err != nil || cached == nil {
-		return nil, err
-	}
+	results := make(map[string]*pb.ObjectPermissions, len(req.ObjectIds))
 
-	decision := "DENY"
-	if cached.Decision {
-		decision = "ALLOW"
-	}
-
-	return &pb.AccessDecision{
-		Decision:  decision,
-		User:      req.UserNodeId,
-		Object:    req.ObjectNodeId,
-		Operation: req.Operation,
-		Explanation: &pb.AccessExplanation{
-			Reason: "resolved from materialized cache",
-		},
-	}, nil
-}
-
-// computeAccess performs the actual graph traversal using the in-memory BFS engine.
-func (s *ReadServer) computeAccess(req *pb.CheckAccessRequest) *pb.AccessDecision {
-	graph := s.store.GetGraph()
-	decision := graph.CheckAccess(req.UserNodeId, req.ObjectNodeId, req.Operation)
-
-	resp := &pb.AccessDecision{
-		Decision:  decision.Decision,
-		User:      decision.User,
-		Object:    decision.Object,
-		Operation: decision.Operation,
-		Explanation: &pb.AccessExplanation{
-			Path:               decision.Explanation.Path,
-			PolicyClass:        decision.Explanation.PolicyClass,
-			UserAttributes:     decision.Explanation.UserAttributes,
-			ObjectAttributes:   decision.Explanation.ObjectAttributes,
-			Reason:             decision.Explanation.Reason,
-			ConstraintsChecked: decision.Explanation.ConstraintsChecked,
-		},
-	}
-
-	if decision.Decision == "ALLOW" && s.constraint != nil {
-		reqCtx := ngac.RequestContext{
-			Time: time.Now(), UserID: req.UserNodeId,
-			ObjectID: req.ObjectNodeId, Operation: req.Operation,
-		}
-		denied, name, msg, checked := s.constraint.Evaluate(reqCtx)
-		resp.Explanation.ConstraintsChecked = checked
-		if denied {
-			resp.Decision = "DENY"
-			resp.Explanation.Reason = msg
-			resp.Explanation.ConstraintDenied = &pb.ConstraintDenial{Name: name, Message: msg}
-		}
-	}
-
-	return resp
-}
-
-// populateCaches stores a computed decision in L2 (materialized) and L1 (Redis).
-func (s *ReadServer) populateCaches(ctx context.Context, req *pb.CheckAccessRequest, cacheKey string, resp *pb.AccessDecision) {
-	if s.materialized != nil && s.version != nil {
-		currentVersion, err := s.version.GetVersion(ctx, "global")
-		if err == nil {
-			allowed := resp.Decision == "ALLOW"
-			if storeErr := s.materialized.Store(ctx, req.UserNodeId, req.ObjectNodeId, req.Operation, allowed, currentVersion); storeErr != nil {
-				slog.Warn("failed to store materialized decision", "error", storeErr)
+	for _, objID := range req.ObjectIds {
+		perms := make(map[string]bool, len(req.Operations))
+		for _, op := range req.Operations {
+			decision, err := s.CheckAccess(ctx, &pb.CheckAccessRequest{
+				UserNodeId:   req.UserNodeId,
+				ObjectNodeId: objID,
+				Operation:    op,
+			})
+			if err != nil {
+				perms[op] = false
+				continue
 			}
+			perms[op] = decision.Decision == ngac.DecisionAllow
 		}
+		results[objID] = &pb.ObjectPermissions{Permissions: perms}
 	}
 
-	s.setRedisCache(ctx, cacheKey, resp)
+	return &pb.BatchAccessResult{Results: results}, nil
+}
+
+// decisionToProto converts internal AccessDecision to proto format.
+func decisionToProto(d *ngac.AccessDecision) *pb.AccessDecision {
+	resp := &pb.AccessDecision{
+		Decision:  d.Decision,
+		User:      d.User,
+		Object:    d.Object,
+		Operation: d.Operation,
+		Explanation: &pb.AccessExplanation{
+			Path:             d.Explanation.Path,
+			PolicyClasses:    d.Explanation.PolicyClasses,
+			UserAttributes:   d.Explanation.UserAttributes,
+			ObjectAttributes: d.Explanation.ObjectAttributes,
+			Reason:           d.Explanation.Reason,
+		},
+	}
+	if d.Explanation.ProhibitionDenied != nil {
+		resp.Explanation.ProhibitionDenied = &pb.ProhibitionDenial{
+			ProhibitionName: d.Explanation.ProhibitionDenied.ProhibitionName,
+			SubjectId:       d.Explanation.ProhibitionDenied.SubjectID,
+		}
+	}
+	return resp
 }
 
 // --- Read-only graph query RPCs ---
@@ -217,32 +170,199 @@ func (s *ReadServer) GetParents(ctx context.Context, req *pb.GetParentsRequest) 
 	return &pb.NodeList{Nodes: nodesToProto(parents)}, nil
 }
 
-// --- Redis helpers ---
 
-func (s *ReadServer) getRedisCache(ctx context.Context, key string) (*pb.AccessDecision, error) {
-	if s.rdb == nil {
-		return nil, fmt.Errorf("redis not available")
+
+const scopeCacheTTL = 60 * time.Second
+
+// ResolveAccessibleScopes returns the set of leaf OA IDs a user can access
+// for a given operation. Algorithm:
+//   1. BFS upward from user → find all UA ancestors
+//   2. For each UA ancestor, find associations with the requested operation → collect target OA IDs
+//   3. For each target OA, BFS downward → flatten to leaf OA IDs (no OA children)
+// Results are cached in Redis (key: scopes:{user}:{op}) with 60s TTL.
+func (s *ReadServer) ResolveAccessibleScopes(ctx context.Context, req *pb.ResolveAccessibleScopesRequest) (*pb.ResolveAccessibleScopesResponse, error) {
+	if req.UserNodeId == "" || req.Operation == "" {
+		return nil, status.Error(codes.InvalidArgument, "user_node_id and operation required")
 	}
+
+	// Check Redis cache
+	// NOTE: scope cache key does not yet include workspace_id because
+	// ResolveAccessibleScopesRequest proto lacks that field.
+	// This will be addressed when proto is updated in a separate change.
+	cacheKey := fmt.Sprintf("scopes:%s:%s", req.UserNodeId, req.Operation)
+	if s.rdb != nil {
+		if cached, err := s.getCachedScopes(ctx, cacheKey); err == nil {
+			return cached, nil
+		}
+	}
+
+	// Step 1: BFS upward from user → collect UA ancestors (including self if UA)
+	graph := s.store.GetGraph()
+	userNode := graph.GetNode(req.UserNodeId)
+	if userNode == nil {
+		return nil, status.Errorf(codes.NotFound, "user node %s not found", req.UserNodeId)
+	}
+
+	uaIDs := s.collectUAAncestors(graph, req.UserNodeId, userNode)
+
+	// Step 2: For each UA, find associations granting the requested operation → collect target OA IDs
+	targetOAIDs := s.collectTargetOAs(graph, uaIDs, req.Operation)
+
+	// Step 3: For each target OA, find leaf descendants (OA nodes with no OA children)
+	leafOAIDs := s.resolveLeafOAs(graph, targetOAIDs)
+
+	resp := &pb.ResolveAccessibleScopesResponse{
+		ScopeOaIds: leafOAIDs,
+	}
+
+	// Cache result
+	if s.rdb != nil {
+		s.setCachedScopes(ctx, cacheKey, resp)
+	}
+
+	return resp, nil
+}
+
+// collectUAAncestors returns all UA node IDs reachable from the user (BFS upward).
+func (s *ReadServer) collectUAAncestors(graph ngac.GraphReader, userNodeID string, userNode *ngac.NGACNode) []string {
+	var uaIDs []string
+
+	// Include self if UA type
+	if userNode.NodeType == ngac.NodeTypeUserAttribute {
+		uaIDs = append(uaIDs, userNodeID)
+	}
+
+	ancestors := graph.GetAncestors(userNodeID)
+	for id, node := range ancestors {
+		if node.NodeType == ngac.NodeTypeUserAttribute {
+			uaIDs = append(uaIDs, id)
+		}
+	}
+	return uaIDs
+}
+
+// collectTargetOAs finds all OA IDs associated with the given UAs for an operation.
+func (s *ReadServer) collectTargetOAs(graph ngac.GraphReader, uaIDs []string, operation string) map[string]bool {
+	targetOAs := make(map[string]bool)
+	for _, uaID := range uaIDs {
+		assocs := graph.GetAssociationsFromUA(uaID)
+		for _, assoc := range assocs {
+			for _, op := range assoc.Operations {
+				if op == operation || op == "*" {
+					targetOAs[assoc.OAID] = true
+					break
+				}
+			}
+		}
+	}
+	return targetOAs
+}
+
+// resolveLeafOAs traverses down from each target OA to find leaf OA nodes.
+// A leaf is an OA that has no OA-type children.
+func (s *ReadServer) resolveLeafOAs(graph ngac.GraphReader, targetOAs map[string]bool) []string {
+	seen := make(map[string]bool)
+
+	for oaID := range targetOAs {
+		descendants := graph.GetDescendants(oaID)
+
+		// Collect all OA-type descendants
+		oaDescendants := make(map[string]bool)
+		for id, node := range descendants {
+			if node.NodeType == ngac.NodeTypeObjectAttr {
+				oaDescendants[id] = true
+			}
+		}
+
+		// If no OA descendants, the target itself is a leaf
+		if len(oaDescendants) == 0 {
+			seen[oaID] = true
+			continue
+		}
+
+		// Find leaves: OA nodes that have no OA-type children
+		for id := range oaDescendants {
+			if !hasOAChildren(graph, id) {
+				seen[id] = true
+			}
+		}
+	}
+
+	result := make([]string, 0, len(seen))
+	for id := range seen {
+		result = append(result, id)
+	}
+	return result
+}
+
+// hasOAChildren checks whether a node has any children of type OA.
+func hasOAChildren(graph ngac.GraphReader, nodeID string) bool {
+	for _, child := range graph.GetChildren(nodeID) {
+		if child.NodeType == ngac.NodeTypeObjectAttr {
+			return true
+		}
+	}
+	return false
+}
+
+// --- Scope cache helpers ---
+
+func (s *ReadServer) getCachedScopes(ctx context.Context, key string) (*pb.ResolveAccessibleScopesResponse, error) {
 	data, err := s.rdb.Get(ctx, key).Bytes()
 	if err != nil {
 		return nil, err
 	}
-	var resp pb.AccessDecision
+	var resp pb.ResolveAccessibleScopesResponse
 	if err := json.Unmarshal(data, &resp); err != nil {
-		return nil, fmt.Errorf("unmarshaling cached decision: %w", err)
+		return nil, err
 	}
 	return &resp, nil
 }
 
-func (s *ReadServer) setRedisCache(ctx context.Context, key string, resp *pb.AccessDecision) {
-	if s.rdb == nil {
-		return
-	}
+func (s *ReadServer) setCachedScopes(ctx context.Context, key string, resp *pb.ResolveAccessibleScopesResponse) {
 	data, err := json.Marshal(resp)
 	if err != nil {
 		return
 	}
-	if err := s.rdb.Set(ctx, key, data, readCacheTTL).Err(); err != nil {
-		slog.Warn("failed to cache access decision", "key", key, "error", err)
+	if err := s.rdb.Set(ctx, key, data, scopeCacheTTL).Err(); err != nil {
+		slog.Warn("failed to cache scopes", "key", key, "error", err)
 	}
+}
+
+// --- Operations + Prohibitions read-only RPCs ---
+
+// ListOperations returns all registered operations.
+func (s *ReadServer) ListOperations(ctx context.Context, _ *pb.Empty) (*pb.OperationList, error) {
+	if s.operations == nil {
+		return &pb.OperationList{}, nil
+	}
+	ops, err := s.operations.List(ctx)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "listing operations: %v", err)
+	}
+	return &pb.OperationList{Operations: ops}, nil
+}
+
+// ListProhibitions returns all prohibitions, optionally filtered by subject_id.
+func (s *ReadServer) ListProhibitions(ctx context.Context, req *pb.ListProhibitionsRequest) (*pb.ProhibitionList, error) {
+	if s.prohibitions == nil {
+		return &pb.ProhibitionList{}, nil
+	}
+	prohibitions, err := s.prohibitions.List(ctx, req.SubjectId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "listing prohibitions: %v", err)
+	}
+
+	var result []*pb.Prohibition
+	for _, p := range prohibitions {
+		result = append(result, &pb.Prohibition{
+			Id:           p.ID,
+			Name:         p.Name,
+			SubjectId:    p.SubjectID,
+			Operations:   p.Operations,
+			TargetOaIds:  p.TargetOAIDs,
+			Intersection: p.Intersection,
+		})
+	}
+	return &pb.ProhibitionList{Prohibitions: result}, nil
 }

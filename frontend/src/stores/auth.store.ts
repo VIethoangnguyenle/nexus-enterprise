@@ -23,10 +23,14 @@ export const useAuthStore = create<AuthState>()(
 
       login: (token, user) => set({ token, user }),
 
-      logout: () => set({ token: null, user: null }),
+      logout: () => {
+        // Clear permission cache on tenant switch / logout
+        import('../stores/permission.store').then(m => m.usePermissionStore.getState().clear())
+        set({ token: null, user: null })
+      },
 
       isAuthenticated: () => !!get().token,
     }),
-    { name: 'ngac-auth' },
+    { name: `ngac-auth${new URLSearchParams(window.location.search).get('user') ? `-${new URLSearchParams(window.location.search).get('user')}` : ''}` },
   ),
 )

@@ -1,0 +1,24 @@
+schema: spec-driven
+created: 2026-05-03
+
+pipeline:
+  current_phase: ready
+  status: ready-to-apply
+  retry_count: 0
+  max_retries: 5
+
+artifacts:
+  proposal:
+    status: done
+    output: proposal.md
+  design:
+    status: done
+    output: design.md
+    depends_on: [proposal]
+  tasks:
+    status: done
+    output: tasks.md
+    depends_on: [design]
+
+apply:
+  requires: [tasks]

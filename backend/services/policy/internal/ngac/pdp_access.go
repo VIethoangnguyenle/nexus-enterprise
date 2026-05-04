@@ -16,12 +16,12 @@ func (g *Graph) CheckAccess(userNodeID, objectNodeID, operation string) *AccessD
 
 	if userNode == nil || objectNode == nil {
 		return &AccessDecision{
-			Decision:  "DENY",
+			Decision:  DecisionDeny,
 			User:      userNodeID,
 			Object:    objectNodeID,
 			Operation: operation,
 			Explanation: AccessExplanation{
-				Reason: "User or object node not found in graph",
+				Reason: DenyReasonNodeNotFound,
 			},
 		}
 	}
@@ -48,13 +48,13 @@ func (g *Graph) CheckAccess(userNodeID, objectNodeID, operation string) *AccessD
 		}
 
 		return &AccessDecision{
-			Decision:  "ALLOW",
+			Decision:  DecisionAllow,
 			User:      userNode.Name,
 			Object:    objectNode.Name,
 			Operation: operation,
 			Explanation: AccessExplanation{
 				Path:             path,
-				PolicyClass:      assocMatch.commonPC,
+				PolicyClasses:    assocMatch.matchedPCs,
 				UserAttributes:   uaNames,
 				ObjectAttributes: oaNames,
 			},
@@ -62,12 +62,12 @@ func (g *Graph) CheckAccess(userNodeID, objectNodeID, operation string) *AccessD
 	}
 
 	return &AccessDecision{
-		Decision:  "DENY",
+		Decision:  DecisionDeny,
 		User:      userNode.Name,
 		Object:    objectNode.Name,
 		Operation: operation,
 		Explanation: AccessExplanation{
-			Reason:           "No association path found with matching operation and common policy class",
+			Reason:           DenyReasonNoAssociation,
 			UserAttributes:   uaNames,
 			ObjectAttributes: oaNames,
 		},
@@ -76,18 +76,27 @@ func (g *Graph) CheckAccess(userNodeID, objectNodeID, operation string) *AccessD
 
 // associationMatch holds the result of a successful association search.
 type associationMatch struct {
-	uaID     string
-	oaID     string
-	commonPC string
+	uaID       string
+	oaID       string
+	matchedPCs []string
 }
 
 // findMatchingAssociation searches for an association granting the requested operation
-// from any user UA to any object OA, requiring at least one common Policy Class.
+// from any user UA to any object OA, requiring ALL object PCs to be covered by user PCs.
 // Returns on first match (early termination) instead of exhaustive search.
+//
+// NIST NGAC spec: objectPCs ⊆ userPCs (ALL-intersection, not single-intersection).
 func (g *Graph) findMatchingAssociation(
 	userUAs, objectOAs, userPCs, objectPCs map[string]bool,
 	operation string,
 ) *associationMatch {
+	// Pre-check: ALL-PC intersection — every PC the object reaches,
+	// the user must also reach. Checked once, not per-association.
+	matched := allPCsSatisfied(objectPCs, userPCs, g.Nodes)
+	if matched == nil {
+		return nil
+	}
+
 	for uaID := range userUAs {
 		for _, assoc := range g.uaToAssociations[uaID] {
 			if !objectOAs[assoc.OAID] {
@@ -96,34 +105,35 @@ func (g *Graph) findMatchingAssociation(
 			if !containsOp(assoc.Operations, operation) {
 				continue
 			}
-			// PC intersection: both user and object must share at least one PC
-			if pc := findCommonPC(userPCs, objectPCs, g.Nodes); pc != "" {
-				return &associationMatch{
-					uaID:     uaID,
-					oaID:     assoc.OAID,
-					commonPC: pc,
-				}
+			return &associationMatch{
+				uaID:       uaID,
+				oaID:       assoc.OAID,
+				matchedPCs: matched,
 			}
 		}
 	}
 	return nil
 }
 
-// findCommonPC returns the name of a common Policy Class between two PC sets.
-// Iterates over the smaller set for efficiency.
-func findCommonPC(userPCs, objectPCs map[string]bool, nodes map[string]*NGACNode) string {
-	smaller, larger := userPCs, objectPCs
-	if len(userPCs) > len(objectPCs) {
-		smaller, larger = objectPCs, userPCs
+// allPCsSatisfied checks that ALL PCs the object reaches are also reached by the user.
+// Returns the list of matched PC names if satisfied, nil otherwise.
+//
+// NIST NGAC spec requires: objectPCs ⊆ userPCs.
+// Previous implementation (findCommonPC) only checked for ANY common PC — incorrect for Multi-PC.
+func allPCsSatisfied(objectPCs, userPCs map[string]bool, nodes map[string]*NGACNode) []string {
+	if len(objectPCs) == 0 {
+		return nil
 	}
-	for pc := range smaller {
-		if larger[pc] {
-			if n := nodes[pc]; n != nil {
-				return n.Name
-			}
+	matched := make([]string, 0, len(objectPCs))
+	for pc := range objectPCs {
+		if !userPCs[pc] {
+			return nil // user missing a required PC → DENY
+		}
+		if n := nodes[pc]; n != nil {
+			matched = append(matched, n.Name)
 		}
 	}
-	return ""
+	return matched
 }
 
 // collectNodeNames extracts node names of a specific type from a set of node IDs.

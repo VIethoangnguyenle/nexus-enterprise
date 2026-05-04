@@ -1,27 +1,26 @@
-import type { HTMLAttributes, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 
-type TextVariant = 'body' | 'caption' | 'label' | 'mono'
+type TextVariant = 'body' | 'small' | 'caption' | 'overline' | 'micro'
 
-interface TextProps extends HTMLAttributes<HTMLSpanElement> {
+interface TextProps {
   variant?: TextVariant
   muted?: boolean
   children: ReactNode
+  className?: string
 }
 
 const variantStyles: Record<TextVariant, string> = {
-  body: 'text-sm leading-relaxed',
-  caption: 'text-xs leading-normal',
-  label: 'text-xs font-medium uppercase tracking-wider',
-  mono: 'text-xs font-mono',
+  body: 'text-body',
+  small: 'text-small',
+  caption: 'text-caption',
+  overline: 'text-overline',
+  micro: 'text-micro',
 }
 
-/** Typography primitive for inline text. */
-export function Text({ variant = 'body', muted = false, className = '', children, ...props }: TextProps) {
+/** Text using typography role tokens. Muted variant uses on-surface-variant (secondary). */
+export function Text({ variant = 'body', muted, children, className = '' }: TextProps) {
   return (
-    <span
-      className={`${variantStyles[variant]} ${muted ? 'text-text-muted' : 'text-text-secondary'} ${className}`}
-      {...props}
-    >
+    <span className={`${variantStyles[variant]} ${muted ? 'text-on-surface-variant' : 'text-on-surface'} ${className}`}>
       {children}
     </span>
   )

@@ -95,7 +95,7 @@ func main() {
 
 	// Start WebSocket server with graceful shutdown support
 	wsMux := http.NewServeMux()
-	wsMux.HandleFunc("/ws", hub.HandleWebSocket(jwtSecret))
+	wsMux.HandleFunc("/api/ws", hub.HandleWebSocket(jwtSecret))
 	wsServer := &http.Server{
 		Addr:         fmt.Sprintf(":%s", wsPort),
 		Handler:      wsMux,
@@ -152,7 +152,7 @@ func main() {
 	pb.RegisterNotificationServiceServer(srv, notifSrv)
 
 	// Start Kafka consumer for asset events → notifications
-	consumer, err := events.NewConsumer(strings.Split(kafkaBrokers, ","), notifSrv)
+	consumer, err := events.NewConsumer(strings.Split(kafkaBrokers, ","), notifSrv, hub)
 	if err != nil {
 		slog.Warn("kafka consumer unavailable, notifications from asset events disabled", "error", err)
 	}
@@ -201,7 +201,7 @@ func main() {
 	e.HideBanner = true
 	e.Use(echomw.Logger())
 	e.Use(echomw.Recover())
-	restHandler := rest.NewHandler(domainSvc, nil) // TODO: wire NotificationStore
+	restHandler := rest.NewHandler(domainSvc, nil, hub)
 	restHandler.RegisterRoutes(e, jwtSecret)
 	go func() {
 		slog.Info("messaging REST listening", "port", restPort)

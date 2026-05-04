@@ -4,6 +4,7 @@ services:
   # ============================================
   traefik:
     image: traefik:v3.2
+    profiles: [app]
     command:
       - --api.dashboard=true
       - --api.insecure=true
@@ -28,6 +29,8 @@ services:
   # ============================================
   postgres:
     image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     environment:
       POSTGRES_DB: ngac
       POSTGRES_USER: ngac
@@ -43,6 +46,8 @@ services:
 
   redis:
     image: redis:7-alpine
+    ports:
+      - "6379:6379"
     command: ["redis-server", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
     volumes:
       - redisdata:/data
@@ -54,11 +59,13 @@ services:
 
   redpanda:
     image: redpandadata/redpanda:v24.2.18
+    ports:
+      - "19092:19092"
     command:
       - redpanda
       - start
       - --smp 1
-      - --memory 128M
+      - --memory 256M
       - --reserve-memory 0M
       - --overprovisioned
       - --default-log-level=warn
@@ -79,6 +86,7 @@ services:
     environment:
       MINIO_ROOT_USER: ngac-admin
       MINIO_ROOT_PASSWORD: ngac-secret-key
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:5173,http://localhost,http://zump-biz.vn"
     ports:
       - "9000:9000"    # S3 API — direct access for presigned URLs
       - "9001:9001"    # MinIO Console (debug only)
@@ -103,6 +111,7 @@ services:
   # Microservices
   # ============================================
   policy:
+    profiles: [app]
     build:
       context: ./backend
       dockerfile: services/policy/Dockerfile
@@ -125,6 +134,7 @@ services:
       retries: 10
 
   policy-read:
+    profiles: [app]
     build:
       context: ./backend
       dockerfile: services/policy/Dockerfile.read
@@ -148,12 +158,15 @@ services:
       retries: 10
 
   auth:
+    profiles: [app]
     build:
       context: ./backend
       dockerfile: services/auth/Dockerfile
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
+      WORKSPACE_SERVICE_ADDR: workspace:50053
+      MESSAGING_SERVICE_ADDR: messaging:50055
       REDIS_URL: redis://redis:6379/1
       JWT_SECRET: ngac-super-secret-key-change-in-production
       GRPC_PORT: "50052"
@@ -177,6 +190,7 @@ services:
       retries: 10
 
   workspace:
+    profiles: [app]
     build:
       context: ./backend
       dockerfile: services/workspace/Dockerfile
@@ -212,6 +226,7 @@ services:
       retries: 10
 
   document:
+    profiles: [app]
     build:
       context: ./backend
       dockerfile: services/document/Dockerfile
@@ -243,6 +258,7 @@ services:
       retries: 10
 
   messaging:
+    profiles: [app]
     build:
       context: ./backend
       dockerfile: services/messaging/Dockerfile
@@ -289,6 +305,7 @@ services:
       retries: 10
 
   asset:
+    profiles: [app]
     build:
       context: ./backend
       dockerfile: services/asset/Dockerfile
@@ -321,6 +338,7 @@ services:
       retries: 10
 
   drive:
+    profiles: [app]
     build:
       context: ./backend
       dockerfile: services/drive/Dockerfile
@@ -351,11 +369,51 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+  # ============================================
+  # Approval Workflow Engine
+  # ============================================
+  approval:
+    profiles: [app]
+    build:
+      context: ./backend
+      dockerfile: services/approval/Dockerfile
+    environment:
+      DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
+      POLICY_ADDR: policy:50051
+      POLICY_SERVICE_ADDR: policy:50051
+      POLICY_READ_SERVICE_ADDR: policy-read:50061
+      REDIS_URL: redis://redis:6379/4
+      KAFKA_BROKERS: redpanda:9092
+      GRPC_PORT: "50058"
+      REST_PORT: "8080"
+      JWT_SECRET: ngac-super-secret-key-change-in-production
+    depends_on:
+      policy:
+        condition: service_healthy
+      policy-read:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.approval.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && PathPrefix(`/api/approval`)"
+      - "traefik.http.routers.approval.entrypoints=web"
+      - "traefik.http.routers.approval.priority=120"
+      - "traefik.http.routers.approval.middlewares=cors-all@docker"
+      - "traefik.http.services.approval.loadbalancer.server.port=8080"
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50058"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   # ============================================
   # Frontend
   # ============================================
   frontend:
+    profiles: [app]
     build:
       context: ./frontend
     depends_on:

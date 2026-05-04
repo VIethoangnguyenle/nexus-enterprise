@@ -1,0 +1,78 @@
+schema: spec-driven
+created: "2026-05-03"
+
+pipeline:
+  current_phase: user-checkpoint
+  status: locked
+  retry_count: 0
+  max_retries: 5
+
+  phases:
+    ceo:
+      status: done
+      completed_at: "2026-05-03T15:58:00Z"
+      output: proposal.md
+    ba:
+      status: done
+      completed_at: "2026-05-03T15:59:00Z"
+      output: specs/
+    user_checkpoint:
+      status: pending
+      completed_at: null
+      user_approved: false
+    sa:
+      status: pending
+      completed_at: null
+      output: architecture.md
+    ux:
+      status: pending
+      completed_at: null
+      output: design.md
+    dev:
+      status: pending
+      completed_at: null
+      output: code
+      checkpoint: null
+    sa_verify:
+      status: pending
+      completed_at: null
+      output: sa-verify-report
+    qc:
+      status: pending
+      completed_at: null
+      output: qa-memory.json
+    polish:
+      status: pending
+      completed_at: null
+      rounds: 0
+      max_rounds: 2
+    learn:
+      status: pending
+      completed_at: null
+      triggered: false
+
+  session_dialogue:
+    decisions: 0
+    handoffs: 0
+    deviations: 0
+    red_flags: 0
+
+  loops:
+    total: 0
+    max: 5
+    history: []
+
+  artifact_versions:
+    proposal: 1
+    specs: 1
+    architecture: 1
+    design: 1
+    tasks: 1
+
+  spec_lock:
+    locked_at: "2026-05-03T15:59:07Z"
+    locked_by: ba
+    spec_hash: a01ab64827c131e04e38fd551f6edb28381964f220525f7e2134f8dce39c6dd6
+    file_hashes:
+      "specs/cache-orchestrator/spec.md": a01ab64827c131e04e38fd551f6edb28381964f220525f7e2134f8dce39c6dd6
+    unlock_count: 0

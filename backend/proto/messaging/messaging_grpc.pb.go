@@ -31,6 +31,22 @@ const (
 	MessagingService_FindThreadsByEntity_FullMethodName = "/messaging.MessagingService/FindThreadsByEntity"
 	MessagingService_CreateDM_FullMethodName            = "/messaging.MessagingService/CreateDM"
 	MessagingService_ListDMs_FullMethodName             = "/messaging.MessagingService/ListDMs"
+	MessagingService_AddReaction_FullMethodName         = "/messaging.MessagingService/AddReaction"
+	MessagingService_RemoveReaction_FullMethodName      = "/messaging.MessagingService/RemoveReaction"
+	MessagingService_ListReactions_FullMethodName       = "/messaging.MessagingService/ListReactions"
+	MessagingService_PinMessage_FullMethodName          = "/messaging.MessagingService/PinMessage"
+	MessagingService_UnpinMessage_FullMethodName        = "/messaging.MessagingService/UnpinMessage"
+	MessagingService_ListPins_FullMethodName            = "/messaging.MessagingService/ListPins"
+	MessagingService_MarkChannelRead_FullMethodName     = "/messaging.MessagingService/MarkChannelRead"
+	MessagingService_GetUnreadCounts_FullMethodName     = "/messaging.MessagingService/GetUnreadCounts"
+	MessagingService_SearchMessages_FullMethodName      = "/messaging.MessagingService/SearchMessages"
+	MessagingService_CreatePoll_FullMethodName          = "/messaging.MessagingService/CreatePoll"
+	MessagingService_VotePoll_FullMethodName            = "/messaging.MessagingService/VotePoll"
+	MessagingService_RemoveVote_FullMethodName          = "/messaging.MessagingService/RemoveVote"
+	MessagingService_GetPoll_FullMethodName             = "/messaging.MessagingService/GetPoll"
+	MessagingService_CreateTask_FullMethodName          = "/messaging.MessagingService/CreateTask"
+	MessagingService_UpdateTask_FullMethodName          = "/messaging.MessagingService/UpdateTask"
+	MessagingService_ListTasks_FullMethodName           = "/messaging.MessagingService/ListTasks"
 )
 
 // MessagingServiceClient is the client API for MessagingService service.
@@ -54,6 +70,28 @@ type MessagingServiceClient interface {
 	// DMs
 	CreateDM(ctx context.Context, in *CreateDMRequest, opts ...grpc.CallOption) (*Channel, error)
 	ListDMs(ctx context.Context, in *ListDMsRequest, opts ...grpc.CallOption) (*ChannelList, error)
+	// Reactions
+	AddReaction(ctx context.Context, in *AddReactionRequest, opts ...grpc.CallOption) (*Empty, error)
+	RemoveReaction(ctx context.Context, in *RemoveReactionRequest, opts ...grpc.CallOption) (*Empty, error)
+	ListReactions(ctx context.Context, in *ListReactionsRequest, opts ...grpc.CallOption) (*ReactionList, error)
+	// Pins
+	PinMessage(ctx context.Context, in *PinMessageRequest, opts ...grpc.CallOption) (*Empty, error)
+	UnpinMessage(ctx context.Context, in *UnpinMessageRequest, opts ...grpc.CallOption) (*Empty, error)
+	ListPins(ctx context.Context, in *ListPinsRequest, opts ...grpc.CallOption) (*PinnedMessageList, error)
+	// Read receipts
+	MarkChannelRead(ctx context.Context, in *MarkChannelReadRequest, opts ...grpc.CallOption) (*Empty, error)
+	GetUnreadCounts(ctx context.Context, in *GetUnreadCountsRequest, opts ...grpc.CallOption) (*ChannelUnreadList, error)
+	// Search
+	SearchMessages(ctx context.Context, in *SearchMessagesRequest, opts ...grpc.CallOption) (*MessageList, error)
+	// Polls
+	CreatePoll(ctx context.Context, in *CreatePollRequest, opts ...grpc.CallOption) (*Poll, error)
+	VotePoll(ctx context.Context, in *VotePollRequest, opts ...grpc.CallOption) (*Empty, error)
+	RemoveVote(ctx context.Context, in *RemoveVoteRequest, opts ...grpc.CallOption) (*Empty, error)
+	GetPoll(ctx context.Context, in *GetPollRequest, opts ...grpc.CallOption) (*Poll, error)
+	// Tasks
+	CreateTask(ctx context.Context, in *CreateTaskRequest, opts ...grpc.CallOption) (*ChatTask, error)
+	UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*ChatTask, error)
+	ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ChatTaskList, error)
 }
 
 type messagingServiceClient struct {
@@ -184,6 +222,166 @@ func (c *messagingServiceClient) ListDMs(ctx context.Context, in *ListDMsRequest
 	return out, nil
 }
 
+func (c *messagingServiceClient) AddReaction(ctx context.Context, in *AddReactionRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, MessagingService_AddReaction_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) RemoveReaction(ctx context.Context, in *RemoveReactionRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, MessagingService_RemoveReaction_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) ListReactions(ctx context.Context, in *ListReactionsRequest, opts ...grpc.CallOption) (*ReactionList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReactionList)
+	err := c.cc.Invoke(ctx, MessagingService_ListReactions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) PinMessage(ctx context.Context, in *PinMessageRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, MessagingService_PinMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) UnpinMessage(ctx context.Context, in *UnpinMessageRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, MessagingService_UnpinMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) ListPins(ctx context.Context, in *ListPinsRequest, opts ...grpc.CallOption) (*PinnedMessageList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PinnedMessageList)
+	err := c.cc.Invoke(ctx, MessagingService_ListPins_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) MarkChannelRead(ctx context.Context, in *MarkChannelReadRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, MessagingService_MarkChannelRead_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) GetUnreadCounts(ctx context.Context, in *GetUnreadCountsRequest, opts ...grpc.CallOption) (*ChannelUnreadList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChannelUnreadList)
+	err := c.cc.Invoke(ctx, MessagingService_GetUnreadCounts_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) SearchMessages(ctx context.Context, in *SearchMessagesRequest, opts ...grpc.CallOption) (*MessageList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(MessageList)
+	err := c.cc.Invoke(ctx, MessagingService_SearchMessages_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) CreatePoll(ctx context.Context, in *CreatePollRequest, opts ...grpc.CallOption) (*Poll, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Poll)
+	err := c.cc.Invoke(ctx, MessagingService_CreatePoll_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) VotePoll(ctx context.Context, in *VotePollRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, MessagingService_VotePoll_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) RemoveVote(ctx context.Context, in *RemoveVoteRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, MessagingService_RemoveVote_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) GetPoll(ctx context.Context, in *GetPollRequest, opts ...grpc.CallOption) (*Poll, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Poll)
+	err := c.cc.Invoke(ctx, MessagingService_GetPoll_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) CreateTask(ctx context.Context, in *CreateTaskRequest, opts ...grpc.CallOption) (*ChatTask, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChatTask)
+	err := c.cc.Invoke(ctx, MessagingService_CreateTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*ChatTask, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChatTask)
+	err := c.cc.Invoke(ctx, MessagingService_UpdateTask_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) ListTasks(ctx context.Context, in *ListTasksRequest, opts ...grpc.CallOption) (*ChatTaskList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ChatTaskList)
+	err := c.cc.Invoke(ctx, MessagingService_ListTasks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MessagingServiceServer is the server API for MessagingService service.
 // All implementations must embed UnimplementedMessagingServiceServer
 // for forward compatibility.
@@ -205,6 +403,28 @@ type MessagingServiceServer interface {
 	// DMs
 	CreateDM(context.Context, *CreateDMRequest) (*Channel, error)
 	ListDMs(context.Context, *ListDMsRequest) (*ChannelList, error)
+	// Reactions
+	AddReaction(context.Context, *AddReactionRequest) (*Empty, error)
+	RemoveReaction(context.Context, *RemoveReactionRequest) (*Empty, error)
+	ListReactions(context.Context, *ListReactionsRequest) (*ReactionList, error)
+	// Pins
+	PinMessage(context.Context, *PinMessageRequest) (*Empty, error)
+	UnpinMessage(context.Context, *UnpinMessageRequest) (*Empty, error)
+	ListPins(context.Context, *ListPinsRequest) (*PinnedMessageList, error)
+	// Read receipts
+	MarkChannelRead(context.Context, *MarkChannelReadRequest) (*Empty, error)
+	GetUnreadCounts(context.Context, *GetUnreadCountsRequest) (*ChannelUnreadList, error)
+	// Search
+	SearchMessages(context.Context, *SearchMessagesRequest) (*MessageList, error)
+	// Polls
+	CreatePoll(context.Context, *CreatePollRequest) (*Poll, error)
+	VotePoll(context.Context, *VotePollRequest) (*Empty, error)
+	RemoveVote(context.Context, *RemoveVoteRequest) (*Empty, error)
+	GetPoll(context.Context, *GetPollRequest) (*Poll, error)
+	// Tasks
+	CreateTask(context.Context, *CreateTaskRequest) (*ChatTask, error)
+	UpdateTask(context.Context, *UpdateTaskRequest) (*ChatTask, error)
+	ListTasks(context.Context, *ListTasksRequest) (*ChatTaskList, error)
 	mustEmbedUnimplementedMessagingServiceServer()
 }
 
@@ -250,6 +470,54 @@ func (UnimplementedMessagingServiceServer) CreateDM(context.Context, *CreateDMRe
 }
 func (UnimplementedMessagingServiceServer) ListDMs(context.Context, *ListDMsRequest) (*ChannelList, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListDMs not implemented")
+}
+func (UnimplementedMessagingServiceServer) AddReaction(context.Context, *AddReactionRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method AddReaction not implemented")
+}
+func (UnimplementedMessagingServiceServer) RemoveReaction(context.Context, *RemoveReactionRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveReaction not implemented")
+}
+func (UnimplementedMessagingServiceServer) ListReactions(context.Context, *ListReactionsRequest) (*ReactionList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListReactions not implemented")
+}
+func (UnimplementedMessagingServiceServer) PinMessage(context.Context, *PinMessageRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method PinMessage not implemented")
+}
+func (UnimplementedMessagingServiceServer) UnpinMessage(context.Context, *UnpinMessageRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method UnpinMessage not implemented")
+}
+func (UnimplementedMessagingServiceServer) ListPins(context.Context, *ListPinsRequest) (*PinnedMessageList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListPins not implemented")
+}
+func (UnimplementedMessagingServiceServer) MarkChannelRead(context.Context, *MarkChannelReadRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method MarkChannelRead not implemented")
+}
+func (UnimplementedMessagingServiceServer) GetUnreadCounts(context.Context, *GetUnreadCountsRequest) (*ChannelUnreadList, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetUnreadCounts not implemented")
+}
+func (UnimplementedMessagingServiceServer) SearchMessages(context.Context, *SearchMessagesRequest) (*MessageList, error) {
+	return nil, status.Error(codes.Unimplemented, "method SearchMessages not implemented")
+}
+func (UnimplementedMessagingServiceServer) CreatePoll(context.Context, *CreatePollRequest) (*Poll, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreatePoll not implemented")
+}
+func (UnimplementedMessagingServiceServer) VotePoll(context.Context, *VotePollRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method VotePoll not implemented")
+}
+func (UnimplementedMessagingServiceServer) RemoveVote(context.Context, *RemoveVoteRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveVote not implemented")
+}
+func (UnimplementedMessagingServiceServer) GetPoll(context.Context, *GetPollRequest) (*Poll, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetPoll not implemented")
+}
+func (UnimplementedMessagingServiceServer) CreateTask(context.Context, *CreateTaskRequest) (*ChatTask, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateTask not implemented")
+}
+func (UnimplementedMessagingServiceServer) UpdateTask(context.Context, *UpdateTaskRequest) (*ChatTask, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateTask not implemented")
+}
+func (UnimplementedMessagingServiceServer) ListTasks(context.Context, *ListTasksRequest) (*ChatTaskList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListTasks not implemented")
 }
 func (UnimplementedMessagingServiceServer) mustEmbedUnimplementedMessagingServiceServer() {}
 func (UnimplementedMessagingServiceServer) testEmbeddedByValue()                          {}
@@ -488,6 +756,294 @@ func _MessagingService_ListDMs_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MessagingService_AddReaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddReactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).AddReaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_AddReaction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).AddReaction(ctx, req.(*AddReactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_RemoveReaction_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveReactionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).RemoveReaction(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_RemoveReaction_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).RemoveReaction(ctx, req.(*RemoveReactionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_ListReactions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListReactionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).ListReactions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_ListReactions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).ListReactions(ctx, req.(*ListReactionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_PinMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PinMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).PinMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_PinMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).PinMessage(ctx, req.(*PinMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_UnpinMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnpinMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).UnpinMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_UnpinMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).UnpinMessage(ctx, req.(*UnpinMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_ListPins_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListPinsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).ListPins(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_ListPins_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).ListPins(ctx, req.(*ListPinsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_MarkChannelRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MarkChannelReadRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).MarkChannelRead(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_MarkChannelRead_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).MarkChannelRead(ctx, req.(*MarkChannelReadRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_GetUnreadCounts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetUnreadCountsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).GetUnreadCounts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_GetUnreadCounts_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).GetUnreadCounts(ctx, req.(*GetUnreadCountsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_SearchMessages_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchMessagesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).SearchMessages(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_SearchMessages_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).SearchMessages(ctx, req.(*SearchMessagesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_CreatePoll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreatePollRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).CreatePoll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_CreatePoll_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).CreatePoll(ctx, req.(*CreatePollRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_VotePoll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(VotePollRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).VotePoll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_VotePoll_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).VotePoll(ctx, req.(*VotePollRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_RemoveVote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveVoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).RemoveVote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_RemoveVote_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).RemoveVote(ctx, req.(*RemoveVoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_GetPoll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetPollRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).GetPoll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_GetPoll_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).GetPoll(ctx, req.(*GetPollRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_CreateTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).CreateTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_CreateTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).CreateTask(ctx, req.(*CreateTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_UpdateTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateTaskRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).UpdateTask(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_UpdateTask_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).UpdateTask(ctx, req.(*UpdateTaskRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_ListTasks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListTasksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).ListTasks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_ListTasks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).ListTasks(ctx, req.(*ListTasksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MessagingService_ServiceDesc is the grpc.ServiceDesc for MessagingService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -543,6 +1099,70 @@ var MessagingService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "ListDMs",
 			Handler:    _MessagingService_ListDMs_Handler,
 		},
+		{
+			MethodName: "AddReaction",
+			Handler:    _MessagingService_AddReaction_Handler,
+		},
+		{
+			MethodName: "RemoveReaction",
+			Handler:    _MessagingService_RemoveReaction_Handler,
+		},
+		{
+			MethodName: "ListReactions",
+			Handler:    _MessagingService_ListReactions_Handler,
+		},
+		{
+			MethodName: "PinMessage",
+			Handler:    _MessagingService_PinMessage_Handler,
+		},
+		{
+			MethodName: "UnpinMessage",
+			Handler:    _MessagingService_UnpinMessage_Handler,
+		},
+		{
+			MethodName: "ListPins",
+			Handler:    _MessagingService_ListPins_Handler,
+		},
+		{
+			MethodName: "MarkChannelRead",
+			Handler:    _MessagingService_MarkChannelRead_Handler,
+		},
+		{
+			MethodName: "GetUnreadCounts",
+			Handler:    _MessagingService_GetUnreadCounts_Handler,
+		},
+		{
+			MethodName: "SearchMessages",
+			Handler:    _MessagingService_SearchMessages_Handler,
+		},
+		{
+			MethodName: "CreatePoll",
+			Handler:    _MessagingService_CreatePoll_Handler,
+		},
+		{
+			MethodName: "VotePoll",
+			Handler:    _MessagingService_VotePoll_Handler,
+		},
+		{
+			MethodName: "RemoveVote",
+			Handler:    _MessagingService_RemoveVote_Handler,
+		},
+		{
+			MethodName: "GetPoll",
+			Handler:    _MessagingService_GetPoll_Handler,
+		},
+		{
+			MethodName: "CreateTask",
+			Handler:    _MessagingService_CreateTask_Handler,
+		},
+		{
+			MethodName: "UpdateTask",
+			Handler:    _MessagingService_UpdateTask_Handler,
+		},
+		{
+			MethodName: "ListTasks",
+			Handler:    _MessagingService_ListTasks_Handler,
+		},
 	},
 	Streams:  []grpc.StreamDesc{},
 	Metadata: "proto/messaging/messaging.proto",
@@ -562,9 +1182,9 @@ const (
 // NotificationService manages user notifications across the platform.
 type NotificationServiceClient interface {
 	ListNotifications(ctx context.Context, in *ListNotificationsRequest, opts ...grpc.CallOption) (*NotificationList, error)
-	MarkRead(ctx context.Context, in *MarkReadRequest, opts ...grpc.CallOption) (*Empty, error)
-	MarkAllRead(ctx context.Context, in *MarkAllReadRequest, opts ...grpc.CallOption) (*Empty, error)
-	GetUnreadCount(ctx context.Context, in *GetUnreadCountRequest, opts ...grpc.CallOption) (*UnreadCountResponse, error)
+	MarkRead(ctx context.Context, in *MarkNotificationReadRequest, opts ...grpc.CallOption) (*Empty, error)
+	MarkAllRead(ctx context.Context, in *MarkAllNotificationsReadRequest, opts ...grpc.CallOption) (*Empty, error)
+	GetUnreadCount(ctx context.Context, in *GetNotificationUnreadCountRequest, opts ...grpc.CallOption) (*NotificationUnreadCountResponse, error)
 }
 
 type notificationServiceClient struct {
@@ -585,7 +1205,7 @@ func (c *notificationServiceClient) ListNotifications(ctx context.Context, in *L
 	return out, nil
 }
 
-func (c *notificationServiceClient) MarkRead(ctx context.Context, in *MarkReadRequest, opts ...grpc.CallOption) (*Empty, error) {
+func (c *notificationServiceClient) MarkRead(ctx context.Context, in *MarkNotificationReadRequest, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
 	err := c.cc.Invoke(ctx, NotificationService_MarkRead_FullMethodName, in, out, cOpts...)
@@ -595,7 +1215,7 @@ func (c *notificationServiceClient) MarkRead(ctx context.Context, in *MarkReadRe
 	return out, nil
 }
 
-func (c *notificationServiceClient) MarkAllRead(ctx context.Context, in *MarkAllReadRequest, opts ...grpc.CallOption) (*Empty, error) {
+func (c *notificationServiceClient) MarkAllRead(ctx context.Context, in *MarkAllNotificationsReadRequest, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
 	err := c.cc.Invoke(ctx, NotificationService_MarkAllRead_FullMethodName, in, out, cOpts...)
@@ -605,9 +1225,9 @@ func (c *notificationServiceClient) MarkAllRead(ctx context.Context, in *MarkAll
 	return out, nil
 }
 
-func (c *notificationServiceClient) GetUnreadCount(ctx context.Context, in *GetUnreadCountRequest, opts ...grpc.CallOption) (*UnreadCountResponse, error) {
+func (c *notificationServiceClient) GetUnreadCount(ctx context.Context, in *GetNotificationUnreadCountRequest, opts ...grpc.CallOption) (*NotificationUnreadCountResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UnreadCountResponse)
+	out := new(NotificationUnreadCountResponse)
 	err := c.cc.Invoke(ctx, NotificationService_GetUnreadCount_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
@@ -622,9 +1242,9 @@ func (c *notificationServiceClient) GetUnreadCount(ctx context.Context, in *GetU
 // NotificationService manages user notifications across the platform.
 type NotificationServiceServer interface {
 	ListNotifications(context.Context, *ListNotificationsRequest) (*NotificationList, error)
-	MarkRead(context.Context, *MarkReadRequest) (*Empty, error)
-	MarkAllRead(context.Context, *MarkAllReadRequest) (*Empty, error)
-	GetUnreadCount(context.Context, *GetUnreadCountRequest) (*UnreadCountResponse, error)
+	MarkRead(context.Context, *MarkNotificationReadRequest) (*Empty, error)
+	MarkAllRead(context.Context, *MarkAllNotificationsReadRequest) (*Empty, error)
+	GetUnreadCount(context.Context, *GetNotificationUnreadCountRequest) (*NotificationUnreadCountResponse, error)
 	mustEmbedUnimplementedNotificationServiceServer()
 }
 
@@ -638,13 +1258,13 @@ type UnimplementedNotificationServiceServer struct{}
 func (UnimplementedNotificationServiceServer) ListNotifications(context.Context, *ListNotificationsRequest) (*NotificationList, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListNotifications not implemented")
 }
-func (UnimplementedNotificationServiceServer) MarkRead(context.Context, *MarkReadRequest) (*Empty, error) {
+func (UnimplementedNotificationServiceServer) MarkRead(context.Context, *MarkNotificationReadRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method MarkRead not implemented")
 }
-func (UnimplementedNotificationServiceServer) MarkAllRead(context.Context, *MarkAllReadRequest) (*Empty, error) {
+func (UnimplementedNotificationServiceServer) MarkAllRead(context.Context, *MarkAllNotificationsReadRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method MarkAllRead not implemented")
 }
-func (UnimplementedNotificationServiceServer) GetUnreadCount(context.Context, *GetUnreadCountRequest) (*UnreadCountResponse, error) {
+func (UnimplementedNotificationServiceServer) GetUnreadCount(context.Context, *GetNotificationUnreadCountRequest) (*NotificationUnreadCountResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUnreadCount not implemented")
 }
 func (UnimplementedNotificationServiceServer) mustEmbedUnimplementedNotificationServiceServer() {}
@@ -687,7 +1307,7 @@ func _NotificationService_ListNotifications_Handler(srv interface{}, ctx context
 }
 
 func _NotificationService_MarkRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MarkReadRequest)
+	in := new(MarkNotificationReadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -699,13 +1319,13 @@ func _NotificationService_MarkRead_Handler(srv interface{}, ctx context.Context,
 		FullMethod: NotificationService_MarkRead_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NotificationServiceServer).MarkRead(ctx, req.(*MarkReadRequest))
+		return srv.(NotificationServiceServer).MarkRead(ctx, req.(*MarkNotificationReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _NotificationService_MarkAllRead_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MarkAllReadRequest)
+	in := new(MarkAllNotificationsReadRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -717,13 +1337,13 @@ func _NotificationService_MarkAllRead_Handler(srv interface{}, ctx context.Conte
 		FullMethod: NotificationService_MarkAllRead_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NotificationServiceServer).MarkAllRead(ctx, req.(*MarkAllReadRequest))
+		return srv.(NotificationServiceServer).MarkAllRead(ctx, req.(*MarkAllNotificationsReadRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
 func _NotificationService_GetUnreadCount_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetUnreadCountRequest)
+	in := new(GetNotificationUnreadCountRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -735,7 +1355,7 @@ func _NotificationService_GetUnreadCount_Handler(srv interface{}, ctx context.Co
 		FullMethod: NotificationService_GetUnreadCount_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(NotificationServiceServer).GetUnreadCount(ctx, req.(*GetUnreadCountRequest))
+		return srv.(NotificationServiceServer).GetUnreadCount(ctx, req.(*GetNotificationUnreadCountRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

@@ -10,7 +10,7 @@ require (
 	github.com/minio/minio-go/v7 v7.0.100
 	github.com/stretchr/testify v1.11.1
 	google.golang.org/grpc v1.72.0
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.8
 	ngac-platform v0.0.0
 )
 

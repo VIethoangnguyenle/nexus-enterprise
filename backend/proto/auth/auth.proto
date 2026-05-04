@@ -5,6 +5,7 @@ package auth;
 option go_package = "ngac-platform/proto/auth";
 
 service AuthService {
+  // Legacy endpoints (backward-compatible)
   rpc Register(RegisterRequest) returns (AuthResponse);
   rpc Login(LoginRequest) returns (AuthResponse);
   rpc RevokeToken(RevokeTokenRequest) returns (RevokeTokenResponse);
@@ -12,7 +13,16 @@ service AuthService {
   rpc GetUserByID(GetUserByIDRequest) returns (UserInfo);
   rpc GetUserByNGACNodeID(GetUserByNGACNodeIDRequest) returns (UserInfo);
   rpc ListUsers(ListUsersRequest) returns (UserListResponse);
+
+  // Multi-tenant endpoints
+  rpc Signup(SignupRequest) returns (SignupResponse);
+  rpc Signin(SigninRequest) returns (SigninResponse);
+  rpc SwitchTenant(SwitchTenantRequest) returns (SwitchTenantResponse);
+  rpc GetMe(GetMeRequest) returns (MeResponse);
+  rpc ListUserTenants(ListUserTenantsRequest) returns (TenantListResponse);
 }
+
+// --- Legacy messages (kept for backward compatibility) ---
 
 message RegisterRequest {
   string username = 1;
@@ -29,10 +39,71 @@ message AuthResponse {
   UserInfo user = 2;
 }
 
+// --- Multi-tenant messages ---
+
+message SignupRequest {
+  string email = 1;
+  string password = 2;
+  string display_name = 3;
+  string tenant_name = 4; // optional: force-create a new tenant with this name
+}
+
+message SignupResponse {
+  string token = 1;
+  UserInfo user = 2;
+  TenantInfo tenant = 3;
+}
+
+message SigninRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message SigninResponse {
+  string token = 1;
+  UserInfo user = 2;
+  repeated TenantInfo tenants = 3;
+  string default_tenant_id = 4;
+}
+
+message SwitchTenantRequest {
+  string tenant_id = 1;
+}
+
+message SwitchTenantResponse {
+  string token = 1;
+  TenantInfo tenant = 2;
+}
+
+message GetMeRequest {}
+
+message MeResponse {
+  UserInfo user = 1;
+  TenantInfo current_tenant = 2;
+}
+
+message ListUserTenantsRequest {}
+
+message TenantListResponse {
+  repeated TenantInfo tenants = 1;
+}
+
+message TenantInfo {
+  string id = 1;
+  string name = 2;
+  string role = 3;
+  string open_id = 4;
+}
+
+// --- Shared messages ---
+
 message UserInfo {
   string id = 1;
   string username = 2;
   string ngac_node_id = 3;
+  string email = 4;
+  string union_id = 5;
+  string display_name = 6;
 }
 
 message GetUserByIDRequest {

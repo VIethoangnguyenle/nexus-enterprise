@@ -102,7 +102,9 @@ func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRe
 	}
 
 	// Broadcast via WebSocket hub (fire-and-forget).
-	s.hub.BroadcastToChannel(req.ChannelId, msg)
+	if s.hub != nil {
+		s.hub.BroadcastToChannel(req.ChannelId, msg)
+	}
 
 	// Publish to Kafka for async processing (fire-and-forget).
 	if s.producer != nil {

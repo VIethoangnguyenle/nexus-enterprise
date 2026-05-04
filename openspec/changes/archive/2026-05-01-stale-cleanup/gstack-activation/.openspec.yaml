@@ -1,0 +1,18 @@
+schemaName: minimal
+status: proposing
+createdAt: "2026-05-01"
+artifacts:
+  - id: proposal
+    path: proposal.md
+    status: pending
+    dependencies: []
+  - id: design
+    path: design.md
+    status: pending
+    dependencies: [proposal]
+  - id: tasks
+    path: tasks.md
+    status: pending
+    dependencies: [design]
+apply:
+  requires: [tasks]

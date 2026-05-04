@@ -13,6 +13,7 @@ import (
 
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/drive"
+	policypb "ngac-platform/proto/policy"
 )
 
 // DriveService defines the operations the REST handler needs.
@@ -38,14 +39,20 @@ type DriveService interface {
 	GetQuota(ctx context.Context, req *pb.GetQuotaRequest) (*pb.Quota, error)
 }
 
+// PolicyReadClient defines the subset of PolicyReadService used by this handler.
+type PolicyReadClient interface {
+	BatchCheckAccess(ctx context.Context, req *policypb.BatchCheckAccessRequest, opts ...interface{}) (*policypb.BatchAccessResult, error)
+}
+
 // Handler serves drive REST endpoints.
 type Handler struct {
-	svc DriveService
+	svc        DriveService
+	policyRead policypb.PolicyReadServiceClient
 }
 
 // NewHandler creates a drive REST handler.
-func NewHandler(svc DriveService) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc DriveService, policyRead policypb.PolicyReadServiceClient) *Handler {
+	return &Handler{svc: svc, policyRead: policyRead}
 }
 
 // RegisterRoutes mounts drive endpoints on the Echo instance.
@@ -79,11 +86,17 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 
 	// Quota
 	api.GET("/workspaces/:id/drive/quota", h.GetQuota)
+
+	// Batch permission check
+	api.POST("/drive/batch-access", h.BatchAccess)
 }
 
 // CreateFolder handles POST /api/workspaces/:id/drive/folders.
 func (h *Handler) CreateFolder(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		Name           string `json:"name"`
 		ParentID       string `json:"parent_id"`
@@ -110,7 +123,10 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 
 // ListRoot handles GET /api/workspaces/:id/drive.
 func (h *Handler) ListRoot(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	resp, err := h.svc.ListFolder(c.Request().Context(), &pb.ListFolderRequest{
 		WorkspaceId:    c.Param("id"),
 		UserNgacNodeId: claims.NGACNodeID,
@@ -125,7 +141,10 @@ func (h *Handler) ListRoot(c echo.Context) error {
 
 // ListFolder handles GET /api/drive/folders/:folderId.
 func (h *Handler) ListFolder(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	resp, err := h.svc.ListFolder(c.Request().Context(), &pb.ListFolderRequest{
 		FolderId:       c.Param("folderId"),
 		UserNgacNodeId: claims.NGACNodeID,
@@ -138,8 +157,13 @@ func (h *Handler) ListFolder(c echo.Context) error {
 
 // GetItem handles GET /api/drive/items/:itemId.
 func (h *Handler) GetItem(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	resp, err := h.svc.GetItem(c.Request().Context(), &pb.GetItemRequest{
-		ItemId: c.Param("itemId"),
+		ItemId:         c.Param("itemId"),
+		UserNgacNodeId: claims.NGACNodeID,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -149,7 +173,10 @@ func (h *Handler) GetItem(c echo.Context) error {
 
 // CreateFile handles POST /api/workspaces/:id/drive/files.
 func (h *Handler) CreateFile(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		Name     string `json:"name"`
 		MimeType string `json:"mime_type"`
@@ -188,7 +215,10 @@ func (h *Handler) ConfirmFile(c echo.Context) error {
 
 // GetDownloadURL handles GET /api/drive/files/:fileId/download.
 func (h *Handler) GetDownloadURL(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	resp, err := h.svc.GetDownloadURL(c.Request().Context(), &pb.GetDownloadURLRequest{
 		FileId:         c.Param("fileId"),
 		UserNgacNodeId: claims.NGACNodeID,
@@ -201,7 +231,10 @@ func (h *Handler) GetDownloadURL(c echo.Context) error {
 
 // RenameItem handles PUT /api/drive/items/:itemId/rename.
 func (h *Handler) RenameItem(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		Name string `json:"name"`
 	}
@@ -222,7 +255,10 @@ func (h *Handler) RenameItem(c echo.Context) error {
 
 // MoveItem handles POST /api/drive/items/:itemId/move.
 func (h *Handler) MoveItem(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		TargetFolderID string `json:"target_folder_id"`
 	}
@@ -243,7 +279,10 @@ func (h *Handler) MoveItem(c echo.Context) error {
 
 // CopyItem handles POST /api/drive/items/:itemId/copy.
 func (h *Handler) CopyItem(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		TargetFolderID string `json:"target_folder_id"`
 	}
@@ -264,8 +303,11 @@ func (h *Handler) CopyItem(c echo.Context) error {
 
 // TrashItem handles DELETE /api/drive/items/:itemId.
 func (h *Handler) TrashItem(c echo.Context) error {
-	claims := httputil.GetClaims(c)
-	_, err := h.svc.TrashItem(c.Request().Context(), &pb.TrashItemRequest{
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	_, err = h.svc.TrashItem(c.Request().Context(), &pb.TrashItemRequest{
 		ItemId:         c.Param("itemId"),
 		UserNgacNodeId: claims.NGACNodeID,
 	})
@@ -288,8 +330,11 @@ func (h *Handler) RestoreItem(c echo.Context) error {
 
 // DeleteItem handles DELETE /api/drive/items/:itemId/permanent.
 func (h *Handler) DeleteItem(c echo.Context) error {
-	claims := httputil.GetClaims(c)
-	_, err := h.svc.DeleteItem(c.Request().Context(), &pb.DeleteItemRequest{
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	_, err = h.svc.DeleteItem(c.Request().Context(), &pb.DeleteItemRequest{
 		ItemId:         c.Param("itemId"),
 		UserNgacNodeId: claims.NGACNodeID,
 	})
@@ -301,7 +346,10 @@ func (h *Handler) DeleteItem(c echo.Context) error {
 
 // CreateShare handles POST /api/drive/items/:itemId/share.
 func (h *Handler) CreateShare(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		TargetNodeID string `json:"target_node_id"`
 		ShareType    string `json:"share_type"`
@@ -326,8 +374,11 @@ func (h *Handler) CreateShare(c echo.Context) error {
 
 // RevokeShare handles DELETE /api/drive/shares/:shareId.
 func (h *Handler) RevokeShare(c echo.Context) error {
-	claims := httputil.GetClaims(c)
-	_, err := h.svc.RevokeShare(c.Request().Context(), &pb.RevokeShareRequest{
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	_, err = h.svc.RevokeShare(c.Request().Context(), &pb.RevokeShareRequest{
 		ShareId:        c.Param("shareId"),
 		UserNgacNodeId: claims.NGACNodeID,
 	})
@@ -350,7 +401,10 @@ func (h *Handler) ListShares(c echo.Context) error {
 
 // SharedWithMe handles GET /api/drive/shared-with-me.
 func (h *Handler) SharedWithMe(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	resp, err := h.svc.GetSharedWithMe(c.Request().Context(), &pb.GetSharedWithMeRequest{
 		UserNgacNodeId: claims.NGACNodeID,
 	})
@@ -391,4 +445,44 @@ func mapGRPCError(err error) *echo.HTTPError {
 	default:
 		return echo.NewHTTPError(http.StatusInternalServerError, st.Message())
 	}
+}
+
+// BatchAccess handles POST /api/drive/batch-access.
+// Resolves NGAC permissions for a batch of drive object IDs.
+func (h *Handler) BatchAccess(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+
+	var body struct {
+		ObjectIDs  []string `json:"object_ids"`
+		Operations []string `json:"operations"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if len(body.ObjectIDs) == 0 {
+		return c.JSON(http.StatusOK, map[string]any{"results": map[string]any{}})
+	}
+	if len(body.Operations) == 0 {
+		body.Operations = []string{"read", "write", "delete", "share"}
+	}
+
+	resp, err := h.policyRead.BatchCheckAccess(c.Request().Context(), &policypb.BatchCheckAccessRequest{
+		UserNodeId: claims.NGACNodeID,
+		ObjectIds:  body.ObjectIDs,
+		Operations: body.Operations,
+	})
+	if err != nil {
+		return mapGRPCError(err)
+	}
+
+	// Convert proto map to JSON-friendly structure
+	results := make(map[string]map[string]bool, len(resp.Results))
+	for objID, objPerms := range resp.Results {
+		results[objID] = objPerms.Permissions
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{"results": results})
 }

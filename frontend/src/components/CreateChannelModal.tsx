@@ -38,12 +38,12 @@ export function CreateChannelModal({ onClose }: CreateChannelModalProps) {
       <form onSubmit={handleSubmit}>
         <Modal.Body>
           {!wsId && (
-            <div className="bg-warning-bg text-warning px-3 py-2 rounded-[var(--radius-sm)] text-sm">
+            <div className="bg-warning-bg text-warning px-3 py-2 rounded-sm text-small">
               No workspace available. Create or join a workspace first.
             </div>
           )}
           {createChannel.error && (
-            <div className="bg-danger-bg text-danger px-3 py-2 rounded-[var(--radius-sm)] text-sm">
+            <div className="bg-danger-bg text-danger px-3 py-2 rounded-sm text-small">
               {createChannel.error.message}
             </div>
           )}

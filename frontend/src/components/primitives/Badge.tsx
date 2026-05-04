@@ -1,36 +1,27 @@
 import type { ReactNode } from 'react'
 
-type BadgeVariant = 'default' | 'primary' | 'success' | 'warning' | 'danger' | 'info'
-type BadgeSize = 'sm' | 'md'
+type BadgeVariant = 'primary' | 'success' | 'warning' | 'danger' | 'info' | 'neutral'
 
 interface BadgeProps {
   variant?: BadgeVariant
-  size?: BadgeSize
   children: ReactNode
   className?: string
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-  default: 'bg-bg-glass border-border text-text-secondary',
-  primary: 'bg-accent/10 border-accent/20 text-accent-hover',
-  success: 'bg-success-bg border-success/20 text-success',
-  warning: 'bg-warning-bg border-warning/20 text-warning',
-  danger: 'bg-danger-bg border-danger/20 text-danger',
-  info: 'bg-info-bg border-info/20 text-info',
+  primary: 'bg-primary-fixed text-primary',
+  success: 'bg-success-bg text-success',
+  warning: 'bg-warning-bg text-warning',
+  danger: 'bg-danger-bg text-danger',
+  info: 'bg-info-bg text-info',
+  neutral: 'bg-surface-container-high text-on-surface',
 }
 
-const sizeStyles: Record<BadgeSize, string> = {
-  sm: 'px-1.5 py-px text-[0.6rem]',
-  md: 'px-2.5 py-0.5 text-[0.7rem]',
-}
-
-/** Pill-shaped badge for status, type labels, and counts. */
-export function Badge({ variant = 'default', size = 'md', children, className = '' }: BadgeProps) {
+/** Semantic badge with Material 3 functional color pairs. */
+export function Badge({ variant = 'primary', children, className = '' }: BadgeProps) {
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border font-semibold uppercase tracking-wide whitespace-nowrap
-        ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
-    >
+    <span className={`inline-flex items-center px-2 py-1 text-micro rounded-full
+      ${variantStyles[variant]} ${className}`}>
       {children}
     </span>
   )

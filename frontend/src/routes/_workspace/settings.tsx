@@ -5,9 +5,9 @@ export const Route = createFileRoute('/_workspace/settings')({ component: Settin
 
 function SettingsPage() {
   return (
-    <div className="animate-fade-in">
-      <Heading as="h2">Settings</Heading>
-      <Text variant="body" muted className="mt-2">Workspace settings coming soon.</Text>
+    <div className="animate-fade-in p-6">
+      <h1 className="font-h1 text-h1 text-on-surface">Settings</h1>
+      <p className="text-sm text-on-surface-variant mt-2">Workspace settings coming soon.</p>
     </div>
   )
 }

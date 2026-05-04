@@ -7,7 +7,7 @@ interface CardPartProps extends HTMLAttributes<HTMLDivElement> {
 function CardRoot({ children, className = '', ...props }: CardPartProps) {
   return (
     <div
-      className={`bg-bg-tertiary border border-border rounded-[var(--radius-md)] overflow-hidden ${className}`}
+      className={`bg-surface-container border border-outline-variant rounded-md overflow-hidden ${className}`}
       {...props}
     >
       {children}
@@ -18,7 +18,7 @@ function CardRoot({ children, className = '', ...props }: CardPartProps) {
 function CardHeader({ children, className = '', ...props }: CardPartProps) {
   return (
     <div
-      className={`flex items-center justify-between px-4 py-3 border-b border-border ${className}`}
+      className={`flex items-center justify-between px-4 py-3 border-b border-outline-variant ${className}`}
       {...props}
     >
       {children}
@@ -37,7 +37,7 @@ function CardBody({ children, className = '', ...props }: CardPartProps) {
 function CardFooter({ children, className = '', ...props }: CardPartProps) {
   return (
     <div
-      className={`flex items-center gap-2 px-4 py-3 border-t border-border ${className}`}
+      className={`flex items-center gap-2 px-4 py-3 border-t border-outline-variant ${className}`}
       {...props}
     >
       {children}

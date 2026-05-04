@@ -24,8 +24,11 @@ import (
 	drivepb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	pb "ngac-platform/proto/workspace"
+	"ngac-platform/pkg/httputil"
+	"ngac-platform/services/workspace/internal/domain"
 	wgrpc "ngac-platform/services/workspace/internal/grpc"
 	"ngac-platform/services/workspace/internal/rest"
+	"ngac-platform/services/workspace/internal/store"
 )
 
 func main() {
@@ -98,7 +101,13 @@ func main() {
 		driveClient = drivepb.NewDriveServiceClient(driveConn)
 	}
 
-	wsSrv := wgrpc.NewWorkspaceServer(pool, policypb.NewPolicyReadServiceClient(policyConn), policypb.NewPolicyWriteServiceClient(policyConn), minioClient, driveClient)
+	// --- Wire clean architecture layers ---
+	policyReadClient := policypb.NewPolicyReadServiceClient(policyConn)
+	policyWriteClient := policypb.NewPolicyWriteServiceClient(policyConn)
+
+	wsStore := store.New(pool)
+	wsSvc := domain.NewService(wsStore, wsStore, policyReadClient, policyWriteClient, minioClient, driveClient)
+	wsSrv := wgrpc.NewWorkspaceServer(wsSvc)
 	pb.RegisterWorkspaceServiceServer(srv, wsSrv)
 
 	healthSrv := health.NewServer()
@@ -112,6 +121,11 @@ func main() {
 	e.Use(echomw.Recover())
 	restHandler := rest.NewHandler(wsSrv)
 	restHandler.RegisterRoutes(e, jwtSecret)
+
+	// Admin organization management endpoints
+	adminHandler := rest.NewAdminHandler(wsSvc)
+	adminAPI := e.Group("/api", httputil.JWTMiddleware(jwtSecret))
+	adminHandler.RegisterAdminRoutes(adminAPI)
 
 	// Start both servers
 	go func() {

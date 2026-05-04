@@ -1,0 +1,215 @@
+syntax = "proto3";
+
+package approval;
+
+option go_package = "ngac-platform/proto/approval";
+
+import "google/protobuf/timestamp.proto";
+
+// ApprovalService manages template-driven multi-step approval workflows.
+// Uses NGAC structural graph for approver resolution, and denormalized tables
+// for high-performance query without per-item graph traversal.
+service ApprovalService {
+  // Template management (admin)
+  rpc CreateTemplate(CreateTemplateRequest) returns (ApprovalTemplate);
+  rpc GetTemplate(GetTemplateRequest) returns (ApprovalTemplate);
+  rpc ListTemplates(ListTemplatesRequest) returns (TemplateList);
+  rpc UpdateTemplate(UpdateTemplateRequest) returns (ApprovalTemplate);
+
+  // Approval request lifecycle
+  rpc CreateRequest(CreateApprovalRequestReq) returns (ApprovalRequest);
+  rpc Approve(ApproveRequest) returns (ApprovalRequest);
+  rpc Reject(RejectRequest) returns (ApprovalRequest);
+  rpc BatchApprove(BatchApproveRequest) returns (BatchApproveResponse);
+
+  // Query tabs
+  rpc GetPending(GetPendingRequest) returns (ApprovalList);
+  rpc GetHistory(GetHistoryRequest) returns (ApprovalList);
+  rpc GetMyRequests(GetMyRequestsRequest) returns (ApprovalList);
+  rpc GetDepartmentRequests(GetDepartmentRequestsRequest) returns (ApprovalList);
+
+  // Audit
+  rpc GetAuditLog(GetAuditLogRequest) returns (AuditLogList);
+}
+
+// ============================================
+// Template messages
+// ============================================
+
+message ApprovalTemplate {
+  string id = 1;
+  string name = 2;
+  string entity_type = 3;
+  bool is_active = 4;
+  int32 priority = 5;
+  repeated ApprovalCondition conditions = 6;
+  repeated ApprovalStep steps = 7;
+  string created_by = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message ApprovalCondition {
+  string id = 1;
+  string field = 2;        // "amount", "service_type", "category"
+  string operator = 3;     // "gt", "lt", "eq", "in", "between"
+  string value_json = 4;   // JSON-encoded value
+}
+
+message ApprovalStep {
+  string id = 1;
+  int32 step_order = 2;
+  string name = 3;
+  string approver_type = 4;  // "specific_user", "role_in_dept", "department", "creator_manager"
+  string approver_value = 5; // UA name, user_node_id, or "{creator_dept}" placeholder
+  int32 required_count = 6;
+  int32 timeout_hours = 7;   // 0 = no timeout
+}
+
+message CreateTemplateRequest {
+  string name = 1;
+  string entity_type = 2;
+  int32 priority = 3;
+  repeated ApprovalCondition conditions = 4;
+  repeated ApprovalStep steps = 5;
+  string user_node_id = 6;
+}
+
+message GetTemplateRequest {
+  string template_id = 1;
+}
+
+message ListTemplatesRequest {
+  string entity_type = 1;   // filter by entity type (optional)
+  bool active_only = 2;
+}
+
+message TemplateList {
+  repeated ApprovalTemplate templates = 1;
+}
+
+message UpdateTemplateRequest {
+  string template_id = 1;
+  string name = 2;
+  bool is_active = 3;
+  int32 priority = 4;
+  repeated ApprovalCondition conditions = 5;
+  repeated ApprovalStep steps = 6;
+}
+
+// ============================================
+// Approval request messages
+// ============================================
+
+message ApprovalRequest {
+  string id = 1;
+  string entity_type = 2;
+  string entity_id = 3;
+  string template_id = 4;
+  string template_name = 5;
+  int32 current_step = 6;
+  string status = 7;              // "pending", "approved", "rejected", "cancelled"
+  string scope_oa_id = 8;
+  string department_id = 9;
+  string created_by = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp completed_at = 12;
+  repeated Assignment assignments = 13;
+}
+
+message Assignment {
+  string id = 1;
+  int32 step_order = 2;
+  string step_name = 3;
+  string user_node_id = 4;
+  string grant_source = 5;       // "direct", "role:KeToan_Chief", "department:KeToan_Dept"
+  string status = 6;             // "pending", "approved", "rejected", "skipped", "revoked"
+  google.protobuf.Timestamp acted_at = 7;
+  string comment = 8;
+}
+
+message CreateApprovalRequestReq {
+  string entity_type = 1;
+  string entity_id = 2;
+  // Entity fields for template matching (JSON map)
+  string entity_fields_json = 3;
+  string user_node_id = 4;
+}
+
+message ApproveRequest {
+  string request_id = 1;
+  string user_node_id = 2;
+  string comment = 3;
+}
+
+message RejectRequest {
+  string request_id = 1;
+  string user_node_id = 2;
+  string comment = 3;
+}
+
+message BatchApproveRequest {
+  repeated string request_ids = 1;
+  string user_node_id = 2;
+  string comment = 3;
+}
+
+message BatchApproveResponse {
+  int32 approved_count = 1;
+  repeated string approved_ids = 2;
+  repeated string failed_ids = 3;
+}
+
+// ============================================
+// Query messages
+// ============================================
+
+message GetPendingRequest {
+  string user_node_id = 1;
+}
+
+message GetHistoryRequest {
+  string user_node_id = 1;
+  string cursor = 2;         // acted_at cursor for paging
+  int32 limit = 3;
+}
+
+message GetMyRequestsRequest {
+  string user_node_id = 1;
+  string cursor = 2;         // created_at cursor
+  int32 limit = 3;
+}
+
+message GetDepartmentRequestsRequest {
+  string user_node_id = 1;
+  string cursor = 2;         // created_at cursor
+  int32 limit = 3;
+}
+
+message ApprovalList {
+  repeated ApprovalRequest requests = 1;
+  string next_cursor = 2;
+}
+
+// ============================================
+// Audit messages
+// ============================================
+
+message AuditEntry {
+  string id = 1;
+  string request_id = 2;
+  string action = 3;         // "created", "assigned", "approved", "rejected", etc.
+  string actor_node_id = 4;
+  int32 step_order = 5;
+  string detail_json = 6;
+  string ip_address = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message GetAuditLogRequest {
+  string request_id = 1;
+}
+
+message AuditLogList {
+  repeated AuditEntry entries = 1;
+}

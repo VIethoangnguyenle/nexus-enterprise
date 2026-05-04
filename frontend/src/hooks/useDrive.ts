@@ -1,5 +1,5 @@
 import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
-import { driveApi } from '../api/drive'
+import { driveApi, type DriveItem } from '../api/drive'
 import { queryClient } from '../lib/query-client'
 
 // --- Query Options ---
@@ -38,11 +38,11 @@ export const driveSharesQueryOptions = (itemId: string) =>
     enabled: !!itemId,
   })
 
-export const channelDriveQueryOptions = (channelId: string) =>
+export const channelDriveQueryOptions = (wsId: string, channelId: string) =>
   queryOptions({
-    queryKey: ['drive', 'channel', channelId],
-    queryFn: () => driveApi.channelDrive(channelId),
-    enabled: !!channelId,
+    queryKey: ['drive', 'channel', wsId, channelId],
+    queryFn: () => driveApi.channelDrive(wsId, channelId),
+    enabled: !!wsId && !!channelId,
   })
 
 // --- Hooks ---
@@ -68,8 +68,8 @@ export function useDriveShares(itemId: string) {
   return useQuery(driveSharesQueryOptions(itemId))
 }
 
-export function useChannelDrive(channelId: string) {
-  return useQuery(channelDriveQueryOptions(channelId))
+export function useChannelDrive(wsId: string, channelId: string) {
+  return useQuery(channelDriveQueryOptions(wsId, channelId))
 }
 
 // --- Mutations ---
@@ -106,17 +106,56 @@ export function useMoveItem(wsId: string) {
   })
 }
 
+/** Optimistic removal helper: removes an item from all drive folder caches. */
+function optimisticRemoveItem(wsId: string, itemId: string) {
+  const cache = queryClient.getQueryCache()
+  const folderQueries = cache.findAll({ queryKey: ['drive', wsId, 'folder'] })
+  const snapshots: { queryKey: unknown[]; data: { items: DriveItem[] } }[] = []
+
+  for (const query of folderQueries) {
+    const data = query.state.data as { items: DriveItem[] } | undefined
+    if (!data?.items) continue
+    snapshots.push({ queryKey: query.queryKey, data })
+    queryClient.setQueryData(query.queryKey, {
+      ...data,
+      items: data.items.filter((item: DriveItem) => item.id !== itemId),
+    })
+  }
+  return snapshots
+}
+
+/** Rollback optimistic removal. */
+function rollbackRemoveItem(snapshots: { queryKey: unknown[]; data: { items: DriveItem[] } }[]) {
+  for (const snap of snapshots) {
+    queryClient.setQueryData(snap.queryKey, snap.data)
+  }
+}
+
+/** Trash an item with optimistic removal from folder view. */
 export function useTrashItem(wsId: string) {
   return useMutation({
     mutationFn: (itemId: string) => driveApi.trashItem(itemId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['drive', wsId] }),
+    onMutate: async (itemId) => {
+      await queryClient.cancelQueries({ queryKey: ['drive', wsId, 'folder'] })
+      return { snapshots: optimisticRemoveItem(wsId, itemId) }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.snapshots) rollbackRemoveItem(context.snapshots)
+    },
   })
 }
 
+/** Permanently delete an item with optimistic removal from folder view. */
 export function useDeleteItem(wsId: string) {
   return useMutation({
     mutationFn: (itemId: string) => driveApi.deleteItem(itemId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['drive', wsId] }),
+    onMutate: async (itemId) => {
+      await queryClient.cancelQueries({ queryKey: ['drive', wsId, 'folder'] })
+      return { snapshots: optimisticRemoveItem(wsId, itemId) }
+    },
+    onError: (_err, _vars, context) => {
+      if (context?.snapshots) rollbackRemoveItem(context.snapshots)
+    },
   })
 }
 

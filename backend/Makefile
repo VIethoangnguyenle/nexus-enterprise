@@ -40,11 +40,14 @@ proto:
 	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
 		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
 		proto/drive/drive.proto
+	protoc -I. -I$(HOME)/.local/include --go_out=. --go_opt=paths=source_relative \
+		--go-grpc_out=. --go-grpc_opt=paths=source_relative \
+		proto/approval/approval.proto
 	@echo "Proto generation complete!"
 
 # Build all services
 build:
-	@for svc in gateway auth policy workspace document messaging asset drive; do \
+	@for svc in gateway auth policy workspace document messaging asset drive approval; do \
 		echo "Building $$svc..."; \
 		cd services/$$svc && go build -o ../../bin/$$svc ./cmd/ && cd ../..; \
 	done

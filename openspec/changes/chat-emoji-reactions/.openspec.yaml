@@ -1,0 +1,77 @@
+schema: spec-driven
+created: 2026-05-02T12:22:00+07:00
+
+pipeline:
+  current_phase: done
+  status: done
+  retry_count: 0
+  max_retries: 5
+
+  phases:
+    ceo:
+      status: done
+      completed_at: 2026-05-02T12:30:00+07:00
+      output: proposal.md
+    ba:
+      status: done
+      completed_at: 2026-05-02T12:30:00+07:00
+      output: specs/
+    user_checkpoint:
+      status: done
+      completed_at: 2026-05-02T12:30:00+07:00
+      user_approved: true
+    sa:
+      status: done
+      completed_at: 2026-05-02T12:30:00+07:00
+      output: architecture.md
+    ux:
+      status: done
+      completed_at: 2026-05-02T12:30:00+07:00
+      output: design.md
+    dev:
+      status: done
+      completed_at: 2026-05-02T12:36:00+07:00
+      output: code
+      checkpoint: null
+    sa_verify:
+      status: done
+      completed_at: 2026-05-02T12:37:00+07:00
+      output: sa-verify-report
+    qc:
+      status: done
+      completed_at: 2026-05-02T12:40:00+07:00
+      output: qa-memory.json
+    polish:
+      status: done
+      completed_at: 2026-05-02T12:40:00+07:00
+      rounds: 0
+      max_rounds: 2
+    learn:
+      status: skipped
+      completed_at: null
+      triggered: false
+
+  session_dialogue:
+    decisions: 6
+    handoffs: 5
+    deviations: 0
+    red_flags: 0
+
+  loops:
+    total: 0
+    max: 5
+    history: []
+
+  artifact_versions:
+    proposal: 2
+    specs: 1
+    architecture: 1
+    design: 1
+    tasks: 1
+
+  spec_lock:
+    locked_at: null
+    locked_by: null
+    spec_hash: null
+    file_hashes: {}
+    unlock_count: 0

@@ -19,14 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	PolicyWriteService_CreateNode_FullMethodName        = "/policy.PolicyWriteService/CreateNode"
-	PolicyWriteService_DeleteNode_FullMethodName        = "/policy.PolicyWriteService/DeleteNode"
-	PolicyWriteService_CreateAssignment_FullMethodName  = "/policy.PolicyWriteService/CreateAssignment"
-	PolicyWriteService_RemoveAssignment_FullMethodName  = "/policy.PolicyWriteService/RemoveAssignment"
-	PolicyWriteService_CreateAssociation_FullMethodName = "/policy.PolicyWriteService/CreateAssociation"
-	PolicyWriteService_RemoveAssociation_FullMethodName = "/policy.PolicyWriteService/RemoveAssociation"
-	PolicyWriteService_InitSchema_FullMethodName        = "/policy.PolicyWriteService/InitSchema"
-	PolicyWriteService_LoadGraph_FullMethodName         = "/policy.PolicyWriteService/LoadGraph"
+	PolicyWriteService_CreateNode_FullMethodName         = "/policy.PolicyWriteService/CreateNode"
+	PolicyWriteService_DeleteNode_FullMethodName         = "/policy.PolicyWriteService/DeleteNode"
+	PolicyWriteService_CreateAssignment_FullMethodName   = "/policy.PolicyWriteService/CreateAssignment"
+	PolicyWriteService_RemoveAssignment_FullMethodName   = "/policy.PolicyWriteService/RemoveAssignment"
+	PolicyWriteService_CreateAssociation_FullMethodName  = "/policy.PolicyWriteService/CreateAssociation"
+	PolicyWriteService_RemoveAssociation_FullMethodName  = "/policy.PolicyWriteService/RemoveAssociation"
+	PolicyWriteService_CreateProhibition_FullMethodName  = "/policy.PolicyWriteService/CreateProhibition"
+	PolicyWriteService_RemoveProhibition_FullMethodName  = "/policy.PolicyWriteService/RemoveProhibition"
+	PolicyWriteService_RegisterOperations_FullMethodName = "/policy.PolicyWriteService/RegisterOperations"
+	PolicyWriteService_InvalidateCache_FullMethodName    = "/policy.PolicyWriteService/InvalidateCache"
+	PolicyWriteService_InitSchema_FullMethodName         = "/policy.PolicyWriteService/InitSchema"
+	PolicyWriteService_LoadGraph_FullMethodName          = "/policy.PolicyWriteService/LoadGraph"
 )
 
 // PolicyWriteServiceClient is the client API for PolicyWriteService service.
@@ -45,6 +49,13 @@ type PolicyWriteServiceClient interface {
 	// Associations (permission edges)
 	CreateAssociation(ctx context.Context, in *CreateAssociationRequest, opts ...grpc.CallOption) (*Association, error)
 	RemoveAssociation(ctx context.Context, in *RemoveAssociationRequest, opts ...grpc.CallOption) (*Empty, error)
+	// Prohibitions (deny overrides)
+	CreateProhibition(ctx context.Context, in *CreateProhibitionRequest, opts ...grpc.CallOption) (*Prohibition, error)
+	RemoveProhibition(ctx context.Context, in *RemoveProhibitionRequest, opts ...grpc.CallOption) (*Empty, error)
+	// Operations registry
+	RegisterOperations(ctx context.Context, in *RegisterOperationsRequest, opts ...grpc.CallOption) (*RegisterOperationsResponse, error)
+	// External cache invalidation
+	InvalidateCache(ctx context.Context, in *InvalidateCacheRequest, opts ...grpc.CallOption) (*InvalidateCacheResponse, error)
 	// Schema and graph lifecycle
 	InitSchema(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
 	LoadGraph(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error)
@@ -118,6 +129,46 @@ func (c *policyWriteServiceClient) RemoveAssociation(ctx context.Context, in *Re
 	return out, nil
 }
 
+func (c *policyWriteServiceClient) CreateProhibition(ctx context.Context, in *CreateProhibitionRequest, opts ...grpc.CallOption) (*Prohibition, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Prohibition)
+	err := c.cc.Invoke(ctx, PolicyWriteService_CreateProhibition_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *policyWriteServiceClient) RemoveProhibition(ctx context.Context, in *RemoveProhibitionRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, PolicyWriteService_RemoveProhibition_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *policyWriteServiceClient) RegisterOperations(ctx context.Context, in *RegisterOperationsRequest, opts ...grpc.CallOption) (*RegisterOperationsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RegisterOperationsResponse)
+	err := c.cc.Invoke(ctx, PolicyWriteService_RegisterOperations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *policyWriteServiceClient) InvalidateCache(ctx context.Context, in *InvalidateCacheRequest, opts ...grpc.CallOption) (*InvalidateCacheResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InvalidateCacheResponse)
+	err := c.cc.Invoke(ctx, PolicyWriteService_InvalidateCache_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *policyWriteServiceClient) InitSchema(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
@@ -154,6 +205,13 @@ type PolicyWriteServiceServer interface {
 	// Associations (permission edges)
 	CreateAssociation(context.Context, *CreateAssociationRequest) (*Association, error)
 	RemoveAssociation(context.Context, *RemoveAssociationRequest) (*Empty, error)
+	// Prohibitions (deny overrides)
+	CreateProhibition(context.Context, *CreateProhibitionRequest) (*Prohibition, error)
+	RemoveProhibition(context.Context, *RemoveProhibitionRequest) (*Empty, error)
+	// Operations registry
+	RegisterOperations(context.Context, *RegisterOperationsRequest) (*RegisterOperationsResponse, error)
+	// External cache invalidation
+	InvalidateCache(context.Context, *InvalidateCacheRequest) (*InvalidateCacheResponse, error)
 	// Schema and graph lifecycle
 	InitSchema(context.Context, *Empty) (*Empty, error)
 	LoadGraph(context.Context, *Empty) (*Empty, error)
@@ -184,6 +242,18 @@ func (UnimplementedPolicyWriteServiceServer) CreateAssociation(context.Context, 
 }
 func (UnimplementedPolicyWriteServiceServer) RemoveAssociation(context.Context, *RemoveAssociationRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveAssociation not implemented")
+}
+func (UnimplementedPolicyWriteServiceServer) CreateProhibition(context.Context, *CreateProhibitionRequest) (*Prohibition, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateProhibition not implemented")
+}
+func (UnimplementedPolicyWriteServiceServer) RemoveProhibition(context.Context, *RemoveProhibitionRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveProhibition not implemented")
+}
+func (UnimplementedPolicyWriteServiceServer) RegisterOperations(context.Context, *RegisterOperationsRequest) (*RegisterOperationsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RegisterOperations not implemented")
+}
+func (UnimplementedPolicyWriteServiceServer) InvalidateCache(context.Context, *InvalidateCacheRequest) (*InvalidateCacheResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InvalidateCache not implemented")
 }
 func (UnimplementedPolicyWriteServiceServer) InitSchema(context.Context, *Empty) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method InitSchema not implemented")
@@ -320,6 +390,78 @@ func _PolicyWriteService_RemoveAssociation_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PolicyWriteService_CreateProhibition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateProhibitionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyWriteServiceServer).CreateProhibition(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyWriteService_CreateProhibition_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyWriteServiceServer).CreateProhibition(ctx, req.(*CreateProhibitionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PolicyWriteService_RemoveProhibition_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveProhibitionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyWriteServiceServer).RemoveProhibition(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyWriteService_RemoveProhibition_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyWriteServiceServer).RemoveProhibition(ctx, req.(*RemoveProhibitionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PolicyWriteService_RegisterOperations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterOperationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyWriteServiceServer).RegisterOperations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyWriteService_RegisterOperations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyWriteServiceServer).RegisterOperations(ctx, req.(*RegisterOperationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PolicyWriteService_InvalidateCache_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InvalidateCacheRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyWriteServiceServer).InvalidateCache(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyWriteService_InvalidateCache_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyWriteServiceServer).InvalidateCache(ctx, req.(*InvalidateCacheRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PolicyWriteService_InitSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(Empty)
 	if err := dec(in); err != nil {
@@ -386,6 +528,22 @@ var PolicyWriteService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveAssociation",
 			Handler:    _PolicyWriteService_RemoveAssociation_Handler,
+		},
+		{
+			MethodName: "CreateProhibition",
+			Handler:    _PolicyWriteService_CreateProhibition_Handler,
+		},
+		{
+			MethodName: "RemoveProhibition",
+			Handler:    _PolicyWriteService_RemoveProhibition_Handler,
+		},
+		{
+			MethodName: "RegisterOperations",
+			Handler:    _PolicyWriteService_RegisterOperations_Handler,
+		},
+		{
+			MethodName: "InvalidateCache",
+			Handler:    _PolicyWriteService_InvalidateCache_Handler,
 		},
 		{
 			MethodName: "InitSchema",

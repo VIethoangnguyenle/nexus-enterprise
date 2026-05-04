@@ -17,15 +17,6 @@ import (
 	"ngac-platform/services/auth/internal/domain"
 )
 
-// AuthService defines what the gRPC handler needs from the domain layer.
-type AuthService interface {
-	Register(ctx context.Context, username, password string) (*domain.AuthResponse, error)
-	Login(ctx context.Context, username, password string) (*domain.AuthResponse, error)
-	GetUserByID(ctx context.Context, userID string) (*domain.UserInfo, error)
-	GetUserByNGACNodeID(ctx context.Context, nodeID string) (*domain.UserInfo, error)
-	ListUsers(ctx context.Context) ([]domain.UserInfo, error)
-}
-
 // AuthServer handles gRPC auth requests.
 type AuthServer struct {
 	pb.UnimplementedAuthServiceServer
@@ -38,7 +29,7 @@ func NewAuthServer(svc *domain.Service, rdb *redis.Client) *AuthServer {
 	return &AuthServer{svc: svc, rdb: rdb}
 }
 
-// Register delegates to domain.Service.Register.
+// Register delegates to domain.Service.Register (legacy).
 func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.AuthResponse, error) {
 	resp, err := s.svc.Register(ctx, req.Username, req.Password)
 	if err != nil {
@@ -47,13 +38,74 @@ func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb
 	return toAuthResponse(resp), nil
 }
 
-// Login delegates to domain.Service.Login.
+// Login delegates to domain.Service.Login (legacy).
 func (s *AuthServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.AuthResponse, error) {
 	resp, err := s.svc.Login(ctx, req.Username, req.Password)
 	if err != nil {
 		return nil, mapError(err)
 	}
 	return toAuthResponse(resp), nil
+}
+
+// Signup handles multi-tenant registration.
+func (s *AuthServer) Signup(ctx context.Context, req *pb.SignupRequest) (*pb.SignupResponse, error) {
+	resp, err := s.svc.Signup(ctx, req.Email, req.Password, req.DisplayName, req.TenantName)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return &pb.SignupResponse{
+		Token: resp.Token,
+		User: &pb.UserInfo{
+			Id: resp.UserID, Username: resp.Username,
+			NgacNodeId: resp.NGACNodeID, Email: resp.Email, UnionId: resp.UnionID,
+		},
+		Tenant: &pb.TenantInfo{
+			Id: resp.TenantID, Name: resp.TenantName,
+			Role: resp.TenantRole, OpenId: resp.OpenID,
+		},
+	}, nil
+}
+
+// Signin handles multi-tenant login with tenant list.
+func (s *AuthServer) Signin(ctx context.Context, req *pb.SigninRequest) (*pb.SigninResponse, error) {
+	resp, err := s.svc.Signin(ctx, req.Email, req.Password)
+	if err != nil {
+		return nil, mapError(err)
+	}
+
+	tenants := make([]*pb.TenantInfo, len(resp.Tenants))
+	for i, t := range resp.Tenants {
+		tenants[i] = &pb.TenantInfo{Id: t.ID, Name: t.Name, Role: t.Role, OpenId: t.OpenID}
+	}
+
+	return &pb.SigninResponse{
+		Token: resp.Token,
+		User: &pb.UserInfo{
+			Id: resp.UserID, Username: resp.Username,
+			NgacNodeId: resp.NGACNodeID, Email: resp.Email,
+			UnionId: resp.UnionID, DisplayName: resp.DisplayName,
+		},
+		Tenants:         tenants,
+		DefaultTenantId: resp.DefaultTenantID,
+	}, nil
+}
+
+// SwitchTenant re-issues a JWT scoped to the target tenant.
+func (s *AuthServer) SwitchTenant(ctx context.Context, req *pb.SwitchTenantRequest) (*pb.SwitchTenantResponse, error) {
+	// NOTE: caller must provide user context via metadata; for now this is service-to-service
+	return nil, status.Error(codes.Unimplemented, "use REST endpoint for tenant switching")
+}
+
+// GetMe returns current user + tenant info.
+func (s *AuthServer) GetMe(ctx context.Context, _ *pb.GetMeRequest) (*pb.MeResponse, error) {
+	// NOTE: requires user context from metadata; primarily a REST endpoint
+	return nil, status.Error(codes.Unimplemented, "use REST endpoint for /me")
+}
+
+// ListUserTenants returns all tenants for the calling user.
+func (s *AuthServer) ListUserTenants(ctx context.Context, _ *pb.ListUserTenantsRequest) (*pb.TenantListResponse, error) {
+	// NOTE: requires user context from metadata; primarily a REST endpoint
+	return nil, status.Error(codes.Unimplemented, "use REST endpoint for tenant listing")
 }
 
 // GetUserByID delegates to domain.Service.GetUserByID.
@@ -126,7 +178,7 @@ func toAuthResponse(r *domain.AuthResponse) *pb.AuthResponse {
 }
 
 func toUserInfo(u *domain.UserInfo) *pb.UserInfo {
-	return &pb.UserInfo{Id: u.ID, Username: u.Username, NgacNodeId: u.NGACNodeID}
+	return &pb.UserInfo{Id: u.ID, Username: u.Username, NgacNodeId: u.NGACNodeID, Email: u.Email, UnionId: u.UnionID, DisplayName: u.DisplayName}
 }
 
 func mapError(err error) error {
@@ -139,6 +191,10 @@ func mapError(err error) error {
 		return status.Error(codes.NotFound, err.Error())
 	case errors.Is(err, domain.ErrInvalidInput):
 		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, domain.ErrAccessDenied):
+		return status.Error(codes.PermissionDenied, err.Error())
+	case errors.Is(err, domain.ErrTenantNotFound):
+		return status.Error(codes.NotFound, err.Error())
 	default:
 		return status.Errorf(codes.Internal, "internal: %v", err)
 	}

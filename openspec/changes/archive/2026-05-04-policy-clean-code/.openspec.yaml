@@ -1,0 +1,27 @@
+schema: spec-driven
+created: 2026-05-04
+
+pipeline:
+  current_phase: propose
+  status: draft
+  retry_count: 0
+  max_retries: 5
+
+  phases:
+    propose:
+      status: done
+      completed_at: 2026-05-04T00:44:00Z
+      output: proposal.md
+    design:
+      status: done
+      completed_at: 2026-05-04T00:44:00Z
+      output: design.md
+    tasks:
+      status: done
+      completed_at: 2026-05-04T00:44:00Z
+      output: tasks.md
+
+  artifact_versions:
+    proposal: 1
+    design: 1
+    tasks: 1

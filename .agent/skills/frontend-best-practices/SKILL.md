@@ -69,14 +69,23 @@ See [performance.md](./references/performance.md) for:
 - Memoization guidelines
 - Bundle analysis with Vite
 
-## CSS & Styling
+## Responsive Design
+
+See [responsive.md](./references/responsive.md) for:
+- Mobile-first breakpoint system (`md:`, `lg:`, `xl:`)
+- Layout patterns: shell+drawer, cards vs tables, panels
+- Per-module responsive guides (Chat, Drive, Assets)
+- Touch target requirements (≥ 44px)
+- Responsive testing checklist
+
+## CSS & Styling (Tailwind v4)
 
 See [styling.md](./references/styling.md) for:
-- Vanilla CSS design system
-- CSS custom properties (design tokens)
-- BEM-like naming conventions
-- Responsive design patterns
-- Dark mode support
+- Tailwind v4 CSS-first configuration
+- Design tokens via `@theme {}` in `index.css`
+- Custom `@utility` directives for typography
+- When to use Tailwind utilities vs custom CSS
+- Dark mode (dark-first palette)
 - Animation guidelines
 
 ## Security

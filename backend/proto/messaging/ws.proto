@@ -48,7 +48,16 @@ message ServerEnvelope {
     UnreadCountEvent   unread_count   = 5;
     ThreadReplyEvent   thread_reply   = 6;
     AssetUpdatedEvent  asset_updated  = 7;
+    ReactionEvent      reaction_event = 8;
+    PinEvent           pin_event      = 9;
+    ReadReceiptEvent   read_receipt   = 10;
+    PollVoteEvent      poll_vote      = 11;
+    TaskUpdateEvent    task_update    = 12;
+    DriveObjectEvent   drive_object   = 13;
+    DrivePermEvent     drive_perm     = 14;
     ErrorEvent         error          = 15;
+    ApprovalEvent      approval_event = 16;
+    PresenceEvent      presence_event = 17;
   }
 }
 
@@ -68,11 +77,21 @@ message ChatMessage {
   string message_type    = 7;
   string parent_message_id = 8;
   int32  reply_count     = 9;
+  string content_format  = 10;    // "markdown", "plain"
+  repeated string mentions = 11;  // User IDs mentioned
+  string linked_entity_type = 12;
+  string linked_entity_id = 13;
 }
 
 message TypingEvent {
   string channel_id = 1;
   string username   = 2;
+}
+
+message PresenceEvent {
+  string user_id  = 1;
+  string username = 2;
+  string status   = 3; // "online" or "offline"
 }
 
 message NotificationEvent {
@@ -98,7 +117,77 @@ message AssetUpdatedEvent {
   string new_state = 2;
 }
 
+// ═══════════════════════════════════════════════
+// NEW: Lark Chat Parity Events
+// ═══════════════════════════════════════════════
+
+message ReactionEvent {
+  string message_id = 1;
+  string channel_id = 2;
+  string user_id    = 3;
+  string username   = 4;
+  string emoji      = 5;
+  string action     = 6;  // "add" | "remove"
+}
+
+message PinEvent {
+  string channel_id = 1;
+  string message_id = 2;
+  string user_id    = 3;
+  string action     = 4;  // "pin" | "unpin"
+}
+
+message ReadReceiptEvent {
+  string channel_id      = 1;
+  string user_id         = 2;
+  string last_message_id = 3;
+}
+
+message PollVoteEvent {
+  string poll_id    = 1;
+  string channel_id = 2;
+  string option_id  = 3;
+  int32  vote_count = 4;
+  int32  total_votes = 5;
+}
+
+message TaskUpdateEvent {
+  string task_id     = 1;
+  string channel_id  = 2;
+  string status      = 3;
+  string assignee_id = 4;
+  string title       = 5;
+}
+
 message ErrorEvent {
   int32  code    = 1;
   string message = 2;
+}
+
+// ═══════════════════════════════════════════════
+// Drive Events (realtime object + permission sync)
+// ═══════════════════════════════════════════════
+
+message DriveObjectEvent {
+  string event_type    = 1;  // "created" | "updated" | "deleted" | "moved"
+  string item_id       = 2;
+  string parent_id     = 3;
+  string workspace_id  = 4;
+}
+
+message DrivePermEvent {
+  string item_id       = 1;
+  string workspace_id  = 2;
+}
+
+// ═══════════════════════════════════════════════
+// Approval Events (realtime approval status sync)
+// ═══════════════════════════════════════════════
+
+message ApprovalEvent {
+  string request_id     = 1;
+  string status         = 2;  // "pending", "approved", "rejected"
+  string action         = 3;  // "created", "approved", "rejected", "step_advanced"
+  string actor_node_id  = 4;
+  string template_name  = 5;
 }

@@ -28,17 +28,49 @@ service MessagingService {
   // DMs
   rpc CreateDM(CreateDMRequest) returns (Channel);
   rpc ListDMs(ListDMsRequest) returns (ChannelList);
+
+  // Reactions
+  rpc AddReaction(AddReactionRequest) returns (Empty);
+  rpc RemoveReaction(RemoveReactionRequest) returns (Empty);
+  rpc ListReactions(ListReactionsRequest) returns (ReactionList);
+
+  // Pins
+  rpc PinMessage(PinMessageRequest) returns (Empty);
+  rpc UnpinMessage(UnpinMessageRequest) returns (Empty);
+  rpc ListPins(ListPinsRequest) returns (PinnedMessageList);
+
+  // Read receipts
+  rpc MarkChannelRead(MarkChannelReadRequest) returns (Empty);
+  rpc GetUnreadCounts(GetUnreadCountsRequest) returns (ChannelUnreadList);
+
+  // Search
+  rpc SearchMessages(SearchMessagesRequest) returns (MessageList);
+
+  // Polls
+  rpc CreatePoll(CreatePollRequest) returns (Poll);
+  rpc VotePoll(VotePollRequest) returns (Empty);
+  rpc RemoveVote(RemoveVoteRequest) returns (Empty);
+  rpc GetPoll(GetPollRequest) returns (Poll);
+
+  // Tasks
+  rpc CreateTask(CreateTaskRequest) returns (ChatTask);
+  rpc UpdateTask(UpdateTaskRequest) returns (ChatTask);
+  rpc ListTasks(ListTasksRequest) returns (ChatTaskList);
 }
 
 // NotificationService manages user notifications across the platform.
 service NotificationService {
   rpc ListNotifications(ListNotificationsRequest) returns (NotificationList);
-  rpc MarkRead(MarkReadRequest) returns (Empty);
-  rpc MarkAllRead(MarkAllReadRequest) returns (Empty);
-  rpc GetUnreadCount(GetUnreadCountRequest) returns (UnreadCountResponse);
+  rpc MarkRead(MarkNotificationReadRequest) returns (Empty);
+  rpc MarkAllRead(MarkAllNotificationsReadRequest) returns (Empty);
+  rpc GetUnreadCount(GetNotificationUnreadCountRequest) returns (NotificationUnreadCountResponse);
 }
 
 message Empty {}
+
+// ============================================
+// Channel Messages
+// ============================================
 
 message Channel {
   string id = 1;
@@ -49,6 +81,9 @@ message Channel {
   string ngac_ua_id = 6;
   string created_by = 7;
   google.protobuf.Timestamp created_at = 8;
+  string topic = 9;           // Short topic line shown below channel name
+  string description = 10;    // Longer channel description
+  int32 member_count = 11;    // Denormalized member count
 }
 
 message CreateChannelRequest {
@@ -71,6 +106,10 @@ message GetChannelRequest {
 message ChannelList {
   repeated Channel channels = 1;
 }
+
+// ============================================
+// Channel Member Messages
+// ============================================
 
 message AddChannelMemberRequest {
   string channel_id = 1;
@@ -98,6 +137,10 @@ message ChannelMemberList {
   repeated ChannelMember members = 1;
 }
 
+// ============================================
+// Core Message Types
+// ============================================
+
 message SendMessageRequest {
   string channel_id = 1;
   string sender_id = 2;
@@ -105,8 +148,10 @@ message SendMessageRequest {
   string content = 4;
   string message_type = 5;          // "user" (default), "system"
   string parent_message_id = 6;     // Thread: reply to this message
-  string linked_entity_type = 7;    // "asset", "document", etc.
+  string linked_entity_type = 7;    // "asset", "document", "poll", "task"
   string linked_entity_id = 8;      // ID of the linked entity
+  string content_format = 9;        // "markdown" (default), "plain"
+  repeated string mentions = 10;    // User IDs mentioned in content
 }
 
 message Message {
@@ -121,6 +166,10 @@ message Message {
   string linked_entity_type = 9;
   string linked_entity_id = 10;
   int32 reply_count = 11;           // Number of replies in thread
+  string content_format = 12;       // "markdown", "plain"
+  repeated string mentions = 13;    // User IDs mentioned
+  repeated ReactionGroup reactions = 14;  // Aggregated reactions
+  bool is_pinned = 15;              // Whether message is pinned
 }
 
 message GetMessagesRequest {
@@ -146,6 +195,10 @@ message FindThreadsByEntityRequest {
   string user_ngac_node_id = 3;
 }
 
+// ============================================
+// DM Messages
+// ============================================
+
 message CreateDMRequest {
   string user_id = 1;
   string user_ngac_node_id = 2;
@@ -155,6 +208,206 @@ message CreateDMRequest {
 
 message ListDMsRequest {
   string user_ngac_node_id = 1;
+}
+
+// ============================================
+// Reaction Messages
+// ============================================
+
+message AddReactionRequest {
+  string message_id = 1;
+  string user_id = 2;
+  string emoji = 3;
+}
+
+message RemoveReactionRequest {
+  string message_id = 1;
+  string user_id = 2;
+  string emoji = 3;
+}
+
+message ListReactionsRequest {
+  string message_id = 1;
+}
+
+message Reaction {
+  string id = 1;
+  string message_id = 2;
+  string user_id = 3;
+  string emoji = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message ReactionGroup {
+  string emoji = 1;
+  int32 count = 2;
+  repeated string user_ids = 3;
+}
+
+message ReactionList {
+  repeated Reaction reactions = 1;
+}
+
+// ============================================
+// Pin Messages
+// ============================================
+
+message PinMessageRequest {
+  string channel_id = 1;
+  string message_id = 2;
+  string user_id = 3;
+}
+
+message UnpinMessageRequest {
+  string channel_id = 1;
+  string message_id = 2;
+}
+
+message ListPinsRequest {
+  string channel_id = 1;
+}
+
+message PinnedMessage {
+  Message message = 1;
+  string pinned_by = 2;
+  google.protobuf.Timestamp pinned_at = 3;
+}
+
+message PinnedMessageList {
+  repeated PinnedMessage pins = 1;
+}
+
+// ============================================
+// Read Receipt Messages
+// ============================================
+
+message MarkChannelReadRequest {
+  string channel_id = 1;
+  string user_id = 2;
+  string last_message_id = 3;
+}
+
+message GetUnreadCountsRequest {
+  string user_id = 1;
+}
+
+message ChannelUnread {
+  string channel_id = 1;
+  int32 unread_count = 2;
+  string last_read_message_id = 3;
+}
+
+message ChannelUnreadList {
+  repeated ChannelUnread channels = 1;
+}
+
+// ============================================
+// Search Messages
+// ============================================
+
+message SearchMessagesRequest {
+  string channel_id = 1;
+  string query = 2;
+  int32 limit = 3;
+  string user_ngac_node_id = 4;
+}
+
+// ============================================
+// Poll Messages
+// ============================================
+
+message CreatePollRequest {
+  string channel_id = 1;
+  string user_id = 2;
+  string user_ngac_node_id = 3;
+  string question = 4;
+  repeated string options = 5;
+  bool is_multi = 6;
+  bool is_anonymous = 7;
+  google.protobuf.Timestamp ends_at = 8;
+}
+
+message VotePollRequest {
+  string poll_id = 1;
+  string option_id = 2;
+  string user_id = 3;
+}
+
+message RemoveVoteRequest {
+  string poll_id = 1;
+  string option_id = 2;
+  string user_id = 3;
+}
+
+message GetPollRequest {
+  string poll_id = 1;
+}
+
+message PollOption {
+  string id = 1;
+  string text = 2;
+  int32 position = 3;
+  int32 vote_count = 4;
+  repeated string voter_ids = 5;  // Empty if anonymous
+}
+
+message Poll {
+  string id = 1;
+  string message_id = 2;
+  string channel_id = 3;
+  string question = 4;
+  repeated PollOption options = 5;
+  bool is_multi = 6;
+  bool is_anonymous = 7;
+  string created_by = 8;
+  google.protobuf.Timestamp ends_at = 9;
+  google.protobuf.Timestamp created_at = 10;
+  int32 total_votes = 11;
+}
+
+// ============================================
+// Chat Task Messages
+// ============================================
+
+message CreateTaskRequest {
+  string channel_id = 1;
+  string user_id = 2;
+  string user_ngac_node_id = 3;
+  string title = 4;
+  string assignee_id = 5;
+  string due_date = 6;  // "YYYY-MM-DD"
+}
+
+message UpdateTaskRequest {
+  string task_id = 1;
+  string user_id = 2;
+  string status = 3;       // "todo", "in_progress", "done"
+  string assignee_id = 4;
+  string title = 5;
+  string due_date = 6;
+}
+
+message ListTasksRequest {
+  string channel_id = 1;
+  string status = 2;  // filter by status, empty = all
+}
+
+message ChatTask {
+  string id = 1;
+  string message_id = 2;
+  string channel_id = 3;
+  string title = 4;
+  string assignee_id = 5;
+  string assignee_name = 6;
+  string status = 7;
+  string due_date = 8;
+  string created_by = 9;
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+}
+
+message ChatTaskList {
+  repeated ChatTask tasks = 1;
 }
 
 // ============================================
@@ -185,19 +438,19 @@ message NotificationList {
   int32 unread_count = 3;
 }
 
-message MarkReadRequest {
+message MarkNotificationReadRequest {
   string notification_id = 1;
   string user_id = 2;
 }
 
-message MarkAllReadRequest {
+message MarkAllNotificationsReadRequest {
   string user_id = 1;
 }
 
-message GetUnreadCountRequest {
+message GetNotificationUnreadCountRequest {
   string user_id = 1;
 }
 
-message UnreadCountResponse {
+message NotificationUnreadCountResponse {
   int32 count = 1;
 }

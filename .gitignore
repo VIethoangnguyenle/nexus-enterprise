@@ -36,5 +36,9 @@ docdata/
 .DS_Store
 Thumbs.db
 
+# Local dev (make dev)
+.dev-logs/
+.dev-pids
+
 # Build artifacts
 *.log

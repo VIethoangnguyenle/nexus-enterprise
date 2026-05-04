@@ -1,0 +1,242 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { useState, useRef, useCallback } from 'react'
+import { useWorkspaces } from '../../hooks/useWorkspaces'
+import { useDriveFolder, useCreateFolder, useUploadFile, useTrashItem, useRenameItem, useDriveQuota } from '../../hooks/useDrive'
+import { driveApi, type DriveItem } from '../../api/drive'
+import { useDriveStore } from '../../stores/drive.store'
+import { DriveFileList } from '../../components/drive/DriveFileList'
+import { DriveContextPanel } from '../../components/drive/DriveContextPanel'
+import { DriveSidebar } from '../../components/drive/DriveSidebar'
+import { Breadcrumbs } from '../../components/composites/Breadcrumbs'
+import { LoadingState } from '../../components/LoadingState'
+import { ErrorState } from '../../components/ErrorState'
+import { EmptyState } from '../../components/EmptyState'
+import { Button, Spinner, Text } from '../../components/primitives'
+import { FolderPlus, Upload, FolderOpen, Plus, List, LayoutGrid } from 'lucide-react'
+
+export const Route = createFileRoute('/_drive/drive')({
+  component: DriveIndex,
+})
+
+/** Standalone Drive page — sidebar tree + content area. */
+function DriveIndex() {
+  const { data: wsData } = useWorkspaces()
+  const wsId = wsData?.workspaces?.[0]?.id || ''
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
+
+  const currentFolderId = useDriveStore((s) => s.currentFolderId)
+  const navigateToFolder = useDriveStore((s) => s.navigateToFolder)
+  const contextPanelOpen = useDriveStore((s) => s.contextPanelOpen)
+  const openContextPanel = useDriveStore((s) => s.openContextPanel)
+
+  const { data, isLoading, error, refetch } = useDriveFolder(wsId, currentFolderId ?? undefined)
+  const createFolder = useCreateFolder(wsId)
+  const uploadFile = useUploadFile(wsId)
+  const trashItem = useTrashItem(wsId)
+  const renameItem = useRenameItem(wsId)
+  const { data: quota } = useDriveQuota(wsId)
+
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [showNewFolder, setShowNewFolder] = useState(false)
+  const [newFolderName, setNewFolderName] = useState('')
+  const [folderStack, setFolderStack] = useState<{ id: string; name: string }[]>([])
+
+  const handleNavigate = useCallback((item: DriveItem) => {
+    if (item.item_type === 'folder') {
+      setFolderStack((prev) => [...prev, { id: item.id, name: item.name }])
+      navigateToFolder(item.id)
+    }
+  }, [navigateToFolder])
+
+  const handleBreadcrumb = useCallback((index: number) => {
+    if (index === -1) {
+      setFolderStack([])
+      navigateToFolder(null)
+    } else {
+      setFolderStack((prev) => prev.slice(0, index + 1))
+      navigateToFolder(folderStack[index].id)
+    }
+  }, [folderStack, navigateToFolder])
+
+  const handleDownload = useCallback(async (item: DriveItem) => {
+    const { download_url } = await driveApi.getDownloadUrl(item.id)
+    const a = document.createElement('a')
+    a.href = download_url
+    a.download = item.name
+    a.click()
+  }, [])
+
+  const handleRename = useCallback(async (item: DriveItem) => {
+    const newName = prompt('New name:', item.name)
+    if (newName && newName !== item.name) {
+      await renameItem.mutateAsync({ itemId: item.id, newName })
+    }
+  }, [renameItem])
+
+  const handleShare = useCallback((item: DriveItem) => {
+    useDriveStore.getState().selectItem(item.id)
+    openContextPanel('permissions')
+  }, [openContextPanel])
+
+  const handleTrash = useCallback(async (item: DriveItem) => {
+    await trashItem.mutateAsync(item.id)
+  }, [trashItem])
+
+  const handleCreateFolder = async () => {
+    if (!newFolderName.trim()) return
+    await createFolder.mutateAsync({ name: newFolderName.trim(), parentId: currentFolderId ?? undefined })
+    setNewFolderName('')
+    setShowNewFolder(false)
+  }
+
+  const handleUpload = async () => {
+    const files = fileInputRef.current?.files
+    if (!files?.length) return
+    for (const file of Array.from(files)) {
+      await uploadFile.mutateAsync({ file, parentId: currentFolderId ?? undefined })
+    }
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const items = data?.items || []
+
+  return (
+    <>
+      {/* Drive Sidebar */}
+      <DriveSidebar
+        workspaceId={wsId}
+        onFolderSelect={(id) => {
+          navigateToFolder(id)
+          setFolderStack([])
+        }}
+        onNewFolder={() => setShowNewFolder(true)}
+        onUpload={() => fileInputRef.current?.click()}
+      />
+      <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleUpload} />
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Toolbar: breadcrumb + actions */}
+        <div className="px-3 md:px-5 py-2 flex items-center justify-between border-b border-outline-variant">
+          <Breadcrumbs
+            root="My Drive"
+            items={folderStack.map(f => ({ id: f.id, label: f.name }))}
+            onNavigate={handleBreadcrumb}
+          />
+          <div className="flex items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setShowNewFolder(true)}>
+              <Plus size={14} />
+              <span className="ml-1 hidden sm:inline">New</span>
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={uploadFile.isPending}>
+              {uploadFile.isPending ? <Spinner size="sm" /> : <Upload size={14} />}
+              <span className="ml-1 hidden sm:inline">Upload</span>
+            </Button>
+            <div className="w-px h-5 bg-outline-variant hidden md:block" />
+            <button
+              onClick={() => setViewMode('list')}
+              className={`p-1.5 rounded-sm border-none cursor-pointer transition-colors hidden md:inline-flex
+                ${viewMode === 'list' ? 'bg-surface-container-high text-on-surface' : 'bg-transparent text-on-surface-variant hover:text-on-surface'}`}
+              title="List view"
+            >
+              <List size={14} />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-sm border-none cursor-pointer transition-colors hidden md:inline-flex
+                ${viewMode === 'grid' ? 'bg-surface-container-high text-on-surface' : 'bg-transparent text-on-surface-variant hover:text-on-surface'}`}
+              title="Grid view"
+            >
+              <LayoutGrid size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Quota bar */}
+        {quota && quota.max_bytes > 0 && (
+          <div className="px-3 md:px-5 py-2 flex items-center gap-3 border-b border-outline-variant/50">
+            <div className="flex-1 h-1 bg-outline-variant rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary rounded-full transition-all"
+                style={{ width: `${Math.min((quota.used_bytes / quota.max_bytes) * 100, 100)}%` }}
+              />
+            </div>
+            <Text variant="caption" muted>
+              {formatSize(quota.used_bytes)} / {formatSize(quota.max_bytes)}
+            </Text>
+          </div>
+        )}
+
+        {/* New folder inline */}
+        {showNewFolder && (
+          <div className="px-3 md:px-5 py-2 flex items-center gap-2 border-b border-outline-variant bg-surface-container-low">
+            <FolderPlus size={16} className="text-amber-400 flex-shrink-0" />
+            <input
+              autoFocus
+              type="text"
+              value={newFolderName}
+              onChange={(e) => setNewFolderName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleCreateFolder()
+                if (e.key === 'Escape') { setShowNewFolder(false); setNewFolderName('') }
+              }}
+              placeholder="Folder name"
+              className="flex-1 px-2 py-1 text-small bg-surface-container-lowest border border-outline-variant rounded-md
+                text-on-surface focus:outline-none focus-ring"
+            />
+            <Button size="sm" onClick={handleCreateFolder} disabled={createFolder.isPending}>
+              {createFolder.isPending ? <Spinner size="sm" /> : 'Create'}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setShowNewFolder(false); setNewFolderName('') }}>
+              Cancel
+            </Button>
+          </div>
+        )}
+
+        {/* Content */}
+        {isLoading ? (
+          <LoadingState />
+        ) : error ? (
+          <ErrorState title="Failed to load drive" message={error.message} onRetry={() => refetch()} />
+        ) : items.length > 0 ? (
+          <DriveFileList
+            items={items}
+            onNavigate={handleNavigate}
+            onDownload={handleDownload}
+            onRename={handleRename}
+            onShare={handleShare}
+            onTrash={handleTrash}
+          />
+        ) : (
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* Table headers even when empty */}
+            <div className="flex items-center px-4 py-2 text-overline text-on-surface-variant border-b border-outline-variant bg-surface-container-low/40">
+              <div className="flex-1">Name</div>
+              <div className="w-24 text-right hidden md:block">Size</div>
+              <div className="w-28 text-right hidden md:block">Modified</div>
+              <div className="w-32 hidden md:block" />
+            </div>
+            <div className="flex-1 flex items-center justify-center">
+              <EmptyState
+                icon={<FolderOpen size={40} color="#f59e0b" strokeWidth={1.5} />}
+                title={currentFolderId ? 'Folder is empty' : 'Drive is empty'}
+                description="Upload files or create folders to get started."
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Context Panel */}
+      {contextPanelOpen && <DriveContextPanel />}
+    </>
+  )
+}
+
+function formatSize(bytes: number): string {
+  if (!bytes || bytes <= 0) return '0 B'
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`
+  if (bytes < 1073741824) return `${(bytes / 1048576).toFixed(1)} MB`
+  return `${(bytes / 1073741824).toFixed(2)} GB`
+}

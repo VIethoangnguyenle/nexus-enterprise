@@ -12,6 +12,9 @@ type Channel struct {
 	NGACUaID    string
 	CreatedBy   string
 	CreatedAt   time.Time
+	Topic       string
+	Description string
+	MemberCount int32
 }
 
 // Message represents a row in the messages table.
@@ -26,5 +29,9 @@ type Message struct {
 	LinkedEntityType string
 	LinkedEntityID   string
 	ReplyCount       int32
+	ContentFormat    string
+	Mentions         []string
+	IsPinned         bool
+	Reactions        []ReactionGroup
 	CreatedAt        time.Time
 }

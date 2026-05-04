@@ -52,19 +52,39 @@ type NotificationCreator interface {
 	CreateNotification(ctx context.Context, userID, notifType, title, body, entityType, entityID string) error
 }
 
-// Consumer listens to Kafka topics and creates notifications from asset events.
-type Consumer struct {
-	client  *kgo.Client
-	notifSv NotificationCreator
-	cancel  context.CancelFunc
+// ApprovalBroadcaster defines the interface for broadcasting approval events via WebSocket.
+type ApprovalBroadcaster interface {
+	BroadcastApprovalEvent(requestID, status, action, actorNodeID, templateName string)
 }
 
-// NewConsumer creates a Kafka consumer subscribing to asset event topics.
-func NewConsumer(brokers []string, notifSv NotificationCreator) (*Consumer, error) {
+// ApprovalEvent matches the event structure from approval service.
+type ApprovalEvent struct {
+	RequestID    string `json:"request_id"`
+	TemplateName string `json:"template_name"`
+	EntityType   string `json:"entity_type"`
+	Status       string `json:"status"`
+	Action       string `json:"action"`
+	ActorNodeID  string `json:"actor_node_id"`
+	CreatedBy    string `json:"created_by"`
+	ScopeOaID    string `json:"scope_oa_id"`
+	Comment      string `json:"comment"`
+	Timestamp    int64  `json:"timestamp"`
+}
+
+// Consumer listens to Kafka topics and creates notifications from asset and approval events.
+type Consumer struct {
+	client     *kgo.Client
+	notifSv    NotificationCreator
+	broadcast  ApprovalBroadcaster
+	cancel     context.CancelFunc
+}
+
+// NewConsumer creates a Kafka consumer subscribing to asset and approval event topics.
+func NewConsumer(brokers []string, notifSv NotificationCreator, broadcast ApprovalBroadcaster) (*Consumer, error) {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup("messaging-notification-consumer"),
-		kgo.ConsumeTopics("asset.lifecycle", "asset.request", "asset.assignment"),
+		kgo.ConsumeTopics("asset.lifecycle", "asset.request", "asset.assignment", "approval.events"),
 		kgo.AllowAutoTopicCreation(),
 	)
 	if err != nil {
@@ -73,9 +93,10 @@ func NewConsumer(brokers []string, notifSv NotificationCreator) (*Consumer, erro
 
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Consumer{
-		client:  client,
-		notifSv: notifSv,
-		cancel:  cancel,
+		client:    client,
+		notifSv:   notifSv,
+		broadcast: broadcast,
+		cancel:    cancel,
 	}
 	go c.run(ctx)
 	return c, nil
@@ -113,6 +134,8 @@ func (c *Consumer) run(ctx context.Context) {
 				c.handleRequestEvent(ctx, record.Value)
 			case "asset.assignment":
 				c.handleAssignmentEvent(ctx, record.Value)
+			case "approval.events":
+				c.handleApprovalEvent(ctx, record.Value)
 			}
 		})
 	}
@@ -190,5 +213,46 @@ func (c *Consumer) handleAssignmentEvent(ctx context.Context, data []byte) {
 				evt.FromUserID, "asset_returned", title, body, "asset", evt.AssetID,
 			)
 		}
+	}
+}
+
+func (c *Consumer) handleApprovalEvent(ctx context.Context, data []byte) {
+	var evt ApprovalEvent
+	if err := json.Unmarshal(data, &evt); err != nil {
+		slog.Warn("failed to unmarshal approval event", "error", err)
+		return
+	}
+
+	slog.Info("approval event received",
+		"request_id", evt.RequestID, "action", evt.Action, "actor", evt.ActorNodeID)
+
+	// 1. Create notification for the request creator (if someone else acted)
+	switch evt.Action {
+	case "approved":
+		if evt.CreatedBy != "" && evt.CreatedBy != evt.ActorNodeID {
+			title := fmt.Sprintf("Approval request: %s", evt.TemplateName)
+			body := "Your approval request has been approved"
+			c.notifSv.CreateNotification(ctx,
+				evt.CreatedBy, "approval_approved", title, body, "approval", evt.RequestID,
+			)
+		}
+	case "rejected":
+		if evt.CreatedBy != "" && evt.CreatedBy != evt.ActorNodeID {
+			title := fmt.Sprintf("Approval request: %s", evt.TemplateName)
+			body := "Your approval request has been rejected"
+			if evt.Comment != "" {
+				body += ": " + evt.Comment
+			}
+			c.notifSv.CreateNotification(ctx,
+				evt.CreatedBy, "approval_rejected", title, body, "approval", evt.RequestID,
+			)
+		}
+	}
+
+	// 2. Broadcast WS event for real-time cache invalidation on all clients
+	if c.broadcast != nil {
+		c.broadcast.BroadcastApprovalEvent(
+			evt.RequestID, evt.Status, evt.Action, evt.ActorNodeID, evt.TemplateName,
+		)
 	}
 }

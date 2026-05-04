@@ -17,6 +17,7 @@ import (
 	pb "ngac-platform/proto/auth"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/auth/internal/auth"
+	"ngac-platform/services/auth/internal/domain"
 	grpcserver "ngac-platform/services/auth/internal/grpc"
 	"ngac-platform/services/auth/internal/store"
 )
@@ -83,7 +84,8 @@ func setupTestServer(t *testing.T) (*grpcserver.AuthServer, *pgxpool.Pool) {
 	t.Cleanup(func() { pool.Close() })
 
 	s := store.New(pool)
-	srv := grpcserver.NewAuthServer(s, &mockPolicyReadClient{}, &mockPolicyWriteClient{pool: pool}, nil)
+	svc := domain.NewService(s, nil, &mockPolicyReadClient{}, &mockPolicyWriteClient{pool: pool}, nil, nil)
+	srv := grpcserver.NewAuthServer(svc, nil)
 	return srv, pool
 }
 
@@ -207,5 +209,5 @@ func TestLogin_UserNotFound(t *testing.T) {
 	require.Error(t, err)
 	st, ok := grpcstatus.FromError(err)
 	require.True(t, ok)
-	assert.Equal(t, codes.NotFound, st.Code())
+	assert.Equal(t, codes.Unauthenticated, st.Code())
 }

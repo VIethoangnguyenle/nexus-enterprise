@@ -1,24 +1,21 @@
-import type { HTMLAttributes, ReactNode } from 'react'
+import type { ReactNode } from 'react'
 
 type HeadingLevel = 'h1' | 'h2' | 'h3' | 'h4'
 
-interface HeadingProps extends HTMLAttributes<HTMLHeadingElement> {
+interface HeadingProps {
   as?: HeadingLevel
   children: ReactNode
+  className?: string
 }
 
 const levelStyles: Record<HeadingLevel, string> = {
-  h1: 'text-2xl font-bold tracking-tight',
-  h2: 'text-xl font-bold tracking-tight',
-  h3: 'text-base font-semibold',
-  h4: 'text-sm font-semibold',
+  h1: 'text-title text-on-surface',
+  h2: 'text-title text-on-surface',
+  h3: 'text-section text-on-surface',
+  h4: 'text-body-strong text-on-surface',
 }
 
-/** Heading typography primitive with semantic HTML level. */
-export function Heading({ as: Tag = 'h2', className = '', children, ...props }: HeadingProps) {
-  return (
-    <Tag className={`text-text-primary ${levelStyles[Tag]} ${className}`} {...props}>
-      {children}
-    </Tag>
-  )
+/** Heading using Material 3 on-surface token for maximum contrast. */
+export function Heading({ as: Tag = 'h2', children, className = '' }: HeadingProps) {
+  return <Tag className={`${levelStyles[Tag]} ${className}`}>{children}</Tag>
 }

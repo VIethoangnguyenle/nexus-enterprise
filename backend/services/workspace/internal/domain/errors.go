@@ -12,3 +12,10 @@ var (
 	// ErrInvalidInput indicates missing or malformed request fields.
 	ErrInvalidInput = errors.New("invalid input")
 )
+
+// Error type checkers for REST/gRPC layer translation.
+func IsNotFound(err error) bool     { return errors.Is(err, ErrNotFound) }
+func IsAccessDenied(err error) bool  { return errors.Is(err, ErrAccessDenied) }
+func IsAlreadyExists(err error) bool { return errors.Is(err, ErrAlreadyExists) }
+func IsInvalidInput(err error) bool  { return errors.Is(err, ErrInvalidInput) }
+

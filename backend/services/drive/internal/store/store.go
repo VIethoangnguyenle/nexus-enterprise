@@ -33,6 +33,7 @@ type DriveItem struct {
 	ObjectKey      *string
 	StorageDocID   *string
 	NGACNodeID     string
+	ScopeOAID      string
 	OwnerID        string
 	Status         string
 	TrashedAt      *time.Time
@@ -68,14 +69,22 @@ func (s *Store) InsertItem(ctx context.Context, item *DriveItem) error {
 	if item.ID == "" {
 		item.ID = uuid.New().String()
 	}
+	now := time.Now()
+	if item.CreatedAt.IsZero() {
+		item.CreatedAt = now
+	}
+	if item.UpdatedAt.IsZero() {
+		item.UpdatedAt = now
+	}
 	_, err := s.db.Exec(ctx,
 		`INSERT INTO drive_items (id, workspace_id, drive_context, drive_context_id, parent_id,
 			item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-			owner_id, status)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+			scope_oa_id, owner_id, status)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
 		item.ID, item.WorkspaceID, item.DriveContext, nilStr(item.DriveContextID),
 		item.ParentID, item.ItemType, item.Name, item.MimeType, item.SizeBytes,
-		item.ObjectKey, item.StorageDocID, item.NGACNodeID, item.OwnerID, item.Status)
+		item.ObjectKey, item.StorageDocID, item.NGACNodeID, nilStr(item.ScopeOAID),
+		item.OwnerID, item.Status)
 	return err
 }
 
@@ -85,12 +94,12 @@ func (s *Store) GetItem(ctx context.Context, id string) (*DriveItem, error) {
 	err := s.db.QueryRow(ctx,
 		`SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
 			item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-			owner_id, status, trashed_at, created_at, updated_at
+			COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
 		 FROM drive_items WHERE id = $1`, id).
 		Scan(&item.ID, &item.WorkspaceID, &item.DriveContext, &item.DriveContextID,
 			&item.ParentID, &item.ItemType, &item.Name, &item.MimeType, &item.SizeBytes,
-			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.OwnerID,
-			&item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt)
+			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.ScopeOAID,
+			&item.OwnerID, &item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -106,7 +115,7 @@ func (s *Store) ListChildren(ctx context.Context, parentID *string, workspaceID,
 		rows, err = s.db.Query(ctx,
 			`SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
 				item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-				owner_id, status, trashed_at, created_at, updated_at
+				COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
 			 FROM drive_items
 			 WHERE parent_id IS NULL AND workspace_id = $1
 			   AND drive_context = $2 AND COALESCE(drive_context_id,'') = $3
@@ -116,7 +125,7 @@ func (s *Store) ListChildren(ctx context.Context, parentID *string, workspaceID,
 		rows, err = s.db.Query(ctx,
 			`SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
 				item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-				owner_id, status, trashed_at, created_at, updated_at
+				COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
 			 FROM drive_items
 			 WHERE parent_id = $1 AND status = 'active'
 			 ORDER BY item_type DESC, name ASC`, *parentID)
@@ -131,13 +140,72 @@ func (s *Store) ListChildren(ctx context.Context, parentID *string, workspaceID,
 		item := &DriveItem{}
 		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.DriveContext, &item.DriveContextID,
 			&item.ParentID, &item.ItemType, &item.Name, &item.MimeType, &item.SizeBytes,
-			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.OwnerID,
-			&item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.ScopeOAID,
+			&item.OwnerID, &item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+// ListByScopes returns all active items whose scope_oa_id matches any of the
+// given scope IDs. Used for NGAC scope-based listing where the caller has
+// pre-resolved their accessible scopes via ResolveAccessibleScopes.
+// This replaces per-item CheckAccess loops with a single indexed SQL query.
+func (s *Store) ListByScopes(ctx context.Context, scopeOAIDs []string, cursor string, limit int) ([]*DriveItem, string, error) {
+	if len(scopeOAIDs) == 0 {
+		return nil, "", nil
+	}
+	if limit <= 0 {
+		limit = 50
+	}
+
+	var rows pgx.Rows
+	var err error
+	if cursor == "" {
+		rows, err = s.db.Query(ctx,
+			`SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
+				item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
+				COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
+			 FROM drive_items
+			 WHERE scope_oa_id = ANY($1) AND status = 'active'
+			 ORDER BY created_at DESC
+			 LIMIT $2`, scopeOAIDs, limit+1)
+	} else {
+		rows, err = s.db.Query(ctx,
+			`SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
+				item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
+				COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
+			 FROM drive_items
+			 WHERE scope_oa_id = ANY($1) AND status = 'active'
+			   AND created_at < $2
+			 ORDER BY created_at DESC
+			 LIMIT $3`, scopeOAIDs, cursor, limit+1)
+	}
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	var items []*DriveItem
+	for rows.Next() {
+		item := &DriveItem{}
+		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.DriveContext, &item.DriveContextID,
+			&item.ParentID, &item.ItemType, &item.Name, &item.MimeType, &item.SizeBytes,
+			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.ScopeOAID,
+			&item.OwnerID, &item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			return nil, "", err
+		}
+		items = append(items, item)
+	}
+
+	var nextCursor string
+	if len(items) > limit {
+		nextCursor = items[limit-1].CreatedAt.Format("2006-01-02T15:04:05.999999Z")
+		items = items[:limit]
+	}
+	return items, nextCursor, nil
 }
 
 // UpdateParent changes the parent of a drive item (move operation).
@@ -153,6 +221,15 @@ func (s *Store) UpdateName(ctx context.Context, id, newName string) error {
 	_, err := s.db.Exec(ctx,
 		`UPDATE drive_items SET name = $1, updated_at = NOW() WHERE id = $2`,
 		newName, id)
+	return err
+}
+
+// UpdateNGACNodeID updates the NGAC node ID for a drive item.
+// Used when moving files to a new parent folder — files inherit the parent's OA.
+func (s *Store) UpdateNGACNodeID(ctx context.Context, id, ngacNodeID string) error {
+	_, err := s.db.Exec(ctx,
+		`UPDATE drive_items SET ngac_node_id = $1, updated_at = NOW() WHERE id = $2`,
+		ngacNodeID, id)
 	return err
 }
 
@@ -212,7 +289,7 @@ func (s *Store) GetChildFiles(ctx context.Context, parentID string) ([]*DriveIte
 		)
 		SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
 			item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-			owner_id, status, trashed_at, created_at, updated_at
+			COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
 		FROM drive_items WHERE id IN (SELECT id FROM tree) AND item_type = 'file'`, parentID)
 	if err != nil {
 		return nil, err
@@ -224,8 +301,8 @@ func (s *Store) GetChildFiles(ctx context.Context, parentID string) ([]*DriveIte
 		item := &DriveItem{}
 		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.DriveContext, &item.DriveContextID,
 			&item.ParentID, &item.ItemType, &item.Name, &item.MimeType, &item.SizeBytes,
-			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.OwnerID,
-			&item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
+			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.ScopeOAID,
+			&item.OwnerID, &item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
 			return nil, err
 		}
 		items = append(items, item)
@@ -268,7 +345,7 @@ func (s *Store) FindRootByContext(ctx context.Context, workspaceID, driveContext
 	err := s.db.QueryRow(ctx,
 		`SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
 			item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-			owner_id, status, trashed_at, created_at, updated_at
+			COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
 		 FROM drive_items
 		 WHERE workspace_id = $1 AND drive_context = $2
 		   AND COALESCE(drive_context_id,'') = $3
@@ -276,8 +353,8 @@ func (s *Store) FindRootByContext(ctx context.Context, workspaceID, driveContext
 		 LIMIT 1`, workspaceID, driveContext, driveContextID).
 		Scan(&item.ID, &item.WorkspaceID, &item.DriveContext, &item.DriveContextID,
 			&item.ParentID, &item.ItemType, &item.Name, &item.MimeType, &item.SizeBytes,
-			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.OwnerID,
-			&item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt)
+			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.ScopeOAID,
+			&item.OwnerID, &item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}

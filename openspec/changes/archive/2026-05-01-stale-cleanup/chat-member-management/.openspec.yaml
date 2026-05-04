@@ -1,0 +1,44 @@
+schema: spec-driven
+created: "2026-05-01"
+
+pipeline:
+  current_phase: complete
+  status: locked
+
+  phases:
+    ceo:
+      status: done
+      completed_at: "2026-05-01T12:13:00Z"
+      output: proposal.md
+    ba:
+      status: done
+      completed_at: "2026-05-01T12:15:00Z"
+      output: specs/
+    ux:
+      status: done
+      completed_at: "2026-05-01T12:17:00Z"
+      output: design.md
+    dev:
+      status: done
+      completed_at: "2026-05-01T12:20:00Z"
+      output: code
+      checkpoint: null
+    qc:
+      status: done
+      completed_at: "2026-05-01T12:27:00Z"
+      output: qa-memory.json
+
+  loops:
+    total: 0
+    max: 5
+    history: []
+
+  spec_lock:
+    locked_at: "2026-05-01T12:15:22Z"
+    locked_by: BA
+    spec_hash: "eae226de04a59bf7c3484375ada5ba2ab28eac383912a1f293dfbecabb4218e8"
+    file_hashes:
+      specs/add-member/spec.md: "6b7d370d14c59d61452509172f8835d5400d967b4b175994e3665323965c0908"
+      specs/overview.md: "ec57a82a94b855609df4b04d7f8c3f48e003f5b47bace7cded20dd661af98762"
+      specs/remove-member/spec.md: "b45506dbf8fb77f256747adc8efcba3c2e1d4d27a5afbc5acd2cce174cf5ef32"
+    unlock_count: 0

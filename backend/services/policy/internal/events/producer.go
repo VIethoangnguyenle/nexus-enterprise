@@ -20,10 +20,13 @@ type AccessCheckedEvent struct {
 }
 
 // GraphMutatedEvent records graph structure changes for audit and replay.
+// Downstream consumers (e.g., approval reconciliation) use these to react to role changes.
 type GraphMutatedEvent struct {
-	MutationType string   `json:"mutation_type"`
-	NodeIDs      []string `json:"node_ids"`
-	OperatorID   string   `json:"operator_id,omitempty"`
+	MutationType string   `json:"mutation_type"` // create_assignment, remove_assignment, create_association, delete_node
+	NodeIDs      []string `json:"node_ids"`      // [childID, parentID] for assignments; [uaID, oaID] for associations
+	WorkspaceID  string   `json:"workspace_id,omitempty"` // tenant workspace affected (for targeted downstream invalidation)
+	ChildType    string   `json:"child_type,omitempty"`  // "U", "UA", "OA" — node type of the child
+	ParentType   string   `json:"parent_type,omitempty"` // "UA", "OA", "PC" — node type of the parent
 	Timestamp    int64    `json:"timestamp"`
 }
 
@@ -86,6 +89,22 @@ func (p *Producer) PublishGraphMutated(mutationType string, nodeIDs []string) {
 	evt := GraphMutatedEvent{
 		MutationType: mutationType,
 		NodeIDs:      nodeIDs,
+		Timestamp:    time.Now().UnixMilli(),
+	}
+	p.publishAsync("ngac.graph.mutated", evt)
+}
+
+// PublishGraphMutatedWithTypes publishes an enriched graph mutation event
+// that includes node types for downstream reconciliation consumers.
+func (p *Producer) PublishGraphMutatedWithTypes(mutationType string, nodeIDs []string, childType, parentType string) {
+	if p == nil {
+		return
+	}
+	evt := GraphMutatedEvent{
+		MutationType: mutationType,
+		NodeIDs:      nodeIDs,
+		ChildType:    childType,
+		ParentType:   parentType,
 		Timestamp:    time.Now().UnixMilli(),
 	}
 	p.publishAsync("ngac.graph.mutated", evt)

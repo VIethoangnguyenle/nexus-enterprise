@@ -202,7 +202,7 @@ func (h *Hub) broadcastTyping(channelID, username string, sender *Client) {
 
 // subscribeRedis listens on channel:* pattern and delivers to local clients.
 func (h *Hub) subscribeRedis() {
-	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*")
+	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", "presence")
 	defer pubsub.Close()
 
 	slog.Info("redis pub/sub subscriber started")
@@ -219,7 +219,9 @@ func (h *Hub) subscribeRedis() {
 			}
 			payload := []byte(msg.Payload)
 
-			if len(msg.Channel) > 5 && msg.Channel[:5] == "user:" {
+			if msg.Channel == "presence" {
+				h.broadcastToAll(payload)
+			} else if len(msg.Channel) > 5 && msg.Channel[:5] == "user:" {
 				userID := msg.Channel[5:]
 				h.sendToUser(userID, payload)
 			} else if len(msg.Channel) > 8 && msg.Channel[:8] == "channel:" {
@@ -235,6 +237,20 @@ func (h *Hub) sendToUser(userID string, data []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	if clients, ok := h.users[userID]; ok {
+		for client := range clients {
+			select {
+			case client.send <- data:
+			default:
+			}
+		}
+	}
+}
+
+// broadcastToAll delivers data to every connected WebSocket client.
+func (h *Hub) broadcastToAll(data []byte) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, clients := range h.users {
 		for client := range clients {
 			select {
 			case client.send <- data:
@@ -370,6 +386,8 @@ func (c *Client) handleAuth(req *pb.AuthRequest) bool {
 	c.hub.mu.Unlock()
 
 	c.sendAuthResponse(true, claims.UserID, "")
+	// Broadcast presence online event
+	c.hub.BroadcastPresence(claims.UserID, claims.Username, "online")
 	return true
 }
 
@@ -391,6 +409,16 @@ func (c *Client) sendAuthResponse(ok bool, userID, reason string) {
 
 func (c *Client) readPump() {
 	defer func() {
+		// Broadcast offline if this was the user's last connection
+		if c.authenticated {
+			c.hub.mu.RLock()
+			remaining := len(c.hub.users[c.userID])
+			c.hub.mu.RUnlock()
+			// Will be 0 after UnsubscribeAll removes this client
+			if remaining <= 1 {
+				c.hub.BroadcastPresence(c.userID, c.username, "offline")
+			}
+		}
 		c.hub.UnsubscribeAll(c)
 		c.conn.Close()
 	}()
@@ -535,4 +563,74 @@ func (h *Hub) BroadcastAssetUpdated(assetID, newState string) {
 // Helper to create a timestamppb from time.Time — used by notification consumer.
 func TimestampProto(t time.Time) *timestamppb.Timestamp {
 	return timestamppb.New(t)
+}
+
+// BroadcastApprovalEvent sends an approval status change to all connected users.
+// All users may be affected: approvers see pending count change, requesters see
+// status updates, department views refresh.
+func (h *Hub) BroadcastApprovalEvent(requestID, status, action, actorNodeID, templateName string) {
+	env := &pb.ServerEnvelope{
+		Payload: &pb.ServerEnvelope_ApprovalEvent{
+			ApprovalEvent: &pb.ApprovalEvent{
+				RequestId:    requestID,
+				Status:       status,
+				Action:       action,
+				ActorNodeId:  actorNodeID,
+				TemplateName: templateName,
+			},
+		},
+	}
+	data := marshalEnvelope(env)
+	if data == nil {
+		return
+	}
+
+	// Broadcast to all connected users
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, clients := range h.users {
+		for client := range clients {
+			select {
+			case client.send <- data:
+			default:
+			}
+		}
+	}
+}
+
+// BroadcastPresence sends a presence event (online/offline) to all connected users.
+func (h *Hub) BroadcastPresence(userID, username, status string) {
+	env := &pb.ServerEnvelope{
+		Payload: &pb.ServerEnvelope_PresenceEvent{
+			PresenceEvent: &pb.PresenceEvent{
+				UserId:   userID,
+				Username: username,
+				Status:   status,
+			},
+		},
+	}
+	data := marshalEnvelope(env)
+	if data == nil {
+		return
+	}
+
+	if h.rdb != nil {
+		// Publish to all instances
+		if err := h.rdb.Publish(h.ctx, "presence", data).Err(); err != nil {
+			slog.Warn("redis presence publish failed", "error", err)
+		}
+		return
+	}
+
+	// Local-only broadcast
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for _, clients := range h.users {
+		for client := range clients {
+			select {
+			case client.send <- data:
+			default:
+			}
+		}
+	}
 }

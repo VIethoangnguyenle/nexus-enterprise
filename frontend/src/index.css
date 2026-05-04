@@ -1,61 +1,439 @@
 @import "tailwindcss";
 
-/* =============================== */
-/* NGAC Constellation Theme        */
-/* Tailwind v4 CSS-first tokens    */
-/* =============================== */
+/* ========================================================= */
+/* NGAC Design System — Nexus Hub Enterprise                 */
+/* Material 3 light surfaces · Manrope type · Stitch DNA     */
+/* Tailwind v4 CSS-first tokens                              */
+/* ========================================================= */
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Menlo', 'Monaco', monospace;
 
-  --color-bg-primary: #0f1218;
-  --color-bg-secondary: #161b22;
-  --color-bg-tertiary: #1c2128;
-  --color-bg-rail: #0d1117;
-  --color-bg-hover: rgba(255, 255, 255, 0.04);
-  --color-bg-active: rgba(99, 102, 241, 0.12);
-  --color-bg-glass: rgba(255, 255, 255, 0.03);
+  /* --- Material 3 Surface System (Light) --- */
+  --color-surface: #f9f9ff;
+  --color-surface-bright: #f9f9ff;
+  --color-surface-dim: #cfdaf2;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f0f3ff;
+  --color-surface-container: #e7eeff;
+  --color-surface-container-high: #dee8ff;
+  --color-surface-container-highest: #d8e3fb;
+  --color-background: #f9f9ff;
 
-  --color-border: rgba(255, 255, 255, 0.06);
-  --color-border-focus: #6366f1;
+  /* --- On-Surface Text --- */
+  --color-on-surface: #111c2d;
+  --color-on-surface-variant: #434655;
+  --color-on-background: #111c2d;
 
-  --color-text-primary: #e8eaed;
-  --color-text-secondary: #8b949e;
-  --color-text-muted: #636e7b;
 
-  --color-accent: #6366f1;
-  --color-accent-hover: #818cf8;
-  --color-accent-glow: rgba(99, 102, 241, 0.25);
+  /* --- Primary --- */
+  --color-primary: #2563EB;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-container: #2563eb;
+  --color-primary-fixed: #dbe1ff;
+  --color-primary-fixed-dim: #b4c5ff;
+  --color-on-primary: #ffffff;
+  --color-on-primary-container: #eeefff;
 
-  --color-success: #10b981;
-  --color-success-bg: rgba(16, 185, 129, 0.1);
-  --color-warning: #f59e0b;
-  --color-warning-bg: rgba(245, 158, 11, 0.1);
-  --color-danger: #ef4444;
-  --color-danger-bg: rgba(239, 68, 68, 0.1);
-  --color-info: #06b6d4;
-  --color-info-bg: rgba(6, 182, 212, 0.1);
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  /* --- Secondary --- */
+  --color-secondary: #505f76;
+  --color-secondary-container: #d0e1fb;
 
-  --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.4);
-  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.25);
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-container: #54647a;
 
-  --animate-fade-in: fade-in 0.2s ease;
-  --animate-slide-up: slide-up 0.25s ease;
-  --animate-slide-left: slide-left 0.2s ease;
+  /* --- Tertiary --- */
+  --color-tertiary: #515659;
+
+
+  /* --- Outline --- */
+  --color-outline: #737686;
+  --color-outline-variant: #c3c6d7;
+
+  /* --- Error / Functional --- */
+  --color-error: #ba1a1a;
+  --color-error-container: #ffdad6;
+  --color-on-error: #ffffff;
+  --color-on-error-container: #93000a;
+  --color-success: #16a34a;
+  --color-success-bg: rgba(22, 163, 74, 0.08);
+  --color-warning: #d97706;
+  --color-warning-bg: rgba(217, 119, 6, 0.08);
+  --color-danger: #ba1a1a;
+  --color-danger-bg: rgba(186, 26, 26, 0.06);
+  --color-info: #0284c7;
+  --color-info-bg: rgba(2, 132, 199, 0.08);
+
+  /* --- Legacy Semantic Aliases (backward compat) --- */
+  --color-bg-primary: var(--color-surface);
+  --color-bg-secondary: var(--color-surface-bright);
+  --color-bg-tertiary: var(--color-surface-container-low);
+
+  --color-bg-hover: var(--color-surface-container);
+  --color-bg-active: rgba(37, 99, 235, 0.08);
+  --color-bg-glass: rgba(0, 0, 0, 0.03);
+  --color-text-primary: var(--color-on-surface);
+  --color-text-secondary: var(--color-on-surface-variant);
+  --color-text-muted: var(--color-outline);
+  --color-border: var(--color-outline-variant);
+  --color-border-subtle: rgba(0, 0, 0, 0.05);
+
+
+  --color-border-solid: var(--color-outline-variant);
+  --color-border-focus: var(--color-primary);
+  --color-accent: var(--color-primary);
+  --color-accent-hover: var(--color-primary-hover);
+  --color-accent-bg: rgba(37, 99, 235, 0.08);
+  --color-accent-glow: rgba(37, 99, 235, 0.15);
+
+  /* --- Status Indicators (semantic) --- */
+  --color-status-online: #16a34a;
+  --color-status-online-bg: rgba(22, 163, 74, 0.08);
+  --color-status-online-border: rgba(22, 163, 74, 0.25);
+  --color-status-offline: var(--color-outline-variant);
+  --color-status-offline-bg: rgba(0, 0, 0, 0.04);
+  --color-status-offline-border: rgba(0, 0, 0, 0.08);
+  --color-status-meeting: #d97706;
+  --color-status-meeting-bg: rgba(217, 119, 6, 0.08);
+  --color-status-meeting-border: rgba(217, 119, 6, 0.25);
+
+  /* --- Legacy Gray Aliases (DEPRECATED — migrate to M3 tokens) ---
+   * These aliases exist for backward compatibility. New code MUST use M3 tokens:
+   *   gray-1  → surface-container-lowest
+   *   gray-2  → surface-bright
+   *   gray-3  → surface-container-low
+   *   gray-4  → surface (default bg)
+   *   gray-5  → surface-container
+   *   gray-6  → surface-container-high
+   *   gray-8  → outline-variant
+   *   gray-9  → outline
+   *   gray-10 → on-surface-variant
+   *   gray-11 → on-surface-variant
+   *   gray-12 → on-surface
+   *   gray-13 → on-surface
+   */
+  --color-gray-1: var(--color-surface-container-lowest);
+  --color-gray-2: var(--color-surface-bright);
+  --color-gray-3: var(--color-surface-container-low);
+  --color-gray-4: var(--color-surface);
+  --color-gray-5: var(--color-surface-container);
+  --color-gray-6: var(--color-surface-container-high);
+
+  --color-gray-8: var(--color-outline-variant);
+  --color-gray-9: var(--color-outline);
+  --color-gray-10: var(--color-on-surface-variant);
+  --color-gray-11: var(--color-on-surface-variant);
+  --color-gray-12: var(--color-on-surface);
+  --color-gray-13: var(--color-on-surface);
+
+
+  /* --- Border Radius --- */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* --- Depth / Elevation Shadows (light mode) --- */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-raised: 0 2px 8px -2px rgba(0, 0, 0, 0.08);
+
+  --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.15);
+
+  /* --- Motion — Durations --- */
+  --duration-instant: 50ms;
+  --duration-fast: 100ms;
+  --duration-normal: 200ms;
+  --duration-slow: 300ms;
+
+  /* --- Motion — Easings --- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+
+  /* --- Animations --- */
+  --animate-fade-in: fade-in var(--duration-normal) var(--ease-out);
+  --animate-slide-up: slide-up var(--duration-normal) var(--ease-out);
+  --animate-slide-left: slide-left var(--duration-normal) var(--ease-out);
+  --animate-scale-in: scale-in var(--duration-normal) var(--ease-spring);
   --animate-spin: spin 0.7s linear infinite;
 }
 
-/* Animations */
+/* ========================= */
+/* Root — Font Features      */
+/* ========================= */
+:root {
+  font-feature-settings: "cv01", "ss03";
+}
+
+/* ========================= */
+/* Typography Utility Roles  */
+/* Aligned with Stitch DNA   */
+/* ========================= */
+@utility text-h1 {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 40px;
+  letter-spacing: -0.02em;
+}
+@utility text-h2 {
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 32px;
+  letter-spacing: -0.01em;
+}
+@utility text-h3 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+@utility text-title {
+  font-size: 18px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.3px;
+}
+@utility text-section {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.40;
+  letter-spacing: -0.15px;
+}
+@utility text-body {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 20px;
+}
+@utility text-body-ui {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+@utility text-body-strong {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 20px;
+}
+@utility text-body-lg {
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 24px;
+}
+@utility text-small {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 18px;
+}
+@utility text-small-ui {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 18px;
+}
+@utility text-caption {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.40;
+}
+@utility text-caption-ui {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.40;
+}
+@utility text-label-caps {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 16px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+@utility text-overline {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+@utility text-micro {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.30;
+  letter-spacing: 0.3px;
+}
+
+
+/* Scrollbar hide utility */
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+
+/* ========================= */
+/* Focus Ring Utility         */
+/* ========================= */
+@utility focus-ring {
+  &:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--color-surface-container-lowest), 0 0 0 4px var(--color-primary);
+  }
+}
+
+/* ========================= */
+/* Animations                */
+/* ========================= */
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slide-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes slide-left { from { opacity: 0; transform: translateX(16px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes scale-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 5px; }
+/* Scrollbar — Nexus style: subtle, light mode */
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.08); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.15); }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 2px; transition: background 0.2s; }
+*:hover > ::-webkit-scrollbar-thumb,
+::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.12); }
+
+/* TipTap Editor */
+.chat-editor-content {
+  font-size: 0.875rem;
+  line-height: 1.625;
+  color: var(--color-on-surface);
+  min-height: 20px;
+  outline: none;
+}
+.chat-editor-content p { margin: 0; }
+.chat-editor-content p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-outline);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+.chat-editor-content code {
+  background: var(--color-surface-container);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+  color: var(--color-primary);
+}
+.chat-editor-content pre {
+  background: var(--color-surface-container-low);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem;
+  margin: 0.25rem 0;
+  font-size: 0.75rem;
+}
+.chat-editor-content blockquote {
+  border-left: 2px solid var(--color-primary-fixed-dim);
+  padding-left: 0.75rem;
+  margin: 0.25rem 0;
+  color: var(--color-on-surface-variant);
+}
+.chat-editor-content ul, .chat-editor-content ol {
+  padding-left: 1.25rem;
+  margin: 0.25rem 0;
+}
+
+/* Message HTML rendering */
+.message-html code {
+  background: var(--color-surface-container);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 0.8125rem;
+  color: var(--color-primary);
+}
+.message-html pre {
+  background: var(--color-surface-container-low);
+  border-radius: var(--radius-sm);
+  padding: 0.5rem;
+  margin: 0.25rem 0;
+  font-size: 0.75rem;
+}
+.message-html blockquote {
+  border-left: 2px solid var(--color-primary-fixed-dim);
+  padding-left: 0.75rem;
+  margin: 0.25rem 0;
+  color: var(--color-on-surface-variant);
+}
+
+
+/* PeekPanel: use custom property for width on desktop only */
+@media (min-width: 1024px) {
+  [style*="--peek-w"] {
+    width: var(--peek-w, 360px);
+  }
+}
+
+/* Reaction pop animation */
+@keyframes reaction-pop {
+  0% { transform: scale(0.5); opacity: 0; }
+  50% { transform: scale(1.2); }
+  100% { transform: scale(1); opacity: 1; }
+}
+@utility animate-reaction-pop {
+  animation: reaction-pop var(--duration-slow) var(--ease-spring);
+}
+
+/* Message slide-in animation */
+@keyframes msg-slide-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@utility animate-msg-slide-in {
+  animation: msg-slide-in var(--duration-normal) var(--ease-out);
+}
+
+/* Panel slide transition */
+@keyframes panel-slide {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@utility animate-panel-slide {
+  animation: panel-slide var(--duration-normal) var(--ease-out);
+}
+
+/* Alias — reuses panel-slide keyframes */
+@utility animate-slide-in-right {
+  animation: panel-slide var(--duration-normal) var(--ease-out);
+}
+
+/* Dialog scale-in animation */
+@utility animate-scale-in {
+  animation: scale-in var(--duration-normal) var(--ease-spring);
+}
+@utility animate-fade-in {
+  animation: fade-in var(--duration-normal) var(--ease-out);
+}
+
+/* ========================= */
+/* Nexus UI — Resize Handle  */
+/* (pseudo-element needs CSS) */
+/* ========================= */
+@utility resize-handle {
+  width: 4px;
+  flex-shrink: 0;
+  cursor: col-resize;
+  background: transparent;
+  transition: background var(--duration-fast);
+  position: relative;
+  z-index: 10;
+  &:hover, &.is-dragging {
+    background: var(--color-primary);
+  }
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0 -4px;
+  }
+}
+
+/* ========================= */
+/* Auth Background Utility   */
+/* ========================= */
+@utility bg-nexus-auth {
+  background-image: radial-gradient(circle at 100% 0%, #dee8ff 0%, transparent 40%),
+                    radial-gradient(circle at 0% 100%, #e7eeff 0%, transparent 40%);
+}

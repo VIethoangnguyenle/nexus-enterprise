@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/health"
@@ -19,6 +21,7 @@ import (
 
 	pb "ngac-platform/proto/policy"
 	pgrpc "ngac-platform/services/policy/internal/grpc"
+	_ "ngac-platform/services/policy/internal/metrics" // register metrics
 	"ngac-platform/services/policy/internal/ngac"
 )
 
@@ -51,12 +54,6 @@ func main() {
 	}
 	slog.Info("graph loaded", "nodes", len(graph.Nodes))
 
-	ce := ngac.NewConstraintEngine()
-	if os.Getenv("ENABLE_WEEKDAY_CONSTRAINT") == "true" {
-		ce.Register(ngac.WeekdayOnlyConstraint)
-		slog.Info("weekday-only constraint enabled")
-	}
-
 	rdb, err := connectRedis(ctx, redisURL)
 	if err != nil {
 		slog.Warn("redis unavailable, L1 caching disabled", "error", err)
@@ -68,6 +65,19 @@ func main() {
 	cte := ngac.NewCTEEvaluator(pool)
 	materialized := ngac.NewMaterializedAccess(pool)
 	versionTracker := ngac.NewVersionTracker(pool)
+	operationStore := ngac.NewOperationStore(pool)
+	prohibitionStore := ngac.NewProhibitionStore(pool)
+
+	// Assemble read-path components: Cache (PIP) + Engine (PDP) → Evaluator
+	decisionCache := ngac.NewLayeredCache(rdb, materialized, versionTracker)
+	decisionEngine := ngac.NewDecisionEngine(store.GetGraph(), cte, prohibitionStore)
+
+	// Shard-aware graph resolution: per-workspace subgraph loading + LRU eviction
+	shardMgr := ngac.NewShardManager(pool, ngac.ShardManagerConfig{MaxShards: 1000})
+	decisionEngine.(interface{ SetShardManager(ngac.ShardManager) }).SetShardManager(shardMgr)
+	slog.Info("shard manager wired (read)", "max_shards", 1000)
+
+	evaluator := ngac.NewAccessEvaluator(decisionCache, decisionEngine)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
@@ -82,7 +92,7 @@ func main() {
 		),
 	)
 
-	readServer := pgrpc.NewReadServer(store, ce, rdb, cte, materialized, versionTracker)
+	readServer := pgrpc.NewReadServer(store, rdb, evaluator, operationStore, prohibitionStore)
 	pb.RegisterPolicyReadServiceServer(srv, readServer)
 
 	healthSrv := health.NewServer()
@@ -107,6 +117,18 @@ func main() {
 		case <-time.After(15 * time.Second):
 			slog.Warn("graceful stop timed out, forcing stop")
 			srv.Stop()
+		}
+	}()
+
+	// Prometheus metrics HTTP server
+	metricsPort := envOr("METRICS_PORT", "9091")
+	go func() {
+		mux := http.NewServeMux()
+		mux.Handle("/metrics", promhttp.Handler())
+		metricsSrv := &http.Server{Addr: ":" + metricsPort, Handler: mux}
+		slog.Info("prometheus metrics serving", "port", metricsPort)
+		if err := metricsSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Warn("metrics server error", "error", err)
 		}
 	}()
 

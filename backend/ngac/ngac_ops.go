@@ -51,23 +51,35 @@ const (
 )
 
 // --- Workspace naming conventions ---
-// Every workspace creates a set of NGAC nodes with predictable names.
-// These functions are the ONLY place those name patterns should live.
+// Every workspace creates a set of NGAC nodes named by workspace ID.
+// Using ID (UUID) instead of display name prevents collisions.
 
-func PCName(wsName string) string            { return fmt.Sprintf("PC_%s", wsName) }
-func OwnersUAName(wsName string) string      { return fmt.Sprintf("%s_Owners", wsName) }
-func MembersUAName(wsName string) string      { return fmt.Sprintf("%s_Members", wsName) }
-func MgmtOAName(wsName string) string         { return fmt.Sprintf("%s_Mgmt", wsName) }
-func DocumentsOAName(wsName string) string    { return fmt.Sprintf("%s_Documents", wsName) }
-func DraftDocsOAName(wsName string) string    { return fmt.Sprintf("%s_DraftDocs", wsName) }
-func ApprovedDocsOAName(wsName string) string { return fmt.Sprintf("%s_ApprovedDocs", wsName) }
-func ChannelsOAName(wsName string) string     { return fmt.Sprintf("%s_Channels", wsName) }
+func PCName(wsID string) string            { return fmt.Sprintf("PC_%s", wsID) }
+func OwnersUAName(wsID string) string      { return fmt.Sprintf("%s_Owners", wsID) }
+func MembersUAName(wsID string) string      { return fmt.Sprintf("%s_Members", wsID) }
+func MgmtOAName(wsID string) string         { return fmt.Sprintf("%s_Mgmt", wsID) }
+func DocumentsOAName(wsID string) string    { return fmt.Sprintf("%s_Documents", wsID) }
+func DraftDocsOAName(wsID string) string    { return fmt.Sprintf("%s_DraftDocs", wsID) }
+func ApprovedDocsOAName(wsID string) string { return fmt.Sprintf("%s_ApprovedDocs", wsID) }
+func ChannelsOAName(wsID string) string     { return fmt.Sprintf("%s_Channels", wsID) }
+
+// --- Department naming conventions ---
+
+func DeptUAName(name string) string { return fmt.Sprintf("Dept_%s", name) }
 
 // --- Channel naming conventions ---
 
-func ChannelContentOAName(chName string) string { return fmt.Sprintf("Ch_%s_Content", chName) }
-func ChannelMembersUAName(chName string) string { return fmt.Sprintf("Ch_%s_Members", chName) }
-func ChannelDriveName(chName string) string     { return fmt.Sprintf("Ch_%s_Drive", chName) }
+func ChannelContentOAName(chID string) string { return fmt.Sprintf("Ch_%s_Content", chID) }
+func ChannelMembersUAName(chID string) string { return fmt.Sprintf("Ch_%s_Members", chID) }
+func ChannelDriveName(chID string) string     { return fmt.Sprintf("Ch_%s_Drive", chID) }
+
+// --- Tenant naming conventions ---
+
+// TenantMemberUAName returns the UA name for regular members of a tenant.
+func TenantMemberUAName(tenantID string) string { return fmt.Sprintf("TenantMember_%s", tenantID) }
+
+// TenantOwnerUAName returns the UA name for owners of a tenant.
+func TenantOwnerUAName(tenantID string) string { return fmt.Sprintf("TenantOwner_%s", tenantID) }
 
 // --- Drive naming conventions ---
 
