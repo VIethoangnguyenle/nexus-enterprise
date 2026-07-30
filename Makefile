@@ -162,13 +162,13 @@ dev: dev-infra
 	@mkdir -p $(DEV_LOGS)
 	@echo "▸ Starting native Go services..."
 	@# Source env and start each service
-	@set -a && . ./$(DEV_ENV) && set +a && \
+	@set -a; . ./$(DEV_ENV); set +a; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
 	REDIS_URL=$$REDIS_URL_POLICY \
 	KAFKA_BROKERS=$$KAFKA_BROKERS \
 	GRPC_PORT=50051 \
-	go run ./backend/services/policy/cmd/ > $(DEV_LOGS)/policy.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	sh -c 'cd backend/services/policy && exec go run ./cmd/' > $(DEV_LOGS)/policy.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  policy       → gRPC :50051"; \
 	sleep 2; \
 	\
@@ -180,7 +180,7 @@ dev: dev-infra
 	JWT_SECRET=$$JWT_SECRET \
 	GRPC_PORT=50052 \
 	REST_PORT=$$AUTH_REST_PORT \
-	go run ./backend/services/auth/cmd/ > $(DEV_LOGS)/auth.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	sh -c 'cd backend/services/auth && exec go run ./cmd/' > $(DEV_LOGS)/auth.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  auth         → gRPC :50052  REST :$$AUTH_REST_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -193,7 +193,7 @@ dev: dev-infra
 	JWT_SECRET=$$JWT_SECRET \
 	GRPC_PORT=50053 \
 	REST_PORT=$$WORKSPACE_REST_PORT \
-	go run ./backend/services/workspace/cmd/ > $(DEV_LOGS)/workspace.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	sh -c 'cd backend/services/workspace && exec go run ./cmd/' > $(DEV_LOGS)/workspace.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  workspace    → gRPC :50053  REST :$$WORKSPACE_REST_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -206,7 +206,7 @@ dev: dev-infra
 	JWT_SECRET=$$JWT_SECRET \
 	GRPC_PORT=50054 \
 	REST_PORT=$$DOCUMENT_REST_PORT \
-	go run ./backend/services/document/cmd/ > $(DEV_LOGS)/document.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	sh -c 'cd backend/services/document && exec go run ./cmd/' > $(DEV_LOGS)/document.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  document     → gRPC :50054  REST :$$DOCUMENT_REST_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -219,7 +219,7 @@ dev: dev-infra
 	GRPC_PORT=50055 \
 	WS_PORT=$$WS_PORT \
 	REST_PORT=$$MESSAGING_REST_PORT \
-	go run ./backend/services/messaging/cmd/ > $(DEV_LOGS)/messaging.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	sh -c 'cd backend/services/messaging && exec go run ./cmd/' > $(DEV_LOGS)/messaging.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  messaging    → gRPC :50055  REST :$$MESSAGING_REST_PORT  WS :$$WS_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -228,7 +228,7 @@ dev: dev-infra
 	JWT_SECRET=$$JWT_SECRET \
 	GRPC_PORT=50056 \
 	REST_PORT=$$ASSET_REST_PORT \
-	go run ./backend/services/asset/cmd/ > $(DEV_LOGS)/asset.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	sh -c 'cd backend/services/asset && exec go run ./cmd/' > $(DEV_LOGS)/asset.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  asset        → gRPC :50056  REST :$$ASSET_REST_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -238,7 +238,7 @@ dev: dev-infra
 	JWT_SECRET=$$JWT_SECRET \
 	GRPC_PORT=50057 \
 	REST_PORT=$$DRIVE_REST_PORT \
-	go run ./backend/services/drive/cmd/ > $(DEV_LOGS)/drive.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	sh -c 'cd backend/services/drive && exec go run ./cmd/' > $(DEV_LOGS)/drive.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  drive        → gRPC :50057  REST :$$DRIVE_REST_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -246,7 +246,7 @@ dev: dev-infra
 	JWT_SECRET=$$JWT_SECRET \
 	GRPC_PORT=50058 \
 	REST_PORT=$$APPROVAL_REST_PORT \
-	go run ./backend/services/approval/cmd/ > $(DEV_LOGS)/approval.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	sh -c 'cd backend/services/approval && exec go run ./cmd/' > $(DEV_LOGS)/approval.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  approval     → gRPC :50058  REST :$$APPROVAL_REST_PORT"
 	@echo ""
 	@echo "▸ Starting frontend dev server..."
