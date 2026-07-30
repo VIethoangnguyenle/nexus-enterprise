@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "serena": {
+      "type": "stdio",
+      "command": "serena",
+      "args": [
+        "start-mcp-server",
+        "--context",
+        "ide-assistant",
+        "--project",
+        "."
+      ],
+      "env": {
+        "PATH": "/usr/local/go/bin:${HOME}/go/bin:${HOME}/.local/bin:${PATH}"
+      }
+    },
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp"
+      ],
+      "env": {
+        "PATH": "${HOME}/.local/bin:${PATH}"
+      }
+    }
+  }
+}
