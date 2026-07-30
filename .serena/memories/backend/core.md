@@ -29,4 +29,4 @@ Ports are fixed in `.env.dev` and `Procfile.dev`; the gRPC and REST numbering ar
 
 ## Schema
 
-`data/init.sql` is the whole schema and is applied with `IF NOT EXISTS` — it is re-runnable, not a versioned migration chain, so schema changes are edits to that file plus `make db-migrate`. `backend/services/policy/migrations/` is policy-local and separate from it.
+Schema lives in two places: `data/init.sql` (base, re-runnable with `IF NOT EXISTS`) **and `data/migrations/` — a numbered chain** (`001_chat_reactions…` through `011_departments`) holding much of the real schema; `union_id`/`open_id`/`tenant_users` come from `005_multi_tenant_auth.sql`, not from `init.sql`. `backend/services/policy/migrations/` is a third, policy-local chain. `make db-migrate` applies them.
