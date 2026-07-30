@@ -17,6 +17,8 @@ Ship with confidence. The goal is not just to deploy — it's to deploy safely, 
 - Opening a beta or early access program
 - Any deployment that carries risk (all of them)
 
+**Not this skill:** how finished work gets merged, PR'd, or a branch closed out → `superpowers:finishing-a-development-branch`. This skill starts once the change is already on the deployable branch and the question is how it reaches users.
+
 ## The Pre-Launch Checklist
 
 ### Code Quality
