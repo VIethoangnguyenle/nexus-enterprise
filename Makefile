@@ -397,10 +397,20 @@ ifdef s
 	cd backend/services/$(s) && go test -v -count=1 -timeout 60s ./...
 else
 	@echo "▸ Testing all services..."
-	@for svc in $(SERVICES); do \
+	@FAIL=""; \
+	for svc in $(SERVICES); do \
 		echo "=== $$svc ==="; \
-		cd $(CURDIR)/backend/services/$$svc && go test -count=1 -timeout 60s ./... 2>&1 | tail -3; \
-	done
+		if ! (cd $(CURDIR)/backend/services/$$svc && go test -count=1 -timeout 60s ./...); then \
+			FAIL="$$FAIL $$svc"; \
+		fi; \
+	done; \
+	if [ -n "$$FAIL" ]; then \
+		echo ""; \
+		echo "✗ Test failures in:$$FAIL"; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "✓ All service tests pass"
 endif
 
 # ---------------------------------------------------------------------------
