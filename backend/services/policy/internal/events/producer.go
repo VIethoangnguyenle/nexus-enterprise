@@ -22,11 +22,11 @@ type AccessCheckedEvent struct {
 // GraphMutatedEvent records graph structure changes for audit and replay.
 // Downstream consumers (e.g., approval reconciliation) use these to react to role changes.
 type GraphMutatedEvent struct {
-	MutationType string   `json:"mutation_type"` // create_assignment, remove_assignment, create_association, delete_node
-	NodeIDs      []string `json:"node_ids"`      // [childID, parentID] for assignments; [uaID, oaID] for associations
+	MutationType string   `json:"mutation_type"`          // create_assignment, remove_assignment, create_association, delete_node
+	NodeIDs      []string `json:"node_ids"`               // [childID, parentID] for assignments; [uaID, oaID] for associations
 	WorkspaceID  string   `json:"workspace_id,omitempty"` // tenant workspace affected (for targeted downstream invalidation)
-	ChildType    string   `json:"child_type,omitempty"`  // "U", "UA", "OA" — node type of the child
-	ParentType   string   `json:"parent_type,omitempty"` // "UA", "OA", "PC" — node type of the parent
+	ChildType    string   `json:"child_type,omitempty"`   // "U", "UA", "OA" — node type of the child
+	ParentType   string   `json:"parent_type,omitempty"`  // "UA", "OA", "PC" — node type of the parent
 	Timestamp    int64    `json:"timestamp"`
 }
 

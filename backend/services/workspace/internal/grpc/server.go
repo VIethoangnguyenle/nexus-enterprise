@@ -9,8 +9,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"ngac-platform/services/workspace/internal/domain"
 	pb "ngac-platform/proto/workspace"
+	"ngac-platform/services/workspace/internal/domain"
 )
 
 // WorkspaceDomainService defines operations the gRPC handler delegates to.

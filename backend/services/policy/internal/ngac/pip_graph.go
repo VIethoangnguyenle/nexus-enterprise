@@ -17,8 +17,8 @@ type Graph struct {
 	mu sync.RWMutex
 
 	Nodes        map[string]*NGACNode
-	Assignments  map[string]*Assignment   // id -> assignment
-	Associations map[string]*Association   // id -> association
+	Assignments  map[string]*Assignment  // id -> assignment
+	Associations map[string]*Association // id -> association
 
 	// Indexes for fast traversal
 	childToParents   map[string]map[string]bool // childID -> set of parentIDs

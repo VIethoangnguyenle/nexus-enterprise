@@ -170,7 +170,6 @@ func (s *Service) CreateNGACFolder(ctx context.Context, name, workspaceID, paren
 // Note: Files do NOT need NGAC nodes. They inherit permissions from their
 // parent folder's OA node. Only folders/containers need CreateNode (OA type).
 
-
 // ResolveParent resolves the parent NGAC node for an item, using ensureRoot for root-level items.
 func (s *Service) ResolveParent(ctx context.Context, parentItemID, workspaceID, driveCtx, driveCtxID, userNodeID string) (parentNGACID string, scopeOAID string, err error) {
 	if parentItemID != "" {

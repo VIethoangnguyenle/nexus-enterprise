@@ -22,4 +22,3 @@ var (
 	ErrRequestCompleted   = errors.New("request already completed")
 	ErrNoMatchingTemplate = errors.New("no matching approval template")
 )
-

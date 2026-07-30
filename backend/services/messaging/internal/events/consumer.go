@@ -73,10 +73,10 @@ type ApprovalEvent struct {
 
 // Consumer listens to Kafka topics and creates notifications from asset and approval events.
 type Consumer struct {
-	client     *kgo.Client
-	notifSv    NotificationCreator
-	broadcast  ApprovalBroadcaster
-	cancel     context.CancelFunc
+	client    *kgo.Client
+	notifSv   NotificationCreator
+	broadcast ApprovalBroadcaster
+	cancel    context.CancelFunc
 }
 
 // NewConsumer creates a Kafka consumer subscribing to asset and approval event topics.

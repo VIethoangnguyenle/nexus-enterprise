@@ -761,7 +761,10 @@ func (s *Store) FindPendingByUserAndSource(ctx context.Context, userNodeID, gran
 // --- scan helpers ---
 
 // scanRequestsWithAssignment scans rows from pending/history queries.
-func scanRequestsWithAssignment(rows interface{ Next() bool; Scan(dest ...any) error }) ([]*domain.RequestWithAssignment, error) {
+func scanRequestsWithAssignment(rows interface {
+	Next() bool
+	Scan(dest ...any) error
+}) ([]*domain.RequestWithAssignment, error) {
 	var results []*domain.RequestWithAssignment
 	for rows.Next() {
 		r := &domain.Request{}
@@ -780,7 +783,10 @@ func scanRequestsWithAssignment(rows interface{ Next() bool; Scan(dest ...any) e
 }
 
 // scanRequests scans rows into Request slice with cursor extraction.
-func scanRequests(rows interface{ Next() bool; Scan(dest ...any) error }, limit int) ([]*domain.Request, string, error) {
+func scanRequests(rows interface {
+	Next() bool
+	Scan(dest ...any) error
+}, limit int) ([]*domain.Request, string, error) {
 	var results []*domain.Request
 	for rows.Next() {
 		r := &domain.Request{}

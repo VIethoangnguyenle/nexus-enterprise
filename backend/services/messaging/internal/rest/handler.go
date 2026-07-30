@@ -54,8 +54,6 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.GET("/channels/:chId/members", h.ListChannelMembers)
 	api.DELETE("/channels/:chId/members/:nodeId", h.RemoveChannelMember)
 
-
-
 	// DMs
 	api.POST("/dms", h.CreateDM)
 	api.GET("/dms", h.ListDMs)
@@ -87,7 +85,6 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/channels/:chId/tasks", h.CreateTask)
 	api.PATCH("/tasks/:taskId", h.UpdateTask)
 	api.GET("/channels/:chId/tasks", h.ListTasks)
-
 
 	// Notifications
 	api.GET("/notifications", h.ListNotifications)
@@ -290,8 +287,6 @@ func (h *Handler) RemoveChannelMember(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
-
-
 
 // CreateDM handles POST /api/dms.
 func (h *Handler) CreateDM(c echo.Context) error {

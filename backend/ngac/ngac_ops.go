@@ -54,8 +54,8 @@ const (
 // Every workspace creates a set of NGAC nodes named by workspace ID.
 // Using ID (UUID) instead of display name prevents collisions.
 
-func PCName(wsID string) string            { return fmt.Sprintf("PC_%s", wsID) }
-func OwnersUAName(wsID string) string      { return fmt.Sprintf("%s_Owners", wsID) }
+func PCName(wsID string) string             { return fmt.Sprintf("PC_%s", wsID) }
+func OwnersUAName(wsID string) string       { return fmt.Sprintf("%s_Owners", wsID) }
 func MembersUAName(wsID string) string      { return fmt.Sprintf("%s_Members", wsID) }
 func MgmtOAName(wsID string) string         { return fmt.Sprintf("%s_Mgmt", wsID) }
 func DocumentsOAName(wsID string) string    { return fmt.Sprintf("%s_Documents", wsID) }

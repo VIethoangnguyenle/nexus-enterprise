@@ -51,7 +51,7 @@ type Asset struct {
 	State              string
 	CustomFields       json.RawMessage
 	AssignedTo         *string
-	AssignedToUsername  string
+	AssignedToUsername string
 	NgacNodeID         string
 	CreatedBy          string
 	Deleted            bool

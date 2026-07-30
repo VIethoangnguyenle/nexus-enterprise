@@ -192,8 +192,6 @@ func (s *WriteServer) LoadGraph(ctx context.Context, _ *pb.Empty) (*pb.Empty, er
 	return &pb.Empty{}, nil
 }
 
-
-
 func (s *WriteServer) publishEvent(action string, nodeIDs []string) {
 	if s.producer != nil {
 		s.producer.PublishGraphMutated(action, nodeIDs)
@@ -297,11 +295,11 @@ func (s *WriteServer) CreateProhibition(ctx context.Context, req *pb.CreateProhi
 	s.publishEvent("create_prohibition", affectedNodes)
 
 	return &pb.Prohibition{
-		Id:          p.ID,
-		Name:        p.Name,
-		SubjectId:   p.SubjectID,
-		Operations:  p.Operations,
-		TargetOaIds: p.TargetOAIDs,
+		Id:           p.ID,
+		Name:         p.Name,
+		SubjectId:    p.SubjectID,
+		Operations:   p.Operations,
+		TargetOaIds:  p.TargetOAIDs,
 		Intersection: p.Intersection,
 	}, nil
 }

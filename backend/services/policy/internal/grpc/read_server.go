@@ -170,15 +170,14 @@ func (s *ReadServer) GetParents(ctx context.Context, req *pb.GetParentsRequest) 
 	return &pb.NodeList{Nodes: nodesToProto(parents)}, nil
 }
 
-
-
 const scopeCacheTTL = 60 * time.Second
 
 // ResolveAccessibleScopes returns the set of leaf OA IDs a user can access
 // for a given operation. Algorithm:
-//   1. BFS upward from user → find all UA ancestors
-//   2. For each UA ancestor, find associations with the requested operation → collect target OA IDs
-//   3. For each target OA, BFS downward → flatten to leaf OA IDs (no OA children)
+//  1. BFS upward from user → find all UA ancestors
+//  2. For each UA ancestor, find associations with the requested operation → collect target OA IDs
+//  3. For each target OA, BFS downward → flatten to leaf OA IDs (no OA children)
+//
 // Results are cached in Redis (key: scopes:{user}:{op}) with 60s TTL.
 func (s *ReadServer) ResolveAccessibleScopes(ctx context.Context, req *pb.ResolveAccessibleScopesRequest) (*pb.ResolveAccessibleScopesResponse, error) {
 	if req.UserNodeId == "" || req.Operation == "" {

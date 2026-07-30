@@ -55,10 +55,10 @@ func buildLargeHierarchy(regions, deptsPerRegion int) *ngac.Graph {
 	return g
 }
 
-func regionOAID(r int) string    { return "region_" + itoa(r) + "_oa" }
-func regionMgrUAID(r int) string { return "mgr_" + itoa(r) + "_ua" }
+func regionOAID(r int) string      { return "region_" + itoa(r) + "_oa" }
+func regionMgrUAID(r int) string   { return "mgr_" + itoa(r) + "_ua" }
 func regionMgrUserID(r int) string { return "user_mgr_" + itoa(r) }
-func deptOAID(r, d int) string   { return "dept_" + itoa(r) + "_" + itoa(d) + "_oa" }
+func deptOAID(r, d int) string     { return "dept_" + itoa(r) + "_" + itoa(d) + "_oa" }
 
 func itoa(n int) string {
 	if n < 10 {

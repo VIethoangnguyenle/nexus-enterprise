@@ -10,11 +10,11 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"ngac-platform/ngac"
-	"ngac-platform/services/auth/internal/auth"
-	"ngac-platform/services/auth/internal/store"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
 	workspacepb "ngac-platform/proto/workspace"
+	"ngac-platform/services/auth/internal/auth"
+	"ngac-platform/services/auth/internal/store"
 )
 
 // AuthStore defines the database operations the domain layer needs.

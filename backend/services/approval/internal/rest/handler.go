@@ -209,9 +209,9 @@ func (h *Handler) ListTemplates(c echo.Context) error {
 // UpdateTemplate handles PUT /api/approval/templates/:id.
 func (h *Handler) UpdateTemplate(c echo.Context) error {
 	var body struct {
-		Name     string `json:"name"`
-		IsActive bool   `json:"is_active"`
-		Priority int    `json:"priority"`
+		Name       string `json:"name"`
+		IsActive   bool   `json:"is_active"`
+		Priority   int    `json:"priority"`
 		FormFields []struct {
 			Label       string `json:"label"`
 			FieldType   string `json:"field_type"`

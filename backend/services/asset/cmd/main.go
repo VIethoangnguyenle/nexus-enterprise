@@ -22,8 +22,8 @@ import (
 
 	assetpb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
-	agrpc "ngac-platform/services/asset/internal/grpc"
 	"ngac-platform/services/asset/internal/events"
+	agrpc "ngac-platform/services/asset/internal/grpc"
 	"ngac-platform/services/asset/internal/rest"
 	"ngac-platform/services/asset/internal/store"
 )

@@ -63,7 +63,6 @@ func main() {
 	}
 	slog.Info("graph loaded", "nodes", len(graph.Nodes))
 
-
 	rdb, err := connectRedis(ctx, redisURL)
 	if err != nil {
 		slog.Warn("redis unavailable, access caching disabled", "error", err)
@@ -95,7 +94,6 @@ func main() {
 
 	// Shared targeted cache invalidator
 	cacheInvalidator := ngac.NewCacheInvalidator(rdb, store.GetGraph)
-
 
 	// CQRS: Read + Write services
 	cte := ngac.NewCTEEvaluator(pool)

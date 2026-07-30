@@ -12,10 +12,10 @@ import (
 // importing every service's domain package. Services MUST use errors.New with
 // these exact strings, or wrap with %w so errors.Is matches.
 var (
-	ErrNotFound     = errors.New("not found")
-	ErrAccessDenied = errors.New("access denied")
+	ErrNotFound      = errors.New("not found")
+	ErrAccessDenied  = errors.New("access denied")
 	ErrAlreadyExists = errors.New("already exists")
-	ErrInvalidInput = errors.New("invalid input")
+	ErrInvalidInput  = errors.New("invalid input")
 )
 
 // MapDomainError translates a domain sentinel error into an Echo HTTP error

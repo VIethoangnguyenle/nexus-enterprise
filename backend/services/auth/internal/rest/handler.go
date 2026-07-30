@@ -26,10 +26,10 @@ func NewHandler(svc *domain.Service) *Handler {
 // RegisterRoutes mounts auth endpoints on the Echo instance.
 func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// Public — no auth required
-	e.POST("/api/auth/register", h.Register)  // legacy
-	e.POST("/api/auth/login", h.Login)         // legacy
-	e.POST("/api/auth/signup", h.Signup)        // multi-tenant
-	e.POST("/api/auth/signin", h.Signin)        // multi-tenant
+	e.POST("/api/auth/register", h.Register) // legacy
+	e.POST("/api/auth/login", h.Login)       // legacy
+	e.POST("/api/auth/signup", h.Signup)     // multi-tenant
+	e.POST("/api/auth/signin", h.Signin)     // multi-tenant
 	e.POST("/api/auth/otp/request", h.RequestOTP)
 	e.POST("/api/auth/otp/verify", h.VerifyOTP)
 
@@ -261,7 +261,7 @@ func (h *Handler) RequestOTP(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
-		"session_id":  sessionID,
+		"session_id": sessionID,
 		"expires_in": 300,
 	})
 }

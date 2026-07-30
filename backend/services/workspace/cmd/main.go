@@ -21,10 +21,10 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/httputil"
 	drivepb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	pb "ngac-platform/proto/workspace"
-	"ngac-platform/pkg/httputil"
 	"ngac-platform/services/workspace/internal/domain"
 	wgrpc "ngac-platform/services/workspace/internal/grpc"
 	"ngac-platform/services/workspace/internal/rest"

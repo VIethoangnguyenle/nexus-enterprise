@@ -20,10 +20,10 @@ import (
 // AssetServer handles gRPC calls for asset CRUD and lifecycle management.
 type AssetServer struct {
 	pb.UnimplementedAssetServiceServer
-	store        *store.Store
+	store       *store.Store
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
-	producer     *events.Producer
+	producer    *events.Producer
 }
 
 // NewAssetServer creates the asset gRPC handler.

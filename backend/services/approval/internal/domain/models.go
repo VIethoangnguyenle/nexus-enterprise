@@ -8,8 +8,8 @@ type FormField struct {
 	Label       string `json:"label"`
 	FieldType   string `json:"field_type"` // "text", "number", "currency", "date", "select", "textarea"
 	Required    bool   `json:"required"`
-	Options     string `json:"options,omitempty"`     // comma-separated options for "select" type
-	FieldOrder  int    `json:"field_order"`           // display order
+	Options     string `json:"options,omitempty"` // comma-separated options for "select" type
+	FieldOrder  int    `json:"field_order"`       // display order
 	Placeholder string `json:"placeholder,omitempty"`
 }
 

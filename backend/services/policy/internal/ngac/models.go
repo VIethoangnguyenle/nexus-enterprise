@@ -71,12 +71,12 @@ type AccessDecision struct {
 
 // AccessExplanation provides details about why access was granted or denied
 type AccessExplanation struct {
-	Path               []string           `json:"path,omitempty"`
-	PolicyClasses      []string           `json:"policy_classes,omitempty"`
-	UserAttributes     []string           `json:"user_attributes,omitempty"`
-	ObjectAttributes   []string           `json:"object_attributes,omitempty"`
-	Reason             string             `json:"reason,omitempty"`
-	ProhibitionDenied  *ProhibitionDenial `json:"prohibition_denied,omitempty"`
+	Path              []string           `json:"path,omitempty"`
+	PolicyClasses     []string           `json:"policy_classes,omitempty"`
+	UserAttributes    []string           `json:"user_attributes,omitempty"`
+	ObjectAttributes  []string           `json:"object_attributes,omitempty"`
+	Reason            string             `json:"reason,omitempty"`
+	ProhibitionDenied *ProhibitionDenial `json:"prohibition_denied,omitempty"`
 }
 
 // ProhibitionDenial details when a prohibition denied access

@@ -23,9 +23,9 @@ import (
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/approval"
 	policypb "ngac-platform/proto/policy"
-	approvalGRPC "ngac-platform/services/approval/internal/grpc"
 	"ngac-platform/services/approval/internal/domain"
 	"ngac-platform/services/approval/internal/events"
+	approvalGRPC "ngac-platform/services/approval/internal/grpc"
 	"ngac-platform/services/approval/internal/rest"
 	"ngac-platform/services/approval/internal/store"
 )

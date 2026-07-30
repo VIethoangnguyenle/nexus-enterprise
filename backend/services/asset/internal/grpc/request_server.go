@@ -16,10 +16,10 @@ import (
 // AssetRequestServer handles gRPC calls for the asset request/approve/assign/return flow.
 type AssetRequestServer struct {
 	pb.UnimplementedAssetRequestServiceServer
-	store        *store.Store
+	store       *store.Store
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
-	producer     *events.Producer
+	producer    *events.Producer
 }
 
 // NewAssetRequestServer creates the asset request gRPC handler.

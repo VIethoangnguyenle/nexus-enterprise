@@ -50,9 +50,9 @@ type ReadReceipt struct {
 
 // ChannelUnread holds unread info for a single channel.
 type ChannelUnread struct {
-	ChannelID       string
-	UnreadCount     int32
-	LastReadMsgID   string
+	ChannelID     string
+	UnreadCount   int32
+	LastReadMsgID string
 }
 
 // --- Reactions Store ---

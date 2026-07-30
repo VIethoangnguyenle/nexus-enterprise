@@ -54,15 +54,15 @@ type CreateWorkspaceInput struct {
 
 // WorkspaceResult is the domain output for workspace operations.
 type WorkspaceResult struct {
-	ID           string
-	Name         string
-	PcNodeID     string
-	OwnersUaID   string
-	MembersUaID  string
-	MgmtOaID     string
+	ID            string
+	Name          string
+	PcNodeID      string
+	OwnersUaID    string
+	MembersUaID   string
+	MgmtOaID      string
 	DocumentsOaID string
-	ChannelsOaID string
-	CreatedBy    string
+	ChannelsOaID  string
+	CreatedBy     string
 }
 
 // CreateWorkspace provisions a new workspace: NGAC graph, DB row, MinIO bucket, Drive root.

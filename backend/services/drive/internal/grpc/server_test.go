@@ -24,7 +24,9 @@ import (
 // Mock clients
 // ---------------------------------------------------------------------------
 
-type mockPolicyRead struct{ policypb.PolicyReadServiceClient }
+type mockPolicyRead struct {
+	policypb.PolicyReadServiceClient
+}
 
 func (m *mockPolicyRead) CheckAccess(_ context.Context, _ *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
 	return &policypb.AccessDecision{Decision: "ALLOW"}, nil
@@ -49,7 +51,9 @@ func (m *mockPolicyReadDeny) CheckAccess(_ context.Context, _ *policypb.CheckAcc
 	return &policypb.AccessDecision{Decision: "DENY"}, nil
 }
 
-type mockPolicyWrite struct{ policypb.PolicyWriteServiceClient }
+type mockPolicyWrite struct {
+	policypb.PolicyWriteServiceClient
+}
 
 func (m *mockPolicyWrite) CreateNode(_ context.Context, req *policypb.CreateNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
 	return &policypb.NGACNode{Id: fmt.Sprintf("node-%s", req.Name), Name: req.Name, NodeType: req.NodeType}, nil
@@ -67,7 +71,9 @@ func (m *mockPolicyWrite) DeleteNode(_ context.Context, _ *policypb.DeleteNodeRe
 	return &policypb.Empty{}, nil
 }
 
-type mockDocStorage struct{ docpb.DocumentStorageServiceClient }
+type mockDocStorage struct {
+	docpb.DocumentStorageServiceClient
+}
 
 func (m *mockDocStorage) GetUploadURL(_ context.Context, req *docpb.GetUploadURLRequest, _ ...grpc.CallOption) (*docpb.GetUploadURLResponse, error) {
 	return &docpb.GetUploadURLResponse{

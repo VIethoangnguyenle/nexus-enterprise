@@ -185,7 +185,7 @@ func TestCreateRole(t *testing.T) {
 	userID, ngacNodeID := getTestUserNGACNodeID(t, pool)
 
 	ws, err := srv.CreateWorkspace(context.Background(), &pb.CreateWorkspaceRequest{
-		Name: fmt.Sprintf("RoleWS_%d", time.Now().UnixNano()),
+		Name:   fmt.Sprintf("RoleWS_%d", time.Now().UnixNano()),
 		UserId: userID, UserNgacNodeId: ngacNodeID,
 	})
 	require.NoError(t, err)
@@ -210,7 +210,7 @@ func TestCreateFolder(t *testing.T) {
 	userID, ngacNodeID := getTestUserNGACNodeID(t, pool)
 
 	ws, err := srv.CreateWorkspace(context.Background(), &pb.CreateWorkspaceRequest{
-		Name: fmt.Sprintf("FolderWS_%d", time.Now().UnixNano()),
+		Name:   fmt.Sprintf("FolderWS_%d", time.Now().UnixNano()),
 		UserId: userID, UserNgacNodeId: ngacNodeID,
 	})
 	require.NoError(t, err)

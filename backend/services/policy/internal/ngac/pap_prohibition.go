@@ -142,4 +142,3 @@ func (s *ProhibitionStore) FindForSubjects(ctx context.Context, subjectIDs []str
 	}
 	return result, nil
 }
-

@@ -19,7 +19,7 @@ import (
 // AssetTypeServer handles gRPC calls for asset type management.
 type AssetTypeServer struct {
 	pb.UnimplementedAssetTypeServiceServer
-	store        *store.Store
+	store       *store.Store
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
 }

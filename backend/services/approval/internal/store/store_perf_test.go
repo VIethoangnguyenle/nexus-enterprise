@@ -96,9 +96,9 @@ func TestPerformanceSLA_AllQueries(t *testing.T) {
 	}
 
 	tests := []struct {
-		name   string
-		maxMs  float64
-		fn     func() error
+		name  string
+		maxMs float64
+		fn    func() error
 	}{
 		{
 			name: "ListPending", maxMs: 5.0,

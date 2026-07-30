@@ -63,17 +63,17 @@ func itemToProto(item *store.DriveItem) *pb.DriveItem {
 		return nil
 	}
 	p := &pb.DriveItem{
-		Id:            item.ID,
-		WorkspaceId:   item.WorkspaceID,
-		DriveContext:  item.DriveContext,
+		Id:             item.ID,
+		WorkspaceId:    item.WorkspaceID,
+		DriveContext:   item.DriveContext,
 		DriveContextId: item.DriveContextID,
-		ItemType:      item.ItemType,
-		Name:          item.Name,
-		NgacNodeId:    item.NGACNodeID,
-		OwnerId:       item.OwnerID,
-		Status:        item.Status,
-		CreatedAt:     timestamppb.New(item.CreatedAt),
-		UpdatedAt:     timestamppb.New(item.UpdatedAt),
+		ItemType:       item.ItemType,
+		Name:           item.Name,
+		NgacNodeId:     item.NGACNodeID,
+		OwnerId:        item.OwnerID,
+		Status:         item.Status,
+		CreatedAt:      timestamppb.New(item.CreatedAt),
+		UpdatedAt:      timestamppb.New(item.UpdatedAt),
 	}
 	if item.ParentID != nil {
 		p.ParentId = *item.ParentID
@@ -143,17 +143,17 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 	}
 
 	item := &store.DriveItem{
-		ID:           uuid.New().String(),
-		WorkspaceID:  req.WorkspaceId,
-		DriveContext: driveCtx,
+		ID:             uuid.New().String(),
+		WorkspaceID:    req.WorkspaceId,
+		DriveContext:   driveCtx,
 		DriveContextID: req.DriveContextId,
-		ParentID:     nilStr(req.ParentId),
-		ItemType:     "folder",
-		Name:         req.Name,
-		NGACNodeID:   folderNode.Id,
-		ScopeOAID:    scopeOAID,
-		OwnerID:      req.UserNgacNodeId,
-		Status:       "active",
+		ParentID:       nilStr(req.ParentId),
+		ItemType:       "folder",
+		Name:           req.Name,
+		NGACNodeID:     folderNode.Id,
+		ScopeOAID:      scopeOAID,
+		OwnerID:        req.UserNgacNodeId,
+		Status:         "active",
 	}
 	if err := s.store.InsertItem(ctx, item); err != nil {
 		return nil, status.Errorf(codes.Internal, "insert folder: %v", err)

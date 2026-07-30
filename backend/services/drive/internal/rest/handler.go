@@ -291,8 +291,8 @@ func (h *Handler) CopyItem(c echo.Context) error {
 	}
 
 	resp, err := h.svc.CopyItem(c.Request().Context(), &pb.CopyItemRequest{
-		ItemId:       c.Param("itemId"),
-		DestParentId: body.TargetFolderID,
+		ItemId:         c.Param("itemId"),
+		DestParentId:   body.TargetFolderID,
 		UserNgacNodeId: claims.NGACNodeID,
 	})
 	if err != nil {
