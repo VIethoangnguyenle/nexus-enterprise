@@ -417,6 +417,60 @@ endif
 # Proto & Frontend
 # ---------------------------------------------------------------------------
 
+## Check formatting of all Go code (does not rewrite)
+fmt-check:
+	@echo "▸ Checking gofmt..."
+	@BAD=""; \
+	for d in . $(addprefix services/,$(SERVICES)); do \
+		OUT=$$(cd $(CURDIR)/backend/$$d && gofmt -l . 2>/dev/null); \
+		[ -n "$$OUT" ] && BAD="$$BAD $$OUT"; \
+	done; \
+	if [ -n "$$BAD" ]; then echo "✗ Not gofmt'd:$$BAD"; exit 1; fi; \
+	echo "✓ All Go code is gofmt'd"
+
+## Rewrite all Go code with gofmt
+fmt:
+	@for d in . $(addprefix services/,$(SERVICES)); do \
+		(cd $(CURDIR)/backend/$$d && gofmt -w . 2>/dev/null); \
+	done; \
+	echo "✓ gofmt applied"
+
+## Lint Go (vet + staticcheck) and frontend (eslint)
+lint:
+	@echo "▸ go vet + staticcheck..."
+	@FAIL=""; \
+	for svc in $(SERVICES); do \
+		printf "  %-12s" "$$svc"; \
+		if (cd $(CURDIR)/backend/services/$$svc && go vet ./... 2>&1 && staticcheck ./... 2>&1); then \
+			echo "✓"; \
+		else \
+			echo "✗"; FAIL="$$FAIL $$svc"; \
+		fi; \
+	done; \
+	echo "▸ eslint..."; \
+	(cd $(CURDIR)/frontend && npm run --silent lint) || FAIL="$$FAIL frontend"; \
+	if [ -n "$$FAIL" ]; then echo "✗ Lint failures in:$$FAIL"; exit 1; fi; \
+	echo "✓ Lint clean"
+
+## Report unreachable Go functions per service
+deadcode:
+	@echo "▸ deadcode..."
+	@for svc in $(SERVICES); do \
+		echo "=== $$svc ==="; \
+		(cd $(CURDIR)/backend/services/$$svc && deadcode ./cmd/ 2>&1 | head -30); \
+	done
+
+## Fail if CLAUDE.md has drifted from the code it describes
+check-docs:
+	@./scripts/check-docs-drift.sh
+
+## Full gate: everything that must pass before a change is done
+verify: check-docs fmt-check build-check lint test
+	@echo "▸ Frontend tests..."
+	@cd $(CURDIR)/frontend && npm test
+	@echo ""
+	@echo "✓ verify passed — build, format, lint, and tests all green"
+
 ## Install protoc Go plugins
 proto-install:
 	$(MAKE) -C backend proto-install
