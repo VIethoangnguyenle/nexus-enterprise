@@ -553,6 +553,22 @@ khẳng định class có mặt trong chuỗi thì vẫn xanh — vì class *có
 `OtpInput` đi theo hướng thứ hai: rename thuần, không đổi một byte markup nào. Nó vốn đã đúng, chỉ
 nằm sai thư mục — `components/auth/` là nơi nó tình cờ được cần đến lần đầu, không phải nơi nó thuộc về.
 
+**Cùng cơ chế đó đã có sẵn trong `Button`, và test của chính dự án này không thấy.** Chuỗi base của
+`Button` chứa `border-none`, trong khi variant `secondary` khai `border border-outline-variant`. Hai
+class hoà nhau, `.border-none` được sinh ra sau `.border` trong stylesheet nên luôn thắng — variant
+mà Stitch gọi là "Secondary/Outlined" **render không có viền ở mọi chỗ dùng**, đo được
+`borderStyle: none`, `borderWidth: 0px`.
+
+Test viết ở Task 3 khẳng định `expect(cls).toContain('border')` và **xanh suốt**, vì class có mặt
+thật. Đó là giới hạn cấu trúc của kiểu test này: `vitest` đặt `css: false` nên nó chỉ thấy chuỗi,
+không thấy hiệu lực.
+
+Hai hệ quả cho các chặng sau:
+
+1. Mỗi variant phải tự khai tình trạng viền của mình; không đặt thuộc tính có thể chọi ở chuỗi base.
+2. Khi một phép kiểm chỉ khẳng định **sự hiện diện** của class, hãy thêm phép kiểm khẳng định
+   **sự vắng mặt** của class chọi với nó. Đó là thứ duy nhất bắt được xung đột ở tầng chuỗi.
+
 ### 7.4 Bóng đổ: xấp xỉ là chấp nhận được, đã đo
 
 Chặng thí điểm nêu nghi vấn rằng thang shadow thiếu một nấc cho loại "offset lớn, rất nhạt"
