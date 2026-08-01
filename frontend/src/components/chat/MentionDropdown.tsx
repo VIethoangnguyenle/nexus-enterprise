@@ -64,7 +64,7 @@ export function MentionDropdown({ members, query, onSelect, onClose, position }:
       <div
         ref={ref}
         className="absolute z-50 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg
-          py-2 px-3 min-w-[200px]"
+          py-2 px-3 min-w-50"
         style={position ? { bottom: position.top, left: position.left } : { bottom: '100%', left: 0 }}
       >
         <div className="text-xs text-on-surface-variant">No members found</div>
@@ -76,10 +76,16 @@ export function MentionDropdown({ members, query, onSelect, onClose, position }:
     <div
       ref={ref}
       className="absolute z-50 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg
-        py-1 min-w-[200px] max-h-[200px] overflow-y-auto"
+        py-1 min-w-50 max-h-50 overflow-y-auto"
       style={position ? { bottom: position.top, left: position.left } : { bottom: '100%', left: 0 }}
     >
       {filtered.map((m, i) => (
+        /* eslint-disable-next-line no-restricted-syntax -- Hàng autocomplete điều hướng bằng
+           phím mũi tên: trạng thái nổi bật đến từ chỉ số bàn phím (selectedIndex), không chỉ
+           hover. Button nướng sẵn justify-center và không có w-full/justify-start để một hàng
+           Avatar + nhãn tràn hết chiều ngang — thêm className để lấn cũng gặp đúng bẫy đặc hiệu
+           đã ghi trong Button.tsx. NavRow là điều hướng sidebar (subItem có pl-9 thụt lề, không
+           hợp một hàng phẳng). Không cái nào khớp một hàng kết quả chọn được bằng bàn phím. */
         <button
           key={m.user_id || m.ngac_node_id}
           onClick={() => onSelect(m)}
