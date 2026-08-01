@@ -23,7 +23,9 @@ Design system đã tồn tại đầy đủ — token M3 trong `frontend/src/ind
 | Hex nướng cứng trong `.tsx` | 10 | 4 | 6 |
 | Hex nướng cứng trong `.ts` | 57 | 48 | 9 |
 | Class bảng màu Tailwind thô | 5 | 0 | 5 |
-| **Tổng** | **369** | **57** | **312** |
+| `shadow-[…]` tuỳ tiện | 34 | 0 | 34 |
+| `shadow-xl` (ngoài thang) | 4 | 0 | 4 |
+| **Tổng** | **407** | **57** | **350** |
 
 Cột "Hợp lệ" gồm hai nhóm khác hẳn nhau, xem 1.3.
 
@@ -95,7 +97,7 @@ Ngược lại, `lib/constants.ts` (9 hex trong `ASSET_STATE_COLORS` và `REQUES
 ## 2. Phạm vi
 
 **Trong phạm vi:** đưa token về khớp Stitch; hiệu chỉnh và mở rộng từ vựng primitive; bật ESLint
-cho `.ts` và `.tsx` với rule ép design system; xử lý 312 vi phạm theo từng chặng; cập nhật ba
+cho `.ts` và `.tsx` với rule ép design system; xử lý 350 vi phạm theo từng chặng; cập nhật ba
 capability spec bị chạm tới.
 
 **Ngoài phạm vi, có chủ đích:**
@@ -156,14 +158,31 @@ lệch một nấc so với thang mặc định của Tailwind mà Stitch viết
 **Bóng đổ:** thêm `--shadow-card: 0 4px 16px rgba(0,0,0,0.04)` — con số Stitch quy định cho card,
 thang hiện tại không có (`shadow-sm` là `0 1px 3px/0.08`, `shadow-md` là `0 4px 12px/0.1`).
 
+Thêm ba token bóng nhấn, để 5 chỗ đang nướng cứng mã RGB của primary cũ có đích để chuyển sang mà
+không phải viết giá trị tuỳ tiện:
+
+```css
+--shadow-accent-sm: 0 2px 12px -2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+--shadow-accent:    0 4px 16px      color-mix(in srgb, var(--color-primary) 20%, transparent);
+--shadow-accent-lg: 0 8px 24px      color-mix(in srgb, var(--color-primary) 8%,  transparent);
+```
+
+Không có ba token này, việc sửa `rgba(37,99,235,…)` chỉ đổi một vi phạm lấy một vi phạm khác:
+`shadow-[0_4px_16px_color-mix(…)]` hết hardcode màu nhưng vẫn là giá trị tuỳ tiện.
+
 **Ba khoản nợ ẩn phải dọn cùng đợt, nếu không đổi màu sẽ vỡ:**
 
 1. **8 chỗ hardcode `rgba(37, 99, 235, …)`** — mã RGB của primary cũ. Đổi `--color-primary` sẽ
    không động tới chúng → app có hai sắc xanh. Thay bằng `color-mix()` trên token.
-2. **`shadow-[0_0_0_2px_rgba(var(--md-primary-rgb),0.15)]`** tham chiếu `--md-primary-rgb`
-   **không tồn tại** trong `index.css` → shadow này hiện không render. Bug sẵn có.
+2. **`shadow-[0_0_0_2px_rgba(var(--md-primary-rgb),0.15)]`** tại
+   `components/patterns/ImagePreviewCard.tsx:72` tham chiếu `--md-primary-rgb` **không tồn tại**
+   trong `index.css` → shadow này hiện không render. Bug sẵn có, sửa ở chặng 2 cùng file.
 3. **34 giá trị `shadow-[…]` tuỳ tiện** trải trên 14 file, cộng `shadow-xl` (4 lượt, không có trong
-   thang → rơi về mặc định Tailwind). Quy về thang token.
+   thang → rơi về mặc định Tailwind). Quy về thang token, đi theo từng chặng sở hữu file.
+
+   *Đính chính so với bản nháp:* ba khoản này ban đầu được xếp "phải dọn cùng lúc ở chặng 0". Sai —
+   chỉ 5 shadow có nhuốm màu primary cũ là gấp, vì chúng vỡ khi đổi token. 29 shadow còn lại là bóng
+   đen trung tính, không liên quan gì tới việc đổi màu, nên đi theo chặng của file chứa chúng.
 
 *Ghi chú:* `on-primary-fixed-variant` ban đầu bị nghi là bug đang chạy. Kiểm tra kỹ: nó chỉ xuất
 hiện trong **comment** của `components/patterns/ContactsSidebar.tsx` (dòng 22 và 129), không phải
@@ -252,7 +271,25 @@ Bốn rule dùng `no-restricted-syntax` (esquery selector, có sẵn trong ESLin
 
 // 4. Bảng màu Tailwind thô — đã có token M3 thay thế
 { selector: "JSXAttribute[name.name='className'] Literal[value=/\\b(bg|text|border)-(slate|gray|zinc|neutral|red|orange|green|blue|indigo)-\\d{2,3}\\b/]" }
+
+// 5. Bóng đổ ngoài thang token
+{ selector: "JSXAttribute[name.name='className'] Literal[value=/shadow-(\\[|xl\\b)/]" }
+{ selector: "JSXAttribute[name.name='className'] TemplateElement[value.raw=/shadow-(\\[|xl\\b)/]" }
 ```
+
+**Vì sao phải có rule 5 — một lỗ hổng do bước tự soát kế hoạch phát hiện.** Rule 2 đòi toàn bộ cụm
+trong ngoặc phải là `\d+(px|rem)`, nên `shadow-[0_4px_16px_rgba(0,0,0,0.04)]` **lọt qua**, dù bên
+trong có `4px`. Kiểm chứng:
+
+```
+shadow-[0_4px_16px_rgba(0,0,0,0.04)]   → lọt
+px-[7px]                                → bị chặn
+grid-cols-[auto_1.5fr]                  → lọt   (đúng ý đồ, xem dưới)
+```
+
+Không có rule 5 thì 34 shadow tuỳ tiện + 4 `shadow-xl` **không bao giờ xuất hiện trên thước đo**, và
+mục 5.6 sẽ báo "0 vi phạm" trong khi chúng còn nguyên vẹn. Một thước đo không nhìn thấy thứ nó phải
+đo thì tệ hơn không có thước đo, vì nó tạo ra niềm tin sai.
 
 **Phạm vi file:** `**/*.{ts,tsx}`, không chỉ `.tsx`. Bản nháp đầu của tài liệu này giới hạn rule
 hex trong `className` và chỉ quét `.tsx` — cả hai đều sai, và tự soát lại mới phát hiện:
@@ -283,16 +320,16 @@ Xếp theo phụ thuộc, không theo kích thước.
 
 | Chặng | Phạm vi | Vi phạm | Lý do vị trí |
 |---|---|---:|---|
-| 0 | token + primitive + lint mức `warn` | 1 | Nền móng (4.1–4.3). Con số là 1 giá trị `[Npx]` trong `primitives/Textarea.tsx` |
-| 1 | `routes/_auth/` + `routes/_auth.tsx` + `components/auth` + `components/layouts` | 32 | **Thí điểm.** Biệt lập, không màn hình nào phụ thuộc. Primitive sai thì lộ ở đây với chi phí thấp nhất |
-| 2 | `components/composites` → `components/patterns` | 73 | Bộ khung, bán kính ảnh hưởng lớn nhất. Chỉ làm sau khi chặng 1 chứng minh primitive đúng |
-| 3 | `routes/_workspace/` + `routes/_workspace.tsx` | 66 | Route vỏ, phụ thuộc `patterns` |
-| 4 | `components/drive` | 62 | Xem cảnh báo bên dưới |
-| 5 | `components/chat` | 34 | Độc lập với drive |
+| 0 | token + primitive + lint mức `warn` | 6 | Nền móng (4.1–4.3). Gồm 1 `[Npx]` trong `primitives/Textarea.tsx` và 5 shadow nhuốm màu primary cũ, nằm rải ở file của chặng 1/2/5 nhưng thuộc về đợt đổi token |
+| 1 | `routes/_auth/` + `routes/_auth.tsx` + `components/auth` + `components/layouts` | 39 | **Thí điểm.** Biệt lập, không màn hình nào phụ thuộc. Primitive sai thì lộ ở đây với chi phí thấp nhất |
+| 2 | `components/composites` → `components/patterns` | 82 | Bộ khung, bán kính ảnh hưởng lớn nhất. Chỉ làm sau khi chặng 1 chứng minh primitive đúng. Gồm bug `--md-primary-rgb` |
+| 3 | `routes/_workspace/` + `routes/_workspace.tsx` | 73 | Route vỏ, phụ thuộc `patterns` |
+| 4 | `components/drive` | 70 | Xem cảnh báo bên dưới |
+| 5 | `components/chat` | 36 | Độc lập với drive |
 | 6 | `components/approval` + `routes/assets/` + `routes/assets.tsx` + `components/` gốc + `lib/constants.ts` | 44 | Phần đuôi. `lib/constants.ts` đi cùng vì `assets` là nơi tiêu thụ nó |
 | 7 | khoá lint `warn` → `error` | 0 | Chỉ khả thi khi đã về 0 |
 
-Đối chiếu: 1 + 32 + 73 + 66 + 62 + 34 + 44 = **312** = tổng 369 trừ 57 hợp lệ (1.3).
+Đối chiếu: 6 + 39 + 82 + 73 + 70 + 36 + 44 = **350** = tổng 407 trừ 57 hợp lệ (1.3).
 
 Vi phạm về màu (15 hex thật + 5 class màu thô) không tách thành chặng riêng — chúng đi theo file
 chứa chúng, nên đã nằm sẵn trong các con số trên.
