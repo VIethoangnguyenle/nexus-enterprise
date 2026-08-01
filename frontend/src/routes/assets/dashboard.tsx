@@ -46,7 +46,7 @@ function AssetDashboard() {
               </div>
               <div>
                 <div className="font-h2 text-h2 text-on-surface">{s.value}</div>
-                <div className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">{s.label}</div>
+                <div className="text-label-caps text-on-surface-variant">{s.label}</div>
               </div>
             </Card.Body>
           </Card>
