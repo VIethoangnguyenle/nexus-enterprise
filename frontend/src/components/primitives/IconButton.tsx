@@ -25,7 +25,7 @@ const sizeStyles: Record<IconButtonSize, string> = {
  */
 /**
  * Hình dạng là trục riêng, không gộp vào `variant`. Thanh soạn tin có hàng nút
- * ghost **tròn** (`ChatEditor`, `ChatInput`), trong khi Stitch §Buttons quy định
+ * ghost **tròn** (`ChatEditor`), trong khi Stitch §Buttons quy định
  * icon button có viền là 8px — cùng `ghost` nhưng khác hình.
  *
  * Bo góc KHÔNG được nằm ở chuỗi base: `rounded-md` ở đó sẽ hoà độ đặc hiệu với
