@@ -29,6 +29,12 @@ export function HoverActionBar({ onReply, onReact, onPin, isPinned, onMore }: Ho
       {actions.map((a, i) => {
         const Icon = a.icon
         return (
+          /* eslint-disable-next-line no-restricted-syntax -- Segmented control: các nút DÙNG
+             CHUNG đường viền và chia nhau bo góc của hộp cha (rounded-l-lg cho nút đầu,
+             rounded-r-lg cho nút cuối), phân cách bằng border-l. IconButton áp bo góc đồng đều
+             cho cả bốn góc và hộp kích thước cố định, không diễn đạt được bo góc một phía lẫn
+             viền dùng chung. Cùng lý do đã miễn trừ ở patterns/MessageItem.tsx (segmented
+             control giống hệt). */
           <button
             key={a.label}
             onClick={a.onClick}
@@ -38,7 +44,6 @@ export function HoverActionBar({ onReply, onReact, onPin, isPinned, onMore }: Ho
               ${i === 0 ? 'rounded-l-lg' : ''}
               ${i === actions.length - 1 ? 'rounded-r-lg' : ''}
               ${i > 0 ? 'border-l border-outline-variant/20' : ''}`}
-            style={i > 0 ? { borderLeft: '1px solid rgba(195,198,215,0.2)' } : undefined}
           >
             <Icon size={18} />
           </button>
