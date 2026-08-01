@@ -39,23 +39,158 @@ Ba điều được phát hiện lúc lập kế hoạch, đã được người
 | `frontend/src/components/primitives/IconButton.test.tsx` | Ghim variant và tone của `IconButton` |
 | `frontend/src/components/primitives/Input.test.tsx` | Ghim dạng mặc định và dạng pill tìm kiếm |
 | `frontend/src/components/primitives/NavRow.test.tsx` | Ghim trạng thái active/inactive theo Stitch |
+| `frontend/scripts/typecheck-diff.sh` | So lỗi type theo từng file với baseline — dự án có 123 lỗi sẵn nên cổng "0 lỗi" bất khả thi |
+| `frontend/typecheck-baseline.txt` | Baseline lỗi type theo file, sinh ở Task 0 |
 
 **Sửa**
 
 | File | Thay đổi |
 |---|---|
-| `frontend/src/index.css` | Màu primary, `on-primary-fixed-variant`, `on-success`, `shadow-card`, 3 chỗ `rgba(37,99,235)` |
+| `frontend/src/index.css` | Màu primary, `on-primary-fixed-variant`, `on-success`, `shadow-card`, ba token `shadow-accent*`, 3 chỗ `rgba(37,99,235)` |
 | `frontend/src/components/primitives/Button.tsx` | 7 variant → 5, thang size theo Stitch |
 | `frontend/src/components/primitives/IconButton.tsx` | Thêm `variant` và `tone` |
 | `frontend/src/components/primitives/Input.tsx` | Thêm `variant="search"` |
 | `frontend/src/components/primitives/Textarea.tsx` | `min-h-[72px]` → giá trị theo thang |
 | `frontend/src/components/primitives/index.ts` | Export `NavRow` |
-| `frontend/eslint.config.js` | Parser TS + 4 rule design system ở mức `warn` |
-| `frontend/package.json` | Thêm `typescript-eslint` |
+| `frontend/eslint.config.js` | Parser TS + 5 rule design system ở mức `warn` |
+| `frontend/package.json` | Thêm `typescript` và `typescript-eslint`; script `typecheck` và `typecheck:diff` |
 | 5 call site vỡ do gộp variant | `variant="outline"` → `secondary`, `variant="error"` → `danger` |
 | 4 call site tự chế success | Dùng `variant="success"` / `tone="success"` |
 | 5 chỗ `rgba(37,99,235)` trong `.tsx` | Chuyển sang `color-mix` trên token |
 | 7 file bề mặt auth | Di cư sang primitive |
+
+---
+
+## Task 0: Dựng lại tầng typecheck
+
+Không có task này thì mọi cổng `tsc` trong kế hoạch đều vô nghĩa, và lưới an toàn cho phần gộp variant ở Task 3 không tồn tại.
+
+Trạng thái hiện tại: `typescript` **không có** trong `package.json`. Bản duy nhất trong `node_modules` là **3.9.10**, kéo vào bắc cầu qua `@protobuf-ts/plugin` → `npx tsc` chạy bản 2020, không hiểu `jsx: "react-jsx"` lẫn `noUncheckedIndexedAccess` mà `tsconfig.json` khai, nên chỉ nôn ra lỗi cú pháp. Dự án chưa từng được typecheck.
+
+Chạy TypeScript 5.9 thật cho **123 lỗi có sẵn**. Nên cổng nghiệm thu không thể là "0 lỗi" — phải so theo từng file với baseline.
+
+**Files:**
+- Modify: `frontend/package.json`
+- Create: `frontend/scripts/typecheck-diff.sh`
+- Create: `frontend/typecheck-baseline.txt`
+
+- [ ] **Step 1: Xác nhận chẩn đoán trước khi sửa**
+
+Chạy:
+```bash
+cd frontend && npx tsc --version && grep -c '"typescript"' package.json
+```
+Kết quả mong đợi: `Version 3.9.10` và `0`.
+
+Nếu đã là 5.x, dừng lại — chẩn đoán này đã cũ, đọc lại trước khi làm tiếp.
+
+- [ ] **Step 2: Cài TypeScript 5 làm phụ thuộc thật**
+
+Chạy: `cd frontend && npm install -D typescript@5`
+Kết quả mong đợi: cài xong; `npx tsc --version` in ra `Version 5.x`.
+
+`typescript-eslint` ở Task 8 cũng cần nó, nên đây là phụ thuộc bắt buộc chứ không phải tiện tay thêm.
+
+- [ ] **Step 3: Thêm hai script vào `package.json`**
+
+Trong khối `"scripts"` của `frontend/package.json`, thêm sau dòng `"lint": "eslint .",`:
+
+```json
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:diff": "bash scripts/typecheck-diff.sh",
+```
+
+- [ ] **Step 4: Viết script so sánh baseline**
+
+Tạo `frontend/scripts/typecheck-diff.sh`:
+
+```bash
+#!/usr/bin/env bash
+# So lỗi TypeScript theo TỪNG FILE với baseline đã ghi.
+#
+# Vì sao không so tổng số: dự án có 123 lỗi type có sẵn (chưa từng được
+# typecheck cho tới 2026-08-01), nên cổng "0 lỗi" là bất khả thi và cổng
+# "tổng không tăng" thì che mất việc một file sạch bắt đầu hỏng.
+#
+# Vì sao đếm theo file chứ không so từng dòng lỗi: số dòng xê dịch mỗi khi
+# sửa file, sẽ sinh ra khác biệt giả.
+set -uo pipefail
+cd "$(dirname "$0")/.."
+
+BASELINE=typecheck-baseline.txt
+CURRENT=$(mktemp)
+trap 'rm -f "$CURRENT"' EXIT
+
+npx tsc --noEmit -p tsconfig.json 2>&1 \
+  | grep -oE '^[^(]+\.tsx?' \
+  | sort | uniq -c \
+  | awk '{print $2"\t"$1}' | sort > "$CURRENT"
+
+if [ ! -f "$BASELINE" ]; then
+  echo "Chưa có $BASELINE. Chạy: cp $CURRENT $BASELINE"
+  cat "$CURRENT"
+  exit 1
+fi
+
+fail=0
+while IFS=$'\t' read -r file count; do
+  [ -z "$file" ] && continue
+  base=$(awk -F'\t' -v f="$file" '$1 == f { print $2 }' "$BASELINE")
+  base=${base:-0}
+  if [ "$count" -gt "$base" ]; then
+    echo "LỖI TYPE MỚI  $file: $count (baseline $base)"
+    fail=1
+  fi
+done < "$CURRENT"
+
+if [ "$fail" -eq 0 ]; then
+  echo "typecheck: không file nào tăng lỗi so với baseline"
+fi
+exit "$fail"
+```
+
+Cấp quyền chạy: `chmod +x frontend/scripts/typecheck-diff.sh`
+
+- [ ] **Step 5: Ghi baseline**
+
+Chạy:
+```bash
+cd frontend && npx tsc --noEmit -p tsconfig.json 2>&1 \
+  | grep -oE '^[^(]+\.tsx?' | sort | uniq -c \
+  | awk '{print $2"\t"$1}' | sort > typecheck-baseline.txt
+wc -l < typecheck-baseline.txt
+```
+Kết quả mong đợi: khoảng 30 dòng (30 file có lỗi).
+
+- [ ] **Step 6: Xác nhận tổng khớp con số đã khảo sát**
+
+Chạy: `cd frontend && awk -F'\t' '{s+=$2} END {print s}' typecheck-baseline.txt`
+Kết quả mong đợi: `123`
+
+Nếu lệch, TypeScript đã cài không phải bản dùng lúc khảo sát — ghi lại con số thực nhận được và dùng nó làm baseline, không ép về 123.
+
+- [ ] **Step 7: Xác nhận cổng chạy được và đang xanh**
+
+Chạy: `cd frontend && npm run typecheck:diff`
+Kết quả mong đợi: in `typecheck: không file nào tăng lỗi so với baseline`, thoát mã 0.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add frontend/package.json frontend/package-lock.json frontend/scripts/typecheck-diff.sh frontend/typecheck-baseline.txt
+git commit -m "build: make the project actually typecheck
+
+typescript was never a dependency. The only copy in node_modules is 3.9.10,
+pulled in transitively through @protobuf-ts/plugin, and it predates both
+jsx: react-jsx and noUncheckedIndexedAccess that tsconfig.json declares — so
+npx tsc emitted syntax errors and checked nothing. The project has never been
+typechecked.
+
+TypeScript 5 reports 123 pre-existing errors, so a zero-error gate is not
+reachable and a total-count gate would hide a clean file starting to break.
+typecheck:diff compares per-file counts against a recorded baseline, which is
+also stable against the line shifts that editing causes."
+```
 
 ---
 
@@ -391,10 +526,15 @@ Kết quả mong đợi: PASS, 9 test.
 
 - [ ] **Step 5: Để trình biên dịch chỉ ra các call site vỡ**
 
-Chạy: `cd frontend && npx tsc --noEmit`
-Kết quả mong đợi: FAIL với đúng 5 lỗi — `variant="outline"` ở 4 chỗ và `variant="error"` ở 1 chỗ, đều báo không gán được vào `ButtonVariant`.
+Chạy:
+```bash
+cd frontend && npm run typecheck 2>&1 | grep -E '"(outline|error)"' | grep -c 'ButtonVariant'
+```
+Kết quả mong đợi: `5` — bốn chỗ `variant="outline"` và một chỗ `variant="error"`.
 
-Nếu số lỗi khác 5, dừng lại và đọc kỹ trước khi sửa: nghĩa là còn call site chưa được khảo sát.
+Dùng `typecheck` chứ không phải `typecheck:diff` ở bước này: ta đang **cố ý** tạo lỗi để trình biên dịch chỉ đường. Không đòi sạch lỗi vì dự án có 123 lỗi type có sẵn — xem Task 0.
+
+Nếu số khác 5, dừng lại và đọc kỹ: nghĩa là còn call site chưa được khảo sát.
 
 - [ ] **Step 6: Sửa 4 chỗ `variant="outline"` → `secondary`**
 
@@ -419,8 +559,8 @@ Nếu số lỗi khác 5, dừng lại và đọc kỹ trước khi sửa: nghĩ
 
 - [ ] **Step 9: Biên dịch sạch**
 
-Chạy: `cd frontend && npx tsc --noEmit && npm run build`
-Kết quả mong đợi: không lỗi.
+Chạy: `cd frontend && npm run typecheck:diff && npm run build`
+Kết quả mong đợi: không file nào tăng lỗi type; build thành công.
 
 - [ ] **Step 10: Chạy toàn bộ test**
 
@@ -591,8 +731,8 @@ Kết quả mong đợi: PASS, 7 test.
 
 - [ ] **Step 6: Biên dịch và chạy test**
 
-Chạy: `cd frontend && npx tsc --noEmit && npm test`
-Kết quả mong đợi: không lỗi, test xanh.
+Chạy: `cd frontend && npm run typecheck:diff && npm test`
+Kết quả mong đợi: không file nào tăng lỗi type; test xanh.
 
 - [ ] **Step 7: Commit**
 
@@ -917,8 +1057,8 @@ export { NavRow } from './NavRow'
 
 - [ ] **Step 6: Biên dịch và chạy toàn bộ test**
 
-Chạy: `cd frontend && npx tsc --noEmit && npm test`
-Kết quả mong đợi: không lỗi, toàn bộ test xanh.
+Chạy: `cd frontend && npm run typecheck:diff && npm test`
+Kết quả mong đợi: không file nào tăng lỗi type; toàn bộ test xanh.
 
 - [ ] **Step 7: Commit**
 
@@ -1255,8 +1395,8 @@ Kết quả mong đợi: 0 vấn đề.
 
 - [ ] **Step 5: Biên dịch và chạy test**
 
-Chạy: `cd frontend && npx tsc --noEmit && npm test`
-Kết quả mong đợi: không lỗi, test xanh.
+Chạy: `cd frontend && npm run typecheck:diff && npm test`
+Kết quả mong đợi: không file nào tăng lỗi type; test xanh.
 
 - [ ] **Step 6: Commit**
 
@@ -1302,8 +1442,8 @@ Kết quả mong đợi: 0 vấn đề.
 
 - [ ] **Step 6: Biên dịch**
 
-Chạy: `cd frontend && npx tsc --noEmit && npm run build`
-Kết quả mong đợi: không lỗi.
+Chạy: `cd frontend && npm run typecheck:diff && npm run build`
+Kết quả mong đợi: không file nào tăng lỗi type; build thành công.
 
 - [ ] **Step 7: Commit**
 
@@ -1338,8 +1478,8 @@ Màn hình này là danh sách workspace bấm được. Thẻ workspace là **h
 
 - [ ] **Step 4: Xác nhận sạch và biên dịch**
 
-Chạy: `cd frontend && npx eslint src/routes/_auth/workspace-select.tsx && npx tsc --noEmit && npm run build`
-Kết quả mong đợi: 0 vấn đề, không lỗi.
+Chạy: `cd frontend && npx eslint src/routes/_auth/workspace-select.tsx && npm run typecheck:diff && npm run build`
+Kết quả mong đợi: 0 vấn đề lint; không file nào tăng lỗi type; build thành công.
 
 - [ ] **Step 5: Commit**
 
@@ -1374,8 +1514,8 @@ Onboarding là luồng nhiều bước, nên nút "Tiếp tục"/"Hoàn tất" t
 
 - [ ] **Step 4: Xác nhận sạch và biên dịch**
 
-Chạy: `cd frontend && npx eslint src/routes/_auth/onboarding.tsx && npx tsc --noEmit && npm run build`
-Kết quả mong đợi: 0 vấn đề, không lỗi.
+Chạy: `cd frontend && npx eslint src/routes/_auth/onboarding.tsx && npm run typecheck:diff && npm run build`
+Kết quả mong đợi: 0 vấn đề lint; không file nào tăng lỗi type; build thành công.
 
 - [ ] **Step 5: Commit**
 
@@ -1427,8 +1567,8 @@ Bốn mã này **phải** còn — chúng là màu thương hiệu, token hoá l
 
 - [ ] **Step 5: Xác nhận sạch và biên dịch**
 
-Chạy: `cd frontend && npx eslint src/routes/_auth/login.tsx && npx tsc --noEmit && npm run build`
-Kết quả mong đợi: 0 vấn đề, không lỗi.
+Chạy: `cd frontend && npx eslint src/routes/_auth/login.tsx && npm run typecheck:diff && npm run build`
+Kết quả mong đợi: 0 vấn đề lint; không file nào tăng lỗi type; build thành công.
 
 - [ ] **Step 6: Commit**
 
@@ -1465,8 +1605,8 @@ Nếu giảm ít hơn 39, còn sót vi phạm. Nếu giảm nhiều hơn 39, có
 
 - [ ] **Step 3: Biên dịch và test**
 
-Chạy: `cd frontend && npx tsc --noEmit && npm run build && npm test`
-Kết quả mong đợi: không lỗi; toàn bộ test xanh, gồm 29 test primitive mới (9 Button + 7 IconButton + 5 Input + 8 NavRow).
+Chạy: `cd frontend && npm run typecheck:diff && npm run build && npm test`
+Kết quả mong đợi: không file nào tăng lỗi type; build thành công; toàn bộ test xanh, gồm 29 test primitive mới (9 Button + 7 IconButton + 5 Input + 8 NavRow).
 
 - [ ] **Step 4: Chụp ảnh sau di cư**
 

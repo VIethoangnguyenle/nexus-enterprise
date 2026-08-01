@@ -377,18 +377,35 @@ NavRow active kind=subItem      → có 'bg-primary-fixed text-on-primary-fixed-
 
 Đây là lần đầu hình học Stitch được ghim bằng thứ chạy được thay vì văn xuôi.
 
-### 5.2 TypeScript bắt hộ phần gộp variant
+### 5.2 TypeScript bắt hộ phần gộp variant — nhưng phải dựng lại trình biên dịch trước
 
 Xoá một nhánh khỏi union type biến mọi call site cũ thành **lỗi biên dịch**:
 
 ```
-xoá success        → 0 chỗ hỏng (đã đo)
-gộp error→danger   → 3 chỗ
-gộp outline→secondary → 4 chỗ
-xoá size lg        → 0 chỗ
+gộp outline → secondary  → 4 chỗ
+gộp error   → danger     → 1 chỗ
+đổi success sang nền đặc → 4 chỗ tự chế bằng className (TypeScript KHÔNG bắt được)
+xoá size lg              → 0 chỗ
 ```
 
-Trình biên dịch liệt kê chính xác 7 vị trí. Không cần test cho phần này, không cần đi tìm.
+Trình biên dịch liệt kê chính xác **5** vị trí. Bản nháp ghi 7 vì đếm cả `AlertBanner variant="error"`
+— `AlertBanner` có kiểu `AlertVariant` riêng, không liên quan `Button`.
+
+**Cảnh báo phải nêu, vì nó làm mục này gần như sai:** dự án **chưa từng được typecheck**.
+`typescript` không có trong `package.json`; bản duy nhất trong `node_modules` là **3.9.10**, kéo vào
+bắc cầu qua `@protobuf-ts/plugin`. Bản 2020 đó không hiểu `jsx: "react-jsx"` lẫn
+`noUncheckedIndexedAccess` mà `tsconfig.json` khai, nên `npx tsc` chỉ nôn ra lỗi cú pháp và không
+kiểm được gì.
+
+Chạy TypeScript 5.9 thật lên codebase cho **123 lỗi có sẵn**. Nên lưới an toàn ở mục này **không tồn
+tại cho tới khi được dựng**, và khi dựng xong nó cũng không thể là cổng "0 lỗi" — 123 lỗi cũ sẽ chôn
+5 lỗi cần tìm, đúng cái bẫy mà 4.3 đã tránh khi từ chối bộ rule TS tổng.
+
+Cách dùng đúng: cài `typescript@5` làm devDependency thật, ghi lại baseline 123, và mỗi task so theo
+**từng file** thay vì theo tổng số. Trong số file mà kế hoạch chạm, chỉ 7 file có lỗi sẵn (11 lỗi):
+`routes/_workspace/drive.tsx` 3, `routes/_workspace/approval.tsx` 2,
+`routes/_auth/workspace-select.tsx` 2, và bốn file khác mỗi file 1. Phần còn lại sạch, nên lỗi mới
+xuất hiện ở chúng là tín hiệu thật.
 
 ### 5.3 Cạm bẫy: chặng 0 đổi giao diện mà diff không thể hiện
 
