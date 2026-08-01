@@ -241,7 +241,7 @@ export function ShareDialog({ item, workspaceId, onClose }: ShareDialogProps) {
         }
         warning="This person will no longer be able to access this file."
         confirmLabel="Remove"
-        confirmVariant="error"
+        confirmVariant="danger"
         loading={revokeShare.isPending}
       />
     </>

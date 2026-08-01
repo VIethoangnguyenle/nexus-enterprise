@@ -40,7 +40,7 @@ export function DeleteConfirmDialog({ item, isDeleting, onConfirm, onClose }: De
       icon={<Trash2 size={22} className="text-error" />}
       iconBg="bg-error-container"
       confirmLabel="Delete"
-      confirmVariant="error"
+      confirmVariant="danger"
       confirmIcon={<Trash2 size={16} />}
       loading={isDeleting}
     />

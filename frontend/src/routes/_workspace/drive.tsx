@@ -203,7 +203,7 @@ function DriveIndex() {
             </div>
             <div className="flex items-center gap-2">
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 onClick={() => setShowNewFolder(true)}
                 className="gap-1.5 rounded-lg h-8 text-[13px] border-outline-variant/60
@@ -375,7 +375,7 @@ function DriveIndex() {
         icon={<AlertTriangle size={22} className="text-error" />}
         iconBg="bg-error-container"
         confirmLabel="Delete permanently"
-        confirmVariant="error"
+        confirmVariant="danger"
         loading={deleteItem.isPending}
       />
 

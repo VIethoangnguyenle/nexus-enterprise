@@ -67,7 +67,7 @@ export function DrivePreviewDialog({ item, sharedBy, onClose, onSave, onDownload
         <div className="flex items-center gap-3 px-6 pb-6">
           {onSave && (
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={() => onSave(item)}
               className="flex-1"
             >

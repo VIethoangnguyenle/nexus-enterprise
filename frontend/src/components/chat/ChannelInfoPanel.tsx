@@ -176,7 +176,7 @@ function MembersTab({ channelId, channelName, wsId }: { channelId: string; chann
         icon={<UserMinus size={22} className="text-error" />}
         iconBg="bg-error-container"
         confirmLabel="Remove"
-        confirmVariant="error"
+        confirmVariant="danger"
         loading={removeMutation.isPending}
       />
     </div>

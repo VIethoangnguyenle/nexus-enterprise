@@ -33,10 +33,10 @@ export function BatchActionBar({ selectedCount, onBatchApprove, onClear, isProce
               <span className="ml-1">Clear</span>
             </Button>
             <Button
+              variant="success"
               size="sm"
               onClick={onBatchApprove}
               disabled={isProcessing}
-              className="bg-success text-on-success hover:bg-success/90"
             >
               <Check size={14} />
               <span className="ml-1">Batch Approve</span>
