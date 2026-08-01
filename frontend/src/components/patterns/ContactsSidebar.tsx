@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Button, NavRow } from '../primitives'
 import {
   ChevronRight, ChevronDown, Building2, Users, UserPlus,
   Star, FolderOpen, Globe,
@@ -19,7 +20,7 @@ interface ContactsSidebarProps {
 
 /** Contacts context sidebar matching Stitch contacts-directory.html:
  *  w-64, bg-surface-container-lowest, border-r border-outline-variant.
- *  Active dept items use bg-primary-fixed text-on-primary-fixed-variant.
+ *  Active dept items use NavRow kind="subItem" active (bg-primary-fixed + text-on-primary-fixed-variant).
  *  Inactive: text-on-surface-variant hover:bg-surface-container-low.
  *  "Add Contact" CTA: bg-primary rounded-lg py-2 shadow-sm. */
 export function ContactsSidebar({
@@ -34,14 +35,10 @@ export function ContactsSidebar({
     <div className="w-64 flex-shrink-0 bg-surface-container-lowest border-r border-outline-variant flex flex-col h-full">
       {/* Add Contact button — Stitch: p-4 pb-2, bg-primary rounded-lg py-2 shadow-sm */}
       <div className="p-4 pb-2">
-        <button
-          onClick={onAddContact}
-          className="w-full flex items-center justify-center gap-2 py-2 bg-primary hover:bg-primary/90
-            text-on-primary font-semibold text-sm rounded-lg transition-colors cursor-pointer border-none shadow-sm"
-        >
+        <Button onClick={onAddContact} size="cta" className="shadow-sm">
           <UserPlus size={16} />
           Add Contact
-        </button>
+        </Button>
       </div>
 
       {/* Category tree — Stitch: p-2 space-y-1 */}
@@ -49,21 +46,13 @@ export function ContactsSidebar({
         {/* Organization Contacts section */}
         <div>
           {/* Stitch: bg-surface-container text-primary font-medium rounded-lg when expanded */}
-          <button
-            onClick={() => setOrgExpanded(!orgExpanded)}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg border-none cursor-pointer
-              transition-colors text-sm font-medium
-              ${orgExpanded
-                ? 'bg-surface-container text-primary'
-                : 'bg-transparent text-on-surface hover:bg-surface-container-low'
-              }`}
-          >
+          <NavRow kind="groupHeader" active={orgExpanded} onClick={() => setOrgExpanded(!orgExpanded)}>
             <span className={`transition-transform ${orgExpanded ? 'rotate-90' : ''}`}>
               <ChevronRight size={20} />
             </span>
             <Building2 size={20} />
             <span>Organization Contacts</span>
-          </button>
+          </NavRow>
 
           {/* Sub-items — Stitch: pl-9 pr-2 py-1 space-y-1 */}
           {orgExpanded && (
@@ -126,7 +115,7 @@ export function ContactsSidebar({
 }
 
 /** Individual sidebar item matching Stitch contacts-directory.html:
- *  Active: bg-primary-fixed text-on-primary-fixed-variant font-medium.
+ *  Active: NavRow kind="subItem" active (bg-primary-fixed + text-on-primary-fixed-variant) font-medium.
  *  Inactive: text-on-surface-variant hover:bg-surface-container-low.
  *  Stitch uses rounded-lg, px-3 py-1.5, count as text-xs text-outline. */
 function SidebarItem({
@@ -145,14 +134,11 @@ function SidebarItem({
   isTopLevel?: boolean
 }) {
   return (
-    <button
+    <NavRow
+      kind={isTopLevel ? 'groupHeader' : 'subItem'}
+      active={active}
       onClick={onClick}
-      className={`w-full flex items-center justify-between ${isTopLevel ? 'gap-2 px-3 py-2' : 'px-3 py-1.5'} rounded-lg
-        border-none cursor-pointer transition-colors text-sm group
-        ${active
-          ? 'bg-primary-fixed font-medium'
-          : 'bg-transparent text-on-surface-variant hover:bg-surface-container-low'
-        }`}
+      className="justify-between"
     >
       <div className="flex items-center gap-2">
         <span className="flex items-center justify-center w-5 flex-shrink-0">{icon}</span>
@@ -165,6 +151,6 @@ function SidebarItem({
           {count}
         </span>
       )}
-    </button>
+    </NavRow>
   )
 }

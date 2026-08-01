@@ -1,5 +1,5 @@
 import type { Contact } from '../../hooks/useContacts'
-import { Avatar } from '../primitives'
+import { Avatar, Button, IconButton } from '../primitives'
 import { MessageSquare, Mail } from 'lucide-react'
 
 interface ContactCardProps {
@@ -57,23 +57,20 @@ export function ContactCard({ contact, onSelect, onMessage }: ContactCardProps) 
 
       {/* Action buttons */}
       <div className="flex items-center gap-2 w-full">
-        <button
+        <Button
           onClick={(e) => { e.stopPropagation(); onMessage?.(contact.user_id) }}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-primary hover:bg-primary-hover
-            text-on-primary font-semibold text-small rounded-lg transition-colors cursor-pointer border-none"
+          className="flex-1"
         >
           <MessageSquare size={14} />
           Message
-        </button>
-        <button
+        </Button>
+        <IconButton
           onClick={(e) => e.stopPropagation()}
-          className="w-9 h-9 flex items-center justify-center rounded-lg
-            bg-surface-container-low border border-outline-variant/50
-            text-on-surface-variant hover:text-on-surface hover:bg-surface-container
-            transition-colors cursor-pointer"
+          variant="outlined"
+          size="lg"
         >
           <Mail size={16} />
-        </button>
+        </IconButton>
       </div>
     </div>
   )

@@ -67,6 +67,9 @@ function TreeItem({ node, depth, activeId, expandedIds, onToggle, onSelect }: Tr
 
   return (
     <>
+      {/* eslint-disable-next-line no-restricted-syntax -- Node cây có thụt lề TÍNH THEO
+          ĐỘ SÂU qua style inline (12 + depth*20 px). NavRow chỉ có thụt lề cố định cho subItem,
+          không nhận độ sâu, nên không diễn đạt được cây nhiều cấp. */}
       <button
         onClick={() => {
           onSelect(node.id)
