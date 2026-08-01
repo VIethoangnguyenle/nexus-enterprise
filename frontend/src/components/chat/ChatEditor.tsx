@@ -128,7 +128,7 @@ export function ChatEditor({
         </div>
 
         {/* TipTap Editor — Stitch: p-4 min-h-[80px] max-h-[200px] */}
-        <div className="min-w-0 min-h-[80px] max-h-[200px] overflow-y-auto p-4">
+        <div className="min-w-0 min-h-20 max-h-50 overflow-y-auto p-4">
           <EditorContent editor={editor} />
         </div>
 
@@ -139,13 +139,17 @@ export function ChatEditor({
             {/* File upload */}
             {onFileUpload && (
               <>
+                {/* eslint-disable-next-line no-restricted-syntax -- Input ẩn (className="hidden"),
+                    chỉ dùng để mở hộp thoại chọn file qua fileRef.current.click(); không có mặt
+                    thị giác nào để primitive tạo hình. Input nướng khung viền/nền/padding cho một
+                    ô nhập hiển thị, không hợp với phần tử luôn ẩn này. */}
                 <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} />
                 <IconButton
                   onClick={() => fileRef.current?.click()}
                   disabled={uploading}
                   title="Add file"
                   aria-label="Add file"
-                  className="rounded-full disabled:opacity-30 disabled:cursor-not-allowed"
+                  shape="round"
                 >
                   {uploading ? <Spinner size="sm" /> : <PlusCircle size={22} />}
                 </IconButton>
@@ -156,7 +160,7 @@ export function ChatEditor({
               onClick={() => setShowEmoji(!showEmoji)}
               title="Emoji"
               aria-label="Emoji"
-              className="rounded-full"
+              shape="round"
             >
               <Smile size={22} />
             </IconButton>
@@ -168,7 +172,7 @@ export function ChatEditor({
               }}
               title="Mention someone"
               aria-label="Mention someone"
-              className="rounded-full"
+              shape="round"
             >
               <AtSign size={22} />
             </IconButton>
@@ -181,8 +185,8 @@ export function ChatEditor({
               onClick={handleSend}
               disabled={isPending || (editor?.isEmpty ?? true)}
               aria-label="Send message"
-              className="bg-primary text-on-primary hover:bg-primary/90 rounded-full shadow-sm
-                disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+              variant="filled"
+              className="flex-shrink-0"
             >
               {isPending ? <Spinner size="sm" /> : <Send size={18} />}
             </IconButton>
