@@ -42,3 +42,7 @@ Thumbs.db
 
 # Build artifacts
 *.log
+
+# Impeccable design hook — config.json is shared and committed; the rest is local state
+.impeccable/hook.cache.json
+.impeccable/config.local.json
