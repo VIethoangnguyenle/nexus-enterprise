@@ -3,6 +3,7 @@ import { useNavigate, useMatches } from '@tanstack/react-router'
 import { useAuthStore } from '../../stores/auth.store'
 import { useUiStore } from '../../stores/ui.store'
 import { useWorkspaces } from '../../hooks/useWorkspaces'
+import { NavRow } from '../primitives'
 import {
   MessageSquare, FolderOpen, Users, Briefcase, ClipboardCheck, Settings, HelpCircle, LogOut, Plus, ChevronDown, Check, ShieldCheck,
 } from 'lucide-react'
@@ -195,24 +196,13 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
           const Icon = item.icon
           const count = unreadCounts[item.id]
           return (
-            /* eslint-disable-next-line no-restricted-syntax -- Hàng điều hướng chính
-               (icon+nhãn+badge), phẳng theo nexus-chat.html chứ không phải cây group-header/
-               sub-item mà NavRow mô phỏng. Năm khác biệt đo được nếu ép vào groupHeader:
-               font-semibold (600) toàn thời vs text-body-ui cố định (500); gap-3 vs gap-2;
-               active bg-surface-container-highest+shadow-sm vs bg-surface-container không shadow;
-               inactive hover bg-surface-container + đổi màu chữ vs hover bg-surface-container-low
-               không đổi màu chữ; và NavRow không có khái niệm icon + badge riêng biệt. */
-            <button
+            <NavRow
               key={item.id}
+              kind="navItem"
+              active={isActive}
               onClick={() => handleClick(item)}
               title={item.label}
               aria-label={item.label}
-              className={`flex items-center gap-3 py-2.5 px-3 rounded-lg cursor-pointer
-                border-none w-full text-left text-sm font-semibold transition-all duration-200
-                ${isActive
-                  ? 'bg-surface-container-highest text-primary shadow-sm'
-                  : 'bg-transparent text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-                }`}
             >
               <Icon size={20} strokeWidth={isActive ? 2.2 : 1.6} />
               <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
@@ -224,55 +214,34 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
                   {count > 99 ? '99+' : count}
                 </span>
               ) : null}
-            </button>
+            </NavRow>
           )
         })}
       </nav>
 
       {/* Footer — Stitch: border-t border-outline-variant/30, gap-1 */}
       <div className="pt-4 border-t border-outline-variant/30 flex flex-col gap-1">
-        {/* eslint-disable-next-line no-restricted-syntax -- Cùng hình học/token với hàng điều
-            hướng chính phía trên (py-2.5/px-3/gap-3/font-semibold/hover bg-surface-container +
-            đổi màu chữ) để ba mục footer nhất quán với nav chính trong cùng sidebar; lý do NavRow
-            không khớp giống hệt hàng nav chính ở trên. Ép riêng footer vào primitive trong khi
-            nav chính giữ nguyên sẽ làm hai khối của cùng sidebar lệch hình học nhau. */}
-        <button
+        <NavRow
+          kind="navItem"
           onClick={() => setActiveModule('settings')}
-          className="flex items-center gap-3 py-2.5 px-3 rounded-lg cursor-pointer
-            border-none bg-transparent text-on-surface-variant w-full text-left
-            text-sm font-semibold transition-all duration-200
-            hover:bg-surface-container hover:text-on-surface"
           title="Settings"
         >
           <Settings size={18} strokeWidth={1.6} />
           <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">Settings</span>
-        </button>
-        {/* eslint-disable-next-line no-restricted-syntax -- Cùng lý do với nút Settings ngay
-            trên: giữ hình học/token đồng nhất với nav chính trong cùng sidebar. */}
-        <button
-          className="flex items-center gap-3 py-2.5 px-3 rounded-lg cursor-pointer
-            border-none bg-transparent text-on-surface-variant w-full text-left
-            text-sm font-semibold transition-all duration-200
-            hover:bg-surface-container hover:text-on-surface"
-          title="Support"
-        >
+        </NavRow>
+        <NavRow kind="navItem" title="Support">
           <HelpCircle size={18} strokeWidth={1.6} />
           <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">Support</span>
-        </button>
-        {/* eslint-disable-next-line no-restricted-syntax -- Cùng lý do với hai nút footer phía
-            trên: giữ hình học/token đồng nhất với nav chính trong cùng sidebar. */}
-        <button
+        </NavRow>
+        <NavRow
+          kind="navItem"
           onClick={logout}
           title={`Logout (${user?.username})`}
           aria-label="Logout"
-          className="flex items-center gap-3 py-2.5 px-3 rounded-lg cursor-pointer
-            border-none bg-transparent text-on-surface-variant w-full text-left
-            text-sm font-semibold transition-all duration-200
-            hover:bg-surface-container hover:text-on-surface"
         >
           <LogOut size={16} strokeWidth={1.6} />
           <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">Logout</span>
-        </button>
+        </NavRow>
       </div>
     </aside>
   )
