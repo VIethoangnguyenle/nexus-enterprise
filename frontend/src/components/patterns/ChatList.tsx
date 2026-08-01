@@ -5,7 +5,7 @@ import { useWebSocketStore } from '../../stores/websocket.store'
 import { useUiStore } from '../../stores/ui.store'
 import { ChatListItem } from './ChatListItem'
 import { CreateChannelModal } from '../CreateChannelModal'
-import { Avatar, IconButton } from '../primitives'
+import { Avatar, IconButton, NavRow } from '../primitives'
 import { Search, Plus, SlidersHorizontal, ChevronDown, ChevronRight, Pin, Building2, User } from 'lucide-react'
 import type { Channel } from '../../api/messaging'
 
@@ -123,6 +123,11 @@ export function ChatList({ workspaceId }: ChatListProps) {
         <div className="flex items-center gap-1.5 px-2 py-1 bg-surface-container rounded-sm
           border border-border/30 focus-within:border-primary/40 transition-colors duration-fast">
           <Search size={12} className="text-on-surface-variant flex-shrink-0" />
+          {/* eslint-disable-next-line no-restricted-syntax -- Ô nhập KHÔNG có chrome, nằm
+              trong hộp cha đã tự mang viền, nền, bo góc và focus-within. Cả hai variant
+              của Input đều kèm thẻ bọc riêng cộng border + bg + px-3 py-2 + focus-ring —
+              năm thứ chồng lên thứ cha đã có, và thẻ bọc sẽ chiếm mất suất flex bên cạnh
+              icon Search. */}
           <input
             type="text"
             value={searchQuery}
@@ -167,20 +172,14 @@ export function ChatList({ workspaceId }: ChatListProps) {
 
                 {/* Desktop: standard collapsible section */}
                 <div className="hidden lg:block">
-                  <button
-                    onClick={() => toggleSection(section.key)}
-                    className="w-full flex items-center gap-1.5 px-3 py-1
-                      text-on-surface-variant
-                      hover:bg-surface-container transition-colors duration-fast
-                      border-none bg-transparent cursor-pointer"
-                  >
+                  <NavRow kind="groupHeader" onClick={() => toggleSection(section.key)}>
                     {collapsedSections[section.key] ? (
                       <ChevronRight size={16} className="flex-shrink-0" />
                     ) : (
                       <ChevronDown size={16} className="flex-shrink-0" />
                     )}
                     <span className="font-label-caps text-label-caps">{section.label}</span>
-                  </button>
+                  </NavRow>
                   {!collapsedSections[section.key] &&
                     section.channels.map((ch) => {
                       const lastMsg = lastMessages[ch.id]
@@ -210,20 +209,14 @@ export function ChatList({ workspaceId }: ChatListProps) {
             ) : (
               <>
                 {/* Standard collapsible section */}
-                <button
-                  onClick={() => toggleSection(section.key)}
-                  className="w-full flex items-center gap-2 px-3 py-1
-                    text-on-surface-variant
-                    hover:bg-surface-container transition-colors
-                    border-none bg-transparent cursor-pointer"
-                >
+                <NavRow kind="groupHeader" onClick={() => toggleSection(section.key)}>
                   {collapsedSections[section.key] ? (
                     <ChevronRight size={16} className="flex-shrink-0" />
                   ) : (
                     <ChevronDown size={16} className="flex-shrink-0" />
                   )}
                   <span className="font-label-caps text-label-caps">{section.label}</span>
-                </button>
+                </NavRow>
 
                 {/* Section items */}
                 {!collapsedSections[section.key] &&
@@ -296,17 +289,21 @@ function PinnedAvatarItem({
   const hasUnread = unreadCount > 0
 
   return (
+    /* eslint-disable-next-line no-restricted-syntax -- Ô kênh trong dải ngang: bố cục
+       DỌC (avatar trên, nhãn dưới) với bề rộng bị kẹp min-w-18/max-w-20. Ba kind của
+       NavRow đều là hàng NGANG một dòng, nên không kind nào diễn đạt được; ép vào sẽ
+       phải đè flex-col qua className và thua theo thứ tự stylesheet. */
     <button
       onClick={() => onClick(channel.id)}
-      className={`flex flex-col items-center gap-1 min-w-[72px] max-w-[80px] py-1.5 px-1
+      className={`flex flex-col items-center gap-1 min-w-18 max-w-20 py-1.5 px-1
         rounded-lg border-none bg-transparent cursor-pointer transition-colors
         ${isActive ? 'bg-primary-fixed' : 'hover:bg-surface-container'}`}
     >
       <div className="relative">
         <Avatar name={channel.name} size="lg" />
         {hasUnread && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1
-            rounded-full bg-error text-white text-[9px] font-bold
+          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1
+            rounded-full bg-error text-white text-micro font-bold
             flex items-center justify-center">
             {unreadCount > 9 ? '+' : unreadCount}
           </span>
@@ -316,7 +313,7 @@ function PinnedAvatarItem({
         {channel.name}
       </span>
       {preview && (
-        <span className="text-[10px] text-on-surface-variant truncate w-full text-center leading-tight">
+        <span className="text-micro text-on-surface-variant truncate w-full text-center leading-tight">
           {preview}
         </span>
       )}
