@@ -548,6 +548,38 @@ làm hai nút Google/SSO mất viền trên cửa trước của ứng dụng.
   `CLAUDE.md` bắt mọi ghi vào `ngac_*` phải đi qua đường EPP invalidation, mà không có REST endpoint
   xoá workspace.
 
+### 8.5 Chặng 2: ba mảnh từ vựng của chặng 0 gặp màn hình thật
+
+Chặng 2 (`composites` + `patterns`, 66 vi phạm → 0, 16 miễn trừ) là lần đầu `NavRow`,
+`IconButton variant="filled"` và `Input variant="search"` được dùng ngoài test của chính chúng.
+Cả ba đều được thiết kế từ `.stitch/DESIGN.md` chứ chưa từng đối chiếu code.
+
+| Mảnh từ vựng | Kết quả |
+|---|---|
+| `NavRow` | **Vừa một nửa.** Khớp tuyệt đối với `ContactsSidebar` — file đó vốn được viết theo đúng spec rồi trôi đi, comment trong file còn nhắc đúng token mà code đã bỏ. Cũng khớp section header của `ChatList`. **Không** vừa `AppSidebar`: bốn sai lệch đo được cùng lúc, vì đó là **pattern khác hẳn** (danh sách icon phẳng theo màn `nexus-chat`) chứ không phải cây group-header của §Navigation Sidebar. Thêm `kind="navItem"`, hình học đo từ chính màn hình. |
+| `IconButton variant="filled"` | **Vừa chính xác** nút gửi của `ChatInput` — không phải đè gì qua `className`. Nhưng `ghost` thiếu trục hình dạng: hàng nút thanh soạn tin là ghost **tròn**. Thêm trục `shape`, và `TopBar` là chỗ dùng thật đầu tiên, khớp không cần chỉnh. |
+| `Input variant="search"` | **Không dùng được lần nào.** Cả hai ô tìm kiếm (`ChatList`, `TopBar`) là input **không có chrome** nằm trong hộp cha đã tự mang viền, nền và focus. Variant `search` vẫn kèm viền, nền và thẻ bọc của riêng nó. |
+
+**Tín hiệu mạnh nhất của cả dự án: thẻ bọc của `Input`/`Select` đã chặn 8 lần di cư.**
+
+```
+OtpInput · 2 ô onboarding · ô login · search ChatList · search TopBar · 2 select ContactsFilterBar
+```
+
+Cả hai primitive bọc phần tử trong `<div class="flex flex-col gap-1">` để chứa `error`/`helpText`.
+Khi control là **con trực tiếp của hàng flex** — mẫu phổ biến trong toàn bộ codebase này — thẻ bọc
+chiếm mất suất flex thay cho chính control.
+
+Khác bốn khuyết tật cascade trước đó, đây là vấn đề **cấu trúc**, không phải hình học: không prop
+nào sửa được. Cách đúng là tách thẻ bọc thành composite `Field` riêng, để primitive chỉ render đúng
+phần tử. Nhưng nó chạm 19 chỗ đang dùng `Input`, nên **quyết ở ranh giới chặng 4 hoặc 5** với đủ số
+liệu, không làm giữa chặng.
+
+**Quy tắc mới rút ra:** khi **nhiều control giống hệt nhau đều cần miễn trừ với cùng một lý do**, đó
+là bằng chứng từ vựng thiếu chứ không phải màn hình sai. Dấu hiệu này xuất hiện ba lần ở chặng 2 và
+lần nào cũng đúng: bốn hàng `AppSidebar` → `navItem`; ba nút thanh soạn tin → trục `shape`; tám chỗ
+thẻ bọc → việc còn treo ở trên.
+
 ## 6. Giả định
 
 ### 6.1 `DESIGN.md` + `metadata.json` là nguồn đủ dùng
