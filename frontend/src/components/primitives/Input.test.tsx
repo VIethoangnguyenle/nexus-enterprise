@@ -38,3 +38,27 @@ describe('Input — trạng thái lỗi', () => {
     expect(screen.queryByText('Dùng email công ty')).toBeNull()
   })
 })
+
+describe('Input — bo góc chọn được', () => {
+  it('mặc định là md (8px), giữ nguyên cho 19 chỗ đang dùng', () => {
+    render(<Input aria-label="Tên" />)
+    expect(screen.getByRole('textbox').className).toContain('rounded-md')
+  })
+
+  it('radius="lg" cho 12px — 5 ô nhập thật cần giá trị này', () => {
+    render(<Input aria-label="Tên" radius="lg" />)
+    expect(screen.getByRole('textbox').className).toContain('rounded-lg')
+  })
+
+  it('radius="lg" KHÔNG kèm rounded-md — nếu kèm thì bo góc sụp về 8px mà test vẫn xanh', () => {
+    render(<Input aria-label="Tên" radius="lg" />)
+    expect(screen.getByRole('textbox').className).not.toContain('rounded-md')
+  })
+
+  it('variant="search" giữ pill bất kể radius', () => {
+    render(<Input aria-label="Tìm" variant="search" radius="lg" />)
+    const cls = screen.getByRole('textbox').className
+    expect(cls).toContain('rounded-full')
+    expect(cls).not.toContain('rounded-lg')
+  })
+})
