@@ -38,6 +38,47 @@ describe('NavRow — trạng thái theo Stitch §Navigation Sidebar', () => {
   })
 })
 
+describe('NavRow — kind navItem (điều hướng phẳng, nexus-chat)', () => {
+  // `.stitch/DESIGN.md` §Navigation Sidebar mô tả cây group-header + mục con thụt
+  // lề — đó là sidebar Contacts. Sidebar chính của app theo màn `nexus-chat`: danh
+  // sách icon phẳng, không thụt lề, hình học khác hẳn. Đo trên AppSidebar cho ra
+  // gap-3 / py-2.5 px-3 / rounded-lg / font-semibold, active nền
+  // surface-container-highest kèm shadow-sm. Đây là kind thứ ba, không phải biến
+  // thể của hai kind kia.
+
+  it('active dùng surface-container-highest kèm shadow, không phải primary-fixed', () => {
+    render(<NavRow kind="navItem" active>Drive</NavRow>)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('bg-surface-container-highest')
+    expect(cls).toContain('text-primary')
+    expect(cls).toContain('shadow-sm')
+    expect(cls).not.toContain('bg-primary-fixed')
+  })
+
+  it('không thụt lề, dùng gap-3 và bo góc 12px', () => {
+    render(<NavRow kind="navItem">Drive</NavRow>)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('gap-3')
+    expect(cls).toContain('rounded-lg')
+    expect(cls).toContain('py-2.5')
+    expect(cls).not.toContain('pl-9')
+  })
+
+  it('KHÔNG kèm gap-2 hay rounded-md — nếu kèm thì hình học sụp về kind khác mà test vẫn xanh', () => {
+    render(<NavRow kind="navItem">Drive</NavRow>)
+    const cls = screen.getByRole('button').className
+    expect(cls).not.toContain('gap-2')
+    expect(cls).not.toContain('rounded-md')
+  })
+
+  it('inactive đổi cả nền lẫn màu chữ khi hover, khác hai kind kia', () => {
+    render(<NavRow kind="navItem">Drive</NavRow>)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('hover:bg-surface-container')
+    expect(cls).toContain('hover:text-on-surface')
+  })
+})
+
 describe('NavRow — hành vi', () => {
   it('bấm thì gọi onClick', async () => {
     const onClick = vi.fn()
