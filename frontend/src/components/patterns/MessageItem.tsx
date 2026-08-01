@@ -29,10 +29,10 @@ const BUBBLE_INCOMING = `bg-surface-bright border border-outline-variant/30
   shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] break-words`
 
 /** Self bubble: bg-primary text-on-primary rounded-2xl rounded-tr-sm p-4
- *  shadow-[0_2px_12px_-2px_rgba(37,99,235,0.2)] */
+ *  shadow-accent-sm */
 const BUBBLE_SELF = `bg-primary border-none
   rounded-2xl rounded-tr-sm p-4 text-on-primary text-sm leading-relaxed
-  shadow-[0_2px_12px_-2px_rgba(37,99,235,0.2)] break-words
+  shadow-accent-sm break-words
   [&_p]:text-on-primary [&_span]:text-on-primary [&_a]:text-on-primary [&_a]:underline
   [&_strong]:text-on-primary [&_em]:text-on-primary
   [&_code]:text-on-primary [&_code]:bg-white/15`

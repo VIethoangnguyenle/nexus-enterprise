@@ -118,7 +118,7 @@ export const MessageRow = memo(function MessageRow({
           {/* Message bubble */}
           {attachedFilename ? null : (
             <div className={isOwn
-              ? `bg-primary border-none rounded-2xl rounded-tr-sm p-4 text-sm leading-relaxed text-on-primary shadow-[0_2px_12px_-2px_rgba(37,99,235,0.2)] break-words [&_p]:text-on-primary [&_span]:text-on-primary [&_a]:text-on-primary [&_a]:underline [&_strong]:text-on-primary [&_em]:text-on-primary [&_code]:text-on-primary [&_code]:bg-white/15`
+              ? `bg-primary border-none rounded-2xl rounded-tr-sm p-4 text-sm leading-relaxed text-on-primary shadow-accent-sm break-words [&_p]:text-on-primary [&_span]:text-on-primary [&_a]:text-on-primary [&_a]:underline [&_strong]:text-on-primary [&_em]:text-on-primary [&_code]:text-on-primary [&_code]:bg-white/15`
               : `bg-surface-bright border border-outline-variant/30 rounded-2xl rounded-tl-sm p-4 text-sm leading-relaxed text-on-surface shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] break-words`}>
               <MessageContent content={m.content} contentFormat={m.content_format} />
             </div>

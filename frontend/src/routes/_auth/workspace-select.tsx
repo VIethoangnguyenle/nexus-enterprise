@@ -58,7 +58,7 @@ function WorkspaceSelectPage() {
         {/* Header — Stitch: centered, w-16 h-16 brand icon */}
         <header className="text-center space-y-2 flex flex-col items-center">
           <div className="w-16 h-16 bg-primary-container text-on-primary rounded-xl md:rounded-xl rounded-full
-            flex items-center justify-center mb-2 shadow-[0_4px_16px_rgba(37,99,235,0.2)]">
+            flex items-center justify-center mb-2 shadow-accent">
             <Briefcase size={32} />
           </div>
           <h1 className="text-h2 md:text-h1 text-on-surface">Select your workspace</h1>
@@ -167,7 +167,7 @@ function WorkspaceCard({
       onClick={onClick}
       className="w-full bg-surface-container-lowest p-6 rounded-xl flex items-center gap-4
         shadow-[0_4px_16px_rgba(0,0,0,0.04)]
-        hover:shadow-[0_8px_24px_rgba(37,99,235,0.08)] hover:bg-surface-bright
+        hover:shadow-accent-lg hover:bg-surface-bright
         transition-all duration-300
         border border-transparent hover:border-primary-container
         group text-left cursor-pointer"
