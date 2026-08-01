@@ -11,6 +11,8 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   tone?: IconButtonTone
   /** Mặc định: `filled` là tròn, còn lại vuông bo 8px. */
   shape?: IconButtonShape
+  /** Trạng thái chọn trong nhóm toggle. Xem ghi chú ở `activeStyle`. */
+  active?: boolean
 }
 
 const sizeStyles: Record<IconButtonSize, string> = {
@@ -45,6 +47,14 @@ const variantStyles: Record<IconButtonVariant, string> = {
   filled: 'bg-primary text-on-primary border-none shadow-sm hover:bg-primary-hover',
 }
 
+/**
+ * Trạng thái chọn cho nhóm toggle (chế độ xem danh sách/lưới, tab header). Ba chỗ
+ * trong codebase tự chế đúng dạng này và mỗi chỗ đều phải miễn trừ vì `variant`
+ * không diễn đạt được "được chọn" — `filled` là nền primary, quá nặng cho một
+ * toggle trong nhóm. Đây là nền nổi nhẹ kèm bóng, đo từ drive.tsx và contacts.tsx.
+ */
+const activeStyle = 'bg-surface-container-highest text-on-surface shadow-sm'
+
 const toneStyles: Record<IconButtonTone, string> = {
   default: 'text-outline hover:text-on-surface hover:bg-surface-container',
   primary: 'text-primary hover:bg-primary/10',
@@ -54,7 +64,7 @@ const toneStyles: Record<IconButtonTone, string> = {
 
 /** Icon-only button with Material 3 surface tokens. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
-  ({ size = 'md', variant = 'ghost', tone = 'default', shape, className = '', ...props }, ref) => (
+  ({ size = 'md', variant = 'ghost', tone = 'default', shape, active = false, className = '', ...props }, ref) => (
     <button
       ref={ref}
       className={`inline-flex items-center justify-center
@@ -62,7 +72,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         disabled:opacity-40 disabled:cursor-not-allowed
         ${shapeStyles[shape ?? (variant === 'filled' ? 'round' : 'square')]}
         ${variantStyles[variant]}
-        ${variant === 'filled' ? '' : toneStyles[tone]}
+        ${variant === 'filled' ? '' : active ? activeStyle : toneStyles[tone]}
         ${sizeStyles[size]} ${className}`}
       {...props}
     />

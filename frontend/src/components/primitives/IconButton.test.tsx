@@ -102,3 +102,25 @@ describe('IconButton — kích thước', () => {
     expect(cls).toContain('h-8')
   })
 })
+
+describe('IconButton — trạng thái chọn trong nhóm toggle', () => {
+  it('active dùng nền nổi kèm bóng, không phải nền primary', () => {
+    render(<IconButton aria-label="Dạng lưới" active />)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('bg-surface-container-highest')
+    expect(cls).toContain('shadow-sm')
+    expect(cls).not.toContain('bg-primary')
+  })
+
+  it('active thay tone chứ không cộng thêm — nếu cộng thì màu chữ chọi nhau', () => {
+    render(<IconButton aria-label="Dạng lưới" active />)
+    expect(screen.getByRole('button').className).not.toContain('text-outline')
+  })
+
+  it('không active thì giữ nguyên tone', () => {
+    render(<IconButton aria-label="Dạng lưới" />)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('text-outline')
+    expect(cls).not.toContain('bg-surface-container-highest')
+  })
+})
