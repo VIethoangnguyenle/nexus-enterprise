@@ -23,10 +23,10 @@ function extractFilename(content: string): string | null {
 /* --- Bubble style constants matching Stitch nexus-chat.html --- */
 
 /** Incoming bubble: bg-surface-bright border border-outline-variant/30 rounded-2xl rounded-tl-sm p-4
- *  shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] */
+ *  shadow-raised */
 const BUBBLE_INCOMING = `bg-surface-bright border border-outline-variant/30
   rounded-2xl rounded-tl-sm p-4 text-on-surface text-sm leading-relaxed
-  shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] break-words`
+  shadow-raised break-words`
 
 /** Self bubble: bg-primary text-on-primary rounded-2xl rounded-tr-sm p-4
  *  shadow-accent-sm */
@@ -96,6 +96,10 @@ export function MessageItem({
 
           {/* Hover action bar — Stitch: absolute -top-3 right-4 bg-surface-container-lowest
               border border-outline-variant/30 rounded-lg shadow-sm */}
+          {/* eslint-disable no-restricted-syntax -- Segmented control: ba nút DÙNG CHUNG
+              đường viền và chia nhau bo góc của hộp cha (rounded-l-lg, không bo, rounded-r-lg),
+              phân cách bằng border-l. IconButton áp bo góc đồng đều cho cả bốn góc và hộp
+              w-8 h-8 cố định, nên không diễn đạt được bo góc một phía lẫn viền dùng chung. */}
           <div className="absolute -top-3 right-4 bg-surface-container-lowest border border-outline-variant/30
             rounded-lg shadow-sm flex items-center opacity-0 group-hover:opacity-100 transition-opacity z-10">
             <button className="p-1.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface
@@ -111,10 +115,15 @@ export function MessageItem({
               <MoreHorizontal size={18} />
             </button>
           </div>
+          {/* eslint-enable no-restricted-syntax */}
         </div>
 
         {/* Reply thread indicator */}
         {onReply && replyCount && replyCount > 0 && (
+          /* eslint-disable-next-line no-restricted-syntax -- Nút dạng liên kết tô màu
+             primary lúc nghỉ. Ghost của Button là text-on-surface-variant và không có trục
+             tone như IconButton, nên màu sẽ đổi; hình học cũng lệch (px-2 py-1 rounded 4px
+             so với px-3 py-1.5 rounded-md 8px). Một chỗ dùng, chưa đủ để thêm trục. */
           <button
             onClick={onReply}
             className="mt-1 px-2 py-1 text-xs text-primary hover:text-primary/80
