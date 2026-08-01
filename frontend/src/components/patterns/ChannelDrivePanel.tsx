@@ -1,6 +1,6 @@
 import { useChannelDrive } from '../../hooks/useDrive'
 import { FilePreviewCard } from './FilePreviewCard'
-import { Heading, Spinner, Text } from '../primitives'
+import { Heading, IconButton, Spinner, Text } from '../primitives'
 import { FolderOpen, X, Paperclip } from 'lucide-react'
 
 interface ChannelDrivePanelProps {
@@ -24,14 +24,9 @@ export function ChannelDrivePanel({ wsId, channelId, onClose }: ChannelDrivePane
           <FolderOpen size={16} className="text-on-surface-variant" />
           <h3 className="text-sm font-semibold text-on-surface">Channel Files</h3>
         </div>
-        <button
-          onClick={onClose}
-          className="w-7 h-7 flex items-center justify-center rounded text-on-surface-variant
-            hover:text-on-surface hover:bg-surface-container-high cursor-pointer border-none
-            bg-transparent transition-colors"
-        >
+        <IconButton onClick={onClose} size="sm" aria-label="Đóng">
           <X size={16} />
-        </button>
+        </IconButton>
       </div>
 
       {/* File count */}

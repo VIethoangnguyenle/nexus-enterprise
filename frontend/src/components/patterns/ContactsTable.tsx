@@ -42,6 +42,10 @@ export function ContactsTable({ contacts, selectedId, onSelect }: ContactsTableP
             const isSelected = selectedId === contact.user_id
 
             return (
+              /* eslint-disable-next-line no-restricted-syntax -- Hàng bảng dữ liệu: thẻ
+                 button không có padding, nó bọc một CSS grid tự mang px-6 py-3.5 và
+                 grid-cols-[auto_1.5fr_1fr_1.5fr_1fr]. NavRow áp padding, gap và bo góc của
+                 riêng nó, sẽ cộng chồng lên padding của grid bên trong. */
               <button
                 key={contact.user_id}
                 onClick={() => onSelect(contact)}
