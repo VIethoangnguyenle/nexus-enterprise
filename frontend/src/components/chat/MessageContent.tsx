@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Copy, Check } from 'lucide-react'
+import { Button } from '../primitives'
 
 interface MessageContentProps {
   content: string
@@ -71,19 +72,19 @@ function FencedCodeBlock({ code, language }: { code: string; language?: string }
         {language && (
           <span className="text-micro font-mono text-on-surface-variant">{language}</span>
         )}
-        <button
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={handleCopy}
-          className="ml-auto flex items-center gap-1 px-2 py-1 rounded text-micro
-            text-on-surface-variant hover:text-on-surface hover:bg-surface-container
-            bg-transparent border-none cursor-pointer transition-colors"
+          className="ml-auto"
           title="Copy code"
         >
           {copied ? (
-            <><Check size={12} className="text-green-600" /> Copied</>
+            <><Check size={12} className="text-success" /> Copied</>
           ) : (
             <><Copy size={12} /> Copy</>
           )}
-        </button>
+        </Button>
       </div>
       {/* Code content */}
       <pre className="m-0 px-3 py-3 bg-surface-container overflow-x-auto">
