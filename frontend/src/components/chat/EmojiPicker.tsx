@@ -52,7 +52,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
   }, [])
 
   return (
-    <div ref={ref} className="shadow-xl rounded-xl overflow-hidden animate-fade-in">
+    <div ref={ref} className="shadow-lg rounded-xl overflow-hidden animate-fade-in">
       <div ref={mountRef} />
     </div>
   )
