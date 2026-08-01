@@ -4,6 +4,7 @@ import {
   FileCode, AtSign,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { IconButton } from '../primitives'
 
 interface EditorToolbarProps {
   editor: Editor
@@ -33,18 +34,15 @@ export function EditorToolbar({ editor }: EditorToolbarProps) {
         }
         const Icon = btn.icon!
         return (
-          <button
+          <IconButton
             key={btn.title}
             onClick={btn.action}
             title={btn.title}
-            className={`p-1.5 flex items-center justify-center rounded-md
-              border-none cursor-pointer transition-colors
-              ${btn.active
-                ? 'bg-surface-container text-on-surface'
-                : 'bg-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container'}`}
+            active={btn.active}
+            size="sm"
           >
             <Icon size={16} />
-          </button>
+          </IconButton>
         )
       })}
     </div>
