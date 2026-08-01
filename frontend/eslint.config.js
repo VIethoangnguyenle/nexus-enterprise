@@ -85,9 +85,11 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
     rules: {
-      // Mức warn trong suốt quá trình di cư; khoá thành error ở chặng cuối,
-      // nếu không repo sẽ đỏ suốt và không phân biệt được lỗi mới với nợ cũ.
-      'no-restricted-syntax': ['warn', ...designSystemRules],
+      // Khoá thành `error` ngày 2026-08-01, sau khi chặng 2–6 đưa số vi phạm
+      // 302 → 0. Trong suốt quá trình di cư mức này là `warn`: nếu khoá sớm thì
+      // repo đỏ suốt và không ai phân biệt được lỗi mới với nợ cũ. Giờ nợ cũ đã
+      // hết, nên mọi cảnh báo xuất hiện lại đều là hồi quy và phải chặn.
+      'no-restricted-syntax': ['error', ...designSystemRules],
     },
   },
   {
@@ -95,7 +97,7 @@ export default defineConfig([
     files: ['src/components/primitives/**/*.tsx'],
     rules: {
       'no-restricted-syntax': [
-        'warn',
+        'error',
         ...designSystemRules.filter(r => !r.selector.startsWith('JSXOpeningElement')),
       ],
     },
@@ -106,7 +108,7 @@ export default defineConfig([
     files: ['src/lib/fileIcons.ts', 'src/routes/_auth/login.tsx'],
     rules: {
       'no-restricted-syntax': [
-        'warn',
+        'error',
         ...designSystemRules.filter(r => r.selector !== 'Literal[value=/#[0-9a-fA-F]{6}/]'),
       ],
     },
