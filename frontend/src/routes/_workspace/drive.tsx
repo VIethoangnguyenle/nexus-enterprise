@@ -159,6 +159,9 @@ function DriveIndex() {
         onNewFolder={() => setShowNewFolder(true)}
         onUpload={() => fileInputRef.current?.click()}
       />
+      {/* eslint-disable-next-line no-restricted-syntax -- Ô chọn tệp ẩn, kích hoạt bằng
+          script. Không primitive nào mô hình hoá thứ này; Input bọc thêm thẻ form-field
+          với chrome nhìn thấy được, vô nghĩa sau className="hidden". */}
       <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleUpload} />
 
       {/* Main content */}
@@ -167,6 +170,11 @@ function DriveIndex() {
         <div className="px-5 md:px-7 pt-5 md:pt-6 pb-0">
           {/* Breadcrumbs */}
           <div className="flex items-center gap-1 text-[12.5px] mb-3">
+            {/* eslint-disable-next-line no-restricted-syntax -- Breadcrumb tự chế với
+                padding rất hẹp (px-1.5 py-0.5). `size="link"` là p-0, `size="sm"` là
+                px-3 py-1.5 — không cái nào khớp. Lưu ý: composites/Breadcrumbs.tsx đã tồn
+                tại và làm đúng việc này; dùng lại nó là thay đổi cấu trúc, không phải di cư
+                class, nên để ngoài phạm vi chặng. */}
             <button
               onClick={() => handleBreadcrumb(-1)}
               className="text-on-surface-variant/70 hover:text-on-surface bg-transparent border-none cursor-pointer
@@ -179,6 +187,8 @@ function DriveIndex() {
             {folderStack.map((folder, idx) => (
               <span key={folder.id} className="flex items-center gap-1">
                 <ChevronRight size={11} className="text-on-surface-variant/30" />
+                {/* eslint-disable-next-line no-restricted-syntax -- Cùng lý do với
+                    breadcrumb gốc phía trên. */}
                 <button
                   onClick={() => handleBreadcrumb(idx)}
                   className={`bg-transparent border-none cursor-pointer transition-all duration-150
@@ -207,7 +217,7 @@ function DriveIndex() {
                 size="sm"
                 onClick={() => setShowNewFolder(true)}
                 className="gap-1.5 rounded-lg h-8 text-small border-outline-variant/60
-                  hover:border-outline-variant hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)]
+                  hover:border-outline-variant hover:shadow-sm
                   transition-all duration-150"
               >
                 <Plus size={14} strokeWidth={2} />
@@ -218,7 +228,7 @@ function DriveIndex() {
                 disabled={uploadFile.isPending}
                 size="sm"
                 className="gap-1.5 rounded-lg h-8 text-small
-                  shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.12)]
+                  shadow-sm hover:shadow-raised
                   transition-all duration-150"
               >
                 {uploadFile.isPending ? <Spinner size="sm" /> : <Upload size={14} strokeWidth={2} />}
@@ -228,11 +238,15 @@ function DriveIndex() {
               {/* View mode switcher */}
               <div className="hidden md:flex items-center gap-0.5 bg-surface-container/60 rounded-lg p-0.5
                 border border-outline-variant/30">
+                {/* eslint-disable no-restricted-syntax -- Cặp toggle chế độ xem: hai nút
+                    dùng chung hộp nền, trạng thái chọn là bg-surface-container-highest kèm
+                    shadow. IconButton có hộp w-8 h-8 cố định và không có variant nào diễn
+                    đạt trạng thái chọn dạng này. */}
                 <button
                   onClick={() => setViewMode('list')}
                   className={`p-1.5 rounded-md border-none cursor-pointer transition-all duration-150
                     ${viewMode === 'list'
-                      ? 'bg-surface-container-highest text-on-surface shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                      ? 'bg-surface-container-highest text-on-surface shadow-sm'
                       : 'text-on-surface-variant/60 hover:text-on-surface bg-transparent'
                     }`}
                   aria-label="List view"
@@ -243,7 +257,7 @@ function DriveIndex() {
                   onClick={() => setViewMode('grid')}
                   className={`p-1.5 rounded-md border-none cursor-pointer transition-all duration-150
                     ${viewMode === 'grid'
-                      ? 'bg-surface-container-highest text-on-surface shadow-[0_1px_2px_rgba(0,0,0,0.06)]'
+                      ? 'bg-surface-container-highest text-on-surface shadow-sm'
                       : 'text-on-surface-variant/60 hover:text-on-surface bg-transparent'
                     }`}
                   aria-label="Grid view"
@@ -264,7 +278,7 @@ function DriveIndex() {
         {showNewFolder && (
           <div className="mx-5 md:mx-7 mb-3 flex items-center gap-2.5 p-3 rounded-xl
             border border-outline-variant/50 bg-surface-container-low/50
-            shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+            shadow-sm">
             <div className="w-8 h-8 rounded-lg bg-amber-500/10 flex items-center justify-center flex-shrink-0">
               <FolderPlus size={16} className="text-amber-500" />
             </div>
@@ -311,7 +325,7 @@ function DriveIndex() {
         ) : (
           <div className="flex-1 flex flex-col min-h-0 px-4 md:px-6 pb-4">
             <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl overflow-hidden flex flex-col flex-1
-              shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
+              shadow-sm">
               {/* Empty state header */}
               <div className="grid grid-cols-12 gap-3 px-4 h-10 items-center border-b border-outline-variant/50
                 bg-surface-container-low/50">
