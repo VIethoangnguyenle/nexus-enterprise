@@ -22,11 +22,17 @@ const designSystemRules = [
   {
     // Rule 2 — chỉ chặn số đo pixel/rem, KHÔNG chặn [...] nói chung:
     // DESIGN.md quy định lưới bảng bằng grid-cols-[auto_1.5fr_1fr_1.5fr_1fr].
-    selector: "JSXAttribute[name.name='className'] Literal[value=/\\[\\d+(px|rem)\\]/]",
+    //
+    // Không neo vào className, cùng lý do với rule 3: nội dung class có thể được
+    // soạn ở nơi khác rồi nội suy vào, và selector neo theo JSXAttribute sẽ không
+    // thấy. Đã có hai chỗ như vậy thật — một object variant-map (Modal.tsx) và một
+    // hằng template ở cấp module (MessageItem.tsx). Đo thực tế khi bỏ neo: đúng +2
+    // cảnh báo, không dương tính giả nào.
+    selector: 'Literal[value=/\\[\\d+(px|rem)\\]/]',
     message: 'Giá trị pixel tuỳ tiện. Dùng thang spacing/radius trong index.css.',
   },
   {
-    selector: "JSXAttribute[name.name='className'] TemplateElement[value.raw=/\\[\\d+(px|rem)\\]/]",
+    selector: 'TemplateElement[value.raw=/\\[\\d+(px|rem)\\]/]',
     message: 'Giá trị pixel tuỳ tiện. Dùng thang spacing/radius trong index.css.',
   },
   {
@@ -46,11 +52,12 @@ const designSystemRules = [
     // cụm trong ngoặc là \d+(px|rem), nên shadow-[0_4px_16px_rgba(...)] lọt qua
     // dù bên trong có 4px. Thiếu rule này thì 34 shadow tuỳ tiện và 4 shadow-xl
     // vô hình với thước đo tiến độ. Xem spec §4.3.
-    selector: "JSXAttribute[name.name='className'] Literal[value=/shadow-(\\[|xl\\b)/]",
+    // Không neo vào className — xem lý do ở rule 2.
+    selector: 'Literal[value=/shadow-(\\[|xl\\b)/]',
     message: 'Bóng đổ ngoài thang. Dùng shadow-sm/md/lg/card/accent* trong index.css.',
   },
   {
-    selector: "JSXAttribute[name.name='className'] TemplateElement[value.raw=/shadow-(\\[|xl\\b)/]",
+    selector: 'TemplateElement[value.raw=/shadow-(\\[|xl\\b)/]',
     message: 'Bóng đổ ngoài thang. Dùng shadow-sm/md/lg/card/accent* trong index.css.',
   },
 ]
