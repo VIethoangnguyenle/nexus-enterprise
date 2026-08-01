@@ -82,15 +82,21 @@ export const DriveFileRow = memo(function DriveFileRow({
   const renderIcon = () => {
     if (isFolder) {
       return (
-        <div className="w-9 h-9 rounded-[10px] bg-amber-500/8 flex items-center justify-center flex-shrink-0
-          group-hover:bg-amber-500/12 transition-colors duration-150">
-          <Folder size={18} className="text-amber-500" strokeWidth={1.8} />
+        /* eslint-disable-next-line no-restricted-syntax -- 10px icon-swatch radius sits equidistant
+           between --radius-md (8px) and --radius-lg (12px); unlike --spacing, --radius-* is four
+           fixed named tokens with no dynamic fractional multiplier, so there is no scale step for
+           10px. Same measurement applies to the file-icon swatch in the branch below. */
+        <div className="w-9 h-9 rounded-[10px] bg-warning/8 flex items-center justify-center flex-shrink-0
+          group-hover:bg-warning/12 transition-colors duration-150">
+          <Folder size={18} className="text-warning" strokeWidth={1.8} />
         </div>
       )
     }
     const fi = getFileIcon(item.name, item.mime_type)
     const Icon = fi.icon
     return (
+      /* eslint-disable-next-line no-restricted-syntax -- Same 10px radius measurement as the
+         folder-icon swatch above (equidistant between --radius-md and --radius-lg). */
       <div className="w-9 h-9 rounded-[10px] flex items-center justify-center flex-shrink-0
         group-hover:scale-[1.02] transition-all duration-150"
         style={{ backgroundColor: `${fi.color}10` }}>
@@ -101,13 +107,20 @@ export const DriveFileRow = memo(function DriveFileRow({
 
   return (
     <>
-      {/* Row */}
+      {/* Row — 3px selected-row accent border, both ternary branches below. Unlike --spacing-based
+          utilities (w/h/p/m/gap/...), Tailwind border-width utilities are a fixed enumerated set
+          {0,1,2,4,8} with no dynamic fractional multiplier — confirmed by building
+          `border-l-0.75`, which compiled to `border-l-0` (width dropped, not 3px). Nearest tokens
+          border-l-2 (2px) and border-l-4 (4px) both visibly change this data-table row's selected
+          indicator. */}
       <div
         className={`grid grid-cols-12 gap-3 px-4 items-center group
-          transition-all duration-150 cursor-pointer h-[48px]
+          transition-all duration-150 cursor-pointer h-12
           ${isSelected
-            ? 'bg-primary-container/8 border-l-[3px] border-l-primary'
-            : 'hover:bg-surface-container/60 border-l-[3px] border-l-transparent'
+            ? // eslint-disable-next-line no-restricted-syntax -- 3px border, see comment above
+              'bg-primary-container/8 border-l-[3px] border-l-primary'
+            : // eslint-disable-next-line no-restricted-syntax -- 3px border, see comment above
+              'hover:bg-surface-container/60 border-l-[3px] border-l-transparent'
           }
           border-b border-b-outline-variant/30`}
         onClick={() => onSelect(item.id)}
@@ -118,11 +131,13 @@ export const DriveFileRow = memo(function DriveFileRow({
         <div className="col-span-5 flex items-center gap-3 min-w-0">
           {renderIcon()}
           <div className="min-w-0 flex-1">
-            <span className={`block truncate text-[13px] leading-tight
+            <span className={`block truncate text-small leading-tight
               ${isFolder ? 'font-medium text-on-surface' : 'text-on-surface'}`}>
               {item.name}
             </span>
-            {/* Subtitle on mobile — show date inline */}
+            {/* eslint-disable-next-line no-restricted-syntax -- 11px subtitle, not uppercase.
+                Both 11px type tokens (text-overline, text-label-caps) force uppercase
+                text-transform; neither fits plain-case secondary text at this size. */}
             <span className="block md:hidden text-[11px] text-on-surface-variant/60 mt-0.5">
               {formatDate(item.updated_at)} · {isFolder ? 'Folder' : formatSize(item.size_bytes)}
             </span>
@@ -139,9 +154,9 @@ export const DriveFileRow = memo(function DriveFileRow({
           <div className="flex -space-x-1.5">
             {/* Owner avatar */}
             <div className="w-7 h-7 rounded-full bg-primary-container text-on-primary-container
-              flex items-center justify-center text-[10px] font-semibold
+              flex items-center justify-center text-micro font-semibold
               border-2 border-surface-container-lowest ring-1 ring-white/5
-              shadow-[0_1px_2px_rgba(0,0,0,0.06)]">
+              shadow-sm">
               {(item.owner_id || '?')[0]?.toUpperCase()}
             </div>
           </div>
@@ -172,7 +187,7 @@ export const DriveFileRow = memo(function DriveFileRow({
         <div
           ref={menuRef}
           className="fixed z-50 bg-surface-container-lowest border border-outline-variant/60 rounded-xl
-            py-1 min-w-[200px] shadow-[0_8px_30px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)]
+            py-1 min-w-50 shadow-lg
             backdrop-blur-sm animate-scale-in"
           style={{ left: contextMenu.x, top: contextMenu.y }}
         >
@@ -219,9 +234,14 @@ function MenuButton({
   danger?: boolean
 }) {
   return (
+    /* eslint-disable-next-line no-restricted-syntax -- Dropdown menu item: full-width,
+       left-aligned icon+label row. Button centers its content (`justify-center` baked into its
+       base classes) and has no left-aligned row layout; its `danger` variant fills solid
+       `bg-error`, but this needs a transparent row with a light red hover wash, not a solid
+       button. */
     <button
       onClick={onClick}
-      className={`w-full text-left px-3 py-[7px] text-[13px] flex items-center gap-2.5
+      className={`w-full text-left px-3 py-1.75 text-small flex items-center gap-2.5
         border-none bg-transparent cursor-pointer rounded-lg mx-0
         transition-all duration-150
         ${danger
