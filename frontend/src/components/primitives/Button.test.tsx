@@ -42,6 +42,23 @@ describe('Button — bộ variant sau khi gộp', () => {
     expect(cls).toContain('border-outline-variant')
   })
 
+  it('secondary KHÔNG kèm border-none — nếu kèm thì viền biến mất mà test vẫn xanh', () => {
+    render(<Button variant="secondary">Huỷ</Button>)
+    // `border-none` từng nằm ở chuỗi base. Nó hoà độ đặc hiệu với `border` và
+    // đứng sau trong stylesheet, nên thắng — `secondary` render không viền ở
+    // mọi chỗ dùng, trong khi phép kiểm `toContain('border')` phía trên vẫn
+    // xanh vì class có mặt. Đây là phép kiểm duy nhất ở tầng chuỗi bắt được nó.
+    expect(screen.getByRole('button').className).not.toContain('border-none')
+  })
+
+  it('các variant không viền vẫn khai border-none tường minh', () => {
+    for (const v of ['primary', 'ghost', 'danger', 'success'] as const) {
+      const { unmount } = render(<Button variant={v}>x</Button>)
+      expect(screen.getByRole('button').className).toContain('border-none')
+      unmount()
+    }
+  })
+
   it('danger là nền đặc, không phải nền nhạt', () => {
     render(<Button variant="danger">Xoá</Button>)
     const cls = screen.getByRole('button').className

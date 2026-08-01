@@ -9,12 +9,22 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean
 }
 
+/**
+ * Mỗi variant tự khai tình trạng viền của mình. `border-none` KHÔNG được nằm ở
+ * chuỗi base: khi đó nó chọi với `border` của `secondary`, hai class hoà nhau về
+ * độ đặc hiệu, và Tailwind xử theo thứ tự trong stylesheet sinh ra — `.border-none`
+ * nằm sau `.border` nên luôn thắng. Hậu quả là `secondary`, thứ Stitch gọi là
+ * "Secondary/Outlined", render ra không có viền nào ở mọi chỗ dùng.
+ *
+ * Test khẳng định chuỗi class có chứa `border` vẫn xanh, vì class có mặt thật —
+ * nó chỉ thua. Xem spec 2026-08-01 §7.5.
+ */
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-on-primary hover:bg-primary-hover',
-  secondary: 'bg-surface-container-lowest text-on-surface border border-outline-variant hover:bg-surface-container-high',
-  ghost: 'bg-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container',
-  danger: 'bg-error text-on-error hover:bg-error/90',
-  success: 'bg-success text-on-success hover:bg-success/90',
+  primary: 'border-none bg-primary text-on-primary hover:bg-primary-hover',
+  secondary: 'border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-high',
+  ghost: 'border-none bg-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container',
+  danger: 'border-none bg-error text-on-error hover:bg-error/90',
+  success: 'border-none bg-success text-on-success hover:bg-success/90',
 }
 
 /**
@@ -41,7 +51,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ref={ref}
       disabled={disabled || loading}
       className={`inline-flex items-center justify-center gap-2
-        transition-colors duration-fast cursor-pointer border-none
+        transition-colors duration-fast cursor-pointer
         disabled:opacity-40 disabled:cursor-not-allowed focus-ring
         ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...props}
