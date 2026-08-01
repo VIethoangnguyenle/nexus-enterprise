@@ -1,8 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState, useEffect, useCallback } from 'react'
 import { useRequestOTP, useVerifyOTP } from '../../hooks/useAuth'
-import { Spinner } from '../../components/primitives'
-import { OtpInput } from '../../components/auth/OtpInput'
+import { Spinner, OtpInput } from '../../components/primitives'
 import { ArrowLeft, ArrowRight, Clock, Mail } from 'lucide-react'
 
 export const Route = createFileRoute('/_auth/login')({
