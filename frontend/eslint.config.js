@@ -44,7 +44,7 @@ const designSystemRules = [
   {
     // Rule 4 — bảng màu Tailwind thô; token M3 đã thay thế.
     selector:
-      "JSXAttribute[name.name='className'] Literal[value=/\\b(bg|text|border)-(slate|gray|zinc|neutral|red|orange|green|blue|indigo)-\\d{2,3}\\b/]",
+      "JSXAttribute[name.name='className'] Literal[value=/\\b(bg|text|border)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\\d{2,3}\\b/]",
     message: 'Bảng màu Tailwind thô. Dùng token M3 hoặc --color-status-*.',
   },
   {
