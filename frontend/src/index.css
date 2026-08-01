@@ -143,8 +143,8 @@
   --shadow-raised: 0 2px 8px -2px rgba(0, 0, 0, 0.08);
   --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.04);
 
-  /* Bóng nhuốm màu nhấn. Tồn tại để 5 chỗ đang nướng cứng rgba(37,99,235)
-     có đích chuyển sang mà không phải viết giá trị tuỳ tiện. */
+  /* Bóng nhuốm màu nhấn. Tồn tại để 5 chỗ đang nướng cứng mã RGB của primary
+     cũ có đích chuyển sang mà không phải viết giá trị tuỳ tiện. */
   --shadow-accent-sm: 0 2px 12px -2px color-mix(in srgb, var(--color-primary) 20%, transparent);
   --shadow-accent: 0 4px 16px color-mix(in srgb, var(--color-primary) 20%, transparent);
   --shadow-accent-lg: 0 8px 24px color-mix(in srgb, var(--color-primary) 8%, transparent);
