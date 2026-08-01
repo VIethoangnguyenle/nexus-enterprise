@@ -450,6 +450,6 @@
 /* Auth Background Utility   */
 /* ========================= */
 @utility bg-nexus-auth {
-  background-image: radial-gradient(circle at 100% 0%, #dee8ff 0%, transparent 40%),
-                    radial-gradient(circle at 0% 100%, #e7eeff 0%, transparent 40%);
+  background-image: radial-gradient(circle at 100% 0%, var(--color-surface-container-high) 0%, transparent 40%),
+                    radial-gradient(circle at 0% 100%, var(--color-surface-container) 0%, transparent 40%);
 }
