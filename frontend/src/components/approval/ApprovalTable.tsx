@@ -96,7 +96,7 @@ export function ApprovalTable({
                     onClick={e => { e.stopPropagation(); onApprove?.(item.id) }}
                     aria-label="Approve"
                     title="Approve"
-                    className="text-success hover:bg-success-bg"
+                    tone="success"
                   >
                     <Check size={16} />
                   </IconButton>
