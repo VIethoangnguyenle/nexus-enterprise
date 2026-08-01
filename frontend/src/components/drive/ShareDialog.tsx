@@ -95,7 +95,7 @@ export function ShareDialog({ item, workspaceId, onClose }: ShareDialogProps) {
                 Not shared with anyone yet
               </p>
             ) : (
-              <div className="space-y-1 max-h-[120px] overflow-y-auto">
+              <div className="space-y-1 max-h-30 overflow-y-auto">
                 {shares.map((share) => (
                   <div
                     key={share.id}
@@ -130,6 +130,10 @@ export function ShareDialog({ item, workspaceId, onClose }: ShareDialogProps) {
           {/* Permission selector */}
           <div className="flex items-center gap-2 mb-3">
             <label className="text-xs text-on-surface-variant">Permission:</label>
+            {/* eslint-disable-next-line no-restricted-syntax -- Direct flex child alongside a
+                `<label>` in a `flex items-center gap-2` row. `Select` wraps its element in its
+                own `flex flex-col gap-1` div for error text, which would displace it from that
+                slot. Known limitation — Select as a direct flex child loses its slot. */}
             <select
               value={permission}
               onChange={(e) => setPermission(e.target.value as 'read' | 'write')}
@@ -147,6 +151,10 @@ export function ShareDialog({ item, workspaceId, onClose }: ShareDialogProps) {
               size={14}
               className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
             />
+            {/* eslint-disable-next-line no-restricted-syntax -- Search field with a leading icon
+                needs asymmetric `pl-8 pr-3` padding for the icon overlay. `Input` bakes `px-3`
+                (symmetric) into its base classes unconditionally, so it can't express this.
+                Known limitation — points at a missing SearchField composite. */}
             <input
               type="text"
               value={search}
@@ -160,7 +168,7 @@ export function ShareDialog({ item, workspaceId, onClose }: ShareDialogProps) {
           </div>
 
           {/* Contact list */}
-          <div className="max-h-[240px] overflow-y-auto space-y-1">
+          <div className="max-h-60 overflow-y-auto space-y-1">
             {contactsLoading ? (
               <div className="flex justify-center py-4">
                 <Spinner size="sm" />
