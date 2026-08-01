@@ -26,7 +26,7 @@ function AdminLayout() {
       >
         {/* Section header */}
         <div className="px-4 pt-5 pb-2">
-          <span className="text-label-caps text-on-surface-variant uppercase tracking-wider text-[11px] font-semibold">
+          <span className="text-label-caps text-on-surface-variant uppercase tracking-wider font-semibold">
             Admin
           </span>
         </div>

@@ -92,7 +92,7 @@ function DocumentsPage() {
       {docs.length > 0 ? (
         <Card>
           <div className="overflow-x-auto">
-            <table className="w-full border-collapse min-w-[400px]">
+            <table className="w-full border-collapse min-w-100">
               <thead>
                 <tr>
                   <th className="text-left px-3 py-2 text-caption-ui text-on-surface-variant uppercase tracking-wider border-b border-outline-variant bg-surface-container">Title</th>
@@ -105,7 +105,7 @@ function DocumentsPage() {
               <tbody>
                 {docs.map(d => (
                   <tr key={d.id} className="border-b border-outline-variant-subtle hover:bg-surface-container-high transition-colors duration-instant h-9">
-                    <td className="px-3 py-0 text-small text-on-surface font-medium truncate max-w-[200px]">{d.title || d.filename}</td>
+                    <td className="px-3 py-0 text-small text-on-surface font-medium truncate max-w-50">{d.title || d.filename}</td>
                     <td className="px-3 py-0 text-small text-on-surface-variant hidden md:table-cell">{d.filename}</td>
                     <td className="px-4 py-3 hidden sm:table-cell">
                       <Badge variant="primary">{d.status}</Badge>

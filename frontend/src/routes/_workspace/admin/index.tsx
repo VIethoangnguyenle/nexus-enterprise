@@ -169,7 +169,7 @@ function AdminOrganizationPage() {
             {/* Children info */}
             {selectedDept.children.length > 0 && (
               <div className="pt-2 border-t border-outline-variant/30">
-                <span className="text-label-caps text-on-surface-variant text-[11px] uppercase tracking-wider">
+                <span className="text-label-caps text-on-surface-variant uppercase tracking-wider">
                   Sub-departments ({selectedDept.children.length})
                 </span>
                 <div className="mt-2 flex flex-col gap-1">

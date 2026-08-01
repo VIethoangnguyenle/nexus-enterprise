@@ -170,7 +170,7 @@ function ChannelHeader({
   return (
     <div className="bg-surface-container-lowest/80 backdrop-blur-md border-b border-outline-variant/20 shrink-0 sticky top-0 z-10">
       {/* Row 1: Identity */}
-      <div className="flex items-center justify-between h-12 md:h-[72px] px-3 md:px-6">
+      <div className="flex items-center justify-between h-12 md:h-18 px-3 md:px-6">
         <div className="flex items-center gap-3 md:gap-4">
           <button
             onClick={() => window.dispatchEvent(new CustomEvent('open-mobile-list'))}
@@ -212,15 +212,15 @@ function ChannelHeader({
       </div>
       {/* Row 2: Tabs — desktop only */}
       <div className="hidden md:flex items-center gap-0.5 h-8 px-6 overflow-x-auto scrollbar-none">
-        <button className="inline-flex items-center gap-1 py-1.5 px-3.5 rounded-[20px] text-[13px] font-medium leading-[1.4] border border-transparent cursor-pointer transition-all duration-fast bg-primary text-on-primary">Chat</button>
+        <button className="inline-flex items-center gap-1 py-1.5 px-3.5 rounded-full text-small font-medium leading-[1.4] border border-transparent cursor-pointer transition-all duration-fast bg-primary text-on-primary">Chat</button>
         <button
-          className={`inline-flex items-center gap-1 py-1.5 px-3.5 rounded-[20px] text-[13px] font-medium leading-[1.4] border border-transparent cursor-pointer transition-all duration-fast hover:bg-surface-container-high hover:text-on-surface ${showInfoPanel && infoPanelTab === 'pins' ? 'bg-primary text-on-primary' : 'bg-transparent text-on-surface-variant'}`}
+          className={`inline-flex items-center gap-1 py-1.5 px-3.5 rounded-full text-small font-medium leading-[1.4] border border-transparent cursor-pointer transition-all duration-fast hover:bg-surface-container-high hover:text-on-surface ${showInfoPanel && infoPanelTab === 'pins' ? 'bg-primary text-on-primary' : 'bg-transparent text-on-surface-variant'}`}
           onClick={() => onOpenInfoTab('pins')}
         >
           <Pin size={12} /> Pinned
         </button>
         <button
-          className={`inline-flex items-center gap-1 py-1.5 px-3.5 rounded-[20px] text-[13px] font-medium leading-[1.4] border border-transparent cursor-pointer transition-all duration-fast hover:bg-surface-container-high hover:text-on-surface ${showInfoPanel && infoPanelTab === 'files' ? 'bg-primary text-on-primary' : 'bg-transparent text-on-surface-variant'}`}
+          className={`inline-flex items-center gap-1 py-1.5 px-3.5 rounded-full text-small font-medium leading-[1.4] border border-transparent cursor-pointer transition-all duration-fast hover:bg-surface-container-high hover:text-on-surface ${showInfoPanel && infoPanelTab === 'files' ? 'bg-primary text-on-primary' : 'bg-transparent text-on-surface-variant'}`}
           onClick={() => onOpenInfoTab('files')}
         >
           <FolderOpen size={12} /> Files

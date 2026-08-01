@@ -72,7 +72,7 @@ function AdminUsersPage() {
         <div className="flex items-center gap-3 px-6 py-3 border-b border-outline-variant/30
           bg-surface-container-lowest shrink-0">
           {/* Search */}
-          <div className="relative flex-1 max-w-[280px]">
+          <div className="relative flex-1 max-w-70">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant pointer-events-none" />
             <input
               type="text"
@@ -107,7 +107,7 @@ function AdminUsersPage() {
           <div className="flex-1 overflow-y-auto">
             {/* Table header */}
             <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-4 px-6 py-2
-              bg-surface-container text-label-caps text-on-surface-variant uppercase tracking-wider text-[11px]
+              bg-surface-container text-label-caps text-on-surface-variant uppercase tracking-wider
               border-b border-outline-variant/30 sticky top-0 z-10">
               <span>Name</span>
               <span>Department</span>
@@ -236,8 +236,8 @@ function DeptDropdown({
       </button>
 
       {open && (
-        <div className="absolute top-full left-0 mt-1 min-w-[180px] rounded-lg border border-outline-variant
-          bg-surface shadow-lg z-50 py-1 max-h-[240px] overflow-y-auto">
+        <div className="absolute top-full left-0 mt-1 min-w-45 rounded-lg border border-outline-variant
+          bg-surface shadow-lg z-50 py-1 max-h-60 overflow-y-auto">
           <button
             onClick={() => { onChange(''); setOpen(false) }}
             className={`w-full text-left px-3 py-2 text-sm cursor-pointer transition-colors

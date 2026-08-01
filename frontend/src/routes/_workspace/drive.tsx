@@ -197,7 +197,7 @@ function DriveIndex() {
           {/* Title + Actions */}
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-[20px] font-semibold text-on-surface tracking-[-0.01em] leading-tight">
+              <h1 className="text-h3 text-on-surface tracking-[-0.01em] leading-tight">
                 {currentFolderLabel}
               </h1>
             </div>
@@ -206,7 +206,7 @@ function DriveIndex() {
                 variant="secondary"
                 size="sm"
                 onClick={() => setShowNewFolder(true)}
-                className="gap-1.5 rounded-lg h-8 text-[13px] border-outline-variant/60
+                className="gap-1.5 rounded-lg h-8 text-small border-outline-variant/60
                   hover:border-outline-variant hover:shadow-[0_1px_2px_rgba(0,0,0,0.04)]
                   transition-all duration-150"
               >
@@ -217,7 +217,7 @@ function DriveIndex() {
                 onClick={() => fileInputRef.current?.click()}
                 disabled={uploadFile.isPending}
                 size="sm"
-                className="gap-1.5 rounded-lg h-8 text-[13px]
+                className="gap-1.5 rounded-lg h-8 text-small
                   shadow-[0_1px_3px_rgba(0,0,0,0.08)] hover:shadow-[0_2px_6px_rgba(0,0,0,0.12)]
                   transition-all duration-150"
               >
@@ -278,15 +278,15 @@ function DriveIndex() {
                 if (e.key === 'Escape') { setShowNewFolder(false); setNewFolderName('') }
               }}
               placeholder="Folder name"
-              className="flex-1 px-3 py-1.5 text-[13px] bg-surface-container-lowest border border-outline-variant/50
+              className="flex-1 px-3 py-1.5 text-small bg-surface-container-lowest border border-outline-variant/50
                 rounded-lg text-on-surface focus:outline-none focus:border-primary/40 transition-colors"
             />
             <Button size="sm" onClick={handleCreateFolder} disabled={createFolder.isPending}
-              className="rounded-lg h-8 text-[13px]">
+              className="rounded-lg h-8 text-small">
               {createFolder.isPending ? <Spinner size="sm" /> : 'Create'}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => { setShowNewFolder(false); setNewFolderName('') }}
-              className="rounded-lg h-8 text-[13px]">
+              className="rounded-lg h-8 text-small">
               Cancel
             </Button>
           </div>
