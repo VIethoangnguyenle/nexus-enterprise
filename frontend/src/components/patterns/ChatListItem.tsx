@@ -37,11 +37,15 @@ export function ChatListItem({
   const hasUnread = unreadCount && unreadCount > 0
 
   return (
+    /* eslint-disable-next-line no-restricted-syntax -- Hàng hội thoại hai dòng:
+       items-start để avatar canh đỉnh khi nhãn xuống dòng, p-3 đều bốn phía, và active
+       dùng bg-primary-fixed. Ba kind của NavRow đều items-center, padding bất đối xứng,
+       và navItem active là bg-surface-container-highest — ép vào sẽ đổi cả căn lề lẫn màu. */
     <button
       className={`flex items-start gap-3 p-3 cursor-pointer border-none
         text-left w-full rounded-lg transition-colors relative group
         ${isActive
-          ? 'bg-primary-fixed shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)]'
+          ? 'bg-primary-fixed shadow-raised'
           : 'bg-transparent hover:bg-surface-container'
         }`}
       onClick={() => onClick(id)}
@@ -51,7 +55,7 @@ export function ChatListItem({
         <div className="relative flex-shrink-0">
           <Avatar name={name} size="md" />
           {isOnline && (
-            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-green-500 border-2 border-surface-container-lowest" />
+            <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-status-online border-2 border-surface-container-lowest" />
           )}
         </div>
       ) : (
@@ -88,7 +92,7 @@ export function ChatListItem({
         {/* External badge — Stitch: text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded border border-secondary */}
         {isExternal && (
           <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-bold tracking-wider px-1.5 py-0.5 rounded border border-secondary text-secondary">
+            <span className="text-micro font-bold tracking-wider px-1.5 py-0.5 rounded border border-secondary text-secondary">
               EXTERNAL
             </span>
           </div>

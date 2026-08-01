@@ -24,7 +24,7 @@ export function DrivePreviewDialog({ item, sharedBy, onClose, onSave, onDownload
       />
 
       {/* Dialog */}
-      <div className="relative bg-surface-container-lowest rounded-2xl shadow-xl w-full max-w-lg mx-4
+      <div className="relative bg-surface-container-lowest rounded-2xl shadow-lg w-full max-w-lg mx-4
         overflow-hidden animate-scale-in">
         {/* Close */}
         <IconButton
@@ -36,7 +36,7 @@ export function DrivePreviewDialog({ item, sharedBy, onClose, onSave, onDownload
         </IconButton>
 
         {/* Preview area */}
-        <div className="flex items-center justify-center bg-surface-container-low p-8 min-h-[200px]">
+        <div className="flex items-center justify-center bg-surface-container-low p-8 min-h-50">
           {isImage ? (
             <img
               src={`/drive/files/${item.id}/download`}
@@ -67,7 +67,7 @@ export function DrivePreviewDialog({ item, sharedBy, onClose, onSave, onDownload
         <div className="flex items-center gap-3 px-6 pb-6">
           {onSave && (
             <Button
-              variant="outline"
+              variant="secondary"
               onClick={() => onSave(item)}
               className="flex-1"
             >

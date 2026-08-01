@@ -9,7 +9,7 @@ import { AppSidebar } from '../components/patterns/AppSidebar'
 import { TopBar } from '../components/patterns/TopBar'
 import { ListPanel } from '../components/patterns/ListPanel'
 import { MobileNav } from '../components/patterns/MobileNav'
-import { Spinner, Text } from '../components/primitives'
+import { Button, IconButton, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { apiFetch } from '../api/client'
 import { PanelLeft, X } from 'lucide-react'
@@ -95,14 +95,8 @@ function WorkspaceLayout() {
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center px-4">
             <Text variant="body" muted>Unable to load workspaces</Text>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-4 text-small text-primary hover:text-primary-hover bg-transparent border-none cursor-pointer focus-ring"
-            >Retry</button>
-            <button
-              onClick={() => logout()}
-              className="mt-2 block mx-auto text-small text-on-surface-variant hover:text-on-surface bg-transparent border-none cursor-pointer focus-ring"
-            >Logout</button>
+            <Button variant="link" size="link" onClick={() => window.location.reload()} className="mt-4">Retry</Button>
+            <Button variant="ghost" size="link" onClick={() => logout()} className="mt-2 block mx-auto">Logout</Button>
           </div>
         </div>
       </div>
@@ -126,14 +120,8 @@ function WorkspaceLayout() {
           <div className="text-center px-4">
             <Spinner size="lg" />
             <Text variant="body" muted className="mt-4">Setting up your workspace...</Text>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-4 text-small text-primary hover:text-primary-hover bg-transparent border-none cursor-pointer focus-ring"
-            >Refresh if this takes too long</button>
-            <button
-              onClick={() => logout()}
-              className="mt-2 block mx-auto text-small text-on-surface-variant hover:text-on-surface bg-transparent border-none cursor-pointer focus-ring"
-            >Logout and re-login</button>
+            <Button variant="link" size="link" onClick={() => window.location.reload()} className="mt-4">Refresh if this takes too long</Button>
+            <Button variant="ghost" size="link" onClick={() => logout()} className="mt-2 block mx-auto">Logout and re-login</Button>
           </div>
         </div>
       </div>
@@ -160,13 +148,9 @@ function WorkspaceLayout() {
             {showMobileList && (
               <div className="fixed inset-0 bottom-14 z-40 bg-surface-bright lg:hidden animate-slide-left">
                 <div className="flex items-center justify-end px-3 py-2 border-b border-outline-variant/30">
-                  <button
-                    onClick={() => setShowMobileList(false)}
-                    className="min-h-11 min-w-11 flex items-center justify-center
-                      bg-transparent border-none cursor-pointer text-on-surface-variant hover:text-on-surface"
-                  >
+                  <IconButton size="lg" onClick={() => setShowMobileList(false)} aria-label="Đóng danh sách">
                     <X size={20} />
-                  </button>
+                  </IconButton>
                 </div>
                 <div className="flex-1 overflow-hidden h-[calc(100%-44px)]">
                   <ListPanel workspaceId={wsId} />
@@ -190,15 +174,10 @@ function WorkspaceLayout() {
         <main className="flex-1 flex flex-col min-w-0 pb-14 lg:pb-0 isolate overflow-hidden">
           {/* Mobile: toggle list panel button */}
           <div className="flex items-center h-11 px-3 border-b border-outline-variant/20 bg-surface-container-lowest lg:hidden">
-            <button
-              onClick={() => setShowMobileList(true)}
-              className="min-h-9 min-w-9 flex items-center justify-center gap-2
-                bg-transparent border-none cursor-pointer text-on-surface-variant hover:text-on-surface
-                text-small"
-            >
+            <Button variant="ghost" size="sm" onClick={() => setShowMobileList(true)} aria-label="Mở danh sách">
               <PanelLeft size={18} />
               <span>Menu</span>
-            </button>
+            </Button>
           </div>
           <ErrorBoundary moduleName="workspace-content">
             <Outlet />

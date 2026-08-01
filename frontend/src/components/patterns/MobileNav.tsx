@@ -58,6 +58,9 @@ export function MobileNav() {
           </a>
         )
       })}
+      {/* eslint-disable-next-line no-restricted-syntax -- Mục thanh tab dưới: bố cục DỌC
+          (icon trên, nhãn dưới) với vùng chạm tối thiểu min-h-11 min-w-11. Ba kind của NavRow
+          đều là hàng ngang một dòng. */}
       <button
         onClick={logout}
         className="flex flex-col items-center justify-center gap-1

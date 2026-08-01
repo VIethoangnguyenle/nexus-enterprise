@@ -8,6 +8,8 @@ import { Modal } from '../../../components/composites/Modal'
 import { ConfirmDialog } from '../../../components/composites/ConfirmDialog'
 import { Button } from '../../../components/primitives/Button'
 import { Input } from '../../../components/primitives/Input'
+import { Select } from '../../../components/primitives/Select'
+import { NavRow } from '../../../components/primitives/NavRow'
 import { Badge } from '../../../components/primitives/Badge'
 import { Heading } from '../../../components/primitives/Heading'
 import { LoadingState } from '../../../components/LoadingState'
@@ -169,25 +171,24 @@ function AdminOrganizationPage() {
             {/* Children info */}
             {selectedDept.children.length > 0 && (
               <div className="pt-2 border-t border-outline-variant/30">
-                <span className="text-label-caps text-on-surface-variant text-[11px] uppercase tracking-wider">
+                <span className="text-label-caps text-on-surface-variant uppercase tracking-wider">
                   Sub-departments ({selectedDept.children.length})
                 </span>
                 <div className="mt-2 flex flex-col gap-1">
                   {selectedDept.children.map((child) => (
-                    <button
+                    <NavRow
                       key={child.id}
+                      kind="navItem"
                       onClick={() => {
                         setSelectedDept(child)
                         setEditingName(child.name)
                         setIsEditing(false)
                       }}
-                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-on-surface
-                        hover:bg-surface-container transition-colors border-none bg-transparent cursor-pointer text-left"
                     >
                       <Building2 size={14} className="text-on-surface-variant shrink-0" />
                       <span className="truncate flex-1">{child.name}</span>
                       <Badge variant="secondary">{child.member_count}</Badge>
-                    </button>
+                    </NavRow>
                   ))}
                 </div>
               </div>
@@ -212,17 +213,15 @@ function AdminOrganizationPage() {
             {data?.flat && data.flat.length > 0 && (
               <div>
                 <label className="text-sm font-medium text-on-surface mb-1 block">Parent Department</label>
-                <select
+                <Select
                   value={newDeptParentId}
                   onChange={(e) => setNewDeptParentId(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg border border-outline-variant bg-surface
-                    text-on-surface text-sm outline-none focus:border-primary transition-colors"
                 >
                   <option value="">None (Root department)</option>
                   {data.flat.map((d) => (
                     <option key={d.id} value={d.id}>{d.name}</option>
                   ))}
-                </select>
+                </Select>
               </div>
             )}
             <div className="flex justify-end gap-2 pt-2">
@@ -272,6 +271,11 @@ function DeptTreeItem({ node, depth, activeId, expandedIds, onToggle, onSelect }
 
   return (
     <>
+      {/* eslint-disable-next-line no-restricted-syntax -- Node cây có thụt lề TÍNH THEO ĐỘ SÂU
+          qua style inline (12 + depth*20 px), y hệt TreeView.tsx (đã miễn trừ cùng lý do).
+          NavRow chỉ có thụt lề cố định cho subItem (pl-9), không nhận tham số depth, nên không
+          diễn đạt được cây nhiều cấp. Hai chỗ giờ dùng chung lý do này — dấu hiệu NavRow còn
+          thiếu một trục "depth" (hoặc component TreeView nên được tái dùng thay vì viết lại). */}
       <button
         onClick={() => {
           onSelect(node)

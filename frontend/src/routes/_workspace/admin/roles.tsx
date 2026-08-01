@@ -139,7 +139,7 @@ function AdminRolesPage() {
             {/* System roles */}
             {systemRoles.length > 0 && (
               <>
-                <span className="text-label-caps text-on-surface-variant uppercase tracking-wider text-[11px] font-semibold px-1">
+                <span className="text-label-caps text-on-surface-variant uppercase tracking-wider font-semibold px-1">
                   System Roles
                 </span>
                 {systemRoles.map((role) => (
@@ -158,7 +158,7 @@ function AdminRolesPage() {
             {/* Custom roles */}
             {customRoles.length > 0 && (
               <>
-                <span className="text-label-caps text-on-surface-variant uppercase tracking-wider text-[11px] font-semibold px-1 mt-4">
+                <span className="text-label-caps text-on-surface-variant uppercase tracking-wider font-semibold px-1 mt-4">
                   Custom Roles
                 </span>
                 {customRoles.map((role) => (
@@ -207,17 +207,17 @@ function AdminRolesPage() {
 
             {/* Permission matrix placeholder */}
             <div className="pt-3 border-t border-outline-variant/30">
-              <span className="text-label-caps text-on-surface-variant text-[11px] uppercase tracking-wider">
+              <span className="text-label-caps text-on-surface-variant uppercase tracking-wider">
                 Permissions
               </span>
               <div className="mt-3 rounded-lg border border-outline-variant overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="bg-surface-container">
-                      <th className="px-3 py-2 text-left text-[11px] text-on-surface-variant uppercase tracking-wider font-medium">Resource</th>
-                      <th className="px-2 py-2 text-center text-[11px] text-on-surface-variant uppercase tracking-wider font-medium w-12">R</th>
-                      <th className="px-2 py-2 text-center text-[11px] text-on-surface-variant uppercase tracking-wider font-medium w-12">W</th>
-                      <th className="px-2 py-2 text-center text-[11px] text-on-surface-variant uppercase tracking-wider font-medium w-12">M</th>
+                      <th className="px-3 py-2 text-left text-label-caps text-on-surface-variant">Resource</th>
+                      <th className="px-2 py-2 text-center text-label-caps text-on-surface-variant w-12">R</th>
+                      <th className="px-2 py-2 text-center text-label-caps text-on-surface-variant w-12">W</th>
+                      <th className="px-2 py-2 text-center text-label-caps text-on-surface-variant w-12">M</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -309,7 +309,7 @@ function PermCheck({ checked }: { checked: boolean }) {
       checked
         ? 'bg-primary border-primary text-on-primary'
         : 'bg-transparent border-outline-variant'
-    } flex items-center justify-center text-[10px] leading-none`}>
+    } flex items-center justify-center text-micro leading-none`}>
       {checked && '✓'}
     </span>
   )
@@ -326,6 +326,11 @@ interface RoleCardProps {
 
 function RoleCard({ role, displayName, isSelected, onSelect, isSystem }: RoleCardProps) {
   return (
+    /* eslint-disable-next-line no-restricted-syntax -- Thẻ vai trò có viền (border-primary khi
+       chọn, border-outline-variant/50 lúc thường) cộng icon-box 40px + badge + bộ đếm — không
+       phải hàng điều hướng. Không kind nào của NavRow có border (cả ba layoutStyles chỉ đổi
+       nền/chữ, không đổi viền), và hình học (gap-4, px-4 py-3) khác cả ba. Button cũng không
+       khớp: không size nào cho border có màu đổi theo trạng thái chọn như border-primary. */
     <button
       onClick={onSelect}
       className={`flex items-center gap-4 px-4 py-3 rounded-lg border text-left

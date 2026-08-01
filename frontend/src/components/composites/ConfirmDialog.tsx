@@ -26,7 +26,7 @@ interface ConfirmDialogProps {
   /** Confirm button label — default "Confirm". */
   confirmLabel?: string
   /** Confirm button variant — default "primary". */
-  confirmVariant?: 'primary' | 'error'
+  confirmVariant?: 'primary' | 'danger'
   /** Icon inside the confirm button. */
   confirmIcon?: ReactNode
   /** Whether the confirm action is in progress. */
@@ -50,7 +50,7 @@ interface ConfirmDialogProps {
  *   icon={<Trash2 size={22} className="text-error" />}
  *   iconBg="bg-error-container"
  *   confirmLabel="Delete"
- *   confirmVariant="error"
+ *   confirmVariant="danger"
  *   loading={isDeleting}
  * />
  * ```
@@ -105,7 +105,7 @@ export function ConfirmDialog({
 
         {/* Actions */}
         <Modal.Actions className="w-full mt-0">
-          <Button variant="outline" onClick={onClose} disabled={loading}>
+          <Button variant="secondary" onClick={onClose} disabled={loading}>
             Cancel
           </Button>
           <Button

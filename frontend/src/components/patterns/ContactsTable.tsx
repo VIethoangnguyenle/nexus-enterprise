@@ -17,7 +17,7 @@ interface ContactsTableProps {
 export function ContactsTable({ contacts, selectedId, onSelect }: ContactsTableProps) {
   return (
     <div className="flex-1 overflow-y-auto p-5 md:p-8 bg-background">
-      <div className="bg-surface-container-lowest rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.04)] border border-outline-variant overflow-hidden">
+      <div className="bg-surface-container-lowest rounded-xl shadow-card border border-outline-variant overflow-hidden">
         {/* Table header — Stitch: CSS Grid, bg-surface-container-low */}
         <div className="hidden md:grid grid-cols-[auto_1.5fr_1fr_1.5fr_1fr] gap-4 px-6 py-3 bg-surface-container-low
           border-b border-outline-variant text-xs font-bold text-on-surface-variant uppercase tracking-wider">
@@ -42,6 +42,10 @@ export function ContactsTable({ contacts, selectedId, onSelect }: ContactsTableP
             const isSelected = selectedId === contact.user_id
 
             return (
+              /* eslint-disable-next-line no-restricted-syntax -- Hàng bảng dữ liệu: thẻ
+                 button không có padding, nó bọc một CSS grid tự mang px-6 py-3.5 và
+                 grid-cols-[auto_1.5fr_1fr_1.5fr_1fr]. NavRow áp padding, gap và bo góc của
+                 riêng nó, sẽ cộng chồng lên padding của grid bên trong. */
               <button
                 key={contact.user_id}
                 onClick={() => onSelect(contact)}

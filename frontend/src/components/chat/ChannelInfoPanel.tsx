@@ -7,7 +7,7 @@ import { useContacts } from '../../hooks/useContacts'
 import { FilePreviewCard } from '../patterns/FilePreviewCard'
 import { Modal } from '../composites/Modal'
 import { ConfirmDialog } from '../composites/ConfirmDialog'
-import { Button, IconButton, Spinner } from '../primitives'
+import { Button, IconButton, Input, Spinner } from '../primitives'
 import { Users, Pin, Search, FolderOpen, Settings, X, UserPlus, UserMinus } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -44,8 +44,13 @@ export function ChannelInfoPanel({ channelId, channelName, wsId, onClose, initia
   ]
 
   return (
-    <div className="fixed inset-0 z-40 lg:relative lg:inset-auto lg:z-auto lg:w-[340px]
-      flex-shrink-0 flex flex-col bg-surface-container-lowest animate-panel-slide lg:border-l lg:border-outline-variant">
+    // Bề rộng panel qua biến CSS --peek-w (áp dụng ở lg: theo index.css), cùng cơ chế
+    // PeekPanel dùng cho width — tránh giá trị pixel tuỳ tiện trong className.
+    <div
+      className="fixed inset-0 z-40 lg:relative lg:inset-auto lg:z-auto
+      flex-shrink-0 flex flex-col bg-surface-container-lowest animate-panel-slide lg:border-l lg:border-outline-variant"
+      style={{ ['--peek-w' as string]: '340px' }}
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant">
         <h3 className="text-sm font-semibold text-on-surface">{channelName}</h3>
@@ -61,6 +66,12 @@ export function ChannelInfoPanel({ channelId, channelName, wsId, onClose, initia
       {/* Tab bar */}
       <div className="flex border-b border-outline-variant px-2">
         {tabs.map((tab) => (
+          /* eslint-disable-next-line no-restricted-syntax -- Tab trạng thái active tô màu
+             primary + viền dưới liền 2px chiếm hết bề rộng tab (border-b-2 border-primary,
+             -mb-px chồng lên border-b của hộp cha). Tabs composite (composites/Tabs.tsx) diễn
+             đạt active bằng font-semibold + một thanh accent thụt lề (inset span), không phải
+             viền primary toàn bề rộng — không có prop nào chỉnh lại kiểu active đó. Đúng lý do
+             đã miễn trừ ở drive/DriveContextPanel.tsx cho cùng dạng tab bar. */
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
@@ -122,7 +133,7 @@ function MembersTab({ channelId, channelName, wsId }: { channelId: string; chann
             {/* ONLINE section */}
             {online.length > 0 && (
               <>
-                <div className="px-2 pt-1 pb-0.5 font-label-caps text-label-caps text-green-600">
+                <div className="px-2 pt-1 pb-0.5 font-label-caps text-label-caps text-status-online">
                   Online — {online.length}
                 </div>
                 {online.map((m) => (
@@ -176,7 +187,7 @@ function MembersTab({ channelId, channelName, wsId }: { channelId: string; chann
         icon={<UserMinus size={22} className="text-error" />}
         iconBg="bg-error-container"
         confirmLabel="Remove"
-        confirmVariant="error"
+        confirmVariant="danger"
         loading={removeMutation.isPending}
       />
     </div>
@@ -194,12 +205,13 @@ function MemberRow({ member: m, isOnline, onRemove }: {
         <div className="w-7 h-7 rounded-full bg-primary-container flex items-center justify-center text-xs text-on-primary-container font-medium">
           {m.username?.[0]?.toUpperCase() || '?'}
         </div>
-        <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-container-lowest ${isOnline ? 'bg-green-500' : 'bg-slate-300'}`} />
+        <span className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-surface-container-lowest ${isOnline ? 'bg-status-online' : 'bg-status-offline'}`} />
       </div>
       <span className="text-sm text-on-surface flex-1 truncate">{m.username}</span>
       <IconButton
         onClick={onRemove}
-        className="opacity-0 group-hover:opacity-100 text-on-surface-variant hover:text-error"
+        tone="danger"
+        className="opacity-0 group-hover:opacity-100"
         aria-label={`Remove ${m.username}`}
         size="sm"
       >
@@ -249,18 +261,16 @@ function AddMemberModal({
       <Modal.Header onClose={onClose}>Add Member to #{channelName}</Modal.Header>
       <div className="p-4">
         {/* Search input */}
-        <input
+        <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search workspace members..."
           autoFocus
-          className="w-full bg-surface-container border border-outline-variant rounded px-3 py-2
-            text-sm text-on-surface placeholder:text-on-surface-variant outline-none
-            focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all mb-3"
+          className="mb-3"
         />
 
         {/* Results */}
-        <div className="max-h-[300px] overflow-y-auto space-y-1">
+        <div className="max-h-75 overflow-y-auto space-y-1">
           {loadingContacts ? (
             <div className="flex justify-center py-4"><Spinner size="sm" /></div>
           ) : filtered.length === 0 ? (
@@ -280,10 +290,10 @@ function AddMemberModal({
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm text-on-surface truncate">{c.display_name || c.username}</div>
-                    {c.email && <div className="text-[10px] text-on-surface-variant truncate">{c.email}</div>}
+                    {c.email && <div className="text-micro text-on-surface-variant truncate">{c.email}</div>}
                   </div>
                   {alreadyAdded ? (
-                    <span className="text-[10px] text-on-surface-variant px-2 py-0.5 rounded bg-surface-container">
+                    <span className="text-micro text-on-surface-variant px-2 py-0.5 rounded bg-surface-container">
                       Added
                     </span>
                   ) : (
@@ -328,7 +338,7 @@ function PinsTab({ channelId }: { channelId: string }) {
               <div key={p.message?.id} className="bg-surface-container rounded p-3 border border-outline-variant">
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-xs font-medium text-on-surface">{p.message?.sender_name}</span>
-                <span className="text-[10px] text-on-surface-variant">pinned by {p.pinned_by}</span>
+                <span className="text-micro text-on-surface-variant">pinned by {p.pinned_by}</span>
               </div>
               <p className="text-sm text-on-surface-variant m-0 line-clamp-3">{stripHtml(p.message?.content || '')}</p>
             </div>
@@ -347,13 +357,11 @@ function SearchTab({ channelId }: { channelId: string }) {
 
   return (
     <div className="p-3">
-      <input
+      <Input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Search messages..."
-        className="w-full bg-surface-container border border-outline-variant rounded px-3 py-2
-          text-sm text-on-surface placeholder:text-on-surface-variant outline-none
-          focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all mb-3"
+        className="mb-3"
       />
       {isLoading ? (
         <div className="text-xs text-on-surface-variant text-center py-4">Searching...</div>
@@ -425,6 +433,10 @@ function SettingsTab({ channelId, channelName }: { channelId: string; channelNam
         <label className="text-xs text-on-surface-variant mb-1 block">Channel Name</label>
         {editing ? (
           <div className="flex items-center gap-2">
+            {/* eslint-disable-next-line no-restricted-syntax -- Input là con trực tiếp của hàng
+                flex (flex-1 cạnh nút Save). Input tự bọc phần tử trong
+                <div class="flex flex-col gap-1">, nên flex-1 đặt trên input sẽ rơi vào cháu chứ
+                không phải con của hàng flex và không chia chỗ đúng cách. */}
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -439,6 +451,10 @@ function SettingsTab({ channelId, channelName }: { channelId: string; channelNam
             </Button>
           </div>
         ) : (
+          /* eslint-disable-next-line no-restricted-syntax -- Nhãn bấm-để-sửa: màu on-surface
+             lúc nghỉ, đổi sang primary chỉ khi hover, không nền, không gạch chân, không đệm.
+             Không variant nào của Button khớp: `link` luôn primary lúc nghỉ; `ghost` đổi màu
+             sang on-surface (không phải primary) và có nền hover. */
           <button
             onClick={() => setEditing(true)}
             className="text-sm text-on-surface font-medium cursor-pointer bg-transparent border-none

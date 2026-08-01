@@ -27,13 +27,14 @@
 
 
   /* --- Primary --- */
-  --color-primary: #2563EB;
-  --color-primary-hover: #1d4ed8;
+  --color-primary: #004AC6;
+  --color-primary-hover: #003EA8;
   --color-primary-container: #2563eb;
   --color-primary-fixed: #dbe1ff;
   --color-primary-fixed-dim: #b4c5ff;
   --color-on-primary: #ffffff;
   --color-on-primary-container: #eeefff;
+  --color-on-primary-fixed-variant: #003EA8;
 
 
   /* --- Secondary --- */
@@ -58,10 +59,18 @@
   --color-on-error-container: #93000a;
   --color-success: #16a34a;
   --color-success-bg: rgba(22, 163, 74, 0.08);
+  --color-on-success: #ffffff;
   --color-warning: #d97706;
   --color-warning-bg: rgba(217, 119, 6, 0.08);
-  --color-danger: #ba1a1a;
-  --color-danger-bg: rgba(186, 26, 26, 0.06);
+  /* `danger` là bí danh của `error`, không phải một màu thứ hai.
+   * Stitch §Error đặt tên cho màu này là `error` ("Signal Red #BA1A1A / error"),
+   * nên `error` là từ vựng chuẩn và `danger` là nhánh trôi của dự án. Trước đây
+   * cả hai cùng nướng cứng #ba1a1a — hai tên, một màu, không gì ràng chúng lại:
+   * sửa một bên mà quên bên kia là app có hai sắc đỏ.
+   * Bí danh gỡ rủi ro đó ngay mà không đụng tới 21 chỗ đang gọi `danger`.
+   * Việc đổi tên chúng sang `error` đi kèm migration từng chặng. */
+  --color-danger: var(--color-error);
+  --color-danger-bg: color-mix(in srgb, var(--color-error) 6%, transparent);
   --color-info: #0284c7;
   --color-info-bg: rgba(2, 132, 199, 0.08);
 
@@ -71,7 +80,7 @@
   --color-bg-tertiary: var(--color-surface-container-low);
 
   --color-bg-hover: var(--color-surface-container);
-  --color-bg-active: rgba(37, 99, 235, 0.08);
+  --color-bg-active: color-mix(in srgb, var(--color-primary) 8%, transparent);
   --color-bg-glass: rgba(0, 0, 0, 0.03);
   --color-text-primary: var(--color-on-surface);
   --color-text-secondary: var(--color-on-surface-variant);
@@ -84,8 +93,8 @@
   --color-border-focus: var(--color-primary);
   --color-accent: var(--color-primary);
   --color-accent-hover: var(--color-primary-hover);
-  --color-accent-bg: rgba(37, 99, 235, 0.08);
-  --color-accent-glow: rgba(37, 99, 235, 0.15);
+  --color-accent-bg: color-mix(in srgb, var(--color-primary) 8%, transparent);
+  --color-accent-glow: color-mix(in srgb, var(--color-primary) 15%, transparent);
 
   /* --- Status Indicators (semantic) --- */
   --color-status-online: #16a34a;
@@ -139,6 +148,13 @@
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
   --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
   --shadow-raised: 0 2px 8px -2px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.04);
+
+  /* Bóng nhuốm màu nhấn. Tồn tại để 5 chỗ đang nướng cứng mã RGB của primary
+     cũ có đích chuyển sang mà không phải viết giá trị tuỳ tiện. */
+  --shadow-accent-sm: 0 2px 12px -2px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  --shadow-accent: 0 4px 16px color-mix(in srgb, var(--color-primary) 20%, transparent);
+  --shadow-accent-lg: 0 8px 24px color-mix(in srgb, var(--color-primary) 8%, transparent);
 
   --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.15);
 
@@ -434,6 +450,6 @@
 /* Auth Background Utility   */
 /* ========================= */
 @utility bg-nexus-auth {
-  background-image: radial-gradient(circle at 100% 0%, #dee8ff 0%, transparent 40%),
-                    radial-gradient(circle at 0% 100%, #e7eeff 0%, transparent 40%);
+  background-image: radial-gradient(circle at 100% 0%, var(--color-surface-container-high) 0%, transparent 40%),
+                    radial-gradient(circle at 0% 100%, var(--color-surface-container) 0%, transparent 40%);
 }

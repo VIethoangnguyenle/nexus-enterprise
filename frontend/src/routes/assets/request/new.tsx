@@ -35,7 +35,7 @@ function AssetRequestNew() {
       <Button variant="ghost" size="sm" onClick={() => navigate({ to: '/assets/dashboard' })}>← Back</Button>
       <h1 className="font-h1 text-h1 text-on-surface mt-3 mb-4">Request Asset</h1>
 
-      <Card className="max-w-[640px]">
+      <Card className="max-w-160">
         <Card.Body>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             {createReq.error && (
@@ -57,11 +57,15 @@ function AssetRequestNew() {
 
             {/* Urgency selector */}
             <div>
-              <label className="block text-[11px] font-bold text-on-surface-variant uppercase tracking-widest mb-2">
+              <label className="block text-label-caps text-on-surface-variant mb-2">
                 Urgency
               </label>
               <div className="flex gap-2">
                 {URGENCY_LEVELS.map(u => (
+                  /* eslint-disable-next-line no-restricted-syntax -- selected-state urgency chip: colour is
+                     data-driven per level (urgencyColors) and Button's variant enum can't parametrise that;
+                     Button also has no active/selected state. Same root cause as assets/list.tsx's state
+                     filter chip — no chip/segmented-toggle primitive exists yet. */
                   <button
                     key={u}
                     type="button"

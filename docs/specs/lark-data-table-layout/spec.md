@@ -11,6 +11,15 @@ Row-based rendering exists (`DriveFileList.tsx`, `DriveFileRow.tsx`). Breadcrumb
 found only in `routes/_workspace/contacts.tsx`, not in Drive, so the breadcrumb requirement is
 unmet where this spec most calls for it.
 
+**Bổ sung 2026-08-01 — di cư design system.** Drive và Assets đã dùng chung token và primitive
+(`Button`, `IconButton`, `Input`, `Badge`), nên phần "một cách trình bày nhất quán" giờ được
+cưỡng chế bằng lint chứ không còn là quy ước. **Yêu cầu breadcrumb vẫn chưa được đáp ứng** —
+đợt di cư này chỉ đụng tới lớp trình bày, không thêm năng lực điều hướng nào.
+
+Bốn chỗ trong `components/drive` giữ số đo pixel tuỳ tiện kèm chú thích miễn trừ: chúng là
+chiều rộng cột của bảng, phải khớp nhau theo pixel giữa hàng tiêu đề và hàng dữ liệu, và thang
+spacing 4px không diễn đạt được ràng buộc đó. Xem `docs/superpowers/specs/2026-08-01-ui-design-system-enforcement-design.md` §1.3.
+
 ## Requirements
 
 ### Requirement: Standard Data Table

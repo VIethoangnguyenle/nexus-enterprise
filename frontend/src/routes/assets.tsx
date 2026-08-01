@@ -5,7 +5,7 @@ import { useWebSocketStore } from '../stores/websocket.store'
 import { useWorkspaces } from '../hooks/useWorkspaces'
 import NotificationBell from '../components/NotificationBell'
 import { MobileNav } from '../components/patterns/MobileNav'
-import { Heading, Spinner, Avatar } from '../components/primitives'
+import { Heading, Spinner, Avatar, IconButton, NavRow } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { LayoutDashboard, Package, ClipboardList, Tag, Settings, LogOut, ArrowLeft, Menu, X } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -62,7 +62,7 @@ function AssetLayout() {
       {/* Nav items */}
       <nav className="flex-1 py-2">
         <div className="px-4 py-2">
-          <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <span className="text-label-caps text-on-surface-variant">
             Management
           </span>
         </div>
@@ -90,11 +90,9 @@ function AssetLayout() {
           text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors no-underline">
           <Settings size={16} /><span>Settings</span>
         </Link>
-        <button onClick={logout} className="flex items-center gap-2 px-4 py-2 text-sm w-full
-          text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors
-          bg-transparent border-none cursor-pointer text-left">
+        <NavRow kind="navItem" onClick={logout} aria-label="Logout">
           <LogOut size={16} /><span>Logout ({user?.username})</span>
-        </button>
+        </NavRow>
       </div>
     </>
   )
@@ -103,7 +101,7 @@ function AssetLayout() {
     <div className="flex flex-col h-dvh bg-surface overflow-hidden">
       <div className="flex flex-1 min-h-0">
         {/* Sidebar — hidden on mobile, visible on lg+ */}
-        <div className="hidden lg:flex w-[260px] flex-shrink-0 bg-surface-container-low border-r border-outline-variant flex-col">
+        <div className="hidden lg:flex w-65 flex-shrink-0 bg-surface-container-low border-r border-outline-variant flex-col">
           {sidebarContent}
         </div>
 
@@ -113,15 +111,15 @@ function AssetLayout() {
             {/* Backdrop */}
             <div className="absolute inset-0 bg-black/40" onClick={() => setShowMobileSidebar(false)} />
             {/* Panel */}
-            <div className="absolute left-0 top-0 bottom-0 w-[280px] bg-surface-container-low flex flex-col animate-slide-left">
+            <div className="absolute left-0 top-0 bottom-0 w-70 bg-surface-container-low flex flex-col animate-slide-left">
               <div className="flex items-center justify-end px-3 py-2 border-b border-outline-variant">
-                <button
+                <IconButton
+                  size="lg"
                   onClick={() => setShowMobileSidebar(false)}
-                  className="min-h-11 min-w-11 flex items-center justify-center
-                    bg-transparent border-none cursor-pointer text-on-surface-variant"
+                  aria-label="Close menu"
                 >
                   <X size={20} />
-                </button>
+                </IconButton>
               </div>
               {sidebarContent}
             </div>
@@ -134,13 +132,14 @@ function AssetLayout() {
             bg-surface-container-lowest flex-shrink-0">
             <div className="flex items-center gap-2">
               {/* Mobile hamburger */}
-              <button
+              <IconButton
+                size="lg"
                 onClick={() => setShowMobileSidebar(true)}
-                className="min-h-9 min-w-9 flex items-center justify-center
-                  bg-transparent border-none cursor-pointer text-on-surface-variant lg:hidden"
+                className="lg:hidden"
+                aria-label="Open menu"
               >
                 <Menu size={18} />
-              </button>
+              </IconButton>
               <h2 className="text-sm font-semibold text-on-surface">Asset Management</h2>
             </div>
             <NotificationBell />

@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useWorkspaces, useCreateWorkspace } from '../../hooks/useWorkspaces'
 import { useAuthStore } from '../../stores/auth.store'
-import { Spinner } from '../../components/primitives'
+import { Button, Spinner } from '../../components/primitives'
 import { Briefcase, ChevronRight, Plus, Users } from 'lucide-react'
 
 export const Route = createFileRoute('/_auth/workspace-select')({
@@ -49,7 +49,13 @@ function WorkspaceSelectPage() {
     <div className="bg-background text-on-background min-h-screen flex items-center justify-center relative overflow-hidden">
       {/* Decorative Background — Stitch: blur circles */}
       <div className="absolute inset-0 z-0 pointer-events-none">
+        {/* eslint-disable-next-line no-restricted-syntax -- Thang blur của Tailwind dừng ở
+            blur-3xl (64px, xem tailwindcss/theme.css) — chưa bằng nửa 120px cần cho khối mờ
+            nền trang trí này; đổi về blur-3xl sẽ làm cứng hẳn viền khối, không phải xấp xỉ hợp
+            lý. Xem Task 14. */}
         <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-surface-container rounded-full blur-[120px] opacity-70" />
+        {/* eslint-disable-next-line no-restricted-syntax -- Cùng lý do: 150px không có giá trị
+            gần trong thang blur (max blur-3xl = 64px). Xem Task 14. */}
         <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-surface-variant rounded-full blur-[150px] opacity-60" />
       </div>
 
@@ -58,7 +64,7 @@ function WorkspaceSelectPage() {
         {/* Header — Stitch: centered, w-16 h-16 brand icon */}
         <header className="text-center space-y-2 flex flex-col items-center">
           <div className="w-16 h-16 bg-primary-container text-on-primary rounded-xl md:rounded-xl rounded-full
-            flex items-center justify-center mb-2 shadow-[0_4px_16px_rgba(37,99,235,0.2)]">
+            flex items-center justify-center mb-2 shadow-accent">
             <Briefcase size={32} />
           </div>
           <h1 className="text-h2 md:text-h1 text-on-surface">Select your workspace</h1>
@@ -123,23 +129,23 @@ function WorkspaceSelectPage() {
 
             {/* Footer Actions — Stitch: border-t, flex sm:flex-row */}
             <footer className="pt-6 border-t border-surface-variant flex flex-col sm:flex-row items-center justify-center gap-4">
-              <button
-                className="w-full sm:w-auto px-6 py-3 bg-surface-container-lowest border border-outline-variant
-                  text-on-surface rounded-lg font-semibold text-small hover:bg-surface-container-low
-                  transition-colors flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+              <Button
+                variant="secondary"
+                size="cta"
+                className="sm:w-auto px-6 shadow-sm"
               >
                 <Users size={18} />
                 Join an Organization
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="cta"
                 onClick={() => navigate({ to: '/onboarding' as any })}
-                className="w-full sm:w-auto px-6 py-3 bg-primary-container text-on-primary rounded-lg
-                  font-semibold text-small hover:bg-primary transition-colors flex items-center justify-center
-                  gap-2 shadow-sm cursor-pointer border-none"
+                className="sm:w-auto px-6 shadow-sm"
               >
                 <Plus size={18} />
                 Create Workspace
-              </button>
+              </Button>
             </footer>
           </>
         )}
@@ -163,11 +169,16 @@ function WorkspaceCard({
   onClick: () => void
 }) {
   return (
+    /* eslint-disable-next-line no-restricted-syntax -- Thẻ chọn workspace (selection card),
+       không phải nút hành động lẫn hàng điều hướng: p-6/rounded-xl cố định và hover đổi đồng
+       thời shadow+bg+border không khớp Button (padding cố định theo size, không có kiểu hover
+       kép) lẫn NavRow (hình học px-3/py-2 hoặc pl-9/pr-2 và màu active/inactive dành cho
+       sidebar, không phải thẻ lớn có elevation). Xem Task 14. */
     <button
       onClick={onClick}
       className="w-full bg-surface-container-lowest p-6 rounded-xl flex items-center gap-4
-        shadow-[0_4px_16px_rgba(0,0,0,0.04)]
-        hover:shadow-[0_8px_24px_rgba(37,99,235,0.08)] hover:bg-surface-bright
+        shadow-card
+        hover:shadow-accent-lg hover:bg-surface-bright
         transition-all duration-300
         border border-transparent hover:border-primary-container
         group text-left cursor-pointer"

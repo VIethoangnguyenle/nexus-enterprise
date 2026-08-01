@@ -13,6 +13,12 @@ Either the spec predates a deliberate redesign or the collapse feature was dropp
 not been decided, so the requirements are recorded here as written rather than edited to match
 the code.
 
+**Bổ sung 2026-08-01 — di cư design system.** `AppSidebar.tsx:105` giờ viết `w-70` thay cho
+`w-[280px]`. Đây chỉ là đổi cách viết sang thang spacing, **không phải sửa độ lệch**: `w-70`
+bằng đúng 280px, nên khoảng cách với 240px spec đòi vẫn còn nguyên và quyết định trên vẫn chưa
+được đưa ra. Nút điều hướng trong sidebar đã chuyển sang primitive `NavRow`; chế độ thu gọn 64px
+vẫn không tồn tại.
+
 ## Requirements
 
 ### Requirement: Hierarchical Sidebar Navigation

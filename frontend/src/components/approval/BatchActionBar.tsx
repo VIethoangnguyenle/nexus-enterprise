@@ -14,7 +14,7 @@ export function BatchActionBar({ selectedCount, onBatchApprove, onClear, isProce
 
   return (
     <div className="fixed bottom-0 lg:bottom-0 inset-x-0 z-40 px-4 pb-4
-      lg:left-[280px] pointer-events-none">
+      lg:left-70 pointer-events-none">
       {/* Offset for MobileNav on mobile */}
       <div className="mb-14 lg:mb-0 pointer-events-auto">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-4
@@ -33,10 +33,10 @@ export function BatchActionBar({ selectedCount, onBatchApprove, onClear, isProce
               <span className="ml-1">Clear</span>
             </Button>
             <Button
+              variant="success"
               size="sm"
               onClick={onBatchApprove}
               disabled={isProcessing}
-              className="bg-success text-on-success hover:bg-success/90"
             >
               <Check size={14} />
               <span className="ml-1">Batch Approve</span>

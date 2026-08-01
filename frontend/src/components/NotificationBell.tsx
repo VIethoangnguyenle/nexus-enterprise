@@ -1,6 +1,6 @@
 import { useNotifications, useUnreadCount, useMarkRead, useMarkAllRead } from '../hooks/useNotifications'
 import { useState, useRef, useEffect } from 'react'
-import { Button, Text } from './primitives'
+import { Button, IconButton, Text } from './primitives'
 import { Bell, ClipboardList, CheckCircle, Package, Undo2, Trash2, MessageSquare, Info, AtSign } from 'lucide-react'
 
 const NOTIF_ICONS: Record<string, typeof ClipboardList> = {
@@ -37,23 +37,22 @@ export default function NotificationBell() {
 
   return (
     <div className="relative" ref={ref}>
-      <button
+      <IconButton
         onClick={() => setOpen(!open)}
-        className="relative w-8 h-8 flex items-center justify-center rounded
-          text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all
-          cursor-pointer border-none bg-transparent"
+        className="relative"
+        aria-label="Notifications"
       >
         <Bell size={18} strokeWidth={1.8} />
         {unreadCount > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 flex items-center
-            justify-center bg-error text-on-error text-[10px] font-bold rounded-full">
+          <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 flex items-center
+            justify-center bg-error text-on-error text-micro rounded-full">
             {unreadCount > 99 ? '99+' : unreadCount}
           </span>
         )}
-      </button>
+      </IconButton>
 
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-[340px] bg-surface-container-lowest border border-outline-variant
+        <div className="absolute right-0 top-full mt-1 w-85 bg-surface-container-lowest border border-outline-variant
           rounded-lg shadow-lg animate-fade-in z-50 overflow-hidden">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant">
@@ -64,7 +63,7 @@ export default function NotificationBell() {
           </div>
 
           {/* List */}
-          <div className="max-h-[360px] overflow-y-auto">
+          <div className="max-h-90 overflow-y-auto">
             {notifications.length > 0 ? notifications.map(n => (
               <div
                 key={n.id}
@@ -77,7 +76,7 @@ export default function NotificationBell() {
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-on-surface truncate">{n.title || n.type}</div>
                   <div className="text-xs text-on-surface-variant mt-1 truncate">{n.body || n.message || ''}</div>
-                  <div className="text-[10px] text-on-surface-variant mt-1">{formatTimeAgo(n.created_at)}</div>
+                  <div className="text-micro text-on-surface-variant mt-1">{formatTimeAgo(n.created_at)}</div>
                 </div>
                 {!n.read && (
                   <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0 mt-2" />

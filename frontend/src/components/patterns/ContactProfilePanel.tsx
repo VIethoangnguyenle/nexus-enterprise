@@ -1,5 +1,5 @@
 import type { Contact } from '../../hooks/useContacts'
-import { Avatar } from '../primitives'
+import { Avatar, Button, IconButton } from '../primitives'
 import { X, MessageSquare, Phone, Mail, MapPin, Building2, Video } from 'lucide-react'
 
 interface ContactProfilePanelProps {
@@ -16,16 +16,12 @@ interface ContactProfilePanelProps {
  *  Action buttons: py-3 rounded-xl with shadow-sm. */
 export function ContactProfilePanel({ contact, onClose, onMessage }: ContactProfilePanelProps) {
   return (
-    <div className="w-96 border-l border-outline-variant bg-surface-container-lowest shadow-xl flex flex-col h-full overflow-y-auto">
+    <div className="w-96 border-l border-outline-variant bg-surface-container-lowest shadow-overlay flex flex-col h-full overflow-y-auto">
       {/* Close button — Stitch: absolute top-4 right-4 p-2 rounded-full */}
       <div className="flex justify-end p-4">
-        <button
-          onClick={onClose}
-          className="p-2 rounded-full bg-transparent border-none cursor-pointer
-            text-outline hover:text-on-surface hover:bg-surface-container-low transition-colors"
-        >
+        <IconButton onClick={onClose} shape="round" size="lg" aria-label="Đóng">
           <X size={20} />
-        </button>
+        </IconButton>
       </div>
 
       {/* Profile header — Stitch: p-8 pb-6 flex-col items-center text-center */}
@@ -63,22 +59,14 @@ export function ContactProfilePanel({ contact, onClose, onMessage }: ContactProf
 
       {/* Action buttons — Stitch: p-6 flex-col gap-3 mt-auto */}
       <div className="p-6 flex flex-col gap-3 mt-auto">
-        <button
-          onClick={() => onMessage?.(contact.user_id)}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-primary hover:bg-primary/90
-            text-on-primary font-semibold rounded-xl transition-colors cursor-pointer border-none shadow-sm"
-        >
+        <Button onClick={() => onMessage?.(contact.user_id)} size="cta" className="shadow-sm">
           <MessageSquare size={20} />
           Message
-        </button>
-        <button
-          className="w-full flex items-center justify-center gap-2 py-3 bg-surface-container-lowest
-            border border-outline-variant rounded-xl text-on-surface font-semibold
-            hover:bg-surface-container-low transition-colors cursor-pointer"
-        >
+        </Button>
+        <Button variant="secondary" size="cta">
           <Video size={20} />
           Call
-        </button>
+        </Button>
       </div>
     </div>
   )

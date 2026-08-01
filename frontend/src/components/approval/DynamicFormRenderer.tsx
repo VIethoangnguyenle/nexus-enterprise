@@ -153,7 +153,7 @@ export function FormDataDisplay({ fields, data }: FormDataDisplayProps) {
 
         return (
           <div key={field.label} className="flex items-start gap-2">
-            <Text variant="caption" muted className="min-w-[100px] shrink-0">
+            <Text variant="caption" muted className="min-w-25 shrink-0">
               {field.label}
             </Text>
             <Text variant="body" className="break-words">

@@ -88,6 +88,10 @@ export function FormFieldBuilder({ fields, onChange }: FormFieldBuilderProps) {
           )}
 
           <label className="flex items-center gap-1 shrink-0 cursor-pointer text-caption-ui text-on-surface-variant">
+            {/* eslint-disable-next-line no-restricted-syntax -- no Checkbox primitive exists. Input bakes
+                `w-full px-3 py-2` text-field styling and wraps in a `flex flex-col gap-1` div (documented
+                limitation), unusable for an inline 16px checkbox. Same reason as ApprovalTable.tsx's two
+                checkboxes — a Checkbox primitive is the real fix. */}
             <input
               type="checkbox"
               checked={field.required}

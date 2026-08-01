@@ -21,6 +21,9 @@ export function Tabs({ tabs, activeId, onChange, className = '' }: TabsProps) {
       role="tablist"
     >
       {tabs.map(tab => (
+        /* eslint-disable-next-line no-restricted-syntax -- Tab trong tablist, mang
+           role="tab" và aria-selected. Button luôn áp nền của variant, còn tab active ở đây
+           chỉ đổi màu chữ và độ đậm rồi vẽ gạch chân bằng phần tử riêng. */
         <button
           key={tab.id}
           role="tab"

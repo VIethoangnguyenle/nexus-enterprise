@@ -50,11 +50,11 @@ export function DriveContextPanel() {
 
   return (
     <div
-      className="w-[320px] border-l border-outline-variant bg-surface-container-lowest flex flex-col flex-shrink-0
+      className="w-80 border-l border-outline-variant bg-surface-container-lowest flex flex-col flex-shrink-0
         animate-slide-in-right"
     >
       {/* Header */}
-      <div className="h-[52px] px-4 flex items-center justify-between border-b border-outline-variant flex-shrink-0">
+      <div className="h-13 px-4 flex items-center justify-between border-b border-outline-variant flex-shrink-0">
         <span className="text-sm font-medium text-on-surface truncate">{item.name}</span>
         <IconButton
           onClick={closePanel}
@@ -70,6 +70,14 @@ export function DriveContextPanel() {
         {visibleTabs.map((t) => {
           const Icon = t.icon
           return (
+            /* eslint-disable-next-line no-restricted-syntax -- Equal-width tab strip for a
+               320px panel: each tab is `flex-1 justify-center` so 4 tabs split the width evenly,
+               with a `border-b-2 border-primary` active indicator. The `Tabs` composite
+               (components/composites/Tabs.tsx) sizes tabs to content with `px-4` padding and no
+               flex-1 — 4 tabs at that padding sum past 320px in this panel — and its active
+               state is a font-weight change plus an inset accent bar, not a full-width bottom
+               border. Neither is expressible through Tabs' props (only the outer className is
+               exposed). */
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
@@ -134,14 +142,14 @@ function PreviewTab({ item }: { item: DriveItem }) {
       {canPreviewImage && !imgError ? (
         <div className="w-full rounded-lg overflow-hidden border border-outline-variant bg-surface-container">
           {imgLoading ? (
-            <div className="w-full h-[180px] flex items-center justify-center animate-pulse">
+            <div className="w-full h-45 flex items-center justify-center animate-pulse">
               <span className="text-xs text-on-surface-variant">Loading preview…</span>
             </div>
           ) : imgUrl ? (
             <img
               src={imgUrl}
               alt={item.name}
-              className="w-full max-h-[280px] object-contain cursor-pointer"
+              className="w-full max-h-70 object-contain cursor-pointer"
               onClick={() => window.open(imgUrl, '_blank')}
               onError={() => setImgError(true)}
               loading="lazy"
@@ -212,17 +220,17 @@ function MetadataTab({ item }: { item: DriveItem }) {
     <div className="space-y-3">
       {fields.map((f) => (
         <div key={f.label}>
-          <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">{f.label}</span>
+          <span className="text-label-caps text-on-surface-variant">{f.label}</span>
           <p className="text-sm text-on-surface mt-1">{f.value}</p>
         </div>
       ))}
 
       {/* Owner — separate section with avatar */}
       <div>
-        <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Owner</span>
+        <span className="text-label-caps text-on-surface-variant">Owner</span>
         <div className="flex items-center gap-2 mt-1">
           <div className="w-6 h-6 rounded-full bg-primary-container text-on-primary-container
-            flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+            flex items-center justify-center text-micro font-semibold flex-shrink-0">
             {(ownerDisplay)[0]?.toUpperCase() || '?'}
           </div>
           <span className="text-sm text-on-surface">{ownerDisplay}{isOwner ? ' (You)' : ''}</span>
@@ -333,6 +341,10 @@ function PermissionsTab({ item }: { item: DriveItem }) {
           {/* Permission selector */}
           <div className="flex items-center gap-2">
             <label className="text-xs text-on-surface-variant">Permission:</label>
+            {/* eslint-disable-next-line no-restricted-syntax -- Direct flex child alongside a
+                `<label>` in a `flex items-center gap-2` row. `Select` wraps its element in its
+                own `flex flex-col gap-1` div for error text, which would displace it from that
+                slot. Known limitation — Select as a direct flex child loses its slot. */}
             <select
               value={permission}
               onChange={(e) => setPermission(e.target.value as 'read' | 'write')}
@@ -350,6 +362,10 @@ function PermissionsTab({ item }: { item: DriveItem }) {
               size={14}
               className="absolute left-2 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none"
             />
+            {/* eslint-disable-next-line no-restricted-syntax -- Search field with a leading icon
+                needs asymmetric `pl-7 pr-2` padding for the icon overlay. `Input` bakes `px-3`
+                (symmetric) into its base classes unconditionally, so it can't express this.
+                Known limitation — points at a missing SearchField composite. */}
             <input
               type="text"
               value={search}
@@ -362,7 +378,7 @@ function PermissionsTab({ item }: { item: DriveItem }) {
           </div>
 
           {/* Contacts */}
-          <div className="max-h-[200px] overflow-y-auto space-y-1">
+          <div className="max-h-50 overflow-y-auto space-y-1">
             {contactsLoading ? (
               <div className="flex justify-center py-3"><Spinner size="sm" /></div>
             ) : filteredContacts.length === 0 ? (
@@ -378,7 +394,7 @@ function PermissionsTab({ item }: { item: DriveItem }) {
                     className="flex items-center gap-2 px-2 py-1.5 rounded hover:bg-surface-container-high transition-colors"
                   >
                     <div className="w-6 h-6 rounded-full bg-primary-container text-on-primary-container
-                      flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+                      flex items-center justify-center text-micro font-semibold flex-shrink-0">
                       {(contact.display_name || contact.username || '?')[0].toUpperCase()}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -387,7 +403,7 @@ function PermissionsTab({ item }: { item: DriveItem }) {
                       </p>
                     </div>
                     {isShared ? (
-                      <span className="flex items-center gap-0.5 text-[10px] text-on-surface-variant px-1.5 py-0.5
+                      <span className="flex items-center gap-0.5 text-micro text-on-surface-variant px-1.5 py-0.5
                         bg-surface-container rounded-full flex-shrink-0">
                         <Check size={10} />
                         Shared

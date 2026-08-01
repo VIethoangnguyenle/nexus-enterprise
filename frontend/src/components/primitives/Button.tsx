@@ -1,7 +1,7 @@
 import { type ButtonHTMLAttributes, forwardRef } from 'react'
 
-type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost' | 'success' | 'outline' | 'error'
-type ButtonSize = 'sm' | 'md' | 'lg'
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'link'
+type ButtonSize = 'sm' | 'md' | 'cta' | 'link'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
@@ -9,20 +9,47 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   loading?: boolean
 }
 
+/**
+ * Mỗi variant tự khai tình trạng viền của mình. `border-none` KHÔNG được nằm ở
+ * chuỗi base: khi đó nó chọi với `border` của `secondary`, hai class hoà nhau về
+ * độ đặc hiệu, và Tailwind xử theo thứ tự trong stylesheet sinh ra — `.border-none`
+ * nằm sau `.border` nên luôn thắng. Hậu quả là `secondary`, thứ Stitch gọi là
+ * "Secondary/Outlined", render ra không có viền nào ở mọi chỗ dùng.
+ *
+ * Test khẳng định chuỗi class có chứa `border` vẫn xanh, vì class có mặt thật —
+ * nó chỉ thua. Xem spec 2026-08-01 §7.5.
+ */
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-on-primary hover:bg-primary-hover',
-  secondary: 'bg-surface-container text-on-surface border border-outline-variant hover:bg-surface-container-high',
-  outline: 'bg-transparent text-on-surface-variant border border-outline-variant hover:bg-surface-container-high hover:text-on-surface',
-  danger: 'bg-danger-bg text-danger border border-danger/20 hover:bg-danger/15',
-  error: 'bg-error text-on-error hover:bg-error/90',
-  success: 'bg-success-bg text-success border border-success/20 hover:bg-success/15',
-  ghost: 'bg-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container',
+  primary: 'border-none bg-primary text-on-primary hover:bg-primary-hover',
+  secondary: 'border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-high',
+  ghost: 'border-none bg-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container',
+  danger: 'border-none bg-error text-on-error hover:bg-error/90',
+  success: 'border-none bg-success text-on-success hover:bg-success/90',
+  link: 'border-none bg-transparent text-primary hover:text-primary-hover hover:underline',
 }
 
+/**
+ * `link` là nút TRÔNG như liên kết: không padding, không bo góc. Bảy chỗ trong
+ * codebase tự chế đúng dạng này (breadcrumb, nút Retry/Logout của route vỏ,
+ * chỉ báo thread) và mỗi chỗ đều phải miễn trừ vì `sm` nhỏ nhất vẫn có
+ * `px-3 py-1.5 rounded-md`. Ghép với `variant="link"` cho chữ primary, hoặc
+ * `variant="ghost"` cho chữ trung tính.
+ *
+ * Thang size theo `.stitch/DESIGN.md` §Buttons:
+ *   md  — Stitch "Primary/Secondary": py-2 px-4, bo 8px, chữ 14/20 w600
+ *   cta — Stitch "Full-Width CTA": py-3, bo 12px
+ *   sm  — KHÔNG có trong Stitch. Phần mở rộng của dự án cho thanh công cụ và
+ *         hàng bảng; 22 chỗ cần tới nó. Xem spec 2026-08-01 §4.2.
+ *
+ * Bo góc ánh xạ theo pixel Stitch nêu, không theo tên class: thang token của
+ * repo là sm 4 / md 8 / lg 12 / xl 16, nên "rounded-lg (8px)" của Stitch là
+ * `rounded-md` ở đây. Xem spec §4.1.
+ */
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: 'px-2 py-1 text-caption-ui rounded-sm',
-  md: 'px-3 py-1 text-small-ui rounded-md',
-  lg: 'px-4 py-2 text-body-ui rounded-md',
+  sm: 'px-3 py-1.5 rounded-md text-small-ui',
+  md: 'px-4 py-2 rounded-md text-body-strong',
+  cta: 'w-full py-3 rounded-lg text-body-strong',
+  link: 'p-0 rounded-none text-small',
 }
 
 /** Flat button primitive — Material 3 surface tokens, no gradients or glow effects. */
@@ -32,7 +59,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ref={ref}
       disabled={disabled || loading}
       className={`inline-flex items-center justify-center gap-2
-        transition-colors duration-fast cursor-pointer border-none
+        transition-colors duration-fast cursor-pointer
         disabled:opacity-40 disabled:cursor-not-allowed focus-ring
         ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...props}

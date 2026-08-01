@@ -23,6 +23,12 @@ export function ReactionBar({ reactions, currentUserId, onToggle, onAddReaction 
 
   return (
     <div className="flex flex-wrap items-center gap-1 mt-1">
+      {/* eslint-disable no-restricted-syntax -- Hàng chip reaction: chip emoji+count và nút "+"
+          cuối hàng dùng CHUNG một độ dày viền border-outline-variant/30 để trông liền một họ.
+          Badge không nhận onClick (là <span>, không tương tác). Button nướng justify-center và
+          padding cố định, không hợp một chip nội dung linh hoạt (emoji+số) hay hộp vuông w-7 h-7.
+          IconButton.outlined nướng viền full-opacity + tone mặc định text-outline — đổi riêng nút
+          "+" sẽ làm viền nó đậm hơn hẳn các chip bên cạnh mà nó phải đứng liền kề. */}
       {reactions.map((r) => {
         const isActive = r.user_ids?.includes(currentUserId)
         return (
@@ -50,6 +56,7 @@ export function ReactionBar({ reactions, currentUserId, onToggle, onAddReaction 
       >
         <Plus size={14} />
       </button>
+      {/* eslint-enable no-restricted-syntax */}
     </div>
   )
 }

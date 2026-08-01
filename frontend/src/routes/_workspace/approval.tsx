@@ -196,7 +196,7 @@ function ApprovalPage() {
             aria-label="Approve"
             onClick={(e: React.MouseEvent) => { e.stopPropagation(); handleApprove(row.id) }}
             size="sm"
-            className="text-success hover:bg-success/10"
+            tone="success"
           >
             <Check size={14} />
           </IconButton>

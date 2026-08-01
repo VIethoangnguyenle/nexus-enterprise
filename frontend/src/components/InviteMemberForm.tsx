@@ -23,7 +23,7 @@ export function InviteMemberForm({ wsId }: InviteMemberFormProps) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-      <label className="text-[11px] font-bold text-on-surface-variant uppercase tracking-widest">
+      <label className="text-label-caps text-on-surface-variant">
         Invite Member
       </label>
       <div className="flex gap-2">

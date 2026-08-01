@@ -55,7 +55,7 @@ export function MoveItemDialog({ item, workspaceId, isMoving, onConfirm, onClose
       {/* Footer actions */}
       <div className="border-t border-outline-variant px-6 py-4">
         <Modal.Actions className="mt-0">
-          <Button variant="outline" onClick={onClose} disabled={isMoving}>
+          <Button variant="secondary" onClick={onClose} disabled={isMoving}>
             Cancel
           </Button>
           <Button

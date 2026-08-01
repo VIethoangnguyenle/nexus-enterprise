@@ -18,17 +18,28 @@ export function DriveFilterPills({ active, onChange }: DriveFilterPillsProps) {
   return (
     <div className="flex items-center gap-1.5">
       {filters.map((f) => (
+        /* eslint-disable-next-line no-restricted-syntax -- Filter-pill toggle: rounded-full
+           pill at a fixed 30px height with two visual states (selected bg-primary-container vs
+           outlined). Button's size scale (sm/md/cta/link) has no pill/rounded-full option and no
+           selected/active toggle concept (only IconButton has `active`, and it is icon-only) —
+           forcing it would drop either the pill shape or the selected-state styling. */
         <button
           key={f.id}
           onClick={() => onChange(f.id)}
-          className={`h-[30px] px-3 rounded-full text-[12px] font-medium border transition-all duration-150
+          className={`h-7.5 px-3 rounded-full text-caption-ui border transition-all duration-150
             cursor-pointer flex items-center gap-1.5
             ${active === f.id
-              ? 'bg-primary-container text-on-primary-container border-primary-container shadow-[0_1px_2px_rgba(0,0,0,0.04)]'
+              ? 'bg-primary-container text-on-primary-container border-primary-container shadow-sm'
               : 'bg-transparent text-on-surface-variant/70 border-outline-variant/50 hover:bg-surface-container hover:text-on-surface hover:border-outline-variant'
             }`}
         >
-          {f.emoji && <span className="text-[11px]">{f.emoji}</span>}
+          {f.emoji && (
+            /* eslint-disable-next-line no-restricted-syntax -- 11px emoji glyph. Both 11px type
+               tokens (text-overline, text-label-caps) force uppercase text-transform, which is
+               meaningless on an emoji but still applies to it; neither is a non-uppercase 11px
+               token, so there is no scale value that carries the size without the transform. */
+            <span className="text-[11px]">{f.emoji}</span>
+          )}
           {f.label}
         </button>
       ))}

@@ -4,7 +4,9 @@
 >
 > **Canonical source of truth:** [`.stitch/DESIGN.md`](.stitch/DESIGN.md)
 >
-> The production system uses: **Manrope font**, **light-mode M3 tokens**, **`#2563EB` primary**.
+> The production system uses: **Manrope font**, **light-mode M3 tokens**, **`#004AC6` primary**
+> (Royal Blue, per `.stitch/metadata.json` `customColor`; it was `#2563EB` until 2026-08-01, which
+> Stitch names `primary-container` rather than `primary`).
 > This file is preserved for historical reference only. All new work MUST follow `.stitch/DESIGN.md`.
 >
 > — Deprecated 2026-05-01 during System Standardization audit

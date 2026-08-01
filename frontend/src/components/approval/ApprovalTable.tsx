@@ -37,6 +37,10 @@ export function ApprovalTable({
           bg-surface-container text-label-caps font-label-caps text-on-surface-variant uppercase tracking-wider">
           {showCheckboxes && (
             <div className="col-span-1 flex items-center">
+              {/* eslint-disable-next-line no-restricted-syntax -- no Checkbox primitive exists. Input bakes
+                  `w-full px-3 py-2` text-field styling and wraps in a `flex flex-col gap-1` div (documented
+                  limitation), unusable for an inline 16px checkbox. Same reason at line ~74 below and in
+                  FormFieldBuilder.tsx — a Checkbox primitive is the real fix. */}
               <input
                 type="checkbox"
                 checked={allSelected}
@@ -65,6 +69,8 @@ export function ApprovalTable({
             >
               {showCheckboxes && (
                 <div className="col-span-1 flex items-center">
+                  {/* eslint-disable-next-line no-restricted-syntax -- no Checkbox primitive; see the
+                      identical reason on the header checkbox above. */}
                   <input
                     type="checkbox"
                     checked={selectedIds.has(item.id)}
@@ -96,7 +102,7 @@ export function ApprovalTable({
                     onClick={e => { e.stopPropagation(); onApprove?.(item.id) }}
                     aria-label="Approve"
                     title="Approve"
-                    className="text-success hover:bg-success-bg"
+                    tone="success"
                   >
                     <Check size={16} />
                   </IconButton>
@@ -104,7 +110,7 @@ export function ApprovalTable({
                     onClick={e => { e.stopPropagation(); onReject?.(item.id) }}
                     aria-label="Reject"
                     title="Reject"
-                    className="text-danger hover:bg-danger-bg"
+                    tone="danger"
                   >
                     <X size={16} />
                   </IconButton>

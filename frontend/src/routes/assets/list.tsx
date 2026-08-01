@@ -44,7 +44,7 @@ function AssetList() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top bar */}
-        <div className="h-[52px] px-4 md:px-6 flex items-center justify-between border-b border-outline-variant flex-shrink-0">
+        <div className="h-13 px-4 md:px-6 flex items-center justify-between border-b border-outline-variant flex-shrink-0">
           <h1 className="font-h3 text-h3 text-on-surface">Assets</h1>
           <Button size="sm" onClick={() => navigate({ to: '/assets/request/new' })}>+ New</Button>
         </div>
@@ -52,6 +52,10 @@ function AssetList() {
         {/* Filter bar */}
         <div className="px-4 md:px-6 py-2 flex items-center gap-2 border-b border-outline-variant flex-shrink-0 overflow-x-auto scrollbar-none">
           {STATE_OPTIONS.map((s) => (
+            /* eslint-disable-next-line no-restricted-syntax -- selected-state filter chip: no primitive has a
+               selected/active variant for text pills (Button has no active state; its sizes bake rounded-md,
+               which same-specificity-conflicts with the rounded-full a chip needs — same trap documented in
+               Button.tsx's own border comment). See also request/new.tsx's urgency selector, same root cause. */
             <button
               key={s}
               onClick={() => setStateFilter(s)}
@@ -120,7 +124,7 @@ function AssetPeekPanel({ assetId, onClose, onOpenFull }: { assetId: string; onC
   const history: AssetHistory[] = histData?.history || []
   const timelineItems = history.slice(0, 5).map((h, i) => ({
     id: `${i}`,
-    color: ASSET_STATE_COLORS[h.to_state] || '#6b7280',
+    color: ASSET_STATE_COLORS[h.to_state] || 'var(--color-outline)',
     title: h.action,
     timestamp: h.created_at ? new Date(h.created_at).toLocaleDateString() : '',
     body: (
@@ -138,15 +142,15 @@ function AssetPeekPanel({ assetId, onClose, onOpenFull }: { assetId: string; onC
         {/* State + type */}
         <div className="space-y-3">
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">State</span>
+            <span className="text-label-caps text-on-surface-variant">State</span>
             <div className="mt-1"><Badge variant={stateToBadge(asset.state)}>{asset.state}</Badge></div>
           </div>
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Type</span>
+            <span className="text-label-caps text-on-surface-variant">Type</span>
             <p className="text-sm text-on-surface mt-1">{asset.type_name || asset.type_id}</p>
           </div>
           <div>
-            <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Assigned To</span>
+            <span className="text-label-caps text-on-surface-variant">Assigned To</span>
             <p className="text-sm text-on-surface mt-1">{asset.assigned_to || '—'}</p>
           </div>
         </div>
@@ -154,7 +158,7 @@ function AssetPeekPanel({ assetId, onClose, onOpenFull }: { assetId: string; onC
         {/* Actions */}
         {(transData?.transitions || []).length > 0 && (
           <div className="border-t border-outline-variant pt-3">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Actions</span>
+            <span className="text-label-caps text-on-surface-variant">Actions</span>
             <div className="flex flex-wrap gap-2 mt-2">
               {transData!.transitions.map(t => (
                 <Button
@@ -175,7 +179,7 @@ function AssetPeekPanel({ assetId, onClose, onOpenFull }: { assetId: string; onC
         {/* Recent history */}
         {timelineItems.length > 0 && (
           <div className="border-t border-outline-variant pt-3">
-            <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">Recent History</span>
+            <span className="text-label-caps text-on-surface-variant">Recent History</span>
             <div className="mt-2">
               <Timeline items={timelineItems} />
             </div>

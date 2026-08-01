@@ -64,7 +64,7 @@ function TimestampDivider({ timestamp }: { timestamp: unknown }) {
 
   return (
     <div className="flex items-center justify-center my-2">
-      <span className="px-3 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-caps text-label-caps text-[10px]">{label}</span>
+      <span className="px-3 py-1 rounded-full bg-surface-container-high text-on-surface-variant font-label-caps text-label-caps">{label}</span>
     </div>
   )
 }
@@ -118,8 +118,8 @@ export const MessageRow = memo(function MessageRow({
           {/* Message bubble */}
           {attachedFilename ? null : (
             <div className={isOwn
-              ? `bg-primary border-none rounded-2xl rounded-tr-sm p-4 text-sm leading-relaxed text-on-primary shadow-[0_2px_12px_-2px_rgba(37,99,235,0.2)] break-words [&_p]:text-on-primary [&_span]:text-on-primary [&_a]:text-on-primary [&_a]:underline [&_strong]:text-on-primary [&_em]:text-on-primary [&_code]:text-on-primary [&_code]:bg-white/15`
-              : `bg-surface-bright border border-outline-variant/30 rounded-2xl rounded-tl-sm p-4 text-sm leading-relaxed text-on-surface shadow-[0_2px_8px_-2px_rgba(0,0,0,0.05)] break-words`}>
+              ? `bg-primary border-none rounded-2xl rounded-tr-sm p-4 text-sm leading-relaxed text-on-primary shadow-accent-sm break-words [&_p]:text-on-primary [&_span]:text-on-primary [&_a]:text-on-primary [&_a]:underline [&_strong]:text-on-primary [&_em]:text-on-primary [&_code]:text-on-primary [&_code]:bg-white/15`
+              : `bg-surface-bright border border-outline-variant/30 rounded-2xl rounded-tl-sm p-4 text-sm leading-relaxed text-on-surface shadow-raised break-words`}>
               <MessageContent content={m.content} contentFormat={m.content_format} />
             </div>
           )}
@@ -148,6 +148,11 @@ export const MessageRow = memo(function MessageRow({
 
           {/* Reply count */}
           {m.reply_count ? (
+            /* eslint-disable-next-line no-restricted-syntax -- Nút dạng liên kết tô màu primary
+               lúc nghỉ, nền primary/5 lúc hover, bo góc nhỏ px-2 py-1 rounded-sm. Button không có
+               variant nào diễn đạt "chữ primary + nền mờ khi hover, không gạch chân": `link` chỉ
+               có gạch chân không nền, `ghost` là text-on-surface-variant trung tính. Cùng lý do
+               đã miễn trừ ở patterns/MessageItem.tsx cho đúng dạng nút reply-count này. */
             <button
               onClick={onReply}
               className="mt-1 px-2 py-1 text-caption-ui text-primary hover:text-primary-hover
@@ -217,7 +222,7 @@ export function VirtualizedMessageList({
           <MessageSquare size={28} className="text-primary" />
         </div>
         <h3 className="text-sm font-semibold text-on-surface mb-1">No messages yet</h3>
-        <p className="text-xs text-on-surface-variant max-w-[240px]">
+        <p className="text-xs text-on-surface-variant max-w-60">
           Start the conversation by sending the first message below.
         </p>
       </div>

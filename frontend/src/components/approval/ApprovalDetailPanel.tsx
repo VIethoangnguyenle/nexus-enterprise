@@ -137,15 +137,16 @@ export function ApprovalDetailPanel({
             />
             <div className="flex gap-2">
               <Button
+                variant="success"
                 onClick={() => onApprove(item.id, comment)}
                 disabled={isApproving}
-                className="flex-1 bg-success text-on-success hover:bg-success/90"
+                className="flex-1"
               >
                 {isApproving ? <Spinner size="sm" /> : <Check size={16} />}
                 <span className="ml-1">Approve</span>
               </Button>
               <Button
-                variant="error"
+                variant="danger"
                 onClick={() => onReject(item.id, comment)}
                 disabled={isRejecting || !comment.trim()}
                 className="flex-1"
@@ -170,7 +171,7 @@ export function ApprovalDetailPanel({
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center gap-2">
-      <Text variant="caption" muted className="min-w-[80px]">{label}</Text>
+      <Text variant="caption" muted className="min-w-20">{label}</Text>
       <Text variant="body" className="truncate">{value}</Text>
     </div>
   )
