@@ -87,3 +87,38 @@ describe('Button — hành vi', () => {
     expect(btn.querySelector('svg')).not.toBeNull()
   })
 })
+
+describe('Button — dạng liên kết', () => {
+  // Bảy chỗ trong codebase tự chế nút trông như liên kết vì `sm` nhỏ nhất vẫn
+  // mang px-3 py-1.5 rounded-md. `size="link"` bỏ hẳn padding và bo góc.
+
+  it('size link bỏ padding và bo góc', () => {
+    render(<Button size="link">Thử lại</Button>)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('p-0')
+    expect(cls).toContain('rounded-none')
+  })
+
+  it('size link KHÔNG kèm padding của size khác', () => {
+    render(<Button size="link">Thử lại</Button>)
+    const cls = screen.getByRole('button').className
+    expect(cls).not.toContain('px-3')
+    expect(cls).not.toContain('px-4')
+    expect(cls).not.toContain('py-2')
+  })
+
+  it('variant link tô chữ primary và gạch chân khi hover', () => {
+    render(<Button variant="link" size="link">Thử lại</Button>)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('text-primary')
+    expect(cls).toContain('hover:underline')
+    expect(cls).toContain('bg-transparent')
+  })
+
+  it('ghost + size link cho liên kết chữ trung tính', () => {
+    render(<Button variant="ghost" size="link">Đăng xuất</Button>)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('text-on-surface-variant')
+    expect(cls).toContain('p-0')
+  })
+})

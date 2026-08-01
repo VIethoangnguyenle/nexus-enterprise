@@ -1,7 +1,7 @@
 import { type ButtonHTMLAttributes, forwardRef } from 'react'
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success'
-type ButtonSize = 'sm' | 'md' | 'cta'
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'link'
+type ButtonSize = 'sm' | 'md' | 'cta' | 'link'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant
@@ -25,9 +25,16 @@ const variantStyles: Record<ButtonVariant, string> = {
   ghost: 'border-none bg-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container',
   danger: 'border-none bg-error text-on-error hover:bg-error/90',
   success: 'border-none bg-success text-on-success hover:bg-success/90',
+  link: 'border-none bg-transparent text-primary hover:text-primary-hover hover:underline',
 }
 
 /**
+ * `link` là nút TRÔNG như liên kết: không padding, không bo góc. Bảy chỗ trong
+ * codebase tự chế đúng dạng này (breadcrumb, nút Retry/Logout của route vỏ,
+ * chỉ báo thread) và mỗi chỗ đều phải miễn trừ vì `sm` nhỏ nhất vẫn có
+ * `px-3 py-1.5 rounded-md`. Ghép với `variant="link"` cho chữ primary, hoặc
+ * `variant="ghost"` cho chữ trung tính.
+ *
  * Thang size theo `.stitch/DESIGN.md` §Buttons:
  *   md  — Stitch "Primary/Secondary": py-2 px-4, bo 8px, chữ 14/20 w600
  *   cta — Stitch "Full-Width CTA": py-3, bo 12px
@@ -42,6 +49,7 @@ const sizeStyles: Record<ButtonSize, string> = {
   sm: 'px-3 py-1.5 rounded-md text-small-ui',
   md: 'px-4 py-2 rounded-md text-body-strong',
   cta: 'w-full py-3 rounded-lg text-body-strong',
+  link: 'p-0 rounded-none text-small',
 }
 
 /** Flat button primitive — Material 3 surface tokens, no gradients or glow effects. */
