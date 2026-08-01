@@ -3,11 +3,14 @@ import { type ButtonHTMLAttributes, forwardRef } from 'react'
 type IconButtonSize = 'sm' | 'md' | 'lg'
 type IconButtonVariant = 'ghost' | 'outlined' | 'filled'
 type IconButtonTone = 'default' | 'primary' | 'success' | 'danger'
+type IconButtonShape = 'square' | 'round'
 
 interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: IconButtonSize
   variant?: IconButtonVariant
   tone?: IconButtonTone
+  /** Mặc định: `filled` là tròn, còn lại vuông bo 8px. */
+  shape?: IconButtonShape
 }
 
 const sizeStyles: Record<IconButtonSize, string> = {
@@ -21,16 +24,25 @@ const sizeStyles: Record<IconButtonSize, string> = {
  * `filled` là phần mở rộng của dự án cho nút gửi tin nhắn — không có trong Stitch.
  */
 /**
- * Bo góc nằm ở đây chứ KHÔNG ở chuỗi base. `filled` là nút tròn (cả hai chỗ dùng
- * trong repo — nút gửi của ChatInput và ThreadPanel — đều `rounded-full`), nên
- * `rounded-md` ở base sẽ hoà độ đặc hiệu với nó và thắng theo thứ tự stylesheet:
- * nút gửi lặng lẽ thành hình chữ nhật bo tròn nhẹ. Cùng cơ chế đã làm variant
- * `secondary` của `Button` mất viền. Xem spec 2026-08-01 §7.5.
+ * Hình dạng là trục riêng, không gộp vào `variant`. Thanh soạn tin có hàng nút
+ * ghost **tròn** (`ChatEditor`, `ChatInput`), trong khi Stitch §Buttons quy định
+ * icon button có viền là 8px — cùng `ghost` nhưng khác hình.
+ *
+ * Bo góc KHÔNG được nằm ở chuỗi base: `rounded-md` ở đó sẽ hoà độ đặc hiệu với
+ * `rounded-full` truyền vào và thắng theo thứ tự stylesheet. `ChatEditor.tsx`
+ * đang mắc đúng lỗi này — nó truyền `className="rounded-full"` và các nút render
+ * vuông 8px. Cùng cơ chế đã làm variant `secondary` của `Button` mất viền.
+ * Xem spec 2026-08-01 §7.5.
  */
+const shapeStyles: Record<IconButtonShape, string> = {
+  square: 'rounded-md',
+  round: 'rounded-full',
+}
+
 const variantStyles: Record<IconButtonVariant, string> = {
-  ghost: 'rounded-md bg-transparent border-none',
-  outlined: 'rounded-md bg-transparent border border-outline-variant',
-  filled: 'rounded-full bg-primary text-on-primary border-none shadow-sm hover:bg-primary-hover',
+  ghost: 'bg-transparent border-none',
+  outlined: 'bg-transparent border border-outline-variant',
+  filled: 'bg-primary text-on-primary border-none shadow-sm hover:bg-primary-hover',
 }
 
 const toneStyles: Record<IconButtonTone, string> = {
@@ -42,12 +54,13 @@ const toneStyles: Record<IconButtonTone, string> = {
 
 /** Icon-only button with Material 3 surface tokens. */
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
-  ({ size = 'md', variant = 'ghost', tone = 'default', className = '', ...props }, ref) => (
+  ({ size = 'md', variant = 'ghost', tone = 'default', shape, className = '', ...props }, ref) => (
     <button
       ref={ref}
       className={`inline-flex items-center justify-center
         transition-colors duration-fast cursor-pointer focus-ring
         disabled:opacity-40 disabled:cursor-not-allowed
+        ${shapeStyles[shape ?? (variant === 'filled' ? 'round' : 'square')]}
         ${variantStyles[variant]}
         ${variant === 'filled' ? '' : toneStyles[tone]}
         ${sizeStyles[size]} ${className}`}

@@ -33,7 +33,7 @@ describe('IconButton — variant', () => {
     expect(cls).not.toContain('rounded-md')
   })
 
-  it('ghost và outlined giữ bo góc 8px', () => {
+  it('ghost và outlined mặc định giữ bo góc 8px', () => {
     for (const v of ['ghost', 'outlined'] as const) {
       const { unmount } = render(<IconButton aria-label="x" variant={v} />)
       const cls = screen.getByRole('button').className
@@ -41,6 +41,39 @@ describe('IconButton — variant', () => {
       expect(cls).not.toContain('rounded-full')
       unmount()
     }
+  })
+})
+
+describe('IconButton — hình dạng là trục riêng', () => {
+  // Thanh soạn tin có hàng nút ghost TRÒN, trong khi Stitch §Buttons quy định
+  // icon button có viền là 8px. Cùng variant, khác hình — nên hình dạng phải là
+  // prop riêng chứ không gộp vào variant. `ChatEditor.tsx` từng truyền
+  // className="rounded-full" và thua `rounded-md` nướng sẵn, render vuông 8px.
+
+  it('ghost shape="round" thật sự tròn, không kèm rounded-md', () => {
+    render(<IconButton aria-label="Emoji" shape="round" />)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('rounded-full')
+    expect(cls).not.toContain('rounded-md')
+  })
+
+  it('filled mặc định tròn mà không cần khai shape', () => {
+    render(<IconButton aria-label="Gửi" variant="filled" />)
+    expect(screen.getByRole('button').className).toContain('rounded-full')
+  })
+
+  it('filled shape="square" ép được về vuông khi cần', () => {
+    render(<IconButton aria-label="Gửi" variant="filled" shape="square" />)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('rounded-md')
+    expect(cls).not.toContain('rounded-full')
+  })
+
+  it('outlined shape="round" giữ viền nhưng đổi hình', () => {
+    render(<IconButton aria-label="Lọc" variant="outlined" shape="round" />)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('rounded-full')
+    expect(cls).toContain('border-outline-variant')
   })
 })
 
