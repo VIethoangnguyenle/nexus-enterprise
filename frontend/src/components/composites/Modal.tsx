@@ -23,7 +23,7 @@ function ModalOverlay({ onClose, children, size = 'md' }: ModalOverlayProps) {
   const maxWidths: Record<ModalSize, string> = {
     sm: 'max-w-sm',
     md: 'max-w-md',
-    lg: 'max-w-[640px]',
+    lg: 'max-w-160',
   }
 
   return (

@@ -16,7 +16,7 @@ export function ChannelDrivePanel({ wsId, channelId, onClose }: ChannelDrivePane
   const files = items.filter(i => i.item_type === 'file' && i.status === 'active')
 
   return (
-    <div className="w-[300px] flex-shrink-0 flex flex-col bg-surface-container-lowest animate-slide-left
+    <div className="w-75 flex-shrink-0 flex flex-col bg-surface-container-lowest animate-slide-left
       border-l border-outline-variant">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-outline-variant">

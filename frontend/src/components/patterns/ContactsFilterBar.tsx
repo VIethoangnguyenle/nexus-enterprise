@@ -1,3 +1,4 @@
+import { Button } from '../primitives'
 import { Filter } from 'lucide-react'
 
 export interface ContactFilters {
@@ -22,6 +23,10 @@ export function ContactsFilterBar({ filters, onFiltersChange, departments, locat
   return (
     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 p-4 bg-surface-container-lowest rounded-xl
       shadow-sm border border-outline-variant/20">
+      {/* eslint-disable-next-line no-restricted-syntax -- Select primitive bọc thẻ trong
+          <div class="flex flex-col gap-1"> để chứa thông báo lỗi; ở đây select là con trực
+          tiếp của hàng flex nên thẻ bọc sẽ chiếm suất flex thay cho chính nó. Xem ghi chú
+          về thẻ bọc của Input/Select ở mốc nghiệm thu chặng 2. */}
       <select
         value={filters.department}
         onChange={(e) => update('department', e.target.value)}
@@ -34,6 +39,8 @@ export function ContactsFilterBar({ filters, onFiltersChange, departments, locat
         ))}
       </select>
 
+      {/* eslint-disable-next-line no-restricted-syntax -- Cùng lý do thẻ bọc như select
+          phía trên. */}
       <select
         value={filters.location}
         onChange={(e) => update('location', e.target.value)}
@@ -48,12 +55,10 @@ export function ContactsFilterBar({ filters, onFiltersChange, departments, locat
 
       <div className="flex-1" />
 
-      <button className="flex items-center gap-2 px-4 py-2.5 bg-surface-container-lowest border border-outline-variant
-        rounded-lg text-small text-on-surface-variant font-medium hover:bg-surface-container-low
-        transition-colors cursor-pointer">
+      <Button variant="secondary">
         <Filter size={14} />
         More Filters
-      </button>
+      </Button>
     </div>
   )
 }
