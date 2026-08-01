@@ -548,6 +548,24 @@ làm hai nút Google/SSO mất viền trên cửa trước của ứng dụng.
   `CLAUDE.md` bắt mọi ghi vào `ngac_*` phải đi qua đường EPP invalidation, mà không có REST endpoint
   xoá workspace.
 
+### 8.6 Ngoại lệ D6 cho `drive` phần lớn không cần thiết
+
+D6 cho phép giữ nguyên số đo pixel trong `components/drive` vì chúng là mật độ căn chỉnh có chủ ý
+và "không nguồn nào quy định chúng". Giả định ngầm bên dưới là **thang 4px không biểu diễn được**
+những giá trị như `[3px]`, `[5px]`, `[7px]`.
+
+Giả định đó sai. Thang spacing của Tailwind 4 là **động và nhận bước phân số**: `p-0.75` sinh ra
+`calc(var(--spacing) * 0.75)` = 0.75 × 0.25rem = **đúng 3px**. Đã kiểm bằng cách build thật với một
+file dò rồi đọc CSS sinh ra.
+
+Nên `[3px]` → `0.75`, `[5px]` → `1.25`, `[7px]` → `1.75` là **quy đổi chính xác, không xấp xỉ**, và
+không cần miễn trừ. D6 vẫn đứng cho trường hợp một giá trị thật sự không rơi trên thang, nhưng đó
+là ngoại lệ hiếm chứ không phải mặc định của cả thư mục.
+
+Kiểm kê nhanh chặng 4 cho thấy phần lớn giá trị `[Npx]` ở đó là **cỡ chữ** (`[11px]` ×9, `[10px]` ×9,
+`[13px]` ×4, `[12px]` ×3), ánh xạ thẳng sang `text-overline`/`text-label-caps`, `text-micro`,
+`text-small`, `text-caption` — cũng không phải chuyện mật độ.
+
 ### 8.5 Chặng 2: ba mảnh từ vựng của chặng 0 gặp màn hình thật
 
 Chặng 2 (`composites` + `patterns`, 66 vi phạm → 0, 16 miễn trừ) là lần đầu `NavRow`,
