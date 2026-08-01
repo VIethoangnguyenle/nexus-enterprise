@@ -101,11 +101,15 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
 
   return (
     <aside
-      className="hidden lg:flex w-[280px] shrink-0 bg-surface-bright border-r border-outline-variant/30
+      className="hidden lg:flex w-70 shrink-0 bg-surface-bright border-r border-outline-variant/30
         flex-col overflow-hidden h-full p-6 gap-y-4"
     >
       {/* Workspace identity — Stitch: hover:bg-surface-container-high p-2 rounded-lg */}
       <div className="relative" ref={wsDropdownRef}>
+        {/* eslint-disable-next-line no-restricted-syntax -- Trigger chuyển workspace: avatar 40px
+            + nhãn hai dòng (tên + hạng) + chevron xoay khi mở dropdown. Không phải hàng điều hướng
+            (NavRow chỉ render một dòng text theo layoutStyles cố định, không có chỗ cho avatar +
+            hai dòng chữ) lẫn Button (canh giữa nội dung, không phải trigger p-2 hover đổi nền). */}
         <button
           onClick={() => setWsDropdownOpen(!wsDropdownOpen)}
           className="flex items-center gap-2 p-2 rounded-lg cursor-pointer border-none
@@ -142,6 +146,11 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
               Workspaces
             </div>
             {workspaces.map((ws: { id: string; name: string }) => (
+              /* eslint-disable-next-line no-restricted-syntax -- Mục danh sách workspace trong
+                 dropdown: danh sách phẳng, không thụt lề như subItem (không phải cây con dưới
+                 group header). Active dùng bg-primary-fixed + text-primary — pha giữa hai kiểu
+                 NavRow (subItem cho nền nhưng chữ text-on-primary-fixed-variant; groupHeader cho
+                 chữ nhưng nền surface-container), không khớp trọn kiểu nào. */
               <button
                 key={ws.id}
                 onClick={() => handleSwitchWorkspace(ws.id)}
@@ -165,6 +174,11 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
       </div>
 
       {/* New Project CTA — Stitch: rounded-lg (not rounded-full), py-2.5 */}
+      {/* eslint-disable-next-line no-restricted-syntax -- CTA đầy theo nexus-chat.html: py-2.5,
+          text-small, shadow-sm, hover:bg-primary/90 (nền primary pha trong suốt). Button
+          size="cta" đến từ màn Stitch khác: py-3, text-body-strong, không shadow,
+          hover:bg-primary-hover (#003EA8 đặc, không phải primary pha loãng) — bốn khác biệt
+          đo được nếu ghép, không chỉ w-full (cái đó đã khớp sẵn). */}
       <button
         className="w-full py-2.5 px-4 bg-primary text-on-primary rounded-lg text-small font-semibold
           border-none cursor-pointer flex items-center justify-center gap-2
@@ -181,6 +195,13 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
           const Icon = item.icon
           const count = unreadCounts[item.id]
           return (
+            /* eslint-disable-next-line no-restricted-syntax -- Hàng điều hướng chính
+               (icon+nhãn+badge), phẳng theo nexus-chat.html chứ không phải cây group-header/
+               sub-item mà NavRow mô phỏng. Năm khác biệt đo được nếu ép vào groupHeader:
+               font-semibold (600) toàn thời vs text-body-ui cố định (500); gap-3 vs gap-2;
+               active bg-surface-container-highest+shadow-sm vs bg-surface-container không shadow;
+               inactive hover bg-surface-container + đổi màu chữ vs hover bg-surface-container-low
+               không đổi màu chữ; và NavRow không có khái niệm icon + badge riêng biệt. */
             <button
               key={item.id}
               onClick={() => handleClick(item)}
@@ -198,7 +219,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
               {count && count > 0 ? (
                 <span
                   className="text-label-caps font-semibold text-on-primary bg-primary rounded-full
-                    px-1.5 min-w-[18px] h-[18px] flex items-center justify-center leading-none shrink-0"
+                    px-1.5 min-w-4.5 h-4.5 flex items-center justify-center leading-none shrink-0"
                 >
                   {count > 99 ? '99+' : count}
                 </span>
@@ -210,6 +231,11 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
 
       {/* Footer — Stitch: border-t border-outline-variant/30, gap-1 */}
       <div className="pt-4 border-t border-outline-variant/30 flex flex-col gap-1">
+        {/* eslint-disable-next-line no-restricted-syntax -- Cùng hình học/token với hàng điều
+            hướng chính phía trên (py-2.5/px-3/gap-3/font-semibold/hover bg-surface-container +
+            đổi màu chữ) để ba mục footer nhất quán với nav chính trong cùng sidebar; lý do NavRow
+            không khớp giống hệt hàng nav chính ở trên. Ép riêng footer vào primitive trong khi
+            nav chính giữ nguyên sẽ làm hai khối của cùng sidebar lệch hình học nhau. */}
         <button
           onClick={() => setActiveModule('settings')}
           className="flex items-center gap-3 py-2.5 px-3 rounded-lg cursor-pointer
@@ -221,6 +247,8 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
           <Settings size={18} strokeWidth={1.6} />
           <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">Settings</span>
         </button>
+        {/* eslint-disable-next-line no-restricted-syntax -- Cùng lý do với nút Settings ngay
+            trên: giữ hình học/token đồng nhất với nav chính trong cùng sidebar. */}
         <button
           className="flex items-center gap-3 py-2.5 px-3 rounded-lg cursor-pointer
             border-none bg-transparent text-on-surface-variant w-full text-left
@@ -231,6 +259,8 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
           <HelpCircle size={18} strokeWidth={1.6} />
           <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">Support</span>
         </button>
+        {/* eslint-disable-next-line no-restricted-syntax -- Cùng lý do với hai nút footer phía
+            trên: giữ hình học/token đồng nhất với nav chính trong cùng sidebar. */}
         <button
           onClick={logout}
           title={`Logout (${user?.username})`}
