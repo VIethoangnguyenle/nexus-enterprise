@@ -548,6 +548,36 @@ làm hai nút Google/SSO mất viền trên cửa trước của ứng dụng.
   `CLAUDE.md` bắt mọi ghi vào `ngac_*` phải đi qua đường EPP invalidation, mà không có REST endpoint
   xoá workspace.
 
+### 8.7 Thang phân số chỉ áp cho spacing, KHÔNG áp cho viền và bo góc
+
+8.6 kết luận thang spacing của Tailwind 4 nhận bước phân số, và điều đó đúng — chặng 4 xác nhận
+11 giá trị `[Npx]` quy đổi **chính xác** sang `w-80`, `h-13`, `h-45`, `py-1.75`, `p-1.25`, v.v.
+
+Nhưng chặng 4 cũng tìm ra giới hạn, và nó **hỏng im lặng**:
+
+```
+border-l-0.75   →  biên dịch thành border-l-0   (Tailwind lặng lẽ bỏ phần thập phân)
+rounded-2.5     →  không sinh ra class nào
+```
+
+`border-width` và `border-radius` là **tập token liệt kê cố định**, không nhân với `--spacing` như
+width/height/padding/margin/gap. Nên `[3px]` trên viền không có đường quy đổi, và tệ hơn: viết
+`border-l-0.75` sẽ ra viền **0px** mà không báo gì — mất hẳn đường viền trong khi lint xanh.
+
+Đây là biến thể thứ ba của cùng một dạng lỗi đã theo suốt dự án: công cụ nhận đầu vào, không báo,
+và cho ra kết quả khác điều người viết định. Hai biến thể trước là `className` thua class nướng sẵn,
+và rule lint có vùng mù. Cả ba chỉ lộ ra khi **đo sản phẩm cuối** thay vì đọc nguồn.
+
+### 8.8 Hai khoảng trống từ vựng còn lại sau chặng 4
+
+- **11px không viết hoa không có token** — 6 chỗ. Cả `text-overline` (11/600) lẫn `text-label-caps`
+  (11/700) đều ép `uppercase`, nên phụ đề và eyebrow chữ thường 11px không có đường nào.
+- **`SearchField` composite** — nay có 5 chỗ, hai biến thể cùng chỉ về một thứ: input trần trong hộp
+  cha đã có chrome (2), và input tự mang chrome cần `pl-9` chừa khe icon mà `Input` nướng `px-3` vô
+  điều kiện (3).
+
+Cả hai chưa xử lý. Quyết ở ranh giới chặng 6 khi đã có đủ số liệu của `chat`, `approval` và `assets`.
+
 ### 8.6 Ngoại lệ D6 cho `drive` phần lớn không cần thiết
 
 D6 cho phép giữ nguyên số đo pixel trong `components/drive` vì chúng là mật độ căn chỉnh có chủ ý
