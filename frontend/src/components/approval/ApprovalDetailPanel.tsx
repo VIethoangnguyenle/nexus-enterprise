@@ -171,7 +171,7 @@ export function ApprovalDetailPanel({
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center gap-2">
-      <Text variant="caption" muted className="min-w-[80px]">{label}</Text>
+      <Text variant="caption" muted className="min-w-20">{label}</Text>
       <Text variant="body" className="truncate">{value}</Text>
     </div>
   )
