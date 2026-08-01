@@ -78,9 +78,11 @@ Chạy TypeScript 5.9 thật cho **123 lỗi có sẵn**. Nên cổng nghiệm t
 
 Chạy:
 ```bash
-cd frontend && npx tsc --version && grep -c '"typescript"' package.json
+cd frontend && rtk proxy npx tsc --version && grep -c '"typescript"' package.json
 ```
 Kết quả mong đợi: `Version 3.9.10` và `0`.
+
+**Bắt buộc dùng `rtk proxy` ở lệnh này.** Hook `rtk` toàn cục chặn lệnh `tsc` trần và thay output bằng dòng tóm tắt của nó — `npx tsc --version` trả về `TypeScript: No errors found` thay vì số hiệu bản. Đã kiểm chứng: `npm run typecheck` và `npm run typecheck:diff` **không** bị lọc (chạy qua npm script), nên các cổng nghiệm thu ở những task sau vẫn đáng tin.
 
 Nếu đã là 5.x, dừng lại — chẩn đoán này đã cũ, đọc lại trước khi làm tiếp.
 
@@ -160,7 +162,9 @@ cd frontend && npx tsc --noEmit -p tsconfig.json 2>&1 \
   | awk '{print $2"\t"$1}' | sort > typecheck-baseline.txt
 wc -l < typecheck-baseline.txt
 ```
-Kết quả mong đợi: khoảng 30 dòng (30 file có lỗi).
+Kết quả mong đợi: **52 dòng** (52 file có lỗi).
+
+*Đính chính:* bản nháp ghi "khoảng 30 file" — con số đó lấy từ dòng tóm tắt của `rtk` khi chạy `tsc` **3.9.10**, tức là tóm tắt của một lần chạy hỏng. TypeScript 5 thật cho 52 file / 123 lỗi.
 
 - [ ] **Step 6: Xác nhận tổng khớp con số đã khảo sát**
 
