@@ -11,7 +11,7 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
       <textarea
         ref={ref}
         className={`w-full px-3 py-2 text-small bg-surface-container-lowest border rounded-md
-          text-on-surface placeholder:text-outline resize-y min-h-[72px]
+          text-on-surface placeholder:text-outline resize-y min-h-18
           transition-colors duration-fast focus-ring
           ${error
             ? 'border-danger focus:border-danger'
