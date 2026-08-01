@@ -124,3 +124,13 @@ describe('IconButton — trạng thái chọn trong nhóm toggle', () => {
     expect(cls).not.toContain('bg-surface-container-highest')
   })
 })
+
+describe('IconButton — cỡ xs cho hàng dày đặc', () => {
+  it('xs là ô 20px, nhỏ hơn sàn sm cũ', () => {
+    render(<IconButton aria-label="Mở" size="xs" />)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('w-5')
+    expect(cls).toContain('h-5')
+    expect(cls).not.toContain('w-7')
+  })
+})

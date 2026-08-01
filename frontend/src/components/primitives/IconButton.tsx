@@ -1,6 +1,6 @@
 import { type ButtonHTMLAttributes, forwardRef } from 'react'
 
-type IconButtonSize = 'sm' | 'md' | 'lg'
+type IconButtonSize = 'xs' | 'sm' | 'md' | 'lg'
 type IconButtonVariant = 'ghost' | 'outlined' | 'filled'
 type IconButtonTone = 'default' | 'primary' | 'success' | 'danger'
 type IconButtonShape = 'square' | 'round'
@@ -15,7 +15,13 @@ interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   active?: boolean
 }
 
+/**
+ * `xs` (20px) cho toggle trong hàng cây và hàng danh sách dày đặc — chevron mở/đóng,
+ * nút glyph nhỏ. Bốn chỗ trong `components/drive` phải miễn trừ vì `sm` (28px) đã là
+ * sàn, quá lớn cho một chevron 15–18px nằm cạnh nhãn.
+ */
 const sizeStyles: Record<IconButtonSize, string> = {
+  xs: 'w-5 h-5',
   sm: 'w-7 h-7',
   md: 'w-8 h-8',
   lg: 'w-9 h-9',
