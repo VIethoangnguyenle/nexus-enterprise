@@ -2,6 +2,7 @@ import { useState, useCallback, memo } from 'react'
 import { ChevronRight, Folder } from 'lucide-react'
 import { useDriveStore } from '../../stores/drive.store'
 import { useDriveFolder } from '../../hooks/useDrive'
+import { NavRow } from '../primitives'
 
 interface TreeNodeProps {
   id: string
@@ -36,14 +37,10 @@ const TreeNode = memo(function TreeNode({ id, name, wsId, depth }: TreeNodeProps
 
   return (
     <div>
-      <button
+      <NavRow
+        kind="subItem"
+        active={isActive}
         onClick={handleClick}
-        className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded
-          border-none cursor-pointer transition-colors
-          ${isActive
-            ? 'bg-surface-container-high text-primary font-bold'
-            : 'bg-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
-          }`}
         style={{ paddingLeft: `${8 + depth * 16}px` }}
       >
         <span
@@ -55,7 +52,7 @@ const TreeNode = memo(function TreeNode({ id, name, wsId, depth }: TreeNodeProps
         </span>
         <Folder size={16} className={isActive ? 'text-primary' : 'text-outline'} />
         <span className="truncate">{name}</span>
-      </button>
+      </NavRow>
 
       {expanded && children.length > 0 && (
         <div className="pl-7 border-l border-outline-variant ml-3 mt-1 flex flex-col gap-0.5">
@@ -88,24 +85,22 @@ export function DriveTreePanel({ workspaceId }: DriveTreePanelProps) {
   return (
     <div className="py-2 px-1 overflow-y-auto h-full">
       <div className="px-2 mb-2">
-        <span className="text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+        <span className="text-label-caps text-on-surface-variant">
           Drive
         </span>
       </div>
 
-      {/* Root entry */}
-      <button
+      {/* Root entry — paddingLeft matches TreeNode's `8 + depth * 16` formula at depth 0, so
+          "My Drive" lines up flush with the tree below it instead of NavRow's default pl-9. */}
+      <NavRow
+        kind="subItem"
+        active={currentFolderId === null}
         onClick={() => navigateToFolder(null)}
-        className={`w-full flex items-center gap-2 px-2 py-1.5 text-sm rounded
-          border-none cursor-pointer transition-colors
-          ${currentFolderId === null
-            ? 'bg-surface-container-high text-primary font-bold'
-            : 'bg-transparent text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
-          }`}
+        style={{ paddingLeft: '8px' }}
       >
         <Folder size={16} className={currentFolderId === null ? 'text-primary' : 'text-outline'} />
         <span>My Drive</span>
-      </button>
+      </NavRow>
 
       {isLoading ? (
         <div className="px-3 py-2 text-xs text-on-surface-variant">Loading…</div>
