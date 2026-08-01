@@ -21,6 +21,27 @@ describe('IconButton — variant', () => {
     expect(cls).toContain('bg-primary')
     expect(cls).toContain('text-on-primary')
   })
+
+  it('filled là nút tròn — cả hai chỗ dùng trong repo đều rounded-full', () => {
+    render(<IconButton aria-label="Gửi" variant="filled" />)
+    const cls = screen.getByRole('button').className
+    expect(cls).toContain('rounded-full')
+    // Nếu `rounded-md` còn nằm ở chuỗi base, nó hoà độ đặc hiệu với `rounded-full`
+    // và thắng theo thứ tự stylesheet — nút gửi lặng lẽ mất hình tròn trong khi
+    // phép kiểm `toContain('rounded-full')` phía trên vẫn xanh. Đây là phép kiểm
+    // duy nhất ở tầng chuỗi bắt được điều đó.
+    expect(cls).not.toContain('rounded-md')
+  })
+
+  it('ghost và outlined giữ bo góc 8px', () => {
+    for (const v of ['ghost', 'outlined'] as const) {
+      const { unmount } = render(<IconButton aria-label="x" variant={v} />)
+      const cls = screen.getByRole('button').className
+      expect(cls).toContain('rounded-md')
+      expect(cls).not.toContain('rounded-full')
+      unmount()
+    }
+  })
 })
 
 describe('IconButton — tone ngữ nghĩa', () => {

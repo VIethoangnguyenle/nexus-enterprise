@@ -20,10 +20,17 @@ const sizeStyles: Record<IconButtonSize, string> = {
  * `outlined` đến từ Stitch §Buttons ("Icon Button: p-2 rounded-lg border").
  * `filled` là phần mở rộng của dự án cho nút gửi tin nhắn — không có trong Stitch.
  */
+/**
+ * Bo góc nằm ở đây chứ KHÔNG ở chuỗi base. `filled` là nút tròn (cả hai chỗ dùng
+ * trong repo — nút gửi của ChatInput và ThreadPanel — đều `rounded-full`), nên
+ * `rounded-md` ở base sẽ hoà độ đặc hiệu với nó và thắng theo thứ tự stylesheet:
+ * nút gửi lặng lẽ thành hình chữ nhật bo tròn nhẹ. Cùng cơ chế đã làm variant
+ * `secondary` của `Button` mất viền. Xem spec 2026-08-01 §7.5.
+ */
 const variantStyles: Record<IconButtonVariant, string> = {
-  ghost: 'bg-transparent border-none',
-  outlined: 'bg-transparent border border-outline-variant',
-  filled: 'bg-primary text-on-primary border-none hover:bg-primary-hover',
+  ghost: 'rounded-md bg-transparent border-none',
+  outlined: 'rounded-md bg-transparent border border-outline-variant',
+  filled: 'rounded-full bg-primary text-on-primary border-none shadow-sm hover:bg-primary-hover',
 }
 
 const toneStyles: Record<IconButtonTone, string> = {
@@ -38,7 +45,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
   ({ size = 'md', variant = 'ghost', tone = 'default', className = '', ...props }, ref) => (
     <button
       ref={ref}
-      className={`inline-flex items-center justify-center rounded-md
+      className={`inline-flex items-center justify-center
         transition-colors duration-fast cursor-pointer focus-ring
         disabled:opacity-40 disabled:cursor-not-allowed
         ${variantStyles[variant]}
