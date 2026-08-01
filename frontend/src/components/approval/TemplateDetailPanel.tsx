@@ -41,7 +41,7 @@ export function TemplateDetailPanel({
         <div className="px-4 py-4 space-y-2 border-b border-outline-variant">
           <DetailRow label="Entity Type" value={template.entity_type} />
           <div className="flex items-center gap-2">
-            <Text variant="caption" muted className="min-w-[80px]">Status</Text>
+            <Text variant="caption" muted className="min-w-20">Status</Text>
             <Badge variant={template.is_active ? 'success' : 'neutral'}>
               {template.is_active ? 'Active' : 'Inactive'}
             </Badge>
@@ -67,7 +67,12 @@ export function TemplateDetailPanel({
                   <Badge variant="neutral">{field.field_type}</Badge>
                   <Text variant="body" className="flex-1 truncate">{field.label}</Text>
                   {field.required && (
-                    <Text variant="caption" className="text-danger shrink-0">Required</Text>
+                    // Text bakes text-on-surface when not muted; that beats a className color override at
+                    // the same specificity (order in the compiled stylesheet decides, not JSX order — see
+                    // spec 2026-08-01 §7.5). Measured in dist/assets/*.css: .text-on-surface lands after
+                    // .text-danger, so "Required" rendered in default ink, never red. Text has no danger/tone
+                    // prop, so this drops the primitive for a plain span carrying the same caption token.
+                    <span className="text-caption text-danger shrink-0">Required</span>
                   )}
                 </div>
               ))}
@@ -105,7 +110,7 @@ export function TemplateDetailPanel({
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center gap-2">
-      <Text variant="caption" muted className="min-w-[80px]">{label}</Text>
+      <Text variant="caption" muted className="min-w-20">{label}</Text>
       <Text variant="body" className="truncate">{value}</Text>
     </div>
   )
