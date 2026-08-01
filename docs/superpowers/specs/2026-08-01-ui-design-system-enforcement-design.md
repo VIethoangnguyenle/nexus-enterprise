@@ -478,6 +478,76 @@ Vì giao diện **được phép đổi** theo D2, ảnh trước/sau là để 
 7. `lib/constants.ts` không còn hex — màu trạng thái đọc từ token
 8. 3 chỗ dùng màu trạng thái Tailwind thô đã chuyển sang token `--color-status-*`
 
+## 8. Biên bản chặng thí điểm (chặng 1, hoàn thành 2026-08-01)
+
+Chặng 1 tồn tại để tìm chỗ primitive gãy khi gặp màn hình thật, **trước khi** áp mẫu lên ~250 vi phạm
+còn lại. Nó đã làm đúng việc đó. Ghi lại để kế hoạch chặng 2–7 viết từ bằng chứng, không từ suy đoán.
+
+### 8.1 Kết quả
+
+| Chỉ số | Giá trị |
+|---|---|
+| Vi phạm lint | 303 → **272** |
+| Bề mặt auth | **0** vi phạm |
+| Thẻ thô đã thay bằng primitive | 22 |
+| Miễn trừ có lý do | 8 |
+| Test | 11 → **42** |
+| Commit | 11 |
+
+Chặng 1 thực tế có **31 vi phạm**, không phải 39 như kế hoạch dự đoán. Chênh lệch là các lượt nằm
+trong **comment** mà `grep` của kế hoạch đếm nhầm còn ESLint loại đúng. **Số của kế hoạch là dự đoán;
+số của lint mới là thẩm quyền.** Mọi task chặng sau phải đọc lint trước khi bắt đầu.
+
+### 8.2 Ba lần cùng một lỗi, và lần thứ tư nằm trong primitive của chính ta
+
+Lỗi "class truyền qua `className` thua class nướng sẵn trong primitive" xuất hiện **bốn lần**:
+
+| Nơi | Thuộc tính | Hậu quả |
+|---|---|---|
+| ô OTP | bo góc 12px → 8px | phát hiện lúc thử, không commit |
+| 2 ô nhập `onboarding` | bo góc 12px → 8px | tránh được bằng miễn trừ |
+| ô nhập `login` | bo góc 12px → 8px | tránh được bằng miễn trừ |
+| **`Button` variant `secondary`** | **viền biến mất hoàn toàn** | **đã lên nhánh, chạy trên toàn app** |
+
+Trường hợp thứ tư là nghiêm trọng nhất vì nó **không phải do di cư gây ra** — nó có sẵn trong chuỗi
+base mà đợt hiệu chỉnh primitive bê nguyên sang, và test viết riêng cho variant đó
+(`expect(cls).toContain('border')`) **xanh suốt**, vì class có mặt thật, chỉ thua khi trình duyệt xử.
+
+Nếu bug này không được tìm ra ở `workspace-select`, nó sẽ trúng ngay `login.tsx` một task sau đó và
+làm hai nút Google/SSO mất viền trên cửa trước của ứng dụng.
+
+### 8.3 Quy tắc bắt buộc cho chặng 2–7
+
+1. **Đọc lint trước, không tin số trong kế hoạch.**
+2. **Phân loại trước khi thay.** (a) control thông thường viết tay → dùng primitive. (b) hình học cố
+   định, phụ thuộc thẻ bọc, hoặc focus/hover riêng nướng trong `className` → ép vào primitive sẽ đánh
+   nhau nhiều trục và có thể mất âm thầm một thuộc tính. Nếu không có logic nghiệp vụ, chuyển vào
+   `primitives/`; nếu là trường hợp cá biệt, miễn trừ **có nêu lý do** tốt hơn một phép thay tồi.
+3. **Đo computed style trên trình duyệt, đo trước khi quyết** — không phải sau. Bốn lần trên đều chỉ
+   lộ ra khi đo; đọc code, chạy test và nhìn ảnh đều cho qua.
+4. **Không thêm hành vi chưa từng có.** `size="cta"` kéo theo `w-full`; nút gốc không full-width thì
+   dùng nó là đẻ ra hành vi mới trên mobile.
+5. **Test khẳng định class *có mặt* phải đi kèm test khẳng định class chọi *vắng mặt*.** Đó là thứ
+   duy nhất bắt được xung đột này ở tầng chuỗi, vì `vitest` chạy `css: false`.
+
+### 8.4 Việc còn treo, quyết lúc lập kế hoạch chặng 2–7
+
+- **Bo góc của `Input`.** Ba ô nhập thật cần 12px, primitive nướng 8px, và đó là nguyên nhân của 3
+  trong 8 miễn trừ. Nhưng bằng chứng **không** ngã hẳn về bên nào: trong các `<input>` thô còn lại,
+  3 dùng `rounded-lg`, 2 dùng `rounded-md`, và `.stitch/DESIGN.md` §Inputs **chỉ** quy định ô tìm
+  kiếm với kiểu focus, không nói gì về bo góc ô thường. Khác hẳn `Button`, nơi *không* size nào khớp.
+  Phương án đáng cân nhắc: thêm prop `radius` để ý định đi qua API có kiểu thay vì qua `className`
+  vốn sẽ thua. **Không tự sửa giữa chặng.**
+- **`max-w-2xl` của `onboarding` không bao giờ có hiệu lực** vì nó nằm lồng trong khung `max-w-110`
+  (440px) của `_auth.tsx`. Lỗi có sẵn, xác nhận giống nhau ở ảnh trước và sau. Sửa phải đụng
+  `_auth.tsx` nên để ngoài phạm vi.
+- **`/workspace-select` không tới được khi đã đăng nhập**: `_auth.tsx` trả `<Navigate to="/documents"/>`
+  ngay khi `isAuth`, trong khi `login.tsx` đặt token *rồi mới* điều hướng sang `/workspace-select`.
+  Lỗi định tuyến có sẵn, ngoài phạm vi, nhưng khiến màn hình đó không kiểm chứng được bằng mắt.
+- **4 workspace "Second Org" thừa** trong DB dev do một task tạo lúc xác minh. Không xoá bằng SQL:
+  `CLAUDE.md` bắt mọi ghi vào `ngac_*` phải đi qua đường EPP invalidation, mà không có REST endpoint
+  xoá workspace.
+
 ## 6. Giả định
 
 ### 6.1 `DESIGN.md` + `metadata.json` là nguồn đủ dùng
