@@ -49,7 +49,11 @@ function FolderTreeNode({ item, level, selectedId, onSelect }: FolderTreeNodePro
         style={{ paddingLeft: `${12 + level * 20}px` }}
         onClick={handleSelect}
       >
-        {/* Expand/Collapse chevron */}
+        {/* eslint-disable-next-line no-restricted-syntax -- Expand-toggle chevron: ~18px box
+            (p-0.5 padding around a 14px icon). IconButton's smallest size is `sm` at
+            w-7/h-7 = 28x28px, over 50% larger, which would visibly enlarge this control past
+            the row it sits in. IconButton has no size below `sm`. Same measurement as the
+            equivalent toggle in DriveSidebar.tsx and the root toggle below. */}
         <button
           onClick={(e) => { e.stopPropagation(); handleToggle() }}
           className="flex-shrink-0 p-0.5 border-none bg-transparent cursor-pointer
@@ -145,6 +149,9 @@ export function FolderTreeSelect({ workspaceId, selectedId, onSelect }: FolderTr
           className="flex items-center gap-2 px-3 py-2 cursor-pointer text-on-surface hover:bg-surface-container-high rounded-lg font-semibold text-sm"
           onClick={() => setRootExpanded((p) => !p)}
         >
+          {/* eslint-disable-next-line no-restricted-syntax -- Same ~18px expand-toggle chevron
+              measurement as FolderTreeNode above; IconButton's smallest size (w-7/h-7 = 28px)
+              is over 50% larger. */}
           <button
             className="flex-shrink-0 p-0.5 border-none bg-transparent cursor-pointer text-on-surface-variant transition-transform"
             style={{ transform: rootExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}
