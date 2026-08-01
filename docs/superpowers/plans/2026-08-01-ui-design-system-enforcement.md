@@ -1213,7 +1213,20 @@ export default defineConfig([
 - [ ] **Step 4: Chạy lint và ghi lại số nền**
 
 Chạy: `cd frontend && npm run lint 2>&1 | tail -5`
-Kết quả mong đợi: lint chạy xong, báo khoảng **340** cảnh báo. Con số chính xác là số nền để đối chiếu ở mọi chặng sau.
+
+**Số nền thực đo được: 302 cảnh báo design system**, phân bố theo rule:
+
+| Rule | Số |
+|---|---:|
+| Thẻ tương tác thô | 142 |
+| Giá trị pixel tuỳ tiện | 116 |
+| Bóng đổ ngoài thang | 25 |
+| Hex nướng cứng | 14 |
+| Bảng màu Tailwind thô | 5 |
+
+Cộng thêm **1 cảnh báo `Unused eslint-disable directive`** ở `EmojiPicker.tsx:51`, **không** thuộc năm rule design system — tổng ESLint báo là 303. Các chặng sau trừ vào con số **302**, không phải 303.
+
+Dự đoán trong bản nháp là ~340; chênh lệch đã được truy nguyên và phần lớn là ảo (ESLint báo tại dòng bắt đầu của node, và 17 chỗ nằm trong comment nên loại đúng).
 
 Nếu ra 0 cảnh báo, config chưa ăn — kiểm tra lại khối `files: ['**/*.{ts,tsx}']`.
 
@@ -1649,7 +1662,7 @@ Chặng 1 xong thì viết kế hoạch cho chặng 2–7 bằng `superpowers:wr
 
 | Chặng | Phạm vi | Vi phạm |
 |---|---|---:|
-| 2 | `components/composites` → `components/patterns` — gồm bug `--md-primary-rgb` ở `ImagePreviewCard.tsx:72` | 82 |
+| 2 | `components/composites` → `components/patterns` — gồm bug `--md-primary-rgb` ở `ImagePreviewCard.tsx:72`, và hai chỗ class soạn ngoài `className` (`Modal.tsx:26`, `MessageItem.tsx:27`) | 84 |
 | 3 | `routes/_workspace/` + `routes/_workspace.tsx` | 73 |
 | 4 | `components/drive` — giữ số đo pixel kèm chú thích miễn trừ (D6) | 70 |
 | 5 | `components/chat` | 36 |
