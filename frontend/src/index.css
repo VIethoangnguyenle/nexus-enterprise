@@ -62,8 +62,15 @@
   --color-on-success: #ffffff;
   --color-warning: #d97706;
   --color-warning-bg: rgba(217, 119, 6, 0.08);
-  --color-danger: #ba1a1a;
-  --color-danger-bg: rgba(186, 26, 26, 0.06);
+  /* `danger` là bí danh của `error`, không phải một màu thứ hai.
+   * Stitch §Error đặt tên cho màu này là `error` ("Signal Red #BA1A1A / error"),
+   * nên `error` là từ vựng chuẩn và `danger` là nhánh trôi của dự án. Trước đây
+   * cả hai cùng nướng cứng #ba1a1a — hai tên, một màu, không gì ràng chúng lại:
+   * sửa một bên mà quên bên kia là app có hai sắc đỏ.
+   * Bí danh gỡ rủi ro đó ngay mà không đụng tới 21 chỗ đang gọi `danger`.
+   * Việc đổi tên chúng sang `error` đi kèm migration từng chặng. */
+  --color-danger: var(--color-error);
+  --color-danger-bg: color-mix(in srgb, var(--color-error) 6%, transparent);
   --color-info: #0284c7;
   --color-info-bg: rgba(2, 132, 199, 0.08);
 
