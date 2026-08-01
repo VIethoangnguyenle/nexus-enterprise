@@ -120,7 +120,7 @@ function AssetPeekPanel({ assetId, onClose, onOpenFull }: { assetId: string; onC
   const history: AssetHistory[] = histData?.history || []
   const timelineItems = history.slice(0, 5).map((h, i) => ({
     id: `${i}`,
-    color: ASSET_STATE_COLORS[h.to_state] || '#6b7280',
+    color: ASSET_STATE_COLORS[h.to_state] || 'var(--color-outline)',
     title: h.action,
     timestamp: h.created_at ? new Date(h.created_at).toLocaleDateString() : '',
     body: (

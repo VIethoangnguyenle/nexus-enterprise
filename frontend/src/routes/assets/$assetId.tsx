@@ -27,7 +27,7 @@ function AssetDetail() {
 
   const timelineItems = history.map((h, i) => ({
     id: `${i}`,
-    color: ASSET_STATE_COLORS[h.to_state] || '#6b7280',
+    color: ASSET_STATE_COLORS[h.to_state] || 'var(--color-outline)',
     title: h.action,
     timestamp: h.created_at ? new Date(h.created_at).toLocaleDateString() : '',
     body: (
