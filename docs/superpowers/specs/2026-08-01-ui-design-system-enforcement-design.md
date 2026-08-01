@@ -20,12 +20,15 @@ Design system đã tồn tại đầy đủ — token M3 trong `frontend/src/ind
 | `<select>` thô | 8 | 1 | 7 |
 | `<textarea>` thô | 2 | 1 | 1 |
 | Giá trị Tailwind tuỳ tiện `[Npx]` | 148 | 0 | 148 |
-| Hex nướng cứng trong `.tsx` | 9 | 4 | 5 |
+| Hex nướng cứng trong `.tsx` | 10 | 4 | 6 |
 | Hex nướng cứng trong `.ts` | 57 | 48 | 9 |
 | Class bảng màu Tailwind thô | 5 | 0 | 5 |
-| **Tổng** | **368** | **57** | **311** |
+| **Tổng** | **369** | **57** | **312** |
 
 Cột "Hợp lệ" gồm hai nhóm khác hẳn nhau, xem 1.3.
+
+Mọi con số ở đây đếm **lượt xuất hiện**, không đếm dòng. Phân biệt này không thừa: `routes/_auth.tsx`
+có 2 hex trên cùng một dòng, và bản nháp đếm theo dòng đã ra 9 thay vì 10.
 
 ### 1.1 Nguyên nhân gốc, không phải sự cẩu thả
 
@@ -92,7 +95,7 @@ Ngược lại, `lib/constants.ts` (9 hex trong `ASSET_STATE_COLORS` và `REQUES
 ## 2. Phạm vi
 
 **Trong phạm vi:** đưa token về khớp Stitch; hiệu chỉnh và mở rộng từ vựng primitive; bật ESLint
-cho `.ts` và `.tsx` với rule ép design system; xử lý 311 vi phạm theo từng chặng; cập nhật ba
+cho `.ts` và `.tsx` với rule ép design system; xử lý 312 vi phạm theo từng chặng; cập nhật ba
 capability spec bị chạm tới.
 
 **Ngoài phạm vi, có chủ đích:**
@@ -254,8 +257,9 @@ Bốn rule dùng `no-restricted-syntax` (esquery selector, có sẵn trong ESLin
 **Phạm vi file:** `**/*.{ts,tsx}`, không chỉ `.tsx`. Bản nháp đầu của tài liệu này giới hạn rule
 hex trong `className` và chỉ quét `.tsx` — cả hai đều sai, và tự soát lại mới phát hiện:
 
-- 4 trong 5 hex thật ở `.tsx` nằm ở prop `color="#3b82f6"` / `color="#f59e0b"`, **không** nằm trong
-  `className` → rule bị giới hạn theo `className` sẽ bỏ sót gần hết
+- 4 trong 6 hex thật ở `.tsx` nằm ngoài `className` — ở prop `color="#3b82f6"` / `color="#f59e0b"`
+  và trong biểu thức `ASSET_STATE_COLORS[...] || '#6b7280'` → rule giới hạn theo `className` chỉ
+  bắt được 2 chỗ trong `routes/_auth.tsx`
 - 57 hex nằm trong `.ts` (`lib/constants.ts`, `lib/fileIcons.ts`) → giới hạn ở `.tsx` bỏ sót toàn bộ
 
 Nên rule 3 quét **mọi string literal** trong `.ts` và `.tsx`, kèm hai override cho nhóm hợp lệ ở
@@ -280,7 +284,7 @@ Xếp theo phụ thuộc, không theo kích thước.
 | Chặng | Phạm vi | Vi phạm | Lý do vị trí |
 |---|---|---:|---|
 | 0 | token + primitive + lint mức `warn` | 1 | Nền móng (4.1–4.3). Con số là 1 giá trị `[Npx]` trong `primitives/Textarea.tsx` |
-| 1 | `routes/_auth/` + `routes/_auth.tsx` + `components/auth` + `components/layouts` | 31 | **Thí điểm.** Biệt lập, không màn hình nào phụ thuộc. Primitive sai thì lộ ở đây với chi phí thấp nhất |
+| 1 | `routes/_auth/` + `routes/_auth.tsx` + `components/auth` + `components/layouts` | 32 | **Thí điểm.** Biệt lập, không màn hình nào phụ thuộc. Primitive sai thì lộ ở đây với chi phí thấp nhất |
 | 2 | `components/composites` → `components/patterns` | 73 | Bộ khung, bán kính ảnh hưởng lớn nhất. Chỉ làm sau khi chặng 1 chứng minh primitive đúng |
 | 3 | `routes/_workspace/` + `routes/_workspace.tsx` | 66 | Route vỏ, phụ thuộc `patterns` |
 | 4 | `components/drive` | 62 | Xem cảnh báo bên dưới |
@@ -288,9 +292,9 @@ Xếp theo phụ thuộc, không theo kích thước.
 | 6 | `components/approval` + `routes/assets/` + `routes/assets.tsx` + `components/` gốc + `lib/constants.ts` | 44 | Phần đuôi. `lib/constants.ts` đi cùng vì `assets` là nơi tiêu thụ nó |
 | 7 | khoá lint `warn` → `error` | 0 | Chỉ khả thi khi đã về 0 |
 
-Đối chiếu: 1 + 31 + 73 + 66 + 62 + 34 + 44 = **311** = tổng 368 trừ 57 hợp lệ (1.3).
+Đối chiếu: 1 + 32 + 73 + 66 + 62 + 34 + 44 = **312** = tổng 369 trừ 57 hợp lệ (1.3).
 
-Vi phạm về màu (14 hex thật + 5 class màu thô) không tách thành chặng riêng — chúng đi theo file
+Vi phạm về màu (15 hex thật + 5 class màu thô) không tách thành chặng riêng — chúng đi theo file
 chứa chúng, nên đã nằm sẵn trong các con số trên.
 
 **Cảnh báo chặng 4.** `components/drive` chứa 45 giá trị pixel tuỳ tiện — tập trung nhất toàn repo,
