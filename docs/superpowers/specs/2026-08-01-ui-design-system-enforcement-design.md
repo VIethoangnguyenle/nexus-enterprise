@@ -383,13 +383,33 @@ Xoá một nhánh khỏi union type biến mọi call site cũ thành **lỗi bi
 
 ```
 gộp outline → secondary  → 4 chỗ
-gộp error   → danger     → 1 chỗ
+gộp error   → danger     → 1 chỗ literal + 1 chỗ lan qua prop = 2
 đổi success sang nền đặc → 4 chỗ tự chế bằng className (TypeScript KHÔNG bắt được)
 xoá size lg              → 0 chỗ
 ```
 
-Trình biên dịch liệt kê chính xác **5** vị trí. Bản nháp ghi 7 vì đếm cả `AlertBanner variant="error"`
-— `AlertBanner` có kiểu `AlertVariant` riêng, không liên quan `Button`.
+Trình biên dịch liệt kê **6** vị trí.
+
+Hai lần đính chính, và lần thứ hai mới là bài học:
+
+- Bản nháp đầu ghi 7, vì đếm cả `AlertBanner variant="error"` — `AlertBanner` có kiểu `AlertVariant`
+  riêng, không liên quan `Button`. Sửa xuống 5.
+- Con số 5 **cũng sai**, phát hiện lúc thi công. `components/composites/ConfirmDialog.tsx:112` viết
+  `<Button variant={confirmVariant} …>`, trong đó `confirmVariant?: 'primary' | 'error'` là prop
+  công khai của chính `ConfirmDialog`, và có **4 nơi bên ngoài** truyền `confirmVariant="error"`
+  (`routes/_workspace/drive.tsx`, `components/drive/ShareDialog.tsx`,
+  `components/drive/DeleteConfirmDialog.tsx`, `components/chat/ChannelInfoPanel.tsx`).
+
+**Vì sao khảo sát bỏ sót:** nó grep chuỗi literal `variant="error"`. Một giá trị đi qua **biến** thì
+vô hình với grep — nó chỉ lộ ra ở tầng kiểu. Đây chính là lý do mục này tồn tại: trình biên dịch
+tìm được thứ mà khảo sát chuỗi không thể. Nhưng nó chỉ tìm được **nếu có trình biên dịch chạy được**,
+mà điều đó lại phải dựng riêng — xem cảnh báo bên dưới.
+
+**Xử lý:** `ConfirmDialog` đổi luôn prop công khai sang `'primary' | 'danger'` thay vì ánh xạ nội bộ
+`error → danger`. Ánh xạ nội bộ giữ lại hai tên gọi cho một khái niệm trong cùng codebase — đúng loại
+trôi dạt mà tài liệu này tồn tại để xoá — và biểu thức ba ngôi sẽ âm thầm quy mọi variant tương lai
+về `primary`. Giá phải trả là 3 file ngoài danh sách ban đầu, mỗi file đổi đúng một từ, do trình biên
+dịch chỉ đích danh.
 
 **Cảnh báo phải nêu, vì nó làm mục này gần như sai:** dự án **chưa từng được typecheck**.
 `typescript` không có trong `package.json`; bản duy nhất trong `node_modules` là **3.9.10**, kéo vào
