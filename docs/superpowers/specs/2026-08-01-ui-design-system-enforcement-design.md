@@ -524,6 +524,28 @@ Ba capability spec đều đang ghi nhận sai lệch với code. Khi sửa `App
 "tiện tay" thêm nút thu gọn cho đúng `lark-sidebar-layout`. **Không làm.** Đó là thay đổi hành vi,
 cần spec và test riêng theo Enforcement Rules của `CLAUDE.md`, và nó không nằm trong cái đã chọn.
 
+### 7.4 Bóng đổ: xấp xỉ là chấp nhận được, đã đo
+
+Chặng thí điểm nêu nghi vấn rằng thang shadow thiếu một nấc cho loại "offset lớn, rất nhạt"
+(`0 16px 32px -12px / .08` ở `welcome.tsx`), và lo rằng sẽ phải xấp xỉ lặp lại nhiều lần.
+
+Kiểm kê 27 shadow tuỳ tiện còn lại bác bỏ điều đó — hình dạng ấy chỉ còn **đúng một lượt nữa**.
+Bức tranh thật là **trôi dạt alpha quanh token đã có**, không phải thang thiếu nấc:
+
+```
+0 1px 2px / 1px 3px, alpha .04–.08   12 lượt  → sát --shadow-sm
+0 2px 8px -2px / .05                  5 lượt  → cùng hình học --shadow-raised, chỉ khác alpha
+0 4px 16px / .04                      2 lượt  → TRÙNG KHÍT --shadow-card
+0 8px 30px / ...                      3 lượt  → sát --shadow-lg
+```
+
+Dựng hai bóng cạnh nhau ở đúng kích thước dùng thật (khối tròn 192px) rồi nhìn: chênh lệch nhỏ tới
+mức gần như không phân biệt được. **Quyết định: dùng token gần nhất, không thêm nấc mới.** Thêm
+token để phục vụ trôi dạt là làm từ vựng phình ra vì lý do ngược.
+
+Hai lượt `0 4px 16px / .04` trùng khít `--shadow-card` là phần thưởng sẵn có ở chặng sau — thay
+thẳng, không xấp xỉ gì cả.
+
 ### 7.3 Chú thích miễn trừ ở drive có thể bị lạm dụng
 
 D6 mở một lối thoát khỏi rule lint. Ràng buộc: mỗi `eslint-disable` phải nêu lý do và dẫn chiếu
