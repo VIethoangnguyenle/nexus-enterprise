@@ -16,7 +16,7 @@ export function AuthLayout() {
         <div className="absolute w-0.5 h-0.5 rounded-full bg-accent/25 top-[70%] right-[35%] animate-pulse [animation-delay:2.5s]" />
       </div>
 
-      <div className="relative z-10 w-full max-w-[420px] animate-slide-up">
+      <div className="relative z-10 w-full max-w-105 animate-slide-up">
         <Outlet />
       </div>
     </div>
