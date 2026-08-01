@@ -524,6 +524,35 @@ Ba capability spec đều đang ghi nhận sai lệch với code. Khi sửa `App
 "tiện tay" thêm nút thu gọn cho đúng `lark-sidebar-layout`. **Không làm.** Đó là thay đổi hành vi,
 cần spec và test riêng theo Enforcement Rules của `CLAUDE.md`, và nó không nằm trong cái đã chọn.
 
+### 7.5 `className` truyền vào primitive KHÔNG ghi đè được class cùng thuộc tính
+
+Đây là phát hiện đắt giá nhất của chặng thí điểm, và nó áp cho mọi lần di cư còn lại.
+
+Khi thử đưa ô OTP (`OtpInput.tsx`) vào `Input`, bo góc **âm thầm** đổi từ 12px xuống 8px:
+`rounded-md` nằm sẵn trong `variantStyles.default` của `Input`, `rounded-lg` truyền qua `className`.
+Hai class **hoà nhau về độ đặc hiệu**, nên Tailwind phân giải theo **thứ tự trong stylesheet sinh ra**,
+không theo thứ tự trong chuỗi JSX. Class viết sau không thắng.
+
+Điều nguy hiểm hơn kết quả: chiều rộng (`w-12` với `w-full`) và màu focus **sống sót** trong cùng
+phép thử — nhưng sống sót do may, cùng cơ chế đã giết bo góc. Một lần thử thấy "trông ổn" không
+chứng minh được gì về lần sau.
+
+**Không có tín hiệu nào ở thời điểm biên dịch.** TypeScript không thấy, ESLint không thấy, test
+khẳng định class có mặt trong chuỗi thì vẫn xanh — vì class *có* mặt thật, nó chỉ không thắng.
+Ảnh chụp so sánh cũng nhiều khả năng cho qua: 12px với 8px trên một ô 56px gần như không phân biệt
+được bằng mắt. Thứ duy nhất bắt được là **đo computed style trên trình duyệt**.
+
+**Quy tắc cho các chặng sau:** trước khi thay thẻ thô bằng primitive, phân loại nó đã:
+
+- **Trường thông thường viết tay** → dùng primitive, đúng ý đồ.
+- **Control có hình học cố định, thẻ bọc riêng, hoặc xử lý focus/thị giác riêng nướng trong
+  `className`** → ép qua primitive sẽ đánh nhau trên nhiều trục, và có thể mất âm thầm một thuộc
+  tính vào tay thứ tự cascade. Nếu nó không có logic nghiệp vụ, cách rẻ và trung thực hơn là
+  **chuyển nó vào `primitives/`**, chứ không phải bọc nó lại.
+
+`OtpInput` đi theo hướng thứ hai: rename thuần, không đổi một byte markup nào. Nó vốn đã đúng, chỉ
+nằm sai thư mục — `components/auth/` là nơi nó tình cờ được cần đến lần đầu, không phải nơi nó thuộc về.
+
 ### 7.4 Bóng đổ: xấp xỉ là chấp nhận được, đã đo
 
 Chặng thí điểm nêu nghi vấn rằng thang shadow thiếu một nấc cho loại "offset lớn, rất nhạt"
