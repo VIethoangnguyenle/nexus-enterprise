@@ -59,7 +59,7 @@ export function DriveFileList({
     <div className="flex-1 flex flex-col min-h-0 px-4 md:px-6 pb-4">
       {/* Table container — Stitch: rounded card with soft elevation */}
       <div className="bg-surface-container-lowest border border-outline-variant/50 rounded-xl overflow-hidden
-        flex flex-col flex-1 shadow-[0_1px_3px_rgba(0,0,0,0.04),0_1px_2px_rgba(0,0,0,0.02)]">
+        flex flex-col flex-1 shadow-sm">
 
         {/* Table Header */}
         <div className="grid grid-cols-12 gap-3 px-4 h-10 items-center border-b border-outline-variant/50
@@ -68,9 +68,9 @@ export function DriveFileList({
             <span className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-on-surface-variant/60">
               Name
             </span>
-            <span className="text-on-surface-variant/30 text-[10px]">↓</span>
+            <span className="text-on-surface-variant/30 text-micro">↓</span>
             {/* Item count badge */}
-            <span className="text-[10px] text-on-surface-variant/40 ml-1 hidden sm:inline">
+            <span className="text-micro text-on-surface-variant/40 ml-1 hidden sm:inline">
               {folderCount > 0 && `${folderCount} folder${folderCount > 1 ? 's' : ''}`}
               {folderCount > 0 && fileCount > 0 && ' · '}
               {fileCount > 0 && `${fileCount} file${fileCount > 1 ? 's' : ''}`}
