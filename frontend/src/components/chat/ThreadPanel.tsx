@@ -84,6 +84,10 @@ export function ThreadPanel({ messageId, channelId, onClose }: { messageId: stri
       {/* Reply editor */}
       <div className="border-t border-outline-variant p-3 bg-surface-container-lowest">
         <div className="flex items-center gap-2">
+          {/* eslint-disable-next-line no-restricted-syntax -- Input là con trực tiếp của hàng
+              flex (flex-1 cạnh nút gửi). Input tự bọc phần tử trong
+              <div class="flex flex-col gap-1">, nên flex-1 đặt trên input sẽ rơi vào cháu chứ
+              không phải con của hàng flex và không chia chỗ đúng cách. */}
           <input
             ref={inputRef}
             value={replyText}
@@ -98,8 +102,8 @@ export function ThreadPanel({ messageId, channelId, onClose }: { messageId: stri
             onClick={handleSendReply}
             disabled={!replyText.trim() || sending}
             aria-label="Send reply"
-            className="bg-primary text-on-primary hover:bg-primary/90 rounded-full shadow-sm
-              disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+            variant="filled"
+            className="flex-shrink-0"
           >
             {sending ? <Spinner size="sm" /> : <Send size={16} />}
           </IconButton>
