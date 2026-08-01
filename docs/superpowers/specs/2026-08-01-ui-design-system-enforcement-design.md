@@ -745,3 +745,62 @@ thẳng, không xấp xỉ gì cả.
 
 D6 mở một lối thoát khỏi rule lint. Ràng buộc: mỗi `eslint-disable` phải nêu lý do và dẫn chiếu
 mục 4.4 của tài liệu này. Miễn trừ không lý do là vi phạm.
+
+### 8.9 Tổng kết miễn trừ toàn dự án (sau chặng 6)
+
+**70 miễn trừ trên 36 tệp**, từ 302 vi phạm ban đầu. Phân loại dưới đây làm bằng regex trên
+phần văn xuôi của mỗi chú thích, nên là **ước lượng chứ không phải kiểm toán chính xác** — con
+số tổng 70 thì chắc chắn, việc xếp nhóm thì có thể lệch một hai cái.
+
+| Lý do | Số | |
+|---|---|---|
+| Trạng thái **được chọn** (tab, chip, filter pill, segmented, toggle) | 29 | 41% |
+| Hàng/ô/thẻ **bấm được nhưng không phải nút** (hàng bảng, mục danh sách, menu item, selection card) | 14 | 20% |
+| Ô nhập liệu: `Input` bọc `div.flex-col` hoặc nướng `px-3` chặn `pl-9` | 11 | 16% |
+| Thang chữ 10/11px thiếu token không-viết-hoa | 6 | |
+| Màu/tone primitive không diễn đạt được | 4 | |
+| Số đo pixel cố định (cột bảng, glyph) — ngoại lệ D6 | 2 | |
+| Checkbox — không có primitive | 1 | |
+| Link chữ nằm trong câu văn | 1 | |
+| Phần tử ẩn hoàn toàn (`<input type="file">` che bởi `className="hidden"`) | 1 | |
+| Breadcrumb dẫn chiếu lý do của khối trên | 1 | |
+
+**Kết luận: hai phần ba số miễn trừ là hai khoảng trống từ vựng, không phải màn hình sai.**
+
+`29 + 14 = 43/70 = 61%` quy về đúng **hai khái niệm còn thiếu**:
+
+1. **Không primitive nào diễn đạt được "đang được chọn".** `Button` có `variant` nhưng không có
+   `active`; `IconButton` có `active` nhưng chỉ hợp với nút chỉ-icon. Tab, chip lọc, segmented
+   control và filter pill đều là cùng một thứ: một nút mang trạng thái bền. 29 chỗ tự chế nó, và
+   mỗi chỗ đều phải đè `className`, tức là mỗi chỗ đều phơi ra đúng cái bẫy cascade ở §7.5. Đây
+   là hạng mục từ vựng đáng làm nhất còn lại.
+2. **Không primitive nào diễn đạt được "hàng bấm được".** 14 chỗ cần một vùng bấm hình chữ nhật
+   trải rộng, canh trái, nhiều dòng — ngược hoàn toàn với `Button` (`inline-flex`, canh giữa,
+   có padding và bo góc). `NavRow` gần nhất nhưng bị khoá vào ba `kind` điều hướng.
+
+Nhóm thứ ba (11 chỗ, ô nhập liệu) khác về bản chất: không phải thiếu khái niệm mà là `Input`
+**bọc thừa** một `div.flex-col gap-1` và nướng `px-3` vào chính ô. Sửa được mà không cần thêm
+primitive nào — chỉ cần cho phép bỏ lớp bọc khi không có nhãn/lỗi, và cho `padding` thành trục
+điều chỉnh được.
+
+Sáu chỗ 11px không viết hoa và một chỗ checkbox là hai lỗ nhỏ, rõ ràng, chi phí thấp.
+
+Không hạng mục nào ở trên được làm trong đợt này: chúng là **mở rộng từ vựng**, tức đổi hành vi,
+và đợt này cố ý chỉ chuẩn hoá thị giác. Ghi lại ở đây để lần sau không phải đo lại.
+
+### 8.10 Chặng 7 — khoá cổng, và chứng minh cổng biết đỏ
+
+Năm rule chuyển từ `warn` sang `error` ở cả ba khối config. Riêng việc khoá thì tầm thường; phần
+đáng kể là **chứng minh nó thất bại được**. Một cổng chưa từng quan sát thấy đỏ thì chưa phải cổng
+— đúng bài học của Task 0, nơi `typecheck:diff` phải được tiêm lỗi type mới đáng tin.
+
+Tệp dò tạm chứa đủ 5 loại vi phạm → `eslint` thoát mã **1** với 9 lỗi, **cả năm rule đều lên
+tiếng**, gồm cả nhánh `TemplateElement` vốn dễ tưởng là thừa. Xoá tệp dò → về exit 0. Đồng thời
+cổng xanh trong khi `components/primitives/` vẫn đầy thẻ `<button>` thô, nên miễn trừ theo phạm
+vi còn sống thật chứ không phải rule bị vô hiệu hoá — hai điều này trông giống hệt nhau nếu chỉ
+nhìn con số 0.
+
+Còn lại đúng 1 cảnh báo, không thuộc design system: chỉ thị disable ở `EmojiPicker.tsx:51` trỏ
+tới `react-hooks/exhaustive-deps`, rule chưa từng được bật trong repo. ESLint gọi nó "unused" vì
+rule không chạy, **không phải vì ý định sai**. Giữ lại: nó là dấu vết máy đọc được duy nhất của
+một suppression có chủ đích, và xoá nó sẽ làm mất thông tin đúng vào lúc ai đó bật Rules of Hooks.
