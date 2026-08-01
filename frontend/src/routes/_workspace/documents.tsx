@@ -68,6 +68,10 @@ function DocumentsPage() {
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-4 md:mb-6">
         <Heading as="h2">Documents</Heading>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          {/* eslint-disable-next-line no-restricted-syntax -- Input tệp hiển thị thật (không ẩn
+              như drive.tsx), tự vẽ nút chọn tệp qua pseudo-class file:*. Không primitive nào mô
+              hình hoá type="file": Input là cho text input, không có khe cho file:mr-3/file:py-2/
+              file:rounded-md/... của trình duyệt. */}
           <input
             ref={fileInputRef}
             type="file"
@@ -129,7 +133,7 @@ function DocumentsPage() {
             </table>
           </div>
         </Card>
-      ) : <EmptyState icon={<FileText size={40} color="#3b82f6" strokeWidth={1.5} />} title="No documents" description="Upload your first document to get started." />}
+      ) : <EmptyState icon={<FileText size={40} className="text-primary-container" strokeWidth={1.5} />} title="No documents" description="Upload your first document to get started." />}
     </div>
   )
 }

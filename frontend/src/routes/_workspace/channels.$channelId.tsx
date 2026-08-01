@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { ErrorState } from '../../components/ErrorState'
 import { ChatEditor, ChannelInfoPanel, VirtualizedMessageList, ThreadPanel } from '../../components/chat'
 import { EmojiPicker } from '../../components/chat/EmojiPicker'
+import { IconButton } from '../../components/primitives'
 import { Search, Pin, Users, FolderOpen, MoreVertical, ArrowLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -172,14 +173,14 @@ function ChannelHeader({
       {/* Row 1: Identity */}
       <div className="flex items-center justify-between h-12 md:h-18 px-3 md:px-6">
         <div className="flex items-center gap-3 md:gap-4">
-          <button
+          <IconButton
             onClick={() => window.dispatchEvent(new CustomEvent('open-mobile-list'))}
-            className="lg:hidden min-h-9 min-w-9 flex items-center justify-center rounded-lg
-              bg-transparent border-none cursor-pointer text-on-surface-variant hover:text-on-surface
-              hover:bg-surface-container transition-colors"
+            size="lg"
+            className="lg:hidden"
+            aria-label="Back to channel list"
           >
             <ArrowLeft size={20} />
-          </button>
+          </IconButton>
           <div className="w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-primary text-on-primary flex items-center justify-center font-bold shadow-sm">
             <span className="text-sm md:text-xl">#</span>
           </div>
@@ -201,16 +202,17 @@ function ChannelHeader({
         <div className="flex items-center gap-2">
           <HeaderButton icon={Users} label="Members" active={showInfoPanel && infoPanelTab === 'members'} onClick={() => onOpenInfoTab('members')} />
           <HeaderButton icon={Search} label="Search" active={showInfoPanel && infoPanelTab === 'search'} onClick={() => onOpenInfoTab('search')} />
-          <button
-            onClick={() => {}}
-            title="More"
-            className="p-2 rounded-lg border-none bg-transparent cursor-pointer text-on-surface-variant hover:bg-surface-container transition-colors"
-          >
+          <IconButton onClick={() => {}} title="More" aria-label="More" size="lg">
             <MoreVertical size={20} />
-          </button>
+          </IconButton>
         </div>
       </div>
       {/* Row 2: Tabs — desktop only */}
+      {/* eslint-disable no-restricted-syntax -- Tab pill: rounded-full py-1.5 px-3.5, ba nút
+          dùng chung container. Button bo góc theo size (rounded-md ở mọi size, kể cả sm), là
+          chuỗi nướng trong sizeStyles — className="rounded-full" sẽ hoà độ đặc hiệu với nó và
+          thắng/thua tuỳ thứ tự stylesheet, đúng lỗi đã ăn `secondary` (border) và ChatEditor
+          (rounded-full). Không size nào của Button cho hình viên thuốc. */}
       <div className="hidden md:flex items-center gap-0.5 h-8 px-6 overflow-x-auto scrollbar-none">
         <button className="inline-flex items-center gap-1 py-1.5 px-3.5 rounded-full text-small font-medium leading-[1.4] border border-transparent cursor-pointer transition-all duration-fast bg-primary text-on-primary">Chat</button>
         <button
@@ -226,13 +228,15 @@ function ChannelHeader({
           <FolderOpen size={12} /> Files
         </button>
       </div>
+      {/* eslint-enable no-restricted-syntax */}
     </div>
   )
 }
 
-/** Header action button — Stitch: p-2 rounded-lg hover:bg-surface-container */
+/** Header action button — Stitch: p-2 rounded-lg hover:bg-surface-container. */
 function HeaderButton({ icon: Icon, label, active, onClick }: { icon: LucideIcon; label: string; active: boolean; onClick: () => void }) {
   return (
+    // eslint-disable-next-line no-restricted-syntax -- Toggle hai trạng thái bền (Members/Search đang mở hay không): nền bg-surface-container + text-on-surface khi active, trong suốt lúc rỗi. IconButton không có trục active/selected (chỉ variant/tone/shape/size); ba variant có sẵn (ghost/outlined/filled) không tạo ra đúng cặp nền đó cho trạng thái active mà không ép qua className — cùng cơ chế cascade đã làm mất viền của Button `secondary`.
     <button
       onClick={onClick}
       title={label}

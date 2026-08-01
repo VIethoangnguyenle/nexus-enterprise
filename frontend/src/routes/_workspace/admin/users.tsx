@@ -74,6 +74,13 @@ function AdminUsersPage() {
           {/* Search */}
           <div className="relative flex-1 max-w-70">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant pointer-events-none" />
+            {/* eslint-disable-next-line no-restricted-syntax -- Ô tìm kiếm tự mang chrome (border
+                + bg + rounded-lg) và cần pl-9 chừa chỗ icon Search tuyệt đối. Input.variant chỉ
+                đổi bo góc/nền, không có khe cho padding-left icon — px-3 nướng trong base sẽ hoà
+                độ đặc hiệu với pl-9 truyền qua className, thắng/thua tuỳ thứ tự stylesheet dựng
+                ra. Lặp lại y hệt ở contacts.tsx (hai ô tìm kiếm) — dấu hiệu thiếu một composite
+                SearchField (đã nêu ở TopBar.tsx/ChatList.tsx cho biến thể ngược: input trần
+                trong hộp cha có sẵn chrome). */}
             <input
               type="text"
               placeholder="Search by name or email..."
@@ -117,6 +124,11 @@ function AdminUsersPage() {
 
             {/* Rows */}
             {filteredContacts.map((contact) => (
+              /* eslint-disable-next-line no-restricted-syntax -- Hàng bảng dữ liệu: CSS Grid
+                 grid-cols-[1fr_1fr_1fr_auto] tự mang gap-4 px-6 py-3. Cùng lý do đã miễn trừ ở
+                 ContactsTable.tsx: NavRow áp gap/padding/bo góc riêng của kind (navItem:
+                 gap-3 rounded-lg px-3 py-2.5) sẽ cộng chồng lên gap-4/px-6/py-3 của grid, hoà độ
+                 đặc hiệu và thắng/thua tuỳ thứ tự stylesheet. */
               <button
                 key={contact.user_id}
                 onClick={() => setSelectedUser(selectedUser?.user_id === contact.user_id ? null : contact)}
@@ -225,6 +237,15 @@ function DeptDropdown({
 
   return (
     <div ref={ref} className="relative">
+      {/* eslint-disable no-restricted-syntax -- Danh sách chọn tự chế thay <select> (comment gốc
+          của component đã nêu lý do: thẻ <option> gốc không nhận CSS). Nút mở (px-3 py-2 bg-surface
+          hover:bg-surface-container-low rounded-lg) không khớp size nào của Button (không phải
+          sm px-3 py-1.5 hay md px-4 py-2) và bg/hover khác token với variant="secondary"
+          (bg-surface-container-lowest/hover:-high). Các mục trong danh sách dùng bg-primary-container/40
+          text-primary font-medium CHỈ khi active — NavRow.groupHeader nướng text-body-ui (500
+          weight) không điều kiện trong layoutStyles, nên mục KHÔNG active cũng sẽ đậm lên, làm
+          nhoè phân cấp active/inactive hiện có; bg active của groupHeader (bg-surface-container)
+          cũng khác tông với bg-primary-container/40 đang dùng. */}
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 px-3 py-2 border border-outline-variant rounded-lg
@@ -257,6 +278,7 @@ function DeptDropdown({
           ))}
         </div>
       )}
+      {/* eslint-enable no-restricted-syntax */}
     </div>
   )
 }

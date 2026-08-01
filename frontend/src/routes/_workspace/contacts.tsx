@@ -8,6 +8,7 @@ import { ContactCard } from '../../components/patterns/ContactCard'
 import { ContactProfilePanel } from '../../components/patterns/ContactProfilePanel'
 import { LoadingState } from '../../components/LoadingState'
 import { EmptyState } from '../../components/EmptyState'
+import { Button, IconButton } from '../../components/primitives'
 import { Users, Search, MoreHorizontal, UserPlus, LayoutGrid, List, X, Building2 } from 'lucide-react'
 import { ResponsiveDetailPanel } from '../../components/composites/ResponsiveDetailPanel'
 
@@ -120,6 +121,15 @@ function ContactsPage() {
             {/* Search input — shown inline on md+ */}
             <div className="hidden md:block relative">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant pointer-events-none" />
+              {/* eslint-disable-next-line no-restricted-syntax -- Ô tìm kiếm tự mang chrome
+                  (border + bg + rounded-full) và cần pl-9 để chừa chỗ cho icon Search tuyệt đối.
+                  Input.variant="search" bake đúng border/bg/rounded-full nhưng base padding
+                  px-3 nướng sẵn trong chuỗi base (không theo variant) — pl-9 truyền qua className
+                  hoà độ đặc hiệu với nó, thắng/thua tuỳ thứ tự stylesheet dựng ra, đúng cơ chế
+                  đã ăn `secondary` của Button. Lặp lại y hệt ở admin/users.tsx (ô tìm) và bản
+                  mobile ngay dưới — dấu hiệu thiếu một composite SearchField (đã được nêu ở
+                  TopBar.tsx/ChatList.tsx cho biến thể "input trần trong hộp cha có chrome"; đây
+                  là biến thể ngược lại — input tự mang chrome, cần khe icon). */}
               <input
                 type="text"
                 placeholder="Search contacts..."
@@ -131,6 +141,10 @@ function ContactsPage() {
             </div>
 
             {/* View toggle — desktop only */}
+            {/* eslint-disable no-restricted-syntax -- Cặp toggle chế độ xem (table/grid), cùng lý
+                do đã miễn trừ ở drive.tsx: trạng thái chọn là bg-primary text-on-primary bền vững,
+                IconButton không có trục active/selected (chỉ variant/tone/shape/size) nên không
+                bật/tắt được cặp nền này mà không ép qua className chồng lên tone nướng sẵn. */}
             <div className="hidden lg:flex items-center border border-outline-variant rounded-lg overflow-hidden">
               <button
                 onClick={() => setViewMode('table')}
@@ -149,20 +163,22 @@ function ContactsPage() {
                 <LayoutGrid size={16} />
               </button>
             </div>
+            {/* eslint-enable no-restricted-syntax */}
 
             {/* Invite button — Stitch: border border-outline-variant text-on-surface rounded-lg */}
-            <button className="hidden md:flex items-center gap-2 px-4 py-2 bg-surface-container-lowest
-              hover:bg-surface-container-low border border-outline-variant text-on-surface font-semibold
-              text-sm rounded-lg transition-colors cursor-pointer">
+            <Button
+              variant="secondary"
+              size="md"
+              className="hidden md:inline-flex"
+            >
               <UserPlus size={18} />
               Invite
-            </button>
+            </Button>
 
             {/* More — Stitch: p-2 rounded-lg border border-outline-variant */}
-            <button className="p-2 text-on-surface-variant hover:bg-surface-container-low rounded-lg
-              transition-colors border border-outline-variant cursor-pointer bg-transparent">
+            <IconButton variant="outlined" size="lg" title="More" aria-label="More">
               <MoreHorizontal size={20} />
-            </button>
+            </IconButton>
           </div>
         </div>
 
@@ -170,6 +186,10 @@ function ContactsPage() {
         <div className="md:hidden px-4 py-3 bg-surface-container-lowest border-b border-outline-variant/30">
           <div className="relative">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant pointer-events-none" />
+            {/* eslint-disable-next-line no-restricted-syntax -- Cùng lý do với ô tìm kiếm desktop
+                phía trên: input tự mang border/bg/rounded-full, cần pl-9 chừa chỗ icon mà Input
+                không có khe cho, px-3 nướng trong base sẽ chọi độ đặc hiệu với pl-9 truyền qua
+                className. */}
             <input
               type="text"
               placeholder="Search contacts..."

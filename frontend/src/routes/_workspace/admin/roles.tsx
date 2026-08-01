@@ -326,6 +326,11 @@ interface RoleCardProps {
 
 function RoleCard({ role, displayName, isSelected, onSelect, isSystem }: RoleCardProps) {
   return (
+    /* eslint-disable-next-line no-restricted-syntax -- Thẻ vai trò có viền (border-primary khi
+       chọn, border-outline-variant/50 lúc thường) cộng icon-box 40px + badge + bộ đếm — không
+       phải hàng điều hướng. Không kind nào của NavRow có border (cả ba layoutStyles chỉ đổi
+       nền/chữ, không đổi viền), và hình học (gap-4, px-4 py-3) khác cả ba. Button cũng không
+       khớp: không size nào cho border có màu đổi theo trạng thái chọn như border-primary. */
     <button
       onClick={onSelect}
       className={`flex items-center gap-4 px-4 py-3 rounded-lg border text-left
