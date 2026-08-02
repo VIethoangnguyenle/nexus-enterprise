@@ -7,6 +7,7 @@ import (
 
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"ngac-platform/ngac"
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/store"
 )
@@ -14,23 +15,32 @@ import (
 // --- Reactions ---
 
 // AddReaction adds an emoji reaction to a message.
-func (s *Service) AddReaction(ctx context.Context, messageID, userID, emoji string) error {
+func (s *Service) AddReaction(ctx context.Context, messageID, userNodeID, userID, emoji string) error {
 	if messageID == "" || emoji == "" {
 		return ErrInvalidInput
+	}
+	if err := s.authorizeMessage(ctx, messageID, userNodeID, ngac.OpWrite); err != nil {
+		return err
 	}
 	return s.store.InsertReaction(ctx, messageID, userID, emoji)
 }
 
 // RemoveReaction removes an emoji reaction from a message.
-func (s *Service) RemoveReaction(ctx context.Context, messageID, userID, emoji string) error {
+func (s *Service) RemoveReaction(ctx context.Context, messageID, userNodeID, userID, emoji string) error {
 	if messageID == "" || emoji == "" {
 		return ErrInvalidInput
+	}
+	if err := s.authorizeMessage(ctx, messageID, userNodeID, ngac.OpWrite); err != nil {
+		return err
 	}
 	return s.store.DeleteReaction(ctx, messageID, userID, emoji)
 }
 
 // ListReactions returns aggregated reactions for a message.
-func (s *Service) ListReactions(ctx context.Context, messageID string) ([]*pb.ReactionGroup, error) {
+func (s *Service) ListReactions(ctx context.Context, messageID, userNodeID string) ([]*pb.ReactionGroup, error) {
+	if err := s.authorizeMessage(ctx, messageID, userNodeID, ngac.OpRead); err != nil {
+		return nil, err
+	}
 	groups, err := s.store.ListReactionsByMessage(ctx, messageID)
 	if err != nil {
 		return nil, fmt.Errorf("list reactions: %w", err)
@@ -54,23 +64,32 @@ func (s *Service) GetChannelIDForMessage(ctx context.Context, messageID string) 
 // --- Pins ---
 
 // PinMessage pins a message in a channel.
-func (s *Service) PinMessage(ctx context.Context, channelID, messageID, userID string) error {
+func (s *Service) PinMessage(ctx context.Context, channelID, messageID, userNodeID, userID string) error {
 	if channelID == "" || messageID == "" {
 		return ErrInvalidInput
+	}
+	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpWrite); err != nil {
+		return err
 	}
 	return s.store.InsertPin(ctx, channelID, messageID, userID)
 }
 
 // UnpinMessage removes a pin from a message.
-func (s *Service) UnpinMessage(ctx context.Context, channelID, messageID string) error {
+func (s *Service) UnpinMessage(ctx context.Context, channelID, messageID, userNodeID string) error {
 	if channelID == "" || messageID == "" {
 		return ErrInvalidInput
+	}
+	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpWrite); err != nil {
+		return err
 	}
 	return s.store.DeletePin(ctx, channelID, messageID)
 }
 
 // ListPins returns pinned messages for a channel with full message data.
-func (s *Service) ListPins(ctx context.Context, channelID string) ([]*pb.PinnedMessage, error) {
+func (s *Service) ListPins(ctx context.Context, channelID, userNodeID string) ([]*pb.PinnedMessage, error) {
+	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead); err != nil {
+		return nil, err
+	}
 	pins, err := s.store.ListPinsByChannel(ctx, channelID)
 	if err != nil {
 		return nil, fmt.Errorf("list pins: %w", err)
@@ -95,14 +114,19 @@ func (s *Service) ListPins(ctx context.Context, channelID string) ([]*pb.PinnedM
 // --- Read Receipts ---
 
 // MarkChannelRead marks a channel as read up to a specific message.
-func (s *Service) MarkChannelRead(ctx context.Context, userID, channelID, lastMessageID string) error {
+func (s *Service) MarkChannelRead(ctx context.Context, userID, userNodeID, channelID, lastMessageID string) error {
 	if channelID == "" {
 		return ErrInvalidInput
+	}
+	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead); err != nil {
+		return err
 	}
 	return s.store.UpsertReadReceipt(ctx, userID, channelID, lastMessageID)
 }
 
 // GetUnreadCounts returns unread message counts for all channels a user is a member of.
+// The query is already scoped to the caller's own receipts, so it needs no
+// further authorization — a user can only ever see their own unread state.
 func (s *Service) GetUnreadCounts(ctx context.Context, userID string) ([]*pb.ChannelUnread, error) {
 	unreads, err := s.store.GetUnreadCounts(ctx, userID)
 	if err != nil {
@@ -122,9 +146,12 @@ func (s *Service) GetUnreadCounts(ctx context.Context, userID string) ([]*pb.Cha
 // --- Search ---
 
 // SearchMessages performs full-text search on messages in a channel.
-func (s *Service) SearchMessages(ctx context.Context, channelID, query string, limit int) (*pb.MessageList, error) {
+func (s *Service) SearchMessages(ctx context.Context, channelID, userNodeID, query string, limit int) (*pb.MessageList, error) {
 	if channelID == "" || query == "" {
 		return &pb.MessageList{}, nil
+	}
+	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead); err != nil {
+		return nil, err
 	}
 	msgs, err := s.store.SearchMessages(ctx, channelID, query, limit)
 	if err != nil {

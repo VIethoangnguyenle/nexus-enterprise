@@ -101,6 +101,7 @@ message ListChannelsRequest {
 
 message GetChannelRequest {
   string channel_id = 1;
+  string user_ngac_node_id = 2;
 }
 
 message ChannelList {
@@ -125,6 +126,7 @@ message RemoveChannelMemberRequest {
 
 message ListChannelMembersRequest {
   string channel_id = 1;
+  string user_ngac_node_id = 2;
 }
 
 message ChannelMember {

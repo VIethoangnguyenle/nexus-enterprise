@@ -31,6 +31,23 @@ type mockPolicyRead struct {
 func (m *mockPolicyRead) CheckAccess(_ context.Context, _ *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
 	return &policypb.AccessDecision{Decision: "ALLOW"}, nil
 }
+// batchDecision answers every requested operation on every object the same way.
+func batchDecision(req *policypb.BatchCheckAccessRequest, allow bool) *policypb.BatchAccessResult {
+	results := make(map[string]*policypb.ObjectPermissions, len(req.ObjectIds))
+	for _, id := range req.ObjectIds {
+		perms := make(map[string]bool, len(req.Operations))
+		for _, op := range req.Operations {
+			perms[op] = allow
+		}
+		results[id] = &policypb.ObjectPermissions{Permissions: perms}
+	}
+	return &policypb.BatchAccessResult{Results: results}
+}
+
+func (m *mockPolicyRead) BatchCheckAccess(_ context.Context, req *policypb.BatchCheckAccessRequest, _ ...grpc.CallOption) (*policypb.BatchAccessResult, error) {
+	return batchDecision(req, true), nil
+}
+
 func (m *mockPolicyRead) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
 	return &policypb.NGACNode{Id: "pc-global", Name: req.Name, NodeType: req.NodeType}, nil
 }
@@ -49,6 +66,10 @@ type mockPolicyReadDeny struct{ mockPolicyRead }
 
 func (m *mockPolicyReadDeny) CheckAccess(_ context.Context, _ *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
 	return &policypb.AccessDecision{Decision: "DENY"}, nil
+}
+
+func (m *mockPolicyReadDeny) BatchCheckAccess(_ context.Context, req *policypb.BatchCheckAccessRequest, _ ...grpc.CallOption) (*policypb.BatchAccessResult, error) {
+	return batchDecision(req, false), nil
 }
 
 type mockPolicyWrite struct {
@@ -369,6 +390,57 @@ func TestRestoreItem_HappyPath(t *testing.T) {
 	restored, err := srv.RestoreItem(context.Background(), &pb.RestoreItemRequest{ItemId: folder.Id})
 	require.NoError(t, err)
 	assert.Equal(t, "active", restored.Status)
+}
+
+// Permanent deletion destroys the stored object, the quota accounting and the
+// item's NGAC node. TrashItem — the reversible operation — already refuses a
+// denied user, so the irreversible one must refuse at least as much.
+func TestDeleteItem_DeniedWithoutAccess(t *testing.T) {
+	srvDeny, pool := setupServerDeny(t)
+	wsID := getTestWorkspaceID(t, pool)
+
+	srvAllow := grpcserver.NewDriveServer(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
+	folder, _ := srvAllow.CreateFolder(context.Background(), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "DeleteDenyTest", UserNgacNodeId: "ngac-user-1",
+	})
+	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
+
+	_, err := srvDeny.DeleteItem(context.Background(), &pb.DeleteItemRequest{
+		ItemId: folder.Id, UserNgacNodeId: "ngac-denied-user",
+	})
+
+	require.Error(t, err, "denied user must not permanently delete an item")
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+
+	// And the item must still be there.
+	item, getErr := srvAllow.GetItem(context.Background(), &pb.GetItemRequest{
+		ItemId: folder.Id, UserNgacNodeId: "ngac-user-1",
+	})
+	require.NoError(t, getErr, "item must survive the denied delete")
+	assert.Equal(t, folder.Id, item.Id)
+}
+
+// Restoring pulls an item back out of the trash and is just as much a write as
+// trashing it was.
+func TestRestoreItem_DeniedWithoutAccess(t *testing.T) {
+	srvDeny, pool := setupServerDeny(t)
+	wsID := getTestWorkspaceID(t, pool)
+
+	srvAllow := grpcserver.NewDriveServer(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
+	folder, _ := srvAllow.CreateFolder(context.Background(), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "RestoreDenyTest", UserNgacNodeId: "ngac-user-1",
+	})
+	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
+	srvAllow.TrashItem(context.Background(), &pb.TrashItemRequest{
+		ItemId: folder.Id, UserNgacNodeId: "ngac-user-1",
+	})
+
+	_, err := srvDeny.RestoreItem(context.Background(), &pb.RestoreItemRequest{
+		ItemId: folder.Id, UserNgacNodeId: "ngac-denied-user",
+	})
+
+	require.Error(t, err, "denied user must not restore a trashed item")
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
 
 func TestRenameItem_HappyPath(t *testing.T) {

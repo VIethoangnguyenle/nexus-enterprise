@@ -51,7 +51,7 @@ func (h *Handler) VotePoll(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	if err := h.svc.VotePoll(c.Request().Context(), c.Param("pollId"), body.OptionID, claims.UserID); err != nil {
+	if err := h.svc.VotePoll(c.Request().Context(), c.Param("pollId"), body.OptionID, claims.NGACNodeID, claims.UserID); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -67,7 +67,7 @@ func (h *Handler) RemoveVote(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	if err := h.svc.RemoveVote(c.Request().Context(), c.Param("pollId"), body.OptionID, claims.UserID); err != nil {
+	if err := h.svc.RemoveVote(c.Request().Context(), c.Param("pollId"), body.OptionID, claims.NGACNodeID, claims.UserID); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -75,7 +75,8 @@ func (h *Handler) RemoveVote(c echo.Context) error {
 
 // GetPoll handles GET /api/polls/:pollId.
 func (h *Handler) GetPoll(c echo.Context) error {
-	poll, err := h.svc.GetPoll(c.Request().Context(), c.Param("pollId"))
+	claims := httputil.GetClaims(c)
+	poll, err := h.svc.GetPoll(c.Request().Context(), c.Param("pollId"), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -126,6 +127,7 @@ func (h *Handler) UpdateTask(c echo.Context) error {
 	task, err := h.svc.UpdateTask(c.Request().Context(), domain.UpdateTaskInput{
 		TaskID:     c.Param("taskId"),
 		UserID:     claims.UserID,
+		UserNodeID: claims.NGACNodeID,
 		Status:     body.Status,
 		AssigneeID: body.AssigneeID,
 		Title:      body.Title,
@@ -139,8 +141,9 @@ func (h *Handler) UpdateTask(c echo.Context) error {
 
 // ListTasks handles GET /api/channels/:chId/tasks.
 func (h *Handler) ListTasks(c echo.Context) error {
+	claims := httputil.GetClaims(c)
 	status := c.QueryParam("status")
-	tasks, err := h.svc.ListTasks(c.Request().Context(), c.Param("chId"), status)
+	tasks, err := h.svc.ListTasks(c.Request().Context(), c.Param("chId"), claims.NGACNodeID, status)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

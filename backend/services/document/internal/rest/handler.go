@@ -28,17 +28,13 @@ func NewHandler(drive drivepb.DriveServiceClient) *Handler {
 func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api := e.Group("/api", httputil.JWTMiddleware(jwtSecret))
 
-	// Active — proxy to Drive
+	// This service is a thin compatibility layer over Drive. Upload, approval,
+	// sharing and publishing all moved there; the routes that used to answer
+	// 410 Gone for them are gone too, since no client is left to inform.
 	api.GET("/workspaces/:id/documents", h.ListDocuments)
 	api.POST("/workspaces/:id/documents/upload-url", h.GetUploadURL)
 	api.POST("/documents/:docId/confirm", h.ConfirmUpload)
 	api.GET("/documents/:docId/download-url", h.GetDownloadURL)
-
-	// Deprecated — return 410 Gone
-	api.POST("/workspaces/:id/documents", h.UploadDocument)
-	api.POST("/documents/:docId/approve", h.ApproveDocument)
-	api.POST("/documents/:docId/share", h.ShareDocument)
-	api.POST("/documents/:docId/publish", h.PublishDocument)
 }
 
 // ListDocuments proxies to Drive ListFolder (legacy endpoint).
@@ -103,26 +99,6 @@ func (h *Handler) GetDownloadURL(c echo.Context) error {
 		return mapGRPCError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
-}
-
-// UploadDocument returns 410 Gone — deprecated in favor of Drive.
-func (h *Handler) UploadDocument(c echo.Context) error {
-	return c.JSON(http.StatusGone, map[string]string{"error": "deprecated: use /api/workspaces/{id}/drive/files"})
-}
-
-// ApproveDocument returns 410 Gone — deprecated.
-func (h *Handler) ApproveDocument(c echo.Context) error {
-	return c.JSON(http.StatusGone, map[string]string{"error": "deprecated: approvals moved to Drive"})
-}
-
-// ShareDocument returns 410 Gone — deprecated.
-func (h *Handler) ShareDocument(c echo.Context) error {
-	return c.JSON(http.StatusGone, map[string]string{"error": "deprecated: use /api/drive/items/{id}/share"})
-}
-
-// PublishDocument returns 410 Gone — deprecated.
-func (h *Handler) PublishDocument(c echo.Context) error {
-	return c.JSON(http.StatusGone, map[string]string{"error": "deprecated: use Drive sharing with public type"})
 }
 
 func mapGRPCError(err error) *echo.HTTPError {

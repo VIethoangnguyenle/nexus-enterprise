@@ -3,6 +3,8 @@ package domain
 import (
 	"encoding/json"
 	"fmt"
+
+	"ngac-platform/ngac"
 )
 
 // LifecycleDefinition describes the state machine for an asset type.
@@ -26,15 +28,15 @@ func DefaultLifecycle() LifecycleDefinition {
 		States:       []string{"requested", "available", "assigned", "maintenance", "retired", "disposed"},
 		InitialState: "requested",
 		Transitions: []TransitionRule{
-			{FromState: "requested", ToState: "available", Operation: "approve", NgacPermission: "approve"},
-			{FromState: "available", ToState: "assigned", Operation: "assign", NgacPermission: "assign"},
-			{FromState: "assigned", ToState: "available", Operation: "return", NgacPermission: "assign"},
-			{FromState: "assigned", ToState: "maintenance", Operation: "flag_maintenance", NgacPermission: "manage"},
-			{FromState: "available", ToState: "maintenance", Operation: "flag_maintenance", NgacPermission: "manage"},
-			{FromState: "maintenance", ToState: "available", Operation: "complete_maintenance", NgacPermission: "manage"},
-			{FromState: "available", ToState: "retired", Operation: "retire", NgacPermission: "manage"},
-			{FromState: "maintenance", ToState: "retired", Operation: "retire", NgacPermission: "manage"},
-			{FromState: "retired", ToState: "disposed", Operation: "dispose", NgacPermission: "dispose"},
+			{FromState: "requested", ToState: "available", Operation: "approve", NgacPermission: ngac.OpApprove},
+			{FromState: "available", ToState: "assigned", Operation: "assign", NgacPermission: ngac.OpManage},
+			{FromState: "assigned", ToState: "available", Operation: "return", NgacPermission: ngac.OpManage},
+			{FromState: "assigned", ToState: "maintenance", Operation: "flag_maintenance", NgacPermission: ngac.OpManage},
+			{FromState: "available", ToState: "maintenance", Operation: "flag_maintenance", NgacPermission: ngac.OpManage},
+			{FromState: "maintenance", ToState: "available", Operation: "complete_maintenance", NgacPermission: ngac.OpManage},
+			{FromState: "available", ToState: "retired", Operation: "retire", NgacPermission: ngac.OpManage},
+			{FromState: "maintenance", ToState: "retired", Operation: "retire", NgacPermission: ngac.OpManage},
+			{FromState: "retired", ToState: "disposed", Operation: "dispose", NgacPermission: ngac.OpManage},
 		},
 	}
 }

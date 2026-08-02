@@ -11,7 +11,7 @@ export const Route = createFileRoute('/_auth')({
  *  Source: .stitch/designs/login.html
  *  Key tokens: bg-background, bg-nexus-auth radial gradients, max-w-110 container. */
 function AuthLayoutRoute() {
-  const isAuth = useAuthStore((s) => !!s.token)
+  const isAuth = useAuthStore((s) => s.isAuthenticated())
   if (isAuth) return <Navigate to="/documents" />
 
   return (

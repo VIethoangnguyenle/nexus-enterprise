@@ -42,8 +42,8 @@ type RequestStore interface {
 	CountApprovedForStep(ctx context.Context, requestID string, stepOrder int) (int, error)
 	SkipRemainingAssignments(ctx context.Context, requestID string, stepOrder int) error
 	SkipAllPendingAssignments(ctx context.Context, requestID string) error
-	AdvanceStep(ctx context.Context, requestID string, nextStep int) error
-	CompleteRequest(ctx context.Context, requestID, status string) error
+	AdvanceStep(ctx context.Context, requestID string, fromStep, nextStep int) (bool, error)
+	CompleteRequest(ctx context.Context, requestID, status string) (bool, error)
 
 	// Query tabs
 	ListPending(ctx context.Context, userNodeID string) ([]*RequestWithAssignment, error)
@@ -52,7 +52,6 @@ type RequestStore interface {
 	ListByScopes(ctx context.Context, scopeOAIDs []string, cursor string, limit int) ([]*Request, string, error)
 
 	// Batch
-	BatchApproveAssignments(ctx context.Context, userNodeID string, requestIDs []string, comment string) ([]string, error)
 }
 
 // AuditStore defines audit log operations.

@@ -1,15 +1,18 @@
--- Migration 010: Add dynamic form fields to approval module
--- Adds form_fields JSONB column to templates (field definitions)
--- Adds form_data_json JSONB column to requests (submitted values)
-
--- This migration runs on ALL tenant schemas via the tenant provisioner.
--- For existing schemas, run manually:
--- ALTER TABLE {schema}.approval_templates ADD COLUMN IF NOT EXISTS form_fields JSONB DEFAULT NULL;
--- ALTER TABLE {schema}.approval_requests ADD COLUMN IF NOT EXISTS form_data_json JSONB DEFAULT NULL;
-
--- The tenant schema provisioner (007_tenant_schema_approval.sql function) should be updated
--- to include these columns in CREATE TABLE statements.
--- However, for safety, this migration adds them via ALTER TABLE to existing schemas.
-
--- Note: This file documents the change. The actual ALTER TABLE must run per-tenant schema.
--- The approval service handles NULL gracefully (no form fields = legacy template).
+-- 010_approval_form_fields.sql
+--
+-- SUPERSEDED BY 014. This file intentionally contains no statements.
+--
+-- It originally described adding approval_templates.form_fields and
+-- approval_requests.form_data_json, and said the work would happen "via the
+-- tenant provisioner" — but it contained no SQL, so nothing ever ran. The
+-- provisioning function was later updated to include both columns, yet it
+-- builds tables with CREATE TABLE IF NOT EXISTS, so re-running it over an
+-- existing tenant schema changes nothing. Every tenant provisioned before that
+-- function changed was left permanently without the columns, and the approval
+-- queries that select them failed for exactly those tenants.
+--
+-- 014_backfill_approval_form_columns.sql walks the tenant registry and adds the
+-- columns wherever they are missing. It is idempotent and safe to re-run.
+--
+-- The file is kept rather than deleted so the numbering stays contiguous, and so
+-- the next person reading this chain finds out why 014 exists.

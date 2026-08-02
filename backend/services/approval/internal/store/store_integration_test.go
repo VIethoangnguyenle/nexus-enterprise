@@ -180,11 +180,11 @@ func TestFullApprovalFlow(t *testing.T) {
 	if count != 1 {
 		t.Errorf("step 1 approved count = %d, want 1", count)
 	}
-	s.AdvanceStep(ctx, reqID, 2)
+	s.AdvanceStep(ctx, reqID, 1, 2)
 
 	// Step 2: Director
 	s.UpdateAssignmentStatus(ctx, asgnIDs[1], "approved", "OK")
-	s.AdvanceStep(ctx, reqID, 3)
+	s.AdvanceStep(ctx, reqID, 2, 3)
 
 	// Step 3: CEO → complete
 	s.UpdateAssignmentStatus(ctx, asgnIDs[2], "approved", "Final")
@@ -276,44 +276,90 @@ func TestScopeBasedListing(t *testing.T) {
 	t.Logf("✅ CEO scope (all): %d items", len(allItems))
 }
 
-func TestBatchApprove(t *testing.T) {
+// Two approvals that satisfy the same quorum concurrently both see the count
+// met and both call AdvanceStep. Only one may win, or each winner goes on to
+// create a full set of assignments for the next step.
+func TestAdvanceStep_IsCompareAndSwap(t *testing.T) {
+	ctx := context.Background()
 	s := store.NewStore(testDB)
-	ctx := tenantCtx(tenantAID)
+	ctx = httputil.WithTenantSchema(ctx, schemaA)
 
+	reqID := insertCASRequest(t, ctx, s, "CAS")
+
+	first, err := s.AdvanceStep(ctx, reqID, 1, 2)
+	if err != nil {
+		t.Fatalf("first advance: %v", err)
+	}
+	if !first {
+		t.Fatal("first advance should win")
+	}
+
+	// The loser still believes current_step is 1.
+	second, err := s.AdvanceStep(ctx, reqID, 1, 2)
+	if err != nil {
+		t.Fatalf("second advance: %v", err)
+	}
+	if second {
+		t.Error("second advance from the same step must lose, got a win")
+	}
+
+	got, _ := s.GetRequest(ctx, reqID)
+	if got.CurrentStep != 2 {
+		t.Errorf("current_step = %d, want 2 (advanced exactly once)", got.CurrentStep)
+	}
+}
+
+// A terminal status must be reached exactly once, so a late approval cannot
+// overwrite a rejection.
+func TestCompleteRequest_OnlyFromPending(t *testing.T) {
+	ctx := context.Background()
+	s := store.NewStore(testDB)
+	ctx = httputil.WithTenantSchema(ctx, schemaA)
+
+	reqID := insertCASRequest(t, ctx, s, "CAS2")
+
+	ok, err := s.CompleteRequest(ctx, reqID, "rejected")
+	if err != nil || !ok {
+		t.Fatalf("first completion should win: ok=%v err=%v", ok, err)
+	}
+
+	ok, err = s.CompleteRequest(ctx, reqID, "approved")
+	if err != nil {
+		t.Fatalf("second completion: %v", err)
+	}
+	if ok {
+		t.Error("a completed request must not be completable again")
+	}
+
+	got, _ := s.GetRequest(ctx, reqID)
+	if got.Status != "rejected" {
+		t.Errorf("status = %q, want rejected (first terminal status wins)", got.Status)
+	}
+}
+
+// insertCASRequest creates a template plus a pending request bound to it, so the
+// request satisfies the approval_requests -> approval_templates foreign key.
+func insertCASRequest(t *testing.T, ctx context.Context, s *store.Store, label string) string {
+	t.Helper()
 	tmplID := newID()
 	now := time.Now()
-	s.InsertTemplate(ctx, &domain.Template{
-		ID: tmplID, Name: "Batch Test", EntityType: "transfer",
-		IsActive: true, CreatedBy: "admin",
-		CreatedAt: now, UpdatedAt: now,
+	if err := s.InsertTemplate(ctx, &domain.Template{
+		ID: tmplID, Name: label, EntityType: "transfer",
+		IsActive: true, CreatedBy: "admin", CreatedAt: now, UpdatedAt: now,
 		Conditions: []*domain.Condition{},
 		Steps:      []*domain.Step{{ID: newID(), StepOrder: 1, Name: "M", ApproverType: "specific_user", RequiredCount: 1}},
-	})
-
-	var reqIDs []string
-	for i := 0; i < 3; i++ {
-		reqID := newID()
-		reqIDs = append(reqIDs, reqID)
-
-		s.InsertRequest(ctx, &domain.Request{
-			ID: reqID, EntityType: "transfer", EntityID: newID(),
-			TemplateID: tmplID, TemplateName: "Batch",
-			TemplateSnapshot: `{}`, CurrentStep: 1, Status: "pending",
-			ScopeOAID: "scope_mn", DepartmentID: "dept1", CreatedBy: "user1",
-		})
-
-		s.InsertAssignments(ctx, []*domain.AssignmentRecord{{
-			ID: newID(), RequestID: reqID, StepOrder: 1,
-			UserNodeID: "batch_user", GrantSource: "template", Status: "pending",
-		}})
+	}); err != nil {
+		t.Fatalf("insert template: %v", err)
 	}
 
-	approved, err := s.BatchApproveAssignments(ctx, "batch_user", reqIDs, "batch OK")
-	if err != nil {
-		t.Fatalf("batch approve: %v", err)
+	reqID := newID()
+	if err := s.InsertRequest(ctx, &domain.Request{
+		ID: reqID, EntityType: "transfer", EntityID: newID(),
+		TemplateID: tmplID, TemplateName: label, TemplateSnapshot: `{}`,
+		CurrentStep: 1, Status: "pending",
+		ScopeOAID: "scope_cas", DepartmentID: "dept1", CreatedBy: "user1",
+	}); err != nil {
+		t.Fatalf("insert request: %v", err)
 	}
-	if len(approved) != 3 {
-		t.Errorf("batch approved %d, want 3", len(approved))
-	}
-	t.Logf("✅ Batch approved %d/%d requests", len(approved), len(reqIDs))
+	return reqID
 }

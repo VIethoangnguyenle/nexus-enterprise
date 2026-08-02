@@ -11,7 +11,7 @@ import { ListPanel } from '../components/patterns/ListPanel'
 import { MobileNav } from '../components/patterns/MobileNav'
 import { Button, IconButton, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
-import { apiFetch } from '../api/client'
+import { apiFetch, logoutSession } from '../api/client'
 import { PanelLeft, X } from 'lucide-react'
 
 export const Route = createFileRoute('/_workspace')({
@@ -19,8 +19,7 @@ export const Route = createFileRoute('/_workspace')({
 })
 
 function WorkspaceLayout() {
-  const token = useAuthStore((s) => s.token)
-  const logout = useAuthStore((s) => s.logout)
+  const token = useAuthStore((s) => s.accessToken)
   const connect = useWebSocketStore((s) => s.connect)
   const disconnect = useWebSocketStore((s) => s.disconnect)
   const { data, isLoading, isError } = useWorkspaces()
@@ -83,9 +82,9 @@ function WorkspaceLayout() {
     const workspaces = data?.workspaces || []
     if (!isLoading && workspaces.length === 0 && token && !verifiedRef.current) {
       verifiedRef.current = true
-      apiFetch('/me').catch(() => { logout() })
+      apiFetch('/me').catch(() => { void logoutSession() })
     }
-  }, [isLoading, data, token, logout])
+  }, [isLoading, data, token])
 
   if (!token) return <Navigate to="/login" search={Object.fromEntries(new URLSearchParams(window.location.search))} />
 
@@ -96,7 +95,7 @@ function WorkspaceLayout() {
           <div className="text-center px-4">
             <Text variant="body" muted>Unable to load workspaces</Text>
             <Button variant="link" size="link" onClick={() => window.location.reload()} className="mt-4">Retry</Button>
-            <Button variant="ghost" size="link" onClick={() => logout()} className="mt-2 block mx-auto">Logout</Button>
+            <Button variant="ghost" size="link" onClick={() => void logoutSession()} className="mt-2 block mx-auto">Logout</Button>
           </div>
         </div>
       </div>
@@ -121,7 +120,7 @@ function WorkspaceLayout() {
             <Spinner size="lg" />
             <Text variant="body" muted className="mt-4">Setting up your workspace...</Text>
             <Button variant="link" size="link" onClick={() => window.location.reload()} className="mt-4">Refresh if this takes too long</Button>
-            <Button variant="ghost" size="link" onClick={() => logout()} className="mt-2 block mx-auto">Logout and re-login</Button>
+            <Button variant="ghost" size="link" onClick={() => void logoutSession()} className="mt-2 block mx-auto">Logout and re-login</Button>
           </div>
         </div>
       </div>

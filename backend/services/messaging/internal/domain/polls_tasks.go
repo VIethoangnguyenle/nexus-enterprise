@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"ngac-platform/ngac"
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/store"
 )
@@ -27,10 +28,40 @@ type CreatePollInput struct {
 	EndsAt      *time.Time
 }
 
+// authorizePoll authorizes an operation on the channel that owns a poll.
+// Polls, like messages, are not graph nodes — the check lands on the channel.
+func (s *Service) authorizePoll(ctx context.Context, pollID, userNodeID, operation string) error {
+	if pollID == "" {
+		return ErrInvalidInput
+	}
+	poll, _, err := s.store.GetPoll(ctx, pollID)
+	if err != nil || poll == nil {
+		return ErrNotFound
+	}
+	_, err = s.authorizeChannel(ctx, poll.ChannelID, userNodeID, operation)
+	return err
+}
+
+// authorizeTask authorizes an operation on the channel that owns a task.
+func (s *Service) authorizeTask(ctx context.Context, taskID, userNodeID, operation string) error {
+	if taskID == "" {
+		return ErrInvalidInput
+	}
+	task, err := s.store.GetTask(ctx, taskID)
+	if err != nil || task == nil {
+		return ErrNotFound
+	}
+	_, err = s.authorizeChannel(ctx, task.ChannelID, userNodeID, operation)
+	return err
+}
+
 // CreatePoll creates a poll with a linked system message.
 func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll, error) {
 	if in.Question == "" || len(in.Options) < 2 {
 		return nil, ErrInvalidInput
+	}
+	if _, err := s.authorizeChannel(ctx, in.ChannelID, in.UserNodeID, ngac.OpWrite); err != nil {
+		return nil, err
 	}
 
 	pollID := uuid.New().String()
@@ -74,27 +105,36 @@ func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll,
 		}
 	}
 
-	return s.GetPoll(ctx, pollID)
+	return s.GetPoll(ctx, pollID, in.UserNodeID)
 }
 
 // VotePoll records a user's vote on a poll option.
-func (s *Service) VotePoll(ctx context.Context, pollID, optionID, userID string) error {
+func (s *Service) VotePoll(ctx context.Context, pollID, optionID, userNodeID, userID string) error {
 	if pollID == "" || optionID == "" {
 		return ErrInvalidInput
+	}
+	if err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpWrite); err != nil {
+		return err
 	}
 	return s.store.InsertVote(ctx, pollID, optionID, userID)
 }
 
 // RemoveVote removes a user's vote from a poll option.
-func (s *Service) RemoveVote(ctx context.Context, pollID, optionID, userID string) error {
+func (s *Service) RemoveVote(ctx context.Context, pollID, optionID, userNodeID, userID string) error {
 	if pollID == "" || optionID == "" {
 		return ErrInvalidInput
+	}
+	if err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpWrite); err != nil {
+		return err
 	}
 	return s.store.DeleteVote(ctx, pollID, optionID, userID)
 }
 
 // GetPoll retrieves a poll with its options and vote counts.
-func (s *Service) GetPoll(ctx context.Context, pollID string) (*pb.Poll, error) {
+func (s *Service) GetPoll(ctx context.Context, pollID, userNodeID string) (*pb.Poll, error) {
+	if err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpRead); err != nil {
+		return nil, err
+	}
 	poll, options, err := s.store.GetPoll(ctx, pollID)
 	if err != nil {
 		return nil, fmt.Errorf("get poll: %w", err)
@@ -121,6 +161,9 @@ type CreateTaskInput struct {
 func (s *Service) CreateTask(ctx context.Context, in CreateTaskInput) (*pb.ChatTask, error) {
 	if in.Title == "" {
 		return nil, ErrInvalidInput
+	}
+	if _, err := s.authorizeChannel(ctx, in.ChannelID, in.UserNodeID, ngac.OpWrite); err != nil {
+		return nil, err
 	}
 
 	taskID := uuid.New().String()
@@ -172,6 +215,7 @@ func (s *Service) CreateTask(ctx context.Context, in CreateTaskInput) (*pb.ChatT
 type UpdateTaskInput struct {
 	TaskID     string
 	UserID     string
+	UserNodeID string
 	Status     string
 	AssigneeID string
 	Title      string
@@ -180,6 +224,10 @@ type UpdateTaskInput struct {
 
 // UpdateTask updates a task's mutable fields.
 func (s *Service) UpdateTask(ctx context.Context, in UpdateTaskInput) (*pb.ChatTask, error) {
+	if err := s.authorizeTask(ctx, in.TaskID, in.UserNodeID, ngac.OpWrite); err != nil {
+		return nil, err
+	}
+
 	var dueDate *time.Time
 	if in.DueDate != "" {
 		t, err := time.Parse("2006-01-02", in.DueDate)
@@ -196,7 +244,10 @@ func (s *Service) UpdateTask(ctx context.Context, in UpdateTaskInput) (*pb.ChatT
 }
 
 // ListTasks returns tasks for a channel, optionally filtered by status.
-func (s *Service) ListTasks(ctx context.Context, channelID, status string) ([]*pb.ChatTask, error) {
+func (s *Service) ListTasks(ctx context.Context, channelID, userNodeID, status string) ([]*pb.ChatTask, error) {
+	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead); err != nil {
+		return nil, err
+	}
 	tasks, err := s.store.ListTasksByChannel(ctx, channelID, status)
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)

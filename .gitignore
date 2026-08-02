@@ -48,3 +48,4 @@ Thumbs.db
 # both at the repo root and under frontend/; the ** keeps the cache ignored at either.
 **/.impeccable/hook.cache.json
 **/.impeccable/config.local.json
+.gstack/

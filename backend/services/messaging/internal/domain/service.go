@@ -6,6 +6,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -74,7 +75,9 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb
 		return nil, err
 	}
 
-	s.grantChannelAccess(ctx, membersUA.Id, contentOA.Id, in.UserNodeID)
+	if err := s.grantChannelAccess(ctx, membersUA.Id, contentOA.Id, in.UserNodeID); err != nil {
+		return nil, err
+	}
 
 	ch := &store.Channel{
 		ID:          chID,
@@ -137,14 +140,18 @@ func (s *Service) assignChannelToWorkspace(ctx context.Context, workspaceID, con
 		channelsOAID = s.findChildByName(ctx, ws.PCNodeID, ngac.ChannelsOAName(ws.Name), ngac.TypeOA)
 	}
 	if channelsOAID != "" {
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: contentOAID, ParentId: channelsOAID,
-		})
+		}); err != nil {
+			return fmt.Errorf("assign channel content under Channels OA: %w", err)
+		}
 	}
 
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: membersUAID, ParentId: ws.PCNodeID,
-	})
+	}); err != nil {
+		return fmt.Errorf("assign channel members UA under workspace PC: %w", err)
+	}
 
 	return nil
 }
@@ -158,25 +165,40 @@ func (s *Service) assignToGlobalPC(ctx context.Context, contentOAID, membersUAID
 		return fmt.Errorf("PC_Global not found: %w", err)
 	}
 
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: contentOAID, ParentId: globalPC.Id,
-	})
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+	}); err != nil {
+		return fmt.Errorf("assign DM content under PC_Global: %w", err)
+	}
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: membersUAID, ParentId: globalPC.Id,
-	})
+	}); err != nil {
+		return fmt.Errorf("assign DM members UA under PC_Global: %w", err)
+	}
 
 	return nil
 }
 
 // grantChannelAccess creates the association and assigns the creator.
-func (s *Service) grantChannelAccess(ctx context.Context, membersUAID, contentOAID, creatorNodeID string) {
-	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
+//
+// Both writes are load-bearing: without the association the channel grants
+// nothing to anyone, and without the assignment its own creator cannot read it.
+// A channel that reaches the database in either of those states is unusable and
+// looks like a permissions bug rather than a failed write, so the caller has to
+// hear about it.
+func (s *Service) grantChannelAccess(ctx context.Context, membersUAID, contentOAID, creatorNodeID string) error {
+	if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
 		UaId: membersUAID, OaId: contentOAID,
 		Operations: ngac.ChannelMemberOps(),
-	})
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+	}); err != nil {
+		return fmt.Errorf("grant channel members access to content: %w", err)
+	}
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: creatorNodeID, ParentId: membersUAID,
-	})
+	}); err != nil {
+		return fmt.Errorf("assign channel creator to members UA: %w", err)
+	}
+	return nil
 }
 
 // createChannelDrive creates a drive folder for the channel (non-fatal on error).
@@ -242,12 +264,31 @@ func (s *Service) ListDMs(ctx context.Context, userNodeID string) ([]*pb.Channel
 
 // filterAccessible checks NGAC read access for each channel and returns only allowed ones.
 func (s *Service) filterAccessible(ctx context.Context, channels []*store.Channel, userNodeID string) []*pb.Channel {
+	if len(channels) == 0 {
+		return nil
+	}
+
+	// One batch call for the whole list. A user in fifty channels otherwise
+	// paid fifty sequential policy round-trips every time the sidebar loaded.
+	objectIDs := make([]string, 0, len(channels))
+	for _, ch := range channels {
+		objectIDs = append(objectIDs, ch.NGACOaID)
+	}
+	batch, err := s.policyRead.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
+		UserNodeId: userNodeID,
+		ObjectIds:  objectIDs,
+		Operations: []string{ngac.OpRead},
+	})
+	if err != nil {
+		// Fail closed: showing every channel because the policy service is
+		// unreachable is the one outcome worse than showing none.
+		slog.Error("batch access check failed; listing no channels", "error", err)
+		return nil
+	}
+
 	var result []*pb.Channel
 	for _, ch := range channels {
-		resp, _ := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
-			UserNodeId: userNodeID, ObjectNodeId: ch.NGACOaID, Operation: ngac.OpRead,
-		})
-		if resp != nil && resp.Decision == ngac.DecisionAllow {
+		if batch.GetResults()[ch.NGACOaID].GetPermissions()[ngac.OpRead] {
 			result = append(result, channelToProto(ch))
 		}
 	}
@@ -263,8 +304,12 @@ func (s *Service) FindOrCreateDM(ctx context.Context, userID, userNodeID, target
 		return channelToProto(existing), nil
 	}
 
+	// The DM's title reaches the screen, so it is built from display names.
+	// The previous form spliced two truncated user IDs together, which both
+	// put raw identifiers in front of the user and panicked on any ID shorter
+	// than eight characters.
 	ch, err := s.CreateChannel(ctx, CreateChannelInput{
-		Name:        fmt.Sprintf("DM_%s_%s", userID[:8], targetUserID[:8]),
+		Name:        ngac.DMChannelName(s.lookupUsername(ctx, userID), s.lookupUsername(ctx, targetUserID)),
 		ChannelType: "dm",
 		UserID:      userID,
 		UserNodeID:  userNodeID,
@@ -388,7 +433,11 @@ func (s *Service) GetMessages(ctx context.Context, channelID, userNodeID, before
 }
 
 // GetThread returns the parent message plus all replies.
-func (s *Service) GetThread(ctx context.Context, messageID string) (*pb.MessageList, error) {
+func (s *Service) GetThread(ctx context.Context, messageID, userNodeID string) (*pb.MessageList, error) {
+	if err := s.authorizeMessage(ctx, messageID, userNodeID, ngac.OpRead); err != nil {
+		return nil, err
+	}
+
 	msgs, err := s.store.GetThread(ctx, messageID)
 	if err != nil {
 		return nil, fmt.Errorf("get thread: %w", err)
@@ -403,35 +452,66 @@ func (s *Service) GetThread(ctx context.Context, messageID string) (*pb.MessageL
 }
 
 // FindThreadsByEntity returns messages linked to a specific entity.
-func (s *Service) FindThreadsByEntity(ctx context.Context, entityType, entityID string) (*pb.MessageList, error) {
+//
+// The lookup spans every channel that references the entity, so the result is
+// filtered per channel rather than authorized up front: a user sees the linked
+// messages from the channels they can read and nothing from the others.
+func (s *Service) FindThreadsByEntity(ctx context.Context, entityType, entityID, userNodeID string) (*pb.MessageList, error) {
 	msgs, err := s.store.FindByEntity(ctx, entityType, entityID)
 	if err != nil {
 		return nil, fmt.Errorf("find threads: %w", err)
 	}
-	return &pb.MessageList{Messages: messagesToProto(msgs)}, nil
+
+	readable := make(map[string]bool, 4)
+	visible := msgs[:0]
+	for _, m := range msgs {
+		allowed, seen := readable[m.ChannelID]
+		if !seen {
+			_, err := s.authorizeChannel(ctx, m.ChannelID, userNodeID, ngac.OpRead)
+			allowed = err == nil
+			readable[m.ChannelID] = allowed
+		}
+		if allowed {
+			visible = append(visible, m)
+		}
+	}
+
+	return &pb.MessageList{Messages: messagesToProto(visible)}, nil
 }
 
 // --- Channel member operations ---
 
 // GetChannel retrieves a single channel.
-func (s *Service) GetChannel(ctx context.Context, channelID string) (*pb.Channel, error) {
-	ch, err := s.store.GetChannel(ctx, channelID)
-	if err != nil || ch == nil {
-		return nil, fmt.Errorf("channel not found")
+func (s *Service) GetChannel(ctx context.Context, channelID, userNodeID string) (*pb.Channel, error) {
+	ch, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead)
+	if err != nil {
+		return nil, err
 	}
 	return channelToProto(ch), nil
 }
 
 // AddMember adds a user to a channel's NGAC members UA.
+//
+// Membership is a graph mutation, so it takes OpInvite on the channel — the
+// operation the vocabulary reserves for exactly this. Workspace owners hold it
+// through the Channels OA; plain channel members hold only read/write and
+// therefore cannot pull other people into a channel.
 func (s *Service) AddMember(ctx context.Context, channelID, requesterNodeID, targetNodeID string) error {
-	ch, err := s.store.GetChannel(ctx, channelID)
-	if err != nil || ch == nil {
-		return fmt.Errorf("channel not found")
-	}
-	_, err = s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: targetNodeID, ParentId: ch.NGACUaID,
-	})
+	ch, err := s.authorizeChannel(ctx, channelID, requesterNodeID, ngac.OpInvite)
 	if err != nil {
+		return err
+	}
+	// A DM is a fixed two-party conversation. Its participants hold invite on
+	// its content OA like any channel member, so the graph alone would let one
+	// of them pull in a third person and silently turn a private exchange into
+	// a group. Widening a DM has to be an explicit act, not a side effect of
+	// AddMember.
+	if ch.ChannelType == "dm" {
+		return fmt.Errorf("%w: cannot add members to a direct message", ErrInvalidInput)
+	}
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		ChildId: targetNodeID, ParentId: ch.NGACUaID,
+	}); err != nil {
 		return fmt.Errorf("add member: %w", err)
 	}
 	s.store.InsertChannelMember(ctx, channelID, targetNodeID)
@@ -439,25 +519,24 @@ func (s *Service) AddMember(ctx context.Context, channelID, requesterNodeID, tar
 }
 
 // RemoveMember removes a user from a channel's NGAC members UA.
-func (s *Service) RemoveMember(ctx context.Context, channelID, targetNodeID string) error {
-	ch, err := s.store.GetChannel(ctx, channelID)
-	if err != nil || ch == nil {
-		return fmt.Errorf("channel not found")
-	}
-	_, err = s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
-		ChildId: targetNodeID, ParentId: ch.NGACUaID,
-	})
+func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, targetNodeID string) error {
+	ch, err := s.authorizeChannel(ctx, channelID, requesterNodeID, ngac.OpInvite)
 	if err != nil {
+		return err
+	}
+	if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+		ChildId: targetNodeID, ParentId: ch.NGACUaID,
+	}); err != nil {
 		return fmt.Errorf("remove member: %w", err)
 	}
 	return nil
 }
 
 // ListMembers returns the members of a channel via NGAC graph traversal.
-func (s *Service) ListMembers(ctx context.Context, channelID string) ([]*pb.ChannelMember, error) {
-	ch, err := s.store.GetChannel(ctx, channelID)
-	if err != nil || ch == nil {
-		return nil, fmt.Errorf("channel not found")
+func (s *Service) ListMembers(ctx context.Context, channelID, userNodeID string) ([]*pb.ChannelMember, error) {
+	ch, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead)
+	if err != nil {
+		return nil, err
 	}
 
 	children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ch.NGACUaID})
@@ -487,13 +566,46 @@ func (s *Service) ListMembers(ctx context.Context, channelID string) ([]*pb.Chan
 
 // checkAccess verifies NGAC access and returns an error if denied.
 func (s *Service) checkAccess(ctx context.Context, userNodeID, objectNodeID, operation string) error {
-	resp, _ := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
+	resp, err := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
 		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
 	})
-	if resp != nil && resp.Decision == ngac.DecisionDeny {
+	if !ngac.Allowed(resp.GetDecision(), err) {
 		return fmt.Errorf("%w: %s on %s", ErrAccessDenied, operation, objectNodeID)
 	}
 	return nil
+}
+
+// authorizeChannel loads a channel and verifies the user holds op on its
+// content OA, returning the channel so callers do not fetch it twice.
+func (s *Service) authorizeChannel(ctx context.Context, channelID, userNodeID, operation string) (*store.Channel, error) {
+	if channelID == "" {
+		return nil, ErrInvalidInput
+	}
+	ch, err := s.store.GetChannel(ctx, channelID)
+	if err != nil || ch == nil {
+		return nil, fmt.Errorf("channel not found")
+	}
+	if err := s.checkAccess(ctx, userNodeID, ch.NGACOaID, operation); err != nil {
+		return nil, err
+	}
+	return ch, nil
+}
+
+// authorizeMessage authorizes an operation on the channel that owns a message.
+//
+// Messages are not nodes in the NGAC graph — they live in Postgres with a
+// foreign key to the channel whose content OA *is* in the graph. So the check
+// belongs on that OA, never on the message ID the caller supplied.
+func (s *Service) authorizeMessage(ctx context.Context, messageID, userNodeID, operation string) error {
+	if messageID == "" {
+		return ErrInvalidInput
+	}
+	channelID, err := s.store.GetChannelIDForMessage(ctx, messageID)
+	if err != nil || channelID == "" {
+		return fmt.Errorf("message not found")
+	}
+	_, err = s.authorizeChannel(ctx, channelID, userNodeID, operation)
+	return err
 }
 
 // lookupUsername resolves a user ID to a username via the auth service.

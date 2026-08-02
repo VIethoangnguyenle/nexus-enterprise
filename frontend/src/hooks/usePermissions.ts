@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { batchCheckAccess } from '../api/access'
 import { usePermissionStore, type ObjectPerms } from '../stores/permission.store'
 
-const EMPTY_PERMS: ObjectPerms = { read: false, write: false, delete: false, share: false }
+const EMPTY_PERMS: ObjectPerms = { read: false, write: false, share: false }
 
 /**
  * Batch permission hook. Given a list of object IDs:

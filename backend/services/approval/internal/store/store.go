@@ -409,39 +409,51 @@ func (s *Store) SkipAllPendingAssignments(ctx context.Context, requestID string)
 }
 
 // AdvanceStep increments the current_step on an approval request.
-func (s *Store) AdvanceStep(ctx context.Context, requestID string, nextStep int) error {
+func (s *Store) AdvanceStep(ctx context.Context, requestID string, fromStep, nextStep int) (bool, error) {
 	c, err := s.conn(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer c.Release()
 
-	_, err = c.Exec(ctx, `
-		UPDATE approval_requests SET current_step = $2 WHERE id = $1`,
-		requestID, nextStep,
+	// Compare-and-swap on current_step. Two approvals that satisfy the same
+	// quorum concurrently both observe the count as met and both try to
+	// advance; without the guard both succeed and each goes on to create a
+	// full set of assignments for the next step. Only the caller that moves
+	// the step away from fromStep may proceed.
+	tag, err := c.Exec(ctx, `
+		UPDATE approval_requests
+		SET current_step = $3
+		WHERE id = $1 AND current_step = $2 AND status = 'pending'`,
+		requestID, fromStep, nextStep,
 	)
 	if err != nil {
-		return fmt.Errorf("advance step: %w", err)
+		return false, fmt.Errorf("advance step: %w", err)
 	}
-	return nil
+	return tag.RowsAffected() == 1, nil
 }
 
 // CompleteRequest marks a request as completed with the given terminal status.
-func (s *Store) CompleteRequest(ctx context.Context, requestID, status string) error {
+func (s *Store) CompleteRequest(ctx context.Context, requestID, status string) (bool, error) {
 	c, err := s.conn(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer c.Release()
 
-	_, err = c.Exec(ctx, `
-		UPDATE approval_requests SET status = $2, completed_at = NOW() WHERE id = $1`,
+	// Only a still-pending request may reach a terminal state, so a late
+	// approval cannot overwrite a rejection (or vice versa) and the completion
+	// audit entry is written exactly once.
+	tag, err := c.Exec(ctx, `
+		UPDATE approval_requests
+		SET status = $2, completed_at = NOW()
+		WHERE id = $1 AND status = 'pending'`,
 		requestID, status,
 	)
 	if err != nil {
-		return fmt.Errorf("complete request: %w", err)
+		return false, fmt.Errorf("complete request: %w", err)
 	}
-	return nil
+	return tag.RowsAffected() == 1, nil
 }
 
 // ListPending returns all pending assignments for a user's current steps.
@@ -596,37 +608,6 @@ func (s *Store) ListByScopes(ctx context.Context, scopeOAIDs []string, cursor st
 		return nil, "", err
 	}
 	return results, nextCursor, nil
-}
-
-// BatchApproveAssignments atomically approves multiple assignments for a user.
-func (s *Store) BatchApproveAssignments(ctx context.Context, userNodeID string, requestIDs []string, comment string) ([]string, error) {
-	c, err := s.conn(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer c.Release()
-
-	rows, err := c.Query(ctx, `
-		UPDATE approval_assignments
-		SET status = 'approved', acted_at = NOW(), comment = $3
-		WHERE user_node_id = $1 AND request_id = ANY($2) AND status = 'pending'
-		RETURNING request_id`,
-		userNodeID, requestIDs, comment,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("batch approve: %w", err)
-	}
-	defer rows.Close()
-
-	var approved []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan batch result: %w", err)
-		}
-		approved = append(approved, id)
-	}
-	return approved, nil
 }
 
 // InsertAuditEntry appends an audit record to the audit log.

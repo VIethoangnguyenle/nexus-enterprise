@@ -15,7 +15,7 @@ export const Route = createFileRoute('/_auth/workspace-select')({
  *  Key tokens: grid-cols-1 md:grid-cols-2, p-space-lg rounded-xl cards, group hover animations. */
 function WorkspaceSelectPage() {
   const navigate = useNavigate()
-  const token = useAuthStore((s) => s.token)
+  const token = useAuthStore((s) => s.accessToken)
   const { data, isLoading } = useWorkspaces()
   const createWorkspace = useCreateWorkspace()
 

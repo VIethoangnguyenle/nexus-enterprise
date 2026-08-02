@@ -211,7 +211,9 @@ export const DriveFileRow = memo(function DriveFileRow({
             <MenuButton onClick={() => { setContextMenu(null); onRename(item) }}
               icon={<Edit3 size={15} />} label="Rename" />
           )}
-          {(perms.delete || isOwner) && (
+          {/* Deletion is enforced as a write on the item's OA, so that is the
+              question the UI has to ask — there is no separate delete right. */}
+          {(perms.write || isOwner) && (
             <>
               <div className="border-t border-outline-variant/40 my-1 mx-2.5" />
               <MenuButton onClick={() => { setContextMenu(null); onTrash(item) }}

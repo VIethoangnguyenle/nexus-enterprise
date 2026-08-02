@@ -181,7 +181,11 @@ func (s *Store) UpdateTypeSchema(ctx context.Context, typeID string, schema json
 
 // CreateAsset inserts a new asset instance.
 func (s *Store) CreateAsset(ctx context.Context, a *Asset) error {
-	a.ID = uuid.New().String()
+	// The caller may have set an ID already, because the NGAC object node is
+	// named after it and has to exist before the row does.
+	if a.ID == "" {
+		a.ID = uuid.New().String()
+	}
 	a.CreatedAt = time.Now()
 	a.UpdatedAt = a.CreatedAt
 

@@ -156,52 +156,6 @@ func TestPerformanceSLA_AllQueries(t *testing.T) {
 }
 
 // TestBatchApprove50 tests batch approval of 50 items.
-func TestBatchApprove50(t *testing.T) {
-	s := store.NewStore(testDB)
-	ctx := tenantCtx(tenantAID)
-
-	tmplID := newID()
-	now := time.Now()
-	s.InsertTemplate(ctx, &domain.Template{
-		ID: tmplID, Name: "Batch50", EntityType: "transfer",
-		IsActive: true, CreatedBy: "admin", CreatedAt: now, UpdatedAt: now,
-		Conditions: []*domain.Condition{},
-		Steps:      []*domain.Step{{ID: newID(), StepOrder: 1, Name: "M", ApproverType: "specific_user", RequiredCount: 1}},
-	})
-
-	var reqIDs []string
-	for i := 0; i < 50; i++ {
-		reqID := newID()
-		reqIDs = append(reqIDs, reqID)
-		s.InsertRequest(ctx, &domain.Request{
-			ID: reqID, EntityType: "transfer", EntityID: newID(),
-			TemplateID: tmplID, TemplateName: "Batch50",
-			TemplateSnapshot: `{}`, CurrentStep: 1, Status: "pending",
-			ScopeOAID: "scope_mn", DepartmentID: "dept1", CreatedBy: "user1",
-		})
-		s.InsertAssignments(ctx, []*domain.AssignmentRecord{{
-			ID: newID(), RequestID: reqID, StepOrder: 1,
-			UserNodeID: "batch50_user", GrantSource: "template", Status: "pending",
-		}})
-	}
-
-	start := time.Now()
-	approved, err := s.BatchApproveAssignments(ctx, "batch50_user", reqIDs, "batch 50 OK")
-	elapsed := time.Since(start)
-
-	if err != nil {
-		t.Fatalf("batch approve 50: %v", err)
-	}
-	t.Logf("✅ Batch approved %d/50 in %v", len(approved), elapsed)
-
-	if len(approved) != 50 {
-		t.Errorf("expected 50 approved, got %d", len(approved))
-	}
-	if elapsed > 500*time.Millisecond {
-		t.Errorf("batch 50 took %v, should be <500ms", elapsed)
-	}
-}
-
 // TestScaleInsert_50K inserts 50,000 assignments to verify volume handling.
 func TestScaleInsert_50K(t *testing.T) {
 	if testing.Short() {

@@ -138,7 +138,11 @@ func (h *Handler) ListChannels(c echo.Context) error {
 
 // GetChannel handles GET /api/channels/:chId.
 func (h *Handler) GetChannel(c echo.Context) error {
-	ch, err := h.svc.GetChannel(c.Request().Context(), c.Param("chId"))
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	ch, err := h.svc.GetChannel(c.Request().Context(), c.Param("chId"), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -225,7 +229,11 @@ func (h *Handler) GetMessages(c echo.Context) error {
 
 // GetThread handles GET /api/messages/:msgId/thread.
 func (h *Handler) GetThread(c echo.Context) error {
-	msgs, err := h.svc.GetThread(c.Request().Context(), c.Param("msgId"))
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	msgs, err := h.svc.GetThread(c.Request().Context(), c.Param("msgId"), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -234,7 +242,11 @@ func (h *Handler) GetThread(c echo.Context) error {
 
 // FindThreadsByEntity handles GET /api/threads/entity/:entityType/:entityId.
 func (h *Handler) FindThreadsByEntity(c echo.Context) error {
-	msgs, err := h.svc.FindThreadsByEntity(c.Request().Context(), c.Param("entityType"), c.Param("entityId"))
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	msgs, err := h.svc.FindThreadsByEntity(c.Request().Context(), c.Param("entityType"), c.Param("entityId"), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -262,7 +274,11 @@ func (h *Handler) AddChannelMember(c echo.Context) error {
 
 // ListChannelMembers handles GET /api/channels/:chId/members.
 func (h *Handler) ListChannelMembers(c echo.Context) error {
-	members, err := h.svc.ListMembers(c.Request().Context(), c.Param("chId"))
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	members, err := h.svc.ListMembers(c.Request().Context(), c.Param("chId"), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -281,8 +297,7 @@ func (h *Handler) RemoveChannelMember(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "target node ID required")
 	}
 
-	_ = claims // JWT auth enforced, NGAC policy checked in domain
-	if err := h.svc.RemoveMember(c.Request().Context(), channelID, targetNodeID); err != nil {
+	if err := h.svc.RemoveMember(c.Request().Context(), channelID, claims.NGACNodeID, targetNodeID); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})

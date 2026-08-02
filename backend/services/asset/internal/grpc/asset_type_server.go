@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -121,12 +122,12 @@ func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, workspaceID, 
 
 	// Ensure PC_AssetManagement exists
 	assetsPC, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: "PC_AssetManagement", NodeType: "PC",
+		Name: ngac.NodePCAssetManagement, NodeType: ngac.TypePC,
 	})
 	if err != nil {
 		// Create it
 		assetsPC, err = s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-			Name: "PC_AssetManagement", NodeType: "PC",
+			Name: ngac.NodePCAssetManagement, NodeType: ngac.TypePC,
 			Properties: map[string]string{"scope": "global"},
 		})
 		if err != nil {
@@ -135,71 +136,96 @@ func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, workspaceID, 
 	}
 
 	// Ensure {ws}_Assets OA under PC_AssetManagement
-	assetsOAName := fmt.Sprintf("%s_Assets", wsName)
+	assetsOAName := ngac.AssetsOAName(workspaceID)
 	assetsOA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: assetsOAName, NodeType: "OA",
+		Name: assetsOAName, NodeType: ngac.TypeOA,
 	})
 	if err != nil {
 		assetsOA, err = s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-			Name: assetsOAName, NodeType: "OA",
+			Name: assetsOAName, NodeType: ngac.TypeOA,
 			Properties: map[string]string{"workspace_id": workspaceID},
 		})
 		if err != nil {
 			return "", fmt.Errorf("create %s OA: %w", assetsOAName, err)
 		}
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: assetsOA.Id, ParentId: assetsPC.Id,
-		})
+		}); err != nil {
+			return "", fmt.Errorf("assign assets OA under PC_AssetManagement: %w", err)
+		}
 	}
 
 	// Ensure category OA under Assets OA
-	categoryOAName := fmt.Sprintf("%s_%s", wsName, sanitizeName(category))
+	categoryOAName := ngac.AssetCategoryOAName(workspaceID, sanitizeName(category))
 	categoryOA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: categoryOAName, NodeType: "OA",
+		Name: categoryOAName, NodeType: ngac.TypeOA,
 	})
 	if err != nil {
 		categoryOA, err = s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-			Name: categoryOAName, NodeType: "OA",
+			Name: categoryOAName, NodeType: ngac.TypeOA,
 			Properties: map[string]string{"category": category, "workspace_id": workspaceID},
 		})
 		if err != nil {
 			return "", fmt.Errorf("create category OA %s: %w", categoryOAName, err)
 		}
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: categoryOA.Id, ParentId: assetsOA.Id,
-		})
+		}); err != nil {
+			return "", fmt.Errorf("assign category OA under assets OA: %w", err)
+		}
 	}
 
 	// Create type OA under category OA
-	typeOAName := fmt.Sprintf("%s_%s", wsName, sanitizeName(typeName))
+	typeOAName := ngac.AssetTypeOAName(workspaceID, sanitizeName(typeName))
 	typeOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: typeOAName, NodeType: "OA",
+		Name: typeOAName, NodeType: ngac.TypeOA,
 		Properties: map[string]string{"asset_type": typeName, "workspace_id": workspaceID},
 	})
 	if err != nil {
 		return "", fmt.Errorf("create type OA %s: %w", typeOAName, err)
 	}
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: typeOA.Id, ParentId: categoryOA.Id,
-	})
+	}); err != nil {
+		return "", fmt.Errorf("assign type OA under category OA: %w", err)
+	}
 
 	// Also assign to workspace PC if available for cross-PC visibility
 	if pcNodeID != "" {
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: assetsOA.Id, ParentId: pcNodeID,
-		})
+		}); err != nil {
+			return "", fmt.Errorf("assign assets OA under workspace PC: %w", err)
+		}
 
-		// Grant workspace owners full access to assets
-		children, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: pcNodeID})
-		if children != nil {
-			for _, n := range children.Nodes {
-				if n.NodeType == ngac.TypeUA {
-					allOps := []string{"read", "write", "approve", "assign", "manage", "dispose", "request"}
-					s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
-						UaId: n.Id, OaId: assetsOA.Id, Operations: allOps,
-					})
-				}
+		// Grant the workspace OWNERS full access to assets.
+		//
+		// This used to loop over every UA under the PC and grant all operations
+		// to each one. That set includes the workspace Members UA, the tenant
+		// member UA, department UAs and every channel's members UA — so every
+		// one of them received manage and approve over all of the workspace's
+		// assets. Match the Owners UA by name instead.
+		ownersUAName := ngac.OwnersUAName(workspaceID)
+		children, err := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: pcNodeID})
+		if err != nil {
+			return "", fmt.Errorf("read workspace PC children: %w", err)
+		}
+		granted := false
+		for _, n := range children.GetNodes() {
+			if n.NodeType != ngac.TypeUA || n.Name != ownersUAName {
+				continue
 			}
+			if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
+				UaId: n.Id, OaId: assetsOA.Id, Operations: ngac.AllOwnerOps(),
+			}); err != nil {
+				return "", fmt.Errorf("grant owners access to assets OA: %w", err)
+			}
+			granted = true
+			break
+		}
+		if !granted {
+			slog.Warn("owners UA not found under workspace PC; assets have no owner grant",
+				"workspace_id", workspaceID, "expected_ua", ownersUAName)
 		}
 	}
 

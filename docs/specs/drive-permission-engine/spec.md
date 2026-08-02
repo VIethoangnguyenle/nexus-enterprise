@@ -5,22 +5,26 @@ Keep the drive UI's permission answers fast and consistent, so actions appear on
 
 ## Status
 
-Verified against code 2026-07-31. Requirements below match `frontend/src/hooks/usePermissions.ts`
+Verified against code 2026-08-02. Requirements below match `frontend/src/hooks/usePermissions.ts`
 and `frontend/src/stores/permission.store.ts` — batching, coalescing, the 60s TTL, and the
-read/write/delete/share shape are all as specified.
+permission shape are all as specified.
 
-**One unresolved divergence.** This spec requires the cache be keyed by `{tenantId}:{objectId}`.
-The implementation keys by `objectId` alone and relies on clearing the whole cache at tenant
-switch (`permission.store.ts` documents this choice in a comment). The two are not equivalent:
-under the implementation, tenant isolation depends on the clear always running, whereas the
-specified key makes cross-tenant reuse structurally impossible. Resolving this means either
-amending this requirement or changing the key — it is a security-posture decision, not a
-cleanup, and is deliberately left open.
+The previously open divergence on cache keying is resolved: the store now keys by
+`{tenantId}:{objectId}`, with the tenant read from the access token's `tenant_id` claim so it
+cannot drift from the tenant the request actually runs as. Tenant isolation no longer depends on
+`clear()` firing at the right moment.
 
 ## Requirements
 
 ### Requirement: Permission Cache
-The frontend SHALL maintain an in-memory permission cache keyed by `{tenantId}:{objectId}` with a configurable TTL (default 60 seconds). The cache SHALL store resolved permissions (read, write, delete, share) as booleans.
+The frontend SHALL maintain an in-memory permission cache keyed by `{tenantId}:{objectId}` with a configurable TTL (default 60 seconds). The cache SHALL store resolved permissions (read, write, share) as booleans.
+
+The tenant component SHALL be derived from the current access token rather than tracked separately, so that a tenant switch or a token refresh cannot leave the key scoped to a stale tenant.
+
+#### Scenario: Same object under two tenants
+- **WHEN** the same object ID is resolved under tenant A and later under tenant B
+- **THEN** the two results occupy separate cache entries
+- **AND** a failure to clear the cache on switch yields a stale-within-tenant read, never one tenant reading another tenant's answer
 
 #### Scenario: Cache hit within TTL
 - **WHEN** a component requests permissions for an object that was batch-checked less than 60 seconds ago
@@ -48,12 +52,14 @@ The frontend SHALL provide a `usePermissions(objectIds)` hook that batches permi
 ### Requirement: Permission-Aware Action Rendering
 The UI SHALL render file/folder actions (edit, share, delete) only when the corresponding permission is `true`. The UI SHALL NOT render any action before permissions are resolved.
 
+The UI SHALL only ask the policy service about operations the backend actually evaluates. There is no `delete` right: trashing, restoring and permanent deletion are all enforced as `write` on the item's object attribute, so the delete action is gated on `write`. Asking for a `delete` operation returns DENY for every user — including those who can genuinely delete — and hides the action from them.
+
 #### Scenario: User with write permission sees edit action
 - **WHEN** user has write=true for a file
 - **THEN** the edit/rename action is visible on hover
 
-#### Scenario: User without delete permission
-- **WHEN** user has delete=false for a file
+#### Scenario: User without write permission
+- **WHEN** user has write=false for a file
 - **THEN** the trash/delete action is not rendered (no disabled state, completely hidden)
 
 #### Scenario: Permissions loading state

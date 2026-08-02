@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/ngac"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
@@ -466,7 +467,7 @@ func (h *Handler) BatchAccess(c echo.Context) error {
 		return c.JSON(http.StatusOK, map[string]any{"results": map[string]any{}})
 	}
 	if len(body.Operations) == 0 {
-		body.Operations = []string{"read", "write", "delete", "share"}
+		body.Operations = []string{ngac.OpRead, ngac.OpWrite, ngac.OpShare}
 	}
 
 	resp, err := h.policyRead.BatchCheckAccess(c.Request().Context(), &policypb.BatchCheckAccessRequest{

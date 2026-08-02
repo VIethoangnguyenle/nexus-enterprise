@@ -34,6 +34,47 @@ func (m *mockPolicyReadClient) CheckAccess(_ context.Context, _ *policypb.CheckA
 	return &policypb.AccessDecision{Decision: "ALLOW"}, nil
 }
 
+// mockPolicyReadDeny denies every access check, standing in for a user who is
+// not a member of the channel they are poking at.
+type mockPolicyReadDeny struct{ mockPolicyReadClient }
+
+func (m *mockPolicyReadDeny) CheckAccess(_ context.Context, _ *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
+	return &policypb.AccessDecision{Decision: "DENY"}, nil
+}
+
+func (m *mockPolicyReadDeny) BatchCheckAccess(_ context.Context, req *policypb.BatchCheckAccessRequest, _ ...grpc.CallOption) (*policypb.BatchAccessResult, error) {
+	return batchDecision(req, false), nil
+}
+
+// mockPolicyReadUnavailable models the policy service being unreachable. The
+// PEP must treat this as a denial, never as a pass.
+type mockPolicyReadUnavailable struct{ mockPolicyReadClient }
+
+func (m *mockPolicyReadUnavailable) CheckAccess(_ context.Context, _ *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
+	return nil, fmt.Errorf("connection refused")
+}
+
+func (m *mockPolicyReadUnavailable) BatchCheckAccess(_ context.Context, _ *policypb.BatchCheckAccessRequest, _ ...grpc.CallOption) (*policypb.BatchAccessResult, error) {
+	return nil, fmt.Errorf("connection refused")
+}
+
+// batchDecision answers every requested operation on every object the same way.
+func batchDecision(req *policypb.BatchCheckAccessRequest, allow bool) *policypb.BatchAccessResult {
+	results := make(map[string]*policypb.ObjectPermissions, len(req.ObjectIds))
+	for _, id := range req.ObjectIds {
+		perms := make(map[string]bool, len(req.Operations))
+		for _, op := range req.Operations {
+			perms[op] = allow
+		}
+		results[id] = &policypb.ObjectPermissions{Permissions: perms}
+	}
+	return &policypb.BatchAccessResult{Results: results}
+}
+
+func (m *mockPolicyReadClient) BatchCheckAccess(_ context.Context, req *policypb.BatchCheckAccessRequest, _ ...grpc.CallOption) (*policypb.BatchAccessResult, error) {
+	return batchDecision(req, true), nil
+}
+
 func (m *mockPolicyReadClient) FindNodeByName(_ context.Context, _ *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
 	return &policypb.NGACNode{Id: "pc-global", Name: "PC_Global", NodeType: "PC"}, nil
 }
@@ -100,6 +141,24 @@ func setupTestServer(t *testing.T) (*grpcserver.MessagingServer, *pgxpool.Pool) 
 	svc := domain.NewService(s, &mockPolicyReadClient{}, &mockPolicyWriteClient{}, &mockAuthClient{}, nil)
 	srv := grpcserver.NewMessagingServer(svc, nil, nil)
 	return srv, pool
+}
+
+// setupTestServerWithPolicy builds a server against a caller-supplied policy
+// read client, so a test can pin behaviour under DENY or under an outage.
+func setupTestServerWithPolicy(t *testing.T, policyRead policypb.PolicyReadServiceClient) (*grpcserver.MessagingServer, *pgxpool.Pool) {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), testDBURL())
+	if err != nil {
+		t.Fatalf("connect to test DB: %v", err)
+	}
+	if err := pool.Ping(context.Background()); err != nil {
+		t.Skipf("test DB not available: %v", err)
+	}
+	t.Cleanup(func() { pool.Close() })
+
+	s := store.NewStore(pool)
+	svc := domain.NewService(s, policyRead, &mockPolicyWriteClient{}, &mockAuthClient{}, nil)
+	return grpcserver.NewMessagingServer(svc, nil, nil), pool
 }
 
 // getTestWorkspaceID returns an existing workspace_id from DB for FK compliance.
@@ -417,4 +476,73 @@ func TestGetThread_NonexistentReturnsEmpty(t *testing.T) {
 	if err == nil {
 		assert.Empty(t, thread.Messages)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// NGAC enforcement — a channel ID is not a capability
+// ---------------------------------------------------------------------------
+
+// Knowing a channel's ID must not be enough to read what is in it. These
+// endpoints previously went straight to the store with no policy call at all.
+func TestChannelReads_DeniedWithoutAccess(t *testing.T) {
+	srv, pool := setupTestServerWithPolicy(t, &mockPolicyReadDeny{})
+	wsID := getTestWorkspaceID(t, pool)
+	chID := insertTestChannel(t, pool, "denyread", "workspace", wsID)
+	t.Cleanup(func() { cleanTestData(t, pool, chID) })
+
+	t.Run("GetChannel", func(t *testing.T) {
+		_, err := srv.GetChannel(context.Background(), &pb.GetChannelRequest{
+			ChannelId: chID, UserNgacNodeId: "ngac-outsider",
+		})
+		require.Error(t, err)
+	})
+
+	t.Run("ListChannelMembers", func(t *testing.T) {
+		_, err := srv.ListChannelMembers(context.Background(), &pb.ListChannelMembersRequest{
+			ChannelId: chID, UserNgacNodeId: "ngac-outsider",
+		})
+		require.Error(t, err)
+	})
+}
+
+// Membership is a graph mutation. An outsider must not be able to assign
+// themselves — or anyone else — into a channel's members UA.
+func TestChannelMembership_DeniedWithoutInvite(t *testing.T) {
+	srv, pool := setupTestServerWithPolicy(t, &mockPolicyReadDeny{})
+	wsID := getTestWorkspaceID(t, pool)
+	chID := insertTestChannel(t, pool, "denymember", "workspace", wsID)
+	t.Cleanup(func() { cleanTestData(t, pool, chID) })
+
+	_, err := srv.RemoveChannelMember(context.Background(), &pb.RemoveChannelMemberRequest{
+		ChannelId: chID, RequesterNgacNodeId: "ngac-outsider", TargetNgacNodeId: "ngac-victim",
+	})
+	require.Error(t, err, "outsider must not remove a channel member")
+}
+
+// The PEP must fail closed. If the policy service cannot be reached, the
+// answer is DENY — not "carry on".
+func TestChannelReads_DeniedWhenPolicyUnavailable(t *testing.T) {
+	srv, pool := setupTestServerWithPolicy(t, &mockPolicyReadUnavailable{})
+	wsID := getTestWorkspaceID(t, pool)
+	chID := insertTestChannel(t, pool, "policydown", "workspace", wsID)
+	t.Cleanup(func() { cleanTestData(t, pool, chID) })
+
+	_, err := srv.GetChannel(context.Background(), &pb.GetChannelRequest{
+		ChannelId: chID, UserNgacNodeId: "ngac-user-1",
+	})
+	require.Error(t, err, "policy outage must deny, not grant")
+}
+
+// Channel members now hold invite on their own channel, which the graph applies
+// to DMs too. A DM must not be convertible into a group chat by adding a third
+// participant.
+func TestAddMember_RejectedOnDirectMessage(t *testing.T) {
+	srv, pool := setupTestServer(t) // policy ALLOWs; the DM guard must still bite
+	dmID := insertTestChannel(t, pool, "dmguard", "dm", "")
+	t.Cleanup(func() { cleanTestData(t, pool, dmID) })
+
+	_, err := srv.AddChannelMember(context.Background(), &pb.AddChannelMemberRequest{
+		ChannelId: dmID, RequesterNgacNodeId: "ngac-user-1", TargetNgacNodeId: "ngac-third-party",
+	})
+	require.Error(t, err, "a third participant must not be addable to a DM")
 }

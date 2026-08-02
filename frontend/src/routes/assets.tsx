@@ -23,7 +23,7 @@ const NAV_ITEMS: { to: string; icon: LucideIcon; label: string }[] = [
 ]
 
 function AssetLayout() {
-  const token = useAuthStore((s) => s.token)
+  const token = useAuthStore((s) => s.accessToken)
   const user = useAuthStore((s) => s.user)
   const logout = useAuthStore((s) => s.logout)
   const connect = useWebSocketStore((s) => s.connect)

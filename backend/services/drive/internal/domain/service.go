@@ -41,10 +41,7 @@ func (s *Service) CheckAccess(ctx context.Context, userNodeID, objectNodeID, ope
 	resp, err := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
 		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
 	})
-	if err != nil {
-		return fmt.Errorf("check access: %w", err)
-	}
-	if resp.Decision == ngac.DecisionDeny {
+	if !ngac.Allowed(resp.GetDecision(), err) {
 		return ErrAccessDenied
 	}
 	return nil
@@ -135,7 +132,7 @@ func (s *Service) findDocumentsOA(ctx context.Context, workspaceID string) (stri
 // createFallbackOA creates a new OA node for a workspace root when no Documents OA exists.
 func (s *Service) createFallbackOA(ctx context.Context, workspaceID, pcID string) (string, error) {
 	node, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: fmt.Sprintf("DriveRoot_%s", workspaceID[:8]), NodeType: ngac.TypeOA,
+		Name: ngac.DriveRootName(workspaceID), NodeType: ngac.TypeOA,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create root node: %w", err)

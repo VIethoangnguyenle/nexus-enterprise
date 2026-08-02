@@ -3,13 +3,15 @@ package grpc
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"log/slog"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"ngac-platform/ngac"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/asset/internal/domain"
@@ -43,7 +45,7 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 	}
 
 	// Check write permission on type's OA
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, "write"); err != nil {
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
@@ -66,10 +68,13 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 		return nil, status.Errorf(codes.Internal, "parse lifecycle: %v", err)
 	}
 
-	// Create NGAC Object node for this asset
+	// Create NGAC Object node for this asset. Named by ID, not display name —
+	// two assets may legitimately share a name, and a shared node name means
+	// they would share access decisions.
+	assetID := uuid.New().String()
 	ngacNode, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name:     fmt.Sprintf("Asset_%s", req.Name),
-		NodeType: "O",
+		Name:     ngac.AssetNodeName(assetID),
+		NodeType: ngac.TypeO,
 		Properties: map[string]string{
 			"asset_type":   req.TypeId,
 			"workspace_id": req.WorkspaceId,
@@ -80,13 +85,18 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 	}
 
 	// Assign asset O to type OA
+	// Without this edge the asset object reaches no OA, so every later check
+	// on it denies and the asset is invisible to everyone including its creator.
 	if at.NgacOAID != "" {
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: ngacNode.Id, ParentId: at.NgacOAID,
-		})
+		}); err != nil {
+			return nil, status.Errorf(codes.Internal, "assign asset under type OA: %v", err)
+		}
 	}
 
 	asset := &store.Asset{
+		ID:           assetID,
 		Name:         req.Name,
 		TypeID:       req.TypeId,
 		WorkspaceID:  req.WorkspaceId,
@@ -117,7 +127,7 @@ func (s *AssetServer) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*p
 	}
 
 	// Check read permission on asset's NGAC node
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, "read"); err != nil {
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 	return assetToProto(asset), nil
@@ -149,7 +159,7 @@ func (s *AssetServer) UpdateAsset(ctx context.Context, req *pb.UpdateAssetReques
 		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
 	}
 
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, "write"); err != nil {
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
@@ -188,7 +198,7 @@ func (s *AssetServer) DeleteAsset(ctx context.Context, req *pb.DeleteAssetReques
 		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
 	}
 
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, "manage"); err != nil {
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpManage); err != nil {
 		return nil, err
 	}
 
@@ -198,7 +208,10 @@ func (s *AssetServer) DeleteAsset(ctx context.Context, req *pb.DeleteAssetReques
 
 	// Remove NGAC assignments for the asset node
 	if asset.NgacNodeID != "" {
-		s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: asset.NgacNodeID})
+		if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: asset.NgacNodeID}); err != nil {
+			slog.Error("asset soft-deleted but its NGAC node remains",
+				"asset_id", req.AssetId, "node_id", asset.NgacNodeID, "error", err)
+		}
 	}
 
 	return &pb.Empty{}, nil
@@ -292,11 +305,28 @@ func (s *AssetServer) GetAvailableTransitions(ctx context.Context, req *pb.GetTr
 	result := &pb.TransitionList{CurrentState: asset.State}
 
 	// Filter by NGAC permissions — only show transitions the user can execute
+	// All transitions are checked against the same object, so the whole set of
+	// permissions can be resolved in one call instead of one per transition.
+	ops := make([]string, 0, len(allTransitions))
+	seen := make(map[string]bool, len(allTransitions))
 	for _, t := range allTransitions {
-		resp, _ := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
-			UserNodeId: req.UserNgacNodeId, ObjectNodeId: asset.NgacNodeID, Operation: t.NgacPermission,
-		})
-		if resp != nil && resp.Decision == "ALLOW" {
+		if !seen[t.NgacPermission] {
+			seen[t.NgacPermission] = true
+			ops = append(ops, t.NgacPermission)
+		}
+	}
+	batch, err := s.policyRead.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
+		UserNodeId: req.UserNgacNodeId,
+		ObjectIds:  []string{asset.NgacNodeID},
+		Operations: ops,
+	})
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
+	}
+	granted := batch.GetResults()[asset.NgacNodeID].GetPermissions()
+
+	for _, t := range allTransitions {
+		if granted[t.NgacPermission] {
 			result.Transitions = append(result.Transitions, &pb.AvailableTransition{
 				Action:         t.Operation,
 				ToState:        t.ToState,
@@ -313,7 +343,7 @@ func (s *AssetServer) GetAssetHistory(ctx context.Context, req *pb.GetHistoryReq
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, "read"); err != nil {
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 
@@ -347,10 +377,7 @@ func (s *AssetServer) checkAccess(ctx context.Context, userNodeID, objectNodeID,
 	resp, err := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
 		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
 	})
-	if err != nil {
-		return status.Errorf(codes.Internal, "access check failed: %v", err)
-	}
-	if resp.Decision != "ALLOW" {
+	if !ngac.Allowed(resp.GetDecision(), err) {
 		return status.Errorf(codes.PermissionDenied, "no %s access", operation)
 	}
 	return nil

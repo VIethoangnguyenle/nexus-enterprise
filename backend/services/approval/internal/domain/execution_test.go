@@ -94,17 +94,24 @@ func (m *mockStore) SkipRemainingAssignments(_ context.Context, requestID string
 func (m *mockStore) SkipAllPendingAssignments(_ context.Context, requestID string) error {
 	return nil
 }
-func (m *mockStore) AdvanceStep(_ context.Context, requestID string, nextStep int) error {
-	if r, ok := m.requests[requestID]; ok {
-		r.CurrentStep = nextStep
+// AdvanceStep mirrors the store's compare-and-swap: it only moves the request
+// when it is still sitting on fromStep, so a second caller racing on the same
+// quorum is told it lost.
+func (m *mockStore) AdvanceStep(_ context.Context, requestID string, fromStep, nextStep int) (bool, error) {
+	r, ok := m.requests[requestID]
+	if !ok || r.CurrentStep != fromStep || r.Status != "pending" {
+		return false, nil
 	}
-	return nil
+	r.CurrentStep = nextStep
+	return true, nil
 }
-func (m *mockStore) CompleteRequest(_ context.Context, requestID, status string) error {
-	if r, ok := m.requests[requestID]; ok {
-		r.Status = status
+func (m *mockStore) CompleteRequest(_ context.Context, requestID, status string) (bool, error) {
+	r, ok := m.requests[requestID]
+	if !ok || r.Status != "pending" {
+		return false, nil
 	}
-	return nil
+	r.Status = status
+	return true, nil
 }
 func (m *mockStore) ListPending(_ context.Context, _ string) ([]*RequestWithAssignment, error) {
 	return nil, nil
@@ -117,9 +124,6 @@ func (m *mockStore) ListMyRequests(_ context.Context, _, _ string, _ int) ([]*Re
 }
 func (m *mockStore) ListByScopes(_ context.Context, _ []string, _ string, _ int) ([]*Request, string, error) {
 	return nil, "", nil
-}
-func (m *mockStore) BatchApproveAssignments(_ context.Context, _ string, ids []string, _ string) ([]string, error) {
-	return ids, nil // mock: all succeed
 }
 func (m *mockStore) InsertAuditEntry(_ context.Context, e *AuditEntry) error {
 	m.auditLog = append(m.auditLog, e)
@@ -464,10 +468,27 @@ func TestApprove_NGACDenied(t *testing.T) {
 }
 
 func TestBatchApprove(t *testing.T) {
-	svc, _, _ := setupServiceWithTemplate()
+	svc, ms, _ := setupServiceWithTemplate()
+
+	// Three real, pending requests the caller is genuinely assigned to.
+	var ids []string
+	for i, entity := range []string{"txn-101", "txn-102", "txn-103"} {
+		req, err := svc.CreateApprovalRequest(context.Background(), CreateRequestInput{
+			EntityType:   "transfer",
+			EntityID:     entity,
+			EntityFields: EntityFields{},
+			ScopeOAID:    "oa_dept1",
+			DepartmentID: "dept1",
+			CreatedBy:    "user1",
+		})
+		if err != nil {
+			t.Fatalf("create request %d: %v", i, err)
+		}
+		ids = append(ids, req.ID)
+	}
 
 	approved, err := svc.BatchApprove(context.Background(), BatchApproveInput{
-		RequestIDs: []string{"req-1", "req-2", "req-3"},
+		RequestIDs: ids,
 		UserNodeID: "approver1",
 		Comment:    "batch ok",
 	})
@@ -476,6 +497,92 @@ func TestBatchApprove(t *testing.T) {
 	}
 	if len(approved) != 3 {
 		t.Errorf("approved count = %d, want 3", len(approved))
+	}
+	for _, id := range ids {
+		if a := ms.assignments[id+":approver1"]; a == nil || a.Status != "approved" {
+			t.Errorf("assignment for %s was not recorded as approved", id)
+		}
+	}
+}
+
+// An unknown request ID must be skipped, not silently reported as approved.
+func TestBatchApprove_SkipsUnknownRequests(t *testing.T) {
+	svc, _, _ := setupServiceWithTemplate()
+
+	approved, err := svc.BatchApprove(context.Background(), BatchApproveInput{
+		RequestIDs: []string{"does-not-exist-1", "does-not-exist-2"},
+		UserNodeID: "approver1",
+	})
+	if err != nil {
+		t.Fatalf("batch approve: %v", err)
+	}
+	if len(approved) != 0 {
+		t.Errorf("approved = %v, want none for unknown request IDs", approved)
+	}
+}
+
+// Batch approval must enforce the same guards as single approval. Otherwise the
+// stale-role defence in Approve is decorative: a user whose role was revoked
+// just sends the same request IDs to /batch-approve instead.
+func TestBatchApprove_EnforcesNGACLikeSingleApprove(t *testing.T) {
+	svc, ms, mp := setupServiceWithTemplate()
+
+	req, err := svc.CreateApprovalRequest(context.Background(), CreateRequestInput{
+		EntityType:   "transfer",
+		EntityID:     "txn-008",
+		EntityFields: EntityFields{},
+		ScopeOAID:    "oa_dept1",
+		DepartmentID: "dept1",
+		CreatedBy:    "user1",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+
+	// Role-based grant, and the role has since been revoked.
+	a, ok := ms.assignments[req.ID+":approver1"]
+	if !ok {
+		t.Fatal("expected an assignment for approver1")
+	}
+	a.GrantSource = "role:manager"
+	mp.allowed = false
+
+	approved, err := svc.BatchApprove(context.Background(), BatchApproveInput{
+		RequestIDs: []string{req.ID},
+		UserNodeID: "approver1",
+		Comment:    "batch bypass attempt",
+	})
+	if err == nil && len(approved) > 0 {
+		t.Fatalf("batch approved %v despite revoked role — /approve denies this", approved)
+	}
+	if a.Status == "approved" {
+		t.Error("assignment was marked approved despite the NGAC denial")
+	}
+}
+
+// A request that is no longer pending must not be approvable in a batch either.
+func TestBatchApprove_RejectsCompletedRequest(t *testing.T) {
+	svc, ms, _ := setupServiceWithTemplate()
+
+	req, err := svc.CreateApprovalRequest(context.Background(), CreateRequestInput{
+		EntityType:   "transfer",
+		EntityID:     "txn-009",
+		EntityFields: EntityFields{},
+		ScopeOAID:    "oa_dept1",
+		DepartmentID: "dept1",
+		CreatedBy:    "user1",
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	ms.requests[req.ID].Status = "rejected"
+
+	approved, err := svc.BatchApprove(context.Background(), BatchApproveInput{
+		RequestIDs: []string{req.ID},
+		UserNodeID: "approver1",
+	})
+	if err == nil && len(approved) > 0 {
+		t.Fatalf("batch approved %v on a rejected request", approved)
 	}
 }
 

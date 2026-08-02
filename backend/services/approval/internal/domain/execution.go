@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -194,8 +195,12 @@ func (s *Service) Reject(ctx context.Context, in RejectInput) error {
 	}
 
 	// Mark request as rejected (terminal)
-	if err := s.store.CompleteRequest(ctx, in.RequestID, "rejected"); err != nil {
+	rejected, err := s.store.CompleteRequest(ctx, in.RequestID, "rejected")
+	if err != nil {
 		return fmt.Errorf("complete request: %w", err)
+	}
+	if !rejected {
+		return ErrRequestCompleted
 	}
 
 	// Audit
@@ -209,28 +214,36 @@ func (s *Service) Reject(ctx context.Context, in RejectInput) error {
 	return nil
 }
 
-// BatchApprove processes multiple approvals atomically.
+// BatchApprove approves several requests in one call.
+//
+// It is a loop over Approve, not a bulk UPDATE, and deliberately so. Approve
+// carries the guards that make an approval legitimate — the request is still
+// pending, the assignment belongs to the step that is actually running, and the
+// approver's role has not been revoked since the assignment was created. A
+// separate bulk statement would be a second decision path that starts out
+// equivalent and drifts, and while it drifted this endpoint would be the way
+// around the checks the single-approve path enforces.
+//
+// Requests the caller may not approve are skipped rather than failing the whole
+// batch: the caller gets back exactly the set that succeeded.
 func (s *Service) BatchApprove(ctx context.Context, in BatchApproveInput) ([]string, error) {
 	if len(in.RequestIDs) == 0 || in.UserNodeID == "" {
 		return nil, ErrInvalidInput
 	}
 
-	approved, err := s.store.BatchApproveAssignments(ctx, in.UserNodeID, in.RequestIDs, in.Comment)
-	if err != nil {
-		return nil, fmt.Errorf("batch approve: %w", err)
-	}
-
-	// Check step completion for each approved request
-	for _, reqID := range approved {
-		req, err := s.store.GetRequest(ctx, reqID)
+	var approved []string
+	for _, reqID := range in.RequestIDs {
+		err := s.Approve(ctx, ApproveInput{
+			RequestID:  reqID,
+			UserNodeID: in.UserNodeID,
+			Comment:    in.Comment,
+		})
 		if err != nil {
+			slog.Info("batch approve skipped a request",
+				"request_id", reqID, "user_node_id", in.UserNodeID, "reason", err)
 			continue
 		}
-		s.logAudit(ctx, reqID, "approved", in.UserNodeID, req.CurrentStep, map[string]string{
-			"comment": in.Comment,
-			"batch":   "true",
-		})
-		s.checkStepCompletion(ctx, req)
+		approved = append(approved, reqID)
 	}
 
 	return approved, nil
@@ -286,19 +299,30 @@ func (s *Service) checkStepCompletion(ctx context.Context, req *Request) error {
 	}
 
 	if nextStepDef == nil {
-		// No more steps — request fully approved
-		if err := s.store.CompleteRequest(ctx, req.ID, "approved"); err != nil {
+		// No more steps — request fully approved. Only the caller that actually
+		// moved the request out of "pending" logs the completion.
+		completed, err := s.store.CompleteRequest(ctx, req.ID, "approved")
+		if err != nil {
 			return fmt.Errorf("complete request: %w", err)
 		}
-		s.logAudit(ctx, req.ID, "completed", "", 0, map[string]string{
-			"final_status": "approved",
-		})
+		if completed {
+			s.logAudit(ctx, req.ID, "completed", "", 0, map[string]string{
+				"final_status": "approved",
+			})
+		}
 		return nil
 	}
 
-	// Advance to next step
-	if err := s.store.AdvanceStep(ctx, req.ID, nextStep); err != nil {
+	// Advance to the next step. Concurrent approvals can both satisfy the same
+	// quorum, so the advance is a compare-and-swap and only the winner goes on
+	// to create the next step's assignments — otherwise every approval past the
+	// quorum would add another full set of approvers.
+	advanced, err := s.store.AdvanceStep(ctx, req.ID, req.CurrentStep, nextStep)
+	if err != nil {
 		return fmt.Errorf("advance step: %w", err)
+	}
+	if !advanced {
+		return nil
 	}
 
 	// Resolve approvers for next step

@@ -21,7 +21,7 @@ func (h *Handler) AddReaction(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
-	if err := h.svc.AddReaction(c.Request().Context(), c.Param("msgId"), claims.UserID, body.Emoji); err != nil {
+	if err := h.svc.AddReaction(c.Request().Context(), c.Param("msgId"), claims.NGACNodeID, claims.UserID, body.Emoji); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -30,7 +30,7 @@ func (h *Handler) AddReaction(c echo.Context) error {
 // RemoveReaction handles DELETE /api/messages/:msgId/reactions/:emoji.
 func (h *Handler) RemoveReaction(c echo.Context) error {
 	claims := httputil.GetClaims(c)
-	if err := h.svc.RemoveReaction(c.Request().Context(), c.Param("msgId"), claims.UserID, c.Param("emoji")); err != nil {
+	if err := h.svc.RemoveReaction(c.Request().Context(), c.Param("msgId"), claims.NGACNodeID, claims.UserID, c.Param("emoji")); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -38,7 +38,8 @@ func (h *Handler) RemoveReaction(c echo.Context) error {
 
 // ListReactions handles GET /api/messages/:msgId/reactions.
 func (h *Handler) ListReactions(c echo.Context) error {
-	reactions, err := h.svc.ListReactions(c.Request().Context(), c.Param("msgId"))
+	claims := httputil.GetClaims(c)
+	reactions, err := h.svc.ListReactions(c.Request().Context(), c.Param("msgId"), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -56,7 +57,7 @@ func (h *Handler) PinMessage(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
-	if err := h.svc.PinMessage(c.Request().Context(), c.Param("chId"), body.MessageID, claims.UserID); err != nil {
+	if err := h.svc.PinMessage(c.Request().Context(), c.Param("chId"), body.MessageID, claims.NGACNodeID, claims.UserID); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -64,7 +65,8 @@ func (h *Handler) PinMessage(c echo.Context) error {
 
 // UnpinMessage handles DELETE /api/channels/:chId/pins/:msgId.
 func (h *Handler) UnpinMessage(c echo.Context) error {
-	if err := h.svc.UnpinMessage(c.Request().Context(), c.Param("chId"), c.Param("msgId")); err != nil {
+	claims := httputil.GetClaims(c)
+	if err := h.svc.UnpinMessage(c.Request().Context(), c.Param("chId"), c.Param("msgId"), claims.NGACNodeID); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -72,7 +74,8 @@ func (h *Handler) UnpinMessage(c echo.Context) error {
 
 // ListPins handles GET /api/channels/:chId/pins.
 func (h *Handler) ListPins(c echo.Context) error {
-	pins, err := h.svc.ListPins(c.Request().Context(), c.Param("chId"))
+	claims := httputil.GetClaims(c)
+	pins, err := h.svc.ListPins(c.Request().Context(), c.Param("chId"), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -90,7 +93,7 @@ func (h *Handler) MarkChannelRead(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
-	if err := h.svc.MarkChannelRead(c.Request().Context(), claims.UserID, c.Param("chId"), body.LastMessageID); err != nil {
+	if err := h.svc.MarkChannelRead(c.Request().Context(), claims.UserID, claims.NGACNodeID, c.Param("chId"), body.LastMessageID); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -119,7 +122,8 @@ func (h *Handler) SearchMessages(c echo.Context) error {
 		}
 	}
 
-	result, err := h.svc.SearchMessages(c.Request().Context(), c.Param("chId"), query, limit)
+	claims := httputil.GetClaims(c)
+	result, err := h.svc.SearchMessages(c.Request().Context(), c.Param("chId"), claims.NGACNodeID, query, limit)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

@@ -60,7 +60,7 @@ func (s *MessagingServer) ListChannels(ctx context.Context, req *pb.ListChannels
 
 // GetChannel delegates to domain.Service.GetChannel.
 func (s *MessagingServer) GetChannel(ctx context.Context, req *pb.GetChannelRequest) (*pb.Channel, error) {
-	ch, err := s.svc.GetChannel(ctx, req.ChannelId)
+	ch, err := s.svc.GetChannel(ctx, req.ChannelId, req.UserNgacNodeId)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "channel not found")
 	}
@@ -125,7 +125,7 @@ func (s *MessagingServer) GetMessages(ctx context.Context, req *pb.GetMessagesRe
 
 // GetThread delegates to domain.Service.GetThread.
 func (s *MessagingServer) GetThread(ctx context.Context, req *pb.GetThreadRequest) (*pb.MessageList, error) {
-	list, err := s.svc.GetThread(ctx, req.MessageId)
+	list, err := s.svc.GetThread(ctx, req.MessageId, req.UserNgacNodeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "get thread: %v", err)
 	}
@@ -134,7 +134,7 @@ func (s *MessagingServer) GetThread(ctx context.Context, req *pb.GetThreadReques
 
 // FindThreadsByEntity delegates to domain.Service.FindThreadsByEntity.
 func (s *MessagingServer) FindThreadsByEntity(ctx context.Context, req *pb.FindThreadsByEntityRequest) (*pb.MessageList, error) {
-	list, err := s.svc.FindThreadsByEntity(ctx, req.EntityType, req.EntityId)
+	list, err := s.svc.FindThreadsByEntity(ctx, req.EntityType, req.EntityId, req.UserNgacNodeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "find threads: %v", err)
 	}
@@ -151,7 +151,7 @@ func (s *MessagingServer) AddChannelMember(ctx context.Context, req *pb.AddChann
 
 // RemoveChannelMember delegates to domain.Service.RemoveMember.
 func (s *MessagingServer) RemoveChannelMember(ctx context.Context, req *pb.RemoveChannelMemberRequest) (*pb.Empty, error) {
-	if err := s.svc.RemoveMember(ctx, req.ChannelId, req.TargetNgacNodeId); err != nil {
+	if err := s.svc.RemoveMember(ctx, req.ChannelId, req.RequesterNgacNodeId, req.TargetNgacNodeId); err != nil {
 		return nil, status.Errorf(codes.Internal, "remove member: %v", err)
 	}
 	return &pb.Empty{}, nil
@@ -159,7 +159,7 @@ func (s *MessagingServer) RemoveChannelMember(ctx context.Context, req *pb.Remov
 
 // ListChannelMembers delegates to domain.Service.ListMembers.
 func (s *MessagingServer) ListChannelMembers(ctx context.Context, req *pb.ListChannelMembersRequest) (*pb.ChannelMemberList, error) {
-	members, err := s.svc.ListMembers(ctx, req.ChannelId)
+	members, err := s.svc.ListMembers(ctx, req.ChannelId, req.UserNgacNodeId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list members: %v", err)
 	}

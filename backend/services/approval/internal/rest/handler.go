@@ -43,8 +43,12 @@ func NewHandler(svc *domain.Service, resolver *httputil.TenantSchemaResolver, pr
 
 // RegisterRoutes mounts approval endpoints on the Echo instance.
 func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
-	// Admin routes — JWT only, no tenant schema required
-	admin := e.Group("/api/admin", httputil.JWTMiddleware(jwtSecret))
+	// Admin routes — JWT + a tenant context, but no schema resolution: the
+	// schema is what this endpoint creates, so it cannot require one already.
+	admin := e.Group("/api/admin",
+		httputil.JWTMiddleware(jwtSecret),
+		httputil.TenantMiddleware(),
+	)
 	admin.POST("/tenants/:id/provision", h.ProvisionTenant)
 
 	// Tenant-scoped routes — JWT + tenant_id + schema resolution
@@ -96,9 +100,21 @@ func (h *Handler) tenantSchemaMiddleware() echo.MiddlewareFunc {
 
 // ProvisionTenant handles POST /api/admin/tenants/:id/provision.
 func (h *Handler) ProvisionTenant(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+
 	tenantID := c.Param("id")
 	if tenantID == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "tenant_id required")
+	}
+
+	// Provisioning creates a whole Postgres schema. A caller may only do that
+	// for the tenant they are currently signed in to — otherwise any
+	// authenticated user of any tenant can create schemas for arbitrary IDs.
+	if claims.TenantID != tenantID {
+		return echo.NewHTTPError(http.StatusForbidden, "cannot provision another tenant")
 	}
 
 	schema, err := h.svc.ProvisionTenantSchema(c.Request().Context(), tenantID)

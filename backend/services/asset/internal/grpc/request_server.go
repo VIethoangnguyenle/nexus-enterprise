@@ -7,6 +7,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"ngac-platform/ngac"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/asset/internal/events"
@@ -38,7 +39,7 @@ func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAs
 	}
 
 	// Check request permission on type OA
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, "request"); err != nil {
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
@@ -96,7 +97,7 @@ func (s *AssetRequestServer) ApproveRequest(ctx context.Context, req *pb.Approve
 	}
 
 	// Check approve permission on type OA
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, "approve"); err != nil {
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, ngac.OpApprove); err != nil {
 		return nil, err
 	}
 
@@ -135,7 +136,7 @@ func (s *AssetRequestServer) RejectRequest(ctx context.Context, req *pb.RejectRe
 		return nil, status.Errorf(codes.Internal, "get type: %v", err)
 	}
 
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, "approve"); err != nil {
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, ngac.OpApprove); err != nil {
 		return nil, err
 	}
 
@@ -184,7 +185,7 @@ func (s *AssetRequestServer) AssignAsset(ctx context.Context, req *pb.AssignAsse
 	}
 
 	// Check assign permission
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, "assign"); err != nil {
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpManage); err != nil {
 		return nil, err
 	}
 
@@ -237,7 +238,7 @@ func (s *AssetRequestServer) ReturnAsset(ctx context.Context, req *pb.ReturnAsse
 	// Either the assigned user or someone with manage permission can return
 	isAssignedUser := asset.AssignedTo != nil && *asset.AssignedTo == req.UserId
 	if !isAssignedUser {
-		if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, "manage"); err != nil {
+		if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpManage); err != nil {
 			return nil, status.Errorf(codes.PermissionDenied, "only the assigned user or a manager can return this asset")
 		}
 	}
@@ -314,7 +315,7 @@ func (s *AssetRequestServer) checkAccess(ctx context.Context, userNodeID, object
 	if err != nil {
 		return status.Errorf(codes.Internal, "access check failed: %v", err)
 	}
-	if resp.Decision != "ALLOW" {
+	if !ngac.Allowed(resp.GetDecision(), nil) {
 		return status.Errorf(codes.PermissionDenied, "no %s access", operation)
 	}
 	return nil

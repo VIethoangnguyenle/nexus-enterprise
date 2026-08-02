@@ -311,10 +311,11 @@ func (x *ListChannelsRequest) GetUserNgacNodeId() string {
 }
 
 type GetChannelRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId      string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetChannelRequest) Reset() {
@@ -350,6 +351,13 @@ func (*GetChannelRequest) Descriptor() ([]byte, []int) {
 func (x *GetChannelRequest) GetChannelId() string {
 	if x != nil {
 		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *GetChannelRequest) GetUserNgacNodeId() string {
+	if x != nil {
+		return x.UserNgacNodeId
 	}
 	return ""
 }
@@ -519,10 +527,11 @@ func (x *RemoveChannelMemberRequest) GetTargetNgacNodeId() string {
 }
 
 type ListChannelMembersRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId      string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ListChannelMembersRequest) Reset() {
@@ -558,6 +567,13 @@ func (*ListChannelMembersRequest) Descriptor() ([]byte, []int) {
 func (x *ListChannelMembersRequest) GetChannelId() string {
 	if x != nil {
 		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *ListChannelMembersRequest) GetUserNgacNodeId() string {
+	if x != nil {
+		return x.UserNgacNodeId
 	}
 	return ""
 }
@@ -3457,10 +3473,11 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\fchannel_type\x18\x05 \x01(\tR\vchannelType\"c\n" +
 	"\x13ListChannelsRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"2\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"]\n" +
 	"\x11GetChannelRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\"=\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12)\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"=\n" +
 	"\vChannelList\x12.\n" +
 	"\bchannels\x18\x01 \x03(\v2\x12.messaging.ChannelR\bchannels\"\x9c\x01\n" +
 	"\x17AddChannelMemberRequest\x12\x1d\n" +
@@ -3472,10 +3489,11 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x123\n" +
 	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12-\n" +
-	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\":\n" +
+	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\"e\n" +
 	"\x19ListChannelMembersRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\"f\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12)\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"f\n" +
 	"\rChannelMember\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12 \n" +

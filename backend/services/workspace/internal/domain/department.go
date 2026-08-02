@@ -205,9 +205,13 @@ func (s *Service) MoveDepartment(ctx context.Context, in MoveDepartmentInput) (*
 			oldParentNGACID = oldParent.NGACUaID
 		}
 	}
-	s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+	// If the old edge survives, the department hangs under both parents and
+	// inherits from both — a move would silently become an addition.
+	if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
 		ChildId: dept.NGACUaID, ParentId: oldParentNGACID,
-	})
+	}); err != nil {
+		return nil, fmt.Errorf("detach department from old parent: %w", err)
+	}
 
 	// Create new assignment
 	newParentNGACID := ws.PcNodeID

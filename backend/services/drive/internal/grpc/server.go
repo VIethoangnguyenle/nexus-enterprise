@@ -48,10 +48,7 @@ func (s *DriveServer) checkAccess(ctx context.Context, userNodeID, objectNodeID,
 	resp, err := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
 		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
 	})
-	if err != nil {
-		return status.Errorf(codes.Internal, "check access: %v", err)
-	}
-	if resp.Decision == ngac.DecisionDeny {
+	if !ngac.Allowed(resp.GetDecision(), err) {
 		return status.Errorf(codes.PermissionDenied, "access denied")
 	}
 	return nil
@@ -125,10 +122,13 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 		return nil, status.Errorf(codes.Internal, "create folder node: %v", err)
 	}
 
-	// Assign folder OA under parent OA (inherits permissions)
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+	// Assign folder OA under parent OA (inherits permissions). Without this
+	// edge the folder reaches no PC and every check on it denies.
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: folderNode.Id, ParentId: parentNGACID,
-	})
+	}); err != nil {
+		return nil, status.Errorf(codes.Internal, "assign folder under parent: %v", err)
+	}
 
 	// Determine scope OA: inherit from parent, or use own OA for root-level folders
 	var scopeOAID string
@@ -188,14 +188,29 @@ func (s *DriveServer) ListFolder(ctx context.Context, req *pb.ListFolderRequest)
 		return nil, status.Errorf(codes.Internal, "list folder: %v", err)
 	}
 
-	// Filter by NGAC access
-	var visible []*pb.DriveItem
+	// Filter by NGAC access. One batch call rather than one per item: a folder
+	// of 200 files used to mean 200 sequential round-trips to the policy
+	// service, which dominated the latency of listing anything.
+	objectIDs := make([]string, 0, len(items))
 	for _, item := range items {
-		resp, _ := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
-			UserNodeId: req.UserNgacNodeId, ObjectNodeId: item.NGACNodeID, Operation: ngac.OpRead,
+		objectIDs = append(objectIDs, item.NGACNodeID)
+	}
+
+	var visible []*pb.DriveItem
+	if len(objectIDs) > 0 {
+		batch, err := s.policyRead.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
+			UserNodeId: req.UserNgacNodeId,
+			ObjectIds:  objectIDs,
+			Operations: []string{ngac.OpRead},
 		})
-		if resp != nil && resp.Decision == ngac.DecisionAllow {
-			visible = append(visible, itemToProto(item))
+		if err != nil {
+			// Fail closed: an unreadable policy answer must not list everything.
+			return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
+		}
+		for _, item := range items {
+			if batch.GetResults()[item.NGACNodeID].GetPermissions()[ngac.OpRead] {
+				visible = append(visible, itemToProto(item))
+			}
 		}
 	}
 
@@ -411,14 +426,20 @@ func (s *DriveServer) MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*p
 		if item.ParentID != nil {
 			old, _ := s.store.GetItem(ctx, *item.ParentID)
 			if old != nil {
-				s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+				// If the old edge survives, the folder hangs under both parents
+				// and keeps inheriting the permissions of the one it left.
+				if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
 					ChildId: item.NGACNodeID, ParentId: old.NGACNodeID,
-				})
+				}); err != nil {
+					return nil, status.Errorf(codes.Internal, "detach folder from old parent: %v", err)
+				}
 			}
 		}
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: item.NGACNodeID, ParentId: dest.NGACNodeID,
-		})
+		}); err != nil {
+			return nil, status.Errorf(codes.Internal, "attach folder to new parent: %v", err)
+		}
 	}
 
 	// For files: update NGACNodeID to inherit from new parent folder.
@@ -509,6 +530,9 @@ func (s *DriveServer) RestoreItem(ctx context.Context, req *pb.RestoreItemReques
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpWrite); err != nil {
+		return nil, err
+	}
 	s.store.UpdateStatus(ctx, item.ID, "active")
 	if item.ItemType == "folder" {
 		s.store.RestoreChildren(ctx, item.ID)
@@ -522,6 +546,11 @@ func (s *DriveServer) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest)
 	item, err := s.store.GetItem(ctx, req.ItemId)
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "item not found")
+	}
+	// Same right as TrashItem: permanent deletion must not be reachable by a
+	// user who cannot perform the reversible version of the same action.
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpWrite); err != nil {
+		return nil, err
 	}
 
 	if item.ItemType == "folder" {
@@ -538,7 +567,9 @@ func (s *DriveServer) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest)
 			// Files don't have their own NGAC nodes — no DeleteNode needed.
 		}
 		// Delete the folder's OA node from NGAC graph.
-		s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: item.NGACNodeID})
+		if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: item.NGACNodeID}); err != nil {
+			return nil, status.Errorf(codes.Internal, "delete folder OA: %v", err)
+		}
 	} else if item.ObjectKey != nil {
 		s.docStorage.DeleteObject(ctx, &docpb.DeleteObjectRequest{
 			WorkspaceId: item.WorkspaceID, ObjectKey: *item.ObjectKey,
@@ -587,7 +618,7 @@ func (s *DriveServer) ensureRoot(ctx context.Context, workspaceID, driveCtx, dri
 	if ngacNodeID == "" {
 		// Fallback: create a new OA node under the workspace PC
 		node, nErr := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-			Name: fmt.Sprintf("DriveRoot_%s", workspaceID[:8]), NodeType: "OA",
+			Name: ngac.DriveRootName(workspaceID), NodeType: ngac.TypeOA,
 		})
 		if nErr != nil {
 			return nil, status.Errorf(codes.Internal, "create root node: %v", nErr)
@@ -596,9 +627,11 @@ func (s *DriveServer) ensureRoot(ctx context.Context, workspaceID, driveCtx, dri
 
 		// Assign DriveRoot OA under workspace PC so files inherit access associations
 		if pcID != "" {
-			s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+			if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 				ChildId: ngacNodeID, ParentId: pcID,
-			})
+			}); err != nil {
+				return nil, status.Errorf(codes.Internal, "assign drive root under workspace PC: %v", err)
+			}
 		}
 	}
 

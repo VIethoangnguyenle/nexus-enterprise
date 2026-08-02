@@ -2,7 +2,6 @@ package grpc
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/google/uuid"
@@ -35,18 +34,22 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 	}
 
 	// Assign item under share OA
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: item.NGACNodeID, ParentId: shareOA.Id,
-	})
+	}); err != nil {
+		return nil, status.Errorf(codes.Internal, "assign item under share OA: %v", err)
+	}
 
 	// Assign share OA under PC_Global
 	pcGlobal, _ := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
 		Name: ngac.NodePCGlobal, NodeType: ngac.TypePC,
 	})
 	if pcGlobal != nil {
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: shareOA.Id, ParentId: pcGlobal.Id,
-		})
+		}); err != nil {
+			return nil, status.Errorf(codes.Internal, "assign share OA under PC_Global: %v", err)
+		}
 	}
 
 	// Determine target UA
@@ -78,10 +81,13 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 		return nil, status.Errorf(codes.InvalidArgument, "invalid share_type: %s", req.ShareType)
 	}
 
-	// Create association
-	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
+	// Create association. This is the share: if it fails we must not write the
+	// DB row, or the UI shows a share that grants nothing.
+	if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
 		UaId: targetUA, OaId: shareOA.Id, Operations: req.Operations,
-	})
+	}); err != nil {
+		return nil, status.Errorf(codes.Internal, "create share association: %v", err)
+	}
 
 	share := &store.DriveShare{
 		ID:           uuid.New().String(),
@@ -111,9 +117,16 @@ func (s *DriveServer) RevokeShare(ctx context.Context, req *pb.RevokeShareReques
 	if err != nil || share == nil {
 		return nil, status.Errorf(codes.NotFound, "share not found")
 	}
-	// Delete the NGAC share OA (cascades associations)
-	s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: share.NGACShareOA})
-	s.store.DeleteShare(ctx, req.ShareId)
+	// Delete the NGAC share OA (cascades associations). This is what actually
+	// revokes access — the DB row is only bookkeeping. If it fails we must not
+	// delete the row and report success, or the share disappears from the UI
+	// while the association keeps granting access to the recipient.
+	if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: share.NGACShareOA}); err != nil {
+		return nil, status.Errorf(codes.Internal, "revoke share OA: %v", err)
+	}
+	if err := s.store.DeleteShare(ctx, req.ShareId); err != nil {
+		return nil, status.Errorf(codes.Internal, "delete share record: %v", err)
+	}
 	return &pb.Empty{}, nil
 }
 
@@ -177,7 +190,7 @@ func (s *DriveServer) GetSharedWithMe(ctx context.Context, req *pb.GetSharedWith
 
 // CreateDriveForChannel creates a channel/DM drive folder with NGAC OA.
 func (s *DriveServer) CreateDriveForChannel(ctx context.Context, req *pb.CreateDriveForChannelRequest) (*pb.DriveItem, error) {
-	driveName := fmt.Sprintf("Ch_%s_Drive", req.ChannelName)
+	driveName := ngac.ChannelDriveName(req.ChannelName)
 
 	// Create NGAC OA for channel drive
 	driveOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
@@ -189,15 +202,19 @@ func (s *DriveServer) CreateDriveForChannel(ctx context.Context, req *pb.CreateD
 	}
 
 	// Assign under channel's Content OA (inherits channel permissions)
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: driveOA.Id, ParentId: req.ChannelNgacOaId,
-	})
+	}); err != nil {
+		return nil, status.Errorf(codes.Internal, "assign channel drive under content OA: %v", err)
+	}
 
 	// Association: channel Members UA → drive OA [read, write, upload]
-	s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
+	if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
 		UaId: req.ChannelNgacUaId, OaId: driveOA.Id,
 		Operations: ngac.ChannelDriveOps(),
-	})
+	}); err != nil {
+		return nil, status.Errorf(codes.Internal, "grant channel members access to drive: %v", err)
+	}
 
 	item := &store.DriveItem{
 		ID: uuid.New().String(), WorkspaceID: req.WorkspaceId,

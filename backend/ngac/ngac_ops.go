@@ -4,7 +4,10 @@
 // so that renames and additions are caught at compile time.
 package ngac
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // --- Operations ---
 // These constants represent the access rights checked by the Policy Service.
@@ -34,8 +37,13 @@ func MemberChannelOps() []string {
 }
 
 // ChannelMemberOps returns operations granted to channel members on content.
+//
+// OpInvite is included so that being in a channel is what lets you bring
+// someone else into it. Membership changes are authorized against the channel's
+// own Content OA, so this grant is scoped to that one channel — it confers
+// nothing on any other channel, and nothing at the workspace level.
 func ChannelMemberOps() []string {
-	return []string{OpRead, OpWrite}
+	return []string{OpRead, OpWrite, OpInvite}
 }
 
 // ChannelDriveOps returns operations granted to channel members on their drive.
@@ -48,7 +56,31 @@ func ChannelDriveOps() []string {
 const (
 	NodePCGlobal    = "PC_Global"
 	NodePublicUsers = "PublicUsers"
+
+	// NodePCAssetManagement is the policy class every workspace's asset tree
+	// hangs under, in addition to the workspace's own PC.
+	NodePCAssetManagement = "PC_AssetManagement"
 )
+
+// --- Asset naming conventions ---
+//
+// Named by workspace ID, not workspace name. Two workspaces are free to share a
+// display name, and a name-derived node would then be shared between them —
+// which in a graph that answers access questions means one tenant's assets
+// resolving onto another's attributes.
+
+func AssetsOAName(wsID string) string { return fmt.Sprintf("%s_Assets", wsID) }
+
+func AssetCategoryOAName(wsID, category string) string {
+	return fmt.Sprintf("%s_Category_%s", wsID, category)
+}
+
+func AssetTypeOAName(wsID, typeName string) string {
+	return fmt.Sprintf("%s_Type_%s", wsID, typeName)
+}
+
+// AssetNodeName names the object node for a single asset.
+func AssetNodeName(assetID string) string { return fmt.Sprintf("Asset_%s", assetID) }
 
 // --- Workspace naming conventions ---
 // Every workspace creates a set of NGAC nodes named by workspace ID.
@@ -73,6 +105,24 @@ func ChannelContentOAName(chID string) string { return fmt.Sprintf("Ch_%s_Conten
 func ChannelMembersUAName(chID string) string { return fmt.Sprintf("Ch_%s_Members", chID) }
 func ChannelDriveName(chID string) string     { return fmt.Sprintf("Ch_%s_Drive", chID) }
 
+// DMChannelName builds the display name for a direct message from the two
+// participants' display names.
+//
+// This is a channel title that reaches the screen, so it must never be
+// assembled from user IDs. Callers resolve display names first and pass them
+// here; an unresolved side degrades to a neutral label rather than leaking an
+// identifier.
+func DMChannelName(displayNameA, displayNameB string) string {
+	a, b := strings.TrimSpace(displayNameA), strings.TrimSpace(displayNameB)
+	if a == "" {
+		a = "Unknown"
+	}
+	if b == "" {
+		b = "Unknown"
+	}
+	return fmt.Sprintf("%s, %s", a, b)
+}
+
 // --- Tenant naming conventions ---
 
 // TenantMemberUAName returns the UA name for regular members of a tenant.
@@ -83,10 +133,13 @@ func TenantOwnerUAName(tenantID string) string { return fmt.Sprintf("TenantOwner
 
 // --- Drive naming conventions ---
 
+// DriveRootName names the root drive OA for a workspace.
+//
+// It carries the whole workspace ID. An earlier version truncated to eight
+// characters, which meant two workspaces whose UUIDs shared a prefix produced
+// the same node name — and names are matched exactly, so the second workspace
+// would have resolved onto the first one's drive root.
 func DriveRootName(workspaceID string) string {
-	if len(workspaceID) > 8 {
-		return fmt.Sprintf("DriveRoot_%s", workspaceID[:8])
-	}
 	return fmt.Sprintf("DriveRoot_%s", workspaceID)
 }
 

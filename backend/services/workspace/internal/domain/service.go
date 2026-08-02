@@ -121,7 +121,12 @@ func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) 
 		{ownersUA.Id, pc.Id}, {membersUA.Id, pc.Id},
 		{mgmtOA.Id, pc.Id}, {docsOA.Id, pc.Id}, {channelsOA.Id, pc.Id},
 		{draftOA.Id, docsOA.Id}, {approvedOA.Id, docsOA.Id},
-		{membersUA.Id, ownersUA.Id},
+		// Owners UA is assigned UNDER Members UA, not the other way round.
+		// BFS walks child→parent, so the child inherits the parent's
+		// associations: this gives owners the member grants on top of their
+		// own. Reversing it hands every member the full owner association set
+		// and silently makes the member-scoped associations below dead code.
+		{ownersUA.Id, membersUA.Id},
 		{in.UserNGACNodeID, ownersUA.Id},
 	}
 	for _, a := range assignments {
@@ -183,20 +188,36 @@ func (s *Service) ListAccessibleWorkspaces(ctx context.Context, userNGACNodeID s
 	if err != nil {
 		return nil, err
 	}
+	if len(allWS) == 0 {
+		return nil, nil
+	}
+
+	// Ask from the user's side, once.
+	//
+	// This used to walk every workspace's entire subtree looking for the user —
+	// one GetDescendants per workspace in the system, each returning every node
+	// under that policy class. Walking up from the user instead is a single
+	// call whose payload is just that user's attributes, and it answers the
+	// same question: a workspace is accessible exactly when its policy class is
+	// among the user's ancestors.
+	ancestors, err := s.policyRead.GetAncestors(ctx, &policypb.GetAncestorsRequest{
+		NodeId: userNGACNodeID,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("resolve user attributes: %w", err)
+	}
+
+	reachable := make(map[string]bool, len(ancestors.GetNodes()))
+	for _, n := range ancestors.GetNodes() {
+		reachable[n.Id] = true
+	}
 
 	var accessible []*WorkspaceResult
 	for _, ws := range allWS {
-		desc, err := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.NGACPcID})
-		if err != nil {
-			continue
-		}
-		for _, n := range desc.Nodes {
-			if n.Id == userNGACNodeID {
-				accessible = append(accessible, &WorkspaceResult{
-					ID: ws.ID, Name: ws.Name, PcNodeID: ws.NGACPcID,
-				})
-				break
-			}
+		if reachable[ws.NGACPcID] {
+			accessible = append(accessible, &WorkspaceResult{
+				ID: ws.ID, Name: ws.Name, PcNodeID: ws.NGACPcID,
+			})
 		}
 	}
 	return accessible, nil
@@ -249,12 +270,25 @@ func (s *Service) RemoveMember(ctx context.Context, wsID, targetNGACNodeID strin
 	if err != nil {
 		return fmt.Errorf("get descendants: %w", err)
 	}
+	// Every UA the user is detached from is one revocation. A failure here
+	// leaves the user assigned and therefore still authorized, so it has to
+	// surface rather than be dropped — reporting "removed" while the graph
+	// still grants access is the worst possible outcome.
+	var failed []string
 	for _, n := range desc.Nodes {
-		if n.NodeType == ngac.TypeUA {
-			s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
-				ChildId: targetNGACNodeID, ParentId: n.Id,
-			})
+		if n.NodeType != ngac.TypeUA {
+			continue
 		}
+		if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+			ChildId: targetNGACNodeID, ParentId: n.Id,
+		}); err != nil {
+			slog.Error("failed to detach user from UA during member removal",
+				"user_node_id", targetNGACNodeID, "ua_id", n.Id, "error", err)
+			failed = append(failed, n.Id)
+		}
+	}
+	if len(failed) > 0 {
+		return fmt.Errorf("member not fully removed, still assigned to %d attribute(s): %v", len(failed), failed)
 	}
 	return nil
 }

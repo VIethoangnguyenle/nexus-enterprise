@@ -35,6 +35,55 @@ The system SHALL create associations between tenant UAs and OAs so that members 
 - **WHEN** a tenant is initialized
 - **THEN** `TenantMember_{tenant_id}` has association to tenant OAs with member operations (read, write, create_channel)
 
+### Requirement: Privilege inheritance runs owner-to-member only
+The system SHALL assign the Owners UA under the Members UA, never the reverse. NGAC derives privilege by walking child → parent, so the direction of this single assignment decides who inherits whom. Assigning Members under Owners gives every member the full owner association set and silently voids the member-scoped associations.
+
+#### Scenario: Owner inherits member grants
+- **WHEN** a user is assigned to `{workspace_id}_Owners`
+- **THEN** access checks resolve both the owner operations and the member operations for that user
+
+#### Scenario: Member does not inherit owner grants
+- **WHEN** a user is assigned to `{workspace_id}_Members` and to no other UA
+- **THEN** `manage`, `invite`, `approve` and `share` on the workspace's Mgmt, Documents and Channels OAs all resolve to DENY
+- **AND** only the member operations (read on Documents, and the channel operations) resolve to ALLOW
+
+#### Scenario: Member of another workspace
+- **WHEN** a user's attributes reach only a different workspace's Policy Class
+- **THEN** every operation on this workspace's OAs resolves to DENY, even where an association exists, because the object's PC is not among the user's PCs
+
+### Requirement: Channel membership is authorized per channel
+The system SHALL authorize adding and removing channel members with the `invite` operation on that channel's Content OA. The channel's Members UA SHALL hold `invite` on its own Content OA, so that belonging to a channel is what permits bringing someone else into it. The grant SHALL confer nothing on any other channel and nothing at the workspace level.
+
+#### Scenario: Member adds someone to their own channel
+- **WHEN** a user assigned to `Ch_{channel_id}_Members` adds another user to that channel
+- **THEN** the check for `invite` on `Ch_{channel_id}_Content` resolves to ALLOW
+
+#### Scenario: Member of a different channel
+- **WHEN** a user assigned only to `Ch_{other_id}_Members` attempts to add someone to `Ch_{channel_id}`
+- **THEN** the check resolves to DENY
+
+#### Scenario: Workspace member who is in no channel
+- **WHEN** a user holds only the workspace Members UA and belongs to no channel
+- **THEN** `invite` on any channel's Content OA resolves to DENY
+
+#### Scenario: Direct messages cannot gain a third participant
+- **WHEN** a participant of a DM attempts to add another user to it
+- **THEN** the request is rejected before any graph mutation, because a DM is a fixed two-party conversation
+- **AND** this guard lives in the messaging service, not in the graph, since the graph cannot express "exactly two sides"
+
+### Requirement: Policy enforcement points fail closed
+Every service that consults the Policy Service SHALL treat anything other than an explicit ALLOW as a denial — including a transport error, an unreachable Policy Service, an empty response, and any unrecognised decision string. Enforcement points SHALL NOT compare against the DENY constant, because that grants access for every value that is neither ALLOW nor DENY.
+
+#### Scenario: Policy Service unreachable
+- **WHEN** an access check cannot reach the Policy Service
+- **THEN** the calling service denies the request
+- **AND** does not fall through to the protected operation
+
+#### Scenario: Single interpretation of a decision
+- **WHEN** a service needs to interpret an access decision
+- **THEN** it calls `ngac.Allowed(resp.GetDecision(), err)` from `backend/ngac`
+- **AND** does not compare the decision string itself
+
 ### Requirement: No authorization outside NGAC
 The system SHALL NOT perform any authorization check outside the NGAC graph. Role checks (`if user.role == "admin"`) and membership checks (`if user in members`) are strictly forbidden.
 
