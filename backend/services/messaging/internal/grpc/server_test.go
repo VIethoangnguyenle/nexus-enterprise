@@ -85,10 +85,25 @@ func (m *mockPolicyReadClient) GetChildren(_ context.Context, _ *policypb.GetChi
 
 type mockPolicyWriteClient struct {
 	policypb.PolicyWriteServiceClient
+	// pool, when set, makes CreateNode persist the node it reports having
+	// created. channels.ngac_oa_id and ngac_ua_id are foreign keys onto
+	// ngac_nodes, so a mock that only invents an ID cannot be used by any code
+	// path that writes a channel row — which is why the DM test had never run.
+	pool *pgxpool.Pool
 }
 
-func (m *mockPolicyWriteClient) CreateNode(_ context.Context, req *policypb.CreateNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
-	return &policypb.NGACNode{Id: fmt.Sprintf("node-%s", req.Name), Name: req.Name, NodeType: req.NodeType}, nil
+func (m *mockPolicyWriteClient) CreateNode(ctx context.Context, req *policypb.CreateNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	id := fmt.Sprintf("node-%s", req.Name)
+	if m.pool != nil {
+		if _, err := m.pool.Exec(ctx,
+			`INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $2, $3)
+			 ON CONFLICT (id) DO NOTHING`,
+			id, req.Name, req.NodeType,
+		); err != nil {
+			return nil, err
+		}
+	}
+	return &policypb.NGACNode{Id: id, Name: req.Name, NodeType: req.NodeType}, nil
 }
 
 func (m *mockPolicyWriteClient) CreateAssignment(_ context.Context, _ *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
@@ -138,7 +153,7 @@ func setupTestServer(t *testing.T) (*grpcserver.MessagingServer, *pgxpool.Pool) 
 	t.Cleanup(func() { pool.Close() })
 
 	s := store.NewStore(pool)
-	svc := domain.NewService(s, &mockPolicyReadClient{}, &mockPolicyWriteClient{}, &mockAuthClient{}, nil)
+	svc := domain.NewService(s, &mockPolicyReadClient{}, &mockPolicyWriteClient{pool: pool}, &mockAuthClient{}, nil)
 	srv := grpcserver.NewMessagingServer(svc, nil, nil)
 	return srv, pool
 }
@@ -157,7 +172,7 @@ func setupTestServerWithPolicy(t *testing.T, policyRead policypb.PolicyReadServi
 	t.Cleanup(func() { pool.Close() })
 
 	s := store.NewStore(pool)
-	svc := domain.NewService(s, policyRead, &mockPolicyWriteClient{}, &mockAuthClient{}, nil)
+	svc := domain.NewService(s, policyRead, &mockPolicyWriteClient{pool: pool}, &mockAuthClient{}, nil)
 	return grpcserver.NewMessagingServer(svc, nil, nil), pool
 }
 
@@ -181,6 +196,28 @@ func getTestUserID(t *testing.T, pool *pgxpool.Pool) string {
 		t.Skipf("no user exists in test DB: %v", err)
 	}
 	return userID
+}
+
+// getTwoTestUserIDs returns two distinct existing users, for the flows whose
+// foreign keys require real participants.
+func getTwoTestUserIDs(t *testing.T, pool *pgxpool.Pool) (string, string) {
+	t.Helper()
+	rows, err := pool.Query(context.Background(), "SELECT id FROM users LIMIT 2")
+	if err != nil {
+		t.Skipf("cannot read users: %v", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) < 2 {
+		t.Fatalf("need two users in the test database, found %d", len(ids))
+	}
+	return ids[0], ids[1]
 }
 
 // insertTestChannel creates a channel directly in DB.
@@ -408,25 +445,32 @@ func TestGetMessages_EmptyChannel(t *testing.T) {
 
 func TestCreateDM_HappyPath(t *testing.T) {
 	srv, pool := setupTestServer(t)
+	// channels.created_by is a foreign key onto users, so the participants have
+	// to be real rows rather than invented ids.
+	userA, userB := getTwoTestUserIDs(t, pool)
+
+	var createdID string
 	t.Cleanup(func() {
-		pool.Exec(context.Background(), "DELETE FROM channels WHERE name LIKE 'DM_user0001_%' OR name LIKE 'DM_user0002_%'")
+		if createdID != "" {
+			cleanTestData(t, pool, createdID)
+		}
 	})
 
 	ch, err := srv.CreateDM(context.Background(), &pb.CreateDMRequest{
-		UserId: "user0001", UserNgacNodeId: "ngac-user-1",
-		TargetUserId: "user0002", TargetNgacNodeId: "ngac-user-2",
+		UserId: userA, UserNgacNodeId: "ngac-user-1",
+		TargetUserId: userB, TargetNgacNodeId: "ngac-user-2",
 	})
-
-	// CreateDM inserts mock NGAC node IDs that violate FK — skip if so
-	if err != nil {
-		st, _ := status.FromError(err)
-		if st.Code() == codes.Internal {
-			t.Skip("CreateDM test skipped: FK constraint on ngac_oa_id — needs real policy service")
-		}
+	if ch != nil {
+		createdID = ch.Id
 	}
+
 	require.NoError(t, err)
 	assert.Equal(t, "dm", ch.ChannelType)
-	assert.Contains(t, ch.Name, "DM_")
+	// The title is built from display names, not identifiers — the mock auth
+	// client resolves both participants to "testuser".
+	assert.Equal(t, "testuser, testuser", ch.Name)
+	assert.NotEmpty(t, ch.NgacOaId)
+	assert.NotEmpty(t, ch.NgacUaId)
 }
 
 // ---------------------------------------------------------------------------

@@ -399,7 +399,7 @@ build-check:
 test:
 ifdef s
 	@echo "▸ Testing $(s)..."
-	cd backend/services/$(s) && go test -v -count=1 -timeout 60s ./...
+	@./scripts/go-test-strict.sh backend/services/$(s) -v -count=1 -timeout 60s
 else
 	@echo "▸ Testing all services..."
 	@FAIL=""; \
@@ -409,7 +409,7 @@ else
 	fi; \
 	for svc in $(SERVICES); do \
 		echo "=== $$svc ==="; \
-		if ! (cd $(CURDIR)/backend/services/$$svc && go test -count=1 -timeout 60s ./...); then \
+		if ! ./scripts/go-test-strict.sh backend/services/$$svc -count=1 -timeout 60s; then \
 			FAIL="$$FAIL $$svc"; \
 		fi; \
 	done; \
