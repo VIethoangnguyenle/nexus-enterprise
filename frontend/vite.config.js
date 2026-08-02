@@ -80,6 +80,11 @@ const devProxy = {
 
   // Approval service — :8186
   '/api/approval': { target: 'http://localhost:8186', changeOrigin: true },
+  // Tenant schema provisioning also lives in the approval service, because the
+  // approval tables are the ones held per-tenant. Without this entry the path
+  // falls through to the Docker catch-all on :80 and 404s in native dev, so
+  // approvals stay unusable for every newly created tenant.
+  '/api/admin': { target: 'http://localhost:8186', changeOrigin: true },
 }
 
 const dockerProxy = {
