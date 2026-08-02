@@ -205,8 +205,13 @@ func (h *Handler) CreateFile(c echo.Context) error {
 
 // ConfirmFile handles POST /api/drive/files/:fileId/confirm.
 func (h *Handler) ConfirmFile(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	resp, err := h.svc.ConfirmFile(c.Request().Context(), &pb.ConfirmFileRequest{
-		FileId: c.Param("fileId"),
+		UserNgacNodeId: claims.NGACNodeID,
+		FileId:         c.Param("fileId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -396,8 +401,13 @@ func (h *Handler) RevokeShare(c echo.Context) error {
 
 // ListShares handles GET /api/drive/items/:itemId/shares.
 func (h *Handler) ListShares(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	resp, err := h.svc.ListShares(c.Request().Context(), &pb.ListSharesRequest{
-		ItemId: c.Param("itemId"),
+		UserNgacNodeId: claims.NGACNodeID,
+		ItemId:         c.Param("itemId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -422,8 +432,13 @@ func (h *Handler) SharedWithMe(c echo.Context) error {
 
 // GetQuota handles GET /api/workspaces/:id/drive/quota.
 func (h *Handler) GetQuota(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	resp, err := h.svc.GetQuota(c.Request().Context(), &pb.GetQuotaRequest{
-		WorkspaceId: c.Param("id"),
+		UserNgacNodeId: claims.NGACNodeID,
+		WorkspaceId:    c.Param("id"),
 	})
 	if err != nil {
 		return mapGRPCError(err)

@@ -201,6 +201,9 @@ message RevokeShareRequest {
 
 message ListSharesRequest {
   string item_id = 1;
+  // Who a file is shared with is itself information about the file, so listing
+  // shares requires the same read right as opening it.
+  string user_ngac_node_id = 2;
 }
 
 message ShareList {
@@ -229,6 +232,9 @@ message GetChannelDriveRequest {
 
 message GetQuotaRequest {
   string workspace_id = 1;
+  // Storage consumption describes the workspace, so reading it requires
+  // membership rather than merely a valid token.
+  string user_ngac_node_id = 2;
 }
 
 message UpdateQuotaRequest {

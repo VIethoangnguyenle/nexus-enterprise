@@ -31,6 +31,7 @@ type mockPolicyRead struct {
 func (m *mockPolicyRead) CheckAccess(_ context.Context, _ *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
 	return &policypb.AccessDecision{Decision: "ALLOW"}, nil
 }
+
 // batchDecision answers every requested operation on every object the same way.
 func batchDecision(req *policypb.BatchCheckAccessRequest, allow bool) *policypb.BatchAccessResult {
 	results := make(map[string]*policypb.ObjectPermissions, len(req.ObjectIds))

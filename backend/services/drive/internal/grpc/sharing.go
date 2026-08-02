@@ -132,6 +132,15 @@ func (s *DriveServer) RevokeShare(ctx context.Context, req *pb.RevokeShareReques
 
 // ListShares returns all shares for an item.
 func (s *DriveServer) ListShares(ctx context.Context, req *pb.ListSharesRequest) (*pb.ShareList, error) {
+	// Who an item is shared with is information about that item.
+	item, err := s.store.GetItem(ctx, req.ItemId)
+	if err != nil || item == nil {
+		return nil, status.Errorf(codes.NotFound, "item not found")
+	}
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpRead); err != nil {
+		return nil, err
+	}
+
 	shares, err := s.store.ListSharesByItem(ctx, req.ItemId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list shares: %v", err)
@@ -252,6 +261,16 @@ func (s *DriveServer) GetChannelDrive(ctx context.Context, req *pb.GetChannelDri
 
 // GetQuota returns workspace storage quota.
 func (s *DriveServer) GetQuota(ctx context.Context, req *pb.GetQuotaRequest) (*pb.Quota, error) {
+	// Storage consumption describes the workspace, so reading it requires
+	// reaching that workspace's drive rather than merely holding a valid token.
+	root, err := s.ensureRoot(ctx, req.WorkspaceId, "workspace", "", req.UserNgacNodeId)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, root.NGACNodeID, ngac.OpRead); err != nil {
+		return nil, err
+	}
+
 	q, err := s.store.GetOrCreateQuota(ctx, req.WorkspaceId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "get quota: %v", err)

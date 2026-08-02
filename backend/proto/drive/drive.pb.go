@@ -1478,10 +1478,13 @@ func (x *RevokeShareRequest) GetUserNgacNodeId() string {
 }
 
 type ListSharesRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ItemId        string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	ItemId string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	// Who a file is shared with is itself information about the file, so listing
+	// shares requires the same read right as opening it.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ListSharesRequest) Reset() {
@@ -1517,6 +1520,13 @@ func (*ListSharesRequest) Descriptor() ([]byte, []int) {
 func (x *ListSharesRequest) GetItemId() string {
 	if x != nil {
 		return x.ItemId
+	}
+	return ""
+}
+
+func (x *ListSharesRequest) GetUserNgacNodeId() string {
+	if x != nil {
+		return x.UserNgacNodeId
 	}
 	return ""
 }
@@ -1730,10 +1740,13 @@ func (x *GetChannelDriveRequest) GetChannelId() string {
 }
 
 type GetQuotaRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Storage consumption describes the workspace, so reading it requires
+	// membership rather than merely a valid token.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *GetQuotaRequest) Reset() {
@@ -1769,6 +1782,13 @@ func (*GetQuotaRequest) Descriptor() ([]byte, []int) {
 func (x *GetQuotaRequest) GetWorkspaceId() string {
 	if x != nil {
 		return x.WorkspaceId
+	}
+	return ""
+}
+
+func (x *GetQuotaRequest) GetUserNgacNodeId() string {
+	if x != nil {
+		return x.UserNgacNodeId
 	}
 	return ""
 }
@@ -2041,9 +2061,10 @@ const file_proto_drive_drive_proto_rawDesc = "" +
 	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"Z\n" +
 	"\x12RevokeShareRequest\x12\x19\n" +
 	"\bshare_id\x18\x01 \x01(\tR\ashareId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\",\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"W\n" +
 	"\x11ListSharesRequest\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\tR\x06itemId\"5\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12)\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"5\n" +
 	"\tShareList\x12(\n" +
 	"\x06shares\x18\x01 \x03(\v2\x10.drive.ShareInfoR\x06shares\"C\n" +
 	"\x16GetSharedWithMeRequest\x12)\n" +
@@ -2057,9 +2078,10 @@ const file_proto_drive_drive_proto_rawDesc = "" +
 	"\x12channel_ngac_ua_id\x18\x05 \x01(\tR\x0fchannelNgacUaId\"7\n" +
 	"\x16GetChannelDriveRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\"4\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\"_\n" +
 	"\x0fGetQuotaRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"q\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12)\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"q\n" +
 	"\x12UpdateQuotaRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1b\n" +
 	"\tmax_bytes\x18\x02 \x01(\x03R\bmaxBytes\x12\x1b\n" +

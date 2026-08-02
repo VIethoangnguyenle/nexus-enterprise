@@ -327,6 +327,11 @@ func (s *DriveServer) ConfirmFile(ctx context.Context, req *pb.ConfirmFileReques
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "file not found")
 	}
+	// Confirming publishes the upload and charges it against the workspace
+	// quota, so it takes the same right as creating the file did.
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpWrite); err != nil {
+		return nil, err
+	}
 	if item.Status != "pending" {
 		return nil, status.Errorf(codes.FailedPrecondition, "file not pending")
 	}
@@ -587,7 +592,23 @@ func (s *DriveServer) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest)
 // ensureRoot finds or auto-creates the root drive folder for a workspace/channel context.
 // This self-heals workspaces created before drive tables existed.
 func (s *DriveServer) ensureRoot(ctx context.Context, workspaceID, driveCtx, driveCtxID, userNodeID string) (*store.DriveItem, error) {
-	root, err := s.store.FindRootByContext(ctx, workspaceID, driveCtx, driveCtxID)
+	// Normalise the context once, and use the same value to look up and to
+	// store.
+	//
+	// These used to disagree: the root was written with the workspace ID
+	// substituted for an empty context, while the lookup ran with the empty
+	// value it was handed. The lookup therefore never matched the root — but
+	// FindRootByContext selects on "top-level folder in this context" with no
+	// further discriminator, so as soon as a user created a folder at the top
+	// level, that folder was returned as the drive root. Everything created at
+	// the top level afterwards was parented under it in the NGAC graph and
+	// inherited its permissions, including any share placed on it.
+	rootCtxID := driveCtxID
+	if rootCtxID == "" {
+		rootCtxID = workspaceID
+	}
+
+	root, err := s.store.FindRootByContext(ctx, workspaceID, driveCtx, rootCtxID)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "find root: %v", err)
 	}
@@ -635,15 +656,11 @@ func (s *DriveServer) ensureRoot(ctx context.Context, workspaceID, driveCtx, dri
 		}
 	}
 
-	contextID := driveCtxID
-	if contextID == "" {
-		contextID = workspaceID
-	}
 	item := &store.DriveItem{
 		ID:             uuid.New().String(),
 		WorkspaceID:    workspaceID,
 		DriveContext:   driveCtx,
-		DriveContextID: contextID,
+		DriveContextID: rootCtxID,
 		ItemType:       "folder",
 		Name:           "Root",
 		NGACNodeID:     ngacNodeID,
