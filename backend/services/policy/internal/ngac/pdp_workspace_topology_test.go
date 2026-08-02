@@ -55,7 +55,7 @@ func buildWorkspaceBootstrapGraph(t *testing.T) *ngac.Graph {
 		{"owners", "mgmt", allOwnerOps},
 		{"owners", "docs", allOwnerOps},
 		{"owners", "channels", allOwnerOps},
-		{"members", "docs", []string{"read"}},
+		{"members", "docs", vocab.MemberDocumentOps()},
 		{"members", "channels", []string{"read", "write", "create_channel"}},
 	} {
 		require.NoError(t, g.AddAssociation(&ngac.Association{
@@ -84,9 +84,9 @@ func TestWorkspaceMemberDoesNotInheritOwnerPrivileges(t *testing.T) {
 	for _, tc := range []struct{ object, op string }{
 		{"mgmt", "manage"},
 		{"mgmt", "invite"},
-		{"docs", "write"},
 		{"docs", "approve"},
 		{"docs", "share"},
+		{"docs", "manage"},
 		{"channels", "manage"},
 	} {
 		d := g.CheckAccess("invitee", tc.object, tc.op)
@@ -196,4 +196,33 @@ func TestChannelMemberCannotInviteIntoOtherChannel(t *testing.T) {
 	// And a plain workspace member, in no channel at all, gets nothing.
 	assert.Equal(t, "DENY", g.CheckAccess("invitee", "chContent", "invite").Decision,
 		"a workspace member who is not in the channel must not invite into it")
+}
+
+// Members upload into the workspace drive, so they must hold the right the
+// drive actually gates file creation on. CreateFile and ConfirmFile both check
+// write on the destination folder, so a read-only member sees the Upload button
+// and can never complete an upload.
+func TestWorkspaceMemberCanUploadToDocuments(t *testing.T) {
+	g := buildWorkspaceBootstrapGraph(t)
+
+	for _, op := range vocab.MemberDocumentOps() {
+		assert.Equalf(t, "ALLOW", g.CheckAccess("invitee", "docs", op).Decision,
+			"a member must hold %q on Documents to use the drive", op)
+	}
+
+	// The grant stops at the drive. It must not have widened into the
+	// workspace-administration rights that live on the same policy class.
+	for _, tc := range []struct{ object, op string }{
+		{"docs", "approve"},
+		{"docs", "share"},
+		{"docs", "manage"},
+		{"mgmt", "read"},
+		{"mgmt", "write"},
+		{"mgmt", "manage"},
+	} {
+		d := g.CheckAccess("invitee", tc.object, tc.op)
+		assert.Equalf(t, "DENY", d.Decision,
+			"member must NOT have %q on %s (got %s via %v)",
+			tc.op, tc.object, d.Decision, d.Explanation.Path)
+	}
 }

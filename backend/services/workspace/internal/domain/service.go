@@ -143,7 +143,7 @@ func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) 
 		{ownersUA.Id, mgmtOA.Id, ngac.AllOwnerOps()},
 		{ownersUA.Id, docsOA.Id, ngac.AllOwnerOps()},
 		{ownersUA.Id, channelsOA.Id, ngac.AllOwnerOps()},
-		{membersUA.Id, docsOA.Id, []string{ngac.OpRead}},
+		{membersUA.Id, docsOA.Id, ngac.MemberDocumentOps()},
 		{membersUA.Id, channelsOA.Id, ngac.MemberChannelOps()},
 	}
 	for _, a := range associations {

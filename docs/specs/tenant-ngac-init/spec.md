@@ -33,7 +33,11 @@ The system SHALL create associations between tenant UAs and OAs so that members 
 
 #### Scenario: TenantMember association
 - **WHEN** a tenant is initialized
-- **THEN** `TenantMember_{tenant_id}` has association to tenant OAs with member operations (read, write, create_channel)
+- **THEN** `TenantMember_{tenant_id}` has association to tenant OAs with member operations: `read, write, upload` on Documents and `read, write, create_channel` on Channels
+
+Members hold `write` on Documents, not only `read`, because the drive gates file creation on it — an upload is CreateFile followed by ConfirmFile and both check `write` on the destination folder. A read-only member sees the Upload button and can never complete an upload. This matches what a member already holds on any channel drive they belong to.
+
+Permissions attach to the folder attribute rather than to individual files, so a member with `write` may also rename, move and delete files in Documents that they did not create. Narrowing that requires per-item attributes, not a smaller grant.
 
 ### Requirement: Privilege inheritance runs owner-to-member only
 The system SHALL assign the Owners UA under the Members UA, never the reverse. NGAC derives privilege by walking child → parent, so the direction of this single assignment decides who inherits whom. Assigning Members under Owners gives every member the full owner association set and silently voids the member-scoped associations.
@@ -45,7 +49,7 @@ The system SHALL assign the Owners UA under the Members UA, never the reverse. N
 #### Scenario: Member does not inherit owner grants
 - **WHEN** a user is assigned to `{workspace_id}_Members` and to no other UA
 - **THEN** `manage`, `invite`, `approve` and `share` on the workspace's Mgmt, Documents and Channels OAs all resolve to DENY
-- **AND** only the member operations (read on Documents, and the channel operations) resolve to ALLOW
+- **AND** only the member operations (read, write and upload on Documents, and the channel operations) resolve to ALLOW
 
 #### Scenario: Member of another workspace
 - **WHEN** a user's attributes reach only a different workspace's Policy Class

@@ -51,6 +51,26 @@ func ChannelDriveOps() []string {
 	return []string{OpRead, OpWrite, OpUpload}
 }
 
+// MemberDocumentOps returns operations granted to workspace members on the
+// Documents tree.
+//
+// Members hold write, not only read, because the drive gates file creation on
+// write: uploading is CreateFile followed by ConfirmFile, and both check write
+// on the destination folder. A read-only member could open the drive and see
+// the Upload button but never complete an upload.
+//
+// This matches ChannelDriveOps — a member already has these rights on any
+// channel drive they belong to, so withholding them on the workspace drive was
+// the odd case rather than the careful one.
+//
+// Note what write carries in this model: permissions attach to the folder OA,
+// not to individual files, so a member may also rename, move and delete files
+// in Documents including ones they did not create. Narrowing that needs
+// per-item attributes, not a smaller grant here.
+func MemberDocumentOps() []string {
+	return []string{OpRead, OpWrite, OpUpload}
+}
+
 // --- Well-known node names ---
 // These are global NGAC nodes that must exist in the policy graph.
 const (
