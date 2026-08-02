@@ -45,13 +45,21 @@ function ChannelChatView() {
     return () => sendUnsubscribe(channelId)
   }, [channelId, sendSubscribe, sendUnsubscribe])
 
-  // Auto mark-as-read (debounced)
+  // Auto mark-as-read (debounced).
+  //
+  // Skips the optimistic placeholder that useSendMessage inserts before the
+  // server replies. Its `temp-<timestamp>` id is not a row in messages, and
+  // read_receipts has a foreign key onto that table — marking read against it
+  // failed, so the unread badge never cleared for the channel you were
+  // actually reading.
   useEffect(() => {
-    if (msgs.length === 0) return
-    const lastMsg = msgs[msgs.length - 1]
-    const timer = setTimeout(() => markRead.mutate(lastMsg.id), 1000)
+    const lastPersisted = [...msgs].reverse().find(
+      (m) => m.id && !(m as { _optimistic?: boolean })._optimistic && !m.id.startsWith('temp-'),
+    )
+    if (!lastPersisted) return
+    const timer = setTimeout(() => markRead.mutate(lastPersisted.id), 1000)
     return () => clearTimeout(timer)
-  }, [msgs.length, channelId])
+  }, [msgs, channelId])
 
   const handleSend = useCallback((content: string, mentions: string[]) => {
     if (!content.trim()) return

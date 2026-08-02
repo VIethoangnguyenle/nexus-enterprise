@@ -121,6 +121,22 @@ func (s *Service) MarkChannelRead(ctx context.Context, userID, userNodeID, chann
 	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead); err != nil {
 		return err
 	}
+
+	// read_receipts has a foreign key onto messages, so an id the client
+	// invented — an optimistic placeholder, or a message from another channel —
+	// used to surface as a 500 from a constraint violation. It is client input:
+	// reject it as such, and require the message to belong to the channel being
+	// marked read so a receipt cannot reference someone else's conversation.
+	if lastMessageID != "" {
+		owner, err := s.store.GetChannelIDForMessage(ctx, lastMessageID)
+		if err != nil || owner == "" {
+			return fmt.Errorf("%w: unknown message %s", ErrInvalidInput, lastMessageID)
+		}
+		if owner != channelID {
+			return fmt.Errorf("%w: message %s is not in this channel", ErrInvalidInput, lastMessageID)
+		}
+	}
+
 	return s.store.UpsertReadReceipt(ctx, userID, channelID, lastMessageID)
 }
 
