@@ -37,6 +37,7 @@ type AuthStore interface {
 // AuthResponse is the domain output for legacy register/login operations.
 type AuthResponse struct {
 	Token      string
+	SessionID  string
 	UserID     string
 	Username   string
 	NGACNodeID string
@@ -45,6 +46,7 @@ type AuthResponse struct {
 // SignupResult is the domain output for multi-tenant signup.
 type SignupResult struct {
 	Token      string
+	SessionID  string
 	UserID     string
 	Username   string
 	NGACNodeID string
@@ -59,6 +61,7 @@ type SignupResult struct {
 // SigninResult is the domain output for multi-tenant signin.
 type SigninResult struct {
 	Token           string
+	SessionID       string
 	UserID          string
 	Username        string
 	NGACNodeID      string
@@ -117,6 +120,7 @@ type Service struct {
 	policyWrite policypb.PolicyWriteServiceClient
 	wsClient    workspacepb.WorkspaceServiceClient
 	msgClient   messagingpb.MessagingServiceClient
+	refresh     *RefreshStore
 }
 
 // NewService creates an auth domain service.
@@ -135,6 +139,7 @@ func NewService(
 		policyWrite: pw,
 		wsClient:    wsClient,
 		msgClient:   msgClient,
+		refresh:     NewRefreshStore(rdb),
 	}
 }
 
@@ -175,7 +180,7 @@ func (s *Service) Signup(ctx context.Context, email, password, displayName, tena
 		return nil, fmt.Errorf("resolve tenant: %w", err)
 	}
 
-	token, err := auth.GenerateToken(userID, username, ngacNode, tenantID)
+	token, sessionID, err := auth.GenerateToken(userID, username, ngacNode, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
@@ -187,7 +192,7 @@ func (s *Service) Signup(ctx context.Context, email, password, displayName, tena
 	}
 
 	return &SignupResult{
-		Token: token, UserID: userID, Username: username,
+		Token: token, SessionID: sessionID, UserID: userID, Username: username,
 		NGACNodeID: ngacNode, Email: email, UnionID: unionID,
 		TenantID: tenantID, TenantName: tName, TenantRole: role, OpenID: openID,
 	}, nil
@@ -278,13 +283,13 @@ func (s *Service) Signin(ctx context.Context, email, password string) (*SigninRe
 
 	defaultTenantID := s.selectDefaultTenant(tenants)
 
-	token, err := auth.GenerateToken(user.ID, user.Username, user.NGACNodeID, defaultTenantID)
+	token, sessionID, err := auth.GenerateToken(user.ID, user.Username, user.NGACNodeID, defaultTenantID)
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
 
 	result := &SigninResult{
-		Token: token, UserID: user.ID, Username: user.Username,
+		Token: token, SessionID: sessionID, UserID: user.ID, Username: user.Username,
 		NGACNodeID: user.NGACNodeID, Email: user.Email,
 		UnionID: user.UnionID, DisplayName: user.DisplayName,
 		DefaultTenantID: defaultTenantID,
@@ -298,25 +303,30 @@ func (s *Service) Signin(ctx context.Context, email, password string) (*SigninRe
 }
 
 // SwitchTenant verifies membership and issues a new JWT scoped to the target tenant.
-func (s *Service) SwitchTenant(ctx context.Context, userID, ngacNodeID, username, targetTenantID string) (string, *TenantInfo, error) {
+//
+// It starts a fresh session rather than re-scoping the current one. The refresh
+// token records the tenant it was issued for, so keeping the old family alive
+// would mean the next refresh silently handed back a token for the tenant the
+// user just left.
+func (s *Service) SwitchTenant(ctx context.Context, userID, ngacNodeID, username, targetTenantID string) (string, string, *TenantInfo, error) {
 	membership, err := s.store.GetTenantUser(ctx, targetTenantID, userID)
 	if err != nil {
-		return "", nil, fmt.Errorf("get tenant user: %w", err)
+		return "", "", nil, fmt.Errorf("get tenant user: %w", err)
 	}
 	if membership == nil {
-		return "", nil, ErrAccessDenied
+		return "", "", nil, ErrAccessDenied
 	}
 
-	token, err := auth.GenerateToken(userID, username, ngacNodeID, targetTenantID)
+	token, sessionID, err := auth.GenerateToken(userID, username, ngacNodeID, targetTenantID)
 	if err != nil {
-		return "", nil, fmt.Errorf("generate token: %w", err)
+		return "", "", nil, fmt.Errorf("generate token: %w", err)
 	}
 
 	info := &TenantInfo{
 		ID: membership.TenantID, Name: membership.TenantName,
 		Role: membership.Role, OpenID: membership.OpenID,
 	}
-	return token, info, nil
+	return token, sessionID, info, nil
 }
 
 // GetMe returns current user and tenant info.
@@ -383,12 +393,12 @@ func (s *Service) Register(ctx context.Context, username, password string) (*Aut
 	// Auto-provision workspace + tenant_users + #general channel
 	s.autoProvisionWorkspace(ctx, userID, username, ngacNode)
 
-	token, err := auth.GenerateToken(userID, username, ngacNode, "")
+	token, sessionID, err := auth.GenerateToken(userID, username, ngacNode, "")
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
 
-	return &AuthResponse{Token: token, UserID: userID, Username: username, NGACNodeID: ngacNode}, nil
+	return &AuthResponse{Token: token, SessionID: sessionID, UserID: userID, Username: username, NGACNodeID: ngacNode}, nil
 }
 
 // Login is the legacy login flow (backward-compatible, uses username).
@@ -408,12 +418,12 @@ func (s *Service) Login(ctx context.Context, username, password string) (*AuthRe
 		return nil, ErrInvalidCredentials
 	}
 
-	token, err := auth.GenerateToken(user.ID, user.Username, user.NGACNodeID, "")
+	token, sessionID, err := auth.GenerateToken(user.ID, user.Username, user.NGACNodeID, "")
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
 
-	return &AuthResponse{Token: token, UserID: user.ID, Username: user.Username, NGACNodeID: user.NGACNodeID}, nil
+	return &AuthResponse{Token: token, SessionID: sessionID, UserID: user.ID, Username: user.Username, NGACNodeID: user.NGACNodeID}, nil
 }
 
 // GetUserByID retrieves a user by their primary key.
@@ -581,17 +591,33 @@ func (s *Service) initTenantNGAC(ctx context.Context, tenantID, pcNodeID, owners
 		return
 	}
 
-	// Assign UAs under the workspace PC for NGAC scoping
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: memberUA.Id, ParentId: pcNodeID})
-	s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: ownerUA.Id, ParentId: pcNodeID})
-
-	// Chain: TenantMember inherits workspace Members permissions,
-	// TenantOwner inherits workspace Owners permissions.
-	if membersUAID != "" {
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: memberUA.Id, ParentId: membersUAID})
+	// Assign UAs under the workspace PC for NGAC scoping, then chain them:
+	// TenantMember inherits workspace Members permissions, TenantOwner inherits
+	// workspace Owners permissions.
+	//
+	// A UA that fails to attach reaches no Policy Class, so every check for
+	// users under it denies. Silently returning here produced tenants where
+	// nobody could see anything and no error had been recorded anywhere.
+	assignments := []struct {
+		what            string
+		childID, parent string
+	}{
+		{"TenantMember under workspace PC", memberUA.Id, pcNodeID},
+		{"TenantOwner under workspace PC", ownerUA.Id, pcNodeID},
+		{"TenantMember under workspace Members", memberUA.Id, membersUAID},
+		{"TenantOwner under workspace Owners", ownerUA.Id, ownersUAID},
 	}
-	if ownersUAID != "" {
-		s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: ownerUA.Id, ParentId: ownersUAID})
+	for _, a := range assignments {
+		if a.parent == "" {
+			continue
+		}
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+			ChildId: a.childID, ParentId: a.parent,
+		}); err != nil {
+			slog.Error("tenant NGAC init incomplete — users of this tenant will be denied",
+				"tenant", tenantID, "assignment", a.what, "error", err)
+			return
+		}
 	}
 
 	slog.Info("tenant NGAC initialized", "tenant", tenantID, "member_ua", memberUA.Id, "owner_ua", ownerUA.Id)

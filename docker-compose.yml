@@ -171,6 +171,10 @@ services:
       JWT_SECRET: ngac-super-secret-key-change-in-production
       GRPC_PORT: "50052"
       REST_PORT: "8080"
+      # Traefik exposes only the plain-HTTP `web` entrypoint (:80), so the
+      # refresh cookie must not carry Secure or the browser will drop it.
+      # Change this once TLS terminates in front of the stack.
+      APP_ENV: dev
     depends_on:
       policy:
         condition: service_healthy

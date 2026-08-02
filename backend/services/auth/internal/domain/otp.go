@@ -33,6 +33,7 @@ type otpSession struct {
 // OTPResult is the domain output for OTP verification.
 type OTPResult struct {
 	Token      string
+	SessionID  string
 	UserID     string
 	Username   string
 	NGACNodeID string
@@ -161,13 +162,14 @@ func (s *Service) otpResultFromExistingUser(ctx context.Context, u *store.User) 
 	tenants, _ := s.store.ListTenantsByUser(ctx, u.ID)
 	defaultTenantID := s.selectDefaultTenant(tenants)
 
-	token, err := auth.GenerateToken(u.ID, u.Username, u.NGACNodeID, defaultTenantID)
+	token, sessionID, err := auth.GenerateToken(u.ID, u.Username, u.NGACNodeID, defaultTenantID)
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
 
 	return &OTPResult{
 		Token:      token,
+		SessionID:  sessionID,
 		UserID:     u.ID,
 		Username:   u.Username,
 		NGACNodeID: u.NGACNodeID,
@@ -211,7 +213,7 @@ func (s *Service) createOTPUser(ctx context.Context, identifier, identType strin
 	tenants, _ := s.store.ListTenantsByUser(ctx, userID)
 	defaultTenantID := s.selectDefaultTenant(tenants)
 
-	token, err := auth.GenerateToken(userID, username, ngacNode, defaultTenantID)
+	token, sessionID, err := auth.GenerateToken(userID, username, ngacNode, defaultTenantID)
 	if err != nil {
 		return nil, fmt.Errorf("generate token: %w", err)
 	}
@@ -220,6 +222,7 @@ func (s *Service) createOTPUser(ctx context.Context, identifier, identType strin
 
 	return &OTPResult{
 		Token:      token,
+		SessionID:  sessionID,
 		UserID:     userID,
 		Username:   username,
 		NGACNodeID: ngacNode,

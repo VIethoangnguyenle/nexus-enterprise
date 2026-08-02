@@ -45,7 +45,11 @@ func main() {
 	driveAddr := envOr("DRIVE_SERVICE_ADDR", "localhost:50057")
 	grpcPort := envOr("GRPC_PORT", "50053")
 	restPort := envOr("REST_PORT", "8080")
-	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
+	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
 
 	// MinIO configuration
 	minioEndpoint := envOr("MINIO_ENDPOINT", "localhost:9000")

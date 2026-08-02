@@ -23,9 +23,18 @@ func JWTMiddleware(secret string) echo.MiddlewareFunc {
 			}
 
 			tokenStr := strings.TrimPrefix(auth, "Bearer ")
-			token, err := jwt.ParseWithClaims(tokenStr, &Claims{}, func(t *jwt.Token) (any, error) {
-				return secretBytes, nil
-			})
+			token, err := jwt.ParseWithClaims(tokenStr, &Claims{},
+				func(t *jwt.Token) (any, error) { return secretBytes, nil },
+				// Pin the algorithm. The keyfunc above returns an HMAC secret
+				// whatever the token header claims, and a parser that accepts
+				// any method is one key-type coincidence away from treating
+				// attacker-chosen input as a signature.
+				jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+				// Require exp. Access tokens are the revocation window — every
+				// service validates locally and never calls back to auth — so a
+				// token without an expiry is a permanent credential.
+				jwt.WithExpirationRequired(),
+			)
 			if err != nil {
 				return echo.NewHTTPError(401, "invalid or expired token")
 			}
@@ -35,7 +44,7 @@ func JWTMiddleware(secret string) echo.MiddlewareFunc {
 				return echo.NewHTTPError(401, "invalid token claims")
 			}
 
-			c.Set(claimsKey, claims)
+			SetClaims(c, claims)
 			return next(c)
 		}
 	}

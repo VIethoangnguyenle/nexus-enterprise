@@ -5,7 +5,7 @@ const mockFetch = vi.fn()
 global.fetch = mockFetch
 
 vi.mock('../stores/auth.store', () => ({
-  useAuthStore: { getState: () => ({ token: 'test-token', logout: vi.fn() }) },
+  useAuthStore: { getState: () => ({ accessToken: 'test-token', logout: vi.fn(), setAccessToken: vi.fn() }) },
 }))
 
 import { messagingApi } from './messaging'

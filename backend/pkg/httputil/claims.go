@@ -17,6 +17,14 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+// SetClaims stores parsed JWT claims on the echo.Context. JWTMiddleware calls
+// it after validating a token; handler tests call it to stand in for the
+// middleware. It is the only writer of the claims key, so the storage format
+// stays in one place.
+func SetClaims(c echo.Context, claims *Claims) {
+	c.Set(claimsKey, claims)
+}
+
 // GetClaims extracts the parsed JWT claims from the echo.Context.
 // Returns nil if JWTMiddleware has not run (e.g., public route).
 func GetClaims(c echo.Context) *Claims {

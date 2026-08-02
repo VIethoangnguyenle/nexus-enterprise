@@ -32,6 +32,12 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	e.POST("/api/auth/signin", h.Signin)     // multi-tenant
 	e.POST("/api/auth/otp/request", h.RequestOTP)
 	e.POST("/api/auth/otp/verify", h.VerifyOTP)
+	// Refresh is public: it authenticates with the httpOnly cookie, and by the
+	// time a client needs it the access token has usually already expired.
+	e.POST("/api/auth/refresh", h.Refresh)
+	// Logout accepts an expired access token for the same reason, so it is
+	// mounted outside the JWT group and reads the claims opportunistically.
+	e.POST("/api/auth/logout", h.Logout)
 
 	// Protected — JWT required
 	api := e.Group("/api", httputil.JWTMiddleware(jwtSecret))
@@ -60,8 +66,15 @@ func (h *Handler) Signup(c echo.Context) error {
 		return mapError(err)
 	}
 
+	if err := h.issueSession(c, domain.RefreshIdentity{
+		UserID: resp.UserID, Username: resp.Username, NGACNodeID: resp.NGACNodeID,
+		TenantID: resp.TenantID, SessionID: resp.SessionID,
+	}); err != nil {
+		return err
+	}
+
 	return c.JSON(http.StatusCreated, map[string]any{
-		"token": resp.Token,
+		"access_token": resp.Token,
 		"user": map[string]string{
 			"id": resp.UserID, "username": resp.Username,
 			"ngac_node_id": resp.NGACNodeID, "email": resp.Email, "union_id": resp.UnionID,
@@ -95,8 +108,15 @@ func (h *Handler) Signin(c echo.Context) error {
 		}
 	}
 
+	if err := h.issueSession(c, domain.RefreshIdentity{
+		UserID: resp.UserID, Username: resp.Username, NGACNodeID: resp.NGACNodeID,
+		TenantID: resp.DefaultTenantID, SessionID: resp.SessionID,
+	}); err != nil {
+		return err
+	}
+
 	return c.JSON(http.StatusOK, map[string]any{
-		"token": resp.Token,
+		"access_token": resp.Token,
 		"user": map[string]string{
 			"id": resp.UserID, "username": resp.Username,
 			"ngac_node_id": resp.NGACNodeID, "email": resp.Email,
@@ -121,13 +141,26 @@ func (h *Handler) SwitchTenant(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	token, tenant, err := h.svc.SwitchTenant(c.Request().Context(), claims.UserID, claims.NGACNodeID, claims.Username, body.TenantID)
+	token, sessionID, tenant, err := h.svc.SwitchTenant(c.Request().Context(), claims.UserID, claims.NGACNodeID, claims.Username, body.TenantID)
 	if err != nil {
 		return mapError(err)
 	}
 
+	// Retire the family scoped to the tenant being left, then bind a new one to
+	// the new session — otherwise a later refresh would hand back a token for
+	// the previous tenant.
+	if err := h.svc.EndSession(c.Request().Context(), claims.SessionID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "could not end previous session")
+	}
+	if err := h.issueSession(c, domain.RefreshIdentity{
+		UserID: claims.UserID, Username: claims.Username, NGACNodeID: claims.NGACNodeID,
+		TenantID: body.TenantID, SessionID: sessionID,
+	}); err != nil {
+		return err
+	}
+
 	return c.JSON(http.StatusOK, map[string]any{
-		"token": token,
+		"access_token": token,
 		"tenant": map[string]string{
 			"id": tenant.ID, "name": tenant.Name,
 			"role": tenant.Role, "open_id": tenant.OpenID,
@@ -178,8 +211,15 @@ func (h *Handler) Register(c echo.Context) error {
 		return mapError(err)
 	}
 
+	if err := h.issueSession(c, domain.RefreshIdentity{
+		UserID: resp.UserID, Username: resp.Username,
+		NGACNodeID: resp.NGACNodeID, SessionID: resp.SessionID,
+	}); err != nil {
+		return err
+	}
+
 	return c.JSON(http.StatusCreated, map[string]any{
-		"token": resp.Token,
+		"access_token": resp.Token,
 		"user": map[string]string{
 			"id": resp.UserID, "username": resp.Username, "ngac_node_id": resp.NGACNodeID,
 		},
@@ -201,8 +241,15 @@ func (h *Handler) Login(c echo.Context) error {
 		return mapError(err)
 	}
 
+	if err := h.issueSession(c, domain.RefreshIdentity{
+		UserID: resp.UserID, Username: resp.Username,
+		NGACNodeID: resp.NGACNodeID, SessionID: resp.SessionID,
+	}); err != nil {
+		return err
+	}
+
 	return c.JSON(http.StatusOK, map[string]any{
-		"token": resp.Token,
+		"access_token": resp.Token,
 		"user": map[string]string{
 			"id": resp.UserID, "username": resp.Username, "ngac_node_id": resp.NGACNodeID,
 		},
@@ -281,8 +328,15 @@ func (h *Handler) VerifyOTP(c echo.Context) error {
 		return mapError(err)
 	}
 
+	if err := h.issueSession(c, domain.RefreshIdentity{
+		UserID: result.UserID, Username: result.Username, NGACNodeID: result.NGACNodeID,
+		SessionID: result.SessionID,
+	}); err != nil {
+		return err
+	}
+
 	return c.JSON(http.StatusOK, map[string]any{
-		"token": result.Token,
+		"access_token": result.Token,
 		"user": map[string]string{
 			"id": result.UserID, "username": result.Username,
 			"ngac_node_id": result.NGACNodeID, "email": result.Email,

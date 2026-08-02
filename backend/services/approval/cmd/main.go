@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 
+	"ngac-platform/ngac"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/approval"
 	policypb "ngac-platform/proto/policy"
@@ -34,7 +35,11 @@ func main() {
 	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5432/ngac?sslmode=disable")
 	grpcPort := envOr("GRPC_PORT", "50058")
 	restPort := envOr("REST_PORT", "8080")
-	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
+	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
 	policyAddr := envOr("POLICY_ADDR", "localhost:50051")
 	kafkaBrokers := envOr("KAFKA_BROKERS", "localhost:19092")
 
@@ -162,7 +167,7 @@ func (a *policyGRPCAdapter) CheckAccess(ctx context.Context, userNodeID, objectN
 	if err != nil {
 		return false, fmt.Errorf("policy check access: %w", err)
 	}
-	return resp.Decision == "allow", nil
+	return ngac.Allowed(resp.GetDecision(), nil), nil
 }
 
 func envOr(key, def string) string {

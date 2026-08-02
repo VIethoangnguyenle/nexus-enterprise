@@ -15,11 +15,13 @@ import (
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/httputil"
 	assetpb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/asset/internal/events"
@@ -42,7 +44,11 @@ func main() {
 	kafkaBrokers := envOr("KAFKA_BROKERS", "localhost:19092")
 	port := envOr("GRPC_PORT", "50056")
 	restPort := envOr("REST_PORT", "8080")
-	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
+	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
 
 	pool, err := connectDB(ctx, dbURL)
 	if err != nil {
@@ -192,7 +198,7 @@ func recoveryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInf
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("panic recovered", "method", info.FullMethod, "panic", fmt.Sprintf("%v", r))
-			err = status.Errorf(13, "internal server error")
+			err = status.Errorf(codes.Internal, "internal server error")
 		}
 	}()
 	return handler(ctx, req)

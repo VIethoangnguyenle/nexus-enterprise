@@ -20,6 +20,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/auth"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
@@ -45,7 +46,11 @@ func main() {
 	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
 	workspaceAddr := envOr("WORKSPACE_SERVICE_ADDR", "localhost:50053")
 	messagingAddr := envOr("MESSAGING_SERVICE_ADDR", "localhost:50055")
-	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
+	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
 	grpcPort := envOr("GRPC_PORT", "50052")
 	restPort := envOr("REST_PORT", "8080")
 

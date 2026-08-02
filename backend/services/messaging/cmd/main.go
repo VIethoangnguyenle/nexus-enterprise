@@ -17,11 +17,13 @@ import (
 	echomw "github.com/labstack/echo/v4/middleware"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/httputil"
 	authpb "ngac-platform/proto/auth"
 	drivepb "ngac-platform/proto/drive"
 	pb "ngac-platform/proto/messaging"
@@ -48,7 +50,11 @@ func main() {
 	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
 	authAddr := envOr("AUTH_SERVICE_ADDR", "localhost:50052")
 	driveAddr := envOr("DRIVE_SERVICE_ADDR", "localhost:50057")
-	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
+	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
 	port := envOr("GRPC_PORT", "50055")
 	wsPort := envOr("WS_PORT", "8081")
 	restPort := envOr("REST_PORT", "8080")
@@ -278,7 +284,7 @@ func recoveryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInf
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error("panic recovered", "method", info.FullMethod, "panic", fmt.Sprintf("%v", r))
-			err = status.Errorf(13, "internal server error")
+			err = status.Errorf(codes.Internal, "internal server error")
 		}
 	}()
 	return handler(ctx, req)

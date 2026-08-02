@@ -2,13 +2,13 @@ import { apiFetch } from './client'
 
 export interface LoginPayload { username: string; password: string }
 export interface RegisterPayload { username: string; password: string }
-export interface AuthResponse { token: string; user: { id: string; username: string; ngac_node_id?: string } }
+export interface AuthResponse { access_token: string; user: { id: string; username: string; ngac_node_id?: string } }
 
 export interface OTPRequestPayload { identifier: string; type: 'phone' | 'email' }
 export interface OTPRequestResponse { session_id: string; expires_in: number }
 export interface OTPVerifyPayload { session_id: string; code: string }
 export interface OTPVerifyResponse {
-  token: string
+  access_token: string
   user: { id: string; username: string; ngac_node_id: string; email: string; phone: string; union_id: string }
   is_new_user: boolean
 }

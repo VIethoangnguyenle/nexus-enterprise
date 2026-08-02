@@ -38,18 +38,46 @@ func CheckPassword(password, hash string) bool {
 	return err == nil
 }
 
-// GenerateToken creates a signed JWT with user and tenant context.
-func GenerateToken(userID, username, ngacNodeID, tenantID string) (string, error) {
+// AccessTokenTTL is how long an access token stays valid.
+//
+// Every service validates the token on its own against the shared secret and
+// never calls back to auth, so this value *is* the revocation window: after a
+// logout or a lockout, an already-issued token keeps working until it expires.
+// Keeping it short is what makes that window acceptable; the refresh token
+// carries the long-lived part of the session.
+const AccessTokenTTL = 15 * time.Minute
+
+// GenerateToken creates a signed access token for a brand-new session and
+// reports the session ID, so the caller can bind a refresh token to the same
+// family.
+func GenerateToken(userID, username, ngacNodeID, tenantID string) (token, sessionID string, err error) {
+	sessionID = uuid.New().String()
+	token, err = GenerateTokenForSession(userID, username, ngacNodeID, tenantID, sessionID)
+	if err != nil {
+		return "", "", err
+	}
+	return token, sessionID, nil
+}
+
+// GenerateTokenForSession creates a signed access token that belongs to an
+// existing session.
+//
+// Refreshing must not start a new session: the session ID is what ties an
+// access token back to the refresh-token family, and therefore what logout
+// uses to kill it. Minting a fresh session ID on every refresh would leave a
+// trail of families that nothing can revoke.
+func GenerateTokenForSession(userID, username, ngacNodeID, tenantID, sessionID string) (string, error) {
+	now := time.Now()
 	claims := &Claims{
 		UserID:     userID,
 		Username:   username,
 		NGACNodeID: ngacNodeID,
 		TenantID:   tenantID,
-		SessionID:  uuid.New().String(),
+		SessionID:  sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.New().String(),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			ExpiresAt: jwt.NewNumericDate(now.Add(AccessTokenTTL)),
+			IssuedAt:  jwt.NewNumericDate(now),
 		},
 	}
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)

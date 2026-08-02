@@ -6,7 +6,7 @@ export function useLogin() {
   const login = useAuthStore((s) => s.login)
   return useMutation({
     mutationFn: (data: LoginPayload) => authApi.login(data),
-    onSuccess: (res) => login(res.token, res.user),
+    onSuccess: (res) => login(res.access_token, res.user),
   })
 }
 
@@ -14,7 +14,7 @@ export function useRegister() {
   const login = useAuthStore((s) => s.login)
   return useMutation({
     mutationFn: (data: RegisterPayload) => authApi.register(data),
-    onSuccess: (res) => login(res.token, res.user),
+    onSuccess: (res) => login(res.access_token, res.user),
   })
 }
 
@@ -28,6 +28,6 @@ export function useVerifyOTP() {
   const login = useAuthStore((s) => s.login)
   return useMutation({
     mutationFn: (data: OTPVerifyPayload) => authApi.verifyOTP(data),
-    onSuccess: (res) => login(res.token, res.user),
+    onSuccess: (res) => login(res.access_token, res.user),
   })
 }

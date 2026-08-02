@@ -39,7 +39,7 @@ SERVICES := policy auth workspace document messaging asset drive approval
 # Service filter — use as: make redeploy s=drive
 s ?=
 
-# Dev environment files
+# Dev environment files. .env.dev is gitignored; .env.example is the template.
 DEV_ENV := .env.dev
 DEV_PIDS := .dev-pids
 DEV_LOGS := .dev-logs
@@ -157,6 +157,11 @@ dev: dev-infra
 	@if [ -f $(DEV_PIDS) ]; then \
 		echo "⚠ Dev services may already be running ($(DEV_PIDS) exists)."; \
 		echo "  Run 'make dev-stop' first, or delete $(DEV_PIDS) if stale."; \
+		exit 1; \
+	fi
+	@if [ ! -f $(DEV_ENV) ]; then \
+		echo "✗ $(DEV_ENV) is missing — it is gitignored, so a fresh clone has none."; \
+		echo "  Create it from the committed template:  cp .env.example $(DEV_ENV)"; \
 		exit 1; \
 	fi
 	@mkdir -p $(DEV_LOGS)
@@ -398,6 +403,10 @@ ifdef s
 else
 	@echo "▸ Testing all services..."
 	@FAIL=""; \
+	echo "=== shared (ngac, pkg, testutil) ==="; \
+	if ! (cd $(CURDIR)/backend && go test -count=1 -timeout 60s ./ngac/... ./pkg/... ./testutil/...); then \
+		FAIL="$$FAIL shared"; \
+	fi; \
 	for svc in $(SERVICES); do \
 		echo "=== $$svc ==="; \
 		if ! (cd $(CURDIR)/backend/services/$$svc && go test -count=1 -timeout 60s ./...); then \
@@ -412,6 +421,24 @@ else
 	echo ""; \
 	echo "✓ All service tests pass"
 endif
+
+## Run tests behind the `integration` build tag (needs `make dev-infra` first)
+test-integration:
+	@echo "▸ Running integration tests (requires a running database)..."
+	@FAIL=""; \
+	for svc in $(SERVICES); do \
+		if ! (cd $(CURDIR)/backend/services/$$svc && \
+			go test -tags=integration -count=1 -timeout 120s ./...); then \
+			FAIL="$$FAIL $$svc"; \
+		fi; \
+	done; \
+	if [ -n "$$FAIL" ]; then \
+		echo ""; \
+		echo "✗ Integration failures in:$$FAIL"; \
+		exit 1; \
+	fi; \
+	echo ""; \
+	echo "✓ Integration tests pass"
 
 # ---------------------------------------------------------------------------
 # Proto & Frontend
@@ -449,6 +476,8 @@ lint:
 	done; \
 	echo "▸ eslint..."; \
 	(cd $(CURDIR)/frontend && npm run --silent lint) || FAIL="$$FAIL frontend"; \
+	echo "▸ tsc (per-file baseline — blocks new errors, tolerates existing ones)..."; \
+	(cd $(CURDIR)/frontend && npm run --silent typecheck:diff) || FAIL="$$FAIL typecheck"; \
 	if [ -n "$$FAIL" ]; then echo "✗ Lint failures in:$$FAIL"; exit 1; fi; \
 	echo "✓ Lint clean"
 
@@ -489,8 +518,14 @@ dev-frontend:
 
 ## Re-apply init.sql schema on running DB (safe — uses IF NOT EXISTS)
 db-migrate:
-	@echo "▸ Applying schema migrations..."
-	docker exec -i $$($(COMPOSE) ps -q postgres) psql -U ngac < data/init.sql
+	@echo "▸ Applying base schema..."
+	@docker exec -i $$($(COMPOSE) ps -q postgres) psql -v ON_ERROR_STOP=1 -U ngac < data/init.sql
+	@echo "▸ Applying numbered migrations..."
+	@PG=$$($(COMPOSE) ps -q postgres); \
+	for f in $$(ls data/migrations/*.sql | sort); do \
+		echo "  → $$(basename $$f)"; \
+		docker exec -i $$PG psql -v ON_ERROR_STOP=1 -U ngac < $$f || exit 1; \
+	done
 	@echo "✓ Schema up to date"
 
 ## Remove build artifacts

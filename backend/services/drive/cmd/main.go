@@ -15,10 +15,13 @@ import (
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/httputil"
 	docpb "ngac-platform/proto/document"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
@@ -33,7 +36,11 @@ func main() {
 	docAddr := envOr("DOCUMENT_SERVICE_ADDR", "localhost:50054")
 	grpcPort := envOr("GRPC_PORT", "50057")
 	restPort := envOr("REST_PORT", "8080")
-	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
+	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -55,7 +62,7 @@ func main() {
 		docpb.NewDocumentStorageServiceClient(docConn),
 	)
 
-	gs := grpc.NewServer()
+	gs := grpc.NewServer(grpc.ChainUnaryInterceptor(recoveryInterceptor))
 	pb.RegisterDriveServiceServer(gs, srv)
 
 	healthSrv := health.NewServer()
@@ -115,4 +122,17 @@ func envOr(key, def string) string {
 		return v
 	}
 	return def
+}
+
+// recoveryInterceptor turns a panic in a handler into an error for that one
+// call. Without it a single bad request takes the whole drive process down,
+// and with it every in-flight upload and every other tenant's requests.
+func recoveryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("panic recovered", "method", info.FullMethod, "panic", fmt.Sprintf("%v", r))
+			err = status.Errorf(codes.Internal, "internal server error")
+		}
+	}()
+	return handler(ctx, req)
 }

@@ -21,6 +21,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/document"
 	drivepb "ngac-platform/proto/drive"
 	dgrpc "ngac-platform/services/document/internal/grpc"
@@ -39,7 +40,11 @@ func main() {
 	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
 	grpcPort := envOr("GRPC_PORT", "50054")
 	restPort := envOr("REST_PORT", "8080")
-	jwtSecret := envOr("JWT_SECRET", "ngac-super-secret-key-change-in-production")
+	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
 	driveAddr := envOr("DRIVE_SERVICE_ADDR", "localhost:50057")
 
 	// MinIO configuration
