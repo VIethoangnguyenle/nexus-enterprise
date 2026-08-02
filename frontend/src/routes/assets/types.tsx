@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useAssetTypes, useCreateAssetType } from '../../hooks/useAssets'
-import { useWorkspaces } from '../../hooks/useWorkspaces'
 import { useState } from 'react'
 import { Button, Input, Select, Badge, Spinner } from '../../components/primitives'
 import { Card, Modal } from '../../components/composites'
@@ -13,8 +13,7 @@ export const Route = createFileRoute('/assets/types')({ component: AssetTypeConf
 const CATEGORIES = ['hardware', 'software', 'license', 'furniture', 'other']
 
 function AssetTypeConfig() {
-  const { data: wsData } = useWorkspaces()
-  const wsId = wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
   const { data, isLoading } = useAssetTypes(wsId)
   const createType = useCreateAssetType(wsId)
   const types = data?.types || []

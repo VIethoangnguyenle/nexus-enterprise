@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useAssetRequests, useApproveRequest, useRejectRequest } from '../../hooks/useAssets'
-import { useWorkspaces } from '../../hooks/useWorkspaces'
 import { useState } from 'react'
 import { LoadingState } from '../../components/LoadingState'
 import { ErrorState } from '../../components/ErrorState'
@@ -21,8 +21,7 @@ const statusToBadge = (status: string) => {
 
 function AssetRequests() {
   const navigate = useNavigate()
-  const { data: wsData } = useWorkspaces()
-  const wsId = wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
   const [filter, setFilter] = useState('pending')
   const { data, isLoading, error, refetch } = useAssetRequests(wsId, filter ? { status: filter } : undefined)
   const approve = useApproveRequest(wsId)

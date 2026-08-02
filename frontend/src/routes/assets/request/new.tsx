@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useActiveWorkspace } from '../../../hooks/useActiveWorkspace'
 import { useAssetTypes, useCreateAssetRequest } from '../../../hooks/useAssets'
-import { useWorkspaces } from '../../../hooks/useWorkspaces'
 import { useState } from 'react'
 import { Button, Select, Textarea, Spinner } from '../../../components/primitives'
 import { Card } from '../../../components/composites'
@@ -17,8 +17,7 @@ const urgencyColors: Record<string, string> = {
 
 function AssetRequestNew() {
   const navigate = useNavigate()
-  const { data: wsData } = useWorkspaces()
-  const wsId = wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
   const { data: typesData } = useAssetTypes(wsId)
   const createReq = useCreateAssetRequest(wsId)
   const [typeId, setTypeId] = useState('')

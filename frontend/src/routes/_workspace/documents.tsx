@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useState, useRef } from 'react'
 import { useDocuments } from '../../hooks/useDocuments'
-import { useWorkspaces } from '../../hooks/useWorkspaces'
 import { documentApi } from '../../api/documents'
 import { queryClient } from '../../lib/query-client'
 import { LoadingState } from '../../components/LoadingState'
@@ -14,8 +14,7 @@ import { Upload, Download, FileText } from 'lucide-react'
 export const Route = createFileRoute('/_workspace/documents')({ component: DocumentsPage })
 
 function DocumentsPage() {
-  const { data: wsData } = useWorkspaces()
-  const wsId = wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
   const { data, isLoading, error, refetch } = useDocuments(wsId)
   const [uploading, setUploading] = useState(false)
   const [uploadStep, setUploadStep] = useState('')

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useState, useRef, useCallback, useMemo } from 'react'
-import { useWorkspaces } from '../../hooks/useWorkspaces'
 import { useDriveFolder, useCreateFolder, useUploadFile, useTrashItem, useDeleteItem, useRenameItem, useMoveItem } from '../../hooks/useDrive'
 import { driveApi, type DriveItem } from '../../api/drive'
 import { useDriveStore } from '../../stores/drive.store'
@@ -26,8 +26,7 @@ export const Route = createFileRoute('/_workspace/drive')({
 /** Drive page — Stitch "Nexus Drive" design.
  *  Layout: Sidebar | Main (Header + Breadcrumbs + Filters + Table | ContextPanel) */
 function DriveIndex() {
-  const { data: wsData } = useWorkspaces()
-  const wsId = wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
   const [viewMode, setViewMode] = useState<'list' | 'grid'>('list')
   const [fileTypeFilter, setFileTypeFilter] = useState<FileTypeFilter>('all')
 

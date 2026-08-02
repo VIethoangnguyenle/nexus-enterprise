@@ -263,9 +263,6 @@ func (s *DriveServer) CreateFile(ctx context.Context, req *pb.CreateFileRequest)
 		if err != nil || parent == nil {
 			return nil, status.Errorf(codes.NotFound, "parent folder not found")
 		}
-		if err := s.checkAccess(ctx, req.UserNgacNodeId, parent.NGACNodeID, ngac.OpWrite); err != nil {
-			return nil, err
-		}
 		parentNGACID = parent.NGACNodeID
 		parentScopeOAID = parent.ScopeOAID
 	} else {
@@ -275,6 +272,21 @@ func (s *DriveServer) CreateFile(ctx context.Context, req *pb.CreateFileRequest)
 		}
 		parentNGACID = root.NGACNodeID
 		parentScopeOAID = root.ScopeOAID
+	}
+
+	// One check covering both destinations.
+	//
+	// This used to sit inside the ParentId branch only, so uploading to the
+	// drive root — which is what the Upload button does — was not authorized at
+	// all. A workspace member, who holds only read on Documents, could create
+	// the row and push the bytes; nothing refused until ConfirmFile, and before
+	// ConfirmFile checked anything the upload simply succeeded.
+	//
+	// Checking here also means the caller is refused before uploading rather
+	// than after, instead of leaving an orphaned object in storage and a
+	// pending row behind.
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, parentNGACID, ngac.OpWrite); err != nil {
+		return nil, err
 	}
 
 	// Files inherit the parent folder's OA node — no NGAC node created.

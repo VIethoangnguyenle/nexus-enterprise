@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useState, useMemo } from 'react'
 import { useAssets, useAsset, useAssetTransitions, useAssetHistory, useTransitionAsset } from '../../hooks/useAssets'
-import { useWorkspaces } from '../../hooks/useWorkspaces'
 import { LoadingState } from '../../components/LoadingState'
 import { ErrorState } from '../../components/ErrorState'
 import { EmptyState } from '../../components/EmptyState'
@@ -24,8 +24,7 @@ const stateToBadge = (state: string) => {
 
 function AssetList() {
   const navigate = useNavigate()
-  const { data: wsData } = useWorkspaces()
-  const wsId = wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
   const { data, isLoading, error, refetch } = useAssets(wsId)
   const [stateFilter, setStateFilter] = useState<string>('all')
   const [selectedId, setSelectedId] = useState<string | null>(null)

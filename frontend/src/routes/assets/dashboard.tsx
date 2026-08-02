@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useAssetSummary, useAssetTypes } from '../../hooks/useAssets'
-import { useWorkspaces } from '../../hooks/useWorkspaces'
 import { LoadingState } from '../../components/LoadingState'
 import { ErrorState } from '../../components/ErrorState'
 import { Card } from '../../components/composites'
@@ -10,8 +10,7 @@ import type { ReactNode } from 'react'
 export const Route = createFileRoute('/assets/dashboard')({ component: AssetDashboard })
 
 function AssetDashboard() {
-  const { data: wsData } = useWorkspaces()
-  const wsId = wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
   const { data: summary, isLoading: summaryLoading, error: summaryError, refetch: refetchSummary } = useAssetSummary(wsId)
   const { data: typesData, isLoading: typesLoading, error: typesError, refetch: refetchTypes } = useAssetTypes(wsId)
 
