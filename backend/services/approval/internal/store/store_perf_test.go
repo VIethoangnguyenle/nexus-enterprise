@@ -4,6 +4,7 @@
 package store_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -66,7 +67,16 @@ func TestPerformanceSLA_AllQueries(t *testing.T) {
 	s := store.NewStore(testDB)
 	ctx := tenantCtx(tenantAID)
 
-	// Seed additional data for more realistic perf testing
+	// Seed under an actor unique to this run, and remove it afterwards.
+	//
+	// These tests used to seed 100 requests against a fixed "perf_approver" and
+	// never clean up, so ListPending measured 100 rows on a fresh database and
+	// 100×N after N runs. The SLA was a moving target: the suite passed until
+	// it had been run enough times, then failed on timing that had nothing to
+	// do with the code under test.
+	approver := "perf_approver_" + newID()
+	t.Cleanup(func() { cleanupByApprover(t, tenantAID, approver) })
+
 	tmplID := newID()
 	now := time.Now()
 	s.InsertTemplate(ctx, &domain.Template{
@@ -91,7 +101,7 @@ func TestPerformanceSLA_AllQueries(t *testing.T) {
 		})
 		s.InsertAssignments(ctx, []*domain.AssignmentRecord{{
 			ID: newID(), RequestID: reqID, StepOrder: 1,
-			UserNodeID: "perf_approver", GrantSource: "template", Status: "pending",
+			UserNodeID: approver, GrantSource: "template", Status: "pending",
 		}})
 	}
 
@@ -103,14 +113,14 @@ func TestPerformanceSLA_AllQueries(t *testing.T) {
 		{
 			name: "ListPending", maxMs: 5.0,
 			fn: func() error {
-				_, err := s.ListPending(ctx, "perf_approver")
+				_, err := s.ListPending(ctx, approver)
 				return err
 			},
 		},
 		{
 			name: "ListHistory", maxMs: 10.0,
 			fn: func() error {
-				_, _, err := s.ListHistory(ctx, "perf_approver", "", 20)
+				_, _, err := s.ListHistory(ctx, approver, "", 20)
 				return err
 			},
 		},
@@ -165,6 +175,12 @@ func TestScaleInsert_50K(t *testing.T) {
 	s := store.NewStore(testDB)
 	ctx := tenantCtx(tenantBID) // Use tenant B to avoid polluting A
 
+	// Same isolation as the SLA test: the assertion below is about query cost
+	// at a known row count, so the rows this run creates must be the only ones
+	// it measures, and must not be left behind for the next run to inherit.
+	approver := "scale_approver_" + newID()
+	t.Cleanup(func() { cleanupByApprover(t, tenantBID, approver) })
+
 	tmplID := newID()
 	now := time.Now()
 	s.InsertTemplate(ctx, &domain.Template{
@@ -188,7 +204,7 @@ func TestScaleInsert_50K(t *testing.T) {
 		})
 		s.InsertAssignments(ctx, []*domain.AssignmentRecord{{
 			ID: newID(), RequestID: reqID, StepOrder: 1,
-			UserNodeID: "scale_approver", GrantSource: "template", Status: "pending",
+			UserNodeID: approver, GrantSource: "template", Status: "pending",
 		}})
 
 		if (i+1)%batchSize == 0 {
@@ -200,11 +216,33 @@ func TestScaleInsert_50K(t *testing.T) {
 
 	// Now query performance with 1000 rows
 	queryStart := time.Now()
-	pending, _ := s.ListPending(ctx, "scale_approver")
+	pending, _ := s.ListPending(ctx, approver)
 	queryDuration := time.Since(queryStart)
 	t.Logf("✅ ListPending returned %d items in %v", len(pending), queryDuration)
 
 	if queryDuration > 50*time.Millisecond {
 		t.Errorf("ListPending with %d rows took %v, should be <50ms", len(pending), queryDuration)
+	}
+}
+
+// cleanupByApprover removes every request and assignment seeded for one actor,
+// so a performance run leaves the schema as it found it.
+func cleanupByApprover(t *testing.T, tenantID, approver string) {
+	t.Helper()
+	ctx := context.Background()
+	schema := schemaA
+	if tenantID == tenantBID {
+		schema = schemaB
+	}
+
+	if _, err := testDB.Exec(ctx, fmt.Sprintf(
+		`DELETE FROM %s.approval_requests WHERE id IN (
+			SELECT request_id FROM %s.approval_assignments WHERE user_node_id = $1)`,
+		schema, schema), approver); err != nil {
+		t.Logf("cleanup requests for %s: %v", approver, err)
+	}
+	if _, err := testDB.Exec(ctx, fmt.Sprintf(
+		`DELETE FROM %s.approval_assignments WHERE user_node_id = $1`, schema), approver); err != nil {
+		t.Logf("cleanup assignments for %s: %v", approver, err)
 	}
 }

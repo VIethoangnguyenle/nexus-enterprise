@@ -361,5 +361,14 @@ func insertCASRequest(t *testing.T, ctx context.Context, s *store.Store, label s
 	}); err != nil {
 		t.Fatalf("insert request: %v", err)
 	}
+
+	// Leave the schema as we found it, so repeated runs do not slowly grow the
+	// dataset that the performance assertions measure against.
+	t.Cleanup(func() {
+		bg := context.Background()
+		testDB.Exec(bg, fmt.Sprintf("DELETE FROM %s.approval_requests WHERE id = $1", schemaA), reqID)
+		testDB.Exec(bg, fmt.Sprintf("DELETE FROM %s.approval_steps WHERE template_id = $1", schemaA), tmplID)
+		testDB.Exec(bg, fmt.Sprintf("DELETE FROM %s.approval_templates WHERE id = $1", schemaA), tmplID)
+	})
 	return reqID
 }

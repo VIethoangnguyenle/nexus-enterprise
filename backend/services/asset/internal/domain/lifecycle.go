@@ -1,7 +1,6 @@
 package domain
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"ngac-platform/ngac"
@@ -92,18 +91,6 @@ func ValidateLifecycle(ld LifecycleDefinition) error {
 	}
 
 	return nil
-}
-
-// ParseLifecycle unmarshals a JSON lifecycle definition with validation.
-func ParseLifecycle(data json.RawMessage) (LifecycleDefinition, error) {
-	var ld LifecycleDefinition
-	if err := json.Unmarshal(data, &ld); err != nil {
-		return ld, fmt.Errorf("parsing lifecycle JSON: %w", err)
-	}
-	if err := ValidateLifecycle(ld); err != nil {
-		return ld, fmt.Errorf("invalid lifecycle: %w", err)
-	}
-	return ld, nil
 }
 
 // AvailableTransitions returns all valid transitions from the current state.

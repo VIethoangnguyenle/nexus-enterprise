@@ -11,7 +11,6 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "ngac-platform/proto/messaging"
 )
@@ -558,11 +557,6 @@ func (h *Hub) BroadcastAssetUpdated(assetID, newState string) {
 			}
 		}
 	}
-}
-
-// Helper to create a timestamppb from time.Time — used by notification consumer.
-func TimestampProto(t time.Time) *timestamppb.Timestamp {
-	return timestamppb.New(t)
 }
 
 // BroadcastApprovalEvent sends an approval status change to all connected users.
