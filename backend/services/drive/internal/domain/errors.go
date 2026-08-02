@@ -1,14 +1,14 @@
 package domain
 
-import "errors"
+import "ngac-platform/pkg/httputil"
 
+// These alias the shared sentinels rather than declaring new ones. errors.Is
+// compares identity, not message text, so a local errors.New with the same
+// string would be a different value and httputil.MapDomainError would never
+// match it — every failure would surface as 500, including denials.
 var (
-	// ErrNotFound indicates the requested entity does not exist.
-	ErrNotFound = errors.New("not found")
-	// ErrAccessDenied indicates the user lacks permission for the operation.
-	ErrAccessDenied = errors.New("access denied")
-	// ErrAlreadyExists indicates a duplicate entity.
-	ErrAlreadyExists = errors.New("already exists")
-	// ErrInvalidInput indicates missing or malformed request fields.
-	ErrInvalidInput = errors.New("invalid input")
+	ErrNotFound      = httputil.ErrNotFound
+	ErrAccessDenied  = httputil.ErrAccessDenied
+	ErrAlreadyExists = httputil.ErrAlreadyExists
+	ErrInvalidInput  = httputil.ErrInvalidInput
 )

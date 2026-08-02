@@ -7,10 +7,17 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// Common domain sentinel errors that services define in their domain/errors.go.
-// These are re-declared here so MapDomainError can match against them without
-// importing every service's domain package. Services MUST use errors.New with
-// these exact strings, or wrap with %w so errors.Is matches.
+// The domain sentinel errors, defined once.
+//
+// Services MUST alias these rather than declare their own:
+//
+//	var ErrAccessDenied = httputil.ErrAccessDenied
+//
+// errors.Is compares identity, not message text, so two errors.New calls with
+// the same string are different values and never match. Every service used to
+// declare its own copy — the comment here even instructed it — which meant
+// MapDomainError matched nothing and every domain failure in every service was
+// reported as 500, including denials.
 var (
 	ErrNotFound      = errors.New("not found")
 	ErrAccessDenied  = errors.New("access denied")

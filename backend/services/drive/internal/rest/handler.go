@@ -320,8 +320,13 @@ func (h *Handler) TrashItem(c echo.Context) error {
 
 // RestoreItem handles POST /api/drive/items/:itemId/restore.
 func (h *Handler) RestoreItem(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	resp, err := h.svc.RestoreItem(c.Request().Context(), &pb.RestoreItemRequest{
-		ItemId: c.Param("itemId"),
+		ItemId:         c.Param("itemId"),
+		UserNgacNodeId: claims.NGACNodeID,
 	})
 	if err != nil {
 		return mapGRPCError(err)
