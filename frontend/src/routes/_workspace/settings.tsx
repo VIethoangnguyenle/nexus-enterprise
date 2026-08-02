@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Heading, Text } from '../../components/primitives'
 
 export const Route = createFileRoute('/_workspace/settings')({ component: SettingsPage })
 

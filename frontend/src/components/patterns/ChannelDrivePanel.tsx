@@ -1,6 +1,6 @@
 import { useChannelDrive } from '../../hooks/useDrive'
 import { FilePreviewCard } from './FilePreviewCard'
-import { Heading, IconButton, Spinner, Text } from '../primitives'
+import { IconButton, Spinner } from '../primitives'
 import { FolderOpen, X, Paperclip } from 'lucide-react'
 
 interface ChannelDrivePanelProps {

@@ -9,7 +9,7 @@ import { ContactProfilePanel } from '../../components/patterns/ContactProfilePan
 import { LoadingState } from '../../components/LoadingState'
 import { EmptyState } from '../../components/EmptyState'
 import { Button, IconButton } from '../../components/primitives'
-import { Users, Search, MoreHorizontal, UserPlus, LayoutGrid, List, X, Building2 } from 'lucide-react'
+import { Users, Search, MoreHorizontal, UserPlus, LayoutGrid, List, Building2 } from 'lucide-react'
 import { ResponsiveDetailPanel } from '../../components/composites/ResponsiveDetailPanel'
 
 export const Route = createFileRoute('/_workspace/contacts')({

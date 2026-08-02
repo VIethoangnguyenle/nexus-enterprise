@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useAssetTypes, useCreateAssetRequest } from '../../../hooks/useAssets'
 import { useWorkspaces } from '../../../hooks/useWorkspaces'
 import { useState } from 'react'
-import { Button, Select, Textarea, Heading, Spinner } from '../../../components/primitives'
+import { Button, Select, Textarea, Spinner } from '../../../components/primitives'
 import { Card } from '../../../components/composites'
 
 export const Route = createFileRoute('/assets/request/new')({ component: AssetRequestNew })

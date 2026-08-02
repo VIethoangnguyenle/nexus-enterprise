@@ -5,7 +5,7 @@ import { LoadingState } from '../../components/LoadingState'
 import { ErrorState } from '../../components/ErrorState'
 import { ASSET_STATE_COLORS } from '../../lib/constants'
 import type { AssetHistory } from '../../api/assets'
-import { Button, Badge, Heading, Input, Spinner, Text } from '../../components/primitives'
+import { Button, Badge, Input, Spinner, Text } from '../../components/primitives'
 import { Card, Timeline } from '../../components/composites'
 
 export const Route = createFileRoute('/assets/$assetId')({ component: AssetDetail })

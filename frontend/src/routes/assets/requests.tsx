@@ -6,7 +6,7 @@ import { LoadingState } from '../../components/LoadingState'
 import { ErrorState } from '../../components/ErrorState'
 import { EmptyState } from '../../components/EmptyState'
 import { REQUEST_STATUS_COLORS } from '../../lib/constants'
-import { Button, Badge, Heading, Spinner, Text } from '../../components/primitives'
+import { Button, Badge, Spinner, Text } from '../../components/primitives'
 import { Card, Tabs } from '../../components/composites'
 import { ClipboardList, Check, X } from 'lucide-react'
 

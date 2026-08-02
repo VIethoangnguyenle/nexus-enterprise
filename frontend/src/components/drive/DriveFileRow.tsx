@@ -1,5 +1,5 @@
 import { memo, useState, useCallback, useRef, useEffect } from 'react'
-import { Download, Edit3, Share2, Trash2, MoreVertical, FolderInput, FolderOpen, Folder, Star } from 'lucide-react'
+import { Download, Edit3, Share2, Trash2, MoreVertical, FolderInput, FolderOpen, Folder } from 'lucide-react'
 import { IconButton } from '../primitives'
 import type { DriveItem } from '../../api/drive'
 import type { ObjectPerms } from '../../stores/permission.store'

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Avatar } from '../primitives'
 
 interface MentionUser {

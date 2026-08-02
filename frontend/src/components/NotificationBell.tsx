@@ -1,6 +1,6 @@
 import { useNotifications, useUnreadCount, useMarkRead, useMarkAllRead } from '../hooks/useNotifications'
 import { useState, useRef, useEffect } from 'react'
-import { Button, IconButton, Text } from './primitives'
+import { Button, IconButton } from './primitives'
 import { Bell, ClipboardList, CheckCircle, Package, Undo2, Trash2, MessageSquare, Info, AtSign } from 'lucide-react'
 
 const NOTIF_ICONS: Record<string, typeof ClipboardList> = {

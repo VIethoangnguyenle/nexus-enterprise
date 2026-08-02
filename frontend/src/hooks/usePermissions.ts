@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { batchCheckAccess } from '../api/access'
 import { usePermissionStore, type ObjectPerms } from '../stores/permission.store'

@@ -7,7 +7,7 @@ import { MentionDropdown } from './MentionDropdown'
 import { EditorToolbar } from './EditorToolbar'
 import { Spinner, IconButton } from '../primitives'
 import { useChannelMembers } from '../../hooks/useMessaging'
-import { PlusCircle, Smile, AtSign, Paperclip, Send } from 'lucide-react'
+import { PlusCircle, Smile, AtSign, Send } from 'lucide-react'
 
 interface ChatEditorProps {
   onSend: (content: string, mentions: string[]) => void

@@ -1,6 +1,6 @@
 import type { Contact } from '../../hooks/useContacts'
 import { Avatar, Button, IconButton } from '../primitives'
-import { X, MessageSquare, Phone, Mail, MapPin, Building2, Video } from 'lucide-react'
+import { X, MessageSquare, Mail, MapPin, Building2, Video } from 'lucide-react'
 
 interface ContactProfilePanelProps {
   contact: Contact

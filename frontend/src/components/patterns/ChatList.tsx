@@ -6,7 +6,7 @@ import { useUiStore } from '../../stores/ui.store'
 import { ChatListItem } from './ChatListItem'
 import { CreateChannelModal } from '../CreateChannelModal'
 import { Avatar, IconButton, NavRow } from '../primitives'
-import { Search, Plus, SlidersHorizontal, ChevronDown, ChevronRight, Pin, Building2, User } from 'lucide-react'
+import { Search, Plus, SlidersHorizontal, ChevronDown, ChevronRight, Pin } from 'lucide-react'
 import type { Channel } from '../../api/messaging'
 
 interface ChatListProps {

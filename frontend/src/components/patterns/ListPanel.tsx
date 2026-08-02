@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useUiStore } from '../../stores/ui.store'
 import { ChatList } from './ChatList'
-import { FileText, Settings as SettingsIcon, HardDrive, LayoutDashboard, ClipboardList, Tag, FileEdit } from 'lucide-react'
+import { Settings as SettingsIcon, LayoutDashboard, ClipboardList, Tag, FileEdit } from 'lucide-react'
 import { Heading } from '../primitives'
 
 interface ListPanelProps {

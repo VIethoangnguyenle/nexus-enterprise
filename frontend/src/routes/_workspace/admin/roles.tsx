@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { useWorkspaces } from '../../../hooks/useWorkspaces'
 import { apiFetch } from '../../../api/client'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -12,7 +12,7 @@ import { Badge } from '../../../components/primitives/Badge'
 import { Heading } from '../../../components/primitives/Heading'
 import { LoadingState } from '../../../components/LoadingState'
 import { EmptyState } from '../../../components/EmptyState'
-import { Shield, Plus, Pencil, Trash2, Lock, Users } from 'lucide-react'
+import { Shield, Plus, Trash2, Lock, Users } from 'lucide-react'
 
 export const Route = createFileRoute('/_workspace/admin/roles')({
   component: AdminRolesPage,
