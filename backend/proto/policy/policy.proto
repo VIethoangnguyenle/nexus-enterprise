@@ -170,6 +170,10 @@ message BatchCheckAccessRequest {
   string user_node_id = 1;
   repeated string object_ids = 2;
   repeated string operations = 3;
+  // Enables shard-based evaluation, matching CheckAccessRequest. Without it a
+  // batch is answered from the global graph while an equivalent single check
+  // would use the workspace shard.
+  optional string workspace_id = 4;
 }
 
 message BatchAccessResult {

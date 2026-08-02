@@ -1346,10 +1346,14 @@ func (x *GetParentsRequest) GetNodeId() string {
 
 // BatchCheckAccess — resolve permissions for multiple objects in one call.
 type BatchCheckAccessRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserNodeId    string                 `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
-	ObjectIds     []string               `protobuf:"bytes,2,rep,name=object_ids,json=objectIds,proto3" json:"object_ids,omitempty"`
-	Operations    []string               `protobuf:"bytes,3,rep,name=operations,proto3" json:"operations,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	UserNodeId string                 `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
+	ObjectIds  []string               `protobuf:"bytes,2,rep,name=object_ids,json=objectIds,proto3" json:"object_ids,omitempty"`
+	Operations []string               `protobuf:"bytes,3,rep,name=operations,proto3" json:"operations,omitempty"`
+	// Enables shard-based evaluation, matching CheckAccessRequest. Without it a
+	// batch is answered from the global graph while an equivalent single check
+	// would use the workspace shard.
+	WorkspaceId   *string `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3,oneof" json:"workspace_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1403,6 +1407,13 @@ func (x *BatchCheckAccessRequest) GetOperations() []string {
 		return x.Operations
 	}
 	return nil
+}
+
+func (x *BatchCheckAccessRequest) GetWorkspaceId() string {
+	if x != nil && x.WorkspaceId != nil {
+		return *x.WorkspaceId
+	}
+	return ""
 }
 
 type BatchAccessResult struct {
@@ -2194,7 +2205,7 @@ const file_proto_policy_policy_proto_rawDesc = "" +
 	"\x12GetChildrenRequest\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\",\n" +
 	"\x11GetParentsRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"z\n" +
+	"\anode_id\x18\x01 \x01(\tR\x06nodeId\"\xb3\x01\n" +
 	"\x17BatchCheckAccessRequest\x12 \n" +
 	"\fuser_node_id\x18\x01 \x01(\tR\n" +
 	"userNodeId\x12\x1d\n" +
@@ -2202,7 +2213,9 @@ const file_proto_policy_policy_proto_rawDesc = "" +
 	"object_ids\x18\x02 \x03(\tR\tobjectIds\x12\x1e\n" +
 	"\n" +
 	"operations\x18\x03 \x03(\tR\n" +
-	"operations\"\xac\x01\n" +
+	"operations\x12&\n" +
+	"\fworkspace_id\x18\x04 \x01(\tH\x00R\vworkspaceId\x88\x01\x01B\x0f\n" +
+	"\r_workspace_id\"\xac\x01\n" +
 	"\x11BatchAccessResult\x12@\n" +
 	"\aresults\x18\x01 \x03(\v2&.policy.BatchAccessResult.ResultsEntryR\aresults\x1aU\n" +
 	"\fResultsEntry\x12\x10\n" +
@@ -2405,6 +2418,7 @@ func file_proto_policy_policy_proto_init() {
 		return
 	}
 	file_proto_policy_policy_proto_msgTypes[5].OneofWrappers = []any{}
+	file_proto_policy_policy_proto_msgTypes[24].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

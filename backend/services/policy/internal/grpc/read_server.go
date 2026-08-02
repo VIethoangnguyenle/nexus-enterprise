@@ -65,22 +65,19 @@ func (s *ReadServer) BatchCheckAccess(ctx context.Context, req *pb.BatchCheckAcc
 		return nil, status.Error(codes.InvalidArgument, "user_node_id required")
 	}
 
-	results := make(map[string]*pb.ObjectPermissions, len(req.ObjectIds))
+	batchReq := ngac.BatchAccessRequest{
+		UserNodeID:    req.UserNodeId,
+		ObjectNodeIDs: req.ObjectIds,
+		Operations:    req.Operations,
+	}
+	if req.WorkspaceId != nil {
+		batchReq.WorkspaceID = *req.WorkspaceId
+	}
 
-	for _, objID := range req.ObjectIds {
-		perms := make(map[string]bool, len(req.Operations))
-		for _, op := range req.Operations {
-			decision, err := s.CheckAccess(ctx, &pb.CheckAccessRequest{
-				UserNodeId:   req.UserNodeId,
-				ObjectNodeId: objID,
-				Operation:    op,
-			})
-			if err != nil {
-				perms[op] = false
-				continue
-			}
-			perms[op] = decision.Decision == ngac.DecisionAllow
-		}
+	decided := s.evaluator.EvaluateBatch(ctx, batchReq)
+
+	results := make(map[string]*pb.ObjectPermissions, len(decided))
+	for objID, perms := range decided {
 		results[objID] = &pb.ObjectPermissions{Permissions: perms}
 	}
 
