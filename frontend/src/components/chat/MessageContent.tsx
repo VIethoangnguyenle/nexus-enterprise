@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import DOMPurify from 'dompurify'
 import remarkGfm from 'remark-gfm'
 import { Copy, Check } from 'lucide-react'
 import { Button } from '../primitives'
@@ -16,7 +17,7 @@ export function MessageContent({ content, contentFormat }: MessageContentProps) 
     return (
       <div
         className="message-html text-sm text-ink leading-[1.55] break-words"
-        dangerouslySetInnerHTML={{ __html: highlightMentions(content) }}
+        dangerouslySetInnerHTML={{ __html: sanitizeMessageHtml(highlightMentions(content)) }}
       />
     )
   }
@@ -97,6 +98,24 @@ function FencedCodeBlock({ code, language }: { code: string; language?: string }
 }
 
 /** Wrap @mentions in highlight spans for HTML content. */
+// Message HTML is written by other users and stored, so it is untrusted: anything it can run
+// runs in every reader's session. DOMPurify drops scripts, event handlers and non-http(s)
+// URLs; links are forced to open in a new tab without access to this window.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noopener noreferrer')
+  }
+})
+
+function sanitizeMessageHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    FORBID_TAGS: ['style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
+    FORBID_ATTR: ['style'],
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|\/|#)/i,
+  })
+}
+
 function highlightMentions(html: string): string {
   return html.replace(
     /@(\w+)/g,
