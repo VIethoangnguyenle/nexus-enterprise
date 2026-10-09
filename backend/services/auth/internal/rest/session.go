@@ -2,6 +2,7 @@
 package rest
 
 import (
+	"context"
 	"net/http"
 	"os"
 	"time"
@@ -76,7 +77,19 @@ func clearRefreshCookie(c echo.Context) {
 // an access token without a refresh token would look like a successful sign-in
 // and then log the user out fifteen minutes later with no explanation.
 func (h *Handler) issueSession(c echo.Context, id domain.RefreshIdentity) error {
-	refreshToken, err := h.svc.AttachRefreshToken(c.Request().Context(), id)
+	return issueSessionWith(c, h.svc, id)
+}
+
+// refreshAttacher issues the refresh token for a freshly minted session.
+type refreshAttacher interface {
+	AttachRefreshToken(ctx context.Context, id domain.RefreshIdentity) (string, error)
+}
+
+// issueSessionWith is issueSession for callers that hold the attacher
+// directly. Every sign-in path — password, OTP, Google — goes through it, so
+// they all establish the same session.
+func issueSessionWith(c echo.Context, a refreshAttacher, id domain.RefreshIdentity) error {
+	refreshToken, err := a.AttachRefreshToken(c.Request().Context(), id)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "could not establish session")
 	}

@@ -32,6 +32,15 @@ type AuthStore interface {
 	FindTenantByDomain(ctx context.Context, domain string) (*store.Tenant, error)
 	UpdateProfile(ctx context.Context, userID, displayName, title, department, location, avatarURL string) error
 	ListContactsByWorkspace(ctx context.Context, workspaceID, departmentFilter, locationFilter string) ([]store.User, error)
+
+	// External identities (user_identities). Provider + subject is the key;
+	// email is recorded for audit only and never used to look a user up.
+	FindUserByIdentity(ctx context.Context, provider, subject string) (*store.User, error)
+	GetIdentitySubject(ctx context.Context, provider, userID string) (string, error)
+	LinkIdentity(ctx context.Context, provider, subject, userID, email string) error
+	// ClaimTenantDomain sets a tenant's domain if neither it nor any other
+	// tenant holds that domain yet, and reports whether it did.
+	ClaimTenantDomain(ctx context.Context, tenantID, domain string) (bool, error)
 }
 
 // AuthResponse is the domain output for legacy register/login operations.
@@ -205,24 +214,53 @@ func (s *Service) resolveOrCreateTenant(ctx context.Context, email, userID, ngac
 		return s.createTenantForUser(ctx, tenantName, userID, ngacNodeID)
 	}
 
-	// Case 2: check email domain for auto-join
-	domain := extractDomain(email)
-	if domain != "" {
-		tenant, err := s.store.FindTenantByDomain(ctx, domain)
-		if err != nil {
-			return "", "", "", fmt.Errorf("find tenant by domain: %w", err)
-		}
-		if tenant != nil {
-			if err := s.joinTenant(ctx, tenant.ID, userID, ngacNodeID, "member"); err != nil {
-				return "", "", "", fmt.Errorf("join tenant: %w", err)
-			}
-			return tenant.ID, tenant.Name, "member", nil
-		}
+	// Case 2: check email domain for auto-join (public mailbox domains never join)
+	tenant, role, err := s.joinTenantByDomain(ctx, extractDomain(email), userID, ngacNodeID)
+	if err != nil {
+		return "", "", "", err
+	}
+	if tenant != nil {
+		return tenant.ID, tenant.Name, role, nil
 	}
 
 	// Case 3: no match → create new tenant
-	wsName := fmt.Sprintf("%s's Workspace", displayName)
-	return s.createTenantForUser(ctx, wsName, userID, ngacNodeID)
+	return s.createTenantForUser(ctx, personalWorkspaceName(displayName), userID, ngacNodeID)
+}
+
+// joinTenantByDomain adds the user as a member of the tenant that owns
+// companyDomain and returns that tenant with the user's role in it. It returns a
+// nil tenant when the domain is empty, is a public mailbox provider, or is owned
+// by no tenant. A user who already has a membership there keeps it unchanged —
+// including a disabled one, which signing in must not re-activate.
+//
+// This is the one place a domain turns into tenant membership; both password
+// signup and Google sign-in go through it.
+func (s *Service) joinTenantByDomain(ctx context.Context, companyDomain, userID, ngacNodeID string) (*store.Tenant, string, error) {
+	companyDomain = normalizeDomain(companyDomain)
+	if companyDomain == "" || IsPublicEmailDomain(companyDomain) {
+		return nil, "", nil
+	}
+
+	tenant, err := s.store.FindTenantByDomain(ctx, companyDomain)
+	if err != nil {
+		return nil, "", fmt.Errorf("find tenant by domain: %w", err)
+	}
+	if tenant == nil {
+		return nil, "", nil
+	}
+
+	existing, err := s.store.GetTenantUser(ctx, tenant.ID, userID)
+	if err != nil {
+		return nil, "", fmt.Errorf("get tenant user: %w", err)
+	}
+	if existing != nil {
+		return tenant, existing.Role, nil
+	}
+
+	if err := s.joinTenant(ctx, tenant.ID, userID, ngacNodeID, "member"); err != nil {
+		return nil, "", fmt.Errorf("join tenant: %w", err)
+	}
+	return tenant, "member", nil
 }
 
 // createTenantForUser creates a workspace/tenant, initializes tenant NGAC UAs, and assigns the user as owner.
@@ -276,30 +314,7 @@ func (s *Service) Signin(ctx context.Context, email, password string) (*SigninRe
 		return nil, ErrInvalidCredentials
 	}
 
-	tenants, err := s.store.ListTenantsByUser(ctx, user.ID)
-	if err != nil {
-		return nil, fmt.Errorf("list tenants: %w", err)
-	}
-
-	defaultTenantID := s.selectDefaultTenant(tenants)
-
-	token, sessionID, err := auth.GenerateToken(user.ID, user.Username, user.NGACNodeID, defaultTenantID)
-	if err != nil {
-		return nil, fmt.Errorf("generate token: %w", err)
-	}
-
-	result := &SigninResult{
-		Token: token, SessionID: sessionID, UserID: user.ID, Username: user.Username,
-		NGACNodeID: user.NGACNodeID, Email: user.Email,
-		UnionID: user.UnionID, DisplayName: user.DisplayName,
-		DefaultTenantID: defaultTenantID,
-	}
-	for _, t := range tenants {
-		result.Tenants = append(result.Tenants, TenantInfo{
-			ID: t.TenantID, Name: t.TenantName, Role: t.Role, OpenID: t.OpenID,
-		})
-	}
-	return result, nil
+	return s.signinResultFor(ctx, user, "")
 }
 
 // SwitchTenant verifies membership and issues a new JWT scoped to the target tenant.

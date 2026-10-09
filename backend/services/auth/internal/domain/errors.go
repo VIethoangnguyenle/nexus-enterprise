@@ -21,4 +21,12 @@ var (
 	ErrTenantNotFound     = errors.New("tenant not found")
 	ErrTooManyAttempts    = errors.New("too many attempts")
 	ErrUserExists         = errors.New("already exists")
+	// ErrEmailNotVerified rejects an external sign-in whose provider has not
+	// verified the email. Such an address is only a claim, so it may neither
+	// create an account nor be matched against an existing one.
+	ErrEmailNotVerified = errors.New("email not verified by identity provider")
+	// ErrIdentityConflict means the email belongs to an account that is
+	// already linked to a different subject at the same provider — typically a
+	// deleted Workspace account whose address was reassigned to someone else.
+	ErrIdentityConflict = errors.New("account is linked to a different external identity")
 )

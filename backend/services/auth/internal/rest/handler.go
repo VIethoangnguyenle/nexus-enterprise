@@ -15,7 +15,8 @@ import (
 
 // Handler serves auth REST endpoints.
 type Handler struct {
-	svc *domain.Service
+	svc    *domain.Service
+	google *googleHandler // nil until EnableGoogle; routes then report it disabled
 }
 
 // NewHandler creates an auth REST handler.
@@ -38,6 +39,15 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// Logout accepts an expired access token for the same reason, so it is
 	// mounted outside the JWT group and reads the claims opportunistically.
 	e.POST("/api/auth/logout", h.Logout)
+	// Sign in with Google. All three sit under /api/auth, so the existing
+	// /api/auth entries in the Vite dev proxy and the Traefik router cover them.
+	google := h.google
+	if google == nil {
+		google = newGoogleHandler(GoogleOptions{}, nil)
+	}
+	e.GET("/api/auth/providers", google.Providers)
+	e.GET("/api/auth/google/start", google.Start)
+	e.GET("/api/auth/google/callback", google.Callback)
 
 	// Protected — JWT required
 	api := e.Group("/api", httputil.JWTMiddleware(jwtSecret))

@@ -31,6 +31,7 @@ import { Route as AuthOnboardingRouteImport } from './routes/_auth/onboarding'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
 import { Route as WorkspaceChannelsIndexRouteImport } from './routes/_workspace/channels.index'
 import { Route as WorkspaceAdminIndexRouteImport } from './routes/_workspace/admin/index'
+import { Route as AuthGoogleDoneRouteImport } from './routes/auth.google.done'
 import { Route as AssetsRequestNewRouteImport } from './routes/assets/request/new'
 import { Route as WorkspaceChannelsChannelIdRouteImport } from './routes/_workspace/channels.$channelId'
 import { Route as WorkspaceAdminUsersRouteImport } from './routes/_workspace/admin/users'
@@ -144,6 +145,11 @@ const WorkspaceAdminIndexRoute = WorkspaceAdminIndexRouteImport.update({
   path: '/',
   getParentRoute: () => WorkspaceAdminRoute,
 } as any)
+const AuthGoogleDoneRoute = AuthGoogleDoneRouteImport.update({
+  id: '/auth/google/done',
+  path: '/auth/google/done',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AssetsRequestNewRoute = AssetsRequestNewRouteImport.update({
   id: '/request/new',
   path: '/request/new',
@@ -189,6 +195,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof WorkspaceAdminUsersRoute
   '/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
+  '/auth/google/done': typeof AuthGoogleDoneRoute
   '/admin/': typeof WorkspaceAdminIndexRoute
   '/channels/': typeof WorkspaceChannelsIndexRoute
 }
@@ -214,6 +221,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof WorkspaceAdminUsersRoute
   '/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
+  '/auth/google/done': typeof AuthGoogleDoneRoute
   '/admin': typeof WorkspaceAdminIndexRoute
   '/channels': typeof WorkspaceChannelsIndexRoute
 }
@@ -243,6 +251,7 @@ export interface FileRoutesById {
   '/_workspace/admin/users': typeof WorkspaceAdminUsersRoute
   '/_workspace/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
+  '/auth/google/done': typeof AuthGoogleDoneRoute
   '/_workspace/admin/': typeof WorkspaceAdminIndexRoute
   '/_workspace/channels/': typeof WorkspaceChannelsIndexRoute
 }
@@ -271,6 +280,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/channels/$channelId'
     | '/assets/request/new'
+    | '/auth/google/done'
     | '/admin/'
     | '/channels/'
   fileRoutesByTo: FileRoutesByTo
@@ -296,6 +306,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/channels/$channelId'
     | '/assets/request/new'
+    | '/auth/google/done'
     | '/admin'
     | '/channels'
   id:
@@ -324,6 +335,7 @@ export interface FileRouteTypes {
     | '/_workspace/admin/users'
     | '/_workspace/channels/$channelId'
     | '/assets/request/new'
+    | '/auth/google/done'
     | '/_workspace/admin/'
     | '/_workspace/channels/'
   fileRoutesById: FileRoutesById
@@ -333,6 +345,7 @@ export interface RootRouteChildren {
   AuthRoute: typeof AuthRouteWithChildren
   WorkspaceRoute: typeof WorkspaceRouteWithChildren
   AssetsRoute: typeof AssetsRouteWithChildren
+  AuthGoogleDoneRoute: typeof AuthGoogleDoneRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -491,6 +504,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceAdminIndexRouteImport
       parentRoute: typeof WorkspaceAdminRoute
     }
+    '/auth/google/done': {
+      id: '/auth/google/done'
+      path: '/auth/google/done'
+      fullPath: '/auth/google/done'
+      preLoaderRoute: typeof AuthGoogleDoneRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/assets/request/new': {
       id: '/assets/request/new'
       path: '/request/new'
@@ -608,6 +628,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRoute: AuthRouteWithChildren,
   WorkspaceRoute: WorkspaceRouteWithChildren,
   AssetsRoute: AssetsRouteWithChildren,
+  AuthGoogleDoneRoute: AuthGoogleDoneRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

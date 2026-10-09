@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	workspacepb "ngac-platform/proto/workspace"
 	"ngac-platform/services/auth/internal/auth"
 	"ngac-platform/services/auth/internal/domain"
+	"ngac-platform/services/auth/internal/googleauth"
 	agrpc "ngac-platform/services/auth/internal/grpc"
 	"ngac-platform/services/auth/internal/rest"
 	"ngac-platform/services/auth/internal/store"
@@ -127,9 +129,17 @@ func main() {
 	// REST server (client-facing)
 	e := echo.New()
 	e.HideBanner = true
-	e.Use(echomw.Logger())
+	e.Use(echomw.LoggerWithConfig(echomw.LoggerConfig{
+		// The access log records the full URI, and the Google callback's query
+		// carries the one-time authorization code. The handler logs the
+		// outcome of that request itself, without the code.
+		Skipper: func(c echo.Context) bool {
+			return c.Request().URL.Path == "/api/auth/google/callback"
+		},
+	}))
 	e.Use(echomw.Recover())
 	restHandler := rest.NewHandler(svc)
+	restHandler.EnableGoogle(googleOptions(rdb))
 	restHandler.RegisterRoutes(e, jwtSecret)
 
 	// Start both servers
@@ -155,6 +165,41 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// googleOptions configures "Sign in with Google" from the environment.
+// Without GOOGLE_CLIENT_ID (or without Redis, which holds in-flight sign-ins)
+// the feature is off: /api/auth/google/start answers 503 and
+// /api/auth/providers reports it unavailable, so the login page hides it.
+func googleOptions(rdb *redis.Client) rest.GoogleOptions {
+	opts := rest.GoogleOptions{
+		AppBaseURL: strings.TrimRight(envOr("APP_BASE_URL", "http://localhost:5173"), "/"),
+	}
+	clientID := os.Getenv("GOOGLE_CLIENT_ID")
+	if clientID == "" {
+		slog.Info("google sign-in disabled: GOOGLE_CLIENT_ID not set")
+		return opts
+	}
+	clientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+	if clientSecret == "" {
+		slog.Warn("google sign-in disabled: GOOGLE_CLIENT_SECRET not set")
+		return opts
+	}
+	if rdb == nil {
+		slog.Warn("google sign-in disabled: redis unavailable")
+		return opts
+	}
+	redirectURL := envOr("GOOGLE_REDIRECT_URL", "http://localhost:5173/api/auth/google/callback")
+
+	opts.Provider = googleauth.New(googleauth.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		RedirectURL:  redirectURL,
+	})
+	opts.Flows = googleauth.NewRedisFlowStore(rdb)
+	// Never log the secret; the client ID and URLs are not sensitive.
+	slog.Info("google sign-in enabled", "redirect_url", redirectURL, "app_base_url", opts.AppBaseURL)
+	return opts
 }
 
 // connectRedis creates a Redis client from a URL and verifies connectivity.
