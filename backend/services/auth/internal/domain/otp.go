@@ -2,6 +2,8 @@ package domain
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log/slog"
@@ -16,18 +18,24 @@ import (
 )
 
 const (
-	otpKeyPrefix   = "otp:"
-	otpTTL         = 5 * time.Minute
-	otpMaxAttempts = 5
-	otpHardcoded   = "999999"
+	otpKeyPrefix         = "otp:"
+	otpAttemptsKeyPrefix = "otp_attempts:"
+	otpRateKeyPrefix     = "otp_rl:"
+	otpTTL               = 5 * time.Minute
+	otpMaxAttempts       = 5
+
+	// At most otpRateMax codes per identifier per otpRateWindow, in every
+	// mode — this bounds both brute force and mail/SMS bombing.
+	otpRateMax    = 5
+	otpRateWindow = 15 * time.Minute
 )
 
-// otpSession is the Redis-stored OTP session data.
+// otpSession is the Redis-stored OTP session data. Only an HMAC of the code
+// is stored, never the code itself.
 type otpSession struct {
 	Identifier string `json:"identifier"`
 	Type       string `json:"type"`
-	Code       string `json:"code"`
-	Attempts   int    `json:"attempts"`
+	CodeHash   string `json:"code_hash"`
 }
 
 // OTPResult is the domain output for OTP verification.
@@ -43,10 +51,13 @@ type OTPResult struct {
 	IsNewUser  bool
 }
 
-// RequestOTP validates the identifier and creates an OTP session in Redis.
+// RequestOTP validates the identifier, enforces the per-identifier rate
+// limit, and opens an OTP session. In fixed-code test mode the session accepts
+// OTPOptions.FixedCode; otherwise a random code is generated and handed to the
+// CodeSender. The code is never logged here.
 func (s *Service) RequestOTP(ctx context.Context, identifier, identType string) (string, error) {
-	if s.rdb == nil {
-		return "", fmt.Errorf("redis unavailable for OTP")
+	if !s.OTPEnabled() {
+		return "", ErrOTPUnavailable
 	}
 
 	normalized, err := validateIdentifier(identifier, identType)
@@ -54,32 +65,64 @@ func (s *Service) RequestOTP(ctx context.Context, identifier, identType string) 
 		return "", fmt.Errorf("%w: %s", ErrInvalidInput, err.Error())
 	}
 
-	sessionID := uuid.New().String()
-	session := otpSession{
-		Identifier: normalized,
-		Type:       identType,
-		Code:       otpHardcoded,
-		Attempts:   0,
+	if err := s.checkOTPRate(ctx, identType, normalized); err != nil {
+		return "", err
 	}
 
-	data, err := json.Marshal(session)
+	code := s.otp.FixedCode
+	if code == "" {
+		if code, err = generateOTPCode(); err != nil {
+			return "", err
+		}
+	}
+
+	sessionID := uuid.New().String()
+	data, err := json.Marshal(otpSession{
+		Identifier: normalized,
+		Type:       identType,
+		CodeHash:   hashOTPCode(s.otp.Secret, sessionID, code),
+	})
 	if err != nil {
 		return "", fmt.Errorf("marshal otp session: %w", err)
 	}
-
 	if err := s.rdb.Set(ctx, otpKeyPrefix+sessionID, data, otpTTL).Err(); err != nil {
 		return "", fmt.Errorf("store otp session: %w", err)
 	}
 
-	slog.Info("OTP generated", "session_id", sessionID, "identifier", maskIdentifier(normalized, identType), "code", otpHardcoded)
+	if s.otp.FixedCode == "" {
+		if err := s.otp.Sender.SendCode(ctx, normalized, identType, code); err != nil {
+			s.rdb.Del(ctx, otpKeyPrefix+sessionID)
+			return "", fmt.Errorf("deliver otp code: %w", err)
+		}
+	}
+
+	slog.Info("OTP issued", "session_id", sessionID, "identifier", maskIdentifier(normalized, identType),
+		"fixed_code_mode", s.otp.FixedCode != "")
 	return sessionID, nil
+}
+
+// checkOTPRate counts a code request against the identifier's window.
+func (s *Service) checkOTPRate(ctx context.Context, identType, normalized string) error {
+	sum := sha256.Sum256([]byte(identType + "|" + normalized))
+	key := otpRateKeyPrefix + hex.EncodeToString(sum[:])
+	n, err := s.rdb.Incr(ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("otp rate limit: %w", err)
+	}
+	if n == 1 {
+		s.rdb.Expire(ctx, key, otpRateWindow)
+	}
+	if n > otpRateMax {
+		return ErrOTPRateLimited
+	}
+	return nil
 }
 
 // VerifyOTP checks the code against the Redis session.
 // If the identifier is new, auto-registers the user and provisions workspace.
 func (s *Service) VerifyOTP(ctx context.Context, sessionID, code string) (*OTPResult, error) {
-	if s.rdb == nil {
-		return nil, fmt.Errorf("redis unavailable for OTP")
+	if !s.OTPEnabled() {
+		return nil, ErrOTPUnavailable
 	}
 
 	key := otpKeyPrefix + sessionID
@@ -93,20 +136,30 @@ func (s *Service) VerifyOTP(ctx context.Context, sessionID, code string) (*OTPRe
 		return nil, fmt.Errorf("unmarshal otp session: %w", err)
 	}
 
-	if session.Attempts >= otpMaxAttempts {
-		s.rdb.Del(ctx, key)
+	// Every verification counts, atomically, so parallel guesses cannot
+	// exceed the limit.
+	attemptsKey := otpAttemptsKeyPrefix + sessionID
+	attempts, err := s.rdb.Incr(ctx, attemptsKey).Result()
+	if err != nil {
+		return nil, fmt.Errorf("count otp attempt: %w", err)
+	}
+	if attempts == 1 {
+		s.rdb.Expire(ctx, attemptsKey, otpTTL)
+	}
+	if attempts > otpMaxAttempts {
+		s.rdb.Del(ctx, key, attemptsKey)
 		return nil, ErrTooManyAttempts
 	}
 
-	if session.Code != code {
-		session.Attempts++
-		updated, _ := json.Marshal(session)
-		s.rdb.Set(ctx, key, updated, s.rdb.TTL(ctx, key).Val())
+	if !otpCodeMatches(s.otp.Secret, sessionID, code, session.CodeHash) {
 		return nil, ErrOTPInvalid
 	}
 
-	// OTP matched — delete session (one-time use)
-	s.rdb.Del(ctx, key)
+	// One-time use: only the caller that actually deletes the session wins.
+	if n, err := s.rdb.Del(ctx, key).Result(); err != nil || n == 0 {
+		return nil, ErrOTPExpired
+	}
+	s.rdb.Del(ctx, attemptsKey)
 
 	return s.resolveOTPUser(ctx, session.Identifier, session.Type)
 }

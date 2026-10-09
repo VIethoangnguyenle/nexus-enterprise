@@ -20,7 +20,12 @@ var (
 	ErrOTPInvalid         = errors.New("invalid otp code")
 	ErrTenantNotFound     = errors.New("tenant not found")
 	ErrTooManyAttempts    = errors.New("too many attempts")
-	ErrUserExists         = errors.New("already exists")
+	// ErrOTPUnavailable means OTP sign-in is switched off: no fixed test
+	// code and no way to deliver a random one.
+	ErrOTPUnavailable = errors.New("otp sign-in is not available")
+	// ErrOTPRateLimited means too many codes were requested for one identifier.
+	ErrOTPRateLimited = errors.New("too many codes requested, try again later")
+	ErrUserExists     = errors.New("already exists")
 	// ErrEmailNotVerified rejects an external sign-in whose provider has not
 	// verified the email. Such an address is only a claim, so it may neither
 	// create an account nor be matched against an existing one.

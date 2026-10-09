@@ -15,7 +15,13 @@ export interface OTPVerifyResponse {
 }
 
 /** Sign-in methods the server has configured. */
-export interface AuthProviders { google: boolean }
+export interface AuthProviders {
+  google: boolean
+  /** OTP sign-in can issue codes. */
+  otp?: boolean
+  /** The documented test-only fixed OTP code is in force. */
+  otp_fixed_code?: boolean
+}
 
 export interface MeResponse {
   user: { id: string; username: string; ngac_node_id: string; email: string; union_id: string; display_name: string }

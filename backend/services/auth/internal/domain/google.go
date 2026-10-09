@@ -99,6 +99,9 @@ func (s *Service) resolveGoogleUser(ctx context.Context, subject, email, display
 		if linked != "" && linked != subject {
 			return nil, false, ErrIdentityConflict
 		}
+		if err := s.evictUnverifiedCredentials(ctx, user.ID); err != nil {
+			return nil, false, err
+		}
 	} else {
 		user, err = s.createExternalUser(ctx, email, displayName)
 		if err != nil {
@@ -111,6 +114,30 @@ func (s *Service) resolveGoogleUser(ctx context.Context, subject, email, display
 		return nil, false, fmt.Errorf("link identity: %w", err)
 	}
 	return user, created, nil
+}
+
+// evictUnverifiedCredentials runs when a verified Google identity is first
+// linked to an account that already existed under the same email.
+//
+// Nothing else in the system verifies email ownership, so that account may
+// have been created by someone else ahead of time (pre-hijacking): signed up
+// with the victim's address and a password of the attacker's choosing, then
+// left waiting. Google has now proved who owns the address, so every
+// credential set up without that proof is dropped — the password, and every
+// session open on any device. The owner can set a new password afterwards.
+//
+// Either step failing fails the sign-in: linking while the attacker keeps
+// access would complete the takeover.
+func (s *Service) evictUnverifiedCredentials(ctx context.Context, userID string) error {
+	if err := s.store.ClearPassword(ctx, userID); err != nil {
+		return fmt.Errorf("clear unverified password: %w", err)
+	}
+	if err := s.refresh.RevokeAllForUser(ctx, userID); err != nil {
+		return fmt.Errorf("revoke unverified sessions: %w", err)
+	}
+	slog.Info("audit: google link evicted unverified credentials",
+		"user_id", userID, "provider", ProviderGoogle, "password_cleared", true, "sessions_revoked", true)
+	return nil
 }
 
 // createExternalUser registers a password-less account for a verified email.

@@ -88,6 +88,47 @@ describe('Login page — Google sign-in', () => {
     expect(screen.queryByText(/something_new/)).not.toBeInTheDocument()
   })
 
+  it('hides the OTP form when the server reports OTP is disabled, keeping Google', async () => {
+    mockProviders.mockResolvedValue({ google: true, otp: false, otp_fixed_code: false })
+    renderLogin()
+
+    await screen.findByRole('button', { name: /google/i })
+    expect(screen.queryByLabelText(/email or phone number/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /continue/i })).not.toBeInTheDocument()
+  })
+
+  it('says sign-in is unavailable when neither OTP nor Google is offered', async () => {
+    mockProviders.mockResolvedValue({ google: false, otp: false, otp_fixed_code: false })
+    renderLogin()
+
+    expect(await screen.findByText(/sign-in isn.t available/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/email or phone number/i)).not.toBeInTheDocument()
+  })
+
+  it('keeps the OTP form while providers are unknown', async () => {
+    mockProviders.mockReturnValue(new Promise(() => {}))
+    renderLogin()
+
+    expect(screen.getByLabelText(/email or phone number/i)).toBeInTheDocument()
+  })
+
+  it('shows the fixed test-code hint whenever the server says the fixed code is active', async () => {
+    mockProviders.mockResolvedValue({ google: false, otp: true, otp_fixed_code: true })
+    renderLogin()
+
+    expect(await screen.findByText(/OTP code is/i)).toBeInTheDocument()
+    expect(screen.getByText('999999')).toBeInTheDocument()
+  })
+
+  it('hides the fixed test-code hint when random codes are in use', async () => {
+    mockProviders.mockResolvedValue({ google: false, otp: true, otp_fixed_code: false })
+    renderLogin()
+
+    await vi.waitFor(() => expect(mockProviders).toHaveBeenCalled())
+    await screen.findByLabelText(/email or phone number/i)
+    expect(screen.queryByText(/OTP code is/i)).not.toBeInTheDocument()
+  })
+
   it('shows no error box without an error parameter', async () => {
     mockProviders.mockResolvedValue({ google: true })
     renderLogin()

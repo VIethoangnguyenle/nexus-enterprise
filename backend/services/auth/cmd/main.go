@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"syscall"
 	"time"
@@ -106,6 +108,12 @@ func main() {
 
 	// Domain service — shared by gRPC and REST handlers
 	svc := domain.NewService(st, rdb, policyRead, policyWrite, wsClient, msgClient)
+	otpOpts, err := otpOptions(jwtSecret)
+	if err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
+	svc.ConfigureOTP(otpOpts)
 
 	// gRPC server (service-to-service)
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
@@ -165,6 +173,45 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+var otpCodeFormat = regexp.MustCompile(`^[0-9]{6}$`)
+
+// otpOptions configures OTP sign-in from the environment.
+//
+// AUTH_FIXED_OTP_CODE selects the mode. Unset → the documented test-only
+// fixed code "999999"; any six digits → that fixed code; set but EMPTY →
+// random codes, delivered by a CodeSender. The only sender today is the
+// dev-only LogSender (APP_ENV=dev or AUTH_DEV_OTP=1); without it random-code
+// OTP is disabled and /api/auth/providers reports otp=false.
+func otpOptions(jwtSecret string) (domain.OTPOptions, error) {
+	// Derive the at-rest HMAC key from the shared JWT secret so every auth
+	// instance verifies codes the others issued, without a new secret to manage.
+	key := sha256.Sum256([]byte("auth-otp-code-hmac\x00" + jwtSecret))
+	opts := domain.OTPOptions{Secret: key[:]}
+
+	fixed, set := os.LookupEnv("AUTH_FIXED_OTP_CODE")
+	if !set {
+		fixed = domain.DefaultFixedOTPCode
+	}
+	fixed = strings.TrimSpace(fixed)
+	if fixed != "" {
+		if !otpCodeFormat.MatchString(fixed) {
+			return opts, fmt.Errorf("AUTH_FIXED_OTP_CODE must be six digits, or empty to disable the fixed code")
+		}
+		opts.FixedCode = fixed
+		slog.Warn("OTP fixed-code TEST MODE is on: every OTP sign-in accepts the configured code. " +
+			"Set AUTH_FIXED_OTP_CODE= (empty) to use random delivered codes.")
+		return opts, nil
+	}
+
+	if domain.DevOTPMode() {
+		opts.Sender = domain.LogSender{}
+		slog.Info("OTP random codes delivered to the log (dev mode only)")
+	} else {
+		slog.Warn("OTP sign-in disabled: fixed code is off and no code sender is configured")
+	}
+	return opts, nil
 }
 
 // googleOptions configures "Sign in with Google" from the environment.

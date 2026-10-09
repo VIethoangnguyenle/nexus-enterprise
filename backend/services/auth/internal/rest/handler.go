@@ -45,7 +45,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	if google == nil {
 		google = newGoogleHandler(GoogleOptions{}, nil)
 	}
-	e.GET("/api/auth/providers", google.Providers)
+	e.GET("/api/auth/providers", h.Providers)
 	e.GET("/api/auth/google/start", google.Start)
 	e.GET("/api/auth/google/callback", google.Callback)
 
@@ -57,6 +57,17 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.GET("/users", h.ListUsers)
 	api.GET("/users/lookup", h.LookupUser)
 	api.GET("/workspaces/:id/contacts", h.ListContacts)
+}
+
+// Providers handles GET /api/auth/providers — which sign-in methods the login
+// page should offer. otp_fixed_code is true while the documented test-only
+// fixed OTP code is in force, so the page can show testers the hint.
+func (h *Handler) Providers(c echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]bool{
+		"google":         h.google.enabled(),
+		"otp":            h.svc.OTPEnabled(),
+		"otp_fixed_code": h.svc.OTPFixedCodeActive(),
+	})
 }
 
 // Signup handles POST /api/auth/signup (multi-tenant flow).
@@ -450,6 +461,10 @@ func mapError(err error) *echo.HTTPError {
 		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
 	case errors.Is(err, domain.ErrTooManyAttempts):
 		return echo.NewHTTPError(http.StatusTooManyRequests, err.Error())
+	case errors.Is(err, domain.ErrOTPRateLimited):
+		return echo.NewHTTPError(http.StatusTooManyRequests, err.Error())
+	case errors.Is(err, domain.ErrOTPUnavailable):
+		return echo.NewHTTPError(http.StatusServiceUnavailable, err.Error())
 	default:
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}

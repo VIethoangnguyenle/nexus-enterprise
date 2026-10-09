@@ -2,7 +2,6 @@ package rest
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -140,31 +139,6 @@ func assertLoginError(t *testing.T, rec *httptest.ResponseRecorder, code string)
 	}
 	if ck := cookieNamed(rec, refreshCookieName); ck != nil && ck.Value != "" {
 		t.Error("a rejected callback must not issue a session")
-	}
-}
-
-func TestProviders_ReportsWhetherGoogleIsConfigured(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		h    *googleHandler
-		want bool
-	}{
-		{"disabled", newGoogleHandler(GoogleOptions{}, nil), false},
-		{"enabled", newGoogleFixture().h, true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			c, rec := request(t, http.MethodGet, "/api/auth/providers")
-			if err := tc.h.Providers(c); err != nil {
-				t.Fatal(err)
-			}
-			var body map[string]bool
-			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
-				t.Fatal(err)
-			}
-			if body["google"] != tc.want {
-				t.Errorf("google = %v, want %v", body["google"], tc.want)
-			}
-		})
 	}
 }
 

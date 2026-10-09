@@ -41,6 +41,8 @@ type AuthStore interface {
 	// ClaimTenantDomain sets a tenant's domain if neither it nor any other
 	// tenant holds that domain yet, and reports whether it did.
 	ClaimTenantDomain(ctx context.Context, tenantID, domain string) (bool, error)
+	// ClearPassword removes a user's password (password sign-in stops working).
+	ClearPassword(ctx context.Context, userID string) error
 }
 
 // AuthResponse is the domain output for legacy register/login operations.
@@ -130,6 +132,7 @@ type Service struct {
 	wsClient    workspacepb.WorkspaceServiceClient
 	msgClient   messagingpb.MessagingServiceClient
 	refresh     *RefreshStore
+	otp         OTPOptions
 }
 
 // NewService creates an auth domain service.
@@ -149,6 +152,8 @@ func NewService(
 		wsClient:    wsClient,
 		msgClient:   msgClient,
 		refresh:     NewRefreshStore(rdb),
+		// Fixed-code test mode unless ConfigureOTP says otherwise.
+		otp: OTPOptions{FixedCode: DefaultFixedOTPCode, Secret: newOTPSecret()},
 	}
 }
 
