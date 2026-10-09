@@ -46,6 +46,9 @@ Verified against the codebase on 2026-07-31.
 | `tenant-ngac-init` | Matches code |
 | `tenant-identity` | Matches code |
 | `tenant-auth-flow` | Matches code |
+| `workspace-admin-authorization` | Matches code |
+| `resource-pep-coverage` | Matches code |
+| `policy-decision-freshness` | Matches code |
 
 **Drive**
 
@@ -54,7 +57,7 @@ Verified against the codebase on 2026-07-31.
 | `drive-context-panel` | Matches code |
 | `drive-tree-navigation` | Matches code |
 | `drive-realtime-sync` | Matches code |
-| `drive-permission-engine` | **Open divergence** — cache key omits tenant; see its Status section |
+| `drive-permission-engine` | Matches code (tenant-keyed cache; divergence closed 2026-08-02) |
 
 **Layout**
 

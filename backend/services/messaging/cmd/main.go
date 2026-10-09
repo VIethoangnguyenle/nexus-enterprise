@@ -96,8 +96,27 @@ func main() {
 		defer rdb.Close()
 	}
 
-	hub := mgrpc.NewHub(rdb)
+	var driveClient drivepb.DriveServiceClient
+	if driveConn != nil {
+		driveClient = drivepb.NewDriveServiceClient(driveConn)
+	}
+
+	// Wire: Store → Domain → Handler
+	msgStore := store.NewStore(pool)
+	domainSvc := domain.NewService(
+		msgStore,
+		policypb.NewPolicyReadServiceClient(policyConn),
+		policypb.NewPolicyWriteServiceClient(policyConn),
+		authpb.NewAuthServiceClient(authConn),
+		driveClient,
+	)
+
+	// The hub authorizes every channel subscription through the domain
+	// service: a WebSocket subscription is a read of the channel.
+	hub := mgrpc.NewHub(rdb, domainSvc)
 	defer hub.Close()
+	// Removing a channel member also ends their live subscriptions.
+	domainSvc.SetSubscriptionRevoker(hub)
 
 	// Start WebSocket server with graceful shutdown support
 	wsMux := http.NewServeMux()
@@ -137,21 +156,6 @@ func main() {
 			recoveryInterceptor,
 		),
 	)
-	var driveClient drivepb.DriveServiceClient
-	if driveConn != nil {
-		driveClient = drivepb.NewDriveServiceClient(driveConn)
-	}
-
-	// Wire: Store → Domain → Handler
-	msgStore := store.NewStore(pool)
-	domainSvc := domain.NewService(
-		msgStore,
-		policypb.NewPolicyReadServiceClient(policyConn),
-		policypb.NewPolicyWriteServiceClient(policyConn),
-		authpb.NewAuthServiceClient(authConn),
-		driveClient,
-	)
-
 	pb.RegisterMessagingServiceServer(srv, mgrpc.NewMessagingServer(domainSvc, hub, producer))
 
 	notifSrv := mgrpc.NewNotificationServer(pool, hub)

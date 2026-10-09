@@ -18,7 +18,7 @@ import { useWorkspaces } from './useWorkspaces'
  * time is enough; there is no navigation to subscribe to.
  */
 export function useActiveWorkspace() {
-  const { data, isLoading } = useWorkspaces()
+  const { data, isLoading, isError } = useWorkspaces()
 
   return useMemo(() => {
     const workspaces = data?.workspaces ?? []
@@ -34,6 +34,7 @@ export function useActiveWorkspace() {
       workspaceName: active?.name ?? '',
       workspaces,
       isLoading,
+      isError,
     }
-  }, [data, isLoading])
+  }, [data, isLoading, isError])
 }

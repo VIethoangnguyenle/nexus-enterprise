@@ -236,6 +236,12 @@ type ListAssetsFilter struct {
 	AssignedTo  string
 	Limit       int32
 	Offset      int32
+
+	// VisibleTypeIDs, when non-nil, restricts the result — rows and total — to
+	// assets of these types. An empty non-nil slice matches nothing. The gRPC
+	// layer sets it to the types the caller may read; the store itself makes
+	// no authorization decision.
+	VisibleTypeIDs []string
 }
 
 // ListAssets returns filtered assets with total count.
@@ -243,6 +249,12 @@ func (s *Store) ListAssets(ctx context.Context, f ListAssetsFilter) ([]*Asset, i
 	baseWhere := "WHERE a.workspace_id = $1 AND a.deleted = FALSE"
 	args := []any{f.WorkspaceID}
 	argIdx := 2
+
+	if f.VisibleTypeIDs != nil {
+		baseWhere += fmt.Sprintf(" AND a.type_id = ANY($%d)", argIdx)
+		args = append(args, f.VisibleTypeIDs)
+		argIdx++
+	}
 
 	if f.TypeID != "" {
 		baseWhere += fmt.Sprintf(" AND a.type_id = $%d", argIdx)
@@ -380,6 +392,48 @@ func (s *Store) ClearAssignment(ctx context.Context, assetID string) error {
 // ============================================
 
 // InsertTransition records a lifecycle state change.
+// ApplyTransition changes an asset's state and records the transition in its
+// history, in one database transaction. If either write fails neither takes
+// effect: a state change with no history row would be an unaudited change, and
+// the history is how the UI says who did what and when.
+//
+// assignedTo, when non-nil, also sets the asset's assignee.
+func (s *Store) ApplyTransition(ctx context.Context, tr *TransitionRecord, assignedTo *string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transition: %w", err)
+	}
+	defer tx.Rollback(ctx) // no-op after Commit
+
+	if assignedTo != nil {
+		_, err = tx.Exec(ctx,
+			`UPDATE assets SET state = $1, assigned_to = $2, updated_at = NOW() WHERE id = $3`,
+			tr.ToState, *assignedTo, tr.AssetID)
+	} else {
+		_, err = tx.Exec(ctx,
+			`UPDATE assets SET state = $1, updated_at = NOW() WHERE id = $2`,
+			tr.ToState, tr.AssetID)
+	}
+	if err != nil {
+		return fmt.Errorf("updating asset state: %w", err)
+	}
+
+	tr.ID = uuid.New().String()
+	tr.CreatedAt = time.Now()
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO asset_transitions (id, asset_id, from_state, to_state, action, actor_id, comment, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		tr.ID, tr.AssetID, tr.FromState, tr.ToState, tr.Action, tr.ActorID, tr.Comment, tr.CreatedAt,
+	); err != nil {
+		return fmt.Errorf("inserting transition: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit transition: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) InsertTransition(ctx context.Context, tr *TransitionRecord) error {
 	tr.ID = uuid.New().String()
 	tr.CreatedAt = time.Now()
@@ -505,6 +559,18 @@ type ListRequestsFilter struct {
 	MineOnly    bool
 	Limit       int32
 	Offset      int32
+
+	// Visibility, when non-nil, restricts the result — rows and total — to
+	// requests the caller may see. The store makes no authorization decision;
+	// the gRPC layer fills this in.
+	Visibility *RequestVisibility
+}
+
+// RequestVisibility selects requests made by RequesterID, or of any type in
+// TypeIDs. Both empty matches nothing.
+type RequestVisibility struct {
+	RequesterID string
+	TypeIDs     []string
 }
 
 // ListRequests returns filtered requests.
@@ -512,6 +578,18 @@ func (s *Store) ListRequests(ctx context.Context, f ListRequestsFilter) ([]*Asse
 	baseWhere := "WHERE r.workspace_id = $1"
 	args := []any{f.WorkspaceID}
 	argIdx := 2
+
+	if v := f.Visibility; v != nil {
+		typeIDs := v.TypeIDs
+		if typeIDs == nil {
+			typeIDs = []string{}
+		}
+		// requester_id is NOT NULL and references users, so an empty
+		// RequesterID matches no row.
+		baseWhere += fmt.Sprintf(" AND (r.requester_id = $%d OR r.type_id = ANY($%d))", argIdx, argIdx+1)
+		args = append(args, v.RequesterID, typeIDs)
+		argIdx += 2
+	}
 
 	if f.MineOnly && f.UserID != "" {
 		baseWhere += fmt.Sprintf(" AND r.requester_id = $%d", argIdx)

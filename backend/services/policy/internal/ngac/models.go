@@ -16,6 +16,12 @@ const (
 const (
 	DenyReasonNodeNotFound  = "node_not_found"
 	DenyReasonNoAssociation = "no_association_path"
+
+	// Fail-closed reasons: evaluation could not complete, so the request is
+	// denied. Decisions carrying these are error-derived and never cached.
+	DenyReasonProhibitionCheckFailed = "prohibition_check_failed"
+	DenyReasonCTEFallbackFailed      = "cte_fallback_failed"
+	DenyReasonEvaluationAborted      = "evaluation_aborted"
 )
 
 // Decision outcomes — used across PDP, cache, and gRPC layers.
@@ -67,6 +73,32 @@ type AccessDecision struct {
 	Object      string            `json:"object"`
 	Operation   string            `json:"operation"`
 	Explanation AccessExplanation `json:"explanation"`
+
+	// EvaluationErr is set when some step of the evaluation failed and the
+	// decision was forced to DENY because of it (fail closed), rather than
+	// because the policy says DENY.
+	//
+	// Such a decision is the right thing to return for this one request, but
+	// it describes the state of the database at that instant, not the policy.
+	// It must never be cached: a cached error-derived DENY turns a transient
+	// blip into a sticky denial, and before the fail-closed fix an error here
+	// produced a cached ALLOW. Never serialized, so a decision read back from
+	// any cache layer is by construction not error-derived.
+	EvaluationErr error `json:"-"`
+}
+
+// ErrorDerived reports whether the decision was produced because evaluation
+// failed. Callers must not cache an error-derived decision.
+func (d *AccessDecision) ErrorDerived() bool {
+	return d != nil && d.EvaluationErr != nil
+}
+
+// failClosed turns the decision into an error-derived DENY.
+func (d *AccessDecision) failClosed(reason string, err error) {
+	d.Decision = DecisionDeny
+	d.Explanation.Reason = reason
+	d.Explanation.ProhibitionDenied = nil
+	d.EvaluationErr = err
 }
 
 // AccessExplanation provides details about why access was granted or denied

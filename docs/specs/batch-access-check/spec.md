@@ -34,3 +34,12 @@ The Drive service SHALL expose `POST /api/drive/batch-access` that accepts a JSO
 #### Scenario: Unauthenticated request
 - **WHEN** request lacks a valid JWT
 - **THEN** system returns 401 Unauthorized
+
+### Requirement: Batch evaluation fails closed
+`BatchCheckAccess` SHALL apply prohibitions exactly as the single check does. If the prohibition
+lookup fails, every operation for every object in the batch SHALL be returned as `false`, and
+none of those results SHALL be cached. See `policy-decision-freshness`.
+
+#### Scenario: Prohibition store unavailable during a batch
+- **WHEN** a batch is evaluated and the prohibition lookup errors
+- **THEN** every result in the batch is `false`

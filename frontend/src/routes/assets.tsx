@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, Navigate, Link, useMatchRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../stores/auth.store'
+import { logoutSession } from '../api/client'
 import { useWebSocketStore } from '../stores/websocket.store'
 import { useWorkspaces } from '../hooks/useWorkspaces'
 import NotificationBell from '../components/NotificationBell'
@@ -25,7 +26,6 @@ const NAV_ITEMS: { to: string; icon: LucideIcon; label: string }[] = [
 function AssetLayout() {
   const token = useAuthStore((s) => s.accessToken)
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
   const connect = useWebSocketStore((s) => s.connect)
   const disconnect = useWebSocketStore((s) => s.disconnect)
   const { data, isLoading } = useWorkspaces()
@@ -90,7 +90,7 @@ function AssetLayout() {
           text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface transition-colors no-underline">
           <Settings size={16} /><span>Settings</span>
         </Link>
-        <NavRow kind="navItem" onClick={logout} aria-label="Logout">
+        <NavRow kind="navItem" onClick={() => void logoutSession()} aria-label="Logout">
           <LogOut size={16} /><span>Logout ({user?.username})</span>
         </NavRow>
       </div>

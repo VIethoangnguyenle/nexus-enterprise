@@ -54,6 +54,23 @@ func (s *DriveServer) checkAccess(ctx context.Context, userNodeID, objectNodeID,
 	return nil
 }
 
+// checkAccessOnNamedOA verifies NGAC access on a well-known OA identified by
+// name (always built with a helper from package ngac). The name is resolved to
+// its node first; a caller with no identity, or an OA that cannot be resolved,
+// denies — there is nothing that could grant the right.
+func (s *DriveServer) checkAccessOnNamedOA(ctx context.Context, userNodeID, oaName, operation string) error {
+	if userNodeID == "" {
+		return status.Errorf(codes.PermissionDenied, "access denied")
+	}
+	node, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
+		Name: oaName, NodeType: ngac.TypeOA,
+	})
+	if err != nil || node.GetId() == "" {
+		return status.Errorf(codes.PermissionDenied, "access denied")
+	}
+	return s.checkAccess(ctx, userNodeID, node.GetId(), operation)
+}
+
 // itemToProto converts a store.DriveItem to a protobuf DriveItem.
 func itemToProto(item *store.DriveItem) *pb.DriveItem {
 	if item == nil {

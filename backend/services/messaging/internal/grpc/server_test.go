@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/ngac"
 	authpb "ngac-platform/proto/auth"
 	pb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
@@ -176,6 +177,34 @@ func setupTestServerWithPolicy(t *testing.T, policyRead policypb.PolicyReadServi
 	return grpcserver.NewMessagingServer(svc, nil, nil), pool
 }
 
+// testPool connects to the test database, skipping when it is unavailable.
+func testPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), testDBURL())
+	if err != nil {
+		t.Fatalf("connect to test DB: %v", err)
+	}
+	if err := pool.Ping(context.Background()); err != nil {
+		t.Skipf("test DB not available: %v", err)
+	}
+	t.Cleanup(func() { pool.Close() })
+	return pool
+}
+
+// mockPolicyReadWithChannelsOA allows every check and resolves the given
+// workspace's ID-keyed Channels OA under any PC, so channel creation in that
+// workspace gets past its create_channel check.
+type mockPolicyReadWithChannelsOA struct {
+	mockPolicyReadClient
+	wsID string
+}
+
+func (m *mockPolicyReadWithChannelsOA) GetChildren(_ context.Context, _ *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	return &policypb.NodeList{Nodes: []*policypb.NGACNode{
+		{Id: "channels-oa-" + m.wsID, Name: ngac.ChannelsOAName(m.wsID), NodeType: ngac.TypeOA},
+	}}, nil
+}
+
 // getTestWorkspaceID returns an existing workspace_id from DB for FK compliance.
 func getTestWorkspaceID(t *testing.T, pool *pgxpool.Pool) string {
 	t.Helper()
@@ -251,10 +280,16 @@ func cleanTestData(t *testing.T, pool *pgxpool.Pool, channelIDs ...string) {
 // ---------------------------------------------------------------------------
 
 func TestCreateChannel_InvalidType(t *testing.T) {
-	srv, _ := setupTestServer(t)
+	// The request has to be authorized for the invalid type to reach the
+	// database constraint: creation now takes create_channel on the
+	// workspace's Channels OA, and a workspace-less request is refused before
+	// any write. So this runs in a real workspace whose Channels OA resolves.
+	pool := testPool(t)
+	wsID := getTestWorkspaceID(t, pool)
+	srv, _ := setupTestServerWithPolicy(t, &mockPolicyReadWithChannelsOA{wsID: wsID})
 
 	_, err := srv.CreateChannel(context.Background(), &pb.CreateChannelRequest{
-		Name: "test_bad_type", ChannelType: "invalid_type",
+		Name: "test_bad_type", ChannelType: "invalid_type", WorkspaceId: wsID,
 		UserId: "user-1", UserNgacNodeId: "ngac-user-1",
 	})
 

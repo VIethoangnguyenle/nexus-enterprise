@@ -27,6 +27,20 @@ type Service struct {
 	policyWrite policypb.PolicyWriteServiceClient
 	authClient  authpb.AuthServiceClient
 	driveClient drivepb.DriveServiceClient
+	revoker     SubscriptionRevoker
+}
+
+// SubscriptionRevoker ends live (WebSocket) subscriptions a user holds on a
+// channel. The hub implements it.
+type SubscriptionRevoker interface {
+	RevokeChannelSubscriptions(channelID, userNodeID string)
+}
+
+// SetSubscriptionRevoker wires the live-subscription revoker. It is a setter
+// rather than a constructor argument because the hub itself depends on this
+// service to authorize subscriptions.
+func (s *Service) SetSubscriptionRevoker(r SubscriptionRevoker) {
+	s.revoker = r
 }
 
 // NewService creates a messaging domain service.
@@ -57,8 +71,41 @@ type CreateChannelInput struct {
 	ChannelType string
 }
 
-// CreateChannel creates a channel with NGAC nodes, permissions, and optional drive.
+// CreateChannel creates a workspace channel with NGAC nodes, permissions, and
+// optional drive.
+//
+// The caller must hold create_channel on the workspace's Channels OA. The check
+// runs before anything is written, so a denied request leaves no orphan nodes
+// in the graph. A channel with no workspace has no Channels OA to authorize
+// against, so it is refused here — direct messages go through FindOrCreateDM.
 func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb.Channel, error) {
+	if in.WorkspaceID == "" {
+		return nil, fmt.Errorf("%w: a channel must belong to a workspace", ErrInvalidInput)
+	}
+	ws, err := s.store.GetWorkspaceByID(ctx, in.WorkspaceID)
+	if err != nil {
+		return nil, fmt.Errorf("workspace lookup: %w", err)
+	}
+	if ws == nil {
+		return nil, fmt.Errorf("%w: workspace", ErrNotFound)
+	}
+	channelsOAID := s.findChildByName(ctx, ws.PCNodeID, ngac.ChannelsOAName(ws.ID), ngac.TypeOA)
+	if channelsOAID == "" {
+		// Fail closed. The legacy name-keyed node is deliberately not consulted:
+		// two workspaces may share a display name, and authorizing against a
+		// node they share is how one tenant's grant reaches another.
+		return nil, fmt.Errorf("%w: %s on workspace channels", ErrAccessDenied, ngac.OpCreateChannel)
+	}
+	if err := s.checkAccess(ctx, in.UserNodeID, channelsOAID, ngac.OpCreateChannel); err != nil {
+		return nil, err
+	}
+	return s.createChannel(ctx, in, ws.PCNodeID, channelsOAID)
+}
+
+// createChannel performs the writes for a channel whose creation has already
+// been authorized. pcID and channelsOAID are empty for a DM, which hangs under
+// PC_Global instead of a workspace.
+func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID, channelsOAID string) (*pb.Channel, error) {
 	// Normalize channel type: "group" maps to "workspace" for DB constraint.
 	if in.ChannelType == "group" {
 		in.ChannelType = "workspace"
@@ -71,7 +118,7 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb
 		return nil, err
 	}
 
-	if err := s.assignChannelToWorkspace(ctx, in.WorkspaceID, contentOA.Id, membersUA.Id); err != nil {
+	if err := s.assignChannelNodes(ctx, pcID, channelsOAID, contentOA.Id, membersUA.Id); err != nil {
 		return nil, err
 	}
 
@@ -121,34 +168,22 @@ func (s *Service) createChannelNGACNodes(ctx context.Context, chID string) (*pol
 	return contentOA, membersUA, nil
 }
 
-// assignChannelToWorkspace links channel nodes into the workspace NGAC tree.
-// For DMs (no workspace), assigns under PC_Global.
-func (s *Service) assignChannelToWorkspace(ctx context.Context, workspaceID, contentOAID, membersUAID string) error {
-	if workspaceID == "" {
+// assignChannelNodes links channel nodes into the workspace NGAC tree: content
+// under the workspace's Channels OA, members under its PC. With no workspace
+// (a DM) both go under PC_Global.
+func (s *Service) assignChannelNodes(ctx context.Context, pcID, channelsOAID, contentOAID, membersUAID string) error {
+	if pcID == "" {
 		return s.assignToGlobalPC(ctx, contentOAID, membersUAID)
 	}
 
-	// Find workspace's Channels OA by workspace ID (not name).
-	ws, err := s.store.GetWorkspaceByID(ctx, workspaceID)
-	if err != nil || ws == nil {
-		return fmt.Errorf("workspace lookup failed: %w", err)
-	}
-
-	// Try ID-based naming first (new convention), fallback to name-based (legacy).
-	channelsOAID := s.findChildByName(ctx, ws.PCNodeID, ngac.ChannelsOAName(workspaceID), ngac.TypeOA)
-	if channelsOAID == "" {
-		channelsOAID = s.findChildByName(ctx, ws.PCNodeID, ngac.ChannelsOAName(ws.Name), ngac.TypeOA)
-	}
-	if channelsOAID != "" {
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: contentOAID, ParentId: channelsOAID,
-		}); err != nil {
-			return fmt.Errorf("assign channel content under Channels OA: %w", err)
-		}
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		ChildId: contentOAID, ParentId: channelsOAID,
+	}); err != nil {
+		return fmt.Errorf("assign channel content under Channels OA: %w", err)
 	}
 
 	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: membersUAID, ParentId: ws.PCNodeID,
+		ChildId: membersUAID, ParentId: pcID,
 	}); err != nil {
 		return fmt.Errorf("assign channel members UA under workspace PC: %w", err)
 	}
@@ -239,9 +274,16 @@ func (s *Service) ListChannels(ctx context.Context, workspaceID, userNodeID stri
 }
 
 // UpdateChannel renames a channel. Returns the updated channel proto.
-func (s *Service) UpdateChannel(ctx context.Context, channelID, name string) (*pb.Channel, error) {
+//
+// Renaming changes what every member sees, so it takes manage on the channel's
+// content OA — held by workspace owners through the Channels OA, not by plain
+// channel members.
+func (s *Service) UpdateChannel(ctx context.Context, channelID, userNodeID, name string) (*pb.Channel, error) {
 	if name == "" {
-		return nil, fmt.Errorf("channel name cannot be empty")
+		return nil, fmt.Errorf("%w: channel name cannot be empty", ErrInvalidInput)
+	}
+	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpManage); err != nil {
+		return nil, err
 	}
 	if err := s.store.UpdateChannelName(ctx, channelID, name); err != nil {
 		return nil, fmt.Errorf("update channel: %w", err)
@@ -308,12 +350,14 @@ func (s *Service) FindOrCreateDM(ctx context.Context, userID, userNodeID, target
 	// The previous form spliced two truncated user IDs together, which both
 	// put raw identifiers in front of the user and panicked on any ID shorter
 	// than eight characters.
-	ch, err := s.CreateChannel(ctx, CreateChannelInput{
+	// A DM belongs to no workspace, so there is no Channels OA to check
+	// create_channel against; it is created directly under PC_Global.
+	ch, err := s.createChannel(ctx, CreateChannelInput{
 		Name:        ngac.DMChannelName(s.lookupUsername(ctx, userID), s.lookupUsername(ctx, targetUserID)),
 		ChannelType: "dm",
 		UserID:      userID,
 		UserNodeID:  userNodeID,
-	})
+	}, "", "")
 	if err != nil {
 		return nil, fmt.Errorf("create DM channel: %w", err)
 	}
@@ -529,6 +573,12 @@ func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, 
 	}); err != nil {
 		return fmt.Errorf("remove member: %w", err)
 	}
+	// Losing membership must also end the live feed. The subscription was
+	// authorized when it was opened; without this the removed user keeps
+	// receiving every new message for as long as the socket stays up.
+	if s.revoker != nil {
+		s.revoker.RevokeChannelSubscriptions(channelID, targetNodeID)
+	}
 	return nil
 }
 
@@ -573,6 +623,15 @@ func (s *Service) checkAccess(ctx context.Context, userNodeID, objectNodeID, ope
 		return fmt.Errorf("%w: %s on %s", ErrAccessDenied, operation, objectNodeID)
 	}
 	return nil
+}
+
+// AuthorizeChannelAccess reports whether the user holds operation on the
+// channel's content OA. The WebSocket hub delegates to it before letting a
+// connection join a channel's live stream. It fails closed: an unknown channel
+// or a policy error is a refusal.
+func (s *Service) AuthorizeChannelAccess(ctx context.Context, channelID, userNodeID, operation string) error {
+	_, err := s.authorizeChannel(ctx, channelID, userNodeID, operation)
+	return err
 }
 
 // authorizeChannel loads a channel and verifies the user holds op on its

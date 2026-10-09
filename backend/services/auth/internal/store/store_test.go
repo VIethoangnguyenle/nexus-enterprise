@@ -48,7 +48,8 @@ func insertTestUser(t *testing.T, s *store.Store, pool *pgxpool.Pool) (id, usern
 	)
 	require.NoError(t, err)
 
-	err = s.CreateUser(context.Background(), id, username, "$2a$10$fakehash000000000000000000000000000000000000", ngacNodeID, "", "", "", "")
+	// union_id is UNIQUE, so it must differ per user or a second call collides.
+	err = s.CreateUser(context.Background(), id, username, "$2a$10$fakehash000000000000000000000000000000000000", ngacNodeID, "", "union-"+id, "", "")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {

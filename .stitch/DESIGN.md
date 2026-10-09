@@ -1,3 +1,6 @@
+> **Archived 2026-10-09.** Superseded by the root `DESIGN.md` (direction "Tín hiệu") and
+> `design/mockups/`. Kept as history; do not design from this file.
+
 # Design System: Nexus Hub
 
 **Project ID:** 14852434379132121789

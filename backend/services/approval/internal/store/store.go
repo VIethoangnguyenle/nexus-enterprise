@@ -371,6 +371,37 @@ func (s *Store) CountApprovedForStep(ctx context.Context, requestID string, step
 	return count, nil
 }
 
+// ListPendingAssignees returns the user nodes whose assignment on a step is
+// still pending.
+func (s *Store) ListPendingAssignees(ctx context.Context, requestID string, stepOrder int) ([]string, error) {
+	c, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Release()
+
+	rows, err := c.Query(ctx, `
+		SELECT user_node_id FROM approval_assignments
+		WHERE request_id = $1 AND step_order = $2 AND status = 'pending'
+		ORDER BY user_node_id`,
+		requestID, stepOrder,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("list pending assignees: %w", err)
+	}
+	defer rows.Close()
+
+	var out []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan pending assignee: %w", err)
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 // SkipRemainingAssignments marks all pending assignments for a step as skipped.
 func (s *Store) SkipRemainingAssignments(ctx context.Context, requestID string, stepOrder int) error {
 	c, err := s.conn(ctx)

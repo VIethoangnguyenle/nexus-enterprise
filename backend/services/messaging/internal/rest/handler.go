@@ -151,13 +151,17 @@ func (h *Handler) GetChannel(c echo.Context) error {
 
 // UpdateChannel handles PATCH /api/channels/:chId.
 func (h *Handler) UpdateChannel(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		Name string `json:"name"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
-	ch, err := h.svc.UpdateChannel(c.Request().Context(), c.Param("chId"), body.Name)
+	ch, err := h.svc.UpdateChannel(c.Request().Context(), c.Param("chId"), claims.NGACNodeID, body.Name)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

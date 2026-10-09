@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import DOMPurify from 'dompurify'
 import remarkGfm from 'remark-gfm'
 import { Copy, Check } from 'lucide-react'
 import { Button } from '../primitives'
@@ -15,15 +16,15 @@ export function MessageContent({ content, contentFormat }: MessageContentProps) 
   if (contentFormat === 'html' || content.startsWith('<')) {
     return (
       <div
-        className="message-html text-body text-on-surface-variant leading-relaxed break-words"
-        dangerouslySetInnerHTML={{ __html: highlightMentions(content) }}
+        className="message-html text-sm text-ink leading-[1.55] break-words"
+        dangerouslySetInnerHTML={{ __html: sanitizeMessageHtml(highlightMentions(content)) }}
       />
     )
   }
 
   // Markdown rendering with custom code block component
   return (
-    <div className="message-markdown text-body text-on-surface-variant leading-relaxed break-words [&_p]:m-0 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:my-1 [&_blockquote]:text-on-surface-variant [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-1 [&_a]:text-primary [&_a]:underline [&_strong]:text-on-surface">
+    <div className="message-markdown text-sm text-ink leading-[1.55] break-words [&_p]:m-0 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:my-1 [&_blockquote]:text-on-surface-variant [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-1 [&_a]:text-primary [&_a]:underline [&_strong]:text-on-surface">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -97,10 +98,28 @@ function FencedCodeBlock({ code, language }: { code: string; language?: string }
 }
 
 /** Wrap @mentions in highlight spans for HTML content. */
+// Message HTML is written by other users and stored, so it is untrusted: anything it can run
+// runs in every reader's session. DOMPurify drops scripts, event handlers and non-http(s)
+// URLs; links are forced to open in a new tab without access to this window.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A') {
+    node.setAttribute('target', '_blank')
+    node.setAttribute('rel', 'noopener noreferrer')
+  }
+})
+
+function sanitizeMessageHtml(html: string): string {
+  return DOMPurify.sanitize(html, {
+    FORBID_TAGS: ['style', 'iframe', 'object', 'embed', 'form', 'input', 'button'],
+    FORBID_ATTR: ['style'],
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:|\/|#)/i,
+  })
+}
+
 function highlightMentions(html: string): string {
   return html.replace(
     /@(\w+)/g,
-    '<span class="text-primary font-medium bg-primary/10 px-1 rounded">@$1</span>'
+    '<span class="text-accent font-semibold bg-accent-wash px-1 rounded-sm">@$1</span>'
   )
 }
 

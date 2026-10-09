@@ -44,6 +44,8 @@ type RequestStore interface {
 	SkipAllPendingAssignments(ctx context.Context, requestID string) error
 	AdvanceStep(ctx context.Context, requestID string, fromStep, nextStep int) (bool, error)
 	CompleteRequest(ctx context.Context, requestID, status string) (bool, error)
+	// ListPendingAssignees returns the user nodes still pending on a step.
+	ListPendingAssignees(ctx context.Context, requestID string, stepOrder int) ([]string, error)
 
 	// Query tabs
 	ListPending(ctx context.Context, userNodeID string) ([]*RequestWithAssignment, error)

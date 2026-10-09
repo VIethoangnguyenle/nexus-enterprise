@@ -159,6 +159,28 @@ func (g *Graph) RemoveAssociationByID(id string) {
 	delete(g.Associations, id)
 }
 
+// replaceWith swaps the entire contents of g for those of src in one step.
+//
+// Every holder of the *Graph (the store, the decision engine, the cache
+// invalidator) keeps its pointer and sees either the complete old graph or the
+// complete new one — never a half-loaded mix. src is consumed: the caller must
+// not use it afterwards.
+func (g *Graph) replaceWith(src *Graph) {
+	src.mu.Lock()
+	defer src.mu.Unlock()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	g.Nodes = src.Nodes
+	g.Assignments = src.Assignments
+	g.Associations = src.Associations
+	g.childToParents = src.childToParents
+	g.parentToChildren = src.parentToChildren
+	g.uaToAssociations = src.uaToAssociations
+	g.oaToAssociations = src.oaToAssociations
+	g.nameTypeIndex = src.nameTypeIndex
+}
+
 // --- Internal helpers ---
 
 func (g *Graph) wouldCreateCycle(fromID, toID string) bool {

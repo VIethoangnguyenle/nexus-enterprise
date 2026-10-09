@@ -3,13 +3,14 @@ import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../stores/auth.store'
 import { useWebSocketStore } from '../stores/websocket.store'
 import { useUiStore } from '../stores/ui.store'
-import { useWorkspaces } from '../hooks/useWorkspaces'
+import { useActiveWorkspace } from '../hooks/useActiveWorkspace'
+import { useUnreadCounts } from '../hooks/useMessaging'
+import { workspaceDisplayName } from '../lib/workspace'
 import { useResizable } from '../hooks/useResizable'
 import { AppSidebar } from '../components/patterns/AppSidebar'
-import { TopBar } from '../components/patterns/TopBar'
 import { ListPanel } from '../components/patterns/ListPanel'
 import { MobileNav } from '../components/patterns/MobileNav'
-import { Button, IconButton, Spinner, Text } from '../components/primitives'
+import { Button, IconButton, Spinner, Text, Toaster } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { apiFetch, logoutSession } from '../api/client'
 import { PanelLeft, X } from 'lucide-react'
@@ -22,7 +23,9 @@ function WorkspaceLayout() {
   const token = useAuthStore((s) => s.accessToken)
   const connect = useWebSocketStore((s) => s.connect)
   const disconnect = useWebSocketStore((s) => s.disconnect)
-  const { data, isLoading, isError } = useWorkspaces()
+  const { workspaceId: wsId, workspaceName, workspaces, isLoading, isError } = useActiveWorkspace()
+  const { data: unreadData } = useUnreadCounts()
+  const unreadMessages = (unreadData?.channels ?? []).reduce((n, c) => n + c.unread_count, 0)
 
   const listPanelWidth = useUiStore((s) => s.listPanelWidth)
   const setListPanelWidth = useUiStore((s) => s.setListPanelWidth)
@@ -65,6 +68,9 @@ function WorkspaceLayout() {
   /* Mobile: toggle list panel overlay */
   const [showMobileList, setShowMobileList] = useState(false)
 
+  /* Picking something in the mobile list navigates; close the overlay so the result is visible. */
+  useEffect(() => { setShowMobileList(false) }, [currentPath])
+
   /* Listen for child routes requesting mobile list panel (e.g. channel back button) */
   useEffect(() => {
     const openList = () => setShowMobileList(true)
@@ -79,12 +85,11 @@ function WorkspaceLayout() {
   // When workspaces is empty after loading, verify session is still valid.
   const verifiedRef = useRef(false)
   useEffect(() => {
-    const workspaces = data?.workspaces || []
     if (!isLoading && workspaces.length === 0 && token && !verifiedRef.current) {
       verifiedRef.current = true
       apiFetch('/me').catch(() => { void logoutSession() })
     }
-  }, [isLoading, data, token])
+  }, [isLoading, workspaces, token])
 
   if (!token) return <Navigate to="/login" search={Object.fromEntries(new URLSearchParams(window.location.search))} />
 
@@ -110,8 +115,6 @@ function WorkspaceLayout() {
     )
   }
 
-  const workspaces = data?.workspaces || []
-
   if (workspaces.length === 0) {
     return (
       <div className="flex h-dvh bg-background overflow-hidden">
@@ -127,19 +130,12 @@ function WorkspaceLayout() {
     )
   }
 
-  const wsParam = new URLSearchParams(window.location.search).get('ws')
-  const selectedWs = wsParam ? workspaces.find(w => w.id === wsParam) : undefined
-  const wsId = selectedWs?.id || workspaces[0].id
-
   return (
     <div className="flex flex-col h-dvh bg-background overflow-hidden">
-      {/* Row 1: TopBar — full width */}
-      <TopBar />
-
       {/* Row 2: Sidebar + Content */}
       <div className="flex flex-1 min-h-0">
         {/* Column 1: AppSidebar — hidden on mobile, visible on lg+ */}
-        <AppSidebar workspaceName={formatWorkspaceName(workspaces.find(w => w.id === wsId)?.name)} />
+        <AppSidebar workspaceName={workspaceDisplayName(workspaceName)} unreadCounts={{ messaging: unreadMessages }} />
 
         {/* Column 2: ListPanel — only for messaging, documents, and workspace modules */}
         {activeModule !== 'contacts' && activeModule !== 'drive' && activeModule !== 'approval' && activeModule !== 'assets' && activeModule !== 'settings' && activeModule !== 'admin' && (
@@ -186,17 +182,7 @@ function WorkspaceLayout() {
 
       {/* Mobile bottom navigation */}
       <MobileNav />
+      <Toaster />
     </div>
   )
-}
-
-/** Format raw workspace name for display.
- *  Converts auto-generated names like "user_123's workspace" to "My Workspace". */
-function formatWorkspaceName(name: string | undefined): string {
-  if (!name) return 'Nexus Workspace'
-  // Personal workspace pattern: "{username}'s workspace"
-  if (name.match(/^user_\d+'s\s+workspace$/i)) {
-    return 'My Workspace'
-  }
-  return name
 }

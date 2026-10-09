@@ -372,3 +372,45 @@ func insertCASRequest(t *testing.T, ctx context.Context, s *store.Store, label s
 	})
 	return reqID
 }
+
+// ListPendingAssignees names who still has to act on a step — and nobody who
+// already acted, nobody on another step, and nothing from another tenant.
+func TestListPendingAssignees(t *testing.T) {
+	s := store.NewStore(testDB)
+	ctxA := httputil.WithTenantSchema(context.Background(), schemaA)
+	reqID := insertCASRequest(t, ctxA, s, "Assignees")
+	bg := context.Background()
+	t.Cleanup(func() {
+		testDB.Exec(bg, fmt.Sprintf("DELETE FROM %s.approval_assignments WHERE request_id = $1", schemaA), reqID)
+	})
+
+	acted := newID()
+	if err := s.InsertAssignments(ctxA, []*domain.AssignmentRecord{
+		{ID: acted, RequestID: reqID, StepOrder: 1, UserNodeID: "ap-done", GrantSource: "direct", Status: "pending"},
+		{ID: newID(), RequestID: reqID, StepOrder: 1, UserNodeID: "ap-waiting", GrantSource: "direct", Status: "pending"},
+		{ID: newID(), RequestID: reqID, StepOrder: 2, UserNodeID: "ap-later", GrantSource: "direct", Status: "pending"},
+	}); err != nil {
+		t.Fatalf("insert assignments: %v", err)
+	}
+	if err := s.UpdateAssignmentStatus(ctxA, acted, "approved", ""); err != nil {
+		t.Fatalf("approve: %v", err)
+	}
+
+	got, err := s.ListPendingAssignees(ctxA, reqID, 1)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 1 || got[0] != "ap-waiting" {
+		t.Errorf("pending on step 1 = %v, want [ap-waiting]", got)
+	}
+
+	// Tenant B's schema holds no such request: the same id names nobody there.
+	ctxB := httputil.WithTenantSchema(context.Background(), schemaB)
+	got, err = s.ListPendingAssignees(ctxB, reqID, 1)
+	if err != nil {
+		t.Fatalf("list in tenant B: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("tenant B sees %v for tenant A's request, want none", got)
+	}
+}

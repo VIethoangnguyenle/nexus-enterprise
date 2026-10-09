@@ -1,212 +1,414 @@
 @import "tailwindcss";
 
-/* ========================================================= */
-/* NGAC Design System — Nexus Hub Enterprise                 */
-/* Material 3 light surfaces · Manrope type · Stitch DNA     */
-/* Tailwind v4 CSS-first tokens                              */
-/* ========================================================= */
-@theme {
-  --font-sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+/* ========================================================================= */
+/* Tín hiệu: design tokens of Nexus Hub. Source of truth is DESIGN.md.       */
+/*                                                                           */
+/* `static` so every token is emitted even when no class names it: person    */
+/* hues are chosen at runtime (lib/person-hue.ts) and reach the DOM through  */
+/* inline custom properties, which Tailwind's scanner cannot see.            */
+/*                                                                           */
+/* Values here are LIGHT. Dark values live under :root[data-theme="dark"]    */
+/* below and are opt-in only: the rest of the app has not been migrated to   */
+/* the new surfaces yet, so prefers-color-scheme is deliberately not wired.  */
+/* ========================================================================= */
+@theme static {
+  /* --- Type (DESIGN.md §3) --- */
+  --font-sans: "Be Vietnam Pro", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "Be Vietnam Pro", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-display: "Bricolage Grotesque", "Be Vietnam Pro", "Segoe UI", Arial, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Menlo', 'Monaco', monospace;
 
-  /* --- Material 3 Surface System (Light) --- */
-  --color-surface: #f9f9ff;
-  --color-surface-bright: #f9f9ff;
-  --color-surface-dim: #cfdaf2;
-  --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f0f3ff;
-  --color-surface-container: #e7eeff;
-  --color-surface-container-high: #dee8ff;
-  --color-surface-container-highest: #d8e3fb;
-  --color-background: #f9f9ff;
+  --text-2xs: 0.6875rem;
+  --text-2xs--line-height: 1rem;
+  --text-xs: 0.75rem;
+  --text-xs--line-height: 1rem;
+  --text-sm: 0.875rem;
+  --text-sm--line-height: 1.3125rem;
+  --text-base: 1rem;
+  --text-base--line-height: 1.5rem;
+  --text-lg: 1.1875rem;
+  --text-lg--line-height: 1.625rem;
+  --text-xl: 1.4375rem;
+  --text-xl--line-height: 1.875rem;
+  --text-2xl: 1.75rem;
+  --text-2xl--line-height: 2.125rem;
 
-  /* --- On-Surface Text --- */
-  --color-on-surface: #111c2d;
-  --color-on-surface-variant: #434655;
-  --color-on-background: #111c2d;
+  /* --- Surfaces: depth by tone, containers carry no border (§2, §4) --- */
+  --color-sunk: oklch(94.6% 0.011 190);
+  --color-base: oklch(97.4% 0.007 190);
+  --color-raised: oklch(99.3% 0.003 190);
+  --color-overlay: oklch(99.6% 0.002 190);
+  --color-hover: oklch(93.4% 0.012 190);
+  --color-scrim: oklch(23% 0.02 200 / 0.32);
 
+  /* --- Ink --- */
+  --color-ink: oklch(23% 0.02 200);
+  --color-ink-muted: oklch(46% 0.02 200);
+  --color-ink-subtle: oklch(62% 0.015 200);
+  --color-line: oklch(89.5% 0.01 195);
 
-  /* --- Primary --- */
-  --color-primary: #004AC6;
-  --color-primary-hover: #003EA8;
-  --color-primary-container: #2563eb;
-  --color-primary-fixed: #dbe1ff;
-  --color-primary-fixed-dim: #b4c5ff;
-  --color-on-primary: #ffffff;
-  --color-on-primary-container: #eeefff;
-  --color-on-primary-fixed-variant: #003EA8;
+  /* --- Accent --- */
+  --color-accent: oklch(50% 0.1 180);
+  --color-accent-hover: oklch(45% 0.1 180);
+  --color-accent-wash: oklch(93% 0.035 180);
+  --color-on-accent: oklch(98.5% 0.005 180);
+  --color-focus: oklch(55% 0.12 180);
+  /* Text on a person-hue fill keeps the light on-accent value in both themes. */
+  --color-on-person: oklch(98.5% 0.005 180);
 
+  /* --- Semantic (always paired with a text label) --- */
+  --color-success: oklch(49% 0.11 150);
+  --color-success-wash: oklch(94% 0.04 150);
+  --color-warning: oklch(50% 0.12 65);
+  --color-warning-wash: oklch(94.5% 0.05 75);
+  --color-danger: oklch(52% 0.17 25);
+  --color-danger-wash: oklch(94.5% 0.035 25);
+  --color-info: oklch(50% 0.1 240);
+  --color-info-wash: oklch(94% 0.03 240);
 
-  /* --- Secondary --- */
-  --color-secondary: #505f76;
-  --color-secondary-container: #d0e1fb;
+  /* --- Person hues (identity, never status) --- */
+  --color-person-1: oklch(52% 0.13 45);
+  --color-person-1-wash: oklch(93% 0.04 45);
+  --color-person-2: oklch(50% 0.1 95);
+  --color-person-2-wash: oklch(94% 0.045 95);
+  --color-person-3: oklch(50% 0.12 140);
+  --color-person-3-wash: oklch(93.5% 0.04 140);
+  --color-person-4: oklch(50% 0.09 205);
+  --color-person-4-wash: oklch(93.5% 0.03 205);
+  --color-person-5: oklch(50% 0.12 245);
+  --color-person-5-wash: oklch(93.5% 0.035 245);
+  --color-person-6: oklch(51% 0.13 285);
+  --color-person-6-wash: oklch(93.5% 0.035 285);
+  --color-person-7: oklch(51% 0.13 325);
+  --color-person-7-wash: oklch(93.5% 0.035 325);
+  --color-person-8: oklch(53% 0.13 355);
+  --color-person-8-wash: oklch(94% 0.035 355);
 
-  --color-on-secondary: #ffffff;
-  --color-on-secondary-container: #54647a;
+  /* ----------------------------------------------------------------------- */
+  /* Legacy names, re-pointed. Screens not yet migrated keep their class     */
+  /* names and pick up the new palette from here, so the whole app shifts    */
+  /* coherently without per-file edits. New code uses the names above.      */
+  /* ----------------------------------------------------------------------- */
+  --color-background: var(--color-base);
+  --color-surface: var(--color-base);
+  --color-surface-bright: var(--color-base);
+  --color-surface-dim: var(--color-line);
+  --color-surface-variant: var(--color-hover);
+  --color-surface-container-lowest: var(--color-raised);
+  --color-surface-container-low: var(--color-sunk);
+  --color-surface-container: var(--color-hover);
+  --color-surface-container-high: var(--color-hover);
+  /* Every use is a selected item or segment: DESIGN's selected tone is raised. */
+  --color-surface-container-highest: var(--color-raised);
 
-  /* --- Tertiary --- */
-  --color-tertiary: #515659;
+  --color-on-surface: var(--color-ink);
+  --color-on-surface-variant: var(--color-ink-muted);
+  --color-on-background: var(--color-ink);
 
+  --color-primary: var(--color-accent);
+  --color-primary-hover: var(--color-accent-hover);
+  --color-primary-container: var(--color-accent);
+  --color-primary-fixed: var(--color-accent-wash);
+  --color-primary-fixed-dim: var(--color-accent-wash);
+  --color-on-primary: var(--color-on-accent);
+  --color-on-primary-container: var(--color-on-accent);
+  --color-on-primary-fixed-variant: var(--color-accent-hover);
 
-  /* --- Outline --- */
-  --color-outline: #737686;
-  --color-outline-variant: #c3c6d7;
+  --color-secondary: var(--color-ink-muted);
+  --color-secondary-container: var(--color-hover);
+  --color-on-secondary: var(--color-on-accent);
+  --color-on-secondary-container: var(--color-ink);
 
-  /* --- Error / Functional --- */
-  --color-error: #ba1a1a;
-  --color-error-container: #ffdad6;
-  --color-on-error: #ffffff;
-  --color-on-error-container: #93000a;
-  --color-success: #16a34a;
-  --color-success-bg: rgba(22, 163, 74, 0.08);
-  --color-on-success: #ffffff;
-  --color-warning: #d97706;
-  --color-warning-bg: rgba(217, 119, 6, 0.08);
-  /* `danger` là bí danh của `error`, không phải một màu thứ hai.
-   * Stitch §Error đặt tên cho màu này là `error` ("Signal Red #BA1A1A / error"),
-   * nên `error` là từ vựng chuẩn và `danger` là nhánh trôi của dự án. Trước đây
-   * cả hai cùng nướng cứng #ba1a1a — hai tên, một màu, không gì ràng chúng lại:
-   * sửa một bên mà quên bên kia là app có hai sắc đỏ.
-   * Bí danh gỡ rủi ro đó ngay mà không đụng tới 21 chỗ đang gọi `danger`.
-   * Việc đổi tên chúng sang `error` đi kèm migration từng chặng. */
-  --color-danger: var(--color-error);
-  --color-danger-bg: color-mix(in srgb, var(--color-error) 6%, transparent);
-  --color-info: #0284c7;
-  --color-info-bg: rgba(2, 132, 199, 0.08);
+  --color-tertiary: var(--color-ink-muted);
+  --color-on-tertiary-container: var(--color-ink-muted);
 
-  /* --- Legacy Semantic Aliases (backward compat) --- */
-  --color-bg-primary: var(--color-surface);
-  --color-bg-secondary: var(--color-surface-bright);
-  --color-bg-tertiary: var(--color-surface-container-low);
+  --color-outline: var(--color-ink-muted);
+  --color-outline-variant: var(--color-line);
 
-  --color-bg-hover: var(--color-surface-container);
-  --color-bg-active: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  --color-bg-glass: rgba(0, 0, 0, 0.03);
-  --color-text-primary: var(--color-on-surface);
-  --color-text-secondary: var(--color-on-surface-variant);
-  --color-text-muted: var(--color-outline);
-  --color-border: var(--color-outline-variant);
-  --color-border-subtle: rgba(0, 0, 0, 0.05);
+  --color-error: var(--color-danger);
+  --color-error-container: var(--color-danger-wash);
+  --color-on-error: var(--color-on-accent);
+  --color-on-error-container: var(--color-danger);
+  --color-on-success: var(--color-on-accent);
+  --color-success-bg: var(--color-success-wash);
+  --color-warning-bg: var(--color-warning-wash);
+  --color-danger-bg: var(--color-danger-wash);
+  --color-info-bg: var(--color-info-wash);
 
+  --color-bg-primary: var(--color-base);
+  --color-bg-secondary: var(--color-base);
+  --color-bg-tertiary: var(--color-sunk);
+  --color-bg-hover: var(--color-hover);
+  --color-bg-active: var(--color-accent-wash);
+  --color-bg-glass: var(--color-hover);
+  --color-text-primary: var(--color-ink);
+  --color-text-secondary: var(--color-ink-muted);
+  --color-text-muted: var(--color-ink-muted);
+  --color-border: var(--color-line);
+  --color-border-subtle: var(--color-line);
+  --color-border-solid: var(--color-line);
+  --color-border-focus: var(--color-focus);
+  --color-accent-bg: var(--color-accent-wash);
+  --color-accent-glow: var(--color-accent-wash);
 
-  --color-border-solid: var(--color-outline-variant);
-  --color-border-focus: var(--color-primary);
-  --color-accent: var(--color-primary);
-  --color-accent-hover: var(--color-primary-hover);
-  --color-accent-bg: color-mix(in srgb, var(--color-primary) 8%, transparent);
-  --color-accent-glow: color-mix(in srgb, var(--color-primary) 15%, transparent);
+  --color-status-online: var(--color-success);
+  --color-status-online-bg: var(--color-success-wash);
+  --color-status-online-border: var(--color-success);
+  --color-status-offline: var(--color-ink-subtle);
+  --color-status-offline-bg: var(--color-sunk);
+  --color-status-offline-border: var(--color-line);
+  --color-status-meeting: var(--color-warning);
+  --color-status-meeting-bg: var(--color-warning-wash);
+  --color-status-meeting-border: var(--color-warning);
 
-  /* --- Status Indicators (semantic) --- */
-  --color-status-online: #16a34a;
-  --color-status-online-bg: rgba(22, 163, 74, 0.08);
-  --color-status-online-border: rgba(22, 163, 74, 0.25);
-  --color-status-offline: var(--color-outline-variant);
-  --color-status-offline-bg: rgba(0, 0, 0, 0.04);
-  --color-status-offline-border: rgba(0, 0, 0, 0.08);
-  --color-status-meeting: #d97706;
-  --color-status-meeting-bg: rgba(217, 119, 6, 0.08);
-  --color-status-meeting-border: rgba(217, 119, 6, 0.25);
+  --color-gray-1: var(--color-raised);
+  --color-gray-2: var(--color-base);
+  --color-gray-3: var(--color-sunk);
+  --color-gray-4: var(--color-base);
+  --color-gray-5: var(--color-hover);
+  --color-gray-6: var(--color-hover);
+  --color-gray-8: var(--color-line);
+  --color-gray-9: var(--color-ink-muted);
+  --color-gray-10: var(--color-ink-muted);
+  --color-gray-11: var(--color-ink-muted);
+  --color-gray-12: var(--color-ink);
+  --color-gray-13: var(--color-ink);
 
-  /* --- Legacy Gray Aliases (DEPRECATED — migrate to M3 tokens) ---
-   * These aliases exist for backward compatibility. New code MUST use M3 tokens:
-   *   gray-1  → surface-container-lowest
-   *   gray-2  → surface-bright
-   *   gray-3  → surface-container-low
-   *   gray-4  → surface (default bg)
-   *   gray-5  → surface-container
-   *   gray-6  → surface-container-high
-   *   gray-8  → outline-variant
-   *   gray-9  → outline
-   *   gray-10 → on-surface-variant
-   *   gray-11 → on-surface-variant
-   *   gray-12 → on-surface
-   *   gray-13 → on-surface
-   */
-  --color-gray-1: var(--color-surface-container-lowest);
-  --color-gray-2: var(--color-surface-bright);
-  --color-gray-3: var(--color-surface-container-low);
-  --color-gray-4: var(--color-surface);
-  --color-gray-5: var(--color-surface-container);
-  --color-gray-6: var(--color-surface-container-high);
-
-  --color-gray-8: var(--color-outline-variant);
-  --color-gray-9: var(--color-outline);
-  --color-gray-10: var(--color-on-surface-variant);
-  --color-gray-11: var(--color-on-surface-variant);
-  --color-gray-12: var(--color-on-surface);
-  --color-gray-13: var(--color-on-surface);
-
-
-  /* --- Border Radius --- */
+  /* --- Radius (§4): control 8 · surface 10 · overlay 12 --- */
   --radius-sm: 4px;
   --radius-md: 8px;
+  --radius-control: 8px;
+  --radius-surface: 10px;
   --radius-lg: 12px;
+  --radius-overlay: 12px;
   --radius-xl: 16px;
 
-  /* --- Depth / Elevation Shadows (light mode) --- */
-  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
-  --shadow-raised: 0 2px 8px -2px rgba(0, 0, 0, 0.08);
-  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.04);
+  /* --- Depth (§4): tone does the lifting; shadow belongs to overlays --- */
+  --shadow-overlay: 0 1px 2px oklch(23% 0.02 200 / 0.06), 0 8px 24px oklch(23% 0.02 200 / 0.1), 0 24px 48px oklch(23% 0.02 200 / 0.08);
+  --shadow-sm: 0 1px 2px oklch(23% 0.02 200 / 0.06);
+  --shadow-raised: 0 1px 2px oklch(23% 0.02 200 / 0.06);
+  --shadow-card: 0 1px 2px oklch(23% 0.02 200 / 0.06);
+  --shadow-md: var(--shadow-overlay);
+  --shadow-lg: var(--shadow-overlay);
+  --shadow-accent-sm: 0 1px 2px oklch(23% 0.02 200 / 0.06);
+  --shadow-accent: var(--shadow-overlay);
+  --shadow-accent-lg: var(--shadow-overlay);
 
-  /* Bóng nhuốm màu nhấn. Tồn tại để 5 chỗ đang nướng cứng mã RGB của primary
-     cũ có đích chuyển sang mà không phải viết giá trị tuỳ tiện. */
-  --shadow-accent-sm: 0 2px 12px -2px color-mix(in srgb, var(--color-primary) 20%, transparent);
-  --shadow-accent: 0 4px 16px color-mix(in srgb, var(--color-primary) 20%, transparent);
-  --shadow-accent-lg: 0 8px 24px color-mix(in srgb, var(--color-primary) 8%, transparent);
+  /* --- Motion (§7). Durations are not a Tailwind namespace: the matching */
+  /* duration-* utilities are declared with @utility further down.        */
+  --duration-press: 100ms;
+  --duration-quick: 160ms;
+  --duration-base: 220ms;
+  --duration-layout: 280ms;
+  --duration-exit: 210ms;
+  --duration-realtime: 2400ms;
+  --duration-halo: 900ms;
+  /* Legacy names → nearest step of the new scale. */
+  --duration-instant: var(--duration-press);
+  --duration-fast: var(--duration-quick);
+  --duration-normal: var(--duration-base);
+  --duration-slow: var(--duration-layout);
 
-  --shadow-overlay: 0 16px 48px rgba(0, 0, 0, 0.15);
-
-  /* --- Motion — Durations --- */
-  --duration-instant: 50ms;
-  --duration-fast: 100ms;
-  --duration-normal: 200ms;
-  --duration-slow: 300ms;
-
-  /* --- Motion — Easings --- */
-  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
   --ease-in-out: cubic-bezier(0.45, 0, 0.55, 1);
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
 
+  /* --- Layers (§4) --- */
+  --z-dropdown: 10;
+  --z-sticky: 20;
+  --z-backdrop: 30;
+  --z-modal: 40;
+  --z-toast: 50;
+  --z-tooltip: 60;
+
   /* --- Animations --- */
-  --animate-fade-in: fade-in var(--duration-normal) var(--ease-out);
-  --animate-slide-up: slide-up var(--duration-normal) var(--ease-out);
-  --animate-slide-left: slide-left var(--duration-normal) var(--ease-out);
-  --animate-scale-in: scale-in var(--duration-normal) var(--ease-spring);
+  --animate-fade-in: fade-in var(--duration-base) var(--ease-out);
+  --animate-slide-up: slide-up var(--duration-base) var(--ease-out);
+  --animate-slide-left: slide-left var(--duration-base) var(--ease-out);
+  --animate-scale-in: scale-in var(--duration-base) var(--ease-out-expo);
   --animate-spin: spin 0.7s linear infinite;
 }
 
+/* Dark: opt-in through data-theme only (see the note at the top). */
+:root[data-theme="dark"] {
+  --color-sunk: oklch(15.5% 0.012 200);
+  --color-base: oklch(18% 0.014 200);
+  --color-raised: oklch(22.5% 0.016 200);
+  --color-overlay: oklch(26% 0.018 200);
+  --color-hover: oklch(25% 0.016 200);
+  --color-scrim: oklch(8% 0.01 200 / 0.6);
+  --color-ink: oklch(94% 0.008 190);
+  --color-ink-muted: oklch(73% 0.016 195);
+  --color-ink-subtle: oklch(58% 0.014 200);
+  --color-line: oklch(30% 0.014 200);
+  --color-accent: oklch(76% 0.11 178);
+  --color-accent-hover: oklch(81% 0.1 178);
+  --color-accent-wash: oklch(29% 0.05 180);
+  --color-on-accent: oklch(18% 0.014 200);
+  --color-focus: oklch(78% 0.12 178);
+  --color-success: oklch(76% 0.12 150);
+  --color-success-wash: oklch(28% 0.05 150);
+  --color-warning: oklch(80% 0.12 70);
+  --color-warning-wash: oklch(29% 0.05 70);
+  --color-danger: oklch(72% 0.15 25);
+  --color-danger-wash: oklch(29% 0.06 25);
+  --color-info: oklch(76% 0.1 240);
+  --color-info-wash: oklch(29% 0.05 240);
+  --color-person-1-wash: oklch(30% 0.06 45);
+  --color-person-2-wash: oklch(30% 0.05 95);
+  --color-person-3-wash: oklch(30% 0.05 140);
+  --color-person-4-wash: oklch(30% 0.045 205);
+  --color-person-5-wash: oklch(30% 0.06 245);
+  --color-person-6-wash: oklch(30% 0.06 285);
+  --color-person-7-wash: oklch(30% 0.06 325);
+  --color-person-8-wash: oklch(30% 0.06 355);
+  --shadow-overlay: 0 1px 2px oklch(5% 0.01 200 / 0.4), 0 8px 24px oklch(5% 0.01 200 / 0.45), 0 24px 48px oklch(5% 0.01 200 / 0.35);
+  color-scheme: dark;
+}
+
 /* ========================= */
-/* Root — Font Features      */
+/* Base                      */
 /* ========================= */
 :root {
-  font-feature-settings: "cv01", "ss03";
+  font-feature-settings: normal;
 }
+html, body {
+  background-color: var(--color-base);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+}
+body {
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+/* Vietnamese stacks diacritics (ặ, ẫ, ổ): headings keep line-height ≥ 1.2 and
+   no tracking tighter than -0.01em (DESIGN.md §3). */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  text-wrap: balance;
+}
+
+/* ========================= */
+/* Motion utilities (§7)     */
+/* ========================= */
+@utility duration-press { transition-duration: var(--duration-press); }
+@utility duration-quick { transition-duration: var(--duration-quick); }
+@utility duration-base { transition-duration: var(--duration-base); }
+@utility duration-layout { transition-duration: var(--duration-layout); }
+@utility duration-instant { transition-duration: var(--duration-press); }
+@utility duration-fast { transition-duration: var(--duration-quick); }
+@utility duration-normal { transition-duration: var(--duration-base); }
+@utility duration-slow { transition-duration: var(--duration-layout); }
+
+/* Layer utilities: the only sanctioned way to set z-index (no z-[…]). */
+@utility z-dropdown { z-index: var(--z-dropdown); }
+@utility z-sticky { z-index: var(--z-sticky); }
+@utility z-backdrop { z-index: var(--z-backdrop); }
+@utility z-modal { z-index: var(--z-modal); }
+@utility z-toast { z-index: var(--z-toast); }
+@utility z-tooltip { z-index: var(--z-tooltip); }
+
+/* Field outlines drawn inside the box so focus never shifts layout (§6 Input). */
+@utility field-line { box-shadow: inset 0 0 0 1px var(--color-line); }
+@utility field-focus { box-shadow: inset 0 0 0 2px var(--color-focus); }
+@utility field-danger { box-shadow: inset 0 0 0 1px var(--color-danger); }
+
+@utility font-display { font-family: var(--font-display); }
+@utility tnum { font-variant-numeric: tabular-nums; }
+
+/* Uppercase panel label: 12px / 600 / 0.06em, at most one per panel. */
+@utility text-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Press feedback shared by buttons and toggles: scale(0.98) for 100ms. */
+@utility press {
+  transition-property: background-color, color, transform, opacity;
+  transition-duration: var(--duration-quick), var(--duration-quick), var(--duration-press), var(--duration-quick);
+  transition-timing-function: var(--ease-out);
+  &:active:not(:disabled) { transform: scale(0.98); }
+  @media (prefers-reduced-motion: reduce) {
+    &:active:not(:disabled) { transform: none; }
+  }
+}
+
+/* ========================= */
+/* Realtime attribution (§7) */
+/* A change by someone else: row washed in the author's hue, held for 40% of */
+/* 2400ms then dissolved; the avatar flashes a halo for 900ms; a small label */
+/* fades with the wash. Callers set --p / --pw (lib/person-hue.ts).          */
+/* ========================= */
+@keyframes rt-wash {
+  0%, 40% { background-color: var(--pw); }
+  100% { background-color: transparent; }
+}
+@keyframes rt-halo {
+  0% { box-shadow: 0 0 0 0 var(--pw), 0 0 0 0 var(--p); }
+  35% { box-shadow: 0 0 0 3px var(--pw), 0 0 0 5px var(--p); }
+  100% { box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent; }
+}
+@keyframes rt-tag {
+  0%, 80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+@utility rt-wash {
+  animation: rt-wash var(--duration-realtime) var(--ease-out) both;
+}
+@utility rt-halo {
+  animation: rt-halo var(--duration-halo) var(--ease-out) both;
+  /* The wash is information and stays; the flash is decoration and goes. */
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+}
+@utility rt-tag {
+  color: var(--p);
+  animation: rt-tag var(--duration-realtime) linear both;
+}
+
+/* Shimmer skeleton: one style everywhere, same shape as the real content. */
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@utility skeleton {
+  background-image: linear-gradient(90deg, var(--color-sunk) 0%, var(--color-hover) 50%, var(--color-sunk) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+  @media (prefers-reduced-motion: reduce) { animation: none; }
+}
+
 
 /* ========================= */
 /* Typography Utility Roles  */
 /* Aligned with Stitch DNA   */
 /* ========================= */
 @utility text-h1 {
+  font-family: var(--font-display);
   font-size: 32px;
   font-weight: 700;
   line-height: 40px;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 @utility text-h2 {
+  font-family: var(--font-display);
   font-size: 24px;
   font-weight: 600;
   line-height: 32px;
   letter-spacing: -0.01em;
 }
 @utility text-h3 {
+  font-family: var(--font-display);
   font-size: 20px;
   font-weight: 600;
   line-height: 28px;
 }
 @utility text-title {
+  font-family: var(--font-display);
   font-size: 18px;
   font-weight: 600;
   line-height: 1.35;
@@ -291,8 +493,8 @@
 /* ========================= */
 @utility focus-ring {
   &:focus-visible {
-    outline: none;
-    box-shadow: 0 0 0 2px var(--color-surface-container-lowest), 0 0 0 4px var(--color-primary);
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
   }
 }
 
@@ -305,25 +507,25 @@
 @keyframes scale-in { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Scrollbar — Nexus style: subtle, light mode */
-::-webkit-scrollbar { width: 4px; height: 4px; }
+/* Scrollbar: invisible at rest, a hairline-coloured thumb on hover */
+::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: transparent; border-radius: 2px; transition: background 0.2s; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 999px; }
 *:hover > ::-webkit-scrollbar-thumb,
-::-webkit-scrollbar-thumb:hover { background: rgba(0, 0, 0, 0.12); }
+::-webkit-scrollbar-thumb:hover { background: var(--color-line); }
 
 /* TipTap Editor */
 .chat-editor-content {
-  font-size: 0.875rem;
-  line-height: 1.625;
-  color: var(--color-on-surface);
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--color-ink);
   min-height: 20px;
   outline: none;
 }
 .chat-editor-content p { margin: 0; }
 .chat-editor-content p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: var(--color-outline);
+  color: var(--color-ink-muted);
   pointer-events: none;
   float: left;
   height: 0;
@@ -343,7 +545,7 @@
   font-size: 0.75rem;
 }
 .chat-editor-content blockquote {
-  border-left: 2px solid var(--color-primary-fixed-dim);
+  border-left: 2px solid var(--color-line);
   padding-left: 0.75rem;
   margin: 0.25rem 0;
   color: var(--color-on-surface-variant);
@@ -369,7 +571,7 @@
   font-size: 0.75rem;
 }
 .message-html blockquote {
-  border-left: 2px solid var(--color-primary-fixed-dim);
+  border-left: 2px solid var(--color-line);
   padding-left: 0.75rem;
   margin: 0.25rem 0;
   color: var(--color-on-surface-variant);
@@ -385,12 +587,12 @@
 
 /* Reaction pop animation */
 @keyframes reaction-pop {
-  0% { transform: scale(0.5); opacity: 0; }
-  50% { transform: scale(1.2); }
+  0% { transform: scale(0.6); opacity: 0; }
   100% { transform: scale(1); opacity: 1; }
 }
 @utility animate-reaction-pop {
-  animation: reaction-pop var(--duration-slow) var(--ease-spring);
+  animation: reaction-pop var(--duration-layout) var(--ease-spring);
+  @media (prefers-reduced-motion: reduce) { animation: fade-in 120ms linear; }
 }
 
 /* Message slide-in animation */
@@ -433,9 +635,9 @@
   flex-shrink: 0;
   cursor: col-resize;
   background: transparent;
-  transition: background var(--duration-fast);
+  transition: background-color var(--duration-quick) var(--ease-out);
   position: relative;
-  z-index: 10;
+  z-index: var(--z-dropdown);
   &:hover, &.is-dragging {
     background: var(--color-primary);
   }
@@ -452,4 +654,13 @@
 @utility bg-nexus-auth {
   background-image: radial-gradient(circle at 100% 0%, var(--color-surface-container-high) 0%, transparent 40%),
                     radial-gradient(circle at 0% 100%, var(--color-surface-container) 0%, transparent 40%);
+}
+
+/* Reduced motion (DESIGN.md §7): no transforms, fades only and at most 120ms. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-slide-up, .animate-slide-left, .animate-panel-slide, .animate-slide-in-right,
+  .animate-scale-in, .animate-msg-slide-in, .animate-fade-in {
+    animation-name: fade-in;
+    animation-duration: 120ms;
+  }
 }

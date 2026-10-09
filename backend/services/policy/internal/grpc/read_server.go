@@ -3,7 +3,6 @@ package grpc
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"time"
 
@@ -185,7 +184,7 @@ func (s *ReadServer) ResolveAccessibleScopes(ctx context.Context, req *pb.Resolv
 	// NOTE: scope cache key does not yet include workspace_id because
 	// ResolveAccessibleScopesRequest proto lacks that field.
 	// This will be addressed when proto is updated in a separate change.
-	cacheKey := fmt.Sprintf("scopes:%s:%s", req.UserNodeId, req.Operation)
+	cacheKey := ngac.ScopeCacheKey(req.UserNodeId, req.Operation)
 	if s.rdb != nil {
 		if cached, err := s.getCachedScopes(ctx, cacheKey); err == nil {
 			return cached, nil

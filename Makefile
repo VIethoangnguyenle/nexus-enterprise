@@ -26,7 +26,8 @@
 
 .PHONY: deploy redeploy down restart ps health logs \
         build-check test proto proto-install dev-frontend clean db-migrate help \
-        dev dev-infra dev-stop dev-logs dev-all dev-restart dev-connect run stop
+        dev dev-infra dev-stop dev-logs dev-all dev-restart dev-connect run stop \
+        agentkit-setup
 
 # ---------------------------------------------------------------------------
 # Auto-detect docker compose command (v2 plugin vs v1 standalone)
@@ -585,9 +586,17 @@ help:
 	@echo "    make dev-restart s=auth  Restart one service (overmind)"
 	@echo "    make dev-connect s=auth  Attach to one service terminal (overmind)"
 	@echo ""
+	@echo "  AGENT TOOLING"
+	@echo "    make agentkit-setup KIT=<tar.gz>  Install the AgentKit plugin locally (never committed)"
+	@echo ""
 	@echo "  DATABASE"
 	@echo "    make db-migrate          Apply schema to running DB"
 	@echo ""
 	@echo "  DANGER"
 	@echo "    make nuke                Delete all containers + volumes"
 
+# ---------------------------------------------------------------------------
+# AgentKit — paid kit, installed per machine into the git-ignored .agentkit/
+# ---------------------------------------------------------------------------
+agentkit-setup:
+	@scripts/agentkit-setup.sh "$(KIT)"

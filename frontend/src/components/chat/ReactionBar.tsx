@@ -1,4 +1,6 @@
-import { Plus } from 'lucide-react'
+import { AnimatePresence, motion } from 'motion/react'
+import { SmilePlus } from 'lucide-react'
+import { DURATION, EASE, useMotionPresets } from '../../lib/motion'
 
 interface ReactionGroup {
   emoji: string
@@ -13,48 +15,59 @@ interface ReactionBarProps {
   onAddReaction: () => void
 }
 
-/** Reaction chips matching Stitch nexus-chat.html:
- *  px-2 py-1 rounded-full bg-surface-container-high text-on-surface-variant
- *  border border-outline-variant/30, hover:bg-surface-container-highest.
- *  Active (user reacted): border-primary/40 bg-primary/10 text-primary.
- *  Count: font-label-caps text-label-caps. */
+/**
+ * Reaction chips under a message. Yours are tinted with the accent wash. A
+ * chip that appears pops in (scale 0.6 → 1, spring, 280ms; the one place the
+ * spring curve is allowed); chips present on load do not animate.
+ */
 export function ReactionBar({ reactions, currentUserId, onToggle, onAddReaction }: ReactionBarProps) {
+  const m = useMotionPresets()
   if (!reactions?.length) return null
 
+  const pop = m.reduced
+    ? { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: DURATION.reducedFade } } }
+    : {
+        initial: { opacity: 0, scale: 0.6 },
+        animate: { opacity: 1, scale: 1, transition: { duration: DURATION.layout, ease: EASE.spring } },
+      }
+
   return (
-    <div className="flex flex-wrap items-center gap-1 mt-1">
-      {/* eslint-disable no-restricted-syntax -- Hàng chip reaction: chip emoji+count và nút "+"
-          cuối hàng dùng CHUNG một độ dày viền border-outline-variant/30 để trông liền một họ.
-          Badge không nhận onClick (là <span>, không tương tác). Button nướng justify-center và
-          padding cố định, không hợp một chip nội dung linh hoạt (emoji+số) hay hộp vuông w-7 h-7.
-          IconButton.outlined nướng viền full-opacity + tone mặc định text-outline — đổi riêng nút
-          "+" sẽ làm viền nó đậm hơn hẳn các chip bên cạnh mà nó phải đứng liền kề. */}
-      {reactions.map((r) => {
-        const isActive = r.user_ids?.includes(currentUserId)
-        return (
-          <button
-            key={r.emoji}
-            onClick={() => onToggle(r.emoji)}
-            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-sm
-              cursor-pointer transition-colors border-none bg-transparent
-              ${isActive
-                ? 'bg-primary/10 text-primary border border-primary/30'
-                : 'bg-surface-container-high text-on-surface-variant border border-outline-variant/30 hover:bg-surface-container-highest'
-              }`}
-          >
-            <span className="text-sm">{r.emoji}</span>
-            <span className="font-label-caps text-label-caps">{r.count}</span>
-          </button>
-        )
-      })}
+    <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
+      {/* eslint-disable no-restricted-syntax -- Chip cảm xúc là nút bật/tắt dạng viên thuốc
+          (emoji + bộ đếm, aria-pressed). Button không có dạng viên thuốc cao 26px; FilterChip là
+          bộ lọc bo 8px. Cùng một họ với nút "+" cuối hàng nên giữ chung một khai báo. */}
+      <AnimatePresence initial={false}>
+        {reactions.map((r) => {
+          const mine = r.user_ids?.includes(currentUserId)
+          return (
+            <motion.button
+              key={r.emoji}
+              type="button"
+              {...pop}
+              exit={{ opacity: 0, transition: { duration: 0.12 } }}
+              aria-pressed={!!mine}
+              aria-label={`${r.emoji} ${r.count}${mine ? ', có bạn' : ''}`}
+              onClick={() => onToggle(r.emoji)}
+              className={`press inline-flex items-center gap-1.5 h-6.5 px-2.25 rounded-full border-none
+                cursor-pointer text-small text-ink focus-ring
+                ${mine ? 'bg-accent-wash' : 'bg-sunk hover:bg-hover'}`}
+            >
+              <span>{r.emoji}</span>
+              <span className="font-semibold tnum">{r.count}</span>
+            </motion.button>
+          )
+        })}
+      </AnimatePresence>
       <button
+        type="button"
         onClick={onAddReaction}
-        className="w-7 h-7 flex items-center justify-center rounded-full
-          text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high
-          border border-outline-variant/30 bg-transparent cursor-pointer transition-colors"
-        title="Add reaction"
+        aria-label="Thêm cảm xúc"
+        title="Thêm cảm xúc"
+        className="press inline-grid place-items-center h-6.5 w-8 rounded-full border-none bg-transparent
+          cursor-pointer text-ink-muted hover:bg-hover hover:text-ink focus-ring
+          opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
       >
-        <Plus size={14} />
+        <SmilePlus size={15} strokeWidth={1.75} />
       </button>
       {/* eslint-enable no-restricted-syntax */}
     </div>

@@ -133,14 +133,44 @@ func (s *AssetServer) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*p
 	return assetToProto(asset), nil
 }
 
+// ListAssets returns the workspace's assets the caller may read.
+//
+// Read is decided per asset type, on the type OA: every asset of a type hangs
+// under that OA, and a grant on the Assets or category OA reaches it too. The
+// readable types are resolved in one batch call and pushed into the query, so
+// pagination and the total count cover only what the caller can see — a
+// post-query filter would still report how many hidden assets exist.
 func (s *AssetServer) ListAssets(ctx context.Context, req *pb.ListAssetsRequest) (*pb.AssetList, error) {
+	types, err := s.store.ListTypes(ctx, req.WorkspaceId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list asset types: %v", err)
+	}
+	if req.TypeId != "" {
+		var only []*store.AssetType
+		for _, at := range types {
+			if at.ID == req.TypeId {
+				only = append(only, at)
+			}
+		}
+		types = only
+	}
+	readable, err := permittedTypeIDs(ctx, s.policyRead, req.UserNgacNodeId, types, ngac.OpRead)
+	if err != nil {
+		// Fail closed: an unreadable policy answer must not list everything.
+		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
+	}
+	if len(readable) == 0 {
+		return &pb.AssetList{}, nil
+	}
+
 	assets, total, err := s.store.ListAssets(ctx, store.ListAssetsFilter{
-		WorkspaceID: req.WorkspaceId,
-		TypeID:      req.TypeId,
-		State:       req.State,
-		AssignedTo:  req.AssignedTo,
-		Limit:       req.Limit,
-		Offset:      req.Offset,
+		WorkspaceID:    req.WorkspaceId,
+		TypeID:         req.TypeId,
+		State:          req.State,
+		AssignedTo:     req.AssignedTo,
+		Limit:          req.Limit,
+		Offset:         req.Offset,
+		VisibleTypeIDs: readable,
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list assets: %v", err)
@@ -252,20 +282,19 @@ func (s *AssetServer) TransitionAsset(ctx context.Context, req *pb.TransitionReq
 		return nil, err
 	}
 
-	// Execute state change
-	if err := s.store.UpdateAssetState(ctx, req.AssetId, tr.ToState, nil); err != nil {
-		return nil, status.Errorf(codes.Internal, "update state: %v", err)
-	}
-
-	// Record transition history
-	s.store.InsertTransition(ctx, &store.TransitionRecord{
+	// Change state and record who did it, atomically. The history row is the
+	// audit trail, so if it cannot be written the transition fails as a whole
+	// rather than taking effect unrecorded — and no event is published.
+	if err := s.store.ApplyTransition(ctx, &store.TransitionRecord{
 		AssetID:   req.AssetId,
 		FromState: asset.State,
 		ToState:   tr.ToState,
 		Action:    req.Action,
 		ActorID:   req.UserId,
 		Comment:   req.Comment,
-	})
+	}, nil); err != nil {
+		return nil, status.Errorf(codes.Internal, "apply transition: %v", err)
+	}
 
 	// Emit Kafka lifecycle event
 	s.producer.PublishLifecycle(events.LifecycleEvent{

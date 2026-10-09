@@ -1,400 +1,242 @@
-# ⚠️ DEPRECATED — DO NOT USE
+# Nexus Hub Design System: Tín hiệu
 
-> **This document is OBSOLETE.** It describes a dark-mode design system that was never fully implemented.
->
-> **Canonical source of truth:** [`.stitch/DESIGN.md`](.stitch/DESIGN.md)
->
-> The production system uses: **Manrope font**, **light-mode M3 tokens**, **`#004AC6` primary**
-> (Royal Blue, per `.stitch/metadata.json` `customColor`; it was `#2563EB` until 2026-08-01, which
-> Stitch names `primary-container` rather than `primary`).
-> This file is preserved for historical reference only. All new work MUST follow `.stitch/DESIGN.md`.
->
-> — Deprecated 2026-05-01 during System Standardization audit
+> **Nguồn thiết kế duy nhất của frontend.** Chọn ngày 2026-10-09 từ
+> [brainstorm](plans/261009-0449-project-wide-refactor/reports/brainstorm-261009-0457-new-ui-direction.html)
+> (hướng B, mượn bảng kẻ mảnh của hướng A). Mockup đã duyệt nằm trong `design/mockups/`.
+> `.stitch/` là lịch sử, không dùng làm nguồn nữa. Code render đúng file này và mockup; không
+> thiết kế trong code. Muốn đổi thiết kế: sửa file này trước, trong cùng PR.
 
----
+## 1. Thesis
 
-# ~~NGAC Design System — Enterprise Workspace~~ (ARCHIVED)
+Nexus Hub là nơi nhiều người cùng sửa một thứ: tin nhắn, thư mục, đề nghị phê duyệt. Câu hỏi
+người dùng đặt ra liên tục là **"ai vừa làm gì"**, nên đó là bản sắc của giao diện: mỗi người có
+một màu riêng, và mỗi thay đổi đến từ người khác mang màu đó trong chốc lát rồi tan.
 
-> Synthesized from: Lark (layout + density), Linear (dark surfaces + borders),
-> Notion (workspace patterns), Vercel (shadow engineering), Stripe (data precision).
-> Purpose: ~~AI agent reference for consistent, enterprise-grade UI generation.~~ DEPRECATED.
+- **Cảnh dùng:** nhân viên khối vận hành, kế toán, hành chính ở văn phòng sáng, laptop 13 đến
+  15 inch, mở cả ngày, chuyển liên tục giữa chat, tài liệu và phê duyệt; thỉnh thoảng duyệt trên
+  điện thoại giữa hai cuộc họp. → **Light là mặc định**, dark đầy đủ cho buổi tối và người thích.
+- **Register:** product UI. Quen thuộc, đáng tin, đọc nhanh. Không có hiệu ứng trang trí; chuyển
+  động chỉ để báo trạng thái, nguồn gốc thay đổi, hoặc quan hệ không gian.
+- **Một chiều được đẩy tới cực:** chuyển động mang danh tính (realtime). Mọi thứ khác giữ yên.
+- Dials: variance 4 · motion 5 · density 5 (bảng ở Tài liệu, Quản trị: density 7).
 
----
+## 2. Color
 
-## 1. Design Philosophy
+OKLCH. Restrained: nền trung tính ngả ngọc lam (hue 190–200), một accent ngọc lam, 8 màu người
+dùng. Accent ≤ 10% bề mặt, chỉ cho hành động chính, mục đang chọn và trạng thái cần chú ý. Không
+`#000`/`#fff` thuần. Không `rgba()` rời rạc: overlay là token.
 
-NGAC is a **dark-mode-native enterprise workspace** — messaging, documents, drive, and
-access control unified in one dense interface. The design language draws from Lark's
-"zero toggle tax" approach: users never leave context to complete a task.
+### Surfaces (nổi bằng sắc độ, không dùng viền cho container)
 
-**Core Principles:**
-- **Density over decoration** — 4px base unit, 13px workhorse text, 36px table rows
-- **Darkness as medium** — surfaces defined by luminance stepping, not color
-- **Function before form** — every visual element serves an information purpose
-- **Context preservation** — side-panels over modals, inline editing over page navigation
-- **Cool precision** — blue-undertone grays, single blue accent, no warm colors
+| Token | Light | Dark | Dùng cho |
+|---|---|---|---|
+| `--color-sunk` | `oklch(94.6% 0.011 190)` | `oklch(15.5% 0.012 200)` | sidebar, vùng chìm, track |
+| `--color-base` | `oklch(97.4% 0.007 190)` | `oklch(18% 0.014 200)` | nền trang, luồng chat |
+| `--color-raised` | `oklch(99.3% 0.003 190)` | `oklch(22.5% 0.016 200)` | panel, card, composer, mục chọn |
+| `--color-overlay` | `oklch(99.6% 0.002 190)` | `oklch(26% 0.018 200)` | popover, modal, toast |
+| `--color-hover` | `oklch(93.4% 0.012 190)` | `oklch(25% 0.016 200)` | hover trên sunk/base |
+| `--color-scrim` | `oklch(23% 0.02 200 / 0.32)` | `oklch(8% 0.01 200 / 0.6)` | nền sau modal |
 
----
+### Ink
 
-## 2. Color System — 14-Shade Grayscale + Functional
+| Token | Light | Dark | Dùng cho |
+|---|---|---|---|
+| `--color-ink` | `oklch(23% 0.02 200)` | `oklch(94% 0.008 190)` | chữ chính |
+| `--color-ink-muted` | `oklch(46% 0.02 200)` | `oklch(73% 0.016 195)` | chữ phụ, metadata, placeholder (≥ 4.5:1) |
+| `--color-ink-subtle` | `oklch(62% 0.015 200)` | `oklch(58% 0.014 200)` | chỉ cho disabled và icon trang trí |
+| `--color-line` | `oklch(89.5% 0.01 195)` | `oklch(30% 0.014 200)` | đường kẻ 1px trong bảng, divider |
 
-### Surface Scale (cool blue undertone)
+### Accent
 
-All surfaces use a carefully calibrated grayscale. Each step is visually
-distinguishable but subtle — one shade = one hover state, two shades = active state.
+| Token | Light | Dark |
+|---|---|---|
+| `--color-accent` | `oklch(50% 0.1 180)` | `oklch(76% 0.11 178)` |
+| `--color-accent-hover` | `oklch(45% 0.1 180)` | `oklch(81% 0.1 178)` |
+| `--color-accent-wash` | `oklch(93% 0.035 180)` | `oklch(29% 0.05 180)` |
+| `--color-on-accent` | `oklch(98.5% 0.005 180)` | `oklch(18% 0.014 200)` |
+| `--color-focus` | `oklch(55% 0.12 180)` | `oklch(78% 0.12 178)` |
 
-| Token | Hex | Role |
-|-------|-----|------|
-| `gray-1` | `#08090a` | Deepest app background, behind everything |
-| `gray-2` | `#0d1017` | Icon Rail background |
-| `gray-3` | `#0f1115` | Sidebar / List Panel background |
-| `gray-4` | `#141720` | Content area background |
-| `gray-5` | `#1a1e26` | Card / elevated surface |
-| `gray-6` | `#21252e` | Hover state on surfaces |
-| `gray-7` | `#282d37` | Active/pressed surface, selected row bg |
-| `gray-8` | `#323843` | Strong surface, toolbar bg |
+### Semantic (tách khỏi accent; luôn đi cùng nhãn chữ, không chỉ màu)
 
-### Content Scale
+| Token | Light fg / wash | Dark fg / wash |
+|---|---|---|
+| `success` | `oklch(49% 0.11 150)` / `oklch(94% 0.04 150)` | `oklch(76% 0.12 150)` / `oklch(28% 0.05 150)` |
+| `warning` | `oklch(50% 0.12 65)` / `oklch(94.5% 0.05 75)` | `oklch(80% 0.12 70)` / `oklch(29% 0.05 70)` |
+| `danger` | `oklch(52% 0.17 25)` / `oklch(94.5% 0.035 25)` | `oklch(72% 0.15 25)` / `oklch(29% 0.06 25)` |
+| `info` | `oklch(50% 0.1 240)` / `oklch(94% 0.03 240)` | `oklch(76% 0.1 240)` / `oklch(29% 0.05 240)` |
 
-| Token | Hex | Role |
-|-------|-----|------|
-| `gray-9` | `#525a68` | Subtle icons, disabled controls |
-| `gray-10` | `#6b7480` | Muted text — timestamps, placeholders |
-| `gray-11` | `#8b929e` | Secondary text — descriptions, metadata |
-| `gray-12` | `#c0c6d0` | Primary body text |
-| `gray-13` | `#e2e5eb` | Headings, active nav items |
-| `gray-14` | `#f0f2f5` | Brightest text (use sparingly) |
+Token: `--color-{success,warning,danger,info}` và `--color-{…}-wash`.
 
-### Functional Colors (semantic, always paired with subtle bg)
+### Person hues
 
-| Role | Foreground | Background (8% opacity) | Use |
-|------|-----------|------------------------|-----|
-| **Primary / Action** | `#3370FF` | `rgba(51,112,255,0.08)` | CTAs, links, active states, brand |
-| **Primary Hover** | `#4B83FF` | `rgba(51,112,255,0.12)` | Hover on primary elements |
-| **Success** | `#22C55E` | `rgba(34,197,94,0.08)` | Online, completed, confirmed |
-| **Warning** | `#F59E0B` | `rgba(245,158,11,0.08)` | Expiring, attention needed |
-| **Error / Danger** | `#EF4444` | `rgba(239,68,68,0.08)` | Failed, destructive action |
-| **Info** | `#06B6D4` | `rgba(6,182,212,0.08)` | Informational badges |
+8 màu, gán **tất định** theo người dùng (hash của user id → 0..7, tính ở client, id không bao giờ
+hiển thị). Dùng cho nền avatar, vòng presence, lớp phủ realtime. Không dùng cho trạng thái.
 
-### Border & Divider
+| # | Hue | `--color-person-N` (avatar fill, light & dark) | `--color-person-N-wash` light / dark |
+|---|---|---|---|
+| 1 | 45 cam đất | `oklch(52% 0.13 45)` | `oklch(93% 0.04 45)` / `oklch(30% 0.06 45)` |
+| 2 | 95 vàng rêu | `oklch(50% 0.1 95)` | `oklch(94% 0.045 95)` / `oklch(30% 0.05 95)` |
+| 3 | 140 lá | `oklch(50% 0.12 140)` | `oklch(93.5% 0.04 140)` / `oklch(30% 0.05 140)` |
+| 4 | 205 biển | `oklch(50% 0.09 205)` | `oklch(93.5% 0.03 205)` / `oklch(30% 0.045 205)` |
+| 5 | 245 lam | `oklch(50% 0.12 245)` | `oklch(93.5% 0.035 245)` / `oklch(30% 0.06 245)` |
+| 6 | 285 tím | `oklch(51% 0.13 285)` | `oklch(93.5% 0.035 285)` / `oklch(30% 0.06 285)` |
+| 7 | 325 mận | `oklch(51% 0.13 325)` | `oklch(93.5% 0.035 325)` / `oklch(30% 0.06 325)` |
+| 8 | 355 hồng | `oklch(53% 0.13 355)` | `oklch(94% 0.035 355)` / `oklch(30% 0.06 355)` |
 
-| Token | Value | Use |
-|-------|-------|-----|
-| `border-subtle` | `rgba(255,255,255,0.05)` | Table row dividers, sidebar section breaks |
-| `border-default` | `rgba(255,255,255,0.08)` | Cards, inputs, panels |
-| `border-strong` | `rgba(255,255,255,0.12)` | Active inputs, emphasized containers |
-| `border-solid` | `#23252a` | Structural dividers (rail/sidebar boundary) |
+Chữ trên avatar: `--color-on-accent` light value (`oklch(98.5% …)`) ở cả hai theme (≥ 4.5:1 trên L ≤ 53%).
 
-### Overlay
+## 3. Typography
 
-| Token | Value | Use |
-|-------|-------|-----|
-| `overlay-backdrop` | `rgba(0,0,0,0.60)` | Modal/dialog backdrop |
-| `overlay-panel` | `rgba(0,0,0,0.40)` | Side-panel overlay on mobile |
+- **Display:** Bricolage Grotesque (opsz 12–96, 600–700). Chỉ cho tên workspace, tiêu đề trang,
+  tiêu đề panel, số tiền lớn. Không dùng cho nút, nhãn, bảng.
+- **Body:** Be Vietnam Pro (400, 500, 600). Mọi thứ còn lại.
+- Tự host qua `@fontsource/bricolage-grotesque` và `@fontsource/be-vietnam-pro`, chỉ subset
+  `latin` + `vietnamese`; preload Be Vietnam Pro 400.
+- Fallback: `"Be Vietnam Pro", "Segoe UI", "Helvetica Neue", Arial, sans-serif`.
+- `font-variant-numeric: tabular-nums` cho giờ, số tiền, dung lượng, bộ đếm, cột bảng.
+- Tiếng Việt có dấu chồng (ặ, ẫ, ổ): line-height thân chữ ≥ 1.5, tiêu đề ≥ 1.2, không tracking âm
+  quá `-0.01em`.
 
----
+Scale 1.2, `rem`:
 
-## 3. Typography — Inter Variable, Dense Scale
+| Token | Size / line | Weight | Dùng cho |
+|---|---|---|---|
+| `text-xs` | 12 / 16 | 500 | nhãn phụ, giờ, badge |
+| `text-sm` | 14 / 21 | 400 | mặc định: tin nhắn, ô bảng, mô tả |
+| `text-base` | 16 / 24 | 400 | input (tránh zoom mobile), đọc dài |
+| `text-lg` | 19 / 26 | 600 display | tiêu đề panel, tên kênh |
+| `text-xl` | 23 / 30 | 700 display | tiêu đề trang |
+| `text-2xl` | 28 / 34 | 600 display | số tiền, con số trọng tâm |
 
-Font: **Inter Variable** with OpenType `"cv01", "ss03"` on ALL text.
-Monospace: **JetBrains Mono** (fallback: `ui-monospace, SF Mono, Menlo`).
+Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một nhãn cho mỗi panel.
 
-### Type Scale
+## 4. Space, radius, depth, layers
 
-| Role | Size | Weight | Line-H | Letter-Sp | Token | Use |
-|------|------|--------|--------|-----------|-------|-----|
-| Page Title | 18px | 600 | 1.35 | -0.3px | `text-title` | Module headers: "Drive", "Messages" |
-| Section | 15px | 600 | 1.40 | -0.15px | `text-section` | Panel headers, group labels |
-| Body | 14px | 400 | 1.50 | 0 | `text-body` | Standard reading text |
-| Body UI | 14px | 500 | 1.50 | 0 | `text-body-ui` | Nav items, table headers, form labels |
-| Body Strong | 14px | 600 | 1.50 | 0 | `text-body-strong` | Active states, emphasis |
-| Small | 13px | 400 | 1.45 | 0 | `text-small` | Sidebar items, secondary content |
-| Small UI | 13px | 500 | 1.45 | 0 | `text-small-ui` | Sub-nav, tab labels |
-| Caption | 12px | 400 | 1.40 | 0 | `text-caption` | Timestamps, file sizes |
-| Caption UI | 12px | 500 | 1.40 | 0 | `text-caption-ui` | Column headers, badge text |
-| Overline | 11px | 600 | 1.35 | 0.5px | `text-overline` | Section labels (uppercase) |
-| Micro | 10px | 500 | 1.30 | 0.3px | `text-micro` | Status badges, counters |
+- **Spacing:** 4, 8, 12, 16, 20, 24, 32, 48, 64. Không giá trị lẻ.
+- **Radius:** control 8px · surface (panel, card, mục nav, tin nhắn hover) 10px · overlay 12px ·
+  pill 999px chỉ cho badge, trạng thái, avatar. Bo lồng nhau = bo cha − padding cha.
+- **Depth:** một chiến lược: **nổi bằng sắc độ** (`sunk → base → raised → overlay`). Container
+  không có viền. Đường kẻ `--color-line` chỉ trong bảng và divider danh sách. Shadow chỉ cho
+  overlay: `--shadow-overlay: 0 1px 2px oklch(23% 0.02 200 / 0.06), 0 8px 24px oklch(23% 0.02 200 / 0.1), 0 24px 48px oklch(23% 0.02 200 / 0.08)`.
+- **Z-index:** `--z-dropdown 10` · `--z-sticky 20` · `--z-backdrop 30` · `--z-modal 40` ·
+  `--z-toast 50` · `--z-tooltip 60`. Không `z-[…]` tuỳ ý.
 
-### Rules
-- **Maximum 18px** in workspace app — no display/hero typography
-- **13px is the workhorse** — sidebar nav, metadata, secondary content
-- **Three weights**: 400 (read), 500 (interact), 600 (announce)
-- **Always set** `font-feature-settings: "cv01", "ss03"` on root element
-- **Negative letter-spacing** ONLY at 15px+ sizes
-- **Overline** is the ONLY role using uppercase + positive letter-spacing
-
----
-
-## 4. Layout — 4-Column Workspace (Lark Pattern)
+## 5. Layout
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│ ┌────┐ ┌──────────┐ ┌──────────────────────┐ ┌───────────┐ │
-│ │    │ │          │ │                      │ │           │ │
-│ │ R  │ │  List    │ │    Content           │ │   Peek    │ │
-│ │ A  │ │  Panel   │ │    Area              │ │   Panel   │ │
-│ │ I  │ │          │ │                      │ │           │ │
-│ │ L  │ │  240px   │ │    flex-1            │ │   360px   │ │
-│ │    │ │  resize  │ │                      │ │   slide   │ │
-│ │48px│ │ 180-320  │ │  Table / Editor /    │ │  in/out   │ │
-│ │    │ │          │ │  Chat / Grid         │ │           │ │
-│ │    │ │          │ │                      │ │           │ │
-│ └────┘ └──────────┘ └──────────────────────┘ └───────────┘ │
-└─────────────────────────────────────────────────────────────┘
+┌─────────┬──────────────┬───────────────────────────┬──────────────┐
+│ Sidebar │ List panel   │ Content                   │ Detail panel │
+│ 232px   │ 280px        │ flex, min 480px           │ 360px        │
+│ (rail   │ (kênh, cây   │                           │ (có điều     │
+│  64px)  │  thư mục…)   │                           │  kiện)       │
+└─────────┴──────────────┴───────────────────────────┴──────────────┘
 ```
 
-### Column 1: Icon Rail (48px)
-- Background: `gray-2` (`#0d1017`)
-- Module icons: 20px, `gray-10` default, `primary` when active
-- Active indicator: 3px left border `primary`, bg `primary-bg`
-- Workspace avatar: top, 32px rounded-lg
-- User avatar: bottom, 28px
-- Always visible, never collapses
+- **Sidebar** (`--color-sunk`): workspace switcher (tên + avatar, display font), 5 mục chính
+  **Tin nhắn · Tài liệu · Phê duyệt · Tài sản · Danh bạ**, đáy: **Quản trị** (khi có quyền),
+  **Cài đặt**, người dùng hiện tại. Thu gọn thành rail 64px (icon + tooltip). Tài sản nằm trong
+  shell này, không có layout riêng.
+- **List panel** chỉ ở Tin nhắn và Tài liệu. **Detail panel** mở bằng chọn mục, đóng bằng Esc.
+- **Breakpoints:** ≥ 1280 đủ 4 cột · 1024–1279 detail panel thành overlay bên phải ·
+  768–1023 sidebar thành rail, list panel thành cột thay thế content · < 768 tab bar đáy 5 mục,
+  mỗi màn một cột, detail panel thành sheet từ dưới lên.
 
-### Column 2: List Panel (240px, resizable 180–320px)
-- Background: `gray-3` (`#0f1115`)
-- Right border: `border-solid` (`#23252a`)
-- Context-specific content:
-  - **Messaging**: Channel list with unread badges
-  - **Drive**: Folder tree with breadcrumbs
-  - **Documents**: Doc tree sidebar
-  - **Settings**: Settings nav
-- Section label: `text-overline`, `gray-10`, uppercase
-- Items: `text-small-ui`, `gray-11`, padding 6px 12px, radius 6px
-- Active item: `primary-bg`, `gray-13` text
-- Collapse: hides to show Rail only (keyboard `[`)
+## 6. Components
 
-### Column 3: Content Area (flex-1, min-width 480px)
-- Background: `gray-4` (`#141720`)
-- Header bar: 44px, `gray-3` bg, bottom border
-- Content padding: 0 (tables edge-to-edge) or 20px (editors)
-- This is where DataTable, ChatView, Editor, or Grid renders
+Primitive sống ở `frontend/src/components/primitives/`; không component nào tự vẽ lại chúng.
 
-### Column 4: Peek Panel (360px, conditional)
-- Background: `gray-4` (`#141720`)
-- Left border: `border-solid` (`#23252a`)
-- Slide-in from right, 200ms ease-out
-- Close: Escape key, close button, or click outside
-- Content: item details, thread view, file preview, permissions
-- Resize handle on left edge (min 280px, max 480px)
+- **Button:** `primary` (accent), `secondary` (`--color-hover` nền), `ghost`, `danger`. Cao 36
+  (`sm` 32), padding ngang 14, radius 8, 14px/600. Hover: nền sáng/tối một bậc; press
+  `scale(0.98)` 100ms; focus ring 2px `--color-focus` offset 2px. Loading: spinner thay icon,
+  giữ nguyên chiều rộng. Một nút primary mỗi view.
+- **IconButton:** 32×32 hit area ≥ 44 trên touch (`::before` inset −6px), `aria-label` bắt buộc.
+- **Input / Select / Textarea:** cao 40, 16px, nền `--color-raised`, không viền; focus = ring.
+  Label luôn có (không dùng placeholder làm label). Lỗi dưới ô, `aria-describedby`, validate khi blur.
+- **Avatar:** tròn, 20/24/32/40, nền `--color-person-N`, 2 chữ cái đầu của **tên hiển thị**
+  (không bao giờ của id). Có ảnh thì dùng ảnh. Presence: chấm 8px `success` ở góc dưới phải.
+- **PersonChip:** avatar 20 + tên hiển thị (+ vai trò mờ). Là cách duy nhất hiển thị một người.
+- **Badge / StatusPill:** pill, 12px/600, nền wash semantic + chữ fg semantic. Nhãn đọc được
+  ("Đang chờ"), không mã trạng thái.
+- **NavRow:** cao 36, radius 10, icon 18 (lucide, stroke 1.75) + nhãn + bộ đếm pill accent.
+  Đang chọn: nền `--color-raised`, chữ 600. Hover: `--color-hover`.
+- **Table (bảng kẻ mảnh):** header 12px/600 `ink-muted`, hàng cao 44, divider `--color-line`
+  1px, không zebra, không viền ngoài. Hàng chọn: `--color-accent-wash`. Cột số và giờ
+  `tabular-nums`, căn phải. Hàng là `button`/`a` thật, điều hướng bàn phím ↑↓ Enter.
+- **Tree:** một component cho cây thư mục, phòng ban, chọn thư mục. Thụt 16px mỗi cấp.
+- **Panel:** `--color-raised`, radius 10, padding 16, margin 12 khỏi mép.
+- **Modal:** `--color-overlay`, radius 12, shadow overlay, max 520px, focus trap + trả focus,
+  Esc đóng. Modal là lựa chọn cuối: ưu tiên detail panel hoặc thao tác tại chỗ + Undo.
+- **Popover / Menu:** Popover API hoặc portal; không `absolute` trong `overflow: hidden`.
+- **Toast:** đáy giữa (mobile) / đáy phải (desktop), tối đa 3, tự tắt 5s, có Undo khi thao tác
+  hoàn tác được. Lỗi mutation luôn ra toast với câu giải thích cách sửa.
+- **Skeleton:** một kiểu shimmer, cùng hình dạng nội dung thật. Không spinner toàn trang.
+- **Empty / Error state:** icon 24 + một câu nói chuyện gì xảy ra + một hành động. Mọi query đều có.
+- **Picker** (người, vai trò, phòng ban, thư mục): ô tìm kiếm + danh sách PersonChip/Tree. Không
+  bao giờ có ô nhập ID.
+- **ApprovalChain:** dọc; mỗi bước: avatar người duyệt, tên, chức danh mờ, StatusPill, giờ.
 
-### Responsive Breakpoints
+## 7. Motion
 
-| Breakpoint | Width | Behavior |
-|-----------|-------|----------|
-| Wide | >1440px | All 4 columns visible |
-| Standard | 1024–1440px | Rail + List + Content; Peek overlays |
-| Compact | 768–1024px | Rail only + Content; List as overlay |
-| Mobile | <768px | Bottom tab bar replaces Rail; full-screen pages |
+Mọi duration/easing là token. Chỉ animate `transform` và `opacity` (cộng `background-color` cho
+lớp phủ realtime). Không `transition: all`. Đóng chạy bằng ~75% thời gian mở.
 
----
+| Token | Giá trị | Dùng cho |
+|---|---|---|
+| `--duration-press` | 100ms | nhấn nút, toggle |
+| `--duration-quick` | 160ms | hover, focus, menu, tooltip |
+| `--duration-base` | 220ms | mở popover, toast, chèn hàng |
+| `--duration-layout` | 280ms | panel, modal, sheet, sắp lại danh sách |
+| `--ease-out` | `cubic-bezier(0.25, 1, 0.5, 1)` | vào, phản hồi |
+| `--ease-out-expo` | `cubic-bezier(0.16, 1, 0.3, 1)` | panel, layout |
+| `--ease-in` | `cubic-bezier(0.5, 0, 0.75, 0)` | ra |
+| `--ease-spring` | `cubic-bezier(0.175, 0.885, 0.32, 1.275)` | **chỉ** reaction pop |
 
-## 5. Component Specifications
+| Chuyển động | Vào | Ra |
+|---|---|---|
+| Detail panel | `translateX(16px) scale(.985)` → 0, 280ms expo | 210ms ease-in |
+| Modal | scrim fade 220ms + `translateY(8px) scale(.98)` → 0, 280ms expo | 210ms ease-in |
+| Popover / menu | `translateY(-4px)` + fade, 160ms | 120ms |
+| Toast | `translateY(12px)` + fade, 220ms | 160ms |
+| Chèn / xoá hàng | layout animation (FLIP) 220ms | fade + co chiều cao 160ms |
+| Chuyển route | content fade 160ms, không trượt | không |
+| Reaction | scale 0.6 → 1 spring 280ms | fade 120ms |
 
-### Buttons
+**Realtime (bản sắc của hệ):**
+- Thay đổi do **người khác** gây ra: avatar tác giả loé vòng `--color-person-N-wash` 900ms; hàng
+  được phủ `--color-person-N-wash`, giữ 40% thời gian rồi tan, tổng **2400ms**; nhãn nhỏ "vừa
+  gửi / vừa đổi tên / vừa duyệt" màu `--color-person-N` biến mất cùng lớp phủ.
+- Thay đổi của **chính mình**: không phủ màu, chỉ animation chèn hàng.
+- **Gộp:** ≥ 3 thay đổi trong cửa sổ 2000ms ở cùng một danh sách → một dòng "Vinh và 2 người khác
+  vừa cập nhật", tối đa một lớp phủ mỗi hàng.
+- **Presence:** cụm avatar người đang xem ở header (tối đa 3 + "+N"), vào/ra fade 220ms.
+- **Kết nối:** bình thường không hiện gì. Mất kết nối > 3s → dải `warning-wash` dưới header
+  "Đang kết nối lại…"; nối lại → "Đã cập nhật" 2s rồi ẩn.
 
-| Variant | Background | Text | Border | Hover | Use |
-|---------|-----------|------|--------|-------|-----|
-| Primary | `#3370FF` | `#fff` | none | `#4B83FF` | Main CTA |
-| Secondary | `gray-5` | `gray-12` | `border-default` | `gray-6` | Secondary action |
-| Ghost | transparent | `gray-11` | none | `gray-6` bg | Tertiary action |
-| Danger | `rgba(239,68,68,0.08)` | `#EF4444` | none | `rgba(239,68,68,0.15)` | Destructive |
-| Icon | transparent | `gray-10` | none | `gray-6` bg | Toolbar icon |
+**Giảm chuyển động** (`prefers-reduced-motion: reduce`): bỏ mọi `transform`; giữ fade ≤ 120ms;
+lớp phủ realtime vẫn hiện (là thông tin) nhưng không loé avatar; layout animation tắt.
 
-All buttons: radius 6px, font `text-small-ui` (13px/500), padding 6px 14px (md).
-**Focus ring**: `0 0 0 2px gray-4, 0 0 0 4px #3370FF` (double ring).
+Thư viện: `motion` (`motion/react`) cho `AnimatePresence` (exit) và `layout`; mọi thứ còn lại là
+CSS. Biến thể dùng chung ở `frontend/src/lib/motion.ts`.
 
-### DataTable
+## 8. Content & identifiers
 
-- **Header**: `gray-3` bg, `text-caption-ui` (12px/500 uppercase), `gray-10` text
-- **Row height**: 36px (dense) / 44px (comfortable)
-- **Row border**: `border-subtle` bottom
-- **Row hover**: `gray-6` bg
-- **Row selected**: `primary-bg` (`rgba(51,112,255,0.08)`)
-- **Cell padding**: 0 12px
-- **Sort icon**: `gray-10`, active `primary`
-- **Checkbox column**: 36px width
-- **Context menu**: right-click → dropdown with actions
-
-### Sidebar Nav Item
-
-```
-┌─────────────────────────────────┐
-│ [icon 16px]  Label        [+]  │  ← 13px/500, gray-11
-│              ────────────────  │
-│              # channel-1       │  ← 13px/400, gray-11, pl-36px
-│              # channel-2  (3)  │  ← unread count badge
-│              # channel-3       │
-└─────────────────────────────────┘
-
-Active parent:  bg primary-bg, text gray-13, icon primary
-Active child:   text primary, font-weight 500
-Hover:          bg gray-6, text gray-12
-```
-
-### PeekPanel
-
-- Width: 360px default, resizable 280–480px
-- Header: 44px, `text-body-strong`, close IconButton top-right
-- Tabs (optional): `text-small-ui`, bottom border indicator
-- Animation: `transform: translateX(100%) → translateX(0)`, 200ms ease-out
-- Close animation: reverse, 150ms ease-in
-
-### Modal / Dialog
-
-- Backdrop: `overlay-backdrop` (`rgba(0,0,0,0.60)`)
-- Container: `gray-5` bg, `border-default` border, 12px radius
-- Max-width: sm(380px) / md(480px) / lg(640px)
-- Animation: fade-in + scale(0.97→1), 200ms ease-out
-- Close: Escape key, click backdrop, close button
-- Title: `text-section` (15px/600)
-
-### Input / Form Controls
-
-- Height: 32px (compact) / 36px (default)
-- Background: `gray-1` (`#08090a`) — recessed look
-- Border: `border-default`, focus: `#3370FF`
-- Text: `gray-12`, placeholder: `gray-10`
-- Radius: 6px
-- Focus: `0 0 0 2px gray-4, 0 0 0 4px #3370FF`
-- Error: border `#EF4444`, helper text below in `#EF4444`
-
-### Badges & Status
-
-| Type | Background | Text | Radius | Size |
-|------|-----------|------|--------|------|
-| Count (unread) | `#3370FF` | `#fff` | 9px | min-w 18px, `text-micro` |
-| Status dot | semantic color | — | 50% | 8px |
-| Tag | `gray-6` | `gray-12` | 4px | `text-caption` |
-| Pill | semantic bg (8%) | semantic fg | 9999px | `text-micro` |
-
-### Toast / Notification
-
-- Position: bottom-right, 16px from edges
-- Background: `gray-5` with `border-default`
-- Shadow: `0 8px 24px rgba(0,0,0,0.4)`
-- Duration: 4s default, 8s for errors
-- Animation: slide-up 200ms ease-out, slide-down 150ms ease-in
-
----
-
-## 6. Depth & Elevation
-
-| Level | Treatment | Use |
-|-------|-----------|-----|
-| Recessed | `gray-1` bg (darkest) | Input fields, recessed wells |
-| Base | `gray-3` / `gray-4` bg | Sidebar, content backgrounds |
-| Surface | `gray-5` bg + `border-default` | Cards, elevated panels |
-| Raised | `gray-5` bg + `0 4px 12px rgba(0,0,0,0.3)` | Dropdowns, tooltips |
-| Floating | `gray-5` bg + `0 8px 24px rgba(0,0,0,0.4)` | Command palette, toasts |
-| Overlay | `gray-5` bg + `0 16px 48px rgba(0,0,0,0.5)` | Modals, full dialogs |
-
-**Philosophy** (learned from Linear + Vercel): On dark surfaces, elevation is
-communicated through **background luminance stepping** — each layer slightly lighter.
-Shadows supplement but don't drive depth. Borders (`rgba(255,255,255,0.08)`) are
-the primary visual separator.
-
----
-
-## 7. Motion & Animation
-
-| Category | Duration | Easing | Use |
-|----------|----------|--------|-----|
-| Instant | 50ms | linear | Color transitions, opacity |
-| Fast | 100ms | ease-out | Button states, icon swaps |
-| Normal | 200ms | `cubic-bezier(0.16, 1, 0.3, 1)` | Panel slide, dropdown, tabs |
-| Slow | 300ms | `cubic-bezier(0.16, 1, 0.3, 1)` | Modal, overlay, page transition |
-| Spring | 250ms | `cubic-bezier(0.175, 0.885, 0.32, 1.275)` | Pop-in, reaction, toast |
-
-### Named Animations
-- `slide-in-right`: Panel peek in (200ms, ease-out)
-- `slide-out-right`: Panel peek out (150ms, ease-in)
-- `fade-in`: Overlay appearance (200ms)
-- `scale-in`: Modal/dropdown (200ms, 0.97→1 + fade)
-- `msg-slide-up`: New chat message (200ms, ease-out)
-- `reaction-pop`: Emoji reaction (250ms, spring)
-
----
-
-## 8. Scrollbar
-
-Lark-style: invisible until container hover.
-
-```css
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: transparent; border-radius: 2px; }
-*:hover > ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); }
-```
-
----
+- Không UUID, id, khoá ngoại, mã nội bộ nào lên màn hình. Người → PersonChip. Thực thể → tên
+  hoặc tiêu đề. Trạng thái → nhãn tiếng Việt.
+- Audit / hoạt động luôn: **ai** (PersonChip) + **làm gì** (động từ) + **khi nào** (giờ tương đối,
+  tooltip giờ đầy đủ).
+- Định dạng qua `frontend/src/lib/format.ts`: tiền `12.450.000 ₫`, ngày `09/10/2026`, giờ `09:14`,
+  tương đối "5 phút trước", dung lượng `412 KB`.
+- Văn phong: câu ngắn, chủ động, nói điều sẽ xảy ra ("Duyệt", rồi toast "Đã duyệt"). Lỗi nói rõ
+  sai gì và cách sửa. Không dùng dấu gạch ngang dài trong giao diện.
 
 ## 9. Accessibility
 
-- **Focus ring** on ALL interactive elements: `0 0 0 2px [surface], 0 0 0 4px #3370FF`
-- **Minimum contrast**: `gray-11` on `gray-3` = 4.8:1 (passes WCAG AA)
-- **Touch targets**: minimum 32px height for buttons and nav items
-- **Keyboard navigation**: Tab through all interactive, Escape closes panels/modals
-- **Screen reader**: aria-labels on icon-only buttons, semantic headings
+WCAG 2.2 AA. Chữ ≥ 4.5:1, chữ lớn và UI ≥ 3:1 trên nền thật. Mọi phần tử tương tác là
+`button`/`a`/control thật, có hover, `:focus-visible`, active, disabled. Touch target ≥ 44px.
+Màu không bao giờ là kênh duy nhất (trạng thái có nhãn; lớp phủ realtime có nhãn chữ).
 
----
+## 10. Enforcement
 
-## 10. Do's and Don'ts
-
-### Do
-- Use 14-shade grayscale — each shade has a specific role, don't skip
-- Keep max text size at 18px — this is an app, not a marketing page
-- Use `gray-12` for body text, `gray-13` for headings — never pure white
-- Apply focus rings on ALL interactive elements — double ring pattern
-- Use side-panels (PeekPanel) over modals wherever possible
-- Keep table rows at 36px — density is a feature
-- Use `border-subtle` (0.05) for internal dividers, `border-default` (0.08) for containers
-- Apply semantic colors ONLY for status — blue for action, not decoration
-- Use shadow-as-border technique from Vercel for subtle elevation
-
-### Don't
-- Don't use `#ffffff` as text — max is `gray-14` (`#f0f2f5`), and rarely
-- Don't exceed 18px font size in workspace — no display/hero typography
-- Don't use weight 700 — maximum is 600, with 500 as the workhorse
-- Don't introduce warm colors — palette is cool gray with blue accent only
-- Don't use modals for detail views — use PeekPanel to preserve context
-- Don't make table rows > 44px — defeats enterprise density
-- Don't use card-grid for data lists — tables are the enterprise standard
-- Don't add decorative gradients or glow effects — flat, precise, functional
-- Don't use positive letter-spacing except on Overline role
-
----
-
-## 11. Agent Quick Reference
-
-### Colors (copy-paste ready)
-```
-Background:  #08090a / #0d1017 / #0f1115 / #141720 / #1a1e26
-Hover/Active: #21252e / #282d37 / #323843
-Text:        #6b7480 / #8b929e / #c0c6d0 / #e2e5eb
-Accent:      #3370FF (action) / #4B83FF (hover)
-Border:      rgba(255,255,255,0.05) / rgba(255,255,255,0.08) / #23252a
-Success:     #22C55E    Warning: #F59E0B    Error: #EF4444
-```
-
-### Typography (copy-paste ready)
-```
-Font:        Inter Variable, font-feature-settings: "cv01", "ss03"
-Mono:        JetBrains Mono, ui-monospace
-Sizes:       18/15/14/13/12/11/10 px
-Weights:     400 (read) / 500 (interact) / 600 (announce)
-```
-
-### Layout (copy-paste ready)
-```
-Rail:        48px,  bg #0d1017
-List Panel:  240px, bg #0f1115, border-right #23252a
-Content:     flex-1, bg #141720
-Peek Panel:  360px, bg #141720, border-left #23252a, slide-in 200ms
-```
-
-### Component prompts
-- "Sidebar nav item: 13px Inter weight 500, gray-11, padding 6px 12px, radius 6px. Active: rgba(51,112,255,0.08) bg, gray-13 text. Hover: gray-6 bg."
-- "DataTable: gray-3 header, 12px/500 uppercase gray-10. Rows: 36px, border-subtle bottom. Hover: gray-6. Selected: primary-bg."
-- "PeekPanel: 360px, gray-4 bg, border-left #23252a, slide-in-right 200ms. Header: 44px, 14px/600 title, close icon button."
-- "Button primary: #3370FF bg, white text, 6px radius, 13px/500, padding 6px 14px. Focus: double ring 2px gap + 2px #3370FF."
+`frontend/eslint.config.js` khoá ở `error`: cấm hex/rgba, màu palette Tailwind thô, cỡ chữ và
+giá trị tuỳ ý (`text-[`, `z-[`, `tracking-[`), `transition-all`, `duration-<số>`, `animate-bounce`,
+`<h1-6>`/`<p>` thô ngoài `Heading`/`Text`. Exemption phải có lý do trong comment.

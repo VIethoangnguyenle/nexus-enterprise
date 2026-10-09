@@ -2,6 +2,8 @@ package ngac
 
 import (
 	"context"
+	"errors"
+	"log/slog"
 	"time"
 
 	"golang.org/x/sync/singleflight"
@@ -71,19 +73,81 @@ func (e *AccessEvaluator) Evaluate(ctx context.Context, req AccessRequest) *Acce
 	// This is not a second cache: it only merges callers that overlap in time.
 	// The moment one traversal finishes, the next request is a fresh question
 	// and goes to the cache as normal.
-	computed, _, _ := e.inflight.Do(inflightKey(req), func() (any, error) {
-		d := e.engine.Decide(ctx, req)
-		e.cache.Set(ctx, req, d)
-		return d, nil
+	flight := e.inflight.DoChan(inflightKey(req), func() (any, error) {
+		return e.computeShared(ctx, req), nil
 	})
 
-	decision, _ := computed.(*AccessDecision)
+	var decision *AccessDecision
+	select {
+	case res := <-flight:
+		decision, _ = res.Val.(*AccessDecision)
+	case <-ctx.Done():
+		// This caller gave up. The shared computation carries on for everyone
+		// else collapsed onto it; this caller just gets a DENY it will most
+		// likely never read. It is error-derived, and is not cached.
+		d := &AccessDecision{
+			Decision:  DecisionDeny,
+			User:      req.UserNodeID,
+			Object:    req.ObjectNodeID,
+			Operation: req.Operation,
+		}
+		d.failClosed(DenyReasonEvaluationAborted, ctx.Err())
+		return d
+	}
 
 	metrics.CheckAccessTotal.WithLabelValues("L3").Inc()
 	metrics.CheckAccessDuration.WithLabelValues("L3").Observe(time.Since(start).Seconds())
 
 	return decision
 }
+
+// sharedDecisionTimeout bounds one shared (singleflight) computation. It is the
+// computation's own deadline, independent of any caller's.
+const sharedDecisionTimeout = 10 * time.Second
+
+// computeShared runs one PDP evaluation on behalf of every caller collapsed
+// onto the same question, and caches the result if — and only if — it is a
+// real policy answer.
+//
+// The context is detached from the caller that happened to start the flight:
+// the result is handed to every collapsed caller and written to the shared
+// caches, so it must not depend on one caller's cancellation. Under the
+// caller's context, a cancelled first caller made the prohibition query fail,
+// and the resulting decision was served to the other callers and cached.
+// Values (trace IDs etc.) are kept; only cancellation and deadline are dropped,
+// and replaced by sharedDecisionTimeout.
+func (e *AccessEvaluator) computeShared(callerCtx context.Context, req AccessRequest) *AccessDecision {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(callerCtx), sharedDecisionTimeout)
+	defer cancel()
+
+	d := e.engine.Decide(ctx, req)
+	if d == nil {
+		d = &AccessDecision{
+			Decision:  DecisionDeny,
+			User:      req.UserNodeID,
+			Object:    req.ObjectNodeID,
+			Operation: req.Operation,
+		}
+		d.failClosed(DenyReasonEvaluationAborted, errNoDecision)
+	}
+
+	if d.ErrorDerived() {
+		// Correct to return for this request, wrong to remember: it describes
+		// a failure at this instant, not the policy. Caching it would make a
+		// transient database blip a sticky denial.
+		slog.Warn("not caching error-derived access decision",
+			"user_node_id", req.UserNodeID, "object_node_id", req.ObjectNodeID,
+			"operation", req.Operation, "workspace_id", req.WorkspaceID,
+			"reason", d.Explanation.Reason, "error", d.EvaluationErr)
+		return d
+	}
+
+	e.cache.Set(ctx, req, d)
+	return d
+}
+
+// errNoDecision marks the (defensive) case of an engine returning no decision.
+var errNoDecision = errors.New("decision engine returned no decision")
 
 // EvaluateBatch resolves many objects for one user in a single pass.
 //

@@ -10,6 +10,7 @@ import (
 	"ngac-platform/ngac"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/asset/internal/caller"
 	"ngac-platform/services/asset/internal/events"
 	"ngac-platform/services/asset/internal/store"
 )
@@ -276,7 +277,32 @@ func (s *AssetRequestServer) ReturnAsset(ctx context.Context, req *pb.ReturnAsse
 	return &pb.Empty{}, nil
 }
 
+// Request visibility.
+//
+// A request is visible to the person who made it, and to whoever may decide
+// it: approve on the request's type OA, which is exactly what ApproveRequest
+// and RejectRequest check. Read on the asset tree is deliberately not enough —
+// a request carries the requester's justification, which is addressed to the
+// approvers, not to everyone who can browse the catalogue. Approve granted on
+// the Assets or category OA reaches the type OAs beneath it, so workspace
+// owners (who hold every operation on the Assets OA) see every request.
+
+// ListRequests returns the requests in a workspace the caller may see.
+// Visibility is pushed into the query so the total counts only those.
 func (s *AssetRequestServer) ListRequests(ctx context.Context, req *pb.ListRequestsReq) (*pb.AssetRequestList, error) {
+	types, err := s.store.ListTypes(ctx, req.WorkspaceId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "list asset types: %v", err)
+	}
+	approvable, err := permittedTypeIDs(ctx, s.policyRead, req.UserNgacNodeId, types, ngac.OpApprove)
+	if err != nil {
+		// Fail closed: an unreadable policy answer must not list anything.
+		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
+	}
+	if req.UserId == "" && len(approvable) == 0 {
+		return &pb.AssetRequestList{}, nil
+	}
+
 	requests, total, err := s.store.ListRequests(ctx, store.ListRequestsFilter{
 		WorkspaceID: req.WorkspaceId,
 		UserID:      req.UserId,
@@ -284,6 +310,7 @@ func (s *AssetRequestServer) ListRequests(ctx context.Context, req *pb.ListReque
 		MineOnly:    req.MineOnly,
 		Limit:       req.Limit,
 		Offset:      req.Offset,
+		Visibility:  &store.RequestVisibility{RequesterID: req.UserId, TypeIDs: approvable},
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list requests: %v", err)
@@ -296,10 +323,30 @@ func (s *AssetRequestServer) ListRequests(ctx context.Context, req *pb.ListReque
 	return result, nil
 }
 
+// GetRequest returns one request if the caller may see it (see ListRequests).
+//
+// GetRequestReq has no caller field, so the caller is read from the in-process
+// identity on the context (see package caller). A call without one is denied
+// before the request is even looked up, so an anonymous caller cannot probe
+// which request IDs exist.
 func (s *AssetRequestServer) GetRequest(ctx context.Context, req *pb.GetRequestReq) (*pb.AssetRequest, error) {
+	who := caller.FromContext(ctx)
+	if who.UserID == "" && who.NGACNodeID == "" {
+		return nil, errDenied(ngac.OpRead)
+	}
 	r, err := s.store.GetRequest(ctx, req.RequestId)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "request not found: %v", err)
+	}
+	if who.UserID != "" && r.RequesterID == who.UserID {
+		return requestToProto(r), nil
+	}
+	at, err := s.store.GetType(ctx, r.TypeID)
+	if err != nil {
+		return nil, errDenied(ngac.OpApprove)
+	}
+	if err := authorize(ctx, s.policyRead, who.NGACNodeID, at.NgacOAID, ngac.OpApprove); err != nil {
+		return nil, err
 	}
 	return requestToProto(r), nil
 }

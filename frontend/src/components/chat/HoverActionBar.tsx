@@ -1,54 +1,39 @@
-import { SmilePlus, Reply, Pin, PinOff, MoreHorizontal } from 'lucide-react'
+import { SmilePlus, MessageSquareReply, Pin, PinOff, MoreHorizontal } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { IconButton } from '../primitives'
 
 interface HoverActionBarProps {
-  onReply: () => void
+  onReply?: () => void
   onReact: () => void
   onPin: () => void
   isPinned?: boolean
   onMore?: () => void
 }
 
-/** Floating message action bar matching Stitch nexus-chat.html:
- *  absolute -top-3 right-4 bg-surface-container-lowest border border-outline-variant/30
- *  rounded-lg shadow-sm, opacity-0 group-hover:opacity-100.
- *  Buttons: p-1.5 text-on-surface-variant hover:bg-surface-container.
- *  Dividers: border-l border-outline-variant/20 between buttons. */
+/**
+ * Message actions that float over the top-right corner on hover or keyboard
+ * focus. An overlay, so it is the one place in a message with a shadow.
+ */
 export function HoverActionBar({ onReply, onReact, onPin, isPinned, onMore }: HoverActionBarProps) {
   const actions: { icon: LucideIcon; label: string; onClick: () => void }[] = [
-    { icon: SmilePlus, label: 'React', onClick: onReact },
-    { icon: Reply, label: 'Reply', onClick: onReply },
-    { icon: isPinned ? PinOff : Pin, label: isPinned ? 'Unpin' : 'Pin', onClick: onPin },
-    ...(onMore ? [{ icon: MoreHorizontal, label: 'More', onClick: onMore }] : []),
+    { icon: SmilePlus, label: 'Bày tỏ cảm xúc', onClick: onReact },
+    ...(onReply ? [{ icon: MessageSquareReply, label: 'Trả lời trong chủ đề', onClick: onReply }] : []),
+    { icon: isPinned ? PinOff : Pin, label: isPinned ? 'Bỏ ghim' : 'Ghim', onClick: onPin },
+    ...(onMore ? [{ icon: MoreHorizontal, label: 'Thêm', onClick: onMore }] : []),
   ]
 
   return (
-    <div className="absolute -top-3 right-4 flex items-center
-      bg-surface-container-lowest border border-outline-variant/30 rounded-lg shadow-sm
-      opacity-0 group-hover:opacity-100 transition-opacity z-10">
-      {actions.map((a, i) => {
-        const Icon = a.icon
-        return (
-          /* eslint-disable-next-line no-restricted-syntax -- Segmented control: các nút DÙNG
-             CHUNG đường viền và chia nhau bo góc của hộp cha (rounded-l-lg cho nút đầu,
-             rounded-r-lg cho nút cuối), phân cách bằng border-l. IconButton áp bo góc đồng đều
-             cho cả bốn góc và hộp kích thước cố định, không diễn đạt được bo góc một phía lẫn
-             viền dùng chung. Cùng lý do đã miễn trừ ở patterns/MessageItem.tsx (segmented
-             control giống hệt). */
-          <button
-            key={a.label}
-            onClick={a.onClick}
-            title={a.label}
-            className={`p-1.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface
-              border-none bg-transparent cursor-pointer transition-colors
-              ${i === 0 ? 'rounded-l-lg' : ''}
-              ${i === actions.length - 1 ? 'rounded-r-lg' : ''}
-              ${i > 0 ? 'border-l border-outline-variant/20' : ''}`}
-          >
-            <Icon size={18} />
-          </button>
-        )
-      })}
+    <div
+      className="absolute -top-3.5 right-3 z-dropdown flex items-center gap-0.5 p-0.5 rounded-md bg-overlay shadow-overlay
+        opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto
+        group-focus-within:opacity-100 group-focus-within:pointer-events-auto
+        transition-opacity duration-quick"
+    >
+      {actions.map((a) => (
+        <IconButton key={a.label} size="sm" aria-label={a.label} title={a.label} onClick={a.onClick}>
+          <a.icon size={16} strokeWidth={1.75} />
+        </IconButton>
+      ))}
     </div>
   )
 }

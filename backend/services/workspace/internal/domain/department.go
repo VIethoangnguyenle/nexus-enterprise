@@ -42,15 +42,25 @@ type CreateDepartmentInput struct {
 	ParentID    string // empty = root department
 }
 
-// CreateDepartment provisions a new department: NGAC UA node + DB row.
-func (s *Service) CreateDepartment(ctx context.Context, in CreateDepartmentInput) (*DepartmentResult, error) {
+// CreateDepartment provisions a new department: NGAC UA node + DB row. The
+// caller must hold manage on the workspace's Mgmt OA; a parent, if given, must
+// be a department of the same workspace.
+func (s *Service) CreateDepartment(ctx context.Context, callerNodeID string, in CreateDepartmentInput) (*DepartmentResult, error) {
 	if in.Name == "" {
 		return nil, fmt.Errorf("%w: department name required", ErrInvalidInput)
 	}
 
-	ws, err := s.GetWorkspace(ctx, in.WorkspaceID)
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, in.WorkspaceID, ngac.OpManage)
 	if err != nil {
 		return nil, err
+	}
+
+	var parentDept *store.Department
+	if in.ParentID != "" {
+		parentDept, err = s.departmentInWorkspace(ctx, in.WorkspaceID, in.ParentID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Create NGAC UA node for the department
@@ -69,11 +79,7 @@ func (s *Service) CreateDepartment(ctx context.Context, in CreateDepartmentInput
 
 	// Assign dept UA to parent dept or workspace PC
 	parentNGACID := ws.PcNodeID
-	if in.ParentID != "" {
-		parentDept, err := s.deptStore.GetDepartment(ctx, in.ParentID)
-		if err != nil {
-			return nil, fmt.Errorf("%w: parent department %s", ErrNotFound, in.ParentID)
-		}
+	if parentDept != nil {
 		parentNGACID = parentDept.NGACUaID
 	}
 
@@ -111,7 +117,11 @@ func (s *Service) CreateDepartment(ctx context.Context, in CreateDepartmentInput
 }
 
 // ListDepartments returns all departments for a workspace with member counts.
-func (s *Service) ListDepartments(ctx context.Context, wsID string) ([]*DepartmentResult, error) {
+// The caller must belong to the workspace.
+func (s *Service) ListDepartments(ctx context.Context, callerNodeID, wsID string) ([]*DepartmentResult, error) {
+	if _, err := s.authorizeMember(ctx, callerNodeID, wsID); err != nil {
+		return nil, err
+	}
 	deps, err := s.deptStore.ListDepartmentsByWorkspace(ctx, wsID)
 	if err != nil {
 		return nil, err
@@ -135,15 +145,19 @@ func (s *Service) ListDepartments(ctx context.Context, wsID string) ([]*Departme
 	return results, nil
 }
 
-// UpdateDepartment renames a department and updates its NGAC node.
-func (s *Service) UpdateDepartment(ctx context.Context, deptID, newName string) (*DepartmentResult, error) {
+// UpdateDepartment renames a department. The caller must hold manage on the
+// workspace's Mgmt OA, and the department must belong to that workspace.
+func (s *Service) UpdateDepartment(ctx context.Context, callerNodeID, wsID, deptID, newName string) (*DepartmentResult, error) {
 	if newName == "" {
 		return nil, fmt.Errorf("%w: department name required", ErrInvalidInput)
 	}
 
-	dept, err := s.deptStore.GetDepartment(ctx, deptID)
+	if _, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage); err != nil {
+		return nil, err
+	}
+	dept, err := s.departmentInWorkspace(ctx, wsID, deptID)
 	if err != nil {
-		return nil, fmt.Errorf("%w: department %s", ErrNotFound, deptID)
+		return nil, err
 	}
 
 	if err := s.deptStore.UpdateDepartmentName(ctx, deptID, newName); err != nil {
@@ -165,15 +179,29 @@ func (s *Service) UpdateDepartment(ctx context.Context, deptID, newName string) 
 
 // MoveDepartmentInput holds parameters for moving a department.
 type MoveDepartmentInput struct {
+	WorkspaceID string
 	DeptID      string
 	NewParentID string // empty = move to root
 }
 
 // MoveDepartment changes a department's parent. Prevents circular references.
-func (s *Service) MoveDepartment(ctx context.Context, in MoveDepartmentInput) (*DepartmentResult, error) {
-	dept, err := s.deptStore.GetDepartment(ctx, in.DeptID)
+// The caller must hold manage on the workspace's Mgmt OA, and both the
+// department and its new parent must belong to that workspace.
+func (s *Service) MoveDepartment(ctx context.Context, callerNodeID string, in MoveDepartmentInput) (*DepartmentResult, error) {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, in.WorkspaceID, ngac.OpManage)
 	if err != nil {
-		return nil, fmt.Errorf("%w: department %s", ErrNotFound, in.DeptID)
+		return nil, err
+	}
+	dept, err := s.departmentInWorkspace(ctx, in.WorkspaceID, in.DeptID)
+	if err != nil {
+		return nil, err
+	}
+	var newParent *store.Department
+	if in.NewParentID != "" {
+		newParent, err = s.departmentInWorkspace(ctx, in.WorkspaceID, in.NewParentID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Prevent moving to self
@@ -193,11 +221,6 @@ func (s *Service) MoveDepartment(ctx context.Context, in MoveDepartmentInput) (*
 	}
 
 	// Update NGAC assignments
-	ws, err := s.GetWorkspace(ctx, dept.WorkspaceID)
-	if err != nil {
-		return nil, err
-	}
-
 	// Remove old assignment
 	oldParentNGACID := ws.PcNodeID
 	if dept.ParentID != nil && *dept.ParentID != "" {
@@ -215,10 +238,8 @@ func (s *Service) MoveDepartment(ctx context.Context, in MoveDepartmentInput) (*
 
 	// Create new assignment
 	newParentNGACID := ws.PcNodeID
-	if in.NewParentID != "" {
-		if newParent, err := s.deptStore.GetDepartment(ctx, in.NewParentID); err == nil {
-			newParentNGACID = newParent.NGACUaID
-		}
+	if newParent != nil {
+		newParentNGACID = newParent.NGACUaID
 	}
 	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: dept.NGACUaID, ParentId: newParentNGACID,
@@ -243,11 +264,16 @@ func (s *Service) MoveDepartment(ctx context.Context, in MoveDepartmentInput) (*
 	}, nil
 }
 
-// DeleteDepartment removes a department, reassigning children and users to parent.
-func (s *Service) DeleteDepartment(ctx context.Context, deptID string) error {
-	dept, err := s.deptStore.GetDepartment(ctx, deptID)
+// DeleteDepartment removes a department, reassigning children and users to
+// parent. The caller must hold manage on the workspace's Mgmt OA, and the
+// department must belong to that workspace.
+func (s *Service) DeleteDepartment(ctx context.Context, callerNodeID, wsID, deptID string) error {
+	if _, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage); err != nil {
+		return err
+	}
+	dept, err := s.departmentInWorkspace(ctx, wsID, deptID)
 	if err != nil {
-		return fmt.Errorf("%w: department %s", ErrNotFound, deptID)
+		return err
 	}
 
 	// Reassign children to parent
@@ -274,14 +300,19 @@ func (s *Service) DeleteDepartment(ctx context.Context, deptID string) error {
 	return nil
 }
 
-// UpdateMemberDepartment assigns a user to a department.
-func (s *Service) UpdateMemberDepartment(ctx context.Context, wsID, userNGACNodeID, deptID string) error {
+// UpdateMemberDepartment assigns a user to a department. The caller must hold
+// manage on the workspace's Mgmt OA, and the department must belong to that
+// workspace.
+func (s *Service) UpdateMemberDepartment(ctx context.Context, callerNodeID, wsID, userNGACNodeID, deptID string) error {
+	if _, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage); err != nil {
+		return err
+	}
 	// If deptID is empty, unassign from department
 	var deptPtr *string
 	if deptID != "" {
-		dept, err := s.deptStore.GetDepartment(ctx, deptID)
+		dept, err := s.departmentInWorkspace(ctx, wsID, deptID)
 		if err != nil {
-			return fmt.Errorf("%w: department %s", ErrNotFound, deptID)
+			return err
 		}
 
 		// Create NGAC assignment: user → dept UA
@@ -300,6 +331,17 @@ func (s *Service) UpdateMemberDepartment(ctx context.Context, wsID, userNGACNode
 	}
 
 	return nil
+}
+
+// departmentInWorkspace loads a department and confirms it belongs to wsID.
+// A department of another workspace is reported as not found, so a caller who
+// administers one workspace cannot act on another's departments by ID.
+func (s *Service) departmentInWorkspace(ctx context.Context, wsID, deptID string) (*store.Department, error) {
+	dept, err := s.deptStore.GetDepartment(ctx, deptID)
+	if err != nil || dept == nil || dept.WorkspaceID != wsID {
+		return nil, fmt.Errorf("%w: department %s", ErrNotFound, deptID)
+	}
+	return dept, nil
 }
 
 // isDescendant checks if targetID is a descendant of parentID in the department tree.

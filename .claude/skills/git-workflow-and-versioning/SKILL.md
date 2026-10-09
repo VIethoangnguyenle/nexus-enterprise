@@ -1,6 +1,6 @@
 ---
 name: git-workflow-and-versioning
-description: Structures git commit and release practices. Use when committing, writing a commit message, resolving conflicts, or keeping changes atomic. Use when cutting a release, choosing a semantic version bump, tagging, or writing a changelog. Does NOT cover branch lifecycle, worktrees, or merging — those belong to superpowers.
+description: Structures git commit and release practices. Use when committing, writing a commit message, resolving conflicts, or keeping changes atomic. Use when cutting a release, choosing a semantic version bump, tagging, or writing a changelog. Does NOT cover branch lifecycle, worktrees, or merging — those belong to AgentKit (`ak:worktree`, `ak:ship`).
 ---
 
 # Git Workflow and Versioning
@@ -110,7 +110,7 @@ git commit -m "refactor validation and add phone number field"
 
 ### 5. Size Your Changes
 
-Target ~100 lines per commit/PR. Changes over ~1000 lines should be split; `superpowers:writing-plans` is where a large change gets broken into landable pieces.
+Target ~100 lines per commit/PR. Changes over ~1000 lines should be split; `ak:plan` is where a large change gets broken into landable pieces.
 
 ```
 ~100 lines  → Easy to review, easy to revert
@@ -120,11 +120,11 @@ Target ~100 lines per commit/PR. Changes over ~1000 lines should be split; `supe
 
 ## Branching, Worktrees, and Merging — Not This Skill
 
-Branch lifecycle is owned by superpowers. Defer, do not duplicate:
+Branch lifecycle is owned by AgentKit. Defer, do not duplicate:
 
-- Creating an isolated workspace for a task → `superpowers:using-git-worktrees`
-- Running parallel streams of work → `superpowers:dispatching-parallel-agents`
-- Deciding how finished work lands (merge, PR, cleanup) → `superpowers:finishing-a-development-branch`
+- Creating an isolated workspace for a task → `ak:worktree`
+- Running parallel streams of work → `ak:team`
+- Deciding how finished work lands (merge, PR, cleanup) → `ak:ship`
 
 This skill covers what happens *inside* a branch: commit granularity, message quality,
 conflict resolution, and release versioning.

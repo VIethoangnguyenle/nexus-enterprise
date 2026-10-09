@@ -20,9 +20,12 @@ const (
 	// Beyond it the user signs in again.
 	RefreshTokenTTL = 7 * 24 * time.Hour
 
-	refreshKeyPrefix  = "refresh:"
-	sessionKeyPrefix  = "refresh_session:"
-	refreshTokenBytes = 32
+	refreshKeyPrefix = "refresh:"
+	sessionKeyPrefix = "refresh_session:"
+	// userCutoffKeyPrefix holds, per user, the instant before which every
+	// session counts as revoked. See RevokeAllForUser.
+	userCutoffKeyPrefix = "refresh_user_cutoff:"
+	refreshTokenBytes   = 32
 )
 
 // ErrRefreshRejected is returned for any refresh token that is unknown,
@@ -39,6 +42,10 @@ type RefreshIdentity struct {
 	NGACNodeID string `json:"ngac_node_id"`
 	TenantID   string `json:"tenant_id"`
 	SessionID  string `json:"session_id"`
+	// StartedAt is when the session began (Unix nanoseconds). It survives
+	// rotation, and is what a user-wide revocation compares against. Records
+	// written before this field existed read as 0 — older than any cutoff.
+	StartedAt int64 `json:"started_at,omitempty"`
 }
 
 // refreshRecord is what a refresh token resolves to in Redis.
@@ -66,8 +73,9 @@ func NewRefreshStore(rdb *redis.Client) *RefreshStore {
 	return &RefreshStore{rdb: rdb, ttl: RefreshTokenTTL}
 }
 
-func refreshKey(token string) string { return refreshKeyPrefix + token }
-func sessionKey(sid string) string   { return sessionKeyPrefix + sid }
+func refreshKey(token string) string  { return refreshKeyPrefix + token }
+func sessionKey(sid string) string    { return sessionKeyPrefix + sid }
+func userCutoffKey(uid string) string { return userCutoffKeyPrefix + uid }
 
 // Issue starts a new session and returns its first refresh token.
 func (s *RefreshStore) Issue(ctx context.Context, id RefreshIdentity) (token, sessionID string, err error) {
@@ -76,6 +84,9 @@ func (s *RefreshStore) Issue(ctx context.Context, id RefreshIdentity) (token, se
 	}
 	if id.SessionID == "" {
 		id.SessionID = uuid.New().String()
+	}
+	if id.StartedAt == 0 {
+		id.StartedAt = time.Now().UnixNano()
 	}
 	token, err = s.mint(ctx, id)
 	if err != nil {
@@ -130,6 +141,15 @@ func (s *RefreshStore) Rotate(ctx context.Context, token string) (string, Refres
 
 	var rec refreshRecord
 	if err := json.Unmarshal(payload, &rec); err != nil {
+		return "", RefreshIdentity{}, ErrRefreshRejected
+	}
+
+	revoked, err := s.revokedForUser(ctx, rec.RefreshIdentity)
+	if err != nil {
+		return "", RefreshIdentity{}, err
+	}
+	if revoked {
+		_ = s.RevokeSession(ctx, rec.SessionID)
 		return "", RefreshIdentity{}, ErrRefreshRejected
 	}
 
@@ -246,4 +266,39 @@ func (s *RefreshStore) RevokeSession(ctx context.Context, sessionID string) erro
 		return fmt.Errorf("revoke session: %w", err)
 	}
 	return nil
+}
+
+// RevokeAllForUser ends every session the user has right now, on every
+// device, including ones whose tokens are not individually known. Sessions
+// started afterwards are unaffected.
+//
+// It records a cutoff instead of hunting down tokens: Rotate rejects any
+// session that started before it. The cutoff lives as long as a refresh token
+// can, after which nothing older could be presented anyway.
+//
+// Without Redis there are no refresh tokens at all, so there is nothing to
+// revoke. Any Redis error is returned: callers rely on this to evict an
+// attacker, so it must not fail silently.
+func (s *RefreshStore) RevokeAllForUser(ctx context.Context, userID string) error {
+	if s == nil || s.rdb == nil || userID == "" {
+		return nil
+	}
+	cutoff := time.Now().UnixNano()
+	if err := s.rdb.Set(ctx, userCutoffKey(userID), cutoff, s.ttl).Err(); err != nil {
+		return fmt.Errorf("revoke user sessions: %w", err)
+	}
+	return nil
+}
+
+// revokedForUser reports whether a user-wide revocation postdates the
+// session's start. A lookup failure is an error, not a pass.
+func (s *RefreshStore) revokedForUser(ctx context.Context, id RefreshIdentity) (bool, error) {
+	cutoff, err := s.rdb.Get(ctx, userCutoffKey(id.UserID)).Int64()
+	if errors.Is(err, redis.Nil) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read user session cutoff: %w", err)
+	}
+	return id.StartedAt < cutoff, nil
 }

@@ -59,6 +59,9 @@ const variantStyles: Record<IconButtonVariant, string> = {
  * không diễn đạt được "được chọn" — `filled` là nền primary, quá nặng cho một
  * toggle trong nhóm. Đây là nền nổi nhẹ kèm bóng, đo từ drive.tsx và contacts.tsx.
  */
+// The variant's bg-transparent is dropped while active: both are background
+// utilities of equal specificity, and bg-transparent sorts later in the
+// stylesheet, so it silently won and the selected fill never showed.
 const activeStyle = 'bg-surface-container-highest text-on-surface shadow-sm'
 
 const toneStyles: Record<IconButtonTone, string> = {
@@ -77,7 +80,7 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
         transition-colors duration-fast cursor-pointer focus-ring
         disabled:opacity-40 disabled:cursor-not-allowed
         ${shapeStyles[shape ?? (variant === 'filled' ? 'round' : 'square')]}
-        ${variantStyles[variant]}
+        ${active && variant !== 'filled' ? variantStyles[variant].replace('bg-transparent', '') : variantStyles[variant]}
         ${variant === 'filled' ? '' : active ? activeStyle : toneStyles[tone]}
         ${sizeStyles[size]} ${className}`}
       {...props}

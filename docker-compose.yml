@@ -141,6 +141,7 @@ services:
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
       GRPC_PORT: "50061"
     deploy:
       replicas: 2
@@ -148,6 +149,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
       policy:
         condition: service_healthy
@@ -175,6 +178,16 @@ services:
       # refresh cookie must not carry Secure or the browser will drop it.
       # Change this once TLS terminates in front of the stack.
       APP_ENV: dev
+      # Sign in with Google — off unless GOOGLE_CLIENT_ID is set in the shell
+      # or a .env file next to this compose file. The redirect URI must also be
+      # listed under the OAuth client's "Authorized redirect URIs".
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL_DOCKER:-http://localhost/api/auth/google/callback}
+      APP_BASE_URL: ${APP_BASE_URL_DOCKER:-http://localhost}
+      # TEST-ONLY fixed OTP code (see .env.example). `-` not `:-`: an
+      # explicitly empty value must stay empty, which turns the test mode off.
+      AUTH_FIXED_OTP_CODE: ${AUTH_FIXED_OTP_CODE-999999}
     depends_on:
       policy:
         condition: service_healthy

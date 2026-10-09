@@ -2,8 +2,10 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -12,7 +14,9 @@ import (
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/protobuf/proto"
 
+	"ngac-platform/ngac"
 	pb "ngac-platform/proto/messaging"
+	"ngac-platform/services/messaging/internal/events"
 )
 
 var upgrader = websocket.Upgrader{
@@ -29,22 +33,42 @@ type Hub struct {
 	rdb      *redis.Client
 	ctx      context.Context
 	cancel   context.CancelFunc
+
+	// access authorizes joining a channel's live stream. A nil checker denies
+	// every subscription.
+	access ChannelAccessChecker
 }
+
+// subscribeCheckTimeout bounds the policy round-trip a Subscribe waits on.
+const subscribeCheckTimeout = 5 * time.Second
 
 // Client represents a connected WebSocket user.
 type Client struct {
-	conn          *websocket.Conn
-	userID        string
-	username      string
-	ngacNodeID    string
+	conn       *websocket.Conn
+	userID     string
+	username   string
+	ngacNodeID string
+	// tenantID is the tenant the session's JWT was issued for. Presence and
+	// approval events are confined to it; empty means the session belongs to
+	// no tenant and receives no tenant-scoped events.
+	tenantID      string
 	hub           *Hub
 	send          chan []byte
 	authenticated bool
 	jwtSecret     string
 }
 
+// ChannelAccessChecker answers whether a user may perform an operation on a
+// channel. domain.Service satisfies it.
+type ChannelAccessChecker interface {
+	AuthorizeChannelAccess(ctx context.Context, channelID, userNodeID, operation string) error
+}
+
 // NewHub creates a Hub with optional Redis pub/sub for horizontal scaling.
-func NewHub(rdb *redis.Client) *Hub {
+//
+// access authorizes every channel subscription; pass nil only where no client
+// should ever be allowed to subscribe.
+func NewHub(rdb *redis.Client, access ChannelAccessChecker) *Hub {
 	ctx, cancel := context.WithCancel(context.Background())
 	h := &Hub{
 		channels: make(map[string]map[*Client]bool),
@@ -52,6 +76,7 @@ func NewHub(rdb *redis.Client) *Hub {
 		rdb:      rdb,
 		ctx:      ctx,
 		cancel:   cancel,
+		access:   access,
 	}
 	if rdb != nil {
 		go h.subscribeRedis()
@@ -64,14 +89,71 @@ func (h *Hub) Close() {
 	h.cancel()
 }
 
-// Subscribe adds a client to a local channel group.
-func (h *Hub) Subscribe(channelID string, client *Client) {
+// authorizeSubscribe decides whether a user may join a channel's live stream.
+//
+// A subscription delivers every message posted to the channel, so it is a read
+// of the channel and takes the same check as fetching its history: read on the
+// channel's content OA. Knowing a channel ID is not a capability. Any failure —
+// no checker, no identity, a policy error — is a refusal.
+func (h *Hub) authorizeSubscribe(channelID, userNodeID string) error {
+	if h.access == nil {
+		return errors.New("no channel access checker configured")
+	}
+	if channelID == "" || userNodeID == "" {
+		return errors.New("channel and user identity required")
+	}
+	ctx, cancel := context.WithTimeout(h.ctx, subscribeCheckTimeout)
+	defer cancel()
+	return h.access.AuthorizeChannelAccess(ctx, channelID, userNodeID, ngac.OpRead)
+}
+
+// subscribe adds a client to a local channel group. Callers must have passed
+// authorizeSubscribe first.
+func (h *Hub) subscribe(channelID string, client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.channels[channelID] == nil {
 		h.channels[channelID] = make(map[*Client]bool)
 	}
 	h.channels[channelID][client] = true
+}
+
+// RevokeChannelSubscriptions drops every live subscription the user (by NGAC
+// node) holds on the channel, on every hub instance. Called when the user is
+// removed from the channel: the subscription was authorized when it opened and
+// would otherwise outlive the membership that justified it.
+func (h *Hub) RevokeChannelSubscriptions(channelID, userNodeID string) {
+	if channelID == "" || userNodeID == "" {
+		return
+	}
+	if h.rdb != nil {
+		// Every instance, this one included, receives this on revoke:*.
+		err := h.rdb.Publish(h.ctx, revokeKeyPrefix+channelID, userNodeID).Err()
+		if err == nil {
+			return
+		}
+		slog.Warn("redis revoke publish failed, revoking locally only",
+			"channel_id", channelID, "error", err)
+	}
+	h.revokeLocal(channelID, userNodeID)
+}
+
+// revokeLocal removes this instance's subscriptions of userNodeID to channelID.
+func (h *Hub) revokeLocal(channelID, userNodeID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for client := range h.channels[channelID] {
+		if client.ngacNodeID == userNodeID {
+			delete(h.channels[channelID], client)
+		}
+	}
+}
+
+// isSubscribed reports whether client currently holds a subscription to channelID.
+func (h *Hub) isSubscribed(channelID string, client *Client) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.channels[channelID][client]
 }
 
 // Unsubscribe removes a client from a channel group.
@@ -199,9 +281,11 @@ func (h *Hub) broadcastTyping(channelID, username string, sender *Client) {
 	}
 }
 
-// subscribeRedis listens on channel:* pattern and delivers to local clients.
+// subscribeRedis listens for cross-instance traffic and delivers it to local
+// clients: channel:<id> to that channel's subscribers, user:<id> to that user's
+// sessions, presence:<tenant> to sessions in that tenant.
 func (h *Hub) subscribeRedis() {
-	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", "presence")
+	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", presenceKeyPrefix+"*", revokeKeyPrefix+"*")
 	defer pubsub.Close()
 
 	slog.Info("redis pub/sub subscriber started")
@@ -218,14 +302,15 @@ func (h *Hub) subscribeRedis() {
 			}
 			payload := []byte(msg.Payload)
 
-			if msg.Channel == "presence" {
-				h.broadcastToAll(payload)
-			} else if len(msg.Channel) > 5 && msg.Channel[:5] == "user:" {
-				userID := msg.Channel[5:]
-				h.sendToUser(userID, payload)
-			} else if len(msg.Channel) > 8 && msg.Channel[:8] == "channel:" {
-				channelID := msg.Channel[8:]
-				h.broadcastLocal(channelID, payload)
+			switch {
+			case strings.HasPrefix(msg.Channel, revokeKeyPrefix):
+				h.revokeLocal(strings.TrimPrefix(msg.Channel, revokeKeyPrefix), msg.Payload)
+			case strings.HasPrefix(msg.Channel, presenceKeyPrefix):
+				h.broadcastToTenant(strings.TrimPrefix(msg.Channel, presenceKeyPrefix), payload)
+			case strings.HasPrefix(msg.Channel, "user:"):
+				h.sendToUser(strings.TrimPrefix(msg.Channel, "user:"), payload)
+			case strings.HasPrefix(msg.Channel, "channel:"):
+				h.broadcastLocal(strings.TrimPrefix(msg.Channel, "channel:"), payload)
 			}
 		}
 	}
@@ -245,12 +330,20 @@ func (h *Hub) sendToUser(userID string, data []byte) {
 	}
 }
 
-// broadcastToAll delivers data to every connected WebSocket client.
-func (h *Hub) broadcastToAll(data []byte) {
+// broadcastToTenant delivers data to every local session of the given tenant.
+// An empty tenant matches no one: a session without a tenant has no
+// colleagues, and treating "" as a tenant would pool every such session.
+func (h *Hub) broadcastToTenant(tenantID string, data []byte) {
+	if tenantID == "" {
+		return
+	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, clients := range h.users {
 		for client := range clients {
+			if client.tenantID != tenantID {
+				continue
+			}
 			select {
 			case client.send <- data:
 			default:
@@ -258,6 +351,13 @@ func (h *Hub) broadcastToAll(data []byte) {
 		}
 	}
 }
+
+// presenceKeyPrefix namespaces the per-tenant Redis presence channels.
+const presenceKeyPrefix = "presence:"
+
+// revokeKeyPrefix namespaces the per-channel Redis subscription-revocation
+// channels. The payload is the NGAC node ID of the user to drop.
+const revokeKeyPrefix = "revoke:"
 
 func redisChanKey(channelID string) string {
 	return "channel:" + channelID
@@ -268,6 +368,7 @@ type WSClaims struct {
 	UserID     string `json:"user_id"`
 	Username   string `json:"username"`
 	NGACNodeID string `json:"ngac_node_id"`
+	TenantID   string `json:"tenant_id,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -362,9 +463,14 @@ func (c *Client) sendError(code int32, message string) {
 
 // handleAuth validates JWT from the first client message and authenticates.
 func (c *Client) handleAuth(req *pb.AuthRequest) bool {
-	token, err := jwt.ParseWithClaims(req.Token, &WSClaims{}, func(t *jwt.Token) (interface{}, error) {
-		return []byte(c.jwtSecret), nil
-	})
+	token, err := jwt.ParseWithClaims(req.Token, &WSClaims{},
+		func(t *jwt.Token) (interface{}, error) { return []byte(c.jwtSecret), nil },
+		// Same rules as httputil.JWTMiddleware: pin HS256 so the HMAC secret
+		// the keyfunc returns is never applied under another algorithm, and
+		// require exp so a token cannot be a permanent credential.
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+	)
 	if err != nil {
 		c.sendAuthResponse(false, "", "invalid token")
 		return false
@@ -374,6 +480,7 @@ func (c *Client) handleAuth(req *pb.AuthRequest) bool {
 	c.userID = claims.UserID
 	c.username = claims.Username
 	c.ngacNodeID = claims.NGACNodeID
+	c.tenantID = claims.TenantID
 	c.authenticated = true
 
 	// Track client by userID
@@ -386,7 +493,7 @@ func (c *Client) handleAuth(req *pb.AuthRequest) bool {
 
 	c.sendAuthResponse(true, claims.UserID, "")
 	// Broadcast presence online event
-	c.hub.BroadcastPresence(claims.UserID, claims.Username, "online")
+	c.hub.BroadcastPresence(c.tenantID, claims.UserID, claims.Username, "online")
 	return true
 }
 
@@ -408,14 +515,21 @@ func (c *Client) sendAuthResponse(ok bool, userID, reason string) {
 
 func (c *Client) readPump() {
 	defer func() {
-		// Broadcast offline if this was the user's last connection
+		// Broadcast offline if this was the user's last connection in this
+		// tenant. Presence is per tenant, so a session still open in another
+		// tenant does not keep the user "online" here.
 		if c.authenticated {
 			c.hub.mu.RLock()
-			remaining := len(c.hub.users[c.userID])
+			remaining := 0
+			for other := range c.hub.users[c.userID] {
+				if other.tenantID == c.tenantID {
+					remaining++
+				}
+			}
 			c.hub.mu.RUnlock()
 			// Will be 0 after UnsubscribeAll removes this client
 			if remaining <= 1 {
-				c.hub.BroadcastPresence(c.userID, c.username, "offline")
+				c.hub.BroadcastPresence(c.tenantID, c.userID, c.username, "offline")
 			}
 		}
 		c.hub.UnsubscribeAll(c)
@@ -472,7 +586,14 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 			c.sendError(401, "not authenticated")
 			return
 		}
-		c.hub.Subscribe(payload.Subscribe.ChannelId, c)
+		channelID := payload.Subscribe.ChannelId
+		if err := c.hub.authorizeSubscribe(channelID, c.ngacNodeID); err != nil {
+			slog.Warn("websocket subscribe denied",
+				"user_id", c.userID, "channel_id", channelID, "error", err)
+			c.sendError(403, "not allowed to subscribe to this channel")
+			return
+		}
+		c.hub.subscribe(channelID, c)
 
 	case *pb.ClientEnvelope_Unsubscribe:
 		if !c.authenticated {
@@ -483,6 +604,13 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 
 	case *pb.ClientEnvelope_Typing:
 		if !c.authenticated {
+			return
+		}
+		// Typing goes out under the sender's name to everyone in the channel,
+		// so it is only accepted for a channel the sender is subscribed to —
+		// which already required read on it.
+		if !c.hub.isSubscribed(payload.Typing.ChannelId, c) {
+			c.sendError(403, "not subscribed to this channel")
 			return
 		}
 		c.hub.broadcastTyping(payload.Typing.ChannelId, c.username, c)
@@ -559,18 +687,34 @@ func (h *Hub) BroadcastAssetUpdated(assetID, newState string) {
 	}
 }
 
-// BroadcastApprovalEvent sends an approval status change to all connected users.
-// All users may be affected: approvers see pending count change, requesters see
-// status updates, department views refresh.
-func (h *Hub) BroadcastApprovalEvent(requestID, status, action, actorNodeID, templateName string) {
+// BroadcastApprovalEvent sends an approval status change to the users the
+// notice names, and to no one else.
+//
+// It used to go to every connected session of every tenant, which handed the
+// request ID, template name and actor of one tenant's approvals to everyone on
+// the platform. Delivery is now by recipient: a session receives the event
+// only if its NGAC user node is in RecipientNodeIDs and, when the notice
+// carries a tenant, only if the session belongs to that tenant. A notice that
+// names nobody is dropped.
+func (h *Hub) BroadcastApprovalEvent(n events.ApprovalNotice) {
+	recipients := make(map[string]bool, len(n.RecipientNodeIDs))
+	for _, id := range n.RecipientNodeIDs {
+		if id != "" {
+			recipients[id] = true
+		}
+	}
+	if len(recipients) == 0 {
+		return
+	}
+
 	env := &pb.ServerEnvelope{
 		Payload: &pb.ServerEnvelope_ApprovalEvent{
 			ApprovalEvent: &pb.ApprovalEvent{
-				RequestId:    requestID,
-				Status:       status,
-				Action:       action,
-				ActorNodeId:  actorNodeID,
-				TemplateName: templateName,
+				RequestId:    n.RequestID,
+				Status:       n.Status,
+				Action:       n.Action,
+				ActorNodeId:  n.ActorNodeID,
+				TemplateName: n.TemplateName,
 			},
 		},
 	}
@@ -579,11 +723,16 @@ func (h *Hub) BroadcastApprovalEvent(requestID, status, action, actorNodeID, tem
 		return
 	}
 
-	// Broadcast to all connected users
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, clients := range h.users {
 		for client := range clients {
+			if !recipients[client.ngacNodeID] {
+				continue
+			}
+			if n.TenantID != "" && client.tenantID != n.TenantID {
+				continue
+			}
 			select {
 			case client.send <- data:
 			default:
@@ -592,8 +741,14 @@ func (h *Hub) BroadcastApprovalEvent(requestID, status, action, actorNodeID, tem
 	}
 }
 
-// BroadcastPresence sends a presence event (online/offline) to all connected users.
-func (h *Hub) BroadcastPresence(userID, username, status string) {
+// BroadcastPresence sends a presence event (online/offline) to the sessions of
+// the given tenant. Presence says who is around; outside the tenant it is a
+// directory of another organisation's people. A session with no tenant
+// announces itself to no one.
+func (h *Hub) BroadcastPresence(tenantID, userID, username, status string) {
+	if tenantID == "" {
+		return
+	}
 	env := &pb.ServerEnvelope{
 		Payload: &pb.ServerEnvelope_PresenceEvent{
 			PresenceEvent: &pb.PresenceEvent{
@@ -609,22 +764,12 @@ func (h *Hub) BroadcastPresence(userID, username, status string) {
 	}
 
 	if h.rdb != nil {
-		// Publish to all instances
-		if err := h.rdb.Publish(h.ctx, "presence", data).Err(); err != nil {
+		// Publish to all instances, on the tenant's own presence channel.
+		if err := h.rdb.Publish(h.ctx, presenceKeyPrefix+tenantID, data).Err(); err != nil {
 			slog.Warn("redis presence publish failed", "error", err)
 		}
 		return
 	}
 
-	// Local-only broadcast
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for _, clients := range h.users {
-		for client := range clients {
-			select {
-			case client.send <- data:
-			default:
-			}
-		}
-	}
+	h.broadcastToTenant(tenantID, data)
 }

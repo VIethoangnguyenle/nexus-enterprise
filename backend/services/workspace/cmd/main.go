@@ -42,6 +42,9 @@ func main() {
 
 	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
 	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
+	// Same convention as drive: authorization reads may go to a read replica;
+	// unset, they go to the primary policy service.
+	policyReadAddr := envOr("POLICY_READ_SERVICE_ADDR", policyAddr)
 	driveAddr := envOr("DRIVE_SERVICE_ADDR", "localhost:50057")
 	grpcPort := envOr("GRPC_PORT", "50053")
 	restPort := envOr("REST_PORT", "8080")
@@ -70,6 +73,16 @@ func main() {
 		os.Exit(1)
 	}
 	defer policyConn.Close()
+
+	policyReadConn := policyConn
+	if policyReadAddr != policyAddr {
+		policyReadConn, err = grpc.NewClient(policyReadAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		if err != nil {
+			slog.Error("failed to connect to policy read service", "address", policyReadAddr, "error", err)
+			os.Exit(1)
+		}
+		defer policyReadConn.Close()
+	}
 
 	// Initialize MinIO client
 	minioClient, err := minio.New(minioEndpoint, &minio.Options{
@@ -106,7 +119,10 @@ func main() {
 	}
 
 	// --- Wire clean architecture layers ---
-	policyReadClient := policypb.NewPolicyReadServiceClient(policyConn)
+	// The read client is the PDP: every admin route checks the caller against it
+	// (see domain/authz.go). It must be wired — a nil client would panic, and the
+	// domain treats any error from it as DENY.
+	policyReadClient := policypb.NewPolicyReadServiceClient(policyReadConn)
 	policyWriteClient := policypb.NewPolicyWriteServiceClient(policyConn)
 
 	wsStore := store.New(pool)

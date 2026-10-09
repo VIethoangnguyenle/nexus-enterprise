@@ -1,6 +1,6 @@
 ---
 name: context-engineering
-description: Optimizes agent context setup. Use when agent output quality degrades, when switching between tasks, or when you need to configure rules files and context for a project. Do NOT use as a session-start routine — superpowers:using-superpowers owns session start.
+description: Optimizes agent context setup. Use when agent output quality degrades, when switching between tasks, or when you need to configure rules files and context for a project. Do NOT use as a session-start routine — AgentKit's session-init hook owns session start.
 ---
 
 # Context Engineering

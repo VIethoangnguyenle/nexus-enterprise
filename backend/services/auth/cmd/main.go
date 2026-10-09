@@ -2,11 +2,14 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"log/slog"
 	"net"
 	"os"
 	"os/signal"
+	"regexp"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,6 +30,7 @@ import (
 	workspacepb "ngac-platform/proto/workspace"
 	"ngac-platform/services/auth/internal/auth"
 	"ngac-platform/services/auth/internal/domain"
+	"ngac-platform/services/auth/internal/googleauth"
 	agrpc "ngac-platform/services/auth/internal/grpc"
 	"ngac-platform/services/auth/internal/rest"
 	"ngac-platform/services/auth/internal/store"
@@ -104,6 +108,12 @@ func main() {
 
 	// Domain service — shared by gRPC and REST handlers
 	svc := domain.NewService(st, rdb, policyRead, policyWrite, wsClient, msgClient)
+	otpOpts, err := otpOptions(jwtSecret)
+	if err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
+	svc.ConfigureOTP(otpOpts)
 
 	// gRPC server (service-to-service)
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
@@ -127,9 +137,17 @@ func main() {
 	// REST server (client-facing)
 	e := echo.New()
 	e.HideBanner = true
-	e.Use(echomw.Logger())
+	e.Use(echomw.LoggerWithConfig(echomw.LoggerConfig{
+		// The access log records the full URI, and the Google callback's query
+		// carries the one-time authorization code. The handler logs the
+		// outcome of that request itself, without the code.
+		Skipper: func(c echo.Context) bool {
+			return c.Request().URL.Path == "/api/auth/google/callback"
+		},
+	}))
 	e.Use(echomw.Recover())
 	restHandler := rest.NewHandler(svc)
+	restHandler.EnableGoogle(googleOptions(rdb))
 	restHandler.RegisterRoutes(e, jwtSecret)
 
 	// Start both servers
@@ -155,6 +173,80 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+var otpCodeFormat = regexp.MustCompile(`^[0-9]{6}$`)
+
+// otpOptions configures OTP sign-in from the environment.
+//
+// AUTH_FIXED_OTP_CODE selects the mode. Unset → the documented test-only
+// fixed code "999999"; any six digits → that fixed code; set but EMPTY →
+// random codes, delivered by a CodeSender. The only sender today is the
+// dev-only LogSender (APP_ENV=dev or AUTH_DEV_OTP=1); without it random-code
+// OTP is disabled and /api/auth/providers reports otp=false.
+func otpOptions(jwtSecret string) (domain.OTPOptions, error) {
+	// Derive the at-rest HMAC key from the shared JWT secret so every auth
+	// instance verifies codes the others issued, without a new secret to manage.
+	key := sha256.Sum256([]byte("auth-otp-code-hmac\x00" + jwtSecret))
+	opts := domain.OTPOptions{Secret: key[:]}
+
+	fixed, set := os.LookupEnv("AUTH_FIXED_OTP_CODE")
+	if !set {
+		fixed = domain.DefaultFixedOTPCode
+	}
+	fixed = strings.TrimSpace(fixed)
+	if fixed != "" {
+		if !otpCodeFormat.MatchString(fixed) {
+			return opts, fmt.Errorf("AUTH_FIXED_OTP_CODE must be six digits, or empty to disable the fixed code")
+		}
+		opts.FixedCode = fixed
+		slog.Warn("OTP fixed-code TEST MODE is on: every OTP sign-in accepts the configured code. " +
+			"Set AUTH_FIXED_OTP_CODE= (empty) to use random delivered codes.")
+		return opts, nil
+	}
+
+	if domain.DevOTPMode() {
+		opts.Sender = domain.LogSender{}
+		slog.Info("OTP random codes delivered to the log (dev mode only)")
+	} else {
+		slog.Warn("OTP sign-in disabled: fixed code is off and no code sender is configured")
+	}
+	return opts, nil
+}
+
+// googleOptions configures "Sign in with Google" from the environment.
+// Without GOOGLE_CLIENT_ID (or without Redis, which holds in-flight sign-ins)
+// the feature is off: /api/auth/google/start answers 503 and
+// /api/auth/providers reports it unavailable, so the login page hides it.
+func googleOptions(rdb *redis.Client) rest.GoogleOptions {
+	opts := rest.GoogleOptions{
+		AppBaseURL: strings.TrimRight(envOr("APP_BASE_URL", "http://localhost:5173"), "/"),
+	}
+	clientID := os.Getenv("GOOGLE_CLIENT_ID")
+	if clientID == "" {
+		slog.Info("google sign-in disabled: GOOGLE_CLIENT_ID not set")
+		return opts
+	}
+	clientSecret := os.Getenv("GOOGLE_CLIENT_SECRET")
+	if clientSecret == "" {
+		slog.Warn("google sign-in disabled: GOOGLE_CLIENT_SECRET not set")
+		return opts
+	}
+	if rdb == nil {
+		slog.Warn("google sign-in disabled: redis unavailable")
+		return opts
+	}
+	redirectURL := envOr("GOOGLE_REDIRECT_URL", "http://localhost:5173/api/auth/google/callback")
+
+	opts.Provider = googleauth.New(googleauth.Config{
+		ClientID:     clientID,
+		ClientSecret: clientSecret,
+		RedirectURL:  redirectURL,
+	})
+	opts.Flows = googleauth.NewRedisFlowStore(rdb)
+	// Never log the secret; the client ID and URLs are not sensitive.
+	slog.Info("google sign-in enabled", "redirect_url", redirectURL, "app_base_url", opts.AppBaseURL)
+	return opts
 }
 
 // connectRedis creates a Redis client from a URL and verifies connectivity.

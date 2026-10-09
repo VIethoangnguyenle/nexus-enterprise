@@ -85,6 +85,15 @@ func (m *mockStore) UpdateAssignmentStatus(_ context.Context, id, status, commen
 	}
 	return ErrNotFound
 }
+func (m *mockStore) ListPendingAssignees(_ context.Context, requestID string, stepOrder int) ([]string, error) {
+	var out []string
+	for _, a := range m.assignList {
+		if a.RequestID == requestID && a.StepOrder == stepOrder && a.Status == "pending" {
+			out = append(out, a.UserNodeID)
+		}
+	}
+	return out, nil
+}
 func (m *mockStore) CountApprovedForStep(_ context.Context, requestID string, stepOrder int) (int, error) {
 	return m.approved, nil
 }
@@ -94,6 +103,7 @@ func (m *mockStore) SkipRemainingAssignments(_ context.Context, requestID string
 func (m *mockStore) SkipAllPendingAssignments(_ context.Context, requestID string) error {
 	return nil
 }
+
 // AdvanceStep mirrors the store's compare-and-swap: it only moves the request
 // when it is still sitting on fromStep, so a second caller racing on the same
 // quorum is told it lost.

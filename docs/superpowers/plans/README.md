@@ -1,4 +1,7 @@
-# Plans
+# Plans (archived)
+
+> **Frozen.** The workflow axis moved from superpowers to AgentKit (see CLAUDE.md §4). New plans
+> are written by `ak:plan` into `plans/<timestamp>-<slug>/`. The files here are kept as history.
 
 Implementation plans written by `superpowers:writing-plans`, one file per feature, named
 `YYYY-MM-DD-<feature>.md`.
