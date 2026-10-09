@@ -3,7 +3,9 @@
 package rest
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -29,15 +31,21 @@ func mapDomainError(err error) *echo.HTTPError {
 	}
 }
 
+// EventPublisher publishes approval lifecycle events. *events.Producer
+// implements it (and tolerates a nil receiver).
+type EventPublisher interface {
+	Publish(ctx context.Context, evt events.ApprovalEventPayload)
+}
+
 // Handler serves approval REST endpoints.
 type Handler struct {
 	svc      *domain.Service
 	resolver *httputil.TenantSchemaResolver
-	producer *events.Producer
+	producer EventPublisher
 }
 
 // NewHandler creates an approval REST handler with tenant schema resolution.
-func NewHandler(svc *domain.Service, resolver *httputil.TenantSchemaResolver, producer *events.Producer) *Handler {
+func NewHandler(svc *domain.Service, resolver *httputil.TenantSchemaResolver, producer EventPublisher) *Handler {
 	return &Handler{svc: svc, resolver: resolver, producer: producer}
 }
 
@@ -317,16 +325,7 @@ func (h *Handler) CreateRequest(c echo.Context) error {
 	}
 
 	// Publish event after DB commit (fire-and-forget)
-	h.producer.Publish(c.Request().Context(), events.ApprovalEventPayload{
-		RequestID:    req.ID,
-		TemplateName: req.TemplateName,
-		EntityType:   req.EntityType,
-		Status:       req.Status,
-		Action:       "created",
-		ActorNodeID:  claims.NGACNodeID,
-		CreatedBy:    claims.NGACNodeID,
-		ScopeOaID:    req.ScopeOAID,
-	})
+	h.publishEvent(c.Request().Context(), claims, req.ID, "created", "")
 
 	return c.JSON(http.StatusCreated, req)
 }
@@ -353,11 +352,7 @@ func (h *Handler) ApproveAction(c echo.Context) error {
 	}
 
 	// Publish event after DB commit (fire-and-forget)
-	h.producer.Publish(c.Request().Context(), events.ApprovalEventPayload{
-		RequestID:   body.RequestID,
-		Action:      "approved",
-		ActorNodeID: claims.NGACNodeID,
-	})
+	h.publishEvent(c.Request().Context(), claims, body.RequestID, "approved", "")
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "approved"})
 }
@@ -384,13 +379,7 @@ func (h *Handler) RejectAction(c echo.Context) error {
 	}
 
 	// Publish event after DB commit (fire-and-forget)
-	h.producer.Publish(c.Request().Context(), events.ApprovalEventPayload{
-		RequestID:   body.RequestID,
-		Status:      "rejected",
-		Action:      "rejected",
-		ActorNodeID: claims.NGACNodeID,
-		Comment:     body.Comment,
-	})
+	h.publishEvent(c.Request().Context(), claims, body.RequestID, "rejected", body.Comment)
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "rejected"})
 }
@@ -419,17 +408,49 @@ func (h *Handler) BatchApproveAction(c echo.Context) error {
 
 	// Publish one event per approved request (fire-and-forget)
 	for _, reqID := range approved {
-		h.producer.Publish(c.Request().Context(), events.ApprovalEventPayload{
-			RequestID:   reqID,
-			Action:      "approved",
-			ActorNodeID: claims.NGACNodeID,
-		})
+		h.publishEvent(c.Request().Context(), claims, reqID, "approved", "")
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"approved_count": len(approved),
 		"approved_ids":   approved,
 	})
+}
+
+// publishEvent announces a lifecycle action that has already been committed.
+//
+// The event names who it concerns so consumers can deliver it to them alone:
+// the actor, the requester (created_by), and the approvers now pending on the
+// request's current step — after an approval that advanced the step, that is
+// the next approver. tenant_id is the tenant of the acting request's JWT, so a
+// consumer can also keep the event inside that tenant.
+//
+// If the request cannot be re-read the event still goes out with what the
+// action itself carries; the consumer then reaches only the actor.
+func (h *Handler) publishEvent(ctx context.Context, claims *httputil.Claims, requestID, action, comment string) {
+	if h.producer == nil {
+		return
+	}
+	evt := events.ApprovalEventPayload{
+		RequestID:   requestID,
+		Action:      action,
+		ActorNodeID: claims.NGACNodeID,
+		TenantID:    claims.TenantID,
+		Comment:     comment,
+	}
+	aud, err := h.svc.EventAudience(ctx, requestID)
+	if err != nil {
+		slog.Warn("approval event audience unavailable; publishing actor-only event",
+			"request_id", requestID, "action", action, "error", err)
+	} else {
+		evt.TemplateName = aud.Request.TemplateName
+		evt.EntityType = aud.Request.EntityType
+		evt.Status = aud.Request.Status
+		evt.CreatedBy = aud.Request.CreatedBy
+		evt.ScopeOaID = aud.Request.ScopeOAID
+		evt.AssigneeNodeIDs = aud.AssigneeNodeIDs
+	}
+	h.producer.Publish(ctx, evt)
 }
 
 // --- Query tab endpoints ---

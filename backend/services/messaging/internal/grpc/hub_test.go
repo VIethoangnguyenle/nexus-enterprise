@@ -23,6 +23,7 @@ import (
 	"ngac-platform/services/messaging/internal/domain"
 	"ngac-platform/services/messaging/internal/events"
 	grpcserver "ngac-platform/services/messaging/internal/grpc"
+	"ngac-platform/services/messaging/internal/store"
 )
 
 const hubTestSecret = "hub-test-secret-hub-test-secret-0123456789"
@@ -81,6 +82,25 @@ func startHub(t *testing.T, access grpcserver.ChannelAccessChecker) (*grpcserver
 
 func connect(t *testing.T, url string, id identity) *wsTestClient {
 	t.Helper()
+	claims := jwt.MapClaims{
+		"user_id": id.userID, "username": id.username, "ngac_node_id": id.nodeID,
+		"exp": time.Now().Add(time.Hour).Unix(),
+	}
+	if id.tenantID != "" {
+		claims["tenant_id"] = id.tenantID
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(hubTestSecret))
+	require.NoError(t, err)
+
+	c, auth := dialAndAuth(t, url, token)
+	require.True(t, auth.Ok, "auth rejected: %s", auth.Reason)
+	return c
+}
+
+// dialAndAuth opens a connection, sends token as the auth message and returns
+// the server's answer.
+func dialAndAuth(t *testing.T, url, token string) (*wsTestClient, *pb.AuthResponse) {
+	t.Helper()
 	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
 	require.NoError(t, err)
 	t.Cleanup(func() { conn.Close() })
@@ -100,21 +120,39 @@ func connect(t *testing.T, url string, id identity) *wsTestClient {
 		}
 	}()
 
-	claims := jwt.MapClaims{
-		"user_id": id.userID, "username": id.username, "ngac_node_id": id.nodeID,
-		"exp": time.Now().Add(time.Hour).Unix(),
-	}
-	if id.tenantID != "" {
-		claims["tenant_id"] = id.tenantID
-	}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(hubTestSecret))
-	require.NoError(t, err)
 	c.send(t, &pb.ClientEnvelope{Payload: &pb.ClientEnvelope_Auth{Auth: &pb.AuthRequest{Token: token}}})
 
 	auth := c.next(t, func(e *pb.ServerEnvelope) bool { return e.GetAuthResponse() != nil }, 2*time.Second)
 	require.NotNil(t, auth, "no auth response")
-	require.True(t, auth.GetAuthResponse().Ok, "auth rejected: %s", auth.GetAuthResponse().Reason)
-	return c
+	return c, auth.GetAuthResponse()
+}
+
+// subscribeAndWait subscribes c to channelID and blocks until a broadcast on
+// that channel reaches it. A successful subscribe sends no acknowledgement, so
+// this is how a test knows the hub has processed it.
+func subscribeAndWait(t *testing.T, hub *grpcserver.Hub, c *wsTestClient, channelID string) {
+	t.Helper()
+	c.subscribe(t, channelID)
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		hub.BroadcastToChannel(channelID, secretMessage(channelID))
+		if c.next(t, isChat(channelID), 50*time.Millisecond) != nil {
+			return
+		}
+	}
+	t.Fatalf("subscription to %s never became live", channelID)
+}
+
+func isTyping(channelID string) func(*pb.ServerEnvelope) bool {
+	return func(e *pb.ServerEnvelope) bool {
+		return e.GetTypingEvent() != nil && e.GetTypingEvent().ChannelId == channelID
+	}
+}
+
+func (c *wsTestClient) typing(t *testing.T, channelID string) {
+	t.Helper()
+	c.send(t, &pb.ClientEnvelope{Payload: &pb.ClientEnvelope_Typing{
+		Typing: &pb.TypingRequest{ChannelId: channelID},
+	}})
 }
 
 func (c *wsTestClient) send(t *testing.T, env *pb.ClientEnvelope) {
@@ -343,4 +381,216 @@ func TestPresence_ScopedToTenantAcrossInstancesViaRedis(t *testing.T) {
 
 	require.NotNil(t, got, "presence must reach the same tenant on another instance")
 	assert.Nil(t, foreign.next(t, isAnnounced, quiet), "presence must not reach another tenant on another instance")
+}
+
+// ---------------------------------------------------------------------------
+// Authentication — HS256 only
+// ---------------------------------------------------------------------------
+
+func TestHubAuth_RejectsOtherSigningMethods(t *testing.T) {
+	_, url := startHub(t, &fakeAccess{})
+	claims := jwt.MapClaims{
+		"user_id": "u-1", "username": "mallory", "ngac_node_id": "n-1", "tenant_id": "tenant-a",
+		"exp": time.Now().Add(time.Hour).Unix(),
+	}
+
+	t.Run("HS384 with the shared secret", func(t *testing.T) {
+		token, err := jwt.NewWithClaims(jwt.SigningMethodHS384, claims).SignedString([]byte(hubTestSecret))
+		require.NoError(t, err)
+		_, auth := dialAndAuth(t, url, token)
+		assert.False(t, auth.Ok, "only HS256 tokens may authenticate")
+	})
+
+	t.Run("alg none", func(t *testing.T) {
+		token, err := jwt.NewWithClaims(jwt.SigningMethodNone, claims).SignedString(jwt.UnsafeAllowNoneSignatureType)
+		require.NoError(t, err)
+		_, auth := dialAndAuth(t, url, token)
+		assert.False(t, auth.Ok, "an unsigned token must not authenticate")
+	})
+
+	t.Run("HS256 without exp", func(t *testing.T) {
+		noExp := jwt.MapClaims{"user_id": "u-1", "username": "mallory", "ngac_node_id": "n-1"}
+		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, noExp).SignedString([]byte(hubTestSecret))
+		require.NoError(t, err)
+		_, auth := dialAndAuth(t, url, token)
+		assert.False(t, auth.Ok, "a token without expiry must not authenticate")
+	})
+
+	t.Run("HS256 with the shared secret", func(t *testing.T) {
+		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(hubTestSecret))
+		require.NoError(t, err)
+		_, auth := dialAndAuth(t, url, token)
+		assert.True(t, auth.Ok)
+	})
+}
+
+// ---------------------------------------------------------------------------
+// Typing — only into a channel the sender is subscribed to
+// ---------------------------------------------------------------------------
+
+func TestTyping_RejectedWhenNotSubscribed(t *testing.T) {
+	access := &fakeAccess{allow: map[[3]string]bool{{"ch-1", "n-member", ngac.OpRead}: true}}
+	hub, url := startHub(t, access)
+	member := connect(t, url, identity{"u-member", "member", "n-member", "tenant-a"})
+	outsider := connect(t, url, identity{"u-out", "outsider", "n-out", "tenant-a"})
+	subscribeAndWait(t, hub, member, "ch-1")
+
+	outsider.typing(t, "ch-1")
+
+	require.NotNil(t, outsider.next(t, isError(403), 2*time.Second), "typing into an unsubscribed channel must answer 403")
+	assert.Nil(t, member.next(t, isTyping("ch-1"), quiet), "an outsider's typing must not reach channel members")
+}
+
+func TestTyping_DeliveredWhenSubscribed(t *testing.T) {
+	access := &fakeAccess{allow: map[[3]string]bool{
+		{"ch-1", "n-alice", ngac.OpRead}: true,
+		{"ch-1", "n-bob", ngac.OpRead}:   true,
+	}}
+	hub, url := startHub(t, access)
+	alice := connect(t, url, identity{"u-alice", "alice", "n-alice", "tenant-a"})
+	bob := connect(t, url, identity{"u-bob", "bob", "n-bob", "tenant-a"})
+	subscribeAndWait(t, hub, alice, "ch-1")
+	subscribeAndWait(t, hub, bob, "ch-1")
+
+	alice.typing(t, "ch-1")
+
+	got := bob.next(t, isTyping("ch-1"), 2*time.Second)
+	require.NotNil(t, got, "a subscribed member's typing must reach the channel")
+	assert.Equal(t, "alice", got.GetTypingEvent().Username)
+	assert.Nil(t, alice.next(t, isError(403), quiet))
+}
+
+// ---------------------------------------------------------------------------
+// Revocation — a removed member's live subscription is dropped
+// ---------------------------------------------------------------------------
+
+// stopsReceiving broadcasts on channelID until the witness (still a member)
+// receives a message the removed client does not, then checks that the next
+// one does not reach the removed client either.
+func stopsReceiving(t *testing.T, hub *grpcserver.Hub, removed, witness *wsTestClient, channelID string) {
+	t.Helper()
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); {
+		hub.BroadcastToChannel(channelID, secretMessage(channelID))
+		require.NotNil(t, witness.next(t, isChat(channelID), 2*time.Second), "the remaining member must keep receiving")
+		if removed.next(t, isChat(channelID), 50*time.Millisecond) == nil {
+			hub.BroadcastToChannel(channelID, secretMessage(channelID))
+			require.NotNil(t, witness.next(t, isChat(channelID), 2*time.Second))
+			assert.Nil(t, removed.next(t, isChat(channelID), quiet), "a removed member must stay unsubscribed")
+			return
+		}
+	}
+	t.Fatalf("removed member kept receiving %s", channelID)
+}
+
+func TestRevokeChannelSubscriptions_DropsOnlyThatUser(t *testing.T) {
+	access := &fakeAccess{allow: map[[3]string]bool{
+		{"ch-1", "n-victim", ngac.OpRead}: true,
+		{"ch-1", "n-stay", ngac.OpRead}:   true,
+		{"ch-2", "n-victim", ngac.OpRead}: true,
+	}}
+	hub, url := startHub(t, access)
+	victim := connect(t, url, identity{"u-victim", "victim", "n-victim", "tenant-a"})
+	stay := connect(t, url, identity{"u-stay", "stay", "n-stay", "tenant-a"})
+	subscribeAndWait(t, hub, victim, "ch-1")
+	subscribeAndWait(t, hub, victim, "ch-2")
+	subscribeAndWait(t, hub, stay, "ch-1")
+
+	hub.RevokeChannelSubscriptions("ch-1", "n-victim")
+
+	stopsReceiving(t, hub, victim, stay, "ch-1")
+	hub.BroadcastToChannel("ch-2", secretMessage("ch-2"))
+	assert.NotNil(t, victim.next(t, isChat("ch-2"), 2*time.Second), "revocation is per channel")
+}
+
+func TestRevokeChannelSubscriptions_AcrossInstancesViaRedis(t *testing.T) {
+	addr := os.Getenv("REDIS_ADDR")
+	if addr == "" {
+		addr = "localhost:6379"
+	}
+	rdb := redis.NewClient(&redis.Options{Addr: addr})
+	if err := rdb.Ping(context.Background()).Err(); err != nil {
+		t.Skipf("redis not available: %v", err)
+	}
+	t.Cleanup(func() { rdb.Close() })
+
+	chID := fmt.Sprintf("ch-revoke-%d", time.Now().UnixNano())
+	access := &fakeAccess{allow: map[[3]string]bool{
+		{chID, "n-victim", ngac.OpRead}: true,
+		{chID, "n-stay", ngac.OpRead}:   true,
+	}}
+	startInstance := func() (*grpcserver.Hub, string) {
+		hub := grpcserver.NewHub(rdb, access)
+		t.Cleanup(hub.Close)
+		srv := httptest.NewServer(hub.HandleWebSocket(hubTestSecret))
+		t.Cleanup(srv.Close)
+		return hub, "ws" + strings.TrimPrefix(srv.URL, "http")
+	}
+	hubOne, _ := startInstance()
+	hubTwo, urlTwo := startInstance()
+	victim := connect(t, urlTwo, identity{"u-victim", "victim", "n-victim", "tenant-a"})
+	stay := connect(t, urlTwo, identity{"u-stay", "stay", "n-stay", "tenant-a"})
+	subscribeAndWait(t, hubTwo, victim, chID)
+	subscribeAndWait(t, hubTwo, stay, chID)
+
+	// Removed through instance one; the sessions live on instance two.
+	hubOne.RevokeChannelSubscriptions(chID, "n-victim")
+
+	stopsReceiving(t, hubTwo, victim, stay, chID)
+}
+
+// Removing a member through the API ends their live feed, not only their
+// future reads: the WebSocket subscription they opened while they were a
+// member is dropped.
+func TestRemoveChannelMember_EndsLiveSubscription(t *testing.T) {
+	pool := testPool(t)
+	wsID := getTestWorkspaceID(t, pool)
+	chID := insertTestChannel(t, pool, "revokelive", "workspace", wsID)
+	t.Cleanup(func() { cleanTestData(t, pool, chID) })
+
+	access := &fakeAccess{allow: map[[3]string]bool{
+		{chID, "ngac-victim", ngac.OpRead}: true,
+		{chID, "ngac-stay", ngac.OpRead}:   true,
+	}}
+	hub, url := startHub(t, access)
+	svc := domain.NewService(store.NewStore(pool), &mockPolicyReadClient{}, &mockPolicyWriteClient{pool: pool}, &mockAuthClient{}, nil)
+	svc.SetSubscriptionRevoker(hub)
+	srv := grpcserver.NewMessagingServer(svc, hub, nil)
+
+	victim := connect(t, url, identity{"u-victim", "victim", "ngac-victim", "tenant-a"})
+	stay := connect(t, url, identity{"u-stay", "stay", "ngac-stay", "tenant-a"})
+	subscribeAndWait(t, hub, victim, chID)
+	subscribeAndWait(t, hub, stay, chID)
+
+	_, err := srv.RemoveChannelMember(context.Background(), &pb.RemoveChannelMemberRequest{
+		ChannelId: chID, RequesterNgacNodeId: "ngac-owner", TargetNgacNodeId: "ngac-victim",
+	})
+	require.NoError(t, err)
+
+	stopsReceiving(t, hub, victim, stay, chID)
+}
+
+// A removal the requester is not entitled to make must not touch anyone's
+// subscription either.
+func TestRemoveChannelMember_DeniedLeavesSubscription(t *testing.T) {
+	pool := testPool(t)
+	wsID := getTestWorkspaceID(t, pool)
+	chID := insertTestChannel(t, pool, "revokedeny", "workspace", wsID)
+	t.Cleanup(func() { cleanTestData(t, pool, chID) })
+
+	access := &fakeAccess{allow: map[[3]string]bool{{chID, "ngac-member", ngac.OpRead}: true}}
+	hub, url := startHub(t, access)
+	svc := domain.NewService(store.NewStore(pool), &mockPolicyReadDeny{}, &mockPolicyWriteClient{pool: pool}, &mockAuthClient{}, nil)
+	svc.SetSubscriptionRevoker(hub)
+	srv := grpcserver.NewMessagingServer(svc, hub, nil)
+
+	member := connect(t, url, identity{"u-member", "member", "ngac-member", "tenant-a"})
+	subscribeAndWait(t, hub, member, chID)
+
+	_, err := srv.RemoveChannelMember(context.Background(), &pb.RemoveChannelMemberRequest{
+		ChannelId: chID, RequesterNgacNodeId: "ngac-outsider", TargetNgacNodeId: "ngac-member",
+	})
+	require.Error(t, err)
+
+	hub.BroadcastToChannel(chID, secretMessage(chID))
+	assert.NotNil(t, member.next(t, isChat(chID), 2*time.Second), "a denied removal must leave the member subscribed")
 }

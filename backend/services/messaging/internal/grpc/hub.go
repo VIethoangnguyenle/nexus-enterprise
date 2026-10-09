@@ -118,6 +118,44 @@ func (h *Hub) subscribe(channelID string, client *Client) {
 	h.channels[channelID][client] = true
 }
 
+// RevokeChannelSubscriptions drops every live subscription the user (by NGAC
+// node) holds on the channel, on every hub instance. Called when the user is
+// removed from the channel: the subscription was authorized when it opened and
+// would otherwise outlive the membership that justified it.
+func (h *Hub) RevokeChannelSubscriptions(channelID, userNodeID string) {
+	if channelID == "" || userNodeID == "" {
+		return
+	}
+	if h.rdb != nil {
+		// Every instance, this one included, receives this on revoke:*.
+		err := h.rdb.Publish(h.ctx, revokeKeyPrefix+channelID, userNodeID).Err()
+		if err == nil {
+			return
+		}
+		slog.Warn("redis revoke publish failed, revoking locally only",
+			"channel_id", channelID, "error", err)
+	}
+	h.revokeLocal(channelID, userNodeID)
+}
+
+// revokeLocal removes this instance's subscriptions of userNodeID to channelID.
+func (h *Hub) revokeLocal(channelID, userNodeID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for client := range h.channels[channelID] {
+		if client.ngacNodeID == userNodeID {
+			delete(h.channels[channelID], client)
+		}
+	}
+}
+
+// isSubscribed reports whether client currently holds a subscription to channelID.
+func (h *Hub) isSubscribed(channelID string, client *Client) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.channels[channelID][client]
+}
+
 // Unsubscribe removes a client from a channel group.
 func (h *Hub) Unsubscribe(channelID string, client *Client) {
 	h.mu.Lock()
@@ -247,7 +285,7 @@ func (h *Hub) broadcastTyping(channelID, username string, sender *Client) {
 // clients: channel:<id> to that channel's subscribers, user:<id> to that user's
 // sessions, presence:<tenant> to sessions in that tenant.
 func (h *Hub) subscribeRedis() {
-	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", presenceKeyPrefix+"*")
+	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", presenceKeyPrefix+"*", revokeKeyPrefix+"*")
 	defer pubsub.Close()
 
 	slog.Info("redis pub/sub subscriber started")
@@ -265,6 +303,8 @@ func (h *Hub) subscribeRedis() {
 			payload := []byte(msg.Payload)
 
 			switch {
+			case strings.HasPrefix(msg.Channel, revokeKeyPrefix):
+				h.revokeLocal(strings.TrimPrefix(msg.Channel, revokeKeyPrefix), msg.Payload)
 			case strings.HasPrefix(msg.Channel, presenceKeyPrefix):
 				h.broadcastToTenant(strings.TrimPrefix(msg.Channel, presenceKeyPrefix), payload)
 			case strings.HasPrefix(msg.Channel, "user:"):
@@ -314,6 +354,10 @@ func (h *Hub) broadcastToTenant(tenantID string, data []byte) {
 
 // presenceKeyPrefix namespaces the per-tenant Redis presence channels.
 const presenceKeyPrefix = "presence:"
+
+// revokeKeyPrefix namespaces the per-channel Redis subscription-revocation
+// channels. The payload is the NGAC node ID of the user to drop.
+const revokeKeyPrefix = "revoke:"
 
 func redisChanKey(channelID string) string {
 	return "channel:" + channelID
@@ -419,9 +463,14 @@ func (c *Client) sendError(code int32, message string) {
 
 // handleAuth validates JWT from the first client message and authenticates.
 func (c *Client) handleAuth(req *pb.AuthRequest) bool {
-	token, err := jwt.ParseWithClaims(req.Token, &WSClaims{}, func(t *jwt.Token) (interface{}, error) {
-		return []byte(c.jwtSecret), nil
-	})
+	token, err := jwt.ParseWithClaims(req.Token, &WSClaims{},
+		func(t *jwt.Token) (interface{}, error) { return []byte(c.jwtSecret), nil },
+		// Same rules as httputil.JWTMiddleware: pin HS256 so the HMAC secret
+		// the keyfunc returns is never applied under another algorithm, and
+		// require exp so a token cannot be a permanent credential.
+		jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}),
+		jwt.WithExpirationRequired(),
+	)
 	if err != nil {
 		c.sendAuthResponse(false, "", "invalid token")
 		return false
@@ -555,6 +604,13 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 
 	case *pb.ClientEnvelope_Typing:
 		if !c.authenticated {
+			return
+		}
+		// Typing goes out under the sender's name to everyone in the channel,
+		// so it is only accepted for a channel the sender is subscribed to —
+		// which already required read on it.
+		if !c.hub.isSubscribed(payload.Typing.ChannelId, c) {
+			c.sendError(403, "not subscribed to this channel")
 			return
 		}
 		c.hub.broadcastTyping(payload.Typing.ChannelId, c.username, c)
