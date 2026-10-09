@@ -173,7 +173,13 @@ func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) 
 	}, nil
 }
 
-// GetWorkspace retrieves a workspace by ID.
+// ViewWorkspace returns a workspace to a caller who belongs to it.
+func (s *Service) ViewWorkspace(ctx context.Context, callerNodeID, id string) (*WorkspaceResult, error) {
+	return s.authorizeMember(ctx, callerNodeID, id)
+}
+
+// GetWorkspace retrieves a workspace by ID. It performs no authorization and is
+// for internal use; caller-facing reads go through ViewWorkspace.
 func (s *Service) GetWorkspace(ctx context.Context, id string) (*WorkspaceResult, error) {
 	ws, err := s.store.GetByID(ctx, id)
 	if err != nil {
@@ -241,9 +247,10 @@ func (s *Service) FindUAByName(ctx context.Context, wsID, uaName string) (string
 	return "", fmt.Errorf("%w: UA %q not found in workspace %s", ErrNotFound, uaName, wsID)
 }
 
-// InviteMember adds a user to the Members UA of a workspace.
-func (s *Service) InviteMember(ctx context.Context, wsID, targetNGACNodeID string) error {
-	ws, err := s.GetWorkspace(ctx, wsID)
+// InviteMember adds a user to the Members UA of a workspace. The caller must
+// hold invite on the workspace's Mgmt OA.
+func (s *Service) InviteMember(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpInvite)
 	if err != nil {
 		return err
 	}
@@ -260,12 +267,19 @@ func (s *Service) InviteMember(ctx context.Context, wsID, targetNGACNodeID strin
 	return nil
 }
 
-// RemoveMember removes a user from all UAs under the workspace PC.
-func (s *Service) RemoveMember(ctx context.Context, wsID, targetNGACNodeID string) error {
-	ws, err := s.GetWorkspace(ctx, wsID)
+// RemoveMember removes a user from all UAs under the workspace PC. The caller
+// must hold invite on the workspace's Mgmt OA.
+func (s *Service) RemoveMember(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpInvite)
 	if err != nil {
 		return err
 	}
+	return s.detachMember(ctx, ws, targetNGACNodeID)
+}
+
+// detachMember removes a user from every UA under the workspace PC. It performs
+// no authorization; callers must have authorized already.
+func (s *Service) detachMember(ctx context.Context, ws *WorkspaceResult, targetNGACNodeID string) error {
 	desc, err := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
 	if err != nil {
 		return fmt.Errorf("get descendants: %w", err)
@@ -299,9 +313,10 @@ type Member struct {
 	Username   string
 }
 
-// ListMembers returns all unique users under the workspace PC.
-func (s *Service) ListMembers(ctx context.Context, wsID string) ([]*Member, error) {
-	ws, err := s.GetWorkspace(ctx, wsID)
+// ListMembers returns all unique users under the workspace PC. The caller must
+// belong to the workspace.
+func (s *Service) ListMembers(ctx context.Context, callerNodeID, wsID string) ([]*Member, error) {
+	ws, err := s.authorizeMember(ctx, callerNodeID, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -321,8 +336,19 @@ func (s *Service) ListMembers(ctx context.Context, wsID string) ([]*Member, erro
 }
 
 // UpdateMemberRoles removes a user from all UAs then assigns to specified roles.
-func (s *Service) UpdateMemberRoles(ctx context.Context, wsID, targetNGACNodeID string, roleIDs []string) error {
-	if err := s.RemoveMember(ctx, wsID, targetNGACNodeID); err != nil {
+// The caller must hold manage on the workspace's Mgmt OA, and every role must be
+// a UA of this workspace.
+func (s *Service) UpdateMemberRoles(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string, roleIDs []string) error {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
+	if err != nil {
+		return err
+	}
+	for _, roleID := range roleIDs {
+		if err := s.requireInWorkspace(ctx, ws, roleID, ngac.TypeUA); err != nil {
+			return err
+		}
+	}
+	if err := s.detachMember(ctx, ws, targetNGACNodeID); err != nil {
 		return err
 	}
 	for _, roleID := range roleIDs {
@@ -335,9 +361,10 @@ func (s *Service) UpdateMemberRoles(ctx context.Context, wsID, targetNGACNodeID 
 	return nil
 }
 
-// TransferOwnership adds a user to the Owners UA of a workspace.
-func (s *Service) TransferOwnership(ctx context.Context, wsID, newOwnerNGACNodeID string) error {
-	ws, err := s.GetWorkspace(ctx, wsID)
+// TransferOwnership adds a user to the Owners UA of a workspace. The caller
+// must hold manage on the workspace's Mgmt OA.
+func (s *Service) TransferOwnership(ctx context.Context, callerNodeID, wsID, newOwnerNGACNodeID string) error {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
 	if err != nil {
 		return err
 	}
@@ -353,9 +380,10 @@ func (s *Service) TransferOwnership(ctx context.Context, wsID, newOwnerNGACNodeI
 	return nil
 }
 
-// RemoveOwner removes a user from the Owners UA, refusing if they are the last owner.
-func (s *Service) RemoveOwner(ctx context.Context, wsID, targetNGACNodeID string) error {
-	ws, err := s.GetWorkspace(ctx, wsID)
+// RemoveOwner removes a user from the Owners UA, refusing if they are the last
+// owner. The caller must hold manage on the workspace's Mgmt OA.
+func (s *Service) RemoveOwner(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
 	if err != nil {
 		return err
 	}
@@ -393,9 +421,10 @@ type Role struct {
 	NGACNodeID string
 }
 
-// CreateRole provisions a new UA role under the workspace PC.
-func (s *Service) CreateRole(ctx context.Context, wsID, roleName string) (*Role, error) {
-	ws, err := s.GetWorkspace(ctx, wsID)
+// CreateRole provisions a new UA role under the workspace PC. The caller must
+// hold manage on the workspace's Mgmt OA.
+func (s *Service) CreateRole(ctx context.Context, callerNodeID, wsID, roleName string) (*Role, error) {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
 	if err != nil {
 		return nil, err
 	}
@@ -411,9 +440,10 @@ func (s *Service) CreateRole(ctx context.Context, wsID, roleName string) (*Role,
 	return &Role{ID: node.Id, Name: roleName, NGACNodeID: node.Id}, nil
 }
 
-// ListRoles returns all UA roles under the workspace PC.
-func (s *Service) ListRoles(ctx context.Context, wsID string) ([]*Role, error) {
-	ws, err := s.GetWorkspace(ctx, wsID)
+// ListRoles returns all UA roles under the workspace PC. The caller must belong
+// to the workspace.
+func (s *Service) ListRoles(ctx context.Context, callerNodeID, wsID string) ([]*Role, error) {
+	ws, err := s.authorizeMember(ctx, callerNodeID, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -430,8 +460,16 @@ func (s *Service) ListRoles(ctx context.Context, wsID string) ([]*Role, error) {
 	return roles, nil
 }
 
-// DeleteRole removes a role (NGAC UA node).
-func (s *Service) DeleteRole(ctx context.Context, roleID string) error {
+// DeleteRole removes a role (NGAC UA node). The caller must hold manage on the
+// workspace's Mgmt OA, and the role must be a UA of this workspace.
+func (s *Service) DeleteRole(ctx context.Context, callerNodeID, wsID, roleID string) error {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
+	if err != nil {
+		return err
+	}
+	if err := s.requireInWorkspace(ctx, ws, roleID, ngac.TypeUA); err != nil {
+		return err
+	}
 	if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: roleID}); err != nil {
 		return fmt.Errorf("delete role: %w", err)
 	}
@@ -445,11 +483,18 @@ type Folder struct {
 	NGACNodeID string
 }
 
-// CreateFolder provisions a new OA folder under a parent (or workspace PC if no parent).
-func (s *Service) CreateFolder(ctx context.Context, wsID, name, parentOaID string) (*Folder, error) {
-	ws, err := s.GetWorkspace(ctx, wsID)
+// CreateFolder provisions a new OA folder under a parent (or workspace PC if no
+// parent). The caller must hold manage on the workspace's Mgmt OA, and a parent,
+// if given, must be an OA of this workspace.
+func (s *Service) CreateFolder(ctx context.Context, callerNodeID, wsID, name, parentOaID string) (*Folder, error) {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
 	if err != nil {
 		return nil, err
+	}
+	if parentOaID != "" {
+		if err := s.requireInWorkspace(ctx, ws, parentOaID, ngac.TypeOA); err != nil {
+			return nil, err
+		}
 	}
 	node, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: name, NodeType: ngac.TypeOA})
 	if err != nil {
@@ -467,9 +512,10 @@ func (s *Service) CreateFolder(ctx context.Context, wsID, name, parentOaID strin
 	return &Folder{ID: node.Id, Name: name, NGACNodeID: node.Id}, nil
 }
 
-// ListFolders returns all OA folders under the workspace PC.
-func (s *Service) ListFolders(ctx context.Context, wsID string) ([]*Folder, error) {
-	ws, err := s.GetWorkspace(ctx, wsID)
+// ListFolders returns all OA folders under the workspace PC. The caller must
+// belong to the workspace.
+func (s *Service) ListFolders(ctx context.Context, callerNodeID, wsID string) ([]*Folder, error) {
+	ws, err := s.authorizeMember(ctx, callerNodeID, wsID)
 	if err != nil {
 		return nil, err
 	}
@@ -486,8 +532,16 @@ func (s *Service) ListFolders(ctx context.Context, wsID string) ([]*Folder, erro
 	return folders, nil
 }
 
-// DeleteFolder removes a folder (NGAC OA node).
-func (s *Service) DeleteFolder(ctx context.Context, folderID string) error {
+// DeleteFolder removes a folder (NGAC OA node). The caller must hold manage on
+// the workspace's Mgmt OA, and the folder must be an OA of this workspace.
+func (s *Service) DeleteFolder(ctx context.Context, callerNodeID, wsID, folderID string) error {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
+	if err != nil {
+		return err
+	}
+	if err := s.requireInWorkspace(ctx, ws, folderID, ngac.TypeOA); err != nil {
+		return err
+	}
 	if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: folderID}); err != nil {
 		return fmt.Errorf("delete folder: %w", err)
 	}
@@ -503,7 +557,30 @@ type Permission struct {
 }
 
 // CreatePermission creates an association between a UA and OA.
-func (s *Service) CreatePermission(ctx context.Context, uaID, oaID string, ops []string) (*Permission, error) {
+//
+// Two checks, both required:
+//   - the caller holds manage on the workspace's Mgmt OA (may administer it);
+//   - the caller holds every requested operation on the target OA. Without this,
+//     manage would be a key to every other operation: a caller could grant a UA
+//     they belong to any right on any OA. Delegation never exceeds what the
+//     delegator has, and a single op not held rejects the whole request.
+//
+// Operations must be among the fixed NGAC operations.
+func (s *Service) CreatePermission(ctx context.Context, callerNodeID, wsID, uaID, oaID string, ops []string) (*Permission, error) {
+	if uaID == "" || oaID == "" {
+		return nil, fmt.Errorf("%w: ua_id and oa_id required", ErrInvalidInput)
+	}
+	if err := validateOperations(ops); err != nil {
+		return nil, err
+	}
+	if _, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage); err != nil {
+		return nil, err
+	}
+	for _, op := range ops {
+		if err := s.checkAccess(ctx, callerNodeID, oaID, op); err != nil {
+			return nil, fmt.Errorf("cannot grant an operation you do not hold: %w", err)
+		}
+	}
 	assoc, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
 		UaId: uaID, OaId: oaID, Operations: ops,
 	})
@@ -511,6 +588,14 @@ func (s *Service) CreatePermission(ctx context.Context, uaID, oaID string, ops [
 		return nil, fmt.Errorf("create permission: %w", err)
 	}
 	return &Permission{ID: assoc.Id, UaID: uaID, OaID: oaID, Operations: ops}, nil
+}
+
+// DeletePermission authorizes removal of an association. Removal itself is not
+// implemented yet (the RPC has always been a no-op); the check is in place so
+// that implementing it cannot ship unguarded.
+func (s *Service) DeletePermission(ctx context.Context, callerNodeID, wsID, _ string) error {
+	_, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
+	return err
 }
 
 // ensureMinioBucket creates a MinIO bucket for the workspace (non-fatal).
