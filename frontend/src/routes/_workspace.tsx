@@ -8,7 +8,6 @@ import { useUnreadCounts } from '../hooks/useMessaging'
 import { workspaceDisplayName } from '../lib/workspace'
 import { useResizable } from '../hooks/useResizable'
 import { AppSidebar } from '../components/patterns/AppSidebar'
-import { TopBar } from '../components/patterns/TopBar'
 import { ListPanel } from '../components/patterns/ListPanel'
 import { MobileNav } from '../components/patterns/MobileNav'
 import { Button, IconButton, Spinner, Text, Toaster } from '../components/primitives'
@@ -68,6 +67,9 @@ function WorkspaceLayout() {
 
   /* Mobile: toggle list panel overlay */
   const [showMobileList, setShowMobileList] = useState(false)
+
+  /* Picking something in the mobile list navigates; close the overlay so the result is visible. */
+  useEffect(() => { setShowMobileList(false) }, [currentPath])
 
   /* Listen for child routes requesting mobile list panel (e.g. channel back button) */
   useEffect(() => {
@@ -130,9 +132,6 @@ function WorkspaceLayout() {
 
   return (
     <div className="flex flex-col h-dvh bg-background overflow-hidden">
-      {/* Row 1: TopBar — full width */}
-      <TopBar />
-
       {/* Row 2: Sidebar + Content */}
       <div className="flex flex-1 min-h-0">
         {/* Column 1: AppSidebar — hidden on mobile, visible on lg+ */}
