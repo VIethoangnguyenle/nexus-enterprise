@@ -685,3 +685,92 @@ func TestGetAssetHistory_Empty(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, history)
 }
+
+// ---------------------------------------------------------------------------
+// Visibility filters — the authorization layer narrows the query, so pages and
+// totals count only rows the caller may see.
+// ---------------------------------------------------------------------------
+
+func TestListAssets_VisibleTypeIDsRestrictsRowsAndTotal(t *testing.T) {
+	s := setupStore(t)
+	wsID := getTestWorkspaceID(t, s.DB())
+	userID := getTestUserID(t, s.DB())
+	visible := createTestType(t, s, wsID)
+	hidden := createTestType(t, s, wsID)
+	a := createTestAsset(t, s, visible.ID, wsID, userID)
+	createTestAsset(t, s, hidden.ID, wsID, userID)
+
+	assets, total, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+		WorkspaceID: wsID, VisibleTypeIDs: []string{visible.ID},
+	})
+	require.NoError(t, err)
+	require.Len(t, assets, 1)
+	assert.Equal(t, a.ID, assets[0].ID)
+	assert.Equal(t, int32(1), total)
+}
+
+func TestListAssets_EmptyVisibleTypeIDsMatchesNothing(t *testing.T) {
+	s := setupStore(t)
+	wsID := getTestWorkspaceID(t, s.DB())
+	userID := getTestUserID(t, s.DB())
+	at := createTestType(t, s, wsID)
+	createTestAsset(t, s, at.ID, wsID, userID)
+
+	assets, total, err := s.ListAssets(context.Background(), store.ListAssetsFilter{
+		WorkspaceID: wsID, VisibleTypeIDs: []string{},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, assets)
+	assert.Zero(t, total)
+}
+
+func TestListRequests_VisibilityRestrictsRowsAndTotal(t *testing.T) {
+	s := setupStore(t)
+	wsID := getTestWorkspaceID(t, s.DB())
+	userID := getTestUserID(t, s.DB())
+	approvable := createTestType(t, s, wsID)
+	other := createTestType(t, s, wsID)
+
+	mk := func(typeID string) string {
+		r := &store.AssetRequest{
+			TypeID: typeID, WorkspaceID: wsID, RequesterID: userID,
+			Status: "pending", Justification: "vis", Quantity: 1,
+		}
+		require.NoError(t, s.CreateRequest(context.Background(), r))
+		t.Cleanup(func() {
+			s.DB().Exec(context.Background(), "DELETE FROM asset_requests WHERE id = $1", r.ID)
+		})
+		return r.ID
+	}
+	onApprovable := mk(approvable.ID)
+	mk(other.ID)
+
+	// Not the requester; may approve one type only.
+	requests, total, err := s.ListRequests(context.Background(), store.ListRequestsFilter{
+		WorkspaceID: wsID,
+		Visibility:  &store.RequestVisibility{RequesterID: "not-a-requester", TypeIDs: []string{approvable.ID}},
+	})
+	require.NoError(t, err)
+	require.Len(t, requests, 1)
+	assert.Equal(t, onApprovable, requests[0].ID)
+	assert.Equal(t, int32(1), total)
+
+	// The requester sees their own requests of any type.
+	requests, total, err = s.ListRequests(context.Background(), store.ListRequestsFilter{
+		WorkspaceID: wsID,
+		Visibility:  &store.RequestVisibility{RequesterID: userID},
+	})
+	require.NoError(t, err)
+	assert.GreaterOrEqual(t, total, int32(2))
+	for _, r := range requests {
+		assert.Equal(t, userID, r.RequesterID)
+	}
+
+	// Nobody and nothing: matches no rows.
+	requests, total, err = s.ListRequests(context.Background(), store.ListRequestsFilter{
+		WorkspaceID: wsID, Visibility: &store.RequestVisibility{},
+	})
+	require.NoError(t, err)
+	assert.Empty(t, requests)
+	assert.Zero(t, total)
+}

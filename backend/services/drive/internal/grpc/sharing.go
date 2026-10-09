@@ -12,6 +12,7 @@ import (
 	"ngac-platform/ngac"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/drive/internal/caller"
 	"ngac-platform/services/drive/internal/store"
 )
 
@@ -116,6 +117,16 @@ func (s *DriveServer) RevokeShare(ctx context.Context, req *pb.RevokeShareReques
 	share, err := s.store.GetShare(ctx, req.ShareId)
 	if err != nil || share == nil {
 		return nil, status.Errorf(codes.NotFound, "share not found")
+	}
+	// Revoking changes who can reach the item, so it takes share on the OA the
+	// item row points at. Without an item to authorize against there is
+	// nothing that could grant the right, so a missing item denies.
+	item, err := s.store.GetItem(ctx, share.DriveItemID)
+	if err != nil || item == nil {
+		return nil, status.Errorf(codes.PermissionDenied, "access denied")
+	}
+	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpShare); err != nil {
+		return nil, err
 	}
 	// Delete the NGAC share OA (cascades associations). This is what actually
 	// revokes access — the DB row is only bookkeeping. If it fails we must not
@@ -282,9 +293,19 @@ func (s *DriveServer) GetQuota(ctx context.Context, req *pb.GetQuotaRequest) (*p
 }
 
 // UpdateQuota sets workspace quota limits.
+//
+// Quota limits are workspace administration, so this takes manage on the
+// workspace's Mgmt OA. UpdateQuotaRequest has no caller field, so the caller is
+// read from the in-process identity on the context (see package caller); a call
+// that arrives without one — which is every call over the network today — is
+// denied.
 func (s *DriveServer) UpdateQuota(ctx context.Context, req *pb.UpdateQuotaRequest) (*pb.Quota, error) {
+	userNodeID := caller.FromContext(ctx).NGACNodeID
+	if err := s.checkAccessOnNamedOA(ctx, userNodeID, ngac.MgmtOAName(req.WorkspaceId), ngac.OpManage); err != nil {
+		return nil, err
+	}
 	if err := s.store.UpdateQuotaLimits(ctx, req.WorkspaceId, req.MaxBytes, req.MaxFiles); err != nil {
 		return nil, status.Errorf(codes.Internal, "update quota: %v", err)
 	}
-	return s.GetQuota(ctx, &pb.GetQuotaRequest{WorkspaceId: req.WorkspaceId})
+	return s.GetQuota(ctx, &pb.GetQuotaRequest{WorkspaceId: req.WorkspaceId, UserNgacNodeId: userNodeID})
 }

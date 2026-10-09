@@ -13,6 +13,7 @@ import (
 	"ngac-platform/ngac"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/asset/internal/caller"
 	"ngac-platform/services/asset/internal/domain"
 	"ngac-platform/services/asset/internal/store"
 )
@@ -33,6 +34,12 @@ func NewAssetTypeServer(s *store.Store, pr policypb.PolicyReadServiceClient, pw 
 func (s *AssetTypeServer) CreateType(ctx context.Context, req *pb.CreateTypeRequest) (*pb.AssetType, error) {
 	if req.Name == "" || req.WorkspaceId == "" || req.Category == "" {
 		return nil, status.Errorf(codes.InvalidArgument, "name, workspace_id, and category are required")
+	}
+
+	// Defining asset types administers the workspace's asset tree. Checked
+	// before anything below writes to the graph.
+	if err := s.authorizeCreateType(ctx, req.UserNgacNodeId, req.WorkspaceId); err != nil {
+		return nil, err
 	}
 
 	// Validate and prepare fields schema
@@ -79,15 +86,72 @@ func (s *AssetTypeServer) CreateType(ctx context.Context, req *pb.CreateTypeRequ
 	return assetTypeToProto(at), nil
 }
 
+// authorizeCreateType requires manage on the workspace's Assets OA.
+//
+// The first type created in a workspace is what creates the Assets OA, so
+// until it exists there is nothing to check manage on. In that case — and only
+// when the policy service positively reports the node absent, not when the
+// lookup fails — the check falls back to manage on the workspace's Mgmt OA.
+// That right is held by the workspace Owners UA, which is the UA
+// ensureNGACHierarchy then grants every operation on the new Assets OA; so the
+// fallback admits exactly the people who would hold the right afterwards.
+func (s *AssetTypeServer) authorizeCreateType(ctx context.Context, userNodeID, workspaceID string) error {
+	if userNodeID == "" {
+		return errDenied(ngac.OpManage)
+	}
+	assetsOA, found, err := resolveOA(ctx, s.policyRead, ngac.AssetsOAName(workspaceID))
+	if err != nil {
+		return errDenied(ngac.OpManage)
+	}
+	if found {
+		return authorize(ctx, s.policyRead, userNodeID, assetsOA, ngac.OpManage)
+	}
+	return authorizeOnNamedOA(ctx, s.policyRead, userNodeID, ngac.MgmtOAName(workspaceID), ngac.OpManage)
+}
+
+// GetType returns one asset type to a caller holding read on its workspace's
+// Assets OA.
+//
+// GetTypeRequest has no caller field, so the caller is read from the
+// in-process identity on the context (see package caller); a call without one
+// is denied before the type is looked up.
 func (s *AssetTypeServer) GetType(ctx context.Context, req *pb.GetTypeRequest) (*pb.AssetType, error) {
+	userNodeID := caller.FromContext(ctx).NGACNodeID
+	if userNodeID == "" {
+		return nil, errDenied(ngac.OpRead)
+	}
 	at, err := s.store.GetType(ctx, req.TypeId)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "type not found: %v", err)
 	}
+	if err := authorizeOnNamedOA(ctx, s.policyRead, userNodeID, ngac.AssetsOAName(at.WorkspaceID), ngac.OpRead); err != nil {
+		return nil, err
+	}
 	return assetTypeToProto(at), nil
 }
 
+// ListTypes returns a workspace's asset types to a caller holding read on its
+// Assets OA. The caller comes from the context, as for GetType.
+//
+// A workspace whose Assets OA does not exist has no types the caller could be
+// authorized for, so it lists nothing rather than refusing — that is the state
+// of every workspace before its first type is created.
 func (s *AssetTypeServer) ListTypes(ctx context.Context, req *pb.ListTypesRequest) (*pb.AssetTypeList, error) {
+	userNodeID := caller.FromContext(ctx).NGACNodeID
+	if userNodeID == "" {
+		return nil, errDenied(ngac.OpRead)
+	}
+	assetsOA, found, err := resolveOA(ctx, s.policyRead, ngac.AssetsOAName(req.WorkspaceId))
+	if err != nil {
+		return nil, errDenied(ngac.OpRead)
+	}
+	if !found {
+		return &pb.AssetTypeList{}, nil
+	}
+	if err := authorize(ctx, s.policyRead, userNodeID, assetsOA, ngac.OpRead); err != nil {
+		return nil, err
+	}
+
 	types, err := s.store.ListTypes(ctx, req.WorkspaceId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list types: %v", err)
@@ -99,14 +163,29 @@ func (s *AssetTypeServer) ListTypes(ctx context.Context, req *pb.ListTypesReques
 	return result, nil
 }
 
+// UpdateTypeSchema changes a type's custom-field schema. It requires manage on
+// the Assets OA of the type's workspace — the same right as defining the type.
 func (s *AssetTypeServer) UpdateTypeSchema(ctx context.Context, req *pb.UpdateTypeSchemaRequest) (*pb.AssetType, error) {
+	at, err := s.store.GetType(ctx, req.TypeId)
+	if err != nil {
+		return nil, status.Errorf(codes.NotFound, "type not found: %v", err)
+	}
+	if err := authorizeOnNamedOA(ctx, s.policyRead, req.UserNgacNodeId, ngac.AssetsOAName(at.WorkspaceID), ngac.OpManage); err != nil {
+		return nil, err
+	}
 	if err := domain.ValidateSchema(json.RawMessage(req.FieldsSchema)); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid schema: %v", err)
 	}
 	if err := s.store.UpdateTypeSchema(ctx, req.TypeId, json.RawMessage(req.FieldsSchema)); err != nil {
 		return nil, status.Errorf(codes.Internal, "update schema: %v", err)
 	}
-	return s.GetType(ctx, &pb.GetTypeRequest{TypeId: req.TypeId})
+	// Re-read without GetType's guard: the caller was just authorized to manage
+	// this type, and the request names them in a field GetType does not read.
+	updated, err := s.store.GetType(ctx, req.TypeId)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "read back type: %v", err)
+	}
+	return assetTypeToProto(updated), nil
 }
 
 // ensureNGACHierarchy creates the NGAC node hierarchy for a new asset type:

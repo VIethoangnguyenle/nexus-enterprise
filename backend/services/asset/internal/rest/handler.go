@@ -12,7 +12,27 @@ import (
 
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/asset"
+	"ngac-platform/services/asset/internal/caller"
 )
+
+// callerNodeID returns the authenticated caller's NGAC node, or "" — which every
+// guarded RPC treats as unauthenticated and denies.
+func callerNodeID(c echo.Context) string {
+	if claims := httputil.GetClaims(c); claims != nil {
+		return claims.NGACNodeID
+	}
+	return ""
+}
+
+// callerCtx returns the request context carrying the authenticated caller, for
+// RPCs whose request message has no caller field (see package caller).
+func callerCtx(c echo.Context) context.Context {
+	ctx := c.Request().Context()
+	if claims := httputil.GetClaims(c); claims != nil {
+		ctx = caller.WithIdentity(ctx, caller.Identity{UserID: claims.UserID, NGACNodeID: claims.NGACNodeID})
+	}
+	return ctx
+}
 
 // AssetService defines the operations the REST handler needs for assets.
 type AssetService interface {
@@ -91,7 +111,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 // GetAssetSummary returns aggregate counts for the asset dashboard.
 func (h *Handler) GetAssetSummary(c echo.Context) error {
 	resp, err := h.assetSvc.ListAssets(c.Request().Context(), &pb.ListAssetsRequest{
-		WorkspaceId: c.Param("id"),
+		WorkspaceId:    c.Param("id"),
+		UserNgacNodeId: callerNodeID(c),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -135,7 +156,7 @@ func (h *Handler) CreateAssetType(c echo.Context) error {
 }
 
 func (h *Handler) ListAssetTypes(c echo.Context) error {
-	resp, err := h.typeSvc.ListTypes(c.Request().Context(), &pb.ListTypesRequest{
+	resp, err := h.typeSvc.ListTypes(callerCtx(c), &pb.ListTypesRequest{
 		WorkspaceId: c.Param("id"),
 	})
 	if err != nil {
@@ -145,7 +166,7 @@ func (h *Handler) ListAssetTypes(c echo.Context) error {
 }
 
 func (h *Handler) GetAssetType(c echo.Context) error {
-	resp, err := h.typeSvc.GetType(c.Request().Context(), &pb.GetTypeRequest{
+	resp, err := h.typeSvc.GetType(callerCtx(c), &pb.GetTypeRequest{
 		TypeId: c.Param("typeId"),
 	})
 	if err != nil {
@@ -162,8 +183,9 @@ func (h *Handler) UpdateAssetTypeSchema(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	resp, err := h.typeSvc.UpdateTypeSchema(c.Request().Context(), &pb.UpdateTypeSchemaRequest{
-		TypeId:       c.Param("typeId"),
-		FieldsSchema: body.FieldsSchema,
+		TypeId:         c.Param("typeId"),
+		FieldsSchema:   body.FieldsSchema,
+		UserNgacNodeId: callerNodeID(c),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -196,8 +218,9 @@ func (h *Handler) CreateAsset(c echo.Context) error {
 
 func (h *Handler) ListAssets(c echo.Context) error {
 	resp, err := h.assetSvc.ListAssets(c.Request().Context(), &pb.ListAssetsRequest{
-		WorkspaceId: c.Param("id"),
-		TypeId:      c.QueryParam("type_id"),
+		WorkspaceId:    c.Param("id"),
+		TypeId:         c.QueryParam("type_id"),
+		UserNgacNodeId: callerNodeID(c),
 	})
 	if err != nil {
 		return mapGRPCError(err)
