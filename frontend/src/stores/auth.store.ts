@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { queryClient } from '../lib/query-client'
 
 interface User {
   id: string
@@ -80,7 +81,10 @@ export const useAuthStore = create<AuthState>()(
       setBootstrapped: () => set({ bootstrapping: false }),
 
       logout: () => {
-        // Clear permission cache on tenant switch / logout
+        // Every cache keyed off this session goes with it: otherwise the next
+        // person to sign in on this tab is served the previous user's data
+        // until each query happens to refetch.
+        queryClient.clear()
         import('../stores/permission.store').then(m => m.usePermissionStore.getState().clear())
         set({ accessToken: null, tenantId: null, user: null, bootstrapping: false })
       },

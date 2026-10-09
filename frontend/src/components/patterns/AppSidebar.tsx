@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useMatches } from '@tanstack/react-router'
 import { useAuthStore } from '../../stores/auth.store'
+import { logoutSession } from '../../api/client'
 import { useUiStore } from '../../stores/ui.store'
 import { useWorkspaces } from '../../hooks/useWorkspaces'
 import { NavRow } from '../primitives'
@@ -41,7 +42,6 @@ interface AppSidebarProps {
  *  Footer: border-t border-outline-variant/30 with Settings + Support. */
 export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps) {
   const user = useAuthStore((s) => s.user)
-  const logout = useAuthStore((s) => s.logout)
   const activeModule = useUiStore((s) => s.activeModule)
   const setActiveModule = useUiStore((s) => s.setActiveModule)
   const navigate = useNavigate()
@@ -235,7 +235,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
         </NavRow>
         <NavRow
           kind="navItem"
-          onClick={logout}
+          onClick={() => void logoutSession()}
           title={`Logout (${user?.username})`}
           aria-label="Logout"
         >

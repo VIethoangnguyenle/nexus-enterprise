@@ -157,9 +157,11 @@ function LoginPage() {
           </Button>
         </div>
 
-        <p className="text-caption text-outline mt-4 text-center">
-          Dev mode — OTP code is <span className="font-mono font-bold text-on-surface-variant">999999</span>
-        </p>
+        {import.meta.env.DEV && (
+          <p className="text-caption text-outline mt-4 text-center">
+            Dev mode — OTP code is <span className="font-mono font-bold text-on-surface-variant">999999</span>
+          </p>
+        )}
       </div>
     )
   }
@@ -252,9 +254,11 @@ function LoginPage() {
         </Button>
       </div>
 
-      <p className="text-caption text-outline mt-6 text-center">
-        Dev mode — OTP code is <span className="font-mono font-bold text-on-surface-variant">999999</span>
-      </p>
+      {import.meta.env.DEV && (
+        <p className="text-caption text-outline mt-6 text-center">
+          Dev mode — OTP code is <span className="font-mono font-bold text-on-surface-variant">999999</span>
+        </p>
+      )}
     </div>
   )
 }
