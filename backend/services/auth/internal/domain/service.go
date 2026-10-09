@@ -184,7 +184,7 @@ func (s *Service) Signup(ctx context.Context, email, password, displayName, tena
 		return nil, fmt.Errorf("create user: %w", err)
 	}
 
-	tenantID, tName, role, err := s.resolveOrCreateTenant(ctx, email, userID, ngacNode, tenantName, displayName)
+	tenantID, tName, role, err := s.resolveOrCreateTenant(ctx, userID, ngacNode, tenantName, displayName)
 	if err != nil {
 		return nil, fmt.Errorf("resolve tenant: %w", err)
 	}
@@ -207,23 +207,19 @@ func (s *Service) Signup(ctx context.Context, email, password, displayName, tena
 	}, nil
 }
 
-// resolveOrCreateTenant determines whether to join an existing tenant or create a new one.
-func (s *Service) resolveOrCreateTenant(ctx context.Context, email, userID, ngacNodeID, tenantName, displayName string) (string, string, string, error) {
-	// Case 1: explicit tenant name → always create new
+// resolveOrCreateTenant picks the tenant for a password signup.
+//
+// It never joins an existing tenant by email domain. Signup does not verify
+// the email, so the domain is only a claim — anyone can register ceo@acme.com
+// and would otherwise land inside Acme's tenant. Company membership comes from
+// proof of ownership instead: a Google Workspace sign-in (the `hd` claim, see
+// SignInWithGoogle) or an invitation.
+func (s *Service) resolveOrCreateTenant(ctx context.Context, userID, ngacNodeID, tenantName, displayName string) (string, string, string, error) {
+	// Explicit tenant name → a new tenant with that name.
 	if tenantName != "" {
 		return s.createTenantForUser(ctx, tenantName, userID, ngacNodeID)
 	}
-
-	// Case 2: check email domain for auto-join (public mailbox domains never join)
-	tenant, role, err := s.joinTenantByDomain(ctx, extractDomain(email), userID, ngacNodeID)
-	if err != nil {
-		return "", "", "", err
-	}
-	if tenant != nil {
-		return tenant.ID, tenant.Name, role, nil
-	}
-
-	// Case 3: no match → create new tenant
+	// Otherwise the no-company case: a personal workspace.
 	return s.createTenantForUser(ctx, personalWorkspaceName(displayName), userID, ngacNodeID)
 }
 
@@ -233,8 +229,10 @@ func (s *Service) resolveOrCreateTenant(ctx context.Context, email, userID, ngac
 // by no tenant. A user who already has a membership there keeps it unchanged —
 // including a disabled one, which signing in must not re-activate.
 //
-// This is the one place a domain turns into tenant membership; both password
-// signup and Google sign-in go through it.
+// This is the one place a domain turns into tenant membership. Callers must
+// hold proof that the user controls an address at companyDomain — today only
+// a verified Google Workspace `hd` claim qualifies. Password signup, legacy
+// register and OTP (whose code is not delivered to the address) do not.
 func (s *Service) joinTenantByDomain(ctx context.Context, companyDomain, userID, ngacNodeID string) (*store.Tenant, string, error) {
 	companyDomain = normalizeDomain(companyDomain)
 	if companyDomain == "" || IsPublicEmailDomain(companyDomain) {
@@ -685,15 +683,6 @@ func (s *Service) selectDefaultTenant(tenants []store.TenantMembership) string {
 		}
 	}
 	return tenants[0].TenantID
-}
-
-// extractDomain extracts the domain part from an email address.
-func extractDomain(email string) string {
-	parts := strings.SplitN(email, "@", 2)
-	if len(parts) != 2 {
-		return ""
-	}
-	return parts[1]
 }
 
 // emailToUsername derives a username from email.
