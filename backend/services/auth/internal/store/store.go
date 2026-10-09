@@ -327,3 +327,12 @@ func (s *Store) ClaimTenantDomain(ctx context.Context, tenantID, domain string) 
 	}
 	return tag.RowsAffected() == 1, nil
 }
+
+// ClearPassword removes a user's password, so password sign-in stops working
+// for that account until a new one is set.
+func (s *Store) ClearPassword(ctx context.Context, userID string) error {
+	if _, err := s.db.Exec(ctx, `UPDATE users SET password = '' WHERE id = $1`, userID); err != nil {
+		return fmt.Errorf("clear password: %w", err)
+	}
+	return nil
+}

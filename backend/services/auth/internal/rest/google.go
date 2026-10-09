@@ -88,12 +88,6 @@ func (g *googleHandler) enabled() bool {
 	return g != nil && g.provider != nil && g.flows != nil
 }
 
-// Providers handles GET /api/auth/providers — which sign-in methods the login
-// page should offer.
-func (g *googleHandler) Providers(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]bool{"google": g.enabled()})
-}
-
 // loginHintPattern accepts what could plausibly be an email; anything else is
 // dropped rather than forwarded to Google.
 var loginHintPattern = regexp.MustCompile(`^[^\s@]{1,64}@[^\s@]{1,190}$`)

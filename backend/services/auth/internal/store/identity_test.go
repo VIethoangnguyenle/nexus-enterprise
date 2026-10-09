@@ -112,6 +112,20 @@ func TestClaimTenantDomain(t *testing.T) {
 	assert.False(t, ok, "a tenant that already has a domain keeps it")
 }
 
+func TestClearPassword(t *testing.T) {
+	s := setupStore(t)
+	pool := getPool(t, s)
+	ctx := context.Background()
+	userID, username, _ := insertTestUser(t, s, pool)
+
+	require.NoError(t, s.ClearPassword(ctx, userID))
+
+	got, err := s.GetUserByUsername(ctx, username)
+	require.NoError(t, err)
+	require.NotNil(t, got)
+	assert.Empty(t, got.Password, "password must be cleared")
+}
+
 func TestFindTenantByDomain_IsCaseInsensitive(t *testing.T) {
 	s := setupStore(t)
 	pool := getPool(t, s)

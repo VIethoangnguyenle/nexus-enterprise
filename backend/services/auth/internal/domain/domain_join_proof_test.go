@@ -2,8 +2,10 @@ package domain_test
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -95,7 +97,9 @@ func TestOTP_NewUserNeverAutoJoinsByDomain(t *testing.T) {
 	svc := domain.NewService(w, rdb, &fakePolicyRead{}, &fakePolicyWrite{w: w}, &fakeWorkspace{w: w}, &fakeMessaging{w: w})
 	acme := w.addTenant("Acme", "acme.com")
 
-	sessionID, err := svc.RequestOTP(context.Background(), "x@acme.com", "email")
+	// Unique per run: OTP requests are rate-limited per identifier in Redis.
+	email := fmt.Sprintf("x-%d@acme.com", time.Now().UnixNano())
+	sessionID, err := svc.RequestOTP(context.Background(), email, "email")
 	if err != nil {
 		t.Fatalf("request otp: %v", err)
 	}

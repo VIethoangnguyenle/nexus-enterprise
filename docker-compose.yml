@@ -185,6 +185,9 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL_DOCKER:-http://localhost/api/auth/google/callback}
       APP_BASE_URL: ${APP_BASE_URL_DOCKER:-http://localhost}
+      # TEST-ONLY fixed OTP code (see .env.example). `-` not `:-`: an
+      # explicitly empty value must stay empty, which turns the test mode off.
+      AUTH_FIXED_OTP_CODE: ${AUTH_FIXED_OTP_CODE-999999}
     depends_on:
       policy:
         condition: service_healthy

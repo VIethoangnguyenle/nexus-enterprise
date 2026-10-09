@@ -237,6 +237,15 @@ func (w *fakeWorld) ClaimTenantDomain(_ context.Context, tenantID, d string) (bo
 	return true, nil
 }
 
+func (w *fakeWorld) ClearPassword(_ context.Context, userID string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if u := w.users[userID]; u != nil {
+		u.Password = ""
+	}
+	return nil
+}
+
 // --- gRPC fakes ---
 
 type fakeWorkspace struct {

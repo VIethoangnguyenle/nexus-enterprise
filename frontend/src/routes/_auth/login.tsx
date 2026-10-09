@@ -46,7 +46,8 @@ function LoginPage() {
   )
 
   // Only offer Google when the server has it configured; a failed lookup
-  // hides the button rather than showing one that cannot work.
+  // hides the button rather than showing one that cannot work. OTP is the
+  // opposite: it stays visible unless the server says it is off.
   const providers = useQuery({
     queryKey: ['auth', 'providers'],
     queryFn: () => authApi.providers(),
@@ -54,6 +55,10 @@ function LoginPage() {
     retry: false,
   })
   const googleEnabled = providers.data?.google === true
+  const otpEnabled = providers.data?.otp !== false
+  // The server's documented test mode: every OTP sign-in accepts a fixed code.
+  const otpFixedCode = providers.data?.otp_fixed_code === true
+  const noSignInMethod = providers.isSuccess && !otpEnabled && !googleEnabled
 
   const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/
   const phoneRegex = /^(0[3-9][0-9]{8,9}|\+?84[3-9][0-9]{7,8})$/
@@ -194,9 +199,9 @@ function LoginPage() {
           </Button>
         </div>
 
-        {import.meta.env.DEV && (
+        {otpFixedCode && (
           <p className="text-caption text-outline mt-4 text-center">
-            Dev mode — OTP code is <span className="font-mono font-bold text-on-surface-variant">999999</span>
+            Test mode — OTP code is <span className="font-mono font-bold text-on-surface-variant">999999</span>
           </p>
         )}
       </div>
@@ -225,56 +230,66 @@ function LoginPage() {
         </div>
       )}
 
-      {/* Form — Stitch: flex flex-col gap-6 */}
-      <form onSubmit={handleRequestOTP} className="flex flex-col gap-6">
-        {/* Input Group — Stitch: flex flex-col gap-2 */}
-        <div className="flex flex-col gap-2">
-          <label className="font-semibold text-small text-on-surface" htmlFor="login-identifier">
-            Email or Phone Number
-          </label>
-          {/* eslint-disable-next-line no-restricted-syntax -- rounded-lg (12px, token thật của
-              scale) sẽ âm thầm rơi về rounded-md (8px) mặc định của Input — đúng lỗi bo góc đã
-              ghi nhận ở ô OTP và ở hai input đã miễn trừ trong onboarding.tsx. Input còn ép cỡ chữ
-              text-small (13px, không có prop để đổi) trong khi trường này hiện kế thừa cỡ nền
-              16px — một hồi quy kiểu chữ trên ô nhập liệu quan trọng nhất màn hình. bg-surface
-              cũng không có variant tương ứng (variant "default" của Input đóng cứng
-              bg-surface-container-lowest). Task 16. */}
-          <input
-            id="login-identifier"
-            type="text"
-            value={identifier}
-            onChange={(e) => setIdentifier(e.target.value)}
-            placeholder="name@company.com"
-            autoFocus
-            className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface text-on-surface
-              placeholder:text-outline focus:border-primary focus:ring-2 focus:ring-primary/10
-              transition-all outline-none"
-          />
-          {identifier && !isValid && (
-            <p className="text-caption text-error">Enter a valid email or phone number</p>
-          )}
-        </div>
+      {otpEnabled && (
+        <>
+          {/* Form — Stitch: flex flex-col gap-6 */}
+          <form onSubmit={handleRequestOTP} className="flex flex-col gap-6">
+            {/* Input Group — Stitch: flex flex-col gap-2 */}
+            <div className="flex flex-col gap-2">
+              <label className="font-semibold text-small text-on-surface" htmlFor="login-identifier">
+                Email or Phone Number
+              </label>
+              {/* eslint-disable-next-line no-restricted-syntax -- rounded-lg (12px, token thật của
+                  scale) sẽ âm thầm rơi về rounded-md (8px) mặc định của Input — đúng lỗi bo góc đã
+                  ghi nhận ở ô OTP và ở hai input đã miễn trừ trong onboarding.tsx. Input còn ép cỡ chữ
+                  text-small (13px, không có prop để đổi) trong khi trường này hiện kế thừa cỡ nền
+                  16px — một hồi quy kiểu chữ trên ô nhập liệu quan trọng nhất màn hình. bg-surface
+                  cũng không có variant tương ứng (variant "default" của Input đóng cứng
+                  bg-surface-container-lowest). Task 16. */}
+              <input
+                id="login-identifier"
+                type="text"
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                placeholder="name@company.com"
+                autoFocus
+                className="w-full px-4 py-3 rounded-lg border border-outline-variant bg-surface text-on-surface
+                  placeholder:text-outline focus:border-primary focus:ring-2 focus:ring-primary/10
+                  transition-all outline-none"
+              />
+              {identifier && !isValid && (
+                <p className="text-caption text-error">Enter a valid email or phone number</p>
+              )}
+            </div>
+  
+            {/* Primary Action — Stitch: rounded-lg py-3 bg-primary shadow-sm */}
+            <Button
+              type="submit"
+              variant="primary"
+              size="cta"
+              disabled={!isValid || requestOTP.isPending}
+              className="px-4 shadow-sm"
+            >
+              {requestOTP.isPending ? <Spinner size="sm" /> : (
+                <>Continue <ArrowRight size={16} /></>
+              )}
+            </Button>
+          </form>
 
-        {/* Primary Action — Stitch: rounded-lg py-3 bg-primary shadow-sm */}
-        <Button
-          type="submit"
-          variant="primary"
-          size="cta"
-          disabled={!isValid || requestOTP.isPending}
-          className="px-4 shadow-sm"
-        >
-          {requestOTP.isPending ? <Spinner size="sm" /> : (
-            <>Continue <ArrowRight size={16} /></>
-          )}
-        </Button>
-      </form>
+          {/* Divider — Stitch: flex items-center gap-4 py-2, with 50% opacity lines */}
+          <div className="flex items-center gap-4 py-2 my-4">
+            <div className="flex-1 h-px bg-outline-variant/50" />
+            <span className="text-small text-on-surface-variant">or continue with</span>
+            <div className="flex-1 h-px bg-outline-variant/50" />
+          </div>
+        </>
+      )}
 
-      {/* Divider — Stitch: flex items-center gap-4 py-2, with 50% opacity lines */}
-      <div className="flex items-center gap-4 py-2 my-4">
-        <div className="flex-1 h-px bg-outline-variant/50" />
-        <span className="text-small text-on-surface-variant">or continue with</span>
-        <div className="flex-1 h-px bg-outline-variant/50" />
-      </div>
+      {noSignInMethod && (
+        <p className="text-body text-on-surface-variant text-center">
+          Sign-in isn't available right now. Please try again later.
+        </p>
+      )}
 
       {/* Social buttons — Stitch: rounded-lg py-2.5, border-outline-variant */}
       <div className="flex flex-col gap-3">
@@ -298,9 +313,9 @@ function LoginPage() {
         </Button>
       </div>
 
-      {import.meta.env.DEV && (
+      {otpEnabled && otpFixedCode && (
         <p className="text-caption text-outline mt-6 text-center">
-          Dev mode — OTP code is <span className="font-mono font-bold text-on-surface-variant">999999</span>
+          Test mode — OTP code is <span className="font-mono font-bold text-on-surface-variant">999999</span>
         </p>
       )}
     </div>

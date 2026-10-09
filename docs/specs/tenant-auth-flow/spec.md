@@ -6,7 +6,7 @@ Get a user from credentials to a tenant-scoped session, and let them move betwee
 ## Requirements
 
 ### Requirement: Domain auto-join requires proof of email ownership
-The system SHALL add a user to a tenant on the basis of that tenant's `domain` only when it holds proof that the user controls an address at that domain. Today the only accepted proof is a Google Workspace sign-in whose verified ID token carries `hd` equal to the domain (see "Google sign-in resolves the company from the hosted domain only"). Password signup (`/api/auth/signup`, gRPC `Signup`), legacy register, and OTP sign-in SHALL NEVER join a tenant by email domain and SHALL NEVER claim a domain: none of them verifies the email. (OTP is excluded because its code is a fixed development value that is never delivered to the address; it MAY qualify once the code is generated per request and delivered to the email being verified.) Otherwise a user joins a company tenant only through an invitation.
+The system SHALL add a user to a tenant on the basis of that tenant's `domain` only when it holds proof that the user controls an address at that domain. Today the only accepted proof is a Google Workspace sign-in whose verified ID token carries `hd` equal to the domain (see "Google sign-in resolves the company from the hosted domain only"). Password signup (`/api/auth/signup`, gRPC `Signup`), legacy register, and OTP sign-in SHALL NEVER join a tenant by email domain and SHALL NEVER claim a domain: none of them verifies the email. (OTP is excluded: in its default fixed-code test mode the code is the same for everyone and proves nothing, and random-code mode has no real delivery channel yet. It MAY qualify once random codes are delivered to the email by a real sender and that mode is the only one enabled.) Otherwise a user joins a company tenant only through an invitation.
 
 #### Scenario: Password signup at a claimed domain
 - **WHEN** user signs up with a password as `x@acme.com` and a tenant has `domain = 'acme.com'`
@@ -79,6 +79,23 @@ The system SHALL identify a Google user by the ID token's `sub`, stored in `user
 - **WHEN** an unlinked `sub` signs in with a verified email that belongs to an existing user who has no Google identity yet
 - **THEN** the identity is linked to that user and no duplicate account is created
 - **AND** the user keeps their existing tenants
+- **AND** every credential that was set up without proof of the email is evicted first (see "Google linking evicts unverified credentials")
+
+#### Scenario: Returning user is not evicted
+- **WHEN** a `sub` that is already linked signs in
+- **THEN** the user's password and existing sessions on other devices are left untouched
+
+### Requirement: Google linking evicts unverified credentials
+Nothing else in the system verifies email ownership, so an account found by email may have been created by someone other than the address's owner (pre-hijacking: an attacker signs up with the victim's address and a password, then waits). When Google sign-in links a verified identity to such an existing account, the system SHALL treat Google as the proof of ownership and, before linking, SHALL clear the account's password and revoke all of its existing sessions on every device, then write an audit log line naming the user id only (never the email). If either step fails, the sign-in SHALL fail rather than link. Session revocation records a per-user cutoff in Redis for the refresh-token lifetime; `POST /api/auth/refresh` rejects any session that started before the cutoff, including sessions created before session start times were recorded. Access tokens already issued remain valid until they expire (at most 15 minutes).
+
+#### Scenario: Pre-registered password stops working
+- **WHEN** an account was created with a password for `victim@acme.com` and the owner then signs in with Google as `victim@acme.com` for the first time
+- **THEN** signing in with that password fails with "invalid credentials"
+
+#### Scenario: Pre-existing sessions are ended
+- **WHEN** a refresh token was issued for that account before the Google link
+- **THEN** presenting it to `POST /api/auth/refresh` is rejected
+- **AND** the session issued by the Google sign-in itself refreshes normally
 
 #### Scenario: Email already linked to a different Google subject
 - **WHEN** an unlinked `sub` signs in with an email whose user is already linked to another Google `sub` (e.g. a deleted Workspace account's address reassigned)
@@ -104,6 +121,34 @@ The system SHALL place a Google user in a company tenant only on the basis of th
 #### Scenario: Company email without a hosted domain
 - **WHEN** a Google account registered on `bob@acme.com` without Google Workspace (no `hd`) signs in and a tenant has `domain = 'acme.com'`
 - **THEN** the user is NOT added to that tenant
+
+### Requirement: OTP sign-in codes
+`POST /api/auth/otp/request` opens a 5-minute session for an email or phone and `POST /api/auth/otp/verify` exchanges its code for the same session as other sign-ins. The code's mode is set by `AUTH_FIXED_OTP_CODE`:
+- **Fixed-code test mode (default).** Unset → `999999`; any six digits → that code. Every OTP session accepts that code, so anyone who knows it can sign in as any email or phone. This is a documented TEST-ONLY mode for testers on deployed builds, and the auth service logs a warning at startup while it is on. `GET /api/auth/providers` reports `otp: true, otp_fixed_code: true`, and the login page then shows the "OTP code is 999999" hint.
+- **Random-code mode.** Setting `AUTH_FIXED_OTP_CODE` explicitly empty (`AUTH_FIXED_OTP_CODE=`) turns the test mode off. Each request then gets a uniformly random six-digit code from `crypto/rand` (rejection sampling, no modulo bias), stored only as an HMAC-SHA256 keyed by a secret derived from the JWT secret and bound to the session, compared in constant time, and handed to a `CodeSender` for delivery. If delivery fails, the request fails and the session is removed. The only sender today is a log sender that runs only when `APP_ENV=dev` or `AUTH_DEV_OTP=1` and refuses otherwise. With no sender, OTP is disabled: request and verify return 503, `/api/auth/providers` reports `otp: false`, and the login page hides the OTP form.
+
+In both modes: at most 5 verification attempts per session (counted atomically, the 6th fails even with the right code), a code works once, at most 5 code requests per identifier per 15 minutes (429), and the service never logs the code.
+
+#### Scenario: Default configuration accepts the fixed test code
+- **WHEN** `AUTH_FIXED_OTP_CODE` is unset and a user requests a code and verifies with `999999`
+- **THEN** the user is signed in
+
+#### Scenario: Fixed code turned off
+- **WHEN** `AUTH_FIXED_OTP_CODE` is set empty and a user verifies with `999999`
+- **THEN** verification fails with "invalid otp code" unless `999999` happens to be the code that was delivered
+- **AND** each request produces a different random code, and Redis holds only its hash
+
+#### Scenario: OTP disabled
+- **WHEN** the fixed code is off and no code sender is configured (not dev mode)
+- **THEN** `POST /api/auth/otp/request` returns 503 and `/api/auth/providers` reports `otp: false`
+
+#### Scenario: Too many attempts
+- **WHEN** a session has received 5 wrong codes
+- **THEN** the next verification fails with "too many attempts", even with the right code
+
+#### Scenario: Too many requests
+- **WHEN** a sixth code is requested for the same identifier within 15 minutes
+- **THEN** the request is rejected with 429 and other identifiers are unaffected
 
 ### Requirement: Signin returns tenant list
 The system SHALL authenticate the user and return a list of all tenants the user belongs to, plus a JWT scoped to the default tenant.
