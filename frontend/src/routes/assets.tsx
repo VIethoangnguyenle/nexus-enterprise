@@ -1,9 +1,10 @@
-import { createFileRoute, Outlet, Navigate, Link, useMatchRoute } from '@tanstack/react-router'
+import { createFileRoute, Outlet, Navigate, Link, retainSearchParams, useMatchRoute } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '../stores/auth.store'
 import { logoutSession } from '../api/client'
 import { useWebSocketStore } from '../stores/websocket.store'
-import { useWorkspaces } from '../hooks/useWorkspaces'
+import { useActiveWorkspace } from '../hooks/useActiveWorkspace'
+import { validateWorkspaceSearch } from '../lib/workspace'
 import NotificationBell from '../components/NotificationBell'
 import { MobileNav } from '../components/patterns/MobileNav'
 import { Spinner, IconButton, NavRow } from '../components/primitives'
@@ -12,6 +13,8 @@ import { LayoutDashboard, Package, ClipboardList, Tag, Settings, LogOut, ArrowLe
 import type { LucideIcon } from 'lucide-react'
 
 export const Route = createFileRoute('/assets')({
+  validateSearch: validateWorkspaceSearch,
+  search: { middlewares: [retainSearchParams(['ws'])] },
   component: AssetLayout,
 })
 
@@ -28,7 +31,7 @@ function AssetLayout() {
   const user = useAuthStore((s) => s.user)
   const connect = useWebSocketStore((s) => s.connect)
   const disconnect = useWebSocketStore((s) => s.disconnect)
-  const { data, isLoading } = useWorkspaces()
+  const { workspaceName, isLoading } = useActiveWorkspace()
   const matchRoute = useMatchRoute()
   const [showMobileSidebar, setShowMobileSidebar] = useState(false)
 
@@ -45,8 +48,7 @@ function AssetLayout() {
     )
   }
 
-  const workspaces = data?.workspaces || []
-  const wsName = workspaces[0]?.name || 'Workspace'
+  const wsName = workspaceName || 'Workspace'
 
   const sidebarContent = (
     <>

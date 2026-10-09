@@ -27,6 +27,7 @@ import { SpaceTasks } from './SpaceTasks'
 import { SpaceSearchPanel } from './SpaceSearchPanel'
 import { SpaceInfoPanel } from './SpaceInfoPanel'
 import { EmptyState } from './EmptyState'
+import { keys } from '../../hooks/keys'
 
 type Tab = 'chat' | 'files' | 'tasks'
 type Panel =
@@ -53,7 +54,7 @@ export function SpaceView({ channelId }: { channelId: string }) {
   // navigator; a channel opened by link before they arrive is fetched alone.
   const listed = conversations.find((c) => c.id === channelId)
   const single = useQuery({
-    queryKey: ['channel', channelId],
+    queryKey: keys.messaging.channel(channelId),
     queryFn: () => messagingApi.getChannel(channelId),
     enabled: !listLoading && !listed,
   })

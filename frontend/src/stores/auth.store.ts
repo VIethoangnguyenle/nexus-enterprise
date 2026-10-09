@@ -85,7 +85,6 @@ export const useAuthStore = create<AuthState>()(
         // person to sign in on this tab is served the previous user's data
         // until each query happens to refetch.
         queryClient.clear()
-        import('../stores/permission.store').then(m => m.usePermissionStore.getState().clear())
         set({ accessToken: null, tenantId: null, user: null, bootstrapping: false })
       },
 

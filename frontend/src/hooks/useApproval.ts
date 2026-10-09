@@ -2,49 +2,50 @@ import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
 import { approvalApi, type RequestWithAssignment } from '../api/approval'
 import { queryClient } from '../lib/query-client'
 import type { CreateTemplateInput, UpdateTemplateInput, CreateRequestInput } from '../api/approval'
+import { keys } from './keys'
 
 // --- Query Options ---
 
 export const approvalPendingOptions = () =>
   queryOptions({
-    queryKey: ['approval', 'pending'],
+    queryKey: keys.approval.pending(),
     queryFn: () => approvalApi.getPending(),
   })
 
 export const approvalHistoryOptions = (cursor?: string) =>
   queryOptions({
-    queryKey: ['approval', 'history', cursor || 'initial'],
+    queryKey: keys.approval.history(cursor),
     queryFn: () => approvalApi.getHistory(cursor),
   })
 
 export const approvalMyRequestsOptions = (cursor?: string) =>
   queryOptions({
-    queryKey: ['approval', 'my-requests', cursor || 'initial'],
+    queryKey: keys.approval.myRequests(cursor),
     queryFn: () => approvalApi.getMyRequests(cursor),
   })
 
 export const approvalDeptOptions = (cursor?: string) =>
   queryOptions({
-    queryKey: ['approval', 'department', cursor || 'initial'],
+    queryKey: keys.approval.department(cursor),
     queryFn: () => approvalApi.getDepartmentRequests(cursor),
   })
 
 export const approvalAuditOptions = (requestId: string) =>
   queryOptions({
-    queryKey: ['approval', 'audit', requestId],
+    queryKey: keys.approval.audit(requestId),
     queryFn: () => approvalApi.getAuditLog(requestId),
     enabled: !!requestId,
   })
 
 export const approvalTemplatesOptions = (entityType?: string, activeOnly = true) =>
   queryOptions({
-    queryKey: ['approval', 'templates', entityType || 'all', activeOnly],
+    queryKey: keys.approval.templates(entityType, activeOnly),
     queryFn: () => approvalApi.listTemplates(entityType, activeOnly),
   })
 
 export const approvalTemplateOptions = (id: string) =>
   queryOptions({
-    queryKey: ['approval', 'template', id],
+    queryKey: keys.approval.template(id),
     queryFn: () => approvalApi.getTemplate(id),
     enabled: !!id,
   })
@@ -90,7 +91,7 @@ export function useApprovalTemplate(id: string) {
 
 /** Optimistic helper: removes request(s) from pending list cache. */
 function optimisticRemoveFromPending(requestIds: string[]) {
-  const key = ['approval', 'pending']
+  const key = keys.approval.pending()
   const prev = queryClient.getQueryData<{ items: RequestWithAssignment[]; total: number }>(key)
   if (prev) {
     const idSet = new Set(requestIds)
@@ -109,14 +110,14 @@ export function useApprove() {
     mutationFn: ({ requestId, comment }: { requestId: string; comment?: string }) =>
       approvalApi.approve(requestId, comment),
     onMutate: async ({ requestId }) => {
-      await queryClient.cancelQueries({ queryKey: ['approval', 'pending'] })
+      await queryClient.cancelQueries({ queryKey: keys.approval.pending() })
       return { prev: optimisticRemoveFromPending([requestId]) }
     },
     onError: (_err, _vars, context) => {
-      if (context?.prev) queryClient.setQueryData(['approval', 'pending'], context.prev)
+      if (context?.prev) queryClient.setQueryData(keys.approval.pending(), context.prev)
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['approval', 'history'] })
+      queryClient.invalidateQueries({ queryKey: keys.approval.historyAll() })
     },
   })
 }
@@ -127,14 +128,14 @@ export function useReject() {
     mutationFn: ({ requestId, comment }: { requestId: string; comment: string }) =>
       approvalApi.reject(requestId, comment),
     onMutate: async ({ requestId }) => {
-      await queryClient.cancelQueries({ queryKey: ['approval', 'pending'] })
+      await queryClient.cancelQueries({ queryKey: keys.approval.pending() })
       return { prev: optimisticRemoveFromPending([requestId]) }
     },
     onError: (_err, _vars, context) => {
-      if (context?.prev) queryClient.setQueryData(['approval', 'pending'], context.prev)
+      if (context?.prev) queryClient.setQueryData(keys.approval.pending(), context.prev)
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['approval', 'history'] })
+      queryClient.invalidateQueries({ queryKey: keys.approval.historyAll() })
     },
   })
 }
@@ -145,14 +146,14 @@ export function useBatchApprove() {
     mutationFn: ({ requestIds, comment }: { requestIds: string[]; comment?: string }) =>
       approvalApi.batchApprove(requestIds, comment),
     onMutate: async ({ requestIds }) => {
-      await queryClient.cancelQueries({ queryKey: ['approval', 'pending'] })
+      await queryClient.cancelQueries({ queryKey: keys.approval.pending() })
       return { prev: optimisticRemoveFromPending(requestIds) }
     },
     onError: (_err, _vars, context) => {
-      if (context?.prev) queryClient.setQueryData(['approval', 'pending'], context.prev)
+      if (context?.prev) queryClient.setQueryData(keys.approval.pending(), context.prev)
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['approval', 'history'] })
+      queryClient.invalidateQueries({ queryKey: keys.approval.historyAll() })
     },
   })
 }
@@ -162,7 +163,7 @@ export function useCreateTemplate() {
   return useMutation({
     mutationFn: (input: CreateTemplateInput) =>
       approvalApi.createTemplate(input),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['approval', 'templates'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.approval.templatesAll() }),
   })
 }
 
@@ -172,8 +173,8 @@ export function useUpdateTemplate() {
     mutationFn: ({ id, input }: { id: string; input: UpdateTemplateInput }) =>
       approvalApi.updateTemplate(id, input),
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['approval', 'templates'] })
-      queryClient.invalidateQueries({ queryKey: ['approval', 'template', vars.id] })
+      queryClient.invalidateQueries({ queryKey: keys.approval.templatesAll() })
+      queryClient.invalidateQueries({ queryKey: keys.approval.template(vars.id) })
     },
   })
 }
@@ -185,7 +186,7 @@ export function useCreateRequest() {
       approvalApi.createRequest(input),
     onSuccess: (newRequest) => {
       // Insert newly created request into my-requests cache
-      const key = ['approval', 'my-requests', 'initial']
+      const key = keys.approval.myRequests()
       const prev = queryClient.getQueryData<{ items: ApprovalRequest[]; next_cursor: string }>(key)
       if (prev) {
         queryClient.setQueryData(key, {
@@ -193,7 +194,7 @@ export function useCreateRequest() {
           items: [newRequest, ...prev.items],
         })
       } else {
-        queryClient.invalidateQueries({ queryKey: ['approval', 'my-requests'] })
+        queryClient.invalidateQueries({ queryKey: keys.approval.myRequestsAll() })
       }
     },
   })

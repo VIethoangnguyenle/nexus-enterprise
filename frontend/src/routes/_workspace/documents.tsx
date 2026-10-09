@@ -10,6 +10,7 @@ import { EmptyState } from '../../components/EmptyState'
 import { Button, Badge, Heading, Spinner } from '../../components/primitives'
 import { Card } from '../../components/composites'
 import { Upload, Download, FileText } from 'lucide-react'
+import { keys } from '../../hooks/keys'
 
 export const Route = createFileRoute('/_workspace/documents')({ component: DocumentsPage })
 
@@ -38,7 +39,7 @@ function DocumentsPage() {
       await documentApi.create(wsId, file, title)
 
       setUploadStep('Done!')
-      await queryClient.invalidateQueries({ queryKey: ['documents', wsId] })
+      await queryClient.invalidateQueries({ queryKey: keys.documents.list(wsId) })
       if (fileInputRef.current) fileInputRef.current.value = ''
     } catch (err: any) {
       console.error('Upload failed:', err.message)

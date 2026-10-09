@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '../api/client'
 import type { ContactFilters } from '../components/patterns/ContactsFilterBar'
+import { keys } from './keys'
 
 export interface Contact {
   user_id: string
@@ -25,7 +26,7 @@ interface ContactsResponse {
 /** Fetch contacts (workspace members with profile data). Falls back to workspace members API. */
 export function useContacts(workspaceId: string, filters?: ContactFilters) {
   return useQuery<ContactsResponse>({
-    queryKey: ['contacts', workspaceId, filters],
+    queryKey: keys.contacts.list(workspaceId, filters),
     queryFn: async () => {
       const params = new URLSearchParams()
       if (filters?.department) params.set('department', filters.department)

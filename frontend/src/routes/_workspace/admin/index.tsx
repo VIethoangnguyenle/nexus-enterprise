@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useCallback } from 'react'
-import { useWorkspaces } from '../../../hooks/useWorkspaces'
+import { useActiveWorkspace } from '../../../hooks/useActiveWorkspace'
 import { useDepartments, useCreateDepartment, useUpdateDepartment, useDeleteDepartment } from '../../../hooks/useAdmin'
 import { type DepartmentTree } from '../../../api/admin'
 import { PeekPanel } from '../../../components/composites/PeekPanel'
@@ -22,9 +22,7 @@ export const Route = createFileRoute('/_workspace/admin/')({
 
 /** Admin Organization — Department tree view matching Stitch design. */
 function AdminOrganizationPage() {
-  const { data: wsData } = useWorkspaces()
-  const wsParam = new URLSearchParams(window.location.search).get('ws')
-  const wsId = wsParam || wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
 
   const { data, isLoading } = useDepartments(wsId)
   const createMutation = useCreateDepartment(wsId)

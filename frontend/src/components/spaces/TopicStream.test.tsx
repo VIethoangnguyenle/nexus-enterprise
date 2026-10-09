@@ -7,6 +7,7 @@ import { buildDirectory } from '../../lib/people'
 import { CONTACTS, MESSAGES, MSG, THREAD, U, CH, ME } from '../../test/chat-fixtures'
 import type { Message } from '../../api/messaging'
 import { TopicStream } from './TopicStream'
+import { keys } from '../../hooks/keys'
 
 vi.mock('../../api/client', async (orig) => {
   const { fixtureApi } = await import('../../test/chat-fixtures')
@@ -65,7 +66,7 @@ describe('TopicStream: topic cards and reply summary', () => {
   })
 
   it('shows who replied and when, once the thread is known', () => {
-    queryClient.setQueryData(['thread', MSG.t1], { messages: THREAD })
+    queryClient.setQueryData(keys.messaging.thread(MSG.t1), { messages: THREAD })
     renderWithClient(stream(ascending))
     const summary = within(topic(/Trần Minh Đức/)).getByRole('button', { name: /2 trả lời/ })
     expect(within(summary).getByTitle('Nguyễn Thu Lan')).toBeInTheDocument()

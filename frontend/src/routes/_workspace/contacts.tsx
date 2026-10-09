@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useMemo, useCallback } from 'react'
-import { useWorkspaces } from '../../hooks/useWorkspaces'
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useContacts, type Contact } from '../../hooks/useContacts'
 import { ContactsSidebar, type ContactCategory } from '../../components/patterns/ContactsSidebar'
 import { ContactsTable } from '../../components/patterns/ContactsTable'
@@ -23,9 +23,7 @@ export const Route = createFileRoute('/_workspace/contacts')({
  *  Breadcrumb: text-sm text-on-surface-variant with icon.
  *  Action buttons: border border-outline-variant rounded-lg. */
 function ContactsPage() {
-  const { data: wsData } = useWorkspaces()
-  const wsParam = new URLSearchParams(window.location.search).get('ws')
-  const wsId = (wsParam && wsData?.workspaces?.find((w: any) => w.id === wsParam)?.id) || wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
 
   const [activeDept, setActiveDept] = useState('')
   const [searchQuery, setSearchQuery] = useState('')

@@ -5,6 +5,7 @@ import { useRequestOTP, useVerifyOTP } from '../../hooks/useAuth'
 import { authApi, startGoogleSignIn } from '../../api/auth'
 import { Spinner, OtpInput, Button } from '../../components/primitives'
 import { ArrowLeft, ArrowRight, Clock, Mail } from 'lucide-react'
+import { keys } from '../../hooks/keys'
 
 export const Route = createFileRoute('/_auth/login')({
   component: LoginPage,
@@ -49,7 +50,7 @@ function LoginPage() {
   // hides the button rather than showing one that cannot work. OTP is the
   // opposite: it stays visible unless the server says it is off.
   const providers = useQuery({
-    queryKey: ['auth', 'providers'],
+    queryKey: keys.auth.providers(),
     queryFn: () => authApi.providers(),
     staleTime: 5 * 60 * 1000,
     retry: false,

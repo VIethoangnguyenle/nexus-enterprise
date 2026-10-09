@@ -2,25 +2,27 @@ import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
 import { messagingApi, type CreateChannelInput, type SendMessageInput, type Message, type Poll, type ChatTask, type ChannelMember } from '../api/messaging'
 import { queryClient } from '../lib/query-client'
 import { useAuthStore } from '../stores/auth.store'
+import { keys } from './keys'
 
 // --- Channels ---
 
 export const channelsQueryOptions = (wsId: string) =>
-  queryOptions({ queryKey: ['channels', wsId], queryFn: () => messagingApi.listChannels(wsId), enabled: !!wsId })
+  queryOptions({ queryKey: keys.messaging.channels(wsId), queryFn: () => messagingApi.listChannels(wsId), enabled: !!wsId })
 
 export function useChannels(wsId: string) { return useQuery(channelsQueryOptions(wsId)) }
 
 export function useCreateChannel(wsId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: (data: CreateChannelInput) => messagingApi.createChannel(wsId, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['channels', wsId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.messaging.channels(wsId) }),
   })
 }
 
 // --- Direct messages ---
 
 export const directMessagesQueryOptions = () =>
-  queryOptions({ queryKey: ['dms'], queryFn: () => messagingApi.listDMs() })
+  queryOptions({ queryKey: keys.messaging.dms(), queryFn: () => messagingApi.listDMs() })
 
 /** DM channels the user can read. Not workspace-scoped on the backend. */
 export function useDirectMessages() { return useQuery(directMessagesQueryOptions()) }
@@ -28,16 +30,18 @@ export function useDirectMessages() { return useQuery(directMessagesQueryOptions
 /** Opens (finds or creates) the DM with a person. */
 export function useCreateDM() {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: (target: { userId: string; ngacNodeId: string }) => messagingApi.createDM(target),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dms'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.messaging.dms() }),
   })
 }
 
 export function useUpdateChannel(channelId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: (data: { name: string }) => messagingApi.updateChannel(channelId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['channels'] })
+      queryClient.invalidateQueries({ queryKey: keys.messaging.channelsAll() })
     },
   })
 }
@@ -45,10 +49,10 @@ export function useUpdateChannel(channelId: string) {
 // --- Messages ---
 
 export const messagesQueryOptions = (channelId: string) =>
-  queryOptions({ queryKey: ['messages', channelId], queryFn: () => messagingApi.listMessages(channelId), enabled: !!channelId })
+  queryOptions({ queryKey: keys.messaging.messages(channelId), queryFn: () => messagingApi.listMessages(channelId), enabled: !!channelId })
 
 export const threadQueryOptions = (messageId: string) =>
-  queryOptions({ queryKey: ['thread', messageId], queryFn: () => messagingApi.getThread(messageId), enabled: !!messageId })
+  queryOptions({ queryKey: keys.messaging.thread(messageId), queryFn: () => messagingApi.getThread(messageId), enabled: !!messageId })
 
 export function useMessages(channelId: string) { return useQuery(messagesQueryOptions(channelId)) }
 export function useThread(messageId: string) { return useQuery(threadQueryOptions(messageId)) }
@@ -56,6 +60,7 @@ export function useThread(messageId: string) { return useQuery(threadQueryOption
 /** Sends a message with optimistic UI: message appears immediately, no refetch needed. */
 export function useSendMessage(channelId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: (params: string | { content: string; linkedEntity?: { type: string; id: string } }) => {
       if (typeof params === 'string') {
         return messagingApi.sendMessage(channelId, params)
@@ -71,8 +76,8 @@ export function useSendMessage(channelId: string) {
 
     // Optimistic: insert temp message BEFORE server responds
     onMutate: async (params) => {
-      await queryClient.cancelQueries({ queryKey: ['messages', channelId] })
-      const previous = queryClient.getQueryData<{ messages: Message[]; has_more: boolean }>(['messages', channelId])
+      await queryClient.cancelQueries({ queryKey: keys.messaging.messages(channelId) })
+      const previous = queryClient.getQueryData<{ messages: Message[]; has_more: boolean }>(keys.messaging.messages(channelId))
       const user = useAuthStore.getState().user
 
       const content = typeof params === 'string' ? params : params.content
@@ -88,7 +93,7 @@ export function useSendMessage(channelId: string) {
       }
 
       queryClient.setQueryData<{ messages: Message[]; has_more: boolean }>(
-        ['messages', channelId],
+        keys.messaging.messages(channelId),
         (old) => old ? { ...old, messages: [tempMsg as Message, ...(old.messages || [])] } : old,
       )
 
@@ -98,7 +103,7 @@ export function useSendMessage(channelId: string) {
     // Replace temp message with server response (WS event will dedup via ID match)
     onSuccess: (serverMsg) => {
       queryClient.setQueryData<{ messages: Message[]; has_more: boolean }>(
-        ['messages', channelId],
+        keys.messaging.messages(channelId),
         (old) => {
           if (!old) return old
           return {
@@ -118,7 +123,7 @@ export function useSendMessage(channelId: string) {
     // Rollback on error
     onError: (_err, _vars, context) => {
       if (context?.previous) {
-        queryClient.setQueryData(['messages', channelId], context.previous)
+        queryClient.setQueryData(keys.messaging.messages(channelId), context.previous)
       }
     },
   })
@@ -135,12 +140,13 @@ type Optimistic = Message & { _optimistic?: boolean }
  */
 export function useSendReply(channelId: string, parentId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: (content: string) =>
       messagingApi.sendMessage(channelId, { content, content_format: 'html', parent_message_id: parentId }),
     onMutate: async (content) => {
-      await queryClient.cancelQueries({ queryKey: ['thread', parentId] })
-      const prevThread = queryClient.getQueryData<Thread>(['thread', parentId])
-      const prevList = queryClient.getQueryData<MessageList>(['messages', channelId])
+      await queryClient.cancelQueries({ queryKey: keys.messaging.thread(parentId) })
+      const prevThread = queryClient.getQueryData<Thread>(keys.messaging.thread(parentId))
+      const prevList = queryClient.getQueryData<MessageList>(keys.messaging.messages(channelId))
       const user = useAuthStore.getState().user
       const temp: Optimistic = {
         id: `temp-${Date.now()}`,
@@ -153,10 +159,10 @@ export function useSendReply(channelId: string, parentId: string) {
         created_at: new Date().toISOString(),
         _optimistic: true,
       }
-      queryClient.setQueryData<Thread>(['thread', parentId], (old) =>
+      queryClient.setQueryData<Thread>(keys.messaging.thread(parentId), (old) =>
         old ? { ...old, messages: [...(old.messages || []), temp] } : old,
       )
-      queryClient.setQueryData<MessageList>(['messages', channelId], (old) =>
+      queryClient.setQueryData<MessageList>(keys.messaging.messages(channelId), (old) =>
         old
           ? { ...old, messages: old.messages.map((m) => (m.id === parentId ? { ...m, reply_count: (m.reply_count || 0) + 1 } : m)) }
           : old,
@@ -164,7 +170,7 @@ export function useSendReply(channelId: string, parentId: string) {
       return { prevThread, prevList }
     },
     onSuccess: (serverMsg) => {
-      queryClient.setQueryData<Thread>(['thread', parentId], (old) => {
+      queryClient.setQueryData<Thread>(keys.messaging.thread(parentId), (old) => {
         if (!old) return old
         const already = old.messages.some((m) => m.id === serverMsg.id)
         const rest = old.messages.filter((m: Optimistic) => !m._optimistic)
@@ -172,8 +178,8 @@ export function useSendReply(channelId: string, parentId: string) {
       })
     },
     onError: (_err, _vars, ctx) => {
-      if (ctx?.prevThread) queryClient.setQueryData(['thread', parentId], ctx.prevThread)
-      if (ctx?.prevList) queryClient.setQueryData(['messages', channelId], ctx.prevList)
+      if (ctx?.prevThread) queryClient.setQueryData(keys.messaging.thread(parentId), ctx.prevThread)
+      if (ctx?.prevList) queryClient.setQueryData(keys.messaging.messages(channelId), ctx.prevList)
     },
   })
 }
@@ -182,7 +188,7 @@ export function useSendReply(channelId: string, parentId: string) {
 
 export function useReactions(messageId: string) {
   return useQuery({
-    queryKey: ['reactions', messageId],
+    queryKey: keys.messaging.reactions(messageId),
     queryFn: () => messagingApi.listReactions(messageId),
     enabled: !!messageId,
   })
@@ -196,12 +202,12 @@ export function useToggleReaction(channelId: string) {
         ? messagingApi.removeReaction(messageId, emoji)
         : messagingApi.addReaction(messageId, emoji),
     onMutate: async ({ messageId, emoji, hasReacted }) => {
-      await queryClient.cancelQueries({ queryKey: ['messages', channelId] })
-      const previous = queryClient.getQueryData<{ messages: Message[]; has_more: boolean }>(['messages', channelId])
+      await queryClient.cancelQueries({ queryKey: keys.messaging.messages(channelId) })
+      const previous = queryClient.getQueryData<{ messages: Message[]; has_more: boolean }>(keys.messaging.messages(channelId))
       const userId = useAuthStore.getState().user?.id || ''
 
       queryClient.setQueryData<{ messages: Message[]; has_more: boolean }>(
-        ['messages', channelId],
+        keys.messaging.messages(channelId),
         (old) => {
           if (!old) return old
           return {
@@ -240,7 +246,7 @@ export function useToggleReaction(channelId: string) {
       return { previous }
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(['messages', channelId], context.previous)
+      if (context?.previous) queryClient.setQueryData(keys.messaging.messages(channelId), context.previous)
     },
   })
 }
@@ -249,7 +255,7 @@ export function useToggleReaction(channelId: string) {
 
 export function usePins(channelId: string) {
   return useQuery({
-    queryKey: ['pins', channelId],
+    queryKey: keys.messaging.pins(channelId),
     queryFn: () => messagingApi.listPins(channelId),
     enabled: !!channelId,
   })
@@ -263,11 +269,11 @@ export function useTogglePin(channelId: string) {
         ? messagingApi.unpinMessage(channelId, messageId)
         : messagingApi.pinMessage(channelId, messageId),
     onMutate: async ({ messageId, isPinned }) => {
-      await queryClient.cancelQueries({ queryKey: ['messages', channelId] })
-      const previous = queryClient.getQueryData<{ messages: Message[]; has_more: boolean }>(['messages', channelId])
+      await queryClient.cancelQueries({ queryKey: keys.messaging.messages(channelId) })
+      const previous = queryClient.getQueryData<{ messages: Message[]; has_more: boolean }>(keys.messaging.messages(channelId))
 
       queryClient.setQueryData<{ messages: Message[]; has_more: boolean }>(
-        ['messages', channelId],
+        keys.messaging.messages(channelId),
         (old) => {
           if (!old) return old
           return {
@@ -281,10 +287,10 @@ export function useTogglePin(channelId: string) {
       return { previous }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pins', channelId] })
+      queryClient.invalidateQueries({ queryKey: keys.messaging.pins(channelId) })
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(['messages', channelId], context.previous)
+      if (context?.previous) queryClient.setQueryData(keys.messaging.messages(channelId), context.previous)
     },
   })
 }
@@ -293,7 +299,7 @@ export function useTogglePin(channelId: string) {
 
 export function useUnreadCounts() {
   return useQuery({
-    queryKey: ['unreadCounts'],
+    queryKey: keys.messaging.unreadCounts(),
     queryFn: () => messagingApi.getUnreadCounts(),
     // No polling — WS unreadCount event handles real-time updates
   })
@@ -301,8 +307,11 @@ export function useUnreadCounts() {
 
 export function useMarkRead(channelId: string) {
   return useMutation({
+    // A background side effect of reading; the user did not ask for it, so a
+    // failure is not theirs to be told about.
+    meta: { silentError: true },
     mutationFn: (lastMessageId: string) => messagingApi.markRead(channelId, lastMessageId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['unreadCounts'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() }),
   })
 }
 
@@ -310,7 +319,7 @@ export function useMarkRead(channelId: string) {
 
 export function useSearch(channelId: string, query: string) {
   return useQuery({
-    queryKey: ['search', channelId, query],
+    queryKey: keys.messaging.search(channelId, query),
     queryFn: () => messagingApi.searchMessages(channelId, query),
     enabled: !!channelId && !!query && query.length >= 2,
   })
@@ -320,7 +329,7 @@ export function useSearch(channelId: string, query: string) {
 
 export function usePoll(pollId: string) {
   return useQuery({
-    queryKey: ['poll', pollId],
+    queryKey: keys.messaging.poll(pollId),
     queryFn: () => messagingApi.getPoll(pollId),
     enabled: !!pollId,
   })
@@ -330,7 +339,7 @@ export function useCreatePoll(channelId: string) {
   return useMutation({
     mutationFn: (data: { question: string; options: string[]; is_multi?: boolean; is_anonymous?: boolean }) =>
       messagingApi.createPoll(channelId, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['messages', channelId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.messaging.messages(channelId) }),
   })
 }
 
@@ -339,11 +348,11 @@ export function useVotePoll(pollId: string) {
   return useMutation({
     mutationFn: (optionId: string) => messagingApi.votePoll(pollId, optionId),
     onMutate: async (optionId) => {
-      await queryClient.cancelQueries({ queryKey: ['poll', pollId] })
-      const previous = queryClient.getQueryData<Poll>(['poll', pollId])
+      await queryClient.cancelQueries({ queryKey: keys.messaging.poll(pollId) })
+      const previous = queryClient.getQueryData<Poll>(keys.messaging.poll(pollId))
 
       queryClient.setQueryData<Poll>(
-        ['poll', pollId],
+        keys.messaging.poll(pollId),
         (old) => {
           if (!old) return old
           return {
@@ -358,7 +367,7 @@ export function useVotePoll(pollId: string) {
       return { previous }
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(['poll', pollId], context.previous)
+      if (context?.previous) queryClient.setQueryData(keys.messaging.poll(pollId), context.previous)
     },
   })
 }
@@ -367,7 +376,7 @@ export function useVotePoll(pollId: string) {
 
 export function useTasks(channelId: string, status?: string) {
   return useQuery({
-    queryKey: ['tasks', channelId, status],
+    queryKey: keys.messaging.tasks(channelId, status),
     queryFn: () => messagingApi.listTasks(channelId, status),
     enabled: !!channelId,
   })
@@ -376,11 +385,13 @@ export function useTasks(channelId: string, status?: string) {
 /** Creates a task with optimistic insert into task list. */
 export function useCreateTask(channelId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: (data: { title: string; assignee_id?: string; due_date?: string }) =>
       messagingApi.createTask(channelId, data),
     onMutate: async (data) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks', channelId] })
-      const previous = queryClient.getQueryData<{ tasks: ChatTask[] }>(['tasks', channelId])
+      await queryClient.cancelQueries({ queryKey: keys.messaging.tasksOf(channelId) })
+      // The list is cached per status filter, so snapshot and patch every one.
+      const previous = queryClient.getQueriesData<{ tasks: ChatTask[] }>({ queryKey: keys.messaging.tasksOf(channelId) })
       const user = useAuthStore.getState().user
 
       const tempTask: ChatTask = {
@@ -397,15 +408,15 @@ export function useCreateTask(channelId: string) {
         updated_at: new Date().toISOString(),
       }
 
-      queryClient.setQueryData<{ tasks: ChatTask[] }>(
-        ['tasks', channelId],
+      queryClient.setQueriesData<{ tasks: ChatTask[] }>(
+        { queryKey: keys.messaging.tasksOf(channelId) },
         (old) => old ? { ...old, tasks: [tempTask, ...old.tasks] } : old,
       )
       return { previous }
     },
     onSuccess: (serverTask) => {
-      queryClient.setQueryData<{ tasks: ChatTask[] }>(
-        ['tasks', channelId],
+      queryClient.setQueriesData<{ tasks: ChatTask[] }>(
+        { queryKey: keys.messaging.tasksOf(channelId) },
         (old) => {
           if (!old) return old
           return {
@@ -416,22 +427,25 @@ export function useCreateTask(channelId: string) {
       )
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(['tasks', channelId], context.previous)
+      context?.previous.forEach(([key, data]) => queryClient.setQueryData(key, data))
     },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: keys.messaging.tasksOf(channelId) }),
   })
 }
 
 /** Updates a task with optimistic field change. */
 export function useUpdateTask(channelId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: ({ taskId, ...data }: { taskId: string; status?: string; assignee_id?: string; title?: string; due_date?: string }) =>
       messagingApi.updateTask(taskId, data),
     onMutate: async ({ taskId, ...data }) => {
-      await queryClient.cancelQueries({ queryKey: ['tasks', channelId] })
-      const previous = queryClient.getQueryData<{ tasks: ChatTask[] }>(['tasks', channelId])
+      await queryClient.cancelQueries({ queryKey: keys.messaging.tasksOf(channelId) })
+      // The list is cached per status filter, so snapshot and patch every one.
+      const previous = queryClient.getQueriesData<{ tasks: ChatTask[] }>({ queryKey: keys.messaging.tasksOf(channelId) })
 
-      queryClient.setQueryData<{ tasks: ChatTask[] }>(
-        ['tasks', channelId],
+      queryClient.setQueriesData<{ tasks: ChatTask[] }>(
+        { queryKey: keys.messaging.tasksOf(channelId) },
         (old) => {
           if (!old) return old
           return {
@@ -445,8 +459,9 @@ export function useUpdateTask(channelId: string) {
       return { previous }
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(['tasks', channelId], context.previous)
+      context?.previous.forEach(([key, data]) => queryClient.setQueryData(key, data))
     },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: keys.messaging.tasksOf(channelId) }),
   })
 }
 
@@ -454,7 +469,7 @@ export function useUpdateTask(channelId: string) {
 
 export function useChannelMembers(channelId: string) {
   return useQuery({
-    queryKey: ['channelMembers', channelId],
+    queryKey: keys.messaging.members(channelId),
     queryFn: () => messagingApi.listMembers(channelId),
     enabled: !!channelId,
   })
@@ -463,13 +478,14 @@ export function useChannelMembers(channelId: string) {
 /** Optimistic add member to channel — member appears instantly, rolls back on error. */
 export function useAddChannelMember(channelId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: ({ ngacNodeId }: { ngacNodeId: string; username?: string; userId?: string }) =>
       messagingApi.addMember(channelId, ngacNodeId),
     onMutate: async ({ ngacNodeId, username, userId }: { ngacNodeId: string; username?: string; userId?: string }) => {
-      await queryClient.cancelQueries({ queryKey: ['channelMembers', channelId] })
-      const previous = queryClient.getQueryData(['channelMembers', channelId])
+      await queryClient.cancelQueries({ queryKey: keys.messaging.members(channelId) })
+      const previous = queryClient.getQueryData(keys.messaging.members(channelId))
       queryClient.setQueryData(
-        ['channelMembers', channelId],
+        keys.messaging.members(channelId),
         (old: { members: ChannelMember[] | null } | undefined) => ({
           members: [
             ...(old?.members || []),
@@ -480,11 +496,11 @@ export function useAddChannelMember(channelId: string) {
       return { previous }
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(['channelMembers', channelId], context.previous)
+      if (context?.previous) queryClient.setQueryData(keys.messaging.members(channelId), context.previous)
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['channelMembers', channelId] })
-      queryClient.invalidateQueries({ queryKey: ['channels'] })
+      queryClient.invalidateQueries({ queryKey: keys.messaging.members(channelId) })
+      queryClient.invalidateQueries({ queryKey: keys.messaging.channelsAll() })
     },
   })
 }
@@ -492,13 +508,14 @@ export function useAddChannelMember(channelId: string) {
 /** Optimistic remove member from channel — member disappears instantly, rolls back on error. */
 export function useRemoveChannelMember(channelId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: ({ nodeId }: { nodeId: string }) =>
       messagingApi.removeMember(channelId, nodeId),
     onMutate: async ({ nodeId }: { nodeId: string }) => {
-      await queryClient.cancelQueries({ queryKey: ['channelMembers', channelId] })
-      const previous = queryClient.getQueryData(['channelMembers', channelId])
+      await queryClient.cancelQueries({ queryKey: keys.messaging.members(channelId) })
+      const previous = queryClient.getQueryData(keys.messaging.members(channelId))
       queryClient.setQueryData(
-        ['channelMembers', channelId],
+        keys.messaging.members(channelId),
         (old: { members: ChannelMember[] | null } | undefined) => ({
           members: (old?.members || []).filter((m) => m.ngac_node_id !== nodeId),
         }),
@@ -506,11 +523,11 @@ export function useRemoveChannelMember(channelId: string) {
       return { previous }
     },
     onError: (_err, _vars, context) => {
-      if (context?.previous) queryClient.setQueryData(['channelMembers', channelId], context.previous)
+      if (context?.previous) queryClient.setQueryData(keys.messaging.members(channelId), context.previous)
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['channelMembers', channelId] })
-      queryClient.invalidateQueries({ queryKey: ['channels'] })
+      queryClient.invalidateQueries({ queryKey: keys.messaging.members(channelId) })
+      queryClient.invalidateQueries({ queryKey: keys.messaging.channelsAll() })
     },
   })
 }

@@ -51,7 +51,7 @@ Audit cũng tìm ra lỗ hổng phân quyền **có thật, đang chạy**. Chú
 | 02b | [gRPC caller identity](phase-02b-grpc-caller-identity.md) | P2 | 3-4d | 01 | pending |
 | 03 | [PDP correctness and freshness](phase-03-pdp-correctness-and-freshness.md) | P0 | 2-3d | 01 | done (PR #2) — in-RAM prohibitions moved to 03b |
 | 03b | [Prohibitions in the in-memory graph](phase-03b-prohibitions-in-memory.md) | P2 | 1-2d | 01 | done |
-| 04 | [Frontend data layer](phase-04-frontend-data-layer.md) | P1 | 2-3d | 01 | pending |
+| 04 | [Frontend data layer](phase-04-frontend-data-layer.md) | P1 | 2-3d | 01 | 04a done; 04b đi cùng từng nhóm màn 06 |
 | 05 | [Realtime over WebSocket](phase-05-realtime-websocket.md) | P1 | 3-4d | 02, 04 | pending |
 | 06 | [UI redesign and motion](phase-06-ui-redesign-and-motion.md) ★ | P1 | 6-8d | 04 (code); design starts now | in-progress |
 | 07 | [NGAC model conformance](phase-07-ngac-model-conformance.md) | P2 | 2-3d | 02b, 03b | pending |

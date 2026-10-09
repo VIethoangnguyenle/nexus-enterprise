@@ -1,27 +1,28 @@
 import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
 import { assetApi, type CreateAssetTypeInput, type CreateAssetInput, type CreateAssetRequestInput, type AssetRequest } from '../api/assets'
 import { queryClient } from '../lib/query-client'
+import { keys } from './keys'
 
 export const assetTypesQueryOptions = (wsId: string) =>
-  queryOptions({ queryKey: ['asset-types', wsId], queryFn: () => assetApi.listTypes(wsId), enabled: !!wsId })
+  queryOptions({ queryKey: keys.assets.types(wsId), queryFn: () => assetApi.listTypes(wsId), enabled: !!wsId })
 
 export const assetsQueryOptions = (wsId: string, params?: Record<string, string>) =>
-  queryOptions({ queryKey: ['assets', wsId, params], queryFn: () => assetApi.list(wsId, params), enabled: !!wsId })
+  queryOptions({ queryKey: keys.assets.list(wsId, params), queryFn: () => assetApi.list(wsId, params), enabled: !!wsId })
 
 export const assetQueryOptions = (id: string) =>
-  queryOptions({ queryKey: ['asset', id], queryFn: () => assetApi.get(id), enabled: !!id })
+  queryOptions({ queryKey: keys.assets.asset(id), queryFn: () => assetApi.get(id), enabled: !!id })
 
 export const assetSummaryQueryOptions = (wsId: string) =>
-  queryOptions({ queryKey: ['asset-summary', wsId], queryFn: () => assetApi.getSummary(wsId), enabled: !!wsId })
+  queryOptions({ queryKey: keys.assets.summary(wsId), queryFn: () => assetApi.getSummary(wsId), enabled: !!wsId })
 
 export const assetRequestsQueryOptions = (wsId: string, params?: Record<string, string>) =>
-  queryOptions({ queryKey: ['asset-requests', wsId, params], queryFn: () => assetApi.listRequests(wsId, params), enabled: !!wsId })
+  queryOptions({ queryKey: keys.assets.requestList(wsId, params), queryFn: () => assetApi.listRequests(wsId, params), enabled: !!wsId })
 
 export const assetTransitionsQueryOptions = (id: string) =>
-  queryOptions({ queryKey: ['asset-transitions', id], queryFn: () => assetApi.getTransitions(id), enabled: !!id })
+  queryOptions({ queryKey: keys.assets.transitions(id), queryFn: () => assetApi.getTransitions(id), enabled: !!id })
 
 export const assetHistoryQueryOptions = (id: string) =>
-  queryOptions({ queryKey: ['asset-history', id], queryFn: () => assetApi.getHistory(id), enabled: !!id })
+  queryOptions({ queryKey: keys.assets.history(id), queryFn: () => assetApi.getHistory(id), enabled: !!id })
 
 export function useAssetTypes(wsId: string) { return useQuery(assetTypesQueryOptions(wsId)) }
 export function useAssets(wsId: string, params?: Record<string, string>) { return useQuery(assetsQueryOptions(wsId, params)) }
@@ -33,8 +34,9 @@ export function useAssetHistory(id: string) { return useQuery(assetHistoryQueryO
 
 export function useCreateAssetType(wsId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: (data: CreateAssetTypeInput) => assetApi.createType(wsId, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['asset-types', wsId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.assets.types(wsId) }),
   })
 }
 
@@ -42,41 +44,44 @@ export function useCreateAsset(wsId: string) {
   return useMutation({
     mutationFn: (data: CreateAssetInput) => assetApi.create(wsId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['assets', wsId] })
-      queryClient.invalidateQueries({ queryKey: ['asset-summary', wsId] })
+      queryClient.invalidateQueries({ queryKey: keys.assets.lists(wsId) })
+      queryClient.invalidateQueries({ queryKey: keys.assets.summary(wsId) })
     },
   })
 }
 
 export function useTransitionAsset() {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: ({ id, action, comment }: { id: string; action: string; comment?: string }) =>
       assetApi.transition(id, action, comment),
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: ['asset', vars.id] })
-      queryClient.invalidateQueries({ queryKey: ['assets'] })
-      queryClient.invalidateQueries({ queryKey: ['asset-history', vars.id] })
-      queryClient.invalidateQueries({ queryKey: ['asset-transitions', vars.id] })
-      queryClient.invalidateQueries({ queryKey: ['asset-summary'] })
+      queryClient.invalidateQueries({ queryKey: keys.assets.asset(vars.id) })
+      queryClient.invalidateQueries({ queryKey: keys.assets.listsAll() })
+      queryClient.invalidateQueries({ queryKey: keys.assets.history(vars.id) })
+      queryClient.invalidateQueries({ queryKey: keys.assets.transitions(vars.id) })
+      queryClient.invalidateQueries({ queryKey: keys.assets.summaries() })
     },
   })
 }
 
 export function useCreateAssetRequest(wsId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: (data: CreateAssetRequestInput) => assetApi.createRequest(wsId, data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['asset-requests', wsId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.assets.requests(wsId) }),
   })
 }
 
 /** Approve an asset request with optimistic status update. */
 export function useApproveRequest(wsId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: (id: string) => assetApi.approveRequest(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: ['asset-requests', wsId] })
+      await queryClient.cancelQueries({ queryKey: keys.assets.requests(wsId) })
       const cache = queryClient.getQueryCache()
-      const queries = cache.findAll({ queryKey: ['asset-requests', wsId] })
+      const queries = cache.findAll({ queryKey: keys.assets.requests(wsId) })
       const snapshots: { key: unknown[]; data: unknown }[] = []
       for (const q of queries) {
         const data = q.state.data as { requests: AssetRequest[]; total: number } | undefined
@@ -97,7 +102,7 @@ export function useApproveRequest(wsId: string) {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['asset-summary'] })
+      queryClient.invalidateQueries({ queryKey: keys.assets.summary(wsId) })
     },
   })
 }
@@ -105,11 +110,12 @@ export function useApproveRequest(wsId: string) {
 /** Reject an asset request with optimistic status update. */
 export function useRejectRequest(wsId: string) {
   return useMutation({
+    meta: { silentError: true },
     mutationFn: ({ id, reason }: { id: string; reason: string }) => assetApi.rejectRequest(id, reason),
     onMutate: async ({ id }) => {
-      await queryClient.cancelQueries({ queryKey: ['asset-requests', wsId] })
+      await queryClient.cancelQueries({ queryKey: keys.assets.requests(wsId) })
       const cache = queryClient.getQueryCache()
-      const queries = cache.findAll({ queryKey: ['asset-requests', wsId] })
+      const queries = cache.findAll({ queryKey: keys.assets.requests(wsId) })
       const snapshots: { key: unknown[]; data: unknown }[] = []
       for (const q of queries) {
         const data = q.state.data as { requests: AssetRequest[]; total: number } | undefined
@@ -130,7 +136,7 @@ export function useRejectRequest(wsId: string) {
       }
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ['asset-summary'] })
+      queryClient.invalidateQueries({ queryKey: keys.assets.summary(wsId) })
     },
   })
 }

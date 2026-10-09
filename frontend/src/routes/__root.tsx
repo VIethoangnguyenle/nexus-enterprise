@@ -2,7 +2,7 @@ import { createRootRoute, Outlet } from '@tanstack/react-router'
 import { useEffect } from 'react'
 import { bootstrapSession } from '../api/client'
 import { useAuthStore } from '../stores/auth.store'
-import { Spinner } from '../components/primitives'
+import { Spinner, Toaster } from '../components/primitives'
 
 export const Route = createRootRoute({
   component: RootRoute,
@@ -31,5 +31,12 @@ function RootRoute() {
     )
   }
 
-  return <Outlet />
+  // One toaster for every route: the global mutation error handler toasts from
+  // auth and onboarding pages too, outside the workspace shell.
+  return (
+    <>
+      <Outlet />
+      <Toaster />
+    </>
+  )
 }

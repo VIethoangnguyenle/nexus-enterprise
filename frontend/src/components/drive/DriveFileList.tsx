@@ -3,8 +3,12 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import type { DriveItem } from '../../api/drive'
 import { DriveFileRow } from './DriveFileRow'
 import { usePermissions } from '../../hooks/usePermissions'
+import { NO_PERMS } from '../../api/access'
 import { useDriveStore } from '../../stores/drive.store'
 import { useAuthStore } from '../../stores/auth.store'
+
+/** Items without an NGAC node are never checked; they can be seen and nothing else. */
+const READ_ONLY = { ...NO_PERMS, read: true }
 
 const ROW_HEIGHT = 48
 
@@ -107,7 +111,7 @@ export function DriveFileList({
           >
             {virtualizer.getVirtualItems().map((virtualRow) => {
               const item = sorted[virtualRow.index]
-              const perms = permsMap[item.ngac_node_id] ?? { read: true, write: false, delete: false, share: false }
+              const perms = permsMap[item.ngac_node_id] ?? READ_ONLY
 
               return (
                 <div

@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState, useMemo, useRef, useEffect } from 'react'
-import { useWorkspaces } from '../../../hooks/useWorkspaces'
+import { useActiveWorkspace } from '../../../hooks/useActiveWorkspace'
 import { useContacts, type Contact } from '../../../hooks/useContacts'
 import { useDepartments } from '../../../hooks/useAdmin'
 import { PeekPanel } from '../../../components/composites/PeekPanel'
@@ -17,9 +17,7 @@ export const Route = createFileRoute('/_workspace/admin/users')({
 
 /** Admin Users — member management table matching Stitch design. */
 function AdminUsersPage() {
-  const { data: wsData } = useWorkspaces()
-  const wsParam = new URLSearchParams(window.location.search).get('ws')
-  const wsId = wsParam || wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
 
   const { data: contactsData, isLoading } = useContacts(wsId)
   const { data: deptData } = useDepartments(wsId)

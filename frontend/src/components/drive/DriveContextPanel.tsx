@@ -3,7 +3,7 @@ import { X, FileText, Info, Shield, Clock, Search, UserPlus, Check } from 'lucid
 import { useDriveStore } from '../../stores/drive.store'
 import { useDriveItem, useDriveShares, useCreateShare, useRevokeShare } from '../../hooks/useDrive'
 import { useContacts, type Contact } from '../../hooks/useContacts'
-import { useWorkspaces } from '../../hooks/useWorkspaces'
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { Spinner, IconButton, Button } from '../primitives'
 import { useObjectPermissions } from '../../hooks/usePermissions'
@@ -241,8 +241,7 @@ function MetadataTab({ item }: { item: DriveItem }) {
 }
 
 function PermissionsTab({ item }: { item: DriveItem }) {
-  const { data: wsData } = useWorkspaces()
-  const wsId = wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
   const { data: sharesData, isLoading: sharesLoading } = useDriveShares(item.id)
   const { data: contactsData, isLoading: contactsLoading } = useContacts(wsId)
   const createShare = useCreateShare(item.id)

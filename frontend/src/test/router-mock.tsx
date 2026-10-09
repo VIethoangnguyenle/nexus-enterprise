@@ -3,11 +3,12 @@ import { vi } from 'vitest'
 
 /**
  * Minimal stand-in for @tanstack/react-router in component tests: links are
- * plain anchors, navigation is a spy, and params/path come from `routerState`.
+ * plain anchors, navigation is a spy, and params/path/search come from `routerState`.
  */
 export const routerState = {
   params: {} as Record<string, string>,
   pathname: '/channels',
+  search: {} as Record<string, unknown>,
   navigate: vi.fn(),
 }
 
@@ -27,6 +28,7 @@ export function routerMockFactory() {
     },
     useNavigate: () => routerState.navigate,
     useParams: () => routerState.params,
+    useSearch: () => routerState.search,
     useRouterState: ({ select }: { select: (s: { location: { pathname: string } }) => unknown }) =>
       select({ location: { pathname: routerState.pathname } }),
   }

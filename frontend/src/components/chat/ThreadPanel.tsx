@@ -14,6 +14,7 @@ import { ChatEditor } from './ChatEditor'
 import { SidePanel } from '../spaces/SidePanel'
 import { MessageBlock } from '../spaces/MessageBlock'
 import { EmptyState } from '../spaces/EmptyState'
+import { keys } from '../../hooks/keys'
 
 type Msg = Message & { _optimistic?: boolean }
 
@@ -43,7 +44,7 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onClo
 
   const all = (data?.messages ?? []) as Msg[]
   const fromList = qc
-    .getQueryData<{ messages: Message[] }>(['messages', channelId])
+    .getQueryData<{ messages: Message[] }>(keys.messaging.messages(channelId))
     ?.messages.find((x) => x.id === messageId)
   const root = all.find((x) => x.id === messageId) ?? fromList
   const replies = useMemo(() => all.filter((x) => x.id !== messageId), [all, messageId])

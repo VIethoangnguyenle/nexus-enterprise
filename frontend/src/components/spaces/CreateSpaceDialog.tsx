@@ -11,6 +11,7 @@ import { workspaceDisplayName } from '../../lib/workspace'
 import type { Person } from '../../lib/people'
 import { Dialog } from '../composites/Dialog'
 import { Button, PeoplePicker, SpaceIcon, TextField, toast } from '../primitives'
+import { keys } from '../../hooks/keys'
 
 const NAME_MAX = 128
 
@@ -63,13 +64,13 @@ export function CreateSpaceDialog({ open, onClose }: { open: boolean; onClose: (
       )
       const failed = results.filter((r) => r.status === 'rejected').length
       // Show the new space in Nhóm at once; the refetch below confirms it.
-      queryClient.setQueryData<{ channels: Channel[] | null }>(['channels', workspaceId], (old) =>
+      queryClient.setQueryData<{ channels: Channel[] | null }>(keys.messaging.channels(workspaceId), (old) =>
         old && !(old.channels ?? []).some((c) => c.id === channel.id)
           ? { ...old, channels: [...(old.channels ?? []), { ...channel, member_count: 1 + members.length - failed }] }
           : old,
       )
-      void queryClient.invalidateQueries({ queryKey: ['channels', workspaceId] })
-      void queryClient.invalidateQueries({ queryKey: ['channelMembers', channel.id] })
+      void queryClient.invalidateQueries({ queryKey: keys.messaging.channels(workspaceId) })
+      void queryClient.invalidateQueries({ queryKey: keys.messaging.members(channel.id) })
       onClose()
       reset()
       navigate({ to: '/channels/$channelId', params: { channelId: channel.id } })

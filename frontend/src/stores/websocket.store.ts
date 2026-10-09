@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { queryClient } from '../lib/query-client'
-import { usePermissionStore } from './permission.store'
+import { keys } from '../hooks/keys'
 import { useAuthStore } from './auth.store'
 import {
   ClientEnvelope,
@@ -233,7 +233,7 @@ function handleServerMessage(
       } else {
         // Cache injection: append new message directly, skip full refetch
         queryClient.setQueryData(
-          ['messages', msg.channelId],
+          keys.messaging.messages(msg.channelId),
           (old: { messages: Message[]; has_more: boolean } | undefined) => {
             if (!old) return old
             // Deduplicate: skip if message already exists (sender's optimistic update)
@@ -250,7 +250,7 @@ function handleServerMessage(
         )
       }
       // Unread counts still need server aggregation
-      queryClient.invalidateQueries({ queryKey: ['unreadCounts'] })
+      queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
       break
     }
 
@@ -279,13 +279,12 @@ function handleServerMessage(
     }
 
     case 'notification':
-      queryClient.invalidateQueries({ queryKey: ['notifications'] })
-      queryClient.invalidateQueries({ queryKey: ['unread-count'] })
+      queryClient.invalidateQueries({ queryKey: keys.notifications.all() })
       break
 
     case 'unreadCount':
-      queryClient.invalidateQueries({ queryKey: ['unread-count'] })
-      queryClient.invalidateQueries({ queryKey: ['unreadCounts'] })
+      queryClient.invalidateQueries({ queryKey: keys.notifications.unreadCount() })
+      queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
       break
 
     case 'threadReply': {
@@ -298,13 +297,15 @@ function handleServerMessage(
 
     case 'assetUpdated': {
       const asset = envelope.payload.assetUpdated
-      queryClient.invalidateQueries({ queryKey: ['assets'] })
+      // The event names the asset, not its workspace, so lists and summaries
+      // are refreshed under every workspace prefix.
+      queryClient.invalidateQueries({ queryKey: keys.assets.listsAll() })
       if (asset.assetId) {
-        queryClient.invalidateQueries({ queryKey: ['asset', asset.assetId] })
-        queryClient.invalidateQueries({ queryKey: ['asset-history', asset.assetId] })
-        queryClient.invalidateQueries({ queryKey: ['asset-transitions', asset.assetId] })
+        queryClient.invalidateQueries({ queryKey: keys.assets.asset(asset.assetId) })
+        queryClient.invalidateQueries({ queryKey: keys.assets.history(asset.assetId) })
+        queryClient.invalidateQueries({ queryKey: keys.assets.transitions(asset.assetId) })
       }
-      queryClient.invalidateQueries({ queryKey: ['asset-summary'] })
+      queryClient.invalidateQueries({ queryKey: keys.assets.summaries() })
       break
     }
 
@@ -312,7 +313,7 @@ function handleServerMessage(
       const reaction = envelope.payload.reactionEvent
       // Inject reaction change directly into the messages cache
       queryClient.setQueryData(
-        ['messages', reaction.channelId],
+        keys.messaging.messages(reaction.channelId),
         (old: { messages: Message[]; has_more: boolean } | undefined) => {
           if (!old) return old
           return {
@@ -357,7 +358,7 @@ function handleServerMessage(
       const isPinned = pin.action === 'pin'
       // Update is_pinned flag in messages cache
       queryClient.setQueryData(
-        ['messages', pin.channelId],
+        keys.messaging.messages(pin.channelId),
         (old: { messages: Message[]; has_more: boolean } | undefined) => {
           if (!old) return old
           return {
@@ -369,7 +370,7 @@ function handleServerMessage(
         },
       )
       // Invalidate pins list (need full pin metadata from server)
-      queryClient.invalidateQueries({ queryKey: ['pins', pin.channelId] })
+      queryClient.invalidateQueries({ queryKey: keys.messaging.pins(pin.channelId) })
       break
     }
 
@@ -377,7 +378,7 @@ function handleServerMessage(
       const vote = envelope.payload.pollVote
       // Inject updated vote counts directly into poll cache
       queryClient.setQueryData(
-        ['poll', vote.pollId],
+        keys.messaging.poll(vote.pollId),
         (old: Poll | undefined) => {
           if (!old) return old
           return {
@@ -394,9 +395,10 @@ function handleServerMessage(
 
     case 'taskUpdate': {
       const task = envelope.payload.taskUpdate
-      // Inject task status/assignee change into tasks cache
-      queryClient.setQueryData(
-        ['tasks', task.channelId],
+      // Inject task status/assignee change into every cached list of the
+      // channel's tasks, whatever status filter each was fetched with.
+      queryClient.setQueriesData(
+        { queryKey: keys.messaging.tasksOf(task.channelId) },
         (old: { tasks: ChatTask[] } | undefined) => {
           if (!old) return old
           return {
@@ -414,17 +416,22 @@ function handleServerMessage(
 
     case 'driveObject': {
       const event = envelope.payload.driveObject
-      // Scope invalidation to the specific parent folder, not all drive queries
-      if (event.parentId) {
-        queryClient.invalidateQueries({ queryKey: ['drive', event.workspaceId, 'folder', event.parentId] })
+      // Scope invalidation to the folder the item sits in, not all drive queries.
+      // An item with no parent sits at the workspace root, which is cached
+      // under its own key.
+      queryClient.invalidateQueries({ queryKey: keys.drive.folder(event.workspaceId, event.parentId) })
+      // A move also empties the folder the item left, and the event names only
+      // the destination, so refresh every listing in the workspace.
+      if (event.eventType === 'moved') {
+        queryClient.invalidateQueries({ queryKey: keys.drive.folders(event.workspaceId) })
       }
       // For deleted/moved items, also invalidate the item detail cache
       if (event.eventType === 'deleted' || event.eventType === 'moved') {
-        queryClient.invalidateQueries({ queryKey: ['drive', 'item', event.itemId] })
+        queryClient.invalidateQueries({ queryKey: keys.drive.item(event.itemId) })
       }
       // Quota may change on create/delete
       if (event.eventType === 'created' || event.eventType === 'deleted') {
-        queryClient.invalidateQueries({ queryKey: ['drive', event.workspaceId, 'quota'] })
+        queryClient.invalidateQueries({ queryKey: keys.drive.quota(event.workspaceId) })
       }
       if (WS_DEBUG()) {
         console.log(`[WS] drive object ${event.eventType}: ${event.itemId} in folder ${event.parentId}`)
@@ -435,9 +442,11 @@ function handleServerMessage(
     case 'drivePerm': {
       const event = envelope.payload.drivePerm
       // Invalidate permission cache for the affected item
-      usePermissionStore.getState().invalidate(event.itemId)
+      queryClient.invalidateQueries({
+        queryKey: keys.permissions.object(useAuthStore.getState().tenantId, event.itemId),
+      })
       // Also invalidate shares queries
-      queryClient.invalidateQueries({ queryKey: ['drive', 'shares', event.itemId] })
+      queryClient.invalidateQueries({ queryKey: keys.drive.shares(event.itemId) })
       if (WS_DEBUG()) {
         console.log(`[WS] drive perm changed: ${event.itemId}`)
       }
@@ -446,7 +455,7 @@ function handleServerMessage(
 
     case 'approvalEvent': {
       // Real-time approval status sync — invalidate all approval queries
-      queryClient.invalidateQueries({ queryKey: ['approval'] })
+      queryClient.invalidateQueries({ queryKey: keys.approval.all() })
       if (WS_DEBUG()) {
         const evt = envelope.payload.approvalEvent
         console.log(`[WS] approval ${evt.action}: ${evt.requestId}`)
@@ -513,7 +522,7 @@ function injectReply(msg: WSChatMessage, set: (fn: (s: WebSocketState) => Partia
   const me = useAuthStore.getState().user?.id
   const fromMe = !!me && msg.senderId === me
   let isNew = true
-  queryClient.setQueryData(['thread', parentId], (old: { messages: Message[] } | undefined) => {
+  queryClient.setQueryData(keys.messaging.thread(parentId), (old: { messages: Message[] } | undefined) => {
     if (!old) return old
     if ((old.messages || []).some((m) => m.id === msg.id)) {
       isNew = false
@@ -526,7 +535,7 @@ function injectReply(msg: WSChatMessage, set: (fn: (s: WebSocketState) => Partia
   })
   if (isNew && !fromMe) {
     queryClient.setQueryData(
-      ['messages', msg.channelId],
+      keys.messaging.messages(msg.channelId),
       (old: { messages: Message[]; has_more: boolean } | undefined) =>
         old
           ? {
@@ -566,19 +575,19 @@ function convertChatMsgToMessage(chatMsg: WSChatMessage): Message {
 
 /** Re-sync all active queries after a reconnect to catch missed events. */
 function resyncAfterReconnect() {
-  queryClient.invalidateQueries({ queryKey: ['messages'] })
-  queryClient.invalidateQueries({ queryKey: ['unreadCounts'] })
-  queryClient.invalidateQueries({ queryKey: ['notifications'] })
-  queryClient.invalidateQueries({ queryKey: ['unread-count'] })
-  queryClient.invalidateQueries({ queryKey: ['channels'] })
-  queryClient.invalidateQueries({ queryKey: ['pins'] })
-  queryClient.invalidateQueries({ queryKey: ['tasks'] })
-  queryClient.invalidateQueries({ queryKey: ['reactions'] })
-  queryClient.invalidateQueries({ queryKey: ['polls'] })
-  queryClient.invalidateQueries({ queryKey: ['thread'] })
-  // Drive: invalidate all folder/item queries + clear permission cache
-  queryClient.invalidateQueries({ queryKey: ['drive'] })
-  usePermissionStore.getState().clear()
+  const refresh = (queryKey: readonly unknown[]) => queryClient.invalidateQueries({ queryKey })
+  refresh(keys.messaging.messagesAll())
+  refresh(keys.messaging.unreadCounts())
+  refresh(keys.notifications.all())
+  refresh(keys.messaging.channelsAll())
+  refresh(keys.messaging.pinsAll())
+  refresh(keys.messaging.tasksAll())
+  refresh(keys.messaging.reactionsAll())
+  refresh(keys.messaging.pollsAll())
+  refresh(keys.messaging.threadsAll())
+  // Drive: every folder, item and share, and every cached permission answer
+  refresh(keys.drive.everything())
+  refresh(keys.permissions.all())
   // Approval: catch any missed approval state changes
-  queryClient.invalidateQueries({ queryKey: ['approval'] })
+  refresh(keys.approval.all())
 }

@@ -1,11 +1,14 @@
 import { useMemo } from 'react'
+import { useSearch } from '@tanstack/react-router'
 import { useWorkspaces } from './useWorkspaces'
 
 /**
- * The workspace the user is currently looking at.
+ * The workspace the user is currently looking at, and the only way to get it.
  *
  * Reads the `?ws=` parameter the sidebar switcher sets, falling back to the
- * first workspace the user can reach.
+ * first workspace the user can reach. Routes that render workspace data declare
+ * the parameter with `validateSearch`, so it arrives here already typed and the
+ * router, not `window.location`, is what this subscribes to.
  *
  * Pages used to inline `wsData?.workspaces?.[0]?.id` and ignore the parameter
  * entirely, so switching workspace changed the URL and nothing else. For anyone
@@ -14,15 +17,16 @@ import { useWorkspaces } from './useWorkspaces'
  * to a workspace they only had read on, and the Upload button answered 403 with
  * no way to get out of it.
  *
- * The switcher performs a full page load, so reading the parameter at render
- * time is enough; there is no navigation to subscribe to.
+ * The switcher still performs a full page load: drive keeps the open folder in
+ * a client store that is not keyed by workspace, and a folder from the previous
+ * workspace must not survive the switch.
  */
 export function useActiveWorkspace() {
   const { data, isLoading, isError } = useWorkspaces()
+  const { ws: requested } = useSearch({ strict: false }) as { ws?: string }
 
   return useMemo(() => {
     const workspaces = data?.workspaces ?? []
-    const requested = new URLSearchParams(window.location.search).get('ws')
 
     // Only honour a requested workspace the user actually has, so a stale or
     // hand-edited parameter degrades to their own workspace instead of a run
@@ -36,5 +40,5 @@ export function useActiveWorkspace() {
       isLoading,
       isError,
     }
-  }, [data, isLoading, isError])
+  }, [data, isLoading, isError, requested])
 }

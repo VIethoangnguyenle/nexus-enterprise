@@ -1,21 +1,25 @@
-import { createFileRoute, Outlet, Navigate, useMatches } from '@tanstack/react-router'
+import { createFileRoute, Outlet, Navigate, retainSearchParams, useMatches } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { useAuthStore } from '../stores/auth.store'
 import { useWebSocketStore } from '../stores/websocket.store'
 import { useUiStore } from '../stores/ui.store'
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace'
 import { useUnreadCounts } from '../hooks/useMessaging'
-import { workspaceDisplayName } from '../lib/workspace'
+import { validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
 import { useResizable } from '../hooks/useResizable'
 import { AppSidebar } from '../components/patterns/AppSidebar'
 import { ListPanel } from '../components/patterns/ListPanel'
 import { MobileNav } from '../components/patterns/MobileNav'
-import { Button, IconButton, Spinner, Text, Toaster } from '../components/primitives'
+import { Button, IconButton, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { apiFetch, logoutSession } from '../api/client'
 import { PanelLeft, X } from 'lucide-react'
 
 export const Route = createFileRoute('/_workspace')({
+  validateSearch: validateWorkspaceSearch,
+  // Keep the chosen workspace across in-app navigation; a link that names no
+  // `ws` would otherwise drop the user back into their first workspace.
+  search: { middlewares: [retainSearchParams(['ws'])] },
   component: WorkspaceLayout,
 })
 
@@ -182,7 +186,6 @@ function WorkspaceLayout() {
 
       {/* Mobile bottom navigation */}
       <MobileNav />
-      <Toaster />
     </div>
   )
 }

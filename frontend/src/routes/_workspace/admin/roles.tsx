@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
-import { useWorkspaces } from '../../../hooks/useWorkspaces'
+import { useActiveWorkspace } from '../../../hooks/useActiveWorkspace'
 import { apiFetch } from '../../../api/client'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { PeekPanel } from '../../../components/composites/PeekPanel'
@@ -13,6 +13,7 @@ import { Heading } from '../../../components/primitives/Heading'
 import { LoadingState } from '../../../components/LoadingState'
 import { EmptyState } from '../../../components/EmptyState'
 import { Shield, Plus, Trash2, Lock, Users } from 'lucide-react'
+import { keys } from '../../../hooks/keys'
 
 export const Route = createFileRoute('/_workspace/admin/roles')({
   component: AdminRolesPage,
@@ -37,14 +38,12 @@ function isSystemRole(name: string): boolean {
 
 /** Admin Roles — role cards with permission management, matching Stitch design. */
 function AdminRolesPage() {
-  const { data: wsData } = useWorkspaces()
-  const wsParam = new URLSearchParams(window.location.search).get('ws')
-  const wsId = wsParam || wsData?.workspaces?.[0]?.id || ''
+  const { workspaceId: wsId } = useActiveWorkspace()
   const qc = useQueryClient()
 
   // Fetch roles
   const { data, isLoading } = useQuery({
-    queryKey: ['admin', 'roles', wsId],
+    queryKey: keys.admin.roles(wsId),
     queryFn: () => apiFetch<{ roles: Role[] }>(`/workspaces/${wsId}/roles`),
     enabled: !!wsId,
   })
@@ -67,7 +66,7 @@ function AdminRolesPage() {
         body: JSON.stringify({ name }),
       }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['admin', 'roles', wsId] })
+      qc.invalidateQueries({ queryKey: keys.admin.roles(wsId) })
       setShowCreateModal(false)
       setNewRoleName('')
     },
@@ -83,7 +82,7 @@ function AdminRolesPage() {
     // Using existing deleteRole API
     apiFetch(`/workspaces/${wsId}/roles/${selectedRole.id}`, { method: 'DELETE' })
       .then(() => {
-        qc.invalidateQueries({ queryKey: ['admin', 'roles', wsId] })
+        qc.invalidateQueries({ queryKey: keys.admin.roles(wsId) })
         setSelectedRole(null)
         setShowDeleteConfirm(false)
       })
