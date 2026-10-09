@@ -1,0 +1,80 @@
+/* Tín hiệu tokens, mirrored from DESIGN.md. Mockup copy; the app's copy lives in frontend/src/index.css. */
+:root {
+  --color-sunk: oklch(94.6% 0.011 190);
+  --color-base: oklch(97.4% 0.007 190);
+  --color-raised: oklch(99.3% 0.003 190);
+  --color-overlay: oklch(99.6% 0.002 190);
+  --color-hover: oklch(93.4% 0.012 190);
+  --color-scrim: oklch(23% 0.02 200 / 0.32);
+  --color-ink: oklch(23% 0.02 200);
+  --color-ink-muted: oklch(46% 0.02 200);
+  --color-ink-subtle: oklch(62% 0.015 200);
+  --color-line: oklch(89.5% 0.01 195);
+  --color-accent: oklch(50% 0.1 180);
+  --color-accent-hover: oklch(45% 0.1 180);
+  --color-accent-wash: oklch(93% 0.035 180);
+  --color-on-accent: oklch(98.5% 0.005 180);
+  --color-on-person: oklch(98.5% 0.005 180);
+  --color-focus: oklch(55% 0.12 180);
+  --color-success: oklch(49% 0.11 150); --color-success-wash: oklch(94% 0.04 150);
+  --color-warning: oklch(50% 0.12 65);  --color-warning-wash: oklch(94.5% 0.05 75);
+  --color-danger: oklch(52% 0.17 25);   --color-danger-wash: oklch(94.5% 0.035 25);
+  --color-info: oklch(50% 0.1 240);     --color-info-wash: oklch(94% 0.03 240);
+  --color-person-1: oklch(52% 0.13 45);  --color-person-1-wash: oklch(93% 0.04 45);
+  --color-person-2: oklch(50% 0.1 95);   --color-person-2-wash: oklch(94% 0.045 95);
+  --color-person-3: oklch(50% 0.12 140); --color-person-3-wash: oklch(93.5% 0.04 140);
+  --color-person-4: oklch(50% 0.09 205); --color-person-4-wash: oklch(93.5% 0.03 205);
+  --color-person-5: oklch(50% 0.12 245); --color-person-5-wash: oklch(93.5% 0.035 245);
+  --color-person-6: oklch(51% 0.13 285); --color-person-6-wash: oklch(93.5% 0.035 285);
+  --color-person-7: oklch(51% 0.13 325); --color-person-7-wash: oklch(93.5% 0.035 325);
+  --color-person-8: oklch(53% 0.13 355); --color-person-8-wash: oklch(94% 0.035 355);
+  --shadow-overlay: 0 1px 2px oklch(23% 0.02 200 / 0.06), 0 8px 24px oklch(23% 0.02 200 / 0.1), 0 24px 48px oklch(23% 0.02 200 / 0.08);
+
+  --font-display: "Bricolage Grotesque", "Be Vietnam Pro", "Segoe UI", Arial, sans-serif;
+  --font-body: "Be Vietnam Pro", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+  --duration-press: 100ms; --duration-quick: 160ms; --duration-base: 220ms; --duration-layout: 280ms;
+  --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
+  --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --rt-total: 2400ms;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-sunk: oklch(15.5% 0.012 200); --color-base: oklch(18% 0.014 200); --color-raised: oklch(22.5% 0.016 200);
+    --color-overlay: oklch(26% 0.018 200); --color-hover: oklch(25% 0.016 200); --color-scrim: oklch(8% 0.01 200 / 0.6);
+    --color-ink: oklch(94% 0.008 190); --color-ink-muted: oklch(73% 0.016 195); --color-ink-subtle: oklch(58% 0.014 200);
+    --color-line: oklch(30% 0.014 200);
+    --color-accent: oklch(76% 0.11 178); --color-accent-hover: oklch(81% 0.1 178); --color-accent-wash: oklch(29% 0.05 180);
+    --color-on-accent: oklch(18% 0.014 200); --color-focus: oklch(78% 0.12 178);
+    --color-success: oklch(76% 0.12 150); --color-success-wash: oklch(28% 0.05 150);
+    --color-warning: oklch(80% 0.12 70);  --color-warning-wash: oklch(29% 0.05 70);
+    --color-danger: oklch(72% 0.15 25);   --color-danger-wash: oklch(29% 0.06 25);
+    --color-info: oklch(76% 0.1 240);     --color-info-wash: oklch(29% 0.05 240);
+    --color-person-1-wash: oklch(30% 0.06 45); --color-person-2-wash: oklch(30% 0.05 95);
+    --color-person-3-wash: oklch(30% 0.05 140); --color-person-4-wash: oklch(30% 0.045 205);
+    --color-person-5-wash: oklch(30% 0.06 245); --color-person-6-wash: oklch(30% 0.06 285);
+    --color-person-7-wash: oklch(30% 0.06 325); --color-person-8-wash: oklch(30% 0.06 355);
+    --shadow-overlay: 0 1px 2px oklch(5% 0.01 200 / 0.4), 0 8px 24px oklch(5% 0.01 200 / 0.45), 0 24px 48px oklch(5% 0.01 200 / 0.35);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --color-sunk: oklch(15.5% 0.012 200); --color-base: oklch(18% 0.014 200); --color-raised: oklch(22.5% 0.016 200);
+  --color-overlay: oklch(26% 0.018 200); --color-hover: oklch(25% 0.016 200); --color-scrim: oklch(8% 0.01 200 / 0.6);
+  --color-ink: oklch(94% 0.008 190); --color-ink-muted: oklch(73% 0.016 195); --color-ink-subtle: oklch(58% 0.014 200);
+  --color-line: oklch(30% 0.014 200);
+  --color-accent: oklch(76% 0.11 178); --color-accent-hover: oklch(81% 0.1 178); --color-accent-wash: oklch(29% 0.05 180);
+  --color-on-accent: oklch(18% 0.014 200); --color-focus: oklch(78% 0.12 178);
+  --color-success: oklch(76% 0.12 150); --color-success-wash: oklch(28% 0.05 150);
+  --color-warning: oklch(80% 0.12 70);  --color-warning-wash: oklch(29% 0.05 70);
+  --color-danger: oklch(72% 0.15 25);   --color-danger-wash: oklch(29% 0.06 25);
+  --color-info: oklch(76% 0.1 240);     --color-info-wash: oklch(29% 0.05 240);
+  --color-person-1-wash: oklch(30% 0.06 45); --color-person-2-wash: oklch(30% 0.05 95);
+  --color-person-3-wash: oklch(30% 0.05 140); --color-person-4-wash: oklch(30% 0.045 205);
+  --color-person-5-wash: oklch(30% 0.06 245); --color-person-6-wash: oklch(30% 0.06 285);
+  --color-person-7-wash: oklch(30% 0.06 325); --color-person-8-wash: oklch(30% 0.06 355);
+  --shadow-overlay: 0 1px 2px oklch(5% 0.01 200 / 0.4), 0 8px 24px oklch(5% 0.01 200 / 0.45), 0 24px 48px oklch(5% 0.01 200 / 0.35);
+  color-scheme: dark;
+}
