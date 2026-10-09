@@ -236,6 +236,12 @@ type ListAssetsFilter struct {
 	AssignedTo  string
 	Limit       int32
 	Offset      int32
+
+	// VisibleTypeIDs, when non-nil, restricts the result — rows and total — to
+	// assets of these types. An empty non-nil slice matches nothing. The gRPC
+	// layer sets it to the types the caller may read; the store itself makes
+	// no authorization decision.
+	VisibleTypeIDs []string
 }
 
 // ListAssets returns filtered assets with total count.
@@ -243,6 +249,12 @@ func (s *Store) ListAssets(ctx context.Context, f ListAssetsFilter) ([]*Asset, i
 	baseWhere := "WHERE a.workspace_id = $1 AND a.deleted = FALSE"
 	args := []any{f.WorkspaceID}
 	argIdx := 2
+
+	if f.VisibleTypeIDs != nil {
+		baseWhere += fmt.Sprintf(" AND a.type_id = ANY($%d)", argIdx)
+		args = append(args, f.VisibleTypeIDs)
+		argIdx++
+	}
 
 	if f.TypeID != "" {
 		baseWhere += fmt.Sprintf(" AND a.type_id = $%d", argIdx)
@@ -505,6 +517,18 @@ type ListRequestsFilter struct {
 	MineOnly    bool
 	Limit       int32
 	Offset      int32
+
+	// Visibility, when non-nil, restricts the result — rows and total — to
+	// requests the caller may see. The store makes no authorization decision;
+	// the gRPC layer fills this in.
+	Visibility *RequestVisibility
+}
+
+// RequestVisibility selects requests made by RequesterID, or of any type in
+// TypeIDs. Both empty matches nothing.
+type RequestVisibility struct {
+	RequesterID string
+	TypeIDs     []string
 }
 
 // ListRequests returns filtered requests.
@@ -512,6 +536,18 @@ func (s *Store) ListRequests(ctx context.Context, f ListRequestsFilter) ([]*Asse
 	baseWhere := "WHERE r.workspace_id = $1"
 	args := []any{f.WorkspaceID}
 	argIdx := 2
+
+	if v := f.Visibility; v != nil {
+		typeIDs := v.TypeIDs
+		if typeIDs == nil {
+			typeIDs = []string{}
+		}
+		// requester_id is NOT NULL and references users, so an empty
+		// RequesterID matches no row.
+		baseWhere += fmt.Sprintf(" AND (r.requester_id = $%d OR r.type_id = ANY($%d))", argIdx, argIdx+1)
+		args = append(args, v.RequesterID, typeIDs)
+		argIdx += 2
+	}
 
 	if f.MineOnly && f.UserID != "" {
 		baseWhere += fmt.Sprintf(" AND r.requester_id = $%d", argIdx)
