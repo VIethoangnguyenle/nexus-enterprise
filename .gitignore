@@ -55,3 +55,4 @@ Thumbs.db
 .claude/settings.local.json
 .claude/rules/
 .claude/worktrees/
+dump.rdb
