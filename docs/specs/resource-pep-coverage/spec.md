@@ -45,12 +45,16 @@ event's tenant when it carries one.
 
 | Operation | Op | Object |
 |---|---|---|
-| Revoke share | `share` | the shared item's node |
+| Revoke share | `share`, or being the share's creator | the shared item's node |
 | Update quota | `manage` | the workspace Mgmt OA |
 
 #### Scenario: Member revokes a share without the share op
 - **WHEN** a member holding `write` but not `share` revokes a share they did not create
 - **THEN** the request is denied and the share remains
+
+#### Scenario: Creator revokes their own share
+- **WHEN** the member who created a share revokes it, holding `write` but not `share`
+- **THEN** the share is revoked
 
 ### Requirement: Asset reads and type administration are guarded
 
