@@ -1,30 +1,34 @@
 package rest
 
 import (
+	"context"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 
+	"ngac-platform/pkg/httputil"
 	"ngac-platform/services/workspace/internal/domain"
 )
 
-// DepartmentService defines operations the admin handler needs.
+// DepartmentService defines operations the admin handler needs. Every call
+// takes the caller's NGAC user node ID, taken from verified JWT claims, and the
+// workspace from the route; authorization happens in the domain.
 type DepartmentService interface {
-	CreateDepartment(ctx domain.CreateDepartmentInput) (*domain.DepartmentResult, error)
-	ListDepartments(wsID string) ([]*domain.DepartmentResult, error)
-	UpdateDepartment(deptID, newName string) (*domain.DepartmentResult, error)
-	DeleteDepartment(deptID string) error
-	MoveDepartment(in domain.MoveDepartmentInput) (*domain.DepartmentResult, error)
-	UpdateMemberDepartment(wsID, userNGACNodeID, deptID string) error
+	CreateDepartment(ctx context.Context, callerNodeID string, in domain.CreateDepartmentInput) (*domain.DepartmentResult, error)
+	ListDepartments(ctx context.Context, callerNodeID, wsID string) ([]*domain.DepartmentResult, error)
+	UpdateDepartment(ctx context.Context, callerNodeID, wsID, deptID, newName string) (*domain.DepartmentResult, error)
+	DeleteDepartment(ctx context.Context, callerNodeID, wsID, deptID string) error
+	MoveDepartment(ctx context.Context, callerNodeID string, in domain.MoveDepartmentInput) (*domain.DepartmentResult, error)
+	UpdateMemberDepartment(ctx context.Context, callerNodeID, wsID, userNGACNodeID, deptID string) error
 }
 
 // AdminHandler serves admin organization endpoints.
 type AdminHandler struct {
-	domain *domain.Service
+	domain DepartmentService
 }
 
 // NewAdminHandler creates an admin REST handler.
-func NewAdminHandler(svc *domain.Service) *AdminHandler {
+func NewAdminHandler(svc DepartmentService) *AdminHandler {
 	return &AdminHandler{domain: svc}
 }
 
@@ -40,6 +44,10 @@ func (h *AdminHandler) RegisterAdminRoutes(api *echo.Group) {
 
 // CreateDepartment handles POST /api/workspaces/:id/departments.
 func (h *AdminHandler) CreateDepartment(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		Name     string `json:"name"`
 		ParentID string `json:"parent_id"`
@@ -48,13 +56,13 @@ func (h *AdminHandler) CreateDepartment(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	result, err := h.domain.CreateDepartment(c.Request().Context(), domain.CreateDepartmentInput{
+	result, err := h.domain.CreateDepartment(c.Request().Context(), claims.NGACNodeID, domain.CreateDepartmentInput{
 		WorkspaceID: c.Param("id"),
 		Name:        body.Name,
 		ParentID:    body.ParentID,
 	})
 	if err != nil {
-		return mapDomainError(err)
+		return httputil.MapDomainError(err)
 	}
 
 	return c.JSON(http.StatusCreated, map[string]any{
@@ -66,9 +74,13 @@ func (h *AdminHandler) CreateDepartment(c echo.Context) error {
 
 // ListDepartments handles GET /api/workspaces/:id/departments.
 func (h *AdminHandler) ListDepartments(c echo.Context) error {
-	results, err := h.domain.ListDepartments(c.Request().Context(), c.Param("id"))
+	claims, err := httputil.RequireClaims(c)
 	if err != nil {
-		return mapDomainError(err)
+		return err
+	}
+	results, err := h.domain.ListDepartments(c.Request().Context(), claims.NGACNodeID, c.Param("id"))
+	if err != nil {
+		return httputil.MapDomainError(err)
 	}
 
 	type deptJSON struct {
@@ -93,6 +105,10 @@ func (h *AdminHandler) ListDepartments(c echo.Context) error {
 
 // UpdateDepartment handles PUT /api/workspaces/:id/departments/:deptId.
 func (h *AdminHandler) UpdateDepartment(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		Name string `json:"name"`
 	}
@@ -100,9 +116,9 @@ func (h *AdminHandler) UpdateDepartment(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	result, err := h.domain.UpdateDepartment(c.Request().Context(), c.Param("deptId"), body.Name)
+	result, err := h.domain.UpdateDepartment(c.Request().Context(), claims.NGACNodeID, c.Param("id"), c.Param("deptId"), body.Name)
 	if err != nil {
-		return mapDomainError(err)
+		return httputil.MapDomainError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
@@ -114,14 +130,22 @@ func (h *AdminHandler) UpdateDepartment(c echo.Context) error {
 
 // DeleteDepartment handles DELETE /api/workspaces/:id/departments/:deptId.
 func (h *AdminHandler) DeleteDepartment(c echo.Context) error {
-	if err := h.domain.DeleteDepartment(c.Request().Context(), c.Param("deptId")); err != nil {
-		return mapDomainError(err)
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	if err := h.domain.DeleteDepartment(c.Request().Context(), claims.NGACNodeID, c.Param("id"), c.Param("deptId")); err != nil {
+		return httputil.MapDomainError(err)
 	}
 	return c.NoContent(http.StatusNoContent)
 }
 
 // MoveDepartment handles PUT /api/workspaces/:id/departments/:deptId/move.
 func (h *AdminHandler) MoveDepartment(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		NewParentID string `json:"new_parent_id"`
 	}
@@ -129,12 +153,13 @@ func (h *AdminHandler) MoveDepartment(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	result, err := h.domain.MoveDepartment(c.Request().Context(), domain.MoveDepartmentInput{
+	result, err := h.domain.MoveDepartment(c.Request().Context(), claims.NGACNodeID, domain.MoveDepartmentInput{
+		WorkspaceID: c.Param("id"),
 		DeptID:      c.Param("deptId"),
 		NewParentID: body.NewParentID,
 	})
 	if err != nil {
-		return mapDomainError(err)
+		return httputil.MapDomainError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
@@ -146,6 +171,10 @@ func (h *AdminHandler) MoveDepartment(c echo.Context) error {
 
 // UpdateMemberDepartment handles PUT /api/workspaces/:id/members/:nodeId/department.
 func (h *AdminHandler) UpdateMemberDepartment(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
 	var body struct {
 		DepartmentID string `json:"department_id"`
 	}
@@ -155,28 +184,13 @@ func (h *AdminHandler) UpdateMemberDepartment(c echo.Context) error {
 
 	if err := h.domain.UpdateMemberDepartment(
 		c.Request().Context(),
+		claims.NGACNodeID,
 		c.Param("id"),
 		c.Param("nodeId"),
 		body.DepartmentID,
 	); err != nil {
-		return mapDomainError(err)
+		return httputil.MapDomainError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-}
-
-// mapDomainError translates domain errors to HTTP errors.
-func mapDomainError(err error) *echo.HTTPError {
-	switch {
-	case domain.IsNotFound(err):
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
-	case domain.IsInvalidInput(err):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
-	case domain.IsAlreadyExists(err):
-		return echo.NewHTTPError(http.StatusConflict, err.Error())
-	case domain.IsAccessDenied(err):
-		return echo.NewHTTPError(http.StatusForbidden, err.Error())
-	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
 }

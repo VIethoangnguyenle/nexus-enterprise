@@ -14,23 +14,30 @@ import (
 )
 
 // WorkspaceDomainService defines operations the gRPC handler delegates to.
+//
+// Every operation other than workspace creation and listing takes the caller's
+// NGAC user node ID and is authorized in the domain. The caller comes from the
+// request's requester field where the wire message has one, and otherwise from
+// domain.RequesterFrom(ctx) — which the REST layer sets from verified JWT
+// claims. A request with neither is denied.
 type WorkspaceDomainService interface {
 	CreateWorkspace(ctx context.Context, in domain.CreateWorkspaceInput) (*domain.WorkspaceResult, error)
-	GetWorkspace(ctx context.Context, id string) (*domain.WorkspaceResult, error)
+	ViewWorkspace(ctx context.Context, callerNodeID, id string) (*domain.WorkspaceResult, error)
 	ListAccessibleWorkspaces(ctx context.Context, userNGACNodeID string) ([]*domain.WorkspaceResult, error)
-	InviteMember(ctx context.Context, wsID, targetNGACNodeID string) error
-	RemoveMember(ctx context.Context, wsID, targetNGACNodeID string) error
-	ListMembers(ctx context.Context, wsID string) ([]*domain.Member, error)
-	UpdateMemberRoles(ctx context.Context, wsID, targetNGACNodeID string, roleIDs []string) error
-	TransferOwnership(ctx context.Context, wsID, newOwnerNGACNodeID string) error
-	RemoveOwner(ctx context.Context, wsID, targetNGACNodeID string) error
-	CreateRole(ctx context.Context, wsID, roleName string) (*domain.Role, error)
-	ListRoles(ctx context.Context, wsID string) ([]*domain.Role, error)
-	DeleteRole(ctx context.Context, roleID string) error
-	CreateFolder(ctx context.Context, wsID, name, parentOaID string) (*domain.Folder, error)
-	ListFolders(ctx context.Context, wsID string) ([]*domain.Folder, error)
-	DeleteFolder(ctx context.Context, folderID string) error
-	CreatePermission(ctx context.Context, uaID, oaID string, ops []string) (*domain.Permission, error)
+	InviteMember(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error
+	RemoveMember(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error
+	ListMembers(ctx context.Context, callerNodeID, wsID string) ([]*domain.Member, error)
+	UpdateMemberRoles(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string, roleIDs []string) error
+	TransferOwnership(ctx context.Context, callerNodeID, wsID, newOwnerNGACNodeID string) error
+	RemoveOwner(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error
+	CreateRole(ctx context.Context, callerNodeID, wsID, roleName string) (*domain.Role, error)
+	ListRoles(ctx context.Context, callerNodeID, wsID string) ([]*domain.Role, error)
+	DeleteRole(ctx context.Context, callerNodeID, wsID, roleID string) error
+	CreateFolder(ctx context.Context, callerNodeID, wsID, name, parentOaID string) (*domain.Folder, error)
+	ListFolders(ctx context.Context, callerNodeID, wsID string) ([]*domain.Folder, error)
+	DeleteFolder(ctx context.Context, callerNodeID, wsID, folderID string) error
+	CreatePermission(ctx context.Context, callerNodeID, wsID, uaID, oaID string, ops []string) (*domain.Permission, error)
+	DeletePermission(ctx context.Context, callerNodeID, wsID, permissionID string) error
 }
 
 // WorkspaceServer implements the workspace gRPC service.
@@ -73,7 +80,7 @@ func (s *WorkspaceServer) ListWorkspaces(ctx context.Context, req *pb.ListWorksp
 
 // GetWorkspace retrieves a single workspace by ID.
 func (s *WorkspaceServer) GetWorkspace(ctx context.Context, req *pb.GetWorkspaceRequest) (*pb.Workspace, error) {
-	res, err := s.svc.GetWorkspace(ctx, req.WorkspaceId)
+	res, err := s.svc.ViewWorkspace(ctx, domain.RequesterFrom(ctx), req.WorkspaceId)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -82,7 +89,7 @@ func (s *WorkspaceServer) GetWorkspace(ctx context.Context, req *pb.GetWorkspace
 
 // InviteMember adds a user to a workspace.
 func (s *WorkspaceServer) InviteMember(ctx context.Context, req *pb.InviteMemberRequest) (*pb.Empty, error) {
-	if err := s.svc.InviteMember(ctx, req.WorkspaceId, req.TargetNgacNodeId); err != nil {
+	if err := s.svc.InviteMember(ctx, req.InviterNgacNodeId, req.WorkspaceId, req.TargetNgacNodeId); err != nil {
 		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
@@ -90,7 +97,7 @@ func (s *WorkspaceServer) InviteMember(ctx context.Context, req *pb.InviteMember
 
 // RemoveMember removes a user from a workspace.
 func (s *WorkspaceServer) RemoveMember(ctx context.Context, req *pb.RemoveMemberRequest) (*pb.Empty, error) {
-	if err := s.svc.RemoveMember(ctx, req.WorkspaceId, req.TargetNgacNodeId); err != nil {
+	if err := s.svc.RemoveMember(ctx, req.RequesterNgacNodeId, req.WorkspaceId, req.TargetNgacNodeId); err != nil {
 		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
@@ -98,7 +105,7 @@ func (s *WorkspaceServer) RemoveMember(ctx context.Context, req *pb.RemoveMember
 
 // ListMembers returns all members of a workspace.
 func (s *WorkspaceServer) ListMembers(ctx context.Context, req *pb.ListMembersRequest) (*pb.MemberList, error) {
-	members, err := s.svc.ListMembers(ctx, req.WorkspaceId)
+	members, err := s.svc.ListMembers(ctx, domain.RequesterFrom(ctx), req.WorkspaceId)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -111,7 +118,7 @@ func (s *WorkspaceServer) ListMembers(ctx context.Context, req *pb.ListMembersRe
 
 // UpdateMemberRoles reassigns a user's roles in a workspace.
 func (s *WorkspaceServer) UpdateMemberRoles(ctx context.Context, req *pb.UpdateMemberRolesRequest) (*pb.Empty, error) {
-	if err := s.svc.UpdateMemberRoles(ctx, req.WorkspaceId, req.TargetNgacNodeId, req.RoleIds); err != nil {
+	if err := s.svc.UpdateMemberRoles(ctx, req.RequesterNgacNodeId, req.WorkspaceId, req.TargetNgacNodeId, req.RoleIds); err != nil {
 		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
@@ -119,7 +126,7 @@ func (s *WorkspaceServer) UpdateMemberRoles(ctx context.Context, req *pb.UpdateM
 
 // TransferOwnership adds a new owner to the workspace.
 func (s *WorkspaceServer) TransferOwnership(ctx context.Context, req *pb.TransferOwnershipRequest) (*pb.Empty, error) {
-	if err := s.svc.TransferOwnership(ctx, req.WorkspaceId, req.NewOwnerNgacNodeId); err != nil {
+	if err := s.svc.TransferOwnership(ctx, req.CurrentOwnerNgacNodeId, req.WorkspaceId, req.NewOwnerNgacNodeId); err != nil {
 		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
@@ -128,13 +135,14 @@ func (s *WorkspaceServer) TransferOwnership(ctx context.Context, req *pb.Transfe
 // AddOwner is an alias for TransferOwnership.
 func (s *WorkspaceServer) AddOwner(ctx context.Context, req *pb.AddOwnerRequest) (*pb.Empty, error) {
 	return s.TransferOwnership(ctx, &pb.TransferOwnershipRequest{
-		WorkspaceId: req.WorkspaceId, NewOwnerNgacNodeId: req.TargetNgacNodeId,
+		WorkspaceId: req.WorkspaceId, CurrentOwnerNgacNodeId: req.RequesterNgacNodeId,
+		NewOwnerNgacNodeId: req.TargetNgacNodeId,
 	})
 }
 
 // RemoveOwner removes an owner from the workspace (fails if last owner).
 func (s *WorkspaceServer) RemoveOwner(ctx context.Context, req *pb.RemoveOwnerRequest) (*pb.Empty, error) {
-	if err := s.svc.RemoveOwner(ctx, req.WorkspaceId, req.TargetNgacNodeId); err != nil {
+	if err := s.svc.RemoveOwner(ctx, req.RequesterNgacNodeId, req.WorkspaceId, req.TargetNgacNodeId); err != nil {
 		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
@@ -145,7 +153,7 @@ func (s *WorkspaceServer) CreateRole(ctx context.Context, req *pb.CreateRoleRequ
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name required")
 	}
-	role, err := s.svc.CreateRole(ctx, req.WorkspaceId, req.Name)
+	role, err := s.svc.CreateRole(ctx, req.RequesterNgacNodeId, req.WorkspaceId, req.Name)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -154,7 +162,7 @@ func (s *WorkspaceServer) CreateRole(ctx context.Context, req *pb.CreateRoleRequ
 
 // ListRoles returns all roles in a workspace.
 func (s *WorkspaceServer) ListRoles(ctx context.Context, req *pb.ListRolesRequest) (*pb.RoleList, error) {
-	roles, err := s.svc.ListRoles(ctx, req.WorkspaceId)
+	roles, err := s.svc.ListRoles(ctx, domain.RequesterFrom(ctx), req.WorkspaceId)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -167,7 +175,7 @@ func (s *WorkspaceServer) ListRoles(ctx context.Context, req *pb.ListRolesReques
 
 // DeleteRole removes a role from the NGAC graph.
 func (s *WorkspaceServer) DeleteRole(ctx context.Context, req *pb.DeleteRoleRequest) (*pb.Empty, error) {
-	if err := s.svc.DeleteRole(ctx, req.RoleId); err != nil {
+	if err := s.svc.DeleteRole(ctx, req.RequesterNgacNodeId, req.WorkspaceId, req.RoleId); err != nil {
 		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
@@ -178,7 +186,7 @@ func (s *WorkspaceServer) CreateFolder(ctx context.Context, req *pb.CreateFolder
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "name required")
 	}
-	f, err := s.svc.CreateFolder(ctx, req.WorkspaceId, req.Name, req.ParentOaId)
+	f, err := s.svc.CreateFolder(ctx, req.RequesterNgacNodeId, req.WorkspaceId, req.Name, req.ParentOaId)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -187,7 +195,7 @@ func (s *WorkspaceServer) CreateFolder(ctx context.Context, req *pb.CreateFolder
 
 // ListFolders returns all folders in a workspace.
 func (s *WorkspaceServer) ListFolders(ctx context.Context, req *pb.ListFoldersRequest) (*pb.FolderList, error) {
-	folders, err := s.svc.ListFolders(ctx, req.WorkspaceId)
+	folders, err := s.svc.ListFolders(ctx, domain.RequesterFrom(ctx), req.WorkspaceId)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -200,7 +208,7 @@ func (s *WorkspaceServer) ListFolders(ctx context.Context, req *pb.ListFoldersRe
 
 // DeleteFolder removes a folder from the NGAC graph.
 func (s *WorkspaceServer) DeleteFolder(ctx context.Context, req *pb.DeleteFolderRequest) (*pb.Empty, error) {
-	if err := s.svc.DeleteFolder(ctx, req.FolderId); err != nil {
+	if err := s.svc.DeleteFolder(ctx, req.RequesterNgacNodeId, req.WorkspaceId, req.FolderId); err != nil {
 		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
@@ -208,7 +216,7 @@ func (s *WorkspaceServer) DeleteFolder(ctx context.Context, req *pb.DeleteFolder
 
 // CreatePermission creates an association (permission) between a UA and OA.
 func (s *WorkspaceServer) CreatePermission(ctx context.Context, req *pb.CreatePermissionRequest) (*pb.Permission, error) {
-	p, err := s.svc.CreatePermission(ctx, req.UaId, req.OaId, req.Operations)
+	p, err := s.svc.CreatePermission(ctx, req.RequesterNgacNodeId, req.WorkspaceId, req.UaId, req.OaId, req.Operations)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -220,8 +228,11 @@ func (s *WorkspaceServer) ListPermissions(ctx context.Context, req *pb.ListPermi
 	return &pb.PermissionList{}, nil
 }
 
-// DeletePermission is a placeholder (not yet implemented).
+// DeletePermission authorizes the caller; removal itself is not yet implemented.
 func (s *WorkspaceServer) DeletePermission(ctx context.Context, req *pb.DeletePermissionRequest) (*pb.Empty, error) {
+	if err := s.svc.DeletePermission(ctx, req.RequesterNgacNodeId, req.WorkspaceId, req.PermissionId); err != nil {
+		return nil, mapError(err)
+	}
 	return &pb.Empty{}, nil
 }
 
