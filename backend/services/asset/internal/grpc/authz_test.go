@@ -2,6 +2,7 @@ package grpc_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -21,6 +22,7 @@ import (
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/asset/internal/caller"
+	"ngac-platform/services/asset/internal/domain"
 	agrpc "ngac-platform/services/asset/internal/grpc"
 	"ngac-platform/services/asset/internal/store"
 )
@@ -711,6 +713,62 @@ func TestListTypes_AllowedWithReadOnAssetsOA(t *testing.T) {
 		ids = append(ids, at.Id)
 	}
 	assert.ElementsMatch(t, []string{f.typeA, f.typeB}, ids)
+}
+
+// ---------------------------------------------------------------------------
+// TransitionAsset — a transition whose history row cannot be written fails as
+// a whole: no state change, no event.
+// ---------------------------------------------------------------------------
+
+func (f *fixture) withLifecycleOnA(t *testing.T) {
+	t.Helper()
+	lifecycle, err := json.Marshal(domain.DefaultLifecycle())
+	require.NoError(t, err)
+	_, err = f.pool.Exec(context.Background(), `UPDATE asset_types SET lifecycle = $1 WHERE id = $2`, lifecycle, f.typeA)
+	require.NoError(t, err)
+	_, err = f.pool.Exec(context.Background(), `UPDATE assets SET ngac_node_id = $1 WHERE id = $2`, f.oaA, f.assetA)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		f.pool.Exec(context.Background(), `DELETE FROM asset_transitions WHERE asset_id = $1`, f.assetA)
+	})
+}
+
+func TestTransitionAsset_FailsWhenHistoryCannotBeRecorded(t *testing.T) {
+	f := newFixture(t)
+	f.withLifecycleOnA(t)
+	p := f.policy()
+	p.grant("n-approver", f.oaA, ngac.OpApprove)
+	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
+
+	_, err := srv.TransitionAsset(context.Background(), &pb.TransitionRequest{
+		AssetId: f.assetA, Action: "approve", UserNgacNodeId: "n-approver",
+		UserId: "no-such-user", // actor_id references users, so history cannot be written
+	})
+
+	require.Error(t, err)
+	var state string
+	require.NoError(t, f.pool.QueryRow(context.Background(),
+		`SELECT state FROM assets WHERE id = $1`, f.assetA).Scan(&state))
+	assert.Equal(t, "requested", state, "a transition with no audit record must not take effect")
+}
+
+func TestTransitionAsset_RecordsActor(t *testing.T) {
+	f := newFixture(t)
+	f.withLifecycleOnA(t)
+	p := f.policy()
+	p.grant("n-y", f.oaA, ngac.OpApprove)
+	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
+
+	a, err := srv.TransitionAsset(context.Background(), &pb.TransitionRequest{
+		AssetId: f.assetA, Action: "approve", UserNgacNodeId: "n-y", UserId: f.userY,
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "available", a.State)
+	history, err := f.st.GetAssetHistory(context.Background(), f.assetA)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.Equal(t, f.userY, history[0].ActorID)
 }
 
 // A workspace with no Assets OA (the state before its first type is created)

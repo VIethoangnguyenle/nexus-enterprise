@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,26 +41,64 @@ func setupStore(t *testing.T) *store.Store {
 	return store.New(pool)
 }
 
-// getTestWorkspaceID returns an existing workspace_id from DB for FK compliance.
-func getTestWorkspaceID(t *testing.T, pool *pgxpool.Pool) string {
+// testTenant is a user and a workspace owned by one test.
+//
+// Test packages run in parallel against one shared database, so a test must
+// never borrow a row it did not create: another package may delete it
+// mid-test (this used to surface as an assets_created_by_fkey violation), and
+// its own cleanup could delete rows another test is using. Each test gets its
+// own uniquely named user and workspace, created on first use and removed —
+// with everything this package hangs off them — when the test ends.
+type testTenant struct{ wsID, userID string }
+
+var tenants sync.Map // *testing.T -> *testTenant
+
+func tenantFor(t *testing.T, pool *pgxpool.Pool) *testTenant {
 	t.Helper()
-	var wsID string
-	err := pool.QueryRow(context.Background(), "SELECT id FROM workspaces LIMIT 1").Scan(&wsID)
-	if err != nil {
-		t.Skipf("no workspace in test DB: %v", err)
+	if v, ok := tenants.Load(t); ok {
+		return v.(*testTenant)
 	}
-	return wsID
+	sfx := uuid.New().String()
+	tt := &testTenant{wsID: "store-test-ws-" + sfx, userID: "store-test-user-" + sfx}
+	ctx := context.Background()
+	_, err := pool.Exec(ctx, `INSERT INTO users (id, username, password) VALUES ($1, $1, '')`, tt.userID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, tt.wsID, tt.userID)
+	require.NoError(t, err)
+	tenants.Store(t, tt)
+
+	t.Cleanup(func() {
+		tenants.Delete(t)
+		c := context.Background()
+		for _, st := range []struct {
+			q    string
+			args []any
+		}{
+			{`DELETE FROM asset_requests WHERE workspace_id = $1 OR requester_id = $2 OR approver_id = $2`, []any{tt.wsID, tt.userID}},
+			{`DELETE FROM asset_transitions WHERE actor_id = $1`, []any{tt.userID}},
+			{`DELETE FROM assets WHERE workspace_id = $1 OR created_by = $2 OR assigned_to = $2`, []any{tt.wsID, tt.userID}},
+			{`DELETE FROM asset_types WHERE workspace_id = $1`, []any{tt.wsID}},
+			{`DELETE FROM workspaces WHERE id = $1`, []any{tt.wsID}},
+			{`DELETE FROM users WHERE id = $1`, []any{tt.userID}},
+		} {
+			if _, err := pool.Exec(c, st.q, st.args...); err != nil {
+				t.Errorf("fixture cleanup %q: %v", st.q, err)
+			}
+		}
+	})
+	return tt
 }
 
-// getTestUserID returns an existing user ID from DB for FK compliance.
+// getTestWorkspaceID returns a workspace created for, and owned by, this test.
+func getTestWorkspaceID(t *testing.T, pool *pgxpool.Pool) string {
+	t.Helper()
+	return tenantFor(t, pool).wsID
+}
+
+// getTestUserID returns a user created for, and owned by, this test.
 func getTestUserID(t *testing.T, pool *pgxpool.Pool) string {
 	t.Helper()
-	var uid string
-	err := pool.QueryRow(context.Background(), "SELECT id FROM users LIMIT 1").Scan(&uid)
-	if err != nil {
-		t.Skipf("no user in test DB: %v", err)
-	}
-	return uid
+	return tenantFor(t, pool).userID
 }
 
 // getTestNGACNodeID returns an existing NGAC OA node for FK compliance.
@@ -682,6 +722,56 @@ func TestGetAssetHistory_Empty(t *testing.T) {
 	asset := createTestAsset(t, s, at.ID, wsID, userID)
 
 	history, err := s.GetAssetHistory(context.Background(), asset.ID)
+	require.NoError(t, err)
+	assert.Empty(t, history)
+}
+
+// ---------------------------------------------------------------------------
+// ApplyTransition — the state change and its history row commit together.
+// ---------------------------------------------------------------------------
+
+func assetState(t *testing.T, s *store.Store, assetID string) string {
+	t.Helper()
+	var st string
+	require.NoError(t, s.DB().QueryRow(context.Background(),
+		`SELECT state FROM assets WHERE id = $1`, assetID).Scan(&st))
+	return st
+}
+
+func TestApplyTransition_WritesStateAndHistory(t *testing.T) {
+	s := setupStore(t)
+	wsID := getTestWorkspaceID(t, s.DB())
+	userID := getTestUserID(t, s.DB())
+	at := createTestType(t, s, wsID)
+	a := createTestAsset(t, s, at.ID, wsID, userID)
+
+	err := s.ApplyTransition(context.Background(), &store.TransitionRecord{
+		AssetID: a.ID, FromState: "requested", ToState: "available", Action: "approve", ActorID: userID,
+	}, nil)
+
+	require.NoError(t, err)
+	assert.Equal(t, "available", assetState(t, s, a.ID))
+	history, err := s.GetAssetHistory(context.Background(), a.ID)
+	require.NoError(t, err)
+	require.Len(t, history, 1)
+	assert.Equal(t, userID, history[0].ActorID)
+}
+
+func TestApplyTransition_HistoryFailureRollsBackState(t *testing.T) {
+	s := setupStore(t)
+	wsID := getTestWorkspaceID(t, s.DB())
+	userID := getTestUserID(t, s.DB())
+	at := createTestType(t, s, wsID)
+	a := createTestAsset(t, s, at.ID, wsID, userID)
+
+	// actor_id references users: an unknown actor makes the history insert fail.
+	err := s.ApplyTransition(context.Background(), &store.TransitionRecord{
+		AssetID: a.ID, FromState: "requested", ToState: "available", Action: "approve", ActorID: "no-such-user",
+	}, nil)
+
+	require.Error(t, err)
+	assert.Equal(t, "requested", assetState(t, s, a.ID), "a transition with no audit record must not take effect")
+	history, err := s.GetAssetHistory(context.Background(), a.ID)
 	require.NoError(t, err)
 	assert.Empty(t, history)
 }

@@ -4,9 +4,11 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -154,24 +156,70 @@ func setupServerDeny(t *testing.T) (*grpcserver.DriveServer, *pgxpool.Pool) {
 	return srv, pool
 }
 
-func getTestWorkspaceID(t *testing.T, pool *pgxpool.Pool) string {
+// testTenant is a user and a workspace owned by one test.
+//
+// Test packages run in parallel against one shared database, so a test must
+// never borrow a row it did not create: another package may delete it
+// mid-test, and this package's writes (drive items, quotas, channels) would
+// land in someone else's workspace. Each test gets its own uniquely named user
+// and workspace, created on first use and removed — with everything this
+// package hangs off them — when the test ends.
+type testTenant struct{ wsID, userID string }
+
+var tenants sync.Map // *testing.T -> *testTenant
+
+func tenantFor(t *testing.T) *testTenant {
 	t.Helper()
-	var wsID string
-	err := pool.QueryRow(context.Background(), "SELECT id FROM workspaces LIMIT 1").Scan(&wsID)
-	if err != nil {
-		t.Skipf("no workspace in test DB: %v", err)
+	if v, ok := tenants.Load(t); ok {
+		return v.(*testTenant)
 	}
-	return wsID
+	ctx := context.Background()
+	// A pool of its own, so cleanup does not depend on which server's pool
+	// happened to be open when the tenant was first needed.
+	pool, err := pgxpool.New(ctx, testDBURL())
+	require.NoError(t, err)
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		t.Skipf("test DB not available: %v", err)
+	}
+	sfx := uuid.New().String()
+	tt := &testTenant{wsID: "drive-test-ws-" + sfx, userID: "drive-test-user-" + sfx}
+	_, err = pool.Exec(ctx, `INSERT INTO users (id, username, password) VALUES ($1, $1, '')`, tt.userID)
+	require.NoError(t, err)
+	_, err = pool.Exec(ctx, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, tt.wsID, tt.userID)
+	require.NoError(t, err)
+	tenants.Store(t, tt)
+
+	t.Cleanup(func() {
+		tenants.Delete(t)
+		c := context.Background()
+		for _, st := range []struct{ q, arg string }{
+			// drive_shares and child items cascade from drive_items.
+			{`DELETE FROM drive_items WHERE workspace_id = $1`, tt.wsID},
+			{`DELETE FROM drive_quotas WHERE workspace_id = $1`, tt.wsID},
+			{`DELETE FROM channels WHERE workspace_id = $1`, tt.wsID},
+			{`DELETE FROM workspaces WHERE id = $1`, tt.wsID},
+			{`DELETE FROM users WHERE id = $1`, tt.userID},
+		} {
+			if _, err := pool.Exec(c, st.q, st.arg); err != nil {
+				t.Errorf("fixture cleanup %q: %v", st.q, err)
+			}
+		}
+		pool.Close()
+	})
+	return tt
 }
 
-func getTestUserID(t *testing.T, pool *pgxpool.Pool) string {
+// getTestWorkspaceID returns a workspace created for, and owned by, this test.
+func getTestWorkspaceID(t *testing.T, _ *pgxpool.Pool) string {
 	t.Helper()
-	var uid string
-	err := pool.QueryRow(context.Background(), "SELECT id FROM users LIMIT 1").Scan(&uid)
-	if err != nil {
-		t.Skipf("no user in test DB: %v", err)
-	}
-	return uid
+	return tenantFor(t).wsID
+}
+
+// getTestUserID returns a user created for, and owned by, this test.
+func getTestUserID(t *testing.T, _ *pgxpool.Pool) string {
+	t.Helper()
+	return tenantFor(t).userID
 }
 
 func cleanDriveItems(t *testing.T, pool *pgxpool.Pool, ids ...string) {

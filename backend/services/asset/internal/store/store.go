@@ -392,6 +392,48 @@ func (s *Store) ClearAssignment(ctx context.Context, assetID string) error {
 // ============================================
 
 // InsertTransition records a lifecycle state change.
+// ApplyTransition changes an asset's state and records the transition in its
+// history, in one database transaction. If either write fails neither takes
+// effect: a state change with no history row would be an unaudited change, and
+// the history is how the UI says who did what and when.
+//
+// assignedTo, when non-nil, also sets the asset's assignee.
+func (s *Store) ApplyTransition(ctx context.Context, tr *TransitionRecord, assignedTo *string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin transition: %w", err)
+	}
+	defer tx.Rollback(ctx) // no-op after Commit
+
+	if assignedTo != nil {
+		_, err = tx.Exec(ctx,
+			`UPDATE assets SET state = $1, assigned_to = $2, updated_at = NOW() WHERE id = $3`,
+			tr.ToState, *assignedTo, tr.AssetID)
+	} else {
+		_, err = tx.Exec(ctx,
+			`UPDATE assets SET state = $1, updated_at = NOW() WHERE id = $2`,
+			tr.ToState, tr.AssetID)
+	}
+	if err != nil {
+		return fmt.Errorf("updating asset state: %w", err)
+	}
+
+	tr.ID = uuid.New().String()
+	tr.CreatedAt = time.Now()
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO asset_transitions (id, asset_id, from_state, to_state, action, actor_id, comment, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		tr.ID, tr.AssetID, tr.FromState, tr.ToState, tr.Action, tr.ActorID, tr.Comment, tr.CreatedAt,
+	); err != nil {
+		return fmt.Errorf("inserting transition: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit transition: %w", err)
+	}
+	return nil
+}
+
 func (s *Store) InsertTransition(ctx context.Context, tr *TransitionRecord) error {
 	tr.ID = uuid.New().String()
 	tr.CreatedAt = time.Now()
