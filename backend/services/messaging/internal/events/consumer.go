@@ -52,23 +52,43 @@ type NotificationCreator interface {
 	CreateNotification(ctx context.Context, userID, notifType, title, body, entityType, entityID string) error
 }
 
+// ApprovalNotice is an approval status change addressed to specific people.
+//
+// RecipientNodeIDs are NGAC user node IDs. The notice is delivered to the
+// WebSocket sessions of those users only; an empty list reaches nobody. When
+// TenantID is set it narrows delivery further to sessions in that tenant.
+type ApprovalNotice struct {
+	RequestID        string
+	Status           string
+	Action           string
+	ActorNodeID      string
+	TemplateName     string
+	TenantID         string
+	RecipientNodeIDs []string
+}
+
 // ApprovalBroadcaster defines the interface for broadcasting approval events via WebSocket.
 type ApprovalBroadcaster interface {
-	BroadcastApprovalEvent(requestID, status, action, actorNodeID, templateName string)
+	BroadcastApprovalEvent(n ApprovalNotice)
 }
 
 // ApprovalEvent matches the event structure from approval service.
+//
+// TenantID is not published by the approval producer yet; it is read here so
+// that delivery narrows to the tenant as soon as the producer starts sending it.
 type ApprovalEvent struct {
-	RequestID    string `json:"request_id"`
-	TemplateName string `json:"template_name"`
-	EntityType   string `json:"entity_type"`
-	Status       string `json:"status"`
-	Action       string `json:"action"`
-	ActorNodeID  string `json:"actor_node_id"`
-	CreatedBy    string `json:"created_by"`
-	ScopeOaID    string `json:"scope_oa_id"`
-	Comment      string `json:"comment"`
-	Timestamp    int64  `json:"timestamp"`
+	RequestID       string   `json:"request_id"`
+	TemplateName    string   `json:"template_name"`
+	EntityType      string   `json:"entity_type"`
+	Status          string   `json:"status"`
+	Action          string   `json:"action"`
+	ActorNodeID     string   `json:"actor_node_id"`
+	CreatedBy       string   `json:"created_by"`
+	AssigneeNodeIDs []string `json:"assignee_node_ids"`
+	ScopeOaID       string   `json:"scope_oa_id"`
+	TenantID        string   `json:"tenant_id"`
+	Comment         string   `json:"comment"`
+	Timestamp       int64    `json:"timestamp"`
 }
 
 // Consumer listens to Kafka topics and creates notifications from asset and approval events.
@@ -249,10 +269,33 @@ func (c *Consumer) handleApprovalEvent(ctx context.Context, data []byte) {
 		}
 	}
 
-	// 2. Broadcast WS event for real-time cache invalidation on all clients
-	if c.broadcast != nil {
-		c.broadcast.BroadcastApprovalEvent(
-			evt.RequestID, evt.Status, evt.Action, evt.ActorNodeID, evt.TemplateName,
-		)
+	// 2. Push a WS event for real-time cache invalidation — to the people the
+	// event names, not to every connected session. The event carries no tenant
+	// today, so the participants it names are the only safe audience.
+	if c.broadcast == nil {
+		return
 	}
+	recipients := approvalRecipients(evt)
+	if len(recipients) == 0 {
+		return
+	}
+	c.broadcast.BroadcastApprovalEvent(ApprovalNotice{
+		RequestID: evt.RequestID, Status: evt.Status, Action: evt.Action,
+		ActorNodeID: evt.ActorNodeID, TemplateName: evt.TemplateName,
+		TenantID: evt.TenantID, RecipientNodeIDs: recipients,
+	})
+}
+
+// approvalRecipients lists, without duplicates or blanks, the user nodes an
+// approval event names: the actor, the requester and any assignees.
+func approvalRecipients(evt ApprovalEvent) []string {
+	seen := make(map[string]bool, 2+len(evt.AssigneeNodeIDs))
+	var out []string
+	for _, id := range append([]string{evt.ActorNodeID, evt.CreatedBy}, evt.AssigneeNodeIDs...) {
+		if id != "" && !seen[id] {
+			seen[id] = true
+			out = append(out, id)
+		}
+	}
+	return out
 }
