@@ -70,7 +70,8 @@ for f in backend/ngac/ngac_ops.go \
          backend/services/policy/internal/ngac/pdp_decision_engine.go \
          frontend/vite.config.js \
          data/init.sql \
-         .stitch/DESIGN.md \
+         DESIGN.md \
+         design/mockups/core-screens.html \
          scripts/agentkit-setup.sh \
          .claude/settings.json; do
   [ -e "$f" ] || MISSING="$MISSING $f"

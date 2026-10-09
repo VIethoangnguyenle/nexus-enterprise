@@ -1,7 +1,7 @@
 ---
 title: "Project-wide refactor — UI and logic"
 description: "Redesign the UI and its motion from scratch via ak:brainstorm, make every screen realtime over WebSocket, and refactor the logic underneath, closing the live authorization gaps first."
-status: pending
+status: in-progress
 priority: P1
 effort: 22-30d
 issue:
@@ -23,8 +23,8 @@ mỗi phase (phase 06 thì một PR mỗi nhóm màn).
 Ưu tiên theo yêu cầu người dùng:
 
 1. **UI đẹp, gồm cả animation** → [phase 06](phase-06-ui-redesign-and-motion.md), trọng tâm của
-   plan. Một bộ UI hoàn toàn mới qua `ak:brainstorm`; 3 hướng đã có trong
-   [brainstorm](reports/brainstorm-261009-0457-new-ui-direction.html), chờ chọn.
+   plan. Một bộ UI hoàn toàn mới qua `ak:brainstorm`: hướng **Tín hiệu** đã chọn,
+   `DESIGN.md` đã viết, mockup màn cốt lõi ở `design/mockups/core-screens.html` chờ duyệt.
 2. **Realtime qua WebSocket** cho mọi màn → [phase 05](phase-05-realtime-websocket.md).
 3. Logic: lớp dữ liệu frontend, NGAC, backend layering, test.
 
@@ -51,7 +51,7 @@ Audit cũng tìm ra lỗ hổng phân quyền **có thật, đang chạy**. Chú
 | 03 | [PDP correctness and freshness](phase-03-pdp-correctness-and-freshness.md) | P0 | 2-3d | 01 | pending |
 | 04 | [Frontend data layer](phase-04-frontend-data-layer.md) | P1 | 2-3d | 01 | pending |
 | 05 | [Realtime over WebSocket](phase-05-realtime-websocket.md) | P1 | 3-4d | 02, 04 | pending |
-| 06 | [UI redesign and motion](phase-06-ui-redesign-and-motion.md) ★ | P1 | 6-8d | 04 (code); design starts now | pending |
+| 06 | [UI redesign and motion](phase-06-ui-redesign-and-motion.md) ★ | P1 | 6-8d | 04 (code); design starts now | in-progress |
 | 07 | [NGAC model conformance](phase-07-ngac-model-conformance.md) | P2 | 2-3d | 02, 03 | pending |
 | 08 | [Backend shared packages and layering](phase-08-backend-shared-packages-and-layering.md) | P2 | 3-4d | 02 | pending |
 | 09 | [Tests, dead code, large files](phase-09-tests-dead-code-and-splits.md) | P3 | 1-2d | 04, 08 | pending |
@@ -108,13 +108,12 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
 
 1. **Workspace authz (phase 02):** đề xuất `invite` cho invite/remove member, `manage` cho
    permission/role/folder/department.
-2. **Thư viện animation (phase 06):** thêm `motion` (Framer Motion, ~30–40KB gz) cho exit/layout
-   animation, hay chỉ CSS + View Transitions API (nhẹ, nhưng exit animation khó hơn)? Đề xuất: `motion`.
+2. ~~Thư viện animation~~ **Đã chốt 2026-10-09:** dùng `motion` cho exit/layout animation, CSS cho phần còn lại.
 3. **Asset O nodes (phase 07):** chuyển sang check trên type OA (đề xuất) hay giữ O node và ghi
    ngoại lệ vào spec?
 4. **Shard manager (phase 08):** đề xuất xoá (368 dòng chưa từng chạy production), thêm lại khi có số đo.
 5. **Assets shell (phase 06):** gộp `/assets` vào layout `_workspace` (cần mockup mới cho
    nav) hay giữ layout riêng nhưng dùng chung guard/WebSocket/logout?
-6. **Hướng UI (phase 06):** chọn A Sổ cái, B Tín hiệu hay C Ca trực trong
-   [brainstorm](reports/brainstorm-261009-0457-new-ui-direction.html)? Đề xuất: B, mượn bảng của A.
+6. ~~Hướng UI~~ **Đã chốt 2026-10-09:** B Tín hiệu, mượn bảng kẻ mảnh của A, light + dark ngay
+   từ đầu. Nguồn thiết kế: `DESIGN.md` + `design/mockups/`.
 7. Phase 02/03 có tách ra làm ngay như hotfix trước khi duyệt phần còn lại?

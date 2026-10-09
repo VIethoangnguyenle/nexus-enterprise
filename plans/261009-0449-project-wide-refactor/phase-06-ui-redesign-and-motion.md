@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "UI redesign and motion"
-status: pending
+status: in-progress
 priority: P1
 effort: 6-8d
 dependencies: [4]
@@ -118,8 +118,10 @@ Theo mức dùng và mức lệch: (1) shell + sidebar + nav, (2) chat, (3) driv
   create spec layout cho assets/admin nếu thêm màn
 
 ## Implementation steps
-1. Người dùng chọn hướng (brainstorm). Cập nhật CLAUDE.md §3 về nguồn thiết kế.
-2. `DESIGN.md` mới + mockup từng nhóm màn → người dùng duyệt.
+1. [x] Người dùng chọn hướng B Tín hiệu (2026-10-09). CLAUDE.md §3 trỏ sang `DESIGN.md`; `.stitch/` lưu trữ.
+2. [~] `DESIGN.md` mới (xong) + mockup: màn cốt lõi (Tin nhắn, Tài liệu, Phê duyệt, trạng thái,
+   di động) ở `design/mockups/core-screens.html` chờ duyệt; còn Tài sản, Quản trị, Danh bạ,
+   Tài liệu văn bản, Cài đặt, Auth.
 3. Nền tảng: tokens bổ sung, `lib/motion`, `lib/format`, primitive còn thiếu, lint siết (ở mức warn
    trong lúc chuyển, khoá error khi xong).
 4. Từng nhóm màn theo thứ tự trên, mỗi nhóm một PR: code theo mockup → test vitest (không UUID,

@@ -57,8 +57,9 @@ Only what is not derivable in ten seconds:
 - **Frontend state split**: TanStack Query owns server state, Zustand owns client state.
   `websocket.store.ts` is the deliberate exception. `routeTree.gen.ts` and `src/generated/` are
   generated — never hand-edit.
-- **Design source of truth is Stitch** (`.stitch/DESIGN.md`, `.stitch/WORKFLOW.md`). UI is
-  designed there first; code renders that design. Do not design in code.
+- **Design source of truth is `DESIGN.md`** (direction "Tín hiệu", chosen 2026-10-09) plus the
+  approved mockups in `design/mockups/`. UI is designed there first; code renders that design.
+  Do not design in code. `.stitch/` is archived history, not a source.
 
 ### NGAC model — the parts that are counter-intuitive
 
