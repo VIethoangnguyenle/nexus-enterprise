@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Avatar } from '../primitives'
+import { displayName, EMPTY_DIRECTORY, normalize, type PeopleDirectory } from '../../lib/people'
 
 interface MentionUser {
   user_id: string
@@ -9,27 +10,29 @@ interface MentionUser {
 
 interface MentionDropdownProps {
   members: MentionUser[]
+  /** Resolves display names; the inserted mention is still @username. */
+  people?: PeopleDirectory
   query: string
   onSelect: (member: MentionUser) => void
   onClose: () => void
-  position?: { top: number; left: number }
 }
 
-/** Floating @mention autocomplete dropdown for ChatEditor.
- *  Shows filtered channel members matching the typed text after @.
- *  Design tokens: bg-surface-container-lowest border-outline-variant rounded-lg shadow-lg */
-export function MentionDropdown({ members, query, onSelect, onClose, position }: MentionDropdownProps) {
+/**
+ * @mention autocomplete for the composer: channel members by display name,
+ * keyboard driven (↑ ↓ Enter, Esc closes).
+ */
+export function MentionDropdown({ members, people = EMPTY_DIRECTORY, query, onSelect, onClose }: MentionDropdownProps) {
   const [selectedIndex, setSelectedIndex] = useState(0)
   const ref = useRef<HTMLDivElement>(null)
 
-  const filtered = members.filter((m) =>
-    m.username.toLowerCase().includes(query.toLowerCase()),
-  ).slice(0, 8)
+  const q = normalize(query)
+  const filtered = members
+    .map((m) => ({ m, name: displayName(people, m.user_id, m.username) }))
+    .filter(({ m, name }) => normalize(m.username).includes(q) || normalize(name).includes(q))
+    .slice(0, 8)
 
-  // Reset selection when query changes
   useEffect(() => { setSelectedIndex(0) }, [query])
 
-  // Keyboard navigation
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown') {
@@ -39,10 +42,14 @@ export function MentionDropdown({ members, query, onSelect, onClose, position }:
         e.preventDefault()
         setSelectedIndex((i) => Math.max(i - 1, 0))
       } else if (e.key === 'Enter') {
-        e.preventDefault()
-        if (filtered[selectedIndex]) onSelect(filtered[selectedIndex])
+        const pick = filtered[selectedIndex]
+        if (pick) {
+          e.preventDefault()
+          onSelect(pick.m)
+        }
       } else if (e.key === 'Escape') {
         e.preventDefault()
+        e.stopPropagation()
         onClose()
       }
     }
@@ -50,7 +57,6 @@ export function MentionDropdown({ members, query, onSelect, onClose, position }:
     return () => document.removeEventListener('keydown', handler, true)
   }, [filtered, selectedIndex, onSelect, onClose])
 
-  // Click outside to close
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose()
@@ -59,46 +65,35 @@ export function MentionDropdown({ members, query, onSelect, onClose, position }:
     return () => document.removeEventListener('mousedown', handler)
   }, [onClose])
 
-  if (filtered.length === 0) {
-    return (
-      <div
-        ref={ref}
-        className="absolute z-50 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg
-          py-2 px-3 min-w-50"
-        style={position ? { bottom: position.top, left: position.left } : { bottom: '100%', left: 0 }}
-      >
-        <div className="text-xs text-on-surface-variant">No members found</div>
-      </div>
-    )
-  }
-
   return (
     <div
       ref={ref}
-      className="absolute z-50 bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg
-        py-1 min-w-50 max-h-50 overflow-y-auto"
-      style={position ? { bottom: position.top, left: position.left } : { bottom: '100%', left: 0 }}
+      role="listbox"
+      aria-label="Nhắc tới"
+      className="min-w-60 max-h-60 overflow-y-auto p-1 rounded-surface bg-overlay shadow-overlay animate-fade-in"
     >
-      {filtered.map((m, i) => (
-        /* eslint-disable-next-line no-restricted-syntax -- Hàng autocomplete điều hướng bằng
-           phím mũi tên: trạng thái nổi bật đến từ chỉ số bàn phím (selectedIndex), không chỉ
-           hover. Button nướng sẵn justify-center và không có w-full/justify-start để một hàng
-           Avatar + nhãn tràn hết chiều ngang — thêm className để lấn cũng gặp đúng bẫy đặc hiệu
-           đã ghi trong Button.tsx. NavRow là điều hướng sidebar (subItem có pl-9 thụt lề, không
-           hợp một hàng phẳng). Không cái nào khớp một hàng kết quả chọn được bằng bàn phím. */
-        <button
-          key={m.user_id || m.ngac_node_id}
-          onClick={() => onSelect(m)}
-          className={`w-full flex items-center gap-2 px-3 py-1.5 text-left border-none cursor-pointer
-            transition-colors text-sm
-            ${i === selectedIndex
-              ? 'bg-surface-container text-on-surface'
-              : 'bg-transparent text-on-surface hover:bg-surface-container/50'}`}
-        >
-          <Avatar name={m.username || '?'} size="sm" />
-          <span className="truncate">{m.username}</span>
-        </button>
-      ))}
+      {filtered.length === 0 ? (
+        <div className="px-2.5 py-2 text-sm text-ink-muted">Không có thành viên nào khớp.</div>
+      ) : (
+        filtered.map(({ m, name }, i) => (
+          <div
+            key={m.ngac_node_id || m.user_id || m.username}
+            role="option"
+            aria-selected={i === selectedIndex}
+            onMouseDown={(e) => {
+              e.preventDefault()
+              onSelect(m)
+            }}
+            onMouseEnter={() => setSelectedIndex(i)}
+            className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-md cursor-pointer text-sm
+              ${i === selectedIndex ? 'bg-hover' : ''}`}
+          >
+            <Avatar name={name} hueKey={m.user_id || m.username} size={24} />
+            <span className="truncate text-ink">{name}</span>
+            <span className="ml-auto text-xs text-ink-muted">@{m.username}</span>
+          </div>
+        ))
+      )}
     </div>
   )
 }

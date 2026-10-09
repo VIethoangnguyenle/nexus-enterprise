@@ -1,6 +1,6 @@
 import { Link } from '@tanstack/react-router'
 import { useUiStore } from '../../stores/ui.store'
-import { ChatList } from './ChatList'
+import { ChatNavigator } from '../spaces/ChatNavigator'
 import { Settings as SettingsIcon, LayoutDashboard, ClipboardList, Tag, FileEdit } from 'lucide-react'
 import { Heading } from '../primitives'
 
@@ -17,10 +17,18 @@ export function ListPanel({ workspaceId }: ListPanelProps) {
     return null
   }
 
+  /* Tin nhắn: the Google-Chat navigator sits on the page tone, no divider (DESIGN.md §4). */
+  if (activeModule === 'messaging') {
+    return (
+      <div className="flex-shrink-0 bg-base flex flex-col overflow-hidden h-full">
+        <ChatNavigator />
+      </div>
+    )
+  }
+
   return (
     <div className="flex-shrink-0 bg-surface-bright border-r border-outline-variant/30
       flex flex-col overflow-hidden h-full">
-      {activeModule === 'messaging' && <ChatList workspaceId={workspaceId} />}
       {activeModule === 'documents' && <DocumentList workspaceId={workspaceId} />}
       {activeModule === 'assets' && <AssetNav />}
       {activeModule === 'settings' && <SettingsNav />}

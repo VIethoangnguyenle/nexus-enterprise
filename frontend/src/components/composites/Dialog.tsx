@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useMotionPresets } from '../../lib/motion'
+import { Heading } from '../primitives'
 
 interface DialogProps {
   open: boolean
@@ -76,7 +77,7 @@ export function Dialog({ open, onClose, title, children, footer, initialFocusRef
 
   const body = (
     <>
-      <h2 id={titleId} className="text-lg font-display font-bold text-ink">{title}</h2>
+      <Heading as="h2" look="panel" id={titleId}>{title}</Heading>
       {children}
       {footer && <div className="flex justify-end gap-2">{footer}</div>}
     </>
