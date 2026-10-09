@@ -46,6 +46,7 @@ Verified against the codebase on 2026-07-31.
 | `tenant-ngac-init` | Matches code |
 | `tenant-identity` | Matches code |
 | `tenant-auth-flow` | Matches code |
+| `workspace-admin-authorization` | Matches code |
 
 **Drive**
 
