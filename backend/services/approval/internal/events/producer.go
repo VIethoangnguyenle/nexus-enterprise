@@ -25,8 +25,11 @@ type ApprovalEventPayload struct {
 	CreatedBy       string   `json:"created_by"`
 	AssigneeNodeIDs []string `json:"assignee_node_ids"`
 	ScopeOaID       string   `json:"scope_oa_id"`
-	Comment         string   `json:"comment,omitempty"`
-	Timestamp       int64    `json:"timestamp"`
+	// TenantID is the tenant the acting request was made in (from its JWT).
+	// Consumers use it to keep the event inside that tenant.
+	TenantID  string `json:"tenant_id,omitempty"`
+	Comment   string `json:"comment,omitempty"`
+	Timestamp int64  `json:"timestamp"`
 }
 
 // Producer publishes approval lifecycle events to Kafka.

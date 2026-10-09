@@ -115,6 +115,8 @@ func main() {
 	// service: a WebSocket subscription is a read of the channel.
 	hub := mgrpc.NewHub(rdb, domainSvc)
 	defer hub.Close()
+	// Removing a channel member also ends their live subscriptions.
+	domainSvc.SetSubscriptionRevoker(hub)
 
 	// Start WebSocket server with graceful shutdown support
 	wsMux := http.NewServeMux()

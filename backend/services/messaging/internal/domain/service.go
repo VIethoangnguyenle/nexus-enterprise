@@ -27,6 +27,20 @@ type Service struct {
 	policyWrite policypb.PolicyWriteServiceClient
 	authClient  authpb.AuthServiceClient
 	driveClient drivepb.DriveServiceClient
+	revoker     SubscriptionRevoker
+}
+
+// SubscriptionRevoker ends live (WebSocket) subscriptions a user holds on a
+// channel. The hub implements it.
+type SubscriptionRevoker interface {
+	RevokeChannelSubscriptions(channelID, userNodeID string)
+}
+
+// SetSubscriptionRevoker wires the live-subscription revoker. It is a setter
+// rather than a constructor argument because the hub itself depends on this
+// service to authorize subscriptions.
+func (s *Service) SetSubscriptionRevoker(r SubscriptionRevoker) {
+	s.revoker = r
 }
 
 // NewService creates a messaging domain service.
@@ -558,6 +572,12 @@ func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, 
 		ChildId: targetNodeID, ParentId: ch.NGACUaID,
 	}); err != nil {
 		return fmt.Errorf("remove member: %w", err)
+	}
+	// Losing membership must also end the live feed. The subscription was
+	// authorized when it was opened; without this the removed user keeps
+	// receiving every new message for as long as the socket stays up.
+	if s.revoker != nil {
+		s.revoker.RevokeChannelSubscriptions(channelID, targetNodeID)
 	}
 	return nil
 }
