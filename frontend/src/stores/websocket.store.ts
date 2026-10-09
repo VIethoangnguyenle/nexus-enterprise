@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { queryClient } from '../lib/query-client'
 import { usePermissionStore } from './permission.store'
+import { useAuthStore } from './auth.store'
 import {
   ClientEnvelope,
   ServerEnvelope,
@@ -16,8 +17,19 @@ const WS_DEBUG = () => typeof localStorage !== 'undefined' && localStorage.getIt
 /** Max reconnect backoff in ms. */
 const MAX_RECONNECT_DELAY = 30000
 
-/** Tracks channels the client has subscribed to so we can re-subscribe on reconnect. */
-const subscribedChannels = new Set<string>()
+/**
+ * Channels the client is subscribed to, with a reference count per channel.
+ *
+ * Several views subscribe to the same channel (the open space, and the
+ * navigator that listens to every conversation). Counting lets each release
+ * its own interest without unsubscribing the others; the server only hears
+ * about the first subscribe and the last unsubscribe. Re-subscribed on
+ * reconnect.
+ */
+const subscribedChannels = new Map<string, number>()
+
+export interface LastMessageInfo { content: string; timestamp: string; senderName: string; senderId: string }
+export interface LastReplyInfo { senderId: string; senderName: string; timestamp: string }
 
 interface WebSocketState {
   ws: WebSocket | null
@@ -25,8 +37,10 @@ interface WebSocketState {
   authenticated: boolean
   typingUsers: Record<string, string[]>
   reconnectAttempt: number
-  /** Last message per channel — used by ChatList for preview text. */
-  lastMessages: Record<string, { content: string; timestamp: string; senderName: string }>
+  /** Last message per channel, seen this session: previews and Home ordering. */
+  lastMessages: Record<string, LastMessageInfo>
+  /** Latest reply per topic (parent message id), seen this session. */
+  lastReplies: Record<string, LastReplyInfo>
   /** Online user IDs + usernames — updated via PresenceEvent. */
   onlineUsers: Record<string, string>
   connect: (token: string) => void
@@ -34,6 +48,8 @@ interface WebSocketState {
   sendTyping: (channelId: string) => void
   sendSubscribe: (channelId: string) => void
   sendUnsubscribe: (channelId: string) => void
+  /** Subscribe to many channels at once; returns the matching release. */
+  subscribeMany: (channelIds: string[]) => () => void
 }
 
 /** Send a binary-encoded ClientEnvelope over WebSocket. */
@@ -51,7 +67,7 @@ function reconnectDelay(attempt: number): number {
 
 /** Re-subscribe to all previously subscribed channels after reconnect. */
 function resubscribeChannels(ws: WebSocket) {
-  for (const channelId of subscribedChannels) {
+  for (const channelId of subscribedChannels.keys()) {
     sendEnvelope(ws, {
       payload: { oneofKind: 'subscribe', subscribe: { channelId } },
     })
@@ -68,6 +84,7 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
   typingUsers: {},
   reconnectAttempt: 0,
   lastMessages: {},
+  lastReplies: {},
   onlineUsers: {},
 
   connect: (token) => {
@@ -140,7 +157,9 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
   },
 
   sendSubscribe: (channelId) => {
-    subscribedChannels.add(channelId)
+    const n = subscribedChannels.get(channelId) ?? 0
+    subscribedChannels.set(channelId, n + 1)
+    if (n > 0) return
     const ws = get().ws
     if (ws && get().authenticated) {
       sendEnvelope(ws, {
@@ -150,12 +169,24 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
   },
 
   sendUnsubscribe: (channelId) => {
+    const n = subscribedChannels.get(channelId) ?? 0
+    if (n > 1) {
+      subscribedChannels.set(channelId, n - 1)
+      return
+    }
     subscribedChannels.delete(channelId)
     const ws = get().ws
     if (ws && get().authenticated) {
       sendEnvelope(ws, {
         payload: { oneofKind: 'unsubscribe', unsubscribe: { channelId } },
       })
+    }
+  },
+
+  subscribeMany: (channelIds) => {
+    for (const id of channelIds) get().sendSubscribe(id)
+    return () => {
+      for (const id of channelIds) get().sendUnsubscribe(id)
     }
   },
 }))
@@ -182,29 +213,42 @@ function handleServerMessage(
 
     case 'chatMessage': {
       const msg = envelope.payload.chatMessage
-      // Update last message cache for ChatList preview
+      const timestamp = timestampToIso(msg.createdAt)
       set((s) => ({
         lastMessages: {
           ...s.lastMessages,
           [msg.channelId]: {
-            content: msg.content.replace(/<[^>]+>/g, '').slice(0, 80),
-            timestamp: msg.createdAt || new Date().toISOString(),
+            content: previewText(msg.content),
+            timestamp,
             senderName: msg.senderName || '',
+            senderId: msg.senderId,
           },
         },
       }))
-      // Cache injection: append new message directly, skip full refetch
-      queryClient.setQueryData(
-        ['messages', msg.channelId],
-        (old: { messages: Message[]; has_more: boolean } | undefined) => {
-          if (!old) return old
-          // Deduplicate: skip if message already exists (sender's optimistic update)
-          if ((old.messages || []).some((m: Message) => m.id === msg.id)) return old
-          // Remove any pending optimistic messages and prepend the real one
-          const cleaned = (old.messages || []).filter((m: Message & { _optimistic?: boolean }) => !m._optimistic)
-          return { ...old, messages: [convertChatMsgToMessage(msg), ...cleaned] }
-        },
-      )
+      // The hub broadcasts thread replies as plain chat messages carrying a
+      // parent id. Prepending those to the channel list would turn every reply
+      // into a new topic, so they are routed to their thread instead.
+      if (msg.parentMessageId) {
+        injectReply(msg, set)
+      } else {
+        // Cache injection: append new message directly, skip full refetch
+        queryClient.setQueryData(
+          ['messages', msg.channelId],
+          (old: { messages: Message[]; has_more: boolean } | undefined) => {
+            if (!old) return old
+            // Deduplicate: skip if message already exists (sender's optimistic update)
+            if ((old.messages || []).some((m: Message) => m.id === msg.id)) return old
+            // Remove any pending optimistic messages and prepend the real one,
+            // inheriting the optimistic row's key so it is not remounted.
+            const pending = (old.messages || []).find(
+              (m: Message & { _optimistic?: boolean }) => m._optimistic && m.sender_id === msg.senderId,
+            )
+            const cleaned = (old.messages || []).filter((m: Message & { _optimistic?: boolean }) => !m._optimistic)
+            const real = { ...convertChatMsgToMessage(msg), _clientKey: pending?.id }
+            return { ...old, messages: [real, ...cleaned] }
+          },
+        )
+      }
       // Unread counts still need server aggregation
       queryClient.invalidateQueries({ queryKey: ['unreadCounts'] })
       break
@@ -247,18 +291,8 @@ function handleServerMessage(
     case 'threadReply': {
       const reply = envelope.payload.threadReply
       if (reply.message) {
-        // Inject reply directly into thread cache
-        queryClient.setQueryData(
-          ['thread', reply.parentMessageId],
-          (old: { messages: Message[] } | undefined) => {
-            if (!old) return old
-            if ((old.messages || []).some((m: Message) => m.id === reply.message!.id)) return old
-            return { ...old, messages: [...(old.messages || []), convertChatMsgToMessage(reply.message!)] }
-          },
-        )
+        injectReply({ ...reply.message, parentMessageId: reply.message.parentMessageId || reply.parentMessageId }, set)
       }
-      // Invalidate channel messages so reply_count refreshes
-      queryClient.invalidateQueries({ queryKey: ['messages'] })
       break
     }
 
@@ -453,6 +487,63 @@ function handleServerMessage(
   }
 }
 
+/** Plain-text preview of a message body: tags stripped, whitespace folded, capped. */
+function previewText(content: string): string {
+  return content.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+}
+
+/** Proto Timestamp (or nothing) to ISO; "now" when the server omitted it. */
+function timestampToIso(ts: WSChatMessage['createdAt']): string {
+  if (ts && ts.seconds !== undefined) {
+    const ms = Number(ts.seconds) * 1000 + Math.floor((ts.nanos ?? 0) / 1e6)
+    if (Number.isFinite(ms) && ms > 0) return new Date(ms).toISOString()
+  }
+  return new Date().toISOString()
+}
+
+/**
+ * A reply arrived: add it to its thread (if that thread is loaded), move the
+ * topic's reply count, and remember who replied last for the topic summary.
+ * The sender's own reply was already counted optimistically by useSendReply,
+ * so only other people's replies move the count here.
+ */
+function injectReply(msg: WSChatMessage, set: (fn: (s: WebSocketState) => Partial<WebSocketState>) => void) {
+  const parentId = msg.parentMessageId
+  if (!parentId) return
+  const me = useAuthStore.getState().user?.id
+  const fromMe = !!me && msg.senderId === me
+  let isNew = true
+  queryClient.setQueryData(['thread', parentId], (old: { messages: Message[] } | undefined) => {
+    if (!old) return old
+    if ((old.messages || []).some((m) => m.id === msg.id)) {
+      isNew = false
+      return old
+    }
+    const rest = fromMe
+      ? (old.messages || []).filter((m: Message & { _optimistic?: boolean }) => !m._optimistic)
+      : old.messages || []
+    return { ...old, messages: [...rest, convertChatMsgToMessage(msg)] }
+  })
+  if (isNew && !fromMe) {
+    queryClient.setQueryData(
+      ['messages', msg.channelId],
+      (old: { messages: Message[]; has_more: boolean } | undefined) =>
+        old
+          ? {
+              ...old,
+              messages: old.messages.map((m) => (m.id === parentId ? { ...m, reply_count: (m.reply_count || 0) + 1 } : m)),
+            }
+          : old,
+    )
+  }
+  set((s) => ({
+    lastReplies: {
+      ...s.lastReplies,
+      [parentId]: { senderId: msg.senderId, senderName: msg.senderName || '', timestamp: timestampToIso(msg.createdAt) },
+    },
+  }))
+}
+
 /** Convert a WebSocket ChatMessage (proto camelCase) to API Message (snake_case). */
 function convertChatMsgToMessage(chatMsg: WSChatMessage): Message {
   return {
@@ -464,6 +555,7 @@ function convertChatMsgToMessage(chatMsg: WSChatMessage): Message {
     content_format: chatMsg.contentFormat || 'markdown',
     created_at: chatMsg.createdAt ?? new Date().toISOString(),
     reply_count: chatMsg.replyCount || 0,
+    parent_message_id: chatMsg.parentMessageId || '',
     mentions: chatMsg.mentions || [],
     linked_entity_type: chatMsg.linkedEntityType || '',
     linked_entity_id: chatMsg.linkedEntityId || '',

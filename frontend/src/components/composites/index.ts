@@ -1,5 +1,6 @@
 export { Card } from './Card'
 export { Modal } from './Modal'
+export { Dialog } from './Dialog'
 export { Tabs } from './Tabs'
 export { DataTable } from './DataTable'
 export { FilterBar } from './FilterBar'

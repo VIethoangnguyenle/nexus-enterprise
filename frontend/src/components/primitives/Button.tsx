@@ -1,6 +1,6 @@
 import { type ButtonHTMLAttributes, forwardRef } from 'react'
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'success' | 'link'
+type ButtonVariant = 'primary' | 'secondary' | 'soft' | 'tonal' | 'ghost' | 'danger' | 'success' | 'link'
 type ButtonSize = 'sm' | 'md' | 'cta' | 'link'
 
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -22,6 +22,10 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 const variantStyles: Record<ButtonVariant, string> = {
   primary: 'border-none bg-primary text-on-primary hover:bg-primary-hover',
   secondary: 'border border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container-high',
+  // Tín hiệu secondary (DESIGN.md §6): a filled neutral, no border.
+  soft: 'border-none bg-hover text-ink hover:bg-line',
+  // Accent-tinted call to action that is not the view's one primary button.
+  tonal: 'border-none bg-accent-wash text-ink hover:bg-hover',
   ghost: 'border-none bg-transparent text-on-surface-variant hover:text-on-surface hover:bg-surface-container',
   danger: 'border-none bg-error text-on-error hover:bg-error/90',
   success: 'border-none bg-success text-on-success hover:bg-success/90',
@@ -59,7 +63,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
       ref={ref}
       disabled={disabled || loading}
       className={`inline-flex items-center justify-center gap-2
-        transition-colors duration-fast cursor-pointer
+        press cursor-pointer
         disabled:opacity-40 disabled:cursor-not-allowed focus-ring
         ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
       {...props}

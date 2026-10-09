@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect } from 'react'
-import { useNavigate, useMatches } from '@tanstack/react-router'
+import { Link, useMatches } from '@tanstack/react-router'
 import { useAuthStore } from '../../stores/auth.store'
-import { logoutSession } from '../../api/client'
 import { useUiStore } from '../../stores/ui.store'
-import { useWorkspaces } from '../../hooks/useWorkspaces'
-import { NavRow } from '../primitives'
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
+import { usePeople } from '../../hooks/usePeople'
+import { logoutSession } from '../../api/client'
+import { workspaceDisplayName } from '../../lib/workspace'
+import { formatCount } from '../../lib/format'
+import { Avatar, IconButton } from '../primitives'
 import {
-  MessageSquare, FolderOpen, Users, Briefcase, ClipboardCheck, Settings, HelpCircle, LogOut, Plus, ChevronDown, Check, ShieldCheck,
+  MessageSquare, FolderOpen, Users, Package, ClipboardCheck, Settings, LogOut, ChevronDown, Check, ShieldCheck,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -16,17 +19,20 @@ type NavItem = {
   id: ModuleId
   icon: LucideIcon
   label: string
-  /** Route path to navigate to (within workspace layout). */
-  routePath?: string
+  to: string
 }
 
+/** DESIGN.md §5: five main destinations, then administration and settings at the foot. */
 const mainNavItems: NavItem[] = [
-  { id: 'messaging', icon: MessageSquare, label: 'Chat', routePath: '/channels' },
-  { id: 'drive', icon: FolderOpen, label: 'Drive', routePath: '/drive' },
-  { id: 'approval', icon: ClipboardCheck, label: 'Approvals', routePath: '/approval' },
-  { id: 'contacts', icon: Users, label: 'Contacts', routePath: '/contacts' },
-  { id: 'assets', icon: Briefcase, label: 'Workplace', routePath: '/assets/dashboard' },
-  { id: 'admin', icon: ShieldCheck, label: 'Admin', routePath: '/admin' },
+  { id: 'messaging', icon: MessageSquare, label: 'Tin nhắn', to: '/channels' },
+  { id: 'drive', icon: FolderOpen, label: 'Tài liệu', to: '/drive' },
+  { id: 'approval', icon: ClipboardCheck, label: 'Phê duyệt', to: '/approval' },
+  { id: 'assets', icon: Package, label: 'Tài sản', to: '/assets/dashboard' },
+  { id: 'contacts', icon: Users, label: 'Danh bạ', to: '/contacts' },
+]
+const footNavItems: NavItem[] = [
+  { id: 'admin', icon: ShieldCheck, label: 'Quản trị', to: '/admin' },
+  { id: 'settings', icon: Settings, label: 'Cài đặt', to: '/settings' },
 ]
 
 interface AppSidebarProps {
@@ -34,36 +40,36 @@ interface AppSidebarProps {
   unreadCounts?: Partial<Record<string, number>>
 }
 
-/** Nexus Enterprise sidebar matching Stitch nexus-chat.html:
- *  w-[280px], bg-surface-bright, p-6, gap-y-4.
- *  Active nav: bg-surface-container-highest text-primary shadow-sm rounded-lg.
- *  Inactive: text-on-surface-variant hover:bg-surface-container rounded-lg.
- *  "New Project" CTA: bg-primary rounded-lg (not rounded-full).
- *  Footer: border-t border-outline-variant/30 with Settings + Support. */
+/**
+ * App sidebar (DESIGN.md §5, design/mockups/core-screens.html): sunk tone,
+ * 232px, workspace switcher on top, main destinations, then Quản trị, Cài đặt
+ * and the signed-in person at the foot.
+ */
 export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps) {
   const user = useAuthStore((s) => s.user)
   const activeModule = useUiStore((s) => s.activeModule)
   const setActiveModule = useUiStore((s) => s.setActiveModule)
-  const navigate = useNavigate()
-  const { data: wsData } = useWorkspaces()
-  const workspaces = wsData?.workspaces || []
+  const { workspaceId, workspaces } = useActiveWorkspace()
+  const people = usePeople(workspaceId)
+  const meAsPerson = user?.id ? people.byUserId.get(user.id) : undefined
 
-  // Workspace switcher dropdown state
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false)
   const wsDropdownRef = useRef<HTMLDivElement>(null)
-  const currentWsParam = new URLSearchParams(window.location.search).get('ws')
-  const activeWsId = currentWsParam || workspaces[0]?.id || ''
 
-  // Close dropdown on outside click
   useEffect(() => {
     if (!wsDropdownOpen) return
     const handleClick = (e: MouseEvent) => {
-      if (wsDropdownRef.current && !wsDropdownRef.current.contains(e.target as Node)) {
-        setWsDropdownOpen(false)
-      }
+      if (wsDropdownRef.current && !wsDropdownRef.current.contains(e.target as Node)) setWsDropdownOpen(false)
+    }
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setWsDropdownOpen(false)
     }
     document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
+    document.addEventListener('keydown', handleKey)
+    return () => {
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
   }, [wsDropdownOpen])
 
   const handleSwitchWorkspace = (wsId: string) => {
@@ -73,11 +79,9 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
     window.location.href = url.toString()
   }
 
-  /** Detect active module from current route path for proper highlighting. */
   const matches = useMatches()
   const currentPath = matches[matches.length - 1]?.pathname || ''
-
-  const getEffectiveActiveModule = (): ModuleId => {
+  const effectiveActive: ModuleId = (() => {
     if (currentPath.includes('/admin')) return 'admin'
     if (currentPath.includes('/contacts')) return 'contacts'
     if (currentPath.includes('/drive')) return 'drive'
@@ -87,161 +91,120 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
     if (currentPath.includes('/settings')) return 'settings'
     if (currentPath.includes('/documents')) return 'documents'
     return activeModule
+  })()
+
+  const name = workspaceName || 'Không gian làm việc'
+  const navLink = (item: NavItem) => {
+    const active = effectiveActive === item.id
+    const count = unreadCounts[item.id]
+    return (
+      <Link
+        key={item.id}
+        to={item.to}
+        onClick={() => setActiveModule(item.id)}
+        aria-current={active ? 'page' : undefined}
+        className={`flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-sm no-underline focus-ring
+          transition-colors duration-quick
+          ${active ? 'bg-raised text-ink font-semibold' : 'text-ink-muted font-medium hover:bg-hover hover:text-ink'}`}
+      >
+        <item.icon size={18} strokeWidth={1.75} aria-hidden="true" />
+        <span className="flex-1 truncate">{item.label}</span>
+        {count && count > 0 ? (
+          <span
+            className="inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full bg-accent
+              text-on-accent text-2xs font-semibold tnum"
+            aria-label={`${count} chưa đọc`}
+          >
+            {formatCount(count)}
+          </span>
+        ) : null}
+      </Link>
+    )
   }
-
-  const effectiveActive = getEffectiveActiveModule()
-
-  const handleClick = (item: NavItem) => {
-    setActiveModule(item.id)
-    if (item.routePath) {
-      navigate({ to: item.routePath })
-    }
-  }
-
-  const initial = workspaceName?.charAt(0).toUpperCase() || 'N'
 
   return (
     <aside
-      className="hidden lg:flex w-70 shrink-0 bg-surface-bright border-r border-outline-variant/30
-        flex-col overflow-hidden h-full p-6 gap-y-4"
+      aria-label="Điều hướng chính"
+      className="hidden lg:grid grid-rows-[auto_1fr_auto] w-58 shrink-0 bg-sunk h-full p-3 gap-3 overflow-hidden"
     >
-      {/* Workspace identity — Stitch: hover:bg-surface-container-high p-2 rounded-lg */}
       <div className="relative" ref={wsDropdownRef}>
-        {/* eslint-disable-next-line no-restricted-syntax -- Trigger chuyển workspace: avatar 40px
-            + nhãn hai dòng (tên + hạng) + chevron xoay khi mở dropdown. Không phải hàng điều hướng
-            (NavRow chỉ render một dòng text theo layoutStyles cố định, không có chỗ cho avatar +
-            hai dòng chữ) lẫn Button (canh giữa nội dung, không phải trigger p-2 hover đổi nền). */}
+        {/* eslint-disable-next-line no-restricted-syntax -- Nút đổi không gian làm việc: logo 32px +
+            tên (font display) + chevron xoay khi mở; không phải Button (canh giữa, hình học cố định)
+            cũng không phải một hàng điều hướng. */}
         <button
+          type="button"
           onClick={() => setWsDropdownOpen(!wsDropdownOpen)}
-          className="flex items-center gap-2 p-2 rounded-lg cursor-pointer border-none
-            bg-transparent w-full text-left transition-colors
-            hover:bg-surface-container-high"
-          title="Switch workspace"
+          aria-haspopup="listbox"
+          aria-expanded={wsDropdownOpen}
+          className="flex items-center gap-2.5 w-full px-2 py-1.5 rounded-surface border-none bg-transparent
+            cursor-pointer text-left focus-ring transition-colors duration-quick hover:bg-hover"
         >
-          {/* Avatar — Stitch: w-10 h-10 rounded-lg bg-primary-container */}
-          <div
-            className="w-10 h-10 rounded-lg bg-primary-container text-on-primary-container
-              flex items-center justify-center font-bold text-lg shrink-0"
+          <span
+            aria-hidden="true"
+            className="grid place-items-center w-8 h-8 rounded-surface bg-accent text-on-accent font-display
+              text-section font-bold shrink-0"
           >
-            {initial}
-          </div>
-          <div className="min-w-0 flex-1 text-left">
-            <div className="text-small font-semibold text-on-surface truncate">
-              {workspaceName || 'Nexus Workspace'}
-            </div>
-            <div className="text-small text-on-surface-variant">Enterprise Tier</div>
-          </div>
+            {Array.from(name.trim())[0]?.toLocaleUpperCase('vi') ?? 'N'}
+          </span>
+          <span className="min-w-0 flex-1 font-display text-base font-bold text-ink truncate">{name}</span>
           <ChevronDown
             size={16}
-            className={`text-on-surface-variant shrink-0 transition-transform
+            strokeWidth={1.75}
+            aria-hidden="true"
+            className={`text-ink-muted shrink-0 transition-transform duration-quick motion-reduce:transition-none
               ${wsDropdownOpen ? 'rotate-180' : ''}`}
           />
         </button>
 
-        {/* Dropdown menu */}
         {wsDropdownOpen && workspaces.length > 0 && (
-          <div className="absolute left-2 right-2 top-full mt-1 z-50
-            bg-surface-container-lowest border border-outline-variant rounded-lg shadow-lg
-            py-1 max-h-60 overflow-y-auto animate-fade-in">
-            <div className="px-3 py-1.5 text-label-caps text-on-surface-variant uppercase tracking-wider">
-              Workspaces
-            </div>
-            {workspaces.map((ws: { id: string; name: string }) => (
-              /* eslint-disable-next-line no-restricted-syntax -- Mục danh sách workspace trong
-                 dropdown: danh sách phẳng, không thụt lề như subItem (không phải cây con dưới
-                 group header). Active dùng bg-primary-fixed + text-primary — pha giữa hai kiểu
-                 NavRow (subItem cho nền nhưng chữ text-on-primary-fixed-variant; groupHeader cho
-                 chữ nhưng nền surface-container), không khớp trọn kiểu nào. */
+          <div
+            role="listbox"
+            aria-label="Không gian làm việc"
+            className="absolute left-0 right-0 top-full mt-1.5 z-dropdown p-1.5 rounded-overlay bg-overlay shadow-overlay
+              max-h-60 overflow-y-auto animate-fade-in"
+          >
+            {workspaces.map((ws) => (
+              /* eslint-disable-next-line no-restricted-syntax -- Lựa chọn trong listbox (role=option),
+                 có dấu tích cho mục đang mở; không có primitive nào cho option của listbox. */
               <button
                 key={ws.id}
+                type="button"
+                role="option"
+                aria-selected={ws.id === workspaceId}
                 onClick={() => handleSwitchWorkspace(ws.id)}
-                className={`w-full flex items-center gap-2 px-3 py-2 text-small text-left
-                  border-none cursor-pointer transition-colors
-                  ${ws.id === activeWsId
-                    ? 'bg-primary-fixed text-primary font-medium'
-                    : 'bg-transparent text-on-surface hover:bg-surface-container-high'
-                  }`}
+                className="w-full flex items-center gap-2.5 h-9 px-2.5 rounded-md border-none bg-transparent
+                  cursor-pointer text-sm text-ink text-left focus-ring hover:bg-hover"
               >
-                <div className="w-6 h-6 rounded-md bg-surface-container-high text-primary flex items-center justify-center
-                  text-label-caps font-bold shrink-0">
-                  {ws.name.charAt(0).toUpperCase()}
-                </div>
-                <span className="truncate flex-1">{ws.name}</span>
-                {ws.id === activeWsId && <Check size={14} className="text-primary shrink-0" />}
+                <span className="truncate flex-1">{workspaceDisplayName(ws.name)}</span>
+                {ws.id === workspaceId && <Check size={16} strokeWidth={1.75} className="text-accent shrink-0" />}
               </button>
             ))}
           </div>
         )}
       </div>
 
-      {/* New Project CTA — Stitch: rounded-lg (not rounded-full), py-2.5 */}
-      {/* eslint-disable-next-line no-restricted-syntax -- CTA đầy theo nexus-chat.html: py-2.5,
-          text-small, shadow-sm, hover:bg-primary/90 (nền primary pha trong suốt). Button
-          size="cta" đến từ màn Stitch khác: py-3, text-body-strong, không shadow,
-          hover:bg-primary-hover (#003EA8 đặc, không phải primary pha loãng) — bốn khác biệt
-          đo được nếu ghép, không chỉ w-full (cái đó đã khớp sẵn). */}
-      <button
-        className="w-full py-2.5 px-4 bg-primary text-on-primary rounded-lg text-small font-semibold
-          border-none cursor-pointer flex items-center justify-center gap-2
-          transition-colors shadow-sm hover:bg-primary/90"
-      >
-        <Plus size={18} />
-        New Project
-      </button>
-
-      {/* Navigation — Stitch: flex flex-col gap-1 mt-space-md */}
-      <nav className="flex flex-col gap-1 flex-1 mt-4">
-        {mainNavItems.map((item) => {
-          const isActive = effectiveActive === item.id
-          const Icon = item.icon
-          const count = unreadCounts[item.id]
-          return (
-            <NavRow
-              key={item.id}
-              kind="navItem"
-              active={isActive}
-              onClick={() => handleClick(item)}
-              title={item.label}
-              aria-label={item.label}
-            >
-              <Icon size={20} strokeWidth={isActive ? 2.2 : 1.6} />
-              <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
-              {count && count > 0 ? (
-                <span
-                  className="text-label-caps font-semibold text-on-primary bg-primary rounded-full
-                    px-1.5 min-w-4.5 h-4.5 flex items-center justify-center leading-none shrink-0"
-                >
-                  {count > 99 ? '99+' : count}
-                </span>
-              ) : null}
-            </NavRow>
-          )
-        })}
+      <nav aria-label="Phân hệ" className="grid content-start gap-0.5">
+        {mainNavItems.map(navLink)}
       </nav>
 
-      {/* Footer — Stitch: border-t border-outline-variant/30, gap-1 */}
-      <div className="pt-4 border-t border-outline-variant/30 flex flex-col gap-1">
-        <NavRow
-          kind="navItem"
-          onClick={() => setActiveModule('settings')}
-          title="Settings"
-        >
-          <Settings size={18} strokeWidth={1.6} />
-          <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">Settings</span>
-        </NavRow>
-        <NavRow kind="navItem" title="Support">
-          <HelpCircle size={18} strokeWidth={1.6} />
-          <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">Support</span>
-        </NavRow>
-        <NavRow
-          kind="navItem"
-          onClick={() => void logoutSession()}
-          title={`Logout (${user?.username})`}
-          aria-label="Logout"
-        >
-          <LogOut size={16} strokeWidth={1.6} />
-          <span className="flex-1 whitespace-nowrap overflow-hidden text-ellipsis">Logout</span>
-        </NavRow>
+      <div className="grid gap-0.5">
+        {footNavItems.map(navLink)}
+        <div className="flex items-center gap-2.5 p-2">
+          <Avatar
+            name={meAsPerson?.name || user?.username || 'Bạn'}
+            hueKey={user?.id}
+            src={meAsPerson?.avatarUrl}
+            online
+            size={32}
+          />
+          <span className="grid min-w-0 flex-1">
+            <span className="font-semibold text-ink truncate">{meAsPerson?.name || user?.username}</span>
+            {meAsPerson?.role && <span className="text-xs text-ink-muted truncate">{meAsPerson.role}</span>}
+          </span>
+          <IconButton size="sm" aria-label="Đăng xuất" title="Đăng xuất" onClick={() => void logoutSession()}>
+            <LogOut size={16} strokeWidth={1.75} />
+          </IconButton>
+        </div>
       </div>
     </aside>
   )

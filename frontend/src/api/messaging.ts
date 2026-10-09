@@ -1,6 +1,24 @@
 import { apiFetch } from './client'
 
-export interface Channel { id: string; name: string; channel_type: string; workspace_id: string; topic?: string; description?: string; member_count?: number }
+/**
+ * A conversation. `channel_type` is `dm` for a direct message and
+ * `workspace` (or `private`) for a space; the backend maps `group` to
+ * `workspace` on create. DMs are not returned by the workspace channel list;
+ * they come from `GET /dms`.
+ */
+export interface Channel {
+  id: string
+  name: string
+  channel_type: string
+  workspace_id: string
+  topic?: string
+  description?: string
+  member_count?: number
+  created_at?: unknown
+}
+
+/** A channel member as the messaging service returns it. Ids are for API calls only. */
+export interface ChannelMember { user_id: string; username: string; ngac_node_id: string }
 
 export interface ReactionGroup { emoji: string; count: number; user_ids: string[] }
 
@@ -13,6 +31,10 @@ export interface Message {
   content_format?: string
   mentions?: string[]
   reply_count?: number
+  /** Set on thread replies; empty on top-level messages (topics). */
+  parent_message_id?: string
+  /** Client-only: the optimistic id this message replaced, kept as a stable React key. */
+  _clientKey?: string
   reactions?: ReactionGroup[]
   is_pinned?: boolean
   created_at?: unknown
@@ -104,9 +126,18 @@ export const messagingApi = {
   },
   getThread: (messageId: string) => apiFetch<{ messages: Message[] }>(`/messages/${messageId}/thread`),
 
+  // Direct messages (not workspace-scoped on the backend)
+  listDMs: () => apiFetch<{ channels: Channel[] | null }>(`/dms`),
+  /** Finds the existing DM with this person or creates it. */
+  createDM: (target: { userId: string; ngacNodeId: string }) =>
+    apiFetch<Channel>(`/dms`, {
+      method: 'POST',
+      body: JSON.stringify({ target_user_id: target.userId, target_ngac_node_id: target.ngacNodeId }),
+    }),
+
   // Members
   listMembers: (channelId: string) =>
-    apiFetch<{ members: { user_id: string; username: string; ngac_node_id: string }[] }>(`/channels/${channelId}/members`),
+    apiFetch<{ members: ChannelMember[] | null }>(`/channels/${channelId}/members`),
   addMember: (channelId: string, ngacNodeId: string) =>
     apiFetch<{ status: string }>(`/channels/${channelId}/members`, {
       method: 'POST',

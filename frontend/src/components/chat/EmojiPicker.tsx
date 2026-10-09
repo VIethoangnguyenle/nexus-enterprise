@@ -37,7 +37,7 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
     instance.current = new Picker({
       data,
       onEmojiSelect: (emoji: { native: string }) => onSelect(emoji.native),
-      theme: 'dark',
+      theme: document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light',
       previewPosition: 'none',
       skinTonePosition: 'none',
       maxFrequentRows: 2,
@@ -48,11 +48,10 @@ export function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
       instance.current = null
     }
     // Mount-only, matching the upstream wrapper's behaviour.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
-    <div ref={ref} className="shadow-lg rounded-xl overflow-hidden animate-fade-in">
+    <div ref={ref} className="shadow-overlay rounded-overlay overflow-hidden animate-fade-in">
       <div ref={mountRef} />
     </div>
   )

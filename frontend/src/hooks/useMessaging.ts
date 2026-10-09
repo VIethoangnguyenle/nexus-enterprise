@@ -1,5 +1,5 @@
 import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
-import { messagingApi, type CreateChannelInput, type SendMessageInput, type Message, type Poll, type ChatTask } from '../api/messaging'
+import { messagingApi, type CreateChannelInput, type SendMessageInput, type Message, type Poll, type ChatTask, type ChannelMember } from '../api/messaging'
 import { queryClient } from '../lib/query-client'
 import { useAuthStore } from '../stores/auth.store'
 
@@ -14,6 +14,22 @@ export function useCreateChannel(wsId: string) {
   return useMutation({
     mutationFn: (data: CreateChannelInput) => messagingApi.createChannel(wsId, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['channels', wsId] }),
+  })
+}
+
+// --- Direct messages ---
+
+export const directMessagesQueryOptions = () =>
+  queryOptions({ queryKey: ['dms'], queryFn: () => messagingApi.listDMs() })
+
+/** DM channels the user can read. Not workspace-scoped on the backend. */
+export function useDirectMessages() { return useQuery(directMessagesQueryOptions()) }
+
+/** Opens (finds or creates) the DM with a person. */
+export function useCreateDM() {
+  return useMutation({
+    mutationFn: (target: { userId: string; ngacNodeId: string }) => messagingApi.createDM(target),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dms'] }),
   })
 }
 
@@ -87,9 +103,13 @@ export function useSendMessage(channelId: string) {
           if (!old) return old
           return {
             ...old,
-            messages: (old.messages || []).map((m: Message & { _optimistic?: boolean }) =>
-              m._optimistic ? serverMsg : m,
-            ),
+            // Keep the optimistic row's key so the topic is not remounted (no
+            // flash, no second insert animation) when the server copy lands.
+            messages: (old.messages || []).some((m) => m.id === serverMsg.id)
+              ? (old.messages || []).filter((m: Message & { _optimistic?: boolean }) => !m._optimistic)
+              : (old.messages || []).map((m: Message & { _optimistic?: boolean }) =>
+                  m._optimistic ? { ...serverMsg, _clientKey: m.id } : m,
+                ),
           }
         },
       )
@@ -100,6 +120,60 @@ export function useSendMessage(channelId: string) {
       if (context?.previous) {
         queryClient.setQueryData(['messages', channelId], context.previous)
       }
+    },
+  })
+}
+
+type MessageList = { messages: Message[]; has_more: boolean }
+type Thread = { messages: Message[] }
+type Optimistic = Message & { _optimistic?: boolean }
+
+/**
+ * Replies inside a topic, with optimistic UI: the reply shows in the thread
+ * at once and the topic's reply count moves with it. The WebSocket echo of
+ * the same reply is de-duplicated by id in websocket.store.
+ */
+export function useSendReply(channelId: string, parentId: string) {
+  return useMutation({
+    mutationFn: (content: string) =>
+      messagingApi.sendMessage(channelId, { content, content_format: 'html', parent_message_id: parentId }),
+    onMutate: async (content) => {
+      await queryClient.cancelQueries({ queryKey: ['thread', parentId] })
+      const prevThread = queryClient.getQueryData<Thread>(['thread', parentId])
+      const prevList = queryClient.getQueryData<MessageList>(['messages', channelId])
+      const user = useAuthStore.getState().user
+      const temp: Optimistic = {
+        id: `temp-${Date.now()}`,
+        channel_id: channelId,
+        sender_id: user?.id || '',
+        sender_name: user?.username || '',
+        content,
+        content_format: 'html',
+        parent_message_id: parentId,
+        created_at: new Date().toISOString(),
+        _optimistic: true,
+      }
+      queryClient.setQueryData<Thread>(['thread', parentId], (old) =>
+        old ? { ...old, messages: [...(old.messages || []), temp] } : old,
+      )
+      queryClient.setQueryData<MessageList>(['messages', channelId], (old) =>
+        old
+          ? { ...old, messages: old.messages.map((m) => (m.id === parentId ? { ...m, reply_count: (m.reply_count || 0) + 1 } : m)) }
+          : old,
+      )
+      return { prevThread, prevList }
+    },
+    onSuccess: (serverMsg) => {
+      queryClient.setQueryData<Thread>(['thread', parentId], (old) => {
+        if (!old) return old
+        const already = old.messages.some((m) => m.id === serverMsg.id)
+        const rest = old.messages.filter((m: Optimistic) => !m._optimistic)
+        return { ...old, messages: already ? rest : [...rest, serverMsg] }
+      })
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prevThread) queryClient.setQueryData(['thread', parentId], ctx.prevThread)
+      if (ctx?.prevList) queryClient.setQueryData(['messages', channelId], ctx.prevList)
     },
   })
 }
@@ -389,17 +463,17 @@ export function useChannelMembers(channelId: string) {
 /** Optimistic add member to channel — member appears instantly, rolls back on error. */
 export function useAddChannelMember(channelId: string) {
   return useMutation({
-    mutationFn: ({ ngacNodeId }: { ngacNodeId: string }) =>
+    mutationFn: ({ ngacNodeId }: { ngacNodeId: string; username?: string; userId?: string }) =>
       messagingApi.addMember(channelId, ngacNodeId),
-    onMutate: async ({ ngacNodeId, username }: { ngacNodeId: string; username?: string }) => {
+    onMutate: async ({ ngacNodeId, username, userId }: { ngacNodeId: string; username?: string; userId?: string }) => {
       await queryClient.cancelQueries({ queryKey: ['channelMembers', channelId] })
       const previous = queryClient.getQueryData(['channelMembers', channelId])
       queryClient.setQueryData(
         ['channelMembers', channelId],
-        (old: { members: { user_id: string; username: string; ngac_node_id: string }[] } | undefined) => ({
+        (old: { members: ChannelMember[] | null } | undefined) => ({
           members: [
             ...(old?.members || []),
-            { user_id: '', username: username || 'Adding...', ngac_node_id: ngacNodeId },
+            { user_id: userId || '', username: username || '', ngac_node_id: ngacNodeId },
           ],
         }),
       )
@@ -425,7 +499,7 @@ export function useRemoveChannelMember(channelId: string) {
       const previous = queryClient.getQueryData(['channelMembers', channelId])
       queryClient.setQueryData(
         ['channelMembers', channelId],
-        (old: { members: { user_id: string; username: string; ngac_node_id: string }[] } | undefined) => ({
+        (old: { members: ChannelMember[] | null } | undefined) => ({
           members: (old?.members || []).filter((m) => m.ngac_node_id !== nodeId),
         }),
       )
