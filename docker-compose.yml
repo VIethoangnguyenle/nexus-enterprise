@@ -141,6 +141,7 @@ services:
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       REDIS_URL: redis://redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
       GRPC_PORT: "50061"
     deploy:
       replicas: 2
@@ -148,6 +149,8 @@ services:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      redpanda:
         condition: service_healthy
       policy:
         condition: service_healthy
