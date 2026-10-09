@@ -28,14 +28,28 @@ or any decision other than ALLOW as a denial. The caller SHALL come from verifie
 - **THEN** it receives an `ErrorEvent` with code 403
 - **AND** it receives none of that channel's messages
 
+#### Scenario: WebSocket token with another algorithm
+- **WHEN** a client authenticates the WebSocket with a token not signed HS256, or without an expiry
+- **THEN** the connection is not authenticated
+
+#### Scenario: Typing into an unsubscribed channel
+- **WHEN** a client sends a typing event for a channel it is not subscribed to
+- **THEN** it receives an `ErrorEvent` 403 and nothing is broadcast
+
+#### Scenario: Removed member's live feed
+- **WHEN** a member is removed from a channel
+- **THEN** their subscriptions to that channel are dropped on every hub instance
+- **AND** they receive no further messages from it
+
 #### Scenario: Create channel without create_channel
 - **WHEN** a caller with no `create_channel` grant on the workspace Channels OA creates a channel
 - **THEN** the request is denied and no graph node is written
 
 ### Requirement: Live events stay within their audience
-Presence events SHALL be delivered only to sessions of the same tenant. Approval events SHALL be
-delivered only to the users the event names (actor, requester, assignees), and only within the
-event's tenant when it carries one.
+Presence events SHALL be delivered only to sessions of the same tenant. Approval events SHALL
+carry the acting user's `tenant_id`, the requester (`created_by`) and the approvers still pending
+on the current step (`assignee_node_ids`), and SHALL be delivered only to those users and the
+actor, within that tenant.
 
 #### Scenario: Approval event in another tenant
 - **WHEN** an approval event for tenant A is consumed
