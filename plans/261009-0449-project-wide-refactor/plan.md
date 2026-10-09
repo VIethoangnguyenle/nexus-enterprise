@@ -5,7 +5,7 @@ status: in-progress
 priority: P1
 effort: 22-30d
 issue:
-branch: claude/inspiring-cray-32y4n1
+branch: refactor/project-wide
 tags: [refactor, frontend, backend, ui, realtime, auth, tech-debt, critical]
 blockedBy: []
 blocks: []
@@ -46,7 +46,7 @@ Audit cũng tìm ra lỗ hổng phân quyền **có thật, đang chạy**. Chú
 
 | # | Phase | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
-| 01 | [CI baseline](phase-01-ci-baseline.md) | P1 | 0.5d | — | pending |
+| 01 | [CI baseline](phase-01-ci-baseline.md) | P1 | 0.5d | — | done (chờ chạy trên GitHub) |
 | 02 | [Close authorization gaps](phase-02-close-authorization-gaps.md) | P0 | 2-3d | 01 | done (PR #2) — gRPC caller identity moved to 02b |
 | 02b | [gRPC caller identity](phase-02b-grpc-caller-identity.md) | P2 | 3-4d | 01 | pending |
 | 03 | [PDP correctness and freshness](phase-03-pdp-correctness-and-freshness.md) | P0 | 2-3d | 01 | done (PR #2) — in-RAM prohibitions moved to 03b |

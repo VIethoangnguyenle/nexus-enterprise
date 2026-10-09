@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "CI baseline"
-status: pending
+status: done
 priority: P1
 effort: 0.5d
 dependencies: []
@@ -37,8 +37,8 @@ lớn — cần lưới an toàn trước.
 3. Lint đỏ có sẵn → sửa trong phase này (nhỏ) hoặc ghi vào baseline kèm lý do, không tắt rule.
 
 ## Success criteria
-- [ ] CI xanh trên `main`.
-- [ ] Một PR cố tình đưa vào `bg-red-500` bị CI chặn.
+- [ ] CI xanh trên `main` (chờ push; local: make test 0 skip trên DB rỗng).
+- [x] Một PR cố tình đưa vào `bg-red-500` bị CI chặn (eslint error, kiểm local).
 
 ## Risks
 - Test Go cần DB (`testutil`) → tách job integration hoặc dùng service container Postgres; quyết
