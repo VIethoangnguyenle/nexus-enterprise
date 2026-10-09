@@ -22,7 +22,7 @@ else
 fi
 
 # --- Module count -----------------------------------------------------------
-MODS=$(find . -name go.mod -not -path '*/node_modules/*' | wc -l | tr -d ' ')
+MODS=$(find . -name go.mod -not -path '*/node_modules/*' -not -path './.claude/worktrees/*' -not -path './.agentkit/*' | wc -l | tr -d ' ')
 if [ "$MODS" -eq 9 ] && grep -q 'Nine Go modules' CLAUDE.md; then
   ok "module count ($MODS) matches the 'Nine Go modules' claim"
 else
