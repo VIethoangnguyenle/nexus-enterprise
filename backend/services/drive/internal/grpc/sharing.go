@@ -118,15 +118,25 @@ func (s *DriveServer) RevokeShare(ctx context.Context, req *pb.RevokeShareReques
 	if err != nil || share == nil {
 		return nil, status.Errorf(codes.NotFound, "share not found")
 	}
-	// Revoking changes who can reach the item, so it takes share on the OA the
-	// item row points at. Without an item to authorize against there is
-	// nothing that could grant the right, so a missing item denies.
-	item, err := s.store.GetItem(ctx, share.DriveItemID)
-	if err != nil || item == nil {
-		return nil, status.Errorf(codes.PermissionDenied, "access denied")
-	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpShare); err != nil {
-		return nil, err
+	// Revoking changes who can reach the item. It is allowed for:
+	//
+	//   - the user who created this share. CreateShare takes only write, so a
+	//     member can share an item without holding the share op; they must be
+	//     able to withdraw what they granted. Revoking only narrows access, so
+	//     this cannot be used to widen anyone's rights. created_by holds the
+	//     creator's NGAC node; an empty value never matches.
+	//   - anyone holding share on the OA the item row points at. Without an
+	//     item to authorize against nothing could grant that right, so a
+	//     missing item denies.
+	isCreator := req.UserNgacNodeId != "" && share.CreatedBy == req.UserNgacNodeId
+	if !isCreator {
+		item, err := s.store.GetItem(ctx, share.DriveItemID)
+		if err != nil || item == nil {
+			return nil, status.Errorf(codes.PermissionDenied, "access denied")
+		}
+		if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpShare); err != nil {
+			return nil, err
+		}
 	}
 	// Delete the NGAC share OA (cascades associations). This is what actually
 	// revokes access — the DB row is only bookkeeping. If it fails we must not
