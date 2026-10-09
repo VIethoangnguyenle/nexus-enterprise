@@ -28,8 +28,40 @@ func NewStore(db *pgxpool.Pool, graph *Graph) *Store {
 
 // LoadGraph hydrates the in-memory graph from database (PIP).
 // Loads nodes (excluding O-type for memory optimization), assignments, and associations.
+//
+// It adds to whatever the graph already holds; it does not remove nodes or
+// edges that have since been deleted from the database. Use ReloadGraph to
+// make the in-memory graph equal to the database.
 func (s *Store) LoadGraph(ctx context.Context) error {
-	rows, err := s.db.Query(ctx,
+	return loadGraphInto(ctx, s.db, s.graph)
+}
+
+// ReloadGraph rebuilds the in-memory graph from the database and swaps it in
+// atomically, so deletions are reflected as well as additions (PIP).
+//
+// The new graph is built off to the side; readers keep evaluating against the
+// old one until the swap. On error the current graph is left untouched.
+//
+// This is how a read replica (policy-read) follows writes made by the policy
+// writer: it has no local mutations to preserve, so replacing wholesale is
+// exact. See ReplicaGraphRefresher.
+func (s *Store) ReloadGraph(ctx context.Context) error {
+	fresh := NewGraph()
+	if err := loadGraphInto(ctx, s.db, fresh); err != nil {
+		return err
+	}
+	s.graph.replaceWith(fresh)
+	return nil
+}
+
+// loadGraphInto reads U, UA, OA and PC nodes plus their assignments and all
+// associations from db into g.
+//
+// Every result set is checked with rows.Err(): a stream cut off midway must
+// fail the load, not yield a silently partial graph (which ReloadGraph would
+// then swap in).
+func loadGraphInto(ctx context.Context, db *pgxpool.Pool, g *Graph) error {
+	rows, err := db.Query(ctx,
 		`SELECT id, name, node_type, properties, created_at FROM ngac_nodes
 		 WHERE node_type IN ('U', 'UA', 'OA', 'PC')`)
 	if err != nil {
@@ -43,10 +75,13 @@ func (s *Store) LoadGraph(ctx context.Context) error {
 			return fmt.Errorf("scanning node: %w", err)
 		}
 		n.Properties = props
-		s.graph.AddNode(&n)
+		g.AddNode(&n)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("loading nodes: %w", err)
 	}
 
-	rows, err = s.db.Query(ctx,
+	rows, err = db.Query(ctx,
 		`SELECT a.id, a.child_id, a.parent_id FROM ngac_assignments a
 		 JOIN ngac_nodes c ON a.child_id = c.id
 		 JOIN ngac_nodes p ON a.parent_id = p.id
@@ -61,12 +96,15 @@ func (s *Store) LoadGraph(ctx context.Context) error {
 		if err := rows.Scan(&a.ID, &a.ChildID, &a.ParentID); err != nil {
 			return fmt.Errorf("scanning assignment: %w", err)
 		}
-		if err := s.graph.AddAssignment(&a); err != nil {
+		if err := g.AddAssignment(&a); err != nil {
 			slog.Warn("skipping assignment during graph load", "id", a.ID, "error", err)
 		}
 	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("loading assignments: %w", err)
+	}
 
-	rows, err = s.db.Query(ctx, "SELECT id, ua_id, oa_id, operations FROM ngac_associations")
+	rows, err = db.Query(ctx, "SELECT id, ua_id, oa_id, operations FROM ngac_associations")
 	if err != nil {
 		return fmt.Errorf("loading associations: %w", err)
 	}
@@ -76,9 +114,12 @@ func (s *Store) LoadGraph(ctx context.Context) error {
 		if err := rows.Scan(&a.ID, &a.UAID, &a.OAID, &a.Operations); err != nil {
 			return fmt.Errorf("scanning association: %w", err)
 		}
-		if err := s.graph.AddAssociation(&a); err != nil {
+		if err := g.AddAssociation(&a); err != nil {
 			slog.Warn("skipping association during graph load", "id", a.ID, "error", err)
 		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("loading associations: %w", err)
 	}
 	return nil
 }

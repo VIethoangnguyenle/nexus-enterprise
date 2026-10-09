@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	pb "ngac-platform/proto/policy"
+	"ngac-platform/services/policy/internal/events"
 	pgrpc "ngac-platform/services/policy/internal/grpc"
 	_ "ngac-platform/services/policy/internal/metrics" // register metrics
 	"ngac-platform/services/policy/internal/ngac"
@@ -36,6 +38,7 @@ func main() {
 
 	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
 	redisURL := envOr("REDIS_URL", "redis://localhost:6379/0")
+	kafkaBrokers := envOr("KAFKA_BROKERS", "localhost:19092")
 	port := envOr("GRPC_PORT", "50061")
 
 	pool, err := connectDB(ctx, dbURL)
@@ -47,6 +50,11 @@ func main() {
 
 	graph := ngac.NewGraph()
 	store := ngac.NewStore(pool, graph)
+
+	// Mutations are consumed from this point on. It is taken before the graph
+	// load (with a margin for clock skew between this host and the broker) so
+	// that a mutation committed while the load runs is still delivered.
+	consumeMutationsSince := time.Now().Add(-graphSyncLookback)
 
 	if err := store.LoadGraph(ctx); err != nil {
 		slog.Error("failed to load graph", "error", err)
@@ -78,6 +86,22 @@ func main() {
 	slog.Info("shard manager wired (read)", "max_shards", 1000)
 
 	evaluator := ngac.NewAccessEvaluator(decisionCache, decisionEngine)
+
+	// Follow the writer: the writer mutates its own in-memory graph, not ours.
+	// Each ngac.graph.mutated event reloads this replica's graph and runs the
+	// same EPP invalidation the writer runs (shards + InvalidationCoordinator).
+	invalidation := ngac.NewInvalidationCoordinator(versionTracker, materialized,
+		ngac.NewCacheInvalidator(rdb, store.GetGraph))
+	refresher := ngac.NewReplicaGraphRefresher(store, shardMgr, invalidation)
+	consumer, err := events.NewGraphMutationConsumer(strings.Split(kafkaBrokers, ","), consumeMutationsSince, refresher)
+	if err != nil {
+		// A replica that cannot follow mutations would serve its startup graph
+		// forever. Refuse to start rather than serve stale decisions.
+		slog.Error("failed to create graph mutation consumer", "error", err)
+		os.Exit(1)
+	}
+	defer consumer.Close()
+	go consumer.Run(ctx)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
@@ -138,6 +162,11 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+// graphSyncLookback is how far before the startup graph load mutation events
+// are re-read from. Re-applying an event the load already reflected is
+// harmless; missing one is not.
+const graphSyncLookback = 30 * time.Second
 
 func envOr(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {

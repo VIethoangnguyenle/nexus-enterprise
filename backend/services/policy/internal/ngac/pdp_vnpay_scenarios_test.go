@@ -1,6 +1,7 @@
 package ngac_test
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -337,18 +338,35 @@ func TestCH05_DM_OnlyTwoUsers(t *testing.T) {
 // Group 7: Prohibition (PH-01 to PH-05) — matchProhibitions unit tests
 // =====================================================================
 
+// PH-01: a union prohibition (intersection=false) denies when ANY target is
+// among the object's containers — even though the association still grants it.
 func TestPH01_ProhibitionUnion_DenyAny(t *testing.T) {
-	objectOAs := map[string]bool{"oa-sensitive": true, "oa-normal": true}
-	prohibitions := []*ngac.Prohibition{{
-		ID: "p1", Name: "block-sensitive", SubjectID: "ngac-hoangnlv",
-		Operations: []string{"write"}, TargetOAIDs: []string{"oa-sensitive"},
+	g := buildVNPayGraph()
+	store := &fakeProhibitions{items: []*ngac.Prohibition{{
+		ID: "p1", Name: "block-drive-writes", SubjectID: "ngac-hoangnlv",
+		Operations: []string{"write"}, TargetOAIDs: []string{"oa-dvnh-drive", "oa-not-in-graph"},
 		Intersection: false,
-	}}
-	// Call exported test helper or verify logic directly
-	// Since matchProhibitions is unexported, we test via DecisionEngine behavior
-	// For now, test the Prohibition model structure
-	assert.False(t, prohibitions[0].Intersection)
-	assert.Contains(t, objectOAs, "oa-sensitive")
+	}}}
+	engine := ngac.NewDecisionEngine(g, nil, store)
+	decide := func(object, op string) *ngac.AccessDecision {
+		return engine.Decide(context.Background(), ngac.AccessRequest{
+			UserNodeID: "ngac-hoangnlv", ObjectNodeID: object, Operation: op,
+		})
+	}
+
+	// Precondition: without the prohibition the association grants write.
+	require.Equal(t, "ALLOW", g.CheckAccess("ngac-hoangnlv", "oa-dvnh-drive", "write").Decision)
+
+	d := decide("oa-dvnh-drive", "write")
+	assert.Equal(t, "DENY", d.Decision, "one matching target is enough for a union prohibition")
+	require.NotNil(t, d.Explanation.ProhibitionDenied)
+	assert.Equal(t, "block-drive-writes", d.Explanation.ProhibitionDenied.ProhibitionName)
+
+	assert.Equal(t, "ALLOW", decide("oa-dvnh-drive", "read").Decision, "only the prohibited operation is denied")
+	assert.Equal(t, "ALLOW", decide("oa-dvnh-approval", "write").Decision, "sibling container is not a target")
+	assert.Equal(t, "ALLOW", engine.Decide(context.Background(), ngac.AccessRequest{
+		UserNodeID: "ngac-nguyenntn", ObjectNodeID: "oa-dvnh-drive", Operation: "write",
+	}).Decision, "another subject is not prohibited")
 }
 
 func TestPH04_NoProhibition_Allow(t *testing.T) {
