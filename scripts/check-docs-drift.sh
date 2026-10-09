@@ -54,7 +54,7 @@ check_major tailwindcss Tailwind
 
 # --- Make targets referenced in CLAUDE.md exist -----------------------------
 MISSING=""
-for t in dev dev-stop run dev-infra build-check test db-migrate proto; do
+for t in dev dev-stop run dev-infra build-check test db-migrate proto agentkit-setup; do
   grep -qE "^$t:" Makefile || MISSING="$MISSING $t"
 done
 if [ -z "$MISSING" ]; then
@@ -70,7 +70,9 @@ for f in backend/ngac/ngac_ops.go \
          backend/services/policy/internal/ngac/pdp_decision_engine.go \
          frontend/vite.config.js \
          data/init.sql \
-         .stitch/DESIGN.md; do
+         .stitch/DESIGN.md \
+         scripts/agentkit-setup.sh \
+         .claude/settings.json; do
   [ -e "$f" ] || MISSING="$MISSING $f"
 done
 if [ -z "$MISSING" ]; then

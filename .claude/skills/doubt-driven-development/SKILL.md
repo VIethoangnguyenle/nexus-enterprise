@@ -1,6 +1,6 @@
 ---
 name: doubt-driven-development
-description: Subjects a decision to fresh-context adversarial review. Use ONLY as a deepening pass after superpowers:requesting-code-review has run and its findings need harder scrutiny — security-sensitive authorization logic, irreversible operations, or claims the compiler cannot verify. Does NOT decide when review happens; superpowers owns that trigger.
+description: Subjects a decision to fresh-context adversarial review. Use ONLY as a deepening pass after ak:code-review has run and its findings need harder scrutiny — security-sensitive authorization logic, irreversible operations, or claims the compiler cannot verify. Does NOT decide when review happens; AgentKit owns that trigger.
 ---
 
 # Doubt-Driven Development
@@ -13,7 +13,7 @@ This is not `/review`. `/review` is a verdict on a finished artifact. This is an
 
 ## When to Use
 
-**Precondition: `superpowers:requesting-code-review` has already run on this change.** If it has not, stop and run that first — it is the trigger, this is the deepening pass. Reaching for this skill on unreviewed work makes it a second, competing review process.
+**Precondition: `ak:code-review` has already run on this change.** If it has not, stop and run that first — it is the trigger, this is the deepening pass. Reaching for this skill on unreviewed work makes it a second, competing review process.
 
 Given that precondition, a decision is **non-trivial** when at least one of these is true:
 
@@ -224,12 +224,12 @@ If 3 cycles is "obviously insufficient" because the artifact is large: the artif
 
 ## Interaction with Other Skills
 
-**This skill does not start itself.** `superpowers:requesting-code-review` decides that a change needs review; this skill runs afterwards, and only when that review left a claim that is still load-bearing and still unproven.
+**This skill does not start itself.** `ak:code-review` decides that a change needs review; this skill runs afterwards, and only when that review left a claim that is still load-bearing and still unproven.
 
-- **`superpowers:requesting-code-review` / `receiving-code-review`**: the entry point and the exit. Findings arrive there; this skill is the deepening pass for the subset that survives.
+- **`ak:code-review`**: the entry point and the exit. Findings arrive there; this skill is the deepening pass for the subset that survives.
 - **`source-driven-development`**: SDD verifies *facts about frameworks* against official docs. Doubt-driven verifies *your reasoning about the artifact*. SDD checks the API exists; doubt-driven checks you used it correctly under the contract.
-- **`superpowers:test-driven-development`**: TDD's RED step is doubt made concrete — a failing test is a disproof attempt. When TDD applies, that failing test *is* the doubt step for behavioral claims, and this skill adds nothing.
-- **`superpowers:systematic-debugging`**: when the reviewer surfaces a real failure mode, hand off there to localize and fix.
+- **`ak:cook --tdd`**: TDD's RED step is doubt made concrete — a failing test is a disproof attempt. When TDD applies, that failing test *is* the doubt step for behavioral claims, and this skill adds nothing.
+- **`ak:debug`**: when the reviewer surfaces a real failure mode, hand off there to localize and fix.
 - **Repo orchestration rules** (`references/orchestration-patterns.md`): this skill orchestrates from the main session. A persona calling another persona is anti-pattern B — see Loading Constraints above.
 
 ## Verification

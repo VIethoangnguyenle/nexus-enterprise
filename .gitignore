@@ -49,3 +49,8 @@ Thumbs.db
 **/.impeccable/hook.cache.json
 **/.impeccable/config.local.json
 .gstack/
+
+# AgentKit (paid kit) — installed per machine by scripts/agentkit-setup.sh, never committed.
+/.agentkit/
+.claude/settings.local.json
+.claude/rules/

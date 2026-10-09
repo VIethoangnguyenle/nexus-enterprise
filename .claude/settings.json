@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "agentkit-local": {
+      "source": {
+        "source": "directory",
+        "path": "./.agentkit/ak-engineer-kit"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "ak-engineer@agentkit-local": true
+  }
+}

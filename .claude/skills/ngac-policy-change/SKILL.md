@@ -1,6 +1,6 @@
 ---
 name: ngac-policy-change
-description: Use when changing anything that affects an NGAC authorization decision — node types, assignments, associations, prohibitions, operations, the PDP decision order, or the shape of the in-memory graph. Covers what to verify and in what order so a permission change cannot silently widen access. Not a process skill; it assumes superpowers already governs planning, TDD, and verification.
+description: Use when changing anything that affects an NGAC authorization decision — node types, assignments, associations, prohibitions, operations, the PDP decision order, or the shape of the in-memory graph. Covers what to verify and in what order so a permission change cannot silently widen access. Not a process skill; it assumes AgentKit already governs planning, TDD, and verification.
 ---
 
 # Changing the NGAC policy model

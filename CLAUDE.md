@@ -22,6 +22,7 @@ make test           # Go tests, all services; exits non-zero on failure
 make test s=policy  # one service, verbose
 make db-migrate     # re-apply data/init.sql + data/migrations/ to the running DB
 make proto          # regenerate Go from backend/proto/
+make agentkit-setup KIT=<tar.gz>  # install the AgentKit plugin locally (git-ignored, see §4)
 
 cd frontend && npm test     # vitest
 cd frontend && npm run lint # eslint
@@ -83,20 +84,28 @@ Only what is not derivable in ten seconds:
 
 ## 4. Required workflow
 
-**superpowers is the sole workflow axis.** Do not add a second one.
+**AgentKit (`ak-engineer` plugin) is the sole workflow axis.** Do not add a second one;
+superpowers is retired. The kit is a paid product and this repo is public, so it is **never
+committed**: `make agentkit-setup KIT=<ak-engineer-kit-X.Y.Z.tar.gz>` extracts it into the
+git-ignored `.agentkit/`, links its rules into `.claude/rules/` and wires the statusline;
+`.claude/settings.json` (committed) enables the plugin. Without that step none of the `ak:*`
+skills, agents, rules or hooks exist in your session.
 
-- Non-trivial work: `superpowers:brainstorming` → `superpowers:writing-plans` (plans go in
-  `docs/superpowers/plans/YYYY-MM-DD-<feature>.md`) → `superpowers:executing-plans` or
-  `superpowers:subagent-driven-development`.
-- All code: `superpowers:test-driven-development` — failing test first.
-- All bugs: `superpowers:systematic-debugging` before proposing a fix.
-- Before claiming done: `superpowers:verification-before-completion`.
+- Non-trivial work: `ak:brainstorm` → `ak:plan` (plans go in `plans/<timestamp>-<slug>/` —
+  `plan.md` plus `phase-NN-*.md`) → `ak:cook` to implement the plan.
+- All code: `ak:cook --tdd` — failing test first.
+- All bugs: `ak:debug` (root cause before any fix), then `ak:fix`.
+- Before claiming done: `ak:test` on the touched behaviour, then `ak:code-review`.
+- Committing, PRs, worktrees: `ak:git`, `ak:ship`, `ak:worktree`.
 - Any plan that changes system behaviour must name the capability in `docs/specs/` it adds or
   modifies, and update that spec when the task lands.
+- `docs/superpowers/` is history: plans and design specs written before the switch. Read them,
+  do not add to them.
 
-**Boundary between the two skill sets:** superpowers = quy trình (khi nào làm gì, theo trình tự
+**Boundary between the two skill sets:** AgentKit = quy trình (khi nào làm gì, theo trình tự
 nào). `.claude/skills/` = kiến thức domain (làm thế nào cho đúng trong lĩnh vực đó). Skill domain
-KHÔNG được định nghĩa quy trình; cần quy trình thì gọi superpowers.
+KHÔNG được định nghĩa quy trình; cần quy trình thì gọi AgentKit. Where an AgentKit rule conflicts
+with this file — plan location, commit conventions, the enforcement rules below — this file wins.
 
 ## 5. Enforcement Rules
 
