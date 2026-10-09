@@ -21,6 +21,7 @@ import (
 	"ngac-platform/services/messaging/internal/domain"
 	grpcserver "ngac-platform/services/messaging/internal/grpc"
 	"ngac-platform/services/messaging/internal/store"
+	"ngac-platform/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -205,48 +206,28 @@ func (m *mockPolicyReadWithChannelsOA) GetChildren(_ context.Context, _ *policyp
 	}}, nil
 }
 
-// getTestWorkspaceID returns an existing workspace_id from DB for FK compliance.
+// getTestWorkspaceID creates a workspace of the test's own for FK compliance.
 func getTestWorkspaceID(t *testing.T, pool *pgxpool.Pool) string {
 	t.Helper()
-	var wsID string
-	err := pool.QueryRow(context.Background(), "SELECT id FROM workspaces LIMIT 1").Scan(&wsID)
-	if err != nil {
-		t.Skipf("no workspace exists in test DB: %v", err)
-	}
+	owner, _ := testutil.CreateUser(t, pool)
+	wsID, _ := testutil.CreateWorkspace(t, pool, owner)
 	return wsID
 }
 
-// getTestUserID returns an existing user ID from DB for FK compliance.
+// getTestUserID creates a user of the test's own for FK compliance.
 func getTestUserID(t *testing.T, pool *pgxpool.Pool) string {
 	t.Helper()
-	var userID string
-	err := pool.QueryRow(context.Background(), "SELECT id FROM users LIMIT 1").Scan(&userID)
-	if err != nil {
-		t.Skipf("no user exists in test DB: %v", err)
-	}
+	userID, _ := testutil.CreateUser(t, pool)
 	return userID
 }
 
-// getTwoTestUserIDs returns two distinct existing users, for the flows whose
-// foreign keys require real participants.
+// getTwoTestUserIDs creates two distinct users, for the flows whose foreign
+// keys require real participants.
 func getTwoTestUserIDs(t *testing.T, pool *pgxpool.Pool) (string, string) {
 	t.Helper()
-	rows, err := pool.Query(context.Background(), "SELECT id FROM users LIMIT 2")
-	if err != nil {
-		t.Skipf("cannot read users: %v", err)
-	}
-	defer rows.Close()
-	var ids []string
-	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err == nil {
-			ids = append(ids, id)
-		}
-	}
-	if len(ids) < 2 {
-		t.Fatalf("need two users in the test database, found %d", len(ids))
-	}
-	return ids[0], ids[1]
+	a, _ := testutil.CreateUser(t, pool)
+	b, _ := testutil.CreateUser(t, pool)
+	return a, b
 }
 
 // insertTestChannel creates a channel directly in DB.

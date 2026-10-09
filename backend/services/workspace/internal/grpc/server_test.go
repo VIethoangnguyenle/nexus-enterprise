@@ -20,6 +20,7 @@ import (
 	"ngac-platform/services/workspace/internal/domain"
 	grpcserver "ngac-platform/services/workspace/internal/grpc"
 	"ngac-platform/services/workspace/internal/store"
+	"ngac-platform/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -163,11 +164,7 @@ func setupTestServer(t *testing.T) (*grpcserver.WorkspaceServer, *pgxpool.Pool, 
 
 func getTestUserNGACNodeID(t *testing.T, pool *pgxpool.Pool) (userID, ngacNodeID string) {
 	t.Helper()
-	err := pool.QueryRow(context.Background(), "SELECT id, ngac_node FROM users LIMIT 1").Scan(&userID, &ngacNodeID)
-	if err != nil {
-		t.Skipf("no user in test DB: %v", err)
-	}
-	return
+	return testutil.CreateUser(t, pool)
 }
 
 func createTestWorkspace(t *testing.T, srv *grpcserver.WorkspaceServer, pool *pgxpool.Pool, prefix string) (ws *pb.Workspace, ngacNodeID string) {

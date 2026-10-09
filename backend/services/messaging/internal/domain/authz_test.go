@@ -19,6 +19,7 @@ import (
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/messaging/internal/domain"
 	"ngac-platform/services/messaging/internal/store"
+	"ngac-platform/testutil"
 )
 
 // ---------------------------------------------------------------------------
@@ -152,13 +153,9 @@ func newFixture(t *testing.T) *fixture {
 	t.Cleanup(pool.Close)
 
 	f := &fixture{pool: pool}
-	if err := pool.QueryRow(context.Background(),
-		`SELECT id, name, ngac_pc_id FROM workspaces LIMIT 1`).Scan(&f.wsID, &f.wsName, &f.pcID); err != nil {
-		t.Skipf("no workspace in test DB: %v", err)
-	}
-	if err := pool.QueryRow(context.Background(), `SELECT id FROM users LIMIT 1`).Scan(&f.userID); err != nil {
-		t.Skipf("no user in test DB: %v", err)
-	}
+	f.userID, _ = testutil.CreateUser(t, pool)
+	f.wsID, f.pcID = testutil.CreateWorkspace(t, pool, f.userID)
+	require.NoError(t, pool.QueryRow(context.Background(), `SELECT name FROM workspaces WHERE id = $1`, f.wsID).Scan(&f.wsName))
 
 	f.read = &scriptedPolicyRead{allow: map[grant]bool{}, children: map[string][]*policypb.NGACNode{}}
 	f.write = &recordingPolicyWrite{pool: pool}
