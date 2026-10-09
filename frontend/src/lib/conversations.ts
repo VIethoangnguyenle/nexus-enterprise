@@ -1,5 +1,5 @@
 import type { Channel } from '../api/messaging'
-import type { PeopleDirectory, Person } from './people'
+import { displayName, type PeopleDirectory, type Person } from './people'
 
 export type ConversationKind = 'dm' | 'space'
 
@@ -90,7 +90,7 @@ export function buildConversations({ spaces, dms, unread, lastMessages, me, dir 
       memberCount: ch.member_count ?? 0,
       lastActivity: last ? Date.parse(last.timestamp) || 0 : 0,
       preview: last?.content || undefined,
-      previewAuthor: last ? (fromMe ? 'Bạn' : last.senderName || undefined) : undefined,
+      previewAuthor: last ? (fromMe ? 'Bạn' : displayName(dir, last.senderId, last.senderName)) : undefined,
       lastSenderId: last?.senderId,
     }
     if (kind === 'dm') {

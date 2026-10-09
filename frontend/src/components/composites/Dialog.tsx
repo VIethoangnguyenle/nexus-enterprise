@@ -33,6 +33,17 @@ export function Dialog({ open, onClose, title, children, footer, initialFocusRef
   const surfaceRef = useRef<HTMLDivElement>(null)
   const returnTo = useRef<HTMLElement | null>(null)
 
+  // While open, the app behind the scrim is inert: no focus, no clicks, and
+  // hidden from assistive tech (aria-modal alone is not honoured everywhere).
+  useEffect(() => {
+    const app = document.getElementById('root')
+    if (!open || !app) return
+    app.inert = true
+    return () => {
+      app.inert = false
+    }
+  }, [open])
+
   useEffect(() => {
     if (!open) return
     returnTo.current = document.activeElement as HTMLElement | null

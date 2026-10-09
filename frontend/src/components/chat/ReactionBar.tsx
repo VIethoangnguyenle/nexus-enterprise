@@ -64,7 +64,8 @@ export function ReactionBar({ reactions, currentUserId, onToggle, onAddReaction 
         aria-label="Thêm cảm xúc"
         title="Thêm cảm xúc"
         className="press inline-grid place-items-center h-6.5 w-8 rounded-full border-none bg-transparent
-          cursor-pointer text-ink-muted hover:bg-hover hover:text-ink focus-ring"
+          cursor-pointer text-ink-muted hover:bg-hover hover:text-ink focus-ring
+          opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
       >
         <SmilePlus size={15} strokeWidth={1.75} />
       </button>

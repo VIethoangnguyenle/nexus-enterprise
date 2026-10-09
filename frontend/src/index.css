@@ -98,7 +98,8 @@
   --color-surface-container-low: var(--color-sunk);
   --color-surface-container: var(--color-hover);
   --color-surface-container-high: var(--color-hover);
-  --color-surface-container-highest: var(--color-line);
+  /* Every use is a selected item or segment: DESIGN's selected tone is raised. */
+  --color-surface-container-highest: var(--color-raised);
 
   --color-on-surface: var(--color-ink);
   --color-on-surface-variant: var(--color-ink-muted);

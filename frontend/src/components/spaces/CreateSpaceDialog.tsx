@@ -4,7 +4,7 @@ import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useCreateChannel } from '../../hooks/useMessaging'
 import { usePeople } from '../../hooks/usePeople'
 import { useAuthStore } from '../../stores/auth.store'
-import { messagingApi } from '../../api/messaging'
+import { messagingApi, type Channel } from '../../api/messaging'
 import { queryClient } from '../../lib/query-client'
 import { isForbidden, explain } from '../../lib/errors'
 import { workspaceDisplayName } from '../../lib/workspace'
@@ -62,6 +62,12 @@ export function CreateSpaceDialog({ open, onClose }: { open: boolean; onClose: (
         members.map((p) => messagingApi.addMember(channel.id, p.nodeId)),
       )
       const failed = results.filter((r) => r.status === 'rejected').length
+      // Show the new space in Nhóm at once; the refetch below confirms it.
+      queryClient.setQueryData<{ channels: Channel[] | null }>(['channels', workspaceId], (old) =>
+        old && !(old.channels ?? []).some((c) => c.id === channel.id)
+          ? { ...old, channels: [...(old.channels ?? []), { ...channel, member_count: 1 + members.length - failed }] }
+          : old,
+      )
       void queryClient.invalidateQueries({ queryKey: ['channels', workspaceId] })
       void queryClient.invalidateQueries({ queryKey: ['channelMembers', channel.id] })
       onClose()

@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { MoreHorizontal, MessageSquare, UserMinus, UserPlus, CircleAlert, Users } from 'lucide-react'
+import { MoreVertical, MessageSquare, UserMinus, UserPlus, CircleAlert, Users } from 'lucide-react'
 import { useAddChannelMember, useChannelMembers, useCreateDM, useRemoveChannelMember } from '../../hooks/useMessaging'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { useMotionPresets } from '../../lib/motion'
@@ -249,7 +249,7 @@ function MemberRow({ row, online, canRemove, onRemove }: {
             aria-expanded={open}
             onClick={() => setOpen((o) => !o)}
           >
-            <MoreHorizontal size={16} strokeWidth={1.75} />
+            <MoreVertical size={16} strokeWidth={1.75} />
           </IconButton>
           <Popover open={open} onClose={() => setOpen(false)} anchorRef={moreRef} placement="bottom-end" role="menu" label={`Tuỳ chọn cho ${person.name}`}>
             <MenuItem icon={<MessageSquare size={16} strokeWidth={1.75} />} onClick={message}>

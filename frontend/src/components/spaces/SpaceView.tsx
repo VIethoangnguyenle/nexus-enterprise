@@ -290,10 +290,11 @@ export function SpaceView({ channelId }: { channelId: string }) {
                 </div>
               )}
 
-              <div className="h-6 px-6 flex items-center text-xs text-ink-muted" aria-live="polite">
-                {typingNames.length > 0 && <TypingLine names={typingNames} />}
-              </div>
-
+              <div className="relative">
+                {/* Floats over the end of the stream so typing never shifts the layout. */}
+                <div className="absolute bottom-full left-6 pb-1 text-xs text-ink-muted" aria-live="polite">
+                  {typingNames.length > 0 && <TypingLine names={typingNames} />}
+                </div>
               <ChatEditor
                 channelId={channelId}
                 people={people}
@@ -304,6 +305,7 @@ export function SpaceView({ channelId }: { channelId: string }) {
                 onFileUpload={handleFileUpload}
                 isPending={send.isPending}
               />
+              </div>
             </>
           )}
           {tab === 'files' && (

@@ -85,7 +85,9 @@ export function ChatEditor({
       const mentionMatch = textBefore.match(/@(\w*)$/)
       setMentionQuery(mentionMatch ? mentionMatch[1] ?? '' : null)
     },
-  })
+  // The placeholder names the conversation, which can arrive after mount;
+  // TipTap reads it once, so the editor is rebuilt when it changes.
+  }, [placeholder])
 
   const mentionOpen = useRef(false)
   mentionOpen.current = mentionQuery !== null

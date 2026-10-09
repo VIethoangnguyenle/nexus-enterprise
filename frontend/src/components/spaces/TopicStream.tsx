@@ -154,8 +154,8 @@ function TopicCard({
       aria-labelledby={`${idBase}-who ${idBase}-text`}
       data-realtime={arrival?.source}
       style={byOther ? personStyle(arrival!.author ?? t.sender_id) : undefined}
-      className={`grid pt-1 pb-1.5 rounded-lg bg-raised ${byOther ? 'rt-wash' : ''}
-        ${open ? 'outline-2 outline-accent-wash' : ''}`}
+      aria-current={open || undefined}
+      className={`grid pt-1 pb-1.5 rounded-lg bg-raised ${byOther ? 'rt-wash' : ''}`}
     >
       <MessageBlock
         message={t}
