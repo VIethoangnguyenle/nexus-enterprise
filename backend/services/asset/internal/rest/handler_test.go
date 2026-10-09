@@ -49,7 +49,85 @@ func (c *captureSvc) UpdateTypeSchema(ctx context.Context, req *pb.UpdateTypeSch
 	return &pb.AssetType{}, nil
 }
 
+type captureAssetSvc struct {
+	AssetService
+	AssetRequestService
+	getAsset    *pb.GetAssetRequest
+	transitions *pb.GetTransitionsRequest
+	history     *pb.GetHistoryRequest
+	createReq   *pb.CreateAssetRequestReq
+}
+
+func (c *captureAssetSvc) GetAsset(_ context.Context, req *pb.GetAssetRequest) (*pb.Asset, error) {
+	c.getAsset = req
+	return &pb.Asset{}, nil
+}
+
+func (c *captureAssetSvc) GetAvailableTransitions(_ context.Context, req *pb.GetTransitionsRequest) (*pb.TransitionList, error) {
+	c.transitions = req
+	return &pb.TransitionList{}, nil
+}
+
+func (c *captureAssetSvc) GetAssetHistory(_ context.Context, req *pb.GetHistoryRequest) (*pb.TransitionHistoryList, error) {
+	c.history = req
+	return &pb.TransitionHistoryList{}, nil
+}
+
+func (c *captureAssetSvc) CreateRequest(_ context.Context, req *pb.CreateAssetRequestReq) (*pb.AssetRequest, error) {
+	c.createReq = req
+	return &pb.AssetRequest{}, nil
+}
+
 var testClaims = &httputil.Claims{UserID: "user-1", NGACNodeID: "ngac-1"}
+
+func TestGetAsset_ForwardsCaller(t *testing.T) {
+	svc := &captureAssetSvc{}
+	h := NewHandler(svc, nil, svc)
+	call(t, http.MethodGet, "", map[string]string{"assetId": "a-1"}, h.GetAsset)
+	require.NotNil(t, svc.getAsset)
+	assert.Equal(t, "ngac-1", svc.getAsset.UserNgacNodeId)
+}
+
+func TestGetAvailableTransitions_ForwardsCaller(t *testing.T) {
+	svc := &captureAssetSvc{}
+	h := NewHandler(svc, nil, svc)
+	call(t, http.MethodGet, "", map[string]string{"assetId": "a-1"}, h.GetAvailableTransitions)
+	require.NotNil(t, svc.transitions)
+	assert.Equal(t, "ngac-1", svc.transitions.UserNgacNodeId)
+}
+
+func TestGetAssetHistory_ForwardsCaller(t *testing.T) {
+	svc := &captureAssetSvc{}
+	h := NewHandler(svc, nil, svc)
+	call(t, http.MethodGet, "", map[string]string{"assetId": "a-1"}, h.GetAssetHistory)
+	require.NotNil(t, svc.history)
+	assert.Equal(t, "ngac-1", svc.history.UserNgacNodeId)
+}
+
+// The requester is who the token says, never who the body says.
+func TestCreateAssetRequest_TakesRequesterFromClaimsNotBody(t *testing.T) {
+	svc := &captureAssetSvc{}
+	h := NewHandler(svc, nil, svc)
+	body := `{"type_id":"t-1","reason":"need it","quantity":1,
+	          "user_id":"forged-user","UserId":"forged-user",
+	          "user_ngac_node_id":"forged-node","UserNgacNodeId":"forged-node"}`
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("id")
+	c.SetParamValues("ws-1")
+	httputil.SetClaims(c, testClaims)
+	require.NoError(t, h.CreateAssetRequest(c))
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	require.NotNil(t, svc.createReq)
+	assert.Equal(t, "user-1", svc.createReq.UserId)
+	assert.Equal(t, "ngac-1", svc.createReq.UserNgacNodeId)
+	assert.Equal(t, "t-1", svc.createReq.TypeId)
+}
 
 func call(t *testing.T, method, body string, params map[string]string, h echo.HandlerFunc) {
 	t.Helper()

@@ -123,7 +123,11 @@ func shareStillListed(t *testing.T, itemID, shareID string) bool {
 }
 
 // ---------------------------------------------------------------------------
-// RevokeShare — requires share on the OA the item row points at.
+// RevokeShare — allowed for the user who created the share, or for anyone
+// holding share on the OA the item row points at.
+//
+// sharedFolder's share is created by "ngac-owner"; "ngac-admin" below is a
+// different user, so the share-right tests do not pass via the creator path.
 // ---------------------------------------------------------------------------
 
 func TestRevokeShare_DeniedWithoutShareRight(t *testing.T) {
@@ -164,13 +168,13 @@ func TestRevokeShare_DeniedWhenPolicyErrors(t *testing.T) {
 	folder, share := sharedFolder(t, "RevokePolicyErr")
 
 	pr := newRulePolicy()
-	pr.grant("ngac-owner", folder.NgacNodeId, ngac.OpShare)
+	pr.grant("ngac-admin", folder.NgacNodeId, ngac.OpShare)
 	pr.failErr = errors.New("policy unavailable")
 	pw := &recordingPolicyWrite{}
 	srv, _ := newServerWith(t, pr, pw)
 
 	_, err := srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{
-		ShareId: share.Id, UserNgacNodeId: "ngac-owner",
+		ShareId: share.Id, UserNgacNodeId: "ngac-admin",
 	})
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -182,7 +186,27 @@ func TestRevokeShare_AllowedWithShareRight(t *testing.T) {
 	folder, share := sharedFolder(t, "RevokeAllow")
 
 	pr := newRulePolicy()
-	pr.grant("ngac-owner", folder.NgacNodeId, ngac.OpShare)
+	pr.grant("ngac-admin", folder.NgacNodeId, ngac.OpShare)
+	pw := &recordingPolicyWrite{}
+	srv, _ := newServerWith(t, pr, pw)
+
+	_, err := srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{
+		ShareId: share.Id, UserNgacNodeId: "ngac-admin",
+	})
+
+	require.NoError(t, err)
+	assert.Contains(t, pr.checks, [3]string{"ngac-admin", folder.NgacNodeId, ngac.OpShare})
+	assert.Len(t, pw.deleted, 1, "the share OA is what grants access and must be deleted")
+	assert.False(t, shareStillListed(t, folder.Id, share.Id))
+}
+
+// A member creates shares with write (CreateShare's check) and holds no share
+// op, yet must be able to withdraw a share they made.
+func TestRevokeShare_CreatorCanRevokeOwnShareWithoutShareRight(t *testing.T) {
+	folder, share := sharedFolder(t, "RevokeOwn")
+
+	pr := newRulePolicy()
+	pr.grant("ngac-owner", folder.NgacNodeId, ngac.OpWrite) // member-level rights only
 	pw := &recordingPolicyWrite{}
 	srv, _ := newServerWith(t, pr, pw)
 
@@ -191,9 +215,53 @@ func TestRevokeShare_AllowedWithShareRight(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Contains(t, pr.checks, [3]string{"ngac-owner", folder.NgacNodeId, ngac.OpShare})
-	assert.Len(t, pw.deleted, 1, "the share OA is what grants access and must be deleted")
+	assert.Len(t, pw.deleted, 1)
 	assert.False(t, shareStillListed(t, folder.Id, share.Id))
+}
+
+// Being able to create shares on the same item does not let a member revoke
+// someone else's.
+func TestRevokeShare_OtherMemberCannotRevokeWithoutShareRight(t *testing.T) {
+	folder, share := sharedFolder(t, "RevokeOthers")
+
+	pr := newRulePolicy()
+	pr.grant("ngac-member-2", folder.NgacNodeId, ngac.OpWrite)
+	pr.grant("ngac-member-2", folder.NgacNodeId, ngac.OpRead)
+	pw := &recordingPolicyWrite{}
+	srv, _ := newServerWith(t, pr, pw)
+
+	_, err := srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{
+		ShareId: share.Id, UserNgacNodeId: "ngac-member-2",
+	})
+
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Empty(t, pw.deleted)
+	assert.True(t, shareStillListed(t, folder.Id, share.Id))
+}
+
+// A share whose creator was never recorded must not be revocable by a caller
+// who is also unidentified: empty does not match empty.
+func TestRevokeShare_EmptyCreatorDoesNotMatchEmptyCaller(t *testing.T) {
+	allow, pool := setupServer(t)
+	wsID := getTestWorkspaceID(t, pool)
+	folder, err := allow.CreateFolder(context.Background(), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "RevokeAnon", UserNgacNodeId: "ngac-owner",
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
+	share, err := allow.CreateShare(context.Background(), &pb.CreateShareRequest{
+		ItemId: folder.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
+		Operations: []string{ngac.OpRead}, // no UserNgacNodeId: created_by is ""
+	})
+	require.NoError(t, err)
+
+	pw := &recordingPolicyWrite{}
+	srv, _ := newServerWith(t, newRulePolicy(), pw)
+	_, err = srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{ShareId: share.Id})
+
+	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	assert.Empty(t, pw.deleted)
+	assert.True(t, shareStillListed(t, folder.Id, share.Id))
 }
 
 // ---------------------------------------------------------------------------

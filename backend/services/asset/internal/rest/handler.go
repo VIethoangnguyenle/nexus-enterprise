@@ -24,6 +24,14 @@ func callerNodeID(c echo.Context) string {
 	return ""
 }
 
+// callerUserID returns the authenticated caller's user ID, or "".
+func callerUserID(c echo.Context) string {
+	if claims := httputil.GetClaims(c); claims != nil {
+		return claims.UserID
+	}
+	return ""
+}
+
 // callerCtx returns the request context carrying the authenticated caller, for
 // RPCs whose request message has no caller field (see package caller).
 func callerCtx(c echo.Context) context.Context {
@@ -230,7 +238,8 @@ func (h *Handler) ListAssets(c echo.Context) error {
 
 func (h *Handler) GetAsset(c echo.Context) error {
 	resp, err := h.assetSvc.GetAsset(c.Request().Context(), &pb.GetAssetRequest{
-		AssetId: c.Param("assetId"),
+		AssetId:        c.Param("assetId"),
+		UserNgacNodeId: callerNodeID(c),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -294,7 +303,8 @@ func (h *Handler) TransitionAsset(c echo.Context) error {
 
 func (h *Handler) GetAvailableTransitions(c echo.Context) error {
 	resp, err := h.assetSvc.GetAvailableTransitions(c.Request().Context(), &pb.GetTransitionsRequest{
-		AssetId: c.Param("assetId"),
+		AssetId:        c.Param("assetId"),
+		UserNgacNodeId: callerNodeID(c),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -304,7 +314,8 @@ func (h *Handler) GetAvailableTransitions(c echo.Context) error {
 
 func (h *Handler) GetAssetHistory(c echo.Context) error {
 	resp, err := h.assetSvc.GetAssetHistory(c.Request().Context(), &pb.GetHistoryRequest{
-		AssetId: c.Param("assetId"),
+		AssetId:        c.Param("assetId"),
+		UserNgacNodeId: callerNodeID(c),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -315,7 +326,9 @@ func (h *Handler) GetAssetHistory(c echo.Context) error {
 // --- Asset Requests ---
 
 func (h *Handler) CreateAssetRequest(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	// The requester is taken from the verified token only. The body has no
+	// user field, and none may be added: the request is recorded as theirs and
+	// ApproveRequest refuses to let a requester approve their own.
 	var body struct {
 		TypeID   string `json:"type_id"`
 		Reason   string `json:"reason"`
@@ -329,7 +342,8 @@ func (h *Handler) CreateAssetRequest(c echo.Context) error {
 		TypeId:         body.TypeID,
 		Justification:  body.Reason,
 		Quantity:       body.Quantity,
-		UserNgacNodeId: claims.NGACNodeID,
+		UserId:         callerUserID(c),
+		UserNgacNodeId: callerNodeID(c),
 	})
 	if err != nil {
 		return mapGRPCError(err)
