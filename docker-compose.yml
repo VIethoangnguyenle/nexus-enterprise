@@ -175,6 +175,13 @@ services:
       # refresh cookie must not carry Secure or the browser will drop it.
       # Change this once TLS terminates in front of the stack.
       APP_ENV: dev
+      # Sign in with Google — off unless GOOGLE_CLIENT_ID is set in the shell
+      # or a .env file next to this compose file. The redirect URI must also be
+      # listed under the OAuth client's "Authorized redirect URIs".
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL_DOCKER:-http://localhost/api/auth/google/callback}
+      APP_BASE_URL: ${APP_BASE_URL_DOCKER:-http://localhost}
     depends_on:
       policy:
         condition: service_healthy
