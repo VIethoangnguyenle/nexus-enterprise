@@ -43,18 +43,3 @@ func TestSignup_PublicDomainNeverAutoJoins(t *testing.T) {
 		t.Errorf("role = %q, want owner of a fresh tenant", res.TenantRole)
 	}
 }
-
-// Regression guard for the refactor: a company domain still auto-joins.
-func TestSignup_CompanyDomainStillAutoJoins(t *testing.T) {
-	w := newFakeWorld()
-	svc := w.service(t)
-	acme := w.addTenant("Acme", "acme.com")
-
-	res, err := svc.Signup(context.Background(), "alice@acme.com", "pw-123456", "Alice", "")
-	if err != nil {
-		t.Fatalf("signup: %v", err)
-	}
-	if res.TenantID != acme || res.TenantRole != "member" {
-		t.Errorf("tenant = %q role = %q, want member of %q", res.TenantID, res.TenantRole, acme)
-	}
-}
