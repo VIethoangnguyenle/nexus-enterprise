@@ -4,7 +4,7 @@ title: "NGAC model conformance"
 status: pending
 priority: P1
 effort: 2-3d
-dependencies: [2, 3]
+dependencies: [2b, 3b]
 ---
 
 # Phase 07 — NGAC model conformance

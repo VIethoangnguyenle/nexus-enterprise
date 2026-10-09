@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Close authorization gaps"
-status: pending
+status: done
 priority: P0
 effort: 2-3d
 dependencies: [1]

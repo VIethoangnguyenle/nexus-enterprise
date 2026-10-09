@@ -122,9 +122,11 @@ Theo mức dùng và mức lệch: (1) shell + sidebar + nav, (2) chat, (3) driv
 2. [~] `DESIGN.md` mới (xong) + mockup: màn cốt lõi (Tin nhắn, Tài liệu, Phê duyệt, trạng thái,
    di động) ở `design/mockups/core-screens.html` chờ duyệt; còn Tài sản, Quản trị, Danh bạ,
    Tài liệu văn bản, Cài đặt, Auth.
-3. Nền tảng: tokens bổ sung, `lib/motion`, `lib/format`, primitive còn thiếu, lint siết (ở mức warn
-   trong lúc chuyển, khoá error khi xong).
-4. Từng nhóm màn theo thứ tự trên, mỗi nhóm một PR: code theo mockup → test vitest (không UUID,
+3. [~] Nền tảng: tokens + type + `lib/motion` (`motion/react`, preset theo DESIGN.md §7, reduced-motion)
+   + `lib/format` đã có (PR #2, `d0e8bac`); Dialog/Popover/Toast đã có exit. Còn: primitive thiếu, lint
+   siết (warn trong lúc chuyển, khoá error khi xong), 32 `transition-all` ở các màn chưa làm.
+   Nhóm (1) shell + sidebar và (2) chat/spaces **đã code** trong PR #2.
+4. Từng nhóm màn theo thứ tự trên, mỗi nhóm một PR **gộp với 04b của domain đó** (xem plan.md): code theo mockup → test vitest (không UUID,
    có loading/empty/error) → screenshot 3 khổ × 2 theme so với mockup.
 5. Motion pass toàn app + reduced-motion; test thủ công 60fps trên danh sách dài (drive, chat).
 6. Khoá lint ở `error`.

@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "PDP correctness and freshness"
-status: pending
+status: done
 priority: P0
 effort: 2-3d
 dependencies: [1]

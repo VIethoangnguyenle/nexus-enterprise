@@ -47,23 +47,37 @@ Audit cũng tìm ra lỗ hổng phân quyền **có thật, đang chạy**. Chú
 | # | Phase | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
 | 01 | [CI baseline](phase-01-ci-baseline.md) | P1 | 0.5d | — | pending |
-| 02 | [Close authorization gaps](phase-02-close-authorization-gaps.md) | P0 | 2-3d | 01 | pending |
-| 03 | [PDP correctness and freshness](phase-03-pdp-correctness-and-freshness.md) | P0 | 2-3d | 01 | pending |
+| 02 | [Close authorization gaps](phase-02-close-authorization-gaps.md) | P0 | 2-3d | 01 | done (PR #2) — gRPC caller identity moved to 02b |
+| 02b | [gRPC caller identity](phase-02b-grpc-caller-identity.md) | P2 | 3-4d | 01 | pending |
+| 03 | [PDP correctness and freshness](phase-03-pdp-correctness-and-freshness.md) | P0 | 2-3d | 01 | done (PR #2) — in-RAM prohibitions moved to 03b |
+| 03b | [Prohibitions in the in-memory graph](phase-03b-prohibitions-in-memory.md) | P2 | 1-2d | 01 | pending |
 | 04 | [Frontend data layer](phase-04-frontend-data-layer.md) | P1 | 2-3d | 01 | pending |
 | 05 | [Realtime over WebSocket](phase-05-realtime-websocket.md) | P1 | 3-4d | 02, 04 | pending |
 | 06 | [UI redesign and motion](phase-06-ui-redesign-and-motion.md) ★ | P1 | 6-8d | 04 (code); design starts now | in-progress |
-| 07 | [NGAC model conformance](phase-07-ngac-model-conformance.md) | P2 | 2-3d | 02, 03 | pending |
+| 07 | [NGAC model conformance](phase-07-ngac-model-conformance.md) | P2 | 2-3d | 02b, 03b | pending |
 | 08 | [Backend shared packages and layering](phase-08-backend-shared-packages-and-layering.md) | P2 | 3-4d | 02 | pending |
 | 09 | [Tests, dead code, large files](phase-09-tests-dead-code-and-splits.md) | P3 | 1-2d | 04, 08 | pending |
 
 ```text
 Track UI     : 06-design (brainstorm)────────────┐
-Track FE     : 01 ─► 04 ─────────────────────────┴─► 06-code ─► 09
-Track secure : 01 ─► 02 ─┬─► 05 realtime
-                   03 ───┴─► 07 ─► 08 ──────────────────────────► 09
+Track FE     : 01 ─► 04 ─┬───────────────────────┴─► 06-code ─► 09
+                         └─► 05 realtime (02 đã xong)
+Track secure : 01 ─► 02b ─┬─► 07 ─► 08 ─────────────────────────► 09
+               01 ─► 03b ─┘
 ```
 
-02/03 chạy song song (`ak:worktree`); 04 song song với 02/03; thiết kế của 06 song song với tất cả.
+**Thứ tự đã chốt 2026-10-10:** 01 → 04 (đường găng tới 05 và 06-code). 02b/03b làm trước 07,
+không chặn 04/05 vì cổng gRPC chỉ nằm trong mạng nội bộ (đã xác nhận). Thiết kế của 06 song song với tất cả.
+
+**UI là trọng tâm (người dùng nhấn mạnh 2026-10-10): refactor UI + animation + hiển thị.** Để mỗi màn
+chỉ bị đụng một lần, 04 tách hai bước:
+- **04a nền dùng chung** (~1d): query-key factory, `useActiveWorkspace` duy nhất, `MutationCache.onError`
+  + toast, quyền chỉ qua TanStack Query.
+- **04b theo từng nhóm màn, gộp với 06-code cùng một PR**: sửa data layer của domain đó **và** dựng lại
+  màn theo mockup (display: không ID, tên + avatar, loading/empty/error; motion: enter/exit, bỏ
+  `transition-all`, reduced-motion). Thứ tự nhóm màn theo phase 06.
+
+Mỗi PR nhóm màn chỉ bắt đầu khi mockup của nhóm đó đã được duyệt.
 
 ## Capabilities in `docs/specs/` this plan touches
 
@@ -75,6 +89,8 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
 | `resource-pep-coverage` | **new** — endpoint → op → OA, gồm WebSocket subscribe | 02 |
 | `session-logout` | **new** | 02 |
 | `policy-decision-freshness` | **new** — EPP tới mọi replica PDP, dạng cache key | 03 |
+| `resource-pep-coverage` | modify — caller lấy từ metadata gRPC đã xác thực, không từ body | 02b |
+| `policy-decision-freshness` | modify — prohibitions đánh giá trong RAM, invalidate qua EPP | 03b |
 | `batch-access-check` | modify — prohibitions fail closed | 03 |
 | `drive-permission-engine` | modify — đóng divergence đang mở (tenant trong cache key) | 03 |
 | `drive-tree-navigation` | modify — folder path trong URL | 04 |
@@ -116,4 +132,6 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
    nav) hay giữ layout riêng nhưng dùng chung guard/WebSocket/logout?
 6. ~~Hướng UI~~ **Đã chốt 2026-10-09:** B Tín hiệu, mượn bảng kẻ mảnh của A, light + dark ngay
    từ đầu. Nguồn thiết kế: `DESIGN.md` + `design/mockups/`.
-7. Phase 02/03 có tách ra làm ngay như hotfix trước khi duyệt phần còn lại?
+7. ~~Hotfix 02/03~~ **Đã xong 2026-10-10:** phần chính của 02/03 đã merge trong PR #2; phần còn lại
+   tách thành 02b/03b.
+8. **Cổng gRPC (02b):** **Đã xác nhận 2026-10-10** chỉ nội bộ → 02b là phòng thủ chiều sâu, P2.

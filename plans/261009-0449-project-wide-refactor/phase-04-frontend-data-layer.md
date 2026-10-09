@@ -9,6 +9,9 @@ dependencies: [1]
 
 # Phase 04 — Frontend data layer
 
+> **Tách 2026-10-10:** 04a = phần dùng chung (key factory, `useActiveWorkspace`, `MutationCache.onError`
+> + toast, quyền). 04b = phần theo domain, làm cùng PR với nhóm màn tương ứng của phase 06.
+
 ## Overview
 TanStack Query sở hữu server state (CLAUDE.md §3), nhưng thực tế có cache tự viết, fetch
 imperative, query key không thống nhất và invalidation trỏ sai key. Sửa lớp dữ liệu trước khi
