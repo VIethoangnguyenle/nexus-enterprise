@@ -91,7 +91,7 @@ func (p *Producer) PublishGraphMutated(mutationType string, nodeIDs []string) {
 		NodeIDs:      nodeIDs,
 		Timestamp:    time.Now().UnixMilli(),
 	}
-	p.publishAsync("ngac.graph.mutated", evt)
+	p.publishAsync(TopicGraphMutated, evt)
 }
 
 // PublishGraphMutatedWithTypes publishes an enriched graph mutation event
@@ -107,7 +107,7 @@ func (p *Producer) PublishGraphMutatedWithTypes(mutationType string, nodeIDs []s
 		ParentType:   parentType,
 		Timestamp:    time.Now().UnixMilli(),
 	}
-	p.publishAsync("ngac.graph.mutated", evt)
+	p.publishAsync(TopicGraphMutated, evt)
 }
 
 // publishAsync sends an event to a Kafka topic without blocking.

@@ -83,20 +83,35 @@ func (s *WriteServer) CreateNode(ctx context.Context, req *pb.CreateNodeRequest)
 	// Invalidate caches and publish event (consistent with all other mutations)
 	wsIDs := s.invalidateShards(node.ID)
 	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), node.ID)
-	s.publishEvent("create_node", []string{node.ID})
+	s.publishEvent(ngac.MutationCreateNode, []string{node.ID})
 
 	return nodeToProto(node), nil
 }
 
 // DeleteNode removes a node and invalidates affected caches.
+//
+// What the deletion touches is resolved BEFORE the delete and invalidated
+// AFTER it. Resolving afterwards finds nothing: the node, its path up to its
+// policy class (hence its workspace shard) and its descendants (the users of a
+// UA, the sub-containers of an OA) are no longer reachable in the graph, so the
+// shard kept serving the deleted node and its users kept their cached ALLOWs.
+// Invalidating before the delete would let a concurrent check re-cache the old
+// answer in between.
 func (s *WriteServer) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest) (*pb.Empty, error) {
+	impact := ngac.ResolveRemovalImpact(s.store.GetGraph(), req.NodeId)
+
 	if err := s.store.DeleteNode(ctx, req.NodeId); err != nil {
 		return nil, status.Errorf(codes.Internal, "delete node: %v", err)
 	}
 
-	wsIDs := s.invalidateShards(req.NodeId)
-	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), req.NodeId)
-	s.publishEvent("delete_node", []string{req.NodeId})
+	s.invalidateResolvedShards(impact.Workspaces)
+	if impact.PolicyClass {
+		// Everything inside the policy class may have changed.
+		s.invalidation.InvalidateAll(ctx)
+	} else {
+		s.invalidation.InvalidateForNodes(ctx, firstWorkspace(impact.Workspaces), impact.NodeIDs...)
+	}
+	s.publishEvent(ngac.MutationDeleteNode, []string{req.NodeId})
 
 	return &pb.Empty{}, nil
 }
@@ -110,7 +125,7 @@ func (s *WriteServer) CreateAssignment(ctx context.Context, req *pb.CreateAssign
 
 	wsIDs := s.invalidateShards(req.ChildId, req.ParentId)
 	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), req.ChildId, req.ParentId)
-	s.publishEvent("create_assignment", []string{req.ChildId, req.ParentId})
+	s.publishEvent(ngac.MutationCreateAssignment, []string{req.ChildId, req.ParentId})
 
 	return &pb.Assignment{Id: a.ID, ChildId: a.ChildID, ParentId: a.ParentID}, nil
 }
@@ -123,7 +138,7 @@ func (s *WriteServer) RemoveAssignment(ctx context.Context, req *pb.RemoveAssign
 
 	wsIDs := s.invalidateShards(req.ChildId, req.ParentId)
 	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), req.ChildId, req.ParentId)
-	s.publishEvent("remove_assignment", []string{req.ChildId, req.ParentId})
+	s.publishEvent(ngac.MutationRemoveAssignment, []string{req.ChildId, req.ParentId})
 
 	return &pb.Empty{}, nil
 }
@@ -150,7 +165,7 @@ func (s *WriteServer) CreateAssociation(ctx context.Context, req *pb.CreateAssoc
 
 	wsIDs := s.invalidateShards(req.UaId, req.OaId)
 	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), req.UaId, req.OaId)
-	s.publishEvent("create_association", []string{req.UaId, req.OaId})
+	s.publishEvent(ngac.MutationCreateAssociation, []string{req.UaId, req.OaId})
 
 	return &pb.Association{Id: a.ID, UaId: a.UAID, OaId: a.OAID, Operations: a.Operations}, nil
 }
@@ -163,7 +178,7 @@ func (s *WriteServer) RemoveAssociation(ctx context.Context, req *pb.RemoveAssoc
 
 	wsIDs := s.invalidateShards(req.UaId, req.OaId)
 	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), req.UaId, req.OaId)
-	s.publishEvent("remove_association", []string{req.UaId, req.OaId})
+	s.publishEvent(ngac.MutationRemoveAssociation, []string{req.UaId, req.OaId})
 
 	return &pb.Empty{}, nil
 }
@@ -189,6 +204,9 @@ func (s *WriteServer) LoadGraph(ctx context.Context, _ *pb.Empty) (*pb.Empty, er
 		s.shardManager.InvalidateAll()
 	}
 
+	// Read replicas hold their own graph; tell them to reload theirs too.
+	s.publishEvent(ngac.MutationLoadGraph, nil)
+
 	return &pb.Empty{}, nil
 }
 
@@ -200,6 +218,9 @@ func (s *WriteServer) publishEvent(action string, nodeIDs []string) {
 
 // invalidateShards resolves workspace_id from affected nodes and invalidates their shards.
 // Returns the set of affected workspace IDs for per-workspace version bumping.
+//
+// It resolves against the current graph, so it is only correct for nodes that
+// still exist; a removal must resolve first (see DeleteNode).
 func (s *WriteServer) invalidateShards(nodeIDs ...string) []string {
 	if s.shardManager == nil || s.store == nil {
 		return nil
@@ -208,31 +229,19 @@ func (s *WriteServer) invalidateShards(nodeIDs ...string) []string {
 	if graph == nil {
 		return nil
 	}
+	wsIDs := ngac.AffectedWorkspaces(graph, nodeIDs...)
+	s.invalidateResolvedShards(wsIDs)
+	return wsIDs
+}
 
-	seen := make(map[string]bool)
-	for _, nodeID := range nodeIDs {
-		node := graph.GetNode(nodeID)
-		if node == nil {
-			continue
-		}
-		// Walk up to find the PC with workspace_id
-		ancestors := graph.GetAncestors(nodeID)
-		for _, anc := range ancestors {
-			if anc.NodeType == ngac.NodeTypePolicyClass && anc.Properties["workspace_id"] != "" {
-				wsID := anc.Properties["workspace_id"]
-				if !seen[wsID] {
-					seen[wsID] = true
-					s.shardManager.InvalidateShard(wsID)
-				}
-			}
-		}
+// invalidateResolvedShards drops the shards of already-resolved workspaces.
+func (s *WriteServer) invalidateResolvedShards(wsIDs []string) {
+	if s.shardManager == nil {
+		return
 	}
-
-	result := make([]string, 0, len(seen))
-	for wsID := range seen {
-		result = append(result, wsID)
+	for _, wsID := range wsIDs {
+		s.shardManager.InvalidateShard(wsID)
 	}
-	return result
 }
 
 // --- New RPCs: Operations, Prohibitions, InvalidateCache ---
@@ -292,7 +301,7 @@ func (s *WriteServer) CreateProhibition(ctx context.Context, req *pb.CreateProhi
 	affectedNodes := s.resolveProhibitionAffectedNodes(req.SubjectId, req.TargetOaIds)
 	wsIDs := s.invalidateShards(affectedNodes...)
 	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), affectedNodes...)
-	s.publishEvent("create_prohibition", affectedNodes)
+	s.publishEvent(ngac.MutationCreateProhibition, affectedNodes)
 
 	return &pb.Prohibition{
 		Id:           p.ID,
@@ -323,7 +332,7 @@ func (s *WriteServer) RemoveProhibition(ctx context.Context, req *pb.RemoveProhi
 	affectedNodes := s.resolveProhibitionAffectedNodes(p.SubjectID, p.TargetOAIDs)
 	wsIDs := s.invalidateShards(affectedNodes...)
 	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), affectedNodes...)
-	s.publishEvent("remove_prohibition", affectedNodes)
+	s.publishEvent(ngac.MutationRemoveProhibition, affectedNodes)
 
 	return &pb.Empty{}, nil
 }
@@ -352,8 +361,5 @@ func (s *WriteServer) resolveProhibitionAffectedNodes(subjectID string, targetOA
 // firstWorkspace returns the first workspace ID from a slice, or empty string if none.
 // Used to pass workspace context from shard invalidation to version bumping.
 func firstWorkspace(wsIDs []string) string {
-	if len(wsIDs) > 0 {
-		return wsIDs[0]
-	}
-	return ""
+	return ngac.FirstWorkspace(wsIDs)
 }

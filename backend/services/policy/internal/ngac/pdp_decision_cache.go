@@ -3,18 +3,15 @@ package ngac
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 )
 
-const (
-	cacheTTL       = 30 * time.Second
-	cacheKeyPrefix = "ngac:access:"
-	scopeKeyPrefix = "scopes:"
-)
+// cacheTTL bounds how long an L1 decision lives. Key layout lives in
+// pdp_decision_cache_keys.go, shared with the invalidator.
+const cacheTTL = 30 * time.Second
 
 // DecisionCache provides layered caching for access decisions.
 // Implementation details (Redis, materialized, version) are hidden.
@@ -25,6 +22,7 @@ type DecisionCache interface {
 	Get(ctx context.Context, req AccessRequest) (*AccessDecision, string)
 
 	// Set stores a computed decision in all cache layers.
+	// An error-derived decision (decision.ErrorDerived()) is never stored.
 	Set(ctx context.Context, req AccessRequest, decision *AccessDecision)
 }
 
@@ -71,6 +69,11 @@ func (c *layeredCache) Get(ctx context.Context, req AccessRequest) (*AccessDecis
 
 // Set stores a computed decision in L2 (materialized) and L1 (Redis).
 func (c *layeredCache) Set(ctx context.Context, req AccessRequest, decision *AccessDecision) {
+	// Second line of defence behind AccessEvaluator: a decision produced by a
+	// failure is not a fact about the policy and must not outlive the request.
+	if decision == nil || decision.ErrorDerived() {
+		return
+	}
 	key := cacheKey(req)
 
 	// L2: Materialized
@@ -148,14 +151,9 @@ func (c *layeredCache) getMaterialized(ctx context.Context, req AccessRequest) *
 }
 
 // cacheKey generates a workspace-isolated cache key for access decisions.
-// When workspace_id is present, keys are prefixed to prevent cross-tenant collisions.
+// See DecisionCacheKey for the layout.
 func cacheKey(req AccessRequest) string {
-	if req.WorkspaceID != "" {
-		return fmt.Sprintf("%s%s:%s:%s:%s",
-			cacheKeyPrefix, req.WorkspaceID, req.UserNodeID, req.ObjectNodeID, req.Operation)
-	}
-	return fmt.Sprintf("%s%s:%s:%s",
-		cacheKeyPrefix, req.UserNodeID, req.ObjectNodeID, req.Operation)
+	return DecisionCacheKey(req)
 }
 
 // versionScope returns the version tracking scope for a request.

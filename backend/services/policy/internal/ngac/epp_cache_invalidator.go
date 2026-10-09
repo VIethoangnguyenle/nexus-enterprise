@@ -2,7 +2,6 @@ package ngac
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 
 	"github.com/redis/go-redis/v9"
@@ -125,18 +124,21 @@ func (c *CacheInvalidator) deleteTargetedKeys(ctx context.Context, users, object
 	totalDeleted := 0
 	pipe := c.rdb.Pipeline()
 
-	// For each affected user: delete access keys and scope keys
+	// Patterns come from the same key builder the decision cache writes with
+	// (pdp_decision_cache_keys.go), so they match the keys actually stored.
+
+	// For each affected user: delete access keys (every workspace) and scope keys
 	for userID := range users {
 		totalDeleted += c.collectAndDelete(ctx, pipe,
-			fmt.Sprintf("%s%s:*", cacheKeyPrefix, userID),
-			fmt.Sprintf("%s%s:*", scopeKeyPrefix, userID),
+			DecisionKeyPatternForUser(userID),
+			ScopeKeyPatternForUser(userID),
 		)
 	}
 
 	// For each affected object: delete keys containing this object ID
 	for objectID := range objects {
 		totalDeleted += c.collectAndDelete(ctx, pipe,
-			fmt.Sprintf("%s*:%s:*", cacheKeyPrefix, objectID),
+			DecisionKeyPatternForObject(objectID),
 		)
 	}
 
@@ -176,7 +178,7 @@ func (c *CacheInvalidator) collectKeys(ctx context.Context, pattern string) []st
 
 // flushAll performs the legacy full-flush of all access and scope cache entries.
 func (c *CacheInvalidator) flushAll(ctx context.Context) {
-	patterns := []string{cacheKeyPrefix + "*", scopeKeyPrefix + "*"}
+	patterns := []string{DecisionKeyPatternAll(), ScopeKeyPatternAll()}
 	for _, pattern := range patterns {
 		iter := c.rdb.Scan(ctx, 0, pattern, 1000).Iterator()
 		var keys []string

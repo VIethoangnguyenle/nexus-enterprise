@@ -151,14 +151,23 @@ func (s *Store) CreateAssociation(ctx context.Context, uaID, oaID string, operat
 }
 
 // RemoveAssociationByUAOA removes a permission edge by UA+OA pair (PAP).
+// Pattern: DB write → graph mutation, like every other mutation here. If the
+// DB delete fails the in-memory graph must still match the DB; removing the
+// edge from memory first would make this process deny what every other
+// process (and this one after a restart) still allows.
 func (s *Store) RemoveAssociationByUAOA(ctx context.Context, uaID, oaID string) error {
-	assocs := s.graph.GetAssociationsFromUA(uaID)
-	for _, a := range assocs {
+	if _, err := s.db.Exec(ctx,
+		"DELETE FROM ngac_associations WHERE ua_id = $1 AND oa_id = $2", uaID, oaID); err != nil {
+		return fmt.Errorf("deleting association: %w", err)
+	}
+
+	// DB succeeded → update in-memory graph. (ua_id, oa_id) is unique, so there
+	// is at most one edge to remove.
+	for _, a := range s.graph.GetAssociationsFromUA(uaID) {
 		if a.OAID == oaID {
 			s.graph.RemoveAssociationByID(a.ID)
 			break
 		}
 	}
-	_, err := s.db.Exec(ctx, "DELETE FROM ngac_associations WHERE ua_id = $1 AND oa_id = $2", uaID, oaID)
-	return err
+	return nil
 }

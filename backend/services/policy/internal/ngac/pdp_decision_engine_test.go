@@ -206,7 +206,11 @@ func TestCacheKey_WithoutWorkspaceID(t *testing.T) {
 		UserNodeID: "u1", ObjectNodeID: "o1", Operation: "read",
 	}
 	key := ngac.ExportCacheKey(req)
-	assert.Equal(t, "ngac:access:u1:o1:read", key, "backward compat: no workspace prefix")
+	// The workspace segment is always present (a sentinel when there is no
+	// workspace) so every key has the same shape and the invalidator's
+	// position-anchored patterns match it. Keys live 30s, so the layout change
+	// needs no migration; nothing outside this service reads them.
+	assert.Equal(t, "ngac:access:_global:u1:o1:read", key)
 }
 
 func TestCacheKey_DifferentWorkspaces_NoCrossHit(t *testing.T) {

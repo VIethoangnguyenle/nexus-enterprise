@@ -11,20 +11,51 @@ import (
 type DecisionEngine interface {
 	// Decide evaluates access using graph traversal + prohibition checks.
 	// Returns the FINAL decision (includes prohibition deny overrides).
+	//
+	// When a step of the evaluation fails, the decision is DENY and
+	// AccessDecision.ErrorDerived() reports true; such a decision must not be
+	// cached.
 	Decide(ctx context.Context, req AccessRequest) *AccessDecision
 }
+
+// ProhibitionFinder is the read side of the prohibition store the PDP needs.
+// *ProhibitionStore implements it; tests substitute fakes.
+type ProhibitionFinder interface {
+	FindForSubjects(ctx context.Context, subjectIDs []string, operation string) ([]*Prohibition, error)
+}
+
+// CTEChecker answers an access question with the SQL recursive-CTE fallback,
+// for objects that are not in the in-memory graph. *CTEEvaluator implements it.
+type CTEChecker interface {
+	CheckAccess(ctx context.Context, userNodeID, objectNodeID, operation string) (bool, error)
+}
+
+// Compile-time checks: the concrete stores satisfy the PDP's dependencies.
+var (
+	_ ProhibitionFinder = (*ProhibitionStore)(nil)
+	_ CTEChecker        = (*CTEEvaluator)(nil)
+)
 
 // decisionEngine implements DecisionEngine using BFS traversal,
 // CTE SQL fallback, shard-based evaluation, and prohibition evaluation.
 type decisionEngine struct {
 	graph        GraphReader
-	cte          *CTEEvaluator
-	prohibitions *ProhibitionStore
+	cte          CTEChecker
+	prohibitions ProhibitionFinder
 	shardManager ShardManager
 }
 
 // NewDecisionEngine creates a PDP engine with graph reader, CTE fallback, and prohibition evaluation.
-func NewDecisionEngine(graph GraphReader, cte *CTEEvaluator, prohibitions *ProhibitionStore) DecisionEngine {
+// cte and prohibitions may be nil to disable that step.
+func NewDecisionEngine(graph GraphReader, cte CTEChecker, prohibitions ProhibitionFinder) DecisionEngine {
+	// A typed nil pointer inside an interface is not == nil; normalise it so the
+	// "step disabled" checks cannot be fooled into calling through a nil store.
+	if c, ok := cte.(*CTEEvaluator); ok && c == nil {
+		cte = nil
+	}
+	if p, ok := prohibitions.(*ProhibitionStore); ok && p == nil {
+		prohibitions = nil
+	}
 	return &decisionEngine{
 		graph:        graph,
 		cte:          cte,
@@ -42,6 +73,9 @@ func (e *decisionEngine) SetShardManager(sm ShardManager) {
 //  2. BFS graph traversal (in-memory)
 //  3. CTE SQL fallback (if object node not in graph)
 //  4. Prohibition evaluation (deny overrides on ALLOW)
+//
+// A step that fails closes the decision to DENY and marks it error-derived
+// (AccessDecision.EvaluationErr), so the caller knows not to cache it.
 func (e *decisionEngine) Decide(ctx context.Context, req AccessRequest) *AccessDecision {
 	// Step 1: Resolve the graph to evaluate against
 	graph := e.resolveGraph(ctx, req)
@@ -54,7 +88,16 @@ func (e *decisionEngine) Decide(ctx context.Context, req AccessRequest) *AccessD
 
 	// Step 4: Prohibition check: if BFS says ALLOW, check for deny overrides.
 	if decision.Decision == DecisionAllow && e.prohibitions != nil {
-		if denied, prohibName, subjectID := e.checkProhibitions(ctx, req, graph); denied {
+		denied, prohibName, subjectID, err := e.checkProhibitions(ctx, req, graph)
+		switch {
+		case err != nil:
+			// Fail closed, consistent with the batch path: a prohibition that
+			// cannot be read might be the one that denies this request.
+			slog.Error("prohibition lookup failed; denying",
+				"user_node_id", req.UserNodeID, "object_node_id", req.ObjectNodeID,
+				"operation", req.Operation, "error", err)
+			decision.failClosed(DenyReasonProhibitionCheckFailed, err)
+		case denied:
 			decision.Decision = DecisionDeny
 			decision.Explanation.Reason = fmt.Sprintf("Denied by prohibition %q", prohibName)
 			decision.Explanation.ProhibitionDenied = &ProhibitionDenial{
@@ -68,6 +111,9 @@ func (e *decisionEngine) Decide(ctx context.Context, req AccessRequest) *AccessD
 }
 
 // tryCTEFallback promotes DENY→ALLOW when CTE succeeds for O nodes not loaded in graph.
+//
+// A CTE failure leaves the decision DENY but marks it error-derived: that DENY
+// reflects a failed query, not the policy, and must not be cached.
 func (e *decisionEngine) tryCTEFallback(ctx context.Context, req AccessRequest, decision *AccessDecision) {
 	if decision.Decision != DecisionDeny || decision.Explanation.Reason != DenyReasonNodeNotFound {
 		return
@@ -76,7 +122,14 @@ func (e *decisionEngine) tryCTEFallback(ctx context.Context, req AccessRequest, 
 		return
 	}
 	allowed, err := e.cte.CheckAccess(ctx, req.UserNodeID, req.ObjectNodeID, req.Operation)
-	if err != nil || !allowed {
+	if err != nil {
+		slog.Warn("CTE fallback failed; denying",
+			"user_node_id", req.UserNodeID, "object_node_id", req.ObjectNodeID,
+			"operation", req.Operation, "error", err)
+		decision.failClosed(DenyReasonCTEFallbackFailed, err)
+		return
+	}
+	if !allowed {
 		return
 	}
 	decision.Decision = DecisionAllow
@@ -115,7 +168,10 @@ func (e *decisionEngine) resolveGraph(ctx context.Context, req AccessRequest) Gr
 // checkProhibitions evaluates all applicable prohibitions for an access request.
 // The graph parameter must be the same resolved graph used for BFS evaluation
 // to prevent prohibition bypass when nodes exist only in a shard.
-func (e *decisionEngine) checkProhibitions(ctx context.Context, req AccessRequest, graph GraphReader) (bool, string, string) {
+//
+// A non-nil error means the prohibitions could not be evaluated; the caller
+// must treat that as DENY, never as "no prohibition".
+func (e *decisionEngine) checkProhibitions(ctx context.Context, req AccessRequest, graph GraphReader) (bool, string, string, error) {
 	// Step 1: Collect user + all UA ancestors (prohibition subjects)
 	subjectIDs := []string{req.UserNodeID}
 	ancestors := graph.GetAncestors(req.UserNodeID)
@@ -128,11 +184,10 @@ func (e *decisionEngine) checkProhibitions(ctx context.Context, req AccessReques
 	// Step 2: Query prohibitions matching subjects + operation
 	prohibitions, err := e.prohibitions.FindForSubjects(ctx, subjectIDs, req.Operation)
 	if err != nil {
-		slog.Warn("failed to query prohibitions", "error", err)
-		return false, "", ""
+		return false, "", "", fmt.Errorf("query prohibitions: %w", err)
 	}
 	if len(prohibitions) == 0 {
-		return false, "", ""
+		return false, "", "", nil
 	}
 
 	// Step 3: Collect object's OA ancestors (prohibition targets)
@@ -146,7 +201,8 @@ func (e *decisionEngine) checkProhibitions(ctx context.Context, req AccessReques
 	}
 
 	// Step 4: Match prohibitions against object's OA set
-	return matchProhibitions(prohibitions, objectOAIDs)
+	denied, name, subject := matchProhibitions(prohibitions, objectOAIDs)
+	return denied, name, subject, nil
 }
 
 // --- PDP: Prohibition matching logic ---
