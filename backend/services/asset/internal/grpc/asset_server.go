@@ -282,20 +282,19 @@ func (s *AssetServer) TransitionAsset(ctx context.Context, req *pb.TransitionReq
 		return nil, err
 	}
 
-	// Execute state change
-	if err := s.store.UpdateAssetState(ctx, req.AssetId, tr.ToState, nil); err != nil {
-		return nil, status.Errorf(codes.Internal, "update state: %v", err)
-	}
-
-	// Record transition history
-	s.store.InsertTransition(ctx, &store.TransitionRecord{
+	// Change state and record who did it, atomically. The history row is the
+	// audit trail, so if it cannot be written the transition fails as a whole
+	// rather than taking effect unrecorded — and no event is published.
+	if err := s.store.ApplyTransition(ctx, &store.TransitionRecord{
 		AssetID:   req.AssetId,
 		FromState: asset.State,
 		ToState:   tr.ToState,
 		Action:    req.Action,
 		ActorID:   req.UserId,
 		Comment:   req.Comment,
-	})
+	}, nil); err != nil {
+		return nil, status.Errorf(codes.Internal, "apply transition: %v", err)
+	}
 
 	// Emit Kafka lifecycle event
 	s.producer.PublishLifecycle(events.LifecycleEvent{

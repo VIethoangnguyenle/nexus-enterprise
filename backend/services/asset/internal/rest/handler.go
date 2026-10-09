@@ -281,7 +281,7 @@ func (h *Handler) DeleteAsset(c echo.Context) error {
 // --- Asset Lifecycle ---
 
 func (h *Handler) TransitionAsset(c echo.Context) error {
-	claims := httputil.GetClaims(c)
+	// The actor recorded in the asset's history is taken from the token only.
 	var body struct {
 		ToState string `json:"to_state"`
 		Comment string `json:"comment"`
@@ -293,7 +293,8 @@ func (h *Handler) TransitionAsset(c echo.Context) error {
 		AssetId:        c.Param("assetId"),
 		Action:         body.ToState,
 		Comment:        body.Comment,
-		UserNgacNodeId: claims.NGACNodeID,
+		UserId:         callerUserID(c),
+		UserNgacNodeId: callerNodeID(c),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -361,11 +362,15 @@ func (h *Handler) GetAssetRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"id": c.Param("reqId")})
 }
 
+// ApproveAssetRequest approves a request as the authenticated caller. The
+// user ID matters as much as the NGAC node: ApproveRequest compares it with
+// the requester to refuse self-approval, and records it as the approver. Both
+// come from the token only.
 func (h *Handler) ApproveAssetRequest(c echo.Context) error {
-	claims := httputil.GetClaims(c)
 	resp, err := h.requestSvc.ApproveRequest(c.Request().Context(), &pb.ApproveRequestReq{
 		RequestId:      c.Param("reqId"),
-		UserNgacNodeId: claims.NGACNodeID,
+		UserId:         callerUserID(c),
+		UserNgacNodeId: callerNodeID(c),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -373,8 +378,9 @@ func (h *Handler) ApproveAssetRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// RejectAssetRequest rejects a request as the authenticated caller, recorded
+// as the approver. Identity comes from the token only.
 func (h *Handler) RejectAssetRequest(c echo.Context) error {
-	claims := httputil.GetClaims(c)
 	var body struct {
 		Reason string `json:"reason"`
 	}
@@ -382,7 +388,8 @@ func (h *Handler) RejectAssetRequest(c echo.Context) error {
 	resp, err := h.requestSvc.RejectRequest(c.Request().Context(), &pb.RejectRequestReq{
 		RequestId:      c.Param("reqId"),
 		Reason:         body.Reason,
-		UserNgacNodeId: claims.NGACNodeID,
+		UserId:         callerUserID(c),
+		UserNgacNodeId: callerNodeID(c),
 	})
 	if err != nil {
 		return mapGRPCError(err)
