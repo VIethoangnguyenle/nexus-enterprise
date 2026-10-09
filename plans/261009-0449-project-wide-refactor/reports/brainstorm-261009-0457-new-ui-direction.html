@@ -1,0 +1,806 @@
+<title>Nexus Hub UI Directions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..700&family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,500..700&family=Familjen+Grotesk:wght@500;600;700&family=Literata:opsz,wght@7..72,500..700&family=Onest:wght@400;500;600&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: a single reading column for the brief (max 68rem), mockups break out into
+   horizontally scrollable frames. Brief chrome stays neutral so the three directions,
+   not the page, carry the visual argument. */
+:root {
+  /* brief chrome */
+  --bg: oklch(98.2% 0.004 250);
+  --surface: oklch(99.4% 0.002 250);
+  --fg: oklch(24% 0.015 255);
+  --muted: oklch(46% 0.015 255);
+  --line: oklch(89% 0.008 255);
+  --accent: oklch(47% 0.09 255);
+  --accent-wash: oklch(94.5% 0.02 255);
+  --font-display: "Literata", Georgia, "Times New Roman", serif;
+  --font-body: "Public Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+  /* Direction A, Ledger */
+  --a-bg: oklch(98.6% 0.001 260);
+  --a-panel: oklch(96.6% 0.002 260);
+  --a-ink: oklch(21% 0.008 260);
+  --a-muted: oklch(47% 0.01 260);
+  --a-line: oklch(88% 0.004 260);
+  --a-accent: oklch(47% 0.17 263);
+  --a-accent-wash: oklch(94% 0.03 263);
+  --a-on-accent: oklch(98.6% 0.001 260);
+  --a-ok: oklch(48% 0.11 150);
+  --a-wait: oklch(52% 0.12 70);
+
+  /* Direction B, Signal */
+  --b-bg: oklch(97.4% 0.007 190);
+  --b-raise: oklch(99.3% 0.003 190);
+  --b-sunk: oklch(94.6% 0.011 190);
+  --b-ink: oklch(23% 0.02 200);
+  --b-muted: oklch(46% 0.02 200);
+  --b-accent: oklch(50% 0.1 180);
+  --b-accent-wash: oklch(93% 0.035 180);
+  --b-on-accent: oklch(98.5% 0.005 180);
+  --b-ok: oklch(49% 0.11 150);
+  --b-wait: oklch(53% 0.12 65);
+  --b-p-vinh: oklch(60% 0.14 40);
+  --b-p-vinh-wash: oklch(93% 0.04 40);
+  --b-p-lan: oklch(56% 0.13 300);
+  --b-p-duc: oklch(55% 0.11 240);
+  --b-p-yen: oklch(58% 0.12 140);
+
+  /* Direction C, Night Shift (dark-first: same values in both themes) */
+  --c-bg: oklch(16.5% 0.014 235);
+  --c-s1: oklch(20.5% 0.016 235);
+  --c-s2: oklch(25% 0.018 235);
+  --c-ink: oklch(92% 0.01 230);
+  --c-muted: oklch(71% 0.016 232);
+  --c-line: oklch(31% 0.016 235);
+  --c-accent: oklch(80% 0.14 78);
+  --c-on-accent: oklch(20% 0.03 70);
+  --c-ok: oklch(76% 0.13 155);
+
+  --ease-out-quart: cubic-bezier(0.25, 1, 0.5, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-quart: cubic-bezier(0.5, 0, 0.75, 0);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: oklch(17% 0.012 255); --surface: oklch(20.5% 0.012 255); --fg: oklch(93% 0.006 255);
+    --muted: oklch(72% 0.012 255); --line: oklch(32% 0.012 255); --accent: oklch(76% 0.08 255);
+    --accent-wash: oklch(26% 0.03 255);
+    --a-bg: oklch(16% 0.006 260); --a-panel: oklch(19.5% 0.006 260); --a-ink: oklch(93% 0.004 260);
+    --a-muted: oklch(70% 0.008 260); --a-line: oklch(30% 0.006 260); --a-accent: oklch(72% 0.13 263);
+    --a-accent-wash: oklch(27% 0.05 263); --a-on-accent: oklch(16% 0.006 260);
+    --a-ok: oklch(74% 0.12 150); --a-wait: oklch(78% 0.12 75);
+    --b-bg: oklch(18% 0.014 200); --b-raise: oklch(22.5% 0.016 200); --b-sunk: oklch(15.5% 0.012 200);
+    --b-ink: oklch(94% 0.008 190); --b-muted: oklch(73% 0.016 195); --b-accent: oklch(76% 0.11 178);
+    --b-accent-wash: oklch(29% 0.05 180); --b-on-accent: oklch(18% 0.014 200);
+    --b-ok: oklch(76% 0.12 150); --b-wait: oklch(80% 0.12 70);
+    --b-p-vinh: oklch(74% 0.13 45); --b-p-vinh-wash: oklch(30% 0.06 45);
+    --b-p-lan: oklch(74% 0.11 300); --b-p-duc: oklch(74% 0.1 240); --b-p-yen: oklch(76% 0.11 140);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: oklch(17% 0.012 255); --surface: oklch(20.5% 0.012 255); --fg: oklch(93% 0.006 255);
+  --muted: oklch(72% 0.012 255); --line: oklch(32% 0.012 255); --accent: oklch(76% 0.08 255);
+  --accent-wash: oklch(26% 0.03 255);
+  --a-bg: oklch(16% 0.006 260); --a-panel: oklch(19.5% 0.006 260); --a-ink: oklch(93% 0.004 260);
+  --a-muted: oklch(70% 0.008 260); --a-line: oklch(30% 0.006 260); --a-accent: oklch(72% 0.13 263);
+  --a-accent-wash: oklch(27% 0.05 263); --a-on-accent: oklch(16% 0.006 260);
+  --a-ok: oklch(74% 0.12 150); --a-wait: oklch(78% 0.12 75);
+  --b-bg: oklch(18% 0.014 200); --b-raise: oklch(22.5% 0.016 200); --b-sunk: oklch(15.5% 0.012 200);
+  --b-ink: oklch(94% 0.008 190); --b-muted: oklch(73% 0.016 195); --b-accent: oklch(76% 0.11 178);
+  --b-accent-wash: oklch(29% 0.05 180); --b-on-accent: oklch(18% 0.014 200);
+  --b-ok: oklch(76% 0.12 150); --b-wait: oklch(80% 0.12 70);
+  --b-p-vinh: oklch(74% 0.13 45); --b-p-vinh-wash: oklch(30% 0.06 45);
+  --b-p-lan: oklch(74% 0.11 300); --b-p-duc: oklch(74% 0.1 240); --b-p-yen: oklch(76% 0.11 140);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 1rem; line-height: 1.6;
+  padding-inline: 16px; padding-block: 0 64px;
+}
+.wrap { max-width: 68rem; margin-inline: auto; display: grid; gap: 64px; }
+h1, h2, h3 { font-family: var(--font-display); line-height: 1.15; text-wrap: balance; margin: 0; font-weight: 600; }
+h1 { font-size: clamp(2rem, 3vw + 1rem, 2.75rem); letter-spacing: -0.015em; }
+h2 { font-size: 1.75rem; letter-spacing: -0.01em; }
+h3 { font-size: 1.25rem; }
+p { margin: 0; text-wrap: pretty; }
+.prose { max-width: 65ch; display: grid; gap: 12px; }
+.muted { color: var(--muted); }
+.label { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header.top { padding-block: 48px 0; display: grid; gap: 16px; }
+.status { display: inline-flex; gap: 8px; align-items: center; font-size: 0.875rem; color: var(--muted); }
+.status b { color: var(--fg); font-weight: 600; }
+
+section { display: grid; gap: 24px; min-width: 0; }
+
+.contract { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 0; border-block: 1px solid var(--line); }
+.contract > div { padding: 20px 20px 24px 0; display: grid; gap: 8px; align-content: start; }
+.contract > div + div { padding-left: 20px; border-left: 1px solid var(--line); }
+@media (max-width: 40rem) { .contract > div + div { border-left: 0; padding-left: 0; border-top: 1px solid var(--line); } }
+.contract ul, .evidence ul { margin: 0; padding-left: 1.1em; display: grid; gap: 6px; font-size: 0.9375rem; }
+
+.evidence { display: grid; grid-template-columns: 2fr 3fr; gap: 32px; align-items: start; }
+@media (max-width: 48rem) { .evidence { grid-template-columns: 1fr; } }
+.counts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; }
+.counts div { display: grid; gap: 2px; }
+.counts strong { font-family: var(--font-display); font-size: 1.75rem; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.counts span { font-size: 0.8125rem; color: var(--muted); }
+
+.dir { display: grid; gap: 20px; padding-top: 32px; border-top: 1px solid var(--line); }
+.dir-head { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 32px; }
+@media (max-width: 48rem) { .dir-head { grid-template-columns: 1fr; } }
+.thesis { font-size: 1.0625rem; }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 0.875rem; margin: 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+.dials { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.8125rem; color: var(--muted); }
+.dials span b { color: var(--fg); font-variant-numeric: tabular-nums; }
+.swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+.sw { display: grid; gap: 4px; font-size: 0.75rem; color: var(--muted); width: 5.5rem; }
+.sw i { display: block; height: 2.5rem; border-radius: 4px; border: 1px solid var(--line); }
+.specimen { padding: 16px 0; border-block: 1px dashed var(--line); display: grid; gap: 6px; }
+
+.frame-scroll { overflow-x: auto; border-radius: 6px; border: 1px solid var(--line); }
+.frame-tools { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+button.tool {
+  font: inherit; font-size: 0.875rem; font-weight: 600; padding: 8px 14px; min-height: 40px;
+  border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--fg);
+  cursor: pointer; transition: background-color 160ms var(--ease-out-quart), transform 100ms var(--ease-out-quart);
+}
+button.tool:hover { background: var(--accent-wash); }
+button.tool:active { transform: translateY(1px); }
+.legend { margin: 0; padding-left: 1.4em; display: grid; gap: 8px; font-size: 0.9375rem; }
+.legend li::marker { font-weight: 700; color: var(--accent); }
+.risk { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 16px 32px; font-size: 0.9375rem; }
+.risk div { display: grid; gap: 4px; }
+
+/* ---------- shared mockup skeleton ---------- */
+.mock { width: 100%; min-width: 960px; display: grid; grid-template-columns: 200px minmax(0, 1fr) 280px; min-height: 520px; position: relative; }
+.mock .side { display: grid; align-content: start; gap: 4px; padding: 16px 12px; }
+.mock .main { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; }
+.mock .chead { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 20px; }
+.mock .stream { display: grid; align-content: end; gap: 0; padding: 8px 0; }
+.mock .msg { display: grid; grid-template-columns: 32px 1fr; gap: 10px; padding: 8px 20px; }
+.mock .msg .av { width: 32px; height: 32px; display: grid; place-items: center; font-size: 0.75rem; font-weight: 600; }
+.mock .msg .who { display: flex; gap: 8px; align-items: baseline; }
+.mock .msg .t { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.mock .compose { margin: 12px 20px 16px; padding: 10px 14px; font-size: 0.875rem; }
+.mock .panel { display: grid; align-content: start; gap: 14px; padding: 16px; }
+.mock .nav { display: flex; align-items: center; gap: 10px; padding: 7px 10px; font-size: 0.875rem; }
+.mock .chain { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.mock .chain li { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 8px 0; font-size: 0.8125rem; }
+.mock .file { display: flex; gap: 10px; align-items: center; padding: 8px 10px; margin-top: 6px; font-size: 0.8125rem; max-width: 22rem; }
+.pin { display: inline-grid; place-items: center; flex: none; width: 20px; height: 20px; border-radius: 50%; margin-left: 6px; vertical-align: middle;
+  font: 700 0.6875rem/1 var(--font-body); background: var(--accent); color: var(--surface); }
+.mock .panel[hidden] { display: none !important; }
+.mock:has(> [data-panel-el][hidden]) { grid-template-columns: 200px minmax(0, 1fr); }
+
+/* ---------- A, Ledger ---------- */
+.mock.a { font-family: "Archivo", "Segoe UI", Arial, sans-serif; font-variation-settings: "wdth" 100; background: var(--a-bg); color: var(--a-ink); font-size: 0.875rem; }
+.mock.a .side { border-right: 1px solid var(--a-line); }
+.mock.a .ws { font-variation-settings: "wdth" 125; font-weight: 700; font-size: 0.9375rem; padding: 4px 10px 12px; letter-spacing: -0.01em; }
+.mock.a .nav { border-radius: 2px; color: var(--a-muted); }
+.mock.a .nav.on { color: var(--a-ink); background: var(--a-accent-wash); box-shadow: inset 0 0 0 1px var(--a-line); }
+.mock.a .nav .n { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 0.75rem; color: var(--a-accent); font-weight: 600; }
+.mock.a .chead { border-bottom: 1px solid var(--a-line); }
+.mock.a .chead h4 { margin: 0; font-variation-settings: "wdth" 125; font-size: 1.0625rem; font-weight: 700; letter-spacing: -0.01em; }
+.mock.a .chead .meta { color: var(--a-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.mock.a .msg + .msg { border-top: 1px solid var(--a-line); }
+.mock.a .msg .av { border-radius: 2px; background: var(--a-panel); box-shadow: inset 0 0 0 1px var(--a-line); }
+.mock.a .msg .who b { font-weight: 600; }
+.mock.a .msg .t { color: var(--a-muted); }
+.mock.a .file { border: 1px solid var(--a-line); border-radius: 2px; }
+.mock.a .file small { color: var(--a-muted); font-variant-numeric: tabular-nums; }
+.mock.a .compose { border: 1px solid var(--a-line); border-radius: 2px; color: var(--a-muted); }
+.mock.a .panel { border-left: 1px solid var(--a-line); background: var(--a-panel); }
+.mock.a .panel h5 { margin: 0; font-variation-settings: "wdth" 125; font-size: 1rem; font-weight: 700; }
+.mock.a .amt { font-variation-settings: "wdth" 125; font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.mock.a .chain li { border-top: 1px solid var(--a-line); }
+.mock.a .chain .st { font-size: 0.75rem; font-weight: 600; }
+.mock.a .chain .ok { color: var(--a-ok); }
+.mock.a .chain .wait { color: var(--a-wait); }
+.mock.a .chain small { color: var(--a-muted); font-variant-numeric: tabular-nums; grid-column: 1 / -1; }
+.mock.a .btns { display: flex; gap: 8px; }
+.mock.a .btns span { padding: 7px 12px; font-weight: 600; border-radius: 2px; border: 1px solid var(--a-line); font-size: 0.8125rem; }
+.mock.a .btns span.primary { background: var(--a-accent); color: var(--a-on-accent); border-color: var(--a-accent); }
+.mock.a .msg.arrive { animation: a-arrive 160ms var(--ease-out-quart) both, a-flash 900ms var(--ease-out-quart) both; }
+@keyframes a-arrive { from { opacity: 0; transform: translateY(6px); } }
+@keyframes a-flash { from { background: var(--a-accent-wash); } to { background: transparent; } }
+.mock.a .panel.enter { animation: a-panel-in 220ms var(--ease-out-quart) both; }
+.mock.a .panel.exit { animation: a-panel-in 160ms var(--ease-in-quart) reverse both; }
+@keyframes a-panel-in { from { opacity: 0; transform: translateX(12px); } }
+
+/* ---------- B, Signal ---------- */
+.mock.b { font-family: "Be Vietnam Pro", "Segoe UI", Arial, sans-serif; background: var(--b-bg); color: var(--b-ink); font-size: 0.875rem; }
+.mock.b .side { background: var(--b-sunk); }
+.mock.b .ws { font-family: "Bricolage Grotesque", "Be Vietnam Pro", sans-serif; font-weight: 700; font-size: 1.0625rem; padding: 4px 10px 12px; letter-spacing: -0.01em; }
+.mock.b .nav { border-radius: 10px; color: var(--b-muted); }
+.mock.b .nav.on { color: var(--b-ink); background: var(--b-raise); font-weight: 600; }
+.mock.b .nav .n { margin-left: auto; min-width: 20px; text-align: center; font-variant-numeric: tabular-nums; font-size: 0.6875rem; font-weight: 600; padding: 1px 6px; border-radius: 999px; background: var(--b-accent); color: var(--b-on-accent); }
+.mock.b .chead h4 { margin: 0; font-family: "Bricolage Grotesque", "Be Vietnam Pro", sans-serif; font-size: 1.125rem; font-weight: 700; letter-spacing: -0.01em; }
+.mock.b .chead .meta { color: var(--b-muted); font-size: 0.75rem; }
+.mock.b .faces { display: flex; }
+.mock.b .faces i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--b-bg); margin-left: -6px; display: block; }
+.mock.b .msg { border-radius: 10px; margin-inline: 8px; padding-inline: 12px; }
+.mock.b .msg .av { border-radius: 50%; color: var(--b-on-accent); }
+.mock.b .msg .who b { font-weight: 600; }
+.mock.b .msg .t { color: var(--b-muted); }
+.mock.b .file { background: var(--b-raise); border-radius: 10px; }
+.mock.b .file small { color: var(--b-muted); font-variant-numeric: tabular-nums; }
+.mock.b .compose { background: var(--b-raise); border-radius: 10px; color: var(--b-muted); }
+.mock.b .panel { background: var(--b-raise); margin: 12px 12px 12px 0; border-radius: 10px; }
+.mock.b .panel h5 { margin: 0; font-family: "Bricolage Grotesque", "Be Vietnam Pro", sans-serif; font-size: 1.0625rem; font-weight: 700; }
+.mock.b .amt { font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.mock.b .chain li { grid-template-columns: 24px 1fr auto; align-items: center; }
+.mock.b .chain .dot { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 0.625rem; font-weight: 700; color: var(--b-on-accent); }
+.mock.b .chain .st { font-size: 0.6875rem; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+.mock.b .chain .ok { color: var(--b-ok); background: var(--b-sunk); }
+.mock.b .chain .wait { color: var(--b-wait); background: var(--b-sunk); }
+.mock.b .chain small { color: var(--b-muted); font-variant-numeric: tabular-nums; grid-column: 2 / -1; }
+.mock.b .btns { display: flex; gap: 8px; }
+.mock.b .btns span { padding: 8px 14px; font-weight: 600; border-radius: 10px; background: var(--b-sunk); font-size: 0.8125rem; }
+.mock.b .btns span.primary { background: var(--b-accent); color: var(--b-on-accent); }
+.mock.b .who .live { font-size: 0.6875rem; font-weight: 600; color: var(--b-p-vinh); }
+.mock.b .msg.arrive { display: grid; animation: b-wash 2400ms var(--ease-out-quart) both; }
+.mock.b .msg.arrive .grow { animation: b-grow 240ms var(--ease-out-expo) both; }
+.mock.b .msg.arrive .av { animation: b-halo 900ms var(--ease-out-quart) both; }
+@keyframes b-wash { from { background: var(--b-p-vinh-wash); } 40% { background: var(--b-p-vinh-wash); } to { background: transparent; } }
+@keyframes b-grow { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@keyframes b-halo { from { box-shadow: 0 0 0 0 var(--b-p-vinh); } 30% { box-shadow: 0 0 0 4px var(--b-p-vinh-wash); } to { box-shadow: 0 0 0 0 transparent; } }
+.mock.b .panel.enter { animation: b-panel-in 260ms var(--ease-out-expo) both; }
+.mock.b .panel.exit { animation: b-panel-in 190ms var(--ease-in-quart) reverse both; }
+@keyframes b-panel-in { from { opacity: 0; transform: translateX(16px) scale(0.985); } }
+
+/* ---------- C, Night Shift ---------- */
+.mock.c { font-family: "Onest", "Segoe UI", Arial, sans-serif; background: var(--c-bg); color: var(--c-ink); font-size: 0.875rem; color-scheme: dark; grid-template-rows: 1fr auto; }
+.mock.c .side { background: var(--c-bg); border-right: 1px solid var(--c-line); }
+.mock.c .ws { font-family: "Familjen Grotesk", "Onest", sans-serif; font-weight: 700; font-size: 1rem; padding: 4px 10px 12px; letter-spacing: 0.01em; }
+.mock.c .nav { border-radius: 6px; color: var(--c-muted); }
+.mock.c .nav.on { color: var(--c-ink); background: var(--c-s2); }
+.mock.c .nav .n { margin-left: auto; font-variant-numeric: tabular-nums; font-size: 0.75rem; font-weight: 600; color: var(--c-accent); }
+.mock.c .main { background: var(--c-s1); }
+.mock.c .chead { border-bottom: 1px solid var(--c-line); }
+.mock.c .chead h4 { margin: 0; font-family: "Familjen Grotesk", "Onest", sans-serif; font-size: 1.0625rem; font-weight: 700; }
+.mock.c .chead .meta { color: var(--c-muted); font-size: 0.75rem; }
+.mock.c .msg .av { border-radius: 6px; background: var(--c-s2); color: var(--c-ink); }
+.mock.c .msg .who b { font-weight: 600; }
+.mock.c .msg .t { color: var(--c-muted); }
+.mock.c .file { background: var(--c-s2); border-radius: 6px; }
+.mock.c .file small { color: var(--c-muted); font-variant-numeric: tabular-nums; }
+.mock.c .compose { background: var(--c-bg); border: 1px solid var(--c-line); border-radius: 6px; color: var(--c-muted); }
+.mock.c .panel { background: var(--c-bg); border-left: 1px solid var(--c-line); }
+.mock.c .panel h5 { margin: 0; font-family: "Familjen Grotesk", "Onest", sans-serif; font-size: 1rem; font-weight: 700; }
+.mock.c .amt { font-family: "Familjen Grotesk", "Onest", sans-serif; font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mock.c .chain li { border-top: 1px solid var(--c-line); }
+.mock.c .chain .st { font-size: 0.75rem; font-weight: 600; }
+.mock.c .chain .ok { color: var(--c-ok); }
+.mock.c .chain .wait { color: var(--c-accent); }
+.mock.c .chain small { color: var(--c-muted); font-variant-numeric: tabular-nums; grid-column: 1 / -1; }
+.mock.c .btns { display: flex; gap: 8px; }
+.mock.c .btns span { padding: 7px 12px; font-weight: 600; border-radius: 6px; background: var(--c-s2); font-size: 0.8125rem; }
+.mock.c .btns span.primary { background: var(--c-accent); color: var(--c-on-accent); }
+.mock.c .strip { grid-column: 1 / -1; display: flex; gap: 20px; align-items: center; padding: 8px 16px; font-size: 0.75rem; color: var(--c-muted); border-top: 1px solid var(--c-line); background: var(--c-bg); overflow: hidden; }
+.mock.c .strip b { color: var(--c-ink); font-weight: 600; }
+.mock.c .strip .conn { color: var(--c-ok); font-weight: 600; }
+.mock.c .strip .last { display: inline-block; }
+.mock.c .strip .last.tick { animation: c-tick 220ms var(--ease-out-quart) both; }
+@keyframes c-tick { from { opacity: 0; transform: translateY(100%); } }
+.mock.c .msg.arrive { animation: c-arrive 200ms var(--ease-out-quart) both; }
+@keyframes c-arrive { from { opacity: 0; } }
+.mock.c .nav.ping .n { animation: c-ping 600ms var(--ease-out-quart) both; }
+@keyframes c-ping { from { transform: scale(1.6); } }
+.mock.c .panel.enter { animation: c-panel-in 200ms var(--ease-out-quart) both; }
+.mock.c .panel.exit { animation: c-panel-in 150ms var(--ease-in-quart) reverse both; }
+@keyframes c-panel-in { from { opacity: 0; } }
+
+/* reduced motion: keep a short fade, drop movement */
+.reduce .mock *, .reduce .mock { animation-duration: 1ms !important; }
+@media (prefers-reduced-motion: reduce) {
+  .mock *, .mock { animation-duration: 1ms !important; }
+  button.tool { transition: none; }
+}
+
+.compare { overflow-x: auto; }
+.compare table { border-collapse: collapse; width: 100%; min-width: 40rem; font-size: 0.9375rem; }
+.compare th, .compare td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.compare thead th { font-size: 0.8125rem; color: var(--muted); font-weight: 600; }
+.compare tbody th { font-weight: 600; width: 22%; }
+.compare td.win { background: var(--accent-wash); }
+
+.twocol { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 32px; align-items: start; }
+@media (max-width: 48rem) { .twocol { grid-template-columns: 1fr; } }
+svg text { fill: var(--fg); font-family: var(--font-body); }
+svg .m { fill: var(--muted); }
+.diagram { overflow-x: auto; }
+.rec { padding: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 6px; display: grid; gap: 12px; }
+.qs { margin: 0; padding-left: 1.4em; display: grid; gap: 10px; max-width: 70ch; }
+.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 0.875rem; }
+.toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+</style>
+
+<div class="wrap" id="top">
+
+<header class="top">
+  <p class="label">ak:brainstorm · plan 261009-0449 · phase 06</p>
+  <h1>Nexus Hub: ba hướng cho bộ UI mới</h1>
+  <div class="prose">
+    <p>Bản này thay hướng Stitch hiện tại bằng một ngôn ngữ thị giác mới, kèm hệ chuyển động và cách thể hiện realtime. Có ba hướng để chọn. Mỗi hướng có token, kiểu chữ tiếng Việt, mockup có chú thích và một bản demo chuyển động bấm thử được.</p>
+    <p class="status">Trạng thái: <b>chờ anh/chị chọn hướng</b>. Chưa sửa dòng code nào.</p>
+  </div>
+  <label class="toggle"><input type="checkbox" id="reduce"> Xem như người dùng bật “giảm chuyển động”</label>
+</header>
+
+<section aria-labelledby="h-contract">
+  <h2 id="h-contract">Hợp đồng brainstorm</h2>
+  <div class="contract">
+    <div>
+      <p class="label">Kết quả</p>
+      <ul>
+        <li>Cả 27 route mang một ngôn ngữ thị giác mới, có light và dark, desktop, tablet và mobile.</li>
+        <li>Một hệ chuyển động thống nhất, có animation lúc mở và lúc đóng.</li>
+        <li>Thay đổi do người khác gây ra hiện ngay trên màn hình và ghi rõ ai làm.</li>
+      </ul>
+    </div>
+    <div>
+      <p class="label">Ràng buộc</p>
+      <ul>
+        <li>React 19 + Tailwind 4: mọi giá trị là token trong <code>@theme</code>.</li>
+        <li>Font tự host qua Fontsource, có subset tiếng Việt.</li>
+        <li>WCAG AA. Tôn trọng <code>prefers-reduced-motion</code>.</li>
+        <li>Chỉ animate <code>transform</code> và <code>opacity</code>.</li>
+        <li>Không ID nào hiện lên màn hình.</li>
+      </ul>
+    </div>
+    <div>
+      <p class="label">Ngoài phạm vi</p>
+      <ul>
+        <li>Không thêm tính năng mới.</li>
+        <li>Không đổi cấu trúc điều hướng, ngoài việc gộp Tài sản vào shell chung.</li>
+        <li>Backend chỉ thêm các trường tên hiển thị.</li>
+        <li>Không làm trang marketing.</li>
+      </ul>
+    </div>
+    <div>
+      <p class="label">Tiêu chí nghiệm thu</p>
+      <ul>
+        <li>Một hướng được chọn và <code>DESIGN.md</code> được viết lại theo hướng đó.</li>
+        <li>Shell, chat, drive và phê duyệt được duyệt trên mockup trước khi code.</li>
+        <li>Mỗi route có ảnh chụp ở 3 khổ màn hình × 2 theme.</li>
+        <li>Lint design-system ở mức error, không còn <code>transition-all</code>.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<section aria-labelledby="h-evidence">
+  <h2 id="h-evidence">Hiện trạng, từ audit</h2>
+  <div class="evidence">
+    <div class="counts">
+      <div><strong>188</strong><span>class cỡ chữ viết thô, không qua token</span></div>
+      <div><strong>77</strong><span>chỗ eslint-disable né rule design system</span></div>
+      <div><strong>42</strong><span><code>transition-all</code></span></div>
+      <div><strong>0</strong><span>chỗ xử lý giảm chuyển động</span></div>
+    </div>
+    <ul>
+      <li>Có 6 nhóm màn chưa từng được thiết kế: Tài sản, Quản trị, Tài liệu, Cài đặt, Đăng ký, cùng phần lớn Tài sản/Yêu cầu. Các màn này hiện được “thiết kế trong code”.</li>
+      <li>Có khoảng 11 kiểu avatar viết tay, 4 cây thư mục, 2 hộp thoại xoá, và ngày tháng được format theo 14 cách.</li>
+      <li>Chỉ có animation lúc mở. Panel và modal biến mất ngay khi đóng.</li>
+      <li>Realtime không có hình thức thể hiện nào: hàng mới chen vào, không ai biết ai vừa sửa gì.</li>
+      <li>Có UUID và mã nội bộ hiện ở trang chi tiết phê duyệt, tài sản và drive.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ======================= A ======================= -->
+<section class="dir" aria-labelledby="h-a">
+  <div class="dir-head">
+    <div class="prose">
+      <p class="label">Hướng A</p>
+      <h2 id="h-a">Sổ cái</h2>
+      <p class="thesis">Swiss/editorial cho dân văn phòng tài chính: nền giấy trung tính, mực gần đen, một màu cobalt, chữ Archivo ở hai độ rộng, chia vùng bằng đường kẻ mảnh, gần như không có card. Điểm nhớ: chuỗi phê duyệt hiển thị như một dòng sổ cái, mỗi bước có “con dấu” kèm giờ ký.</p>
+      <p class="muted">Hình thức đến từ chứng từ kế toán: cột số thẳng hàng, đường kẻ, chữ ký có thời điểm.</p>
+    </div>
+    <div style="display:grid;gap:12px;align-content:start">
+      <dl class="facts">
+        <dt>Chữ</dt><dd>Archivo: rộng 125 cho tiêu đề, 100 cho nội dung</dd>
+        <dt>Màu</dt><dd>Restrained: trung tính + cobalt ≤ 10%</dd>
+        <dt>Chiều sâu</dt><dd>Chỉ dùng đường kẻ 1px</dd>
+        <dt>Bo góc</dt><dd>2px ở mọi chỗ</dd>
+        <dt>Chuyển động</dt><dd>120 đến 180ms, trượt dọc trục, không scale</dd>
+      </dl>
+      <div class="dials"><span>Variance <b>3</b></span><span>Motion <b>3</b></span><span>Density <b>7</b></span></div>
+    </div>
+  </div>
+  <div class="swatches" aria-label="Bảng màu hướng A">
+    <div class="sw"><i style="background:var(--a-bg)"></i>nền</div>
+    <div class="sw"><i style="background:var(--a-panel)"></i>panel</div>
+    <div class="sw"><i style="background:var(--a-line)"></i>đường kẻ</div>
+    <div class="sw"><i style="background:var(--a-muted)"></i>chữ phụ</div>
+    <div class="sw"><i style="background:var(--a-ink)"></i>mực</div>
+    <div class="sw"><i style="background:var(--a-accent)"></i>cobalt</div>
+  </div>
+  <div class="specimen" style="font-family:'Archivo',Arial,sans-serif">
+    <div style="font-variation-settings:'wdth' 125;font-size:1.75rem;font-weight:700;letter-spacing:-0.01em;line-height:1.15">Đề nghị tạm ứng công tác phí tháng 10</div>
+    <div style="font-size:0.9375rem">Người đề nghị Phạm Hải Yến · Số tiền <span style="font-variant-numeric:tabular-nums">12.450.000 ₫</span> · Chờ Kế toán trưởng duyệt</div>
+  </div>
+  <div class="frame-tools">
+    <button class="tool" type="button" data-sim="a">Mô phỏng tin nhắn realtime<span class="pin" aria-label="chú thích 4">4</span></button>
+    <button class="tool" type="button" data-panel="a">Đóng/mở panel phê duyệt</button>
+  </div>
+  <div class="frame-scroll">
+    <div class="mock a" id="mock-a">
+      <nav class="side" aria-label="Điều hướng mẫu A">
+        <div class="ws">Khối Vận hành</div>
+        <div class="nav on">Tin nhắn <span class="n">4</span><span class="pin" aria-label="chú thích 1">1</span></div>
+        <div class="nav">Tài liệu</div>
+        <div class="nav">Phê duyệt <span class="n">2</span></div>
+        <div class="nav">Tài sản</div>
+        <div class="nav">Danh bạ</div>
+      </nav>
+      <div class="main">
+        <div class="chead"><h4>doi-soat-giao-dich</h4><span class="meta">14 thành viên · 3 đang trực tuyến<span class="pin" aria-label="chú thích 2">2</span></span></div>
+        <div class="stream" data-stream>
+          <div class="msg"><div class="av">MĐ</div><div><div class="who"><b>Trần Minh Đức</b><span class="t">09:12</span></div><p>File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.</p><div class="file">doi-soat-08-10.xlsx <small>412 KB</small></div></div></div>
+          <div class="msg"><div class="av">TL</div><div><div class="who"><b>Nguyễn Thu Lan</b><span class="t">09:14</span></div><p>Mình kiểm tra 3 giao dịch đó. Tổng chênh lệch 1.284.500 ₫.</p></div></div>
+        </div>
+        <div class="compose">Nhắn tới doi-soat-giao-dich</div>
+      </div>
+      <aside class="panel" data-panel-el>
+        <p class="label" style="margin:0">Phê duyệt<span class="pin" aria-label="chú thích 3">3</span></p>
+        <h5>Tạm ứng công tác phí</h5>
+        <div class="amt">12.450.000 ₫</div>
+        <ol class="chain">
+          <li><span>Trưởng phòng · Trần Minh Đức</span><span class="st ok">Đã ký</span><small>08:41, 09/10</small></li>
+          <li><span>Kế toán trưởng · Lê Thị Hoa</span><span class="st wait">Đang chờ</span><small>Gửi lúc 08:41</small></li>
+          <li><span>Giám đốc khối · Đỗ Văn Khải</span><span class="st" style="color:var(--a-muted)">Chưa tới</span><small>Sau Kế toán trưởng</small></li>
+        </ol>
+        <div class="btns"><span class="primary">Duyệt</span><span>Trả lại</span></div>
+      </aside>
+    </div>
+  </div>
+  <ol class="legend">
+    <li>Mục đang chọn: nền <code>--accent-wash</code> và viền trong 1px, không đổi kích thước. Số chưa đọc dùng chữ số đều nhau màu cobalt, không dùng badge.</li>
+    <li>Tiêu đề kênh dùng Archivo rộng 125. Siêu dữ liệu dùng chữ số đều nhau. Header chỉ có một đường kẻ dưới, không đổ bóng.</li>
+    <li>Chuỗi phê duyệt kiểu sổ cái: mỗi bước một dòng, ghi người ký, trạng thái và thời điểm. Đáp ứng quy tắc “audit phải ghi người làm” của CLAUDE.md.</li>
+    <li>Tin nhắn realtime trượt lên 6px trong 160ms, nền loé cobalt nhạt rồi tắt trong 900ms. Có bản thay thế khi giảm chuyển động.</li>
+  </ol>
+  <div class="risk">
+    <div><p class="label">Phụ thuộc vào giả định</p><p>Người dùng chủ yếu xử lý chứng từ và bảng, chat chỉ là phụ.</p></div>
+    <div><p class="label">Hỏng trước tiên ở đâu</p><p>Màn chat dài: không có ranh giới mềm nên đọc lâu bị mỏi. Control chỉ có đường kẻ nên khó nhận ra là bấm được.</p></div>
+  </div>
+</section>
+
+<!-- ======================= B ======================= -->
+<section class="dir" aria-labelledby="h-b">
+  <div class="dir-head">
+    <div class="prose">
+      <p class="label">Hướng B · đề xuất</p>
+      <h2 id="h-b">Tín hiệu</h2>
+      <p class="thesis">Neo-grotesque product, lấy realtime làm bản sắc: nền trung tính ngả ngọc lam, mặt phẳng nổi bằng sắc độ thay cho viền, Bricolage Grotesque dùng dè dặt cho tiêu đề, Be Vietnam Pro cho nội dung. Điểm nhớ: mỗi thay đổi đến từ người khác mang màu riêng của người đó. Avatar loé một vòng, hàng được phủ một lớp màu nhạt rồi tan trong 2,4 giây.</p>
+      <p class="muted">Hình thức đến từ chính sản phẩm: đây là nơi nhiều người cùng sửa một thứ, nên câu hỏi “ai vừa làm gì” chính là nội dung.</p>
+    </div>
+    <div style="display:grid;gap:12px;align-content:start">
+      <dl class="facts">
+        <dt>Chữ</dt><dd>Bricolage Grotesque cho tiêu đề, Be Vietnam Pro cho nội dung</dd>
+        <dt>Màu</dt><dd>Restrained: ngọc lam + 8 màu người dùng</dd>
+        <dt>Chiều sâu</dt><dd>Nổi bằng sắc độ, không có viền</dd>
+        <dt>Bo góc</dt><dd>10px cho mọi chỗ, pill cho badge</dd>
+        <dt>Chuyển động</dt><dd>160 đến 260ms, layout animation cho danh sách, đóng bằng 75% thời gian mở</dd>
+      </dl>
+      <div class="dials"><span>Variance <b>4</b></span><span>Motion <b>5</b></span><span>Density <b>5</b></span></div>
+    </div>
+  </div>
+  <div class="swatches" aria-label="Bảng màu hướng B">
+    <div class="sw"><i style="background:var(--b-sunk)"></i>chìm</div>
+    <div class="sw"><i style="background:var(--b-bg)"></i>nền</div>
+    <div class="sw"><i style="background:var(--b-raise)"></i>nổi</div>
+    <div class="sw"><i style="background:var(--b-muted)"></i>chữ phụ</div>
+    <div class="sw"><i style="background:var(--b-ink)"></i>mực</div>
+    <div class="sw"><i style="background:var(--b-accent)"></i>ngọc lam</div>
+    <div class="sw"><i style="background:var(--b-p-vinh)"></i>màu Vinh</div>
+    <div class="sw"><i style="background:var(--b-p-lan)"></i>màu Lan</div>
+  </div>
+  <div class="specimen">
+    <div style="font-family:'Bricolage Grotesque','Be Vietnam Pro',sans-serif;font-size:1.75rem;font-weight:700;letter-spacing:-0.01em;line-height:1.15">Đề nghị tạm ứng công tác phí tháng 10</div>
+    <div style="font-family:'Be Vietnam Pro',Arial,sans-serif;font-size:0.9375rem">Người đề nghị Phạm Hải Yến · Số tiền <span style="font-variant-numeric:tabular-nums">12.450.000 ₫</span> · Chờ Kế toán trưởng duyệt</div>
+  </div>
+  <div class="frame-tools">
+    <button class="tool" type="button" data-sim="b">Mô phỏng tin nhắn realtime<span class="pin" aria-label="chú thích 4">4</span></button>
+    <button class="tool" type="button" data-panel="b">Đóng/mở panel phê duyệt</button>
+  </div>
+  <div class="frame-scroll">
+    <div class="mock b" id="mock-b">
+      <nav class="side" aria-label="Điều hướng mẫu B">
+        <div class="ws">Khối Vận hành</div>
+        <div class="nav on">Tin nhắn <span class="n">4</span><span class="pin" aria-label="chú thích 1">1</span></div>
+        <div class="nav">Tài liệu</div>
+        <div class="nav">Phê duyệt <span class="n">2</span></div>
+        <div class="nav">Tài sản</div>
+        <div class="nav">Danh bạ</div>
+      </nav>
+      <div class="main">
+        <div class="chead"><h4>doi-soat-giao-dich</h4>
+          <span class="meta" style="display:flex;gap:10px;align-items:center"><span class="faces"><i style="background:var(--b-p-duc)"></i><i style="background:var(--b-p-lan)"></i><i style="background:var(--b-p-vinh)"></i></span>3 người đang xem<span class="pin" aria-label="chú thích 2">2</span></span></div>
+        <div class="stream" data-stream>
+          <div class="msg"><div class="av" style="background:var(--b-p-duc)">MĐ</div><div><div class="who"><b>Trần Minh Đức</b><span class="t">09:12</span></div><p>File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.</p><div class="file">doi-soat-08-10.xlsx <small>412 KB</small></div></div></div>
+          <div class="msg"><div class="av" style="background:var(--b-p-lan)">TL</div><div><div class="who"><b>Nguyễn Thu Lan</b><span class="t">09:14</span></div><p>Mình kiểm tra 3 giao dịch đó. Tổng chênh lệch 1.284.500 ₫.</p></div></div>
+        </div>
+        <div class="compose">Nhắn tới doi-soat-giao-dich</div>
+      </div>
+      <aside class="panel" data-panel-el>
+        <p class="label" style="margin:0">Phê duyệt<span class="pin" aria-label="chú thích 3">3</span></p>
+        <h5>Tạm ứng công tác phí</h5>
+        <div class="amt">12.450.000 ₫</div>
+        <ol class="chain">
+          <li><span class="dot" style="background:var(--b-p-duc)">MĐ</span><span>Trần Minh Đức</span><span class="st ok">Đã duyệt</span><small>Trưởng phòng · 08:41</small></li>
+          <li><span class="dot" style="background:var(--b-p-yen)">LH</span><span>Lê Thị Hoa</span><span class="st wait">Đang chờ</span><small>Kế toán trưởng · từ 08:41</small></li>
+          <li><span class="dot" style="background:var(--b-muted)">ĐK</span><span>Đỗ Văn Khải</span><span class="st" style="color:var(--b-muted);background:var(--b-sunk)">Chưa tới</span><small>Giám đốc khối</small></li>
+        </ol>
+        <div class="btns"><span class="primary">Duyệt</span><span>Trả lại</span></div>
+      </aside>
+    </div>
+  </div>
+  <ol class="legend">
+    <li>Mục đang chọn nổi lên bằng sắc độ <code>--raise</code>, không dùng viền hay đường kẻ bên. Badge chưa đọc là pill ngọc lam, màu accent chỉ dùng cho trạng thái cần chú ý.</li>
+    <li>Presence: avatar của người đang xem kênh, mỗi người một màu cố định lấy từ bảng 8 màu theo người dùng. Dữ liệu đến từ <code>PresenceEvent</code> (phase 05).</li>
+    <li>Chuỗi phê duyệt ghi tên người kèm avatar, chức danh ghi phụ. Trạng thái là pill có nhãn đọc được, không có mã nào.</li>
+    <li>Thay đổi realtime: avatar loé vòng 900ms, hàng phủ màu của người gửi rồi tan trong 2,4s, kèm nhãn “vừa gửi”. Khi giảm chuyển động, chỉ còn lớp phủ màu, không có chuyển động.</li>
+  </ol>
+  <div class="risk">
+    <div><p class="label">Phụ thuộc vào giả định</p><p>Phase 05 đưa được tác giả và loại thay đổi vào mọi event, kể cả drive và phê duyệt.</p></div>
+    <div><p class="label">Hỏng trước tiên ở đâu</p><p>Kênh hoặc thư mục có nhiều người sửa cùng lúc: các lớp phủ màu chồng lên nhau thành nhiễu. Cần gộp: 3 thay đổi trở lên trong 2 giây thành một dòng “Vinh và 2 người khác”.</p></div>
+  </div>
+</section>
+
+<!-- ======================= C ======================= -->
+<section class="dir" aria-labelledby="h-c">
+  <div class="dir-head">
+    <div class="prose">
+      <p class="label">Hướng C</p>
+      <h2 id="h-c">Ca trực</h2>
+      <p class="thesis">Industrial, ưu tiên nền tối, cho phòng điều hành: nền gần đen ngả xanh, bề mặt sáng dần theo tầng, màu hổ phách cho mọi thứ cần chú ý, Familjen Grotesk cho tiêu đề, Onest cho nội dung. Điểm nhớ: một dải trạng thái luôn hiện ở đáy màn hình, cho biết kết nối realtime, ai đang hoạt động và sự kiện mới nhất.</p>
+      <p class="muted">Hình thức đến từ công việc đối soát và vận hành: theo dõi liên tục, phát hiện bất thường.</p>
+    </div>
+    <div style="display:grid;gap:12px;align-content:start">
+      <dl class="facts">
+        <dt>Chữ</dt><dd>Familjen Grotesk cho tiêu đề, Onest cho nội dung</dd>
+        <dt>Màu</dt><dd>Nền tối trước, hổ phách cho mọi thứ cần chú ý</dd>
+        <dt>Chiều sâu</dt><dd>Nổi bằng độ sáng: 16 / 20 / 25% L</dd>
+        <dt>Bo góc</dt><dd>6px</dd>
+        <dt>Chuyển động</dt><dd>150 đến 220ms, chủ yếu fade, dải trạng thái cuộn số</dd>
+      </dl>
+      <div class="dials"><span>Variance <b>3</b></span><span>Motion <b>4</b></span><span>Density <b>8</b></span></div>
+    </div>
+  </div>
+  <div class="swatches" aria-label="Bảng màu hướng C">
+    <div class="sw"><i style="background:var(--c-bg)"></i>nền</div>
+    <div class="sw"><i style="background:var(--c-s1)"></i>tầng 1</div>
+    <div class="sw"><i style="background:var(--c-s2)"></i>tầng 2</div>
+    <div class="sw"><i style="background:var(--c-muted)"></i>chữ phụ</div>
+    <div class="sw"><i style="background:var(--c-ink)"></i>mực</div>
+    <div class="sw"><i style="background:var(--c-accent)"></i>hổ phách</div>
+  </div>
+  <div class="specimen" style="background:var(--c-bg);color:var(--c-ink);padding:16px;border:0;border-radius:6px">
+    <div style="font-family:'Familjen Grotesk','Onest',sans-serif;font-size:1.75rem;font-weight:700;line-height:1.15">Đề nghị tạm ứng công tác phí tháng 10</div>
+    <div style="font-family:'Onest',Arial,sans-serif;font-size:0.9375rem;color:var(--c-muted)">Người đề nghị Phạm Hải Yến · Số tiền <span style="font-variant-numeric:tabular-nums;color:var(--c-ink)">12.450.000 ₫</span> · Chờ Kế toán trưởng duyệt</div>
+  </div>
+  <div class="frame-tools">
+    <button class="tool" type="button" data-sim="c">Mô phỏng tin nhắn realtime</button>
+    <button class="tool" type="button" data-panel="c">Đóng/mở panel phê duyệt</button>
+  </div>
+  <div class="frame-scroll">
+    <div class="mock c" id="mock-c">
+      <nav class="side" aria-label="Điều hướng mẫu C">
+        <div class="ws">Khối Vận hành</div>
+        <div class="nav on" data-ping>Tin nhắn <span class="n">4</span><span class="pin" aria-label="chú thích 1">1</span></div>
+        <div class="nav">Tài liệu</div>
+        <div class="nav">Phê duyệt <span class="n">2</span></div>
+        <div class="nav">Tài sản</div>
+        <div class="nav">Danh bạ</div>
+      </nav>
+      <div class="main">
+        <div class="chead"><h4>doi-soat-giao-dich</h4><span class="meta">14 thành viên</span></div>
+        <div class="stream" data-stream>
+          <div class="msg"><div class="av">MĐ</div><div><div class="who"><b>Trần Minh Đức</b><span class="t">09:12</span></div><p>File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.</p><div class="file">doi-soat-08-10.xlsx <small>412 KB</small></div></div></div>
+          <div class="msg"><div class="av">TL</div><div><div class="who"><b>Nguyễn Thu Lan</b><span class="t">09:14</span></div><p>Mình kiểm tra 3 giao dịch đó. Tổng chênh lệch 1.284.500 ₫.</p></div></div>
+        </div>
+        <div class="compose">Nhắn tới doi-soat-giao-dich</div>
+      </div>
+      <aside class="panel" data-panel-el>
+        <p class="label" style="margin:0;color:var(--c-muted)">Phê duyệt<span class="pin" aria-label="chú thích 2">2</span></p>
+        <h5>Tạm ứng công tác phí</h5>
+        <div class="amt">12.450.000 ₫</div>
+        <ol class="chain">
+          <li><span>Trần Minh Đức · Trưởng phòng</span><span class="st ok">Đã duyệt</span><small>08:41, 09/10</small></li>
+          <li><span>Lê Thị Hoa · Kế toán trưởng</span><span class="st wait">Đang chờ</span><small>từ 08:41</small></li>
+          <li><span>Đỗ Văn Khải · Giám đốc khối</span><span class="st" style="color:var(--c-muted)">Chưa tới</span><small>sau Kế toán trưởng</small></li>
+        </ol>
+        <div class="btns"><span class="primary">Duyệt</span><span>Trả lại</span></div>
+      </aside>
+      <div class="strip"><span class="pin" aria-label="chú thích 3">3</span><span class="conn">Đã kết nối</span><span><b>3</b> người đang hoạt động trong khối</span><span>Gần nhất: <span class="last" data-last>Nguyễn Thu Lan nhắn trong doi-soat-giao-dich, 09:14</span></span></div>
+    </div>
+  </div>
+  <ol class="legend">
+    <li>Số chưa đọc màu hổ phách. Khi có tin mới ở kênh khác, số bật lên một lần trong 600ms rồi đứng yên.</li>
+    <li>Trạng thái “Đang chờ” cũng dùng hổ phách: một màu duy nhất cho mọi thứ cần hành động.</li>
+    <li>Dải trạng thái dùng dữ liệu thật: trạng thái kết nối WebSocket, số người hoạt động, sự kiện gần nhất. Sự kiện mới cuộn lên trong 220ms.</li>
+  </ol>
+  <div class="risk">
+    <div><p class="label">Phụ thuộc vào giả định</p><p>Người dùng ngồi trong môi trường ánh sáng dịu và chủ yếu theo dõi chứ không đọc dài.</p></div>
+    <div><p class="label">Hỏng trước tiên ở đâu</p><p>Văn phòng sáng và các phiên đọc chat hay tài liệu dài: nền tối gây mỏi mắt. Bản light dễ thành thứ yếu. Hổ phách trên nền tối dễ lẫn với cảnh báo lỗi.</p></div>
+  </div>
+</section>
+
+<section aria-labelledby="h-compare">
+  <h2 id="h-compare">So sánh</h2>
+  <div class="twocol">
+    <div class="compare">
+      <table>
+        <thead><tr><th scope="col">Tiêu chí</th><th scope="col">A · Sổ cái</th><th scope="col">B · Tín hiệu</th><th scope="col">C · Ca trực</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Thể hiện realtime</th><td>Loé nền, không ghi ai làm</td><td class="win">Ghi rõ người làm, có presence</td><td>Dải trạng thái chung</td></tr>
+          <tr><th scope="row">Chữ tiếng Việt</th><td>Tốt (Archivo có subset tiếng Việt)</td><td class="win">Rất tốt (Be Vietnam Pro được thiết kế cho tiếng Việt)</td><td>Tốt</td></tr>
+          <tr><th scope="row">Bảng dày (drive, quản trị)</th><td class="win">Rất tốt</td><td>Tốt, có thể mượn bảng kẻ mảnh của A</td><td class="win">Rất tốt</td></tr>
+          <tr><th scope="row">Đọc chat dài</th><td>Trung bình</td><td class="win">Tốt</td><td>Kém ở văn phòng sáng</td></tr>
+          <tr><th scope="row">Khối lượng chuyển động</th><td>Ít</td><td>Vừa, cần layout animation</td><td>Ít</td></tr>
+          <tr><th scope="row">Rủi ro chính</th><td>Lạnh, khó nhận ra control</td><td>Nhiễu khi nhiều người sửa cùng lúc</td><td>Mỏi mắt, light mode yếu</td></tr>
+          <tr><th scope="row">Chi phí đổi hướng sau này</th><td colspan="3">Như nhau ở tầng token. Cả ba dùng chung kiến trúc component, nên đổi hướng chủ yếu là đổi token và module motion.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <figure style="margin:0;display:grid;gap:8px">
+      <svg viewBox="0 0 360 300" width="100%" role="img" aria-labelledby="q-title">
+        <title id="q-title">Vị trí ba hướng theo độ dày thông tin và mức thể hiện chuyển động</title>
+        <line x1="48" y1="250" x2="340" y2="250" stroke="var(--line)" stroke-width="1"/>
+        <line x1="48" y1="20" x2="48" y2="250" stroke="var(--line)" stroke-width="1"/>
+        <line x1="194" y1="20" x2="194" y2="250" stroke="var(--line)" stroke-dasharray="3 4"/>
+        <line x1="48" y1="135" x2="340" y2="135" stroke="var(--line)" stroke-dasharray="3 4"/>
+        <text x="194" y="282" text-anchor="middle" font-size="12" class="m">Độ dày thông tin →</text>
+        <text x="16" y="135" text-anchor="middle" font-size="12" class="m" transform="rotate(-90 16 135)">Chuyển động →</text>
+        <text x="56" y="266" font-size="11" class="m">thoáng</text>
+        <text x="336" y="266" font-size="11" class="m" text-anchor="end">dày</text>
+        <circle cx="252" cy="181" r="7" fill="var(--a-accent)"/>
+        <text x="264" y="185" font-size="13" font-weight="600">A</text>
+        <circle cx="194" cy="89" r="9" fill="var(--b-accent)"/>
+        <text x="208" y="93" font-size="13" font-weight="600">B</text>
+        <circle cx="282" cy="158" r="7" fill="var(--c-accent)" stroke="var(--fg)" stroke-width="1"/>
+        <text x="294" y="162" font-size="13" font-weight="600">C</text>
+      </svg>
+      <figcaption class="muted" style="font-size:0.8125rem">B đứng giữa về độ dày nhưng có nhiều chuyển động nhất. Hai yêu cầu anh/chị đặt ra (UI đẹp có animation, và realtime) đều nằm trên trục dọc.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section aria-labelledby="h-rec">
+  <h2 id="h-rec">Đề xuất</h2>
+  <div class="rec">
+    <p><strong>Chọn B, Tín hiệu, và mượn bảng kẻ mảnh của A cho Tài liệu và Quản trị.</strong></p>
+    <ul style="margin:0;padding-left:1.1em;display:grid;gap:6px">
+      <li>Đây là hướng duy nhất biến realtime thành thứ người dùng nhìn thấy và hiểu được: ai vừa làm gì. Nó cũng đáp ứng luôn quy tắc “audit phải ghi người làm” trong CLAUDE.md.</li>
+      <li>Be Vietnam Pro được thiết kế cho dấu tiếng Việt. Dấu chồng (ặ, ẫ, ổ) không bị chạm dòng ở cỡ 13 đến 14px.</li>
+      <li>Rủi ro chính là nhiễu, và có cách xử lý rõ ràng: gộp thay đổi theo cửa sổ 2 giây, giới hạn một lớp phủ cho mỗi hàng.</li>
+      <li>Nếu sau này thấy quá nhiều chuyển động, có thể hạ motion từ 5 xuống 3 bằng token mà không phải viết lại component.</li>
+    </ul>
+  </div>
+</section>
+
+<section aria-labelledby="h-flow">
+  <h2 id="h-flow">Triển khai sau khi chọn hướng</h2>
+  <div class="diagram">
+    <svg viewBox="0 0 920 250" width="920" role="img" aria-labelledby="f-title" style="max-width:none">
+      <title id="f-title">Luồng triển khai từ chọn hướng tới khoá lint</title>
+      <defs><marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>
+      <g font-size="12">
+        <rect x="8" y="40" width="128" height="64" rx="6" fill="var(--accent-wash)" stroke="var(--accent)"/>
+        <text x="72" y="66" text-anchor="middle" font-weight="600">1 · Chọn hướng</text><text x="72" y="84" text-anchor="middle" class="m">anh/chị</text>
+        <rect x="160" y="40" width="140" height="64" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="230" y="66" text-anchor="middle" font-weight="600">2 · Token + font</text><text x="230" y="84" text-anchor="middle" class="m">DESIGN.md, @theme</text>
+        <rect x="324" y="40" width="150" height="64" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="399" y="66" text-anchor="middle" font-weight="600">3 · Primitive + motion</text><text x="399" y="84" text-anchor="middle" class="m">lib/motion, lib/format</text>
+        <rect x="498" y="40" width="130" height="64" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="563" y="66" text-anchor="middle" font-weight="600">4 · Shell</text><text x="563" y="84" text-anchor="middle" class="m">sidebar, gộp Tài sản</text>
+        <rect x="652" y="40" width="130" height="64" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="717" y="66" text-anchor="middle" font-weight="600">5 · Từng nhóm màn</text><text x="717" y="84" text-anchor="middle" class="m">mỗi nhóm một PR</text>
+        <rect x="806" y="40" width="106" height="64" rx="6" fill="var(--surface)" stroke="var(--line)"/>
+        <text x="859" y="66" text-anchor="middle" font-weight="600">6 · Khoá lint</text><text x="859" y="84" text-anchor="middle" class="m">3 khổ × 2 theme</text>
+        <line x1="136" y1="72" x2="158" y2="72" stroke="var(--muted)" marker-end="url(#arr)"/>
+        <line x1="300" y1="72" x2="322" y2="72" stroke="var(--muted)" marker-end="url(#arr)"/>
+        <line x1="474" y1="72" x2="496" y2="72" stroke="var(--muted)" marker-end="url(#arr)"/>
+        <line x1="628" y1="72" x2="650" y2="72" stroke="var(--muted)" marker-end="url(#arr)"/>
+        <line x1="782" y1="72" x2="804" y2="72" stroke="var(--muted)" marker-end="url(#arr)"/>
+        <rect x="430" y="164" width="190" height="56" rx="6" fill="var(--surface)" stroke="var(--line)" stroke-dasharray="4 3"/>
+        <text x="525" y="188" text-anchor="middle" font-weight="600">Phase 04 · lớp dữ liệu</text><text x="525" y="206" text-anchor="middle" class="m">key factory, workspace</text>
+        <rect x="650" y="164" width="190" height="56" rx="6" fill="var(--surface)" stroke="var(--line)" stroke-dasharray="4 3"/>
+        <text x="745" y="188" text-anchor="middle" font-weight="600">Phase 05 · realtime</text><text x="745" y="206" text-anchor="middle" class="m">tác giả + loại thay đổi</text>
+        <path d="M525 164 L525 130 L563 130 L563 106" fill="none" stroke="var(--muted)" marker-end="url(#arr)"/>
+        <path d="M745 164 L745 130 L717 130 L717 106" fill="none" stroke="var(--muted)" marker-end="url(#arr)"/>
+        <text x="8" y="160" font-size="12" class="m">Bước 1 đến 3 không phụ thuộc backend,</text>
+        <text x="8" y="178" font-size="12" class="m">bắt đầu được ngay song song phase 02, 03.</text>
+      </g>
+    </svg>
+  </div>
+</section>
+
+<section aria-labelledby="h-q">
+  <h2 id="h-q">Câu hỏi còn mở</h2>
+  <ol class="qs">
+    <li>Anh/chị chọn A, B hay C? Hoặc kết hợp, ví dụ B làm nền và mượn bảng của A.</li>
+    <li>Dark mode: làm đầy đủ ngay từ đầu, hay light trước và dark ở đợt sau?</li>
+    <li>Thêm thư viện <code>motion</code> (khoảng 30 đến 40KB gzip) để có animation lúc đóng và layout animation cho danh sách? B gần như cần thư viện này. A và C có thể chỉ dùng CSS.</li>
+    <li>Bỏ hẳn Stitch làm nguồn thiết kế và chuyển sang <code>DESIGN.md</code> mới cùng mockup trong repo (CLAUDE.md sẽ được sửa theo)?</li>
+  </ol>
+</section>
+
+</div>
+
+<script>
+(function () {
+  var reduceBox = document.getElementById('reduce');
+  if (reduceBox) {
+    reduceBox.addEventListener('change', function () {
+      document.documentElement.classList.toggle('reduce', reduceBox.checked);
+    });
+  }
+
+  var arrivals = {
+    a: { html: '<div class="av">QV</div><div><div class="who"><b>Lê Quang Vinh</b><span class="t">09:17</span></div><p>Đã đối chiếu xong. Chênh lệch do phí chuyển khoản liên ngân hàng, không phải lỗi hệ thống.</p></div>' },
+    b: { html: '<div class="av" style="background:var(--b-p-vinh)">QV</div><div class="grow"><div class="who"><b>Lê Quang Vinh</b><span class="t">09:17</span><span class="live">vừa gửi</span></div><p>Đã đối chiếu xong. Chênh lệch do phí chuyển khoản liên ngân hàng, không phải lỗi hệ thống.</p></div>' },
+    c: { html: '<div class="av">QV</div><div><div class="who"><b>Lê Quang Vinh</b><span class="t">09:17</span></div><p>Đã đối chiếu xong. Chênh lệch do phí chuyển khoản liên ngân hàng, không phải lỗi hệ thống.</p></div>' }
+  };
+
+  document.querySelectorAll('[data-sim]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var key = btn.getAttribute('data-sim');
+      var mock = document.getElementById('mock-' + key);
+      var stream = mock.querySelector('[data-stream]');
+      var msgs = stream.querySelectorAll('.msg');
+      if (msgs.length > 2) { stream.removeChild(msgs[msgs.length - 1]); }
+      var el = document.createElement('div');
+      el.className = 'msg arrive';
+      el.innerHTML = arrivals[key].html;
+      stream.appendChild(el);
+      if (key === 'b') {
+        setTimeout(function () { var live = el.querySelector('.live'); if (live) live.remove(); }, 2400);
+      }
+      if (key === 'c') {
+        var last = mock.querySelector('[data-last]');
+        last.classList.remove('tick'); void last.offsetWidth;
+        last.textContent = 'Lê Quang Vinh nhắn trong doi-soat-giao-dich, 09:17';
+        last.classList.add('tick');
+        var ping = mock.querySelector('[data-ping]');
+        ping.classList.remove('ping'); void ping.offsetWidth; ping.classList.add('ping');
+      }
+    });
+  });
+
+  document.querySelectorAll('[data-panel]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var mock = document.getElementById('mock-' + btn.getAttribute('data-panel'));
+      var panel = mock.querySelector('[data-panel-el]');
+      var reduced = document.documentElement.classList.contains('reduce') ||
+        (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+      if (panel.hidden) {
+        panel.hidden = false;
+        panel.classList.remove('exit'); void panel.offsetWidth; panel.classList.add('enter');
+      } else if (reduced) {
+        panel.hidden = true;
+      } else {
+        panel.classList.remove('enter'); void panel.offsetWidth; panel.classList.add('exit');
+        panel.addEventListener('animationend', function done() {
+          panel.removeEventListener('animationend', done);
+          panel.classList.remove('exit');
+          panel.hidden = true;
+        });
+      }
+    });
+  });
+})();
+</script>

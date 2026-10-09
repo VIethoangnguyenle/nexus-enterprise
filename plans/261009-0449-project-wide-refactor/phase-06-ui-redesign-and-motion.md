@@ -10,13 +10,16 @@ dependencies: [4]
 # Phase 06 — UI redesign and motion  ★ trọng tâm của plan
 
 ## Overview
-Ưu tiên số một của người dùng: **refactor UI cho đẹp, kể cả animation**. Đây là thiết kế lại có
-chủ đích, không chỉ dọn code. Quy trình vẫn là Stitch-first (CLAUDE.md §3, `.stitch/WORKFLOW.md`):
-thiết kế trên Stitch → duyệt → code render đúng thiết kế. Việc thiết kế (bước 1–3) **không phụ
-thuộc backend** nên bắt đầu ngay, song song với phase 02–03; phần code (bước 4+) chờ phase 04.
+Ưu tiên số một của người dùng: **refactor UI cho đẹp, kể cả animation**. Người dùng đã đồng ý
+làm **một bộ UI hoàn toàn mới qua `ak:brainstorm`** thay vì bám thiết kế Stitch hiện có.
 
-> Session hiện tại không kết nối Stitch MCP. Bước thiết kế cần Stitch MCP (hoặc người dùng thiết
-> kế trên Stitch rồi đưa screen ID).
+- Brainstorm: [`reports/brainstorm-261009-0457-new-ui-direction.html`](reports/brainstorm-261009-0457-new-ui-direction.html)
+  — 3 hướng (A Sổ cái, B Tín hiệu, C Ca trực), mockup có chú thích, demo motion. Đề xuất: **B**,
+  mượn bảng kẻ mảnh của A cho Tài liệu và Quản trị.
+- Khi người dùng chọn hướng: viết lại `DESIGN.md` theo hướng đó, đổi dòng "Design source of truth
+  is Stitch" trong CLAUDE.md §3 sang `DESIGN.md` mới + mockup trong repo, rồi mới code.
+- Thiết kế (token, font, primitive, motion) **không phụ thuộc backend**, bắt đầu ngay song song
+  phase 02–03; phần code màn hình chờ phase 04.
 
 ## Key insights
 **Độ phủ thiết kế.** Stitch project `14852434379132121789` có 24 screen (chat, contacts, drive,
@@ -64,27 +67,30 @@ loading/error/empty.
 
 ## Requirements
 
-### A. Thiết kế (Stitch)
-- Đánh giá hiện trạng từng màn: chụp screenshot app thật (Playwright) cạnh screen Stitch, chấm
-  bằng `impeccable` (critique/audit) + `ak:ui-ux-pro-max`; ra danh sách vấn đề thị giác theo mức độ.
-- Thiết kế mới trên Stitch cho 5 nhóm màn chưa có screen (assets, admin, documents, settings,
-  register) và cập nhật screen hiện có ở chỗ critique chỉ ra.
-- Bổ sung vào `.stitch/DESIGN.md`: thang z-index, thang icon/màu loại file trong token, quy tắc
+### A. Thiết kế (ak:brainstorm → DESIGN.md)
+- Người dùng chọn hướng trong file brainstorm.
+- Viết lại `DESIGN.md` theo hướng đã chọn (token OKLCH, font Fontsource có subset tiếng Việt,
+  thang cỡ chữ, spacing 4pt, radius, chiều sâu, motion); `.stitch/` giữ làm lịch sử.
+- Mockup có chú thích cho mọi nhóm màn (shell, chat, drive, approval, assets, admin, contacts,
+  documents, settings, auth) theo `ak:frontend-design`, duyệt từng nhóm trước khi code.
+- Nội dung `DESIGN.md` phải có: thang z-index, thang icon/màu loại file trong token, quy tắc
   avatar, mật độ bảng, trạng thái loading/empty/error chuẩn, **motion spec đầy đủ** (dưới).
-- Người dùng duyệt từng nhóm màn trước khi code.
 
 ### B. Motion system
 - Một module `frontend/src/lib/motion.ts` + utilities CSS: enter/exit cho modal, panel, popover,
   toast, dropdown; stagger danh sách; chuyển cảnh route; hiệu ứng hàng mới/xoá do realtime
   (phase 05); skeleton shimmer duy nhất.
-- Exit animation thật (giữ mount tới khi xong). Đề xuất: `motion` (Framer Motion) cho
-  presence/layout animation, CSS cho phần còn lại — chốt ở Unresolved Q2 trong plan.md.
+- Exit animation thật (giữ mount tới khi xong), chạy ở ~75% thời gian mở. Đề xuất: `motion`
+  cho presence/layout animation, CSS cho phần còn lại (Unresolved Q2 trong plan.md).
+- Hướng B: realtime mang danh tính, nghĩa là avatar loé và hàng phủ màu của tác giả rồi tan trong
+  2,4s; gộp ≥ 3 thay đổi trong 2s thành "X và N người khác"; giảm chuyển động thì chỉ còn lớp
+  phủ màu.
 - Chỉ animate `transform`/`opacity`; bỏ `transition-all`; mọi duration/easing từ token.
 - `prefers-reduced-motion`: tắt chuyển động, giữ fade ngắn.
 - Lint: cấm `transition-all`, `duration-<số>` thô, `animate-bounce`.
 
 ### C. Code
-- Mỗi màn render đúng Stitch; dùng primitive (`Heading`, `Text`, `Avatar`, `Modal`,
+- Mỗi màn render đúng mockup đã duyệt; dùng primitive (`Heading`, `Text`, `Avatar`, `Modal`,
   `ConfirmDialog`, một `TreeView`, `lib/format`).
 - Gộp `/assets` vào shell `_workspace` (hoặc dùng chung guard/WS/nav — Unresolved Q5).
 - Picker user/role/department thay mọi ô nhập ID; backend trả display name/avatar cho
@@ -95,14 +101,15 @@ loading/error/empty.
 - Một bộ Loading/Empty/Error, có ở mọi query.
 - Siết lint: px thập phân, `z-[`, `tracking-[`, `rgba`, motion rules; bật `react-hooks`;
   giảm `eslint-disable` về chỉ còn exemption có lý do.
-- Responsive theo screen tablet/mobile đã có trên Stitch.
+- Responsive: mockup tablet/mobile cho từng nhóm màn.
 
 ## Order of screens
 Theo mức dùng và mức lệch: (1) shell + sidebar + nav, (2) chat, (3) drive, (4) approval,
 (5) assets, (6) admin, (7) contacts, documents, settings, (8) auth/onboarding.
 
 ## Related files
-- modify `.stitch/DESIGN.md`, `DESIGN.md`, `.stitch/metadata.json` (screen mới), `.stitch/designs/`
+- modify `DESIGN.md` (viết lại), `CLAUDE.md` §3 (nguồn thiết kế); `.stitch/` giữ làm lịch sử
+- create `frontend/src/assets/fonts` qua `@fontsource/*` (subset `vietnamese`)
 - modify `frontend/src/index.css`, `frontend/eslint.config.js`, `frontend/src/components/**`,
   `frontend/src/routes/**`
 - create `frontend/src/lib/{motion,format}.ts`, `frontend/src/components/composites/{UserPicker,RolePicker,DepartmentPicker}.tsx`
@@ -111,23 +118,23 @@ Theo mức dùng và mức lệch: (1) shell + sidebar + nav, (2) chat, (3) driv
   create spec layout cho assets/admin nếu thêm màn
 
 ## Implementation steps
-1. Chạy app (`make dev`), chụp toàn bộ màn (desktop/tablet/mobile) → báo cáo critique.
-2. Thiết kế trên Stitch: màn thiếu + sửa theo critique + motion spec → người dùng duyệt.
+1. Người dùng chọn hướng (brainstorm). Cập nhật CLAUDE.md §3 về nguồn thiết kế.
+2. `DESIGN.md` mới + mockup từng nhóm màn → người dùng duyệt.
 3. Nền tảng: tokens bổ sung, `lib/motion`, `lib/format`, primitive còn thiếu, lint siết (ở mức warn
    trong lúc chuyển, khoá error khi xong).
-4. Từng màn theo thứ tự trên, mỗi màn một PR: fetch Stitch HTML → code → test vitest (không UUID,
-   có loading/empty/error) → screenshot so với Stitch.
+4. Từng nhóm màn theo thứ tự trên, mỗi nhóm một PR: code theo mockup → test vitest (không UUID,
+   có loading/empty/error) → screenshot 3 khổ × 2 theme so với mockup.
 5. Motion pass toàn app + reduced-motion; test thủ công 60fps trên danh sách dài (drive, chat).
 6. Khoá lint ở `error`.
 
 ## Success criteria
-- [ ] Mọi route có screen Stitch tương ứng và screenshot khớp.
+- [ ] Mọi route có mockup đã duyệt và screenshot khớp, ở 3 khổ × 2 theme.
 - [ ] Không còn ID trên màn hình (test regex UUID), không còn ô nhập ID.
 - [ ] Mọi overlay có enter + exit; tôn trọng `prefers-reduced-motion`.
 - [ ] Không còn `transition-all`, duration/easing thô, z-index tuỳ ý.
 - [ ] Lint design-system ở `error`, `eslint-disable` chỉ còn exemption có lý do.
 
 ## Risks
-- Không có Stitch MCP → thiết kế bị chặn; fallback: người dùng thiết kế trên Stitch rồi đưa screen ID.
+- Hướng B nhiễu khi nhiều người sửa cùng lúc → gộp theo cửa sổ 2s, tối đa một lớp phủ mỗi hàng.
 - Thêm thư viện animation tăng bundle (~30–40KB gz cho `motion`); đo trước/sau.
 - Redesign lớn dễ trượt phạm vi → mỗi màn một PR, duyệt thiết kế trước khi code.

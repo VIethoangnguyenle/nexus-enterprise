@@ -1,6 +1,6 @@
 ---
 title: "Project-wide refactor — UI and logic"
-description: "Redesign the UI and its motion on Stitch, make every screen realtime over WebSocket, and refactor the logic underneath, closing the live authorization gaps first."
+description: "Redesign the UI and its motion from scratch via ak:brainstorm, make every screen realtime over WebSocket, and refactor the logic underneath, closing the live authorization gaps first."
 status: pending
 priority: P1
 effort: 22-30d
@@ -23,7 +23,8 @@ mỗi phase (phase 06 thì một PR mỗi nhóm màn).
 Ưu tiên theo yêu cầu người dùng:
 
 1. **UI đẹp, gồm cả animation** → [phase 06](phase-06-ui-redesign-and-motion.md), trọng tâm của
-   plan. Phần thiết kế trên Stitch bắt đầu ngay, song song mọi thứ khác.
+   plan. Một bộ UI hoàn toàn mới qua `ak:brainstorm`; 3 hướng đã có trong
+   [brainstorm](reports/brainstorm-261009-0457-new-ui-direction.html), chờ chọn.
 2. **Realtime qua WebSocket** cho mọi màn → [phase 05](phase-05-realtime-websocket.md).
 3. Logic: lớp dữ liệu frontend, NGAC, backend layering, test.
 
@@ -56,7 +57,7 @@ Audit cũng tìm ra lỗ hổng phân quyền **có thật, đang chạy**. Chú
 | 09 | [Tests, dead code, large files](phase-09-tests-dead-code-and-splits.md) | P3 | 1-2d | 04, 08 | pending |
 
 ```text
-Track UI     : 06-design (Stitch) ──────────────┐
+Track UI     : 06-design (brainstorm)────────────┐
 Track FE     : 01 ─► 04 ─────────────────────────┴─► 06-code ─► 09
 Track secure : 01 ─► 02 ─┬─► 05 realtime
                    03 ───┴─► 07 ─► 08 ──────────────────────────► 09
@@ -90,7 +91,7 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
 - Thay đổi policy model → spec + test vector trong `backend/services/policy/internal/ngac/` cùng
   commit; dùng skill `ngac-policy-change`.
 - Chuỗi NGAC chỉ đến từ `backend/ngac`. Ghi graph phải đi qua EPP.
-- UI: thiết kế trên Stitch trước (`.stitch/WORKFLOW.md`), code chỉ render thiết kế. Không ID nào
+- UI: thiết kế trước (brainstorm → `DESIGN.md` + mockup đã duyệt), code chỉ render thiết kế. Không ID nào
   lên màn hình. Mọi chuyển động dùng motion token.
 - Proto dùng chung đổi → `make proto` **và** `npm run proto:gen`.
 - Route REST mới → `frontend/vite.config.js` (cả khối regex nếu nằm dưới `/api/workspaces/:id/`).
@@ -112,8 +113,8 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
 3. **Asset O nodes (phase 07):** chuyển sang check trên type OA (đề xuất) hay giữ O node và ghi
    ngoại lệ vào spec?
 4. **Shard manager (phase 08):** đề xuất xoá (368 dòng chưa từng chạy production), thêm lại khi có số đo.
-5. **Assets shell (phase 06):** gộp `/assets` vào layout `_workspace` (cần Stitch screen mới cho
+5. **Assets shell (phase 06):** gộp `/assets` vào layout `_workspace` (cần mockup mới cho
    nav) hay giữ layout riêng nhưng dùng chung guard/WebSocket/logout?
-6. **Stitch:** session này không có Stitch MCP. Thiết kế phase 06 do người dùng làm trên Stitch,
-   hay cấu hình Stitch MCP để agent làm?
+6. **Hướng UI (phase 06):** chọn A Sổ cái, B Tín hiệu hay C Ca trực trong
+   [brainstorm](reports/brainstorm-261009-0457-new-ui-direction.html)? Đề xuất: B, mượn bảng của A.
 7. Phase 02/03 có tách ra làm ngay như hotfix trước khi duyệt phần còn lại?
