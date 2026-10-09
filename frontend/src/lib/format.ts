@@ -16,7 +16,11 @@ export function toDate(value: unknown): Date | null {
   if (value == null || value === '') return null
   let d: Date
   if (value instanceof Date) d = new Date(value.getTime())
-  else if (typeof value === 'string') d = new Date(value)
+  else if (typeof value === 'string') {
+    // A bare date ("2026-10-10", e.g. a due date) is a calendar day, not UTC midnight.
+    const day = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+    d = day ? new Date(Number(day[1]), Number(day[2]) - 1, Number(day[3])) : new Date(value)
+  }
   else if (typeof value === 'number') d = new Date(value * 1000)
   else if (typeof value === 'object' && 'seconds' in (value as object)) {
     const { seconds, nanos } = value as { seconds: number | string; nanos?: number }
