@@ -1,0 +1,1214 @@
+<title>Nexus Hub Danh bạ, Văn bản, Cài đặt</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Danh bạ and Cài đặt: shell without list panel. Văn bản lives under Tài liệu, so it keeps the list
+   panel (DESIGN.md §5: list panel only in Tin nhắn and Tài liệu). The editor hides the list panel
+   to give the page the width; everything else is the core-screens kit. */
+* { box-sizing: border-box; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5;
+  padding-inline: 16px; padding-block: 0 64px; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-ink-muted); }
+
+/* ---------- review chrome ---------- */
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 65ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; min-height: 36px;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; }
+.check input { width: 18px; height: 18px; accent-color: var(--color-accent); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.toc a:hover { background: var(--color-hover); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; }
+.screen-head { display: grid; gap: 6px; max-width: 75ch; }
+.screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.demo span.k { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-right: 4px; }
+.scroll { overflow-x: auto; border-radius: 12px; }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 80ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+
+/* ---------- primitives ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0;
+  font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink);
+  transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-press) var(--ease-out); }
+.btn:hover { background: var(--color-line); }
+.btn:active { transform: scale(0.98); }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.primary:hover { background: var(--color-accent-hover); }
+.btn.ghost { background: transparent; }
+.btn.ghost:hover { background: var(--color-hover); }
+.btn.danger { background: var(--color-danger); color: var(--color-on-person); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
+.ibtn { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); position: relative; }
+.av.s20 { width: 20px; height: 20px; font-size: 0.5625rem; }
+.av.s24 { width: 24px; height: 24px; font-size: 0.625rem; }
+.av.s40 { width: 40px; height: 40px; font-size: 0.875rem; }
+.av .on { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%; background: var(--color-success); box-shadow: 0 0 0 2px var(--color-sunk); }
+.chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.chip .nm { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip .role { color: var(--color-ink-muted); white-space: nowrap; }
+.pill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font: 600 0.75rem/1 var(--font-body); white-space: nowrap; }
+.pill.wait { background: var(--color-warning-wash); color: var(--color-warning); }
+.pill.ok { background: var(--color-success-wash); color: var(--color-success); }
+.pill.bad { background: var(--color-danger-wash); color: var(--color-danger); }
+.pill.idle { background: var(--color-sunk); color: var(--color-ink-muted); }
+.pill.count { background: var(--color-accent); color: var(--color-on-accent); height: 18px; padding: 0 6px; font-size: 0.6875rem; min-width: 18px; justify-content: center; }
+.label { font: 600 0.75rem/1.3 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); }
+.faces { display: flex; align-items: center; }
+.faces .av { box-shadow: 0 0 0 2px var(--color-base); }
+.faces .av + .av { margin-left: -6px; }
+
+/* ---------- app shell ---------- */
+.app { display: grid; grid-template-columns: 232px 280px minmax(480px, 1fr) 360px; height: 760px; min-width: 1240px;
+  background: var(--color-base); border-radius: 12px; overflow: hidden; position: relative; isolation: isolate; }
+.app.no-list { grid-template-columns: 232px minmax(560px, 1fr) 380px; }
+.app.detail-closed { grid-template-columns: 232px 280px minmax(480px, 1fr) 0; }
+.app.no-list.detail-closed { grid-template-columns: 232px minmax(560px, 1fr) 0; }
+.side { background: var(--color-sunk); display: grid; grid-template-rows: auto 1fr auto; padding: 12px; gap: 12px; min-height: 0; }
+.ws { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 10px; }
+.ws .logo { width: 32px; height: 32px; border-radius: 10px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 0.9375rem/1 var(--font-display); }
+.ws .n { font: 700 1rem/1.2 var(--font-display); }
+.ws .s { font-size: 0.75rem; color: var(--color-ink-muted); }
+.nav { display: grid; gap: 2px; align-content: start; }
+.nav a { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 10px; color: var(--color-ink-muted); text-decoration: none; font-weight: 500;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.nav a:hover { background: var(--color-hover); color: var(--color-ink); }
+.nav a[aria-current="page"] { background: var(--color-raised); color: var(--color-ink); font-weight: 600; }
+.nav a .pill { margin-left: auto; }
+.me { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; }
+.me .r { font-size: 0.75rem; color: var(--color-ink-muted); }
+
+.list { border-right: 0; display: grid; grid-template-rows: auto 1fr; min-height: 0; background: var(--color-base); }
+.list .lhead { padding: 16px 16px 8px; display: grid; gap: 12px; }
+.list .lhead h3 { font-size: 1.1875rem; font-weight: 700; line-height: 1.3; }
+.search { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 8px; background: var(--color-sunk); color: var(--color-ink-muted); }
+.list .body { overflow: auto; padding: 4px 8px 16px; display: grid; gap: 2px; align-content: start; }
+.list .group { padding: 12px 8px 4px; }
+.row-link { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 10px; color: var(--color-ink); text-decoration: none; min-width: 0;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.row-link:hover { background: var(--color-hover); }
+.row-link[aria-current="page"] { background: var(--color-raised); font-weight: 600; }
+.row-link.unread { font-weight: 600; }
+.row-link .pill { margin-left: auto; }
+.row-link .h { color: var(--color-ink-muted); }
+.tree .row-link { height: 32px; }
+
+.content { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; min-height: 0; background: var(--color-base); position: relative; }
+.chead { display: flex; align-items: center; gap: 16px; padding: 16px 20px 12px; min-width: 0; }
+.chead .t { display: grid; gap: 2px; min-width: 0; }
+.chead h3 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.chead .sub { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chead .end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.presence { display: inline-flex; align-items: center; gap: 8px; color: var(--color-ink-muted); font-size: 0.8125rem; margin-right: 8px; }
+
+/* chat */
+.stream { overflow: auto; display: grid; align-content: end; padding: 8px 12px; gap: 0; }
+.day { display: flex; align-items: center; gap: 12px; padding: 8px; color: var(--color-ink-muted); font-size: 0.75rem; font-weight: 600; }
+.day::before, .day::after { content: ""; height: 1px; flex: 1; background: var(--color-line); }
+.msg { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 8px 10px; border-radius: 10px;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.msg:hover { background: var(--color-raised); }
+.msg.cont { padding-top: 2px; }
+.msg.cont .av { visibility: hidden; height: 0; }
+.msg .who { display: flex; align-items: baseline; gap: 8px; }
+.msg .who b { font-weight: 600; }
+.msg .who time { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.msg .txt { line-height: 1.55; max-width: 68ch; }
+.msg .tag { font-size: 0.75rem; font-weight: 600; color: var(--p); }
+.file { display: inline-flex; align-items: center; gap: 12px; margin-top: 8px; padding: 10px 14px 10px 10px; border-radius: 10px; background: var(--color-raised); max-width: 340px; }
+.file .fi { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; background: var(--color-success-wash); color: var(--color-success); }
+.file .fi.pdf { background: var(--color-danger-wash); color: var(--color-danger); }
+.file .fi.doc { background: var(--color-info-wash); color: var(--color-info); }
+.file b { font-weight: 600; display: block; }
+.file small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.reacts { display: flex; gap: 6px; margin-top: 8px; }
+.react { display: inline-flex; gap: 6px; align-items: center; height: 26px; padding: 0 9px; border-radius: 999px; background: var(--color-sunk); font-size: 0.8125rem; border: 0; color: var(--color-ink); cursor: pointer; }
+.react.mine { background: var(--color-accent-wash); color: var(--color-ink); }
+.react b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.thread { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; padding: 4px 8px 4px 4px; border-radius: 8px; color: var(--color-accent); font-weight: 600; font-size: 0.8125rem; }
+.thread:hover { background: var(--color-raised); }
+.thread .muted { font-weight: 400; }
+.typing { padding: 0 22px 6px; height: 22px; font-size: 0.75rem; color: var(--color-ink-muted); display: flex; align-items: center; gap: 6px; }
+.typing .dots { display: inline-flex; gap: 3px; }
+.typing .dots i { width: 4px; height: 4px; border-radius: 50%; background: currentColor; animation: dot 1200ms var(--ease-out) infinite; }
+.typing .dots i:nth-child(2) { animation-delay: 150ms; } .typing .dots i:nth-child(3) { animation-delay: 300ms; }
+@keyframes dot { 0%, 60%, 100% { opacity: 0.3; } 30% { opacity: 1; } }
+.composer { margin: 0 20px 16px; background: var(--color-raised); border-radius: 12px; padding: 10px 10px 10px 14px; display: grid; gap: 8px; }
+.composer .ph { color: var(--color-ink-muted); font-size: 1rem; padding: 4px 0; }
+.composer .bar { display: flex; align-items: center; gap: 2px; }
+.composer .bar .btn { margin-left: auto; }
+
+/* detail panel */
+.detail { background: var(--color-raised); margin: 12px 12px 12px 0; border-radius: 10px; overflow: auto; display: grid; align-content: start; gap: 20px; padding: 16px;
+  min-width: 0; }
+.app.detail-closed .detail { display: none; }
+.detail .dh { display: flex; align-items: flex-start; gap: 12px; }
+.detail .dh h4 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; }
+.detail .dh .ibtn { margin-left: auto; }
+.detail section { display: grid; gap: 10px; }
+.kv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 12px; margin: 0; }
+.kv dt { color: var(--color-ink-muted); }
+.kv dd { margin: 0; min-width: 0; }
+.amount { font: 600 1.75rem/1.2 var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.acts { display: grid; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.acts li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; }
+.acts li p { line-height: 1.45; }
+.acts li time { display: block; font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.people { display: grid; gap: 8px; }
+.people .p { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.people .perm { color: var(--color-ink-muted); font-size: 0.8125rem; display: inline-flex; align-items: center; gap: 2px; }
+
+/* hairline table (borrowed from direction A) */
+.tbl { display: grid; align-content: start; overflow: auto; padding: 0 20px 16px; }
+.tr { display: grid; grid-template-columns: minmax(0, 1fr) 200px 120px 96px; align-items: center; gap: 12px; min-height: 44px; padding: 0 10px;
+  border-bottom: 1px solid var(--color-line); border-radius: 0; text-decoration: none; color: inherit;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.tr.th { min-height: 36px; font: 600 0.75rem/1 var(--font-body); color: var(--color-ink-muted); }
+.tr:not(.th):hover { background: var(--color-hover); }
+.tr[aria-selected="true"] { background: var(--color-accent-wash); }
+.tr .r { text-align: right; font-variant-numeric: tabular-nums; }
+.tr .nm { display: flex; align-items: center; gap: 10px; min-width: 0; font-weight: 500; }
+.tr .nm span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr .t { color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.ficon { color: var(--color-ink-muted); display: inline-grid; }
+.ficon.x { color: var(--color-success); } .ficon.pdf { color: var(--color-danger); } .ficon.doc { color: var(--color-info); } .ficon.dir { color: var(--color-accent); }
+.tbl.appr .tr { grid-template-columns: minmax(0, 1fr) 168px 128px 112px; min-height: 56px; }
+.tbl.appr .tr.th { min-height: 36px; }
+.tbl.appr .nm { display: grid; gap: 2px; }
+.tbl.appr .nm small { font-weight: 400; font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.crumbs { display: flex; align-items: center; gap: 4px; color: var(--color-ink-muted); font-size: 0.8125rem; }
+.crumbs a { color: inherit; text-decoration: none; } .crumbs a:hover { color: var(--color-ink); }
+.tabs { display: flex; gap: 4px; padding: 0 20px 8px; }
+.tabs button { font: 600 0.875rem/1 var(--font-body); height: 34px; padding: 0 12px; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.tabs button[aria-selected="true"] { background: var(--color-raised); color: var(--color-ink); }
+.coalesce { margin: 0 20px 8px; padding: 8px 12px; border-radius: 10px; display: none; align-items: center; gap: 10px; background: var(--color-raised); }
+.coalesce.show { display: flex; animation: fade-up var(--duration-base) var(--ease-out) both; }
+.chain { list-style: none; margin: 0; padding: 0; display: grid; }
+.chain li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 4px 10px; align-items: center; padding: 10px 0; position: relative; }
+.chain li + li { border-top: 1px solid var(--color-line); }
+.chain small { grid-column: 2 / -1; color: var(--color-ink-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.quote { padding: 10px 12px; border-radius: 8px; background: var(--color-base); line-height: 1.55; }
+.actions { display: flex; gap: 8px; position: sticky; bottom: 0; }
+
+/* overlays inside frame */
+.scrim { position: absolute; inset: 0; background: var(--color-scrim); z-index: 30; display: grid; place-items: center; }
+.scrim[hidden] { display: none !important; }
+.modal { width: 440px; max-width: calc(100% - 32px); background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 20px; display: grid; gap: 16px; z-index: 40; }
+.modal h4 { font-size: 1.1875rem; font-weight: 700; }
+.field { display: grid; gap: 6px; }
+.field label { font-weight: 600; }
+.field .ta { min-height: 88px; border-radius: 8px; background: var(--color-raised); padding: 10px 12px; font-size: 1rem; line-height: 1.5; color: var(--color-ink); box-shadow: inset 0 0 0 1px var(--color-line); }
+.field .ta:focus { outline: 2px solid var(--color-focus); outline-offset: 1px; }
+.field .hint { font-size: 0.75rem; color: var(--color-ink-muted); }
+.toasts { position: absolute; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 50; justify-items: end; }
+.toast { display: flex; align-items: center; gap: 12px; min-width: 280px; max-width: 380px; padding: 10px 10px 10px 14px; border-radius: 12px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); }
+.toast .btn { margin-left: auto; }
+.toast .ok { color: var(--color-success); } .toast .bad { color: var(--color-danger); }
+.banner { display: none; align-items: center; gap: 10px; margin: 0 20px 8px; padding: 8px 12px; border-radius: 10px; background: var(--color-warning-wash); color: var(--color-ink); font-weight: 500; }
+.banner.show { display: flex; animation: fade-up var(--duration-base) var(--ease-out) both; }
+.banner.ok { background: var(--color-success-wash); }
+.banner svg { color: var(--color-warning); } .banner.ok svg { color: var(--color-success); }
+
+/* ---------- motion (DESIGN.md §7) ---------- */
+@keyframes fade-up { from { opacity: 0; transform: translateY(8px); } }
+@keyframes fade { from { opacity: 0; } }
+@keyframes rt-wash { 0%, 40% { background-color: var(--pw); } 100% { background-color: transparent; } }
+@keyframes rt-halo { 0% { box-shadow: 0 0 0 0 var(--pw), 0 0 0 0 var(--p); } 35% { box-shadow: 0 0 0 3px var(--pw), 0 0 0 5px var(--p); } 100% { box-shadow: 0 0 0 0 transparent, 0 0 0 0 transparent; } }
+@keyframes rt-tag { 0%, 80% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes grow { from { grid-template-rows: 0fr; opacity: 0; } to { grid-template-rows: 1fr; opacity: 1; } }
+@keyframes shrink { from { grid-template-rows: 1fr; opacity: 1; } to { grid-template-rows: 0fr; opacity: 0; } }
+@keyframes panel-in { from { opacity: 0; transform: translateX(16px) scale(0.985); } }
+@keyframes panel-out { to { opacity: 0; transform: translateX(16px) scale(0.985); } }
+@keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@keyframes modal-out { to { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@keyframes scrim-out { to { opacity: 0; } }
+@keyframes toast-in { from { opacity: 0; transform: translateY(12px); } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(12px); } }
+@keyframes pop { from { transform: scale(0.6); } }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+.rt { animation: rt-wash var(--rt-total) var(--ease-out) both; }
+.rt > .av, .rt .av.halo { animation: rt-halo 900ms var(--ease-out) both; }
+.rt .tag { animation: rt-tag var(--rt-total) linear both; }
+.ins { display: grid; animation: grow var(--duration-base) var(--ease-out-expo) both; }
+.ins > * { min-height: 0; overflow: hidden; }
+.del { display: grid; animation: shrink var(--duration-quick) var(--ease-in) both; }
+.del > * { min-height: 0; overflow: hidden; }
+.detail.enter { animation: panel-in var(--duration-layout) var(--ease-out-expo) both; }
+.detail.exit { animation: panel-out 210ms var(--ease-in) both; }
+.scrim.enter { animation: fade var(--duration-base) var(--ease-out) both; }
+.scrim.enter .modal { animation: modal-in var(--duration-layout) var(--ease-out-expo) both; }
+.scrim.exit { animation: scrim-out 210ms var(--ease-in) both; }
+.scrim.exit .modal { animation: modal-out 210ms var(--ease-in) both; }
+.toast.enter { animation: toast-in var(--duration-base) var(--ease-out) both; }
+.toast.exit { animation: toast-out var(--duration-quick) var(--ease-in) both; }
+.react.pop b { display: inline-block; animation: pop 280ms var(--ease-spring) both; }
+
+/* reduced motion: no transforms, fades ≤ 120ms, realtime wash stays (it is information) */
+html.reduce .rt > .av, html.reduce .rt .av.halo { animation: none; }
+html.reduce .ins, html.reduce .del { animation-duration: 1ms; }
+html.reduce .detail.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .modal, html.reduce .toast.enter,
+html.reduce .coalesce.show, html.reduce .banner.show { animation-name: fade; animation-duration: 120ms; }
+html.reduce .react.pop b, html.reduce .typing .dots i { animation: none; }
+html.reduce .btn:active { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .rt > .av, .rt .av.halo { animation: none; }
+  .ins, .del { animation-duration: 1ms; }
+  .detail.enter, .scrim.enter, .scrim.enter .modal, .toast.enter, .coalesce.show, .banner.show { animation-name: fade; animation-duration: 120ms; }
+  .react.pop b, .typing .dots i { animation: none; }
+  .btn:active { transform: none; }
+}
+
+/* ---------- states sheet ---------- */
+.sheet { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.card { background: var(--color-raised); border-radius: 10px; padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.card h3 { font-size: 1rem; font-weight: 700; }
+.skel { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--color-sunk) 0%, var(--color-hover) 50%, var(--color-sunk) 100%); background-size: 200% 100%; animation: shimmer 1600ms linear infinite; }
+html.reduce .skel { animation: none; }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+.skrow { display: grid; grid-template-columns: 20px 1fr 80px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--color-line); }
+.state { display: grid; justify-items: center; text-align: center; gap: 8px; padding: 20px 8px; }
+.state .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--color-sunk); color: var(--color-ink-muted); }
+.state .ic.bad { background: var(--color-danger-wash); color: var(--color-danger); }
+.state p { max-width: 32ch; }
+.row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.people8 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.input { display: grid; gap: 6px; }
+.input label { font-weight: 600; }
+.input .box { height: 40px; border-radius: 8px; background: var(--color-base); display: flex; align-items: center; padding: 0 12px; font-size: 1rem; box-shadow: inset 0 0 0 1px var(--color-line); }
+.input.err .box { box-shadow: inset 0 0 0 1.5px var(--color-danger); }
+.input .msg-err { color: var(--color-danger); font-size: 0.8125rem; }
+.scale div { display: flex; align-items: baseline; gap: 12px; }
+.scale small { width: 64px; flex: none; color: var(--color-ink-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+
+/* ---------- phones ---------- */
+.phones { display: flex; gap: 24px; flex-wrap: wrap; }
+.phone { width: min(360px, calc(100% - 16px)); height: 720px; border-radius: 28px; background: var(--color-base); overflow: hidden; display: grid; grid-template-rows: auto 1fr auto; position: relative;
+  box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; }
+.phone .ph-head { display: flex; align-items: center; gap: 10px; padding: 16px 16px 8px; }
+.phone .ph-head h3 { font-size: 1.0625rem; font-weight: 700; display: flex; gap: 4px; align-items: center; }
+.phone .stream { padding: 8px 6px; }
+.tabbar { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--color-raised); padding: 6px 4px 14px; }
+.tabbar a { display: grid; justify-items: center; gap: 2px; font-size: 0.6875rem; font-weight: 500; color: var(--color-ink-muted); text-decoration: none; padding: 6px 0; min-height: 44px; position: relative; }
+.tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 600; }
+.tabbar a .pill { position: absolute; top: 2px; left: calc(50% + 6px); }
+.sheetp { position: absolute; left: 0; right: 0; bottom: 0; background: var(--color-overlay); border-radius: 20px 20px 0 0; box-shadow: var(--shadow-overlay); padding: 8px 16px 20px; display: grid; gap: 14px; }
+.sheetp .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-line); justify-self: center; }
+
+/* ================= additions for the remaining screen groups (same tokens, same primitives) ================= */
+[hidden] { display: none !important; }
+code { font-size: 0.8125rem; background: var(--color-sunk); padding: 1px 5px; border-radius: 4px; }
+.need { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--color-info-wash); color: var(--color-info); font: 600 0.6875rem/1 var(--font-body); margin-left: 4px; vertical-align: 1px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.pill.info { background: var(--color-info-wash); color: var(--color-info); }
+.pill.acc { background: var(--color-accent-wash); color: var(--color-accent); }
+
+/* callout markers: numbered dots on the frame, matching the numbered notes under it */
+.cx { position: absolute; z-index: 60; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--color-info); color: var(--color-base);
+  font: 600 0.6875rem/1 var(--font-body); box-shadow: 0 0 0 2px var(--color-base); pointer-events: none; font-variant-numeric: tabular-nums; }
+.cxn { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--color-info); color: var(--color-base); font: 600 0.6875rem/1 var(--font-body); margin-right: 6px; vertical-align: 1px; }
+html.no-cx .cx { display: none; }
+.notes.cxl { list-style: none; padding-left: 0; }
+.rel { position: relative; }
+
+/* frames for the three widths */
+.frames { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.wlabel { font: 600 0.75rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); margin-bottom: 8px; display: block; }
+.tablet { width: 820px; max-width: 100%; height: 640px; border-radius: 20px; background: var(--color-base); overflow: hidden; position: relative; isolation: isolate;
+  box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; display: grid; grid-template-columns: 64px minmax(0, 1fr); }
+.phone { isolation: isolate; }
+.phone .pbody { overflow: auto; min-height: 0; padding: 0 12px 12px; display: grid; align-content: start; gap: 8px; }
+
+/* rail = collapsed sidebar (768–1023) */
+.rail { background: var(--color-sunk); display: grid; grid-template-rows: auto 1fr auto; justify-items: center; padding: 12px 0; gap: 12px; min-height: 0; }
+.rail .logo { width: 36px; height: 36px; border-radius: 10px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 0.9375rem/1 var(--font-display); }
+.rail nav { display: grid; gap: 4px; align-content: start; }
+.rail a { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 10px; color: var(--color-ink-muted); text-decoration: none; position: relative;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.rail a:hover { background: var(--color-hover); color: var(--color-ink); }
+.rail a[aria-current="page"] { background: var(--color-raised); color: var(--color-ink); }
+.rail a .dotc { position: absolute; top: 6px; right: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--color-accent); }
+.tip { position: absolute; left: 52px; top: 50%; transform: translateY(-50%); z-index: 60; background: var(--color-ink); color: var(--color-base); font: 500 0.75rem/1 var(--font-body);
+  padding: 6px 8px; border-radius: 6px; white-space: nowrap; }
+
+/* page-level content (no list panel): header + toolbar + body */
+.pg { display: grid; grid-template-rows: auto auto 1fr; min-width: 0; min-height: 0; background: var(--color-base); position: relative; }
+.pg .body { overflow: auto; min-height: 0; padding: 0 20px 20px; display: grid; align-content: start; gap: 16px; }
+.toolbar { display: flex; align-items: center; gap: 8px; padding: 0 20px 12px; flex-wrap: wrap; }
+.toolbar .search { width: 260px; }
+.toolbar .end { margin-left: auto; display: flex; gap: 8px; }
+.fchip { white-space: nowrap; flex: none; height: 32px; padding: 0 12px; border-radius: 8px; border: 0; background: var(--color-sunk); color: var(--color-ink); font: 500 0.8125rem/1 var(--font-body); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.fchip:hover { background: var(--color-hover); }
+.fchip[aria-pressed="true"] { background: var(--color-accent-wash); font-weight: 600; }
+.fchip .muted { font-weight: 400; }
+
+/* table variants */
+.tbl.flush { padding: 0; }
+.tr .sub2 { display: grid; gap: 2px; min-width: 0; }
+.tr .sub2 small { font-size: 0.75rem; color: var(--color-ink-muted); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tr .ell { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.tr .acts-c { display: flex; justify-content: flex-end; gap: 4px; }
+.tr.dense { min-height: 40px; }
+.pager { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 12px 10px 0; color: var(--color-ink-muted); font-size: 0.8125rem; }
+
+/* stats / dashboard */
+.stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.stat { background: var(--color-raised); border-radius: 10px; padding: 16px; display: grid; gap: 6px; text-decoration: none; color: inherit;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+a.stat:hover { background: var(--color-hover); }
+.stat .n { font: 600 1.75rem/1.2 var(--font-display); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.stat .k { color: var(--color-ink-muted); display: flex; align-items: center; gap: 6px; }
+.stat .d { font-size: 0.75rem; color: var(--color-ink-muted); }
+.grid2 { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 12px; align-items: start; }
+.panel { background: var(--color-raised); border-radius: 10px; padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.panel > .ph { display: flex; align-items: center; gap: 8px; }
+.panel > .ph h4 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; }
+.panel > .ph .end { margin-left: auto; }
+.stack { display: flex; height: 10px; border-radius: 999px; overflow: hidden; gap: 2px; background: var(--color-sunk); }
+.stack i { display: block; height: 100%; }
+.legend { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.legend li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
+.legend li i { width: 10px; height: 10px; border-radius: 3px; }
+.legend li b { font-weight: 600; font-variant-numeric: tabular-nums; }
+.bars { display: grid; gap: 10px; }
+.bars .b { display: grid; grid-template-columns: 120px minmax(0, 1fr) 40px; gap: 10px; align-items: center; }
+.bars .t { height: 8px; border-radius: 999px; background: var(--color-sunk); overflow: hidden; }
+.bars .t i { display: block; height: 100%; border-radius: 999px; background: var(--color-accent); }
+.bars .v { text-align: right; font-variant-numeric: tabular-nums; color: var(--color-ink-muted); }
+
+/* forms */
+.form { display: grid; gap: 16px; max-width: 560px; }
+.form.wide { max-width: 720px; }
+.fld { display: grid; gap: 6px; position: relative; min-width: 0; }
+.fld > .lab { font-weight: 600; }
+.fld > .lab .muted { font-weight: 400; }
+.inp { min-height: 40px; border-radius: 8px; background: var(--color-raised); display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 1rem; color: var(--color-ink);
+  box-shadow: inset 0 0 0 1px var(--color-line); min-width: 0; flex-wrap: wrap; }
+.inp.ph { color: var(--color-ink-muted); }
+.inp.sel { justify-content: space-between; cursor: pointer; flex-wrap: nowrap; }
+.inp.sel > :first-child { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.inp.sel > .chip > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.inp.sel svg:last-child { color: var(--color-ink-muted); }
+.inp.focus { box-shadow: inset 0 0 0 1px var(--color-line), 0 0 0 2px var(--color-focus); }
+.inp.err { box-shadow: inset 0 0 0 1.5px var(--color-danger); }
+.inp.ta { min-height: 88px; align-items: flex-start; padding: 10px 12px; line-height: 1.5; }
+.inp.dis { color: var(--color-ink-subtle); background: var(--color-sunk); box-shadow: none; }
+.fld .hint { font-size: 0.75rem; color: var(--color-ink-muted); }
+.fld .msg-err { color: var(--color-danger); font-size: 0.8125rem; display: flex; gap: 6px; align-items: center; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+a.btn { text-decoration: none; }
+.pchip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px 0 2px; border-radius: 999px; background: var(--color-sunk); font-size: 0.875rem; font-weight: 500; }
+.pchip .x { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; color: var(--color-ink-muted); }
+.pop { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 10; background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 6px; display: grid; gap: 2px; }
+.pop.enter { animation: pop-in var(--duration-quick) var(--ease-out) both; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-4px); } }
+.pop .o { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; padding: 8px 10px; border-radius: 8px; cursor: pointer; }
+.pop .o small { grid-column: 2; color: var(--color-ink-muted); font-size: 0.75rem; }
+.pop .o.hl, .pop .o:hover { background: var(--color-hover); }
+.pop .o .end { grid-row: 1 / span 2; grid-column: 3; color: var(--color-accent); }
+.pop .grp { padding: 8px 10px 4px; }
+.opts { display: grid; gap: 8px; }
+.opt { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; align-items: start; padding: 12px; border-radius: 10px; background: var(--color-raised); cursor: pointer; box-shadow: inset 0 0 0 1px var(--color-line);
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.opt .r { width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--color-ink-muted); margin-top: 2px; }
+.opt.on { background: var(--color-accent-wash); box-shadow: inset 0 0 0 1.5px var(--color-accent); }
+.opt.on .r { box-shadow: inset 0 0 0 5px var(--color-accent); }
+.opt b { display: block; font-weight: 600; }
+.opt span span { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.sw { width: 40px; height: 24px; border-radius: 999px; background: var(--color-line); border: 0; position: relative; cursor: pointer; flex: none;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--color-raised);
+  transition: transform var(--duration-press) var(--ease-out); }
+.sw[aria-checked="true"] { background: var(--color-accent); }
+.sw[aria-checked="true"]::after { transform: translateX(16px); }
+.cb { width: 18px; height: 18px; border-radius: 5px; box-shadow: inset 0 0 0 1.5px var(--color-ink-muted); display: inline-grid; place-items: center; color: var(--color-on-accent); flex: none; }
+.cb.on { background: var(--color-accent); box-shadow: none; }
+.cb.part { background: var(--color-accent); box-shadow: none; }
+.cb svg { width: 14px; height: 14px; stroke-width: 2.5; }
+.formbar { display: flex; gap: 8px; justify-content: flex-end; padding-top: 4px; }
+
+/* settings / list rows */
+.srow { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--color-line); }
+.srow:last-child { border-bottom: 0; }
+.srow .t { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.srow .t span { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.subnav { display: grid; gap: 2px; align-content: start; padding: 16px 8px; }
+
+/* theme preview swatches */
+.themes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.th-card { border: 0; padding: 8px; border-radius: 10px; background: var(--color-raised); cursor: pointer; display: grid; gap: 8px; text-align: left; color: var(--color-ink); box-shadow: inset 0 0 0 1px var(--color-line); font: inherit; }
+.th-card[aria-checked="true"] { box-shadow: inset 0 0 0 2px var(--color-accent); }
+.th-card .mini { height: 72px; border-radius: 8px; display: grid; grid-template-columns: 28% 1fr; overflow: hidden; }
+.th-card .mini i { display: block; }
+.th-card b { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+
+/* role / permission matrix */
+.mx .tr { grid-template-columns: minmax(0, 1fr) repeat(8, 64px); }
+.mx .tr .c { display: grid; place-items: center; }
+.mx .tr.th span { text-align: center; line-height: 1.25; }
+.mx .tr.th span:first-child { text-align: left; }
+.opslist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.opi { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 10px; align-items: start; padding: 10px 12px; border-radius: 10px; background: var(--color-base); }
+.opi b { font-weight: 600; display: block; }
+.opi span span { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.rolehead { display: flex; align-items: center; gap: 10px; }
+.rdot { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--color-accent-wash); color: var(--color-accent); flex: none; }
+
+/* contacts cards */
+.cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.pcard { background: var(--color-raised); border-radius: 10px; padding: 16px; display: grid; gap: 10px; justify-items: start; border: 0; text-align: left; color: inherit; font: inherit; cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.pcard:hover { background: var(--color-hover); }
+.pcard[aria-selected="true"] { background: var(--color-accent-wash); }
+.pcard .n { font-weight: 600; }
+.pcard .e { color: var(--color-ink-muted); font-size: 0.8125rem; }
+
+/* document editor shell */
+.ed { display: grid; grid-template-rows: auto auto 1fr; min-width: 0; min-height: 0; background: var(--color-base); position: relative; }
+.edbar { display: flex; align-items: center; gap: 2px; padding: 6px 8px; margin: 0 20px 8px; background: var(--color-raised); border-radius: 10px; }
+.edbar .sep { width: 1px; height: 20px; background: var(--color-line); margin: 0 6px; }
+.edbar .ibtn[aria-pressed="true"] { background: var(--color-accent-wash); color: var(--color-ink); }
+.edbar .bsel { height: 32px; padding: 0 8px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; color: var(--color-ink); font-weight: 500; }
+.canvas { overflow: auto; min-height: 0; padding: 8px 20px 24px; }
+.sheetdoc { max-width: 720px; margin-inline: auto; background: var(--color-raised); border-radius: 10px; padding: 40px 56px; display: grid; gap: 14px; font-size: 1rem; line-height: 1.6; }
+.sheetdoc h1 { font: 700 1.4375rem/1.3 var(--font-display); }
+.sheetdoc h2 { font: 700 1.1875rem/1.35 var(--font-display); }
+.sheetdoc p { max-width: 68ch; }
+.caret { display: inline-block; position: relative; width: 2px; height: 1.2em; vertical-align: text-bottom; background: var(--p); margin: 0 1px; }
+.caret b { position: absolute; bottom: 100%; left: -1px; font: 600 0.6875rem/1 var(--font-body); color: var(--color-on-person); background: var(--p); padding: 3px 5px; border-radius: 4px 4px 4px 0; white-space: nowrap; }
+.hlp { background: var(--pw); border-radius: 2px; }
+.saved { display: inline-flex; align-items: center; gap: 6px; color: var(--color-ink-muted); font-size: 0.8125rem; }
+
+/* auth */
+.auth { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); height: 720px; min-width: 980px; border-radius: 12px; overflow: hidden; background: var(--color-base); position: relative; isolation: isolate; }
+.auth .brand { background: var(--color-sunk); padding: 40px; display: grid; grid-template-rows: auto 1fr auto; gap: 24px; }
+.auth .brand .ws { padding: 0; }
+.auth .brand blockquote { margin: 0; align-self: center; display: grid; gap: 16px; max-width: 40ch; }
+.auth .brand blockquote > p { font: 600 1.4375rem/1.35 var(--font-display); }
+.auth .formside { display: grid; place-items: center; padding: 40px; }
+.auth .box { width: 100%; max-width: 380px; display: grid; gap: 20px; }
+.auth h3 { font: 700 1.4375rem/1.3 var(--font-display); }
+.or { display: flex; align-items: center; gap: 12px; color: var(--color-ink-muted); font-size: 0.8125rem; }
+.or::before, .or::after { content: ""; height: 1px; flex: 1; background: var(--color-line); }
+.btn.wide { width: 100%; height: 44px; font-size: 0.9375rem; }
+.btn.g { background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); }
+.btn.g:hover { background: var(--color-hover); }
+.otp { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.otp span { height: 52px; border-radius: 8px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); display: grid; place-items: center; font: 600 1.4375rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.otp span.cur { box-shadow: inset 0 0 0 1px var(--color-line), 0 0 0 2px var(--color-focus); }
+.otp.err span { box-shadow: inset 0 0 0 1.5px var(--color-danger); }
+.otp.shake { animation: shake 280ms var(--ease-out) both; }
+@keyframes shake { 20% { transform: translateX(-4px); } 40% { transform: translateX(4px); } 60% { transform: translateX(-2px); } 80% { transform: translateX(2px); } }
+.steps { display: flex; gap: 6px; }
+.steps i { height: 4px; flex: 1; border-radius: 999px; background: var(--color-line); }
+.steps i.on { background: var(--color-accent); }
+.wslist { display: grid; gap: 8px; }
+.wsrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px; border-radius: 10px; background: var(--color-raised); text-decoration: none; color: inherit; border: 0; font: inherit; text-align: left; cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.wsrow:hover { background: var(--color-hover); }
+.wsrow .logo { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; font: 700 1rem/1 var(--font-display); background: var(--p); color: var(--color-on-person); }
+.wsrow b { font-weight: 600; display: block; }
+.wsrow small { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.link { color: var(--color-accent); font-weight: 600; text-decoration: none; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.link:hover { text-decoration: underline; }
+
+/* list stagger (first paint only): opacity only, 20ms step, max 6 rows, no slide (route rule §7) */
+@keyframes st-fade { from { opacity: 0; } }
+.stagger > * { animation: st-fade var(--duration-quick) var(--ease-out) both; }
+.stagger > *:nth-child(2) { animation-delay: 20ms; } .stagger > *:nth-child(3) { animation-delay: 40ms; } .stagger > *:nth-child(4) { animation-delay: 60ms; }
+.stagger > *:nth-child(5) { animation-delay: 80ms; } .stagger > *:nth-child(6) { animation-delay: 100ms; } .stagger > *:nth-child(n+7) { animation-delay: 120ms; }
+html.reduce .stagger > *, html.reduce .otp.shake, html.reduce .pop.enter { animation: none; }
+@media (prefers-reduced-motion: reduce) { .stagger > *, .otp.shake, .pop.enter { animation: none; } }
+
+/* tablet detail overlay (1024 and below): panel floats over content with a scrim */
+.ovl { position: absolute; inset: 0; background: var(--color-scrim); z-index: 30; }
+.detail.float { position: absolute; top: 0; right: 0; bottom: 0; width: 360px; margin: 12px; z-index: 40; box-shadow: var(--shadow-overlay); background: var(--color-overlay); border-radius: 12px; }
+.ovl.enter { animation: fade var(--duration-base) var(--ease-out) both; }
+html.reduce .ovl.enter { animation-duration: 120ms; }
+
+.tbl.ct .tr { grid-template-columns: minmax(0, 1fr) 160px 220px 112px; }
+.tbl.dc .tr { grid-template-columns: minmax(0, 1fr) 184px 112px 96px; }
+.app.ed-mode { grid-template-columns: 232px minmax(560px, 1fr) 0; }
+.prof { display: grid; justify-items: center; text-align: center; gap: 8px; padding-top: 8px; }
+.av.s64 { width: 64px; height: 64px; font-size: 1.25rem; }
+.av.s64 .on { width: 14px; height: 14px; box-shadow: 0 0 0 3px var(--color-raised); }
+.av .on.fade-in { animation: fade var(--duration-base) var(--ease-out) both; }
+.prog { height: 4px; border-radius: 999px; background: var(--color-sunk); overflow: hidden; }
+.prog i { display: block; height: 100%; background: var(--color-accent); border-radius: 999px; transform-origin: left; transition: transform var(--duration-base) var(--ease-out); }
+.setform { padding: 4px 20px 20px; display: grid; gap: 20px; max-width: 640px; align-content: start; overflow: auto; }
+.avedit { display: flex; align-items: center; gap: 16px; }
+.mini-l { background: oklch(97.4% 0.007 190); } .mini-l i:first-child { background: oklch(94.6% 0.011 190); }
+.mini-d { background: oklch(18% 0.014 200); } .mini-d i:first-child { background: oklch(15.5% 0.012 200); }
+.mini-s { background: linear-gradient(90deg, oklch(97.4% 0.007 190) 50%, oklch(18% 0.014 200) 50%); } .mini-s i:first-child { background: linear-gradient(90deg, oklch(94.6% 0.011 190) 0 100%); }
+.mini i:last-child { margin: 10px; border-radius: 4px; background: oklch(50% 0.1 180 / 0.9); height: 8px; width: 40%; }
+.danger-zone { display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: 10px; background: var(--color-danger-wash); }
+.danger-zone .t { flex: 1; display: grid; gap: 2px; } .danger-zone .t span { font-size: 0.8125rem; color: var(--color-ink-muted); }
+.typing-note { color: var(--color-ink-muted); font-size: 0.8125rem; display: inline-flex; gap: 6px; align-items: center; }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+  <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="i-hash" viewBox="0 0 24 24"><path d="M4 9h16"/><path d="M4 15h16"/><path d="M10 3 8 21"/><path d="M16 3l-2 18"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-sheet" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/><path d="M5 12.86a10 10 0 0 1 5.17-2.69"/><path d="M19 12.86a10 10 0 0 0-2-1.52"/><path d="M2 8.82a15 15 0 0 1 4.18-2.64"/><path d="M22 8.82a15 15 0 0 0-11.29-3.76"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M11.53 2.3a.53.53 0 0 1 .94 0l2.31 4.68a2.12 2.12 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.12 2.12 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.12 2.12 0 0 0-1.97 0L6.4 21.01a.53.53 0 0 1-.77-.56l.88-5.14a2.12 2.12 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.12 2.12 0 0 0 1.6-1.16z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-crown" viewBox="0 0 24 24"><path d="M11.56 3.27a.5.5 0 0 1 .88 0l2.95 5.6a1 1 0 0 0 1.52.29l4.27-3.66a.5.5 0 0 1 .82.5l-2.83 10.25a1 1 0 0 1-.97.75H5.81a1 1 0 0 1-.97-.75L2 5.99a.5.5 0 0 1 .82-.5l4.28 3.66a1 1 0 0 0 1.51-.29z"/><path d="M5 21h14"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M12.59 2.59A2 2 0 0 0 11.17 2H4a2 2 0 0 0-2 2v7.17a2 2 0 0 0 .59 1.42l8.7 8.7a2.43 2.43 0 0 0 3.42 0l6.58-6.58a2.43 2.43 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/></symbol>
+  <symbol id="i-bold" viewBox="0 0 24 24"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/></symbol>
+  <symbol id="i-italic" viewBox="0 0 24 24"><path d="M19 4h-9"/><path d="M14 20H5"/><path d="M15 4 9 20"/></symbol>
+  <symbol id="i-ul" viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><circle cx="3.5" cy="6" r=".5"/><circle cx="3.5" cy="12" r=".5"/><circle cx="3.5" cy="18" r=".5"/></symbol>
+  <symbol id="i-ol" viewBox="0 0 24 24"><path d="M10 6h11"/><path d="M10 12h11"/><path d="M10 18h11"/><path d="M4 6h1v4"/><path d="M4 10h2"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol>
+  <symbol id="i-table" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></symbol>
+  <symbol id="i-redo" viewBox="0 0 24 24"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="i-wrench" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+  <symbol id="i-rows" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><path d="m9 14 2 2 4-4"/></symbol>
+  <symbol id="i-laptop" viewBox="0 0 24 24"><path d="M20 16V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v9m16 0H4m16 0 1.28 2.55a1 1 0 0 1-.9 1.45H3.62a1 1 0 0 1-.9-1.45L4 16"/></symbol>
+  <symbol id="i-motion" viewBox="0 0 24 24"><path d="M3 12h4"/><path d="M5 7h6"/><path d="M5 17h6"/><circle cx="16" cy="12" r="5"/></symbol>
+  <symbol id="i-ticket" viewBox="0 0 24 24"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/><path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/></symbol>
+  <symbol id="i-checkmark" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
+</svg>
+
+<div class="page">
+<header>
+  <h1>Nexus Hub · Danh bạ, Văn bản, Cài đặt</h1>
+  <p>Danh bạ (bảng và thẻ, hồ sơ trong panel), danh sách văn bản và khung soạn thảo cộng tác, Cài đặt (hồ sơ, workspace, giao diện sáng/tối). Chấm số xanh khớp với chú thích cùng số.</p>
+  <div class="controls"><div class="seg" role="group" aria-label="Theme"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div><label class="check"><input type="checkbox" id="reduce"> Giảm chuyển động</label><label class="check"><input type="checkbox" id="cxs" checked> Hiện chú thích số</label></div>
+  <nav class="toc" aria-label="Các màn"><a href="#contacts">Danh bạ</a><a href="#docs">Văn bản</a><a href="#editor">Soạn thảo</a><a href="#profile">Hồ sơ</a><a href="#appearance">Giao diện</a><a href="#workspace">Workspace</a><a href="#states">Trạng thái</a><a href="#tablet">Máy tính bảng</a><a href="#mobile">Di động</a></nav>
+</header>
+
+<!-- ============================ CONTACTS ============================ -->
+<section class="screen" id="contacts" aria-labelledby="h-ct">
+  <div class="screen-head">
+    <h2 id="h-ct">1 · Danh bạ</h2>
+    <p>Bảng người trong workspace, lọc theo phòng ban bằng Tree picker. Chọn người mở hồ sơ: nhắn tin trực tiếp, gửi email, cùng phòng. Bỏ các mục giả (Bên ngoài, Mới, Gắn sao, Nhóm của tôi) không có dữ liệu thật.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="ct-online">Vinh vừa trực tuyến</button>
+    <button class="btn sm" type="button" data-act="ct-panel">Đóng/mở hồ sơ</button>
+  </div>
+  <div class="scroll">
+    <div class="app no-list" id="app-ct">
+      <aside class="side" aria-label="Điều hướng chính"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></div><nav class="nav"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">4</span></a><a href="#"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a><a href="#"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#" aria-current="page"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav><div class="nav"><a href="#"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a><a href="#"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH<span class="on"></span></span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div></div></aside>
+      <div class="pg">
+        <div>
+          <div class="chead"><div class="t"><h3>Danh bạ</h3><div class="sub">64 người trong Khối Vận hành</div></div>
+            <div class="end"><div class="seg" role="group" aria-label="Kiểu xem" data-cx="1"><button type="button" aria-pressed="true" aria-label="Bảng"><svg class="i s"><use href="#i-list"/></svg></button><button type="button" aria-pressed="false" aria-label="Thẻ"><svg class="i s"><use href="#i-grid"/></svg></button></div></div></div>
+          <div class="toolbar">
+            <div class="search" style="width:240px"><svg class="i s"><use href="#i-search"/></svg>Tên, chức danh hoặc email</div>
+            <button class="fchip" type="button" aria-haspopup="tree" data-cx="2"><svg class="i s"><use href="#i-building"/></svg>Đối soát<svg class="i s"><use href="#i-down"/></svg></button>
+            <button class="fchip" type="button" aria-pressed="false">Đang trực tuyến</button>
+          </div>
+        </div>
+        <div class="tbl ct stagger" role="table" aria-label="Người trong phòng Đối soát">
+          <div class="tr th" role="row"><span role="columnheader">Người</span><span role="columnheader">Phòng ban</span><span role="columnheader">Email</span><span role="columnheader">Trạng thái</span></div>
+          <a class="tr" role="row" href="#contacts" aria-selected="true"><span class="nm"><span class="av s32" style="--p:var(--color-person-5)">MĐ<span class="on"></span></span><span class="sub2"><span class="ell">Trần Minh Đức</span><small>Trưởng phòng</small></span></span><span class="ell">Vận hành thanh toán</span><span class="ell t">duc.tran@novapay.vn</span><span><span class="pill ok">Trực tuyến</span></span></a>
+          <a class="tr" role="row" href="#contacts"><span class="nm"><span class="av s32" style="--p:var(--color-person-6)">TL<span class="on"></span></span><span class="sub2"><span class="ell">Nguyễn Thu Lan</span><small>Chuyên viên</small></span></span><span class="ell">Đối soát</span><span class="ell t">lan.nguyen@novapay.vn</span><span><span class="pill ok">Trực tuyến</span></span></a>
+          <a class="tr" role="row" href="#contacts" id="ct-vinh"><span class="nm"><span class="av s32" style="--p:var(--color-person-1)" id="ct-vinh-av">QV</span><span class="sub2"><span class="ell">Lê Quang Vinh</span><small>Chuyên viên</small></span></span><span class="ell">Đối soát</span><span class="ell t">vinh.le@novapay.vn</span><span data-st data-cx="3"><span class="pill idle">Ngoại tuyến</span></span></a>
+          <a class="tr" role="row" href="#contacts"><span class="nm"><span class="av s32" style="--p:var(--color-person-2)">TB</span><span class="sub2"><span class="ell">Trần Bảo Ngọc</span><small>Chuyên viên</small></span></span><span class="ell">Đối soát</span><span class="ell t">ngoc.tran@novapay.vn</span><span><span class="pill idle">Ngoại tuyến</span></span></a>
+          <a class="tr" role="row" href="#contacts"><span class="nm"><span class="av s32" style="--p:var(--color-person-3)">HY</span><span class="sub2"><span class="ell">Phạm Hải Yến</span><small>Chuyên viên</small></span></span><span class="ell">Vận hành thanh toán</span><span class="ell t">yen.pham@novapay.vn</span><span><span class="pill idle">Ngoại tuyến</span></span></a>
+        </div>
+      </div>
+      <aside class="detail" id="ct-detail" aria-label="Hồ sơ">
+        <div class="dh"><button class="ibtn" type="button" aria-label="Đóng hồ sơ" data-act="ct-panel"><svg class="i"><use href="#i-x"/></svg></button></div>
+        <div class="prof" style="margin-top:-28px" data-cx="4"><span class="av s64" style="--p:var(--color-person-5)">MĐ<span class="on"></span></span><h4 style="font-size:1.1875rem;font-weight:700">Trần Minh Đức</h4><span class="muted">Trưởng phòng · Vận hành thanh toán</span><span class="pill ok">Trực tuyến</span></div>
+        <div class="row" style="justify-content:center" data-cx="5"><button class="btn primary" type="button"><svg class="i s"><use href="#i-msg"/></svg>Nhắn tin</button><button class="btn" type="button"><svg class="i s"><use href="#i-mail"/></svg>Gửi email</button></div>
+        <dl class="kv"><dt>Email</dt><dd class="ell">duc.tran@novapay.vn</dd><dt>Phòng ban</dt><dd>Khối Vận hành › Vận hành thanh toán</dd><dt>Nơi làm việc</dt><dd>Hà Nội, tầng 12</dd></dl>
+        <section><div class="label">Cùng phòng</div><span class="presence" style="margin:0"><span class="faces"><span class="av s24" style="--p:var(--color-person-3)">HY</span><span class="av s24" style="--p:var(--color-person-4)">VK</span><span class="av s24" style="--p:var(--color-person-8)">AT</span></span>Phạm Hải Yến và 30 người khác</span></section>
+      </aside>
+    </div>
+  </div>
+  <ol class="notes cxl">
+    <li><span class="cxn">1</span><b>Kiểu xem</b> Bảng/Thẻ là segmented control, nhớ theo người dùng. Thẻ xem ở khung máy tính bảng bên dưới.</li>
+    <li><span class="cxn">2</span><b>Phòng ban</b> lọc bằng Tree picker (cùng component với Quản trị), không có cột cây bên trái vì Danh bạ không có list panel.</li>
+    <li><span class="cxn">3</span><b>Trạng thái</b> có chữ, không chỉ chấm màu. Người vừa trực tuyến: chấm presence và nhãn fade 220ms; không phủ màu hàng vì presence không phải thay đổi nội dung. Code đang có giá trị “meeting” không bao giờ xuất hiện: bỏ.</li>
+    <li><span class="cxn">4</span><b>Hồ sơ</b>: avatar 64 (ngoài thang 20/24/32/40 của DESIGN.md, xem câu hỏi mở), tên hiển thị, chức danh, phòng ban. Không hiện <code>username</code>, <code>user_id</code> hay mã node.</li>
+    <li><span class="cxn">5</span><b>Nhắn tin</b> mở tin nhắn riêng (code hiện là stub). Bỏ nút “Gọi” cho tới khi có tính năng gọi; nút không làm gì là vi phạm “mọi hành động phải thật”.</li>
+  </ol>
+</section>
+
+<!-- ============================ DOCUMENTS ============================ -->
+<section class="screen" id="docs" aria-labelledby="h-dc">
+  <div class="screen-head">
+    <h2 id="h-dc">2 · Văn bản</h2>
+    <p>Văn bản nằm dưới mục Tài liệu: list panel có nhóm Văn bản ở trên cây thư mục. Bảng kẻ mảnh với chủ sở hữu, trạng thái, giờ sửa; tải lên hiện tiến độ ngay trong bảng.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="dc-upload">Tải lên một tệp</button>
+    <button class="btn sm" type="button" data-act="dc-other">Lan sửa một văn bản</button>
+  </div>
+  <div class="scroll">
+    <div class="app detail-closed" id="app-dc">
+      <aside class="side" aria-label="Điều hướng chính"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></div><nav class="nav"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">4</span></a><a href="#" aria-current="page"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a><a href="#"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav><div class="nav"><a href="#"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a><a href="#"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH<span class="on"></span></span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div></div></aside>
+      <div class="list">
+        <div class="lhead"><h3>Tài liệu</h3><div class="search"><svg class="i s"><use href="#i-search"/></svg>Tìm văn bản hoặc tệp</div></div>
+        <div class="body tree" data-cx="1">
+          <div class="group label">Văn bản</div>
+          <a class="row-link" href="#docs" aria-current="page"><svg class="i s h"><use href="#i-doc"/></svg>Tất cả văn bản</a>
+          <a class="row-link" href="#docs"><svg class="i s h"><use href="#i-pen"/></svg>Bản nháp của tôi<span class="pill count tnum">2</span></a>
+          <a class="row-link" href="#docs"><svg class="i s h"><use href="#i-user-plus"/></svg>Được chia sẻ với tôi</a>
+          <div class="group label">Thư mục</div>
+          <a class="row-link" href="#docs"><svg class="i s h"><use href="#i-right"/></svg><svg class="i s" style="color:var(--color-accent)"><use href="#i-folder"/></svg>Khối Vận hành</a>
+          <a class="row-link" href="#docs"><svg class="i s h"><use href="#i-right"/></svg><svg class="i s" style="color:var(--color-accent)"><use href="#i-folder"/></svg>Hợp đồng</a>
+          <a class="row-link" href="#docs"><svg class="i s h"><use href="#i-right"/></svg><svg class="i s" style="color:var(--color-accent)"><use href="#i-folder"/></svg>Báo cáo quý</a>
+        </div>
+      </div>
+      <div class="content" style="grid-template-rows:auto 1fr">
+        <div>
+          <div class="chead"><div class="t"><h3>Tất cả văn bản</h3><div class="sub">18 văn bản bạn được xem</div></div><div class="end"><button class="btn sm" type="button" data-act="dc-upload"><svg class="i s"><use href="#i-upload"/></svg>Tải lên</button><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-plus"/></svg>Văn bản mới</button></div></div>
+          <div class="coalesce" id="dc-coalesce" role="status"></div>
+        </div>
+        <div class="tbl dc" role="table" aria-label="Văn bản" id="dc-table">
+          <div class="tr th" role="row"><span role="columnheader">Tiêu đề</span><span role="columnheader">Chủ sở hữu</span><span role="columnheader">Trạng thái</span><span role="columnheader" class="r">Sửa lúc</span></div>
+          <a class="tr" role="row" href="#editor"><span class="nm"><span class="ficon doc"><svg class="i"><use href="#i-doc"/></svg></span><span>Quy trình đối soát cuối ngày</span></span><span class="chip"><span class="av s20" style="--p:var(--color-person-7)">TH</span><span class="nm">Lê Thị Hoa</span></span><span><span class="pill wait">Bản nháp</span></span><span class="r t">09:41</span></a>
+          <a class="tr" role="row" href="#docs" id="dc-row-sla"><span class="nm"><span class="ficon doc"><svg class="i"><use href="#i-doc"/></svg></span><span>Cam kết SLA với ngân hàng đối tác</span></span><span class="chip"><span class="av s20" style="--p:var(--color-person-5)">MĐ</span><span class="nm">Trần Minh Đức</span></span><span><span class="pill ok">Đang dùng</span></span><span class="r t" data-when>Hôm qua</span></a>
+          <a class="tr" role="row" href="#docs"><span class="nm"><span class="ficon pdf"><svg class="i"><use href="#i-doc"/></svg></span><span>Quy chế tạm ứng 2026.pdf</span></span><span class="chip"><span class="av s20" style="--p:var(--color-person-4)">VK</span><span class="nm">Đỗ Văn Khải</span></span><span><span class="pill ok">Đang dùng</span></span><span class="r t">02/10</span></a>
+          <a class="tr" role="row" href="#docs"><span class="nm"><span class="ficon x"><svg class="i"><use href="#i-sheet"/></svg></span><span>Mẫu biên bản chênh lệch.xlsx</span></span><span class="chip"><span class="av s20" style="--p:var(--color-person-6)">TL</span><span class="nm">Nguyễn Thu Lan</span></span><span><span class="pill idle">Lưu trữ</span></span><span class="r t">14/08</span></a>
+        </div>
+        <div class="toasts" id="dc-toasts" aria-live="polite"></div>
+      </div>
+      <aside class="detail" aria-hidden="true"></aside>
+    </div>
+  </div>
+  <ol class="notes cxl">
+    <li><span class="cxn">1</span><b>Văn bản trong Tài liệu</b>: route <code>/documents</code> thành một mục trong list panel của Tài liệu thay vì một trang trôi nổi. Văn bản soạn trong app và tệp tải lên (PDF, bảng tính) cùng một bảng; icon và màu theo loại tệp từ token (<code>ficon</code>).</li>
+    <li><b>Tải lên</b>: ba bước nội bộ (xin URL, đẩy tệp, xác nhận) gộp thành một thanh tiến độ trong hàng mới; xong thì hàng chuyển sang trạng thái thường và toast “Đã tải lên”. Lỗi: hàng giữ lại với nút Thử lại, toast nói lý do (vượt dung lượng, mất mạng). Không còn ô chọn tệp gốc của trình duyệt trên màn.</li>
+    <li><b>Người khác sửa</b>: hàng phủ màu người đó 2,4s, nhãn “vừa sửa”; ≥ 3 thay đổi trong 2 giây gộp thành một dòng dưới header. Thao tác trên hàng (Tải xuống, Chia sẻ, Xoá) nằm trong menu “…” của hàng và panel chi tiết giống Drive trong core-screens.</li>
+  </ol>
+</section>
+
+<!-- ============================ EDITOR ============================ -->
+<section class="screen" id="editor" aria-labelledby="h-ed">
+  <div class="screen-head">
+    <h2 id="h-ed">3 · Soạn thảo văn bản</h2>
+    <p>Khung soạn thảo cộng tác: list panel ẩn để lấy bề ngang, trang giấy rộng tối đa 720px, con trỏ của người khác mang màu và tên của họ. Trạng thái lưu luôn hiện cạnh tiêu đề.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="ed-type">Vinh gõ một câu</button>
+    <button class="btn sm" type="button" data-act="ed-offline">Mất kết nối</button>
+  </div>
+  <div class="scroll">
+    <div class="app ed-mode detail-closed" id="app-ed">
+      <aside class="side" aria-label="Điều hướng chính"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></div><nav class="nav"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">4</span></a><a href="#" aria-current="page"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a><a href="#"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav><div class="nav"><a href="#"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a><a href="#"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH<span class="on"></span></span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div></div></aside>
+      <div class="ed">
+        <div class="chead">
+          <button class="ibtn" type="button" aria-label="Quay lại danh sách văn bản"><svg class="i"><use href="#i-back"/></svg></button>
+          <div class="t"><nav class="crumbs" aria-label="Đường dẫn"><a href="#docs">Văn bản</a><svg class="i s"><use href="#i-right"/></svg><span>Bản nháp</span></nav><h3>Quy trình đối soát cuối ngày</h3></div>
+          <span class="saved" id="ed-saved" role="status" data-cx="1"><svg class="i s"><use href="#i-cloud"/></svg>Đã lưu 09:41</span>
+          <div class="end">
+            <span class="presence" data-cx="2"><span class="faces"><span class="av s24" style="--p:var(--color-person-1)">QV</span><span class="av s24" style="--p:var(--color-person-6)">TL</span></span>Đang cùng sửa</span>
+            <button class="btn sm" type="button"><svg class="i s"><use href="#i-user-plus"/></svg>Chia sẻ</button>
+            <button class="btn primary sm" type="button">Gửi duyệt</button>
+            <button class="ibtn" type="button" aria-label="Thêm"><svg class="i"><use href="#i-more"/></svg></button>
+          </div>
+        </div>
+        <div>
+          <div class="banner" id="ed-banner" role="status"></div>
+          <div class="edbar" role="toolbar" aria-label="Định dạng" data-cx="3">
+            <button class="ibtn" type="button" aria-label="Hoàn tác"><svg class="i s"><use href="#i-undo"/></svg></button><button class="ibtn" type="button" aria-label="Làm lại"><svg class="i s"><use href="#i-redo"/></svg></button><span class="sep"></span>
+            <span class="bsel">Đoạn văn<svg class="i s muted"><use href="#i-down"/></svg></span><span class="sep"></span>
+            <button class="ibtn" type="button" aria-label="In đậm" aria-pressed="true"><svg class="i s"><use href="#i-bold"/></svg></button><button class="ibtn" type="button" aria-label="In nghiêng" aria-pressed="false"><svg class="i s"><use href="#i-italic"/></svg></button><span class="sep"></span>
+            <button class="ibtn" type="button" aria-label="Danh sách chấm"><svg class="i s"><use href="#i-ul"/></svg></button><button class="ibtn" type="button" aria-label="Danh sách số"><svg class="i s"><use href="#i-ol"/></svg></button><span class="sep"></span>
+            <button class="ibtn" type="button" aria-label="Chèn liên kết"><svg class="i s"><use href="#i-link"/></svg></button><button class="ibtn" type="button" aria-label="Chèn ảnh"><svg class="i s"><use href="#i-image"/></svg></button><button class="ibtn" type="button" aria-label="Chèn bảng"><svg class="i s"><use href="#i-table"/></svg></button>
+            <span class="typing-note" style="margin-left:auto" id="ed-typing"></span>
+          </div>
+        </div>
+        <div class="canvas">
+          <article class="sheetdoc" aria-label="Nội dung văn bản" data-cx="4">
+            <h1>Quy trình đối soát cuối ngày</h1>
+            <p class="muted" style="font-size:0.875rem">Áp dụng cho tổ Đối soát từ 15/10/2026. Người phụ trách: Trần Minh Đức.</p>
+            <h2>1. Chuẩn bị số liệu</h2>
+            <p>Trước 16:30, chuyên viên tải sao kê từ cổng ngân hàng đối tác và file giao dịch từ hệ thống lõi, đặt vào thư mục <b>Đối soát › 2026 › Tháng 10</b>.<span class="caret" style="--p:var(--color-person-6)"><b>Nguyễn Thu Lan</b></span></p>
+            <h2>2. Đối chiếu</h2>
+            <p id="ed-p2">Chạy mẫu đối chiếu, lọc các giao dịch lệch theo số tiền và thời điểm ghi nhận. <span class="hlp" style="--pw:var(--color-person-1-wash)">Chênh lệch dưới 10.000 ₫ do phí liên ngân hàng được ghi nhận vào tài khoản 6427</span><span class="caret" style="--p:var(--color-person-1)" id="ed-caret"><b>Lê Quang Vinh</b></span></p>
+            <ul style="margin:0;padding-left:1.3em;display:grid;gap:4px"><li>Lệch số tiền: lập biên bản, gửi Kế toán trưởng duyệt.</li><li>Lệch thời điểm: theo dõi sang ngày hôm sau, không lập biên bản.</li></ul>
+          </article>
+        </div>
+      </div>
+      <aside class="detail" aria-hidden="true"></aside>
+    </div>
+  </div>
+  <ol class="notes cxl">
+    <li><span class="cxn">1</span><b>Trạng thái lưu</b>: “Đang lưu…” khi gõ, “Đã lưu 09:41” khi xong, “Chưa lưu, đang chờ mạng” khi mất kết nối (kèm dải <code>warning-wash</code> sau 3 giây như core-screens). Không có nút Lưu.</li>
+    <li><span class="cxn">2</span><b>Presence</b>: tối đa 3 avatar + “+N”, vào/ra fade 220ms. Bấm vào avatar thì cuộn tới con trỏ của người đó.</li>
+    <li><span class="cxn">3</span><b>Thanh định dạng</b> nền <code>--color-raised</code>, radius 10, IconButton 32 có <code>aria-label</code>; nút đang bật dùng <code>--color-accent-wash</code>. Trên di động thanh này dính trên bàn phím.</li>
+    <li><span class="cxn">4</span><b>Con trỏ cộng tác</b>: vạch 2px và nhãn tên màu <code>--color-person-N</code>; vùng người khác vừa gõ phủ <code>--color-person-N-wash</code> rồi tan trong 2,4s, đúng ngữ pháp realtime của hệ. Trang giấy <code>--color-raised</code>, chữ 16/1.6, tối đa 68 ký tự một dòng. <span class="need">cần backend</span> hiện chưa có editor và chưa có đồng bộ cộng tác (câu hỏi mở).</li>
+  </ol>
+</section>
+
+<!-- ============================ SETTINGS: PROFILE ============================ -->
+<section class="screen" id="profile" aria-labelledby="h-pf">
+  <div class="screen-head">
+    <h2 id="h-pf">4 · Cài đặt: Hồ sơ</h2>
+    <p>Cài đặt có ba tab: Hồ sơ, Workspace, Giao diện. Hồ sơ sửa tên hiển thị, chức danh, ảnh; email và phòng ban chỉ xem với lý do.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="pf-error">Xoá trống tên rồi lưu</button><button class="btn sm" type="button" data-act="pf-save">Lưu hợp lệ</button></div>
+  <div class="scroll">
+    <div class="app no-list detail-closed" id="app-pf" style="height:700px">
+      <aside class="side" aria-label="Điều hướng chính"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></div><nav class="nav"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">4</span></a><a href="#"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a><a href="#"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav><div class="nav"><a href="#"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a><a href="#" aria-current="page"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH<span class="on"></span></span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div></div></aside>
+      <div class="pg" style="grid-template-rows:auto auto 1fr">
+        <div class="chead"><div class="t"><h3>Cài đặt</h3></div></div>
+        <div class="tabs" role="tablist" data-cx="1"><button role="tab" aria-selected="true" type="button">Hồ sơ</button><button role="tab" aria-selected="false" type="button">Workspace</button><button role="tab" aria-selected="false" type="button">Giao diện</button></div>
+        <div class="setform">
+          <div class="avedit" data-cx="2"><span class="av s64" style="--p:var(--color-person-7)">TH</span><div style="display:grid;gap:6px"><div class="row"><button class="btn sm" type="button"><svg class="i s"><use href="#i-camera"/></svg>Đổi ảnh</button><button class="btn sm ghost" type="button">Bỏ ảnh</button></div><span class="muted" style="font-size:0.75rem">JPG hoặc PNG, tối đa 5 MB. Không có ảnh thì dùng chữ cái đầu trên màu riêng của bạn.</span></div></div>
+          <div class="row2">
+            <div class="fld"><label class="lab" for="pf-name">Tên hiển thị</label><div class="inp" id="pf-name" tabindex="0" aria-describedby="pf-name-h">Lê Thị Hoa</div><span class="hint" id="pf-name-h">Mọi người thấy tên này trong chat, phê duyệt và danh bạ.</span></div>
+            <div class="fld"><label class="lab" for="pf-title">Chức danh</label><div class="inp" id="pf-title">Kế toán trưởng</div></div>
+          </div>
+          <div class="row2">
+            <div class="fld" data-cx="3"><span class="lab">Email đăng nhập</span><div class="inp dis"><svg class="i s"><use href="#i-lock"/></svg>hoa.le@novapay.vn</div><span class="hint">Dùng để nhận mã đăng nhập. Đổi email cần quản trị viên.</span></div>
+            <div class="fld"><span class="lab">Phòng ban</span><div class="inp dis"><svg class="i s"><use href="#i-lock"/></svg>Kế toán</div><span class="hint">Do quản trị viên đặt.</span></div>
+          </div>
+          <div class="fld"><label class="lab" for="pf-phone">Số điện thoại <span class="muted">(không bắt buộc)</span></label><div class="inp tnum" id="pf-phone" style="max-width:300px">0912 345 678</div></div>
+          <div class="formbar" style="justify-content:flex-start"><button class="btn primary" type="button" data-act="pf-save">Lưu thay đổi</button><button class="btn ghost" type="button">Huỷ</button></div>
+          <div class="srow" style="border-top:1px solid var(--color-line)"><span class="t"><b style="font-weight:600">Đăng xuất</b><span>Thoát khỏi Nexus Hub trên trình duyệt này.</span></span><button class="btn" type="button"><svg class="i s"><use href="#i-logout"/></svg>Đăng xuất</button></div>
+        </div>
+        <div class="toasts" id="pf-toasts" aria-live="polite"></div>
+      </div>
+      <aside class="detail" aria-hidden="true"></aside>
+    </div>
+  </div>
+  <ol class="notes cxl">
+    <li><span class="cxn">1</span><b>Tab</b> giống các nhóm khác; route <code>/settings</code> mở tab Hồ sơ, <code>?tab=giao-dien</code> cho Giao diện. Thay chữ “coming soon” hiện tại.</li>
+    <li><span class="cxn">2</span><b>Ảnh đại diện</b> 64px; không có ảnh thì chữ cái đầu của tên hiển thị trên <code>--color-person-N</code> (tất định theo người, id không bao giờ hiện).</li>
+    <li><span class="cxn">3</span><b>Ô chỉ xem</b> có biểu tượng khoá và câu nói vì sao, nền <code>--color-sunk</code>, chữ <code>ink-subtle</code>; không phải ô bị tắt im lặng. Lỗi kiểm khi rời ô; lưu xong toast “Đã lưu hồ sơ”, tên mới cập nhật ngay ở sidebar.</li>
+  </ol>
+</section>
+
+<!-- ============================ SETTINGS: APPEARANCE ============================ -->
+<section class="screen" id="appearance" aria-labelledby="h-ap">
+  <div class="screen-head">
+    <h2 id="h-ap">5 · Cài đặt: Giao diện</h2>
+    <p>Chọn Theo hệ thống, Sáng hoặc Tối; bấm thẻ ở đây đổi luôn theme của cả trang review này. Giảm chuyển động theo hệ thống hoặc luôn bật.</p>
+  </div>
+  <div class="scroll">
+    <div class="app no-list detail-closed" id="app-ap" style="height:640px">
+      <aside class="side" aria-label="Điều hướng chính"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></div><nav class="nav"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">4</span></a><a href="#"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a><a href="#"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav><div class="nav"><a href="#"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a><a href="#" aria-current="page"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH<span class="on"></span></span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div></div></aside>
+      <div class="pg" style="grid-template-rows:auto auto 1fr">
+        <div class="chead"><div class="t"><h3>Cài đặt</h3></div></div>
+        <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Hồ sơ</button><button role="tab" aria-selected="false" type="button">Workspace</button><button role="tab" aria-selected="true" type="button">Giao diện</button></div>
+        <div class="setform">
+          <div class="fld"><span class="lab" id="ap-theme">Chủ đề</span>
+            <div class="themes" role="radiogroup" aria-labelledby="ap-theme" data-cx="1">
+              <button class="th-card" type="button" role="radio" aria-checked="true" data-theme-card="system"><span class="mini mini-s"><i></i><i></i></span><b><svg class="i s"><use href="#i-monitor"/></svg>Theo hệ thống</b></button>
+              <button class="th-card" type="button" role="radio" aria-checked="false" data-theme-card="light"><span class="mini mini-l"><i></i><i></i></span><b><svg class="i s"><use href="#i-sun"/></svg>Sáng</b></button>
+              <button class="th-card" type="button" role="radio" aria-checked="false" data-theme-card="dark"><span class="mini mini-d"><i></i><i></i></span><b><svg class="i s"><use href="#i-moon"/></svg>Tối</b></button>
+            </div>
+            <span class="hint">Mặc định là Theo hệ thống. Lưu trên máy này và theo tài khoản.</span>
+          </div>
+          <div>
+            <div class="srow" data-cx="2"><span class="t"><b style="font-weight:600">Giảm chuyển động</b><span>Tắt trượt và phóng to; giữ fade ngắn và lớp màu realtime vì đó là thông tin.</span></span><div class="seg" role="radiogroup" aria-label="Giảm chuyển động"><button type="button" role="radio" aria-pressed="true" aria-checked="true">Theo hệ thống</button><button type="button" role="radio" aria-pressed="false" aria-checked="false">Luôn bật</button></div></div>
+            <div class="srow"><span class="t"><b style="font-weight:600">Thu gọn sidebar</b><span>Chỉ hiện icon, tên mục hiện khi rê chuột.</span></span><button class="sw" type="button" role="switch" aria-checked="false" aria-label="Thu gọn sidebar" data-act="sw"></button></div>
+            <div class="srow"><span class="t"><b style="font-weight:600">Màu theo người</b><span>Thay đổi của người khác loé màu của họ trong 2,4 giây.</span></span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="Màu theo người" data-act="sw"></button></div>
+          </div>
+        </div>
+      </div>
+      <aside class="detail" aria-hidden="true"></aside>
+    </div>
+  </div>
+  <ol class="notes cxl">
+    <li><span class="cxn">1</span><b>Thẻ chủ đề</b> là radio thật (<code>role="radio"</code>, phím mũi tên), thẻ chọn có viền 2px accent. Đổi theme không có animation chuyển màu toàn trang (tránh nhấp nháy); áp ngay. Ảnh thu nhỏ vẽ bằng chính token surface của theme đó.</li>
+    <li><span class="cxn">2</span><b>Giảm chuyển động</b> mặc định theo <code>prefers-reduced-motion</code>; “Luôn bật” đặt class trên <code>html</code> như ô “Giảm chuyển động” của trang review này. Công tắc 100ms (<code>--duration-press</code>). “Màu theo người” là câu hỏi mở: DESIGN.md chưa cho tắt.</li>
+  </ol>
+</section>
+
+<!-- ============================ SETTINGS: WORKSPACE ============================ -->
+<section class="screen" id="workspace" aria-labelledby="h-ws">
+  <div class="screen-head">
+    <h2 id="h-ws">6 · Cài đặt: Workspace</h2>
+    <p>Tên, biểu tượng, mô tả của workspace. Người không có quyền Quản lý thấy mọi ô ở chế độ chỉ xem với một câu giải thích; rời workspace luôn được.</p>
+  </div>
+  <div class="scroll">
+    <div class="app no-list detail-closed" style="height:600px">
+      <aside class="side" aria-label="Điều hướng chính"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></div><nav class="nav"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">4</span></a><a href="#"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a><a href="#"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav><div class="nav"><a href="#"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a><a href="#" aria-current="page"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH<span class="on"></span></span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div></div></aside>
+      <div class="pg" style="grid-template-rows:auto auto 1fr">
+        <div class="chead"><div class="t"><h3>Cài đặt</h3></div></div>
+        <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Hồ sơ</button><button role="tab" aria-selected="true" type="button">Workspace</button><button role="tab" aria-selected="false" type="button">Giao diện</button></div>
+        <div class="setform">
+          <div class="avedit"><span class="logo" style="width:64px;height:64px;border-radius:12px;background:var(--color-accent);color:var(--color-on-accent);display:grid;place-items:center;font:700 1.75rem/1 var(--font-display)">V</span><div style="display:grid;gap:6px"><button class="btn sm" type="button"><svg class="i s"><use href="#i-camera"/></svg>Đổi biểu tượng</button></div></div>
+          <div class="row2">
+            <div class="fld"><label class="lab" for="ws-n">Tên workspace</label><div class="inp" id="ws-n">Khối Vận hành</div></div>
+            <div class="fld"><span class="lab">Tổ chức</span><div class="inp dis"><svg class="i s"><use href="#i-lock"/></svg>NovaPay</div></div>
+          </div>
+          <div class="fld"><label class="lab" for="ws-d">Mô tả</label><div class="inp ta" id="ws-d">Đối soát, thanh toán và hỗ trợ đối tác.</div></div>
+          <div class="srow"><span class="t"><b style="font-weight:600">64 thành viên, 5 vai trò</b><span>Mời người, đổi vai trò và phòng ban ở Quản trị.</span></span><a class="btn" href="#">Mở Quản trị<svg class="i s"><use href="#i-arrow"/></svg></a></div>
+          <div class="danger-zone" data-cx="1"><span class="t"><b style="font-weight:600">Rời Khối Vận hành</b><span>Bạn mất quyền truy cập tin nhắn, tài liệu và đề nghị của workspace này. Chủ sở hữu cuối cùng không rời được.</span></span><button class="btn danger" type="button">Rời workspace</button></div>
+        </div>
+      </div>
+      <aside class="detail" aria-hidden="true"></aside>
+    </div>
+  </div>
+  <ol class="notes cxl">
+    <li><span class="cxn">1</span><b>Rời workspace</b> là thao tác không hoàn tác được nên dùng modal xác nhận (gõ lại tên workspace là quá nặng; một câu hệ quả + nút đỏ là đủ). Không có đường dẫn slug hay mã workspace nào trên màn.</li>
+  </ol>
+</section>
+
+<!-- ============================ STATES ============================ -->
+<section class="screen" id="states" aria-labelledby="h-states">
+  <div class="screen-head">
+    <h2 id="h-states">7 · Trạng thái</h2>
+    <p>Bộ dùng chung, áp vào Danh bạ, Văn bản, Soạn thảo và Cài đặt.</p>
+  </div>
+  <div class="sheet">
+    <div class="card"><h3>Danh bạ đang tải</h3>
+      <div class="skrow" style="grid-template-columns:32px 1fr 72px"><div class="skel" style="height:32px;border-radius:50%"></div><div style="display:grid;gap:6px"><div class="skel" style="width:60%"></div><div class="skel" style="width:35%;height:10px"></div></div><div class="skel"></div></div>
+      <div class="skrow" style="grid-template-columns:32px 1fr 72px"><div class="skel" style="height:32px;border-radius:50%"></div><div style="display:grid;gap:6px"><div class="skel" style="width:70%"></div><div class="skel" style="width:30%;height:10px"></div></div><div class="skel"></div></div>
+    </div>
+    <div class="card"><h3>Tìm không thấy người</h3>
+      <div class="state"><span class="ic"><svg class="i"><use href="#i-search"/></svg></span><b>Không có ai tên “Hưng” trong phòng Đối soát</b><p class="muted">Thử tìm trong cả Khối Vận hành.</p><button class="btn sm" type="button">Tìm trong cả khối</button></div>
+    </div>
+    <div class="card"><h3>Chưa có văn bản</h3>
+      <div class="state"><span class="ic"><svg class="i"><use href="#i-doc"/></svg></span><b>Bạn chưa có văn bản nào</b><p class="muted">Tạo văn bản để soạn cùng đồng nghiệp, hoặc tải lên tệp có sẵn.</p><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-plus"/></svg>Văn bản mới</button></div>
+    </div>
+    <div class="card"><h3>Lỗi tải danh bạ</h3>
+      <div class="state"><span class="ic bad"><svg class="i"><use href="#i-alert"/></svg></span><b>Không tải được danh bạ</b><p class="muted">Kết nối tới máy chủ bị gián đoạn. Kiểm tra mạng rồi thử lại.</p><button class="btn sm" type="button"><svg class="i s"><use href="#i-refresh"/></svg>Thử lại</button></div>
+    </div>
+    <div class="card"><h3>Văn bản không mở được</h3>
+      <div class="state"><span class="ic"><svg class="i"><use href="#i-lock"/></svg></span><b>Bạn chưa được xem văn bản này</b><p class="muted">Lê Thị Hoa là chủ sở hữu. Gửi yêu cầu, chị ấy sẽ nhận thông báo.</p><button class="btn sm" type="button">Xin quyền xem</button></div>
+    </div>
+    <div class="card"><h3>Lỗi tải lên và lưu</h3>
+      <div class="toast"><svg class="i bad"><use href="#i-alert"/></svg><span>Không tải lên được “sao-ke-thang-10.pdf”. Tệp vượt 50 MB.</span><button class="btn ghost sm" type="button">Thử lại</button></div>
+      <div class="input err"><label>Tên hiển thị</label><div class="box"></div><span class="msg-err">Nhập tên để mọi người nhận ra bạn.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ TABLET ============================ -->
+<section class="screen" id="tablet" aria-labelledby="h-tablet">
+  <div class="screen-head">
+    <h2 id="h-tablet">8 · Máy tính bảng (768 đến 1023)</h2>
+    <p>Danh bạ dạng thẻ với rail; soạn thảo giữ trang giấy, thanh định dạng gọn lại.</p>
+  </div>
+  <div class="frames">
+    <div><span class="wlabel">820 px · Danh bạ dạng thẻ</span>
+      <div class="tablet">
+        <aside class="rail" aria-label="Điều hướng chính"><span class="logo" aria-label="Khối Vận hành">V</span><nav><a href="#" aria-label="Tin nhắn" title="Tin nhắn"><svg class="i"><use href="#i-msg"/></svg><span class="dotc"></span></a><a href="#" aria-label="Tài liệu" title="Tài liệu"><svg class="i"><use href="#i-folder"/></svg></a><a href="#" aria-label="Phê duyệt" title="Phê duyệt"><svg class="i"><use href="#i-check"/></svg><span class="dotc"></span></a><a href="#" aria-label="Tài sản" title="Tài sản"><svg class="i"><use href="#i-box"/></svg></a><a href="#" aria-current="page" aria-label="Danh bạ" title="Danh bạ"><svg class="i"><use href="#i-users"/></svg></a></nav><nav><a href="#" aria-label="Quản trị" title="Quản trị"><svg class="i"><use href="#i-shield"/></svg></a><a href="#" aria-label="Cài đặt" title="Cài đặt"><svg class="i"><use href="#i-gear"/></svg></a><a href="#" aria-label="Lê Thị Hoa"><span class="av s32" style="--p:var(--color-person-7)">TH</span></a></nav></aside>
+        <div class="pg">
+          <div>
+            <div class="chead"><div class="t"><h3>Danh bạ</h3></div><div class="end"><div class="seg" role="group" aria-label="Kiểu xem"><button type="button" aria-pressed="false" aria-label="Bảng"><svg class="i s"><use href="#i-list"/></svg></button><button type="button" aria-pressed="true" aria-label="Thẻ"><svg class="i s"><use href="#i-grid"/></svg></button></div></div></div>
+            <div class="toolbar"><div class="search" style="width:220px"><svg class="i s"><use href="#i-search"/></svg>Tìm người</div><button class="fchip" type="button"><svg class="i s"><use href="#i-building"/></svg>Đối soát<svg class="i s"><use href="#i-down"/></svg></button></div>
+          </div>
+          <div class="body">
+            <div class="cards stagger" data-cx="1">
+              <button class="pcard" type="button" aria-selected="true"><span class="av s40" style="--p:var(--color-person-5)">MĐ<span class="on" style="box-shadow:0 0 0 2px var(--color-accent-wash)"></span></span><span class="n">Trần Minh Đức</span><span class="e">Trưởng phòng · Vận hành thanh toán</span></button>
+              <button class="pcard" type="button"><span class="av s40" style="--p:var(--color-person-6)">TL<span class="on" style="box-shadow:0 0 0 2px var(--color-raised)"></span></span><span class="n">Nguyễn Thu Lan</span><span class="e">Chuyên viên · Đối soát</span></button>
+              <button class="pcard" type="button"><span class="av s40" style="--p:var(--color-person-1)">QV</span><span class="n">Lê Quang Vinh</span><span class="e">Chuyên viên · Đối soát</span></button>
+              <button class="pcard" type="button"><span class="av s40" style="--p:var(--color-person-2)">TB</span><span class="n">Trần Bảo Ngọc</span><span class="e">Chuyên viên · Đối soát</span></button>
+              <button class="pcard" type="button"><span class="av s40" style="--p:var(--color-person-3)">HY</span><span class="n">Phạm Hải Yến</span><span class="e">Chuyên viên · Vận hành thanh toán</span></button>
+              <button class="pcard" type="button"><span class="av s40" style="--p:var(--color-person-8)">AT</span><span class="n">Vũ Anh Thư</span><span class="e">Chuyên viên · Hành chính</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div><span class="wlabel">820 px · Soạn thảo</span>
+      <div class="tablet">
+        <aside class="rail" aria-label="Điều hướng chính"><span class="logo" aria-label="Khối Vận hành">V</span><nav><a href="#" aria-label="Tin nhắn" title="Tin nhắn"><svg class="i"><use href="#i-msg"/></svg><span class="dotc"></span></a><a href="#" aria-current="page" aria-label="Tài liệu" title="Tài liệu"><svg class="i"><use href="#i-folder"/></svg></a><a href="#" aria-label="Phê duyệt" title="Phê duyệt"><svg class="i"><use href="#i-check"/></svg><span class="dotc"></span></a><a href="#" aria-label="Tài sản" title="Tài sản"><svg class="i"><use href="#i-box"/></svg></a><a href="#" aria-label="Danh bạ" title="Danh bạ"><svg class="i"><use href="#i-users"/></svg></a></nav><nav><a href="#" aria-label="Quản trị" title="Quản trị"><svg class="i"><use href="#i-shield"/></svg></a><a href="#" aria-label="Cài đặt" title="Cài đặt"><svg class="i"><use href="#i-gear"/></svg></a><a href="#" aria-label="Lê Thị Hoa"><span class="av s32" style="--p:var(--color-person-7)">TH</span></a></nav></aside>
+        <div class="ed">
+          <div class="chead"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><div class="t"><h3>Quy trình đối soát cuối ngày</h3></div><div class="end"><span class="saved"><svg class="i s"><use href="#i-cloud"/></svg>Đã lưu</span><span class="faces"><span class="av s24" style="--p:var(--color-person-1)">QV</span></span><button class="ibtn" type="button" aria-label="Thêm"><svg class="i"><use href="#i-more"/></svg></button></div></div>
+          <div class="edbar" role="toolbar" aria-label="Định dạng" data-cx="2"><button class="ibtn" type="button" aria-label="Hoàn tác"><svg class="i s"><use href="#i-undo"/></svg></button><span class="sep"></span><span class="bsel">Đoạn văn<svg class="i s muted"><use href="#i-down"/></svg></span><span class="sep"></span><button class="ibtn" type="button" aria-label="In đậm"><svg class="i s"><use href="#i-bold"/></svg></button><button class="ibtn" type="button" aria-label="In nghiêng"><svg class="i s"><use href="#i-italic"/></svg></button><button class="ibtn" type="button" aria-label="Danh sách"><svg class="i s"><use href="#i-ul"/></svg></button><button class="ibtn" type="button" aria-label="Chèn thêm"><svg class="i s"><use href="#i-plus"/></svg></button></div>
+          <div class="canvas"><article class="sheetdoc" style="padding:28px 32px"><h1>Quy trình đối soát cuối ngày</h1><h2>1. Chuẩn bị số liệu</h2><p>Trước 16:30, chuyên viên tải sao kê từ cổng ngân hàng đối tác và file giao dịch từ hệ thống lõi.<span class="caret" style="--p:var(--color-person-1)"><b>Lê Quang Vinh</b></span></p></article></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes cxl">
+    <li><span class="cxn">1</span><b>Thẻ người</b>: <code>button</code> thật, nền <code>--color-raised</code>, radius 10, hover một bậc, chọn <code>accent-wash</code>; mở hồ sơ dạng panel nổi như các nhóm khác. Lần đầu vẽ fade lần lượt (chỉ opacity).</li>
+    <li><span class="cxn">2</span><b>Thanh định dạng gọn</b>: nhóm ít dùng (liên kết, ảnh, bảng) vào nút “+”; trang giấy giảm lề còn 32px.</li>
+  </ol>
+</section>
+
+<!-- ============================ MOBILE ============================ -->
+<section class="screen" id="mobile" aria-labelledby="h-mobile">
+  <div class="screen-head">
+    <h2 id="h-mobile">9 · Di động (dưới 768)</h2>
+    <p>Danh bạ là một cột, hồ sơ là sheet; soạn thảo có thanh định dạng trên bàn phím; Giao diện là danh sách tuỳ chọn.</p>
+  </div>
+  <div class="phones">
+    <div class="phone" aria-label="Danh bạ trên điện thoại">
+      <div class="ph-head"><div><h3>Danh bạ</h3><div class="muted" style="font-size:0.75rem">64 người</div></div></div>
+      <div class="pbody">
+        <div class="search"><svg class="i s"><use href="#i-search"/></svg>Tìm người</div>
+        <div class="tbl flush">
+          <a class="tr" href="#mobile" style="grid-template-columns:auto 1fr;min-height:56px"><span class="av" style="--p:var(--color-person-5)">MĐ<span class="on"></span></span><span class="sub2"><b style="font-weight:600">Trần Minh Đức</b><small>Trưởng phòng · Vận hành thanh toán</small></span></a>
+          <a class="tr" href="#mobile" style="grid-template-columns:auto 1fr;min-height:56px"><span class="av" style="--p:var(--color-person-6)">TL<span class="on"></span></span><span class="sub2"><b style="font-weight:600">Nguyễn Thu Lan</b><small>Chuyên viên · Đối soát</small></span></a>
+          <a class="tr" href="#mobile" style="grid-template-columns:auto 1fr;min-height:56px"><span class="av" style="--p:var(--color-person-1)">QV</span><span class="sub2"><b style="font-weight:600">Lê Quang Vinh</b><small>Chuyên viên · Đối soát</small></span></a>
+        </div>
+      </div>
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count">4</span></a><a href="#"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count">2</span></a><a href="#"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#" aria-current="page"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav>
+      <div class="sheetp" aria-label="Hồ sơ" data-cx="1">
+        <span class="grab"></span>
+        <div class="prof"><span class="av s64" style="--p:var(--color-person-5)">MĐ<span class="on"></span></span><b style="font:700 1.0625rem/1.3 var(--font-display)">Trần Minh Đức</b><span class="muted">Trưởng phòng · Vận hành thanh toán</span></div>
+        <div class="actions"><button class="btn primary" type="button" style="flex:1;height:44px"><svg class="i s"><use href="#i-msg"/></svg>Nhắn tin</button><button class="btn" type="button" style="flex:1;height:44px"><svg class="i s"><use href="#i-mail"/></svg>Email</button></div>
+      </div>
+    </div>
+    <div class="phone" aria-label="Soạn thảo trên điện thoại" style="grid-template-rows:auto 1fr auto">
+      <div class="ph-head"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><div style="min-width:0"><h3 class="ell" style="display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px">Quy trình đối soát cuối ngày</h3><div class="muted" style="font-size:0.75rem">Đã lưu · Vinh đang sửa</div></div></div>
+      <div class="pbody"><article class="sheetdoc" style="padding:16px;border-radius:8px"><h2>2. Đối chiếu</h2><p>Chạy mẫu đối chiếu, lọc các giao dịch lệch theo số tiền và thời điểm ghi nhận.<span class="caret" style="--p:var(--color-person-1)"><b>Vinh</b></span></p></article></div>
+      <div class="edbar" role="toolbar" aria-label="Định dạng" style="margin:0;border-radius:0;justify-content:space-between;padding:6px 12px 18px" data-cx="2"><button class="ibtn" type="button" aria-label="In đậm" style="width:44px;height:44px"><svg class="i"><use href="#i-bold"/></svg></button><button class="ibtn" type="button" aria-label="In nghiêng" style="width:44px;height:44px"><svg class="i"><use href="#i-italic"/></svg></button><button class="ibtn" type="button" aria-label="Danh sách" style="width:44px;height:44px"><svg class="i"><use href="#i-ul"/></svg></button><button class="ibtn" type="button" aria-label="Liên kết" style="width:44px;height:44px"><svg class="i"><use href="#i-link"/></svg></button><button class="ibtn" type="button" aria-label="Thêm" style="width:44px;height:44px"><svg class="i"><use href="#i-plus"/></svg></button></div>
+    </div>
+    <div class="phone" aria-label="Giao diện trên điện thoại">
+      <div class="ph-head"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h3>Giao diện</h3></div>
+      <div class="pbody">
+        <div class="label" style="padding-top:8px">Chủ đề</div>
+        <div class="opts" role="radiogroup" aria-label="Chủ đề">
+          <div class="opt on" role="radio" aria-checked="true"><span class="r"></span><span><b>Theo hệ thống</b><span>Đổi theo cài đặt của điện thoại</span></span></div>
+          <div class="opt" role="radio" aria-checked="false"><span class="r"></span><span><b>Sáng</b></span></div>
+          <div class="opt" role="radio" aria-checked="false"><span class="r"></span><span><b>Tối</b></span></div>
+        </div>
+        <div class="srow"><span class="t"><b style="font-weight:600">Giảm chuyển động</b><span>Theo hệ thống</span></span><button class="sw" type="button" role="switch" aria-checked="false" aria-label="Luôn giảm chuyển động" data-act="sw"></button></div>
+      </div>
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count">4</span></a><a href="#"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count">2</span></a><a href="#"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav>
+    </div>
+  </div>
+  <ol class="notes cxl">
+    <li><span class="cxn">1</span><b>Hồ sơ là sheet</b> từ dưới lên (280ms expo, đóng 210ms), kéo xuống để đóng; hai hành động cao 44px.</li>
+    <li><span class="cxn">2</span><b>Thanh định dạng</b> dính trên bàn phím, mỗi nút 44×44; chỉ năm thao tác hay dùng.</li>
+  </ol>
+</section>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  function reduced() { return root.classList.contains('reduce') || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  function replay(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function exitThen(el, cls, done) {
+    if (reduced()) { done(); return; }
+    el.classList.add(cls);
+    el.addEventListener('animationend', function h(e) { if (e.target !== el) return; el.removeEventListener('animationend', h); el.classList.remove(cls); done(); });
+  }
+  function frag(html) { var t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+  /* row insert = height grow 220ms expo (FLIP stand-in), row delete = fade + collapse 160ms ease-in (DESIGN.md §7) */
+  function insertAnimated(parent, html, before) {
+    var wrap = document.createElement('div'); wrap.className = 'ins';
+    var inner = frag(html); wrap.appendChild(inner);
+    if (before) parent.insertBefore(wrap, before); else parent.appendChild(wrap);
+    var done = function () { if (wrap.parentNode) wrap.parentNode.replaceChild(inner, wrap); };
+    if (reduced()) { done(); return inner; }
+    wrap.addEventListener('animationend', function h(e) { if (e.target !== wrap) return; wrap.removeEventListener('animationend', h); done(); });
+    return inner;
+  }
+  function removeAnimated(el, after) {
+    if (!el || !el.parentNode) return;
+    var wrap = document.createElement('div'); wrap.className = 'del';
+    el.parentNode.replaceChild(wrap, el); wrap.appendChild(el);
+    var finish = function () { if (wrap.parentNode) wrap.parentNode.removeChild(wrap); if (after) after(); };
+    if (reduced()) { finish(); return; }
+    wrap.addEventListener('animationend', function h(e) { if (e.target !== wrap) return; wrap.removeEventListener('animationend', h); finish(); });
+  }
+  /* realtime identity: wash in the author's person hue for --rt-total (2400ms), avatar halo 900ms */
+  function trace(el, n, tagText, tagHost) {
+    el.style.setProperty('--p', 'var(--color-person-' + n + ')');
+    el.style.setProperty('--pw', 'var(--color-person-' + n + '-wash)');
+    if (tagText) {
+      var host = tagHost || el; var old = host.querySelector('.tag'); if (old) old.remove();
+      host.insertAdjacentHTML('beforeend', '<span class="tag" style="--p:var(--color-person-' + n + ');color:var(--color-person-' + n + ');font-size:0.75rem;font-weight:600;margin-left:6px">' + tagText + '</span>');
+      setTimeout(function () { var t = host.querySelector('.tag'); if (t) t.remove(); }, 2400);
+    }
+    replay(el, 'rt');
+  }
+  function toast(box, html, ms) {
+    var t = frag('<div class="toast enter">' + html + '</div>');
+    box.appendChild(t);
+    while (box.children.length > 3) box.removeChild(box.firstElementChild);
+    setTimeout(function () { exitThen(t, 'exit', function () { t.remove(); }); }, ms || 5000);
+    return t;
+  }
+  function openModal(id) { var m = document.getElementById(id); m.hidden = false; replay(m, 'enter'); var f = m.querySelector('[data-autofocus]') || m.querySelector('button, [tabindex]'); if (f) f.focus(); }
+  function closeModal(id, after) { var m = document.getElementById(id); m.classList.remove('enter'); exitThen(m, 'exit', function () { m.hidden = true; if (after) after(); }); }
+  function togglePanel(appId, panelId, closedCls) {
+    var app = document.getElementById(appId), d = document.getElementById(panelId), c = closedCls || 'detail-closed';
+    if (app.classList.contains(c)) { app.classList.remove(c); replay(d, 'enter'); }
+    else { d.classList.remove('enter'); exitThen(d, 'exit', function () { app.classList.add(c); }); }
+  }
+  /* callouts: every [data-cx] target gets a numbered dot at its top-left corner, positioned inside its frame */
+  function placeCx() {
+    document.querySelectorAll('.cx.auto').forEach(function (n) { n.remove(); });
+    document.querySelectorAll('[data-cx]').forEach(function (t) {
+      var f = t.closest('.app, .tablet, .phone, .auth'); if (!f) return;
+      var r = t.getBoundingClientRect(); if (!r.width && !r.height) return;
+      var fr = f.getBoundingClientRect();
+      var s = document.createElement('span'); s.className = 'cx auto'; s.setAttribute('aria-hidden', 'true'); s.textContent = t.getAttribute('data-cx');
+      s.style.top = Math.max(2, Math.min(fr.height - 22, r.top - fr.top - 8)) + 'px';
+      s.style.left = Math.max(2, Math.min(fr.width - 22, r.left - fr.left - 8)) + 'px';
+      f.appendChild(s);
+    });
+  }
+  window.addEventListener('load', placeCx); window.addEventListener('resize', placeCx);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeCx);
+  document.addEventListener('click', function () { setTimeout(placeCx, 320); });
+  window.MK = { placeCx: placeCx, reduced: reduced, replay: replay, exitThen: exitThen, frag: frag, insertAnimated: insertAnimated, removeAnimated: removeAnimated, trace: trace, toast: toast, openModal: openModal, closeModal: closeModal, togglePanel: togglePanel,
+    OK: '<svg class="i ok"><use href="#i-ok"/></svg>', BAD: '<svg class="i bad"><use href="#i-alert"/></svg>' };
+  window.ACTIONS = window.ACTIONS || {};
+  var qs = /[?&]theme=(light|dark)/.exec(location.search); if (qs) root.setAttribute('data-theme', qs[1]);
+
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-theme-set');
+      if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+      document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o.getAttribute('data-theme-set') === v)); });
+    });
+  });
+  var rd = document.getElementById('reduce'); if (rd) rd.addEventListener('change', function () { root.classList.toggle('reduce', rd.checked); });
+  var cx = document.getElementById('cxs'); if (cx) cx.addEventListener('change', function () { root.classList.toggle('no-cx', !cx.checked); });
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]'); if (!b) return;
+    var f = window.ACTIONS[b.getAttribute('data-act')]; if (f) { e.preventDefault(); f(b); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    document.querySelectorAll('[data-esc]').forEach(function (el) {
+      if (el.hidden) return; var f = window.ACTIONS[el.getAttribute('data-esc')]; if (f) f(el);
+    });
+  });
+})();
+
+</script>
+<script>
+(function () {
+  var M = window.MK, A = window.ACTIONS, root = document.documentElement;
+  A['ct-online'] = function () {
+    var av = document.getElementById('ct-vinh-av'); if (av.querySelector('.on')) return;
+    av.insertAdjacentHTML('beforeend', '<span class="on fade-in"></span>');
+    var st = document.querySelector('#ct-vinh [data-st]'); st.innerHTML = '<span class="pill ok" style="animation:fade var(--duration-base) var(--ease-out) both">Trực tuyến</span>';
+  };
+  A['ct-panel'] = function () { M.togglePanel('app-ct', 'ct-detail'); };
+  A['dc-upload'] = function () {
+    var tb = document.getElementById('dc-table');
+    var row = M.insertAnimated(tb, '<div class="tr" role="row"><span class="nm"><span class="ficon pdf"><svg class="i"><use href="#i-doc"/></svg></span><span class="sub2"><span class="ell">sao-ke-ngan-hang-10-2026.pdf</span><span class="prog" aria-label="Tiến độ tải lên"><i style="transform:scaleX(0.1)"></i></span></span></span><span class="chip"><span class="av s20" style="--p:var(--color-person-7)">TH</span><span class="nm">Lê Thị Hoa</span></span><span class="muted" data-st>Đang tải lên</span><span class="r t" data-when>10%</span></div>', tb.children[1]);
+    var bar = row.querySelector('.prog i'), pct = 10;
+    var tick = setInterval(function () {
+      pct = Math.min(100, pct + 30); bar.style.transform = 'scaleX(' + pct / 100 + ')'; row.querySelector('[data-when]').textContent = pct + '%';
+      if (pct >= 100) {
+        clearInterval(tick);
+        setTimeout(function () {
+          row.querySelector('.prog').remove(); row.querySelector('[data-st]').outerHTML = '<span><span class="pill ok">Đang dùng</span></span>';
+          row.querySelector('[data-when]').textContent = 'Vừa xong';
+          M.toast(document.getElementById('dc-toasts'), M.OK + '<span>Đã tải lên sao-ke-ngan-hang-10-2026.pdf</span><button class="btn ghost sm" type="button">Mở</button>', 4000);
+        }, 240);
+      }
+    }, 450);
+  };
+  A['dc-other'] = function () {
+    var row = document.getElementById('dc-row-sla');
+    row.querySelector('[data-when]').textContent = 'Vừa xong';
+    M.trace(row, 6, 'Lan vừa sửa', row.querySelector('.nm'));
+  };
+  var edc = 0;
+  A['ed-type'] = function () {
+    var p = document.getElementById('ed-p2'), c = document.getElementById('ed-caret');
+    var s = document.createElement('span'); s.className = 'hlp'; s.style.setProperty('--pw', 'var(--color-person-1-wash)');
+    s.textContent = [' Biên bản phải có chữ ký của trưởng phòng.', ' Gửi bản scan lên thư mục Chứng từ gốc.'][edc++ % 2];
+    p.insertBefore(s, c);
+    var sv = document.getElementById('ed-saved'); sv.innerHTML = '<svg class="i s"><use href="#i-refresh"/></svg>Đang lưu…';
+    document.getElementById('ed-typing').innerHTML = '<span class="av s20" style="--p:var(--color-person-1)">QV</span>Vinh đang gõ';
+    s.style.transition = 'background-color 1440ms var(--ease-out) 960ms';
+    requestAnimationFrame(function () { requestAnimationFrame(function () { s.style.backgroundColor = 'transparent'; }); });
+    setTimeout(function () { sv.innerHTML = '<svg class="i s"><use href="#i-cloud"/></svg>Đã lưu 09:42'; document.getElementById('ed-typing').textContent = ''; }, 1400);
+  };
+  A['ed-offline'] = function () {
+    var b = document.getElementById('ed-banner'), sv = document.getElementById('ed-saved');
+    b.classList.remove('ok'); b.innerHTML = '<svg class="i s"><use href="#i-wifi-off"/></svg><span>Đang kết nối lại… Bạn vẫn gõ được; thay đổi sẽ lưu khi có mạng.</span>';
+    b.classList.remove('show'); void b.offsetWidth; b.classList.add('show');
+    sv.innerHTML = '<svg class="i s" style="color:var(--color-warning)"><use href="#i-wifi-off"/></svg>Chưa lưu, đang chờ mạng';
+    setTimeout(function () {
+      b.classList.add('ok'); b.innerHTML = '<svg class="i s"><use href="#i-ok"/></svg><span>Đã cập nhật</span>';
+      sv.innerHTML = '<svg class="i s"><use href="#i-cloud"/></svg>Đã lưu 09:43';
+      setTimeout(function () { b.classList.remove('show', 'ok'); }, 2000);
+    }, 3000);
+  };
+  A['pf-error'] = function () {
+    var n = document.getElementById('pf-name'); n.textContent = ''; n.classList.add('err');
+    var h = document.getElementById('pf-name-h'); h.className = 'msg-err'; h.innerHTML = '<svg class="i s"><use href="#i-alert"/></svg>Nhập tên để mọi người nhận ra bạn.';
+  };
+  A['pf-save'] = function () {
+    var n = document.getElementById('pf-name');
+    if (!n.textContent.trim()) { A['pf-error'](); return; }
+    M.toast(document.getElementById('pf-toasts'), M.OK + '<span>Đã lưu hồ sơ</span>', 4000);
+  };
+  A['pf-fix'] = function () {};
+  A['sw'] = function (b) { b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true')); };
+  document.querySelectorAll('[data-theme-card]').forEach(function (card) {
+    card.addEventListener('click', function () {
+      var v = card.getAttribute('data-theme-card');
+      document.querySelectorAll('[data-theme-card]').forEach(function (c) { c.setAttribute('aria-checked', String(c === card)); });
+      var seg = document.querySelector('[data-theme-set="' + v + '"]'); if (seg) seg.click();
+    });
+  });
+})();
+</script>
