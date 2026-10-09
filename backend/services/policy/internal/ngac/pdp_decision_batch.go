@@ -2,7 +2,6 @@ package ngac
 
 import (
 	"context"
-	"log/slog"
 )
 
 // BatchAccessRequest asks one question about many objects for a single user.
@@ -25,13 +24,11 @@ type BatchAccessRequest struct {
 //     CheckAccessBatch) instead of once per object;
 //   - the user's prohibition subjects are collected once instead of once per
 //     object;
-//   - prohibitions are queried once per operation instead of once per
+//   - prohibitions are looked up once per operation instead of once per
 //     (object, operation) pair.
 //
-// The last two matter most. Prohibition checking runs on the ALLOW path, which
-// is the common one for a list the user can mostly see, and it previously
-// re-walked the user's ancestors and re-queried the prohibition store for every
-// single item on the page.
+// Prohibitions are read from the in-memory graph; the batch path touches the
+// database only for the CTE fallback.
 func (e *decisionEngine) DecideBatch(ctx context.Context, req BatchAccessRequest) map[string]map[string]bool {
 	graph := e.resolveGraph(ctx, AccessRequest{
 		UserNodeID:  req.UserNodeID,
@@ -41,7 +38,7 @@ func (e *decisionEngine) DecideBatch(ctx context.Context, req BatchAccessRequest
 	results := graph.CheckAccessBatch(req.UserNodeID, req.ObjectNodeIDs, req.Operations)
 
 	e.applyCTEFallbackBatch(ctx, graph, req, results)
-	e.applyProhibitionsBatch(ctx, graph, req, results)
+	e.applyProhibitionsBatch(graph, req, results)
 
 	return results
 }
@@ -88,12 +85,8 @@ func (e *decisionEngine) applyCTEFallbackBatch(
 // Prohibitions are deny-overrides evaluated after the traversal, never an
 // independent grant, so this only ever flips true to false.
 func (e *decisionEngine) applyProhibitionsBatch(
-	ctx context.Context, graph GraphReader, req BatchAccessRequest, results map[string]map[string]bool,
+	graph GraphReader, req BatchAccessRequest, results map[string]map[string]bool,
 ) {
-	if e.prohibitions == nil {
-		return
-	}
-
 	// Any ALLOW at all? If the whole page is denied there is nothing to override.
 	anyAllowed := false
 	for _, perms := range results {
@@ -119,23 +112,13 @@ func (e *decisionEngine) applyProhibitionsBatch(
 		}
 	}
 
-	// Queried once per operation rather than once per (object, operation).
-	// Most deployments hold few or no prohibitions, so this usually returns
-	// nothing and the per-object work below is skipped entirely.
+	// Looked up once per operation (an in-memory index read) rather than once
+	// per (object, operation). Most deployments hold few or no prohibitions, so
+	// this usually returns nothing and the per-object work below is skipped.
 	perOperation := make(map[string][]*Prohibition, len(req.Operations))
 	anyProhibition := false
 	for _, op := range req.Operations {
-		found, err := e.prohibitions.FindForSubjects(ctx, subjectIDs, op)
-		if err != nil {
-			// Fail closed: a prohibition that cannot be read might be the one
-			// that denies this request, so nothing may be reported as allowed.
-			slog.Error("prohibition lookup failed; denying the batch",
-				"user_node_id", req.UserNodeID, "operation", op, "error", err)
-			for _, perms := range results {
-				perms[op] = false
-			}
-			continue
-		}
+		found := e.graph.ProhibitionsForSubjects(subjectIDs, op)
 		if len(found) > 0 {
 			anyProhibition = true
 		}

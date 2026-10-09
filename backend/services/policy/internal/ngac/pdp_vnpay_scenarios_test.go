@@ -342,12 +342,12 @@ func TestCH05_DM_OnlyTwoUsers(t *testing.T) {
 // among the object's containers — even though the association still grants it.
 func TestPH01_ProhibitionUnion_DenyAny(t *testing.T) {
 	g := buildVNPayGraph()
-	store := &fakeProhibitions{items: []*ngac.Prohibition{{
+	require.NoError(t, g.AddProhibition(&ngac.Prohibition{
 		ID: "p1", Name: "block-drive-writes", SubjectID: "ngac-hoangnlv",
 		Operations: []string{"write"}, TargetOAIDs: []string{"oa-dvnh-drive", "oa-not-in-graph"},
 		Intersection: false,
-	}}}
-	engine := ngac.NewDecisionEngine(g, nil, store)
+	}))
+	engine := ngac.NewDecisionEngine(g, nil)
 	decide := func(object, op string) *ngac.AccessDecision {
 		return engine.Decide(context.Background(), ngac.AccessRequest{
 			UserNodeID: "ngac-hoangnlv", ObjectNodeID: object, Operation: op,

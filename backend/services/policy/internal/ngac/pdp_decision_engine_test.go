@@ -83,7 +83,7 @@ func TestDecide_ShardRouting(t *testing.T) {
 	sm := newMockShardManager()
 	sm.shards["ws-alpha"] = shardGraph
 
-	engine := ngac.NewDecisionEngine(globalGraph, nil, nil)
+	engine := ngac.NewDecisionEngine(globalGraph, nil)
 	setShardManager(engine, sm)
 
 	result := engine.Decide(context.Background(), ngac.AccessRequest{
@@ -112,7 +112,7 @@ func TestDecide_GlobalFallback(t *testing.T) {
 
 	sm := newMockShardManager() // empty — shard miss
 
-	engine := ngac.NewDecisionEngine(globalGraph, nil, nil)
+	engine := ngac.NewDecisionEngine(globalGraph, nil)
 	setShardManager(engine, sm)
 
 	result := engine.Decide(context.Background(), ngac.AccessRequest{
@@ -150,7 +150,7 @@ func TestDecide_CrossTenantIsolation(t *testing.T) {
 	sm.shards["ws-a"] = shardA
 	sm.shards["ws-b"] = shardB
 
-	engine := ngac.NewDecisionEngine(globalGraph, nil, nil)
+	engine := ngac.NewDecisionEngine(globalGraph, nil)
 	setShardManager(engine, sm)
 
 	resultA := engine.Decide(context.Background(), ngac.AccessRequest{
@@ -179,7 +179,7 @@ func TestDecide_NoWorkspaceID_UsesGlobalGraph(t *testing.T) {
 	globalGraph.AddAssociation(&ngac.Association{ID: "assoc-g", UAID: "ua-all", OAID: "oa-all", Operations: []string{"read"}})
 
 	sm := newMockShardManager()
-	engine := ngac.NewDecisionEngine(globalGraph, nil, nil)
+	engine := ngac.NewDecisionEngine(globalGraph, nil)
 	setShardManager(engine, sm)
 
 	result := engine.Decide(context.Background(), ngac.AccessRequest{
@@ -271,7 +271,7 @@ func TestCrossTenant_UserInBothWorkspaces(t *testing.T) {
 	sm.shards["ws-1"] = ws1
 	sm.shards["ws-2"] = ws2
 
-	engine := ngac.NewDecisionEngine(globalGraph, nil, nil)
+	engine := ngac.NewDecisionEngine(globalGraph, nil)
 	setShardManager(engine, sm)
 
 	// WS-1: write → ALLOW (owner)

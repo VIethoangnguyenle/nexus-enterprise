@@ -3,7 +3,6 @@ package ngac_test
 import (
 	"context"
 	"os"
-	"slices"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -12,38 +11,6 @@ import (
 
 	"ngac-platform/services/policy/internal/ngac"
 )
-
-// fakeProhibitions is an in-memory ProhibitionFinder with the same matching
-// rule as the real store: subject_id ∈ subjectIDs AND operation ∈ operations.
-type fakeProhibitions struct {
-	mu    sync.Mutex
-	items []*ngac.Prohibition
-	err   error // returned instead of results when set
-
-	calls atomic.Int64
-}
-
-func (f *fakeProhibitions) FindForSubjects(_ context.Context, subjectIDs []string, operation string) ([]*ngac.Prohibition, error) {
-	f.calls.Add(1)
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	if f.err != nil {
-		return nil, f.err
-	}
-	var out []*ngac.Prohibition
-	for _, p := range f.items {
-		if slices.Contains(subjectIDs, p.SubjectID) && slices.Contains(p.Operations, operation) {
-			out = append(out, p)
-		}
-	}
-	return out, nil
-}
-
-func (f *fakeProhibitions) setErr(err error) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.err = err
-}
 
 // fakeCTE is a CTEChecker that answers from a fixed table.
 type fakeCTE struct {

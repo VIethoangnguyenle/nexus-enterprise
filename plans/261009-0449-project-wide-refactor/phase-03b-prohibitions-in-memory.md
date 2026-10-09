@@ -1,7 +1,7 @@
 ---
 phase: 3b
 title: "Prohibitions in the in-memory graph"
-status: pending
+status: done
 priority: P2
 effort: 1-2d
 dependencies: [1]

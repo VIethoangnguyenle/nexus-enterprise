@@ -19,9 +19,8 @@ const (
 
 	// Fail-closed reasons: evaluation could not complete, so the request is
 	// denied. Decisions carrying these are error-derived and never cached.
-	DenyReasonProhibitionCheckFailed = "prohibition_check_failed"
-	DenyReasonCTEFallbackFailed      = "cte_fallback_failed"
-	DenyReasonEvaluationAborted      = "evaluation_aborted"
+	DenyReasonCTEFallbackFailed = "cte_fallback_failed"
+	DenyReasonEvaluationAborted = "evaluation_aborted"
 )
 
 // Decision outcomes — used across PDP, cache, and gRPC layers.

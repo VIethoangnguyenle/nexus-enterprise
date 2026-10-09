@@ -188,7 +188,7 @@ func TestReplicaRefresh_ReplicaStopsAllowingAfterRevocation(t *testing.T) {
 	// The replica loads its own graph, as policy-read does at startup.
 	replica := ngac.NewStore(pool, ngac.NewGraph())
 	require.NoError(t, replica.LoadGraph(ctx))
-	engine := ngac.NewDecisionEngine(replica.GetGraph(), nil, nil)
+	engine := ngac.NewDecisionEngine(replica.GetGraph(), nil)
 	req := ngac.AccessRequest{UserNodeID: user.ID, ObjectNodeID: oa.ID, Operation: "read"}
 	require.Equal(t, ngac.DecisionAllow, engine.Decide(ctx, req).Decision)
 

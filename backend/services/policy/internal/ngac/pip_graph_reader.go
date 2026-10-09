@@ -14,6 +14,7 @@ type GraphReader interface {
 	GetNodesByType(nodeType string) []*NGACNode
 	GetAssociationsFromUA(uaID string) []*Association
 	IsAssigned(childID, parentID string) bool
+	ProhibitionsForSubjects(subjectIDs []string, operation string) []*Prohibition
 	CheckAccess(userID, objectID, operation string) *AccessDecision
 	CheckAccessBatch(userID string, objectIDs, operations []string) map[string]map[string]bool
 }

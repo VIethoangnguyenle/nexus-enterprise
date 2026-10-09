@@ -2,6 +2,8 @@ package ngac
 
 import (
 	"fmt"
+	"slices"
+	"sort"
 	"sync"
 )
 
@@ -26,6 +28,13 @@ type Graph struct {
 	uaToAssociations map[string][]*Association  // uaID -> associations from this UA
 	oaToAssociations map[string][]*Association  // oaID -> associations to this OA
 	nameTypeIndex    map[string]*NGACNode       // "name\x00type" -> node for O(1) lookup
+
+	// Prohibitions live with the graph so the PDP never queries the database
+	// for them, and so ReloadGraph swaps them in together with the nodes they
+	// refer to. Stored values are private copies and must be treated as
+	// read-only by everyone who receives them.
+	prohibitions          map[string]*Prohibition   // name -> prohibition
+	prohibitionsBySubject map[string][]*Prohibition // subjectID -> prohibitions (sorted by name)
 }
 
 func NewGraph() *Graph {
@@ -38,6 +47,9 @@ func NewGraph() *Graph {
 		uaToAssociations: make(map[string][]*Association),
 		oaToAssociations: make(map[string][]*Association),
 		nameTypeIndex:    make(map[string]*NGACNode),
+
+		prohibitions:          make(map[string]*Prohibition),
+		prohibitionsBySubject: make(map[string][]*Prohibition),
 	}
 }
 
@@ -220,6 +232,35 @@ func (g *Graph) IsAssigned(childID, parentID string) bool {
 		return parents[parentID]
 	}
 	return false
+}
+
+// ProhibitionsForSubjects returns the prohibitions whose subject is one of
+// subjectIDs (a user and its UA ancestors) and that cover operation, ordered by
+// name so the prohibition reported for a denial is deterministic. The returned
+// values are shared with the graph: read-only.
+func (g *Graph) ProhibitionsForSubjects(subjectIDs []string, operation string) []*Prohibition {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+
+	var out []*Prohibition
+	for _, id := range subjectIDs {
+		for _, p := range g.prohibitionsBySubject[id] {
+			if slices.Contains(p.Operations, operation) {
+				out = append(out, p)
+			}
+		}
+	}
+	if len(out) > 1 {
+		sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	}
+	return out
+}
+
+// ProhibitionCount returns how many prohibitions are loaded.
+func (g *Graph) ProhibitionCount() int {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return len(g.prohibitions)
 }
 
 // --- PDP support: BFS helpers used by pdp_access.go ---

@@ -8,19 +8,57 @@ or remembered as, an answer.
 ## Requirements
 
 ### Requirement: Evaluation failures deny and are never cached
-When any part of a decision cannot be evaluated (the prohibition lookup, the CTE fallback for an
-OA not in memory, or the shared computation itself), the PDP SHALL return DENY. Such a decision
+When any part of a decision cannot be evaluated (the CTE fallback for an OA not in memory, or the
+shared computation itself), the PDP SHALL return DENY. Such a decision
 SHALL be marked error-derived and SHALL NOT be written to the Redis decision cache or the
 materialized cache. The single and batch paths SHALL agree.
 
-#### Scenario: Prohibition store errors on an otherwise allowed request
-- **WHEN** the caller holds a matching association but the prohibition lookup fails
+#### Scenario: CTE fallback errors on an otherwise allowed request
+- **WHEN** the object is not in the in-memory graph and the CTE query fails
 - **THEN** the decision is DENY
-- **AND** the next request after the store recovers is evaluated afresh, not served from cache
+- **AND** the next request after the database recovers is evaluated afresh, not served from cache
+
+### Requirement: Prohibitions are evaluated from memory
+Prohibitions SHALL be loaded into the in-memory graph with it (`LoadGraph`, `ReloadGraph`) and
+swapped in atomically together with it. The PDP SHALL evaluate them from the global graph and
+SHALL NOT query the database for them. Decision order is unchanged: prohibitions are deny-overrides
+applied only to an ALLOW, and the default is DENY. A reload that fails, including one that cannot
+read prohibitions, SHALL leave the previous graph and prohibitions in place.
 
 #### Scenario: Prohibition matches despite an association
-- **WHEN** a prohibition on the caller covers the target and operation
+- **WHEN** a prohibition on the caller (or one of its user attributes) covers the target and operation
 - **THEN** the decision is DENY on both the single and the batch path
+
+#### Scenario: Prohibition does not match
+- **WHEN** a prohibition names another subject, another operation, or targets not among the object's containers
+- **THEN** the ALLOW from the association stands
+
+#### Scenario: Allow path does not touch the database
+- **WHEN** an ALLOW is decided for an object in the in-memory graph
+- **THEN** no database connection is used
+
+#### Scenario: Prohibition on a DENY
+- **WHEN** the graph already denies the request
+- **THEN** the decision is the graph's DENY and carries no prohibition denial
+
+### Requirement: Prohibition mutations write the database before memory and reach every replica
+Creating or removing a prohibition SHALL write the database first, update the writer's in-memory
+graph only after that write succeeds, then invalidate caches and publish `ngac.graph.mutated`
+(`create_prohibition` / `remove_prohibition`). Each replica SHALL reload its graph, prohibitions
+included, on that event.
+
+#### Scenario: Prohibition created on the writer
+- **WHEN** a prohibition is created through the writer
+- **THEN** the writer denies at once
+- **AND** `policy-read` denies after applying the event, without a restart
+
+#### Scenario: Prohibition removed on the writer
+- **WHEN** that prohibition is removed through the writer
+- **THEN** the ALLOW returns on the writer at once and on `policy-read` after the event
+
+#### Scenario: Database write fails
+- **WHEN** creating or removing a prohibition fails in the database
+- **THEN** the in-memory prohibitions are unchanged
 
 ### Requirement: Shared evaluations do not inherit a caller's cancellation
 Concurrent identical requests MAY share one evaluation. That evaluation SHALL run on its own

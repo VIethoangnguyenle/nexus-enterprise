@@ -18,49 +18,36 @@ type DecisionEngine interface {
 	Decide(ctx context.Context, req AccessRequest) *AccessDecision
 }
 
-// ProhibitionFinder is the read side of the prohibition store the PDP needs.
-// *ProhibitionStore implements it; tests substitute fakes.
-type ProhibitionFinder interface {
-	FindForSubjects(ctx context.Context, subjectIDs []string, operation string) ([]*Prohibition, error)
-}
-
 // CTEChecker answers an access question with the SQL recursive-CTE fallback,
 // for objects that are not in the in-memory graph. *CTEEvaluator implements it.
 type CTEChecker interface {
 	CheckAccess(ctx context.Context, userNodeID, objectNodeID, operation string) (bool, error)
 }
 
-// Compile-time checks: the concrete stores satisfy the PDP's dependencies.
-var (
-	_ ProhibitionFinder = (*ProhibitionStore)(nil)
-	_ CTEChecker        = (*CTEEvaluator)(nil)
-)
+// Compile-time check: the concrete store satisfies the PDP's dependency.
+var _ CTEChecker = (*CTEEvaluator)(nil)
 
 // decisionEngine implements DecisionEngine using BFS traversal,
 // CTE SQL fallback, shard-based evaluation, and prohibition evaluation.
 type decisionEngine struct {
-	graph        GraphReader
+	graph        GraphReader // global graph; also the source of prohibitions
 	cte          CTEChecker
-	prohibitions ProhibitionFinder
 	shardManager ShardManager
 }
 
-// NewDecisionEngine creates a PDP engine with graph reader, CTE fallback, and prohibition evaluation.
-// cte and prohibitions may be nil to disable that step.
-func NewDecisionEngine(graph GraphReader, cte CTEChecker, prohibitions ProhibitionFinder) DecisionEngine {
+// NewDecisionEngine creates a PDP engine with graph reader and CTE fallback.
+// cte may be nil to disable that step.
+//
+// Prohibitions are read from graph (loaded with it, see Store.LoadGraph), never
+// from the database, so graph must be the global graph the prohibitions were
+// loaded into: shard graphs carry none.
+func NewDecisionEngine(graph GraphReader, cte CTEChecker) DecisionEngine {
 	// A typed nil pointer inside an interface is not == nil; normalise it so the
-	// "step disabled" checks cannot be fooled into calling through a nil store.
+	// "step disabled" check cannot be fooled into calling through a nil store.
 	if c, ok := cte.(*CTEEvaluator); ok && c == nil {
 		cte = nil
 	}
-	if p, ok := prohibitions.(*ProhibitionStore); ok && p == nil {
-		prohibitions = nil
-	}
-	return &decisionEngine{
-		graph:        graph,
-		cte:          cte,
-		prohibitions: prohibitions,
-	}
+	return &decisionEngine{graph: graph, cte: cte}
 }
 
 // SetShardManager enables shard-based graph evaluation.
@@ -86,18 +73,9 @@ func (e *decisionEngine) Decide(ctx context.Context, req AccessRequest) *AccessD
 	// Step 3: CTE fallback for O nodes (not loaded into in-memory graph)
 	e.tryCTEFallback(ctx, req, decision)
 
-	// Step 4: Prohibition check: if BFS says ALLOW, check for deny overrides.
-	if decision.Decision == DecisionAllow && e.prohibitions != nil {
-		denied, prohibName, subjectID, err := e.checkProhibitions(ctx, req, graph)
-		switch {
-		case err != nil:
-			// Fail closed, consistent with the batch path: a prohibition that
-			// cannot be read might be the one that denies this request.
-			slog.Error("prohibition lookup failed; denying",
-				"user_node_id", req.UserNodeID, "object_node_id", req.ObjectNodeID,
-				"operation", req.Operation, "error", err)
-			decision.failClosed(DenyReasonProhibitionCheckFailed, err)
-		case denied:
+	// Step 4: Prohibition check (in memory): if BFS says ALLOW, check for deny overrides.
+	if decision.Decision == DecisionAllow {
+		if denied, prohibName, subjectID := e.checkProhibitions(req, graph); denied {
 			decision.Decision = DecisionDeny
 			decision.Explanation.Reason = fmt.Sprintf("Denied by prohibition %q", prohibName)
 			decision.Explanation.ProhibitionDenied = &ProhibitionDenial{
@@ -166,43 +144,35 @@ func (e *decisionEngine) resolveGraph(ctx context.Context, req AccessRequest) Gr
 }
 
 // checkProhibitions evaluates all applicable prohibitions for an access request.
-// The graph parameter must be the same resolved graph used for BFS evaluation
-// to prevent prohibition bypass when nodes exist only in a shard.
-//
-// A non-nil error means the prohibitions could not be evaluated; the caller
-// must treat that as DENY, never as "no prohibition".
-func (e *decisionEngine) checkProhibitions(ctx context.Context, req AccessRequest, graph GraphReader) (bool, string, string, error) {
+// graph must be the resolved graph used for BFS evaluation (its ancestors define
+// the subject and target sets, so nodes that exist only in a shard are covered);
+// the prohibitions themselves come from the global graph.
+func (e *decisionEngine) checkProhibitions(req AccessRequest, graph GraphReader) (bool, string, string) {
 	// Step 1: Collect user + all UA ancestors (prohibition subjects)
 	subjectIDs := []string{req.UserNodeID}
-	ancestors := graph.GetAncestors(req.UserNodeID)
-	for id, node := range ancestors {
+	for id, node := range graph.GetAncestors(req.UserNodeID) {
 		if node.NodeType == NodeTypeUserAttribute {
 			subjectIDs = append(subjectIDs, id)
 		}
 	}
 
-	// Step 2: Query prohibitions matching subjects + operation
-	prohibitions, err := e.prohibitions.FindForSubjects(ctx, subjectIDs, req.Operation)
-	if err != nil {
-		return false, "", "", fmt.Errorf("query prohibitions: %w", err)
-	}
+	// Step 2: Prohibitions matching subjects + operation, from memory
+	prohibitions := e.graph.ProhibitionsForSubjects(subjectIDs, req.Operation)
 	if len(prohibitions) == 0 {
-		return false, "", "", nil
+		return false, "", ""
 	}
 
 	// Step 3: Collect object's OA ancestors (prohibition targets)
 	objectOAIDs := make(map[string]bool)
 	objectOAIDs[req.ObjectNodeID] = true // include self
-	objAncestors := graph.GetAncestors(req.ObjectNodeID)
-	for id, node := range objAncestors {
+	for id, node := range graph.GetAncestors(req.ObjectNodeID) {
 		if node.NodeType == NodeTypeObjectAttr {
 			objectOAIDs[id] = true
 		}
 	}
 
 	// Step 4: Match prohibitions against object's OA set
-	denied, name, subject := matchProhibitions(prohibitions, objectOAIDs)
-	return denied, name, subject, nil
+	return matchProhibitions(prohibitions, objectOAIDs)
 }
 
 // --- PDP: Prohibition matching logic ---

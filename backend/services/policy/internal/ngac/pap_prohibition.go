@@ -19,17 +19,26 @@ type Prohibition struct {
 	Intersection bool     // true=ALL targets must match, false=ANY target
 }
 
-// ProhibitionStore manages prohibition CRUD in the database.
+// ProhibitionStore manages prohibition CRUD in the database and keeps the
+// in-memory graph the PDP evaluates against in step with it.
+//
+// Writes go to the database first and to memory only after the database
+// accepted them, so a failed write never leaves this process enforcing (or
+// ignoring) a rule the rest of the system does not see. Publishing the EPP
+// graph-mutation event and invalidating caches stays with the caller.
 type ProhibitionStore struct {
-	pool *pgxpool.Pool
+	pool  *pgxpool.Pool
+	graph *Graph // may be nil: database-only use (tools, tests)
 }
 
-// NewProhibitionStore creates a new ProhibitionStore.
-func NewProhibitionStore(pool *pgxpool.Pool) *ProhibitionStore {
-	return &ProhibitionStore{pool: pool}
+// NewProhibitionStore creates a ProhibitionStore. graph is the in-memory graph
+// to update on Create/Remove; pass the one the decision engine reads.
+func NewProhibitionStore(pool *pgxpool.Pool, graph *Graph) *ProhibitionStore {
+	return &ProhibitionStore{pool: pool, graph: graph}
 }
 
-// Create inserts a new prohibition. Returns error if name already exists.
+// Create inserts a new prohibition, then loads it into memory.
+// Returns error if name already exists.
 func (s *ProhibitionStore) Create(ctx context.Context, p *Prohibition) (*Prohibition, error) {
 	if p.Name == "" {
 		return nil, fmt.Errorf("prohibition name is required")
@@ -54,11 +63,19 @@ func (s *ProhibitionStore) Create(ctx context.Context, p *Prohibition) (*Prohibi
 	}
 
 	p.ID = id
+	if s.graph != nil {
+		if err := s.graph.AddProhibition(p); err != nil {
+			// Unreachable after the validation above; if it ever happens the
+			// database holds a rule memory lacks, so say so loudly.
+			return nil, fmt.Errorf("loading prohibition %q into memory (stored in database): %w", p.Name, err)
+		}
+	}
 	slog.Info("prohibition created", "name", p.Name, "subject", p.SubjectID, "ops", p.Operations)
 	return p, nil
 }
 
-// Remove deletes a prohibition by name. Returns error if not found.
+// Remove deletes a prohibition by name from the database, then from memory.
+// Returns error if not found.
 func (s *ProhibitionStore) Remove(ctx context.Context, name string) error {
 	tag, err := s.pool.Exec(ctx, `DELETE FROM ngac_prohibitions WHERE name = $1`, name)
 	if err != nil {
@@ -66,6 +83,9 @@ func (s *ProhibitionStore) Remove(ctx context.Context, name string) error {
 	}
 	if tag.RowsAffected() == 0 {
 		return fmt.Errorf("prohibition %q not found", name)
+	}
+	if s.graph != nil {
+		s.graph.RemoveProhibition(name)
 	}
 	slog.Info("prohibition removed", "name", name)
 	return nil
@@ -101,34 +121,6 @@ func (s *ProhibitionStore) List(ctx context.Context, subjectID string) ([]*Prohi
 	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("listing prohibitions: %w", err)
-	}
-	defer rows.Close()
-
-	var result []*Prohibition
-	for rows.Next() {
-		p := &Prohibition{}
-		if err := rows.Scan(&p.ID, &p.Name, &p.SubjectID, &p.Operations, &p.TargetOAIDs, &p.Intersection); err != nil {
-			return nil, fmt.Errorf("scanning prohibition: %w", err)
-		}
-		result = append(result, p)
-	}
-	return result, nil
-}
-
-// FindForSubjects returns all prohibitions that apply to ANY of the given subject IDs
-// (user + user's UA ancestors) and match the given operation.
-func (s *ProhibitionStore) FindForSubjects(ctx context.Context, subjectIDs []string, operation string) ([]*Prohibition, error) {
-	if len(subjectIDs) == 0 {
-		return nil, nil
-	}
-
-	rows, err := s.pool.Query(ctx,
-		`SELECT id, name, subject_id, operations, target_oa_ids, intersection
-		 FROM ngac_prohibitions
-		 WHERE subject_id = ANY($1) AND $2 = ANY(operations)`,
-		subjectIDs, operation)
-	if err != nil {
-		return nil, fmt.Errorf("finding prohibitions for subjects: %w", err)
 	}
 	defer rows.Close()
 

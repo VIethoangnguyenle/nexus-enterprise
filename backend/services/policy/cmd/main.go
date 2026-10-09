@@ -100,7 +100,7 @@ func main() {
 	materialized := ngac.NewMaterializedAccess(pool)
 	versionTracker := ngac.NewVersionTracker(pool)
 	operationStore := ngac.NewOperationStore(pool)
-	prohibitionStore := ngac.NewProhibitionStore(pool)
+	prohibitionStore := ngac.NewProhibitionStore(pool, store.GetGraph())
 	strictOps := os.Getenv("STRICT_OPERATIONS") == "true"
 	if strictOps {
 		slog.Info("strict operations mode enabled — unregistered operations will be rejected")
@@ -108,7 +108,7 @@ func main() {
 
 	// Assemble read-path components: Cache (PIP) + Engine (PDP) → Evaluator
 	decisionCache := ngac.NewLayeredCache(rdb, materialized, versionTracker)
-	decisionEngine := ngac.NewDecisionEngine(store.GetGraph(), cte, prohibitionStore)
+	decisionEngine := ngac.NewDecisionEngine(store.GetGraph(), cte)
 
 	// Shard-aware graph resolution: per-workspace subgraph loading + LRU eviction
 	shardMgr := ngac.NewShardManager(pool, ngac.ShardManagerConfig{MaxShards: 1000})

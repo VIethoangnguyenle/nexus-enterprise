@@ -112,7 +112,7 @@ const sharedDecisionTimeout = 10 * time.Second
 // The context is detached from the caller that happened to start the flight:
 // the result is handed to every collapsed caller and written to the shared
 // caches, so it must not depend on one caller's cancellation. Under the
-// caller's context, a cancelled first caller made the prohibition query fail,
+// caller's context, a cancelled first caller made the CTE fallback query fail,
 // and the resulting decision was served to the other callers and cached.
 // Values (trace IDs etc.) are kept; only cancellation and deadline are dropped,
 // and replaced by sharedDecisionTimeout.

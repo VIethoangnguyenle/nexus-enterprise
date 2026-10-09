@@ -2,6 +2,7 @@ package ngac
 
 import (
 	"fmt"
+	"slices"
 )
 
 // --- PAP: Graph mutations ---
@@ -179,6 +180,51 @@ func (g *Graph) replaceWith(src *Graph) {
 	g.uaToAssociations = src.uaToAssociations
 	g.oaToAssociations = src.oaToAssociations
 	g.nameTypeIndex = src.nameTypeIndex
+	g.prohibitions = src.prohibitions
+	g.prohibitionsBySubject = src.prohibitionsBySubject
+}
+
+// AddProhibition loads a prohibition into the graph, replacing any with the
+// same name. The graph keeps its own copy.
+func (g *Graph) AddProhibition(p *Prohibition) error {
+	if p == nil {
+		return fmt.Errorf("prohibition is nil")
+	}
+	if p.Name == "" || p.SubjectID == "" || len(p.Operations) == 0 || len(p.TargetOAIDs) == 0 {
+		return fmt.Errorf("prohibition %q needs a name, a subject, operations and targets", p.Name)
+	}
+	cp := *p
+	cp.Operations = slices.Clone(p.Operations)
+	cp.TargetOAIDs = slices.Clone(p.TargetOAIDs)
+
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.removeProhibitionLocked(cp.Name)
+	g.prohibitions[cp.Name] = &cp
+	g.prohibitionsBySubject[cp.SubjectID] = append(g.prohibitionsBySubject[cp.SubjectID], &cp)
+	return nil
+}
+
+// RemoveProhibition drops the named prohibition; unknown names are a no-op.
+func (g *Graph) RemoveProhibition(name string) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.removeProhibitionLocked(name)
+}
+
+func (g *Graph) removeProhibitionLocked(name string) {
+	old, ok := g.prohibitions[name]
+	if !ok {
+		return
+	}
+	delete(g.prohibitions, name)
+	rest := slices.DeleteFunc(slices.Clone(g.prohibitionsBySubject[old.SubjectID]),
+		func(p *Prohibition) bool { return p.Name == name })
+	if len(rest) == 0 {
+		delete(g.prohibitionsBySubject, old.SubjectID)
+		return
+	}
+	g.prohibitionsBySubject[old.SubjectID] = rest
 }
 
 // --- Internal helpers ---

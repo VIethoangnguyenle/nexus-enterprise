@@ -27,7 +27,8 @@ func NewStore(db *pgxpool.Pool, graph *Graph) *Store {
 // --- PIP: Data hydration ---
 
 // LoadGraph hydrates the in-memory graph from database (PIP).
-// Loads nodes (excluding O-type for memory optimization), assignments, and associations.
+// Loads nodes (excluding O-type for memory optimization), assignments, associations
+// and prohibitions.
 //
 // It adds to whatever the graph already holds; it does not remove nodes or
 // edges that have since been deleted from the database. Use ReloadGraph to
@@ -120,6 +121,27 @@ func loadGraphInto(ctx context.Context, db *pgxpool.Pool, g *Graph) error {
 	}
 	if err := rows.Err(); err != nil {
 		return fmt.Errorf("loading associations: %w", err)
+	}
+
+	rows, err = db.Query(ctx,
+		`SELECT id, name, subject_id, operations, target_oa_ids, intersection FROM ngac_prohibitions`)
+	if err != nil {
+		return fmt.Errorf("loading prohibitions: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var p Prohibition
+		if err := rows.Scan(&p.ID, &p.Name, &p.SubjectID, &p.Operations, &p.TargetOAIDs, &p.Intersection); err != nil {
+			return fmt.Errorf("scanning prohibition: %w", err)
+		}
+		if err := g.AddProhibition(&p); err != nil {
+			// Skipping would silently drop a deny rule; failing keeps the
+			// previous graph (ReloadGraph) or stops startup (LoadGraph).
+			return fmt.Errorf("loading prohibition %q: %w", p.Name, err)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("loading prohibitions: %w", err)
 	}
 	return nil
 }
