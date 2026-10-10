@@ -85,7 +85,6 @@ func TestWorkspaceMemberDoesNotInheritOwnerPrivileges(t *testing.T) {
 		{"mgmt", "manage"},
 		{"mgmt", "invite"},
 		{"docs", "approve"},
-		{"docs", "share"},
 		{"docs", "manage"},
 		{"channels", "manage"},
 	} {
@@ -202,6 +201,30 @@ func TestChannelMemberCannotInviteIntoOtherChannel(t *testing.T) {
 // drive actually gates file creation on. CreateFile and ConfirmFile both check
 // write on the destination folder, so a read-only member sees the Upload button
 // and can never complete an upload.
+// Members share what they work on: the drive gates CreateShare on `share`, so
+// a member must hold it on Documents. What a share hands to its grantee is read
+// or write only, so the grantee of a "write" share does not gain share.
+func TestWorkspaceMemberCanShareButShareGranteeCannotReshare(t *testing.T) {
+	g := buildWorkspaceBootstrapGraph(t)
+	assert.Equal(t, "ALLOW", g.CheckAccess("invitee", "docs", "share").Decision, "a member holds share on Documents")
+
+	// A person outside the members UA, granted a write share through a
+	// personal UA, gets read and write on the shared OA and nothing more.
+	g.AddNode(&ngac.NGACNode{ID: "grantee", Name: "grantee", NodeType: "U"})
+	g.AddNode(&ngac.NGACNode{ID: "grantee-ua", Name: "grantee-ua", NodeType: "UA"})
+	g.AddNode(&ngac.NGACNode{ID: "shared", Name: "shared", NodeType: "OA"})
+	require.NoError(t, g.AddAssignment(&ngac.Assignment{ID: "g1", ChildID: "grantee", ParentID: "members"}))
+	require.NoError(t, g.AddAssignment(&ngac.Assignment{ID: "g2", ChildID: "grantee", ParentID: "grantee-ua"}))
+	require.NoError(t, g.AddAssignment(&ngac.Assignment{ID: "g3", ChildID: "shared", ParentID: "pc"}))
+	require.NoError(t, g.AddAssociation(&ngac.Association{ID: "gs", UAID: "grantee-ua", OAID: "shared", Operations: []string{"read", "write"}}))
+	for _, op := range []string{"read", "write"} {
+		assert.Equal(t, "ALLOW", g.CheckAccess("grantee", "shared", op).Decision, op)
+	}
+	for _, op := range []string{"share", "manage", "approve"} {
+		assert.Equal(t, "DENY", g.CheckAccess("grantee", "shared", op).Decision, op)
+	}
+}
+
 func TestWorkspaceMemberCanUploadToDocuments(t *testing.T) {
 	g := buildWorkspaceBootstrapGraph(t)
 
@@ -214,7 +237,6 @@ func TestWorkspaceMemberCanUploadToDocuments(t *testing.T) {
 	// workspace-administration rights that live on the same policy class.
 	for _, tc := range []struct{ object, op string }{
 		{"docs", "approve"},
-		{"docs", "share"},
 		{"docs", "manage"},
 		{"mgmt", "read"},
 		{"mgmt", "write"},

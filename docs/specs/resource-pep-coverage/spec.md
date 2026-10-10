@@ -60,8 +60,13 @@ actor, within that tenant.
 
 | Operation | Op | Object |
 |---|---|---|
+| Create share | `share` (not `write`) | the shared item's node |
 | Revoke share | `share`, or being the share's creator | the shared item's node |
 | Update quota | `manage` | the workspace Mgmt OA |
+
+#### Scenario: Caller creates a share without the share op
+- **WHEN** a caller holding `write` but not `share` on the item (for example the grantee of a write share) creates a share
+- **THEN** the request is denied and nothing is written
 
 #### Scenario: Member revokes a share without the share op
 - **WHEN** a member holding `write` but not `share` revokes a share they did not create
@@ -70,6 +75,30 @@ actor, within that tenant.
 #### Scenario: Creator revokes their own share
 - **WHEN** the member who created a share revokes it, holding `write` but not `share`
 - **THEN** the share is revoked
+
+### Requirement: The approval audit trail is limited to those who can see the request
+The audit trail of an approval request (`GET /api/approval/requests/:id/audit`, gRPC `GetAuditLog`)
+SHALL be returned only to a caller who could see the request through the list endpoints: its
+requester (`created_by`), a user assigned to any step of it, current or past and of any assignment
+status, or a caller whose `read` scopes (the department-requests scope set) include the request's
+`scope_oa_id`. Anyone else SHALL be denied (PermissionDenied / 403), and a request that does not
+exist SHALL get the same answer, so the trail's existence is not revealed. A request id that is not
+a UUID is a bad request (InvalidArgument / 400), not a server error. Looking up a caller's assignment
+on a request is served by the index `(request_id, user_node_id)` on `approval_assignments`
+(`provision_tenant_schema`, and migration 021 for existing tenants). A failure to resolve the caller's scopes SHALL deny, never grant. The caller comes from
+the verified claims / request metadata, and the request is looked up in the caller's tenant schema.
+
+#### Scenario: Requester, assignee, department scope
+- **WHEN** the requester, a user assigned to any step of the request, or a caller whose scopes include the request's scope reads its audit trail
+- **THEN** the entries are returned
+
+#### Scenario: Unrelated caller
+- **WHEN** a caller who is none of the above reads the audit trail
+- **THEN** the request is denied and no entry is returned
+
+#### Scenario: Body names another user
+- **WHEN** the request body names a user holding a department scope and the metadata caller holds none
+- **THEN** scopes are resolved for the metadata caller only and the result is empty
 
 ### Requirement: Asset reads and type administration are guarded
 

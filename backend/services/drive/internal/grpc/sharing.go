@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
@@ -17,12 +18,33 @@ import (
 )
 
 // CreateShare creates an NGAC association to share a file or folder.
+//
+// req.Operations carries exactly one share permission ("read" or "write", see
+// ngac.ShareOps), never operation names: the operations a share grants are
+// decided here, so a caller cannot hand out rights such as manage or share.
 func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareRequest) (*pb.ShareInfo, error) {
 	item, err := s.store.GetItem(ctx, req.ItemId)
-	if err != nil || item == nil {
+	// A trashed item cannot be shared: the grant would outlive the trash view
+	// and surface again on restore.
+	if err != nil || item == nil || item.Status == "trashed" {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
+	// Sharing hands the item to someone else, which is what the share right is
+	// for. Write is not enough: it lets a member edit, not widen who can.
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpShare); err != nil {
+		return nil, err
+	}
+
+	// Validate everything that can be refused before the first policy write.
+	if len(req.Operations) != 1 {
+		return nil, status.Errorf(codes.InvalidArgument, "share permission must be one of: read, write")
+	}
+	ops, ok := ngac.ShareOps(req.Operations[0])
+	if !ok {
+		return nil, status.Errorf(codes.InvalidArgument, "invalid share permission: %q", req.Operations[0])
+	}
+	targetUA, targetLabel, err := s.resolveShareTarget(ctx, req)
+	if err != nil {
 		return nil, err
 	}
 
@@ -33,12 +55,20 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create share OA: %v", err)
 	}
+	// From here on a failure must not leave the share OA, its assignments or a
+	// half-built association behind; deleting the node cascades all of them.
+	fail := func(err error) (*pb.ShareInfo, error) {
+		if _, derr := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: shareOA.Id}); derr != nil {
+			slog.Error("could not remove share OA after a failed share", "share_oa", shareOA.Id, "error", derr)
+		}
+		return nil, err
+	}
 
 	// Assign item under share OA
 	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: item.NGACNodeID, ParentId: shareOA.Id,
 	}); err != nil {
-		return nil, status.Errorf(codes.Internal, "assign item under share OA: %v", err)
+		return fail(status.Errorf(codes.Internal, "assign item under share OA: %v", err))
 	}
 
 	// Assign share OA under PC_Global
@@ -49,45 +79,16 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: shareOA.Id, ParentId: pcGlobal.Id,
 		}); err != nil {
-			return nil, status.Errorf(codes.Internal, "assign share OA under PC_Global: %v", err)
+			return fail(status.Errorf(codes.Internal, "assign share OA under PC_Global: %v", err))
 		}
-	}
-
-	// Determine target UA
-	var targetUA string
-	var targetLabel string
-	switch req.ShareType {
-	case "public":
-		pubUA, _ := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-			Name: ngac.NodePublicUsers, NodeType: ngac.TypeUA,
-		})
-		if pubUA == nil {
-			return nil, status.Errorf(codes.Internal, "PublicUsers UA not found")
-		}
-		targetUA = pubUA.Id
-		targetLabel = "Anyone with link"
-	case "user", "role":
-		targetUA = req.TargetNgacNodeId
-		node, _ := s.policyRead.GetNode(ctx, &policypb.GetNodeRequest{NodeId: targetUA})
-		if node != nil {
-			targetLabel = node.Name
-		}
-	case "workspace":
-		targetUA = req.TargetNgacNodeId
-		node, _ := s.policyRead.GetNode(ctx, &policypb.GetNodeRequest{NodeId: targetUA})
-		if node != nil {
-			targetLabel = node.Name + " (workspace)"
-		}
-	default:
-		return nil, status.Errorf(codes.InvalidArgument, "invalid share_type: %s", req.ShareType)
 	}
 
 	// Create association. This is the share: if it fails we must not write the
 	// DB row, or the UI shows a share that grants nothing.
 	if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
-		UaId: targetUA, OaId: shareOA.Id, Operations: req.Operations,
+		UaId: targetUA, OaId: shareOA.Id, Operations: ops,
 	}); err != nil {
-		return nil, status.Errorf(codes.Internal, "create share association: %v", err)
+		return fail(status.Errorf(codes.Internal, "create share association: %v", err))
 	}
 
 	share := &store.DriveShare{
@@ -96,20 +97,142 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 		ShareType:    req.ShareType,
 		TargetNGACID: nilStr(req.TargetNgacNodeId),
 		TargetLabel:  &targetLabel,
-		Operations:   req.Operations,
+		Operations:   ops,
 		NGACShareOA:  shareOA.Id,
 		CreatedBy:    grpcauth.CallerFrom(ctx).NGACNodeID,
 	}
 	if err := s.store.InsertShare(ctx, share); err != nil {
-		return nil, status.Errorf(codes.Internal, "insert share: %v", err)
+		return fail(status.Errorf(codes.Internal, "insert share: %v", err))
 	}
 
 	slog.Info("share created", "item", item.Name, "type", req.ShareType, "target", targetLabel)
 	return &pb.ShareInfo{
 		Id: share.ID, DriveItemId: req.ItemId, ShareType: req.ShareType,
 		TargetNgacId: req.TargetNgacNodeId, TargetLabel: targetLabel,
-		Operations: req.Operations, CreatedAt: timestamppb.Now(),
+		Operations: ops, CreatedAt: timestamppb.Now(),
 	}, nil
+}
+
+// resolveShareTarget returns the UA a share's association will start from and
+// the label to show for it. It writes nothing for roles, workspaces and public
+// links; for a person it may create that person's personal UA (see
+// personalUA), which is harmless to leave if the share then fails.
+func (s *DriveServer) resolveShareTarget(ctx context.Context, req *pb.CreateShareRequest) (ua, label string, err error) {
+	switch req.ShareType {
+	case "public":
+		pubUA, _ := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
+			Name: ngac.NodePublicUsers, NodeType: ngac.TypeUA,
+		})
+		if pubUA == nil {
+			return "", "", status.Errorf(codes.Internal, "PublicUsers UA not found")
+		}
+		return pubUA.Id, "Anyone with link", nil
+	case "user", "role", "workspace":
+		if req.TargetNgacNodeId == "" {
+			return "", "", status.Errorf(codes.InvalidArgument, "share target is required")
+		}
+		node, gerr := s.policyRead.GetNode(ctx, &policypb.GetNodeRequest{NodeId: req.TargetNgacNodeId})
+		if gerr != nil || node == nil || node.GetId() == "" {
+			return "", "", status.Errorf(codes.InvalidArgument, "share target not found")
+		}
+		label = node.Name
+		if req.ShareType == "workspace" {
+			label += " (workspace)"
+		}
+		switch node.NodeType {
+		case ngac.TypeUA:
+			return node.Id, label, nil
+		case ngac.TypeU:
+			// Only a person can be the target of a "user" share. For other
+			// types a U node is the wrong kind of target.
+			if req.ShareType != "user" {
+				return "", "", status.Errorf(codes.InvalidArgument, "share target must be a group")
+			}
+			ua, err = s.personalUA(ctx, node)
+			return ua, label, err
+		}
+		return "", "", status.Errorf(codes.InvalidArgument, "share target must be a person or a group")
+	}
+	return "", "", status.Errorf(codes.InvalidArgument, "invalid share_type: %s", req.ShareType)
+}
+
+// personalUA returns the user attribute that contains exactly this user,
+// creating it on first use. An association can only start from a UA, never
+// from a user node, so granting an item to one person goes through this
+// attribute.
+//
+// A node is trusted as the person's UA only by what it is, never by its name:
+// its properties must mark it as the personal UA of this user (see
+// ngac.IsPersonalUAOf), and the user must be inside it. Role names are chosen
+// by workspace administrators, so a role called "User_<id>" would otherwise
+// receive every share made to that person. At most one such UA exists per user
+// (unique index), which makes a lost creation race resolvable by looking again.
+func (s *DriveServer) personalUA(ctx context.Context, user *policypb.NGACNode) (string, error) {
+	if id, err := s.findPersonalUA(ctx, user); err != nil || id != "" {
+		return id, err
+	}
+
+	ua, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.PersonalUAName(user.Id), NodeType: ngac.TypeUA,
+		Properties: ngac.PersonalUAProperties(user.Id),
+	})
+	if err != nil {
+		// Most likely a concurrent first share created it between our lookup
+		// and our create; give it a moment to finish assigning, then look again.
+		for i := 0; i < 3; i++ {
+			time.Sleep(50 * time.Millisecond)
+			if id, ferr := s.findPersonalUA(ctx, user); ferr == nil && id != "" {
+				return id, nil
+			}
+		}
+		return "", status.Errorf(codes.Internal, "create personal UA: %v", err)
+	}
+	if err := s.assignToPersonalUA(ctx, user.Id, ua.Id); err != nil {
+		if _, derr := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: ua.Id}); derr != nil {
+			slog.Error("could not remove personal UA after a failed assignment", "ua", ua.Id, "error", derr)
+		}
+		return "", err
+	}
+	return ua.Id, nil
+}
+
+func (s *DriveServer) assignToPersonalUA(ctx context.Context, userID, uaID string) error {
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		ChildId: userID, ParentId: uaID,
+	}); err != nil {
+		return status.Errorf(codes.Internal, "assign user to personal UA: %v", err)
+	}
+	return nil
+}
+
+// findPersonalUA looks for the user's personal UA: first among the attributes
+// the user is already in, then by name for one that was created but not yet
+// assigned (adopting it only if its properties say it is this user's). A node
+// that merely has the right name is never returned. "" means none exists.
+func (s *DriveServer) findPersonalUA(ctx context.Context, user *policypb.NGACNode) (string, error) {
+	anc, err := s.policyRead.GetAncestors(ctx, &policypb.GetAncestorsRequest{NodeId: user.Id})
+	if err != nil {
+		return "", status.Errorf(codes.Internal, "look up personal UA: %v", err)
+	}
+	for _, n := range anc.GetNodes() {
+		if n.GetNodeType() == ngac.TypeUA && ngac.IsPersonalUAOf(n.GetProperties(), user.Id) {
+			return n.Id, nil
+		}
+	}
+
+	byName, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
+		Name: ngac.PersonalUAName(user.Id), NodeType: ngac.TypeUA,
+	})
+	if err != nil && status.Code(err) != codes.NotFound {
+		return "", status.Errorf(codes.Internal, "look up personal UA: %v", err)
+	}
+	if err == nil && byName.GetId() != "" && ngac.IsPersonalUAOf(byName.GetProperties(), user.Id) {
+		if aerr := s.assignToPersonalUA(ctx, user.Id, byName.Id); aerr != nil {
+			return "", aerr
+		}
+		return byName.Id, nil
+	}
+	return "", nil
 }
 
 // RevokeShare removes a share.
@@ -120,11 +243,11 @@ func (s *DriveServer) RevokeShare(ctx context.Context, req *pb.RevokeShareReques
 	}
 	// Revoking changes who can reach the item. It is allowed for:
 	//
-	//   - the user who created this share. CreateShare takes only write, so a
-	//     member can share an item without holding the share op; they must be
-	//     able to withdraw what they granted. Revoking only narrows access, so
-	//     this cannot be used to widen anyone's rights. created_by holds the
-	//     creator's NGAC node; an empty value never matches.
+	//   - the user who created this share. They must be able to withdraw what
+	//     they granted even if their share right has since been taken away.
+	//     Revoking only narrows access, so this cannot be used to widen anyone's
+	//     rights. created_by holds the creator's NGAC node; an empty value
+	//     never matches.
 	//   - anyone holding share on the OA the item row points at. Without an
 	//     item to authorize against nothing could grant that right, so a
 	//     missing item denies.

@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	platformngac "ngac-platform/ngac"
 )
 
 // ShardManager manages per-tenant in-memory graph shards with LRU eviction.
@@ -276,6 +278,47 @@ func (sm *shardManager) loadShard(ctx context.Context, workspaceID string) (*Gra
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("iterating shard nodes: %w", err)
+	}
+
+	// Step 4b: personal UAs. A personal UA is assigned to no policy class (the
+	// user already reaches the policy classes through other attributes), so the
+	// descent above never meets it; without it a share made to a person grants
+	// nothing on the shard. Only a UA that is marked as the personal attribute
+	// of exactly the user assigned to it is carried over.
+	var userIDs []string
+	for id, n := range graph.Nodes {
+		if n.NodeType == NodeTypeUser {
+			userIDs = append(userIDs, id)
+		}
+	}
+	if len(userIDs) > 0 {
+		prows, err := sm.db.Query(ctx,
+			`SELECT DISTINCT n.id, n.name, n.node_type, n.properties
+			 FROM ngac_nodes n
+			 JOIN ngac_assignments a ON a.parent_id = n.id
+			 WHERE a.child_id = ANY($1)
+			   AND n.node_type = 'UA'
+			   AND n.properties->>$2 = $3
+			   AND n.properties->>$4 = a.child_id`,
+			userIDs, platformngac.PropType, platformngac.PropTypePersonalUA, platformngac.PropUserNodeID,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("loading shard personal UAs: %w", err)
+		}
+		for prows.Next() {
+			var n NGACNode
+			var props map[string]string
+			if err := prows.Scan(&n.ID, &n.Name, &n.NodeType, &props); err != nil {
+				prows.Close()
+				return nil, fmt.Errorf("scanning shard personal UA: %w", err)
+			}
+			n.Properties = props
+			graph.AddNode(&n)
+		}
+		prows.Close()
+		if err := prows.Err(); err != nil {
+			return nil, fmt.Errorf("iterating shard personal UAs: %w", err)
+		}
 	}
 
 	// Step 5: Load assignments between nodes in the shard

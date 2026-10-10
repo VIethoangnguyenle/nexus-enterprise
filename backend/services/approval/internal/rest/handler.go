@@ -528,7 +528,11 @@ func (h *Handler) GetDepartmentRequests(c echo.Context) error {
 
 // GetAuditLog handles GET /api/approval/requests/:id/audit.
 func (h *Handler) GetAuditLog(c echo.Context) error {
-	entries, err := h.svc.GetAuditLog(c.Request().Context(), c.Param("id"))
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	entries, err := h.svc.GetAuditLog(c.Request().Context(), claims.NGACNodeID, c.Param("id"))
 	if err != nil {
 		return mapDomainError(err)
 	}

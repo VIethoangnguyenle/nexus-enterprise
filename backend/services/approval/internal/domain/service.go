@@ -38,6 +38,9 @@ type RequestStore interface {
 	GetRequest(ctx context.Context, id string) (*Request, error)
 	InsertAssignments(ctx context.Context, assignments []*AssignmentRecord) error
 	GetAssignment(ctx context.Context, requestID, userNodeID string) (*AssignmentRecord, error)
+	// HasAssignment reports whether the user has an assignment of any status on
+	// any step of the request, current or past.
+	HasAssignment(ctx context.Context, requestID, userNodeID string) (bool, error)
 	UpdateAssignmentStatus(ctx context.Context, id, status, comment string) error
 	CountApprovedForStep(ctx context.Context, requestID string, stepOrder int) (int, error)
 	SkipRemainingAssignments(ctx context.Context, requestID string, stepOrder int) error

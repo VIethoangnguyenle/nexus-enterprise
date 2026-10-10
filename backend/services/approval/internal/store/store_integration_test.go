@@ -12,6 +12,7 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"testing"
@@ -412,5 +413,46 @@ func TestListPendingAssignees(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Errorf("tenant B sees %v for tenant A's request, want none", got)
+	}
+}
+
+// HasAssignment counts an assignment of any status, on any step, and only for
+// the tenant whose schema the context names; a missing request is NotFound.
+func TestHasAssignment_AnyStatusAnyStepTenantScoped(t *testing.T) {
+	s := store.NewStore(testDB)
+	ctxA := httputil.WithTenantSchema(context.Background(), schemaA)
+	reqID := insertCASRequest(t, ctxA, s, "HasAssignment")
+	bg := context.Background()
+	t.Cleanup(func() {
+		testDB.Exec(bg, fmt.Sprintf("DELETE FROM %s.approval_assignments WHERE request_id = $1", schemaA), reqID)
+	})
+
+	skipped := newID()
+	if err := s.InsertAssignments(ctxA, []*domain.AssignmentRecord{
+		{ID: skipped, RequestID: reqID, StepOrder: 1, UserNodeID: "ap-skipped", GrantSource: "direct", Status: "pending"},
+		{ID: newID(), RequestID: reqID, StepOrder: 2, UserNodeID: "ap-later", GrantSource: "direct", Status: "pending"},
+	}); err != nil {
+		t.Fatalf("insert assignments: %v", err)
+	}
+	if err := s.UpdateAssignmentStatus(ctxA, skipped, "skipped", ""); err != nil {
+		t.Fatalf("skip: %v", err)
+	}
+
+	for user, want := range map[string]bool{"ap-skipped": true, "ap-later": true, "ap-stranger": false} {
+		got, err := s.HasAssignment(ctxA, reqID, user)
+		if err != nil {
+			t.Fatalf("HasAssignment(%s): %v", user, err)
+		}
+		if got != want {
+			t.Errorf("HasAssignment(%s) = %v, want %v", user, got, want)
+		}
+	}
+
+	ctxB := httputil.WithTenantSchema(context.Background(), schemaB)
+	if got, err := s.HasAssignment(ctxB, reqID, "ap-later"); err != nil || got {
+		t.Errorf("tenant B sees tenant A's assignment: got=%v err=%v", got, err)
+	}
+	if _, err := s.GetRequest(ctxA, newID()); !errors.Is(err, domain.ErrNotFound) {
+		t.Errorf("GetRequest(unknown) err = %v, want ErrNotFound", err)
 	}
 }

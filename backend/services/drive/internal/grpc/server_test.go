@@ -419,10 +419,10 @@ func TestTrashItem_HappyPath(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	item, _ := srv.GetItem(asCaller("", "ngac-user-1"), &pb.GetItemRequest{
-		ItemId: folder.Id,
-	})
-	assert.Equal(t, "trashed", item.Status)
+	// A trashed item no longer opens.
+	_, err = srv.GetItem(asCaller("", "ngac-user-1"), &pb.GetItemRequest{ItemId: folder.Id})
+	require.Error(t, err)
+	assert.Equal(t, codes.NotFound, status.Code(err))
 }
 
 func TestRestoreItem_HappyPath(t *testing.T) {
@@ -570,7 +570,7 @@ func TestListShares_ReturnsShares(t *testing.T) {
 	})
 	share, _ := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
 		ItemId: folder.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{"read", "write"},
+		Operations: []string{"write"},
 	})
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), "DELETE FROM drive_shares WHERE id = $1", share.Id)
@@ -884,7 +884,7 @@ func TestE2E_FolderSharingInheritance(t *testing.T) {
 	// 2. Share folder with user-2
 	share, err := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
 		ItemId: folder.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{"read", "write"},
+		Operations: []string{"write"},
 	})
 	require.NoError(t, err)
 

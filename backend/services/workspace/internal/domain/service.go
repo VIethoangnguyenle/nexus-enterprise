@@ -428,6 +428,9 @@ func (s *Service) CreateRole(ctx context.Context, callerNodeID, wsID, roleName s
 	if err != nil {
 		return nil, err
 	}
+	if err := ngac.ValidateRoleName(roleName); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
+	}
 	node, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: roleName, NodeType: ngac.TypeUA})
 	if err != nil {
 		return nil, fmt.Errorf("create role: %w", err)

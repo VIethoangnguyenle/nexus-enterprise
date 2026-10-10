@@ -136,8 +136,16 @@ func (s *Store) RemoveAssignment(ctx context.Context, childID, parentID string) 
 }
 
 // CreateAssociation creates a permission edge in DB and graph (PAP).
+// Pattern: validate (read-only) → DB write → graph mutation.
 func (s *Store) CreateAssociation(ctx context.Context, uaID, oaID string, operations []string) (*Association, error) {
 	a := &Association{ID: uuid.New().String(), UAID: uaID, OAID: oaID, Operations: operations}
+
+	// Validate node existence and types before the DB write. Checking only
+	// after the insert left a row the graph refused, which the next LoadGraph
+	// would then hit.
+	if err := s.graph.ValidateAssociation(a); err != nil {
+		return nil, err
+	}
 	_, err := s.db.Exec(ctx,
 		"INSERT INTO ngac_associations (id, ua_id, oa_id, operations) VALUES ($1, $2, $3, $4) ON CONFLICT (ua_id, oa_id) DO UPDATE SET operations = $4",
 		a.ID, a.UAID, a.OAID, operations)

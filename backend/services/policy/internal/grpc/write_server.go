@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 
 	"google.golang.org/grpc/codes"
@@ -160,6 +161,9 @@ func (s *WriteServer) CreateAssociation(ctx context.Context, req *pb.CreateAssoc
 
 	a, err := s.store.CreateAssociation(ctx, req.UaId, req.OaId, req.Operations)
 	if err != nil {
+		if errors.Is(err, ngac.ErrInvalidAssociation) {
+			return nil, status.Errorf(codes.InvalidArgument, "create association: %v", err)
+		}
 		return nil, status.Errorf(codes.Internal, "create association: %v", err)
 	}
 

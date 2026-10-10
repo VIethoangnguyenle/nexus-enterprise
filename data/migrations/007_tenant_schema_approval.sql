@@ -131,6 +131,8 @@ BEGIN
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_ar_scope ON %I.approval_requests(scope_oa_id, status, created_at DESC)', v_schema);
     -- Reconciliation: find pending assignments by grant_source
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_aa_grant_source ON %I.approval_assignments(grant_source, status) WHERE status = ''pending''', v_schema);
+    -- Audit-trail access check: does this user have any assignment on this request
+    EXECUTE format('CREATE INDEX IF NOT EXISTS idx_aa_request_user ON %I.approval_assignments(request_id, user_node_id)', v_schema);
     -- Audit trail
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_audit_request ON %I.approval_audit_log(request_id, created_at)', v_schema);
 

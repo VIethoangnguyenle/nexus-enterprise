@@ -216,6 +216,70 @@ func (s *Store) UpdateParent(ctx context.Context, id string, newParentID *string
 	return err
 }
 
+// UpdateParentAndNode moves an item in one statement: its parent row and the
+// OA it is authorized against change together or not at all. The update applies
+// only if the item is still under expectedParent and not trashed; it reports
+// whether it did, so a caller that lost a race to another move can undo its
+// policy edges instead of recording a parent that disagrees with the graph.
+func (s *Store) UpdateParentAndNode(ctx context.Context, id string, expectedParent, newParentID *string, ngacNodeID string) (bool, error) {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE drive_items SET parent_id = $1, ngac_node_id = $2, updated_at = NOW()
+		 WHERE id = $3 AND parent_id IS NOT DISTINCT FROM $4 AND status <> 'trashed'`,
+		newParentID, ngacNodeID, id, expectedParent)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// LockItem serialises work on one item across every drive instance with a
+// session-level Postgres advisory lock, and returns the function that releases
+// it. Moves hold it from reading the item's parent to writing the new one, so
+// two moves of the same item cannot interleave their policy edges. The lock
+// lives on its own pooled connection; if that connection cannot be unlocked it
+// is closed, which drops the lock.
+func (s *Store) LockItem(ctx context.Context, id string) (func(), error) {
+	conn, err := s.db.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	key := "drive_item:" + id
+	if _, err := conn.Exec(ctx, `SELECT pg_advisory_lock(hashtextextended($1, 0))`, key); err != nil {
+		_ = conn.Hijack().Close(context.Background())
+		return nil, err
+	}
+	return func() {
+		uctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if _, err := conn.Exec(uctx, `SELECT pg_advisory_unlock(hashtextextended($1, 0))`, key); err != nil {
+			_ = conn.Hijack().Close(uctx)
+			return
+		}
+		conn.Release()
+	}, nil
+}
+
+// MaxTreeDepth bounds every walk up or down the folder tree. It is far deeper
+// than any real hierarchy and exists so that a parent_id cycle ends a query
+// instead of running it until the statement times out.
+const MaxTreeDepth = 64
+
+// IsAncestorOrSelf reports whether ancestorID is id itself or one of the
+// folders above it, following parent_id. Moving a folder under anything for
+// which this is true would make it its own ancestor.
+func (s *Store) IsAncestorOrSelf(ctx context.Context, ancestorID, id string) (bool, error) {
+	var found bool
+	err := s.db.QueryRow(ctx,
+		`WITH RECURSIVE up AS (
+			SELECT id, parent_id, 1 AS depth FROM drive_items WHERE id = $1
+			UNION ALL
+			SELECT di.id, di.parent_id, up.depth + 1 FROM drive_items di JOIN up ON di.id = up.parent_id
+			WHERE up.depth < $3
+		)
+		SELECT EXISTS (SELECT 1 FROM up WHERE id = $2)`, id, ancestorID, MaxTreeDepth).Scan(&found)
+	return found, err
+}
+
 // UpdateName renames a drive item.
 func (s *Store) UpdateName(ctx context.Context, id, newName string) error {
 	_, err := s.db.Exec(ctx,
@@ -312,13 +376,20 @@ func (s *Store) GetChildFiles(ctx context.Context, parentID string) ([]*DriveIte
 
 // GetBreadcrumb returns the path from a folder to the root.
 func (s *Store) GetBreadcrumb(ctx context.Context, folderID string) ([]struct{ ID, Name string }, error) {
+	// Depth counts up from the folder asked about, so the deepest row is the
+	// top of the tree. Ordering by id would give an arbitrary path.
+	//
+	// The walk is bounded: a parent_id cycle (which no code path should
+	// produce, but a bad write or manual edit can) would otherwise recurse
+	// until the statement times out, on every list request for that folder.
 	rows, err := s.db.Query(ctx,
 		`WITH RECURSIVE path AS (
-			SELECT id, name, parent_id FROM drive_items WHERE id = $1
+			SELECT id, name, parent_id, 0 AS depth FROM drive_items WHERE id = $1
 			UNION ALL
-			SELECT di.id, di.name, di.parent_id FROM drive_items di JOIN path p ON di.id = p.parent_id
+			SELECT di.id, di.name, di.parent_id, p.depth + 1 FROM drive_items di JOIN path p ON di.id = p.parent_id
+			WHERE p.depth < $2
 		)
-		SELECT id, name FROM path ORDER BY id`, folderID)
+		SELECT id, name FROM path ORDER BY depth DESC`, folderID, MaxTreeDepth)
 	if err != nil {
 		return nil, err
 	}
@@ -332,11 +403,7 @@ func (s *Store) GetBreadcrumb(ctx context.Context, folderID string) ([]struct{ I
 		}
 		crumbs = append(crumbs, c)
 	}
-	// Reverse so root comes first
-	for i, j := 0, len(crumbs)-1; i < j; i, j = i+1, j-1 {
-		crumbs[i], crumbs[j] = crumbs[j], crumbs[i]
-	}
-	return crumbs, nil
+	return crumbs, rows.Err()
 }
 
 // FindRootByContext finds the root folder for a workspace or channel drive.

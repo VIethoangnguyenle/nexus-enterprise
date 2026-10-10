@@ -6,8 +6,10 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"ngac-platform/pkg/httputil"
@@ -282,6 +284,9 @@ func (s *Store) GetRequest(ctx context.Context, id string) (*domain.Request, err
 	if formDataJSON != nil {
 		r.FormDataJSON = *formDataJSON
 	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get request: %w", err)
 	}
@@ -331,6 +336,25 @@ func (s *Store) GetAssignment(ctx context.Context, requestID, userNodeID string)
 		a.Comment = *comment
 	}
 	return a, nil
+}
+
+// HasAssignment reports whether the user has an assignment of any status on any
+// step of the request.
+func (s *Store) HasAssignment(ctx context.Context, requestID, userNodeID string) (bool, error) {
+	c, err := s.conn(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer c.Release()
+
+	var found bool
+	err = c.QueryRow(ctx, `
+		SELECT EXISTS (SELECT 1 FROM approval_assignments WHERE request_id = $1 AND user_node_id = $2)`,
+		requestID, userNodeID).Scan(&found)
+	if err != nil {
+		return false, fmt.Errorf("has assignment: %w", err)
+	}
+	return found, nil
 }
 
 // UpdateAssignmentStatus updates an assignment's status and sets acted_at.

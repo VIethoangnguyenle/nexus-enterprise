@@ -72,6 +72,24 @@ func (s *DriveServer) checkAccessOnNamedOA(ctx context.Context, userNodeID, oaNa
 	return s.checkAccess(ctx, userNodeID, node.GetId(), operation)
 }
 
+// liveFolder loads a folder that can be opened or filled: it exists, is active
+// (a trashed or still-uploading item is not a place anyone can browse into) and
+// belongs to workspaceID. An empty workspaceID skips the workspace check.
+//
+// Every refusal is NotFound, so a caller learns nothing about a folder in
+// another workspace or in the trash beyond "not there".
+func (s *DriveServer) liveFolder(ctx context.Context, id, workspaceID string) (*store.DriveItem, error) {
+	item, err := s.store.GetItem(ctx, id)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "load folder: %v", err)
+	}
+	if item == nil || item.Status != "active" || item.ItemType != "folder" ||
+		(workspaceID != "" && item.WorkspaceID != workspaceID) {
+		return nil, status.Errorf(codes.NotFound, "folder not found")
+	}
+	return item, nil
+}
+
 // itemToProto converts a store.DriveItem to a protobuf DriveItem.
 func itemToProto(item *store.DriveItem) *pb.DriveItem {
 	if item == nil {
@@ -114,10 +132,12 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 
 	// Determine parent NGAC OA for the new folder
 	var parentNGACID string
+	var parent *store.DriveItem
 	if req.ParentId != "" {
-		parent, err := s.store.GetItem(ctx, req.ParentId)
-		if err != nil || parent == nil {
-			return nil, status.Errorf(codes.NotFound, "parent folder not found")
+		var err error
+		parent, err = s.liveFolder(ctx, req.ParentId, req.WorkspaceId)
+		if err != nil {
+			return nil, err
 		}
 		if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, parent.NGACNodeID, ngac.OpWrite); err != nil {
 			return nil, err
@@ -150,11 +170,8 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 
 	// Determine scope OA: inherit from parent, or use own OA for root-level folders
 	var scopeOAID string
-	if req.ParentId != "" {
-		parent, _ := s.store.GetItem(ctx, req.ParentId)
-		if parent != nil && parent.ScopeOAID != "" {
-			scopeOAID = parent.ScopeOAID
-		}
+	if parent != nil && parent.ScopeOAID != "" {
+		scopeOAID = parent.ScopeOAID
 	}
 	if scopeOAID == "" {
 		scopeOAID = folderNode.Id
@@ -192,9 +209,9 @@ func (s *DriveServer) ListFolder(ctx context.Context, req *pb.ListFolderRequest)
 	if req.FolderId != "" {
 		parentID = &req.FolderId
 		// Check read access on the folder itself
-		folder, err := s.store.GetItem(ctx, req.FolderId)
-		if err != nil || folder == nil {
-			return nil, status.Errorf(codes.NotFound, "folder not found")
+		folder, err := s.liveFolder(ctx, req.FolderId, req.WorkspaceId)
+		if err != nil {
+			return nil, err
 		}
 		if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, folder.NGACNodeID, ngac.OpRead); err != nil {
 			return nil, err
@@ -248,7 +265,10 @@ func (s *DriveServer) ListFolder(ctx context.Context, req *pb.ListFolderRequest)
 // GetItem returns a single drive item after NGAC read check.
 func (s *DriveServer) GetItem(ctx context.Context, req *pb.GetItemRequest) (*pb.DriveItem, error) {
 	item, err := s.store.GetItem(ctx, req.ItemId)
-	if err != nil || item == nil {
+	// A trashed item is gone as far as this call is concerned; it is reached
+	// again only through RestoreItem. (A pending upload stays readable: the
+	// uploader looks it up between CreateFile and ConfirmFile.)
+	if err != nil || item == nil || item.Status == "trashed" {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpRead); err != nil {
@@ -277,9 +297,9 @@ func (s *DriveServer) CreateFile(ctx context.Context, req *pb.CreateFileRequest)
 	var parentNGACID string
 	var parentScopeOAID string
 	if req.ParentId != "" {
-		parent, err := s.store.GetItem(ctx, req.ParentId)
-		if err != nil || parent == nil {
-			return nil, status.Errorf(codes.NotFound, "parent folder not found")
+		parent, err := s.liveFolder(ctx, req.ParentId, req.WorkspaceId)
+		if err != nil {
+			return nil, err
 		}
 		parentNGACID = parent.NGACNodeID
 		parentScopeOAID = parent.ScopeOAID
@@ -438,57 +458,185 @@ func (s *DriveServer) RenameItem(ctx context.Context, req *pb.RenameItemRequest)
 	return itemToProto(item), nil
 }
 
-// MoveItem moves an item within the same drive context.
+// MoveItem moves an item within the same drive context. An empty NewParentId
+// moves it to the top level of that drive.
+//
+// Moves of one item are serialised (store.LockItem), and the row is updated
+// only if the item is still under the parent this move started from, so two
+// concurrent moves cannot leave the item under both destinations in the graph.
 func (s *DriveServer) MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*pb.DriveItem, error) {
+	callerNode := grpcauth.CallerFrom(ctx).NGACNodeID
 	item, err := s.store.GetItem(ctx, req.ItemId)
-	if err != nil || item == nil {
+	if err != nil || item == nil || item.Status == "trashed" {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
-		return nil, err
-	}
-	dest, err := s.store.GetItem(ctx, req.NewParentId)
-	if err != nil || dest == nil {
-		return nil, status.Errorf(codes.NotFound, "destination not found")
-	}
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, dest.NGACNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, callerNode, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
-	// NGAC: only reassign node for folders (folders have their own OA node).
-	// Files don't have NGAC nodes — they inherit from parent folder.
-	if item.ItemType == "folder" {
-		if item.ParentID != nil {
-			old, _ := s.store.GetItem(ctx, *item.ParentID)
-			if old != nil {
-				// If the old edge survives, the folder hangs under both parents
-				// and keeps inheriting the permissions of the one it left.
-				if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
-					ChildId: item.NGACNodeID, ParentId: old.NGACNodeID,
-				}); err != nil {
-					return nil, status.Errorf(codes.Internal, "detach folder from old parent: %v", err)
-				}
+	unlock, err := s.store.LockItem(ctx, item.ID)
+	if err != nil {
+		return nil, status.Errorf(codes.Unavailable, "wait for concurrent move: %v", err)
+	}
+	defer unlock()
+
+	// Read again under the lock: the item may have moved, or been trashed,
+	// while this call waited, and what follows must start from where it is now.
+	prevNode := item.NGACNodeID
+	item, err = s.store.GetItem(ctx, req.ItemId)
+	if err != nil || item == nil || item.Status == "trashed" {
+		return nil, status.Errorf(codes.NotFound, "item not found")
+	}
+	if item.NGACNodeID != prevNode {
+		if err := s.checkAccess(ctx, callerNode, item.NGACNodeID, ngac.OpWrite); err != nil {
+			return nil, err
+		}
+	}
+
+	// Resolve the destination. Everything that can be refused is refused here,
+	// before any policy write.
+	var dest *store.DriveItem
+	var newParentID *string
+	if req.NewParentId == "" {
+		root, err := s.ensureRoot(ctx, item.WorkspaceID, item.DriveContext, item.DriveContextID, callerNode)
+		if err != nil {
+			return nil, err
+		}
+		if root.ID == item.ID {
+			return nil, status.Errorf(codes.InvalidArgument, "the drive root cannot be moved")
+		}
+		dest = root // top-level items have no parent row; the root is only their OA
+	} else {
+		dest, err = s.store.GetItem(ctx, req.NewParentId)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "load destination: %v", err)
+		}
+		if dest == nil || dest.Status != "active" {
+			return nil, status.Errorf(codes.NotFound, "destination not found")
+		}
+		if dest.ItemType != "folder" {
+			return nil, status.Errorf(codes.InvalidArgument, "destination is not a folder")
+		}
+		if dest.WorkspaceID != item.WorkspaceID || dest.DriveContext != item.DriveContext ||
+			(item.DriveContext != "workspace" && dest.DriveContextID != item.DriveContextID) {
+			return nil, status.Errorf(codes.InvalidArgument, "an item can only be moved within its own drive")
+		}
+		if item.ItemType == "folder" {
+			inside, err := s.store.IsAncestorOrSelf(ctx, item.ID, dest.ID)
+			if err != nil {
+				return nil, status.Errorf(codes.Internal, "check destination: %v", err)
+			}
+			if inside {
+				return nil, status.Errorf(codes.InvalidArgument,
+					"a folder cannot be moved into itself or one of its subfolders")
 			}
 		}
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: item.NGACNodeID, ParentId: dest.NGACNodeID,
-		}); err != nil {
-			return nil, status.Errorf(codes.Internal, "attach folder to new parent: %v", err)
+		id := dest.ID
+		newParentID = &id
+	}
+	if err := s.checkAccess(ctx, callerNode, dest.NGACNodeID, ngac.OpWrite); err != nil {
+		return nil, err
+	}
+
+	newNodeID := item.NGACNodeID // a folder keeps its own OA
+	var oldParentOA string
+	if item.ItemType == "folder" {
+		// Folders have their own OA; moving one means re-pointing its parent
+		// edge. Files have none and inherit from the folder they sit in.
+		oldParentOA, err = s.currentParentOA(ctx, item)
+		if err != nil {
+			return nil, err
 		}
+		if err := s.reparent(ctx, item.NGACNodeID, oldParentOA, dest.NGACNodeID); err != nil {
+			return nil, status.Errorf(codes.Internal, "move folder: %v", err)
+		}
+	} else {
+		newNodeID = dest.NGACNodeID
 	}
 
-	// For files: update NGACNodeID to inherit from new parent folder.
-	if item.ItemType == "file" {
-		item.NGACNodeID = dest.NGACNodeID
-		s.store.UpdateNGACNodeID(ctx, item.ID, dest.NGACNodeID)
+	moved, err := s.store.UpdateParentAndNode(ctx, item.ID, item.ParentID, newParentID, newNodeID)
+	if err != nil || !moved {
+		// The row did not move, so neither may the policy edge.
+		if item.ItemType == "folder" {
+			if rerr := s.reparent(ctx, item.NGACNodeID, dest.NGACNodeID, oldParentOA); rerr != nil {
+				slog.Error("move rolled back incompletely; folder edge needs repair",
+					"item", item.ID, "error", rerr)
+				return nil, status.Errorf(codes.Internal, "move failed and could not be undone: %v", rerr)
+			}
+		}
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "move: %v", err)
+		}
+		return nil, status.Errorf(codes.Aborted, "item was changed by another request; retry")
 	}
-
-	newParent := req.NewParentId
-	if err := s.store.UpdateParent(ctx, item.ID, &newParent); err != nil {
-		return nil, status.Errorf(codes.Internal, "move: %v", err)
-	}
-	item.ParentID = &newParent
+	item.NGACNodeID = newNodeID
+	item.ParentID = newParentID
 	return itemToProto(item), nil
+}
+
+// currentParentOA returns the OA a folder is assigned under today: its parent
+// folder's OA, or the drive root's for a top-level folder. "" means unknown
+// (no parent row or root found), in which case there is no edge to remove.
+func (s *DriveServer) currentParentOA(ctx context.Context, item *store.DriveItem) (string, error) {
+	if item.ParentID != nil {
+		old, err := s.store.GetItem(ctx, *item.ParentID)
+		if err != nil {
+			return "", status.Errorf(codes.Internal, "load current parent: %v", err)
+		}
+		if old == nil {
+			return "", nil
+		}
+		return old.NGACNodeID, nil
+	}
+	rootCtxID := item.DriveContextID
+	if rootCtxID == "" {
+		rootCtxID = item.WorkspaceID
+	}
+	root, err := s.store.FindRootByContext(ctx, item.WorkspaceID, item.DriveContext, rootCtxID)
+	if err != nil {
+		return "", status.Errorf(codes.Internal, "find drive root: %v", err)
+	}
+	if root == nil {
+		return "", nil
+	}
+	if root.ID == item.ID {
+		return "", status.Errorf(codes.InvalidArgument, "the drive root cannot be moved")
+	}
+	return root.NGACNodeID, nil
+}
+
+// reparent moves a folder OA from one parent OA to another. The new edge is
+// made first and the old one removed after, so the folder never reaches fewer
+// policy classes than it should: a shared folder detached from its workspace
+// reaches only PC_Global, which would let users of other tenants through the
+// share. If the new edge is refused (a cycle, say) nothing has changed; if the
+// old edge cannot be removed the new one is withdrawn again. A failure that
+// leaves the folder under both parents is returned, not just logged.
+func (s *DriveServer) reparent(ctx context.Context, childOA, fromOA, toOA string) error {
+	if fromOA == toOA {
+		return nil
+	}
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+		ChildId: childOA, ParentId: toOA,
+	}); err != nil {
+		return fmt.Errorf("attach folder to new parent: %w", err)
+	}
+	if fromOA == "" {
+		return nil
+	}
+	// If the old edge survives, the folder hangs under both parents and keeps
+	// inheriting the permissions of the one it left.
+	if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+		ChildId: childOA, ParentId: fromOA,
+	}); err != nil {
+		if _, rerr := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+			ChildId: childOA, ParentId: toOA,
+		}); rerr != nil {
+			return fmt.Errorf("detach folder from old parent: %w; withdrawing the new edge also failed (%v), so the folder is under both parents", err, rerr)
+		}
+		return fmt.Errorf("detach folder from old parent: %w", err)
+	}
+	return nil
 }
 
 // CopyItem copies a file to a destination (possibly cross-context).

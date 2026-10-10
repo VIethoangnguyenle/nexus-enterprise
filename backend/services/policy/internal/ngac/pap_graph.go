@@ -1,6 +1,7 @@
 package ngac
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 )
@@ -119,25 +120,45 @@ func (g *Graph) RemoveAssignment(childID, parentID string) {
 	}
 }
 
+// ErrInvalidAssociation marks an association that the graph cannot hold: a
+// source that is not a UA, a target that is not an OA, or a node that does not
+// exist. It is the caller's mistake, not a server fault.
+var ErrInvalidAssociation = errors.New("invalid association")
+
+// validateAssociationLocked checks node existence and types. g.mu must be held.
+func (g *Graph) validateAssociationLocked(a *Association) error {
+	ua, ok := g.Nodes[a.UAID]
+	if !ok {
+		return fmt.Errorf("%w: UA node %s not found", ErrInvalidAssociation, a.UAID)
+	}
+	if ua.NodeType != NodeTypeUserAttribute {
+		return fmt.Errorf("%w: source must be UA, got %s", ErrInvalidAssociation, ua.NodeType)
+	}
+	oa, ok := g.Nodes[a.OAID]
+	if !ok {
+		return fmt.Errorf("%w: OA node %s not found", ErrInvalidAssociation, a.OAID)
+	}
+	if oa.NodeType != NodeTypeObjectAttr {
+		return fmt.Errorf("%w: target must be OA, got %s", ErrInvalidAssociation, oa.NodeType)
+	}
+	return nil
+}
+
+// ValidateAssociation checks whether an association is valid without mutating
+// the graph, so a caller can refuse it before writing anything durable.
+func (g *Graph) ValidateAssociation(a *Association) error {
+	g.mu.RLock()
+	defer g.mu.RUnlock()
+	return g.validateAssociationLocked(a)
+}
+
 // AddAssociation adds a permission edge
 func (g *Graph) AddAssociation(a *Association) error {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 
-	ua, ok := g.Nodes[a.UAID]
-	if !ok {
-		return fmt.Errorf("UA node %s not found", a.UAID)
-	}
-	if ua.NodeType != NodeTypeUserAttribute {
-		return fmt.Errorf("source must be UA, got %s", ua.NodeType)
-	}
-
-	oa, ok := g.Nodes[a.OAID]
-	if !ok {
-		return fmt.Errorf("OA node %s not found", a.OAID)
-	}
-	if oa.NodeType != NodeTypeObjectAttr {
-		return fmt.Errorf("target must be OA, got %s", oa.NodeType)
+	if err := g.validateAssociationLocked(a); err != nil {
+		return err
 	}
 
 	g.Associations[a.ID] = a

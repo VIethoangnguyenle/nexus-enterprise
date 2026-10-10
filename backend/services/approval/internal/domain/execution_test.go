@@ -75,6 +75,14 @@ func (m *mockStore) GetAssignment(_ context.Context, requestID, userNodeID strin
 	}
 	return a, nil
 }
+func (m *mockStore) HasAssignment(_ context.Context, requestID, userNodeID string) (bool, error) {
+	for _, a := range m.assignList {
+		if a.RequestID == requestID && a.UserNodeID == userNodeID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 func (m *mockStore) UpdateAssignmentStatus(_ context.Context, id, status, comment string) error {
 	for _, a := range m.assignList {
 		if a.ID == id {
@@ -152,12 +160,13 @@ func (m *mockStore) ListAuditEntries(_ context.Context, requestID string) ([]*Au
 // --- mock policy ---
 
 type mockPolicy struct {
-	scopes  []string
-	allowed bool
+	scopes    []string
+	allowed   bool
+	scopesErr error
 }
 
 func (m *mockPolicy) ResolveAccessibleScopes(_ context.Context, _, _ string) ([]string, error) {
-	return m.scopes, nil
+	return m.scopes, m.scopesErr
 }
 func (m *mockPolicy) CheckAccess(_ context.Context, _, _, _ string) (bool, error) {
 	return m.allowed, nil

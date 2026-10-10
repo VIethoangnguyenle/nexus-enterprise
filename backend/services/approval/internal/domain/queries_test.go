@@ -111,35 +111,107 @@ func TestGetDepartmentRequests_WithScopes(t *testing.T) {
 	}
 }
 
-func TestGetAuditLog_EmptyInput(t *testing.T) {
-	ms := newMockStore()
-	mp := &mockPolicy{allowed: true}
-	svc := NewService(ms, mp)
+const (
+	req1ID = "11111111-1111-4111-8111-111111111111"
+	req2ID = "22222222-2222-4222-8222-222222222222"
+)
 
-	_, err := svc.GetAuditLog(context.Background(), "")
-	if !errors.Is(err, ErrInvalidInput) {
-		t.Errorf("err = %v, want ErrInvalidInput", err)
+func TestGetAuditLog_EmptyInput(t *testing.T) {
+	svc := NewService(newMockStore(), &mockPolicy{allowed: true})
+
+	if _, err := svc.GetAuditLog(context.Background(), "user1", ""); !errors.Is(err, ErrInvalidInput) {
+		t.Errorf("empty request id: err = %v, want ErrInvalidInput", err)
+	}
+	if _, err := svc.GetAuditLog(context.Background(), "", req1ID); !errors.Is(err, ErrAccessDenied) {
+		t.Errorf("empty caller: err = %v, want ErrAccessDenied", err)
 	}
 }
 
-func TestGetAuditLog_ReturnsEntries(t *testing.T) {
+// auditFixture holds req1 (created by "requester", scoped to oa-dept, with
+// "approver" assigned to a past step) and req2, plus an audit trail for each.
+func auditFixture(policy *mockPolicy) (*Service, *mockStore) {
 	ms := newMockStore()
-	mp := &mockPolicy{allowed: true}
-	svc := NewService(ms, mp)
-
-	// Seed audit log
+	ms.requests[req1ID] = &Request{ID: req1ID, CreatedBy: "requester", ScopeOAID: "oa-dept"}
+	ms.requests[req2ID] = &Request{ID: req2ID, CreatedBy: "someone-else", ScopeOAID: "oa-other"}
+	ms.assignList = append(ms.assignList, &AssignmentRecord{
+		ID: "as1", RequestID: req1ID, StepOrder: 1, UserNodeID: "approver", Status: "skipped",
+	})
 	ms.auditLog = append(ms.auditLog,
-		&AuditEntry{ID: "a1", RequestID: "req1", Action: "created"},
-		&AuditEntry{ID: "a2", RequestID: "req1", Action: "approved"},
-		&AuditEntry{ID: "a3", RequestID: "req2", Action: "created"},
+		&AuditEntry{ID: "a1", RequestID: req1ID, Action: "created"},
+		&AuditEntry{ID: "a2", RequestID: req1ID, Action: "approved"},
+		&AuditEntry{ID: "a3", RequestID: req2ID, Action: "created"},
 	)
+	return NewService(ms, policy), ms
+}
 
-	entries, err := svc.GetAuditLog(context.Background(), "req1")
-	if err != nil {
-		t.Fatalf("GetAuditLog: %v", err)
+func TestGetAuditLog_AllowedForEachPathToTheRequest(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		caller string
+		policy *mockPolicy
+	}{
+		{"requester", "requester", &mockPolicy{}},
+		{"assignee of a past step", "approver", &mockPolicy{}},
+		{"department scope covers it", "dept-head", &mockPolicy{scopes: []string{"oa-x", "oa-dept"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			svc, _ := auditFixture(tc.policy)
+			entries, err := svc.GetAuditLog(context.Background(), tc.caller, req1ID)
+			if err != nil {
+				t.Fatalf("GetAuditLog: %v", err)
+			}
+			if len(entries) != 2 {
+				t.Errorf("got %d entries, want the 2 of req1", len(entries))
+			}
+		})
 	}
-	if len(entries) != 2 {
-		t.Errorf("got %d entries, want 2", len(entries))
+}
+
+func TestGetAuditLog_DeniedForAnUnrelatedCaller(t *testing.T) {
+	// Scopes cover another request only; the caller neither created nor was
+	// assigned req1.
+	svc, _ := auditFixture(&mockPolicy{scopes: []string{"oa-other"}})
+	entries, err := svc.GetAuditLog(context.Background(), "stranger", req1ID)
+	if !errors.Is(err, ErrAccessDenied) {
+		t.Fatalf("err = %v, want ErrAccessDenied", err)
+	}
+	if entries != nil {
+		t.Errorf("a denied caller received %d entries", len(entries))
+	}
+
+	// Having an assignment on req1 grants nothing on req2.
+	svc, _ = auditFixture(&mockPolicy{})
+	if _, err := svc.GetAuditLog(context.Background(), "approver", req2ID); !errors.Is(err, ErrAccessDenied) {
+		t.Errorf("assignee of req1 reading req2: err = %v, want ErrAccessDenied", err)
+	}
+}
+
+func TestGetAuditLog_ScopeResolutionFailureIsNotAGrant(t *testing.T) {
+	svc, _ := auditFixture(&mockPolicy{scopes: []string{"oa-dept"}, scopesErr: errors.New("policy down")})
+	entries, err := svc.GetAuditLog(context.Background(), "dept-head", req1ID)
+	if err == nil {
+		t.Fatal("want an error when scopes cannot be resolved")
+	}
+	if entries != nil {
+		t.Errorf("entries leaked while the policy was unreachable")
+	}
+}
+
+func TestGetAuditLog_MissingHiddenAndMalformedIDs(t *testing.T) {
+	svc, _ := auditFixture(&mockPolicy{})
+	// A missing request is answered exactly like a hidden one.
+	missing := "3f2c1d0e-0000-4000-8000-000000000000"
+	if _, err := svc.GetAuditLog(context.Background(), "requester", missing); !errors.Is(err, ErrAccessDenied) {
+		t.Errorf("missing request: err = %v, want ErrAccessDenied", err)
+	}
+	if _, err := svc.GetAuditLog(context.Background(), "stranger", req1ID); !errors.Is(err, ErrAccessDenied) {
+		t.Errorf("hidden request: err = %v, want ErrAccessDenied", err)
+	}
+	// A malformed id is a bad request, not a server error.
+	for _, bad := range []string{"not-a-uuid", "1", "req1"} {
+		if _, err := svc.GetAuditLog(context.Background(), "requester", bad); !errors.Is(err, ErrInvalidInput) {
+			t.Errorf("id %q: err = %v, want ErrInvalidInput", bad, err)
+		}
 	}
 }
 

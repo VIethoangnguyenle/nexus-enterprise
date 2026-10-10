@@ -146,6 +146,9 @@ func (h *Handler) ListFolder(c echo.Context) error {
 	}
 	resp, err := h.svc.ListFolder(c.Request().Context(), &pb.ListFolderRequest{
 		FolderId: c.Param("folderId"),
+		// Optional: a client that knows the workspace it is browsing names it
+		// (?ws=), and the drive then refuses a folder of any other workspace.
+		WorkspaceId: c.QueryParam("ws"),
 	})
 	if err != nil {
 		return mapGRPCError(err)

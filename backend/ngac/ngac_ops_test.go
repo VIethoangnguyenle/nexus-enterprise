@@ -82,3 +82,92 @@ func TestDMChannelName(t *testing.T) {
 		}()
 	}
 }
+
+func TestShareOps(t *testing.T) {
+	read, ok := ngac.ShareOps(ngac.SharePermissionRead)
+	if !ok || len(read) != 1 || read[0] != ngac.OpRead {
+		t.Fatalf("read share = %v, %v", read, ok)
+	}
+	write, ok := ngac.ShareOps(ngac.SharePermissionWrite)
+	if !ok || len(write) != 2 || write[0] != ngac.OpRead || write[1] != ngac.OpWrite {
+		t.Fatalf("write share = %v, %v", write, ok)
+	}
+	// Deny: nothing outside the two permissions maps to operations, least of
+	// all an operation name a client might try to smuggle in.
+	for _, bad := range []string{"", "manage", "share", "approve", "READ", "read,write", "upload"} {
+		if ops, ok := ngac.ShareOps(bad); ok || ops != nil {
+			t.Errorf("ngac.ShareOps(%q) = %v, %v; want rejected", bad, ops, ok)
+		}
+	}
+}
+
+func TestPersonalUANameIsPerUser(t *testing.T) {
+	if ngac.PersonalUAName("a") == ngac.PersonalUAName("b") {
+		t.Fatal("distinct users must get distinct personal UAs")
+	}
+}
+
+func TestValidateRoleName(t *testing.T) {
+	for _, ok := range []string{"Editor", "Kế toán trưởng", "Reviewers", "Members of QA", "Userland"} {
+		if err := ngac.ValidateRoleName(ok); err != nil {
+			t.Errorf("ValidateRoleName(%q) = %v, want accepted", ok, err)
+		}
+	}
+	// Deny: every namespace the platform builds node names in.
+	for _, bad := range []string{
+		"", "   ", "User_abc", "user_abc", "PC_Global", "PC_ws1", "TenantMember_t", "TenantOwner_t",
+		"Dept_Sales", "Ch_x_Members", "ws1_Owners", "ws1_members", "ws1_Mgmt", "ws1_Documents",
+		"ws1_Channels", "ws1_Assets", "PublicUsers", "publicusers", "DriveRoot_ws", "Folder_x",
+		"Share_x_1", " User_abc",
+	} {
+		if err := ngac.ValidateRoleName(bad); err == nil {
+			t.Errorf("ValidateRoleName(%q) accepted, want rejected", bad)
+		}
+	}
+}
+
+func TestPersonalUAProperties(t *testing.T) {
+	props := ngac.PersonalUAProperties("u1")
+	if !ngac.IsPersonalUAOf(props, "u1") {
+		t.Fatal("own properties must match")
+	}
+	for name, p := range map[string]map[string]string{
+		"other user": props, "no properties": nil, "wrong type": {ngac.PropType: "role", ngac.PropUserNodeID: "u2"},
+		"missing user": {ngac.PropType: ngac.PropTypePersonalUA},
+	} {
+		if ngac.IsPersonalUAOf(p, "u2") && name == "other user" {
+			t.Errorf("%s: matched", name)
+		}
+	}
+	if ngac.IsPersonalUAOf(ngac.PersonalUAProperties(""), "") {
+		t.Error("an empty user id must never match")
+	}
+	if ngac.IsPersonalUAOf(map[string]string{ngac.PropType: "role", ngac.PropUserNodeID: "u2"}, "u2") {
+		t.Error("a node without the personal_ua type must not match")
+	}
+}
+
+func TestMembersKeepShareButShareGranteesDoNot(t *testing.T) {
+	has := func(ops []string, op string) bool {
+		for _, o := range ops {
+			if o == op {
+				return true
+			}
+		}
+		return false
+	}
+	if !has(ngac.MemberDocumentOps(), ngac.OpShare) || !has(ngac.ChannelDriveOps(), ngac.OpShare) {
+		t.Fatal("members must hold share on Documents and on their channel drive")
+	}
+	for _, op := range []string{ngac.OpManage, ngac.OpApprove, ngac.OpInvite} {
+		if has(ngac.MemberDocumentOps(), op) || has(ngac.ChannelDriveOps(), op) {
+			t.Errorf("members must not hold %s", op)
+		}
+	}
+	for _, perm := range []string{ngac.SharePermissionRead, ngac.SharePermissionWrite} {
+		ops, _ := ngac.ShareOps(perm)
+		if has(ops, ngac.OpShare) {
+			t.Errorf("a %s share must not grant share", perm)
+		}
+	}
+}

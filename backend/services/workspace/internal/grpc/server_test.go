@@ -262,6 +262,30 @@ func TestCreateRole(t *testing.T) {
 	assert.Equal(t, "Editor", role.Name)
 }
 
+// A role is a UA with a name the administrator chooses, and node names are
+// matched exactly. A role named inside a namespace the platform builds its own
+// nodes in (a person's personal UA, a workspace's Owners UA, a policy class)
+// could be found where the platform expects its own node, and receive what is
+// granted to it.
+func TestCreateRole_ReservedNamesAreRejected(t *testing.T) {
+	srv, pool, _ := setupTestServer(t)
+	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "RoleWSReserved")
+
+	for _, name := range []string{
+		ngac.PersonalUAName("some-victim-node"), "PC_Global", ngac.OwnersUAName(ws.Id),
+		ngac.MembersUAName("other-ws"), ngac.TenantMemberUAName("t1"), ngac.NodePublicUsers,
+	} {
+		_, err := srv.CreateRole(asCaller("", ngacNodeID), &pb.CreateRoleRequest{WorkspaceId: ws.Id, Name: name})
+		requireCode(t, err, codes.InvalidArgument)
+	}
+
+	roles, err := srv.ListRoles(asCaller("", ngacNodeID), &pb.ListRolesRequest{WorkspaceId: ws.Id})
+	require.NoError(t, err)
+	for _, r := range roles.Roles {
+		assert.NotEqual(t, ngac.PersonalUAName("some-victim-node"), r.Name)
+	}
+}
+
 func TestCreateRole_PDPDenyIsPermissionDenied(t *testing.T) {
 	srv, pool, pr := setupTestServer(t)
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "RoleWSDeny")

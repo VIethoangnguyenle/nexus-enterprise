@@ -178,7 +178,12 @@ func (s *Server) GetAuditLog(ctx context.Context, req *pb.GetAuditLogRequest) (*
 		return nil, status.Error(codes.InvalidArgument, "request_id required")
 	}
 
-	entries, err := s.svc.GetAuditLog(ctx, req.RequestId)
+	userNodeID, err := callerNode(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	entries, err := s.svc.GetAuditLog(ctx, userNodeID, req.RequestId)
 	if err != nil {
 		return nil, mapError(err)
 	}

@@ -33,7 +33,7 @@ The system SHALL create associations between tenant UAs and OAs so that members 
 
 #### Scenario: TenantMember association
 - **WHEN** a tenant is initialized
-- **THEN** `TenantMember_{tenant_id}` has association to tenant OAs with member operations: `read, write, upload` on Documents and `read, write, create_channel` on Channels
+- **THEN** `TenantMember_{tenant_id}` has association to tenant OAs with member operations: `read, write, upload, share` on Documents and `read, write, create_channel` on Channels
 
 Members hold `write` on Documents, not only `read`, because the drive gates file creation on it — an upload is CreateFile followed by ConfirmFile and both check `write` on the destination folder. A read-only member sees the Upload button and can never complete an upload. This matches what a member already holds on any channel drive they belong to.
 
@@ -48,8 +48,8 @@ The system SHALL assign the Owners UA under the Members UA, never the reverse. N
 
 #### Scenario: Member does not inherit owner grants
 - **WHEN** a user is assigned to `{workspace_id}_Members` and to no other UA
-- **THEN** `manage`, `invite`, `approve` and `share` on the workspace's Mgmt, Documents and Channels OAs all resolve to DENY
-- **AND** only the member operations (read, write and upload on Documents, and the channel operations) resolve to ALLOW
+- **THEN** `manage`, `invite` and `approve` on the workspace's Mgmt, Documents and Channels OAs all resolve to DENY, and so does `share` on Mgmt and Channels
+- **AND** only the member operations (read, write, upload and share on Documents, and the channel operations) resolve to ALLOW
 
 #### Scenario: Member of another workspace
 - **WHEN** a user's attributes reach only a different workspace's Policy Class
@@ -95,3 +95,61 @@ The system SHALL NOT perform any authorization check outside the NGAC graph. Rol
 - **WHEN** any service needs to check if a user can perform an operation
 - **THEN** it calls `checkAccess(user_ngac_node_id, object_ngac_node_id, operation)` via the Policy Service
 - **AND** never inspects `tenant_users.role` for authorization decisions
+
+### Requirement: Associations are validated before they are written
+The policy service SHALL check that an association starts from an existing UA and ends at an existing OA before it writes the association row, and SHALL answer InvalidArgument when it does not. A refused association SHALL leave no row in `ngac_associations` and no edge in the graph.
+
+#### Scenario: Association from a user node
+- **WHEN** `CreateAssociation` names a user (U) node as the source
+- **THEN** it fails with InvalidArgument, no `ngac_associations` row exists for it, and the graph is unchanged
+
+#### Scenario: Association to a non-OA or unknown node
+- **WHEN** the target is a UA, or either node does not exist
+- **THEN** it fails with InvalidArgument and nothing is written
+
+#### Scenario: Valid association
+- **WHEN** a UA and an OA are associated
+- **THEN** the row is written, the edge is in the graph, and caches are invalidated through the EPP path
+
+### Requirement: A person can be granted access through a personal user attribute
+Because only a UA can be the source of an association, granting access to one person SHALL go through a personal UA that contains exactly that user. It is created the first time a grant needs it with the properties `type = personal_ua` and `user_node_id = <the user's node id>` (`ngac.PersonalUAProperties`), is named `ngac.PersonalUAName(userNodeID)` for readability only, and is reused afterwards. It needs no policy class of its own: the user already reaches the workspace and global policy classes through other attributes, so the intersection rule still decides.
+
+A node is accepted as a person's personal UA only by its properties (`ngac.IsPersonalUAOf`) and by the user being inside it, never by its name: workspace administrators choose role names, and a role named like a personal UA must not receive the person's shares. The database allows at most one personal UA per `user_node_id` (unique index), so a lost creation race is resolved by looking the winner up. A workspace shard SHALL carry the personal UA of every user it loads, and only a UA marked as that very user's, because the descent from the tenant policy class never reaches it.
+
+#### Scenario: Grant to a person
+- **WHEN** an item is shared with a user who has no personal UA yet
+- **THEN** the UA is created, the user is assigned to it, and the association starts from the UA
+
+#### Scenario: A same-named node is never reused
+- **WHEN** a role (or any UA) has the name of a person's personal UA but not the properties marking it as theirs, or is marked as another user's
+- **THEN** it is ignored: a genuine personal UA is created for the person and the share's association starts from that one
+
+#### Scenario: Second personal UA for one user
+- **WHEN** a second UA with `type = personal_ua` and the same `user_node_id` is created
+- **THEN** the database refuses it
+
+#### Scenario: Personal UA on a workspace shard
+- **WHEN** a workspace shard is loaded for a user who has a personal UA
+- **THEN** the shard contains that UA and its associations, so a share to the person grants on the shard exactly what it grants on the global graph; another user's personal UA is not loaded through them
+
+#### Scenario: Grant to a person outside the workspace
+- **WHEN** the person does not reach the workspace's policy class
+- **THEN** the share grants them nothing, because the object's policy classes are not all reached by the user
+
+### Requirement: Default grants decide who may share
+Workspace Owners hold `share` (with every other owner operation) on the Documents OA; Members hold `read, write, upload, share` there (`ngac.MemberDocumentOps`), and members of a channel hold `read, write, upload, share` on its drive (`ngac.ChannelDriveOps`). Members share what they work on. A share grants its grantee `read` or `read, write` only (`ngac.ShareOps`), never `share`, so the right does not spread to the people a file is shared with. Existing associations are backfilled by migration `019_member_share_op.sql`; like the other direct association writes it bypasses EPP invalidation, so the services must be restarted after it is applied.
+
+#### Scenario: Member shares
+- **WHEN** a workspace member (or a channel member, on the channel's drive) shares an item
+- **THEN** the `share` check on the item resolves to ALLOW
+
+#### Scenario: Grantee of a write share
+- **WHEN** a person has been shared an item with "write"
+- **THEN** they have `read` and `write` on it and `share`, `manage`, `approve` resolve to DENY
+
+### Requirement: Role names stay out of the platform's namespaces
+A role (a UA created by a workspace administrator) SHALL be refused when its name is empty or starts or ends like a name the platform builds itself (`ngac.ValidateRoleName`): the prefixes `User_`, `PC_`, `TenantMember_`, `TenantOwner_`, `Dept_`, `Ch_`, `DriveRoot_`, `Folder_`, `Share_`, `Asset_`, the suffixes `_Owners`, `_Members`, `_Mgmt`, `_Documents`, `_DraftDocs`, `_ApprovedDocs`, `_Channels`, `_Assets`, `_Content`, `_Drive`, and the names `PC_Global` and `PublicUsers`, compared case-insensitively. Node names are matched exactly and the graph's name index keeps the last node written, so a role inside one of these namespaces could be found where the platform expects its own node.
+
+#### Scenario: Reserved role name
+- **WHEN** an administrator creates a role named like a personal UA, a workspace's Owners UA or a policy class
+- **THEN** the request fails with InvalidArgument and no node is written

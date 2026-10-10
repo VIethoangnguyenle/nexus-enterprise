@@ -47,12 +47,21 @@ func ChannelMemberOps() []string {
 }
 
 // ChannelDriveOps returns operations granted to channel members on their drive.
+//
+// OpShare is included so that members keep sharing the files of a channel they
+// belong to, as they did before sharing was gated on the share operation. A
+// share only ever grants read or write to the grantee (see ShareOps), so the
+// right to share does not spread the right to share.
 func ChannelDriveOps() []string {
-	return []string{OpRead, OpWrite, OpUpload}
+	return []string{OpRead, OpWrite, OpUpload, OpShare}
 }
 
 // MemberDocumentOps returns operations granted to workspace members on the
 // Documents tree.
+//
+// OpShare is included because members share what they work on; the drive gates
+// CreateShare on it. Sharing grants the grantee read or write only, never
+// share, manage or approve.
 //
 // Members hold write, not only read, because the drive gates file creation on
 // write: uploading is CreateFile followed by ConfirmFile, and both check write
@@ -68,7 +77,31 @@ func ChannelDriveOps() []string {
 // in Documents including ones they did not create. Narrowing that needs
 // per-item attributes, not a smaller grant here.
 func MemberDocumentOps() []string {
-	return []string{OpRead, OpWrite, OpUpload}
+	return []string{OpRead, OpWrite, OpUpload, OpShare}
+}
+
+// SharePermission names how much a share lets the grantee do. It is the only
+// vocabulary clients may use to describe a share; the operations behind it are
+// decided here, never passed in by the caller.
+const (
+	SharePermissionRead  = "read"
+	SharePermissionWrite = "write"
+)
+
+// ShareOps maps a share permission to the operations the share grants.
+//
+// "write" includes read because a grantee who can edit a file must be able to
+// open it. Nothing else is accepted: in particular a caller cannot name an
+// operation such as manage or share, which would let a share hand out rights
+// the sharer was never meant to delegate.
+func ShareOps(permission string) ([]string, bool) {
+	switch permission {
+	case SharePermissionRead:
+		return []string{OpRead}, true
+	case SharePermissionWrite:
+		return []string{OpRead, OpWrite}, true
+	}
+	return nil, false
 }
 
 // --- Well-known node names ---
@@ -162,6 +195,78 @@ func TenantOwnerUAName(tenantID string) string { return fmt.Sprintf("TenantOwner
 func DriveRootName(workspaceID string) string {
 	return fmt.Sprintf("DriveRoot_%s", workspaceID)
 }
+
+// Properties that mark a node as a person's own attribute. The name below is
+// for readability only: nothing may trust a node because of its name, since a
+// workspace administrator chooses role names. A personal UA is recognised by
+// these properties and by the user being assigned to it.
+const (
+	PropType           = "type"
+	PropTypePersonalUA = "personal_ua"
+	PropUserNodeID     = "user_node_id"
+)
+
+// PersonalUAProperties returns the properties a personal UA is created with.
+func PersonalUAProperties(userNodeID string) map[string]string {
+	return map[string]string{PropType: PropTypePersonalUA, PropUserNodeID: userNodeID}
+}
+
+// IsPersonalUAOf reports whether props mark a UA as the personal attribute of
+// exactly this user.
+func IsPersonalUAOf(props map[string]string, userNodeID string) bool {
+	return userNodeID != "" && props[PropType] == PropTypePersonalUA && props[PropUserNodeID] == userNodeID
+}
+
+// reservedRolePrefixes and reservedRoleSuffixes are the namespaces the platform
+// builds its own node names in. A role is a UA whose name a workspace
+// administrator picks, and node names are matched exactly, so a role named
+// inside one of these namespaces could be found where the platform expects its
+// own node.
+var (
+	reservedRolePrefixes = []string{
+		"User_", "PC_", "TenantMember_", "TenantOwner_", "Dept_", "Ch_",
+		"DriveRoot_", "Folder_", "Share_", "Asset_",
+	}
+	reservedRoleSuffixes = []string{
+		"_Owners", "_Members", "_Mgmt", "_Documents", "_DraftDocs", "_ApprovedDocs",
+		"_Channels", "_Assets", "_Content", "_Drive",
+	}
+	reservedRoleNames = []string{NodePCGlobal, NodePublicUsers}
+)
+
+// ValidateRoleName rejects a role name that is empty or falls inside a
+// namespace the platform reserves for its own nodes (case-insensitively).
+func ValidateRoleName(name string) error {
+	n := strings.TrimSpace(name)
+	if n == "" {
+		return fmt.Errorf("role name is required")
+	}
+	lower := strings.ToLower(n)
+	for _, r := range reservedRoleNames {
+		if lower == strings.ToLower(r) {
+			return fmt.Errorf("role name %q is reserved", name)
+		}
+	}
+	for _, p := range reservedRolePrefixes {
+		if strings.HasPrefix(lower, strings.ToLower(p)) {
+			return fmt.Errorf("role name may not start with %q", p)
+		}
+	}
+	for _, sfx := range reservedRoleSuffixes {
+		if strings.HasSuffix(lower, strings.ToLower(sfx)) {
+			return fmt.Errorf("role name may not end with %q", sfx)
+		}
+	}
+	return nil
+}
+
+// PersonalUAName names the user attribute that stands for exactly one user.
+//
+// A user node (U) cannot be the source of an association — only a UA can — so
+// granting something to one person means granting it to a UA that contains only
+// them. Named by the user's node ID, never by display name, so two people with
+// the same name cannot resolve onto the same attribute.
+func PersonalUAName(userNodeID string) string { return fmt.Sprintf("User_%s", userNodeID) }
 
 func FolderNodeName(name string) string { return fmt.Sprintf("Folder_%s", name) }
 
