@@ -60,6 +60,14 @@ func (s *Service) SignInWithGoogle(ctx context.Context, ext ExternalIdentity) (*
 	if err != nil {
 		return nil, err
 	}
+	// Google vouched for this address (email_verified was checked above): the
+	// account's address is proven. A returning user whose stored address differs
+	// from Google's now keeps the old one unverified.
+	if strings.EqualFold(user.Email, email) {
+		if _, err := s.store.MarkEmailVerified(ctx, user.ID); err != nil {
+			return nil, err
+		}
+	}
 
 	preferredTenant := ""
 	switch {
@@ -156,6 +164,7 @@ func (s *Service) createExternalUser(ctx context.Context, email, displayName str
 	unionID := uuid.New().String()
 	ngacNode, err := s.createUserWithNode(ctx, newUser{
 		ID: userID, Username: username, Email: email, UnionID: unionID, DisplayName: displayName,
+		EmailVerified: true, // only reached with a verified Google email
 	})
 	if err != nil {
 		return nil, err

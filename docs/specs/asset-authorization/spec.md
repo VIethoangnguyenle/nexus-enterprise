@@ -113,3 +113,61 @@ Creating an asset type SHALL create its graph nodes and its row as one unit. A f
 #### Scenario: Workspace without a policy class
 - **WHEN** the workspace has no policy class recorded
 - **THEN** the request fails and nothing is written to the graph
+
+### Requirement: Types are listed by what the caller holds on each type's OA
+Listing a workspace's asset types SHALL return each type the caller holds at least one of `read`, `write`, `approve` or `manage` on, decided on that type's OA in one batch, and name the operations held (`AssetType.permissions`). It SHALL also say whether the caller may define types and edit their fields (`can_manage`: `manage` on the Assets OA, or on the Mgmt OA before the first type exists). A policy failure SHALL fail the call, never list nothing as if allowed.
+
+#### Scenario: Grant on one type
+- **WHEN** a caller holds `write` on the OA of type A only
+- **THEN** only type A is listed, with `permissions = [write]`, and `can_manage` is false
+
+#### Scenario: Nothing held
+- **WHEN** the caller holds nothing on any type OA
+- **THEN** the list is empty
+
+### Requirement: Handing over, approving and returning are decisions on the type OA
+Giving an asset to a person (`HandOverAsset`) SHALL require `manage` on its type OA and a recipient who is an active member of the asset's workspace; the asset must be `available` or `assigned`. Approving a request together with an asset SHALL require `approve` **and** `manage` on the request's type OA, the caller not being the requester, and the asset being `available`, in the request's workspace and of the request's type; the approval, the hand-over and the history entry SHALL be written in one transaction, so any refusal leaves request and asset unchanged. Giving an asset to a request approved earlier SHALL require `manage`. Rejecting a request SHALL require a non-blank reason. A bare lifecycle transition SHALL NOT perform `assign`.
+
+#### Scenario: Approve without manage
+- **WHEN** a caller holding `approve` but not `manage` approves a request naming an asset
+- **THEN** the call is PermissionDenied, the request stays pending and the asset stays available
+
+#### Scenario: Asset taken meanwhile
+- **WHEN** the named asset is no longer available, or is of another type
+- **THEN** the call fails (FailedPrecondition / InvalidArgument) and nothing changes
+
+#### Scenario: Two requests, one asset
+- **WHEN** two requests are approved with the same asset at once
+- **THEN** exactly one succeeds
+
+### Requirement: Names are read inside the asset's workspace
+Holder, requester, approver and history/feed actor names SHALL be joined through the membership of the record's own workspace; a person outside it is not named, and no identifier stands in for the name.
+
+### Requirement: What a caller learns without read
+Listing or fetching a type SHALL show it to a caller holding any of read, write, approve or manage on its OA, but SHALL report the type's asset and available counts only to a caller holding `read`. A caller holding only `write` can ask for the type without learning how many assets exist. Fetching a type, an asset's available steps, or deciding a request SHALL be authorized before anything about the record is said: a record that does not exist and one the caller may not touch SHALL answer alike (PermissionDenied). An asset's available steps SHALL require `read` on its type's OA.
+
+#### Scenario: Write only
+- **WHEN** a caller holds only `write` on type A and lists types
+- **THEN** A is listed with `permissions = [write]` and no counts
+
+#### Scenario: Missing request
+- **WHEN** a caller who may not approve approves a request ID that does not exist, and another that does
+- **THEN** both answers are the same PermissionDenied
+
+### Requirement: A request is decided once, and a step is taken on the state it was chosen from
+Deciding a request (approve, reject, hand over) SHALL succeed only while the request is pending, checked in the write itself; a late decision SHALL fail with FailedPrecondition and reason `request_not_open` and change nothing. A lifecycle step SHALL succeed only if, under the asset's row lock, the asset is not deleted and still in the state the step was chosen from (and, for a return, still held by the person read), else FailedPrecondition with reason `state_changed`. Refusals that share a status code SHALL carry a machine-readable reason (`asset_unavailable`, `request_not_open`, `state_changed`, `wrong_type`, `not_a_member`, `same_holder`). Internal failures SHALL reach a client as a generic error, never as database text.
+
+#### Scenario: Plain approve after approve-and-assign
+- **WHEN** a request was fulfilled with an asset and a plain approve or a reject arrives afterwards
+- **THEN** it fails with `request_not_open`; the request keeps its asset
+
+#### Scenario: Retire racing a hand-out
+- **WHEN** retiring an available asset and approving a request with it run at once
+- **THEN** exactly one stands; a retired asset has no holder
+
+### Requirement: Custom values are checked against the type and its workspace
+A type with no custom fields SHALL accept no custom values; a required field SHALL not be blank; a person-kind field SHALL name an active member of the type's workspace; an asset's name SHALL be 1 to 120 characters, and a request's reason and a rejection's reason at most 1000.
+
+#### Scenario: Person of another tenant
+- **WHEN** a custom field names a user who belongs only to another workspace
+- **THEN** the write is refused (InvalidArgument, reason `not_a_member`)

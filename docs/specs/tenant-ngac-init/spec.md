@@ -204,8 +204,8 @@ Listing, deleting and assigning roles SHALL act only on UAs marked `type = role`
 - **THEN** it is refused (NotFound) and the UA is untouched
 
 #### Scenario: Assign a member to a platform UA
-- **WHEN** `UpdateMemberRoles` names a platform UA among the roles
-- **THEN** it is refused before the member is detached from anything
+- **WHEN** a role assignment names a platform UA (Owners, Members, a department)
+- **THEN** it is refused (NotFound) and nothing is assigned
 
 ### Requirement: The policy service creates no object nodes
 `CreateNode` SHALL refuse node type `O` with InvalidArgument and write nothing.
@@ -213,4 +213,31 @@ Listing, deleting and assigning roles SHALL act only on UAs marked `type = role`
 #### Scenario: Create an O node
 - **WHEN** any caller asks the policy service to create a node of type `O`
 - **THEN** the request fails with InvalidArgument
+
+### Requirement: One association per attribute pair, replaced by a later grant
+A user attribute SHALL have at most one association with a given object attribute. Granting a UA operations on an OA it is already associated with replaces the earlier operations, in the database and in the in-memory graph of every policy service. The association keeps the row's ID, so a reload from the database decides as the running process did. Association writes are serialised, so the database row and the graph edge are written in the same order by every writer; assigning an edge that already exists keeps the row's ID and one graph entry.
+
+#### Scenario: Narrowing a grant
+- **WHEN** a UA holding `read`, `write` and `share` on an OA is granted only `read` on it
+- **THEN** a user of that UA is denied `write` and `share` at once, and still after the graph is reloaded
+
+#### Scenario: Another OA
+- **WHEN** a UA's grant on one OA is replaced
+- **THEN** its grants on other OAs are unchanged
+
+### Requirement: Associations of a user attribute can be read
+The policy read service SHALL list the associations of a UA (`GetAssociations`), and the policy writer SHALL answer the same from its own, authoritative graph for callers that decide a write from what is there now: each OA and the operations held. It SHALL answer InvalidArgument for an empty ID or a node that is not a UA, and NotFound for an unknown node, and SHALL return copies, so a caller cannot change the graph through the answer. Like every read RPC other than the signup lookups, it requires a verified end user.
+
+The policy writer SHALL likewise answer `GetNode`, `GetChildren`, `GetParents`, `GetAncestors` and `GetDescendants` from its own graph, under the same caller rule (Unauthenticated with no caller, a user caller required), so callers that decide a write or an authorization from the graph are not exposed to a lagging replica.
+
+#### Scenario: A user node
+- **WHEN** the associations of a user (U) node are requested
+- **THEN** the answer is InvalidArgument
+
+### Requirement: Members hold share on Documents and on channel drives
+The workspace's Members UA SHALL hold `share` with `read`, `write` and `upload` on Documents (the permissions screens list only the operations an area offers, and no area offers `upload`: the drive gates an upload on `write`), and channel members SHALL hold `share` on their channel's drive. The permissions screens SHALL show this: a role listing for Members under Tài liệu includes "Chia sẻ", and the permission areas offered for Documents and Channels include `share` and the channel operations members hold.
+
+#### Scenario: Members on Documents
+- **WHEN** an administrator opens the Members role
+- **THEN** its Documents permissions read Xem, Sửa, Chia sẻ and cannot be edited
 

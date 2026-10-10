@@ -60,18 +60,22 @@ func (*Empty) Descriptor() ([]byte, []int) {
 }
 
 type AssetType struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
-	Description   string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
-	Category      string                 `protobuf:"bytes,4,opt,name=category,proto3" json:"category,omitempty"`
-	WorkspaceId   string                 `protobuf:"bytes,5,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	FieldsSchema  string                 `protobuf:"bytes,6,opt,name=fields_schema,json=fieldsSchema,proto3" json:"fields_schema,omitempty"` // JSON Schema string for custom fields
-	Lifecycle     *LifecycleDefinition   `protobuf:"bytes,7,opt,name=lifecycle,proto3" json:"lifecycle,omitempty"`
-	NgacOaId      string                 `protobuf:"bytes,8,opt,name=ngac_oa_id,json=ngacOaId,proto3" json:"ngac_oa_id,omitempty"` // NGAC OA node for this type
-	AssetCount    int32                  `protobuf:"varint,9,opt,name=asset_count,json=assetCount,proto3" json:"asset_count,omitempty"`
-	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Id             string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name           string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	Description    string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
+	Category       string                 `protobuf:"bytes,4,opt,name=category,proto3" json:"category,omitempty"`
+	WorkspaceId    string                 `protobuf:"bytes,5,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	FieldsSchema   string                 `protobuf:"bytes,6,opt,name=fields_schema,json=fieldsSchema,proto3" json:"fields_schema,omitempty"` // JSON Schema string for custom fields
+	Lifecycle      *LifecycleDefinition   `protobuf:"bytes,7,opt,name=lifecycle,proto3" json:"lifecycle,omitempty"`
+	NgacOaId       string                 `protobuf:"bytes,8,opt,name=ngac_oa_id,json=ngacOaId,proto3" json:"ngac_oa_id,omitempty"` // NGAC OA node for this type
+	AssetCount     int32                  `protobuf:"varint,9,opt,name=asset_count,json=assetCount,proto3" json:"asset_count,omitempty"`
+	CreatedAt      *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt      *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	AvailableCount int32                  `protobuf:"varint,12,opt,name=available_count,json=availableCount,proto3" json:"available_count,omitempty"` // assets of this type in the "available" state
+	// Operations (read, write, approve, manage) the caller holds on this type's OA.
+	// Only set by ListTypes, so a screen offers what the server would accept.
+	Permissions   []string `protobuf:"bytes,13,rep,name=permissions,proto3" json:"permissions,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -179,6 +183,20 @@ func (x *AssetType) GetCreatedAt() *timestamppb.Timestamp {
 func (x *AssetType) GetUpdatedAt() *timestamppb.Timestamp {
 	if x != nil {
 		return x.UpdatedAt
+	}
+	return nil
+}
+
+func (x *AssetType) GetAvailableCount() int32 {
+	if x != nil {
+		return x.AvailableCount
+	}
+	return 0
+}
+
+func (x *AssetType) GetPermissions() []string {
+	if x != nil {
+		return x.Permissions
 	}
 	return nil
 }
@@ -496,6 +514,7 @@ func (x *ListTypesRequest) GetWorkspaceId() string {
 type AssetTypeList struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Types         []*AssetType           `protobuf:"bytes,1,rep,name=types,proto3" json:"types,omitempty"`
+	CanManage     bool                   `protobuf:"varint,2,opt,name=can_manage,json=canManage,proto3" json:"can_manage,omitempty"` // caller may define types and edit their fields
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -535,6 +554,13 @@ func (x *AssetTypeList) GetTypes() []*AssetType {
 		return x.Types
 	}
 	return nil
+}
+
+func (x *AssetTypeList) GetCanManage() bool {
+	if x != nil {
+		return x.CanManage
+	}
+	return false
 }
 
 type UpdateTypeSchemaRequest struct {
@@ -615,6 +641,7 @@ type Asset struct {
 	Deleted            bool                   `protobuf:"varint,12,opt,name=deleted,proto3" json:"deleted,omitempty"`
 	CreatedAt          *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt          *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	AssignedToName     string                 `protobuf:"bytes,15,opt,name=assigned_to_name,json=assignedToName,proto3" json:"assigned_to_name,omitempty"` // holder's display name, only for members of the asset's workspace
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -745,6 +772,13 @@ func (x *Asset) GetUpdatedAt() *timestamppb.Timestamp {
 		return x.UpdatedAt
 	}
 	return nil
+}
+
+func (x *Asset) GetAssignedToName() string {
+	if x != nil {
+		return x.AssignedToName
+	}
+	return ""
 }
 
 type CreateAssetRequest struct {
@@ -899,6 +933,7 @@ type ListAssetsRequest struct {
 	AssignedTo     string `protobuf:"bytes,5,opt,name=assigned_to,json=assignedTo,proto3" json:"assigned_to,omitempty"`                 // Optional filter
 	Limit          int32  `protobuf:"varint,6,opt,name=limit,proto3" json:"limit,omitempty"`
 	Offset         int32  `protobuf:"varint,7,opt,name=offset,proto3" json:"offset,omitempty"`
+	Search         string `protobuf:"bytes,8,opt,name=search,proto3" json:"search,omitempty"` // Optional: matches the asset's name or its holder's name
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -981,6 +1016,13 @@ func (x *ListAssetsRequest) GetOffset() int32 {
 		return x.Offset
 	}
 	return 0
+}
+
+func (x *ListAssetsRequest) GetSearch() string {
+	if x != nil {
+		return x.Search
+	}
+	return ""
 }
 
 type AssetList struct {
@@ -1357,6 +1399,7 @@ type TransitionList struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Transitions   []*AvailableTransition `protobuf:"bytes,1,rep,name=transitions,proto3" json:"transitions,omitempty"`
 	CurrentState  string                 `protobuf:"bytes,2,opt,name=current_state,json=currentState,proto3" json:"current_state,omitempty"`
+	CanAssign     bool                   `protobuf:"varint,3,opt,name=can_assign,json=canAssign,proto3" json:"can_assign,omitempty"` // caller may hand the asset to someone (manage, and it is available or assigned)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1403,6 +1446,13 @@ func (x *TransitionList) GetCurrentState() string {
 		return x.CurrentState
 	}
 	return ""
+}
+
+func (x *TransitionList) GetCanAssign() bool {
+	if x != nil {
+		return x.CanAssign
+	}
+	return false
 }
 
 type GetHistoryRequest struct {
@@ -1470,6 +1520,8 @@ type TransitionRecord struct {
 	ActorName     string                 `protobuf:"bytes,7,opt,name=actor_name,json=actorName,proto3" json:"actor_name,omitempty"`
 	Comment       string                 `protobuf:"bytes,8,opt,name=comment,proto3" json:"comment,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,9,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	SubjectUserId string                 `protobuf:"bytes,10,opt,name=subject_user_id,json=subjectUserId,proto3" json:"subject_user_id,omitempty"` // the person the step concerned: new holder, or previous holder on a return
+	SubjectName   string                 `protobuf:"bytes,11,opt,name=subject_name,json=subjectName,proto3" json:"subject_name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1567,6 +1619,20 @@ func (x *TransitionRecord) GetCreatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *TransitionRecord) GetSubjectUserId() string {
+	if x != nil {
+		return x.SubjectUserId
+	}
+	return ""
+}
+
+func (x *TransitionRecord) GetSubjectName() string {
+	if x != nil {
+		return x.SubjectName
+	}
+	return ""
+}
+
 type TransitionHistoryList struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Records       []*TransitionRecord    `protobuf:"bytes,1,rep,name=records,proto3" json:"records,omitempty"`
@@ -1611,12 +1677,500 @@ func (x *TransitionHistoryList) GetRecords() []*TransitionRecord {
 	return nil
 }
 
+type HandOverRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	AssetId       string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	AssigneeId    string                 `protobuf:"bytes,2,opt,name=assignee_id,json=assigneeId,proto3" json:"assignee_id,omitempty"` // a user of the asset's workspace
+	Comment       string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *HandOverRequest) Reset() {
+	*x = HandOverRequest{}
+	mi := &file_proto_asset_asset_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *HandOverRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*HandOverRequest) ProtoMessage() {}
+
+func (x *HandOverRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_asset_asset_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use HandOverRequest.ProtoReflect.Descriptor instead.
+func (*HandOverRequest) Descriptor() ([]byte, []int) {
+	return file_proto_asset_asset_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *HandOverRequest) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *HandOverRequest) GetAssigneeId() string {
+	if x != nil {
+		return x.AssigneeId
+	}
+	return ""
+}
+
+func (x *HandOverRequest) GetComment() string {
+	if x != nil {
+		return x.Comment
+	}
+	return ""
+}
+
+type GetSummaryRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSummaryRequest) Reset() {
+	*x = GetSummaryRequest{}
+	mi := &file_proto_asset_asset_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSummaryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSummaryRequest) ProtoMessage() {}
+
+func (x *GetSummaryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_asset_asset_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSummaryRequest.ProtoReflect.Descriptor instead.
+func (*GetSummaryRequest) Descriptor() ([]byte, []int) {
+	return file_proto_asset_asset_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *GetSummaryRequest) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
+type TypeCount struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TypeId        string                 `protobuf:"bytes,1,opt,name=type_id,json=typeId,proto3" json:"type_id,omitempty"`
+	TypeName      string                 `protobuf:"bytes,2,opt,name=type_name,json=typeName,proto3" json:"type_name,omitempty"`
+	Count         int32                  `protobuf:"varint,3,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TypeCount) Reset() {
+	*x = TypeCount{}
+	mi := &file_proto_asset_asset_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TypeCount) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TypeCount) ProtoMessage() {}
+
+func (x *TypeCount) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_asset_asset_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TypeCount.ProtoReflect.Descriptor instead.
+func (*TypeCount) Descriptor() ([]byte, []int) {
+	return file_proto_asset_asset_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *TypeCount) GetTypeId() string {
+	if x != nil {
+		return x.TypeId
+	}
+	return ""
+}
+
+func (x *TypeCount) GetTypeName() string {
+	if x != nil {
+		return x.TypeName
+	}
+	return ""
+}
+
+func (x *TypeCount) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
+// Counts over the assets the caller may read.
+type AssetSummary struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	Total              int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
+	ByState            map[string]int32       `protobuf:"bytes,2,rep,name=by_state,json=byState,proto3" json:"by_state,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"`
+	ByType             []*TypeCount           `protobuf:"bytes,3,rep,name=by_type,json=byType,proto3" json:"by_type,omitempty"`
+	Holders            int32                  `protobuf:"varint,4,opt,name=holders,proto3" json:"holders,omitempty"`                                                 // distinct people holding an assigned asset
+	MaintenanceOverdue int32                  `protobuf:"varint,5,opt,name=maintenance_overdue,json=maintenanceOverdue,proto3" json:"maintenance_overdue,omitempty"` // assets in maintenance for more than 14 days
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
+}
+
+func (x *AssetSummary) Reset() {
+	*x = AssetSummary{}
+	mi := &file_proto_asset_asset_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AssetSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AssetSummary) ProtoMessage() {}
+
+func (x *AssetSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_asset_asset_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AssetSummary.ProtoReflect.Descriptor instead.
+func (*AssetSummary) Descriptor() ([]byte, []int) {
+	return file_proto_asset_asset_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *AssetSummary) GetTotal() int32 {
+	if x != nil {
+		return x.Total
+	}
+	return 0
+}
+
+func (x *AssetSummary) GetByState() map[string]int32 {
+	if x != nil {
+		return x.ByState
+	}
+	return nil
+}
+
+func (x *AssetSummary) GetByType() []*TypeCount {
+	if x != nil {
+		return x.ByType
+	}
+	return nil
+}
+
+func (x *AssetSummary) GetHolders() int32 {
+	if x != nil {
+		return x.Holders
+	}
+	return 0
+}
+
+func (x *AssetSummary) GetMaintenanceOverdue() int32 {
+	if x != nil {
+		return x.MaintenanceOverdue
+	}
+	return 0
+}
+
+type ListActivityRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListActivityRequest) Reset() {
+	*x = ListActivityRequest{}
+	mi := &file_proto_asset_asset_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListActivityRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListActivityRequest) ProtoMessage() {}
+
+func (x *ListActivityRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_asset_asset_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListActivityRequest.ProtoReflect.Descriptor instead.
+func (*ListActivityRequest) Descriptor() ([]byte, []int) {
+	return file_proto_asset_asset_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *ListActivityRequest) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
+func (x *ListActivityRequest) GetLimit() int32 {
+	if x != nil {
+		return x.Limit
+	}
+	return 0
+}
+
+type ActivityEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	AssetId       string                 `protobuf:"bytes,2,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	AssetName     string                 `protobuf:"bytes,3,opt,name=asset_name,json=assetName,proto3" json:"asset_name,omitempty"`
+	TypeName      string                 `protobuf:"bytes,4,opt,name=type_name,json=typeName,proto3" json:"type_name,omitempty"`
+	FromState     string                 `protobuf:"bytes,5,opt,name=from_state,json=fromState,proto3" json:"from_state,omitempty"`
+	ToState       string                 `protobuf:"bytes,6,opt,name=to_state,json=toState,proto3" json:"to_state,omitempty"`
+	Action        string                 `protobuf:"bytes,7,opt,name=action,proto3" json:"action,omitempty"`
+	ActorId       string                 `protobuf:"bytes,8,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"`
+	ActorName     string                 `protobuf:"bytes,9,opt,name=actor_name,json=actorName,proto3" json:"actor_name,omitempty"`
+	SubjectUserId string                 `protobuf:"bytes,10,opt,name=subject_user_id,json=subjectUserId,proto3" json:"subject_user_id,omitempty"`
+	SubjectName   string                 `protobuf:"bytes,11,opt,name=subject_name,json=subjectName,proto3" json:"subject_name,omitempty"`
+	Comment       string                 `protobuf:"bytes,12,opt,name=comment,proto3" json:"comment,omitempty"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,13,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	// "" for a lifecycle step; "approved" or "rejected" for a decision on a request, in which
+	// case `action` is request_approved / request_rejected, asset_name names the type and
+	// subject is the requester.
+	RequestStatus string `protobuf:"bytes,14,opt,name=request_status,json=requestStatus,proto3" json:"request_status,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ActivityEntry) Reset() {
+	*x = ActivityEntry{}
+	mi := &file_proto_asset_asset_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ActivityEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ActivityEntry) ProtoMessage() {}
+
+func (x *ActivityEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_asset_asset_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ActivityEntry.ProtoReflect.Descriptor instead.
+func (*ActivityEntry) Descriptor() ([]byte, []int) {
+	return file_proto_asset_asset_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *ActivityEntry) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetAssetName() string {
+	if x != nil {
+		return x.AssetName
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetTypeName() string {
+	if x != nil {
+		return x.TypeName
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetFromState() string {
+	if x != nil {
+		return x.FromState
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetToState() string {
+	if x != nil {
+		return x.ToState
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetAction() string {
+	if x != nil {
+		return x.Action
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetActorId() string {
+	if x != nil {
+		return x.ActorId
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetActorName() string {
+	if x != nil {
+		return x.ActorName
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetSubjectUserId() string {
+	if x != nil {
+		return x.SubjectUserId
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetSubjectName() string {
+	if x != nil {
+		return x.SubjectName
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetComment() string {
+	if x != nil {
+		return x.Comment
+	}
+	return ""
+}
+
+func (x *ActivityEntry) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *ActivityEntry) GetRequestStatus() string {
+	if x != nil {
+		return x.RequestStatus
+	}
+	return ""
+}
+
+type ActivityList struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Entries       []*ActivityEntry       `protobuf:"bytes,1,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ActivityList) Reset() {
+	*x = ActivityList{}
+	mi := &file_proto_asset_asset_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ActivityList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ActivityList) ProtoMessage() {}
+
+func (x *ActivityList) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_asset_asset_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ActivityList.ProtoReflect.Descriptor instead.
+func (*ActivityList) Descriptor() ([]byte, []int) {
+	return file_proto_asset_asset_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *ActivityList) GetEntries() []*ActivityEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
 var File_proto_asset_asset_proto protoreflect.FileDescriptor
 
 const file_proto_asset_asset_proto_rawDesc = "" +
 	"\n" +
 	"\x17proto/asset/asset.proto\x12\x05asset\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x1cgoogle/protobuf/struct.proto\"\a\n" +
-	"\x05Empty\"\xa4\x03\n" +
+	"\x05Empty\"\xef\x03\n" +
 	"\tAssetType\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12 \n" +
@@ -1633,7 +2187,9 @@ const file_proto_asset_asset_proto_rawDesc = "" +
 	"created_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\x8b\x01\n" +
+	"updated_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12'\n" +
+	"\x0favailable_count\x18\f \x01(\x05R\x0eavailableCount\x12 \n" +
+	"\vpermissions\x18\r \x03(\tR\vpermissions\"\x8b\x01\n" +
 	"\x13LifecycleDefinition\x12\x16\n" +
 	"\x06states\x18\x01 \x03(\tR\x06states\x12#\n" +
 	"\rinitial_state\x18\x02 \x01(\tR\finitialState\x127\n" +
@@ -1655,13 +2211,15 @@ const file_proto_asset_asset_proto_rawDesc = "" +
 	"\x0eGetTypeRequest\x12\x17\n" +
 	"\atype_id\x18\x01 \x01(\tR\x06typeId\"5\n" +
 	"\x10ListTypesRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"7\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"V\n" +
 	"\rAssetTypeList\x12&\n" +
-	"\x05types\x18\x01 \x03(\v2\x10.asset.AssetTypeR\x05types\"\x86\x01\n" +
+	"\x05types\x18\x01 \x03(\v2\x10.asset.AssetTypeR\x05types\x12\x1d\n" +
+	"\n" +
+	"can_manage\x18\x02 \x01(\bR\tcanManage\"\x86\x01\n" +
 	"\x17UpdateTypeSchemaRequest\x12\x17\n" +
 	"\atype_id\x18\x01 \x01(\tR\x06typeId\x12-\n" +
 	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12#\n" +
-	"\rfields_schema\x18\x03 \x01(\tR\ffieldsSchema\"\x8a\x04\n" +
+	"\rfields_schema\x18\x03 \x01(\tR\ffieldsSchema\"\xb4\x04\n" +
 	"\x05Asset\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x17\n" +
@@ -1681,7 +2239,8 @@ const file_proto_asset_asset_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xee\x01\n" +
+	"updated_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12(\n" +
+	"\x10assigned_to_name\x18\x0f \x01(\tR\x0eassignedToName\"\xee\x01\n" +
 	"\x12CreateAssetRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n" +
 	"\atype_id\x18\x02 \x01(\tR\x06typeId\x12!\n" +
@@ -1691,7 +2250,7 @@ const file_proto_asset_asset_proto_rawDesc = "" +
 	"\rcustom_fields\x18\x06 \x01(\v2\x17.google.protobuf.StructR\fcustomFields\"[\n" +
 	"\x0fGetAssetRequest\x12\x19\n" +
 	"\basset_id\x18\x01 \x01(\tR\aassetId\x12-\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\xe3\x01\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\xfb\x01\n" +
 	"\x11ListAssetsRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12-\n" +
 	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12\x17\n" +
@@ -1700,7 +2259,8 @@ const file_proto_asset_asset_proto_rawDesc = "" +
 	"\vassigned_to\x18\x05 \x01(\tR\n" +
 	"assignedTo\x12\x14\n" +
 	"\x05limit\x18\x06 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06offset\x18\a \x01(\x05R\x06offset\"G\n" +
+	"\x06offset\x18\a \x01(\x05R\x06offset\x12\x16\n" +
+	"\x06search\x18\b \x01(\tR\x06search\"G\n" +
 	"\tAssetList\x12$\n" +
 	"\x06assets\x18\x01 \x03(\v2\f.asset.AssetR\x06assets\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\"\xb0\x01\n" +
@@ -1724,13 +2284,15 @@ const file_proto_asset_asset_proto_rawDesc = "" +
 	"\x13AvailableTransition\x12\x16\n" +
 	"\x06action\x18\x01 \x01(\tR\x06action\x12\x19\n" +
 	"\bto_state\x18\x02 \x01(\tR\atoState\x12'\n" +
-	"\x0fngac_permission\x18\x03 \x01(\tR\x0engacPermission\"s\n" +
+	"\x0fngac_permission\x18\x03 \x01(\tR\x0engacPermission\"\x92\x01\n" +
 	"\x0eTransitionList\x12<\n" +
 	"\vtransitions\x18\x01 \x03(\v2\x1a.asset.AvailableTransitionR\vtransitions\x12#\n" +
-	"\rcurrent_state\x18\x02 \x01(\tR\fcurrentState\"]\n" +
+	"\rcurrent_state\x18\x02 \x01(\tR\fcurrentState\x12\x1d\n" +
+	"\n" +
+	"can_assign\x18\x03 \x01(\bR\tcanAssign\"]\n" +
 	"\x11GetHistoryRequest\x12\x19\n" +
 	"\basset_id\x18\x01 \x01(\tR\aassetId\x12-\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\x9e\x02\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\xe9\x02\n" +
 	"\x10TransitionRecord\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
 	"\basset_id\x18\x02 \x01(\tR\aassetId\x12\x1d\n" +
@@ -1743,15 +2305,63 @@ const file_proto_asset_asset_proto_rawDesc = "" +
 	"actor_name\x18\a \x01(\tR\tactorName\x12\x18\n" +
 	"\acomment\x18\b \x01(\tR\acomment\x129\n" +
 	"\n" +
-	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"J\n" +
+	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12&\n" +
+	"\x0fsubject_user_id\x18\n" +
+	" \x01(\tR\rsubjectUserId\x12!\n" +
+	"\fsubject_name\x18\v \x01(\tR\vsubjectName\"J\n" +
 	"\x15TransitionHistoryList\x121\n" +
-	"\arecords\x18\x01 \x03(\v2\x17.asset.TransitionRecordR\arecords2\x82\x02\n" +
+	"\arecords\x18\x01 \x03(\v2\x17.asset.TransitionRecordR\arecords\"g\n" +
+	"\x0fHandOverRequest\x12\x19\n" +
+	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x1f\n" +
+	"\vassignee_id\x18\x02 \x01(\tR\n" +
+	"assigneeId\x12\x18\n" +
+	"\acomment\x18\x03 \x01(\tR\acomment\"6\n" +
+	"\x11GetSummaryRequest\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"W\n" +
+	"\tTypeCount\x12\x17\n" +
+	"\atype_id\x18\x01 \x01(\tR\x06typeId\x12\x1b\n" +
+	"\ttype_name\x18\x02 \x01(\tR\btypeName\x12\x14\n" +
+	"\x05count\x18\x03 \x01(\x05R\x05count\"\x93\x02\n" +
+	"\fAssetSummary\x12\x14\n" +
+	"\x05total\x18\x01 \x01(\x05R\x05total\x12;\n" +
+	"\bby_state\x18\x02 \x03(\v2 .asset.AssetSummary.ByStateEntryR\abyState\x12)\n" +
+	"\aby_type\x18\x03 \x03(\v2\x10.asset.TypeCountR\x06byType\x12\x18\n" +
+	"\aholders\x18\x04 \x01(\x05R\aholders\x12/\n" +
+	"\x13maintenance_overdue\x18\x05 \x01(\x05R\x12maintenanceOverdue\x1a:\n" +
+	"\fByStateEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\x05R\x05value:\x028\x01\"N\n" +
+	"\x13ListActivityRequest\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x14\n" +
+	"\x05limit\x18\x02 \x01(\x05R\x05limit\"\xc9\x03\n" +
+	"\rActivityEntry\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x19\n" +
+	"\basset_id\x18\x02 \x01(\tR\aassetId\x12\x1d\n" +
+	"\n" +
+	"asset_name\x18\x03 \x01(\tR\tassetName\x12\x1b\n" +
+	"\ttype_name\x18\x04 \x01(\tR\btypeName\x12\x1d\n" +
+	"\n" +
+	"from_state\x18\x05 \x01(\tR\tfromState\x12\x19\n" +
+	"\bto_state\x18\x06 \x01(\tR\atoState\x12\x16\n" +
+	"\x06action\x18\a \x01(\tR\x06action\x12\x19\n" +
+	"\bactor_id\x18\b \x01(\tR\aactorId\x12\x1d\n" +
+	"\n" +
+	"actor_name\x18\t \x01(\tR\tactorName\x12&\n" +
+	"\x0fsubject_user_id\x18\n" +
+	" \x01(\tR\rsubjectUserId\x12!\n" +
+	"\fsubject_name\x18\v \x01(\tR\vsubjectName\x12\x18\n" +
+	"\acomment\x18\f \x01(\tR\acomment\x129\n" +
+	"\n" +
+	"created_at\x18\r \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12%\n" +
+	"\x0erequest_status\x18\x0e \x01(\tR\rrequestStatus\">\n" +
+	"\fActivityList\x12.\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.asset.ActivityEntryR\aentries2\x82\x02\n" +
 	"\x10AssetTypeService\x128\n" +
 	"\n" +
 	"CreateType\x12\x18.asset.CreateTypeRequest\x1a\x10.asset.AssetType\x122\n" +
 	"\aGetType\x12\x15.asset.GetTypeRequest\x1a\x10.asset.AssetType\x12:\n" +
 	"\tListTypes\x12\x17.asset.ListTypesRequest\x1a\x14.asset.AssetTypeList\x12D\n" +
-	"\x10UpdateTypeSchema\x12\x1e.asset.UpdateTypeSchemaRequest\x1a\x10.asset.AssetType2\xf8\x03\n" +
+	"\x10UpdateTypeSchema\x12\x1e.asset.UpdateTypeSchemaRequest\x1a\x10.asset.AssetType2\xad\x05\n" +
 	"\fAssetService\x126\n" +
 	"\vCreateAsset\x12\x19.asset.CreateAssetRequest\x1a\f.asset.Asset\x120\n" +
 	"\bGetAsset\x12\x16.asset.GetAssetRequest\x1a\f.asset.Asset\x128\n" +
@@ -1761,7 +2371,11 @@ const file_proto_asset_asset_proto_rawDesc = "" +
 	"\vDeleteAsset\x12\x19.asset.DeleteAssetRequest\x1a\f.asset.Empty\x129\n" +
 	"\x0fTransitionAsset\x12\x18.asset.TransitionRequest\x1a\f.asset.Asset\x12N\n" +
 	"\x17GetAvailableTransitions\x12\x1c.asset.GetTransitionsRequest\x1a\x15.asset.TransitionList\x12I\n" +
-	"\x0fGetAssetHistory\x12\x18.asset.GetHistoryRequest\x1a\x1c.asset.TransitionHistoryListB\x1bZ\x19ngac-platform/proto/assetb\x06proto3"
+	"\x0fGetAssetHistory\x12\x18.asset.GetHistoryRequest\x1a\x1c.asset.TransitionHistoryList\x125\n" +
+	"\rHandOverAsset\x12\x16.asset.HandOverRequest\x1a\f.asset.Asset\x12;\n" +
+	"\n" +
+	"GetSummary\x12\x18.asset.GetSummaryRequest\x1a\x13.asset.AssetSummary\x12?\n" +
+	"\fListActivity\x12\x1a.asset.ListActivityRequest\x1a\x13.asset.ActivityListB\x1bZ\x19ngac-platform/proto/assetb\x06proto3"
 
 var (
 	file_proto_asset_asset_proto_rawDescOnce sync.Once
@@ -1775,7 +2389,7 @@ func file_proto_asset_asset_proto_rawDescGZIP() []byte {
 	return file_proto_asset_asset_proto_rawDescData
 }
 
-var file_proto_asset_asset_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_proto_asset_asset_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_proto_asset_asset_proto_goTypes = []any{
 	(*Empty)(nil),                   // 0: asset.Empty
 	(*AssetType)(nil),               // 1: asset.AssetType
@@ -1800,54 +2414,72 @@ var file_proto_asset_asset_proto_goTypes = []any{
 	(*GetHistoryRequest)(nil),       // 20: asset.GetHistoryRequest
 	(*TransitionRecord)(nil),        // 21: asset.TransitionRecord
 	(*TransitionHistoryList)(nil),   // 22: asset.TransitionHistoryList
-	(*timestamppb.Timestamp)(nil),   // 23: google.protobuf.Timestamp
-	(*structpb.Struct)(nil),         // 24: google.protobuf.Struct
+	(*HandOverRequest)(nil),         // 23: asset.HandOverRequest
+	(*GetSummaryRequest)(nil),       // 24: asset.GetSummaryRequest
+	(*TypeCount)(nil),               // 25: asset.TypeCount
+	(*AssetSummary)(nil),            // 26: asset.AssetSummary
+	(*ListActivityRequest)(nil),     // 27: asset.ListActivityRequest
+	(*ActivityEntry)(nil),           // 28: asset.ActivityEntry
+	(*ActivityList)(nil),            // 29: asset.ActivityList
+	nil,                             // 30: asset.AssetSummary.ByStateEntry
+	(*timestamppb.Timestamp)(nil),   // 31: google.protobuf.Timestamp
+	(*structpb.Struct)(nil),         // 32: google.protobuf.Struct
 }
 var file_proto_asset_asset_proto_depIdxs = []int32{
 	2,  // 0: asset.AssetType.lifecycle:type_name -> asset.LifecycleDefinition
-	23, // 1: asset.AssetType.created_at:type_name -> google.protobuf.Timestamp
-	23, // 2: asset.AssetType.updated_at:type_name -> google.protobuf.Timestamp
+	31, // 1: asset.AssetType.created_at:type_name -> google.protobuf.Timestamp
+	31, // 2: asset.AssetType.updated_at:type_name -> google.protobuf.Timestamp
 	3,  // 3: asset.LifecycleDefinition.transitions:type_name -> asset.TransitionRule
 	2,  // 4: asset.CreateTypeRequest.lifecycle:type_name -> asset.LifecycleDefinition
 	1,  // 5: asset.AssetTypeList.types:type_name -> asset.AssetType
-	24, // 6: asset.Asset.custom_fields:type_name -> google.protobuf.Struct
-	23, // 7: asset.Asset.created_at:type_name -> google.protobuf.Timestamp
-	23, // 8: asset.Asset.updated_at:type_name -> google.protobuf.Timestamp
-	24, // 9: asset.CreateAssetRequest.custom_fields:type_name -> google.protobuf.Struct
+	32, // 6: asset.Asset.custom_fields:type_name -> google.protobuf.Struct
+	31, // 7: asset.Asset.created_at:type_name -> google.protobuf.Timestamp
+	31, // 8: asset.Asset.updated_at:type_name -> google.protobuf.Timestamp
+	32, // 9: asset.CreateAssetRequest.custom_fields:type_name -> google.protobuf.Struct
 	9,  // 10: asset.AssetList.assets:type_name -> asset.Asset
-	24, // 11: asset.UpdateAssetRequest.custom_fields:type_name -> google.protobuf.Struct
+	32, // 11: asset.UpdateAssetRequest.custom_fields:type_name -> google.protobuf.Struct
 	18, // 12: asset.TransitionList.transitions:type_name -> asset.AvailableTransition
-	23, // 13: asset.TransitionRecord.created_at:type_name -> google.protobuf.Timestamp
+	31, // 13: asset.TransitionRecord.created_at:type_name -> google.protobuf.Timestamp
 	21, // 14: asset.TransitionHistoryList.records:type_name -> asset.TransitionRecord
-	4,  // 15: asset.AssetTypeService.CreateType:input_type -> asset.CreateTypeRequest
-	5,  // 16: asset.AssetTypeService.GetType:input_type -> asset.GetTypeRequest
-	6,  // 17: asset.AssetTypeService.ListTypes:input_type -> asset.ListTypesRequest
-	8,  // 18: asset.AssetTypeService.UpdateTypeSchema:input_type -> asset.UpdateTypeSchemaRequest
-	10, // 19: asset.AssetService.CreateAsset:input_type -> asset.CreateAssetRequest
-	11, // 20: asset.AssetService.GetAsset:input_type -> asset.GetAssetRequest
-	12, // 21: asset.AssetService.ListAssets:input_type -> asset.ListAssetsRequest
-	14, // 22: asset.AssetService.UpdateAsset:input_type -> asset.UpdateAssetRequest
-	15, // 23: asset.AssetService.DeleteAsset:input_type -> asset.DeleteAssetRequest
-	16, // 24: asset.AssetService.TransitionAsset:input_type -> asset.TransitionRequest
-	17, // 25: asset.AssetService.GetAvailableTransitions:input_type -> asset.GetTransitionsRequest
-	20, // 26: asset.AssetService.GetAssetHistory:input_type -> asset.GetHistoryRequest
-	1,  // 27: asset.AssetTypeService.CreateType:output_type -> asset.AssetType
-	1,  // 28: asset.AssetTypeService.GetType:output_type -> asset.AssetType
-	7,  // 29: asset.AssetTypeService.ListTypes:output_type -> asset.AssetTypeList
-	1,  // 30: asset.AssetTypeService.UpdateTypeSchema:output_type -> asset.AssetType
-	9,  // 31: asset.AssetService.CreateAsset:output_type -> asset.Asset
-	9,  // 32: asset.AssetService.GetAsset:output_type -> asset.Asset
-	13, // 33: asset.AssetService.ListAssets:output_type -> asset.AssetList
-	9,  // 34: asset.AssetService.UpdateAsset:output_type -> asset.Asset
-	0,  // 35: asset.AssetService.DeleteAsset:output_type -> asset.Empty
-	9,  // 36: asset.AssetService.TransitionAsset:output_type -> asset.Asset
-	19, // 37: asset.AssetService.GetAvailableTransitions:output_type -> asset.TransitionList
-	22, // 38: asset.AssetService.GetAssetHistory:output_type -> asset.TransitionHistoryList
-	27, // [27:39] is the sub-list for method output_type
-	15, // [15:27] is the sub-list for method input_type
-	15, // [15:15] is the sub-list for extension type_name
-	15, // [15:15] is the sub-list for extension extendee
-	0,  // [0:15] is the sub-list for field type_name
+	30, // 15: asset.AssetSummary.by_state:type_name -> asset.AssetSummary.ByStateEntry
+	25, // 16: asset.AssetSummary.by_type:type_name -> asset.TypeCount
+	31, // 17: asset.ActivityEntry.created_at:type_name -> google.protobuf.Timestamp
+	28, // 18: asset.ActivityList.entries:type_name -> asset.ActivityEntry
+	4,  // 19: asset.AssetTypeService.CreateType:input_type -> asset.CreateTypeRequest
+	5,  // 20: asset.AssetTypeService.GetType:input_type -> asset.GetTypeRequest
+	6,  // 21: asset.AssetTypeService.ListTypes:input_type -> asset.ListTypesRequest
+	8,  // 22: asset.AssetTypeService.UpdateTypeSchema:input_type -> asset.UpdateTypeSchemaRequest
+	10, // 23: asset.AssetService.CreateAsset:input_type -> asset.CreateAssetRequest
+	11, // 24: asset.AssetService.GetAsset:input_type -> asset.GetAssetRequest
+	12, // 25: asset.AssetService.ListAssets:input_type -> asset.ListAssetsRequest
+	14, // 26: asset.AssetService.UpdateAsset:input_type -> asset.UpdateAssetRequest
+	15, // 27: asset.AssetService.DeleteAsset:input_type -> asset.DeleteAssetRequest
+	16, // 28: asset.AssetService.TransitionAsset:input_type -> asset.TransitionRequest
+	17, // 29: asset.AssetService.GetAvailableTransitions:input_type -> asset.GetTransitionsRequest
+	20, // 30: asset.AssetService.GetAssetHistory:input_type -> asset.GetHistoryRequest
+	23, // 31: asset.AssetService.HandOverAsset:input_type -> asset.HandOverRequest
+	24, // 32: asset.AssetService.GetSummary:input_type -> asset.GetSummaryRequest
+	27, // 33: asset.AssetService.ListActivity:input_type -> asset.ListActivityRequest
+	1,  // 34: asset.AssetTypeService.CreateType:output_type -> asset.AssetType
+	1,  // 35: asset.AssetTypeService.GetType:output_type -> asset.AssetType
+	7,  // 36: asset.AssetTypeService.ListTypes:output_type -> asset.AssetTypeList
+	1,  // 37: asset.AssetTypeService.UpdateTypeSchema:output_type -> asset.AssetType
+	9,  // 38: asset.AssetService.CreateAsset:output_type -> asset.Asset
+	9,  // 39: asset.AssetService.GetAsset:output_type -> asset.Asset
+	13, // 40: asset.AssetService.ListAssets:output_type -> asset.AssetList
+	9,  // 41: asset.AssetService.UpdateAsset:output_type -> asset.Asset
+	0,  // 42: asset.AssetService.DeleteAsset:output_type -> asset.Empty
+	9,  // 43: asset.AssetService.TransitionAsset:output_type -> asset.Asset
+	19, // 44: asset.AssetService.GetAvailableTransitions:output_type -> asset.TransitionList
+	22, // 45: asset.AssetService.GetAssetHistory:output_type -> asset.TransitionHistoryList
+	9,  // 46: asset.AssetService.HandOverAsset:output_type -> asset.Asset
+	26, // 47: asset.AssetService.GetSummary:output_type -> asset.AssetSummary
+	29, // 48: asset.AssetService.ListActivity:output_type -> asset.ActivityList
+	34, // [34:49] is the sub-list for method output_type
+	19, // [19:34] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_proto_asset_asset_proto_init() }
@@ -1861,7 +2493,7 @@ func file_proto_asset_asset_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_asset_asset_proto_rawDesc), len(file_proto_asset_asset_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

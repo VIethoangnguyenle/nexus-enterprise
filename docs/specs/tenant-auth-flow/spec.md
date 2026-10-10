@@ -122,6 +122,21 @@ The system SHALL place a Google user in a company tenant only on the basis of th
 - **WHEN** a Google account registered on `bob@acme.com` without Google Workspace (no `hd`) signs in and a tenant has `domain = 'acme.com'`
 - **THEN** the user is NOT added to that tenant
 
+### Requirement: Email addresses are normalised, unique and proved
+Addresses SHALL be trimmed and lower-cased at signup, registration, sign-in and OTP, and an address that is not well formed is rejected (400). `users.email` is unique case-insensitively (unique index on `lower(email)`, migration 030), so a case-variant signup of an existing address is refused. `users.email_verified_at` records proof of ownership and is set only by: Google sign-in with `email_verified` true (new, linked or returning account), and an OTP code that a real sender delivered to the address (`DeliversToOwner`). Password signup never sets it. Fixed-code test mode and the log sender never set it, since anyone can complete those. The first proof on an existing account evicts its unverified credentials, as Google linking does. Phone identifiers carry no email proof. Other services treat an address as the account's only when it is verified (workspace invitations).
+
+#### Scenario: Fixed code does not verify
+- **WHEN** a user signs in through the fixed test code with an email address
+- **THEN** the session is issued but the account's email stays unverified
+
+#### Scenario: Case-variant signup
+- **WHEN** `Victim@Acme.com` signs up while `victim@acme.com` exists
+- **THEN** the signup is refused
+
+#### Scenario: Delivered code proves the address
+- **WHEN** a code delivered by a real sender is verified for an address
+- **THEN** `email_verified_at` is set and any earlier password on that account is cleared
+
 ### Requirement: OTP sign-in codes
 `POST /api/auth/otp/request` opens a 5-minute session for an email or phone and `POST /api/auth/otp/verify` exchanges its code for the same session as other sign-ins. The code's mode is set by `AUTH_FIXED_OTP_CODE`:
 - **Fixed-code test mode (default).** Unset → `999999`; any six digits → that code. Every OTP session accepts that code, so anyone who knows it can sign in as any email or phone. This is a documented TEST-ONLY mode for testers on deployed builds, and the auth service logs a warning at startup while it is on. `GET /api/auth/providers` reports `otp: true, otp_fixed_code: true`, and the login page then shows the "OTP code is 999999" hint.

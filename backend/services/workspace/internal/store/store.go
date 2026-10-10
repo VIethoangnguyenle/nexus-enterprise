@@ -61,3 +61,22 @@ func (s *Store) ListAll(ctx context.Context) ([]*Workspace, error) {
 	}
 	return result, nil
 }
+
+// WithOwnerLock runs fn inside a transaction holding a per-workspace advisory
+// lock. Checks of who the owners are and the writes that follow take it, so two
+// owner changes at once run one after the other and the second sees the first.
+// The lock is released when fn returns, whether or not it succeeded.
+func (s *Store) WithOwnerLock(ctx context.Context, wsID string, fn func(ctx context.Context) error) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin owner lock: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", "workspace-owners:"+wsID); err != nil {
+		return fmt.Errorf("take owner lock: %w", err)
+	}
+	if err := fn(ctx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}

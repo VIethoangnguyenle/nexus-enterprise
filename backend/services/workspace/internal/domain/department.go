@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 
 	"github.com/google/uuid"
 
@@ -21,7 +22,7 @@ type DepartmentStore interface {
 	UpdateDepartmentName(ctx context.Context, id, name string) error
 	MoveDepartment(ctx context.Context, id string, newParentID *string) error
 	DeleteDepartment(ctx context.Context, id string) error
-	UpdateUserDepartment(ctx context.Context, userID string, deptID *string) error
+	UpdateUserDepartment(ctx context.Context, tenantID, nodeID string, deptID *string) error
 	CountMembersByDepartment(ctx context.Context, deptID string) (int, error)
 	ReassignDepartmentChildren(ctx context.Context, oldParentID string, newParentID *string) error
 	ReassignDepartmentUsers(ctx context.Context, oldDeptID string, newDeptID *string) error
@@ -132,7 +133,13 @@ func (s *Service) ListDepartments(ctx context.Context, callerNodeID, wsID string
 
 	results := make([]*DepartmentResult, 0, len(deps))
 	for _, d := range deps {
-		count, _ := s.deptStore.CountMembersByDepartment(ctx, d.ID)
+		// The people of a department are who is assigned to its UA in the graph,
+		// the same source as the people table; a cached column would drift from it.
+		kids, err := s.policyWrite.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: d.NGACUaID})
+		if err != nil {
+			return nil, fmt.Errorf("count department members: %w", err)
+		}
+		count := len(uniqueNodes(userNodes(kids.GetNodes())))
 		parentID := ""
 		if d.ParentID != nil {
 			parentID = *d.ParentID
@@ -223,6 +230,15 @@ func (s *Service) MoveDepartment(ctx context.Context, callerNodeID string, in Mo
 		}
 	}
 
+	// Moving a department under a parent gives everyone in it, and under it,
+	// everything the parent and its ancestors grant: a delegation, so the caller
+	// must hold all of it. Moving to the root grants nothing.
+	if newParent != nil {
+		if err := s.guardDelegation(ctx, callerNodeID, newParent.NGACUaID); err != nil {
+			return nil, err
+		}
+	}
+
 	// Update NGAC assignments
 	// Remove old assignment
 	oldParentNGACID := ws.PcNodeID
@@ -270,13 +286,52 @@ func (s *Service) MoveDepartment(ctx context.Context, callerNodeID string, in Mo
 // DeleteDepartment removes a department, reassigning children and users to
 // parent. The caller must hold manage on the workspace's Mgmt OA, and the
 // department must belong to that workspace.
+//
+// The graph is moved first: a child department's UA hangs under this one and a
+// person may be assigned to it, and deleting the node takes those edges with it.
+// Without re-parenting them, a child department would lose its way to the
+// workspace's PC and the people here would silently have no department while the
+// table said otherwise. Moving them up grants nothing new: they already reached
+// the parent's grants through this department.
 func (s *Service) DeleteDepartment(ctx context.Context, callerNodeID, wsID, deptID string) error {
-	if _, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage); err != nil {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
+	if err != nil {
 		return err
 	}
 	dept, err := s.departmentInWorkspace(ctx, wsID, deptID)
 	if err != nil {
 		return err
+	}
+
+	parentUA := ws.PcNodeID
+	if dept.ParentID != nil {
+		parent, err := s.departmentInWorkspace(ctx, wsID, *dept.ParentID)
+		if err != nil {
+			return err
+		}
+		parentUA = parent.NGACUaID
+	}
+	all, err := s.deptStore.ListDepartmentsByWorkspace(ctx, wsID)
+	if err != nil {
+		return err
+	}
+	for _, d := range all {
+		if d.ParentID != nil && *d.ParentID == deptID {
+			if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: d.NGACUaID, ParentId: parentUA}); err != nil {
+				return fmt.Errorf("move sub-department up: %w", err)
+			}
+		}
+	}
+	if dept.ParentID != nil {
+		kids, err := s.policyWrite.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: dept.NGACUaID})
+		if err != nil {
+			return fmt.Errorf("get department members: %w", err)
+		}
+		for _, u := range userNodes(kids.GetNodes()) {
+			if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: u.Id, ParentId: parentUA}); err != nil {
+				return fmt.Errorf("move member up: %w", err)
+			}
+		}
 	}
 
 	// Reassign children to parent
@@ -303,37 +358,97 @@ func (s *Service) DeleteDepartment(ctx context.Context, callerNodeID, wsID, dept
 	return nil
 }
 
-// UpdateMemberDepartment assigns a user to a department. The caller must hold
-// manage on the workspace's Mgmt OA, and the department must belong to that
-// workspace.
+// UpdateMemberDepartment puts a member in a department, taking them out of the
+// one they were in, or, with an empty deptID, out of any. The caller must hold
+// manage on the workspace's Mgmt OA, the department must belong to that
+// workspace, the person must already belong to it, and the caller must hold
+// whatever the department confers.
 func (s *Service) UpdateMemberDepartment(ctx context.Context, callerNodeID, wsID, userNGACNodeID, deptID string) error {
-	if _, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage); err != nil {
+	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
+	if err != nil {
 		return err
 	}
-	// If deptID is empty, unassign from department
-	var deptPtr *string
+	var dept *store.Department
 	if deptID != "" {
-		dept, err := s.departmentInWorkspace(ctx, wsID, deptID)
-		if err != nil {
+		if dept, err = s.departmentInWorkspace(ctx, wsID, deptID); err != nil {
 			return err
 		}
+	}
+	if err := s.requireMemberUser(ctx, ws, userNGACNodeID); err != nil {
+		return err
+	}
+	if dept != nil {
+		if err := s.guardDelegation(ctx, callerNodeID, dept.NGACUaID); err != nil {
+			return err
+		}
+	}
 
-		// Create NGAC assignment: user → dept UA
+	return s.applyDepartment(ctx, ws, userNGACNodeID, dept)
+}
+
+// applyDepartment puts a person in a department (nil: out of any), taking them
+// out of the one they were in. It performs no authorization.
+func (s *Service) applyDepartment(ctx context.Context, ws *WorkspaceResult, userNGACNodeID string, dept *store.Department) error {
+	wsID := ws.ID
+	deptID := ""
+	if dept != nil {
+		deptID = dept.ID
+	}
+	// Which department UAs the person sits directly under now.
+	all, err := s.deptStore.ListDepartmentsByWorkspace(ctx, wsID)
+	if err != nil {
+		return err
+	}
+	isDept := make(map[string]bool, len(all))
+	for _, d := range all {
+		isDept[d.NGACUaID] = true
+	}
+	parents, err := s.policyWrite.GetParents(ctx, &policypb.GetParentsRequest{NodeId: userNGACNodeID})
+	if err != nil {
+		return fmt.Errorf("get current department: %w", err)
+	}
+	var current []string
+	for _, p := range parents.GetNodes() {
+		if isDept[p.Id] {
+			current = append(current, p.Id)
+		}
+	}
+
+	// New edge first, then the old ones: if leaving fails the person is not
+	// left in no department, and the new edge is taken back.
+	joined := false
+	if dept != nil && !slices.Contains(current, dept.NGACUaID) {
 		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: userNGACNodeID, ParentId: dept.NGACUaID,
 		}); err != nil {
 			return fmt.Errorf("assign user to dept: %w", err)
 		}
+		joined = true
+	}
+	for _, old := range current {
+		if dept != nil && old == dept.NGACUaID {
+			continue
+		}
+		if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+			ChildId: userNGACNodeID, ParentId: old,
+		}); err != nil {
+			if joined {
+				if _, undo := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+					ChildId: userNGACNodeID, ParentId: dept.NGACUaID,
+				}); undo != nil {
+					slog.Error("could not undo a department move", "workspace", wsID, "error", undo)
+				}
+			}
+			return fmt.Errorf("leave previous department: %w", err)
+		}
+	}
+
+	// The row is a cache of the graph; it follows the graph.
+	var deptPtr *string
+	if dept != nil {
 		deptPtr = &deptID
 	}
-
-	// Update DB — find user_id from ngac_node_id via the workspace members
-	// For now, update by ngac_node_id lookup
-	if err := s.deptStore.UpdateUserDepartment(ctx, userNGACNodeID, deptPtr); err != nil {
-		return err
-	}
-
-	return nil
+	return s.deptStore.UpdateUserDepartment(ctx, wsID, userNGACNodeID, deptPtr)
 }
 
 // departmentInWorkspace loads a department and confirms it belongs to wsID.

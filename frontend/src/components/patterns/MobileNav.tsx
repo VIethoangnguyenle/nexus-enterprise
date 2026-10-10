@@ -20,7 +20,7 @@ const navItems: NavItem[] = [
   { id: 'drive', icon: FolderOpen, label: 'Drive', routePath: '/drive', activeMatch: '/drive' },
   { id: 'approval', icon: ClipboardCheck, label: 'Approvals', routePath: '/approval', activeMatch: '/approval' },
   { id: 'contacts', icon: Users, label: 'Contacts', routePath: '/contacts', activeMatch: '/contacts' },
-  { id: 'assets', icon: Briefcase, label: 'Work', routePath: '/dashboard', activeMatch: '/dashboard' },
+  { id: 'assets', icon: Briefcase, label: 'Work', routePath: '/assets', activeMatch: '/assets' },
 ]
 
 /** Mobile bottom navigation bar — visible on < lg screens. Nexus Hub design tokens.

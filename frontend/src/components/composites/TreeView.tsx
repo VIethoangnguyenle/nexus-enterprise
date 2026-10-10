@@ -33,6 +33,8 @@ interface TreeViewProps {
   icon?: (node: TreeNode, open: boolean) => ReactNode
   /** Text for an open node with no children. */
   emptyLabel?: string
+  /** Muted figure at the row's right edge (a head count), e.g. `(n) => n.count`. */
+  trailing?: (node: TreeNode) => ReactNode
 }
 
 const DEFAULT_EMPTY = 'Không có thư mục con'
@@ -171,6 +173,7 @@ function Branch(p: BranchProps) {
           <Folder size={16} strokeWidth={1.75} className="text-accent shrink-0" aria-hidden="true" />
         )}
         <span className="truncate">{node.label}</span>
+        {p.trailing && <span className="ml-auto pl-2 text-small text-ink-muted tnum shrink-0">{p.trailing(node)}</span>}
       </div>
       {open && <Children {...p} />}
     </li>

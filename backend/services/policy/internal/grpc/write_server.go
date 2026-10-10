@@ -196,6 +196,36 @@ func (s *WriteServer) RemoveAssociation(ctx context.Context, req *pb.RemoveAssoc
 	return &pb.Empty{}, nil
 }
 
+// GetAssociations answers from the writer's own graph, which every write has
+// already updated.
+func (s *WriteServer) GetAssociations(ctx context.Context, req *pb.GetAssociationsRequest) (*pb.AssociationList, error) {
+	return associationsOf(s.store, req.UaId)
+}
+
+// The graph reads below answer from the writer's own graph, the same way the
+// read service does from its graph (see ReadServer).
+func (s *WriteServer) reads() *ReadServer { return &ReadServer{store: s.store} }
+
+func (s *WriteServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.NGACNode, error) {
+	return s.reads().GetNode(ctx, req)
+}
+
+func (s *WriteServer) GetChildren(ctx context.Context, req *pb.GetChildrenRequest) (*pb.NodeList, error) {
+	return s.reads().GetChildren(ctx, req)
+}
+
+func (s *WriteServer) GetParents(ctx context.Context, req *pb.GetParentsRequest) (*pb.NodeList, error) {
+	return s.reads().GetParents(ctx, req)
+}
+
+func (s *WriteServer) GetAncestors(ctx context.Context, req *pb.GetAncestorsRequest) (*pb.NodeList, error) {
+	return s.reads().GetAncestors(ctx, req)
+}
+
+func (s *WriteServer) GetDescendants(ctx context.Context, req *pb.GetDescendantsRequest) (*pb.NodeList, error) {
+	return s.reads().GetDescendants(ctx, req)
+}
+
 func (s *WriteServer) InitSchema(ctx context.Context, _ *pb.Empty) (*pb.Empty, error) {
 	if err := s.store.InitSchema(ctx); err != nil {
 		return nil, status.Errorf(codes.Internal, "init schema: %v", err)

@@ -21,6 +21,10 @@ type TransitionRule struct {
 	NgacPermission string `json:"ngac_permission"`
 }
 
+// ActionAssign is the lifecycle step that gives an asset to a person. It needs
+// a person, so it is taken through a hand-over, never through a bare transition.
+const ActionAssign = "assign"
+
 // DefaultLifecycle returns the standard lifecycle for generic asset types.
 func DefaultLifecycle() LifecycleDefinition {
 	return LifecycleDefinition{

@@ -1,55 +1,11 @@
-import { createFileRoute } from '@tanstack/react-router'
-import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
-import { useAssetSummary, useAssetTypes } from '../../hooks/useAssets'
-import { LoadingState } from '../../components/LoadingState'
-import { ErrorState } from '../../components/ErrorState'
-import { Card } from '../../components/composites'
-import { Package, CheckCircle, Clock, Tag } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { createFileRoute, redirect } from '@tanstack/react-router'
+import { legacyAssetsRedirect } from '../../lib/assets-search'
+import { validateWorkspaceSearch } from '../../lib/workspace'
 
-export const Route = createFileRoute('/assets/dashboard')({ component: AssetDashboard })
-
-function AssetDashboard() {
-  const { workspaceId: wsId } = useActiveWorkspace()
-  const { data: summary, isLoading: summaryLoading, error: summaryError, refetch: refetchSummary } = useAssetSummary(wsId)
-  const { data: typesData, isLoading: typesLoading, error: typesError, refetch: refetchTypes } = useAssetTypes(wsId)
-
-  const isLoading = summaryLoading || typesLoading
-  const error = summaryError || typesError
-
-  if (isLoading) return <LoadingState />
-  if (error) return <ErrorState title="Failed to load dashboard" message={error.message} onRetry={() => { refetchSummary(); refetchTypes() }} />
-
-  const stats: { label: string; value: number; icon: ReactNode; color: string }[] = [
-    { label: 'Total Assets', value: summary?.total || 0, icon: <Package size={20} />, color: 'bg-primary-container text-on-primary-container' },
-    { label: 'In Use', value: summary?.in_use || 0, icon: <CheckCircle size={20} />, color: 'bg-tertiary-container text-on-tertiary-container' },
-    { label: 'Pending', value: summary?.pending || 0, icon: <Clock size={20} />, color: 'bg-secondary-container text-on-secondary-container' },
-    { label: 'Types', value: typesData?.types?.length || 0, icon: <Tag size={20} />, color: 'bg-surface-variant text-on-surface-variant' },
-  ]
-
-  return (
-    <div className="animate-fade-in">
-      <div className="mb-6">
-        <h1 className="font-h1 text-h1 text-on-surface">Asset Dashboard</h1>
-        <p className="text-sm text-on-surface-variant mt-1">Overview of all managed assets</p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-        {stats.map((s, i) => (
-          <Card key={i} className="hover:-translate-y-0.5 transition-transform duration-200">
-            <Card.Body className="flex items-center gap-4">
-              <div className={`w-11 h-11 rounded-md flex items-center justify-center
-                text-section ${s.color}`}>
-                {s.icon}
-              </div>
-              <div>
-                <div className="font-h2 text-h2 text-on-surface">{s.value}</div>
-                <div className="text-label-caps text-on-surface-variant">{s.label}</div>
-              </div>
-            </Card.Body>
-          </Card>
-        ))}
-      </div>
-    </div>
-  )
-}
+// The old /assets pages became tabs of one screen in the shared shell; a saved link keeps working.
+export const Route = createFileRoute('/assets/dashboard')({
+  validateSearch: validateWorkspaceSearch,
+  beforeLoad: ({ search }) => {
+    throw redirect({ to: '/assets', search: legacyAssetsRedirect('dashboard', search), replace: true })
+  },
+})

@@ -34,6 +34,10 @@ message AssetRequest {
   string approver_comment = 13;
   google.protobuf.Timestamp created_at = 14;
   google.protobuf.Timestamp updated_at = 15;
+  string urgency = 16;             // "low", "normal", "high", "urgent"
+  string assigned_asset_name = 17;
+  bool can_decide = 18;            // caller may approve or reject it (approve on the type's OA, and it is pending)
+  bool can_assign = 19;            // caller may give it an asset (manage on the type's OA, and it is pending or approved)
 }
 
 message CreateAssetRequestReq {
@@ -43,6 +47,7 @@ message CreateAssetRequestReq {
   string user_ngac_node_id = 4 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string justification = 5;
   int32 quantity = 6;
+  string urgency = 7;              // Optional; defaults to "normal"
 }
 
 message ApproveRequestReq {
@@ -50,6 +55,7 @@ message ApproveRequestReq {
   string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string comment = 4;
+  string asset_id = 5;             // Optional: approve and hand this asset over in the same step
 }
 
 message RejectRequestReq {
@@ -76,7 +82,7 @@ message ListRequestsReq {
   string workspace_id = 1;
   string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
-  string status = 4;               // Optional filter
+  string status = 4;               // Optional filter; several statuses may be given separated by commas
   bool mine_only = 5;              // If true, only return user's own requests
   int32 limit = 6;
   int32 offset = 7;

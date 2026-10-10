@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
@@ -22,16 +23,27 @@ type WorkspaceStore interface {
 	Insert(ctx context.Context, ws *store.Workspace) error
 	GetByID(ctx context.Context, id string) (*store.Workspace, error)
 	ListAll(ctx context.Context) ([]*store.Workspace, error)
+	// WithOwnerLock runs fn while holding the workspace's owner lock, so checks
+	// of who the owners are and the changes that follow cannot interleave.
+	WithOwnerLock(ctx context.Context, wsID string, fn func(ctx context.Context) error) error
 }
 
 // Service orchestrates workspace business logic.
 type Service struct {
-	store       WorkspaceStore
-	deptStore   DepartmentStore
+	store     WorkspaceStore
+	deptStore DepartmentStore
+	// policyRead answers CheckAccess only. A read replica may lag, so every graph
+	// read that feeds an authorization or write decision goes through policyWrite.
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
 	minioClient *minio.Client
 	driveClient drivepb.DriveServiceClient
+	// directory names the people behind user nodes; see WithDirectory.
+	directory DirectoryStore
+	// invitations holds pending offers to join; see WithInvitations.
+	invitations   InvitationStore
+	now           func() time.Time
+	inviteLimiter *windowLimiter
 }
 
 // NewService creates a workspace domain service.
@@ -43,7 +55,9 @@ func NewService(
 	mc *minio.Client,
 	dc drivepb.DriveServiceClient,
 ) *Service {
-	return &Service{store: st, deptStore: ds, policyRead: pr, policyWrite: pw, minioClient: mc, driveClient: dc}
+	svc := &Service{store: st, deptStore: ds, policyRead: pr, policyWrite: pw, minioClient: mc, driveClient: dc}
+	svc.inviteLimiter = newWindowLimiter(defaultInviteMax, defaultInviteWindow, svc.clock)
+	return svc
 }
 
 // CreateWorkspaceInput holds the parameters for creating a workspace.
@@ -218,7 +232,7 @@ func (s *Service) ListAccessibleWorkspaces(ctx context.Context, userNGACNodeID s
 	// call whose payload is just that user's attributes, and it answers the
 	// same question: a workspace is accessible exactly when its policy class is
 	// among the user's ancestors.
-	ancestors, err := s.policyRead.GetAncestors(ctx, &policypb.GetAncestorsRequest{
+	ancestors, err := s.policyWrite.GetAncestors(ctx, &policypb.GetAncestorsRequest{
 		NodeId: userNGACNodeID,
 	})
 	if err != nil {
@@ -247,7 +261,7 @@ func (s *Service) FindUAByName(ctx context.Context, wsID, uaName string) (string
 	if err != nil {
 		return "", err
 	}
-	children, err := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeID})
+	children, err := s.policyWrite.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeID})
 	if err != nil {
 		return "", fmt.Errorf("get children: %w", err)
 	}
@@ -259,40 +273,108 @@ func (s *Service) FindUAByName(ctx context.Context, wsID, uaName string) (string
 	return "", fmt.Errorf("%w: UA %q not found in workspace %s", ErrNotFound, uaName, wsID)
 }
 
-// InviteMember adds a user to the Members UA of a workspace. The caller must
-// hold invite on the workspace's Mgmt OA.
-func (s *Service) InviteMember(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error {
-	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpInvite)
-	if err != nil {
-		return err
+// withdrawOffers revokes what was still open to a removed person's proved
+// address in this workspace, so an old invitation cannot bring them back.
+// Access is already gone; a failure here is logged, not returned.
+func (s *Service) withdrawOffers(ctx context.Context, wsID, nodeID string) {
+	if s.invitations == nil {
+		return
 	}
-	membersUAID, err := s.FindUAByName(ctx, wsID, ngac.MembersUAName(ngac.WorkspaceID(ws.ID)))
-	if err != nil {
-		return err
+	email, err := s.invitations.VerifiedEmailByNode(ctx, nodeID)
+	if err != nil || email == "" {
+		if err != nil {
+			slog.Warn("could not look up a removed member's address", "workspace", wsID, "error", err)
+		}
+		return
 	}
-	_, err = s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: targetNGACNodeID, ParentId: membersUAID,
-	})
+	if _, err := s.invitations.RevokePendingForEmail(ctx, wsID, email, s.clock()); err != nil {
+		slog.Warn("member removed but their invitations remain", "workspace", wsID, "error", err)
+	}
+}
+
+// ownersOf returns the people in the workspace's Owners UA and the UA's ID.
+func (s *Service) ownersOf(ctx context.Context, ws *WorkspaceResult) (string, []*policypb.NGACNode, error) {
+	ownersUAID, err := s.FindUAByName(ctx, ws.ID, ngac.OwnersUAName(ngac.WorkspaceID(ws.ID)))
 	if err != nil {
-		return fmt.Errorf("assign member: %w", err)
+		return "", nil, err
+	}
+	kids, err := s.policyWrite.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ownersUAID})
+	if err != nil {
+		return "", nil, fmt.Errorf("get owners: %w", err)
+	}
+	return ownersUAID, userNodes(kids.GetNodes()), nil
+}
+
+func containsNode(nodes []*policypb.NGACNode, id string) bool {
+	for _, n := range nodes {
+		if n.Id == id {
+			return true
+		}
+	}
+	return false
+}
+
+// requireOwner confirms the caller is in the Owners UA. Holding manage is not
+// enough to change who the owners are: a role can carry manage, and a manager
+// must not be able to demote or replace the people above them.
+func requireOwner(owners []*policypb.NGACNode, callerNodeID string) error {
+	if !containsNode(owners, callerNodeID) {
+		return fmt.Errorf("%w: only an owner changes the owners", ErrAccessDenied)
 	}
 	return nil
 }
 
 // RemoveMember removes a user from all UAs under the workspace PC. The caller
 // must hold invite on the workspace's Mgmt OA.
+//
+// Removing someone in the Owners UA takes being an Owner and holding manage, and
+// the last owner stays. That rule is checked and acted on under the workspace's
+// owner lock, so two removals at once cannot both pass it.
 func (s *Service) RemoveMember(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error {
 	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpInvite)
 	if err != nil {
 		return err
 	}
-	return s.detachMember(ctx, ws, targetNGACNodeID)
+	remove := func(ctx context.Context) error {
+		_, owners, err := s.ownersOf(ctx, ws)
+		if err != nil {
+			return err
+		}
+		if containsNode(owners, targetNGACNodeID) {
+			if err := requireOwner(owners, callerNodeID); err != nil {
+				return err
+			}
+			mgmtID, err := s.mgmtOAID(ctx, ws)
+			if err != nil {
+				return err
+			}
+			if err := s.checkAccess(ctx, callerNodeID, mgmtID, ngac.OpManage); err != nil {
+				return err
+			}
+			if len(owners) <= 1 {
+				return fmt.Errorf("%w: cannot remove last owner", ErrInvalidInput)
+			}
+		}
+		return s.detachMember(ctx, ws, targetNGACNodeID)
+	}
+	if err := s.store.WithOwnerLock(ctx, ws.ID, remove); err != nil {
+		return err
+	}
+	s.withdrawOffers(ctx, ws.ID, targetNGACNodeID)
+	if s.directory != nil {
+		// Access is already gone; a listing left behind only keeps the person in
+		// contacts, so a failure is reported but does not undo the removal.
+		if err := s.directory.RemoveTenantUser(ctx, ws.ID, targetNGACNodeID); err != nil {
+			slog.Warn("member removed but their listing remains", "workspace", ws.ID, "error", err)
+		}
+	}
+	return nil
 }
 
 // detachMember removes a user from every UA under the workspace PC. It performs
 // no authorization; callers must have authorized already.
 func (s *Service) detachMember(ctx context.Context, ws *WorkspaceResult, targetNGACNodeID string) error {
-	desc, err := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
+	desc, err := s.policyWrite.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
 	if err != nil {
 		return fmt.Errorf("get descendants: %w", err)
 	}
@@ -332,7 +414,7 @@ func (s *Service) ListMembers(ctx context.Context, callerNodeID, wsID string) ([
 	if err != nil {
 		return nil, err
 	}
-	desc, err := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
+	desc, err := s.policyWrite.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
 	if err != nil {
 		return nil, fmt.Errorf("get descendants: %w", err)
 	}
@@ -347,83 +429,65 @@ func (s *Service) ListMembers(ctx context.Context, callerNodeID, wsID string) ([
 	return members, nil
 }
 
-// UpdateMemberRoles removes a user from all UAs then assigns to specified roles.
-// The caller must hold manage on the workspace's Mgmt OA, and every role must be
-// a UA of this workspace.
-func (s *Service) UpdateMemberRoles(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string, roleIDs []string) error {
-	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
-	if err != nil {
-		return err
-	}
-	for _, roleID := range roleIDs {
-		if err := s.requireRole(ctx, ws, roleID); err != nil {
-			return err
-		}
-	}
-	if err := s.detachMember(ctx, ws, targetNGACNodeID); err != nil {
-		return err
-	}
-	for _, roleID := range roleIDs {
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: targetNGACNodeID, ParentId: roleID,
-		}); err != nil {
-			return fmt.Errorf("assign role %s: %w", roleID, err)
-		}
-	}
-	return nil
-}
-
 // TransferOwnership adds a user to the Owners UA of a workspace. The caller
-// must hold manage on the workspace's Mgmt OA.
+// must hold manage on the workspace's Mgmt OA and be an Owner, and the new owner
+// must already belong to the workspace.
 func (s *Service) TransferOwnership(ctx context.Context, callerNodeID, wsID, newOwnerNGACNodeID string) error {
 	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
 	if err != nil {
 		return err
 	}
-	ownersUAID, err := s.FindUAByName(ctx, wsID, ngac.OwnersUAName(ngac.WorkspaceID(ws.ID)))
-	if err != nil {
-		return err
+	add := func(ctx context.Context) error {
+		ownersUAID, owners, err := s.ownersOf(ctx, ws)
+		if err != nil {
+			return err
+		}
+		if err := requireOwner(owners, callerNodeID); err != nil {
+			return err
+		}
+		if err := s.requireMemberUser(ctx, ws, newOwnerNGACNodeID); err != nil {
+			return err
+		}
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+			ChildId: newOwnerNGACNodeID, ParentId: ownersUAID,
+		}); err != nil {
+			return fmt.Errorf("assign owner: %w", err)
+		}
+		return nil
 	}
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: newOwnerNGACNodeID, ParentId: ownersUAID,
-	}); err != nil {
-		return fmt.Errorf("assign owner: %w", err)
-	}
-	return nil
+	return s.store.WithOwnerLock(ctx, ws.ID, add)
 }
 
 // RemoveOwner removes a user from the Owners UA, refusing if they are the last
-// owner. The caller must hold manage on the workspace's Mgmt OA.
+// owner. The caller must hold manage on the workspace's Mgmt OA and be an Owner;
+// the count and the removal happen under the workspace's owner lock.
 func (s *Service) RemoveOwner(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error {
 	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
 	if err != nil {
 		return err
 	}
-	ownersUAID, err := s.FindUAByName(ctx, wsID, ngac.OwnersUAName(ngac.WorkspaceID(ws.ID)))
-	if err != nil {
-		return err
-	}
-
-	ownerChildren, err := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ownersUAID})
-	if err != nil {
-		return fmt.Errorf("get owner children: %w", err)
-	}
-	userCount := 0
-	for _, n := range ownerChildren.Nodes {
-		if n.NodeType == ngac.TypeU {
-			userCount++
+	remove := func(ctx context.Context) error {
+		ownersUAID, owners, err := s.ownersOf(ctx, ws)
+		if err != nil {
+			return err
 		}
+		if err := requireOwner(owners, callerNodeID); err != nil {
+			return err
+		}
+		if !containsNode(owners, targetNGACNodeID) {
+			return fmt.Errorf("%w: not an owner of this workspace", ErrNotFound)
+		}
+		if len(owners) <= 1 {
+			return fmt.Errorf("%w: cannot remove last owner", ErrInvalidInput)
+		}
+		if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+			ChildId: targetNGACNodeID, ParentId: ownersUAID,
+		}); err != nil {
+			return fmt.Errorf("remove assignment: %w", err)
+		}
+		return nil
 	}
-	if userCount <= 1 {
-		return fmt.Errorf("%w: cannot remove last owner", ErrInvalidInput)
-	}
-
-	if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
-		ChildId: targetNGACNodeID, ParentId: ownersUAID,
-	}); err != nil {
-		return fmt.Errorf("remove assignment: %w", err)
-	}
-	return nil
+	return s.store.WithOwnerLock(ctx, ws.ID, remove)
 }
 
 // Role represents an NGAC role (UA) in a workspace.
@@ -474,7 +538,7 @@ func (s *Service) ListRoles(ctx context.Context, callerNodeID, wsID string) ([]*
 	if err != nil {
 		return nil, err
 	}
-	children, err := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeID})
+	children, err := s.policyWrite.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeID})
 	if err != nil {
 		return nil, fmt.Errorf("get children: %w", err)
 	}
@@ -550,7 +614,7 @@ func (s *Service) ListFolders(ctx context.Context, callerNodeID, wsID string) ([
 	if err != nil {
 		return nil, err
 	}
-	desc, err := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
+	desc, err := s.policyWrite.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
 	if err != nil {
 		return nil, fmt.Errorf("get descendants: %w", err)
 	}
@@ -577,48 +641,6 @@ func (s *Service) DeleteFolder(ctx context.Context, callerNodeID, wsID, folderID
 		return fmt.Errorf("delete folder: %w", err)
 	}
 	return nil
-}
-
-// Permission represents an NGAC association.
-type Permission struct {
-	ID         string
-	UaID       string
-	OaID       string
-	Operations []string
-}
-
-// CreatePermission creates an association between a UA and OA.
-//
-// Two checks, both required:
-//   - the caller holds manage on the workspace's Mgmt OA (may administer it);
-//   - the caller holds every requested operation on the target OA. Without this,
-//     manage would be a key to every other operation: a caller could grant a UA
-//     they belong to any right on any OA. Delegation never exceeds what the
-//     delegator has, and a single op not held rejects the whole request.
-//
-// Operations must be among the fixed NGAC operations.
-func (s *Service) CreatePermission(ctx context.Context, callerNodeID, wsID, uaID, oaID string, ops []string) (*Permission, error) {
-	if uaID == "" || oaID == "" {
-		return nil, fmt.Errorf("%w: ua_id and oa_id required", ErrInvalidInput)
-	}
-	if err := validateOperations(ops); err != nil {
-		return nil, err
-	}
-	if _, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage); err != nil {
-		return nil, err
-	}
-	for _, op := range ops {
-		if err := s.checkAccess(ctx, callerNodeID, oaID, op); err != nil {
-			return nil, fmt.Errorf("cannot grant an operation you do not hold: %w", err)
-		}
-	}
-	assoc, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
-		UaId: uaID, OaId: oaID, Operations: ops,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("create permission: %w", err)
-	}
-	return &Permission{ID: assoc.Id, UaID: uaID, OaID: oaID, Operations: ops}, nil
 }
 
 // DeletePermission authorizes removal of an association. Removal itself is not

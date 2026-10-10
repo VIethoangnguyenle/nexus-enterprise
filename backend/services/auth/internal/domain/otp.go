@@ -161,18 +161,20 @@ func (s *Service) VerifyOTP(ctx context.Context, sessionID, code string) (*OTPRe
 	}
 	s.rdb.Del(ctx, attemptsKey)
 
-	return s.resolveOTPUser(ctx, session.Identifier, session.Type)
+	return s.resolveOTPUser(ctx, session.Identifier, session.Type, s.OTPProvesOwnership())
 }
 
 // resolveOTPUser finds an existing user or creates a new one.
-func (s *Service) resolveOTPUser(ctx context.Context, identifier, identType string) (*OTPResult, error) {
+// proven says the code reached the owner of the identifier; only then is an
+// email address marked verified.
+func (s *Service) resolveOTPUser(ctx context.Context, identifier, identType string, proven bool) (*OTPResult, error) {
 	var user *OTPResult
 	var err error
 
 	if identType == "phone" {
 		user, err = s.findUserByPhone(ctx, identifier)
 	} else {
-		user, err = s.findUserByEmail(ctx, identifier)
+		user, err = s.findUserByEmail(ctx, identifier, proven)
 	}
 	if err != nil {
 		return nil, err
@@ -183,7 +185,7 @@ func (s *Service) resolveOTPUser(ctx context.Context, identifier, identType stri
 	}
 
 	// New user — auto-register
-	return s.createOTPUser(ctx, identifier, identType)
+	return s.createOTPUser(ctx, identifier, identType, proven)
 }
 
 // findUserByPhone looks up an existing user by phone and generates a JWT.
@@ -199,13 +201,27 @@ func (s *Service) findUserByPhone(ctx context.Context, phone string) (*OTPResult
 }
 
 // findUserByEmail looks up an existing user by email and generates a JWT.
-func (s *Service) findUserByEmail(ctx context.Context, email string) (*OTPResult, error) {
+func (s *Service) findUserByEmail(ctx context.Context, email string, proven bool) (*OTPResult, error) {
 	user, err := s.store.GetUserByEmail(ctx, email)
 	if err != nil {
 		return nil, fmt.Errorf("get user by email: %w", err)
 	}
 	if user == nil {
 		return nil, nil
+	}
+	if proven {
+		// First proof of this address: whatever credentials were set up before it
+		// (a password someone else chose when signing up with it) are dropped,
+		// exactly as when Google proves it.
+		changed, err := s.store.MarkEmailVerified(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		if changed {
+			if err := s.evictUnverifiedCredentials(ctx, user.ID); err != nil {
+				return nil, err
+			}
+		}
 	}
 	return s.otpResultFromExistingUser(ctx, user)
 }
@@ -234,7 +250,7 @@ func (s *Service) otpResultFromExistingUser(ctx context.Context, u *store.User) 
 }
 
 // createOTPUser creates a new user from an OTP-verified identifier.
-func (s *Service) createOTPUser(ctx context.Context, identifier, identType string) (*OTPResult, error) {
+func (s *Service) createOTPUser(ctx context.Context, identifier, identType string, proven bool) (*OTPResult, error) {
 	var username, email, phone string
 
 	if identType == "phone" {
@@ -253,6 +269,7 @@ func (s *Service) createOTPUser(ctx context.Context, identifier, identType strin
 
 	ngacNode, err := s.createUserWithNode(ctx, newUser{
 		ID: userID, Username: username, Email: email, UnionID: unionID, DisplayName: displayName, Phone: phone,
+		EmailVerified: proven && identType != "phone",
 	})
 	if err != nil {
 		return nil, err

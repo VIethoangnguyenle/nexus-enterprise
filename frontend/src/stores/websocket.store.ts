@@ -313,6 +313,12 @@ function handleServerMessage(
         queryClient.invalidateQueries({ queryKey: keys.assets.transitions(asset.assetId) })
       }
       queryClient.invalidateQueries({ queryKey: keys.assets.summaries() })
+      // The same step moves the dashboard's feed, the types' available counts and
+      // any request that was waiting for an asset.
+      queryClient.invalidateQueries({ queryKey: keys.assets.activitiesAll() })
+      queryClient.invalidateQueries({ queryKey: keys.assets.typesAll() })
+      queryClient.invalidateQueries({ queryKey: keys.assets.requestsAll() })
+      queryClient.invalidateQueries({ queryKey: keys.assets.requestDetailsAll() })
       break
     }
 

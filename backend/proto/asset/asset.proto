@@ -27,6 +27,13 @@ service AssetService {
   rpc TransitionAsset(TransitionRequest) returns (Asset);
   rpc GetAvailableTransitions(GetTransitionsRequest) returns (TransitionList);
   rpc GetAssetHistory(GetHistoryRequest) returns (TransitionHistoryList);
+
+  // Hand an available (or already assigned) asset to a person of the workspace.
+  rpc HandOverAsset(HandOverRequest) returns (Asset);
+
+  // Dashboard
+  rpc GetSummary(GetSummaryRequest) returns (AssetSummary);
+  rpc ListActivity(ListActivityRequest) returns (ActivityList);
 }
 
 message Empty {}
@@ -47,6 +54,10 @@ message AssetType {
   int32 asset_count = 9;
   google.protobuf.Timestamp created_at = 10;
   google.protobuf.Timestamp updated_at = 11;
+  int32 available_count = 12;      // assets of this type in the "available" state
+  // Operations (read, write, approve, manage) the caller holds on this type's OA.
+  // Only set by ListTypes, so a screen offers what the server would accept.
+  repeated string permissions = 13;
 }
 
 message LifecycleDefinition {
@@ -82,6 +93,7 @@ message ListTypesRequest {
 
 message AssetTypeList {
   repeated AssetType types = 1;
+  bool can_manage = 2;             // caller may define types and edit their fields
 }
 
 message UpdateTypeSchemaRequest {
@@ -109,6 +121,7 @@ message Asset {
   bool deleted = 12;
   google.protobuf.Timestamp created_at = 13;
   google.protobuf.Timestamp updated_at = 14;
+  string assigned_to_name = 15;    // holder's display name, only for members of the asset's workspace
 }
 
 message CreateAssetRequest {
@@ -133,6 +146,7 @@ message ListAssetsRequest {
   string assigned_to = 5;         // Optional filter
   int32 limit = 6;
   int32 offset = 7;
+  string search = 8;              // Optional: matches the asset's name or its holder's name
 }
 
 message AssetList {
@@ -178,6 +192,7 @@ message AvailableTransition {
 message TransitionList {
   repeated AvailableTransition transitions = 1;
   string current_state = 2;
+  bool can_assign = 3;            // caller may hand the asset to someone (manage, and it is available or assigned)
 }
 
 message GetHistoryRequest {
@@ -195,8 +210,68 @@ message TransitionRecord {
   string actor_name = 7;
   string comment = 8;
   google.protobuf.Timestamp created_at = 9;
+  string subject_user_id = 10;     // the person the step concerned: new holder, or previous holder on a return
+  string subject_name = 11;
 }
 
 message TransitionHistoryList {
   repeated TransitionRecord records = 1;
+}
+
+// ============================================
+// Hand-over, summary, activity
+// ============================================
+
+message HandOverRequest {
+  string asset_id = 1;
+  string assignee_id = 2;          // a user of the asset's workspace
+  string comment = 3;
+}
+
+message GetSummaryRequest {
+  string workspace_id = 1;
+}
+
+message TypeCount {
+  string type_id = 1;
+  string type_name = 2;
+  int32 count = 3;
+}
+
+// Counts over the assets the caller may read.
+message AssetSummary {
+  int32 total = 1;
+  map<string, int32> by_state = 2;
+  repeated TypeCount by_type = 3;
+  int32 holders = 4;               // distinct people holding an assigned asset
+  int32 maintenance_overdue = 5;   // assets in maintenance for more than 14 days
+}
+
+message ListActivityRequest {
+  string workspace_id = 1;
+  int32 limit = 2;
+}
+
+message ActivityEntry {
+  string id = 1;
+  string asset_id = 2;
+  string asset_name = 3;
+  string type_name = 4;
+  string from_state = 5;
+  string to_state = 6;
+  string action = 7;
+  string actor_id = 8;
+  string actor_name = 9;
+  string subject_user_id = 10;
+  string subject_name = 11;
+  string comment = 12;
+  google.protobuf.Timestamp created_at = 13;
+  // "" for a lifecycle step; "approved" or "rejected" for a decision on a request, in which
+  // case `action` is request_approved / request_rejected, asset_name names the type and
+  // subject is the requester.
+  string request_status = 14;
+}
+
+message ActivityList {
+  repeated ActivityEntry entries = 1;
 }

@@ -126,7 +126,7 @@ Theo mức dùng và mức lệch: (1) shell + sidebar + nav, (2) chat, (3) driv
    + `lib/format` đã có (PR #2, `d0e8bac`); Dialog/Popover/Toast đã có exit. Còn: primitive thiếu, lint
    siết (warn trong lúc chuyển, khoá error khi xong), 32 `transition-all` ở các màn chưa làm.
    Nhóm (1) shell + sidebar và (2) chat/spaces **đã code** trong PR #2.
-4. [~] Từng nhóm màn theo thứ tự trên, mỗi nhóm một PR **gộp với 04b của domain đó** (xem plan.md). Xong: (1) shell, (2) chat (PR #2), (3) drive (2026-10-10, `reports/phase-06-drive-report.md`), (4) approval (2026-10-10, `reports/phase-06-approval-report.md`). Tiếp: assets.
+4. [~] Từng nhóm màn theo thứ tự trên, mỗi nhóm một PR **gộp với 04b của domain đó** (xem plan.md). Xong: (1) shell, (2) chat (PR #2), (3) drive (2026-10-10, `reports/phase-06-drive-report.md`), (4) approval (2026-10-10, `reports/phase-06-approval-report.md`), (5) assets và (6) admin (2026-10-10, `reports/phase-06-assets-report.md`, `reports/phase-06-admin-report.md`). Tiếp: contacts/documents/settings, rồi auth.
    code theo mockup → test vitest (không UUID,
    có loading/empty/error) → screenshot 3 khổ × 2 theme so với mockup.
 5. Motion pass toàn app + reduced-motion; test thủ công 60fps trên danh sách dài (drive, chat).

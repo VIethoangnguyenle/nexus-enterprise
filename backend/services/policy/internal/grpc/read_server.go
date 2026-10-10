@@ -166,6 +166,36 @@ func (s *ReadServer) GetParents(ctx context.Context, req *pb.GetParentsRequest) 
 	return &pb.NodeList{Nodes: nodesToProto(parents)}, nil
 }
 
+// GetAssociations lists what a user attribute is associated with: each OA it
+// reaches and the operations held. It reads the in-memory graph, like the rest
+// of the traversal RPCs.
+func (s *ReadServer) GetAssociations(ctx context.Context, req *pb.GetAssociationsRequest) (*pb.AssociationList, error) {
+	return associationsOf(s.store, req.UaId)
+}
+
+// associationsOf answers GetAssociations from a store's graph. Refused, not
+// answered with an empty list, for an empty ID, an unknown node, or a node that
+// cannot hold an association; the answer is a copy.
+func associationsOf(store *ngac.Store, uaID string) (*pb.AssociationList, error) {
+	if uaID == "" {
+		return nil, status.Error(codes.InvalidArgument, "ua_id required")
+	}
+	graph := store.GetGraph()
+	node := graph.GetNode(uaID)
+	if node == nil {
+		return nil, status.Errorf(codes.NotFound, "node %s not found", uaID)
+	}
+	if node.NodeType != ngac.NodeTypeUserAttribute {
+		return nil, status.Errorf(codes.InvalidArgument, "node %s is not a user attribute", uaID)
+	}
+	assocs := graph.GetAssociationsFromUA(uaID)
+	out := make([]*pb.Association, 0, len(assocs))
+	for _, a := range assocs {
+		out = append(out, &pb.Association{Id: a.ID, UaId: a.UAID, OaId: a.OAID, Operations: append([]string(nil), a.Operations...)})
+	}
+	return &pb.AssociationList{Associations: out}, nil
+}
+
 const scopeCacheTTL = 60 * time.Second
 
 // ResolveAccessibleScopes returns the set of leaf OA IDs a user can access

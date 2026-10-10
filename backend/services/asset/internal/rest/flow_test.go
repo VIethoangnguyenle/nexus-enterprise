@@ -222,7 +222,7 @@ func TestTransitionOverREST_RecordsActorFromToken(t *testing.T) {
 
 	// "requested" -> "available" is the default lifecycle's "approve".
 	code := f.serve(t, f.approver, "assetId", f.assetID,
-		forged(f.requester, `"to_state":"approve","comment":"ok",`), f.h.TransitionAsset)
+		forged(f.requester, `"action":"approve","comment":"ok",`), f.h.TransitionAsset)
 
 	require.Equal(t, http.StatusOK, code)
 	var actor, toState string
@@ -230,4 +230,77 @@ func TestTransitionOverREST_RecordsActorFromToken(t *testing.T) {
 		`SELECT actor_id, to_state FROM asset_transitions WHERE asset_id = $1`, f.assetID).Scan(&actor, &toState))
 	assert.Equal(t, f.approver, actor)
 	assert.Equal(t, "available", toState)
+}
+
+// ---------------------------------------------------------------------------
+// Approve and hand over an asset, end to end over REST
+// ---------------------------------------------------------------------------
+
+// freeAsset adds an available asset of the fixture's type and makes the
+// requester a member of the workspace, which is what receiving one needs.
+func (f *flowFixture) freeAsset(t *testing.T) string {
+	t.Helper()
+	ctx := context.Background()
+	id := "flow-free-" + uuid.New().String()[:8]
+	_, err := f.pool.Exec(ctx, `INSERT INTO tenant_users (tenant_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, f.wsID, f.requester)
+	require.NoError(t, err)
+	_, err = f.pool.Exec(ctx, `INSERT INTO assets (id, name, type_id, workspace_id, state, created_by) VALUES ($1, $1, $2, $3, 'available', $4)`,
+		id, f.typeID, f.wsID, f.approver)
+	require.NoError(t, err)
+	t.Cleanup(func() { f.pool.Exec(context.Background(), `DELETE FROM asset_transitions WHERE asset_id = $1`, id) })
+	return id
+}
+
+func (f *flowFixture) holder(t *testing.T, assetID string) (state string, holder *string) {
+	t.Helper()
+	require.NoError(t, f.pool.QueryRow(context.Background(),
+		`SELECT state, assigned_to FROM assets WHERE id = $1`, assetID).Scan(&state, &holder))
+	return state, holder
+}
+
+func TestApproveWithAssetOverREST_NeedsApproveAndManageAndChangesNothingOtherwise(t *testing.T) {
+	f := newFlowFixture(t)
+	asset := f.freeAsset(t)
+	body := `{"asset_id":"` + asset + `","comment":"Máy mới"}`
+
+	// Approve alone: the hand-over half is refused, so nothing happens.
+	code := f.serve(t, f.approver, "reqId", f.requestID, body, f.h.ApproveAssetRequest)
+	assert.Equal(t, http.StatusForbidden, code)
+	st, _ := f.requestState(t)
+	assert.Equal(t, "pending", st)
+	state, holder := f.holder(t, asset)
+	assert.Equal(t, "available", state)
+	assert.Nil(t, holder)
+
+	// Approve and manage: request and asset change together, recorded as the token's user.
+	f.policy.grants[[3]string{nodeOf(f.approver), f.oaID, ngac.OpManage}] = true
+	code = f.serve(t, f.approver, "reqId", f.requestID, forged(f.requester, `"asset_id":"`+asset+`",`), f.h.ApproveAssetRequest)
+	require.Equal(t, http.StatusOK, code)
+	st, approver := f.requestState(t)
+	assert.Equal(t, "fulfilled", st)
+	require.NotNil(t, approver)
+	assert.Equal(t, f.approver, *approver)
+	state, holder = f.holder(t, asset)
+	assert.Equal(t, "assigned", state)
+	require.NotNil(t, holder)
+	assert.Equal(t, f.requester, *holder)
+
+	// The same asset cannot be given to a second request.
+	second := "flow-second-" + uuid.New().String()[:8]
+	_, err := f.pool.Exec(context.Background(), `INSERT INTO asset_requests (id, type_id, workspace_id, requester_id, justification) VALUES ($1, $2, $3, $4, 'again')`,
+		second, f.typeID, f.wsID, f.approver)
+	require.NoError(t, err)
+	f.policy.grants[[3]string{nodeOf(f.requester), f.oaID, ngac.OpManage}] = true
+	code = f.serve(t, f.requester, "reqId", second, body, f.h.ApproveAssetRequest)
+	assert.Equal(t, http.StatusConflict, code, "an asset that is no longer available is a conflict")
+}
+
+func TestRejectOverREST_RefusesAnEmptyReason(t *testing.T) {
+	f := newFlowFixture(t)
+
+	code := f.serve(t, f.approver, "reqId", f.requestID, `{"reason":"  "}`, f.h.RejectAssetRequest)
+
+	assert.Equal(t, http.StatusBadRequest, code)
+	st, _ := f.requestState(t)
+	assert.Equal(t, "pending", st)
 }

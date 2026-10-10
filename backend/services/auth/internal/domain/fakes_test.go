@@ -38,6 +38,7 @@ type fakeWorld struct {
 	channels   []string                           // workspace ids that got #general
 	callers    map[string]grpcauth.Caller         // downstream RPC -> caller on its context
 	seq        int
+	verified   map[string]bool // user id -> email proven
 }
 
 func newFakeWorld() *fakeWorld {
@@ -46,6 +47,7 @@ func newFakeWorld() *fakeWorld {
 		identities: map[string]string{},
 		workspaces: map[string]*store.Tenant{},
 		members:    map[string]*store.TenantMembership{},
+		verified:   map[string]bool{},
 	}
 }
 
@@ -104,7 +106,7 @@ func (w *fakeWorld) CreateUser(_ context.Context, id, username, password, ngacNo
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for _, u := range w.users {
-		if email != "" && u.Email == email {
+		if email != "" && strings.EqualFold(u.Email, email) {
 			return fmt.Errorf("duplicate email")
 		}
 		if u.Username == username {
@@ -132,7 +134,7 @@ func (w *fakeWorld) GetUserByUsername(_ context.Context, username string) (*stor
 	return w.find(func(u *store.User) bool { return u.Username == username }), nil
 }
 func (w *fakeWorld) GetUserByEmail(_ context.Context, email string) (*store.User, error) {
-	return w.find(func(u *store.User) bool { return email != "" && u.Email == email }), nil
+	return w.find(func(u *store.User) bool { return email != "" && strings.EqualFold(u.Email, email) }), nil
 }
 func (w *fakeWorld) GetUserByPhone(_ context.Context, phone string) (*store.User, error) {
 	return w.find(func(u *store.User) bool { return phone != "" && u.Phone == phone }), nil
@@ -307,4 +309,26 @@ func (f *fakePolicyWrite) CreateNode(_ context.Context, req *policypb.CreateNode
 
 func (f *fakePolicyWrite) CreateAssignment(_ context.Context, req *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
 	return &policypb.Assignment{Id: "asg-" + req.ChildId + "-" + req.ParentId}, nil
+}
+
+// MarkEmailVerified records proof of the address; false when it already was.
+func (w *fakeWorld) MarkEmailVerified(_ context.Context, userID string) (bool, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	u, ok := w.users[userID]
+	if !ok || u.Email == "" || w.verified[userID] {
+		return false, nil
+	}
+	w.verified[userID] = true
+	return true, nil
+}
+
+func (w *fakeWorld) emailVerified(userID string) bool {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.verified[userID]
+}
+
+func (w *fakeWorld) userByEmail(email string) *store.User {
+	return w.find(func(u *store.User) bool { return strings.EqualFold(u.Email, email) })
 }

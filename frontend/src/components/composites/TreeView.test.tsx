@@ -128,3 +128,22 @@ function Fixed({ list, selected }: { list: TreeNode[]; selected: string | null }
     />
   )
 }
+
+describe('TreeView trailing figure', () => {
+  it('puts a figure at the right of each row when asked', () => {
+    render(
+      <TreeView
+        label="Phòng ban"
+        roots={roots}
+        useChildren={useChildren}
+        expanded={new Set()}
+        onToggle={() => {}}
+        onSelect={() => {}}
+        trailing={(n) => (n.id === 'a' ? '12' : null)}
+      />,
+    )
+    const first = screen.getByRole('treeitem', { name: /Đối soát/ })
+    expect(within(first).getByText('12').className).toMatch(/tnum/)
+    expect(within(screen.getByRole('treeitem', { name: /Hợp đồng/ })).queryByText('12')).toBeNull()
+  })
+})

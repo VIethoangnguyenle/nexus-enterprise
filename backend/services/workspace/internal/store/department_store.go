@@ -84,11 +84,15 @@ func (s *Store) DeleteDepartment(ctx context.Context, id string) error {
 	return nil
 }
 
-// UpdateUserDepartment sets a user's department.
-func (s *Store) UpdateUserDepartment(ctx context.Context, userID string, deptID *string) error {
+// UpdateUserDepartment sets the department of the person whose graph node is
+// nodeID, within one workspace. Only that workspace's listing is touched: a
+// person can belong to several workspaces and a department belongs to one.
+func (s *Store) UpdateUserDepartment(ctx context.Context, tenantID, nodeID string, deptID *string) error {
 	_, err := s.db.Exec(ctx,
-		`UPDATE tenant_users SET department_id = $1 WHERE user_id = $2`, deptID, userID,
-	)
+		`UPDATE tenant_users tu SET department_id = $1
+		   FROM users u
+		  WHERE tu.user_id = u.id AND tu.tenant_id = $2
+		    AND (tu.ngac_node_id = $3 OR u.ngac_node = $3)`, deptID, tenantID, nodeID)
 	if err != nil {
 		return fmt.Errorf("update user department: %w", err)
 	}

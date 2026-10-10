@@ -23,7 +23,10 @@ import (
 type AuthStore interface {
 	CreateUser(ctx context.Context, id, username, password, ngacNodeID, email, unionID, displayName, phone string) error
 	GetUserByUsername(ctx context.Context, username string) (*store.User, error)
+	// GetUserByEmail matches the address case-insensitively.
 	GetUserByEmail(ctx context.Context, email string) (*store.User, error)
+	// MarkEmailVerified records proof of the account's address; true when this call set it.
+	MarkEmailVerified(ctx context.Context, userID string) (bool, error)
 	GetUserByPhone(ctx context.Context, phone string) (*store.User, error)
 	GetUserByID(ctx context.Context, userID string) (*store.User, error)
 	GetUserByNGACNodeID(ctx context.Context, ngacNodeID string) (*store.User, error)
@@ -161,7 +164,13 @@ func NewService(
 
 // Signup creates a new user and joins or creates a tenant.
 func (s *Service) Signup(ctx context.Context, email, password, displayName, tenantName string) (*SignupResult, error) {
-	if email == "" || password == "" {
+	if password == "" {
+		return nil, ErrInvalidInput
+	}
+	// The address is stored trimmed and lower-cased: two spellings of one address
+	// are one account. It is only a claim, so nothing here marks it verified.
+	email, err := normalizeEmail(email)
+	if err != nil {
 		return nil, ErrInvalidInput
 	}
 
@@ -308,6 +317,7 @@ func (s *Service) joinTenant(ctx context.Context, tenantID, userID, ngacNodeID, 
 
 // Signin authenticates by email and returns tenant list with a default-scoped JWT.
 func (s *Service) Signin(ctx context.Context, email, password string) (*SigninResult, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" || password == "" {
 		return nil, ErrInvalidInput
 	}
@@ -588,6 +598,9 @@ type newUser struct {
 	UnionID      string
 	DisplayName  string
 	Phone        string
+	// EmailVerified marks the address as proved when the account is created:
+	// only for a verified Google email or a code delivered to the address.
+	EmailVerified bool
 }
 
 // createUserWithNode creates the user's U node and the users row, and returns
@@ -601,6 +614,11 @@ func (s *Service) createUserWithNode(ctx context.Context, u newUser) (string, er
 	}
 	if err := s.store.CreateUser(ctx, u.ID, u.Username, u.PasswordHash, ngacNode, u.Email, u.UnionID, u.DisplayName, u.Phone); err != nil {
 		return "", prov.Fail(ctx, fmt.Errorf("create user: %w", err))
+	}
+	if u.EmailVerified && u.Email != "" {
+		if _, err := s.store.MarkEmailVerified(ctx, u.ID); err != nil {
+			return "", prov.Fail(ctx, err)
+		}
 	}
 	prov.Done()
 	return ngacNode, nil

@@ -24,6 +24,14 @@ type CodeSender interface {
 	SendCode(ctx context.Context, identifier, identType, code string) error
 }
 
+// OwnershipProver is implemented by a sender whose codes reach only the owner of
+// the address or number: a real mail or SMS provider. Delivery through the log,
+// or a fixed code, reaches whoever can read the log or knows the code, so those
+// prove nothing and a code accepted through them does not verify an address.
+type OwnershipProver interface {
+	DeliversToOwner() bool
+}
+
 // OTPOptions configures one-time-code sign-in.
 type OTPOptions struct {
 	// FixedCode, when non-empty, is the code every OTP session accepts — a
@@ -50,6 +58,17 @@ func (s *Service) ConfigureOTP(o OTPOptions) {
 // OTPEnabled reports whether RequestOTP can issue codes at all.
 func (s *Service) OTPEnabled() bool {
 	return s != nil && s.rdb != nil && (s.otp.FixedCode != "" || s.otp.Sender != nil)
+}
+
+// OTPProvesOwnership reports whether a code accepted now proves the holder
+// controls the address: random codes (not the fixed test code) delivered by a
+// sender that says it delivers to the owner. LogSender does not.
+func (s *Service) OTPProvesOwnership() bool {
+	if s == nil || s.otp.FixedCode != "" || s.otp.Sender == nil {
+		return false
+	}
+	p, ok := s.otp.Sender.(OwnershipProver)
+	return ok && p.DeliversToOwner()
 }
 
 // OTPFixedCodeActive reports whether the fixed test code is in force.

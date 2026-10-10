@@ -161,3 +161,27 @@ servers authorize the new user like any other caller.
 - **WHEN** a request carries only a service identity and the method is not in the table above
 - **THEN** it is rejected with `Unauthenticated`
 
+### Requirement: The admin screens' endpoints are guarded
+All on the workspace service, with the caller from verified claims; `Mgmt OA` is `ngac.MgmtOAName(wsID)`.
+
+| Endpoint | Op | Object |
+|---|---|---|
+| `GET /workspaces/:id/permission-areas` | membership | the workspace PC |
+| `GET /workspaces/:id/roles` | membership | the workspace PC |
+| `POST`, `DELETE /workspaces/:id/roles[/:roleId]` | `manage` | Mgmt OA |
+| `GET /workspaces/:id/roles/:roleId` | `manage` | Mgmt OA |
+| `PUT /workspaces/:id/roles/:roleId/permissions/:area` | `manage`, plus each added operation | Mgmt OA, then the area's OA |
+| `GET /workspaces/:id/admin/members` | `manage` | Mgmt OA |
+| `POST /workspaces/:id/members` (email) | `invite`; a role or department attached also needs `manage` and what it confers | Mgmt OA, then each OA the role or department (and its ancestors) is associated with |
+| `GET`, `DELETE /workspaces/:id/invitations[/:invitationId]` | `invite` | Mgmt OA |
+| `GET /invitations`, `POST /invitations/:id/accept`, `POST /invitations/:id/decline` | the caller's own account address; accepting needs the inviter to still hold `invite` | Mgmt OA (as the inviter) |
+| `PUT`, `DELETE /workspaces/:id/members/:nodeId/roles/:roleId` | `manage`, plus what the role confers when assigning | Mgmt OA, then each OA the role is associated with |
+| `PUT /workspaces/:id/members/:nodeId/department` | `manage`, plus what the department confers | Mgmt OA, then each OA the department is associated with |
+| `DELETE /workspaces/:id/members/:nodeId` | `invite`; an owner also needs `manage` and the caller to be an Owner | Mgmt OA, Owners UA |
+| `POST /workspaces/:id/permissions` | removed; there is no free-form grant | none |
+| `POST /workspaces/:id/invite` | removed; nothing adds a person by node ID | none |
+
+#### Scenario: Member calls an admin endpoint
+- **WHEN** a workspace member without `manage` calls any `manage` endpoint above
+- **THEN** the answer is 403 and nothing is read or written beyond the check
+

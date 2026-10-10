@@ -66,6 +66,7 @@ func reversed(in []string) []string {
 func newWriteFixture(t *testing.T, w *testutil.FakePolicyWrite) *fixture {
 	t.Helper()
 	f := newFixture(t)
+	w.Reads = f.read
 	f.svc = domain.NewService(f.wsStore, f.depts, f.read, w, nil, nil)
 	return f
 }
@@ -249,7 +250,7 @@ func TestListRoles_ShowsRolesByDisplayNameAndNothingElse(t *testing.T) {
 	for _, r := range roles {
 		names = append(names, r.Name)
 	}
-	assert.ElementsMatch(t, []string{"Reviewer", "Editor"}, names, "roles only")
+	assert.ElementsMatch(t, []string{"Reviewer", "Editor", "Người đọc", "Biên tập"}, names, "roles only")
 	for _, n := range names {
 		assert.NotContains(t, n, "_Owners", "platform UAs are not roles")
 		assert.NotContains(t, n, "_Members")
@@ -268,9 +269,9 @@ func TestRolesAPI_RefusesPlatformUAs(t *testing.T) {
 			require.Error(t, err)
 			assert.NotContains(t, f.write.mutations, "DeleteNode "+id, "the UA must survive")
 
-			err = f.svc.UpdateMemberRoles(context.Background(), owner, ws1, target, []string{role1, id})
+			err = f.svc.AssignMemberRole(context.Background(), owner, ws1, target, id)
 			require.Error(t, err)
-			assert.Empty(t, f.write.mutations, "nothing is detached or assigned when any role is not a role")
+			assert.Empty(t, f.write.mutations, "nothing is assigned when the target is not a role")
 		})
 	}
 }
@@ -278,7 +279,7 @@ func TestRolesAPI_RefusesPlatformUAs(t *testing.T) {
 func TestRolesAPI_AcceptsARealRole(t *testing.T) {
 	f := newFixture(t)
 
-	require.NoError(t, f.svc.UpdateMemberRoles(context.Background(), owner, ws1, target, []string{role1}))
+	require.NoError(t, f.svc.AssignMemberRole(context.Background(), owner, ws1, target, role1))
 	require.NoError(t, f.svc.DeleteRole(context.Background(), owner, ws1, role1))
 
 	assert.Contains(t, f.write.mutations, "DeleteNode "+role1)

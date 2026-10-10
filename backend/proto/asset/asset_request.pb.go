@@ -23,24 +23,28 @@ const (
 )
 
 type AssetRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	TypeId          string                 `protobuf:"bytes,2,opt,name=type_id,json=typeId,proto3" json:"type_id,omitempty"`
-	TypeName        string                 `protobuf:"bytes,3,opt,name=type_name,json=typeName,proto3" json:"type_name,omitempty"`
-	WorkspaceId     string                 `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterId     string                 `protobuf:"bytes,5,opt,name=requester_id,json=requesterId,proto3" json:"requester_id,omitempty"`
-	RequesterName   string                 `protobuf:"bytes,6,opt,name=requester_name,json=requesterName,proto3" json:"requester_name,omitempty"`
-	Status          string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"` // "pending", "approved", "rejected", "fulfilled"
-	Justification   string                 `protobuf:"bytes,8,opt,name=justification,proto3" json:"justification,omitempty"`
-	Quantity        int32                  `protobuf:"varint,9,opt,name=quantity,proto3" json:"quantity,omitempty"`
-	AssignedAssetId string                 `protobuf:"bytes,10,opt,name=assigned_asset_id,json=assignedAssetId,proto3" json:"assigned_asset_id,omitempty"`
-	ApproverId      string                 `protobuf:"bytes,11,opt,name=approver_id,json=approverId,proto3" json:"approver_id,omitempty"`
-	ApproverName    string                 `protobuf:"bytes,12,opt,name=approver_name,json=approverName,proto3" json:"approver_name,omitempty"`
-	ApproverComment string                 `protobuf:"bytes,13,opt,name=approver_comment,json=approverComment,proto3" json:"approver_comment,omitempty"`
-	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
-	UpdatedAt       *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	Id                string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	TypeId            string                 `protobuf:"bytes,2,opt,name=type_id,json=typeId,proto3" json:"type_id,omitempty"`
+	TypeName          string                 `protobuf:"bytes,3,opt,name=type_name,json=typeName,proto3" json:"type_name,omitempty"`
+	WorkspaceId       string                 `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	RequesterId       string                 `protobuf:"bytes,5,opt,name=requester_id,json=requesterId,proto3" json:"requester_id,omitempty"`
+	RequesterName     string                 `protobuf:"bytes,6,opt,name=requester_name,json=requesterName,proto3" json:"requester_name,omitempty"`
+	Status            string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"` // "pending", "approved", "rejected", "fulfilled"
+	Justification     string                 `protobuf:"bytes,8,opt,name=justification,proto3" json:"justification,omitempty"`
+	Quantity          int32                  `protobuf:"varint,9,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	AssignedAssetId   string                 `protobuf:"bytes,10,opt,name=assigned_asset_id,json=assignedAssetId,proto3" json:"assigned_asset_id,omitempty"`
+	ApproverId        string                 `protobuf:"bytes,11,opt,name=approver_id,json=approverId,proto3" json:"approver_id,omitempty"`
+	ApproverName      string                 `protobuf:"bytes,12,opt,name=approver_name,json=approverName,proto3" json:"approver_name,omitempty"`
+	ApproverComment   string                 `protobuf:"bytes,13,opt,name=approver_comment,json=approverComment,proto3" json:"approver_comment,omitempty"`
+	CreatedAt         *timestamppb.Timestamp `protobuf:"bytes,14,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	UpdatedAt         *timestamppb.Timestamp `protobuf:"bytes,15,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	Urgency           string                 `protobuf:"bytes,16,opt,name=urgency,proto3" json:"urgency,omitempty"` // "low", "normal", "high", "urgent"
+	AssignedAssetName string                 `protobuf:"bytes,17,opt,name=assigned_asset_name,json=assignedAssetName,proto3" json:"assigned_asset_name,omitempty"`
+	CanDecide         bool                   `protobuf:"varint,18,opt,name=can_decide,json=canDecide,proto3" json:"can_decide,omitempty"` // caller may approve or reject it (approve on the type's OA, and it is pending)
+	CanAssign         bool                   `protobuf:"varint,19,opt,name=can_assign,json=canAssign,proto3" json:"can_assign,omitempty"` // caller may give it an asset (manage on the type's OA, and it is pending or approved)
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *AssetRequest) Reset() {
@@ -178,6 +182,34 @@ func (x *AssetRequest) GetUpdatedAt() *timestamppb.Timestamp {
 	return nil
 }
 
+func (x *AssetRequest) GetUrgency() string {
+	if x != nil {
+		return x.Urgency
+	}
+	return ""
+}
+
+func (x *AssetRequest) GetAssignedAssetName() string {
+	if x != nil {
+		return x.AssignedAssetName
+	}
+	return ""
+}
+
+func (x *AssetRequest) GetCanDecide() bool {
+	if x != nil {
+		return x.CanDecide
+	}
+	return false
+}
+
+func (x *AssetRequest) GetCanAssign() bool {
+	if x != nil {
+		return x.CanAssign
+	}
+	return false
+}
+
 type CreateAssetRequestReq struct {
 	state       protoimpl.MessageState `protogen:"open.v1"`
 	TypeId      string                 `protobuf:"bytes,1,opt,name=type_id,json=typeId,proto3" json:"type_id,omitempty"`
@@ -188,6 +220,7 @@ type CreateAssetRequestReq struct {
 	UserNgacNodeId string `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	Justification  string `protobuf:"bytes,5,opt,name=justification,proto3" json:"justification,omitempty"`
 	Quantity       int32  `protobuf:"varint,6,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	Urgency        string `protobuf:"bytes,7,opt,name=urgency,proto3" json:"urgency,omitempty"` // Optional; defaults to "normal"
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -266,6 +299,13 @@ func (x *CreateAssetRequestReq) GetQuantity() int32 {
 	return 0
 }
 
+func (x *CreateAssetRequestReq) GetUrgency() string {
+	if x != nil {
+		return x.Urgency
+	}
+	return ""
+}
+
 type ApproveRequestReq struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
@@ -274,6 +314,7 @@ type ApproveRequestReq struct {
 	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	Comment        string `protobuf:"bytes,4,opt,name=comment,proto3" json:"comment,omitempty"`
+	AssetId        string `protobuf:"bytes,5,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"` // Optional: approve and hand this asset over in the same step
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -334,6 +375,13 @@ func (x *ApproveRequestReq) GetUserNgacNodeId() string {
 func (x *ApproveRequestReq) GetComment() string {
 	if x != nil {
 		return x.Comment
+	}
+	return ""
+}
+
+func (x *ApproveRequestReq) GetAssetId() string {
+	if x != nil {
+		return x.AssetId
 	}
 	return ""
 }
@@ -553,7 +601,7 @@ type ListRequestsReq struct {
 	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
-	Status         string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`                                           // Optional filter
+	Status         string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`                                           // Optional filter; several statuses may be given separated by commas
 	MineOnly       bool   `protobuf:"varint,5,opt,name=mine_only,json=mineOnly,proto3" json:"mine_only,omitempty"`                      // If true, only return user's own requests
 	Limit          int32  `protobuf:"varint,6,opt,name=limit,proto3" json:"limit,omitempty"`
 	Offset         int32  `protobuf:"varint,7,opt,name=offset,proto3" json:"offset,omitempty"`
@@ -742,7 +790,7 @@ var File_proto_asset_asset_request_proto protoreflect.FileDescriptor
 
 const file_proto_asset_asset_request_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/asset/asset_request.proto\x12\x05asset\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17proto/asset/asset.proto\"\xae\x04\n" +
+	"\x1fproto/asset/asset_request.proto\x12\x05asset\x1a\x1fgoogle/protobuf/timestamp.proto\x1a\x17proto/asset/asset.proto\"\xb6\x05\n" +
 	"\fAssetRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x17\n" +
 	"\atype_id\x18\x02 \x01(\tR\x06typeId\x12\x1b\n" +
@@ -762,20 +810,28 @@ const file_proto_asset_asset_request_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe1\x01\n" +
+	"updated_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\x12\x18\n" +
+	"\aurgency\x18\x10 \x01(\tR\aurgency\x12.\n" +
+	"\x13assigned_asset_name\x18\x11 \x01(\tR\x11assignedAssetName\x12\x1d\n" +
+	"\n" +
+	"can_decide\x18\x12 \x01(\bR\tcanDecide\x12\x1d\n" +
+	"\n" +
+	"can_assign\x18\x13 \x01(\bR\tcanAssign\"\xfb\x01\n" +
 	"\x15CreateAssetRequestReq\x12\x17\n" +
 	"\atype_id\x18\x01 \x01(\tR\x06typeId\x12!\n" +
 	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x1b\n" +
 	"\auser_id\x18\x03 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
 	"\x11user_ngac_node_id\x18\x04 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12$\n" +
 	"\rjustification\x18\x05 \x01(\tR\rjustification\x12\x1a\n" +
-	"\bquantity\x18\x06 \x01(\x05R\bquantity\"\x98\x01\n" +
+	"\bquantity\x18\x06 \x01(\x05R\bquantity\x12\x18\n" +
+	"\aurgency\x18\a \x01(\tR\aurgency\"\xb3\x01\n" +
 	"\x11ApproveRequestReq\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1b\n" +
 	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
 	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12\x18\n" +
-	"\acomment\x18\x04 \x01(\tR\acomment\"\x95\x01\n" +
+	"\acomment\x18\x04 \x01(\tR\acomment\x12\x19\n" +
+	"\basset_id\x18\x05 \x01(\tR\aassetId\"\x95\x01\n" +
 	"\x10RejectRequestReq\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1b\n" +

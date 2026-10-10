@@ -66,6 +66,18 @@ Verified against the codebase on 2026-07-31.
 |---|---|
 | `approval-screens` | Matches code (template administration, role and department approvers and routing included; known gaps under its Status) |
 
+**Administration**
+
+| Capability | State |
+|---|---|
+| `admin-screens` | Matches code (added 2026-10-10; known gaps under its Status) |
+
+**Assets**
+
+| Capability | State |
+|---|---|
+| `assets-screens` | Matches code (known gaps under its Status) |
+
 **Layout**
 
 | Capability | State |

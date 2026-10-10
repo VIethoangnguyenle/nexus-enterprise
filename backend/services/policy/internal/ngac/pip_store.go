@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -18,6 +19,10 @@ import (
 type Store struct {
 	db    *pgxpool.Pool
 	graph *Graph
+	// assocMu orders association writes: the row is written and then the graph
+	// updated, and two writers interleaving those steps would leave the graph
+	// holding a grant the database no longer has.
+	assocMu sync.Mutex
 }
 
 func NewStore(db *pgxpool.Pool, graph *Graph) *Store {

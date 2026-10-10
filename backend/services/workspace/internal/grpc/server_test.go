@@ -338,41 +338,6 @@ func TestCreateFolder_PDPDenyIsPermissionDenied(t *testing.T) {
 // Permissions
 // ---------------------------------------------------------------------------
 
-func TestCreatePermission_PDPDenyIsPermissionDenied(t *testing.T) {
-	srv, pool, pr := setupTestServer(t)
-	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "PermWSDeny")
-	pr.deny = true
-
-	_, err := srv.CreatePermission(asCaller("", ngacNodeID), &pb.CreatePermissionRequest{
-		WorkspaceId: ws.Id,
-		UaId:        ws.MembersUaId, OaId: ws.MgmtOaId, Operations: []string{ngac.OpManage},
-	})
-	requireCode(t, err, codes.PermissionDenied)
-}
-
-func TestCreatePermission_UnknownOperationIsInvalidArgument(t *testing.T) {
-	srv, pool, _ := setupTestServer(t)
-	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "PermWSBadOp")
-
-	_, err := srv.CreatePermission(asCaller("", ngacNodeID), &pb.CreatePermissionRequest{
-		WorkspaceId: ws.Id,
-		UaId:        ws.MembersUaId, OaId: ws.DocumentsOaId, Operations: []string{"root"},
-	})
-	requireCode(t, err, codes.InvalidArgument)
-}
-
-func TestCreatePermission_Allowed(t *testing.T) {
-	srv, pool, _ := setupTestServer(t)
-	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "PermWS")
-
-	p, err := srv.CreatePermission(asCaller("", ngacNodeID), &pb.CreatePermissionRequest{
-		WorkspaceId: ws.Id,
-		UaId:        ws.MembersUaId, OaId: ws.DocumentsOaId, Operations: []string{ngac.OpRead},
-	})
-	require.NoError(t, err)
-	assert.Equal(t, []string{ngac.OpRead}, p.Operations)
-}
-
 func TestDeletePermission_PDPDenyIsPermissionDenied(t *testing.T) {
 	srv, pool, pr := setupTestServer(t)
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "DelPermWSDeny")
@@ -387,17 +352,6 @@ func TestDeletePermission_PDPDenyIsPermissionDenied(t *testing.T) {
 // ---------------------------------------------------------------------------
 // Members
 // ---------------------------------------------------------------------------
-
-func TestInviteMember_PDPDenyIsPermissionDenied(t *testing.T) {
-	srv, pool, pr := setupTestServer(t)
-	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "InviteWSDeny")
-	pr.deny = true
-
-	_, err := srv.InviteMember(asCaller("", ngacNodeID), &pb.InviteMemberRequest{
-		WorkspaceId: ws.Id, TargetNgacNodeId: "someone",
-	})
-	requireCode(t, err, codes.PermissionDenied)
-}
 
 func TestListMembers_MemberAllowed_NonMemberDenied(t *testing.T) {
 	srv, pool, _ := setupTestServer(t)
@@ -416,4 +370,39 @@ func TestListMembers_MemberAllowed_NonMemberDenied(t *testing.T) {
 // put there from request metadata.
 func asCaller(userID, nodeID string) context.Context {
 	return grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: userID, NGACNodeID: nodeID})
+}
+
+// The writer answers graph reads from the same in-memory graph the read mock
+// serves, as the real writer does from its own.
+func (m *mockPolicyWriteClient) reads() *mockPolicyReadClient { return &mockPolicyReadClient{w: m} }
+
+func (m *mockPolicyWriteClient) GetChildren(c context.Context, req *policypb.GetChildrenRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {
+	return m.reads().GetChildren(c, req, o...)
+}
+
+func (m *mockPolicyWriteClient) GetDescendants(c context.Context, req *policypb.GetDescendantsRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {
+	return m.reads().GetDescendants(c, req, o...)
+}
+
+func (m *mockPolicyWriteClient) GetAncestors(c context.Context, req *policypb.GetAncestorsRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {
+	return m.reads().GetAncestors(c, req, o...)
+}
+
+func (m *mockPolicyWriteClient) GetParents(_ context.Context, req *policypb.GetParentsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	var out []*policypb.NGACNode
+	for _, id := range m.parents[req.NodeId] {
+		out = append(out, &policypb.NGACNode{Id: id})
+	}
+	return &policypb.NodeList{Nodes: out}, nil
+}
+
+func (m *mockPolicyWriteClient) GetNode(_ context.Context, req *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if n, ok := m.nodes[req.NodeId]; ok {
+		return n, nil
+	}
+	return nil, grpcstatus.Error(codes.NotFound, "node not found")
+}
+
+func (m *mockPolicyWriteClient) GetAssociations(_ context.Context, _ *policypb.GetAssociationsRequest, _ ...grpc.CallOption) (*policypb.AssociationList, error) {
+	return &policypb.AssociationList{}, nil
 }

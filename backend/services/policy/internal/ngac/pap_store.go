@@ -110,9 +110,12 @@ func (s *Store) CreateAssignment(ctx context.Context, childID, parentID string) 
 	}
 
 	// Persist to DB first — graph stays clean on DB failure
-	_, err := s.db.Exec(ctx,
-		"INSERT INTO ngac_assignments (id, child_id, parent_id) VALUES ($1, $2, $3) ON CONFLICT (child_id, parent_id) DO NOTHING",
-		a.ID, a.ChildID, a.ParentID)
+	// An edge that exists keeps its row ID (the no-op update returns it), so the
+	// graph never holds a second entry under an ID the database does not know.
+	err := s.db.QueryRow(ctx,
+		`INSERT INTO ngac_assignments (id, child_id, parent_id) VALUES ($1, $2, $3)
+		 ON CONFLICT (child_id, parent_id) DO UPDATE SET child_id = EXCLUDED.child_id RETURNING id`,
+		a.ID, a.ChildID, a.ParentID).Scan(&a.ID)
 	if err != nil {
 		return nil, fmt.Errorf("inserting assignment: %w", err)
 	}
@@ -138,6 +141,8 @@ func (s *Store) RemoveAssignment(ctx context.Context, childID, parentID string) 
 // CreateAssociation creates a permission edge in DB and graph (PAP).
 // Pattern: validate (read-only) → DB write → graph mutation.
 func (s *Store) CreateAssociation(ctx context.Context, uaID, oaID string, operations []string) (*Association, error) {
+	s.assocMu.Lock()
+	defer s.assocMu.Unlock()
 	a := &Association{ID: uuid.New().String(), UAID: uaID, OAID: oaID, Operations: operations}
 
 	// Validate node existence and types before the DB write. Checking only
@@ -146,9 +151,11 @@ func (s *Store) CreateAssociation(ctx context.Context, uaID, oaID string, operat
 	if err := s.graph.ValidateAssociation(a); err != nil {
 		return nil, err
 	}
-	_, err := s.db.Exec(ctx,
-		"INSERT INTO ngac_associations (id, ua_id, oa_id, operations) VALUES ($1, $2, $3, $4) ON CONFLICT (ua_id, oa_id) DO UPDATE SET operations = $4",
-		a.ID, a.UAID, a.OAID, operations)
+	// A second grant to the same UA and OA updates the row and keeps its ID;
+	// the graph must carry that ID, or a reload would disagree with this process.
+	err := s.db.QueryRow(ctx,
+		"INSERT INTO ngac_associations (id, ua_id, oa_id, operations) VALUES ($1, $2, $3, $4) ON CONFLICT (ua_id, oa_id) DO UPDATE SET operations = $4 RETURNING id",
+		a.ID, a.UAID, a.OAID, operations).Scan(&a.ID)
 	if err != nil {
 		return nil, fmt.Errorf("inserting association: %w", err)
 	}
@@ -164,6 +171,8 @@ func (s *Store) CreateAssociation(ctx context.Context, uaID, oaID string, operat
 // edge from memory first would make this process deny what every other
 // process (and this one after a restart) still allows.
 func (s *Store) RemoveAssociationByUAOA(ctx context.Context, uaID, oaID string) error {
+	s.assocMu.Lock()
+	defer s.assocMu.Unlock()
 	if _, err := s.db.Exec(ctx,
 		"DELETE FROM ngac_associations WHERE ua_id = $1 AND oa_id = $2", uaID, oaID); err != nil {
 		return fmt.Errorf("deleting association: %w", err)

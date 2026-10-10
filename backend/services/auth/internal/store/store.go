@@ -76,7 +76,21 @@ func (s *Store) GetUserByUsername(ctx context.Context, username string) (*User, 
 func (s *Store) GetUserByEmail(ctx context.Context, email string) (*User, error) {
 	return s.scanUser(s.db.QueryRow(ctx,
 		`SELECT id, username, COALESCE(password,''), COALESCE(ngac_node,''), COALESCE(email,''), COALESCE(union_id,''), COALESCE(display_name,''), COALESCE(phone,'')
-		 FROM users WHERE email = $1`, email))
+		 FROM users WHERE lower(email) = lower($1)`, email))
+}
+
+// MarkEmailVerified records that the owner of the account's address has proved
+// it (a Google sign-in with email_verified, or a code delivered to the address).
+// It reports whether this call set it: false when it was already set or the
+// account has no address.
+func (s *Store) MarkEmailVerified(ctx context.Context, userID string) (bool, error) {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE users SET email_verified_at = NOW()
+		  WHERE id = $1 AND email IS NOT NULL AND email_verified_at IS NULL`, userID)
+	if err != nil {
+		return false, fmt.Errorf("mark email verified: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
 // GetUserByPhone looks up a user by phone number.

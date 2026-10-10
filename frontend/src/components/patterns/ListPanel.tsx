@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { useUiStore } from '../../stores/ui.store'
 import { ChatNavigator } from '../spaces/ChatNavigator'
-import { Settings as SettingsIcon, LayoutDashboard, ClipboardList, Tag, FileEdit } from 'lucide-react'
+import { Settings as SettingsIcon } from 'lucide-react'
 import { Heading } from '../primitives'
 
 interface ListPanelProps {
@@ -30,7 +30,6 @@ export function ListPanel({ workspaceId }: ListPanelProps) {
     <div className="flex-shrink-0 bg-surface-bright border-r border-outline-variant/30
       flex flex-col overflow-hidden h-full">
       {activeModule === 'documents' && <DocumentList workspaceId={workspaceId} />}
-      {activeModule === 'assets' && <AssetNav />}
       {activeModule === 'settings' && <SettingsNav />}
     </div>
   )
@@ -46,41 +45,6 @@ function DocumentList({ workspaceId: _wsId }: { workspaceId: string }) {
         <div className="px-4 py-6 text-center">
           <span className="text-caption text-on-surface-variant">Documents open in Docs tab</span>
         </div>
-      </div>
-    </>
-  )
-}
-
-function AssetNav() {
-  const links = [
-    { to: '/assets/dashboard', icon: <LayoutDashboard size={16} className="flex-shrink-0" />, label: 'Dashboard' },
-    { to: '/assets/list', icon: <ClipboardList size={16} className="flex-shrink-0" />, label: 'All Assets' },
-    { to: '/assets/types', icon: <Tag size={16} className="flex-shrink-0" />, label: 'Asset Types' },
-    { to: '/assets/requests', icon: <FileEdit size={16} className="flex-shrink-0" />, label: 'Requests' },
-  ] as const
-
-  return (
-    <>
-      <div className="flex items-center px-3 py-2 border-b border-outline-variant">
-        <Heading as="h4">Assets</Heading>
-      </div>
-      <div className="flex-1 overflow-y-auto py-1">
-        {links.map((l) => (
-          <Link
-            key={l.to}
-            to={l.to}
-            className="flex items-center gap-2 px-4 py-2 text-small text-on-surface-variant
-              hover:bg-surface-container hover:text-on-surface transition-colors duration-fast
-              no-underline rounded-md mx-1 focus-ring"
-            activeProps={{
-              className:
-                'flex items-center gap-2 px-4 py-2 text-small-ui bg-primary/8 text-primary no-underline rounded-md mx-1',
-            }}
-          >
-            {l.icon}
-            <span className="truncate">{l.label}</span>
-          </Link>
-        ))}
       </div>
     </>
   )

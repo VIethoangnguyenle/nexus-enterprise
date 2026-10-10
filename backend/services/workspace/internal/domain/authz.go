@@ -3,7 +3,6 @@ package domain
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"ngac-platform/ngac"
 	policypb "ngac-platform/proto/policy"
@@ -39,7 +38,7 @@ func (s *Service) checkAccess(ctx context.Context, userNodeID, objectNodeID, ope
 // its own PC. Looking it up under the PC — rather than by name globally — keeps
 // a node that merely shares the name, created elsewhere, from standing in for it.
 func (s *Service) mgmtOAID(ctx context.Context, ws *WorkspaceResult) (string, error) {
-	children, err := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeID})
+	children, err := s.policyWrite.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeID})
 	if err != nil {
 		return "", fmt.Errorf("%w: cannot resolve workspace management attribute", ErrAccessDenied)
 	}
@@ -83,7 +82,7 @@ func (s *Service) authorizeMember(ctx context.Context, callerNodeID, wsID string
 	if err != nil {
 		return nil, err
 	}
-	anc, err := s.policyRead.GetAncestors(ctx, &policypb.GetAncestorsRequest{NodeId: callerNodeID})
+	anc, err := s.policyWrite.GetAncestors(ctx, &policypb.GetAncestorsRequest{NodeId: callerNodeID})
 	if err != nil {
 		return nil, fmt.Errorf("%w: cannot resolve membership", ErrAccessDenied)
 	}
@@ -108,7 +107,7 @@ func (s *Service) nodeInWorkspace(ctx context.Context, ws *WorkspaceResult, node
 	if nodeID == "" {
 		return nil, fmt.Errorf("%w: node id required", ErrInvalidInput)
 	}
-	desc, err := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
+	desc, err := s.policyWrite.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace nodes: %w", err)
 	}
@@ -129,7 +128,7 @@ func isRole(n *policypb.NGACNode) bool {
 
 // requireRole confirms roleID is a role of this workspace. The roles API takes
 // node IDs from the client, and a platform UA is a UA too: without this check,
-// DeleteRole could delete the workspace's Owners UA and UpdateMemberRoles could
+// DeleteRole could delete the workspace's Owners UA and a role assignment could
 // assign a member to it.
 func (s *Service) requireRole(ctx context.Context, ws *WorkspaceResult, roleID string) error {
 	n, err := s.nodeInWorkspace(ctx, ws, roleID, ngac.TypeUA)
@@ -138,21 +137,6 @@ func (s *Service) requireRole(ctx context.Context, ws *WorkspaceResult, roleID s
 	}
 	if !isRole(n) {
 		return fmt.Errorf("%w: role not in this workspace", ErrNotFound)
-	}
-	return nil
-}
-
-// validateOperations rejects an empty list and any string that is not one of
-// the fixed NGAC operations.
-func validateOperations(ops []string) error {
-	if len(ops) == 0 {
-		return fmt.Errorf("%w: at least one operation required", ErrInvalidInput)
-	}
-	known := ngac.AllOwnerOps()
-	for _, op := range ops {
-		if !slices.Contains(known, op) {
-			return fmt.Errorf("%w: unknown operation %q", ErrInvalidInput, op)
-		}
 	}
 	return nil
 }

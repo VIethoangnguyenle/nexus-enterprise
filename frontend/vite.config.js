@@ -50,6 +50,9 @@ const devProxy = {
     },
   },
 
+  // Invitations, answered by the person invited (not under a workspace) — workspace service :8181
+  '/api/invitations': { target: 'http://localhost:8181', changeOrigin: true },
+
   // Document service — :8182
   '/api/documents': { target: 'http://localhost:8182', changeOrigin: true },
 

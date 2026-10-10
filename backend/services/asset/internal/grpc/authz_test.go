@@ -644,15 +644,37 @@ func TestUpdateTypeSchema_AllowedWithManageOnAssetsOA(t *testing.T) {
 	assert.JSONEq(t, newSchema, typeSchema(t, f, f.typeA))
 }
 
-func TestGetType_DeniedWithoutReadOnAssetsOA(t *testing.T) {
+// GetType follows the per-type model of ListTypes: any operation on the type's
+// own OA shows it; a grant on another type's OA, or none, is a denial that does
+// not say whether the type exists.
+func TestGetType_DeniedOffTheTypeOA(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
-	p.grant("n-member", f.oaA, ngac.OpRead) // the gate is the Assets OA
+	p.grant("n-member", f.oaB, ngac.OpRead)
 	srv := agrpc.NewAssetTypeServer(f.st, p, &fakePolicyWrite{})
 
 	_, err := srv.GetType(asCaller("member", "n-member"), &pb.GetTypeRequest{TypeId: f.typeA})
-
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	_, err = srv.GetType(asCaller("member", "n-member"), &pb.GetTypeRequest{TypeId: "no-such-type"})
+	assert.Equal(t, codes.PermissionDenied, status.Code(err), "a missing type looks like a forbidden one")
+}
+
+func TestGetType_AnyOperationOnItsOAShowsIt_CountsOnlyToReaders(t *testing.T) {
+	f := newFixture(t)
+	p := f.policy()
+	p.grant("n-writer", f.oaA, ngac.OpWrite)
+	p.grant("n-reader", f.oaA, ngac.OpRead)
+	srv := agrpc.NewAssetTypeServer(f.st, p, &fakePolicyWrite{})
+
+	w, err := srv.GetType(asCaller("w", "n-writer"), &pb.GetTypeRequest{TypeId: f.typeA})
+	require.NoError(t, err)
+	assert.Equal(t, []string{ngac.OpWrite}, w.Permissions)
+	assert.Zero(t, w.AssetCount, "write alone does not tell how many assets exist")
+	assert.Zero(t, w.AvailableCount)
+
+	r, err := srv.GetType(asCaller("r", "n-reader"), &pb.GetTypeRequest{TypeId: f.typeA})
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), r.AssetCount)
 }
 
 func TestGetType_DeniedWithoutCaller(t *testing.T) {
@@ -669,7 +691,7 @@ func TestGetType_DeniedWithoutCaller(t *testing.T) {
 func TestGetType_AllowedWithReadOnAssetsOA(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
-	p.grant("n-owner", f.assetsOA(), ngac.OpRead)
+	p.grant("n-owner", f.oaA, ngac.OpRead)
 	srv := agrpc.NewAssetTypeServer(f.st, p, &fakePolicyWrite{})
 
 	at, err := srv.GetType(asCaller("owner", "n-owner"), &pb.GetTypeRequest{TypeId: f.typeA})
@@ -678,7 +700,9 @@ func TestGetType_AllowedWithReadOnAssetsOA(t *testing.T) {
 	assert.Equal(t, f.typeA, at.Id)
 }
 
-func TestListTypes_DeniedWithoutReadOnAssetsOA(t *testing.T) {
+// A type is listed on what the caller holds on its own OA: a grant on one type
+// lists that type and no other.
+func TestListTypes_ReadOnOneTypeListsOnlyThatType(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
 	p.grant("n-member", f.oaA, ngac.OpRead)
@@ -686,8 +710,19 @@ func TestListTypes_DeniedWithoutReadOnAssetsOA(t *testing.T) {
 
 	list, err := srv.ListTypes(asCaller("member", "n-member"), &pb.ListTypesRequest{WorkspaceId: f.wsID})
 
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
-	assert.Empty(t, list.GetTypes())
+	require.NoError(t, err)
+	require.Len(t, list.Types, 1)
+	assert.Equal(t, f.typeA, list.Types[0].Id)
+}
+
+func TestListTypes_NothingHeldListsNothing(t *testing.T) {
+	f := newFixture(t)
+	srv := agrpc.NewAssetTypeServer(f.st, f.policy(), &fakePolicyWrite{})
+
+	list, err := srv.ListTypes(asCaller("member", "n-member"), &pb.ListTypesRequest{WorkspaceId: f.wsID})
+
+	require.NoError(t, err)
+	assert.Empty(t, list.Types)
 }
 
 func TestListTypes_DeniedWithoutCaller(t *testing.T) {
@@ -700,23 +735,26 @@ func TestListTypes_DeniedWithoutCaller(t *testing.T) {
 	assert.Empty(t, list.GetTypes())
 }
 
-func TestListTypes_DeniedWhenPolicyErrors(t *testing.T) {
+func TestListTypes_FailsClosedWhenPolicyErrors(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
-	p.grant("n-owner", f.assetsOA(), ngac.OpRead)
+	p.grant("n-owner", f.oaA, ngac.OpRead)
 	p.failErr = errPolicyDown
 	srv := agrpc.NewAssetTypeServer(f.st, p, &fakePolicyWrite{})
 
 	list, err := srv.ListTypes(asCaller("owner", "n-owner"), &pb.ListTypesRequest{WorkspaceId: f.wsID})
 
-	assert.Equal(t, codes.PermissionDenied, status.Code(err))
+	require.Error(t, err)
 	assert.Empty(t, list.GetTypes())
 }
 
-func TestListTypes_AllowedWithReadOnAssetsOA(t *testing.T) {
+func TestListTypes_ReadOnEveryTypeOA(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
-	p.grant("n-owner", f.assetsOA(), ngac.OpRead)
+	// A grant on the Assets OA reaches every type OA beneath it; the policy
+	// service answers per type OA, which is what the fake grants here.
+	p.grant("n-owner", f.oaA, ngac.OpRead)
+	p.grant("n-owner", f.oaB, ngac.OpRead)
 	srv := agrpc.NewAssetTypeServer(f.st, p, &fakePolicyWrite{})
 
 	list, err := srv.ListTypes(asCaller("owner", "n-owner"), &pb.ListTypesRequest{WorkspaceId: f.wsID})

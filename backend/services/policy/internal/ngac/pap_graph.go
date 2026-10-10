@@ -97,6 +97,14 @@ func (g *Graph) AddAssignment(a *Assignment) error {
 		return fmt.Errorf("assignment would create a cycle")
 	}
 
+	// One entry per edge: adding an edge that is there replaces its entry.
+	if g.childToParents[a.ChildID][a.ParentID] {
+		for id, existing := range g.Assignments {
+			if existing.ChildID == a.ChildID && existing.ParentID == a.ParentID {
+				delete(g.Assignments, id)
+			}
+		}
+	}
 	g.Assignments[a.ID] = a
 	if g.childToParents[a.ChildID] == nil {
 		g.childToParents[a.ChildID] = make(map[string]bool)
@@ -164,6 +172,16 @@ func (g *Graph) AddAssociation(a *Association) error {
 
 	if err := g.validateAssociationLocked(a); err != nil {
 		return err
+	}
+
+	// One edge per UA and OA, as in the database (UNIQUE(ua_id, oa_id)): a second
+	// grant replaces the first. Keeping both would make the operations a union
+	// of every grant ever made, so narrowing a role's rights would change nothing.
+	for _, existing := range slices.Clone(g.uaToAssociations[a.UAID]) {
+		if existing.OAID == a.OAID {
+			g.removeAssociationIndexes(existing)
+			delete(g.Associations, existing.ID)
+		}
 	}
 
 	g.Associations[a.ID] = a

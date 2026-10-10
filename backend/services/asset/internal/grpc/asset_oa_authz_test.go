@@ -169,7 +169,10 @@ func TestGetAvailableTransitions_AreFilteredByWhatTheTypeOAGrants(t *testing.T) 
 	f.withLifecycleOnA(t)
 	p := f.policy()
 	p.grant("n-approver", f.oaA, ngac.OpApprove)
+	p.grant("n-approver", f.oaA, ngac.OpRead)
+	p.grant("n-reader", f.oaA, ngac.OpRead)
 	p.grant("n-elsewhere", f.oaB, ngac.OpApprove)
+	p.grant("n-elsewhere", f.oaB, ngac.OpRead)
 	srv := f.srv(p)
 
 	list, err := srv.GetAvailableTransitions(asCaller("", "n-approver"), &pb.GetTransitionsRequest{AssetId: f.assetA})
@@ -177,9 +180,13 @@ func TestGetAvailableTransitions_AreFilteredByWhatTheTypeOAGrants(t *testing.T) 
 	require.Len(t, list.Transitions, 1)
 	assert.Equal(t, "approve", list.Transitions[0].Action)
 
-	list, err = srv.GetAvailableTransitions(asCaller("", "n-elsewhere"), &pb.GetTransitionsRequest{AssetId: f.assetA})
+	list, err = srv.GetAvailableTransitions(asCaller("", "n-reader"), &pb.GetTransitionsRequest{AssetId: f.assetA})
 	require.NoError(t, err)
-	assert.Empty(t, list.Transitions, "approve on another type's OA offers nothing here")
+	assert.Empty(t, list.Transitions, "read alone offers no step")
+
+	// Reading another type's assets does not reveal this asset's state.
+	_, err = srv.GetAvailableTransitions(asCaller("", "n-elsewhere"), &pb.GetTransitionsRequest{AssetId: f.assetA})
+	asserted(t, err, codes.PermissionDenied)
 }
 
 func TestCreateAsset_WriteOnTheTypeOA(t *testing.T) {
@@ -220,11 +227,13 @@ func TestAssignAndReturnAsset_ManageOnTheTypeOA(t *testing.T) {
 	p.grant("n-manager", f.oaA, ngac.OpManage)
 	p.grant("n-elsewhere", f.oaB, ngac.OpManage)
 	srv := agrpc.NewAssetRequestServer(f.st, p, &fakePolicyWrite{}, nil)
+	_, err := f.pool.Exec(context.Background(), `UPDATE assets SET state = 'assigned' WHERE id = $1`, f.assetA)
+	require.NoError(t, err)
 
-	_, err := srv.ReturnAsset(asCaller("someone", "n-elsewhere"), &pb.ReturnAssetReq{AssetId: f.assetA})
+	_, err = srv.ReturnAsset(asCaller(f.userY, "n-elsewhere"), &pb.ReturnAssetReq{AssetId: f.assetA})
 	asserted(t, err, codes.PermissionDenied)
 
-	_, err = srv.ReturnAsset(asCaller("someone", "n-manager"), &pb.ReturnAssetReq{AssetId: f.assetA})
+	_, err = srv.ReturnAsset(asCaller(f.userY, "n-manager"), &pb.ReturnAssetReq{AssetId: f.assetA})
 	require.NoError(t, err)
 }
 

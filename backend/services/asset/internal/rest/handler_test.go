@@ -155,14 +155,6 @@ func TestListAssets_PutsCallerOnContext(t *testing.T) {
 	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
 }
 
-func TestGetAssetSummary_PutsCallerOnContext(t *testing.T) {
-	svc := &captureSvc{}
-	h := NewHandler(svc, svc, nil)
-	call(t, http.MethodGet, "", map[string]string{"id": "ws-1"}, h.GetAssetSummary)
-	require.NotNil(t, svc.listAssets)
-	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
-}
-
 func TestListAssetTypes_PutsCallerOnContext(t *testing.T) {
 	svc := &captureSvc{}
 	h := NewHandler(svc, svc, nil)

@@ -4,11 +4,15 @@ package rest
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/labstack/echo/v4"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
 
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/asset"
@@ -24,6 +28,9 @@ type AssetService interface {
 	TransitionAsset(ctx context.Context, req *pb.TransitionRequest) (*pb.Asset, error)
 	GetAvailableTransitions(ctx context.Context, req *pb.GetTransitionsRequest) (*pb.TransitionList, error)
 	GetAssetHistory(ctx context.Context, req *pb.GetHistoryRequest) (*pb.TransitionHistoryList, error)
+	HandOverAsset(ctx context.Context, req *pb.HandOverRequest) (*pb.Asset, error)
+	GetSummary(ctx context.Context, req *pb.GetSummaryRequest) (*pb.AssetSummary, error)
+	ListActivity(ctx context.Context, req *pb.ListActivityRequest) (*pb.ActivityList, error)
 }
 
 // AssetTypeService defines asset type operations.
@@ -39,6 +46,10 @@ type AssetRequestService interface {
 	CreateRequest(ctx context.Context, req *pb.CreateAssetRequestReq) (*pb.AssetRequest, error)
 	ApproveRequest(ctx context.Context, req *pb.ApproveRequestReq) (*pb.AssetRequest, error)
 	RejectRequest(ctx context.Context, req *pb.RejectRequestReq) (*pb.AssetRequest, error)
+	AssignAsset(ctx context.Context, req *pb.AssignAssetReq) (*pb.AssetRequest, error)
+	ReturnAsset(ctx context.Context, req *pb.ReturnAssetReq) (*pb.Empty, error)
+	ListRequests(ctx context.Context, req *pb.ListRequestsReq) (*pb.AssetRequestList, error)
+	GetRequest(ctx context.Context, req *pb.GetRequestReq) (*pb.AssetRequest, error)
 }
 
 // Handler serves asset REST endpoints.
@@ -65,6 +76,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 
 	// Assets
 	api.GET("/workspaces/:id/assets/summary", h.GetAssetSummary)
+	api.GET("/workspaces/:id/assets/activity", h.ListAssetActivity)
 	api.POST("/workspaces/:id/assets", h.CreateAsset)
 	api.GET("/workspaces/:id/assets", h.ListAssets)
 	api.GET("/assets/:assetId", h.GetAsset)
@@ -73,6 +85,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 
 	// Asset Lifecycle
 	api.POST("/assets/:assetId/transition", h.TransitionAsset)
+	api.POST("/assets/:assetId/assign", h.HandOverAsset)
 	api.GET("/assets/:assetId/transitions", h.GetAvailableTransitions)
 	api.GET("/assets/:assetId/history", h.GetAssetHistory)
 
@@ -88,43 +101,78 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 
 // --- Asset Summary ---
 
-// GetAssetSummary returns aggregate counts for the asset dashboard.
+// GetAssetSummary returns the dashboard's counts over the assets the caller may read.
 func (h *Handler) GetAssetSummary(c echo.Context) error {
-	resp, err := h.assetSvc.ListAssets(c.Request().Context(), &pb.ListAssetsRequest{
+	resp, err := h.assetSvc.GetSummary(c.Request().Context(), &pb.GetSummaryRequest{
 		WorkspaceId: c.Param("id"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
 	}
-	total := len(resp.GetAssets())
-	var inUse, pending int
-	for _, a := range resp.GetAssets() {
-		switch a.GetState() {
-		case "in_use", "assigned":
-			inUse++
-		case "pending", "requested":
-			pending++
-		}
+	return c.JSON(http.StatusOK, resp)
+}
+
+// ListAssetActivity returns the newest lifecycle steps on assets the caller may
+// read, with the people involved named.
+func (h *Handler) ListAssetActivity(c echo.Context) error {
+	limit, err := intQuery(c, "limit")
+	if err != nil {
+		return err
 	}
-	return c.JSON(http.StatusOK, map[string]int{
-		"total": total, "in_use": inUse, "pending": pending,
+	resp, err := h.assetSvc.ListActivity(c.Request().Context(), &pb.ListActivityRequest{
+		WorkspaceId: c.Param("id"),
+		Limit:       limit,
 	})
+	if err != nil {
+		return mapGRPCError(err)
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+// intQuery reads an optional integer query parameter. A value that is not a
+// number is the client's mistake and is refused, not read as zero.
+func intQuery(c echo.Context, name string) (int32, error) {
+	raw := c.QueryParam(name)
+	if raw == "" {
+		return 0, nil
+	}
+	n, err := strconv.ParseInt(raw, 10, 32)
+	if err != nil || n < 0 {
+		return 0, echo.NewHTTPError(http.StatusBadRequest, name+" must be a non-negative number")
+	}
+	return int32(n), nil
+}
+
+// customFields turns the JSON object a client sent into the proto struct.
+func customFields(raw map[string]any) (*structpb.Struct, error) {
+	if raw == nil {
+		return nil, nil
+	}
+	st, err := structpb.NewStruct(raw)
+	if err != nil {
+		return nil, echo.NewHTTPError(http.StatusBadRequest, "custom_fields is not valid")
+	}
+	return st, nil
 }
 
 // --- Asset Types ---
 
 func (h *Handler) CreateAssetType(c echo.Context) error {
 	var body struct {
-		Name     string `json:"name"`
-		Category string `json:"category"`
+		Name         string `json:"name"`
+		Category     string `json:"category"`
+		Description  string `json:"description"`
+		FieldsSchema string `json:"fields_schema"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	resp, err := h.typeSvc.CreateType(c.Request().Context(), &pb.CreateTypeRequest{
-		WorkspaceId: c.Param("id"),
-		Name:        body.Name,
-		Category:    body.Category,
+		WorkspaceId:  c.Param("id"),
+		Name:         body.Name,
+		Category:     body.Category,
+		Description:  body.Description,
+		FieldsSchema: body.FieldsSchema,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -173,16 +221,22 @@ func (h *Handler) UpdateAssetTypeSchema(c echo.Context) error {
 
 func (h *Handler) CreateAsset(c echo.Context) error {
 	var body struct {
-		TypeID string `json:"type_id"`
-		Name   string `json:"name"`
+		TypeID       string         `json:"type_id"`
+		Name         string         `json:"name"`
+		CustomFields map[string]any `json:"custom_fields"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
+	fields, err := customFields(body.CustomFields)
+	if err != nil {
+		return err
+	}
 	resp, err := h.assetSvc.CreateAsset(c.Request().Context(), &pb.CreateAssetRequest{
-		WorkspaceId: c.Param("id"),
-		TypeId:      body.TypeID,
-		Name:        body.Name,
+		WorkspaceId:  c.Param("id"),
+		TypeId:       body.TypeID,
+		Name:         body.Name,
+		CustomFields: fields,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -191,9 +245,22 @@ func (h *Handler) CreateAsset(c echo.Context) error {
 }
 
 func (h *Handler) ListAssets(c echo.Context) error {
+	limit, err := intQuery(c, "limit")
+	if err != nil {
+		return err
+	}
+	offset, err := intQuery(c, "offset")
+	if err != nil {
+		return err
+	}
 	resp, err := h.assetSvc.ListAssets(c.Request().Context(), &pb.ListAssetsRequest{
 		WorkspaceId: c.Param("id"),
 		TypeId:      c.QueryParam("type_id"),
+		State:       c.QueryParam("state"),
+		AssignedTo:  c.QueryParam("assigned_to"),
+		Search:      c.QueryParam("search"),
+		Limit:       limit,
+		Offset:      offset,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -213,14 +280,20 @@ func (h *Handler) GetAsset(c echo.Context) error {
 
 func (h *Handler) UpdateAsset(c echo.Context) error {
 	var body struct {
-		Name string `json:"name"`
+		Name         string         `json:"name"`
+		CustomFields map[string]any `json:"custom_fields"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
+	fields, err := customFields(body.CustomFields)
+	if err != nil {
+		return err
+	}
 	resp, err := h.assetSvc.UpdateAsset(c.Request().Context(), &pb.UpdateAssetRequest{
-		AssetId: c.Param("assetId"),
-		Name:    body.Name,
+		AssetId:      c.Param("assetId"),
+		Name:         body.Name,
+		CustomFields: fields,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -243,16 +316,43 @@ func (h *Handler) DeleteAsset(c echo.Context) error {
 func (h *Handler) TransitionAsset(c echo.Context) error {
 	// The actor recorded in the asset's history is taken from the token only.
 	var body struct {
-		ToState string `json:"to_state"`
+		Action  string `json:"action"`
+		ToState string `json:"to_state"` // the older spelling of action
 		Comment string `json:"comment"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
+	action := body.Action
+	if action == "" {
+		action = body.ToState
+	}
 	resp, err := h.assetSvc.TransitionAsset(c.Request().Context(), &pb.TransitionRequest{
 		AssetId: c.Param("assetId"),
-		Action:  body.ToState,
+		Action:  action,
 		Comment: body.Comment,
+	})
+	if err != nil {
+		return mapGRPCError(err)
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+// HandOverAsset gives an available or assigned asset to a person. The person is
+// named by user ID, picked from the workspace's people; who is acting comes
+// from the token only.
+func (h *Handler) HandOverAsset(c echo.Context) error {
+	var body struct {
+		AssigneeID string `json:"assignee_id"`
+		Comment    string `json:"comment"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	resp, err := h.assetSvc.HandOverAsset(c.Request().Context(), &pb.HandOverRequest{
+		AssetId:    c.Param("assetId"),
+		AssigneeId: body.AssigneeID,
+		Comment:    body.Comment,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -289,6 +389,7 @@ func (h *Handler) CreateAssetRequest(c echo.Context) error {
 	var body struct {
 		TypeID   string `json:"type_id"`
 		Reason   string `json:"reason"`
+		Urgency  string `json:"urgency"`
 		Quantity int32  `json:"quantity"`
 	}
 	if err := c.Bind(&body); err != nil {
@@ -298,6 +399,7 @@ func (h *Handler) CreateAssetRequest(c echo.Context) error {
 		WorkspaceId:   c.Param("id"),
 		TypeId:        body.TypeID,
 		Justification: body.Reason,
+		Urgency:       body.Urgency,
 		Quantity:      body.Quantity,
 	})
 	if err != nil {
@@ -306,23 +408,59 @@ func (h *Handler) CreateAssetRequest(c echo.Context) error {
 	return c.JSON(http.StatusCreated, resp)
 }
 
+// ListAssetRequests lists the requests the caller may see: their own, and those
+// they may decide. status may name several, separated by commas.
 func (h *Handler) ListAssetRequests(c echo.Context) error {
-	// ListRequests is not in proto, return placeholder
-	return c.JSON(http.StatusOK, map[string]any{"requests": []any{}})
+	limit, err := intQuery(c, "limit")
+	if err != nil {
+		return err
+	}
+	offset, err := intQuery(c, "offset")
+	if err != nil {
+		return err
+	}
+	resp, err := h.requestSvc.ListRequests(c.Request().Context(), &pb.ListRequestsReq{
+		WorkspaceId: c.Param("id"),
+		Status:      c.QueryParam("status"),
+		MineOnly:    c.QueryParam("mine") == "true",
+		Limit:       limit,
+		Offset:      offset,
+	})
+	if err != nil {
+		return mapGRPCError(err)
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 func (h *Handler) GetAssetRequest(c echo.Context) error {
-	// GetRequest is not in proto, return placeholder
-	return c.JSON(http.StatusOK, map[string]string{"id": c.Param("reqId")})
+	resp, err := h.requestSvc.GetRequest(c.Request().Context(), &pb.GetRequestReq{
+		RequestId: c.Param("reqId"),
+	})
+	if err != nil {
+		return mapGRPCError(err)
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
 // ApproveAssetRequest approves a request as the authenticated caller. The
 // user ID matters as much as the NGAC node: ApproveRequest compares it with
 // the requester to refuse self-approval, and records it as the approver. Both
 // come from the token only.
+//
+// With asset_id the request is approved and that asset handed to the requester
+// in one step; without it the request is only approved.
 func (h *Handler) ApproveAssetRequest(c echo.Context) error {
+	var body struct {
+		AssetID string `json:"asset_id"`
+		Comment string `json:"comment"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
 	resp, err := h.requestSvc.ApproveRequest(c.Request().Context(), &pb.ApproveRequestReq{
 		RequestId: c.Param("reqId"),
+		AssetId:   body.AssetID,
+		Comment:   body.Comment,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -336,7 +474,9 @@ func (h *Handler) RejectAssetRequest(c echo.Context) error {
 	var body struct {
 		Reason string `json:"reason"`
 	}
-	c.Bind(&body)
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
 	resp, err := h.requestSvc.RejectRequest(c.Request().Context(), &pb.RejectRequestReq{
 		RequestId: c.Param("reqId"),
 		Reason:    body.Reason,
@@ -347,29 +487,74 @@ func (h *Handler) RejectAssetRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
+// AssignAsset gives an asset to a request that was approved without one.
 func (h *Handler) AssignAsset(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	var body struct {
+		AssetID string `json:"asset_id"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	resp, err := h.requestSvc.AssignAsset(c.Request().Context(), &pb.AssignAssetReq{
+		RequestId: c.Param("reqId"),
+		AssetId:   body.AssetID,
+	})
+	if err != nil {
+		return mapGRPCError(err)
+	}
+	return c.JSON(http.StatusOK, resp)
 }
 
+// ReturnAsset takes an assigned asset back into stock.
 func (h *Handler) ReturnAsset(c echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	if _, err := h.requestSvc.ReturnAsset(c.Request().Context(), &pb.ReturnAssetReq{
+		AssetId: c.Param("assetId"),
+	}); err != nil {
+		return mapGRPCError(err)
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "returned"})
+}
+
+// errBody is what a client reads from a refusal: a sentence for logs and a
+// machine-readable reason (when the service gave one) to tell apart refusals
+// that share a status code.
+type errBody struct {
+	Message string `json:"message"`
+	Reason  string `json:"reason,omitempty"`
+}
+
+func httpErr(code int, st *status.Status) *echo.HTTPError {
+	b := errBody{Message: st.Message()}
+	for _, d := range st.Details() {
+		if info, ok := d.(*errdetails.ErrorInfo); ok {
+			b.Reason = info.Reason
+		}
+	}
+	return echo.NewHTTPError(code, b)
 }
 
 func mapGRPCError(err error) *echo.HTTPError {
 	st, ok := status.FromError(err)
 	if !ok {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		slog.Error("asset request failed", "error", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, errBody{Message: "internal error"})
 	}
 	switch st.Code() {
 	case codes.NotFound:
-		return echo.NewHTTPError(http.StatusNotFound, st.Message())
+		return httpErr(http.StatusNotFound, st)
 	case codes.PermissionDenied:
-		return echo.NewHTTPError(http.StatusForbidden, st.Message())
+		return httpErr(http.StatusForbidden, st)
 	case codes.AlreadyExists:
-		return echo.NewHTTPError(http.StatusConflict, st.Message())
+		return httpErr(http.StatusConflict, st)
 	case codes.InvalidArgument:
-		return echo.NewHTTPError(http.StatusBadRequest, st.Message())
+		return httpErr(http.StatusBadRequest, st)
+	case codes.FailedPrecondition:
+		return httpErr(http.StatusConflict, st)
+	case codes.Unauthenticated:
+		return httpErr(http.StatusUnauthorized, st)
 	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, st.Message())
+		// The detail (a database error, a policy failure) is for our logs, not the client.
+		slog.Error("asset request failed", "code", st.Code().String(), "error", st.Message())
+		return echo.NewHTTPError(http.StatusInternalServerError, errBody{Message: "internal error"})
 	}
 }

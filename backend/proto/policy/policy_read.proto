@@ -26,6 +26,11 @@ service PolicyReadService {
   rpc GetChildren(GetChildrenRequest) returns (NodeList);
   rpc GetParents(GetParentsRequest) returns (NodeList);
 
+  // Associations granted to a user attribute (read-only): which OAs it reaches
+  // and with which operations. Used by the workspace service to show and check
+  // what a role or department confers.
+  rpc GetAssociations(GetAssociationsRequest) returns (AssociationList);
+
   // Scope resolution — returns leaf OA IDs the user can access for an operation.
   // Used by approval/drive services for O(1) scope-based data filtering.
   rpc ResolveAccessibleScopes(ResolveAccessibleScopesRequest) returns (ResolveAccessibleScopesResponse);
@@ -35,6 +40,14 @@ service PolicyReadService {
 
   // Prohibitions (read-only)
   rpc ListProhibitions(ListProhibitionsRequest) returns (ProhibitionList);
+}
+
+message GetAssociationsRequest {
+  string ua_id = 1;
+}
+
+message AssociationList {
+  repeated Association associations = 1;
 }
 
 // ResolveAccessibleScopesRequest identifies a user and the operation to resolve.

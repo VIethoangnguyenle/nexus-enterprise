@@ -71,3 +71,25 @@ func TestPolicyAdmitsAUserCallerOnAnyRPC(t *testing.T) {
 	_, err = r.CheckAccess(ctx, &pb.CheckAccessRequest{})
 	wantCode(t, "CheckAccess", err, codes.Unimplemented)
 }
+
+// The writer's graph reads carry the same policy as the read service: a verified
+// end user, never a bare service identity.
+func TestPolicyWriterGraphReadsNeedAUserCaller(t *testing.T) {
+	w, _ := servePolicy(t)
+	bare := context.Background()
+	user := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: "u", NGACNodeID: "n"})
+	for name, call := range map[string]func(context.Context) error{
+		"GetNode":        func(c context.Context) error { _, err := w.GetNode(c, &pb.GetNodeRequest{}); return err },
+		"GetChildren":    func(c context.Context) error { _, err := w.GetChildren(c, &pb.GetChildrenRequest{}); return err },
+		"GetParents":     func(c context.Context) error { _, err := w.GetParents(c, &pb.GetParentsRequest{}); return err },
+		"GetAncestors":   func(c context.Context) error { _, err := w.GetAncestors(c, &pb.GetAncestorsRequest{}); return err },
+		"GetDescendants": func(c context.Context) error { _, err := w.GetDescendants(c, &pb.GetDescendantsRequest{}); return err },
+		"GetAssociations": func(c context.Context) error {
+			_, err := w.GetAssociations(c, &pb.GetAssociationsRequest{})
+			return err
+		},
+	} {
+		wantCode(t, name+" without a caller", call(bare), codes.Unauthenticated)
+		wantCode(t, name+" with a user", call(user), codes.Unimplemented)
+	}
+}

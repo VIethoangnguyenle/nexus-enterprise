@@ -22,6 +22,94 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type GetAssociationsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UaId          string                 `protobuf:"bytes,1,opt,name=ua_id,json=uaId,proto3" json:"ua_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAssociationsRequest) Reset() {
+	*x = GetAssociationsRequest{}
+	mi := &file_proto_policy_policy_read_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAssociationsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAssociationsRequest) ProtoMessage() {}
+
+func (x *GetAssociationsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_read_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAssociationsRequest.ProtoReflect.Descriptor instead.
+func (*GetAssociationsRequest) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_read_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *GetAssociationsRequest) GetUaId() string {
+	if x != nil {
+		return x.UaId
+	}
+	return ""
+}
+
+type AssociationList struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Associations  []*Association         `protobuf:"bytes,1,rep,name=associations,proto3" json:"associations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AssociationList) Reset() {
+	*x = AssociationList{}
+	mi := &file_proto_policy_policy_read_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AssociationList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AssociationList) ProtoMessage() {}
+
+func (x *AssociationList) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_policy_policy_read_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AssociationList.ProtoReflect.Descriptor instead.
+func (*AssociationList) Descriptor() ([]byte, []int) {
+	return file_proto_policy_policy_read_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *AssociationList) GetAssociations() []*Association {
+	if x != nil {
+		return x.Associations
+	}
+	return nil
+}
+
 // ResolveAccessibleScopesRequest identifies a user and the operation to resolve.
 type ResolveAccessibleScopesRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -33,7 +121,7 @@ type ResolveAccessibleScopesRequest struct {
 
 func (x *ResolveAccessibleScopesRequest) Reset() {
 	*x = ResolveAccessibleScopesRequest{}
-	mi := &file_proto_policy_policy_read_proto_msgTypes[0]
+	mi := &file_proto_policy_policy_read_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -45,7 +133,7 @@ func (x *ResolveAccessibleScopesRequest) String() string {
 func (*ResolveAccessibleScopesRequest) ProtoMessage() {}
 
 func (x *ResolveAccessibleScopesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_policy_policy_read_proto_msgTypes[0]
+	mi := &file_proto_policy_policy_read_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +146,7 @@ func (x *ResolveAccessibleScopesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveAccessibleScopesRequest.ProtoReflect.Descriptor instead.
 func (*ResolveAccessibleScopesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_policy_policy_read_proto_rawDescGZIP(), []int{0}
+	return file_proto_policy_policy_read_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ResolveAccessibleScopesRequest) GetUserNodeId() string {
@@ -87,7 +175,7 @@ type ResolveAccessibleScopesResponse struct {
 
 func (x *ResolveAccessibleScopesResponse) Reset() {
 	*x = ResolveAccessibleScopesResponse{}
-	mi := &file_proto_policy_policy_read_proto_msgTypes[1]
+	mi := &file_proto_policy_policy_read_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -99,7 +187,7 @@ func (x *ResolveAccessibleScopesResponse) String() string {
 func (*ResolveAccessibleScopesResponse) ProtoMessage() {}
 
 func (x *ResolveAccessibleScopesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_policy_policy_read_proto_msgTypes[1]
+	mi := &file_proto_policy_policy_read_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -112,7 +200,7 @@ func (x *ResolveAccessibleScopesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveAccessibleScopesResponse.ProtoReflect.Descriptor instead.
 func (*ResolveAccessibleScopesResponse) Descriptor() ([]byte, []int) {
-	return file_proto_policy_policy_read_proto_rawDescGZIP(), []int{1}
+	return file_proto_policy_policy_read_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ResolveAccessibleScopesResponse) GetScopeOaIds() []string {
@@ -133,7 +221,11 @@ var File_proto_policy_policy_read_proto protoreflect.FileDescriptor
 
 const file_proto_policy_policy_read_proto_rawDesc = "" +
 	"\n" +
-	"\x1eproto/policy/policy_read.proto\x12\x06policy\x1a\x19proto/policy/policy.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"`\n" +
+	"\x1eproto/policy/policy_read.proto\x12\x06policy\x1a\x19proto/policy/policy.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"-\n" +
+	"\x16GetAssociationsRequest\x12\x13\n" +
+	"\x05ua_id\x18\x01 \x01(\tR\x04uaId\"J\n" +
+	"\x0fAssociationList\x127\n" +
+	"\fassociations\x18\x01 \x03(\v2\x13.policy.AssociationR\fassociations\"`\n" +
 	"\x1eResolveAccessibleScopesRequest\x12 \n" +
 	"\fuser_node_id\x18\x01 \x01(\tR\n" +
 	"userNodeId\x12\x1c\n" +
@@ -142,7 +234,7 @@ const file_proto_policy_policy_read_proto_rawDesc = "" +
 	"\fscope_oa_ids\x18\x01 \x03(\tR\n" +
 	"scopeOaIds\x12;\n" +
 	"\vresolved_at\x18\x02 \x01(\v2\x1a.google.protobuf.TimestampR\n" +
-	"resolvedAt2\x8c\a\n" +
+	"resolvedAt2\xd8\a\n" +
 	"\x11PolicyReadService\x12A\n" +
 	"\vCheckAccess\x12\x1a.policy.CheckAccessRequest\x1a\x16.policy.AccessDecision\x12N\n" +
 	"\x10BatchCheckAccess\x12\x1f.policy.BatchCheckAccessRequest\x1a\x19.policy.BatchAccessResult\x123\n" +
@@ -155,7 +247,8 @@ const file_proto_policy_policy_read_proto_rawDesc = "" +
 	"\x0eGetDescendants\x12\x1d.policy.GetDescendantsRequest\x1a\x10.policy.NodeList\x12;\n" +
 	"\vGetChildren\x12\x1a.policy.GetChildrenRequest\x1a\x10.policy.NodeList\x129\n" +
 	"\n" +
-	"GetParents\x12\x19.policy.GetParentsRequest\x1a\x10.policy.NodeList\x12j\n" +
+	"GetParents\x12\x19.policy.GetParentsRequest\x1a\x10.policy.NodeList\x12J\n" +
+	"\x0fGetAssociations\x12\x1e.policy.GetAssociationsRequest\x1a\x17.policy.AssociationList\x12j\n" +
 	"\x17ResolveAccessibleScopes\x12&.policy.ResolveAccessibleScopesRequest\x1a'.policy.ResolveAccessibleScopesResponse\x126\n" +
 	"\x0eListOperations\x12\r.policy.Empty\x1a\x15.policy.OperationList\x12L\n" +
 	"\x10ListProhibitions\x12\x1f.policy.ListProhibitionsRequest\x1a\x17.policy.ProhibitionListB\x1cZ\x1angac-platform/proto/policyb\x06proto3"
@@ -172,64 +265,70 @@ func file_proto_policy_policy_read_proto_rawDescGZIP() []byte {
 	return file_proto_policy_policy_read_proto_rawDescData
 }
 
-var file_proto_policy_policy_read_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_policy_policy_read_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_policy_policy_read_proto_goTypes = []any{
-	(*ResolveAccessibleScopesRequest)(nil),  // 0: policy.ResolveAccessibleScopesRequest
-	(*ResolveAccessibleScopesResponse)(nil), // 1: policy.ResolveAccessibleScopesResponse
-	(*timestamppb.Timestamp)(nil),           // 2: google.protobuf.Timestamp
-	(*CheckAccessRequest)(nil),              // 3: policy.CheckAccessRequest
-	(*BatchCheckAccessRequest)(nil),         // 4: policy.BatchCheckAccessRequest
-	(*GetNodeRequest)(nil),                  // 5: policy.GetNodeRequest
-	(*FindNodeByNameRequest)(nil),           // 6: policy.FindNodeByNameRequest
-	(*GetNodesByTypeRequest)(nil),           // 7: policy.GetNodesByTypeRequest
-	(*IsAssignedRequest)(nil),               // 8: policy.IsAssignedRequest
-	(*GetAncestorsRequest)(nil),             // 9: policy.GetAncestorsRequest
-	(*GetDescendantsRequest)(nil),           // 10: policy.GetDescendantsRequest
-	(*GetChildrenRequest)(nil),              // 11: policy.GetChildrenRequest
-	(*GetParentsRequest)(nil),               // 12: policy.GetParentsRequest
-	(*Empty)(nil),                           // 13: policy.Empty
-	(*ListProhibitionsRequest)(nil),         // 14: policy.ListProhibitionsRequest
-	(*AccessDecision)(nil),                  // 15: policy.AccessDecision
-	(*BatchAccessResult)(nil),               // 16: policy.BatchAccessResult
-	(*NGACNode)(nil),                        // 17: policy.NGACNode
-	(*NodeList)(nil),                        // 18: policy.NodeList
-	(*BoolResponse)(nil),                    // 19: policy.BoolResponse
-	(*OperationList)(nil),                   // 20: policy.OperationList
-	(*ProhibitionList)(nil),                 // 21: policy.ProhibitionList
+	(*GetAssociationsRequest)(nil),          // 0: policy.GetAssociationsRequest
+	(*AssociationList)(nil),                 // 1: policy.AssociationList
+	(*ResolveAccessibleScopesRequest)(nil),  // 2: policy.ResolveAccessibleScopesRequest
+	(*ResolveAccessibleScopesResponse)(nil), // 3: policy.ResolveAccessibleScopesResponse
+	(*Association)(nil),                     // 4: policy.Association
+	(*timestamppb.Timestamp)(nil),           // 5: google.protobuf.Timestamp
+	(*CheckAccessRequest)(nil),              // 6: policy.CheckAccessRequest
+	(*BatchCheckAccessRequest)(nil),         // 7: policy.BatchCheckAccessRequest
+	(*GetNodeRequest)(nil),                  // 8: policy.GetNodeRequest
+	(*FindNodeByNameRequest)(nil),           // 9: policy.FindNodeByNameRequest
+	(*GetNodesByTypeRequest)(nil),           // 10: policy.GetNodesByTypeRequest
+	(*IsAssignedRequest)(nil),               // 11: policy.IsAssignedRequest
+	(*GetAncestorsRequest)(nil),             // 12: policy.GetAncestorsRequest
+	(*GetDescendantsRequest)(nil),           // 13: policy.GetDescendantsRequest
+	(*GetChildrenRequest)(nil),              // 14: policy.GetChildrenRequest
+	(*GetParentsRequest)(nil),               // 15: policy.GetParentsRequest
+	(*Empty)(nil),                           // 16: policy.Empty
+	(*ListProhibitionsRequest)(nil),         // 17: policy.ListProhibitionsRequest
+	(*AccessDecision)(nil),                  // 18: policy.AccessDecision
+	(*BatchAccessResult)(nil),               // 19: policy.BatchAccessResult
+	(*NGACNode)(nil),                        // 20: policy.NGACNode
+	(*NodeList)(nil),                        // 21: policy.NodeList
+	(*BoolResponse)(nil),                    // 22: policy.BoolResponse
+	(*OperationList)(nil),                   // 23: policy.OperationList
+	(*ProhibitionList)(nil),                 // 24: policy.ProhibitionList
 }
 var file_proto_policy_policy_read_proto_depIdxs = []int32{
-	2,  // 0: policy.ResolveAccessibleScopesResponse.resolved_at:type_name -> google.protobuf.Timestamp
-	3,  // 1: policy.PolicyReadService.CheckAccess:input_type -> policy.CheckAccessRequest
-	4,  // 2: policy.PolicyReadService.BatchCheckAccess:input_type -> policy.BatchCheckAccessRequest
-	5,  // 3: policy.PolicyReadService.GetNode:input_type -> policy.GetNodeRequest
-	6,  // 4: policy.PolicyReadService.FindNodeByName:input_type -> policy.FindNodeByNameRequest
-	7,  // 5: policy.PolicyReadService.GetNodesByType:input_type -> policy.GetNodesByTypeRequest
-	8,  // 6: policy.PolicyReadService.IsAssigned:input_type -> policy.IsAssignedRequest
-	9,  // 7: policy.PolicyReadService.GetAncestors:input_type -> policy.GetAncestorsRequest
-	10, // 8: policy.PolicyReadService.GetDescendants:input_type -> policy.GetDescendantsRequest
-	11, // 9: policy.PolicyReadService.GetChildren:input_type -> policy.GetChildrenRequest
-	12, // 10: policy.PolicyReadService.GetParents:input_type -> policy.GetParentsRequest
-	0,  // 11: policy.PolicyReadService.ResolveAccessibleScopes:input_type -> policy.ResolveAccessibleScopesRequest
-	13, // 12: policy.PolicyReadService.ListOperations:input_type -> policy.Empty
-	14, // 13: policy.PolicyReadService.ListProhibitions:input_type -> policy.ListProhibitionsRequest
-	15, // 14: policy.PolicyReadService.CheckAccess:output_type -> policy.AccessDecision
-	16, // 15: policy.PolicyReadService.BatchCheckAccess:output_type -> policy.BatchAccessResult
-	17, // 16: policy.PolicyReadService.GetNode:output_type -> policy.NGACNode
-	17, // 17: policy.PolicyReadService.FindNodeByName:output_type -> policy.NGACNode
-	18, // 18: policy.PolicyReadService.GetNodesByType:output_type -> policy.NodeList
-	19, // 19: policy.PolicyReadService.IsAssigned:output_type -> policy.BoolResponse
-	18, // 20: policy.PolicyReadService.GetAncestors:output_type -> policy.NodeList
-	18, // 21: policy.PolicyReadService.GetDescendants:output_type -> policy.NodeList
-	18, // 22: policy.PolicyReadService.GetChildren:output_type -> policy.NodeList
-	18, // 23: policy.PolicyReadService.GetParents:output_type -> policy.NodeList
-	1,  // 24: policy.PolicyReadService.ResolveAccessibleScopes:output_type -> policy.ResolveAccessibleScopesResponse
-	20, // 25: policy.PolicyReadService.ListOperations:output_type -> policy.OperationList
-	21, // 26: policy.PolicyReadService.ListProhibitions:output_type -> policy.ProhibitionList
-	14, // [14:27] is the sub-list for method output_type
-	1,  // [1:14] is the sub-list for method input_type
-	1,  // [1:1] is the sub-list for extension type_name
-	1,  // [1:1] is the sub-list for extension extendee
-	0,  // [0:1] is the sub-list for field type_name
+	4,  // 0: policy.AssociationList.associations:type_name -> policy.Association
+	5,  // 1: policy.ResolveAccessibleScopesResponse.resolved_at:type_name -> google.protobuf.Timestamp
+	6,  // 2: policy.PolicyReadService.CheckAccess:input_type -> policy.CheckAccessRequest
+	7,  // 3: policy.PolicyReadService.BatchCheckAccess:input_type -> policy.BatchCheckAccessRequest
+	8,  // 4: policy.PolicyReadService.GetNode:input_type -> policy.GetNodeRequest
+	9,  // 5: policy.PolicyReadService.FindNodeByName:input_type -> policy.FindNodeByNameRequest
+	10, // 6: policy.PolicyReadService.GetNodesByType:input_type -> policy.GetNodesByTypeRequest
+	11, // 7: policy.PolicyReadService.IsAssigned:input_type -> policy.IsAssignedRequest
+	12, // 8: policy.PolicyReadService.GetAncestors:input_type -> policy.GetAncestorsRequest
+	13, // 9: policy.PolicyReadService.GetDescendants:input_type -> policy.GetDescendantsRequest
+	14, // 10: policy.PolicyReadService.GetChildren:input_type -> policy.GetChildrenRequest
+	15, // 11: policy.PolicyReadService.GetParents:input_type -> policy.GetParentsRequest
+	0,  // 12: policy.PolicyReadService.GetAssociations:input_type -> policy.GetAssociationsRequest
+	2,  // 13: policy.PolicyReadService.ResolveAccessibleScopes:input_type -> policy.ResolveAccessibleScopesRequest
+	16, // 14: policy.PolicyReadService.ListOperations:input_type -> policy.Empty
+	17, // 15: policy.PolicyReadService.ListProhibitions:input_type -> policy.ListProhibitionsRequest
+	18, // 16: policy.PolicyReadService.CheckAccess:output_type -> policy.AccessDecision
+	19, // 17: policy.PolicyReadService.BatchCheckAccess:output_type -> policy.BatchAccessResult
+	20, // 18: policy.PolicyReadService.GetNode:output_type -> policy.NGACNode
+	20, // 19: policy.PolicyReadService.FindNodeByName:output_type -> policy.NGACNode
+	21, // 20: policy.PolicyReadService.GetNodesByType:output_type -> policy.NodeList
+	22, // 21: policy.PolicyReadService.IsAssigned:output_type -> policy.BoolResponse
+	21, // 22: policy.PolicyReadService.GetAncestors:output_type -> policy.NodeList
+	21, // 23: policy.PolicyReadService.GetDescendants:output_type -> policy.NodeList
+	21, // 24: policy.PolicyReadService.GetChildren:output_type -> policy.NodeList
+	21, // 25: policy.PolicyReadService.GetParents:output_type -> policy.NodeList
+	1,  // 26: policy.PolicyReadService.GetAssociations:output_type -> policy.AssociationList
+	3,  // 27: policy.PolicyReadService.ResolveAccessibleScopes:output_type -> policy.ResolveAccessibleScopesResponse
+	23, // 28: policy.PolicyReadService.ListOperations:output_type -> policy.OperationList
+	24, // 29: policy.PolicyReadService.ListProhibitions:output_type -> policy.ProhibitionList
+	16, // [16:30] is the sub-list for method output_type
+	2,  // [2:16] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_proto_policy_policy_read_proto_init() }
@@ -244,7 +343,7 @@ func file_proto_policy_policy_read_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_policy_policy_read_proto_rawDesc), len(file_proto_policy_policy_read_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

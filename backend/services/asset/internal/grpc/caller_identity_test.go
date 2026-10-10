@@ -82,7 +82,7 @@ func TestOverTheWire_MetadataCallerDecides_Allow(t *testing.T) {
 func TestOverTheWire_GetTypeWorksForAuthorizedCaller(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
-	p.grant("n-reader", f.assetsOA(), ngac.OpRead)
+	p.grant("n-reader", f.oaA, ngac.OpRead)
 	_, types, _ := serveAsset(t, f, p)
 
 	at, err := types.GetType(asCaller("u-reader", "n-reader"), &pb.GetTypeRequest{TypeId: f.typeA})

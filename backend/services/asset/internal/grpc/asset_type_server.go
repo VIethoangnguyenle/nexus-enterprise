@@ -127,45 +127,66 @@ func (s *AssetTypeServer) GetType(ctx context.Context, req *pb.GetTypeRequest) (
 	if userNodeID == "" {
 		return nil, errDenied(ngac.OpRead)
 	}
+	// A type that does not exist and one the caller holds nothing on look alike.
 	at, err := s.store.GetType(ctx, req.TypeId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "type not found: %v", err)
+		return nil, errDenied(ngac.OpRead)
 	}
-	if err := authorizeOnNamedOA(ctx, s.policyRead, userNodeID, ngac.AssetsOAName(ngac.WorkspaceID(at.WorkspaceID)), ngac.OpRead); err != nil {
-		return nil, err
+	held, err := heldOnTypes(ctx, s.policyRead, userNodeID, []*store.AssetType{at}, typeOps)
+	if err != nil || len(held[at.ID]) == 0 {
+		return nil, errDenied(ngac.OpRead)
 	}
-	return assetTypeToProto(at), nil
+	return typeForCaller(at, held[at.ID]), nil
 }
 
-// ListTypes returns a workspace's asset types to a caller holding read on its
-// Assets OA. The caller comes from the context, as for GetType.
+// typeForCaller is a type as the caller may see it: with the operations they
+// hold, and with the counts of its assets only if they may read them. Holding
+// only `write` lists the type (to ask for it) without telling how many assets
+// of it exist or are free.
+func typeForCaller(at *store.AssetType, ops []string) *pb.AssetType {
+	p := assetTypeToProto(at)
+	p.Permissions = ops
+	for _, op := range ops {
+		if op == ngac.OpRead {
+			return p
+		}
+	}
+	p.AssetCount, p.AvailableCount = 0, 0
+	return p
+}
+
+// typeOps are the operations a screen cares about for each type, in the order
+// they are reported.
+var typeOps = []string{ngac.OpRead, ngac.OpWrite, ngac.OpApprove, ngac.OpManage}
+
+// ListTypes returns the workspace's asset types the caller holds any of read,
+// write, approve or manage on, each with the operations held. A type is decided
+// on its own OA, so a grant on one type (or on a category) lists that type
+// without handing over the whole catalogue; a grant on the Assets OA reaches
+// every type beneath it. The caller comes from the context, as for GetType.
 //
-// A workspace whose Assets OA does not exist has no types the caller could be
-// authorized for, so it lists nothing rather than refusing — that is the state
-// of every workspace before its first type is created.
+// CanManage says whether the caller may define types and edit their fields.
 func (s *AssetTypeServer) ListTypes(ctx context.Context, req *pb.ListTypesRequest) (*pb.AssetTypeList, error) {
 	userNodeID := grpcauth.CallerFrom(ctx).NGACNodeID
 	if userNodeID == "" {
 		return nil, errDenied(ngac.OpRead)
 	}
-	assetsOA, found, err := resolveOA(ctx, s.policyRead, ngac.AssetsOAName(ngac.WorkspaceID(req.WorkspaceId)))
-	if err != nil {
-		return nil, errDenied(ngac.OpRead)
-	}
-	if !found {
-		return &pb.AssetTypeList{}, nil
-	}
-	if err := authorize(ctx, s.policyRead, userNodeID, assetsOA, ngac.OpRead); err != nil {
-		return nil, err
-	}
-
 	types, err := s.store.ListTypes(ctx, req.WorkspaceId)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list types: %v", err)
 	}
-	result := &pb.AssetTypeList{}
+	held, err := heldOnTypes(ctx, s.policyRead, userNodeID, types, typeOps)
+	if err != nil {
+		// Fail closed: an unreadable policy answer must not list anything.
+		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
+	}
+	result := &pb.AssetTypeList{CanManage: s.authorizeCreateType(ctx, userNodeID, req.WorkspaceId) == nil}
 	for _, at := range types {
-		result.Types = append(result.Types, assetTypeToProto(at))
+		ops := held[at.ID]
+		if len(ops) == 0 {
+			continue
+		}
+		result.Types = append(result.Types, typeForCaller(at, ops))
 	}
 	return result, nil
 }
@@ -282,16 +303,17 @@ func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, prov *provisi
 
 func assetTypeToProto(at *store.AssetType) *pb.AssetType {
 	result := &pb.AssetType{
-		Id:           at.ID,
-		Name:         at.Name,
-		Description:  at.Description,
-		Category:     at.Category,
-		WorkspaceId:  at.WorkspaceID,
-		FieldsSchema: string(at.FieldsSchema),
-		NgacOaId:     at.NgacOAID,
-		AssetCount:   at.AssetCount,
-		CreatedAt:    timestamppb.New(at.CreatedAt),
-		UpdatedAt:    timestamppb.New(at.UpdatedAt),
+		Id:             at.ID,
+		Name:           at.Name,
+		Description:    at.Description,
+		Category:       at.Category,
+		WorkspaceId:    at.WorkspaceID,
+		FieldsSchema:   string(at.FieldsSchema),
+		NgacOaId:       at.NgacOAID,
+		AssetCount:     at.AssetCount,
+		AvailableCount: at.AvailableCount,
+		CreatedAt:      timestamppb.New(at.CreatedAt),
+		UpdatedAt:      timestamppb.New(at.UpdatedAt),
 	}
 
 	var ld domain.LifecycleDefinition

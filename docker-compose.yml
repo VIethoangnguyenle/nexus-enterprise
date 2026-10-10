@@ -231,7 +231,7 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.workspace.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && PathPrefix(`/api/workspaces`)"
+      - "traefik.http.routers.workspace.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/workspaces`) || PathPrefix(`/api/invitations`))"
       - "traefik.http.routers.workspace.entrypoints=web"
       - "traefik.http.routers.workspace.priority=100"
       - "traefik.http.routers.workspace.middlewares=cors-all@docker"

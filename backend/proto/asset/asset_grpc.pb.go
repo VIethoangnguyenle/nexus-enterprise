@@ -247,6 +247,9 @@ const (
 	AssetService_TransitionAsset_FullMethodName         = "/asset.AssetService/TransitionAsset"
 	AssetService_GetAvailableTransitions_FullMethodName = "/asset.AssetService/GetAvailableTransitions"
 	AssetService_GetAssetHistory_FullMethodName         = "/asset.AssetService/GetAssetHistory"
+	AssetService_HandOverAsset_FullMethodName           = "/asset.AssetService/HandOverAsset"
+	AssetService_GetSummary_FullMethodName              = "/asset.AssetService/GetSummary"
+	AssetService_ListActivity_FullMethodName            = "/asset.AssetService/ListActivity"
 )
 
 // AssetServiceClient is the client API for AssetService service.
@@ -264,6 +267,11 @@ type AssetServiceClient interface {
 	TransitionAsset(ctx context.Context, in *TransitionRequest, opts ...grpc.CallOption) (*Asset, error)
 	GetAvailableTransitions(ctx context.Context, in *GetTransitionsRequest, opts ...grpc.CallOption) (*TransitionList, error)
 	GetAssetHistory(ctx context.Context, in *GetHistoryRequest, opts ...grpc.CallOption) (*TransitionHistoryList, error)
+	// Hand an available (or already assigned) asset to a person of the workspace.
+	HandOverAsset(ctx context.Context, in *HandOverRequest, opts ...grpc.CallOption) (*Asset, error)
+	// Dashboard
+	GetSummary(ctx context.Context, in *GetSummaryRequest, opts ...grpc.CallOption) (*AssetSummary, error)
+	ListActivity(ctx context.Context, in *ListActivityRequest, opts ...grpc.CallOption) (*ActivityList, error)
 }
 
 type assetServiceClient struct {
@@ -354,6 +362,36 @@ func (c *assetServiceClient) GetAssetHistory(ctx context.Context, in *GetHistory
 	return out, nil
 }
 
+func (c *assetServiceClient) HandOverAsset(ctx context.Context, in *HandOverRequest, opts ...grpc.CallOption) (*Asset, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Asset)
+	err := c.cc.Invoke(ctx, AssetService_HandOverAsset_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *assetServiceClient) GetSummary(ctx context.Context, in *GetSummaryRequest, opts ...grpc.CallOption) (*AssetSummary, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AssetSummary)
+	err := c.cc.Invoke(ctx, AssetService_GetSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *assetServiceClient) ListActivity(ctx context.Context, in *ListActivityRequest, opts ...grpc.CallOption) (*ActivityList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ActivityList)
+	err := c.cc.Invoke(ctx, AssetService_ListActivity_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AssetServiceServer is the server API for AssetService service.
 // All implementations must embed UnimplementedAssetServiceServer
 // for forward compatibility.
@@ -369,6 +407,11 @@ type AssetServiceServer interface {
 	TransitionAsset(context.Context, *TransitionRequest) (*Asset, error)
 	GetAvailableTransitions(context.Context, *GetTransitionsRequest) (*TransitionList, error)
 	GetAssetHistory(context.Context, *GetHistoryRequest) (*TransitionHistoryList, error)
+	// Hand an available (or already assigned) asset to a person of the workspace.
+	HandOverAsset(context.Context, *HandOverRequest) (*Asset, error)
+	// Dashboard
+	GetSummary(context.Context, *GetSummaryRequest) (*AssetSummary, error)
+	ListActivity(context.Context, *ListActivityRequest) (*ActivityList, error)
 	mustEmbedUnimplementedAssetServiceServer()
 }
 
@@ -402,6 +445,15 @@ func (UnimplementedAssetServiceServer) GetAvailableTransitions(context.Context, 
 }
 func (UnimplementedAssetServiceServer) GetAssetHistory(context.Context, *GetHistoryRequest) (*TransitionHistoryList, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetAssetHistory not implemented")
+}
+func (UnimplementedAssetServiceServer) HandOverAsset(context.Context, *HandOverRequest) (*Asset, error) {
+	return nil, status.Error(codes.Unimplemented, "method HandOverAsset not implemented")
+}
+func (UnimplementedAssetServiceServer) GetSummary(context.Context, *GetSummaryRequest) (*AssetSummary, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSummary not implemented")
+}
+func (UnimplementedAssetServiceServer) ListActivity(context.Context, *ListActivityRequest) (*ActivityList, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListActivity not implemented")
 }
 func (UnimplementedAssetServiceServer) mustEmbedUnimplementedAssetServiceServer() {}
 func (UnimplementedAssetServiceServer) testEmbeddedByValue()                      {}
@@ -568,6 +620,60 @@ func _AssetService_GetAssetHistory_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AssetService_HandOverAsset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(HandOverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AssetServiceServer).HandOverAsset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AssetService_HandOverAsset_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AssetServiceServer).HandOverAsset(ctx, req.(*HandOverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AssetService_GetSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AssetServiceServer).GetSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AssetService_GetSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AssetServiceServer).GetSummary(ctx, req.(*GetSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AssetService_ListActivity_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListActivityRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AssetServiceServer).ListActivity(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AssetService_ListActivity_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AssetServiceServer).ListActivity(ctx, req.(*ListActivityRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AssetService_ServiceDesc is the grpc.ServiceDesc for AssetService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -606,6 +712,18 @@ var AssetService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetAssetHistory",
 			Handler:    _AssetService_GetAssetHistory_Handler,
+		},
+		{
+			MethodName: "HandOverAsset",
+			Handler:    _AssetService_HandOverAsset_Handler,
+		},
+		{
+			MethodName: "GetSummary",
+			Handler:    _AssetService_GetSummary_Handler,
+		},
+		{
+			MethodName: "ListActivity",
+			Handler:    _AssetService_ListActivity_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

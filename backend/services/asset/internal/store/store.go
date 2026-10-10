@@ -3,11 +3,14 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -37,8 +40,10 @@ type AssetType struct {
 	Lifecycle    json.RawMessage
 	NgacOAID     string
 	AssetCount   int32
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// AvailableCount is the assets of the type that can be handed out now.
+	AvailableCount int32
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // Asset represents a single asset instance.
@@ -52,6 +57,9 @@ type Asset struct {
 	CustomFields       json.RawMessage
 	AssignedTo         *string
 	AssignedToUsername string
+	// AssignedToName is the holder's display name, empty when the holder is not
+	// a member of the asset's workspace.
+	AssignedToName string
 	// TypeOAID is the OA of the asset's type, which is what the asset is
 	// authorized on. It comes from the type, not from a column on the asset.
 	TypeOAID  string
@@ -70,8 +78,15 @@ type TransitionRecord struct {
 	Action    string
 	ActorID   string
 	ActorName string
-	Comment   string
-	CreatedAt time.Time
+	// SubjectUserID is the person the step concerned: the new holder on a
+	// hand-over, the previous holder on a return. Empty for steps about no one.
+	SubjectUserID string
+	SubjectName   string
+	Comment       string
+	CreatedAt     time.Time
+	// ExpectHolder, when set, is who the caller read as the holder; the step is
+	// refused if somebody else holds the asset by the time it is locked.
+	ExpectHolder string
 }
 
 // AssetRequest represents a request to obtain an asset.
@@ -89,8 +104,11 @@ type AssetRequest struct {
 	ApproverID      *string
 	ApproverName    string
 	ApproverComment string
-	CreatedAt       time.Time
-	UpdatedAt       time.Time
+	// Urgency is "low", "normal", "high" or "urgent".
+	Urgency           string
+	AssignedAssetName string
+	CreatedAt         time.Time
+	UpdatedAt         time.Time
 }
 
 // ============================================
@@ -125,12 +143,13 @@ func (s *Store) GetType(ctx context.Context, typeID string) (*AssetType, error) 
 	err := s.pool.QueryRow(ctx,
 		`SELECT t.id, t.name, t.description, t.category, t.workspace_id,
 		        t.fields_schema, t.lifecycle, COALESCE(t.ngac_oa_id, ''), t.created_at, t.updated_at,
-		        (SELECT COUNT(*) FROM assets a WHERE a.type_id = t.id AND a.deleted = FALSE)
+		        (SELECT COUNT(*) FROM assets a WHERE a.type_id = t.id AND a.deleted = FALSE),
+		        (SELECT COUNT(*) FROM assets a WHERE a.type_id = t.id AND a.deleted = FALSE AND a.state = 'available')
 		 FROM asset_types t WHERE t.id = $1`, typeID,
 	).Scan(
 		&at.ID, &at.Name, &at.Description, &at.Category, &at.WorkspaceID,
 		&at.FieldsSchema, &at.Lifecycle, &at.NgacOAID, &at.CreatedAt, &at.UpdatedAt,
-		&at.AssetCount,
+		&at.AssetCount, &at.AvailableCount,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("getting asset type: %w", err)
@@ -143,7 +162,8 @@ func (s *Store) ListTypes(ctx context.Context, workspaceID string) ([]*AssetType
 	rows, err := s.pool.Query(ctx,
 		`SELECT t.id, t.name, t.description, t.category, t.workspace_id,
 		        t.fields_schema, t.lifecycle, COALESCE(t.ngac_oa_id, ''), t.created_at, t.updated_at,
-		        (SELECT COUNT(*) FROM assets a WHERE a.type_id = t.id AND a.deleted = FALSE)
+		        (SELECT COUNT(*) FROM assets a WHERE a.type_id = t.id AND a.deleted = FALSE),
+		        (SELECT COUNT(*) FROM assets a WHERE a.type_id = t.id AND a.deleted = FALSE AND a.state = 'available')
 		 FROM asset_types t WHERE t.workspace_id = $1 ORDER BY t.category, t.name`, workspaceID,
 	)
 	if err != nil {
@@ -157,7 +177,7 @@ func (s *Store) ListTypes(ctx context.Context, workspaceID string) ([]*AssetType
 		if err := rows.Scan(
 			&at.ID, &at.Name, &at.Description, &at.Category, &at.WorkspaceID,
 			&at.FieldsSchema, &at.Lifecycle, &at.NgacOAID, &at.CreatedAt, &at.UpdatedAt,
-			&at.AssetCount,
+			&at.AssetCount, &at.AvailableCount,
 		); err != nil {
 			return nil, fmt.Errorf("scanning asset type row: %w", err)
 		}
@@ -205,29 +225,42 @@ func (s *Store) CreateAsset(ctx context.Context, a *Asset) error {
 	return nil
 }
 
-// GetAsset retrieves a single asset by ID with its type name and assigned username.
-func (s *Store) GetAsset(ctx context.Context, assetID string) (*Asset, error) {
+// assetSelect reads an asset with its type and, when the holder is a member of
+// the asset's own workspace, their name.
+const assetSelect = `SELECT a.id, a.name, a.type_id, t.name, a.workspace_id, a.state,
+		        a.custom_fields, a.assigned_to, ` + "%s" + `, ` + "%s" + `,
+		        COALESCE(t.ngac_oa_id, ''), a.created_by, a.deleted, a.created_at, a.updated_at`
+
+var assetFrom = " FROM assets a JOIN asset_types t ON a.type_id = t.id" + memberJoin("a.assigned_to", "a.workspace_id", "hu", "htu")
+
+func assetQuery(tail string) string {
+	return fmt.Sprintf(assetSelect, personLogin("hu", "htu"), personName("hu", "htu")) + assetFrom + " " + tail
+}
+
+type rowScanner interface{ Scan(dest ...any) error }
+
+func scanAsset(row rowScanner) (*Asset, error) {
 	a := &Asset{}
-	var assignedTo, assignedUsername *string
-	err := s.pool.QueryRow(ctx,
-		`SELECT a.id, a.name, a.type_id, t.name, a.workspace_id, a.state,
-		        a.custom_fields, a.assigned_to, u.username,
-		        COALESCE(t.ngac_oa_id, ''), a.created_by, a.deleted, a.created_at, a.updated_at
-		 FROM assets a
-		 JOIN asset_types t ON a.type_id = t.id
-		 LEFT JOIN users u ON a.assigned_to = u.id
-		 WHERE a.id = $1`, assetID,
-	).Scan(
+	var assignedTo, login *string
+	if err := row.Scan(
 		&a.ID, &a.Name, &a.TypeID, &a.TypeName, &a.WorkspaceID, &a.State,
-		&a.CustomFields, &assignedTo, &assignedUsername,
+		&a.CustomFields, &assignedTo, &login, &a.AssignedToName,
 		&a.TypeOAID, &a.CreatedBy, &a.Deleted, &a.CreatedAt, &a.UpdatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("getting asset: %w", err)
+	); err != nil {
+		return nil, err
 	}
 	a.AssignedTo = assignedTo
-	if assignedUsername != nil {
-		a.AssignedToUsername = *assignedUsername
+	if login != nil {
+		a.AssignedToUsername = *login
+	}
+	return a, nil
+}
+
+// GetAsset retrieves a single asset by ID with its type name and holder's name.
+func (s *Store) GetAsset(ctx context.Context, assetID string) (*Asset, error) {
+	a, err := scanAsset(s.pool.QueryRow(ctx, assetQuery("WHERE a.id = $1"), assetID))
+	if err != nil {
+		return nil, fmt.Errorf("getting asset: %w", err)
 	}
 	return a, nil
 }
@@ -238,8 +271,11 @@ type ListAssetsFilter struct {
 	TypeID      string
 	State       string
 	AssignedTo  string
-	Limit       int32
-	Offset      int32
+	// Search matches, as plain text anywhere in it, the asset's name or its
+	// holder's name.
+	Search string
+	Limit  int32
+	Offset int32
 
 	// VisibleTypeIDs, when non-nil, restricts the result — rows and total — to
 	// assets of these types. An empty non-nil slice matches nothing. The gRPC
@@ -248,7 +284,7 @@ type ListAssetsFilter struct {
 	VisibleTypeIDs []string
 }
 
-// ListAssets returns filtered assets with total count.
+// ListAssets returns filtered assets with total count, most recently changed first.
 func (s *Store) ListAssets(ctx context.Context, f ListAssetsFilter) ([]*Asset, int32, error) {
 	baseWhere := "WHERE a.workspace_id = $1 AND a.deleted = FALSE"
 	args := []any{f.WorkspaceID}
@@ -275,32 +311,24 @@ func (s *Store) ListAssets(ctx context.Context, f ListAssetsFilter) ([]*Asset, i
 		args = append(args, f.AssignedTo)
 		argIdx++
 	}
+	if strings.TrimSpace(f.Search) != "" {
+		baseWhere += fmt.Sprintf(" AND (a.name ILIKE $%d ESCAPE '\\' OR %s ILIKE $%d ESCAPE '\\')", argIdx, personName("hu", "htu"), argIdx)
+		args = append(args, containsPattern(f.Search))
+		argIdx++
+	}
 
-	// Count query
 	var total int32
-	err := s.pool.QueryRow(ctx,
-		fmt.Sprintf("SELECT COUNT(*) FROM assets a %s", baseWhere), args...,
-	).Scan(&total)
+	err := s.pool.QueryRow(ctx, "SELECT COUNT(*)"+assetFrom+" "+baseWhere, args...).Scan(&total)
 	if err != nil {
 		return nil, 0, fmt.Errorf("counting assets: %w", err)
 	}
 
-	// Pagination defaults
 	limit := f.Limit
 	if limit <= 0 || limit > 100 {
 		limit = 25
 	}
 
-	query := fmt.Sprintf(
-		`SELECT a.id, a.name, a.type_id, t.name, a.workspace_id, a.state,
-		        a.custom_fields, a.assigned_to, u.username,
-		        COALESCE(t.ngac_oa_id, ''), a.created_by, a.deleted, a.created_at, a.updated_at
-		 FROM assets a
-		 JOIN asset_types t ON a.type_id = t.id
-		 LEFT JOIN users u ON a.assigned_to = u.id
-		 %s ORDER BY a.created_at DESC LIMIT $%d OFFSET $%d`,
-		baseWhere, argIdx, argIdx+1,
-	)
+	query := assetQuery(fmt.Sprintf("%s ORDER BY a.updated_at DESC, a.id LIMIT $%d OFFSET $%d", baseWhere, argIdx, argIdx+1))
 	args = append(args, limit, f.Offset)
 
 	rows, err := s.pool.Query(ctx, query, args...)
@@ -311,18 +339,9 @@ func (s *Store) ListAssets(ctx context.Context, f ListAssetsFilter) ([]*Asset, i
 
 	var assets []*Asset
 	for rows.Next() {
-		a := &Asset{}
-		var assignedTo, assignedUsername *string
-		if err := rows.Scan(
-			&a.ID, &a.Name, &a.TypeID, &a.TypeName, &a.WorkspaceID, &a.State,
-			&a.CustomFields, &assignedTo, &assignedUsername,
-			&a.TypeOAID, &a.CreatedBy, &a.Deleted, &a.CreatedAt, &a.UpdatedAt,
-		); err != nil {
+		a, err := scanAsset(rows)
+		if err != nil {
 			return nil, 0, fmt.Errorf("scanning asset row: %w", err)
-		}
-		a.AssignedTo = assignedTo
-		if assignedUsername != nil {
-			a.AssignedToUsername = *assignedUsername
 		}
 		assets = append(assets, a)
 	}
@@ -395,13 +414,25 @@ func (s *Store) ClearAssignment(ctx context.Context, assetID string) error {
 // Transition Queries
 // ============================================
 
-// InsertTransition records a lifecycle state change.
+// clearsHolder reports whether an asset that moves into this state is no
+// longer held by anyone. Maintenance and the like leave the holder in place —
+// it is still their laptop — while stock, retired and disposed assets have none.
+func clearsHolder(toState string) bool {
+	switch toState {
+	case "available", "requested", "retired", "disposed":
+		return true
+	}
+	return false
+}
+
 // ApplyTransition changes an asset's state and records the transition in its
 // history, in one database transaction. If either write fails neither takes
 // effect: a state change with no history row would be an unaudited change, and
 // the history is how the UI says who did what and when.
 //
-// assignedTo, when non-nil, also sets the asset's assignee.
+// assignedTo, when non-nil, also sets the asset's holder (and is the step's
+// subject). A move into a state that holds no one clears the holder, and the
+// step then names the person it was taken from.
 func (s *Store) ApplyTransition(ctx context.Context, tr *TransitionRecord, assignedTo *string) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -409,58 +440,89 @@ func (s *Store) ApplyTransition(ctx context.Context, tr *TransitionRecord, assig
 	}
 	defer tx.Rollback(ctx) // no-op after Commit
 
-	if assignedTo != nil {
-		_, err = tx.Exec(ctx,
-			`UPDATE assets SET state = $1, assigned_to = $2, updated_at = NOW() WHERE id = $3`,
-			tr.ToState, *assignedTo, tr.AssetID)
-	} else {
-		_, err = tx.Exec(ctx,
-			`UPDATE assets SET state = $1, updated_at = NOW() WHERE id = $2`,
-			tr.ToState, tr.AssetID)
+	var holder *string
+	var state string
+	var deleted bool
+	if err := tx.QueryRow(ctx, `SELECT state, deleted, assigned_to FROM assets WHERE id = $1 FOR UPDATE`, tr.AssetID).Scan(&state, &deleted, &holder); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrNotFound
+		}
+		return fmt.Errorf("locking asset: %w", err)
 	}
-	if err != nil {
+	// The step was chosen from what the caller read; under the lock, it must
+	// still be true.
+	if deleted {
+		return ErrNotFound
+	}
+	if state != tr.FromState {
+		return ErrStateChanged
+	}
+	if tr.ExpectHolder != "" && (holder == nil || *holder != tr.ExpectHolder) {
+		return ErrStateChanged
+	}
+	subject := tr.SubjectUserID
+	switch {
+	case assignedTo != nil:
+		holder = assignedTo
+		if subject == "" {
+			subject = *assignedTo
+		}
+	case clearsHolder(tr.ToState):
+		if holder != nil && subject == "" {
+			subject = *holder
+		}
+		holder = nil
+	}
+	tr.SubjectUserID = subject
+
+	if _, err := tx.Exec(ctx,
+		`UPDATE assets SET state = $1, assigned_to = $2, updated_at = NOW() WHERE id = $3`,
+		tr.ToState, holder, tr.AssetID); err != nil {
 		return fmt.Errorf("updating asset state: %w", err)
 	}
-
-	tr.ID = uuid.New().String()
-	tr.CreatedAt = time.Now()
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO asset_transitions (id, asset_id, from_state, to_state, action, actor_id, comment, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		tr.ID, tr.AssetID, tr.FromState, tr.ToState, tr.Action, tr.ActorID, tr.Comment, tr.CreatedAt,
-	); err != nil {
-		return fmt.Errorf("inserting transition: %w", err)
+	if err := insertTransition(ctx, tx, tr); err != nil {
+		return err
 	}
-
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit transition: %w", err)
 	}
 	return nil
 }
 
-func (s *Store) InsertTransition(ctx context.Context, tr *TransitionRecord) error {
+type execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+func insertTransition(ctx context.Context, q execer, tr *TransitionRecord) error {
 	tr.ID = uuid.New().String()
 	tr.CreatedAt = time.Now()
-
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO asset_transitions (id, asset_id, from_state, to_state, action, actor_id, comment, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-		tr.ID, tr.AssetID, tr.FromState, tr.ToState, tr.Action, tr.ActorID, tr.Comment, tr.CreatedAt,
-	)
-	if err != nil {
+	if _, err := q.Exec(ctx,
+		`INSERT INTO asset_transitions (id, asset_id, from_state, to_state, action, actor_id, subject_user_id, comment, created_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9)`,
+		tr.ID, tr.AssetID, tr.FromState, tr.ToState, tr.Action, tr.ActorID, tr.SubjectUserID, tr.Comment, tr.CreatedAt,
+	); err != nil {
 		return fmt.Errorf("inserting transition: %w", err)
 	}
 	return nil
 }
 
+// InsertTransition records a lifecycle step without changing the asset.
+func (s *Store) InsertTransition(ctx context.Context, tr *TransitionRecord) error {
+	return insertTransition(ctx, s.pool, tr)
+}
+
 // GetAssetHistory returns all transitions for an asset ordered chronologically.
+// The people in it are named only if they belong to the asset's workspace.
 func (s *Store) GetAssetHistory(ctx context.Context, assetID string) ([]*TransitionRecord, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT t.id, t.asset_id, t.from_state, t.to_state, t.action,
-		        t.actor_id, COALESCE(u.username, ''), t.comment, t.created_at
+		        t.actor_id, `+personName("au", "atu")+`, COALESCE(t.subject_user_id, ''), `+personName("su", "stu")+`,
+		        t.comment, t.created_at
 		 FROM asset_transitions t
-		 LEFT JOIN users u ON t.actor_id = u.id
-		 WHERE t.asset_id = $1 ORDER BY t.created_at`, assetID,
+		 JOIN assets a ON a.id = t.asset_id`+
+			memberJoin("t.actor_id", "a.workspace_id", "au", "atu")+
+			memberJoin("t.subject_user_id", "a.workspace_id", "su", "stu")+`
+		 WHERE t.asset_id = $1 ORDER BY t.created_at, t.id`, assetID,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("getting asset history: %w", err)
@@ -472,7 +534,7 @@ func (s *Store) GetAssetHistory(ctx context.Context, assetID string) ([]*Transit
 		tr := &TransitionRecord{}
 		if err := rows.Scan(
 			&tr.ID, &tr.AssetID, &tr.FromState, &tr.ToState, &tr.Action,
-			&tr.ActorID, &tr.ActorName, &tr.Comment, &tr.CreatedAt,
+			&tr.ActorID, &tr.ActorName, &tr.SubjectUserID, &tr.SubjectName, &tr.Comment, &tr.CreatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning transition row: %w", err)
 		}
@@ -490,12 +552,15 @@ func (s *Store) CreateRequest(ctx context.Context, req *AssetRequest) error {
 	req.ID = uuid.New().String()
 	req.CreatedAt = time.Now()
 	req.UpdatedAt = req.CreatedAt
+	if req.Urgency == "" {
+		req.Urgency = "normal"
+	}
 
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO asset_requests (id, type_id, workspace_id, requester_id, status, justification, quantity, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		`INSERT INTO asset_requests (id, type_id, workspace_id, requester_id, status, justification, quantity, urgency, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		req.ID, req.TypeID, req.WorkspaceID, req.RequesterID, req.Status,
-		req.Justification, req.Quantity, req.CreatedAt, req.UpdatedAt,
+		req.Justification, req.Quantity, req.Urgency, req.CreatedAt, req.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting asset request: %w", err)
@@ -503,41 +568,57 @@ func (s *Store) CreateRequest(ctx context.Context, req *AssetRequest) error {
 	return nil
 }
 
-// GetRequest retrieves a request by ID with requester/approver names and type name.
-func (s *Store) GetRequest(ctx context.Context, requestID string) (*AssetRequest, error) {
+// requestSelect reads a request with its type, the people on it (named only if
+// they belong to the request's workspace) and the asset it was given.
+var requestSelect = `SELECT r.id, r.type_id, t.name, r.workspace_id, r.requester_id, ` + personName("ru", "rtu") + `,
+		        r.status, r.justification, r.quantity, r.assigned_asset_id,
+		        r.approver_id, ` + personName("au", "atu") + `, r.approver_comment, r.urgency,
+		        COALESCE(aa.name, ''), r.created_at, r.updated_at
+		 FROM asset_requests r
+		 JOIN asset_types t ON r.type_id = t.id` +
+	memberJoin("r.requester_id", "r.workspace_id", "ru", "rtu") +
+	memberJoin("r.approver_id", "r.workspace_id", "au", "atu") +
+	` LEFT JOIN assets aa ON aa.id = r.assigned_asset_id`
+
+func scanRequest(row rowScanner) (*AssetRequest, error) {
 	r := &AssetRequest{}
 	var approverID, assignedAssetID *string
-	err := s.pool.QueryRow(ctx,
-		`SELECT r.id, r.type_id, t.name, r.workspace_id, r.requester_id, u.username,
-		        r.status, r.justification, r.quantity, r.assigned_asset_id,
-		        r.approver_id, COALESCE(au.username, ''), r.approver_comment, r.created_at, r.updated_at
-		 FROM asset_requests r
-		 JOIN asset_types t ON r.type_id = t.id
-		 JOIN users u ON r.requester_id = u.id
-		 LEFT JOIN users au ON r.approver_id = au.id
-		 WHERE r.id = $1`, requestID,
-	).Scan(
+	if err := row.Scan(
 		&r.ID, &r.TypeID, &r.TypeName, &r.WorkspaceID, &r.RequesterID, &r.RequesterName,
 		&r.Status, &r.Justification, &r.Quantity, &assignedAssetID,
-		&approverID, &r.ApproverName, &r.ApproverComment, &r.CreatedAt, &r.UpdatedAt,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("getting asset request: %w", err)
+		&approverID, &r.ApproverName, &r.ApproverComment, &r.Urgency,
+		&r.AssignedAssetName, &r.CreatedAt, &r.UpdatedAt,
+	); err != nil {
+		return nil, err
 	}
 	r.ApproverID = approverID
 	r.AssignedAssetID = assignedAssetID
 	return r, nil
 }
 
+// GetRequest retrieves a request by ID with requester/approver names and type name.
+func (s *Store) GetRequest(ctx context.Context, requestID string) (*AssetRequest, error) {
+	r, err := scanRequest(s.pool.QueryRow(ctx, requestSelect+` WHERE r.id = $1`, requestID))
+	if err != nil {
+		return nil, fmt.Errorf("getting asset request: %w", err)
+	}
+	return r, nil
+}
+
 // UpdateRequestStatus updates the status and approver info of a request.
 func (s *Store) UpdateRequestStatus(ctx context.Context, requestID, status, approverID, comment string) error {
-	_, err := s.pool.Exec(ctx,
+	tag, err := s.pool.Exec(ctx,
 		`UPDATE asset_requests SET status = $1, approver_id = $2, approver_comment = $3, updated_at = NOW()
-		 WHERE id = $4`,
+		 WHERE id = $4 AND status = 'pending'`,
 		status, approverID, comment, requestID,
 	)
 	if err != nil {
 		return fmt.Errorf("updating request status: %w", err)
+	}
+	// Decided only while still pending: a request someone fulfilled, rejected or
+	// approved a moment ago is not overwritten.
+	if tag.RowsAffected() == 0 {
+		return ErrRequestNotOpen
 	}
 	return nil
 }
@@ -559,10 +640,11 @@ func (s *Store) FulfillRequest(ctx context.Context, requestID, assetID string) e
 type ListRequestsFilter struct {
 	WorkspaceID string
 	UserID      string
-	Status      string
-	MineOnly    bool
-	Limit       int32
-	Offset      int32
+	// Status is one status, or several separated by commas ("approved,fulfilled").
+	Status   string
+	MineOnly bool
+	Limit    int32
+	Offset   int32
 
 	// Visibility, when non-nil, restricts the result — rows and total — to
 	// requests the caller may see. The store makes no authorization decision;
@@ -577,7 +659,7 @@ type RequestVisibility struct {
 	TypeIDs     []string
 }
 
-// ListRequests returns filtered requests.
+// ListRequests returns filtered requests, newest first.
 func (s *Store) ListRequests(ctx context.Context, f ListRequestsFilter) ([]*AssetRequest, int32, error) {
 	baseWhere := "WHERE r.workspace_id = $1"
 	args := []any{f.WorkspaceID}
@@ -600,9 +682,9 @@ func (s *Store) ListRequests(ctx context.Context, f ListRequestsFilter) ([]*Asse
 		args = append(args, f.UserID)
 		argIdx++
 	}
-	if f.Status != "" {
-		baseWhere += fmt.Sprintf(" AND r.status = $%d", argIdx)
-		args = append(args, f.Status)
+	if statuses := splitList(f.Status); len(statuses) > 0 {
+		baseWhere += fmt.Sprintf(" AND r.status = ANY($%d)", argIdx)
+		args = append(args, statuses)
 		argIdx++
 	}
 
@@ -619,17 +701,7 @@ func (s *Store) ListRequests(ctx context.Context, f ListRequestsFilter) ([]*Asse
 		limit = 25
 	}
 
-	query := fmt.Sprintf(
-		`SELECT r.id, r.type_id, t.name, r.workspace_id, r.requester_id, u.username,
-		        r.status, r.justification, r.quantity, r.assigned_asset_id,
-		        r.approver_id, COALESCE(au.username, ''), r.approver_comment, r.created_at, r.updated_at
-		 FROM asset_requests r
-		 JOIN asset_types t ON r.type_id = t.id
-		 JOIN users u ON r.requester_id = u.id
-		 LEFT JOIN users au ON r.approver_id = au.id
-		 %s ORDER BY r.created_at DESC LIMIT $%d OFFSET $%d`,
-		baseWhere, argIdx, argIdx+1,
-	)
+	query := fmt.Sprintf("%s %s ORDER BY r.created_at DESC, r.id LIMIT $%d OFFSET $%d", requestSelect, baseWhere, argIdx, argIdx+1)
 	args = append(args, limit, f.Offset)
 
 	rows, err := s.pool.Query(ctx, query, args...)
@@ -640,20 +712,23 @@ func (s *Store) ListRequests(ctx context.Context, f ListRequestsFilter) ([]*Asse
 
 	var requests []*AssetRequest
 	for rows.Next() {
-		r := &AssetRequest{}
-		var approverID, assignedAssetID *string
-		if err := rows.Scan(
-			&r.ID, &r.TypeID, &r.TypeName, &r.WorkspaceID, &r.RequesterID, &r.RequesterName,
-			&r.Status, &r.Justification, &r.Quantity, &assignedAssetID,
-			&approverID, &r.ApproverName, &r.ApproverComment, &r.CreatedAt, &r.UpdatedAt,
-		); err != nil {
+		r, err := scanRequest(rows)
+		if err != nil {
 			return nil, 0, fmt.Errorf("scanning request row: %w", err)
 		}
-		r.ApproverID = approverID
-		r.AssignedAssetID = assignedAssetID
 		requests = append(requests, r)
 	}
 	return requests, total, rows.Err()
+}
+
+func splitList(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // HasExistingAssets checks if any non-deleted assets exist for a given type.

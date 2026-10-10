@@ -5,6 +5,7 @@ package policy;
 option go_package = "ngac-platform/proto/policy";
 
 import "proto/policy/policy.proto";
+import "proto/policy/policy_read.proto";
 
 // PolicyWriteService handles graph mutations (singleton instance).
 // All write operations invalidate relevant caches and publish events.
@@ -30,6 +31,19 @@ service PolicyWriteService {
 
   // External cache invalidation
   rpc InvalidateCache(InvalidateCacheRequest) returns (InvalidateCacheResponse);
+
+  // Associations as the writer holds them: the authoritative copy, for callers
+  // that decide a write from what is there now (a read replica may be behind).
+  rpc GetAssociations(GetAssociationsRequest) returns (AssociationList);
+
+  // The graph as the writer holds it, for the same reason: authorization that
+  // reads who an owner is, where a node sits or what a UA reaches must see the
+  // write that was just made, not a replica that has not applied it yet.
+  rpc GetNode(GetNodeRequest) returns (NGACNode);
+  rpc GetChildren(GetChildrenRequest) returns (NodeList);
+  rpc GetParents(GetParentsRequest) returns (NodeList);
+  rpc GetAncestors(GetAncestorsRequest) returns (NodeList);
+  rpc GetDescendants(GetDescendantsRequest) returns (NodeList);
 
   // Schema and graph lifecycle
   rpc InitSchema(Empty) returns (Empty);

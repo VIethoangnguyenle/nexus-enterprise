@@ -22,13 +22,21 @@ type DepartmentService interface {
 	UpdateMemberDepartment(ctx context.Context, callerNodeID, wsID, userNGACNodeID, deptID string) error
 }
 
+// AdminService is everything the admin screens call: departments, roles,
+// permissions and people. Every call takes the caller's NGAC user node ID from
+// verified JWT claims; authorization happens in the domain.
+type AdminService interface {
+	DepartmentService
+	PeopleService
+}
+
 // AdminHandler serves admin organization endpoints.
 type AdminHandler struct {
-	domain DepartmentService
+	domain AdminService
 }
 
 // NewAdminHandler creates an admin REST handler.
-func NewAdminHandler(svc DepartmentService) *AdminHandler {
+func NewAdminHandler(svc AdminService) *AdminHandler {
 	return &AdminHandler{domain: svc}
 }
 
@@ -40,6 +48,7 @@ func (h *AdminHandler) RegisterAdminRoutes(api *echo.Group) {
 	api.DELETE("/workspaces/:id/departments/:deptId", h.DeleteDepartment)
 	api.PUT("/workspaces/:id/departments/:deptId/move", h.MoveDepartment)
 	api.PUT("/workspaces/:id/members/:nodeId/department", h.UpdateMemberDepartment)
+	h.registerPeopleRoutes(api)
 }
 
 // CreateDepartment handles POST /api/workspaces/:id/departments.

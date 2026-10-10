@@ -21,13 +21,9 @@ type WorkspaceService interface {
 	CreateWorkspace(ctx context.Context, req *pb.CreateWorkspaceRequest) (*pb.Workspace, error)
 	ListWorkspaces(ctx context.Context, req *pb.ListWorkspacesRequest) (*pb.WorkspaceList, error)
 	GetWorkspace(ctx context.Context, req *pb.GetWorkspaceRequest) (*pb.Workspace, error)
-	InviteMember(ctx context.Context, req *pb.InviteMemberRequest) (*pb.Empty, error)
 	RemoveMember(ctx context.Context, req *pb.RemoveMemberRequest) (*pb.Empty, error)
 	ListMembers(ctx context.Context, req *pb.ListMembersRequest) (*pb.MemberList, error)
-	CreateRole(ctx context.Context, req *pb.CreateRoleRequest) (*pb.Role, error)
-	ListRoles(ctx context.Context, req *pb.ListRolesRequest) (*pb.RoleList, error)
 	CreateFolder(ctx context.Context, req *pb.CreateFolderRequest) (*pb.Folder, error)
-	CreatePermission(ctx context.Context, req *pb.CreatePermissionRequest) (*pb.Permission, error)
 }
 
 // Handler serves workspace REST endpoints.
@@ -47,13 +43,9 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/workspaces", h.CreateWorkspace)
 	api.GET("/workspaces", h.ListWorkspaces)
 	api.GET("/workspaces/:id", h.GetWorkspace)
-	api.POST("/workspaces/:id/invite", h.InviteMember)
 	api.DELETE("/workspaces/:id/members/:nodeId", h.RemoveMember)
 	api.GET("/workspaces/:id/members", h.ListMembers)
-	api.POST("/workspaces/:id/roles", h.CreateRole)
-	api.GET("/workspaces/:id/roles", h.ListRoles)
 	api.POST("/workspaces/:id/folders", h.CreateFolder)
-	api.POST("/workspaces/:id/permissions", h.CreatePermission)
 }
 
 // CreateWorkspace handles POST /api/workspaces.
@@ -107,29 +99,6 @@ func (h *Handler) GetWorkspace(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// InviteMember handles POST /api/workspaces/:id/invite.
-func (h *Handler) InviteMember(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	var body struct {
-		NGACNodeID string `json:"ngac_node_id"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-
-	_, err = h.svc.InviteMember(c.Request().Context(), &pb.InviteMemberRequest{
-		WorkspaceId:      c.Param("id"),
-		TargetNgacNodeId: body.NGACNodeID,
-	})
-	if err != nil {
-		return httputil.MapGRPCError(err)
-	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
-}
-
 // RemoveMember handles DELETE /api/workspaces/:id/members/:nodeId.
 func (h *Handler) RemoveMember(c echo.Context) error {
 	_, err := httputil.RequireClaims(c)
@@ -162,45 +131,6 @@ func (h *Handler) ListMembers(c echo.Context) error {
 	return c.JSON(http.StatusOK, resp)
 }
 
-// CreateRole handles POST /api/workspaces/:id/roles.
-func (h *Handler) CreateRole(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	var body struct {
-		Name string `json:"name"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-
-	resp, err := h.svc.CreateRole(c.Request().Context(), &pb.CreateRoleRequest{
-		WorkspaceId: c.Param("id"),
-		Name:        body.Name,
-	})
-	if err != nil {
-		return httputil.MapGRPCError(err)
-	}
-	return c.JSON(http.StatusCreated, resp)
-}
-
-// ListRoles handles GET /api/workspaces/:id/roles.
-func (h *Handler) ListRoles(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	ctx := c.Request().Context()
-	resp, err := h.svc.ListRoles(ctx, &pb.ListRolesRequest{
-		WorkspaceId: c.Param("id"),
-	})
-	if err != nil {
-		return httputil.MapGRPCError(err)
-	}
-	return c.JSON(http.StatusOK, resp)
-}
-
 // CreateFolder handles POST /api/workspaces/:id/folders.
 func (h *Handler) CreateFolder(c echo.Context) error {
 	_, err := httputil.RequireClaims(c)
@@ -219,33 +149,6 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 		WorkspaceId: c.Param("id"),
 		Name:        body.Name,
 		ParentOaId:  body.ParentOAID,
-	})
-	if err != nil {
-		return httputil.MapGRPCError(err)
-	}
-	return c.JSON(http.StatusCreated, resp)
-}
-
-// CreatePermission handles POST /api/workspaces/:id/permissions.
-func (h *Handler) CreatePermission(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	var body struct {
-		UAID       string   `json:"ua_id"`
-		OAID       string   `json:"oa_id"`
-		Operations []string `json:"operations"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-
-	resp, err := h.svc.CreatePermission(c.Request().Context(), &pb.CreatePermissionRequest{
-		WorkspaceId: c.Param("id"),
-		UaId:        body.UAID,
-		OaId:        body.OAID,
-		Operations:  body.Operations,
 	})
 	if err != nil {
 		return httputil.MapGRPCError(err)

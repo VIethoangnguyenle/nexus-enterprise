@@ -27,7 +27,7 @@ const mainNavItems: NavItem[] = [
   { id: 'messaging', icon: MessageSquare, label: 'Tin nhắn', to: '/channels' },
   { id: 'drive', icon: FolderOpen, label: 'Tài liệu', to: '/drive' },
   { id: 'approval', icon: ClipboardCheck, label: 'Phê duyệt', to: '/approval' },
-  { id: 'assets', icon: Package, label: 'Tài sản', to: '/assets/dashboard' },
+  { id: 'assets', icon: Package, label: 'Tài sản', to: '/assets' },
   { id: 'contacts', icon: Users, label: 'Danh bạ', to: '/contacts' },
 ]
 const footNavItems: NavItem[] = [

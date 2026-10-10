@@ -19,6 +19,10 @@ import (
 type FakePolicyWrite struct {
 	policypb.PolicyWriteServiceClient
 
+	// Reads answers the graph reads (GetNode, GetChildren, ...) the way the writer
+	// would. Left nil, every read finds an empty graph.
+	Reads policypb.PolicyReadServiceClient
+
 	mu sync.Mutex
 	// NextIDs, when set, are handed out as the IDs of the next nodes created, in
 	// order. A test whose code writes the ID to a table with a foreign key onto
@@ -157,4 +161,46 @@ func (f *FakePolicyWrite) label(id string) string {
 		return n.Name
 	}
 	return id
+}
+
+func (f *FakePolicyWrite) GetNode(ctx context.Context, in *policypb.GetNodeRequest, o ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if f.Reads == nil {
+		return nil, fmt.Errorf("node %s not found", in.NodeId)
+	}
+	return f.Reads.GetNode(ctx, in, o...)
+}
+
+func (f *FakePolicyWrite) GetChildren(ctx context.Context, in *policypb.GetChildrenRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {
+	if f.Reads == nil {
+		return &policypb.NodeList{}, nil
+	}
+	return f.Reads.GetChildren(ctx, in, o...)
+}
+
+func (f *FakePolicyWrite) GetParents(ctx context.Context, in *policypb.GetParentsRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {
+	if f.Reads == nil {
+		return &policypb.NodeList{}, nil
+	}
+	return f.Reads.GetParents(ctx, in, o...)
+}
+
+func (f *FakePolicyWrite) GetAncestors(ctx context.Context, in *policypb.GetAncestorsRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {
+	if f.Reads == nil {
+		return &policypb.NodeList{}, nil
+	}
+	return f.Reads.GetAncestors(ctx, in, o...)
+}
+
+func (f *FakePolicyWrite) GetDescendants(ctx context.Context, in *policypb.GetDescendantsRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {
+	if f.Reads == nil {
+		return &policypb.NodeList{}, nil
+	}
+	return f.Reads.GetDescendants(ctx, in, o...)
+}
+
+func (f *FakePolicyWrite) GetAssociations(ctx context.Context, in *policypb.GetAssociationsRequest, o ...grpc.CallOption) (*policypb.AssociationList, error) {
+	if f.Reads == nil {
+		return &policypb.AssociationList{}, nil
+	}
+	return f.Reads.GetAssociations(ctx, in, o...)
 }

@@ -106,6 +106,18 @@ describe('websocket events invalidate the keys the screens actually cache under'
     expect(invalidated(keys.assets.history('asset-1'))).toBe(true)
   })
 
+  it('an asset event also refreshes the feed, the types and the requests', () => {
+    seed(keys.assets.activity('ws-1', 10))
+    seed(keys.assets.types('ws-1'))
+    seed(keys.assets.requestList('ws-1', { status: 'pending' }))
+    seed(keys.assets.request('req-1'))
+    deliver({ oneofKind: 'assetUpdated', assetUpdated: { assetId: 'asset-1', newState: 'assigned' } })
+    expect(invalidated(keys.assets.activity('ws-1', 10))).toBe(true)
+    expect(invalidated(keys.assets.types('ws-1'))).toBe(true)
+    expect(invalidated(keys.assets.requestList('ws-1', { status: 'pending' }))).toBe(true)
+    expect(invalidated(keys.assets.request('req-1'))).toBe(true)
+  })
+
   it('an unread-count event refreshes both the chat and the notification counters', () => {
     seed(keys.messaging.unreadCounts())
     seed(keys.notifications.unreadCount())

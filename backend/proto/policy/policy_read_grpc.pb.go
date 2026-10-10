@@ -29,6 +29,7 @@ const (
 	PolicyReadService_GetDescendants_FullMethodName          = "/policy.PolicyReadService/GetDescendants"
 	PolicyReadService_GetChildren_FullMethodName             = "/policy.PolicyReadService/GetChildren"
 	PolicyReadService_GetParents_FullMethodName              = "/policy.PolicyReadService/GetParents"
+	PolicyReadService_GetAssociations_FullMethodName         = "/policy.PolicyReadService/GetAssociations"
 	PolicyReadService_ResolveAccessibleScopes_FullMethodName = "/policy.PolicyReadService/ResolveAccessibleScopes"
 	PolicyReadService_ListOperations_FullMethodName          = "/policy.PolicyReadService/ListOperations"
 	PolicyReadService_ListProhibitions_FullMethodName        = "/policy.PolicyReadService/ListProhibitions"
@@ -54,6 +55,10 @@ type PolicyReadServiceClient interface {
 	GetDescendants(ctx context.Context, in *GetDescendantsRequest, opts ...grpc.CallOption) (*NodeList, error)
 	GetChildren(ctx context.Context, in *GetChildrenRequest, opts ...grpc.CallOption) (*NodeList, error)
 	GetParents(ctx context.Context, in *GetParentsRequest, opts ...grpc.CallOption) (*NodeList, error)
+	// Associations granted to a user attribute (read-only): which OAs it reaches
+	// and with which operations. Used by the workspace service to show and check
+	// what a role or department confers.
+	GetAssociations(ctx context.Context, in *GetAssociationsRequest, opts ...grpc.CallOption) (*AssociationList, error)
 	// Scope resolution — returns leaf OA IDs the user can access for an operation.
 	// Used by approval/drive services for O(1) scope-based data filtering.
 	ResolveAccessibleScopes(ctx context.Context, in *ResolveAccessibleScopesRequest, opts ...grpc.CallOption) (*ResolveAccessibleScopesResponse, error)
@@ -171,6 +176,16 @@ func (c *policyReadServiceClient) GetParents(ctx context.Context, in *GetParents
 	return out, nil
 }
 
+func (c *policyReadServiceClient) GetAssociations(ctx context.Context, in *GetAssociationsRequest, opts ...grpc.CallOption) (*AssociationList, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AssociationList)
+	err := c.cc.Invoke(ctx, PolicyReadService_GetAssociations_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *policyReadServiceClient) ResolveAccessibleScopes(ctx context.Context, in *ResolveAccessibleScopesRequest, opts ...grpc.CallOption) (*ResolveAccessibleScopesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ResolveAccessibleScopesResponse)
@@ -221,6 +236,10 @@ type PolicyReadServiceServer interface {
 	GetDescendants(context.Context, *GetDescendantsRequest) (*NodeList, error)
 	GetChildren(context.Context, *GetChildrenRequest) (*NodeList, error)
 	GetParents(context.Context, *GetParentsRequest) (*NodeList, error)
+	// Associations granted to a user attribute (read-only): which OAs it reaches
+	// and with which operations. Used by the workspace service to show and check
+	// what a role or department confers.
+	GetAssociations(context.Context, *GetAssociationsRequest) (*AssociationList, error)
 	// Scope resolution — returns leaf OA IDs the user can access for an operation.
 	// Used by approval/drive services for O(1) scope-based data filtering.
 	ResolveAccessibleScopes(context.Context, *ResolveAccessibleScopesRequest) (*ResolveAccessibleScopesResponse, error)
@@ -267,6 +286,9 @@ func (UnimplementedPolicyReadServiceServer) GetChildren(context.Context, *GetChi
 }
 func (UnimplementedPolicyReadServiceServer) GetParents(context.Context, *GetParentsRequest) (*NodeList, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetParents not implemented")
+}
+func (UnimplementedPolicyReadServiceServer) GetAssociations(context.Context, *GetAssociationsRequest) (*AssociationList, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetAssociations not implemented")
 }
 func (UnimplementedPolicyReadServiceServer) ResolveAccessibleScopes(context.Context, *ResolveAccessibleScopesRequest) (*ResolveAccessibleScopesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ResolveAccessibleScopes not implemented")
@@ -478,6 +500,24 @@ func _PolicyReadService_GetParents_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PolicyReadService_GetAssociations_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetAssociationsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyReadServiceServer).GetAssociations(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyReadService_GetAssociations_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyReadServiceServer).GetAssociations(ctx, req.(*GetAssociationsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PolicyReadService_ResolveAccessibleScopes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ResolveAccessibleScopesRequest)
 	if err := dec(in); err != nil {
@@ -578,6 +618,10 @@ var PolicyReadService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetParents",
 			Handler:    _PolicyReadService_GetParents_Handler,
+		},
+		{
+			MethodName: "GetAssociations",
+			Handler:    _PolicyReadService_GetAssociations_Handler,
 		},
 		{
 			MethodName: "ResolveAccessibleScopes",

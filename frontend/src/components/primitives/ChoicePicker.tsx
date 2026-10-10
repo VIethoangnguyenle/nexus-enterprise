@@ -7,6 +7,8 @@ export interface Choice {
   /** Opaque key handed back to the caller. Never rendered. */
   id: string
   name: string
+  /** Muted second part in the list ("Phần cứng · 4 sẵn sàng"). Searched, not part of the pick. */
+  hint?: string
 }
 
 interface ChoicePickerProps {
@@ -44,7 +46,7 @@ export function ChoicePicker({
 
   const matches = useMemo(() => {
     const q = normalize(query)
-    return choices.filter((c) => !q || normalize(c.name).includes(q)).slice(0, LIMIT)
+    return choices.filter((c) => !q || normalize(c.name).includes(q) || normalize(c.hint ?? '').includes(q)).slice(0, LIMIT)
   }, [choices, query])
 
   const pick = (c: Choice) => {
@@ -142,6 +144,7 @@ export function ChoicePicker({
               >
                 <span className="text-ink-muted shrink-0" aria-hidden="true">{icon}</span>
                 <span className="truncate text-ink">{c.name}</span>
+                {c.hint && <span className="ml-auto pl-2 shrink-0 text-xs text-ink-muted">{c.hint}</span>}
               </div>
             ))
           )}

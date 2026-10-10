@@ -6,6 +6,8 @@ import { matchesPerson, type Person } from '../../lib/people'
 interface PeoplePickerProps {
   /** Accessible name of the search box, e.g. "Thêm người". */
   label: string
+  /** Id of a visible element that names the picker; used instead of `label` when set. */
+  labelledBy?: string
   /** Everyone who can be picked. */
   people: Person[]
   value: Person[]
@@ -29,7 +31,7 @@ const LIMIT = 6
  * pick, Esc closes the suggestions (and only them).
  */
 export function PeoplePicker({
-  label, people, value, onChange, exclude, max, placeholder, autoFocus,
+  label, labelledBy, people, value, onChange, exclude, max, placeholder, autoFocus,
 }: PeoplePickerProps) {
   const listId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
@@ -101,7 +103,8 @@ export function PeoplePicker({
           <input
             ref={inputRef}
             role="combobox"
-            aria-label={label}
+            aria-label={labelledBy ? undefined : label}
+            aria-labelledby={labelledBy}
             aria-expanded={showList}
             aria-controls={listId}
             aria-autocomplete="list"

@@ -22,10 +22,8 @@ const (
 	WorkspaceService_CreateWorkspace_FullMethodName   = "/workspace.WorkspaceService/CreateWorkspace"
 	WorkspaceService_ListWorkspaces_FullMethodName    = "/workspace.WorkspaceService/ListWorkspaces"
 	WorkspaceService_GetWorkspace_FullMethodName      = "/workspace.WorkspaceService/GetWorkspace"
-	WorkspaceService_InviteMember_FullMethodName      = "/workspace.WorkspaceService/InviteMember"
 	WorkspaceService_RemoveMember_FullMethodName      = "/workspace.WorkspaceService/RemoveMember"
 	WorkspaceService_ListMembers_FullMethodName       = "/workspace.WorkspaceService/ListMembers"
-	WorkspaceService_UpdateMemberRoles_FullMethodName = "/workspace.WorkspaceService/UpdateMemberRoles"
 	WorkspaceService_TransferOwnership_FullMethodName = "/workspace.WorkspaceService/TransferOwnership"
 	WorkspaceService_AddOwner_FullMethodName          = "/workspace.WorkspaceService/AddOwner"
 	WorkspaceService_RemoveOwner_FullMethodName       = "/workspace.WorkspaceService/RemoveOwner"
@@ -35,7 +33,6 @@ const (
 	WorkspaceService_CreateFolder_FullMethodName      = "/workspace.WorkspaceService/CreateFolder"
 	WorkspaceService_ListFolders_FullMethodName       = "/workspace.WorkspaceService/ListFolders"
 	WorkspaceService_DeleteFolder_FullMethodName      = "/workspace.WorkspaceService/DeleteFolder"
-	WorkspaceService_CreatePermission_FullMethodName  = "/workspace.WorkspaceService/CreatePermission"
 	WorkspaceService_ListPermissions_FullMethodName   = "/workspace.WorkspaceService/ListPermissions"
 	WorkspaceService_DeletePermission_FullMethodName  = "/workspace.WorkspaceService/DeletePermission"
 )
@@ -49,10 +46,8 @@ type WorkspaceServiceClient interface {
 	ListWorkspaces(ctx context.Context, in *ListWorkspacesRequest, opts ...grpc.CallOption) (*WorkspaceList, error)
 	GetWorkspace(ctx context.Context, in *GetWorkspaceRequest, opts ...grpc.CallOption) (*Workspace, error)
 	// Members
-	InviteMember(ctx context.Context, in *InviteMemberRequest, opts ...grpc.CallOption) (*Empty, error)
 	RemoveMember(ctx context.Context, in *RemoveMemberRequest, opts ...grpc.CallOption) (*Empty, error)
 	ListMembers(ctx context.Context, in *ListMembersRequest, opts ...grpc.CallOption) (*MemberList, error)
-	UpdateMemberRoles(ctx context.Context, in *UpdateMemberRolesRequest, opts ...grpc.CallOption) (*Empty, error)
 	// Ownership
 	TransferOwnership(ctx context.Context, in *TransferOwnershipRequest, opts ...grpc.CallOption) (*Empty, error)
 	AddOwner(ctx context.Context, in *AddOwnerRequest, opts ...grpc.CallOption) (*Empty, error)
@@ -64,7 +59,6 @@ type WorkspaceServiceClient interface {
 	CreateFolder(ctx context.Context, in *CreateFolderRequest, opts ...grpc.CallOption) (*Folder, error)
 	ListFolders(ctx context.Context, in *ListFoldersRequest, opts ...grpc.CallOption) (*FolderList, error)
 	DeleteFolder(ctx context.Context, in *DeleteFolderRequest, opts ...grpc.CallOption) (*Empty, error)
-	CreatePermission(ctx context.Context, in *CreatePermissionRequest, opts ...grpc.CallOption) (*Permission, error)
 	ListPermissions(ctx context.Context, in *ListPermissionsRequest, opts ...grpc.CallOption) (*PermissionList, error)
 	DeletePermission(ctx context.Context, in *DeletePermissionRequest, opts ...grpc.CallOption) (*Empty, error)
 }
@@ -107,16 +101,6 @@ func (c *workspaceServiceClient) GetWorkspace(ctx context.Context, in *GetWorksp
 	return out, nil
 }
 
-func (c *workspaceServiceClient) InviteMember(ctx context.Context, in *InviteMemberRequest, opts ...grpc.CallOption) (*Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, WorkspaceService_InviteMember_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *workspaceServiceClient) RemoveMember(ctx context.Context, in *RemoveMemberRequest, opts ...grpc.CallOption) (*Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Empty)
@@ -131,16 +115,6 @@ func (c *workspaceServiceClient) ListMembers(ctx context.Context, in *ListMember
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MemberList)
 	err := c.cc.Invoke(ctx, WorkspaceService_ListMembers_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *workspaceServiceClient) UpdateMemberRoles(ctx context.Context, in *UpdateMemberRolesRequest, opts ...grpc.CallOption) (*Empty, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Empty)
-	err := c.cc.Invoke(ctx, WorkspaceService_UpdateMemberRoles_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -237,16 +211,6 @@ func (c *workspaceServiceClient) DeleteFolder(ctx context.Context, in *DeleteFol
 	return out, nil
 }
 
-func (c *workspaceServiceClient) CreatePermission(ctx context.Context, in *CreatePermissionRequest, opts ...grpc.CallOption) (*Permission, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(Permission)
-	err := c.cc.Invoke(ctx, WorkspaceService_CreatePermission_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *workspaceServiceClient) ListPermissions(ctx context.Context, in *ListPermissionsRequest, opts ...grpc.CallOption) (*PermissionList, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(PermissionList)
@@ -276,10 +240,8 @@ type WorkspaceServiceServer interface {
 	ListWorkspaces(context.Context, *ListWorkspacesRequest) (*WorkspaceList, error)
 	GetWorkspace(context.Context, *GetWorkspaceRequest) (*Workspace, error)
 	// Members
-	InviteMember(context.Context, *InviteMemberRequest) (*Empty, error)
 	RemoveMember(context.Context, *RemoveMemberRequest) (*Empty, error)
 	ListMembers(context.Context, *ListMembersRequest) (*MemberList, error)
-	UpdateMemberRoles(context.Context, *UpdateMemberRolesRequest) (*Empty, error)
 	// Ownership
 	TransferOwnership(context.Context, *TransferOwnershipRequest) (*Empty, error)
 	AddOwner(context.Context, *AddOwnerRequest) (*Empty, error)
@@ -291,7 +253,6 @@ type WorkspaceServiceServer interface {
 	CreateFolder(context.Context, *CreateFolderRequest) (*Folder, error)
 	ListFolders(context.Context, *ListFoldersRequest) (*FolderList, error)
 	DeleteFolder(context.Context, *DeleteFolderRequest) (*Empty, error)
-	CreatePermission(context.Context, *CreatePermissionRequest) (*Permission, error)
 	ListPermissions(context.Context, *ListPermissionsRequest) (*PermissionList, error)
 	DeletePermission(context.Context, *DeletePermissionRequest) (*Empty, error)
 	mustEmbedUnimplementedWorkspaceServiceServer()
@@ -313,17 +274,11 @@ func (UnimplementedWorkspaceServiceServer) ListWorkspaces(context.Context, *List
 func (UnimplementedWorkspaceServiceServer) GetWorkspace(context.Context, *GetWorkspaceRequest) (*Workspace, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetWorkspace not implemented")
 }
-func (UnimplementedWorkspaceServiceServer) InviteMember(context.Context, *InviteMemberRequest) (*Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method InviteMember not implemented")
-}
 func (UnimplementedWorkspaceServiceServer) RemoveMember(context.Context, *RemoveMemberRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveMember not implemented")
 }
 func (UnimplementedWorkspaceServiceServer) ListMembers(context.Context, *ListMembersRequest) (*MemberList, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListMembers not implemented")
-}
-func (UnimplementedWorkspaceServiceServer) UpdateMemberRoles(context.Context, *UpdateMemberRolesRequest) (*Empty, error) {
-	return nil, status.Error(codes.Unimplemented, "method UpdateMemberRoles not implemented")
 }
 func (UnimplementedWorkspaceServiceServer) TransferOwnership(context.Context, *TransferOwnershipRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method TransferOwnership not implemented")
@@ -351,9 +306,6 @@ func (UnimplementedWorkspaceServiceServer) ListFolders(context.Context, *ListFol
 }
 func (UnimplementedWorkspaceServiceServer) DeleteFolder(context.Context, *DeleteFolderRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteFolder not implemented")
-}
-func (UnimplementedWorkspaceServiceServer) CreatePermission(context.Context, *CreatePermissionRequest) (*Permission, error) {
-	return nil, status.Error(codes.Unimplemented, "method CreatePermission not implemented")
 }
 func (UnimplementedWorkspaceServiceServer) ListPermissions(context.Context, *ListPermissionsRequest) (*PermissionList, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPermissions not implemented")
@@ -436,24 +388,6 @@ func _WorkspaceService_GetWorkspace_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkspaceService_InviteMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(InviteMemberRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WorkspaceServiceServer).InviteMember(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WorkspaceService_InviteMember_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkspaceServiceServer).InviteMember(ctx, req.(*InviteMemberRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _WorkspaceService_RemoveMember_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RemoveMemberRequest)
 	if err := dec(in); err != nil {
@@ -486,24 +420,6 @@ func _WorkspaceService_ListMembers_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkspaceServiceServer).ListMembers(ctx, req.(*ListMembersRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _WorkspaceService_UpdateMemberRoles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UpdateMemberRolesRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WorkspaceServiceServer).UpdateMemberRoles(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WorkspaceService_UpdateMemberRoles_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkspaceServiceServer).UpdateMemberRoles(ctx, req.(*UpdateMemberRolesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -670,24 +586,6 @@ func _WorkspaceService_DeleteFolder_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WorkspaceService_CreatePermission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(CreatePermissionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WorkspaceServiceServer).CreatePermission(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: WorkspaceService_CreatePermission_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WorkspaceServiceServer).CreatePermission(ctx, req.(*CreatePermissionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _WorkspaceService_ListPermissions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListPermissionsRequest)
 	if err := dec(in); err != nil {
@@ -744,20 +642,12 @@ var WorkspaceService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WorkspaceService_GetWorkspace_Handler,
 		},
 		{
-			MethodName: "InviteMember",
-			Handler:    _WorkspaceService_InviteMember_Handler,
-		},
-		{
 			MethodName: "RemoveMember",
 			Handler:    _WorkspaceService_RemoveMember_Handler,
 		},
 		{
 			MethodName: "ListMembers",
 			Handler:    _WorkspaceService_ListMembers_Handler,
-		},
-		{
-			MethodName: "UpdateMemberRoles",
-			Handler:    _WorkspaceService_UpdateMemberRoles_Handler,
 		},
 		{
 			MethodName: "TransferOwnership",
@@ -794,10 +684,6 @@ var WorkspaceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DeleteFolder",
 			Handler:    _WorkspaceService_DeleteFolder_Handler,
-		},
-		{
-			MethodName: "CreatePermission",
-			Handler:    _WorkspaceService_CreatePermission_Handler,
 		},
 		{
 			MethodName: "ListPermissions",

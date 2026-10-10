@@ -4,11 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
 	policypb "ngac-platform/proto/policy"
@@ -53,6 +56,12 @@ const (
 	otherOwner = "u-other-owner"
 	outsider   = "u-outsider"
 	target     = "u-target"
+	leaver     = "u-leaver"
+
+	assets1  = "oa-assets-1"
+	chat1    = "oa-channels-1"
+	roleRead = "ua-role-read"
+	roleEdit = "ua-role-edit"
 )
 
 type grant struct{ user, obj, op string }
@@ -63,6 +72,10 @@ type fakePolicyRead struct {
 	children    map[string][]*policypb.NGACNode
 	descendants map[string][]*policypb.NGACNode
 	ancestors   map[string][]*policypb.NGACNode
+	nodes       map[string]*policypb.NGACNode
+	parents     map[string][]*policypb.NGACNode
+	assocs      map[string][]*policypb.Association
+	assocErr    error
 	checkErr    error
 	ancErr      error
 	checks      []*policypb.CheckAccessRequest
@@ -94,11 +107,75 @@ func (f *fakePolicyRead) GetAncestors(_ context.Context, req *policypb.GetAncest
 	return &policypb.NodeList{Nodes: f.ancestors[req.NodeId]}, nil
 }
 
+func (f *fakePolicyRead) GetNode(_ context.Context, req *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if n, ok := f.nodes[req.NodeId]; ok {
+		return n, nil
+	}
+	return nil, status.Error(codes.NotFound, "node not found")
+}
+
+func (f *fakePolicyRead) GetParents(_ context.Context, req *policypb.GetParentsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	return &policypb.NodeList{Nodes: f.parents[req.NodeId]}, nil
+}
+
+func (f *fakePolicyRead) GetAssociations(_ context.Context, req *policypb.GetAssociationsRequest, _ ...grpc.CallOption) (*policypb.AssociationList, error) {
+	if f.assocErr != nil {
+		return nil, f.assocErr
+	}
+	return &policypb.AssociationList{Associations: f.assocs[req.UaId]}, nil
+}
+
 type fakePolicyWrite struct {
 	policypb.PolicyWriteServiceClient
-	mutations []string
-	assocs    []*policypb.CreateAssociationRequest
-	n         int
+	// src answers GetAssociations as the writer: by default what the read side has.
+	src          *fakePolicyRead
+	writerAssocs map[string][]*policypb.Association
+	// writer views that differ from the (stale) read side
+	writerChildren, writerDescendants, writerAncestors map[string][]*policypb.NGACNode
+	mutations                                          []string
+	assocs                                             []*policypb.CreateAssociationRequest
+	n                                                  int
+}
+
+func (f *fakePolicyWrite) GetAssociations(_ context.Context, req *policypb.GetAssociationsRequest, _ ...grpc.CallOption) (*policypb.AssociationList, error) {
+	if as, ok := f.writerAssocs[req.UaId]; ok {
+		return &policypb.AssociationList{Associations: as}, nil
+	}
+	if f.src == nil {
+		return &policypb.AssociationList{}, nil
+	}
+	return f.src.GetAssociations(context.Background(), req)
+}
+
+// Graph reads answer as the writer: by default what the read side has, unless a
+// test gives the writer its own fresher view.
+func (f *fakePolicyWrite) GetChildren(ctx context.Context, req *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	if ns, ok := f.writerChildren[req.NodeId]; ok {
+		return &policypb.NodeList{Nodes: ns}, nil
+	}
+	return f.src.GetChildren(ctx, req)
+}
+
+func (f *fakePolicyWrite) GetDescendants(ctx context.Context, req *policypb.GetDescendantsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	if ns, ok := f.writerDescendants[req.NodeId]; ok {
+		return &policypb.NodeList{Nodes: ns}, nil
+	}
+	return f.src.GetDescendants(ctx, req)
+}
+
+func (f *fakePolicyWrite) GetAncestors(ctx context.Context, req *policypb.GetAncestorsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	if ns, ok := f.writerAncestors[req.NodeId]; ok {
+		return &policypb.NodeList{Nodes: ns}, nil
+	}
+	return f.src.GetAncestors(ctx, req)
+}
+
+func (f *fakePolicyWrite) GetParents(ctx context.Context, req *policypb.GetParentsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	return f.src.GetParents(ctx, req)
+}
+
+func (f *fakePolicyWrite) GetNode(ctx context.Context, req *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return f.src.GetNode(ctx, req)
 }
 
 func (f *fakePolicyWrite) record(s string) { f.mutations = append(f.mutations, s) }
@@ -130,7 +207,22 @@ func (f *fakePolicyWrite) CreateAssociation(_ context.Context, req *policypb.Cre
 	return &policypb.Association{Id: "assoc"}, nil
 }
 
-type fakeWSStore struct{ ws map[string]*store.Workspace }
+func (f *fakePolicyWrite) RemoveAssociation(_ context.Context, req *policypb.RemoveAssociationRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
+	f.record("RemoveAssociation " + req.UaId + "->" + req.OaId)
+	return &policypb.Empty{}, nil
+}
+
+type fakeWSStore struct {
+	ws map[string]*store.Workspace
+	mu sync.Mutex
+}
+
+// WithOwnerLock serialises owner changes per process, as the real store does per workspace.
+func (f *fakeWSStore) WithOwnerLock(ctx context.Context, _ string, fn func(context.Context) error) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return fn(ctx)
+}
 
 func (f *fakeWSStore) Insert(_ context.Context, w *store.Workspace) error { f.ws[w.ID] = w; return nil }
 func (f *fakeWSStore) GetByID(_ context.Context, id string) (*store.Workspace, error) {
@@ -184,8 +276,12 @@ func (f *fakeDeptStore) DeleteDepartment(_ context.Context, id string) error {
 	f.mutations = append(f.mutations, "delete "+id)
 	return nil
 }
-func (f *fakeDeptStore) UpdateUserDepartment(_ context.Context, u string, _ *string) error {
-	f.mutations = append(f.mutations, "user-dept "+u)
+func (f *fakeDeptStore) UpdateUserDepartment(_ context.Context, tenant, u string, d *string) error {
+	dept := ""
+	if d != nil {
+		dept = *d
+	}
+	f.mutations = append(f.mutations, "user-dept "+tenant+" "+u+" "+dept)
 	return nil
 }
 func (f *fakeDeptStore) CountMembersByDepartment(_ context.Context, _ string) (int, error) {
@@ -235,13 +331,18 @@ func newFixture(t *testing.T) *fixture {
 		{Id: role1, Name: "Editor", NodeType: ngac.TypeUA, Properties: map[string]string{ngac.PropType: ngac.PropTypeRole}},
 		node(mgmt1, ngac.MgmtOAName(ws1), ngac.TypeOA),
 		node(docs1, ngac.DocumentsOAName(ws1), ngac.TypeOA),
+		node(chat1, ngac.ChannelsOAName(ws1), ngac.TypeOA),
+		node(assets1, ngac.AssetsOAName(ws1), ngac.TypeOA),
 		node(folder1, "Engineering", ngac.TypeOA),
+		{Id: roleRead, Name: ngac.RoleUAName("r-read"), NodeType: ngac.TypeUA, Properties: map[string]string{ngac.PropType: ngac.PropTypeRole, ngac.PropDisplayName: "Người đọc"}},
+		{Id: roleEdit, Name: ngac.RoleUAName("r-edit"), NodeType: ngac.TypeUA, Properties: map[string]string{ngac.PropType: ngac.PropTypeRole, ngac.PropDisplayName: "Biên tập"}},
 	}
 	pc1Desc := append([]*policypb.NGACNode{}, pc1Children...)
 	pc1Desc = append(pc1Desc,
 		node(owner, "owner", ngac.TypeU),
 		node(member, "member", ngac.TypeU),
 		node(target, "target", ngac.TypeU),
+		node(leaver, "leaver", ngac.TypeU),
 	)
 	pc2Children := []*policypb.NGACNode{
 		node(owners2, ngac.OwnersUAName(ws2), ngac.TypeUA),
@@ -258,10 +359,26 @@ func newFixture(t *testing.T) *fixture {
 		descendants: map[string][]*policypb.NGACNode{pc1: pc1Desc, pc2: pc2Children},
 		ancestors: map[string][]*policypb.NGACNode{
 			owner: inPC1, member: inPC1, inviter: inPC1, manager: inPC1, delegator: inPC1,
+			target: inPC1, leaver: inPC1,
 			otherOwner: inPC2,
 		},
+		// Every person the screens act on is a user node of ws-1, except the
+		// foreign owner, who belongs to ws-2.
+		nodes: map[string]*policypb.NGACNode{
+			owner: node(owner, "owner", ngac.TypeU), member: node(member, "member", ngac.TypeU),
+			target: node(target, "target", ngac.TypeU), leaver: node(leaver, "leaver", ngac.TypeU),
+			inviter: node(inviter, "inviter", ngac.TypeU), manager: node(manager, "manager", ngac.TypeU), delegator: node(delegator, "delegator", ngac.TypeU),
+			otherOwner: node(otherOwner, "other", ngac.TypeU), outsider: node(outsider, "outsider", ngac.TypeU),
+			role1: node(role1, "Editor", ngac.TypeUA), docs1: node(docs1, "docs", ngac.TypeOA),
+		},
+		parents: map[string][]*policypb.NGACNode{},
+		assocs: map[string][]*policypb.Association{
+			// What the roles confer: reading, or reading and writing, Documents.
+			roleRead: {{Id: "as-1", UaId: roleRead, OaId: docs1, Operations: []string{ngac.OpRead}}},
+			roleEdit: {{Id: "as-2", UaId: roleEdit, OaId: docs1, Operations: []string{ngac.OpRead, ngac.OpWrite}}},
+		},
 	}
-	write := &fakePolicyWrite{}
+	write := &fakePolicyWrite{src: read}
 	wsStore := &fakeWSStore{ws: map[string]*store.Workspace{
 		ws1: {ID: ws1, Name: "Acme", NGACPcID: pc1},
 		ws2: {ID: ws2, Name: "Globex", NGACPcID: pc2},
@@ -294,11 +411,8 @@ type adminCase struct {
 
 func adminCases() []adminCase {
 	return []adminCase{
-		{"InviteMember", ngac.OpInvite, func(ctx context.Context, s *domain.Service, c string) error {
-			return s.InviteMember(ctx, c, ws1, target)
-		}},
 		{"RemoveMember", ngac.OpInvite, func(ctx context.Context, s *domain.Service, c string) error {
-			return s.RemoveMember(ctx, c, ws1, target)
+			return s.RemoveMember(ctx, c, ws1, leaver)
 		}},
 		{"CreateRole", ngac.OpManage, func(ctx context.Context, s *domain.Service, c string) error {
 			_, err := s.CreateRole(ctx, c, ws1, "Reviewer")
@@ -313,13 +427,6 @@ func adminCases() []adminCase {
 		}},
 		{"DeleteFolder", ngac.OpManage, func(ctx context.Context, s *domain.Service, c string) error {
 			return s.DeleteFolder(ctx, c, ws1, folder1)
-		}},
-		{"CreatePermission", ngac.OpManage, func(ctx context.Context, s *domain.Service, c string) error {
-			_, err := s.CreatePermission(ctx, c, ws1, role1, docs1, []string{ngac.OpRead})
-			return err
-		}},
-		{"UpdateMemberRoles", ngac.OpManage, func(ctx context.Context, s *domain.Service, c string) error {
-			return s.UpdateMemberRoles(ctx, c, ws1, target, []string{role1})
 		}},
 		{"TransferOwnership", ngac.OpManage, func(ctx context.Context, s *domain.Service, c string) error {
 			return s.TransferOwnership(ctx, c, ws1, target)
@@ -404,8 +511,8 @@ func TestAdminOps_AllowWhenCallerHoldsOpOnMgmtOA(t *testing.T) {
 // The holder of exactly the required op (and nothing else) is enough.
 func TestAdminOps_AllowWithExactlyTheRequiredOp(t *testing.T) {
 	for _, tc := range adminCases() {
-		if tc.name == "CreatePermission" {
-			continue // also needs the granted ops on the target OA; covered below
+		if tc.name == "TransferOwnership" || tc.name == "RemoveOwner" {
+			continue // owner changes need to be an Owner, not only to hold manage; see the owner tests
 		}
 		holder := inviter
 		if tc.op == ngac.OpManage {
@@ -416,99 +523,6 @@ func TestAdminOps_AllowWithExactlyTheRequiredOp(t *testing.T) {
 			require.NoError(t, tc.call(context.Background(), f.svc, holder))
 		})
 	}
-}
-
-// ---------------------------------------------------------------------------
-// CreatePermission: delegation escalation and input validation.
-// ---------------------------------------------------------------------------
-
-func TestCreatePermission_RejectsGrantingOpCallerDoesNotHold(t *testing.T) {
-	f := newFixture(t)
-	// delegator holds manage on Mgmt (passes the admin gate) but only read on Documents.
-	_, err := f.svc.CreatePermission(context.Background(), delegator, ws1, role1, docs1, []string{ngac.OpManage})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, domain.ErrAccessDenied)
-	assert.Empty(t, f.write.assocs)
-}
-
-func TestCreatePermission_RejectsWholeRequestIfAnyOpNotHeld(t *testing.T) {
-	f := newFixture(t)
-	_, err := f.svc.CreatePermission(context.Background(), delegator, ws1, role1, docs1, []string{ngac.OpRead, ngac.OpWrite})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, domain.ErrAccessDenied)
-	assert.Empty(t, f.write.assocs)
-}
-
-func TestCreatePermission_AllowsDelegatingHeldOp(t *testing.T) {
-	f := newFixture(t)
-	p, err := f.svc.CreatePermission(context.Background(), delegator, ws1, role1, docs1, []string{ngac.OpRead})
-	require.NoError(t, err)
-	require.Len(t, f.write.assocs, 1)
-	assert.Equal(t, role1, f.write.assocs[0].UaId)
-	assert.Equal(t, docs1, f.write.assocs[0].OaId)
-	assert.Equal(t, []string{ngac.OpRead}, f.write.assocs[0].Operations)
-	assert.Equal(t, []string{ngac.OpRead}, p.Operations)
-
-	// The per-op check must target the OA being granted on, for the caller.
-	var sawTargetCheck bool
-	for _, c := range f.read.checks {
-		if c.ObjectNodeId == docs1 && c.Operation == ngac.OpRead && c.UserNodeId == delegator {
-			sawTargetCheck = true
-		}
-	}
-	assert.True(t, sawTargetCheck)
-}
-
-func TestCreatePermission_RejectsUnknownOperation(t *testing.T) {
-	f := newFixture(t)
-	_, err := f.svc.CreatePermission(context.Background(), owner, ws1, role1, docs1, []string{ngac.OpRead, "superuser"})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, domain.ErrInvalidInput)
-	assert.Empty(t, f.write.assocs)
-}
-
-func TestCreatePermission_RejectsEmptyOperations(t *testing.T) {
-	f := newFixture(t)
-	_, err := f.svc.CreatePermission(context.Background(), owner, ws1, role1, docs1, nil)
-	require.Error(t, err)
-	assert.ErrorIs(t, err, domain.ErrInvalidInput)
-	assert.Empty(t, f.write.assocs)
-}
-
-func TestCreatePermission_RejectsMissingUAOrOA(t *testing.T) {
-	f := newFixture(t)
-	_, err := f.svc.CreatePermission(context.Background(), owner, ws1, "", docs1, []string{ngac.OpRead})
-	assert.ErrorIs(t, err, domain.ErrInvalidInput)
-	_, err = f.svc.CreatePermission(context.Background(), owner, ws1, role1, "", []string{ngac.OpRead})
-	assert.ErrorIs(t, err, domain.ErrInvalidInput)
-	assert.Empty(t, f.write.assocs)
-}
-
-func TestCreatePermission_DeniesWhenPerOpCheckErrors(t *testing.T) {
-	f := newFixture(t)
-	calls := 0
-	f.read.grants[grant{owner, mgmt1, ngac.OpManage}] = true
-	// Fail every check after the admin gate.
-	wrapped := &erroringAfter{fakePolicyRead: f.read, after: 1, calls: &calls}
-	svc := domain.NewService(&fakeWSStore{ws: map[string]*store.Workspace{ws1: {ID: ws1, NGACPcID: pc1}}}, f.depts, wrapped, f.write, nil, nil)
-	_, err := svc.CreatePermission(context.Background(), owner, ws1, role1, docs1, []string{ngac.OpRead})
-	require.Error(t, err)
-	assert.ErrorIs(t, err, domain.ErrAccessDenied)
-	assert.Empty(t, f.write.assocs)
-}
-
-type erroringAfter struct {
-	*fakePolicyRead
-	after int
-	calls *int
-}
-
-func (e *erroringAfter) CheckAccess(ctx context.Context, req *policypb.CheckAccessRequest, opts ...grpc.CallOption) (*policypb.AccessDecision, error) {
-	*e.calls++
-	if *e.calls > e.after {
-		return nil, errors.New("policy unavailable")
-	}
-	return e.fakePolicyRead.CheckAccess(ctx, req, opts...)
 }
 
 // ---------------------------------------------------------------------------
@@ -530,9 +544,6 @@ func TestScoping_RejectsForeignNodesAndDepartments(t *testing.T) {
 		{"CreateFolder under foreign OA", func(ctx context.Context, s *domain.Service) error {
 			_, err := s.CreateFolder(ctx, owner, ws1, "x", folder2)
 			return err
-		}},
-		{"UpdateMemberRoles into foreign UA", func(ctx context.Context, s *domain.Service) error {
-			return s.UpdateMemberRoles(ctx, owner, ws1, target, []string{owners2})
 		}},
 		{"CreateDepartment under foreign parent", func(ctx context.Context, s *domain.Service) error {
 			_, err := s.CreateDepartment(ctx, owner, domain.CreateDepartmentInput{WorkspaceID: ws1, Name: "x", ParentID: "dept-ws2"})

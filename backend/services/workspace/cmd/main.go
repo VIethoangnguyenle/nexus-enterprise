@@ -125,7 +125,7 @@ func main() {
 	policyWriteClient := policypb.NewPolicyWriteServiceClient(policyConn)
 
 	wsStore := store.New(pool)
-	wsSvc := domain.NewService(wsStore, wsStore, policyReadClient, policyWriteClient, minioClient, driveClient)
+	wsSvc := domain.NewService(wsStore, wsStore, policyReadClient, policyWriteClient, minioClient, driveClient).WithDirectory(wsStore).WithInvitations(wsStore)
 	wsSrv := wgrpc.NewWorkspaceServer(wsSvc)
 	pb.RegisterWorkspaceServiceServer(srv, wsSrv)
 
