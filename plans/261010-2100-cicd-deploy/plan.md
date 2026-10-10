@@ -1,7 +1,7 @@
 ---
 title: "CI/CD deploy to the VPS"
 description: "Build images on GitHub Actions, push to GHCR, and deploy to 160.187.146.173 behind the shared Traefik at nexus.zaneng.xyz after a manual approval."
-status: in-progress
+status: done
 priority: P1
 branch: refactor/project-wide
 created: 2026-10-10
@@ -43,13 +43,19 @@ health check fails.
 - Moving Odysseus or OpenClaw.
 
 ## Acceptance criteria
-- [ ] `deploy.yml` produces and pushes every image tagged with the commit SHA.
-- [ ] The deploy job waits for approval, deploys, runs migrations after a backup, and passes a
+- [x] `deploy.yml` produces and pushes every image tagged with the commit SHA.
+- [x] The deploy job waits for approval, deploys, runs migrations after a backup, and passes a
       health check on https://nexus.zaneng.xyz.
 - [ ] A failing health check rolls back to the previous SHA.
-- [ ] Nothing in the Nexus stack publishes a host port; ufw unchanged.
+- [x] Nothing in the Nexus stack publishes a host port; ufw unchanged.
 
 ## Steps needing the user (outward-facing)
 - DNS record; GitHub `production` environment with required reviewer; repo secrets
   (`DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`); one-time server bootstrap (create `/opt/nexus`,
   `.env`, install the deploy public key); Google OAuth client / email sender for real sign-in.
+
+## Result (2026-10-10)
+First deploy of `d9817e4` approved and green: https://nexus.zaneng.xyz serves 200 with a Let's
+Encrypt certificate, http redirects to https, the 14 Nexus containers are healthy with no
+published ports, and `storage.nexus.zaneng.xyz` serves MinIO. The rollback path is in place but
+has not fired yet (the first deploy has no previous release to roll back to).
