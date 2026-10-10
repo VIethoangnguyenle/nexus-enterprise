@@ -148,3 +148,6 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
 14. **Quyền chia sẻ của thành viên:** **Đã chốt 2026-10-10** chia sẻ drive kiểm tra `share` (không còn
     `write`); thành viên được cấp `share` trên Documents và drive của channel (migration backfill).
     Người nhận share "Có thể sửa" không được chia sẻ tiếp.
+15. **Văn bản (editor):** **Đã chốt 2026-10-10** làm editor một người soạn + autosave + phát hiện xung đột
+    phiên bản ở vòng này; đồng soạn thảo realtime (CRDT/Yjs qua WebSocket, presence, con trỏ màu) là
+    phase riêng sau 05.
