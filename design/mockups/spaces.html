@@ -181,7 +181,7 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .convo { position: relative; min-height: 0; display: grid; }
 .stream { position: relative; overflow: auto; display: flex; flex-direction: column; padding: 8px 8px 20px; min-height: 0; }
 .stream > :first-child { margin-top: auto; }
-.m { position: relative; flex: none; display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; padding: 8px 14px 6px; border-radius: 10px; transition: background-color var(--duration-quick) var(--ease-out); }
+.m { position: relative; flex: none; display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; padding: 8px 14px 2px; border-radius: 10px; transition: background-color var(--duration-quick) var(--ease-out); }
 .m.cont { padding-top: 2px; }
 .m .gt { padding-top: 3px; text-align: center; font: 500 0.6875rem/1.5 var(--font-body); color: var(--color-ink-muted); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
 .m:hover .gt, .m:focus-within .gt, .m.hov .gt { opacity: 1; }
@@ -194,6 +194,10 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .txt { line-height: 1.55; width: fit-content; max-width: min(70ch, 85%); overflow-wrap: anywhere; margin-top: 2px; padding: 7px 12px; border-radius: 16px; background: var(--color-sunk); }
 .txt + .txt { margin-top: 4px; }
 .who + .txt { border-top-left-radius: 4px; }
+.txt .q { display: grid; gap: 2px; margin: 1px -6px 6px; padding: 7px 10px 8px; border-radius: 10px; background: var(--color-raised); font-size: 0.8125rem; line-height: 1.45; }
+.txt .q .qa { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.txt .q .qa svg { width: 12px; height: 12px; color: var(--color-accent); }
+.txt .q .qt { color: var(--color-ink-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 /* two sides: others on the left with avatar and name, yours on the right with neither */
 .m.mine { grid-template-columns: minmax(0, 1fr) 32px; }
 .m.mine .mc { grid-column: 1; grid-row: 1; align-items: flex-end; }
@@ -592,7 +596,7 @@ html.reduce .sk { animation: none; }
     </div>
     <label class="check"><input type="checkbox" id="reduce"> Giảm chuyển động</label>
   </div>
-  <nav class="toc" aria-label="Các màn"><a href="#home">Trang chủ</a><a href="#space">Luồng và thread</a><a href="#threads">Panel Thread</a><a href="#composer">Ô soạn và đính kèm</a><a href="#create">Tạo nhóm</a><a href="#members">Thành viên</a><a href="#browse">Duyệt nhóm</a></nav>
+  <nav class="toc" aria-label="Các màn"><a href="#home">Trang chủ</a><a href="#dm">Tin nhắn hai bên</a><a href="#space">Luồng và thread</a><a href="#threads">Panel Thread</a><a href="#composer">Ô soạn và đính kèm</a><a href="#create">Tạo nhóm</a><a href="#members">Thành viên</a><a href="#browse">Duyệt nhóm</a></nav>
 </header>
 
 <!-- ============================ HOME ============================ -->
@@ -717,10 +721,94 @@ html.reduce .sk { animation: none; }
   </ol>
 </section>
 
+<!-- ============================ DM: TWO-SIDED MESSAGES ============================ -->
+<section class="screen" id="dm" aria-labelledby="h-dm">
+  <div class="screen-head">
+    <h2 id="h-dm">2 · Tin nhắn trực tiếp: tin hai bên</h2>
+    <p>Tin của bạn nằm <b>bên phải</b> trong bong bóng màu accent, không avatar, không tên. Tin của người kia nằm <b>bên trái</b>, bong bóng xám, avatar và tên ở tin đầu mỗi cụm. Giờ nằm trên mỗi cụm tin. Nhóm dùng đúng bố cục này (§3).</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="dm-in">Lan nhắn tin mới</button>
+    <button class="btn sm" type="button" data-act="dm-out">Bạn gửi một tin</button>
+  </div>
+  <div class="scroll">
+    <div class="app" id="app-dm">
+      <aside class="side" aria-label="Điều hướng chính">
+        <div class="ws"><button class="ibtn tog" type="button" aria-label="Thu gọn menu chính" aria-expanded="true" data-act="rail-toggle"><svg class="i"><use href="#i-sidebar"/></svg></button><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div>
+        <nav class="nav">
+          <a href="#dm" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">3</span></a>
+          <a href="#dm"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a>
+          <a href="#dm"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a>
+          <a href="#dm"><svg class="i"><use href="#i-box"/></svg>Tài sản</a>
+          <a href="#dm"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a>
+        </nav>
+        <div class="nav"><a href="#dm"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a>
+          <div class="me"><span class="av" style="--p:var(--color-person-7)">TH<span class="on"></span></span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div></div>
+      </aside>
+      <div class="cnav">
+        <div class="top"><button class="newchat" type="button"><svg class="i"><use href="#i-pen"/></svg>Trò chuyện mới</button></div>
+        <div class="body">
+          <a class="rl" href="#home"><svg class="i s h"><use href="#i-home"/></svg><span class="t">Trang chủ</span><span class="pill count tnum">3</span></a>
+          <a class="rl" href="#home"><svg class="i s h"><use href="#i-at"/></svg><span class="t">Được nhắc tới</span></a>
+          <a class="rl" href="#home"><svg class="i s h"><use href="#i-star"/></svg><span class="t">Đã gắn sao</span></a>
+          <div class="sec"><button class="sec-t" type="button" aria-expanded="true" data-act="sec-toggle"><svg class="i s"><use href="#i-down"/></svg><span class="nm">Tin nhắn trực tiếp</span></button></div>
+          <div class="grp-b">
+            <a class="rl" href="#dm" aria-current="page"><span class="av s24" style="--p:var(--color-person-6)">TL<span class="on"></span></span><span class="t">Nguyễn Thu Lan</span></a>
+            <a class="rl unread" href="#dm"><span class="av s24" style="--p:var(--color-person-3)">HY</span><span class="t">Phạm Hải Yến</span><span class="pill count">1</span></a>
+            <a class="rl" href="#dm"><span class="av s24" style="--p:var(--color-person-1)">QV<span class="on"></span></span><span class="t">Lê Quang Vinh</span></a>
+          </div>
+          <div class="sec"><button class="sec-t" type="button" aria-expanded="true" data-act="sec-toggle"><svg class="i s"><use href="#i-down"/></svg><span class="nm">Nhóm</span></button></div>
+          <div class="grp-b">
+            <a class="rl unread" href="#space"><span class="sp s24" style="--p:var(--color-person-4)">Đ</span><span class="t">Đối soát giao dịch</span><span class="pill count">2</span></a>
+            <a class="rl" href="#space"><span class="sp s24" style="--p:var(--color-person-2)">V</span><span class="t">Vận hành chung</span></a>
+          </div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="chead">
+          <span class="av s40" style="--p:var(--color-person-6)">TL<span class="on"></span></span>
+          <div class="t"><h3>Nguyễn Thu Lan</h3><div class="sub">Kế toán viên · Đang hoạt động</div></div>
+          <div class="end">
+            <button class="ibtn" type="button" aria-label="Tìm trong cuộc trò chuyện"><svg class="i"><use href="#i-search"/></svg></button>
+            <button class="ibtn" type="button" aria-label="Thread" title="Thread"><svg class="i"><use href="#i-threads"/></svg></button>
+            <button class="ibtn" type="button" aria-label="Thông tin"><svg class="i"><use href="#i-info"/></svg></button>
+          </div>
+        </div>
+        <div class="convo"><div class="stream" id="dm-stream" role="log" aria-live="polite" aria-label="Tin nhắn với Nguyễn Thu Lan">
+            <div class="dd" role="separator">Hôm qua</div>
+            <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>18:55</time></div><div class="txt">Chị ơi, phí liên ngân hàng tháng này hạch toán vào đâu ạ?</div></div></div>
+            <div class="m cont"><time class="gt">18:55</time><div class="mc"><div class="txt">Em thấy kỳ trước để 6427 nhưng sổ chi nhánh lại ghi 6425.</div></div></div>
+            <div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>19:01</time></div><div class="txt"><span class="q"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-6)">TL</span>Nguyễn Thu Lan</span><span class="qt">Em thấy kỳ trước để 6427 nhưng sổ chi nhánh lại ghi 6425.</span></span>Vẫn 6427 nhé em, chi nhánh ghi nhầm, chị đã báo bên đó sửa.</div></div></div>
+            <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>19:11</time></div><div class="txt"><span class="q"><span class="qa"><svg class="i"><use href="#i-quote"/></svg>Bạn</span><span class="qt">Vẫn 6427 nhé em, chi nhánh ghi nhầm, chị đã báo bên đó sửa.</span></span>Dạ em sửa luôn trong biên bản ạ.</div></div></div>
+            <div class="m cont"><time class="gt">19:11</time><div class="mc"><div class="txt">Còn khoản hoàn tiền ngày 07/10 thì sao chị?</div></div></div>
+            <div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>19:45</time></div><div class="txt">Khoản đó chờ sao kê sáng mai, có rồi chị gửi em.</div></div></div>
+            <div class="m cont mine"><time class="gt">19:45</time><div class="mc"><div class="txt">Em nhắc chị lúc 9 giờ nhé 🙏</div><div class="reacts"><button class="react" type="button" aria-label="Thích, 1 người">👍 <b>1</b></button></div></div></div>
+            <div class="dd" role="separator">Hôm nay</div>
+            <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>08:58</time></div><div class="txt">Chị ơi, sao kê sáng nay ngân hàng gửi rồi ạ.</div><div class="att"><div class="file"><span class="fi pdf"><svg class="i"><use href="#i-file-text"/></svg></span><span class="fm"><b>sao-ke-10-10.pdf</b><small>PDF · 640 KB</small></span><button class="ibtn dl" type="button" aria-label="Tải xuống sao-ke-10-10.pdf"><svg class="i s"><use href="#i-download"/></svg></button></div></div></div></div>
+            <div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>09:02</time></div><div class="txt">Khớp rồi em, khoản hoàn tiền đã ghi có lại.</div></div></div>
+            <div class="m cont mine"><time class="gt">09:02</time><div class="mc"><div class="txt">Em đóng mục này trong biên bản giúp chị, cảm ơn em nhiều!</div></div></div>
+            <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>09:04</time></div><div class="txt">Dạ xong rồi ạ ✅</div></div></div>
+        </div></div>
+        <div class="composer">
+          <div class="fmt" role="toolbar" aria-label="Định dạng" data-fill="fmt" hidden></div>
+          <div class="cin ph">Tin nhắn cho Nguyễn Thu Lan</div>
+          <div class="cbar"><span class="cl" data-fill="ctools"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button" disabled><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Hai bên</b>: bạn bên phải (bong bóng <code>--color-accent-wash</code>, không avatar, không tên), người kia bên trái (bong bóng <code>--color-sunk</code>, avatar 32 và tên ở tin đầu cụm). Bong bóng co theo chữ, rộng tối đa 85% cột tin; góc phía người gửi của bong bóng đầu cụm vuông hơn (4px).</li>
+    <li><b>Cụm tin</b>: cùng người trong 5 phút thì xếp sát nhau, chỉ tin đầu có giờ (và tên, avatar với người kia). Trỏ chuột vào tin sau thì giờ hiện ở lề ngoài.</li>
+    <li><b>Trích dẫn</b> <span class="wave" style="margin:0">đợt 3</span>: khối nhỏ nằm trong bong bóng, có tên người được trích và tối đa 2 dòng; bấm vào cuộn tới tin gốc.</li>
+    <li>Ảnh, tệp, cảm xúc và tóm tắt thread nằm ngoài bong bóng, bám theo bên của tin. Hover actions của tin bạn mở ở góc trái.</li>
+  </ol>
+</section>
+
 <!-- ============================ SPACE: IN-LINE STREAM ============================ -->
 <section class="screen" id="space" aria-labelledby="h-space">
   <div class="screen-head">
-    <h2 id="h-space">2 · Nhóm: luồng in-line và thread</h2>
+    <h2 id="h-space">3 · Nhóm: luồng in-line và thread</h2>
     <p>Tin xếp theo thời gian như Google Chat. Tin liền nhau của cùng một người trong 5 phút được gom lại; trả lời nằm trong thread của từng tin, luồng chính chỉ hiện một hàng tóm tắt. Mở nhóm có tin chưa đọc thì luồng dừng ở vạch “Tin mới”.</p>
   </div>
   <div class="demo"><span class="k">Demo</span>
@@ -851,7 +939,7 @@ html.reduce .sk { animation: none; }
 <!-- ============================ THREADS PANEL ============================ -->
 <section class="screen" id="threads" aria-labelledby="h-threads">
   <div class="screen-head">
-    <h2 id="h-threads">3 · Panel Thread của nhóm</h2>
+    <h2 id="h-threads">4 · Panel Thread của nhóm</h2>
     <p>Nút Thread ở header mở danh sách mọi thread trong nhóm, mới trả lời nhất ở trên, lọc Tất cả, Đang theo dõi, Chưa đọc. Badge trên nút đếm thread bạn theo dõi có tin mới.</p>
   </div>
   <div class="demo"><span class="k">Demo</span>
@@ -941,7 +1029,7 @@ html.reduce .sk { animation: none; }
 <!-- ============================ COMPOSER + ATTACHMENTS ============================ -->
 <section class="screen" id="composer" aria-labelledby="h-composer">
   <div class="screen-head">
-    <h2 id="h-composer">4 · Ô soạn tin: định dạng, đính kèm, trình xem ảnh</h2>
+    <h2 id="h-composer">5 · Ô soạn tin: định dạng, đính kèm, trình xem ảnh</h2>
     <p>Tệp chờ trong ô soạn và đi cùng chữ trong <b>một</b> tin, như Google Chat. Nút A bật thanh định dạng. Ảnh trong tin hiện thành lưới; bấm ảnh để mở trình xem, dùng phím ← → và Esc.</p>
   </div>
   <div class="demo"><span class="k">Demo</span>
@@ -1040,7 +1128,7 @@ html.reduce .sk { animation: none; }
 <!-- ============================ CREATE ============================ -->
 <section class="screen" id="create" aria-labelledby="h-create">
   <div class="screen-head">
-    <h2 id="h-create">5 · Tạo nhóm</h2>
+    <h2 id="h-create">6 · Tạo nhóm</h2>
     <p>Hộp thoại một bước: biểu tượng và tên, mô tả, thêm người bằng tìm kiếm (không bao giờ nhập mã), quyền truy cập và kiểu nhóm.</p>
   </div>
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="create-open">Mở hộp thoại</button></div>
@@ -1087,7 +1175,7 @@ html.reduce .sk { animation: none; }
 <!-- ============================ MEMBERS ============================ -->
 <section class="screen" id="members" aria-labelledby="h-members">
   <div class="screen-head">
-    <h2 id="h-members">6 · Thành viên</h2>
+    <h2 id="h-members">7 · Thành viên</h2>
     <p>Panel phải của nhóm: tìm, thêm người, đổi vai trò và xoá khỏi nhóm từ menu của từng người.</p>
   </div>
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="member-menu">Mở menu của Lê Quang Vinh</button><button class="btn sm" type="button" data-act="member-remove">Xoá Vinh khỏi nhóm</button></div>
@@ -1128,7 +1216,7 @@ html.reduce .sk { animation: none; }
 <!-- ============================ BROWSE ============================ -->
 <section class="screen" id="browse" aria-labelledby="h-browse">
   <div class="screen-head">
-    <h2 id="h-browse">7 · Duyệt nhóm <span class="need">cần backend</span></h2>
+    <h2 id="h-browse">8 · Duyệt nhóm <span class="need">cần backend</span></h2>
     <p>Danh sách nhóm mở trong khối mà bạn chưa tham gia. Cần API liệt kê nhóm “mọi người có thể tham gia” và API tự tham gia.</p>
   </div>
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="join">Tham gia “Kiểm soát nội bộ”</button></div>
@@ -1623,6 +1711,15 @@ html.reduce .sk { animation: none; }
     exitThen(vw, 'exit', function () { vw.hidden = true; document.body.style.overflow = ''; if (V.from) V.from.focus({ preventScroll: true }); });
   }
 
+  // ---------- §2 DM: two sides ----------
+  var dmS = $('dm-stream'), dmIn = 0, dmOut = 0;
+  dmS.scrollTop = dmS.scrollHeight;
+  var DM_IN = ['Chị ơi chiều nay chị có ở văn phòng không ạ?', 'Em gửi bản biên bản đã sửa vào Tài liệu rồi ạ.'];
+  var DM_OUT = ['Chị có, 3 giờ em qua nhé.', 'Ok em, chị xem ngay.'];
+  function dmAppend(html) {
+    var n = insertAnimated(dmS, html); addHact(dmS); dmS.scrollTo({ top: dmS.scrollHeight, behavior: sb() }); return n;
+  }
+
   // ---------- main sidebar: rail ----------
   // wrap bare nav labels so the rail can hide them while the link keeps its accessible name
   document.querySelectorAll('.side .nav a').forEach(function (a) {
@@ -1715,6 +1812,15 @@ html.reduce .sk { animation: none; }
       flipMoveToTop(feed, c); trace(c, 3);
       var hc = $('home-count'); hc.textContent = String(Number(hc.textContent) + 1);
       setTimeout(function () { var t = c.querySelector('.tag'); if (t) t.remove(); }, 2400);
+    },
+    'dm-in': function () {
+      var t = DM_IN[dmIn++ % DM_IN.length];
+      var n = dmAppend('<div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>09:15</time></div><div class="txt">' + esc(t) + '</div></div></div>');
+      trace(n, 6);
+    },
+    'dm-out': function () {
+      var t = DM_OUT[dmOut++ % DM_OUT.length];
+      dmAppend('<div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>09:16</time></div><div class="txt">' + esc(t) + '</div></div></div>');
     },
     'rail-toggle': function (b) {
       var app = b.getAttribute('data-app') ? $(b.getAttribute('data-app')) : b.closest('.app');

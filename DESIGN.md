@@ -138,7 +138,7 @@ Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một
   **Tin nhắn · Tài liệu · Phê duyệt · Tài sản · Danh bạ**, đáy: **Thông báo** (mở NotificationPanel,
   §6), **Quản trị** (khi có quyền),
   **Cài đặt**, người dùng hiện tại. Tài sản nằm trong shell này, không có layout riêng.
-- **Thu gọn sidebar (rail 64px)** (mockup `spaces.html` §2, nút "Thu gọn/mở menu chính"): IconButton
+- **Thu gọn sidebar (rail 64px)** (mockup `spaces.html` §3, nút "Thu gọn/mở menu chính"): IconButton
   "Thu gọn menu chính" (icon khung có cột trái) ở cuối hàng workspace, `aria-expanded`. Thu gọn: cột còn
   64px, chỉ icon 20; logo workspace và nút mở rộng xếp dọc ở đầu; avatar người dùng ở đáy; số chưa đọc
   thành badge 16 trên góc icon (viền 2px màu sidebar); tên mục hiện bằng tooltip, tên vẫn là accessible
@@ -268,7 +268,7 @@ Tin nhắn trực tiếp · Nhóm · "Duyệt nhóm" · "Tạo mục".
   Nhóm, toast "Đã xoá mục “…”" có **Hoàn tác** (5s) khôi phục mục, vị trí và các cuộc trò chuyện.
 - **Mobile:** tab Tin nhắn dùng cùng thứ tự và cùng mục; menu ⋯ thành sheet đáy.
 
-### Chat: luồng in-line, thread, ô soạn (mockup `design/mockups/spaces.html` §2–§4)
+### Chat: luồng in-line, thread, ô soạn (mockup `design/mockups/spaces.html` §2–§5; §2 là tin nhắn trực tiếp với tin hai bên)
 
 Nhóm và tin nhắn trực tiếp dùng **chung một mô hình in-line threading** như Google Chat. Không có thẻ chủ đề:
 mỗi tin là một hàng trong luồng theo thời gian; tin nào có trả lời thì có hàng tóm tắt thread ngay dưới. Enter
@@ -284,7 +284,9 @@ này thì cái kia đóng.
   đầu nhóm là 4 (trên trái với người khác, trên phải với bạn). `code` và khối code trong bong bóng nền
   `--color-base`. Đính kèm (lưới ảnh, thẻ tệp), cảm xúc và hàng tóm tắt thread nằm ngoài bong bóng, bám
   theo bên của tin. Hàng tin padding 8 × 14, không tô nền khi hover (bong bóng đã đủ khối); lớp phủ
-  realtime (§7) vẫn phủ cả hàng. Tin đã ghim có nhãn "Đã ghim" (icon 12) sau giờ. Áp dụng như nhau trong
+  realtime (§7) vẫn phủ cả hàng. Tin đã ghim có nhãn "Đã ghim" (icon 12) sau giờ. Khoảng cách giữa hai bong bóng
+  cùng cụm là 4px. Trích dẫn (đợt 3) là khối `--color-raised` radius 10 nằm trong bong bóng: tên người được trích +
+  tối đa 2 dòng, bấm thì cuộn tới tin gốc. Áp dụng như nhau trong
   panel thread và tin nhắn trực tiếp.
 - **Gom tin:** tin liền sau của **cùng người gửi** trong **≤ 5 phút** kể từ tin trước của họ thì ẩn avatar và
   tên, padding trên 2; giờ của dòng đó hiện ở lề ngoài (cột avatar bên trái với người khác, cột 32 bên phải
