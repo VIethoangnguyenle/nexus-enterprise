@@ -170,7 +170,9 @@ Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một
     "Thông báo" · Đóng, sheet giữ cao 85%) · divider `--color-line` ·
     **Đăng xuất**. Hàng đổi workspace thay nội dung sheet bằng danh sách workspace người đó vào
     được (tên + vai trò, dấu tích ở workspace đang mở, nút quay lại); chọn một workspace gắn lại
-    phiên vào workspace đó, làm mới dữ liệu rồi đóng sheet.
+    phiên vào workspace đó, làm mới dữ liệu rồi đóng sheet. Có lời mời đang chờ thì cuối danh sách có
+    hàng "Lời mời đang chờ (N)" dẫn tới `/workspace-select` (nơi chấp nhận hoặc từ chối); danh sách đổi
+    workspace của sidebar cũng có hàng đó.
   - *Hành vi:* modal đầy đủ (focus trap, focus vào hàng đầu khi mở, trả focus về nút Thêm, nền sau
     inert). Đóng bằng Esc, chạm scrim, nút Đóng, hoặc kéo tay nắm xuống quá 25% chiều cao hay vuốt
     nhanh. Chọn một mục điều hướng cũng đóng. Chuyển động theo §7: scrim fade 220ms, sheet

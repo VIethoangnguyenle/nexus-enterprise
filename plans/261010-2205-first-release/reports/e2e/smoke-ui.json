@@ -1,0 +1,38 @@
+[
+  {
+    "flow": "smoke-ui",
+    "id": "owner signs in and opens Quản trị (roles and permission editor)",
+    "ok": true,
+    "detail": "roles listed"
+  },
+  {
+    "flow": "smoke-ui",
+    "id": "role panel shows the permission grid for Quản lý",
+    "ok": true,
+    "detail": "grid shown"
+  },
+  {
+    "flow": "smoke-ui",
+    "id": "users screen lists the people with department and roles",
+    "ok": true,
+    "detail": "users listed"
+  },
+  {
+    "flow": "smoke-ui",
+    "id": "approval screen lists the template and the routed request; detail names the actors",
+    "ok": true,
+    "detail": "approval content"
+  },
+  {
+    "flow": "smoke-ui",
+    "id": "asset types screen lists the new type",
+    "ok": true,
+    "detail": "type listed"
+  },
+  {
+    "flow": "smoke-ui",
+    "id": "member sees a file shared with him under \"Được chia sẻ với tôi\" and can download it",
+    "ok": true,
+    "detail": "shared list shows the file (1)"
+  }
+]

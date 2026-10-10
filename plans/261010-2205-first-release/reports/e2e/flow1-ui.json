@@ -1,0 +1,44 @@
+[
+  {
+    "flow": "flow1-signin-workspace",
+    "id": "OTP sign-in by UI (fixed test code)",
+    "ok": true,
+    "detail": "http://localhost:18080/workspace-select"
+  },
+  {
+    "flow": "flow1-signin-workspace",
+    "id": "first-time profile step (/register) completes",
+    "ok": true,
+    "detail": "http://localhost:18080/workspace-select"
+  },
+  {
+    "flow": "flow1-signin-workspace",
+    "id": "create workspace refused until email is verified (explained, no create)",
+    "ok": true,
+    "detail": "verify gate shown"
+  },
+  {
+    "flow": "flow1-signin-workspace",
+    "id": "email verified via SQL (no SMTP/Google on this stack)",
+    "ok": true,
+    "detail": "UPDATE users SET email_verified_at"
+  },
+  {
+    "flow": "flow1-signin-workspace",
+    "id": "create workspace by name only",
+    "ok": true,
+    "detail": "http://localhost:18080/channels?ws=97fcbf19-6fe3-4b2e-b8ef-e3a637e4c108"
+  },
+  {
+    "flow": "flow1-signin-workspace",
+    "id": "workspace home shows #general and the new name",
+    "ok": true,
+    "detail": "ok"
+  },
+  {
+    "flow": "flow1-signin-workspace",
+    "id": "workspace selection screen lists the workspace",
+    "ok": true,
+    "detail": "ok"
+  }
+]

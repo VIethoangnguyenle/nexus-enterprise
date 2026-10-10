@@ -1,0 +1,11 @@
+HTTP/2 200 
+accept-ranges: bytes
+content-type: text/html
+date: Sat, 10 Oct 2026 15:10:20 GMT
+etag: "6aca5115-74b"
+last-modified: Sat, 10 Oct 2026 14:52:05 GMT
+server: nginx/1.31.6
+x-content-type-options: nosniff
+x-frame-options: SAMEORIGIN
+content-length: 1867
+

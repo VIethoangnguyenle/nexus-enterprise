@@ -1,0 +1,134 @@
+[
+  {
+    "flow": "drive",
+    "id": "create file returns presigned upload_url",
+    "ok": true,
+    "detail": "201"
+  },
+  {
+    "flow": "drive",
+    "id": "PUT to presigned URL through edge (storage host) -> 200",
+    "ok": true,
+    "detail": "200 "
+  },
+  {
+    "flow": "drive",
+    "id": "confirm upload",
+    "ok": true,
+    "detail": "200 {\"id\":\"4a19d2af-b469-46f6-bdaf-7dea87d6dae1\",\"workspace_id\":\"a346e92e-fc46-459f-8c40-3f439224ab26\",\"drive_context\":\"workspace\",\"item_type\":\"file\",\"name\":\"hop-dong.pdf\",\"mime_type\":\"application/pdf\",\"size_bytes\":2048,\"object_key\":\"drive/4a19d2af-b469-46f6-bdaf-7dea87d6dae1/hop-dong.pdf\",\"ngac_node_id"
+  },
+  {
+    "flow": "drive",
+    "id": "owner gets download URL",
+    "ok": true,
+    "detail": "200 {\"download_url\":\"http://storage.localhost:18080/ws-a346e92e-fc46-459f-8c40-3f439224ab26/drive/4a19d2af-b469-46f6-bdaf-7dea87d6dae1/hop-dong.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=e2e32741fd598c9%2F20261010%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20261010T151540Z&X-Amz-Expires=900&X"
+  },
+  {
+    "flow": "drive",
+    "id": "download bytes match upload (2048)",
+    "ok": true,
+    "detail": "200 len=2048"
+  },
+  {
+    "flow": "drive",
+    "id": "folder create (root and child)",
+    "ok": true,
+    "detail": "201/201 {\"id\":\"467efdb6-d156-4709-8641-bc340eb9e554\",\"workspace_id\":\"a346e92e-fc46-459f-8c40-3f439224ab26\",\"drive_context\":\"workspace\",\"item_type\":\"folder\",\"name\":\"Dự án A\",\"ngac_node_id\":\"e19ec851-c051-4de1-af9c-adb119e98f80\",\"owner_id\":\"6562db98-a405-441c-9ddc-86a5466985c7\",\"status\":\"active\",\"created_at\":"
+  },
+  {
+    "flow": "drive",
+    "id": "folder rename",
+    "ok": true,
+    "detail": "200 {\"id\":\"fd0290b8-c552-4d40-a5d8-7b1730e1bf8b\",\"workspace_id\":\"a346e92e-fc46-459f-8c40-3f439224ab26\",\"drive_context\":\"workspace\",\"parent_id\":\"467efdb6-d156-4709-8641-bc340eb9e554\",\"item_type\":\"folder\",\"name\":\"Con B đổi tên\",\"ngac_node_id\":\"98ebeeab-0dd0-449a-9bca-07abc55dea1b\",\"owner_id\":\"6562db98-a40"
+  },
+  {
+    "flow": "drive",
+    "id": "move folder into itself refused",
+    "ok": true,
+    "detail": "400 {\"message\":\"a folder cannot be moved into itself or one of its subfolders\"}"
+  },
+  {
+    "flow": "drive",
+    "id": "move folder into its own descendant refused",
+    "ok": true,
+    "detail": "400 {\"message\":\"a folder cannot be moved into itself or one of its subfolders\"}"
+  },
+  {
+    "flow": "drive",
+    "id": "move child folder back to root",
+    "ok": true,
+    "detail": "200 {\"id\":\"fd0290b8-c552-4d40-a5d8-7b1730e1bf8b\",\"workspace_id\":\"a346e92e-fc46-459f-8c40-3f439224ab26\",\"drive_context\":\"workspace\",\"item_type\":\"folder\",\"name\":\"Con B đổi tên\",\"ngac_node_id\":\"98ebeeab-0dd0-449a-9bca-07abc55dea1b\",\"owner_id\":\"6562db98-a405-441c-9ddc-86a5466985c7\",\"status\":\"active\",\"create"
+  },
+  {
+    "flow": "drive",
+    "id": "share to M3 with write (Có thể sửa)",
+    "ok": true,
+    "detail": "201 {\"id\":\"a1338a10-318c-4a14-9787-bfc09c43fb8e\",\"drive_item_id\":\"4a19d2af-b469-46f6-bdaf-7dea87d6dae1\",\"share_type\":\"user\",\"target_ngac_id\":\"e9b168f9-b0a3-4b79-b8f3-28d7e9026fd0\",\"target_label\":\"e2e-m3-mv2jdhpo.example\",\"operations\":[\"read\",\"write\"],\"created_at\":{\"seconds\":1791645340,\"nanos\":916131975}"
+  },
+  {
+    "flow": "drive",
+    "id": "grantee M3 can read the file",
+    "ok": true,
+    "detail": "200 {\"id\":\"4a19d2af-b469-46f6-bdaf-7dea87d6dae1\",\"workspace_id\":\"a346e92e-fc46-459f-8c40-3f439224ab26\",\"drive_context\":\"workspace\",\"item_type\":\"file\",\"name\":\"hop-dong.pdf\",\"mime_type\":\"application/pdf\",\"size_bytes\":2048,\"object_key\":\"drive/4a19d2af-b469-46f6-bdaf-7dea87d6dae1/hop-dong.pdf\",\"ngac_node_id"
+  },
+  {
+    "flow": "drive",
+    "id": "grantee M3 can download",
+    "ok": true,
+    "detail": "200 {\"download_url\":\"http://storage.localhost:18080/ws-a346e92e-fc46-459f-8c40-3f439224ab26/drive/4a19d2af-b469-46f6-bdaf-7dea87d6dae1/hop-dong.pdf?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=e2e32741fd598c9%2F20261010%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20261010T151541Z&X-Amz-Expires=900&X"
+  },
+  {
+    "flow": "drive",
+    "id": "workspace member M4 reads workspace-root file (spec drive-tree-navigation:103 default)",
+    "ok": true,
+    "detail": "200"
+  },
+  {
+    "flow": "drive",
+    "id": "shared-with-me lists the file for M3",
+    "ok": true,
+    "detail": "200 {\"items\":[{\"id\":\"4a19d2af-b469-46f6-bdaf-7dea87d6dae1\",\"workspace_id\":\"a346e92e-fc46-459f-8c40-3f439224ab26\",\"drive_context\":\"workspace\",\"item_type\":\"file\",\"name\":\"hop-dong.pdf\",\"mime_type\":\"application/pdf\",\"size_bytes\":2048,\"object_key\":\"drive/4a19d2af-b469-46f6-bdaf-7dea87d6dae1/hop-dong.pdf\",\"ng"
+  },
+  {
+    "flow": "drive",
+    "id": "trash folder (soft delete)",
+    "ok": true,
+    "detail": "200 {\"status\":\"trashed\"}"
+  },
+  {
+    "flow": "drive",
+    "id": "undo: restore from trash",
+    "ok": true,
+    "detail": "200 {\"id\":\"fd0290b8-c552-4d40-a5d8-7b1730e1bf8b\",\"workspace_id\":\"a346e92e-fc46-459f-8c40-3f439224ab26\",\"drive_context\":\"workspace\",\"item_type\":\"folder\",\"name\":\"Con B đổi tên\",\"ngac_node_id\":\"98ebeeab-0dd0-449a-9bca-07abc55dea1b\",\"owner_id\":\"6562db98-a405-441c-9ddc-86a5466985c7\",\"status\":\"active\",\"create"
+  },
+  {
+    "flow": "drive",
+    "id": "file over quota -> 413 (at create or confirm)",
+    "ok": true,
+    "detail": "413 {\"message\":\"storage quota exceeded\",\"reason\":\"quota_exceeded\"}"
+  },
+  {
+    "flow": "drive",
+    "id": "quota endpoint answers",
+    "ok": true,
+    "detail": "200 {\"workspace_id\":\"a346e92e-fc46-459f-8c40-3f439224ab26\",\"max_bytes\":1000,\"used_bytes\":2048,\"max_files\":-1,\"used_files\":1}"
+  },
+  {
+    "flow": "drive",
+    "id": "foreign folder by id refused (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied\"}"
+  },
+  {
+    "flow": "drive",
+    "id": "foreign-workspace drive listing refused (403)",
+    "ok": false,
+    "detail": "foreign=200 {} | nonexistent ws=200 {}"
+  },
+  {
+    "flow": "drive",
+    "id": "tenant-B user cannot read tenant-A file by id (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied\"}"
+  }
+]

@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { authApi } from '../api/auth'
+import { resetArrivals } from '../lib/notification-arrivals'
 import { queryClient } from '../lib/query-client'
 import { tenantIdFromToken, useAuthStore } from '../stores/auth.store'
 import { useDriveStore } from '../stores/drive.store'
@@ -29,6 +30,8 @@ export function moduleRootOf(pathname: string): ModuleRoot {
  */
 export function resetTenantScopedState() {
   queryClient.clear()
+  // Pending toasts and washes belong to the workspace being left.
+  resetArrivals()
   useDriveStore.setState({ selectedItemId: null, expandedFolders: new Set<string>() })
 }
 

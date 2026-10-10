@@ -285,8 +285,8 @@ func TestCreateRole_FailedProvisioningAnnouncesNothing(t *testing.T) {
 
 func TestAcceptInvitation_AnnouncesTheNewMemberOnce(t *testing.T) {
 	f := newInviteFixture(t)
+	id := f.invite(t, inviter, domain.InviteInput{}) // before the probe: inviting announces too
 	p := withProbe(f.adminFixture)
-	id := f.invite(t, inviter, domain.InviteInput{})
 
 	_, err := f.svc.AcceptInvitation(ctx(), newbieUser, newbie, id)
 	require.NoError(t, err)
@@ -297,8 +297,8 @@ func TestAcceptInvitation_AnnouncesTheNewMemberOnce(t *testing.T) {
 
 func TestAcceptInvitation_RefusedOrUndoneAnnouncesNothing(t *testing.T) {
 	f := newInviteFixture(t)
+	id := f.invite(t, inviter, domain.InviteInput{}) // before the probe: inviting announces too
 	p := withProbe(f.adminFixture)
-	id := f.invite(t, inviter, domain.InviteInput{})
 
 	_, err := f.svc.AcceptInvitation(ctx(), "someone-else", newbie, id)
 	require.Error(t, err)

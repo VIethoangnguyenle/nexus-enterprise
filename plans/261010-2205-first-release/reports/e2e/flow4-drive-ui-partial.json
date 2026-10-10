@@ -1,0 +1,20 @@
+[
+  {
+    "flow": "flow4-drive-ui",
+    "id": "owner signs in (UI)",
+    "ok": true,
+    "detail": "http://localhost:18080/drive?ws=ecedcec2-3ca5-480f-844b-dcee07e3ea7a"
+  },
+  {
+    "flow": "flow4-drive-ui",
+    "id": "upload a file through the presigned URL (UI input)",
+    "ok": true,
+    "detail": "listed"
+  },
+  {
+    "flow": "flow4-drive-ui",
+    "id": "share the file to M3 with \"Có thể sửa\"",
+    "ok": true,
+    "detail": "shared with write"
+  }
+]

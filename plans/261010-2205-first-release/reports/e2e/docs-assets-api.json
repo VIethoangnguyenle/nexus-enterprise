@@ -1,0 +1,146 @@
+[
+  {
+    "flow": "documents",
+    "id": "create text document",
+    "ok": true,
+    "detail": "201 {\"id\":\"77d01996-8294-4ac8-99e2-5a6b975356e0\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"title\":\"Báo cáo tuần\",\"content\":\"\",\"version\":1,\"status\":\"draft\",\"owner_id\":\"99b4ff50-2fda-4bb4-a791-c55ee63835b5\",\"owner_name\":\"Olivia Owner\",\"can_write\":true,\"created_at\":\"2026-10-10T15:19:41.061517Z"
+  },
+  {
+    "flow": "documents",
+    "id": "owner reads document with version",
+    "ok": true,
+    "detail": "200 {\"id\":\"77d01996-8294-4ac8-99e2-5a6b975356e0\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"title\":\"Báo cáo tuần\",\"content\":\"\",\"version\":1,\"status\":\"draft\",\"owner_id\":\"99b4ff50-2fda-4bb4-a791-c55ee63835b5\",\"owner_name\":\"Olivia Owner\",\"can_write\":true,\"created_at\":\"2026-10-10T15:19:41.061517Z"
+  },
+  {
+    "flow": "documents",
+    "id": "autosave from tab 1 accepted",
+    "ok": true,
+    "detail": "200 {\"id\":\"77d01996-8294-4ac8-99e2-5a6b975356e0\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"title\":\"Báo cáo tuần\",\"content\":\"<p>Tab 1 lưu</p>\",\"version\":2,\"status\":\"draft\",\"owner_id\":\"99b4ff50-2fda-4bb4-a791-c55ee63835b5\",\"owner_name\":\"Olivia Owner\",\"can_write\":true,\"created_at\":\"2026-10-10T"
+  },
+  {
+    "flow": "documents",
+    "id": "stale save from tab 2 -> 409 with current content",
+    "ok": true,
+    "detail": "409 {\"current\":{\"id\":\"77d01996-8294-4ac8-99e2-5a6b975356e0\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"title\":\"Báo cáo tuần\",\"content\":\"<p>Tab 1 lưu</p>\",\"version\":2,\"status\":\"draft\",\"owner_id\":\"99b4ff50-2fda-4bb4-a791-c55ee63835b5\",\"owner_name\":\"Olivia Owner\",\"can_write\":true,\"created_at\":\""
+  },
+  {
+    "flow": "documents",
+    "id": "member (write on Documents) saves after reload",
+    "ok": true,
+    "detail": "200 {\"id\":\"77d01996-8294-4ac8-99e2-5a6b975356e0\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"title\":\"Báo cáo tuần\",\"content\":\"<p>Tab 2 sau khi tải lại</p>\",\"version\":3,\"status\":\"draft\",\"owner_id\":\"99b4ff50-2fda-4bb4-a791-c55ee63835b5\",\"owner_name\":\"Olivia Owner\",\"can_write\":true,\"created_at\":"
+  },
+  {
+    "flow": "documents",
+    "id": "raw script content stored (render must neutralise; see UI flow)",
+    "ok": true,
+    "detail": "201"
+  },
+  {
+    "flow": "documents",
+    "id": "outsider (tenant B) cannot read tenant-A document (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied\"}"
+  },
+  {
+    "flow": "documents",
+    "id": "outsider document list for tenant A is refused or empty",
+    "ok": true,
+    "detail": "200 {\"documents\":[],\"next_cursor\":\"\"}"
+  },
+  {
+    "flow": "assets",
+    "id": "create asset type with custom fields",
+    "ok": true,
+    "detail": "201 {\"id\":\"d36c3bc4-9062-4daa-b942-bb11bf5119a7\",\"name\":\"Laptop mv2jimyg\",\"category\":\"it\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"fields_schema\":\"{\\\"type\\\":\\\"object\\\",\\\"properties\\\":{\\\"serial\\\":{\\\"type\\\":\\\"string\\\",\\\"title\\\":\\\"Số serial\\\",\\\"x-kind\\\":\\\"text\\\"},\\\"owner_person\\\":{\\\"type\\\":\\\""
+  },
+  {
+    "flow": "assets",
+    "id": "required custom field blank refused (400)",
+    "ok": true,
+    "detail": "400 {\"message\":\"field validation failed: missing required field: serial\"}"
+  },
+  {
+    "flow": "assets",
+    "id": "add two assets",
+    "ok": true,
+    "detail": "201/201 {\"id\":\"a4d3213e-2541-4090-968e-a618b4406f07\",\"name\":\"Máy A\",\"type_id\":\"d36c3bc4-9062-4daa-b942-bb11bf5119a7\",\"type_name\":\"Laptop mv2jimyg\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"state\":\"requested\",\"custom_fields\":{\"serial\":\"SN-1\"},\"ngac_node_id\":\"433ac94c-12ab-48da-abc8-16abbe5578ec\""
+  },
+  {
+    "flow": "assets",
+    "id": "member files asset request: refused (403) because write on type is not grantable to members",
+    "ok": true,
+    "detail": "403 {\"message\":\"no write access\"}"
+  },
+  {
+    "flow": "assets",
+    "id": "owner cannot approve own request (refused)",
+    "ok": true,
+    "detail": "req=201 decide=403 {\"message\":\"cannot approve own request\"}"
+  },
+  {
+    "flow": "assets",
+    "id": "lifecycle approve: requested -> available",
+    "ok": true,
+    "detail": "200 state=available"
+  },
+  {
+    "flow": "assets",
+    "id": "hand over (assign) to member M3",
+    "ok": true,
+    "detail": "200 {\"id\":\"a4d3213e-2541-4090-968e-a618b4406f07\",\"name\":\"Máy A\",\"type_id\":\"d36c3bc4-9062-4daa-b942-bb11bf5119a7\",\"type_name\":\"Laptop mv2jimyg\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"state\":\"assigned\",\"custom_fields\":{\"serial\":\"SN-1\"},\"assigned_to_user_id\":\"48266858-0075-4038-a991-dfa63e1"
+  },
+  {
+    "flow": "assets",
+    "id": "history names the actor (Olivia Owner) and the holder",
+    "ok": true,
+    "detail": "200 {\"records\":[{\"id\":\"816d6efa-77f8-4413-b256-fc3e6fab59f2\",\"asset_id\":\"a4d3213e-2541-4090-968e-a618b4406f07\",\"from_state\":\"requested\",\"to_state\":\"available\",\"action\":\"approve\",\"actor_id\":\"99b4ff50-2fda-4bb4-a791-c55ee63835b5\",\"actor_name\":\"Ol"
+  },
+  {
+    "flow": "assets",
+    "id": "return asset (assigned -> available)",
+    "ok": true,
+    "detail": "200 {\"status\":\"returned\"}"
+  },
+  {
+    "flow": "assets",
+    "id": "lifecycle: flag_maintenance",
+    "ok": true,
+    "detail": "200 {\"id\":\"a4d3213e-2541-4090-968e-a618b4406f07\",\"name\":\"Máy A\",\"type_id\":\"d36c3bc4-9062-4daa-b942-bb11bf5119a7\",\"type_name\":\"Laptop mv2jimyg\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"state\":\"maintenance\",\"custom_fields\":{\"serial\":\"SN-1\"},\"ngac_node_id\":\"433ac94c-12ab-48da-abc8-16abbe5578e"
+  },
+  {
+    "flow": "assets",
+    "id": "lifecycle: retire from maintenance",
+    "ok": true,
+    "detail": "200 {\"id\":\"a4d3213e-2541-4090-968e-a618b4406f07\",\"name\":\"Máy A\",\"type_id\":\"d36c3bc4-9062-4daa-b942-bb11bf5119a7\",\"type_name\":\"Laptop mv2jimyg\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"state\":\"retired\",\"custom_fields\":{\"serial\":\"SN-1\"},\"ngac_node_id\":\"433ac94c-12ab-48da-abc8-16abbe5578ec\",\""
+  },
+  {
+    "flow": "assets",
+    "id": "invalid transition from retired refused (409)",
+    "ok": true,
+    "detail": "409 {\"message\":\"no transition \\\"approve\\\" available from state \\\"retired\\\"\"}"
+  },
+  {
+    "flow": "assets",
+    "id": "member cannot run a lifecycle step on a type he cannot manage (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"no approve access\"}"
+  },
+  {
+    "flow": "assets",
+    "id": "race: two concurrent approve steps -> one 200, one 409 state_changed",
+    "ok": true,
+    "detail": "200/409 {\"id\":\"8e6ba061-0522-4a41-bac0-66f94327502e\",\"name\":\"Máy B\",\"type_id\":\"d36c3bc4-9062-4daa-b942-bb11bf5119a7\",\"type_name\":\"Laptop mv2jimyg\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"state\":\"available\",\"custom_fields\":{\"serial\":\"SN-2\"},\"ngac_node_id\":\"433ac94c-12ab-48da-abc8-16abbe5578ec\" | {\"message\":\"no transition \\\"approve\\\" available from state \\\"available\\\"\"}"
+  },
+  {
+    "flow": "assets",
+    "id": "race: two concurrent hand-overs of one asset -> one 200, one 409",
+    "ok": false,
+    "detail": "200/200 {\"id\":\"8e6ba061-0522-4a41-bac0-66f94327502e\",\"name\":\"Máy B\",\"type_id\":\"d36c3bc4-9062-4daa-b942-bb11bf5119a7\",\"type_name\":\"Laptop mv2jimyg\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"state\":\"assigned\",\"custom_fields\":{\"serial\":\"SN-2\"},\"assigned_to_user_id\":\"48266858-0075-4038-a991-dfa63e1 | {\"id\":\"8e6ba061-0522-4a41-bac0-66f94327502e\",\"name\":\"Máy B\",\"type_id\":\"d36c3bc4-9062-4daa-b942-bb11bf5119a7\",\"type_name\":\"Laptop mv2jimyg\",\"workspace_id\":\"f17b0a4f-a9dc-42ed-b628-8b9e31c4cbca\",\"state\":\"assigned\",\"custom_fields\":{\"serial\":\"SN-2\"},\"assigned_to_user_id\":\"146d0b42-43db-4525-b728-332d37b"
+  },
+  {
+    "flow": "assets",
+    "id": "outsider cannot read tenant-A asset (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"no read access\"}"
+  }
+]

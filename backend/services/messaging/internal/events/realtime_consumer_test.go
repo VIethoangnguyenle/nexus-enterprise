@@ -140,3 +140,15 @@ func TestHandle_PermissionEventsWaitForReplicasToSettle(t *testing.T) {
 		return len(cap.got) == 2
 	}, 2*time.Second, 20*time.Millisecond, "the permission event follows once the settle time has passed")
 }
+
+// Who has been invited is for the invitee's notification only: workspace members
+// are never sent the invitation_created event.
+func TestHandle_InvitationCreatedIsNotFannedOut(t *testing.T) {
+	cap := &capture{}
+	c := &RealtimeConsumer{pub: cap, now: time.Now}
+	c.handle("workspace.events", eventBytes(realtime.Event{
+		Domain: realtime.DomainWorkspace, Kind: realtime.KindInvitationCreated,
+		TenantID: "w", WorkspaceID: "w", IDs: []string{"inv-1"},
+	}))
+	assert.Empty(t, cap.got)
+}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
 import { ClipboardCheck, Ellipsis, FolderOpen, MessageSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -8,7 +8,10 @@ import { useBottomBarLayout } from '../../hooks/usePhone'
 import { formatCount } from '../../lib/format'
 import { useUiStore } from '../../stores/ui.store'
 import { Pressable } from '../primitives'
-import { MORE_ITEMS, MobileMoreSheet } from './MobileMoreSheet'
+import { useUnreadCount } from '../../hooks/useNotifications'
+import { unreadLabel } from '../../lib/notification-model'
+import { useNotificationUi } from '../../stores/notification.store'
+import { MORE_ITEMS, MobileMoreSheet, type SheetView } from './MobileMoreSheet'
 
 type Tab = {
   id: 'messaging' | 'drive' | 'approval'
@@ -43,7 +46,21 @@ export function MobileNav() {
   // Above the bar's widths nothing shows the count, so nothing asks for it.
   const shown = useBottomBarLayout()
   const pending = useQuery({ ...approvalPendingOptions(), enabled: shown }).data?.total ?? 0
+  const unread = useUnreadCount(shown).data ?? 0
   const [moreOpen, setMoreOpen] = useState(false)
+  const [view, setView] = useState<SheetView>('menu')
+  const openMore = (v: SheetView = 'menu') => {
+    setView(v)
+    setMoreOpen(true)
+  }
+  // "Mở" on a toast brings the list up wherever the person is.
+  const openRequest = useNotificationUi((s) => s.openRequest)
+  const handledRequest = useRef(openRequest)
+  useEffect(() => {
+    if (openRequest === handledRequest.current) return
+    handledRequest.current = openRequest
+    if (shown) openMore('notifications')
+  }, [openRequest, shown])
   const moreCurrent = MORE_ITEMS.some((item) => under(pathname, item.to))
   const moreLit = moreCurrent || moreOpen
 
@@ -83,7 +100,8 @@ export function MobileNav() {
           )
         })}
         <Pressable
-          onClick={() => setMoreOpen(true)}
+          onClick={() => openMore()}
+          aria-label={unread > 0 ? unreadLabel('Thêm', unread, 'thông báo') : undefined}
           aria-haspopup="dialog"
           aria-expanded={moreOpen}
           data-current={moreCurrent || undefined}
@@ -91,11 +109,20 @@ export function MobileNav() {
         >
           <span className={`${TAB_ICON} ${moreLit ? 'bg-accent-wash' : ''}`}>
             <Ellipsis size={20} strokeWidth={1.75} aria-hidden="true" />
+            {unread > 0 && (
+              <span
+                aria-hidden="true"
+                data-testid="more-dot"
+                className="absolute -top-0.5 right-1.5 w-2 h-2 rounded-full bg-accent ring-2 ring-raised"
+              />
+            )}
           </span>
           Thêm
         </Pressable>
       </nav>
-      <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} pathname={pathname} />
+      <MobileMoreSheet
+        open={moreOpen} onClose={() => setMoreOpen(false)} pathname={pathname} view={view} onViewChange={setView}
+      />
     </>
   )
 }

@@ -1,0 +1,20 @@
+[
+  {
+    "flow": "flow11-mobile",
+    "id": "member on 360px opens Tài liệu (a screen with its own search)",
+    "ok": true,
+    "detail": "http://localhost:18080/drive?ws=9f9b0fc7-dd9c-4d57-912f-e6d82112c000"
+  },
+  {
+    "flow": "flow11-mobile",
+    "id": "top-bar search appears and moves focus to the screen search box",
+    "ok": true,
+    "detail": "focused on search box"
+  },
+  {
+    "flow": "flow11-mobile",
+    "id": "search query returns nothing for an unknown term and lists a known file",
+    "ok": true,
+    "detail": "query accepted"
+  }
+]

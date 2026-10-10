@@ -1,2 +1,2 @@
 src/generated/google/protobuf/timestamp.ts	2
-src/generated/proto/messaging/ws.ts	2
+src/generated/proto/messaging/ws.ts	5

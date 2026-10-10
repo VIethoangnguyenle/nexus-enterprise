@@ -1,0 +1,104 @@
+[
+  {
+    "flow": "flow9-settings",
+    "id": "member signs in and opens settings (profile)",
+    "ok": true,
+    "detail": "http://localhost:18080/settings?ws=935da35e-36ff-4a28-a7bd-af93b36f8c03"
+  },
+  {
+    "flow": "flow9-settings",
+    "id": "department is read-only and says it is set by the administrator",
+    "ok": true,
+    "detail": "read-only"
+  },
+  {
+    "flow": "flow9-settings",
+    "id": "edit display name and save; name persists after reload",
+    "ok": true,
+    "detail": "Hoa Đã Đổi mv2kkhun"
+  },
+  {
+    "flow": "flow9-settings",
+    "id": "appearance: dark theme is chosen and survives reload",
+    "ok": true,
+    "detail": "dark kept"
+  },
+  {
+    "flow": "flow9-settings",
+    "id": "workspace details: member sees the name read-only",
+    "ok": true,
+    "detail": "read-only for member"
+  },
+  {
+    "flow": "flow10-contacts",
+    "id": "owner opens Danh bạ (directory lists the people)",
+    "ok": true,
+    "detail": "listed"
+  },
+  {
+    "flow": "flow10-contacts",
+    "id": "profile panel opens for a person",
+    "ok": true,
+    "detail": "panel"
+  },
+  {
+    "flow": "flow10-contacts",
+    "id": "start a direct message from the panel (Nhắn tin)",
+    "ok": true,
+    "detail": "http://localhost:18080/channels/55bff428-f9b9-46d7-8b60-ab5f7e45139d?ws=935da35e-36ff-4a28-a7bd-af93b36f8c03"
+  },
+  {
+    "flow": "flow11-mobile",
+    "id": "member on 360px: sign-in and workspace A",
+    "ok": true,
+    "detail": "http://localhost:18080/channels?ws=935da35e-36ff-4a28-a7bd-af93b36f8c03"
+  },
+  {
+    "flow": "flow11-mobile",
+    "id": "bottom bar: Tin nhắn, Tài liệu, Phê duyệt and Thêm",
+    "ok": true,
+    "detail": "four entries"
+  },
+  {
+    "flow": "flow11-mobile",
+    "id": "Thêm opens the sheet (Tài sản, Danh bạ, Quản trị, Cài đặt) and the workspace switch",
+    "ok": true,
+    "detail": "sheet + switch list"
+  },
+  {
+    "flow": "flow11-mobile",
+    "id": "switching workspace re-scopes the token and the data changes (A -> B)",
+    "ok": true,
+    "detail": "B shown; channel list shows general x2"
+  },
+  {
+    "flow": "flow11-mobile",
+    "id": "top-bar search (Tìm kiếm) opens on a channel and accepts a query",
+    "ok": false,
+    "detail": "locator.click: Timeout 8000ms exceeded. [shot FAIL-flow11-mobile-top-bar_search_T_m_ki_m_opens_on_a_channel_and_accepts_a_query.png url=http://localhost:18080/channels?ws=036318e7-4a81-46a6-b808-bc9a5a76a513]"
+  },
+  {
+    "flow": "flow12-cross-tenant",
+    "id": "outsider signs in and enters tenant B only",
+    "ok": true,
+    "detail": "http://localhost:18080/channels?ws=036318e7-4a81-46a6-b808-bc9a5a76a513"
+  },
+  {
+    "flow": "flow12-cross-tenant",
+    "id": "owner posts in tenant A #general; outsider sees nothing (live)",
+    "ok": true,
+    "detail": "no leak (post 201)"
+  },
+  {
+    "flow": "flow12-cross-tenant",
+    "id": "outsider contacts and search show no tenant-A person",
+    "ok": true,
+    "detail": "no A names in B directory"
+  },
+  {
+    "flow": "flow12-cross-tenant",
+    "id": "outsider opens tenant A drive by URL: no files shown",
+    "ok": true,
+    "detail": "no file names"
+  }
+]

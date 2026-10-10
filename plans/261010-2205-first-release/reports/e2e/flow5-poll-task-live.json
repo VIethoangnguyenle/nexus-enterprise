@@ -1,0 +1,26 @@
+[
+  {
+    "flow": "flow5-poll-task-live",
+    "id": "member opens #general",
+    "ok": true,
+    "detail": "open"
+  },
+  {
+    "flow": "flow5-poll-task-live",
+    "id": "poll created by owner via API appears in the member stream live",
+    "ok": false,
+    "detail": "not rendered live after 5s [shot FAIL-flow5-poll-task-live-poll_created_by_owner_via_API_appears_in_the_member_stream_live.png url=http://localhost:18080/channels/76253622-f140-4b04-9921-5fd7b485d3f1?ws=c7063b53-513c-4cf4-ad90-cb0020aaee7a]"
+  },
+  {
+    "flow": "flow5-poll-task-live",
+    "id": "poll visible after reload (is it rendered at all?)",
+    "ok": true,
+    "detail": "present after reload"
+  },
+  {
+    "flow": "flow5-poll-task-live",
+    "id": "task created by owner via API appears live in the member stream",
+    "ok": false,
+    "detail": "task not rendered live after 5s [shot FAIL-flow5-poll-task-live-task_created_by_owner_via_API_appears_live_in_the_member_stream.png url=http://localhost:18080/channels/76253622-f140-4b04-9921-5fd7b485d3f1?ws=c7063b53-513c-4cf4-ad90-cb0020aaee7a]"
+  }
+]

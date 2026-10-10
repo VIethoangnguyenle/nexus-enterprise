@@ -146,8 +146,10 @@ When a list refetches after an event whose actor is somebody other than the sign
 | `document` | `created`, `updated`, `deleted` | the document (list level only) | workspace |
 | `channel` | `created`, `renamed`, `member_added`, `member_removed` | the channel | user (created: the people who can read it at birth, the creator and any DM participant), channel (renamed, roster), user (the person added or removed) |
 | `workspace` | `invitation_accepted`, `member_removed`, `role_changed`, `department_changed`, `updated` | member node, role, department or workspace | workspace |
+| `workspace` (not for browsers) | `invitation_created` | the invitation | none: the notification consumer reads it to tell the invited account; the hub drops it, because members are not told who has been invited |
 | `asset` | `updated`, `request_changed`, `assigned` | asset or request | workspace |
 | `permission` | `changed` | none | user (the users whose own standing the write changed; see "Permission events are narrow") |
+| notification (`NotificationEvent` frame) | one per stored notification | the notification | the recipient's sessions in the notification's workspace only; a personal notification (a workspace invitation) reaches every session of the recipient. It carries the type, actor id and name, target type, id and name, workspace, params and creation time, never pre-built text |
 | approval (`ApprovalEvent`) | created, approved, rejected, step_advanced | the request | the people the request names |
 
 There is no channel "archive" in the system, so there is no archive event.

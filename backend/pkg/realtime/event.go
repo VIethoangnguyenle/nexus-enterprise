@@ -44,6 +44,10 @@ const (
 	KindRoleChanged        = "role_changed"
 	KindDepartmentChanged  = "department_changed"
 	KindInvitationAccepted = "invitation_accepted"
+	// KindInvitationCreated tells messaging an invitation was created or
+	// refreshed (ids: the invitation). It is not for browsers: the hub drops it,
+	// because workspace members are not told who has been invited.
+	KindInvitationCreated = "invitation_created"
 
 	KindRequestChanged = "request_changed"
 	KindAssigned       = "assigned"

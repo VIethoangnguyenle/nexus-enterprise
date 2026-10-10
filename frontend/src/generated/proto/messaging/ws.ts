@@ -325,21 +325,49 @@ export interface NotificationEvent {
      */
     type: string;
     /**
-     * @generated from protobuf field: string title = 3
+     * @deprecated
+     * @generated from protobuf field: string title = 3 [deprecated = true]
      */
-    title: string;
+    title: string; // no longer written
     /**
-     * @generated from protobuf field: string body = 4
+     * @deprecated
+     * @generated from protobuf field: string body = 4 [deprecated = true]
      */
-    body: string;
+    body: string; // no longer written
     /**
-     * @generated from protobuf field: string entity_type = 5
+     * @generated from protobuf field: string target_type = 5
      */
-    entityType: string;
+    targetType: string;
     /**
-     * @generated from protobuf field: string entity_id = 6
+     * @generated from protobuf field: string target_id = 6
      */
-    entityId: string;
+    targetId: string;
+    /**
+     * @generated from protobuf field: string actor_user_id = 7
+     */
+    actorUserId: string;
+    /**
+     * @generated from protobuf field: string actor_name = 8
+     */
+    actorName: string; // empty when unknown, never an id
+    /**
+     * @generated from protobuf field: string target_name = 9
+     */
+    targetName: string; // empty when unknown, never an id
+    /**
+     * @generated from protobuf field: string workspace_id = 10
+     */
+    workspaceId: string;
+    /**
+     * @generated from protobuf field: map<string, string> params = 11
+     */
+    params: {
+        [key: string]: string;
+    };
+    /**
+     * @generated from protobuf field: google.protobuf.Timestamp created_at = 12
+     */
+    createdAt?: Timestamp;
 }
 /**
  * @generated from protobuf message messaging.UnreadCountEvent
@@ -1432,8 +1460,14 @@ class NotificationEvent$Type extends MessageType<NotificationEvent> {
             { no: 2, name: "type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 3, name: "title", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 4, name: "body", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 5, name: "entity_type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 6, name: "entity_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 5, name: "target_type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 6, name: "target_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 7, name: "actor_user_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 8, name: "actor_name", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 9, name: "target_name", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 10, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 11, name: "params", kind: "map", K: 9 /*ScalarType.STRING*/, V: { kind: "scalar", T: 9 /*ScalarType.STRING*/ } },
+            { no: 12, name: "created_at", kind: "message", T: () => Timestamp }
         ]);
     }
     create(value?: PartialMessage<NotificationEvent>): NotificationEvent {
@@ -1442,8 +1476,13 @@ class NotificationEvent$Type extends MessageType<NotificationEvent> {
         message.type = "";
         message.title = "";
         message.body = "";
-        message.entityType = "";
-        message.entityId = "";
+        message.targetType = "";
+        message.targetId = "";
+        message.actorUserId = "";
+        message.actorName = "";
+        message.targetName = "";
+        message.workspaceId = "";
+        message.params = {};
         if (value !== undefined)
             reflectionMergePartial<NotificationEvent>(this, message, value);
         return message;
@@ -1459,17 +1498,35 @@ class NotificationEvent$Type extends MessageType<NotificationEvent> {
                 case /* string type */ 2:
                     message.type = reader.string();
                     break;
-                case /* string title */ 3:
+                case /* string title = 3 [deprecated = true] */ 3:
                     message.title = reader.string();
                     break;
-                case /* string body */ 4:
+                case /* string body = 4 [deprecated = true] */ 4:
                     message.body = reader.string();
                     break;
-                case /* string entity_type */ 5:
-                    message.entityType = reader.string();
+                case /* string target_type */ 5:
+                    message.targetType = reader.string();
                     break;
-                case /* string entity_id */ 6:
-                    message.entityId = reader.string();
+                case /* string target_id */ 6:
+                    message.targetId = reader.string();
+                    break;
+                case /* string actor_user_id */ 7:
+                    message.actorUserId = reader.string();
+                    break;
+                case /* string actor_name */ 8:
+                    message.actorName = reader.string();
+                    break;
+                case /* string target_name */ 9:
+                    message.targetName = reader.string();
+                    break;
+                case /* string workspace_id */ 10:
+                    message.workspaceId = reader.string();
+                    break;
+                case /* map<string, string> params */ 11:
+                    this.binaryReadMap11(message.params, reader, options);
+                    break;
+                case /* google.protobuf.Timestamp created_at */ 12:
+                    message.createdAt = Timestamp.internalBinaryRead(reader, reader.uint32(), options, message.createdAt);
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1482,6 +1539,22 @@ class NotificationEvent$Type extends MessageType<NotificationEvent> {
         }
         return message;
     }
+    private binaryReadMap11(map: NotificationEvent["params"], reader: IBinaryReader, options: BinaryReadOptions): void {
+        let len = reader.uint32(), end = reader.pos + len, key: keyof NotificationEvent["params"] | undefined, val: NotificationEvent["params"][any] | undefined;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case 1:
+                    key = reader.string();
+                    break;
+                case 2:
+                    val = reader.string();
+                    break;
+                default: throw new globalThis.Error("unknown map entry field for messaging.NotificationEvent.params");
+            }
+        }
+        map[key ?? ""] = val ?? "";
+    }
     internalBinaryWrite(message: NotificationEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
         /* string id = 1; */
         if (message.id !== "")
@@ -1489,18 +1562,36 @@ class NotificationEvent$Type extends MessageType<NotificationEvent> {
         /* string type = 2; */
         if (message.type !== "")
             writer.tag(2, WireType.LengthDelimited).string(message.type);
-        /* string title = 3; */
+        /* string title = 3 [deprecated = true]; */
         if (message.title !== "")
             writer.tag(3, WireType.LengthDelimited).string(message.title);
-        /* string body = 4; */
+        /* string body = 4 [deprecated = true]; */
         if (message.body !== "")
             writer.tag(4, WireType.LengthDelimited).string(message.body);
-        /* string entity_type = 5; */
-        if (message.entityType !== "")
-            writer.tag(5, WireType.LengthDelimited).string(message.entityType);
-        /* string entity_id = 6; */
-        if (message.entityId !== "")
-            writer.tag(6, WireType.LengthDelimited).string(message.entityId);
+        /* string target_type = 5; */
+        if (message.targetType !== "")
+            writer.tag(5, WireType.LengthDelimited).string(message.targetType);
+        /* string target_id = 6; */
+        if (message.targetId !== "")
+            writer.tag(6, WireType.LengthDelimited).string(message.targetId);
+        /* string actor_user_id = 7; */
+        if (message.actorUserId !== "")
+            writer.tag(7, WireType.LengthDelimited).string(message.actorUserId);
+        /* string actor_name = 8; */
+        if (message.actorName !== "")
+            writer.tag(8, WireType.LengthDelimited).string(message.actorName);
+        /* string target_name = 9; */
+        if (message.targetName !== "")
+            writer.tag(9, WireType.LengthDelimited).string(message.targetName);
+        /* string workspace_id = 10; */
+        if (message.workspaceId !== "")
+            writer.tag(10, WireType.LengthDelimited).string(message.workspaceId);
+        /* map<string, string> params = 11; */
+        for (let k of globalThis.Object.keys(message.params))
+            writer.tag(11, WireType.LengthDelimited).fork().tag(1, WireType.LengthDelimited).string(k).tag(2, WireType.LengthDelimited).string(message.params[k]).join();
+        /* google.protobuf.Timestamp created_at = 12; */
+        if (message.createdAt)
+            Timestamp.internalBinaryWrite(message.createdAt, writer.tag(12, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

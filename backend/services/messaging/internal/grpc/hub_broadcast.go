@@ -115,7 +115,7 @@ func (h *Hub) broadcastTyping(channelID, username string, sender *Client) {
 // clients: channel:<id> to that channel's subscribers, user:<id> to that user's
 // sessions, presence:<tenant> to sessions in that tenant.
 func (h *Hub) subscribeRedis() {
-	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", presenceKeyPrefix+"*", revokeKeyPrefix+"*",
+	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", notifyKeyPrefix+"*", presenceKeyPrefix+"*", revokeKeyPrefix+"*",
 		workspaceEventPrefix+"*", channelEventPrefix+"*", userEventPrefix+"*", permEventPrefix+"*", workspaceRevokePrefix+"*")
 	defer pubsub.Close()
 
@@ -141,6 +141,10 @@ func (h *Hub) subscribeRedis() {
 				h.revokeLocal(strings.TrimPrefix(msg.Channel, revokeKeyPrefix), msg.Payload)
 			case strings.HasPrefix(msg.Channel, presenceKeyPrefix):
 				h.broadcastToTenant(strings.TrimPrefix(msg.Channel, presenceKeyPrefix), payload)
+			case strings.HasPrefix(msg.Channel, notifyKeyPrefix):
+				if tenant, user, ok := strings.Cut(strings.TrimPrefix(msg.Channel, notifyKeyPrefix), ":"); ok {
+					h.sendToUserInTenant(tenant, user, payload)
+				}
 			case strings.HasPrefix(msg.Channel, "user:"):
 				h.sendToUser(strings.TrimPrefix(msg.Channel, "user:"), payload)
 			case strings.HasPrefix(msg.Channel, "channel:"):
@@ -186,33 +190,70 @@ func (h *Hub) broadcastToTenant(tenantID string, data []byte) {
 	}
 }
 
-// SendNotification pushes a notification to all connected WebSocket clients for a user.
-func (h *Hub) SendNotification(userID string, notif *pb.Notification) {
+// notifyKeyPrefix namespaces the Redis channels that carry a notification to one
+// user's sessions inside one workspace: notify:<workspace>:<user>.
+const notifyKeyPrefix = "notify:"
+
+// SendNotification pushes a notification to the recipient's open sessions in the
+// notification's workspace, and to no other session of theirs: a person open in
+// two workspaces is not told, in one, about the other. An empty workspace is a
+// personal notification (an invitation) and reaches every session of the user.
+func (h *Hub) SendNotification(workspaceID, userID string, notif *pb.Notification) {
 	env := &pb.ServerEnvelope{
 		Payload: &pb.ServerEnvelope_Notification{
 			Notification: &pb.NotificationEvent{
-				Id:         notif.Id,
-				Type:       notif.Type,
-				Title:      notif.Title,
-				Body:       notif.Body,
-				EntityType: notif.EntityType,
-				EntityId:   notif.EntityId,
+				Id:          notif.Id,
+				Type:        notif.Type,
+				TargetType:  notif.TargetType,
+				TargetId:    notif.TargetId,
+				ActorUserId: notif.ActorUserId,
+				ActorName:   notif.ActorName,
+				TargetName:  notif.TargetName,
+				WorkspaceId: notif.WorkspaceId,
+				Params:      notif.Params,
+				CreatedAt:   notif.CreatedAt,
 			},
 		},
 	}
 	data := marshalEnvelope(env)
-	if data == nil {
+	if data == nil || userID == "" {
 		return
 	}
 
+	if workspaceID == "" {
+		if h.rdb != nil {
+			if err := h.rdb.Publish(h.ctx, "user:"+userID, data).Err(); err != nil {
+				slog.Warn("redis notification publish failed", "error", err)
+			}
+			return
+		}
+		h.sendToUser(userID, data)
+		return
+	}
 	if h.rdb != nil {
-		if err := h.rdb.Publish(h.ctx, "user:"+userID, data).Err(); err != nil {
+		if err := h.rdb.Publish(h.ctx, notifyKeyPrefix+workspaceID+":"+userID, data).Err(); err != nil {
 			slog.Warn("redis notification publish failed", "error", err)
 		}
 		return
 	}
+	h.sendToUserInTenant(workspaceID, userID, data)
+}
 
-	h.sendToUser(userID, data)
+// sendToUserInTenant delivers data to the user's sessions that belong to the tenant.
+func (h *Hub) sendToUserInTenant(tenantID, userID string, data []byte) {
+	if tenantID == "" || userID == "" {
+		return
+	}
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	for client := range h.users[userID] {
+		if client.tenantID == tenantID {
+			select {
+			case client.send <- data:
+			default:
+			}
+		}
+	}
 }
 
 // SendUnreadCount pushes an unread count update to a user.

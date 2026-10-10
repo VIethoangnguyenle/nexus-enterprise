@@ -1,0 +1,62 @@
+[
+  {
+    "flow": "flow12-cross-tenant-api",
+    "id": "owner posts a tenant-A message (setup)",
+    "ok": true,
+    "detail": "201"
+  },
+  {
+    "flow": "flow12-cross-tenant-api",
+    "id": "outsider channel search on tenant-A channel refused (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied: read on 21d265b0-6812-49f3-b837-4a84c1b72382\"}"
+  },
+  {
+    "flow": "flow12-cross-tenant-api",
+    "id": "outsider reads tenant-A channel messages refused (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied: read on 21d265b0-6812-49f3-b837-4a84c1b72382\"}"
+  },
+  {
+    "flow": "flow12-cross-tenant-api",
+    "id": "outsider contacts of tenant A refused (403)",
+    "ok": true,
+    "detail": "403 {\"code\":\"access_denied\",\"message\":\"access denied\"}"
+  },
+  {
+    "flow": "flow12-cross-tenant-api",
+    "id": "outsider member list of tenant A refused (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied: not a member of this workspace\"}"
+  },
+  {
+    "flow": "flow12-cross-tenant-api",
+    "id": "outsider unread list has no tenant-A channel",
+    "ok": false,
+    "detail": "200 {\"channels\":[{\"channel_id\":\"0021f6ed-f235-450e-b81c-590276acf686\"},{\"channel_id\":\"00b90978-e0f7-43be-9b29-9acabe0739a0\"},{\"channel_id\":\"00c49c7f-4d6b-4162-b51f-945e1c22840a\"},{\"channel_id\":\"016fa9de-2"
+  },
+  {
+    "flow": "flow12-cross-tenant-api",
+    "id": "outsider notifications contain no tenant-A text",
+    "ok": true,
+    "detail": "200"
+  },
+  {
+    "flow": "flow12-cross-tenant-api",
+    "id": "outsider cannot post into tenant-A channel (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied: write on 21d265b0-6812-49f3-b837-4a84c1b72382\"}"
+  },
+  {
+    "flow": "flow12-cross-tenant-api",
+    "id": "outsider asset types of tenant A refused (403)",
+    "ok": false,
+    "detail": "200 {}"
+  },
+  {
+    "flow": "flow12-cross-tenant-api",
+    "id": "outsider approval templates list holds no tenant-A template",
+    "ok": true,
+    "detail": "200 {\"templates\":null}"
+  }
+]

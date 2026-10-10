@@ -419,13 +419,18 @@ message ChatTaskList {
 message Notification {
   string id = 1;
   string user_id = 2;
-  string type = 3;                   // "asset_requested", "asset_approved", "asset_assigned", "thread_reply", "mention"
-  string title = 4;
-  string body = 5;
-  string entity_type = 6;           // "asset", "asset_request", "message", etc.
-  string entity_id = 7;
+  string type = 3;                   // "approval_approved", "approval_step_approved", "approval_rejected", "asset_request_approved", ...
+  string title = 4 [deprecated = true]; // no longer written: the screen words each notification from the fields below
+  string body = 5 [deprecated = true];  // no longer written
+  string target_type = 6;            // what it is about: "approval", "asset_request", "asset"
+  string target_id = 7;
   bool read = 8;
   google.protobuf.Timestamp created_at = 9;
+  string actor_user_id = 10;         // who did it; empty when nobody did
+  string actor_name = 11;            // their name in the workspace at the time; empty when unknown, never an id
+  string target_name = 12;           // the subject's name at the time; empty when unknown, never an id
+  string workspace_id = 13;
+  map<string, string> params = 14;   // small per-type facts, e.g. "reason"
 }
 
 message ListNotificationsRequest {

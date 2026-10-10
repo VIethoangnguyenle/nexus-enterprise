@@ -10,9 +10,15 @@ import { logoutSession } from '../../api/client'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { formatCount } from '../../lib/format'
 import { UNKNOWN_PERSON } from '../../lib/people'
-import { Avatar, IconButton } from '../primitives'
+import { useMyInvitations } from '../../hooks/useInvitations'
+import { useBottomBarLayout } from '../../hooks/usePhone'
+import { useUnreadCount } from '../../hooks/useNotifications'
+import { unreadLabel } from '../../lib/notification-model'
+import { useNotificationUi } from '../../stores/notification.store'
+import { NotificationPanel } from '../notifications/NotificationPanel'
+import { Avatar, IconButton, Pressable } from '../primitives'
 import {
-  MessageSquare, FolderOpen, Users, Package, ClipboardCheck, Settings, LogOut, ChevronDown, Check, ShieldCheck,
+  MessageSquare, FolderOpen, Users, Package, ClipboardCheck, Settings, LogOut, ChevronDown, Check, ShieldCheck, Bell, Mail,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -64,6 +70,21 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
 
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false)
   const wsDropdownRef = useRef<HTMLDivElement>(null)
+
+  // Below 1024 the sidebar is hidden and the Thêm sheet carries notifications instead.
+  const barLayout = useBottomBarLayout()
+  const unread = useUnreadCount(!barLayout).data ?? 0
+  const [panelOpen, setPanelOpen] = useState(false)
+  const notifRef = useRef<HTMLButtonElement>(null)
+  const openRequest = useNotificationUi((s) => s.openRequest)
+  const handledRequest = useRef(openRequest)
+  useEffect(() => {
+    if (openRequest === handledRequest.current) return
+    handledRequest.current = openRequest
+    if (!barLayout) setPanelOpen(true)
+  }, [openRequest, barLayout])
+  // Offers waiting for this person's answer; asked for only while the switcher is open.
+  const offers = useMyInvitations(wsDropdownOpen).data?.length ?? 0
 
   useEffect(() => {
     if (!wsDropdownOpen) return
@@ -171,28 +192,39 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
 
         {wsDropdownOpen && workspaces.length > 0 && (
           <div
-            role="listbox"
-            aria-label="Không gian làm việc"
             className={`absolute left-0 top-full mt-1.5 z-dropdown p-1.5 rounded-overlay bg-overlay shadow-overlay
-              max-h-60 overflow-y-auto animate-fade-in ${rail ? 'w-56' : 'right-0'}`}
+              max-h-72 overflow-y-auto animate-fade-in ${rail ? 'w-56' : 'right-0'}`}
           >
-            {workspaces.map((ws) => (
-              /* eslint-disable-next-line no-restricted-syntax -- Lựa chọn trong listbox (role=option),
-                 có dấu tích cho mục đang mở; không có primitive nào cho option của listbox. */
-              <button
-                key={ws.id}
-                type="button"
-                role="option"
-                aria-selected={ws.id === workspaceId}
-                disabled={switcher.switchingId !== undefined}
-                onClick={() => handleSwitchWorkspace(ws.id)}
-                className="w-full flex items-center gap-2.5 h-9 px-2.5 rounded-md border-none bg-transparent
-                  cursor-pointer text-sm text-ink text-left focus-ring hover:bg-hover disabled:opacity-50"
+            <div role="listbox" aria-label="Không gian làm việc">
+              {workspaces.map((ws) => (
+                /* eslint-disable-next-line no-restricted-syntax -- Lựa chọn trong listbox (role=option),
+                   có dấu tích cho mục đang mở; không có primitive nào cho option của listbox. */
+                <button
+                  key={ws.id}
+                  type="button"
+                  role="option"
+                  aria-selected={ws.id === workspaceId}
+                  disabled={switcher.switchingId !== undefined}
+                  onClick={() => handleSwitchWorkspace(ws.id)}
+                  className="w-full flex items-center gap-2.5 h-9 px-2.5 rounded-md border-none bg-transparent
+                    cursor-pointer text-sm text-ink text-left focus-ring hover:bg-hover disabled:opacity-50"
+                >
+                  <span className="truncate flex-1">{workspaceDisplayName(ws.name)}</span>
+                  {ws.id === workspaceId && <Check size={16} strokeWidth={1.75} className="text-accent shrink-0" />}
+                </button>
+              ))}
+            </div>
+            {offers > 0 && (
+              <Link
+                to="/workspace-select"
+                onClick={() => setWsDropdownOpen(false)}
+                className="mt-1 flex items-center gap-2.5 h-9 px-2.5 rounded-md text-sm font-semibold text-ink no-underline
+                  focus-ring hover:bg-hover"
               >
-                <span className="truncate flex-1">{workspaceDisplayName(ws.name)}</span>
-                {ws.id === workspaceId && <Check size={16} strokeWidth={1.75} className="text-accent shrink-0" />}
-              </button>
-            ))}
+                <Mail size={16} strokeWidth={1.75} aria-hidden="true" className="text-accent shrink-0" />
+                <span className="truncate flex-1">Lời mời đang chờ ({offers})</span>
+              </Link>
+            )}
           </div>
         )}
       </div>
@@ -202,6 +234,30 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
       </nav>
 
       <div className="grid gap-0.5">
+        <Pressable
+          ref={notifRef}
+          onClick={() => setPanelOpen((v) => !v)}
+          aria-haspopup="dialog"
+          aria-expanded={panelOpen}
+          aria-label={unreadLabel('Thông báo', unread)}
+          title={rail ? 'Thông báo' : undefined}
+          className={`relative flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-sm focus-ring
+            transition-colors duration-quick ${rail ? 'justify-center' : ''}
+            ${panelOpen ? 'bg-raised text-ink font-semibold' : 'text-ink-muted font-medium hover:bg-hover hover:text-ink'}`}
+        >
+          <Bell size={18} strokeWidth={1.75} aria-hidden="true" />
+          {!rail && <span className="flex-1 truncate">Thông báo</span>}
+          {unread > 0 ? (
+            <span
+              aria-hidden="true"
+              className={`inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full bg-accent
+                text-on-accent text-2xs font-semibold tnum transition-opacity duration-quick
+                ${rail ? 'absolute top-0 right-0' : ''}`}
+            >
+              {formatCount(unread)}
+            </span>
+          ) : null}
+        </Pressable>
         {footNavItems.map(navLink)}
         <div className={`flex items-center gap-2.5 p-2 ${rail ? 'flex-col' : ''}`}>
           <Avatar
@@ -222,6 +278,12 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
           </IconButton>
         </div>
       </div>
+      <NotificationPanel
+        open={panelOpen && !barLayout}
+        onClose={() => setPanelOpen(false)}
+        anchorRef={notifRef}
+        rail={rail}
+      />
     </aside>
   )
 }

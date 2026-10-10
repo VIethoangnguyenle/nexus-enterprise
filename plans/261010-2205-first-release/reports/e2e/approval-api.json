@@ -1,0 +1,182 @@
+[
+  {
+    "flow": "approval",
+    "id": "manager creates template",
+    "ok": true,
+    "detail": "201 {\"id\":\"fa6d4072-f5e7-41cd-a07f-1f7f1f5620ff\",\"name\":\"Chi lớn mv2khgb0\",\"entity_type\":\"general\",\"is_active\":true,\"priority\":10,\"conditions\":[{\"id\":\"693d5a3e-0f29-457c-9d09-036a7f104c22\",\"field\":\"amount\",\"operator\":\"gt\",\"value\":\"1000\"}],\"steps\":[{\"id\":\"c921c649-ecb2-442a-8443-27168f1c76d6\",\"step_order\":1,\"name\":\"Người phụ trách\",\"approver_type\":\"specific_user\",\"approver_value\":\"1a97b263-f35e-466a-a5"
+  },
+  {
+    "flow": "approval",
+    "id": "member template create refused (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied: managing templates needs manage on the tenant\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "manager creates second (small) template",
+    "ok": true,
+    "detail": "201 {\"id\":\"11b65f29-7557-4890-b0a1-5aebcb795f6e\",\"name\":\"Chi nhỏ mv2khgb0\",\"entity_type\":\"general\",\"is_active\":true,\"priority\":1,\"conditions\":[{\"id\":\"900fb829-432d-48a9-b300-f7d794135ead\",\"field\":\"amount\",\"operator\":\"lte\",\"value\":\"1000\"}],\"steps\":[{\"id\":\"8c4b4471-2fc4-46e4-85ee-be28efc2ddd6\",\"step_order\":1,\"name\":\"Tài chính\",\"approver_type\":\"department\",\"approver_value\":\"cc5b990a-2b19-4fa1-8d25-ec279e"
+  },
+  {
+    "flow": "approval",
+    "id": "member template edit refused (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied: managing templates needs manage on the tenant\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "request 5000 routed to big template",
+    "ok": true,
+    "detail": "201 tid=fa6d4072-f5e7-41cd-a07f-1f7f1f5620ff want fa6d4072-f5e7-41cd-a07f-1f7f1f5620ff {\"id\":\"70680e9c-75dd-485d-9c30-6ba31549670d\",\"entity_type\":\"general\",\"entity_id\":\"0b4cec6e-1d06-4ea4-9f8d-337768d069a8\",\"template_id\":\"fa6d4072-f5e7-41cd-a07f-1f7f1f5620ff\",\"template_name\":\"Chi lớn mv2khgb0\",\"form_data_json\":\"{\\\"amount\\\":\\\"5000\\\"}\",\"current_step\":1,\"status\":\"pending\",\"scope_oa_id\":\"default\",\"department_id\":\"default\",\"created_by\":\"63e922b5-fb55-476e-8722-9a49995f9bd3\",\"created_at\":"
+  },
+  {
+    "flow": "approval",
+    "id": "request 100 routed to small template",
+    "ok": true,
+    "detail": "201 tid=11b65f29-7557-4890-b0a1-5aebcb795f6e want 11b65f29-7557-4890-b0a1-5aebcb795f6e"
+  },
+  {
+    "flow": "approval",
+    "id": "dept member (step 3) cannot approve before step 1 (refused)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied: not an approver of this request\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "role holder cannot act on person step (refused)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied: not an approver of this request\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "step 1 person approver (M1) approves",
+    "ok": true,
+    "detail": "200 {\"status\":\"approved\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "step 2 role-in-department approver (M2) approves",
+    "ok": true,
+    "detail": "200 {\"status\":\"approved\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "quorum 2: concurrent approvals both accepted",
+    "ok": true,
+    "detail": "200 / 200 {\"status\":\"approved\"} {\"status\":\"approved\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "quorum 2: request final status approved",
+    "ok": true,
+    "detail": "200"
+  },
+  {
+    "flow": "approval",
+    "id": "approving an already-finished request refused",
+    "ok": true,
+    "detail": "409 {\"message\":\"request already completed\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "quorum 2: first of two department approvals accepted",
+    "ok": true,
+    "detail": "200 {\"status\":\"approved\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "quorum 2: request still open after one approval",
+    "ok": true,
+    "detail": "status=pending current_step=3"
+  },
+  {
+    "flow": "approval",
+    "id": "quorum 2: same person cannot count twice (refused)",
+    "ok": true,
+    "detail": "409 {\"message\":\"already exists: already acted on this step\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "quorum 2: second person completes the request",
+    "ok": true,
+    "detail": "200 {\"status\":\"approved\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "owner revokes role Thẩm định from M2",
+    "ok": true,
+    "detail": "200 {\"status\":\"ok\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "revoked role holder refused on step 2 (policy, live)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied: not an approver of this request\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "owner restores role to M2",
+    "ok": true,
+    "detail": "200 {\"status\":\"ok\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "restored role holder approves step 2 again",
+    "ok": true,
+    "detail": "200 {\"status\":\"approved\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "reject without reason refused (400)",
+    "ok": false,
+    "detail": "200 {\"status\":\"rejected\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "reject with reason accepted",
+    "ok": true,
+    "detail": "200 {\"status\":\"rejected\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "rejected request status = rejected",
+    "ok": true,
+    "detail": "200 {\"request\":{\"id\":\"ebbd96b3-b602-45ed-a5ad-2dffd5b35a0b\",\"entity_type\":\"general\",\"entity_id\":\"415dc889-983e-4d2b-bbd4-491a59bde330\",\"template_id\":\"11b65f29-7557-4890-b0a1-5aebcb795f6e\",\"template_name\":"
+  },
+  {
+    "flow": "approval",
+    "id": "audit returns entries for owner",
+    "ok": true,
+    "detail": "200 {\"entries\":[{\"id\":\"67bdebf8-1740-4b4b-a58b-0ec8a7afe7bf\",\"request_id\":\"70680e9c-75dd-485d-9c30-6ba31549670d\",\"action\":\"created\",\"actor_node_id\":\"63e922b5-fb55-476e-8722-9a49995f9bd3\",\"step_order\":0,\"detail_json\":\"{\\\"template\\\": \\\"Chi lớn mv2khgb0\\\", \\\"entity_id\\\": \\\"0b4cec6e-1d06-4ea4-9f8d-337768d06"
+  },
+  {
+    "flow": "approval",
+    "id": "audit names actors (Minh/Mai/Hoa/Khang present, not only ids)",
+    "ok": true,
+    "detail": "{\"entries\":[{\"id\":\"67bdebf8-1740-4b4b-a58b-0ec8a7afe7bf\",\"request_id\":\"70680e9c-75dd-485d-9c30-6ba31549670d\",\"action\":\"created\",\"actor_node_id\":\"63e922b5-fb55-476e-8722-9a49995f9bd3\",\"step_order\":0,\"detail_json\":\"{\\\"template\\\": \\\"Chi lớn mv2khgb0\\\", \\\"entity_id\\\": \\\"0b4cec6e-1d06-4ea4-9f8d-337768d069a8\\\", \\\"entity_type\\\": \\\"general\\\"}\",\"ip_address\":\"\",\"created_at\":\"2026-10-10T15:46:45.597958Z\",\"actor_name\":\"Olivia Owner\"},{\"id\":\"6f4429a8-7b0c-4d30-9533-425c3bc0baa7\",\"request_id\":\"70680e9c-75dd-4"
+  },
+  {
+    "flow": "approval",
+    "id": "rejection reason recorded in audit",
+    "ok": true,
+    "detail": "{\"entries\":[{\"id\":\"5d5afffe-e15a-47a4-8aba-6796add0de70\",\"request_id\":\"ebbd96b3-b602-45ed-a5ad-2dffd5b35a0b\",\"action\":\"created\",\"actor_node_id\":\"63e922b5-fb55-476e-8722-9a49995f9bd3\",\"step_order\":0,\"detail_json\":\"{\\\"template\\\": \\\"Chi nhỏ mv2khgb0\\\", \\\"entity_id\\\": \\\"415dc889-983e-4d2b-bbd4-491a59bde330\\\", \\\"entity_type\\\": \\\"general\\\"}\",\"ip_address\":\"\",\"created_at\":\"2026-10-10T15:46:49.25308Z\",\"act"
+  },
+  {
+    "flow": "approval",
+    "id": "outsider 403 on request detail",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "outsider 403 on audit",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied\"}"
+  },
+  {
+    "flow": "approval",
+    "id": "outsider pending list contains no tenant-A request",
+    "ok": true,
+    "detail": "200 {\"items\":null,\"total\":0}"
+  }
+]

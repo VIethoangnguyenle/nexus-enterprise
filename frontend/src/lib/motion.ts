@@ -61,6 +61,8 @@ export interface MotionPresets {
   reduced: boolean
   /** Detail panel: translateX(16px) scale(.985) → 0, 280ms expo; out 210ms. */
   panel: Preset
+  /** A panel that grows out of the sidebar (notifications): translateX(-16px) scale(.985) → 0, 280ms expo; out 210ms. */
+  panelLeft: Preset
   /** Modal surface: translateY(8px) scale(.98) → 0, 280ms expo; out 210ms. */
   modal: Preset
   /** Bottom sheet: translateY(100%) → 0, 280ms expo; out 210ms ease-in. */
@@ -87,6 +89,7 @@ export function presets(reduced: boolean): MotionPresets {
     return {
       reduced,
       panel: f,
+      panelLeft: f,
       modal: f,
       sheet: f,
       scrim: f,
@@ -101,6 +104,7 @@ export function presets(reduced: boolean): MotionPresets {
   return {
     reduced,
     panel: slide({ x: 16, scale: 0.985 }, DURATION.layout, EASE.outExpo, DURATION.exit),
+    panelLeft: slide({ x: -16, scale: 0.985 }, DURATION.layout, EASE.outExpo, DURATION.exit),
     modal: slide({ y: 8, scale: 0.98 }, DURATION.layout, EASE.outExpo, DURATION.exit),
     sheet: {
       initial: { y: '100%' },

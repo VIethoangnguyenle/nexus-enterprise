@@ -1,0 +1,50 @@
+[
+  {
+    "flow": "flow13-resilience",
+    "id": "owner and member sign in and open #general",
+    "ok": true,
+    "detail": "both in #general"
+  },
+  {
+    "flow": "flow13-resilience",
+    "id": "baseline: message is live before the outage",
+    "ok": true,
+    "detail": "live"
+  },
+  {
+    "flow": "flow13-resilience",
+    "id": "kill messaging (docker kill); outage begins",
+    "ok": true,
+    "detail": "exited exit=137"
+  },
+  {
+    "flow": "flow13-resilience",
+    "id": "during the outage a post is refused by the edge (no silent success)",
+    "ok": true,
+    "detail": "refused with 504"
+  },
+  {
+    "flow": "flow13-resilience",
+    "id": "member page is still open during the outage and raises no page error",
+    "ok": true,
+    "detail": "no page errors"
+  },
+  {
+    "flow": "flow13-resilience",
+    "id": "restart messaging (docker start); healthy again",
+    "ok": true,
+    "detail": "healthy after 6s"
+  },
+  {
+    "flow": "flow13-resilience",
+    "id": "owner posts after restart; member sees it live without reload (WS reconnect + resync)",
+    "ok": true,
+    "detail": "live (new websocket connections: 5)"
+  },
+  {
+    "flow": "flow13-resilience",
+    "id": "member socket re-established after the outage",
+    "ok": true,
+    "detail": "sockets 6"
+  }
+]

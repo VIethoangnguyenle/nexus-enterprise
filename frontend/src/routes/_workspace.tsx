@@ -13,6 +13,7 @@ import { AppSidebar } from '../components/patterns/AppSidebar'
 import { ListPanel } from '../components/patterns/ListPanel'
 import { MobileNav } from '../components/patterns/MobileNav'
 import { MobileTopBar } from '../components/patterns/MobileTopBar'
+import { NotificationsRuntime } from '../components/notifications/NotificationsRuntime'
 import { Button, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { apiFetch, logoutSession } from '../api/client'
@@ -163,6 +164,7 @@ function WorkspaceLayout() {
 
       {/* Mobile bottom navigation */}
       <MobileNav />
+      <NotificationsRuntime />
     </div>
   )
 }

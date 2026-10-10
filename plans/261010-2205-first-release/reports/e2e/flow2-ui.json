@@ -1,0 +1,44 @@
+[
+  {
+    "flow": "flow2-invite-leave",
+    "id": "owner invites a new person by email (API)",
+    "ok": true,
+    "detail": 202
+  },
+  {
+    "flow": "flow2-invite-leave",
+    "id": "invitee signs in by OTP on UI and verifies email (SQL)",
+    "ok": true,
+    "detail": "http://localhost:18080/workspace-select"
+  },
+  {
+    "flow": "flow2-invite-leave",
+    "id": "invitee sees the offer on workspace selection (Lời mời)",
+    "ok": true,
+    "detail": "offer visible"
+  },
+  {
+    "flow": "flow2-invite-leave",
+    "id": "invitee accepts (Tham gia) and enters the workspace",
+    "ok": true,
+    "detail": "http://localhost:18080/channels?ws=97fcbf19-6fe3-4b2e-b8ef-e3a637e4c108"
+  },
+  {
+    "flow": "flow2-invite-leave",
+    "id": "invitee leaves the workspace from Cài đặt (confirmed)",
+    "ok": true,
+    "detail": "http://localhost:18080/workspace-select"
+  },
+  {
+    "flow": "flow2-invite-leave",
+    "id": "owner signs in on UI",
+    "ok": true,
+    "detail": "http://localhost:18080/workspace-select"
+  },
+  {
+    "flow": "flow2-invite-leave",
+    "id": "last owner: leaving is refused with an explanation",
+    "ok": true,
+    "detail": "refusal shown"
+  }
+]

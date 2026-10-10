@@ -1,0 +1,12 @@
+# E2E-only override (outside the repo). Changes exactly what cannot stay production-valued locally.
+services:
+  auth:
+    environment:
+      AUTH_FIXED_OTP_CODE: "999999"
+  document:
+    environment:
+      MINIO_PUBLIC_ENDPOINT: storage.localhost:18080
+      MINIO_PUBLIC_SECURE: "false"
+  nexus-minio:
+    environment:
+      MINIO_API_CORS_ALLOW_ORIGIN: "http://localhost:18080"

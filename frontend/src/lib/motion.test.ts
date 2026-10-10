@@ -33,7 +33,7 @@ describe('withDelay', () => {
 describe('reduced-motion presets', () => {
   it('slide nothing: fades only, at most 120ms', () => {
     const p = presets(true)
-    for (const preset of [p.panel, p.modal, p.sheet, p.popover, p.toast]) {
+    for (const preset of [p.panel, p.panelLeft, p.modal, p.sheet, p.popover, p.toast]) {
       expect(preset.initial).toEqual({ opacity: 0 })
       expect((preset.animate.transition as { duration: number }).duration).toBeLessThanOrEqual(0.12)
     }
@@ -45,6 +45,15 @@ describe('sheet preset', () => {
   it('rises from the bottom edge in 280ms and leaves in 210ms', () => {
     const p = presets(false).sheet
     expect(p.initial).toEqual({ y: '100%' })
+    expect((p.animate.transition as { duration: number }).duration).toBe(0.28)
+    expect((p.exit.transition as { duration: number }).duration).toBe(0.21)
+  })
+})
+
+describe('panelLeft preset', () => {
+  it('grows out of the sidebar: from the left, 280ms in and 210ms out', () => {
+    const p = presets(false).panelLeft
+    expect(p.initial).toMatchObject({ opacity: 0, x: -16, scale: 0.985 })
     expect((p.animate.transition as { duration: number }).duration).toBe(0.28)
     expect((p.exit.transition as { duration: number }).duration).toBe(0.21)
   })

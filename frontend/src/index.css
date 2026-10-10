@@ -323,6 +323,7 @@ h1, h2, h3, h4 {
 @utility bottom-above-bar { bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
 @utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
 @utility max-h-sheet { max-height: 85dvh; }
+@utility h-sheet { height: 85dvh; }
 
 /* Field outlines drawn inside the box so focus never shifts layout (§6 Input). */
 @utility field-line { box-shadow: inset 0 0 0 1px var(--color-line); }

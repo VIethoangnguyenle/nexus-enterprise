@@ -101,12 +101,18 @@ message PresenceEvent {
 }
 
 message NotificationEvent {
-  string id          = 1;
-  string type        = 2;
-  string title       = 3;
-  string body        = 4;
-  string entity_type = 5;
-  string entity_id   = 6;
+  string id            = 1;
+  string type          = 2;
+  string title         = 3 [deprecated = true]; // no longer written
+  string body          = 4 [deprecated = true]; // no longer written
+  string target_type   = 5;
+  string target_id     = 6;
+  string actor_user_id = 7;
+  string actor_name    = 8;  // empty when unknown, never an id
+  string target_name   = 9;  // empty when unknown, never an id
+  string workspace_id  = 10;
+  map<string, string> params = 11;
+  google.protobuf.Timestamp created_at = 12;
 }
 
 message UnreadCountEvent {

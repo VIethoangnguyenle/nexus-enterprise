@@ -1,0 +1,39 @@
+{
+  "run": "mv2knfjm",
+  "wsA": "f4567982-42de-4fbd-be4d-df8a43b330fb",
+  "wsB": "9ae1fe0d-2f5c-40b0-ad05-66c28c3a4dbd",
+  "depKD": "cbb4288a-7a54-4abb-8a53-7d19907a8a3f",
+  "depTC": "2ce1d0b5-c750-418e-b419-060247d3fea2",
+  "roleMgr": "3232abc8-4f7e-4b35-97c9-3fee4d7e352e",
+  "roleThamdinh": "acf54399-32a8-4404-b92c-9434b4e606a6",
+  "O": {
+    "email": "e2e-o-mv2knfjm@example.test",
+    "id": "7565a888-1c65-4218-906d-39380f19d2d2",
+    "node": "f7f021b4-70e5-470d-ac64-6c287b610c35"
+  },
+  "X": {
+    "email": "e2e-x-mv2knfjm@example.test",
+    "id": "1a4d131f-c94d-47b7-ba2d-527fd2b33a1e",
+    "node": "62a743e9-641d-4405-8600-ecd724d1befc"
+  },
+  "M1": {
+    "email": "e2e-m1-mv2knfjm@example.test",
+    "id": "750001cc-313b-44c3-8a2d-879babbe3024",
+    "node": "e475adc3-ddb7-4e7a-acc3-2dd6149e5f98"
+  },
+  "M2": {
+    "email": "e2e-m2-mv2knfjm@example.test",
+    "id": "549d9c98-fc83-4c7a-aa48-6edaea2cea66",
+    "node": "68f455ad-f73a-4f97-8f35-c954bf95e5fc"
+  },
+  "M3": {
+    "email": "e2e-m3-mv2knfjm@example.test",
+    "id": "d297e684-c128-4c01-a211-9ab4f55945f5",
+    "node": "b0abe905-4f1d-4b7b-9e61-2325a23baae7"
+  },
+  "M4": {
+    "email": "e2e-m4-mv2knfjm@example.test",
+    "id": "0c73f35a-2bc0-4f26-bba1-9d53726b6105",
+    "node": "d4c3e985-7d62-43ec-a08c-612d4d0da1f4"
+  }
+}

@@ -29,17 +29,25 @@ User decision (2026-10-10): all four items below ship before the first release.
 - Deployed `c56af89` to production (green, 14/14 healthy): invitation emails (E, new), signed
   service identity (D), Docker-dev WebSocket fix (C), notifications mockup + DESIGN.md entries.
   `INTERNAL_IDENTITY_SECRET` was added to `/opt/nexus/.env` via the bootstrap before deploying.
-- **B (notifications screen): in progress, UNCOMMITTED on disk.** An agent was mid-way when the
-  session ended: messaging notifications restructured (migration `037_notifications_structured.sql`,
-  already applied to the local `ngac` and `ngac_ci` DBs), proto `messaging.proto`/`ws.proto`,
-  `pkg/realtime/event.go` (`KindInvitationCreated`), workspace `invitation_announce_test.go`, and
-  the frontend panel/sheet. Messaging did not compile at last check. Next session: review what is
-  on disk against `reports/notifications-design-report.md` and finish, including the
-  invitation-surfacing scope (invitations as notifications + "Lời mời đang chờ (N)" in the
-  workspace switcher), then re-add the `s.announce(ctx, realtime.KindInvitationCreated, …)` line in
-  `workspace/internal/domain/invitations.go` (kept out of `c56af89`) together with the hub/consumer
-  handling that drops it from workspace fan-out.
-- **A (full-system E2E): in progress.** Output under `reports/e2e/`; no final report yet. A local
-  compose project `nexus-e2e` may still be running — check `docker ps` and tear it down
-  (`docker compose -p nexus-e2e down -v`).
+- **B (notifications screen): CODE COMPLETE, NOT REVIEWED, NOT COMMITTED** (working tree and the
+  `wip/notifications` branch). Report: `reports/notifications-report.md`; all gates green on `ngac`
+  and `ngac_ci` at session end. Includes migration 037, structured notifications, the approval
+  recipient fix, invitation notifications + "Lời mời đang chờ (N)" in both switchers, and the
+  `invitation_created` emit in workspace `invitations.go` (handled/dropped in messaging). Next:
+  independent review → fixes → commit → deploy (with the E2E hotfixes below).
+  Known follow-ups: the desktop panel is modal (useModalFocus) while the mockup shows a popover; a
+  revoked/expired invitation leaves its notice unread.
+- **A (full-system E2E): DONE — verdict NO-GO** (`reports/e2e-report.md`, 169/185 pass, 13 real
+  defects). Fix FIRST next session, in this order:
+  1. **CRITICAL, live in production:** the unread list returns every channel in the system to an
+     outsider (cross-tenant leak) — `messaging/.../store/reactions_pins_receipts.go:249` uses
+     `ngac_node_id` where the column is `ngac_node`. Hotfix + deny test + deploy.
+  2. **Blocker:** workspaces created through the product get no approval schema → approvals 404 in
+     every new tenant. Check existing prod tenants (read-only) and backfill.
+  3. High: approval notifications not stored (fix is in the uncommitted notifications work —
+     verify); deleting a department strands approval requests; polls/tasks/reactions/pins not live;
+     approve-and-assign impossible in a one-owner tenant (product decision).
+  4. Medium/low: empty rejection reason accepted; edge lacks HSTS/CSP/Referrer-Policy/
+     Permissions-Policy. Open questions are at the end of the report.
+  The `nexus-e2e` stack was torn down by the agent.
 - Release tag: after B lands and deploys green, and A's findings are triaged.

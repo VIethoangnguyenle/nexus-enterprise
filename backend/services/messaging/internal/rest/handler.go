@@ -91,6 +91,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.GET("/notifications", h.ListNotifications)
 	api.POST("/notifications/:notifId/read", h.MarkRead)
 	api.POST("/notifications/read-all", h.MarkAllRead)
+	api.POST("/notifications/read-about", h.MarkAboutRead)
 	api.GET("/notifications/unread-count", h.UnreadCount)
 }
 
@@ -342,16 +343,21 @@ func (h *Handler) ListDMs(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"channels": dms})
 }
 
-// notificationJSON is a notification as the screens read it.
+// notificationJSON is a notification as the screens read it. It carries facts,
+// not wording: the screen builds the sentence from the type and the names.
+// ActorName and TargetName are empty when unknown, and are never an id.
 type notificationJSON struct {
-	ID         string    `json:"id"`
-	Type       string    `json:"type"`
-	Title      string    `json:"title"`
-	Body       string    `json:"body"`
-	Read       bool      `json:"read"` // ngac-lint:allow the notification's read flag, not an operation
-	EntityType string    `json:"entity_type,omitempty"`
-	EntityID   string    `json:"entity_id,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID          string            `json:"id"`
+	Type        string            `json:"type"`
+	Read        bool              `json:"read"` // ngac-lint:allow the notification's read flag, not an operation
+	ActorUserID string            `json:"actor_user_id,omitempty"`
+	ActorName   string            `json:"actor_name,omitempty"`
+	TargetType  string            `json:"target_type,omitempty"`
+	TargetID    string            `json:"target_id,omitempty"`
+	TargetName  string            `json:"target_name,omitempty"`
+	WorkspaceID string            `json:"workspace_id"`
+	Params      map[string]string `json:"params"`
+	CreatedAt   time.Time         `json:"created_at"`
 }
 
 // intQuery reads an optional integer query parameter: absent is 0 (the domain
@@ -382,15 +388,20 @@ func (h *Handler) ListNotifications(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	page, err := h.notifs.List(c.Request().Context(), claims.UserID, limit, offset)
+	page, err := h.notifs.List(c.Request().Context(), claims.UserID, claims.TenantID, limit, offset)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
 	items := make([]notificationJSON, 0, len(page.Items))
 	for _, n := range page.Items {
+		params := n.Params
+		if params == nil {
+			params = map[string]string{}
+		}
 		items = append(items, notificationJSON{
-			ID: n.ID, Type: n.Type, Title: n.Title, Body: n.Body, Read: n.Read,
-			EntityType: n.EntityType, EntityID: n.EntityID, CreatedAt: n.CreatedAt,
+			ID: n.ID, Type: n.Type, Read: n.Read, ActorUserID: n.ActorUserID, ActorName: n.ActorName,
+			TargetType: n.TargetType, TargetID: n.TargetID, TargetName: n.TargetName,
+			WorkspaceID: n.WorkspaceID, Params: params, CreatedAt: n.CreatedAt,
 		})
 	}
 	return c.JSON(http.StatusOK, map[string]any{"notifications": items, "total": page.Total, "unread_count": page.Unread})
@@ -402,7 +413,7 @@ func (h *Handler) MarkRead(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := h.notifs.MarkRead(c.Request().Context(), claims.UserID, c.Param("notifId")); err != nil {
+	if err := h.notifs.MarkRead(c.Request().Context(), claims.UserID, claims.TenantID, c.Param("notifId")); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -414,7 +425,27 @@ func (h *Handler) MarkAllRead(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := h.notifs.MarkAllRead(c.Request().Context(), claims.UserID); err != nil {
+	if err := h.notifs.MarkAllRead(c.Request().Context(), claims.UserID, claims.TenantID); err != nil {
+		return httputil.MapDomainError(err)
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// MarkAboutRead handles POST /api/notifications/read-about {type, id}: it marks the
+// caller's notifications about one subject read. Answering an invitation uses it.
+func (h *Handler) MarkAboutRead(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	var body struct {
+		Type string `json:"type"`
+		ID   string `json:"id"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if err := h.notifs.MarkAboutRead(c.Request().Context(), claims.UserID, claims.TenantID, body.Type, body.ID); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -426,7 +457,7 @@ func (h *Handler) UnreadCount(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	count, err := h.notifs.UnreadCount(c.Request().Context(), claims.UserID)
+	count, err := h.notifs.UnreadCount(c.Request().Context(), claims.UserID, claims.TenantID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

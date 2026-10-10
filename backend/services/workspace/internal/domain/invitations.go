@@ -164,6 +164,9 @@ func (s *Service) InviteByEmail(ctx context.Context, callerNodeID, wsID string, 
 	if err := s.invitations.UpsertInvitation(ctx, inv); err != nil {
 		return err
 	}
+	// Announced for every address alike; messaging alone decides, from the
+	// stored invitation, whether an existing account is told.
+	s.announce(ctx, realtime.KindInvitationCreated, ws.ID, inv.ID)
 	// After the commit, off the request: the answer is the same for every address.
 	s.emailInvitation(ctx, ws.Name, inv)
 	return nil

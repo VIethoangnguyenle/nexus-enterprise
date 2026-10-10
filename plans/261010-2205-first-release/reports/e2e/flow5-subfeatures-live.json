@@ -1,0 +1,38 @@
+[
+  {
+    "flow": "flow5-subfeatures-live",
+    "id": "member opens #general",
+    "ok": true,
+    "detail": "open"
+  },
+  {
+    "flow": "flow5-subfeatures-live",
+    "id": "base message is live for the member",
+    "ok": true,
+    "detail": "live"
+  },
+  {
+    "flow": "flow5-subfeatures-live",
+    "id": "reaction added by owner (API) appears live on member page (5s)",
+    "ok": false,
+    "detail": "reaction not rendered live (no reload) [shot FAIL-flow5-subfeatures-live-reaction_added_by_owner_API_appears_live_on_member_page_5s_.png url=http://localhost:18080/channels/162f5619-55b5-4120-9293-865f6992a034?ws=204d4864-e6de-47a6-9f16-566049bf3c08]"
+  },
+  {
+    "flow": "flow5-subfeatures-live",
+    "id": "pin by owner (API) appears live on member page (5s)",
+    "ok": false,
+    "detail": "pin not rendered live (no reload) [shot FAIL-flow5-subfeatures-live-pin_by_owner_API_appears_live_on_member_page_5s_.png url=http://localhost:18080/channels/162f5619-55b5-4120-9293-865f6992a034?ws=204d4864-e6de-47a6-9f16-566049bf3c08]"
+  },
+  {
+    "flow": "flow5-subfeatures-live",
+    "id": "poll vote by owner (API) updates the tally live (5s)",
+    "ok": false,
+    "detail": "tally not updated live (no reload) [shot FAIL-flow5-subfeatures-live-poll_vote_by_owner_API_updates_the_tally_live_5s_.png url=http://localhost:18080/channels/162f5619-55b5-4120-9293-865f6992a034?ws=204d4864-e6de-47a6-9f16-566049bf3c08]"
+  },
+  {
+    "flow": "flow5-subfeatures-live",
+    "id": "task status change (API) appears live on member page (5s)",
+    "ok": false,
+    "detail": "task created (and then marked done) not in the member Công việc list without reload [shot FAIL-flow5-subfeatures-live-task_status_change_API_appears_live_on_member_page_5s_.png url=http://localhost:18080/channels/162f5619-55b5-4120-9293-865f6992a034?ws=204d4864-e6de-47a6-9f16-566049bf3c08]"
+  }
+]

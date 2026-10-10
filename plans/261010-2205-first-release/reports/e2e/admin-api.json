@@ -1,0 +1,128 @@
+[
+  {
+    "flow": "admin",
+    "id": "last owner cannot leave (refused)",
+    "ok": true,
+    "detail": "409 {\"error\":\"Bạn là chủ sở hữu cuối cùng. Chuyển quyền sở hữu cho người khác trước khi rời.\",\"reason\":\"last_owner\"}"
+  },
+  {
+    "flow": "admin",
+    "id": "owner narrows manager role to management:manage (no invite)",
+    "ok": true,
+    "detail": "200 {\"area\":\"management\",\"operations\":[\"manage\"]}"
+  },
+  {
+    "flow": "admin",
+    "id": "manager can open roles (permission editor data)",
+    "ok": true,
+    "detail": "200"
+  },
+  {
+    "flow": "admin",
+    "id": "delegation guard: manager cannot grant invite it lacks (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"cannot grant an operation you do not hold: access denied: invite\"}"
+  },
+  {
+    "flow": "admin",
+    "id": "delegation guard: manager may grant an op it holds (manage)",
+    "ok": true,
+    "detail": "200 {\"area\":\"management\",\"operations\":[\"manage\"]}"
+  },
+  {
+    "flow": "admin",
+    "id": "owner grants Thẩm định management:invite (setup)",
+    "ok": true,
+    "detail": "200"
+  },
+  {
+    "flow": "admin",
+    "id": "delegation guard: manager cannot assign a role conferring invite it lacks (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"cannot hand out an operation you do not hold: access denied: invite\"}"
+  },
+  {
+    "flow": "admin",
+    "id": "owner (holds invite) can assign the same role",
+    "ok": true,
+    "detail": "200"
+  },
+  {
+    "flow": "admin",
+    "id": "delegation guard: assigning a role that confers invite by a manager lacking it refused",
+    "ok": true,
+    "detail": "403 {\"message\":\"cannot hand out an operation you do not hold: access denied: invite\"}"
+  },
+  {
+    "flow": "admin",
+    "id": "member cannot create a role (403)",
+    "ok": true,
+    "detail": "403 {\"message\":\"access denied: manage\"}"
+  },
+  {
+    "flow": "admin",
+    "id": "assign department to M4 (owner)",
+    "ok": true,
+    "detail": "200 {\"status\":\"ok\"}"
+  },
+  {
+    "flow": "admin",
+    "id": "assign role Thẩm định to M4 (owner)",
+    "ok": true,
+    "detail": "200 {\"status\":\"ok\"}"
+  },
+  {
+    "flow": "admin",
+    "id": "remove role from M4",
+    "ok": true,
+    "detail": "200"
+  },
+  {
+    "flow": "admin",
+    "id": "move department under another (owner)",
+    "ok": true,
+    "detail": "200 {\"id\":\"f16acf33-a8d7-4612-8680-a181f995b99e\",\"name\":\"Kinh doanh\",\"parent_id\":\"730d7bd2-dafb-4428-9f4e-caaff6845e0a\"}"
+  },
+  {
+    "flow": "admin",
+    "id": "move department into itself refused",
+    "ok": true,
+    "detail": "400 {\"message\":\"invalid input: cannot move department to itself\"}"
+  },
+  {
+    "flow": "admin",
+    "id": "delete department with members: 204 (members re-homed to parent by design)",
+    "ok": true,
+    "detail": "204"
+  },
+  {
+    "flow": "admin",
+    "id": "M2 (was in deleted department) now has no department",
+    "ok": true,
+    "detail": "{\"username\":\"e2e-m2-mv2jfisi.example\",\"ngac_node_id\":\"6bb7fd79-acab-402d-aa6f-a17d985bbf34\"}"
+  },
+  {
+    "flow": "admin",
+    "id": "template naming dept X created",
+    "ok": true,
+    "detail": "201 {\"id\":\"9627651f-0058-4663-b016-22193983221b\",\"name\":\"Phòng X mv2jfisi\",\"entity_type\":\"general\",\"is_active\":true,\"priority\":50,\"conditions\":[{\"id\":\"e84f76b3-d5bb-4ddf-a2ec-f8a9f5503e68\",\"field\":\"tag\",\"operator\":\"eq\",\"value\":\"\\\"dept-x\\\"\"}],\"steps\":[{\"id\":\"5b96280d-5274-465e-9bea-10d7f471f6ff\",\"step_or"
+  },
+  {
+    "flow": "admin",
+    "id": "request on template whose department was deleted is refused (no silent stuck approval)",
+    "ok": false,
+    "detail": "201 {\"id\":\"20ec975d-0bc0-4eaf-8f8b-7a6052b3a0ce\",\"entity_type\":\"general\",\"entity_id\":\"1d269ee0-ca30-4853-87e3-8ff3f8d0ce65\",\"template_id\":\"9627651f-0058-4663-b016-22193983221b\",\"template_name\":\"Phòng X mv2jfisi\",\"form_data_json\":\"{\\\"tag\\\":\\\"dept-x\\\"}\",\"current_step\":1,\"status\":\"pending\",\"scope_oa_id\":\"d "
+  },
+  {
+    "flow": "admin",
+    "id": "delete empty department",
+    "ok": true,
+    "detail": "204 \"\""
+  },
+  {
+    "flow": "admin",
+    "id": "member can list members",
+    "ok": true,
+    "detail": "200"
+  }
+]

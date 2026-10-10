@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { queryClient } from '../lib/query-client'
 import { keys } from '../hooks/keys'
 import { useAuthStore } from './auth.store'
+import { receiveNotification } from '../lib/notification-arrivals'
 import {
   ClientEnvelope,
   ServerEnvelope,
@@ -400,10 +401,11 @@ function handleServerMessage(
       break
     }
 
-    // The notification keys are kept for the notifications UI that is still to
-    // be decided; no screen reads them yet.
+    // The list and the count refetch; the arrival decides what the person sees
+    // (a wash on the open list, or a toast).
     case 'notification':
       queryClient.invalidateQueries({ queryKey: keys.notifications.all() })
+      receiveNotification(envelope.payload.notification)
       break
 
     case 'unreadCount':

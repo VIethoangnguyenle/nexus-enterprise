@@ -1,0 +1,21 @@
+http:
+  routers:
+    app:
+      rule: "Host(`localhost`)"
+      entryPoints: [web]
+      service: frontend
+      priority: 1
+    storage:
+      rule: "Host(`storage.localhost`)"
+      entryPoints: [web]
+      service: minio
+      priority: 10
+  services:
+    frontend:
+      loadBalancer:
+        servers:
+          - url: "http://nexus-frontend:80"
+    minio:
+      loadBalancer:
+        servers:
+          - url: "http://nexus-minio:9000"

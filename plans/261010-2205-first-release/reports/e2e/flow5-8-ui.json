@@ -1,0 +1,104 @@
+[
+  {
+    "flow": "flow5-chat-realtime",
+    "id": "owner signs in (UI) and enters the workspace",
+    "ok": true,
+    "detail": "http://localhost:18080/channels?ws=ada8f90c-5fe8-4561-8fab-4640e0abaebd"
+  },
+  {
+    "flow": "flow5-chat-realtime",
+    "id": "member M3 signs in (UI) and enters the workspace",
+    "ok": true,
+    "detail": "http://localhost:18080/channels?ws=ada8f90c-5fe8-4561-8fab-4640e0abaebd"
+  },
+  {
+    "flow": "flow5-chat-realtime",
+    "id": "both open #general from the channel list",
+    "ok": true,
+    "detail": "08e7e138-3502-4f2f-a2be-3629627c3248"
+  },
+  {
+    "flow": "flow5-chat-realtime",
+    "id": "owner posts; member sees it live (no reload)",
+    "ok": true,
+    "detail": "live in 268 ms"
+  },
+  {
+    "flow": "flow5-chat-realtime",
+    "id": "member replies; owner sees it live",
+    "ok": true,
+    "detail": "live in 242 ms"
+  },
+  {
+    "flow": "flow5-chat-realtime",
+    "id": "member pins owner message (Ghim); owner sees the pin live",
+    "ok": false,
+    "detail": "locator.waitFor: Timeout 10000ms exceeded. [shot FAIL-flow5-chat-realtime-member_pins_owner_message_Ghim_owner_sees_the_pin_live.png url=http://localhost:18080/channels/08e7e138-3502-4f2f-a2be-3629627c3248?ws=ada8f90c-5fe8-4561-8fab-4640e0abaebd]"
+  },
+  {
+    "flow": "flow5-chat-realtime",
+    "id": "poll created via API; member sees the question live",
+    "ok": false,
+    "detail": "locator.waitFor: Timeout 10000ms exceeded. [shot FAIL-flow5-chat-realtime-poll_created_via_API_member_sees_the_question_live.png url=http://localhost:18080/channels/08e7e138-3502-4f2f-a2be-3629627c3248?ws=ada8f90c-5fe8-4561-8fab-4640e0abaebd]"
+  },
+  {
+    "flow": "flow5-chat-realtime",
+    "id": "task created via API; member sees it live",
+    "ok": false,
+    "detail": "locator.waitFor: Timeout 10000ms exceeded. [shot FAIL-flow5-chat-realtime-task_created_via_API_member_sees_it_live.png url=http://localhost:18080/channels/08e7e138-3502-4f2f-a2be-3629627c3248?ws=ada8f90c-5fe8-4561-8fab-4640e0abaebd]"
+  },
+  {
+    "flow": "flow8-documents",
+    "id": "owner creates a text document (\"Văn bản mới\")",
+    "ok": true,
+    "detail": "http://localhost:18080/documents/bac4ba43-6fe4-4034-ae4f-c2b9578d14de?ws=ada8f90c-5fe8-4561-8fab-4640e0abaebd"
+  },
+  {
+    "flow": "flow8-documents",
+    "id": "type in the editor; autosave shows \"Đã lưu\"",
+    "ok": true,
+    "detail": "autosaved"
+  },
+  {
+    "flow": "flow8-documents",
+    "id": "member (read on Documents) opens the document and sees the text",
+    "ok": true,
+    "detail": "visible"
+  },
+  {
+    "flow": "flow8-documents",
+    "id": "second tab of the owner opens the same document",
+    "ok": true,
+    "detail": "open"
+  },
+  {
+    "flow": "flow8-documents",
+    "id": "tab 1 saves a newer version",
+    "ok": true,
+    "detail": "saved"
+  },
+  {
+    "flow": "flow8-documents",
+    "id": "tab 2 writes from the old version: conflict dialog, no silent overwrite",
+    "ok": true,
+    "detail": "conflict dialog shown"
+  },
+  {
+    "flow": "flow8-documents",
+    "id": "conflict \"Tải lại bản mới nhất\" loads the server version",
+    "ok": true,
+    "detail": "server version shown"
+  },
+  {
+    "flow": "flow8-documents",
+    "id": "hostile markup stored via API (script, onerror, javascript: link, iframe)",
+    "ok": true,
+    "detail": "stored"
+  },
+  {
+    "flow": "flow8-documents",
+    "id": "member opens it: no script runs, no event handler, no javascript: link, no iframe",
+    "ok": true,
+    "detail": "{\"onerrorImg\":0,\"jsLinks\":0,\"iframes\":0,\"scripts\":0}"
+  }
+]

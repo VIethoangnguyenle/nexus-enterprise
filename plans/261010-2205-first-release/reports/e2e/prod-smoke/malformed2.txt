@@ -1,0 +1,3 @@
+{"code":"session_required","message":"missing or invalid authorization header"}
+
+401

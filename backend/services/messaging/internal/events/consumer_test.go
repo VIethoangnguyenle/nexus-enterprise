@@ -6,13 +6,14 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"ngac-platform/services/messaging/internal/domain"
 )
 
 type nopNotifier struct{}
 
-func (nopNotifier) CreateNotification(context.Context, string, string, string, string, string, string) error {
-	return nil
-}
+func (nopNotifier) CreateNotification(context.Context, domain.NewNotification) error { return nil }
+func (nopNotifier) NotifyInvitation(context.Context, string) error                   { return nil }
 
 type capturingBroadcaster struct{ got []ApprovalNotice }
 

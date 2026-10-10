@@ -949,13 +949,21 @@ func (x *PresenceEvent) GetStatus() string {
 }
 
 type NotificationEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
-	Type          string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
-	Title         string                 `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"`
-	Body          string                 `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"`
-	EntityType    string                 `protobuf:"bytes,5,opt,name=entity_type,json=entityType,proto3" json:"entity_type,omitempty"`
-	EntityId      string                 `protobuf:"bytes,6,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Id    string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Type  string                 `protobuf:"bytes,2,opt,name=type,proto3" json:"type,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/ws.proto.
+	Title string `protobuf:"bytes,3,opt,name=title,proto3" json:"title,omitempty"` // no longer written
+	// Deprecated: Marked as deprecated in proto/messaging/ws.proto.
+	Body          string                 `protobuf:"bytes,4,opt,name=body,proto3" json:"body,omitempty"` // no longer written
+	TargetType    string                 `protobuf:"bytes,5,opt,name=target_type,json=targetType,proto3" json:"target_type,omitempty"`
+	TargetId      string                 `protobuf:"bytes,6,opt,name=target_id,json=targetId,proto3" json:"target_id,omitempty"`
+	ActorUserId   string                 `protobuf:"bytes,7,opt,name=actor_user_id,json=actorUserId,proto3" json:"actor_user_id,omitempty"`
+	ActorName     string                 `protobuf:"bytes,8,opt,name=actor_name,json=actorName,proto3" json:"actor_name,omitempty"`    // empty when unknown, never an id
+	TargetName    string                 `protobuf:"bytes,9,opt,name=target_name,json=targetName,proto3" json:"target_name,omitempty"` // empty when unknown, never an id
+	WorkspaceId   string                 `protobuf:"bytes,10,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	Params        map[string]string      `protobuf:"bytes,11,rep,name=params,proto3" json:"params,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1004,6 +1012,7 @@ func (x *NotificationEvent) GetType() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/ws.proto.
 func (x *NotificationEvent) GetTitle() string {
 	if x != nil {
 		return x.Title
@@ -1011,6 +1020,7 @@ func (x *NotificationEvent) GetTitle() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/ws.proto.
 func (x *NotificationEvent) GetBody() string {
 	if x != nil {
 		return x.Body
@@ -1018,18 +1028,60 @@ func (x *NotificationEvent) GetBody() string {
 	return ""
 }
 
-func (x *NotificationEvent) GetEntityType() string {
+func (x *NotificationEvent) GetTargetType() string {
 	if x != nil {
-		return x.EntityType
+		return x.TargetType
 	}
 	return ""
 }
 
-func (x *NotificationEvent) GetEntityId() string {
+func (x *NotificationEvent) GetTargetId() string {
 	if x != nil {
-		return x.EntityId
+		return x.TargetId
 	}
 	return ""
+}
+
+func (x *NotificationEvent) GetActorUserId() string {
+	if x != nil {
+		return x.ActorUserId
+	}
+	return ""
+}
+
+func (x *NotificationEvent) GetActorName() string {
+	if x != nil {
+		return x.ActorName
+	}
+	return ""
+}
+
+func (x *NotificationEvent) GetTargetName() string {
+	if x != nil {
+		return x.TargetName
+	}
+	return ""
+}
+
+func (x *NotificationEvent) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
+func (x *NotificationEvent) GetParams() map[string]string {
+	if x != nil {
+		return x.Params
+	}
+	return nil
+}
+
+func (x *NotificationEvent) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
 }
 
 type UnreadCountEvent struct {
@@ -1900,15 +1952,28 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\rPresenceEvent\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12\x16\n" +
-	"\x06status\x18\x03 \x01(\tR\x06status\"\x9f\x01\n" +
+	"\x06status\x18\x03 \x01(\tR\x06status\"\xe6\x03\n" +
 	"\x11NotificationEvent\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04type\x18\x02 \x01(\tR\x04type\x12\x14\n" +
-	"\x05title\x18\x03 \x01(\tR\x05title\x12\x12\n" +
-	"\x04body\x18\x04 \x01(\tR\x04body\x12\x1f\n" +
-	"\ventity_type\x18\x05 \x01(\tR\n" +
-	"entityType\x12\x1b\n" +
-	"\tentity_id\x18\x06 \x01(\tR\bentityId\"(\n" +
+	"\x04type\x18\x02 \x01(\tR\x04type\x12\x18\n" +
+	"\x05title\x18\x03 \x01(\tB\x02\x18\x01R\x05title\x12\x16\n" +
+	"\x04body\x18\x04 \x01(\tB\x02\x18\x01R\x04body\x12\x1f\n" +
+	"\vtarget_type\x18\x05 \x01(\tR\n" +
+	"targetType\x12\x1b\n" +
+	"\ttarget_id\x18\x06 \x01(\tR\btargetId\x12\"\n" +
+	"\ractor_user_id\x18\a \x01(\tR\vactorUserId\x12\x1d\n" +
+	"\n" +
+	"actor_name\x18\b \x01(\tR\tactorName\x12\x1f\n" +
+	"\vtarget_name\x18\t \x01(\tR\n" +
+	"targetName\x12!\n" +
+	"\fworkspace_id\x18\n" +
+	" \x01(\tR\vworkspaceId\x12@\n" +
+	"\x06params\x18\v \x03(\v2(.messaging.NotificationEvent.ParamsEntryR\x06params\x129\n" +
+	"\n" +
+	"created_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x1a9\n" +
+	"\vParamsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"(\n" +
 	"\x10UnreadCountEvent\x12\x14\n" +
 	"\x05count\x18\x01 \x01(\x05R\x05count\"p\n" +
 	"\x10ThreadReplyEvent\x120\n" +
@@ -1995,7 +2060,7 @@ func file_proto_messaging_ws_proto_rawDescGZIP() []byte {
 	return file_proto_messaging_ws_proto_rawDescData
 }
 
-var file_proto_messaging_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_proto_messaging_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_proto_messaging_ws_proto_goTypes = []any{
 	(*ClientEnvelope)(nil),        // 0: messaging.ClientEnvelope
 	(*AuthRequest)(nil),           // 1: messaging.AuthRequest
@@ -2019,7 +2084,8 @@ var file_proto_messaging_ws_proto_goTypes = []any{
 	(*DomainEvent)(nil),           // 19: messaging.DomainEvent
 	(*WorkspaceSubscribed)(nil),   // 20: messaging.WorkspaceSubscribed
 	(*ApprovalEvent)(nil),         // 21: messaging.ApprovalEvent
-	(*timestamppb.Timestamp)(nil), // 22: google.protobuf.Timestamp
+	nil,                           // 22: messaging.NotificationEvent.ParamsEntry
+	(*timestamppb.Timestamp)(nil), // 23: google.protobuf.Timestamp
 }
 var file_proto_messaging_ws_proto_depIdxs = []int32{
 	1,  // 0: messaging.ClientEnvelope.auth:type_name -> messaging.AuthRequest
@@ -2042,13 +2108,15 @@ var file_proto_messaging_ws_proto_depIdxs = []int32{
 	9,  // 17: messaging.ServerEnvelope.presence_event:type_name -> messaging.PresenceEvent
 	19, // 18: messaging.ServerEnvelope.domain_event:type_name -> messaging.DomainEvent
 	20, // 19: messaging.ServerEnvelope.workspace_subscribed:type_name -> messaging.WorkspaceSubscribed
-	22, // 20: messaging.ChatMessage.created_at:type_name -> google.protobuf.Timestamp
-	7,  // 21: messaging.ThreadReplyEvent.message:type_name -> messaging.ChatMessage
-	22, // [22:22] is the sub-list for method output_type
-	22, // [22:22] is the sub-list for method input_type
-	22, // [22:22] is the sub-list for extension type_name
-	22, // [22:22] is the sub-list for extension extendee
-	0,  // [0:22] is the sub-list for field type_name
+	23, // 20: messaging.ChatMessage.created_at:type_name -> google.protobuf.Timestamp
+	22, // 21: messaging.NotificationEvent.params:type_name -> messaging.NotificationEvent.ParamsEntry
+	23, // 22: messaging.NotificationEvent.created_at:type_name -> google.protobuf.Timestamp
+	7,  // 23: messaging.ThreadReplyEvent.message:type_name -> messaging.ChatMessage
+	24, // [24:24] is the sub-list for method output_type
+	24, // [24:24] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_proto_messaging_ws_proto_init() }
@@ -2086,7 +2154,7 @@ func file_proto_messaging_ws_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_messaging_ws_proto_rawDesc), len(file_proto_messaging_ws_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   22,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

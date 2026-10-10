@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { create } from 'zustand'
 import { AnimatePresence, motion } from 'motion/react'
 import { CircleCheck, CircleAlert, Info } from 'lucide-react'
@@ -16,6 +16,8 @@ export interface ToastItem {
   message: string
   tone: Tone
   action?: ToastAction
+  /** Replaces the tone's icon, e.g. the avatar of the person a notification is about. */
+  icon?: ReactNode
   /** Milliseconds before it leaves on its own. */
   duration: number
 }
@@ -50,6 +52,7 @@ interface ToastOptions {
   tone?: Tone
   /** e.g. `{ label: 'Hoàn tác', onClick: undo }`. Clicking also dismisses. */
   action?: ToastAction
+  icon?: ReactNode
   duration?: number
 }
 
@@ -62,6 +65,7 @@ export function toast(message: string, opts: ToastOptions = {}): number {
     message,
     tone: opts.tone ?? 'success',
     action: opts.action,
+    icon: opts.icon,
     duration: opts.duration ?? TOAST_DURATION,
   })
 }
@@ -103,7 +107,7 @@ function ToastView({ item }: { item: ToastItem }) {
       className="pointer-events-auto flex items-center gap-3 min-w-72 max-w-100 py-2.5 pr-2.5 pl-3.5
         rounded-overlay bg-overlay shadow-overlay text-sm text-ink"
     >
-      {toneIcon[item.tone]}
+      {item.icon ?? toneIcon[item.tone]}
       <span className="flex-1 min-w-0">{item.message}</span>
       {item.action && (
         <button

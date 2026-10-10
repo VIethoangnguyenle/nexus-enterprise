@@ -1,9 +1,9 @@
-import { useRef, useState, type RefObject } from 'react'
+import { useRef, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from '@tanstack/react-router'
 import { AnimatePresence, motion, useDragControls, type PanInfo } from 'motion/react'
 import {
-  ArrowLeft, Check, ChevronRight, LogOut, Package, RefreshCw, Settings, ShieldCheck, Users, X,
+  ArrowLeft, Bell, Check, ChevronRight, LogOut, Mail, Package, RefreshCw, Settings, ShieldCheck, Users, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { logoutSession } from '../../api/client'
@@ -11,6 +11,11 @@ import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useModalFocus } from '../../hooks/useModalFocus'
 import { usePeople } from '../../hooks/usePeople'
 import { useWorkspaceSwitcher } from '../../hooks/useSwitchWorkspace'
+import { useMyInvitations } from '../../hooks/useInvitations'
+import { useUnreadCount } from '../../hooks/useNotifications'
+import { formatCount } from '../../lib/format'
+import { unreadLabel } from '../../lib/notification-model'
+import { NotificationsView } from '../notifications/NotificationsView'
 import { workspaceRowDetail } from '../../lib/auth-flow'
 import { useMotionPresets } from '../../lib/motion'
 import { UNKNOWN_PERSON } from '../../lib/people'
@@ -33,9 +38,14 @@ export const MORE_ITEMS: MoreItem[] = [
 const CLOSE_DISTANCE = 0.25
 const CLOSE_VELOCITY = 500
 
+export type SheetView = 'menu' | 'workspaces' | 'notifications'
+
 interface MobileMoreSheetProps {
   open: boolean
   onClose: () => void
+  /** What the sheet shows; the bar opens it straight onto the list when asked to. */
+  view: SheetView
+  onViewChange: (v: SheetView) => void
   /** The path being shown, to mark the item the person is already on. */
   pathname: string
 }
@@ -48,7 +58,7 @@ interface MobileMoreSheetProps {
  * (trap, initial focus, return focus, Esc), the same ones `Dialog` and the
  * phone `SidePanel` follow; a downward drag on the handle row also closes it.
  */
-export function MobileMoreSheet({ open, onClose, pathname }: MobileMoreSheetProps) {
+export function MobileMoreSheet({ open, onClose, pathname, view, onViewChange }: MobileMoreSheetProps) {
   const m = useMotionPresets()
   const surfaceRef = useRef<HTMLDivElement>(null)
   const dragControls = useDragControls()
@@ -78,10 +88,13 @@ export function MobileMoreSheet({ open, onClose, pathname }: MobileMoreSheetProp
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={{ top: 0, bottom: 0.5 }}
             onDragEnd={onDragEnd}
-            className="absolute inset-x-0 bottom-0 z-modal flex flex-col max-h-sheet overflow-hidden rounded-t-overlay
-              bg-overlay shadow-overlay px-4 pb-sheet"
+            className={`absolute inset-x-0 bottom-0 z-modal flex flex-col overflow-hidden rounded-t-overlay
+              bg-overlay shadow-overlay px-4 pb-sheet ${view === 'notifications' ? 'h-sheet' : 'max-h-sheet'}`}
           >
-            <SheetBody onClose={onClose} pathname={pathname} entryRef={entryRef} onHandleDown={(e) => dragControls.start(e)} />
+            <SheetBody
+              onClose={onClose} pathname={pathname} entryRef={entryRef} view={view} onViewChange={onViewChange}
+              onHandleDown={(e) => dragControls.start(e)}
+            />
           </motion.div>
         </div>
       )}
@@ -90,13 +103,15 @@ export function MobileMoreSheet({ open, onClose, pathname }: MobileMoreSheetProp
   )
 }
 
-function SheetBody({ onClose, pathname, entryRef, onHandleDown }: {
+function SheetBody({ onClose, pathname, entryRef, onHandleDown, view, onViewChange }: {
   onClose: () => void
   pathname: string
   entryRef: RefObject<HTMLButtonElement | null>
   onHandleDown: (e: React.PointerEvent) => void
+  view: SheetView
+  onViewChange: (v: SheetView) => void
 }) {
-  const [view, setView] = useState<'menu' | 'workspaces'>('menu')
+  const setView = onViewChange
   return (
     <>
       {/* The handle row is the drag surface; the content below scrolls. */}
@@ -104,13 +119,15 @@ function SheetBody({ onClose, pathname, entryRef, onHandleDown }: {
         onPointerDown={onHandleDown}
         className="grid grid-cols-[2rem_1fr_2rem] items-center h-10 mt-1 shrink-0 touch-none"
       >
-        {view === 'workspaces' && (
+        {view !== 'menu' && (
           <IconButton aria-label="Quay lại" onClick={() => setView('menu')} className="col-start-1 row-start-1">
             <ArrowLeft size={18} strokeWidth={1.75} />
           </IconButton>
         )}
-        {view === 'workspaces' ? (
-          <Heading as="h2" look="section" className="col-start-2 row-start-1 justify-self-center">Đổi workspace</Heading>
+        {view !== 'menu' ? (
+          <Heading as="h2" look="section" className="col-start-2 row-start-1 justify-self-center">
+            {view === 'notifications' ? 'Thông báo' : 'Đổi workspace'}
+          </Heading>
         ) : (
           <span aria-hidden="true" className="col-start-2 row-start-1 justify-self-center w-9 h-1 rounded-full bg-line" />
         )}
@@ -118,21 +135,35 @@ function SheetBody({ onClose, pathname, entryRef, onHandleDown }: {
           <X size={18} strokeWidth={1.75} />
         </IconButton>
       </div>
-      <div className="min-h-0 overflow-y-auto">
-        {view === 'menu'
-          ? <MenuView onClose={onClose} pathname={pathname} entryRef={entryRef} onPickWorkspace={() => setView('workspaces')} />
-          : <WorkspaceView onDone={onClose} />}
-      </div>
+      {view === 'notifications' ? (
+        // The list scrolls inside itself, so its header line stays put.
+        <div className="flex flex-col min-h-0 flex-1 -mx-4">
+          <NotificationsView onNavigated={onClose} />
+        </div>
+      ) : (
+        <div className="min-h-0 overflow-y-auto">
+          {view === 'menu'
+            ? (
+              <MenuView
+                onClose={onClose} pathname={pathname} entryRef={entryRef}
+                onPickWorkspace={() => setView('workspaces')} onShowNotifications={() => setView('notifications')}
+              />
+            )
+            : <WorkspaceView onDone={onClose} />}
+        </div>
+      )}
     </>
   )
 }
 
-function MenuView({ onClose, pathname, entryRef, onPickWorkspace }: {
+function MenuView({ onClose, pathname, entryRef, onPickWorkspace, onShowNotifications }: {
   onClose: () => void
   pathname: string
   entryRef: RefObject<HTMLButtonElement | null>
   onPickWorkspace: () => void
+  onShowNotifications: () => void
 }) {
+  const unread = useUnreadCount().data ?? 0
   const user = useAuthStore((s) => s.user)
   const setActiveModule = useUiStore((s) => s.setActiveModule)
   const { workspaceId, workspaceName } = useActiveWorkspace()
@@ -166,6 +197,24 @@ function MenuView({ onClose, pathname, entryRef, onPickWorkspace }: {
       </Pressable>
 
       <nav aria-label="Thêm" className="grid gap-0.5 pt-2">
+        <Pressable
+          onClick={onShowNotifications}
+          aria-label={unreadLabel('Thông báo', unread)}
+          className="flex items-center gap-3 h-12 px-3 rounded-surface text-base font-medium text-ink
+            hover:bg-hover transition-colors duration-quick"
+        >
+          <Bell size={18} strokeWidth={1.75} aria-hidden="true" className="text-ink-muted" />
+          <span className="flex-1">Thông báo</span>
+          {unread > 0 && (
+            <span
+              aria-hidden="true"
+              className="inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full bg-accent
+                text-on-accent text-2xs font-semibold tnum"
+            >
+              {formatCount(unread)}
+            </span>
+          )}
+        </Pressable>
         {MORE_ITEMS.map((item) => {
           const active = pathname === item.to || pathname.startsWith(`${item.to}/`)
           return (
@@ -206,6 +255,7 @@ function MenuView({ onClose, pathname, entryRef, onPickWorkspace }: {
 function WorkspaceView({ onDone }: { onDone: () => void }) {
   const { currentId, workspaces, isLoading, isError, refetch, choose, switchingId } = useWorkspaceSwitcher()
   const busy = switchingId !== undefined
+  const offers = useMyInvitations().data?.length ?? 0
 
   if (isError) {
     return (
@@ -236,6 +286,7 @@ function WorkspaceView({ onDone }: { onDone: () => void }) {
     )
   }
   return (
+    <div>
     <ul role="listbox" aria-label="Workspace của bạn" className="grid gap-0.5 m-0 p-0">
       {workspaces.map((w) => {
         const name = workspaceDisplayName(w.name)
@@ -268,5 +319,17 @@ function WorkspaceView({ onDone }: { onDone: () => void }) {
         )
       })}
     </ul>
+      {offers > 0 && (
+        <Link
+          to="/workspace-select"
+          onClick={onDone}
+          className="flex items-center gap-3 min-h-12 px-3 mt-1 rounded-surface text-base font-semibold text-ink no-underline
+            focus-ring hover:bg-hover transition-colors duration-quick"
+        >
+          <Mail size={18} strokeWidth={1.75} aria-hidden="true" className="text-accent" />
+          Lời mời đang chờ ({offers})
+        </Link>
+      )}
+    </div>
   )
 }

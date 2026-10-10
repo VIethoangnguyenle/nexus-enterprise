@@ -118,6 +118,11 @@ func (c *RealtimeConsumer) handle(topic string, value []byte) {
 		slog.Debug("realtime event stale, skipped", "topic", topic, "age", age)
 		return
 	}
+	// An invitation is for messaging's notifications only: members are not told
+	// who has been invited.
+	if evt.Domain == realtime.DomainWorkspace && evt.Kind == realtime.KindInvitationCreated {
+		return
+	}
 	// A person who stops belonging to the workspace stops following it before
 	// anyone is told they left.
 	if evt.Domain == realtime.DomainWorkspace && evt.Kind == realtime.KindMemberRemoved {
