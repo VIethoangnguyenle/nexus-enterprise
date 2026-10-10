@@ -56,6 +56,11 @@ func (p *scriptedPolicyRead) CheckAccess(_ context.Context, req *policypb.CheckA
 	return &policypb.AccessDecision{Decision: ngac.DecisionDeny}, nil
 }
 
+// IsAssigned reports no existing edges: the scripted world starts empty.
+func (p *scriptedPolicyRead) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return &policypb.BoolResponse{}, nil
+}
+
 func (p *scriptedPolicyRead) GetChildren(_ context.Context, req *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
 	return &policypb.NodeList{Nodes: p.children[req.NodeId]}, nil
 }

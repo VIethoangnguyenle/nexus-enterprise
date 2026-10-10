@@ -18,6 +18,7 @@ make run            # same stack in the foreground via overmind (Procfile.dev)
 make dev-infra      # postgres/redis/redpanda/minio only, then applies schema
 
 make build-check    # compile every service's ./cmd/ — the fast "does it still build" gate
+make check-layering # shared helpers, REST→domain, no SQL in transports, no dropped store errors
 make test           # Go tests, all services; exits non-zero on failure
 make test s=policy  # one service, verbose
 make db-migrate     # re-apply data/init.sql + data/migrations/ to the running DB
@@ -40,10 +41,19 @@ Postgres, Redis, Redpanda, MinIO, Traefik.
 
 Only what is not derivable in ten seconds:
 
-- **Nine Go modules, not one.** `backend/go.mod` holds shared code (`ngac`, `pkg/httputil`,
-  `proto`, `testutil`); each service has its own `go.mod` with `replace ngac-platform => ../..`.
+- **Nine Go modules, not one.** `backend/go.mod` holds shared code (`ngac`, `pkg/*`, `proto`,
+  `testutil`); each service has its own `go.mod` with `replace ngac-platform => ../..`.
   There is no `go.work`. **`go test ./...` from `backend/` silently skips every service** and
   reports success having tested nothing — always run Go commands from inside a service directory.
+- **Every service's `main` is built from the same parts.** `pkg/bootstrap` (env, DB pool, graceful
+  shutdown; `redisconn` for Redis), `grpcauth` (`ServerOptions` is the only way to build a gRPC
+  server — it carries logging, panic recovery and the caller check — and `Dial` the only way to
+  open a client), `policyclient` (every policy check, fail-closed), `grpcutil.Status` and
+  `httputil.MapDomainError`/`MapGRPCError` (domain error → status). The policy address is
+  `POLICY_SERVICE_ADDR`; the old `POLICY_ADDR` is still read, with a deprecation warning, for one
+  release. Layering is transport → domain → store: REST never calls the gRPC server, and no SQL
+  runs in a transport. A 500 answers `{"message": "internal error", "request_id"}` and the cause
+  goes only to the log; `make check-layering` enforces all of this.
 - **Schema lives in three places**: `data/init.sql` (base), `data/migrations/` (numbered chain —
   `union_id`, `open_id`, `tenant_users` come from `005_multi_tenant_auth.sql`), and
   `backend/services/policy/migrations/` (policy-local). Approval tables live in a per-tenant

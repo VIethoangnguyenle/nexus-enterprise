@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"google.golang.org/genproto/googleapis/rpc/errdetails"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -15,25 +16,37 @@ import (
 // not one of those, so passing it there silently falls through to 500. A denial
 // reported as "internal server error" tells the caller the server broke and the
 // request might succeed on retry, when the answer is a settled no.
+//
+// A refusal keeps its message. When the service attached an ErrorInfo reason
+// (to tell apart refusals that share a status code) the body also carries it as
+// "reason". Every other code — Internal, Unavailable, Unknown — is a failure of
+// ours and becomes a generic 500 (see Internal); its text only reaches the log.
 func MapGRPCError(err error) *echo.HTTPError {
 	st, ok := status.FromError(err)
 	if !ok {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return Internal(err)
 	}
 	switch st.Code() {
 	case codes.NotFound:
-		return echo.NewHTTPError(http.StatusNotFound, st.Message())
+		return refusal(http.StatusNotFound, st)
 	case codes.PermissionDenied:
-		return echo.NewHTTPError(http.StatusForbidden, st.Message())
+		return refusal(http.StatusForbidden, st)
 	case codes.Unauthenticated:
-		return echo.NewHTTPError(http.StatusUnauthorized, st.Message())
+		return refusal(http.StatusUnauthorized, st)
 	case codes.InvalidArgument:
-		return echo.NewHTTPError(http.StatusBadRequest, st.Message())
-	case codes.AlreadyExists:
-		return echo.NewHTTPError(http.StatusConflict, st.Message())
-	case codes.FailedPrecondition:
-		return echo.NewHTTPError(http.StatusConflict, st.Message())
+		return refusal(http.StatusBadRequest, st)
+	case codes.AlreadyExists, codes.FailedPrecondition:
+		return refusal(http.StatusConflict, st)
 	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, st.Message())
+		return Internal(err)
 	}
+}
+
+func refusal(code int, st *status.Status) *echo.HTTPError {
+	for _, d := range st.Details() {
+		if info, ok := d.(*errdetails.ErrorInfo); ok && info.Reason != "" {
+			return echo.NewHTTPError(code, map[string]any{"message": st.Message(), "reason": info.Reason})
+		}
+	}
+	return echo.NewHTTPError(code, st.Message())
 }

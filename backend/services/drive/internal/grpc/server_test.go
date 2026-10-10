@@ -144,7 +144,7 @@ func setupServer(t *testing.T) (*grpcserver.DriveServer, *pgxpool.Pool) {
 		t.Skipf("test DB not available: %v", err)
 	}
 	t.Cleanup(func() { pool.Close() })
-	srv := grpcserver.NewDriveServer(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
+	srv := newDrive(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
 	return srv, pool
 }
 
@@ -158,7 +158,7 @@ func setupServerDeny(t *testing.T) (*grpcserver.DriveServer, *pgxpool.Pool) {
 		t.Skipf("test DB not available: %v", err)
 	}
 	t.Cleanup(func() { pool.Close() })
-	srv := grpcserver.NewDriveServer(pool, &mockPolicyReadDeny{}, &mockPolicyWrite{}, &mockDocStorage{})
+	srv := newDrive(pool, &mockPolicyReadDeny{}, &mockPolicyWrite{}, &mockDocStorage{})
 	return srv, pool
 }
 
@@ -299,7 +299,7 @@ func TestListFolder_NGACFiltering(t *testing.T) {
 	wsID := getTestWorkspaceID(t, pool)
 
 	// Use the allow server to create an item
-	srvAllow := grpcserver.NewDriveServer(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
+	srvAllow := newDrive(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
 	folder, _ := srvAllow.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
 		WorkspaceId: wsID, Name: "DenyTest",
 	})
@@ -380,7 +380,7 @@ func TestConfirmFile_HappyPath(t *testing.T) {
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, created.FileId) })
 
-	confirmed, err := srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{
+	confirmed, err := srv.ConfirmFile(asCaller("", "ngac-user-1"), &pb.ConfirmFileRequest{
 		FileId: created.FileId,
 	})
 
@@ -442,7 +442,7 @@ func TestRestoreItem_HappyPath(t *testing.T) {
 
 	srv.TrashItem(asCaller("", "ngac-user-1"), &pb.TrashItemRequest{ItemId: folder.Id})
 
-	restored, err := srv.RestoreItem(context.Background(), &pb.RestoreItemRequest{ItemId: folder.Id})
+	restored, err := srv.RestoreItem(asCaller("", "ngac-user-1"), &pb.RestoreItemRequest{ItemId: folder.Id})
 	require.NoError(t, err)
 	assert.Equal(t, "active", restored.Status)
 }
@@ -454,7 +454,7 @@ func TestDeleteItem_DeniedWithoutAccess(t *testing.T) {
 	srvDeny, pool := setupServerDeny(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	srvAllow := grpcserver.NewDriveServer(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
+	srvAllow := newDrive(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
 	folder, _ := srvAllow.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
 		WorkspaceId: wsID, Name: "DeleteDenyTest",
 	})
@@ -481,7 +481,7 @@ func TestRestoreItem_DeniedWithoutAccess(t *testing.T) {
 	srvDeny, pool := setupServerDeny(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	srvAllow := grpcserver.NewDriveServer(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
+	srvAllow := newDrive(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
 	folder, _ := srvAllow.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
 		WorkspaceId: wsID, Name: "RestoreDenyTest",
 	})
@@ -527,7 +527,7 @@ func TestCopyItem_HappyPath(t *testing.T) {
 		WorkspaceId: wsID, Name: "copyable.pdf", MimeType: "application/pdf",
 		SizeBytes: 512,
 	})
-	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
+	srv.ConfirmFile(asCaller("", "ngac-user-1"), &pb.ConfirmFileRequest{FileId: created.FileId})
 	t.Cleanup(func() { cleanDriveItems(t, pool, created.FileId, destFolder.Id) })
 
 	copied, err := srv.CopyItem(asCaller(userID, "ngac-user-1"), &pb.CopyItemRequest{
@@ -583,7 +583,7 @@ func TestListShares_ReturnsShares(t *testing.T) {
 		cleanDriveItems(t, pool, folder.Id)
 	})
 
-	list, err := srv.ListShares(context.Background(), &pb.ListSharesRequest{ItemId: folder.Id})
+	list, err := srv.ListShares(asCaller("", "ngac-user-1"), &pb.ListSharesRequest{ItemId: folder.Id})
 
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(list.Shares), 1)
@@ -602,10 +602,10 @@ func TestRevokeShare_HappyPath(t *testing.T) {
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 
-	_, err := srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{ShareId: share.Id})
+	_, err := srv.RevokeShare(asCaller("", "ngac-user-1"), &pb.RevokeShareRequest{ShareId: share.Id})
 	require.NoError(t, err)
 
-	list, _ := srv.ListShares(context.Background(), &pb.ListSharesRequest{ItemId: folder.Id})
+	list, _ := srv.ListShares(asCaller("", "ngac-user-1"), &pb.ListSharesRequest{ItemId: folder.Id})
 	for _, s := range list.Shares {
 		assert.NotEqual(t, share.Id, s.Id, "revoked share should not appear")
 	}
@@ -643,7 +643,7 @@ func TestGetQuota_CreatesDefault(t *testing.T) {
 	// Ensure clean state
 	pool.Exec(context.Background(), "DELETE FROM drive_quotas WHERE workspace_id = $1", wsID)
 
-	q, err := srv.GetQuota(context.Background(), &pb.GetQuotaRequest{WorkspaceId: wsID})
+	q, err := srv.GetQuota(asCaller("", "ngac-user-1"), &pb.GetQuotaRequest{WorkspaceId: wsID})
 
 	require.NoError(t, err)
 	assert.Equal(t, wsID, q.WorkspaceId)
@@ -659,16 +659,16 @@ func TestQuota_IncrementOnConfirm(t *testing.T) {
 	// Ensure clean quota
 	pool.Exec(context.Background(), "DELETE FROM drive_quotas WHERE workspace_id = $1", wsID)
 
-	before, _ := srv.GetQuota(context.Background(), &pb.GetQuotaRequest{WorkspaceId: wsID})
+	before, _ := srv.GetQuota(asCaller("", "ngac-user-1"), &pb.GetQuotaRequest{WorkspaceId: wsID})
 
 	created, _ := srv.CreateFile(asCaller(userID, "ngac-user-1"), &pb.CreateFileRequest{
 		WorkspaceId: wsID, Name: "quota_test.pdf", MimeType: "application/pdf",
 		SizeBytes: 2048,
 	})
-	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
+	srv.ConfirmFile(asCaller("", "ngac-user-1"), &pb.ConfirmFileRequest{FileId: created.FileId})
 	t.Cleanup(func() { cleanDriveItems(t, pool, created.FileId) })
 
-	after, _ := srv.GetQuota(context.Background(), &pb.GetQuotaRequest{WorkspaceId: wsID})
+	after, _ := srv.GetQuota(asCaller("", "ngac-user-1"), &pb.GetQuotaRequest{WorkspaceId: wsID})
 
 	assert.Greater(t, after.UsedBytes, before.UsedBytes, "used_bytes should increase after confirm")
 	assert.Greater(t, after.UsedFiles, before.UsedFiles, "used_files should increase after confirm")
@@ -783,7 +783,7 @@ func TestE2E_UploadShareDownloadRevokeDeny(t *testing.T) {
 		SizeBytes: 1024,
 	})
 	require.NoError(t, err)
-	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
+	srv.ConfirmFile(asCaller("", "ngac-user-1"), &pb.ConfirmFileRequest{FileId: created.FileId})
 	t.Cleanup(func() { cleanDriveItems(t, pool, created.FileId) })
 
 	// 2. Share with user-2
@@ -805,11 +805,11 @@ func TestE2E_UploadShareDownloadRevokeDeny(t *testing.T) {
 	assert.NotEmpty(t, dl.DownloadUrl)
 
 	// 4. Revoke share
-	_, err = srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{ShareId: share.Id})
+	_, err = srv.RevokeShare(asCaller("", "ngac-user-1"), &pb.RevokeShareRequest{ShareId: share.Id})
 	require.NoError(t, err)
 
 	// 5. Verify share is gone
-	list, _ := srv.ListShares(context.Background(), &pb.ListSharesRequest{ItemId: created.FileId})
+	list, _ := srv.ListShares(asCaller("", "ngac-user-1"), &pb.ListSharesRequest{ItemId: created.FileId})
 	for _, s := range list.Shares {
 		assert.NotEqual(t, share.Id, s.Id, "revoked share must not appear")
 	}
@@ -842,7 +842,7 @@ func TestE2E_ChatFileUpload(t *testing.T) {
 		SizeBytes: 4096, ParentId: drive.Id,
 	})
 	require.NoError(t, err)
-	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
+	srv.ConfirmFile(asCaller("", "ngac-user-1"), &pb.ConfirmFileRequest{FileId: created.FileId})
 	t.Cleanup(func() { cleanDriveItems(t, pool, created.FileId) })
 
 	// 3. Verify file appears in channel drive
@@ -900,7 +900,7 @@ func TestE2E_FolderSharingInheritance(t *testing.T) {
 		SizeBytes: 2048, ParentId: folder.Id,
 	})
 	require.NoError(t, err)
-	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
+	srv.ConfirmFile(asCaller("", "ngac-user-1"), &pb.ConfirmFileRequest{FileId: created.FileId})
 
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), "DELETE FROM drive_shares WHERE id = $1", share.Id)
@@ -954,7 +954,7 @@ func TestE2E_MovePreservesShares(t *testing.T) {
 	assert.Equal(t, folderB.Id, moved.ParentId, "item should be under new parent")
 
 	// Verify share still exists after move
-	shares, err := srv.ListShares(context.Background(), &pb.ListSharesRequest{ItemId: child.Id})
+	shares, err := srv.ListShares(asCaller("", "ngac-user-1"), &pb.ListSharesRequest{ItemId: child.Id})
 	require.NoError(t, err)
 	assert.GreaterOrEqual(t, len(shares.Shares), 1, "share should survive move")
 }
@@ -969,7 +969,7 @@ func TestE2E_CopyCreatesIndependentFile(t *testing.T) {
 		WorkspaceId: wsID, Name: "copy_src.pdf", MimeType: "application/pdf",
 		SizeBytes: 1024,
 	})
-	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
+	srv.ConfirmFile(asCaller("", "ngac-user-1"), &pb.ConfirmFileRequest{FileId: created.FileId})
 
 	// Share original
 	share, _ := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
@@ -1001,6 +1001,6 @@ func TestE2E_CopyCreatesIndependentFile(t *testing.T) {
 	assert.Equal(t, destFolder.Id, copied.ParentId, "copy is under dest folder")
 
 	// Verify original's shares are NOT inherited by copy
-	copyShares, _ := srv.ListShares(context.Background(), &pb.ListSharesRequest{ItemId: copied.Id})
+	copyShares, _ := srv.ListShares(asCaller("", "ngac-user-1"), &pb.ListSharesRequest{ItemId: copied.Id})
 	assert.Empty(t, copyShares.Shares, "copy should not inherit source's shares")
 }

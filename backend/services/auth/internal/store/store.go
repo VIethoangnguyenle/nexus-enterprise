@@ -82,6 +82,19 @@ func (s *Store) CreateUser(ctx context.Context, id, username, password, ngacNode
 	return err
 }
 
+// CreateUserWithVerifiedEmail is CreateUser for a person whose address has
+// already been proved (a Google sign-in with email_verified): the row is born
+// verified, in the same statement, so there is no moment — and no failure
+// between two statements — in which the account exists unverified. With no
+// address there is nothing to verify and it behaves as CreateUser.
+func (s *Store) CreateUserWithVerifiedEmail(ctx context.Context, id, username, password, ngacNodeID, email, unionID, displayName, phone string) error {
+	_, err := s.db.Exec(ctx,
+		`INSERT INTO users (id, username, password, ngac_node, email, union_id, display_name, phone, email_verified_at)
+		 VALUES ($1, $2, $3, $4, NULLIF($5,''), $6, $7, NULLIF($8,''), CASE WHEN $5 <> '' THEN NOW() END)`,
+		id, username, password, ngacNodeID, email, unionID, displayName, phone)
+	return err
+}
+
 // GetUserByUsername looks up a user by username.
 func (s *Store) GetUserByUsername(ctx context.Context, username string) (*User, error) {
 	return s.scanUser(s.db.QueryRow(ctx,

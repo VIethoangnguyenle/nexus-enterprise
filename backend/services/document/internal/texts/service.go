@@ -12,6 +12,7 @@ import (
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
 )
@@ -90,10 +91,7 @@ func (s *Service) authorize(ctx context.Context, who Caller, oaID, op string) er
 	if who.NGACNodeID == "" || who.UserID == "" || oaID == "" {
 		return denied(op)
 	}
-	resp, err := s.policy.CheckAccess(ctx, &policypb.CheckAccessRequest{
-		UserNodeId: who.NGACNodeID, ObjectNodeId: oaID, Operation: op,
-	})
-	if !ngac.Allowed(resp.GetDecision(), err) {
+	if ok, _ := policyclient.New(s.policy).Check(ctx, who.NGACNodeID, oaID, op); !ok {
 		return denied(op)
 	}
 	return nil
@@ -241,17 +239,15 @@ func checkScope(scope string) error {
 // readable asks the policy service, in one call, which of the OAs the caller may
 // read and which of those it may also write. An unreadable answer is an error,
 // never "nothing allowed" and never "everything allowed".
-func (s *Service) readable(ctx context.Context, who Caller, oas []string) (map[string]*policypb.ObjectPermissions, error) {
+func (s *Service) readable(ctx context.Context, who Caller, oas []string) (policyclient.Permissions, error) {
 	if len(oas) == 0 {
 		return nil, nil
 	}
-	batch, err := s.policy.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
-		UserNodeId: who.NGACNodeID, ObjectIds: oas, Operations: []string{ngac.OpRead, ngac.OpWrite},
-	})
+	perms, err := policyclient.New(s.policy).BatchCheck(ctx, who.NGACNodeID, oas, []string{ngac.OpRead, ngac.OpWrite})
 	if err != nil {
 		return nil, fmt.Errorf("batch access check: %w", err)
 	}
-	return batch.GetResults(), nil
+	return perms, nil
 }
 
 // List returns one page of the workspace's documents the caller may read,
@@ -302,8 +298,8 @@ func (s *Service) List(ctx context.Context, who Caller, workspaceID, scope, curs
 		for i, d := range rows {
 			scanned++
 			after = &Cursor{UpdatedAt: d.UpdatedAt, ID: d.ID}
-			if d.OAID != "" && perms[d.OAID].GetPermissions()[ngac.OpRead] {
-				page.Docs = append(page.Docs, &Opened{Doc: d, CanRead: true, CanWrite: perms[d.OAID].GetPermissions()[ngac.OpWrite]})
+			if d.OAID != "" && perms.Has(d.OAID, ngac.OpRead) {
+				page.Docs = append(page.Docs, &Opened{Doc: d, CanRead: true, CanWrite: perms.Has(d.OAID, ngac.OpWrite)})
 				if len(page.Docs) == limit {
 					if i < len(rows)-1 || len(rows) == limit {
 						page.Next = encodeCursor(d)
@@ -348,7 +344,7 @@ func (s *Service) Count(ctx context.Context, who Caller, workspaceID, scope stri
 	}
 	total := 0
 	for _, oa := range oas {
-		if perms[oa].GetPermissions()[ngac.OpRead] {
+		if perms.Has(oa, ngac.OpRead) {
 			total += counts[oa]
 		}
 	}

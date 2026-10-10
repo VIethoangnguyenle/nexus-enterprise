@@ -170,13 +170,19 @@ func (c *ReconciliationConsumer) handleUserRemovedFromUA(ctx context.Context, us
 
 // auditReconciliation logs a reconciliation action to the audit trail.
 func (c *ReconciliationConsumer) auditReconciliation(ctx context.Context, requestID, action, actorNodeID string, stepOrder int, detail map[string]string) {
-	detailJSON, _ := json.Marshal(detail)
-	c.store.InsertAuditEntry(ctx, &domain.AuditEntry{
+	detailJSON, err := json.Marshal(detail)
+	if err != nil {
+		detailJSON = []byte("{}")
+	}
+	if err := c.store.InsertAuditEntry(ctx, &domain.AuditEntry{
 		ID:          uuid.New().String(),
 		RequestID:   requestID,
 		Action:      action,
 		ActorNodeID: actorNodeID,
 		StepOrder:   stepOrder,
 		DetailJSON:  string(detailJSON),
-	})
+	}); err != nil {
+		slog.Error("reconciliation audit entry not recorded", "request", requestID, "action", action,
+			"actor", actorNodeID, "detail", string(detailJSON), "error", err)
+	}
 }

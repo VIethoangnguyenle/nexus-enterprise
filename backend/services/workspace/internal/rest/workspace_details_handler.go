@@ -3,7 +3,6 @@ package rest
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -86,13 +85,12 @@ func (h *AdminHandler) UpdateWorkspaceDetails(c echo.Context) error {
 }
 
 // detailsError answers a domain error with its status. Anything that is not one
-// of the domain's own refusals is logged and answered generically, so database
+// of the domain's own refusals is a generic 500, so database
 // text never reaches a client.
 func detailsError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, httputil.ErrNotFound), errors.Is(err, httputil.ErrAccessDenied), errors.Is(err, httputil.ErrInvalidInput):
 		return httputil.MapDomainError(err)
 	}
-	slog.Error("workspace details request failed", "path", c.Path(), "error", err)
-	return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	return httputil.Internal(err)
 }

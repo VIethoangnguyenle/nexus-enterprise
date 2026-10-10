@@ -1,21 +1,19 @@
-// Package rest provides Echo REST handlers for the asset service.
-// Delegates to gRPC servers (AssetServer, AssetTypeServer, AssetRequestServer).
+// Package rest provides Echo REST handlers for the asset service. They adapt
+// HTTP to the asset domain services and hold no business logic.
 package rest
 
 import (
 	"context"
-	"log/slog"
+	"errors"
 	"net/http"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
-	"google.golang.org/genproto/googleapis/rpc/errdetails"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/asset"
+	"ngac-platform/services/asset/internal/domain"
 )
 
 // AssetService defines the operations the REST handler needs for assets.
@@ -107,7 +105,7 @@ func (h *Handler) GetAssetSummary(c echo.Context) error {
 		WorkspaceId: c.Param("id"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -124,7 +122,7 @@ func (h *Handler) ListAssetActivity(c echo.Context) error {
 		Limit:       limit,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -175,7 +173,7 @@ func (h *Handler) CreateAssetType(c echo.Context) error {
 		FieldsSchema: body.FieldsSchema,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusCreated, resp)
 }
@@ -185,7 +183,7 @@ func (h *Handler) ListAssetTypes(c echo.Context) error {
 		WorkspaceId: c.Param("id"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -195,7 +193,7 @@ func (h *Handler) GetAssetType(c echo.Context) error {
 		TypeId: c.Param("typeId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -212,7 +210,7 @@ func (h *Handler) UpdateAssetTypeSchema(c echo.Context) error {
 		FieldsSchema: body.FieldsSchema,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -239,7 +237,7 @@ func (h *Handler) CreateAsset(c echo.Context) error {
 		CustomFields: fields,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusCreated, resp)
 }
@@ -263,7 +261,7 @@ func (h *Handler) ListAssets(c echo.Context) error {
 		Offset:      offset,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -273,7 +271,7 @@ func (h *Handler) GetAsset(c echo.Context) error {
 		AssetId: c.Param("assetId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -296,7 +294,7 @@ func (h *Handler) UpdateAsset(c echo.Context) error {
 		CustomFields: fields,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -306,7 +304,7 @@ func (h *Handler) DeleteAsset(c echo.Context) error {
 		AssetId: c.Param("assetId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -333,7 +331,7 @@ func (h *Handler) TransitionAsset(c echo.Context) error {
 		Comment: body.Comment,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -355,7 +353,7 @@ func (h *Handler) HandOverAsset(c echo.Context) error {
 		Comment:    body.Comment,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -365,7 +363,7 @@ func (h *Handler) GetAvailableTransitions(c echo.Context) error {
 		AssetId: c.Param("assetId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -375,7 +373,7 @@ func (h *Handler) GetAssetHistory(c echo.Context) error {
 		AssetId: c.Param("assetId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -403,7 +401,7 @@ func (h *Handler) CreateAssetRequest(c echo.Context) error {
 		Quantity:      body.Quantity,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusCreated, resp)
 }
@@ -427,7 +425,7 @@ func (h *Handler) ListAssetRequests(c echo.Context) error {
 		Offset:      offset,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -437,7 +435,7 @@ func (h *Handler) GetAssetRequest(c echo.Context) error {
 		RequestId: c.Param("reqId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -463,7 +461,7 @@ func (h *Handler) ApproveAssetRequest(c echo.Context) error {
 		Comment:   body.Comment,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -482,7 +480,7 @@ func (h *Handler) RejectAssetRequest(c echo.Context) error {
 		Reason:    body.Reason,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -500,7 +498,7 @@ func (h *Handler) AssignAsset(c echo.Context) error {
 		AssetId:   body.AssetID,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -510,51 +508,33 @@ func (h *Handler) ReturnAsset(c echo.Context) error {
 	if _, err := h.requestSvc.ReturnAsset(c.Request().Context(), &pb.ReturnAssetReq{
 		AssetId: c.Param("assetId"),
 	}); err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "returned"})
 }
 
-// errBody is what a client reads from a refusal: a sentence for logs and a
-// machine-readable reason (when the service gave one) to tell apart refusals
-// that share a status code.
-type errBody struct {
-	Message string `json:"message"`
-	Reason  string `json:"reason,omitempty"`
-}
-
-func httpErr(code int, st *status.Status) *echo.HTTPError {
-	b := errBody{Message: st.Message()}
-	for _, d := range st.Details() {
-		if info, ok := d.(*errdetails.ErrorInfo); ok {
-			b.Reason = info.Reason
-		}
-	}
-	return echo.NewHTTPError(code, b)
-}
-
-func mapGRPCError(err error) *echo.HTTPError {
-	st, ok := status.FromError(err)
-	if !ok {
-		slog.Error("asset request failed", "error", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, errBody{Message: "internal error"})
-	}
-	switch st.Code() {
-	case codes.NotFound:
-		return httpErr(http.StatusNotFound, st)
-	case codes.PermissionDenied:
-		return httpErr(http.StatusForbidden, st)
-	case codes.AlreadyExists:
-		return httpErr(http.StatusConflict, st)
-	case codes.InvalidArgument:
-		return httpErr(http.StatusBadRequest, st)
-	case codes.FailedPrecondition:
-		return httpErr(http.StatusConflict, st)
-	case codes.Unauthenticated:
-		return httpErr(http.StatusUnauthorized, st)
+// mapError answers a domain error with its HTTP status. A refusal that carries a
+// reason (to tell apart refusals that share a status) answers
+// {"message", "reason"}. Anything the domain did not classify is a failure of
+// ours and becomes a generic 500 (httputil.Internal).
+func mapError(err error) *echo.HTTPError {
+	var code int
+	switch {
+	case errors.Is(err, domain.ErrNotFound):
+		code = http.StatusNotFound
+	case errors.Is(err, domain.ErrAccessDenied):
+		code = http.StatusForbidden
+	case errors.Is(err, domain.ErrAlreadyExists), errors.Is(err, domain.ErrConflict):
+		code = http.StatusConflict
+	case errors.Is(err, domain.ErrInvalidInput):
+		code = http.StatusBadRequest
+	case errors.Is(err, domain.ErrUnauthenticated):
+		code = http.StatusUnauthorized
 	default:
-		// The detail (a database error, a policy failure) is for our logs, not the client.
-		slog.Error("asset request failed", "code", st.Code().String(), "error", st.Message())
-		return echo.NewHTTPError(http.StatusInternalServerError, errBody{Message: "internal error"})
+		return httputil.Internal(err)
 	}
+	if reason := domain.Reason(err); reason != "" {
+		return echo.NewHTTPError(code, map[string]any{"message": err.Error(), "reason": reason})
+	}
+	return echo.NewHTTPError(code, err.Error())
 }

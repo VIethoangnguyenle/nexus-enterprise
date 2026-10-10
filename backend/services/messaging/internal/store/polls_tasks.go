@@ -55,7 +55,11 @@ type ChatTask struct {
 
 // InsertPoll creates a new poll.
 func (s *Store) InsertPoll(ctx context.Context, p *Poll) error {
-	_, err := s.db.Exec(ctx,
+	return insertPoll(ctx, s.db, p)
+}
+
+func insertPoll(ctx context.Context, x execer, p *Poll) error {
+	_, err := x.Exec(ctx,
 		`INSERT INTO polls (id, message_id, channel_id, question, is_multi, is_anonymous, created_by, ends_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
 		p.ID, p.MessageID, p.ChannelID, p.Question, p.IsMulti, p.IsAnonymous, p.CreatedBy, p.EndsAt)
@@ -67,7 +71,11 @@ func (s *Store) InsertPoll(ctx context.Context, p *Poll) error {
 
 // InsertPollOption adds an option to a poll.
 func (s *Store) InsertPollOption(ctx context.Context, id, pollID, text string, position int) error {
-	_, err := s.db.Exec(ctx,
+	return insertPollOption(ctx, s.db, id, pollID, text, position)
+}
+
+func insertPollOption(ctx context.Context, x execer, id, pollID, text string, position int) error {
+	_, err := x.Exec(ctx,
 		`INSERT INTO poll_options (id, poll_id, text, position) VALUES ($1, $2, $3, $4)`,
 		id, pollID, text, position)
 	if err != nil {
@@ -165,7 +173,11 @@ func (s *Store) GetPollByMessage(ctx context.Context, messageID string) (*Poll, 
 
 // InsertTask creates a new chat task.
 func (s *Store) InsertTask(ctx context.Context, t *ChatTask) error {
-	_, err := s.db.Exec(ctx,
+	return insertTask(ctx, s.db, t)
+}
+
+func insertTask(ctx context.Context, x execer, t *ChatTask) error {
+	_, err := x.Exec(ctx,
 		`INSERT INTO chat_tasks (id, message_id, channel_id, title, assignee_id, status, due_date, created_by)
 		 VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8)`,
 		t.ID, t.MessageID, t.ChannelID, t.Title, t.AssigneeID, t.Status, t.DueDate, t.CreatedBy)
@@ -249,4 +261,44 @@ func (s *Store) ListTasksByChannel(ctx context.Context, channelID, status string
 		tasks = append(tasks, t)
 	}
 	return tasks, nil
+}
+
+// InsertPollWithMessage stores a poll, its options and the system message that
+// announces it in one transaction: an announcement with no poll behind it is a
+// message nobody can answer.
+func (s *Store) InsertPollWithMessage(ctx context.Context, msg *Message, p *Poll, options []PollOptionInput) error {
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if err := insertMessage(ctx, tx, msg); err != nil {
+			return fmt.Errorf("create poll message: %w", err)
+		}
+		if err := insertPoll(ctx, tx, p); err != nil {
+			return fmt.Errorf("create poll: %w", err)
+		}
+		for i, opt := range options {
+			if err := insertPollOption(ctx, tx, opt.ID, p.ID, opt.Text, i); err != nil {
+				return fmt.Errorf("create poll option: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+// PollOptionInput is one option of a new poll.
+type PollOptionInput struct {
+	ID   string
+	Text string
+}
+
+// InsertTaskWithMessage stores a task and the system message that announces it
+// in one transaction.
+func (s *Store) InsertTaskWithMessage(ctx context.Context, msg *Message, t *ChatTask) error {
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if err := insertMessage(ctx, tx, msg); err != nil {
+			return fmt.Errorf("create task message: %w", err)
+		}
+		if err := insertTask(ctx, tx, t); err != nil {
+			return fmt.Errorf("create task: %w", err)
+		}
+		return nil
+	})
 }

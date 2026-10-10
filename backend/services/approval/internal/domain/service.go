@@ -29,6 +29,15 @@ type Store interface {
 	RequestStore
 	AuditStore
 	DirectoryStore
+	Transactor
+}
+
+// Transactor runs several store calls as one change.
+type Transactor interface {
+	// InTx runs fn with every store call made on the context it is given inside
+	// one transaction: all of them take effect or none does. fn returning an
+	// error rolls them all back.
+	InTx(ctx context.Context, fn func(ctx context.Context) error) error
 }
 
 // DirectoryStore answers questions about who and what exists in a tenant, from
@@ -80,6 +89,10 @@ type RequestStore interface {
 	CountApprovedForStep(ctx context.Context, requestID string, stepOrder int) (int, error)
 	SkipRemainingAssignments(ctx context.Context, requestID string, stepOrder int) error
 	SkipAllPendingAssignments(ctx context.Context, requestID string) error
+	// LockRequest takes the request's row lock until the surrounding InTx ends and
+	// returns its status and current step as they stand under it. Missing is
+	// ErrNotFound.
+	LockRequest(ctx context.Context, requestID string) (status string, currentStep int, err error)
 	AdvanceStep(ctx context.Context, requestID string, fromStep, nextStep int) (bool, error)
 	CompleteRequest(ctx context.Context, requestID, status string) (bool, error)
 	// ListPendingAssignees returns the user nodes still pending on a step.

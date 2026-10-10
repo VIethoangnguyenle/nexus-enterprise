@@ -140,11 +140,15 @@ func StreamServerInterceptor(p ServerPolicy) grpc.StreamServerInterceptor {
 }
 
 // ServerOptions returns the interceptor chains every service's gRPC server
-// uses: unary (extra first, then the caller check) and stream. Building both
-// in one place keeps a server from getting one without the other.
+// uses. The unary chain is Logging, Recovery, extra, then the caller check, so
+// every server logs every call and survives a panic whether or not its main
+// remembers to ask. Building both chains in one place keeps a server from
+// getting one without the other.
 func ServerOptions(p ServerPolicy, extra ...grpc.UnaryServerInterceptor) []grpc.ServerOption {
+	chain := append([]grpc.UnaryServerInterceptor{Logging, Recovery}, extra...)
+	chain = append(chain, ServerInterceptor(p))
 	return []grpc.ServerOption{
-		grpc.ChainUnaryInterceptor(append(extra, ServerInterceptor(p))...),
+		grpc.ChainUnaryInterceptor(chain...),
 		grpc.ChainStreamInterceptor(StreamServerInterceptor(p)),
 	}
 }

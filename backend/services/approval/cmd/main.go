@@ -3,26 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/bootstrap"
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/pkg/policyclient"
 	pb "ngac-platform/proto/approval"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/approval/internal/domain"
@@ -33,34 +28,37 @@ import (
 )
 
 func main() {
-	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5432/ngac?sslmode=disable")
-	grpcPort := envOr("GRPC_PORT", "50058")
-	restPort := envOr("REST_PORT", "8080")
-	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	bootstrap.InitLogger()
+
+	dbURL := bootstrap.Env("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5432/ngac?sslmode=disable")
+	grpcPort := bootstrap.Env("GRPC_PORT", "50058")
+	restPort := bootstrap.Env("REST_PORT", "8080")
+	jwtSecret := bootstrap.Env("JWT_SECRET", httputil.DevJWTSecret)
 	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
 		slog.Error("refusing to start", "error", err)
 		os.Exit(1)
 	}
-	policyAddr := envOr("POLICY_ADDR", "localhost:50051")
-	kafkaBrokers := envOr("KAFKA_BROKERS", "localhost:19092")
+	policyAddr := bootstrap.PolicyAddr()
+	kafkaBrokers := bootstrap.Env("KAFKA_BROKERS", "localhost:19092")
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	db, err := pgxpool.New(ctx, dbURL)
+	db, err := bootstrap.ConnectDB(ctx, dbURL)
 	if err != nil {
-		log.Fatalf("connect db: %v", err)
+		slog.Error("failed to connect to database", "error", err)
+		os.Exit(1)
 	}
 	defer db.Close()
 
 	// Connect to Policy Service for scope resolution and access checks
-	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("approval")))
+	policyConn, err := grpcauth.Dial(policyAddr, "approval")
 	if err != nil {
-		log.Fatalf("connect policy service: %v", err)
+		slog.Error("failed to connect to policy service", "address", policyAddr, "error", err)
+		os.Exit(1)
 	}
 	defer policyConn.Close()
-	policyClient := &policyGRPCAdapter{client: policypb.NewPolicyReadServiceClient(policyConn)}
+	policyClient := newPolicyAdapter(policypb.NewPolicyReadServiceClient(policyConn))
 
 	// Tenant schema resolver — caches tenant_id → schema_name lookups
 	resolver := httputil.NewTenantSchemaResolver(db)
@@ -78,14 +76,12 @@ func main() {
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
 	if err != nil {
-		log.Fatalf("listen: %v", err)
+		slog.Error("failed to listen", "port", grpcPort, "error", err)
+		os.Exit(1)
 	}
 
 	// REST server with tenant schema middleware
-	e := echo.New()
-	e.HideBanner = true
-	e.Use(echomw.Logger())
-	e.Use(echomw.Recover())
+	e := httputil.NewEcho("approval", echomw.Logger())
 
 	// Start event producer (graceful degradation if Kafka unavailable)
 	brokers := strings.Split(kafkaBrokers, ",")
@@ -122,29 +118,30 @@ func main() {
 		}
 	}()
 
-	// Graceful shutdown
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	<-sigCh
-	slog.Info("shutting down approval service")
-	cancel()
-
-	if consumer != nil {
-		consumer.Close()
-	}
-	if producer != nil {
-		producer.Close()
-	}
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer shutdownCancel()
-	e.Shutdown(shutdownCtx)
-	gs.GracefulStop()
+	bootstrap.Shutdown{
+		GRPC:   gs,
+		Health: healthSrv,
+		HTTP:   []bootstrap.HTTPServer{e},
+		Cancel: cancel,
+		Cleanup: func() {
+			if consumer != nil {
+				consumer.Close()
+			}
+			if producer != nil {
+				producer.Close()
+			}
+		},
+	}.Wait()
 }
 
 // policyGRPCAdapter wraps PolicyReadServiceClient to implement domain.PolicyClient.
 type policyGRPCAdapter struct {
 	client policypb.PolicyReadServiceClient
+	checks *policyclient.Client
+}
+
+func newPolicyAdapter(c policypb.PolicyReadServiceClient) *policyGRPCAdapter {
+	return &policyGRPCAdapter{client: c, checks: policyclient.New(c)}
 }
 
 // ResolveAccessibleScopes delegates to the Policy Service gRPC call.
@@ -159,17 +156,13 @@ func (a *policyGRPCAdapter) ResolveAccessibleScopes(ctx context.Context, userNod
 	return resp.ScopeOaIds, nil
 }
 
-// CheckAccess delegates to the Policy Service CheckAccess RPC.
+// CheckAccess asks the policy service; an error is never an allow.
 func (a *policyGRPCAdapter) CheckAccess(ctx context.Context, userNodeID, objectNodeID, operation string) (bool, error) {
-	resp, err := a.client.CheckAccess(ctx, &policypb.CheckAccessRequest{
-		UserNodeId:   userNodeID,
-		ObjectNodeId: objectNodeID,
-		Operation:    operation,
-	})
+	allowed, err := a.checks.Check(ctx, userNodeID, objectNodeID, operation)
 	if err != nil {
 		return false, fmt.Errorf("policy check access: %w", err)
 	}
-	return ngac.Allowed(resp.GetDecision(), nil), nil
+	return allowed, nil
 }
 
 // GetAncestors delegates to the Policy Service: every node above the given one.
@@ -198,11 +191,4 @@ func (a *policyGRPCAdapter) GetMembers(ctx context.Context, uaNodeID string) ([]
 		}
 	}
 	return ids, nil
-}
-
-func envOr(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return def
 }

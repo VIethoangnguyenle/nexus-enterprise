@@ -91,3 +91,7 @@ jobs:
       # Operation strings and node names come from backend/ngac, never from inline literals.
       - run: bash scripts/check-ngac-identifiers.sh --self-test
       - run: bash scripts/check-ngac-identifiers.sh
+      # Shared start-up and error helpers, REST calls the domain, no SQL in a transport,
+      # no dropped store errors (see scripts/check-backend-layering.sh).
+      - run: bash scripts/check-backend-layering.sh --self-test
+      - run: bash scripts/check-backend-layering.sh

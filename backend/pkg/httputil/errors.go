@@ -5,6 +5,8 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+
+	"ngac-platform/pkg/grpcauth"
 )
 
 // The domain sentinel errors, defined once.
@@ -25,8 +27,25 @@ var (
 	ErrInvalidInput  = errors.New("invalid input")
 )
 
+// InternalMessage is the whole of what a client learns about a 500. The cause
+// goes to the log, tagged with the request ID the response carries.
+const InternalMessage = grpcauth.InternalMessage
+
+// Internal is a 500 whose body is generic. err is kept on the HTTPError, where
+// ErrorHandler logs it and the response never shows it: a database error or a
+// failed downstream call can name tables, hosts and queries.
+func Internal(err error) *echo.HTTPError {
+	he := echo.NewHTTPError(http.StatusInternalServerError, InternalMessage)
+	if err != nil {
+		he.SetInternal(err)
+	}
+	return he
+}
+
 // MapDomainError translates a domain sentinel error into an Echo HTTP error
-// with the appropriate status code. Unknown errors map to 500.
+// with the appropriate status code. The sentinels' messages are written for the
+// caller and are sent as they are. Anything else is a failure of ours: it maps
+// to a generic 500 (see Internal).
 func MapDomainError(err error) *echo.HTTPError {
 	switch {
 	case errors.Is(err, ErrNotFound):
@@ -38,7 +57,7 @@ func MapDomainError(err error) *echo.HTTPError {
 	case errors.Is(err, ErrInvalidInput):
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return Internal(err)
 	}
 }
 

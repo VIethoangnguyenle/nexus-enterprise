@@ -6,21 +6,15 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/signal"
-	"syscall"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/bootstrap"
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	"ngac-platform/pkg/realtime"
@@ -29,37 +23,35 @@ import (
 	policypb "ngac-platform/proto/policy"
 	dgrpc "ngac-platform/services/document/internal/grpc"
 	"ngac-platform/services/document/internal/rest"
+	"ngac-platform/services/document/internal/storage"
 	"ngac-platform/services/document/internal/texts"
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
+	bootstrap.InitLogger()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
-	grpcPort := envOr("GRPC_PORT", "50054")
-	restPort := envOr("REST_PORT", "8080")
-	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	dbURL := bootstrap.Env("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
+	grpcPort := bootstrap.Env("GRPC_PORT", "50054")
+	restPort := bootstrap.Env("REST_PORT", "8080")
+	jwtSecret := bootstrap.Env("JWT_SECRET", httputil.DevJWTSecret)
 	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
 		slog.Error("refusing to start", "error", err)
 		os.Exit(1)
 	}
-	driveAddr := envOr("DRIVE_SERVICE_ADDR", "localhost:50057")
-	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
+	driveAddr := bootstrap.Env("DRIVE_SERVICE_ADDR", "localhost:50057")
+	policyAddr := bootstrap.PolicyAddr()
 
 	// MinIO configuration
-	minioEndpoint := envOr("MINIO_ENDPOINT", "localhost:9000")
-	minioAccessKey := envOr("MINIO_ACCESS_KEY", "ngac-admin")
-	minioSecretKey := envOr("MINIO_SECRET_KEY", "ngac-secret-key")
-	minioUseSSL := envOr("MINIO_USE_SSL", "false") == "true"
-	minioPublicEndpoint := envOr("MINIO_PUBLIC_ENDPOINT", "localhost/storage")
+	minioEndpoint := bootstrap.Env("MINIO_ENDPOINT", "localhost:9000")
+	minioAccessKey := bootstrap.Env("MINIO_ACCESS_KEY", "ngac-admin")
+	minioSecretKey := bootstrap.Env("MINIO_SECRET_KEY", "ngac-secret-key")
+	minioUseSSL := bootstrap.Env("MINIO_USE_SSL", "false") == "true"
+	minioPublicEndpoint := bootstrap.Env("MINIO_PUBLIC_ENDPOINT", "localhost/storage")
 
-	pool, err := connectDB(ctx, dbURL)
+	pool, err := bootstrap.ConnectDB(ctx, dbURL)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)
@@ -96,8 +88,8 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()}, loggingInterceptor, recoveryInterceptor)...)
-	pb.RegisterDocumentStorageServiceServer(srv, dgrpc.NewDocumentStorageServer(pool, minioClient, presignClient))
+	srv := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()})...)
+	pb.RegisterDocumentStorageServiceServer(srv, dgrpc.NewDocumentStorageServer(storage.New(minioClient, presignClient)))
 
 	healthSrv := health.NewServer()
 	healthpb.RegisterHealthServer(srv, healthSrv)
@@ -105,8 +97,7 @@ func main() {
 
 	// Connect to Drive Service for legacy document endpoint proxying
 	var driveClient drivepb.DriveServiceClient
-	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("document")))
+	driveConn, err := grpcauth.Dial(driveAddr, "document")
 	if err != nil {
 		slog.Warn("drive service unavailable for document proxy", "address", driveAddr, "error", err)
 	} else {
@@ -115,8 +106,7 @@ func main() {
 	}
 
 	// Documents written in the app are authorized by the policy service.
-	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("document")))
+	policyConn, err := grpcauth.Dial(policyAddr, "document")
 	if err != nil {
 		slog.Error("failed to connect to policy service", "address", policyAddr, "error", err)
 		os.Exit(1)
@@ -128,10 +118,7 @@ func main() {
 	textService.SetEmitter(rt)
 
 	// REST server (client-facing)
-	e := echo.New()
-	e.HideBanner = true
-	e.Use(echomw.Logger())
-	e.Use(echomw.Recover())
+	e := httputil.NewEcho("document", echomw.Logger())
 	restHandler := rest.NewHandler(driveClient, textService)
 	restHandler.RegisterRoutes(e, jwtSecret)
 
@@ -149,84 +136,5 @@ func main() {
 		}
 	}()
 
-	gracefulShutdown(srv, healthSrv, e, cancel)
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-func connectDB(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
-	cfg, err := pgxpool.ParseConfig(dbURL)
-	if err != nil {
-		return nil, fmt.Errorf("parsing database url: %w", err)
-	}
-	cfg.MaxConns = 25
-	cfg.MinConns = 5
-	cfg.MaxConnLifetime = 5 * time.Minute
-	cfg.MaxConnIdleTime = 1 * time.Minute
-
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("creating connection pool: %w", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("pinging database: %w", err)
-	}
-	return pool, nil
-}
-
-func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, echoSrv *echo.Echo, cancel context.CancelFunc) {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-sigCh
-	slog.Info("received shutdown signal", "signal", sig)
-
-	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
-	cancel()
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer shutdownCancel()
-	echoSrv.Shutdown(shutdownCtx)
-
-	stopped := make(chan struct{})
-	go func() {
-		srv.GracefulStop()
-		close(stopped)
-	}()
-	select {
-	case <-stopped:
-		slog.Info("server stopped gracefully")
-	case <-shutdownCtx.Done():
-		slog.Warn("graceful stop timed out, forcing stop")
-		srv.Stop()
-	}
-}
-
-func loggingInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	start := time.Now()
-	resp, err := handler(ctx, req)
-	code := status.Code(err)
-	attrs := []any{"method", info.FullMethod, "duration_ms", time.Since(start).Milliseconds(), "code", code.String()}
-	if err != nil {
-		attrs = append(attrs, "error", err.Error())
-		slog.Warn("grpc call failed", attrs...)
-	} else {
-		slog.Debug("grpc call", attrs...)
-	}
-	return resp, err
-}
-
-func recoveryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("panic recovered", "method", info.FullMethod, "panic", fmt.Sprintf("%v", r))
-			err = status.Errorf(13, "internal server error")
-		}
-	}()
-	return handler(ctx, req)
+	bootstrap.Shutdown{GRPC: srv, Health: healthSrv, HTTP: []bootstrap.HTTPServer{e}, Cancel: cancel}.Wait()
 }

@@ -7,23 +7,20 @@ import (
 	"log/slog"
 	"net"
 	"os"
-	"os/signal"
 	"regexp"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/bootstrap"
+	"ngac-platform/pkg/bootstrap/redisconn"
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/auth"
@@ -39,38 +36,34 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
+	bootstrap.InitLogger()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
-	redisURL := envOr("REDIS_URL", "redis://localhost:6379/1")
-	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
-	workspaceAddr := envOr("WORKSPACE_SERVICE_ADDR", "localhost:50053")
-	messagingAddr := envOr("MESSAGING_SERVICE_ADDR", "localhost:50055")
-	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	dbURL := bootstrap.Env("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
+	redisURL := bootstrap.Env("REDIS_URL", "redis://localhost:6379/1")
+	policyAddr := bootstrap.PolicyAddr()
+	workspaceAddr := bootstrap.Env("WORKSPACE_SERVICE_ADDR", "localhost:50053")
+	messagingAddr := bootstrap.Env("MESSAGING_SERVICE_ADDR", "localhost:50055")
+	jwtSecret := bootstrap.Env("JWT_SECRET", httputil.DevJWTSecret)
 	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
 		slog.Error("refusing to start", "error", err)
 		os.Exit(1)
 	}
-	grpcPort := envOr("GRPC_PORT", "50052")
-	restPort := envOr("REST_PORT", "8080")
+	grpcPort := bootstrap.Env("GRPC_PORT", "50052")
+	restPort := bootstrap.Env("REST_PORT", "8080")
 
 	auth.SetJWTSecret(jwtSecret)
 
-	pool, err := connectDB(ctx, dbURL)
+	pool, err := bootstrap.ConnectDB(ctx, dbURL)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("auth")))
+	policyConn, err := grpcauth.Dial(policyAddr, "auth")
 	if err != nil {
 		slog.Error("failed to connect to policy service", "address", policyAddr, "error", err)
 		os.Exit(1)
@@ -81,8 +74,7 @@ func main() {
 
 	// Workspace gRPC client (for auto-provisioning on register)
 	var wsClient workspacepb.WorkspaceServiceClient
-	wsConn, err := grpc.NewClient(workspaceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("auth")))
+	wsConn, err := grpcauth.Dial(workspaceAddr, "auth")
 	if err != nil {
 		slog.Warn("workspace service unavailable, auto-provision disabled", "address", workspaceAddr, "error", err)
 	} else {
@@ -92,8 +84,7 @@ func main() {
 
 	// Messaging gRPC client (for auto-provisioning #general channel)
 	var msgClient messagingpb.MessagingServiceClient
-	msgConn, err := grpc.NewClient(messagingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("auth")))
+	msgConn, err := grpcauth.Dial(messagingAddr, "auth")
 	if err != nil {
 		slog.Warn("messaging service unavailable, auto-provision disabled", "address", messagingAddr, "error", err)
 	} else {
@@ -103,7 +94,7 @@ func main() {
 
 	st := store.New(pool)
 
-	rdb, err := connectRedis(ctx, redisURL)
+	rdb, err := redisconn.Connect(ctx, redisURL)
 	if err != nil {
 		slog.Warn("redis unavailable, jwt blacklist disabled", "error", err)
 	}
@@ -127,7 +118,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := grpc.NewServer(grpcauth.ServerOptions(agrpc.AuthPolicy(), loggingInterceptor, recoveryInterceptor)...)
+	srv := grpc.NewServer(grpcauth.ServerOptions(agrpc.AuthPolicy())...)
 	pb.RegisterAuthServiceServer(srv, agrpc.NewAuthServer(svc, rdb))
 
 	healthSrv := health.NewServer()
@@ -135,9 +126,7 @@ func main() {
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 
 	// REST server (client-facing)
-	e := echo.New()
-	e.HideBanner = true
-	e.Use(echomw.LoggerWithConfig(echomw.LoggerConfig{
+	e := httputil.NewEcho("auth", echomw.LoggerWithConfig(echomw.LoggerConfig{
 		// The access log records the full URI, and the Google callback's query
 		// carries the one-time authorization code. The handler logs the
 		// outcome of that request itself, without the code.
@@ -145,7 +134,6 @@ func main() {
 			return c.Request().URL.Path == "/api/auth/google/callback"
 		},
 	}))
-	e.Use(echomw.Recover())
 	// Who is asking, for the per-address limits. Nothing is trusted unless the
 	// proxy networks are listed: X-Forwarded-For is a header any client writes.
 	extractIP, err := rest.NewIPExtractor(strings.Split(os.Getenv("AUTH_TRUSTED_PROXIES"), ","))
@@ -180,15 +168,7 @@ func main() {
 		}
 	}()
 
-	gracefulShutdown(srv, healthSrv, e, cancel)
-}
-
-// envOr returns the environment variable value or a fallback default.
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
+	bootstrap.Shutdown{GRPC: srv, Health: healthSrv, HTTP: []bootstrap.HTTPServer{e}, Cancel: cancel}.Wait()
 }
 
 var otpCodeFormat = regexp.MustCompile(`^[0-9]{6}$`)
@@ -236,7 +216,7 @@ func otpOptions(jwtSecret string) (domain.OTPOptions, error) {
 // /api/auth/providers reports it unavailable, so the login page hides it.
 func googleOptions(rdb *redis.Client) rest.GoogleOptions {
 	opts := rest.GoogleOptions{
-		AppBaseURL: strings.TrimRight(envOr("APP_BASE_URL", "http://localhost:5173"), "/"),
+		AppBaseURL: strings.TrimRight(bootstrap.Env("APP_BASE_URL", "http://localhost:5173"), "/"),
 	}
 	clientID := os.Getenv("GOOGLE_CLIENT_ID")
 	if clientID == "" {
@@ -252,7 +232,7 @@ func googleOptions(rdb *redis.Client) rest.GoogleOptions {
 		slog.Warn("google sign-in disabled: redis unavailable")
 		return opts
 	}
-	redirectURL := envOr("GOOGLE_REDIRECT_URL", "http://localhost:5173/api/auth/google/callback")
+	redirectURL := bootstrap.Env("GOOGLE_REDIRECT_URL", "http://localhost:5173/api/auth/google/callback")
 
 	opts.Provider = googleauth.New(googleauth.Config{
 		ClientID:     clientID,
@@ -263,117 +243,4 @@ func googleOptions(rdb *redis.Client) rest.GoogleOptions {
 	// Never log the secret; the client ID and URLs are not sensitive.
 	slog.Info("google sign-in enabled", "redirect_url", redirectURL, "app_base_url", opts.AppBaseURL)
 	return opts
-}
-
-// connectRedis creates a Redis client from a URL and verifies connectivity.
-func connectRedis(ctx context.Context, redisURL string) (*redis.Client, error) {
-	opts, err := redis.ParseURL(redisURL)
-	if err != nil {
-		return nil, fmt.Errorf("parsing redis url: %w", err)
-	}
-	rdb := redis.NewClient(opts)
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		rdb.Close()
-		return nil, fmt.Errorf("pinging redis: %w", err)
-	}
-	slog.Info("redis connected", "addr", opts.Addr, "db", opts.DB)
-	return rdb, nil
-}
-
-// connectDB creates a pgxpool with production-ready pool configuration.
-func connectDB(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
-	cfg, err := pgxpool.ParseConfig(dbURL)
-	if err != nil {
-		return nil, fmt.Errorf("parsing database url: %w", err)
-	}
-	cfg.MaxConns = 25
-	cfg.MinConns = 5
-	cfg.MaxConnLifetime = 5 * time.Minute
-	cfg.MaxConnIdleTime = 1 * time.Minute
-
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("creating connection pool: %w", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("pinging database: %w", err)
-	}
-	return pool, nil
-}
-
-// gracefulShutdown waits for SIGINT/SIGTERM and drains in-flight requests.
-func gracefulShutdown(srv *grpc.Server, healthSrv *health.Server, echoSrv *echo.Echo, cancel context.CancelFunc) {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-sigCh
-	slog.Info("received shutdown signal", "signal", sig)
-
-	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
-	cancel()
-
-	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer shutdownCancel()
-
-	// Shutdown Echo REST server
-	if err := echoSrv.Shutdown(shutdownCtx); err != nil {
-		slog.Warn("echo shutdown error", "error", err)
-	}
-
-	// Graceful stop gRPC server
-	stopped := make(chan struct{})
-	go func() {
-		srv.GracefulStop()
-		close(stopped)
-	}()
-	select {
-	case <-stopped:
-		slog.Info("server stopped gracefully")
-	case <-shutdownCtx.Done():
-		slog.Warn("graceful stop timed out, forcing stop")
-		srv.Stop()
-	}
-}
-
-// loggingInterceptor logs every gRPC call with method, duration, and status code.
-func loggingInterceptor(
-	ctx context.Context,
-	req any,
-	info *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (any, error) {
-	start := time.Now()
-	resp, err := handler(ctx, req)
-	code := status.Code(err)
-	attrs := []any{
-		"method", info.FullMethod,
-		"duration_ms", time.Since(start).Milliseconds(),
-		"code", code.String(),
-	}
-	if err != nil {
-		attrs = append(attrs, "error", err.Error())
-		slog.Warn("grpc call failed", attrs...)
-	} else {
-		slog.Debug("grpc call", attrs...)
-	}
-	return resp, err
-}
-
-// recoveryInterceptor catches panics in handlers and returns Internal error.
-func recoveryInterceptor(
-	ctx context.Context,
-	req any,
-	info *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (resp any, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("panic recovered in grpc handler",
-				"method", info.FullMethod,
-				"panic", fmt.Sprintf("%v", r),
-			)
-			err = status.Errorf(13, "internal server error")
-		}
-	}()
-	return handler(ctx, req)
 }

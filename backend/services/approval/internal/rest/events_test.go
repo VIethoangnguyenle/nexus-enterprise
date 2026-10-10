@@ -37,6 +37,11 @@ func newMemStore() *memStore {
 	return &memStore{requests: map[string]*domain.Request{}}
 }
 
+// InTx runs fn; this fake has no rollback to demonstrate.
+func (m *memStore) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	return fn(ctx)
+}
+
 func (m *memStore) ListTemplates(_ context.Context, entityType string, activeOnly bool) ([]*domain.Template, error) {
 	var out []*domain.Template
 	for _, t := range m.templates {
@@ -69,6 +74,16 @@ func (m *memStore) InsertRequest(_ context.Context, r *domain.Request) error {
 	cp := *r
 	m.requests[r.ID] = &cp
 	return nil
+}
+
+func (m *memStore) LockRequest(_ context.Context, id string) (string, int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.requests[id]
+	if !ok {
+		return "", 0, domain.ErrNotFound
+	}
+	return r.Status, r.CurrentStep, nil
 }
 
 func (m *memStore) GetRequest(_ context.Context, id string) (*domain.Request, error) {

@@ -3,7 +3,6 @@ package rest
 import (
 	"context"
 	"errors"
-	"log/slog"
 	"net/http"
 	"strconv"
 	"time"
@@ -190,8 +189,8 @@ func (t *textHandler) remove(c echo.Context) error {
 
 // textError turns a service error into a response. A conflict carries the
 // document as it now stands so the client can offer to reload or compare;
-// anything unexpected is logged and answered with a generic body, never the
-// error text (which may come from the database).
+// anything unexpected is a generic 500 (see httputil.Internal), never the error
+// text (which may come from the database).
 func textError(c echo.Context, err error) error {
 	var conflict *texts.ConflictError
 	switch {
@@ -210,6 +209,5 @@ func textError(c echo.Context, err error) error {
 	case errors.Is(err, httputil.ErrInvalidInput):
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
-	slog.Error("text document request failed", "path", c.Path(), "error", err)
-	return echo.NewHTTPError(http.StatusInternalServerError, "internal error")
+	return httputil.Internal(err)
 }

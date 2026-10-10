@@ -1,25 +1,25 @@
-// Package rest provides Echo REST handlers for the drive service.
-// Delegates to the gRPC server (which contains the business logic) as a
-// transitional adapter. Future: extract domain layer from gRPC handler.
+// Package rest provides Echo REST handlers for the drive service. They adapt
+// HTTP to the domain service and hold no business logic.
 package rest
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/pkg/policyclient"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/drive/internal/domain"
 	"ngac-platform/services/drive/internal/reason"
 )
 
-// DriveService defines the operations the REST handler needs.
-// Currently implemented by the gRPC DriveServer directly.
+// DriveService defines the operations the REST handler needs. It is the drive
+// domain service; the handler never goes through the gRPC server.
 type DriveService interface {
 	CreateFolder(ctx context.Context, req *pb.CreateFolderRequest) (*pb.DriveItem, error)
 	ListFolder(ctx context.Context, req *pb.ListFolderRequest) (*pb.DriveItemList, error)
@@ -41,9 +41,14 @@ type DriveService interface {
 	GetQuota(ctx context.Context, req *pb.GetQuotaRequest) (*pb.Quota, error)
 }
 
-// PolicyReadClient defines the subset of PolicyReadService used by this handler.
-type PolicyReadClient interface {
-	BatchCheckAccess(ctx context.Context, req *policypb.BatchCheckAccessRequest, opts ...interface{}) (*policypb.BatchAccessResult, error)
+// mapError answers a domain error with its HTTP status. A conflict is a 409; the
+// other refusals the domain classifies map as everywhere (httputil.MapDomainError);
+// anything else, including a quota or lock refusal, is a generic 500.
+func mapError(err error) *echo.HTTPError {
+	if errors.Is(err, domain.ErrConflict) {
+		return echo.NewHTTPError(http.StatusConflict, err.Error())
+	}
+	return httputil.MapDomainError(err)
 }
 
 // Handler serves drive REST endpoints.
@@ -117,7 +122,7 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 		DriveContextId: body.DriveContextID,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusCreated, resp)
 }
@@ -134,7 +139,7 @@ func (h *Handler) ListRoot(c echo.Context) error {
 		DriveContextId: c.QueryParam("drive_context_id"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -152,7 +157,7 @@ func (h *Handler) ListFolder(c echo.Context) error {
 		WorkspaceId: c.QueryParam("ws"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -167,7 +172,7 @@ func (h *Handler) GetItem(c echo.Context) error {
 		ItemId: c.Param("itemId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -196,7 +201,7 @@ func (h *Handler) CreateFile(c echo.Context) error {
 		ParentId:    body.ParentID,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusCreated, resp)
 }
@@ -211,7 +216,7 @@ func (h *Handler) ConfirmFile(c echo.Context) error {
 		FileId: c.Param("fileId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -226,7 +231,7 @@ func (h *Handler) GetDownloadURL(c echo.Context) error {
 		FileId: c.Param("fileId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -249,7 +254,7 @@ func (h *Handler) RenameItem(c echo.Context) error {
 		NewName: body.Name,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -272,7 +277,7 @@ func (h *Handler) MoveItem(c echo.Context) error {
 		NewParentId: body.TargetFolderID,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -295,7 +300,7 @@ func (h *Handler) CopyItem(c echo.Context) error {
 		DestParentId: body.TargetFolderID,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -310,7 +315,7 @@ func (h *Handler) TrashItem(c echo.Context) error {
 		ItemId: c.Param("itemId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "trashed"})
 }
@@ -325,7 +330,7 @@ func (h *Handler) RestoreItem(c echo.Context) error {
 		ItemId: c.Param("itemId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -342,13 +347,13 @@ func (h *Handler) DeleteItem(c echo.Context) error {
 	if err != nil {
 		// A folder that still holds text documents is refused with 409 and a
 		// machine-readable reason; the writing in it is never deleted with it.
-		if st, ok := status.FromError(err); ok && st.Code() == codes.FailedPrecondition && st.Message() == reason.FolderHasDocuments {
+		if errors.Is(err, domain.ErrFolderHasDocuments) {
 			return c.JSON(http.StatusConflict, map[string]string{
 				"error":  "Thư mục này còn văn bản. Chuyển hoặc xoá các văn bản trước, rồi xoá thư mục.",
 				"reason": reason.FolderHasDocuments,
 			})
 		}
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "deleted"})
 }
@@ -375,7 +380,7 @@ func (h *Handler) CreateShare(c echo.Context) error {
 		Operations:       []string{body.Permission},
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusCreated, resp)
 }
@@ -390,7 +395,7 @@ func (h *Handler) RevokeShare(c echo.Context) error {
 		ShareId: c.Param("shareId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "revoked"})
 }
@@ -405,7 +410,7 @@ func (h *Handler) ListShares(c echo.Context) error {
 		ItemId: c.Param("itemId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -418,7 +423,7 @@ func (h *Handler) SharedWithMe(c echo.Context) error {
 	}
 	resp, err := h.svc.GetSharedWithMe(c.Request().Context(), &pb.GetSharedWithMeRequest{})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -433,31 +438,9 @@ func (h *Handler) GetQuota(c echo.Context) error {
 		WorkspaceId: c.Param("id"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
-}
-
-// mapGRPCError translates gRPC status codes to Echo HTTP errors.
-func mapGRPCError(err error) *echo.HTTPError {
-	st, ok := status.FromError(err)
-	if !ok {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	switch st.Code() {
-	case codes.NotFound:
-		return echo.NewHTTPError(http.StatusNotFound, st.Message())
-	case codes.PermissionDenied:
-		return echo.NewHTTPError(http.StatusForbidden, st.Message())
-	case codes.AlreadyExists, codes.FailedPrecondition:
-		return echo.NewHTTPError(http.StatusConflict, st.Message())
-	case codes.InvalidArgument:
-		return echo.NewHTTPError(http.StatusBadRequest, st.Message())
-	case codes.Unauthenticated:
-		return echo.NewHTTPError(http.StatusUnauthorized, st.Message())
-	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, st.Message())
-	}
 }
 
 // BatchAccess handles POST /api/drive/batch-access.
@@ -482,19 +465,9 @@ func (h *Handler) BatchAccess(c echo.Context) error {
 		body.Operations = []string{ngac.OpRead, ngac.OpWrite, ngac.OpShare}
 	}
 
-	resp, err := h.policyRead.BatchCheckAccess(c.Request().Context(), &policypb.BatchCheckAccessRequest{
-		UserNodeId: claims.NGACNodeID,
-		ObjectIds:  body.ObjectIDs,
-		Operations: body.Operations,
-	})
+	results, err := policyclient.New(h.policyRead).BatchCheck(c.Request().Context(), claims.NGACNodeID, body.ObjectIDs, body.Operations)
 	if err != nil {
-		return mapGRPCError(err)
-	}
-
-	// Convert proto map to JSON-friendly structure
-	results := make(map[string]map[string]bool, len(resp.Results))
-	for objID, objPerms := range resp.Results {
-		results[objID] = objPerms.Permissions
+		return httputil.MapGRPCError(err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{"results": results})

@@ -78,3 +78,39 @@ func TestEmailVerificationAndCaseInsensitiveAddresses(t *testing.T) {
 		assert.False(t, changed)
 	})
 }
+
+// A person whose address is already proved is created verified in one statement.
+func TestCreateUserWithVerifiedEmail_IsBornVerified(t *testing.T) {
+	ctx := context.Background()
+	pool, err := pgxpool.New(ctx, testDBURL())
+	require.NoError(t, err)
+	if err := pool.Ping(ctx); err != nil {
+		t.Skipf("test DB not available: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	st := store.New(pool)
+
+	n := time.Now().UnixNano()
+	node := func(name string) string {
+		nid := fmt.Sprintf("evv-%s-%d", name, n)
+		_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type, properties) VALUES ($1, $1, 'U', '{}')`, nid)
+		require.NoError(t, err)
+		t.Cleanup(func() {
+			pool.Exec(context.Background(), `DELETE FROM users WHERE ngac_node = $1`, nid)
+			pool.Exec(context.Background(), `DELETE FROM ngac_nodes WHERE id = $1`, nid)
+		})
+		return nid
+	}
+
+	id := fmt.Sprintf("evv-user-%d", n)
+	require.NoError(t, st.CreateUserWithVerifiedEmail(ctx, id, fmt.Sprintf("evv%d", n), "", node("a"), fmt.Sprintf("v.%d@example.vn", n), fmt.Sprintf("uv-%d", n), "Vee", ""))
+	u, err := st.GetUserByID(ctx, id)
+	require.NoError(t, err)
+	assert.True(t, u.EmailVerified, "created verified")
+
+	noAddr := fmt.Sprintf("evv-none-%d", n)
+	require.NoError(t, st.CreateUserWithVerifiedEmail(ctx, noAddr, fmt.Sprintf("evn%d", n), "", node("b"), "", fmt.Sprintf("un-%d", n), "Nil", ""))
+	u, err = st.GetUserByID(ctx, noAddr)
+	require.NoError(t, err)
+	assert.False(t, u.EmailVerified, "no address, nothing to verify")
+}

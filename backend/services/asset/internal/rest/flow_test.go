@@ -22,7 +22,6 @@ import (
 	"ngac-platform/pkg/httputil"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/asset/internal/domain"
-	agrpc "ngac-platform/services/asset/internal/grpc"
 	"ngac-platform/services/asset/internal/store"
 )
 
@@ -112,9 +111,9 @@ func newFlowFixture(t *testing.T) *flowFixture {
 
 	st := store.New(pool)
 	f.h = NewHandler(
-		agrpc.NewAssetServer(st, f.policy, nil),
-		agrpc.NewAssetTypeServer(st, f.policy, nil),
-		agrpc.NewAssetRequestServer(st, f.policy, nil, nil),
+		domain.NewAssetService(st, f.policy, nil),
+		domain.NewAssetTypeService(st, f.policy, nil),
+		domain.NewAssetRequestService(st, f.policy, nil, nil),
 	)
 	// Both users may approve this type and act on this asset, so only the
 	// identity rules — not missing grants — decide the outcomes below.

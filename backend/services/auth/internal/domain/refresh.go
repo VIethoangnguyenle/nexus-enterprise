@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -153,14 +154,14 @@ func (s *RefreshStore) Rotate(ctx context.Context, token string) (string, Refres
 		return "", RefreshIdentity{}, err
 	}
 	if revoked {
-		_ = s.RevokeSession(ctx, rec.SessionID)
+		s.revokeLogged(ctx, rec.SessionID, "identity revoked")
 		return "", RefreshIdentity{}, ErrRefreshRejected
 	}
 
 	if rec.Spent {
 		// Replay detected — burn the family, including the token the honest
 		// client is holding right now.
-		_ = s.RevokeSession(ctx, rec.SessionID)
+		s.revokeLogged(ctx, rec.SessionID, "refresh token replayed")
 		return "", RefreshIdentity{}, ErrRefreshRejected
 	}
 
@@ -328,4 +329,13 @@ func (s *RefreshStore) revokedForUser(ctx context.Context, id RefreshIdentity) (
 		return false, fmt.Errorf("read spared session: %w", err)
 	}
 	return keep == "" || keep != id.SessionID, nil
+}
+
+// revokeLogged ends a session on the way to refusing a refresh. The refusal does
+// not depend on the revocation succeeding, but a session that could not be
+// revoked is still live and the log must say so.
+func (s *RefreshStore) revokeLogged(ctx context.Context, sessionID, why string) {
+	if err := s.RevokeSession(ctx, sessionID); err != nil {
+		slog.Error("session not revoked", "session", sessionID, "why", why, "error", err)
+	}
 }

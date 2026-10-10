@@ -5,6 +5,7 @@ package rest
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -21,14 +22,14 @@ type Broadcaster interface {
 
 // Handler serves messaging REST endpoints.
 type Handler struct {
-	svc     *domain.Service
-	notifSt domain.NotificationStore
-	hub     Broadcaster
+	svc    *domain.Service
+	notifs *domain.NotificationService
+	hub    Broadcaster
 }
 
 // NewHandler creates a messaging REST handler.
-func NewHandler(svc *domain.Service, notifSt domain.NotificationStore, hub Broadcaster) *Handler {
-	return &Handler{svc: svc, notifSt: notifSt, hub: hub}
+func NewHandler(svc *domain.Service, notifs *domain.NotificationService, hub Broadcaster) *Handler {
+	return &Handler{svc: svc, notifs: notifs, hub: hub}
 }
 
 // RegisterRoutes mounts messaging endpoints on the Echo instance.
@@ -341,22 +342,47 @@ func (h *Handler) ListDMs(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"channels": dms})
 }
 
-// ListNotifications handles GET /api/notifications.
+// notificationJSON is a notification as the screens read it.
+type notificationJSON struct {
+	ID         string    `json:"id"`
+	Type       string    `json:"type"`
+	Title      string    `json:"title"`
+	Body       string    `json:"body"`
+	Read       bool      `json:"read"` // ngac-lint:allow the notification's read flag, not an operation
+	EntityType string    `json:"entity_type,omitempty"`
+	EntityID   string    `json:"entity_id,omitempty"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+// ListNotifications handles GET /api/notifications?limit=&offset=.
 func (h *Handler) ListNotifications(c echo.Context) error {
 	claims, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
-	notifs, err := h.notifSt.ListByUser(c.Request().Context(), claims.UserID)
+	limit, _ := strconv.Atoi(c.QueryParam("limit"))
+	offset, _ := strconv.Atoi(c.QueryParam("offset"))
+	page, err := h.notifs.List(c.Request().Context(), claims.UserID, limit, offset)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
-	return c.JSON(http.StatusOK, map[string]any{"notifications": notifs})
+	items := make([]notificationJSON, 0, len(page.Items))
+	for _, n := range page.Items {
+		items = append(items, notificationJSON{
+			ID: n.ID, Type: n.Type, Title: n.Title, Body: n.Body, Read: n.Read,
+			EntityType: n.EntityType, EntityID: n.EntityID, CreatedAt: n.CreatedAt,
+		})
+	}
+	return c.JSON(http.StatusOK, map[string]any{"notifications": items, "total": page.Total, "unread_count": page.Unread})
 }
 
 // MarkRead handles POST /api/notifications/:notifId/read.
 func (h *Handler) MarkRead(c echo.Context) error {
-	if err := h.notifSt.MarkRead(c.Request().Context(), c.Param("notifId")); err != nil {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	if err := h.notifs.MarkRead(c.Request().Context(), claims.UserID, c.Param("notifId")); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -368,7 +394,7 @@ func (h *Handler) MarkAllRead(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	if err := h.notifSt.MarkAllRead(c.Request().Context(), claims.UserID); err != nil {
+	if err := h.notifs.MarkAllRead(c.Request().Context(), claims.UserID); err != nil {
 		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
@@ -380,7 +406,7 @@ func (h *Handler) UnreadCount(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	count, err := h.notifSt.UnreadCount(c.Request().Context(), claims.UserID)
+	count, err := h.notifs.UnreadCount(c.Request().Context(), claims.UserID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

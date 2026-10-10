@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/policyclient"
 	policypb "ngac-platform/proto/policy"
 )
 
@@ -25,10 +26,7 @@ func (s *Service) checkAccess(ctx context.Context, userNodeID, objectNodeID, ope
 	if userNodeID == "" || objectNodeID == "" {
 		return fmt.Errorf("%w: %s requires an authenticated caller", ErrAccessDenied, operation)
 	}
-	resp, err := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
-		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
-	})
-	if !ngac.Allowed(resp.GetDecision(), err) {
+	if ok, _ := policyclient.New(s.policyRead).Check(ctx, userNodeID, objectNodeID, operation); !ok {
 		return fmt.Errorf("%w: %s", ErrAccessDenied, operation)
 	}
 	return nil

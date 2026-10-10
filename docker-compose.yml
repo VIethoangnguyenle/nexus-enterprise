@@ -404,7 +404,6 @@ services:
       dockerfile: services/approval/Dockerfile
     environment:
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
-      POLICY_ADDR: policy:50051
       POLICY_SERVICE_ADDR: policy:50051
       POLICY_READ_SERVICE_ADDR: policy-read:50061
       REDIS_URL: redis://redis:6379/4

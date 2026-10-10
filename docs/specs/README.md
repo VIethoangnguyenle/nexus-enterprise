@@ -67,6 +67,7 @@ Verified against the codebase on 2026-07-31.
 | Capability | State |
 |---|---|
 | `realtime-event-delivery` | Matches code (added 2026-10-10) |
+| `notifications` | Matches code (added 2026-10-10) |
 
 **Approval**
 

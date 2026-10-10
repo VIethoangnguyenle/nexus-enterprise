@@ -70,3 +70,10 @@ The Giao diện tab SHALL offer the theme (Theo hệ thống, Sáng, Tối) as r
 - Hồ sơ cannot change the photo (no upload exists) and saves Nơi làm việc where the mockup shows a phone number (the profile API has no phone). Department is the profile's free text, not the organisation's department.
 - Workspace cannot change the icon and shows no organisation field: neither has a server behind it.
 - Presence "đang xem" and live cursors are not drawn: see `text-documents`.
+
+### Requirement: The legacy document routes pass the drive's refusals through
+`GET /api/workspaces/{id}/documents`, `POST .../documents/upload-url`, `POST /api/documents/{id}/confirm` and `GET /api/documents/{id}/download-url` proxy to the drive service and SHALL answer with the drive's own refusal: 404, 403, 400, 401 and 409 keep their status and message. Only a failure that is the drive's own (an internal error, an unreachable service) is a 500, and then it carries `internal error` and a request ID, never the drive's text.
+
+#### Scenario: A file not pending
+- **WHEN** the drive refuses a confirmation because the file is no longer pending
+- **THEN** the proxy answers 409, not 500

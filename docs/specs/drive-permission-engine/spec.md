@@ -65,3 +65,14 @@ The UI SHALL only ask the policy service about operations the backend actually e
 #### Scenario: Permissions loading state
 - **WHEN** permissions are being fetched for newly visible items
 - **THEN** action buttons are not rendered until permissions resolve (skeleton or hidden)
+
+### Requirement: Confirming an upload is idempotent
+`POST /api/drive/files/{id}/confirm` SHALL publish a pending file and charge its size to the workspace quota as one change. A second confirmation of the same file finds nothing pending: it answers 409 and charges nothing, so a client that retries cannot be billed twice. Removing a file that was never confirmed releases no quota, because none was taken. If the object store has no such object the answer is 409 with the fixed message `file not uploaded`; if the store or the document service fails for any other reason the answer is a generic 500, and the failure's text (hosts, buckets) goes to the log only.
+
+#### Scenario: Confirmed twice
+- **WHEN** a client confirms the same upload twice
+- **THEN** the first answer is 200 and the second 409, and the workspace's used bytes and used files rose once
+
+#### Scenario: Object store unreachable while confirming
+- **WHEN** the document service cannot reach the object store
+- **THEN** the answer is 500 `internal error`, the file stays pending, and no host name appears in the body

@@ -1,15 +1,13 @@
-package grpc
+package domain
 
 import (
 	"context"
 	"errors"
-
-	"google.golang.org/genproto/googleapis/rpc/errdetails"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"fmt"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/policyclient"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/asset/internal/store"
 )
@@ -19,7 +17,7 @@ import (
 // service denies.
 
 func errDenied(op string) error {
-	return status.Errorf(codes.PermissionDenied, "no %s access", op)
+	return denied("no %s access", op)
 }
 
 // authorize checks op for the caller on one object node.
@@ -27,10 +25,7 @@ func authorize(ctx context.Context, pr policypb.PolicyReadServiceClient, userNod
 	if userNodeID == "" || objectNodeID == "" {
 		return errDenied(op)
 	}
-	resp, err := pr.CheckAccess(ctx, &policypb.CheckAccessRequest{
-		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: op,
-	})
-	if !ngac.Allowed(resp.GetDecision(), err) {
+	if ok, _ := policyclient.New(pr).Check(ctx, userNodeID, objectNodeID, op); !ok {
 		return errDenied(op)
 	}
 	return nil
@@ -42,7 +37,7 @@ func authorize(ctx context.Context, pr policypb.PolicyReadServiceClient, userNod
 // callers cannot mistake an outage for an absent node.
 func resolveOA(ctx context.Context, pr policypb.PolicyReadServiceClient, name string) (id string, found bool, err error) {
 	node, err := pr.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{Name: name, NodeType: ngac.TypeOA})
-	if status.Code(err) == codes.NotFound {
+	if policyclient.IsNotFound(err) {
 		return "", false, nil
 	}
 	if err != nil {
@@ -90,14 +85,12 @@ func permittedTypeIDs(ctx context.Context, pr policypb.PolicyReadServiceClient, 
 	if len(oaIDs) == 0 {
 		return permitted, nil
 	}
-	batch, err := pr.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
-		UserNodeId: userNodeID, ObjectIds: oaIDs, Operations: []string{op},
-	})
+	batch, err := policyclient.New(pr).BatchCheck(ctx, userNodeID, oaIDs, []string{op})
 	if err != nil {
 		return nil, err
 	}
 	for _, at := range types {
-		if at.NgacOAID != "" && batch.GetResults()[at.NgacOAID].GetPermissions()[op] {
+		if at.NgacOAID != "" && batch.Has(at.NgacOAID, op) {
 			permitted = append(permitted, at.ID)
 		}
 	}
@@ -124,9 +117,7 @@ func heldOnTypes(ctx context.Context, pr policypb.PolicyReadServiceClient, userN
 	if len(oaIDs) == 0 {
 		return held, nil
 	}
-	batch, err := pr.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
-		UserNodeId: userNodeID, ObjectIds: oaIDs, Operations: ops,
-	})
+	batch, err := policyclient.New(pr).BatchCheck(ctx, userNodeID, oaIDs, ops)
 	if err != nil {
 		return nil, err
 	}
@@ -134,9 +125,8 @@ func heldOnTypes(ctx context.Context, pr policypb.PolicyReadServiceClient, userN
 		if at.NgacOAID == "" {
 			continue
 		}
-		perms := batch.GetResults()[at.NgacOAID].GetPermissions()
 		for _, op := range ops {
-			if perms[op] {
+			if batch.Has(at.NgacOAID, op) {
 				held[at.ID] = append(held[at.ID], op)
 			}
 		}
@@ -156,14 +146,6 @@ const (
 	ReasonStateChanged     = "state_changed"
 )
 
-func refuse(code codes.Code, reason, msg string) error {
-	st := status.New(code, msg)
-	if d, err := st.WithDetails(&errdetails.ErrorInfo{Reason: reason, Domain: "asset"}); err == nil {
-		st = d
-	}
-	return st.Err()
-}
-
 // storeErr turns a refusal the store made inside a transaction into the status
 // a caller should see. Anything else is a failure of ours.
 func storeErr(err error, what string) error {
@@ -171,28 +153,28 @@ func storeErr(err error, what string) error {
 	case err == nil:
 		return nil
 	case errors.Is(err, store.ErrNotFound):
-		return status.Errorf(codes.NotFound, "%s not found", what)
+		return notFound("%s not found", what)
 	case errors.Is(err, store.ErrAssetUnavailable):
-		return refuse(codes.FailedPrecondition, ReasonAssetUnavailable, "asset is not available")
+		return Refuse(ErrConflict, ReasonAssetUnavailable, "asset is not available")
 	case errors.Is(err, store.ErrRequestNotOpen):
-		return refuse(codes.FailedPrecondition, ReasonRequestNotOpen, "request is not in a state that allows this")
+		return Refuse(ErrConflict, ReasonRequestNotOpen, "request is not in a state that allows this")
 	case errors.Is(err, store.ErrStateChanged):
-		return refuse(codes.FailedPrecondition, ReasonStateChanged, "asset changed since it was read")
+		return Refuse(ErrConflict, ReasonStateChanged, "asset changed since it was read")
 	case errors.Is(err, store.ErrWrongType):
-		return refuse(codes.InvalidArgument, ReasonWrongType, "asset is not of the requested type")
+		return Refuse(ErrInvalidInput, ReasonWrongType, "asset is not of the requested type")
 	case errors.Is(err, store.ErrNotAMember):
-		return refuse(codes.InvalidArgument, ReasonNotAMember, "the person is not a member of this workspace")
+		return Refuse(ErrInvalidInput, ReasonNotAMember, "the person is not a member of this workspace")
 	case errors.Is(err, store.ErrSameHolder):
-		return refuse(codes.InvalidArgument, ReasonSameHolder, "the asset is already held by this person")
+		return Refuse(ErrInvalidInput, ReasonSameHolder, "the asset is already held by this person")
 	}
-	return status.Errorf(codes.Internal, "%s failed", what)
+	return fmt.Errorf("%s failed: %w", what, err)
 }
 
 // loadForDecision reads a request and its type and requires op on the type's OA
 // before saying anything about the request. A request that does not exist, and
 // one the caller may not touch, both answer PermissionDenied: whether a request
 // ID exists is not the caller's to learn.
-func (s *AssetRequestServer) loadForDecision(ctx context.Context, requestID, op string) (*store.AssetRequest, *store.AssetType, error) {
+func (s *AssetRequestService) loadForDecision(ctx context.Context, requestID, op string) (*store.AssetRequest, *store.AssetType, error) {
 	who := grpcauth.CallerFrom(ctx)
 	r, err := s.store.GetRequest(ctx, requestID)
 	if err != nil {

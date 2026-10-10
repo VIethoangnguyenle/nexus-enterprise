@@ -27,7 +27,7 @@
 .PHONY: deploy redeploy down restart ps health logs \
         build-check test proto proto-install dev-frontend clean db-migrate help \
         dev dev-infra dev-stop dev-logs dev-all dev-restart dev-connect run stop \
-        agentkit-setup
+        agentkit-setup check-docs check-ngac check-layering
 
 # ---------------------------------------------------------------------------
 # Auto-detect docker compose command (v2 plugin vs v1 standalone)
@@ -174,7 +174,7 @@ dev: dev-infra
 	REDIS_URL=$$REDIS_URL_POLICY \
 	KAFKA_BROKERS=$$KAFKA_BROKERS \
 	GRPC_PORT=50051 \
-	sh -c 'cd backend/services/policy && exec go run ./cmd/' > $(DEV_LOGS)/policy.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	setsid sh -c 'cd backend/services/policy && exec go run ./cmd/' > $(DEV_LOGS)/policy.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  policy       → gRPC :50051"; \
 	sleep 2; \
 	\
@@ -186,7 +186,7 @@ dev: dev-infra
 	JWT_SECRET=$$JWT_SECRET \
 	GRPC_PORT=50052 \
 	REST_PORT=$$AUTH_REST_PORT \
-	sh -c 'cd backend/services/auth && exec go run ./cmd/' > $(DEV_LOGS)/auth.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	setsid sh -c 'cd backend/services/auth && exec go run ./cmd/' > $(DEV_LOGS)/auth.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  auth         → gRPC :50052  REST :$$AUTH_REST_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -200,7 +200,7 @@ dev: dev-infra
 	KAFKA_BROKERS=$$KAFKA_BROKERS \
 	GRPC_PORT=50053 \
 	REST_PORT=$$WORKSPACE_REST_PORT \
-	sh -c 'cd backend/services/workspace && exec go run ./cmd/' > $(DEV_LOGS)/workspace.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	setsid sh -c 'cd backend/services/workspace && exec go run ./cmd/' > $(DEV_LOGS)/workspace.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  workspace    → gRPC :50053  REST :$$WORKSPACE_REST_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -215,7 +215,7 @@ dev: dev-infra
 	KAFKA_BROKERS=$$KAFKA_BROKERS \
 	GRPC_PORT=50054 \
 	REST_PORT=$$DOCUMENT_REST_PORT \
-	sh -c 'cd backend/services/document && exec go run ./cmd/' > $(DEV_LOGS)/document.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	setsid sh -c 'cd backend/services/document && exec go run ./cmd/' > $(DEV_LOGS)/document.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  document     → gRPC :50054  REST :$$DOCUMENT_REST_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -228,7 +228,7 @@ dev: dev-infra
 	GRPC_PORT=50055 \
 	WS_PORT=$$WS_PORT \
 	REST_PORT=$$MESSAGING_REST_PORT \
-	sh -c 'cd backend/services/messaging && exec go run ./cmd/' > $(DEV_LOGS)/messaging.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	setsid sh -c 'cd backend/services/messaging && exec go run ./cmd/' > $(DEV_LOGS)/messaging.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  messaging    → gRPC :50055  REST :$$MESSAGING_REST_PORT  WS :$$WS_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -237,7 +237,7 @@ dev: dev-infra
 	JWT_SECRET=$$JWT_SECRET \
 	GRPC_PORT=50056 \
 	REST_PORT=$$ASSET_REST_PORT \
-	sh -c 'cd backend/services/asset && exec go run ./cmd/' > $(DEV_LOGS)/asset.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	setsid sh -c 'cd backend/services/asset && exec go run ./cmd/' > $(DEV_LOGS)/asset.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  asset        → gRPC :50056  REST :$$ASSET_REST_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
@@ -248,19 +248,19 @@ dev: dev-infra
 	KAFKA_BROKERS=$$KAFKA_BROKERS \
 	GRPC_PORT=50057 \
 	REST_PORT=$$DRIVE_REST_PORT \
-	sh -c 'cd backend/services/drive && exec go run ./cmd/' > $(DEV_LOGS)/drive.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	setsid sh -c 'cd backend/services/drive && exec go run ./cmd/' > $(DEV_LOGS)/drive.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  drive        → gRPC :50057  REST :$$DRIVE_REST_PORT"; \
 	\
 	DATABASE_URL=$$DATABASE_URL \
-	POLICY_ADDR=$$POLICY_SERVICE_ADDR \
+	POLICY_SERVICE_ADDR=$$POLICY_SERVICE_ADDR \
 	JWT_SECRET=$$JWT_SECRET \
 	GRPC_PORT=50058 \
 	REST_PORT=$$APPROVAL_REST_PORT \
-	sh -c 'cd backend/services/approval && exec go run ./cmd/' > $(DEV_LOGS)/approval.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	setsid sh -c 'cd backend/services/approval && exec go run ./cmd/' > $(DEV_LOGS)/approval.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  approval     → gRPC :50058  REST :$$APPROVAL_REST_PORT"
 	@echo ""
 	@echo "▸ Starting frontend dev server..."
-	@cd frontend && VITE_DEV_MODE=true npm run dev -- --port 5173 --host > ../$(DEV_LOGS)/frontend.log 2>&1 & echo $$! >> $(DEV_PIDS)
+	@VITE_DEV_MODE=true setsid sh -c 'cd frontend && exec npm run dev -- --port 5173 --host' > $(DEV_LOGS)/frontend.log 2>&1 & echo $$! >> $(DEV_PIDS)
 	@echo "  frontend     → http://localhost:5173"
 	@echo ""
 	@echo "✓ All services started. PIDs in $(DEV_PIDS), logs in $(DEV_LOGS)/"
@@ -318,7 +318,7 @@ stop:
 	@# 7. Clean dev-pids (from 'make dev' mode)
 	@if [ -f $(DEV_PIDS) ]; then \
 		while read pid; do \
-			kill $$pid 2>/dev/null && echo "  killed PID $$pid (dev-pids)" || true; \
+			env kill -TERM -- -$$pid 2>/dev/null || kill $$pid 2>/dev/null && echo "  stopped $$pid (dev-pids)" || true; \
 		done < $(DEV_PIDS); \
 		rm -f $(DEV_PIDS); \
 	fi
@@ -360,11 +360,25 @@ dev-stop:
 		exit 0; \
 	fi
 	@echo "▸ Stopping dev services..."
+	@# Every service and the frontend was started under setsid, so the recorded PID
+	@# is a process-group leader: signalling the group reaches the compiled server
+	@# behind `go run` and the node process behind `npm`, not just the wrapper.
+	@# `env kill` is the external kill: the shell builtin cannot signal a group.
 	@while read pid; do \
-		if kill -0 $$pid 2>/dev/null; then \
-			kill $$pid 2>/dev/null && echo "  killed PID $$pid"; \
+		if env kill -0 -- -$$pid 2>/dev/null; then \
+			env kill -TERM -- -$$pid 2>/dev/null && echo "  stopping process group $$pid"; \
 		else \
-			echo "  PID $$pid already exited (stale)"; \
+			echo "  group $$pid already exited (stale)"; \
+		fi; \
+	done < $(DEV_PIDS)
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
+		LIVE=0; \
+		while read pid; do env kill -0 -- -$$pid 2>/dev/null && LIVE=1; done < $(DEV_PIDS); \
+		[ $$LIVE = 0 ] && break; sleep 0.5; \
+	done
+	@while read pid; do \
+		if env kill -0 -- -$$pid 2>/dev/null; then \
+			env kill -KILL -- -$$pid 2>/dev/null && echo "  force-killed process group $$pid"; \
 		fi; \
 	done < $(DEV_PIDS)
 	@rm -f $(DEV_PIDS)
@@ -471,6 +485,12 @@ fmt:
 lint:
 	@echo "▸ go vet + staticcheck..."
 	@FAIL=""; \
+	printf "  %-12s" "pkg"; \
+	if (cd $(CURDIR)/backend && go vet ./pkg/... ./ngac/... ./testutil/... 2>&1 && staticcheck ./pkg/... ./ngac/... ./testutil/... 2>&1); then \
+		echo "✓"; \
+	else \
+		echo "✗"; FAIL="$$FAIL pkg"; \
+	fi; \
 	for svc in $(SERVICES); do \
 		printf "  %-12s" "$$svc"; \
 		if (cd $(CURDIR)/backend/services/$$svc && go vet ./... 2>&1 && staticcheck ./... 2>&1); then \
@@ -503,8 +523,14 @@ check-ngac:
 	@./scripts/check-ngac-identifiers.sh --self-test
 	@./scripts/check-ngac-identifiers.sh
 
+## Fail if backend code copies a shared helper, skips the shared gRPC options, runs SQL in a transport,
+## calls the gRPC server from REST, hand-builds a 500, or drops a store write's error
+check-layering:
+	@./scripts/check-backend-layering.sh --self-test
+	@./scripts/check-backend-layering.sh
+
 ## Full gate: everything that must pass before a change is done
-verify: check-docs check-ngac fmt-check build-check lint test
+verify: check-docs check-ngac check-layering fmt-check build-check lint test
 	@echo "▸ Frontend tests..."
 	@cd $(CURDIR)/frontend && npm test
 	@echo ""

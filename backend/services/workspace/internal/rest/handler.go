@@ -1,5 +1,5 @@
-// Package rest provides Echo REST handlers for the workspace service.
-// Delegates to the gRPC server (transitional — domain layer extraction is future work).
+// Package rest provides Echo REST handlers for the workspace service. They adapt
+// HTTP to the workspace domain service and never go through the gRPC server.
 package rest
 
 import (
@@ -9,20 +9,21 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"ngac-platform/pkg/httputil"
-	pb "ngac-platform/proto/workspace"
+	"ngac-platform/services/workspace/internal/domain"
+	"ngac-platform/services/workspace/internal/wire"
 )
 
 // The caller is always taken from verified JWT claims — never from the request
-// body. httputil.SetClaims puts it on the request context, which the service
-// reads with grpcauth.CallerFrom. Authorization itself happens in the domain.
+// body. Authorization itself happens in the domain.
 
-// WorkspaceService defines the operations the REST handler needs.
+// WorkspaceService defines the operations the REST handler needs: the domain
+// service. Each takes the caller's NGAC user node and authorizes in the domain.
 type WorkspaceService interface {
-	ListWorkspaces(ctx context.Context, req *pb.ListWorkspacesRequest) (*pb.WorkspaceList, error)
-	GetWorkspace(ctx context.Context, req *pb.GetWorkspaceRequest) (*pb.Workspace, error)
-	RemoveMember(ctx context.Context, req *pb.RemoveMemberRequest) (*pb.Empty, error)
-	ListMembers(ctx context.Context, req *pb.ListMembersRequest) (*pb.MemberList, error)
-	CreateFolder(ctx context.Context, req *pb.CreateFolderRequest) (*pb.Folder, error)
+	ListAccessibleWorkspaces(ctx context.Context, userNGACNodeID string) ([]*domain.WorkspaceResult, error)
+	ViewWorkspace(ctx context.Context, callerNodeID, id string) (*domain.WorkspaceResult, error)
+	RemoveMember(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error
+	ListMembers(ctx context.Context, callerNodeID, wsID string) ([]*domain.Member, error)
+	CreateFolder(ctx context.Context, callerNodeID, wsID, name, parentOaID string) (*domain.Folder, error)
 }
 
 // Handler serves workspace REST endpoints.
@@ -57,68 +58,58 @@ func (h *Handler) WorkspaceCreationMoved(c echo.Context) error {
 
 // ListWorkspaces handles GET /api/workspaces.
 func (h *Handler) ListWorkspaces(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
+	claims, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
-	resp, err := h.svc.ListWorkspaces(c.Request().Context(), &pb.ListWorkspacesRequest{})
+	res, err := h.svc.ListAccessibleWorkspaces(c.Request().Context(), claims.NGACNodeID)
 	if err != nil {
-		return httputil.MapGRPCError(err)
+		return httputil.MapDomainError(err)
 	}
-	return c.JSON(http.StatusOK, resp)
+	return c.JSON(http.StatusOK, wire.Workspaces(res))
 }
 
 // GetWorkspace handles GET /api/workspaces/:id.
 func (h *Handler) GetWorkspace(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
+	claims, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
-	ctx := c.Request().Context()
-	resp, err := h.svc.GetWorkspace(ctx, &pb.GetWorkspaceRequest{
-		WorkspaceId: c.Param("id"),
-	})
+	res, err := h.svc.ViewWorkspace(c.Request().Context(), claims.NGACNodeID, c.Param("id"))
 	if err != nil {
-		return httputil.MapGRPCError(err)
+		return httputil.MapDomainError(err)
 	}
-	return c.JSON(http.StatusOK, resp)
+	return c.JSON(http.StatusOK, wire.Workspace(res))
 }
 
 // RemoveMember handles DELETE /api/workspaces/:id/members/:nodeId.
 func (h *Handler) RemoveMember(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
+	claims, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
-	_, err = h.svc.RemoveMember(c.Request().Context(), &pb.RemoveMemberRequest{
-		WorkspaceId:      c.Param("id"),
-		TargetNgacNodeId: c.Param("nodeId"),
-	})
-	if err != nil {
-		return httputil.MapGRPCError(err)
+	if err := h.svc.RemoveMember(c.Request().Context(), claims.NGACNodeID, c.Param("id"), c.Param("nodeId")); err != nil {
+		return httputil.MapDomainError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // ListMembers handles GET /api/workspaces/:id/members.
 func (h *Handler) ListMembers(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
+	claims, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
-	ctx := c.Request().Context()
-	resp, err := h.svc.ListMembers(ctx, &pb.ListMembersRequest{
-		WorkspaceId: c.Param("id"),
-	})
+	members, err := h.svc.ListMembers(c.Request().Context(), claims.NGACNodeID, c.Param("id"))
 	if err != nil {
-		return httputil.MapGRPCError(err)
+		return httputil.MapDomainError(err)
 	}
-	return c.JSON(http.StatusOK, resp)
+	return c.JSON(http.StatusOK, wire.Members(members))
 }
 
 // CreateFolder handles POST /api/workspaces/:id/folders.
 func (h *Handler) CreateFolder(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
+	claims, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
@@ -129,14 +120,13 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
-
-	resp, err := h.svc.CreateFolder(c.Request().Context(), &pb.CreateFolderRequest{
-		WorkspaceId: c.Param("id"),
-		Name:        body.Name,
-		ParentOaId:  body.ParentOAID,
-	})
-	if err != nil {
-		return httputil.MapGRPCError(err)
+	if body.Name == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "name required")
 	}
-	return c.JSON(http.StatusCreated, resp)
+
+	f, err := h.svc.CreateFolder(c.Request().Context(), claims.NGACNodeID, c.Param("id"), body.Name, body.ParentOAID)
+	if err != nil {
+		return httputil.MapDomainError(err)
+	}
+	return c.JSON(http.StatusCreated, wire.Folder(f))
 }

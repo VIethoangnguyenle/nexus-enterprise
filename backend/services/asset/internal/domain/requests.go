@@ -1,16 +1,16 @@
-package grpc
+package domain
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"unicode/utf8"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/policyclient"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/asset/internal/events"
@@ -22,39 +22,38 @@ const MaxReasonRunes = 1000
 
 var validUrgency = map[string]bool{"low": true, "normal": true, "high": true, "urgent": true}
 
-// AssetRequestServer handles gRPC calls for the asset request/approve/assign/return flow.
-type AssetRequestServer struct {
-	pb.UnimplementedAssetRequestServiceServer
+// AssetRequestService handles gRPC calls for the asset request/approve/assign/return flow.
+type AssetRequestService struct {
 	store       *store.Store
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
 	producer    events.Publisher
 }
 
-// NewAssetRequestServer creates the asset request gRPC handler.
-func NewAssetRequestServer(s *store.Store, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient, p events.Publisher) *AssetRequestServer {
-	return &AssetRequestServer{store: s, policyRead: pr, policyWrite: pw, producer: orDiscard(p)}
+// NewAssetRequestService creates the asset request gRPC handler.
+func NewAssetRequestService(s *store.Store, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient, p events.Publisher) *AssetRequestService {
+	return &AssetRequestService{store: s, policyRead: pr, policyWrite: pw, producer: orDiscard(p)}
 }
 
-func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAssetRequestReq) (*pb.AssetRequest, error) {
+func (s *AssetRequestService) CreateRequest(ctx context.Context, req *pb.CreateAssetRequestReq) (*pb.AssetRequest, error) {
 	req.Justification = strings.TrimSpace(req.Justification)
 	if req.TypeId == "" || req.WorkspaceId == "" || req.Justification == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "type_id, workspace_id, and justification are required")
+		return nil, invalid("type_id, workspace_id, and justification are required")
 	}
 	urgency := req.Urgency
 	if urgency == "" {
 		urgency = "normal"
 	}
 	if utf8.RuneCountInString(req.Justification) > MaxReasonRunes {
-		return nil, status.Errorf(codes.InvalidArgument, "the reason is too long")
+		return nil, invalid("the reason is too long")
 	}
 	if !validUrgency[urgency] {
-		return nil, status.Errorf(codes.InvalidArgument, "urgency must be one of low, normal, high, urgent")
+		return nil, invalid("urgency must be one of low, normal, high, urgent")
 	}
 
 	at, err := s.store.GetType(ctx, req.TypeId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "asset type not found: %v", err)
+		return nil, lookupErr(err, "asset type")
 	}
 
 	// Check request permission on type OA
@@ -65,7 +64,7 @@ func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAs
 	// A request is filed in its type's workspace. Checked after authorization
 	// so a caller without write on the type learns nothing about its workspace.
 	if at.WorkspaceID != req.WorkspaceId {
-		return nil, status.Errorf(codes.InvalidArgument, "asset type does not belong to this workspace")
+		return nil, invalid("asset type does not belong to this workspace")
 	}
 
 	quantity := req.Quantity
@@ -83,7 +82,7 @@ func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAs
 		Urgency:       urgency,
 	}
 	if err := s.store.CreateRequest(ctx, assetReq); err != nil {
-		return nil, status.Errorf(codes.Internal, "create request: %v", err)
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 
 	// Emit Kafka event
@@ -98,7 +97,7 @@ func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAs
 
 	created, err := s.store.GetRequest(ctx, assetReq.ID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read back request: %v", err)
+		return nil, fmt.Errorf("read back request: %w", err)
 	}
 	return requestToProto(created), nil
 }
@@ -110,7 +109,7 @@ func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAs
 // so a request is never approved without its asset nor an asset given without
 // the request being closed. That needs approve (the decision) and manage (the
 // hand-over) on the request's type OA; either missing refuses the whole thing.
-func (s *AssetRequestServer) ApproveRequest(ctx context.Context, req *pb.ApproveRequestReq) (*pb.AssetRequest, error) {
+func (s *AssetRequestService) ApproveRequest(ctx context.Context, req *pb.ApproveRequestReq) (*pb.AssetRequest, error) {
 	who := grpcauth.CallerFrom(ctx)
 	// Authorization first: nothing about the request is said to someone who may not decide it.
 	assetReq, at, err := s.loadForDecision(ctx, req.RequestId, ngac.OpApprove)
@@ -118,11 +117,11 @@ func (s *AssetRequestServer) ApproveRequest(ctx context.Context, req *pb.Approve
 		return nil, err
 	}
 	if assetReq.Status != "pending" {
-		return nil, refuse(codes.FailedPrecondition, ReasonRequestNotOpen, "request is not pending")
+		return nil, Refuse(ErrConflict, ReasonRequestNotOpen, "request is not pending")
 	}
 	// Cannot approve own request
 	if assetReq.RequesterID == who.UserID {
-		return nil, status.Errorf(codes.PermissionDenied, "cannot approve own request")
+		return nil, denied("cannot approve own request")
 	}
 
 	if req.AssetId != "" {
@@ -149,7 +148,7 @@ func (s *AssetRequestServer) ApproveRequest(ctx context.Context, req *pb.Approve
 	return s.readBack(ctx, req.RequestId)
 }
 
-func (s *AssetRequestServer) publishDecision(ctx context.Context, r *store.AssetRequest, at *store.AssetType, statusName, approverID string) {
+func (s *AssetRequestService) publishDecision(ctx context.Context, r *store.AssetRequest, at *store.AssetType, statusName, approverID string) {
 	s.producer.PublishRequest(ctx, events.RequestEvent{
 		RequestID:   r.ID,
 		TypeName:    at.Name,
@@ -161,30 +160,30 @@ func (s *AssetRequestServer) publishDecision(ctx context.Context, r *store.Asset
 	})
 }
 
-func (s *AssetRequestServer) readBack(ctx context.Context, requestID string) (*pb.AssetRequest, error) {
+func (s *AssetRequestService) readBack(ctx context.Context, requestID string) (*pb.AssetRequest, error) {
 	updated, err := s.store.GetRequest(ctx, requestID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read back request: %v", err)
+		return nil, fmt.Errorf("read back request: %w", err)
 	}
 	return requestToProto(updated), nil
 }
 
-func (s *AssetRequestServer) RejectRequest(ctx context.Context, req *pb.RejectRequestReq) (*pb.AssetRequest, error) {
+func (s *AssetRequestService) RejectRequest(ctx context.Context, req *pb.RejectRequestReq) (*pb.AssetRequest, error) {
 	req.Reason = strings.TrimSpace(req.Reason)
 	assetReq, at, err := s.loadForDecision(ctx, req.RequestId, ngac.OpApprove)
 	if err != nil {
 		return nil, err
 	}
 	if assetReq.Status != "pending" {
-		return nil, refuse(codes.FailedPrecondition, ReasonRequestNotOpen, "request is not pending")
+		return nil, Refuse(ErrConflict, ReasonRequestNotOpen, "request is not pending")
 	}
 
 	// The requester reads this; a rejection without a reason tells them nothing.
 	if req.Reason == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "a reason is required")
+		return nil, invalid("a reason is required")
 	}
 	if utf8.RuneCountInString(req.Reason) > MaxReasonRunes {
-		return nil, status.Errorf(codes.InvalidArgument, "the reason is too long")
+		return nil, invalid("the reason is too long")
 	}
 
 	if err := s.store.UpdateRequestStatus(ctx, req.RequestId, "rejected", grpcauth.CallerFrom(ctx).UserID, req.Reason); err != nil {
@@ -203,7 +202,7 @@ func (s *AssetRequestServer) RejectRequest(ctx context.Context, req *pb.RejectRe
 
 	updated, err := s.store.GetRequest(ctx, req.RequestId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read back request: %v", err)
+		return nil, fmt.Errorf("read back request: %w", err)
 	}
 	return requestToProto(updated), nil
 }
@@ -211,17 +210,17 @@ func (s *AssetRequestServer) RejectRequest(ctx context.Context, req *pb.RejectRe
 // AssignAsset gives an asset to a request that was approved without one. It
 // needs manage on the OA of the request's type; the asset must be available and
 // of that type. The request, the asset and the history change together.
-func (s *AssetRequestServer) AssignAsset(ctx context.Context, req *pb.AssignAssetReq) (*pb.AssetRequest, error) {
+func (s *AssetRequestService) AssignAsset(ctx context.Context, req *pb.AssignAssetReq) (*pb.AssetRequest, error) {
 	who := grpcauth.CallerFrom(ctx)
 	assetReq, at, err := s.loadForDecision(ctx, req.RequestId, ngac.OpManage)
 	if err != nil {
 		return nil, err
 	}
 	if assetReq.Status != "approved" {
-		return nil, status.Errorf(codes.FailedPrecondition, "request must be approved before assignment (current: %s)", assetReq.Status)
+		return nil, conflict("request must be approved before assignment (current: %s)", assetReq.Status)
 	}
 	if req.AssetId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "asset_id is required")
+		return nil, invalid("asset_id is required")
 	}
 	if err := s.store.AssignApproved(ctx, store.FulfilParams{RequestID: req.RequestId, AssetID: req.AssetId, ActorID: who.UserID}); err != nil {
 		return nil, storeErr(err, "assign")
@@ -236,21 +235,21 @@ func (s *AssetRequestServer) AssignAsset(ctx context.Context, req *pb.AssignAsse
 
 // ReturnAsset takes an assigned asset back into stock and clears its holder.
 // Its holder may return it, and so may anyone with manage on its type's OA.
-func (s *AssetRequestServer) ReturnAsset(ctx context.Context, req *pb.ReturnAssetReq) (*pb.Empty, error) {
+func (s *AssetRequestService) ReturnAsset(ctx context.Context, req *pb.ReturnAssetReq) (*pb.Empty, error) {
 	asset, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil || asset.Deleted {
-		return nil, status.Errorf(codes.NotFound, "asset not found")
+		return nil, notFound("asset not found")
 	}
 
 	who := grpcauth.CallerFrom(ctx)
 	isAssignedUser := asset.AssignedTo != nil && who.UserID != "" && *asset.AssignedTo == who.UserID
 	if !isAssignedUser {
 		if err := s.checkAccess(ctx, who.NGACNodeID, asset.TypeOAID, ngac.OpManage); err != nil {
-			return nil, status.Errorf(codes.PermissionDenied, "only the assigned user or a manager can return this asset")
+			return nil, denied("only the assigned user or a manager can return this asset")
 		}
 	}
 	if asset.State != "assigned" {
-		return nil, status.Errorf(codes.FailedPrecondition, "only an assigned asset can be returned (current: %s)", asset.State)
+		return nil, conflict("only an assigned asset can be returned (current: %s)", asset.State)
 	}
 
 	previousUser := derefString(asset.AssignedTo)
@@ -286,15 +285,15 @@ func (s *AssetRequestServer) ReturnAsset(ctx context.Context, req *pb.ReturnAsse
 
 // ListRequests returns the requests in a workspace the caller may see.
 // Visibility is pushed into the query so the total counts only those.
-func (s *AssetRequestServer) ListRequests(ctx context.Context, req *pb.ListRequestsReq) (*pb.AssetRequestList, error) {
+func (s *AssetRequestService) ListRequests(ctx context.Context, req *pb.ListRequestsReq) (*pb.AssetRequestList, error) {
 	types, err := s.store.ListTypes(ctx, req.WorkspaceId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list asset types: %v", err)
+		return nil, fmt.Errorf("list asset types: %w", err)
 	}
 	approvable, err := permittedTypeIDs(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, types, ngac.OpApprove)
 	if err != nil {
 		// Fail closed: an unreadable policy answer must not list anything.
-		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
+		return nil, fmt.Errorf("batch access check: %w", err)
 	}
 	if grpcauth.CallerFrom(ctx).UserID == "" && len(approvable) == 0 {
 		return &pb.AssetRequestList{}, nil
@@ -310,7 +309,7 @@ func (s *AssetRequestServer) ListRequests(ctx context.Context, req *pb.ListReque
 		Visibility:  &store.RequestVisibility{RequesterID: grpcauth.CallerFrom(ctx).UserID, TypeIDs: approvable},
 	})
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list requests: %v", err)
+		return nil, fmt.Errorf("list requests: %w", err)
 	}
 
 	result := &pb.AssetRequestList{Total: total}
@@ -334,18 +333,18 @@ type requestFlags struct {
 	held     map[string][]string // type ID -> operations held on its OA
 }
 
-func (s *AssetRequestServer) flagsFor(ctx context.Context, workspaceID string, requests []*store.AssetRequest) (requestFlags, error) {
+func (s *AssetRequestService) flagsFor(ctx context.Context, workspaceID string, requests []*store.AssetRequest) (requestFlags, error) {
 	f := requestFlags{callerID: grpcauth.CallerFrom(ctx).UserID, held: map[string][]string{}}
 	if len(requests) == 0 {
 		return f, nil
 	}
 	types, err := s.store.ListTypes(ctx, workspaceID)
 	if err != nil {
-		return f, status.Errorf(codes.Internal, "list asset types: %v", err)
+		return f, fmt.Errorf("list asset types: %w", err)
 	}
 	f.held, err = heldOnTypes(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, types, []string{ngac.OpApprove, ngac.OpManage})
 	if err != nil {
-		return f, status.Errorf(codes.Internal, "batch access check: %v", err)
+		return f, fmt.Errorf("batch access check: %w", err)
 	}
 	return f, nil
 }
@@ -369,14 +368,14 @@ func (f requestFlags) apply(r *pb.AssetRequest) {
 //
 // A call without a caller is denied before the request is even looked up, so
 // an anonymous caller cannot probe which request IDs exist.
-func (s *AssetRequestServer) GetRequest(ctx context.Context, req *pb.GetRequestReq) (*pb.AssetRequest, error) {
+func (s *AssetRequestService) GetRequest(ctx context.Context, req *pb.GetRequestReq) (*pb.AssetRequest, error) {
 	who := grpcauth.CallerFrom(ctx)
 	if who.UserID == "" && who.NGACNodeID == "" {
 		return nil, errDenied(ngac.OpRead)
 	}
 	r, err := s.store.GetRequest(ctx, req.RequestId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "request not found: %v", err)
+		return nil, lookupErr(err, "request")
 	}
 	if who.UserID == "" || r.RequesterID != who.UserID {
 		at, err := s.store.GetType(ctx, r.TypeID)
@@ -400,15 +399,13 @@ func (s *AssetRequestServer) GetRequest(ctx context.Context, req *pb.GetRequestR
 // Helpers
 // ============================================
 
-func (s *AssetRequestServer) checkAccess(ctx context.Context, userNodeID, objectNodeID, operation string) error {
-	resp, err := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
-		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
-	})
+func (s *AssetRequestService) checkAccess(ctx context.Context, userNodeID, objectNodeID, operation string) error {
+	allowed, err := policyclient.New(s.policyRead).Check(ctx, userNodeID, objectNodeID, operation)
 	if err != nil {
-		return status.Errorf(codes.Internal, "access check failed: %v", err)
+		return fmt.Errorf("access check failed: %w", err)
 	}
-	if !ngac.Allowed(resp.GetDecision(), nil) {
-		return status.Errorf(codes.PermissionDenied, "no %s access", operation)
+	if !allowed {
+		return denied("no %s access", operation)
 	}
 	return nil
 }

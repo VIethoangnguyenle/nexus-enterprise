@@ -3,11 +3,13 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/realtime"
 	pb "ngac-platform/proto/policy"
 	"ngac-platform/services/policy/internal/events"
@@ -89,7 +91,7 @@ func (s *WriteServer) CreateNode(ctx context.Context, req *pb.CreateNodeRequest)
 	}
 	node, err := s.store.CreateNode(ctx, req.Name, req.NodeType, props)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create node: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("create node: %w", err))
 	}
 
 	// Invalidate caches and publish event (consistent with all other mutations)
@@ -118,7 +120,7 @@ func (s *WriteServer) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest)
 	}
 
 	if err := s.store.DeleteNode(ctx, req.NodeId); err != nil {
-		return nil, status.Errorf(codes.Internal, "delete node: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("delete node: %w", err))
 	}
 
 	s.invalidateResolvedShards(impact.Workspaces)
@@ -138,7 +140,7 @@ func (s *WriteServer) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest)
 func (s *WriteServer) CreateAssignment(ctx context.Context, req *pb.CreateAssignmentRequest) (*pb.Assignment, error) {
 	a, err := s.store.CreateAssignment(ctx, req.ChildId, req.ParentId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create assignment: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("create assignment: %w", err))
 	}
 
 	wsIDs := s.invalidateShards(req.ChildId, req.ParentId)
@@ -152,7 +154,7 @@ func (s *WriteServer) CreateAssignment(ctx context.Context, req *pb.CreateAssign
 // RemoveAssignment modifies graph structure — targeted cache invalidation.
 func (s *WriteServer) RemoveAssignment(ctx context.Context, req *pb.RemoveAssignmentRequest) (*pb.Empty, error) {
 	if err := s.store.RemoveAssignment(ctx, req.ChildId, req.ParentId); err != nil {
-		return nil, status.Errorf(codes.Internal, "remove assignment: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("remove assignment: %w", err))
 	}
 
 	wsIDs := s.invalidateShards(req.ChildId, req.ParentId)
@@ -170,7 +172,7 @@ func (s *WriteServer) CreateAssociation(ctx context.Context, req *pb.CreateAssoc
 	if s.strictOps && s.operations != nil {
 		invalid, err := s.operations.ValidateOperations(ctx, req.Operations)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "validating operations: %v", err)
+			return nil, grpcauth.Internal(fmt.Errorf("validating operations: %w", err))
 		}
 		if len(invalid) > 0 {
 			return nil, status.Errorf(codes.InvalidArgument,
@@ -183,7 +185,7 @@ func (s *WriteServer) CreateAssociation(ctx context.Context, req *pb.CreateAssoc
 		if errors.Is(err, ngac.ErrInvalidAssociation) {
 			return nil, status.Errorf(codes.InvalidArgument, "create association: %v", err)
 		}
-		return nil, status.Errorf(codes.Internal, "create association: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("create association: %w", err))
 	}
 
 	wsIDs := s.invalidateShards(req.UaId, req.OaId)
@@ -197,7 +199,7 @@ func (s *WriteServer) CreateAssociation(ctx context.Context, req *pb.CreateAssoc
 // RemoveAssociation modifies permissions — targeted cache invalidation.
 func (s *WriteServer) RemoveAssociation(ctx context.Context, req *pb.RemoveAssociationRequest) (*pb.Empty, error) {
 	if err := s.store.RemoveAssociationByUAOA(ctx, req.UaId, req.OaId); err != nil {
-		return nil, status.Errorf(codes.Internal, "remove association: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("remove association: %w", err))
 	}
 
 	wsIDs := s.invalidateShards(req.UaId, req.OaId)
@@ -240,7 +242,7 @@ func (s *WriteServer) GetDescendants(ctx context.Context, req *pb.GetDescendants
 
 func (s *WriteServer) InitSchema(ctx context.Context, _ *pb.Empty) (*pb.Empty, error) {
 	if err := s.store.InitSchema(ctx); err != nil {
-		return nil, status.Errorf(codes.Internal, "init schema: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("init schema: %w", err))
 	}
 	return &pb.Empty{}, nil
 }
@@ -248,7 +250,7 @@ func (s *WriteServer) InitSchema(ctx context.Context, _ *pb.Empty) (*pb.Empty, e
 // LoadGraph reloads the graph and invalidates all caches.
 func (s *WriteServer) LoadGraph(ctx context.Context, _ *pb.Empty) (*pb.Empty, error) {
 	if err := s.store.LoadGraph(ctx); err != nil {
-		return nil, status.Errorf(codes.Internal, "load graph: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("load graph: %w", err))
 	}
 
 	// Full invalidation on graph reload
@@ -309,7 +311,7 @@ func (s *WriteServer) RegisterOperations(ctx context.Context, req *pb.RegisterOp
 
 	result, err := s.operations.Register(ctx, req.Operations)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "register operations: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("register operations: %w", err))
 	}
 
 	return &pb.RegisterOperationsResponse{
@@ -350,7 +352,7 @@ func (s *WriteServer) CreateProhibition(ctx context.Context, req *pb.CreateProhi
 		Intersection: req.Intersection,
 	})
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create prohibition: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("create prohibition: %w", err))
 	}
 
 	affectedNodes := s.resolveProhibitionAffectedNodes(req.SubjectId, req.TargetOaIds)
@@ -382,7 +384,7 @@ func (s *WriteServer) RemoveProhibition(ctx context.Context, req *pb.RemoveProhi
 	}
 
 	if err := s.prohibitions.Remove(ctx, req.Name); err != nil {
-		return nil, status.Errorf(codes.Internal, "remove prohibition: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("remove prohibition: %w", err))
 	}
 
 	affectedNodes := s.resolveProhibitionAffectedNodes(p.SubjectID, p.TargetOAIDs)

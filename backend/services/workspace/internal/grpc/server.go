@@ -4,14 +4,15 @@ package grpc
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/grpcutil"
 	pb "ngac-platform/proto/workspace"
 	"ngac-platform/services/workspace/internal/domain"
+	"ngac-platform/services/workspace/internal/wire"
 )
 
 // WorkspaceDomainService defines operations the gRPC handler delegates to.
@@ -60,7 +61,7 @@ func (s *WorkspaceServer) CreateWorkspace(ctx context.Context, req *pb.CreateWor
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return workspaceToProto(res), nil
+	return wire.Workspace(res), nil
 }
 
 // ListWorkspaces returns workspaces accessible to the calling user.
@@ -69,11 +70,7 @@ func (s *WorkspaceServer) ListWorkspaces(ctx context.Context, req *pb.ListWorksp
 	if err != nil {
 		return nil, mapError(err)
 	}
-	var ws []*pb.Workspace
-	for _, r := range results {
-		ws = append(ws, workspaceToProto(r))
-	}
-	return &pb.WorkspaceList{Workspaces: ws}, nil
+	return wire.Workspaces(results), nil
 }
 
 // GetWorkspace retrieves a single workspace by ID.
@@ -82,7 +79,7 @@ func (s *WorkspaceServer) GetWorkspace(ctx context.Context, req *pb.GetWorkspace
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return workspaceToProto(res), nil
+	return wire.Workspace(res), nil
 }
 
 // RemoveMember removes a user from a workspace.
@@ -99,11 +96,7 @@ func (s *WorkspaceServer) ListMembers(ctx context.Context, req *pb.ListMembersRe
 	if err != nil {
 		return nil, mapError(err)
 	}
-	var pbMembers []*pb.Member
-	for _, m := range members {
-		pbMembers = append(pbMembers, &pb.Member{NgacNodeId: m.NGACNodeID, Username: m.Username})
-	}
-	return &pb.MemberList{Members: pbMembers}, nil
+	return wire.Members(members), nil
 }
 
 // TransferOwnership adds a new owner to the workspace.
@@ -171,7 +164,7 @@ func (s *WorkspaceServer) CreateFolder(ctx context.Context, req *pb.CreateFolder
 	if err != nil {
 		return nil, mapError(err)
 	}
-	return &pb.Folder{Id: f.ID, Name: f.Name, NgacNodeId: f.NGACNodeID}, nil
+	return wire.Folder(f), nil
 }
 
 // ListFolders returns all folders in a workspace.
@@ -208,28 +201,8 @@ func (s *WorkspaceServer) DeletePermission(ctx context.Context, req *pb.DeletePe
 	return &pb.Empty{}, nil
 }
 
-// workspaceToProto converts a domain result to proto.
-func workspaceToProto(r *domain.WorkspaceResult) *pb.Workspace {
-	return &pb.Workspace{
-		Id: r.ID, Name: r.Name, PcNodeId: r.PcNodeID,
-		OwnersUaId: r.OwnersUaID, MembersUaId: r.MembersUaID,
-		MgmtOaId: r.MgmtOaID, DocumentsOaId: r.DocumentsOaID,
-		ChannelsOaId: r.ChannelsOaID, CreatedBy: r.CreatedBy,
-	}
-}
-
-// mapError translates domain sentinel errors to gRPC status codes.
+// mapError translates a domain error to a gRPC status; anything that is not the
+// domain's own refusal becomes a generic Internal (see grpcutil.Status).
 func mapError(err error) error {
-	switch {
-	case errors.Is(err, domain.ErrNotFound):
-		return status.Error(codes.NotFound, err.Error())
-	case errors.Is(err, domain.ErrAccessDenied):
-		return status.Error(codes.PermissionDenied, err.Error())
-	case errors.Is(err, domain.ErrAlreadyExists):
-		return status.Error(codes.AlreadyExists, err.Error())
-	case errors.Is(err, domain.ErrInvalidInput):
-		return status.Error(codes.InvalidArgument, err.Error())
-	default:
-		return status.Errorf(codes.Internal, "internal: %v", err)
-	}
+	return grpcutil.Status(err)
 }

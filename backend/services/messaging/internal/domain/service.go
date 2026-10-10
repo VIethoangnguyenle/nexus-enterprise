@@ -14,6 +14,7 @@ import (
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/provision"
 	"ngac-platform/pkg/realtime"
 	authpb "ngac-platform/proto/auth"
@@ -23,9 +24,16 @@ import (
 	"ngac-platform/services/messaging/internal/store"
 )
 
+// memberCache is the channel_members table, which DM lookup reads. The graph is
+// the source of truth for membership; this is its denormalised copy.
+type memberCache interface {
+	InsertChannelMember(ctx context.Context, channelID, ngacNodeID string) error
+}
+
 // Service orchestrates messaging business logic.
 type Service struct {
 	store       *store.Store
+	members     memberCache
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
 	authClient  authpb.AuthServiceClient
@@ -79,6 +87,7 @@ func NewService(
 ) *Service {
 	return &Service{
 		store:       st,
+		members:     st,
 		policyRead:  pr,
 		policyWrite: pw,
 		authClient:  ac,
@@ -173,13 +182,13 @@ func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID
 		CreatedBy:   in.UserID,
 		CreatedAt:   time.Now(),
 	}
-	if err := s.store.InsertChannel(ctx, ch); err != nil {
+	// The row and the members cache (what DM lookup reads) are written together:
+	// a channel without them is a DM nobody can find, created again on the next try.
+	members := append([]string{in.UserNodeID}, extraMemberNodeIDs...)
+	if err := s.store.InsertChannelWithMembers(ctx, ch, members...); err != nil {
 		return nil, prov.Fail(ctx, fmt.Errorf("create channel: %w", err))
 	}
 	prov.Done()
-
-	// Track creator as channel member for DM lookup optimization.
-	s.store.InsertChannelMember(ctx, chID, in.UserNodeID)
 
 	s.createChannelDrive(ctx, in.WorkspaceID, chID, in.Name, contentOA.Id, membersUA.Id)
 
@@ -274,13 +283,17 @@ func (s *Service) createChannelDrive(ctx context.Context, workspaceID, chID, chN
 	if s.driveClient == nil || workspaceID == "" {
 		return
 	}
-	s.driveClient.CreateDriveForChannel(ctx, &drivepb.CreateDriveForChannelRequest{
+	if _, err := s.driveClient.CreateDriveForChannel(ctx, &drivepb.CreateDriveForChannelRequest{
 		WorkspaceId:     workspaceID,
 		ChannelId:       chID,
 		ChannelName:     chName,
 		ChannelNgacOaId: oaID,
 		ChannelNgacUaId: uaID,
-	})
+	}); err != nil {
+		// The channel exists and works without its drive; the drive is created
+		// lazily on first use. The failure is for the log.
+		slog.Warn("channel drive not created", "channel", chID, "error", err)
+	}
 }
 
 // findChildByName searches direct children of a node for a specific name+type.
@@ -354,11 +367,7 @@ func (s *Service) filterAccessible(ctx context.Context, channels []*store.Channe
 	for _, ch := range channels {
 		objectIDs = append(objectIDs, ch.NGACOaID)
 	}
-	batch, err := s.policyRead.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
-		UserNodeId: userNodeID,
-		ObjectIds:  objectIDs,
-		Operations: []string{ngac.OpRead},
-	})
+	batch, err := policyclient.New(s.policyRead).BatchCheck(ctx, userNodeID, objectIDs, []string{ngac.OpRead})
 	if err != nil {
 		// Fail closed: showing every channel because the policy service is
 		// unreachable is the one outcome worse than showing none.
@@ -368,7 +377,7 @@ func (s *Service) filterAccessible(ctx context.Context, channels []*store.Channe
 
 	var result []*pb.Channel
 	for _, ch := range channels {
-		if batch.GetResults()[ch.NGACOaID].GetPermissions()[ngac.OpRead] {
+		if batch.Has(ch.NGACOaID, ngac.OpRead) {
 			result = append(result, channelToProto(ch))
 		}
 	}
@@ -402,9 +411,6 @@ func (s *Service) FindOrCreateDM(ctx context.Context, userID, userNodeID, target
 	if err != nil {
 		return nil, fmt.Errorf("create DM channel: %w", err)
 	}
-
-	// Track target as channel member for future DM lookups.
-	s.store.InsertChannelMember(ctx, ch.Id, targetNodeID)
 
 	return ch, nil
 }
@@ -464,11 +470,6 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 
 	if err := s.store.InsertMessage(ctx, msg); err != nil {
 		return nil, fmt.Errorf("send message: %w", err)
-	}
-
-	if in.ParentMessageID != "" {
-		s.store.IncrementReplyCount(ctx, in.ParentMessageID)
-		s.store.TrackThreadParticipant(ctx, in.ParentMessageID, in.SenderID)
 	}
 
 	msg.SenderName = s.lookupUsername(ctx, in.SenderID)
@@ -587,12 +588,35 @@ func (s *Service) AddMember(ctx context.Context, channelID, requesterNodeID, tar
 	if ch.ChannelType == "dm" {
 		return fmt.Errorf("%w: cannot add members to a direct message", ErrInvalidInput)
 	}
+	// CreateAssignment is idempotent, so an edge that was already there is
+	// indistinguishable afterwards from one this call made. Ask first: only an
+	// edge this call creates may be withdrawn again. If the question cannot be
+	// answered, assume the edge may be older and never withdraw it.
+	existed := true
+	if res, err := s.policyRead.IsAssigned(ctx, &policypb.IsAssignedRequest{ChildId: targetNodeID, ParentId: ch.NGACUaID}); err == nil {
+		existed = res.GetValue()
+	}
 	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: targetNodeID, ParentId: ch.NGACUaID,
 	}); err != nil {
 		return fmt.Errorf("add member: %w", err)
 	}
-	s.store.InsertChannelMember(ctx, channelID, targetNodeID)
+	// The graph is the membership; channel_members is the cache DM lookup reads.
+	// If the cache cannot be written, an assignment this call made is withdrawn,
+	// so the two never disagree about who is in the channel.
+	if err := s.members.InsertChannelMember(ctx, channelID, targetNodeID); err != nil {
+		if existed {
+			return fmt.Errorf("add member: %w", err)
+		}
+		if _, rerr := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+			ChildId: targetNodeID, ParentId: ch.NGACUaID,
+		}); rerr != nil {
+			slog.Error("member added to the graph but not recorded, and the assignment could not be withdrawn",
+				"channel", channelID, "member", targetNodeID, "record_error", err, "withdraw_error", rerr)
+			return fmt.Errorf("add member: %w; withdrawing the assignment also failed (%v), so the graph and the cache disagree", err, rerr)
+		}
+		return fmt.Errorf("add member: %w", err)
+	}
 	s.announceMembership(ctx, realtime.KindMemberAdded, ch, targetNodeID)
 	return nil
 }
@@ -666,10 +690,7 @@ func (s *Service) ListMembers(ctx context.Context, channelID, userNodeID string)
 
 // checkAccess verifies NGAC access and returns an error if denied.
 func (s *Service) checkAccess(ctx context.Context, userNodeID, objectNodeID, operation string) error {
-	resp, err := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
-		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
-	})
-	if !ngac.Allowed(resp.GetDecision(), err) {
+	if ok, _ := policyclient.New(s.policyRead).Check(ctx, userNodeID, objectNodeID, operation); !ok {
 		return fmt.Errorf("%w: %s on %s", ErrAccessDenied, operation, objectNodeID)
 	}
 	return nil

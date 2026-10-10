@@ -79,10 +79,6 @@ func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll,
 		LinkedEntityID:   pollID,
 		CreatedAt:        time.Now(),
 	}
-	if err := s.store.InsertMessage(ctx, msg); err != nil {
-		return nil, fmt.Errorf("create poll message: %w", err)
-	}
-
 	poll := &store.Poll{
 		ID:          pollID,
 		MessageID:   msgID,
@@ -94,15 +90,13 @@ func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll,
 		EndsAt:      in.EndsAt,
 		CreatedAt:   time.Now(),
 	}
-	if err := s.store.InsertPoll(ctx, poll); err != nil {
-		return nil, fmt.Errorf("create poll: %w", err)
+	options := make([]store.PollOptionInput, 0, len(in.Options))
+	for _, opt := range in.Options {
+		options = append(options, store.PollOptionInput{ID: uuid.New().String(), Text: opt})
 	}
-
-	for i, opt := range in.Options {
-		optID := uuid.New().String()
-		if err := s.store.InsertPollOption(ctx, optID, pollID, opt, i); err != nil {
-			return nil, fmt.Errorf("create poll option: %w", err)
-		}
+	// The announcement, the poll and its options stand or fall together.
+	if err := s.store.InsertPollWithMessage(ctx, msg, poll, options); err != nil {
+		return nil, err
 	}
 
 	return s.GetPoll(ctx, pollID, in.UserNodeID)
@@ -180,10 +174,6 @@ func (s *Service) CreateTask(ctx context.Context, in CreateTaskInput) (*pb.ChatT
 		LinkedEntityID:   taskID,
 		CreatedAt:        time.Now(),
 	}
-	if err := s.store.InsertMessage(ctx, msg); err != nil {
-		return nil, fmt.Errorf("create task message: %w", err)
-	}
-
 	var dueDate *time.Time
 	if in.DueDate != "" {
 		t, err := time.Parse("2006-01-02", in.DueDate)
@@ -204,8 +194,9 @@ func (s *Service) CreateTask(ctx context.Context, in CreateTaskInput) (*pb.ChatT
 		CreatedAt:  time.Now(),
 		UpdatedAt:  time.Now(),
 	}
-	if err := s.store.InsertTask(ctx, task); err != nil {
-		return nil, fmt.Errorf("create task: %w", err)
+	// The announcement and the task stand or fall together.
+	if err := s.store.InsertTaskWithMessage(ctx, msg, task); err != nil {
+		return nil, err
 	}
 
 	return s.getTaskProto(ctx, taskID)

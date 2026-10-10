@@ -4,13 +4,13 @@ package grpc
 
 import (
 	"context"
-	"errors"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/grpcutil"
 	pb "ngac-platform/proto/approval"
 	"ngac-platform/services/approval/internal/domain"
 )
@@ -37,26 +37,14 @@ func callerNode(ctx context.Context) (string, error) {
 	return node, nil
 }
 
-// mapError translates domain sentinel errors to gRPC status codes.
+// mapError translates a domain error to a gRPC status; anything that is not the
+// domain's own refusal becomes a generic Internal (see grpcutil.Status).
 func mapError(err error) error {
-	switch {
-	case errors.Is(err, domain.ErrNotFound):
-		return status.Error(codes.NotFound, err.Error())
-	case errors.Is(err, domain.ErrAccessDenied):
-		return status.Error(codes.PermissionDenied, err.Error())
-	case errors.Is(err, domain.ErrAlreadyExists):
-		return status.Error(codes.AlreadyExists, err.Error())
-	case errors.Is(err, domain.ErrInvalidInput):
-		return status.Error(codes.InvalidArgument, err.Error())
-	case errors.Is(err, domain.ErrStepNotActive):
-		return status.Error(codes.FailedPrecondition, err.Error())
-	case errors.Is(err, domain.ErrRequestCompleted):
-		return status.Error(codes.FailedPrecondition, err.Error())
-	case errors.Is(err, domain.ErrNoMatchingTemplate):
-		return status.Error(codes.NotFound, err.Error())
-	default:
-		return status.Errorf(codes.Internal, "internal: %v", err)
-	}
+	return grpcutil.Status(err,
+		grpcutil.Mapping{Is: domain.ErrStepNotActive, Code: codes.FailedPrecondition},
+		grpcutil.Mapping{Is: domain.ErrRequestCompleted, Code: codes.FailedPrecondition},
+		grpcutil.Mapping{Is: domain.ErrNoMatchingTemplate, Code: codes.NotFound},
+	)
 }
 
 // --- Proto conversion helpers ---

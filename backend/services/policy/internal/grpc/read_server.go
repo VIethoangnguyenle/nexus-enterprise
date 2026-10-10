@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/policy"
 	"ngac-platform/services/policy/internal/ngac"
 )
@@ -363,7 +365,7 @@ func (s *ReadServer) ListOperations(ctx context.Context, _ *pb.Empty) (*pb.Opera
 	}
 	ops, err := s.operations.List(ctx)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing operations: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("listing operations: %w", err))
 	}
 	return &pb.OperationList{Operations: ops}, nil
 }
@@ -375,7 +377,7 @@ func (s *ReadServer) ListProhibitions(ctx context.Context, req *pb.ListProhibiti
 	}
 	prohibitions, err := s.prohibitions.List(ctx, req.SubjectId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing prohibitions: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("listing prohibitions: %w", err))
 	}
 
 	var result []*pb.Prohibition

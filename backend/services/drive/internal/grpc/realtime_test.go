@@ -415,7 +415,7 @@ func TestRealtime_StorageFailureEmitsNothing(t *testing.T) {
 	closed, err := pgxpool.New(context.Background(), testDBURL())
 	require.NoError(t, err)
 	closed.Close()
-	broken := grpcserver.NewDriveServer(closed, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
+	broken := newDrive(closed, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
 	p := &probe{}
 	broken.SetEmitter(p)
 

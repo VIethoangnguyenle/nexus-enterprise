@@ -13,5 +13,5 @@ document:  bash -c 'set -a && source .env.dev && set +a && cd backend/services/d
 messaging: bash -c 'set -a && source .env.dev && set +a && cd backend/services/messaging && REDIS_URL=$REDIS_URL_MESSAGING GRPC_PORT=50055 REST_PORT=$MESSAGING_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
 asset:     bash -c 'set -a && source .env.dev && set +a && cd backend/services/asset && GRPC_PORT=50056 REST_PORT=$ASSET_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
 drive:     bash -c 'set -a && source .env.dev && set +a && cd backend/services/drive && GRPC_PORT=50057 REST_PORT=$DRIVE_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
-approval:  bash -c 'set -a && source .env.dev && set +a && cd backend/services/approval && POLICY_ADDR=$POLICY_SERVICE_ADDR GRPC_PORT=50058 REST_PORT=$APPROVAL_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
+approval:  bash -c 'set -a && source .env.dev && set +a && cd backend/services/approval && GRPC_PORT=50058 REST_PORT=$APPROVAL_REST_PORT exec /usr/local/go/bin/go run ./cmd/'
 frontend:  cd frontend && VITE_DEV_MODE=true npx vite --port 5173 --host

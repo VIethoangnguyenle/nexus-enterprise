@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -12,13 +13,11 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/genproto/googleapis/rpc/errdetails"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/asset"
+	"ngac-platform/services/asset/internal/domain"
 )
 
 // What the asset screens send, field by field, and what the handlers hand to
@@ -264,40 +263,52 @@ func TestTypes_CreateAndSchemaReadTheirFields(t *testing.T) {
 }
 
 func TestErrors_MapToTheStatusAScreenCanActOn(t *testing.T) {
-	cases := map[codes.Code]int{
-		codes.PermissionDenied:   http.StatusForbidden,
-		codes.NotFound:           http.StatusNotFound,
-		codes.InvalidArgument:    http.StatusBadRequest,
-		codes.FailedPrecondition: http.StatusConflict,
-		codes.AlreadyExists:      http.StatusConflict,
-		codes.Unauthenticated:    http.StatusUnauthorized,
-		codes.Internal:           http.StatusInternalServerError,
+	cases := map[string]struct {
+		err  error
+		want int
+	}{
+		"denied":       {domain.ErrAccessDenied, http.StatusForbidden},
+		"not found":    {domain.ErrNotFound, http.StatusNotFound},
+		"invalid":      {domain.ErrInvalidInput, http.StatusBadRequest},
+		"conflict":     {domain.ErrConflict, http.StatusConflict},
+		"exists":       {domain.ErrAlreadyExists, http.StatusConflict},
+		"unauthed":     {domain.ErrUnauthenticated, http.StatusUnauthorized},
+		"wrapped deny": {fmt.Errorf("hand over: %w", domain.ErrAccessDenied), http.StatusForbidden},
+		"unclassified": {errors.New("apply transition: boom"), http.StatusInternalServerError},
+		"unavailable":  {domain.ErrUnavailable, http.StatusInternalServerError},
 	}
-	for code, want := range cases {
-		s := &spy{err: status.Error(code, "no")}
+	for name, tc := range cases {
+		s := &spy{err: tc.err}
 		got := run(t, s.handler().HandOverAsset, http.MethodPost, "/", `{"assignee_id":"u"}`, map[string]string{"assetId": "a"})
-		assert.Equal(t, want, got, code.String())
+		assert.Equal(t, tc.want, got, name)
 	}
 }
 
 func TestInternalErrors_NeverCarryTheDatabaseText(t *testing.T) {
-	err := mapGRPCError(status.Error(codes.Internal, `apply transition: ERROR: duplicate key value violates unique constraint "assets_pkey" (SQLSTATE 23505)`))
+	err := mapError(errors.New(`apply transition: ERROR: duplicate key value violates unique constraint "assets_pkey" (SQLSTATE 23505)`))
 	assert.Equal(t, http.StatusInternalServerError, err.Code)
 	body, _ := json.Marshal(err.Message)
 	assert.NotContains(t, string(body), "SQLSTATE")
 	assert.NotContains(t, string(body), "assets_pkey")
 	assert.Contains(t, string(body), "internal error")
 
-	plain := mapGRPCError(errors.New("pq: connection refused at 10.0.0.5"))
-	assert.Equal(t, http.StatusInternalServerError, plain.Code)
-	body, _ = json.Marshal(plain.Message)
-	assert.NotContains(t, string(body), "10.0.0.5")
+	// And end to end: the body a client reads carries the request ID, not the text.
+	e := httputil.NewEcho("asset")
+	s := &spy{err: errors.New("pq: connection refused at 10.0.0.5")}
+	h := s.handler()
+	e.GET("/assets/:assetId", func(c echo.Context) error {
+		httputil.SetClaims(c, &httputil.Claims{UserID: "u", NGACNodeID: "n"})
+		return h.GetAsset(c)
+	})
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/assets/a-1", nil))
+	assert.Equal(t, http.StatusInternalServerError, rec.Code)
+	assert.NotContains(t, rec.Body.String(), "10.0.0.5")
+	assert.Contains(t, rec.Body.String(), `"request_id"`)
 }
 
 func TestRefusals_HandTheReasonToTheClient(t *testing.T) {
-	st, _ := status.New(codes.FailedPrecondition, "request is not in a state that allows this").
-		WithDetails(&errdetails.ErrorInfo{Reason: "request_not_open"})
-	err := mapGRPCError(st.Err())
+	err := mapError(domain.Refuse(domain.ErrConflict, "request_not_open", "request is not in a state that allows this"))
 	assert.Equal(t, http.StatusConflict, err.Code)
 	body, _ := json.Marshal(err.Message)
 	assert.JSONEq(t, `{"message":"request is not in a state that allows this","reason":"request_not_open"}`, string(body))

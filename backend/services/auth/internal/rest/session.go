@@ -3,6 +3,7 @@ package rest
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"time"
@@ -91,7 +92,7 @@ type refreshAttacher interface {
 func issueSessionWith(c echo.Context, a refreshAttacher, id domain.RefreshIdentity) error {
 	refreshToken, err := a.AttachRefreshToken(c.Request().Context(), id)
 	if err != nil {
-		return apiError(http.StatusInternalServerError, "internal", "could not establish session")
+		return internalFailure(fmt.Errorf("establish session: %w", err))
 	}
 	setRefreshCookie(c, refreshToken)
 	return nil
@@ -130,11 +131,11 @@ func (h *Handler) Logout(c echo.Context) error {
 	// that logout still works once the access token has expired.
 	if claims := httputil.GetClaims(c); claims != nil && claims.SessionID != "" {
 		if err := h.svc.EndSession(c.Request().Context(), claims.SessionID); err != nil {
-			return apiError(http.StatusInternalServerError, "internal", "logout failed")
+			return internalFailure(fmt.Errorf("logout: %w", err))
 		}
 	} else if cookie, err := c.Cookie(refreshCookieName); err == nil && cookie.Value != "" {
 		if err := h.svc.EndSessionByRefreshToken(c.Request().Context(), cookie.Value); err != nil {
-			return apiError(http.StatusInternalServerError, "internal", "logout failed")
+			return internalFailure(fmt.Errorf("logout: %w", err))
 		}
 	}
 

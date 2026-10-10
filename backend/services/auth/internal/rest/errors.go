@@ -2,10 +2,13 @@ package rest
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+
+	"ngac-platform/pkg/httputil"
 )
 
 // statusCodes are the codes for errors Echo or a middleware raises with only a
@@ -32,14 +35,21 @@ func envelopeErrors(err error, c echo.Context) {
 	}
 	he := new(echo.HTTPError)
 	if !errors.As(err, &he) {
-		slog.Error("auth request failed", "method", c.Request().Method, "path", c.Path(), "error", err)
-		he = apiError(http.StatusInternalServerError, "internal", "internal error")
+		he = internalFailure(err)
 	}
 
-	var body any = he.Message
+	body := any(he.Message)
 	switch m := he.Message.(type) {
 	case map[string]any:
 		// Already the envelope.
+		if he.Code == http.StatusInternalServerError {
+			cause := he.Internal
+			if cause == nil {
+				cause = fmt.Errorf("%v", m["message"])
+			}
+			m["message"] = httputil.InternalMessage
+			m["request_id"] = httputil.LogInternal(c, "auth", cause)
+		}
 	case string:
 		code, ok := statusCodes[he.Code]
 		if !ok {
@@ -50,8 +60,13 @@ func envelopeErrors(err error, c echo.Context) {
 		}
 		if he.Code >= 500 {
 			// A 5xx message is for the log; the caller gets the plain sentence.
-			slog.Error("auth request failed", "status", he.Code, "message", m)
-			m = "internal error"
+			cause := he.Internal
+			if cause == nil {
+				cause = errors.New(m)
+			}
+			id := httputil.LogInternal(c, "auth", cause)
+			body = map[string]any{"message": httputil.InternalMessage, "code": code, "request_id": id}
+			break
 		}
 		body = map[string]any{"message": m, "code": code}
 	default:

@@ -128,17 +128,25 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, in CreateRequestInp
 			return nil, fmt.Errorf("assign step 1: %w", err)
 		}
 	}
-	if err := s.store.InsertRequestWithAssignments(ctx, req, first); err != nil {
-		return nil, fmt.Errorf("insert request: %w", err)
-	}
-
-	// 5. Audit
-	s.logAudit(ctx, req.ID, "created", in.CreatedBy, 0, map[string]string{
-		"entity_type": in.EntityType,
-		"entity_id":   in.EntityID,
-		"template":    tmpl.Name,
+	// 5. The request, its first assignments and its audit trail are one change:
+	// a request nobody can account for, or a trail for a request that was not
+	// stored, would both be wrong for ever.
+	err = s.store.InTx(ctx, func(ctx context.Context) error {
+		if err := s.store.InsertRequestWithAssignments(ctx, req, first); err != nil {
+			return fmt.Errorf("insert request: %w", err)
+		}
+		if err := s.logAudit(ctx, req.ID, "created", in.CreatedBy, 0, map[string]string{
+			"entity_type": in.EntityType,
+			"entity_id":   in.EntityID,
+			"template":    tmpl.Name,
+		}); err != nil {
+			return err
+		}
+		return s.auditAssigned(ctx, req.ID, 1, first)
 	})
-	s.auditAssigned(ctx, req.ID, 1, first)
+	if err != nil {
+		return nil, err
+	}
 
 	return req, nil
 }
@@ -216,29 +224,49 @@ func (s *Service) Approve(ctx context.Context, in ApproveInput) error {
 		return ErrInvalidInput
 	}
 
-	req, err := s.store.GetRequest(ctx, in.RequestID)
-	if err != nil {
-		return fmt.Errorf("get request: %w", err)
-	}
-	if req.Status != "pending" {
-		return ErrRequestCompleted
-	}
-
-	row, group, err := s.actingRow(ctx, req, in.UserNodeID)
-	if err != nil {
-		return err
-	}
-	if err := s.decide(ctx, row, group, in.UserNodeID, "approved", in.Comment); err != nil {
-		return err
-	}
-
-	// Audit
-	s.logAudit(ctx, in.RequestID, "approved", in.UserNodeID, req.CurrentStep, map[string]string{
-		"comment": in.Comment,
+	// The decision, its audit entry and whatever it completes (a step, the
+	// request, the next step's assignments) are one change: a decision recorded
+	// without the step moving on, or a step advanced to nobody, leaves a request
+	// that nothing can finish.
+	return s.store.InTx(ctx, func(ctx context.Context) error {
+		req, err := s.lockPending(ctx, in.RequestID)
+		if err != nil {
+			return err
+		}
+		row, group, err := s.actingRow(ctx, req, in.UserNodeID)
+		if err != nil {
+			return err
+		}
+		if err := s.decide(ctx, row, group, in.UserNodeID, "approved", in.Comment); err != nil {
+			return err
+		}
+		if err := s.logAudit(ctx, in.RequestID, "approved", in.UserNodeID, req.CurrentStep, map[string]string{
+			"comment": in.Comment,
+		}); err != nil {
+			return err
+		}
+		return s.checkStepCompletion(ctx, req)
 	})
+}
 
-	// Check if step is complete
-	return s.checkStepCompletion(ctx, req)
+// lockPending takes the request's row lock and returns the request as it stands
+// under it. Every decision starts here, so decisions on one request run one at a
+// time: two approvals of a step that needs two cannot each count only itself,
+// and an approval and a rejection take their locks in the same order. A request
+// that is no longer pending is ErrRequestCompleted.
+func (s *Service) lockPending(ctx context.Context, requestID string) (*Request, error) {
+	status, _, err := s.store.LockRequest(ctx, requestID)
+	if err != nil {
+		return nil, fmt.Errorf("lock request: %w", err)
+	}
+	if status != "pending" {
+		return nil, ErrRequestCompleted
+	}
+	req, err := s.store.GetRequest(ctx, requestID)
+	if err != nil {
+		return nil, fmt.Errorf("get request: %w", err)
+	}
+	return req, nil
 }
 
 // Reject processes a rejection — immediately terminates the request.
@@ -247,45 +275,43 @@ func (s *Service) Reject(ctx context.Context, in RejectInput) error {
 		return ErrInvalidInput
 	}
 
-	req, err := s.store.GetRequest(ctx, in.RequestID)
-	if err != nil {
-		return fmt.Errorf("get request: %w", err)
-	}
-	if req.Status != "pending" {
-		return ErrRequestCompleted
-	}
+	return s.store.InTx(ctx, func(ctx context.Context) error {
+		req, err := s.lockPending(ctx, in.RequestID)
+		if err != nil {
+			return err
+		}
+		row, group, err := s.actingRow(ctx, req, in.UserNodeID)
+		if err != nil {
+			return err
+		}
+		if err := s.decide(ctx, row, group, in.UserNodeID, "rejected", in.Comment); err != nil {
+			return err
+		}
 
-	row, group, err := s.actingRow(ctx, req, in.UserNodeID)
-	if err != nil {
-		return err
-	}
-	if err := s.decide(ctx, row, group, in.UserNodeID, "rejected", in.Comment); err != nil {
-		return err
-	}
+		// Skip ALL remaining pending assignments across all steps
+		if err := s.store.SkipAllPendingAssignments(ctx, in.RequestID); err != nil {
+			return fmt.Errorf("skip remaining: %w", err)
+		}
 
-	// Skip ALL remaining pending assignments across all steps
-	if err := s.store.SkipAllPendingAssignments(ctx, in.RequestID); err != nil {
-		return fmt.Errorf("skip remaining: %w", err)
-	}
+		// Mark request as rejected (terminal)
+		rejected, err := s.store.CompleteRequest(ctx, in.RequestID, "rejected")
+		if err != nil {
+			return fmt.Errorf("complete request: %w", err)
+		}
+		if !rejected {
+			// Closed by someone else first: this decision does not stand.
+			return ErrRequestCompleted
+		}
 
-	// Mark request as rejected (terminal)
-	rejected, err := s.store.CompleteRequest(ctx, in.RequestID, "rejected")
-	if err != nil {
-		return fmt.Errorf("complete request: %w", err)
-	}
-	if !rejected {
-		return ErrRequestCompleted
-	}
-
-	// Audit
-	s.logAudit(ctx, in.RequestID, "rejected", in.UserNodeID, req.CurrentStep, map[string]string{
-		"comment": in.Comment,
+		if err := s.logAudit(ctx, in.RequestID, "rejected", in.UserNodeID, req.CurrentStep, map[string]string{
+			"comment": in.Comment,
+		}); err != nil {
+			return err
+		}
+		return s.logAudit(ctx, in.RequestID, "completed", in.UserNodeID, 0, map[string]string{
+			"final_status": "rejected",
+		})
 	})
-	s.logAudit(ctx, in.RequestID, "completed", in.UserNodeID, 0, map[string]string{
-		"final_status": "rejected",
-	})
-
-	return nil
 }
 
 // BatchApprove approves several requests in one call.
@@ -358,9 +384,11 @@ func (s *Service) checkStepCompletion(ctx context.Context, req *Request) error {
 		return fmt.Errorf("skip remaining: %w", err)
 	}
 
-	s.logAudit(ctx, req.ID, "step_advanced", "", req.CurrentStep, map[string]string{
+	if err := s.logAudit(ctx, req.ID, "step_advanced", "", req.CurrentStep, map[string]string{
 		"from_step": fmt.Sprintf("%d", req.CurrentStep),
-	})
+	}); err != nil {
+		return err
+	}
 
 	// Check if there's a next step
 	nextStep := req.CurrentStep + 1
@@ -380,7 +408,7 @@ func (s *Service) checkStepCompletion(ctx context.Context, req *Request) error {
 			return fmt.Errorf("complete request: %w", err)
 		}
 		if completed {
-			s.logAudit(ctx, req.ID, "completed", "", 0, map[string]string{
+			return s.logAudit(ctx, req.ID, "completed", "", 0, map[string]string{
 				"final_status": "approved",
 			})
 		}
@@ -412,8 +440,7 @@ func (s *Service) assignStep(ctx context.Context, requestID string, step *Step, 
 	if err := s.store.InsertAssignments(ctx, assignments); err != nil {
 		return fmt.Errorf("insert assignments: %w", err)
 	}
-	s.auditAssigned(ctx, requestID, step.StepOrder, assignments)
-	return nil
+	return s.auditAssigned(ctx, requestID, step.StepOrder, assignments)
 }
 
 // buildAssignments turns a step into its assignment rows.
@@ -445,12 +472,15 @@ func buildAssignments(requestID string, step *Step, deptID string) ([]*Assignmen
 	}}, nil
 }
 
-func (s *Service) auditAssigned(ctx context.Context, requestID string, stepOrder int, rows []*AssignmentRecord) {
+func (s *Service) auditAssigned(ctx context.Context, requestID string, stepOrder int, rows []*AssignmentRecord) error {
 	for _, a := range rows {
-		s.logAudit(ctx, requestID, "assigned", a.UserNodeID, stepOrder, map[string]string{
+		if err := s.logAudit(ctx, requestID, "assigned", a.UserNodeID, stepOrder, map[string]string{
 			"grant_source": a.GrantSource,
-		})
+		}); err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 // groupOf is the UA a role:/department: grant source names ("" for anything else).
@@ -487,11 +517,15 @@ func (s *Service) verifyMember(ctx context.Context, userNodeID, groupNodeID stri
 	return fmt.Errorf("%w: no longer a member of the approving role or department", ErrAccessDenied)
 }
 
-// logAudit is a fire-and-forget audit logger. Errors are swallowed since
-// audit failures should not break the approval flow.
-func (s *Service) logAudit(ctx context.Context, requestID, action, actorNodeID string, stepOrder int, detail map[string]string) {
-	detailJSON, _ := json.Marshal(detail)
-	s.store.InsertAuditEntry(ctx, &AuditEntry{
+// logAudit appends to the audit trail and reports a failure to append. It runs
+// inside the same change as the thing it records (see InTx), so a failure rolls
+// that back too: the trail has no gaps.
+func (s *Service) logAudit(ctx context.Context, requestID, action, actorNodeID string, stepOrder int, detail map[string]string) error {
+	detailJSON, err := json.Marshal(detail)
+	if err != nil {
+		return fmt.Errorf("encode audit detail: %w", err)
+	}
+	if err := s.store.InsertAuditEntry(ctx, &AuditEntry{
 		ID:          uuid.New().String(),
 		RequestID:   requestID,
 		Action:      action,
@@ -499,5 +533,8 @@ func (s *Service) logAudit(ctx context.Context, requestID, action, actorNodeID s
 		StepOrder:   stepOrder,
 		DetailJSON:  string(detailJSON),
 		CreatedAt:   time.Now(),
-	})
+	}); err != nil {
+		return fmt.Errorf("audit %s: %w", action, err)
+	}
+	return nil
 }

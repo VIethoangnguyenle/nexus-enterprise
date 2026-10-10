@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -295,15 +296,13 @@ func (g *googleHandler) StartVerification(c echo.Context) error {
 
 	secrets, err := googleauth.NewFlowSecrets()
 	if err != nil {
-		slog.Error("google verification: generate flow secrets", "error", err)
-		return apiError(http.StatusInternalServerError, "internal", "internal error")
+		return internalFailure(fmt.Errorf("google verification: generate flow secrets: %w", err))
 	}
 	if err := g.flows.Save(c.Request().Context(), secrets.State, googleauth.Flow{
 		Nonce: secrets.Nonce, Verifier: secrets.Verifier,
 		VerifyUserID: claims.UserID, VerifySessionID: claims.SessionID,
 	}); err != nil {
-		slog.Error("google verification: store flow", "error", err)
-		return apiError(http.StatusInternalServerError, "internal", "internal error")
+		return internalFailure(fmt.Errorf("google verification: store flow: %w", err))
 	}
 	setGoogleStateCookie(c, secrets.State)
 	c.Response().Header().Set("Cache-Control", "no-store")

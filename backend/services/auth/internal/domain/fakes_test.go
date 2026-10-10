@@ -121,6 +121,18 @@ func (w *fakeWorld) CreateUser(_ context.Context, id, username, password, ngacNo
 	return nil
 }
 
+func (w *fakeWorld) CreateUserWithVerifiedEmail(ctx context.Context, id, username, password, ngacNodeID, email, unionID, displayName, phone string) error {
+	if err := w.CreateUser(ctx, id, username, password, ngacNodeID, email, unionID, displayName, phone); err != nil {
+		return err
+	}
+	if email != "" {
+		w.mu.Lock()
+		w.verified[id] = true
+		w.mu.Unlock()
+	}
+	return nil
+}
+
 func (w *fakeWorld) find(match func(*store.User) bool) *store.User {
 	w.mu.Lock()
 	defer w.mu.Unlock()

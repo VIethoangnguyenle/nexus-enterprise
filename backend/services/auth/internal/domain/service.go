@@ -24,6 +24,8 @@ import (
 // AuthStore defines the database operations the domain layer needs.
 type AuthStore interface {
 	CreateUser(ctx context.Context, id, username, password, ngacNodeID, email, unionID, displayName, phone string) error
+	// CreateUserWithVerifiedEmail creates the user with the address already proved.
+	CreateUserWithVerifiedEmail(ctx context.Context, id, username, password, ngacNodeID, email, unionID, displayName, phone string) error
 	GetUserByUsername(ctx context.Context, username string) (*store.User, error)
 	// GetUserByEmail matches the address case-insensitively.
 	GetUserByEmail(ctx context.Context, email string) (*store.User, error)
@@ -544,13 +546,15 @@ func (s *Service) createUserWithNode(ctx context.Context, u newUser) (string, er
 	if err != nil {
 		return "", fmt.Errorf("create ngac node: %w", err)
 	}
-	if err := s.store.CreateUser(ctx, u.ID, u.Username, u.PasswordHash, ngacNode, u.Email, u.UnionID, u.DisplayName, u.Phone); err != nil {
-		return "", prov.Fail(ctx, fmt.Errorf("create user: %w", err))
-	}
+	// A person whose address is already proved is created verified, in one
+	// statement: creating the row and then marking it would leave an unverified
+	// account behind if the second write failed.
+	create := s.store.CreateUser
 	if u.EmailVerified && u.Email != "" {
-		if _, err := s.store.MarkEmailVerified(ctx, u.ID); err != nil {
-			return "", prov.Fail(ctx, err)
-		}
+		create = s.store.CreateUserWithVerifiedEmail
+	}
+	if err := create(ctx, u.ID, u.Username, u.PasswordHash, ngacNode, u.Email, u.UnionID, u.DisplayName, u.Phone); err != nil {
+		return "", prov.Fail(ctx, fmt.Errorf("create user: %w", err))
 	}
 	prov.Done()
 	return ngacNode, nil

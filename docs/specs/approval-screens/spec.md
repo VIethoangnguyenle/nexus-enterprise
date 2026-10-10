@@ -158,3 +158,14 @@ Known gaps, recorded rather than resolved:
 - Requests created through the UI carry the default scope, so they appear to the requester, the assigned approvers (directly or through their role or department) and whoever reads the default scope.
 - The sidebar count of waiting requests (mockup §3) is not shown; the tab carries it.
 - The reconciliation consumer no longer copies a pending step to a newly added member (the group row covers them); it still revokes a person's own pending rows when they leave a UA.
+
+### Requirement: A decision and its audit entry stand or fall together
+Approving, rejecting and creating a request SHALL each be one change that includes its audit entries: the decision, the step it completes or advances (including the next step's assignments), and every audit entry written for them take effect together or not at all. An audit entry that cannot be written fails the operation and leaves the request exactly as it was. Decisions on one request SHALL be serialised by a lock on the request, taken first, so two approvals of a step that needs two both count each other and an approval racing a rejection ends in one terminal state with nothing left pending.
+
+#### Scenario: Audit cannot be written
+- **WHEN** the audit write fails while an approval is being recorded
+- **THEN** the approval is not recorded, the request is unchanged, and the caller is told it failed
+
+#### Scenario: Two approvals at once
+- **WHEN** two people approve a step that needs two approvals at the same moment
+- **THEN** the step completes; it is not left waiting for a third

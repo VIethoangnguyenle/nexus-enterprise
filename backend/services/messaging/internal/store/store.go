@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,17 +24,28 @@ func NewStore(db *pgxpool.Pool) *Store {
 
 // --- Channels ---
 
-// InsertChannel persists a new channel row.
-func (s *Store) InsertChannel(ctx context.Context, ch *Channel) error {
-	_, err := s.db.Exec(ctx,
-		`INSERT INTO channels (id, name, channel_type, workspace_id, ngac_oa_id, ngac_ua_id, created_by)
-		 VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7)`,
-		ch.ID, ch.Name, ch.ChannelType, ch.WorkspaceID,
-		ch.NGACOaID, ch.NGACUaID, ch.CreatedBy)
-	if err != nil {
-		return fmt.Errorf("insert channel: %w", err)
-	}
-	return nil
+// InsertChannelWithMembers persists a new channel and records its first members
+// in the channel_members cache in one transaction: a channel row without its
+// members would make a DM unfindable by its pair and be created twice.
+func (s *Store) InsertChannelWithMembers(ctx context.Context, ch *Channel, memberNodeIDs ...string) error {
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO channels (id, name, channel_type, workspace_id, ngac_oa_id, ngac_ua_id, created_by)
+			 VALUES ($1, $2, $3, NULLIF($4, ''), $5, $6, $7)`,
+			ch.ID, ch.Name, ch.ChannelType, ch.WorkspaceID,
+			ch.NGACOaID, ch.NGACUaID, ch.CreatedBy); err != nil {
+			return fmt.Errorf("insert channel: %w", err)
+		}
+		for _, node := range memberNodeIDs {
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2)
+				 ON CONFLICT DO NOTHING`, ch.ID, node); err != nil {
+				return fmt.Errorf("record channel member: %w", err)
+			}
+		}
+		return nil
+	})
+	return err
 }
 
 // UpdateChannelName renames a channel.
@@ -123,10 +135,12 @@ func (s *Store) FindDMByMembers(ctx context.Context, userNodeID, targetNodeID st
 // InsertChannelMember records a member in the channel_members table.
 // This is used for DM lookup optimization.
 func (s *Store) InsertChannelMember(ctx context.Context, channelID, ngacNodeID string) error {
-	_, err := s.db.Exec(ctx,
+	if _, err := s.db.Exec(ctx,
 		`INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2)
-		 ON CONFLICT DO NOTHING`, channelID, ngacNodeID)
-	return err
+		 ON CONFLICT DO NOTHING`, channelID, ngacNodeID); err != nil {
+		return fmt.Errorf("record channel member: %w", err)
+	}
+	return nil
 }
 
 // Workspace holds workspace metadata needed for channel assignment.
@@ -173,37 +187,53 @@ const messageCols = `m.id, m.channel_id, m.sender_id, COALESCE(u.username,''), m
 	COALESCE(m.linked_entity_type,''), COALESCE(m.linked_entity_id,''), m.reply_count,
 	COALESCE(m.content_format,'markdown'), COALESCE(m.mentions, '{}')`
 
-// InsertMessage persists a new message row.
-func (s *Store) InsertMessage(ctx context.Context, msg *Message) error {
+// execer is what a statement runs on: the pool, or a transaction on it.
+type execer interface {
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+}
+
+// insertMessage writes one message row.
+func insertMessage(ctx context.Context, x execer, msg *Message) error {
 	contentFormat := msg.ContentFormat
 	if contentFormat == "" {
 		contentFormat = "markdown"
 	}
-	_, err := s.db.Exec(ctx,
+	if _, err := x.Exec(ctx,
 		`INSERT INTO messages (id, channel_id, sender_id, content, message_type,
 		 parent_message_id, linked_entity_type, linked_entity_id,
 		 content_format, mentions, created_at)
 		 VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), $9, $10, $11)`,
 		msg.ID, msg.ChannelID, msg.SenderID, msg.Content, msg.MessageType,
 		msg.ParentMessageID, msg.LinkedEntityType, msg.LinkedEntityID,
-		contentFormat, msg.Mentions, msg.CreatedAt)
-	if err != nil {
+		contentFormat, msg.Mentions, msg.CreatedAt); err != nil {
 		return fmt.Errorf("insert message: %w", err)
 	}
 	return nil
 }
 
-// IncrementReplyCount bumps the reply counter on a parent message.
-func (s *Store) IncrementReplyCount(ctx context.Context, parentID string) {
-	s.db.Exec(ctx,
-		`UPDATE messages SET reply_count = reply_count + 1 WHERE id = $1`, parentID)
-}
-
-// TrackThreadParticipant records a user as a participant in a thread.
-func (s *Store) TrackThreadParticipant(ctx context.Context, parentID, userID string) {
-	s.db.Exec(ctx,
-		`INSERT INTO thread_participants (message_id, user_id) VALUES ($1, $2)
-		 ON CONFLICT DO NOTHING`, parentID, userID)
+// InsertMessage persists a new message. A reply is counted on its parent and its
+// sender joins the thread, all in one transaction.
+func (s *Store) InsertMessage(ctx context.Context, msg *Message) error {
+	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if err := insertMessage(ctx, tx, msg); err != nil {
+			return err
+		}
+		if msg.ParentMessageID == "" {
+			return nil
+		}
+		// A reply that was stored but not counted would show a thread with the
+		// wrong number of replies for ever, so the three writes stand or fall together.
+		if _, err := tx.Exec(ctx,
+			`UPDATE messages SET reply_count = reply_count + 1 WHERE id = $1`, msg.ParentMessageID); err != nil {
+			return fmt.Errorf("count reply: %w", err)
+		}
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO thread_participants (message_id, user_id) VALUES ($1, $2)
+			 ON CONFLICT DO NOTHING`, msg.ParentMessageID, msg.SenderID); err != nil {
+			return fmt.Errorf("track thread participant: %w", err)
+		}
+		return nil
+	})
 }
 
 // ListMessages returns paginated messages for a channel, excluding thread replies.

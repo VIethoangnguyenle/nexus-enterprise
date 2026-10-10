@@ -152,6 +152,9 @@ func (s *Store) GetType(ctx context.Context, typeID string) (*AssetType, error) 
 		&at.AssetCount, &at.AvailableCount,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("getting asset type: %w", ErrNotFound)
+		}
 		return nil, fmt.Errorf("getting asset type: %w", err)
 	}
 	return at, nil
@@ -260,6 +263,9 @@ func scanAsset(row rowScanner) (*Asset, error) {
 func (s *Store) GetAsset(ctx context.Context, assetID string) (*Asset, error) {
 	a, err := scanAsset(s.pool.QueryRow(ctx, assetQuery("WHERE a.id = $1"), assetID))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("getting asset: %w", ErrNotFound)
+		}
 		return nil, fmt.Errorf("getting asset: %w", err)
 	}
 	return a, nil
@@ -600,6 +606,9 @@ func scanRequest(row rowScanner) (*AssetRequest, error) {
 func (s *Store) GetRequest(ctx context.Context, requestID string) (*AssetRequest, error) {
 	r, err := scanRequest(s.pool.QueryRow(ctx, requestSelect+` WHERE r.id = $1`, requestID))
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, fmt.Errorf("getting asset request: %w", ErrNotFound)
+		}
 		return nil, fmt.Errorf("getting asset request: %w", err)
 	}
 	return r, nil

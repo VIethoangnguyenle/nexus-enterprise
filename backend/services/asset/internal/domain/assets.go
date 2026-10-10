@@ -1,56 +1,55 @@
-package grpc
+package domain
 
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"sort"
 	"strings"
 	"unicode/utf8"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/policyclient"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
-	"ngac-platform/services/asset/internal/domain"
 	"ngac-platform/services/asset/internal/events"
 	"ngac-platform/services/asset/internal/store"
 )
 
-// AssetServer handles gRPC calls for asset CRUD and lifecycle management.
+// AssetService handles gRPC calls for asset CRUD and lifecycle management.
 //
 // It holds a read client only. An asset is not a node: the graph holds
 // attributes, and every check on an asset is a check on the OA of its type
 // (store.Asset.TypeOAID). There is nothing here for a write client to write.
-type AssetServer struct {
-	pb.UnimplementedAssetServiceServer
+type AssetService struct {
 	store      *store.Store
 	policyRead policypb.PolicyReadServiceClient
 	producer   events.Publisher
 }
 
-// NewAssetServer creates the asset gRPC handler.
-func NewAssetServer(s *store.Store, pr policypb.PolicyReadServiceClient, p events.Publisher) *AssetServer {
-	return &AssetServer{store: s, policyRead: pr, producer: orDiscard(p)}
+// NewAssetService creates the asset gRPC handler.
+func NewAssetService(s *store.Store, pr policypb.PolicyReadServiceClient, p events.Publisher) *AssetService {
+	return &AssetService{store: s, policyRead: pr, producer: orDiscard(p)}
 }
 
-func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetRequest) (*pb.Asset, error) {
+func (s *AssetService) CreateAsset(ctx context.Context, req *pb.CreateAssetRequest) (*pb.Asset, error) {
 	req.Name = strings.TrimSpace(req.Name)
 	if req.Name == "" || req.TypeId == "" || req.WorkspaceId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "name, type_id, and workspace_id are required")
+		return nil, invalid("name, type_id, and workspace_id are required")
 	}
 	if utf8.RuneCountInString(req.Name) > MaxNameRunes {
-		return nil, status.Errorf(codes.InvalidArgument, "name is too long")
+		return nil, invalid("name is too long")
 	}
 
 	// Fetch type for schema validation and lifecycle initial state
 	at, err := s.store.GetType(ctx, req.TypeId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "asset type not found: %v", err)
+		return nil, lookupErr(err, "asset type")
 	}
 
 	// Check write permission on type's OA
@@ -62,7 +61,7 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 	// under another. Checked after authorization so a caller without write on
 	// the type learns nothing about which workspace it is in.
 	if at.WorkspaceID != req.WorkspaceId {
-		return nil, status.Errorf(codes.InvalidArgument, "asset type does not belong to this workspace")
+		return nil, invalid("asset type does not belong to this workspace")
 	}
 
 	// Validate custom fields against type schema
@@ -70,21 +69,21 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 	if req.CustomFields != nil {
 		b, err := req.CustomFields.MarshalJSON()
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid custom_fields: %v", err)
+			return nil, invalid("invalid custom_fields: %v", err)
 		}
 		fieldsJSON = b
 	}
-	if err := domain.ValidateCustomFields(at.FieldsSchema, fieldsJSON); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "field validation failed: %v", err)
+	if err := ValidateCustomFields(at.FieldsSchema, fieldsJSON); err != nil {
+		return nil, invalid("field validation failed: %v", err)
 	}
 	if err := s.checkPeople(ctx, at.WorkspaceID, at.FieldsSchema, fieldsJSON); err != nil {
 		return nil, err
 	}
 
 	// Get initial state from lifecycle
-	var ld domain.LifecycleDefinition
+	var ld LifecycleDefinition
 	if err := json.Unmarshal(at.Lifecycle, &ld); err != nil {
-		return nil, status.Errorf(codes.Internal, "parse lifecycle: %v", err)
+		return nil, fmt.Errorf("parse lifecycle: %w", err)
 	}
 
 	// No graph node is created for the asset. It is authorized through the OA of
@@ -99,24 +98,24 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 		CreatedBy:    grpcauth.CallerFrom(ctx).UserID,
 	}
 	if err := s.store.CreateAsset(ctx, asset); err != nil {
-		return nil, status.Errorf(codes.Internal, "create asset: %v", err)
+		return nil, fmt.Errorf("create asset: %w", err)
 	}
 
 	// Re-read for complete data (type_name, etc.)
 	created, err := s.store.GetAsset(ctx, asset.ID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read back asset: %v", err)
+		return nil, fmt.Errorf("read back asset: %w", err)
 	}
 	return assetToProto(created), nil
 }
 
-func (s *AssetServer) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*pb.Asset, error) {
+func (s *AssetService) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*pb.Asset, error) {
 	asset, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
+		return nil, lookupErr(err, "asset")
 	}
 	if asset.Deleted {
-		return nil, status.Errorf(codes.NotFound, "asset has been deleted")
+		return nil, notFound("asset has been deleted")
 	}
 
 	// Check read permission on the OA of the asset's type
@@ -133,10 +132,10 @@ func (s *AssetServer) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*p
 // readable types are resolved in one batch call and pushed into the query, so
 // pagination and the total count cover only what the caller can see — a
 // post-query filter would still report how many hidden assets exist.
-func (s *AssetServer) ListAssets(ctx context.Context, req *pb.ListAssetsRequest) (*pb.AssetList, error) {
+func (s *AssetService) ListAssets(ctx context.Context, req *pb.ListAssetsRequest) (*pb.AssetList, error) {
 	types, err := s.store.ListTypes(ctx, req.WorkspaceId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list asset types: %v", err)
+		return nil, fmt.Errorf("list asset types: %w", err)
 	}
 	if req.TypeId != "" {
 		var only []*store.AssetType
@@ -150,7 +149,7 @@ func (s *AssetServer) ListAssets(ctx context.Context, req *pb.ListAssetsRequest)
 	readable, err := permittedTypeIDs(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, types, ngac.OpRead)
 	if err != nil {
 		// Fail closed: an unreadable policy answer must not list everything.
-		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
+		return nil, fmt.Errorf("batch access check: %w", err)
 	}
 	if len(readable) == 0 {
 		return &pb.AssetList{}, nil
@@ -167,7 +166,7 @@ func (s *AssetServer) ListAssets(ctx context.Context, req *pb.ListAssetsRequest)
 		VisibleTypeIDs: readable,
 	})
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list assets: %v", err)
+		return nil, fmt.Errorf("list assets: %w", err)
 	}
 
 	result := &pb.AssetList{Total: total}
@@ -177,10 +176,10 @@ func (s *AssetServer) ListAssets(ctx context.Context, req *pb.ListAssetsRequest)
 	return result, nil
 }
 
-func (s *AssetServer) UpdateAsset(ctx context.Context, req *pb.UpdateAssetRequest) (*pb.Asset, error) {
+func (s *AssetService) UpdateAsset(ctx context.Context, req *pb.UpdateAssetRequest) (*pb.Asset, error) {
 	asset, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
+		return nil, lookupErr(err, "asset")
 	}
 
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpWrite); err != nil {
@@ -189,23 +188,23 @@ func (s *AssetServer) UpdateAsset(ctx context.Context, req *pb.UpdateAssetReques
 
 	req.Name = strings.TrimSpace(req.Name)
 	if utf8.RuneCountInString(req.Name) > MaxNameRunes {
-		return nil, status.Errorf(codes.InvalidArgument, "name is too long")
+		return nil, invalid("name is too long")
 	}
 	fieldsJSON := asset.CustomFields
 	if req.CustomFields != nil {
 		b, err := req.CustomFields.MarshalJSON()
 		if err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid custom_fields: %v", err)
+			return nil, invalid("invalid custom_fields: %v", err)
 		}
 		fieldsJSON = b
 
 		// Validate against type schema
 		at, err := s.store.GetType(ctx, asset.TypeID)
 		if err != nil {
-			return nil, status.Errorf(codes.Internal, "get type for validation: %v", err)
+			return nil, fmt.Errorf("get type for validation: %w", err)
 		}
-		if err := domain.ValidateCustomFields(at.FieldsSchema, fieldsJSON); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "field validation failed: %v", err)
+		if err := ValidateCustomFields(at.FieldsSchema, fieldsJSON); err != nil {
+			return nil, invalid("field validation failed: %v", err)
 		}
 		if err := s.checkPeople(ctx, asset.WorkspaceID, at.FieldsSchema, fieldsJSON); err != nil {
 			return nil, err
@@ -213,20 +212,20 @@ func (s *AssetServer) UpdateAsset(ctx context.Context, req *pb.UpdateAssetReques
 	}
 
 	if err := s.store.UpdateAsset(ctx, req.AssetId, req.Name, fieldsJSON); err != nil {
-		return nil, status.Errorf(codes.Internal, "update asset: %v", err)
+		return nil, fmt.Errorf("update asset: %w", err)
 	}
 
 	updated, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read back asset: %v", err)
+		return nil, fmt.Errorf("read back asset: %w", err)
 	}
 	return assetToProto(updated), nil
 }
 
-func (s *AssetServer) DeleteAsset(ctx context.Context, req *pb.DeleteAssetRequest) (*pb.Empty, error) {
+func (s *AssetService) DeleteAsset(ctx context.Context, req *pb.DeleteAssetRequest) (*pb.Empty, error) {
 	asset, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
+		return nil, lookupErr(err, "asset")
 	}
 
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpManage); err != nil {
@@ -234,7 +233,7 @@ func (s *AssetServer) DeleteAsset(ctx context.Context, req *pb.DeleteAssetReques
 	}
 
 	if err := s.store.SoftDeleteAsset(ctx, req.AssetId); err != nil {
-		return nil, status.Errorf(codes.Internal, "delete asset: %v", err)
+		return nil, fmt.Errorf("delete asset: %w", err)
 	}
 
 	return &pb.Empty{}, nil
@@ -244,30 +243,29 @@ func (s *AssetServer) DeleteAsset(ctx context.Context, req *pb.DeleteAssetReques
 // Lifecycle Operations
 // ============================================
 
-func (s *AssetServer) TransitionAsset(ctx context.Context, req *pb.TransitionRequest) (*pb.Asset, error) {
+func (s *AssetService) TransitionAsset(ctx context.Context, req *pb.TransitionRequest) (*pb.Asset, error) {
 	asset, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
+		return nil, lookupErr(err, "asset")
 	}
 	if asset.Deleted {
-		return nil, status.Errorf(codes.FailedPrecondition, "cannot transition deleted asset")
+		return nil, conflict("cannot transition deleted asset")
 	}
 
 	// Load lifecycle from type
 	at, err := s.store.GetType(ctx, asset.TypeID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "get asset type: %v", err)
+		return nil, fmt.Errorf("get asset type: %w", err)
 	}
-	var ld domain.LifecycleDefinition
+	var ld LifecycleDefinition
 	if err := json.Unmarshal(at.Lifecycle, &ld); err != nil {
-		return nil, status.Errorf(codes.Internal, "parse lifecycle: %v", err)
+		return nil, fmt.Errorf("parse lifecycle: %w", err)
 	}
 
 	// Find the requested transition
-	tr, found := domain.FindTransition(ld, asset.State, req.Action)
+	tr, found := FindTransition(ld, asset.State, req.Action)
 	if !found {
-		return nil, status.Errorf(codes.FailedPrecondition,
-			"no transition %q available from state %q", req.Action, asset.State)
+		return nil, conflict("no transition %q available from state %q", req.Action, asset.State)
 	}
 
 	// Check NGAC permission for the transition
@@ -277,8 +275,8 @@ func (s *AssetServer) TransitionAsset(ctx context.Context, req *pb.TransitionReq
 
 	// Giving an asset away needs someone to give it to; a bare transition would
 	// leave it "assigned" to nobody.
-	if req.Action == domain.ActionAssign {
-		return nil, status.Errorf(codes.InvalidArgument, "assigning needs a person; use the hand-over")
+	if req.Action == ActionAssign {
+		return nil, invalid("assigning needs a person; use the hand-over")
 	}
 
 	// Change state and record who did it, atomically. The history row is the
@@ -309,15 +307,15 @@ func (s *AssetServer) TransitionAsset(ctx context.Context, req *pb.TransitionReq
 
 	updated, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read back asset: %v", err)
+		return nil, fmt.Errorf("read back asset: %w", err)
 	}
 	return assetToProto(updated), nil
 }
 
-func (s *AssetServer) GetAvailableTransitions(ctx context.Context, req *pb.GetTransitionsRequest) (*pb.TransitionList, error) {
+func (s *AssetService) GetAvailableTransitions(ctx context.Context, req *pb.GetTransitionsRequest) (*pb.TransitionList, error) {
 	asset, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
+		return nil, lookupErr(err, "asset")
 	}
 	// An asset's state is read like the asset: on its type's OA.
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpRead); err != nil {
@@ -326,14 +324,14 @@ func (s *AssetServer) GetAvailableTransitions(ctx context.Context, req *pb.GetTr
 
 	at, err := s.store.GetType(ctx, asset.TypeID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "get asset type: %v", err)
+		return nil, fmt.Errorf("get asset type: %w", err)
 	}
-	var ld domain.LifecycleDefinition
+	var ld LifecycleDefinition
 	if err := json.Unmarshal(at.Lifecycle, &ld); err != nil {
-		return nil, status.Errorf(codes.Internal, "parse lifecycle: %v", err)
+		return nil, fmt.Errorf("parse lifecycle: %w", err)
 	}
 
-	allTransitions := domain.AvailableTransitions(ld, asset.State)
+	allTransitions := AvailableTransitions(ld, asset.State)
 	result := &pb.TransitionList{CurrentState: asset.State}
 
 	// Filter by NGAC permissions — only show transitions the user can execute
@@ -347,15 +345,11 @@ func (s *AssetServer) GetAvailableTransitions(ctx context.Context, req *pb.GetTr
 			ops = append(ops, t.NgacPermission)
 		}
 	}
-	batch, err := s.policyRead.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
-		UserNodeId: grpcauth.CallerFrom(ctx).NGACNodeID,
-		ObjectIds:  []string{asset.TypeOAID},
-		Operations: ops,
-	})
+	batch, err := policyclient.New(s.policyRead).BatchCheckCaller(ctx, []string{asset.TypeOAID}, ops)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
+		return nil, fmt.Errorf("batch access check: %w", err)
 	}
-	granted := batch.GetResults()[asset.TypeOAID].GetPermissions()
+	granted := batch[asset.TypeOAID]
 	result.CanAssign = granted[ngac.OpManage] && (asset.State == "available" || asset.State == "assigned")
 
 	for _, t := range allTransitions {
@@ -370,11 +364,11 @@ func (s *AssetServer) GetAvailableTransitions(ctx context.Context, req *pb.GetTr
 	return result, nil
 }
 
-func (s *AssetServer) GetAssetHistory(ctx context.Context, req *pb.GetHistoryRequest) (*pb.TransitionHistoryList, error) {
+func (s *AssetService) GetAssetHistory(ctx context.Context, req *pb.GetHistoryRequest) (*pb.TransitionHistoryList, error) {
 	// Check read access
 	asset, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
+		return nil, lookupErr(err, "asset")
 	}
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpRead); err != nil {
 		return nil, err
@@ -382,7 +376,7 @@ func (s *AssetServer) GetAssetHistory(ctx context.Context, req *pb.GetHistoryReq
 
 	records, err := s.store.GetAssetHistory(ctx, req.AssetId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "get history: %v", err)
+		return nil, fmt.Errorf("get history: %w", err)
 	}
 
 	result := &pb.TransitionHistoryList{}
@@ -408,17 +402,17 @@ func (s *AssetServer) GetAssetHistory(ctx context.Context, req *pb.GetHistoryReq
 // of the asset's workspace. It needs manage on the OA of the asset's type — the
 // same right as any other assignment — and the person must belong to the
 // workspace the asset is in.
-func (s *AssetServer) HandOverAsset(ctx context.Context, req *pb.HandOverRequest) (*pb.Asset, error) {
+func (s *AssetService) HandOverAsset(ctx context.Context, req *pb.HandOverRequest) (*pb.Asset, error) {
 	asset, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil || asset.Deleted {
-		return nil, status.Errorf(codes.NotFound, "asset not found")
+		return nil, notFound("asset not found")
 	}
 	who := grpcauth.CallerFrom(ctx)
 	if err := s.checkAccess(ctx, who.NGACNodeID, asset.TypeOAID, ngac.OpManage); err != nil {
 		return nil, err
 	}
 	if req.AssigneeId == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "assignee_id is required")
+		return nil, invalid("assignee_id is required")
 	}
 	if err := s.store.HandOver(ctx, req.AssetId, req.AssigneeId, who.UserID, req.Comment); err != nil {
 		return nil, storeErr(err, "hand over")
@@ -428,40 +422,40 @@ func (s *AssetServer) HandOverAsset(ctx context.Context, req *pb.HandOverRequest
 		AssetName:   asset.Name,
 		FromUserID:  derefString(asset.AssignedTo),
 		ToUserID:    req.AssigneeId,
-		Action:      domain.ActionAssign,
+		Action:      ActionAssign,
 		ActorID:     who.UserID,
 		WorkspaceID: asset.WorkspaceID,
 	})
 	updated, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read back asset: %v", err)
+		return nil, fmt.Errorf("read back asset: %w", err)
 	}
 	return assetToProto(updated), nil
 }
 
 // readableTypes returns the IDs of the workspace's asset types the caller may
 // read, failing closed when the policy service cannot answer.
-func (s *AssetServer) readableTypes(ctx context.Context, workspaceID string) ([]string, error) {
+func (s *AssetService) readableTypes(ctx context.Context, workspaceID string) ([]string, error) {
 	types, err := s.store.ListTypes(ctx, workspaceID)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list asset types: %v", err)
+		return nil, fmt.Errorf("list asset types: %w", err)
 	}
 	readable, err := permittedTypeIDs(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, types, ngac.OpRead)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
+		return nil, fmt.Errorf("batch access check: %w", err)
 	}
 	return readable, nil
 }
 
 // GetSummary counts the workspace's assets the caller may read.
-func (s *AssetServer) GetSummary(ctx context.Context, req *pb.GetSummaryRequest) (*pb.AssetSummary, error) {
+func (s *AssetService) GetSummary(ctx context.Context, req *pb.GetSummaryRequest) (*pb.AssetSummary, error) {
 	readable, err := s.readableTypes(ctx, req.WorkspaceId)
 	if err != nil {
 		return nil, err
 	}
 	sum, err := s.store.Summary(ctx, req.WorkspaceId, readable)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "summary: %v", err)
+		return nil, fmt.Errorf("summary: %w", err)
 	}
 	out := &pb.AssetSummary{Total: sum.Total, ByState: sum.ByState, Holders: sum.Holders, MaintenanceOverdue: sum.MaintenanceOverdue}
 	for _, tc := range sum.ByType {
@@ -471,19 +465,19 @@ func (s *AssetServer) GetSummary(ctx context.Context, req *pb.GetSummaryRequest)
 }
 
 // ListActivity returns the newest lifecycle steps on assets the caller may read.
-func (s *AssetServer) ListActivity(ctx context.Context, req *pb.ListActivityRequest) (*pb.ActivityList, error) {
+func (s *AssetService) ListActivity(ctx context.Context, req *pb.ListActivityRequest) (*pb.ActivityList, error) {
 	readable, err := s.readableTypes(ctx, req.WorkspaceId)
 	if err != nil {
 		return nil, err
 	}
 	entries, err := s.store.ListActivity(ctx, req.WorkspaceId, readable, req.Limit)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "activity: %v", err)
+		return nil, fmt.Errorf("activity: %w", err)
 	}
 	// Decisions on requests of the same readable types, merged by time.
 	decisions, err := s.store.ListRequestDecisions(ctx, req.WorkspaceId, readable, req.Limit)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "activity: %v", err)
+		return nil, fmt.Errorf("activity: %w", err)
 	}
 	entries = append(entries, decisions...)
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].CreatedAt.After(entries[j].CreatedAt) })
@@ -513,13 +507,13 @@ const MaxNameRunes = 120
 // checkPeople requires every person named in a person-kind field to be an
 // active member of the workspace the asset type belongs to, so a field cannot
 // point at another tenant's user.
-func (s *AssetServer) checkPeople(ctx context.Context, workspaceID string, schema, fields json.RawMessage) error {
-	ok, err := s.store.AllActiveMembers(ctx, workspaceID, domain.PersonValues(schema, fields))
+func (s *AssetService) checkPeople(ctx context.Context, workspaceID string, schema, fields json.RawMessage) error {
+	ok, err := s.store.AllActiveMembers(ctx, workspaceID, PersonValues(schema, fields))
 	if err != nil {
-		return status.Errorf(codes.Internal, "check people")
+		return errors.New("check people")
 	}
 	if !ok {
-		return refuse(codes.InvalidArgument, ReasonNotAMember, "a person in the fields is not a member of this workspace")
+		return Refuse(ErrInvalidInput, ReasonNotAMember, "a person in the fields is not a member of this workspace")
 	}
 	return nil
 }
@@ -537,7 +531,7 @@ func derefString(s *string) string {
 
 // checkAccess requires op for the caller on one OA. An empty caller or OA —
 // an asset whose type has no OA — is a denial, not a lookup of "".
-func (s *AssetServer) checkAccess(ctx context.Context, userNodeID, oaID, operation string) error {
+func (s *AssetService) checkAccess(ctx context.Context, userNodeID, oaID, operation string) error {
 	return authorize(ctx, s.policyRead, userNodeID, oaID, operation)
 }
 

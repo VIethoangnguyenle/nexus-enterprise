@@ -7,22 +7,16 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/signal"
 	"strings"
-	"syscall"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
-	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/health"
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/bootstrap"
+	"ngac-platform/pkg/bootstrap/redisconn"
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	"ngac-platform/pkg/realtime"
@@ -38,54 +32,48 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
-		Level: slog.LevelInfo,
-	}))
-	slog.SetDefault(logger)
+	bootstrap.InitLogger()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	dbURL := envOr("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
-	redisURL := envOr("REDIS_URL", "redis://localhost:6379/2")
-	kafkaBrokers := envOr("KAFKA_BROKERS", "localhost:19092")
-	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
-	authAddr := envOr("AUTH_SERVICE_ADDR", "localhost:50052")
-	driveAddr := envOr("DRIVE_SERVICE_ADDR", "localhost:50057")
-	jwtSecret := envOr("JWT_SECRET", httputil.DevJWTSecret)
+	dbURL := bootstrap.Env("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
+	redisURL := bootstrap.Env("REDIS_URL", "redis://localhost:6379/2")
+	kafkaBrokers := bootstrap.Env("KAFKA_BROKERS", "localhost:19092")
+	policyAddr := bootstrap.PolicyAddr()
+	authAddr := bootstrap.Env("AUTH_SERVICE_ADDR", "localhost:50052")
+	driveAddr := bootstrap.Env("DRIVE_SERVICE_ADDR", "localhost:50057")
+	jwtSecret := bootstrap.Env("JWT_SECRET", httputil.DevJWTSecret)
 	if err := httputil.RequireJWTSecret(jwtSecret); err != nil {
 		slog.Error("refusing to start", "error", err)
 		os.Exit(1)
 	}
-	port := envOr("GRPC_PORT", "50055")
-	wsPort := envOr("WS_PORT", "8081")
-	restPort := envOr("REST_PORT", "8080")
+	port := bootstrap.Env("GRPC_PORT", "50055")
+	wsPort := bootstrap.Env("WS_PORT", "8081")
+	restPort := bootstrap.Env("REST_PORT", "8080")
 
-	pool, err := connectDB(ctx, dbURL)
+	pool, err := bootstrap.ConnectDB(ctx, dbURL)
 	if err != nil {
 		slog.Error("failed to connect to database", "error", err)
 		os.Exit(1)
 	}
 	defer pool.Close()
 
-	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("messaging")))
+	policyConn, err := grpcauth.Dial(policyAddr, "messaging")
 	if err != nil {
 		slog.Error("failed to connect to policy service", "address", policyAddr, "error", err)
 		os.Exit(1)
 	}
 	defer policyConn.Close()
 
-	authConn, err := grpc.NewClient(authAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("messaging")))
+	authConn, err := grpcauth.Dial(authAddr, "messaging")
 	if err != nil {
 		slog.Error("failed to connect to auth service", "address", authAddr, "error", err)
 		os.Exit(1)
 	}
 	defer authConn.Close()
 
-	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("messaging")))
+	driveConn, err := grpcauth.Dial(driveAddr, "messaging")
 	if err != nil {
 		slog.Warn("drive service unavailable, channel drives disabled", "address", driveAddr, "error", err)
 	}
@@ -93,7 +81,7 @@ func main() {
 		defer driveConn.Close()
 	}
 
-	rdb, err := connectRedis(ctx, redisURL)
+	rdb, err := redisconn.Connect(ctx, redisURL)
 	if err != nil {
 		slog.Warn("redis unavailable, local-only hub", "error", err)
 	}
@@ -162,14 +150,14 @@ func main() {
 		defer producer.Close()
 	}
 
-	srv := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()}, loggingInterceptor, recoveryInterceptor)...)
+	srv := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()})...)
 	pb.RegisterMessagingServiceServer(srv, mgrpc.NewMessagingServer(domainSvc, hub, producer))
 
-	notifSrv := mgrpc.NewNotificationServer(pool, hub)
-	pb.RegisterNotificationServiceServer(srv, notifSrv)
+	notifications := domain.NewNotificationService(msgStore, hub)
+	pb.RegisterNotificationServiceServer(srv, mgrpc.NewNotificationServer(notifications))
 
 	// Start Kafka consumer for asset events → notifications
-	consumer, err := events.NewConsumer(strings.Split(kafkaBrokers, ","), notifSrv, hub)
+	consumer, err := events.NewConsumer(strings.Split(kafkaBrokers, ","), notifications, hub)
 	if err != nil {
 		slog.Warn("kafka consumer unavailable, notifications from asset events disabled", "error", err)
 	}
@@ -190,45 +178,18 @@ func main() {
 	healthpb.RegisterHealthServer(srv, healthSrv)
 	healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
 
-	// Graceful shutdown for both gRPC and WebSocket
-	go func() {
-		sigCh := make(chan os.Signal, 1)
-		signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-		sig := <-sigCh
-		slog.Info("received shutdown signal", "signal", sig)
-
-		healthSrv.SetServingStatus("", healthpb.HealthCheckResponse_NOT_SERVING)
-		cancel()
-
-		// Shutdown WebSocket server
-		wsCtx, wsCancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer wsCancel()
-		if err := wsServer.Shutdown(wsCtx); err != nil {
-			slog.Warn("websocket server shutdown error", "error", err)
-		}
-
-		// Shutdown gRPC server
-		stopped := make(chan struct{})
-		go func() {
-			srv.GracefulStop()
-			close(stopped)
-		}()
-		select {
-		case <-stopped:
-			slog.Info("server stopped gracefully")
-		case <-time.After(15 * time.Second):
-			slog.Warn("graceful stop timed out, forcing stop")
-			srv.Stop()
-		}
-	}()
-
 	// REST server (client-facing)
-	e := echo.New()
-	e.HideBanner = true
-	e.Use(echomw.Logger())
-	e.Use(echomw.Recover())
-	restHandler := rest.NewHandler(domainSvc, nil, hub)
+	e := httputil.NewEcho("messaging", echomw.Logger())
+	restHandler := rest.NewHandler(domainSvc, notifications, hub)
 	restHandler.RegisterRoutes(e, jwtSecret)
+
+	// Graceful shutdown for the gRPC, WebSocket and REST servers.
+	go bootstrap.Shutdown{
+		GRPC:   srv,
+		Health: healthSrv,
+		HTTP:   []bootstrap.HTTPServer{wsServer, e},
+		Cancel: cancel,
+	}.Wait()
 	go func() {
 		slog.Info("messaging REST listening", "port", restPort)
 		if err := e.Start(fmt.Sprintf(":%s", restPort)); err != nil {
@@ -241,71 +202,4 @@ func main() {
 		slog.Error("server exited", "error", err)
 		os.Exit(1)
 	}
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
-}
-
-// connectRedis creates a Redis client from a URL and verifies connectivity.
-func connectRedis(ctx context.Context, redisURL string) (*redis.Client, error) {
-	opts, err := redis.ParseURL(redisURL)
-	if err != nil {
-		return nil, fmt.Errorf("parsing redis url: %w", err)
-	}
-	rdb := redis.NewClient(opts)
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		rdb.Close()
-		return nil, fmt.Errorf("pinging redis: %w", err)
-	}
-	slog.Info("redis connected", "addr", opts.Addr, "db", opts.DB)
-	return rdb, nil
-}
-
-func connectDB(ctx context.Context, dbURL string) (*pgxpool.Pool, error) {
-	cfg, err := pgxpool.ParseConfig(dbURL)
-	if err != nil {
-		return nil, fmt.Errorf("parsing database url: %w", err)
-	}
-	cfg.MaxConns = 25
-	cfg.MinConns = 5
-	cfg.MaxConnLifetime = 5 * time.Minute
-	cfg.MaxConnIdleTime = 1 * time.Minute
-
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		return nil, fmt.Errorf("creating connection pool: %w", err)
-	}
-	if err := pool.Ping(ctx); err != nil {
-		pool.Close()
-		return nil, fmt.Errorf("pinging database: %w", err)
-	}
-	return pool, nil
-}
-
-func loggingInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-	start := time.Now()
-	resp, err := handler(ctx, req)
-	code := status.Code(err)
-	attrs := []any{"method", info.FullMethod, "duration_ms", time.Since(start).Milliseconds(), "code", code.String()}
-	if err != nil {
-		attrs = append(attrs, "error", err.Error())
-		slog.Warn("grpc call failed", attrs...)
-	} else {
-		slog.Debug("grpc call", attrs...)
-	}
-	return resp, err
-}
-
-func recoveryInterceptor(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (resp any, err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("panic recovered", "method", info.FullMethod, "panic", fmt.Sprintf("%v", r))
-			err = status.Errorf(codes.Internal, "internal server error")
-		}
-	}()
-	return handler(ctx, req)
 }

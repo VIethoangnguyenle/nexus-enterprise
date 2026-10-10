@@ -5,7 +5,6 @@ package grpc
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -13,6 +12,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/grpcutil"
 	pb "ngac-platform/proto/auth"
 	"ngac-platform/services/auth/internal/domain"
 )
@@ -75,7 +76,7 @@ func (s *AuthServer) RevokeToken(ctx context.Context, req *pb.RevokeTokenRequest
 		return &pb.RevokeTokenResponse{Revoked: true}, nil
 	}
 	if err := s.rdb.Set(ctx, jwtBlacklistKey(req.Jti), "1", remaining).Err(); err != nil {
-		return nil, status.Errorf(codes.Internal, "blacklist token: %v", err)
+		return nil, grpcauth.Internal(fmt.Errorf("blacklist token: %w", err))
 	}
 	return &pb.RevokeTokenResponse{Revoked: true}, nil
 }
@@ -100,21 +101,12 @@ func toUserInfo(u *domain.UserInfo) *pb.UserInfo {
 	return &pb.UserInfo{Id: u.ID, Username: u.Username, NgacNodeId: u.NGACNodeID, Email: u.Email, UnionId: u.UnionID, DisplayName: u.DisplayName}
 }
 
+// mapError translates a domain error to a gRPC status; anything that is not the
+// domain's own refusal becomes a generic Internal (see grpcutil.Status).
 func mapError(err error) error {
-	switch {
-	case errors.Is(err, domain.ErrInvalidCredentials):
-		return status.Error(codes.Unauthenticated, err.Error())
-	case errors.Is(err, domain.ErrUserExists):
-		return status.Error(codes.AlreadyExists, err.Error())
-	case errors.Is(err, domain.ErrNotFound):
-		return status.Error(codes.NotFound, err.Error())
-	case errors.Is(err, domain.ErrInvalidInput):
-		return status.Error(codes.InvalidArgument, err.Error())
-	case errors.Is(err, domain.ErrAccessDenied):
-		return status.Error(codes.PermissionDenied, err.Error())
-	case errors.Is(err, domain.ErrTenantNotFound):
-		return status.Error(codes.NotFound, err.Error())
-	default:
-		return status.Errorf(codes.Internal, "internal: %v", err)
-	}
+	return grpcutil.Status(err,
+		grpcutil.Mapping{Is: domain.ErrInvalidCredentials, Code: codes.Unauthenticated},
+		grpcutil.Mapping{Is: domain.ErrUserExists, Code: codes.AlreadyExists},
+		grpcutil.Mapping{Is: domain.ErrTenantNotFound, Code: codes.NotFound},
+	)
 }

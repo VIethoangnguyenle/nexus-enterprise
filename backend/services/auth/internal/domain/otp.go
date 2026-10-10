@@ -239,7 +239,10 @@ func (s *Service) findUserByEmail(ctx context.Context, email string, proven bool
 // provenNow says this very code proved the account's address, which the user row
 // read before the proof does not yet show.
 func (s *Service) otpResultFromExistingUser(ctx context.Context, u *store.User, provenNow bool) (*OTPResult, error) {
-	tenants, _ := s.store.ListTenantsByUser(ctx, u.ID)
+	tenants, err := s.store.ListTenantsByUser(ctx, u.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list tenants: %w", err)
+	}
 	defaultTenantID := s.selectDefaultTenant(tenants)
 
 	token, sessionID, err := auth.GenerateToken(u.ID, u.Username, u.NGACNodeID, defaultTenantID)
@@ -293,7 +296,10 @@ func (s *Service) createOTPUser(ctx context.Context, identifier, identType strin
 	// Auto-provision workspace + #general channel
 	s.autoProvisionWorkspace(ctx, userID, username, ngacNode)
 
-	tenants, _ := s.store.ListTenantsByUser(ctx, userID)
+	tenants, err := s.store.ListTenantsByUser(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list tenants: %w", err)
+	}
 	defaultTenantID := s.selectDefaultTenant(tenants)
 
 	token, sessionID, err := auth.GenerateToken(userID, username, ngacNode, defaultTenantID)

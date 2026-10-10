@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Backend shared packages and layering"
-status: pending
+status: done
 priority: P2
 effort: 3-4d
 dependencies: [2]
@@ -55,9 +55,14 @@ xử lý lỗi và transaction đúng. Không đổi hành vi ra ngoài.
 5. Quyết định shard manager (Unresolved Q4).
 
 ## Success criteria
-- [ ] Không còn `mapGRPCError`/`envOr`/`connectDB` local.
-- [ ] Mọi gRPC server có recovery + logging.
-- [ ] Không còn `_ =` nuốt lỗi store ở đường ghi.
+- [x] Không còn `mapGRPCError`/`envOr`/`connectDB` local (`make check-layering`).
+- [x] Mọi gRPC server có recovery + logging (`grpcauth.ServerOptions` mang sẵn cả hai).
+- [x] Không còn `_ =` nuốt lỗi store ở đường ghi (`make check-layering`; đọc-path còn vài chỗ, xem report).
 
 ## Spec
 Hành vi không đổi ngoài thông điệp lỗi 500 → ghi vào spec chung nếu có; còn lại không cần spec.
+
+## Kết quả (2026-10-10)
+Báo cáo đầy đủ, checklist từng service và các điểm cần chú ý: `reports/phase-08-report.md`.
+Shard manager được giữ nguyên trong thứ tự quyết định (plan.md quyết định 4). Gate mới:
+`make check-layering` (scripts/check-backend-layering.sh), có trong job `docs` của CI.

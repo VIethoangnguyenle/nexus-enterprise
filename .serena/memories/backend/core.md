@@ -18,7 +18,7 @@ Ports are fixed in `.env.dev` and `Procfile.dev`; the gRPC and REST numbering ar
 | approval | 50058 | 8186 |
 
 - **`policy` has no REST surface.** It is reached only over gRPC by other services. `policy-read` is a second entrypoint (`cmd/policy-read`) sharing the same port in dev but split out in compose so the read path can scale separately.
-- `approval` is the only service that needs `POLICY_ADDR` explicitly; the rest resolve the policy address from `.env.dev`.
+- Every service reads the policy address from `POLICY_SERVICE_ADDR` (`bootstrap.PolicyAddr`). The old `POLICY_ADDR` (approval) still works for one release with a deprecation warning.
 - Redis is per-service by URL (`REDIS_URL_POLICY`, `REDIS_URL_AUTH`, `REDIS_URL_MESSAGING`); only those three use it.
 
 ## Architecture rules

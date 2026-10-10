@@ -5,7 +5,7 @@ package rest
 
 import (
 	"errors"
-	"log/slog"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -104,7 +104,7 @@ func (h *Handler) SwitchTenant(c echo.Context) error {
 	// the new session — otherwise a later refresh would hand back a token for
 	// the previous tenant.
 	if err := h.svc.EndSession(c.Request().Context(), claims.SessionID); err != nil {
-		return apiError(http.StatusInternalServerError, "internal", "could not end previous session")
+		return internalFailure(fmt.Errorf("end previous session: %w", err))
 	}
 	if err := h.issueSession(c, domain.RefreshIdentity{
 		UserID: claims.UserID, Username: claims.Username, NGACNodeID: claims.NGACNodeID,
@@ -422,6 +422,12 @@ func apiError(status int, code, message string, extra ...any) *echo.HTTPError {
 	return echo.NewHTTPError(status, body)
 }
 
+// internalFailure is a 500 in the auth envelope with a generic message. cause
+// stays on the error for envelopeErrors to log under the request ID.
+func internalFailure(cause error) *echo.HTTPError {
+	return apiError(http.StatusInternalServerError, "internal", httputil.InternalMessage).SetInternal(cause)
+}
+
 // fail turns a domain error into its HTTP answer. A rate-limited caller is told
 // when to come back, in the Retry-After header as well as the body.
 func fail(c echo.Context, err error) error {
@@ -480,8 +486,7 @@ func mapError(err error) *echo.HTTPError {
 	default:
 		// The text of an unexpected error names hosts, queries and downstream
 		// services. It goes to the log, never to the caller.
-		slog.Error("auth request failed", "error", err)
-		return apiError(http.StatusInternalServerError, "internal", "internal error")
+		return internalFailure(err)
 	}
 }
 

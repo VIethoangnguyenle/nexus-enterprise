@@ -86,7 +86,7 @@ func newServerWith(t *testing.T, pr policypb.PolicyReadServiceClient, pw policyp
 		t.Skipf("test DB not available: %v", err)
 	}
 	t.Cleanup(func() { pool.Close() })
-	return grpcserver.NewDriveServer(pool, pr, pw, &mockDocStorage{}), pool
+	return newDrive(pool, pr, pw, &mockDocStorage{}), pool
 }
 
 // sharedFolder creates a folder and a share on it using an allow-all server,
@@ -249,10 +249,13 @@ func TestRevokeShare_EmptyCreatorDoesNotMatchEmptyCaller(t *testing.T) {
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
-	share, err := allow.CreateShare(context.Background(), &pb.CreateShareRequest{
+	share, err := allow.CreateShare(asCaller("", "ngac-owner"), &pb.CreateShareRequest{
 		ItemId: folder.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{ngac.OpRead}, // no caller on the context: created_by is ""
+		Operations: []string{ngac.OpRead},
 	})
+	require.NoError(t, err)
+	// A share row whose creator was never recorded.
+	_, err = pool.Exec(context.Background(), `UPDATE drive_shares SET created_by = '' WHERE id = $1`, share.Id)
 	require.NoError(t, err)
 
 	pw := &recordingPolicyWrite{}

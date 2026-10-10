@@ -1,149 +1,90 @@
+// Package grpc is the document service's gRPC transport for object storage. It
+// adapts the DocumentStorage API to the storage service and holds no logic.
 package grpc
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"log/slog"
-	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/minio/minio-go/v7"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"ngac-platform/pkg/grpcutil"
 	pb "ngac-platform/proto/document"
+	"ngac-platform/services/document/internal/storage"
 )
 
-// DocumentStorageServer implements the pure storage API — no NGAC awareness.
+// DocumentStorageServer implements the pure storage API: no NGAC awareness.
 // Access control is handled by the Drive Service before calling these RPCs.
 type DocumentStorageServer struct {
 	pb.UnimplementedDocumentStorageServiceServer
-	db            *pgxpool.Pool
-	minioClient   *minio.Client // for server-side ops (StatObject, PutObject, CopyObject)
-	presignClient *minio.Client // for presigned URL generation with public endpoint
+	svc *storage.Service
 }
 
-// NewDocumentStorageServer creates a storage handler backed by MinIO.
-func NewDocumentStorageServer(db *pgxpool.Pool, mc *minio.Client, presignMC *minio.Client) *DocumentStorageServer {
-	return &DocumentStorageServer{db: db, minioClient: mc, presignClient: presignMC}
+// NewDocumentStorageServer wraps the storage service.
+func NewDocumentStorageServer(svc *storage.Service) *DocumentStorageServer {
+	return &DocumentStorageServer{svc: svc}
 }
 
-// bucketName derives the MinIO bucket name from a workspace ID.
-func bucketName(workspaceID string) string {
-	return fmt.Sprintf("ws-%s", workspaceID)
-}
-
-// ensureBucket creates the workspace bucket if it doesn't exist.
-func (s *DocumentStorageServer) ensureBucket(ctx context.Context, bucket string) {
-	exists, err := s.minioClient.BucketExists(ctx, bucket)
-	if err != nil || exists {
-		return
-	}
-	if err := s.minioClient.MakeBucket(ctx, bucket, minio.MakeBucketOptions{}); err != nil {
-		slog.Warn("make bucket failed", "bucket", bucket, "error", err)
-	}
+// mapError turns the storage service's refusals into gRPC statuses; anything
+// else is a generic Internal whose detail stays in the log.
+func mapError(err error) error {
+	return grpcutil.Status(err, grpcutil.Mapping{Is: storage.ErrNotUploaded, Code: codes.FailedPrecondition})
 }
 
 // GetUploadURL generates a presigned PUT URL for direct-to-MinIO upload.
 func (s *DocumentStorageServer) GetUploadURL(ctx context.Context, req *pb.GetUploadURLRequest) (*pb.GetUploadURLResponse, error) {
-	bucket := bucketName(req.WorkspaceId)
-	s.ensureBucket(ctx, bucket)
-
-	key := fmt.Sprintf("drive/%s/%s", req.DocId, req.Filename)
-
-	presignedURL, err := s.presignClient.PresignedPutObject(ctx, bucket, key, 5*time.Minute)
+	u, key, err := s.svc.UploadURL(ctx, req.WorkspaceId, req.DocId, req.Filename)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "generate upload URL: %v", err)
+		return nil, mapError(err)
 	}
-
-	return &pb.GetUploadURLResponse{
-		UploadUrl: presignedURL.String(),
-		ObjectKey: key,
-	}, nil
+	return &pb.GetUploadURLResponse{UploadUrl: u, ObjectKey: key}, nil
 }
 
 // ConfirmUpload verifies the file exists in MinIO and returns its metadata.
 func (s *DocumentStorageServer) ConfirmUpload(ctx context.Context, req *pb.ConfirmUploadRequest) (*pb.ConfirmUploadResponse, error) {
-	bucket := bucketName(req.WorkspaceId)
-
-	info, err := s.minioClient.StatObject(ctx, bucket, req.ObjectKey, minio.StatObjectOptions{})
+	size, ctype, err := s.svc.Confirm(ctx, req.WorkspaceId, req.ObjectKey)
 	if err != nil {
-		return nil, status.Errorf(codes.FailedPrecondition, "file not uploaded: %v", err)
+		return nil, mapError(err)
 	}
-
-	return &pb.ConfirmUploadResponse{
-		SizeBytes:   info.Size,
-		ContentType: info.ContentType,
-	}, nil
+	return &pb.ConfirmUploadResponse{SizeBytes: size, ContentType: ctype}, nil
 }
 
 // GetDownloadURL generates a presigned GET URL for downloading a file.
 func (s *DocumentStorageServer) GetDownloadURL(ctx context.Context, req *pb.GetDownloadURLRequest) (*pb.GetDownloadURLResponse, error) {
-	bucket := bucketName(req.WorkspaceId)
-
-	presignedURL, err := s.presignClient.PresignedGetObject(ctx, bucket, req.ObjectKey, 15*time.Minute, nil)
+	u, err := s.svc.DownloadURL(ctx, req.WorkspaceId, req.ObjectKey)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "generate download URL: %v", err)
+		return nil, mapError(err)
 	}
-
-	return &pb.GetDownloadURLResponse{DownloadUrl: presignedURL.String()}, nil
+	return &pb.GetDownloadURLResponse{DownloadUrl: u}, nil
 }
 
 // DeleteObject removes an object from MinIO.
 func (s *DocumentStorageServer) DeleteObject(ctx context.Context, req *pb.DeleteObjectRequest) (*pb.Empty, error) {
-	bucket := bucketName(req.WorkspaceId)
-	err := s.minioClient.RemoveObject(ctx, bucket, req.ObjectKey, minio.RemoveObjectOptions{})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "delete object: %v", err)
+	if err := s.svc.Delete(ctx, req.WorkspaceId, req.ObjectKey); err != nil {
+		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil
 }
 
 // CopyObject performs a server-side copy of an object in MinIO.
 func (s *DocumentStorageServer) CopyObject(ctx context.Context, req *pb.CopyObjectRequest) (*pb.CopyObjectResponse, error) {
-	srcBucket := bucketName(req.SrcWorkspaceId)
-	dstBucket := bucketName(req.DstWorkspaceId)
-	s.ensureBucket(ctx, dstBucket)
-
-	src := minio.CopySrcOptions{Bucket: srcBucket, Object: req.SrcObjectKey}
-	dst := minio.CopyDestOptions{Bucket: dstBucket, Object: req.DstObjectKey}
-
-	info, err := s.minioClient.CopyObject(ctx, dst, src)
+	size, err := s.svc.Copy(ctx, req.SrcWorkspaceId, req.SrcObjectKey, req.DstWorkspaceId, req.DstObjectKey)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "copy object: %v", err)
+		return nil, mapError(err)
 	}
-
-	return &pb.CopyObjectResponse{
-		ObjectKey: req.DstObjectKey,
-		SizeBytes: info.Size,
-	}, nil
+	return &pb.CopyObjectResponse{ObjectKey: req.DstObjectKey, SizeBytes: size}, nil
 }
 
 // GetObjectInfo returns metadata about an object in MinIO.
 func (s *DocumentStorageServer) GetObjectInfo(ctx context.Context, req *pb.GetObjectInfoRequest) (*pb.ObjectInfo, error) {
-	bucket := bucketName(req.WorkspaceId)
-
-	info, err := s.minioClient.StatObject(ctx, bucket, req.ObjectKey, minio.StatObjectOptions{})
+	info, err := s.svc.Info(ctx, req.WorkspaceId, req.ObjectKey)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "object not found: %v", err)
+		return nil, mapError(err)
 	}
-
 	return &pb.ObjectInfo{
 		ObjectKey:    req.ObjectKey,
 		SizeBytes:    info.Size,
 		ContentType:  info.ContentType,
 		LastModified: timestamppb.New(info.LastModified),
 	}, nil
-}
-
-// --- Legacy compatibility: PutObject for internal use ---
-
-// PutObjectDirect stores content directly (used by legacy Upload flow during migration).
-func (s *DocumentStorageServer) PutObjectDirect(ctx context.Context, bucket, key string, content []byte, contentType string) error {
-	_, err := s.minioClient.PutObject(ctx, bucket, key,
-		bytes.NewReader(content), int64(len(content)),
-		minio.PutObjectOptions{ContentType: contentType})
-	return err
 }

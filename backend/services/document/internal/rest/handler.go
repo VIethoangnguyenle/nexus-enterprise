@@ -7,8 +7,6 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"ngac-platform/pkg/httputil"
 	drivepb "ngac-platform/proto/drive"
@@ -47,7 +45,7 @@ func (h *Handler) ListDocuments(c echo.Context) error {
 		WorkspaceId: c.Param("id"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return httputil.MapGRPCError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -71,7 +69,7 @@ func (h *Handler) GetUploadURL(c echo.Context) error {
 		ParentId:    body.ParentID,
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return httputil.MapGRPCError(err)
 	}
 	return c.JSON(http.StatusCreated, resp)
 }
@@ -82,7 +80,7 @@ func (h *Handler) ConfirmUpload(c echo.Context) error {
 		FileId: c.Param("docId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return httputil.MapGRPCError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
 }
@@ -93,24 +91,7 @@ func (h *Handler) GetDownloadURL(c echo.Context) error {
 		FileId: c.Param("docId"),
 	})
 	if err != nil {
-		return mapGRPCError(err)
+		return httputil.MapGRPCError(err)
 	}
 	return c.JSON(http.StatusOK, resp)
-}
-
-func mapGRPCError(err error) *echo.HTTPError {
-	st, ok := status.FromError(err)
-	if !ok {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
-	}
-	switch st.Code() {
-	case codes.NotFound:
-		return echo.NewHTTPError(http.StatusNotFound, st.Message())
-	case codes.PermissionDenied:
-		return echo.NewHTTPError(http.StatusForbidden, st.Message())
-	case codes.InvalidArgument:
-		return echo.NewHTTPError(http.StatusBadRequest, st.Message())
-	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, st.Message())
-	}
 }

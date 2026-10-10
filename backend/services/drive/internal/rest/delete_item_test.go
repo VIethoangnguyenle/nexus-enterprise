@@ -3,16 +3,16 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/labstack/echo/v4"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/drive"
+	"ngac-platform/services/drive/internal/domain"
 	"ngac-platform/services/drive/internal/reason"
 )
 
@@ -45,7 +45,7 @@ func deleteRequest(t *testing.T, svc DriveService) *httptest.ResponseRecorder {
 // A folder that still holds text documents answers 409 with a reason the
 // screen can act on, not a 500 and not a bare message.
 func TestDeleteItem_FolderWithDocumentsIs409WithReason(t *testing.T) {
-	rec := deleteRequest(t, &deleteSpy{err: status.Error(codes.FailedPrecondition, reason.FolderHasDocuments)})
+	rec := deleteRequest(t, &deleteSpy{err: domain.ErrFolderHasDocuments})
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("status = %d, want 409", rec.Code)
 	}
@@ -59,13 +59,17 @@ func TestDeleteItem_FolderWithDocumentsIs409WithReason(t *testing.T) {
 }
 
 func TestDeleteItem_OtherRefusalsKeepTheirStatus(t *testing.T) {
-	for code, want := range map[codes.Code]int{
-		codes.PermissionDenied: http.StatusForbidden,
-		codes.NotFound:         http.StatusNotFound,
-		codes.Internal:         http.StatusInternalServerError,
+	for name, tc := range map[string]struct {
+		err  error
+		want int
+	}{
+		"denied":   {httputil.ErrAccessDenied, http.StatusForbidden},
+		"missing":  {httputil.ErrNotFound, http.StatusNotFound},
+		"conflict": {domain.ErrConflict, http.StatusConflict},
+		"internal": {errors.New("delete item: boom"), http.StatusInternalServerError},
 	} {
-		if got := deleteRequest(t, &deleteSpy{err: status.Error(code, "x")}).Code; got != want {
-			t.Errorf("%v -> %d, want %d", code, got, want)
+		if got := deleteRequest(t, &deleteSpy{err: tc.err}).Code; got != tc.want {
+			t.Errorf("%s -> %d, want %d", name, got, tc.want)
 		}
 	}
 }

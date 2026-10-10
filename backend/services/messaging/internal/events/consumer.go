@@ -177,11 +177,7 @@ func (c *Consumer) handleLifecycleEvent(ctx context.Context, data []byte) {
 	title := fmt.Sprintf("Asset %s: %s", evt.AssetName, evt.Action)
 	body := fmt.Sprintf("%s transitioned from %s to %s", evt.AssetName, evt.FromState, evt.ToState)
 
-	if err := c.notifSv.CreateNotification(ctx,
-		evt.ActorID, "asset_lifecycle", title, body, "asset", evt.AssetID,
-	); err != nil {
-		slog.Warn("failed to create lifecycle notification", "error", err)
-	}
+	c.notify(ctx, evt.ActorID, "asset_lifecycle", title, body, "asset", evt.AssetID)
 }
 
 func (c *Consumer) handleRequestEvent(ctx context.Context, data []byte) {
@@ -196,19 +192,19 @@ func (c *Consumer) handleRequestEvent(ctx context.Context, data []byte) {
 		// Notify workspace admins — for now notify the requester as confirmation
 		title := fmt.Sprintf("Asset request submitted: %s", evt.TypeName)
 		body := fmt.Sprintf("Your request for %s is pending approval", evt.TypeName)
-		c.notifSv.CreateNotification(ctx,
+		c.notify(ctx,
 			evt.RequesterID, "asset_request", title, body, "asset_request", evt.RequestID,
 		)
 	case "approved":
 		title := fmt.Sprintf("Asset request approved: %s", evt.TypeName)
 		body := fmt.Sprintf("Your request for %s has been approved", evt.TypeName)
-		c.notifSv.CreateNotification(ctx,
+		c.notify(ctx,
 			evt.RequesterID, "asset_request_approved", title, body, "asset_request", evt.RequestID,
 		)
 	case "rejected":
 		title := fmt.Sprintf("Asset request rejected: %s", evt.TypeName)
 		body := fmt.Sprintf("Your request for %s has been rejected", evt.TypeName)
-		c.notifSv.CreateNotification(ctx,
+		c.notify(ctx,
 			evt.RequesterID, "asset_request_rejected", title, body, "asset_request", evt.RequestID,
 		)
 	}
@@ -226,7 +222,7 @@ func (c *Consumer) handleAssignmentEvent(ctx context.Context, data []byte) {
 		if evt.ToUserID != "" {
 			title := fmt.Sprintf("Asset assigned: %s", evt.AssetName)
 			body := fmt.Sprintf("You have been assigned %s", evt.AssetName)
-			c.notifSv.CreateNotification(ctx,
+			c.notify(ctx,
 				evt.ToUserID, "asset_assigned", title, body, "asset", evt.AssetID,
 			)
 		}
@@ -234,7 +230,7 @@ func (c *Consumer) handleAssignmentEvent(ctx context.Context, data []byte) {
 		if evt.FromUserID != "" {
 			title := fmt.Sprintf("Asset returned: %s", evt.AssetName)
 			body := fmt.Sprintf("%s has been returned", evt.AssetName)
-			c.notifSv.CreateNotification(ctx,
+			c.notify(ctx,
 				evt.FromUserID, "asset_returned", title, body, "asset", evt.AssetID,
 			)
 		}
@@ -257,7 +253,7 @@ func (c *Consumer) handleApprovalEvent(ctx context.Context, data []byte) {
 		if evt.CreatedBy != "" && evt.CreatedBy != evt.ActorNodeID {
 			title := fmt.Sprintf("Approval request: %s", evt.TemplateName)
 			body := "Your approval request has been approved"
-			c.notifSv.CreateNotification(ctx,
+			c.notify(ctx,
 				evt.CreatedBy, "approval_approved", title, body, "approval", evt.RequestID,
 			)
 		}
@@ -268,7 +264,7 @@ func (c *Consumer) handleApprovalEvent(ctx context.Context, data []byte) {
 			if evt.Comment != "" {
 				body += ": " + evt.Comment
 			}
-			c.notifSv.CreateNotification(ctx,
+			c.notify(ctx,
 				evt.CreatedBy, "approval_rejected", title, body, "approval", evt.RequestID,
 			)
 		}
@@ -303,4 +299,12 @@ func approvalRecipients(evt ApprovalEvent) []string {
 		}
 	}
 	return out
+}
+
+// notify records a notification. A notification that cannot be stored is logged
+// and does not stop the rest of the event from being handled.
+func (c *Consumer) notify(ctx context.Context, userID, notifType, title, body, entityType, entityID string) {
+	if err := c.notifSv.CreateNotification(ctx, userID, notifType, title, body, entityType, entityID); err != nil {
+		slog.Error("notification not recorded", "user", userID, "type", notifType, "entity", entityID, "error", err)
+	}
 }

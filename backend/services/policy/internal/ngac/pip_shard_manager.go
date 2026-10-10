@@ -3,11 +3,13 @@ package ngac
 import (
 	"container/list"
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	platformngac "ngac-platform/ngac"
@@ -214,11 +216,16 @@ func (sm *shardManager) loadShard(ctx context.Context, workspaceID string) (*Gra
 
 	// Step 2: Find PC_Global (always included in every shard)
 	var globalPCID string
-	_ = sm.db.QueryRow(ctx,
+	err = sm.db.QueryRow(ctx,
 		`SELECT id FROM ngac_nodes
 		 WHERE node_type = 'PC' AND properties->>'scope' = 'global'
 		 LIMIT 1`,
-	).Scan(&globalPCID) // OK if not found — some deployments may not have PC_Global
+	).Scan(&globalPCID)
+	// Not found is fine — some deployments have no PC_Global. Any other failure
+	// would load a shard without it and quietly deny what it grants.
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return nil, fmt.Errorf("finding global PC: %w", err)
+	}
 
 	// Step 3: Recursive CTE to collect all nodes reachable from tenant PC(s)
 	// Traces DOWN from PCs through assignments to find all UA/OA/U nodes.

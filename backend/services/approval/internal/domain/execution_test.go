@@ -32,6 +32,33 @@ func newMockStore() *mockStore {
 	}
 }
 
+// InTx gives the mock the all-or-nothing behaviour of the real store: when fn
+// fails, everything it wrote through the mock is put back.
+func (m *mockStore) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
+	reqs := make(map[string]*Request, len(m.requests))
+	for k, v := range m.requests {
+		cp := *v
+		reqs[k] = &cp
+	}
+	assigns := make(map[string]*AssignmentRecord, len(m.assignments))
+	for k, v := range m.assignments {
+		cp := *v
+		assigns[k] = &cp
+	}
+	list := make([]*AssignmentRecord, len(m.assignList))
+	for i, v := range m.assignList {
+		cp := *v
+		list[i] = &cp
+	}
+	audit := append([]*AuditEntry(nil), m.auditLog...)
+
+	if err := fn(ctx); err != nil {
+		m.requests, m.assignments, m.assignList, m.auditLog = reqs, assigns, list, audit
+		return err
+	}
+	return nil
+}
+
 func (m *mockStore) InsertTemplate(_ context.Context, t *Template) error {
 	m.templates = append(m.templates, t)
 	return nil
@@ -105,6 +132,13 @@ func (m *mockStore) GetRequest(_ context.Context, id string) (*Request, error) {
 		return nil, ErrNotFound
 	}
 	return r, nil
+}
+func (m *mockStore) LockRequest(_ context.Context, id string) (string, int, error) {
+	r, ok := m.requests[id]
+	if !ok {
+		return "", 0, ErrNotFound
+	}
+	return r.Status, r.CurrentStep, nil
 }
 func (m *mockStore) InsertAssignments(_ context.Context, assignments []*AssignmentRecord) error {
 	for _, a := range assignments {

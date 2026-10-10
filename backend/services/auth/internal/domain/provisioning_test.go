@@ -53,6 +53,10 @@ func (f *failingCreateUser) CreateUser(context.Context, string, string, string, 
 	return f.err
 }
 
+func (f *failingCreateUser) CreateUserWithVerifiedEmail(context.Context, string, string, string, string, string, string, string, string) error {
+	return f.err
+}
+
 func (w *fakeWorld) serviceOn(t *testing.T, st domain.AuthStore, read *scriptedRead, write *testutil.FakePolicyWrite) *domain.Service {
 	t.Helper()
 	auth.SetJWTSecret("test-secret-key-for-testing-only")

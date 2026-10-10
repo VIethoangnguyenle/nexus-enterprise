@@ -12,13 +12,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
-	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
-	pb "ngac-platform/proto/workspace"
 	"ngac-platform/services/workspace/internal/domain"
 )
 
@@ -27,33 +23,30 @@ const callerNode = "u-caller"
 // fakeWorkspaceService records what each handler passes down and returns err.
 type fakeWorkspaceService struct {
 	err       error
-	requester string // caller on the context of the last call
+	requester string // caller node the handler passed to the last call
 	calls     int
 }
 
-func (f *fakeWorkspaceService) seen(ctx context.Context) error {
+func (f *fakeWorkspaceService) seen(callerNodeID string) error {
 	f.calls++
-	f.requester = grpcauth.CallerFrom(ctx).NGACNodeID
+	f.requester = callerNodeID
 	return f.err
 }
 
-func (f *fakeWorkspaceService) CreateWorkspace(ctx context.Context, req *pb.CreateWorkspaceRequest) (*pb.Workspace, error) {
-	return &pb.Workspace{}, f.seen(ctx)
+func (f *fakeWorkspaceService) ListAccessibleWorkspaces(_ context.Context, caller string) ([]*domain.WorkspaceResult, error) {
+	return nil, f.seen(caller)
 }
-func (f *fakeWorkspaceService) ListWorkspaces(ctx context.Context, req *pb.ListWorkspacesRequest) (*pb.WorkspaceList, error) {
-	return &pb.WorkspaceList{}, f.seen(ctx)
+func (f *fakeWorkspaceService) ViewWorkspace(_ context.Context, caller, _ string) (*domain.WorkspaceResult, error) {
+	return &domain.WorkspaceResult{}, f.seen(caller)
 }
-func (f *fakeWorkspaceService) GetWorkspace(ctx context.Context, _ *pb.GetWorkspaceRequest) (*pb.Workspace, error) {
-	return &pb.Workspace{}, f.seen(ctx)
+func (f *fakeWorkspaceService) RemoveMember(_ context.Context, caller, _, _ string) error {
+	return f.seen(caller)
 }
-func (f *fakeWorkspaceService) RemoveMember(ctx context.Context, req *pb.RemoveMemberRequest) (*pb.Empty, error) {
-	return &pb.Empty{}, f.seen(ctx)
+func (f *fakeWorkspaceService) ListMembers(_ context.Context, caller, _ string) ([]*domain.Member, error) {
+	return nil, f.seen(caller)
 }
-func (f *fakeWorkspaceService) ListMembers(ctx context.Context, _ *pb.ListMembersRequest) (*pb.MemberList, error) {
-	return &pb.MemberList{}, f.seen(ctx)
-}
-func (f *fakeWorkspaceService) CreateFolder(ctx context.Context, req *pb.CreateFolderRequest) (*pb.Folder, error) {
-	return &pb.Folder{}, f.seen(ctx)
+func (f *fakeWorkspaceService) CreateFolder(_ context.Context, caller, _, _, _ string) (*domain.Folder, error) {
+	return &domain.Folder{}, f.seen(caller)
 }
 
 type route struct {
@@ -111,7 +104,7 @@ func TestHandler_CallerComesFromClaims(t *testing.T) {
 func TestHandler_PermissionDeniedIs403(t *testing.T) {
 	for _, r := range guardedRoutes() {
 		t.Run(r.name, func(t *testing.T) {
-			f := &fakeWorkspaceService{err: status.Error(codes.PermissionDenied, "access denied: manage")}
+			f := &fakeWorkspaceService{err: fmt.Errorf("%w: manage", httputil.ErrAccessDenied)}
 			c, _ := newCtx(t, r, true)
 			err := r.handler(NewHandler(f))(c)
 			var he *echo.HTTPError

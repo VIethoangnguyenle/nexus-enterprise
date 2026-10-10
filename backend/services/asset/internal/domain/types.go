@@ -1,4 +1,4 @@
-package grpc
+package domain
 
 import (
 	"context"
@@ -7,35 +7,32 @@ import (
 	"log/slog"
 
 	"github.com/google/uuid"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/provision"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
-	"ngac-platform/services/asset/internal/domain"
 	"ngac-platform/services/asset/internal/store"
 )
 
-// AssetTypeServer handles gRPC calls for asset type management.
-type AssetTypeServer struct {
-	pb.UnimplementedAssetTypeServiceServer
+// AssetTypeService handles gRPC calls for asset type management.
+type AssetTypeService struct {
 	store       *store.Store
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
 }
 
-// NewAssetTypeServer creates the asset type gRPC handler.
-func NewAssetTypeServer(s *store.Store, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient) *AssetTypeServer {
-	return &AssetTypeServer{store: s, policyRead: pr, policyWrite: pw}
+// NewAssetTypeService creates the asset type gRPC handler.
+func NewAssetTypeService(s *store.Store, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient) *AssetTypeService {
+	return &AssetTypeService{store: s, policyRead: pr, policyWrite: pw}
 }
 
-func (s *AssetTypeServer) CreateType(ctx context.Context, req *pb.CreateTypeRequest) (*pb.AssetType, error) {
+func (s *AssetTypeService) CreateType(ctx context.Context, req *pb.CreateTypeRequest) (*pb.AssetType, error) {
 	if req.Name == "" || req.WorkspaceId == "" || req.Category == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "name, workspace_id, and category are required")
+		return nil, invalid("name, workspace_id, and category are required")
 	}
 
 	// Defining asset types administers the workspace's asset tree. Checked
@@ -47,23 +44,23 @@ func (s *AssetTypeServer) CreateType(ctx context.Context, req *pb.CreateTypeRequ
 	// Validate and prepare fields schema
 	fieldsSchema := json.RawMessage("{}")
 	if req.FieldsSchema != "" {
-		if err := domain.ValidateSchema(json.RawMessage(req.FieldsSchema)); err != nil {
-			return nil, status.Errorf(codes.InvalidArgument, "invalid fields_schema: %v", err)
+		if err := ValidateSchema(json.RawMessage(req.FieldsSchema)); err != nil {
+			return nil, invalid("invalid fields_schema: %v", err)
 		}
 		fieldsSchema = json.RawMessage(req.FieldsSchema)
 	}
 
 	// Validate or use default lifecycle
-	ld := domain.DefaultLifecycle()
+	ld := DefaultLifecycle()
 	if req.Lifecycle != nil && len(req.Lifecycle.States) > 0 {
 		ld = protoToLifecycle(req.Lifecycle)
 	}
-	if err := domain.ValidateLifecycle(ld); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid lifecycle: %v", err)
+	if err := ValidateLifecycle(ld); err != nil {
+		return nil, invalid("invalid lifecycle: %v", err)
 	}
 	lifecycleJSON, err := json.Marshal(ld)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "marshal lifecycle: %v", err)
+		return nil, fmt.Errorf("marshal lifecycle: %w", err)
 	}
 
 	// The type's ID is chosen first so its OA can be named by it. Provisioning
@@ -83,11 +80,11 @@ func (s *AssetTypeServer) CreateType(ctx context.Context, req *pb.CreateTypeRequ
 	prov := provision.NewCreator(s.policyWrite)
 	ngacOAID, err := s.ensureNGACHierarchy(ctx, prov, req.WorkspaceId, req.Category, at.ID, req.Name)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ngac setup: %v", prov.Fail(ctx, err))
+		return nil, fmt.Errorf("ngac setup: %w", prov.Fail(ctx, err))
 	}
 	at.NgacOAID = ngacOAID
 	if err := s.store.CreateType(ctx, at); err != nil {
-		return nil, status.Errorf(codes.Internal, "create type: %v", prov.Fail(ctx, err))
+		return nil, fmt.Errorf("create type: %w", prov.Fail(ctx, err))
 	}
 	prov.Done()
 
@@ -103,7 +100,7 @@ func (s *AssetTypeServer) CreateType(ctx context.Context, req *pb.CreateTypeRequ
 // That right is held by the workspace Owners UA, which is the UA
 // ensureNGACHierarchy then grants every operation on the new Assets OA; so the
 // fallback admits exactly the people who would hold the right afterwards.
-func (s *AssetTypeServer) authorizeCreateType(ctx context.Context, userNodeID, workspaceID string) error {
+func (s *AssetTypeService) authorizeCreateType(ctx context.Context, userNodeID, workspaceID string) error {
 	if userNodeID == "" {
 		return errDenied(ngac.OpManage)
 	}
@@ -122,7 +119,7 @@ func (s *AssetTypeServer) authorizeCreateType(ctx context.Context, userNodeID, w
 //
 // The caller comes from the context (see package grpcauth); a call without
 // one is denied before the type is looked up.
-func (s *AssetTypeServer) GetType(ctx context.Context, req *pb.GetTypeRequest) (*pb.AssetType, error) {
+func (s *AssetTypeService) GetType(ctx context.Context, req *pb.GetTypeRequest) (*pb.AssetType, error) {
 	userNodeID := grpcauth.CallerFrom(ctx).NGACNodeID
 	if userNodeID == "" {
 		return nil, errDenied(ngac.OpRead)
@@ -166,19 +163,19 @@ var typeOps = []string{ngac.OpRead, ngac.OpWrite, ngac.OpApprove, ngac.OpManage}
 // every type beneath it. The caller comes from the context, as for GetType.
 //
 // CanManage says whether the caller may define types and edit their fields.
-func (s *AssetTypeServer) ListTypes(ctx context.Context, req *pb.ListTypesRequest) (*pb.AssetTypeList, error) {
+func (s *AssetTypeService) ListTypes(ctx context.Context, req *pb.ListTypesRequest) (*pb.AssetTypeList, error) {
 	userNodeID := grpcauth.CallerFrom(ctx).NGACNodeID
 	if userNodeID == "" {
 		return nil, errDenied(ngac.OpRead)
 	}
 	types, err := s.store.ListTypes(ctx, req.WorkspaceId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "list types: %v", err)
+		return nil, fmt.Errorf("list types: %w", err)
 	}
 	held, err := heldOnTypes(ctx, s.policyRead, userNodeID, types, typeOps)
 	if err != nil {
 		// Fail closed: an unreadable policy answer must not list anything.
-		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
+		return nil, fmt.Errorf("batch access check: %w", err)
 	}
 	result := &pb.AssetTypeList{CanManage: s.authorizeCreateType(ctx, userNodeID, req.WorkspaceId) == nil}
 	for _, at := range types {
@@ -193,25 +190,25 @@ func (s *AssetTypeServer) ListTypes(ctx context.Context, req *pb.ListTypesReques
 
 // UpdateTypeSchema changes a type's custom-field schema. It requires manage on
 // the Assets OA of the type's workspace — the same right as defining the type.
-func (s *AssetTypeServer) UpdateTypeSchema(ctx context.Context, req *pb.UpdateTypeSchemaRequest) (*pb.AssetType, error) {
+func (s *AssetTypeService) UpdateTypeSchema(ctx context.Context, req *pb.UpdateTypeSchemaRequest) (*pb.AssetType, error) {
 	at, err := s.store.GetType(ctx, req.TypeId)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "type not found: %v", err)
+		return nil, lookupErr(err, "type")
 	}
 	if err := authorizeOnNamedOA(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, ngac.AssetsOAName(ngac.WorkspaceID(at.WorkspaceID)), ngac.OpManage); err != nil {
 		return nil, err
 	}
-	if err := domain.ValidateSchema(json.RawMessage(req.FieldsSchema)); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid schema: %v", err)
+	if err := ValidateSchema(json.RawMessage(req.FieldsSchema)); err != nil {
+		return nil, invalid("invalid schema: %v", err)
 	}
 	if err := s.store.UpdateTypeSchema(ctx, req.TypeId, json.RawMessage(req.FieldsSchema)); err != nil {
-		return nil, status.Errorf(codes.Internal, "update schema: %v", err)
+		return nil, fmt.Errorf("update schema: %w", err)
 	}
 	// Re-read without GetType's guard: the caller was just authorized to manage
 	// this type, and the request names them in a field GetType does not read.
 	updated, err := s.store.GetType(ctx, req.TypeId)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "read back type: %v", err)
+		return nil, fmt.Errorf("read back type: %w", err)
 	}
 	return assetTypeToProto(updated), nil
 }
@@ -229,7 +226,7 @@ func (s *AssetTypeServer) UpdateTypeSchema(ctx context.Context, req *pb.UpdateTy
 //
 // Safe to run again: the Assets and category OAs are found if they exist, and
 // everything this call creates is recorded in prov for rollback.
-func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, prov *provision.Creator, workspaceID, category, typeID, typeName string) (string, error) {
+func (s *AssetTypeService) ensureNGACHierarchy(ctx context.Context, prov *provision.Creator, workspaceID, category, typeID, typeName string) (string, error) {
 	var pcNodeID string
 	row := s.store.DB().QueryRow(ctx, "SELECT COALESCE(ngac_pc_id, '') FROM workspaces WHERE id = $1", workspaceID)
 	if err := row.Scan(&pcNodeID); err != nil {
@@ -291,7 +288,7 @@ func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, prov *provisi
 		if err := prov.Associate(ctx, owners.Id, assetsOA.Id, ngac.AllOwnerOps()); err != nil {
 			return "", fmt.Errorf("grant owners access to assets OA: %w", err)
 		}
-	case err != nil && status.Code(err) != codes.NotFound:
+	case err != nil && !policyclient.IsNotFound(err):
 		return "", fmt.Errorf("look up owners UA: %w", err)
 	default:
 		slog.Warn("owners UA not found; assets have no owner grant",
@@ -316,14 +313,14 @@ func assetTypeToProto(at *store.AssetType) *pb.AssetType {
 		UpdatedAt:      timestamppb.New(at.UpdatedAt),
 	}
 
-	var ld domain.LifecycleDefinition
+	var ld LifecycleDefinition
 	if err := json.Unmarshal(at.Lifecycle, &ld); err == nil {
 		result.Lifecycle = lifecycleToProto(ld)
 	}
 	return result
 }
 
-func lifecycleToProto(ld domain.LifecycleDefinition) *pb.LifecycleDefinition {
+func lifecycleToProto(ld LifecycleDefinition) *pb.LifecycleDefinition {
 	result := &pb.LifecycleDefinition{
 		States:       ld.States,
 		InitialState: ld.InitialState,
@@ -339,13 +336,13 @@ func lifecycleToProto(ld domain.LifecycleDefinition) *pb.LifecycleDefinition {
 	return result
 }
 
-func protoToLifecycle(pb *pb.LifecycleDefinition) domain.LifecycleDefinition {
-	ld := domain.LifecycleDefinition{
+func protoToLifecycle(pb *pb.LifecycleDefinition) LifecycleDefinition {
+	ld := LifecycleDefinition{
 		States:       pb.States,
 		InitialState: pb.InitialState,
 	}
 	for _, t := range pb.Transitions {
-		ld.Transitions = append(ld.Transitions, domain.TransitionRule{
+		ld.Transitions = append(ld.Transitions, TransitionRule{
 			FromState:      t.FromState,
 			ToState:        t.ToState,
 			Operation:      t.Operation,

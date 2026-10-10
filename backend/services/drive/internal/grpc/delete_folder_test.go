@@ -77,7 +77,7 @@ func newDeleteFixture(t *testing.T) *deleteFixture {
 		pool: pool, policy: &graphDeletes{}, storage: &recordingDocStorage{},
 		wsID: getTestWorkspaceID(t, pool), userID: getTestUserID(t, pool),
 	}
-	f.srv = grpcserver.NewDriveServer(pool, &mockPolicyRead{}, f.policy, f.storage)
+	f.srv = newDrive(pool, &mockPolicyRead{}, f.policy, f.storage)
 	return f
 }
 
@@ -200,7 +200,7 @@ func TestDeleteFolder_DeniedCallerLearnsNothingAboutDocuments(t *testing.T) {
 	f := newDeleteFixture(t)
 	folder := f.folder(t, "Kín", "")
 	f.document(t, folder.Id)
-	denied := grpcserver.NewDriveServer(f.pool, &mockPolicyReadDeny{}, f.policy, f.storage)
+	denied := newDrive(f.pool, &mockPolicyReadDeny{}, f.policy, f.storage)
 
 	_, err := denied.DeleteItem(asCaller("", "ngac-denied-user"), &pb.DeleteItemRequest{ItemId: folder.Id})
 

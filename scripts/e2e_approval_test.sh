@@ -8,7 +8,7 @@
 #
 # Environment variables:
 #   API_BASE     - Base URL for approval REST API (default: http://localhost:8080)
-#   POLICY_ADDR  - Policy service gRPC address (default: localhost:50051)
+#   POLICY_SERVICE_ADDR - Policy service gRPC address (default: localhost:50051)
 
 set -euo pipefail
 
