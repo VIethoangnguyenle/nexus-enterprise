@@ -31,6 +31,8 @@ cd frontend && npm run build
 cd frontend && npm run proto:gen   # regenerate TS wire types — separate from `make proto`
 ```
 
+Production deploys (merge to `main` → GHCR images → approval → https://nexus.zaneng.xyz): see `docs/deployment.md`.
+
 **Go is not on the default PATH.** `export PATH="/usr/local/go/bin:$HOME/go/bin:$PATH"` — without
 it every Go command fails with a misleading "Go is not installed".
 
@@ -54,7 +56,7 @@ Only what is not derivable in ten seconds:
   release. Layering is transport → domain → store: REST never calls the gRPC server, and no SQL
   runs in a transport. A 500 answers `{"message": "internal error", "request_id"}` and the cause
   goes only to the log; `make check-layering` enforces all of this.
-- **Schema lives in three places**: `data/init.sql` (base), `data/migrations/` (numbered chain —
+- **Schema lives in two places**: `data/init.sql` (base) and `data/migrations/` (numbered chain —
   `union_id`, `open_id`, `tenant_users` come from `005_multi_tenant_auth.sql`). Approval tables
   live in a per-tenant schema, never in `public`.
 - **No gateway.** Each service owns its REST surface on its own port. In Docker, Traefik routes;

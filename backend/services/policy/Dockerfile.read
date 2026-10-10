@@ -4,6 +4,8 @@ WORKDIR /app
 # Copy root module (proto dependency)
 COPY go.mod go.sum ./
 COPY proto/ proto/
+COPY pkg/ pkg/
+COPY ngac/ ngac/
 # Copy service module
 COPY services/policy/go.mod services/policy/go.sum services/policy/
 WORKDIR /app/services/policy

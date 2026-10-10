@@ -72,6 +72,8 @@ const devProxy = {
   '/api/dms': { target: 'http://localhost:8183', changeOrigin: true },
   '/api/threads': { target: 'http://localhost:8183', changeOrigin: true },
   '/api/notifications': { target: 'http://localhost:8183', changeOrigin: true },
+  '/api/polls': { target: 'http://localhost:8183', changeOrigin: true },
+  '/api/tasks': { target: 'http://localhost:8183', changeOrigin: true },
 
   // Asset service — :8184
   '/api/assets': { target: 'http://localhost:8184', changeOrigin: true },

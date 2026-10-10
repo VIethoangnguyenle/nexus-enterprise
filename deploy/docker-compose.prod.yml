@@ -1,0 +1,523 @@
+# Production stack for nexus.zaneng.xyz. Installed per release as
+# /opt/nexus/releases/<tag>/docker-compose.yml (deploy.yml rsyncs deploy/ there).
+#
+# Single edge: behind the shared Traefik, only `nexus-frontend` (nginx: SPA plus an /api/* reverse
+# proxy, see nginx/default.conf) and `nexus-minio` (presigned URLs, own host) join the external
+# `traefik` network. Every Go service lives on the internal `nexus` network alone, so their
+# unauthenticated gRPC ports are unreachable from the shared network. Nothing publishes a host port.
+#
+#   cd /opt/nexus/releases/<tag>
+#   export COMPOSE_ENV_FILES=/opt/nexus/.env NEXUS_HOME=/opt/nexus NEXUS_OWNER=<owner> NEXUS_TAG=<tag>
+#   docker compose --profile tools run --rm migrate      # ledger migrations, backup first
+#   docker compose up -d --remove-orphans --wait
+# (deploy.sh does all of this, plus the registry login and the real-ip file nginx needs.)
+#
+# Configuration comes from /opt/nexus/.env (chmod 600, written by server-bootstrap.sh). Compose
+# reads it for interpolation, and each container gets only the variables it needs, spelled out
+# below, instead of the whole file. Names that live on a shared network (the two containers
+# above) carry a `nexus-` prefix so another app cannot shadow them or be shadowed; Traefik router
+# and service names are prefixed for the same reason.
+name: nexus
+
+x-go-service: &go-service
+  restart: unless-stopped
+  networks: [nexus]
+  security_opt: ["no-new-privileges:true"]
+  logging: &log-rotation
+    driver: json-file
+    options: { max-size: "10m", max-file: "3" }
+
+x-traefik-network: &traefik-label "traefik.docker.network=traefik"
+
+services:
+
+  # ============================================
+  # Data stores
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    networks: [nexus]
+    security_opt: ["no-new-privileges:true"]
+    logging: *log-rotation
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-ngac}
+      POSTGRES_USER: ${POSTGRES_USER:-ngac}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing from .env}
+    command: ["postgres", "-c", "shared_buffers=128MB", "-c", "max_connections=100", "-c", "work_mem=4MB"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 512M }
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks: [nexus]
+    security_opt: ["no-new-privileges:true"]
+    logging: *log-rotation
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD missing from .env}
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    command:
+      - sh
+      - -c
+      - exec redis-server --maxmemory 192mb --maxmemory-policy allkeys-lru --requirepass "$$REDIS_PASSWORD"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    deploy:
+      resources:
+        limits: { memory: 256M }
+
+  redpanda:
+    image: redpandadata/redpanda:v24.2.18
+    restart: unless-stopped
+    networks: [nexus]
+    security_opt: ["no-new-privileges:true"]
+    logging: *log-rotation
+    command:
+      - redpanda
+      - start
+      - --smp 1
+      - --memory 320M
+      - --reserve-memory 0M
+      - --overprovisioned
+      - --default-log-level=warn
+      - --kafka-addr internal://0.0.0.0:9092
+      - --advertise-kafka-addr internal://redpanda:9092
+    volumes:
+      - redpandadata:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -q 'HEALTHY' || rpk cluster health | grep -q 'healthy'"]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 30s
+    deploy:
+      resources:
+        limits: { memory: 640M }
+
+  nexus-minio:
+    # MinIO no longer publishes images on Docker Hub or Quay. This is the official
+    # minio/minio RELEASE.2025-09-07T16-13-09Z image (the release dev runs), mirrored unchanged
+    # to this project's private GHCR. Override MINIO_IMAGE (in .env) to use another image.
+    image: ${MINIO_IMAGE:-ghcr.io/${NEXUS_OWNER}/nexus-minio:RELEASE.2025-09-07T16-13-09Z}
+    restart: unless-stopped
+    networks: [nexus, traefik]
+    security_opt: ["no-new-privileges:true"]
+    logging: *log-rotation
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?MINIO_ROOT_USER missing from .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD missing from .env}
+      MINIO_API_CORS_ALLOW_ORIGIN: "https://nexus.zaneng.xyz"
+    volumes:
+      - miniodata:/data
+    labels:
+      - "traefik.enable=true"
+      - *traefik-label
+      # S3 API (:9000, not the console on :9001) for presigned uploads/downloads. A separate
+      # host, because a path prefix would break the signature (the document service signs
+      # against MINIO_PUBLIC_ENDPOINT). Traefik forwards the Host header unchanged (passHostHeader
+      # defaults to true), which the signature requires.
+      - "traefik.http.routers.nexus-storage.rule=Host(`storage.nexus.zaneng.xyz`)"
+      - "traefik.http.routers.nexus-storage.entrypoints=websecure"
+      - "traefik.http.routers.nexus-storage.tls.certresolver=le"
+      - "traefik.http.routers.nexus-storage.priority=150"
+      - "traefik.http.routers.nexus-storage.service=nexus-storage"
+      - "traefik.http.services.nexus-storage.loadbalancer.server.port=9000"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    deploy:
+      resources:
+        limits: { memory: 256M }
+
+  # ============================================
+  # One-shot database migration (ledger + backup). Not started by `up`; run explicitly.
+  # ============================================
+  migrate:
+    image: postgres:16-alpine
+    profiles: [tools]
+    networks: [nexus]
+    entrypoint: ["sh", "/migrate.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-ngac}
+      PGDATABASE: ${POSTGRES_DB:-ngac}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD missing from .env}
+      BACKUP_KEEP: "14"
+    volumes:
+      - ./migrate.sh:/migrate.sh:ro
+      - ./db:/db:ro
+      - ${NEXUS_HOME:?NEXUS_HOME not set}/backups:/backups
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # ============================================
+  # Microservices (internal: gRPC only)
+  # ============================================
+  policy:
+    <<: *go-service
+    image: ghcr.io/${NEXUS_OWNER:?NEXUS_OWNER not set}/nexus-policy:${NEXUS_TAG:?NEXUS_TAG not set}
+    environment:
+      DATABASE_URL: &database-url postgres://${POSTGRES_USER:-ngac}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-ngac}?sslmode=disable
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+      GRPC_PORT: "50051"
+      APP_ENV: production
+      GOMEMLIMIT: 200MiB
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 256M }
+
+  policy-read:
+    <<: *go-service
+    image: ghcr.io/${NEXUS_OWNER}/nexus-policy-read:${NEXUS_TAG}
+    environment:
+      DATABASE_URL: *database-url
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/0
+      KAFKA_BROKERS: redpanda:9092
+      GRPC_PORT: "50061"
+      APP_ENV: production
+      GOMEMLIMIT: 150MiB
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+      policy: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50061"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 192M }
+
+  auth:
+    <<: *go-service
+    image: ghcr.io/${NEXUS_OWNER}/nexus-auth:${NEXUS_TAG}
+    networks:
+      nexus:
+        aliases: [nexus-auth]
+    environment:
+      DATABASE_URL: *database-url
+      POLICY_SERVICE_ADDR: policy:50051
+      WORKSPACE_SERVICE_ADDR: workspace:50053
+      MESSAGING_SERVICE_ADDR: messaging:50055
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/1
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET missing from .env}
+      GRPC_PORT: "50052"
+      REST_PORT: "8080"
+      # Anything other than dev/development/local/test marks the cookie Secure and makes the
+      # services refuse the committed placeholder JWT secret.
+      APP_ENV: production
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-https://nexus.zaneng.xyz/api/auth/google/callback}
+      APP_BASE_URL: ${APP_BASE_URL:-https://nexus.zaneng.xyz}
+      # Set but empty: the TEST-ONLY fixed OTP code is off. Not read from .env on purpose, so a
+      # stray line there cannot switch it back on. Unset would mean 999999.
+      AUTH_FIXED_OTP_CODE: ""
+      # Email delivery of sign-in codes (Gmail SMTP). With SMTP_HOST empty there is no OTP
+      # sign-in at all; with it set, a delivered code also proves the address.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TLS: ${SMTP_TLS:-}
+      # X-Forwarded-For is believed only from the nginx edge (fixed address on the nexus network).
+      AUTH_TRUSTED_PROXIES: 10.77.231.10/32
+      GOMEMLIMIT: 100MiB
+    depends_on:
+      policy: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50052"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 128M }
+
+  workspace:
+    <<: *go-service
+    image: ghcr.io/${NEXUS_OWNER}/nexus-workspace:${NEXUS_TAG}
+    networks:
+      nexus:
+        aliases: [nexus-workspace]
+    environment:
+      DATABASE_URL: *database-url
+      POLICY_SERVICE_ADDR: policy:50051
+      MINIO_ENDPOINT: nexus-minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_USE_SSL: "false"
+      GRPC_PORT: "50053"
+      REST_PORT: "8080"
+      JWT_SECRET: ${JWT_SECRET}
+      KAFKA_BROKERS: redpanda:9092
+      DRIVE_SERVICE_ADDR: drive:50057
+      APP_ENV: production
+      GOMEMLIMIT: 100MiB
+    depends_on:
+      policy: { condition: service_healthy }
+      nexus-minio: { condition: service_healthy }
+      drive: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50053"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 128M }
+
+  document:
+    <<: *go-service
+    image: ghcr.io/${NEXUS_OWNER}/nexus-document:${NEXUS_TAG}
+    networks:
+      nexus:
+        aliases: [nexus-document]
+    environment:
+      DATABASE_URL: *database-url
+      MINIO_ENDPOINT: nexus-minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      MINIO_USE_SSL: "false"
+      # Presigned URLs are signed for the public host over https (browsers on the https site
+      # block http links). MINIO_ENDPOINT above stays the internal address for server-side work.
+      MINIO_PUBLIC_ENDPOINT: storage.nexus.zaneng.xyz
+      MINIO_PUBLIC_SECURE: "true"
+      GRPC_PORT: "50054"
+      REST_PORT: "8080"
+      JWT_SECRET: ${JWT_SECRET}
+      KAFKA_BROKERS: redpanda:9092
+      DRIVE_SERVICE_ADDR: drive:50057
+      POLICY_SERVICE_ADDR: policy:50051
+      APP_ENV: production
+      GOMEMLIMIT: 100MiB
+    depends_on:
+      nexus-minio: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50054"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 128M }
+
+  messaging:
+    <<: *go-service
+    image: ghcr.io/${NEXUS_OWNER}/nexus-messaging:${NEXUS_TAG}
+    networks:
+      nexus:
+        aliases: [nexus-messaging]
+    environment:
+      DATABASE_URL: *database-url
+      POLICY_SERVICE_ADDR: policy:50051
+      AUTH_SERVICE_ADDR: auth:50052
+      JWT_SECRET: ${JWT_SECRET}
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/2
+      KAFKA_BROKERS: redpanda:9092
+      GRPC_PORT: "50055"
+      WS_PORT: "8081"
+      REST_PORT: "8080"
+      DRIVE_SERVICE_ADDR: drive:50057
+      APP_ENV: production
+      GOMEMLIMIT: 100MiB
+    depends_on:
+      policy: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+      drive: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50055"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 160M }
+
+  asset:
+    <<: *go-service
+    image: ghcr.io/${NEXUS_OWNER}/nexus-asset:${NEXUS_TAG}
+    networks:
+      nexus:
+        aliases: [nexus-asset]
+    environment:
+      DATABASE_URL: *database-url
+      POLICY_SERVICE_ADDR: policy:50051
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/3
+      KAFKA_BROKERS: redpanda:9092
+      GRPC_PORT: "50056"
+      REST_PORT: "8080"
+      JWT_SECRET: ${JWT_SECRET}
+      APP_ENV: production
+      GOMEMLIMIT: 100MiB
+    depends_on:
+      policy: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      redpanda: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50056"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 128M }
+
+  drive:
+    <<: *go-service
+    image: ghcr.io/${NEXUS_OWNER}/nexus-drive:${NEXUS_TAG}
+    networks:
+      nexus:
+        aliases: [nexus-drive]
+    environment:
+      DATABASE_URL: *database-url
+      POLICY_SERVICE_ADDR: policy:50051
+      POLICY_READ_SERVICE_ADDR: policy-read:50061
+      DOCUMENT_SERVICE_ADDR: document:50054
+      GRPC_PORT: "50057"
+      REST_PORT: "8080"
+      JWT_SECRET: ${JWT_SECRET}
+      KAFKA_BROKERS: redpanda:9092
+      APP_ENV: production
+      GOMEMLIMIT: 100MiB
+    depends_on:
+      policy: { condition: service_healthy }
+      policy-read: { condition: service_healthy }
+      document: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50057"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 128M }
+
+  approval:
+    <<: *go-service
+    image: ghcr.io/${NEXUS_OWNER}/nexus-approval:${NEXUS_TAG}
+    networks:
+      nexus:
+        aliases: [nexus-approval]
+    environment:
+      DATABASE_URL: *database-url
+      POLICY_SERVICE_ADDR: policy:50051
+      POLICY_READ_SERVICE_ADDR: policy-read:50061
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379/4
+      KAFKA_BROKERS: redpanda:9092
+      GRPC_PORT: "50058"
+      REST_PORT: "8080"
+      JWT_SECRET: ${JWT_SECRET}
+      APP_ENV: production
+      GOMEMLIMIT: 100MiB
+    depends_on:
+      policy: { condition: service_healthy }
+      policy-read: { condition: service_healthy }
+      redis: { condition: service_healthy }
+      redpanda: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50058"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 128M }
+
+  # ============================================
+  # Frontend (SPA served by nginx)
+  # ============================================
+  nexus-frontend:
+    image: ghcr.io/${NEXUS_OWNER}/nexus-frontend:${NEXUS_TAG}
+    restart: unless-stopped
+    networks:
+      nexus:
+        # Fixed so the services can trust X-Forwarded-For from this one address only.
+        ipv4_address: 10.77.231.10
+      traefik: {}
+    security_opt: ["no-new-privileges:true"]
+    logging: *log-rotation
+    volumes:
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx:/etc/nginx/nexus:ro
+    depends_on:
+      auth: { condition: service_healthy }
+    labels:
+      - "traefik.enable=true"
+      - *traefik-label
+      # Everything for the host goes to nginx; nginx does the path routing. Traefik's global
+      # web -> websecure redirect (entryPoint redirection in its static config) covers http.
+      - "traefik.http.routers.nexus-frontend.rule=Host(`nexus.zaneng.xyz`)"
+      - "traefik.http.routers.nexus-frontend.entrypoints=websecure"
+      - "traefik.http.routers.nexus-frontend.tls.certresolver=le"
+      - "traefik.http.services.nexus-frontend.loadbalancer.server.port=80"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://127.0.0.1/"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits: { memory: 48M }
+
+networks:
+  nexus:
+    ipam:
+      config:
+        # Containers without a fixed address are numbered from the upper half only, so the
+        # edge's fixed 10.77.231.10 can never be taken by another container first.
+        - subnet: 10.77.231.0/24
+          ip_range: 10.77.231.128/25
+  traefik:
+    external: true
+    name: traefik
+
+volumes:
+  pgdata:
+  redisdata:
+  redpandadata:
+  miniodata:

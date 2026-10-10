@@ -95,3 +95,44 @@ jobs:
       # no dropped store errors (see scripts/check-backend-layering.sh).
       - run: bash scripts/check-backend-layering.sh --self-test
       - run: bash scripts/check-backend-layering.sh
+      # Production stack (docs/deployment.md): the compose file must resolve with a dummy env and
+      # pass the structural/environment checks (no published port or host network, only the edge
+      # on the shared network, every service has the variables its main reads); the nginx edge
+      # config must parse; the deploy scripts must pass shellcheck.
+      - name: Check production compose
+        run: bash deploy/check-compose-env.sh
+      - name: Test nginx edge config
+        run: |
+          # deploy.sh generates real-ip.conf from the traefik network at deploy time; stand in for it.
+          cp -r deploy/nginx "$RUNNER_TEMP/nginx"
+          echo 'set_real_ip_from 172.16.0.0/12;' >"$RUNNER_TEMP/nginx/real-ip.conf"
+          docker run --rm \
+            -v "$RUNNER_TEMP/nginx:/etc/nginx/nexus:ro" \
+            -v "$RUNNER_TEMP/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro" \
+            nginx:alpine nginx -t
+      - name: Shellcheck deploy scripts
+        run: shellcheck -S warning deploy/*.sh
+
+  # Every image deploy.yml pushes must build: a Dockerfile that misses a COPY only fails when the
+  # image is built, which would otherwise be after merge. Builds only, nothing is pushed.
+  images:
+    name: Images — ${{ matrix.image }} builds
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { image: policy,      context: backend,  file: backend/services/policy/Dockerfile }
+          - { image: policy-read, context: backend,  file: backend/services/policy/Dockerfile.read }
+          - { image: auth,        context: backend,  file: backend/services/auth/Dockerfile }
+          - { image: workspace,   context: backend,  file: backend/services/workspace/Dockerfile }
+          - { image: document,    context: backend,  file: backend/services/document/Dockerfile }
+          - { image: messaging,   context: backend,  file: backend/services/messaging/Dockerfile }
+          - { image: asset,       context: backend,  file: backend/services/asset/Dockerfile }
+          - { image: drive,       context: backend,  file: backend/services/drive/Dockerfile }
+          - { image: approval,    context: backend,  file: backend/services/approval/Dockerfile }
+          - { image: frontend,    context: frontend, file: frontend/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t "nexus-${{ matrix.image }}:ci" -f "${{ matrix.file }}" "${{ matrix.context }}"

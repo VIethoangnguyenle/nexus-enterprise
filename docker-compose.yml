@@ -316,7 +316,7 @@ services:
       - "traefik.http.routers.ws.middlewares=ws-strip@docker"
       - "traefik.http.services.ws.loadbalancer.server.port=8081"
       # REST router — channels, messages, DMs, threads, notifications
-      - "traefik.http.routers.messaging.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/channels`) || PathPrefix(`/api/messages`) || PathPrefix(`/api/dms`) || PathPrefix(`/api/threads`) || PathPrefix(`/api/notifications`) || PathRegexp(`/api/workspaces/[^/]+/channels`))"
+      - "traefik.http.routers.messaging.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/channels`) || PathPrefix(`/api/messages`) || PathPrefix(`/api/dms`) || PathPrefix(`/api/threads`) || PathPrefix(`/api/notifications`) || PathPrefix(`/api/polls`) || PathPrefix(`/api/tasks`) || PathRegexp(`/api/workspaces/[^/]+/channels`))"
       - "traefik.http.routers.messaging.entrypoints=web"
       - "traefik.http.routers.messaging.priority=120"
       - "traefik.http.routers.messaging.service=messaging"
