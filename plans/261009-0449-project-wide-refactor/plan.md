@@ -54,7 +54,7 @@ Audit cũng tìm ra lỗ hổng phân quyền **có thật, đang chạy**. Chú
 | 04 | [Frontend data layer](phase-04-frontend-data-layer.md) | P1 | 2-3d | 01 | 04a done; 04b đi cùng từng nhóm màn 06 |
 | 05 | [Realtime over WebSocket](phase-05-realtime-websocket.md) | P1 | 3-4d | 02, 04 | pending |
 | 06 | [UI redesign and motion](phase-06-ui-redesign-and-motion.md) ★ | P1 | 6-8d | 04 (code); design starts now | in-progress |
-| 07 | [NGAC model conformance](phase-07-ngac-model-conformance.md) | P2 | 2-3d | 02b, 03b | pending |
+| 07 | [NGAC model conformance](phase-07-ngac-model-conformance.md) | P2 | 2-3d | 02b, 03b | in-progress |
 | 08 | [Backend shared packages and layering](phase-08-backend-shared-packages-and-layering.md) | P2 | 3-4d | 02 | pending |
 | 09 | [Tests, dead code, large files](phase-09-tests-dead-code-and-splits.md) | P3 | 1-2d | 04, 08 | pending |
 
@@ -125,8 +125,8 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
 1. **Workspace authz (phase 02):** đề xuất `invite` cho invite/remove member, `manage` cho
    permission/role/folder/department.
 2. ~~Thư viện animation~~ **Đã chốt 2026-10-09:** dùng `motion` cho exit/layout animation, CSS cho phần còn lại.
-3. **Asset O nodes (phase 07):** chuyển sang check trên type OA (đề xuất) hay giữ O node và ghi
-   ngoại lệ vào spec?
+3. ~~Asset O nodes~~ **Đã chốt 2026-10-10:** check trên type OA, gỡ O node per-asset — theo quyết định
+   kiến trúc trong CLAUDE.md ("graph không chứa object").
 4. **Shard manager (phase 08):** đề xuất xoá (368 dòng chưa từng chạy production), thêm lại khi có số đo.
 5. ~~Assets shell~~ **Đã chốt 2026-10-10:** gộp `/assets` vào shell `_workspace` (mockup `assets.html` §0).
 6. ~~Hướng UI~~ **Đã chốt 2026-10-09:** B Tín hiệu, mượn bảng kẻ mảnh của A, light + dark ngay
