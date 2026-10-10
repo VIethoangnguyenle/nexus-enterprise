@@ -18,6 +18,18 @@ const rowNames = () =>
     .getAllByRole('link')
     .map((a) => a.getAttribute('aria-label'))
 
+describe('HomeView on a phone', () => {
+  it('offers Trò chuyện mới, so a chat or a group can be started without the navigator column', async () => {
+    const user = userEvent.setup()
+    renderWithClient(<HomeView />)
+    await user.click(await screen.findByRole('button', { name: 'Trò chuyện mới' }))
+    const menu = await screen.findByRole('menu', { name: 'Trò chuyện mới' })
+    expect(within(menu).getByRole('menuitem', { name: 'Nhắn tin trực tiếp' })).toBeInTheDocument()
+    await user.click(within(menu).getByRole('menuitem', { name: 'Tạo nhóm' }))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+})
+
 describe('HomeView filter chips', () => {
   it('starts on "Tất cả" with every conversation, unread first', async () => {
     renderWithClient(<HomeView />)

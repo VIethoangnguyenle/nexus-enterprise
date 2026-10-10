@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence } from 'motion/react'
@@ -42,6 +43,7 @@ type Panel =
  * time (thread, members, search, info). Esc closes the panel.
  */
 export function SpaceView({ channelId }: { channelId: string }) {
+  const navigate = useNavigate()
   const { workspaceId } = useActiveWorkspace()
   const { conversations, isLoading: listLoading } = useConversations(workspaceId)
   const people = usePeople(workspaceId)
@@ -162,7 +164,7 @@ export function SpaceView({ channelId }: { channelId: string }) {
           <IconButton
             className="lg:hidden"
             aria-label="Về danh sách trò chuyện"
-            onClick={() => window.dispatchEvent(new CustomEvent('open-mobile-list'))}
+            onClick={() => void navigate({ to: '/channels' })}
           >
             <ArrowLeft size={18} strokeWidth={1.75} />
           </IconButton>
@@ -210,6 +212,7 @@ export function SpaceView({ channelId }: { channelId: string }) {
             <IconButton
               aria-label={kind === 'space' ? 'Tìm trong nhóm' : 'Tìm trong cuộc trò chuyện'}
               title="Tìm kiếm"
+              data-module-search
               active={panel?.kind === 'search'}
               onClick={() => setPanel(panel?.kind === 'search' ? null : { kind: 'search' })}
             >

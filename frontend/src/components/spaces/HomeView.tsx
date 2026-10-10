@@ -18,6 +18,7 @@ import { Button, FilterChip, Heading } from '../primitives'
 import { ConversationIcon } from './ConversationIcon'
 import { EmptyState } from './EmptyState'
 import { CreateSpaceDialog } from './CreateSpaceDialog'
+import { NewChatMenu } from './NewChatMenu'
 
 const FILTERS: { id: ConversationFilter; label: string; empty: string }[] = [
   { id: 'all', label: 'Tất cả', empty: 'Chưa có cuộc trò chuyện nào.' },
@@ -54,11 +55,21 @@ export function HomeView() {
 
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-base">
-      <header className="px-5 pt-3.5 pb-1.5 grid gap-px">
-        <Heading as="h1" look="panel">Trang chủ</Heading>
-        <span className="text-small text-ink-muted truncate">
-          Mọi cuộc trò chuyện của bạn trong {workspaceDisplayName(workspaceName)}
-        </span>
+      <header className="flex items-start gap-3 px-5 pt-3.5 pb-1.5">
+        <div className="grid gap-px min-w-0 flex-1">
+          <Heading as="h1" look="panel">Trang chủ</Heading>
+          <span className="text-small text-ink-muted truncate">
+            Mọi cuộc trò chuyện của bạn trong {workspaceDisplayName(workspaceName)}
+          </span>
+        </div>
+        {/* The navigator column that holds this menu on desktop is not on a phone. */}
+        <div className="lg:hidden shrink-0">
+          <NewChatMenu
+            placement="bottom-end"
+            className="press inline-flex items-center gap-2 h-10 pl-3 pr-4 rounded-xl bg-accent-wash text-sm
+              font-semibold text-ink hover:bg-hover"
+          />
+        </div>
       </header>
 
       <div role="group" aria-label="Lọc" className="flex flex-wrap gap-1.5 px-5 pt-1 pb-2.5">

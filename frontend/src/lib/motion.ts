@@ -63,6 +63,8 @@ export interface MotionPresets {
   panel: Preset
   /** Modal surface: translateY(8px) scale(.98) → 0, 280ms expo; out 210ms. */
   modal: Preset
+  /** Bottom sheet: translateY(100%) → 0, 280ms expo; out 210ms ease-in. */
+  sheet: Preset
   /** Scrim behind a modal: fade 220ms; out 210ms. */
   scrim: Preset
   /** Popover / menu: translateY(-4px) + fade, 160ms; out 120ms. */
@@ -86,6 +88,7 @@ export function presets(reduced: boolean): MotionPresets {
       reduced,
       panel: f,
       modal: f,
+      sheet: f,
       scrim: f,
       popover: f,
       toast: f,
@@ -99,6 +102,11 @@ export function presets(reduced: boolean): MotionPresets {
     reduced,
     panel: slide({ x: 16, scale: 0.985 }, DURATION.layout, EASE.outExpo, DURATION.exit),
     modal: slide({ y: 8, scale: 0.98 }, DURATION.layout, EASE.outExpo, DURATION.exit),
+    sheet: {
+      initial: { y: '100%' },
+      animate: { y: 0, transition: { duration: DURATION.layout, ease: EASE.outExpo } },
+      exit: { y: '100%', transition: { duration: DURATION.exit, ease: EASE.in } },
+    },
     scrim: fade(DURATION.base, DURATION.exit),
     popover: slide({ y: -4 }, DURATION.quick, EASE.out, 0.12),
     toast: slide({ y: 12 }, DURATION.base, EASE.out, DURATION.quick),

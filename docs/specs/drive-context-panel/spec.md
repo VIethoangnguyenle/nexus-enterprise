@@ -85,3 +85,18 @@ Deleting an item SHALL ask for confirmation in the shared confirmation dialog an
 #### Scenario: Delete and undo
 - **WHEN** user confirms deleting an item and then presses Hoàn tác in the toast
 - **THEN** the item is removed from the list at once and returns to it after the restore
+
+### Requirement: Permanent Delete Refuses Folders That Hold Text Documents
+`DELETE /api/drive/items/:itemId/permanent` SHALL refuse a folder when it, or any folder beneath it, still holds a text document, whatever the document's state. The refusal comes before anything is touched: `409` with `{"error", "reason": "folder_has_documents"}` (gRPC `FailedPrecondition`), the folder row, its files, its stored objects, its quota and its object attribute all stay. For a folder that can be deleted, the row is deleted first and only then are the stored objects removed, the quota released and the folder's object attribute deleted from the graph, so a refusal by the database (a document saved after the check) also leaves the folder whole. The caller's `write` right on the folder is checked before the documents are counted, so a refusal never tells a denied caller what a folder holds. The UI SHALL say that the folder still holds documents and what to do ("Chuyển hoặc xoá các văn bản trước, rồi xoá thư mục"), never the raw reason.
+
+#### Scenario: Folder with a document beneath it
+- **WHEN** a caller with `write` permanently deletes a folder whose subfolder holds a text document
+- **THEN** the answer is 409 `folder_has_documents` and the folder, the subfolder, the document, every stored object and the folder's graph node are unchanged
+
+#### Scenario: Folder with only files
+- **WHEN** a caller with `write` permanently deletes a folder holding only files
+- **THEN** the row is gone, the stored objects are removed, the quota is released and the folder's graph node is deleted
+
+#### Scenario: Caller without write
+- **WHEN** a caller without `write` deletes a folder that holds documents
+- **THEN** the answer is 403, not 409

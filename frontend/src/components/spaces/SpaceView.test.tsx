@@ -20,6 +20,20 @@ afterEach(resetClient)
 
 const noIds = () => expect(document.body.textContent).not.toMatch(UUID_RE)
 
+describe('SpaceView on a phone', () => {
+  it('goes back to Trang chủ, the conversation list, since there is no drawer', async () => {
+    const user = userEvent.setup()
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    await user.click(await screen.findByRole('button', { name: 'Về danh sách trò chuyện' }))
+    expect(routerState.navigate).toHaveBeenCalledWith({ to: '/channels' })
+  })
+
+  it('marks its search action so the phone top bar can reach it', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    expect(await screen.findByRole('button', { name: 'Tìm trong nhóm' })).toHaveAttribute('data-module-search')
+  })
+})
+
 describe('SpaceView', () => {
   it('shows the space by name with its member count, and its topics', async () => {
     renderWithClient(<SpaceView channelId={CH.doisoat} />)

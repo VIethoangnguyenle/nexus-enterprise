@@ -15,6 +15,7 @@ import (
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/drive/internal/reason"
 )
 
 // DriveService defines the operations the REST handler needs.
@@ -339,6 +340,14 @@ func (h *Handler) DeleteItem(c echo.Context) error {
 		ItemId: c.Param("itemId"),
 	})
 	if err != nil {
+		// A folder that still holds text documents is refused with 409 and a
+		// machine-readable reason; the writing in it is never deleted with it.
+		if st, ok := status.FromError(err); ok && st.Code() == codes.FailedPrecondition && st.Message() == reason.FolderHasDocuments {
+			return c.JSON(http.StatusConflict, map[string]string{
+				"error":  "Thư mục này còn văn bản. Chuyển hoặc xoá các văn bản trước, rồi xoá thư mục.",
+				"reason": reason.FolderHasDocuments,
+			})
+		}
 		return mapGRPCError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "deleted"})
@@ -440,7 +449,7 @@ func mapGRPCError(err error) *echo.HTTPError {
 		return echo.NewHTTPError(http.StatusNotFound, st.Message())
 	case codes.PermissionDenied:
 		return echo.NewHTTPError(http.StatusForbidden, st.Message())
-	case codes.AlreadyExists:
+	case codes.AlreadyExists, codes.FailedPrecondition:
 		return echo.NewHTTPError(http.StatusConflict, st.Message())
 	case codes.InvalidArgument:
 		return echo.NewHTTPError(http.StatusBadRequest, st.Message())

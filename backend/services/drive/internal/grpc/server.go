@@ -18,6 +18,7 @@ import (
 	docpb "ngac-platform/proto/document"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/drive/internal/reason"
 	"ngac-platform/services/drive/internal/store"
 )
 
@@ -744,34 +745,58 @@ func (s *DriveServer) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest)
 		return nil, err
 	}
 
+	var files []*store.DriveItem
 	if item.ItemType == "folder" {
-		children, _ := s.store.GetChildFiles(ctx, item.ID)
-		for _, child := range children {
-			if child.ObjectKey != nil {
-				s.docStorage.DeleteObject(ctx, &docpb.DeleteObjectRequest{
-					WorkspaceId: child.WorkspaceID, ObjectKey: *child.ObjectKey,
-				})
-			}
-			if child.SizeBytes != nil {
-				s.store.DecrementQuota(ctx, child.WorkspaceID, *child.SizeBytes, 1)
-			}
-			// Files don't have their own NGAC nodes — no DeleteNode needed.
+		// Refuse before anything is touched: text documents block the delete
+		// (their folder reference is RESTRICT), and a half-finished delete would
+		// leave the folder row with its access node gone.
+		n, err := s.store.CountTextDocumentsUnder(ctx, item.ID)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "check folder contents: %v", err)
 		}
-		// Delete the folder's OA node from NGAC graph.
-		if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: item.NGACNodeID}); err != nil {
-			return nil, status.Errorf(codes.Internal, "delete folder OA: %v", err)
+		if n > 0 {
+			return nil, status.Error(codes.FailedPrecondition, reason.FolderHasDocuments)
 		}
-	} else if item.ObjectKey != nil {
-		s.docStorage.DeleteObject(ctx, &docpb.DeleteObjectRequest{
-			WorkspaceId: item.WorkspaceID, ObjectKey: *item.ObjectKey,
-		})
-		if item.SizeBytes != nil {
-			s.store.DecrementQuota(ctx, item.WorkspaceID, *item.SizeBytes, 1)
+		if files, err = s.store.GetChildFiles(ctx, item.ID); err != nil {
+			return nil, status.Errorf(codes.Internal, "list folder files: %v", err)
 		}
-		// Files inherit parent OA — no NGAC node to delete.
+	} else {
+		files = []*store.DriveItem{item}
 	}
 
-	s.store.DeleteItem(ctx, item.ID)
+	// The row goes first. Stored objects, quota and the folder's access node are
+	// only released once the database has agreed, so a refusal (a document saved
+	// since the check above) leaves the folder exactly as it was.
+	if err := s.store.DeleteItem(ctx, item.ID); err != nil {
+		if errors.Is(err, store.ErrFolderHasDocuments) {
+			return nil, status.Error(codes.FailedPrecondition, reason.FolderHasDocuments)
+		}
+		return nil, status.Errorf(codes.Internal, "delete item: %v", err)
+	}
+
+	for _, f := range files {
+		// Files inherit their folder's OA: no NGAC node of their own to delete.
+		if f.ObjectKey != nil {
+			if _, err := s.docStorage.DeleteObject(ctx, &docpb.DeleteObjectRequest{
+				WorkspaceId: f.WorkspaceID, ObjectKey: *f.ObjectKey,
+			}); err != nil {
+				slog.Error("deleted file's stored object not removed", "item", f.ID, "err", err)
+			}
+		}
+		if f.SizeBytes != nil {
+			if err := s.store.DecrementQuota(ctx, f.WorkspaceID, *f.SizeBytes, 1); err != nil {
+				slog.Error("deleted file's quota not released", "item", f.ID, "err", err)
+			}
+		}
+	}
+
+	if item.ItemType == "folder" {
+		// The folder is already gone, so a failure here cannot be retried by the
+		// caller; it leaves an unreachable OA with no row, which is logged for repair.
+		if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: item.NGACNodeID}); err != nil {
+			slog.Error("deleted folder's OA not removed; node needs cleanup", "item", item.ID, "node", item.NGACNodeID, "err", err)
+		}
+	}
 	return &pb.Empty{}, nil
 }
 

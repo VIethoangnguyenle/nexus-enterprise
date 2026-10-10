@@ -17,9 +17,9 @@ import { useWorkspaces } from './useWorkspaces'
  * to a workspace they only had read on, and the Upload button answered 403 with
  * no way to get out of it.
  *
- * The switcher still performs a full page load: drive keeps the open folder in
- * a client store that is not keyed by workspace, and a folder from the previous
- * workspace must not survive the switch.
+ * The switcher (`useWorkspaceSwitcher`) re-scopes the session to the chosen
+ * workspace, drops the cache and the Tài liệu client state, and only then
+ * changes this parameter, so nothing from the previous workspace survives.
  */
 export function useActiveWorkspace() {
   const { data, isLoading, isError } = useWorkspaces()

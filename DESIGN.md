@@ -138,8 +138,39 @@ Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một
   shell này, không có layout riêng.
 - **List panel** chỉ ở Tin nhắn và Tài liệu. **Detail panel** mở bằng chọn mục, đóng bằng Esc.
 - **Breakpoints:** ≥ 1280 đủ 4 cột · 1024–1279 detail panel thành overlay bên phải ·
-  768–1023 sidebar thành rail, list panel thành cột thay thế content · < 768 tab bar đáy 5 mục,
-  mỗi màn một cột, detail panel thành sheet từ dưới lên.
+  768–1023 sidebar thành rail, list panel thành cột thay thế content (rail chưa làm: hiện thanh
+  đáy dùng cho cả dưới 1024) · < 768 thanh đáy 3 tab có nhãn + "Thêm", mỗi màn một cột, detail
+  panel thành sheet từ dưới lên.
+- **Điều hướng di động (dưới 1024 cho tới khi rail 64px của 768–1023 được làm):** thanh trên + thanh đáy 3 tab có nhãn **Tin nhắn · Tài liệu · Phê duyệt** (kèm
+  số chờ duyệt) + mục **Thêm** mở sheet đáy. Không có avatar nổi; mọi thứ còn lại vào qua Thêm.
+  - *Thanh trên:* `--color-base`, không viền, cao 48 + `env(safe-area-inset-top)`. Trái: **Nexus**
+    (font display 700) + " · " + tên workspace (mờ, cắt bằng …). Phải: IconButton tìm kiếm (icon
+    20, vùng chạm ≥ 44, `aria-label` "Tìm kiếm") đưa focus vào ô tìm kiếm có sẵn của màn đang xem;
+    trong một cuộc trò chuyện nó mở bảng Tìm của cuộc trò chuyện. Màn không có tìm kiếm riêng
+    (Trang chủ, Phê duyệt, Cài đặt…) thì không có nút. Tiêu đề màn nằm ngay dưới thanh. Không có nút
+    Menu: danh sách trò chuyện là Trang chủ của Tin nhắn (có "Trò chuyện mới": nhắn trực tiếp,
+    tạo nhóm), mọi thứ còn lại vào qua tab, Thêm hoặc đổi workspace trong sheet.
+  - *Thanh đáy:* `--color-raised`, không viền, `--z-sticky`; 4 cột đều nhau. Mỗi tab cao 48, thanh
+    đệm 4 trên và dưới (cao 56) + `env(safe-area-inset-bottom)`; vùng chạm cả ô ≥ 44. Mỗi tab một
+    icon lucide 20 stroke 1.75 trên nhãn 11px/500 (`text-2xs`); chỉ 4 icon trên cả thanh
+    (Thêm dùng dấu ba chấm). Đang chọn: nhãn 600 `--color-accent`, icon nằm trong nền
+    `--color-accent-wash` (radius 10, 48×24), `aria-current="page"`; Thêm cũng sáng khi màn hiện tại
+    là Tài sản, Danh bạ, Quản trị hoặc Cài đặt. Số chờ duyệt: badge pill accent 18px ở góc trên phải
+    icon, `99+` khi quá 99, ẩn khi 0, `aria-label` "Phê duyệt, 3 chờ bạn". Chỉ Phê duyệt có số, và chỉ lấy số khi thanh đáy đang hiện. Toast nổi ngay trên thanh đáy (cách 16 + safe-area).
+  - *Sheet Thêm:* `--color-overlay`, radius 12 hai góc trên, `--shadow-overlay`, đệm 16 +
+    safe-area, cao tối đa 85% màn, nội dung cuộn; nằm trên thanh đáy (`--z-modal`), nền sau là
+    `--color-scrim` (`--z-backdrop`). Thứ tự từ trên: hàng tay nắm 36×4 (`--color-line`, giữa) + IconButton Đóng bên phải · **hàng
+    workspace + người**: ô chữ cái workspace 40, tên workspace (font display), dưới là avatar 20 +
+    tên hiển thị + vai trò mờ, chevron phải; bấm mở danh sách đổi workspace · **Tài sản · Danh bạ ·
+    Quản trị · Cài đặt** (hàng cao 48, icon 18 + nhãn, như NavRow) · divider `--color-line` ·
+    **Đăng xuất**. Hàng đổi workspace thay nội dung sheet bằng danh sách workspace người đó vào
+    được (tên + vai trò, dấu tích ở workspace đang mở, nút quay lại); chọn một workspace gắn lại
+    phiên vào workspace đó, làm mới dữ liệu rồi đóng sheet.
+  - *Hành vi:* modal đầy đủ (focus trap, focus vào hàng đầu khi mở, trả focus về nút Thêm, nền sau
+    inert). Đóng bằng Esc, chạm scrim, nút Đóng, hoặc kéo tay nắm xuống quá 25% chiều cao hay vuốt
+    nhanh. Chọn một mục điều hướng cũng đóng. Chuyển động theo §7: scrim fade 220ms, sheet
+    `translateY(100%)` → 0 trong 280ms expo; ra 210ms ease-in; đổi giữa menu và danh sách workspace
+    là fade 160ms. Giảm chuyển động: bỏ translate, chỉ fade ≤ 120ms (kéo xuống vẫn theo ngón tay).
 
 ## 6. Components
 

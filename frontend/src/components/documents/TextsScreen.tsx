@@ -172,7 +172,7 @@ export function TextsScreen() {
               {g.id === 'all' ? 'Văn bản' : g.label}
             </FilterChip>
           ))}
-          <SearchField label="Tìm văn bản" tone="sunk" value={query} onChange={(e) => setQuery(e.target.value)} className="w-full sm:ml-auto sm:w-64" />
+          <SearchField label="Tìm văn bản" moduleSearch tone="sunk" value={query} onChange={(e) => setQuery(e.target.value)} className="w-full sm:ml-auto sm:w-64" />
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto">{body}</div>

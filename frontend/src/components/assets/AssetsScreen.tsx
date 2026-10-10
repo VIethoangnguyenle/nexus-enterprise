@@ -287,6 +287,7 @@ export function AssetsScreen() {
           <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
             <SearchField
               label="Tìm tài sản"
+              moduleSearch
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               className="w-full sm:w-56"

@@ -127,7 +127,7 @@ export function Toaster() {
   const toasts = useToastStore((s) => s.toasts)
   return (
     <div
-      className="fixed z-toast bottom-4 inset-x-4 md:inset-x-auto md:right-4 flex flex-col items-center
+      className="fixed z-toast bottom-4 max-lg:bottom-above-bar inset-x-4 md:inset-x-auto md:right-4 flex flex-col items-center
         md:items-end gap-2 pointer-events-none"
       aria-live="polite"
     >

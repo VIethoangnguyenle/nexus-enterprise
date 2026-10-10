@@ -41,3 +41,16 @@ The sidebar SHALL contain a global search input at the top (below workspace swit
 #### Scenario: Search input is accessible
 - **WHEN** the sidebar is expanded
 - **THEN** a global search input SHALL be visible and usable
+
+### Requirement: Phone Navigation And Workspace Switching
+Where the sidebar is not shown, a bottom bar SHALL offer three labelled tabs, Tin nhắn, Tài liệu and Phê duyệt (with the number of requests waiting on the person, `99+` above 99, hidden at 0), and a fourth, Thêm, that opens a modal bottom sheet holding the current workspace and person, Tài sản, Danh bạ, Quản trị, Cài đặt and Đăng xuất (through the one logout path). No avatar floats over the screens. The sheet traps focus, takes focus on open, closes on Esc, the scrim, its Đóng button or a downward drag, and returns focus to Thêm.
+
+The workspace switcher in the sidebar and in the sheet SHALL list only the workspaces from `GET /api/me/workspaces`. Choosing one SHALL re-scope the session with `POST /api/auth/switch-tenant`, replace the access token, drop the whole query cache and the Tài liệu client state, and open the module the person was in under `?ws=` of the new workspace with no folder or view carried over. A refusal leaves the token, the data and the screen as they were and says so in a toast.
+
+#### Scenario: Switch from the sheet
+- **WHEN** the person opens Thêm, picks another workspace in the list and the server accepts
+- **THEN** the token is the new workspace's, the old workspace's cached data is gone, the sheet closes and the same module opens on the new workspace
+
+#### Scenario: Switch refused
+- **WHEN** switch-tenant answers 403
+- **THEN** the token and cached data are unchanged, the sheet stays open and a toast says the switch failed

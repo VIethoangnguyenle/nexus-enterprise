@@ -161,6 +161,7 @@ export function ContactsScreen() {
         <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
           <SearchField
             label="Tên, chức danh hoặc email"
+            moduleSearch
             tone="sunk"
             value={filter.query}
             onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}

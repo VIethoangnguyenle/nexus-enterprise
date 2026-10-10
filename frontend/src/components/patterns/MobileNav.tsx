@@ -1,75 +1,101 @@
-import { useLocation, useNavigate } from '@tanstack/react-router'
-import { useUiStore } from '../../stores/ui.store'
-import { useAuthStore } from '../../stores/auth.store'
-import {
-  MessageSquare, FolderOpen, Users, Briefcase, ClipboardCheck, LogOut,
-} from 'lucide-react'
+import { useState } from 'react'
+import { Link, useLocation } from '@tanstack/react-router'
+import { ClipboardCheck, Ellipsis, FolderOpen, MessageSquare } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { approvalPendingOptions } from '../../hooks/useApproval'
+import { useBottomBarLayout } from '../../hooks/usePhone'
+import { formatCount } from '../../lib/format'
+import { useUiStore } from '../../stores/ui.store'
+import { Pressable } from '../primitives'
+import { MORE_ITEMS, MobileMoreSheet } from './MobileMoreSheet'
 
-type NavItem = {
-  id: 'messaging' | 'drive' | 'contacts' | 'assets' | 'approval'
+type Tab = {
+  id: 'messaging' | 'drive' | 'approval'
   icon: LucideIcon
   label: string
-  routePath: string
-  /** Path segment used to detect active state. */
-  activeMatch: string
+  to: string
+  /** Path prefixes that light this tab up. */
+  matches: string[]
 }
 
-const navItems: NavItem[] = [
-  { id: 'messaging', icon: MessageSquare, label: 'Chat', routePath: '/channels', activeMatch: '/channels' },
-  { id: 'drive', icon: FolderOpen, label: 'Drive', routePath: '/drive', activeMatch: '/drive' },
-  { id: 'approval', icon: ClipboardCheck, label: 'Approvals', routePath: '/approval', activeMatch: '/approval' },
-  { id: 'contacts', icon: Users, label: 'Contacts', routePath: '/contacts', activeMatch: '/contacts' },
-  { id: 'assets', icon: Briefcase, label: 'Work', routePath: '/assets', activeMatch: '/assets' },
+/** DESIGN.md §5, Điều hướng di động: three labelled tabs; everything else is under Thêm. */
+const TABS: Tab[] = [
+  { id: 'messaging', icon: MessageSquare, label: 'Tin nhắn', to: '/channels', matches: ['/channels'] },
+  // Văn bản is a group inside Tài liệu, so its pages light up Tài liệu.
+  { id: 'drive', icon: FolderOpen, label: 'Tài liệu', to: '/drive', matches: ['/drive', '/documents'] },
+  { id: 'approval', icon: ClipboardCheck, label: 'Phê duyệt', to: '/approval', matches: ['/approval'] },
 ]
 
-/** Mobile bottom navigation bar — visible on < lg screens. Nexus Hub design tokens.
- *
- * Uses native <a> elements with useNavigate() instead of TanStack <Link> to guarantee
- * all items always render as interactive anchor elements regardless of route context.
- * TanStack Router's <Link> can fail to render as <a> in certain nested route scenarios. */
-export function MobileNav() {
-  const setActiveModule = useUiStore((s) => s.setActiveModule)
-  const logout = useAuthStore((s) => s.logout)
-  const navigate = useNavigate()
-  const { pathname } = useLocation()
+const under = (pathname: string, prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
 
+const TAB_CELL = 'relative grid justify-items-center content-center gap-0.5 min-h-12 text-2xs font-medium no-underline focus-ring rounded-surface'
+const TAB_ICON = 'relative grid place-items-center w-12 h-6 rounded-surface transition-colors duration-quick'
+
+/**
+ * Phone bottom bar (DESIGN.md §5): Tin nhắn, Tài liệu, Phê duyệt (with the
+ * number waiting on the person) and Thêm, which opens the sheet holding the
+ * rest. Rendered only where the sidebar is not shown (below 1024px).
+ */
+export function MobileNav() {
+  const { pathname } = useLocation()
+  const setActiveModule = useUiStore((s) => s.setActiveModule)
+  // Above the bar's widths nothing shows the count, so nothing asks for it.
+  const shown = useBottomBarLayout()
+  const pending = useQuery({ ...approvalPendingOptions(), enabled: shown }).data?.total ?? 0
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreCurrent = MORE_ITEMS.some((item) => under(pathname, item.to))
+  const moreLit = moreCurrent || moreOpen
+
+  if (!shown) return null
   return (
-    <nav className="fixed bottom-0 inset-x-0 h-14 bg-surface-container-lowest border-t border-outline-variant/30
-      flex items-center justify-around z-sticky lg:hidden">
-      {navItems.map((item) => {
-        const isActive = pathname.includes(item.activeMatch)
-        const Icon = item.icon
-        return (
-          <a
-            key={item.id}
-            href={item.routePath}
-            onClick={(e) => {
-              e.preventDefault()
-              setActiveModule(item.id)
-              navigate({ to: item.routePath })
-            }}
-            className={`flex flex-col items-center justify-center gap-1
-              min-h-11 min-w-11 no-underline cursor-pointer
-              transition-colors ${isActive ? 'text-primary' : 'text-on-surface-variant'}`}
-          >
-            <Icon size={20} strokeWidth={isActive ? 2.2 : 1.6} />
-            <span className="text-micro font-medium">{item.label}</span>
-          </a>
-        )
-      })}
-      {/* eslint-disable-next-line no-restricted-syntax -- Mục thanh tab dưới: bố cục DỌC
-          (icon trên, nhãn dưới) với vùng chạm tối thiểu min-h-11 min-w-11. Ba kind của NavRow
-          đều là hàng ngang một dòng. */}
-      <button
-        onClick={logout}
-        className="flex flex-col items-center justify-center gap-1
-          min-h-11 min-w-11 bg-transparent border-none cursor-pointer
-          text-on-surface-variant transition-colors"
+    <>
+      <nav
+        aria-label="Điều hướng di động"
+        className="fixed bottom-0 inset-x-0 z-sticky lg:hidden grid grid-cols-4 gap-1 px-1 pt-1 pb-bar bg-raised"
       >
-        <LogOut size={20} strokeWidth={1.6} />
-        <span className="text-micro font-medium">Logout</span>
-      </button>
-    </nav>
+        {TABS.map((tab) => {
+          const active = tab.matches.some((prefix) => under(pathname, prefix))
+          const badge = tab.id === 'approval' && pending > 0
+          return (
+            <Link
+              key={tab.id}
+              to={tab.to}
+              onClick={() => setActiveModule(tab.id)}
+              aria-current={active ? 'page' : undefined}
+              aria-label={badge ? `${tab.label}, ${pending} chờ bạn` : undefined}
+              className={`${TAB_CELL} ${active ? 'text-accent font-semibold' : 'text-ink-muted'}`}
+            >
+              <span className={`${TAB_ICON} ${active ? 'bg-accent-wash' : ''}`}>
+                <tab.icon size={20} strokeWidth={1.75} aria-hidden="true" />
+                {badge && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute -top-1.5 right-0.5 inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5
+                      rounded-full bg-accent text-on-accent text-2xs font-semibold tnum ring-2 ring-raised"
+                  >
+                    {formatCount(pending)}
+                  </span>
+                )}
+              </span>
+              {tab.label}
+            </Link>
+          )
+        })}
+        <Pressable
+          onClick={() => setMoreOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={moreOpen}
+          data-current={moreCurrent || undefined}
+          className={`${TAB_CELL} text-center ${moreLit ? 'text-accent font-semibold' : 'text-ink-muted'}`}
+        >
+          <span className={`${TAB_ICON} ${moreLit ? 'bg-accent-wash' : ''}`}>
+            <Ellipsis size={20} strokeWidth={1.75} aria-hidden="true" />
+          </span>
+          Thêm
+        </Pressable>
+      </nav>
+      <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} pathname={pathname} />
+    </>
   )
 }

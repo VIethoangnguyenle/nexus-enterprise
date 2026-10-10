@@ -11,10 +11,10 @@ import { useResizable } from '../hooks/useResizable'
 import { AppSidebar } from '../components/patterns/AppSidebar'
 import { ListPanel } from '../components/patterns/ListPanel'
 import { MobileNav } from '../components/patterns/MobileNav'
-import { Button, IconButton, Spinner, Text } from '../components/primitives'
+import { MobileTopBar } from '../components/patterns/MobileTopBar'
+import { Button, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { apiFetch, logoutSession } from '../api/client'
-import { PanelLeft, X } from 'lucide-react'
 
 export const Route = createFileRoute('/_workspace')({
   validateSearch: validateWorkspaceSearch,
@@ -70,18 +70,8 @@ function WorkspaceLayout() {
     onResize: setListPanelWidth,
   })
 
-  /* Mobile: toggle list panel overlay */
-  const [showMobileList, setShowMobileList] = useState(false)
-
-  /* Picking something in the mobile list navigates; close the overlay so the result is visible. */
-  useEffect(() => { setShowMobileList(false) }, [currentPath])
-
-  /* Listen for child routes requesting mobile list panel (e.g. channel back button) */
-  useEffect(() => {
-    const openList = () => setShowMobileList(true)
-    window.addEventListener('open-mobile-list', openList)
-    return () => window.removeEventListener('open-mobile-list', openList)
-  }, [])
+  /* The screen under the phone top bar; the bar watches it for the screen's own search. */
+  const [screenEl, setScreenEl] = useState<HTMLElement | null>(null)
 
   useEffect(() => {
     if (token) { connect(token); return () => disconnect() }
@@ -145,19 +135,7 @@ function WorkspaceLayout() {
         {/* Column 2: ListPanel — only for messaging, documents, and workspace modules */}
         {activeModule !== 'contacts' && activeModule !== 'drive' && activeModule !== 'approval' && activeModule !== 'assets' && activeModule !== 'settings' && activeModule !== 'admin' && (
           <>
-            {showMobileList && (
-              <div className="fixed inset-0 bottom-14 z-40 bg-surface-bright lg:hidden animate-slide-left">
-                <div className="flex items-center justify-end px-3 py-2 border-b border-outline-variant/30">
-                  <IconButton size="lg" onClick={() => setShowMobileList(false)} aria-label="Đóng danh sách">
-                    <X size={20} />
-                  </IconButton>
-                </div>
-                <div className="flex-1 overflow-hidden h-[calc(100%-44px)]">
-                  <ListPanel workspaceId={wsId} />
-                </div>
-              </div>
-            )}
-            {/* Desktop inline */}
+            {/* Tin nhắn's navigator column: desktop only. On a phone its job is done by Trang chủ. */}
             <div style={{ width: size, flexShrink: 0 }} className="h-full hidden lg:block">
               <ListPanel workspaceId={wsId} />
             </div>
@@ -171,17 +149,13 @@ function WorkspaceLayout() {
         )}
 
         {/* Column 3: Content */}
-        <main className="flex-1 flex flex-col min-w-0 pb-14 lg:pb-0 isolate overflow-hidden">
-          {/* Mobile: toggle list panel button */}
-          <div className="flex items-center h-11 px-3 border-b border-outline-variant/20 bg-surface-container-lowest lg:hidden">
-            <Button variant="ghost" size="sm" onClick={() => setShowMobileList(true)} aria-label="Mở danh sách">
-              <PanelLeft size={18} />
-              <span>Menu</span>
-            </Button>
+        <main className="flex-1 flex flex-col min-w-0 pb-tabbar lg:pb-0 isolate overflow-hidden">
+          <MobileTopBar scope={screenEl} />
+          <div ref={setScreenEl} className="flex-1 flex flex-col min-h-0 min-w-0">
+            <ErrorBoundary moduleName="workspace-content">
+              <Outlet />
+            </ErrorBoundary>
           </div>
-          <ErrorBoundary moduleName="workspace-content">
-            <Outlet />
-          </ErrorBoundary>
         </main>
       </div>
 

@@ -188,6 +188,19 @@ export function useTrashItem(wsId: string) {
   })
 }
 
+/**
+ * Delete an item for good. A folder that still holds text documents is refused
+ * by the server (409, reason `folder_has_documents`); the shared handler turns
+ * that into a sentence saying what to do, and nothing is removed from the view.
+ */
+export function useDeleteItemPermanently(wsId: string) {
+  return useMutation({
+    meta: { action: 'xoá thư mục' },
+    mutationFn: (itemId: string) => driveApi.deleteItem(itemId),
+    onSuccess: (_d, itemId) => invalidateItem(wsId, itemId),
+  })
+}
+
 /** Bring a trashed item back (the Undo of a delete). */
 export function useRestoreItem(wsId: string) {
   return useMutation({

@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { queryClient } from '../lib/query-client'
 import { driveApi, type DriveListing } from '../api/drive'
 import { keys } from './keys'
-import { useMoveItem, useRenameItem, useRestoreItem, useTrashItem } from './useDrive'
+import { ApiError } from '../api/client'
+import { useToastStore } from '../components/primitives'
+import { useDeleteItemPermanently, useMoveItem, useRenameItem, useRestoreItem, useTrashItem } from './useDrive'
 
 const wrapper = ({ children }: { children: ReactNode }) => (
   <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -67,5 +69,34 @@ describe('drive mutations refresh every place the item shows', () => {
     await waitFor(() =>
       expect(queryClient.getQueryData<DriveListing>(keys.drive.sharedWithMe())?.items?.map((i) => i.id)).toEqual([ITEM, 'other']),
     )
+  })
+})
+
+describe('permanent delete of a folder that holds text documents', () => {
+  it('says what to do, and leaves the view as it was', async () => {
+    useToastStore.getState().clear()
+    const listing: DriveListing = { items: [{ id: ITEM } as never] }
+    queryClient.setQueryData(keys.drive.sharedWithMe(), listing)
+    vi.spyOn(driveApi, 'deleteItem').mockRejectedValue(
+      new ApiError('conflict', 409, { error: 'x', reason: 'folder_has_documents' }),
+    )
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { result } = renderHook(() => useDeleteItemPermanently(WS), { wrapper })
+
+    await act(async () => { await result.current.mutateAsync(ITEM).catch(() => undefined) })
+
+    const messages = useToastStore.getState().toasts.map((t) => t.message)
+    expect(messages).toEqual([expect.stringContaining('trong thư mục còn văn bản')])
+    expect(messages[0]).not.toContain('người khác thay đổi')
+    expect(queryClient.getQueryData<DriveListing>(keys.drive.sharedWithMe())?.items?.map((i) => i.id)).toEqual([ITEM])
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('refreshes the listings when the delete goes through', async () => {
+    vi.spyOn(driveApi, 'deleteItem').mockResolvedValue({} as never)
+    const spy = vi.spyOn(queryClient, 'invalidateQueries')
+    const { result } = renderHook(() => useDeleteItemPermanently(WS), { wrapper })
+    await act(() => result.current.mutateAsync(ITEM))
+    expectRefreshes(spy)
   })
 })

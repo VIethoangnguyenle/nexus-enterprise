@@ -388,12 +388,81 @@ html.reduce .skel { animation: none; }
 .phone .ph-head { display: flex; align-items: center; gap: 10px; padding: 16px 16px 8px; }
 .phone .ph-head h3 { font-size: 1.0625rem; font-weight: 700; display: flex; gap: 4px; align-items: center; }
 .phone .stream { padding: 8px 6px; }
-.tabbar { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--color-raised); padding: 6px 4px 14px; }
-.tabbar a { display: grid; justify-items: center; gap: 2px; font-size: 0.6875rem; font-weight: 500; color: var(--color-ink-muted); text-decoration: none; padding: 6px 0; min-height: 44px; position: relative; }
+.topbar { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 8px 0 16px; background: var(--color-base); }
+.topbar .brand { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-ink-muted); font-size: 1rem; }
+.topbar .brand b { font: 700 1rem/1 var(--font-display); color: var(--color-ink); }
+.topbar .ibtn { width: 44px; height: 44px; }
+.phone { grid-template-rows: auto auto 1fr auto; }
+.tabbar { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--color-raised); padding: 4px 4px 14px; position: relative; z-index: 20; } /* 56 = 48 tab + 4 + 4; 14 mô phỏng safe-area-inset-bottom */
+.tabbar a { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 48px; font-size: 0.6875rem; line-height: 1rem; font-weight: 500; color: var(--color-ink-muted); text-decoration: none; position: relative; }
+.tabbar a .ic { position: relative; display: grid; place-items: center; width: 48px; height: 24px; border-radius: 10px; }
+.tabbar a .ic svg.i { width: 20px; height: 20px; }
 .tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 600; }
-.tabbar a .pill { position: absolute; top: 2px; left: calc(50% + 6px); }
-.sheetp { position: absolute; left: 0; right: 0; bottom: 0; background: var(--color-overlay); border-radius: 20px 20px 0 0; box-shadow: var(--shadow-overlay); padding: 8px 16px 20px; display: grid; gap: 14px; }
+.tabbar a[aria-current="page"] .ic { background: var(--color-accent-wash); }
+.tabbar a .pill.count { position: absolute; top: -6px; right: 2px; box-shadow: 0 0 0 2px var(--color-raised); }
+.sheetp { z-index: 40; position: absolute; left: 0; right: 0; bottom: 0; background: var(--color-overlay); border-radius: 12px 12px 0 0; box-shadow: var(--shadow-overlay); padding: 8px 16px 20px; display: grid; gap: 14px; }
 .sheetp .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-line); justify-self: center; }
+
+/* Thêm: sheet đáy (DESIGN.md §5 Điều hướng di động) */
+.phone .scrimp { position: absolute; inset: 0; background: var(--color-scrim); z-index: 30; }
+.phone .layer { position: absolute; inset: 0; z-index: 30; }
+.phone .layer[hidden] { display: none; }
+.sheetm { position: absolute; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--color-overlay); border-radius: 12px 12px 0 0; box-shadow: var(--shadow-overlay); padding: 0 16px 20px; max-height: 85%; overflow: auto; display: grid; gap: 4px; align-content: start; }
+.sheetm .sh-top { height: 40px; display: grid; grid-template-columns: 32px 1fr 32px; align-items: center; margin-top: 4px; }
+.sheetm .sh-top .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-line); justify-self: center; grid-column: 2; }
+.sheetm .sh-top .ibtn:last-child { grid-column: 3; }
+.sheetm .sh-top h4 { grid-column: 2; justify-self: center; font: 700 1.0625rem/1.3 var(--font-display); }
+.ws-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 64px; padding: 12px; border: 0; border-radius: 10px; background: var(--color-raised); color: inherit; font: inherit; text-align: left; width: 100%; cursor: pointer; }
+.ws-row:hover { background: var(--color-hover); }
+.ws-logo { width: 40px; height: 40px; border-radius: 10px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 1.0625rem/1 var(--font-display); }
+.ws-row .t { display: grid; gap: 2px; min-width: 0; }
+.ws-row .t b { font: 700 1rem/1.3 var(--font-display); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-row .t .p { display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; color: var(--color-ink-muted); min-width: 0; }
+.ws-row .t .p span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-list { display: grid; gap: 2px; padding-top: 8px; }
+.sh-list a { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 12px; border-radius: 10px; color: var(--color-ink); text-decoration: none; font-weight: 500; }
+.sh-list a:hover { background: var(--color-hover); }
+.sh-list a[aria-current="page"] { background: var(--color-raised); font-weight: 600; }
+.sh-list a svg.i { color: var(--color-ink-muted); }
+.sh-sep { height: 1px; background: var(--color-line); margin: 4px 0; }
+.ws-list { display: grid; gap: 2px; padding-top: 4px; list-style: none; margin: 0; }
+.ws-list a { display: grid; grid-template-columns: 40px minmax(0, 1fr) 20px; gap: 12px; align-items: center; min-height: 56px; padding: 8px 12px; border-radius: 10px; color: var(--color-ink); text-decoration: none; }
+.ws-list a:hover { background: var(--color-hover); }
+.ws-list a[aria-selected="true"] { background: var(--color-raised); }
+.ws-list b { display: block; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-list small { display: block; font-size: 0.75rem; color: var(--color-ink-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ws-list .tick { color: var(--color-accent); }
+.phone .cap { position: absolute; }
+.cap-line { width: min(360px, calc(100% - 16px)); margin: 0 8px; font-size: 0.8125rem; color: var(--color-ink-muted); }
+.cap-line b { color: var(--color-ink); font-weight: 600; }
+.pcol { display: grid; gap: 12px; align-content: start; width: 376px; max-width: 100%; }
+.sub { font-size: 1.0625rem; font-weight: 700; margin-top: 8px; }
+.phone.dark {
+  --color-sunk: oklch(15.5% 0.012 200); --color-base: oklch(18% 0.014 200); --color-raised: oklch(22.5% 0.016 200);
+  --color-overlay: oklch(26% 0.018 200); --color-hover: oklch(25% 0.016 200); --color-scrim: oklch(8% 0.01 200 / 0.6);
+  --color-ink: oklch(94% 0.008 190); --color-ink-muted: oklch(73% 0.016 195); --color-ink-subtle: oklch(58% 0.014 200);
+  --color-line: oklch(30% 0.014 200);
+  --color-accent: oklch(76% 0.11 178); --color-accent-hover: oklch(81% 0.1 178); --color-accent-wash: oklch(29% 0.05 180);
+  --color-on-accent: oklch(18% 0.014 200); --color-focus: oklch(78% 0.12 178);
+  --color-success: oklch(76% 0.12 150); --color-success-wash: oklch(28% 0.05 150);
+  --color-warning: oklch(80% 0.12 70);  --color-warning-wash: oklch(29% 0.05 70);
+  --color-danger: oklch(72% 0.15 25);   --color-danger-wash: oklch(29% 0.06 25);
+  --color-info: oklch(76% 0.1 240);     --color-info-wash: oklch(29% 0.05 240);
+  --color-person-1-wash: oklch(30% 0.06 45); --color-person-2-wash: oklch(30% 0.05 95);
+  --color-person-3-wash: oklch(30% 0.05 140); --color-person-4-wash: oklch(30% 0.045 205);
+  --color-person-5-wash: oklch(30% 0.06 245); --color-person-6-wash: oklch(30% 0.06 285);
+  --color-person-7-wash: oklch(30% 0.06 325); --color-person-8-wash: oklch(30% 0.06 355);
+  --shadow-overlay: 0 1px 2px oklch(5% 0.01 200 / 0.4), 0 8px 24px oklch(5% 0.01 200 / 0.45), 0 24px 48px oklch(5% 0.01 200 / 0.35);
+    color-scheme: dark; color: var(--color-ink); }
+@keyframes sheet-in { from { transform: translateY(100%); } }
+@keyframes sheet-out { to { transform: translateY(100%); } }
+.layer.enter .scrimp { animation: fade var(--duration-base) var(--ease-out) both; }
+.layer.enter .sheetm { animation: sheet-in var(--duration-layout) var(--ease-out-expo) both; }
+.layer.exit .scrimp { animation: scrim-out 210ms var(--ease-in) both; }
+.layer.exit .sheetm { animation: sheet-out 210ms var(--ease-in) both; }
+.sheetm .swap.enter { animation: fade var(--duration-quick) var(--ease-out) both; }
+html.reduce .layer.enter .sheetm, html.reduce .layer.enter .scrimp { animation-name: fade; animation-duration: 120ms; }
+@media (prefers-reduced-motion: reduce) { .layer.enter .sheetm, .layer.enter .scrimp { animation-name: fade; animation-duration: 120ms; } }
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -425,6 +494,8 @@ html.reduce .skel { animation: none; }
   <symbol id="i-panel" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/></symbol>
   <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+<symbol id="i-tick" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
 </svg>
 
 <div class="page">
@@ -762,37 +833,39 @@ html.reduce .skel { animation: none; }
 <section class="screen" id="mobile" aria-labelledby="h-mobile">
   <div class="screen-head">
     <h2 id="h-mobile">5 · Di động</h2>
-    <p>Dưới 768px: tab bar đáy 5 mục, mỗi màn một cột, chi tiết thành sheet kéo từ dưới lên.</p>
+    <p>Dưới 1024px (rail 64px của 768–1023 chưa làm): thanh trên “Nexus · workspace” + tìm kiếm, thanh đáy 3 tab có nhãn (Tin nhắn, Tài liệu, Phê duyệt kèm số chờ) + Thêm mở sheet đáy (Tài sản, Danh bạ, Quản trị, Cài đặt, đổi workspace, Đăng xuất). Mỗi màn một cột, chi tiết thành sheet kéo từ dưới lên. Không còn avatar nổi.</p>
   </div>
+  <h3 class="sub">Sáng</h3>
   <div class="phones">
-    <div class="phone" aria-label="Kênh trên điện thoại">
-      <div class="ph-head"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><div><h3><svg class="i s muted"><use href="#i-hash"/></svg>doi-soat-giao-dich</h3><div class="muted" style="font-size:0.75rem">3 người đang xem</div></div><button class="ibtn" type="button" aria-label="Thêm" style="margin-left:auto"><svg class="i"><use href="#i-more"/></svg></button></div>
+    <div class="pcol"><div class="phone" id="ph-demo" aria-label="Tin nhắn có thanh đáy">
+      <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i"><use href="#i-search"/></svg></button></div>
+      <div class="ph-head"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><div><h3><svg class="i s muted"><use href="#i-hash"/></svg>doi-soat-giao-dich</h3><div class="muted" style="font-size:0.75rem">3 người đang xem</div></div></div>
       <div class="stream">
         <div class="msg"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>09:12</time></div><p class="txt">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch.</p><div class="file"><span class="fi"><svg class="i"><use href="#i-sheet"/></svg></span><span><b>doi-soat-08-10.xlsx</b><small class="tnum">412 KB</small></span></div></div></div>
         <div class="msg"><span class="av" style="--p:var(--color-person-6)">TL</span><div><div class="who"><b>Nguyễn Thu Lan</b><time>09:14</time></div><p class="txt">Tổng chênh lệch 1.284.500 ₫.</p></div></div>
         <div class="composer" style="margin:8px 4px 4px"><div class="ph">Nhắn tới #doi-soat-giao-dich</div></div>
       </div>
-      <nav class="tabbar" aria-label="Điều hướng di động">
-        <a href="#mobile" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count">4</span></a>
-        <a href="#mobile"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a>
-        <a href="#mobile"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count">2</span></a>
-        <a href="#mobile"><svg class="i"><use href="#i-box"/></svg>Tài sản</a>
-        <a href="#mobile"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a>
-      </nav>
-    </div>
-    <div class="phone" aria-label="Duyệt trên điện thoại">
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count" aria-label="2 chờ bạn">2</span></span>Phê duyệt</a><a href="#mobile" data-act="more-open"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+      <div class="layer" id="more-layer" hidden><div class="scrimp" data-act="more-close" aria-hidden="true"></div><div class="sheetm" role="dialog" aria-modal="true" aria-label="Thêm">
+        <div class="sh-top"><span class="grab"></span><button class="ibtn" type="button" aria-label="Đóng Thêm" data-act="more-close"><svg class="i"><use href="#i-x"/></svg></button></div>
+        <button class="ws-row" type="button" aria-label="Đổi workspace, đang ở Khối Vận hành"><span class="ws-logo" aria-hidden="true">K</span><span class="t"><b>Khối Vận hành</b><span class="p"><span class="av s20" style="--p:var(--color-person-7)">TH</span><span>Lê Thị Hoa · Kế toán trưởng</span></span></span><svg class="i muted"><use href="#i-right"/></svg></button>
+        <nav class="sh-list" aria-label="Thêm">
+          <a href="#mobile"><svg class="i"><use href="#i-box"/></svg>Tài sản</a>
+          <a href="#mobile"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a>
+          <a href="#mobile"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a>
+          <a href="#mobile"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a>
+          <div class="sh-sep" role="separator"></div>
+          <a href="#mobile"><svg class="i"><use href="#i-logout"/></svg>Đăng xuất</a>
+        </nav>
+      </div></div>
+    </div><p class="cap-line"><b>Thanh đáy, đang ở Tin nhắn.</b> Chạm Thêm để mở sheet (demo chạy thật; Esc hoặc chạm nền để đóng).</p></div><div class="pcol"><div class="phone" aria-label="Phê duyệt trên điện thoại">
+      <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span></div>
       <div class="ph-head"><div><h3>Phê duyệt</h3><div class="muted" style="font-size:0.75rem">2 đề nghị chờ bạn</div></div></div>
       <div class="tbl" style="padding:0 12px">
         <div class="tr" style="grid-template-columns:1fr auto;min-height:56px"><span style="display:grid;gap:2px;min-width:0"><b style="font-weight:600">Tạm ứng công tác phí tháng 10</b><span class="muted tnum" style="font-size:0.75rem">Phạm Hải Yến · 12.450.000 ₫</span></span><span class="pill wait">Chờ bạn</span></div>
         <div class="tr" style="grid-template-columns:1fr auto;min-height:56px"><span style="display:grid;gap:2px;min-width:0"><b style="font-weight:600">Mua 4 màn hình cho tổ đối soát</b><span class="muted tnum" style="font-size:0.75rem">Lê Quang Vinh · 18.960.000 ₫</span></span><span class="pill wait">Chờ bạn</span></div>
       </div>
-      <nav class="tabbar" aria-label="Điều hướng di động">
-        <a href="#mobile"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count">4</span></a>
-        <a href="#mobile"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a>
-        <a href="#mobile" aria-current="page"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count">2</span></a>
-        <a href="#mobile"><svg class="i"><use href="#i-box"/></svg>Tài sản</a>
-        <a href="#mobile"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a>
-      </nav>
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile" aria-current="page"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count" aria-label="2 chờ bạn">2</span></span>Phê duyệt</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
       <div class="sheetp" aria-label="Chi tiết đề nghị">
         <span class="grab"></span>
         <div style="display:grid;gap:4px"><span class="label">Tạm ứng</span><b style="font:700 1.0625rem/1.3 var(--font-display)">Tạm ứng công tác phí tháng 10</b></div>
@@ -803,8 +876,109 @@ html.reduce .skel { animation: none; }
         </ol>
         <div class="actions"><button class="btn primary" type="button" style="flex:1;height:44px">Duyệt</button><button class="btn" type="button" style="flex:1;height:44px">Trả lại</button></div>
       </div>
-    </div>
+    </div><p class="cap-line"><b>Phê duyệt có số chờ.</b> Badge 18px ở góc icon, chỉ tab này có số; sheet chi tiết nằm dưới thanh đáy trong mockup, trong app nó phủ lên.</p></div><div class="pcol"><div class="phone" aria-label="Sheet Thêm">
+      <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i"><use href="#i-search"/></svg></button></div>
+      <div class="ph-head"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><div><h3><svg class="i s muted"><use href="#i-hash"/></svg>doi-soat-giao-dich</h3><div class="muted" style="font-size:0.75rem">3 người đang xem</div></div></div>
+      <div class="stream">
+        <div class="msg"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>09:12</time></div><p class="txt">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch.</p><div class="file"><span class="fi"><svg class="i"><use href="#i-sheet"/></svg></span><span><b>doi-soat-08-10.xlsx</b><small class="tnum">412 KB</small></span></div></div></div>
+        <div class="msg"><span class="av" style="--p:var(--color-person-6)">TL</span><div><div class="who"><b>Nguyễn Thu Lan</b><time>09:14</time></div><p class="txt">Tổng chênh lệch 1.284.500 ₫.</p></div></div>
+        <div class="composer" style="margin:8px 4px 4px"><div class="ph">Nhắn tới #doi-soat-giao-dich</div></div>
+      </div>
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count" aria-label="2 chờ bạn">2</span></span>Phê duyệt</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+      <div class="layer"><div class="scrimp" aria-hidden="true"></div><div class="sheetm" role="dialog" aria-modal="true" aria-label="Thêm">
+        <div class="sh-top"><span class="grab"></span><button class="ibtn" type="button" aria-label="Đóng Thêm"><svg class="i"><use href="#i-x"/></svg></button></div>
+        <button class="ws-row" type="button" aria-label="Đổi workspace, đang ở Khối Vận hành"><span class="ws-logo" aria-hidden="true">K</span><span class="t"><b>Khối Vận hành</b><span class="p"><span class="av s20" style="--p:var(--color-person-7)">TH</span><span>Lê Thị Hoa · Kế toán trưởng</span></span></span><svg class="i muted"><use href="#i-right"/></svg></button>
+        <nav class="sh-list" aria-label="Thêm">
+          <a href="#mobile"><svg class="i"><use href="#i-box"/></svg>Tài sản</a>
+          <a href="#mobile"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a>
+          <a href="#mobile"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a>
+          <a href="#mobile"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a>
+          <div class="sh-sep" role="separator"></div>
+          <a href="#mobile"><svg class="i"><use href="#i-logout"/></svg>Đăng xuất</a>
+        </nav>
+      </div></div>
+    </div><p class="cap-line"><b>Thêm đang mở.</b> Hàng workspace + người, bốn mục, divider, Đăng xuất. Nền sau là scrim; thanh đáy bị sheet che.</p></div><div class="pcol"><div class="phone" aria-label="Đổi workspace trong sheet">
+      <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i"><use href="#i-search"/></svg></button></div>
+      <div class="ph-head"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><div><h3><svg class="i s muted"><use href="#i-hash"/></svg>doi-soat-giao-dich</h3><div class="muted" style="font-size:0.75rem">3 người đang xem</div></div></div>
+      <div class="stream">
+        <div class="msg"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>09:12</time></div><p class="txt">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch.</p><div class="file"><span class="fi"><svg class="i"><use href="#i-sheet"/></svg></span><span><b>doi-soat-08-10.xlsx</b><small class="tnum">412 KB</small></span></div></div></div>
+        <div class="msg"><span class="av" style="--p:var(--color-person-6)">TL</span><div><div class="who"><b>Nguyễn Thu Lan</b><time>09:14</time></div><p class="txt">Tổng chênh lệch 1.284.500 ₫.</p></div></div>
+        <div class="composer" style="margin:8px 4px 4px"><div class="ph">Nhắn tới #doi-soat-giao-dich</div></div>
+      </div>
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count" aria-label="2 chờ bạn">2</span></span>Phê duyệt</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+      <div class="layer"><div class="scrimp" aria-hidden="true"></div><div class="sheetm" role="dialog" aria-modal="true" aria-label="Đổi workspace">
+        <div class="sh-top"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h4>Đổi workspace</h4><button class="ibtn" type="button" aria-label="Đóng Thêm"><svg class="i"><use href="#i-x"/></svg></button></div>
+        <ul class="ws-list" role="listbox" aria-label="Workspace của bạn">
+          <li><a href="#mobile" role="option" aria-selected="true"><span class="ws-logo" style="background:var(--color-accent)" aria-hidden="true">K</span><span><b>Khối Vận hành</b><small>novapay.vn · 64 thành viên · Quản trị viên</small></span><svg class="i tick"><use href="#i-tick"/></svg></a></li>
+          <li><a href="#mobile" role="option" aria-selected="false"><span class="ws-logo" style="background:var(--color-person-5);color:var(--color-on-person)" aria-hidden="true">N</span><span><b>NovaPay Kế toán</b><small>novapay.vn · 12 thành viên · Thành viên</small></span><span></span></a></li>
+          <li><a href="#mobile" role="option" aria-selected="false"><span class="ws-logo" style="background:var(--color-person-3);color:var(--color-on-person)" aria-hidden="true">S</span><span><b>Hợp tác xã Sen Việt</b><small>8 thành viên · Thành viên</small></span><span></span></a></li>
+          <li><a href="#mobile" role="option" aria-selected="false"><span class="ws-logo" style="background:var(--color-person-7);color:var(--color-on-person)" aria-hidden="true">K</span><span><b>Không gian của bạn</b><small>1 thành viên · Chủ sở hữu</small></span><span></span></a></li>
+        </ul>
+      </div></div>
+    </div><p class="cap-line"><b>Đổi workspace.</b> Chỉ workspace người đó vào được; dấu tích ở nơi đang mở. Chọn xong: gắn lại phiên, làm mới dữ liệu, đóng sheet.</p></div>
   </div>
+  <h3 class="sub">Tối</h3>
+  <div class="phones">
+    <div class="pcol"><div class="phone dark" aria-label="Tài sản, chế độ tối">
+      <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i"><use href="#i-search"/></svg></button></div>
+      <div class="ph-head"><div><h3>Tài sản</h3><div class="muted" style="font-size:0.75rem">12 thiết bị trong tổ đối soát</div></div></div>
+      <div class="tbl" style="padding:0 12px">
+        <div class="tr" style="grid-template-columns:1fr auto;min-height:56px"><span style="display:grid;gap:2px;min-width:0"><b style="font-weight:600">Màn hình Dell U2723QE</b><span class="muted" style="font-size:0.75rem">Trần Minh Đức</span></span><span class="pill ok">Đang dùng</span></div>
+        <div class="tr" style="grid-template-columns:1fr auto;min-height:56px"><span style="display:grid;gap:2px;min-width:0"><b style="font-weight:600">Laptop ThinkPad T14</b><span class="muted" style="font-size:0.75rem">Kho</span></span><span class="pill idle">Sẵn sàng</span></div>
+      </div>
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count" aria-label="2 chờ bạn">2</span></span>Phê duyệt</a><a href="#mobile" aria-current="page"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+    </div><p class="cap-line"><b>Tối: đang ở Tài sản</b>, nên Thêm sáng (Tài sản, Danh bạ, Quản trị, Cài đặt đều nằm trong Thêm).</p></div><div class="pcol"><div class="phone dark" aria-label="Sheet Thêm, chế độ tối">
+      <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i"><use href="#i-search"/></svg></button></div>
+      <div class="ph-head"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><div><h3><svg class="i s muted"><use href="#i-hash"/></svg>doi-soat-giao-dich</h3><div class="muted" style="font-size:0.75rem">3 người đang xem</div></div></div>
+      <div class="stream">
+        <div class="msg"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>09:12</time></div><p class="txt">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch.</p><div class="file"><span class="fi"><svg class="i"><use href="#i-sheet"/></svg></span><span><b>doi-soat-08-10.xlsx</b><small class="tnum">412 KB</small></span></div></div></div>
+        <div class="msg"><span class="av" style="--p:var(--color-person-6)">TL</span><div><div class="who"><b>Nguyễn Thu Lan</b><time>09:14</time></div><p class="txt">Tổng chênh lệch 1.284.500 ₫.</p></div></div>
+        <div class="composer" style="margin:8px 4px 4px"><div class="ph">Nhắn tới #doi-soat-giao-dich</div></div>
+      </div>
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count" aria-label="2 chờ bạn">2</span></span>Phê duyệt</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+      <div class="layer"><div class="scrimp" aria-hidden="true"></div><div class="sheetm" role="dialog" aria-modal="true" aria-label="Thêm">
+        <div class="sh-top"><span class="grab"></span><button class="ibtn" type="button" aria-label="Đóng Thêm"><svg class="i"><use href="#i-x"/></svg></button></div>
+        <button class="ws-row" type="button" aria-label="Đổi workspace, đang ở Khối Vận hành"><span class="ws-logo" aria-hidden="true">K</span><span class="t"><b>Khối Vận hành</b><span class="p"><span class="av s20" style="--p:var(--color-person-7)">TH</span><span>Lê Thị Hoa · Kế toán trưởng</span></span></span><svg class="i muted"><use href="#i-right"/></svg></button>
+        <nav class="sh-list" aria-label="Thêm">
+          <a href="#mobile"><svg class="i"><use href="#i-box"/></svg>Tài sản</a>
+          <a href="#mobile"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a>
+          <a href="#mobile"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a>
+          <a href="#mobile"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a>
+          <div class="sh-sep" role="separator"></div>
+          <a href="#mobile"><svg class="i"><use href="#i-logout"/></svg>Đăng xuất</a>
+        </nav>
+      </div></div>
+    </div><p class="cap-line"><b>Tối: Thêm đang mở.</b> Scrim và overlay lấy token tối; ô workspace dùng accent tối.</p></div><div class="pcol"><div class="phone dark" aria-label="Đổi workspace, chế độ tối">
+      <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i"><use href="#i-search"/></svg></button></div>
+      <div class="ph-head"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><div><h3><svg class="i s muted"><use href="#i-hash"/></svg>doi-soat-giao-dich</h3><div class="muted" style="font-size:0.75rem">3 người đang xem</div></div></div>
+      <div class="stream">
+        <div class="msg"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>09:12</time></div><p class="txt">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch.</p><div class="file"><span class="fi"><svg class="i"><use href="#i-sheet"/></svg></span><span><b>doi-soat-08-10.xlsx</b><small class="tnum">412 KB</small></span></div></div></div>
+        <div class="msg"><span class="av" style="--p:var(--color-person-6)">TL</span><div><div class="who"><b>Nguyễn Thu Lan</b><time>09:14</time></div><p class="txt">Tổng chênh lệch 1.284.500 ₫.</p></div></div>
+        <div class="composer" style="margin:8px 4px 4px"><div class="ph">Nhắn tới #doi-soat-giao-dich</div></div>
+      </div>
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count" aria-label="2 chờ bạn">2</span></span>Phê duyệt</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+      <div class="layer"><div class="scrimp" aria-hidden="true"></div><div class="sheetm" role="dialog" aria-modal="true" aria-label="Đổi workspace">
+        <div class="sh-top"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h4>Đổi workspace</h4><button class="ibtn" type="button" aria-label="Đóng Thêm"><svg class="i"><use href="#i-x"/></svg></button></div>
+        <ul class="ws-list" role="listbox" aria-label="Workspace của bạn">
+          <li><a href="#mobile" role="option" aria-selected="true"><span class="ws-logo" style="background:var(--color-accent)" aria-hidden="true">K</span><span><b>Khối Vận hành</b><small>novapay.vn · 64 thành viên · Quản trị viên</small></span><svg class="i tick"><use href="#i-tick"/></svg></a></li>
+          <li><a href="#mobile" role="option" aria-selected="false"><span class="ws-logo" style="background:var(--color-person-5);color:var(--color-on-person)" aria-hidden="true">N</span><span><b>NovaPay Kế toán</b><small>novapay.vn · 12 thành viên · Thành viên</small></span><span></span></a></li>
+          <li><a href="#mobile" role="option" aria-selected="false"><span class="ws-logo" style="background:var(--color-person-3);color:var(--color-on-person)" aria-hidden="true">S</span><span><b>Hợp tác xã Sen Việt</b><small>8 thành viên · Thành viên</small></span><span></span></a></li>
+          <li><a href="#mobile" role="option" aria-selected="false"><span class="ws-logo" style="background:var(--color-person-7);color:var(--color-on-person)" aria-hidden="true">K</span><span><b>Không gian của bạn</b><small>1 thành viên · Chủ sở hữu</small></span><span></span></a></li>
+        </ul>
+      </div></div>
+    </div><p class="cap-line"><b>Tối: đổi workspace.</b></p></div>
+  </div>
+  <ol class="notes">
+    <li><b>Toast:</b> nổi cách thanh đáy 16px + safe-area.</li>
+    <li><b>Thanh đáy:</b> nền <code>--color-raised</code>, không viền; tab cao 48, đệm 4 trên và dưới (tổng 56) + <code>env(safe-area-inset-bottom)</code> (mockup mô phỏng 10px). Vùng chạm là cả ô, rộng 90px, cao 48.</li>
+    <li><b>Ít icon:</b> chỉ 4 icon 20px trên cả thanh. Nhãn 11px/500 luôn hiện; đang chọn 600 + <code>--color-accent</code>, icon nằm trong nền <code>--color-accent-wash</code> 48×24 radius 10.</li>
+    <li><b>Số chờ:</b> chỉ Phê duyệt; <code>99+</code> khi quá 99; ẩn khi 0; đọc thành “Phê duyệt, 2 chờ bạn”.</li>
+    <li><b>Sheet Thêm:</b> <code>--color-overlay</code>, radius 12 hai góc trên, <code>--shadow-overlay</code>, cao tối đa 85%. Scrim <code>--z-backdrop</code>, sheet <code>--z-modal</code>.</li>
+    <li><b>Chuyển động (§7):</b> scrim fade 220ms; sheet <code>translateY(100%)</code> → 0 trong 280ms expo; ra 210ms ease-in; đổi menu ⇄ danh sách workspace fade 160ms. Giảm chuyển động: chỉ fade 120ms.</li>
+    <li><b>Đóng:</b> Esc, chạm scrim, nút Đóng, hoặc kéo tay nắm xuống quá 25% chiều cao (hay vuốt nhanh). Chọn một mục điều hướng cũng đóng. Focus vào hàng đầu khi mở, trả về nút Thêm khi đóng.</li>
+    <li><b>Thanh trên:</b> “Nexus · tên workspace” bên trái, nút tìm kiếm 44×44 bên phải khi màn có tìm kiếm riêng (kênh, Tài sản, Tài liệu, Danh bạ, Người dùng); Phê duyệt, Trang chủ và Cài đặt không có nút. Tiêu đề màn nằm ngay dưới. Không có nút Menu: danh sách trò chuyện là Trang chủ.</li>
+    <li><b>Không còn avatar nổi:</b> người dùng, đổi workspace và đăng xuất đều ở trong Thêm; không màn nào cần chừa chỗ góc dưới trái.</li>
+  </ol>
 </section>
 </div>
 
@@ -957,6 +1131,19 @@ html.reduce .skel { animation: none; }
         toast(document.getElementById('appr-toasts'), '<span class="av s24" style="--p:var(--color-person-1)">QV</span><span><b>Lê Quang Vinh</b> đã rút “Mua 4 màn hình cho tổ đối soát”</span>', 4000);
       });
     },
+    'more-open': function () {
+      var l = document.getElementById('more-layer'); if (!l.hidden) return;
+      l.hidden = false; replay(l, 'enter');
+      var f = l.querySelector('.ws-row'); if (f) f.focus();
+    },
+    'more-close': function () {
+      var l = document.getElementById('more-layer'); if (!l || l.hidden) return;
+      l.classList.remove('enter'); l.classList.add('exit');
+      setTimeout(function () {
+        l.classList.remove('exit'); l.hidden = true;
+        var t = document.querySelector('#ph-demo .tabbar a[data-act=more-open]'); if (t) t.focus();
+      }, reduced() ? 0 : 220);
+    },
     'toast-demo': function () {
       toast(document.getElementById('state-toasts'), ICON_OK + '<span>Đã tải lên 2 tệp</span><button class="btn ghost sm" type="button">Xem</button>', 3000);
     }
@@ -967,6 +1154,8 @@ html.reduce .skel { animation: none; }
   });
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && !document.getElementById('appr-modal').hidden) actions['appr-cancel']();
+    var ml = document.getElementById('more-layer');
+    if (e.key === 'Escape' && ml && !ml.hidden) actions['more-close']();
   });
 })();
 </script>

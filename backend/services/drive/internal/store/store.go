@@ -351,9 +351,34 @@ func (s *Store) RestoreChildren(ctx context.Context, parentID string) error {
 	return err
 }
 
-// DeleteItem permanently removes a drive item.
+// ErrFolderHasDocuments is returned when a delete would remove a folder (or one
+// beneath it) that still holds text documents. text_documents.folder_id is
+// ON DELETE RESTRICT: the writing in it is never destroyed as a side effect.
+var ErrFolderHasDocuments = errors.New("folder holds text documents")
+
+// CountTextDocumentsUnder counts the text documents in a folder and in every
+// folder beneath it, in any state.
+func (s *Store) CountTextDocumentsUnder(ctx context.Context, folderID string) (int, error) {
+	var n int
+	err := s.db.QueryRow(ctx,
+		`WITH RECURSIVE tree AS (
+			SELECT id FROM drive_items WHERE id = $1
+			UNION ALL
+			SELECT di.id FROM drive_items di JOIN tree t ON di.parent_id = t.id
+		)
+		SELECT count(*) FROM text_documents WHERE folder_id IN (SELECT id FROM tree)`, folderID).Scan(&n)
+	return n, err
+}
+
+// DeleteItem permanently removes a drive item. It returns ErrFolderHasDocuments
+// when the database refuses because text documents still hang on the folder or
+// one beneath it (a document saved after the caller last looked).
 func (s *Store) DeleteItem(ctx context.Context, id string) error {
 	_, err := s.db.Exec(ctx, `DELETE FROM drive_items WHERE id = $1`, id)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "text_documents_folder_id_fkey" {
+		return ErrFolderHasDocuments
+	}
 	return err
 }
 

@@ -63,7 +63,7 @@ export function UserPanel({ workspaceId, member, roles, departments, isMe, onClo
       onClose={onClose}
       footer={
         !isMe && (
-          <div className="flex items-center gap-2 px-4 pt-2 pb-4 max-md:pl-16">
+          <div className="flex items-center gap-2 px-4 pt-2 pb-4">
             <Button variant="ghost" size="sm" className="text-danger" onClick={() => setConfirming(true)}>
               <Trash2 size={16} strokeWidth={1.75} aria-hidden="true" />
               Xoá khỏi workspace

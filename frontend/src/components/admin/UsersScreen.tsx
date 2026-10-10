@@ -146,6 +146,7 @@ export function UsersScreen() {
           <div className="flex flex-wrap items-center gap-2 px-5 pt-3 pb-2">
             <SearchField
               label="Tìm theo tên hoặc email"
+              moduleSearch
               tone="sunk"
               className="w-full sm:w-64"
               value={query}

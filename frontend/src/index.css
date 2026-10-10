@@ -315,6 +315,15 @@ h1, h2, h3, h4 {
 @utility z-toast { z-index: var(--z-toast); }
 @utility z-tooltip { z-index: var(--z-tooltip); }
 
+/* Phone tab bar (DESIGN.md §5): 56px of bar plus the home-indicator inset. */
+@utility pb-tabbar { padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px)); }
+@utility bottom-tabbar { bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px)); }
+@utility pb-bar { padding-bottom: calc(0.25rem + env(safe-area-inset-bottom, 0px)); }
+@utility pb-sheet { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
+@utility bottom-above-bar { bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
+@utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+@utility max-h-sheet { max-height: 85dvh; }
+
 /* Field outlines drawn inside the box so focus never shifts layout (§6 Input). */
 @utility field-line { box-shadow: inset 0 0 0 1px var(--color-line); }
 @utility field-focus { box-shadow: inset 0 0 0 2px var(--color-focus); }

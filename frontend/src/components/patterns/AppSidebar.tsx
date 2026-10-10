@@ -4,6 +4,7 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useUiStore } from '../../stores/ui.store'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { usePeople } from '../../hooks/usePeople'
+import { useWorkspaceSwitcher } from '../../hooks/useSwitchWorkspace'
 import { usePreferences } from '../../hooks/usePreferences'
 import { logoutSession } from '../../api/client'
 import { workspaceDisplayName } from '../../lib/workspace'
@@ -51,7 +52,10 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
   const user = useAuthStore((s) => s.user)
   const activeModule = useUiStore((s) => s.activeModule)
   const setActiveModule = useUiStore((s) => s.setActiveModule)
-  const { workspaceId, workspaces } = useActiveWorkspace()
+  const { workspaceId } = useActiveWorkspace()
+  // Only workspaces the person can enter, and choosing one re-scopes the session.
+  const switcher = useWorkspaceSwitcher()
+  const workspaces = switcher.workspaces
   const people = usePeople(workspaceId)
   const { prefs } = usePreferences()
   // Rail: icons only, 64px (DESIGN.md §5); every label moves to the tooltip.
@@ -77,15 +81,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
     }
   }, [wsDropdownOpen])
 
-  const handleSwitchWorkspace = (wsId: string) => {
-    setWsDropdownOpen(false)
-    const url = new URL(window.location.href)
-    url.searchParams.set('ws', wsId)
-    // A folder belongs to one workspace; the new one opens at its root.
-    url.searchParams.delete('folder')
-    url.searchParams.delete('view')
-    window.location.href = url.toString()
-  }
+  const handleSwitchWorkspace = (wsId: string) => switcher.choose(wsId, () => setWsDropdownOpen(false))
 
   const matches = useMatches()
   const currentPath = matches[matches.length - 1]?.pathname || ''
@@ -188,9 +184,10 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
                 type="button"
                 role="option"
                 aria-selected={ws.id === workspaceId}
+                disabled={switcher.switchingId !== undefined}
                 onClick={() => handleSwitchWorkspace(ws.id)}
                 className="w-full flex items-center gap-2.5 h-9 px-2.5 rounded-md border-none bg-transparent
-                  cursor-pointer text-sm text-ink text-left focus-ring hover:bg-hover"
+                  cursor-pointer text-sm text-ink text-left focus-ring hover:bg-hover disabled:opacity-50"
               >
                 <span className="truncate flex-1">{workspaceDisplayName(ws.name)}</span>
                 {ws.id === workspaceId && <Check size={16} strokeWidth={1.75} className="text-accent shrink-0" />}

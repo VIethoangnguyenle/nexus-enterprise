@@ -1,14 +1,15 @@
-import { useId, useRef, useState, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { Link, useParams, useRouterState } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { ChevronDown, House, PenLine, Plus, UserPlus, Users } from 'lucide-react'
+import { ChevronDown, House, Plus } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useConversations } from '../../hooks/useConversations'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { useMotionPresets } from '../../lib/motion'
 import { formatCount } from '../../lib/format'
 import type { Conversation } from '../../lib/conversations'
-import { Button, IconButton, MenuItem, Popover, Pressable } from '../primitives'
+import { Button, IconButton, Pressable } from '../primitives'
+import { NewChatMenu } from './NewChatMenu'
 import { ConversationIcon } from './ConversationIcon'
 import { CreateSpaceDialog } from './CreateSpaceDialog'
 import { StartChatDialog } from './StartChatDialog'
@@ -27,8 +28,6 @@ export function ChatNavigator() {
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const onHome = /^\/channels\/?$/.test(pathname)
 
-  const newChatRef = useRef<HTMLButtonElement>(null)
-  const [menuOpen, setMenuOpen] = useState(false)
   const [dialog, setDialog] = useState<'space' | 'dm' | null>(null)
 
   const row = (c: Conversation) => (
@@ -43,33 +42,10 @@ export function ChatNavigator() {
   return (
     <nav aria-label="Trò chuyện" className="flex flex-col h-full min-h-0 bg-base">
       <div className="px-3 pt-4 pb-2">
-        <Pressable
-          ref={newChatRef}
-          aria-haspopup="menu"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen((o) => !o)}
+        <NewChatMenu
           className="press inline-flex items-center gap-2.5 h-11 pl-3.5 pr-4.5 rounded-xl bg-accent-wash
             text-section text-ink hover:bg-hover"
-        >
-          <PenLine size={18} strokeWidth={1.75} className="text-accent" aria-hidden="true" />
-          Trò chuyện mới
-        </Pressable>
-        <Popover
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          anchorRef={newChatRef}
-          role="menu"
-          label="Trò chuyện mới"
-        >
-          <MenuItem icon={<UserPlus size={16} strokeWidth={1.75} />} onClick={() => setDialog('dm')}>
-            Nhắn tin trực tiếp
-          </MenuItem>
-          {/* Whether you may create spaces is only known server-side (create_channel on the
-              workspace's channel area), so the item always shows and a 403 is explained. */}
-          <MenuItem icon={<Users size={16} strokeWidth={1.75} />} onClick={() => setDialog('space')}>
-            Tạo nhóm
-          </MenuItem>
-        </Popover>
+        />
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-4">

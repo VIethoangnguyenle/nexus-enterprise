@@ -401,6 +401,7 @@ export function DriveScreen() {
           {/* The list panel carries the search from lg up; below that it sits here. */}
           <SearchField
             label="Tìm tệp hoặc thư mục"
+            moduleSearch
             tone="sunk"
             value={query}
             onChange={(e) => setQuery(e.target.value)}

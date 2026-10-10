@@ -309,10 +309,13 @@ html.reduce .skel { animation: none; }
 .phone .ph-head { display: flex; align-items: center; gap: 10px; padding: 16px 16px 8px; }
 .phone .ph-head h3 { font-size: 1.0625rem; font-weight: 700; display: flex; gap: 4px; align-items: center; }
 .phone .stream { padding: 8px 6px; }
-.tabbar { display: grid; grid-template-columns: repeat(5, 1fr); background: var(--color-raised); padding: 6px 4px 14px; }
-.tabbar a { display: grid; justify-items: center; gap: 2px; font-size: 0.6875rem; font-weight: 500; color: var(--color-ink-muted); text-decoration: none; padding: 6px 0; min-height: 44px; position: relative; }
+.tabbar { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--color-raised); padding: 4px 4px 14px; position: relative; z-index: 20; } /* 56 = 48 tab + 4 + 4; 14 mô phỏng safe-area-inset-bottom */
+.tabbar a { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 48px; font-size: 0.6875rem; line-height: 1rem; font-weight: 500; color: var(--color-ink-muted); text-decoration: none; position: relative; }
+.tabbar a .ic { position: relative; display: grid; place-items: center; width: 48px; height: 24px; border-radius: 10px; }
+.tabbar a .ic svg.i { width: 20px; height: 20px; }
 .tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 600; }
-.tabbar a .pill { position: absolute; top: 2px; left: calc(50% + 6px); }
+.tabbar a[aria-current="page"] .ic { background: var(--color-accent-wash); }
+.tabbar a .pill.count { position: absolute; top: -6px; right: 2px; box-shadow: 0 0 0 2px var(--color-raised); }
 .sheetp { position: absolute; left: 0; right: 0; bottom: 0; background: var(--color-overlay); border-radius: 20px 20px 0 0; box-shadow: var(--shadow-overlay); padding: 8px 16px 20px; display: grid; gap: 14px; }
 .sheetp .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-line); justify-self: center; }
 
@@ -1067,7 +1070,7 @@ html.reduce .ovl.enter { animation-duration: 120ms; }
 <section class="screen" id="mobile" aria-labelledby="h-mobile">
   <div class="screen-head">
     <h2 id="h-mobile">8 · Di động (dưới 768)</h2>
-    <p>Tab bar đáy 5 mục; tab con của Tài sản thành nhóm nút cuộn ngang. Chi tiết là sheet từ dưới lên; tạo yêu cầu là màn đầy đủ.</p>
+    <p>Thanh đáy 3 tab + Thêm (Tài sản nằm trong Thêm); tab con của Tài sản thành nhóm nút cuộn ngang. Chi tiết là sheet từ dưới lên; tạo yêu cầu là màn đầy đủ.</p>
   </div>
   <div class="phones">
     <div class="phone" aria-label="Tổng quan tài sản trên điện thoại">
@@ -1083,7 +1086,7 @@ html.reduce .ovl.enter { animation-duration: 120ms; }
         <div class="panel"><div class="ph"><h4 style="font-size:1rem">Hoạt động gần đây</h4></div>
           <ol class="acts"><li><span class="av s24" style="--p:var(--color-person-5)">MĐ</span><p><b>Trần Minh Đức</b> đã thu hồi máy số 3<time>09:20</time></p></li><li><span class="av s24" style="--p:var(--color-person-2)">NB</span><p><b>Ngô Bảo</b> đã đưa máy in đi bảo trì<time>Hôm qua</time></p></li></ol></div>
       </div>
-      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count">4</span></a><a href="#"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count">2</span></a><a href="#" aria-current="page"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav>
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count" aria-label="2 chờ bạn">2</span></span>Phê duyệt</a><a href="#" aria-current="page"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
     </div>
     <div class="phone" aria-label="Chi tiết tài sản trên điện thoại">
       <div class="ph-head"><div><h3>Danh sách</h3></div></div>
@@ -1093,7 +1096,7 @@ html.reduce .ovl.enter { animation-duration: 120ms; }
           <a class="tr" href="#mobile" style="grid-template-columns:1fr auto;min-height:56px"><span class="sub2"><b style="font-weight:600" class="ell">Máy in HP LaserJet tầng 3</b><small>Dùng chung · Máy in</small></span><span class="pill ok">Sẵn sàng</span></a>
         </div>
       </div>
-      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count">4</span></a><a href="#"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count">2</span></a><a href="#" aria-current="page"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav>
+      <nav class="tabbar" aria-label="Điều hướng di động"><a href="#"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count" aria-label="2 chờ bạn">2</span></span>Phê duyệt</a><a href="#" aria-current="page"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
       <div class="sheetp" aria-label="Chi tiết tài sản" data-cx="1">
         <span class="grab"></span>
         <div style="display:grid;gap:4px"><span class="label">Laptop</span><b style="font:700 1.0625rem/1.3 var(--font-display)">MacBook Pro 14 inch, máy số 7</b></div>
