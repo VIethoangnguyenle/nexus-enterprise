@@ -49,6 +49,7 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .btn:hover { background: var(--color-line); }
 .btn:active { transform: scale(0.98); }
 .btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.danger { background: var(--color-danger); color: var(--color-on-accent); }
 .btn.primary:hover { background: var(--color-accent-hover); }
 .btn.ghost { background: transparent; } .btn.ghost:hover { background: var(--color-hover); }
 .btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
@@ -194,6 +195,14 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .txt { line-height: 1.55; width: fit-content; max-width: min(70ch, 85%); overflow-wrap: anywhere; margin-top: 2px; padding: 7px 12px; border-radius: 16px; background: var(--color-sunk); }
 .txt + .txt { margin-top: 4px; }
 .who + .txt { border-top-left-radius: 4px; }
+/* edit in place, edited label, deleted placeholder */
+.txt.editing { width: min(560px, 85%); max-width: min(560px, 85%); padding: 8px 10px; background: var(--color-raised) !important; box-shadow: inset 0 0 0 2px var(--color-accent); border-radius: 12px !important; display: grid; gap: 8px; }
+.txt .ed { outline: none; min-height: 24px; white-space: pre-wrap; }
+.txt .eda { display: flex; align-items: center; gap: 6px; }
+.txt .eda small { color: var(--color-ink-muted); font-size: 0.75rem; margin-right: auto; }
+.txt .edm { margin-left: 6px; font-size: 0.6875rem; color: var(--color-ink-muted); white-space: nowrap; }
+.txt.del { background: transparent !important; box-shadow: inset 0 0 0 1px var(--color-line); color: var(--color-ink-muted); font-style: italic; }
+.mc .why-del { font-size: 0.75rem; color: var(--color-ink-muted); margin-top: 2px; }
 .txt .q { display: grid; gap: 2px; margin: 1px -6px 6px; padding: 7px 10px 8px; border-radius: 10px; background: var(--color-raised); font-size: 0.8125rem; line-height: 1.45; }
 .txt .q .qa { display: flex; align-items: center; gap: 6px; font-weight: 600; }
 .txt .q .qa svg { width: 12px; height: 12px; color: var(--color-accent); }
@@ -207,7 +216,7 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .m.mine .who + .txt { border-top-left-radius: 16px; border-top-right-radius: 4px; }
 .m.mine .att { justify-items: end; }
 .m.mine .tsum { margin: 4px -8px 2px 0; }
-.m.mine .hact, .m.mine .menu { right: auto; left: 12px; }
+.m.mine .hact, .m.mine .menu { right: 52px; left: auto; }
 .txt strong { font-weight: 600; }
 .txt a { color: var(--color-accent); text-underline-offset: 2px; }
 .txt code { font: 0.8125rem/1.5 var(--font-mono); background: var(--color-base); padding: 1px 4px; border-radius: 4px; }
@@ -797,6 +806,10 @@ html.reduce .sk { animation: none; }
   <div class="demo"><span class="k">Demo</span>
     <button class="btn sm" type="button" data-act="dm-in">Lan nhắn tin mới</button>
     <button class="btn sm" type="button" data-act="dm-out">Bạn gửi một tin</button>
+    <button class="btn sm" type="button" data-act="demo-edit">Sửa tin cuối của bạn</button>
+    <button class="btn sm" type="button" data-act="demo-del">Xoá tin của bạn</button>
+    <button class="btn sm" type="button" data-act="dm-their-edit">Lan sửa tin</button>
+    <button class="btn sm" type="button" data-act="dm-their-del">Lan xoá tin</button>
   </div>
   <div class="scroll">
     <div class="app" id="app-dm">
@@ -868,7 +881,9 @@ html.reduce .sk { animation: none; }
     <li><b>Hai bên</b>: bạn bên phải (bong bóng <code>--color-accent-wash</code>, không avatar, không tên), người kia bên trái (bong bóng <code>--color-sunk</code>, avatar 32 và tên ở tin đầu cụm). Bong bóng co theo chữ, rộng tối đa 85% cột tin; góc phía người gửi của bong bóng đầu cụm vuông hơn (4px).</li>
     <li><b>Cụm tin</b>: cùng người trong 5 phút thì xếp sát nhau, chỉ tin đầu có giờ (và tên, avatar với người kia). Trỏ chuột vào tin sau thì giờ hiện ở lề ngoài.</li>
     <li><b>Trích dẫn</b> <span class="wave" style="margin:0">đợt 3</span>: khối nhỏ nằm trong bong bóng, có tên người được trích và tối đa 2 dòng; bấm vào cuộn tới tin gốc.</li>
-    <li>Ảnh, tệp, cảm xúc và tóm tắt thread nằm ngoài bong bóng, bám theo bên của tin. Hover actions của tin bạn mở ở góc trái.</li>
+    <li>Ảnh, tệp, cảm xúc và tóm tắt thread nằm ngoài bong bóng, bám theo bên của tin. Thanh hover actions của tin bạn nằm ngay trên góc phải bong bóng.</li>
+    <li><b>Sửa tin</b>: nút bút chì trên thanh hover (chỉ tin của bạn) hoặc Thêm → Sửa tin, hoặc phím ↑ khi ô soạn trống (sửa tin gần nhất của bạn). Bong bóng thành ô sửa tại chỗ: Enter lưu, Shift+Enter xuống dòng, Esc huỷ. Lưu xong có nhãn “đã sửa” trong bong bóng; người khác thấy chữ đổi tại chỗ (fade 160ms), không có thông báo mới. Xoá hết chữ rồi lưu thì hỏi xoá tin. Thẻ bình chọn, công việc… không sửa được, chỉ xoá.</li>
+    <li><b>Xoá tin</b>: Thêm → Xoá tin, có hộp xác nhận vì tin mất với mọi người và không hoàn tác. Tin của bạn: bạn xoá được. Tin người khác: chỉ quản lý nhóm, hộp xác nhận nói rõ tên người gửi, nhật ký nhóm ghi ai đã xoá. Tin không có thread thì biến mất (thu 220ms) ở mọi người; tin có thread thì còn khung “Tin nhắn đã bị xoá” để giữ thread.</li>
   </ol>
 </section>
 
@@ -885,6 +900,7 @@ html.reduce .sk { animation: none; }
     <button class="btn sm" type="button" data-act="jump">Bấm nút nổi</button>
     <button class="btn sm" type="button" data-act="thread-close">Đóng/mở panel thread</button>
     <button class="btn sm" type="button" data-act="more-menu">Mở menu Thêm của tin</button>
+    <button class="btn sm" type="button" data-act="demo-del-thread">Xoá tin có thread</button>
     <button class="btn sm" type="button" data-act="rail-toggle" data-app="app-space">Thu gọn/mở menu chính</button>
   </div>
   <div class="scroll">
@@ -956,10 +972,10 @@ html.reduce .sk { animation: none; }
                 <button type="button" role="menuitem" data-act="menu-follow" data-thread="c"><svg class="i s"><use href="#i-bell-ring"/></svg><span>Theo dõi thread</span></button>
                 <button type="button" role="menuitem"><svg class="i s"><use href="#i-copy"/></svg>Sao chép văn bản</button>
                 <hr>
-                <button type="button" role="menuitem"><svg class="i s"><use href="#i-quote"/></svg>Trích dẫn khi trả lời<span class="wave">đợt 3</span></button>
-                <button type="button" role="menuitem"><svg class="i s"><use href="#i-mail-dot"/></svg>Đánh dấu chưa đọc<span class="wave">đợt 3</span></button>
+                <button type="button" role="menuitem"><svg class="i s"><use href="#i-quote"/></svg>Trích dẫn khi trả lời</button>
+                <button type="button" role="menuitem"><svg class="i s"><use href="#i-mail-dot"/></svg>Đánh dấu chưa đọc</button>
                 <hr>
-                <button type="button" role="menuitem" class="danger"><svg class="i s"><use href="#i-trash"/></svg>Xoá<span class="wave">đợt 3</span></button>
+                <button type="button" role="menuitem" class="danger" data-act="msg-del-from-menu"><svg class="i s"><use href="#i-trash"/></svg>Xoá tin (quản lý nhóm)</button>
               </div>
             </div>
             <div class="m"><span class="av" style="--p:var(--color-person-2)">BN</span><div class="mc"><div class="who"><b>Trần Bảo Ngọc</b><time>09:41</time></div><p class="txt">Kiểm soát đã nhận file, chiều nay bên em gửi xác nhận.</p></div></div>
@@ -992,7 +1008,7 @@ html.reduce .sk { animation: none; }
     </div>
   </div>
   <ol class="notes">
-    <li><b>Hai bên</b>: tin của bạn nằm bên phải, bong bóng nền accent wash, không avatar, không tên; tin người khác nằm bên trái, bong bóng nền sunk, có avatar và tên. Đính kèm, cảm xúc và hàng tóm tắt thread bám theo bên của tin; thanh hover actions của tin bạn mở ở góc trái. Áp dụng cả trong panel thread và tin nhắn trực tiếp.</li>
+    <li><b>Hai bên</b>: tin của bạn nằm bên phải, bong bóng nền accent wash, không avatar, không tên; tin người khác nằm bên trái, bong bóng nền sunk, có avatar và tên. Đính kèm, cảm xúc và hàng tóm tắt thread bám theo bên của tin; thanh hover actions của tin bạn nằm ngay trên góc phải bong bóng. Áp dụng cả trong panel thread và tin nhắn trực tiếp.</li>
     <li><b>Menu chính thu gọn</b>: nút ở đầu menu chính (Tin nhắn, Tài liệu, Phê duyệt…) thu nó thành dải icon 64px để chừa chỗ cho chat; số chưa đọc thành badge trên icon, tên hiện bằng tooltip. Trỏ chuột vào dải 300ms thì menu mở tạm, nổi đè lên cột trò chuyện, rời chuột thì thu lại. Trạng thái nhớ theo thiết bị; màn 1024–1279px mặc định thu gọn.</li>
     <li><b>Gom tin</b>: cùng người, cách nhau ≤ 5 phút thì dòng sau không có avatar và tên; giờ hiện ở lề ngoài (trái với người khác, phải với bạn) khi trỏ chuột hoặc focus. Tin có hàng tóm tắt thread, vạch ngày, vạch “Tin mới” đều ngắt nhóm.</li>
     <li><b>Vạch “Tin mới”</b> nằm trước tin chưa đọc đầu tiên, đường accent từ trái, nhãn bên phải. Nhiều hơn một màn thì nhóm mở tại vạch. <b>Nút nổi</b> có hai trạng thái: “Tin mới nhất” khi còn tin phía dưới, “Nhảy tới tin chưa đọc” khi bạn đã nhảy qua vạch. Demo: bấm nút nổi hai lần.</li>
@@ -1558,6 +1574,9 @@ html.reduce .sk { animation: none; }
       if (m.querySelector(':scope > .hact')) return;
       var h = frag($('tpl-hact').innerHTML);
       if (m.closest('.panel')) h.querySelector('[data-act="hact-reply"]').remove();
+      if (m.classList.contains('mine') && m.querySelector('.txt') && !m.querySelector('.card')) {
+        h.querySelector('[data-act="hact-more"]').insertAdjacentHTML('beforebegin', '<button class="ibtn" type="button" data-act="msg-edit" aria-label="Sửa tin" title="Sửa tin (↑ trong ô soạn trống)"><svg class="i s"><use href="#i-pen"/></svg></button>');
+      }
       m.appendChild(h);
     });
   }
@@ -1933,6 +1952,73 @@ html.reduce .sk { animation: none; }
   mkScrim.addEventListener('click', function (e) { var b = e.target.closest('[data-mk]'); if (b) openMk(b.getAttribute('data-mk')); });
   pollEl.addEventListener('click', function (e) { var o = e.target.closest('.po'); if (o) pollVote(o); });
 
+  // ---------- edit / delete a message ----------
+  var ME_INI = 'TH';
+  function rowAuthor(row) { var a = row.querySelector(':scope > .av'); return a ? a.textContent : null; }
+  function bubbleText(row) { var t = row.querySelector('.txt'); if (!t) return ''; var c = t.cloneNode(true); c.querySelectorAll('.q, .edm').forEach(function (x) { x.remove(); }); return c.textContent.trim(); }
+  function startEdit(row) {
+    var t = row.querySelector('.txt'); if (!t || t.classList.contains('editing') || t.classList.contains('del')) return;
+    closeMenus(); t = asDiv(t);
+    var q = t.querySelector('.q'), old = t.innerHTML, text = bubbleText(row);
+    t.classList.add('editing'); t.setAttribute('data-old', old);
+    t.innerHTML = (q ? q.outerHTML : '') + '<div class="ed" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Sửa tin">' + esc(text) + '</div>'
+      + '<div class="eda"><small>Esc huỷ · Enter lưu</small><button class="btn ghost sm" type="button" data-act="edit-cancel">Huỷ</button><button class="btn primary sm" type="button" data-act="edit-save">Lưu</button></div>';
+    var ed = t.querySelector('.ed'); ed.focus();
+    var r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  }
+  function endEdit(t, save) {
+    var row = t.closest('.m'), v = t.querySelector('.ed').textContent.trim(), q = t.querySelector('.q');
+    if (save && !v) { cancelEdit(t); askDelete(row); return; }
+    if (!save) { cancelEdit(t); return; }
+    t.classList.remove('editing'); t.removeAttribute('data-old');
+    t.innerHTML = (q ? q.outerHTML : '') + esc(v) + '<span class="edm">đã sửa</span>';
+    if (!reduced()) replay(t, 'nf');
+  }
+  // bubbles written as <p> become <div> before holding block content
+  function asDiv(t) { if (t.tagName !== 'P') return t; var d = document.createElement('div'); d.className = t.className; d.innerHTML = t.innerHTML; t.replaceWith(d); return d; }
+  function cancelEdit(t) { t.innerHTML = t.getAttribute('data-old'); t.classList.remove('editing'); t.removeAttribute('data-old'); }
+  // the next row of the same author becomes the head of its cluster when the head is removed
+  function promoteNext(row) {
+    var nx = row.nextElementSibling;
+    if (row.classList.contains('cont') || !nx || !nx.classList.contains('m') || !nx.classList.contains('cont')) return;
+    var gt = nx.querySelector(':scope > .gt'), time = gt ? gt.textContent : '';
+    if (gt) gt.remove(); nx.classList.remove('cont');
+    var av = row.querySelector(':scope > .av'); if (av) nx.insertBefore(av.cloneNode(true), nx.firstChild);
+    var who = row.querySelector('.who'); if (who) { var w = who.cloneNode(true); var tm = w.querySelector('time'); if (tm) tm.textContent = time; w.querySelectorAll('.pinned').forEach(function (x) { x.remove(); }); nx.querySelector('.mc').insertBefore(w, nx.querySelector('.mc').firstChild); }
+  }
+  function removeRow(row) {
+    if (row.querySelector('.tsum')) {
+      var t = row.querySelector('.txt');
+      if (t) { t = asDiv(t); t.className = 'txt del'; t.textContent = 'Tin nhắn đã bị xoá'; }
+      row.querySelectorAll('.att, .reacts, .card').forEach(function (x) { x.remove(); });
+      var e = row.querySelector('[data-act="msg-edit"]'); if (e) e.remove();
+      if (!reduced()) replay(row, 'nf');
+      return;
+    }
+    fadeOut(row, function () { promoteNext(row); row.remove(); });
+  }
+  function askDelete(row) {
+    closeMenus();
+    var app = row.closest('.app') || row.closest('.pane'), mine = row.classList.contains('mine');
+    var who = mine ? '' : (row.querySelector('.who b') ? row.querySelector('.who b').textContent : (function () { var p = row.previousElementSibling; while (p && !p.querySelector('.who b')) p = p.previousElementSibling; return p ? p.querySelector('.who b').textContent : ''; })());
+    var body = mine ? 'Tin sẽ bị xoá với mọi người trong cuộc trò chuyện và không khôi phục được.'
+      : 'Tin của ' + esc(who) + ' sẽ bị xoá với mọi người. Nhật ký nhóm ghi lại bạn đã xoá tin này.';
+    if (row.querySelector('.tsum')) body += ' Thread của tin vẫn giữ lại.';
+    var sc = frag('<div class="scrim enter" data-del-scrim><div class="modal" role="alertdialog" aria-modal="true" aria-labelledby="del-t" aria-describedby="del-d" style="width:420px">'
+      + '<h4 id="del-t">Xoá tin nhắn?</h4><p id="del-d" class="muted" style="line-height:1.5">' + body + '</p>'
+      + '<div class="actions"><button class="btn ghost sm" type="button" data-act="del-cancel">Huỷ</button><button class="btn danger sm" type="button" data-act="del-ok">Xoá</button></div></div></div>');
+    sc._row = row; app.appendChild(sc); sc.querySelector('[data-act="del-cancel"]').focus();
+  }
+  function closeDel(sc, then) { sc.classList.remove('enter'); exitThen(sc, 'exit', function () { sc.remove(); if (then) then(); }); }
+  function lastMine(scope) { var all = scope.querySelectorAll('.m.mine'); for (var i = all.length - 1; i >= 0; i--) if (all[i].querySelector('.txt:not(.del)') && !all[i].querySelector('.card')) return all[i]; return null; }
+  document.addEventListener('keydown', function (e) {
+    var ds = document.querySelector('[data-del-scrim]');
+    if (ds && e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeDel(ds); return; }
+    var ed = e.target.closest && e.target.closest('.txt.editing .ed'); if (!ed) return;
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); endEdit(ed.closest('.txt'), true); }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); endEdit(ed.closest('.txt'), false); }
+  }, true);
+
   // ---------- main sidebar: rail ----------
   // wrap bare nav labels so the rail can hide them while the link keeps its accessible name
   document.querySelectorAll('.side .nav a').forEach(function (a) {
@@ -2081,6 +2167,25 @@ html.reduce .sk { animation: none; }
       else { st.className = 'pill ok'; st.textContent = 'Đã duyệt'; }
       trace($('appr-row'), 5);
     },
+    'msg-edit': function (b) { startEdit(b.closest('.m')); },
+    'edit-save': function (b) { endEdit(b.closest('.txt'), true); },
+    'edit-cancel': function (b) { endEdit(b.closest('.txt'), false); },
+    'msg-del': function (b) { askDelete(b.closest('.m')); },
+    'msg-del-from-menu': function () { askDelete($('msg-c')); },
+    'del-cancel': function (b) { closeDel(b.closest('[data-del-scrim]')); },
+    'del-ok': function (b) { var sc = b.closest('[data-del-scrim]'), row = sc._row; closeDel(sc, function () { removeRow(row); }); },
+    'demo-edit': function () { var r = lastMine($('dm-stream')); if (r) { r.scrollIntoView({ block: 'nearest', behavior: sb() }); startEdit(r); } },
+    'demo-del': function () { var r = lastMine($('dm-stream')); if (r) askDelete(r); },
+    'demo-del-thread': function () { var r = $('msg-d'); if (r) { scrollToRow(r, function () { askDelete(r); }); } },
+    'dm-their-edit': function () {
+      var rows = $('dm-stream').querySelectorAll('.m:not(.mine)'), r = rows[rows.length - 1]; if (!r) return;
+      var t = r.querySelector('.txt'); t.innerHTML = 'Dạ xong rồi ạ ✅ Em gửi bản đã đóng vào Tài liệu luôn rồi.<span class="edm">đã sửa</span>';
+      replay(t, 'nf'); r.scrollIntoView({ block: 'nearest', behavior: sb() });
+    },
+    'dm-their-del': function () {
+      var rows = $('dm-stream').querySelectorAll('.m:not(.mine)'), r = rows[rows.length - 1]; if (!r) return;
+      r.scrollIntoView({ block: 'nearest', behavior: sb() }); setTimeout(function () { removeRow(r); }, 250);
+    },
     'dm-in': function () {
       var t = DM_IN[dmIn++ % DM_IN.length];
       var n = dmAppend('<div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>09:15</time></div><div class="txt">' + esc(t) + '</div></div></div>');
@@ -2164,7 +2269,23 @@ html.reduce .sk { animation: none; }
     },
     'more-menu': function () { var m = $('msg-menu'), open = m.hidden; closeMenus(); if (!open) return; scrollToRow($('msg-c'), function () { m.hidden = false; replay(m, 'enter'); }); },
     'hact-reply': function (b) { var row = b.closest('.m'), k = row && row.getAttribute('data-thread'); if (k && TH[k]) openThread(k); },
-    'hact-more': function (b) { if (b.closest('#msg-c')) actions['more-menu'](); },
+    'hact-more': function (b) {
+      if (b.closest('#msg-c')) { actions['more-menu'](); return; }
+      var row = b.closest('.m'), mine = row.classList.contains('mine'), old = $('dyn-menu'); if (old) old.remove();
+      var open = !b.hasAttribute('data-open'); document.querySelectorAll('[data-open]').forEach(function (x) { x.removeAttribute('data-open'); }); closeMenus();
+      if (!open) return;
+      var canEdit = mine && row.querySelector('.txt:not(.del)') && !row.querySelector('.card');
+      var m = frag('<div class="menu" id="dyn-menu" role="menu" aria-label="Thêm thao tác cho tin">'
+        + '<button type="button" role="menuitem"><svg class="i s"><use href="#i-copy"/></svg>Sao chép văn bản</button>'
+        + '<button type="button" role="menuitem"><svg class="i s"><use href="#i-quote"/></svg>Trích dẫn khi trả lời</button>'
+        + (mine ? '' : '<button type="button" role="menuitem"><svg class="i s"><use href="#i-mail-dot"/></svg>Đánh dấu chưa đọc</button>')
+        + (canEdit ? '<button type="button" role="menuitem" data-act="msg-edit"><svg class="i s"><use href="#i-pen"/></svg>Sửa tin</button>' : '')
+        + (mine ? '<hr><button type="button" role="menuitem" class="danger" data-act="msg-del"><svg class="i s"><use href="#i-trash"/></svg>Xoá tin</button>' : '')
+        + '</div>');
+      row.appendChild(m); b.setAttribute('data-open', ''); replay(m, 'enter');
+      // open upward when the menu would run under the composer
+      var sc = row.closest('.stream, .pb, .mini'); if (sc && m.getBoundingClientRect().bottom > sc.getBoundingClientRect().bottom) { m.style.top = 'auto'; m.style.bottom = 'calc(100% - 8px)'; }
+    },
     'go-threads': function () { $('threads').scrollIntoView({ behavior: sb() }); },
     'tl-toggle': function () {
       var p = $('tl-panel'), app = $('app-threads'), btn = $('tl-btn');

@@ -1,13 +1,16 @@
 ---
 phase: 8
-title: "Vòng đời tin nhắn (đợt 3)"
+title: "Vòng đời tin nhắn (đợt 2)"
 status: pending
 priority: P2
 effort: "2d"
 dependencies: [5, 7]
 ---
 
-# Phase 08: Vòng đời tin nhắn (đợt 3)
+# Phase 08: Vòng đời tin nhắn (đợt 2)
+
+Người dùng yêu cầu sửa/xoá tin (2026-10-10): chuyển từ đợt 3 lên đợt 2. Thiết kế: DESIGN.md "Sửa tin", "Xoá tin";
+mockup `spaces.html` §2 (nút Demo sửa/xoá) và §3 ("Xoá tin có thread").
 
 ## Overview
 Sửa, xoá, trích dẫn khi trả lời, đánh dấu chưa đọc — như Google Chat. Hiện không có `PATCH`/`DELETE /messages/:id`.
@@ -16,7 +19,9 @@ Sửa, xoá, trích dẫn khi trả lời, đánh dấu chưa đọc — như Go
 - Sửa tin của mình: `PATCH /api/messages/:msgId` → `edited_at`; UI nhãn "Đã chỉnh sửa"; phím ↑ sửa tin cuối.
   Quyền: người gửi + `write` trên OA kênh.
 - Xoá: `DELETE /api/messages/:msgId` → soft delete (`deleted_at`, nội dung xoá khỏi phản hồi); UI dòng "Tin nhắn đã
-  bị xoá"; tin gốc bị xoá vẫn giữ thread. Quyền: người gửi (`write`) hoặc người có `manage` trên OA kênh.
+  bị xoá" chỉ cho tin có thread, tin không có thread biến mất khỏi luồng; luôn có hộp xác nhận. Quyền: người gửi
+  (`write`) hoặc người có `manage` trên OA kênh; xoá tin người khác ghi nhật ký nhóm (ai xoá, tin của ai, lúc nào).
+- Sửa chữ rỗng → client hỏi xoá; server từ chối `content` rỗng khi PATCH. Thẻ (poll, task…) không PATCH được.
 - Trích dẫn khi trả lời: `quoted_message_id`; hiển thị khối trích dẫn (tên người + đoạn đầu), bấm → cuộn tới tin.
 - Đánh dấu chưa đọc: đặt read receipt kênh/thread lùi về trước tin đó.
 - WS: `MessageEditedEvent`, `MessageDeletedEvent` (proto + regenerate cả hai phía).

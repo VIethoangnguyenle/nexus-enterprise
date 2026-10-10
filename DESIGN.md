@@ -321,13 +321,28 @@ này thì cái kia đóng.
 - **Theo dõi thread:** tự theo dõi khi bạn viết tin gốc, trả lời trong thread hoặc được nhắc tên trong thread; tự
   bỏ bằng nút Theo dõi hoặc menu Thêm. Theo dõi nghĩa là có "mới" và thông báo cho trả lời mới; mức thông báo
   theo nhóm thuộc đợt 4.
-- **Hover actions:** thanh nổi ở góc trên phải hàng tin (trên −14, phải 12; tin của bạn: góc trên trái, trái 12), `--color-overlay`, radius 10,
+- **Hover actions:** thanh nổi ở góc trên phải hàng tin (trên −14, phải 12; tin của bạn: phải 52, ngay trên góc bong bóng), `--color-overlay`, radius 10,
   `--shadow-overlay` (overlay duy nhất trong một tin), IconButton 32 có tooltip: **Bày tỏ cảm xúc · Trả lời
   trong thread · Ghim / Bỏ ghim · Thêm**. Hiện khi hover hoặc khi focus nằm trong hàng (Tab tới được). Trong
-  panel thread không có "Trả lời trong thread". **Menu Thêm**, đợt 1: Theo dõi thread / Bỏ theo dõi thread, Sao
-  chép văn bản. Đợt 3 chèn theo thứ tự: Trích dẫn khi trả lời, Đánh dấu chưa đọc, Sửa (tin của mình), divider,
-  Xoá (`danger`; tin của mình hoặc người quản lý nhóm). Mục của đợt chưa làm thì **không hiện** (không có mục
-  disabled chờ tính năng). Màn chạm: nhấn giữ tin mở sheet đáy với hàng cảm xúc nhanh và cùng các mục.
+  panel thread không có "Trả lời trong thread". Tin của bạn (chữ, không phải thẻ) có thêm IconButton **Sửa tin**
+  (bút chì) trước Thêm. **Menu Thêm** theo thứ tự: Theo dõi thread / Bỏ theo dõi thread, Sao chép văn bản, Trích
+  dẫn khi trả lời, Đánh dấu chưa đọc (tin người khác), Sửa tin (tin của bạn), divider, **Xoá tin** (`danger`; tin
+  của bạn, hoặc tin người khác khi bạn quản lý nhóm). Mục chưa làm thì **không hiện** (không có mục disabled chờ
+  tính năng). Menu mở lên trên khi gần đáy luồng. Màn chạm: nhấn giữ tin mở sheet đáy với hàng cảm xúc nhanh và
+  cùng các mục.
+- **Sửa tin** (mockup §2 "Sửa tin cuối của bạn"): mở bằng nút bút chì, Thêm → Sửa tin, hoặc **↑ khi ô soạn trống**
+  (tin gần nhất của bạn trong cuộc trò chuyện hoặc thread đang mở). Bong bóng thành ô sửa tại chỗ: nền
+  `--color-raised`, viền trong 2px `--color-accent`, radius 12, rộng tối đa min(560, 85%); dưới chữ: "Esc huỷ ·
+  Enter lưu" 12px mờ + Huỷ (ghost sm) + Lưu (primary sm). Enter lưu, Shift+Enter xuống dòng, Esc huỷ (trả nguyên
+  bản). Trích dẫn và đính kèm giữ nguyên. Lưu xong cuối bong bóng có nhãn **"đã sửa"** 11px mờ (cả người khác
+  thấy). Lưu chữ rỗng = hỏi xoá tin. Người khác thấy chữ đổi tại chỗ (fade 160ms), không tính là tin mới, không
+  thông báo. Thẻ (bình chọn, công việc…) không sửa được.
+- **Xoá tin:** luôn qua hộp xác nhận (`alertdialog`, rộng 420): "Xoá tin nhắn?" + câu nói rõ hậu quả ("Tin sẽ bị
+  xoá với mọi người trong cuộc trò chuyện và không khôi phục được."; tin người khác: nêu tên người gửi và "Nhật ký
+  nhóm ghi lại bạn đã xoá tin này"; tin có thread: "Thread của tin vẫn giữ lại.") + Huỷ (focus mặc định) / **Xoá**
+  (Button `danger`). Xoá xong: tin **không có thread** thu lại và biến mất ở mọi người (fade + co 220ms; tin sau
+  cùng người gửi lên làm đầu cụm); tin **có thread** còn khung **"Tin nhắn đã bị xoá"** (chữ nghiêng mờ, không nền,
+  viền trong 1px `--color-line`), mất đính kèm và cảm xúc, giữ hàng tóm tắt thread.
 - **Panel thread (ThreadPanel):** detail panel (dưới 1024 là sheet toàn màn). Đầu: "Thread" `text-lg` + tên nhóm
   hoặc người (DM) mờ · nút **Theo dõi / Đang theo dõi** (toggle `aria-pressed`, Button sm: tắt = `secondary` +
   icon chuông, bật = nền `--color-accent-wash`, icon chuông reo `--color-accent`; nhãn đổi theo trạng thái, đổi
