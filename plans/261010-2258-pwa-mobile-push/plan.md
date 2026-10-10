@@ -36,8 +36,10 @@ báo đẩy về, dùng OneSignal").
 ## Quyết định
 - Push: **OneSignal** (người dùng chốt). Web SDK v16, định danh người dùng bằng `external_id` = `users.id`
   (`OneSignal.login`), gửi từ backend qua REST API `POST /notifications` nhắm `include_aliases.external_id`.
-- Mất mạng: **chỉ khung app + báo mất kết nối** (mặc định đề xuất, người dùng chưa trả lời; đổi được ở phase 02).
-- Icon/tên: **"Nexus"**, icon dựng từ logo hiện có (mặc định đề xuất, người dùng chưa trả lời).
+- Mất mạng: **chỉ khung app + báo mất kết nối** (người dùng đồng ý 2026-10-10).
+- Icon/tên: **"Nexus"**, icon chữ N trên nền accent (người dùng đồng ý 2026-10-10).
+- Push **có xem trước nội dung** (đoạn đầu văn bản thuần); quản trị workspace tắt được cho cả workspace (người dùng chốt 2026-10-10).
+- Mockup `design/mockups/push.html` **đã duyệt** (2026-10-10).
 
 ## Phases
 
@@ -76,6 +78,4 @@ báo đẩy về, dùng OneSignal").
 - iOS: chỉ push khi đã thêm vào màn hình chính, phải xin quyền từ một cú chạm của người dùng.
 
 ## Unresolved questions
-- Xem trước nội dung tin trong push (tên người gửi + đoạn đầu) hay chỉ "Bạn có tin nhắn mới từ …"? Đề xuất: có xem
-  trước, quản trị workspace tắt được.
-- Mức offline và icon/tên (đang dùng mặc định ở trên).
+- Không còn.

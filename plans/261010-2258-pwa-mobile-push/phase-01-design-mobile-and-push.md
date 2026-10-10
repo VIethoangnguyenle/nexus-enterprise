@@ -28,7 +28,7 @@ Thiết kế trước khi code (CLAUDE.md §3): bổ sung DESIGN.md và mockup c
 - [x] `design/mockups/push.html` (2026-10-10, theo yêu cầu "làm luôn mockup notification"): push trên màn khoá
   Android/iPhone + bấm mở đúng chỗ, thẻ hỏi bật thông báo + hộp quyền trình duyệt, Cài đặt → Thông báo (3 trạng
   thái quyền), gợi ý cài app Android + hướng dẫn iPhone, thanh mất kết nối + thanh bản mới; DESIGN.md mục "Thông báo
-  đẩy, cài app, mất kết nối". **Chờ người dùng duyệt.**
+  đẩy, cài app, mất kết nối". **Đã duyệt 2026-10-10** (kèm: có xem trước nội dung; offline chỉ khung app; tên/icon Nexus).
 - [ ] Mockup mobile 390px cho các màn chat mới (luồng hai bên, thread thành sheet, ô soạn với +, menu ⋯ thành sheet).
 
 ## Related Code Files

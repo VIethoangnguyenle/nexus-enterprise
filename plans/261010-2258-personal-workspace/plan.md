@@ -58,4 +58,4 @@ Chat** (người dùng: Chat quan trọng nhất).
 - Heuristic migration sai với workspace đã đổi tên → báo số workspace mỗi loại trước/sau, cho quản trị sửa tay.
 
 ## Unresolved questions
-- Workspace cá nhân có được mời thêm người không? (Giữ hành vi hiện tại cho tới khi người dùng quyết.)
+- Không còn. Mời thêm người vào workspace cá nhân: giữ hành vi hiện tại (người dùng đồng ý mặc định 2026-10-10).

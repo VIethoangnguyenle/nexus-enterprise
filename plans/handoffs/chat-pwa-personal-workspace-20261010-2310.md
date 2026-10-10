@@ -79,8 +79,8 @@ Chat (chi tiết trong `plans/261010-1559-chat-inline-threads/plan.md` và `phas
 PWA / push (`plans/261010-2258-pwa-mobile-push/plan.md`):
 - Push dùng **OneSignal** (người dùng chốt): Web SDK v16, `external_id` = `users.id`, gửi từ backend qua REST
   API, một service worker chung (SW app `importScripts` SW của OneSignal).
-- Mặc định đề xuất, người dùng **chưa trả lời**: offline chỉ khung app + báo mất kết nối; tên/icon "Nexus" từ
-  logo hiện có; có xem trước nội dung trong push.
+- Người dùng chốt 2026-10-10 (sau khi viết bản đầu handoff này): duyệt mockup `push.html`; push **có xem trước nội
+  dung**; offline chỉ khung app + báo mất kết nối; tên/icon "Nexus"; workspace cá nhân giữ hành vi mời người hiện tại.
 
 Workspace cá nhân (`plans/261010-2258-personal-workspace/plan.md`): 1A định nghĩa cá nhân/tổ chức + heuristic
 migration; 2 chủ chuyển cá nhân → tổ chức (một chiều); 3 mobile thay tab Phê duyệt bằng Danh bạ; 4 ẩn duyệt tài
@@ -110,9 +110,9 @@ liệu. Làm sau Chat.
 
 ## Open risks and blockers
 
-- Người dùng chưa trả lời: mức offline của PWA, icon/tên, xem trước nội dung trong push (đang dùng mặc định đề xuất
-  — xác nhận trước phase 01 của plan PWA).
-- Workspace cá nhân có được mời thêm người không — chưa hỏi.
+- Các câu hỏi mở về PWA và workspace cá nhân đã được trả lời (xem Decisions).
+- Người dùng cần tự tạo app OneSignal và đặt App ID + REST API key vào cấu hình máy chủ (không vào git); nên xoay
+  vòng Google client secret.
 - Số migration: plan chat dự kiến 037 (thread), 038 (đính kèm), 039 (văn bản thuần), 040 (vòng đời); các plan khác
   dùng "số tiếp theo lúc làm" — kiểm `data/migrations/` trước mỗi migration để không trùng.
 - Mockup ở artifact là riêng tư; muốn người khác xem phải chia sẻ từ menu Share của trang.
@@ -131,8 +131,8 @@ liệu. Làm sau Chat.
    thread, đếm chưa đọc theo thread, auto-follow 3 trường hợp, unfollow rồi trả lời) và domain (deny/allow cho
    follow/read/list + trả lời vào tin của kênh khác) → hiện thực store → domain → gRPC/REST → proto hai phía →
    spec `docs/specs/chat-threads/spec.md` → `make test s=messaging`, `make check-layering`, `make check-ngac`.
-4. **Mobile (ưu tiên):** plan PWA phase 01 — mockup push/cài app/mất kết nối đã có (`design/mockups/push.html`, chờ
-   duyệt); còn mockup 390px cho màn chat mới; gửi người dùng duyệt (xác nhận luôn 3 mặc định còn mở); rồi phase 03 — rà Playwright mọi màn hiện có ở 390/768px và
+4. **Mobile (ưu tiên):** plan PWA phase 01 — mockup push/cài app/mất kết nối đã duyệt (`design/mockups/push.html`);
+   còn mockup 390px cho màn chat mới, gửi người dùng duyệt; rồi phase 03 — rà Playwright mọi màn hiện có ở 390/768px và
    sửa tràn ngang, vùng chạm, safe-area, bàn phím ảo. Chạy song song bước 5.
 5. Chat phase 03 (realtime), 04 (UI **mobile-first** theo mockup §2–§4 + mockup mobile), 05 (kiểm chứng hai người
    dùng trên stack thật, cả 390px) → hết đợt 1. Sau đó PWA phase 02, 04, 05, 06.
@@ -145,7 +145,7 @@ liệu. Làm sau Chat.
 - `CLAUDE.md` — lệnh, quy ước, enforcement rules.
 - `DESIGN.md` — §5 Layout (rail), §6 "Chat: cột điều hướng và mục", "Chat: luồng in-line, thread, ô soạn",
   "Chat: tạo trong chat…", §7 motion.
-- `design/mockups/push.html` — mockup thông báo đẩy / cài app / mất kết nối (mobile trước), **chờ duyệt**.
+- `design/mockups/push.html` — mockup thông báo đẩy / cài app / mất kết nối (mobile trước), **đã duyệt**.
 - `design/mockups/spaces.html` (+ `tokens.css`) — mockup Chat đã duyệt; các mockup khác cùng thư mục:
   `core-screens.html`, `admin.html`, `assets.html`, `auth.html`, `contacts-documents-settings.html`,
   `notifications.html`.
