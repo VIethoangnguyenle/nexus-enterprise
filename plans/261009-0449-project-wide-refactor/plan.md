@@ -141,3 +141,7 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
 11. **Op theo vùng tài nguyên (màn quyền của vai trò):** **Đã chốt 2026-10-10** backend trả danh sách
     op hợp lệ theo loại OA qua endpoint mới; client không hard-code.
 12. **Toggle "Màu theo người":** **Đã chốt 2026-10-10** bỏ — màu là danh tính (DESIGN.md).
+13. **Xác thực service-to-service (sau 02b):** metadata caller chưa ký — chỉ chặn client nội bộ quên
+    danh tính, không chặn kẻ đã vào mạng nội bộ (gọi thẳng policy `CreateAssignment`). Đề xuất phase
+    riêng: token nội bộ ngắn hạn do biên REST ký thay cho `x-caller-*`, hoặc mTLS; trong lúc chờ,
+    `make dev` nên bind gRPC vào `127.0.0.1`. Chưa lên lịch — cần người dùng quyết.
