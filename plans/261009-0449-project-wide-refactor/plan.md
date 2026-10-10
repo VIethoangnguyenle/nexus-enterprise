@@ -145,3 +145,6 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
     danh tính, không chặn kẻ đã vào mạng nội bộ (gọi thẳng policy `CreateAssignment`). Đề xuất phase
     riêng: token nội bộ ngắn hạn do biên REST ký thay cho `x-caller-*`, hoặc mTLS; trong lúc chờ,
     `make dev` nên bind gRPC vào `127.0.0.1`. Chưa lên lịch — cần người dùng quyết.
+14. **Quyền chia sẻ của thành viên:** **Đã chốt 2026-10-10** chia sẻ drive kiểm tra `share` (không còn
+    `write`); thành viên được cấp `share` trên Documents và drive của channel (migration backfill).
+    Người nhận share "Có thể sửa" không được chia sẻ tiếp.
