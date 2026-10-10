@@ -417,6 +417,23 @@ này thì cái kia đóng.
   đóng và trả focus về ảnh đã bấm. Phạm vi: các ảnh của **cùng một tin**. Màn chạm: vuốt ngang chuyển ảnh, nút
   trước/sau nằm sát mép.
 
+### Chat trên điện thoại (mockup `design/mockups/chat-mobile.html`)
+
+Bản 390px của Chat; hành vi theo các mục "Chat: …" ở trên, chỉ khác cách chạm:
+- **Tab Tin nhắn:** cùng thứ tự với cột điều hướng (lối tắt, mục của bạn, Tin nhắn trực tiếp, Nhóm); hàng 64, avatar 44;
+  nút nổi "Trò chuyện mới" (cao 52, radius 16, `--color-accent-wash`) góc phải trên thanh đáy, ẩn khi cuộn xuống. Nhấn
+  giữ hàng mở sheet Chuyển tới mục / Mục mới… / Bỏ khỏi mục / Gắn sao / Tắt thông báo.
+- **Luồng:** thanh trên có quay lại, icon nhóm 28, tên + "N thành viên", nút Thread (badge) và Thông tin; bong bóng tối đa
+  88%, chữ 15px; hàng tóm tắt thread cao 36. Không hover: chạm tin hiện giờ trong cụm.
+- **Thread và danh sách Thread:** màn toàn màn trượt lên (280ms), quay lại giữ vị trí cuộn của luồng; nút Theo dõi /
+  Đang theo dõi (pill 36) trên thanh trên; danh sách Thread có chip lọc cuộn ngang (cao 36).
+- **Nhấn giữ tin (400ms):** sheet đáy có hàng 6 cảm xúc nhanh (48) + thao tác (hàng 52): Trả lời trong thread, Theo dõi /
+  Bỏ theo dõi thread, Sao chép, Trích dẫn, Ghim, Sửa tin (của bạn) hoặc Đánh dấu chưa đọc (người khác), divider, Xoá tin.
+  Sửa trên điện thoại dùng ô soạn ở chế độ sửa (thanh "Đang sửa tin" + Huỷ).
+- **Ô soạn:** bo 22, nút + (sheet: hàng đính kèm Máy ảnh / Ảnh / Tệp / Tài liệu, rồi Bình chọn / Công việc / Tài liệu mới /
+  Đề nghị phê duyệt), chữ 16px (tránh iOS phóng to), nút định dạng, nút gửi tròn 40 accent khi có nội dung; dính đáy và
+  đi lên cùng bàn phím ảo.
+
 ### Thông báo đẩy, cài app, mất kết nối (mockup `design/mockups/push.html`, mobile trước)
 
 - **Thông báo đẩy (OneSignal):** năm loại, mỗi loại tắt được: tin nhắn trực tiếp, được nhắc tên, trả lời trong thread

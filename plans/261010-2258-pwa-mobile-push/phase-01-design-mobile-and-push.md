@@ -29,7 +29,9 @@ Thiết kế trước khi code (CLAUDE.md §3): bổ sung DESIGN.md và mockup c
   Android/iPhone + bấm mở đúng chỗ, thẻ hỏi bật thông báo + hộp quyền trình duyệt, Cài đặt → Thông báo (3 trạng
   thái quyền), gợi ý cài app Android + hướng dẫn iPhone, thanh mất kết nối + thanh bản mới; DESIGN.md mục "Thông báo
   đẩy, cài app, mất kết nối". **Đã duyệt 2026-10-10** (kèm: có xem trước nội dung; offline chỉ khung app; tên/icon Nexus).
-- [ ] Mockup mobile 390px cho các màn chat mới (luồng hai bên, thread thành sheet, ô soạn với +, menu ⋯ thành sheet).
+- [x] `design/mockups/chat-mobile.html` (2026-10-10): tab Tin nhắn có mục, luồng nhóm hai bên + tóm tắt thread + "Tin
+  mới", thread toàn màn có Theo dõi, danh sách Thread có lọc, sheet nhấn giữ tin, sheet nút +; DESIGN.md "Chat trên
+  điện thoại". **Chờ người dùng duyệt.**
 
 ## Related Code Files
 - Modify: `DESIGN.md` (§ mobile, mục PWA/push), `design/mockups/spaces.html` và/hoặc mockup mới `design/mockups/mobile.html`

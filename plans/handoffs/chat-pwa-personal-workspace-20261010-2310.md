@@ -132,7 +132,7 @@ liệu. Làm sau Chat.
    follow/read/list + trả lời vào tin của kênh khác) → hiện thực store → domain → gRPC/REST → proto hai phía →
    spec `docs/specs/chat-threads/spec.md` → `make test s=messaging`, `make check-layering`, `make check-ngac`.
 4. **Mobile (ưu tiên):** plan PWA phase 01 — mockup push/cài app/mất kết nối đã duyệt (`design/mockups/push.html`);
-   còn mockup 390px cho màn chat mới, gửi người dùng duyệt; rồi phase 03 — rà Playwright mọi màn hiện có ở 390/768px và
+   mockup Chat mobile đã có (`design/mockups/chat-mobile.html`, chờ duyệt); rồi phase 03 — rà Playwright mọi màn hiện có ở 390/768px và
    sửa tràn ngang, vùng chạm, safe-area, bàn phím ảo. Chạy song song bước 5.
 5. Chat phase 03 (realtime), 04 (UI **mobile-first** theo mockup §2–§4 + mockup mobile), 05 (kiểm chứng hai người
    dùng trên stack thật, cả 390px) → hết đợt 1. Sau đó PWA phase 02, 04, 05, 06.
@@ -145,6 +145,7 @@ liệu. Làm sau Chat.
 - `CLAUDE.md` — lệnh, quy ước, enforcement rules.
 - `DESIGN.md` — §5 Layout (rail), §6 "Chat: cột điều hướng và mục", "Chat: luồng in-line, thread, ô soạn",
   "Chat: tạo trong chat…", §7 motion.
+- `design/mockups/chat-mobile.html` — Chat trên điện thoại 390px (thread toàn màn, nhấn giữ, nút +), **chờ duyệt**.
 - `design/mockups/push.html` — mockup thông báo đẩy / cài app / mất kết nối (mobile trước), **đã duyệt**.
 - `design/mockups/spaces.html` (+ `tokens.css`) — mockup Chat đã duyệt; các mockup khác cùng thư mục:
   `core-screens.html`, `admin.html`, `assets.html`, `auth.html`, `contacts-documents-settings.html`,
