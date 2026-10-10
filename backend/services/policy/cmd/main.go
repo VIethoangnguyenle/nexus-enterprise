@@ -87,8 +87,6 @@ func main() {
 
 	// CQRS: Read + Write services
 	cte := ngac.NewCTEEvaluator(pool)
-	materialized := ngac.NewMaterializedAccess(pool)
-	versionTracker := ngac.NewVersionTracker(pool)
 	operationStore := ngac.NewOperationStore(pool)
 	prohibitionStore := ngac.NewProhibitionStore(pool, store.GetGraph())
 	strictOps := os.Getenv("STRICT_OPERATIONS") == "true"
@@ -97,7 +95,7 @@ func main() {
 	}
 
 	// Assemble read-path components: Cache (PIP) + Engine (PDP) → Evaluator
-	decisionCache := ngac.NewLayeredCache(rdb, materialized, versionTracker)
+	decisionCache := ngac.NewLayeredCache(rdb)
 	decisionEngine := ngac.NewDecisionEngine(store.GetGraph(), cte)
 
 	// Shard-aware graph resolution: per-workspace subgraph loading + LRU eviction
@@ -108,7 +106,7 @@ func main() {
 	evaluator := ngac.NewAccessEvaluator(decisionCache, decisionEngine)
 
 	// Write-path: InvalidationCoordinator hides PIP cache topology from transport
-	invalidation := ngac.NewInvalidationCoordinator(versionTracker, materialized, cacheInvalidator)
+	invalidation := ngac.NewInvalidationCoordinator(cacheInvalidator)
 
 	readServer := pgrpc.NewReadServer(store, rdb, evaluator, operationStore, prohibitionStore)
 	pb.RegisterPolicyReadServiceServer(srv, readServer)

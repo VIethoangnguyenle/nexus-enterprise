@@ -97,10 +97,6 @@ func (c *Creator) Associate(ctx context.Context, uaID, oaID string, ops []string
 	return err
 }
 
-// OnFail records an undo for a write outside the graph (a database row, say)
-// that must be reverted if a later step fails.
-func (c *Creator) OnFail(label string, undo func(ctx context.Context) error) { c.rb.Add(label, undo) }
-
 // Fail removes everything this run created, newest first, and returns cause.
 func (c *Creator) Fail(ctx context.Context, cause error) error { return c.rb.Fail(ctx, cause) }
 

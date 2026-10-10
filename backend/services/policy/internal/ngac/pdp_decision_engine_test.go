@@ -227,21 +227,6 @@ func TestCacheKey_DifferentWorkspaces_NoCrossHit(t *testing.T) {
 		"same (user,obj,op) with different workspace_id MUST produce different cache keys")
 }
 
-func TestVersionScope_WorkspaceIsolation(t *testing.T) {
-	reqA := ngac.AccessRequest{WorkspaceID: "ws-A"}
-	reqB := ngac.AccessRequest{WorkspaceID: "ws-B"}
-	reqGlobal := ngac.AccessRequest{}
-
-	scopeA := ngac.ExportVersionScope(reqA)
-	scopeB := ngac.ExportVersionScope(reqB)
-	scopeGlobal := ngac.ExportVersionScope(reqGlobal)
-
-	assert.Equal(t, "ws:ws-A", scopeA)
-	assert.Equal(t, "ws:ws-B", scopeB)
-	assert.Equal(t, "global", scopeGlobal)
-	assert.NotEqual(t, scopeA, scopeB, "different workspace version scopes must differ")
-}
-
 // --- 5d. Cross-tenant integration (Tier 1 — no DB) ---
 
 func TestCrossTenant_UserInBothWorkspaces(t *testing.T) {
@@ -316,21 +301,6 @@ func TestCrossTenant_CacheKeyIsolation(t *testing.T) {
 				tc.name, existing, key)
 		}
 		keys[key] = tc.name
-	}
-}
-
-func TestCrossTenant_VersionScopeIsolation(t *testing.T) {
-	// Verify version scopes are unique per workspace
-	workspaces := []string{"ws-1", "ws-2", "ws-3", ""}
-	scopes := make(map[string]string)
-	for _, ws := range workspaces {
-		req := ngac.AccessRequest{WorkspaceID: ws}
-		scope := ngac.ExportVersionScope(req)
-		if existing, ok := scopes[scope]; ok {
-			t.Fatalf("version scope collision: workspace %q and %q produce same scope %q",
-				ws, existing, scope)
-		}
-		scopes[scope] = ws
 	}
 }
 

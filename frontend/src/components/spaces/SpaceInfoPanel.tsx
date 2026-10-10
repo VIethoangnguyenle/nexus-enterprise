@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Pin } from 'lucide-react'
-import { usePins, useUpdateChannel } from '../../hooks/useMessaging'
+import { useUpdateChannel } from '../../hooks/useMessaging'
+import { usePins } from '../../hooks/useMessages'
 import { explain } from '../../lib/errors'
 import { formatDateTime, formatListTime } from '../../lib/format'
 import { displayName, type PeopleDirectory, type Person } from '../../lib/people'

@@ -1,7 +1,7 @@
 ---
 phase: 9
 title: "Tests, dead code, large files"
-status: pending
+status: done
 priority: P3
 effort: 1-2d
 dependencies: [4, 8]

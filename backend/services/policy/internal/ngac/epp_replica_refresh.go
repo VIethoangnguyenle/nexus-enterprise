@@ -20,10 +20,10 @@ type GraphReloader interface {
 	GetGraph() *Graph
 }
 
-// GraphInvalidator is the EPP invalidation surface: version bump, L2 and L1.
+// GraphInvalidator is the EPP invalidation surface for the decision cache (L1).
 // *InvalidationCoordinator implements it.
 type GraphInvalidator interface {
-	InvalidateForNodes(ctx context.Context, workspaceID string, nodeIDs ...string)
+	InvalidateForNodes(ctx context.Context, nodeIDs ...string)
 	InvalidateAll(ctx context.Context)
 }
 
@@ -52,7 +52,7 @@ var (
 // Step 3 is not redundant with the writer's own invalidation of the shared
 // caches: between the writer's invalidation and this replica's reload, the
 // replica can recompute a decision from its stale graph and write it back to
-// Redis and the materialized table (under the already-bumped version). Running
+// Redis. Running
 // the invalidation again after the reload removes those.
 type ReplicaGraphRefresher struct {
 	store        GraphReloader
@@ -125,7 +125,7 @@ func (r *ReplicaGraphRefresher) Apply(ctx context.Context, batch []GraphMutation
 				r.shards.InvalidateShard(w)
 			}
 		}
-		r.invalidation.InvalidateForNodes(ctx, FirstWorkspace(ws), dedupe(targets[i])...)
+		r.invalidation.InvalidateForNodes(ctx, dedupe(targets[i])...)
 	}
 	slog.Info("replica graph refreshed", "mutations", len(batch))
 	return nil

@@ -114,11 +114,11 @@ func TestDeleteNode_ResolvesBeforeDeleteAndInvalidatesAfter(t *testing.T) {
 	ctx := context.Background()
 
 	shards := &recordingShards{}
-	coord := ngac.NewInvalidationCoordinator(nil, nil, nil)
+	coord := ngac.NewInvalidationCoordinator(nil)
 	var rdb *redis.Client
 	if os.Getenv("TEST_REDIS_ADDR") != "" || os.Getenv("REDIS_ADDR") != "" {
 		rdb = setupWriteTestRedis(t)
-		coord = ngac.NewInvalidationCoordinator(nil, nil, ngac.NewCacheInvalidator(rdb, store.GetGraph))
+		coord = ngac.NewInvalidationCoordinator(ngac.NewCacheInvalidator(rdb, store.GetGraph))
 	}
 	ws := NewWriteServer(store, nil, coord, nil, nil, false)
 	ws.SetShardManager(shards)
@@ -126,7 +126,7 @@ func TestDeleteNode_ResolvesBeforeDeleteAndInvalidatesAfter(t *testing.T) {
 	userReq := ngac.AccessRequest{UserNodeID: f.user, ObjectNodeID: f.oa, Operation: "read", WorkspaceID: f.ws}
 	otherReq := ngac.AccessRequest{UserNodeID: "someone-else", ObjectNodeID: "other-oa", Operation: "read", WorkspaceID: f.ws}
 	if rdb != nil {
-		cache := ngac.NewLayeredCache(rdb, nil, nil)
+		cache := ngac.NewLayeredCache(rdb)
 		cache.Set(ctx, userReq, &ngac.AccessDecision{Decision: ngac.DecisionAllow})
 		cache.Set(ctx, otherReq, &ngac.AccessDecision{Decision: ngac.DecisionAllow})
 	}
@@ -159,12 +159,12 @@ func TestDeleteNode_PolicyClass_InvalidatesEverything(t *testing.T) {
 	ctx := context.Background()
 
 	shards := &recordingShards{}
-	coord := ngac.NewInvalidationCoordinator(nil, nil, ngac.NewCacheInvalidator(rdb, store.GetGraph))
+	coord := ngac.NewInvalidationCoordinator(ngac.NewCacheInvalidator(rdb, store.GetGraph))
 	ws := NewWriteServer(store, nil, coord, nil, nil, false)
 	ws.SetShardManager(shards)
 
 	other := ngac.AccessRequest{UserNodeID: "someone-else", ObjectNodeID: "other-oa", Operation: "read"}
-	ngac.NewLayeredCache(rdb, nil, nil).Set(ctx, other, &ngac.AccessDecision{Decision: ngac.DecisionAllow})
+	ngac.NewLayeredCache(rdb).Set(ctx, other, &ngac.AccessDecision{Decision: ngac.DecisionAllow})
 
 	_, err := ws.DeleteNode(ctx, &pb.DeleteNodeRequest{NodeId: f.pc})
 	require.NoError(t, err)

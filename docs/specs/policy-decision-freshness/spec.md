@@ -10,8 +10,8 @@ or remembered as, an answer.
 ### Requirement: Evaluation failures deny and are never cached
 When any part of a decision cannot be evaluated (the CTE fallback for an OA not in memory, or the
 shared computation itself), the PDP SHALL return DENY. Such a decision
-SHALL be marked error-derived and SHALL NOT be written to the Redis decision cache or the
-materialized cache. The single and batch paths SHALL agree.
+SHALL be marked error-derived and SHALL NOT be written to the Redis decision cache (the only decision
+cache: a runtime check never reads the database). The single and batch paths SHALL agree.
 
 #### Scenario: CTE fallback errors on an otherwise allowed request
 - **WHEN** the object is not in the in-memory graph and the CTE query fails

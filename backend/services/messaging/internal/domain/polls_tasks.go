@@ -35,7 +35,10 @@ func (s *Service) authorizePoll(ctx context.Context, pollID, userNodeID, operati
 		return ErrInvalidInput
 	}
 	poll, _, err := s.store.GetPoll(ctx, pollID)
-	if err != nil || poll == nil {
+	if err != nil {
+		return fmt.Errorf("load poll: %w", err)
+	}
+	if poll == nil {
 		return ErrNotFound
 	}
 	_, err = s.authorizeChannel(ctx, poll.ChannelID, userNodeID, operation)
@@ -48,7 +51,10 @@ func (s *Service) authorizeTask(ctx context.Context, taskID, userNodeID, operati
 		return ErrInvalidInput
 	}
 	task, err := s.store.GetTask(ctx, taskID)
-	if err != nil || task == nil {
+	if err != nil {
+		return fmt.Errorf("load task: %w", err)
+	}
+	if task == nil {
 		return ErrNotFound
 	}
 	_, err = s.authorizeChannel(ctx, task.ChannelID, userNodeID, operation)
@@ -109,6 +115,15 @@ func (s *Service) VotePoll(ctx context.Context, pollID, optionID, userNodeID, us
 	}
 	if err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpWrite); err != nil {
 		return err
+	}
+	// The tally of an option is counted by option, so the option must be this
+	// poll's: authorising on one poll must not let a vote land in another.
+	ok, err := s.store.PollHasOption(ctx, pollID, optionID)
+	if err != nil {
+		return fmt.Errorf("check poll option: %w", err)
+	}
+	if !ok {
+		return fmt.Errorf("%w: option %s is not part of this poll", ErrInvalidInput, optionID)
 	}
 	return s.store.InsertVote(ctx, pollID, optionID, userID)
 }

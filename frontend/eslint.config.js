@@ -17,7 +17,7 @@ const designSystemRules = [
     // Rule 1 — thẻ tương tác thô. Override cho phép trong chính primitives/.
     selector: "JSXOpeningElement[name.name=/^(button|input|textarea|select)$/]",
     message:
-      'Dùng primitive (Button/IconButton/Input/Select/Textarea/NavRow) thay thẻ thô. Chỉ components/primitives/ được render thẻ HTML trực tiếp.',
+      'Dùng primitive (Button/IconButton/TextField/Select/Textarea/Pressable) thay thẻ thô. Chỉ components/primitives/ được render thẻ HTML trực tiếp.',
   },
   {
     // Rule 2 — chỉ chặn số đo pixel/rem, KHÔNG chặn [...] nói chung:

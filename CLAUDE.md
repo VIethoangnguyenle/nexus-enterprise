@@ -55,9 +55,8 @@ Only what is not derivable in ten seconds:
   runs in a transport. A 500 answers `{"message": "internal error", "request_id"}` and the cause
   goes only to the log; `make check-layering` enforces all of this.
 - **Schema lives in three places**: `data/init.sql` (base), `data/migrations/` (numbered chain —
-  `union_id`, `open_id`, `tenant_users` come from `005_multi_tenant_auth.sql`), and
-  `backend/services/policy/migrations/` (policy-local). Approval tables live in a per-tenant
-  schema, never in `public`.
+  `union_id`, `open_id`, `tenant_users` come from `005_multi_tenant_auth.sql`). Approval tables
+  live in a per-tenant schema, never in `public`.
 - **No gateway.** Each service owns its REST surface on its own port. In Docker, Traefik routes;
   in native dev, the Vite proxy does. `policy` has no REST surface at all — gRPC only.
 - **`frontend/vite.config.js` is not a flat proxy table.** `/api/workspaces` re-dispatches nested

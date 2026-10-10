@@ -84,6 +84,15 @@ func insertPollOption(ctx context.Context, x execer, id, pollID, text string, po
 	return nil
 }
 
+// PollHasOption reports whether the option belongs to the poll.
+func (s *Store) PollHasOption(ctx context.Context, pollID, optionID string) (bool, error) {
+	var ok bool
+	err := s.db.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM poll_options WHERE id = $1 AND poll_id = $2)`,
+		optionID, pollID).Scan(&ok)
+	return ok, err
+}
+
 // InsertVote records a user's vote. Idempotent via UNIQUE constraint.
 func (s *Store) InsertVote(ctx context.Context, pollID, optionID, userID string) error {
 	_, err := s.db.Exec(ctx,

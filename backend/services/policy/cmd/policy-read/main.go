@@ -66,13 +66,11 @@ func main() {
 	}
 
 	cte := ngac.NewCTEEvaluator(pool)
-	materialized := ngac.NewMaterializedAccess(pool)
-	versionTracker := ngac.NewVersionTracker(pool)
 	operationStore := ngac.NewOperationStore(pool)
 	prohibitionStore := ngac.NewProhibitionStore(pool, store.GetGraph())
 
 	// Assemble read-path components: Cache (PIP) + Engine (PDP) → Evaluator
-	decisionCache := ngac.NewLayeredCache(rdb, materialized, versionTracker)
+	decisionCache := ngac.NewLayeredCache(rdb)
 	decisionEngine := ngac.NewDecisionEngine(store.GetGraph(), cte)
 
 	// Shard-aware graph resolution: per-workspace subgraph loading + LRU eviction
@@ -85,8 +83,7 @@ func main() {
 	// Follow the writer: the writer mutates its own in-memory graph, not ours.
 	// Each ngac.graph.mutated event reloads this replica's graph and runs the
 	// same EPP invalidation the writer runs (shards + InvalidationCoordinator).
-	invalidation := ngac.NewInvalidationCoordinator(versionTracker, materialized,
-		ngac.NewCacheInvalidator(rdb, store.GetGraph))
+	invalidation := ngac.NewInvalidationCoordinator(ngac.NewCacheInvalidator(rdb, store.GetGraph))
 	refresher := ngac.NewReplicaGraphRefresher(store, shardMgr, invalidation)
 	consumer, err := events.NewGraphMutationConsumer(strings.Split(kafkaBrokers, ","), consumeMutationsSince, refresher)
 	if err != nil {

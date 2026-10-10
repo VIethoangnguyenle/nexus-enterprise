@@ -95,8 +95,8 @@ func (s *WriteServer) CreateNode(ctx context.Context, req *pb.CreateNodeRequest)
 	}
 
 	// Invalidate caches and publish event (consistent with all other mutations)
-	wsIDs := s.invalidateShards(node.ID)
-	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), node.ID)
+	s.invalidateShards(node.ID)
+	s.invalidation.InvalidateForNodes(ctx, node.ID)
 	s.publishEvent(ngac.MutationCreateNode, []string{node.ID})
 
 	return nodeToProto(node), nil
@@ -128,7 +128,7 @@ func (s *WriteServer) DeleteNode(ctx context.Context, req *pb.DeleteNodeRequest)
 		// Everything inside the policy class may have changed.
 		s.invalidation.InvalidateAll(ctx)
 	} else {
-		s.invalidation.InvalidateForNodes(ctx, firstWorkspace(impact.Workspaces), impact.NodeIDs...)
+		s.invalidation.InvalidateForNodes(ctx, impact.NodeIDs...)
 	}
 	s.publishEvent(ngac.MutationDeleteNode, []string{req.NodeId})
 	s.announcePermissionChange(users, impact.Workspaces)
@@ -143,8 +143,8 @@ func (s *WriteServer) CreateAssignment(ctx context.Context, req *pb.CreateAssign
 		return nil, grpcauth.Internal(fmt.Errorf("create assignment: %w", err))
 	}
 
-	wsIDs := s.invalidateShards(req.ChildId, req.ParentId)
-	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), req.ChildId, req.ParentId)
+	s.invalidateShards(req.ChildId, req.ParentId)
+	s.invalidation.InvalidateForNodes(ctx, req.ChildId, req.ParentId)
 	s.publishEvent(ngac.MutationCreateAssignment, []string{req.ChildId, req.ParentId})
 	s.announceUsersOf(req.ChildId, req.ParentId)
 
@@ -157,8 +157,8 @@ func (s *WriteServer) RemoveAssignment(ctx context.Context, req *pb.RemoveAssign
 		return nil, grpcauth.Internal(fmt.Errorf("remove assignment: %w", err))
 	}
 
-	wsIDs := s.invalidateShards(req.ChildId, req.ParentId)
-	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), req.ChildId, req.ParentId)
+	s.invalidateShards(req.ChildId, req.ParentId)
+	s.invalidation.InvalidateForNodes(ctx, req.ChildId, req.ParentId)
 	s.publishEvent(ngac.MutationRemoveAssignment, []string{req.ChildId, req.ParentId})
 	s.announceUsersOf(req.ChildId, req.ParentId)
 
@@ -188,8 +188,8 @@ func (s *WriteServer) CreateAssociation(ctx context.Context, req *pb.CreateAssoc
 		return nil, grpcauth.Internal(fmt.Errorf("create association: %w", err))
 	}
 
-	wsIDs := s.invalidateShards(req.UaId, req.OaId)
-	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), req.UaId, req.OaId)
+	s.invalidateShards(req.UaId, req.OaId)
+	s.invalidation.InvalidateForNodes(ctx, req.UaId, req.OaId)
 	s.publishEvent(ngac.MutationCreateAssociation, []string{req.UaId, req.OaId})
 	s.announceUsersOf(req.UaId, req.OaId)
 
@@ -202,8 +202,8 @@ func (s *WriteServer) RemoveAssociation(ctx context.Context, req *pb.RemoveAssoc
 		return nil, grpcauth.Internal(fmt.Errorf("remove association: %w", err))
 	}
 
-	wsIDs := s.invalidateShards(req.UaId, req.OaId)
-	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), req.UaId, req.OaId)
+	s.invalidateShards(req.UaId, req.OaId)
+	s.invalidation.InvalidateForNodes(ctx, req.UaId, req.OaId)
 	s.publishEvent(ngac.MutationRemoveAssociation, []string{req.UaId, req.OaId})
 	s.announceUsersOf(req.UaId, req.OaId)
 
@@ -328,8 +328,8 @@ func (s *WriteServer) InvalidateCache(ctx context.Context, req *pb.InvalidateCac
 
 	slog.Info("external cache invalidation", "node_ids", req.NodeIds, "reason", req.Reason)
 
-	wsIDs := s.invalidateShards(req.NodeIds...)
-	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), req.NodeIds...)
+	s.invalidateShards(req.NodeIds...)
+	s.invalidation.InvalidateForNodes(ctx, req.NodeIds...)
 
 	return &pb.InvalidateCacheResponse{
 		L1KeysDeleted: 0,
@@ -356,8 +356,8 @@ func (s *WriteServer) CreateProhibition(ctx context.Context, req *pb.CreateProhi
 	}
 
 	affectedNodes := s.resolveProhibitionAffectedNodes(req.SubjectId, req.TargetOaIds)
-	wsIDs := s.invalidateShards(affectedNodes...)
-	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), affectedNodes...)
+	s.invalidateShards(affectedNodes...)
+	s.invalidation.InvalidateForNodes(ctx, affectedNodes...)
 	s.publishEvent(ngac.MutationCreateProhibition, affectedNodes)
 	s.announceUsersOf(req.SubjectId, req.TargetOaIds...)
 
@@ -388,8 +388,8 @@ func (s *WriteServer) RemoveProhibition(ctx context.Context, req *pb.RemoveProhi
 	}
 
 	affectedNodes := s.resolveProhibitionAffectedNodes(p.SubjectID, p.TargetOAIDs)
-	wsIDs := s.invalidateShards(affectedNodes...)
-	s.invalidation.InvalidateForNodes(ctx, firstWorkspace(wsIDs), affectedNodes...)
+	s.invalidateShards(affectedNodes...)
+	s.invalidation.InvalidateForNodes(ctx, affectedNodes...)
 	s.publishEvent(ngac.MutationRemoveProhibition, affectedNodes)
 	s.announceUsersOf(p.SubjectID, p.TargetOAIDs...)
 
@@ -415,10 +415,4 @@ func (s *WriteServer) resolveProhibitionAffectedNodes(subjectID string, targetOA
 	}
 
 	return affected
-}
-
-// firstWorkspace returns the first workspace ID from a slice, or empty string if none.
-// Used to pass workspace context from shard invalidation to version bumping.
-func firstWorkspace(wsIDs []string) string {
-	return ngac.FirstWorkspace(wsIDs)
 }

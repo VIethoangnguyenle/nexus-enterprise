@@ -63,7 +63,7 @@ func (s *MessagingServer) ListChannels(ctx context.Context, req *pb.ListChannels
 func (s *MessagingServer) GetChannel(ctx context.Context, req *pb.GetChannelRequest) (*pb.Channel, error) {
 	ch, err := s.svc.GetChannel(ctx, req.ChannelId, grpcauth.CallerFrom(ctx).NGACNodeID)
 	if err != nil {
-		return nil, status.Errorf(codes.NotFound, "channel not found")
+		return nil, domainError("get channel", err)
 	}
 	return ch, nil
 }

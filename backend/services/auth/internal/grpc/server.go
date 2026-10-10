@@ -30,24 +30,6 @@ func NewAuthServer(svc *domain.Service, rdb *redis.Client) *AuthServer {
 	return &AuthServer{svc: svc, rdb: rdb}
 }
 
-// SwitchTenant re-issues a JWT scoped to the target tenant.
-func (s *AuthServer) SwitchTenant(ctx context.Context, req *pb.SwitchTenantRequest) (*pb.SwitchTenantResponse, error) {
-	// NOTE: caller must provide user context via metadata; for now this is service-to-service
-	return nil, status.Error(codes.Unimplemented, "use REST endpoint for tenant switching")
-}
-
-// GetMe returns current user + tenant info.
-func (s *AuthServer) GetMe(ctx context.Context, _ *pb.GetMeRequest) (*pb.MeResponse, error) {
-	// NOTE: requires user context from metadata; primarily a REST endpoint
-	return nil, status.Error(codes.Unimplemented, "use REST endpoint for /me")
-}
-
-// ListUserTenants returns all tenants for the calling user.
-func (s *AuthServer) ListUserTenants(ctx context.Context, _ *pb.ListUserTenantsRequest) (*pb.TenantListResponse, error) {
-	// NOTE: requires user context from metadata; primarily a REST endpoint
-	return nil, status.Error(codes.Unimplemented, "use REST endpoint for tenant listing")
-}
-
 // GetUserByID delegates to domain.Service.GetUserByID.
 func (s *AuthServer) GetUserByID(ctx context.Context, req *pb.GetUserByIDRequest) (*pb.UserInfo, error) {
 	user, err := s.svc.GetUserByID(ctx, req.UserId)

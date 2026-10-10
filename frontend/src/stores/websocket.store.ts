@@ -10,7 +10,10 @@ import type {
   ServerEnvelope as ServerEnvelopeType,
   ChatMessage as WSChatMessage,
 } from '../generated/proto/messaging/ws'
-import type { Message, ReactionGroup, Poll, ChatTask } from '../api/messaging'
+import type { Message } from '../api/messaging'
+import {
+  applyPin, applyReaction, applyTaskUpdate, convertChatMsgToMessage, previewText, timestampToIso,
+} from '../lib/chat-cache'
 import {
   createBatcher,
   emptySeq,
@@ -397,6 +400,8 @@ function handleServerMessage(
       break
     }
 
+    // The notification keys are kept for the notifications UI that is still to
+    // be decided; no screen reads them yet.
     case 'notification':
       queryClient.invalidateQueries({ queryKey: keys.notifications.all() })
       break
@@ -414,110 +419,21 @@ function handleServerMessage(
       break
     }
 
-    case 'reactionEvent': {
-      const reaction = envelope.payload.reactionEvent
-      // Inject reaction change directly into the messages cache
-      queryClient.setQueryData(
-        keys.messaging.messages(reaction.channelId),
-        (old: { messages: Message[]; has_more: boolean } | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            messages: (old.messages || []).map((m: Message) => {
-              if (m.id !== reaction.messageId) return m
-              const reactions = [...(m.reactions || [])]
-              const idx = reactions.findIndex((r: ReactionGroup) => r.emoji === reaction.emoji)
-              if (reaction.action === 'add') {
-                if (idx >= 0) {
-                  const group = { ...reactions[idx] }
-                  if (!group.user_ids.includes(reaction.userId)) {
-                    group.count += 1
-                    group.user_ids = [...group.user_ids, reaction.userId]
-                  }
-                  reactions[idx] = group
-                } else {
-                  reactions.push({ emoji: reaction.emoji, count: 1, user_ids: [reaction.userId] })
-                }
-              } else {
-                if (idx >= 0) {
-                  const group = { ...reactions[idx] }
-                  group.user_ids = group.user_ids.filter((id: string) => id !== reaction.userId)
-                  group.count = group.user_ids.length
-                  if (group.count <= 0) {
-                    reactions.splice(idx, 1)
-                  } else {
-                    reactions[idx] = group
-                  }
-                }
-              }
-              return { ...m, reactions }
-            }),
-          }
-        },
-      )
+    case 'reactionEvent':
+      applyReaction(envelope.payload.reactionEvent)
       break
-    }
 
-    case 'pinEvent': {
-      const pin = envelope.payload.pinEvent
-      const isPinned = pin.action === 'pin'
-      // Update is_pinned flag in messages cache
-      queryClient.setQueryData(
-        keys.messaging.messages(pin.channelId),
-        (old: { messages: Message[]; has_more: boolean } | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            messages: (old.messages || []).map((m: Message) =>
-              m.id === pin.messageId ? { ...m, is_pinned: isPinned } : m,
-            ),
-          }
-        },
-      )
-      // Invalidate pins list (need full pin metadata from server)
-      queryClient.invalidateQueries({ queryKey: keys.messaging.pins(pin.channelId) })
+    case 'pinEvent':
+      applyPin(envelope.payload.pinEvent)
       break
-    }
 
-    case 'pollVote': {
-      const vote = envelope.payload.pollVote
-      // Inject updated vote counts directly into poll cache
-      queryClient.setQueryData(
-        keys.messaging.poll(vote.pollId),
-        (old: Poll | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            total_votes: vote.totalVotes,
-            options: old.options.map((opt) =>
-              opt.id === vote.optionId ? { ...opt, vote_count: vote.voteCount } : opt,
-            ),
-          }
-        },
-      )
+    case 'pollVote':
+      // No screen renders polls, so there is no cache to patch.
       break
-    }
 
-    case 'taskUpdate': {
-      const task = envelope.payload.taskUpdate
-      // Inject task status/assignee change into every cached list of the
-      // channel's tasks, whatever status filter each was fetched with.
-      queryClient.setQueriesData(
-        { queryKey: keys.messaging.tasksOf(task.channelId) },
-        (old: { tasks: ChatTask[] } | undefined) => {
-          if (!old) return old
-          return {
-            ...old,
-            tasks: old.tasks.map((t: ChatTask) =>
-              t.id === task.taskId
-                ? { ...t, status: task.status || t.status, assignee_id: task.assigneeId || t.assignee_id, title: task.title || t.title }
-                : t,
-            ),
-          }
-        },
-      )
+    case 'taskUpdate':
+      applyTaskUpdate(envelope.payload.taskUpdate)
       break
-    }
 
     case 'workspaceSubscribed': {
       const ack = envelope.payload.workspaceSubscribed
@@ -687,20 +603,6 @@ function noteChanges(
   })
 }
 
-/** Plain-text preview of a message body: tags stripped, whitespace folded, capped. */
-function previewText(content: string): string {
-  return content.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
-}
-
-/** Proto Timestamp (or nothing) to ISO; "now" when the server omitted it. */
-function timestampToIso(ts: WSChatMessage['createdAt']): string {
-  if (ts && ts.seconds !== undefined) {
-    const ms = Number(ts.seconds) * 1000 + Math.floor((ts.nanos ?? 0) / 1e6)
-    if (Number.isFinite(ms) && ms > 0) return new Date(ms).toISOString()
-  }
-  return new Date().toISOString()
-}
-
 /**
  * A reply arrived: add it to its thread (if that thread is loaded), move the
  * topic's reply count, and remember who replied last for the topic summary.
@@ -742,26 +644,6 @@ function injectReply(msg: WSChatMessage, set: (fn: (s: WebSocketState) => Partia
       [parentId]: { senderId: msg.senderId, senderName: msg.senderName || '', timestamp: timestampToIso(msg.createdAt) },
     },
   }))
-}
-
-/** Convert a WebSocket ChatMessage (proto camelCase) to API Message (snake_case). */
-function convertChatMsgToMessage(chatMsg: WSChatMessage): Message {
-  return {
-    id: chatMsg.id,
-    channel_id: chatMsg.channelId,
-    sender_id: chatMsg.senderId,
-    sender_name: chatMsg.senderName,
-    content: chatMsg.content,
-    content_format: chatMsg.contentFormat || 'markdown',
-    created_at: chatMsg.createdAt ?? new Date().toISOString(),
-    reply_count: chatMsg.replyCount || 0,
-    parent_message_id: chatMsg.parentMessageId || '',
-    mentions: chatMsg.mentions || [],
-    linked_entity_type: chatMsg.linkedEntityType || '',
-    linked_entity_id: chatMsg.linkedEntityId || '',
-    reactions: [],
-    is_pinned: false,
-  }
 }
 
 /**

@@ -90,8 +90,8 @@ func TestCreateMyWorkspace_RefusesBadNamesAndCreatesNothing(t *testing.T) {
 		"81 runes":    strings.Repeat("a", 81),
 		"newline":     "Tổ\nĐối soát",
 		"NUL":         "Tổ\x00",
-		"bidi":        "Tổ‮Đối soát", // right-to-left override: spoofs how a name reads
-		"zero width":  "​",
+		"bidi":        "Tổ\u202eĐối soát", // right-to-left override: spoofs how a name reads
+		"zero width":  "\u200b",
 		"only spaces": "  ",
 	} {
 		before := w.workspaceCount()

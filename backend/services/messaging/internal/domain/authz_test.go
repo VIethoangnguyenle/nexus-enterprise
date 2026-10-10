@@ -34,12 +34,13 @@ type grant struct{ user, object, op string }
 type scriptedPolicyRead struct {
 	policypb.PolicyReadServiceClient
 
-	mu       sync.Mutex
-	allow    map[grant]bool
-	err      error
-	children map[string][]*policypb.NGACNode
-	checks   []grant
-	noGlobal bool // PC_Global cannot be found
+	mu          sync.Mutex
+	allow       map[grant]bool
+	err         error
+	children    map[string][]*policypb.NGACNode
+	checks      []grant
+	noGlobal    bool  // PC_Global cannot be found
+	childrenErr error // GetChildren fails
 }
 
 func (p *scriptedPolicyRead) CheckAccess(_ context.Context, req *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
@@ -62,6 +63,9 @@ func (p *scriptedPolicyRead) IsAssigned(context.Context, *policypb.IsAssignedReq
 }
 
 func (p *scriptedPolicyRead) GetChildren(_ context.Context, req *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	if p.childrenErr != nil {
+		return nil, p.childrenErr
+	}
 	return &policypb.NodeList{Nodes: p.children[req.NodeId]}, nil
 }
 

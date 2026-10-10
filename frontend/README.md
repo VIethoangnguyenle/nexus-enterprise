@@ -1,16 +1,45 @@
-# React + Vite
+# Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React 19 single-page app for the NGAC platform: Vite, TanStack Router and Query, Zustand, Tailwind 4.
+TanStack Query owns server state; Zustand owns client state (the WebSocket store is the one deliberate exception).
 
-Currently, two official plugins are available:
+Design source of truth is [`../DESIGN.md`](../DESIGN.md) ("Tín hiệu") and the approved mockups in
+[`../design/mockups/`](../design/mockups/). Design there first; this code renders that design.
+Repo-wide rules live in [`../CLAUDE.md`](../CLAUDE.md).
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Scripts
 
-## React Compiler
+Run from this directory.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Command | What it does |
+| --- | --- |
+| `npm run dev` | Vite dev server. From the repo root, `make dev` starts the infra, all Go services and this. |
+| `npm test` | Vitest (jsdom), one run. `npm run test:watch` to watch. |
+| `npm run lint` | ESLint, including the design-rule restrictions (no raw palette classes, `transition-all`, etc.). |
+| `npm run typecheck` | Full `tsc --noEmit`. |
+| `npm run typecheck:diff` | Compares error counts per file with `typecheck-baseline.txt`; fails if any file gets worse. Never grow the baseline; shrink it when you fix errors. |
+| `npm run build` | Production build. |
+| `npm run proto:gen` | Regenerates `src/generated/` from `backend/proto/messaging/ws.proto`. Needs `protoc`. |
 
-## Expanding the ESLint configuration
+## Dev proxy
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+There is no gateway. In native dev, [`vite.config.js`](vite.config.js) forwards `/api/*` to the Go services on their own
+ports, and `/api/ws` to the WebSocket server on `:8081`. It is not a flat table: `/api/workspaces` re-dispatches nested
+paths by regex (`/drive`, `/documents`, `/channels`, `/contacts`, `/asset*`) to different services, and `/api/messages`
+must stay declared before `/api/me`. A new REST route has to be added there, or it will 404 in native dev while working
+in Docker (where Traefik routes).
+
+## Generated code
+
+Never hand-edit:
+
+- `src/routeTree.gen.ts`: written by the TanStack Router plugin on `dev`/`build`.
+- `src/generated/`: protobuf wire types, from `npm run proto:gen`. After a shared `.proto` change also run `make proto`
+  at the repo root.
+
+## Layout
+
+- `src/routes/`: file-based routes; screens live in `src/components/<area>/`.
+- `src/api/`: typed REST clients. `src/hooks/`: query and mutation hooks; `src/hooks/keys/` is the single source of query keys.
+- `src/stores/`: Zustand stores (`auth`, `ui`, `drive`, `websocket`).
+- `src/lib/`: pure logic (models, search-param builders, formatting, realtime planning). `src/test/`: shared fixtures.

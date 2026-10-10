@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"ngac-platform/services/auth/internal/auth"
 	"ngac-platform/services/auth/internal/domain"
 )
 
@@ -17,12 +16,8 @@ import (
 func seedPasswordUser(t *testing.T, w *fakeWorld, email, password string) string {
 	t.Helper()
 	u := w.addUser(email)
-	hash, err := auth.HashPassword(password)
-	if err != nil {
-		t.Fatal(err)
-	}
 	w.mu.Lock()
-	w.users[u.ID].Password = hash
+	w.users[u.ID].Password = "stored-hash-of-" + password
 	w.mu.Unlock()
 	return u.ID
 }

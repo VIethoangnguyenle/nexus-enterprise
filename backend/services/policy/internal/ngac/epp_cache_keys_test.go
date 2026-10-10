@@ -75,7 +75,7 @@ func TestCacheInvalidator_DeletesKeysTheDecisionCacheWrote(t *testing.T) {
 	rdb := testRedis(t, 11)
 	ctx := context.Background()
 	g := buildFailClosedGraph()
-	cache := ngac.NewLayeredCache(rdb, nil, nil)
+	cache := ngac.NewLayeredCache(rdb)
 	inv := ngac.NewCacheInvalidator(rdb, func() *ngac.Graph { return g })
 
 	allow := func(req ngac.AccessRequest) {
@@ -122,7 +122,7 @@ func TestCacheInvalidator_DeletesKeysTheDecisionCacheWrote(t *testing.T) {
 func TestLayeredCache_RefusesErrorDerivedDecision(t *testing.T) {
 	rdb := testRedis(t, 11)
 	ctx := context.Background()
-	cache := ngac.NewLayeredCache(rdb, nil, nil)
+	cache := ngac.NewLayeredCache(rdb)
 	req := ngac.AccessRequest{UserNodeID: "u-alice", ObjectNodeID: "oa-docs", Operation: "read", WorkspaceID: "ws-1"}
 
 	cache.Set(ctx, req, &ngac.AccessDecision{Decision: ngac.DecisionDeny, EvaluationErr: errors.New("db down")})

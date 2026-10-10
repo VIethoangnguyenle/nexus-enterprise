@@ -76,3 +76,14 @@ The UI SHALL only ask the policy service about operations the backend actually e
 #### Scenario: Object store unreachable while confirming
 - **WHEN** the document service cannot reach the object store
 - **THEN** the answer is 500 `internal error`, the file stays pending, and no host name appears in the body
+
+### Requirement: A full quota and a lost race are refusals with a reason
+Whether the caller may write comes first: a caller without write on the destination is refused (403, gRPC `PermissionDenied`) whatever room is left, and so learns nothing about the workspace's usage. When creating a file would take the workspace past its storage quota (bytes or number of files), `POST /api/workspaces/{id}/drive/files` SHALL answer `413 {"message":"storage quota exceeded","reason":"quota_exceeded"}`; over gRPC the code is `ResourceExhausted`. When another request changed the item first (a move that lost the race for the same item), the answer SHALL be `409 {"message":"item was changed by another request; retry","reason":"item_changed"}` (gRPC `Aborted`). A lock that could not be had in time stays a generic 500. Only the class of the error decides the answer: a database error whose text mentions the quota is still a 500.
+
+#### Scenario: Upload over the quota
+- **WHEN** a member asks to create a file larger than the room the workspace has left
+- **THEN** the answer is 413 with reason `quota_exceeded`, no item is created and nothing is charged
+
+#### Scenario: Two moves of one item
+- **WHEN** two requests move the same item at once
+- **THEN** the loser is told 409 `item_changed` and may retry

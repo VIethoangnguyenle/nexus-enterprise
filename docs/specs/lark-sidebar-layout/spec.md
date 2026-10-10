@@ -16,7 +16,7 @@ the code.
 **Bổ sung 2026-08-01 — di cư design system.** `AppSidebar.tsx:105` giờ viết `w-70` thay cho
 `w-[280px]`. Đây chỉ là đổi cách viết sang thang spacing, **không phải sửa độ lệch**: `w-70`
 bằng đúng 280px, nên khoảng cách với 240px spec đòi vẫn còn nguyên và quyết định trên vẫn chưa
-được đưa ra. Nút điều hướng trong sidebar đã chuyển sang primitive `NavRow`; chế độ thu gọn 64px
+được đưa ra. Các mục điều hướng trong sidebar là `Link` của router với kiểu dáng riêng trong `AppSidebar.tsx` (primitive `NavRow` đã bị xoá); chế độ thu gọn 64px
 vẫn không tồn tại.
 
 ## Requirements

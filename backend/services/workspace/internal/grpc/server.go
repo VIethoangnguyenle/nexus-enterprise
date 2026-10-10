@@ -36,7 +36,6 @@ type WorkspaceDomainService interface {
 	CreateFolder(ctx context.Context, callerNodeID, wsID, name, parentOaID string) (*domain.Folder, error)
 	ListFolders(ctx context.Context, callerNodeID, wsID string) ([]*domain.Folder, error)
 	DeleteFolder(ctx context.Context, callerNodeID, wsID, folderID string) error
-	DeletePermission(ctx context.Context, callerNodeID, wsID, permissionID string) error
 }
 
 // WorkspaceServer implements the workspace gRPC service.
@@ -183,19 +182,6 @@ func (s *WorkspaceServer) ListFolders(ctx context.Context, req *pb.ListFoldersRe
 // DeleteFolder removes a folder from the NGAC graph.
 func (s *WorkspaceServer) DeleteFolder(ctx context.Context, req *pb.DeleteFolderRequest) (*pb.Empty, error) {
 	if err := s.svc.DeleteFolder(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, req.WorkspaceId, req.FolderId); err != nil {
-		return nil, mapError(err)
-	}
-	return &pb.Empty{}, nil
-}
-
-// ListPermissions is a placeholder (not yet implemented).
-func (s *WorkspaceServer) ListPermissions(ctx context.Context, req *pb.ListPermissionsRequest) (*pb.PermissionList, error) {
-	return &pb.PermissionList{}, nil
-}
-
-// DeletePermission authorizes the caller; removal itself is not yet implemented.
-func (s *WorkspaceServer) DeletePermission(ctx context.Context, req *pb.DeletePermissionRequest) (*pb.Empty, error) {
-	if err := s.svc.DeletePermission(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, req.WorkspaceId, req.PermissionId); err != nil {
 		return nil, mapError(err)
 	}
 	return &pb.Empty{}, nil

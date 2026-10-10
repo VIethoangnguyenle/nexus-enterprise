@@ -177,9 +177,10 @@ var otpCodeFormat = regexp.MustCompile(`^[0-9]{6}$`)
 //
 // AUTH_FIXED_OTP_CODE selects the mode. Unset → the documented test-only
 // fixed code "999999"; any six digits → that fixed code; set but EMPTY →
-// random codes, delivered by a CodeSender. The only sender today is the
-// dev-only LogSender (APP_ENV=dev or AUTH_DEV_OTP=1); without it random-code
-// OTP is disabled and /api/auth/providers reports otp=false.
+// random codes, delivered by a CodeSender: the SMTP sender when SMTP_HOST is
+// set (codes then reach the mailbox owner and prove the address), otherwise
+// the dev-only LogSender (APP_ENV=dev or AUTH_DEV_OTP=1). With neither,
+// random-code OTP is disabled and /api/auth/providers reports otp=false.
 func otpOptions(jwtSecret string) (domain.OTPOptions, error) {
 	// Derive the at-rest HMAC key from the shared JWT secret so every auth
 	// instance verifies codes the others issued, without a new secret to manage.
@@ -201,13 +202,46 @@ func otpOptions(jwtSecret string) (domain.OTPOptions, error) {
 		return opts, nil
 	}
 
-	if domain.DevOTPMode() {
+	sender, err := smtpSender()
+	if err != nil {
+		return opts, err
+	}
+	switch {
+	case sender != nil:
+		opts.Sender = sender
+	case domain.DevOTPMode():
 		opts.Sender = domain.LogSender{}
 		slog.Info("OTP random codes delivered to the log (dev mode only)")
-	} else {
+	default:
 		slog.Warn("OTP sign-in disabled: fixed code is off and no code sender is configured")
 	}
 	return opts, nil
+}
+
+// smtpSender builds the email sender from SMTP_HOST, SMTP_PORT (default 587),
+// SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM and the optional SMTP_TLS
+// ("starttls" or "tls"; default by port). It returns nil when SMTP_HOST is
+// unset, and an error when it is set but the rest is unusable, so a half
+// configured production never silently falls back to no sign-in.
+func smtpSender() (*domain.SMTPSender, error) {
+	host := strings.TrimSpace(os.Getenv("SMTP_HOST"))
+	if host == "" {
+		return nil, nil
+	}
+	s, err := domain.NewSMTPSender(domain.SMTPConfig{
+		Host:     host,
+		Port:     os.Getenv("SMTP_PORT"),
+		Username: os.Getenv("SMTP_USERNAME"),
+		Password: os.Getenv("SMTP_PASSWORD"),
+		From:     os.Getenv("SMTP_FROM"),
+		TLS:      os.Getenv("SMTP_TLS"),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("SMTP_HOST is set but the SMTP configuration is unusable: %w", err)
+	}
+	// Host and from address are not secrets; the password never is logged.
+	slog.Info("OTP codes delivered by email over SMTP", "host", host, "port", os.Getenv("SMTP_PORT"))
+	return s, nil
 }
 
 // googleOptions configures "Sign in with Google" from the environment.

@@ -79,10 +79,6 @@ export function shareTargetName(share: DriveShare, people: PeopleDirectory): str
   return share.share_type === 'user' ? UNKNOWN_PERSON : 'Nhóm người dùng'
 }
 
-/** Newest first, for activity feeds. */
-export const byNewest = (a: { created_at: unknown }, b: { created_at: unknown }) =>
-  toMillis(b.created_at) - toMillis(a.created_at)
-
 /** One token for "this version of this item": a change to either name or time is a new arrival. */
 export function itemVersion(item: DriveItem): string {
   return `${item.id}@${item.name}@${toMillis(item.updated_at)}`

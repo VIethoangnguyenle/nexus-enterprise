@@ -16,6 +16,10 @@ The Phê duyệt screen SHALL offer the tabs "Chờ tôi duyệt", "Tôi đã g�
 - **WHEN** the user chooses "Xem thêm" on a paged tab
 - **THEN** the next page is added under the rows already shown; none is replaced
 
+#### Scenario: Every row is reached
+- **WHEN** a tab with five rows is read two at a time by following `next_cursor` until it is absent
+- **THEN** each of the five rows is seen exactly once: the cursor names the last row of the page, so the next page starts right after it and skips none, even where rows share a timestamp: the cursor is the opaque pair (time, id) the lists are ordered by, and a cursor that is not one the service issued is 400 (this holds for "Đã xử lý", "Tôi đã gửi" and "Phòng ban")
+
 ### Requirement: Request table
 Each request row SHALL show its title, the sender (avatar and display name), the amount when the template has a currency field, and a status as a word ("Chờ bạn", "Chờ <tên bước>", "Đã duyệt", "Trả lại", "Đã huỷ"). The row's title SHALL be a real button over the whole row, reachable and activatable from the keyboard, with ↑/↓ moving between rows.
 

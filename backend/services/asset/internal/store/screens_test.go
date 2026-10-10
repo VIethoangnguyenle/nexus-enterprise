@@ -36,24 +36,6 @@ func member(t *testing.T, pool *pgxpool.Pool, wsID, display string) string {
 	return id
 }
 
-// otherWorkspace is a second workspace, owned by owner, for tenant-scoping tests.
-func otherWorkspace(t *testing.T, pool *pgxpool.Pool, owner string) string {
-	t.Helper()
-	id := "screens-ws-" + uuid.NewString()
-	_, err := pool.Exec(context.Background(), `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, id, owner)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		c := context.Background()
-		pool.Exec(c, `DELETE FROM asset_requests WHERE workspace_id = $1`, id)
-		pool.Exec(c, `DELETE FROM asset_transitions WHERE asset_id IN (SELECT id FROM assets WHERE workspace_id = $1)`, id)
-		pool.Exec(c, `DELETE FROM assets WHERE workspace_id = $1`, id)
-		pool.Exec(c, `DELETE FROM asset_types WHERE workspace_id = $1`, id)
-		pool.Exec(c, `DELETE FROM tenant_users WHERE tenant_id = $1`, id)
-		pool.Exec(c, `DELETE FROM workspaces WHERE id = $1`, id)
-	})
-	return id
-}
-
 func newAsset(t *testing.T, s *store.Store, typeID, wsID, creator, name, state string) *store.Asset {
 	t.Helper()
 	a := &store.Asset{Name: name, TypeID: typeID, WorkspaceID: wsID, State: state, CustomFields: json.RawMessage(`{}`), CreatedBy: creator}

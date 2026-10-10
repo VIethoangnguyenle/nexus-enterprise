@@ -7,7 +7,7 @@ import {
 import { renderWithClient, resetClient } from '../../test/render'
 import { D, ITEMS, U, UUID_RE, WS_ID, calls, driveFixtureApi, resetFixtures } from '../../test/drive-fixtures'
 import { validateDriveSearch } from '../../lib/drive-search'
-import { apiFetch } from '../../api/client'
+import { ApiError, apiFetch } from '../../api/client'
 import { driveApi } from '../../api/drive'
 import { useToastStore } from '../primitives'
 import { useWebSocketStore } from '../../stores/websocket.store'
@@ -639,6 +639,24 @@ describe('DriveScreen: actions', () => {
     })
     expect(put).toHaveBeenCalledWith('https://storage.test/put', file)
     put.mockRestore()
+  })
+
+  it('says the workspace storage is full when an upload is refused for quota', async () => {
+    const user = userEvent.setup()
+    api.mockImplementation(async (path: string, init?: RequestInit) => {
+      if (path === `/workspaces/${WS_ID}/drive/files` && init?.method === 'POST') {
+        throw new ApiError('quota', 413, { reason: 'quota_exceeded' })
+      }
+      return driveFixtureApi(path, init)
+    })
+    await renderDrive()
+    await within(table()).findByText('Đối soát')
+    const file = new File(['abc'], 'lon.pdf', { type: 'application/pdf' })
+    await user.upload(screen.getByLabelText('Chọn tệp để tải lên'), file)
+    await waitFor(() => expect(useToastStore.getState().toasts.length).toBeGreaterThan(0))
+    const text = useToastStore.getState().toasts.map((t) => t.message).join(' ')
+    expect(text).toContain('kho tài liệu của workspace đã đầy')
+    expect(text).not.toContain('kết nối mạng')
   })
 
   it('accepts files dropped on the list', async () => {

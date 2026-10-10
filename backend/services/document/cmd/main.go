@@ -49,7 +49,10 @@ func main() {
 	minioAccessKey := bootstrap.Env("MINIO_ACCESS_KEY", "ngac-admin")
 	minioSecretKey := bootstrap.Env("MINIO_SECRET_KEY", "ngac-secret-key")
 	minioUseSSL := bootstrap.Env("MINIO_USE_SSL", "false") == "true"
+	// Where browsers reach the store, for presigned URLs. MINIO_PUBLIC_SECURE=true
+	// signs https URLs (production, behind TLS); unset keeps plain http for dev.
 	minioPublicEndpoint := bootstrap.Env("MINIO_PUBLIC_ENDPOINT", "localhost/storage")
+	minioPublicSecure := bootstrap.Env("MINIO_PUBLIC_SECURE", "false") == "true"
 
 	pool, err := bootstrap.ConnectDB(ctx, dbURL)
 	if err != nil {
@@ -70,17 +73,13 @@ func main() {
 	slog.Info("minio internal client initialized", "endpoint", minioEndpoint)
 
 	// Initialize presign MinIO client for generating presigned URLs with the public endpoint.
-	presignClient, err := minio.New(minioPublicEndpoint, &minio.Options{
-		Creds:        credentials.NewStaticV4(minioAccessKey, minioSecretKey, ""),
-		Secure:       false,
-		Region:       "us-east-1",
-		BucketLookup: minio.BucketLookupPath,
-	})
+	presignClient, err := storage.NewPresignClient(
+		storage.PublicEndpoint{Host: minioPublicEndpoint, Secure: minioPublicSecure}, minioAccessKey, minioSecretKey)
 	if err != nil {
 		slog.Error("failed to create minio presign client", "endpoint", minioPublicEndpoint, "error", err)
 		os.Exit(1)
 	}
-	slog.Info("minio presign client initialized", "endpoint", minioPublicEndpoint)
+	slog.Info("minio presign client initialized", "endpoint", minioPublicEndpoint, "secure", minioPublicSecure)
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
 	if err != nil {

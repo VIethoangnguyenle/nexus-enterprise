@@ -45,7 +45,7 @@ func NewReadServer(
 	}
 }
 
-// CheckAccess evaluates access via the AccessEvaluator (L1 Redis → L2 Materialized → L3 BFS/CTE + prohibitions).
+// CheckAccess evaluates access via the AccessEvaluator (L1 Redis → L3 BFS/CTE + prohibitions).
 func (s *ReadServer) CheckAccess(ctx context.Context, req *pb.CheckAccessRequest) (*pb.AccessDecision, error) {
 	accessReq := ngac.AccessRequest{
 		UserNodeID:   req.UserNodeId,

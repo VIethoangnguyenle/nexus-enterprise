@@ -71,6 +71,15 @@ func (s *Service) PinMessage(ctx context.Context, channelID, messageID, userNode
 	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpWrite); err != nil {
 		return err
 	}
+	// A pin is shown to everyone who can read the channel, with the message's
+	// text. The message must therefore be one of this channel's.
+	owner, err := s.store.GetChannelIDForMessage(ctx, messageID)
+	if err != nil {
+		return fmt.Errorf("load message: %w", err)
+	}
+	if owner != channelID {
+		return fmt.Errorf("%w: message %s is not in this channel", ErrInvalidInput, messageID)
+	}
 	return s.store.InsertPin(ctx, channelID, messageID, userID)
 }
 
@@ -98,8 +107,12 @@ func (s *Service) ListPins(ctx context.Context, channelID, userNodeID string) ([
 	var result []*pb.PinnedMessage
 	for _, p := range pins {
 		// Load the full message for each pin
-		msgs, _ := s.store.GetThread(ctx, p.MessageID)
-		if len(msgs) == 0 {
+		msgs, err := s.store.GetThread(ctx, p.MessageID)
+		if err != nil {
+			return nil, fmt.Errorf("load pinned message: %w", err)
+		}
+		// A pin that names another channel's message is never shown.
+		if len(msgs) == 0 || msgs[0].ChannelID != channelID {
 			continue
 		}
 		result = append(result, &pb.PinnedMessage{
@@ -129,7 +142,10 @@ func (s *Service) MarkChannelRead(ctx context.Context, userID, userNodeID, chann
 	// marked read so a receipt cannot reference someone else's conversation.
 	if lastMessageID != "" {
 		owner, err := s.store.GetChannelIDForMessage(ctx, lastMessageID)
-		if err != nil || owner == "" {
+		if err != nil {
+			return fmt.Errorf("load message: %w", err)
+		}
+		if owner == "" {
 			return fmt.Errorf("%w: unknown message %s", ErrInvalidInput, lastMessageID)
 		}
 		if owner != channelID {
@@ -177,9 +193,9 @@ func (s *Service) SearchMessages(ctx context.Context, channelID, userNodeID, que
 }
 
 // EnrichMessagesWithMetadata adds reactions and pin status to a slice of messages.
-func (s *Service) EnrichMessagesWithMetadata(ctx context.Context, msgs []*store.Message, channelID string) {
+func (s *Service) EnrichMessagesWithMetadata(ctx context.Context, msgs []*store.Message, channelID string) error {
 	if len(msgs) == 0 {
-		return
+		return nil
 	}
 
 	// Batch load reactions
@@ -187,10 +203,16 @@ func (s *Service) EnrichMessagesWithMetadata(ctx context.Context, msgs []*store.
 	for i, m := range msgs {
 		msgIDs[i] = m.ID
 	}
-	reactionsMap, _ := s.store.ListReactionsForMessages(ctx, msgIDs)
+	reactionsMap, err := s.store.ListReactionsForMessages(ctx, msgIDs)
+	if err != nil {
+		return fmt.Errorf("load reactions: %w", err)
+	}
 
 	// Batch load pin status
-	pinnedSet, _ := s.store.PinnedMessageIDs(ctx, channelID)
+	pinnedSet, err := s.store.PinnedMessageIDs(ctx, channelID)
+	if err != nil {
+		return fmt.Errorf("load pins: %w", err)
+	}
 
 	for _, m := range msgs {
 		if groups, ok := reactionsMap[m.ID]; ok {
@@ -198,4 +220,5 @@ func (s *Service) EnrichMessagesWithMetadata(ctx context.Context, msgs []*store.
 		}
 		m.IsPinned = pinnedSet[m.ID]
 	}
+	return nil
 }

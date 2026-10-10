@@ -90,14 +90,6 @@ func ResolveRemovalImpact(g GraphReader, nodeID string) RemovalImpact {
 	return impact
 }
 
-// FirstWorkspace returns the first workspace ID, or "" (global scope) if none.
-func FirstWorkspace(wsIDs []string) string {
-	if len(wsIDs) > 0 {
-		return wsIDs[0]
-	}
-	return ""
-}
-
 func sortedKeys(set map[string]bool) []string {
 	out := make([]string, 0, len(set))
 	for k := range set {

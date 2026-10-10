@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // Mock fetch and auth store before importing messaging API
 const mockFetch = vi.fn()
-global.fetch = mockFetch
+globalThis.fetch = mockFetch
 
 vi.mock('../stores/auth.store', () => ({
   useAuthStore: { getState: () => ({ accessToken: 'test-token', logout: vi.fn(), setAccessToken: vi.fn() }) },

@@ -3,7 +3,6 @@ package store
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -52,29 +51,6 @@ type DriveItem struct {
 // for the item's drive context: another run created it first.
 var ErrRootExists = errors.New("drive root already exists for this context")
 
-// DriveShare represents a row in the drive_shares table.
-type DriveShare struct {
-	ID           string
-	DriveItemID  string
-	ShareType    string
-	TargetNGACID *string
-	TargetLabel  *string
-	Operations   []string
-	NGACShareOA  string
-	CreatedBy    string
-	CreatedAt    time.Time
-}
-
-// DriveQuota represents a row in the drive_quotas table.
-type DriveQuota struct {
-	WorkspaceID string
-	MaxBytes    int64
-	UsedBytes   int64
-	MaxFiles    int32
-	UsedFiles   int32
-	UpdatedAt   time.Time
-}
-
 // InsertItem creates a new drive item.
 func (s *Store) InsertItem(ctx context.Context, item *DriveItem) error {
 	if item.ID == "" {
@@ -92,9 +68,9 @@ func (s *Store) InsertItem(ctx context.Context, item *DriveItem) error {
 			item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
 			scope_oa_id, owner_id, status, is_root)
 		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
-		item.ID, item.WorkspaceID, item.DriveContext, nilStr(item.DriveContextID),
+		item.ID, item.WorkspaceID, item.DriveContext, NilIfEmpty(item.DriveContextID),
 		item.ParentID, item.ItemType, item.Name, item.MimeType, item.SizeBytes,
-		item.ObjectKey, item.StorageDocID, item.NGACNodeID, nilStr(item.ScopeOAID),
+		item.ObjectKey, item.StorageDocID, item.NGACNodeID, NilIfEmpty(item.ScopeOAID),
 		item.OwnerID, item.Status, item.IsRoot)
 	var pgErr *pgconn.PgError
 	if item.IsRoot && errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "drive_items_one_root_per_context" {
@@ -326,174 +302,6 @@ func (s *Store) UpdateStatus(ctx context.Context, id, status string) error {
 	return err
 }
 
-// ErrNotPending is returned when a file is confirmed that is no longer pending:
-// it was already confirmed, or removed, since the caller looked.
-var ErrNotPending = errors.New("file is not pending")
-
-// ActivateFile publishes a pending upload and charges it to the workspace's
-// quota in one transaction: a file is never active without being counted, and a
-// second confirmation (which finds nothing pending) charges nothing. sizeBytes,
-// the size the store reports for the uploaded object, replaces the declared one.
-func (s *Store) ActivateFile(ctx context.Context, id, workspaceID string, sizeBytes int64) error {
-	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		tag, err := tx.Exec(ctx,
-			`UPDATE drive_items SET size_bytes = $2, status = 'active', trashed_at = NULL, updated_at = NOW()
-			 WHERE id = $1 AND status = 'pending'`, id, sizeBytes)
-		if err != nil {
-			return fmt.Errorf("publish file: %w", err)
-		}
-		if tag.RowsAffected() != 1 {
-			return ErrNotPending
-		}
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO drive_quotas (workspace_id, used_bytes, used_files) VALUES ($1, $2, 1)
-			 ON CONFLICT (workspace_id) DO UPDATE SET
-			   used_bytes = drive_quotas.used_bytes + EXCLUDED.used_bytes,
-			   used_files = drive_quotas.used_files + 1, updated_at = NOW()`, workspaceID, sizeBytes); err != nil {
-			return fmt.Errorf("charge quota: %w", err)
-		}
-		return nil
-	})
-}
-
-// DeleteItemReleasingQuota permanently removes an item and, in the same
-// transaction, gives back the quota the files under it held. The files are read
-// inside the transaction with their rows locked, so a file added or confirmed
-// while the delete runs is either in the list (and released) or blocked until
-// the delete is over; the list is never a stale copy. It returns every file the
-// delete removed (the caller removes their stored objects) and nothing when the
-// item was already gone. A pending upload was never charged and releases
-// nothing. It returns ErrFolderHasDocuments when the database refuses because
-// text documents still hang on the folder or one beneath it.
-func (s *Store) DeleteItemReleasingQuota(ctx context.Context, id string) ([]*DriveItem, error) {
-	var files []*DriveItem
-	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
-		files = nil
-		rows, err := tx.Query(ctx,
-			`SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
-				item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-				COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
-			 FROM drive_items WHERE id IN (
-				WITH RECURSIVE tree AS (
-					SELECT id FROM drive_items WHERE id = $1
-					UNION ALL
-					SELECT di.id FROM drive_items di JOIN tree t ON di.parent_id = t.id
-				) SELECT id FROM tree)
-			 ORDER BY id FOR UPDATE`, id)
-		if err != nil {
-			return fmt.Errorf("lock subtree: %w", err)
-		}
-		for rows.Next() {
-			item := &DriveItem{}
-			if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.DriveContext, &item.DriveContextID,
-				&item.ParentID, &item.ItemType, &item.Name, &item.MimeType, &item.SizeBytes,
-				&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.ScopeOAID,
-				&item.OwnerID, &item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
-				rows.Close()
-				return fmt.Errorf("scan subtree: %w", err)
-			}
-			if item.ItemType == "file" {
-				files = append(files, item)
-			}
-		}
-		rows.Close()
-		if err := rows.Err(); err != nil {
-			return fmt.Errorf("read subtree: %w", err)
-		}
-
-		tag, err := tx.Exec(ctx, `DELETE FROM drive_items WHERE id = $1`, id)
-		if err != nil {
-			return err
-		}
-		if tag.RowsAffected() == 0 {
-			files = nil
-			return nil
-		}
-		for _, f := range files {
-			if f.SizeBytes == nil || f.Status == "pending" {
-				continue
-			}
-			if _, err := tx.Exec(ctx,
-				`UPDATE drive_quotas SET used_bytes = GREATEST(0, used_bytes - $1),
-					used_files = GREATEST(0, used_files - 1), updated_at = NOW()
-				 WHERE workspace_id = $2`, *f.SizeBytes, f.WorkspaceID); err != nil {
-				return fmt.Errorf("release quota: %w", err)
-			}
-		}
-		return nil
-	})
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "text_documents_folder_id_fkey" {
-		return nil, ErrFolderHasDocuments
-	}
-	if err != nil {
-		return nil, err
-	}
-	return files, nil
-}
-
-// ErrFolderHasDocuments is returned when a delete would remove a folder (or one
-// beneath it) that still holds text documents. text_documents.folder_id is
-// ON DELETE RESTRICT: the writing in it is never destroyed as a side effect.
-var ErrFolderHasDocuments = errors.New("folder holds text documents")
-
-// CountTextDocumentsUnder counts the text documents in a folder and in every
-// folder beneath it, in any state.
-func (s *Store) CountTextDocumentsUnder(ctx context.Context, folderID string) (int, error) {
-	var n int
-	err := s.db.QueryRow(ctx,
-		`WITH RECURSIVE tree AS (
-			SELECT id FROM drive_items WHERE id = $1
-			UNION ALL
-			SELECT di.id FROM drive_items di JOIN tree t ON di.parent_id = t.id
-		)
-		SELECT count(*) FROM text_documents WHERE folder_id IN (SELECT id FROM tree)`, folderID).Scan(&n)
-	return n, err
-}
-
-// DeleteItem permanently removes a drive item. It returns ErrFolderHasDocuments
-// when the database refuses because text documents still hang on the folder or
-// one beneath it (a document saved after the caller last looked).
-func (s *Store) DeleteItem(ctx context.Context, id string) error {
-	_, err := s.db.Exec(ctx, `DELETE FROM drive_items WHERE id = $1`, id)
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23503" && pgErr.ConstraintName == "text_documents_folder_id_fkey" {
-		return ErrFolderHasDocuments
-	}
-	return err
-}
-
-// GetChildFiles returns all file items under a folder recursively (for permanent delete + quota).
-func (s *Store) GetChildFiles(ctx context.Context, parentID string) ([]*DriveItem, error) {
-	rows, err := s.db.Query(ctx,
-		`WITH RECURSIVE tree AS (
-			SELECT id FROM drive_items WHERE parent_id = $1
-			UNION ALL
-			SELECT di.id FROM drive_items di JOIN tree t ON di.parent_id = t.id
-		)
-		SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
-			item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-			COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
-		FROM drive_items WHERE id IN (SELECT id FROM tree) AND item_type = 'file'`, parentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var items []*DriveItem
-	for rows.Next() {
-		item := &DriveItem{}
-		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.DriveContext, &item.DriveContextID,
-			&item.ParentID, &item.ItemType, &item.Name, &item.MimeType, &item.SizeBytes,
-			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.ScopeOAID,
-			&item.OwnerID, &item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt); err != nil {
-			return nil, err
-		}
-		items = append(items, item)
-	}
-	return items, nil
-}
-
 // GetBreadcrumb returns the path from a folder to the root.
 func (s *Store) GetBreadcrumb(ctx context.Context, folderID string) ([]struct{ ID, Name string }, error) {
 	// Depth counts up from the folder asked about, so the deepest row is the
@@ -526,239 +334,16 @@ func (s *Store) GetBreadcrumb(ctx context.Context, folderID string) ([]struct{ I
 	return crumbs, rows.Err()
 }
 
-// FindRootByContext finds the root folder for a workspace or channel drive.
-func (s *Store) FindRootByContext(ctx context.Context, workspaceID, driveContext, driveContextID string) (*DriveItem, error) {
-	item := &DriveItem{}
-	err := s.db.QueryRow(ctx,
-		`SELECT id, workspace_id, drive_context, COALESCE(drive_context_id,''), parent_id,
-			item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-			COALESCE(scope_oa_id,''), owner_id, status, trashed_at, created_at, updated_at
-		 FROM drive_items
-		 WHERE workspace_id = $1 AND drive_context = $2
-		   AND COALESCE(drive_context_id,'') = $3
-		   AND parent_id IS NULL AND item_type = 'folder' AND is_root AND status = 'active'
-		 LIMIT 1`, workspaceID, driveContext, driveContextID).
-		Scan(&item.ID, &item.WorkspaceID, &item.DriveContext, &item.DriveContextID,
-			&item.ParentID, &item.ItemType, &item.Name, &item.MimeType, &item.SizeBytes,
-			&item.ObjectKey, &item.StorageDocID, &item.NGACNodeID, &item.ScopeOAID,
-			&item.OwnerID, &item.Status, &item.TrashedAt, &item.CreatedAt, &item.UpdatedAt)
-	if err == pgx.ErrNoRows {
-		return nil, nil
-	}
-	return item, err
-}
-
-// RootWorkspaceByNode returns the workspace whose drive root hangs on the given
-// OA, or "" when no root does. A drive OA that is the root of one workspace must
-// never be adopted by another.
-func (s *Store) RootWorkspaceByNode(ctx context.Context, nodeID string) (string, error) {
-	var ws string
-	err := s.db.QueryRow(ctx,
-		`SELECT workspace_id FROM drive_items WHERE ngac_node_id = $1 AND is_root LIMIT 1`, nodeID).Scan(&ws)
-	if err == pgx.ErrNoRows {
-		return "", nil
-	}
-	return ws, err
-}
-
 // --- Shares ---
-
-// InsertShare creates a drive share record.
-func (s *Store) InsertShare(ctx context.Context, share *DriveShare) error {
-	if share.ID == "" {
-		share.ID = uuid.New().String()
-	}
-	_, err := s.db.Exec(ctx,
-		`INSERT INTO drive_shares (id, drive_item_id, share_type, target_ngac_id, target_label,
-			operations, ngac_share_oa, created_by)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-		share.ID, share.DriveItemID, share.ShareType, share.TargetNGACID, share.TargetLabel,
-		share.Operations, share.NGACShareOA, share.CreatedBy)
-	return err
-}
-
-// GetShare retrieves a share by ID.
-func (s *Store) GetShare(ctx context.Context, id string) (*DriveShare, error) {
-	share := &DriveShare{}
-	err := s.db.QueryRow(ctx,
-		`SELECT id, drive_item_id, share_type, target_ngac_id, target_label,
-			operations, ngac_share_oa, created_by, created_at
-		 FROM drive_shares WHERE id = $1`, id).
-		Scan(&share.ID, &share.DriveItemID, &share.ShareType, &share.TargetNGACID,
-			&share.TargetLabel, &share.Operations, &share.NGACShareOA, &share.CreatedBy,
-			&share.CreatedAt)
-	if err == pgx.ErrNoRows {
-		return nil, nil
-	}
-	return share, err
-}
-
-// ListSharesByItem returns all shares for a drive item.
-func (s *Store) ListSharesByItem(ctx context.Context, itemID string) ([]*DriveShare, error) {
-	rows, err := s.db.Query(ctx,
-		`SELECT id, drive_item_id, share_type, target_ngac_id, target_label,
-			operations, ngac_share_oa, created_by, created_at
-		 FROM drive_shares WHERE drive_item_id = $1 ORDER BY created_at`, itemID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var shares []*DriveShare
-	for rows.Next() {
-		share := &DriveShare{}
-		if err := rows.Scan(&share.ID, &share.DriveItemID, &share.ShareType, &share.TargetNGACID,
-			&share.TargetLabel, &share.Operations, &share.NGACShareOA, &share.CreatedBy,
-			&share.CreatedAt); err != nil {
-			return nil, err
-		}
-		shares = append(shares, share)
-	}
-	return shares, nil
-}
-
-// ListSharesByTarget returns shares targeting a specific NGAC node.
-func (s *Store) ListSharesByTarget(ctx context.Context, targetNGACIDs []string) ([]*DriveShare, error) {
-	rows, err := s.db.Query(ctx,
-		`SELECT ds.id, ds.drive_item_id, ds.share_type, ds.target_ngac_id, ds.target_label,
-			ds.operations, ds.ngac_share_oa, ds.created_by, ds.created_at
-		 FROM drive_shares ds
-		 JOIN drive_items di ON ds.drive_item_id = di.id
-		 WHERE (ds.target_ngac_id = ANY($1) OR ds.share_type = 'public')
-		   AND di.status = 'active'
-		 ORDER BY ds.created_at DESC`, targetNGACIDs)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var shares []*DriveShare
-	for rows.Next() {
-		share := &DriveShare{}
-		if err := rows.Scan(&share.ID, &share.DriveItemID, &share.ShareType, &share.TargetNGACID,
-			&share.TargetLabel, &share.Operations, &share.NGACShareOA, &share.CreatedBy,
-			&share.CreatedAt); err != nil {
-			return nil, err
-		}
-		shares = append(shares, share)
-	}
-	return shares, nil
-}
-
-// DeleteShare removes a share record.
-func (s *Store) DeleteShare(ctx context.Context, id string) error {
-	_, err := s.db.Exec(ctx, `DELETE FROM drive_shares WHERE id = $1`, id)
-	return err
-}
 
 // --- Quotas ---
 
-// GetOrCreateQuota returns the quota for a workspace, creating the default row
-// if there is none. Reading an existing row takes no lock: the insert is
-// DO NOTHING, so only the first call for a workspace writes.
-func (s *Store) GetOrCreateQuota(ctx context.Context, workspaceID string) (*DriveQuota, error) {
-	if _, err := s.db.Exec(ctx,
-		`INSERT INTO drive_quotas (workspace_id) VALUES ($1) ON CONFLICT (workspace_id) DO NOTHING`, workspaceID); err != nil {
-		return nil, fmt.Errorf("create quota: %w", err)
-	}
-	q := &DriveQuota{}
-	err := s.db.QueryRow(ctx,
-		`SELECT workspace_id, max_bytes, used_bytes, max_files, used_files, updated_at
-		 FROM drive_quotas WHERE workspace_id = $1`, workspaceID).
-		Scan(&q.WorkspaceID, &q.MaxBytes, &q.UsedBytes, &q.MaxFiles, &q.UsedFiles, &q.UpdatedAt)
-	if err != nil {
-		return nil, fmt.Errorf("get quota: %w", err)
-	}
-	return q, nil
-}
-
-// UpdateQuotaLimits sets the max_bytes and max_files for a workspace.
-func (s *Store) UpdateQuotaLimits(ctx context.Context, workspaceID string, maxBytes int64, maxFiles int32) error {
-	_, err := s.db.Exec(ctx,
-		`UPDATE drive_quotas SET max_bytes = $1, max_files = $2, updated_at = NOW()
-		 WHERE workspace_id = $3`, maxBytes, maxFiles, workspaceID)
-	return err
-}
-
-// IncrementQuota adds to used_bytes and used_files atomically.
-func (s *Store) IncrementQuota(ctx context.Context, workspaceID string, bytes int64, files int32) error {
-	_, err := s.db.Exec(ctx,
-		`UPDATE drive_quotas SET used_bytes = used_bytes + $1, used_files = used_files + $2,
-			updated_at = NOW()
-		 WHERE workspace_id = $3`, bytes, files, workspaceID)
-	return err
-}
-
-// DecrementQuota subtracts from used_bytes and used_files atomically.
-func (s *Store) DecrementQuota(ctx context.Context, workspaceID string, bytes int64, files int32) error {
-	_, err := s.db.Exec(ctx,
-		`UPDATE drive_quotas SET used_bytes = GREATEST(0, used_bytes - $1),
-			used_files = GREATEST(0, used_files - $2), updated_at = NOW()
-		 WHERE workspace_id = $3`, bytes, files, workspaceID)
-	return err
-}
-
-// CheckQuota returns true if the workspace has room for the given size.
-func (s *Store) CheckQuota(ctx context.Context, workspaceID string, additionalBytes int64) (bool, error) {
-	q, err := s.GetOrCreateQuota(ctx, workspaceID)
-	if err != nil {
-		return false, err
-	}
-	if q.MaxBytes >= 0 && q.UsedBytes+additionalBytes > q.MaxBytes {
-		return false, nil
-	}
-	if q.MaxFiles >= 0 && q.UsedFiles+1 > q.MaxFiles {
-		return false, nil
-	}
-	return true, nil
-}
-
-func nilStr(s string) *string {
+// NilIfEmpty is the nullable column value for s: nil for "", else &s.
+func NilIfEmpty(s string) *string {
 	if s == "" {
 		return nil
 	}
 	return &s
-}
-
-// UpdateFileSize updates the size_bytes column for a drive item.
-func (s *Store) UpdateFileSize(ctx context.Context, id string, sizeBytes int64) error {
-	_, err := s.db.Exec(ctx, `UPDATE drive_items SET size_bytes = $1 WHERE id = $2`, sizeBytes, id)
-	return err
-}
-
-// GetWorkspacePCID returns the NGAC PC node ID for a workspace.
-func (s *Store) GetWorkspacePCID(ctx context.Context, workspaceID string) (string, error) {
-	var pcID string
-	err := s.db.QueryRow(ctx,
-		`SELECT ngac_pc_id FROM workspaces WHERE id = $1`, workspaceID).Scan(&pcID)
-	if err == pgx.ErrNoRows {
-		return "", nil
-	}
-	return pcID, err
-}
-
-// GetWorkspaceDocumentsOAID returns the Documents OA recorded for a workspace,
-// or "" when the workspace has none recorded (or does not exist). The drive roots
-// itself there; it never works the OA out from node names.
-func (s *Store) GetWorkspaceDocumentsOAID(ctx context.Context, workspaceID string) (string, error) {
-	var oaID string
-	err := s.db.QueryRow(ctx,
-		`SELECT COALESCE(documents_oa_id, '') FROM workspaces WHERE id = $1`, workspaceID).Scan(&oaID)
-	if err == pgx.ErrNoRows {
-		return "", nil
-	}
-	return oaID, err
-}
-
-// GetChannelWorkspaceID returns the workspace_id for a channel.
-func (s *Store) GetChannelWorkspaceID(ctx context.Context, channelID string) (string, error) {
-	var wsID string
-	err := s.db.QueryRow(ctx,
-		`SELECT COALESCE(workspace_id, '') FROM channels WHERE id = $1`, channelID).Scan(&wsID)
-	if err == pgx.ErrNoRows {
-		return "", nil
-	}
-	return wsID, err
 }
 
 // SetTrashed trashes (or restores) an item and, for a folder, everything

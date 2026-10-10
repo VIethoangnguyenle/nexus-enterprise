@@ -1,15 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { Link, useNavigate, useSearch } from '@tanstack/react-router'
-import { AnimatePresence, motion } from 'motion/react'
-import { CircleAlert, FolderOpen, Plus, Upload, UserPlus, WifiOff } from 'lucide-react'
+import { useNavigate, useSearch } from '@tanstack/react-router'
+import { AnimatePresence } from 'motion/react'
+import { Plus, Upload, WifiOff } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useArrivals } from '../../hooks/useArrivals'
 import { useConnectionLost } from '../../hooks/useConnectionLost'
 import { useDownloadFile } from '../../hooks/useDownloadUrl'
-import {
-  useCreateFolder, useDriveFolder, useDriveItem, useMoveItem, useRenameItem, useRestoreItem, useSharedWithMe, useTrashItem,
-  useUploadFile,
-} from '../../hooks/useDrive'
+import { useDriveFolder, useDriveItem, useSharedWithMe } from '../../hooks/useDrive'
 import { usePeople } from '../../hooks/usePeople'
 import { usePermissions } from '../../hooks/usePermissions'
 import { NO_PERMS, type ObjectPerms } from '../../api/access'
@@ -21,16 +18,18 @@ import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { useDriveStore } from '../../stores/drive.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { Avatar, Button, FilterChip, Heading, SearchField, toast } from '../primitives'
-import { ConfirmDialog } from '../composites/ConfirmDialog'
-import { EmptyState } from '../spaces/EmptyState'
+import { Button, FilterChip, Heading, SearchField } from '../primitives'
+import { DeleteItemDialog } from './DeleteItemDialog'
+import { DriveBody } from './DriveBody'
 import { DriveBreadcrumbs, type Crumb } from './DriveBreadcrumbs'
+import { DriveBurstBanner } from './DriveBurstBanner'
 import { DriveDetailPanel } from './DriveDetailPanel'
 import { DriveTable, type RowActions } from './DriveTable'
 import { DriveTree } from './DriveTree'
 import { MoveItemDialog } from './MoveItemDialog'
 import { NameDialog } from './NameDialog'
 import { ShareDialog } from './ShareDialog'
+import { useDriveActions } from './useDriveActions'
 import {
   itemVersion, matchesName, ownerOf, sortItems,
 } from './drive-model'
@@ -40,13 +39,6 @@ const READ_ONLY: ObjectPerms = { ...NO_PERMS, read: true }
 
 /** How long after my own change the same change from the server still counts as mine. */
 const MINE_MS = 15_000
-
-type Dialog =
-  | { kind: 'new-folder' }
-  | { kind: 'rename'; item: DriveItem }
-  | { kind: 'move'; item: DriveItem }
-  | { kind: 'delete'; item: DriveItem }
-  | { kind: 'share'; item: DriveItem }
 
 /**
  * Tài liệu (design/mockups/core-screens.html §2): folder tree, the hairline
@@ -91,7 +83,6 @@ export function DriveScreen() {
   const expandFolders = useDriveStore((s) => s.expandFolders)
 
   const [query, setQuery] = useState('')
-  const [dialog, setDialog] = useState<Dialog | null>(null)
   const [dragging, setDragging] = useState(false)
   // Deleting the last row: keep the table up until the row has folded away,
   // then show the empty state (reduced motion swaps at once).
@@ -99,12 +90,6 @@ export function DriveScreen() {
   const rowsSeen = useRef({ scope: '', n: 0 })
   const fileInput = useRef<HTMLInputElement>(null)
 
-  const createFolder = useCreateFolder(wsId)
-  const upload = useUploadFile(wsId)
-  const rename = useRenameItem(wsId)
-  const move = useMoveItem(wsId)
-  const trash = useTrashItem(wsId)
-  const restore = useRestoreItem(wsId)
   const { download } = useDownloadFile()
 
   // A new place starts with no selection, no filter and an empty search.
@@ -141,6 +126,10 @@ export function DriveScreen() {
   const recentChanges = useWebSocketStore((s) => s.recentChanges)
   const mine = useRef(new Map<string, number>())
   const markMine = (id: string) => mine.current.set(id, Date.now())
+  const {
+    dialog, setDialog, closeDialog, uploadFiles, uploading, creatingFolder, renaming, moving, trashing,
+    submitNewFolder, submitRename, submitMove, submitDelete,
+  } = useDriveActions({ workspaceId: wsId, folderId, foreign, selectedId, selectItem, markMine })
   const { fresh, burst } = useArrivals(all, {
     keyOf: itemVersion,
     authorOf: (i) => {
@@ -171,24 +160,6 @@ export function DriveScreen() {
     [navigate],
   )
 
-  const uploadFiles = useCallback(
-    async (files: File[]) => {
-      if (foreign) return
-      let done = 0
-      for (const file of files) {
-        try {
-          await upload.mutateAsync({ file, parentId: folderId })
-          done++
-        } catch {
-          // The shared mutation handler has told the user which file failed.
-        }
-      }
-      if (done === 1 && files.length === 1) toast(`Đã tải lên “${files[0]!.name}”`)
-      else if (done > 0) toast(`Đã tải lên ${done} tệp`)
-    },
-    [upload, folderId, foreign],
-  )
-
   const actions: RowActions = useMemo(
     () => ({
       onSelect: (item) => selectItem(item.id),
@@ -200,53 +171,6 @@ export function DriveScreen() {
     }),
     [selectItem, download],
   )
-
-  const closeDialog = () => setDialog(null)
-
-  const submitNewFolder = async (name: string) => {
-    try {
-      await createFolder.mutateAsync({ name, parentId: folderId })
-      closeDialog()
-      toast(`Đã tạo thư mục “${name}”`)
-    } catch {
-      // Told by the shared handler; the dialog stays open for another try.
-    }
-  }
-
-  const submitRename = async (item: DriveItem, name: string) => {
-    if (name === item.name) return closeDialog()
-    try {
-      markMine(item.id)
-      await rename.mutateAsync({ itemId: item.id, newName: name })
-      closeDialog()
-    } catch {
-      /* see above */
-    }
-  }
-
-  const submitMove = async (item: DriveItem, targetFolderId: string) => {
-    try {
-      markMine(item.id)
-      await move.mutateAsync({ itemId: item.id, targetFolderId })
-      closeDialog()
-      toast(`Đã chuyển “${item.name}”`)
-    } catch {
-      /* see above */
-    }
-  }
-
-  const submitDelete = async (item: DriveItem) => {
-    try {
-      await trash.mutateAsync(item.id)
-      closeDialog()
-      if (selectedId === item.id) selectItem(null)
-      toast(`Đã xoá “${item.name}”`, {
-        action: { label: 'Hoàn tác', onClick: () => restore.mutate(item.id) },
-      })
-    } catch {
-      /* see above */
-    }
-  }
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault()
@@ -270,87 +194,6 @@ export function DriveScreen() {
       : [{ label: workspaceLabel }]
   // Until the workspace is known the query is idle, and that is still loading.
   const loading = !active.data && !active.isError
-
-  const body = (() => {
-    if (missing) {
-      return (
-        <EmptyState
-          icon={<CircleAlert size={24} strokeWidth={1.75} />}
-          text="Không mở được thư mục này. Có thể nó đã bị xoá hoặc bạn chưa có quyền xem."
-          action={
-            <Link
-              to="/drive"
-              search={(prev: DriveSearch) => folderSearch(prev)}
-              className="inline-flex items-center h-8 px-3 rounded-md bg-hover text-small-ui font-semibold text-ink
-                no-underline hover:bg-line focus-ring"
-            >
-              Về thư mục gốc
-            </Link>
-          }
-        />
-      )
-    }
-    if (active.isError) {
-      return (
-        <EmptyState
-          icon={<CircleAlert size={24} strokeWidth={1.75} />}
-          text="Không tải được danh sách tệp. Kiểm tra kết nối rồi thử lại."
-          action={<Button variant="soft" size="sm" onClick={() => void active.refetch()}>Thử lại</Button>}
-        />
-      )
-    }
-    if (!loading && all.length === 0 && !holdTable) {
-      return shared ? (
-        <EmptyState
-          icon={<UserPlus size={24} strokeWidth={1.75} />}
-          text="Chưa có ai chia sẻ tệp với bạn. Tệp được chia sẻ sẽ hiện ở đây."
-        />
-      ) : (
-        <EmptyState
-          icon={<FolderOpen size={24} strokeWidth={1.75} />}
-          text="Thư mục này chưa có tệp. Kéo tệp vào đây hoặc tải lên từ máy. Người có quyền trong thư mục sẽ thấy ngay."
-          action={
-            <Button size="sm" onClick={() => fileInput.current?.click()}>
-              <Upload size={16} strokeWidth={1.75} aria-hidden="true" />
-              Tải lên
-            </Button>
-          }
-        />
-      )
-    }
-    if (!loading && all.length > 0 && items.length === 0) {
-      return (
-        <EmptyState
-          icon={<FolderOpen size={24} strokeWidth={1.75} />}
-          text="Không có tệp nào khớp."
-          action={
-            <Button variant="soft" size="sm" onClick={() => setQuery('')}>
-              Xoá tìm kiếm
-            </Button>
-          }
-        />
-      )
-    }
-    return (
-      <motion.div key={view} {...m.route}>
-        <DriveTable
-          label={`Tệp trong ${title ?? 'thư mục'}`}
-          items={items}
-          loading={loading}
-          people={people}
-          permsOf={permsOf}
-          selectedId={selected?.id ?? null}
-          scope={view}
-          fresh={fresh}
-          versionOf={itemVersion}
-          actions={actions}
-          onRowsGone={() => setHoldTable(false)}
-        />
-      </motion.div>
-    )
-  })()
-
-  const burstName = burst ? ownerNameOf(burst.authors[0], people) : ''
 
   return (
     <div className="relative flex flex-1 min-h-0 min-w-0">
@@ -383,7 +226,7 @@ export function DriveScreen() {
                 <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
                 <span className="max-sm:sr-only">Thư mục mới</span>
               </Button>
-              <Button size="sm" loading={upload.isPending} onClick={() => fileInput.current?.click()}>
+              <Button size="sm" loading={uploading} onClick={() => fileInput.current?.click()}>
                 <Upload size={16} strokeWidth={1.75} aria-hidden="true" />
                 <span className="max-sm:sr-only">Tải lên</span>
               </Button>
@@ -420,26 +263,7 @@ export function DriveScreen() {
         )}
 
         <AnimatePresence>
-          {burst && (
-            <motion.div
-              key="burst"
-              role="status"
-              {...m.row}
-              className="mx-5 overflow-hidden"
-            >
-              <div className="flex items-center gap-2.5 mb-2 px-3 py-2 rounded-surface bg-raised text-sm">
-                <span className="flex items-center">
-                  {burst.authors.slice(0, 3).map((a, i) => (
-                    <Avatar key={a} name={ownerNameOf(a, people)} hueKey={a} size={20} className={`ring-2 ring-raised ${i > 0 ? '-ml-1.5' : ''}`} />
-                  ))}
-                </span>
-                <span>
-                  <b className="font-semibold">{burstName}</b>
-                  {burst.authors.length > 1 ? ` và ${burst.authors.length - 1} người khác` : ''} vừa cập nhật thư mục này
-                </span>
-              </div>
-            </motion.div>
-          )}
+          {burst && <DriveBurstBanner burst={burst} people={people} row={m.row} />}
         </AnimatePresence>
 
         <div
@@ -456,7 +280,35 @@ export function DriveScreen() {
               Thả tệp để tải lên “{title}”
             </div>
           )}
-          {body}
+          <DriveBody
+            missing={missing}
+            isError={active.isError}
+            onRetry={() => void active.refetch()}
+            loading={loading}
+            shared={shared}
+            total={all.length}
+            visible={items.length}
+            holdTable={holdTable}
+            onClearQuery={() => setQuery('')}
+            onPickFiles={() => fileInput.current?.click()}
+            view={view}
+            route={m.route}
+            table={
+              <DriveTable
+                label={`Tệp trong ${title ?? 'thư mục'}`}
+                items={items}
+                loading={loading}
+                people={people}
+                permsOf={permsOf}
+                selectedId={selected?.id ?? null}
+                scope={view}
+                fresh={fresh}
+                versionOf={itemVersion}
+                actions={actions}
+                onRowsGone={() => setHoldTable(false)}
+              />
+            }
+          />
         </div>
       </section>
 
@@ -497,7 +349,7 @@ export function DriveScreen() {
         title="Thư mục mới"
         submitLabel="Tạo"
         emptyMessage="Đặt tên cho thư mục"
-        pending={createFolder.isPending}
+        pending={creatingFolder}
         onSubmit={(name) => void submitNewFolder(name)}
       />
       <NameDialog
@@ -507,57 +359,23 @@ export function DriveScreen() {
         submitLabel="Đổi tên"
         emptyMessage="Đặt tên cho mục này"
         initialName={dialog?.kind === 'rename' ? dialog.item.name : ''}
-        pending={rename.isPending}
+        pending={renaming}
         onSubmit={(name) => dialog?.kind === 'rename' && void submitRename(dialog.item, name)}
       />
       <MoveItemDialog
         item={dialog?.kind === 'move' ? dialog.item : null}
         workspaceId={wsId}
-        pending={move.isPending}
+        pending={moving}
         onConfirm={(item, target) => void submitMove(item, target)}
         onClose={closeDialog}
       />
       <ShareDialog item={dialog?.kind === 'share' ? dialog.item : null} people={people} onClose={closeDialog} />
-      <DeleteDialog
+      <DeleteItemDialog
         item={dialog?.kind === 'delete' ? dialog.item : null}
-        pending={trash.isPending}
+        pending={trashing}
         onConfirm={(item) => void submitDelete(item)}
         onClose={closeDialog}
       />
     </div>
-  )
-}
-
-function ownerNameOf(hueKey: string | undefined, people: ReturnType<typeof usePeople>): string {
-  return (hueKey && people.byUserId.get(hueKey)?.name) || 'Một người'
-}
-
-function DeleteDialog({ item, pending, onConfirm, onClose }: {
-  item: DriveItem | null
-  pending: boolean
-  onConfirm: (item: DriveItem) => void
-  onClose: () => void
-}) {
-  // Keep the last item while the dialog fades out, so its text does not blank.
-  const last = useRef<DriveItem | null>(null)
-  if (item) last.current = item
-  const shown = item ?? last.current
-  const folder = shown?.item_type === 'folder'
-  return (
-    <ConfirmDialog
-      open={!!item}
-      onClose={onClose}
-      onConfirm={() => item && onConfirm(item)}
-      title={folder ? 'Xoá thư mục' : 'Xoá tệp'}
-      description={
-        <>
-          Xoá <b className="font-semibold text-ink">{shown?.name}</b>?{' '}
-          {folder ? 'Mọi thứ bên trong cũng bị xoá. ' : ''}Bạn có thể hoàn tác ngay sau khi xoá.
-        </>
-      }
-      confirmLabel="Xoá"
-      confirmVariant="danger"
-      loading={pending}
-    />
   )
 }

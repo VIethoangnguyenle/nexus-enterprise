@@ -73,16 +73,14 @@ func (f *fakePolicyRead) FindNodeByName(_ context.Context, req *policypb.FindNod
 // recWrite records every policy write in order.
 type recWrite struct {
 	mockPolicyWrite
-	mu          sync.Mutex
-	calls       []string
-	failAssign  func(child, parent string) bool
-	failAssoc   bool
-	assocByUA   map[string][]string
-	createdNode map[string]string // id -> node type
-	nodeProps   map[string]map[string]string
-	failRemove  func(child, parent string) bool
-	edges       map[string]map[string]bool // child -> parents, as the graph would hold them
-	delay       time.Duration              // widens the window between policy calls
+	mu         sync.Mutex
+	calls      []string
+	failAssign func(child, parent string) bool
+	failAssoc  bool
+	nodeProps  map[string]map[string]string
+	failRemove func(child, parent string) bool
+	edges      map[string]map[string]bool // child -> parents, as the graph would hold them
+	delay      time.Duration              // widens the window between policy calls
 }
 
 func (w *recWrite) rec(format string, a ...any) {
@@ -655,4 +653,29 @@ func TestCreateShare_RemovesTheShareOAWhenTheAssociationFails(t *testing.T) {
 	list, lerr := f.srv.ListShares(asCaller("", actor), &pb.ListSharesRequest{ItemId: f.item.Id})
 	require.NoError(t, lerr)
 	assert.Empty(t, list.Shares)
+}
+
+// Who may not write is told so before anything about the quota: a full quota is
+// not something to reveal to a caller who could not have uploaded anyway, and
+// "forbidden" must not depend on how much room is left.
+func TestCreateFile_DeniedCallerGets403EvenWhenTheQuotaIsFull(t *testing.T) {
+	f := newMoveFixture(t)
+	ctx := context.Background()
+	_, err := f.pool.Exec(ctx, `INSERT INTO drive_quotas (workspace_id, max_bytes, max_files) VALUES ($1, 10, 1)
+		ON CONFLICT (workspace_id) DO UPDATE SET max_bytes = 10, max_files = 1`, f.wsID)
+	require.NoError(t, err)
+	t.Cleanup(func() { f.pool.Exec(ctx, `DELETE FROM drive_quotas WHERE workspace_id = $1`, f.wsID) })
+	req := &pb.CreateFileRequest{WorkspaceId: f.wsID, Name: "big.bin", MimeType: "application/octet-stream", SizeBytes: 1 << 20, ParentId: f.a.Id}
+
+	f.pr.allow = func(_, object, op string) bool { return false }
+	_, err = f.srv.CreateFile(asCaller("u", "outsider"), req)
+	assert.Equal(t, codes.PermissionDenied, status.Code(err), "denied first")
+
+	f.pr.allow = func(_, object, op string) bool { return true }
+	_, err = f.srv.CreateFile(asCaller("u", actor), req)
+	assert.Equal(t, codes.ResourceExhausted, status.Code(err), "a caller who may write is told the quota is full")
+
+	var n int
+	require.NoError(t, f.pool.QueryRow(ctx, `SELECT count(*) FROM drive_items WHERE workspace_id = $1 AND name = 'big.bin'`, f.wsID).Scan(&n))
+	assert.Zero(t, n, "neither attempt left a row behind")
 }

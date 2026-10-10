@@ -62,8 +62,8 @@ export function workspaceResyncKeys(wsId: string): QueryKey[] {
     keys.messaging.pinsAll(),
     keys.messaging.tasksAll(),
     keys.messaging.reactionsAll(),
-    keys.messaging.pollsAll(),
     keys.messaging.threadsAll(),
+    // Kept for the notifications UI that is still to be decided; no screen reads it yet.
     keys.notifications.all(),
   ]
 }

@@ -90,6 +90,15 @@ func TestNotifications_ListAnswersTheShapeTheScreenReads(t *testing.T) {
 	assert.Equal(t, 2, f.off)
 }
 
+func TestNotifications_ANonNumericPageIsRefused(t *testing.T) {
+	for _, q := range []string{"limit=ten", "offset=x"} {
+		f := &fakeNotifs{}
+		rec := do(notificationsEcho(f), http.MethodGet, "/api/notifications?"+q)
+		assert.Equal(t, http.StatusBadRequest, rec.Code, q)
+		assert.Zero(t, f.limit, "the store is not asked")
+	}
+}
+
 func TestNotifications_EmptyListIsAnArrayNotNull(t *testing.T) {
 	rec := do(notificationsEcho(&fakeNotifs{}), http.MethodGet, "/api/notifications")
 	assert.Contains(t, rec.Body.String(), `"notifications":[]`)

@@ -6,9 +6,9 @@ import { ArrowLeft, Info, Search, UserPlus, CircleAlert, Lock } from 'lucide-rea
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useConversations } from '../../hooks/useConversations'
 import { usePeople } from '../../hooks/usePeople'
-import {
-  useMarkRead, useMessages, useSendMessage, useTasks, useTogglePin, useToggleReaction, useChannelMembers,
-} from '../../hooks/useMessaging'
+import { useMarkRead, useChannelMembers } from '../../hooks/useMessaging'
+import { useMessages, useSendMessage, useTogglePin, useToggleReaction } from '../../hooks/useMessages'
+import { useTasks } from '../../hooks/useChannelTasks'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { messagingApi, type Message } from '../../api/messaging'

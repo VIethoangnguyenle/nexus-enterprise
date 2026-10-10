@@ -20,7 +20,7 @@ func TestWriteServer_DatabaseFailureIsAGenericInternal(t *testing.T) {
 	store, pool := setupWriteTestStore(t)
 	pool.Close() // every statement now fails with the driver's own message
 
-	ws := NewWriteServer(store, nil, ngac.NewInvalidationCoordinator(nil, nil, nil), nil,
+	ws := NewWriteServer(store, nil, ngac.NewInvalidationCoordinator(nil), nil,
 		ngac.NewProhibitionStore(pool, store.GetGraph()), false)
 
 	_, err := ws.CreateNode(context.Background(), &pb.CreateNodeRequest{Name: "leak-check-" + t.Name(), NodeType: "UA"})

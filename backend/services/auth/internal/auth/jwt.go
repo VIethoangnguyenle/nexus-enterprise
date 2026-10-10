@@ -5,7 +5,6 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
-	"golang.org/x/crypto/bcrypt"
 )
 
 var jwtSecret []byte
@@ -23,18 +22,6 @@ type Claims struct {
 	TenantID   string `json:"tenant_id,omitempty"`
 	SessionID  string `json:"session_id,omitempty"`
 	jwt.RegisteredClaims
-}
-
-// HashPassword hashes a plaintext password using bcrypt.
-func HashPassword(password string) (string, error) {
-	bytes, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	return string(bytes), err
-}
-
-// CheckPassword verifies a plaintext password against a bcrypt hash.
-func CheckPassword(password, hash string) bool {
-	err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password))
-	return err == nil
 }
 
 // AccessTokenTTL is how long an access token stays valid.

@@ -354,14 +354,34 @@ type notificationJSON struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+// intQuery reads an optional integer query parameter: absent is 0 (the domain
+// then applies its default), present but not a number is a 400.
+func intQuery(c echo.Context, name string) (int, error) {
+	raw := c.QueryParam(name)
+	if raw == "" {
+		return 0, nil
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil {
+		return 0, echo.NewHTTPError(http.StatusBadRequest, name+" must be a number")
+	}
+	return v, nil
+}
+
 // ListNotifications handles GET /api/notifications?limit=&offset=.
 func (h *Handler) ListNotifications(c echo.Context) error {
 	claims, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
-	limit, _ := strconv.Atoi(c.QueryParam("limit"))
-	offset, _ := strconv.Atoi(c.QueryParam("offset"))
+	limit, err := intQuery(c, "limit")
+	if err != nil {
+		return err
+	}
+	offset, err := intQuery(c, "offset")
+	if err != nil {
+		return err
+	}
 	page, err := h.notifs.List(c.Request().Context(), claims.UserID, limit, offset)
 	if err != nil {
 		return httputil.MapDomainError(err)

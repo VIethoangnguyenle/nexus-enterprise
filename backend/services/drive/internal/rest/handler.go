@@ -9,9 +9,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
-	"ngac-platform/ngac"
 	"ngac-platform/pkg/httputil"
-	"ngac-platform/pkg/policyclient"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/drive/internal/domain"
@@ -41,14 +39,25 @@ type DriveService interface {
 	GetQuota(ctx context.Context, req *pb.GetQuotaRequest) (*pb.Quota, error)
 }
 
-// mapError answers a domain error with its HTTP status. A conflict is a 409; the
-// other refusals the domain classifies map as everywhere (httputil.MapDomainError);
-// anything else, including a quota or lock refusal, is a generic 500.
+// mapError answers a domain error with its HTTP status. A conflict is a 409; a
+// full quota is a 413 and an item changed by another request a 409, each with a
+// reason the screen can act on. The other refusals the domain classifies map as
+// everywhere (httputil.MapDomainError); anything else, including a lock that
+// could not be had, is a generic 500.
 func mapError(err error) *echo.HTTPError {
-	if errors.Is(err, domain.ErrConflict) {
+	switch {
+	case errors.Is(err, domain.ErrConflict):
 		return echo.NewHTTPError(http.StatusConflict, err.Error())
+	case errors.Is(err, domain.ErrQuotaExceeded):
+		return refusalWithReason(http.StatusRequestEntityTooLarge, err, reason.QuotaExceeded)
+	case errors.Is(err, domain.ErrAborted):
+		return refusalWithReason(http.StatusConflict, err, reason.ItemChanged)
 	}
 	return httputil.MapDomainError(err)
+}
+
+func refusalWithReason(code int, err error, why string) *echo.HTTPError {
+	return echo.NewHTTPError(code, map[string]any{"message": err.Error(), "reason": why})
 }
 
 // Handler serves drive REST endpoints.
@@ -356,119 +365,4 @@ func (h *Handler) DeleteItem(c echo.Context) error {
 		return mapError(err)
 	}
 	return c.JSON(http.StatusOK, map[string]string{"status": "deleted"})
-}
-
-// CreateShare handles POST /api/drive/items/:itemId/share.
-func (h *Handler) CreateShare(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	var body struct {
-		TargetNodeID string `json:"target_node_id"`
-		ShareType    string `json:"share_type"`
-		Permission   string `json:"permission"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-
-	resp, err := h.svc.CreateShare(c.Request().Context(), &pb.CreateShareRequest{
-		ItemId:           c.Param("itemId"),
-		TargetNgacNodeId: body.TargetNodeID,
-		ShareType:        body.ShareType,
-		Operations:       []string{body.Permission},
-	})
-	if err != nil {
-		return mapError(err)
-	}
-	return c.JSON(http.StatusCreated, resp)
-}
-
-// RevokeShare handles DELETE /api/drive/shares/:shareId.
-func (h *Handler) RevokeShare(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	_, err = h.svc.RevokeShare(c.Request().Context(), &pb.RevokeShareRequest{
-		ShareId: c.Param("shareId"),
-	})
-	if err != nil {
-		return mapError(err)
-	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "revoked"})
-}
-
-// ListShares handles GET /api/drive/items/:itemId/shares.
-func (h *Handler) ListShares(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	resp, err := h.svc.ListShares(c.Request().Context(), &pb.ListSharesRequest{
-		ItemId: c.Param("itemId"),
-	})
-	if err != nil {
-		return mapError(err)
-	}
-	return c.JSON(http.StatusOK, resp)
-}
-
-// SharedWithMe handles GET /api/drive/shared-with-me.
-func (h *Handler) SharedWithMe(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	resp, err := h.svc.GetSharedWithMe(c.Request().Context(), &pb.GetSharedWithMeRequest{})
-	if err != nil {
-		return mapError(err)
-	}
-	return c.JSON(http.StatusOK, resp)
-}
-
-// GetQuota handles GET /api/workspaces/:id/drive/quota.
-func (h *Handler) GetQuota(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	resp, err := h.svc.GetQuota(c.Request().Context(), &pb.GetQuotaRequest{
-		WorkspaceId: c.Param("id"),
-	})
-	if err != nil {
-		return mapError(err)
-	}
-	return c.JSON(http.StatusOK, resp)
-}
-
-// BatchAccess handles POST /api/drive/batch-access.
-// Resolves NGAC permissions for a batch of drive object IDs.
-func (h *Handler) BatchAccess(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-
-	var body struct {
-		ObjectIDs  []string `json:"object_ids"`
-		Operations []string `json:"operations"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-	if len(body.ObjectIDs) == 0 {
-		return c.JSON(http.StatusOK, map[string]any{"results": map[string]any{}})
-	}
-	if len(body.Operations) == 0 {
-		body.Operations = []string{ngac.OpRead, ngac.OpWrite, ngac.OpShare}
-	}
-
-	results, err := policyclient.New(h.policyRead).BatchCheck(c.Request().Context(), claims.NGACNodeID, body.ObjectIDs, body.Operations)
-	if err != nil {
-		return httputil.MapGRPCError(err)
-	}
-
-	return c.JSON(http.StatusOK, map[string]any{"results": results})
 }

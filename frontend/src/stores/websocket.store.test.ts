@@ -74,12 +74,6 @@ const ackWorkspace = (seq = '0', workspaceId = 'ws-1') =>
   deliver({ oneofKind: 'workspaceSubscribed', workspaceSubscribed: { workspaceId, seq, denied: false } })
 
 describe('websocket events invalidate the keys the screens actually cache under', () => {
-  it('reconnect resync refreshes cached polls', () => {
-    seed(keys.messaging.poll('poll-1'))
-    deliver({ oneofKind: 'authResponse', authResponse: { ok: true, userId: 'u', reason: '' } })
-    expect(invalidated(keys.messaging.poll('poll-1'))).toBe(true)
-  })
-
   it('reconnect resync refreshes permissions and the workspace root listing', () => {
     seed(keys.permissions.object('tenant-1', 'node-1'))
     seed(keys.drive.folder('ws-1'))

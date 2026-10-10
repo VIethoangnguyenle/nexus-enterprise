@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/asset"
+	"ngac-platform/services/asset/internal/domain"
 )
 
 // The guarded RPCs authorize the caller on the context. These tests pin that
@@ -176,4 +178,49 @@ func TestUpdateAssetTypeSchema_PutsCallerOnContext(t *testing.T) {
 	call(t, http.MethodPut, `{"fields_schema":"{}"}`, map[string]string{"typeId": "t-1"}, h.UpdateAssetTypeSchema)
 	require.NotNil(t, svc.updateType)
 	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
+}
+
+type deletingAssetSvc struct {
+	AssetService
+	ctx context.Context
+	req *pb.DeleteAssetRequest
+	err error
+}
+
+func (d *deletingAssetSvc) DeleteAsset(ctx context.Context, req *pb.DeleteAssetRequest) (*pb.Empty, error) {
+	d.ctx, d.req = ctx, req
+	return &pb.Empty{}, d.err
+}
+
+func TestDeleteAsset_AsksTheDomainForThatAssetOnly(t *testing.T) {
+	svc := &deletingAssetSvc{}
+	h := NewHandler(svc, nil, nil)
+	call(t, http.MethodDelete, "", map[string]string{"assetId": "a-1"}, h.DeleteAsset)
+	require.NotNil(t, svc.req)
+	assert.Equal(t, "a-1", svc.req.AssetId)
+	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
+}
+
+func TestDeleteAsset_RefusalsKeepTheirStatus(t *testing.T) {
+	for name, tc := range map[string]struct {
+		err  error
+		want int
+	}{
+		"denied":   {domain.ErrAccessDenied, http.StatusForbidden},
+		"missing":  {domain.ErrNotFound, http.StatusNotFound},
+		"conflict": {domain.ErrConflict, http.StatusConflict},
+		"internal": {errors.New("delete: boom"), http.StatusInternalServerError},
+	} {
+		h := NewHandler(&deletingAssetSvc{err: tc.err}, nil, nil)
+		e := echo.New()
+		rec := httptest.NewRecorder()
+		c := e.NewContext(httptest.NewRequest(http.MethodDelete, "/", nil), rec)
+		c.SetParamNames("assetId")
+		c.SetParamValues("a-1")
+		httputil.SetClaims(c, testClaims)
+		err := h.DeleteAsset(c)
+		var he *echo.HTTPError
+		require.ErrorAs(t, err, &he, name)
+		assert.Equal(t, tc.want, he.Code, name)
+	}
 }

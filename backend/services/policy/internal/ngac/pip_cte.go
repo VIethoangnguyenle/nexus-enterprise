@@ -20,7 +20,7 @@ func NewCTEEvaluator(db *pgxpool.Pool) *CTEEvaluator {
 }
 
 // CheckAccess performs an NGAC access decision via SQL recursive CTE.
-// Falls back to this when both L1 (Redis) and L2 (materialized) miss.
+// Falls back to this when L1 (Redis) misses.
 func (e *CTEEvaluator) CheckAccess(ctx context.Context, userNodeID, objectNodeID, operation string) (bool, error) {
 	var allowed bool
 	err := e.db.QueryRow(ctx,

@@ -10,7 +10,6 @@ import (
 	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
-	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/policyclient"
 	policypb "ngac-platform/proto/policy"
 )
@@ -77,28 +76,6 @@ func TestCheckForwardsEmptyIdentitiesToThePDP(t *testing.T) {
 	}
 	if f.calls != 3 {
 		t.Errorf("policy service was asked %d times, want 3", f.calls)
-	}
-}
-
-func TestCheckCallerUsesTheVerifiedCaller(t *testing.T) {
-	f := &fakePolicy{decision: ngac.DecisionAllow}
-	c := policyclient.New(f)
-
-	ctx := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: "u1", NGACNodeID: "node-1"})
-	ok, err := c.CheckCaller(ctx, "oa-1", ngac.OpWrite)
-	if !ok || err != nil {
-		t.Fatalf("CheckCaller = (%v, %v)", ok, err)
-	}
-	if f.lastReq.GetUserNodeId() != "node-1" || f.lastReq.GetObjectNodeId() != "oa-1" || f.lastReq.GetOperation() != ngac.OpWrite {
-		t.Errorf("asked %+v", f.lastReq)
-	}
-
-	denying := &fakePolicy{decision: ngac.DecisionDeny}
-	if ok, _ := policyclient.New(denying).CheckCaller(context.Background(), "oa-1", ngac.OpWrite); ok {
-		t.Error("no caller on the context asks the PDP about nobody, which denies")
-	}
-	if denying.lastReq.GetUserNodeId() != "" {
-		t.Errorf("asked about %q", denying.lastReq.GetUserNodeId())
 	}
 }
 

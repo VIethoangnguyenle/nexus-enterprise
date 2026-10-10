@@ -48,13 +48,13 @@ func inflightKey(req AccessRequest) string {
 }
 
 // Evaluate resolves an access decision using the 3-layer cache strategy:
-//   - L1 (Redis) and L2 (Materialized) are checked by the cache
+//   - L1 (Redis) is checked by the cache
 //   - L3 (BFS/CTE + prohibitions) is computed by the engine on cache miss
 //   - Result is stored back into cache layers for future lookups
 func (e *AccessEvaluator) Evaluate(ctx context.Context, req AccessRequest) *AccessDecision {
 	start := time.Now()
 
-	// Try cache (L1 → L2)
+	// Try the cache (L1)
 	if cached, layer := e.cache.Get(ctx, req); cached != nil {
 		metrics.CheckAccessTotal.WithLabelValues(layer).Inc()
 		metrics.CheckAccessDuration.WithLabelValues(layer).Observe(time.Since(start).Seconds())

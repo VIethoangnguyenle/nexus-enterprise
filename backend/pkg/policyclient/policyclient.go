@@ -51,11 +51,6 @@ func (c *Client) Check(ctx context.Context, userNodeID, objectNodeID, op string)
 	return ngac.Allowed(resp.GetDecision(), nil), nil
 }
 
-// CheckCaller is Check for the verified caller on ctx (see package grpcauth).
-func (c *Client) CheckCaller(ctx context.Context, objectNodeID, op string) (bool, error) {
-	return c.Check(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, objectNodeID, op)
-}
-
 // Permissions is the answer to a batch check: object ID -> operation -> held.
 // The zero value, and anything not asked about, holds nothing.
 type Permissions map[string]map[string]bool

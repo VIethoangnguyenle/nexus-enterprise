@@ -29,14 +29,6 @@ const (
 	DecisionDeny  = "DENY"
 )
 
-// Version scope constants — used by cache versioning and invalidation.
-const ScopeGlobal = "global"
-
-// WorkspaceScope returns the version scope key for a tenant workspace.
-func WorkspaceScope(wsID string) string {
-	return "ws:" + wsID
-}
-
 // Operations are dynamic — registered at runtime via RegisterOperations RPC.
 // Consumers define their own operations (e.g. "read", "approve", "transfer").
 // No hardcoded constants in the generic policy service.

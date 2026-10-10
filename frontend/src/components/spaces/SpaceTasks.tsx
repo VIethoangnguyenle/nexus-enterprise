@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, CircleAlert, ListChecks } from 'lucide-react'
-import { useCreateTask, useTasks, useUpdateTask } from '../../hooks/useMessaging'
+import { useCreateTask, useTasks, useUpdateTask } from '../../hooks/useChannelTasks'
 import { explain } from '../../lib/errors'
 import { formatDate } from '../../lib/format'
 import { displayName, type PeopleDirectory } from '../../lib/people'

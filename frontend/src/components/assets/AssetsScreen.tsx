@@ -1,35 +1,30 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { CircleAlert, ClipboardList, Package, Plus, SearchX, Tag } from 'lucide-react'
-import type { Asset, AssetRequest, AssetType } from '../../api/assets'
+import { CircleAlert, ClipboardList, Plus, Tag } from 'lucide-react'
+import type { Asset, AssetType } from '../../api/assets'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
-import {
-  useApproveRequest, useAssetActivity, useAssetRequests, useAssetSummary, useAssetTypes, useAssets,
-  useAssignRequest, useRejectRequest,
-} from '../../hooks/useAssets'
+import { useAssetActivity, useAssetRequests, useAssetSummary, useAssetTypes, useAssets } from '../../hooks/useAssets'
 import { useArrivals } from '../../hooks/useArrivals'
 import { usePeople } from '../../hooks/usePeople'
 import { parseFields } from '../../lib/asset-fields'
+import { REQUEST_FILTERS, requestFilterStatuses, type RequestFilter } from '../../lib/asset-model'
 import {
-  ASSET_STATES, REQUEST_FILTERS, explainAsset, requestFilterStatuses, stateLabel, type RequestFilter,
-} from '../../lib/asset-model'
-import {
-  assetSearch, composeSearch, filterSearch, pageSearch, requestSearch, showSearch, tabOf, tabSearch, typeSearch,
+  assetSearch, composeSearch, filterSearch, requestSearch, showSearch, tabOf, tabSearch, typeSearch,
   type AssetsSearch, type AssetsTab,
 } from '../../lib/assets-search'
-import { statusOf } from '../../lib/errors'
 import { toMillis } from '../../lib/format'
 import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
-import { Button, FilterChip, Heading, SearchField, TabBar, toast, type TabItem } from '../primitives'
+import { Button, FilterChip, Heading, TabBar, type TabItem } from '../primitives'
 import { CountPill } from '../approval/StatusPill'
 import { EmptyState } from '../spaces/EmptyState'
-import { ApproveDialog, type ApproveMode } from './ApproveDialog'
+import { ApproveDialog } from './ApproveDialog'
 import { AssetDetailPanel } from './AssetDetailPanel'
+import { AssetListBody, PAGE } from './AssetListBody'
 import { AssetOverview } from './AssetOverview'
-import { AssetTable, type RealtimeTag } from './AssetTable'
+import type { RealtimeTag } from './AssetTable'
 import { NewAssetDialog } from './NewAssetDialog'
 import { NewRequestPanel } from './NewRequestPanel'
 import { NewTypeDialog } from './NewTypeDialog'
@@ -37,10 +32,9 @@ import { RejectDialog } from './RejectDialog'
 import { RequestDetailPanel } from './RequestDetailPanel'
 import { RequestTable } from './RequestTable'
 import { TypeDetailPanel } from './TypeDetailPanel'
-import { TypeFilter } from './TypeFilter'
 import { TypesTable } from './TypesTable'
+import { useRequestDecisions } from './useRequestDecisions'
 
-const PAGE = 25
 /** Shared by the tab's count, the overview and the "Đang chờ" filter, so they are one request. */
 const PENDING = { status: 'pending', limit: 100 } as const
 
@@ -59,12 +53,6 @@ const SUBTITLE: Record<AssetsTab, string> = {
   list: 'Tài sản',
   requests: 'Yêu cầu cấp tài sản',
   types: 'Loại tài sản',
-}
-
-/** Why a decision failed. 403 says which rights it takes; the rest follow the server's reason. */
-function decisionFailure(err: unknown, verb: string): string {
-  if (statusOf(err) === 403) return `Bạn chưa có quyền ${verb} yêu cầu này. Cần quyền Duyệt và Quản lý trên loại tài sản; hỏi quản trị viên.`
-  return explainAsset(err, verb)
 }
 
 /**
@@ -110,14 +98,12 @@ export function AssetsScreen() {
   const activityQ = useAssetActivity(wsId, 10, tab === 'overview' || tab === 'list')
 
   // ---- dialogs ----
-  const [deciding, setDeciding] = useState<{ request: AssetRequest; mode: ApproveMode } | null>(null)
-  const [rejecting, setRejecting] = useState<AssetRequest | null>(null)
-  const [decisionError, setDecisionError] = useState<string | undefined>()
   const [creatingType, setCreatingType] = useState(false)
   const [creatingAsset, setCreatingAsset] = useState(false)
-  const approve = useApproveRequest()
-  const assign = useAssignRequest()
-  const reject = useRejectRequest()
+  const {
+    deciding, rejecting, decisionError, decidePending, rejectPending, anyPending,
+    closeDecision, closeReject, doApprove, startApprove, startReject, startAssign, doReject,
+  } = useRequestDecisions()
 
   // ---- the search box: typed text is local; the URL follows after a pause ----
   const [typed, setTyped] = useState(search.q ?? '')
@@ -180,51 +166,6 @@ export function AssetsScreen() {
     return { text: `${given} vừa cập nhật`, hueKey: arrival.author }
   }
 
-  // ---- decisions ----
-  const closeDecision = () => {
-    setDeciding(null)
-    setDecisionError(undefined)
-  }
-  const doApprove = async (request: AssetRequest, assetId: string) => {
-    setDecisionError(undefined)
-    try {
-      if (deciding?.mode === 'assign') {
-        await assign.mutateAsync({ id: request.id, assetId })
-        toast('Đã giao tài sản')
-      } else {
-        await approve.mutateAsync({ id: request.id, ...(assetId ? { asset_id: assetId } : {}) })
-        toast(assetId ? 'Đã duyệt và giao tài sản' : 'Đã duyệt yêu cầu')
-      }
-      closeDecision()
-    } catch (err) {
-      setDecisionError(decisionFailure(err, deciding?.mode === 'assign' ? 'giao tài sản cho' : 'duyệt'))
-    }
-  }
-  // A request the caller may decide but not give an asset to is approved at once.
-  const startApprove = async (request: AssetRequest) => {
-    if (request.can_assign) {
-      setDecisionError(undefined)
-      setDeciding({ request, mode: 'approve' })
-      return
-    }
-    try {
-      await approve.mutateAsync({ id: request.id })
-      toast('Đã duyệt yêu cầu')
-    } catch (err) {
-      toast.error(decisionFailure(err, 'duyệt'))
-    }
-  }
-  const doReject = async (request: AssetRequest, reason: string) => {
-    setDecisionError(undefined)
-    try {
-      await reject.mutateAsync({ id: request.id, reason })
-      setRejecting(null)
-      toast('Đã từ chối yêu cầu')
-    } catch (err) {
-      setDecisionError(decisionFailure(err, 'từ chối'))
-    }
-  }
-
   // ---- what to show ----
   const tabs: TabItem[] = [
     { id: 'overview', label: 'Tổng quan' },
@@ -276,80 +217,28 @@ export function AssetsScreen() {
 
     if (tab === 'list') {
       if (listQ.isError && !listQ.data) return failed('Không tải được danh sách tài sản. Kiểm tra kết nối rồi thử lại.', listQ)
-      const filtered = !!(search.state || search.kind || search.q)
-      const loading = !listQ.data && !listQ.isError
-      const counts = summaryQ.data?.byState ?? {}
-      const chips = ASSET_STATES.filter((s) => (counts[s] ?? 0) > 0 || s === search.state)
-      const from = (page - 1) * PAGE + 1
-      const to = Math.min(page * PAGE, total)
       return (
-        <>
-          <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
-            <SearchField
-              label="Tìm tài sản"
-              moduleSearch
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              className="w-full sm:w-56"
-              tone="sunk"
-            />
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Lọc theo trạng thái">
-              <FilterChip pressed={!search.state} onClick={() => go((p) => filterSearch(p, { state: undefined }))}>
-                Tất cả {summaryQ.data && <span className="font-normal text-ink-muted tnum">{summaryQ.data.total}</span>}
-              </FilterChip>
-              {chips.map((s) => (
-                <FilterChip key={s} pressed={search.state === s} onClick={() => go((p) => filterSearch(p, { state: s }))}>
-                  {stateLabel(s)} <span className="font-normal text-ink-muted tnum">{counts[s] ?? 0}</span>
-                </FilterChip>
-              ))}
-            </div>
-            {types.length > 0 && (
-              <TypeFilter
-                types={types}
-                value={search.kind}
-                onChange={(kind) => go((p) => filterSearch(p, { kind }))}
-              />
-            )}
-          </div>
-          {!loading && rows.length === 0 ? (
-            filtered ? (
-              <EmptyState
-                icon={<SearchX size={24} strokeWidth={1.75} />}
-                text={`Không có tài sản nào khớp${search.q ? ` “${search.q.trim()}”` : ' bộ lọc'}. Thử bỏ bộ lọc hoặc tìm theo tên người giữ.`}
-                action={<Button variant="soft" size="sm" onClick={() => go((p) => filterSearch(p, { state: undefined, kind: undefined, q: '' }))}>Xoá bộ lọc</Button>}
-              />
-            ) : (
-              <EmptyState
-                icon={<Package size={24} strokeWidth={1.75} />}
-                text={requestable.length > 0 ? 'Chưa có tài sản nào. Thêm tài sản để theo dõi người giữ và lịch sử của nó.' : 'Chưa có tài sản nào trong phạm vi bạn xem được.'}
-                action={requestable.length > 0 ? <Button size="sm" onClick={() => setCreatingAsset(true)}>Thêm tài sản</Button> : undefined}
-              />
-            )
-          ) : (
-            <motion.div key="list" {...m.route}>
-              <AssetTable
-                assets={rows}
-                loading={loading}
-                people={people}
-                openId={openAssetId}
-                onOpen={(a) => go((p) => assetSearch(p, a.id))}
-                scope={listScope}
-                fresh={fresh}
-                versionOf={versionOf}
-                tagOf={tagOf}
-              />
-              {!loading && total > 0 && (
-                <div className="flex items-center justify-between gap-2 px-7 pb-4 text-sm text-ink-muted">
-                  <span className="tnum">{from} đến {to} trong {total}</span>
-                  <span className="flex gap-2">
-                    <Button variant="ghost" size="sm" disabled={page <= 1} onClick={() => go((p) => pageSearch(p, page - 1))}>Trước</Button>
-                    <Button variant="soft" size="sm" disabled={to >= total} onClick={() => go((p) => pageSearch(p, page + 1))}>Sau</Button>
-                  </span>
-                </div>
-              )}
-            </motion.div>
-          )}
-        </>
+        <AssetListBody
+          search={search}
+          go={go}
+          typed={typed}
+          onTyped={setTyped}
+          summary={summaryQ.data}
+          types={types}
+          requestable={requestable}
+          rows={rows}
+          total={total}
+          page={page}
+          loading={!listQ.data && !listQ.isError}
+          people={people}
+          openId={openAssetId}
+          scope={listScope}
+          fresh={fresh}
+          versionOf={versionOf}
+          tagOf={tagOf}
+          route={m.route}
+          onAddAsset={() => setCreatingAsset(true)}
+        />
       )
     }
 
@@ -489,16 +378,10 @@ export function AssetsScreen() {
             summary={openRequest}
             people={people}
             types={types}
-            busy={approve.isPending || assign.isPending || reject.isPending}
+            busy={anyPending}
             onApprove={(r) => void startApprove(r)}
-            onReject={(r) => {
-              setDecisionError(undefined)
-              setRejecting(r)
-            }}
-            onAssign={(r) => {
-              setDecisionError(undefined)
-              setDeciding({ request: r, mode: 'assign' })
-            }}
+            onReject={startReject}
+            onAssign={startAssign}
             onClose={closePanel}
           />
         )}
@@ -520,20 +403,17 @@ export function AssetsScreen() {
         workspaceId={wsId}
         fields={deciderFields}
         people={people}
-        pending={approve.isPending || assign.isPending}
+        pending={decidePending}
         failure={decisionError}
         onConfirm={(r, assetId) => void doApprove(r, assetId)}
         onClose={closeDecision}
       />
       <RejectDialog
         request={rejecting}
-        pending={reject.isPending}
+        pending={rejectPending}
         failure={decisionError}
         onConfirm={(r, why) => void doReject(r, why)}
-        onClose={() => {
-          setRejecting(null)
-          setDecisionError(undefined)
-        }}
+        onClose={closeReject}
       />
       <NewTypeDialog
         open={creatingType}

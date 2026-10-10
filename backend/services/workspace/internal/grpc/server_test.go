@@ -338,15 +338,19 @@ func TestCreateFolder_PDPDenyIsPermissionDenied(t *testing.T) {
 // Permissions
 // ---------------------------------------------------------------------------
 
-func TestDeletePermission_PDPDenyIsPermissionDenied(t *testing.T) {
-	srv, pool, pr := setupTestServer(t)
-	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "DelPermWSDeny")
-	pr.deny = true
+// The permission RPCs were placeholders (one answered an empty list, the other
+// authorised and deleted nothing). They are not implemented, and the service
+// says so: Unimplemented, for any caller, never an empty success.
+func TestPermissionPlaceholders_AnswerUnimplemented(t *testing.T) {
+	srv, _, _ := setupTestServer(t)
+	conn := testutil.ServeGRPC(t, grpcauth.ServerPolicy{}, func(s *grpc.Server) { pb.RegisterWorkspaceServiceServer(s, srv) })
+	c := pb.NewWorkspaceServiceClient(conn)
+	ctx := asCaller("user", "node-alice")
 
-	_, err := srv.DeletePermission(asCaller("", ngacNodeID), &pb.DeletePermissionRequest{
-		WorkspaceId: ws.Id, PermissionId: "assoc-1",
-	})
-	requireCode(t, err, codes.PermissionDenied)
+	_, err := c.ListPermissions(ctx, &pb.ListPermissionsRequest{WorkspaceId: "ws"})
+	assert.Equal(t, codes.Unimplemented, grpcstatus.Code(err))
+	_, err = c.DeletePermission(ctx, &pb.DeletePermissionRequest{WorkspaceId: "ws", PermissionId: "assoc-1"})
+	assert.Equal(t, codes.Unimplemented, grpcstatus.Code(err))
 }
 
 // ---------------------------------------------------------------------------

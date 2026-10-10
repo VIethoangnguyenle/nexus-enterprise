@@ -30,8 +30,7 @@ func (f *fakeReloader) ReloadGraph(context.Context) error {
 }
 
 type invalidateCall struct {
-	workspace string
-	nodes     []string
+	nodes []string
 }
 
 type recordingInvalidator struct {
@@ -39,8 +38,8 @@ type recordingInvalidator struct {
 	all   int
 }
 
-func (r *recordingInvalidator) InvalidateForNodes(_ context.Context, ws string, ids ...string) {
-	r.calls = append(r.calls, invalidateCall{workspace: ws, nodes: ids})
+func (r *recordingInvalidator) InvalidateForNodes(_ context.Context, ids ...string) {
+	r.calls = append(r.calls, invalidateCall{nodes: ids})
 }
 func (r *recordingInvalidator) InvalidateAll(context.Context) { r.all++ }
 
@@ -78,7 +77,6 @@ func TestReplicaRefresh_DeleteNode_ResolvesBeforeReload(t *testing.T) {
 	assert.Equal(t, 1, store.reloads)
 	assert.Equal(t, []string{"ws-1"}, shards.invalidated, "the deleted UA's shard must be dropped")
 	require.Len(t, inv.calls, 1)
-	assert.Equal(t, "ws-1", inv.calls[0].workspace, "version bump must hit the workspace scope")
 	assert.ElementsMatch(t, []string{"ua-team", "u1"}, inv.calls[0].nodes,
 		"the UA's users lose access and must be invalidated")
 	assert.Zero(t, inv.all)
@@ -97,7 +95,6 @@ func TestReplicaRefresh_CreatedNode_ResolvesAfterReload(t *testing.T) {
 
 	assert.Equal(t, []string{"ws-1"}, shards.invalidated)
 	require.Len(t, inv.calls, 1)
-	assert.Equal(t, "ws-1", inv.calls[0].workspace)
 	assert.ElementsMatch(t, []string{"oa-files", "pc-1"}, inv.calls[0].nodes)
 }
 

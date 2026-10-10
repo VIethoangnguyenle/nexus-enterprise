@@ -23,9 +23,6 @@ export const messagingKeys = {
   /** Per-channel unread counts for the signed-in user. */
   unreadCounts: () => ['unread-counts'] as const,
   search: (channelId: string, query: string) => ['search', channelId, query] as const,
-  /** Prefix of every poll. */
-  pollsAll: () => ['poll'] as const,
-  poll: (pollId: string) => ['poll', pollId] as const,
   tasksAll: () => ['tasks'] as const,
   /** Prefix of a channel's task lists, whatever the status filter. */
   tasksOf: (channelId: string) => ['tasks', channelId] as const,

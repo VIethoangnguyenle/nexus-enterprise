@@ -25,3 +25,6 @@ A person's notifications are listed, counted and marked read over REST by the me
 
 ### Requirement: A failure is generic
 A notification request that fails for a reason of the server's SHALL answer `500 {"message":"internal error","request_id"}` and never the database's text.
+
+### Requirement: A page that is not a number is refused
+`limit` or `offset` that is present but not a whole number SHALL answer 400 `{"message": "limit must be a number"}` (or `offset`) and read nothing. Absent means the default; a number out of range is still clamped as above.

@@ -18,7 +18,7 @@ func newRealtimeWriteServer(t *testing.T) (*WriteServer, *tenantFixture, *realti
 	t.Helper()
 	store, pool := setupWriteTestStore(t)
 	f := newTenantFixture(t, store, pool)
-	coord := ngac.NewInvalidationCoordinator(nil, nil, nil)
+	coord := ngac.NewInvalidationCoordinator(nil)
 	ws := NewWriteServer(store, nil, coord, nil, ngac.NewProhibitionStore(pool, store.GetGraph()), false)
 	rec := &realtime.Recorder{}
 	ws.SetRealtime(rec)
