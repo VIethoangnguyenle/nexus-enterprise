@@ -43,7 +43,7 @@ func (s *Service) mgmtOAID(ctx context.Context, ws *WorkspaceResult) (string, er
 	if err != nil {
 		return "", fmt.Errorf("%w: cannot resolve workspace management attribute", ErrAccessDenied)
 	}
-	want := ngac.MgmtOAName(ws.ID)
+	want := ngac.MgmtOAName(ngac.WorkspaceID(ws.ID))
 	for _, n := range children.GetNodes() {
 		if n.NodeType == ngac.TypeOA && n.Name == want {
 			return n.Id, nil
@@ -100,19 +100,46 @@ func (s *Service) authorizeMember(ctx context.Context, callerNodeID, wsID string
 // holding manage on one workspace would let a caller delete or attach to
 // nodes of another by passing their IDs through its own route.
 func (s *Service) requireInWorkspace(ctx context.Context, ws *WorkspaceResult, nodeID, nodeType string) error {
+	_, err := s.nodeInWorkspace(ctx, ws, nodeID, nodeType)
+	return err
+}
+
+func (s *Service) nodeInWorkspace(ctx context.Context, ws *WorkspaceResult, nodeID, nodeType string) (*policypb.NGACNode, error) {
 	if nodeID == "" {
-		return fmt.Errorf("%w: node id required", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: node id required", ErrInvalidInput)
 	}
 	desc, err := s.policyRead.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
 	if err != nil {
-		return fmt.Errorf("resolve workspace nodes: %w", err)
+		return nil, fmt.Errorf("resolve workspace nodes: %w", err)
 	}
 	for _, n := range desc.GetNodes() {
 		if n.Id == nodeID && n.NodeType == nodeType {
-			return nil
+			return n, nil
 		}
 	}
-	return fmt.Errorf("%w: %s node not in this workspace", ErrNotFound, nodeType)
+	return nil, fmt.Errorf("%w: %s node not in this workspace", ErrNotFound, nodeType)
+}
+
+// isRole reports whether a UA is a role an administrator created, as opposed to
+// a UA the platform builds (Owners, Members, tenant, department, channel,
+// personal). Roles carry type=role (CreateRole; migration 023 for older ones).
+func isRole(n *policypb.NGACNode) bool {
+	return n.GetNodeType() == ngac.TypeUA && n.GetProperties()[ngac.PropType] == ngac.PropTypeRole
+}
+
+// requireRole confirms roleID is a role of this workspace. The roles API takes
+// node IDs from the client, and a platform UA is a UA too: without this check,
+// DeleteRole could delete the workspace's Owners UA and UpdateMemberRoles could
+// assign a member to it.
+func (s *Service) requireRole(ctx context.Context, ws *WorkspaceResult, roleID string) error {
+	n, err := s.nodeInWorkspace(ctx, ws, roleID, ngac.TypeUA)
+	if err != nil {
+		return err
+	}
+	if !isRole(n) {
+		return fmt.Errorf("%w: role not in this workspace", ErrNotFound)
+	}
+	return nil
 }
 
 // validateOperations rejects an empty list and any string that is not one of

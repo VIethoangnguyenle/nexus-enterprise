@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/provision"
 	authpb "ngac-platform/proto/auth"
 	drivepb "ngac-platform/proto/drive"
 	pb "ngac-platform/proto/messaging"
@@ -89,7 +90,7 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb
 	if ws == nil {
 		return nil, fmt.Errorf("%w: workspace", ErrNotFound)
 	}
-	channelsOAID := s.findChildByName(ctx, ws.PCNodeID, ngac.ChannelsOAName(ws.ID), ngac.TypeOA)
+	channelsOAID := s.findChildByName(ctx, ws.PCNodeID, ngac.ChannelsOAName(ngac.WorkspaceID(ws.ID)), ngac.TypeOA)
 	if channelsOAID == "" {
 		// Fail closed. The legacy name-keyed node is deliberately not consulted:
 		// two workspaces may share a display name, and authorizing against a
@@ -104,26 +105,37 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb
 
 // createChannel performs the writes for a channel whose creation has already
 // been authorized. pcID and channelsOAID are empty for a DM, which hangs under
-// PC_Global instead of a workspace.
-func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID, channelsOAID string) (*pb.Channel, error) {
+// PC_Global instead of a workspace. extraMemberNodeIDs are users assigned to the
+// channel's Members UA alongside its creator (a DM's other participant).
+//
+// The graph writes and the row insert are separate steps. A failure at any of
+// them removes the nodes already created, newest first, so a channel that could
+// not be completed leaves nothing in the graph.
+func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID, channelsOAID string, extraMemberNodeIDs ...string) (*pb.Channel, error) {
 	// Normalize channel type: "group" maps to "workspace" for DB constraint.
 	if in.ChannelType == "group" {
 		in.ChannelType = "workspace"
 	}
 
 	chID := uuid.New().String()
+	prov := provision.NewCreator(s.policyWrite)
 
-	contentOA, membersUA, err := s.createChannelNGACNodes(ctx, chID)
+	contentOA, membersUA, err := s.createChannelNGACNodes(ctx, prov, chID)
 	if err != nil {
-		return nil, err
+		return nil, prov.Fail(ctx, err)
 	}
 
-	if err := s.assignChannelNodes(ctx, pcID, channelsOAID, contentOA.Id, membersUA.Id); err != nil {
-		return nil, err
+	if err := s.assignChannelNodes(ctx, prov, pcID, channelsOAID, contentOA.Id, membersUA.Id); err != nil {
+		return nil, prov.Fail(ctx, err)
 	}
 
-	if err := s.grantChannelAccess(ctx, membersUA.Id, contentOA.Id, in.UserNodeID); err != nil {
-		return nil, err
+	if err := s.grantChannelAccess(ctx, prov, membersUA.Id, contentOA.Id, in.UserNodeID); err != nil {
+		return nil, prov.Fail(ctx, err)
+	}
+	for _, nodeID := range extraMemberNodeIDs {
+		if err := prov.Assign(ctx, nodeID, membersUA.Id); err != nil {
+			return nil, prov.Fail(ctx, fmt.Errorf("assign member to channel members UA: %w", err))
+		}
 	}
 
 	ch := &store.Channel{
@@ -137,8 +149,9 @@ func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID
 		CreatedAt:   time.Now(),
 	}
 	if err := s.store.InsertChannel(ctx, ch); err != nil {
-		return nil, fmt.Errorf("create channel: %w", err)
+		return nil, prov.Fail(ctx, fmt.Errorf("create channel: %w", err))
 	}
+	prov.Done()
 
 	// Track creator as channel member for DM lookup optimization.
 	s.store.InsertChannelMember(ctx, chID, in.UserNodeID)
@@ -150,16 +163,17 @@ func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID
 
 // createChannelNGACNodes creates the Content OA and Members UA for a channel.
 // Uses channel ID for naming to prevent collisions.
-func (s *Service) createChannelNGACNodes(ctx context.Context, chID string) (*policypb.NGACNode, *policypb.NGACNode, error) {
-	contentOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.ChannelContentOAName(chID), NodeType: ngac.TypeOA,
+func (s *Service) createChannelNGACNodes(ctx context.Context, prov *provision.Creator, chID string) (*policypb.NGACNode, *policypb.NGACNode, error) {
+	id := ngac.ChannelID(chID)
+	contentOA, err := prov.Node(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.ChannelContentOAName(id), NodeType: ngac.TypeOA,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("create channel content OA: %w", err)
 	}
 
-	membersUA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.ChannelMembersUAName(chID), NodeType: ngac.TypeUA,
+	membersUA, err := prov.Node(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.ChannelMembersUAName(id), NodeType: ngac.TypeUA,
 	})
 	if err != nil {
 		return nil, nil, fmt.Errorf("create channel members UA: %w", err)
@@ -171,20 +185,16 @@ func (s *Service) createChannelNGACNodes(ctx context.Context, chID string) (*pol
 // assignChannelNodes links channel nodes into the workspace NGAC tree: content
 // under the workspace's Channels OA, members under its PC. With no workspace
 // (a DM) both go under PC_Global.
-func (s *Service) assignChannelNodes(ctx context.Context, pcID, channelsOAID, contentOAID, membersUAID string) error {
+func (s *Service) assignChannelNodes(ctx context.Context, prov *provision.Creator, pcID, channelsOAID, contentOAID, membersUAID string) error {
 	if pcID == "" {
-		return s.assignToGlobalPC(ctx, contentOAID, membersUAID)
+		return s.assignToGlobalPC(ctx, prov, contentOAID, membersUAID)
 	}
 
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: contentOAID, ParentId: channelsOAID,
-	}); err != nil {
+	if err := prov.Assign(ctx, contentOAID, channelsOAID); err != nil {
 		return fmt.Errorf("assign channel content under Channels OA: %w", err)
 	}
 
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: membersUAID, ParentId: pcID,
-	}); err != nil {
+	if err := prov.Assign(ctx, membersUAID, pcID); err != nil {
 		return fmt.Errorf("assign channel members UA under workspace PC: %w", err)
 	}
 
@@ -192,23 +202,19 @@ func (s *Service) assignChannelNodes(ctx context.Context, pcID, channelsOAID, co
 }
 
 // assignToGlobalPC assigns orphaned channel nodes (DMs) under PC_Global.
-func (s *Service) assignToGlobalPC(ctx context.Context, contentOAID, membersUAID string) error {
+func (s *Service) assignToGlobalPC(ctx context.Context, prov *provision.Creator, contentOAID, membersUAID string) error {
 	globalPC, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
 		Name: ngac.NodePCGlobal, NodeType: ngac.TypePC,
 	})
 	if err != nil || globalPC == nil {
-		return fmt.Errorf("PC_Global not found: %w", err)
+		return fmt.Errorf("%s not found: %w", ngac.NodePCGlobal, err)
 	}
 
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: contentOAID, ParentId: globalPC.Id,
-	}); err != nil {
-		return fmt.Errorf("assign DM content under PC_Global: %w", err)
+	if err := prov.Assign(ctx, contentOAID, globalPC.Id); err != nil {
+		return fmt.Errorf("assign DM content under %s: %w", ngac.NodePCGlobal, err)
 	}
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: membersUAID, ParentId: globalPC.Id,
-	}); err != nil {
-		return fmt.Errorf("assign DM members UA under PC_Global: %w", err)
+	if err := prov.Assign(ctx, membersUAID, globalPC.Id); err != nil {
+		return fmt.Errorf("assign DM members UA under %s: %w", ngac.NodePCGlobal, err)
 	}
 
 	return nil
@@ -221,16 +227,11 @@ func (s *Service) assignToGlobalPC(ctx context.Context, contentOAID, membersUAID
 // A channel that reaches the database in either of those states is unusable and
 // looks like a permissions bug rather than a failed write, so the caller has to
 // hear about it.
-func (s *Service) grantChannelAccess(ctx context.Context, membersUAID, contentOAID, creatorNodeID string) error {
-	if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
-		UaId: membersUAID, OaId: contentOAID,
-		Operations: ngac.ChannelMemberOps(),
-	}); err != nil {
+func (s *Service) grantChannelAccess(ctx context.Context, prov *provision.Creator, membersUAID, contentOAID, creatorNodeID string) error {
+	if err := prov.Associate(ctx, membersUAID, contentOAID, ngac.ChannelMemberOps()); err != nil {
 		return fmt.Errorf("grant channel members access to content: %w", err)
 	}
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: creatorNodeID, ParentId: membersUAID,
-	}); err != nil {
+	if err := prov.Assign(ctx, creatorNodeID, membersUAID); err != nil {
 		return fmt.Errorf("assign channel creator to members UA: %w", err)
 	}
 	return nil
@@ -352,21 +353,17 @@ func (s *Service) FindOrCreateDM(ctx context.Context, userID, userNodeID, target
 	// than eight characters.
 	// A DM belongs to no workspace, so there is no Channels OA to check
 	// create_channel against; it is created directly under PC_Global.
+	// The other participant joins the Members UA inside the same provisioning,
+	// so a failure to add them removes the whole DM rather than leaving a
+	// one-person DM behind.
 	ch, err := s.createChannel(ctx, CreateChannelInput{
 		Name:        ngac.DMChannelName(s.lookupUsername(ctx, userID), s.lookupUsername(ctx, targetUserID)),
 		ChannelType: "dm",
 		UserID:      userID,
 		UserNodeID:  userNodeID,
-	}, "", "")
+	}, "", "", targetNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("create DM channel: %w", err)
-	}
-
-	// Assign target user to channel members UA.
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: targetNodeID, ParentId: ch.NgacUaId,
-	}); err != nil {
-		return nil, fmt.Errorf("assign target to DM: %w", err)
 	}
 
 	// Track target as channel member for future DM lookups.
@@ -599,7 +596,7 @@ func (s *Service) ListMembers(ctx context.Context, channelID, userNodeID string)
 		if n.NodeType != ngac.TypeU {
 			continue
 		}
-		username, userID := n.Name, ""
+		username, userID := ngac.DisplayName(n.Name, n.Properties), ""
 		user, _ := s.authClient.GetUserByNGACNodeID(ctx, &authpb.GetUserByNGACNodeIDRequest{NgacNodeId: n.Id})
 		if user != nil {
 			username = user.Username

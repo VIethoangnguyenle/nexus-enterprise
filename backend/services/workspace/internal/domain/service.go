@@ -11,6 +11,7 @@ import (
 	"github.com/minio/minio-go/v7"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/provision"
 	drivepb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/workspace/internal/store"
@@ -66,54 +67,64 @@ type WorkspaceResult struct {
 }
 
 // CreateWorkspace provisions a new workspace: NGAC graph, DB row, MinIO bucket, Drive root.
+//
+// The graph writes and the row insert are separate steps with no shared
+// transaction. A failure at any of them removes the nodes already created,
+// newest first, so a failed provisioning leaves nothing in the graph.
 func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) (*WorkspaceResult, error) {
 	if in.Name == "" {
 		return nil, fmt.Errorf("%w: name required", ErrInvalidInput)
 	}
 
 	wsID := uuid.New().String()
+	id := ngac.WorkspaceID(wsID)
+	prov := provision.NewCreator(s.policyWrite)
+
+	node := func(label, name, nodeType string, props map[string]string) (*policypb.NGACNode, error) {
+		n, err := prov.Node(ctx, &policypb.CreateNodeRequest{Name: name, NodeType: nodeType, Properties: props})
+		if err != nil {
+			return nil, prov.Fail(ctx, fmt.Errorf("create %s: %w", label, err))
+		}
+		return n, nil
+	}
 
 	// Build NGAC graph
-	pc, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.PCName(wsID), NodeType: ngac.TypePC,
-		Properties: map[string]string{
-			"workspace":    in.Name,
-			"workspace_id": wsID,
-			"scope":        "tenant",
-			"tenant_id":    wsID,
-		},
+	pc, err := node("PC", ngac.PCName(id), ngac.TypePC, map[string]string{
+		"workspace":    in.Name,
+		"workspace_id": wsID,
+		"scope":        "tenant",
+		"tenant_id":    wsID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create PC: %w", err)
+		return nil, err
 	}
-
-	ownersUA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: ngac.OwnersUAName(wsID), NodeType: ngac.TypeUA})
+	ownersUA, err := node("owners UA", ngac.OwnersUAName(id), ngac.TypeUA, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create owners UA: %w", err)
+		return nil, err
 	}
-	membersUA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: ngac.MembersUAName(wsID), NodeType: ngac.TypeUA})
+	membersUA, err := node("members UA", ngac.MembersUAName(id), ngac.TypeUA, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create members UA: %w", err)
+		return nil, err
 	}
-	mgmtOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: ngac.MgmtOAName(wsID), NodeType: ngac.TypeOA})
+	mgmtOA, err := node("mgmt OA", ngac.MgmtOAName(id), ngac.TypeOA, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create mgmt OA: %w", err)
+		return nil, err
 	}
-	docsOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: ngac.DocumentsOAName(wsID), NodeType: ngac.TypeOA})
+	docsOA, err := node("docs OA", ngac.DocumentsOAName(id), ngac.TypeOA, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create docs OA: %w", err)
+		return nil, err
 	}
-	draftOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: ngac.DraftDocsOAName(wsID), NodeType: ngac.TypeOA})
+	draftOA, err := node("draft OA", ngac.DraftDocsOAName(id), ngac.TypeOA, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create draft OA: %w", err)
+		return nil, err
 	}
-	approvedOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: ngac.ApprovedDocsOAName(wsID), NodeType: ngac.TypeOA})
+	approvedOA, err := node("approved OA", ngac.ApprovedDocsOAName(id), ngac.TypeOA, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create approved OA: %w", err)
+		return nil, err
 	}
-	channelsOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: ngac.ChannelsOAName(wsID), NodeType: ngac.TypeOA})
+	channelsOA, err := node("channels OA", ngac.ChannelsOAName(id), ngac.TypeOA, nil)
 	if err != nil {
-		return nil, fmt.Errorf("create channels OA: %w", err)
+		return nil, err
 	}
 
 	// Assignments
@@ -130,8 +141,8 @@ func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) 
 		{in.UserNGACNodeID, ownersUA.Id},
 	}
 	for _, a := range assignments {
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: a.child, ParentId: a.parent}); err != nil {
-			return nil, fmt.Errorf("assign %s→%s: %w", a.child, a.parent, err)
+		if err := prov.Assign(ctx, a.child, a.parent); err != nil {
+			return nil, prov.Fail(ctx, fmt.Errorf("assign %s→%s: %w", a.child, a.parent, err))
 		}
 	}
 
@@ -147,17 +158,18 @@ func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) 
 		{membersUA.Id, channelsOA.Id, ngac.MemberChannelOps()},
 	}
 	for _, a := range associations {
-		if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: a.ua, OaId: a.oa, Operations: a.ops}); err != nil {
-			return nil, fmt.Errorf("associate %s→%s: %w", a.ua, a.oa, err)
+		if err := prov.Associate(ctx, a.ua, a.oa, a.ops); err != nil {
+			return nil, prov.Fail(ctx, fmt.Errorf("associate %s→%s: %w", a.ua, a.oa, err))
 		}
 	}
 
 	// Persist to DB
 	if err := s.store.Insert(ctx, &store.Workspace{
-		ID: wsID, Name: in.Name, Desc: "", OwnerID: in.UserID, NGACPcID: pc.Id,
+		ID: wsID, Name: in.Name, Desc: "", OwnerID: in.UserID, NGACPcID: pc.Id, DocumentsOAID: docsOA.Id,
 	}); err != nil {
-		return nil, err
+		return nil, prov.Fail(ctx, err)
 	}
+	prov.Done()
 
 	// Create MinIO bucket (non-fatal)
 	s.ensureMinioBucket(ctx, wsID)
@@ -254,7 +266,7 @@ func (s *Service) InviteMember(ctx context.Context, callerNodeID, wsID, targetNG
 	if err != nil {
 		return err
 	}
-	membersUAID, err := s.FindUAByName(ctx, wsID, ngac.MembersUAName(ws.ID))
+	membersUAID, err := s.FindUAByName(ctx, wsID, ngac.MembersUAName(ngac.WorkspaceID(ws.ID)))
 	if err != nil {
 		return err
 	}
@@ -329,7 +341,7 @@ func (s *Service) ListMembers(ctx context.Context, callerNodeID, wsID string) ([
 	for _, n := range desc.Nodes {
 		if n.NodeType == ngac.TypeU && !seen[n.Id] {
 			seen[n.Id] = true
-			members = append(members, &Member{NGACNodeID: n.Id, Username: n.Name})
+			members = append(members, &Member{NGACNodeID: n.Id, Username: ngac.DisplayName(n.Name, n.Properties)})
 		}
 	}
 	return members, nil
@@ -344,7 +356,7 @@ func (s *Service) UpdateMemberRoles(ctx context.Context, callerNodeID, wsID, tar
 		return err
 	}
 	for _, roleID := range roleIDs {
-		if err := s.requireInWorkspace(ctx, ws, roleID, ngac.TypeUA); err != nil {
+		if err := s.requireRole(ctx, ws, roleID); err != nil {
 			return err
 		}
 	}
@@ -368,7 +380,7 @@ func (s *Service) TransferOwnership(ctx context.Context, callerNodeID, wsID, new
 	if err != nil {
 		return err
 	}
-	ownersUAID, err := s.FindUAByName(ctx, wsID, ngac.OwnersUAName(ws.ID))
+	ownersUAID, err := s.FindUAByName(ctx, wsID, ngac.OwnersUAName(ngac.WorkspaceID(ws.ID)))
 	if err != nil {
 		return err
 	}
@@ -387,7 +399,7 @@ func (s *Service) RemoveOwner(ctx context.Context, callerNodeID, wsID, targetNGA
 	if err != nil {
 		return err
 	}
-	ownersUAID, err := s.FindUAByName(ctx, wsID, ngac.OwnersUAName(ws.ID))
+	ownersUAID, err := s.FindUAByName(ctx, wsID, ngac.OwnersUAName(ngac.WorkspaceID(ws.ID)))
 	if err != nil {
 		return err
 	}
@@ -423,6 +435,10 @@ type Role struct {
 
 // CreateRole provisions a new UA role under the workspace PC. The caller must
 // hold manage on the workspace's Mgmt OA.
+//
+// The node is named by a generated ID; the name the administrator typed is kept
+// as its display_name property. Node names are matched exactly, so a name taken
+// from input would let a role pose as a node the platform builds itself.
 func (s *Service) CreateRole(ctx context.Context, callerNodeID, wsID, roleName string) (*Role, error) {
 	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
 	if err != nil {
@@ -431,15 +447,23 @@ func (s *Service) CreateRole(ctx context.Context, callerNodeID, wsID, roleName s
 	if err := ngac.ValidateRoleName(roleName); err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidInput, err)
 	}
-	node, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: roleName, NodeType: ngac.TypeUA})
+	prov := provision.NewCreator(s.policyWrite)
+	node, err := prov.Node(ctx, &policypb.CreateNodeRequest{
+		Name:     ngac.RoleUAName(ngac.RoleID(uuid.New().String())),
+		NodeType: ngac.TypeUA,
+		Properties: map[string]string{
+			ngac.PropType:        ngac.PropTypeRole,
+			ngac.PropDisplayName: roleName,
+			"workspace_id":       wsID,
+		},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("create role: %w", err)
 	}
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: node.Id, ParentId: ws.PcNodeID,
-	}); err != nil {
-		return nil, fmt.Errorf("assign role: %w", err)
+	if err := prov.Assign(ctx, node.Id, ws.PcNodeID); err != nil {
+		return nil, prov.Fail(ctx, fmt.Errorf("assign role: %w", err))
 	}
+	prov.Done()
 	return &Role{ID: node.Id, Name: roleName, NGACNodeID: node.Id}, nil
 }
 
@@ -456,8 +480,8 @@ func (s *Service) ListRoles(ctx context.Context, callerNodeID, wsID string) ([]*
 	}
 	var roles []*Role
 	for _, n := range children.Nodes {
-		if n.NodeType == ngac.TypeUA {
-			roles = append(roles, &Role{ID: n.Id, Name: n.Name, NGACNodeID: n.Id})
+		if isRole(n) {
+			roles = append(roles, &Role{ID: n.Id, Name: ngac.DisplayName(n.Name, n.Properties), NGACNodeID: n.Id})
 		}
 	}
 	return roles, nil
@@ -470,7 +494,7 @@ func (s *Service) DeleteRole(ctx context.Context, callerNodeID, wsID, roleID str
 	if err != nil {
 		return err
 	}
-	if err := s.requireInWorkspace(ctx, ws, roleID, ngac.TypeUA); err != nil {
+	if err := s.requireRole(ctx, ws, roleID); err != nil {
 		return err
 	}
 	if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: roleID}); err != nil {
@@ -499,7 +523,12 @@ func (s *Service) CreateFolder(ctx context.Context, callerNodeID, wsID, name, pa
 			return nil, err
 		}
 	}
-	node, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{Name: name, NodeType: ngac.TypeOA})
+	prov := provision.NewCreator(s.policyWrite)
+	node, err := prov.Node(ctx, &policypb.CreateNodeRequest{
+		Name:       ngac.FolderNodeName(ngac.FolderID(uuid.New().String())),
+		NodeType:   ngac.TypeOA,
+		Properties: map[string]string{ngac.PropDisplayName: name, "workspace_id": wsID},
+	})
 	if err != nil {
 		return nil, fmt.Errorf("create folder: %w", err)
 	}
@@ -507,11 +536,10 @@ func (s *Service) CreateFolder(ctx context.Context, callerNodeID, wsID, name, pa
 	if parentID == "" {
 		parentID = ws.PcNodeID
 	}
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: node.Id, ParentId: parentID,
-	}); err != nil {
-		return nil, fmt.Errorf("assign folder: %w", err)
+	if err := prov.Assign(ctx, node.Id, parentID); err != nil {
+		return nil, prov.Fail(ctx, fmt.Errorf("assign folder: %w", err))
 	}
+	prov.Done()
 	return &Folder{ID: node.Id, Name: name, NGACNodeID: node.Id}, nil
 }
 
@@ -529,7 +557,7 @@ func (s *Service) ListFolders(ctx context.Context, callerNodeID, wsID string) ([
 	var folders []*Folder
 	for _, n := range desc.Nodes {
 		if n.NodeType == ngac.TypeOA {
-			folders = append(folders, &Folder{ID: n.Id, Name: n.Name, NGACNodeID: n.Id})
+			folders = append(folders, &Folder{ID: n.Id, Name: ngac.DisplayName(n.Name, n.Properties), NGACNodeID: n.Id})
 		}
 	}
 	return folders, nil
@@ -626,7 +654,7 @@ func (s *Service) ensureDriveRoot(ctx context.Context, wsID, wsName, docsOaID, o
 	_, err := s.driveClient.CreateDriveForChannel(ctx, &drivepb.CreateDriveForChannelRequest{
 		WorkspaceId:     wsID,
 		ChannelId:       wsID,
-		ChannelName:     wsName + "_Root",
+		ChannelName:     wsName,
 		ChannelNgacOaId: docsOaID,
 		ChannelNgacUaId: ownersUaID,
 	})

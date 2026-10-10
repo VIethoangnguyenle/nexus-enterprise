@@ -48,6 +48,7 @@ Verified against the codebase on 2026-07-31.
 | `tenant-auth-flow` | Matches code |
 | `workspace-admin-authorization` | Matches code |
 | `resource-pep-coverage` | Matches code |
+| `asset-authorization` | Matches code (added 2026-10-10) |
 | `policy-decision-freshness` | Matches code |
 
 **Drive**

@@ -23,7 +23,7 @@ import (
 func serveAsset(t *testing.T, f *fixture, p *fakePolicyRead) (pb.AssetServiceClient, pb.AssetTypeServiceClient, pb.AssetRequestServiceClient) {
 	t.Helper()
 	conn := testutil.ServeGRPC(t, grpcauth.ServerPolicy{}, func(s *grpc.Server) {
-		pb.RegisterAssetServiceServer(s, agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil))
+		pb.RegisterAssetServiceServer(s, agrpc.NewAssetServer(f.st, p, nil))
 		pb.RegisterAssetTypeServiceServer(s, agrpc.NewAssetTypeServer(f.st, p, &fakePolicyWrite{}))
 		pb.RegisterAssetRequestServiceServer(s, agrpc.NewAssetRequestServer(f.st, p, &fakePolicyWrite{}, nil))
 	})

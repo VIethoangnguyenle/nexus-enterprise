@@ -68,8 +68,10 @@ Only what is not derivable in ten seconds:
   Postgres with a foreign key to a parent OA. Access is therefore checked **on the OA**, never on
   the object itself. This is the single most important architectural decision in the system.
 - **Intersection principle.** A permission holds only when the user side (`U → UA`) and the
-  resource side (`O → OA`) both reach the **same PC**. Different PC means DENY even when an
+  resource side (the object's parent `OA` → … → `PC`; objects themselves are not nodes) both reach the **same PC**. Different PC means DENY even when an
   association exists.
+- **Objects have no nodes.** Assets are authorized on the OA of their type
+  (`docs/specs/asset-authorization/`); there is no `O` node anywhere in the graph.
 - **Eight fixed operations**, defined in `backend/ngac/ngac_ops.go`: `read, write, upload,
   approve, share, manage, invite, create_channel`. They stay generic verbs — context comes from
   the OA the association targets, and is never encoded into an operation name.
@@ -123,8 +125,11 @@ nothing about the boundary. *A new decision path tested only on its allow branch
 
 **NGAC identifiers.** Every operation string and node name MUST come from `backend/ngac`.
 Never `fmt.Sprintf` a node-name pattern inline; the helper functions exist so a rename becomes a
-compile error instead of a silent authorization change. *A change that introduces an NGAC string
-outside `backend/ngac` is incomplete.*
+compile error instead of a silent authorization change. Name helpers take ID types
+(`ngac.DeptID`, `ngac.WorkspaceID`, …): a node is keyed by an entity's ID, never by a name a tenant
+chooses, and the display name lives in the `display_name` property. `make check-ngac`
+(`scripts/check-ngac-identifiers.sh`, also run by CI) fails on an inline operation or node-name
+pattern. *A change that introduces an NGAC string outside `backend/ngac` is incomplete.*
 
 **Graph mutations.** Any code that writes to `ngac_nodes`, `ngac_assignments`, or
 `ngac_associations` MUST route the invalidation through the EPP path, because runtime decisions

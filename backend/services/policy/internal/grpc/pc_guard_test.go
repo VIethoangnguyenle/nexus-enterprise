@@ -83,7 +83,7 @@ func TestPCGuard_GlobalScope_NoTenantRequired(t *testing.T) {
 func TestPCGuard_NonPCNode_NoGuard(t *testing.T) {
 	ws := &WriteServer{}
 
-	for _, nodeType := range []string{"U", "UA", "OA", "O"} {
+	for _, nodeType := range []string{"U", "UA", "OA"} {
 		t.Run(nodeType, func(t *testing.T) {
 			var guardPassed bool
 			func() {
@@ -108,4 +108,19 @@ func TestPCGuard_NonPCNode_NoGuard(t *testing.T) {
 				"node type %s should NOT trigger PC guard", nodeType)
 		})
 	}
+}
+
+// The graph holds attributes, not objects (docs/specs/asset-authorization): an O
+// node is never created, whatever the caller says. Refused before the store is
+// touched, with InvalidArgument, and without writing anything.
+func TestCreateNode_ObjectNodesAreRefused(t *testing.T) {
+	ws := &WriteServer{} // nil store: the refusal must fire before any write
+
+	_, err := ws.CreateNode(context.Background(), &pb.CreateNodeRequest{Name: "Asset_1", NodeType: "O"})
+
+	require.Error(t, err)
+	st, ok := status.FromError(err)
+	require.True(t, ok)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	assert.Contains(t, st.Message(), "object")
 }

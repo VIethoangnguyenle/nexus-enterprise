@@ -88,3 +88,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bash scripts/check-docs-drift.sh
+      # Operation strings and node names come from backend/ngac, never from inline literals.
+      - run: bash scripts/check-ngac-identifiers.sh --self-test
+      - run: bash scripts/check-ngac-identifiers.sh

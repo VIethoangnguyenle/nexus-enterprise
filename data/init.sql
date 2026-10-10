@@ -189,7 +189,6 @@ CREATE TABLE IF NOT EXISTS assets (
     state           TEXT NOT NULL DEFAULT 'requested',
     custom_fields   JSONB NOT NULL DEFAULT '{}',
     assigned_to     TEXT REFERENCES users(id),
-    ngac_node_id    TEXT REFERENCES ngac_nodes(id),
     created_by      TEXT NOT NULL REFERENCES users(id),
     deleted         BOOLEAN NOT NULL DEFAULT FALSE,
     created_at      TIMESTAMPTZ DEFAULT NOW(),

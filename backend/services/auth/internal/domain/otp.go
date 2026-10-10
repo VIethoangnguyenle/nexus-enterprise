@@ -247,17 +247,15 @@ func (s *Service) createOTPUser(ctx context.Context, identifier, identType strin
 		phone = ""
 	}
 
-	ngacNode, err := s.createUserNGACNode(ctx, username)
-	if err != nil {
-		return nil, fmt.Errorf("create ngac node: %w", err)
-	}
-
 	userID := uuid.New().String()
 	unionID := uuid.New().String()
 	displayName := username
 
-	if err := s.store.CreateUser(ctx, userID, username, "", ngacNode, email, unionID, displayName, phone); err != nil {
-		return nil, fmt.Errorf("create otp user: %w", err)
+	ngacNode, err := s.createUserWithNode(ctx, newUser{
+		ID: userID, Username: username, Email: email, UnionID: unionID, DisplayName: displayName, Phone: phone,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Auto-provision workspace + #general channel

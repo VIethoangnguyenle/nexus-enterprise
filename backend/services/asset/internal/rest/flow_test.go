@@ -96,8 +96,8 @@ func newFlowFixture(t *testing.T) *flowFixture {
 	exec(`INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, f.wsID, f.approver)
 	exec(`INSERT INTO asset_types (id, name, category, workspace_id, ngac_oa_id, lifecycle)
 	      VALUES ($1, $1, 'hardware', $2, $3, $4)`, f.typeID, f.wsID, f.oaID, lifecycle)
-	exec(`INSERT INTO assets (id, name, type_id, workspace_id, state, ngac_node_id, created_by)
-	      VALUES ($1, $1, $2, $3, 'requested', $4, $5)`, f.assetID, f.typeID, f.wsID, f.oaID, f.approver)
+	exec(`INSERT INTO assets (id, name, type_id, workspace_id, state, created_by)
+	      VALUES ($1, $1, $2, $3, 'requested', $4)`, f.assetID, f.typeID, f.wsID, f.approver)
 	exec(`INSERT INTO asset_requests (id, type_id, workspace_id, requester_id, justification)
 	      VALUES ($1, $2, $3, $4, 'need one')`, f.requestID, f.typeID, f.wsID, f.requester)
 	t.Cleanup(func() {
@@ -112,7 +112,7 @@ func newFlowFixture(t *testing.T) *flowFixture {
 
 	st := store.New(pool)
 	f.h = NewHandler(
-		agrpc.NewAssetServer(st, f.policy, nil, nil),
+		agrpc.NewAssetServer(st, f.policy, nil),
 		agrpc.NewAssetTypeServer(st, f.policy, nil),
 		agrpc.NewAssetRequestServer(st, f.policy, nil, nil),
 	)

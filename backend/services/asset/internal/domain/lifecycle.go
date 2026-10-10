@@ -27,7 +27,7 @@ func DefaultLifecycle() LifecycleDefinition {
 		States:       []string{"requested", "available", "assigned", "maintenance", "retired", "disposed"},
 		InitialState: "requested",
 		Transitions: []TransitionRule{
-			{FromState: "requested", ToState: "available", Operation: "approve", NgacPermission: ngac.OpApprove},
+			{FromState: "requested", ToState: "available", Operation: "approve", NgacPermission: ngac.OpApprove}, // ngac-lint:allow lifecycle action name stored in type definitions; the NGAC operation is NgacPermission
 			{FromState: "available", ToState: "assigned", Operation: "assign", NgacPermission: ngac.OpManage},
 			{FromState: "assigned", ToState: "available", Operation: "return", NgacPermission: ngac.OpManage},
 			{FromState: "assigned", ToState: "maintenance", Operation: "flag_maintenance", NgacPermission: ngac.OpManage},

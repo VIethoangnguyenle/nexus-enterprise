@@ -186,7 +186,7 @@ func (s *AssetRequestServer) AssignAsset(ctx context.Context, req *pb.AssignAsse
 	}
 
 	// Check assign permission
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpManage); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpManage); err != nil {
 		return nil, err
 	}
 
@@ -239,7 +239,7 @@ func (s *AssetRequestServer) ReturnAsset(ctx context.Context, req *pb.ReturnAsse
 	// Either the assigned user or someone with manage permission can return
 	isAssignedUser := asset.AssignedTo != nil && *asset.AssignedTo == grpcauth.CallerFrom(ctx).UserID
 	if !isAssignedUser {
-		if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpManage); err != nil {
+		if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpManage); err != nil {
 			return nil, status.Errorf(codes.PermissionDenied, "only the assigned user or a manager can return this asset")
 		}
 	}

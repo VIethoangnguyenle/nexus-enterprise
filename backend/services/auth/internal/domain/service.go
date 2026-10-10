@@ -11,6 +11,7 @@ import (
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/provision"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
 	workspacepb "ngac-platform/proto/workspace"
@@ -179,15 +180,13 @@ func (s *Service) Signup(ctx context.Context, email, password, displayName, tena
 		displayName = username
 	}
 
-	ngacNode, err := s.createUserNGACNode(ctx, username)
-	if err != nil {
-		return nil, fmt.Errorf("create ngac node: %w", err)
-	}
-
 	userID := uuid.New().String()
 	unionID := uuid.New().String()
-	if err := s.store.CreateUser(ctx, userID, username, hash, ngacNode, email, unionID, displayName, ""); err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
+	ngacNode, err := s.createUserWithNode(ctx, newUser{
+		ID: userID, Username: username, PasswordHash: hash, Email: email, UnionID: unionID, DisplayName: displayName,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	tenantID, tName, role, err := s.resolveOrCreateTenant(ctx, userID, ngacNode, tenantName, displayName)
@@ -281,7 +280,13 @@ func (s *Service) createTenantForUser(ctx context.Context, name, userID, ngacNod
 	}
 
 	// Create tenant-scoped NGAC UAs and assign under the workspace PC.
-	s.initTenantNGAC(ctx, ws.Id, ws.PcNodeId, ws.OwnersUaId, ws.MembersUaId)
+	if err := s.initTenantNGAC(ctx, ws.Id, ws.PcNodeId, ws.OwnersUaId, ws.MembersUaId); err != nil {
+		// Not fatal, as before: the workspace exists and its owner is in it.
+		// initTenantNGAC removed what it had half-built and creates only what is
+		// missing, so running it again repairs the tenant.
+		slog.Error("tenant NGAC init incomplete — users of this tenant will be denied",
+			"tenant", ws.Id, "error", err)
+	}
 
 	if err := s.joinTenant(ctx, ws.Id, userID, ngacNodeID, "owner"); err != nil {
 		return "", "", "", fmt.Errorf("join as owner: %w", err)
@@ -398,15 +403,13 @@ func (s *Service) Register(ctx context.Context, username, password string) (*Aut
 		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	ngacNode, err := s.createUserNGACNode(ctx, username)
-	if err != nil {
-		return nil, fmt.Errorf("create ngac node: %w", err)
-	}
-
 	userID := uuid.New().String()
 	unionID := uuid.New().String()
-	if err := s.store.CreateUser(ctx, userID, username, hash, ngacNode, "", unionID, username, ""); err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
+	ngacNode, err := s.createUserWithNode(ctx, newUser{
+		ID: userID, Username: username, PasswordHash: hash, UnionID: unionID, DisplayName: username,
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	// Auto-provision workspace + tenant_users + #general channel
@@ -576,11 +579,45 @@ func (s *Service) autoProvisionChannel(ctx context.Context, workspaceID, userID,
 	slog.Info("auto-provisioned #general channel", "workspace_id", workspaceID)
 }
 
-// createUserNGACNode creates a user node in the NGAC graph and assigns to PublicUsers.
-func (s *Service) createUserNGACNode(ctx context.Context, username string) (string, error) {
-	userNode, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: username, NodeType: ngac.TypeU,
-		Properties: map[string]string{"type": "user"},
+// newUser is everything needed to create an account and its graph node.
+type newUser struct {
+	ID           string
+	Username     string
+	PasswordHash string
+	Email        string
+	UnionID      string
+	DisplayName  string
+	Phone        string
+}
+
+// createUserWithNode creates the user's U node and the users row, and returns
+// the node ID. If the row cannot be written, the node is removed again, so a
+// failed signup leaves no user node that belongs to nobody.
+func (s *Service) createUserWithNode(ctx context.Context, u newUser) (string, error) {
+	prov := provision.NewCreator(s.policyWrite)
+	ngacNode, err := s.createUserNGACNode(ctx, prov, u.ID, u.Username)
+	if err != nil {
+		return "", fmt.Errorf("create ngac node: %w", err)
+	}
+	if err := s.store.CreateUser(ctx, u.ID, u.Username, u.PasswordHash, ngacNode, u.Email, u.UnionID, u.DisplayName, u.Phone); err != nil {
+		return "", prov.Fail(ctx, fmt.Errorf("create user: %w", err))
+	}
+	prov.Done()
+	return ngacNode, nil
+}
+
+// createUserNGACNode creates a user node in the NGAC graph and assigns to
+// PublicUsers. The node is named by the user's ID: a username is chosen by the
+// user, and the graph resolves nodes by exact name. The username rides along as
+// the display name. A failure after the node exists removes it.
+func (s *Service) createUserNGACNode(ctx context.Context, prov *provision.Creator, userID, username string) (string, error) {
+	userNode, err := prov.Node(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.UserNodeName(ngac.UserID(userID)), NodeType: ngac.TypeU,
+		Properties: map[string]string{
+			"type":               "user",
+			"user_id":            userID,
+			ngac.PropDisplayName: username,
+		},
 	})
 	if err != nil {
 		return "", fmt.Errorf("create node: %w", err)
@@ -590,10 +627,8 @@ func (s *Service) createUserNGACNode(ctx context.Context, username string) (stri
 		Name: ngac.NodePublicUsers, NodeType: ngac.TypeUA,
 	})
 	if err == nil && publicUA != nil {
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: userNode.Id, ParentId: publicUA.Id,
-		}); err != nil {
-			return "", fmt.Errorf("assign to public: %w", err)
+		if err := prov.Assign(ctx, userNode.Id, publicUA.Id); err != nil {
+			return "", prov.Fail(ctx, fmt.Errorf("assign to public: %w", err))
 		}
 	}
 
@@ -602,21 +637,26 @@ func (s *Service) createUserNGACNode(ctx context.Context, username string) (stri
 
 // initTenantNGAC creates the TenantMember and TenantOwner UAs for a new tenant
 // and chains them into the workspace's existing NGAC graph.
-func (s *Service) initTenantNGAC(ctx context.Context, tenantID, pcNodeID, ownersUAID, membersUAID string) {
-	memberUA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.TenantMemberUAName(tenantID), NodeType: ngac.TypeUA,
+//
+// Safe to run again: a UA that already exists is reused rather than duplicated,
+// and the edges are idempotent. A failure part way removes the UAs this call
+// created, so it never leaves a UA that reaches no policy class.
+func (s *Service) initTenantNGAC(ctx context.Context, tenantID, pcNodeID, ownersUAID, membersUAID string) error {
+	tid := ngac.WorkspaceID(tenantID)
+	prov := provision.NewCreator(s.policyWrite)
+
+	memberUA, err := prov.EnsureNode(ctx, s.policyRead, &policypb.CreateNodeRequest{
+		Name: ngac.TenantMemberUAName(tid), NodeType: ngac.TypeUA,
 	})
 	if err != nil {
-		slog.Error("create TenantMember UA failed", "tenant", tenantID, "error", err)
-		return
+		return prov.Fail(ctx, fmt.Errorf("create TenantMember UA: %w", err))
 	}
 
-	ownerUA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.TenantOwnerUAName(tenantID), NodeType: ngac.TypeUA,
+	ownerUA, err := prov.EnsureNode(ctx, s.policyRead, &policypb.CreateNodeRequest{
+		Name: ngac.TenantOwnerUAName(tid), NodeType: ngac.TypeUA,
 	})
 	if err != nil {
-		slog.Error("create TenantOwner UA failed", "tenant", tenantID, "error", err)
-		return
+		return prov.Fail(ctx, fmt.Errorf("create TenantOwner UA: %w", err))
 	}
 
 	// Assign UAs under the workspace PC for NGAC scoping, then chain them:
@@ -639,16 +679,14 @@ func (s *Service) initTenantNGAC(ctx context.Context, tenantID, pcNodeID, owners
 		if a.parent == "" {
 			continue
 		}
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: a.childID, ParentId: a.parent,
-		}); err != nil {
-			slog.Error("tenant NGAC init incomplete — users of this tenant will be denied",
-				"tenant", tenantID, "assignment", a.what, "error", err)
-			return
+		if err := prov.Assign(ctx, a.childID, a.parent); err != nil {
+			return prov.Fail(ctx, fmt.Errorf("%s: %w", a.what, err))
 		}
 	}
+	prov.Done()
 
 	slog.Info("tenant NGAC initialized", "tenant", tenantID, "member_ua", memberUA.Id, "owner_ua", ownerUA.Id)
+	return nil
 }
 
 // assignUserToTenantNGAC assigns a user's NGAC node to the tenant's member/owner UAs.
@@ -656,7 +694,7 @@ func (s *Service) initTenantNGAC(ctx context.Context, tenantID, pcNodeID, owners
 func (s *Service) assignUserToTenantNGAC(ctx context.Context, tenantID, userNodeID string, isOwner bool) {
 	// Assign to TenantMember UA
 	memberUA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: ngac.TenantMemberUAName(tenantID), NodeType: ngac.TypeUA,
+		Name: ngac.TenantMemberUAName(ngac.WorkspaceID(tenantID)), NodeType: ngac.TypeUA,
 	})
 	if err != nil {
 		slog.Error("TenantMember UA not found — was initTenantNGAC called?", "tenant", tenantID, "error", err)
@@ -674,7 +712,7 @@ func (s *Service) assignUserToTenantNGAC(ctx context.Context, tenantID, userNode
 
 	// Assign to TenantOwner UA
 	ownerUA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: ngac.TenantOwnerUAName(tenantID), NodeType: ngac.TypeUA,
+		Name: ngac.TenantOwnerUAName(ngac.WorkspaceID(tenantID)), NodeType: ngac.TypeUA,
 	})
 	if err != nil {
 		slog.Error("TenantOwner UA not found — was initTenantNGAC called?", "tenant", tenantID, "error", err)

@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/provision"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/drive/internal/store"
@@ -48,26 +50,31 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 		return nil, err
 	}
 
-	// Create a Share OA wrapping the item
-	shareOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.ShareOAName(item.Name, uuid.New().String()[:8]), NodeType: ngac.TypeOA,
+	// The share's ID is chosen first so the OA can be named by it: a name taken
+	// from the item would be the same for two items called "report.pdf", in this
+	// workspace or another, and the graph resolves nodes by exact name.
+	shareID := uuid.New().String()
+
+	// Create a Share OA wrapping the item. From here on a failure must not leave
+	// the share OA, its assignments or a half-built association behind; deleting
+	// the node cascades all of them.
+	prov := provision.NewCreator(s.policyWrite)
+	shareOA, err := prov.Node(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.ShareOAName(ngac.ShareID(shareID)), NodeType: ngac.TypeOA,
+		Properties: map[string]string{ngac.PropDisplayName: item.Name, "workspace_id": item.WorkspaceID},
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create share OA: %v", err)
 	}
-	// From here on a failure must not leave the share OA, its assignments or a
-	// half-built association behind; deleting the node cascades all of them.
 	fail := func(err error) (*pb.ShareInfo, error) {
-		if _, derr := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: shareOA.Id}); derr != nil {
-			slog.Error("could not remove share OA after a failed share", "share_oa", shareOA.Id, "error", derr)
+		if rbErr := prov.Fail(ctx, err); rbErr != nil && rbErr != err {
+			slog.Error("could not remove share OA after a failed share", "share_oa", shareOA.Id, "error", rbErr)
 		}
 		return nil, err
 	}
 
 	// Assign item under share OA
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: item.NGACNodeID, ParentId: shareOA.Id,
-	}); err != nil {
+	if err := prov.Assign(ctx, item.NGACNodeID, shareOA.Id); err != nil {
 		return fail(status.Errorf(codes.Internal, "assign item under share OA: %v", err))
 	}
 
@@ -76,23 +83,19 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 		Name: ngac.NodePCGlobal, NodeType: ngac.TypePC,
 	})
 	if pcGlobal != nil {
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: shareOA.Id, ParentId: pcGlobal.Id,
-		}); err != nil {
+		if err := prov.Assign(ctx, shareOA.Id, pcGlobal.Id); err != nil {
 			return fail(status.Errorf(codes.Internal, "assign share OA under PC_Global: %v", err))
 		}
 	}
 
 	// Create association. This is the share: if it fails we must not write the
 	// DB row, or the UI shows a share that grants nothing.
-	if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
-		UaId: targetUA, OaId: shareOA.Id, Operations: ops,
-	}); err != nil {
+	if err := prov.Associate(ctx, targetUA, shareOA.Id, ops); err != nil {
 		return fail(status.Errorf(codes.Internal, "create share association: %v", err))
 	}
 
 	share := &store.DriveShare{
-		ID:           uuid.New().String(),
+		ID:           shareID,
 		DriveItemID:  req.ItemId,
 		ShareType:    req.ShareType,
 		TargetNGACID: nilStr(req.TargetNgacNodeId),
@@ -104,6 +107,7 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 	if err := s.store.InsertShare(ctx, share); err != nil {
 		return fail(status.Errorf(codes.Internal, "insert share: %v", err))
 	}
+	prov.Done()
 
 	slog.Info("share created", "item", item.Name, "type", req.ShareType, "target", targetLabel)
 	return &pb.ShareInfo{
@@ -135,7 +139,7 @@ func (s *DriveServer) resolveShareTarget(ctx context.Context, req *pb.CreateShar
 		if gerr != nil || node == nil || node.GetId() == "" {
 			return "", "", status.Errorf(codes.InvalidArgument, "share target not found")
 		}
-		label = node.Name
+		label = ngac.DisplayName(node.Name, node.Properties)
 		if req.ShareType == "workspace" {
 			label += " (workspace)"
 		}
@@ -172,8 +176,9 @@ func (s *DriveServer) personalUA(ctx context.Context, user *policypb.NGACNode) (
 		return id, err
 	}
 
-	ua, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.PersonalUAName(user.Id), NodeType: ngac.TypeUA,
+	prov := provision.NewCreator(s.policyWrite)
+	ua, err := prov.Node(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.PersonalUAName(ngac.UserNodeID(user.Id)), NodeType: ngac.TypeUA,
 		Properties: ngac.PersonalUAProperties(user.Id),
 	})
 	if err != nil {
@@ -188,11 +193,12 @@ func (s *DriveServer) personalUA(ctx context.Context, user *policypb.NGACNode) (
 		return "", status.Errorf(codes.Internal, "create personal UA: %v", err)
 	}
 	if err := s.assignToPersonalUA(ctx, user.Id, ua.Id); err != nil {
-		if _, derr := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: ua.Id}); derr != nil {
-			slog.Error("could not remove personal UA after a failed assignment", "ua", ua.Id, "error", derr)
+		if rbErr := prov.Fail(ctx, err); rbErr != err {
+			slog.Error("could not remove personal UA after a failed assignment", "ua", ua.Id, "error", rbErr)
 		}
 		return "", err
 	}
+	prov.Done()
 	return ua.Id, nil
 }
 
@@ -221,7 +227,7 @@ func (s *DriveServer) findPersonalUA(ctx context.Context, user *policypb.NGACNod
 	}
 
 	byName, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: ngac.PersonalUAName(user.Id), NodeType: ngac.TypeUA,
+		Name: ngac.PersonalUAName(ngac.UserNodeID(user.Id)), NodeType: ngac.TypeUA,
 	})
 	if err != nil && status.Code(err) != codes.NotFound {
 		return "", status.Errorf(codes.Internal, "look up personal UA: %v", err)
@@ -342,43 +348,89 @@ func (s *DriveServer) GetSharedWithMe(ctx context.Context, req *pb.GetSharedWith
 }
 
 // CreateDriveForChannel creates a channel/DM drive folder with NGAC OA.
+//
+// Safe to call again for the same channel: an existing drive is returned as is,
+// and an OA left by an earlier attempt that did not finish is reused. A failure
+// part way removes the OA this call created.
 func (s *DriveServer) CreateDriveForChannel(ctx context.Context, req *pb.CreateDriveForChannelRequest) (*pb.DriveItem, error) {
-	driveName := ngac.ChannelDriveName(req.ChannelName)
+	if req.ChannelId == "" || req.WorkspaceId == "" {
+		return nil, status.Errorf(codes.InvalidArgument, "channel_id and workspace_id are required")
+	}
+	// The channel must be one of this workspace's (or the workspace itself, which
+	// the workspace service registers as the context of its own root drive). The
+	// OA below is found by the channel's ID alone, so without this a request that
+	// paired workspace B with workspace A's channel would adopt A's drive and
+	// grant B's channel UA access to it.
+	if req.ChannelId != req.WorkspaceId {
+		chWS, err := s.store.GetChannelWorkspaceID(ctx, req.ChannelId)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "look up channel: %v", err)
+		}
+		if chWS != req.WorkspaceId {
+			return nil, status.Errorf(codes.PermissionDenied, "channel does not belong to this workspace")
+		}
+	}
+	if existing, err := s.store.FindRootByContext(ctx, req.WorkspaceId, "channel", req.ChannelId); err != nil {
+		return nil, status.Errorf(codes.Internal, "find channel drive: %v", err)
+	} else if existing != nil {
+		return itemToProto(existing), nil
+	}
 
-	// Create NGAC OA for channel drive
-	driveOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
+	// The OA is named by the channel's ID, never its name: two channels may
+	// share a name, in one workspace or across tenants.
+	driveName := ngac.ChannelDriveName(ngac.ChannelID(req.ChannelId))
+	displayName := req.ChannelName
+	if displayName == "" {
+		displayName = "Drive"
+	}
+
+	prov := provision.NewCreator(s.policyWrite)
+	driveOA, err := prov.EnsureNode(ctx, s.policyRead, &policypb.CreateNodeRequest{
 		Name: driveName, NodeType: ngac.TypeOA,
-		Properties: map[string]string{"type": "channel_drive", "channel_id": req.ChannelId},
+		Properties: map[string]string{
+			"type": "channel_drive", "channel_id": req.ChannelId, "workspace_id": req.WorkspaceId,
+			ngac.PropDisplayName: displayName,
+		},
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create channel drive OA: %v", err)
 	}
-
-	// Assign under channel's Content OA (inherits channel permissions)
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: driveOA.Id, ParentId: req.ChannelNgacOaId,
-	}); err != nil {
-		return nil, status.Errorf(codes.Internal, "assign channel drive under content OA: %v", err)
+	// An OA found by name must not be another workspace's drive root.
+	if owner, oerr := s.store.RootWorkspaceByNode(ctx, driveOA.Id); oerr != nil {
+		return nil, status.Errorf(codes.Internal, "check drive owner: %v", prov.Fail(ctx, oerr))
+	} else if (owner != "" && owner != req.WorkspaceId) ||
+		(driveOA.Properties["workspace_id"] != "" && driveOA.Properties["workspace_id"] != req.WorkspaceId) {
+		_ = prov.Fail(ctx, errors.New("drive belongs to another workspace"))
+		return nil, status.Errorf(codes.PermissionDenied, "channel drive belongs to another workspace")
 	}
 
-	// Association: channel Members UA → drive OA [read, write, upload]
-	if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
-		UaId: req.ChannelNgacUaId, OaId: driveOA.Id,
-		Operations: ngac.ChannelDriveOps(),
-	}); err != nil {
-		return nil, status.Errorf(codes.Internal, "grant channel members access to drive: %v", err)
+	// Assign under channel's Content OA (inherits channel permissions)
+	if err := prov.Assign(ctx, driveOA.Id, req.ChannelNgacOaId); err != nil {
+		return nil, status.Errorf(codes.Internal, "assign channel drive under content OA: %v", prov.Fail(ctx, err))
+	}
+
+	// Association: channel Members UA → drive OA [read, write, upload, share]
+	if err := prov.Associate(ctx, req.ChannelNgacUaId, driveOA.Id, ngac.ChannelDriveOps()); err != nil {
+		return nil, status.Errorf(codes.Internal, "grant channel members access to drive: %v", prov.Fail(ctx, err))
 	}
 
 	item := &store.DriveItem{
 		ID: uuid.New().String(), WorkspaceID: req.WorkspaceId,
 		DriveContext: "channel", DriveContextID: req.ChannelId,
-		ItemType: "folder", Name: driveName,
+		ItemType: "folder", Name: displayName,
 		NGACNodeID: driveOA.Id, ScopeOAID: driveOA.Id,
-		OwnerID: "system", Status: "active",
+		OwnerID: "system", Status: "active", IsRoot: true,
 	}
 	if err := s.store.InsertItem(ctx, item); err != nil {
-		return nil, status.Errorf(codes.Internal, "insert channel drive: %v", err)
+		rbErr := prov.Fail(ctx, err)
+		if errors.Is(err, store.ErrRootExists) {
+			if winner, ferr := s.store.FindRootByContext(ctx, req.WorkspaceId, "channel", req.ChannelId); ferr == nil && winner != nil {
+				return itemToProto(winner), nil
+			}
+		}
+		return nil, status.Errorf(codes.Internal, "insert channel drive: %v", rbErr)
 	}
+	prov.Done()
 
 	slog.Info("channel drive created", "channel", req.ChannelId, "drive", item.ID)
 	return itemToProto(item), nil
@@ -431,7 +483,7 @@ func (s *DriveServer) GetQuota(ctx context.Context, req *pb.GetQuotaRequest) (*p
 // workspace's Mgmt OA, for the caller on the context (see package grpcauth).
 func (s *DriveServer) UpdateQuota(ctx context.Context, req *pb.UpdateQuotaRequest) (*pb.Quota, error) {
 	userNodeID := grpcauth.CallerFrom(ctx).NGACNodeID
-	if err := s.checkAccessOnNamedOA(ctx, userNodeID, ngac.MgmtOAName(req.WorkspaceId), ngac.OpManage); err != nil {
+	if err := s.checkAccessOnNamedOA(ctx, userNodeID, ngac.MgmtOAName(ngac.WorkspaceID(req.WorkspaceId)), ngac.OpManage); err != nil {
 		return nil, err
 	}
 	if err := s.store.UpdateQuotaLimits(ctx, req.WorkspaceId, req.MaxBytes, req.MaxFiles); err != nil {

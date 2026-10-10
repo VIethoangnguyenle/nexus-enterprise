@@ -105,6 +105,7 @@ the verified claims / request metadata, and the request is looked up in the call
 | Operation | Op | Object |
 |---|---|---|
 | List assets | `read` | each asset type OA (batch); unreadable types are filtered out, never a 403 for the list |
+| Get / update / delete / transition one asset | `read`, `write`, `manage`, the transition's op | the OA of the asset's type — an asset has no node of its own (see `asset-authorization`) |
 | List / get asset requests | — | visible to the requester, or to holders of `approve` on the request's type OA |
 | Create asset type | `manage` | the workspace Assets OA; for the first type, before that OA exists, `manage` on the Mgmt OA |
 | Update type schema | `manage` | the workspace Assets OA |

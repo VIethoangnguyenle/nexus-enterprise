@@ -152,15 +152,13 @@ func (s *Service) createExternalUser(ctx context.Context, email, displayName str
 		displayName = username
 	}
 
-	ngacNode, err := s.createUserNGACNode(ctx, username)
-	if err != nil {
-		return nil, fmt.Errorf("create ngac node: %w", err)
-	}
-
 	userID := uuid.New().String()
 	unionID := uuid.New().String()
-	if err := s.store.CreateUser(ctx, userID, username, "", ngacNode, email, unionID, displayName, ""); err != nil {
-		return nil, fmt.Errorf("create user: %w", err)
+	ngacNode, err := s.createUserWithNode(ctx, newUser{
+		ID: userID, Username: username, Email: email, UnionID: unionID, DisplayName: displayName,
+	})
+	if err != nil {
+		return nil, err
 	}
 	slog.Info("registered user from external identity", "user_id", userID, "provider", ProviderGoogle)
 

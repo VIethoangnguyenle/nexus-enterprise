@@ -494,8 +494,13 @@ deadcode:
 check-docs:
 	@./scripts/check-docs-drift.sh
 
+## Fail if Go code outside backend/ngac hand-builds an operation string or node name
+check-ngac:
+	@./scripts/check-ngac-identifiers.sh --self-test
+	@./scripts/check-ngac-identifiers.sh
+
 ## Full gate: everything that must pass before a change is done
-verify: check-docs fmt-check build-check lint test
+verify: check-docs check-ngac fmt-check build-check lint test
 	@echo "▸ Frontend tests..."
 	@cd $(CURDIR)/frontend && npm test
 	@echo ""

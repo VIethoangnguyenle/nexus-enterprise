@@ -3,9 +3,7 @@ package grpc
 import (
 	"context"
 	"encoding/json"
-	"log/slog"
 
-	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
@@ -21,17 +19,20 @@ import (
 )
 
 // AssetServer handles gRPC calls for asset CRUD and lifecycle management.
+//
+// It holds a read client only. An asset is not a node: the graph holds
+// attributes, and every check on an asset is a check on the OA of its type
+// (store.Asset.TypeOAID). There is nothing here for a write client to write.
 type AssetServer struct {
 	pb.UnimplementedAssetServiceServer
-	store       *store.Store
-	policyRead  policypb.PolicyReadServiceClient
-	policyWrite policypb.PolicyWriteServiceClient
-	producer    *events.Producer
+	store      *store.Store
+	policyRead policypb.PolicyReadServiceClient
+	producer   *events.Producer
 }
 
 // NewAssetServer creates the asset gRPC handler.
-func NewAssetServer(s *store.Store, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient, p *events.Producer) *AssetServer {
-	return &AssetServer{store: s, policyRead: pr, policyWrite: pw, producer: p}
+func NewAssetServer(s *store.Store, pr policypb.PolicyReadServiceClient, p *events.Producer) *AssetServer {
+	return &AssetServer{store: s, policyRead: pr, producer: p}
 }
 
 func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetRequest) (*pb.Asset, error) {
@@ -48,6 +49,13 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 	// Check write permission on type's OA
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, at.NgacOAID, ngac.OpWrite); err != nil {
 		return nil, err
+	}
+
+	// The asset belongs to its type's workspace; the request may not file it
+	// under another. Checked after authorization so a caller without write on
+	// the type learns nothing about which workspace it is in.
+	if at.WorkspaceID != req.WorkspaceId {
+		return nil, status.Errorf(codes.InvalidArgument, "asset type does not belong to this workspace")
 	}
 
 	// Validate custom fields against type schema
@@ -69,41 +77,15 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 		return nil, status.Errorf(codes.Internal, "parse lifecycle: %v", err)
 	}
 
-	// Create NGAC Object node for this asset. Named by ID, not display name —
-	// two assets may legitimately share a name, and a shared node name means
-	// they would share access decisions.
-	assetID := uuid.New().String()
-	ngacNode, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name:     ngac.AssetNodeName(assetID),
-		NodeType: ngac.TypeO,
-		Properties: map[string]string{
-			"asset_type":   req.TypeId,
-			"workspace_id": req.WorkspaceId,
-		},
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "create asset NGAC node: %v", err)
-	}
-
-	// Assign asset O to type OA
-	// Without this edge the asset object reaches no OA, so every later check
-	// on it denies and the asset is invisible to everyone including its creator.
-	if at.NgacOAID != "" {
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: ngacNode.Id, ParentId: at.NgacOAID,
-		}); err != nil {
-			return nil, status.Errorf(codes.Internal, "assign asset under type OA: %v", err)
-		}
-	}
-
+	// No graph node is created for the asset. It is authorized through the OA of
+	// its type, which the check above already used; two assets may share a name
+	// and still share nothing but that type's grants.
 	asset := &store.Asset{
-		ID:           assetID,
 		Name:         req.Name,
 		TypeID:       req.TypeId,
 		WorkspaceID:  req.WorkspaceId,
 		State:        ld.InitialState,
 		CustomFields: fieldsJSON,
-		NgacNodeID:   ngacNode.Id,
 		CreatedBy:    grpcauth.CallerFrom(ctx).UserID,
 	}
 	if err := s.store.CreateAsset(ctx, asset); err != nil {
@@ -127,8 +109,8 @@ func (s *AssetServer) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*p
 		return nil, status.Errorf(codes.NotFound, "asset has been deleted")
 	}
 
-	// Check read permission on asset's NGAC node
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpRead); err != nil {
+	// Check read permission on the OA of the asset's type
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 	return assetToProto(asset), nil
@@ -190,7 +172,7 @@ func (s *AssetServer) UpdateAsset(ctx context.Context, req *pb.UpdateAssetReques
 		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
 	}
 
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
@@ -229,20 +211,12 @@ func (s *AssetServer) DeleteAsset(ctx context.Context, req *pb.DeleteAssetReques
 		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
 	}
 
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpManage); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpManage); err != nil {
 		return nil, err
 	}
 
 	if err := s.store.SoftDeleteAsset(ctx, req.AssetId); err != nil {
 		return nil, status.Errorf(codes.Internal, "delete asset: %v", err)
-	}
-
-	// Remove NGAC assignments for the asset node
-	if asset.NgacNodeID != "" {
-		if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: asset.NgacNodeID}); err != nil {
-			slog.Error("asset soft-deleted but its NGAC node remains",
-				"asset_id", req.AssetId, "node_id", asset.NgacNodeID, "error", err)
-		}
 	}
 
 	return &pb.Empty{}, nil
@@ -279,7 +253,7 @@ func (s *AssetServer) TransitionAsset(ctx context.Context, req *pb.TransitionReq
 	}
 
 	// Check NGAC permission for the transition
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, tr.NgacPermission); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, tr.NgacPermission); err != nil {
 		return nil, err
 	}
 
@@ -347,13 +321,13 @@ func (s *AssetServer) GetAvailableTransitions(ctx context.Context, req *pb.GetTr
 	}
 	batch, err := s.policyRead.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
 		UserNodeId: grpcauth.CallerFrom(ctx).NGACNodeID,
-		ObjectIds:  []string{asset.NgacNodeID},
+		ObjectIds:  []string{asset.TypeOAID},
 		Operations: ops,
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
 	}
-	granted := batch.GetResults()[asset.NgacNodeID].GetPermissions()
+	granted := batch.GetResults()[asset.TypeOAID].GetPermissions()
 
 	for _, t := range allTransitions {
 		if granted[t.NgacPermission] {
@@ -373,7 +347,7 @@ func (s *AssetServer) GetAssetHistory(ctx context.Context, req *pb.GetHistoryReq
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
 	}
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpRead); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 
@@ -403,14 +377,10 @@ func (s *AssetServer) GetAssetHistory(ctx context.Context, req *pb.GetHistoryReq
 // Helpers
 // ============================================
 
-func (s *AssetServer) checkAccess(ctx context.Context, userNodeID, objectNodeID, operation string) error {
-	resp, err := s.policyRead.CheckAccess(ctx, &policypb.CheckAccessRequest{
-		UserNodeId: userNodeID, ObjectNodeId: objectNodeID, Operation: operation,
-	})
-	if !ngac.Allowed(resp.GetDecision(), err) {
-		return status.Errorf(codes.PermissionDenied, "no %s access", operation)
-	}
-	return nil
+// checkAccess requires op for the caller on one OA. An empty caller or OA —
+// an asset whose type has no OA — is a denial, not a lookup of "".
+func (s *AssetServer) checkAccess(ctx context.Context, userNodeID, oaID, operation string) error {
+	return authorize(ctx, s.policyRead, userNodeID, oaID, operation)
 }
 
 func assetToProto(a *store.Asset) *pb.Asset {
@@ -421,7 +391,7 @@ func assetToProto(a *store.Asset) *pb.Asset {
 		TypeName:    a.TypeName,
 		WorkspaceId: a.WorkspaceID,
 		State:       a.State,
-		NgacNodeId:  a.NgacNodeID,
+		NgacNodeId:  a.TypeOAID, // the OA the asset is authorized on
 		CreatedBy:   a.CreatedBy,
 		Deleted:     a.Deleted,
 		CreatedAt:   timestamppb.New(a.CreatedAt),

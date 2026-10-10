@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "NGAC model conformance"
-status: pending
+status: done-with-concerns
 priority: P1
 effort: 2-3d
 dependencies: [2b, 3b]
@@ -49,9 +49,12 @@ dependencies: [2b, 3b]
 4. Asset: test deny/allow trên type OA trước, rồi gỡ O node.
 
 ## Success criteria
-- [ ] `grep` không còn op literal/`fmt.Sprintf` tên node ngoài `backend/ngac`.
-- [ ] Hai tenant tạo department cùng tên không đụng nhau (test).
-- [ ] Không còn node loại O trong graph.
+- [x] `grep` không còn op literal/`fmt.Sprintf` tên node ngoài `backend/ngac` — `scripts/check-ngac-identifiers.sh`
+      (CI docs job, `make check-ngac`); `services/approval` tạm bị bỏ qua, còn 4 literal (xem report).
+- [x] Hai tenant tạo department cùng tên không đụng nhau (test: `workspace/internal/domain/provisioning_test.go`).
+- [x] Không còn node loại O trong graph (`select count(*) from ngac_nodes where node_type='O'` = 0 sau migration 024).
+
+Kết quả chi tiết: `reports/phase-07-report.md`.
 
 ## Risks
 - Migration đổi tên node ảnh hưởng mọi tenant → cần chạy thử trên bản sao DB, có rollback.

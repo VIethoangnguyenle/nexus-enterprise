@@ -16,6 +16,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/ngac"
 	docpb "ngac-platform/proto/document"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
@@ -51,8 +52,13 @@ func (m *mockPolicyRead) BatchCheckAccess(_ context.Context, req *policypb.Batch
 	return batchDecision(req, true), nil
 }
 
+// FindNodeByName knows the two well-known global nodes; every other name is
+// absent, as it is in a graph where nothing has been created yet.
 func (m *mockPolicyRead) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
-	return &policypb.NGACNode{Id: "pc-global", Name: req.Name, NodeType: req.NodeType}, nil
+	if req.Name == ngac.NodePCGlobal || req.Name == ngac.NodePublicUsers {
+		return &policypb.NGACNode{Id: "pc-global", Name: req.Name, NodeType: req.NodeType}, nil
+	}
+	return nil, status.Errorf(codes.NotFound, "node %s not found", req.Name)
 }
 func (m *mockPolicyRead) GetNode(_ context.Context, req *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
 	return &policypb.NGACNode{Id: req.NodeId, Name: "MockNode", NodeType: "UA"}, nil
@@ -726,7 +732,7 @@ func TestCreateDriveForChannel_HappyPath(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "folder", drive.ItemType)
-	assert.Contains(t, drive.Name, "Ch_drive_test_ch_Drive")
+	assert.Equal(t, "drive_test_ch", drive.Name, "the drive shows the channel's name, never a node name")
 	assert.Equal(t, "active", drive.Status)
 }
 

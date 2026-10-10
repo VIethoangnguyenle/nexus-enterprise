@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -39,7 +41,15 @@ type DriveItem struct {
 	TrashedAt      *time.Time
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	// IsRoot marks the drive root of a context. Top-level user folders are
+	// parent-less too, so "no parent" does not identify the root; at most one
+	// active root exists per (workspace, context, context id).
+	IsRoot bool
 }
+
+// ErrRootExists is returned by InsertItem when an active root already exists
+// for the item's drive context: another run created it first.
+var ErrRootExists = errors.New("drive root already exists for this context")
 
 // DriveShare represents a row in the drive_shares table.
 type DriveShare struct {
@@ -79,12 +89,16 @@ func (s *Store) InsertItem(ctx context.Context, item *DriveItem) error {
 	_, err := s.db.Exec(ctx,
 		`INSERT INTO drive_items (id, workspace_id, drive_context, drive_context_id, parent_id,
 			item_type, name, mime_type, size_bytes, object_key, storage_doc_id, ngac_node_id,
-			scope_oa_id, owner_id, status)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
+			scope_oa_id, owner_id, status, is_root)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
 		item.ID, item.WorkspaceID, item.DriveContext, nilStr(item.DriveContextID),
 		item.ParentID, item.ItemType, item.Name, item.MimeType, item.SizeBytes,
 		item.ObjectKey, item.StorageDocID, item.NGACNodeID, nilStr(item.ScopeOAID),
-		item.OwnerID, item.Status)
+		item.OwnerID, item.Status, item.IsRoot)
+	var pgErr *pgconn.PgError
+	if item.IsRoot && errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "drive_items_one_root_per_context" {
+		return ErrRootExists
+	}
 	return err
 }
 
@@ -416,7 +430,7 @@ func (s *Store) FindRootByContext(ctx context.Context, workspaceID, driveContext
 		 FROM drive_items
 		 WHERE workspace_id = $1 AND drive_context = $2
 		   AND COALESCE(drive_context_id,'') = $3
-		   AND parent_id IS NULL AND item_type = 'folder'
+		   AND parent_id IS NULL AND item_type = 'folder' AND is_root AND status = 'active'
 		 LIMIT 1`, workspaceID, driveContext, driveContextID).
 		Scan(&item.ID, &item.WorkspaceID, &item.DriveContext, &item.DriveContextID,
 			&item.ParentID, &item.ItemType, &item.Name, &item.MimeType, &item.SizeBytes,
@@ -426,6 +440,19 @@ func (s *Store) FindRootByContext(ctx context.Context, workspaceID, driveContext
 		return nil, nil
 	}
 	return item, err
+}
+
+// RootWorkspaceByNode returns the workspace whose drive root hangs on the given
+// OA, or "" when no root does. A drive OA that is the root of one workspace must
+// never be adopted by another.
+func (s *Store) RootWorkspaceByNode(ctx context.Context, nodeID string) (string, error) {
+	var ws string
+	err := s.db.QueryRow(ctx,
+		`SELECT workspace_id FROM drive_items WHERE ngac_node_id = $1 AND is_root LIMIT 1`, nodeID).Scan(&ws)
+	if err == pgx.ErrNoRows {
+		return "", nil
+	}
+	return ws, err
 }
 
 // --- Shares ---
@@ -602,6 +629,19 @@ func (s *Store) GetWorkspacePCID(ctx context.Context, workspaceID string) (strin
 		return "", nil
 	}
 	return pcID, err
+}
+
+// GetWorkspaceDocumentsOAID returns the Documents OA recorded for a workspace,
+// or "" when the workspace has none recorded (or does not exist). The drive roots
+// itself there; it never works the OA out from node names.
+func (s *Store) GetWorkspaceDocumentsOAID(ctx context.Context, workspaceID string) (string, error) {
+	var oaID string
+	err := s.db.QueryRow(ctx,
+		`SELECT COALESCE(documents_oa_id, '') FROM workspaces WHERE id = $1`, workspaceID).Scan(&oaID)
+	if err == pgx.ErrNoRows {
+		return "", nil
+	}
+	return oaID, err
 }
 
 // GetChannelWorkspaceID returns the workspace_id for a channel.

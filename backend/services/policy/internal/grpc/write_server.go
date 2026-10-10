@@ -51,6 +51,15 @@ func (s *WriteServer) SetShardManager(sm ngac.ShardManager) {
 }
 
 func (s *WriteServer) CreateNode(ctx context.Context, req *pb.CreateNodeRequest) (*pb.NGACNode, error) {
+	// The graph holds attributes, not objects: files, messages, assets and
+	// requests live in Postgres under a parent OA and are authorized on it. An
+	// O node would never be loaded into the in-memory graph and every check on
+	// it would fall through to the SQL fallback.
+	if req.NodeType == ngac.NodeTypeObject {
+		return nil, status.Errorf(codes.InvalidArgument,
+			"object (O) nodes are not created: authorize on the parent object attribute instead")
+	}
+
 	// PC Authorization Guard: PolicyClass nodes require explicit scope + tenant_id metadata.
 	// This prevents unauthorized/accidental PC creation which would break tenant isolation.
 	if req.NodeType == ngac.NodeTypePolicyClass {

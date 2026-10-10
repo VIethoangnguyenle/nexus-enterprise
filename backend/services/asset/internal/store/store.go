@@ -52,11 +52,13 @@ type Asset struct {
 	CustomFields       json.RawMessage
 	AssignedTo         *string
 	AssignedToUsername string
-	NgacNodeID         string
-	CreatedBy          string
-	Deleted            bool
-	CreatedAt          time.Time
-	UpdatedAt          time.Time
+	// TypeOAID is the OA of the asset's type, which is what the asset is
+	// authorized on. It comes from the type, not from a column on the asset.
+	TypeOAID  string
+	CreatedBy string
+	Deleted   bool
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 // TransitionRecord records a lifecycle state change.
@@ -97,7 +99,11 @@ type AssetRequest struct {
 
 // CreateType inserts a new asset type and returns it.
 func (s *Store) CreateType(ctx context.Context, at *AssetType) error {
-	at.ID = uuid.New().String()
+	// The caller sets the ID when the type's OA has to be named by it before
+	// the row exists.
+	if at.ID == "" {
+		at.ID = uuid.New().String()
+	}
 	at.CreatedAt = time.Now()
 	at.UpdatedAt = at.CreatedAt
 
@@ -181,8 +187,6 @@ func (s *Store) UpdateTypeSchema(ctx context.Context, typeID string, schema json
 
 // CreateAsset inserts a new asset instance.
 func (s *Store) CreateAsset(ctx context.Context, a *Asset) error {
-	// The caller may have set an ID already, because the NGAC object node is
-	// named after it and has to exist before the row does.
 	if a.ID == "" {
 		a.ID = uuid.New().String()
 	}
@@ -190,10 +194,10 @@ func (s *Store) CreateAsset(ctx context.Context, a *Asset) error {
 	a.UpdatedAt = a.CreatedAt
 
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO assets (id, name, type_id, workspace_id, state, custom_fields, ngac_node_id, created_by, created_at, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		`INSERT INTO assets (id, name, type_id, workspace_id, state, custom_fields, created_by, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		a.ID, a.Name, a.TypeID, a.WorkspaceID, a.State,
-		a.CustomFields, a.NgacNodeID, a.CreatedBy, a.CreatedAt, a.UpdatedAt,
+		a.CustomFields, a.CreatedBy, a.CreatedAt, a.UpdatedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("inserting asset: %w", err)
@@ -208,7 +212,7 @@ func (s *Store) GetAsset(ctx context.Context, assetID string) (*Asset, error) {
 	err := s.pool.QueryRow(ctx,
 		`SELECT a.id, a.name, a.type_id, t.name, a.workspace_id, a.state,
 		        a.custom_fields, a.assigned_to, u.username,
-		        COALESCE(a.ngac_node_id, ''), a.created_by, a.deleted, a.created_at, a.updated_at
+		        COALESCE(t.ngac_oa_id, ''), a.created_by, a.deleted, a.created_at, a.updated_at
 		 FROM assets a
 		 JOIN asset_types t ON a.type_id = t.id
 		 LEFT JOIN users u ON a.assigned_to = u.id
@@ -216,7 +220,7 @@ func (s *Store) GetAsset(ctx context.Context, assetID string) (*Asset, error) {
 	).Scan(
 		&a.ID, &a.Name, &a.TypeID, &a.TypeName, &a.WorkspaceID, &a.State,
 		&a.CustomFields, &assignedTo, &assignedUsername,
-		&a.NgacNodeID, &a.CreatedBy, &a.Deleted, &a.CreatedAt, &a.UpdatedAt,
+		&a.TypeOAID, &a.CreatedBy, &a.Deleted, &a.CreatedAt, &a.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("getting asset: %w", err)
@@ -290,7 +294,7 @@ func (s *Store) ListAssets(ctx context.Context, f ListAssetsFilter) ([]*Asset, i
 	query := fmt.Sprintf(
 		`SELECT a.id, a.name, a.type_id, t.name, a.workspace_id, a.state,
 		        a.custom_fields, a.assigned_to, u.username,
-		        COALESCE(a.ngac_node_id, ''), a.created_by, a.deleted, a.created_at, a.updated_at
+		        COALESCE(t.ngac_oa_id, ''), a.created_by, a.deleted, a.created_at, a.updated_at
 		 FROM assets a
 		 JOIN asset_types t ON a.type_id = t.id
 		 LEFT JOIN users u ON a.assigned_to = u.id
@@ -312,7 +316,7 @@ func (s *Store) ListAssets(ctx context.Context, f ListAssetsFilter) ([]*Asset, i
 		if err := rows.Scan(
 			&a.ID, &a.Name, &a.TypeID, &a.TypeName, &a.WorkspaceID, &a.State,
 			&a.CustomFields, &assignedTo, &assignedUsername,
-			&a.NgacNodeID, &a.CreatedBy, &a.Deleted, &a.CreatedAt, &a.UpdatedAt,
+			&a.TypeOAID, &a.CreatedBy, &a.Deleted, &a.CreatedAt, &a.UpdatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scanning asset row: %w", err)
 		}

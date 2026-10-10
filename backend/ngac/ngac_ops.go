@@ -109,10 +109,6 @@ func ShareOps(permission string) ([]string, bool) {
 const (
 	NodePCGlobal    = "PC_Global"
 	NodePublicUsers = "PublicUsers"
-
-	// NodePCAssetManagement is the policy class every workspace's asset tree
-	// hangs under, in addition to the workspace's own PC.
-	NodePCAssetManagement = "PC_AssetManagement"
 )
 
 // --- Asset naming conventions ---
@@ -121,42 +117,52 @@ const (
 // display name, and a name-derived node would then be shared between them —
 // which in a graph that answers access questions means one tenant's assets
 // resolving onto another's attributes.
+//
+// Assets themselves have no node: the graph holds only attributes, so an asset
+// is authorized through the OA of its type (AssetTypeOAName), and a grant on
+// the Assets or a category OA reaches every type beneath it.
 
-func AssetsOAName(wsID string) string { return fmt.Sprintf("%s_Assets", wsID) }
+func AssetsOAName(wsID WorkspaceID) string { return fmt.Sprintf("%s_Assets", wsID) }
 
-func AssetCategoryOAName(wsID, category string) string {
+// AssetCategoryOAName names the OA of a category within one workspace. A
+// category is a label the workspace chooses, not an entity with an ID; it is
+// scoped by the workspace ID so two workspaces never share one.
+func AssetCategoryOAName(wsID WorkspaceID, category string) string {
 	return fmt.Sprintf("%s_Category_%s", wsID, category)
 }
 
-func AssetTypeOAName(wsID, typeName string) string {
-	return fmt.Sprintf("%s_Type_%s", wsID, typeName)
+// AssetTypeOAName names the OA of one asset type. Keyed by the type's ID: two
+// types may share a display name (or sanitize to the same string) and must not
+// share an OA, since the OA is what their assets are authorized on.
+func AssetTypeOAName(wsID WorkspaceID, typeID AssetTypeID) string {
+	return fmt.Sprintf("%s_Type_%s", wsID, typeID)
 }
-
-// AssetNodeName names the object node for a single asset.
-func AssetNodeName(assetID string) string { return fmt.Sprintf("Asset_%s", assetID) }
 
 // --- Workspace naming conventions ---
 // Every workspace creates a set of NGAC nodes named by workspace ID.
 // Using ID (UUID) instead of display name prevents collisions.
 
-func PCName(wsID string) string             { return fmt.Sprintf("PC_%s", wsID) }
-func OwnersUAName(wsID string) string       { return fmt.Sprintf("%s_Owners", wsID) }
-func MembersUAName(wsID string) string      { return fmt.Sprintf("%s_Members", wsID) }
-func MgmtOAName(wsID string) string         { return fmt.Sprintf("%s_Mgmt", wsID) }
-func DocumentsOAName(wsID string) string    { return fmt.Sprintf("%s_Documents", wsID) }
-func DraftDocsOAName(wsID string) string    { return fmt.Sprintf("%s_DraftDocs", wsID) }
-func ApprovedDocsOAName(wsID string) string { return fmt.Sprintf("%s_ApprovedDocs", wsID) }
-func ChannelsOAName(wsID string) string     { return fmt.Sprintf("%s_Channels", wsID) }
+func PCName(wsID WorkspaceID) string             { return fmt.Sprintf("PC_%s", wsID) }
+func OwnersUAName(wsID WorkspaceID) string       { return fmt.Sprintf("%s_Owners", wsID) }
+func MembersUAName(wsID WorkspaceID) string      { return fmt.Sprintf("%s_Members", wsID) }
+func MgmtOAName(wsID WorkspaceID) string         { return fmt.Sprintf("%s_Mgmt", wsID) }
+func DocumentsOAName(wsID WorkspaceID) string    { return fmt.Sprintf("%s_Documents", wsID) }
+func DraftDocsOAName(wsID WorkspaceID) string    { return fmt.Sprintf("%s_DraftDocs", wsID) }
+func ApprovedDocsOAName(wsID WorkspaceID) string { return fmt.Sprintf("%s_ApprovedDocs", wsID) }
+func ChannelsOAName(wsID WorkspaceID) string     { return fmt.Sprintf("%s_Channels", wsID) }
 
 // --- Department naming conventions ---
 
-func DeptUAName(name string) string { return fmt.Sprintf("Dept_%s", name) }
+// DeptUAName names a department's UA by the department's ID. The display name
+// lives in the node properties (PropDisplayName), so renaming a department
+// never renames a node and two tenants may both have a "Sales".
+func DeptUAName(deptID DeptID) string { return fmt.Sprintf("Dept_%s", deptID) }
 
 // --- Channel naming conventions ---
 
-func ChannelContentOAName(chID string) string { return fmt.Sprintf("Ch_%s_Content", chID) }
-func ChannelMembersUAName(chID string) string { return fmt.Sprintf("Ch_%s_Members", chID) }
-func ChannelDriveName(chID string) string     { return fmt.Sprintf("Ch_%s_Drive", chID) }
+func ChannelContentOAName(chID ChannelID) string { return fmt.Sprintf("Ch_%s_Content", chID) }
+func ChannelMembersUAName(chID ChannelID) string { return fmt.Sprintf("Ch_%s_Members", chID) }
+func ChannelDriveName(chID ChannelID) string     { return fmt.Sprintf("Ch_%s_Drive", chID) }
 
 // DMChannelName builds the display name for a direct message from the two
 // participants' display names.
@@ -179,10 +185,10 @@ func DMChannelName(displayNameA, displayNameB string) string {
 // --- Tenant naming conventions ---
 
 // TenantMemberUAName returns the UA name for regular members of a tenant.
-func TenantMemberUAName(tenantID string) string { return fmt.Sprintf("TenantMember_%s", tenantID) }
+func TenantMemberUAName(tenantID WorkspaceID) string { return fmt.Sprintf("TenantMember_%s", tenantID) }
 
 // TenantOwnerUAName returns the UA name for owners of a tenant.
-func TenantOwnerUAName(tenantID string) string { return fmt.Sprintf("TenantOwner_%s", tenantID) }
+func TenantOwnerUAName(tenantID WorkspaceID) string { return fmt.Sprintf("TenantOwner_%s", tenantID) }
 
 // --- Drive naming conventions ---
 
@@ -192,7 +198,7 @@ func TenantOwnerUAName(tenantID string) string { return fmt.Sprintf("TenantOwner
 // characters, which meant two workspaces whose UUIDs shared a prefix produced
 // the same node name — and names are matched exactly, so the second workspace
 // would have resolved onto the first one's drive root.
-func DriveRootName(workspaceID string) string {
+func DriveRootName(workspaceID WorkspaceID) string {
 	return fmt.Sprintf("DriveRoot_%s", workspaceID)
 }
 
@@ -203,6 +209,7 @@ func DriveRootName(workspaceID string) string {
 const (
 	PropType           = "type"
 	PropTypePersonalUA = "personal_ua"
+	PropTypeRole       = "role"
 	PropUserNodeID     = "user_node_id"
 )
 
@@ -218,14 +225,16 @@ func IsPersonalUAOf(props map[string]string, userNodeID string) bool {
 }
 
 // reservedRolePrefixes and reservedRoleSuffixes are the namespaces the platform
-// builds its own node names in. A role is a UA whose name a workspace
-// administrator picks, and node names are matched exactly, so a role named
-// inside one of these namespaces could be found where the platform expects its
-// own node.
+// builds its own node names in. A role's node is named by a generated ID
+// (RoleUAName) and its display name is only a property, so a name an
+// administrator types can no longer become a node name. The list stays as
+// display-name hygiene: a role listed as "Dept_Sales" or "Role_1" would read as
+// a platform node on screen and in logs, and legacy nodes written before names
+// were ID-keyed still carry their display name as the node name.
 var (
 	reservedRolePrefixes = []string{
 		"User_", "PC_", "TenantMember_", "TenantOwner_", "Dept_", "Ch_",
-		"DriveRoot_", "Folder_", "Share_", "Asset_",
+		"DriveRoot_", "Folder_", "Share_", "Asset_", "Role_", "U_",
 	}
 	reservedRoleSuffixes = []string{
 		"_Owners", "_Members", "_Mgmt", "_Documents", "_DraftDocs", "_ApprovedDocs",
@@ -266,12 +275,35 @@ func ValidateRoleName(name string) error {
 // granting something to one person means granting it to a UA that contains only
 // them. Named by the user's node ID, never by display name, so two people with
 // the same name cannot resolve onto the same attribute.
-func PersonalUAName(userNodeID string) string { return fmt.Sprintf("User_%s", userNodeID) }
+func PersonalUAName(userNodeID UserNodeID) string { return fmt.Sprintf("User_%s", userNodeID) }
 
-func FolderNodeName(name string) string { return fmt.Sprintf("Folder_%s", name) }
+// FolderNodeName names a folder's OA by the folder's ID, never by what the
+// folder is called: sibling folders in different tenants share names freely.
+func FolderNodeName(folderID FolderID) string { return fmt.Sprintf("Folder_%s", folderID) }
 
-func ShareOAName(itemName, uniqueSuffix string) string {
-	return fmt.Sprintf("Share_%s_%s", itemName, uniqueSuffix)
+// ShareOAName names the OA that wraps one shared item, by the share's ID.
+func ShareOAName(shareID ShareID) string { return fmt.Sprintf("Share_%s", shareID) }
+
+// RoleUAName names a role's UA by a generated ID. The role's display name — the
+// one an administrator typed — is kept in PropDisplayName; it is never part of
+// a node name, so a role cannot take over a name the platform builds itself.
+func RoleUAName(roleID RoleID) string { return fmt.Sprintf("Role_%s", roleID) }
+
+// UserNodeName names a user's U node by users.id, not by username.
+func UserNodeName(userID UserID) string { return fmt.Sprintf("U_%s", userID) }
+
+// PropDisplayName holds the human-readable name of a node whose own name is a
+// platform-built identifier. Screens show it; nothing authorizes on it.
+const PropDisplayName = "display_name"
+
+// DisplayName returns the name to show for a node: its display_name property
+// when it has one, else the node name (nodes created before names became
+// ID-keyed carry their display name as the node name).
+func DisplayName(name string, props map[string]string) string {
+	if d := props[PropDisplayName]; d != "" {
+		return d
+	}
+	return name
 }
 
 // --- Node types ---

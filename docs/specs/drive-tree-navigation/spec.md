@@ -105,3 +105,35 @@ The folder tree SHALL NOT display folders the user cannot read. For workspace me
 #### Scenario: Shared folder not in workspace
 - **WHEN** a user has been shared a specific subfolder but not its parent
 - **THEN** only the shared folder appears in the tree (not the inaccessible parent hierarchy)
+
+### Requirement: A workspace's drive root is its recorded Documents OA
+The drive root of a workspace SHALL hang on the Documents OA recorded on the workspace (`workspaces.documents_oa_id`, set when the workspace is provisioned). The drive SHALL NOT work the root out from node names — not by looking for "Documents" or "Docs" among the policy class's children, and not by taking the first OA found. A workspace with no Documents OA recorded SHALL get a root OA of its own, `ngac.DriveRootName(workspace id)`, which is found again on later calls instead of created twice. A drive root is marked (`drive_items.is_root`), because top-level user folders are parent-less too; at most one active root exists per workspace, drive context and context id (unique index), and a request that loses the race to create it SHALL read the winner's root again and use it. A channel's drive SHALL be built only for a channel of the requesting workspace (or for the workspace's own id, its root-drive context); a request pairing one workspace with another's channel is refused (PermissionDenied) before anything is written, and an OA that is already another workspace's drive root is never adopted. Folders and shares created in the drive SHALL be named by their own IDs (`ngac.FolderNodeName`, `ngac.ShareOAName`), and a channel's drive by the channel's ID (`ngac.ChannelDriveName`), with what the screen shows kept in the item name and the node's `display_name` property.
+
+#### Scenario: Recorded Documents OA
+- **WHEN** the first top-level folder is created in a workspace that has a Documents OA recorded
+- **THEN** the root and the folder hang under that OA, whatever other OAs the policy class has and whatever they are called
+
+#### Scenario: Nothing recorded
+- **WHEN** the workspace has no Documents OA recorded
+- **THEN** a `DriveRoot_{workspace id}` OA is used (found, or created once), and no OA is chosen by name or by order
+
+#### Scenario: Two channels with one name
+- **WHEN** two channels, in one workspace or two, are both called "general" and each gets a drive
+- **THEN** the drives are two OAs, each named by its channel's ID, and each drive shows "general"
+
+#### Scenario: Drive provisioning fails part way
+- **WHEN** a step after the drive's OA is created fails
+- **THEN** the OA this call created is deleted and no drive row exists; an OA that was already there is not deleted
+
+#### Scenario: Many first requests at once
+- **WHEN** several requests that each need a workspace's drive root arrive together for a workspace that has none
+- **THEN** exactly one root row exists afterwards and every request is served
+
+#### Scenario: Top-level folders are not roots
+- **WHEN** a workspace holds any number of parent-less user folders
+- **THEN** they are accepted, and only the one marked root is unique per context
+
+#### Scenario: Another workspace's channel
+- **WHEN** workspace B asks for a drive for a channel that belongs to workspace A, or for a channel that does not exist
+- **THEN** the request is refused with PermissionDenied and no node, association or row is written
+

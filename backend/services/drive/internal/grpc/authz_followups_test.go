@@ -179,7 +179,11 @@ func (w *recWrite) has(prefix string) bool {
 
 const actor = "ngac-actor"
 
-func folderOA(name string) string { return "id:" + ngac.FolderNodeName(name) }
+func personalUA(userNodeID string) string { return ngac.PersonalUAName(ngac.UserNodeID(userNodeID)) }
+
+// oaOf is the policy node ID the fake hands out for a folder: its node is named
+// by the folder's own ID, so two folders called "A" are two nodes.
+func oaOf(it *pb.DriveItem) string { return "id:" + ngac.FolderNodeName(ngac.FolderID(it.Id)) }
 
 // ---------------------------------------------------------------------------
 // MoveItem
@@ -241,19 +245,19 @@ func TestMoveItem_SiblingMoveStillWorksAndSwapsTheEdge(t *testing.T) {
 	assert.Equal(t, f.other.Id, moved.ParentId)
 	// New edge first, old edge second: the folder is never detached.
 	assert.Equal(t, []string{
-		fmt.Sprintf("assign %s>%s", folderOA("C"), folderOA("Other")),
-		fmt.Sprintf("unassign %s>%s", folderOA("C"), folderOA("B")),
+		fmt.Sprintf("assign %s>%s", oaOf(f.c), oaOf(f.other)),
+		fmt.Sprintf("unassign %s>%s", oaOf(f.c), oaOf(f.b)),
 	}, f.pw.snapshot())
 }
 
 func TestMoveItem_RefusedNewEdgeNeverTouchesTheOldOne(t *testing.T) {
 	f := newMoveFixture(t)
-	f.pw.failAssign = func(child, parent string) bool { return parent == folderOA("Other") }
+	f.pw.failAssign = func(child, parent string) bool { return parent == oaOf(f.other) }
 
 	_, err := f.srv.MoveItem(asCaller("", actor), &pb.MoveItemRequest{ItemId: f.c.Id, NewParentId: f.other.Id})
 	require.Error(t, err)
 	assert.Equal(t, []string{
-		fmt.Sprintf("assign %s>%s", folderOA("C"), folderOA("Other")), // refused; nothing detached
+		fmt.Sprintf("assign %s>%s", oaOf(f.c), oaOf(f.other)), // refused; nothing detached
 	}, f.pw.snapshot())
 
 	// The row did not move either.
@@ -264,14 +268,14 @@ func TestMoveItem_RefusedNewEdgeNeverTouchesTheOldOne(t *testing.T) {
 
 func TestMoveItem_WithdrawsTheNewEdgeWhenTheOldCannotBeRemoved(t *testing.T) {
 	f := newMoveFixture(t)
-	f.pw.failRemove = func(child, parent string) bool { return parent == folderOA("B") }
+	f.pw.failRemove = func(child, parent string) bool { return parent == oaOf(f.b) }
 
 	_, err := f.srv.MoveItem(asCaller("", actor), &pb.MoveItemRequest{ItemId: f.c.Id, NewParentId: f.other.Id})
 	require.Error(t, err)
 	assert.Equal(t, []string{
-		fmt.Sprintf("assign %s>%s", folderOA("C"), folderOA("Other")),
-		fmt.Sprintf("unassign %s>%s", folderOA("C"), folderOA("B")),     // fails
-		fmt.Sprintf("unassign %s>%s", folderOA("C"), folderOA("Other")), // new edge withdrawn
+		fmt.Sprintf("assign %s>%s", oaOf(f.c), oaOf(f.other)),
+		fmt.Sprintf("unassign %s>%s", oaOf(f.c), oaOf(f.b)),     // fails
+		fmt.Sprintf("unassign %s>%s", oaOf(f.c), oaOf(f.other)), // new edge withdrawn
 	}, f.pw.snapshot())
 	got, gerr := f.srv.GetItem(asCaller("", actor), &pb.GetItemRequest{ItemId: f.c.Id})
 	require.NoError(t, gerr)
@@ -315,9 +319,9 @@ func TestMoveItem_ConcurrentMovesOfOneItemLeaveOneParent(t *testing.T) {
 
 	got, err := f.srv.GetItem(ctx, &pb.GetItemRequest{ItemId: f.c.Id})
 	require.NoError(t, err)
-	parents := f.pw.parentsOf(folderOA("C"))
+	parents := f.pw.parentsOf(oaOf(f.c))
 	require.Len(t, parents, 1, "the folder must hang under exactly one parent, got %v", parents)
-	want := map[string]string{f.other.Id: folderOA("Other"), f.a.Id: folderOA("A")}[got.ParentId]
+	want := map[string]string{f.other.Id: oaOf(f.other), f.a.Id: oaOf(f.a)}[got.ParentId]
 	assert.Equal(t, want, parents[0], "the graph edge must be the one the row records")
 }
 
@@ -337,7 +341,7 @@ func TestMoveItem_StaleParentRollsBackItsEdges(t *testing.T) {
 	// succeeds from there: the old edge it removes is Other's, not B's.
 	_, err = f.srv.MoveItem(ctx, &pb.MoveItemRequest{ItemId: f.c.Id, NewParentId: f.a.Id})
 	require.NoError(t, err)
-	assert.Contains(t, f.pw.snapshot(), fmt.Sprintf("unassign %s>%s", folderOA("C"), folderOA("Other")))
+	assert.Contains(t, f.pw.snapshot(), fmt.Sprintf("unassign %s>%s", oaOf(f.c), oaOf(f.other)))
 }
 
 func TestMoveItem_TrashedItemIsNotFound(t *testing.T) {
@@ -357,8 +361,8 @@ func TestMoveItem_ToDriveRoot(t *testing.T) {
 	moved, err := f.srv.MoveItem(asCaller("", actor), &pb.MoveItemRequest{ItemId: f.c.Id, NewParentId: ""})
 	require.NoError(t, err)
 	assert.Empty(t, moved.ParentId, "top-level items have no parent row")
-	assert.True(t, f.pw.has(fmt.Sprintf("unassign %s>%s", folderOA("C"), folderOA("B"))))
-	assert.True(t, f.pw.has(fmt.Sprintf("assign %s>", folderOA("C"))))
+	assert.True(t, f.pw.has(fmt.Sprintf("unassign %s>%s", oaOf(f.c), oaOf(f.b))))
+	assert.True(t, f.pw.has(fmt.Sprintf("assign %s>", oaOf(f.c))))
 }
 
 func TestMoveItem_TopLevelFolderLeavesTheRootEdgeBehind(t *testing.T) {
@@ -367,8 +371,8 @@ func TestMoveItem_TopLevelFolderLeavesTheRootEdgeBehind(t *testing.T) {
 	require.NoError(t, err)
 	calls := f.pw.snapshot()
 	require.Len(t, calls, 2, "old (root) edge removed, new edge made: %v", calls)
-	assert.Equal(t, fmt.Sprintf("assign %s>%s", folderOA("Other"), folderOA("B")), calls[0])
-	assert.True(t, strings.HasPrefix(calls[1], "unassign "+folderOA("Other")+">"), calls[1])
+	assert.Equal(t, fmt.Sprintf("assign %s>%s", oaOf(f.other), oaOf(f.b)), calls[0])
+	assert.True(t, strings.HasPrefix(calls[1], "unassign "+oaOf(f.other)+">"), calls[1])
 }
 
 func TestMoveItem_RefusedDestinations(t *testing.T) {
@@ -397,7 +401,7 @@ func TestMoveItem_RefusedDestinations(t *testing.T) {
 
 func TestMoveItem_DeniedWithoutWriteOnDestination(t *testing.T) {
 	f := newMoveFixture(t)
-	f.pr.allow = func(_, object, op string) bool { return object != folderOA("Other") }
+	f.pr.allow = func(_, object, op string) bool { return object != oaOf(f.other) }
 	_, err := f.srv.MoveItem(asCaller("", actor), &pb.MoveItemRequest{ItemId: f.c.Id, NewParentId: f.other.Id})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 	assert.Empty(t, f.pw.snapshot())
@@ -504,9 +508,9 @@ func TestCreateShare_PersonGetsAPersonalUAAndTheMappedOperations(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tc.want, info.Operations)
 
-			ua := "id:" + ngac.PersonalUAName(f.person)
+			ua := "id:" + personalUA(f.person)
 			calls := strings.Join(f.pw.snapshot(), "\n")
-			assert.Contains(t, calls, "node UA "+ngac.PersonalUAName(f.person))
+			assert.Contains(t, calls, "node UA "+personalUA(f.person))
 			assert.Contains(t, calls, fmt.Sprintf("assign %s>%s", f.person, ua), "the person joins their own UA")
 			assert.Contains(t, calls, fmt.Sprintf("assoc %s>", ua), "the association starts from the UA, not the user node")
 			assert.NotContains(t, calls, fmt.Sprintf("assoc %s>", f.person))
@@ -518,7 +522,7 @@ func TestCreateShare_PersonGetsAPersonalUAAndTheMappedOperations(t *testing.T) {
 func TestCreateShare_ReusesTheExistingPersonalUA(t *testing.T) {
 	f := newShareFixture(t)
 	f.pr.ancestors[f.person] = []*policypb.NGACNode{{
-		Id: "ua-existing", Name: ngac.PersonalUAName(f.person), NodeType: ngac.TypeUA,
+		Id: "ua-existing", Name: personalUA(f.person), NodeType: ngac.TypeUA,
 		Properties: ngac.PersonalUAProperties(f.person),
 	}}
 	_, err := f.share("user", f.person, ngac.SharePermissionRead)
@@ -531,7 +535,7 @@ func TestCreateShare_PersonalUAIsCreatedWithItsMarkingProperties(t *testing.T) {
 	f := newShareFixture(t)
 	_, err := f.share("user", f.person, ngac.SharePermissionRead)
 	require.NoError(t, err)
-	assert.Equal(t, ngac.PersonalUAProperties(f.person), f.pw.nodeProps["id:"+ngac.PersonalUAName(f.person)])
+	assert.Equal(t, ngac.PersonalUAProperties(f.person), f.pw.nodeProps["id:"+personalUA(f.person)])
 }
 
 // A role is a UA whose name a workspace administrator picks. One named exactly
@@ -543,17 +547,17 @@ func TestCreateShare_SameNamedNonPersonalUAIsNeverReused(t *testing.T) {
 	}
 	for name, setup := range map[string]func(f *shareFixture){
 		"found by name": func(f *shareFixture) {
-			squatter.Name = ngac.PersonalUAName(f.person)
+			squatter.Name = personalUA(f.person)
 			f.pr.add(squatter.Id, squatter.Name, ngac.TypeUA)
 			f.pr.names[squatter.Name+"|"+ngac.TypeUA] = squatter
 		},
 		"no properties at all": func(f *shareFixture) {
-			sq := &policypb.NGACNode{Id: "ua-squatter", Name: ngac.PersonalUAName(f.person), NodeType: ngac.TypeUA}
+			sq := &policypb.NGACNode{Id: "ua-squatter", Name: personalUA(f.person), NodeType: ngac.TypeUA}
 			f.pr.names[sq.Name+"|"+ngac.TypeUA] = sq
 		},
 		"personal UA of someone else": func(f *shareFixture) {
 			sq := &policypb.NGACNode{
-				Id: "ua-squatter", Name: ngac.PersonalUAName(f.person), NodeType: ngac.TypeUA,
+				Id: "ua-squatter", Name: personalUA(f.person), NodeType: ngac.TypeUA,
 				Properties: ngac.PersonalUAProperties("another-user"),
 			}
 			f.pr.names[sq.Name+"|"+ngac.TypeUA] = sq
@@ -568,8 +572,8 @@ func TestCreateShare_SameNamedNonPersonalUAIsNeverReused(t *testing.T) {
 
 			calls := strings.Join(f.pw.snapshot(), "\n")
 			assert.NotContains(t, calls, "assoc ua-squatter>", "the share must not go to the squatter")
-			assert.Contains(t, calls, "node UA "+ngac.PersonalUAName(f.person), "a genuine personal UA is created instead")
-			assert.Contains(t, calls, fmt.Sprintf("assign %s>id:%s", f.person, ngac.PersonalUAName(f.person)))
+			assert.Contains(t, calls, "node UA "+personalUA(f.person), "a genuine personal UA is created instead")
+			assert.Contains(t, calls, fmt.Sprintf("assign %s>id:%s", f.person, personalUA(f.person)))
 		})
 	}
 }

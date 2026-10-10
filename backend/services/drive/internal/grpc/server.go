@@ -2,9 +2,9 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,6 +14,7 @@ import (
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/provision"
 	docpb "ngac-platform/proto/document"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
@@ -151,10 +152,18 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 		parentNGACID = root.NGACNodeID
 	}
 
-	// Create NGAC OA node for the folder
-	folderNode, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: ngac.FolderNodeName(req.Name), NodeType: ngac.TypeOA,
-		Properties: map[string]string{"type": "drive_folder", "workspace_id": req.WorkspaceId},
+	// The folder's ID is chosen first so its OA can be named by it. A name taken
+	// from the folder would be shared by every folder called "Reports", in this
+	// workspace and in other tenants', and the graph resolves nodes by exact name.
+	itemID := uuid.New().String()
+
+	// Create NGAC OA node for the folder. A failure at any later step removes it.
+	prov := provision.NewCreator(s.policyWrite)
+	folderNode, err := prov.Node(ctx, &policypb.CreateNodeRequest{
+		Name: ngac.FolderNodeName(ngac.FolderID(itemID)), NodeType: ngac.TypeOA,
+		Properties: map[string]string{
+			"type": "drive_folder", "workspace_id": req.WorkspaceId, ngac.PropDisplayName: req.Name,
+		},
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "create folder node: %v", err)
@@ -162,10 +171,8 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 
 	// Assign folder OA under parent OA (inherits permissions). Without this
 	// edge the folder reaches no PC and every check on it denies.
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: folderNode.Id, ParentId: parentNGACID,
-	}); err != nil {
-		return nil, status.Errorf(codes.Internal, "assign folder under parent: %v", err)
+	if err := prov.Assign(ctx, folderNode.Id, parentNGACID); err != nil {
+		return nil, status.Errorf(codes.Internal, "assign folder under parent: %v", prov.Fail(ctx, err))
 	}
 
 	// Determine scope OA: inherit from parent, or use own OA for root-level folders
@@ -178,7 +185,7 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 	}
 
 	item := &store.DriveItem{
-		ID:             uuid.New().String(),
+		ID:             itemID,
 		WorkspaceID:    req.WorkspaceId,
 		DriveContext:   driveCtx,
 		DriveContextID: req.DriveContextId,
@@ -191,8 +198,9 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 		Status:         "active",
 	}
 	if err := s.store.InsertItem(ctx, item); err != nil {
-		return nil, status.Errorf(codes.Internal, "insert folder: %v", err)
+		return nil, status.Errorf(codes.Internal, "insert folder: %v", prov.Fail(ctx, err))
 	}
+	prov.Done()
 
 	slog.Info("folder created", "id", item.ID, "name", req.Name)
 	return itemToProto(item), nil
@@ -794,44 +802,15 @@ func (s *DriveServer) ensureRoot(ctx context.Context, workspaceID, driveCtx, dri
 		return root, nil
 	}
 
-	// Auto-create root — find workspace's Documents OA from NGAC graph
-	ngacNodeID := ""
-	pcID, err := s.store.GetWorkspacePCID(ctx, workspaceID)
-	if err == nil && pcID != "" {
-		desc, _ := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: pcID})
-		if desc != nil {
-			for _, n := range desc.Nodes {
-				if n.NodeType == ngac.TypeOA && len(n.Name) > 0 {
-					// Prefer Documents OA, fall back to first OA
-					if ngacNodeID == "" {
-						ngacNodeID = n.Id
-					}
-					if contains(n.Name, "Documents") || contains(n.Name, "Docs") {
-						ngacNodeID = n.Id
-						break
-					}
-				}
-			}
-		}
-	}
-	if ngacNodeID == "" {
-		// Fallback: create a new OA node under the workspace PC
-		node, nErr := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-			Name: ngac.DriveRootName(workspaceID), NodeType: ngac.TypeOA,
-		})
-		if nErr != nil {
-			return nil, status.Errorf(codes.Internal, "create root node: %v", nErr)
-		}
-		ngacNodeID = node.Id
-
-		// Assign DriveRoot OA under workspace PC so files inherit access associations
-		if pcID != "" {
-			if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-				ChildId: ngacNodeID, ParentId: pcID,
-			}); err != nil {
-				return nil, status.Errorf(codes.Internal, "assign drive root under workspace PC: %v", err)
-			}
-		}
+	// Auto-create root. It roots on the workspace's Documents OA, which the
+	// workspace records when it is created; the OA is never worked out from node
+	// names (a scan for "Documents"/"Docs" with a first-OA fallback depended on
+	// the order the graph returned children in, and could pick a folder somebody
+	// had named "Docs").
+	prov := provision.NewCreator(s.policyWrite)
+	ngacNodeID, err := s.rootOA(ctx, prov, workspaceID)
+	if err != nil {
+		return nil, err
 	}
 
 	item := &store.DriveItem{
@@ -845,18 +824,55 @@ func (s *DriveServer) ensureRoot(ctx context.Context, workspaceID, driveCtx, dri
 		ScopeOAID:      ngacNodeID,
 		OwnerID:        userNodeID,
 		Status:         "active",
+		IsRoot:         true,
 	}
 	if err := s.store.InsertItem(ctx, item); err != nil {
-		return nil, status.Errorf(codes.Internal, "insert root: %v", err)
+		cause := fmt.Errorf("insert root: %w", err)
+		rbErr := prov.Fail(ctx, cause)
+		if errors.Is(err, store.ErrRootExists) {
+			// Another request created the root first. Whatever this one
+			// created for it is gone; use the winner's.
+			if winner, ferr := s.store.FindRootByContext(ctx, workspaceID, driveCtx, rootCtxID); ferr == nil && winner != nil {
+				return winner, nil
+			}
+		}
+		return nil, status.Errorf(codes.Internal, "%v", rbErr)
 	}
+	prov.Done()
 
 	slog.Info("auto-created drive root", "workspace", workspaceID, "context", driveCtx, "root_id", item.ID)
 	return item, nil
 }
 
-// contains checks if s contains substr (case-insensitive not needed here, names are exact).
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && (s[len(s)-len(substr):] == substr || s[:len(substr)] == substr || strings.Contains(s, substr)))
+// rootOA returns the OA a workspace's drive root hangs on: its recorded
+// Documents OA. A workspace with none recorded (one created outside the
+// workspace service) gets a DriveRoot OA of its own, named by the workspace ID,
+// found again on the next call rather than created twice. Nodes this creates are
+// recorded in prov so a later failure removes them.
+func (s *DriveServer) rootOA(ctx context.Context, prov *provision.Creator, workspaceID string) (string, error) {
+	docsOA, err := s.store.GetWorkspaceDocumentsOAID(ctx, workspaceID)
+	if err != nil {
+		return "", status.Errorf(codes.Internal, "look up documents OA: %v", err)
+	}
+	if docsOA != "" {
+		return docsOA, nil
+	}
+
+	node, err := prov.EnsureNode(ctx, s.policyRead, &policypb.CreateNodeRequest{
+		Name: ngac.DriveRootName(ngac.WorkspaceID(workspaceID)), NodeType: ngac.TypeOA,
+	})
+	if err != nil {
+		return "", status.Errorf(codes.Internal, "create root node: %v", err)
+	}
+
+	// Assign DriveRoot OA under workspace PC so files inherit access associations
+	pcID, err := s.store.GetWorkspacePCID(ctx, workspaceID)
+	if err == nil && pcID != "" {
+		if err := prov.Assign(ctx, node.Id, pcID); err != nil {
+			return "", status.Errorf(codes.Internal, "assign drive root under workspace PC: %v", prov.Fail(ctx, err))
+		}
+	}
+	return node.Id, nil
 }
 
 func nilStr(s string) *string {

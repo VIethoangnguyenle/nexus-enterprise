@@ -20,8 +20,8 @@ func New(db *pgxpool.Pool) *Store {
 // Insert persists a new workspace row.
 func (s *Store) Insert(ctx context.Context, ws *Workspace) error {
 	_, err := s.db.Exec(ctx,
-		"INSERT INTO workspaces (id, name, description, owner_id, ngac_pc_id) VALUES ($1, $2, $3, $4, $5)",
-		ws.ID, ws.Name, ws.Desc, ws.OwnerID, ws.NGACPcID,
+		"INSERT INTO workspaces (id, name, description, owner_id, ngac_pc_id, documents_oa_id) VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))",
+		ws.ID, ws.Name, ws.Desc, ws.OwnerID, ws.NGACPcID, ws.DocumentsOAID,
 	)
 	if err != nil {
 		return fmt.Errorf("insert workspace: %w", err)

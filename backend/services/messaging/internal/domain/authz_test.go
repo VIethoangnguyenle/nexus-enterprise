@@ -39,6 +39,7 @@ type scriptedPolicyRead struct {
 	err      error
 	children map[string][]*policypb.NGACNode
 	checks   []grant
+	noGlobal bool // PC_Global cannot be found
 }
 
 func (p *scriptedPolicyRead) CheckAccess(_ context.Context, req *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
@@ -59,7 +60,10 @@ func (p *scriptedPolicyRead) GetChildren(_ context.Context, req *policypb.GetChi
 	return &policypb.NodeList{Nodes: p.children[req.NodeId]}, nil
 }
 
-func (p *scriptedPolicyRead) FindNodeByName(_ context.Context, _ *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+func (p *scriptedPolicyRead) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if req.Name == ngac.NodePCGlobal && req.NodeType == ngac.TypePC && !p.noGlobal {
+		return &policypb.NGACNode{Id: "pc-global", Name: req.Name, NodeType: req.NodeType}, nil
+	}
 	return nil, errors.New("not found")
 }
 
@@ -178,7 +182,7 @@ func newFixture(t *testing.T) *fixture {
 func (f *fixture) withChannelsOA() string {
 	id := fmt.Sprintf("test-channels-oa-%d", time.Now().UnixNano())
 	f.read.children[f.pcID] = append(f.read.children[f.pcID], &policypb.NGACNode{
-		Id: id, Name: ngac.ChannelsOAName(f.wsID), NodeType: ngac.TypeOA,
+		Id: id, Name: ngac.ChannelsOAName(ngac.WorkspaceID(f.wsID)), NodeType: ngac.TypeOA,
 	})
 	return id
 }
@@ -191,7 +195,7 @@ func (f *fixture) insertChannel(t *testing.T, name string) (chID, oaID string) {
 	chID = fmt.Sprintf("test-authz-ch-%d", n)
 	oaID = fmt.Sprintf("test-authz-oa-%d", n)
 	_, err := f.pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $2, $3)`,
-		oaID, ngac.ChannelContentOAName(chID), ngac.TypeOA)
+		oaID, ngac.ChannelContentOAName(ngac.ChannelID(chID)), ngac.TypeOA)
 	require.NoError(t, err)
 	_, err = f.pool.Exec(ctx,
 		`INSERT INTO channels (id, name, channel_type, workspace_id, ngac_oa_id, created_at) VALUES ($1, $2, 'workspace', $3, $4, now())`,
@@ -273,7 +277,7 @@ func TestCreateChannel_DeniedWhenGrantIsOnAnotherOA(t *testing.T) {
 func TestCreateChannel_DeniedWhenOnlyLegacyNameKeyedOAExists(t *testing.T) {
 	f := newFixture(t)
 	legacy := "test-legacy-channels-oa"
-	f.read.children[f.pcID] = []*policypb.NGACNode{{Id: legacy, Name: ngac.ChannelsOAName(f.wsName), NodeType: ngac.TypeOA}}
+	f.read.children[f.pcID] = []*policypb.NGACNode{{Id: legacy, Name: ngac.ChannelsOAName(ngac.WorkspaceID(f.wsName)), NodeType: ngac.TypeOA}}
 	f.read.allow[grant{userNode, legacy, ngac.OpCreateChannel}] = true
 	name := fmt.Sprintf("authz-legacy-%d", time.Now().UnixNano())
 

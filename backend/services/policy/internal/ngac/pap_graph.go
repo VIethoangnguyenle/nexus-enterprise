@@ -22,7 +22,12 @@ func (g *Graph) RemoveNode(nodeID string) {
 	defer g.mu.Unlock()
 
 	if node, ok := g.Nodes[nodeID]; ok {
-		delete(g.nameTypeIndex, nameTypeKey(node.Name, node.NodeType))
+		// Only if the entry is this node's: another node may have been written
+		// under the same name since, and it must stay findable.
+		key := nameTypeKey(node.Name, node.NodeType)
+		if g.nameTypeIndex[key] == node {
+			delete(g.nameTypeIndex, key)
+		}
 	}
 	delete(g.Nodes, nodeID)
 

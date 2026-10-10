@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/provision"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/asset/internal/domain"
@@ -64,24 +66,30 @@ func (s *AssetTypeServer) CreateType(ctx context.Context, req *pb.CreateTypeRequ
 		return nil, status.Errorf(codes.Internal, "marshal lifecycle: %v", err)
 	}
 
-	// NGAC: create or find workspace Assets OA hierarchy
-	ngacOAID, err := s.ensureNGACHierarchy(ctx, req.WorkspaceId, req.Category, req.Name)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "ngac setup: %v", err)
-	}
-
+	// The type's ID is chosen first so its OA can be named by it. Provisioning
+	// is a run of graph writes followed by the row; a failure at any step removes
+	// the nodes this call created.
 	at := &store.AssetType{
+		ID:           uuid.New().String(),
 		Name:         req.Name,
 		Description:  req.Description,
 		Category:     req.Category,
 		WorkspaceID:  req.WorkspaceId,
 		FieldsSchema: fieldsSchema,
 		Lifecycle:    lifecycleJSON,
-		NgacOAID:     ngacOAID,
 	}
+
+	// NGAC: create or find workspace Assets OA hierarchy
+	prov := provision.NewCreator(s.policyWrite)
+	ngacOAID, err := s.ensureNGACHierarchy(ctx, prov, req.WorkspaceId, req.Category, at.ID, req.Name)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "ngac setup: %v", prov.Fail(ctx, err))
+	}
+	at.NgacOAID = ngacOAID
 	if err := s.store.CreateType(ctx, at); err != nil {
-		return nil, status.Errorf(codes.Internal, "create type: %v", err)
+		return nil, status.Errorf(codes.Internal, "create type: %v", prov.Fail(ctx, err))
 	}
+	prov.Done()
 
 	return assetTypeToProto(at), nil
 }
@@ -99,14 +107,14 @@ func (s *AssetTypeServer) authorizeCreateType(ctx context.Context, userNodeID, w
 	if userNodeID == "" {
 		return errDenied(ngac.OpManage)
 	}
-	assetsOA, found, err := resolveOA(ctx, s.policyRead, ngac.AssetsOAName(workspaceID))
+	assetsOA, found, err := resolveOA(ctx, s.policyRead, ngac.AssetsOAName(ngac.WorkspaceID(workspaceID)))
 	if err != nil {
 		return errDenied(ngac.OpManage)
 	}
 	if found {
 		return authorize(ctx, s.policyRead, userNodeID, assetsOA, ngac.OpManage)
 	}
-	return authorizeOnNamedOA(ctx, s.policyRead, userNodeID, ngac.MgmtOAName(workspaceID), ngac.OpManage)
+	return authorizeOnNamedOA(ctx, s.policyRead, userNodeID, ngac.MgmtOAName(ngac.WorkspaceID(workspaceID)), ngac.OpManage)
 }
 
 // GetType returns one asset type to a caller holding read on its workspace's
@@ -123,7 +131,7 @@ func (s *AssetTypeServer) GetType(ctx context.Context, req *pb.GetTypeRequest) (
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "type not found: %v", err)
 	}
-	if err := authorizeOnNamedOA(ctx, s.policyRead, userNodeID, ngac.AssetsOAName(at.WorkspaceID), ngac.OpRead); err != nil {
+	if err := authorizeOnNamedOA(ctx, s.policyRead, userNodeID, ngac.AssetsOAName(ngac.WorkspaceID(at.WorkspaceID)), ngac.OpRead); err != nil {
 		return nil, err
 	}
 	return assetTypeToProto(at), nil
@@ -140,7 +148,7 @@ func (s *AssetTypeServer) ListTypes(ctx context.Context, req *pb.ListTypesReques
 	if userNodeID == "" {
 		return nil, errDenied(ngac.OpRead)
 	}
-	assetsOA, found, err := resolveOA(ctx, s.policyRead, ngac.AssetsOAName(req.WorkspaceId))
+	assetsOA, found, err := resolveOA(ctx, s.policyRead, ngac.AssetsOAName(ngac.WorkspaceID(req.WorkspaceId)))
 	if err != nil {
 		return nil, errDenied(ngac.OpRead)
 	}
@@ -169,7 +177,7 @@ func (s *AssetTypeServer) UpdateTypeSchema(ctx context.Context, req *pb.UpdateTy
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "type not found: %v", err)
 	}
-	if err := authorizeOnNamedOA(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, ngac.AssetsOAName(at.WorkspaceID), ngac.OpManage); err != nil {
+	if err := authorizeOnNamedOA(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, ngac.AssetsOAName(ngac.WorkspaceID(at.WorkspaceID)), ngac.OpManage); err != nil {
 		return nil, err
 	}
 	if err := domain.ValidateSchema(json.RawMessage(req.FieldsSchema)); err != nil {
@@ -187,124 +195,86 @@ func (s *AssetTypeServer) UpdateTypeSchema(ctx context.Context, req *pb.UpdateTy
 	return assetTypeToProto(updated), nil
 }
 
-// ensureNGACHierarchy creates the NGAC node hierarchy for a new asset type:
-// PC_AssetManagement → {ws}_Assets → {ws}_{category} → {ws}_{typeName}
-func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, workspaceID, category, typeName string) (string, error) {
-	// Get workspace name and PC node ID from the database
-	var wsName, pcNodeID string
-	row := s.store.DB().QueryRow(ctx, "SELECT name, ngac_pc_id FROM workspaces WHERE id = $1", workspaceID)
-	if err := row.Scan(&wsName, &pcNodeID); err != nil {
-		wsName = "WS"
-		pcNodeID = ""
+// ensureNGACHierarchy creates the NGAC node hierarchy for a new asset type and
+// returns the type's OA:
+//
+//	workspace PC → {ws}_Assets → {ws}_Category_{category} → {ws}_Type_{type id}
+//
+// Assets are not nodes. The OA of the type is what every asset of the type is
+// authorized on, and a grant on the Assets or category OA reaches it from above.
+// The tree hangs under the workspace's own policy class only: an access needs
+// the user to reach every policy class the object reaches, so a second class
+// that no workspace UA is assigned to would make the whole tree unreachable.
+//
+// Safe to run again: the Assets and category OAs are found if they exist, and
+// everything this call creates is recorded in prov for rollback.
+func (s *AssetTypeServer) ensureNGACHierarchy(ctx context.Context, prov *provision.Creator, workspaceID, category, typeID, typeName string) (string, error) {
+	var pcNodeID string
+	row := s.store.DB().QueryRow(ctx, "SELECT COALESCE(ngac_pc_id, '') FROM workspaces WHERE id = $1", workspaceID)
+	if err := row.Scan(&pcNodeID); err != nil {
+		return "", fmt.Errorf("look up workspace %s: %w", workspaceID, err)
 	}
+	if pcNodeID == "" {
+		return "", fmt.Errorf("workspace %s has no policy class", workspaceID)
+	}
+	wsID := ngac.WorkspaceID(workspaceID)
 
-	// Ensure PC_AssetManagement exists
-	assetsPC, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: ngac.NodePCAssetManagement, NodeType: ngac.TypePC,
+	// Ensure {ws}_Assets OA under the workspace PC
+	assetsOA, err := prov.EnsureNode(ctx, s.policyRead, &policypb.CreateNodeRequest{
+		Name: ngac.AssetsOAName(wsID), NodeType: ngac.TypeOA,
+		Properties: map[string]string{"workspace_id": workspaceID},
 	})
 	if err != nil {
-		// Create it
-		assetsPC, err = s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-			Name: ngac.NodePCAssetManagement, NodeType: ngac.TypePC,
-			Properties: map[string]string{"scope": "global"},
-		})
-		if err != nil {
-			return "", fmt.Errorf("create PC_AssetManagement: %w", err)
-		}
+		return "", fmt.Errorf("create assets OA: %w", err)
 	}
-
-	// Ensure {ws}_Assets OA under PC_AssetManagement
-	assetsOAName := ngac.AssetsOAName(workspaceID)
-	assetsOA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: assetsOAName, NodeType: ngac.TypeOA,
-	})
-	if err != nil {
-		assetsOA, err = s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-			Name: assetsOAName, NodeType: ngac.TypeOA,
-			Properties: map[string]string{"workspace_id": workspaceID},
-		})
-		if err != nil {
-			return "", fmt.Errorf("create %s OA: %w", assetsOAName, err)
-		}
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: assetsOA.Id, ParentId: assetsPC.Id,
-		}); err != nil {
-			return "", fmt.Errorf("assign assets OA under PC_AssetManagement: %w", err)
-		}
+	if err := prov.Assign(ctx, assetsOA.Id, pcNodeID); err != nil {
+		return "", fmt.Errorf("assign assets OA under workspace PC: %w", err)
 	}
 
 	// Ensure category OA under Assets OA
-	categoryOAName := ngac.AssetCategoryOAName(workspaceID, sanitizeName(category))
-	categoryOA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: categoryOAName, NodeType: ngac.TypeOA,
+	categoryOA, err := prov.EnsureNode(ctx, s.policyRead, &policypb.CreateNodeRequest{
+		Name: ngac.AssetCategoryOAName(wsID, sanitizeName(category)), NodeType: ngac.TypeOA,
+		Properties: map[string]string{"category": category, "workspace_id": workspaceID},
 	})
 	if err != nil {
-		categoryOA, err = s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-			Name: categoryOAName, NodeType: ngac.TypeOA,
-			Properties: map[string]string{"category": category, "workspace_id": workspaceID},
-		})
-		if err != nil {
-			return "", fmt.Errorf("create category OA %s: %w", categoryOAName, err)
-		}
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: categoryOA.Id, ParentId: assetsOA.Id,
-		}); err != nil {
-			return "", fmt.Errorf("assign category OA under assets OA: %w", err)
-		}
+		return "", fmt.Errorf("create category OA: %w", err)
+	}
+	if err := prov.Assign(ctx, categoryOA.Id, assetsOA.Id); err != nil {
+		return "", fmt.Errorf("assign category OA under assets OA: %w", err)
 	}
 
-	// Create type OA under category OA
-	typeOAName := ngac.AssetTypeOAName(workspaceID, sanitizeName(typeName))
-	typeOA, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name: typeOAName, NodeType: ngac.TypeOA,
-		Properties: map[string]string{"asset_type": typeName, "workspace_id": workspaceID},
+	// Type OA under category OA, named by the type's ID
+	typeOA, err := prov.EnsureNode(ctx, s.policyRead, &policypb.CreateNodeRequest{
+		Name: ngac.AssetTypeOAName(wsID, ngac.AssetTypeID(typeID)), NodeType: ngac.TypeOA,
+		Properties: map[string]string{"asset_type_id": typeID, ngac.PropDisplayName: typeName, "workspace_id": workspaceID},
 	})
 	if err != nil {
-		return "", fmt.Errorf("create type OA %s: %w", typeOAName, err)
+		return "", fmt.Errorf("create type OA: %w", err)
 	}
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: typeOA.Id, ParentId: categoryOA.Id,
-	}); err != nil {
+	if err := prov.Assign(ctx, typeOA.Id, categoryOA.Id); err != nil {
 		return "", fmt.Errorf("assign type OA under category OA: %w", err)
 	}
 
-	// Also assign to workspace PC if available for cross-PC visibility
-	if pcNodeID != "" {
-		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-			ChildId: assetsOA.Id, ParentId: pcNodeID,
-		}); err != nil {
-			return "", fmt.Errorf("assign assets OA under workspace PC: %w", err)
+	// Grant the workspace OWNERS full access to assets.
+	//
+	// This used to loop over every UA under the PC and grant all operations to
+	// each one. That set includes the workspace Members UA, the tenant member
+	// UA, department UAs and every channel's members UA — so every one of them
+	// received manage and approve over all of the workspace's assets. The Owners
+	// UA is named by the workspace ID, so it is looked up directly.
+	owners, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
+		Name: ngac.OwnersUAName(wsID), NodeType: ngac.TypeUA,
+	})
+	switch {
+	case err == nil && owners.GetId() != "":
+		if err := prov.Associate(ctx, owners.Id, assetsOA.Id, ngac.AllOwnerOps()); err != nil {
+			return "", fmt.Errorf("grant owners access to assets OA: %w", err)
 		}
-
-		// Grant the workspace OWNERS full access to assets.
-		//
-		// This used to loop over every UA under the PC and grant all operations
-		// to each one. That set includes the workspace Members UA, the tenant
-		// member UA, department UAs and every channel's members UA — so every
-		// one of them received manage and approve over all of the workspace's
-		// assets. Match the Owners UA by name instead.
-		ownersUAName := ngac.OwnersUAName(workspaceID)
-		children, err := s.policyRead.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: pcNodeID})
-		if err != nil {
-			return "", fmt.Errorf("read workspace PC children: %w", err)
-		}
-		granted := false
-		for _, n := range children.GetNodes() {
-			if n.NodeType != ngac.TypeUA || n.Name != ownersUAName {
-				continue
-			}
-			if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{
-				UaId: n.Id, OaId: assetsOA.Id, Operations: ngac.AllOwnerOps(),
-			}); err != nil {
-				return "", fmt.Errorf("grant owners access to assets OA: %w", err)
-			}
-			granted = true
-			break
-		}
-		if !granted {
-			slog.Warn("owners UA not found under workspace PC; assets have no owner grant",
-				"workspace_id", workspaceID, "expected_ua", ownersUAName)
-		}
+	case err != nil && status.Code(err) != codes.NotFound:
+		return "", fmt.Errorf("look up owners UA: %w", err)
+	default:
+		slog.Warn("owners UA not found; assets have no owner grant",
+			"workspace_id", workspaceID, "expected_ua", ngac.OwnersUAName(wsID))
 	}
 
 	return typeOA.Id, nil

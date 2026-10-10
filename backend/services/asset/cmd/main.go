@@ -87,7 +87,7 @@ func main() {
 
 	srv := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()}, loggingInterceptor, recoveryInterceptor)...)
 	assetTypeSrv := agrpc.NewAssetTypeServer(assetStore, policyRead, policyWrite)
-	assetSrv := agrpc.NewAssetServer(assetStore, policyRead, policyWrite, producer)
+	assetSrv := agrpc.NewAssetServer(assetStore, policyRead, producer)
 	assetReqSrv := agrpc.NewAssetRequestServer(assetStore, policyRead, policyWrite, producer)
 
 	assetpb.RegisterAssetTypeServiceServer(srv, assetTypeSrv)

@@ -14,22 +14,28 @@ func TestNameHelpersSurviveShortInput(t *testing.T) {
 	shortInputs := []string{"", "a", "ab", "abc123"}
 
 	helpers := map[string]func(string) string{
-		"PCName":             ngac.PCName,
-		"OwnersUAName":       ngac.OwnersUAName,
-		"MembersUAName":      ngac.MembersUAName,
-		"MgmtOAName":         ngac.MgmtOAName,
-		"DocumentsOAName":    ngac.DocumentsOAName,
-		"DraftDocsOAName":    ngac.DraftDocsOAName,
-		"ApprovedDocsOAName": ngac.ApprovedDocsOAName,
-		"ChannelsOAName":     ngac.ChannelsOAName,
-		"DeptUAName":         ngac.DeptUAName,
-		"ChannelContentOA":   ngac.ChannelContentOAName,
-		"ChannelMembersUA":   ngac.ChannelMembersUAName,
-		"ChannelDriveName":   ngac.ChannelDriveName,
-		"TenantMemberUAName": ngac.TenantMemberUAName,
-		"TenantOwnerUAName":  ngac.TenantOwnerUAName,
-		"DriveRootName":      ngac.DriveRootName,
-		"FolderNodeName":     ngac.FolderNodeName,
+		"PCName":             func(s string) string { return ngac.PCName(ngac.WorkspaceID(s)) },
+		"OwnersUAName":       func(s string) string { return ngac.OwnersUAName(ngac.WorkspaceID(s)) },
+		"MembersUAName":      func(s string) string { return ngac.MembersUAName(ngac.WorkspaceID(s)) },
+		"MgmtOAName":         func(s string) string { return ngac.MgmtOAName(ngac.WorkspaceID(s)) },
+		"DocumentsOAName":    func(s string) string { return ngac.DocumentsOAName(ngac.WorkspaceID(s)) },
+		"DraftDocsOAName":    func(s string) string { return ngac.DraftDocsOAName(ngac.WorkspaceID(s)) },
+		"ApprovedDocsOAName": func(s string) string { return ngac.ApprovedDocsOAName(ngac.WorkspaceID(s)) },
+		"ChannelsOAName":     func(s string) string { return ngac.ChannelsOAName(ngac.WorkspaceID(s)) },
+		"AssetsOAName":       func(s string) string { return ngac.AssetsOAName(ngac.WorkspaceID(s)) },
+		"DeptUAName":         func(s string) string { return ngac.DeptUAName(ngac.DeptID(s)) },
+		"ChannelContentOA":   func(s string) string { return ngac.ChannelContentOAName(ngac.ChannelID(s)) },
+		"ChannelMembersUA":   func(s string) string { return ngac.ChannelMembersUAName(ngac.ChannelID(s)) },
+		"ChannelDriveName":   func(s string) string { return ngac.ChannelDriveName(ngac.ChannelID(s)) },
+		"TenantMemberUAName": func(s string) string { return ngac.TenantMemberUAName(ngac.WorkspaceID(s)) },
+		"TenantOwnerUAName":  func(s string) string { return ngac.TenantOwnerUAName(ngac.WorkspaceID(s)) },
+		"DriveRootName":      func(s string) string { return ngac.DriveRootName(ngac.WorkspaceID(s)) },
+		"FolderNodeName":     func(s string) string { return ngac.FolderNodeName(ngac.FolderID(s)) },
+		"ShareOAName":        func(s string) string { return ngac.ShareOAName(ngac.ShareID(s)) },
+		"RoleUAName":         func(s string) string { return ngac.RoleUAName(ngac.RoleID(s)) },
+		"UserNodeName":       func(s string) string { return ngac.UserNodeName(ngac.UserID(s)) },
+		"PersonalUAName":     func(s string) string { return ngac.PersonalUAName(ngac.UserNodeID(s)) },
+		"AssetTypeOAName":    func(s string) string { return ngac.AssetTypeOAName("ws", ngac.AssetTypeID(s)) },
 	}
 
 	for name, fn := range helpers {
@@ -48,17 +54,59 @@ func TestNameHelpersSurviveShortInput(t *testing.T) {
 	}
 }
 
+// Two entities of one kind with different IDs never share a node name, and the
+// same ID in two kinds never does either. A display name is not an input of any
+// helper, so two tenants who both call a department "Sales" cannot collide.
+func TestIDKeyedNamesAreDistinct(t *testing.T) {
+	names := map[string]string{}
+	for what, name := range map[string]string{
+		"dept a":   ngac.DeptUAName("a"),
+		"dept b":   ngac.DeptUAName("b"),
+		"folder a": ngac.FolderNodeName("a"),
+		"folder b": ngac.FolderNodeName("b"),
+		"share a":  ngac.ShareOAName("a"),
+		"share b":  ngac.ShareOAName("b"),
+		"role a":   ngac.RoleUAName("a"),
+		"role b":   ngac.RoleUAName("b"),
+		"user a":   ngac.UserNodeName("a"),
+		"user b":   ngac.UserNodeName("b"),
+		"type a":   ngac.AssetTypeOAName("ws", "a"),
+		"type b":   ngac.AssetTypeOAName("ws", "b"),
+		"type a/2": ngac.AssetTypeOAName("ws2", "a"),
+		"drive a":  ngac.ChannelDriveName("a"),
+		"drive b":  ngac.ChannelDriveName("b"),
+	} {
+		if prev, dup := names[name]; dup {
+			t.Errorf("%s and %s share the node name %q", what, prev, name)
+		}
+		names[name] = what
+	}
+}
+
+func TestDisplayName(t *testing.T) {
+	if got := ngac.DisplayName("Dept_1", map[string]string{ngac.PropDisplayName: "Sales"}); got != "Sales" {
+		t.Errorf("DisplayName with property = %q, want Sales", got)
+	}
+	// Nodes written before names became ID-keyed carry the display name itself.
+	if got := ngac.DisplayName("Editor", nil); got != "Editor" {
+		t.Errorf("DisplayName without property = %q, want the node name", got)
+	}
+	if got := ngac.DisplayName("Role_1", map[string]string{ngac.PropDisplayName: ""}); got != "Role_1" {
+		t.Errorf("an empty display name must fall back to the node name, got %q", got)
+	}
+}
+
 // Truncating the workspace ID into the node name meant two workspaces whose
 // UUIDs share a prefix would produce the same DriveRoot node — and the graph
 // looks names up by exact match.
 func TestDriveRootNameDoesNotCollideOnSharedPrefix(t *testing.T) {
-	a := "0a1b2c3d-1111-4444-8888-aaaaaaaaaaaa"
-	b := "0a1b2c3d-2222-5555-9999-bbbbbbbbbbbb"
+	var a ngac.WorkspaceID = "0a1b2c3d-1111-4444-8888-aaaaaaaaaaaa"
+	var b ngac.WorkspaceID = "0a1b2c3d-2222-5555-9999-bbbbbbbbbbbb"
 
 	if ngac.DriveRootName(a) == ngac.DriveRootName(b) {
 		t.Errorf("DriveRootName collides on a shared 8-char prefix: %q", ngac.DriveRootName(a))
 	}
-	if !strings.Contains(ngac.DriveRootName(a), a) {
+	if !strings.Contains(ngac.DriveRootName(a), string(a)) {
 		t.Errorf("DriveRootName(%q) = %q, want it to carry the full ID", a, ngac.DriveRootName(a))
 	}
 }
@@ -118,7 +166,7 @@ func TestValidateRoleName(t *testing.T) {
 		"", "   ", "User_abc", "user_abc", "PC_Global", "PC_ws1", "TenantMember_t", "TenantOwner_t",
 		"Dept_Sales", "Ch_x_Members", "ws1_Owners", "ws1_members", "ws1_Mgmt", "ws1_Documents",
 		"ws1_Channels", "ws1_Assets", "PublicUsers", "publicusers", "DriveRoot_ws", "Folder_x",
-		"Share_x_1", " User_abc",
+		"Share_x_1", " User_abc", "Role_abc", "role_abc", "U_abc",
 	} {
 		if err := ngac.ValidateRoleName(bad); err == nil {
 			t.Errorf("ValidateRoleName(%q) accepted, want rejected", bad)

@@ -108,13 +108,23 @@ type fakePolicyWrite struct {
 	mu      sync.Mutex
 	nodeID  string
 	created []string
+	types   []string // node types of everything created
+	deleted []string
 }
 
 func (w *fakePolicyWrite) CreateNode(_ context.Context, req *policypb.CreateNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.created = append(w.created, req.Name)
+	w.types = append(w.types, req.NodeType)
 	return &policypb.NGACNode{Id: w.nodeID, Name: req.Name, NodeType: req.NodeType}, nil
+}
+
+func (w *fakePolicyWrite) DeleteNode(_ context.Context, req *policypb.DeleteNodeRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.deleted = append(w.deleted, req.NodeId)
+	return &policypb.Empty{}, nil
 }
 
 func (w *fakePolicyWrite) CreateAssignment(_ context.Context, _ *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
@@ -190,7 +200,11 @@ func newFixture(t *testing.T) *fixture {
 		require.NoError(t, err, q)
 	}
 	exec(`INSERT INTO users (id, username, password) VALUES ($1, $1, ''), ($2, $2, '')`, f.userX, f.userY)
-	exec(`INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, f.wsID, f.userX)
+	var pcID string
+	if err := pool.QueryRow(ctx, "SELECT id FROM ngac_nodes WHERE node_type = 'PC' ORDER BY id LIMIT 1").Scan(&pcID); err != nil {
+		t.Skip("need a PC node in the test DB")
+	}
+	exec(`INSERT INTO workspaces (id, name, owner_id, ngac_pc_id) VALUES ($1, $1, $2, $3)`, f.wsID, f.userX, pcID)
 	exec(`INSERT INTO asset_types (id, name, category, workspace_id, ngac_oa_id) VALUES
 	      ($1, $1, 'hardware', $3, $4), ($2, $2, 'hardware', $3, $5)`, f.typeA, f.typeB, f.wsID, f.oaA, f.oaB)
 	exec(`INSERT INTO assets (id, name, type_id, workspace_id, created_by) VALUES
@@ -215,8 +229,8 @@ func (f *fixture) mgmtOA() string   { return "mgmt-oa:" + f.wsID }
 // policy returns a fake in which this workspace's Assets OA and Mgmt OA exist.
 func (f *fixture) policy() *fakePolicyRead {
 	p := newFakePolicy()
-	p.nodes[ngac.AssetsOAName(f.wsID)] = f.assetsOA()
-	p.nodes[ngac.MgmtOAName(f.wsID)] = f.mgmtOA()
+	p.nodes[ngac.AssetsOAName(ngac.WorkspaceID(f.wsID))] = f.assetsOA()
+	p.nodes[ngac.MgmtOAName(ngac.WorkspaceID(f.wsID))] = f.mgmtOA()
 	return p
 }
 
@@ -244,7 +258,7 @@ func TestListAssets_DeniedSeesNothing(t *testing.T) {
 	// Write and manage on a type OA do not confer read for listing purposes
 	// unless read is also held; here only non-read ops are granted.
 	p.grant("n-member", f.oaA, ngac.OpWrite)
-	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
+	srv := agrpc.NewAssetServer(f.st, p, nil)
 
 	list, err := srv.ListAssets(asCaller("", "n-member"), &pb.ListAssetsRequest{
 		WorkspaceId: f.wsID,
@@ -259,7 +273,7 @@ func TestListAssets_SeesOnlyPermittedSubset(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
 	p.grant("n-reader", f.oaA, ngac.OpRead)
-	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
+	srv := agrpc.NewAssetServer(f.st, p, nil)
 
 	list, err := srv.ListAssets(asCaller("", "n-reader"), &pb.ListAssetsRequest{
 		WorkspaceId: f.wsID,
@@ -274,7 +288,7 @@ func TestListAssets_TypeFilterOnUnreadableTypeIsEmpty(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
 	p.grant("n-reader", f.oaA, ngac.OpRead)
-	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
+	srv := agrpc.NewAssetServer(f.st, p, nil)
 
 	list, err := srv.ListAssets(asCaller("", "n-reader"), &pb.ListAssetsRequest{
 		WorkspaceId: f.wsID, TypeId: f.typeB,
@@ -290,7 +304,7 @@ func TestListAssets_AllowedSeesAll(t *testing.T) {
 	p := f.policy()
 	p.grant("n-owner", f.oaA, ngac.OpRead)
 	p.grant("n-owner", f.oaB, ngac.OpRead)
-	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
+	srv := agrpc.NewAssetServer(f.st, p, nil)
 
 	list, err := srv.ListAssets(asCaller("", "n-owner"), &pb.ListAssetsRequest{
 		WorkspaceId: f.wsID,
@@ -306,7 +320,7 @@ func TestListAssets_PolicyErrorFailsClosed(t *testing.T) {
 	p := f.policy()
 	p.grant("n-owner", f.oaA, ngac.OpRead)
 	p.failErr = errPolicyDown
-	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
+	srv := agrpc.NewAssetServer(f.st, p, nil)
 
 	list, err := srv.ListAssets(asCaller("", "n-owner"), &pb.ListAssetsRequest{
 		WorkspaceId: f.wsID,
@@ -544,7 +558,7 @@ func TestCreateType_AllowedWithManageOnAssetsOA(t *testing.T) {
 func TestCreateType_FirstTypeDeniedWithoutManageOnMgmtOA(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
-	delete(p.nodes, ngac.AssetsOAName(f.wsID))
+	delete(p.nodes, ngac.AssetsOAName(ngac.WorkspaceID(f.wsID)))
 	p.grant("n-member", f.mgmtOA(), ngac.OpRead)
 	w := &fakePolicyWrite{nodeID: f.oaA}
 	srv := agrpc.NewAssetTypeServer(f.st, p, w)
@@ -560,7 +574,7 @@ func TestCreateType_FirstTypeDeniedWithoutManageOnMgmtOA(t *testing.T) {
 func TestCreateType_FirstTypeAllowedWithManageOnMgmtOA(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
-	delete(p.nodes, ngac.AssetsOAName(f.wsID))
+	delete(p.nodes, ngac.AssetsOAName(ngac.WorkspaceID(f.wsID)))
 	p.grant("n-owner", f.mgmtOA(), ngac.OpManage)
 	w := &fakePolicyWrite{nodeID: f.oaA}
 	srv := agrpc.NewAssetTypeServer(f.st, p, w)
@@ -726,8 +740,6 @@ func (f *fixture) withLifecycleOnA(t *testing.T) {
 	require.NoError(t, err)
 	_, err = f.pool.Exec(context.Background(), `UPDATE asset_types SET lifecycle = $1 WHERE id = $2`, lifecycle, f.typeA)
 	require.NoError(t, err)
-	_, err = f.pool.Exec(context.Background(), `UPDATE assets SET ngac_node_id = $1 WHERE id = $2`, f.oaA, f.assetA)
-	require.NoError(t, err)
 	t.Cleanup(func() {
 		f.pool.Exec(context.Background(), `DELETE FROM asset_transitions WHERE asset_id = $1`, f.assetA)
 	})
@@ -738,7 +750,7 @@ func TestTransitionAsset_FailsWhenHistoryCannotBeRecorded(t *testing.T) {
 	f.withLifecycleOnA(t)
 	p := f.policy()
 	p.grant("n-approver", f.oaA, ngac.OpApprove)
-	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
+	srv := agrpc.NewAssetServer(f.st, p, nil)
 
 	_, err := srv.TransitionAsset(asCaller("no-such-user", "n-approver"), &pb.TransitionRequest{
 		AssetId: f.assetA, Action: "approve",
@@ -757,7 +769,7 @@ func TestTransitionAsset_RecordsActor(t *testing.T) {
 	f.withLifecycleOnA(t)
 	p := f.policy()
 	p.grant("n-y", f.oaA, ngac.OpApprove)
-	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
+	srv := agrpc.NewAssetServer(f.st, p, nil)
 
 	a, err := srv.TransitionAsset(asCaller(f.userY, "n-y"), &pb.TransitionRequest{
 		AssetId: f.assetA, Action: "approve",
@@ -777,7 +789,7 @@ func TestTransitionAsset_RecordsActor(t *testing.T) {
 func TestListTypes_NoAssetsOAIsEmpty(t *testing.T) {
 	f := newFixture(t)
 	p := f.policy()
-	delete(p.nodes, ngac.AssetsOAName(f.wsID))
+	delete(p.nodes, ngac.AssetsOAName(ngac.WorkspaceID(f.wsID)))
 	srv := agrpc.NewAssetTypeServer(f.st, p, &fakePolicyWrite{})
 
 	list, err := srv.ListTypes(asCaller("owner", "n-owner"), &pb.ListTypesRequest{WorkspaceId: f.wsID})

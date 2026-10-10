@@ -272,7 +272,7 @@ func TestCreateRole_ReservedNamesAreRejected(t *testing.T) {
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "RoleWSReserved")
 
 	for _, name := range []string{
-		ngac.PersonalUAName("some-victim-node"), "PC_Global", ngac.OwnersUAName(ws.Id),
+		ngac.PersonalUAName("some-victim-node"), ngac.NodePCGlobal, ngac.OwnersUAName(ngac.WorkspaceID(ws.Id)),
 		ngac.MembersUAName("other-ws"), ngac.TenantMemberUAName("t1"), ngac.NodePublicUsers,
 	} {
 		_, err := srv.CreateRole(asCaller("", ngacNodeID), &pb.CreateRoleRequest{WorkspaceId: ws.Id, Name: name})

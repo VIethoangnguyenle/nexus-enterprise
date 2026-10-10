@@ -148,8 +148,69 @@ Workspace Owners hold `share` (with every other owner operation) on the Document
 - **THEN** they have `read` and `write` on it and `share`, `manage`, `approve` resolve to DENY
 
 ### Requirement: Role names stay out of the platform's namespaces
-A role (a UA created by a workspace administrator) SHALL be refused when its name is empty or starts or ends like a name the platform builds itself (`ngac.ValidateRoleName`): the prefixes `User_`, `PC_`, `TenantMember_`, `TenantOwner_`, `Dept_`, `Ch_`, `DriveRoot_`, `Folder_`, `Share_`, `Asset_`, the suffixes `_Owners`, `_Members`, `_Mgmt`, `_Documents`, `_DraftDocs`, `_ApprovedDocs`, `_Channels`, `_Assets`, `_Content`, `_Drive`, and the names `PC_Global` and `PublicUsers`, compared case-insensitively. Node names are matched exactly and the graph's name index keeps the last node written, so a role inside one of these namespaces could be found where the platform expects its own node.
+A role's node is named by a generated ID (`ngac.RoleUAName`, `Role_{id}`); the name the administrator typed is the node's `display_name` property, and role listings show it. A role (a UA created by a workspace administrator) SHALL still be refused when its name is empty or starts or ends like a name the platform builds itself (`ngac.ValidateRoleName`): the prefixes `User_`, `PC_`, `TenantMember_`, `TenantOwner_`, `Dept_`, `Ch_`, `DriveRoot_`, `Folder_`, `Share_`, `Asset_`, `Role_`, `U_`, the suffixes `_Owners`, `_Members`, `_Mgmt`, `_Documents`, `_DraftDocs`, `_ApprovedDocs`, `_Channels`, `_Assets`, `_Content`, `_Drive`, and the names `PC_Global` and `PublicUsers`, compared case-insensitively. This is display-name hygiene: a role's node is named by a generated ID, so the typed name can no longer become a node name, but a role listed as `Dept_Sales` would read as a platform node on screen and in logs (nodes written before names were ID-keyed still carry their display name as the node name).
 
 #### Scenario: Reserved role name
 - **WHEN** an administrator creates a role named like a personal UA, a workspace's Owners UA or a policy class
 - **THEN** the request fails with InvalidArgument and no node is written
+
+### Requirement: Platform-built node names are keyed by IDs
+Every node name the platform builds SHALL come from a helper in `backend/ngac` that takes an ID of the entity, never a name a tenant chooses: `DeptUAName(department id)`, `FolderNodeName(folder id)`, `ShareOAName(share id)`, `RoleUAName(role id)`, `UserNodeName(user id)`, `ChannelDriveName(channel id)`, `AssetTypeOAName(workspace id, type id)`, `PersonalUAName(user node id)` and the workspace- and channel-keyed helpers. The helpers take distinct types (`ngac.DeptID`, `ngac.WorkspaceID`, ...) so that passing a display name is a compile error and the conversion that remains is visible in review; `scripts/check-ngac-identifiers.sh` fails CI on an operation literal or a hand-built node name outside `backend/ngac`. What a screen shows is kept in the node's `display_name` property (`ngac.DisplayName` falls back to the node name for a node written before names were ID-keyed). Nodes written with the old names are renamed by migration `023_ngac_id_keyed_names.sql`, matching each node through the foreign key that ties it to its entity and checking the entity's own workspace; the old name is recorded in `ngac_node_renames`, which is also the rollback. Like the other direct graph writes it bypasses EPP invalidation, so the services must be restarted after it is applied.
+
+#### Scenario: Two tenants, one department name
+- **WHEN** two tenants each create a department called "Sales"
+- **THEN** the graph holds two UAs named `Dept_{department id}` — one per department row — and each displays "Sales"
+
+#### Scenario: Two roles or folders with one name
+- **WHEN** an administrator creates two roles (or two folders) with the same name
+- **THEN** each is its own node, named by a generated ID, and neither can resolve onto the other
+
+#### Scenario: A display name is not a node name
+- **WHEN** a department, role, folder or user is renamed or has a name that looks like a platform node name
+- **THEN** no lookup by node name changes, because no node name contains it
+
+#### Scenario: Migration matches through the foreign key
+- **WHEN** a node's name looks like it belongs to an entity but the entity's foreign key points elsewhere, or at another workspace
+- **THEN** the migration leaves it alone
+
+### Requirement: Provisioning is all-or-nothing and safe to repeat
+Creating a workspace, department, role, folder, channel, direct message, user node, tenant UAs, asset type, drive folder, channel drive or share is a run of separate policy writes followed by a database write, with no shared transaction. A failure at any step SHALL remove the nodes that run had created, newest first, on a context that survives the request's cancellation, and SHALL return the original error (noting a rollback that was itself incomplete). Node names for tenant UAs, drive roots, Assets, drive and category OAs are unique per type (partial unique index, migration `025`), and the graph's name index drops an entry only when it still points at the node being removed, so one run's rollback cannot hide the node a concurrent run kept. A run whose create fails SHALL look the name up once more and adopt the node that is there. A run that finds a node it would create already present under its ID-keyed name (tenant UAs, an asset tree's Assets and category OAs, a drive's OA) SHALL reuse it and SHALL NOT delete it if a later step fails; a lookup that fails for any reason other than "not found" SHALL be a failure, not an absence. Every write goes through the policy service, so each takes the EPP invalidation path.
+
+#### Scenario: Failure at any graph write
+- **WHEN** the policy service fails the Nth write of a provisioning run, for any N
+- **THEN** the run fails and none of the nodes it created remains in the graph
+
+#### Scenario: Failure at the database write
+- **WHEN** every graph write succeeds and the row insert is refused
+- **THEN** every node the run created is deleted
+
+#### Scenario: Repeat after a partial failure
+- **WHEN** tenant initialisation is run again for a tenant whose UAs already exist
+- **THEN** the existing UAs are reused, no second copy is created, and the assignments are made again
+
+#### Scenario: Tenant initialisation fails
+- **WHEN** a tenant's UAs cannot be attached to its workspace
+- **THEN** the UAs this run created are removed, the failure is logged, and the owner's sign-up still completes (the workspace exists and its owner is in it); initialisation is safe to run again, but nothing re-runs it automatically
+
+#### Scenario: Two runs race for one node
+- **WHEN** two provisioning runs both find a tenant UA absent and both create it
+- **THEN** the database refuses the second, which adopts the first's node; if the first run then rolls back, the second's node is still found by name
+
+### Requirement: The roles API only touches roles
+Listing, deleting and assigning roles SHALL act only on UAs marked `type = role` (created by `CreateRole`, or marked by migration `023`). The workspace's Owners and Members UAs, tenant UAs, department UAs and channel Members UAs are UAs too and are neither listed as roles, nor deleted, nor assignable through the roles API.
+
+#### Scenario: Delete the Owners UA through the roles API
+- **WHEN** a caller holding `manage` calls `DeleteRole` with the workspace's Owners UA id
+- **THEN** it is refused (NotFound) and the UA is untouched
+
+#### Scenario: Assign a member to a platform UA
+- **WHEN** `UpdateMemberRoles` names a platform UA among the roles
+- **THEN** it is refused before the member is detached from anything
+
+### Requirement: The policy service creates no object nodes
+`CreateNode` SHALL refuse node type `O` with InvalidArgument and write nothing.
+
+#### Scenario: Create an O node
+- **WHEN** any caller asks the policy service to create a node of type `O`
+- **THEN** the request fails with InvalidArgument
+

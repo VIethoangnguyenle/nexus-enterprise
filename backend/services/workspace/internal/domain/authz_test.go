@@ -201,10 +201,11 @@ func (f *fakeDeptStore) ReassignDepartmentUsers(_ context.Context, id string, _ 
 }
 
 type fixture struct {
-	svc   *domain.Service
-	read  *fakePolicyRead
-	write *fakePolicyWrite
-	depts *fakeDeptStore
+	svc     *domain.Service
+	read    *fakePolicyRead
+	write   *fakePolicyWrite
+	depts   *fakeDeptStore
+	wsStore *fakeWSStore
 }
 
 func node(id, name, typ string) *policypb.NGACNode {
@@ -231,7 +232,7 @@ func newFixture(t *testing.T) *fixture {
 	pc1Children := []*policypb.NGACNode{
 		node(owners1, ngac.OwnersUAName(ws1), ngac.TypeUA),
 		node(members1, ngac.MembersUAName(ws1), ngac.TypeUA),
-		node(role1, "Editor", ngac.TypeUA),
+		{Id: role1, Name: "Editor", NodeType: ngac.TypeUA, Properties: map[string]string{ngac.PropType: ngac.PropTypeRole}},
 		node(mgmt1, ngac.MgmtOAName(ws1), ngac.TypeOA),
 		node(docs1, ngac.DocumentsOAName(ws1), ngac.TypeOA),
 		node(folder1, "Engineering", ngac.TypeOA),
@@ -273,7 +274,7 @@ func newFixture(t *testing.T) *fixture {
 		"dept-ws2":     {ID: "dept-ws2", WorkspaceID: ws2, Name: "Foreign", NGACUaID: "ua-dept-ws2"},
 	}}
 	svc := domain.NewService(wsStore, depts, read, write, nil, nil)
-	return &fixture{svc: svc, read: read, write: write, depts: depts}
+	return &fixture{svc: svc, read: read, write: write, depts: depts, wsStore: wsStore}
 }
 
 func (f *fixture) mutated() bool { return len(f.write.mutations) > 0 || len(f.depts.mutations) > 0 }

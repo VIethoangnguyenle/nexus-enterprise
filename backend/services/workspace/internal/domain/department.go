@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/provision"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/workspace/internal/store"
 )
@@ -63,14 +64,19 @@ func (s *Service) CreateDepartment(ctx context.Context, callerNodeID string, in 
 		}
 	}
 
-	// Create NGAC UA node for the department
-	uaName := ngac.DeptUAName(in.Name)
-	node, err := s.policyWrite.CreateNode(ctx, &policypb.CreateNodeRequest{
-		Name:     uaName,
+	// The department's ID is chosen first so the node can be named by it: a
+	// name taken from input would be shared by two tenants who both have a
+	// "Sales", and the graph resolves nodes by exact name. The display name rides
+	// along as a property.
+	deptID := uuid.New().String()
+	prov := provision.NewCreator(s.policyWrite)
+	node, err := prov.Node(ctx, &policypb.CreateNodeRequest{
+		Name:     ngac.DeptUAName(ngac.DeptID(deptID)),
 		NodeType: ngac.TypeUA,
 		Properties: map[string]string{
-			"workspace_id": in.WorkspaceID,
-			"dept_name":    in.Name,
+			"workspace_id":       in.WorkspaceID,
+			"dept_name":          in.Name,
+			ngac.PropDisplayName: in.Name,
 		},
 	})
 	if err != nil {
@@ -82,15 +88,11 @@ func (s *Service) CreateDepartment(ctx context.Context, callerNodeID string, in 
 	if parentDept != nil {
 		parentNGACID = parentDept.NGACUaID
 	}
-
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: node.Id, ParentId: parentNGACID,
-	}); err != nil {
-		return nil, fmt.Errorf("assign dept UA: %w", err)
+	if err := prov.Assign(ctx, node.Id, parentNGACID); err != nil {
+		return nil, prov.Fail(ctx, fmt.Errorf("assign dept UA: %w", err))
 	}
 
 	// Persist to DB
-	deptID := uuid.New().String()
 	var parentPtr *string
 	if in.ParentID != "" {
 		parentPtr = &in.ParentID
@@ -103,8 +105,9 @@ func (s *Service) CreateDepartment(ctx context.Context, callerNodeID string, in 
 		ParentID:    parentPtr,
 		NGACUaID:    node.Id,
 	}); err != nil {
-		return nil, err
+		return nil, prov.Fail(ctx, err)
 	}
+	prov.Done()
 
 	slog.Info("department created", "dept_id", deptID, "name", in.Name, "workspace", in.WorkspaceID)
 

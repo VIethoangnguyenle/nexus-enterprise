@@ -78,7 +78,7 @@ func TestDriveOverTheWire_UpdateQuotaUsesMetadataCaller(t *testing.T) {
 	beforeBytes, beforeFiles := quotaLimits(t, pool, wsID)
 
 	pr := newRulePolicy()
-	pr.grant("ngac-admin", oaID(ngac.MgmtOAName(wsID)), ngac.OpManage)
+	pr.grant("ngac-admin", oaID(ngac.MgmtOAName(ngac.WorkspaceID(wsID))), ngac.OpManage)
 	pr.grant("ngac-admin", anyObject, ngac.OpRead) // GetQuota, which UpdateQuota returns, needs read
 	c := serveDrive(t, pr)
 

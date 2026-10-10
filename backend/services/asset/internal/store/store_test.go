@@ -139,7 +139,7 @@ func createTestType(t *testing.T, s *store.Store, wsID string) *store.AssetType 
 	return at
 }
 
-// createTestAsset inserts a test asset via direct SQL to avoid FK issues with ngac_node_id.
+// createTestAsset inserts a test asset via direct SQL.
 func createTestAsset(t *testing.T, s *store.Store, typeID, wsID, userID string) *store.Asset {
 	t.Helper()
 	a := &store.Asset{
@@ -249,7 +249,6 @@ func TestCreateAsset(t *testing.T) {
 	s := setupStore(t)
 	wsID := getTestWorkspaceID(t, s.DB())
 	userID := getTestUserID(t, s.DB())
-	ngacOA := getTestNGACNodeID(t, s.DB())
 	at := createTestType(t, s, wsID)
 
 	a := &store.Asset{
@@ -258,7 +257,6 @@ func TestCreateAsset(t *testing.T) {
 		WorkspaceID:  wsID,
 		State:        "requested",
 		CustomFields: json.RawMessage(`{"serial":"ABC123"}`),
-		NgacNodeID:   ngacOA,
 		CreatedBy:    userID,
 	}
 	err := s.CreateAsset(context.Background(), a)

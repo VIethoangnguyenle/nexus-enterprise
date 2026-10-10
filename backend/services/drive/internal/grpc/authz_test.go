@@ -298,8 +298,8 @@ func TestUpdateQuota_DeniedWithoutManageOnMgmtOA(t *testing.T) {
 	beforeBytes, beforeFiles := quotaLimits(t, pool, wsID)
 
 	// Manage somewhere else, and read on the Mgmt OA, are not enough.
-	pr.grant("ngac-member", oaID(ngac.DocumentsOAName(wsID)), ngac.OpManage)
-	pr.grant("ngac-member", oaID(ngac.MgmtOAName(wsID)), ngac.OpRead)
+	pr.grant("ngac-member", oaID(ngac.DocumentsOAName(ngac.WorkspaceID(wsID))), ngac.OpManage)
+	pr.grant("ngac-member", oaID(ngac.MgmtOAName(ngac.WorkspaceID(wsID))), ngac.OpRead)
 
 	ctx := asCaller("", "ngac-member")
 	_, err := srv.UpdateQuota(ctx, &pb.UpdateQuotaRequest{
@@ -319,7 +319,7 @@ func TestUpdateQuota_DeniedWithoutCaller(t *testing.T) {
 	restoreQuota(t, pool, wsID)
 	beforeBytes, _ := quotaLimits(t, pool, wsID)
 	// Even a grant to the empty subject must not open the call.
-	pr.grant("", oaID(ngac.MgmtOAName(wsID)), ngac.OpManage)
+	pr.grant("", oaID(ngac.MgmtOAName(ngac.WorkspaceID(wsID))), ngac.OpManage)
 
 	_, err := srv.UpdateQuota(context.Background(), &pb.UpdateQuotaRequest{
 		WorkspaceId: wsID, MaxBytes: beforeBytes + 1, MaxFiles: 1,
@@ -336,7 +336,7 @@ func TestUpdateQuota_DeniedWhenPolicyErrors(t *testing.T) {
 	wsID := getTestWorkspaceID(t, pool)
 	restoreQuota(t, pool, wsID)
 	beforeBytes, _ := quotaLimits(t, pool, wsID)
-	pr.grant("ngac-owner", oaID(ngac.MgmtOAName(wsID)), ngac.OpManage)
+	pr.grant("ngac-owner", oaID(ngac.MgmtOAName(ngac.WorkspaceID(wsID))), ngac.OpManage)
 	pr.failErr = errors.New("policy unavailable")
 
 	ctx := asCaller("", "ngac-owner")
@@ -354,7 +354,7 @@ func TestUpdateQuota_AllowedWithManageOnMgmtOA(t *testing.T) {
 	srv, pool := newServerWith(t, pr, &recordingPolicyWrite{})
 	wsID := getTestWorkspaceID(t, pool)
 	restoreQuota(t, pool, wsID)
-	pr.grant("ngac-owner", oaID(ngac.MgmtOAName(wsID)), ngac.OpManage)
+	pr.grant("ngac-owner", oaID(ngac.MgmtOAName(ngac.WorkspaceID(wsID))), ngac.OpManage)
 
 	// The response re-reads the quota, which takes read on the drive root.
 	pr.grant("ngac-owner", anyObject, ngac.OpRead)
@@ -365,7 +365,7 @@ func TestUpdateQuota_AllowedWithManageOnMgmtOA(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	assert.Contains(t, pr.checks, [3]string{"ngac-owner", oaID(ngac.MgmtOAName(wsID)), ngac.OpManage})
+	assert.Contains(t, pr.checks, [3]string{"ngac-owner", oaID(ngac.MgmtOAName(ngac.WorkspaceID(wsID))), ngac.OpManage})
 	assert.Equal(t, int64(987654321), q.MaxBytes)
 	assert.Equal(t, int32(4321), q.MaxFiles)
 }

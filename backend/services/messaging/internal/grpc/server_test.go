@@ -109,6 +109,17 @@ func (m *mockPolicyWriteClient) CreateNode(ctx context.Context, req *policypb.Cr
 	return &policypb.NGACNode{Id: id, Name: req.Name, NodeType: req.NodeType}, nil
 }
 
+// DeleteNode removes what CreateNode wrote: a failed provisioning rolls its
+// nodes back through this.
+func (m *mockPolicyWriteClient) DeleteNode(ctx context.Context, req *policypb.DeleteNodeRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
+	if m.pool != nil {
+		if _, err := m.pool.Exec(ctx, `DELETE FROM ngac_nodes WHERE id = $1`, req.NodeId); err != nil {
+			return nil, err
+		}
+	}
+	return &policypb.Empty{}, nil
+}
+
 func (m *mockPolicyWriteClient) CreateAssignment(_ context.Context, _ *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
 	return &policypb.Assignment{Id: "assign-1"}, nil
 }
@@ -203,7 +214,7 @@ type mockPolicyReadWithChannelsOA struct {
 
 func (m *mockPolicyReadWithChannelsOA) GetChildren(_ context.Context, _ *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
 	return &policypb.NodeList{Nodes: []*policypb.NGACNode{
-		{Id: "channels-oa-" + m.wsID, Name: ngac.ChannelsOAName(m.wsID), NodeType: ngac.TypeOA},
+		{Id: "channels-oa-" + m.wsID, Name: ngac.ChannelsOAName(ngac.WorkspaceID(m.wsID)), NodeType: ngac.TypeOA},
 	}}, nil
 }
 
