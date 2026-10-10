@@ -159,7 +159,7 @@ func TestFullApprovalFlow(t *testing.T) {
 	}
 
 	// Verify pending
-	pending, err := s.ListPending(ctx, "mgr1")
+	pending, err := s.ListPending(ctx, "mgr1", nil)
 	if err != nil {
 		t.Fatalf("list pending: %v", err)
 	}
@@ -439,7 +439,7 @@ func TestHasAssignment_AnyStatusAnyStepTenantScoped(t *testing.T) {
 	}
 
 	for user, want := range map[string]bool{"ap-skipped": true, "ap-later": true, "ap-stranger": false} {
-		got, err := s.HasAssignment(ctxA, reqID, user)
+		got, err := s.HasAssignment(ctxA, reqID, []string{user})
 		if err != nil {
 			t.Fatalf("HasAssignment(%s): %v", user, err)
 		}
@@ -449,7 +449,7 @@ func TestHasAssignment_AnyStatusAnyStepTenantScoped(t *testing.T) {
 	}
 
 	ctxB := httputil.WithTenantSchema(context.Background(), schemaB)
-	if got, err := s.HasAssignment(ctxB, reqID, "ap-later"); err != nil || got {
+	if got, err := s.HasAssignment(ctxB, reqID, []string{"ap-later"}); err != nil || got {
 		t.Errorf("tenant B sees tenant A's assignment: got=%v err=%v", got, err)
 	}
 	if _, err := s.GetRequest(ctxA, newID()); !errors.Is(err, domain.ErrNotFound) {

@@ -21,7 +21,7 @@ func BenchmarkListPending(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		s.ListPending(ctx, "mgr1")
+		s.ListPending(ctx, "mgr1", nil)
 	}
 }
 
@@ -113,7 +113,7 @@ func TestPerformanceSLA_AllQueries(t *testing.T) {
 		{
 			name: "ListPending", maxMs: 5.0,
 			fn: func() error {
-				_, err := s.ListPending(ctx, approver)
+				_, err := s.ListPending(ctx, approver, nil)
 				return err
 			},
 		},
@@ -216,7 +216,7 @@ func TestScaleInsert_50K(t *testing.T) {
 
 	// Now query performance with 1000 rows
 	queryStart := time.Now()
-	pending, _ := s.ListPending(ctx, approver)
+	pending, _ := s.ListPending(ctx, approver, nil)
 	queryDuration := time.Since(queryStart)
 	t.Logf("✅ ListPending returned %d items in %v", len(pending), queryDuration)
 

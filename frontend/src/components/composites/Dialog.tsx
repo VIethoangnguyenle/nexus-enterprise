@@ -1,6 +1,7 @@
-import { useEffect, useId, useRef, type ReactNode, type RefObject } from 'react'
+import { useId, useRef, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
+import { useModalFocus } from '../../hooks/useModalFocus'
 import { useMotionPresets } from '../../lib/motion'
 import { Heading } from '../primitives'
 
@@ -17,9 +18,6 @@ interface DialogProps {
   onSubmit?: () => void
 }
 
-const FOCUSABLE =
-  'a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
-
 /**
  * Modal dialog (DESIGN.md §6): overlay surface, radius 12, max 520px, focus
  * trapped inside while open, focus returned to whatever opened it, Esc closes.
@@ -31,62 +29,8 @@ export function Dialog({ open, onClose, title, children, footer, initialFocusRef
   const m = useMotionPresets()
   const titleId = useId()
   const surfaceRef = useRef<HTMLDivElement>(null)
-  const returnTo = useRef<HTMLElement | null>(null)
 
-  // While open, the app behind the scrim is inert: no focus, no clicks, and
-  // hidden from assistive tech (aria-modal alone is not honoured everywhere).
-  useEffect(() => {
-    const app = document.getElementById('root')
-    if (!open || !app) return
-    app.inert = true
-    return () => {
-      app.inert = false
-    }
-  }, [open])
-
-  useEffect(() => {
-    if (!open) return
-    returnTo.current = document.activeElement as HTMLElement | null
-    const id = requestAnimationFrame(() => {
-      const target = initialFocusRef?.current ?? surfaceRef.current?.querySelector<HTMLElement>(FOCUSABLE)
-      target?.focus()
-    })
-    return () => {
-      cancelAnimationFrame(id)
-      // Give focus back to the opener so keyboard users land where they were.
-      returnTo.current?.focus?.()
-    }
-  }, [open, initialFocusRef])
-
-  useEffect(() => {
-    if (!open) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        // Marks the key as taken, so a panel behind this dialog does not also close.
-        e.preventDefault()
-        e.stopPropagation()
-        onClose()
-        return
-      }
-      if (e.key !== 'Tab' || !surfaceRef.current) return
-      const nodes = Array.from(surfaceRef.current.querySelectorAll<HTMLElement>(FOCUSABLE))
-      const first = nodes[0]
-      const last = nodes[nodes.length - 1]
-      if (!first || !last) return
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault()
-        last.focus()
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault()
-        first.focus()
-      } else if (!surfaceRef.current.contains(document.activeElement)) {
-        e.preventDefault()
-        first.focus()
-      }
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [open, onClose])
+  useModalFocus({ active: open, surfaceRef, onClose, initialFocusRef })
 
   const body = (
     <>

@@ -55,6 +55,13 @@ func (m *memStore) GetTemplate(_ context.Context, id string) (*domain.Template, 
 	return nil, domain.ErrNotFound
 }
 
+func (m *memStore) InsertRequestWithAssignments(ctx context.Context, r *domain.Request, as []*domain.AssignmentRecord) error {
+	if err := m.InsertRequest(ctx, r); err != nil {
+		return err
+	}
+	return m.InsertAssignments(ctx, as)
+}
+
 func (m *memStore) InsertRequest(_ context.Context, r *domain.Request) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -89,6 +96,10 @@ func (m *memStore) GetAssignment(_ context.Context, requestID, userNodeID string
 			return a, nil
 		}
 	}
+	return nil, domain.ErrNotFound
+}
+
+func (m *memStore) FindGroupAssignment(context.Context, string, int, []string) (*domain.AssignmentRecord, error) {
 	return nil, domain.ErrNotFound
 }
 
@@ -171,6 +182,18 @@ func (m *memStore) ListPendingAssignees(_ context.Context, requestID string, ste
 	return out, nil
 }
 
+func (m *memStore) ListAssignments(_ context.Context, requestID string) ([]*domain.AssignmentRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []*domain.AssignmentRecord
+	for _, a := range m.assignments {
+		if a.RequestID == requestID {
+			out = append(out, a)
+		}
+	}
+	return out, nil
+}
+
 func (m *memStore) InsertAuditEntry(context.Context, *domain.AuditEntry) error { return nil }
 
 type allowPolicy struct{}
@@ -181,6 +204,8 @@ func (allowPolicy) ResolveAccessibleScopes(context.Context, string, string) ([]s
 func (allowPolicy) CheckAccess(context.Context, string, string, string) (bool, error) {
 	return true, nil
 }
+func (allowPolicy) GetAncestors(context.Context, string) ([]string, error) { return nil, nil }
+func (allowPolicy) GetMembers(context.Context, string) ([]string, error)   { return nil, nil }
 
 type capturePublisher struct {
 	mu  sync.Mutex

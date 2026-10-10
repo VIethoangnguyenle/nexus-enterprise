@@ -28,11 +28,7 @@ scan() {
   files=$(find "${roots[@]}" -type f -name '*.go' \
     -not -name '*_test.go' -not -name '*.pb.go' -not -name '*.pb.gw.go' \
     -not -path '*backend/ngac/*' -not -path '*/node_modules/*' -not -path '*/.agentkit/*' \
-    -not -path '*/.claude/*' \
-    -not -path '*backend/services/approval/*' | sort)
-  # approval is skipped for now: it still carries "read"/"approve" literals (domain/execution.go,
-  # domain/queries.go) and is being reworked by another change. Remove that exclusion, and the
-  # literals with it, once that work lands.
+    -not -path '*/.claude/*' | sort)
   [ -z "$files" ] && return 0
   for f in $files; do
     awk -v file="$f" -v ops="$OPS" -v pre="$PREFIXES" -v suf="$SUFFIXES" '
@@ -98,7 +94,7 @@ func good(id string) {
 	// `read` and fmt.Sprintf("%s_Type_%s") in a comment are not code either.
 }
 EOF
-  # Excluded by design: the vocabulary itself, tests, generated code, the temporarily skipped service.
+  # Excluded by design: the vocabulary itself, tests, generated code.
   printf 'package ngac\nconst OpRead = "read"\nvar _ = fmt.Sprintf("Dept_%%s", 1)\n' >"$dir/backend/ngac/ops.go"
   printf 'package svc\nvar _ = "read"\n' >"$dir/svc/x_test.go"
   printf 'package svc\nvar _ = "read"\n' >"$dir/svc/x.pb.go"
@@ -109,8 +105,10 @@ EOF
   for want in 'bad.go:4:' 'bad.go:5:' 'bad.go:6:' 'bad.go:7:' 'bad.go:8:' 'bad.go:9:' 'bad.go:10:' 'bad.go:11:' 'bad.go:12:' 'bad.go:13:' 'bad.go:14:' 'bad.go:15:'; do
     echo "$out" | grep -q "$want" || { echo "self-test: expected a violation at $want"; rc=1; }
   done
+  # No service is exempt: an op literal in approval is caught like anywhere else.
+  echo "$out" | grep -q 'services/approval/x.go:2:' || { echo "self-test: approval must not be skipped"; rc=1; }
   echo "$out" | grep -q 'good.go' && { echo "self-test: good.go must pass"; echo "$out" | grep good.go; rc=1; }
-  for skipped in backend/ngac x_test.go x.pb.go services/approval; do
+  for skipped in backend/ngac x_test.go x.pb.go; do
     echo "$out" | grep -q "$skipped" && { echo "self-test: $skipped must be skipped"; rc=1; }
   done
   [ $rc -eq 0 ] && echo "self-test ok"

@@ -3,8 +3,10 @@ package domain
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,6 +14,9 @@ import (
 
 // CreateRequestInput contains the fields to create a new approval request.
 type CreateRequestInput struct {
+	// TemplateID, when set, is the template the submitter chose; the request
+	// then follows it instead of being matched by entity type and conditions.
+	TemplateID   string
 	EntityType   string
 	EntityID     string
 	EntityFields EntityFields // for template matching
@@ -43,14 +48,24 @@ type BatchApproveInput struct {
 }
 
 // CreateApprovalRequest creates a new approval request by:
-// 1. Matching a template
+// 1. Choosing the template: the one the submitter picked (if it fits), or the best match
 // 2. Snapshotting the template
-// 3. Resolving approvers for step 1
-// 4. Inserting assignments
+// 3. Building the first step's assignments
+// 4. Storing request and assignments as one change
 // 5. Logging audit
+//
+// Conditions are always judged on values the server derives from the submitted
+// form (see fieldsFor), never on figures the client states separately: a form
+// that says 500 million cannot be routed through the "under 10 million" chain.
 func (s *Service) CreateApprovalRequest(ctx context.Context, in CreateRequestInput) (*Request, error) {
-	if in.EntityType == "" || in.EntityID == "" || in.CreatedBy == "" {
-		return nil, fmt.Errorf("entity_type, entity_id, created_by: %w", ErrInvalidInput)
+	if (in.EntityType == "" && in.TemplateID == "") || in.CreatedBy == "" {
+		return nil, fmt.Errorf("entity_type or template_id, created_by: %w", ErrInvalidInput)
+	}
+	// A request about nothing outside the workflow (a leave request, an
+	// advance) has no entity of its own; it gets an identity here instead of
+	// making the client invent one.
+	if in.EntityID == "" {
+		in.EntityID = uuid.New().String()
 	}
 	// Default scope/department if not provided — workspace-level context
 	// will supply these once OA/department features are implemented.
@@ -60,11 +75,26 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, in CreateRequestInp
 	if in.DepartmentID == "" {
 		in.DepartmentID = "default"
 	}
+	form := parseForm(in.FormDataJSON)
 
-	// 1. Match template
-	tmpl, err := s.ResolveTemplate(ctx, in.EntityType, in.EntityFields)
-	if err != nil {
-		return nil, err
+	// 1. The chosen template, or the best match for the entity
+	var tmpl *Template
+	if in.TemplateID != "" {
+		t, err := s.store.GetTemplate(ctx, in.TemplateID)
+		if err != nil {
+			return nil, fmt.Errorf("get template: %w", err)
+		}
+		if err := s.checkChosen(ctx, t, form, in.EntityFields); err != nil {
+			return nil, err
+		}
+		tmpl = t
+		in.EntityType = t.EntityType
+	} else {
+		t, err := s.resolveForForm(ctx, in.EntityType, form, in.EntityFields)
+		if err != nil {
+			return nil, err
+		}
+		tmpl = t
 	}
 
 	// 2. Snapshot the template
@@ -90,25 +120,94 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, in CreateRequestInp
 		CreatedAt:        now,
 	}
 
-	if err := s.store.InsertRequest(ctx, req); err != nil {
-		return nil, fmt.Errorf("insert request: %w", err)
-	}
-
-	// 3. Resolve approvers for step 1 and insert assignments
+	// 3-4. Someone must be able to decide the request before it exists: a
+	// request whose first step resolves to nobody is refused, not left pending.
+	var first []*AssignmentRecord
 	if len(tmpl.Steps) > 0 {
-		if err := s.assignStep(ctx, req.ID, tmpl.Steps[0], in.DepartmentID); err != nil {
+		if first, err = buildAssignments(req.ID, tmpl.Steps[0], in.DepartmentID); err != nil {
 			return nil, fmt.Errorf("assign step 1: %w", err)
 		}
 	}
+	if err := s.store.InsertRequestWithAssignments(ctx, req, first); err != nil {
+		return nil, fmt.Errorf("insert request: %w", err)
+	}
 
-	// 4. Audit
+	// 5. Audit
 	s.logAudit(ctx, req.ID, "created", in.CreatedBy, 0, map[string]string{
 		"entity_type": in.EntityType,
 		"entity_id":   in.EntityID,
 		"template":    tmpl.Name,
 	})
+	s.auditAssigned(ctx, req.ID, 1, first)
 
 	return req, nil
+}
+
+// actingRow finds the assignment the caller acts through on the request's
+// current step, and says whether it is a group's row.
+//
+//   - The caller's own pending row (a named approver, or one added by
+//     reconciliation): if it came from a role or department, the caller must
+//     still belong to it.
+//   - Otherwise a role or department row of the current step whose group is
+//     among the caller's ancestors right now. Membership is read at the moment
+//     of acting, so a member removed since the request was made cannot act, and
+//     someone in a different department never could.
+//
+// Anything else is ErrAccessDenied.
+func (s *Service) actingRow(ctx context.Context, req *Request, userNodeID string) (*AssignmentRecord, bool, error) {
+	own, err := s.store.GetAssignment(ctx, req.ID, userNodeID)
+	switch {
+	case err == nil:
+		if own.StepOrder != req.CurrentStep {
+			return nil, false, ErrStepNotActive
+		}
+		if own.GrantSource != "direct" {
+			if err := s.verifyMember(ctx, userNodeID, groupOf(own.GrantSource)); err != nil {
+				return nil, false, err
+			}
+		}
+		return own, false, nil
+	case !errors.Is(err, ErrNotFound):
+		return nil, false, fmt.Errorf("get assignment: %w", err)
+	}
+
+	ancestors, err := s.policy.GetAncestors(ctx, userNodeID)
+	if err != nil {
+		return nil, false, fmt.Errorf("ngac ancestors: %w", err)
+	}
+	group, err := s.store.FindGroupAssignment(ctx, req.ID, req.CurrentStep, ancestors)
+	if errors.Is(err, ErrNotFound) {
+		return nil, false, fmt.Errorf("%w: not an approver of this request", ErrAccessDenied)
+	}
+	if err != nil {
+		return nil, false, fmt.Errorf("find group assignment: %w", err)
+	}
+	return group, true, nil
+}
+
+// decide records the caller's decision on the row they act through. A group
+// row stays pending (other members may still act); the person gets a row of
+// their own, which is what the quorum counts and what stops a second action.
+func (s *Service) decide(ctx context.Context, row *AssignmentRecord, group bool, userNodeID, status, comment string) error {
+	if !group {
+		if err := s.store.UpdateAssignmentStatus(ctx, row.ID, status, comment); err != nil {
+			return fmt.Errorf("update assignment: %w", err)
+		}
+		return nil
+	}
+	now := time.Now()
+	err := s.store.InsertActedAssignment(ctx, &AssignmentRecord{
+		ID: uuid.New().String(), RequestID: row.RequestID, StepOrder: row.StepOrder,
+		UserNodeID: userNodeID, GrantSource: row.GrantSource, Status: status, ActedAt: &now, Comment: comment,
+	})
+	if errors.Is(err, ErrAlreadyExists) {
+		return fmt.Errorf("%w: already acted on this step", ErrAlreadyExists)
+	}
+	if err != nil {
+		return fmt.Errorf("record decision: %w", err)
+	}
+	return nil
 }
 
 // Approve processes a single approval action.
@@ -125,25 +224,12 @@ func (s *Service) Approve(ctx context.Context, in ApproveInput) error {
 		return ErrRequestCompleted
 	}
 
-	assignment, err := s.store.GetAssignment(ctx, in.RequestID, in.UserNodeID)
+	row, group, err := s.actingRow(ctx, req, in.UserNodeID)
 	if err != nil {
-		return fmt.Errorf("get assignment: %w", err)
+		return err
 	}
-	if assignment.StepOrder != req.CurrentStep {
-		return ErrStepNotActive
-	}
-
-	// NGAC double-check: only for role-based grants where role could be revoked
-	// after assignment. Direct assignments (specific_user) are self-authorizing.
-	if assignment.GrantSource != "direct" {
-		if err := s.verifyApproveAccess(ctx, in.UserNodeID, req.ScopeOAID); err != nil {
-			return err
-		}
-	}
-
-	// Update assignment
-	if err := s.store.UpdateAssignmentStatus(ctx, assignment.ID, "approved", in.Comment); err != nil {
-		return fmt.Errorf("update assignment: %w", err)
+	if err := s.decide(ctx, row, group, in.UserNodeID, "approved", in.Comment); err != nil {
+		return err
 	}
 
 	// Audit
@@ -169,24 +255,12 @@ func (s *Service) Reject(ctx context.Context, in RejectInput) error {
 		return ErrRequestCompleted
 	}
 
-	assignment, err := s.store.GetAssignment(ctx, in.RequestID, in.UserNodeID)
+	row, group, err := s.actingRow(ctx, req, in.UserNodeID)
 	if err != nil {
-		return fmt.Errorf("get assignment: %w", err)
+		return err
 	}
-	if assignment.StepOrder != req.CurrentStep {
-		return ErrStepNotActive
-	}
-
-	// NGAC double-check: only for role-based grants where role could be revoked.
-	if assignment.GrantSource != "direct" {
-		if err := s.verifyApproveAccess(ctx, in.UserNodeID, req.ScopeOAID); err != nil {
-			return err
-		}
-	}
-
-	// Update assignment
-	if err := s.store.UpdateAssignmentStatus(ctx, assignment.ID, "rejected", in.Comment); err != nil {
-		return fmt.Errorf("update assignment: %w", err)
+	if err := s.decide(ctx, row, group, in.UserNodeID, "rejected", in.Comment); err != nil {
+		return err
 	}
 
 	// Skip ALL remaining pending assignments across all steps
@@ -329,94 +403,88 @@ func (s *Service) checkStepCompletion(ctx context.Context, req *Request) error {
 	return s.assignStep(ctx, req.ID, nextStepDef, req.DepartmentID)
 }
 
-// assignStep resolves approvers for a step and inserts assignments.
+// assignStep builds a step's assignments and stores them.
 func (s *Service) assignStep(ctx context.Context, requestID string, step *Step, deptID string) error {
-	approverValue := ResolvePlaceholder(step.ApproverValue, deptID)
-
-	var assignments []*AssignmentRecord
-
-	switch step.ApproverType {
-	case "specific_user":
-		assignments = append(assignments, &AssignmentRecord{
-			ID:          uuid.New().String(),
-			RequestID:   requestID,
-			StepOrder:   step.StepOrder,
-			UserNodeID:  approverValue,
-			GrantSource: "direct",
-			Status:      "pending",
-		})
-
-	case "role_in_dept":
-		// Resolve: get descendants of the role UA → find users
-		scopes, err := s.policy.ResolveAccessibleScopes(ctx, approverValue, "approve")
-		if err != nil {
-			// Fallback: assign to the role itself
-			assignments = append(assignments, &AssignmentRecord{
-				ID:          uuid.New().String(),
-				RequestID:   requestID,
-				StepOrder:   step.StepOrder,
-				UserNodeID:  approverValue,
-				GrantSource: fmt.Sprintf("role:%s", approverValue),
-				Status:      "pending",
-			})
-		} else {
-			for _, scopeID := range scopes {
-				assignments = append(assignments, &AssignmentRecord{
-					ID:          uuid.New().String(),
-					RequestID:   requestID,
-					StepOrder:   step.StepOrder,
-					UserNodeID:  scopeID,
-					GrantSource: fmt.Sprintf("role:%s", approverValue),
-					Status:      "pending",
-				})
-			}
-		}
-
-	case "department":
-		// Assign to all members of the department UA
-		assignments = append(assignments, &AssignmentRecord{
-			ID:          uuid.New().String(),
-			RequestID:   requestID,
-			StepOrder:   step.StepOrder,
-			UserNodeID:  approverValue,
-			GrantSource: fmt.Sprintf("department:%s", approverValue),
-			Status:      "pending",
-		})
-
-	default:
-		return fmt.Errorf("unknown approver_type %q: %w", step.ApproverType, ErrInvalidInput)
+	assignments, err := buildAssignments(requestID, step, deptID)
+	if err != nil {
+		return err
 	}
-
-	if len(assignments) == 0 {
-		return fmt.Errorf("no approvers resolved for step %d: %w", step.StepOrder, ErrInvalidInput)
-	}
-
 	if err := s.store.InsertAssignments(ctx, assignments); err != nil {
 		return fmt.Errorf("insert assignments: %w", err)
 	}
-
-	// Audit each assignment
-	for _, a := range assignments {
-		s.logAudit(ctx, requestID, "assigned", a.UserNodeID, step.StepOrder, map[string]string{
-			"grant_source": a.GrantSource,
-		})
-	}
-
+	s.auditAssigned(ctx, requestID, step.StepOrder, assignments)
 	return nil
 }
 
-// verifyApproveAccess performs a real-time NGAC permission check before
-// allowing an approve/reject action. This prevents stale role exploitation
-// where a user's role was revoked after their assignment was created.
-func (s *Service) verifyApproveAccess(ctx context.Context, userNodeID, scopeOAID string) error {
-	allowed, err := s.policy.CheckAccess(ctx, userNodeID, scopeOAID, "approve")
+// buildAssignments turns a step into its assignment rows.
+//
+// A named person gets a "direct" row. A role or a department gets ONE group
+// row whose user_node_id is the role's or department's UA and whose grant
+// source is role:<ua> / department:<ua>; whoever belongs to that UA when they
+// act gets a row of their own then (see actingRow). A step that names nobody is
+// ErrInvalidInput, so it can be refused before anything is stored.
+func buildAssignments(requestID string, step *Step, deptID string) ([]*AssignmentRecord, error) {
+	value := ResolvePlaceholder(step.ApproverValue, deptID)
+	if value == "" || value == "default" {
+		return nil, fmt.Errorf("no approvers resolved for step %d: %w", step.StepOrder, ErrInvalidInput)
+	}
+	grant := ""
+	switch step.ApproverType {
+	case ApproverSpecificUser:
+		grant = "direct"
+	case ApproverRole:
+		grant = "role:" + value
+	case ApproverDepartment:
+		grant = "department:" + value
+	default:
+		return nil, fmt.Errorf("unknown approver_type %q: %w", step.ApproverType, ErrInvalidInput)
+	}
+	return []*AssignmentRecord{{
+		ID: uuid.New().String(), RequestID: requestID, StepOrder: step.StepOrder,
+		UserNodeID: value, GrantSource: grant, Status: "pending",
+	}}, nil
+}
+
+func (s *Service) auditAssigned(ctx context.Context, requestID string, stepOrder int, rows []*AssignmentRecord) {
+	for _, a := range rows {
+		s.logAudit(ctx, requestID, "assigned", a.UserNodeID, stepOrder, map[string]string{
+			"grant_source": a.GrantSource,
+		})
+	}
+}
+
+// groupOf is the UA a role:/department: grant source names ("" for anything else).
+func groupOf(grantSource string) string {
+	if _, ua, ok := strings.Cut(grantSource, ":"); ok {
+		return ua
+	}
+	return ""
+}
+
+// isGroupRow reports whether an assignment is a role's or department's own row
+// (its user_node_id is the group named by its grant source) rather than a person's.
+func isGroupRow(a *AssignmentRecord) bool {
+	return a.UserNodeID != "" && groupOf(a.GrantSource) == a.UserNodeID
+}
+
+// verifyMember checks, at the moment of acting, that the person still belongs to
+// the role or department an assignment came from. This is what stops a member
+// removed since the request was made, and what keeps the check on the group's
+// own UA rather than on some scope attribute.
+func (s *Service) verifyMember(ctx context.Context, userNodeID, groupNodeID string) error {
+	if groupNodeID == "" {
+		return fmt.Errorf("%w: assignment names no role or department", ErrAccessDenied)
+	}
+	ancestors, err := s.policy.GetAncestors(ctx, userNodeID)
 	if err != nil {
-		return fmt.Errorf("ngac check access: %w", err)
+		return fmt.Errorf("ngac ancestors: %w", err)
 	}
-	if !allowed {
-		return fmt.Errorf("user no longer has approve permission on scope %s: %w", scopeOAID, ErrAccessDenied)
+	for _, a := range ancestors {
+		if a == groupNodeID {
+			return nil
+		}
 	}
-	return nil
+	return fmt.Errorf("%w: no longer a member of the approving role or department", ErrAccessDenied)
 }
 
 // logAudit is a fire-and-forget audit logger. Errors are swallowed since

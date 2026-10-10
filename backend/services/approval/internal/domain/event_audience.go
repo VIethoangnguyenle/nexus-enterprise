@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log/slog"
 )
 
 // EventAudience is who an approval lifecycle event concerns.
@@ -19,8 +20,9 @@ type EventAudience struct {
 // step. Call it after the action, so a step that just advanced names the next
 // step's approvers.
 //
-// Assignees of the "department" or role-fallback kinds are UA nodes rather than
-// users; they are passed through as recorded and simply match no session.
+// A role's or department's row names the group, not a person, so it is
+// replaced by the people in it who have not already acted on the step: they are
+// the ones who must act next.
 func (s *Service) EventAudience(ctx context.Context, requestID string) (*EventAudience, error) {
 	if requestID == "" {
 		return nil, ErrInvalidInput
@@ -37,6 +39,32 @@ func (s *Service) EventAudience(ctx context.Context, requestID string) (*EventAu
 	if err != nil {
 		return nil, fmt.Errorf("list pending assignees: %w", err)
 	}
-	aud.AssigneeNodeIDs = assignees
+	rows, err := s.store.ListAssignments(ctx, requestID)
+	if err != nil {
+		return nil, fmt.Errorf("list assignments: %w", err)
+	}
+	acted := map[string]bool{}
+	for _, a := range rows {
+		if a.StepOrder == req.CurrentStep && a.Status != "pending" {
+			acted[a.UserNodeID] = true
+		}
+	}
+	seen := map[string]bool{}
+	for _, id := range assignees {
+		members, err := s.policy.GetMembers(ctx, id)
+		if err != nil {
+			// The event still goes to the others; this group's members miss the push.
+			slog.Warn("approval event: cannot expand group", "error", err)
+		}
+		if len(members) == 0 {
+			members = []string{id} // a person, not a group
+		}
+		for _, m := range members {
+			if !seen[m] && !acted[m] {
+				seen[m] = true
+				aud.AssigneeNodeIDs = append(aud.AssigneeNodeIDs, m)
+			}
+		}
+	}
 	return aud, nil
 }

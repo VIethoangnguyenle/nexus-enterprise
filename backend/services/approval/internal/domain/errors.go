@@ -21,4 +21,7 @@ var (
 	ErrStepNotActive      = errors.New("step not active")
 	ErrRequestCompleted   = errors.New("request already completed")
 	ErrNoMatchingTemplate = errors.New("no matching approval template")
+
+	// ErrStale: the template changed since the caller read it (HTTP 409).
+	ErrStale = errors.New("template changed since it was read")
 )

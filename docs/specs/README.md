@@ -60,6 +60,12 @@ Verified against the codebase on 2026-07-31.
 | `drive-realtime-sync` | Matches code |
 | `drive-permission-engine` | Matches code (tenant-keyed cache; divergence closed 2026-08-02) |
 
+**Approval**
+
+| Capability | State |
+|---|---|
+| `approval-screens` | Matches code (template administration, role and department approvers and routing included; known gaps under its Status) |
+
 **Layout**
 
 | Capability | State |

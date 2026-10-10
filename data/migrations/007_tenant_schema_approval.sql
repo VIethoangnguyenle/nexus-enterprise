@@ -133,6 +133,9 @@ BEGIN
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_aa_grant_source ON %I.approval_assignments(grant_source, status) WHERE status = ''pending''', v_schema);
     -- Audit-trail access check: does this user have any assignment on this request
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_aa_request_user ON %I.approval_assignments(request_id, user_node_id)', v_schema);
+    -- One row per person per step: a person who acts through a role or department
+    -- grant gets their own row, and this is what stops them acting twice (026).
+    EXECUTE format('CREATE UNIQUE INDEX IF NOT EXISTS uq_aa_request_step_user ON %I.approval_assignments(request_id, step_order, user_node_id)', v_schema);
     -- Audit trail
     EXECUTE format('CREATE INDEX IF NOT EXISTS idx_audit_request ON %I.approval_audit_log(request_id, created_at)', v_schema);
 

@@ -119,73 +119,12 @@ func (c *ReconciliationConsumer) handleRecord(ctx context.Context, record *kgo.R
 	}
 }
 
-// handleUserAddedToUA creates new assignments for the user on pending requests
-// that have assignments with a grant_source matching the UA.
-func (c *ReconciliationConsumer) handleUserAddedToUA(ctx context.Context, userNodeID, uaNodeID string) {
-	// Find pending assignments granted by this UA (role or department)
-	patterns := []string{
-		fmt.Sprintf("role:%s", uaNodeID),
-		fmt.Sprintf("department:%s", uaNodeID),
-	}
-
-	for _, pattern := range patterns {
-		existing, err := c.store.FindPendingByGrantSource(ctx, pattern)
-		if err != nil {
-			slog.Warn("find pending by grant source", "pattern", pattern, "error", err)
-			continue
-		}
-
-		// Group by request_id+step_order to avoid duplicates
-		seen := make(map[string]bool)
-		var newAssignments []*domain.AssignmentRecord
-
-		for _, a := range existing {
-			key := fmt.Sprintf("%s:%d", a.RequestID, a.StepOrder)
-			if seen[key] {
-				continue
-			}
-			seen[key] = true
-
-			// Check user doesn't already have an assignment for this request+step
-			_, err := c.store.FindPendingByUserAndSource(ctx, userNodeID, a.RequestID)
-			if err == nil {
-				continue // user already assigned
-			}
-
-			newAssignments = append(newAssignments, &domain.AssignmentRecord{
-				ID:          uuid.New().String(),
-				RequestID:   a.RequestID,
-				StepOrder:   a.StepOrder,
-				UserNodeID:  userNodeID,
-				GrantSource: a.GrantSource,
-				Status:      "pending",
-			})
-		}
-
-		if len(newAssignments) == 0 {
-			continue
-		}
-
-		if err := c.store.InsertAssignments(ctx, newAssignments); err != nil {
-			slog.Error("insert reconciled assignments", "error", err)
-			continue
-		}
-
-		// Audit each new assignment
-		for _, a := range newAssignments {
-			c.auditReconciliation(ctx, a.RequestID, "reassigned_policy_change", userNodeID, a.StepOrder,
-				map[string]string{
-					"reason":       "user_added_to_ua",
-					"ua_node_id":   uaNodeID,
-					"grant_source": a.GrantSource,
-				})
-		}
-
-		slog.Info("reconciled: user added to UA",
-			"user", userNodeID, "ua", uaNodeID,
-			"new_assignments", len(newAssignments))
-	}
-}
+// handleUserAddedToUA does nothing, on purpose. A role or department step is one
+// group row; a member is matched to it when they act (and in the pending list),
+// by the memberships the policy service reports at that moment. Copying the
+// request into a row of the new member here would put two rows for one person on
+// the same step.
+func (c *ReconciliationConsumer) handleUserAddedToUA(_ context.Context, _, _ string) {}
 
 // handleUserRemovedFromUA revokes pending assignments for the user
 // that were granted by the removed UA.

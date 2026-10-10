@@ -62,57 +62,6 @@ func (m *mockReconcStore) InsertAuditEntry(_ context.Context, entry *domain.Audi
 
 // --- Tests ---
 
-func TestHandleRecord_UserAddedToUA_CreatesNewAssignments(t *testing.T) {
-	store := newMockReconcStore()
-	consumer := &ReconciliationConsumer{store: store}
-
-	// Existing pending assignment granted by role:Managers_UA
-	store.pendingBySource["role:Managers_UA"] = []*domain.AssignmentRecord{
-		{ID: "asgn-1", RequestID: "req-1", StepOrder: 1, UserNodeID: "old_user", GrantSource: "role:Managers_UA", Status: "pending"},
-		{ID: "asgn-2", RequestID: "req-2", StepOrder: 1, UserNodeID: "old_user", GrantSource: "role:Managers_UA", Status: "pending"},
-	}
-
-	// Create the event: new_user added to Managers_UA
-	evt := GraphMutatedEvent{
-		MutationType: "create_assignment",
-		NodeIDs:      []string{"new_user", "Managers_UA"},
-		ChildType:    "U",
-		ParentType:   "UA",
-		Timestamp:    1000,
-	}
-	data, _ := json.Marshal(evt)
-	record := &kgo.Record{Value: data}
-
-	consumer.handleRecord(context.Background(), record)
-
-	// Should create 2 new assignments for new_user
-	if len(store.inserted) != 2 {
-		t.Fatalf("inserted %d, want 2", len(store.inserted))
-	}
-	for _, a := range store.inserted {
-		if a.UserNodeID != "new_user" {
-			t.Errorf("assignment user = %q, want new_user", a.UserNodeID)
-		}
-		if a.Status != "pending" {
-			t.Errorf("status = %q, want pending", a.Status)
-		}
-		if a.GrantSource != "role:Managers_UA" {
-			t.Errorf("grant_source = %q, want role:Managers_UA", a.GrantSource)
-		}
-	}
-
-	// Should have 2 audit entries
-	if len(store.auditEntries) != 2 {
-		t.Errorf("audit entries = %d, want 2", len(store.auditEntries))
-	}
-	for _, e := range store.auditEntries {
-		if e.Action != "reassigned_policy_change" {
-			t.Errorf("audit action = %q, want reassigned_policy_change", e.Action)
-		}
-	}
-	t.Log("✅ User added to UA → 2 new assignments created + 2 audit entries")
-}
-
 func TestHandleRecord_UserRemovedFromUA_RevokesAssignments(t *testing.T) {
 	store := newMockReconcStore()
 	consumer := &ReconciliationConsumer{store: store}
@@ -180,61 +129,6 @@ func TestHandleRecord_IgnoresNonUserUAEvents(t *testing.T) {
 	t.Log("✅ Non-user-UA events correctly ignored")
 }
 
-func TestHandleRecord_SkipsDuplicateRequestStep(t *testing.T) {
-	store := newMockReconcStore()
-	consumer := &ReconciliationConsumer{store: store}
-
-	// Two assignments for the same request+step (different approvers)
-	store.pendingBySource["role:Managers_UA"] = []*domain.AssignmentRecord{
-		{ID: "a1", RequestID: "req-dup", StepOrder: 1, UserNodeID: "user_a", GrantSource: "role:Managers_UA"},
-		{ID: "a2", RequestID: "req-dup", StepOrder: 1, UserNodeID: "user_b", GrantSource: "role:Managers_UA"},
-	}
-
-	evt := GraphMutatedEvent{
-		MutationType: "create_assignment",
-		NodeIDs:      []string{"new_user", "Managers_UA"},
-		ChildType:    "U",
-		ParentType:   "UA",
-	}
-	data, _ := json.Marshal(evt)
-	consumer.handleRecord(context.Background(), &kgo.Record{Value: data})
-
-	// Should only create 1 assignment (deduped by request_id+step_order)
-	if len(store.inserted) != 1 {
-		t.Errorf("inserted %d, want 1 (deduplicated)", len(store.inserted))
-	}
-	t.Log("✅ Duplicate request+step correctly deduplicated")
-}
-
-func TestHandleRecord_SkipsIfUserAlreadyAssigned(t *testing.T) {
-	store := newMockReconcStore()
-	consumer := &ReconciliationConsumer{store: store}
-
-	store.pendingBySource["role:Managers_UA"] = []*domain.AssignmentRecord{
-		{ID: "a1", RequestID: "req-exists", StepOrder: 1, UserNodeID: "user_a", GrantSource: "role:Managers_UA"},
-	}
-
-	// Mark that existing_user already has an assignment for this request
-	store.pendingByUser["existing_user:req-exists"] = []*domain.AssignmentRecord{
-		{ID: "existing-asgn", RequestID: "req-exists", StepOrder: 1, UserNodeID: "existing_user"},
-	}
-
-	evt := GraphMutatedEvent{
-		MutationType: "create_assignment",
-		NodeIDs:      []string{"existing_user", "Managers_UA"},
-		ChildType:    "U",
-		ParentType:   "UA",
-	}
-	data, _ := json.Marshal(evt)
-	consumer.handleRecord(context.Background(), &kgo.Record{Value: data})
-
-	// Should not create duplicate assignment
-	if len(store.inserted) != 0 {
-		t.Errorf("inserted %d, want 0 (user already assigned)", len(store.inserted))
-	}
-	t.Log("✅ Already-assigned user correctly skipped")
-}
-
 func TestHandleRecord_ShortNodeIDs_Ignored(t *testing.T) {
 	store := newMockReconcStore()
 	consumer := &ReconciliationConsumer{store: store}
@@ -266,29 +160,20 @@ func TestHandleRecord_InvalidJSON_NoError(t *testing.T) {
 	t.Log("✅ Invalid JSON gracefully handled")
 }
 
-func TestHandleRecord_DepartmentPattern(t *testing.T) {
+// Adding a member to a role or department creates no copy of pending requests:
+// the group row already covers them, and membership is read when they act.
+func TestHandleRecord_UserAddedToUA_CreatesNothing(t *testing.T) {
 	store := newMockReconcStore()
 	consumer := &ReconciliationConsumer{store: store}
-
-	// Assignment granted by department pattern
-	store.pendingBySource["department:KeToan_Dept_UA"] = []*domain.AssignmentRecord{
-		{ID: "d1", RequestID: "req-dept", StepOrder: 1, UserNodeID: "dept_user", GrantSource: "department:KeToan_Dept_UA"},
+	for _, pattern := range []string{"role:Managers_UA", "department:Managers_UA"} {
+		store.pendingBySource[pattern] = []*domain.AssignmentRecord{
+			{ID: "g", RequestID: "req-1", StepOrder: 1, UserNodeID: "Managers_UA", GrantSource: pattern},
+		}
 	}
-
-	evt := GraphMutatedEvent{
-		MutationType: "create_assignment",
-		NodeIDs:      []string{"new_dept_user", "KeToan_Dept_UA"},
-		ChildType:    "U",
-		ParentType:   "UA",
-	}
+	evt := GraphMutatedEvent{MutationType: "create_assignment", NodeIDs: []string{"new_user", "Managers_UA"}, ChildType: "U", ParentType: "UA"}
 	data, _ := json.Marshal(evt)
 	consumer.handleRecord(context.Background(), &kgo.Record{Value: data})
-
-	if len(store.inserted) != 1 {
-		t.Fatalf("inserted %d, want 1 for department pattern", len(store.inserted))
+	if len(store.inserted) != 0 || len(store.auditEntries) != 0 {
+		t.Errorf("inserted %d rows, %d audit entries; want none", len(store.inserted), len(store.auditEntries))
 	}
-	if store.inserted[0].GrantSource != "department:KeToan_Dept_UA" {
-		t.Errorf("grant_source = %q, want department:KeToan_Dept_UA", store.inserted[0].GrantSource)
-	}
-	t.Log("✅ Department pattern reconciliation works")
 }

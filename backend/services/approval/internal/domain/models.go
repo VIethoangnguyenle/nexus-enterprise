@@ -26,6 +26,7 @@ type Template struct {
 	StepCount      int          `json:"step_count"`      // populated by ListTemplates (avoids N+1)
 	ConditionCount int          `json:"condition_count"` // populated by ListTemplates (avoids N+1)
 	CreatedBy      string       `json:"created_by"`
+	CreatedByName  string       `json:"created_by_name,omitempty"` // display name; filled in by the REST layer
 	CreatedAt      time.Time    `json:"created_at"`
 	UpdatedAt      time.Time    `json:"updated_at"`
 }
@@ -45,6 +46,9 @@ type Step struct {
 	Name          string `json:"name"`
 	ApproverType  string `json:"approver_type"`  // "specific_user", "role_in_dept", "department", "creator_manager"
 	ApproverValue string `json:"approver_value"` // UA name, user_node_id, or "{creator_dept}" placeholder
+	// ApproverName is who ApproverValue stands for, as a person would say it.
+	// It is filled in on the way out by the REST layer and never stored.
+	ApproverName  string `json:"approver_name,omitempty"`
 	RequiredCount int    `json:"required_count"`
 	TimeoutHours  int    `json:"timeout_hours"`
 }
@@ -65,6 +69,10 @@ type Request struct {
 	CreatedBy        string     `json:"created_by"`
 	CreatedAt        time.Time  `json:"created_at"`
 	CompletedAt      *time.Time `json:"completed_at"`
+	// Display names for the ids above, filled in on the way out by the REST
+	// layer so the client never has to show an id. Never stored.
+	CreatedByName  string `json:"created_by_name,omitempty"`
+	DepartmentName string `json:"department_name,omitempty"`
 }
 
 // AssignmentRecord represents a denormalized user→request approval assignment.
@@ -77,6 +85,9 @@ type AssignmentRecord struct {
 	Status      string     `json:"status"`       // "pending", "approved", "rejected", "skipped", "revoked"
 	ActedAt     *time.Time `json:"acted_at"`
 	Comment     string     `json:"comment"`
+	// UserName is who (or which role or department) UserNodeID is; filled in
+	// by the REST layer, never stored.
+	UserName string `json:"user_name,omitempty"`
 }
 
 // RequestWithAssignment pairs a request with the user's specific assignment.
@@ -96,4 +107,21 @@ type AuditEntry struct {
 	DetailJSON  string    `json:"detail_json"`
 	IPAddress   string    `json:"ip_address"`
 	CreatedAt   time.Time `json:"created_at"`
+	// ActorName is the display name of ActorNodeID; filled in by the REST
+	// layer, never stored. Empty for system entries (step advanced, completed).
+	ActorName string `json:"actor_name,omitempty"`
+}
+
+// RequestDetail is one request opened for reading: the request itself, the
+// chain of steps it runs through and every approver's assignment, not only the
+// caller's. Steps and form fields come from the template as it was when the
+// request was made, so a later edit of the template does not rewrite history.
+type RequestDetail struct {
+	Request     *Request            `json:"request"`
+	Steps       []*Step             `json:"steps"`
+	FormFields  []*FormField        `json:"form_fields"`
+	Assignments []*AssignmentRecord `json:"assignments"`
+	// CanAct: it is the caller's turn, directly or through a role or department
+	// they belong to right now, and they have not yet acted on this step.
+	CanAct bool `json:"can_act"`
 }

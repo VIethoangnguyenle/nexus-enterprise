@@ -8,8 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"ngac-platform/pkg/httputil"
@@ -106,7 +108,9 @@ func (s *Store) InsertTemplate(ctx context.Context, t *domain.Template) error {
 	return tx.Commit(ctx)
 }
 
-// GetTemplate retrieves a template by ID with its conditions and steps.
+// GetTemplate retrieves a template by ID with its conditions and steps. The
+// four reads share one REPEATABLE READ snapshot, so a template being edited
+// at the same moment is read whole, never with the old steps and the new name.
 func (s *Store) GetTemplate(ctx context.Context, id string) (*domain.Template, error) {
 	c, err := s.conn(ctx)
 	if err != nil {
@@ -114,12 +118,21 @@ func (s *Store) GetTemplate(ctx context.Context, id string) (*domain.Template, e
 	}
 	defer c.Release()
 
+	tx, err := c.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
+	if err != nil {
+		return nil, fmt.Errorf("begin read tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
 	t := &domain.Template{}
 	var formFieldsJSON *string
-	err = c.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT id, name, entity_type, is_active, priority, form_fields, created_by, created_at, updated_at
 		FROM approval_templates WHERE id = $1`, id,
 	).Scan(&t.ID, &t.Name, &t.EntityType, &t.IsActive, &t.Priority, &formFieldsJSON, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get template: %w", err)
 	}
@@ -129,23 +142,12 @@ func (s *Store) GetTemplate(ctx context.Context, id string) (*domain.Template, e
 		}
 	}
 
-	rows, err := c.Query(ctx, `
-		SELECT id, field, operator, value FROM approval_conditions WHERE template_id = $1`, id)
-	if err != nil {
-		return nil, fmt.Errorf("list conditions: %w", err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		cond := &domain.Condition{}
-		if err := rows.Scan(&cond.ID, &cond.Field, &cond.Operator, &cond.Value); err != nil {
-			return nil, fmt.Errorf("scan condition: %w", err)
-		}
-		t.Conditions = append(t.Conditions, cond)
+	if err := loadConditions(ctx, tx, []string{id}, func(_ string, cond *domain.Condition) { t.Conditions = append(t.Conditions, cond) }); err != nil {
+		return nil, err
 	}
 
-	stepRows, err := c.Query(ctx, `
-		SELECT id, step_order, name, approver_type, approver_value, required_count, timeout_hours
+	stepRows, err := tx.Query(ctx, `
+		SELECT id, step_order, name, approver_type, COALESCE(approver_value, ''), COALESCE(required_count, 1), COALESCE(timeout_hours, 0)
 		FROM approval_steps WHERE template_id = $1 ORDER BY step_order`, id)
 	if err != nil {
 		return nil, fmt.Errorf("list steps: %w", err)
@@ -159,8 +161,33 @@ func (s *Store) GetTemplate(ctx context.Context, id string) (*domain.Template, e
 		}
 		t.Steps = append(t.Steps, step)
 	}
-
+	if err := stepRows.Err(); err != nil {
+		return nil, err
+	}
 	return t, nil
+}
+
+// loadConditions reads the conditions of the given templates and hands each to
+// add with its template id.
+func loadConditions(ctx context.Context, q interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+}, templateIDs []string, add func(templateID string, c *domain.Condition)) error {
+	rows, err := q.Query(ctx, `
+		SELECT template_id::text, id::text, field, operator, value::text
+		FROM approval_conditions WHERE template_id::text = ANY($1) ORDER BY id`, templateIDs)
+	if err != nil {
+		return fmt.Errorf("list conditions: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var tid string
+		cond := &domain.Condition{}
+		if err := rows.Scan(&tid, &cond.ID, &cond.Field, &cond.Operator, &cond.Value); err != nil {
+			return fmt.Errorf("scan condition: %w", err)
+		}
+		add(tid, cond)
+	}
+	return rows.Err()
 }
 
 // ListTemplates retrieves templates filtered by entity type and active status.
@@ -210,14 +237,36 @@ func (s *Store) ListTemplates(ctx context.Context, entityType string, activeOnly
 		t.ConditionCount = condCount
 		templates = append(templates, t)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+
+	// Conditions come with the list: choosing a template for a form means
+	// judging them, and a list without them would let every template match.
+	byID := make(map[string]*domain.Template, len(templates))
+	ids := make([]string, 0, len(templates))
+	for _, t := range templates {
+		byID[t.ID] = t
+		ids = append(ids, t.ID)
+	}
+	if err := loadConditions(ctx, c, ids, func(tid string, cond *domain.Condition) {
+		byID[tid].Conditions = append(byID[tid].Conditions, cond)
+	}); err != nil {
+		return nil, err
+	}
 	return templates, nil
 }
 
-// UpdateTemplate updates a template's metadata (name, active, priority).
-func (s *Store) UpdateTemplate(ctx context.Context, t *domain.Template) error {
+// UpdateTemplate saves a template's metadata, form fields, steps and
+// conditions as one change. Steps and conditions are replaced wholesale by the
+// template as given (the domain loads them first, so an edit that does not
+// touch them hands the same ones back); requests already made keep their own
+// frozen snapshot and are unaffected.
+func (s *Store) UpdateTemplate(ctx context.Context, t *domain.Template, expected time.Time) (time.Time, error) {
 	c, err := s.conn(ctx)
 	if err != nil {
-		return err
+		return time.Time{}, err
 	}
 	defer c.Release()
 
@@ -225,20 +274,65 @@ func (s *Store) UpdateTemplate(ctx context.Context, t *domain.Template) error {
 	if len(t.FormFields) > 0 {
 		b, err := json.Marshal(t.FormFields)
 		if err != nil {
-			return fmt.Errorf("marshal form fields: %w", err)
+			return time.Time{}, fmt.Errorf("marshal form fields: %w", err)
 		}
 		formFieldsJSON = string(b)
 	}
 
-	_, err = c.Exec(ctx, `
-		UPDATE approval_templates SET name = $2, is_active = $3, priority = $4, form_fields = $5, updated_at = NOW()
-		WHERE id = $1`,
-		t.ID, t.Name, t.IsActive, t.Priority, formFieldsJSON,
-	)
+	tx, err := c.Begin(ctx)
 	if err != nil {
-		return fmt.Errorf("update template: %w", err)
+		return time.Time{}, fmt.Errorf("begin tx: %w", err)
 	}
-	return nil
+	defer tx.Rollback(ctx)
+
+	// The precondition and the write are one statement: of two edits made from
+	// the same read, the second finds updated_at moved and is refused.
+	var updatedAt time.Time
+	err = tx.QueryRow(ctx, `
+		UPDATE approval_templates SET name = $2, is_active = $3, priority = $4, form_fields = $5, updated_at = NOW()
+		WHERE id = $1 AND updated_at = $6
+		RETURNING updated_at`,
+		t.ID, t.Name, t.IsActive, t.Priority, formFieldsJSON, expected,
+	).Scan(&updatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		var exists bool
+		if qerr := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM approval_templates WHERE id = $1)`, t.ID).Scan(&exists); qerr == nil && !exists {
+			return time.Time{}, domain.ErrNotFound
+		}
+		return time.Time{}, domain.ErrStale
+	}
+	if err != nil {
+		return time.Time{}, fmt.Errorf("update template: %w", err)
+	}
+
+	if _, err := tx.Exec(ctx, `DELETE FROM approval_steps WHERE template_id = $1`, t.ID); err != nil {
+		return time.Time{}, fmt.Errorf("clear steps: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM approval_conditions WHERE template_id = $1`, t.ID); err != nil {
+		return time.Time{}, fmt.Errorf("clear conditions: %w", err)
+	}
+	for _, cond := range t.Conditions {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO approval_conditions (id, template_id, field, operator, value)
+			VALUES ($1, $2, $3, $4, $5)`,
+			cond.ID, t.ID, cond.Field, cond.Operator, cond.Value,
+		); err != nil {
+			return time.Time{}, fmt.Errorf("insert condition: %w", err)
+		}
+	}
+	for _, step := range t.Steps {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO approval_steps (id, template_id, step_order, name, approver_type, approver_value, required_count, timeout_hours)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+			step.ID, t.ID, step.StepOrder, step.Name, step.ApproverType, step.ApproverValue, step.RequiredCount, step.TimeoutHours,
+		); err != nil {
+			return time.Time{}, fmt.Errorf("insert step: %w", err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return time.Time{}, fmt.Errorf("commit: %w", err)
+	}
+	return updatedAt, nil
 }
 
 // InsertRequest persists a new approval request.
@@ -263,6 +357,44 @@ func (s *Store) InsertRequest(ctx context.Context, r *domain.Request) error {
 		return fmt.Errorf("insert request: %w", err)
 	}
 	return nil
+}
+
+// InsertRequestWithAssignments stores a request and its first assignments in
+// one transaction: a request never exists with nobody to decide it.
+func (s *Store) InsertRequestWithAssignments(ctx context.Context, r *domain.Request, assignments []*domain.AssignmentRecord) error {
+	c, err := s.conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+
+	tx, err := c.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var formData interface{}
+	if r.FormDataJSON != "" {
+		formData = r.FormDataJSON
+	}
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO approval_requests (id, entity_type, entity_id, template_id, template_name, template_snapshot, form_data_json, current_step, status, scope_oa_id, department_id, created_by, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+		r.ID, r.EntityType, r.EntityID, r.TemplateID, r.TemplateName, r.TemplateSnapshot, formData, r.CurrentStep, r.Status, r.ScopeOAID, r.DepartmentID, r.CreatedBy, r.CreatedAt,
+	); err != nil {
+		return fmt.Errorf("insert request: %w", err)
+	}
+	for _, a := range assignments {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO approval_assignments (id, request_id, step_order, user_node_id, grant_source, status)
+			VALUES ($1, $2, $3, $4, $5, $6)`,
+			a.ID, a.RequestID, a.StepOrder, a.UserNodeID, a.GrantSource, a.Status,
+		); err != nil {
+			return fmt.Errorf("insert assignment: %w", err)
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 // GetRequest retrieves an approval request by ID.
@@ -329,6 +461,9 @@ func (s *Store) GetAssignment(ctx context.Context, requestID, userNodeID string)
 		FROM approval_assignments
 		WHERE request_id = $1 AND user_node_id = $2 AND status = 'pending'`, requestID, userNodeID,
 	).Scan(&a.ID, &a.RequestID, &a.StepOrder, &a.UserNodeID, &a.GrantSource, &a.Status, &a.ActedAt, &comment)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrNotFound
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get assignment: %w", err)
 	}
@@ -338,9 +473,9 @@ func (s *Store) GetAssignment(ctx context.Context, requestID, userNodeID string)
 	return a, nil
 }
 
-// HasAssignment reports whether the user has an assignment of any status on any
-// step of the request.
-func (s *Store) HasAssignment(ctx context.Context, requestID, userNodeID string) (bool, error) {
+// HasAssignment reports whether any of the nodes has an assignment of any
+// status on any step of the request.
+func (s *Store) HasAssignment(ctx context.Context, requestID string, nodeIDs []string) (bool, error) {
 	c, err := s.conn(ctx)
 	if err != nil {
 		return false, err
@@ -349,12 +484,94 @@ func (s *Store) HasAssignment(ctx context.Context, requestID, userNodeID string)
 
 	var found bool
 	err = c.QueryRow(ctx, `
-		SELECT EXISTS (SELECT 1 FROM approval_assignments WHERE request_id = $1 AND user_node_id = $2)`,
-		requestID, userNodeID).Scan(&found)
+		SELECT EXISTS (SELECT 1 FROM approval_assignments WHERE request_id = $1 AND user_node_id = ANY($2))`,
+		requestID, nodeIDs).Scan(&found)
 	if err != nil {
 		return false, fmt.Errorf("has assignment: %w", err)
 	}
 	return found, nil
+}
+
+// FindGroupAssignment returns the pending role or department row of a step
+// whose group is among groupNodeIDs. A group row is the one whose grant source
+// names its own user_node_id (role:<ua> / department:<ua>), which a person's
+// row never does.
+func (s *Store) FindGroupAssignment(ctx context.Context, requestID string, stepOrder int, groupNodeIDs []string) (*domain.AssignmentRecord, error) {
+	c, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Release()
+
+	a := &domain.AssignmentRecord{}
+	err = c.QueryRow(ctx, `
+		SELECT id, request_id, step_order, user_node_id, grant_source, status
+		FROM approval_assignments
+		WHERE request_id = $1 AND step_order = $2 AND status = 'pending'
+		  AND user_node_id = ANY($3)
+		  AND grant_source IN ('role:' || user_node_id, 'department:' || user_node_id)
+		ORDER BY id LIMIT 1`, requestID, stepOrder, groupNodeIDs,
+	).Scan(&a.ID, &a.RequestID, &a.StepOrder, &a.UserNodeID, &a.GrantSource, &a.Status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, domain.ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("find group assignment: %w", err)
+	}
+	return a, nil
+}
+
+// InsertActedAssignment records a person's own decision on a step assigned to
+// a group. The unique (request, step, person) index makes a second decision by
+// the same person ErrAlreadyExists.
+func (s *Store) InsertActedAssignment(ctx context.Context, a *domain.AssignmentRecord) error {
+	c, err := s.conn(ctx)
+	if err != nil {
+		return err
+	}
+	defer c.Release()
+
+	_, err = c.Exec(ctx, `
+		INSERT INTO approval_assignments (id, request_id, step_order, user_node_id, grant_source, status, acted_at, comment)
+		VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, NOW()), $8)`,
+		a.ID, a.RequestID, a.StepOrder, a.UserNodeID, a.GrantSource, a.Status, a.ActedAt, a.Comment)
+	var pg *pgconn.PgError
+	if errors.As(err, &pg) && pg.Code == "23505" {
+		return domain.ErrAlreadyExists
+	}
+	if err != nil {
+		return fmt.Errorf("insert acted assignment: %w", err)
+	}
+	return nil
+}
+
+// ListAssignments returns every assignment of a request, step by step.
+func (s *Store) ListAssignments(ctx context.Context, requestID string) ([]*domain.AssignmentRecord, error) {
+	c, err := s.conn(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer c.Release()
+
+	rows, err := c.Query(ctx, `
+		SELECT id, request_id, step_order, user_node_id, grant_source, status, acted_at, COALESCE(comment, '')
+		FROM approval_assignments
+		WHERE request_id = $1
+		ORDER BY step_order, acted_at NULLS LAST, id`, requestID)
+	if err != nil {
+		return nil, fmt.Errorf("list assignments: %w", err)
+	}
+	defer rows.Close()
+
+	var out []*domain.AssignmentRecord
+	for rows.Next() {
+		a := &domain.AssignmentRecord{}
+		if err := rows.Scan(&a.ID, &a.RequestID, &a.StepOrder, &a.UserNodeID, &a.GrantSource, &a.Status, &a.ActedAt, &a.Comment); err != nil {
+			return nil, fmt.Errorf("scan assignment: %w", err)
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
 }
 
 // UpdateAssignmentStatus updates an assignment's status and sets acted_at.
@@ -511,8 +728,11 @@ func (s *Store) CompleteRequest(ctx context.Context, requestID, status string) (
 	return tag.RowsAffected() == 1, nil
 }
 
-// ListPending returns all pending assignments for a user's current steps.
-func (s *Store) ListPending(ctx context.Context, userNodeID string) ([]*domain.RequestWithAssignment, error) {
+// ListPending returns the user's pending assignments on their requests' current
+// steps: rows of their own, and the group rows of the roles and departments in
+// groupNodeIDs. A step the user has already acted on drops out even though its
+// group row stays pending for the other members.
+func (s *Store) ListPending(ctx context.Context, userNodeID string, groupNodeIDs []string) ([]*domain.RequestWithAssignment, error) {
 	c, err := s.conn(ctx)
 	if err != nil {
 		return nil, err
@@ -525,10 +745,17 @@ func (s *Store) ListPending(ctx context.Context, userNodeID string) ([]*domain.R
 		       aa.id, aa.step_order, aa.user_node_id, aa.grant_source, aa.status
 		FROM approval_assignments aa
 		JOIN approval_requests ar ON aa.request_id = ar.id
-		WHERE aa.user_node_id = $1
-		  AND aa.status = 'pending'
+		WHERE aa.status = 'pending'
+		  AND ar.status = 'pending'
 		  AND ar.current_step = aa.step_order
-		ORDER BY ar.created_at ASC`, userNodeID,
+		  AND (aa.user_node_id = $1
+		       OR (aa.user_node_id = ANY($2)
+		           AND aa.grant_source IN ('role:' || aa.user_node_id, 'department:' || aa.user_node_id)))
+		  AND NOT EXISTS (
+		        SELECT 1 FROM approval_assignments mine
+		        WHERE mine.request_id = aa.request_id AND mine.step_order = aa.step_order
+		          AND mine.user_node_id = $1 AND mine.id <> aa.id)
+		ORDER BY ar.created_at ASC`, userNodeID, groupNodeIDs,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list pending: %w", err)
@@ -603,8 +830,8 @@ func (s *Store) ListMyRequests(ctx context.Context, userNodeID, cursor string, l
 	}
 	defer c.Release()
 
-	query := `SELECT id, entity_type, entity_id, template_id, template_name, template_snapshot, current_step, status,
-		scope_oa_id, department_id, created_by, created_at, completed_at
+	query := `SELECT id, entity_type, entity_id, template_id, template_name, template_snapshot, COALESCE(form_data_json::text, ''),
+		current_step, status, scope_oa_id, department_id, created_by, created_at, completed_at
 		FROM approval_requests WHERE created_by = $1`
 	args := []any{userNodeID}
 	argIdx := 2
@@ -638,8 +865,8 @@ func (s *Store) ListByScopes(ctx context.Context, scopeOAIDs []string, cursor st
 	}
 	defer c.Release()
 
-	query := `SELECT id, entity_type, entity_id, template_id, template_name, template_snapshot, current_step, status,
-		scope_oa_id, department_id, created_by, created_at, completed_at
+	query := `SELECT id, entity_type, entity_id, template_id, template_name, template_snapshot, COALESCE(form_data_json::text, ''),
+		current_step, status, scope_oa_id, department_id, created_by, created_at, completed_at
 		FROM approval_requests WHERE scope_oa_id = ANY($1)`
 	args := []any{scopeOAIDs}
 	argIdx := 2
@@ -826,7 +1053,7 @@ func scanRequests(rows interface {
 	var results []*domain.Request
 	for rows.Next() {
 		r := &domain.Request{}
-		if err := rows.Scan(&r.ID, &r.EntityType, &r.EntityID, &r.TemplateID, &r.TemplateName, &r.TemplateSnapshot,
+		if err := rows.Scan(&r.ID, &r.EntityType, &r.EntityID, &r.TemplateID, &r.TemplateName, &r.TemplateSnapshot, &r.FormDataJSON,
 			&r.CurrentStep, &r.Status, &r.ScopeOAID, &r.DepartmentID, &r.CreatedBy, &r.CreatedAt, &r.CompletedAt,
 		); err != nil {
 			return nil, "", fmt.Errorf("scan request: %w", err)

@@ -150,4 +150,14 @@ describe('websocket events invalidate the keys the screens actually cache under'
     const data = queryClient.getQueryData<{ tasks: { status: string }[] }>(keys.messaging.tasks('ch-1'))
     expect(data?.tasks[0]?.status).toBe('done')
   })
+
+  it('remembers who acted on an approval request, and forgets it when the session ends', () => {
+    deliver({
+      oneofKind: 'approvalEvent',
+      approvalEvent: { requestId: 'r-1', status: 'approved', action: 'approved', actorNodeId: 'n-duc', templateName: 'Tạm ứng' },
+    } as ServerEnvelopeInit)
+    expect(useWebSocketStore.getState().approvalActivity['r-1']).toMatchObject({ actorNodeId: 'n-duc', action: 'approved' })
+    useWebSocketStore.getState().disconnect()
+    expect(useWebSocketStore.getState().approvalActivity).toEqual({})
+  })
 })

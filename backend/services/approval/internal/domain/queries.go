@@ -2,10 +2,14 @@ package domain
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 
 	"github.com/google/uuid"
+
+	"ngac-platform/ngac"
 )
 
 const defaultPageLimit = 20
@@ -15,7 +19,15 @@ func (s *Service) GetPending(ctx context.Context, userNodeID string) ([]*Request
 	if userNodeID == "" {
 		return nil, ErrInvalidInput
 	}
-	items, err := s.store.ListPending(ctx, userNodeID)
+	// The roles and departments the user belongs to, so requests waiting on them
+	// show up too. If membership cannot be read, what waits on the person
+	// directly still shows: a shorter list, never a wider one.
+	groups, err := s.policy.GetAncestors(ctx, userNodeID)
+	if err != nil {
+		slog.Warn("approval pending: cannot read memberships, listing direct assignments only", "error", err)
+		groups = nil
+	}
+	items, err := s.store.ListPending(ctx, userNodeID, groups)
 	if err != nil {
 		return nil, fmt.Errorf("list pending: %w", err)
 	}
@@ -63,7 +75,7 @@ func (s *Service) GetDepartmentRequests(ctx context.Context, userNodeID, cursor 
 	}
 
 	// Resolve scopes via NGAC
-	scopes, err := s.policy.ResolveAccessibleScopes(ctx, userNodeID, "read")
+	scopes, err := s.policy.ResolveAccessibleScopes(ctx, userNodeID, ngac.OpRead)
 	if err != nil {
 		return nil, "", fmt.Errorf("resolve scopes: %w", err)
 	}
@@ -115,6 +127,96 @@ func (s *Service) GetAuditLog(ctx context.Context, userNodeID, requestID string)
 	return entries, nil
 }
 
+// GetRequestDetail opens one request for a caller who can see it by any of the
+// three paths GetAuditLog accepts. Anyone else, and a request that does not
+// exist, get ErrAccessDenied, so the answer does not reveal which ids are real.
+func (s *Service) GetRequestDetail(ctx context.Context, userNodeID, requestID string) (*RequestDetail, error) {
+	if _, err := uuid.Parse(requestID); err != nil {
+		return nil, ErrInvalidInput
+	}
+	if userNodeID == "" {
+		return nil, ErrAccessDenied
+	}
+	req, err := s.store.GetRequest(ctx, requestID)
+	if errors.Is(err, ErrNotFound) {
+		return nil, ErrAccessDenied
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get request: %w", err)
+	}
+	visible, err := s.canSeeRequest(ctx, userNodeID, req)
+	if err != nil {
+		return nil, err
+	}
+	if !visible {
+		return nil, ErrAccessDenied
+	}
+	assignments, err := s.store.ListAssignments(ctx, requestID)
+	if err != nil {
+		return nil, fmt.Errorf("list assignments: %w", err)
+	}
+
+	d := &RequestDetail{Request: req, Assignments: assignments}
+	d.CanAct, err = s.canAct(ctx, req, assignments, userNodeID)
+	if err != nil {
+		return nil, err
+	}
+	if req.TemplateSnapshot != "" {
+		var snap Template
+		if err := json.Unmarshal([]byte(req.TemplateSnapshot), &snap); err != nil {
+			// The chain can still be read from the assignments; losing the
+			// frozen steps must not lock an approver out of acting.
+			slog.Warn("approval request has an unreadable template snapshot", "request_id", requestID, "error", err)
+		} else {
+			d.Steps, d.FormFields = snap.Steps, snap.FormFields
+		}
+	}
+	// The snapshot is already unpacked into Steps and FormFields.
+	shown := *req
+	shown.TemplateSnapshot = ""
+	d.Request = &shown
+	return d, nil
+}
+
+// canAct reports whether it is the caller's turn on the request: it is pending,
+// and on its current step the caller holds a pending row of their own, or
+// belongs to a role or department that does and has not yet acted themselves.
+func (s *Service) canAct(ctx context.Context, req *Request, rows []*AssignmentRecord, userNodeID string) (bool, error) {
+	if req.Status != "pending" {
+		return false, nil
+	}
+	acted := false
+	var groups []*AssignmentRecord
+	for _, a := range rows {
+		if a.StepOrder != req.CurrentStep {
+			continue
+		}
+		if a.UserNodeID == userNodeID {
+			if a.Status == "pending" {
+				return true, nil
+			}
+			acted = true
+		} else if a.Status == "pending" && isGroupRow(a) {
+			groups = append(groups, a)
+		}
+	}
+	if acted || len(groups) == 0 {
+		return false, nil
+	}
+	ancestors, err := s.policy.GetAncestors(ctx, userNodeID)
+	if err != nil {
+		return false, fmt.Errorf("ngac ancestors: %w", err)
+	}
+	for _, g := range groups {
+		for _, a := range ancestors {
+			if a == g.UserNodeID {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
 // canSeeRequest applies the same three paths the list endpoints expose:
 // my-requests (created_by), pending/history (an assignment) and
 // department-requests (scope_oa_id within the caller's readable scopes). A
@@ -123,17 +225,31 @@ func (s *Service) canSeeRequest(ctx context.Context, userNodeID string, req *Req
 	if req.CreatedBy == userNodeID {
 		return true, nil
 	}
-	assigned, err := s.store.HasAssignment(ctx, req.ID, userNodeID)
+	assigned, err := s.store.HasAssignment(ctx, req.ID, []string{userNodeID})
 	if err != nil {
 		return false, fmt.Errorf("check assignment: %w", err)
 	}
 	if assigned {
 		return true, nil
 	}
+	// Assigned through a role or department the caller belongs to.
+	ancestors, err := s.policy.GetAncestors(ctx, userNodeID)
+	if err != nil {
+		return false, fmt.Errorf("ngac ancestors: %w", err)
+	}
+	if len(ancestors) > 0 {
+		viaGroup, err := s.store.HasAssignment(ctx, req.ID, ancestors)
+		if err != nil {
+			return false, fmt.Errorf("check group assignment: %w", err)
+		}
+		if viaGroup {
+			return true, nil
+		}
+	}
 	if req.ScopeOAID == "" {
 		return false, nil
 	}
-	scopes, err := s.policy.ResolveAccessibleScopes(ctx, userNodeID, "read")
+	scopes, err := s.policy.ResolveAccessibleScopes(ctx, userNodeID, ngac.OpRead)
 	if err != nil {
 		return false, fmt.Errorf("resolve scopes: %w", err)
 	}

@@ -1,33 +1,44 @@
-import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
-import { approvalApi, type RequestWithAssignment } from '../api/approval'
+import { useInfiniteQuery, useMutation, useQuery, queryOptions, type InfiniteData } from '@tanstack/react-query'
+import {
+  approvalApi,
+  type ApprovalAssignment,
+  type ApprovalRequest,
+  type CreateRequestInput,
+  type CreateTemplateInput,
+  type RequestWithAssignment,
+  type UpdateTemplateInput,
+} from '../api/approval'
+import { apiFetch } from '../api/client'
 import { queryClient } from '../lib/query-client'
-import type { CreateTemplateInput, UpdateTemplateInput, CreateRequestInput } from '../api/approval'
+import { statusOf } from '../lib/errors'
 import { keys } from './keys'
 
-// --- Query Options ---
+/**
+ * A line of any request list. Pending and history rows come with the viewer's
+ * own assignment; "my requests" and department rows do not have one.
+ */
+export interface ApprovalRow {
+  request: ApprovalRequest
+  assignment?: ApprovalAssignment
+}
+
+// --- Query options ---
 
 export const approvalPendingOptions = () =>
   queryOptions({
     queryKey: keys.approval.pending(),
     queryFn: () => approvalApi.getPending(),
+    select: (d): { rows: ApprovalRow[]; total: number } => ({
+      rows: (d.items ?? []).map((r) => ({ request: r.request, assignment: r.assignment })),
+      total: d.total ?? 0,
+    }),
   })
 
-export const approvalHistoryOptions = (cursor?: string) =>
+export const approvalRequestOptions = (requestId: string) =>
   queryOptions({
-    queryKey: keys.approval.history(cursor),
-    queryFn: () => approvalApi.getHistory(cursor),
-  })
-
-export const approvalMyRequestsOptions = (cursor?: string) =>
-  queryOptions({
-    queryKey: keys.approval.myRequests(cursor),
-    queryFn: () => approvalApi.getMyRequests(cursor),
-  })
-
-export const approvalDeptOptions = (cursor?: string) =>
-  queryOptions({
-    queryKey: keys.approval.department(cursor),
-    queryFn: () => approvalApi.getDepartmentRequests(cursor),
+    queryKey: keys.approval.request(requestId),
+    queryFn: () => approvalApi.getRequest(requestId),
+    enabled: !!requestId,
   })
 
 export const approvalAuditOptions = (requestId: string) =>
@@ -35,6 +46,8 @@ export const approvalAuditOptions = (requestId: string) =>
     queryKey: keys.approval.audit(requestId),
     queryFn: () => approvalApi.getAuditLog(requestId),
     enabled: !!requestId,
+    // 403 is an answer ("not yours to read"), not a hiccup: asking again won't change it.
+    retry: (count, err) => statusOf(err) !== 403 && count < 1,
   })
 
 export const approvalTemplatesOptions = (entityType?: string, activeOnly = true) =>
@@ -50,152 +63,199 @@ export const approvalTemplateOptions = (id: string) =>
     enabled: !!id,
   })
 
-// --- Query Hooks ---
+// --- Query hooks ---
 
-/** Loads all pending approvals assigned to current user. */
+/** Everything waiting on the signed-in user, with the count for the tab. */
 export function useApprovalPending() {
   return useQuery(approvalPendingOptions())
 }
 
-/** Loads approval history with cursor-based pagination. */
-export function useApprovalHistory(cursor?: string) {
-  return useQuery(approvalHistoryOptions(cursor))
+type Page<T> = { items?: T[]; next_cursor?: string }
+
+/** The same list read page by page: every loaded page is kept, newest request first. */
+function usePagedRows<T>(
+  queryKey: readonly unknown[],
+  fetchPage: (cursor?: string) => Promise<Page<T>>,
+  toRow: (item: T) => ApprovalRow,
+  enabled: boolean,
+) {
+  const q = useInfiniteQuery({
+    queryKey,
+    queryFn: ({ pageParam }) => fetchPage(pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next_cursor || undefined,
+    enabled,
+    select: (d: InfiniteData<Page<T>>) => d.pages.flatMap((p) => (p.items ?? []).map(toRow)),
+  })
+  return q
 }
 
-/** Loads requests created by current user. */
-export function useApprovalMyRequests(cursor?: string) {
-  return useQuery(approvalMyRequestsOptions(cursor))
+const wrapped = (r: RequestWithAssignment): ApprovalRow => ({ request: r.request, assignment: r.assignment })
+const flat = (r: ApprovalRequest): ApprovalRow => ({ request: r })
+
+/** Requests the user has acted on. Off until the tab is opened. */
+export function useApprovalHistory(enabled = true) {
+  return usePagedRows(keys.approval.history(), (c) => approvalApi.getHistory(c), wrapped, enabled)
 }
 
-/** Loads department-scoped requests. */
-export function useApprovalDepartment(cursor?: string) {
-  return useQuery(approvalDeptOptions(cursor))
+/** Requests the user submitted. */
+export function useApprovalMyRequests(enabled = true) {
+  return usePagedRows(keys.approval.myRequests(), (c) => approvalApi.getMyRequests(c), flat, enabled)
 }
 
-/** Loads audit log for a specific request. */
+/** Requests inside the scopes the user can read. */
+export function useApprovalDepartment(enabled = true) {
+  return usePagedRows(keys.approval.department(), (c) => approvalApi.getDepartmentRequests(c), flat, enabled)
+}
+
+/** One request with its chain; the caller must be allowed to see it (403 otherwise). */
+export function useApprovalRequest(requestId: string) {
+  return useQuery(approvalRequestOptions(requestId))
+}
+
+/** The audit trail of a request. 403 when the caller cannot read this request's trail. */
 export function useApprovalAudit(requestId: string) {
   return useQuery(approvalAuditOptions(requestId))
 }
 
-/** Loads all approval templates (optionally filtered by entity type). */
-export function useApprovalTemplates(entityType?: string, activeOnly = true) {
-  return useQuery(approvalTemplatesOptions(entityType, activeOnly))
+/** What the user may do here. Unknown until it loads; callers treat unknown as no. */
+export function useApprovalPermissions() {
+  return useQuery({
+    queryKey: keys.approval.permissions(),
+    queryFn: () => approvalApi.getPermissions(),
+    staleTime: 60_000,
+  })
 }
 
-/** Loads a single approval template by ID. */
+/** Templates, optionally of one entity type; `activeOnly = false` includes switched-off ones. */
+export function useApprovalTemplates(entityType?: string, activeOnly = true, enabled = true) {
+  return useQuery({ ...approvalTemplatesOptions(entityType, activeOnly), enabled })
+}
+
 export function useApprovalTemplate(id: string) {
   return useQuery(approvalTemplateOptions(id))
 }
 
-// --- Mutation Hooks ---
+export interface WorkspaceRole {
+  id: string
+  name: string
+  ngac_node_id: string
+}
 
-/** Optimistic helper: removes request(s) from pending list cache. */
-function optimisticRemoveFromPending(requestIds: string[]) {
+/**
+ * The workspace's roles, for choosing who approves a step. Shares its cache
+ * entry (and response shape) with the admin roles page.
+ */
+export function useWorkspaceRoles(workspaceId: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.admin.roles(workspaceId),
+    queryFn: () => apiFetch<{ roles?: WorkspaceRole[] }>(`/workspaces/${workspaceId}/roles`),
+    enabled: !!workspaceId && enabled,
+    select: (d) => d.roles ?? [],
+  })
+}
+
+// --- Mutations ---
+
+type PendingCache = { items: RequestWithAssignment[]; total: number }
+
+/** Takes request(s) out of the pending list at once; returns what to put back on failure. */
+function removeFromPending(requestIds: string[]) {
   const key = keys.approval.pending()
-  const prev = queryClient.getQueryData<{ items: RequestWithAssignment[]; total: number }>(key)
+  const prev = queryClient.getQueryData<PendingCache>(key)
   if (prev) {
-    const idSet = new Set(requestIds)
-    queryClient.setQueryData(key, {
-      ...prev,
-      items: prev.items.filter((r) => !idSet.has(r.request.id)),
-      total: Math.max(0, prev.total - requestIds.length),
-    })
+    const gone = new Set(requestIds)
+    const items = (prev.items ?? []).filter((r) => !gone.has(r.request.id))
+    queryClient.setQueryData<PendingCache>(key, { ...prev, items, total: Math.max(0, (prev.total ?? 0) - ((prev.items ?? []).length - items.length)) })
   }
   return prev
 }
 
-/** Approve a single pending request with optimistic removal. */
+/** What a decision changes: lists, the opened request and its trail. Templates are untouched. */
+function refreshAfterDecision() {
+  for (const queryKey of [
+    keys.approval.pending(),
+    keys.approval.historyAll(),
+    keys.approval.myRequestsAll(),
+    keys.approval.departmentAll(),
+    keys.approval.requestsAll(),
+    keys.approval.auditAll(),
+  ]) {
+    void queryClient.invalidateQueries({ queryKey })
+  }
+}
+
+/** Optimistic removal from the pending list, undone if the server refuses. */
+function decision<V>(idsOf: (vars: V) => string[]) {
+  return {
+    onMutate: async (vars: V) => {
+      await queryClient.cancelQueries({ queryKey: keys.approval.pending() })
+      return { prev: removeFromPending(idsOf(vars)) }
+    },
+    onError: (_e: unknown, _v: V, ctx: { prev?: PendingCache } | undefined) => {
+      if (ctx?.prev) queryClient.setQueryData(keys.approval.pending(), ctx.prev)
+    },
+    onSettled: refreshAfterDecision,
+  }
+}
+
+/** Approve one request. It leaves the pending list at once and comes back if the server refuses. */
 export function useApprove() {
   return useMutation({
+    meta: { action: 'duyệt đề nghị' },
     mutationFn: ({ requestId, comment }: { requestId: string; comment?: string }) =>
       approvalApi.approve(requestId, comment),
-    onMutate: async ({ requestId }) => {
-      await queryClient.cancelQueries({ queryKey: keys.approval.pending() })
-      return { prev: optimisticRemoveFromPending([requestId]) }
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.prev) queryClient.setQueryData(keys.approval.pending(), context.prev)
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.approval.historyAll() })
-    },
+    ...decision<{ requestId: string; comment?: string }>((v) => [v.requestId]),
   })
 }
 
-/** Reject a single pending request with optimistic removal. */
+/** Return one request with the reason. The reason is required by the screen; the server stores it. */
 export function useReject() {
   return useMutation({
+    meta: { action: 'trả lại đề nghị' },
     mutationFn: ({ requestId, comment }: { requestId: string; comment: string }) =>
       approvalApi.reject(requestId, comment),
-    onMutate: async ({ requestId }) => {
-      await queryClient.cancelQueries({ queryKey: keys.approval.pending() })
-      return { prev: optimisticRemoveFromPending([requestId]) }
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.prev) queryClient.setQueryData(keys.approval.pending(), context.prev)
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.approval.historyAll() })
-    },
+    ...decision<{ requestId: string; comment: string }>((v) => [v.requestId]),
   })
 }
 
-/** Batch approve multiple requests with optimistic removal. */
+/** Approve several at once. The server skips any it cannot approve and says which it did. */
 export function useBatchApprove() {
   return useMutation({
+    meta: { action: 'duyệt các đề nghị đã chọn' },
     mutationFn: ({ requestIds, comment }: { requestIds: string[]; comment?: string }) =>
       approvalApi.batchApprove(requestIds, comment),
-    onMutate: async ({ requestIds }) => {
-      await queryClient.cancelQueries({ queryKey: keys.approval.pending() })
-      return { prev: optimisticRemoveFromPending(requestIds) }
-    },
-    onError: (_err, _vars, context) => {
-      if (context?.prev) queryClient.setQueryData(keys.approval.pending(), context.prev)
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: keys.approval.historyAll() })
-    },
+    ...decision<{ requestIds: string[]; comment?: string }>((v) => v.requestIds),
   })
 }
 
-/** Create a new approval template (admin-only, invalidation pattern). */
 export function useCreateTemplate() {
   return useMutation({
-    mutationFn: (input: CreateTemplateInput) =>
-      approvalApi.createTemplate(input),
+    meta: { action: 'lưu mẫu phê duyệt' },
+    mutationFn: (input: CreateTemplateInput) => approvalApi.createTemplate(input),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.approval.templatesAll() }),
   })
 }
 
-/** Update an existing approval template (admin-only, invalidation pattern). */
 export function useUpdateTemplate() {
   return useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateTemplateInput }) =>
-      approvalApi.updateTemplate(id, input),
+    meta: { action: 'lưu mẫu phê duyệt' },
+    mutationFn: ({ id, input }: { id: string; input: UpdateTemplateInput }) => approvalApi.updateTemplate(id, input),
     onSuccess: (_, vars) => {
-      queryClient.invalidateQueries({ queryKey: keys.approval.templatesAll() })
-      queryClient.invalidateQueries({ queryKey: keys.approval.template(vars.id) })
+      void queryClient.invalidateQueries({ queryKey: keys.approval.templatesAll() })
+      void queryClient.invalidateQueries({ queryKey: keys.approval.template(vars.id) })
     },
   })
 }
 
-/** Create a new approval request with optimistic insert into my-requests. */
+/** Send a new request. The dialog reports a failure beside the form, so no second toast. */
 export function useCreateRequest() {
   return useMutation({
-    mutationFn: (input: CreateRequestInput) =>
-      approvalApi.createRequest(input),
-    onSuccess: (newRequest) => {
-      // Insert newly created request into my-requests cache
-      const key = keys.approval.myRequests()
-      const prev = queryClient.getQueryData<{ items: ApprovalRequest[]; next_cursor: string }>(key)
-      if (prev) {
-        queryClient.setQueryData(key, {
-          ...prev,
-          items: [newRequest, ...prev.items],
-        })
-      } else {
-        queryClient.invalidateQueries({ queryKey: keys.approval.myRequestsAll() })
-      }
+    meta: { silentError: true },
+    mutationFn: (input: CreateRequestInput) => approvalApi.createRequest(input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.approval.myRequestsAll() })
+      void queryClient.invalidateQueries({ queryKey: keys.approval.departmentAll() })
     },
   })
 }

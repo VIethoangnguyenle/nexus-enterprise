@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -26,6 +27,8 @@ func mapDomainError(err error) *echo.HTTPError {
 		return echo.NewHTTPError(http.StatusConflict, err.Error())
 	case errors.Is(err, domain.ErrNoMatchingTemplate):
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+	case errors.Is(err, domain.ErrStale):
+		return echo.NewHTTPError(http.StatusConflict, "template changed since it was read")
 	default:
 		return httputil.MapDomainError(err)
 	}
@@ -42,6 +45,7 @@ type Handler struct {
 	svc      *domain.Service
 	resolver *httputil.TenantSchemaResolver
 	producer EventPublisher
+	names    NameResolver // optional; see WithNames
 }
 
 // NewHandler creates an approval REST handler with tenant schema resolution.
@@ -73,6 +77,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	approval.GET("/templates", h.ListTemplates)
 	approval.GET("/templates/:id", h.GetTemplate)
 	approval.PUT("/templates/:id", h.UpdateTemplate)
+	approval.GET("/permissions", h.GetPermissions)
 
 	// Approval lifecycle
 	approval.POST("/requests", h.CreateRequest)
@@ -87,6 +92,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	approval.GET("/department-requests", h.GetDepartmentRequests)
 
 	// Audit
+	approval.GET("/requests/:id", h.GetRequest)
 	approval.GET("/requests/:id/audit", h.GetAuditLog)
 }
 
@@ -178,6 +184,7 @@ func (h *Handler) CreateTemplate(c echo.Context) error {
 	}
 
 	in := domain.CreateTemplateInput{
+		TenantID:   claims.TenantID,
 		Name:       body.Name,
 		EntityType: body.EntityType,
 		Priority:   body.Priority,
@@ -205,6 +212,7 @@ func (h *Handler) CreateTemplate(c echo.Context) error {
 	if err != nil {
 		return mapDomainError(err)
 	}
+	h.fillNames(c.Request().Context(), named{templates: []*domain.Template{t}})
 
 	return c.JSON(http.StatusCreated, t)
 }
@@ -215,6 +223,7 @@ func (h *Handler) GetTemplate(c echo.Context) error {
 	if err != nil {
 		return mapDomainError(err)
 	}
+	h.fillNames(c.Request().Context(), named{templates: []*domain.Template{t}})
 	return c.JSON(http.StatusOK, t)
 }
 
@@ -227,67 +236,118 @@ func (h *Handler) ListTemplates(c echo.Context) error {
 	if err != nil {
 		return mapDomainError(err)
 	}
+	h.fillNames(c.Request().Context(), named{templates: templates})
 	return c.JSON(http.StatusOK, map[string]any{"templates": templates})
 }
 
-// UpdateTemplate handles PUT /api/approval/templates/:id.
-func (h *Handler) UpdateTemplate(c echo.Context) error {
-	var body struct {
-		Name       string `json:"name"`
-		IsActive   bool   `json:"is_active"`
-		Priority   int    `json:"priority"`
-		FormFields []struct {
-			Label       string `json:"label"`
-			FieldType   string `json:"field_type"`
-			Required    bool   `json:"required"`
-			Options     string `json:"options"`
-			Placeholder string `json:"placeholder"`
-		} `json:"form_fields"`
-		Steps []struct {
-			StepOrder     int    `json:"step_order"`
-			Name          string `json:"name"`
-			ApproverType  string `json:"approver_type"`
-			ApproverValue string `json:"approver_value"`
-			RequiredCount int    `json:"required_count"`
-			TimeoutHours  int    `json:"timeout_hours"`
-		} `json:"steps"`
-		Conditions []struct {
-			Field    string `json:"field"`
-			Operator string `json:"operator"`
-			Value    string `json:"value"`
-		} `json:"conditions"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
+// updateTemplateBody is the JSON of PUT /api/approval/templates/:id.
+type updateTemplateBody struct {
+	Name     string `json:"name"`
+	IsActive bool   `json:"is_active"`
+	Priority int    `json:"priority"`
+	// ExpectedUpdatedAt is the template's updated_at as the client read it.
+	ExpectedUpdatedAt time.Time `json:"expected_updated_at"`
+	FormFields        []struct {
+		Label       string `json:"label"`
+		FieldType   string `json:"field_type"`
+		Required    bool   `json:"required"`
+		Options     string `json:"options"`
+		Placeholder string `json:"placeholder"`
+	} `json:"form_fields"`
+	Steps []struct {
+		StepOrder     int    `json:"step_order"`
+		Name          string `json:"name"`
+		ApproverType  string `json:"approver_type"`
+		ApproverValue string `json:"approver_value"`
+		RequiredCount int    `json:"required_count"`
+		TimeoutHours  int    `json:"timeout_hours"`
+	} `json:"steps"`
+	Conditions []struct {
+		Field    string `json:"field"`
+		Operator string `json:"operator"`
+		Value    string `json:"value"`
+	} `json:"conditions"`
+}
 
-	in := domain.UpdateTemplateInput{
-		Name: body.Name, IsActive: body.IsActive, Priority: body.Priority,
+// formFieldsOf, stepsOf and conditionsOf convert the body's lists. A body that
+// leaves a key out gives nil (the template keeps what it has); one that sends an
+// empty list gives an empty, non-nil slice (clear it).
+func formFieldsOf(b updateTemplateBody) []domain.FormFieldInput {
+	if b.FormFields == nil {
+		return nil
 	}
-	for _, ff := range body.FormFields {
-		in.FormFields = append(in.FormFields, domain.FormFieldInput{
+	out := make([]domain.FormFieldInput, 0, len(b.FormFields))
+	for _, ff := range b.FormFields {
+		out = append(out, domain.FormFieldInput{
 			Label: ff.Label, FieldType: ff.FieldType,
 			Required: ff.Required, Options: ff.Options, Placeholder: ff.Placeholder,
 		})
 	}
-	for _, step := range body.Steps {
-		in.Steps = append(in.Steps, domain.StepInput{
-			StepOrder: step.StepOrder, Name: step.Name,
-			ApproverType: step.ApproverType, ApproverValue: step.ApproverValue,
-			RequiredCount: step.RequiredCount, TimeoutHours: step.TimeoutHours,
+	return out
+}
+
+func stepsOf(b updateTemplateBody) []domain.StepInput {
+	if b.Steps == nil {
+		return nil
+	}
+	out := make([]domain.StepInput, 0, len(b.Steps))
+	for _, st := range b.Steps {
+		out = append(out, domain.StepInput{
+			StepOrder: st.StepOrder, Name: st.Name,
+			ApproverType: st.ApproverType, ApproverValue: st.ApproverValue,
+			RequiredCount: st.RequiredCount, TimeoutHours: st.TimeoutHours,
 		})
 	}
-	for _, c2 := range body.Conditions {
-		in.Conditions = append(in.Conditions, domain.ConditionInput{
-			Field: c2.Field, Operator: c2.Operator, Value: c2.Value,
-		})
+	return out
+}
+
+func conditionsOf(b updateTemplateBody) []domain.ConditionInput {
+	if b.Conditions == nil {
+		return nil
+	}
+	out := make([]domain.ConditionInput, 0, len(b.Conditions))
+	for _, c := range b.Conditions {
+		out = append(out, domain.ConditionInput{Field: c.Field, Operator: c.Operator, Value: c.Value})
+	}
+	return out
+}
+
+// UpdateTemplate handles PUT /api/approval/templates/:id. Only a caller with
+// manage on the tenant may change a template (the domain decides).
+func (h *Handler) UpdateTemplate(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	var body updateTemplateBody
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	t, err := h.svc.UpdateTemplate(c.Request().Context(), c.Param("id"), in)
+	t, err := h.svc.UpdateTemplate(c.Request().Context(), claims.NGACNodeID, c.Param("id"), domain.UpdateTemplateInput{
+		TenantID: claims.TenantID, Name: body.Name, IsActive: body.IsActive, Priority: body.Priority,
+		FormFields: formFieldsOf(body), Steps: stepsOf(body), Conditions: conditionsOf(body),
+		ExpectedUpdatedAt: body.ExpectedUpdatedAt,
+	})
 	if err != nil {
 		return mapDomainError(err)
 	}
+	h.fillNames(c.Request().Context(), named{templates: []*domain.Template{t}})
 	return c.JSON(http.StatusOK, t)
+}
+
+// GetPermissions handles GET /api/approval/permissions: what the caller may do
+// here, so the screen can leave out what the server would refuse.
+func (h *Handler) GetPermissions(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	can, err := h.svc.CanManageTemplates(c.Request().Context(), claims.NGACNodeID, claims.TenantID)
+	if err != nil {
+		return mapDomainError(err)
+	}
+	return c.JSON(http.StatusOK, map[string]bool{"can_manage_templates": can})
 }
 
 // --- Approval lifecycle endpoints ---
@@ -300,21 +360,21 @@ func (h *Handler) CreateRequest(c echo.Context) error {
 	}
 
 	var body struct {
-		EntityType   string            `json:"entity_type"`
-		EntityID     string            `json:"entity_id"`
-		EntityFields map[string]string `json:"entity_fields"`
-		FormDataJSON string            `json:"form_data_json"`
-		ScopeOAID    string            `json:"scope_oa_id"`
-		DepartmentID string            `json:"department_id"`
+		TemplateID   string `json:"template_id"`
+		EntityType   string `json:"entity_type"`
+		EntityID     string `json:"entity_id"`
+		FormDataJSON string `json:"form_data_json"`
+		ScopeOAID    string `json:"scope_oa_id"`
+		DepartmentID string `json:"department_id"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
 	req, err := h.svc.CreateApprovalRequest(c.Request().Context(), domain.CreateRequestInput{
+		TemplateID:   body.TemplateID,
 		EntityType:   body.EntityType,
 		EntityID:     body.EntityID,
-		EntityFields: body.EntityFields,
 		FormDataJSON: body.FormDataJSON,
 		ScopeOAID:    body.ScopeOAID,
 		DepartmentID: body.DepartmentID,
@@ -327,6 +387,10 @@ func (h *Handler) CreateRequest(c echo.Context) error {
 	// Publish event after DB commit (fire-and-forget)
 	h.publishEvent(c.Request().Context(), claims, req.ID, "created", "")
 
+	// The snapshot is the server's record of the template; the client reads the
+	// request's chain from GET /requests/:id.
+	req.TemplateSnapshot = ""
+	h.fillNames(c.Request().Context(), named{requests: []*domain.Request{req}})
 	return c.JSON(http.StatusCreated, req)
 }
 
@@ -466,6 +530,7 @@ func (h *Handler) GetPending(c echo.Context) error {
 	if err != nil {
 		return mapDomainError(err)
 	}
+	h.fillNames(c.Request().Context(), withAssignments(items))
 	return c.JSON(http.StatusOK, map[string]any{"items": items, "total": len(items)})
 }
 
@@ -483,6 +548,7 @@ func (h *Handler) GetHistory(c echo.Context) error {
 	if err != nil {
 		return mapDomainError(err)
 	}
+	h.fillNames(c.Request().Context(), withAssignments(items))
 	return c.JSON(http.StatusOK, map[string]any{
 		"items": items, "next_cursor": nextCursor,
 	})
@@ -502,6 +568,7 @@ func (h *Handler) GetMyRequests(c echo.Context) error {
 	if err != nil {
 		return mapDomainError(err)
 	}
+	h.fillNames(c.Request().Context(), named{requests: items})
 	return c.JSON(http.StatusOK, map[string]any{
 		"items": items, "next_cursor": nextCursor,
 	})
@@ -521,6 +588,7 @@ func (h *Handler) GetDepartmentRequests(c echo.Context) error {
 	if err != nil {
 		return mapDomainError(err)
 	}
+	h.fillNames(c.Request().Context(), named{requests: items})
 	return c.JSON(http.StatusOK, map[string]any{
 		"items": items, "next_cursor": nextCursor,
 	})
@@ -536,7 +604,25 @@ func (h *Handler) GetAuditLog(c echo.Context) error {
 	if err != nil {
 		return mapDomainError(err)
 	}
+	h.fillNames(c.Request().Context(), named{audit: entries})
 	return c.JSON(http.StatusOK, map[string]any{"entries": entries})
+}
+
+// GetRequest handles GET /api/approval/requests/:id: one request with its
+// chain of steps and every approver's assignment, for a caller who may see it.
+func (h *Handler) GetRequest(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	d, err := h.svc.GetRequestDetail(c.Request().Context(), claims.NGACNodeID, c.Param("id"))
+	if err != nil {
+		return mapDomainError(err)
+	}
+	h.fillNames(c.Request().Context(), named{
+		requests: []*domain.Request{d.Request}, assignments: d.Assignments, steps: d.Steps,
+	})
+	return c.JSON(http.StatusOK, d)
 }
 
 // parseLimit extracts a limit from a query param with a sensible default.

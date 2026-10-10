@@ -30,6 +30,8 @@ const subscribedChannels = new Map<string, number>()
 
 export interface LastMessageInfo { content: string; timestamp: string; senderName: string; senderId: string }
 export interface LastReplyInfo { senderId: string; senderName: string; timestamp: string }
+/** Who last acted on an approval request this session, for attributing realtime changes. */
+export interface ApprovalActivityInfo { actorNodeId: string; action: string; at: number }
 
 interface WebSocketState {
   ws: WebSocket | null
@@ -43,6 +45,8 @@ interface WebSocketState {
   lastReplies: Record<string, LastReplyInfo>
   /** Online user IDs + usernames — updated via PresenceEvent. */
   onlineUsers: Record<string, string>
+  /** Latest action per approval request (by request id), seen this session. */
+  approvalActivity: Record<string, ApprovalActivityInfo>
   connect: (token: string) => void
   disconnect: () => void
   sendTyping: (channelId: string) => void
@@ -86,6 +90,7 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
   lastMessages: {},
   lastReplies: {},
   onlineUsers: {},
+  approvalActivity: {},
 
   connect: (token) => {
     const existing = get().ws
@@ -144,7 +149,9 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
     const ws = get().ws
     if (ws) ws.close(1000, 'user disconnect')
     subscribedChannels.clear()
-    set({ ws: null, connected: false, authenticated: false, reconnectAttempt: 0 })
+    // What the session learned about who acted belongs to the session: it must not
+    // be read as news by whoever signs in next in this tab.
+    set({ ws: null, connected: false, authenticated: false, reconnectAttempt: 0, approvalActivity: {} })
   },
 
   sendTyping: (channelId) => {
@@ -454,6 +461,15 @@ function handleServerMessage(
     }
 
     case 'approvalEvent': {
+      // Remember who acted before the refetch lands, so the list can attribute
+      // the change it is about to show.
+      const activity = envelope.payload.approvalEvent
+      set((s) => ({
+        approvalActivity: {
+          ...s.approvalActivity,
+          [activity.requestId]: { actorNodeId: activity.actorNodeId, action: activity.action, at: Date.now() },
+        },
+      }))
       // Real-time approval status sync — invalidate all approval queries
       queryClient.invalidateQueries({ queryKey: keys.approval.all() })
       if (WS_DEBUG()) {

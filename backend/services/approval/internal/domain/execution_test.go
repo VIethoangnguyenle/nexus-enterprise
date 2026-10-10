@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
+
+	"ngac-platform/ngac"
 )
 
 // --- mock store ---
@@ -15,7 +18,11 @@ type mockStore struct {
 	assignments map[string]*AssignmentRecord // keyed by "requestID:userNodeID"
 	assignList  []*AssignmentRecord
 	auditLog    []*AuditEntry
-	approved    int // count approved for step
+	approved    int // when non-zero, the count reported for any step
+	// departments maps a department id to its UA; approvers, when non-nil, is the
+	// set of approver keys that exist in the tenant.
+	departments map[string]string
+	approvers   map[string]bool
 }
 
 func newMockStore() *mockStore {
@@ -32,7 +39,8 @@ func (m *mockStore) InsertTemplate(_ context.Context, t *Template) error {
 func (m *mockStore) GetTemplate(_ context.Context, id string) (*Template, error) {
 	for _, t := range m.templates {
 		if t.ID == id {
-			return t, nil
+			cp := *t // a read hands out a copy, as the database does
+			return &cp, nil
 		}
 	}
 	return nil, ErrNotFound
@@ -46,8 +54,47 @@ func (m *mockStore) ListTemplates(_ context.Context, entityType string, activeOn
 	}
 	return result, nil
 }
-func (m *mockStore) UpdateTemplate(_ context.Context, t *Template) error { return nil }
+func (m *mockStore) UpdateTemplate(_ context.Context, t *Template, expected time.Time) (time.Time, error) {
+	for i, cur := range m.templates {
+		if cur.ID != t.ID {
+			continue
+		}
+		if !cur.UpdatedAt.Equal(expected) {
+			return time.Time{}, ErrStale
+		}
+		t.UpdatedAt = expected.Add(time.Second)
+		m.templates[i] = t
+		return t.UpdatedAt, nil
+	}
+	return time.Time{}, ErrNotFound
+}
 
+// FindNodeID answers for the management OA of the tenant "tenant-1" only.
+func (m *mockStore) FindNodeID(_ context.Context, name, nodeType string) (string, error) {
+	if nodeType == ngac.TypeOA && name == ngac.MgmtOAName("tenant-1") {
+		return "mgmt-oa", nil
+	}
+	return "", ErrNotFound
+}
+
+// CanonicalApprover accepts the values in knownApprovers and turns a department
+// id into its UA; everything else is not in the tenant.
+func (m *mockStore) CanonicalApprover(_ context.Context, _, _, value string) (string, error) {
+	if ua, ok := m.departments[value]; ok {
+		return ua, nil
+	}
+	if m.approvers == nil || m.approvers[value] {
+		return value, nil
+	}
+	return "", ErrInvalidInput
+}
+
+func (m *mockStore) InsertRequestWithAssignments(ctx context.Context, r *Request, as []*AssignmentRecord) error {
+	if err := m.InsertRequest(ctx, r); err != nil {
+		return err
+	}
+	return m.InsertAssignments(ctx, as)
+}
 func (m *mockStore) InsertRequest(_ context.Context, r *Request) error {
 	m.requests[r.ID] = r
 	return nil
@@ -75,13 +122,49 @@ func (m *mockStore) GetAssignment(_ context.Context, requestID, userNodeID strin
 	}
 	return a, nil
 }
-func (m *mockStore) HasAssignment(_ context.Context, requestID, userNodeID string) (bool, error) {
+func (m *mockStore) HasAssignment(_ context.Context, requestID string, nodeIDs []string) (bool, error) {
 	for _, a := range m.assignList {
-		if a.RequestID == requestID && a.UserNodeID == userNodeID {
-			return true, nil
+		for _, id := range nodeIDs {
+			if a.RequestID == requestID && a.UserNodeID == id {
+				return true, nil
+			}
 		}
 	}
 	return false, nil
+}
+
+func (m *mockStore) FindGroupAssignment(_ context.Context, requestID string, step int, groups []string) (*AssignmentRecord, error) {
+	for _, a := range m.assignList {
+		if a.RequestID != requestID || a.StepOrder != step || a.Status != "pending" || !isGroupRow(a) {
+			continue
+		}
+		for _, g := range groups {
+			if a.UserNodeID == g {
+				return a, nil
+			}
+		}
+	}
+	return nil, ErrNotFound
+}
+
+// InsertActedAssignment enforces the unique (request, step, person) index.
+func (m *mockStore) InsertActedAssignment(_ context.Context, a *AssignmentRecord) error {
+	for _, x := range m.assignList {
+		if x.RequestID == a.RequestID && x.StepOrder == a.StepOrder && x.UserNodeID == a.UserNodeID {
+			return ErrAlreadyExists
+		}
+	}
+	m.assignList = append(m.assignList, a)
+	return nil
+}
+func (m *mockStore) ListAssignments(_ context.Context, requestID string) ([]*AssignmentRecord, error) {
+	var out []*AssignmentRecord
+	for _, a := range m.assignList {
+		if a.RequestID == requestID {
+			out = append(out, a)
+		}
+	}
+	return out, nil
 }
 func (m *mockStore) UpdateAssignmentStatus(_ context.Context, id, status, comment string) error {
 	for _, a := range m.assignList {
@@ -103,7 +186,16 @@ func (m *mockStore) ListPendingAssignees(_ context.Context, requestID string, st
 	return out, nil
 }
 func (m *mockStore) CountApprovedForStep(_ context.Context, requestID string, stepOrder int) (int, error) {
-	return m.approved, nil
+	if m.approved != 0 {
+		return m.approved, nil
+	}
+	n := 0
+	for _, a := range m.assignList {
+		if a.RequestID == requestID && a.StepOrder == stepOrder && a.Status == "approved" {
+			n++
+		}
+	}
+	return n, nil
 }
 func (m *mockStore) SkipRemainingAssignments(_ context.Context, requestID string, stepOrder int) error {
 	return nil
@@ -131,8 +223,34 @@ func (m *mockStore) CompleteRequest(_ context.Context, requestID, status string)
 	r.Status = status
 	return true, nil
 }
-func (m *mockStore) ListPending(_ context.Context, _ string) ([]*RequestWithAssignment, error) {
-	return nil, nil
+
+// ListPending applies the store's rule: the user's own pending rows and the group
+// rows of the groups given, on a request's current step, minus steps the user
+// has already acted on.
+func (m *mockStore) ListPending(_ context.Context, user string, groups []string) ([]*RequestWithAssignment, error) {
+	var out []*RequestWithAssignment
+	for _, a := range m.assignList {
+		r := m.requests[a.RequestID]
+		if r == nil || r.Status != "pending" || a.Status != "pending" || a.StepOrder != r.CurrentStep {
+			continue
+		}
+		mine := a.UserNodeID == user
+		for _, g := range groups {
+			if a.UserNodeID == g && isGroupRow(a) {
+				mine = true
+			}
+		}
+		acted := false
+		for _, x := range m.assignList {
+			if x != a && x.RequestID == a.RequestID && x.StepOrder == a.StepOrder && x.UserNodeID == user {
+				acted = true
+			}
+		}
+		if mine && !acted {
+			out = append(out, &RequestWithAssignment{Request: r, Assignment: a})
+		}
+	}
+	return out, nil
 }
 func (m *mockStore) ListHistory(_ context.Context, _, _ string, _ int) ([]*RequestWithAssignment, string, error) {
 	return nil, "", nil
@@ -163,13 +281,29 @@ type mockPolicy struct {
 	scopes    []string
 	allowed   bool
 	scopesErr error
+	// ancestors is what each node reaches upward (roles and departments of a
+	// person); members is what sits under a group.
+	ancestors    map[string][]string
+	members      map[string][]string
+	ancestorsErr error
+	// allowedBy, when set, decides CheckAccess per "user|object|op".
+	allowedBy map[string]bool
 }
 
 func (m *mockPolicy) ResolveAccessibleScopes(_ context.Context, _, _ string) ([]string, error) {
 	return m.scopes, m.scopesErr
 }
-func (m *mockPolicy) CheckAccess(_ context.Context, _, _, _ string) (bool, error) {
+func (m *mockPolicy) CheckAccess(_ context.Context, user, object, op string) (bool, error) {
+	if m.allowedBy != nil {
+		return m.allowedBy[user+"|"+object+"|"+op], nil
+	}
 	return m.allowed, nil
+}
+func (m *mockPolicy) GetAncestors(_ context.Context, node string) ([]string, error) {
+	return m.ancestors[node], m.ancestorsErr
+}
+func (m *mockPolicy) GetMembers(_ context.Context, node string) ([]string, error) {
+	return m.members[node], nil
 }
 
 // --- helper: create a service with a template already registered ---
@@ -329,7 +463,7 @@ func TestApprove_FinalStep_Completes(t *testing.T) {
 	ms.requests[req.ID].CurrentStep = 2
 	step2Assignment := &AssignmentRecord{
 		ID: "a2", RequestID: req.ID, StepOrder: 2,
-		UserNodeID: "approver2", Status: "pending",
+		UserNodeID: "approver2", GrantSource: "direct", Status: "pending",
 	}
 	ms.assignments[req.ID+":approver2"] = step2Assignment
 	ms.assignList = append(ms.assignList, step2Assignment)
@@ -440,7 +574,7 @@ func TestApprove_WrongStep(t *testing.T) {
 	// Try to approve as step 2 user while step 1 is active
 	step2 := &AssignmentRecord{
 		ID: "a2", RequestID: req.ID, StepOrder: 2,
-		UserNodeID: "approver2", Status: "pending",
+		UserNodeID: "approver2", GrantSource: "direct", Status: "pending",
 	}
 	ms.assignments[req.ID+":approver2"] = step2
 	ms.assignList = append(ms.assignList, step2)

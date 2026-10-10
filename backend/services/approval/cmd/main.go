@@ -94,7 +94,7 @@ func main() {
 		slog.Warn("approval event producer unavailable — real-time events disabled", "error", err)
 	}
 
-	restHandler := rest.NewHandler(svc, resolver, producer)
+	restHandler := rest.NewHandler(svc, resolver, producer).WithNames(st)
 	restHandler.RegisterRoutes(e, jwtSecret)
 
 	// Start reconciliation consumer (graceful degradation if Kafka unavailable)
@@ -170,6 +170,34 @@ func (a *policyGRPCAdapter) CheckAccess(ctx context.Context, userNodeID, objectN
 		return false, fmt.Errorf("policy check access: %w", err)
 	}
 	return ngac.Allowed(resp.GetDecision(), nil), nil
+}
+
+// GetAncestors delegates to the Policy Service: every node above the given one.
+func (a *policyGRPCAdapter) GetAncestors(ctx context.Context, nodeID string) ([]string, error) {
+	resp, err := a.client.GetAncestors(ctx, &policypb.GetAncestorsRequest{NodeId: nodeID})
+	if err != nil {
+		return nil, fmt.Errorf("policy get ancestors: %w", err)
+	}
+	ids := make([]string, 0, len(resp.GetNodes()))
+	for _, n := range resp.GetNodes() {
+		ids = append(ids, n.GetId())
+	}
+	return ids, nil
+}
+
+// GetMembers returns the people (U nodes) beneath a role or department.
+func (a *policyGRPCAdapter) GetMembers(ctx context.Context, uaNodeID string) ([]string, error) {
+	resp, err := a.client.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: uaNodeID})
+	if err != nil {
+		return nil, fmt.Errorf("policy get descendants: %w", err)
+	}
+	var ids []string
+	for _, n := range resp.GetNodes() {
+		if n.GetNodeType() == ngac.TypeU {
+			ids = append(ids, n.GetId())
+		}
+	}
+	return ids, nil
 }
 
 func envOr(key, def string) string {

@@ -15,6 +15,7 @@ export function explain(err: unknown, action: string): string {
   const status = statusOf(err)
   if (status === 403) return `Bạn chưa có quyền ${action}. Nhờ quản trị viên hoặc quản lý nhóm cấp quyền.`
   if (status === 404) return `Không ${action} được vì mục này không còn nữa. Tải lại trang rồi thử lại.`
+  if (status === 409) return `Không ${action} được vì mục này vừa được người khác thay đổi. Tải lại trang để lấy bản mới nhất rồi làm lại.`
   if (status === 400) return `Không ${action} được vì thông tin chưa hợp lệ. Kiểm tra lại rồi thử lại.`
   if (status && status >= 500) return `Máy chủ đang gặp sự cố nên chưa ${action} được. Thử lại sau ít phút.`
   return `Chưa ${action} được. Kiểm tra kết nối mạng rồi thử lại.`

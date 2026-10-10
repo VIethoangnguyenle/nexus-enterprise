@@ -41,8 +41,10 @@ func (p *scopePolicy) ResolveAccessibleScopes(_ context.Context, userNodeID, _ s
 func (p *scopePolicy) CheckAccess(context.Context, string, string, string) (bool, error) {
 	return false, nil
 }
+func (p *scopePolicy) GetAncestors(context.Context, string) ([]string, error) { return nil, nil }
+func (p *scopePolicy) GetMembers(context.Context, string) ([]string, error)   { return nil, nil }
 
-func (p *pendingStore) ListPending(_ context.Context, userNodeID string) ([]*domain.RequestWithAssignment, error) {
+func (p *pendingStore) ListPending(_ context.Context, userNodeID string, _ []string) ([]*domain.RequestWithAssignment, error) {
 	p.asked = append(p.asked, userNodeID)
 	return nil, nil
 }
@@ -50,7 +52,7 @@ func (p *pendingStore) ListPending(_ context.Context, userNodeID string) ([]*dom
 func serve(t *testing.T) (pb.ApprovalServiceClient, *pendingStore) {
 	t.Helper()
 	st := &pendingStore{}
-	srv := agrpc.NewServer(domain.NewService(st, nil))
+	srv := agrpc.NewServer(domain.NewService(st, &scopePolicy{}))
 	conn := testutil.ServeGRPC(t, grpcauth.ServerPolicy{}, func(s *grpc.Server) { pb.RegisterApprovalServiceServer(s, srv) })
 	return pb.NewApprovalServiceClient(conn), st
 }
@@ -145,8 +147,13 @@ func (p *pendingStore) GetRequest(_ context.Context, id string) (*domain.Request
 	return &domain.Request{ID: id, CreatedBy: "node-requester", ScopeOAID: "oa-dept"}, nil
 }
 
-func (p *pendingStore) HasAssignment(_ context.Context, _, userNodeID string) (bool, error) {
-	return userNodeID == "node-approver", nil
+func (p *pendingStore) HasAssignment(_ context.Context, _ string, nodeIDs []string) (bool, error) {
+	for _, id := range nodeIDs {
+		if id == "node-approver" {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (p *pendingStore) ListAuditEntries(_ context.Context, requestID string) ([]*domain.AuditEntry, error) {

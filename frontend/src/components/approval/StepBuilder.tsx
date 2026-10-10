@@ -1,124 +1,118 @@
-import { useCallback } from 'react'
-import { Plus, Trash2 } from 'lucide-react'
-import { Input, Select, Button, Text } from '../primitives'
-import { IconButton } from '../primitives'
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
+import { newUid } from '../../lib/approval-model'
+import type { PeopleDirectory } from '../../lib/people'
+import { Button, IconButton, TextField } from '../primitives'
+import { ApproverPicker, type Approver } from './ApproverPicker'
 
-export interface StepItem {
-  step_order: number
+/** A step as the builder holds it. `uid` is only a React key; it never reaches the server. */
+export interface StepDraft {
+  uid: number
   name: string
-  approver_type: string
-  approver_value: string
-  required_count: number
-  timeout_hours: number
+  approver: Approver
+  requiredCount: number
+  /** Kept from the saved template so an edit does not reset it. */
+  timeoutHours: number
 }
+
+export interface StepErrors { name?: string; approver?: string }
+
+export const blankStep = (): StepDraft => ({
+  uid: newUid(), name: '', approver: { type: 'specific_user', value: '', name: '' }, requiredCount: 1, timeoutHours: 0,
+})
 
 interface StepBuilderProps {
-  steps: StepItem[]
-  onChange: (steps: StepItem[]) => void
+  steps: StepDraft[]
+  onChange: (steps: StepDraft[]) => void
+  errors: Record<number, StepErrors>
+  workspaceId: string
+  people: PeopleDirectory
 }
 
-const APPROVER_TYPES = [
-  { value: 'specific_user', label: 'Specific User' },
-  { value: 'role_in_dept', label: 'Role in Department' },
-  { value: 'department', label: 'Department' },
-  { value: 'creator_manager', label: "Creator's Manager" },
-]
-
-/** Builder for approval step chain — ordered step cards with type, name, required count. */
-export function StepBuilder({ steps, onChange }: StepBuilderProps) {
-  const addStep = useCallback(() => {
-    const nextOrder = steps.length > 0 ? Math.max(...steps.map((s) => s.step_order)) + 1 : 1
-    onChange([
-      ...steps,
-      {
-        step_order: nextOrder,
-        name: '',
-        approver_type: 'role_in_dept',
-        approver_value: '',
-        required_count: 1,
-        timeout_hours: 0,
-      },
-    ])
-  }, [steps, onChange])
-
-  const updateStep = useCallback(
-    (index: number, patch: Partial<StepItem>) => {
-      const next = steps.map((s, i) => (i === index ? { ...s, ...patch } : s))
-      onChange(next)
-    },
-    [steps, onChange],
-  )
-
-  const removeStep = useCallback(
-    (index: number) => {
-      const next = steps.filter((_, i) => i !== index).map((s, i) => ({ ...s, step_order: i + 1 }))
-      onChange(next)
-    },
-    [steps, onChange],
-  )
+/**
+ * The approval chain of a template: ordered steps, each with a name and an
+ * approver chosen by picker (a person, a role or a department). Steps can be
+ * moved up and down; the order is the order of approval.
+ */
+export function StepBuilder({ steps, onChange, errors, workspaceId, people }: StepBuilderProps) {
+  const update = (uid: number, patch: Partial<StepDraft>) =>
+    onChange(steps.map((s) => (s.uid === uid ? { ...s, ...patch } : s)))
+  const move = (index: number, by: -1 | 1) => {
+    const to = index + by
+    if (to < 0 || to >= steps.length) return
+    const next = [...steps]
+    ;[next[index], next[to]] = [next[to]!, next[index]!]
+    onChange(next)
+  }
 
   return (
-    <div className="space-y-3">
-      <Text variant="caption" muted className="uppercase tracking-wider">
-        Approval Steps — Define approval chain
-      </Text>
-
-      {steps.map((step, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-2 p-3 bg-surface-container-lowest border border-outline-variant rounded-lg"
-        >
-          <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs font-medium shrink-0">
-            {step.step_order}
-          </span>
-
-          <Input
-            type="text"
-            value={step.name}
-            onChange={(e) => updateStep(i, { name: e.target.value })}
-            placeholder="Step name"
-            className="flex-1 min-w-0"
-          />
-
-          <Select
-            value={step.approver_type}
-            onChange={(e) => updateStep(i, { approver_type: e.target.value })}
-            className="w-40 shrink-0"
-          >
-            {APPROVER_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </Select>
-
-          <Input
-            type="text"
-            value={step.approver_value}
-            onChange={(e) => updateStep(i, { approver_value: e.target.value })}
-            placeholder="UA / User ID"
-            className="w-32 shrink-0"
-          />
-
-          <Input
-            type="number"
-            value={String(step.required_count)}
-            onChange={(e) => updateStep(i, { required_count: Number(e.target.value) || 1 })}
-            className="w-16 shrink-0"
-            min={1}
-          />
-
-          <IconButton
-            aria-label="Remove step"
-            onClick={() => removeStep(i)}
-            size="sm"
-          >
-            <Trash2 size={14} />
-          </IconButton>
-        </div>
-      ))}
-
-      <Button variant="ghost" onClick={addStep} className="w-full">
-        <Plus size={14} />
-        Add Step
+    <div className="grid gap-3">
+      <ol aria-label="Các bước duyệt" className="grid gap-3 m-0 p-0 list-none">
+        {steps.map((s, i) => {
+          const err = errors[s.uid]
+          const label = `bước ${i + 1}`
+          return (
+            <li key={s.uid} className="grid gap-3 p-3 rounded-surface bg-sunk">
+              <div className="flex items-start gap-2.5">
+                <span
+                  className="grid place-items-center w-6 h-6 mt-8 rounded-full bg-accent text-on-accent text-xs font-semibold shrink-0 tnum"
+                  aria-hidden="true"
+                >
+                  {i + 1}
+                </span>
+                <TextField
+                  className="flex-1 min-w-0"
+                  label={`Tên ${label}`}
+                  value={s.name}
+                  placeholder="Ví dụ: Trưởng phòng duyệt"
+                  error={err?.name}
+                  onChange={(e) => update(s.uid, { name: e.target.value })}
+                />
+                <div className="flex items-center gap-0.5 mt-7 shrink-0">
+                  <IconButton size="md" aria-label={`Đưa ${label} lên trước`} disabled={i === 0} onClick={() => move(i, -1)}>
+                    <ArrowUp size={16} strokeWidth={1.75} />
+                  </IconButton>
+                  <IconButton size="md" aria-label={`Đưa ${label} xuống sau`} disabled={i === steps.length - 1} onClick={() => move(i, 1)}>
+                    <ArrowDown size={16} strokeWidth={1.75} />
+                  </IconButton>
+                  <IconButton
+                    size="md"
+                    tone="danger"
+                    aria-label={`Xoá ${label}`}
+                    disabled={steps.length === 1}
+                    onClick={() => onChange(steps.filter((x) => x.uid !== s.uid))}
+                  >
+                    <Trash2 size={16} strokeWidth={1.75} />
+                  </IconButton>
+                </div>
+              </div>
+              <div className="grid gap-1.5 pl-8.5">
+                <span className="text-sm font-semibold text-ink">Người duyệt</span>
+                <ApproverPicker
+                  stepLabel={label}
+                  workspaceId={workspaceId}
+                  people={people}
+                  value={s.approver}
+                  invalid={!!err?.approver}
+                  onChange={(approver) => update(s.uid, { approver })}
+                />
+                {err?.approver && <span role="alert" className="text-xs font-medium text-danger">{err.approver}</span>}
+              </div>
+              <TextField
+                className="pl-8.5 w-72"
+                label={`Số người cần duyệt ${label}`}
+                labelHint="(tối thiểu)"
+                type="number"
+                min={1}
+                value={String(s.requiredCount)}
+                onChange={(e) => update(s.uid, { requiredCount: Math.max(1, Math.floor(Number(e.target.value)) || 1) })}
+              />
+            </li>
+          )
+        })}
+      </ol>
+      <Button variant="soft" size="sm" className="justify-self-start" onClick={() => onChange([...steps, blankStep()])}>
+        <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
+        Thêm bước
       </Button>
     </div>
   )

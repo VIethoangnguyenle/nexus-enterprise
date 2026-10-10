@@ -1,169 +1,88 @@
-import { Input, Select, Textarea, Text } from '../primitives'
+import { useId } from 'react'
 import type { FormFieldDefinition } from '../../api/approval'
+import { Select, Textarea, TextField } from '../primitives'
 
 interface DynamicFormRendererProps {
   fields: FormFieldDefinition[]
+  /** Values keyed by field label. */
   values: Record<string, string>
+  /** Messages keyed by field label, shown under the field. */
+  errors?: Record<string, string>
   onChange: (fieldLabel: string, value: string) => void
   disabled?: boolean
 }
 
-/** Renders dynamic form fields from a template definition.
- * Each field type maps to an existing primitive component. */
-export function DynamicFormRenderer({
-  fields,
-  values,
-  onChange,
-  disabled = false,
-}: DynamicFormRendererProps) {
+/**
+ * The submitter's form, built from a template's fields (DESIGN.md §6: label
+ * above, error below, never a placeholder as the label). Each field type maps
+ * to the matching control.
+ */
+export function DynamicFormRenderer({ fields, values, errors = {}, onChange, disabled = false }: DynamicFormRendererProps) {
   const sorted = [...fields].sort((a, b) => a.field_order - b.field_order)
-
   return (
-    <div className="space-y-4">
-      {sorted.map((field) => (
-        <div key={field.label} className="flex flex-col gap-1">
-          <label className="text-caption-ui text-on-surface-variant flex items-center gap-1">
-            {field.label}
-            {field.required && <span className="text-danger">*</span>}
-          </label>
-          {renderField(field, values[field.label] || '', onChange, disabled)}
-        </div>
+    <div className="grid gap-4">
+      {sorted.map((f) => (
+        <FieldControl
+          key={f.label}
+          field={f}
+          value={values[f.label] ?? ''}
+          error={errors[f.label]}
+          disabled={disabled}
+          onChange={(v) => onChange(f.label, v)}
+        />
       ))}
     </div>
   )
 }
 
-/** Maps a FormFieldDefinition to the correct primitive input. */
-function renderField(
-  field: FormFieldDefinition,
-  value: string,
-  onChange: (label: string, val: string) => void,
-  disabled: boolean,
-) {
-  const common = {
-    disabled,
-    placeholder: field.placeholder || '',
-  }
+function FieldControl({ field, value, error, disabled, onChange }: {
+  field: FormFieldDefinition
+  value: string
+  error?: string
+  disabled: boolean
+  onChange: (value: string) => void
+}) {
+  const id = useId()
+  const label = field.label
+  const hint = field.required ? undefined : '(không bắt buộc)'
+  const common = { disabled, placeholder: field.placeholder || undefined }
 
   switch (field.field_type) {
-    case 'text':
-      return (
-        <Input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(field.label, e.target.value)}
-          {...common}
-        />
-      )
-
-    case 'number':
-      return (
-        <Input
-          type="number"
-          value={value}
-          onChange={(e) => onChange(field.label, e.target.value)}
-          {...common}
-        />
-      )
-
-    case 'currency':
-      return (
-        <div className="relative">
-          <Input
-            type="number"
-            value={value}
-            onChange={(e) => onChange(field.label, e.target.value)}
-            className="pl-8"
-            {...common}
-          />
-          <Text
-            variant="caption"
-            muted
-            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-          >
-            ₫
-          </Text>
-        </div>
-      )
-
-    case 'date':
-      return (
-        <Input
-          type="date"
-          value={value}
-          onChange={(e) => onChange(field.label, e.target.value)}
-          {...common}
-        />
-      )
-
-    case 'select':
-      return (
-        <Select
-          value={value}
-          onChange={(e) => onChange(field.label, e.target.value)}
-          disabled={disabled}
-        >
-          <option value="">Select...</option>
-          {(field.options || '').split(',').filter(Boolean).map((opt) => (
-            <option key={opt.trim()} value={opt.trim()}>
-              {opt.trim()}
-            </option>
-          ))}
-        </Select>
-      )
-
     case 'textarea':
       return (
-        <Textarea
-          value={value}
-          onChange={(e) => onChange(field.label, e.target.value)}
-          rows={3}
-          {...common}
-        />
+        <div className="grid gap-1.5">
+          <label htmlFor={id} className="text-sm font-semibold text-ink">
+            {label}{hint && <span className="font-normal text-ink-muted"> {hint}</span>}
+          </label>
+          <Textarea id={id} rows={3} value={value} error={error} onChange={(e) => onChange(e.target.value)} {...common} />
+        </div>
       )
-
-    default:
+    case 'select':
       return (
-        <Input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(field.label, e.target.value)}
-          {...common}
+        <div className="grid gap-1.5">
+          <label htmlFor={id} className="text-sm font-semibold text-ink">
+            {label}{hint && <span className="font-normal text-ink-muted"> {hint}</span>}
+          </label>
+          <Select id={id} value={value} error={error} disabled={disabled} onChange={(e) => onChange(e.target.value)}>
+            <option value="">Chọn một mục</option>
+            {(field.options || '').split(',').map((o) => o.trim()).filter(Boolean).map((o) => (
+              <option key={o} value={o}>{o}</option>
+            ))}
+          </Select>
+        </div>
+      )
+    case 'currency':
+      return (
+        <TextField
+          label={label} labelHint={hint ? `${hint} · ₫` : '₫'} inputMode="numeric" value={value} error={error}
+          onChange={(e) => onChange(e.target.value.replace(/[^\d]/g, ''))} className="tnum" {...common}
         />
       )
+    case 'number':
+      return <TextField label={label} labelHint={hint} type="number" value={value} error={error} onChange={(e) => onChange(e.target.value)} {...common} />
+    case 'date':
+      return <TextField label={label} labelHint={hint} type="date" value={value} error={error} onChange={(e) => onChange(e.target.value)} {...common} />
+    default:
+      return <TextField label={label} labelHint={hint} value={value} error={error} onChange={(e) => onChange(e.target.value)} {...common} />
   }
-}
-
-// --- Read-only display ---
-
-interface FormDataDisplayProps {
-  fields: FormFieldDefinition[]
-  data: Record<string, string>
-}
-
-/** Displays submitted form data in a read-only label/value layout. */
-export function FormDataDisplay({ fields, data }: FormDataDisplayProps) {
-  const sorted = [...fields].sort((a, b) => a.field_order - b.field_order)
-
-  return (
-    <div className="space-y-2">
-      {sorted.map((field) => {
-        const value = data[field.label]
-        if (!value) return null
-
-        return (
-          <div key={field.label} className="flex items-start gap-2">
-            <Text variant="caption" muted className="min-w-25 shrink-0">
-              {field.label}
-            </Text>
-            <Text variant="body" className="break-words">
-              {field.field_type === 'currency'
-                ? `${Number(value).toLocaleString('vi-VN')} ₫`
-                : value}
-            </Text>
-          </div>
-        )
-      })}
-    </div>
-  )
 }

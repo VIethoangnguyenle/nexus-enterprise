@@ -1,119 +1,94 @@
-import { useCallback } from 'react'
-import { Plus, GripVertical, Trash2 } from 'lucide-react'
-import { Input, Select, Button, Text } from '../primitives'
-import { IconButton } from '../primitives'
+import { Plus, Trash2 } from 'lucide-react'
+import { Button, Checkbox, IconButton, Select, TextField } from '../primitives'
+import { fieldTypeLabel, newUid } from '../../lib/approval-model'
 
-export interface FormFieldItem {
+/** A form field as the builder holds it. `uid` is only a React key. */
+export interface FieldDraft {
+  uid: number
   label: string
-  field_type: string
+  fieldType: string
   required: boolean
   options: string
-  placeholder: string
 }
+
+export interface FieldErrors { label?: string; options?: string }
+
+export const FIELD_TYPES = ['text', 'textarea', 'number', 'currency', 'date', 'select']
+
+export const blankField = (): FieldDraft => ({ uid: newUid(), label: '', fieldType: 'text', required: false, options: '' })
 
 interface FormFieldBuilderProps {
-  fields: FormFieldItem[]
-  onChange: (fields: FormFieldItem[]) => void
+  fields: FieldDraft[]
+  onChange: (fields: FieldDraft[]) => void
+  errors: Record<number, FieldErrors>
 }
 
-const FIELD_TYPES = [
-  { value: 'text', label: 'Text' },
-  { value: 'number', label: 'Number' },
-  { value: 'currency', label: 'Currency' },
-  { value: 'date', label: 'Date' },
-  { value: 'select', label: 'Select' },
-  { value: 'textarea', label: 'Textarea' },
-]
-
-/** Builder for template form field definitions — drag handle + label + type + required + delete. */
-export function FormFieldBuilder({ fields, onChange }: FormFieldBuilderProps) {
-  const addField = useCallback(() => {
-    onChange([...fields, { label: '', field_type: 'text', required: false, options: '', placeholder: '' }])
-  }, [fields, onChange])
-
-  const updateField = useCallback(
-    (index: number, patch: Partial<FormFieldItem>) => {
-      const next = fields.map((f, i) => (i === index ? { ...f, ...patch } : f))
-      onChange(next)
-    },
-    [fields, onChange],
-  )
-
-  const removeField = useCallback(
-    (index: number) => {
-      onChange(fields.filter((_, i) => i !== index))
-    },
-    [fields, onChange],
-  )
+/** What the submitter is asked: a label, a type, whether it is required, and options for a list. */
+export function FormFieldBuilder({ fields, onChange, errors }: FormFieldBuilderProps) {
+  const update = (uid: number, patch: Partial<FieldDraft>) =>
+    onChange(fields.map((f) => (f.uid === uid ? { ...f, ...patch } : f)))
 
   return (
-    <div className="space-y-3">
-      <Text variant="caption" muted className="uppercase tracking-wider">
-        Form Fields — Define submitter inputs
-      </Text>
-
-      {fields.map((field, i) => (
-        <div
-          key={i}
-          className="flex items-center gap-2 p-3 bg-surface-container-lowest border border-outline-variant rounded-lg"
-        >
-          <GripVertical size={14} className="text-outline shrink-0 cursor-grab" />
-
-          <Input
-            type="text"
-            value={field.label}
-            onChange={(e) => updateField(i, { label: e.target.value })}
-            placeholder="Field label"
-            className="flex-1 min-w-0"
-          />
-
-          <Select
-            value={field.field_type}
-            onChange={(e) => updateField(i, { field_type: e.target.value })}
-            className="w-28 shrink-0"
-          >
-            {FIELD_TYPES.map((t) => (
-              <option key={t.value} value={t.value}>{t.label}</option>
-            ))}
-          </Select>
-
-          {field.field_type === 'select' && (
-            <Input
-              type="text"
-              value={field.options}
-              onChange={(e) => updateField(i, { options: e.target.value })}
-              placeholder="opt1, opt2"
-              className="w-32 shrink-0"
-            />
-          )}
-
-          <label className="flex items-center gap-1 shrink-0 cursor-pointer text-caption-ui text-on-surface-variant">
-            {/* eslint-disable-next-line no-restricted-syntax -- no Checkbox primitive exists. Input bakes
-                `w-full px-3 py-2` text-field styling and wraps in a `flex flex-col gap-1` div (documented
-                limitation), unusable for an inline 16px checkbox. Same reason as ApprovalTable.tsx's two
-                checkboxes — a Checkbox primitive is the real fix. */}
-            <input
-              type="checkbox"
-              checked={field.required}
-              onChange={(e) => updateField(i, { required: e.target.checked })}
-              className="w-4 h-4 accent-primary"
-            />
-            Req
-          </label>
-
-          <IconButton
-            aria-label="Remove field"
-            onClick={() => removeField(i)}
-            size="sm"
-          >
-            <Trash2 size={14} />
-          </IconButton>
-        </div>
-      ))}
-
-      <Button variant="ghost" onClick={addField} className="w-full">
-        <Plus size={14} />
-        Add Field
+    <div className="grid gap-3">
+      {fields.length === 0 && (
+        <p className="m-0 text-sm text-ink-muted">Chưa hỏi thông tin nào. Thêm trường để người gửi điền số tiền, lý do và các chi tiết khác.</p>
+      )}
+      <ul aria-label="Trường biểu mẫu" className="grid gap-3 m-0 p-0 list-none">
+        {fields.map((f, i) => {
+          const err = errors[f.uid]
+          const n = i + 1
+          return (
+            <li key={f.uid} className="grid gap-3 p-3 rounded-surface bg-sunk">
+              <div className="flex items-start gap-2.5">
+                <TextField
+                  className="flex-1 min-w-0"
+                  label={`Tên trường ${n}`}
+                  value={f.label}
+                  placeholder="Ví dụ: Số tiền"
+                  error={err?.label}
+                  onChange={(e) => update(f.uid, { label: e.target.value })}
+                />
+                <div className="grid gap-1.5 w-40 shrink-0">
+                  <label htmlFor={`field-type-${f.uid}`} className="text-sm font-semibold text-ink">{`Kiểu trường ${n}`}</label>
+                  <Select id={`field-type-${f.uid}`} value={f.fieldType} onChange={(e) => update(f.uid, { fieldType: e.target.value })}>
+                    {FIELD_TYPES.map((t) => <option key={t} value={t}>{fieldTypeLabel(t)}</option>)}
+                  </Select>
+                </div>
+                <IconButton
+                  size="md"
+                  tone="danger"
+                  className="mt-7 shrink-0"
+                  aria-label={`Xoá trường ${n}`}
+                  onClick={() => onChange(fields.filter((x) => x.uid !== f.uid))}
+                >
+                  <Trash2 size={16} strokeWidth={1.75} />
+                </IconButton>
+              </div>
+              {f.fieldType === 'select' && (
+                <TextField
+                  label={`Các lựa chọn của trường ${n}`}
+                  labelHint="(cách nhau bằng dấu phẩy)"
+                  value={f.options}
+                  placeholder="Máy bay, Tàu hoả, Ô tô"
+                  error={err?.options}
+                  onChange={(e) => update(f.uid, { options: e.target.value })}
+                />
+              )}
+              <label className="inline-flex items-center gap-2 text-sm cursor-pointer justify-self-start">
+                <Checkbox
+                  label={`Trường ${n} bắt buộc`}
+                  checked={f.required}
+                  onChange={(e) => update(f.uid, { required: e.target.checked })}
+                />
+                Bắt buộc điền
+              </label>
+            </li>
+          )
+        })}
+      </ul>
+      <Button variant="soft" size="sm" className="justify-self-start" onClick={() => onChange([...fields, blankField()])}>
+        <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
+        Thêm trường
       </Button>
     </div>
   )

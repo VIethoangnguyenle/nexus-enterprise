@@ -1,6 +1,8 @@
-import type { ReactNode } from 'react'
+import { useRef, useSyncExternalStore, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
 import { X } from 'lucide-react'
+import { useModalFocus } from '../../hooks/useModalFocus'
 import { useMotionPresets } from '../../lib/motion'
 import { Heading, IconButton } from '../primitives'
 
@@ -18,17 +20,37 @@ interface SidePanelProps {
   footer?: ReactNode
 }
 
+const PHONE = '(max-width: 767.98px)'
+const subscribePhone = (cb: () => void) => {
+  const mq = window.matchMedia?.(PHONE)
+  mq?.addEventListener('change', cb)
+  return () => mq?.removeEventListener('change', cb)
+}
+const onPhone = () => !!window.matchMedia?.(PHONE).matches
+
 /**
  * Right detail panel (DESIGN.md §5–§7): raised, radius 10, 12px off the
  * edges, 360px. Enters with translateX(16px) scale(.985) over 280ms and leaves
  * in 210ms; under 1280px it floats over the content, under 768px it is a
  * full-screen sheet. Mount inside `AnimatePresence` for the exit.
+ *
+ * As a sheet it is a modal layer, so it behaves like `Dialog`: rendered in
+ * `document.body` at the modal level (above the phone tab bar and clear of the
+ * content area's stacking context), focus moves in and is trapped, Esc closes,
+ * and focus returns to what opened it. Wider than that it stays a plain
+ * complementary region beside the content.
  */
 export function SidePanel({ label, title, sub, actions, closeLabel, onClose, children, footer }: SidePanelProps) {
   const m = useMotionPresets()
-  return (
+  const sheet = useSyncExternalStore(subscribePhone, onPhone, () => false)
+  const surfaceRef = useRef<HTMLElement>(null)
+  useModalFocus({ active: sheet, surfaceRef, onClose })
+
+  const panel = (
     <motion.aside
-      role="complementary"
+      ref={surfaceRef}
+      role={sheet ? 'dialog' : 'complementary'}
+      aria-modal={sheet || undefined}
       aria-label={label}
       {...m.panel}
       className="flex flex-col min-h-0 min-w-0 bg-raised
@@ -52,4 +74,5 @@ export function SidePanel({ label, title, sub, actions, closeLabel, onClose, chi
       {footer}
     </motion.aside>
   )
+  return sheet ? createPortal(panel, document.body) : panel
 }
