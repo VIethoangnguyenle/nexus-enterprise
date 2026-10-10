@@ -159,4 +159,4 @@ liệu. Làm sau Chat.
 - Code chính cho phase 02: `backend/services/messaging/internal/{store/store.go,store/reactions_pins_receipts.go,
   domain/messages.go,domain/authz.go,rest/handler.go}`, `backend/proto/messaging/messaging.proto`,
   `data/migrations/` (mới nhất `036_invitation_last_emailed_at.sql`).
-- Mockup trực tuyến (riêng tư): https://claude.ai/artifact/K7pKNwwtjUTSnP47nymvL3 (Chat), https://claude.ai/artifact/SSTwi1SgWUfiNrAkEpWKbJ (thông báo đẩy)
+- Mockup trực tuyến (riêng tư): https://claude.ai/artifact/K7pKNwwtjUTSnP47nymvL3 (Chat), https://claude.ai/artifact/SSTwi1SgWUfiNrAkEpWKbJ (thông báo đẩy), https://claude.ai/artifact/CZXS7BKypAiyb2Y56QaUgN (Chat trên điện thoại)
