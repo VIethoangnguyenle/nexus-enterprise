@@ -49,6 +49,14 @@ type OTPResult struct {
 	Phone      string
 	UnionID    string
 	IsNewUser  bool
+	// TenantID is the workspace the access token is scoped to, so the session's
+	// refresh token can name the same one.
+	TenantID string
+	// EmailVerified: the address on the account is proved (by this code, when a
+	// real sender delivered it, or earlier by Google).
+	EmailVerified bool
+	// NeedsProfile: the person still owes the "what should we call you" step.
+	NeedsProfile bool
 }
 
 // RequestOTP validates the identifier, enforces the per-identifier rate
@@ -113,7 +121,7 @@ func (s *Service) checkOTPRate(ctx context.Context, identType, normalized string
 		s.rdb.Expire(ctx, key, otpRateWindow)
 	}
 	if n > otpRateMax {
-		return ErrOTPRateLimited
+		return &rateLimitedError{base: ErrOTPRateLimited, after: s.windowLeft(ctx, key, otpRateWindow)}
 	}
 	return nil
 }
@@ -152,7 +160,7 @@ func (s *Service) VerifyOTP(ctx context.Context, sessionID, code string) (*OTPRe
 	}
 
 	if !otpCodeMatches(s.otp.Secret, sessionID, code, session.CodeHash) {
-		return nil, ErrOTPInvalid
+		return nil, &otpInvalidError{left: otpMaxAttempts - int(attempts)}
 	}
 
 	// One-time use: only the caller that actually deletes the session wins.
@@ -197,7 +205,7 @@ func (s *Service) findUserByPhone(ctx context.Context, phone string) (*OTPResult
 	if user == nil {
 		return nil, nil
 	}
-	return s.otpResultFromExistingUser(ctx, user)
+	return s.otpResultFromExistingUser(ctx, user, false)
 }
 
 // findUserByEmail looks up an existing user by email and generates a JWT.
@@ -223,11 +231,14 @@ func (s *Service) findUserByEmail(ctx context.Context, email string, proven bool
 			}
 		}
 	}
-	return s.otpResultFromExistingUser(ctx, user)
+	return s.otpResultFromExistingUser(ctx, user, proven)
 }
 
 // otpResultFromExistingUser generates a JWT and builds OTPResult for a known user.
-func (s *Service) otpResultFromExistingUser(ctx context.Context, u *store.User) (*OTPResult, error) {
+//
+// provenNow says this very code proved the account's address, which the user row
+// read before the proof does not yet show.
+func (s *Service) otpResultFromExistingUser(ctx context.Context, u *store.User, provenNow bool) (*OTPResult, error) {
 	tenants, _ := s.store.ListTenantsByUser(ctx, u.ID)
 	defaultTenantID := s.selectDefaultTenant(tenants)
 
@@ -246,6 +257,10 @@ func (s *Service) otpResultFromExistingUser(ctx context.Context, u *store.User) 
 		Phone:      u.Phone,
 		UnionID:    u.UnionID,
 		IsNewUser:  false,
+		TenantID:   defaultTenantID,
+
+		EmailVerified: u.EmailVerified || (provenNow && u.Email != ""),
+		NeedsProfile:  !u.ProfileCompleted,
 	}, nil
 }
 
@@ -298,6 +313,10 @@ func (s *Service) createOTPUser(ctx context.Context, identifier, identType strin
 		Phone:      phone,
 		UnionID:    unionID,
 		IsNewUser:  true,
+		TenantID:   defaultTenantID,
+
+		EmailVerified: proven && identType != "phone",
+		NeedsProfile:  true,
 	}, nil
 }
 

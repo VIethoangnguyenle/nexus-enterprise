@@ -19,20 +19,20 @@ import { Route as AssetsDashboardRouteImport } from './routes/assets/dashboard'
 import { Route as AssetsAssetIdRouteImport } from './routes/assets/$assetId'
 import { Route as WorkspaceSettingsRouteImport } from './routes/_workspace/settings'
 import { Route as WorkspaceDriveRouteImport } from './routes/_workspace/drive'
-import { Route as WorkspaceDocumentsRouteImport } from './routes/_workspace/documents'
 import { Route as WorkspaceContactsRouteImport } from './routes/_workspace/contacts'
 import { Route as WorkspaceAssetsRouteImport } from './routes/_workspace/assets'
 import { Route as WorkspaceApprovalRouteImport } from './routes/_workspace/approval'
 import { Route as WorkspaceAdminRouteImport } from './routes/_workspace/admin'
 import { Route as AuthWorkspaceSelectRouteImport } from './routes/_auth/workspace-select'
-import { Route as AuthWelcomeRouteImport } from './routes/_auth/welcome'
 import { Route as AuthRegisterRouteImport } from './routes/_auth/register'
 import { Route as AuthOnboardingRouteImport } from './routes/_auth/onboarding'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
+import { Route as WorkspaceDocumentsIndexRouteImport } from './routes/_workspace/documents.index'
 import { Route as WorkspaceChannelsIndexRouteImport } from './routes/_workspace/channels.index'
 import { Route as WorkspaceAdminIndexRouteImport } from './routes/_workspace/admin/index'
 import { Route as AuthGoogleDoneRouteImport } from './routes/auth.google.done'
 import { Route as AssetsRequestNewRouteImport } from './routes/assets/request/new'
+import { Route as WorkspaceDocumentsDocIdRouteImport } from './routes/_workspace/documents.$docId'
 import { Route as WorkspaceChannelsChannelIdRouteImport } from './routes/_workspace/channels.$channelId'
 import { Route as WorkspaceAdminUsersRouteImport } from './routes/_workspace/admin/users'
 import { Route as WorkspaceAdminRolesRouteImport } from './routes/_workspace/admin/roles'
@@ -85,11 +85,6 @@ const WorkspaceDriveRoute = WorkspaceDriveRouteImport.update({
   path: '/drive',
   getParentRoute: () => WorkspaceRoute,
 } as any)
-const WorkspaceDocumentsRoute = WorkspaceDocumentsRouteImport.update({
-  id: '/documents',
-  path: '/documents',
-  getParentRoute: () => WorkspaceRoute,
-} as any)
 const WorkspaceContactsRoute = WorkspaceContactsRouteImport.update({
   id: '/contacts',
   path: '/contacts',
@@ -115,11 +110,6 @@ const AuthWorkspaceSelectRoute = AuthWorkspaceSelectRouteImport.update({
   path: '/workspace-select',
   getParentRoute: () => AuthRoute,
 } as any)
-const AuthWelcomeRoute = AuthWelcomeRouteImport.update({
-  id: '/welcome',
-  path: '/welcome',
-  getParentRoute: () => AuthRoute,
-} as any)
 const AuthRegisterRoute = AuthRegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -134,6 +124,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => AuthRoute,
+} as any)
+const WorkspaceDocumentsIndexRoute = WorkspaceDocumentsIndexRouteImport.update({
+  id: '/documents/',
+  path: '/documents/',
+  getParentRoute: () => WorkspaceRoute,
 } as any)
 const WorkspaceChannelsIndexRoute = WorkspaceChannelsIndexRouteImport.update({
   id: '/channels/',
@@ -154,6 +149,11 @@ const AssetsRequestNewRoute = AssetsRequestNewRouteImport.update({
   id: '/assets/request/new',
   path: '/assets/request/new',
   getParentRoute: () => rootRouteImport,
+} as any)
+const WorkspaceDocumentsDocIdRoute = WorkspaceDocumentsDocIdRouteImport.update({
+  id: '/documents/$docId',
+  path: '/documents/$docId',
+  getParentRoute: () => WorkspaceRoute,
 } as any)
 const WorkspaceChannelsChannelIdRoute =
   WorkspaceChannelsChannelIdRouteImport.update({
@@ -177,13 +177,11 @@ export interface FileRoutesByFullPath {
   '/login': typeof AuthLoginRoute
   '/onboarding': typeof AuthOnboardingRoute
   '/register': typeof AuthRegisterRoute
-  '/welcome': typeof AuthWelcomeRoute
   '/workspace-select': typeof AuthWorkspaceSelectRoute
   '/admin': typeof WorkspaceAdminRouteWithChildren
   '/approval': typeof WorkspaceApprovalRoute
   '/assets': typeof WorkspaceAssetsRoute
   '/contacts': typeof WorkspaceContactsRoute
-  '/documents': typeof WorkspaceDocumentsRoute
   '/drive': typeof WorkspaceDriveRoute
   '/settings': typeof WorkspaceSettingsRoute
   '/assets/$assetId': typeof AssetsAssetIdRoute
@@ -194,22 +192,22 @@ export interface FileRoutesByFullPath {
   '/admin/roles': typeof WorkspaceAdminRolesRoute
   '/admin/users': typeof WorkspaceAdminUsersRoute
   '/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
+  '/documents/$docId': typeof WorkspaceDocumentsDocIdRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
   '/auth/google/done': typeof AuthGoogleDoneRoute
   '/admin/': typeof WorkspaceAdminIndexRoute
   '/channels/': typeof WorkspaceChannelsIndexRoute
+  '/documents/': typeof WorkspaceDocumentsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof AuthLoginRoute
   '/onboarding': typeof AuthOnboardingRoute
   '/register': typeof AuthRegisterRoute
-  '/welcome': typeof AuthWelcomeRoute
   '/workspace-select': typeof AuthWorkspaceSelectRoute
   '/approval': typeof WorkspaceApprovalRoute
   '/assets': typeof WorkspaceAssetsRoute
   '/contacts': typeof WorkspaceContactsRoute
-  '/documents': typeof WorkspaceDocumentsRoute
   '/drive': typeof WorkspaceDriveRoute
   '/settings': typeof WorkspaceSettingsRoute
   '/assets/$assetId': typeof AssetsAssetIdRoute
@@ -220,10 +218,12 @@ export interface FileRoutesByTo {
   '/admin/roles': typeof WorkspaceAdminRolesRoute
   '/admin/users': typeof WorkspaceAdminUsersRoute
   '/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
+  '/documents/$docId': typeof WorkspaceDocumentsDocIdRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
   '/auth/google/done': typeof AuthGoogleDoneRoute
   '/admin': typeof WorkspaceAdminIndexRoute
   '/channels': typeof WorkspaceChannelsIndexRoute
+  '/documents': typeof WorkspaceDocumentsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -233,13 +233,11 @@ export interface FileRoutesById {
   '/_auth/login': typeof AuthLoginRoute
   '/_auth/onboarding': typeof AuthOnboardingRoute
   '/_auth/register': typeof AuthRegisterRoute
-  '/_auth/welcome': typeof AuthWelcomeRoute
   '/_auth/workspace-select': typeof AuthWorkspaceSelectRoute
   '/_workspace/admin': typeof WorkspaceAdminRouteWithChildren
   '/_workspace/approval': typeof WorkspaceApprovalRoute
   '/_workspace/assets': typeof WorkspaceAssetsRoute
   '/_workspace/contacts': typeof WorkspaceContactsRoute
-  '/_workspace/documents': typeof WorkspaceDocumentsRoute
   '/_workspace/drive': typeof WorkspaceDriveRoute
   '/_workspace/settings': typeof WorkspaceSettingsRoute
   '/assets/$assetId': typeof AssetsAssetIdRoute
@@ -250,10 +248,12 @@ export interface FileRoutesById {
   '/_workspace/admin/roles': typeof WorkspaceAdminRolesRoute
   '/_workspace/admin/users': typeof WorkspaceAdminUsersRoute
   '/_workspace/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
+  '/_workspace/documents/$docId': typeof WorkspaceDocumentsDocIdRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
   '/auth/google/done': typeof AuthGoogleDoneRoute
   '/_workspace/admin/': typeof WorkspaceAdminIndexRoute
   '/_workspace/channels/': typeof WorkspaceChannelsIndexRoute
+  '/_workspace/documents/': typeof WorkspaceDocumentsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -262,13 +262,11 @@ export interface FileRouteTypes {
     | '/login'
     | '/onboarding'
     | '/register'
-    | '/welcome'
     | '/workspace-select'
     | '/admin'
     | '/approval'
     | '/assets'
     | '/contacts'
-    | '/documents'
     | '/drive'
     | '/settings'
     | '/assets/$assetId'
@@ -279,22 +277,22 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/users'
     | '/channels/$channelId'
+    | '/documents/$docId'
     | '/assets/request/new'
     | '/auth/google/done'
     | '/admin/'
     | '/channels/'
+    | '/documents/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/login'
     | '/onboarding'
     | '/register'
-    | '/welcome'
     | '/workspace-select'
     | '/approval'
     | '/assets'
     | '/contacts'
-    | '/documents'
     | '/drive'
     | '/settings'
     | '/assets/$assetId'
@@ -305,10 +303,12 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/users'
     | '/channels/$channelId'
+    | '/documents/$docId'
     | '/assets/request/new'
     | '/auth/google/done'
     | '/admin'
     | '/channels'
+    | '/documents'
   id:
     | '__root__'
     | '/'
@@ -317,13 +317,11 @@ export interface FileRouteTypes {
     | '/_auth/login'
     | '/_auth/onboarding'
     | '/_auth/register'
-    | '/_auth/welcome'
     | '/_auth/workspace-select'
     | '/_workspace/admin'
     | '/_workspace/approval'
     | '/_workspace/assets'
     | '/_workspace/contacts'
-    | '/_workspace/documents'
     | '/_workspace/drive'
     | '/_workspace/settings'
     | '/assets/$assetId'
@@ -334,10 +332,12 @@ export interface FileRouteTypes {
     | '/_workspace/admin/roles'
     | '/_workspace/admin/users'
     | '/_workspace/channels/$channelId'
+    | '/_workspace/documents/$docId'
     | '/assets/request/new'
     | '/auth/google/done'
     | '/_workspace/admin/'
     | '/_workspace/channels/'
+    | '/_workspace/documents/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -425,13 +425,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceDriveRouteImport
       parentRoute: typeof WorkspaceRoute
     }
-    '/_workspace/documents': {
-      id: '/_workspace/documents'
-      path: '/documents'
-      fullPath: '/documents'
-      preLoaderRoute: typeof WorkspaceDocumentsRouteImport
-      parentRoute: typeof WorkspaceRoute
-    }
     '/_workspace/contacts': {
       id: '/_workspace/contacts'
       path: '/contacts'
@@ -467,13 +460,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthWorkspaceSelectRouteImport
       parentRoute: typeof AuthRoute
     }
-    '/_auth/welcome': {
-      id: '/_auth/welcome'
-      path: '/welcome'
-      fullPath: '/welcome'
-      preLoaderRoute: typeof AuthWelcomeRouteImport
-      parentRoute: typeof AuthRoute
-    }
     '/_auth/register': {
       id: '/_auth/register'
       path: '/register'
@@ -494,6 +480,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/login'
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof AuthRoute
+    }
+    '/_workspace/documents/': {
+      id: '/_workspace/documents/'
+      path: '/documents'
+      fullPath: '/documents/'
+      preLoaderRoute: typeof WorkspaceDocumentsIndexRouteImport
+      parentRoute: typeof WorkspaceRoute
     }
     '/_workspace/channels/': {
       id: '/_workspace/channels/'
@@ -523,6 +516,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AssetsRequestNewRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_workspace/documents/$docId': {
+      id: '/_workspace/documents/$docId'
+      path: '/documents/$docId'
+      fullPath: '/documents/$docId'
+      preLoaderRoute: typeof WorkspaceDocumentsDocIdRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
     '/_workspace/channels/$channelId': {
       id: '/_workspace/channels/$channelId'
       path: '/channels/$channelId'
@@ -551,7 +551,6 @@ interface AuthRouteChildren {
   AuthLoginRoute: typeof AuthLoginRoute
   AuthOnboardingRoute: typeof AuthOnboardingRoute
   AuthRegisterRoute: typeof AuthRegisterRoute
-  AuthWelcomeRoute: typeof AuthWelcomeRoute
   AuthWorkspaceSelectRoute: typeof AuthWorkspaceSelectRoute
 }
 
@@ -559,7 +558,6 @@ const AuthRouteChildren: AuthRouteChildren = {
   AuthLoginRoute: AuthLoginRoute,
   AuthOnboardingRoute: AuthOnboardingRoute,
   AuthRegisterRoute: AuthRegisterRoute,
-  AuthWelcomeRoute: AuthWelcomeRoute,
   AuthWorkspaceSelectRoute: AuthWorkspaceSelectRoute,
 }
 
@@ -586,11 +584,12 @@ interface WorkspaceRouteChildren {
   WorkspaceApprovalRoute: typeof WorkspaceApprovalRoute
   WorkspaceAssetsRoute: typeof WorkspaceAssetsRoute
   WorkspaceContactsRoute: typeof WorkspaceContactsRoute
-  WorkspaceDocumentsRoute: typeof WorkspaceDocumentsRoute
   WorkspaceDriveRoute: typeof WorkspaceDriveRoute
   WorkspaceSettingsRoute: typeof WorkspaceSettingsRoute
   WorkspaceChannelsChannelIdRoute: typeof WorkspaceChannelsChannelIdRoute
+  WorkspaceDocumentsDocIdRoute: typeof WorkspaceDocumentsDocIdRoute
   WorkspaceChannelsIndexRoute: typeof WorkspaceChannelsIndexRoute
+  WorkspaceDocumentsIndexRoute: typeof WorkspaceDocumentsIndexRoute
 }
 
 const WorkspaceRouteChildren: WorkspaceRouteChildren = {
@@ -598,11 +597,12 @@ const WorkspaceRouteChildren: WorkspaceRouteChildren = {
   WorkspaceApprovalRoute: WorkspaceApprovalRoute,
   WorkspaceAssetsRoute: WorkspaceAssetsRoute,
   WorkspaceContactsRoute: WorkspaceContactsRoute,
-  WorkspaceDocumentsRoute: WorkspaceDocumentsRoute,
   WorkspaceDriveRoute: WorkspaceDriveRoute,
   WorkspaceSettingsRoute: WorkspaceSettingsRoute,
   WorkspaceChannelsChannelIdRoute: WorkspaceChannelsChannelIdRoute,
+  WorkspaceDocumentsDocIdRoute: WorkspaceDocumentsDocIdRoute,
   WorkspaceChannelsIndexRoute: WorkspaceChannelsIndexRoute,
+  WorkspaceDocumentsIndexRoute: WorkspaceDocumentsIndexRoute,
 }
 
 const WorkspaceRouteWithChildren = WorkspaceRoute._addFileChildren(

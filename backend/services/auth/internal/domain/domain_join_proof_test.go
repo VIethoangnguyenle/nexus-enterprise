@@ -14,57 +14,44 @@ import (
 )
 
 // Joining a company tenant by domain requires proof that the person controls
-// an address at that domain. A password signup proves nothing — anyone can
-// type ceo@acme.com — so it must never land in Acme's tenant.
+// an address at that domain. Only a Google Workspace account (hd) is proof; a
+// consumer Google account at the same address, or a one-time code, is not.
 
-func TestSignup_PasswordNeverAutoJoinsClaimedDomain(t *testing.T) {
+func TestGoogle_ConsumerAccountNeverAutoJoinsClaimedDomain(t *testing.T) {
 	w := newFakeWorld()
 	svc := w.service(t)
 	acme := w.addTenant("Acme", "acme.com")
 
-	res, err := svc.Signup(context.Background(), "x@acme.com", "pw-123456", "X", "")
+	// No hd: Google vouches for the address, not for the company.
+	res, err := svc.SignInWithGoogle(context.Background(), googleIdentity("sub-x", "x@acme.com", ""))
 	if err != nil {
-		t.Fatalf("signup: %v", err)
+		t.Fatalf("sign in: %v", err)
 	}
-	if res.TenantID == acme || w.membership(acme, res.UserID) != nil {
-		t.Fatal("password signup joined the tenant owning the email domain without proof of ownership")
+	if res.DefaultTenantID == acme || w.membership(acme, res.UserID) != nil {
+		t.Fatal("a Google account without a hosted domain joined the tenant owning the email domain")
 	}
-	if res.TenantRole != "owner" {
-		t.Errorf("role = %q, want owner of a personal workspace", res.TenantRole)
+	if m := w.membership(res.DefaultTenantID, res.UserID); m == nil || m.Role != "owner" {
+		t.Errorf("membership = %+v, want owner of a personal workspace", m)
 	}
 	if tw, _ := w.FindTenantByDomain(context.Background(), "acme.com"); tw == nil || tw.ID != acme {
 		t.Error("the personal workspace must not claim or take over the domain")
 	}
 }
 
-func TestSignup_PasswordOnUnclaimedDomainDoesNotClaimIt(t *testing.T) {
+func TestGoogle_ConsumerAccountOnUnclaimedDomainDoesNotClaimIt(t *testing.T) {
 	w := newFakeWorld()
 	svc := w.service(t)
 
-	if _, err := svc.Signup(context.Background(), "first@newco.io", "pw-123456", "First", ""); err != nil {
-		t.Fatalf("signup: %v", err)
+	if _, err := svc.SignInWithGoogle(context.Background(), googleIdentity("sub-first", "first@newco.io", "")); err != nil {
+		t.Fatalf("sign in: %v", err)
 	}
 	if tw, _ := w.FindTenantByDomain(context.Background(), "newco.io"); tw != nil {
-		t.Fatal("an unverified signup must not claim a domain for its workspace")
-	}
-}
-
-func TestRegister_LegacyNeverAutoJoinsByDomain(t *testing.T) {
-	w := newFakeWorld()
-	svc := w.service(t)
-	acme := w.addTenant("Acme", "acme.com")
-
-	res, err := svc.Register(context.Background(), "eve@acme.com", "pw-123456")
-	if err != nil {
-		t.Fatalf("register: %v", err)
-	}
-	if w.membership(acme, res.UserID) != nil {
-		t.Fatal("legacy register joined a tenant by domain")
+		t.Fatal("an account without a hosted domain must not claim a domain for its workspace")
 	}
 }
 
 // Allow side of the same rule: a Google Workspace account (hd) is proof.
-func TestSignInWithGoogle_HostedDomainStillJoinsAfterSignupChange(t *testing.T) {
+func TestSignInWithGoogle_HostedDomainJoins(t *testing.T) {
 	w := newFakeWorld()
 	svc := w.service(t)
 	acme := w.addTenant("Acme", "acme.com")
@@ -115,16 +102,16 @@ func TestOTP_NewUserNeverAutoJoinsByDomain(t *testing.T) {
 	}
 }
 
-// Signup runs before any token exists, so the downstream workspace and channel
-// RPCs must carry the user auth just created — otherwise their servers see no
+// Sign-in runs before any token exists, so the downstream workspace and channel
+// RPCs must carry the user auth just created: otherwise their servers see no
 // caller and refuse.
-func TestSignup_DownstreamRPCsCarryTheNewUserAsCaller(t *testing.T) {
+func TestSignIn_DownstreamRPCsCarryTheNewUserAsCaller(t *testing.T) {
 	w := newFakeWorld()
 	svc := w.service(t)
 
-	res, err := svc.Signup(context.Background(), "new@example.org", "pw-123456", "New", "")
+	res, err := svc.SignInWithGoogle(context.Background(), googleIdentity("sub-new", "new@example.org", ""))
 	if err != nil {
-		t.Fatalf("signup: %v", err)
+		t.Fatalf("sign in: %v", err)
 	}
 
 	w.mu.Lock()

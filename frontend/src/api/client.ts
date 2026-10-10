@@ -138,6 +138,27 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
   return toResult<T>(await withRefreshRetry(path, options, true))
 }
 
+/**
+ * A request that is not made on behalf of a session: signing in itself
+ * (providers, ask for a code, check a code).
+ *
+ * `apiFetch` reads a 401 as "the session ended": it refreshes, then logs out
+ * whoever is on the page, and drops the body. Here a 401 is an answer, "wrong
+ * code" or "code expired", and the body (`code`, `attempts_left`) is what the
+ * screen needs. So: no token, no refresh, no logout, and the body is kept.
+ */
+export async function publicFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...options,
+    headers: { ...(options.body ? { 'Content-Type': 'application/json' } : {}), ...(options.headers || {}) },
+  })
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}))
+    throw new ApiError((body as any).error || (body as any).message || res.statusText, res.status, body)
+  }
+  return res.json()
+}
+
 /** Authenticated FormData upload. Does NOT set Content-Type — browser handles multipart boundary. */
 export async function apiUpload<T>(path: string, body: FormData): Promise<T> {
   return toResult<T>(await withRefreshRetry(path, { method: 'POST', body }, false))

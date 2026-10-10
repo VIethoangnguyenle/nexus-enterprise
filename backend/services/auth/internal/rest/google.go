@@ -13,6 +13,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"ngac-platform/pkg/httputil"
 	"ngac-platform/services/auth/internal/domain"
 	"ngac-platform/services/auth/internal/googleauth"
 )
@@ -29,6 +30,10 @@ const (
 	// googleDonePath is the SPA route that finishes sign-in by calling
 	// /api/auth/refresh. Tokens are never put in this URL.
 	googleDonePath = "/auth/google/done"
+
+	// verifyDonePath is where proving an address by Google ends: the workspace
+	// list, which is where the person was asked to prove it.
+	verifyDonePath = "/workspace-select"
 )
 
 // Error codes appended to /login?error=. The SPA maps them to sentences and
@@ -40,7 +45,9 @@ const (
 	googleErrFailed      = "google_failed"
 	googleErrUnverified  = "google_unverified"
 	googleErrConflict    = "google_conflict"
-	googleErrInternal    = "google_error"
+	// googleErrMismatch: the Google account's address is not the one being proved.
+	googleErrMismatch = "google_mismatch"
+	googleErrInternal = "google_error"
 )
 
 // GoogleProvider is the Google side of the flow (googleauth.Client).
@@ -53,6 +60,9 @@ type GoogleProvider interface {
 type googleSessionService interface {
 	refreshAttacher
 	SignInWithGoogle(ctx context.Context, id domain.ExternalIdentity) (*domain.SigninResult, error)
+	// GetUserByID and VerifyEmailWithGoogle serve "prove my address with Google".
+	GetUserByID(ctx context.Context, userID string) (*domain.UserInfo, error)
+	VerifyEmailWithGoogle(ctx context.Context, userID, keepSessionID string, id domain.ExternalIdentity) error
 }
 
 // GoogleOptions configures Google sign-in. A nil Provider disables it.
@@ -96,7 +106,7 @@ var loginHintPattern = regexp.MustCompile(`^[^\s@]{1,64}@[^\s@]{1,190}$`)
 // the browser to Google.
 func (g *googleHandler) Start(c echo.Context) error {
 	if !g.enabled() {
-		return echo.NewHTTPError(http.StatusServiceUnavailable, "google sign-in is not configured")
+		return apiError(http.StatusServiceUnavailable, "google_unavailable", "google sign-in is not configured")
 	}
 
 	hint := strings.TrimSpace(c.QueryParam("login_hint"))
@@ -144,17 +154,20 @@ func (g *googleHandler) Callback(c echo.Context) error {
 		slog.Warn("google sign-in rejected", "reason", googleErrState, "error", err)
 		return g.fail(c, googleErrState)
 	}
+	// A person who is already signed in and only proving their address goes back
+	// to the workspace list with the outcome; everyone else back to the login page.
+	fail := func(reason string) error { return g.failFlow(c, flow, reason) }
 
 	if e := c.QueryParam("error"); e != "" {
 		if e == "access_denied" {
-			return g.fail(c, googleErrCancelled)
+			return fail(googleErrCancelled)
 		}
 		slog.Warn("google sign-in: provider returned an error", "error_code", truncate(e, 64))
-		return g.fail(c, googleErrFailed)
+		return fail(googleErrFailed)
 	}
 	code := c.QueryParam("code")
 	if code == "" {
-		return g.fail(c, googleErrFailed)
+		return fail(googleErrFailed)
 	}
 
 	ident, err := g.provider.Exchange(ctx, code, flow.Verifier, flow.Nonce)
@@ -164,7 +177,11 @@ func (g *googleHandler) Callback(c echo.Context) error {
 			reason = googleErrUnverified
 		}
 		slog.Warn("google sign-in rejected", "reason", reason, "error", err)
-		return g.fail(c, reason)
+		return fail(reason)
+	}
+
+	if flow.VerifyUserID != "" {
+		return g.finishVerification(c, flow, ident)
 	}
 
 	res, err := g.svc.SignInWithGoogle(ctx, domain.ExternalIdentity{
@@ -203,6 +220,14 @@ func (g *googleHandler) Callback(c echo.Context) error {
 	return c.Redirect(http.StatusFound, g.appBase+googleDonePath)
 }
 
+// failFlow is fail for a flow that may have been started to prove an address.
+func (g *googleHandler) failFlow(c echo.Context, flow googleauth.Flow, reason string) error {
+	if flow.VerifyUserID != "" {
+		return c.Redirect(http.StatusFound, g.appBase+verifyDonePath+"?verify_error="+url.QueryEscape(reason))
+	}
+	return g.fail(c, reason)
+}
+
 // fail sends the browser back to the login page with a short error code.
 func (g *googleHandler) fail(c echo.Context, code string) error {
 	return c.Redirect(http.StatusFound, g.appBase+"/login?error="+url.QueryEscape(code))
@@ -239,4 +264,72 @@ func truncate(s string, n int) string {
 		return s[:n]
 	}
 	return s
+}
+
+// StartVerification handles POST /api/me/email/verify/google: the signed-in
+// person wants to prove the address on their account with Google. It starts a
+// flow like Start does, but the flow names the account and the session that
+// asked, binds the browser with the same state cookie, and answers with the
+// Google URL instead of redirecting (a fetch cannot follow a redirect to
+// another site). The Google account is hinted to the address on the account;
+// whichever account the person picks, the callback proves the address only if
+// that account's own verified email is the same one.
+func (g *googleHandler) StartVerification(c echo.Context) error {
+	if !g.enabled() {
+		return apiError(http.StatusServiceUnavailable, "google_unavailable", "google sign-in is not configured")
+	}
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	user, err := g.svc.GetUserByID(c.Request().Context(), claims.UserID)
+	if err != nil {
+		return fail(c, err)
+	}
+	if user.Email == "" {
+		return apiError(http.StatusBadRequest, "invalid_input", "the account has no email address to verify")
+	}
+	if user.EmailVerified {
+		return apiError(http.StatusConflict, "already_verified", domain.ErrAlreadyVerified.Error())
+	}
+
+	secrets, err := googleauth.NewFlowSecrets()
+	if err != nil {
+		slog.Error("google verification: generate flow secrets", "error", err)
+		return apiError(http.StatusInternalServerError, "internal", "internal error")
+	}
+	if err := g.flows.Save(c.Request().Context(), secrets.State, googleauth.Flow{
+		Nonce: secrets.Nonce, Verifier: secrets.Verifier,
+		VerifyUserID: claims.UserID, VerifySessionID: claims.SessionID,
+	}); err != nil {
+		slog.Error("google verification: store flow", "error", err)
+		return apiError(http.StatusInternalServerError, "internal", "internal error")
+	}
+	setGoogleStateCookie(c, secrets.State)
+	c.Response().Header().Set("Cache-Control", "no-store")
+	return c.JSON(http.StatusOK, map[string]string{
+		"url": g.provider.AuthCodeURL(secrets.State, secrets.Nonce, secrets.Verifier, user.Email),
+	})
+}
+
+// finishVerification is the callback of a flow that proves an address. It issues
+// no session and sets no cookie: the person is already signed in, and the
+// Google account they used is not who they are signing in as.
+func (g *googleHandler) finishVerification(c echo.Context, flow googleauth.Flow, ident *googleauth.Identity) error {
+	err := g.svc.VerifyEmailWithGoogle(c.Request().Context(), flow.VerifyUserID, flow.VerifySessionID, domain.ExternalIdentity{
+		Provider: domain.ProviderGoogle, Subject: ident.Subject, Email: ident.Email, EmailVerified: ident.EmailVerified,
+	})
+	if err != nil {
+		reason := googleErrInternal
+		switch {
+		case errors.Is(err, domain.ErrEmailMismatch):
+			reason = googleErrMismatch
+		case errors.Is(err, domain.ErrEmailNotVerified):
+			reason = googleErrUnverified
+		}
+		slog.Warn("google address verification rejected", "reason", reason, "user_id", flow.VerifyUserID, "error", err)
+		return g.failFlow(c, flow, reason)
+	}
+	slog.Info("google address verification succeeded", "user_id", flow.VerifyUserID)
+	return c.Redirect(http.StatusFound, g.appBase+verifyDonePath+"?verified=1")
 }

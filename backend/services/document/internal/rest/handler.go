@@ -17,11 +17,13 @@ import (
 // Handler serves document REST endpoints.
 type Handler struct {
 	drive drivepb.DriveServiceClient
+	texts TextService
 }
 
-// NewHandler creates a document REST handler.
-func NewHandler(drive drivepb.DriveServiceClient) *Handler {
-	return &Handler{drive: drive}
+// NewHandler creates a document REST handler. texts serves the documents
+// written in the app; nil leaves those routes unmounted.
+func NewHandler(drive drivepb.DriveServiceClient, texts TextService) *Handler {
+	return &Handler{drive: drive, texts: texts}
 }
 
 // RegisterRoutes mounts document endpoints on the Echo instance.
@@ -35,6 +37,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/workspaces/:id/documents/upload-url", h.GetUploadURL)
 	api.POST("/documents/:docId/confirm", h.ConfirmUpload)
 	api.GET("/documents/:docId/download-url", h.GetDownloadURL)
+
+	h.registerTextRoutes(api)
 }
 
 // ListDocuments proxies to Drive ListFolder (legacy endpoint).

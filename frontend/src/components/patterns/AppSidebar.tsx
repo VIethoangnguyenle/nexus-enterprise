@@ -4,9 +4,11 @@ import { useAuthStore } from '../../stores/auth.store'
 import { useUiStore } from '../../stores/ui.store'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { usePeople } from '../../hooks/usePeople'
+import { usePreferences } from '../../hooks/usePreferences'
 import { logoutSession } from '../../api/client'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { formatCount } from '../../lib/format'
+import { UNKNOWN_PERSON } from '../../lib/people'
 import { Avatar, IconButton } from '../primitives'
 import {
   MessageSquare, FolderOpen, Users, Package, ClipboardCheck, Settings, LogOut, ChevronDown, Check, ShieldCheck,
@@ -51,6 +53,9 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
   const setActiveModule = useUiStore((s) => s.setActiveModule)
   const { workspaceId, workspaces } = useActiveWorkspace()
   const people = usePeople(workspaceId)
+  const { prefs } = usePreferences()
+  // Rail: icons only, 64px (DESIGN.md §5); every label moves to the tooltip.
+  const rail = prefs.sidebarCollapsed
   const meAsPerson = user?.id ? people.byUserId.get(user.id) : undefined
 
   const [wsDropdownOpen, setWsDropdownOpen] = useState(false)
@@ -92,7 +97,8 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
     if (currentPath.includes('/channels')) return 'messaging'
     if (currentPath.includes('/assets')) return 'assets'
     if (currentPath.includes('/settings')) return 'settings'
-    if (currentPath.includes('/documents')) return 'documents'
+    // Văn bản is a group inside Tài liệu, so its pages light up Tài liệu.
+    if (currentPath.includes('/documents')) return 'drive'
     return activeModule
   })()
 
@@ -106,16 +112,18 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
         to={item.to}
         onClick={() => setActiveModule(item.id)}
         aria-current={active ? 'page' : undefined}
-        className={`flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-sm no-underline focus-ring
-          transition-colors duration-quick
+        aria-label={rail ? (count && count > 0 ? `${item.label}, ${count} chưa đọc` : item.label) : undefined}
+        title={rail ? item.label : undefined}
+        className={`relative flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-sm no-underline focus-ring
+          transition-colors duration-quick ${rail ? 'justify-center' : ''}
           ${active ? 'bg-raised text-ink font-semibold' : 'text-ink-muted font-medium hover:bg-hover hover:text-ink'}`}
       >
         <item.icon size={18} strokeWidth={1.75} aria-hidden="true" />
-        <span className="flex-1 truncate">{item.label}</span>
+        {!rail && <span className="flex-1 truncate">{item.label}</span>}
         {count && count > 0 ? (
           <span
-            className="inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full bg-accent
-              text-on-accent text-2xs font-semibold tnum"
+            className={`inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full bg-accent
+              text-on-accent text-2xs font-semibold tnum ${rail ? 'absolute top-0 right-0' : ''}`}
             aria-label={`${count} chưa đọc`}
           >
             {formatCount(count)}
@@ -128,7 +136,9 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
   return (
     <aside
       aria-label="Điều hướng chính"
-      className="hidden lg:grid grid-rows-[auto_1fr_auto] w-58 shrink-0 bg-sunk h-full p-3 gap-3 overflow-hidden"
+      data-rail={rail || undefined}
+      className={`hidden lg:grid grid-rows-[auto_1fr_auto] shrink-0 bg-sunk h-full p-3 gap-3 overflow-hidden
+        ${rail ? 'w-16' : 'w-58'}`}
     >
       <div className="relative" ref={wsDropdownRef}>
         {/* eslint-disable-next-line no-restricted-syntax -- Nút đổi không gian làm việc: logo 32px +
@@ -139,8 +149,10 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
           onClick={() => setWsDropdownOpen(!wsDropdownOpen)}
           aria-haspopup="listbox"
           aria-expanded={wsDropdownOpen}
-          className="flex items-center gap-2.5 w-full px-2 py-1.5 rounded-surface border-none bg-transparent
-            cursor-pointer text-left focus-ring transition-colors duration-quick hover:bg-hover"
+          aria-label={rail ? `Không gian làm việc: ${name}` : undefined}
+          title={rail ? name : undefined}
+          className={`flex items-center gap-2.5 w-full px-2 py-1.5 rounded-surface border-none bg-transparent
+            cursor-pointer text-left focus-ring transition-colors duration-quick hover:bg-hover ${rail ? 'justify-center' : ''}`}
         >
           <span
             aria-hidden="true"
@@ -149,22 +161,24 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
           >
             {Array.from(name.trim())[0]?.toLocaleUpperCase('vi') ?? 'N'}
           </span>
-          <span className="min-w-0 flex-1 font-display text-base font-bold text-ink truncate">{name}</span>
-          <ChevronDown
-            size={16}
-            strokeWidth={1.75}
-            aria-hidden="true"
-            className={`text-ink-muted shrink-0 transition-transform duration-quick motion-reduce:transition-none
-              ${wsDropdownOpen ? 'rotate-180' : ''}`}
-          />
+          {!rail && <span className="min-w-0 flex-1 font-display text-base font-bold text-ink truncate">{name}</span>}
+          {!rail && (
+            <ChevronDown
+              size={16}
+              strokeWidth={1.75}
+              aria-hidden="true"
+              className={`text-ink-muted shrink-0 transition-transform duration-quick motion-reduce:transition-none
+                ${wsDropdownOpen ? 'rotate-180' : ''}`}
+            />
+          )}
         </button>
 
         {wsDropdownOpen && workspaces.length > 0 && (
           <div
             role="listbox"
             aria-label="Không gian làm việc"
-            className="absolute left-0 right-0 top-full mt-1.5 z-dropdown p-1.5 rounded-overlay bg-overlay shadow-overlay
-              max-h-60 overflow-y-auto animate-fade-in"
+            className={`absolute left-0 top-full mt-1.5 z-dropdown p-1.5 rounded-overlay bg-overlay shadow-overlay
+              max-h-60 overflow-y-auto animate-fade-in ${rail ? 'w-56' : 'right-0'}`}
           >
             {workspaces.map((ws) => (
               /* eslint-disable-next-line no-restricted-syntax -- Lựa chọn trong listbox (role=option),
@@ -192,18 +206,20 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
 
       <div className="grid gap-0.5">
         {footNavItems.map(navLink)}
-        <div className="flex items-center gap-2.5 p-2">
+        <div className={`flex items-center gap-2.5 p-2 ${rail ? 'flex-col' : ''}`}>
           <Avatar
-            name={meAsPerson?.name || user?.username || 'Bạn'}
+            name={meAsPerson?.name || UNKNOWN_PERSON}
             hueKey={user?.id}
             src={meAsPerson?.avatarUrl}
             online
             size={32}
           />
-          <span className="grid min-w-0 flex-1">
-            <span className="font-semibold text-ink truncate">{meAsPerson?.name || user?.username}</span>
-            {meAsPerson?.role && <span className="text-xs text-ink-muted truncate">{meAsPerson.role}</span>}
-          </span>
+          {!rail && (
+            <span className="grid min-w-0 flex-1">
+              <span className="font-semibold text-ink truncate">{meAsPerson?.name || UNKNOWN_PERSON}</span>
+              {meAsPerson?.role && <span className="text-xs text-ink-muted truncate">{meAsPerson.role}</span>}
+            </span>
+          )}
           <IconButton size="sm" aria-label="Đăng xuất" title="Đăng xuất" onClick={() => void logoutSession()}>
             <LogOut size={16} strokeWidth={1.75} />
           </IconButton>

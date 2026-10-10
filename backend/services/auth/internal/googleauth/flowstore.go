@@ -26,6 +26,12 @@ var ErrFlowNotFound = errors.New("google sign-in flow not found")
 type Flow struct {
 	Nonce    string `json:"nonce"`
 	Verifier string `json:"verifier"`
+
+	// A flow started to prove the address of the account someone is already
+	// signed in to (rather than to sign in) names that account and the session
+	// that asked. The callback then proves the address and issues nothing.
+	VerifyUserID    string `json:"verify_user_id,omitempty"`
+	VerifySessionID string `json:"verify_session_id,omitempty"`
 }
 
 // FlowStore keeps in-progress sign-in attempts.

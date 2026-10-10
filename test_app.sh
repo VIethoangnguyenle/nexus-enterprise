@@ -15,34 +15,45 @@ echo "  NGAC Platform - Full Business Test"
 echo "=========================================="
 
 # ==========================================
-# 1. AUTH: Register + Login
+# 1. AUTH: sign in with a one-time code
 # ==========================================
+# There is no password sign-up or sign-in. A test signs in the way a person does,
+# with a code. NGAC_TEST_OTP is the server's fixed test code (AUTH_FIXED_OTP_CODE,
+# 999999 unless set otherwise): fine for a dev script, never for a real deployment.
 echo ""
 echo "--- 1. AUTH ---"
 
-R=$(curl -s -X POST "$BASE/api/auth/register" -H 'Content-Type: application/json' -d "{\"username\":\"admin_$TS\",\"password\":\"pass1234\"}")
-UID1=$(extract "$R" "['user']['id']")
-[ -n "$UID1" ] && ok "Register admin1 (id=$UID1)" || fail "Register admin1: $R"
+OTP_CODE="${NGAC_TEST_OTP:-999999}"
 
-R=$(curl -s -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' -d "{\"username\":\"admin_$TS\",\"password\":\"pass1234\"}")
-TOKEN1=$(extract "$R" "['token']")
+# otp_signin <email>: prints the verify answer (JSON), or nothing on failure.
+otp_signin() {
+  local sid
+  sid=$(curl -s -X POST "$BASE/api/auth/otp/request" -H 'Content-Type: application/json' \
+    -d "{\"identifier\":\"$1\",\"type\":\"email\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)['session_id'])" 2>/dev/null)
+  [ -n "$sid" ] || return 1
+  curl -s -X POST "$BASE/api/auth/otp/verify" -H 'Content-Type: application/json' \
+    -d "{\"session_id\":\"$sid\",\"code\":\"$OTP_CODE\"}"
+}
+
+R=$(otp_signin "admin_$TS@test.local")
+TOKEN1=$(extract "$R" "['access_token']")
 UID1=$(extract "$R" "['user']['id']")
-[ -n "$TOKEN1" ] && ok "Login admin1" || fail "Login admin1: $R"
 NGAC1=$(extract "$R" "['user']['ngac_node_id']")
+[ -n "$TOKEN1" ] && ok "Sign in admin1 by code (id=$UID1)" || fail "Sign in admin1: $R"
 
-R=$(curl -s -X POST "$BASE/api/auth/register" -H 'Content-Type: application/json' -d "{\"username\":\"user2_$TS\",\"password\":\"pass1234\"}")
+R=$(otp_signin "user2_$TS@test.local")
+TOKEN2=$(extract "$R" "['access_token']")
 UID2=$(extract "$R" "['user']['id']")
-[ -n "$UID2" ] && ok "Register user2 (id=$UID2)" || fail "Register user2: $R"
-
-R=$(curl -s -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' -d "{\"username\":\"user2_$TS\",\"password\":\"pass1234\"}")
-TOKEN2=$(extract "$R" "['token']")
 NGAC2=$(extract "$R" "['user']['ngac_node_id']")
-[ -n "$TOKEN2" ] && ok "Login user2" || fail "Login user2: $R"
+[ -n "$TOKEN2" ] && ok "Sign in user2 by code (id=$UID2)" || fail "Sign in user2: $R"
 
 # Auth negative tests
-R=$(curl -s -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' -d "{\"username\":\"admin_$TS\",\"password\":\"wrong\"}")
-ERR=$(extract "$R" "['error']")
-[ -n "$ERR" ] && ok "Login wrong password rejected" || fail "Wrong password not rejected"
+SID=$(curl -s -X POST "$BASE/api/auth/otp/request" -H 'Content-Type: application/json' -d "{\"identifier\":\"admin_$TS@test.local\",\"type\":\"email\"}" | python3 -c "import sys,json; print(json.load(sys.stdin)['session_id'])" 2>/dev/null)
+R=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/auth/otp/verify" -H 'Content-Type: application/json' -d "{\"session_id\":\"$SID\",\"code\":\"000000\"}")
+[ "$R" = "401" ] && ok "Wrong code rejected" || fail "Wrong code not rejected: got $R"
+
+R=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE/api/auth/login" -H 'Content-Type: application/json' -d '{"username":"x","password":"y"}')
+[ "$R" != "200" ] && [ "$R" != "201" ] && ok "Password login no longer exists ($R)" || fail "Password login still answers: $R"
 
 R=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/api/workspaces" -H 'Authorization: Bearer invalid_token')
 [ "$R" = "401" ] && ok "Invalid token returns 401" || fail "Invalid token: got $R"
@@ -53,10 +64,9 @@ R=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/api/workspaces")
 H1="Authorization: Bearer $TOKEN1"
 H2="Authorization: Bearer $TOKEN2"
 
-# List users
-R=$(curl -s "$BASE/api/users" -H "$H1")
-echo "$R" | python3 -c "import sys,json; d=json.load(sys.stdin); assert len(d.get('users',[])) >= 2" 2>/dev/null
-check $? "List users returns >= 2" "$R"
+# The account list is gone: nothing may let a signed-in person walk the user table.
+R=$(curl -s -o /dev/null -w "%{http_code}" "$BASE/api/users" -H "$H1")
+[ "$R" != "200" ] && ok "GET /api/users is gone ($R)" || fail "GET /api/users still lists accounts"
 
 # ==========================================
 # 2. WORKSPACE

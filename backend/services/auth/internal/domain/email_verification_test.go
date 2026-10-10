@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,55 +22,60 @@ type verifyingSender struct{ recordingSender }
 
 func (*verifyingSender) DeliversToOwner() bool { return true }
 
-func TestSignup_StoresTheAddressNormalisedAndNeverVerified(t *testing.T) {
-	w := newFakeWorld()
-	svc := w.service(t)
-	res, err := svc.Signup(context.Background(), "  Eve.Smith@Acme.COM ", "pw-123456", "Eve", "")
+func TestOTP_StoresTheAddressNormalisedAndUnverified(t *testing.T) {
+	svc, w, _ := otpService(t, nil)
+	base := fmt.Sprintf("Eve.%d", time.Now().UnixNano())
+	sid, err := svc.RequestOTP(context.Background(), "  "+base+"@Acme.COM ", "email")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Email != "eve.smith@acme.com" {
-		t.Errorf("email = %q, want trimmed and lower-cased", res.Email)
+	res, err := svc.VerifyOTP(context.Background(), sid, "999999")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if u := w.userByEmail("eve.smith@acme.com"); u == nil || u.Email != "eve.smith@acme.com" {
+	want := strings.ToLower(base) + "@acme.com"
+	if res.Email != want {
+		t.Errorf("email = %q, want trimmed and lower-cased %q", res.Email, want)
+	}
+	if u := w.userByEmail(want); u == nil || u.Email != want {
 		t.Errorf("stored email = %+v", u)
 	}
 	if w.emailVerified(res.UserID) {
-		t.Error("a password signup proves nothing about the address")
+		t.Error("the fixed test code proves nothing about the address")
 	}
 }
 
-func TestSignup_CaseVariantOfAnExistingAddressIsRejected(t *testing.T) {
-	w := newFakeWorld()
-	svc := w.service(t)
-	w.addUser("owner@acme.com")
-	for _, variant := range []string{"OWNER@acme.com", "Owner@Acme.com", "  owner@acme.com  "} {
-		if _, err := svc.Signup(context.Background(), variant, "pw-123456", "x", ""); !errors.Is(err, domain.ErrUserExists) {
-			t.Errorf("%q: err = %v, want ErrUserExists", variant, err)
+func TestOTP_CaseVariantOfAnExistingAddressIsTheSameAccount(t *testing.T) {
+	svc, w, _ := otpService(t, nil)
+	base := fmt.Sprintf("owner%d", time.Now().UnixNano())
+	existing := w.addUser(base + "@acme.com")
+	for _, variant := range []string{strings.ToUpper(base) + "@acme.com", "  " + base + "@Acme.com  "} {
+		sid, err := svc.RequestOTP(context.Background(), variant, "email")
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := svc.VerifyOTP(context.Background(), sid, "999999")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.UserID != existing.ID || res.IsNewUser {
+			t.Errorf("%q: signed in as %q (new=%v), want the existing account", variant, res.UserID, res.IsNewUser)
 		}
 	}
 	if w.userCount() != 1 {
-		t.Errorf("no account may be created, have %d", w.userCount())
+		t.Errorf("no account may be created for a case variant, have %d", w.userCount())
 	}
 }
 
-func TestSignup_RejectsWhatIsNotAnAddress(t *testing.T) {
-	svc := newFakeWorld().service(t)
+func TestOTP_RefusesWhatIsNotAnAddress(t *testing.T) {
+	svc, w, _ := otpService(t, nil)
 	for _, in := range []string{"", "   ", "no-at-sign", "a@b", "a b@c.vn"} {
-		if _, err := svc.Signup(context.Background(), in, "pw-123456", "x", ""); err == nil {
-			t.Errorf("%q must be rejected", in)
+		if _, err := svc.RequestOTP(context.Background(), in, "email"); !errors.Is(err, domain.ErrInvalidInput) {
+			t.Errorf("%q: err = %v, want ErrInvalidInput", in, err)
 		}
 	}
-}
-
-func TestSignin_FindsTheAccountWhateverTheCase(t *testing.T) {
-	w := newFakeWorld()
-	svc := w.service(t)
-	if _, err := svc.Signup(context.Background(), "Dan@Acme.com", "pw-123456", "Dan", ""); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.Signin(context.Background(), " DAN@ACME.COM", "pw-123456"); err != nil {
-		t.Fatalf("signin with another case: %v", err)
+	if w.userCount() != 0 {
+		t.Error("no account may be created")
 	}
 }
 

@@ -137,10 +137,16 @@ func (s *Service) resolveGoogleUser(ctx context.Context, subject, email, display
 // Either step failing fails the sign-in: linking while the attacker keeps
 // access would complete the takeover.
 func (s *Service) evictUnverifiedCredentials(ctx context.Context, userID string) error {
+	return s.evictUnverifiedCredentialsExcept(ctx, userID, "")
+}
+
+// evictUnverifiedCredentialsExcept is the same, sparing the session of the person
+// who has just proved the address (see RevokeAllForUserExcept).
+func (s *Service) evictUnverifiedCredentialsExcept(ctx context.Context, userID, keepSessionID string) error {
 	if err := s.store.ClearPassword(ctx, userID); err != nil {
 		return fmt.Errorf("clear unverified password: %w", err)
 	}
-	if err := s.refresh.RevokeAllForUser(ctx, userID); err != nil {
+	if err := s.refresh.RevokeAllForUserExcept(ctx, userID, keepSessionID); err != nil {
 		return fmt.Errorf("revoke unverified sessions: %w", err)
 	}
 	slog.Info("audit: google link evicted unverified credentials",

@@ -25,8 +25,10 @@ import (
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/document"
 	drivepb "ngac-platform/proto/drive"
+	policypb "ngac-platform/proto/policy"
 	dgrpc "ngac-platform/services/document/internal/grpc"
 	"ngac-platform/services/document/internal/rest"
+	"ngac-platform/services/document/internal/texts"
 )
 
 func main() {
@@ -47,6 +49,7 @@ func main() {
 		os.Exit(1)
 	}
 	driveAddr := envOr("DRIVE_SERVICE_ADDR", "localhost:50057")
+	policyAddr := envOr("POLICY_SERVICE_ADDR", "localhost:50051")
 
 	// MinIO configuration
 	minioEndpoint := envOr("MINIO_ENDPOINT", "localhost:9000")
@@ -110,12 +113,22 @@ func main() {
 		driveClient = drivepb.NewDriveServiceClient(driveConn)
 	}
 
+	// Documents written in the app are authorized by the policy service.
+	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("document")))
+	if err != nil {
+		slog.Error("failed to connect to policy service", "address", policyAddr, "error", err)
+		os.Exit(1)
+	}
+	defer policyConn.Close()
+	textService := texts.NewService(texts.NewStore(pool), policypb.NewPolicyReadServiceClient(policyConn))
+
 	// REST server (client-facing)
 	e := echo.New()
 	e.HideBanner = true
 	e.Use(echomw.Logger())
 	e.Use(echomw.Recover())
-	restHandler := rest.NewHandler(driveClient)
+	restHandler := rest.NewHandler(driveClient, textService)
 	restHandler.RegisterRoutes(e, jwtSecret)
 
 	// Start both servers

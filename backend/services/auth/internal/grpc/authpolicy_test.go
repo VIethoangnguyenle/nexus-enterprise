@@ -31,19 +31,24 @@ func TestUserLookupsRequireACaller(t *testing.T) {
 	if _, err := c.GetUserByNGACNodeID(context.Background(), &pb.GetUserByNGACNodeIDRequest{NgacNodeId: "n"}); status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("GetUserByNGACNodeID: want Unauthenticated, got %v", err)
 	}
-	if _, err := c.ListUsers(context.Background(), &pb.ListUsersRequest{}); status.Code(err) != codes.Unauthenticated {
-		t.Fatalf("ListUsers: want Unauthenticated, got %v", err)
-	}
 }
 
-// Login presents credentials; with no caller it still reaches the handler. An
-// empty request is rejected there as invalid input, never by the interceptor.
-func TestCredentialRPCsAreReachableWithoutACaller(t *testing.T) {
-	c := serveAuth(t)
-
-	_, err := c.Login(context.Background(), &pb.LoginRequest{})
-	if status.Code(err) == codes.Unauthenticated && status.Convert(err).Message() == "caller identity required" {
-		t.Fatalf("Login refused by the caller interceptor: %v", err)
+// People sign in with Google or a one-time code, over REST. The service has no
+// password RPC and no way to list accounts, so there is nothing to attack or to
+// enumerate over gRPC either.
+func TestNoPasswordOrListingRPCsExist(t *testing.T) {
+	methods := pb.AuthService_ServiceDesc.Methods
+	have := map[string]bool{}
+	for _, m := range methods {
+		have[m.MethodName] = true
+	}
+	for _, gone := range []string{"Register", "Login", "Signup", "Signin", "ListUsers"} {
+		if have[gone] {
+			t.Errorf("AuthService still has %s", gone)
+		}
+	}
+	if !have["GetUserByID"] || !have["GetUserByNGACNodeID"] {
+		t.Error("the lookups other services use must remain")
 	}
 }
 

@@ -10,11 +10,11 @@ const isDev = process.env.VITE_DEV_MODE === 'true'
 const devProxy = {
   // Auth service — :8180
   '/api/auth': { target: 'http://localhost:8180', changeOrigin: true },
-  '/api/users': { target: 'http://localhost:8180', changeOrigin: true },
 
   // Messaging service — :8183 (REST) + :8081 (WebSocket)
   // IMPORTANT: /api/messages MUST come before /api/me (prefix collision)
   '/api/messages': { target: 'http://localhost:8183', changeOrigin: true },
+  // /api/me, /api/me/profile and /api/me/workspaces (list, create) are all the auth service.
   '/api/me': { target: 'http://localhost:8180', changeOrigin: true },
 
   // Workspace service — :8181 (with sub-routing for nested service paths)

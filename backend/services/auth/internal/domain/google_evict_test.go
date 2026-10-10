@@ -2,15 +2,15 @@ package domain_test
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"ngac-platform/services/auth/internal/auth"
 	"ngac-platform/services/auth/internal/domain"
 )
 
-// Pre-hijacking: an attacker registers victim@acme.com with a password (signup
-// never verifies the email) and waits. When the real owner signs in with
+// Pre-hijacking: an attacker holds an account on victim@acme.com that nobody
+// proved (a password set before the address was verified, or a session from the
+// test-only fixed code) and waits. When the real owner signs in with
 // Google, the account is linked to them — so whatever the attacker set up on
 // it must stop working at that moment.
 
@@ -27,13 +27,19 @@ func seedPasswordUser(t *testing.T, w *fakeWorld, email, password string) string
 	return u.ID
 }
 
+func passwordOf(w *fakeWorld, userID string) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.users[userID].Password
+}
+
 func TestGoogleLinkByEmail_ClearsUnverifiedPassword(t *testing.T) {
 	w := newFakeWorld()
 	svc := w.service(t)
 	userID := seedPasswordUser(t, w, "victim@acme.com", "attacker-pw")
 
-	if _, err := svc.Signin(context.Background(), "victim@acme.com", "attacker-pw"); err != nil {
-		t.Fatalf("precondition: password works before linking: %v", err)
+	if passwordOf(w, userID) == "" {
+		t.Fatal("precondition: the account has a password before linking")
 	}
 
 	res, err := svc.SignInWithGoogle(context.Background(), googleIdentity("victim-sub", "victim@acme.com", ""))
@@ -43,8 +49,8 @@ func TestGoogleLinkByEmail_ClearsUnverifiedPassword(t *testing.T) {
 	if res.UserID != userID {
 		t.Fatalf("linked to %q, want the existing account %q", res.UserID, userID)
 	}
-	if _, err := svc.Signin(context.Background(), "victim@acme.com", "attacker-pw"); !errors.Is(err, domain.ErrInvalidCredentials) {
-		t.Fatalf("the pre-existing password still signs in after Google proved ownership: %v", err)
+	if passwordOf(w, userID) != "" {
+		t.Fatal("the pre-existing password survived Google proving ownership")
 	}
 }
 
@@ -57,8 +63,8 @@ func TestGoogleReturningUserBySubject_KeepsPassword(t *testing.T) {
 	if _, err := svc.SignInWithGoogle(context.Background(), googleIdentity("alice-sub", "alice@acme.com", "")); err != nil {
 		t.Fatalf("google sign in: %v", err)
 	}
-	if _, err := svc.Signin(context.Background(), "alice@acme.com", "alice-pw"); err != nil {
-		t.Fatalf("a returning, already-linked user must keep their password: %v", err)
+	if passwordOf(w, userID) == "" {
+		t.Fatal("a returning, already-linked user must keep their password")
 	}
 }
 

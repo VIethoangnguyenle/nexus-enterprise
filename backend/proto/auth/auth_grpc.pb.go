@@ -19,15 +19,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AuthService_Register_FullMethodName            = "/auth.AuthService/Register"
-	AuthService_Login_FullMethodName               = "/auth.AuthService/Login"
 	AuthService_RevokeToken_FullMethodName         = "/auth.AuthService/RevokeToken"
 	AuthService_IsTokenRevoked_FullMethodName      = "/auth.AuthService/IsTokenRevoked"
 	AuthService_GetUserByID_FullMethodName         = "/auth.AuthService/GetUserByID"
 	AuthService_GetUserByNGACNodeID_FullMethodName = "/auth.AuthService/GetUserByNGACNodeID"
-	AuthService_ListUsers_FullMethodName           = "/auth.AuthService/ListUsers"
-	AuthService_Signup_FullMethodName              = "/auth.AuthService/Signup"
-	AuthService_Signin_FullMethodName              = "/auth.AuthService/Signin"
 	AuthService_SwitchTenant_FullMethodName        = "/auth.AuthService/SwitchTenant"
 	AuthService_GetMe_FullMethodName               = "/auth.AuthService/GetMe"
 	AuthService_ListUserTenants_FullMethodName     = "/auth.AuthService/ListUserTenants"
@@ -37,17 +32,14 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type AuthServiceClient interface {
-	// Legacy endpoints (backward-compatible)
-	Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*AuthResponse, error)
-	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*AuthResponse, error)
+	// There is no password sign-up or sign-in, and no way to list accounts:
+	// people sign in with Google or a one-time code, and other services look an
+	// account up by ID or NGAC node.
 	RevokeToken(ctx context.Context, in *RevokeTokenRequest, opts ...grpc.CallOption) (*RevokeTokenResponse, error)
 	IsTokenRevoked(ctx context.Context, in *IsTokenRevokedRequest, opts ...grpc.CallOption) (*IsTokenRevokedResponse, error)
 	GetUserByID(ctx context.Context, in *GetUserByIDRequest, opts ...grpc.CallOption) (*UserInfo, error)
 	GetUserByNGACNodeID(ctx context.Context, in *GetUserByNGACNodeIDRequest, opts ...grpc.CallOption) (*UserInfo, error)
-	ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*UserListResponse, error)
 	// Multi-tenant endpoints
-	Signup(ctx context.Context, in *SignupRequest, opts ...grpc.CallOption) (*SignupResponse, error)
-	Signin(ctx context.Context, in *SigninRequest, opts ...grpc.CallOption) (*SigninResponse, error)
 	SwitchTenant(ctx context.Context, in *SwitchTenantRequest, opts ...grpc.CallOption) (*SwitchTenantResponse, error)
 	GetMe(ctx context.Context, in *GetMeRequest, opts ...grpc.CallOption) (*MeResponse, error)
 	ListUserTenants(ctx context.Context, in *ListUserTenantsRequest, opts ...grpc.CallOption) (*TenantListResponse, error)
@@ -59,26 +51,6 @@ type authServiceClient struct {
 
 func NewAuthServiceClient(cc grpc.ClientConnInterface) AuthServiceClient {
 	return &authServiceClient{cc}
-}
-
-func (c *authServiceClient) Register(ctx context.Context, in *RegisterRequest, opts ...grpc.CallOption) (*AuthResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AuthResponse)
-	err := c.cc.Invoke(ctx, AuthService_Register_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *authServiceClient) Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*AuthResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(AuthResponse)
-	err := c.cc.Invoke(ctx, AuthService_Login_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
 }
 
 func (c *authServiceClient) RevokeToken(ctx context.Context, in *RevokeTokenRequest, opts ...grpc.CallOption) (*RevokeTokenResponse, error) {
@@ -121,36 +93,6 @@ func (c *authServiceClient) GetUserByNGACNodeID(ctx context.Context, in *GetUser
 	return out, nil
 }
 
-func (c *authServiceClient) ListUsers(ctx context.Context, in *ListUsersRequest, opts ...grpc.CallOption) (*UserListResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(UserListResponse)
-	err := c.cc.Invoke(ctx, AuthService_ListUsers_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *authServiceClient) Signup(ctx context.Context, in *SignupRequest, opts ...grpc.CallOption) (*SignupResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SignupResponse)
-	err := c.cc.Invoke(ctx, AuthService_Signup_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *authServiceClient) Signin(ctx context.Context, in *SigninRequest, opts ...grpc.CallOption) (*SigninResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(SigninResponse)
-	err := c.cc.Invoke(ctx, AuthService_Signin_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *authServiceClient) SwitchTenant(ctx context.Context, in *SwitchTenantRequest, opts ...grpc.CallOption) (*SwitchTenantResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(SwitchTenantResponse)
@@ -185,17 +127,14 @@ func (c *authServiceClient) ListUserTenants(ctx context.Context, in *ListUserTen
 // All implementations must embed UnimplementedAuthServiceServer
 // for forward compatibility.
 type AuthServiceServer interface {
-	// Legacy endpoints (backward-compatible)
-	Register(context.Context, *RegisterRequest) (*AuthResponse, error)
-	Login(context.Context, *LoginRequest) (*AuthResponse, error)
+	// There is no password sign-up or sign-in, and no way to list accounts:
+	// people sign in with Google or a one-time code, and other services look an
+	// account up by ID or NGAC node.
 	RevokeToken(context.Context, *RevokeTokenRequest) (*RevokeTokenResponse, error)
 	IsTokenRevoked(context.Context, *IsTokenRevokedRequest) (*IsTokenRevokedResponse, error)
 	GetUserByID(context.Context, *GetUserByIDRequest) (*UserInfo, error)
 	GetUserByNGACNodeID(context.Context, *GetUserByNGACNodeIDRequest) (*UserInfo, error)
-	ListUsers(context.Context, *ListUsersRequest) (*UserListResponse, error)
 	// Multi-tenant endpoints
-	Signup(context.Context, *SignupRequest) (*SignupResponse, error)
-	Signin(context.Context, *SigninRequest) (*SigninResponse, error)
 	SwitchTenant(context.Context, *SwitchTenantRequest) (*SwitchTenantResponse, error)
 	GetMe(context.Context, *GetMeRequest) (*MeResponse, error)
 	ListUserTenants(context.Context, *ListUserTenantsRequest) (*TenantListResponse, error)
@@ -209,12 +148,6 @@ type AuthServiceServer interface {
 // pointer dereference when methods are called.
 type UnimplementedAuthServiceServer struct{}
 
-func (UnimplementedAuthServiceServer) Register(context.Context, *RegisterRequest) (*AuthResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Register not implemented")
-}
-func (UnimplementedAuthServiceServer) Login(context.Context, *LoginRequest) (*AuthResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Login not implemented")
-}
 func (UnimplementedAuthServiceServer) RevokeToken(context.Context, *RevokeTokenRequest) (*RevokeTokenResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RevokeToken not implemented")
 }
@@ -226,15 +159,6 @@ func (UnimplementedAuthServiceServer) GetUserByID(context.Context, *GetUserByIDR
 }
 func (UnimplementedAuthServiceServer) GetUserByNGACNodeID(context.Context, *GetUserByNGACNodeIDRequest) (*UserInfo, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetUserByNGACNodeID not implemented")
-}
-func (UnimplementedAuthServiceServer) ListUsers(context.Context, *ListUsersRequest) (*UserListResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method ListUsers not implemented")
-}
-func (UnimplementedAuthServiceServer) Signup(context.Context, *SignupRequest) (*SignupResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Signup not implemented")
-}
-func (UnimplementedAuthServiceServer) Signin(context.Context, *SigninRequest) (*SigninResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method Signin not implemented")
 }
 func (UnimplementedAuthServiceServer) SwitchTenant(context.Context, *SwitchTenantRequest) (*SwitchTenantResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method SwitchTenant not implemented")
@@ -264,42 +188,6 @@ func RegisterAuthServiceServer(s grpc.ServiceRegistrar, srv AuthServiceServer) {
 		t.testEmbeddedByValue()
 	}
 	s.RegisterService(&AuthService_ServiceDesc, srv)
-}
-
-func _AuthService_Register_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuthServiceServer).Register(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuthService_Register_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuthServiceServer).Register(ctx, req.(*RegisterRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuthService_Login_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(LoginRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuthServiceServer).Login(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuthService_Login_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuthServiceServer).Login(ctx, req.(*LoginRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 func _AuthService_RevokeToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -374,60 +262,6 @@ func _AuthService_GetUserByNGACNodeID_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
-func _AuthService_ListUsers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ListUsersRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuthServiceServer).ListUsers(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuthService_ListUsers_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuthServiceServer).ListUsers(ctx, req.(*ListUsersRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuthService_Signup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SignupRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuthServiceServer).Signup(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuthService_Signup_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuthServiceServer).Signup(ctx, req.(*SignupRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _AuthService_Signin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SigninRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(AuthServiceServer).Signin(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: AuthService_Signin_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(AuthServiceServer).Signin(ctx, req.(*SigninRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _AuthService_SwitchTenant_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SwitchTenantRequest)
 	if err := dec(in); err != nil {
@@ -490,14 +324,6 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*AuthServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Register",
-			Handler:    _AuthService_Register_Handler,
-		},
-		{
-			MethodName: "Login",
-			Handler:    _AuthService_Login_Handler,
-		},
-		{
 			MethodName: "RevokeToken",
 			Handler:    _AuthService_RevokeToken_Handler,
 		},
@@ -512,18 +338,6 @@ var AuthService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserByNGACNodeID",
 			Handler:    _AuthService_GetUserByNGACNodeID_Handler,
-		},
-		{
-			MethodName: "ListUsers",
-			Handler:    _AuthService_ListUsers_Handler,
-		},
-		{
-			MethodName: "Signup",
-			Handler:    _AuthService_Signup_Handler,
-		},
-		{
-			MethodName: "Signin",
-			Handler:    _AuthService_Signin_Handler,
 		},
 		{
 			MethodName: "SwitchTenant",

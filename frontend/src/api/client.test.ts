@@ -17,7 +17,7 @@ vi.mock('../stores/auth.store', () => ({
   useAuthStore: { getState: () => state },
 }))
 
-const { apiFetch, refreshAccessToken, bootstrapSession } = await import('./client')
+const { apiFetch, publicFetch, ApiError, refreshAccessToken, bootstrapSession } = await import('./client')
 
 /** A 401 followed by whatever the caller queues next. */
 function unauthorized() {
@@ -148,5 +148,54 @@ describe('bootstrapSession', () => {
 
     expect(mockFetch).not.toHaveBeenCalled()
     expect(state.setBootstrapped).toHaveBeenCalled()
+  })
+})
+
+// Signing in is not a request made on behalf of a session: a 401 from it is an
+// answer ("wrong code", "code expired"), and treating it as an expired session
+// would refresh, then log out whoever is on the page and drop the answer's body.
+describe('publicFetch', () => {
+  it('keeps the body of a 401 and neither refreshes nor logs anyone out', async () => {
+    const body = { code: 'otp_invalid', attempts_left: 3, message: 'invalid otp code' }
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 401, json: () => Promise.resolve(body) })
+
+    const err = await publicFetch('/auth/otp/verify', { method: 'POST', body: '{}' }).catch((e) => e)
+
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err).toMatchObject({ status: 401, body })
+    expect(mockFetch).toHaveBeenCalledTimes(1) // no refresh, no retry
+    expect(state.logout).not.toHaveBeenCalled()
+  })
+
+  it('sends no Authorization header even when a token is held', async () => {
+    mockFetch.mockResolvedValueOnce(ok({ session_id: 's' }))
+    await publicFetch('/auth/otp/request', { method: 'POST', body: '{"identifier":"x"}' })
+    const [url, init] = mockFetch.mock.calls[0]! as [string, RequestInit]
+    expect(url).toBe('/api/auth/otp/request')
+    expect(init.headers).toEqual({ 'Content-Type': 'application/json' })
+  })
+
+  it('returns the parsed body', async () => {
+    mockFetch.mockResolvedValueOnce(ok({ google: true }))
+    await expect(publicFetch('/auth/providers')).resolves.toEqual({ google: true })
+  })
+
+  it.each([
+    [429, { code: 'otp_rate_limited', retry_after_seconds: 700 }],
+    [503, { code: 'otp_unavailable' }],
+    [500, { code: 'internal' }],
+  ])('keeps the body of a %i', async (status, body) => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status, json: () => Promise.resolve(body) })
+    await expect(publicFetch('/auth/otp/request', { method: 'POST' })).rejects.toMatchObject({ status, body })
+  })
+
+  it('survives an answer that is not JSON', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 502, statusText: 'Bad Gateway', json: () => Promise.reject(new Error('html')) })
+    await expect(publicFetch('/auth/providers')).rejects.toMatchObject({ status: 502, message: 'Bad Gateway' })
+  })
+
+  it('lets a network failure through as it is', async () => {
+    mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    await expect(publicFetch('/auth/providers')).rejects.toBeInstanceOf(TypeError)
   })
 })

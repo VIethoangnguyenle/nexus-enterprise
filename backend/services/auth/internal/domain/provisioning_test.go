@@ -59,6 +59,14 @@ func (w *fakeWorld) serviceOn(t *testing.T, st domain.AuthStore, read *scriptedR
 	return domain.NewService(st, nil, read, write, &fakeWorkspace{w: w}, &fakeMessaging{w: w})
 }
 
+// newAccount signs a brand-new person in with Google (consumer account), which
+// creates the account, its graph node and a personal workspace.
+func newAccount(svc *domain.Service, email string) (*domain.SigninResult, error) {
+	return svc.SignInWithGoogle(context.Background(), domain.ExternalIdentity{
+		Provider: domain.ProviderGoogle, Subject: "sub-" + email, Email: email, EmailVerified: true, DisplayName: "Test Person",
+	})
+}
+
 func hasPrefix(live []string, prefix string) bool {
 	for _, l := range live {
 		if strings.HasPrefix(l, prefix) {
@@ -70,12 +78,12 @@ func hasPrefix(live []string, prefix string) bool {
 
 // The user's node is named by users.id and carries the username as its display
 // name. A node named by username is raw input in the graph's name index.
-func TestSignup_UserNodeIsKeyedByUserID(t *testing.T) {
+func TestNewAccount_UserNodeIsKeyedByUserID(t *testing.T) {
 	w := newFakeWorld()
 	write := testutil.NewFakePolicyWrite()
 	svc := w.serviceOn(t, w, publicUsersOnly(), write)
 
-	res, err := svc.Signup(context.Background(), "alice@example.com", "pw-123456", "Alice", "")
+	res, err := newAccount(svc, "alice@example.com")
 
 	require.NoError(t, err)
 	assert.Contains(t, write.LiveNodes(), "U "+ngac.UserNodeName(ngac.UserID(res.UserID)))
@@ -88,14 +96,14 @@ func TestSignup_UserNodeIsKeyedByUserID(t *testing.T) {
 
 // Two accounts whose usernames normalise to the same string get distinct nodes
 // (the username is unique in the table, but nothing in the graph depends on it).
-func TestSignup_UserNodeNamesDifferPerUser(t *testing.T) {
+func TestNewAccount_UserNodeNamesDifferPerUser(t *testing.T) {
 	w := newFakeWorld()
 	write := testutil.NewFakePolicyWrite()
 	svc := w.serviceOn(t, w, publicUsersOnly(), write)
 
-	a, err := svc.Signup(context.Background(), "bob@one.com", "pw-123456", "Bob", "")
+	a, err := newAccount(svc, "bob@one.com")
 	require.NoError(t, err)
-	b, err := svc.Signup(context.Background(), "bob@two.com", "pw-123456", "Bob", "")
+	b, err := newAccount(svc, "bob@two.com")
 	require.NoError(t, err)
 
 	assert.NotEqual(t, ngac.UserNodeName(ngac.UserID(a.UserID)), ngac.UserNodeName(ngac.UserID(b.UserID)))
@@ -103,12 +111,12 @@ func TestSignup_UserNodeNamesDifferPerUser(t *testing.T) {
 	assert.Contains(t, write.LiveNodes(), "U "+ngac.UserNodeName(ngac.UserID(b.UserID)))
 }
 
-func TestSignup_RemovesTheUserNodeWhenTheRowCannotBeWritten(t *testing.T) {
+func TestNewAccount_RemovesTheUserNodeWhenTheRowCannotBeWritten(t *testing.T) {
 	w := newFakeWorld()
 	write := testutil.NewFakePolicyWrite()
 	svc := w.serviceOn(t, &failingCreateUser{fakeWorld: w, err: errors.New("db down")}, publicUsersOnly(), write)
 
-	_, err := svc.Signup(context.Background(), "carol@example.com", "pw-123456", "Carol", "")
+	_, err := newAccount(svc, "carol@example.com")
 
 	require.ErrorContains(t, err, "db down")
 	assert.Empty(t, write.LiveNodes(), "a failed signup leaves no user node behind")
@@ -116,13 +124,13 @@ func TestSignup_RemovesTheUserNodeWhenTheRowCannotBeWritten(t *testing.T) {
 	assert.True(t, strings.HasPrefix(log[len(log)-1], "delete U_"), "the node is removed again: %v", log)
 }
 
-func TestSignup_RemovesTheUserNodeWhenItCannotBeAssigned(t *testing.T) {
+func TestNewAccount_RemovesTheUserNodeWhenItCannotBeAssigned(t *testing.T) {
 	w := newFakeWorld()
 	write := testutil.NewFakePolicyWrite()
 	write.FailAt = 2 // the assignment under PublicUsers
 	svc := w.serviceOn(t, w, publicUsersOnly(), write)
 
-	_, err := svc.Signup(context.Background(), "dave@example.com", "pw-123456", "Dave", "")
+	_, err := newAccount(svc, "dave@example.com")
 
 	require.Error(t, err)
 	assert.Empty(t, write.LiveNodes())
@@ -191,14 +199,14 @@ func TestInitTenantNGAC_DoesNotCreateWhenTheLookupFails(t *testing.T) {
 
 // An incomplete tenant init is logged and tolerated, as it always was: the
 // owner is in the workspace. What changed is that it cleans up after itself.
-func TestSignup_ToleratesATenantInitFailureAndLeavesNoHalfBuiltUAs(t *testing.T) {
+func TestNewAccount_ToleratesATenantInitFailureAndLeavesNoHalfBuiltUAs(t *testing.T) {
 	w := newFakeWorld()
 	write := testutil.NewFakePolicyWrite()
 	// 1 user node, 2 public assignment, 3 TenantMember, 4 TenantOwner, 5 first tenant assignment.
 	write.FailAt = 5
 	svc := w.serviceOn(t, w, publicUsersOnly(), write)
 
-	res, err := svc.Signup(context.Background(), "erin@example.com", "pw-123456", "Erin", "")
+	res, err := newAccount(svc, "erin@example.com")
 
 	require.NoError(t, err)
 	assert.False(t, hasPrefix(write.LiveNodes(), "UA TenantMember_"), "live: %v", write.LiveNodes())

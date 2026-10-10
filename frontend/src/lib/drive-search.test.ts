@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { folderSearch, sharedSearch, validateDriveSearch } from './drive-search'
+import { folderSearch, sharedSearch, textsSearch, validateDriveSearch } from './drive-search'
 
 const F = '66666666-aaaa-4bbb-8ccc-000000000001'
 
@@ -27,5 +27,22 @@ describe('search builders', () => {
 
   it('the shared view clears the folder but keeps the workspace', () => {
     expect(sharedSearch({ ws: 'w1', folder: F })).toEqual({ ws: 'w1', view: 'shared' })
+  })
+})
+
+describe('the Văn bản view', () => {
+  it('is kept with its group; a group means nothing outside it', () => {
+    expect(validateDriveSearch({ view: 'texts' })).toEqual({ view: 'texts' })
+    expect(validateDriveSearch({ view: 'texts', group: 'drafts' })).toEqual({ view: 'texts', group: 'drafts' })
+    expect(validateDriveSearch({ view: 'texts', group: 'bogus' })).toEqual({ view: 'texts' })
+    expect(validateDriveSearch({ view: 'shared', group: 'drafts' })).toEqual({ view: 'shared' })
+    expect(validateDriveSearch({ group: 'drafts' })).toEqual({})
+  })
+
+  it('opens from anywhere without the folder, and opening a folder leaves it', () => {
+    expect(textsSearch({ ws: 'w1', folder: F })).toEqual({ ws: 'w1', view: 'texts' })
+    expect(textsSearch({ ws: 'w1', view: 'texts', group: 'drafts' }, 'shared')).toEqual({ ws: 'w1', view: 'texts', group: 'shared' })
+    expect(folderSearch({ ws: 'w1', view: 'texts', group: 'drafts' }, F)).toEqual({ ws: 'w1', folder: F })
+    expect(sharedSearch({ ws: 'w1', view: 'texts', group: 'drafts' })).toEqual({ ws: 'w1', view: 'shared' })
   })
 })

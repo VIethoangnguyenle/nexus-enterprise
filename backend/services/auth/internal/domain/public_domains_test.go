@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"ngac-platform/services/auth/internal/domain"
@@ -25,21 +26,24 @@ func TestIsPublicEmailDomain(t *testing.T) {
 	}
 }
 
-// The existing password signup path auto-joins by email domain. A tenant that
-// sets domain = gmail.com must not capture every Gmail user who signs up.
-func TestSignup_PublicDomainNeverAutoJoins(t *testing.T) {
+// A tenant that sets domain = gmail.com must not capture every Gmail user, on
+// any sign-in path.
+func TestPublicDomainNeverAutoJoins(t *testing.T) {
 	w := newFakeWorld()
 	svc := w.service(t)
 	squatter := w.addTenant("Gmail Squatter", "gmail.com")
 
-	res, err := svc.Signup(context.Background(), "victim@gmail.com", "pw-123456", "Victim", "")
-	if err != nil {
-		t.Fatalf("signup: %v", err)
-	}
-	if res.TenantID == squatter || w.membership(squatter, res.UserID) != nil {
-		t.Fatal("signup with a public email domain auto-joined the tenant claiming that domain")
-	}
-	if res.TenantRole != "owner" {
-		t.Errorf("role = %q, want owner of a fresh tenant", res.TenantRole)
+	// A consumer account, and a (forged or mistaken) hosted domain of gmail.com.
+	for i, hd := range []string{"", "gmail.com"} {
+		res, err := svc.SignInWithGoogle(context.Background(), googleIdentity(fmt.Sprintf("sub-%d", i), fmt.Sprintf("victim%d@gmail.com", i), hd))
+		if err != nil {
+			t.Fatalf("sign in (hd %q): %v", hd, err)
+		}
+		if res.DefaultTenantID == squatter || w.membership(squatter, res.UserID) != nil {
+			t.Fatalf("hd %q: a public email domain auto-joined the tenant claiming it", hd)
+		}
+		if m := w.membership(res.DefaultTenantID, res.UserID); m == nil || m.Role != "owner" {
+			t.Errorf("hd %q: membership = %+v, want owner of a fresh tenant", hd, m)
+		}
 	}
 }

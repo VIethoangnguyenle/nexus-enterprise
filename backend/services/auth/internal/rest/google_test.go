@@ -368,3 +368,12 @@ func TestCallback_SuccessIssuesSessionAndRedirectsWithoutTokens(t *testing.T) {
 		t.Error("the access token must not be in the response; the SPA obtains it via /refresh")
 	}
 }
+
+// The sign-in tests never reach the verification half of the interface.
+func (f *fakeSessions) GetUserByID(context.Context, string) (*domain.UserInfo, error) {
+	return nil, errors.New("not used by a sign-in flow")
+}
+
+func (f *fakeSessions) VerifyEmailWithGoogle(context.Context, string, string, domain.ExternalIdentity) error {
+	return errors.New("not used by a sign-in flow")
+}

@@ -185,3 +185,38 @@ All on the workspace service, with the caller from verified claims; `Mgmt OA` is
 - **WHEN** a workspace member without `manage` calls any `manage` endpoint above
 - **THEN** the answer is 403 and nothing is read or written beyond the check
 
+
+### Requirement: Text documents and workspace details are guarded
+Text documents follow the table in `text-documents` (read or write on the OA of the folder the document sits in). The workspace's own details are on the workspace service, with the caller from verified claims.
+
+| Endpoint | Op | Object |
+|---|---|---|
+| `GET /workspaces/:id/details` | membership | the workspace PC (`can_manage` is reported from `manage` on the Mgmt OA) |
+| `PATCH /workspaces/:id/details` | `manage` | Mgmt OA |
+| `POST /workspaces/:id/leave` | membership; the person is always the caller | the workspace PC (the Owners UA is read under the owner lock) |
+| `POST /workspaces` | removed (410): creation is `POST /api/me/workspaces` on the auth service | none |
+
+#### Scenario: Member renames the workspace
+- **WHEN** a member without `manage`, or a person of another workspace, calls `PATCH /workspaces/:id/details`
+- **THEN** the answer is 403 and the name is unchanged
+
+#### Scenario: Unwritable save
+- **WHEN** the name is empty, longer than 100 characters or contains NUL, or the description is longer than 500 characters
+- **THEN** the answer is 400 and nothing is written
+
+#### Scenario: Leaving
+- **WHEN** a member calls `POST /workspaces/:id/leave`
+- **THEN** they are detached from every attribute of the workspace through the policy writer, their listing is removed and any invitation open to their verified address is revoked
+- **AND** nobody else is touched, whatever the body says
+
+#### Scenario: Leaving without belonging, or when the policy cannot answer
+- **WHEN** the caller is not in the workspace, has no identity, or the policy call fails
+- **THEN** the answer is 403 and nothing is written
+
+#### Scenario: The last Owner
+- **WHEN** the only Owner calls leave
+- **THEN** the answer is 409 with `reason: "last_owner"` and nothing is detached; the Owners are read and the removal done under the workspace's owner lock, so two Owners leaving together cannot both be the other one
+
+#### Scenario: Editing two fields at once
+- **WHEN** one manager sets the name while another sets the description
+- **THEN** both land, because each is a single statement that sets only the fields it names

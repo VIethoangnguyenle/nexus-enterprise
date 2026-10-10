@@ -188,6 +188,10 @@ services:
       # TEST-ONLY fixed OTP code (see .env.example). `-` not `:-`: an
       # explicitly empty value must stay empty, which turns the test mode off.
       AUTH_FIXED_OTP_CODE: ${AUTH_FIXED_OTP_CODE-999999}
+      # Whose address a request comes from, for the per-address limits: X-Forwarded-For
+      # is believed only from these networks (the Docker bridge Traefik sits on).
+      # Empty trusts nothing, and every client then counts as the proxy.
+      AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16}
     depends_on:
       policy:
         condition: service_healthy
@@ -195,7 +199,7 @@ services:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.auth.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/auth`) || PathPrefix(`/api/users`))"
+      - "traefik.http.routers.auth.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/auth`) || PathRegexp(`^/api/me(/|$$)`) || PathRegexp(`^/api/workspaces/[^/]+/contacts`))"
       - "traefik.http.routers.auth.entrypoints=web"
       - "traefik.http.routers.auth.priority=110"
       - "traefik.http.routers.auth.middlewares=cors-all@docker"
@@ -258,6 +262,7 @@ services:
       REST_PORT: "8080"
       JWT_SECRET: ngac-super-secret-key-change-in-production
       DRIVE_SERVICE_ADDR: drive:50057
+      POLICY_SERVICE_ADDR: policy:50051
     depends_on:
       minio:
         condition: service_healthy

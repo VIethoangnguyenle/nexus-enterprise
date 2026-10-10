@@ -22,6 +22,7 @@ const (
 	WorkspaceService_CreateWorkspace_FullMethodName   = "/workspace.WorkspaceService/CreateWorkspace"
 	WorkspaceService_ListWorkspaces_FullMethodName    = "/workspace.WorkspaceService/ListWorkspaces"
 	WorkspaceService_GetWorkspace_FullMethodName      = "/workspace.WorkspaceService/GetWorkspace"
+	WorkspaceService_DeleteWorkspace_FullMethodName   = "/workspace.WorkspaceService/DeleteWorkspace"
 	WorkspaceService_RemoveMember_FullMethodName      = "/workspace.WorkspaceService/RemoveMember"
 	WorkspaceService_ListMembers_FullMethodName       = "/workspace.WorkspaceService/ListMembers"
 	WorkspaceService_TransferOwnership_FullMethodName = "/workspace.WorkspaceService/TransferOwnership"
@@ -45,6 +46,13 @@ type WorkspaceServiceClient interface {
 	CreateWorkspace(ctx context.Context, in *CreateWorkspaceRequest, opts ...grpc.CallOption) (*Workspace, error)
 	ListWorkspaces(ctx context.Context, in *ListWorkspacesRequest, opts ...grpc.CallOption) (*WorkspaceList, error)
 	GetWorkspace(ctx context.Context, in *GetWorkspaceRequest, opts ...grpc.CallOption) (*Workspace, error)
+	// DeleteWorkspace undoes a workspace that was just created and should not
+	// stay: it exists for compensation (the auth service calls it when
+	// provisioning fails after CreateWorkspace). It has no REST route. The caller
+	// must be an owner (or the creator) and the only member; it removes the
+	// graph, the rows, the drive, the channels and any approval schema, and
+	// answers OK when there is nothing left to remove.
+	DeleteWorkspace(ctx context.Context, in *DeleteWorkspaceRequest, opts ...grpc.CallOption) (*Empty, error)
 	// Members
 	RemoveMember(ctx context.Context, in *RemoveMemberRequest, opts ...grpc.CallOption) (*Empty, error)
 	ListMembers(ctx context.Context, in *ListMembersRequest, opts ...grpc.CallOption) (*MemberList, error)
@@ -95,6 +103,16 @@ func (c *workspaceServiceClient) GetWorkspace(ctx context.Context, in *GetWorksp
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Workspace)
 	err := c.cc.Invoke(ctx, WorkspaceService_GetWorkspace_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workspaceServiceClient) DeleteWorkspace(ctx context.Context, in *DeleteWorkspaceRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, WorkspaceService_DeleteWorkspace_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -239,6 +257,13 @@ type WorkspaceServiceServer interface {
 	CreateWorkspace(context.Context, *CreateWorkspaceRequest) (*Workspace, error)
 	ListWorkspaces(context.Context, *ListWorkspacesRequest) (*WorkspaceList, error)
 	GetWorkspace(context.Context, *GetWorkspaceRequest) (*Workspace, error)
+	// DeleteWorkspace undoes a workspace that was just created and should not
+	// stay: it exists for compensation (the auth service calls it when
+	// provisioning fails after CreateWorkspace). It has no REST route. The caller
+	// must be an owner (or the creator) and the only member; it removes the
+	// graph, the rows, the drive, the channels and any approval schema, and
+	// answers OK when there is nothing left to remove.
+	DeleteWorkspace(context.Context, *DeleteWorkspaceRequest) (*Empty, error)
 	// Members
 	RemoveMember(context.Context, *RemoveMemberRequest) (*Empty, error)
 	ListMembers(context.Context, *ListMembersRequest) (*MemberList, error)
@@ -273,6 +298,9 @@ func (UnimplementedWorkspaceServiceServer) ListWorkspaces(context.Context, *List
 }
 func (UnimplementedWorkspaceServiceServer) GetWorkspace(context.Context, *GetWorkspaceRequest) (*Workspace, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetWorkspace not implemented")
+}
+func (UnimplementedWorkspaceServiceServer) DeleteWorkspace(context.Context, *DeleteWorkspaceRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteWorkspace not implemented")
 }
 func (UnimplementedWorkspaceServiceServer) RemoveMember(context.Context, *RemoveMemberRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveMember not implemented")
@@ -384,6 +412,24 @@ func _WorkspaceService_GetWorkspace_Handler(srv interface{}, ctx context.Context
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkspaceServiceServer).GetWorkspace(ctx, req.(*GetWorkspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkspaceService_DeleteWorkspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteWorkspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkspaceServiceServer).DeleteWorkspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkspaceService_DeleteWorkspace_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkspaceServiceServer).DeleteWorkspace(ctx, req.(*DeleteWorkspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -640,6 +686,10 @@ var WorkspaceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetWorkspace",
 			Handler:    _WorkspaceService_GetWorkspace_Handler,
+		},
+		{
+			MethodName: "DeleteWorkspace",
+			Handler:    _WorkspaceService_DeleteWorkspace_Handler,
 		},
 		{
 			MethodName: "RemoveMember",

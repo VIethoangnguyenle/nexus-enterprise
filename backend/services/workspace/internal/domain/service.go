@@ -23,6 +23,9 @@ type WorkspaceStore interface {
 	Insert(ctx context.Context, ws *store.Workspace) error
 	GetByID(ctx context.Context, id string) (*store.Workspace, error)
 	ListAll(ctx context.Context) ([]*store.Workspace, error)
+	// UpdateDetails sets the name and/or description given (nil leaves a field
+	// alone) in one statement and returns both as they are afterwards.
+	UpdateDetails(ctx context.Context, id string, name, description *string) (string, string, error)
 	// WithOwnerLock runs fn while holding the workspace's owner lock, so checks
 	// of who the owners are and the changes that follow cannot interleave.
 	WithOwnerLock(ctx context.Context, wsID string, fn func(ctx context.Context) error) error

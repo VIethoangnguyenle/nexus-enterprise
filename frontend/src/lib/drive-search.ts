@@ -9,7 +9,10 @@ import { validateWorkspaceSearch } from './workspace'
 export interface DriveSearch {
   ws?: string
   folder?: string
-  view?: 'shared'
+  /** `shared`: files shared with me. `texts`: the documents written in the app (Văn bản). */
+  view?: 'shared' | 'texts'
+  /** Which Văn bản, with `view=texts`: absent is all of them. */
+  group?: 'drafts' | 'shared'
 }
 
 /**
@@ -21,17 +24,27 @@ export function validateDriveSearch(search: Record<string, unknown>): DriveSearc
   const out: DriveSearch = { ...validateWorkspaceSearch(search) }
   if (typeof search.folder === 'string' && search.folder) out.folder = search.folder
   if (search.view === 'shared') out.view = 'shared'
+  if (search.view === 'texts') {
+    out.view = 'texts'
+    if (search.group === 'drafts' || search.group === 'shared') out.group = search.group
+  }
   return out
 }
 
 /** Search for opening a folder (or the root, with no id), keeping the workspace. */
 export function folderSearch(prev: DriveSearch, folderId?: string): DriveSearch {
-  const { folder: _f, view: _v, ...rest } = prev
+  const { folder: _f, view: _v, group: _g, ...rest } = prev
   return folderId ? { ...rest, folder: folderId } : rest
 }
 
 /** Search for the shared-with-me view, keeping the workspace. */
 export function sharedSearch(prev: DriveSearch): DriveSearch {
-  const { folder: _f, ...rest } = prev
+  const { folder: _f, group: _g, ...rest } = prev
   return { ...rest, view: 'shared' }
+}
+
+/** Search for the Văn bản view (all of them, or the drafts / shared group), keeping the workspace. */
+export function textsSearch(prev: DriveSearch, group?: 'drafts' | 'shared'): DriveSearch {
+  const { folder: _f, group: _g, ...rest } = prev
+  return group ? { ...rest, view: 'texts', group } : { ...rest, view: 'texts' }
 }

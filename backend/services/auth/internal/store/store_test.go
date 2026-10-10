@@ -124,28 +124,6 @@ func TestGetUserByNGACNodeID_NotFound(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// 5.3: TestListUsers
-// ---------------------------------------------------------------------------
-
-func TestListUsers(t *testing.T) {
-	s := setupStore(t)
-	pool := getPool(t, s)
-	_, username, _ := insertTestUser(t, s, pool)
-
-	users, err := s.ListUsers(context.Background())
-	require.NoError(t, err)
-	assert.GreaterOrEqual(t, len(users), 1)
-
-	found := false
-	for _, u := range users {
-		if u.Username == username {
-			found = true
-		}
-	}
-	assert.True(t, found, "created user should appear in list")
-}
-
-// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 

@@ -14,7 +14,7 @@ import { usePeople } from '../../hooks/usePeople'
 import { usePermissions } from '../../hooks/usePermissions'
 import { NO_PERMS, type ObjectPerms } from '../../api/access'
 import type { DriveItem } from '../../api/drive'
-import { folderSearch, sharedSearch, type DriveSearch } from '../../lib/drive-search'
+import { folderSearch, sharedSearch, textsSearch, type DriveSearch } from '../../lib/drive-search'
 import { statusOf } from '../../lib/errors'
 import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
@@ -393,6 +393,9 @@ export function DriveScreen() {
             <FilterChip pressed={!shared} onClick={() => openFolder()}>Tất cả tệp</FilterChip>
             <FilterChip pressed={shared} onClick={() => void navigate({ to: '/drive', search: (p: DriveSearch) => sharedSearch(p) })}>
               Chia sẻ với tôi
+            </FilterChip>
+            <FilterChip pressed={false} onClick={() => void navigate({ to: '/drive', search: (p: DriveSearch) => textsSearch(p) })}>
+              Văn bản
             </FilterChip>
           </div>
           {/* The list panel carries the search from lg up; below that it sits here. */}

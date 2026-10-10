@@ -7,6 +7,24 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script>
+      /* Before the bundle runs: put the stored theme and motion choice on <html>, so a reload
+         does not paint light and then flip. Reads the signed-in person's own choice, else the
+         device's last. Mirrors src/lib/preferences.ts; any failure leaves the defaults. */
+      try {
+        var q = new URLSearchParams(location.search).get('user')
+        var auth = JSON.parse(localStorage.getItem('ngac-auth' + (q ? '-' + q : '')) || 'null')
+        var uid = auth && auth.state && auth.state.user && auth.state.user.id
+        var raw = (uid && localStorage.getItem('ngac-prefs:' + uid)) || localStorage.getItem('ngac-prefs:last')
+        var p = raw ? JSON.parse(raw) : null
+        if (p) {
+          var root = document.documentElement
+          var dark = p.theme === 'dark' || (p.theme === 'system' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          if (dark) root.setAttribute('data-theme', 'dark')
+          if (p.motion === 'reduce') root.setAttribute('data-motion', 'reduce')
+        }
+      } catch (e) { /* defaults */ }
+    </script>
     <title>Nexus Enterprise</title>
   </head>
   <body>

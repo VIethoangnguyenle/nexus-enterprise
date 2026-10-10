@@ -25,7 +25,10 @@ const (
 	// userCutoffKeyPrefix holds, per user, the instant before which every
 	// session counts as revoked. See RevokeAllForUser.
 	userCutoffKeyPrefix = "refresh_user_cutoff:"
-	refreshTokenBytes   = 32
+	// userKeepKeyPrefix holds the one session a user-wide revocation spares: the
+	// session of the person who has just proved the address.
+	userKeepKeyPrefix = "refresh_user_keep:"
+	refreshTokenBytes = 32
 )
 
 // ErrRefreshRejected is returned for any refresh token that is unknown,
@@ -76,6 +79,7 @@ func NewRefreshStore(rdb *redis.Client) *RefreshStore {
 func refreshKey(token string) string  { return refreshKeyPrefix + token }
 func sessionKey(sid string) string    { return sessionKeyPrefix + sid }
 func userCutoffKey(uid string) string { return userCutoffKeyPrefix + uid }
+func userKeepKey(uid string) string   { return userKeepKeyPrefix + uid }
 
 // Issue starts a new session and returns its first refresh token.
 func (s *RefreshStore) Issue(ctx context.Context, id RefreshIdentity) (token, sessionID string, err error) {
@@ -280,11 +284,26 @@ func (s *RefreshStore) RevokeSession(ctx context.Context, sessionID string) erro
 // revoke. Any Redis error is returned: callers rely on this to evict an
 // attacker, so it must not fail silently.
 func (s *RefreshStore) RevokeAllForUser(ctx context.Context, userID string) error {
+	return s.RevokeAllForUserExcept(ctx, userID, "")
+}
+
+// RevokeAllForUserExcept is RevokeAllForUser sparing one session, the caller's
+// own. Used when the person at the keyboard has just proved they own the
+// address: every other session on the account is, by definition, someone who
+// has not, but the session that proved it must not be ended under them.
+func (s *RefreshStore) RevokeAllForUserExcept(ctx context.Context, userID, keepSessionID string) error {
 	if s == nil || s.rdb == nil || userID == "" {
 		return nil
 	}
 	cutoff := time.Now().UnixNano()
-	if err := s.rdb.Set(ctx, userCutoffKey(userID), cutoff, s.ttl).Err(); err != nil {
+	pipe := s.rdb.TxPipeline()
+	pipe.Set(ctx, userCutoffKey(userID), cutoff, s.ttl)
+	if keepSessionID != "" {
+		pipe.Set(ctx, userKeepKey(userID), keepSessionID, s.ttl)
+	} else {
+		pipe.Del(ctx, userKeepKey(userID))
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
 		return fmt.Errorf("revoke user sessions: %w", err)
 	}
 	return nil
@@ -300,5 +319,13 @@ func (s *RefreshStore) revokedForUser(ctx context.Context, id RefreshIdentity) (
 	if err != nil {
 		return false, fmt.Errorf("read user session cutoff: %w", err)
 	}
-	return id.StartedAt < cutoff, nil
+	if id.StartedAt >= cutoff {
+		return false, nil
+	}
+	// The one session the revocation spared, if any.
+	keep, err := s.rdb.Get(ctx, userKeepKey(id.UserID)).Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		return false, fmt.Errorf("read spared session: %w", err)
+	}
+	return keep == "" || keep != id.SessionID, nil
 }

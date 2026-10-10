@@ -22,19 +22,28 @@ beforeEach(() => {
 })
 
 describe('/auth/google/done', () => {
-  it('finishes the session and continues to workspace selection, like the OTP flow', async () => {
-    mockComplete.mockResolvedValue(true)
+  it('finishes the session and continues to workspace selection, like the code flow', async () => {
+    mockComplete.mockResolvedValue({ needsProfile: false })
     render(<GoogleDonePage />)
 
-    expect(screen.getByText(/signing you in/i)).toBeInTheDocument()
+    expect(screen.getByText(/Đang đăng nhập bằng Google/)).toBeInTheDocument()
     await vi.waitFor(() =>
       expect(mockNavigate).toHaveBeenCalledWith(expect.objectContaining({ to: '/workspace-select', replace: true })),
     )
     expect(mockComplete).toHaveBeenCalledTimes(1)
   })
 
+  it('asks a new person for their profile first', async () => {
+    mockComplete.mockResolvedValue({ needsProfile: true })
+    render(<GoogleDonePage />)
+
+    await vi.waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith(expect.objectContaining({ to: '/register', replace: true })),
+    )
+  })
+
   it('sends the user back to the login page with an error when the session cannot be established', async () => {
-    mockComplete.mockResolvedValue(false)
+    mockComplete.mockResolvedValue(null)
     render(<GoogleDonePage />)
 
     await vi.waitFor(() =>
@@ -45,7 +54,7 @@ describe('/auth/google/done', () => {
   })
 
   it('runs the bootstrap only once even if the effect fires twice', async () => {
-    mockComplete.mockResolvedValue(true)
+    mockComplete.mockResolvedValue({ needsProfile: false })
     const { rerender } = render(<GoogleDonePage />)
     rerender(<GoogleDonePage />)
 

@@ -64,7 +64,9 @@ const TAB_LABEL: Record<ApprovalTab, string> = {
  */
 export function ApprovalScreen() {
   const search = useSearch({ strict: false }) as ApprovalSearch
-  const navigate = useNavigate()
+  // `from` makes the search callbacks below typed against this route's own search; without it
+  // they are typed against every route's, and routes that share a key (`tab`) disagree.
+  const navigate = useNavigate({ from: '/approval' })
   const m = useMotionPresets()
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
   const people = usePeople(wsId)
@@ -154,7 +156,7 @@ export function ApprovalScreen() {
 
   // ---- URL ----
   const go = useCallback(
-    (to: (prev: ApprovalSearch) => ApprovalSearch) => void navigate({ to: '/approval', search: to }),
+    (to: (prev: ApprovalSearch) => ApprovalSearch) => void navigate({ search: to }),
     [navigate],
   )
   const openRequest = (row: ApprovalRow) => go((p) => requestSearch(p, row.request.id))
@@ -164,7 +166,7 @@ export function ApprovalScreen() {
   // them, falls back to the first tab.
   useEffect(() => {
     if (!permsPending && !canManage && (search.tab === 'templates' || search.edit || search.template)) {
-      void navigate({ to: '/approval', search: (p: ApprovalSearch) => tabSearch(p, 'pending'), replace: true })
+      void navigate({ search: (p: ApprovalSearch) => tabSearch(p, 'pending'), replace: true })
     }
   }, [permsPending, canManage, search.tab, search.edit, search.template, navigate])
 

@@ -1,5 +1,10 @@
 @import "tailwindcss";
 
+/* `motion-reduce:` follows the OS setting AND "Giảm chuyển động: Luôn bật"      */
+/* (Cài đặt → Giao diện, `data-motion="reduce"` on <html>); Tailwind's own     */
+/* variant only knows the media query.                                         */
+@custom-variant motion-reduce (@media (prefers-reduced-motion: reduce), &:where([data-motion="reduce"], [data-motion="reduce"] *));
+
 /* ========================================================================= */
 /* Tín hiệu: design tokens of Nexus Hub. Source of truth is DESIGN.md.       */
 /*                                                                           */
@@ -672,4 +677,90 @@ h1, h2, h3, h4 {
     animation-name: fade-in;
     animation-duration: 120ms;
   }
+}
+
+/* "Giảm chuyển động: Luôn bật" (Cài đặt → Giao diện) is data-motion="reduce"  */
+/* on <html> and means exactly what the OS setting means in the blocks above.  */
+:root[data-motion="reduce"] {
+  .animate-slide-up, .animate-slide-left, .animate-panel-slide, .animate-slide-in-right,
+  .animate-scale-in, .animate-msg-slide-in, .animate-fade-in {
+    animation-name: fade-in;
+    animation-duration: 120ms;
+  }
+  .animate-reaction-pop { animation: fade-in 120ms linear; }
+  .rt-halo, .skeleton { animation: none; }
+  .press:active:not(:disabled) { transform: none; }
+}
+
+/* Theme thumbnails (Cài đặt → Giao diện) draw a theme's own surfaces whichever */
+/* theme the page is in, so they carry their own copies of the DESIGN.md §2    */
+/* values: sunk, base, raised, ink, line, accent.                              */
+[data-preview="light"] {
+  --pv-sunk: oklch(94.6% 0.011 190);
+  --pv-base: oklch(97.4% 0.007 190);
+  --pv-raised: oklch(99.3% 0.003 190);
+  --pv-ink: oklch(23% 0.02 200);
+  --pv-line: oklch(89.5% 0.01 195);
+  --pv-accent: oklch(50% 0.1 180);
+}
+[data-preview="dark"] {
+  --pv-sunk: oklch(15.5% 0.012 200);
+  --pv-base: oklch(18% 0.014 200);
+  --pv-raised: oklch(22.5% 0.016 200);
+  --pv-ink: oklch(94% 0.008 190);
+  --pv-line: oklch(30% 0.014 200);
+  --pv-accent: oklch(76% 0.11 178);
+}
+
+/* Văn bản: the page of the document editor, and a document shown read-only. */
+/* 16/1.6 text on a 720px page (mockup §3).                                  */
+.doc-prose {
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--color-ink);
+  outline: none;
+  overflow-wrap: anywhere;
+}
+.doc-prose > * + * { margin-top: 0.75rem; }
+.doc-prose p { margin: 0; }
+.doc-prose p + p { margin-top: 0.75rem; }
+.doc-prose h1, .doc-prose h2, .doc-prose h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 1.5rem 0 0.5rem;
+}
+.doc-prose h1 { font-size: 1.4375rem; }
+.doc-prose h2 { font-size: 1.1875rem; }
+.doc-prose h3 { font-size: 1rem; }
+.doc-prose ul, .doc-prose ol { padding-left: 1.5rem; margin: 0.5rem 0; }
+.doc-prose li + li { margin-top: 0.25rem; }
+.doc-prose blockquote {
+  border-left: 3px solid var(--color-line);
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  color: var(--color-ink-muted);
+}
+.doc-prose code {
+  background: var(--color-sunk);
+  padding: 1px 4px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+}
+.doc-prose pre {
+  background: var(--color-sunk);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+}
+.doc-prose pre code { background: none; padding: 0; }
+.doc-prose hr { border: 0; border-top: 1px solid var(--color-line); margin: 1.25rem 0; }
+.doc-prose a { color: var(--color-accent); text-decoration: underline; }
+.doc-prose p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-ink-muted);
+  pointer-events: none;
+  float: left;
+  height: 0;
 }

@@ -19,7 +19,7 @@ func JWTMiddleware(secret string) echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			auth := c.Request().Header.Get("Authorization")
 			if !strings.HasPrefix(auth, "Bearer ") {
-				return echo.NewHTTPError(401, "missing or invalid authorization header")
+				return CodedError(401, CodeSessionRequired, "missing or invalid authorization header")
 			}
 
 			tokenStr := strings.TrimPrefix(auth, "Bearer ")
@@ -36,12 +36,12 @@ func JWTMiddleware(secret string) echo.MiddlewareFunc {
 				jwt.WithExpirationRequired(),
 			)
 			if err != nil {
-				return echo.NewHTTPError(401, "invalid or expired token")
+				return CodedError(401, CodeSessionInvalid, "invalid or expired token")
 			}
 
 			claims, ok := token.Claims.(*Claims)
 			if !ok || !token.Valid {
-				return echo.NewHTTPError(401, "invalid token claims")
+				return CodedError(401, CodeSessionInvalid, "invalid token claims")
 			}
 
 			SetClaims(c, claims)

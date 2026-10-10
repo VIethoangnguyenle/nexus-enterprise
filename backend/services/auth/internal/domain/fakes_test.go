@@ -39,6 +39,9 @@ type fakeWorld struct {
 	callers    map[string]grpcauth.Caller         // downstream RPC -> caller on its context
 	seq        int
 	verified   map[string]bool // user id -> email proven
+	deleted    []string        // workspaces removed through DeleteWorkspace
+	deleteErr  error           // DeleteWorkspace fails with this
+	channelErr error           // CreateChannel fails with this
 }
 
 func newFakeWorld() *fakeWorld {
@@ -124,6 +127,7 @@ func (w *fakeWorld) find(match func(*store.User) bool) *store.User {
 	for _, u := range w.users {
 		if match(u) {
 			cp := *u
+			cp.EmailVerified = w.verified[u.ID]
 			return &cp
 		}
 	}
@@ -145,7 +149,6 @@ func (w *fakeWorld) GetUserByID(_ context.Context, id string) (*store.User, erro
 func (w *fakeWorld) GetUserByNGACNodeID(_ context.Context, id string) (*store.User, error) {
 	return w.find(func(u *store.User) bool { return u.NGACNodeID == id }), nil
 }
-func (w *fakeWorld) ListUsers(context.Context) ([]store.User, error) { return nil, nil }
 
 func (w *fakeWorld) InsertTenantUser(_ context.Context, tenantID, userID, role, status, ngacNodeID string) error {
 	w.mu.Lock()
@@ -195,11 +198,46 @@ func (w *fakeWorld) FindTenantByDomain(_ context.Context, d string) (*store.Tena
 	return nil, nil
 }
 
-func (w *fakeWorld) UpdateProfile(context.Context, string, string, string, string, string, string) error {
+func (w *fakeWorld) UpdateProfile(_ context.Context, userID string, ch store.ProfileChanges) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	u := w.users[userID]
+	if u == nil {
+		return store.ErrNoSuchUser
+	}
+	if ch.DisplayName != nil {
+		u.DisplayName = *ch.DisplayName
+	}
+	if ch.Title != nil {
+		u.Title = *ch.Title
+	}
+	if ch.Location != nil {
+		u.Location = *ch.Location
+	}
+	u.ProfileCompleted = true
 	return nil
 }
-func (w *fakeWorld) ListContactsByWorkspace(context.Context, string, string, string) ([]store.User, error) {
-	return nil, nil
+
+func (w *fakeWorld) ListWorkspaceSummaries(_ context.Context, userID string) ([]store.WorkspaceSummary, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	var out []store.WorkspaceSummary
+	for _, m := range w.members {
+		if m.UserID != userID || m.Status != "active" {
+			continue
+		}
+		count := 0
+		for _, o := range w.members {
+			if o.TenantID == m.TenantID && o.Status == "active" {
+				count++
+			}
+		}
+		out = append(out, store.WorkspaceSummary{ID: m.TenantID, Name: m.TenantName, Role: m.Role, MemberCount: count})
+	}
+	return out, nil
+}
+func (w *fakeWorld) ListContactsByWorkspace(context.Context, string, store.ContactFilter) ([]store.User, int, *store.ContactCursor, error) {
+	return nil, 0, nil, nil
 }
 
 func (w *fakeWorld) FindUserByIdentity(_ context.Context, provider, subject string) (*store.User, error) {
@@ -275,6 +313,25 @@ func (f *fakeWorkspace) CreateWorkspace(ctx context.Context, req *workspacepb.Cr
 		OwnersUaId: "owners-" + id, MembersUaId: "members-" + id}, nil
 }
 
+// DeleteWorkspace is the compensation: it removes the workspace and every
+// membership in it from the fake world and records who asked.
+func (f *fakeWorkspace) DeleteWorkspace(ctx context.Context, req *workspacepb.DeleteWorkspaceRequest, _ ...grpc.CallOption) (*workspacepb.Empty, error) {
+	f.w.mu.Lock()
+	defer f.w.mu.Unlock()
+	f.w.recordCaller("DeleteWorkspace", ctx)
+	f.w.deleted = append(f.w.deleted, req.WorkspaceId)
+	if f.w.deleteErr != nil {
+		return nil, f.w.deleteErr
+	}
+	delete(f.w.workspaces, req.WorkspaceId)
+	for k, m := range f.w.members {
+		if m.TenantID == req.WorkspaceId {
+			delete(f.w.members, k)
+		}
+	}
+	return &workspacepb.Empty{}, nil
+}
+
 type fakeMessaging struct {
 	messagingpb.MessagingServiceClient
 	w *fakeWorld
@@ -284,6 +341,9 @@ func (f *fakeMessaging) CreateChannel(ctx context.Context, req *messagingpb.Crea
 	f.w.mu.Lock()
 	defer f.w.mu.Unlock()
 	f.w.recordCaller("CreateChannel", ctx)
+	if f.w.channelErr != nil {
+		return nil, f.w.channelErr
+	}
 	f.w.channels = append(f.w.channels, req.WorkspaceId)
 	return &messagingpb.Channel{Id: "ch-" + req.WorkspaceId, Name: req.Name}, nil
 }

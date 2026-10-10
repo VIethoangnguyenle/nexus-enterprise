@@ -12,10 +12,10 @@ func TenantMiddleware() echo.MiddlewareFunc {
 		return func(c echo.Context) error {
 			claims := GetClaims(c)
 			if claims == nil {
-				return echo.NewHTTPError(401, "authentication required")
+				return CodedError(401, CodeSessionRequired, "authentication required")
 			}
 			if claims.TenantID == "" {
-				return echo.NewHTTPError(403, "tenant context required: use /api/auth/switch-tenant to select a tenant")
+				return CodedError(403, CodeTenantRequired, "tenant context required: use /api/auth/switch-tenant to select a tenant")
 			}
 			return next(c)
 		}

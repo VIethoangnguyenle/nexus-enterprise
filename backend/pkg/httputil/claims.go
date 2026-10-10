@@ -58,7 +58,7 @@ func GetClaims(c echo.Context) *Claims {
 func RequireClaims(c echo.Context) (*Claims, error) {
 	claims := GetClaims(c)
 	if claims == nil {
-		return nil, echo.NewHTTPError(http.StatusUnauthorized, "authentication required")
+		return nil, CodedError(http.StatusUnauthorized, CodeSessionRequired, "authentication required")
 	}
 	return claims, nil
 }

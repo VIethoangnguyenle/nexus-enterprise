@@ -134,6 +134,9 @@ export function driveFixtureApi(path: string, init?: RequestInit): Promise<unkno
 
   if (p === '/workspaces') return ok({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành' }] })
   if (p === `/workspaces/${WS_ID}/contacts`) return ok({ contacts: CONTACTS, total: CONTACTS.length })
+  // The list panel counts the person's drafts (Văn bản); the drive tests have none.
+  if (p === `/workspaces/${WS_ID}/documents/texts`) return ok({ documents: [] })
+  if (p === `/workspaces/${WS_ID}/documents/texts/count`) return ok({ count: 0 })
   if (p === `/workspaces/${WS_ID}/drive/quota`) return ok(QUOTA)
   if (p === `/workspaces/${WS_ID}/drive` && method === 'GET') return ok(listing(undefined))
   if (p === `/workspaces/${WS_ID}/drive/folders` && method === 'POST') {

@@ -1,4 +1,6 @@
+import { useSyncExternalStore } from 'react'
 import { useReducedMotion, type Transition, type TargetAndTransition } from 'motion/react'
+import { getPreferences, subscribePreferences } from './preferences'
 
 /**
  * Shared motion presets, one per row of the DESIGN.md §7 table.
@@ -133,7 +135,11 @@ export function withDelay(preset: Preset, delay: number): Preset {
   return { ...preset, animate: { ...preset.animate, transition } }
 }
 
-/** Presets for the current user's motion preference. */
+/**
+ * Presets for the current user's motion preference: the device's
+ * `prefers-reduced-motion`, or "Luôn bật" chosen in Cài đặt → Giao diện.
+ */
 export function useMotionPresets(): MotionPresets {
-  return presets(!!useReducedMotion())
+  const always = useSyncExternalStore(subscribePreferences, () => getPreferences().motion === 'reduce')
+  return presets(!!useReducedMotion() || always)
 }

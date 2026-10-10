@@ -185,7 +185,7 @@ Every graph read that feeds an authorization or write decision in the workspace 
 
 ## Status
 Known gaps, recorded rather than resolved:
-- Nothing sends an email: an invitation is found by the invitee on their next sign-in (the screen that lists and answers invitations on workspace selection belongs to the sign-in group). An address with no account can be invited, and the offer waits for it.
+- Nothing sends an email: an invitation is found by the invitee on their next sign-in, on the workspace selection screen (`sign-in-screens`), which lists the offers and answers them. An address with no account can be invited, and the offer waits for it.
 - An invitation is matched to `users.email` only when `users.email_verified_at` is set. That is set by Google sign-in (`email_verified` true) and by a one-time code that a real sender delivered to the address. Fixed-code test mode and the log sender prove nothing, so accounts made through them never see invitations until the address is proved by one of the real routes. Profile edits do not change the address.
 - The invite limit is counted in the workspace service's memory (a fixed window per caller), so with several replicas the budget is per replica.
 - Nothing records who changed a role, a permission, a member or a department, so there is no administrators' activity feed.

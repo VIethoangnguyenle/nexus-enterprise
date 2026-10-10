@@ -28,6 +28,7 @@ type DepartmentService interface {
 type AdminService interface {
 	DepartmentService
 	PeopleService
+	WorkspaceDetailsService
 }
 
 // AdminHandler serves admin organization endpoints.
@@ -49,6 +50,7 @@ func (h *AdminHandler) RegisterAdminRoutes(api *echo.Group) {
 	api.PUT("/workspaces/:id/departments/:deptId/move", h.MoveDepartment)
 	api.PUT("/workspaces/:id/members/:nodeId/department", h.UpdateMemberDepartment)
 	h.registerPeopleRoutes(api)
+	h.registerWorkspaceDetailsRoutes(api)
 }
 
 // CreateDepartment handles POST /api/workspaces/:id/departments.

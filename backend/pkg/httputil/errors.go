@@ -41,3 +41,22 @@ func MapDomainError(err error) *echo.HTTPError {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 }
+
+// Codes of the errors this package raises. A client branches on the code, never
+// on the English message.
+const (
+	// CodeSessionRequired: the request carries no session at all.
+	CodeSessionRequired = "session_required"
+	// CodeSessionInvalid: the session is there but cannot be used (bad
+	// signature, expired). The client may refresh once, then sign in again.
+	CodeSessionInvalid = "session_invalid"
+	// CodeTenantRequired: the token is not scoped to a workspace.
+	CodeTenantRequired = "tenant_required"
+)
+
+// CodedError is an HTTP error whose body is {"message", "code"}: the shape the
+// auth service answers every error in, so a screen reads one envelope whichever
+// service said no. Echo writes a map message as the body as it is.
+func CodedError(status int, code, message string) *echo.HTTPError {
+	return echo.NewHTTPError(status, map[string]any{"message": message, "code": code})
+}

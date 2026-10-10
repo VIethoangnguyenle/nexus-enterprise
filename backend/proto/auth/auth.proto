@@ -5,66 +5,21 @@ package auth;
 option go_package = "ngac-platform/proto/auth";
 
 service AuthService {
-  // Legacy endpoints (backward-compatible)
-  rpc Register(RegisterRequest) returns (AuthResponse);
-  rpc Login(LoginRequest) returns (AuthResponse);
+  // There is no password sign-up or sign-in, and no way to list accounts:
+  // people sign in with Google or a one-time code, and other services look an
+  // account up by ID or NGAC node.
   rpc RevokeToken(RevokeTokenRequest) returns (RevokeTokenResponse);
   rpc IsTokenRevoked(IsTokenRevokedRequest) returns (IsTokenRevokedResponse);
   rpc GetUserByID(GetUserByIDRequest) returns (UserInfo);
   rpc GetUserByNGACNodeID(GetUserByNGACNodeIDRequest) returns (UserInfo);
-  rpc ListUsers(ListUsersRequest) returns (UserListResponse);
 
   // Multi-tenant endpoints
-  rpc Signup(SignupRequest) returns (SignupResponse);
-  rpc Signin(SigninRequest) returns (SigninResponse);
   rpc SwitchTenant(SwitchTenantRequest) returns (SwitchTenantResponse);
   rpc GetMe(GetMeRequest) returns (MeResponse);
   rpc ListUserTenants(ListUserTenantsRequest) returns (TenantListResponse);
 }
 
-// --- Legacy messages (kept for backward compatibility) ---
-
-message RegisterRequest {
-  string username = 1;
-  string password = 2;
-}
-
-message LoginRequest {
-  string username = 1;
-  string password = 2;
-}
-
-message AuthResponse {
-  string token = 1;
-  UserInfo user = 2;
-}
-
 // --- Multi-tenant messages ---
-
-message SignupRequest {
-  string email = 1;
-  string password = 2;
-  string display_name = 3;
-  string tenant_name = 4; // optional: force-create a new tenant with this name
-}
-
-message SignupResponse {
-  string token = 1;
-  UserInfo user = 2;
-  TenantInfo tenant = 3;
-}
-
-message SigninRequest {
-  string email = 1;
-  string password = 2;
-}
-
-message SigninResponse {
-  string token = 1;
-  UserInfo user = 2;
-  repeated TenantInfo tenants = 3;
-  string default_tenant_id = 4;
-}
 
 message SwitchTenantRequest {
   string tenant_id = 1;
@@ -112,12 +67,6 @@ message GetUserByIDRequest {
 
 message GetUserByNGACNodeIDRequest {
   string ngac_node_id = 1;
-}
-
-message ListUsersRequest {}
-
-message UserListResponse {
-  repeated UserInfo users = 1;
 }
 
 message RevokeTokenRequest {

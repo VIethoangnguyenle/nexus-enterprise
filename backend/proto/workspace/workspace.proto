@@ -9,6 +9,13 @@ service WorkspaceService {
   rpc CreateWorkspace(CreateWorkspaceRequest) returns (Workspace);
   rpc ListWorkspaces(ListWorkspacesRequest) returns (WorkspaceList);
   rpc GetWorkspace(GetWorkspaceRequest) returns (Workspace);
+  // DeleteWorkspace undoes a workspace that was just created and should not
+  // stay: it exists for compensation (the auth service calls it when
+  // provisioning fails after CreateWorkspace). It has no REST route. The caller
+  // must be an owner (or the creator) and the only member; it removes the
+  // graph, the rows, the drive, the channels and any approval schema, and
+  // answers OK when there is nothing left to remove.
+  rpc DeleteWorkspace(DeleteWorkspaceRequest) returns (Empty);
 
   // Members
   rpc RemoveMember(RemoveMemberRequest) returns (Empty);
@@ -58,6 +65,10 @@ message ListWorkspacesRequest {
 }
 
 message GetWorkspaceRequest {
+  string workspace_id = 1;
+}
+
+message DeleteWorkspaceRequest {
   string workspace_id = 1;
 }
 

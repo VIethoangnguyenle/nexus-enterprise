@@ -2,11 +2,13 @@ package domain
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
-	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 
 	"ngac-platform/ngac"
@@ -30,13 +32,15 @@ type AuthStore interface {
 	GetUserByPhone(ctx context.Context, phone string) (*store.User, error)
 	GetUserByID(ctx context.Context, userID string) (*store.User, error)
 	GetUserByNGACNodeID(ctx context.Context, ngacNodeID string) (*store.User, error)
-	ListUsers(ctx context.Context) ([]store.User, error)
 	InsertTenantUser(ctx context.Context, tenantID, userID, role, status, ngacNodeID string) error
 	ListTenantsByUser(ctx context.Context, userID string) ([]store.TenantMembership, error)
 	GetTenantUser(ctx context.Context, tenantID, userID string) (*store.TenantMembership, error)
 	FindTenantByDomain(ctx context.Context, domain string) (*store.Tenant, error)
-	UpdateProfile(ctx context.Context, userID, displayName, title, department, location, avatarURL string) error
-	ListContactsByWorkspace(ctx context.Context, workspaceID, departmentFilter, locationFilter string) ([]store.User, error)
+	// UpdateProfile writes only the fields set in ch and marks the profile done.
+	UpdateProfile(ctx context.Context, userID string, ch store.ProfileChanges) error
+	// ListWorkspaceSummaries lists the workspaces a person actively belongs to.
+	ListWorkspaceSummaries(ctx context.Context, userID string) ([]store.WorkspaceSummary, error)
+	ListContactsByWorkspace(ctx context.Context, workspaceID string, f store.ContactFilter) ([]store.User, int, *store.ContactCursor, error)
 
 	// External identities (user_identities). Provider + subject is the key;
 	// email is recorded for audit only and never used to look a user up.
@@ -48,30 +52,6 @@ type AuthStore interface {
 	ClaimTenantDomain(ctx context.Context, tenantID, domain string) (bool, error)
 	// ClearPassword removes a user's password (password sign-in stops working).
 	ClearPassword(ctx context.Context, userID string) error
-}
-
-// AuthResponse is the domain output for legacy register/login operations.
-type AuthResponse struct {
-	Token      string
-	SessionID  string
-	UserID     string
-	Username   string
-	NGACNodeID string
-}
-
-// SignupResult is the domain output for multi-tenant signup.
-type SignupResult struct {
-	Token      string
-	SessionID  string
-	UserID     string
-	Username   string
-	NGACNodeID string
-	Email      string
-	UnionID    string
-	TenantID   string
-	TenantName string
-	TenantRole string
-	OpenID     string
 }
 
 // SigninResult is the domain output for multi-tenant signin.
@@ -94,6 +74,8 @@ type TenantInfo struct {
 	Name   string
 	Role   string
 	OpenID string
+	// Department is the one an administrator assigned in this workspace.
+	Department string
 }
 
 // UserInfo is the domain representation of a user (no password).
@@ -104,15 +86,13 @@ type UserInfo struct {
 	Email       string
 	UnionID     string
 	DisplayName string
-}
-
-// ProfileUpdateInput contains fields to update on a user profile.
-type ProfileUpdateInput struct {
-	DisplayName string
 	Title       string
-	Department  string
 	Location    string
 	AvatarURL   string
+	// EmailVerified: the address on the account has been proved by its owner.
+	EmailVerified bool
+	// NeedsProfile: the person has not yet been asked for the name colleagues see.
+	NeedsProfile bool
 }
 
 // ContactInfo is a user enriched with profile data for the contacts directory.
@@ -162,81 +142,6 @@ func NewService(
 	}
 }
 
-// Signup creates a new user and joins or creates a tenant.
-func (s *Service) Signup(ctx context.Context, email, password, displayName, tenantName string) (*SignupResult, error) {
-	if password == "" {
-		return nil, ErrInvalidInput
-	}
-	// The address is stored trimmed and lower-cased: two spellings of one address
-	// are one account. It is only a claim, so nothing here marks it verified.
-	email, err := normalizeEmail(email)
-	if err != nil {
-		return nil, ErrInvalidInput
-	}
-
-	existing, _ := s.store.GetUserByEmail(ctx, email)
-	if existing != nil {
-		return nil, ErrUserExists
-	}
-
-	hash, err := auth.HashPassword(password)
-	if err != nil {
-		return nil, fmt.Errorf("hash password: %w", err)
-	}
-
-	username := emailToUsername(email)
-	if displayName == "" {
-		displayName = username
-	}
-
-	userID := uuid.New().String()
-	unionID := uuid.New().String()
-	ngacNode, err := s.createUserWithNode(ctx, newUser{
-		ID: userID, Username: username, PasswordHash: hash, Email: email, UnionID: unionID, DisplayName: displayName,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	tenantID, tName, role, err := s.resolveOrCreateTenant(ctx, userID, ngacNode, tenantName, displayName)
-	if err != nil {
-		return nil, fmt.Errorf("resolve tenant: %w", err)
-	}
-
-	token, sessionID, err := auth.GenerateToken(userID, username, ngacNode, tenantID)
-	if err != nil {
-		return nil, fmt.Errorf("generate token: %w", err)
-	}
-
-	membership, _ := s.store.GetTenantUser(ctx, tenantID, userID)
-	openID := ""
-	if membership != nil {
-		openID = membership.OpenID
-	}
-
-	return &SignupResult{
-		Token: token, SessionID: sessionID, UserID: userID, Username: username,
-		NGACNodeID: ngacNode, Email: email, UnionID: unionID,
-		TenantID: tenantID, TenantName: tName, TenantRole: role, OpenID: openID,
-	}, nil
-}
-
-// resolveOrCreateTenant picks the tenant for a password signup.
-//
-// It never joins an existing tenant by email domain. Signup does not verify
-// the email, so the domain is only a claim — anyone can register ceo@acme.com
-// and would otherwise land inside Acme's tenant. Company membership comes from
-// proof of ownership instead: a Google Workspace sign-in (the `hd` claim, see
-// SignInWithGoogle) or an invitation.
-func (s *Service) resolveOrCreateTenant(ctx context.Context, userID, ngacNodeID, tenantName, displayName string) (string, string, string, error) {
-	// Explicit tenant name → a new tenant with that name.
-	if tenantName != "" {
-		return s.createTenantForUser(ctx, tenantName, userID, ngacNodeID)
-	}
-	// Otherwise the no-company case: a personal workspace.
-	return s.createTenantForUser(ctx, personalWorkspaceName(displayName), userID, ngacNodeID)
-}
-
 // joinTenantByDomain adds the user as a member of the tenant that owns
 // companyDomain and returns that tenant with the user's role in it. It returns a
 // nil tenant when the domain is empty, is a public mailbox provider, or is owned
@@ -245,8 +150,8 @@ func (s *Service) resolveOrCreateTenant(ctx context.Context, userID, ngacNodeID,
 //
 // This is the one place a domain turns into tenant membership. Callers must
 // hold proof that the user controls an address at companyDomain — today only
-// a verified Google Workspace `hd` claim qualifies. Password signup, legacy
-// register and OTP (whose code is not delivered to the address) do not.
+// a verified Google Workspace `hd` claim qualifies. A one-time code (not
+// delivered to the address) and a consumer Google account do not.
 func (s *Service) joinTenantByDomain(ctx context.Context, companyDomain, userID, ngacNodeID string) (*store.Tenant, string, error) {
 	companyDomain = normalizeDomain(companyDomain)
 	if companyDomain == "" || IsPublicEmailDomain(companyDomain) {
@@ -275,8 +180,23 @@ func (s *Service) joinTenantByDomain(ctx context.Context, companyDomain, userID,
 	return tenant, "member", nil
 }
 
-// createTenantForUser creates a workspace/tenant, initializes tenant NGAC UAs, and assigns the user as owner.
+// createTenantForUser creates a workspace/tenant, initializes tenant NGAC UAs,
+// and assigns the user as owner. It is the lenient path sign-in uses: a tenant
+// graph that is only partly built is logged and repaired later, because the
+// person must still get into their new account.
 func (s *Service) createTenantForUser(ctx context.Context, name, userID, ngacNodeID string) (string, string, string, error) {
+	return s.provisionTenant(ctx, name, userID, ngacNodeID, false)
+}
+
+// provisionTenant is createTenantForUser with a choice of what a failure means.
+//
+// Lenient (sign-in): a tenant graph that did not finish, or a #general channel
+// that could not be made, is logged and tolerated.
+//
+// Strict (a person creating a workspace on purpose): any failure after the
+// workspace exists undoes it through the workspace service and is returned, so
+// no half-built workspace that nobody can use stays in the system.
+func (s *Service) provisionTenant(ctx context.Context, name, userID, ngacNodeID string, strict bool) (string, string, string, error) {
 	if s.wsClient == nil {
 		return "", "", "", fmt.Errorf("workspace service unavailable")
 	}
@@ -287,23 +207,58 @@ func (s *Service) createTenantForUser(ctx context.Context, name, userID, ngacNod
 	if err != nil {
 		return "", "", "", fmt.Errorf("create workspace: %w", err)
 	}
+	fail := func(step string, cause error) (string, string, string, error) {
+		s.undoWorkspace(ctx, ws.Id, userID, ngacNodeID)
+		return "", "", "", fmt.Errorf("%s: %w", step, cause)
+	}
 
 	// Create tenant-scoped NGAC UAs and assign under the workspace PC.
 	if err := s.initTenantNGAC(ctx, ws.Id, ws.PcNodeId, ws.OwnersUaId, ws.MembersUaId); err != nil {
-		// Not fatal, as before: the workspace exists and its owner is in it.
-		// initTenantNGAC removed what it had half-built and creates only what is
-		// missing, so running it again repairs the tenant.
+		if strict {
+			return fail("init tenant graph", err)
+		}
+		// Not fatal here, as before: the workspace exists and its owner is in
+		// it. initTenantNGAC removed what it had half-built and creates only
+		// what is missing, so running it again repairs the tenant.
 		slog.Error("tenant NGAC init incomplete — users of this tenant will be denied",
 			"tenant", ws.Id, "error", err)
+	}
+
+	if strict {
+		if err := s.store.InsertTenantUser(ctx, ws.Id, userID, "owner", "active", ngacNodeID); err != nil {
+			return fail("insert tenant user", err)
+		}
+		if err := s.assignTenantNGAC(ctx, ws.Id, ngacNodeID, true); err != nil {
+			return fail("assign owner", err)
+		}
+		if err := s.provisionChannel(ctx, ws.Id, userID, ngacNodeID); err != nil {
+			return fail("create #general", err)
+		}
+		return ws.Id, name, "owner", nil
 	}
 
 	if err := s.joinTenant(ctx, ws.Id, userID, ngacNodeID, "owner"); err != nil {
 		return "", "", "", fmt.Errorf("join as owner: %w", err)
 	}
-
 	s.autoProvisionChannel(ctx, ws.Id, userID, ngacNodeID)
-
 	return ws.Id, name, "owner", nil
+}
+
+// undoWorkspace removes a workspace this service has just created, through the
+// workspace service (graph, rows, drive, channels). It runs on a context
+// detached from the request: the commonest reason provisioning fails is that
+// the request was cancelled, and a cleanup that dies with it would leave the
+// very orphan it exists to remove. A failure is logged loudly; the caller still
+// reports the original error.
+func (s *Service) undoWorkspace(ctx context.Context, workspaceID, userID, ngacNodeID string) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+	defer cancel()
+	if _, err := s.wsClient.DeleteWorkspace(actingAs(ctx, userID, ngacNodeID), &workspacepb.DeleteWorkspaceRequest{WorkspaceId: workspaceID}); err != nil {
+		slog.Error("could not remove a workspace whose provisioning failed; an orphan remains",
+			"workspace", workspaceID, "error", err)
+		return
+	}
+	slog.Warn("removed a workspace whose provisioning failed", "workspace", workspaceID)
 }
 
 // joinTenant creates the tenant_users record and assigns the user in NGAC.
@@ -313,27 +268,6 @@ func (s *Service) joinTenant(ctx context.Context, tenantID, userID, ngacNodeID, 
 	}
 	s.assignUserToTenantNGAC(ctx, tenantID, ngacNodeID, role == "owner")
 	return nil
-}
-
-// Signin authenticates by email and returns tenant list with a default-scoped JWT.
-func (s *Service) Signin(ctx context.Context, email, password string) (*SigninResult, error) {
-	email = strings.ToLower(strings.TrimSpace(email))
-	if email == "" || password == "" {
-		return nil, ErrInvalidInput
-	}
-
-	user, err := s.store.GetUserByEmail(ctx, email)
-	if err != nil {
-		return nil, fmt.Errorf("get user: %w", err)
-	}
-	if user == nil {
-		return nil, ErrInvalidCredentials
-	}
-	if !auth.CheckPassword(password, user.Password) {
-		return nil, ErrInvalidCredentials
-	}
-
-	return s.signinResultFor(ctx, user, "")
 }
 
 // SwitchTenant verifies membership and issues a new JWT scoped to the target tenant.
@@ -347,7 +281,10 @@ func (s *Service) SwitchTenant(ctx context.Context, userID, ngacNodeID, username
 	if err != nil {
 		return "", "", nil, fmt.Errorf("get tenant user: %w", err)
 	}
-	if membership == nil {
+	// Only an active member may act as the tenant. A suspended or not yet
+	// accepted membership still has a row, and a token scoped to the tenant
+	// would be accepted by every service that reads the tenant from the token.
+	if membership == nil || membership.Status != "active" {
 		return "", "", nil, ErrAccessDenied
 	}
 
@@ -373,10 +310,7 @@ func (s *Service) GetMe(ctx context.Context, userID, tenantID string) (*UserInfo
 		return nil, nil, ErrNotFound
 	}
 
-	uInfo := &UserInfo{
-		ID: user.ID, Username: user.Username, NGACNodeID: user.NGACNodeID,
-		Email: user.Email, UnionID: user.UnionID, DisplayName: user.DisplayName,
-	}
+	uInfo := userInfo(user)
 
 	if tenantID == "" {
 		return uInfo, nil, nil
@@ -388,74 +322,13 @@ func (s *Service) GetMe(ctx context.Context, userID, tenantID string) (*UserInfo
 	}
 
 	var tInfo *TenantInfo
-	if membership != nil {
+	if membership != nil && membership.Status == "active" {
 		tInfo = &TenantInfo{
 			ID: membership.TenantID, Name: membership.TenantName,
-			Role: membership.Role, OpenID: membership.OpenID,
+			Role: membership.Role, OpenID: membership.OpenID, Department: membership.DepartmentName,
 		}
 	}
 	return uInfo, tInfo, nil
-}
-
-// Register is the legacy registration flow (backward-compatible).
-func (s *Service) Register(ctx context.Context, username, password string) (*AuthResponse, error) {
-	if username == "" || password == "" {
-		return nil, ErrInvalidInput
-	}
-
-	existing, _ := s.store.GetUserByUsername(ctx, username)
-	if existing != nil {
-		return nil, ErrUserExists
-	}
-
-	hash, err := auth.HashPassword(password)
-	if err != nil {
-		return nil, fmt.Errorf("hash password: %w", err)
-	}
-
-	userID := uuid.New().String()
-	unionID := uuid.New().String()
-	ngacNode, err := s.createUserWithNode(ctx, newUser{
-		ID: userID, Username: username, PasswordHash: hash, UnionID: unionID, DisplayName: username,
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// Auto-provision workspace + tenant_users + #general channel
-	s.autoProvisionWorkspace(ctx, userID, username, ngacNode)
-
-	token, sessionID, err := auth.GenerateToken(userID, username, ngacNode, "")
-	if err != nil {
-		return nil, fmt.Errorf("generate token: %w", err)
-	}
-
-	return &AuthResponse{Token: token, SessionID: sessionID, UserID: userID, Username: username, NGACNodeID: ngacNode}, nil
-}
-
-// Login is the legacy login flow (backward-compatible, uses username).
-func (s *Service) Login(ctx context.Context, username, password string) (*AuthResponse, error) {
-	if username == "" || password == "" {
-		return nil, ErrInvalidInput
-	}
-
-	user, err := s.store.GetUserByUsername(ctx, username)
-	if err != nil {
-		return nil, fmt.Errorf("get user: %w", err)
-	}
-	if user == nil {
-		return nil, ErrInvalidCredentials
-	}
-	if !auth.CheckPassword(password, user.Password) {
-		return nil, ErrInvalidCredentials
-	}
-
-	token, sessionID, err := auth.GenerateToken(user.ID, user.Username, user.NGACNodeID, "")
-	if err != nil {
-		return nil, fmt.Errorf("generate token: %w", err)
-	}
-
-	return &AuthResponse{Token: token, SessionID: sessionID, UserID: user.ID, Username: user.Username, NGACNodeID: user.NGACNodeID}, nil
 }
 
 // GetUserByID retrieves a user by their primary key.
@@ -467,7 +340,17 @@ func (s *Service) GetUserByID(ctx context.Context, userID string) (*UserInfo, er
 	if user == nil {
 		return nil, ErrNotFound
 	}
-	return &UserInfo{ID: user.ID, Username: user.Username, NGACNodeID: user.NGACNodeID, Email: user.Email, UnionID: user.UnionID, DisplayName: user.DisplayName}, nil
+	return userInfo(user), nil
+}
+
+// userInfo is the domain view of an account (no password).
+func userInfo(u *store.User) *UserInfo {
+	return &UserInfo{
+		ID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID,
+		Email: u.Email, UnionID: u.UnionID, DisplayName: u.DisplayName,
+		Title: u.Title, Location: u.Location, AvatarURL: u.AvatarURL,
+		EmailVerified: u.EmailVerified, NeedsProfile: !u.ProfileCompleted,
+	}
 }
 
 // GetUserByNGACNodeID retrieves a user by their NGAC graph node.
@@ -482,47 +365,84 @@ func (s *Service) GetUserByNGACNodeID(ctx context.Context, nodeID string) (*User
 	return &UserInfo{ID: user.ID, Username: user.Username, NGACNodeID: user.NGACNodeID}, nil
 }
 
-// GetUserByUsername looks up a user by username.
-func (s *Service) GetUserByUsername(ctx context.Context, username string) (*UserInfo, error) {
-	user, err := s.store.GetUserByUsername(ctx, username)
-	if err != nil {
-		return nil, fmt.Errorf("get user by username: %w", err)
-	}
-	if user == nil {
-		return nil, ErrNotFound
-	}
-	return &UserInfo{ID: user.ID, Username: user.Username, NGACNodeID: user.NGACNodeID}, nil
+// ContactQuery is what a member asks of the workspace directory.
+type ContactQuery struct {
+	Department string
+	Location   string
+	Search     string
+	// Cursor is the NextCursor of the page before; empty for the first page.
+	Cursor string
+	Limit  int
 }
 
-// ListUsers returns all users.
-func (s *Service) ListUsers(ctx context.Context) ([]UserInfo, error) {
-	users, err := s.store.ListUsers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("list users: %w", err)
+// Directory page sizes: the default, and the most one request may ask for.
+const (
+	DefaultContactsLimit = 50
+	MaxContactsLimit     = 200
+	maxCursorBytes       = 512
+)
+
+// encodeCursor and decodeCursor keep the keyset position opaque to clients: it
+// is a place to continue from, not something to build.
+func encodeCursor(c *store.ContactCursor) string {
+	if c == nil {
+		return ""
 	}
-	result := make([]UserInfo, len(users))
-	for i, u := range users {
-		result[i] = UserInfo{ID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID}
-	}
-	return result, nil
+	raw, _ := json.Marshal(c)
+	return base64.RawURLEncoding.EncodeToString(raw)
 }
 
-// UpdateProfile updates a user's profile fields.
-func (s *Service) UpdateProfile(ctx context.Context, userID string, in ProfileUpdateInput) error {
-	if userID == "" {
-		return ErrInvalidInput
+func decodeCursor(s string) (*store.ContactCursor, error) {
+	if s == "" {
+		return nil, nil
 	}
-	return s.store.UpdateProfile(ctx, userID, in.DisplayName, in.Title, in.Department, in.Location, in.AvatarURL)
-}
-
-// ListContacts returns enriched user profiles for a workspace.
-func (s *Service) ListContacts(ctx context.Context, workspaceID, department, location string) ([]ContactInfo, error) {
-	if workspaceID == "" {
+	if len(s) > maxCursorBytes {
 		return nil, ErrInvalidInput
 	}
-	users, err := s.store.ListContactsByWorkspace(ctx, workspaceID, department, location)
+	raw, err := base64.RawURLEncoding.DecodeString(s)
 	if err != nil {
-		return nil, fmt.Errorf("list contacts: %w", err)
+		return nil, ErrInvalidInput
+	}
+	var c store.ContactCursor
+	if err := json.Unmarshal(raw, &c); err != nil || c.ID == "" {
+		return nil, ErrInvalidInput
+	}
+	return &c, nil
+}
+
+// ListContacts returns one page of the workspace directory, the true number of
+// people matching, and the cursor of the next page ("" on the last). Only an
+// active member of that workspace may read it. A person's display name is empty
+// until they have saved their profile: the directory never shows a login handle
+// as a name.
+func (s *Service) ListContacts(ctx context.Context, callerID, workspaceID string, q ContactQuery) ([]ContactInfo, int, string, error) {
+	if workspaceID == "" {
+		return nil, 0, "", ErrInvalidInput
+	}
+	membership, err := s.store.GetTenantUser(ctx, workspaceID, callerID)
+	if err != nil {
+		return nil, 0, "", fmt.Errorf("check membership: %w", err)
+	}
+	if membership == nil || membership.Status != "active" {
+		return nil, 0, "", ErrAccessDenied
+	}
+	limit := q.Limit
+	if limit <= 0 {
+		limit = DefaultContactsLimit
+	}
+	if limit > MaxContactsLimit || len([]rune(q.Search)) > 100 {
+		return nil, 0, "", ErrInvalidInput
+	}
+	after, err := decodeCursor(q.Cursor)
+	if err != nil {
+		return nil, 0, "", err
+	}
+	users, total, next, err := s.store.ListContactsByWorkspace(ctx, workspaceID, store.ContactFilter{
+		Department: strings.TrimSpace(q.Department), Location: strings.TrimSpace(q.Location),
+		Search: strings.TrimSpace(q.Search), Limit: limit, After: after,
+	})
+	if err != nil {
+		return nil, 0, "", fmt.Errorf("list contacts: %w", err)
 	}
 	contacts := make([]ContactInfo, len(users))
 	for i, u := range users {
@@ -533,8 +453,10 @@ func (s *Service) ListContacts(ctx context.Context, workspaceID, department, loc
 			Location: u.Location, AvatarURL: u.AvatarURL,
 		}
 	}
-	return contacts, nil
+	return contacts, total, encodeCursor(next), nil
 }
+
+// --- Private helpers ---
 
 // --- Private helpers ---
 
@@ -573,20 +495,30 @@ func (s *Service) autoProvisionWorkspace(ctx context.Context, userID, username, 
 	s.autoProvisionChannel(ctx, ws.Id, userID, ngacNodeID)
 }
 
-// autoProvisionChannel creates a #general channel in the workspace.
+// autoProvisionChannel creates a #general channel in the workspace. A failure
+// is logged and tolerated: it is the lenient path's.
 func (s *Service) autoProvisionChannel(ctx context.Context, workspaceID, userID, ngacNodeID string) {
 	if s.msgClient == nil {
 		slog.Warn("messaging client unavailable, skipping #general channel")
 		return
 	}
-	_, err := s.msgClient.CreateChannel(actingAs(ctx, userID, ngacNodeID), &messagingpb.CreateChannelRequest{
-		Name: "general", WorkspaceId: workspaceID, ChannelType: "workspace",
-	})
-	if err != nil {
+	if err := s.provisionChannel(ctx, workspaceID, userID, ngacNodeID); err != nil {
 		slog.Error("auto-provision #general channel failed", "workspace", workspaceID, "error", err)
 		return
 	}
 	slog.Info("auto-provisioned #general channel", "workspace_id", workspaceID)
+}
+
+// provisionChannel creates #general and reports a failure. Without a messaging
+// client there is nothing to create and nothing failed.
+func (s *Service) provisionChannel(ctx context.Context, workspaceID, userID, ngacNodeID string) error {
+	if s.msgClient == nil {
+		return nil
+	}
+	_, err := s.msgClient.CreateChannel(actingAs(ctx, userID, ngacNodeID), &messagingpb.CreateChannelRequest{
+		Name: "general", WorkspaceId: workspaceID, ChannelType: "workspace",
+	})
+	return err
 }
 
 // newUser is everything needed to create an account and its graph node.
@@ -707,40 +639,45 @@ func (s *Service) initTenantNGAC(ctx context.Context, tenantID, pcNodeID, owners
 	return nil
 }
 
-// assignUserToTenantNGAC assigns a user's NGAC node to the tenant's member/owner UAs.
-// Uses find-or-log pattern: if the UA doesn't exist yet, logs an error instead of silently skipping.
+// assignUserToTenantNGAC assigns a user's NGAC node to the tenant's member/owner
+// UAs. A failure is logged, not returned: see assignTenantNGAC for the strict form.
 func (s *Service) assignUserToTenantNGAC(ctx context.Context, tenantID, userNodeID string, isOwner bool) {
-	// Assign to TenantMember UA
+	if err := s.assignTenantNGAC(ctx, tenantID, userNodeID, isOwner); err != nil {
+		slog.Error("assign user to tenant UAs failed", "tenant", tenantID, "error", err)
+	}
+}
+
+// assignTenantNGAC puts the user under the tenant's TenantMember UA, and under
+// TenantOwner when isOwner. A UA that does not exist is an error, not a skip:
+// without them every check for the user denies.
+func (s *Service) assignTenantNGAC(ctx context.Context, tenantID, userNodeID string, isOwner bool) error {
 	memberUA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
 		Name: ngac.TenantMemberUAName(ngac.WorkspaceID(tenantID)), NodeType: ngac.TypeUA,
 	})
 	if err != nil {
-		slog.Error("TenantMember UA not found — was initTenantNGAC called?", "tenant", tenantID, "error", err)
-		return
+		return fmt.Errorf("TenantMember UA not found — was initTenantNGAC called?: %w", err)
 	}
 	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: userNodeID, ParentId: memberUA.Id,
 	}); err != nil {
-		slog.Error("assign to tenant member UA failed", "tenant", tenantID, "error", err)
+		return fmt.Errorf("assign to tenant member UA: %w", err)
 	}
 
 	if !isOwner {
-		return
+		return nil
 	}
-
-	// Assign to TenantOwner UA
 	ownerUA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
 		Name: ngac.TenantOwnerUAName(ngac.WorkspaceID(tenantID)), NodeType: ngac.TypeUA,
 	})
 	if err != nil {
-		slog.Error("TenantOwner UA not found — was initTenantNGAC called?", "tenant", tenantID, "error", err)
-		return
+		return fmt.Errorf("TenantOwner UA not found — was initTenantNGAC called?: %w", err)
 	}
 	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 		ChildId: userNodeID, ParentId: ownerUA.Id,
 	}); err != nil {
-		slog.Error("assign to tenant owner UA failed", "tenant", tenantID, "error", err)
+		return fmt.Errorf("assign to tenant owner UA: %w", err)
 	}
+	return nil
 }
 
 // selectDefaultTenant picks the default tenant (prefer owner, else first).

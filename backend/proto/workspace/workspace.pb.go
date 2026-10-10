@@ -329,6 +329,50 @@ func (x *GetWorkspaceRequest) GetWorkspaceId() string {
 	return ""
 }
 
+type DeleteWorkspaceRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteWorkspaceRequest) Reset() {
+	*x = DeleteWorkspaceRequest{}
+	mi := &file_proto_workspace_workspace_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteWorkspaceRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteWorkspaceRequest) ProtoMessage() {}
+
+func (x *DeleteWorkspaceRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workspace_workspace_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteWorkspaceRequest.ProtoReflect.Descriptor instead.
+func (*DeleteWorkspaceRequest) Descriptor() ([]byte, []int) {
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *DeleteWorkspaceRequest) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
 type WorkspaceList struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Workspaces    []*Workspace           `protobuf:"bytes,1,rep,name=workspaces,proto3" json:"workspaces,omitempty"`
@@ -338,7 +382,7 @@ type WorkspaceList struct {
 
 func (x *WorkspaceList) Reset() {
 	*x = WorkspaceList{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[5]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -350,7 +394,7 @@ func (x *WorkspaceList) String() string {
 func (*WorkspaceList) ProtoMessage() {}
 
 func (x *WorkspaceList) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[5]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -363,7 +407,7 @@ func (x *WorkspaceList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WorkspaceList.ProtoReflect.Descriptor instead.
 func (*WorkspaceList) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{5}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *WorkspaceList) GetWorkspaces() []*Workspace {
@@ -385,7 +429,7 @@ type RemoveMemberRequest struct {
 
 func (x *RemoveMemberRequest) Reset() {
 	*x = RemoveMemberRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[6]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -397,7 +441,7 @@ func (x *RemoveMemberRequest) String() string {
 func (*RemoveMemberRequest) ProtoMessage() {}
 
 func (x *RemoveMemberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[6]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -410,7 +454,7 @@ func (x *RemoveMemberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveMemberRequest.ProtoReflect.Descriptor instead.
 func (*RemoveMemberRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{6}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *RemoveMemberRequest) GetWorkspaceId() string {
@@ -444,7 +488,7 @@ type ListMembersRequest struct {
 
 func (x *ListMembersRequest) Reset() {
 	*x = ListMembersRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[7]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -456,7 +500,7 @@ func (x *ListMembersRequest) String() string {
 func (*ListMembersRequest) ProtoMessage() {}
 
 func (x *ListMembersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[7]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -469,7 +513,7 @@ func (x *ListMembersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListMembersRequest.ProtoReflect.Descriptor instead.
 func (*ListMembersRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{7}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ListMembersRequest) GetWorkspaceId() string {
@@ -492,7 +536,7 @@ type Member struct {
 
 func (x *Member) Reset() {
 	*x = Member{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[8]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -504,7 +548,7 @@ func (x *Member) String() string {
 func (*Member) ProtoMessage() {}
 
 func (x *Member) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[8]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -517,7 +561,7 @@ func (x *Member) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Member.ProtoReflect.Descriptor instead.
 func (*Member) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{8}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *Member) GetUserId() string {
@@ -564,7 +608,7 @@ type MemberList struct {
 
 func (x *MemberList) Reset() {
 	*x = MemberList{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[9]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -576,7 +620,7 @@ func (x *MemberList) String() string {
 func (*MemberList) ProtoMessage() {}
 
 func (x *MemberList) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[9]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -589,7 +633,7 @@ func (x *MemberList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MemberList.ProtoReflect.Descriptor instead.
 func (*MemberList) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{9}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *MemberList) GetMembers() []*Member {
@@ -611,7 +655,7 @@ type TransferOwnershipRequest struct {
 
 func (x *TransferOwnershipRequest) Reset() {
 	*x = TransferOwnershipRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[10]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -623,7 +667,7 @@ func (x *TransferOwnershipRequest) String() string {
 func (*TransferOwnershipRequest) ProtoMessage() {}
 
 func (x *TransferOwnershipRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[10]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -636,7 +680,7 @@ func (x *TransferOwnershipRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransferOwnershipRequest.ProtoReflect.Descriptor instead.
 func (*TransferOwnershipRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{10}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *TransferOwnershipRequest) GetWorkspaceId() string {
@@ -673,7 +717,7 @@ type AddOwnerRequest struct {
 
 func (x *AddOwnerRequest) Reset() {
 	*x = AddOwnerRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[11]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -685,7 +729,7 @@ func (x *AddOwnerRequest) String() string {
 func (*AddOwnerRequest) ProtoMessage() {}
 
 func (x *AddOwnerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[11]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -698,7 +742,7 @@ func (x *AddOwnerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddOwnerRequest.ProtoReflect.Descriptor instead.
 func (*AddOwnerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{11}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *AddOwnerRequest) GetWorkspaceId() string {
@@ -735,7 +779,7 @@ type RemoveOwnerRequest struct {
 
 func (x *RemoveOwnerRequest) Reset() {
 	*x = RemoveOwnerRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[12]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -747,7 +791,7 @@ func (x *RemoveOwnerRequest) String() string {
 func (*RemoveOwnerRequest) ProtoMessage() {}
 
 func (x *RemoveOwnerRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[12]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -760,7 +804,7 @@ func (x *RemoveOwnerRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveOwnerRequest.ProtoReflect.Descriptor instead.
 func (*RemoveOwnerRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{12}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *RemoveOwnerRequest) GetWorkspaceId() string {
@@ -797,7 +841,7 @@ type CreateRoleRequest struct {
 
 func (x *CreateRoleRequest) Reset() {
 	*x = CreateRoleRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[13]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -809,7 +853,7 @@ func (x *CreateRoleRequest) String() string {
 func (*CreateRoleRequest) ProtoMessage() {}
 
 func (x *CreateRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[13]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -822,7 +866,7 @@ func (x *CreateRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateRoleRequest.ProtoReflect.Descriptor instead.
 func (*CreateRoleRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{13}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *CreateRoleRequest) GetWorkspaceId() string {
@@ -858,7 +902,7 @@ type Role struct {
 
 func (x *Role) Reset() {
 	*x = Role{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[14]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -870,7 +914,7 @@ func (x *Role) String() string {
 func (*Role) ProtoMessage() {}
 
 func (x *Role) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[14]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -883,7 +927,7 @@ func (x *Role) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Role.ProtoReflect.Descriptor instead.
 func (*Role) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{14}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *Role) GetId() string {
@@ -916,7 +960,7 @@ type ListRolesRequest struct {
 
 func (x *ListRolesRequest) Reset() {
 	*x = ListRolesRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[15]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -928,7 +972,7 @@ func (x *ListRolesRequest) String() string {
 func (*ListRolesRequest) ProtoMessage() {}
 
 func (x *ListRolesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[15]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -941,7 +985,7 @@ func (x *ListRolesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRolesRequest.ProtoReflect.Descriptor instead.
 func (*ListRolesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{15}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ListRolesRequest) GetWorkspaceId() string {
@@ -960,7 +1004,7 @@ type RoleList struct {
 
 func (x *RoleList) Reset() {
 	*x = RoleList{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[16]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -972,7 +1016,7 @@ func (x *RoleList) String() string {
 func (*RoleList) ProtoMessage() {}
 
 func (x *RoleList) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[16]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -985,7 +1029,7 @@ func (x *RoleList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoleList.ProtoReflect.Descriptor instead.
 func (*RoleList) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{16}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *RoleList) GetRoles() []*Role {
@@ -1007,7 +1051,7 @@ type DeleteRoleRequest struct {
 
 func (x *DeleteRoleRequest) Reset() {
 	*x = DeleteRoleRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[17]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1019,7 +1063,7 @@ func (x *DeleteRoleRequest) String() string {
 func (*DeleteRoleRequest) ProtoMessage() {}
 
 func (x *DeleteRoleRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[17]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1032,7 +1076,7 @@ func (x *DeleteRoleRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteRoleRequest.ProtoReflect.Descriptor instead.
 func (*DeleteRoleRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{17}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *DeleteRoleRequest) GetWorkspaceId() string {
@@ -1070,7 +1114,7 @@ type CreateFolderRequest struct {
 
 func (x *CreateFolderRequest) Reset() {
 	*x = CreateFolderRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[18]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1082,7 +1126,7 @@ func (x *CreateFolderRequest) String() string {
 func (*CreateFolderRequest) ProtoMessage() {}
 
 func (x *CreateFolderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[18]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1095,7 +1139,7 @@ func (x *CreateFolderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateFolderRequest.ProtoReflect.Descriptor instead.
 func (*CreateFolderRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{18}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *CreateFolderRequest) GetWorkspaceId() string {
@@ -1138,7 +1182,7 @@ type Folder struct {
 
 func (x *Folder) Reset() {
 	*x = Folder{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[19]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1150,7 +1194,7 @@ func (x *Folder) String() string {
 func (*Folder) ProtoMessage() {}
 
 func (x *Folder) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[19]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1163,7 +1207,7 @@ func (x *Folder) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Folder.ProtoReflect.Descriptor instead.
 func (*Folder) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{19}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Folder) GetId() string {
@@ -1196,7 +1240,7 @@ type ListFoldersRequest struct {
 
 func (x *ListFoldersRequest) Reset() {
 	*x = ListFoldersRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[20]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1208,7 +1252,7 @@ func (x *ListFoldersRequest) String() string {
 func (*ListFoldersRequest) ProtoMessage() {}
 
 func (x *ListFoldersRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[20]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1221,7 +1265,7 @@ func (x *ListFoldersRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListFoldersRequest.ProtoReflect.Descriptor instead.
 func (*ListFoldersRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{20}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ListFoldersRequest) GetWorkspaceId() string {
@@ -1240,7 +1284,7 @@ type FolderList struct {
 
 func (x *FolderList) Reset() {
 	*x = FolderList{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[21]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1252,7 +1296,7 @@ func (x *FolderList) String() string {
 func (*FolderList) ProtoMessage() {}
 
 func (x *FolderList) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[21]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1265,7 +1309,7 @@ func (x *FolderList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FolderList.ProtoReflect.Descriptor instead.
 func (*FolderList) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{21}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *FolderList) GetFolders() []*Folder {
@@ -1287,7 +1331,7 @@ type DeleteFolderRequest struct {
 
 func (x *DeleteFolderRequest) Reset() {
 	*x = DeleteFolderRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[22]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1299,7 +1343,7 @@ func (x *DeleteFolderRequest) String() string {
 func (*DeleteFolderRequest) ProtoMessage() {}
 
 func (x *DeleteFolderRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[22]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1312,7 +1356,7 @@ func (x *DeleteFolderRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteFolderRequest.ProtoReflect.Descriptor instead.
 func (*DeleteFolderRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{22}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *DeleteFolderRequest) GetWorkspaceId() string {
@@ -1351,7 +1395,7 @@ type Permission struct {
 
 func (x *Permission) Reset() {
 	*x = Permission{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[23]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1363,7 +1407,7 @@ func (x *Permission) String() string {
 func (*Permission) ProtoMessage() {}
 
 func (x *Permission) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[23]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1376,7 +1420,7 @@ func (x *Permission) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Permission.ProtoReflect.Descriptor instead.
 func (*Permission) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{23}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *Permission) GetId() string {
@@ -1430,7 +1474,7 @@ type ListPermissionsRequest struct {
 
 func (x *ListPermissionsRequest) Reset() {
 	*x = ListPermissionsRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[24]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1442,7 +1486,7 @@ func (x *ListPermissionsRequest) String() string {
 func (*ListPermissionsRequest) ProtoMessage() {}
 
 func (x *ListPermissionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[24]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1455,7 +1499,7 @@ func (x *ListPermissionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPermissionsRequest.ProtoReflect.Descriptor instead.
 func (*ListPermissionsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{24}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *ListPermissionsRequest) GetWorkspaceId() string {
@@ -1474,7 +1518,7 @@ type PermissionList struct {
 
 func (x *PermissionList) Reset() {
 	*x = PermissionList{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[25]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1486,7 +1530,7 @@ func (x *PermissionList) String() string {
 func (*PermissionList) ProtoMessage() {}
 
 func (x *PermissionList) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[25]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1499,7 +1543,7 @@ func (x *PermissionList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PermissionList.ProtoReflect.Descriptor instead.
 func (*PermissionList) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{25}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *PermissionList) GetPermissions() []*Permission {
@@ -1521,7 +1565,7 @@ type DeletePermissionRequest struct {
 
 func (x *DeletePermissionRequest) Reset() {
 	*x = DeletePermissionRequest{}
-	mi := &file_proto_workspace_workspace_proto_msgTypes[26]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1533,7 +1577,7 @@ func (x *DeletePermissionRequest) String() string {
 func (*DeletePermissionRequest) ProtoMessage() {}
 
 func (x *DeletePermissionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_workspace_workspace_proto_msgTypes[26]
+	mi := &file_proto_workspace_workspace_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1546,7 +1590,7 @@ func (x *DeletePermissionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeletePermissionRequest.ProtoReflect.Descriptor instead.
 func (*DeletePermissionRequest) Descriptor() ([]byte, []int) {
-	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{26}
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *DeletePermissionRequest) GetWorkspaceId() string {
@@ -1599,6 +1643,8 @@ const file_proto_workspace_workspace_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
 	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"8\n" +
 	"\x13GetWorkspaceRequest\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\";\n" +
+	"\x16DeleteWorkspaceRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"E\n" +
 	"\rWorkspaceList\x124\n" +
 	"\n" +
@@ -1686,11 +1732,12 @@ const file_proto_workspace_workspace_proto_rawDesc = "" +
 	"\x17DeletePermissionRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
 	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12#\n" +
-	"\rpermission_id\x18\x03 \x01(\tR\fpermissionId2\xde\b\n" +
+	"\rpermission_id\x18\x03 \x01(\tR\fpermissionId2\xa6\t\n" +
 	"\x10WorkspaceService\x12J\n" +
 	"\x0fCreateWorkspace\x12!.workspace.CreateWorkspaceRequest\x1a\x14.workspace.Workspace\x12L\n" +
 	"\x0eListWorkspaces\x12 .workspace.ListWorkspacesRequest\x1a\x18.workspace.WorkspaceList\x12D\n" +
-	"\fGetWorkspace\x12\x1e.workspace.GetWorkspaceRequest\x1a\x14.workspace.Workspace\x12@\n" +
+	"\fGetWorkspace\x12\x1e.workspace.GetWorkspaceRequest\x1a\x14.workspace.Workspace\x12F\n" +
+	"\x0fDeleteWorkspace\x12!.workspace.DeleteWorkspaceRequest\x1a\x10.workspace.Empty\x12@\n" +
 	"\fRemoveMember\x12\x1e.workspace.RemoveMemberRequest\x1a\x10.workspace.Empty\x12C\n" +
 	"\vListMembers\x12\x1d.workspace.ListMembersRequest\x1a\x15.workspace.MemberList\x12J\n" +
 	"\x11TransferOwnership\x12#.workspace.TransferOwnershipRequest\x1a\x10.workspace.Empty\x128\n" +
@@ -1719,77 +1766,80 @@ func file_proto_workspace_workspace_proto_rawDescGZIP() []byte {
 	return file_proto_workspace_workspace_proto_rawDescData
 }
 
-var file_proto_workspace_workspace_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_proto_workspace_workspace_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
 var file_proto_workspace_workspace_proto_goTypes = []any{
 	(*Empty)(nil),                    // 0: workspace.Empty
 	(*Workspace)(nil),                // 1: workspace.Workspace
 	(*CreateWorkspaceRequest)(nil),   // 2: workspace.CreateWorkspaceRequest
 	(*ListWorkspacesRequest)(nil),    // 3: workspace.ListWorkspacesRequest
 	(*GetWorkspaceRequest)(nil),      // 4: workspace.GetWorkspaceRequest
-	(*WorkspaceList)(nil),            // 5: workspace.WorkspaceList
-	(*RemoveMemberRequest)(nil),      // 6: workspace.RemoveMemberRequest
-	(*ListMembersRequest)(nil),       // 7: workspace.ListMembersRequest
-	(*Member)(nil),                   // 8: workspace.Member
-	(*MemberList)(nil),               // 9: workspace.MemberList
-	(*TransferOwnershipRequest)(nil), // 10: workspace.TransferOwnershipRequest
-	(*AddOwnerRequest)(nil),          // 11: workspace.AddOwnerRequest
-	(*RemoveOwnerRequest)(nil),       // 12: workspace.RemoveOwnerRequest
-	(*CreateRoleRequest)(nil),        // 13: workspace.CreateRoleRequest
-	(*Role)(nil),                     // 14: workspace.Role
-	(*ListRolesRequest)(nil),         // 15: workspace.ListRolesRequest
-	(*RoleList)(nil),                 // 16: workspace.RoleList
-	(*DeleteRoleRequest)(nil),        // 17: workspace.DeleteRoleRequest
-	(*CreateFolderRequest)(nil),      // 18: workspace.CreateFolderRequest
-	(*Folder)(nil),                   // 19: workspace.Folder
-	(*ListFoldersRequest)(nil),       // 20: workspace.ListFoldersRequest
-	(*FolderList)(nil),               // 21: workspace.FolderList
-	(*DeleteFolderRequest)(nil),      // 22: workspace.DeleteFolderRequest
-	(*Permission)(nil),               // 23: workspace.Permission
-	(*ListPermissionsRequest)(nil),   // 24: workspace.ListPermissionsRequest
-	(*PermissionList)(nil),           // 25: workspace.PermissionList
-	(*DeletePermissionRequest)(nil),  // 26: workspace.DeletePermissionRequest
+	(*DeleteWorkspaceRequest)(nil),   // 5: workspace.DeleteWorkspaceRequest
+	(*WorkspaceList)(nil),            // 6: workspace.WorkspaceList
+	(*RemoveMemberRequest)(nil),      // 7: workspace.RemoveMemberRequest
+	(*ListMembersRequest)(nil),       // 8: workspace.ListMembersRequest
+	(*Member)(nil),                   // 9: workspace.Member
+	(*MemberList)(nil),               // 10: workspace.MemberList
+	(*TransferOwnershipRequest)(nil), // 11: workspace.TransferOwnershipRequest
+	(*AddOwnerRequest)(nil),          // 12: workspace.AddOwnerRequest
+	(*RemoveOwnerRequest)(nil),       // 13: workspace.RemoveOwnerRequest
+	(*CreateRoleRequest)(nil),        // 14: workspace.CreateRoleRequest
+	(*Role)(nil),                     // 15: workspace.Role
+	(*ListRolesRequest)(nil),         // 16: workspace.ListRolesRequest
+	(*RoleList)(nil),                 // 17: workspace.RoleList
+	(*DeleteRoleRequest)(nil),        // 18: workspace.DeleteRoleRequest
+	(*CreateFolderRequest)(nil),      // 19: workspace.CreateFolderRequest
+	(*Folder)(nil),                   // 20: workspace.Folder
+	(*ListFoldersRequest)(nil),       // 21: workspace.ListFoldersRequest
+	(*FolderList)(nil),               // 22: workspace.FolderList
+	(*DeleteFolderRequest)(nil),      // 23: workspace.DeleteFolderRequest
+	(*Permission)(nil),               // 24: workspace.Permission
+	(*ListPermissionsRequest)(nil),   // 25: workspace.ListPermissionsRequest
+	(*PermissionList)(nil),           // 26: workspace.PermissionList
+	(*DeletePermissionRequest)(nil),  // 27: workspace.DeletePermissionRequest
 }
 var file_proto_workspace_workspace_proto_depIdxs = []int32{
 	1,  // 0: workspace.WorkspaceList.workspaces:type_name -> workspace.Workspace
-	14, // 1: workspace.Member.roles:type_name -> workspace.Role
-	8,  // 2: workspace.MemberList.members:type_name -> workspace.Member
-	14, // 3: workspace.RoleList.roles:type_name -> workspace.Role
-	19, // 4: workspace.FolderList.folders:type_name -> workspace.Folder
-	23, // 5: workspace.PermissionList.permissions:type_name -> workspace.Permission
+	15, // 1: workspace.Member.roles:type_name -> workspace.Role
+	9,  // 2: workspace.MemberList.members:type_name -> workspace.Member
+	15, // 3: workspace.RoleList.roles:type_name -> workspace.Role
+	20, // 4: workspace.FolderList.folders:type_name -> workspace.Folder
+	24, // 5: workspace.PermissionList.permissions:type_name -> workspace.Permission
 	2,  // 6: workspace.WorkspaceService.CreateWorkspace:input_type -> workspace.CreateWorkspaceRequest
 	3,  // 7: workspace.WorkspaceService.ListWorkspaces:input_type -> workspace.ListWorkspacesRequest
 	4,  // 8: workspace.WorkspaceService.GetWorkspace:input_type -> workspace.GetWorkspaceRequest
-	6,  // 9: workspace.WorkspaceService.RemoveMember:input_type -> workspace.RemoveMemberRequest
-	7,  // 10: workspace.WorkspaceService.ListMembers:input_type -> workspace.ListMembersRequest
-	10, // 11: workspace.WorkspaceService.TransferOwnership:input_type -> workspace.TransferOwnershipRequest
-	11, // 12: workspace.WorkspaceService.AddOwner:input_type -> workspace.AddOwnerRequest
-	12, // 13: workspace.WorkspaceService.RemoveOwner:input_type -> workspace.RemoveOwnerRequest
-	13, // 14: workspace.WorkspaceService.CreateRole:input_type -> workspace.CreateRoleRequest
-	15, // 15: workspace.WorkspaceService.ListRoles:input_type -> workspace.ListRolesRequest
-	17, // 16: workspace.WorkspaceService.DeleteRole:input_type -> workspace.DeleteRoleRequest
-	18, // 17: workspace.WorkspaceService.CreateFolder:input_type -> workspace.CreateFolderRequest
-	20, // 18: workspace.WorkspaceService.ListFolders:input_type -> workspace.ListFoldersRequest
-	22, // 19: workspace.WorkspaceService.DeleteFolder:input_type -> workspace.DeleteFolderRequest
-	24, // 20: workspace.WorkspaceService.ListPermissions:input_type -> workspace.ListPermissionsRequest
-	26, // 21: workspace.WorkspaceService.DeletePermission:input_type -> workspace.DeletePermissionRequest
-	1,  // 22: workspace.WorkspaceService.CreateWorkspace:output_type -> workspace.Workspace
-	5,  // 23: workspace.WorkspaceService.ListWorkspaces:output_type -> workspace.WorkspaceList
-	1,  // 24: workspace.WorkspaceService.GetWorkspace:output_type -> workspace.Workspace
-	0,  // 25: workspace.WorkspaceService.RemoveMember:output_type -> workspace.Empty
-	9,  // 26: workspace.WorkspaceService.ListMembers:output_type -> workspace.MemberList
-	0,  // 27: workspace.WorkspaceService.TransferOwnership:output_type -> workspace.Empty
-	0,  // 28: workspace.WorkspaceService.AddOwner:output_type -> workspace.Empty
-	0,  // 29: workspace.WorkspaceService.RemoveOwner:output_type -> workspace.Empty
-	14, // 30: workspace.WorkspaceService.CreateRole:output_type -> workspace.Role
-	16, // 31: workspace.WorkspaceService.ListRoles:output_type -> workspace.RoleList
-	0,  // 32: workspace.WorkspaceService.DeleteRole:output_type -> workspace.Empty
-	19, // 33: workspace.WorkspaceService.CreateFolder:output_type -> workspace.Folder
-	21, // 34: workspace.WorkspaceService.ListFolders:output_type -> workspace.FolderList
-	0,  // 35: workspace.WorkspaceService.DeleteFolder:output_type -> workspace.Empty
-	25, // 36: workspace.WorkspaceService.ListPermissions:output_type -> workspace.PermissionList
-	0,  // 37: workspace.WorkspaceService.DeletePermission:output_type -> workspace.Empty
-	22, // [22:38] is the sub-list for method output_type
-	6,  // [6:22] is the sub-list for method input_type
+	5,  // 9: workspace.WorkspaceService.DeleteWorkspace:input_type -> workspace.DeleteWorkspaceRequest
+	7,  // 10: workspace.WorkspaceService.RemoveMember:input_type -> workspace.RemoveMemberRequest
+	8,  // 11: workspace.WorkspaceService.ListMembers:input_type -> workspace.ListMembersRequest
+	11, // 12: workspace.WorkspaceService.TransferOwnership:input_type -> workspace.TransferOwnershipRequest
+	12, // 13: workspace.WorkspaceService.AddOwner:input_type -> workspace.AddOwnerRequest
+	13, // 14: workspace.WorkspaceService.RemoveOwner:input_type -> workspace.RemoveOwnerRequest
+	14, // 15: workspace.WorkspaceService.CreateRole:input_type -> workspace.CreateRoleRequest
+	16, // 16: workspace.WorkspaceService.ListRoles:input_type -> workspace.ListRolesRequest
+	18, // 17: workspace.WorkspaceService.DeleteRole:input_type -> workspace.DeleteRoleRequest
+	19, // 18: workspace.WorkspaceService.CreateFolder:input_type -> workspace.CreateFolderRequest
+	21, // 19: workspace.WorkspaceService.ListFolders:input_type -> workspace.ListFoldersRequest
+	23, // 20: workspace.WorkspaceService.DeleteFolder:input_type -> workspace.DeleteFolderRequest
+	25, // 21: workspace.WorkspaceService.ListPermissions:input_type -> workspace.ListPermissionsRequest
+	27, // 22: workspace.WorkspaceService.DeletePermission:input_type -> workspace.DeletePermissionRequest
+	1,  // 23: workspace.WorkspaceService.CreateWorkspace:output_type -> workspace.Workspace
+	6,  // 24: workspace.WorkspaceService.ListWorkspaces:output_type -> workspace.WorkspaceList
+	1,  // 25: workspace.WorkspaceService.GetWorkspace:output_type -> workspace.Workspace
+	0,  // 26: workspace.WorkspaceService.DeleteWorkspace:output_type -> workspace.Empty
+	0,  // 27: workspace.WorkspaceService.RemoveMember:output_type -> workspace.Empty
+	10, // 28: workspace.WorkspaceService.ListMembers:output_type -> workspace.MemberList
+	0,  // 29: workspace.WorkspaceService.TransferOwnership:output_type -> workspace.Empty
+	0,  // 30: workspace.WorkspaceService.AddOwner:output_type -> workspace.Empty
+	0,  // 31: workspace.WorkspaceService.RemoveOwner:output_type -> workspace.Empty
+	15, // 32: workspace.WorkspaceService.CreateRole:output_type -> workspace.Role
+	17, // 33: workspace.WorkspaceService.ListRoles:output_type -> workspace.RoleList
+	0,  // 34: workspace.WorkspaceService.DeleteRole:output_type -> workspace.Empty
+	20, // 35: workspace.WorkspaceService.CreateFolder:output_type -> workspace.Folder
+	22, // 36: workspace.WorkspaceService.ListFolders:output_type -> workspace.FolderList
+	0,  // 37: workspace.WorkspaceService.DeleteFolder:output_type -> workspace.Empty
+	26, // 38: workspace.WorkspaceService.ListPermissions:output_type -> workspace.PermissionList
+	0,  // 39: workspace.WorkspaceService.DeletePermission:output_type -> workspace.Empty
+	23, // [23:40] is the sub-list for method output_type
+	6,  // [6:23] is the sub-list for method input_type
 	6,  // [6:6] is the sub-list for extension type_name
 	6,  // [6:6] is the sub-list for extension extendee
 	0,  // [0:6] is the sub-list for field type_name
@@ -1806,7 +1856,7 @@ func file_proto_workspace_workspace_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_workspace_workspace_proto_rawDesc), len(file_proto_workspace_workspace_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   27,
+			NumMessages:   28,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

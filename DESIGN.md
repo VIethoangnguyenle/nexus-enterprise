@@ -152,7 +152,7 @@ Primitive sống ở `frontend/src/components/primitives/`; không component nà
 - **IconButton:** 32×32 hit area ≥ 44 trên touch (`::before` inset −6px), `aria-label` bắt buộc.
 - **Input / Select / Textarea:** cao 40, 16px, nền `--color-raised`, không viền; focus = ring.
   Label luôn có (không dùng placeholder làm label). Lỗi dưới ô, `aria-describedby`, validate khi blur.
-- **Avatar:** tròn, 20/24/32/40, nền `--color-person-N`, 2 chữ cái đầu của **tên hiển thị**
+- **Avatar:** tròn, 20/24/32/40 (64 chỉ cho hồ sơ trong Danh bạ và Cài đặt), nền `--color-person-N`, 2 chữ cái đầu của **tên hiển thị**
   (không bao giờ của id). Có ảnh thì dùng ảnh. Presence: chấm 8px `success` ở góc dưới phải.
 - **PersonChip:** avatar 20 + tên hiển thị (+ vai trò mờ). Là cách duy nhất hiển thị một người.
 - **Badge / StatusPill:** pill, 12px/600, nền wash semantic + chữ fg semantic. Nhãn đọc được

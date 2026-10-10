@@ -18,7 +18,6 @@ import (
 
 // WorkspaceService defines the operations the REST handler needs.
 type WorkspaceService interface {
-	CreateWorkspace(ctx context.Context, req *pb.CreateWorkspaceRequest) (*pb.Workspace, error)
 	ListWorkspaces(ctx context.Context, req *pb.ListWorkspacesRequest) (*pb.WorkspaceList, error)
 	GetWorkspace(ctx context.Context, req *pb.GetWorkspaceRequest) (*pb.Workspace, error)
 	RemoveMember(ctx context.Context, req *pb.RemoveMemberRequest) (*pb.Empty, error)
@@ -40,7 +39,7 @@ func NewHandler(svc WorkspaceService) *Handler {
 func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api := e.Group("/api", httputil.JWTMiddleware(jwtSecret))
 
-	api.POST("/workspaces", h.CreateWorkspace)
+	api.POST("/workspaces", h.WorkspaceCreationMoved)
 	api.GET("/workspaces", h.ListWorkspaces)
 	api.GET("/workspaces/:id", h.GetWorkspace)
 	api.DELETE("/workspaces/:id/members/:nodeId", h.RemoveMember)
@@ -48,26 +47,12 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/workspaces/:id/folders", h.CreateFolder)
 }
 
-// CreateWorkspace handles POST /api/workspaces.
-func (h *Handler) CreateWorkspace(c echo.Context) error {
-	_, err := httputil.RequireClaims(c)
-	if err != nil {
-		return err
-	}
-	var body struct {
-		Name string `json:"name"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-
-	resp, err := h.svc.CreateWorkspace(c.Request().Context(), &pb.CreateWorkspaceRequest{
-		Name: body.Name,
-	})
-	if err != nil {
-		return httputil.MapGRPCError(err)
-	}
-	return c.JSON(http.StatusCreated, resp)
+// WorkspaceCreationMoved answers POST /api/workspaces, which used to create a
+// workspace for any signed-in caller. Creation now belongs to the auth service
+// (POST /api/me/workspaces, which also records the person's membership); this
+// route says so rather than doing it a second, unchecked way.
+func (h *Handler) WorkspaceCreationMoved(c echo.Context) error {
+	return echo.NewHTTPError(http.StatusGone, "workspace creation moved to POST /api/me/workspaces")
 }
 
 // ListWorkspaces handles GET /api/workspaces.

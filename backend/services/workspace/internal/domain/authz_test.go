@@ -213,8 +213,20 @@ func (f *fakePolicyWrite) RemoveAssociation(_ context.Context, req *policypb.Rem
 }
 
 type fakeWSStore struct {
-	ws map[string]*store.Workspace
-	mu sync.Mutex
+	ws        map[string]*store.Workspace
+	mu        sync.Mutex
+	mutations []string
+}
+
+func (f *fakeWSStore) UpdateDetails(_ context.Context, id string, name, desc *string) (string, string, error) {
+	f.mutations = append(f.mutations, "details "+id)
+	if name != nil {
+		f.ws[id].Name = *name
+	}
+	if desc != nil {
+		f.ws[id].Desc = *desc
+	}
+	return f.ws[id].Name, f.ws[id].Desc, nil
 }
 
 // WithOwnerLock serialises owner changes per process, as the real store does per workspace.
@@ -394,7 +406,9 @@ func newFixture(t *testing.T) *fixture {
 	return &fixture{svc: svc, read: read, write: write, depts: depts, wsStore: wsStore}
 }
 
-func (f *fixture) mutated() bool { return len(f.write.mutations) > 0 || len(f.depts.mutations) > 0 }
+func (f *fixture) mutated() bool {
+	return len(f.write.mutations) > 0 || len(f.depts.mutations) > 0 || len(f.wsStore.mutations) > 0
+}
 
 // ---------------------------------------------------------------------------
 // Admin operations, table-driven: every guarded call is exercised for DENY and
@@ -451,6 +465,11 @@ func adminCases() []adminCase {
 		}},
 		{"UpdateMemberDepartment", ngac.OpManage, func(ctx context.Context, s *domain.Service, c string) error {
 			return s.UpdateMemberDepartment(ctx, c, ws1, target, "dept-root-1")
+		}},
+		{"UpdateWorkspaceDetails", ngac.OpManage, func(ctx context.Context, s *domain.Service, c string) error {
+			name := "Renamed"
+			_, err := s.UpdateWorkspaceDetails(ctx, c, ws1, &name, nil)
+			return err
 		}},
 	}
 }

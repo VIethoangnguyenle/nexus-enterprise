@@ -91,7 +91,7 @@ type refreshAttacher interface {
 func issueSessionWith(c echo.Context, a refreshAttacher, id domain.RefreshIdentity) error {
 	refreshToken, err := a.AttachRefreshToken(c.Request().Context(), id)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "could not establish session")
+		return apiError(http.StatusInternalServerError, "internal", "could not establish session")
 	}
 	setRefreshCookie(c, refreshToken)
 	return nil
@@ -104,7 +104,7 @@ func issueSessionWith(c echo.Context, a refreshAttacher, id domain.RefreshIdenti
 func (h *Handler) Refresh(c echo.Context) error {
 	cookie, err := c.Cookie(refreshCookieName)
 	if err != nil || cookie.Value == "" {
-		return echo.NewHTTPError(http.StatusUnauthorized, "no refresh token")
+		return apiError(http.StatusUnauthorized, "session_required", "no refresh token")
 	}
 
 	access, next, err := h.svc.RefreshSession(c.Request().Context(), cookie.Value)
@@ -113,7 +113,7 @@ func (h *Handler) Refresh(c echo.Context) error {
 		// because this very call tripped reuse detection. Either way the client
 		// must stop presenting it.
 		clearRefreshCookie(c)
-		return echo.NewHTTPError(http.StatusUnauthorized, "refresh rejected")
+		return apiError(http.StatusUnauthorized, "session_invalid", "refresh rejected")
 	}
 
 	setRefreshCookie(c, next)
@@ -130,11 +130,11 @@ func (h *Handler) Logout(c echo.Context) error {
 	// that logout still works once the access token has expired.
 	if claims := httputil.GetClaims(c); claims != nil && claims.SessionID != "" {
 		if err := h.svc.EndSession(c.Request().Context(), claims.SessionID); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "logout failed")
+			return apiError(http.StatusInternalServerError, "internal", "logout failed")
 		}
 	} else if cookie, err := c.Cookie(refreshCookieName); err == nil && cookie.Value != "" {
 		if err := h.svc.EndSessionByRefreshToken(c.Request().Context(), cookie.Value); err != nil {
-			return echo.NewHTTPError(http.StatusInternalServerError, "logout failed")
+			return apiError(http.StatusInternalServerError, "internal", "logout failed")
 		}
 	}
 

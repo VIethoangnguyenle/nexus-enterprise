@@ -5,7 +5,10 @@ package rest
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
+	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -17,6 +20,9 @@ import (
 type Handler struct {
 	svc    *domain.Service
 	google *googleHandler // nil until EnableGoogle; routes then report it disabled
+
+	limit    PublicLimit // allowance of one address for one public route
+	limitSet bool
 }
 
 // NewHandler creates an auth REST handler.
@@ -26,19 +32,18 @@ func NewHandler(svc *domain.Service) *Handler {
 
 // RegisterRoutes mounts auth endpoints on the Echo instance.
 func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
-	// Public — no auth required
-	e.POST("/api/auth/register", h.Register) // legacy
-	e.POST("/api/auth/login", h.Login)       // legacy
-	e.POST("/api/auth/signup", h.Signup)     // multi-tenant
-	e.POST("/api/auth/signin", h.Signin)     // multi-tenant
-	e.POST("/api/auth/otp/request", h.RequestOTP)
-	e.POST("/api/auth/otp/verify", h.VerifyOTP)
+	// Every error, from any handler or middleware, is {message, code}.
+	e.HTTPErrorHandler = envelopeErrors
+
+	// Public — no auth required, so each is behind a per-address limit.
+	e.POST("/api/auth/otp/request", h.RequestOTP, h.publicLimiter("otp-request"))
+	e.POST("/api/auth/otp/verify", h.VerifyOTP, h.publicLimiter("otp-verify"))
 	// Refresh is public: it authenticates with the httpOnly cookie, and by the
 	// time a client needs it the access token has usually already expired.
-	e.POST("/api/auth/refresh", h.Refresh)
+	e.POST("/api/auth/refresh", h.Refresh, h.publicLimiter("refresh"))
 	// Logout accepts an expired access token for the same reason, so it is
 	// mounted outside the JWT group and reads the claims opportunistically.
-	e.POST("/api/auth/logout", h.Logout)
+	e.POST("/api/auth/logout", h.Logout, h.publicLimiter("logout"))
 	// Sign in with Google. All three sit under /api/auth, so the existing
 	// /api/auth entries in the Vite dev proxy and the Traefik router cover them.
 	google := h.google
@@ -46,7 +51,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 		google = newGoogleHandler(GoogleOptions{}, nil)
 	}
 	e.GET("/api/auth/providers", h.Providers)
-	e.GET("/api/auth/google/start", google.Start)
+	e.GET("/api/auth/google/start", google.Start, h.publicLimiter("google-start"))
 	e.GET("/api/auth/google/callback", google.Callback)
 
 	// Protected — JWT required
@@ -54,97 +59,25 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/auth/switch-tenant", h.SwitchTenant)
 	api.GET("/me", h.GetMe)
 	api.PATCH("/me/profile", h.UpdateProfile)
-	api.GET("/users", h.ListUsers)
-	api.GET("/users/lookup", h.LookupUser)
+	api.POST("/me/email/verify", h.VerifyEmail)
+	api.POST("/me/email/verify/google", func(c echo.Context) error { return h.googleHandler().StartVerification(c) })
+	api.GET("/me/workspaces", h.ListMyWorkspaces)
+	api.POST("/me/workspaces", h.CreateMyWorkspace)
 	api.GET("/workspaces/:id/contacts", h.ListContacts)
 }
 
 // Providers handles GET /api/auth/providers — which sign-in methods the login
 // page should offer. otp_fixed_code is true while the documented test-only
-// fixed OTP code is in force, so the page can show testers the hint.
+// fixed OTP code is in force; it is for operators and the API, and no screen
+// may print the code. otp_proves_email is true when a code delivered here
+// reaches only the owner of the address, so entering it verifies the address:
+// the screen offers "send me a code" as a way to verify only when it is true.
 func (h *Handler) Providers(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]bool{
-		"google":         h.google.enabled(),
-		"otp":            h.svc.OTPEnabled(),
-		"otp_fixed_code": h.svc.OTPFixedCodeActive(),
-	})
-}
-
-// Signup handles POST /api/auth/signup (multi-tenant flow).
-func (h *Handler) Signup(c echo.Context) error {
-	var body struct {
-		Email       string `json:"email"`
-		Password    string `json:"password"`
-		DisplayName string `json:"display_name"`
-		TenantName  string `json:"tenant_name"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-
-	resp, err := h.svc.Signup(c.Request().Context(), body.Email, body.Password, body.DisplayName, body.TenantName)
-	if err != nil {
-		return mapError(err)
-	}
-
-	if err := h.issueSession(c, domain.RefreshIdentity{
-		UserID: resp.UserID, Username: resp.Username, NGACNodeID: resp.NGACNodeID,
-		TenantID: resp.TenantID, SessionID: resp.SessionID,
-	}); err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusCreated, map[string]any{
-		"access_token": resp.Token,
-		"user": map[string]string{
-			"id": resp.UserID, "username": resp.Username,
-			"ngac_node_id": resp.NGACNodeID, "email": resp.Email, "union_id": resp.UnionID,
-		},
-		"tenant": map[string]string{
-			"id": resp.TenantID, "name": resp.TenantName,
-			"role": resp.TenantRole, "open_id": resp.OpenID,
-		},
-	})
-}
-
-// Signin handles POST /api/auth/signin (multi-tenant flow).
-func (h *Handler) Signin(c echo.Context) error {
-	var body struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-
-	resp, err := h.svc.Signin(c.Request().Context(), body.Email, body.Password)
-	if err != nil {
-		return mapError(err)
-	}
-
-	tenants := make([]map[string]string, len(resp.Tenants))
-	for i, t := range resp.Tenants {
-		tenants[i] = map[string]string{
-			"id": t.ID, "name": t.Name, "role": t.Role, "open_id": t.OpenID,
-		}
-	}
-
-	if err := h.issueSession(c, domain.RefreshIdentity{
-		UserID: resp.UserID, Username: resp.Username, NGACNodeID: resp.NGACNodeID,
-		TenantID: resp.DefaultTenantID, SessionID: resp.SessionID,
-	}); err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusOK, map[string]any{
-		"access_token": resp.Token,
-		"user": map[string]string{
-			"id": resp.UserID, "username": resp.Username,
-			"ngac_node_id": resp.NGACNodeID, "email": resp.Email,
-			"union_id": resp.UnionID, "display_name": resp.DisplayName,
-		},
-		"tenants":           tenants,
-		"default_tenant_id": resp.DefaultTenantID,
+		"google":           h.google.enabled(),
+		"otp":              h.svc.OTPEnabled(),
+		"otp_fixed_code":   h.svc.OTPFixedCodeActive(),
+		"otp_proves_email": h.svc.OTPProvesOwnership(),
 	})
 }
 
@@ -159,19 +92,19 @@ func (h *Handler) SwitchTenant(c echo.Context) error {
 		TenantID string `json:"tenant_id"`
 	}
 	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+		return badBody()
 	}
 
 	token, sessionID, tenant, err := h.svc.SwitchTenant(c.Request().Context(), claims.UserID, claims.NGACNodeID, claims.Username, body.TenantID)
 	if err != nil {
-		return mapError(err)
+		return fail(c, err)
 	}
 
 	// Retire the family scoped to the tenant being left, then bind a new one to
 	// the new session — otherwise a later refresh would hand back a token for
 	// the previous tenant.
 	if err := h.svc.EndSession(c.Request().Context(), claims.SessionID); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "could not end previous session")
+		return apiError(http.StatusInternalServerError, "internal", "could not end previous session")
 	}
 	if err := h.issueSession(c, domain.RefreshIdentity{
 		UserID: claims.UserID, Username: claims.Username, NGACNodeID: claims.NGACNodeID,
@@ -196,121 +129,36 @@ func (h *Handler) GetMe(c echo.Context) error {
 		return err
 	}
 
-	user, tenant, err := h.svc.GetMe(c.Request().Context(), claims.UserID, claims.TenantID)
+	// current_tenant is the token's workspace unless ?workspace= names another;
+	// it is present only for a workspace the caller is an active member of, so
+	// asking about someone else's workspace learns nothing.
+	tenantID := claims.TenantID
+	if w := c.QueryParam("workspace"); w != "" {
+		tenantID = w
+	}
+	user, tenant, err := h.svc.GetMe(c.Request().Context(), claims.UserID, tenantID)
 	if err != nil {
-		return mapError(err)
+		return fail(c, err)
 	}
 
 	result := map[string]any{
-		"user": map[string]string{
+		"user": map[string]any{
 			"id": user.ID, "username": user.Username,
 			"ngac_node_id": user.NGACNodeID, "email": user.Email,
 			"union_id": user.UnionID, "display_name": user.DisplayName,
+			"title": user.Title, "location": user.Location, "avatar_url": user.AvatarURL,
+			"email_verified": user.EmailVerified, "needs_profile": user.NeedsProfile,
 		},
 	}
 	if tenant != nil {
 		result["current_tenant"] = map[string]string{
 			"id": tenant.ID, "name": tenant.Name,
 			"role": tenant.Role, "open_id": tenant.OpenID,
+			// Assigned by an administrator in this workspace; read-only here.
+			"department": tenant.Department,
 		}
 	}
 	return c.JSON(http.StatusOK, result)
-}
-
-// Register handles POST /api/auth/register (legacy).
-func (h *Handler) Register(c echo.Context) error {
-	var body struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-
-	resp, err := h.svc.Register(c.Request().Context(), body.Username, body.Password)
-	if err != nil {
-		return mapError(err)
-	}
-
-	if err := h.issueSession(c, domain.RefreshIdentity{
-		UserID: resp.UserID, Username: resp.Username,
-		NGACNodeID: resp.NGACNodeID, SessionID: resp.SessionID,
-	}); err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusCreated, map[string]any{
-		"access_token": resp.Token,
-		"user": map[string]string{
-			"id": resp.UserID, "username": resp.Username, "ngac_node_id": resp.NGACNodeID,
-		},
-	})
-}
-
-// Login handles POST /api/auth/login (legacy).
-func (h *Handler) Login(c echo.Context) error {
-	var body struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-	}
-	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-
-	resp, err := h.svc.Login(c.Request().Context(), body.Username, body.Password)
-	if err != nil {
-		return mapError(err)
-	}
-
-	if err := h.issueSession(c, domain.RefreshIdentity{
-		UserID: resp.UserID, Username: resp.Username,
-		NGACNodeID: resp.NGACNodeID, SessionID: resp.SessionID,
-	}); err != nil {
-		return err
-	}
-
-	return c.JSON(http.StatusOK, map[string]any{
-		"access_token": resp.Token,
-		"user": map[string]string{
-			"id": resp.UserID, "username": resp.Username, "ngac_node_id": resp.NGACNodeID,
-		},
-	})
-}
-
-// ListUsers handles GET /api/users.
-func (h *Handler) ListUsers(c echo.Context) error {
-	users, err := h.svc.ListUsers(c.Request().Context())
-	if err != nil {
-		return mapError(err)
-	}
-
-	type userJSON struct {
-		ID         string `json:"id"`
-		Username   string `json:"username"`
-		NGACNodeID string `json:"ngac_node_id"`
-	}
-	result := make([]userJSON, len(users))
-	for i, u := range users {
-		result[i] = userJSON{ID: u.ID, Username: u.Username, NGACNodeID: u.NGACNodeID}
-	}
-	return c.JSON(http.StatusOK, map[string]any{"users": result})
-}
-
-// LookupUser handles GET /api/users/lookup?username=X.
-func (h *Handler) LookupUser(c echo.Context) error {
-	username := c.QueryParam("username")
-	if username == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "username query param required")
-	}
-
-	user, err := h.svc.GetUserByUsername(c.Request().Context(), username)
-	if err != nil {
-		return mapError(err)
-	}
-
-	return c.JSON(http.StatusOK, map[string]string{
-		"id": user.ID, "username": user.Username, "ngac_node_id": user.NGACNodeID,
-	})
 }
 
 // RequestOTP handles POST /api/auth/otp/request.
@@ -320,12 +168,12 @@ func (h *Handler) RequestOTP(c echo.Context) error {
 		Type       string `json:"type"`
 	}
 	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+		return badBody()
 	}
 
 	sessionID, err := h.svc.RequestOTP(c.Request().Context(), body.Identifier, body.Type)
 	if err != nil {
-		return mapError(err)
+		return fail(c, err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
@@ -341,33 +189,74 @@ func (h *Handler) VerifyOTP(c echo.Context) error {
 		Code      string `json:"code"`
 	}
 	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+		return badBody()
 	}
 
 	result, err := h.svc.VerifyOTP(c.Request().Context(), body.SessionID, body.Code)
 	if err != nil {
-		return mapError(err)
+		return fail(c, err)
 	}
 
 	if err := h.issueSession(c, domain.RefreshIdentity{
 		UserID: result.UserID, Username: result.Username, NGACNodeID: result.NGACNodeID,
-		SessionID: result.SessionID,
+		TenantID: result.TenantID, SessionID: result.SessionID,
 	}); err != nil {
 		return err
 	}
 
 	return c.JSON(http.StatusOK, map[string]any{
 		"access_token": result.Token,
-		"user": map[string]string{
+		"user": map[string]any{
 			"id": result.UserID, "username": result.Username,
 			"ngac_node_id": result.NGACNodeID, "email": result.Email,
 			"phone": result.Phone, "union_id": result.UnionID,
+			"email_verified": result.EmailVerified,
 		},
-		"is_new_user": result.IsNewUser,
+		"is_new_user":   result.IsNewUser,
+		"needs_profile": result.NeedsProfile,
 	})
 }
 
-// UpdateProfile handles PATCH /api/me/profile.
+// googleHandler is the Google side, or a disabled one when Google is not set up.
+func (h *Handler) googleHandler() *googleHandler {
+	if h.google != nil {
+		return h.google
+	}
+	return newGoogleHandler(GoogleOptions{}, h.svc)
+}
+
+// VerifyEmail handles POST /api/me/email/verify, proving the address on the
+// signed-in account without signing anyone in. Without a "code" it sends a code
+// to the address (202); with one it checks it (200). Neither returns a token or
+// sets a cookie, and the session that asks keeps going while every other session
+// on the account ends when the address is first proved.
+func (h *Handler) VerifyEmail(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	var body struct {
+		Code *string `json:"code"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return badBody()
+	}
+	if body.Code == nil {
+		ttl, err := h.svc.RequestEmailVerification(c.Request().Context(), claims.UserID)
+		if err != nil {
+			return fail(c, err)
+		}
+		return c.JSON(http.StatusAccepted, map[string]any{"expires_in": int(ttl.Seconds())})
+	}
+	if err := h.svc.ConfirmEmailVerification(c.Request().Context(), claims.UserID, claims.SessionID, *body.Code); err != nil {
+		return fail(c, err)
+	}
+	return c.JSON(http.StatusOK, map[string]any{"email_verified": true})
+}
+
+// UpdateProfile handles PATCH /api/me/profile. It is a partial update: a field
+// that is absent (or null) is left as it is, and "" clears it. The person
+// edited is always the token's; nothing in the body can name another.
 func (h *Handler) UpdateProfile(c echo.Context) error {
 	claims, err := httputil.RequireClaims(c)
 	if err != nil {
@@ -375,47 +264,123 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 	}
 
 	var body struct {
-		DisplayName string `json:"display_name"`
-		Title       string `json:"title"`
-		Department  string `json:"department"`
-		Location    string `json:"location"`
-		AvatarURL   string `json:"avatar_url"`
+		DisplayName *string `json:"display_name"`
+		Title       *string `json:"title"`
+		Location    *string `json:"location"`
+		// The two fields below are read only to be refused by name.
+		Department *string `json:"department"`
+		AvatarURL  *string `json:"avatar_url"`
 	}
 	if err := c.Bind(&body); err != nil {
-		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+		return badBody()
+	}
+	// A department is assigned by an administrator, per workspace; letting
+	// people write their own would let anyone present themselves as "Ban giám
+	// đốc" in the directory. Refused, not ignored, so a client that sends it
+	// learns it does not work.
+	if body.Department != nil {
+		return apiError(http.StatusBadRequest, "department_not_editable",
+			"the department is assigned by a workspace administrator")
+	}
+	// There is nowhere to keep a picture yet, and a URL the person typed would
+	// be loaded by every colleague's browser.
+	if body.AvatarURL != nil {
+		return apiError(http.StatusBadRequest, "avatar_not_supported", "profile pictures are not supported yet")
 	}
 
 	if err := h.svc.UpdateProfile(c.Request().Context(), claims.UserID, domain.ProfileUpdateInput{
 		DisplayName: body.DisplayName,
 		Title:       body.Title,
-		Department:  body.Department,
 		Location:    body.Location,
-		AvatarURL:   body.AvatarURL,
 	}); err != nil {
-		return mapError(err)
+		return fail(c, err)
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "updated"})
 }
 
-// ListContacts handles GET /api/workspaces/:id/contacts.
+// workspaceJSON is a workspace as the picker needs it. The identifier is for
+// navigation; no screen prints it.
+func workspaceJSON(w domain.WorkspaceInfo) map[string]any {
+	return map[string]any{"id": w.ID, "name": w.Name, "role": w.Role, "member_count": w.MemberCount, "domain": w.Domain}
+}
+
+// ListMyWorkspaces handles GET /api/me/workspaces: the workspaces the caller
+// actively belongs to, with their own role and the headcount.
+func (h *Handler) ListMyWorkspaces(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.ListMyWorkspaces(c.Request().Context(), claims.UserID)
+	if err != nil {
+		return fail(c, err)
+	}
+	out := make([]map[string]any, len(list))
+	for i, w := range list {
+		out[i] = workspaceJSON(w)
+	}
+	return c.JSON(http.StatusOK, map[string]any{"workspaces": out})
+}
+
+// CreateMyWorkspace handles POST /api/me/workspaces. The name is the only
+// input; the caller becomes the owner and the workspace is provisioned in full.
+func (h *Handler) CreateMyWorkspace(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	var body struct {
+		Name string `json:"name"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return badBody()
+	}
+	ws, err := h.svc.CreateMyWorkspace(c.Request().Context(), claims.UserID, claims.NGACNodeID, body.Name)
+	if err != nil {
+		return fail(c, err)
+	}
+	return c.JSON(http.StatusCreated, workspaceJSON(*ws))
+}
+
+// ListContacts handles GET /api/workspaces/:id/contacts: one page of the
+// workspace directory. Query: department, location, search, limit (default 50,
+// at most 200) and cursor (the next_cursor of the page before). The answer
+// carries the true total, and next_cursor when more people follow.
 func (h *Handler) ListContacts(c echo.Context) error {
 	wsID := c.Param("id")
 	if wsID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "workspace id required")
+		return apiError(http.StatusBadRequest, "invalid_input", "workspace id required")
+	}
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	q := domain.ContactQuery{
+		Department: c.QueryParam("department"),
+		Location:   c.QueryParam("location"),
+		Search:     c.QueryParam("search"),
+		Cursor:     c.QueryParam("cursor"),
+	}
+	if v := c.QueryParam("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 {
+			return apiError(http.StatusBadRequest, "invalid_input", "limit must be a positive number")
+		}
+		q.Limit = n
 	}
 
-	department := c.QueryParam("department")
-	location := c.QueryParam("location")
-
-	contacts, err := h.svc.ListContacts(c.Request().Context(), wsID, department, location)
+	contacts, total, next, err := h.svc.ListContacts(c.Request().Context(), claims.UserID, wsID, q)
 	if err != nil {
-		return mapError(err)
+		return fail(c, err)
 	}
 
 	type contactJSON struct {
-		UserID      string `json:"user_id"`
-		NGACNodeID  string `json:"ngac_node_id"`
+		UserID     string `json:"user_id"`
+		NGACNodeID string `json:"ngac_node_id"`
+		// Username is the login handle. It identifies a person to the chat's
+		// own records; it is never a name, and display_name is empty (not the
+		// handle) for someone who has not yet said what to call them.
 		Username    string `json:"username"`
 		DisplayName string `json:"display_name"`
 		Email       string `json:"email"`
@@ -424,7 +389,6 @@ func (h *Handler) ListContacts(c echo.Context) error {
 		Location    string `json:"location"`
 		AvatarURL   string `json:"avatar_url"`
 	}
-
 	result := make([]contactJSON, len(contacts))
 	for i, c := range contacts {
 		result[i] = contactJSON{
@@ -435,37 +399,95 @@ func (h *Handler) ListContacts(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"contacts": result,
-		"total":    len(result),
-	})
+	out := map[string]any{"contacts": result, "total": total}
+	if next != "" {
+		out["next_cursor"] = next
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
+// badBody is the answer to a request body that is not the JSON the route takes.
+func badBody() *echo.HTTPError {
+	return apiError(http.StatusBadRequest, "invalid_input", "invalid request body")
+}
+
+// apiError is an error response whose body is {"message", "code", ...extra}.
+// The code is the stable machine-readable part the screens branch on; the
+// message is an English fallback for API users and is never shown as is.
+func apiError(status int, code, message string, extra ...any) *echo.HTTPError {
+	body := map[string]any{"message": message, "code": code}
+	for i := 0; i+1 < len(extra); i += 2 {
+		body[extra[i].(string)] = extra[i+1]
+	}
+	return echo.NewHTTPError(status, body)
+}
+
+// fail turns a domain error into its HTTP answer. A rate-limited caller is told
+// when to come back, in the Retry-After header as well as the body.
+func fail(c echo.Context, err error) error {
+	if d, ok := domain.RetryAfter(err); ok {
+		c.Response().Header().Set(echo.HeaderRetryAfter, strconv.Itoa(retrySeconds(d)))
+	}
+	return mapError(err)
+}
+
+// retrySeconds rounds a wait up to whole seconds, never below one.
+func retrySeconds(d time.Duration) int {
+	secs := int((d + time.Second - 1) / time.Second)
+	if secs < 1 {
+		secs = 1
+	}
+	return secs
 }
 
 func mapError(err error) *echo.HTTPError {
 	switch {
 	case errors.Is(err, domain.ErrInvalidCredentials):
-		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+		return apiError(http.StatusUnauthorized, "invalid_credentials", err.Error())
 	case errors.Is(err, domain.ErrUserExists):
-		return echo.NewHTTPError(http.StatusConflict, err.Error())
-	case errors.Is(err, domain.ErrNotFound):
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		return apiError(http.StatusConflict, "already_exists", err.Error())
+	case errors.Is(err, domain.ErrNotFound), errors.Is(err, domain.ErrTenantNotFound):
+		return apiError(http.StatusNotFound, "not_found", err.Error())
 	case errors.Is(err, domain.ErrInvalidInput):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return apiError(http.StatusBadRequest, "invalid_input", err.Error())
 	case errors.Is(err, domain.ErrAccessDenied):
-		return echo.NewHTTPError(http.StatusForbidden, err.Error())
-	case errors.Is(err, domain.ErrTenantNotFound):
-		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+		return apiError(http.StatusForbidden, "access_denied", err.Error())
 	case errors.Is(err, domain.ErrOTPExpired):
-		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+		return apiError(http.StatusUnauthorized, "otp_expired", err.Error())
 	case errors.Is(err, domain.ErrOTPInvalid):
-		return echo.NewHTTPError(http.StatusUnauthorized, err.Error())
+		if left, ok := domain.OTPAttemptsLeft(err); ok {
+			return apiError(http.StatusUnauthorized, "otp_invalid", err.Error(), "attempts_left", left)
+		}
+		return apiError(http.StatusUnauthorized, "otp_invalid", err.Error())
 	case errors.Is(err, domain.ErrTooManyAttempts):
-		return echo.NewHTTPError(http.StatusTooManyRequests, err.Error())
+		return apiError(http.StatusTooManyRequests, "otp_too_many_attempts", err.Error())
 	case errors.Is(err, domain.ErrOTPRateLimited):
-		return echo.NewHTTPError(http.StatusTooManyRequests, err.Error())
+		return rateLimited("otp_rate_limited", err)
+	case errors.Is(err, domain.ErrRateLimited):
+		return rateLimited("rate_limited", err)
+	case errors.Is(err, domain.ErrVerificationUnavailable):
+		return apiError(http.StatusServiceUnavailable, "verification_unavailable", err.Error())
+	case errors.Is(err, domain.ErrAlreadyVerified):
+		return apiError(http.StatusConflict, "already_verified", err.Error())
+	case errors.Is(err, domain.ErrEmailMismatch):
+		return apiError(http.StatusConflict, "email_mismatch", err.Error())
+	case errors.Is(err, domain.ErrEmailNotVerified):
+		return apiError(http.StatusForbidden, "email_not_verified_by_provider", err.Error())
+	case errors.Is(err, domain.ErrEmailUnverified):
+		return apiError(http.StatusForbidden, "email_unverified", err.Error())
 	case errors.Is(err, domain.ErrOTPUnavailable):
-		return echo.NewHTTPError(http.StatusServiceUnavailable, err.Error())
+		return apiError(http.StatusServiceUnavailable, "otp_unavailable", err.Error())
 	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		// The text of an unexpected error names hosts, queries and downstream
+		// services. It goes to the log, never to the caller.
+		slog.Error("auth request failed", "error", err)
+		return apiError(http.StatusInternalServerError, "internal", "internal error")
 	}
+}
+
+func rateLimited(code string, err error) *echo.HTTPError {
+	if d, ok := domain.RetryAfter(err); ok {
+		return apiError(http.StatusTooManyRequests, code, err.Error(), "retry_after_seconds", retrySeconds(d))
+	}
+	return apiError(http.StatusTooManyRequests, code, err.Error())
 }

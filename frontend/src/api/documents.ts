@@ -1,109 +1,83 @@
-import { apiFetch, apiUpload } from './client'
+import { ApiError, apiFetch } from './client'
 
-export interface Document {
+/** Where a text document stands. */
+export type TextStatus = 'draft' | 'active' | 'archived'
+
+/** Which documents a listing shows. */
+export type TextScope = 'all' | 'mine' | 'drafts' | 'shared'
+
+/**
+ * A document written in the app. Ids are for calling the API and picking a
+ * colour; the screen shows `title` and `owner_name`. A listing omits `content`.
+ */
+export interface TextDocument {
   id: string
+  workspace_id: string
+  folder_id?: string
   title: string
-  filename: string
-  mime_type: string
-  status: string
-  owner_id?: string
-  owner_name?: string
-  ngac_node_id?: string
-  workspace_id?: string
-  created_at?: string
+  content?: string
+  /** Moves up by one on every save; a save names the version it was based on. */
+  version: number
+  status: TextStatus
+  owner_id: string
+  owner_name: string
+  can_write?: boolean
+  created_at: string
+  updated_at: string
 }
 
-interface UploadURLResponse {
-  upload_url: string
-  doc_id: string
-  object_key: string
+export interface TextSave {
+  base_version: number
+  title?: string
+  content?: string
+  status?: TextStatus
 }
 
-interface DownloadURLResponse {
-  download_url: string
+/** The 409 body of a save refused because the document moved on. */
+export interface VersionConflictBody {
+  reason: 'version_conflict'
+  current: TextDocument
+}
+
+/** The document as it now stands, when `err` is a refused-stale-save; otherwise null. */
+export function conflictOf(err: unknown): TextDocument | null {
+  if (!(err instanceof ApiError) || err.status !== 409) return null
+  const body = err.body as Partial<VersionConflictBody> | undefined
+  return body?.reason === 'version_conflict' && body.current ? body.current : null
+}
+
+/** One page of a listing; `next` is what to ask for after it, absent at the end. */
+export interface TextPage {
+  documents: TextDocument[]
+  next?: string
 }
 
 export const documentApi = {
-  /** Lists documents (proxied to Drive ListFolder — returns items not documents). */
-  list: async (wsId: string): Promise<{ documents: Document[] }> => {
-    const resp = await apiFetch<{ items?: any[] }>(`/workspaces/${wsId}/documents`)
-    const items = resp?.items || []
-    return {
-      documents: items
-        .filter(i => i.item_type === 'file' && i.status === 'active')
-        .map(i => ({
-          id: i.id,
-          title: i.name?.replace(/\.[^/.]+$/, '') || i.name,
-          filename: i.name,
-          mime_type: i.mime_type || '',
-          status: i.status || 'active',
-          owner_id: i.owner_id,
-          owner_name: i.owner_name,
-          ngac_node_id: i.ngac_node_id,
-          workspace_id: i.workspace_id,
-          created_at: i.created_at?.seconds
-            ? new Date(Number(i.created_at.seconds) * 1000).toISOString()
-            : i.created_at,
-        } as Document)),
-    }
+  list: async (wsId: string, scope: TextScope = 'all', cursor?: string): Promise<TextPage> => {
+    const params = new URLSearchParams()
+    if (scope !== 'all') params.set('scope', scope)
+    if (cursor) params.set('cursor', cursor)
+    const qs = params.toString()
+    const res = await apiFetch<{ documents?: TextDocument[]; next_cursor?: string }>(
+      `/workspaces/${wsId}/documents/texts${qs ? `?${qs}` : ''}`,
+    )
+    return { documents: res.documents ?? [], next: res.next_cursor || undefined }
   },
 
-  get: (id: string) =>
-    apiFetch<Document>(`/documents/${id}`),
-
-  /** Step 1: Get a presigned PUT URL for direct-to-MinIO upload. */
-  getUploadUrl: (wsId: string, metadata: { title: string; filename: string; mime_type: string }) =>
-    apiFetch<UploadURLResponse>(`/workspaces/${wsId}/documents/upload-url`, {
-      method: 'POST',
-      body: JSON.stringify(metadata),
-    }),
-
-  /** Step 2: Upload file directly to MinIO via presigned PUT URL. */
-  uploadToMinIO: async (uploadUrl: string, file: File): Promise<void> => {
-    const res = await fetch(uploadUrl, {
-      method: 'PUT',
-      body: file,
-      headers: { 'Content-Type': file.type || 'application/octet-stream' },
-    })
-    if (!res.ok) {
-      throw new Error(`MinIO upload failed: ${res.status} ${res.statusText}`)
-    }
+  /** How many documents of a listing the caller may read, without loading them. */
+  count: async (wsId: string, scope: TextScope = 'all'): Promise<number> => {
+    const qs = scope === 'all' ? '' : `?scope=${scope}`
+    const res = await apiFetch<{ count?: number }>(`/workspaces/${wsId}/documents/texts/count${qs}`)
+    return res.count ?? 0
   },
 
-  /** Step 3: Confirm the upload completed and finalize the document record. */
-  confirmUpload: (docId: string) =>
-    apiFetch<Document>(`/documents/${docId}/confirm`, { method: 'POST' }),
+  get: (id: string) => apiFetch<TextDocument>(`/documents/texts/${id}`),
 
-  /** Orchestrated three-step presigned upload flow. */
-  create: async (wsId: string, file: File, title: string): Promise<Document> => {
-    // Step 1: Get presigned URL
-    const { upload_url, doc_id } = await documentApi.getUploadUrl(wsId, {
-      title,
-      filename: file.name,
-      mime_type: file.type || 'application/octet-stream',
-    })
+  create: (wsId: string, body: { title?: string; folder_id?: string }) =>
+    apiFetch<TextDocument>(`/workspaces/${wsId}/documents/texts`, { method: 'POST', body: JSON.stringify(body) }),
 
-    // Step 2: Upload to MinIO directly
-    await documentApi.uploadToMinIO(upload_url, file)
+  save: (id: string, body: TextSave) =>
+    apiFetch<TextDocument>(`/documents/texts/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
 
-    // Step 3: Confirm
-    return documentApi.confirmUpload(doc_id)
-  },
-
-  /** Legacy upload via multipart (backward compat). */
-  legacyCreate: (wsId: string, data: FormData) =>
-    apiUpload<Document>(`/workspaces/${wsId}/documents`, data),
-
-  /** Get a presigned download URL (access-checked). */
-  getDownloadUrl: (docId: string) =>
-    apiFetch<DownloadURLResponse>(`/documents/${docId}/download-url`),
-
-  delete: (id: string) =>
-    apiFetch(`/documents/${id}`, { method: 'DELETE' }),
-
-  approve: (id: string) =>
-    apiFetch(`/documents/${id}/approve`, { method: 'POST' }),
-
-  share: (id: string, data: object) =>
-    apiFetch(`/documents/${id}/share`, { method: 'POST', body: JSON.stringify(data) }),
+  remove: (id: string) => apiFetch<unknown>(`/documents/texts/${id}`, { method: 'DELETE' }),
 }

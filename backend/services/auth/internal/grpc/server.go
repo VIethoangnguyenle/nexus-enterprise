@@ -29,67 +29,6 @@ func NewAuthServer(svc *domain.Service, rdb *redis.Client) *AuthServer {
 	return &AuthServer{svc: svc, rdb: rdb}
 }
 
-// Register delegates to domain.Service.Register (legacy).
-func (s *AuthServer) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.AuthResponse, error) {
-	resp, err := s.svc.Register(ctx, req.Username, req.Password)
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return toAuthResponse(resp), nil
-}
-
-// Login delegates to domain.Service.Login (legacy).
-func (s *AuthServer) Login(ctx context.Context, req *pb.LoginRequest) (*pb.AuthResponse, error) {
-	resp, err := s.svc.Login(ctx, req.Username, req.Password)
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return toAuthResponse(resp), nil
-}
-
-// Signup handles multi-tenant registration.
-func (s *AuthServer) Signup(ctx context.Context, req *pb.SignupRequest) (*pb.SignupResponse, error) {
-	resp, err := s.svc.Signup(ctx, req.Email, req.Password, req.DisplayName, req.TenantName)
-	if err != nil {
-		return nil, mapError(err)
-	}
-	return &pb.SignupResponse{
-		Token: resp.Token,
-		User: &pb.UserInfo{
-			Id: resp.UserID, Username: resp.Username,
-			NgacNodeId: resp.NGACNodeID, Email: resp.Email, UnionId: resp.UnionID,
-		},
-		Tenant: &pb.TenantInfo{
-			Id: resp.TenantID, Name: resp.TenantName,
-			Role: resp.TenantRole, OpenId: resp.OpenID,
-		},
-	}, nil
-}
-
-// Signin handles multi-tenant login with tenant list.
-func (s *AuthServer) Signin(ctx context.Context, req *pb.SigninRequest) (*pb.SigninResponse, error) {
-	resp, err := s.svc.Signin(ctx, req.Email, req.Password)
-	if err != nil {
-		return nil, mapError(err)
-	}
-
-	tenants := make([]*pb.TenantInfo, len(resp.Tenants))
-	for i, t := range resp.Tenants {
-		tenants[i] = &pb.TenantInfo{Id: t.ID, Name: t.Name, Role: t.Role, OpenId: t.OpenID}
-	}
-
-	return &pb.SigninResponse{
-		Token: resp.Token,
-		User: &pb.UserInfo{
-			Id: resp.UserID, Username: resp.Username,
-			NgacNodeId: resp.NGACNodeID, Email: resp.Email,
-			UnionId: resp.UnionID, DisplayName: resp.DisplayName,
-		},
-		Tenants:         tenants,
-		DefaultTenantId: resp.DefaultTenantID,
-	}, nil
-}
-
 // SwitchTenant re-issues a JWT scoped to the target tenant.
 func (s *AuthServer) SwitchTenant(ctx context.Context, req *pb.SwitchTenantRequest) (*pb.SwitchTenantResponse, error) {
 	// NOTE: caller must provide user context via metadata; for now this is service-to-service
@@ -126,19 +65,6 @@ func (s *AuthServer) GetUserByNGACNodeID(ctx context.Context, req *pb.GetUserByN
 	return toUserInfo(user), nil
 }
 
-// ListUsers delegates to domain.Service.ListUsers.
-func (s *AuthServer) ListUsers(ctx context.Context, _ *pb.ListUsersRequest) (*pb.UserListResponse, error) {
-	users, err := s.svc.ListUsers(ctx)
-	if err != nil {
-		return nil, mapError(err)
-	}
-	var resp []*pb.UserInfo
-	for _, u := range users {
-		resp = append(resp, &pb.UserInfo{Id: u.ID, Username: u.Username, NgacNodeId: u.NGACNodeID})
-	}
-	return &pb.UserListResponse{Users: resp}, nil
-}
-
 // RevokeToken adds a JWT ID to the Redis blacklist.
 func (s *AuthServer) RevokeToken(ctx context.Context, req *pb.RevokeTokenRequest) (*pb.RevokeTokenResponse, error) {
 	if s.rdb == nil {
@@ -168,13 +94,6 @@ func (s *AuthServer) IsTokenRevoked(ctx context.Context, req *pb.IsTokenRevokedR
 
 func jwtBlacklistKey(jti string) string {
 	return fmt.Sprintf("jwt:blacklist:%s", jti)
-}
-
-func toAuthResponse(r *domain.AuthResponse) *pb.AuthResponse {
-	return &pb.AuthResponse{
-		Token: r.Token,
-		User:  &pb.UserInfo{Id: r.UserID, Username: r.Username, NgacNodeId: r.NGACNodeID},
-	}
 }
 
 func toUserInfo(u *domain.UserInfo) *pb.UserInfo {

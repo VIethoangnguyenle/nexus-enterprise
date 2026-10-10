@@ -26,7 +26,7 @@ export function personFromContact(c: Contact): Person {
     userId: c.user_id,
     nodeId: c.ngac_node_id,
     username: c.username,
-    name: c.display_name || c.username,
+    name: c.display_name?.trim() || UNKNOWN_PERSON,
     role: [c.title, c.department].filter(Boolean).join(' · '),
     avatarUrl: c.avatar_url || '',
   }

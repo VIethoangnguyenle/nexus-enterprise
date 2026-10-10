@@ -1,7 +1,9 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef } from 'react'
 import { completeGoogleSignIn } from '../api/auth'
-import { Spinner } from '../components/primitives'
+import { AuthShell } from '../components/auth/AuthShell'
+import { Spinner, Text } from '../components/primitives'
+import { afterSignIn } from '../lib/auth-flow'
 
 export const Route = createFileRoute('/auth/google/done')({
   component: GoogleDonePage,
@@ -10,10 +12,9 @@ export const Route = createFileRoute('/auth/google/done')({
 /**
  * Landing page after Google redirects back through the auth service.
  *
- * Deliberately outside the `_auth` layout: that layout bounces anyone with a
- * persisted user to /documents, which would skip this page — and the persisted
- * user may be someone else entirely if a different account signed in before.
- * This page always re-reads who the new session belongs to.
+ * Deliberately outside the `_auth` layout: this page must always re-read who
+ * the new session belongs to, and a persisted user may be someone else entirely
+ * if a different account signed in before.
  */
 function GoogleDonePage() {
   const navigate = useNavigate()
@@ -25,21 +26,23 @@ function GoogleDonePage() {
     if (started.current) return
     started.current = true
 
-    void completeGoogleSignIn().then((ok) => {
-      if (ok) {
-        // Same next step as the OTP flow: workspace selection decides between
-        // onboarding, a single workspace, or the picker.
-        navigate({ to: '/workspace-select' as any, replace: true })
+    void completeGoogleSignIn().then((result) => {
+      if (result) {
+        // The same next step as a code sign-in: a profile if one is owed,
+        // otherwise the choice of workspace.
+        void navigate({ to: afterSignIn(result.needsProfile), replace: true })
       } else {
-        navigate({ to: '/login' as any, search: { error: 'google_session' } as any, replace: true })
+        void navigate({ to: '/login', search: { error: 'google_session' }, replace: true })
       }
     })
   }, [navigate])
 
   return (
-    <div className="flex flex-col items-center justify-center gap-4 min-h-screen bg-background">
-      <Spinner />
-      <p className="text-body text-on-surface-variant">Signing you in with Google…</p>
-    </div>
+    <AuthShell>
+      <div className="grid justify-items-center gap-3 py-10 text-center" role="status">
+        <Spinner />
+        <Text variant="body" muted>Đang đăng nhập bằng Google…</Text>
+      </div>
+    </AuthShell>
   )
 }

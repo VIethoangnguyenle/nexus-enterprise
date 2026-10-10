@@ -22,8 +22,7 @@ export interface AcceptedInvitation {
 /**
  * The invitee's side of an invitation. The endpoints take no person: who is
  * asking is the token's, and an invitation is matched to the address on that
- * person's account. The screen that lists these on workspace selection belongs
- * to the sign-in group.
+ * person's account. Workspace selection lists and answers them.
  */
 export const invitationsApi = {
   listMine: () => apiFetch<{ invitations: MyInvitation[] }>('/invitations'),

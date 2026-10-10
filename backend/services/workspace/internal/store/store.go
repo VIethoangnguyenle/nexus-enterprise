@@ -33,12 +33,26 @@ func (s *Store) Insert(ctx context.Context, ws *Workspace) error {
 func (s *Store) GetByID(ctx context.Context, id string) (*Workspace, error) {
 	var ws Workspace
 	err := s.db.QueryRow(ctx,
-		"SELECT id, name, ngac_pc_id FROM workspaces WHERE id = $1", id,
-	).Scan(&ws.ID, &ws.Name, &ws.NGACPcID)
+		"SELECT id, name, COALESCE(description, ''), ngac_pc_id FROM workspaces WHERE id = $1", id,
+	).Scan(&ws.ID, &ws.Name, &ws.Desc, &ws.NGACPcID)
 	if err != nil {
 		return nil, fmt.Errorf("get workspace %s: %w", id, err)
 	}
 	return &ws, nil
+}
+
+// UpdateDetails sets the name and/or description given (nil leaves a field
+// alone) in one statement, so concurrent edits of different fields both land,
+// and returns both as they are afterwards.
+func (s *Store) UpdateDetails(ctx context.Context, id string, name, description *string) (string, string, error) {
+	var n, d string
+	err := s.db.QueryRow(ctx,
+		`UPDATE workspaces SET name = COALESCE($2, name), description = COALESCE($3, description)
+		  WHERE id = $1 RETURNING name, COALESCE(description, '')`, id, name, description).Scan(&n, &d)
+	if err != nil {
+		return "", "", fmt.Errorf("update workspace %s: %w", id, err)
+	}
+	return n, d, nil
 }
 
 // ListAll returns all workspaces ordered by creation time descending.

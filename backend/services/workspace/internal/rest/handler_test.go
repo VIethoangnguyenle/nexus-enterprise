@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -173,6 +174,17 @@ func (f *fakeDeptService) UpdateMemberDepartment(_ context.Context, caller, wsID
 	return f.rec(caller, wsID)
 }
 
+func (f *fakeDeptService) WorkspaceDetails(_ context.Context, caller, wsID string) (*domain.WorkspaceDetails, error) {
+	return &domain.WorkspaceDetails{}, f.rec(caller, wsID)
+}
+func (f *fakeDeptService) UpdateWorkspaceDetails(_ context.Context, caller, wsID string, _, _ *string) (*domain.WorkspaceDetails, error) {
+	return &domain.WorkspaceDetails{}, f.rec(caller, wsID)
+}
+
+func (f *fakeDeptService) LeaveWorkspace(_ context.Context, caller, wsID string) error {
+	return f.rec(caller, wsID)
+}
+
 func (f *fakeDeptService) ListPermissionAreas(_ context.Context, caller, wsID string) ([]domain.PermissionArea, error) {
 	return []domain.PermissionArea{{Area: ngac.AreaDocuments, Operations: ngac.AreaOps(ngac.AreaDocuments)}}, f.rec(caller, wsID)
 }
@@ -259,6 +271,9 @@ func adminRoutes() []adminRoute {
 		{"MoveDepartment", http.MethodPut, `{"new_parent_id":""}`, []string{"id", "deptId"}, func(h *AdminHandler) echo.HandlerFunc { return h.MoveDepartment }},
 		{"UpdateMemberDepartment", http.MethodPut, `{"department_id":"d"}`, []string{"id", "nodeId"}, func(h *AdminHandler) echo.HandlerFunc { return h.UpdateMemberDepartment }},
 		{"ListPermissionAreas", http.MethodGet, "", []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.ListPermissionAreas }},
+		{"LeaveWorkspace", http.MethodPost, `{"nodeId":"u-victim",` + spoof + `}`, []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.LeaveWorkspace }},
+		{"GetWorkspaceDetails", http.MethodGet, "", []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.GetWorkspaceDetails }},
+		{"UpdateWorkspaceDetails", http.MethodPatch, `{"name":"Ops",` + spoof + `}`, []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.UpdateWorkspaceDetails }},
 		{"ListRoles", http.MethodGet, "", []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.ListRoles }},
 		{"CreateRole", http.MethodPost, `{"name":"Kế toán",` + spoof + `}`, []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.CreateRole }},
 		{"GetRole", http.MethodGet, "", []string{"id", "roleId"}, func(h *AdminHandler) echo.HandlerFunc { return h.GetRole }},
@@ -540,4 +555,54 @@ func TestRoutes_NoFreeFormPermissionGrant(t *testing.T) {
 		assert.Contains(t, []int{http.StatusNotFound, http.StatusMethodNotAllowed, http.StatusUnauthorized}, rec.Code)
 		assert.NotEqual(t, http.StatusOK, rec.Code)
 	}
+}
+
+func TestWorkspaceDetails_InternalFailureDoesNotLeakItsText(t *testing.T) {
+	for _, name := range []string{"GetWorkspaceDetails", "UpdateWorkspaceDetails"} {
+		t.Run(name, func(t *testing.T) {
+			f := &fakeDeptService{err: errors.New(`ERROR: relation "workspaces" does not exist`)}
+			r := find(name)
+			c, _ := newCtx(t, route2(r), true)
+			err := r.handler(NewAdminHandler(f))(c)
+			var he *echo.HTTPError
+			require.True(t, errors.As(err, &he), "err = %v", err)
+			assert.Equal(t, http.StatusInternalServerError, he.Code)
+			assert.NotContains(t, fmt.Sprint(he.Message), "workspaces")
+		})
+	}
+}
+
+func TestWorkspaceCreationRoute_IsGoneAndCreatesNothing(t *testing.T) {
+	f := &fakeWorkspaceService{}
+	e := echo.New()
+	NewHandler(f).RegisterRoutes(e, httputil.DevJWTSecret)
+	req := httptest.NewRequest(http.MethodPost, "/api/workspaces", strings.NewReader(`{"name":"Lậu"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	// Not signed in: refused before anything. Signed in: Gone. Either way, nothing created.
+	assert.Contains(t, []int{http.StatusUnauthorized, http.StatusGone}, rec.Code)
+	assert.Zero(t, f.calls)
+
+	c, rec2 := newCtx(t, route{method: http.MethodPost, body: `{"name":"Lậu"}`}, true)
+	err := NewHandler(f).WorkspaceCreationMoved(c)
+	var he *echo.HTTPError
+	require.ErrorAs(t, err, &he)
+	assert.Equal(t, http.StatusGone, he.Code)
+	assert.Zero(t, f.calls, "the route no longer reaches the service")
+	_ = rec2
+}
+
+func TestLeaveRoute_TakesTheCallerFromClaimsAndMapsTheLastOwner(t *testing.T) {
+	r := find("LeaveWorkspace")
+	f := &fakeDeptService{}
+	require.NoError(t, r.handler(NewAdminHandler(f))(newAdminCtx(t, r, true)))
+	assert.Equal(t, callerNode, f.caller, "whoever leaves is the verified caller, whatever the body says")
+	assert.Equal(t, "ws-1", f.wsID)
+
+	last := &fakeDeptService{err: domain.ErrLastOwner}
+	c, rec := newCtx(t, route2(r), true)
+	require.NoError(t, r.handler(NewAdminHandler(last))(c))
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"reason":"last_owner"`)
 }

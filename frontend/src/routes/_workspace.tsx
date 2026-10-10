@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth.store'
 import { useWebSocketStore } from '../stores/websocket.store'
 import { useUiStore } from '../stores/ui.store'
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace'
+import { usePreferencesSync } from '../hooks/usePreferences'
 import { useUnreadCounts } from '../hooks/useMessaging'
 import { validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
 import { useResizable } from '../hooks/useResizable'
@@ -28,6 +29,7 @@ function WorkspaceLayout() {
   const connect = useWebSocketStore((s) => s.connect)
   const disconnect = useWebSocketStore((s) => s.disconnect)
   const { workspaceId: wsId, workspaceName, workspaces, isLoading, isError } = useActiveWorkspace()
+  usePreferencesSync()
   const { data: unreadData } = useUnreadCounts()
   const unreadMessages = (unreadData?.channels ?? []).reduce((n, c) => n + c.unread_count, 0)
 
@@ -47,7 +49,8 @@ function WorkspaceLayout() {
       if (activeModule !== 'admin') setActiveModule('admin')
     } else if (currentPath.includes('/contacts')) {
       if (activeModule !== 'contacts') setActiveModule('contacts')
-    } else if (currentPath.includes('/drive')) {
+    } else if (currentPath.includes('/drive') || currentPath.includes('/documents')) {
+      // Văn bản is a group inside Tài liệu: same module, same list panel (its own).
       if (activeModule !== 'drive') setActiveModule('drive')
     } else if (currentPath.includes('/approval')) {
       if (activeModule !== 'approval') setActiveModule('approval')
@@ -55,8 +58,6 @@ function WorkspaceLayout() {
       if (activeModule !== 'assets') setActiveModule('assets')
     } else if (currentPath.includes('/settings')) {
       if (activeModule !== 'settings') setActiveModule('settings')
-    } else if (currentPath.includes('/documents')) {
-      if (activeModule !== 'documents') setActiveModule('documents')
     }
   }, [currentPath])
 

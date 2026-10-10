@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -145,7 +146,23 @@ func main() {
 		},
 	}))
 	e.Use(echomw.Recover())
+	// Who is asking, for the per-address limits. Nothing is trusted unless the
+	// proxy networks are listed: X-Forwarded-For is a header any client writes.
+	extractIP, err := rest.NewIPExtractor(strings.Split(os.Getenv("AUTH_TRUSTED_PROXIES"), ","))
+	if err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
+	e.IPExtractor = extractIP
 	restHandler := rest.NewHandler(svc)
+	if v := os.Getenv("AUTH_PUBLIC_RATE_LIMIT"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 0 {
+			slog.Error("refusing to start: AUTH_PUBLIC_RATE_LIMIT must be a number of requests per minute (0 turns it off)")
+			os.Exit(1)
+		}
+		restHandler.SetPublicLimit(rest.PublicLimit{Max: n, Window: time.Minute})
+	}
 	restHandler.EnableGoogle(googleOptions(rdb))
 	restHandler.RegisterRoutes(e, jwtSecret)
 

@@ -1,12 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { SettingsScreen } from '../../components/settings/SettingsScreen'
+import { validateSettingsSearch } from '../../lib/settings-search'
 
-export const Route = createFileRoute('/_workspace/settings')({ component: SettingsPage })
-
-function SettingsPage() {
-  return (
-    <div className="animate-fade-in p-6">
-      <h1 className="font-h1 text-h1 text-on-surface">Settings</h1>
-      <p className="text-sm text-on-surface-variant mt-2">Workspace settings coming soon.</p>
-    </div>
-  )
-}
+// The workspace and the open tab are part of the URL: /settings is Hồ sơ,
+// ?tab=workspace and ?tab=giao-dien are the others.
+export const Route = createFileRoute('/_workspace/settings')({
+  validateSearch: validateSettingsSearch,
+  component: SettingsScreen,
+})

@@ -29,3 +29,14 @@ describe('withDelay', () => {
     expect(withDelay(base, 0)).toBe(base)
   })
 })
+
+describe('reduced-motion presets', () => {
+  it('slide nothing: fades only, at most 120ms', () => {
+    const p = presets(true)
+    for (const preset of [p.panel, p.modal, p.popover, p.toast]) {
+      expect(preset.initial).toEqual({ opacity: 0 })
+      expect((preset.animate.transition as { duration: number }).duration).toBeLessThanOrEqual(0.12)
+    }
+    expect(p.layoutProp).toBe(false)
+  })
+})
