@@ -1,7 +1,7 @@
 ---
 title: "Chat: Google-Chat-style in-line threading"
 description: "Bring Chat to Google Chat parity: in-line threading with thread follow and per-thread unread, staged multi-file attachments, rich-text (HTML) messages sanitized on the server, then message lifecycle and notification levels."
-status: pending
+status: in-progress
 priority: P1
 effort: 12-15d
 issue:
@@ -32,7 +32,7 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 
 | # | Phase | Đợt | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|
-| 01 | [Thiết kế Chat: thread, đính kèm, định dạng](phase-01-design-inline-threads.md) | 1 | P1 | 1-1.5d | — | pending |
+| 01 | [Thiết kế Chat: thread, đính kèm, định dạng](phase-01-design-inline-threads.md) | 1 | P1 | 1-1.5d | — | in-progress |
 | 02 | [Mô hình dữ liệu và API thread](phase-02-thread-data-model-and-api.md) | 1 | P1 | 2d | 01 (chốt hành vi) | pending |
 | 03 | [Sự kiện realtime cho thread](phase-03-realtime-thread-events.md) | 1 | P1 | 1d | 02 | pending |
 | 04 | [UI luồng in-line, panel Thread](phase-04-inline-stream-ui.md) | 1 | P1 | 2-3d | 01, 02, 03 | pending |
