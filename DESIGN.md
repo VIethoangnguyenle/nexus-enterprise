@@ -231,6 +231,36 @@ Primitive sống ở `frontend/src/components/primitives/`; không component nà
   toast. Bộ đếm đổi số bằng fade 160ms. Bảng mở: `translateX(-16px) scale(.985)` → 0, 280ms expo; đóng
   210ms ease-in.
 
+### Chat: cột điều hướng và mục (mockup `design/mockups/spaces.html` §1)
+
+Thứ tự trong cột: nút "Trò chuyện mới" · lối tắt (Trang chủ, Được nhắc tới, Đã gắn sao) · **mục của bạn** ·
+Tin nhắn trực tiếp · Nhóm · "Duyệt nhóm" · "Tạo mục".
+
+- **Mục (ChatSection):** người dùng tự tạo để gom nhóm và tin nhắn trực tiếp, như Google Chat. Mục là **của
+  riêng từng người** trong từng workspace; người khác không thấy và không bị ảnh hưởng. Tên 1–40 ký tự, không
+  trùng (không phân biệt hoa thường) trong các mục của bạn. Một cuộc trò chuyện nằm trong **tối đa một** mục;
+  đã vào mục thì không lặp lại ở Tin nhắn trực tiếp hay Nhóm. Mục chỉ là cách sắp xếp, không đổi quyền hay
+  thành viên.
+- **Tiêu đề mục:** `button` có `aria-expanded`, chevron 16 xoay −90° khi thu gọn (160ms), tên 13px/600
+  `--color-ink` (mục mặc định `--color-ink-muted`). Thu gọn thì cuối tiêu đề hiện pill đếm = tổng chưa đọc
+  trong mục. Mục của bạn có IconButton 28 "⋯" (hiện khi hover hoặc focus) mở menu: **Đổi tên mục · Chuyển
+  lên · Chuyển xuống** (mục đầu/cuối thì mục tương ứng disabled) · divider · **Xoá mục** (`danger`). Mục mặc
+  định có nút "+" (Nhắn tin trực tiếp / Tạo nhóm) như cũ, không đổi tên hay xoá được. Trạng thái thu gọn
+  nhớ theo thiết bị.
+- **Tạo / đổi tên:** popover nổi trong cột (không modal): ô "Tên mục" + Huỷ / Tạo (Lưu); Enter xác nhận,
+  Esc đóng, lỗi nói rõ ("Nhập tên mục", "Bạn đã có mục tên này"). Mở từ "Tạo mục" cuối cột, từ menu "Trò
+  chuyện mới" hoặc "Mục mới…" trong menu của một cuộc trò chuyện (khi đó cuộc trò chuyện vào luôn mục vừa
+  tạo). Mục mới nằm cuối các mục của bạn; rỗng thì hiện gợi ý 13px mờ cách mở menu ⋯ để chuyển vào.
+- **Chuyển cuộc trò chuyện:** mỗi hàng có IconButton 28 "⋯" ở mép phải, hiện khi hover hoặc focus (thay chỗ
+  pill chưa đọc trong lúc đó). Menu: nhãn "Chuyển tới mục" + danh sách mục của bạn (`menuitemradio`, dấu ✓ ở
+  mục hiện tại) · "Mục mới…" · divider · "Bỏ khỏi mục" (chỉ khi đang ở trong mục; về lại Tin nhắn trực tiếp
+  hoặc Nhóm) · Gắn sao · Tắt thông báo. Trên máy tính kéo thả hàng vào tiêu đề mục cũng chuyển được; bàn
+  phím và màn chạm (nhấn giữ hàng) dùng menu. Chuyển xong: hàng fade vào chỗ mới, mục đích tự mở, toast "Đã
+  chuyển … vào “…”".
+- **Xoá mục:** không hỏi xác nhận vì không mất dữ liệu: các cuộc trò chuyện trở về Tin nhắn trực tiếp hoặc
+  Nhóm, toast "Đã xoá mục “…”" có **Hoàn tác** (5s) khôi phục mục, vị trí và các cuộc trò chuyện.
+- **Mobile:** tab Tin nhắn dùng cùng thứ tự và cùng mục; menu ⋯ thành sheet đáy.
+
 ### Chat: luồng in-line, thread, ô soạn (mockup `design/mockups/spaces.html` §2–§4)
 
 Nhóm và tin nhắn trực tiếp dùng **chung một mô hình in-line threading** như Google Chat. Không có thẻ chủ đề:
@@ -239,11 +269,19 @@ trong ô soạn chính gửi một tin vào luồng, không mở gì thêm; tr�
 tóm tắt. Panel thread, panel Thread của nhóm và panel Thành viên dùng chung khe detail panel 360px (§5): mở cái
 này thì cái kia đóng.
 
-- **Luồng (MessageStream):** nền `--color-base`, cũ trên mới dưới, tin không có nền riêng. Hàng tin: Avatar 32
-  + tên hiển thị 600 + giờ `text-xs` mờ tabular + nội dung `text-sm` line-height 1.55, rộng tối đa 70ch; padding
-  8 × 14, radius 10, hover và focus-within nền `--color-hover`. Tin đã ghim có nhãn "Đã ghim" (icon 12) sau giờ.
+- **Luồng (MessageStream):** nền `--color-base`, cũ trên mới dưới, tin xếp **hai bên**. Tin của người khác
+  bên trái: Avatar 32 + tên hiển thị 600 + giờ `text-xs` mờ tabular phía trên bong bóng. **Tin của bạn bên
+  phải**: không avatar, không tên (chữ ẩn "Bạn" cho trình đọc màn hình), chỉ giờ ở trên, căn phải. Bong bóng:
+  `text-sm` line-height 1.55, padding 7 × 12, radius 16, rộng tối đa min(70ch, 85%) cột tin, co theo nội
+  dung; người khác nền `--color-sunk`, của bạn nền `--color-accent-wash`; góc phía người gửi của bong bóng
+  đầu nhóm là 4 (trên trái với người khác, trên phải với bạn). `code` và khối code trong bong bóng nền
+  `--color-base`. Đính kèm (lưới ảnh, thẻ tệp), cảm xúc và hàng tóm tắt thread nằm ngoài bong bóng, bám
+  theo bên của tin. Hàng tin padding 8 × 14, không tô nền khi hover (bong bóng đã đủ khối); lớp phủ
+  realtime (§7) vẫn phủ cả hàng. Tin đã ghim có nhãn "Đã ghim" (icon 12) sau giờ. Áp dụng như nhau trong
+  panel thread và tin nhắn trực tiếp.
 - **Gom tin:** tin liền sau của **cùng người gửi** trong **≤ 5 phút** kể từ tin trước của họ thì ẩn avatar và
-  tên, padding trên 2; giờ của dòng đó hiện ở cột avatar (11px mờ, tabular) khi hover hoặc focus. Ngắt nhóm khi:
+  tên, padding trên 2; giờ của dòng đó hiện ở lề ngoài (cột avatar bên trái với người khác, cột 32 bên phải
+  với bạn; 11px mờ, tabular) khi hover hoặc focus. Ngắt nhóm khi:
   khác người, cách > 5 phút, có vạch ngày hoặc vạch "Tin mới" ở giữa, tin trước có hàng tóm tắt thread, hoặc tin
   trước là tin hệ thống (công việc, thành viên vào/ra). Gom chỉ là cách hiển thị: mỗi dòng vẫn là một tin riêng
   với hover actions, cảm xúc và thread riêng. Áp dụng như nhau trong panel thread.
@@ -274,7 +312,7 @@ này thì cái kia đóng.
 - **Theo dõi thread:** tự theo dõi khi bạn viết tin gốc, trả lời trong thread hoặc được nhắc tên trong thread; tự
   bỏ bằng nút Theo dõi hoặc menu Thêm. Theo dõi nghĩa là có "mới" và thông báo cho trả lời mới; mức thông báo
   theo nhóm thuộc đợt 4.
-- **Hover actions:** thanh nổi ở góc trên phải hàng tin (trên −14, phải 12), `--color-overlay`, radius 10,
+- **Hover actions:** thanh nổi ở góc trên phải hàng tin (trên −14, phải 12; tin của bạn: góc trên trái, trái 12), `--color-overlay`, radius 10,
   `--shadow-overlay` (overlay duy nhất trong một tin), IconButton 32 có tooltip: **Bày tỏ cảm xúc · Trả lời
   trong thread · Ghim / Bỏ ghim · Thêm**. Hiện khi hover hoặc khi focus nằm trong hàng (Tab tới được). Trong
   panel thread không có "Trả lời trong thread". **Menu Thêm**, đợt 1: Theo dõi thread / Bỏ theo dõi thread, Sao

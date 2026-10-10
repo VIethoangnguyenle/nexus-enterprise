@@ -104,6 +104,32 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .rl .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-accent); flex: none; }
 .rl .h { color: var(--color-ink-muted); }
 .rl.browse { color: var(--color-accent); font-weight: 600; }
+/* sections: user-made groups above the default ones */
+.grp { position: relative; display: grid; gap: 2px; }
+.grp-b { display: grid; gap: 2px; }
+.grp-b[hidden] { display: none; }
+.sec { padding: 10px 4px 2px 6px; }
+.sec-t { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sec-t:hover { background: var(--color-hover); }
+.sec-t .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sec-t[aria-expanded="false"] > svg { transform: rotate(-90deg); }
+.sec-t .pill { margin-left: auto; }
+.sec-t[aria-expanded="true"] .pill { display: none; }
+.sec.usr { color: var(--color-ink); }
+.sec .ibtn { margin-left: 0; }
+.sec .more { opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.sec:hover .more, .sec:focus-within .more, .sec .more[aria-expanded="true"] { opacity: 1; }
+.rlw { position: relative; }
+.rlw .more { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; opacity: 0; background: var(--color-hover); transition: opacity var(--duration-quick) var(--ease-out); }
+.rlw:hover .more, .rlw:focus-within .more, .rlw .more[aria-expanded="true"] { opacity: 1; }
+.rlw:hover .rl .pill, .rlw:focus-within .rl .pill { visibility: hidden; }
+.menu .mlabel { padding: 8px 10px 4px; font: 600 0.75rem/1 var(--font-body); color: var(--color-ink-muted); }
+.menu button[aria-checked="true"]::after { content: "✓"; margin-left: auto; color: var(--color-accent); font-weight: 700; }
+.sec-hint { padding: 4px 10px 8px 34px; font-size: 0.8125rem; color: var(--color-ink-muted); }
+.rl.newsec { width: 100%; border: 0; background: transparent; font: inherit; cursor: pointer; text-align: left; color: var(--color-ink-muted); }
+.sdlg { position: absolute; z-index: 10; left: 8px; right: 8px; bottom: 16px; background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 16px; display: grid; gap: 12px; }
+.sdlg[hidden] { display: none; }
+#home-toasts .toast { min-width: 0; }
 
 /* content */
 .content { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; min-height: 0; background: var(--color-base); position: relative; }
@@ -140,21 +166,32 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .stream { position: relative; overflow: auto; display: flex; flex-direction: column; padding: 8px 8px 20px; min-height: 0; }
 .stream > :first-child { margin-top: auto; }
 .m { position: relative; flex: none; display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; padding: 8px 14px 6px; border-radius: 10px; transition: background-color var(--duration-quick) var(--ease-out); }
-.m:hover, .m:focus-within, .m.hov { background: var(--color-hover); }
 .m.cont { padding-top: 2px; }
 .m .gt { padding-top: 3px; text-align: center; font: 500 0.6875rem/1.5 var(--font-body); color: var(--color-ink-muted); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
 .m:hover .gt, .m:focus-within .gt, .m.hov .gt { opacity: 1; }
-.mc { min-width: 0; }
+.mc { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.mc > * { max-width: 100%; }
 .who { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
 .who b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .who time { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; flex: none; }
 .who .tag, .tsum .tag { font-size: 0.75rem; font-weight: 600; color: var(--p); flex: none; }
-.txt { line-height: 1.55; max-width: 70ch; overflow-wrap: anywhere; }
+.txt { line-height: 1.55; width: fit-content; max-width: min(70ch, 85%); overflow-wrap: anywhere; margin-top: 2px; padding: 7px 12px; border-radius: 16px; background: var(--color-sunk); }
 .txt + .txt { margin-top: 4px; }
+.who + .txt { border-top-left-radius: 4px; }
+/* two sides: others on the left with avatar and name, yours on the right with neither */
+.m.mine { grid-template-columns: minmax(0, 1fr) 32px; }
+.m.mine .mc { grid-column: 1; grid-row: 1; align-items: flex-end; }
+.m.mine .gt { grid-column: 2; grid-row: 1; }
+.m.mine .who { justify-content: flex-end; }
+.m.mine .txt { background: var(--color-accent-wash); }
+.m.mine .who + .txt { border-top-left-radius: 16px; border-top-right-radius: 4px; }
+.m.mine .att { justify-items: end; }
+.m.mine .tsum { margin: 4px -8px 2px 0; }
+.m.mine .hact, .m.mine .menu { right: auto; left: 12px; }
 .txt strong { font-weight: 600; }
 .txt a { color: var(--color-accent); text-underline-offset: 2px; }
-.txt code { font: 0.8125rem/1.5 var(--font-mono); background: var(--color-sunk); padding: 1px 4px; border-radius: 4px; }
-.txt pre { margin: 6px 0; padding: 10px 12px; border-radius: 8px; background: var(--color-sunk); overflow-x: auto; font: 0.8125rem/1.55 var(--font-mono); }
+.txt code { font: 0.8125rem/1.5 var(--font-mono); background: var(--color-base); padding: 1px 4px; border-radius: 4px; }
+.txt pre { margin: 6px 0; padding: 10px 12px; border-radius: 8px; background: var(--color-base); overflow-x: auto; font: 0.8125rem/1.55 var(--font-mono); }
 .txt pre code { background: none; padding: 0; }
 .txt blockquote { margin: 6px 0; padding-left: 10px; border-left: 3px solid var(--color-line); color: var(--color-ink-muted); }
 .txt ul, .txt ol { margin: 4px 0; padding-left: 1.4em; }
@@ -184,7 +221,7 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .wave { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; margin-left: auto; border-radius: 999px; background: var(--color-sunk); color: var(--color-ink-muted); font: 600 0.6875rem/1 var(--font-body); }
 
 /* attachments in a message */
-.att { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 8px; justify-items: start; min-width: 0; }
+.att { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 8px; justify-items: start; min-width: 0; align-self: stretch; }
 .grid { display: grid; gap: 4px; width: min(360px, 100%); grid-template-columns: 1fr 1fr; }
 .grid.g1 { grid-template-columns: 1fr; }
 .tile { position: relative; display: block; aspect-ratio: 1; border: 0; padding: 0; border-radius: 8px; overflow: hidden; background: var(--color-sunk); cursor: zoom-in; }
@@ -473,6 +510,8 @@ html.reduce .sk { animation: none; }
   <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
   <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-rename" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
   <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
@@ -543,11 +582,15 @@ html.reduce .sk { animation: none; }
 <section class="screen" id="home" aria-labelledby="h-home">
   <div class="screen-head">
     <h2 id="h-home">1 · Trang chủ</h2>
-    <p>Mọi cuộc trò chuyện xếp theo hoạt động mới nhất, chưa đọc in đậm. Có tin mới thì cuộc trò chuyện trượt lên đầu, mang màu người gửi.</p>
+    <p>Mọi cuộc trò chuyện xếp theo hoạt động mới nhất, chưa đọc in đậm. Có tin mới thì cuộc trò chuyện trượt lên đầu, mang màu người gửi. Cột điều hướng có <b>mục</b> do bạn tự tạo để gom nhóm và tin nhắn trực tiếp, như Google Chat.</p>
   </div>
   <div class="demo"><span class="k">Demo</span>
     <button class="btn sm" type="button" data-act="home-new">Yến nhắn trong Hợp đồng đối tác</button>
     <button class="btn sm" type="button" data-act="newchat-menu">Mở menu trò chuyện mới</button>
+    <button class="btn sm" type="button" data-act="sec-create">Tạo mục</button>
+    <button class="btn sm" type="button" data-act="row-menu" data-row="hopdong">Chuyển Hợp đồng đối tác sang mục khác</button>
+    <button class="btn sm" type="button" data-act="sec-menu" data-sec="q4">Mở menu của mục</button>
+    <button class="btn sm" type="button" data-act="sec-delete" data-sec="q4">Xoá mục Quyết toán quý 4</button>
   </div>
   <div class="scroll">
     <div class="app" id="app-home">
@@ -566,30 +609,72 @@ html.reduce .sk { animation: none; }
           <div class="me"><span class="av" style="--p:var(--color-person-7)">TH<span class="on"></span></span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div>
         </div>
       </aside>
-      <div class="cnav">
+      <div class="cnav" id="home-nav" style="position:relative">
         <div class="top" style="position:relative">
           <button class="newchat" type="button" data-act="newchat-menu"><svg class="i"><use href="#i-pen"/></svg>Trò chuyện mới</button>
           <div class="menu" id="newchat-menu" hidden style="top:60px;left:12px" role="menu">
             <button type="button" role="menuitem"><svg class="i s"><use href="#i-user-plus"/></svg>Nhắn tin trực tiếp</button>
             <button type="button" role="menuitem" data-act="create-open"><svg class="i s"><use href="#i-users"/></svg>Tạo nhóm</button>
             <button type="button" role="menuitem"><svg class="i s"><use href="#i-compass"/></svg>Duyệt nhóm</button>
+            <hr>
+            <button type="button" role="menuitem" data-act="sec-create"><svg class="i s"><use href="#i-folder-plus"/></svg>Tạo mục</button>
           </div>
         </div>
-        <div class="body">
+        <div class="body" id="home-body">
           <a class="rl" href="#home" aria-current="page"><svg class="i s h"><use href="#i-home"/></svg><span class="t">Trang chủ</span><span class="pill count tnum" id="home-count">5</span></a>
           <a class="rl" href="#home"><svg class="i s h"><use href="#i-at"/></svg><span class="t">Được nhắc tới</span><span class="dot" aria-label="có mục mới"></span></a>
           <a class="rl" href="#home"><svg class="i s h"><use href="#i-star"/></svg><span class="t">Đã gắn sao</span></a>
-          <div class="sec"><svg class="i s"><use href="#i-down"/></svg>Tin nhắn trực tiếp<button class="ibtn" type="button" aria-label="Nhắn tin trực tiếp"><svg class="i s"><use href="#i-plus"/></svg></button></div>
-          <a class="rl unread" href="#home"><span class="av s24" style="--p:var(--color-person-3)">HY</span><span class="t">Phạm Hải Yến</span><span class="pill count">1</span></a>
-          <a class="rl" href="#home"><span class="av s24" style="--p:var(--color-person-6)">TL<span class="on"></span></span><span class="t">Nguyễn Thu Lan</span></a>
-          <a class="rl" href="#home"><span class="av s24" style="--p:var(--color-person-1)">QV<span class="on"></span></span><span class="t">Lê Quang Vinh</span></a>
-          <div class="sec"><svg class="i s"><use href="#i-down"/></svg>Nhóm<button class="ibtn" type="button" aria-label="Tạo nhóm" data-act="create-open"><svg class="i s"><use href="#i-plus"/></svg></button></div>
-          <a class="rl unread" href="#space"><span class="sp s24" style="--p:var(--color-person-4)">Đ</span><span class="t">Đối soát giao dịch</span><span class="pill count">3</span></a>
-          <a class="rl" href="#space"><span class="sp s24" style="--p:var(--color-person-2)">V</span><span class="t">Vận hành chung</span></a>
-          <a class="rl" href="#space"><span class="sp s24" style="--p:var(--color-person-8)">H</span><span class="t">Hợp đồng đối tác</span></a>
-          <a class="rl" href="#space"><span class="sp s24" style="--p:var(--color-person-5)">T</span><span class="t">Thông báo khối</span></a>
+          <div class="grp usr" data-sec="q4">
+            <div class="sec usr"><button class="sec-t" type="button" aria-expanded="true" data-act="sec-toggle"><svg class="i s"><use href="#i-down"/></svg><span class="nm">Quyết toán quý 4</span></button><button class="ibtn more" type="button" aria-label="Tuỳ chọn cho mục Quyết toán quý 4" aria-haspopup="menu" aria-expanded="false" data-act="sec-menu" data-sec="q4"><svg class="i s"><use href="#i-more-h"/></svg></button></div>
+            <div class="grp-b">
+              <div class="rlw" data-row="doisoat" data-home="sp"><a class="rl unread" href="#home"><span class="sp s24" style="--p:var(--color-person-4)">Đ</span><span class="t">Đối soát giao dịch</span><span class="pill count">3</span></a><button class="ibtn more" type="button" aria-label="Tuỳ chọn cho Đối soát giao dịch" aria-haspopup="menu" aria-expanded="false" data-act="row-menu" data-row="doisoat"><svg class="i s"><use href="#i-more-h"/></svg></button></div>
+              <div class="rlw" data-row="hopdong" data-home="sp"><a class="rl" href="#home"><span class="sp s24" style="--p:var(--color-person-8)">H</span><span class="t">Hợp đồng đối tác</span></a><button class="ibtn more" type="button" aria-label="Tuỳ chọn cho Hợp đồng đối tác" aria-haspopup="menu" aria-expanded="false" data-act="row-menu" data-row="hopdong"><svg class="i s"><use href="#i-more-h"/></svg></button></div>
+              <div class="rlw" data-row="lan" data-home="dm"><a class="rl" href="#home"><span class="av s24" style="--p:var(--color-person-6)">TL<span class="on"></span></span><span class="t">Nguyễn Thu Lan</span></a><button class="ibtn more" type="button" aria-label="Tuỳ chọn cho Nguyễn Thu Lan" aria-haspopup="menu" aria-expanded="false" data-act="row-menu" data-row="lan"><svg class="i s"><use href="#i-more-h"/></svg></button></div>
+            </div>
+          </div>
+          <div class="grp usr" data-sec="noibo">
+            <div class="sec usr"><button class="sec-t" type="button" aria-expanded="false" data-act="sec-toggle"><svg class="i s"><use href="#i-down"/></svg><span class="nm">Nội bộ kế toán</span><span class="pill count tnum">1</span></button><button class="ibtn more" type="button" aria-label="Tuỳ chọn cho mục Nội bộ kế toán" aria-haspopup="menu" aria-expanded="false" data-act="sec-menu" data-sec="noibo"><svg class="i s"><use href="#i-more-h"/></svg></button></div>
+            <div class="grp-b" hidden>
+              <div class="rlw" data-row="vinh" data-home="dm"><a class="rl unread" href="#home"><span class="av s24" style="--p:var(--color-person-1)">QV<span class="on"></span></span><span class="t">Lê Quang Vinh</span><span class="pill count">1</span></a><button class="ibtn more" type="button" aria-label="Tuỳ chọn cho Lê Quang Vinh" aria-haspopup="menu" aria-expanded="false" data-act="row-menu" data-row="vinh"><svg class="i s"><use href="#i-more-h"/></svg></button></div>
+              <div class="rlw" data-row="vanhanh" data-home="sp"><a class="rl" href="#home"><span class="sp s24" style="--p:var(--color-person-2)">V</span><span class="t">Vận hành chung</span></a><button class="ibtn more" type="button" aria-label="Tuỳ chọn cho Vận hành chung" aria-haspopup="menu" aria-expanded="false" data-act="row-menu" data-row="vanhanh"><svg class="i s"><use href="#i-more-h"/></svg></button></div>
+            </div>
+          </div>
+          <div class="grp" data-sec="dm">
+            <div class="sec"><button class="sec-t" type="button" aria-expanded="true" data-act="sec-toggle"><svg class="i s"><use href="#i-down"/></svg><span class="nm">Tin nhắn trực tiếp</span></button><button class="ibtn" type="button" aria-label="Nhắn tin trực tiếp"><svg class="i s"><use href="#i-plus"/></svg></button></div>
+            <div class="grp-b">
+              <div class="rlw" data-row="yen" data-home="dm"><a class="rl unread" href="#home"><span class="av s24" style="--p:var(--color-person-3)">HY</span><span class="t">Phạm Hải Yến</span><span class="pill count">1</span></a><button class="ibtn more" type="button" aria-label="Tuỳ chọn cho Phạm Hải Yến" aria-haspopup="menu" aria-expanded="false" data-act="row-menu" data-row="yen"><svg class="i s"><use href="#i-more-h"/></svg></button></div>
+            </div>
+          </div>
+          <div class="grp" data-sec="sp">
+            <div class="sec"><button class="sec-t" type="button" aria-expanded="true" data-act="sec-toggle"><svg class="i s"><use href="#i-down"/></svg><span class="nm">Nhóm</span></button><button class="ibtn" type="button" aria-label="Tạo nhóm" data-act="create-open"><svg class="i s"><use href="#i-plus"/></svg></button></div>
+            <div class="grp-b">
+              <div class="rlw" data-row="thongbao" data-home="sp"><a class="rl" href="#home"><span class="sp s24" style="--p:var(--color-person-5)">T</span><span class="t">Thông báo khối</span></a><button class="ibtn more" type="button" aria-label="Tuỳ chọn cho Thông báo khối" aria-haspopup="menu" aria-expanded="false" data-act="row-menu" data-row="thongbao"><svg class="i s"><use href="#i-more-h"/></svg></button></div>
+            </div>
+          </div>
           <a class="rl browse" href="#browse"><svg class="i s"><use href="#i-compass"/></svg><span class="t">Duyệt nhóm</span></a>
+          <button class="rl newsec" type="button" data-act="sec-create"><svg class="i s"><use href="#i-folder-plus"/></svg><span class="t">Tạo mục</span></button>
         </div>
+        <div class="menu" id="sec-menu" role="menu" aria-label="Tuỳ chọn cho mục" hidden>
+          <button type="button" role="menuitem" data-act="sec-rename"><svg class="i s"><use href="#i-rename"/></svg>Đổi tên mục</button>
+          <button type="button" role="menuitem" data-act="sec-up"><svg class="i s"><use href="#i-arrow-up"/></svg>Chuyển lên</button>
+          <button type="button" role="menuitem" data-act="sec-down"><svg class="i s"><use href="#i-arrow-down"/></svg>Chuyển xuống</button>
+          <hr>
+          <button type="button" role="menuitem" class="danger" data-act="sec-delete"><svg class="i s"><use href="#i-trash"/></svg>Xoá mục</button>
+        </div>
+        <div class="menu" id="row-menu" role="menu" aria-label="Tuỳ chọn cho cuộc trò chuyện" hidden>
+          <div class="mlabel">Chuyển tới mục</div>
+          <div id="row-menu-secs" style="display:grid;gap:2px"></div>
+          <button type="button" role="menuitem" data-act="sec-create"><svg class="i s"><use href="#i-folder-plus"/></svg>Mục mới…</button>
+          <hr>
+          <button type="button" role="menuitem" id="row-out" data-act="move-out"><svg class="i s"><use href="#i-x"/></svg>Bỏ khỏi mục</button>
+          <button type="button" role="menuitem"><svg class="i s"><use href="#i-star"/></svg>Gắn sao</button>
+          <button type="button" role="menuitem"><svg class="i s"><use href="#i-bell-off"/></svg>Tắt thông báo</button>
+        </div>
+        <div class="sdlg" id="sec-dlg" role="dialog" aria-labelledby="sec-dlg-t" hidden>
+          <div class="field"><label for="sec-name" id="sec-dlg-t">Tên mục mới</label><input class="inp" id="sec-name" maxlength="40" placeholder="Ví dụ: Dự án Q4" aria-describedby="sec-err"><span class="ferr" id="sec-err"></span></div>
+          <div class="actions"><button class="btn ghost sm" type="button" data-act="sec-dlg-close">Huỷ</button><button class="btn primary sm" type="button" id="sec-ok" data-act="sec-dlg-ok">Tạo</button></div>
+        </div>
+        <div class="toasts" id="home-toasts" style="left:8px;right:8px;justify-items:stretch"></div>
       </div>
       <div class="content" style="grid-template-rows:auto auto 1fr">
         <div class="chead"><div class="t"><h3>Trang chủ</h3><div class="sub">Mọi cuộc trò chuyện của bạn trong Khối Vận hành</div></div></div>
@@ -609,6 +694,9 @@ html.reduce .sk { animation: none; }
     <li><b>Nhóm có biểu tượng vuông bo</b> để phân biệt với người (tròn). Màu lấy từ bảng màu người dùng, gán cố định theo nhóm.</li>
     <li><b>Được nhắc tới</b> <span class="need">cần backend</span> và <b>Đã gắn sao</b> <span class="need">cần backend</span>: hiện chưa có API; số chưa đọc và Trang chủ dùng API hiện có.</li>
     <li><b>Xếp lại khi có tin mới</b>: FLIP 280ms, cuộc trò chuyện mang lớp phủ màu người gửi 2,4s.</li>
+    <li><b>Mục</b> <span class="need">cần backend</span>: bạn tự tạo mục (tối đa 40 ký tự, không trùng tên) để gom nhóm và tin nhắn trực tiếp; mục là của riêng bạn, người khác không thấy. Mục của bạn nằm trên Tin nhắn trực tiếp và Nhóm. Mỗi cuộc trò chuyện nằm trong tối đa một mục; đã vào mục thì không lặp lại ở mục mặc định. Thu gọn mục thì tiêu đề hiện tổng số chưa đọc.</li>
+    <li><b>Chuyển vào mục</b>: menu ⋯ của cuộc trò chuyện (hiện khi trỏ chuột hoặc focus, thay chỗ số chưa đọc) có Chuyển tới mục, Mục mới…, Bỏ khỏi mục. Kéo thả hàng vào tiêu đề mục làm được tương tự trên máy tính; bàn phím và màn chạm dùng menu.</li>
+    <li><b>Menu của mục</b>: Đổi tên, Chuyển lên, Chuyển xuống, Xoá mục. Xoá không mất tin nhắn: các cuộc trò chuyện trở về Tin nhắn trực tiếp hoặc Nhóm, toast có Hoàn tác, nên không cần hộp xác nhận. Tin nhắn trực tiếp và Nhóm là mục mặc định, không đổi tên hay xoá được.</li>
   </ol>
 </section>
 
@@ -681,8 +769,8 @@ html.reduce .sk { animation: none; }
             <div class="m cont"><time class="gt">16:42</time><div class="mc"><p class="txt">Mẫu tổng hợp vẫn dùng bản cũ trong Tài liệu, thư mục Đối soát / Tháng 9.</p></div></div>
             <div class="dd" role="separator">Hôm nay</div>
             <div class="m" id="msg-a" data-thread="a"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>09:12</time><span class="pinned"><svg class="i"><use href="#i-pin"/></svg>Đã ghim</span></div><p class="txt">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.</p><div class="att"><div class="file"><span class="fi"><svg class="i"><use href="#i-sheet"/></svg></span><span class="fm"><b>doi-soat-08-10.xlsx</b><small>Bảng tính · 412 KB</small></span><button class="ibtn dl" type="button" aria-label="Tải xuống doi-soat-08-10.xlsx"><svg class="i s"><use href="#i-download"/></svg></button></div></div><button class="tsum" type="button" data-thread="a"></button></div></div>
-            <div class="m"><span class="av" style="--p:var(--color-person-7)">TH</span><div class="mc"><div class="who"><b>Lê Thị Hoa</b><time>09:24</time></div><p class="txt">Phí chuyển khoản liên ngân hàng hạch toán vào tài khoản 6427.</p></div></div>
-            <div class="m cont" id="msg-d" data-thread="d"><time class="gt">09:25</time><div class="mc"><p class="txt">Mọi người cập nhật biên bản trước 15:00 nhé.</p><div class="reacts"><button class="react mine" type="button" aria-label="Thích, 4 người, có bạn">👍 <b>4</b></button></div><button class="tsum" type="button" data-thread="d"></button></div></div>
+            <div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>09:24</time></div><p class="txt">Phí chuyển khoản liên ngân hàng hạch toán vào tài khoản 6427.</p></div></div>
+            <div class="m cont mine" id="msg-d" data-thread="d"><time class="gt">09:25</time><div class="mc"><p class="txt">Mọi người cập nhật biên bản trước 15:00 nhé.</p><div class="reacts"><button class="react mine" type="button" aria-label="Thích, 4 người, có bạn">👍 <b>4</b></button></div><button class="tsum" type="button" data-thread="d"></button></div></div>
             <div class="dd unread" role="separator" id="unread-div">Tin mới</div>
             <div class="m" id="msg-b" data-thread="b"><span class="av" style="--p:var(--color-person-1)">QV</span><div class="mc"><div class="who"><b>Lê Quang Vinh</b><time>09:31</time></div><p class="txt">Ảnh chụp sao kê 3 giao dịch lệch, mọi người đối chiếu giúp em với lệnh hoàn tiền.</p>
               <div class="att"><div class="grid g3" data-who="Lê Quang Vinh" data-ini="QV" data-p="1" data-time="09:31">
@@ -705,6 +793,8 @@ html.reduce .sk { animation: none; }
             <div class="m cont"><time class="gt">09:42</time><div class="mc"><p class="txt">Nếu cần bổ sung chứng từ thì anh chị nhắn em nhé.</p><div class="reacts"><button class="react" type="button" aria-label="Cảm ơn, 2 người">🙏 <b>2</b></button></div></div></div>
             <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>09:44</time></div><p class="txt">Chiều nay 14:00 anh họp nhanh với ngân hàng, ai cần hỏi gì thêm thì ghi vào biên bản trước giờ đó.</p></div></div>
             <div class="m cont"><time class="gt">09:45</time><div class="mc"><p class="txt">Lan chuẩn bị giúp anh danh sách 3 giao dịch kèm số tiền và giờ chuyển nhé.</p></div></div>
+            <div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>09:47</time></div><p class="txt">Chị đã thêm 3 giao dịch vào biên bản, mọi người xem lại trước 14:00 nhé.</p></div></div>
+            <div class="m cont mine"><time class="gt">09:47</time><div class="mc"><p class="txt">Số tiền lấy theo sao kê, không theo hệ thống.</p></div></div>
           </div>
           <button class="jump" id="jump" type="button" data-act="jump" hidden><svg class="i s"><use href="#i-arrow-down" id="jump-ic"/></svg><span id="jump-t">Tin mới nhất</span><span class="pill count tnum" id="jump-n" hidden>4</span></button>
         </div>
@@ -729,7 +819,8 @@ html.reduce .sk { animation: none; }
     </div>
   </div>
   <ol class="notes">
-    <li><b>Gom tin</b>: cùng người, cách nhau ≤ 5 phút thì dòng sau không có avatar và tên; giờ hiện ở lề trái khi trỏ chuột hoặc focus. Tin có hàng tóm tắt thread, vạch ngày, vạch “Tin mới” đều ngắt nhóm.</li>
+    <li><b>Hai bên</b>: tin của bạn nằm bên phải, bong bóng nền accent wash, không avatar, không tên; tin người khác nằm bên trái, bong bóng nền sunk, có avatar và tên. Đính kèm, cảm xúc và hàng tóm tắt thread bám theo bên của tin; thanh hover actions của tin bạn mở ở góc trái. Áp dụng cả trong panel thread và tin nhắn trực tiếp.</li>
+    <li><b>Gom tin</b>: cùng người, cách nhau ≤ 5 phút thì dòng sau không có avatar và tên; giờ hiện ở lề ngoài (trái với người khác, phải với bạn) khi trỏ chuột hoặc focus. Tin có hàng tóm tắt thread, vạch ngày, vạch “Tin mới” đều ngắt nhóm.</li>
     <li><b>Vạch “Tin mới”</b> nằm trước tin chưa đọc đầu tiên, đường accent từ trái, nhãn bên phải. Nhiều hơn một màn thì nhóm mở tại vạch. <b>Nút nổi</b> có hai trạng thái: “Tin mới nhất” khi còn tin phía dưới, “Nhảy tới tin chưa đọc” khi bạn đã nhảy qua vạch. Demo: bấm nút nổi hai lần.</li>
     <li><b>Hàng tóm tắt thread</b>: tối đa 3 avatar người trả lời gần nhất, “N trả lời”, giờ trả lời cuối, pill “M mới” chỉ khi bạn theo dõi thread <span class="need">cần backend</span> (tóm tắt thread do server trả, phase 02).</li>
     <li><b>Realtime</b>: trả lời trong thread đang theo dõi phủ màu người trả lời 2,4s, avatar loé, “mới” tăng, badge Thread ở header tăng. Thread không theo dõi chỉ đổi số, không phủ màu, không “mới”. Thread đang mở ở panel: chèn trả lời, không “mới”.</li>
@@ -892,8 +983,8 @@ html.reduce .sk { animation: none; }
         <div>
           <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:14</time></div><p class="txt">Biên lai phí chuyển khoản ngày 08/10.</p>
             <div class="att"><div class="grid g1" data-who="Nguyễn Thu Lan" data-ini="TL" data-p="6" data-time="10:14"><button class="tile" type="button" data-size="1,4 MB" aria-label="Mở ảnh bien-lai-phi-08-10.jpg"><img data-photo="4" alt="bien-lai-phi-08-10.jpg"></button></div></div></div></div>
-          <div class="m"><span class="av" style="--p:var(--color-person-1)">QV</span><div class="mc"><div class="who"><b>Lê Quang Vinh</b><time>10:16</time></div><p class="txt">Hai mặt của phiếu hoàn tiền.</p>
-            <div class="att"><div class="grid g2" data-who="Lê Quang Vinh" data-ini="QV" data-p="1" data-time="10:16"><button class="tile" type="button" data-size="980 KB" aria-label="Mở ảnh phieu-hoan-tien-mat-truoc.jpg"><img data-photo="1" alt="phieu-hoan-tien-mat-truoc.jpg"></button><button class="tile" type="button" data-size="1,1 MB" aria-label="Mở ảnh phieu-hoan-tien-mat-sau.jpg"><img data-photo="3" alt="phieu-hoan-tien-mat-sau.jpg"></button></div></div></div></div>
+          <div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>10:16</time></div><p class="txt">Hai mặt của phiếu hoàn tiền.</p>
+            <div class="att"><div class="grid g2" data-who="Lê Thị Hoa" data-ini="TH" data-p="7" data-time="10:16"><button class="tile" type="button" data-size="980 KB" aria-label="Mở ảnh phieu-hoan-tien-mat-truoc.jpg"><img data-photo="1" alt="phieu-hoan-tien-mat-truoc.jpg"></button><button class="tile" type="button" data-size="1,1 MB" aria-label="Mở ảnh phieu-hoan-tien-mat-sau.jpg"><img data-photo="3" alt="phieu-hoan-tien-mat-sau.jpg"></button></div></div></div></div>
         </div>
         <div>
           <div class="m"><span class="av" style="--p:var(--color-person-3)">HY</span><div class="mc"><div class="who"><b>Phạm Hải Yến</b><time>10:20</time></div><p class="txt">Toàn bộ chứng từ gốc của 3 giao dịch.</p>
@@ -1190,6 +1281,7 @@ html.reduce .sk { animation: none; }
   addHact(document);
   function closeMenus() {
     document.querySelectorAll('.menu').forEach(function (m) { m.hidden = true; });
+    document.querySelectorAll('.more[aria-expanded="true"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
     document.querySelectorAll('[data-act="attach-menu"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
   }
 
@@ -1221,7 +1313,9 @@ html.reduce .sk { animation: none; }
   function mins(t) { var p = t.split(':'); return +p[0] * 60 + +p[1]; }
   function avHTML(ini, size, extra) { return '<span class="av' + (size ? ' s' + size : '') + (extra ? ' ' + extra : '') + '" style="--p:var(--color-person-' + P[ini][0] + ')">' + ini + '</span>'; }
   function rowHTML(r, cont, body, tag) {
-    if (cont) return '<div class="m cont"><time class="gt">' + r.time + '</time><div class="mc">' + body + '</div></div>';
+    var me = r.ini === 'TH';
+    if (cont) return '<div class="m cont' + (me ? ' mine' : '') + '"><time class="gt">' + r.time + '</time><div class="mc">' + body + '</div></div>';
+    if (me) return '<div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>' + r.time + '</time></div>' + body + '</div></div>';
     return '<div class="m">' + avHTML(r.ini, 0, tag ? 'halo' : '') + '<div class="mc"><div class="who"><b>' + P[r.ini][1] + '</b><time>' + r.time + '</time>'
       + (tag ? '<span class="tag" style="--p:var(--color-person-' + P[r.ini][0] + ')">vừa trả lời</span>' : '') + '</div>' + body + '</div></div>';
   }
@@ -1469,7 +1563,7 @@ html.reduce .sk { animation: none; }
     }).join('') + '</div>';
     att += docs.map(function (o) { return '<div class="file"><span class="fi ' + o.kind + '"><svg class="i"><use href="#' + KIND[o.kind][0] + '"/></svg></span><span class="fm"><b>' + esc(o.name) + '</b><small>' + KIND[o.kind][1] + ' · ' + esc(o.size) + '</small></span><button class="ibtn dl" type="button" aria-label="Tải xuống ' + esc(o.name) + '"><svg class="i s"><use href="#i-download"/></svg></button></div>'; }).join('');
     var mini = $('mini-b');
-    insertAnimated(mini, '<div class="m">' + avHTML('TH') + '<div class="mc"><div class="who"><b>Lê Thị Hoa</b><time>10:07</time></div>' + (text ? '<p class="txt">' + esc(text) + '</p>' : '') + (att ? '<div class="att">' + att + '</div>' : '') + '</div></div>');
+    insertAnimated(mini, '<div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>10:07</time></div>' + (text ? '<p class="txt">' + esc(text) + '</p>' : '') + (att ? '<div class="att">' + att + '</div>' : '') + '</div></div>');
     addHact(mini); mini.scrollTo({ top: mini.scrollHeight, behavior: sb() });
     items.forEach(function (o) { o.el.remove(); }); items = [];
     $('cin-b').className = 'cin ph'; $('cin-b').textContent = 'Tin nhắn cho Đối soát giao dịch'; $('note-b').textContent = '';
@@ -1510,6 +1604,68 @@ html.reduce .sk { animation: none; }
     exitThen(vw, 'exit', function () { vw.hidden = true; document.body.style.overflow = ''; if (V.from) V.from.focus({ preventScroll: true }); });
   }
 
+  // ---------- §1 sections ----------
+  var hnav = $('home-nav'), hbody = $('home-body'), secMenu = $('sec-menu'), rowMenu = $('row-menu'), sdlg = $('sec-dlg');
+  var menuSec = null, menuRow = null, dlgMode = 'create', secSeq = 0, lastDeleted = null;
+  function grpOf(key) { return hbody.querySelector('.grp[data-sec="' + key + '"]'); }
+  function usrGroups() { return Array.prototype.slice.call(hbody.querySelectorAll('.grp.usr')); }
+  function secName(g) { return g.querySelector('.sec-t .nm').textContent; }
+  function rowName(rw) { return rw.querySelector('.t').textContent; }
+  function placeMenu(m, anchor) {
+    var a = anchor.getBoundingClientRect(), n = hnav.getBoundingClientRect();
+    m.style.top = (a.bottom - n.top + 4) + 'px'; m.style.right = '12px'; m.style.left = 'auto';
+    anchor.setAttribute('aria-expanded', 'true'); m.hidden = false; replay(m, 'enter');
+  }
+  function expand(g) { g.querySelector('.grp-b').hidden = false; g.querySelector('.sec-t').setAttribute('aria-expanded', 'true'); }
+  // a user section shows the sum of its unread counts when collapsed, and a hint when empty
+  function recount(g) {
+    if (!g || !g.classList.contains('usr')) return;
+    var n = 0, t = g.querySelector('.sec-t'), pill = t.querySelector('.pill'), b = g.querySelector('.grp-b'), hint = b.querySelector('.sec-hint');
+    g.querySelectorAll('.rl .pill').forEach(function (x) { n += Number(x.textContent) || 0; });
+    if (n && !pill) { t.insertAdjacentHTML('beforeend', '<span class="pill count tnum"></span>'); pill = t.querySelector('.pill'); }
+    if (pill) { if (n) pill.textContent = n; else pill.remove(); }
+    var empty = !b.querySelector('.rlw');
+    if (empty && !hint) b.insertAdjacentHTML('beforeend', '<div class="sec-hint">Chưa có cuộc trò chuyện. Mở menu ⋯ của một cuộc trò chuyện để chuyển vào đây.</div>');
+    if (!empty && hint) hint.remove();
+  }
+  function moveRow(rw, g) {
+    var from = rw.closest('.grp'); expand(g);
+    var b = g.querySelector('.grp-b'), hint = b.querySelector('.sec-hint');
+    b.insertBefore(rw, hint || null);
+    if (!reduced()) replay(rw, 'nf');
+    recount(from); recount(g);
+  }
+  function openRowMenu(key) {
+    var rw = hbody.querySelector('.rlw[data-row="' + key + '"]'); if (!rw) return;
+    var cur = rw.closest('.grp'); expand(cur); menuRow = rw;
+    $('row-menu-secs').innerHTML = usrGroups().map(function (g) {
+      return '<button type="button" role="menuitemradio" aria-checked="' + (g === cur) + '" data-act="move-to" data-sec="' + g.getAttribute('data-sec') + '"><svg class="i s"><use href="#i-folder"/></svg><span class="t">' + esc(secName(g)) + '</span></button>';
+    }).join('');
+    $('row-out').hidden = !cur.classList.contains('usr');
+    rowMenu.setAttribute('aria-label', 'Tuỳ chọn cho ' + rowName(rw));
+    placeMenu(rowMenu, rw.querySelector('.more'));
+  }
+  function openSecDlg(mode, g) {
+    dlgMode = mode; menuSec = g || menuSec;
+    $('sec-dlg-t').textContent = mode === 'rename' ? 'Đổi tên mục' : 'Tên mục mới';
+    $('sec-ok').textContent = mode === 'rename' ? 'Lưu' : 'Tạo';
+    $('sec-name').value = mode === 'rename' ? secName(menuSec) : ''; $('sec-err').textContent = '';
+    sdlg.hidden = false; replay(sdlg, 'enter'); $('sec-name').focus();
+  }
+  function closeSecDlg() { sdlg.hidden = true; }
+  function newGroupHTML(key, name) {
+    return '<div class="grp usr" data-sec="' + key + '"><div class="sec usr"><button class="sec-t" type="button" aria-expanded="true" data-act="sec-toggle"><svg class="i s"><use href="#i-down"/></svg><span class="nm">' + esc(name) + '</span></button>'
+      + '<button class="ibtn more" type="button" aria-label="Tuỳ chọn cho mục ' + esc(name) + '" aria-haspopup="menu" aria-expanded="false" data-act="sec-menu" data-sec="' + key + '"><svg class="i s"><use href="#i-more-h"/></svg></button></div><div class="grp-b"></div></div>';
+  }
+  function secToast(html) { toast($('home-toasts'), html, 5000); }
+  function deleteSec(g) {
+    var rows = Array.prototype.slice.call(g.querySelectorAll('.rlw')), next = g.nextElementSibling;
+    rows.forEach(function (rw) { moveRow(rw, grpOf(rw.getAttribute('data-home'))); });
+    lastDeleted = { g: g, next: next, rows: rows };
+    g.remove();
+    secToast(OK + '<span>Đã xoá mục “' + esc(secName(g)) + '”, cuộc trò chuyện trở về Tin nhắn trực tiếp và Nhóm</span><button class="btn ghost sm" type="button" data-act="sec-undo">Hoàn tác</button>');
+  }
+
   // ---------- actions ----------
   var actions = {
     'home-new': function () {
@@ -1521,6 +1677,61 @@ html.reduce .sk { animation: none; }
       flipMoveToTop(feed, c); trace(c, 3);
       var hc = $('home-count'); hc.textContent = String(Number(hc.textContent) + 1);
       setTimeout(function () { var t = c.querySelector('.tag'); if (t) t.remove(); }, 2400);
+    },
+    'sec-toggle': function (b) {
+      var open = b.getAttribute('aria-expanded') !== 'true', body = b.closest('.grp').querySelector('.grp-b');
+      b.setAttribute('aria-expanded', String(open)); body.hidden = !open;
+      if (open && !reduced()) replay(body, 'nf');
+    },
+    'sec-menu': function (b) {
+      var g = grpOf(b.getAttribute('data-sec')); if (!g) return;
+      closeMenus(); menuSec = g;
+      var all = usrGroups(), i = all.indexOf(g);
+      secMenu.querySelector('[data-act="sec-up"]').disabled = i === 0;
+      secMenu.querySelector('[data-act="sec-down"]').disabled = i === all.length - 1;
+      secMenu.setAttribute('aria-label', 'Tuỳ chọn cho mục ' + secName(g));
+      placeMenu(secMenu, g.querySelector('.sec .more'));
+    },
+    'sec-rename': function () { closeMenus(); openSecDlg('rename', menuSec); },
+    'sec-up': function () { closeMenus(); var p = menuSec.previousElementSibling; if (p && p.classList.contains('usr')) { hbody.insertBefore(menuSec, p); replay(menuSec, 'nf'); } },
+    'sec-down': function () { closeMenus(); var n = menuSec.nextElementSibling; if (n && n.classList.contains('usr')) { hbody.insertBefore(n, menuSec); replay(menuSec, 'nf'); } },
+    'sec-delete': function (b) {
+      var g = b.getAttribute('data-sec') ? grpOf(b.getAttribute('data-sec')) : menuSec; closeMenus();
+      if (!g || !g.isConnected) return; deleteSec(g);
+    },
+    'sec-undo': function (b) {
+      var d = lastDeleted; if (!d) return; lastDeleted = null;
+      hbody.insertBefore(d.g, d.next && d.next.isConnected ? d.next : grpOf('dm'));
+      d.rows.forEach(function (rw) { moveRow(rw, d.g); });
+      var t = b.closest('.toast'); if (t) t.remove();
+    },
+    'sec-create': function (b) { if (!b.closest('#row-menu')) menuRow = null; closeMenus(); openSecDlg('create'); },
+    'sec-dlg-close': function () { closeSecDlg(); },
+    'sec-dlg-ok': function () {
+      var v = $('sec-name').value.trim(), err = $('sec-err');
+      if (!v) { err.textContent = 'Nhập tên mục'; $('sec-name').focus(); return; }
+      var clash = usrGroups().some(function (g) { return g !== (dlgMode === 'rename' ? menuSec : null) && secName(g).toLowerCase() === v.toLowerCase(); });
+      if (clash) { err.textContent = 'Bạn đã có mục tên này'; $('sec-name').focus(); return; }
+      closeSecDlg();
+      if (dlgMode === 'rename') {
+        menuSec.querySelector('.sec-t .nm').textContent = v;
+        menuSec.querySelector('.sec .more').setAttribute('aria-label', 'Tuỳ chọn cho mục ' + v);
+        secToast(OK + '<span>Đã đổi tên mục thành “' + esc(v) + '”</span>'); return;
+      }
+      var key = 'u' + (++secSeq), all = usrGroups(), after = all.length ? all[all.length - 1].nextElementSibling : hbody.querySelector('.grp');
+      hbody.insertBefore(frag(newGroupHTML(key, v)), after);
+      var g = grpOf(key); replay(g, 'nf');
+      if (menuRow) { moveRow(menuRow, g); secToast(OK + '<span>Đã tạo mục “' + esc(v) + '” và chuyển ' + esc(rowName(menuRow)) + ' vào</span>'); menuRow = null; }
+      else { recount(g); secToast(OK + '<span>Đã tạo mục “' + esc(v) + '”</span>'); }
+    },
+    'row-menu': function (b) { closeMenus(); openRowMenu(b.getAttribute('data-row')); },
+    'move-to': function (b) {
+      closeMenus(); var g = grpOf(b.getAttribute('data-sec')); if (!g || !menuRow || menuRow.closest('.grp') === g) return;
+      moveRow(menuRow, g); secToast(OK + '<span>Đã chuyển ' + esc(rowName(menuRow)) + ' vào “' + esc(secName(g)) + '”</span>');
+    },
+    'move-out': function () {
+      closeMenus(); if (!menuRow) return; var from = menuRow.closest('.grp');
+      moveRow(menuRow, grpOf(menuRow.getAttribute('data-home'))); secToast(OK + '<span>Đã bỏ ' + esc(rowName(menuRow)) + ' khỏi “' + esc(secName(from)) + '”</span>');
     },
     'newchat-menu': function () { var m = $('newchat-menu'); var open = m.hidden; closeMenus(); if (open) { m.hidden = false; replay(m, 'enter'); } },
     'th-follow-reply': function () { var r = followReplies[fi++ % followReplies.length]; reply('d', r[0], r[1]); },
@@ -1632,7 +1843,9 @@ html.reduce .sk { animation: none; }
       }
       return;
     }
+    if (e.key === 'Enter' && document.activeElement === $('sec-name')) { e.preventDefault(); actions['sec-dlg-ok'](); return; }
     if (e.key !== 'Escape') return;
+    if (!sdlg.hidden) { closeSecDlg(); return; }
     if (!ldlg.hidden) { closeLink(); return; }
     var anyMenu = Array.prototype.some.call(document.querySelectorAll('.menu'), function (m) { return !m.hidden; });
     if (anyMenu) { closeMenus(); return; }

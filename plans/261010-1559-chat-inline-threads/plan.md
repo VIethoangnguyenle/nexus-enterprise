@@ -14,6 +14,8 @@ created: 2026-10-10
 
 # Chat — in-line threading như Google Chat
 
+Cập nhật 2026-10-10: tin xếp hai bên (của bạn bên phải, bong bóng) và mục trong cột điều hướng (phase 10), theo yêu cầu người dùng.
+
 Nguồn: [brainstorm](../reports/brainstorm-261010-1559-chat-inline-threads.md) (đã chấp nhận). Nền: `main` @ 61616dc.
 Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 (UI Tín hiệu — plan này thay
 `TopicStream` của phase đó).
@@ -41,6 +43,7 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 | 07 | [Soạn tin định dạng HTML](phase-07-rich-text-messages.md) | 2 | P1 | 1.5d | 05 | pending |
 | 08 | [Vòng đời tin nhắn](phase-08-message-lifecycle.md) | 3 | P2 | 2d | 05, 07 | pending |
 | 09 | [Mức thông báo, Trang chủ theo thread](phase-09-notification-levels.md) | 4 | P3 | 1.5d | 08 | pending |
+| 10 | [Mục trong cột điều hướng](phase-10-navigator-sections.md) | 2 | P2 | 1.5d | 01, 05 | pending |
 
 ```text
 01 design (cả 4 đợt) ──► 02 data+API ──► 03 realtime ──► 04 UI ──► 05 verify   │ đợt 1 (merge riêng)
@@ -58,6 +61,7 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 | `chat-threads` (or `chat-rich-text`) | modify/new — HTML allowlist, plain-text copy, mentions as nodes | 07 |
 | `chat-message-lifecycle` | **new** — edit/delete/quote/mark unread | 08 |
 | `notifications` | modify — per-space notification level | 09 |
+| `chat-sections` | **new** — personal navigator sections | 10 |
 
 ## Ground rules (CLAUDE.md §5)
 - Thiết kế trước: DESIGN.md + `design/mockups/spaces.html` được duyệt rồi mới code UI.
