@@ -318,6 +318,15 @@ h1, h2, h3, h4 {
 @utility font-display { font-family: var(--font-display); }
 @utility tnum { font-variant-numeric: tabular-nums; }
 
+/* A long list paints only the rows near the viewport; 44px is the table row height (§6 Table). */
+@utility row-lazy {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 44px;
+}
+
+/* Tree row indent: 16px per level from the row's --depth, plus the 8px row padding (§6 Tree). */
+@utility tree-indent { padding-left: calc(0.5rem + var(--depth, 0) * 1rem); }
+
 /* Uppercase panel label: 12px / 600 / 0.06em, at most one per panel. */
 @utility text-label {
   font-size: 0.75rem;

@@ -1,30 +1,32 @@
-import type { ReactNode } from 'react'
-import { Modal } from './Modal'
-import { AlertBanner } from './AlertBanner'
+import { useRef, type ReactNode } from 'react'
 import { Button } from '../primitives'
+import { AlertBanner } from './AlertBanner'
+import { Dialog } from './Dialog'
 
 interface ConfirmDialogProps {
   /** Controls visibility — pass false or omit to hide. */
   open: boolean
-  /** Close handler (backdrop click, ESC, Cancel button). */
+  /** Close handler (backdrop click, Esc, cancel button). */
   onClose: () => void
   /** Confirm handler. */
   onConfirm: () => void
 
   /** Dialog title. */
   title: string
-  /** Description below the title — supports ReactNode for inline formatting. */
+  /** What is about to happen — supports ReactNode for inline formatting. */
   description: ReactNode
 
-  /** Optional warning/error banner below description. */
+  /** Optional warning banner below the description. */
   warning?: string
-  /** Icon rendered in a colored circle above the title. */
+  /** Icon rendered in a colored circle beside the description. */
   icon?: ReactNode
-  /** Background class for the icon circle (e.g. "bg-error-container"). */
+  /** Background class for the icon circle. */
   iconBg?: string
 
-  /** Confirm button label — default "Confirm". */
+  /** Confirm button label. */
   confirmLabel?: string
+  /** Cancel button label. */
+  cancelLabel?: string
   /** Confirm button variant — default "primary". */
   confirmVariant?: 'primary' | 'danger'
   /** Icon inside the confirm button. */
@@ -34,26 +36,11 @@ interface ConfirmDialogProps {
 }
 
 /**
- * Generic confirmation dialog — compose from Modal + AlertBanner + Button.
+ * The one confirmation dialog, built on `Dialog`: focus is trapped and
+ * returned, Esc closes, and it enters and leaves with the shared motion.
  *
- * Reuse for: delete file, leave workspace, revoke access, archive channel, etc.
- *
- * Usage:
- * ```tsx
- * <ConfirmDialog
- *   open={!!target}
- *   onClose={close}
- *   onConfirm={handleDelete}
- *   title="Delete File"
- *   description={<>Delete <strong>{name}</strong>?</>}
- *   warning="This action cannot be undone."
- *   icon={<Trash2 size={22} className="text-error" />}
- *   iconBg="bg-error-container"
- *   confirmLabel="Delete"
- *   confirmVariant="danger"
- *   loading={isDeleting}
- * />
- * ```
+ * A destructive confirm opens with focus on Cancel, so a stray Enter cannot
+ * delete anything.
  */
 export function ConfirmDialog({
   open,
@@ -63,61 +50,42 @@ export function ConfirmDialog({
   description,
   warning,
   icon,
-  iconBg = 'bg-primary-container',
-  confirmLabel = 'Confirm',
+  iconBg = 'bg-accent-wash',
+  confirmLabel = 'Xác nhận',
+  cancelLabel = 'Huỷ',
   confirmVariant = 'primary',
   confirmIcon,
   loading = false,
 }: ConfirmDialogProps) {
-  if (!open) return null
+  const cancelRef = useRef<HTMLButtonElement>(null)
 
   return (
-    <Modal onClose={onClose} size="sm">
-      <div
-        className="p-6 flex flex-col items-center text-center"
-        role="alertdialog"
-        aria-labelledby="confirm-dialog-title"
-        aria-describedby="confirm-dialog-desc"
-      >
-        {/* Icon circle */}
-        {icon && (
-          <div className={`w-12 h-12 rounded-full flex items-center justify-center mb-4 ${iconBg}`}>
-            {icon}
-          </div>
-        )}
-
-        {/* Title */}
-        <Modal.Title className="mb-2">
-          <span id="confirm-dialog-title">{title}</span>
-        </Modal.Title>
-
-        {/* Description */}
-        <p id="confirm-dialog-desc" className="text-body-md text-on-surface-variant mb-4 leading-relaxed">
-          {description}
-        </p>
-
-        {/* Warning banner */}
-        {warning && (
-          <div className="w-full mb-6">
-            <AlertBanner variant="error">{warning}</AlertBanner>
-          </div>
-        )}
-
-        {/* Actions */}
-        <Modal.Actions className="w-full mt-0">
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
-            Cancel
+    <Dialog
+      open={open}
+      onClose={onClose}
+      title={title}
+      initialFocusRef={confirmVariant === 'danger' ? cancelRef : undefined}
+      footer={
+        <>
+          <Button ref={cancelRef} variant="soft" onClick={onClose} disabled={loading}>
+            {cancelLabel}
           </Button>
-          <Button
-            variant={confirmVariant}
-            onClick={onConfirm}
-            loading={loading}
-          >
+          <Button variant={confirmVariant} onClick={onConfirm} loading={loading}>
             {confirmIcon}
             {confirmLabel}
           </Button>
-        </Modal.Actions>
+        </>
+      }
+    >
+      <div className="flex items-start gap-3">
+        {icon && (
+          <span className={`grid place-items-center w-10 h-10 rounded-full shrink-0 ${iconBg}`} aria-hidden="true">
+            {icon}
+          </span>
+        )}
+        <div className="text-sm text-ink-muted leading-relaxed">{description}</div>
       </div>
-    </Modal>
+      {warning && <AlertBanner variant="error">{warning}</AlertBanner>}
+    </Dialog>
   )
 }

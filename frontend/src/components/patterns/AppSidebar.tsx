@@ -76,6 +76,9 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
     setWsDropdownOpen(false)
     const url = new URL(window.location.href)
     url.searchParams.set('ws', wsId)
+    // A folder belongs to one workspace; the new one opens at its root.
+    url.searchParams.delete('folder')
+    url.searchParams.delete('view')
     window.location.href = url.toString()
   }
 

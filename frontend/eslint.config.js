@@ -104,8 +104,8 @@ export default defineConfig([
   },
   {
     // Nhóm B của spec §1.3 — màu là bản sắc nội dung, không phải màu giao diện.
-    // fileIcons.ts gán màu cho loại tệp; login.tsx chứa logo thương hiệu Google.
-    files: ['src/lib/fileIcons.ts', 'src/routes/_auth/login.tsx'],
+    // login.tsx chứa logo thương hiệu Google.
+    files: ['src/routes/_auth/login.tsx'],
     rules: {
       'no-restricted-syntax': [
         'error',

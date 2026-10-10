@@ -1,21 +1,43 @@
 import { apiFetch } from './client'
 
+/** A protobuf Timestamp as the REST layer serialises it, or an ISO string. `lib/format` reads both. */
+export type DriveTimestamp = string | { seconds: number | string; nanos?: number }
+
+/**
+ * A file or folder as the drive REST returns it. The server omits empty
+ * fields, so everything a folder or a root item lacks is optional.
+ */
 export interface DriveItem {
   id: string
   workspace_id: string
   drive_context: string
-  drive_context_id: string
-  parent_id: string
+  drive_context_id?: string
+  parent_id?: string
   item_type: 'file' | 'folder'
   name: string
-  mime_type: string
-  size_bytes: number
-  object_key: string
+  mime_type?: string
+  size_bytes?: number
+  object_key?: string
   ngac_node_id: string
+  /** A user id on files, an NGAC node id on folders. Never shown; see `owner_name`. */
   owner_id: string
+  /** Display name of the owner, when the owner is a person. */
+  owner_name?: string
   status: string
-  created_at: string
-  updated_at: string
+  created_at: DriveTimestamp
+  updated_at: DriveTimestamp
+}
+
+export interface DriveBreadcrumb {
+  id: string
+  name: string
+}
+
+/** A folder's contents. An empty folder comes back as `{}`. */
+export interface DriveListing {
+  items?: DriveItem[]
+  /** Path from the top of the tree to this folder; present for folder listings, not the root. */
+  breadcrumb?: DriveBreadcrumb[]
 }
 
 export interface DriveQuota {
@@ -33,9 +55,12 @@ export interface DriveShare {
   target_ngac_id: string
   target_label: string
   operations: string[]
-  created_by: string
-  created_at: string
+  created_by?: string
+  created_at: DriveTimestamp
 }
+
+/** How much a share lets the grantee do. Mapped to NGAC operations server-side. */
+export type SharePermission = 'read' | 'write'
 
 interface CreateFileResponse {
   file_id: string
@@ -50,10 +75,11 @@ interface DownloadURLResponse {
 export const driveApi = {
   // — Folders —
   listRoot: (wsId: string) =>
-    apiFetch<{ items: DriveItem[] }>(`/workspaces/${wsId}/drive`),
+    apiFetch<DriveListing>(`/workspaces/${wsId}/drive`),
 
-  listFolder: (folderId: string) =>
-    apiFetch<{ items: DriveItem[] }>(`/drive/folders/${folderId}`),
+  /** wsId lets the drive refuse a folder that belongs to another workspace. */
+  listFolder: (wsId: string, folderId: string) =>
+    apiFetch<DriveListing>(`/drive/folders/${folderId}?ws=${encodeURIComponent(wsId)}`),
 
   createFolder: (wsId: string, name: string, parentId?: string) =>
     apiFetch<DriveItem>(`/workspaces/${wsId}/drive/folders`, {
@@ -65,22 +91,24 @@ export const driveApi = {
   getItem: (itemId: string) =>
     apiFetch<DriveItem>(`/drive/items/${itemId}`),
 
-  moveItem: (itemId: string, newParentId: string) =>
+  // The REST handler binds `target_folder_id` and `name`. Other spellings are
+  // ignored without an error, and a rename then blanks the item's name.
+  moveItem: (itemId: string, targetFolderId: string) =>
     apiFetch<DriveItem>(`/drive/items/${itemId}/move`, {
       method: 'POST',
-      body: JSON.stringify({ new_parent_id: newParentId }),
+      body: JSON.stringify({ target_folder_id: targetFolderId }),
     }),
 
-  copyItem: (itemId: string, destParentId: string, destWorkspaceId?: string) =>
+  copyItem: (itemId: string, targetFolderId: string) =>
     apiFetch<DriveItem>(`/drive/items/${itemId}/copy`, {
       method: 'POST',
-      body: JSON.stringify({ dest_parent_id: destParentId, dest_workspace_id: destWorkspaceId }),
+      body: JSON.stringify({ target_folder_id: targetFolderId }),
     }),
 
-  renameItem: (itemId: string, newName: string) =>
+  renameItem: (itemId: string, name: string) =>
     apiFetch<DriveItem>(`/drive/items/${itemId}/rename`, {
       method: 'PUT',
-      body: JSON.stringify({ new_name: newName }),
+      body: JSON.stringify({ name }),
     }),
 
   trashItem: (itemId: string) =>
@@ -127,24 +155,24 @@ export const driveApi = {
     apiFetch<DownloadURLResponse>(`/drive/files/${fileId}/download`),
 
   // — Sharing —
-  createShare: (itemId: string, shareType: string, targetNgacId: string, operations: string[]) =>
+  createShare: (itemId: string, shareType: string, targetNodeId: string, permission: SharePermission) =>
     apiFetch<DriveShare>(`/drive/items/${itemId}/share`, {
       method: 'POST',
-      body: JSON.stringify({ share_type: shareType, target_ngac_id: targetNgacId, operations }),
+      body: JSON.stringify({ share_type: shareType, target_node_id: targetNodeId, permission }),
     }),
 
   revokeShare: (shareId: string) =>
     apiFetch(`/drive/shares/${shareId}`, { method: 'DELETE' }),
 
   listShares: (itemId: string) =>
-    apiFetch<{ shares: DriveShare[] }>(`/drive/items/${itemId}/shares`),
+    apiFetch<{ shares?: DriveShare[] }>(`/drive/items/${itemId}/shares`),
 
   sharedWithMe: () =>
-    apiFetch<{ items: DriveItem[] }>(`/drive/shared-with-me`),
+    apiFetch<DriveListing>(`/drive/shared-with-me`),
 
   /** List drive items for a channel (uses Drive service ListRoot with context filter). */
   channelDrive: (wsId: string, channelId: string) =>
-    apiFetch<{ items: DriveItem[] }>(`/workspaces/${wsId}/drive?drive_context=channel&drive_context_id=${channelId}`),
+    apiFetch<DriveListing>(`/workspaces/${wsId}/drive?drive_context=channel&drive_context_id=${channelId}`),
 
   // — Quota —
   getQuota: (wsId: string) =>

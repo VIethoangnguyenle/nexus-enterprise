@@ -62,6 +62,8 @@ export function Dialog({ open, onClose, title, children, footer, initialFocusRef
     if (!open) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Marks the key as taken, so a panel behind this dialog does not also close.
+        e.preventDefault()
         e.stopPropagation()
         onClose()
         return

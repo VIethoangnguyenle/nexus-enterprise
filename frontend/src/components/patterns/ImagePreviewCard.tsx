@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
-import { driveApi } from '../../api/drive'
+import { useState } from 'react'
+import { useDownloadUrl } from '../../hooks/useDownloadUrl'
+import { Pressable } from '../primitives'
 import { FilePreviewCard } from './FilePreviewCard'
-import { Spinner } from '../primitives'
 
 const IMAGE_EXTENSIONS = new Set([
   'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif',
@@ -18,63 +18,35 @@ interface ImagePreviewCardProps {
   filename: string
 }
 
-/** Inline image preview for chat messages — lazy-loads presigned URL, renders thumbnail. */
+/** Inline image preview for chat messages: loads the presigned URL, renders a thumbnail. */
 export function ImagePreviewCard({ fileId, filename }: ImagePreviewCardProps) {
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(false)
+  const url = useDownloadUrl(fileId)
+  const [broken, setBroken] = useState(false)
 
-  useEffect(() => {
-    let cancelled = false
-    setLoading(true)
-    setError(false)
-
-    driveApi.getDownloadUrl(fileId)
-      .then(({ download_url }) => {
-        if (!cancelled) setImageUrl(download_url)
-      })
-      .catch(() => {
-        if (!cancelled) setError(true)
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
-      })
-
-    return () => { cancelled = true }
-  }, [fileId])
-
-  // Fallback to regular file card on error
-  if (error) {
+  // Fall back to the plain file card when the image cannot be shown.
+  if (url.isError || broken) {
     return <FilePreviewCard fileId={fileId} filename={filename} />
   }
 
+  const open = () => url.data && window.open(url.data, '_blank', 'noopener')
+
   return (
-    <div
-      id={`image-card-${fileId}`}
-      className="inline-block mt-1 max-w-80 cursor-pointer group"
-      onClick={() => imageUrl && window.open(imageUrl, '_blank')}
-      role="button"
-      tabIndex={0}
-      onKeyDown={e => e.key === 'Enter' && imageUrl && window.open(imageUrl, '_blank')}
-    >
-      {loading ? (
-        <div className="w-50 h-30 rounded bg-surface-container border border-outline-variant
-          flex items-center justify-center animate-pulse">
-          <Spinner size="sm" />
-        </div>
+    <div className="inline-block mt-1 max-w-80 group">
+      {!url.data ? (
+        <div className="skeleton w-50 h-30 rounded-surface" aria-busy="true" />
       ) : (
-        <img
-          src={imageUrl!}
-          alt={filename}
-          className="rounded border border-outline-variant object-contain
-            max-w-80 max-h-60 bg-surface-container
-            transition-all duration-150
-            group-hover:border-primary/30 group-hover:ring-2 group-hover:ring-primary/15"
-          onError={() => setError(true)}
-          loading="lazy"
-        />
+        <Pressable onClick={open} aria-label={`Mở ảnh ${filename}`} className="block rounded-surface">
+          <img
+            src={url.data}
+            alt={filename}
+            className="rounded-surface object-contain max-w-80 max-h-60 bg-sunk
+              transition-opacity duration-quick group-hover:opacity-90"
+            onError={() => setBroken(true)}
+            loading="lazy"
+          />
+        </Pressable>
       )}
-      <p className="text-micro text-on-surface-variant mt-1 m-0 truncate">{filename}</p>
+      <p className="m-0 mt-1 text-xs text-ink-muted truncate">{filename}</p>
     </div>
   )
 }

@@ -7,9 +7,6 @@ type AppModule = 'messaging' | 'documents' | 'drive' | 'assets' | 'contacts' | '
 const LIST_PANEL_DEFAULT_WIDTH = 280
 
 interface UiState {
-  activeModal: string | null
-  openModal: (id: string) => void
-  closeModal: () => void
   activeModule: AppModule
   setActiveModule: (m: AppModule) => void
   listPanelOpen: boolean
@@ -18,10 +15,6 @@ interface UiState {
   listPanelWidth: number
   setListPanelWidth: (w: number) => void
   resetListPanelWidth: () => void
-  peekPanelOpen: boolean
-  peekPanelContent: { type: string; id: string } | null
-  openPeekPanel: (type: string, id: string) => void
-  closePeekPanel: () => void
   starredChannels: string[]
   toggleStarChannel: (channelId: string) => void
 }
@@ -29,9 +22,6 @@ interface UiState {
 export const useUiStore = create<UiState>()(
   persist(
     (set) => ({
-      activeModal: null,
-      openModal: (id) => set({ activeModal: id }),
-      closeModal: () => set({ activeModal: null }),
       activeModule: 'messaging',
       setActiveModule: (m) => set({ activeModule: m, listPanelOpen: true }),
       listPanelOpen: true,
@@ -40,10 +30,6 @@ export const useUiStore = create<UiState>()(
       listPanelWidth: LIST_PANEL_DEFAULT_WIDTH,
       setListPanelWidth: (w) => set({ listPanelWidth: w }),
       resetListPanelWidth: () => set({ listPanelWidth: LIST_PANEL_DEFAULT_WIDTH }),
-      peekPanelOpen: false,
-      peekPanelContent: null,
-      openPeekPanel: (type, id) => set({ peekPanelOpen: true, peekPanelContent: { type, id } }),
-      closePeekPanel: () => set({ peekPanelOpen: false, peekPanelContent: null }),
       starredChannels: [],
       toggleStarChannel: (channelId) => set((s) => ({
         starredChannels: s.starredChannels.includes(channelId)

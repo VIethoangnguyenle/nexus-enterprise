@@ -1,88 +1,37 @@
 import { create } from 'zustand'
 
-type ViewMode = 'list' | 'grid'
-type ContextTab = 'preview' | 'metadata' | 'permissions' | 'activity'
-
+/**
+ * Client-only state of Tài liệu. Where the user is (the open folder, the
+ * workspace, the shared view) lives in the URL, not here: that is what makes
+ * reload, Back and a pasted link land in the same place.
+ */
 interface DriveState {
-  // --- Selection ---
+  /** The item shown in the detail panel; null closes the panel. */
   selectedItemId: string | null
-  selectedItemIds: Set<string>
   selectItem: (id: string | null) => void
-  toggleSelectItem: (id: string) => void
-  clearSelection: () => void
 
-  // --- View ---
-  viewMode: ViewMode
-  setViewMode: (mode: ViewMode) => void
-
-  // --- Context Panel ---
-  contextPanelOpen: boolean
-  contextPanelTab: ContextTab
-  openContextPanel: (tab?: ContextTab) => void
-  closeContextPanel: () => void
-  setContextPanelTab: (tab: ContextTab) => void
-
-  // --- Folder Tree ---
-  expandedFolders: Set<string>
-  activePath: string[]
-  currentFolderId: string | null
+  /** Folders opened in the tree. Survives leaving Tài liệu and coming back. */
+  expandedFolders: ReadonlySet<string>
   toggleFolder: (folderId: string) => void
-  setActivePath: (path: string[]) => void
-  navigateToFolder: (folderId: string | null) => void
+  /** Open several at once, e.g. every ancestor of the folder the URL names. */
+  expandFolders: (folderIds: string[]) => void
 }
 
-export const useDriveStore = create<DriveState>()((set, get) => ({
-  // Selection
+export const useDriveStore = create<DriveState>()((set) => ({
   selectedItemId: null,
-  selectedItemIds: new Set(),
-  selectItem: (id) => {
-    set({
-      selectedItemId: id,
-      selectedItemIds: id ? new Set([id]) : new Set(),
-      contextPanelOpen: !!id,
-      contextPanelTab: id ? get().contextPanelTab : 'preview',
-    })
-  },
-  toggleSelectItem: (id) => {
-    const selected = new Set(get().selectedItemIds)
-    if (selected.has(id)) {
-      selected.delete(id)
-    } else {
-      selected.add(id)
-    }
-    set({
-      selectedItemIds: selected,
-      selectedItemId: selected.size === 1 ? [...selected][0] : null,
-    })
-  },
-  clearSelection: () => {
-    set({ selectedItemId: null, selectedItemIds: new Set(), contextPanelOpen: false })
-  },
+  selectItem: (id) => set({ selectedItemId: id }),
 
-  // View
-  viewMode: 'list',
-  setViewMode: (mode) => set({ viewMode: mode }),
-
-  // Context Panel
-  contextPanelOpen: false,
-  contextPanelTab: 'preview',
-  openContextPanel: (tab) => set({ contextPanelOpen: true, contextPanelTab: tab ?? 'preview' }),
-  closeContextPanel: () => set({ contextPanelOpen: false }),
-  setContextPanelTab: (tab) => set({ contextPanelTab: tab }),
-
-  // Folder Tree
-  expandedFolders: new Set(),
-  activePath: [],
-  currentFolderId: null,
-  toggleFolder: (folderId) => {
-    const expanded = new Set(get().expandedFolders)
-    if (expanded.has(folderId)) {
-      expanded.delete(folderId)
-    } else {
-      expanded.add(folderId)
-    }
-    set({ expandedFolders: expanded })
-  },
-  setActivePath: (path) => set({ activePath: path }),
-  navigateToFolder: (folderId) => set({ currentFolderId: folderId, selectedItemId: null, selectedItemIds: new Set(), contextPanelOpen: false }),
+  expandedFolders: new Set<string>(),
+  toggleFolder: (folderId) =>
+    set((s) => {
+      const next = new Set(s.expandedFolders)
+      if (next.has(folderId)) next.delete(folderId)
+      else next.add(folderId)
+      return { expandedFolders: next }
+    }),
+  expandFolders: (folderIds) =>
+    set((s) => {
+      if (folderIds.every((id) => s.expandedFolders.has(id))) return s
+      return { expandedFolders: new Set([...s.expandedFolders, ...folderIds]) }
+    }),
 }))

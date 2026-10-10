@@ -109,8 +109,9 @@ export function SpaceView({ channelId }: { channelId: string }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !e.defaultPrevented) setPanel(null)
     }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
+    // On `window`, so it runs after the dialogs' and menus' `document` handlers.
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
   }, [panel])
 
   const handleSend = useCallback(

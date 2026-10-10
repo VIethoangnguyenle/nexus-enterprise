@@ -111,6 +111,28 @@ export function presets(reduced: boolean): MotionPresets {
   }
 }
 
+/** Gap between consecutive rows of a list that has just appeared. */
+export const STAGGER_STEP = 0.03
+/** Rows past this one enter together, so a long list never keeps its tail waiting. */
+export const STAGGER_ROWS = 8
+
+/**
+ * Entrance delay (seconds) for row `index` of a list that has just appeared:
+ * 30ms apart over the first eight rows. None under reduced motion.
+ */
+export function staggerDelay(index: number, reduced: boolean): number {
+  if (reduced) return 0
+  return Math.min(Math.max(index, 0), STAGGER_ROWS) * STAGGER_STEP
+}
+
+/** The same preset with its entrance delayed. Exits are left alone. */
+export function withDelay(preset: Preset, delay: number): Preset {
+  if (delay <= 0) return preset
+  const base = preset.animate.transition
+  const transition = { ...(base as object), delay } as Transition
+  return { ...preset, animate: { ...preset.animate, transition } }
+}
+
 /** Presets for the current user's motion preference. */
 export function useMotionPresets(): MotionPresets {
   return presets(!!useReducedMotion())

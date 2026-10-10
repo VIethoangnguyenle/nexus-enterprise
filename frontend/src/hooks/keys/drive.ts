@@ -16,4 +16,6 @@ export const driveKeys = {
   item: (itemId: string) => ['drive', 'item', itemId] as const,
   sharedWithMe: () => ['drive', 'shared-with-me'] as const,
   shares: (itemId: string) => ['drive', 'shares', itemId] as const,
+  /** Presigned download URL of a file; short-lived, so cached for minutes, not the session. */
+  downloadUrl: (fileId: string) => ['drive', 'download-url', fileId] as const,
 }

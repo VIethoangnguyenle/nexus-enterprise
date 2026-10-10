@@ -1,11 +1,11 @@
 import { useMemo, useRef, type KeyboardEvent } from 'react'
 import { FolderOpen, CircleAlert } from 'lucide-react'
 import { useChannelDrive, useDriveFolder } from '../../hooks/useDrive'
-import { driveApi, type DriveItem } from '../../api/drive'
+import { useDownloadFile } from '../../hooks/useDownloadUrl'
 import { fileKind } from '../../lib/file-kind'
 import { formatBytes, formatDateTime, formatRelative, toMillis } from '../../lib/format'
 import { displayName, type PeopleDirectory } from '../../lib/people'
-import { Button, PersonChip, Pressable, toast } from '../primitives'
+import { Button, PersonChip, Pressable } from '../primitives'
 import { EmptyState } from './EmptyState'
 
 interface SpaceFilesProps {
@@ -37,17 +37,7 @@ export function SpaceFiles({ workspaceId, channelId, people, onGoToChat }: Space
 
   const loading = root.isLoading || (!!folder && inner.isLoading)
 
-  const download = async (item: DriveItem) => {
-    try {
-      const { download_url } = await driveApi.getDownloadUrl(item.id)
-      const a = document.createElement('a')
-      a.href = download_url
-      a.download = item.name
-      a.click()
-    } catch {
-      toast.error(`Chưa tải được “${item.name}”. Thử lại sau ít phút.`)
-    }
-  }
+  const { download } = useDownloadFile()
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return

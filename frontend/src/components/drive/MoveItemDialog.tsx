@@ -1,74 +1,107 @@
-import { useState, useCallback } from 'react'
-import { ArrowRight } from 'lucide-react'
+import { useState } from 'react'
 import type { DriveItem } from '../../api/drive'
-import { FolderTreeSelect } from './FolderTreeSelect'
-import { Modal } from '../composites'
 import { Button } from '../primitives'
+import { Dialog } from '../composites/Dialog'
+import { TreeView, type TreeNode } from '../composites/TreeView'
+import { useFolderNodes } from './DriveTree'
 
 interface MoveItemDialogProps {
-  /** The item to move — null hides the dialog. */
+  /** The item to move; null keeps the dialog closed. */
   item: DriveItem | null
-  /** Workspace ID for folder tree loading. */
   workspaceId: string
-  /** Whether the move mutation is in progress. */
-  isMoving: boolean
-  /** Called when the user confirms the move. */
-  onConfirm: (item: DriveItem, destinationFolderId: string) => void
-  /** Called when the user cancels or dismisses the dialog. */
+  pending: boolean
+  onConfirm: (item: DriveItem, targetFolderId: string) => void
   onClose: () => void
 }
 
 /**
- * Drive-specific move dialog — composes Modal + FolderTreeSelect.
- *
- * Design source: Nexus Drive - Move File/Folder (99dc16ab)
+ * "Di chuyển tới": pick a folder in the shared tree. A folder cannot be
+ * moved into itself, and the folder an item already sits in is not offered.
  */
-export function MoveItemDialog({ item, workspaceId, isMoving, onConfirm, onClose }: MoveItemDialogProps) {
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+export function MoveItemDialog({ item, workspaceId, pending, onConfirm, onClose }: MoveItemDialogProps) {
+  const [target, setTarget] = useState<string | null>(null)
+  const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
 
-  const handleConfirm = useCallback(() => {
-    if (item && selectedFolderId) onConfirm(item, selectedFolderId)
-  }, [item, selectedFolderId, onConfirm])
+  // Each item starts clean: a pick made for one item must not carry over to the
+  // next, or "Di chuyển" could send a folder into itself. Adjusting state while
+  // rendering (rather than in an effect) means no render ever sees the stale pick.
+  const [forId, setForId] = useState(item?.id)
+  if (forId !== item?.id) {
+    setForId(item?.id)
+    setTarget(null)
+    setOpen(new Set())
+  }
 
-  if (!item) return null
+  // The moved item is left out at every level, which also hides everything
+  // inside it: a folder cannot be moved into itself or its own subfolders.
+  const without = (nodes: TreeNode[] | undefined) => nodes?.filter((n) => n.id !== item?.id)
+  const top = useFolderNodes(workspaceId)
+  const useChildren = (parentId: string) => {
+    const r = useFolderNodes(workspaceId, parentId)
+    return { ...r, nodes: without(r.nodes) }
+  }
+  const roots = without(top.nodes) ?? []
+
+  const toggle = (id: string) =>
+    setOpen((o) => {
+      const next = new Set(o)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+
+  const close = () => {
+    if (pending) return
+    onClose()
+  }
+
+  // The tree hides the item and everything under it, so the pick can only be
+  // one of those through stale state; refuse it anyway, and a no-op move.
+  const canMove = !!item && !!target && target !== item.id && target !== item.parent_id
 
   return (
-    <Modal onClose={onClose} size="lg">
-      <Modal.Header onClose={onClose}>Move to…</Modal.Header>
-
-      {/* Info bar — shows what's being moved */}
-      <div className="px-6 py-3 bg-surface-container-low border-b border-outline-variant">
-        <p className="text-sm text-on-surface-variant">
-          Moving <span className="font-semibold text-on-surface">{item.name}</span>
-        </p>
-      </div>
-
-      {/* Tree body — scrollable */}
-      <div className="flex-1 overflow-y-auto px-3 py-3">
-        <FolderTreeSelect
-          workspaceId={workspaceId}
-          selectedId={selectedFolderId}
-          onSelect={setSelectedFolderId}
-        />
-      </div>
-
-      {/* Footer actions */}
-      <div className="border-t border-outline-variant px-6 py-4">
-        <Modal.Actions className="mt-0">
-          <Button variant="secondary" onClick={onClose} disabled={isMoving}>
-            Cancel
-          </Button>
+    <Dialog
+      open={!!item}
+      onClose={close}
+      title="Di chuyển tới"
+      footer={
+        <>
+          <Button type="button" variant="soft" onClick={close} disabled={pending}>Huỷ</Button>
           <Button
-            variant="primary"
-            onClick={handleConfirm}
-            disabled={!selectedFolderId}
-            loading={isMoving}
+            type="button"
+            loading={pending}
+            disabled={!canMove}
+            onClick={() => canMove && onConfirm(item, target)}
           >
-            <ArrowRight size={16} />
-            Move Here
+            Di chuyển vào đây
           </Button>
-        </Modal.Actions>
+        </>
+      }
+    >
+      <p className="m-0 text-sm text-ink-muted">
+        Chọn thư mục để chuyển <b className="font-semibold text-ink">{item?.name}</b> tới.
+      </p>
+      <div className="max-h-80 overflow-y-auto -mx-1.5 px-1.5">
+        {top.isLoading ? (
+          <div className="grid gap-1.5" aria-busy="true">
+            {[0, 1, 2].map((i) => <div key={i} className="skeleton h-7 rounded-md" />)}
+          </div>
+        ) : top.isError ? (
+          <p className="m-0 text-small text-danger">Không tải được danh sách thư mục.</p>
+        ) : roots.length === 0 ? (
+          <p className="m-0 text-small text-ink-muted">Chưa có thư mục nào để chuyển tới.</p>
+        ) : (
+          <TreeView
+            label="Chọn thư mục"
+            roots={roots}
+            useChildren={useChildren}
+            expanded={open}
+            onToggle={toggle}
+            selectedId={target}
+            onSelect={setTarget}
+          />
+        )}
       </div>
-    </Modal>
+    </Dialog>
   )
 }

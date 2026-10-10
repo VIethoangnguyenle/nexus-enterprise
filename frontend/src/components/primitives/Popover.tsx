@@ -75,6 +75,7 @@ export function Popover({
     }
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== 'Escape') return
+      e.preventDefault()
       e.stopPropagation()
       onClose()
       anchorRef.current?.focus()

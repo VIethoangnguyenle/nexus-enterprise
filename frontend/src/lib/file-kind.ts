@@ -3,8 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 
 /**
  * What a file is, in words, with an icon and a tile tone from the semantic
- * tokens. Chat and the space's Tệp tab speak this; the drive keeps its own
- * per-extension colours (lib/fileIcons.ts).
+ * tokens. Chat, the space's Tệp tab and Tài liệu all speak this.
  */
 export interface FileKind {
   label: string

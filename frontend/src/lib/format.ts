@@ -90,8 +90,8 @@ const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 })
 const integer = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 })
 
 /** `412 KB`, `1,5 MB`. Binary units, Vietnamese decimal comma. */
-export function formatBytes(bytes: number): string {
-  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
+export function formatBytes(bytes: number | undefined): string {
+  if (bytes === undefined || !Number.isFinite(bytes) || bytes <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']
   let i = 0
   let v = bytes
