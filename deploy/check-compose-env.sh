@@ -44,6 +44,15 @@ edge_ip=$(jq -r '.services["nexus-frontend"].networks.nexus.ipv4_address' <<<"$c
 [[ $(jq -r '.services.auth.environment.AUTH_TRUSTED_PROXIES' <<<"$cfg") == "$edge_ip/32" ]] ||
   bad "auth: AUTH_TRUSTED_PROXIES must be exactly the edge address $edge_ip/32"
 
+# One SMTP account and one app URL serve both the auth service (sign-in codes) and the workspace
+# service (invitation emails): they must be wired identically. workspace's SMTP_* are read in
+# cmd/invite_mail.go, which the per-service scan below (main.go only) does not see.
+for var in APP_BASE_URL SMTP_HOST SMTP_PORT SMTP_USERNAME SMTP_PASSWORD SMTP_FROM SMTP_TLS; do
+  a=$(jq -r --arg v "$var" '.services.auth.environment[$v] // "unset"' <<<"$cfg")
+  w=$(jq -r --arg v "$var" '.services.workspace.environment[$v] // "unset"' <<<"$cfg")
+  [[ $w != unset && $w == "$a" ]] || bad "workspace: $var must be set to the same value as in auth (auth='$a' workspace='$w')"
+done
+
 # --- environment each service needs ---------------------------------------------------------
 names=$(jq -r '.services | keys[]' <<<"$cfg")
 for svc in "${!MAIN[@]}"; do
@@ -53,6 +62,7 @@ for svc in "${!MAIN[@]}"; do
   needed=$(grep -ohE '(bootstrap\.Env|bootstrap\.EnvAlias|os\.Getenv|os\.LookupEnv)\("[A-Z][A-Z0-9_]*"' "$main" | grep -oE '"[A-Z0-9_]+"' | tr -d '"' || true)
   grep -q 'bootstrap\.PolicyAddr()' "$main" && needed+=$'\nPOLICY_SERVICE_ADDR'
   grep -q 'RequireJWTSecret' "$main" && needed+=$'\nJWT_SECRET'
+  grep -q 'ConfigureInternalIdentity' "$main" && needed+=$'\nINTERNAL_IDENTITY_SECRET'
   grep -q 'realtime\.' "$main" && needed+=$'\nKAFKA_BROKERS'
   for var in $(sort -u <<<"$needed"); do
     [[ $OPTIONAL == *" $var "* || $OPTIONAL == *" $svc:$var "* ]] && continue

@@ -16,7 +16,14 @@ import (
 
 func serveAuth(t *testing.T) pb.AuthServiceClient {
 	t.Helper()
-	conn := testutil.ServeGRPC(t, agrpc.AuthPolicy(), func(s *grpc.Server) {
+	return serveAuthAs(t, "messaging")
+}
+
+// serveAuthAs dials as service. "messaging" is the only service the auth
+// policy accepts without a user.
+func serveAuthAs(t *testing.T, service string) pb.AuthServiceClient {
+	t.Helper()
+	conn := testutil.ServeGRPCAs(t, service, agrpc.AuthPolicy(), func(s *grpc.Server) {
 		pb.RegisterAuthServiceServer(s, agrpc.NewAuthServer(nil, nil))
 	})
 	return pb.NewAuthServiceClient(conn)
@@ -53,7 +60,7 @@ func TestNoPasswordOrListingRPCsExist(t *testing.T) {
 }
 
 func TestIsTokenRevokedAcceptsAServiceIdentity(t *testing.T) {
-	c := serveAuth(t) // test client dials with the "test" service identity
+	c := serveAuth(t) // dials as the messaging service
 
 	resp, err := c.IsTokenRevoked(context.Background(), &pb.IsTokenRevokedRequest{Jti: "j"})
 	if err != nil {
@@ -73,5 +80,20 @@ func TestPolicyKeepsRevokeTokenBehindACaller(t *testing.T) {
 	ctx := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: "u", NGACNodeID: "n"})
 	if _, err := c.RevokeToken(ctx, &pb.RevokeTokenRequest{Jti: "j"}); status.Code(err) == codes.Unauthenticated {
 		t.Fatalf("RevokeToken with a caller was refused: %v", err)
+	}
+}
+
+func TestIsTokenRevokedRefusesOtherServicesAndForgedIdentity(t *testing.T) {
+	req := &pb.IsTokenRevokedRequest{Jti: "j"}
+	if _, err := serveAuthAs(t, "drive").IsTokenRevoked(context.Background(), req); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("from drive: want Unauthenticated, got %v", err)
+	}
+
+	conn := testutil.ServeGRPC(t, agrpc.AuthPolicy(), func(s *grpc.Server) {
+		pb.RegisterAuthServiceServer(s, agrpc.NewAuthServer(nil, nil))
+	})
+	forged := testutil.ForgedIdentity(context.Background())
+	if _, err := pb.NewAuthServiceClient(testutil.Unsigned(t, conn)).IsTokenRevoked(forged, req); status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("forged identity: want Unauthenticated, got %v", err)
 	}
 }

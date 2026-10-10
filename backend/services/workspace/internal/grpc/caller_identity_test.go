@@ -95,3 +95,14 @@ func TestOverTheWire_MetadataCallerDecides_Allow(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Editor", role.Name)
 }
+
+// Metadata an attacker can invent without the signing secret is not an
+// identity, whatever user it names.
+func TestOverTheWire_ForgedIdentityIsUnauthenticated(t *testing.T) {
+	srv, _, _ := setupTestServer(t)
+	conn := testutil.ServeGRPC(t, grpcauth.ServerPolicy{}, func(s *grpc.Server) { pb.RegisterWorkspaceServiceServer(s, srv) })
+	c := pb.NewWorkspaceServiceClient(testutil.Unsigned(t, conn))
+
+	_, err := c.ListWorkspaces(testutil.ForgedIdentity(context.Background()), &pb.ListWorkspacesRequest{})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}

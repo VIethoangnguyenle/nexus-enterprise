@@ -145,7 +145,12 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
 13. **Xác thực service-to-service (sau 02b):** metadata caller chưa ký — chỉ chặn client nội bộ quên
     danh tính, không chặn kẻ đã vào mạng nội bộ (gọi thẳng policy `CreateAssignment`). Đề xuất phase
     riêng: token nội bộ ngắn hạn do biên REST ký thay cho `x-caller-*`, hoặc mTLS; trong lúc chờ,
-    `make dev` nên bind gRPC vào `127.0.0.1`. Chưa lên lịch — cần người dùng quyết.
+    `make dev` nên bind gRPC vào `127.0.0.1`.
+    **ĐÃ LÀM (2026-10-10):** token HMAC-SHA256 ký theo từng lời gọi (audience = method, ~60 s) trong
+    `x-nexus-identity`, secret `INTERNAL_IDENTITY_SECRET` — xem
+    `plans/261010-2205-first-release/reports/signed-identity-report.md` và
+    `docs/specs/resource-pep-coverage/spec.md`. Ký ở client interceptor của từng service (không phải
+    biên REST); lộ secret vẫn là rủi ro còn lại.
 14. **Quyền chia sẻ của thành viên:** **Đã chốt 2026-10-10** chia sẻ drive kiểm tra `share` (không còn
     `write`); thành viên được cấp `share` trên Documents và drive của channel (migration backfill).
     Người nhận share "Có thể sửa" không được chia sẻ tiếp.

@@ -168,3 +168,70 @@ func lowerASCII(s string) string {
 	}
 	return string(b)
 }
+
+func TestInvitationStore_EmailClaim(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	st := store.New(pool)
+	ownerID, _ := testutil.CreateUser(t, pool)
+	ws, _ := testutil.CreateWorkspace(t, pool, ownerID)
+	now := time.Now().UTC().Truncate(time.Second)
+	gap := 10 * time.Minute
+	addr := "mail." + uuid.NewString()[:8] + "@example.vn"
+	inv := &store.Invitation{WorkspaceID: ws, Email: addr, InvitedBy: "node-inviter", ExpiresAt: now.Add(7 * 24 * time.Hour)}
+
+	require.NoError(t, st.UpsertInvitation(ctx, inv))
+	require.NotEmpty(t, inv.ID, "upsert reports the invitation's ID")
+	again := &store.Invitation{WorkspaceID: ws, Email: addr, InvitedBy: "node-inviter", ExpiresAt: inv.ExpiresAt}
+	require.NoError(t, st.UpsertInvitation(ctx, again))
+	assert.Equal(t, inv.ID, again.ID, "inviting again reports the same open invitation")
+
+	claim := func(at time.Time) bool {
+		ok, err := st.ClaimInvitationEmail(ctx, inv.ID, at, at.Add(-gap))
+		require.NoError(t, err)
+		return ok
+	}
+	assert.True(t, claim(now), "never emailed: may send")
+	assert.False(t, claim(now.Add(time.Minute)), "emailed a minute ago: must not")
+
+	// A refresh keeps the mark, so re-inviting inside the window sends nothing.
+	require.NoError(t, st.UpsertInvitation(ctx, again))
+	assert.False(t, claim(now.Add(2*time.Minute)))
+
+	assert.True(t, claim(now.Add(11*time.Minute)), "past the window: may send again")
+
+	require.NoError(t, st.ReleaseInvitationEmail(ctx, inv.ID))
+	assert.True(t, claim(now.Add(12*time.Minute)), "a released slot may be claimed at once")
+
+	t.Run("two claims at once send once", func(t *testing.T) {
+		require.NoError(t, st.ReleaseInvitationEmail(ctx, inv.ID))
+		at := now.Add(time.Hour)
+		results := make(chan bool, 8)
+		for i := 0; i < 8; i++ {
+			go func() {
+				ok, err := st.ClaimInvitationEmail(ctx, inv.ID, at, at.Add(-gap))
+				results <- err == nil && ok
+			}()
+		}
+		won := 0
+		for i := 0; i < 8; i++ {
+			if <-results {
+				won++
+			}
+		}
+		assert.Equal(t, 1, won)
+	})
+
+	t.Run("an answered or expired invitation is not claimed", func(t *testing.T) {
+		ok, err := st.ClaimInvitationEmail(ctx, inv.ID, inv.ExpiresAt.Add(time.Minute), inv.ExpiresAt.Add(-time.Hour))
+		require.NoError(t, err)
+		assert.False(t, ok, "expired")
+
+		ok, err = st.RevokeInvitation(ctx, ws, inv.ID, now)
+		require.NoError(t, err)
+		require.True(t, ok)
+		claimed, err := st.ClaimInvitationEmail(ctx, inv.ID, now.Add(48*time.Hour), now.Add(40*time.Hour))
+		require.NoError(t, err)
+		assert.False(t, claimed, "revoked")
+	})
+}

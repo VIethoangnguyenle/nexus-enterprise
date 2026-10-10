@@ -124,6 +124,35 @@ other `/api/...` returns a JSON 404.
    `nexus-*` package -> Package settings -> Manage Actions access and give this repository read
    access (the images carry the `org.opencontainers.image.source` label that normally links them).
 
+### Adding `INTERNAL_IDENTITY_SECRET` to a server bootstrapped earlier
+
+Services sign the identity they send each other over gRPC with `INTERNAL_IDENTITY_SECRET`
+(see `docs/specs/resource-pep-coverage/spec.md`). `docker-compose.prod.yml` requires it, so a
+deploy to a server whose `/opt/nexus/.env` lacks it stops at `docker compose` before any
+container is touched. Add it once, **before** the first deploy that contains this change, by
+re-running the bootstrap, which appends missing keys only and never rewrites an existing one:
+
+```bash
+scp deploy/server-bootstrap.sh root@160.187.146.173:/root/
+ssh root@160.187.146.173 'bash /root/server-bootstrap.sh'
+ssh root@160.187.146.173 "grep -c '^INTERNAL_IDENTITY_SECRET=.' /opt/nexus/.env"   # prints 1
+```
+
+The bootstrap output lists `added keys: INTERNAL_IDENTITY_SECRET` and never prints the value.
+
+To rotate it, three deploys, because a deploy replaces containers one at a time and a recreated
+container that signs with a secret its not-yet-restarted peers cannot verify is refused. Let OLD
+be the value now in `/opt/nexus/.env` and NEW a fresh `openssl rand -hex 48`:
+
+1. `INTERNAL_IDENTITY_SECRET=OLD`, `INTERNAL_IDENTITY_SECRET_PREVIOUS=NEW`, deploy (everything signs
+   OLD and accepts both).
+2. `INTERNAL_IDENTITY_SECRET=NEW`, `INTERNAL_IDENTITY_SECRET_PREVIOUS=OLD`, deploy (everything signs
+   NEW and still accepts OLD).
+3. Delete `INTERNAL_IDENTITY_SECRET_PREVIOUS`, deploy.
+
+After a suspected leak do not keep the leaked value as `_PREVIOUS`: set only the new secret in one
+deploy and accept a short burst of `Unauthenticated` while containers are replaced.
+
 ## Deploying
 
 Merge to `main`. When CI is green, `Deploy` builds the images, then pauses at `production`;
@@ -253,6 +282,11 @@ The auth service sends one-time sign-in codes by email through SMTP (Go standard
 extra dependency). When `SMTP_HOST` is set, `/api/auth/providers` reports `otp_proves_email: true`
 and a code typed correctly also marks the address verified. The fixed test code stays off.
 
+The same `SMTP_*` values and `APP_BASE_URL` also serve the workspace service, which emails an
+invitation to the invited address ("<inviter> mời bạn vào <workspace> trên Nexus", with a link to
+`APP_BASE_URL`). There is nothing else to configure: one Gmail account sends both. Without
+`SMTP_HOST`, invitations are still recorded and nothing is emailed.
+
 1. Turn on **2-Step Verification** for the Gmail account.
 2. Create an **App Password** at https://myaccount.google.com/apppasswords (any name, e.g.
    "Nexus"). Google shows 16 characters, in groups of four; remove the spaces.
@@ -273,13 +307,21 @@ and a code typed correctly also marks the address verified. The fixed test code 
    From address.
 5. Put the values **only** in `/opt/nexus/.env` on the server (mode 600). Never in the repository,
    in `deploy/env.example`, or in GitHub secrets. A literal `$` in the password must be written
-   `$$`. Then apply with `docker compose up -d auth` from the current release directory (see
+   `$$`. Then apply with `docker compose up -d auth workspace` from the current release directory (see
 [Working on the server](#working-on-the-server)).
 
 If `SMTP_HOST` is set but the rest is incomplete, the auth service refuses to start and says
 which part is wrong (never echoing the password). A failed send returns a generic 500 to the
 caller, with the cause only in the auth log, and leaves no usable session; the response does not
 depend on whether the address has an account. The code itself is never logged.
+
+The workspace service refuses to start on the same half-configured `SMTP_*`, and on an
+`APP_BASE_URL` that is not an absolute http(s) URL. An invitation email is sent in the
+background after the invitation is stored: the invite request answers 202 at the same speed
+whether or not the mail goes out, and a failure is only a warning in the workspace log, with the
+address masked and the body never logged. Inviting the same pending address again within 10
+minutes of the last email sends nothing new (the `last_emailed_at` column of
+`workspace_invitations`, migration 036).
 
 ## Presigned file URLs
 

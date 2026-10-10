@@ -3,7 +3,7 @@ services:
   # Edge Proxy
   # ============================================
   traefik:
-    image: traefik:v3.2
+    image: traefik:v3.6  # v3.2 cannot negotiate with Docker Engine API >= 1.44
     profiles: [app]
     command:
       - --api.dashboard=true
@@ -116,6 +116,7 @@ services:
       context: ./backend
       dockerfile: services/policy/Dockerfile
     environment:
+      APP_ENV: dev
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
@@ -139,6 +140,7 @@ services:
       context: ./backend
       dockerfile: services/policy/Dockerfile.read
     environment:
+      APP_ENV: dev
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       REDIS_URL: redis://redis:6379/0
       KAFKA_BROKERS: redpanda:9092
@@ -216,6 +218,7 @@ services:
       context: ./backend
       dockerfile: services/workspace/Dockerfile
     environment:
+      APP_ENV: dev
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
       MINIO_ENDPOINT: minio:9000
@@ -253,6 +256,7 @@ services:
       context: ./backend
       dockerfile: services/document/Dockerfile
     environment:
+      APP_ENV: dev
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       MINIO_ENDPOINT: minio:9000
       MINIO_ACCESS_KEY: ngac-admin
@@ -287,6 +291,7 @@ services:
       context: ./backend
       dockerfile: services/messaging/Dockerfile
     environment:
+      APP_ENV: dev
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
       AUTH_SERVICE_ADDR: auth:50052
@@ -312,8 +317,7 @@ services:
       - "traefik.http.routers.ws.entrypoints=web"
       - "traefik.http.routers.ws.priority=200"
       - "traefik.http.routers.ws.service=ws"
-      - "traefik.http.middlewares.ws-strip.stripprefix.prefixes=/api"
-      - "traefik.http.routers.ws.middlewares=ws-strip@docker"
+      # No strip-prefix: the hub serves /api/ws itself, as it does behind nginx in production.
       - "traefik.http.services.ws.loadbalancer.server.port=8081"
       # REST router — channels, messages, DMs, threads, notifications
       - "traefik.http.routers.messaging.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/channels`) || PathPrefix(`/api/messages`) || PathPrefix(`/api/dms`) || PathPrefix(`/api/threads`) || PathPrefix(`/api/notifications`) || PathPrefix(`/api/polls`) || PathPrefix(`/api/tasks`) || PathRegexp(`/api/workspaces/[^/]+/channels`))"
@@ -334,6 +338,7 @@ services:
       context: ./backend
       dockerfile: services/asset/Dockerfile
     environment:
+      APP_ENV: dev
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
       REDIS_URL: redis://redis:6379/3
@@ -367,6 +372,7 @@ services:
       context: ./backend
       dockerfile: services/drive/Dockerfile
     environment:
+      APP_ENV: dev
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
       POLICY_READ_SERVICE_ADDR: policy-read:50061
@@ -403,6 +409,7 @@ services:
       context: ./backend
       dockerfile: services/approval/Dockerfile
     environment:
+      APP_ENV: dev
       DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
       POLICY_SERVICE_ADDR: policy:50051
       POLICY_READ_SERVICE_ADDR: policy-read:50061

@@ -37,3 +37,17 @@ func TestStorageRefusesRequestsWithoutACaller(t *testing.T) {
 		t.Fatalf("with caller: code = %v, want Unimplemented (admitted)", status.Code(err))
 	}
 }
+
+// Metadata an attacker can invent without the signing secret is not an
+// identity, whatever user it names.
+func TestStorageRefusesForgedIdentity(t *testing.T) {
+	conn := testutil.ServeGRPC(t, grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()}, func(s *grpc.Server) {
+		pb.RegisterDocumentStorageServiceServer(s, pb.UnimplementedDocumentStorageServiceServer{})
+	})
+	c := pb.NewDocumentStorageServiceClient(testutil.Unsigned(t, conn))
+
+	_, err := c.GetDownloadURL(testutil.ForgedIdentity(context.Background()), &pb.GetDownloadURLRequest{})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("forged identity: code = %v, want Unauthenticated", status.Code(err))
+	}
+}

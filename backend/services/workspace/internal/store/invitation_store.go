@@ -43,17 +43,44 @@ func scanInvitation(row pgx.Row) (*Invitation, error) {
 
 // UpsertInvitation records a pending invitation, or refreshes the one already
 // pending for this address in this workspace (new inviter, role, department and
-// expiry), so inviting twice is one offer.
+// expiry), so inviting twice is one offer. On success inv.ID is the ID of that
+// one open invitation. The time it was last emailed is kept across a refresh.
 func (s *Store) UpsertInvitation(ctx context.Context, inv *Invitation) error {
-	_, err := s.db.Exec(ctx,
+	err := s.db.QueryRow(ctx,
 		`INSERT INTO workspace_invitations (workspace_id, email, role_id, department_id, invited_by, status, expires_at)
 		 VALUES ($1, $2, NULLIF($3,''), NULLIF($4,''), $5, 'pending', $6)
 		 ON CONFLICT (workspace_id, email) WHERE status = 'pending'
 		 DO UPDATE SET role_id = EXCLUDED.role_id, department_id = EXCLUDED.department_id,
-		               invited_by = EXCLUDED.invited_by, created_at = NOW(), expires_at = EXCLUDED.expires_at`,
-		inv.WorkspaceID, inv.Email, inv.RoleID, inv.DepartmentID, inv.InvitedBy, inv.ExpiresAt)
+		               invited_by = EXCLUDED.invited_by, created_at = NOW(), expires_at = EXCLUDED.expires_at
+		 RETURNING id`,
+		inv.WorkspaceID, inv.Email, inv.RoleID, inv.DepartmentID, inv.InvitedBy, inv.ExpiresAt).Scan(&inv.ID)
 	if err != nil {
 		return fmt.Errorf("upsert invitation: %w", err)
+	}
+	return nil
+}
+
+// ClaimInvitationEmail marks a pending, unexpired invitation as emailed at now
+// and reports whether the caller may send: false when it was already emailed at
+// or after notBefore (or is no longer open). Being one conditional update, two
+// invites at once send one email.
+func (s *Store) ClaimInvitationEmail(ctx context.Context, id string, now, notBefore time.Time) (bool, error) {
+	tag, err := s.db.Exec(ctx,
+		`UPDATE workspace_invitations SET last_emailed_at = $2
+		  WHERE id = $1 AND status = 'pending' AND expires_at > $2
+		    AND (last_emailed_at IS NULL OR last_emailed_at < $3)`, id, now, notBefore)
+	if err != nil {
+		return false, fmt.Errorf("claim invitation email: %w", err)
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// ReleaseInvitationEmail forgets that a pending invitation was emailed, after a
+// send that failed, so the next invite may try again.
+func (s *Store) ReleaseInvitationEmail(ctx context.Context, id string) error {
+	if _, err := s.db.Exec(ctx,
+		`UPDATE workspace_invitations SET last_emailed_at = NULL WHERE id = $1 AND status = 'pending'`, id); err != nil {
+		return fmt.Errorf("release invitation email: %w", err)
 	}
 	return nil
 }

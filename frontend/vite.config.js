@@ -93,8 +93,8 @@ const devProxy = {
 }
 
 const dockerProxy = {
-  '/api': { target: 'http://localhost:80', changeOrigin: true },
-  '/ws': { target: 'ws://localhost:8081', ws: true },
+  // ws: true so /api/ws upgrades through Traefik, which forwards it to the hub unchanged.
+  '/api': { target: 'http://localhost:80', changeOrigin: true, ws: true },
 }
 
 export default defineConfig({

@@ -133,7 +133,8 @@ Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một
 ```
 
 - **Sidebar** (`--color-sunk`): workspace switcher (tên + avatar, display font), 5 mục chính
-  **Tin nhắn · Tài liệu · Phê duyệt · Tài sản · Danh bạ**, đáy: **Quản trị** (khi có quyền),
+  **Tin nhắn · Tài liệu · Phê duyệt · Tài sản · Danh bạ**, đáy: **Thông báo** (mở NotificationPanel,
+  §6), **Quản trị** (khi có quyền),
   **Cài đặt**, người dùng hiện tại. Thu gọn thành rail 64px (icon + tooltip). Tài sản nằm trong
   shell này, không có layout riêng.
 - **List panel** chỉ ở Tin nhắn và Tài liệu. **Detail panel** mở bằng chọn mục, đóng bằng Esc.
@@ -156,13 +157,17 @@ Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một
     (Thêm dùng dấu ba chấm). Đang chọn: nhãn 600 `--color-accent`, icon nằm trong nền
     `--color-accent-wash` (radius 10, 48×24), `aria-current="page"`; Thêm cũng sáng khi màn hiện tại
     là Tài sản, Danh bạ, Quản trị hoặc Cài đặt. Số chờ duyệt: badge pill accent 18px ở góc trên phải
-    icon, `99+` khi quá 99, ẩn khi 0, `aria-label` "Phê duyệt, 3 chờ bạn". Chỉ Phê duyệt có số, và chỉ lấy số khi thanh đáy đang hiện. Toast nổi ngay trên thanh đáy (cách 16 + safe-area).
+    icon, `99+` khi quá 99, ẩn khi 0, `aria-label` "Phê duyệt, 3 chờ bạn". Chỉ Phê duyệt có số, và chỉ lấy số khi thanh đáy đang hiện. Có thông báo chưa đọc thì Thêm mang
+    chấm 8px `--color-accent` (viền 2px `--color-raised`, không số, không làm Thêm sáng), `aria-label`
+    "Thêm, 3 thông báo chưa đọc". Toast nổi ngay trên thanh đáy (cách 16 + safe-area).
   - *Sheet Thêm:* `--color-overlay`, radius 12 hai góc trên, `--shadow-overlay`, đệm 16 +
     safe-area, cao tối đa 85% màn, nội dung cuộn; nằm trên thanh đáy (`--z-modal`), nền sau là
     `--color-scrim` (`--z-backdrop`). Thứ tự từ trên: hàng tay nắm 36×4 (`--color-line`, giữa) + IconButton Đóng bên phải · **hàng
     workspace + người**: ô chữ cái workspace 40, tên workspace (font display), dưới là avatar 20 +
-    tên hiển thị + vai trò mờ, chevron phải; bấm mở danh sách đổi workspace · **Tài sản · Danh bạ ·
-    Quản trị · Cài đặt** (hàng cao 48, icon 18 + nhãn, như NavRow) · divider `--color-line` ·
+    tên hiển thị + vai trò mờ, chevron phải; bấm mở danh sách đổi workspace · **Thông báo · Tài sản ·
+    Danh bạ · Quản trị · Cài đặt** (hàng cao 48, icon 18 + nhãn, như NavRow; Thông báo có pill số chưa
+    đọc cuối hàng và thay nội dung sheet bằng danh sách thông báo, như danh sách workspace: quay lại ·
+    "Thông báo" · Đóng, sheet giữ cao 85%) · divider `--color-line` ·
     **Đăng xuất**. Hàng đổi workspace thay nội dung sheet bằng danh sách workspace người đó vào
     được (tên + vai trò, dấu tích ở workspace đang mở, nút quay lại); chọn một workspace gắn lại
     phiên vào workspace đó, làm mới dữ liệu rồi đóng sheet.
@@ -205,6 +210,24 @@ Primitive sống ở `frontend/src/components/primitives/`; không component nà
 - **Picker** (người, vai trò, phòng ban, thư mục): ô tìm kiếm + danh sách PersonChip/Tree. Không
   bao giờ có ô nhập ID.
 - **ApprovalChain:** dọc; mỗi bước: avatar người duyệt, tên, chức danh mờ, StatusPill, giờ.
+- **NotificationPanel** (mockup `design/mockups/notifications.html`): desktop là popover lớn cạnh
+  sidebar, rộng 380, cách mép 12, cao trọn khung, `--color-overlay`, radius 12, `--shadow-overlay`;
+  không scrim, Esc / bấm ngoài / Đóng thì đóng, trả focus về NavRow. Dưới 1024 nằm trong sheet Thêm
+  (§5). Đầu: tiêu đề `text-lg` + "N chưa đọc" mờ + Button `ghost sm` "Đánh dấu tất cả đã đọc"
+  (disabled khi 0). Nhóm "Hôm nay" / "Trước đó" bằng divider ngày của chat. 25 mỗi trang, cuối là
+  "Tải thêm" + "Đã hiện X trong Y". Có Skeleton, Empty ("Chưa có thông báo nào…" + "Xem đề nghị của
+  bạn") và Error ("Không tải được thông báo…" + "Thử lại").
+- **NotificationRow:** liên kết thật: Avatar 32 của người gây ra (không có người: ô icon 32 radius 10
+  `--color-sunk`) + câu **ai đã làm gì cái gì** (tên người và tên đối tượng, không bao giờ id; dựng ở
+  client theo loại, không in `title`/`body` của server) + lý do nếu có (khối `--color-sunk`, tối đa 2
+  dòng) + meta 12px: icon miền + "Phê duyệt" / "Tài sản" + giờ tương đối. Chưa đọc: chữ `--color-ink`,
+  tên 600, chấm 8px `--color-accent` cuối hàng + chữ ẩn "Chưa đọc"; đã đọc: chữ `--color-ink-muted`,
+  không chấm; không tô nền. Bấm: đánh dấu đã đọc rồi mở đối tượng; trỏ chuột vào hàng chưa đọc thì chấm
+  thành IconButton "Đánh dấu đã đọc" (không có trên màn chạm). Đánh dấu là lạc quan, lỗi thì hoàn lại +
+  toast. Realtime theo §7: bảng mở thì chèn hàng + lớp phủ màu người + nhãn "vừa duyệt / vừa giao…";
+  bảng đóng thì toast có "Xem"; gộp ≥ 3 trong 2000ms; đang mở đúng đối tượng thì đánh dấu đã đọc, không
+  toast. Bộ đếm đổi số bằng fade 160ms. Bảng mở: `translateX(-16px) scale(.985)` → 0, 280ms expo; đóng
+  210ms ease-in.
 
 ## 7. Motion
 

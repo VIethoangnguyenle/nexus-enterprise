@@ -83,7 +83,7 @@ Panels and dialogs enter and leave through the shared presets; Esc closes only t
 ## Status
 Known gaps, recorded rather than resolved:
 - No administrators' activity feed: nothing records who changed a role, a permission, a member or a department, so Tổng quan does not draw one.
-- The "Đã mời" filter of the mockup is a list under the table instead; the invite dialog has no message field and no email is sent: the invitee finds the offer on their next sign-in, on a screen that belongs to the sign-in group.
+- The "Đã mời" filter of the mockup is a list under the table instead; the invite dialog has no message field. The invited address is emailed (see `workspace-admin-authorization`, "Inviting records an offer"), but the dialog does not report whether the mail went out: the answer is the same 202 either way, and the invitee finds the offer on their next verified sign-in, on a screen that belongs to the sign-in group.
 - No lock-account action: nothing in the backend can lock one. A person listed as disabled in `tenant_users` is shown as "Đã khoá".
 - A role cannot be renamed, and "Trưởng phòng" of a department is not shown: neither exists in the backend.
 - The permission editor drafts in memory; leaving it by another route discards the draft without asking.

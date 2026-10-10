@@ -1,4 +1,11 @@
-package domain
+// Package mailer sends email over SMTP for every service that needs to: the
+// auth service's sign-in codes and the workspace service's invitations share
+// one transport, one set of safety rules and one SMTP_* configuration.
+//
+// The transport is STARTTLS or implicit TLS only; there is no plaintext mode, so
+// credentials and message contents never cross the network unencrypted. It uses
+// only the standard library.
+package mailer
 
 import (
 	"context"
@@ -7,8 +14,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"html"
-	"log/slog"
 	"mime"
 	"mime/quotedprintable"
 	"net"
@@ -19,22 +24,22 @@ import (
 	"time"
 )
 
-// SMTP transport security modes.
+// Transport security modes.
 const (
-	// SMTPTLSStartTLS upgrades a plain connection with STARTTLS (port 587).
-	SMTPTLSStartTLS = "starttls"
-	// SMTPTLSImplicit wraps the connection in TLS from the first byte (port 465).
-	SMTPTLSImplicit = "tls"
+	// TLSStartTLS upgrades a plain connection with STARTTLS (port 587).
+	TLSStartTLS = "starttls"
+	// TLSImplicit wraps the connection in TLS from the first byte (port 465).
+	TLSImplicit = "tls"
 )
 
 const (
-	defaultSMTPDialTimeout = 10 * time.Second
-	defaultSMTPSendTimeout = 30 * time.Second
-	maxSMTPAddressLen      = 254
+	defaultDialTimeout = 10 * time.Second
+	defaultSendTimeout = 30 * time.Second
+	maxAddressLen      = 254
 )
 
-// SMTPConfig configures SMTPSender.
-type SMTPConfig struct {
+// Config configures a Sender.
+type Config struct {
 	Host     string
 	Port     string
 	Username string
@@ -42,9 +47,8 @@ type SMTPConfig struct {
 	// From is the sender, "Display Name <address>" or a bare address. For Gmail it
 	// must be the account itself or a verified alias.
 	From string
-	// TLS is SMTPTLSStartTLS or SMTPTLSImplicit. Empty picks implicit TLS for port
-	// 465 and STARTTLS otherwise. There is no plaintext mode: credentials and
-	// codes never cross the network unencrypted.
+	// TLS is TLSStartTLS or TLSImplicit. Empty picks implicit TLS for port 465
+	// and STARTTLS otherwise.
 	TLS string
 	// DialTimeout bounds connecting; SendTimeout bounds the whole exchange.
 	// Zero values use 10s and 30s.
@@ -55,22 +59,23 @@ type SMTPConfig struct {
 	TLSConfig *tls.Config
 }
 
-// SMTPSender delivers one-time codes by email over SMTP. It reaches the owner
-// of the mailbox, so a code accepted after it proves the address.
-type SMTPSender struct {
-	cfg  SMTPConfig
-	from mail.Address
-	// validity is how long a code lives, as stated in the message.
-	validity time.Duration
+// Message is one email to one recipient: a plain-text part and an HTML part.
+type Message struct {
+	// To is a bare address (no display name, no list).
+	To      string
+	Subject string
+	Text    string
+	HTML    string
 }
 
-var (
-	_ CodeSender      = (*SMTPSender)(nil)
-	_ OwnershipProver = (*SMTPSender)(nil)
-)
+// Sender delivers messages through one SMTP account.
+type Sender struct {
+	cfg  Config
+	from mail.Address
+}
 
-// NewSMTPSender validates the configuration and returns a sender.
-func NewSMTPSender(cfg SMTPConfig) (*SMTPSender, error) {
+// New validates the configuration and returns a sender.
+func New(cfg Config) (*Sender, error) {
 	cfg.Host = strings.TrimSpace(cfg.Host)
 	cfg.Port = strings.TrimSpace(cfg.Port)
 	cfg.TLS = strings.ToLower(strings.TrimSpace(cfg.TLS))
@@ -88,19 +93,19 @@ func NewSMTPSender(cfg SMTPConfig) (*SMTPSender, error) {
 	}
 	switch cfg.TLS {
 	case "":
-		cfg.TLS = SMTPTLSStartTLS
+		cfg.TLS = TLSStartTLS
 		if cfg.Port == "465" {
-			cfg.TLS = SMTPTLSImplicit
+			cfg.TLS = TLSImplicit
 		}
-	case SMTPTLSStartTLS, SMTPTLSImplicit:
+	case TLSStartTLS, TLSImplicit:
 	default:
-		return nil, fmt.Errorf("smtp: tls mode %q must be %q or %q", cfg.TLS, SMTPTLSStartTLS, SMTPTLSImplicit)
+		return nil, fmt.Errorf("smtp: tls mode %q must be %q or %q", cfg.TLS, TLSStartTLS, TLSImplicit)
 	}
 	if cfg.DialTimeout <= 0 {
-		cfg.DialTimeout = defaultSMTPDialTimeout
+		cfg.DialTimeout = defaultDialTimeout
 	}
 	if cfg.SendTimeout <= 0 {
-		cfg.SendTimeout = defaultSMTPSendTimeout
+		cfg.SendTimeout = defaultSendTimeout
 	}
 	if strings.ContainsAny(cfg.From, "\r\n") {
 		return nil, errors.New("smtp: from address contains a line break")
@@ -109,37 +114,26 @@ func NewSMTPSender(cfg SMTPConfig) (*SMTPSender, error) {
 	if err != nil {
 		return nil, fmt.Errorf("smtp: from address: %w", err)
 	}
-	return &SMTPSender{cfg: cfg, from: *from, validity: otpTTL}, nil
+	return &Sender{cfg: cfg, from: *from}, nil
 }
 
-// DeliversToOwner reports that codes sent here reach only the mailbox owner.
-func (*SMTPSender) DeliversToOwner() bool { return true }
-
-// SendCode emails the code to identifier. Only email identifiers are supported.
-// The error never contains the code or the message body.
-func (s *SMTPSender) SendCode(ctx context.Context, identifier, identType, code string) error {
-	if identType != "email" {
-		return fmt.Errorf("smtp: cannot deliver to a %q identifier", identType)
-	}
-	rcpt, err := parseRecipient(identifier)
+// Send delivers m. The error never contains the message body.
+func (s *Sender) Send(ctx context.Context, m Message) error {
+	rcpt, err := parseRecipient(m.To)
 	if err != nil {
 		return err
 	}
-	msg, err := s.buildMessage(rcpt, code, time.Now())
+	msg, err := s.build(rcpt, m, time.Now())
 	if err != nil {
 		return err
 	}
-	if err := s.deliver(ctx, rcpt, msg); err != nil {
-		return err
-	}
-	slog.Info("OTP email sent", "to", maskIdentifier(rcpt, "email"))
-	return nil
+	return s.deliver(ctx, rcpt, msg)
 }
 
 // parseRecipient accepts only a bare addr-spec. Anything that could add a
 // header, a second recipient or a display name is refused, not cleaned.
 func parseRecipient(s string) (string, error) {
-	if s == "" || len(s) > maxSMTPAddressLen {
+	if s == "" || len(s) > maxAddressLen {
 		return "", errors.New("smtp: recipient is empty or too long")
 	}
 	for _, r := range s {
@@ -154,7 +148,7 @@ func parseRecipient(s string) (string, error) {
 	return s, nil
 }
 
-func (s *SMTPSender) tlsConfig() *tls.Config {
+func (s *Sender) tlsConfig() *tls.Config {
 	var c *tls.Config
 	if s.cfg.TLSConfig != nil {
 		c = s.cfg.TLSConfig.Clone()
@@ -171,7 +165,7 @@ func (s *SMTPSender) tlsConfig() *tls.Config {
 }
 
 // deliver runs one SMTP transaction under the send timeout.
-func (s *SMTPSender) deliver(ctx context.Context, rcpt string, msg []byte) error {
+func (s *Sender) deliver(ctx context.Context, rcpt string, msg []byte) error {
 	ctx, cancel := context.WithTimeout(ctx, s.cfg.SendTimeout)
 	defer cancel()
 
@@ -181,7 +175,7 @@ func (s *SMTPSender) deliver(ctx context.Context, rcpt string, msg []byte) error
 		conn net.Conn
 		err  error
 	)
-	if s.cfg.TLS == SMTPTLSImplicit {
+	if s.cfg.TLS == TLSImplicit {
 		conn, err = (&tls.Dialer{NetDialer: dialer, Config: s.tlsConfig()}).DialContext(ctx, "tcp", addr)
 	} else {
 		conn, err = dialer.DialContext(ctx, "tcp", addr)
@@ -190,7 +184,7 @@ func (s *SMTPSender) deliver(ctx context.Context, rcpt string, msg []byte) error
 		return fmt.Errorf("smtp: connect: %w", err)
 	}
 	defer conn.Close()
-	// A server that stops answering must not hold the request: every read and
+	// A server that stops answering must not hold the caller: every read and
 	// write ends at the deadline.
 	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {
@@ -203,7 +197,7 @@ func (s *SMTPSender) deliver(ctx context.Context, rcpt string, msg []byte) error
 	}
 	defer c.Close()
 
-	if s.cfg.TLS == SMTPTLSStartTLS {
+	if s.cfg.TLS == TLSStartTLS {
 		if ok, _ := c.Extension("STARTTLS"); !ok {
 			// Refuse rather than send credentials in the clear.
 			return errors.New("smtp: server does not offer STARTTLS")
@@ -236,21 +230,20 @@ func (s *SMTPSender) deliver(ctx context.Context, rcpt string, msg []byte) error
 	return nil
 }
 
-// buildMessage renders the multipart/alternative message (plain text first,
-// HTML second) with CRLF line endings.
-func (s *SMTPSender) buildMessage(rcpt, code string, now time.Time) ([]byte, error) {
-	minutes := int(s.validity / time.Minute)
-	subject := "Mã đăng nhập Nexus: " + code
-	text := fmt.Sprintf("Mã đăng nhập Nexus của bạn là: %s\n\n"+
-		"Mã có hiệu lực trong %d phút. Đừng chia sẻ mã này với bất kỳ ai.\n\n"+
-		"Nếu bạn không yêu cầu mã này, hãy bỏ qua email này.\n", code, minutes)
-	htmlBody := fmt.Sprintf("<!DOCTYPE html>\n<html lang=\"vi\"><body style=\"font-family:Arial,sans-serif;color:#1a1a1a\">\n"+
-		"<p>Mã đăng nhập Nexus của bạn là:</p>\n"+
-		"<p style=\"font-size:28px;font-weight:bold;letter-spacing:4px\">%s</p>\n"+
-		"<p>Mã có hiệu lực trong %d phút. Đừng chia sẻ mã này với bất kỳ ai.</p>\n"+
-		"<p>Nếu bạn không yêu cầu mã này, hãy bỏ qua email này.</p>\n</body></html>\n",
-		html.EscapeString(code), minutes)
+// headerText folds anything that could end a header line into a space, so text
+// from outside (a person's name in a subject) cannot add headers.
+func headerText(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || r == 0x85 || r == 0x2028 || r == 0x2029 {
+			return ' '
+		}
+		return r
+	}, s)
+}
 
+// build renders the multipart/alternative message (plain text first, HTML
+// second) with CRLF line endings.
+func (s *Sender) build(rcpt string, m Message, now time.Time) ([]byte, error) {
 	idRand := make([]byte, 16)
 	boundRand := make([]byte, 12)
 	if _, err := rand.Read(idRand); err != nil {
@@ -269,7 +262,7 @@ func (s *SMTPSender) buildMessage(rcpt, code string, now time.Time) ([]byte, err
 	header := func(k, v string) { b.WriteString(k + ": " + v + "\r\n") }
 	header("From", s.from.String())
 	header("To", rcpt)
-	header("Subject", mime.QEncoding.Encode("utf-8", subject))
+	header("Subject", mime.QEncoding.Encode("utf-8", headerText(m.Subject)))
 	header("Date", now.Format(time.RFC1123Z))
 	header("Message-ID", "<"+hex.EncodeToString(idRand)+"@"+domainPart+">")
 	header("MIME-Version", "1.0")
@@ -291,12 +284,22 @@ func (s *SMTPSender) buildMessage(rcpt, code string, now time.Time) ([]byte, err
 		b.WriteString("\r\n")
 		return nil
 	}
-	if err := part("text/plain", text); err != nil {
+	if err := part("text/plain", m.Text); err != nil {
 		return nil, fmt.Errorf("smtp: encode text part: %w", err)
 	}
-	if err := part("text/html", htmlBody); err != nil {
+	if err := part("text/html", m.HTML); err != nil {
 		return nil, fmt.Errorf("smtp: encode html part: %w", err)
 	}
 	b.WriteString("--" + boundary + "--\r\n")
 	return []byte(b.String()), nil
+}
+
+// MaskEmail hides most of an address for logs: "mo***@novapay.vn". Anything that
+// is not an address with a local part longer than two characters becomes "***".
+func MaskEmail(addr string) string {
+	local, domain, ok := strings.Cut(addr, "@")
+	if ok && len(local) > 2 {
+		return local[:2] + "***@" + domain
+	}
+	return "***"
 }

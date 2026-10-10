@@ -3,17 +3,14 @@ package httputil
 import (
 	"fmt"
 	"os"
+
+	"ngac-platform/pkg/bootstrap"
 )
 
 // DevJWTSecret is the placeholder every service falls back to when JWT_SECRET
 // is unset. It is committed to this repository, so it is public: anyone can
 // forge a token for any user of any tenant with it.
 const DevJWTSecret = "ngac-super-secret-key-change-in-production"
-
-// devEnvironments are the APP_ENV values that permit the placeholder secret.
-var devEnvironments = map[string]bool{
-	"dev": true, "development": true, "local": true, "test": true,
-}
 
 // RequireJWTSecret returns the signing secret, or an error explaining why the
 // process must not start.
@@ -30,7 +27,7 @@ func RequireJWTSecret(secret string) error {
 	if secret != DevJWTSecret {
 		return nil
 	}
-	if devEnvironments[os.Getenv("APP_ENV")] {
+	if bootstrap.IsDevEnvironment() {
 		return nil
 	}
 	return fmt.Errorf(

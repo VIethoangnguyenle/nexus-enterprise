@@ -185,3 +185,16 @@ func TestGetAuditLog_MalformedIDIsInvalidArgument(t *testing.T) {
 		t.Fatalf("want InvalidArgument, got %v", err)
 	}
 }
+
+// Metadata an attacker can invent without the signing secret is not an
+// identity, whatever user it names.
+func TestOverTheWire_ForgedIdentityIsUnauthenticated(t *testing.T) {
+	srv := agrpc.NewServer(domain.NewService(&pendingStore{}, &scopePolicy{}))
+	conn := testutil.ServeGRPC(t, grpcauth.ServerPolicy{}, func(s *grpc.Server) { pb.RegisterApprovalServiceServer(s, srv) })
+	c := pb.NewApprovalServiceClient(testutil.Unsigned(t, conn))
+
+	_, err := c.GetPending(testutil.ForgedIdentity(context.Background()), &pb.GetPendingRequest{})
+	if status.Code(err) != codes.Unauthenticated {
+		t.Fatalf("forged identity: code = %v, want Unauthenticated", status.Code(err))
+	}
+}

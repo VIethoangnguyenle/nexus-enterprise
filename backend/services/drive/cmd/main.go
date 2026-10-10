@@ -27,6 +27,10 @@ import (
 
 func main() {
 	bootstrap.InitLogger()
+	if err := bootstrap.ConfigureInternalIdentity(); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
 
 	dbURL := bootstrap.Env("DATABASE_URL", "postgres://ngac:ngac_secret@localhost:5433/ngac?sslmode=disable")
 	policyAddr := bootstrap.PolicyAddr()

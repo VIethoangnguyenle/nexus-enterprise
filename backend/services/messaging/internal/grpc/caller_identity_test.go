@@ -100,3 +100,17 @@ func TestOverTheWire_AddMemberRequesterIsMetadata(t *testing.T) {
 	require.Error(t, err)
 	assert.NotContains(t, policy.asked, "ngac-member")
 }
+
+// Metadata an attacker can invent without the signing secret is not an
+// identity, whatever user it names.
+func TestOverTheWire_ForgedIdentityIsUnauthenticated(t *testing.T) {
+	srv, pool := setupTestServerWithPolicy(t, &mockPolicyReadClient{})
+	wsID := getTestWorkspaceID(t, pool)
+	chID := insertTestChannel(t, pool, "wireforged", "workspace", wsID)
+	t.Cleanup(func() { cleanTestData(t, pool, chID) })
+	conn := testutil.ServeGRPC(t, grpcauth.ServerPolicy{}, func(s *grpc.Server) { pb.RegisterMessagingServiceServer(s, srv) })
+	c := pb.NewMessagingServiceClient(testutil.Unsigned(t, conn))
+
+	_, err := c.GetChannel(testutil.ForgedIdentity(context.Background()), &pb.GetChannelRequest{ChannelId: chID})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}

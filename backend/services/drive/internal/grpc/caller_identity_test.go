@@ -88,3 +88,15 @@ func TestDriveOverTheWire_UpdateQuotaUsesMetadataCaller(t *testing.T) {
 	_, err = c.UpdateQuota(asCaller("u-admin", "ngac-admin"), &pb.UpdateQuotaRequest{WorkspaceId: wsID, MaxBytes: beforeBytes + 1, MaxFiles: beforeFiles})
 	require.NoError(t, err)
 }
+
+// Metadata an attacker can invent without the signing secret is not an
+// identity, whatever user it names.
+func TestDriveOverTheWire_ForgedIdentityIsUnauthenticated(t *testing.T) {
+	folder, _ := sharedFolder(t, "WireForged")
+	srv, _ := newServerWith(t, newRulePolicy(), &recordingPolicyWrite{})
+	conn := testutil.ServeGRPC(t, grpcauth.ServerPolicy{}, func(s *grpc.Server) { pb.RegisterDriveServiceServer(s, srv) })
+	c := pb.NewDriveServiceClient(testutil.Unsigned(t, conn))
+
+	_, err := c.GetItem(testutil.ForgedIdentity(context.Background()), &pb.GetItemRequest{ItemId: folder.Id})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}

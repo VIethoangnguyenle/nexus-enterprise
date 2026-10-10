@@ -23,6 +23,7 @@ import (
 	"ngac-platform/pkg/bootstrap/redisconn"
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/pkg/mailer"
 	pb "ngac-platform/proto/auth"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
@@ -37,6 +38,10 @@ import (
 
 func main() {
 	bootstrap.InitLogger()
+	if err := bootstrap.ConfigureInternalIdentity(); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -218,30 +223,18 @@ func otpOptions(jwtSecret string) (domain.OTPOptions, error) {
 	return opts, nil
 }
 
-// smtpSender builds the email sender from SMTP_HOST, SMTP_PORT (default 587),
-// SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM and the optional SMTP_TLS
-// ("starttls" or "tls"; default by port). It returns nil when SMTP_HOST is
-// unset, and an error when it is set but the rest is unusable, so a half
-// configured production never silently falls back to no sign-in.
-func smtpSender() (*domain.SMTPSender, error) {
-	host := strings.TrimSpace(os.Getenv("SMTP_HOST"))
-	if host == "" {
-		return nil, nil
-	}
-	s, err := domain.NewSMTPSender(domain.SMTPConfig{
-		Host:     host,
-		Port:     os.Getenv("SMTP_PORT"),
-		Username: os.Getenv("SMTP_USERNAME"),
-		Password: os.Getenv("SMTP_PASSWORD"),
-		From:     os.Getenv("SMTP_FROM"),
-		TLS:      os.Getenv("SMTP_TLS"),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("SMTP_HOST is set but the SMTP configuration is unusable: %w", err)
+// smtpSender builds the code sender from the SMTP_* environment (see
+// mailer.FromEnv). It returns nil when SMTP_HOST is unset, and an error when it
+// is set but unusable, so a half configured production never silently falls
+// back to no sign-in.
+func smtpSender() (domain.CodeSender, error) {
+	m, err := mailer.FromEnv()
+	if err != nil || m == nil {
+		return nil, err
 	}
 	// Host and from address are not secrets; the password never is logged.
-	slog.Info("OTP codes delivered by email over SMTP", "host", host, "port", os.Getenv("SMTP_PORT"))
-	return s, nil
+	slog.Info("OTP codes delivered by email over SMTP", "host", os.Getenv("SMTP_HOST"), "port", os.Getenv("SMTP_PORT"))
+	return domain.NewEmailCodeSender(m), nil
 }
 
 // googleOptions configures "Sign in with Google" from the environment.

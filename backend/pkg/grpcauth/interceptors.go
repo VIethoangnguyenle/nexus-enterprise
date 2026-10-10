@@ -75,13 +75,14 @@ func Recovery(ctx context.Context, req any, info *grpc.UnaryServerInfo, h grpc.U
 }
 
 // Dial opens a client connection to addr that forwards the caller on the
-// request context (ClientInterceptor) and names the dialling process as
-// service. The transport is plaintext: the network between services is
-// internal (see the package comment). Extra options are applied last.
+// request context (ClientInterceptor, StreamClientInterceptor) and names the
+// dialling process as service. The transport is plaintext: the network between
+// services is internal (see the package comment). Extra options are applied last.
 func Dial(addr, service string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	base := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithChainUnaryInterceptor(ClientInterceptor(service)),
+		grpc.WithChainStreamInterceptor(StreamClientInterceptor(service)),
 	}
 	return grpc.NewClient(addr, append(base, opts...)...)
 }

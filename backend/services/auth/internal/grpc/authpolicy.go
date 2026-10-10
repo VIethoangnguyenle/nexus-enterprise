@@ -11,8 +11,9 @@ import (
 func AuthPolicy() grpcauth.ServerPolicy {
 	return grpcauth.ServerPolicy{
 		Exempt: grpcauth.HealthExempt(),
-		ServiceOK: map[string]string{
-			pb.AuthService_IsTokenRevoked_FullMethodName: "token validity is checked from a bare jti by services that hold no user session",
+		ServiceOK: map[string]grpcauth.ServiceRule{
+			pb.AuthService_IsTokenRevoked_FullMethodName: grpcauth.ServiceOnly(
+				"token validity is checked from a bare jti by services that hold no user session", "messaging"),
 		},
 	}
 }

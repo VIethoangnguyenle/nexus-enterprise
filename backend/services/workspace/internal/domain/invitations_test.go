@@ -27,10 +27,12 @@ type fakeInvites struct {
 	byNode map[string]string // user node -> verified address
 	seq    int
 	gets   int
+	// emailed is when each invitation was last emailed, as the table keeps it.
+	emailed map[string]time.Time
 }
 
 func newFakeInvites() *fakeInvites {
-	return &fakeInvites{byID: map[string]*store.Invitation{}, emails: map[string]string{}, byNode: map[string]string{}}
+	return &fakeInvites{byID: map[string]*store.Invitation{}, emails: map[string]string{}, byNode: map[string]string{}, emailed: map[string]time.Time{}}
 }
 
 func (f *fakeInvites) UpsertInvitation(_ context.Context, inv *store.Invitation) error {
@@ -39,6 +41,7 @@ func (f *fakeInvites) UpsertInvitation(_ context.Context, inv *store.Invitation)
 	for _, e := range f.byID {
 		if e.WorkspaceID == inv.WorkspaceID && e.Email == inv.Email && e.Status == store.InvitationPending {
 			e.RoleID, e.DepartmentID, e.InvitedBy, e.ExpiresAt = inv.RoleID, inv.DepartmentID, inv.InvitedBy, inv.ExpiresAt
+			inv.ID = e.ID
 			return nil
 		}
 	}
@@ -47,6 +50,28 @@ func (f *fakeInvites) UpsertInvitation(_ context.Context, inv *store.Invitation)
 	c.ID = fmt.Sprintf("inv-%d", f.seq)
 	c.Status = store.InvitationPending
 	f.byID[c.ID] = &c
+	inv.ID = c.ID
+	return nil
+}
+
+func (f *fakeInvites) ClaimInvitationEmail(_ context.Context, id string, now, notBefore time.Time) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	i, ok := f.byID[id]
+	if !ok || i.Status != store.InvitationPending || !i.ExpiresAt.After(now) {
+		return false, nil
+	}
+	if at, sent := f.emailed[id]; sent && !at.Before(notBefore) {
+		return false, nil
+	}
+	f.emailed[id] = now
+	return true, nil
+}
+
+func (f *fakeInvites) ReleaseInvitationEmail(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.emailed, id)
 	return nil
 }
 

@@ -3,6 +3,7 @@ package grpcauth
 import (
 	"context"
 	"net"
+	"os"
 	"testing"
 
 	"google.golang.org/grpc"
@@ -76,7 +77,24 @@ func startServer(t *testing.T, policy ServerPolicy, svc string, handlerCtx *cont
 	return grpc_health_v1.NewHealthClient(conn)
 }
 
-const checkMethod = "/grpc.health.v1.Health/Check"
+const (
+	checkMethod = "/grpc.health.v1.Health/Check"
+	watchMethod = "/grpc.health.v1.Health/Watch"
+
+	// The metadata keys the identity token replaced. Servers must ignore them.
+	rawUserID = "x-caller-user-id"
+	rawNodeID = "x-caller-ngac-node-id"
+	rawSvc    = "x-service-name"
+)
+
+const testSecret = "unit-test-identity-secret-0123456789"
+
+func TestMain(m *testing.M) {
+	if err := Configure(Keys{Current: testSecret}); err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
 
 func TestServerRejectsMissingCaller(t *testing.T) {
 	c := startServer(t, ServerPolicy{}, "", nil)
@@ -114,7 +132,7 @@ func TestServerExemptMethodNeedsNothing(t *testing.T) {
 }
 
 func TestServerServiceMethodNeedsServiceIdentity(t *testing.T) {
-	p := ServerPolicy{ServiceOK: map[string]string{checkMethod: "bootstrap"}}
+	p := ServerPolicy{ServiceOK: map[string]ServiceRule{checkMethod: ServiceOnly("bootstrap", "auth")}}
 
 	anon := startServer(t, p, "", nil)
 	if _, err := anon.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{}); status.Code(err) != codes.Unauthenticated {
@@ -132,7 +150,7 @@ func TestServerServiceMethodNeedsServiceIdentity(t *testing.T) {
 }
 
 func TestServiceIdentityDoesNotUnlockOtherMethods(t *testing.T) {
-	c := startServer(t, ServerPolicy{ServiceOK: map[string]string{"/other/Method": "x"}}, "auth", nil)
+	c := startServer(t, ServerPolicy{ServiceOK: map[string]ServiceRule{"/other/Method": ServiceOnly("x", "auth")}}, "auth", nil)
 	if _, err := c.Check(context.Background(), &grpc_health_v1.HealthCheckRequest{}); status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("want Unauthenticated, got %v", err)
 	}
@@ -144,7 +162,7 @@ func TestClientDoesNotForwardForgedOutgoingMetadata(t *testing.T) {
 	real := Caller{UserID: "real", NGACNodeID: "real-node"}
 	// A caller smuggling its own metadata must lose to the verified context.
 	ctx := metadata.AppendToOutgoingContext(WithCaller(context.Background(), real),
-		KeyUserID, "forged", KeyNGACNodeID, "forged-node")
+		rawUserID, "forged", rawNodeID, "forged-node", KeyIdentity, "forged.token")
 	if _, err := c.Check(ctx, &grpc_health_v1.HealthCheckRequest{}); err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +173,7 @@ func TestClientDoesNotForwardForgedOutgoingMetadata(t *testing.T) {
 
 func TestClientStripsForgedMetadataWithoutCaller(t *testing.T) {
 	c := startServer(t, ServerPolicy{}, "", nil)
-	ctx := metadata.AppendToOutgoingContext(context.Background(), KeyUserID, "forged", KeyNGACNodeID, "forged-node")
+	ctx := metadata.AppendToOutgoingContext(context.Background(), rawUserID, "forged", rawNodeID, "forged-node")
 	if _, err := c.Check(ctx, &grpc_health_v1.HealthCheckRequest{}); status.Code(err) != codes.Unauthenticated {
 		t.Fatalf("want Unauthenticated, got %v", err)
 	}
@@ -175,7 +193,7 @@ func startStreamServer(t *testing.T, p ServerPolicy) grpc_health_v1.HealthClient
 	t.Cleanup(gs.Stop)
 	conn, err := grpc.NewClient(lis.Addr().String(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithChainUnaryInterceptor(ClientInterceptor("")))
+		grpc.WithChainStreamInterceptor(StreamClientInterceptor("")))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +220,7 @@ func TestStreamRejectsMissingCaller(t *testing.T) {
 
 func TestStreamAdmitsCaller(t *testing.T) {
 	c := startStreamServer(t, ServerPolicy{})
-	ctx := metadata.AppendToOutgoingContext(context.Background(), KeyUserID, "u1", KeyNGACNodeID, "n1")
+	ctx := WithCaller(context.Background(), Caller{UserID: "u1", NGACNodeID: "n1"})
 	if err := watchErr(t, c, ctx); err != nil {
 		t.Fatalf("want first watch update, got %v", err)
 	}

@@ -48,9 +48,11 @@ Only what is not derivable in ten seconds:
   There is no `go.work`. **`go test ./...` from `backend/` silently skips every service** and
   reports success having tested nothing — always run Go commands from inside a service directory.
 - **Every service's `main` is built from the same parts.** `pkg/bootstrap` (env, DB pool, graceful
-  shutdown; `redisconn` for Redis), `grpcauth` (`ServerOptions` is the only way to build a gRPC
-  server — it carries logging, panic recovery and the caller check — and `Dial` the only way to
-  open a client), `policyclient` (every policy check, fail-closed), `grpcutil.Status` and
+  shutdown; `redisconn` for Redis; `ConfigureInternalIdentity` first thing in `main`), `grpcauth`
+  (`ServerOptions` is the only way to build a gRPC server — it carries logging, panic recovery and
+  the caller check — and `Dial` the only way to open a client; the caller travels as an
+  HMAC-signed, per-method, ~60 s token in `x-nexus-identity` under `INTERNAL_IDENTITY_SECRET`, and
+  the old unsigned `x-caller-*` keys are ignored), `policyclient` (every policy check, fail-closed), `grpcutil.Status` and
   `httputil.MapDomainError`/`MapGRPCError` (domain error → status). The policy address is
   `POLICY_SERVICE_ADDR`; the old `POLICY_ADDR` is still read, with a deprecation warning, for one
   release. Layering is transport → domain → store: REST never calls the gRPC server, and no SQL

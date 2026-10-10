@@ -92,3 +92,16 @@ func TestOverTheWire_GetTypeWorksForAuthorizedCaller(t *testing.T) {
 	_, err = types.GetType(asCaller("u-other", "n-other"), &pb.GetTypeRequest{TypeId: f.typeA})
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 }
+
+// Metadata an attacker can invent without the signing secret is not an
+// identity, whatever user it names.
+func TestOverTheWire_ForgedIdentityIsUnauthenticated(t *testing.T) {
+	f := newFixture(t)
+	conn := testutil.ServeGRPC(t, grpcauth.ServerPolicy{}, func(s *grpc.Server) {
+		pb.RegisterAssetServiceServer(s, agrpc.NewAssetServer(f.st, f.policy(), nil))
+	})
+	c := pb.NewAssetServiceClient(testutil.Unsigned(t, conn))
+
+	_, err := c.ListAssets(testutil.ForgedIdentity(context.Background()), &pb.ListAssetsRequest{WorkspaceId: f.wsID})
+	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}

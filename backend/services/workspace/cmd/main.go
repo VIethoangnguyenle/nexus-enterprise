@@ -29,6 +29,10 @@ import (
 
 func main() {
 	bootstrap.InitLogger()
+	if err := bootstrap.ConfigureInternalIdentity(); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -118,6 +122,11 @@ func main() {
 
 	wsStore := store.New(pool)
 	wsSvc := domain.NewService(wsStore, wsStore, policyReadClient, policyWriteClient, minioClient, driveClient).WithDirectory(wsStore).WithInvitations(wsStore).WithEmitter(rt)
+	if err := configureInviteMail(wsSvc); err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
+	defer drainInviteMail(wsSvc)
 	wsSrv := wgrpc.NewWorkspaceServer(wsSvc)
 	pb.RegisterWorkspaceServiceServer(srv, wsSrv)
 

@@ -182,6 +182,8 @@ services:
       KAFKA_BROKERS: redpanda:9092
       GRPC_PORT: "50051"
       APP_ENV: production
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
+      INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
       GOMEMLIMIT: 200MiB
     depends_on:
       postgres: { condition: service_healthy }
@@ -206,6 +208,8 @@ services:
       KAFKA_BROKERS: redpanda:9092
       GRPC_PORT: "50061"
       APP_ENV: production
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
+      INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
       GOMEMLIMIT: 150MiB
     depends_on:
       postgres: { condition: service_healthy }
@@ -240,6 +244,8 @@ services:
       # Anything other than dev/development/local/test marks the cookie Secure and makes the
       # services refuse the committed placeholder JWT secret.
       APP_ENV: production
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
+      INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       GOOGLE_REDIRECT_URL: ${GOOGLE_REDIRECT_URL:-https://nexus.zaneng.xyz/api/auth/google/callback}
@@ -290,6 +296,17 @@ services:
       KAFKA_BROKERS: redpanda:9092
       DRIVE_SERVICE_ADDR: drive:50057
       APP_ENV: production
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
+      INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
+      # Invitation emails: the same SMTP account as the auth service's sign-in codes. With
+      # SMTP_HOST empty, invitations are recorded and nothing is sent. APP_BASE_URL is the link.
+      APP_BASE_URL: ${APP_BASE_URL:-https://nexus.zaneng.xyz}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      SMTP_TLS: ${SMTP_TLS:-}
       GOMEMLIMIT: 100MiB
     depends_on:
       policy: { condition: service_healthy }
@@ -328,6 +345,8 @@ services:
       DRIVE_SERVICE_ADDR: drive:50057
       POLICY_SERVICE_ADDR: policy:50051
       APP_ENV: production
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
+      INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
       GOMEMLIMIT: 100MiB
     depends_on:
       nexus-minio: { condition: service_healthy }
@@ -359,6 +378,8 @@ services:
       REST_PORT: "8080"
       DRIVE_SERVICE_ADDR: drive:50057
       APP_ENV: production
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
+      INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
       GOMEMLIMIT: 100MiB
     depends_on:
       policy: { condition: service_healthy }
@@ -390,6 +411,8 @@ services:
       REST_PORT: "8080"
       JWT_SECRET: ${JWT_SECRET}
       APP_ENV: production
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
+      INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
       GOMEMLIMIT: 100MiB
     depends_on:
       policy: { condition: service_healthy }
@@ -421,6 +444,8 @@ services:
       JWT_SECRET: ${JWT_SECRET}
       KAFKA_BROKERS: redpanda:9092
       APP_ENV: production
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
+      INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
       GOMEMLIMIT: 100MiB
     depends_on:
       policy: { condition: service_healthy }
@@ -452,6 +477,8 @@ services:
       REST_PORT: "8080"
       JWT_SECRET: ${JWT_SECRET}
       APP_ENV: production
+      INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
+      INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
       GOMEMLIMIT: 100MiB
     depends_on:
       policy: { condition: service_healthy }

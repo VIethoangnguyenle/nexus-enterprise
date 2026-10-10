@@ -5,6 +5,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -47,6 +48,12 @@ type Service struct {
 	invitations   InvitationStore
 	now           func() time.Time
 	inviteLimiter *windowLimiter
+	// mail sends the invitation email; nil sends none. See WithInviteMail.
+	mail       InviteMailer
+	appBaseURL string
+	mailResend time.Duration
+	mailSlots  chan struct{}
+	mailWG     sync.WaitGroup
 	// emitter announces committed changes to live clients; see WithEmitter.
 	emitter realtime.Emitter
 }
@@ -60,7 +67,8 @@ func NewService(
 	mc *minio.Client,
 	dc drivepb.DriveServiceClient,
 ) *Service {
-	svc := &Service{store: st, deptStore: ds, policyRead: pr, policyWrite: pw, minioClient: mc, driveClient: dc}
+	svc := &Service{store: st, deptStore: ds, policyRead: pr, policyWrite: pw, minioClient: mc, driveClient: dc,
+		mailResend: DefaultInviteResendWindow, mailSlots: make(chan struct{}, inviteMailInFlight)}
 	svc.inviteLimiter = newWindowLimiter(defaultInviteMax, defaultInviteWindow, svc.clock)
 	return svc
 }

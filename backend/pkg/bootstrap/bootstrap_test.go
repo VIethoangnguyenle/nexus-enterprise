@@ -154,3 +154,41 @@ func TestShutdownForcesAHungGRPCServerStopAfterTheTimeout(t *testing.T) {
 		t.Fatalf("steps = %s", got)
 	}
 }
+
+func TestConfigureInternalIdentity(t *testing.T) {
+	const strong = "a-production-grade-identity-secret-0123456789"
+	cases := map[string]struct {
+		env     map[string]string
+		wantErr string
+	}{
+		"dev default":               {map[string]string{"APP_ENV": "dev"}, ""},
+		"dev explicit":              {map[string]string{"APP_ENV": "local", "INTERNAL_IDENTITY_SECRET": strong}, ""},
+		"prod unset":                {map[string]string{"APP_ENV": "production"}, "is not set"},
+		"unset env unset secret":    {map[string]string{}, "is not set"},
+		"prod placeholder":          {map[string]string{"APP_ENV": "production", "INTERNAL_IDENTITY_SECRET": bootstrap.DevInternalIdentitySecret}, "placeholder"},
+		"prod strong":               {map[string]string{"APP_ENV": "production", "INTERNAL_IDENTITY_SECRET": strong}, ""},
+		"same as jwt":               {map[string]string{"APP_ENV": "production", "INTERNAL_IDENTITY_SECRET": strong, "JWT_SECRET": strong}, "must differ from JWT_SECRET"},
+		"previous same as jwt":      {map[string]string{"APP_ENV": "production", "INTERNAL_IDENTITY_SECRET": strong, "INTERNAL_IDENTITY_SECRET_PREVIOUS": strong + "-jwt", "JWT_SECRET": strong + "-jwt"}, "must differ from JWT_SECRET"},
+		"31 bytes":                  {map[string]string{"APP_ENV": "production", "INTERNAL_IDENTITY_SECRET": strings.Repeat("k", 31)}, "at least 32"},
+		"too short":                 {map[string]string{"APP_ENV": "production", "INTERNAL_IDENTITY_SECRET": "short"}, "at least"},
+		"prod previous placeholder": {map[string]string{"APP_ENV": "production", "INTERNAL_IDENTITY_SECRET": strong, "INTERNAL_IDENTITY_SECRET_PREVIOUS": bootstrap.DevInternalIdentitySecret}, "placeholder"},
+		"prod with previous":        {map[string]string{"APP_ENV": "production", "INTERNAL_IDENTITY_SECRET": strong, "INTERNAL_IDENTITY_SECRET_PREVIOUS": strong + "-old"}, ""},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			for _, k := range []string{"APP_ENV", "INTERNAL_IDENTITY_SECRET", "INTERNAL_IDENTITY_SECRET_PREVIOUS", "JWT_SECRET"} {
+				t.Setenv(k, tc.env[k])
+			}
+			err := bootstrap.ConfigureInternalIdentity()
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("err = %v, want containing %q", err, tc.wantErr)
+			}
+		})
+	}
+}

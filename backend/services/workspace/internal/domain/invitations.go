@@ -29,7 +29,14 @@ const (
 
 // InvitationStore is where invitations and the address on an account live.
 type InvitationStore interface {
+	// UpsertInvitation stores the invitation or refreshes the open one for the
+	// address, and sets inv.ID to that invitation's ID.
 	UpsertInvitation(ctx context.Context, inv *store.Invitation) error
+	// ClaimInvitationEmail marks an open invitation as emailed at now, and
+	// reports whether the caller may send: false if it was emailed since notBefore.
+	ClaimInvitationEmail(ctx context.Context, id string, now, notBefore time.Time) (bool, error)
+	// ReleaseInvitationEmail undoes a claim after a failed send.
+	ReleaseInvitationEmail(ctx context.Context, id string) error
 	GetInvitation(ctx context.Context, id string) (*store.Invitation, error)
 	ListPendingForWorkspace(ctx context.Context, wsID string, now time.Time) ([]*store.Invitation, error)
 	ListPendingForEmail(ctx context.Context, email string, now time.Time) ([]*store.Invitation, error)
@@ -127,6 +134,9 @@ type InviteInput struct {
 // must belong to this workspace, and attaching one takes manage and holding
 // everything it confers; both are checked again, against the inviter's rights at
 // that time, when the invitation is accepted. Inviting is limited per caller.
+//
+// Once stored, the address is emailed in the background (see emailInvitation);
+// whether that works changes nothing about the result.
 func (s *Service) InviteByEmail(ctx context.Context, callerNodeID, wsID string, in InviteInput) error {
 	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpInvite)
 	if err != nil {
@@ -147,10 +157,16 @@ func (s *Service) InviteByEmail(ctx context.Context, callerNodeID, wsID string, 
 	if s.inviteLimiter != nil && !s.inviteLimiter.allow(callerNodeID) {
 		return ErrRateLimited
 	}
-	return s.invitations.UpsertInvitation(ctx, &store.Invitation{
+	inv := &store.Invitation{
 		WorkspaceID: ws.ID, Email: addr, RoleID: in.RoleID, DepartmentID: in.DepartmentID,
 		InvitedBy: callerNodeID, ExpiresAt: s.clock().Add(InvitationTTL),
-	})
+	}
+	if err := s.invitations.UpsertInvitation(ctx, inv); err != nil {
+		return err
+	}
+	// After the commit, off the request: the answer is the same for every address.
+	s.emailInvitation(ctx, ws.Name, inv)
+	return nil
 }
 
 // checkInviteExtras validates the role and department of an invitation as the

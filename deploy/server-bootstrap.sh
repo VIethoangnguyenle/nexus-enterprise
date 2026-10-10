@@ -86,6 +86,8 @@ ensure_key POSTGRES_USER ngac
 ensure_key POSTGRES_PASSWORD "$(rand_hex 24)" "# Generated. Changing it after the first start does not change the database user's password."
 ensure_key REDIS_PASSWORD "$(rand_hex 24)"
 ensure_key JWT_SECRET "$(rand_hex 48)" "# Signs every session token. Rotating it signs everyone out."
+ensure_key INTERNAL_IDENTITY_SECRET "$(rand_hex 48)" "# Signs the identity tokens services send each other over gRPC. Must differ from JWT_SECRET.
+# Rotate in 3 deploys (see docs/deployment.md): PREVIOUS=new; swap; drop PREVIOUS."
 ensure_key MINIO_ROOT_USER "nexus$(rand_hex 6)"
 ensure_key MINIO_ROOT_PASSWORD "$(rand_hex 24)"
 ensure_key APP_BASE_URL "$PUBLIC_URL"
