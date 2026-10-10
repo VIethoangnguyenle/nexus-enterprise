@@ -71,7 +71,7 @@ func serve(t *testing.T, svc TextService, authed bool, method, path, body string
 	api := e.Group("/api", func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if authed {
-				httputil.SetClaims(c, &httputil.Claims{UserID: "u-claims", NGACNodeID: "n-claims"})
+				httputil.SetClaims(c, &httputil.Claims{UserID: "u-claims", NGACNodeID: "n-claims", TenantID: "t-claims"})
 			}
 			return next(c)
 		}
@@ -109,7 +109,7 @@ func TestTextRoutes_CallerComesFromClaimsNotTheBody(t *testing.T) {
 		`{"base_version":3,"title":"New","content":"<p>a</p>","user_id":"u-evil","ngac_node_id":"n-evil","owner_id":"u-evil"}`)
 
 	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, texts.Caller{UserID: "u-claims", NGACNodeID: "n-claims"}, f.who)
+	assert.Equal(t, texts.Caller{UserID: "u-claims", NGACNodeID: "n-claims", TenantID: "t-claims"}, f.who)
 	assert.Equal(t, 3, f.change.BaseVersion)
 	assert.Equal(t, "New", *f.change.Title)
 }
@@ -233,7 +233,7 @@ func TestTextRoutes_CountIsAGuardedRoute(t *testing.T) {
 	rec := serve(t, f, true, "GET", "/api/workspaces/w1/documents/texts/count?scope=drafts", "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	assert.JSONEq(t, `{"count":7}`, rec.Body.String())
-	assert.Equal(t, texts.Caller{UserID: "u-claims", NGACNodeID: "n-claims"}, f.who)
+	assert.Equal(t, texts.Caller{UserID: "u-claims", NGACNodeID: "n-claims", TenantID: "t-claims"}, f.who)
 
 	g := &fakeTexts{}
 	rec = serve(t, g, false, "GET", "/api/workspaces/w1/documents/texts/count", "")

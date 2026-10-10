@@ -13,7 +13,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/provision"
+	"ngac-platform/pkg/realtime"
 	authpb "ngac-platform/proto/auth"
 	drivepb "ngac-platform/proto/drive"
 	pb "ngac-platform/proto/messaging"
@@ -29,6 +31,29 @@ type Service struct {
 	authClient  authpb.AuthServiceClient
 	driveClient drivepb.DriveServiceClient
 	revoker     SubscriptionRevoker
+	emitter     realtime.Emitter
+}
+
+// SetEmitter wires the announcer of committed channel changes. A nil emitter
+// is valid and announces nothing.
+func (s *Service) SetEmitter(e realtime.Emitter) { s.emitter = e }
+
+// emit announces a change that has already committed.
+func (s *Service) emit(e realtime.Event) {
+	if s.emitter != nil {
+		s.emitter.Emit(e)
+	}
+}
+
+// channelEvent builds a channel-domain event for ch on behalf of the request in
+// ctx. A DM has no workspace; its session tenant stands in so the event still
+// has a boundary.
+func channelEvent(ctx context.Context, kind string, ch *store.Channel) realtime.Event {
+	ws := ch.WorkspaceID
+	if ws == "" {
+		ws = grpcauth.CallerFrom(ctx).TenantID
+	}
+	return realtime.For(ctx, realtime.DomainChannel, kind, ws, ch.ID)
 }
 
 // SubscriptionRevoker ends live (WebSocket) subscriptions a user holds on a
@@ -157,6 +182,13 @@ func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID
 	s.store.InsertChannelMember(ctx, chID, in.UserNodeID)
 
 	s.createChannelDrive(ctx, in.WorkspaceID, chID, in.Name, contentOA.Id, membersUA.Id)
+
+	// A channel is readable by its Members UA, which holds the creator and any
+	// extra participants (a DM's other person) when it is born: they are the
+	// audience, not the workspace. Others learn of it through member_added.
+	created := channelEvent(ctx, realtime.KindCreated, ch)
+	created.UserNodeIDs = append([]string{in.UserNodeID}, extraMemberNodeIDs...)
+	s.emit(created)
 
 	return channelToProto(ch), nil
 }
@@ -293,6 +325,11 @@ func (s *Service) UpdateChannel(ctx context.Context, channelID, userNodeID, name
 	if err != nil || ch == nil {
 		return nil, fmt.Errorf("get updated channel: %w", err)
 	}
+	// Only the channel's own subscribers hear about it: a private channel's name
+	// is not the rest of the workspace's business.
+	renamed := channelEvent(ctx, realtime.KindRenamed, ch)
+	renamed.ChannelID = ch.ID
+	s.emit(renamed)
 	return channelToProto(ch), nil
 }
 
@@ -556,7 +593,22 @@ func (s *Service) AddMember(ctx context.Context, channelID, requesterNodeID, tar
 		return fmt.Errorf("add member: %w", err)
 	}
 	s.store.InsertChannelMember(ctx, channelID, targetNodeID)
+	s.announceMembership(ctx, realtime.KindMemberAdded, ch, targetNodeID)
 	return nil
+}
+
+// announceMembership tells the channel's subscribers that its roster changed,
+// and tells the person concerned directly: someone just added is not
+// subscribed yet, and someone just removed no longer is.
+func (s *Service) announceMembership(ctx context.Context, kind string, ch *store.Channel, targetNodeID string) {
+	roster := channelEvent(ctx, kind, ch)
+	roster.ChannelID = ch.ID
+	s.emit(roster)
+
+	person := channelEvent(ctx, kind, ch)
+	person.ChannelID = ch.ID
+	person.UserNodeIDs = []string{targetNodeID}
+	s.emit(person)
 }
 
 // RemoveMember removes a user from a channel's NGAC members UA.
@@ -576,6 +628,7 @@ func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, 
 	if s.revoker != nil {
 		s.revoker.RevokeChannelSubscriptions(channelID, targetNodeID)
 	}
+	s.announceMembership(ctx, realtime.KindMemberRemoved, ch, targetNodeID)
 	return nil
 }
 
@@ -725,4 +778,24 @@ func messagesToProto(msgs []*store.Message) []*pb.Message {
 		result = append(result, messageToProto(m))
 	}
 	return result
+}
+
+// AuthorizeWorkspaceAccess reports whether the user holds operation on the
+// workspace's Documents OA — the workspace-level attribute that stands for
+// "being in the workspace". The WebSocket hub delegates to it before a session
+// may follow the workspace's live changes. The workspace must be the session's
+// own tenant: a token scoped to one tenant never follows another. It fails
+// closed: an unknown workspace, a mismatch or a policy error is a refusal.
+func (s *Service) AuthorizeWorkspaceAccess(ctx context.Context, workspaceID, userNodeID, tenantID, operation string) error {
+	if workspaceID == "" || userNodeID == "" || tenantID == "" {
+		return ErrInvalidInput
+	}
+	if workspaceID != tenantID {
+		return fmt.Errorf("%w: workspace is outside the session's tenant", ErrAccessDenied)
+	}
+	oaID, err := s.store.WorkspaceDocumentsOA(ctx, workspaceID)
+	if err != nil || oaID == "" {
+		return fmt.Errorf("%w: workspace not found", ErrAccessDenied)
+	}
+	return s.checkAccess(ctx, userNodeID, oaID, operation)
 }

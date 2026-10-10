@@ -3,6 +3,8 @@ import { AnimatePresence, motion } from 'motion/react'
 import type { Member } from '../../api/admin'
 import { rolePills, statusLabel } from '../../lib/admin-model'
 import { staggerDelay, useMotionPresets, withDelay } from '../../lib/motion'
+import { personStyle } from '../../lib/person-hue'
+import type { Arrival } from '../../hooks/useArrivals'
 import { Avatar, Pressable } from '../primitives'
 import { StatusPill } from '../approval/StatusPill'
 
@@ -22,11 +24,18 @@ interface UsersTableProps {
   label: string
   members: Member[]
   loading: boolean
+  /** Realtime arrivals by member version, from `useRealtimeWash`. */
+  fresh: Map<string, Arrival>
   /** Person open in the panel (their node, never shown). */
   openId: string | null
   onOpen: (m: Member) => void
   /** Changes with the filters; rows enter in sequence when the list is new. */
   scope: string
+}
+
+/** Identity of one version of a person's row: anything the row shows changing is a new version. */
+export function memberVersion(m: Member): string {
+  return [m.ngac_node_id, m.department?.id ?? '', m.roles.map((r) => r.id).join(','), m.status, m.is_owner, m.display_name].join(':')
 }
 
 const TONE: Record<string, 'ok' | 'wait' | 'bad'> = { active: 'ok', invited: 'wait', disabled: 'bad' }
@@ -37,7 +46,7 @@ const TONE: Record<string, 'ok' | 'wait' | 'bad'> = { active: 'ok', invited: 'wa
  * real control, a button stretched over the whole row, so the row is reachable
  * by keyboard and ↑/↓ move between rows.
  */
-export function UsersTable({ label, members, loading, openId, onOpen, scope }: UsersTableProps) {
+export function UsersTable({ label, members, loading, fresh, openId, onOpen, scope }: UsersTableProps) {
   const m = useMotionPresets()
   const bodyRef = useRef<HTMLDivElement>(null)
 
@@ -95,7 +104,7 @@ export function UsersTable({ label, members, loading, openId, onOpen, scope }: U
                   transition={m.layout}
                   className="overflow-hidden"
                 >
-                  <UserRow member={p} open={openId === p.ngac_node_id} onOpen={onOpen} />
+                  <UserRow member={p} open={openId === p.ngac_node_id} arrival={fresh.get(memberVersion(p))} onOpen={onOpen} />
                 </motion.div>
               )
             })}
@@ -106,15 +115,17 @@ export function UsersTable({ label, members, loading, openId, onOpen, scope }: U
   )
 }
 
-const UserRow = memo(function UserRow({ member, open, onOpen }: { member: Member; open: boolean; onOpen: (m: Member) => void }) {
+const UserRow = memo(function UserRow({ member, open, arrival, onOpen }: { member: Member; open: boolean; arrival?: Arrival; onOpen: (m: Member) => void }) {
+  const byOther = arrival?.source === 'other' && !!arrival.author
   const pills = rolePills(member)
   const status = { tone: TONE[member.status] ?? 'ok', label: statusLabel(member.status) } as const
   const sub = [member.department?.name, pills.shown.join(', ')].filter(Boolean).join(' · ')
   return (
     <div
       role="row"
+      style={byOther ? personStyle(arrival.author!) : undefined}
       className={`${COLS} row-lazy relative min-h-11 border-b border-line transition-colors duration-quick
-        ${open ? 'bg-accent-wash' : 'hover:bg-hover'}`}
+        ${open ? 'bg-accent-wash' : 'hover:bg-hover'} ${byOther ? 'rt-wash' : ''}`}
     >
       <span role="cell" className="flex items-center gap-2.5 min-w-0 py-1.5">
         <Avatar name={member.display_name} hueKey={member.user_id} src={member.avatar_url} size={24} />
@@ -129,6 +140,7 @@ const UserRow = memo(function UserRow({ member, open, onOpen }: { member: Member
           >
             {member.display_name}
           </Pressable>
+          {byOther && <span className="rt-tag text-xs font-semibold">vừa cập nhật</span>}
           {member.email && <small className="text-xs text-ink-muted truncate">{member.email}</small>}
           <small className="text-xs text-ink-muted truncate @xl:hidden">{sub}</small>
         </span>

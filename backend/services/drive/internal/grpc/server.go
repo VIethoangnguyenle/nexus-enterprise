@@ -15,6 +15,7 @@ import (
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/provision"
+	"ngac-platform/pkg/realtime"
 	docpb "ngac-platform/proto/document"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
@@ -29,6 +30,7 @@ type DriveServer struct {
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
 	docStorage  docpb.DocumentStorageServiceClient
+	emitter     realtime.Emitter
 }
 
 // NewDriveServer creates a drive handler with all required dependencies.
@@ -44,6 +46,29 @@ func NewDriveServer(
 		policyWrite: pw,
 		docStorage:  ds,
 	}
+}
+
+// SetEmitter installs the sink for realtime change events. Without one the
+// server runs silently.
+func (s *DriveServer) SetEmitter(e realtime.Emitter) { s.emitter = e }
+
+// announce tells connected browsers that item changed. Call it only once the
+// change is committed: an event for state that is not yet readable sends
+// clients to refetch what they already have. The tenant and actor are the
+// verified caller's. ParentID is the containing folder ("" for the drive's top
+// level); adjust may refine the event (moves name the folder they left).
+func (s *DriveServer) announce(ctx context.Context, kind string, item *store.DriveItem, adjust ...func(*realtime.Event)) {
+	if s.emitter == nil || item == nil {
+		return
+	}
+	e := realtime.For(ctx, realtime.DomainDrive, kind, item.WorkspaceID, item.ID)
+	if item.ParentID != nil {
+		e.ParentID = *item.ParentID
+	}
+	for _, f := range adjust {
+		f(&e)
+	}
+	s.emitter.Emit(e)
 }
 
 // checkAccess verifies NGAC access, returning an error if denied.
@@ -204,6 +229,7 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 	prov.Done()
 
 	slog.Info("folder created", "id", item.ID, "name", req.Name)
+	s.announce(ctx, realtime.KindCreated, item)
 	return itemToProto(item), nil
 }
 
@@ -404,16 +430,23 @@ func (s *DriveServer) ConfirmFile(ctx context.Context, req *pb.ConfirmFileReques
 	}
 
 	// Update size from actual upload
-	s.store.UpdateStatus(ctx, item.ID, "active")
 	actualSize := confirmResp.SizeBytes
-	s.store.UpdateFileSize(ctx, item.ID, actualSize)
+	if err := s.store.UpdateFileSize(ctx, item.ID, actualSize); err != nil {
+		return nil, status.Errorf(codes.Internal, "record file size: %v", err)
+	}
+	if err := s.store.UpdateStatus(ctx, item.ID, "active"); err != nil {
+		return nil, status.Errorf(codes.Internal, "publish file: %v", err)
+	}
 
 	// Update quota
-	s.store.IncrementQuota(ctx, item.WorkspaceID, actualSize, 1)
+	if err := s.store.IncrementQuota(ctx, item.WorkspaceID, actualSize, 1); err != nil {
+		slog.Error("confirmed file's quota not charged", "item", item.ID, "err", err)
+	}
 
 	item.Status = "active"
 	item.SizeBytes = &actualSize
 	slog.Info("file confirmed", "id", item.ID, "name", item.Name, "size", actualSize)
+	s.announce(ctx, realtime.KindCreated, item)
 	return itemToProto(item), nil
 }
 
@@ -464,6 +497,7 @@ func (s *DriveServer) RenameItem(ctx context.Context, req *pb.RenameItemRequest)
 		return nil, status.Errorf(codes.Internal, "rename: %v", err)
 	}
 	item.Name = req.NewName
+	s.announce(ctx, realtime.KindUpdated, item)
 	return itemToProto(item), nil
 }
 
@@ -578,8 +612,13 @@ func (s *DriveServer) MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*p
 		}
 		return nil, status.Errorf(codes.Aborted, "item was changed by another request; retry")
 	}
+	oldParent := ""
+	if item.ParentID != nil {
+		oldParent = *item.ParentID
+	}
 	item.NGACNodeID = newNodeID
 	item.ParentID = newParentID
+	s.announce(ctx, realtime.KindMoved, item, func(e *realtime.Event) { e.OldParentID = oldParent })
 	return itemToProto(item), nil
 }
 
@@ -697,6 +736,7 @@ func (s *DriveServer) CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*p
 	if err := s.store.InsertItem(ctx, newItem); err != nil {
 		return nil, status.Errorf(codes.Internal, "insert copy: %v", err)
 	}
+	s.announce(ctx, realtime.KindCreated, newItem)
 	return itemToProto(newItem), nil
 }
 
@@ -709,10 +749,10 @@ func (s *DriveServer) TrashItem(ctx context.Context, req *pb.TrashItemRequest) (
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
-	s.store.UpdateStatus(ctx, item.ID, "trashed")
-	if item.ItemType == "folder" {
-		s.store.TrashChildren(ctx, item.ID)
+	if err := s.store.SetTrashed(ctx, item.ID, item.ItemType == "folder", true); err != nil {
+		return nil, status.Errorf(codes.Internal, "trash: %v", err)
 	}
+	s.announce(ctx, realtime.KindDeleted, item)
 	return &pb.Empty{}, nil
 }
 
@@ -725,11 +765,11 @@ func (s *DriveServer) RestoreItem(ctx context.Context, req *pb.RestoreItemReques
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
-	s.store.UpdateStatus(ctx, item.ID, "active")
-	if item.ItemType == "folder" {
-		s.store.RestoreChildren(ctx, item.ID)
+	if err := s.store.SetTrashed(ctx, item.ID, item.ItemType == "folder", false); err != nil {
+		return nil, status.Errorf(codes.Internal, "restore: %v", err)
 	}
 	item.Status = "active"
+	s.announce(ctx, realtime.KindUpdated, item)
 	return itemToProto(item), nil
 }
 
@@ -797,6 +837,7 @@ func (s *DriveServer) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest)
 			slog.Error("deleted folder's OA not removed; node needs cleanup", "item", item.ID, "node", item.NGACNodeID, "err", err)
 		}
 	}
+	s.announce(ctx, realtime.KindDeleted, item)
 	return &pb.Empty{}, nil
 }
 

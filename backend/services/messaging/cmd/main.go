@@ -25,6 +25,7 @@ import (
 
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/pkg/realtime"
 	authpb "ngac-platform/proto/auth"
 	drivepb "ngac-platform/proto/drive"
 	pb "ngac-platform/proto/messaging"
@@ -119,6 +120,13 @@ func main() {
 	// service: a WebSocket subscription is a read of the channel.
 	hub := mgrpc.NewHub(rdb, domainSvc)
 	defer hub.Close()
+	// Following a workspace's live changes is a read of the workspace.
+	hub.SetWorkspaceAccess(domainSvc)
+	// Channel changes (create, rename, members) are announced like every other
+	// domain's: through Redpanda, after the commit.
+	rt := realtime.Connect("messaging")
+	defer rt.Close()
+	domainSvc.SetEmitter(rt)
 	// Removing a channel member also ends their live subscriptions.
 	domainSvc.SetSubscriptionRevoker(hub)
 
@@ -167,6 +175,15 @@ func main() {
 	}
 	if consumer != nil {
 		defer consumer.Close()
+	}
+
+	// Every domain's committed changes reach the hub through this consumer.
+	rtConsumer, err := events.NewRealtimeConsumer(strings.Split(kafkaBrokers, ","), hub)
+	if err != nil {
+		slog.Warn("realtime consumer unavailable, live workspace updates disabled", "error", err)
+	}
+	if rtConsumer != nil {
+		defer rtConsumer.Close()
 	}
 
 	healthSrv := health.NewServer()

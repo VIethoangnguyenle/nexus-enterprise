@@ -23,6 +23,7 @@ import (
 
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/pkg/realtime"
 	pb "ngac-platform/proto/document"
 	drivepb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
@@ -122,6 +123,9 @@ func main() {
 	}
 	defer policyConn.Close()
 	textService := texts.NewService(texts.NewStore(pool), policypb.NewPolicyReadServiceClient(policyConn))
+	rt := realtime.Connect("document")
+	defer rt.Close()
+	textService.SetEmitter(rt)
 
 	// REST server (client-facing)
 	e := echo.New()

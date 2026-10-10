@@ -14,6 +14,7 @@ import (
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/provision"
+	"ngac-platform/pkg/realtime"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/drive/internal/store"
@@ -110,6 +111,7 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 	prov.Done()
 
 	slog.Info("share created", "item", item.Name, "type", req.ShareType, "target", targetLabel)
+	s.announceShare(ctx, realtime.KindShareCreated, item)
 	return &pb.ShareInfo{
 		Id: share.ID, DriveItemId: req.ItemId, ShareType: req.ShareType,
 		TargetNgacId: req.TargetNgacNodeId, TargetLabel: targetLabel,
@@ -241,6 +243,12 @@ func (s *DriveServer) findPersonalUA(ctx context.Context, user *policypb.NGACNod
 	return "", nil
 }
 
+// announceShare reports a change to who can reach item. The item itself did not
+// move, so the event carries no folder.
+func (s *DriveServer) announceShare(ctx context.Context, kind string, item *store.DriveItem) {
+	s.announce(ctx, kind, item, func(e *realtime.Event) { e.ParentID = "" })
+}
+
 // RevokeShare removes a share.
 func (s *DriveServer) RevokeShare(ctx context.Context, req *pb.RevokeShareRequest) (*pb.Empty, error) {
 	share, err := s.store.GetShare(ctx, req.ShareId)
@@ -258,8 +266,8 @@ func (s *DriveServer) RevokeShare(ctx context.Context, req *pb.RevokeShareReques
 	//     item to authorize against nothing could grant that right, so a
 	//     missing item denies.
 	isCreator := grpcauth.CallerFrom(ctx).NGACNodeID != "" && share.CreatedBy == grpcauth.CallerFrom(ctx).NGACNodeID
+	item, err := s.store.GetItem(ctx, share.DriveItemID)
 	if !isCreator {
-		item, err := s.store.GetItem(ctx, share.DriveItemID)
 		if err != nil || item == nil {
 			return nil, status.Errorf(codes.PermissionDenied, "access denied")
 		}
@@ -277,6 +285,7 @@ func (s *DriveServer) RevokeShare(ctx context.Context, req *pb.RevokeShareReques
 	if err := s.store.DeleteShare(ctx, req.ShareId); err != nil {
 		return nil, status.Errorf(codes.Internal, "delete share record: %v", err)
 	}
+	s.announceShare(ctx, realtime.KindShareRevoked, item)
 	return &pb.Empty{}, nil
 }
 

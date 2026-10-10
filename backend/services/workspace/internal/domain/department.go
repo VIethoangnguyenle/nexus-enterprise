@@ -10,6 +10,7 @@ import (
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/provision"
+	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/workspace/internal/store"
 )
@@ -109,6 +110,7 @@ func (s *Service) CreateDepartment(ctx context.Context, callerNodeID string, in 
 		return nil, prov.Fail(ctx, err)
 	}
 	prov.Done()
+	s.announce(ctx, realtime.KindDepartmentChanged, in.WorkspaceID, deptID)
 
 	slog.Info("department created", "dept_id", deptID, "name", in.Name, "workspace", in.WorkspaceID)
 
@@ -173,6 +175,7 @@ func (s *Service) UpdateDepartment(ctx context.Context, callerNodeID, wsID, dept
 	if err := s.deptStore.UpdateDepartmentName(ctx, deptID, newName); err != nil {
 		return nil, err
 	}
+	s.announce(ctx, realtime.KindDepartmentChanged, wsID, deptID)
 
 	parentID := ""
 	if dept.ParentID != nil {
@@ -274,6 +277,7 @@ func (s *Service) MoveDepartment(ctx context.Context, callerNodeID string, in Mo
 	if err := s.deptStore.MoveDepartment(ctx, in.DeptID, newParentPtr); err != nil {
 		return nil, err
 	}
+	s.announce(ctx, realtime.KindDepartmentChanged, in.WorkspaceID, in.DeptID)
 
 	return &DepartmentResult{
 		ID:       dept.ID,
@@ -355,6 +359,7 @@ func (s *Service) DeleteDepartment(ctx context.Context, callerNodeID, wsID, dept
 	}
 
 	slog.Info("department deleted", "dept_id", deptID, "name", dept.Name)
+	s.announce(ctx, realtime.KindDepartmentChanged, ws.ID, deptID)
 	return nil
 }
 
@@ -383,7 +388,12 @@ func (s *Service) UpdateMemberDepartment(ctx context.Context, callerNodeID, wsID
 		}
 	}
 
-	return s.applyDepartment(ctx, ws, userNGACNodeID, dept)
+	if err := s.applyDepartment(ctx, ws, userNGACNodeID, dept); err != nil {
+		return err
+	}
+	s.announce(ctx, realtime.KindDepartmentChanged, ws.ID, deptID, userNGACNodeID)
+	s.announceAccessChanged(ctx, ws.ID, userNGACNodeID)
+	return nil
 }
 
 // applyDepartment puts a person in a department (nil: out of any), taking them

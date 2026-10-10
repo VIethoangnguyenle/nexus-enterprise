@@ -20,6 +20,7 @@ import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { useDriveStore } from '../../stores/drive.store'
+import { useWebSocketStore } from '../../stores/websocket.store'
 import { Avatar, Button, FilterChip, Heading, SearchField, toast } from '../primitives'
 import { ConfirmDialog } from '../composites/ConfirmDialog'
 import { EmptyState } from '../spaces/EmptyState'
@@ -137,6 +138,7 @@ export function DriveScreen() {
 
   // Changes I make come back from the server as "new versions"; they are mine,
   // whoever owns the item, so they must not be washed in someone else's colour.
+  const recentChanges = useWebSocketStore((s) => s.recentChanges)
   const mine = useRef(new Map<string, number>())
   const markMine = (id: string) => mine.current.set(id, Date.now())
   const { fresh, burst } = useArrivals(all, {
@@ -144,7 +146,8 @@ export function DriveScreen() {
     authorOf: (i) => {
       const at = mine.current.get(i.id)
       if (at && Date.now() - at < MINE_MS) return me?.id
-      return ownerOf(i, people).hueKey
+      // The person who just acted, when a realtime event named them; otherwise the owner.
+      return recentChanges[i.id]?.actorUserId ?? ownerOf(i, people).hueKey
     },
     me: me?.id,
     ready: !!active.data,

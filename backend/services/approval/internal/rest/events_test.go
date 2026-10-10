@@ -3,6 +3,7 @@ package rest
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"sort"
@@ -302,8 +303,8 @@ func TestCreateRequest_EventNamesTenantRequesterAndFirstApprover(t *testing.T) {
 	if evt.RequestID != id || evt.Action != "created" {
 		t.Fatalf("event = %+v", evt)
 	}
-	if evt.TenantID != "tenant-a" {
-		t.Errorf("tenant_id = %q, want tenant-a", evt.TenantID)
+	if evt.TenantID != "tenant-a" || evt.WorkspaceID != "tenant-a" {
+		t.Errorf("tenant_id = %q workspace_id = %q, want tenant-a for both", evt.TenantID, evt.WorkspaceID)
 	}
 	if evt.CreatedBy != "n-req" {
 		t.Errorf("created_by = %q, want n-req", evt.CreatedBy)
@@ -395,5 +396,58 @@ func TestApprove_RefusedPublishesNothing(t *testing.T) {
 	}
 	if len(l.pub.got) != before {
 		t.Errorf("a refused approval published %d event(s)", len(l.pub.got)-before)
+	}
+}
+
+func TestEveryPublishedEventCarriesTenantAndWorkspace(t *testing.T) {
+	l := newLifecycle(t)
+	id := l.create(t)
+	_ = l.call(t, l.h.ApproveAction, "n-ap1", "tenant-a", body(map[string]any{"request_id": id}))
+	_ = l.call(t, l.h.RejectAction, "n-ap2", "tenant-a", body(map[string]any{"request_id": id, "comment": "no"}))
+
+	if len(l.pub.got) != 3 {
+		t.Fatalf("published %d events, want 3", len(l.pub.got))
+	}
+	for _, evt := range l.pub.got {
+		if evt.TenantID != "tenant-a" || evt.WorkspaceID != "tenant-a" {
+			t.Errorf("%s event: tenant_id = %q workspace_id = %q", evt.Action, evt.TenantID, evt.WorkspaceID)
+		}
+	}
+}
+
+// failingInsertStore fails the transaction that writes a new request, the way a
+// rolled-back commit does: nothing is stored.
+type failingInsertStore struct{ *memStore }
+
+func (failingInsertStore) InsertRequestWithAssignments(context.Context, *domain.Request, []*domain.AssignmentRecord) error {
+	return errors.New("commit failed")
+}
+
+func TestCreateRequest_RolledBackPublishesNothing(t *testing.T) {
+	l := newLifecycle(t)
+	l.h = NewHandler(domain.NewService(failingInsertStore{l.store}, allowPolicy{}), nil, l.pub)
+
+	err := l.call(t, l.h.CreateRequest, "n-req", "tenant-a", `{"entity_type":"leave","entity_id":"e-1"}`)
+
+	if err == nil {
+		t.Fatal("a failed commit must surface as an error")
+	}
+	if len(l.pub.got) != 0 {
+		t.Errorf("a rolled-back request published %d event(s)", len(l.pub.got))
+	}
+}
+
+func TestReject_RefusedPublishesNothing(t *testing.T) {
+	l := newLifecycle(t)
+	id := l.create(t)
+	before := len(l.pub.got)
+
+	err := l.call(t, l.h.RejectAction, "n-stranger", "tenant-a", body(map[string]any{"request_id": id, "comment": "x"}))
+
+	if err == nil {
+		t.Fatal("a user with no assignment must not be able to reject")
+	}
+	if len(l.pub.got) != before {
+		t.Errorf("a refused rejection published %d event(s)", len(l.pub.got)-before)
 	}
 }

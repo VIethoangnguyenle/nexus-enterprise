@@ -38,6 +38,10 @@ type Hub struct {
 	// access authorizes joining a channel's live stream. A nil checker denies
 	// every subscription.
 	access ChannelAccessChecker
+
+	// dom holds workspace subscriptions, sequence numbers and the presence
+	// grace timers (hub_domain.go). Its maps are guarded by mu.
+	dom domainState
 }
 
 // subscribeCheckTimeout bounds the policy round-trip a Subscribe waits on.
@@ -52,8 +56,10 @@ type Client struct {
 	// tenantID is the tenant the session's JWT was issued for. Presence and
 	// approval events are confined to it; empty means the session belongs to
 	// no tenant and receives no tenant-scoped events.
-	tenantID      string
-	hub           *Hub
+	tenantID string
+	hub      *Hub
+	// expiry closes the session when the token it authenticated with expires.
+	expiry        *time.Timer
 	send          chan []byte
 	authenticated bool
 	jwtSecret     string
@@ -78,6 +84,7 @@ func NewHub(rdb *redis.Client, access ChannelAccessChecker) *Hub {
 		ctx:      ctx,
 		cancel:   cancel,
 		access:   access,
+		dom:      newDomainState(),
 	}
 	if rdb != nil {
 		go h.subscribeRedis()
@@ -88,6 +95,12 @@ func NewHub(rdb *redis.Client, access ChannelAccessChecker) *Hub {
 // Close shuts down the Hub and its Redis subscription.
 func (h *Hub) Close() {
 	h.cancel()
+	h.dom.presenceMu.Lock()
+	defer h.dom.presenceMu.Unlock()
+	for key, t := range h.dom.pendingAbsent {
+		t.Stop()
+		delete(h.dom.pendingAbsent, key)
+	}
 }
 
 // authorizeSubscribe decides whether a user may join a channel's live stream.
@@ -174,6 +187,9 @@ func (h *Hub) UnsubscribeAll(client *Client) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	for _, clients := range h.channels {
+		delete(clients, client)
+	}
+	for _, clients := range h.dom.workspaces {
 		delete(clients, client)
 	}
 	if userClients, ok := h.users[client.userID]; ok {
@@ -289,7 +305,8 @@ func (h *Hub) broadcastTyping(channelID, username string, sender *Client) {
 // clients: channel:<id> to that channel's subscribers, user:<id> to that user's
 // sessions, presence:<tenant> to sessions in that tenant.
 func (h *Hub) subscribeRedis() {
-	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", presenceKeyPrefix+"*", revokeKeyPrefix+"*")
+	pubsub := h.rdb.PSubscribe(h.ctx, "channel:*", "user:*", presenceKeyPrefix+"*", revokeKeyPrefix+"*",
+		workspaceEventPrefix+"*", channelEventPrefix+"*", userEventPrefix+"*", permEventPrefix+"*", workspaceRevokePrefix+"*")
 	defer pubsub.Close()
 
 	slog.Info("redis pub/sub subscriber started")
@@ -307,6 +324,9 @@ func (h *Hub) subscribeRedis() {
 			payload := []byte(msg.Payload)
 
 			switch {
+			case h.deliverRedisDomain(msg.Channel, payload):
+			case strings.HasPrefix(msg.Channel, workspaceRevokePrefix):
+				h.revokeWorkspaceLocal(strings.TrimPrefix(msg.Channel, workspaceRevokePrefix), msg.Payload)
 			case strings.HasPrefix(msg.Channel, revokeKeyPrefix):
 				h.revokeLocal(strings.TrimPrefix(msg.Channel, revokeKeyPrefix), msg.Payload)
 			case strings.HasPrefix(msg.Channel, presenceKeyPrefix):
@@ -486,6 +506,14 @@ func (c *Client) handleAuth(req *pb.AuthRequest) bool {
 	c.ngacNodeID = claims.NGACNodeID
 	c.tenantID = claims.TenantID
 	c.authenticated = true
+	// A session is good for as long as the token it proved itself with; the
+	// client reconnects with its refreshed one.
+	if claims.ExpiresAt != nil {
+		c.expiry = time.AfterFunc(time.Until(claims.ExpiresAt.Time), func() {
+			c.sendError(401, "token expired")
+			c.conn.Close()
+		})
+	}
 
 	// Track client by userID
 	c.hub.mu.Lock()
@@ -496,8 +524,7 @@ func (c *Client) handleAuth(req *pb.AuthRequest) bool {
 	c.hub.mu.Unlock()
 
 	c.sendAuthResponse(true, claims.UserID, "")
-	// Broadcast presence online event
-	c.hub.BroadcastPresence(c.tenantID, claims.UserID, claims.Username, "online")
+	c.hub.userCameOnline(c)
 	return true
 }
 
@@ -519,24 +546,16 @@ func (c *Client) sendAuthResponse(ok bool, userID, reason string) {
 
 func (c *Client) readPump() {
 	defer func() {
-		// Broadcast offline if this was the user's last connection in this
-		// tenant. Presence is per tenant, so a session still open in another
-		// tenant does not keep the user "online" here.
-		if c.authenticated {
-			c.hub.mu.RLock()
-			remaining := 0
-			for other := range c.hub.users[c.userID] {
-				if other.tenantID == c.tenantID {
-					remaining++
-				}
-			}
-			c.hub.mu.RUnlock()
-			// Will be 0 after UnsubscribeAll removes this client
-			if remaining <= 1 {
-				c.hub.BroadcastPresence(c.tenantID, c.userID, c.username, "offline")
-			}
+		if c.expiry != nil {
+			c.expiry.Stop()
 		}
 		c.hub.UnsubscribeAll(c)
+		// Presence is per tenant, so a session still open in another tenant
+		// does not keep the user "online" here. The absence is announced after
+		// a grace period (userLeft), so a reload does not flicker.
+		if c.authenticated && c.hub.sessionsOf(c.tenantID, c.userID) == 0 {
+			c.hub.userLeft(c)
+		}
 		c.conn.Close()
 	}()
 
@@ -590,6 +609,10 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 			c.sendError(401, "not authenticated")
 			return
 		}
+		if ws := payload.Subscribe.WorkspaceId; ws != "" {
+			c.handleWorkspaceSubscribe(ws)
+			return
+		}
 		channelID := payload.Subscribe.ChannelId
 		if err := c.hub.authorizeSubscribe(channelID, grpcauth.Caller{UserID: c.userID, NGACNodeID: c.ngacNodeID, TenantID: c.tenantID}); err != nil {
 			slog.Warn("websocket subscribe denied",
@@ -602,6 +625,10 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 	case *pb.ClientEnvelope_Unsubscribe:
 		if !c.authenticated {
 			c.sendError(401, "not authenticated")
+			return
+		}
+		if ws := payload.Unsubscribe.WorkspaceId; ws != "" {
+			c.hub.unsubscribeWorkspace(ws, c)
 			return
 		}
 		c.hub.Unsubscribe(payload.Unsubscribe.ChannelId, c)
@@ -663,34 +690,6 @@ func (h *Hub) BroadcastThreadReply(channelID string, msg *pb.Message) {
 	h.broadcastLocal(channelID, data)
 }
 
-// BroadcastAssetUpdated sends an asset state change event to channel subscribers.
-func (h *Hub) BroadcastAssetUpdated(assetID, newState string) {
-	env := &pb.ServerEnvelope{
-		Payload: &pb.ServerEnvelope_AssetUpdated{
-			AssetUpdated: &pb.AssetUpdatedEvent{
-				AssetId:  assetID,
-				NewState: newState,
-			},
-		},
-	}
-	data := marshalEnvelope(env)
-	if data == nil {
-		return
-	}
-
-	// Broadcast to all connected users (no channel scope for asset updates)
-	h.mu.RLock()
-	defer h.mu.RUnlock()
-	for _, clients := range h.users {
-		for client := range clients {
-			select {
-			case client.send <- data:
-			default:
-			}
-		}
-	}
-}
-
 // BroadcastApprovalEvent sends an approval status change to the users the
 // notice names, and to no one else.
 //
@@ -719,6 +718,8 @@ func (h *Hub) BroadcastApprovalEvent(n events.ApprovalNotice) {
 				Action:       n.Action,
 				ActorNodeId:  n.ActorNodeID,
 				TemplateName: n.TemplateName,
+				TenantId:     n.TenantID,
+				WorkspaceId:  n.WorkspaceID,
 			},
 		},
 	}

@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Realtime over WebSocket"
-status: pending
+status: completed
 priority: P1
 effort: 3-4d
 dependencies: [2, 4]
@@ -75,9 +75,9 @@ WebSocket (subscribe check, broadcast theo tenant) đã nằm ở phase 02 — p
    user B cập nhật ≤ 1s, không refresh.
 
 ## Success criteria
-- [ ] Mỗi màn hình trong `frontend/src/routes/` phản ánh thay đổi của user khác không cần refresh.
-- [ ] Không event nào vượt tenant (test).
-- [ ] Rớt mạng 30s rồi nối lại → dữ liệu đúng (test resync).
+- [~] Mỗi màn hình trong `frontend/src/routes/` phản ánh thay đổi của user khác không cần refresh. Đã chạy thật: drive, văn bản, danh bạ/admin (người), phê duyệt, chat. Chưa có event: trạng thái đã đọc thông báo từ thiết bị khác, asset-type riêng lẻ (xem report).
+- [x] Không event nào vượt tenant (test).
+- [x] Rớt mạng 30s rồi nối lại → dữ liệu đúng (test resync).
 
 ## Risks
 - Nhiều event → bão refetch. Gộp invalidation theo frame (debounce ~100ms) trong reducer.

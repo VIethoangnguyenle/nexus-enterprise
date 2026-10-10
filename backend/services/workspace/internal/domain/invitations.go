@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/workspace/internal/store"
 )
@@ -392,6 +393,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, userID, callerNodeID, in
 		}
 		return nil, err
 	}
+	s.announce(ctx, realtime.KindInvitationAccepted, ws.ID, callerNodeID)
 	return result, nil
 }
 

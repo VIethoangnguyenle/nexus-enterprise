@@ -7,6 +7,7 @@ import (
 	"unicode/utf8"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/realtime"
 )
 
 // Limits of a workspace's name and description, in characters.
@@ -75,5 +76,6 @@ func (s *Service) UpdateWorkspaceDetails(ctx context.Context, callerNodeID, wsID
 	if err != nil {
 		return nil, err
 	}
+	s.announce(ctx, realtime.KindUpdated, ws.ID, ws.ID)
 	return &WorkspaceDetails{ID: ws.ID, Name: gotName, Description: gotDesc, CanManage: true}, nil
 }

@@ -325,32 +325,6 @@ func (s *Store) UpdateStatus(ctx context.Context, id, status string) error {
 	return err
 }
 
-// TrashChildren recursively trashes all children of a folder.
-func (s *Store) TrashChildren(ctx context.Context, parentID string) error {
-	_, err := s.db.Exec(ctx,
-		`WITH RECURSIVE tree AS (
-			SELECT id FROM drive_items WHERE parent_id = $1
-			UNION ALL
-			SELECT di.id FROM drive_items di JOIN tree t ON di.parent_id = t.id
-		)
-		UPDATE drive_items SET status = 'trashed', trashed_at = NOW(), updated_at = NOW()
-		WHERE id IN (SELECT id FROM tree)`, parentID)
-	return err
-}
-
-// RestoreChildren recursively restores all trashed children of a folder.
-func (s *Store) RestoreChildren(ctx context.Context, parentID string) error {
-	_, err := s.db.Exec(ctx,
-		`WITH RECURSIVE tree AS (
-			SELECT id FROM drive_items WHERE parent_id = $1
-			UNION ALL
-			SELECT di.id FROM drive_items di JOIN tree t ON di.parent_id = t.id
-		)
-		UPDATE drive_items SET status = 'active', trashed_at = NULL, updated_at = NOW()
-		WHERE id IN (SELECT id FROM tree) AND status = 'trashed'`, parentID)
-	return err
-}
-
 // ErrFolderHasDocuments is returned when a delete would remove a folder (or one
 // beneath it) that still holds text documents. text_documents.folder_id is
 // ON DELETE RESTRICT: the writing in it is never destroyed as a side effect.
@@ -641,8 +615,9 @@ func nilStr(s string) *string {
 }
 
 // UpdateFileSize updates the size_bytes column for a drive item.
-func (s *Store) UpdateFileSize(ctx context.Context, id string, sizeBytes int64) {
-	s.db.Exec(ctx, `UPDATE drive_items SET size_bytes = $1 WHERE id = $2`, sizeBytes, id)
+func (s *Store) UpdateFileSize(ctx context.Context, id string, sizeBytes int64) error {
+	_, err := s.db.Exec(ctx, `UPDATE drive_items SET size_bytes = $1 WHERE id = $2`, sizeBytes, id)
+	return err
 }
 
 // GetWorkspacePCID returns the NGAC PC node ID for a workspace.
@@ -678,4 +653,38 @@ func (s *Store) GetChannelWorkspaceID(ctx context.Context, channelID string) (st
 		return "", nil
 	}
 	return wsID, err
+}
+
+// SetTrashed trashes (or restores) an item and, for a folder, everything
+// beneath it as one unit: either the whole subtree changes or none of it does,
+// so a failure cannot leave a trashed folder over live children.
+func (s *Store) SetTrashed(ctx context.Context, id string, isFolder, trashed bool) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // a no-op after Commit
+
+	status, parentSQL, childSQL := "active", `trashed_at = NULL`, `trashed_at = NULL`
+	childWhere := ` AND status = 'trashed'`
+	if trashed {
+		status, parentSQL, childSQL, childWhere = "trashed", `trashed_at = NOW()`, `trashed_at = NOW()`, ""
+	}
+	if _, err := tx.Exec(ctx,
+		`UPDATE drive_items SET status = $1, `+parentSQL+`, updated_at = NOW() WHERE id = $2`, status, id); err != nil {
+		return err
+	}
+	if isFolder {
+		if _, err := tx.Exec(ctx,
+			`WITH RECURSIVE tree AS (
+				SELECT id FROM drive_items WHERE parent_id = $2
+				UNION ALL
+				SELECT di.id FROM drive_items di JOIN tree t ON di.parent_id = t.id
+			)
+			UPDATE drive_items SET status = $1, `+childSQL+`, updated_at = NOW()
+			WHERE id IN (SELECT id FROM tree)`+childWhere, status, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }

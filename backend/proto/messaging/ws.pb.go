@@ -180,9 +180,12 @@ func (x *AuthRequest) GetToken() string {
 	return ""
 }
 
+// Exactly one of channel_id / workspace_id is set. A workspace subscription
+// delivers that workspace's DomainEvents and needs read on the workspace.
 type SubscribeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	WorkspaceId   string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -224,9 +227,17 @@ func (x *SubscribeRequest) GetChannelId() string {
 	return ""
 }
 
+func (x *SubscribeRequest) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
 type UnsubscribeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	WorkspaceId   string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -264,6 +275,13 @@ func (*UnsubscribeRequest) Descriptor() ([]byte, []int) {
 func (x *UnsubscribeRequest) GetChannelId() string {
 	if x != nil {
 		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *UnsubscribeRequest) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
 	}
 	return ""
 }
@@ -322,17 +340,16 @@ type ServerEnvelope struct {
 	//	*ServerEnvelope_Notification
 	//	*ServerEnvelope_UnreadCount
 	//	*ServerEnvelope_ThreadReply
-	//	*ServerEnvelope_AssetUpdated
 	//	*ServerEnvelope_ReactionEvent
 	//	*ServerEnvelope_PinEvent
 	//	*ServerEnvelope_ReadReceipt
 	//	*ServerEnvelope_PollVote
 	//	*ServerEnvelope_TaskUpdate
-	//	*ServerEnvelope_DriveObject
-	//	*ServerEnvelope_DrivePerm
 	//	*ServerEnvelope_Error
 	//	*ServerEnvelope_ApprovalEvent
 	//	*ServerEnvelope_PresenceEvent
+	//	*ServerEnvelope_DomainEvent
+	//	*ServerEnvelope_WorkspaceSubscribed
 	Payload       isServerEnvelope_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -429,15 +446,6 @@ func (x *ServerEnvelope) GetThreadReply() *ThreadReplyEvent {
 	return nil
 }
 
-func (x *ServerEnvelope) GetAssetUpdated() *AssetUpdatedEvent {
-	if x != nil {
-		if x, ok := x.Payload.(*ServerEnvelope_AssetUpdated); ok {
-			return x.AssetUpdated
-		}
-	}
-	return nil
-}
-
 func (x *ServerEnvelope) GetReactionEvent() *ReactionEvent {
 	if x != nil {
 		if x, ok := x.Payload.(*ServerEnvelope_ReactionEvent); ok {
@@ -483,24 +491,6 @@ func (x *ServerEnvelope) GetTaskUpdate() *TaskUpdateEvent {
 	return nil
 }
 
-func (x *ServerEnvelope) GetDriveObject() *DriveObjectEvent {
-	if x != nil {
-		if x, ok := x.Payload.(*ServerEnvelope_DriveObject); ok {
-			return x.DriveObject
-		}
-	}
-	return nil
-}
-
-func (x *ServerEnvelope) GetDrivePerm() *DrivePermEvent {
-	if x != nil {
-		if x, ok := x.Payload.(*ServerEnvelope_DrivePerm); ok {
-			return x.DrivePerm
-		}
-	}
-	return nil
-}
-
 func (x *ServerEnvelope) GetError() *ErrorEvent {
 	if x != nil {
 		if x, ok := x.Payload.(*ServerEnvelope_Error); ok {
@@ -523,6 +513,24 @@ func (x *ServerEnvelope) GetPresenceEvent() *PresenceEvent {
 	if x != nil {
 		if x, ok := x.Payload.(*ServerEnvelope_PresenceEvent); ok {
 			return x.PresenceEvent
+		}
+	}
+	return nil
+}
+
+func (x *ServerEnvelope) GetDomainEvent() *DomainEvent {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerEnvelope_DomainEvent); ok {
+			return x.DomainEvent
+		}
+	}
+	return nil
+}
+
+func (x *ServerEnvelope) GetWorkspaceSubscribed() *WorkspaceSubscribed {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerEnvelope_WorkspaceSubscribed); ok {
+			return x.WorkspaceSubscribed
 		}
 	}
 	return nil
@@ -556,10 +564,6 @@ type ServerEnvelope_ThreadReply struct {
 	ThreadReply *ThreadReplyEvent `protobuf:"bytes,6,opt,name=thread_reply,json=threadReply,proto3,oneof"`
 }
 
-type ServerEnvelope_AssetUpdated struct {
-	AssetUpdated *AssetUpdatedEvent `protobuf:"bytes,7,opt,name=asset_updated,json=assetUpdated,proto3,oneof"`
-}
-
 type ServerEnvelope_ReactionEvent struct {
 	ReactionEvent *ReactionEvent `protobuf:"bytes,8,opt,name=reaction_event,json=reactionEvent,proto3,oneof"`
 }
@@ -580,14 +584,6 @@ type ServerEnvelope_TaskUpdate struct {
 	TaskUpdate *TaskUpdateEvent `protobuf:"bytes,12,opt,name=task_update,json=taskUpdate,proto3,oneof"`
 }
 
-type ServerEnvelope_DriveObject struct {
-	DriveObject *DriveObjectEvent `protobuf:"bytes,13,opt,name=drive_object,json=driveObject,proto3,oneof"`
-}
-
-type ServerEnvelope_DrivePerm struct {
-	DrivePerm *DrivePermEvent `protobuf:"bytes,14,opt,name=drive_perm,json=drivePerm,proto3,oneof"`
-}
-
 type ServerEnvelope_Error struct {
 	Error *ErrorEvent `protobuf:"bytes,15,opt,name=error,proto3,oneof"`
 }
@@ -598,6 +594,14 @@ type ServerEnvelope_ApprovalEvent struct {
 
 type ServerEnvelope_PresenceEvent struct {
 	PresenceEvent *PresenceEvent `protobuf:"bytes,17,opt,name=presence_event,json=presenceEvent,proto3,oneof"`
+}
+
+type ServerEnvelope_DomainEvent struct {
+	DomainEvent *DomainEvent `protobuf:"bytes,18,opt,name=domain_event,json=domainEvent,proto3,oneof"`
+}
+
+type ServerEnvelope_WorkspaceSubscribed struct {
+	WorkspaceSubscribed *WorkspaceSubscribed `protobuf:"bytes,19,opt,name=workspace_subscribed,json=workspaceSubscribed,proto3,oneof"`
 }
 
 func (*ServerEnvelope_AuthResponse) isServerEnvelope_Payload() {}
@@ -612,8 +616,6 @@ func (*ServerEnvelope_UnreadCount) isServerEnvelope_Payload() {}
 
 func (*ServerEnvelope_ThreadReply) isServerEnvelope_Payload() {}
 
-func (*ServerEnvelope_AssetUpdated) isServerEnvelope_Payload() {}
-
 func (*ServerEnvelope_ReactionEvent) isServerEnvelope_Payload() {}
 
 func (*ServerEnvelope_PinEvent) isServerEnvelope_Payload() {}
@@ -624,15 +626,15 @@ func (*ServerEnvelope_PollVote) isServerEnvelope_Payload() {}
 
 func (*ServerEnvelope_TaskUpdate) isServerEnvelope_Payload() {}
 
-func (*ServerEnvelope_DriveObject) isServerEnvelope_Payload() {}
-
-func (*ServerEnvelope_DrivePerm) isServerEnvelope_Payload() {}
-
 func (*ServerEnvelope_Error) isServerEnvelope_Payload() {}
 
 func (*ServerEnvelope_ApprovalEvent) isServerEnvelope_Payload() {}
 
 func (*ServerEnvelope_PresenceEvent) isServerEnvelope_Payload() {}
+
+func (*ServerEnvelope_DomainEvent) isServerEnvelope_Payload() {}
+
+func (*ServerEnvelope_WorkspaceSubscribed) isServerEnvelope_Payload() {}
 
 type AuthResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1126,58 +1128,6 @@ func (x *ThreadReplyEvent) GetParentMessageId() string {
 	return ""
 }
 
-type AssetUpdatedEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	AssetId       string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
-	NewState      string                 `protobuf:"bytes,2,opt,name=new_state,json=newState,proto3" json:"new_state,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *AssetUpdatedEvent) Reset() {
-	*x = AssetUpdatedEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[13]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *AssetUpdatedEvent) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*AssetUpdatedEvent) ProtoMessage() {}
-
-func (x *AssetUpdatedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[13]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use AssetUpdatedEvent.ProtoReflect.Descriptor instead.
-func (*AssetUpdatedEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{13}
-}
-
-func (x *AssetUpdatedEvent) GetAssetId() string {
-	if x != nil {
-		return x.AssetId
-	}
-	return ""
-}
-
-func (x *AssetUpdatedEvent) GetNewState() string {
-	if x != nil {
-		return x.NewState
-	}
-	return ""
-}
-
 type ReactionEvent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	MessageId     string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
@@ -1192,7 +1142,7 @@ type ReactionEvent struct {
 
 func (x *ReactionEvent) Reset() {
 	*x = ReactionEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[14]
+	mi := &file_proto_messaging_ws_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1204,7 +1154,7 @@ func (x *ReactionEvent) String() string {
 func (*ReactionEvent) ProtoMessage() {}
 
 func (x *ReactionEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[14]
+	mi := &file_proto_messaging_ws_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1217,7 +1167,7 @@ func (x *ReactionEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReactionEvent.ProtoReflect.Descriptor instead.
 func (*ReactionEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{14}
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ReactionEvent) GetMessageId() string {
@@ -1274,7 +1224,7 @@ type PinEvent struct {
 
 func (x *PinEvent) Reset() {
 	*x = PinEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[15]
+	mi := &file_proto_messaging_ws_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1286,7 +1236,7 @@ func (x *PinEvent) String() string {
 func (*PinEvent) ProtoMessage() {}
 
 func (x *PinEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[15]
+	mi := &file_proto_messaging_ws_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1299,7 +1249,7 @@ func (x *PinEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PinEvent.ProtoReflect.Descriptor instead.
 func (*PinEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{15}
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PinEvent) GetChannelId() string {
@@ -1341,7 +1291,7 @@ type ReadReceiptEvent struct {
 
 func (x *ReadReceiptEvent) Reset() {
 	*x = ReadReceiptEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[16]
+	mi := &file_proto_messaging_ws_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1353,7 +1303,7 @@ func (x *ReadReceiptEvent) String() string {
 func (*ReadReceiptEvent) ProtoMessage() {}
 
 func (x *ReadReceiptEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[16]
+	mi := &file_proto_messaging_ws_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1366,7 +1316,7 @@ func (x *ReadReceiptEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadReceiptEvent.ProtoReflect.Descriptor instead.
 func (*ReadReceiptEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{16}
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ReadReceiptEvent) GetChannelId() string {
@@ -1403,7 +1353,7 @@ type PollVoteEvent struct {
 
 func (x *PollVoteEvent) Reset() {
 	*x = PollVoteEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[17]
+	mi := &file_proto_messaging_ws_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1415,7 +1365,7 @@ func (x *PollVoteEvent) String() string {
 func (*PollVoteEvent) ProtoMessage() {}
 
 func (x *PollVoteEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[17]
+	mi := &file_proto_messaging_ws_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1428,7 +1378,7 @@ func (x *PollVoteEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PollVoteEvent.ProtoReflect.Descriptor instead.
 func (*PollVoteEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{17}
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *PollVoteEvent) GetPollId() string {
@@ -1479,7 +1429,7 @@ type TaskUpdateEvent struct {
 
 func (x *TaskUpdateEvent) Reset() {
 	*x = TaskUpdateEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[18]
+	mi := &file_proto_messaging_ws_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1491,7 +1441,7 @@ func (x *TaskUpdateEvent) String() string {
 func (*TaskUpdateEvent) ProtoMessage() {}
 
 func (x *TaskUpdateEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[18]
+	mi := &file_proto_messaging_ws_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1504,7 +1454,7 @@ func (x *TaskUpdateEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskUpdateEvent.ProtoReflect.Descriptor instead.
 func (*TaskUpdateEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{18}
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *TaskUpdateEvent) GetTaskId() string {
@@ -1552,7 +1502,7 @@ type ErrorEvent struct {
 
 func (x *ErrorEvent) Reset() {
 	*x = ErrorEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[19]
+	mi := &file_proto_messaging_ws_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1564,7 +1514,7 @@ func (x *ErrorEvent) String() string {
 func (*ErrorEvent) ProtoMessage() {}
 
 func (x *ErrorEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[19]
+	mi := &file_proto_messaging_ws_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1577,7 +1527,7 @@ func (x *ErrorEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ErrorEvent.ProtoReflect.Descriptor instead.
 func (*ErrorEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{19}
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ErrorEvent) GetCode() int32 {
@@ -1594,31 +1544,45 @@ func (x *ErrorEvent) GetMessage() string {
 	return ""
 }
 
-type DriveObjectEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	EventType     string                 `protobuf:"bytes,1,opt,name=event_type,json=eventType,proto3" json:"event_type,omitempty"` // "created" | "updated" | "deleted" | "moved"
-	ItemId        string                 `protobuf:"bytes,2,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	ParentId      string                 `protobuf:"bytes,3,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`
-	WorkspaceId   string                 `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+// DomainEvent tells a client that something it may be showing changed. It
+// carries ids and the kind of change, never content: the client invalidates the
+// matching queries and refetches under its own authorization.
+//
+// domain/kind pairs are listed in docs/specs/realtime-event-delivery/spec.md.
+type DomainEvent struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Domain      string                 `protobuf:"bytes,1,opt,name=domain,proto3" json:"domain,omitempty"` // drive | channel | workspace | document | asset | permission
+	Kind        string                 `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`     // created | updated | deleted | moved | ...
+	TenantId    string                 `protobuf:"bytes,3,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	WorkspaceId string                 `protobuf:"bytes,4,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	Ids         []string               `protobuf:"bytes,5,rep,name=ids,proto3" json:"ids,omitempty"`                                      // entities the change touched
+	ParentId    string                 `protobuf:"bytes,6,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"`            // destination / containing folder, when relevant
+	OldParentId string                 `protobuf:"bytes,7,opt,name=old_parent_id,json=oldParentId,proto3" json:"old_parent_id,omitempty"` // folder an item left (moves)
+	ActorUserId string                 `protobuf:"bytes,8,opt,name=actor_user_id,json=actorUserId,proto3" json:"actor_user_id,omitempty"` // who caused the change
+	// Per-workspace sequence, assigned by the hub to workspace-wide events. A
+	// client that sees a hole resynchronises. 0 for events addressed to a
+	// channel or to specific users: those are not part of the workspace stream.
+	Seq           uint64 `protobuf:"varint,9,opt,name=seq,proto3" json:"seq,omitempty"`
+	ChannelId     string `protobuf:"bytes,10,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"` // set for channel-addressed events
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DriveObjectEvent) Reset() {
-	*x = DriveObjectEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[20]
+func (x *DomainEvent) Reset() {
+	*x = DomainEvent{}
+	mi := &file_proto_messaging_ws_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DriveObjectEvent) String() string {
+func (x *DomainEvent) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DriveObjectEvent) ProtoMessage() {}
+func (*DomainEvent) ProtoMessage() {}
 
-func (x *DriveObjectEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[20]
+func (x *DomainEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_messaging_ws_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1629,62 +1593,110 @@ func (x *DriveObjectEvent) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DriveObjectEvent.ProtoReflect.Descriptor instead.
-func (*DriveObjectEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{20}
+// Deprecated: Use DomainEvent.ProtoReflect.Descriptor instead.
+func (*DomainEvent) Descriptor() ([]byte, []int) {
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{19}
 }
 
-func (x *DriveObjectEvent) GetEventType() string {
+func (x *DomainEvent) GetDomain() string {
 	if x != nil {
-		return x.EventType
+		return x.Domain
 	}
 	return ""
 }
 
-func (x *DriveObjectEvent) GetItemId() string {
+func (x *DomainEvent) GetKind() string {
 	if x != nil {
-		return x.ItemId
+		return x.Kind
 	}
 	return ""
 }
 
-func (x *DriveObjectEvent) GetParentId() string {
+func (x *DomainEvent) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *DomainEvent) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
+func (x *DomainEvent) GetIds() []string {
+	if x != nil {
+		return x.Ids
+	}
+	return nil
+}
+
+func (x *DomainEvent) GetParentId() string {
 	if x != nil {
 		return x.ParentId
 	}
 	return ""
 }
 
-func (x *DriveObjectEvent) GetWorkspaceId() string {
+func (x *DomainEvent) GetOldParentId() string {
 	if x != nil {
-		return x.WorkspaceId
+		return x.OldParentId
 	}
 	return ""
 }
 
-type DrivePermEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ItemId        string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	WorkspaceId   string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+func (x *DomainEvent) GetActorUserId() string {
+	if x != nil {
+		return x.ActorUserId
+	}
+	return ""
+}
+
+func (x *DomainEvent) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *DomainEvent) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+// WorkspaceSubscribed answers a workspace subscription. seq is the last
+// sequence number issued before the subscription took effect; everything after
+// it will arrive, so a client that refetches on this ack misses nothing.
+type WorkspaceSubscribed struct {
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	Seq         uint64                 `protobuf:"varint,2,opt,name=seq,proto3" json:"seq,omitempty"`
+	// True when the subscription was refused. The session follows nothing, but
+	// knows its attempt was decided, so it can fetch what it missed on its own.
+	Denied        bool `protobuf:"varint,3,opt,name=denied,proto3" json:"denied,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *DrivePermEvent) Reset() {
-	*x = DrivePermEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[21]
+func (x *WorkspaceSubscribed) Reset() {
+	*x = WorkspaceSubscribed{}
+	mi := &file_proto_messaging_ws_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *DrivePermEvent) String() string {
+func (x *WorkspaceSubscribed) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*DrivePermEvent) ProtoMessage() {}
+func (*WorkspaceSubscribed) ProtoMessage() {}
 
-func (x *DrivePermEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[21]
+func (x *WorkspaceSubscribed) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_messaging_ws_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1695,23 +1707,30 @@ func (x *DrivePermEvent) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use DrivePermEvent.ProtoReflect.Descriptor instead.
-func (*DrivePermEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{21}
+// Deprecated: Use WorkspaceSubscribed.ProtoReflect.Descriptor instead.
+func (*WorkspaceSubscribed) Descriptor() ([]byte, []int) {
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{20}
 }
 
-func (x *DrivePermEvent) GetItemId() string {
-	if x != nil {
-		return x.ItemId
-	}
-	return ""
-}
-
-func (x *DrivePermEvent) GetWorkspaceId() string {
+func (x *WorkspaceSubscribed) GetWorkspaceId() string {
 	if x != nil {
 		return x.WorkspaceId
 	}
 	return ""
+}
+
+func (x *WorkspaceSubscribed) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *WorkspaceSubscribed) GetDenied() bool {
+	if x != nil {
+		return x.Denied
+	}
+	return false
 }
 
 type ApprovalEvent struct {
@@ -1721,13 +1740,15 @@ type ApprovalEvent struct {
 	Action        string                 `protobuf:"bytes,3,opt,name=action,proto3" json:"action,omitempty"` // "created", "approved", "rejected", "step_advanced"
 	ActorNodeId   string                 `protobuf:"bytes,4,opt,name=actor_node_id,json=actorNodeId,proto3" json:"actor_node_id,omitempty"`
 	TemplateName  string                 `protobuf:"bytes,5,opt,name=template_name,json=templateName,proto3" json:"template_name,omitempty"`
+	TenantId      string                 `protobuf:"bytes,6,opt,name=tenant_id,json=tenantId,proto3" json:"tenant_id,omitempty"`
+	WorkspaceId   string                 `protobuf:"bytes,7,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ApprovalEvent) Reset() {
 	*x = ApprovalEvent{}
-	mi := &file_proto_messaging_ws_proto_msgTypes[22]
+	mi := &file_proto_messaging_ws_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1739,7 +1760,7 @@ func (x *ApprovalEvent) String() string {
 func (*ApprovalEvent) ProtoMessage() {}
 
 func (x *ApprovalEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_ws_proto_msgTypes[22]
+	mi := &file_proto_messaging_ws_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1752,7 +1773,7 @@ func (x *ApprovalEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApprovalEvent.ProtoReflect.Descriptor instead.
 func (*ApprovalEvent) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{22}
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ApprovalEvent) GetRequestId() string {
@@ -1790,6 +1811,20 @@ func (x *ApprovalEvent) GetTemplateName() string {
 	return ""
 }
 
+func (x *ApprovalEvent) GetTenantId() string {
+	if x != nil {
+		return x.TenantId
+	}
+	return ""
+}
+
+func (x *ApprovalEvent) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
 var File_proto_messaging_ws_proto protoreflect.FileDescriptor
 
 const file_proto_messaging_ws_proto_rawDesc = "" +
@@ -1802,38 +1837,39 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\x06typing\x18\x04 \x01(\v2\x18.messaging.TypingRequestH\x00R\x06typingB\t\n" +
 	"\apayload\"#\n" +
 	"\vAuthRequest\x12\x14\n" +
-	"\x05token\x18\x01 \x01(\tR\x05token\"1\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token\"T\n" +
 	"\x10SubscribeRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\"3\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12!\n" +
+	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\"V\n" +
 	"\x12UnsubscribeRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\".\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12!\n" +
+	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\".\n" +
 	"\rTypingRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\"\xc6\b\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\"\xd0\b\n" +
 	"\x0eServerEnvelope\x12>\n" +
 	"\rauth_response\x18\x01 \x01(\v2\x17.messaging.AuthResponseH\x00R\fauthResponse\x12;\n" +
 	"\fchat_message\x18\x02 \x01(\v2\x16.messaging.ChatMessageH\x00R\vchatMessage\x12;\n" +
 	"\ftyping_event\x18\x03 \x01(\v2\x16.messaging.TypingEventH\x00R\vtypingEvent\x12B\n" +
 	"\fnotification\x18\x04 \x01(\v2\x1c.messaging.NotificationEventH\x00R\fnotification\x12@\n" +
 	"\funread_count\x18\x05 \x01(\v2\x1b.messaging.UnreadCountEventH\x00R\vunreadCount\x12@\n" +
-	"\fthread_reply\x18\x06 \x01(\v2\x1b.messaging.ThreadReplyEventH\x00R\vthreadReply\x12C\n" +
-	"\rasset_updated\x18\a \x01(\v2\x1c.messaging.AssetUpdatedEventH\x00R\fassetUpdated\x12A\n" +
+	"\fthread_reply\x18\x06 \x01(\v2\x1b.messaging.ThreadReplyEventH\x00R\vthreadReply\x12A\n" +
 	"\x0ereaction_event\x18\b \x01(\v2\x18.messaging.ReactionEventH\x00R\rreactionEvent\x122\n" +
 	"\tpin_event\x18\t \x01(\v2\x13.messaging.PinEventH\x00R\bpinEvent\x12@\n" +
 	"\fread_receipt\x18\n" +
 	" \x01(\v2\x1b.messaging.ReadReceiptEventH\x00R\vreadReceipt\x127\n" +
 	"\tpoll_vote\x18\v \x01(\v2\x18.messaging.PollVoteEventH\x00R\bpollVote\x12=\n" +
 	"\vtask_update\x18\f \x01(\v2\x1a.messaging.TaskUpdateEventH\x00R\n" +
-	"taskUpdate\x12@\n" +
-	"\fdrive_object\x18\r \x01(\v2\x1b.messaging.DriveObjectEventH\x00R\vdriveObject\x12:\n" +
-	"\n" +
-	"drive_perm\x18\x0e \x01(\v2\x19.messaging.DrivePermEventH\x00R\tdrivePerm\x12-\n" +
+	"taskUpdate\x12-\n" +
 	"\x05error\x18\x0f \x01(\v2\x15.messaging.ErrorEventH\x00R\x05error\x12A\n" +
 	"\x0eapproval_event\x18\x10 \x01(\v2\x18.messaging.ApprovalEventH\x00R\rapprovalEvent\x12A\n" +
-	"\x0epresence_event\x18\x11 \x01(\v2\x18.messaging.PresenceEventH\x00R\rpresenceEventB\t\n" +
-	"\apayload\"O\n" +
+	"\x0epresence_event\x18\x11 \x01(\v2\x18.messaging.PresenceEventH\x00R\rpresenceEvent\x12;\n" +
+	"\fdomain_event\x18\x12 \x01(\v2\x16.messaging.DomainEventH\x00R\vdomainEvent\x12S\n" +
+	"\x14workspace_subscribed\x18\x13 \x01(\v2\x1e.messaging.WorkspaceSubscribedH\x00R\x13workspaceSubscribedB\t\n" +
+	"\apayloadJ\x04\b\a\x10\bJ\x04\b\r\x10\x0eJ\x04\b\x0e\x10\x0fR\rasset_updatedR\fdrive_objectR\n" +
+	"drive_perm\"O\n" +
 	"\fAuthResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12\x16\n" +
@@ -1877,10 +1913,7 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\x05count\x18\x01 \x01(\x05R\x05count\"p\n" +
 	"\x10ThreadReplyEvent\x120\n" +
 	"\amessage\x18\x01 \x01(\v2\x16.messaging.ChatMessageR\amessage\x12*\n" +
-	"\x11parent_message_id\x18\x02 \x01(\tR\x0fparentMessageId\"K\n" +
-	"\x11AssetUpdatedEvent\x12\x19\n" +
-	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x1b\n" +
-	"\tnew_state\x18\x02 \x01(\tR\bnewState\"\xb0\x01\n" +
+	"\x11parent_message_id\x18\x02 \x01(\tR\x0fparentMessageId\"\xb0\x01\n" +
 	"\rReactionEvent\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x1d\n" +
@@ -1922,23 +1955,33 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\n" +
 	"ErrorEvent\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\x05R\x04code\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"\x8a\x01\n" +
-	"\x10DriveObjectEvent\x12\x1d\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\"\xa1\x02\n" +
+	"\vDomainEvent\x12\x16\n" +
+	"\x06domain\x18\x01 \x01(\tR\x06domain\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x1b\n" +
+	"\ttenant_id\x18\x03 \x01(\tR\btenantId\x12!\n" +
+	"\fworkspace_id\x18\x04 \x01(\tR\vworkspaceId\x12\x10\n" +
+	"\x03ids\x18\x05 \x03(\tR\x03ids\x12\x1b\n" +
+	"\tparent_id\x18\x06 \x01(\tR\bparentId\x12\"\n" +
+	"\rold_parent_id\x18\a \x01(\tR\voldParentId\x12\"\n" +
+	"\ractor_user_id\x18\b \x01(\tR\vactorUserId\x12\x10\n" +
+	"\x03seq\x18\t \x01(\x04R\x03seq\x12\x1d\n" +
 	"\n" +
-	"event_type\x18\x01 \x01(\tR\teventType\x12\x17\n" +
-	"\aitem_id\x18\x02 \x01(\tR\x06itemId\x12\x1b\n" +
-	"\tparent_id\x18\x03 \x01(\tR\bparentId\x12!\n" +
-	"\fworkspace_id\x18\x04 \x01(\tR\vworkspaceId\"L\n" +
-	"\x0eDrivePermEvent\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12!\n" +
-	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\"\xa7\x01\n" +
+	"channel_id\x18\n" +
+	" \x01(\tR\tchannelId\"b\n" +
+	"\x13WorkspaceSubscribed\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x10\n" +
+	"\x03seq\x18\x02 \x01(\x04R\x03seq\x12\x16\n" +
+	"\x06denied\x18\x03 \x01(\bR\x06denied\"\xe7\x01\n" +
 	"\rApprovalEvent\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x16\n" +
 	"\x06action\x18\x03 \x01(\tR\x06action\x12\"\n" +
 	"\ractor_node_id\x18\x04 \x01(\tR\vactorNodeId\x12#\n" +
-	"\rtemplate_name\x18\x05 \x01(\tR\ftemplateNameB\x1fZ\x1dngac-platform/proto/messagingb\x06proto3"
+	"\rtemplate_name\x18\x05 \x01(\tR\ftemplateName\x12\x1b\n" +
+	"\ttenant_id\x18\x06 \x01(\tR\btenantId\x12!\n" +
+	"\fworkspace_id\x18\a \x01(\tR\vworkspaceIdB\x1fZ\x1dngac-platform/proto/messagingb\x06proto3"
 
 var (
 	file_proto_messaging_ws_proto_rawDescOnce sync.Once
@@ -1952,7 +1995,7 @@ func file_proto_messaging_ws_proto_rawDescGZIP() []byte {
 	return file_proto_messaging_ws_proto_rawDescData
 }
 
-var file_proto_messaging_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_proto_messaging_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
 var file_proto_messaging_ws_proto_goTypes = []any{
 	(*ClientEnvelope)(nil),        // 0: messaging.ClientEnvelope
 	(*AuthRequest)(nil),           // 1: messaging.AuthRequest
@@ -1967,17 +2010,16 @@ var file_proto_messaging_ws_proto_goTypes = []any{
 	(*NotificationEvent)(nil),     // 10: messaging.NotificationEvent
 	(*UnreadCountEvent)(nil),      // 11: messaging.UnreadCountEvent
 	(*ThreadReplyEvent)(nil),      // 12: messaging.ThreadReplyEvent
-	(*AssetUpdatedEvent)(nil),     // 13: messaging.AssetUpdatedEvent
-	(*ReactionEvent)(nil),         // 14: messaging.ReactionEvent
-	(*PinEvent)(nil),              // 15: messaging.PinEvent
-	(*ReadReceiptEvent)(nil),      // 16: messaging.ReadReceiptEvent
-	(*PollVoteEvent)(nil),         // 17: messaging.PollVoteEvent
-	(*TaskUpdateEvent)(nil),       // 18: messaging.TaskUpdateEvent
-	(*ErrorEvent)(nil),            // 19: messaging.ErrorEvent
-	(*DriveObjectEvent)(nil),      // 20: messaging.DriveObjectEvent
-	(*DrivePermEvent)(nil),        // 21: messaging.DrivePermEvent
-	(*ApprovalEvent)(nil),         // 22: messaging.ApprovalEvent
-	(*timestamppb.Timestamp)(nil), // 23: google.protobuf.Timestamp
+	(*ReactionEvent)(nil),         // 13: messaging.ReactionEvent
+	(*PinEvent)(nil),              // 14: messaging.PinEvent
+	(*ReadReceiptEvent)(nil),      // 15: messaging.ReadReceiptEvent
+	(*PollVoteEvent)(nil),         // 16: messaging.PollVoteEvent
+	(*TaskUpdateEvent)(nil),       // 17: messaging.TaskUpdateEvent
+	(*ErrorEvent)(nil),            // 18: messaging.ErrorEvent
+	(*DomainEvent)(nil),           // 19: messaging.DomainEvent
+	(*WorkspaceSubscribed)(nil),   // 20: messaging.WorkspaceSubscribed
+	(*ApprovalEvent)(nil),         // 21: messaging.ApprovalEvent
+	(*timestamppb.Timestamp)(nil), // 22: google.protobuf.Timestamp
 }
 var file_proto_messaging_ws_proto_depIdxs = []int32{
 	1,  // 0: messaging.ClientEnvelope.auth:type_name -> messaging.AuthRequest
@@ -1990,24 +2032,23 @@ var file_proto_messaging_ws_proto_depIdxs = []int32{
 	10, // 7: messaging.ServerEnvelope.notification:type_name -> messaging.NotificationEvent
 	11, // 8: messaging.ServerEnvelope.unread_count:type_name -> messaging.UnreadCountEvent
 	12, // 9: messaging.ServerEnvelope.thread_reply:type_name -> messaging.ThreadReplyEvent
-	13, // 10: messaging.ServerEnvelope.asset_updated:type_name -> messaging.AssetUpdatedEvent
-	14, // 11: messaging.ServerEnvelope.reaction_event:type_name -> messaging.ReactionEvent
-	15, // 12: messaging.ServerEnvelope.pin_event:type_name -> messaging.PinEvent
-	16, // 13: messaging.ServerEnvelope.read_receipt:type_name -> messaging.ReadReceiptEvent
-	17, // 14: messaging.ServerEnvelope.poll_vote:type_name -> messaging.PollVoteEvent
-	18, // 15: messaging.ServerEnvelope.task_update:type_name -> messaging.TaskUpdateEvent
-	20, // 16: messaging.ServerEnvelope.drive_object:type_name -> messaging.DriveObjectEvent
-	21, // 17: messaging.ServerEnvelope.drive_perm:type_name -> messaging.DrivePermEvent
-	19, // 18: messaging.ServerEnvelope.error:type_name -> messaging.ErrorEvent
-	22, // 19: messaging.ServerEnvelope.approval_event:type_name -> messaging.ApprovalEvent
-	9,  // 20: messaging.ServerEnvelope.presence_event:type_name -> messaging.PresenceEvent
-	23, // 21: messaging.ChatMessage.created_at:type_name -> google.protobuf.Timestamp
-	7,  // 22: messaging.ThreadReplyEvent.message:type_name -> messaging.ChatMessage
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	13, // 10: messaging.ServerEnvelope.reaction_event:type_name -> messaging.ReactionEvent
+	14, // 11: messaging.ServerEnvelope.pin_event:type_name -> messaging.PinEvent
+	15, // 12: messaging.ServerEnvelope.read_receipt:type_name -> messaging.ReadReceiptEvent
+	16, // 13: messaging.ServerEnvelope.poll_vote:type_name -> messaging.PollVoteEvent
+	17, // 14: messaging.ServerEnvelope.task_update:type_name -> messaging.TaskUpdateEvent
+	18, // 15: messaging.ServerEnvelope.error:type_name -> messaging.ErrorEvent
+	21, // 16: messaging.ServerEnvelope.approval_event:type_name -> messaging.ApprovalEvent
+	9,  // 17: messaging.ServerEnvelope.presence_event:type_name -> messaging.PresenceEvent
+	19, // 18: messaging.ServerEnvelope.domain_event:type_name -> messaging.DomainEvent
+	20, // 19: messaging.ServerEnvelope.workspace_subscribed:type_name -> messaging.WorkspaceSubscribed
+	22, // 20: messaging.ChatMessage.created_at:type_name -> google.protobuf.Timestamp
+	7,  // 21: messaging.ThreadReplyEvent.message:type_name -> messaging.ChatMessage
+	22, // [22:22] is the sub-list for method output_type
+	22, // [22:22] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_proto_messaging_ws_proto_init() }
@@ -2028,17 +2069,16 @@ func file_proto_messaging_ws_proto_init() {
 		(*ServerEnvelope_Notification)(nil),
 		(*ServerEnvelope_UnreadCount)(nil),
 		(*ServerEnvelope_ThreadReply)(nil),
-		(*ServerEnvelope_AssetUpdated)(nil),
 		(*ServerEnvelope_ReactionEvent)(nil),
 		(*ServerEnvelope_PinEvent)(nil),
 		(*ServerEnvelope_ReadReceipt)(nil),
 		(*ServerEnvelope_PollVote)(nil),
 		(*ServerEnvelope_TaskUpdate)(nil),
-		(*ServerEnvelope_DriveObject)(nil),
-		(*ServerEnvelope_DrivePerm)(nil),
 		(*ServerEnvelope_Error)(nil),
 		(*ServerEnvelope_ApprovalEvent)(nil),
 		(*ServerEnvelope_PresenceEvent)(nil),
+		(*ServerEnvelope_DomainEvent)(nil),
+		(*ServerEnvelope_WorkspaceSubscribed)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2046,7 +2086,7 @@ func file_proto_messaging_ws_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_messaging_ws_proto_rawDesc), len(file_proto_messaging_ws_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   23,
+			NumMessages:   22,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

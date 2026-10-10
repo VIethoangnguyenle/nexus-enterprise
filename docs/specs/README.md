@@ -59,8 +59,14 @@ Verified against the codebase on 2026-07-31.
 |---|---|
 | `drive-context-panel` | Matches code |
 | `drive-tree-navigation` | Matches code |
-| `drive-realtime-sync` | Matches code |
+| `drive-realtime-sync` | Matches code (divergence closed 2026-10-10; see its Status) |
 | `drive-permission-engine` | Matches code (tenant-keyed cache; divergence closed 2026-08-02) |
+
+**Realtime**
+
+| Capability | State |
+|---|---|
+| `realtime-event-delivery` | Matches code (added 2026-10-10) |
 
 **Approval**
 

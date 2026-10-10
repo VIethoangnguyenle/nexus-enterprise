@@ -5,6 +5,7 @@ import type { TextDocument } from '../../api/documents'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useCreateTextDocument, useDeleteTextDocument, useTextDocuments } from '../../hooks/useDocuments'
 import { usePeople } from '../../hooks/usePeople'
+import { useRealtimeWash } from '../../hooks/useRealtimeWash'
 import { folderSearch, textsSearch, type DriveSearch } from '../../lib/drive-search'
 import { normalize } from '../../lib/people'
 import { workspaceDisplayName } from '../../lib/workspace'
@@ -13,7 +14,7 @@ import { ConfirmDialog } from '../composites/ConfirmDialog'
 import { DriveTree } from '../drive/DriveTree'
 import { EmptyState } from '../spaces/EmptyState'
 import { TextsTable } from './TextsTable'
-import { GROUPS, groupOf, titleOf } from './document-model'
+import { GROUPS, groupOf, textVersion, titleOf } from './document-model'
 
 /**
  * Văn bản, the group at the top of Tài liệu's list panel (mockup §2): the
@@ -38,6 +39,12 @@ export function TextsScreen() {
     return (q.docs ?? []).filter((d) => !needle || normalize(titleOf(d)).includes(needle))
   }, [q.docs, query])
   const loading = !q.docs && !q.isError
+  const { fresh } = useRealtimeWash(q.docs ?? [], {
+    idOf: (d) => d.id,
+    versionOf: textVersion,
+    ready: !!q.docs && !q.isFetching,
+    scope: `${wsId}:${group.id}`,
+  })
   const total = q.docs?.length ?? 0
   const more = q.hasNextPage
   const workspaceLabel = workspaceDisplayName(workspaceName)
@@ -109,6 +116,7 @@ export function TextsScreen() {
           docs={docs}
           loading={loading}
           people={people}
+          fresh={fresh}
           scope={`${wsId}:${group.id}`}
           onDelete={setToDelete}
         />

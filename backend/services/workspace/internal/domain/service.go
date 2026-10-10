@@ -13,6 +13,7 @@ import (
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/provision"
+	"ngac-platform/pkg/realtime"
 	drivepb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/workspace/internal/store"
@@ -47,6 +48,8 @@ type Service struct {
 	invitations   InvitationStore
 	now           func() time.Time
 	inviteLimiter *windowLimiter
+	// emitter announces committed changes to live clients; see WithEmitter.
+	emitter realtime.Emitter
 }
 
 // NewService creates a workspace domain service.
@@ -371,6 +374,8 @@ func (s *Service) RemoveMember(ctx context.Context, callerNodeID, wsID, targetNG
 			slog.Warn("member removed but their listing remains", "workspace", ws.ID, "error", err)
 		}
 	}
+	s.announce(ctx, realtime.KindMemberRemoved, ws.ID, targetNGACNodeID)
+	s.announceAccessChanged(ctx, ws.ID, targetNGACNodeID)
 	return nil
 }
 
@@ -458,7 +463,12 @@ func (s *Service) TransferOwnership(ctx context.Context, callerNodeID, wsID, new
 		}
 		return nil
 	}
-	return s.store.WithOwnerLock(ctx, ws.ID, add)
+	if err := s.store.WithOwnerLock(ctx, ws.ID, add); err != nil {
+		return err
+	}
+	s.announce(ctx, realtime.KindRoleChanged, ws.ID, newOwnerNGACNodeID)
+	s.announceAccessChanged(ctx, ws.ID, newOwnerNGACNodeID)
+	return nil
 }
 
 // RemoveOwner removes a user from the Owners UA, refusing if they are the last
@@ -490,7 +500,12 @@ func (s *Service) RemoveOwner(ctx context.Context, callerNodeID, wsID, targetNGA
 		}
 		return nil
 	}
-	return s.store.WithOwnerLock(ctx, ws.ID, remove)
+	if err := s.store.WithOwnerLock(ctx, ws.ID, remove); err != nil {
+		return err
+	}
+	s.announce(ctx, realtime.KindRoleChanged, ws.ID, targetNGACNodeID)
+	s.announceAccessChanged(ctx, ws.ID, targetNGACNodeID)
+	return nil
 }
 
 // Role represents an NGAC role (UA) in a workspace.
@@ -531,6 +546,7 @@ func (s *Service) CreateRole(ctx context.Context, callerNodeID, wsID, roleName s
 		return nil, prov.Fail(ctx, fmt.Errorf("assign role: %w", err))
 	}
 	prov.Done()
+	s.announce(ctx, realtime.KindRoleChanged, ws.ID, node.Id)
 	return &Role{ID: node.Id, Name: roleName, NGACNodeID: node.Id}, nil
 }
 
@@ -567,6 +583,7 @@ func (s *Service) DeleteRole(ctx context.Context, callerNodeID, wsID, roleID str
 	if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: roleID}); err != nil {
 		return fmt.Errorf("delete role: %w", err)
 	}
+	s.announce(ctx, realtime.KindRoleChanged, ws.ID, roleID)
 	return nil
 }
 

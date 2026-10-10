@@ -17,6 +17,8 @@ export const assetKeys = {
   summaries: () => ['asset-summary'] as const,
   summary: (wsId: string) => ['asset-summary', wsId] as const,
   activitiesAll: () => ['asset-activity'] as const,
+  /** Every cached feed of one workspace, whatever its limit. */
+  activities: (wsId: string) => ['asset-activity', wsId] as const,
   activity: (wsId: string, limit?: number) => ['asset-activity', wsId, limit] as const,
   requestsAll: () => ['asset-requests'] as const,
   requests: (wsId: string) => ['asset-requests', wsId] as const,

@@ -23,6 +23,7 @@ import (
 
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/pkg/realtime"
 	drivepb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	pb "ngac-platform/proto/workspace"
@@ -124,8 +125,11 @@ func main() {
 	policyReadClient := policypb.NewPolicyReadServiceClient(policyReadConn)
 	policyWriteClient := policypb.NewPolicyWriteServiceClient(policyConn)
 
+	rt := realtime.Connect("workspace")
+	defer rt.Close()
+
 	wsStore := store.New(pool)
-	wsSvc := domain.NewService(wsStore, wsStore, policyReadClient, policyWriteClient, minioClient, driveClient).WithDirectory(wsStore).WithInvitations(wsStore)
+	wsSvc := domain.NewService(wsStore, wsStore, policyReadClient, policyWriteClient, minioClient, driveClient).WithDirectory(wsStore).WithInvitations(wsStore).WithEmitter(rt)
 	wsSrv := wgrpc.NewWorkspaceServer(wsSvc)
 	pb.RegisterWorkspaceServiceServer(srv, wsSrv)
 

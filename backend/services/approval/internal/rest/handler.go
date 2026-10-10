@@ -500,6 +500,7 @@ func (h *Handler) publishEvent(ctx context.Context, claims *httputil.Claims, req
 		Action:      action,
 		ActorNodeID: claims.NGACNodeID,
 		TenantID:    claims.TenantID,
+		WorkspaceID: claims.TenantID,
 		Comment:     comment,
 	}
 	aud, err := h.svc.EventAudience(ctx, requestID)

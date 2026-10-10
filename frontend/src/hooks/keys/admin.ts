@@ -3,6 +3,8 @@
  * shows another workspace's people or roles. `all(wsId)` is the group prefix.
  */
 export const adminKeys = {
+  /** Every admin query of any workspace: the one prefix that covers people, roles, departments and invitations. */
+  everything: () => ['admin'] as const,
   all: (wsId: string) => ['admin', wsId] as const,
   departments: (wsId: string) => ['admin', 'departments', wsId] as const,
   /** The people table (name, email, department, roles, standing). */

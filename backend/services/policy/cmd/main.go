@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/realtime"
 	pb "ngac-platform/proto/policy"
 	"ngac-platform/services/policy/internal/events"
 	pgrpc "ngac-platform/services/policy/internal/grpc"
@@ -121,6 +122,9 @@ func main() {
 
 	writeServer := pgrpc.NewWriteServer(store, producer, invalidation, operationStore, prohibitionStore, strictOps)
 	writeServer.SetShardManager(shardMgr)
+	rtProducer := realtime.Connect("policy")
+	defer rtProducer.Close()
+	writeServer.SetRealtime(rtProducer)
 	pb.RegisterPolicyWriteServiceServer(srv, writeServer)
 
 	healthSrv := health.NewServer()

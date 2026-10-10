@@ -20,6 +20,7 @@ type AssetLifecycleEvent struct {
 	Action      string `json:"action"`
 	ActorID     string `json:"actor_id"`
 	WorkspaceID string `json:"workspace_id"`
+	TenantID    string `json:"tenant_id"`
 	Timestamp   int64  `json:"timestamp"`
 }
 
@@ -32,6 +33,7 @@ type AssetRequestEvent struct {
 	Status      string `json:"status"`
 	ApproverID  string `json:"approver_id,omitempty"`
 	WorkspaceID string `json:"workspace_id"`
+	TenantID    string `json:"tenant_id"`
 	Timestamp   int64  `json:"timestamp"`
 }
 
@@ -44,6 +46,7 @@ type AssetAssignmentEvent struct {
 	Action      string `json:"action"`
 	ActorID     string `json:"actor_id"`
 	WorkspaceID string `json:"workspace_id"`
+	TenantID    string `json:"tenant_id"`
 	Timestamp   int64  `json:"timestamp"`
 }
 
@@ -64,6 +67,7 @@ type ApprovalNotice struct {
 	ActorNodeID      string
 	TemplateName     string
 	TenantID         string
+	WorkspaceID      string
 	RecipientNodeIDs []string
 }
 
@@ -74,8 +78,8 @@ type ApprovalBroadcaster interface {
 
 // ApprovalEvent matches the event structure from approval service.
 //
-// TenantID is not published by the approval producer yet; it is read here so
-// that delivery narrows to the tenant as soon as the producer starts sending it.
+// TenantID and WorkspaceID come from the acting request's token; delivery is
+// narrowed to that tenant and the frontend scopes its refetch by the workspace.
 type ApprovalEvent struct {
 	RequestID       string   `json:"request_id"`
 	TemplateName    string   `json:"template_name"`
@@ -87,6 +91,7 @@ type ApprovalEvent struct {
 	AssigneeNodeIDs []string `json:"assignee_node_ids"`
 	ScopeOaID       string   `json:"scope_oa_id"`
 	TenantID        string   `json:"tenant_id"`
+	WorkspaceID     string   `json:"workspace_id"`
 	Comment         string   `json:"comment"`
 	Timestamp       int64    `json:"timestamp"`
 }
@@ -282,7 +287,7 @@ func (c *Consumer) handleApprovalEvent(ctx context.Context, data []byte) {
 	c.broadcast.BroadcastApprovalEvent(ApprovalNotice{
 		RequestID: evt.RequestID, Status: evt.Status, Action: evt.Action,
 		ActorNodeID: evt.ActorNodeID, TemplateName: evt.TemplateName,
-		TenantID: evt.TenantID, RecipientNodeIDs: recipients,
+		TenantID: evt.TenantID, WorkspaceID: evt.WorkspaceID, RecipientNodeIDs: recipients,
 	})
 }
 

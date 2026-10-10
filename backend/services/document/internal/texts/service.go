@@ -12,6 +12,7 @@ import (
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
 )
 
@@ -47,6 +48,8 @@ func (e *ConflictError) Unwrap() error { return ErrVersionConflict }
 type Caller struct {
 	UserID     string
 	NGACNodeID string
+	// TenantID is the tenant of the caller's token; realtime events stay inside it.
+	TenantID string
 }
 
 // Service holds the rules: who may do what to which document, and what a
@@ -55,6 +58,24 @@ type Caller struct {
 type Service struct {
 	store  *Store
 	policy policypb.PolicyReadServiceClient
+	emit   realtime.Emitter
+}
+
+// SetEmitter installs the sink that learns of committed changes. nil, the
+// default, announces nothing.
+func (s *Service) SetEmitter(e realtime.Emitter) { s.emit = e }
+
+// announce tells the emitter a change to d has been committed. Call it only
+// after the write succeeded.
+func (s *Service) announce(who Caller, kind string, d *Doc) {
+	if s.emit == nil {
+		return
+	}
+	s.emit.Emit(realtime.Event{
+		Domain: realtime.DomainDocument, Kind: kind,
+		TenantID: who.TenantID, WorkspaceID: d.WorkspaceID,
+		IDs: []string{d.ID}, ParentID: d.FolderID, ActorUserID: who.UserID,
+	})
 }
 
 // NewService returns a Service on store, deciding access through policy.
@@ -144,9 +165,14 @@ func (s *Service) Create(ctx context.Context, who Caller, workspaceID, folderID,
 	if err := s.authorize(ctx, who, oa, ngac.OpWrite); err != nil {
 		return nil, err
 	}
-	return s.store.Insert(ctx, &Doc{
+	created, err := s.store.Insert(ctx, &Doc{
 		WorkspaceID: workspaceID, FolderID: folderID, Title: title, Status: StatusDraft, OwnerID: who.UserID,
 	})
+	if err != nil {
+		return nil, err
+	}
+	s.announce(who, realtime.KindCreated, created)
+	return created, nil
 }
 
 // Opened is a document with what the caller may do to it. CanRead says whether
@@ -389,6 +415,7 @@ func (s *Service) Update(ctx context.Context, who Caller, id string, ch Change) 
 	case err != nil:
 		return nil, err
 	}
+	s.announce(who, realtime.KindUpdated, cur)
 	if !canRead {
 		cur = &Doc{ID: cur.ID, WorkspaceID: cur.WorkspaceID, Version: cur.Version, Status: cur.Status, UpdatedAt: cur.UpdatedAt}
 	}
@@ -401,7 +428,11 @@ func (s *Service) Delete(ctx context.Context, who Caller, id string) error {
 	if err != nil {
 		return err
 	}
-	if err := s.store.Delete(ctx, d.ID); err != nil && !errors.Is(err, ErrNotFound) {
+	err = s.store.Delete(ctx, d.ID)
+	switch {
+	case err == nil:
+		s.announce(who, realtime.KindDeleted, d)
+	case !errors.Is(err, ErrNotFound):
 		return err
 	}
 	return nil

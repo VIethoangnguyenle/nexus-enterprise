@@ -30,12 +30,12 @@ type AssetServer struct {
 	pb.UnimplementedAssetServiceServer
 	store      *store.Store
 	policyRead policypb.PolicyReadServiceClient
-	producer   *events.Producer
+	producer   events.Publisher
 }
 
 // NewAssetServer creates the asset gRPC handler.
-func NewAssetServer(s *store.Store, pr policypb.PolicyReadServiceClient, p *events.Producer) *AssetServer {
-	return &AssetServer{store: s, policyRead: pr, producer: p}
+func NewAssetServer(s *store.Store, pr policypb.PolicyReadServiceClient, p events.Publisher) *AssetServer {
+	return &AssetServer{store: s, policyRead: pr, producer: orDiscard(p)}
 }
 
 func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetRequest) (*pb.Asset, error) {
@@ -296,7 +296,7 @@ func (s *AssetServer) TransitionAsset(ctx context.Context, req *pb.TransitionReq
 	}
 
 	// Emit Kafka lifecycle event
-	s.producer.PublishLifecycle(events.LifecycleEvent{
+	s.producer.PublishLifecycle(ctx, events.LifecycleEvent{
 		AssetID:     req.AssetId,
 		AssetName:   asset.Name,
 		TypeName:    asset.TypeName,
@@ -423,7 +423,7 @@ func (s *AssetServer) HandOverAsset(ctx context.Context, req *pb.HandOverRequest
 	if err := s.store.HandOver(ctx, req.AssetId, req.AssigneeId, who.UserID, req.Comment); err != nil {
 		return nil, storeErr(err, "hand over")
 	}
-	s.producer.PublishAssignment(events.AssignmentEvent{
+	s.producer.PublishAssignment(ctx, events.AssignmentEvent{
 		AssetID:     req.AssetId,
 		AssetName:   asset.Name,
 		FromUserID:  derefString(asset.AssignedTo),
@@ -572,4 +572,13 @@ func assetToProto(a *store.Asset) *pb.Asset {
 		}
 	}
 	return result
+}
+
+// orDiscard turns a missing publisher into one that discards, so a server built
+// without Kafka (or in a test) never has to check before announcing.
+func orDiscard(p events.Publisher) events.Publisher {
+	if p == nil {
+		return (*events.Producer)(nil)
+	}
+	return p
 }

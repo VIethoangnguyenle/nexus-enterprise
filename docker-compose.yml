@@ -225,6 +225,7 @@ services:
       GRPC_PORT: "50053"
       REST_PORT: "8080"
       JWT_SECRET: ngac-super-secret-key-change-in-production
+      KAFKA_BROKERS: redpanda:9092
       DRIVE_SERVICE_ADDR: drive:50057
     depends_on:
       policy:
@@ -261,6 +262,7 @@ services:
       GRPC_PORT: "50054"
       REST_PORT: "8080"
       JWT_SECRET: ngac-super-secret-key-change-in-production
+      KAFKA_BROKERS: redpanda:9092
       DRIVE_SERVICE_ADDR: drive:50057
       POLICY_SERVICE_ADDR: policy:50051
     depends_on:
@@ -372,6 +374,7 @@ services:
       GRPC_PORT: "50057"
       REST_PORT: "8080"
       JWT_SECRET: ngac-super-secret-key-change-in-production
+      KAFKA_BROKERS: redpanda:9092
     depends_on:
       policy:
         condition: service_healthy

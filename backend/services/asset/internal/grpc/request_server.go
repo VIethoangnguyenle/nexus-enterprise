@@ -28,12 +28,12 @@ type AssetRequestServer struct {
 	store       *store.Store
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
-	producer    *events.Producer
+	producer    events.Publisher
 }
 
 // NewAssetRequestServer creates the asset request gRPC handler.
-func NewAssetRequestServer(s *store.Store, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient, p *events.Producer) *AssetRequestServer {
-	return &AssetRequestServer{store: s, policyRead: pr, policyWrite: pw, producer: p}
+func NewAssetRequestServer(s *store.Store, pr policypb.PolicyReadServiceClient, pw policypb.PolicyWriteServiceClient, p events.Publisher) *AssetRequestServer {
+	return &AssetRequestServer{store: s, policyRead: pr, policyWrite: pw, producer: orDiscard(p)}
 }
 
 func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAssetRequestReq) (*pb.AssetRequest, error) {
@@ -87,7 +87,7 @@ func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAs
 	}
 
 	// Emit Kafka event
-	s.producer.PublishRequest(events.RequestEvent{
+	s.producer.PublishRequest(ctx, events.RequestEvent{
 		RequestID:   assetReq.ID,
 		TypeName:    at.Name,
 		TypeID:      req.TypeId,
@@ -134,23 +134,23 @@ func (s *AssetRequestServer) ApproveRequest(ctx context.Context, req *pb.Approve
 		}); err != nil {
 			return nil, storeErr(err, "approve and assign")
 		}
-		s.producer.PublishAssignment(events.AssignmentEvent{
+		s.producer.PublishAssignment(ctx, events.AssignmentEvent{
 			AssetID: req.AssetId, ToUserID: assetReq.RequesterID, Action: "assign",
 			ActorID: who.UserID, WorkspaceID: assetReq.WorkspaceID,
 		})
-		s.publishDecision(assetReq, at, "fulfilled", who.UserID)
+		s.publishDecision(ctx, assetReq, at, "fulfilled", who.UserID)
 		return s.readBack(ctx, req.RequestId)
 	}
 
 	if err := s.store.UpdateRequestStatus(ctx, req.RequestId, "approved", who.UserID, req.Comment); err != nil {
 		return nil, storeErr(err, "update request")
 	}
-	s.publishDecision(assetReq, at, "approved", who.UserID)
+	s.publishDecision(ctx, assetReq, at, "approved", who.UserID)
 	return s.readBack(ctx, req.RequestId)
 }
 
-func (s *AssetRequestServer) publishDecision(r *store.AssetRequest, at *store.AssetType, statusName, approverID string) {
-	s.producer.PublishRequest(events.RequestEvent{
+func (s *AssetRequestServer) publishDecision(ctx context.Context, r *store.AssetRequest, at *store.AssetType, statusName, approverID string) {
+	s.producer.PublishRequest(ctx, events.RequestEvent{
 		RequestID:   r.ID,
 		TypeName:    at.Name,
 		TypeID:      r.TypeID,
@@ -191,7 +191,7 @@ func (s *AssetRequestServer) RejectRequest(ctx context.Context, req *pb.RejectRe
 		return nil, storeErr(err, "update request")
 	}
 
-	s.producer.PublishRequest(events.RequestEvent{
+	s.producer.PublishRequest(ctx, events.RequestEvent{
 		RequestID:   req.RequestId,
 		TypeName:    at.Name,
 		TypeID:      assetReq.TypeID,
@@ -226,11 +226,11 @@ func (s *AssetRequestServer) AssignAsset(ctx context.Context, req *pb.AssignAsse
 	if err := s.store.AssignApproved(ctx, store.FulfilParams{RequestID: req.RequestId, AssetID: req.AssetId, ActorID: who.UserID}); err != nil {
 		return nil, storeErr(err, "assign")
 	}
-	s.producer.PublishAssignment(events.AssignmentEvent{
+	s.producer.PublishAssignment(ctx, events.AssignmentEvent{
 		AssetID: req.AssetId, ToUserID: assetReq.RequesterID, Action: "assign",
 		ActorID: who.UserID, WorkspaceID: assetReq.WorkspaceID,
 	})
-	s.publishDecision(assetReq, at, "fulfilled", who.UserID)
+	s.publishDecision(ctx, assetReq, at, "fulfilled", who.UserID)
 	return s.readBack(ctx, req.RequestId)
 }
 
@@ -262,7 +262,7 @@ func (s *AssetRequestServer) ReturnAsset(ctx context.Context, req *pb.ReturnAsse
 		return nil, storeErr(err, "return")
 	}
 
-	s.producer.PublishAssignment(events.AssignmentEvent{
+	s.producer.PublishAssignment(ctx, events.AssignmentEvent{
 		AssetID:     req.AssetId,
 		AssetName:   asset.Name,
 		FromUserID:  previousUser,

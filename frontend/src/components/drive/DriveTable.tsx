@@ -173,7 +173,7 @@ const DriveRow = memo(function DriveRow({ item, perms, people, selected, arrival
   return (
     <div
       role="row"
-      style={byOther ? personStyle(owner.hueKey) : undefined}
+      style={byOther ? personStyle(arrival?.author ?? owner.hueKey) : undefined}
       onContextMenu={(e) => {
         e.preventDefault()
         setMenuOpen(true)

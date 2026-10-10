@@ -6,9 +6,11 @@ import type { TextDocument } from '../../api/documents'
 import { formatDateTime, formatListTime } from '../../lib/format'
 import { staggerDelay, useMotionPresets, withDelay } from '../../lib/motion'
 import { UNKNOWN_PERSON, type PeopleDirectory } from '../../lib/people'
+import { personStyle } from '../../lib/person-hue'
+import type { Arrival } from '../../hooks/useArrivals'
 import { IconButton, MenuItem, MenuSeparator, PersonChip, Popover } from '../primitives'
 import { StatusPill } from '../approval/StatusPill'
-import { statusPill, titleOf } from './document-model'
+import { statusPill, textVersion, titleOf } from './document-model'
 
 /**
  * Title · owner · status · modified · actions (DESIGN.md §6 Table, mockup §2).
@@ -24,12 +26,14 @@ interface TextsTableProps {
   docs: TextDocument[]
   loading: boolean
   people: PeopleDirectory
+  /** Realtime arrivals by document version, from `useRealtimeWash`. */
+  fresh: Map<string, Arrival>
   /** Changes with the list shown; rows enter in sequence when it is new. */
   scope: string
   onDelete: (doc: TextDocument) => void
 }
 
-export function TextsTable({ label, docs, loading, people, scope, onDelete }: TextsTableProps) {
+export function TextsTable({ label, docs, loading, people, fresh, scope, onDelete }: TextsTableProps) {
   const m = useMotionPresets()
   const bodyRef = useRef<HTMLDivElement>(null)
   const firstBatch = useRef<{ scope: string; ids: Map<string, number> } | null>(null)
@@ -86,7 +90,7 @@ export function TextsTable({ label, docs, loading, people, scope, onDelete }: Te
                   transition={m.layout}
                   className="overflow-hidden"
                 >
-                  <TextRow doc={d} people={people} onDelete={onDelete} />
+                  <TextRow doc={d} people={people} arrival={fresh.get(textVersion(d))} onDelete={onDelete} />
                 </motion.div>
               )
             })}
@@ -97,9 +101,10 @@ export function TextsTable({ label, docs, loading, people, scope, onDelete }: Te
   )
 }
 
-const TextRow = memo(function TextRow({ doc, people, onDelete }: {
+const TextRow = memo(function TextRow({ doc, people, arrival, onDelete }: {
   doc: TextDocument
   people: PeopleDirectory
+  arrival?: Arrival
   onDelete: (doc: TextDocument) => void
 }) {
   const person = people.byUserId.get(doc.owner_id)
@@ -107,16 +112,19 @@ const TextRow = memo(function TextRow({ doc, people, onDelete }: {
   const title = titleOf(doc)
   const menuRef = useRef<HTMLButtonElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
+  // Somebody else changed it just now: washed in their hue (reduced motion keeps the wash, drops the flash).
+  const byOther = arrival?.source === 'other' && !!arrival.author
 
   return (
     <div
       role="row"
+      style={byOther ? personStyle(arrival.author!) : undefined}
       onContextMenu={(e) => {
         e.preventDefault()
         setMenuOpen(true)
       }}
       className={`${COLS} row-lazy relative min-h-14 @2xl:min-h-11 border-b border-line hover:bg-hover
-        transition-colors duration-quick`}
+        transition-colors duration-quick ${byOther ? 'rt-wash' : ''}`}
     >
       <span role="cell" className="flex items-center gap-2.5 min-w-0 row-start-1">
         <span className="grid place-items-center w-7 h-7 rounded-md shrink-0 bg-accent-wash text-accent" aria-hidden="true">
@@ -132,6 +140,7 @@ const TextRow = memo(function TextRow({ doc, people, onDelete }: {
         >
           {title}
         </Link>
+        {byOther && <span className="rt-tag shrink-0 text-xs font-semibold">vừa cập nhật</span>}
       </span>
       <span role="cell" className="flex items-center gap-1.5 min-w-0 text-xs @2xl:text-sm row-start-2 @2xl:row-start-1">
         <PersonChip name={owner} hueKey={doc.owner_id} avatarUrl={person?.avatarUrl || undefined} />

@@ -81,7 +81,7 @@ func callerOf(c echo.Context) (texts.Caller, error) {
 	if err != nil {
 		return texts.Caller{}, err
 	}
-	return texts.Caller{UserID: claims.UserID, NGACNodeID: claims.NGACNodeID}, nil
+	return texts.Caller{UserID: claims.UserID, NGACNodeID: claims.NGACNodeID, TenantID: claims.TenantID}, nil
 }
 
 func (t *textHandler) list(c echo.Context) error {

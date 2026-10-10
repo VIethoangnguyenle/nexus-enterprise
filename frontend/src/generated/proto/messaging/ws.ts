@@ -60,6 +60,9 @@ export interface AuthRequest {
     token: string;
 }
 /**
+ * Exactly one of channel_id / workspace_id is set. A workspace subscription
+ * delivers that workspace's DomainEvents and needs read on the workspace.
+ *
  * @generated from protobuf message messaging.SubscribeRequest
  */
 export interface SubscribeRequest {
@@ -67,6 +70,10 @@ export interface SubscribeRequest {
      * @generated from protobuf field: string channel_id = 1
      */
     channelId: string;
+    /**
+     * @generated from protobuf field: string workspace_id = 2
+     */
+    workspaceId: string;
 }
 /**
  * @generated from protobuf message messaging.UnsubscribeRequest
@@ -76,6 +83,10 @@ export interface UnsubscribeRequest {
      * @generated from protobuf field: string channel_id = 1
      */
     channelId: string;
+    /**
+     * @generated from protobuf field: string workspace_id = 2
+     */
+    workspaceId: string;
 }
 /**
  * @generated from protobuf message messaging.TypingRequest
@@ -134,12 +145,6 @@ export interface ServerEnvelope {
          */
         threadReply: ThreadReplyEvent;
     } | {
-        oneofKind: "assetUpdated";
-        /**
-         * @generated from protobuf field: messaging.AssetUpdatedEvent asset_updated = 7
-         */
-        assetUpdated: AssetUpdatedEvent;
-    } | {
         oneofKind: "reactionEvent";
         /**
          * @generated from protobuf field: messaging.ReactionEvent reaction_event = 8
@@ -170,18 +175,6 @@ export interface ServerEnvelope {
          */
         taskUpdate: TaskUpdateEvent;
     } | {
-        oneofKind: "driveObject";
-        /**
-         * @generated from protobuf field: messaging.DriveObjectEvent drive_object = 13
-         */
-        driveObject: DriveObjectEvent;
-    } | {
-        oneofKind: "drivePerm";
-        /**
-         * @generated from protobuf field: messaging.DrivePermEvent drive_perm = 14
-         */
-        drivePerm: DrivePermEvent;
-    } | {
         oneofKind: "error";
         /**
          * @generated from protobuf field: messaging.ErrorEvent error = 15
@@ -199,6 +192,18 @@ export interface ServerEnvelope {
          * @generated from protobuf field: messaging.PresenceEvent presence_event = 17
          */
         presenceEvent: PresenceEvent;
+    } | {
+        oneofKind: "domainEvent";
+        /**
+         * @generated from protobuf field: messaging.DomainEvent domain_event = 18
+         */
+        domainEvent: DomainEvent;
+    } | {
+        oneofKind: "workspaceSubscribed";
+        /**
+         * @generated from protobuf field: messaging.WorkspaceSubscribed workspace_subscribed = 19
+         */
+        workspaceSubscribed: WorkspaceSubscribed;
     } | {
         oneofKind: undefined;
     };
@@ -358,19 +363,6 @@ export interface ThreadReplyEvent {
      */
     parentMessageId: string;
 }
-/**
- * @generated from protobuf message messaging.AssetUpdatedEvent
- */
-export interface AssetUpdatedEvent {
-    /**
-     * @generated from protobuf field: string asset_id = 1
-     */
-    assetId: string;
-    /**
-     * @generated from protobuf field: string new_state = 2
-     */
-    newState: string;
-}
 // ═══════════════════════════════════════════════
 // NEW: Lark Chat Parity Events
 // ═══════════════════════════════════════════════
@@ -506,42 +498,87 @@ export interface ErrorEvent {
     message: string;
 }
 // ═══════════════════════════════════════════════
-// Drive Events (realtime object + permission sync)
+// Domain events (realtime change notices)
 // ═══════════════════════════════════════════════
 
 /**
- * @generated from protobuf message messaging.DriveObjectEvent
+ * DomainEvent tells a client that something it may be showing changed. It
+ * carries ids and the kind of change, never content: the client invalidates the
+ * matching queries and refetches under its own authorization.
+ *
+ * domain/kind pairs are listed in docs/specs/realtime-event-delivery/spec.md.
+ *
+ * @generated from protobuf message messaging.DomainEvent
  */
-export interface DriveObjectEvent {
+export interface DomainEvent {
     /**
-     * @generated from protobuf field: string event_type = 1
+     * @generated from protobuf field: string domain = 1
      */
-    eventType: string; // "created" | "updated" | "deleted" | "moved"
+    domain: string; // drive | channel | workspace | document | asset | permission
     /**
-     * @generated from protobuf field: string item_id = 2
+     * @generated from protobuf field: string kind = 2
      */
-    itemId: string;
+    kind: string; // created | updated | deleted | moved | ...
     /**
-     * @generated from protobuf field: string parent_id = 3
+     * @generated from protobuf field: string tenant_id = 3
      */
-    parentId: string;
+    tenantId: string;
     /**
      * @generated from protobuf field: string workspace_id = 4
      */
     workspaceId: string;
+    /**
+     * @generated from protobuf field: repeated string ids = 5
+     */
+    ids: string[]; // entities the change touched
+    /**
+     * @generated from protobuf field: string parent_id = 6
+     */
+    parentId: string; // destination / containing folder, when relevant
+    /**
+     * @generated from protobuf field: string old_parent_id = 7
+     */
+    oldParentId: string; // folder an item left (moves)
+    /**
+     * @generated from protobuf field: string actor_user_id = 8
+     */
+    actorUserId: string; // who caused the change
+    /**
+     * Per-workspace sequence, assigned by the hub to workspace-wide events. A
+     * client that sees a hole resynchronises. 0 for events addressed to a
+     * channel or to specific users: those are not part of the workspace stream.
+     *
+     * @generated from protobuf field: uint64 seq = 9
+     */
+    seq: string;
+    /**
+     * @generated from protobuf field: string channel_id = 10
+     */
+    channelId: string; // set for channel-addressed events
 }
 /**
- * @generated from protobuf message messaging.DrivePermEvent
+ * WorkspaceSubscribed answers a workspace subscription. seq is the last
+ * sequence number issued before the subscription took effect; everything after
+ * it will arrive, so a client that refetches on this ack misses nothing.
+ *
+ * @generated from protobuf message messaging.WorkspaceSubscribed
  */
-export interface DrivePermEvent {
+export interface WorkspaceSubscribed {
     /**
-     * @generated from protobuf field: string item_id = 1
-     */
-    itemId: string;
-    /**
-     * @generated from protobuf field: string workspace_id = 2
+     * @generated from protobuf field: string workspace_id = 1
      */
     workspaceId: string;
+    /**
+     * @generated from protobuf field: uint64 seq = 2
+     */
+    seq: string;
+    /**
+     * True when the subscription was refused. The session follows nothing, but
+     * knows its attempt was decided, so it can fetch what it missed on its own.
+     *
+     * @generated from protobuf field: bool denied = 3
+     */
+    denied: boolean;
 }
 // ═══════════════════════════════════════════════
 // Approval Events (realtime approval status sync)
@@ -571,6 +608,14 @@ export interface ApprovalEvent {
      * @generated from protobuf field: string template_name = 5
      */
     templateName: string;
+    /**
+     * @generated from protobuf field: string tenant_id = 6
+     */
+    tenantId: string;
+    /**
+     * @generated from protobuf field: string workspace_id = 7
+     */
+    workspaceId: string;
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class ClientEnvelope$Type extends MessageType<ClientEnvelope> {
@@ -703,12 +748,14 @@ export const AuthRequest = new AuthRequest$Type();
 class SubscribeRequest$Type extends MessageType<SubscribeRequest> {
     constructor() {
         super("messaging.SubscribeRequest", [
-            { no: 1, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 1, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<SubscribeRequest>): SubscribeRequest {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.channelId = "";
+        message.workspaceId = "";
         if (value !== undefined)
             reflectionMergePartial<SubscribeRequest>(this, message, value);
         return message;
@@ -720,6 +767,9 @@ class SubscribeRequest$Type extends MessageType<SubscribeRequest> {
             switch (fieldNo) {
                 case /* string channel_id */ 1:
                     message.channelId = reader.string();
+                    break;
+                case /* string workspace_id */ 2:
+                    message.workspaceId = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -736,6 +786,9 @@ class SubscribeRequest$Type extends MessageType<SubscribeRequest> {
         /* string channel_id = 1; */
         if (message.channelId !== "")
             writer.tag(1, WireType.LengthDelimited).string(message.channelId);
+        /* string workspace_id = 2; */
+        if (message.workspaceId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.workspaceId);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -750,12 +803,14 @@ export const SubscribeRequest = new SubscribeRequest$Type();
 class UnsubscribeRequest$Type extends MessageType<UnsubscribeRequest> {
     constructor() {
         super("messaging.UnsubscribeRequest", [
-            { no: 1, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 1, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<UnsubscribeRequest>): UnsubscribeRequest {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.channelId = "";
+        message.workspaceId = "";
         if (value !== undefined)
             reflectionMergePartial<UnsubscribeRequest>(this, message, value);
         return message;
@@ -767,6 +822,9 @@ class UnsubscribeRequest$Type extends MessageType<UnsubscribeRequest> {
             switch (fieldNo) {
                 case /* string channel_id */ 1:
                     message.channelId = reader.string();
+                    break;
+                case /* string workspace_id */ 2:
+                    message.workspaceId = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -783,6 +841,9 @@ class UnsubscribeRequest$Type extends MessageType<UnsubscribeRequest> {
         /* string channel_id = 1; */
         if (message.channelId !== "")
             writer.tag(1, WireType.LengthDelimited).string(message.channelId);
+        /* string workspace_id = 2; */
+        if (message.workspaceId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.workspaceId);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -850,17 +911,16 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
             { no: 4, name: "notification", kind: "message", oneof: "payload", T: () => NotificationEvent },
             { no: 5, name: "unread_count", kind: "message", oneof: "payload", T: () => UnreadCountEvent },
             { no: 6, name: "thread_reply", kind: "message", oneof: "payload", T: () => ThreadReplyEvent },
-            { no: 7, name: "asset_updated", kind: "message", oneof: "payload", T: () => AssetUpdatedEvent },
             { no: 8, name: "reaction_event", kind: "message", oneof: "payload", T: () => ReactionEvent },
             { no: 9, name: "pin_event", kind: "message", oneof: "payload", T: () => PinEvent },
             { no: 10, name: "read_receipt", kind: "message", oneof: "payload", T: () => ReadReceiptEvent },
             { no: 11, name: "poll_vote", kind: "message", oneof: "payload", T: () => PollVoteEvent },
             { no: 12, name: "task_update", kind: "message", oneof: "payload", T: () => TaskUpdateEvent },
-            { no: 13, name: "drive_object", kind: "message", oneof: "payload", T: () => DriveObjectEvent },
-            { no: 14, name: "drive_perm", kind: "message", oneof: "payload", T: () => DrivePermEvent },
             { no: 15, name: "error", kind: "message", oneof: "payload", T: () => ErrorEvent },
             { no: 16, name: "approval_event", kind: "message", oneof: "payload", T: () => ApprovalEvent },
-            { no: 17, name: "presence_event", kind: "message", oneof: "payload", T: () => PresenceEvent }
+            { no: 17, name: "presence_event", kind: "message", oneof: "payload", T: () => PresenceEvent },
+            { no: 18, name: "domain_event", kind: "message", oneof: "payload", T: () => DomainEvent },
+            { no: 19, name: "workspace_subscribed", kind: "message", oneof: "payload", T: () => WorkspaceSubscribed }
         ]);
     }
     create(value?: PartialMessage<ServerEnvelope>): ServerEnvelope {
@@ -911,12 +971,6 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
                         threadReply: ThreadReplyEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).threadReply)
                     };
                     break;
-                case /* messaging.AssetUpdatedEvent asset_updated */ 7:
-                    message.payload = {
-                        oneofKind: "assetUpdated",
-                        assetUpdated: AssetUpdatedEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).assetUpdated)
-                    };
-                    break;
                 case /* messaging.ReactionEvent reaction_event */ 8:
                     message.payload = {
                         oneofKind: "reactionEvent",
@@ -947,18 +1001,6 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
                         taskUpdate: TaskUpdateEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).taskUpdate)
                     };
                     break;
-                case /* messaging.DriveObjectEvent drive_object */ 13:
-                    message.payload = {
-                        oneofKind: "driveObject",
-                        driveObject: DriveObjectEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).driveObject)
-                    };
-                    break;
-                case /* messaging.DrivePermEvent drive_perm */ 14:
-                    message.payload = {
-                        oneofKind: "drivePerm",
-                        drivePerm: DrivePermEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).drivePerm)
-                    };
-                    break;
                 case /* messaging.ErrorEvent error */ 15:
                     message.payload = {
                         oneofKind: "error",
@@ -975,6 +1017,18 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
                     message.payload = {
                         oneofKind: "presenceEvent",
                         presenceEvent: PresenceEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).presenceEvent)
+                    };
+                    break;
+                case /* messaging.DomainEvent domain_event */ 18:
+                    message.payload = {
+                        oneofKind: "domainEvent",
+                        domainEvent: DomainEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).domainEvent)
+                    };
+                    break;
+                case /* messaging.WorkspaceSubscribed workspace_subscribed */ 19:
+                    message.payload = {
+                        oneofKind: "workspaceSubscribed",
+                        workspaceSubscribed: WorkspaceSubscribed.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).workspaceSubscribed)
                     };
                     break;
                 default:
@@ -1007,9 +1061,6 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
         /* messaging.ThreadReplyEvent thread_reply = 6; */
         if (message.payload.oneofKind === "threadReply")
             ThreadReplyEvent.internalBinaryWrite(message.payload.threadReply, writer.tag(6, WireType.LengthDelimited).fork(), options).join();
-        /* messaging.AssetUpdatedEvent asset_updated = 7; */
-        if (message.payload.oneofKind === "assetUpdated")
-            AssetUpdatedEvent.internalBinaryWrite(message.payload.assetUpdated, writer.tag(7, WireType.LengthDelimited).fork(), options).join();
         /* messaging.ReactionEvent reaction_event = 8; */
         if (message.payload.oneofKind === "reactionEvent")
             ReactionEvent.internalBinaryWrite(message.payload.reactionEvent, writer.tag(8, WireType.LengthDelimited).fork(), options).join();
@@ -1025,12 +1076,6 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
         /* messaging.TaskUpdateEvent task_update = 12; */
         if (message.payload.oneofKind === "taskUpdate")
             TaskUpdateEvent.internalBinaryWrite(message.payload.taskUpdate, writer.tag(12, WireType.LengthDelimited).fork(), options).join();
-        /* messaging.DriveObjectEvent drive_object = 13; */
-        if (message.payload.oneofKind === "driveObject")
-            DriveObjectEvent.internalBinaryWrite(message.payload.driveObject, writer.tag(13, WireType.LengthDelimited).fork(), options).join();
-        /* messaging.DrivePermEvent drive_perm = 14; */
-        if (message.payload.oneofKind === "drivePerm")
-            DrivePermEvent.internalBinaryWrite(message.payload.drivePerm, writer.tag(14, WireType.LengthDelimited).fork(), options).join();
         /* messaging.ErrorEvent error = 15; */
         if (message.payload.oneofKind === "error")
             ErrorEvent.internalBinaryWrite(message.payload.error, writer.tag(15, WireType.LengthDelimited).fork(), options).join();
@@ -1040,6 +1085,12 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
         /* messaging.PresenceEvent presence_event = 17; */
         if (message.payload.oneofKind === "presenceEvent")
             PresenceEvent.internalBinaryWrite(message.payload.presenceEvent, writer.tag(17, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.DomainEvent domain_event = 18; */
+        if (message.payload.oneofKind === "domainEvent")
+            DomainEvent.internalBinaryWrite(message.payload.domainEvent, writer.tag(18, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.WorkspaceSubscribed workspace_subscribed = 19; */
+        if (message.payload.oneofKind === "workspaceSubscribed")
+            WorkspaceSubscribed.internalBinaryWrite(message.payload.workspaceSubscribed, writer.tag(19, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1562,61 +1613,6 @@ class ThreadReplyEvent$Type extends MessageType<ThreadReplyEvent> {
  */
 export const ThreadReplyEvent = new ThreadReplyEvent$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class AssetUpdatedEvent$Type extends MessageType<AssetUpdatedEvent> {
-    constructor() {
-        super("messaging.AssetUpdatedEvent", [
-            { no: 1, name: "asset_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "new_state", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
-        ]);
-    }
-    create(value?: PartialMessage<AssetUpdatedEvent>): AssetUpdatedEvent {
-        const message = globalThis.Object.create((this.messagePrototype!));
-        message.assetId = "";
-        message.newState = "";
-        if (value !== undefined)
-            reflectionMergePartial<AssetUpdatedEvent>(this, message, value);
-        return message;
-    }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: AssetUpdatedEvent): AssetUpdatedEvent {
-        let message = target ?? this.create(), end = reader.pos + length;
-        while (reader.pos < end) {
-            let [fieldNo, wireType] = reader.tag();
-            switch (fieldNo) {
-                case /* string asset_id */ 1:
-                    message.assetId = reader.string();
-                    break;
-                case /* string new_state */ 2:
-                    message.newState = reader.string();
-                    break;
-                default:
-                    let u = options.readUnknownField;
-                    if (u === "throw")
-                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
-                    let d = reader.skip(wireType);
-                    if (u !== false)
-                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
-            }
-        }
-        return message;
-    }
-    internalBinaryWrite(message: AssetUpdatedEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* string asset_id = 1; */
-        if (message.assetId !== "")
-            writer.tag(1, WireType.LengthDelimited).string(message.assetId);
-        /* string new_state = 2; */
-        if (message.newState !== "")
-            writer.tag(2, WireType.LengthDelimited).string(message.newState);
-        let u = options.writeUnknownFields;
-        if (u !== false)
-            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
-        return writer;
-    }
-}
-/**
- * @generated MessageType for protobuf message messaging.AssetUpdatedEvent
- */
-export const AssetUpdatedEvent = new AssetUpdatedEvent$Type();
-// @generated message type with reflection information, may provide speed optimized methods
 class ReactionEvent$Type extends MessageType<ReactionEvent> {
     constructor() {
         super("messaging.ReactionEvent", [
@@ -2051,42 +2047,72 @@ class ErrorEvent$Type extends MessageType<ErrorEvent> {
  */
 export const ErrorEvent = new ErrorEvent$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class DriveObjectEvent$Type extends MessageType<DriveObjectEvent> {
+class DomainEvent$Type extends MessageType<DomainEvent> {
     constructor() {
-        super("messaging.DriveObjectEvent", [
-            { no: 1, name: "event_type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "item_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 3, name: "parent_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 4, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        super("messaging.DomainEvent", [
+            { no: 1, name: "domain", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "kind", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "tenant_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "ids", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ },
+            { no: 6, name: "parent_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 7, name: "old_parent_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 8, name: "actor_user_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 9, name: "seq", kind: "scalar", T: 4 /*ScalarType.UINT64*/ },
+            { no: 10, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
-    create(value?: PartialMessage<DriveObjectEvent>): DriveObjectEvent {
+    create(value?: PartialMessage<DomainEvent>): DomainEvent {
         const message = globalThis.Object.create((this.messagePrototype!));
-        message.eventType = "";
-        message.itemId = "";
-        message.parentId = "";
+        message.domain = "";
+        message.kind = "";
+        message.tenantId = "";
         message.workspaceId = "";
+        message.ids = [];
+        message.parentId = "";
+        message.oldParentId = "";
+        message.actorUserId = "";
+        message.seq = "0";
+        message.channelId = "";
         if (value !== undefined)
-            reflectionMergePartial<DriveObjectEvent>(this, message, value);
+            reflectionMergePartial<DomainEvent>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: DriveObjectEvent): DriveObjectEvent {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: DomainEvent): DomainEvent {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* string event_type */ 1:
-                    message.eventType = reader.string();
+                case /* string domain */ 1:
+                    message.domain = reader.string();
                     break;
-                case /* string item_id */ 2:
-                    message.itemId = reader.string();
+                case /* string kind */ 2:
+                    message.kind = reader.string();
                     break;
-                case /* string parent_id */ 3:
-                    message.parentId = reader.string();
+                case /* string tenant_id */ 3:
+                    message.tenantId = reader.string();
                     break;
                 case /* string workspace_id */ 4:
                     message.workspaceId = reader.string();
                     break;
+                case /* repeated string ids */ 5:
+                    message.ids.push(reader.string());
+                    break;
+                case /* string parent_id */ 6:
+                    message.parentId = reader.string();
+                    break;
+                case /* string old_parent_id */ 7:
+                    message.oldParentId = reader.string();
+                    break;
+                case /* string actor_user_id */ 8:
+                    message.actorUserId = reader.string();
+                    break;
+                case /* uint64 seq */ 9:
+                    message.seq = reader.uint64().toString();
+                    break;
+                case /* string channel_id */ 10:
+                    message.channelId = reader.string();
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -2098,19 +2124,37 @@ class DriveObjectEvent$Type extends MessageType<DriveObjectEvent> {
         }
         return message;
     }
-    internalBinaryWrite(message: DriveObjectEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* string event_type = 1; */
-        if (message.eventType !== "")
-            writer.tag(1, WireType.LengthDelimited).string(message.eventType);
-        /* string item_id = 2; */
-        if (message.itemId !== "")
-            writer.tag(2, WireType.LengthDelimited).string(message.itemId);
-        /* string parent_id = 3; */
-        if (message.parentId !== "")
-            writer.tag(3, WireType.LengthDelimited).string(message.parentId);
+    internalBinaryWrite(message: DomainEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string domain = 1; */
+        if (message.domain !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.domain);
+        /* string kind = 2; */
+        if (message.kind !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.kind);
+        /* string tenant_id = 3; */
+        if (message.tenantId !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.tenantId);
         /* string workspace_id = 4; */
         if (message.workspaceId !== "")
             writer.tag(4, WireType.LengthDelimited).string(message.workspaceId);
+        /* repeated string ids = 5; */
+        for (let i = 0; i < message.ids.length; i++)
+            writer.tag(5, WireType.LengthDelimited).string(message.ids[i]);
+        /* string parent_id = 6; */
+        if (message.parentId !== "")
+            writer.tag(6, WireType.LengthDelimited).string(message.parentId);
+        /* string old_parent_id = 7; */
+        if (message.oldParentId !== "")
+            writer.tag(7, WireType.LengthDelimited).string(message.oldParentId);
+        /* string actor_user_id = 8; */
+        if (message.actorUserId !== "")
+            writer.tag(8, WireType.LengthDelimited).string(message.actorUserId);
+        /* uint64 seq = 9; */
+        if (message.seq !== "0")
+            writer.tag(9, WireType.Varint).uint64(message.seq);
+        /* string channel_id = 10; */
+        if (message.channelId !== "")
+            writer.tag(10, WireType.LengthDelimited).string(message.channelId);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -2118,35 +2162,40 @@ class DriveObjectEvent$Type extends MessageType<DriveObjectEvent> {
     }
 }
 /**
- * @generated MessageType for protobuf message messaging.DriveObjectEvent
+ * @generated MessageType for protobuf message messaging.DomainEvent
  */
-export const DriveObjectEvent = new DriveObjectEvent$Type();
+export const DomainEvent = new DomainEvent$Type();
 // @generated message type with reflection information, may provide speed optimized methods
-class DrivePermEvent$Type extends MessageType<DrivePermEvent> {
+class WorkspaceSubscribed$Type extends MessageType<WorkspaceSubscribed> {
     constructor() {
-        super("messaging.DrivePermEvent", [
-            { no: 1, name: "item_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 2, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        super("messaging.WorkspaceSubscribed", [
+            { no: 1, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "seq", kind: "scalar", T: 4 /*ScalarType.UINT64*/ },
+            { no: 3, name: "denied", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
         ]);
     }
-    create(value?: PartialMessage<DrivePermEvent>): DrivePermEvent {
+    create(value?: PartialMessage<WorkspaceSubscribed>): WorkspaceSubscribed {
         const message = globalThis.Object.create((this.messagePrototype!));
-        message.itemId = "";
         message.workspaceId = "";
+        message.seq = "0";
+        message.denied = false;
         if (value !== undefined)
-            reflectionMergePartial<DrivePermEvent>(this, message, value);
+            reflectionMergePartial<WorkspaceSubscribed>(this, message, value);
         return message;
     }
-    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: DrivePermEvent): DrivePermEvent {
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: WorkspaceSubscribed): WorkspaceSubscribed {
         let message = target ?? this.create(), end = reader.pos + length;
         while (reader.pos < end) {
             let [fieldNo, wireType] = reader.tag();
             switch (fieldNo) {
-                case /* string item_id */ 1:
-                    message.itemId = reader.string();
-                    break;
-                case /* string workspace_id */ 2:
+                case /* string workspace_id */ 1:
                     message.workspaceId = reader.string();
+                    break;
+                case /* uint64 seq */ 2:
+                    message.seq = reader.uint64().toString();
+                    break;
+                case /* bool denied */ 3:
+                    message.denied = reader.bool();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -2159,13 +2208,16 @@ class DrivePermEvent$Type extends MessageType<DrivePermEvent> {
         }
         return message;
     }
-    internalBinaryWrite(message: DrivePermEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
-        /* string item_id = 1; */
-        if (message.itemId !== "")
-            writer.tag(1, WireType.LengthDelimited).string(message.itemId);
-        /* string workspace_id = 2; */
+    internalBinaryWrite(message: WorkspaceSubscribed, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string workspace_id = 1; */
         if (message.workspaceId !== "")
-            writer.tag(2, WireType.LengthDelimited).string(message.workspaceId);
+            writer.tag(1, WireType.LengthDelimited).string(message.workspaceId);
+        /* uint64 seq = 2; */
+        if (message.seq !== "0")
+            writer.tag(2, WireType.Varint).uint64(message.seq);
+        /* bool denied = 3; */
+        if (message.denied !== false)
+            writer.tag(3, WireType.Varint).bool(message.denied);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -2173,9 +2225,9 @@ class DrivePermEvent$Type extends MessageType<DrivePermEvent> {
     }
 }
 /**
- * @generated MessageType for protobuf message messaging.DrivePermEvent
+ * @generated MessageType for protobuf message messaging.WorkspaceSubscribed
  */
-export const DrivePermEvent = new DrivePermEvent$Type();
+export const WorkspaceSubscribed = new WorkspaceSubscribed$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class ApprovalEvent$Type extends MessageType<ApprovalEvent> {
     constructor() {
@@ -2184,7 +2236,9 @@ class ApprovalEvent$Type extends MessageType<ApprovalEvent> {
             { no: 2, name: "status", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 3, name: "action", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 4, name: "actor_node_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 5, name: "template_name", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 5, name: "template_name", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 6, name: "tenant_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 7, name: "workspace_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<ApprovalEvent>): ApprovalEvent {
@@ -2194,6 +2248,8 @@ class ApprovalEvent$Type extends MessageType<ApprovalEvent> {
         message.action = "";
         message.actorNodeId = "";
         message.templateName = "";
+        message.tenantId = "";
+        message.workspaceId = "";
         if (value !== undefined)
             reflectionMergePartial<ApprovalEvent>(this, message, value);
         return message;
@@ -2217,6 +2273,12 @@ class ApprovalEvent$Type extends MessageType<ApprovalEvent> {
                     break;
                 case /* string template_name */ 5:
                     message.templateName = reader.string();
+                    break;
+                case /* string tenant_id */ 6:
+                    message.tenantId = reader.string();
+                    break;
+                case /* string workspace_id */ 7:
+                    message.workspaceId = reader.string();
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -2245,6 +2307,12 @@ class ApprovalEvent$Type extends MessageType<ApprovalEvent> {
         /* string template_name = 5; */
         if (message.templateName !== "")
             writer.tag(5, WireType.LengthDelimited).string(message.templateName);
+        /* string tenant_id = 6; */
+        if (message.tenantId !== "")
+            writer.tag(6, WireType.LengthDelimited).string(message.tenantId);
+        /* string workspace_id = 7; */
+        if (message.workspaceId !== "")
+            writer.tag(7, WireType.LengthDelimited).string(message.workspaceId);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);

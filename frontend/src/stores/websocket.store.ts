@@ -11,11 +11,23 @@ import type {
   ChatMessage as WSChatMessage,
 } from '../generated/proto/messaging/ws'
 import type { Message, ReactionGroup, Poll, ChatTask } from '../api/messaging'
+import {
+  createBatcher,
+  emptySeq,
+  observeSeq,
+  planFor,
+  resetSeq,
+  workspaceResyncKeys,
+  type SeqState,
+} from '../lib/realtime'
 
 const WS_DEBUG = () => typeof localStorage !== 'undefined' && localStorage.getItem('WS_DEBUG') === '1'
 
 /** Max reconnect backoff in ms. */
 const MAX_RECONNECT_DELAY = 30000
+
+/** Presence changes within this window are applied together. */
+const PRESENCE_BATCH_MS = 100
 
 /**
  * Channels the client is subscribed to, with a reference count per channel.
@@ -28,10 +40,59 @@ const MAX_RECONNECT_DELAY = 30000
  */
 const subscribedChannels = new Map<string, number>()
 
+/** The workspace whose live changes this tab follows; re-subscribed on reconnect. */
+let followedWorkspace: string | null = null
+/** Where each followed workspace's event stream stands. */
+let seqState: SeqState = emptySeq()
+/**
+ * True from the moment the connection is made until the workspace
+ * subscription is acknowledged: whatever happened while it was down has to be
+ * fetched again, and only after the subscription is live, or the refetch could
+ * predate it and an event in between would be lost.
+ */
+let resyncPending = true
+
+/**
+ * Invalidations from events are held for one frame and run together, so a burst
+ * of changes costs one refetch of each affected query.
+ */
+const invalidations = createBatcher((queryKey) => {
+  void queryClient.invalidateQueries({ queryKey })
+})
+
+/** Pending reconnect after a dropped socket; cleared by a disconnect. */
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+/** Pending second refresh after a permission event. */
+const permissionRetries = new Set<ReturnType<typeof setTimeout>>()
+/** Pending retry of a refused workspace subscription, and how many were made. */
+let subscribeRetryTimer: ReturnType<typeof setTimeout> | null = null
+let subscribeRetries = 0
+const SUBSCRIBE_RETRY_MS = [5_000, 15_000, 45_000]
+/**
+ * A permission event is repeated once after this delay: policy read replicas
+ * learn of a change from their own feed, and the first refetch can reach one
+ * that has not yet applied it.
+ */
+const PERMISSION_RETRY_MS = 2_000
+
+function clearTimers() {
+  if (reconnectTimer) clearTimeout(reconnectTimer)
+  reconnectTimer = null
+  if (subscribeRetryTimer) clearTimeout(subscribeRetryTimer)
+  subscribeRetryTimer = null
+  for (const t of permissionRetries) clearTimeout(t)
+  permissionRetries.clear()
+}
+
+/** Who last changed an entity, for the wash on its row; see `ChangeInfo`. */
+const CHANGE_TTL_MS = 10_000
+
 export interface LastMessageInfo { content: string; timestamp: string; senderName: string; senderId: string }
 export interface LastReplyInfo { senderId: string; senderName: string; timestamp: string }
 /** Who last acted on an approval request this session, for attributing realtime changes. */
 export interface ApprovalActivityInfo { actorNodeId: string; action: string; at: number }
+/** Who else just changed an entity (by id), seen this session. Never rendered; it picks a hue. */
+export interface ChangeInfo { actorUserId: string; at: number }
 
 interface WebSocketState {
   ws: WebSocket | null
@@ -47,6 +108,8 @@ interface WebSocketState {
   onlineUsers: Record<string, string>
   /** Latest action per approval request (by request id), seen this session. */
   approvalActivity: Record<string, ApprovalActivityInfo>
+  /** Entities somebody else changed in the last few seconds, by entity id. */
+  recentChanges: Record<string, ChangeInfo>
   connect: (token: string) => void
   disconnect: () => void
   sendTyping: (channelId: string) => void
@@ -54,6 +117,8 @@ interface WebSocketState {
   sendUnsubscribe: (channelId: string) => void
   /** Subscribe to many channels at once; returns the matching release. */
   subscribeMany: (channelIds: string[]) => () => void
+  /** Follow a workspace's live changes; returns the matching release. */
+  followWorkspace: (workspaceId: string) => () => void
 }
 
 /** Send a binary-encoded ClientEnvelope over WebSocket. */
@@ -73,7 +138,7 @@ function reconnectDelay(attempt: number): number {
 function resubscribeChannels(ws: WebSocket) {
   for (const channelId of subscribedChannels.keys()) {
     sendEnvelope(ws, {
-      payload: { oneofKind: 'subscribe', subscribe: { channelId } },
+      payload: { oneofKind: 'subscribe', subscribe: { channelId, workspaceId: '' } },
     })
   }
   if (WS_DEBUG() && subscribedChannels.size > 0) {
@@ -91,6 +156,7 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
   lastReplies: {},
   onlineUsers: {},
   approvalActivity: {},
+  recentChanges: {},
 
   connect: (token) => {
     const existing = get().ws
@@ -101,6 +167,7 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
     ws.binaryType = 'arraybuffer'
 
     ws.onopen = () => {
+      resyncPending = true
       set({ connected: true, reconnectAttempt: 0 })
       // Auth handshake: send token as first message
       sendEnvelope(ws, {
@@ -109,6 +176,10 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
     }
 
     ws.onclose = (event) => {
+      // A connection replaced since (token change, workspace switch) must not
+      // wipe the state of the one that replaced it.
+      const current = get().ws
+      if (current && current !== ws) return
       const attempt = get().reconnectAttempt
       set({ connected: false, authenticated: false, ws: null, reconnectAttempt: attempt + 1 })
 
@@ -120,8 +191,13 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
         console.log(`[WS] reconnecting in ${Math.round(delay)}ms (attempt ${attempt + 1})`)
       }
 
-      setTimeout(() => {
-        if (get().ws === null) get().connect(token)
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null
+        // The session may have refreshed its token while the socket was down,
+        // and may have ended altogether: then there is nobody to reconnect.
+        const current = useAuthStore.getState().accessToken
+        if (!current) return
+        if (get().ws === null) get().connect(current)
       }, delay)
     }
 
@@ -149,9 +225,16 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
     const ws = get().ws
     if (ws) ws.close(1000, 'user disconnect')
     subscribedChannels.clear()
+    // followedWorkspace stays: a disconnect is how a token refresh swaps the
+    // socket, and the new one must resume following. The follower's release
+    // (unmount, sign-out, switching workspace) is what ends it.
+    seqState = emptySeq()
+    invalidations.cancel()
+    clearTimers()
+    subscribeRetries = 0
     // What the session learned about who acted belongs to the session: it must not
     // be read as news by whoever signs in next in this tab.
-    set({ ws: null, connected: false, authenticated: false, reconnectAttempt: 0, approvalActivity: {} })
+    set({ ws: null, connected: false, authenticated: false, reconnectAttempt: 0, approvalActivity: {}, recentChanges: {} })
   },
 
   sendTyping: (channelId) => {
@@ -170,7 +253,7 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
     const ws = get().ws
     if (ws && get().authenticated) {
       sendEnvelope(ws, {
-        payload: { oneofKind: 'subscribe', subscribe: { channelId } },
+        payload: { oneofKind: 'subscribe', subscribe: { channelId, workspaceId: '' } },
       })
     }
   },
@@ -185,8 +268,28 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
     const ws = get().ws
     if (ws && get().authenticated) {
       sendEnvelope(ws, {
-        payload: { oneofKind: 'unsubscribe', unsubscribe: { channelId } },
+        payload: { oneofKind: 'unsubscribe', unsubscribe: { channelId, workspaceId: '' } },
       })
+    }
+  },
+
+  followWorkspace: (workspaceId) => {
+    followedWorkspace = workspaceId
+    const ws = get().ws
+    if (ws && get().authenticated) {
+      sendEnvelope(ws, { payload: { oneofKind: 'subscribe', subscribe: { channelId: '', workspaceId } } })
+    }
+    return () => {
+      if (followedWorkspace !== workspaceId) return
+      followedWorkspace = null
+      seqState = emptySeq()
+      if (subscribeRetryTimer) clearTimeout(subscribeRetryTimer)
+      subscribeRetryTimer = null
+      subscribeRetries = 0
+      const open = get().ws
+      if (open && get().authenticated) {
+        sendEnvelope(open, { payload: { oneofKind: 'unsubscribe', unsubscribe: { channelId: '', workspaceId } } })
+      }
     }
   },
 
@@ -209,9 +312,18 @@ function handleServerMessage(
       const auth = envelope.payload.authResponse
       if (auth.ok) {
         set(() => ({ authenticated: true }))
-        // On reconnect: re-subscribe channels and refetch stale data
+        // On reconnect: re-subscribe, then refetch what may have changed while
+        // the socket was down. With a workspace followed the refetch waits for
+        // its acknowledgement (see 'workspaceSubscribed').
         resubscribeChannels(ws)
-        resyncAfterReconnect()
+        if (followedWorkspace) {
+          sendEnvelope(ws, {
+            payload: { oneofKind: 'subscribe', subscribe: { channelId: '', workspaceId: followedWorkspace } },
+          })
+        } else {
+          resyncAfterReconnect()
+          resyncPending = false
+        }
       } else {
         console.error('[WS] auth failed:', auth.reason)
       }
@@ -299,26 +411,6 @@ function handleServerMessage(
       if (reply.message) {
         injectReply({ ...reply.message, parentMessageId: reply.message.parentMessageId || reply.parentMessageId }, set)
       }
-      break
-    }
-
-    case 'assetUpdated': {
-      const asset = envelope.payload.assetUpdated
-      // The event names the asset, not its workspace, so lists and summaries
-      // are refreshed under every workspace prefix.
-      queryClient.invalidateQueries({ queryKey: keys.assets.listsAll() })
-      if (asset.assetId) {
-        queryClient.invalidateQueries({ queryKey: keys.assets.asset(asset.assetId) })
-        queryClient.invalidateQueries({ queryKey: keys.assets.history(asset.assetId) })
-        queryClient.invalidateQueries({ queryKey: keys.assets.transitions(asset.assetId) })
-      }
-      queryClient.invalidateQueries({ queryKey: keys.assets.summaries() })
-      // The same step moves the dashboard's feed, the types' available counts and
-      // any request that was waiting for an asset.
-      queryClient.invalidateQueries({ queryKey: keys.assets.activitiesAll() })
-      queryClient.invalidateQueries({ queryKey: keys.assets.typesAll() })
-      queryClient.invalidateQueries({ queryKey: keys.assets.requestsAll() })
-      queryClient.invalidateQueries({ queryKey: keys.assets.requestDetailsAll() })
       break
     }
 
@@ -427,42 +519,76 @@ function handleServerMessage(
       break
     }
 
-    case 'driveObject': {
-      const event = envelope.payload.driveObject
-      // Scope invalidation to the folder the item sits in, not all drive queries.
-      // An item with no parent sits at the workspace root, which is cached
-      // under its own key.
-      queryClient.invalidateQueries({ queryKey: keys.drive.folder(event.workspaceId, event.parentId) })
-      // A move also empties the folder the item left, and the event names only
-      // the destination, so refresh every listing in the workspace.
-      if (event.eventType === 'moved') {
-        queryClient.invalidateQueries({ queryKey: keys.drive.folders(event.workspaceId) })
+    case 'workspaceSubscribed': {
+      const ack = envelope.payload.workspaceSubscribed
+      if (ack.workspaceId !== followedWorkspace) break
+      if (ack.denied) {
+        // Not following, but the attempt is decided: fetch what was missed
+        // (chat and notifications do not depend on the workspace stream), and
+        // ask again later, since a refusal can be a policy replica a step behind.
+        if (resyncPending) {
+          resyncPending = false
+          resyncAfterReconnect()
+        }
+        if (subscribeRetries < SUBSCRIBE_RETRY_MS.length && !subscribeRetryTimer) {
+          const wait = SUBSCRIBE_RETRY_MS[subscribeRetries++]
+          subscribeRetryTimer = setTimeout(() => {
+            subscribeRetryTimer = null
+            const { ws: open, authenticated } = useWebSocketStore.getState()
+            if (open && authenticated && followedWorkspace === ack.workspaceId) {
+              sendEnvelope(open, {
+                payload: { oneofKind: 'subscribe', subscribe: { channelId: '', workspaceId: ack.workspaceId } },
+              })
+            }
+          }, wait)
+        }
+        break
       }
-      // For deleted/moved items, also invalidate the item detail cache
-      if (event.eventType === 'deleted' || event.eventType === 'moved') {
-        queryClient.invalidateQueries({ queryKey: keys.drive.item(event.itemId) })
-      }
-      // Quota may change on create/delete
-      if (event.eventType === 'created' || event.eventType === 'deleted') {
-        queryClient.invalidateQueries({ queryKey: keys.drive.quota(event.workspaceId) })
-      }
-      if (WS_DEBUG()) {
-        console.log(`[WS] drive object ${event.eventType}: ${event.itemId} in folder ${event.parentId}`)
+      subscribeRetries = 0
+      if (subscribeRetryTimer) clearTimeout(subscribeRetryTimer)
+      subscribeRetryTimer = null
+      seqState = resetSeq(seqState, ack.workspaceId, Number(ack.seq))
+      if (resyncPending) {
+        resyncPending = false
+        resyncAfterReconnect()
       }
       break
     }
 
-    case 'drivePerm': {
-      const event = envelope.payload.drivePerm
-      // Invalidate permission cache for the affected item
-      queryClient.invalidateQueries({
-        queryKey: keys.permissions.object(useAuthStore.getState().tenantId, event.itemId),
-      })
-      // Also invalidate shares queries
-      queryClient.invalidateQueries({ queryKey: keys.drive.shares(event.itemId) })
-      if (WS_DEBUG()) {
-        console.log(`[WS] drive perm changed: ${event.itemId}`)
+    case 'domainEvent': {
+      const d = envelope.payload.domainEvent
+      const seq = Number(d.seq)
+      if (seq && d.workspaceId) {
+        const seen = observeSeq(seqState, d.workspaceId, seq)
+        seqState = seen.state
+        if (seen.verdict === 'duplicate') break
+        if (seen.verdict === 'resync') {
+          // Events were missed: nothing this tab holds for the workspace can be trusted.
+          if (WS_DEBUG()) console.warn(`[WS] sequence hole in ${d.workspaceId}, resynchronising`)
+          resyncAfterReconnect()
+          break
+        }
       }
+      const plan = planFor({
+        domain: d.domain,
+        kind: d.kind,
+        workspaceId: d.workspaceId,
+        ids: d.ids,
+        parentId: d.parentId,
+        oldParentId: d.oldParentId,
+        channelId: d.channelId,
+        actorUserId: d.actorUserId,
+      })
+      invalidations.add(plan.invalidate)
+      if (d.domain === 'permission') {
+        const retry = setTimeout(() => {
+          permissionRetries.delete(retry)
+          invalidations.add(plan.invalidate)
+        }, PERMISSION_RETRY_MS)
+        permissionRetries.add(retry)
+      }
+      noteChanges(plan.touched, d.actorUserId, set)
+      if (WS_DEBUG()) console.log(`[WS] ${d.domain} ${d.kind}`, d.ids)
       break
     }
 
@@ -477,7 +603,7 @@ function handleServerMessage(
         },
       }))
       // Real-time approval status sync — invalidate all approval queries
-      queryClient.invalidateQueries({ queryKey: keys.approval.all() })
+      invalidations.add([keys.approval.all()])
       if (WS_DEBUG()) {
         const evt = envelope.payload.approvalEvent
         console.log(`[WS] approval ${evt.action}: ${evt.requestId}`)
@@ -487,15 +613,7 @@ function handleServerMessage(
 
     case 'presenceEvent': {
       const presence = envelope.payload.presenceEvent
-      set((s) => {
-        const onlineUsers = { ...s.onlineUsers }
-        if (presence.status === 'online') {
-          onlineUsers[presence.userId] = presence.username
-        } else {
-          delete onlineUsers[presence.userId]
-        }
-        return { onlineUsers }
-      })
+      queuePresence(presence.userId, presence.status === 'online' ? presence.username : null, set)
       if (WS_DEBUG()) {
         console.log(`[WS] presence: ${presence.username} is ${presence.status}`)
       }
@@ -516,6 +634,57 @@ function handleServerMessage(
       }
       break
   }
+}
+
+/**
+ * Presence changes are applied once per frame: a reconnect storm or a morning
+ * rush of people coming online would otherwise re-render everything that reads
+ * the roster once per person.
+ */
+const pendingPresence = new Map<string, string | null>()
+let presenceTimer: ReturnType<typeof setTimeout> | null = null
+
+function queuePresence(
+  userId: string,
+  username: string | null,
+  set: (fn: (s: WebSocketState) => Partial<WebSocketState>) => void,
+) {
+  pendingPresence.set(userId, username)
+  if (presenceTimer) return
+  presenceTimer = setTimeout(() => flushPresence(set), PRESENCE_BATCH_MS)
+}
+
+function flushPresence(set: (fn: (s: WebSocketState) => Partial<WebSocketState>) => void) {
+  presenceTimer = null
+  const batch = [...pendingPresence]
+  pendingPresence.clear()
+  set((s) => {
+    const onlineUsers = { ...s.onlineUsers }
+    for (const [userId, username] of batch) {
+      if (username === null) delete onlineUsers[userId]
+      else onlineUsers[userId] = username
+    }
+    return { onlineUsers }
+  })
+}
+
+/** Remember who else just changed these entities, so their rows can be washed in that person's hue. */
+function noteChanges(
+  ids: string[],
+  actorUserId: string,
+  set: (fn: (s: WebSocketState) => Partial<WebSocketState>) => void,
+) {
+  if (ids.length === 0 || !actorUserId) return
+  if (actorUserId === useAuthStore.getState().user?.id) return
+  const now = Date.now()
+  set((s) => {
+    const next: Record<string, ChangeInfo> = {}
+    for (const [id, info] of Object.entries(s.recentChanges)) {
+      if (now - info.at < CHANGE_TTL_MS) next[id] = info
+    }
+    for (const id of ids) next[id] = { actorUserId, at: now }
+    return { recentChanges: next }
+  })
 }
 
 /** Plain-text preview of a message body: tags stripped, whitespace folded, capped. */
@@ -595,21 +764,12 @@ function convertChatMsgToMessage(chatMsg: WSChatMessage): Message {
   }
 }
 
-/** Re-sync all active queries after a reconnect to catch missed events. */
+/**
+ * Re-sync everything after a reconnect or a hole in the event stream: whatever
+ * happened while this tab was not listening is unknown, so every query family
+ * is refreshed, immediately rather than in the next batch.
+ */
 function resyncAfterReconnect() {
-  const refresh = (queryKey: readonly unknown[]) => queryClient.invalidateQueries({ queryKey })
-  refresh(keys.messaging.messagesAll())
-  refresh(keys.messaging.unreadCounts())
-  refresh(keys.notifications.all())
-  refresh(keys.messaging.channelsAll())
-  refresh(keys.messaging.pinsAll())
-  refresh(keys.messaging.tasksAll())
-  refresh(keys.messaging.reactionsAll())
-  refresh(keys.messaging.pollsAll())
-  refresh(keys.messaging.threadsAll())
-  // Drive: every folder, item and share, and every cached permission answer
-  refresh(keys.drive.everything())
-  refresh(keys.permissions.all())
-  // Approval: catch any missed approval state changes
-  refresh(keys.approval.all())
+  invalidations.add(workspaceResyncKeys(followedWorkspace ?? ''))
+  invalidations.flush()
 }

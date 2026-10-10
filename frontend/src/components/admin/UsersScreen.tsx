@@ -15,7 +15,8 @@ import { AdminFrame } from './AdminFrame'
 import { InvitationsList } from './InvitationsList'
 import { InviteDialog } from './InviteDialog'
 import { UserPanel } from './UserPanel'
-import { UsersTable } from './UsersTable'
+import { UsersTable, memberVersion } from './UsersTable'
+import { useRealtimeWash } from '../../hooks/useRealtimeWash'
 
 const ALL_ROLES = ''
 const OWNERS = 'owners'
@@ -54,6 +55,12 @@ export function UsersScreen() {
         (roleFilter === ALL_ROLES || (roleFilter === OWNERS ? p.is_owner : p.roles.some((r) => r.id === roleFilter))),
     )
   }, [everyone, query, deptFilter, roleFilter, flat])
+  const { fresh } = useRealtimeWash(filtered, {
+    idOf: (p) => p.ngac_node_id,
+    versionOf: memberVersion,
+    ready: !!people.data && !people.isFetching,
+    scope: `${wsId}|${deptFilter}|${roleFilter}|${query}`,
+  })
   const filtering = !!query.trim() || !!deptFilter || !!roleFilter
 
   const go = useCallback(
@@ -127,6 +134,7 @@ export function UsersScreen() {
           label="Thành viên"
           members={filtered}
           loading={loading}
+          fresh={fresh}
           openId={openId}
           onOpen={(p) => go((prev) => openSearch(prev, 'member', p.ngac_node_id))}
           scope={`${deptFilter}|${roleFilter}|${query}`}

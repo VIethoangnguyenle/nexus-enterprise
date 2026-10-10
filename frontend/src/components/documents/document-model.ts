@@ -115,3 +115,8 @@ export function diffLines(mine: string[], theirs: string[]): { mine: DiffLine[];
   while (j < m) b.push({ text: theirs[j++]!, changed: true })
   return { mine: a, theirs: b }
 }
+
+/** Identity of one version of a document in a list: any change to what the row shows is a new version. */
+export function textVersion(d: TextDocument): string {
+  return `${d.id}:${d.version}:${d.title}:${d.status}`
+}

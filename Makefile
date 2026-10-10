@@ -197,6 +197,7 @@ dev: dev-infra
 	MINIO_SECRET_KEY=$$MINIO_SECRET_KEY \
 	MINIO_USE_SSL=$$MINIO_USE_SSL \
 	JWT_SECRET=$$JWT_SECRET \
+	KAFKA_BROKERS=$$KAFKA_BROKERS \
 	GRPC_PORT=50053 \
 	REST_PORT=$$WORKSPACE_REST_PORT \
 	sh -c 'cd backend/services/workspace && exec go run ./cmd/' > $(DEV_LOGS)/workspace.log 2>&1 & echo $$! >> $(DEV_PIDS); \
@@ -211,6 +212,7 @@ dev: dev-infra
 	DRIVE_SERVICE_ADDR=$$DRIVE_SERVICE_ADDR \
 	POLICY_SERVICE_ADDR=$$POLICY_SERVICE_ADDR \
 	JWT_SECRET=$$JWT_SECRET \
+	KAFKA_BROKERS=$$KAFKA_BROKERS \
 	GRPC_PORT=50054 \
 	REST_PORT=$$DOCUMENT_REST_PORT \
 	sh -c 'cd backend/services/document && exec go run ./cmd/' > $(DEV_LOGS)/document.log 2>&1 & echo $$! >> $(DEV_PIDS); \
@@ -243,6 +245,7 @@ dev: dev-infra
 	POLICY_READ_SERVICE_ADDR=$$POLICY_READ_SERVICE_ADDR \
 	DOCUMENT_SERVICE_ADDR=$$DOCUMENT_SERVICE_ADDR \
 	JWT_SECRET=$$JWT_SECRET \
+	KAFKA_BROKERS=$$KAFKA_BROKERS \
 	GRPC_PORT=50057 \
 	REST_PORT=$$DRIVE_REST_PORT \
 	sh -c 'cd backend/services/drive && exec go run ./cmd/' > $(DEV_LOGS)/drive.log 2>&1 & echo $$! >> $(DEV_PIDS); \

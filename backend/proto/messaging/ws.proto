@@ -23,12 +23,16 @@ message AuthRequest {
   string token = 1;
 }
 
+// Exactly one of channel_id / workspace_id is set. A workspace subscription
+// delivers that workspace's DomainEvents and needs read on the workspace.
 message SubscribeRequest {
-  string channel_id = 1;
+  string channel_id   = 1;
+  string workspace_id = 2;
 }
 
 message UnsubscribeRequest {
-  string channel_id = 1;
+  string channel_id   = 1;
+  string workspace_id = 2;
 }
 
 message TypingRequest {
@@ -47,18 +51,20 @@ message ServerEnvelope {
     NotificationEvent  notification   = 4;
     UnreadCountEvent   unread_count   = 5;
     ThreadReplyEvent   thread_reply   = 6;
-    AssetUpdatedEvent  asset_updated  = 7;
     ReactionEvent      reaction_event = 8;
     PinEvent           pin_event      = 9;
     ReadReceiptEvent   read_receipt   = 10;
     PollVoteEvent      poll_vote      = 11;
     TaskUpdateEvent    task_update    = 12;
-    DriveObjectEvent   drive_object   = 13;
-    DrivePermEvent     drive_perm     = 14;
     ErrorEvent         error          = 15;
     ApprovalEvent      approval_event = 16;
     PresenceEvent      presence_event = 17;
+    DomainEvent        domain_event   = 18;
+    WorkspaceSubscribed workspace_subscribed = 19;
   }
+  // asset_updated, drive_object and drive_perm were replaced by domain_event.
+  reserved 7, 13, 14;
+  reserved "asset_updated", "drive_object", "drive_perm";
 }
 
 message AuthResponse {
@@ -112,11 +118,6 @@ message ThreadReplyEvent {
   string      parent_message_id = 2;
 }
 
-message AssetUpdatedEvent {
-  string asset_id  = 1;
-  string new_state = 2;
-}
-
 // ═══════════════════════════════════════════════
 // NEW: Lark Chat Parity Events
 // ═══════════════════════════════════════════════
@@ -165,19 +166,39 @@ message ErrorEvent {
 }
 
 // ═══════════════════════════════════════════════
-// Drive Events (realtime object + permission sync)
+// Domain events (realtime change notices)
 // ═══════════════════════════════════════════════
 
-message DriveObjectEvent {
-  string event_type    = 1;  // "created" | "updated" | "deleted" | "moved"
-  string item_id       = 2;
-  string parent_id     = 3;
-  string workspace_id  = 4;
+// DomainEvent tells a client that something it may be showing changed. It
+// carries ids and the kind of change, never content: the client invalidates the
+// matching queries and refetches under its own authorization.
+//
+// domain/kind pairs are listed in docs/specs/realtime-event-delivery/spec.md.
+message DomainEvent {
+  string domain          = 1;  // drive | channel | workspace | document | asset | permission
+  string kind            = 2;  // created | updated | deleted | moved | ...
+  string tenant_id       = 3;
+  string workspace_id    = 4;
+  repeated string ids    = 5;  // entities the change touched
+  string parent_id       = 6;  // destination / containing folder, when relevant
+  string old_parent_id   = 7;  // folder an item left (moves)
+  string actor_user_id   = 8;  // who caused the change
+  // Per-workspace sequence, assigned by the hub to workspace-wide events. A
+  // client that sees a hole resynchronises. 0 for events addressed to a
+  // channel or to specific users: those are not part of the workspace stream.
+  uint64 seq             = 9;
+  string channel_id      = 10; // set for channel-addressed events
 }
 
-message DrivePermEvent {
-  string item_id       = 1;
-  string workspace_id  = 2;
+// WorkspaceSubscribed answers a workspace subscription. seq is the last
+// sequence number issued before the subscription took effect; everything after
+// it will arrive, so a client that refetches on this ack misses nothing.
+message WorkspaceSubscribed {
+  string workspace_id = 1;
+  uint64 seq          = 2;
+  // True when the subscription was refused. The session follows nothing, but
+  // knows its attempt was decided, so it can fetch what it missed on its own.
+  bool   denied       = 3;
 }
 
 // ═══════════════════════════════════════════════
@@ -190,4 +211,6 @@ message ApprovalEvent {
   string action         = 3;  // "created", "approved", "rejected", "step_advanced"
   string actor_node_id  = 4;
   string template_name  = 5;
+  string tenant_id      = 6;
+  string workspace_id   = 7;
 }

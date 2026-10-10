@@ -1,0 +1,38 @@
+workspace W=61234056-216e-4b6b-8fab-eb1751e3ed26 (A,B,D)  other tenant W2=499e2b7c-c1f0-4e87-97d2-6e23884365bf (C)
+provision approval schema 201
+folder create 201 4b30128f-ad6a-49b8-9c4e-0c12a42bb1b2
+template 201 484d3868-2c56-46ff-8616-d76648fbbdc4
+B frames after load: ["auth","presence","subscribed"]
+C frames after load: ["auth","presence","subscribed"]
+rename status 200
+1. folder rename visible on B in 181 ms
+doc create 201{"id":"db4ba0d3-f071-4dec-855b-3e5a42e5374c","workspace_id":"61234056-216e-4b6b-8fab-eb1751e3ed26","title":"Báo cáo mv2c
+2. text document visible on B in 203 ms
+accept 200
+3. new member visible on B contacts in 195 ms
+approval create 201{"id":"0fa9eee3-d4e0-47de-9104-9280ad930dd0","entity_type":"general","entity_id":"32dfd3ef-ffa0-4449-ab24-82a4de983235","template_id":"484d3868-2c56-46ff-8616-d
+4. approval visible on B in 202 ms
+C (other tenant) frames: ["auth","presence","subscribed"]
+isolation: other-tenant domain/approval frames = 0
+B frames kinds: domain=3 approval=1 subscribed=4
+B offline at 2026-10-10T11:51:54.871Z
+rename while B offline: 200
+while offline B shows new name: false (expected false)
+B back online at 2026-10-10T11:52:24.956Z
+5. after 30s outage, B shows the folder name changed meanwhile after 2322 ms from reconnect
+5c. live updates resume after reconnect: 182 ms
+5b. (same page, no reload) the document created meanwhile is not on the drive screen: true
+B frames after reconnect: ["auth","presence","subscribed","domain"]
+
+--- review fixes: checks a, b, c ---
+(c) folder created: B sees it in 215 ms; B frames = ["domain:drive/created"]
+(c) permission frames delivered to B (a bystander) for a folder creation: 0
+(c) D joins: frames to bystander B = ["domain:workspace/invitation_accepted"]
+(c) permission frames to B when someone else joins: 0
+(b) intercepted one request with 401
+(b) forced 401 -> token refresh; socket re-authenticated: true (auth frames 2 -> 3)
+(b) after the refresh B still receives events: approval visible in 183 ms; subscribed frames after = true
+(b) workspace stream after refresh: folder rename visible in 208 ms
+(a) remove B: 200
+(a) frames to B after removal: ["domain:permission/changed","domain:permission/changed","domain:permission/changed","domain:permission/changed","domain:permission/changed","domain:permission/changed","other","subscribed"]
+(a) drive/doc/asset frames received after removal (must be 0): 0

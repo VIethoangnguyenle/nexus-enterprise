@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
 )
 
@@ -262,6 +263,9 @@ func (s *Service) SetRolePermissions(ctx context.Context, callerNodeID, wsID, ro
 			return nil, fmt.Errorf("set permission: %w", err)
 		}
 	}
+	if !slices.Equal(haveSet, want) {
+		s.announce(ctx, realtime.KindRoleChanged, ws.ID, roleID)
+	}
 	return grant, nil
 }
 
@@ -311,6 +315,8 @@ func (s *Service) AssignMemberRole(ctx context.Context, callerNodeID, wsID, targ
 	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: targetNodeID, ParentId: roleID}); err != nil {
 		return fmt.Errorf("assign role: %w", err)
 	}
+	s.announce(ctx, realtime.KindRoleChanged, ws.ID, targetNodeID, roleID)
+	s.announceAccessChanged(ctx, ws.ID, targetNodeID)
 	return nil
 }
 
@@ -330,5 +336,7 @@ func (s *Service) UnassignMemberRole(ctx context.Context, callerNodeID, wsID, ta
 	if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{ChildId: targetNodeID, ParentId: roleID}); err != nil {
 		return fmt.Errorf("unassign role: %w", err)
 	}
+	s.announce(ctx, realtime.KindRoleChanged, ws.ID, targetNodeID, roleID)
+	s.announceAccessChanged(ctx, ws.ID, targetNodeID)
 	return nil
 }

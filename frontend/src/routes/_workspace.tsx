@@ -5,6 +5,7 @@ import { useWebSocketStore } from '../stores/websocket.store'
 import { useUiStore } from '../stores/ui.store'
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace'
 import { usePreferencesSync } from '../hooks/usePreferences'
+import { useWorkspaceRealtime } from '../hooks/useWorkspaceRealtime'
 import { useUnreadCounts } from '../hooks/useMessaging'
 import { validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
 import { useResizable } from '../hooks/useResizable'
@@ -30,6 +31,7 @@ function WorkspaceLayout() {
   const disconnect = useWebSocketStore((s) => s.disconnect)
   const { workspaceId: wsId, workspaceName, workspaces, isLoading, isError } = useActiveWorkspace()
   usePreferencesSync()
+  useWorkspaceRealtime(wsId, !!token)
   const { data: unreadData } = useUnreadCounts()
   const unreadMessages = (unreadData?.channels ?? []).reduce((n, c) => n + c.unread_count, 0)
 

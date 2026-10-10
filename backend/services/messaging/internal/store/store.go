@@ -283,3 +283,19 @@ func scanMessages(rows pgx.Rows) ([]*Message, error) {
 	}
 	return msgs, nil
 }
+
+// WorkspaceDocumentsOA returns the ID of the workspace's Documents OA, the
+// workspace-level attribute a "read the workspace" check lands on. Empty when
+// the workspace does not exist or has none.
+func (s *Store) WorkspaceDocumentsOA(ctx context.Context, workspaceID string) (string, error) {
+	var oaID string
+	err := s.db.QueryRow(ctx,
+		`SELECT COALESCE(documents_oa_id, '') FROM workspaces WHERE id = $1`, workspaceID).Scan(&oaID)
+	if err == pgx.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("workspace documents oa: %w", err)
+	}
+	return oaID, nil
+}

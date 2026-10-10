@@ -23,6 +23,7 @@ import (
 
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/pkg/realtime"
 	docpb "ngac-platform/proto/document"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
@@ -63,6 +64,10 @@ func main() {
 		policypb.NewPolicyWriteServiceClient(policyWriteConn),
 		docpb.NewDocumentStorageServiceClient(docConn),
 	)
+
+	rt := realtime.Connect("drive")
+	defer rt.Close()
+	srv.SetEmitter(rt)
 
 	gs := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()}, recoveryInterceptor)...)
 	pb.RegisterDriveServiceServer(gs, srv)

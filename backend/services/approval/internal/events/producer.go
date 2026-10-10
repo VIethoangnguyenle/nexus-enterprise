@@ -14,6 +14,9 @@ import (
 
 const approvalEventsTopic = "approval.events"
 
+// publishTimeout bounds how long one event may wait for the broker.
+const publishTimeout = 10 * time.Second
+
 // ApprovalEventPayload is the JSON schema published to Kafka.
 type ApprovalEventPayload struct {
 	RequestID       string   `json:"request_id"`
@@ -27,9 +30,12 @@ type ApprovalEventPayload struct {
 	ScopeOaID       string   `json:"scope_oa_id"`
 	// TenantID is the tenant the acting request was made in (from its JWT).
 	// Consumers use it to keep the event inside that tenant.
-	TenantID  string `json:"tenant_id,omitempty"`
-	Comment   string `json:"comment,omitempty"`
-	Timestamp int64  `json:"timestamp"`
+	TenantID string `json:"tenant_id,omitempty"`
+	// WorkspaceID is the workspace the request belongs to. Approval data lives
+	// in a per-tenant schema and a tenant is a workspace, so it equals TenantID.
+	WorkspaceID string `json:"workspace_id,omitempty"`
+	Comment     string `json:"comment,omitempty"`
+	Timestamp   int64  `json:"timestamp"`
 }
 
 // Producer publishes approval lifecycle events to Kafka.
@@ -43,6 +49,9 @@ func NewProducer(brokers []string) (*Producer, error) {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.AllowAutoTopicCreation(),
+		// A broker that is down costs events, never request latency.
+		kgo.RecordDeliveryTimeout(publishTimeout),
+		kgo.MaxBufferedRecords(2000),
 	)
 	if err != nil {
 		return nil, err
@@ -68,11 +77,16 @@ func (p *Producer) Publish(ctx context.Context, evt ApprovalEventPayload) {
 		return
 	}
 
-	p.client.Produce(ctx, &kgo.Record{
+	// The request that caused the event ends as soon as it answers, so the
+	// produce must not hang on its context; it gets its own bounded one, which
+	// the promise releases.
+	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), publishTimeout)
+	p.client.TryProduce(pctx, &kgo.Record{
 		Topic: approvalEventsTopic,
 		Key:   []byte(evt.RequestID),
 		Value: data,
 	}, func(_ *kgo.Record, err error) {
+		cancel()
 		if err != nil {
 			slog.Warn("publish approval event failed", "request_id", evt.RequestID, "error", err)
 		}
@@ -82,6 +96,9 @@ func (p *Producer) Publish(ctx context.Context, evt ApprovalEventPayload) {
 // Close shuts down the producer.
 func (p *Producer) Close() {
 	if p != nil && p.client != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		_ = p.client.Flush(ctx)
 		p.client.Close()
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
+	"ngac-platform/pkg/realtime"
 )
 
 // ErrLastOwner is a refusal: the person leaving is the workspace's only Owner,
@@ -47,5 +49,6 @@ func (s *Service) LeaveWorkspace(ctx context.Context, callerNodeID, wsID string)
 			slog.Warn("member left but their listing remains", "workspace", ws.ID, "error", err)
 		}
 	}
+	s.announce(ctx, realtime.KindMemberRemoved, ws.ID, callerNodeID)
 	return nil
 }
