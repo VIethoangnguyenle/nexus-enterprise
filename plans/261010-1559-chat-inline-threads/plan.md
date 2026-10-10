@@ -44,6 +44,7 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 | 08 | [Vòng đời tin nhắn](phase-08-message-lifecycle.md) | 3 | P2 | 2d | 05, 07 | pending |
 | 09 | [Mức thông báo, Trang chủ theo thread](phase-09-notification-levels.md) | 4 | P3 | 1.5d | 08 | pending |
 | 10 | [Mục trong cột điều hướng](phase-10-navigator-sections.md) | 2 | P2 | 1.5d | 01, 05 | pending |
+| 11 | [Tạo trong chat: bình chọn, công việc, tài liệu, phê duyệt](phase-11-in-chat-create.md) | 2 | P2 | 2.5-3d | 01, 05 | pending |
 
 ```text
 01 design (cả 4 đợt) ──► 02 data+API ──► 03 realtime ──► 04 UI ──► 05 verify   │ đợt 1 (merge riêng)
@@ -62,6 +63,7 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 | `chat-message-lifecycle` | **new** — edit/delete/quote/mark unread | 08 |
 | `notifications` | modify — per-space notification level | 09 |
 | `chat-sections` | **new** — personal navigator sections | 10 |
+| `chat-cards` | **new** — poll, task, document, approval cards created from chat | 11 |
 
 ## Ground rules (CLAUDE.md §5)
 - Thiết kế trước: DESIGN.md + `design/mockups/spaces.html` được duyệt rồi mới code UI.

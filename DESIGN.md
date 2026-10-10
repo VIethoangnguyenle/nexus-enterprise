@@ -402,6 +402,34 @@ này thì cái kia đóng.
   đóng và trả focus về ảnh đã bấm. Phạm vi: các ảnh của **cùng một tin**. Màn chạm: vuốt ngang chuyển ảnh, nút
   trước/sau nằm sát mép.
 
+### Chat: tạo trong chat — bình chọn, công việc, tài liệu, phê duyệt (mockup `spaces.html` §6)
+
+- **Nút +** (IconButton 32, icon cộng) đứng đầu hàng nút của ô soạn, trước nút đính kèm; có ở ô soạn chính và ô
+  "Trả lời trong thread". Menu (popover lên trên): **Bình chọn · Công việc · Tài liệu mới · Đề nghị phê duyệt**.
+  Workspace cá nhân không có Đề nghị phê duyệt. Mỗi mục mở **hộp tạo** (Modal 520, có seg đổi loại Bình chọn /
+  Công việc / Tài liệu); gửi xong thành một tin chứa **thẻ**.
+- **Thẻ (ChatCard):** nằm ngoài bong bóng, bám bên của tin, rộng tối đa 420; `--color-raised` (trong panel
+  `--color-base`), viền trong 1px `--color-line`, radius 12, padding 12 × 14. Đầu thẻ: ô icon 32 radius 8 (Bình
+  chọn accent, Công việc success, Tài liệu info, Phê duyệt warning, đều dạng wash) + tiêu đề 600 + dòng phụ 12px
+  mờ "Loại · chi tiết". Chân thẻ: trạng thái + hành động phụ (Button ghost sm) căn phải. Không ID nào trên thẻ.
+- **Bình chọn:** câu hỏi ≤ 200 ký tự, 2–10 lựa chọn, tuỳ chọn "Cho chọn nhiều đáp án", "Ẩn danh", "Đóng bình
+  chọn" (Không tự đóng / Sau 1 giờ / Cuối ngày / Chọn ngày giờ). Mỗi lựa chọn là `button role=radio` (chọn nhiều:
+  `checkbox`, ô vuông) cao ≥ 40, nền `--color-sunk`. **Chưa bỏ phiếu: không thấy kết quả**, chỉ thấy "N người đã
+  bình chọn" (tránh theo số đông). Bỏ phiếu xong / đã đóng: thanh `--color-accent-wash` theo phần trăm (trượt
+  280ms `--ease-out-expo`), số phiếu tabular, tối đa 3 avatar 20 người chọn (ẩn danh thì không). Đổi ý bằng bấm
+  lựa chọn khác, "Rút phiếu" ở chân. Người tạo và quản lý nhóm đóng sớm qua menu Thêm; đóng rồi lựa chọn cao nhất
+  có pill `ok` "Nhiều nhất", dòng phụ "Đã đóng lúc…". Phiếu realtime của người khác: thanh trượt tới giá trị
+  mới, hàng tin phủ màu người bỏ phiếu (§7).
+- **Công việc:** tên việc ≤ 200, Giao cho (Picker thành viên nhóm), Hạn (date). Thẻ: ô đánh dấu 20 radius 6
+  (`role=checkbox`; xong = nền `--color-success`, tiêu đề gạch ngang mờ) cho người được giao và người tạo;
+  PersonChip người làm; StatusPill Chưa làm / Đang làm / Đã xong; "Mở trong Công việc" sang tab Công việc của nhóm.
+- **Tài liệu mới:** tên, loại (Văn bản / Bảng tính), "Lưu vào" mặc định thư mục của nhóm (Picker thư mục để đổi).
+  Thẻ: vị trí thư mục, giờ sửa cuối, ai đang sửa (avatar), Button "Mở". Chọn tài liệu có sẵn vẫn qua nút đính kèm.
+- **Đề nghị phê duyệt:** mở form đề nghị của Phê duyệt (detail panel) với "Gửi vào: tên nhóm". Thẻ: tiêu đề, loại
+  và số tiền, **chuỗi duyệt** (avatar 20 + tên + trạng thái từng bước: Đã gửi / Đã duyệt giờ `success`, Đang chờ
+  `warning`, Tiếp theo mờ; ngăn bằng "›"), StatusPill tổng ("Chờ … duyệt" `warn`, "Đã duyệt" `ok`, "Từ chối"
+  `bad`), "Xem đề nghị". Người đang phải duyệt thấy thêm Duyệt / Từ chối ngay trên thẻ. Người không có quyền
+  đọc đề nghị chỉ thấy tiêu đề và "Bạn không có quyền xem đề nghị này".
 ## 7. Motion
 
 Mọi duration/easing là token. Chỉ animate `transform` và `opacity` (cộng `background-color` cho

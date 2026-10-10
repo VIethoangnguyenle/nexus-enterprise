@@ -262,6 +262,68 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .fi.doc { background: var(--color-info-wash); color: var(--color-info); }
 .fi.other { background: var(--color-sunk); color: var(--color-ink-muted); }
 
+/* cards in a message: poll, task, document, approval request */
+.card { width: min(420px, 100%); margin-top: 6px; padding: 12px 14px; border-radius: 12px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); display: grid; gap: 10px; min-width: 0; }
+.panel .card { background: var(--color-base); }
+.card .ch { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.card .ci { width: 32px; height: 32px; flex: none; border-radius: 8px; display: grid; place-items: center; background: var(--color-accent-wash); color: var(--color-accent); }
+.card .ci.task { background: var(--color-success-wash); color: var(--color-success); }
+.card .ci.doc { background: var(--color-info-wash); color: var(--color-info); }
+.card .ci.appr { background: var(--color-warning-wash); color: var(--color-warning); }
+.card .ct { display: block; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.card .cs { display: block; margin-top: 2px; font-size: 0.75rem; color: var(--color-ink-muted); }
+.card .cf { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 0.8125rem; color: var(--color-ink-muted); }
+.card .cf .btn { margin-left: auto; }
+.pill.ok { background: var(--color-success-wash); color: var(--color-success); }
+.pill.warn { background: var(--color-warning-wash); color: var(--color-warning); }
+.pill.bad { background: var(--color-danger-wash); color: var(--color-danger); }
+/* poll */
+.popts { display: grid; gap: 6px; }
+.po { position: relative; isolation: isolate; overflow: hidden; display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 12px; border: 0; border-radius: 8px; background: var(--color-sunk); color: var(--color-ink); font: inherit; text-align: left; cursor: pointer; transition: background-color var(--duration-quick) var(--ease-out); }
+.po:hover { background: var(--color-hover); }
+.po .bar { position: absolute; inset: 0 auto 0 0; z-index: -1; width: 0; background: var(--color-accent-wash); transition: width var(--duration-layout) var(--ease-out-expo); }
+.poll.voted .po .bar, .poll.closed .po .bar { width: var(--w, 0%); }
+.po .pr { width: 16px; height: 16px; flex: none; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--color-ink-muted); display: grid; place-items: center; color: var(--color-on-accent); }
+.poll[data-multi="1"] .po .pr { border-radius: 4px; }
+.po[aria-checked="true"] .pr { background: var(--color-accent); box-shadow: none; }
+.po .pr svg { width: 12px; height: 12px; stroke-width: 3; opacity: 0; }
+.po[aria-checked="true"] .pr svg { opacity: 1; }
+.po .pt { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.po[aria-checked="true"] .pt { font-weight: 600; }
+.po .pn, .po .faces { display: none; }
+.poll.voted .po .pn, .poll.closed .po .pn { display: inline; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 0.8125rem; }
+.poll.voted .po .faces, .poll.closed .po .faces { display: flex; }
+.po .faces .av { box-shadow: 0 0 0 2px var(--color-sunk); }
+.poll.closed .po { cursor: default; }
+.poll.closed .po:hover { background: var(--color-sunk); }
+.po .top { display: none; }
+.poll.closed .po.win .top { display: inline-flex; }
+/* task */
+.tchk { width: 20px; height: 20px; flex: none; margin: 6px 6px 0; border: 0; border-radius: 6px; padding: 0; background: transparent; box-shadow: inset 0 0 0 1.5px var(--color-ink-muted); display: grid; place-items: center; color: var(--color-on-accent); cursor: pointer; }
+.tchk svg { width: 14px; height: 14px; stroke-width: 3; opacity: 0; }
+.tchk[aria-checked="true"] { background: var(--color-success); box-shadow: none; }
+.tchk[aria-checked="true"] svg { opacity: 1; }
+.task.done .ct { text-decoration: line-through; color: var(--color-ink-muted); }
+/* approval chain */
+.chain { display: flex; align-items: center; gap: 4px 6px; flex-wrap: wrap; font-size: 0.8125rem; }
+.step { display: inline-flex; align-items: center; gap: 6px; }
+.step small { color: var(--color-ink-muted); }
+.step.ok small { color: var(--color-success); font-weight: 600; }
+.step.wait small { color: var(--color-warning); font-weight: 600; }
+.chain .sep { color: var(--color-ink-muted); }
+/* create dialogs inside a pane */
+.pane .scrim { border-radius: 12px; }
+.pane .modal { gap: 14px; padding: 18px; max-height: calc(100% - 24px); overflow: auto; }
+.polist { display: grid; gap: 6px; }
+.polist .row { display: grid; grid-template-columns: minmax(0, 1fr) 32px; gap: 6px; align-items: center; }
+.chk { display: flex; align-items: flex-start; gap: 10px; font-size: 0.875rem; }
+.chk input { margin: 3px 0 0; width: 16px; height: 16px; accent-color: var(--color-accent); }
+.chk small { display: block; color: var(--color-ink-muted); }
+select.inp { appearance: auto; padding-right: 8px; }
+.seg2 { display: inline-flex; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg2 button { height: 30px; padding: 0 12px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink-muted); font: 600 0.8125rem/1 var(--font-body); cursor: pointer; }
+.seg2 button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); box-shadow: var(--shadow-raised, 0 1px 2px rgb(0 0 0 / .08)); }
+
 /* jump pill */
 .jump { position: absolute; left: 0; right: 0; bottom: 12px; margin-inline: auto; width: max-content; z-index: 20; display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--color-overlay); color: var(--color-ink); box-shadow: var(--shadow-overlay); font: 600 0.8125rem/1 var(--font-body); cursor: pointer; }
 .jump[hidden] { display: none; }
@@ -533,6 +595,11 @@ html.reduce .sk { animation: none; }
   <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
   <symbol id="i-rename" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
   <symbol id="i-sidebar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-poll" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></symbol>
+  <symbol id="i-task" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-file-plus" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 15h6"/><path d="M12 18v-6"/></symbol>
+  <symbol id="i-stamp" viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"/><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-6 0c0 2 1 2 1 3.5V13"/></symbol>
+  <symbol id="i-tick" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
   <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
@@ -596,7 +663,7 @@ html.reduce .sk { animation: none; }
     </div>
     <label class="check"><input type="checkbox" id="reduce"> Giảm chuyển động</label>
   </div>
-  <nav class="toc" aria-label="Các màn"><a href="#home">Trang chủ</a><a href="#dm">Tin nhắn hai bên</a><a href="#space">Luồng và thread</a><a href="#threads">Panel Thread</a><a href="#composer">Ô soạn và đính kèm</a><a href="#create">Tạo nhóm</a><a href="#members">Thành viên</a><a href="#browse">Duyệt nhóm</a></nav>
+  <nav class="toc" aria-label="Các màn"><a href="#home">Trang chủ</a><a href="#dm">Tin nhắn hai bên</a><a href="#space">Luồng và thread</a><a href="#threads">Panel Thread</a><a href="#composer">Ô soạn và đính kèm</a><a href="#cards">Bình chọn, công việc…</a><a href="#create">Tạo nhóm</a><a href="#members">Thành viên</a><a href="#browse">Duyệt nhóm</a></nav>
 </header>
 
 <!-- ============================ HOME ============================ -->
@@ -1125,10 +1192,112 @@ html.reduce .sk { animation: none; }
   </ol>
 </section>
 
+<!-- ============================ IN-CHAT CREATE: POLL, TASK, DOC, APPROVAL ============================ -->
+<section class="screen" id="cards" aria-labelledby="h-cards">
+  <div class="screen-head">
+    <h2 id="h-cards">6 · Tạo trong chat: bình chọn, công việc, tài liệu, phê duyệt</h2>
+    <p>Nút <b>+</b> trong ô soạn mở menu tạo, như menu ứng dụng của Google Chat. Mỗi thứ tạo ra là một <b>thẻ</b> trong tin: ai trong nhóm cũng thấy, trạng thái cập nhật realtime. Đề nghị phê duyệt chỉ có ở workspace tổ chức.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="cm-demo">Mở menu +</button>
+    <button class="btn sm" type="button" data-act="mk" data-k="poll">Hộp tạo bình chọn</button>
+    <button class="btn sm" type="button" data-act="mk" data-k="task">Hộp tạo công việc</button>
+    <button class="btn sm" type="button" data-act="mk" data-k="doc">Hộp tạo tài liệu</button>
+    <button class="btn sm" type="button" data-act="poll-other">Ngọc bỏ phiếu</button>
+    <button class="btn sm" type="button" data-act="poll-close">Đóng bình chọn</button>
+    <button class="btn sm" type="button" data-act="appr-step">Đề nghị đi tiếp một bước</button>
+  </div>
+  <div class="cgrid">
+    <!-- A: + menu and the create dialogs -->
+    <div class="pane" id="pane-mk" style="height:700px">
+      <div class="pane-h"><b>Menu + và hộp tạo</b><small>Bấm + trong ô soạn, chọn loại, điền, gửi</small></div>
+      <div class="mini">
+        <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>10:30</time></div><div class="txt">Mình chốt lịch họp với ngân hàng tuần sau nhé, mọi người chọn giờ giúp anh.</div></div></div>
+      </div>
+      <div class="composer" id="cmp-mk">
+        <div class="fmt" role="toolbar" aria-label="Định dạng" data-fill="fmt" hidden></div>
+        <div class="cin ph">Tin nhắn cho Đối soát giao dịch</div>
+        <div class="cbar"><span class="cl" data-fill="ctools"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button" disabled><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+      </div>
+      <div class="toasts" id="mk-toasts"></div>
+      <div class="scrim" id="mk-scrim" hidden>
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mk-title">
+          <div style="display:flex;align-items:center;gap:8px"><h4 id="mk-title">Tạo bình chọn</h4><div class="seg2" role="group" aria-label="Loại" style="margin-left:auto">
+            <button type="button" data-mk="poll" aria-pressed="true">Bình chọn</button><button type="button" data-mk="task" aria-pressed="false">Công việc</button><button type="button" data-mk="doc" aria-pressed="false">Tài liệu</button></div></div>
+          <div data-form="poll" style="display:grid;gap:14px">
+            <div class="field"><label for="pq">Câu hỏi</label><input class="inp" id="pq" maxlength="200" value="Chốt lịch họp đối soát với ngân hàng?"></div>
+            <div class="field"><span class="lab">Lựa chọn</span>
+              <div class="polist" id="pol-list">
+                <div class="row"><input class="inp" aria-label="Lựa chọn 1" value="Thứ Ba 14/10, 14:00"><button class="ibtn" type="button" aria-label="Bỏ lựa chọn 1" data-act="po-del"><svg class="i s"><use href="#i-x"/></svg></button></div>
+                <div class="row"><input class="inp" aria-label="Lựa chọn 2" value="Thứ Tư 15/10, 9:00"><button class="ibtn" type="button" aria-label="Bỏ lựa chọn 2" data-act="po-del"><svg class="i s"><use href="#i-x"/></svg></button></div>
+                <div class="row"><input class="inp" aria-label="Lựa chọn 3" placeholder="Thêm lựa chọn"><button class="ibtn" type="button" aria-label="Bỏ lựa chọn 3" data-act="po-del"><svg class="i s"><use href="#i-x"/></svg></button></div>
+              </div>
+              <button class="btn ghost sm" type="button" data-act="po-add" style="justify-self:start"><svg class="i s"><use href="#i-plus"/></svg>Thêm lựa chọn</button>
+            </div>
+            <label class="chk"><input type="checkbox"><span>Cho chọn nhiều đáp án</span></label>
+            <label class="chk"><input type="checkbox"><span>Ẩn danh<small>Không ai thấy ai đã chọn gì, chỉ thấy số phiếu.</small></span></label>
+            <div class="field"><label for="pend">Đóng bình chọn</label><select class="inp" id="pend"><option>Không tự đóng</option><option>Sau 1 giờ</option><option selected>Cuối ngày hôm nay (17:00)</option><option>Chọn ngày giờ…</option></select></div>
+          </div>
+          <div data-form="task" style="display:none;gap:14px">
+            <div class="field"><label for="tt">Việc cần làm</label><input class="inp" id="tt" maxlength="200" value="Gửi danh sách 3 giao dịch lệch cho ngân hàng"></div>
+            <div class="field"><span class="lab">Giao cho</span><div class="box"><span class="pchip"><span class="av s24" style="--p:var(--color-person-6)">TL</span>Nguyễn Thu Lan<span class="x" aria-label="Bỏ"><svg class="i s"><use href="#i-x"/></svg></span></span><span class="muted">Tìm thành viên nhóm…</span></div></div>
+            <div class="field"><label for="tdue">Hạn</label><input class="inp" id="tdue" type="date" value="2026-10-15"></div>
+          </div>
+          <div data-form="doc" style="display:none;gap:14px">
+            <div class="field"><label for="dn">Tên tài liệu</label><input class="inp" id="dn" maxlength="120" value="Biên bản họp với ngân hàng 14/10"></div>
+            <div class="field"><span class="lab">Loại</span><div class="seg2" role="group" aria-label="Loại tài liệu"><button type="button" aria-pressed="true">Văn bản</button><button type="button" aria-pressed="false">Bảng tính</button></div></div>
+            <div class="field"><span class="lab">Lưu vào</span><div class="box"><svg class="i s" style="color:var(--color-ink-muted)"><use href="#i-folder"/></svg><span>Đối soát giao dịch / Biên bản</span><button class="btn ghost sm" type="button" style="margin-left:auto">Đổi thư mục</button></div><small class="muted">Mọi thành viên nhóm mở được; quyền theo thư mục của nhóm.</small></div>
+          </div>
+          <div class="actions"><button class="btn ghost sm" type="button" data-act="mk-close">Huỷ</button><button class="btn primary sm" type="button" id="mk-ok" data-act="mk-send">Gửi bình chọn</button></div>
+        </div>
+      </div>
+    </div>
+    <!-- B: cards in the stream -->
+    <div class="pane" id="pane-cards" style="height:auto;min-height:540px">
+      <div class="pane-h"><b>Thẻ trong luồng</b><small>Bấm một lựa chọn để bỏ phiếu; bấm ô vuông để xong việc</small></div>
+      <div class="mini" id="mini-cards">
+        <div class="m" id="poll-row"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>10:31</time></div>
+          <div class="card poll" id="poll-demo" data-multi="0">
+            <div class="ch"><span class="ci"><svg class="i"><use href="#i-poll"/></svg></span><span style="min-width:0"><b class="ct">Chốt lịch họp đối soát với ngân hàng?</b><span class="cs" id="poll-meta">Bình chọn · Chọn một · Đóng lúc 17:00</span></span></div>
+            <div class="popts" role="radiogroup" aria-label="Chốt lịch họp đối soát với ngân hàng?"><button class="po" type="button" role="radio" aria-checked="false" data-o="0" data-n="3" style="--w:50%"><span class="bar"></span><span class="pr"><svg class="i"><use href="#i-tick"/></svg></span><span class="pt">Thứ Ba 14/10, 14:00</span><span class="pill ok top">Nhiều nhất</span><span class="faces"><span class="av s20" style="--p:var(--color-person-5)">MĐ</span><span class="av s20" style="--p:var(--color-person-1)">QV</span><span class="av s20" style="--p:var(--color-person-6)">TL</span></span><span class="pn">3</span></button><button class="po" type="button" role="radio" aria-checked="false" data-o="1" data-n="2" style="--w:33%"><span class="bar"></span><span class="pr"><svg class="i"><use href="#i-tick"/></svg></span><span class="pt">Thứ Tư 15/10, 9:00</span><span class="pill ok top">Nhiều nhất</span><span class="faces"><span class="av s20" style="--p:var(--color-person-2)">BN</span><span class="av s20" style="--p:var(--color-person-3)">HY</span></span><span class="pn">2</span></button><button class="po" type="button" role="radio" aria-checked="false" data-o="2" data-n="1" style="--w:17%"><span class="bar"></span><span class="pr"><svg class="i"><use href="#i-tick"/></svg></span><span class="pt">Thứ Năm 16/10, 15:30</span><span class="pill ok top">Nhiều nhất</span><span class="faces"><span class="av s20" style="--p:var(--color-person-4)">LK</span></span><span class="pn">1</span></button></div>
+            <div class="cf"><span id="poll-total">6 người đã bình chọn</span><button class="btn ghost sm" type="button" data-act="poll-unvote" id="poll-unvote" hidden>Rút phiếu</button></div>
+          </div><button class="tsum" type="button" aria-label="Thread, 2 trả lời"><span class="faces"><span class="av s20" style="--p:var(--color-person-1)">QV</span><span class="av s20" style="--p:var(--color-person-6)">TL</span></span><span class="n">2 trả lời</span><span class="l">Lần cuối 10:40</span></button></div></div>
+        <div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>10:45</time></div>
+          <div class="card task" id="task-demo">
+            <div class="ch"><button class="tchk" type="button" role="checkbox" aria-checked="false" aria-label="Đánh dấu xong: Gửi danh sách 3 giao dịch lệch cho ngân hàng" data-act="task-toggle"><svg class="i"><use href="#i-tick"/></svg></button><span style="min-width:0"><b class="ct">Gửi danh sách 3 giao dịch lệch cho ngân hàng</b><span class="cs">Công việc · Hạn thứ Tư 15/10</span></span></div>
+            <div class="cf"><span class="pchip"><span class="av s24" style="--p:var(--color-person-6)">TL</span>Nguyễn Thu Lan</span><span class="pill idle" id="task-st">Chưa làm</span><button class="btn ghost sm" type="button">Mở trong Công việc</button></div>
+          </div></div></div>
+        <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>11:02</time></div><div class="txt">Em tạo biên bản họp sẵn rồi ạ.</div>
+          <div class="card">
+            <div class="ch"><span class="ci doc"><svg class="i"><use href="#i-file-text"/></svg></span><span style="min-width:0"><b class="ct">Biên bản họp với ngân hàng 14/10</b><span class="cs">Tài liệu · Đối soát giao dịch / Biên bản · Sửa lần cuối 11:01</span></span></div>
+            <div class="cf"><span class="faces"><span class="av s20" style="--p:var(--color-person-6)">TL</span></span><span>Nguyễn Thu Lan đang sửa</span><button class="btn sm" type="button">Mở</button></div>
+          </div></div></div>
+        <div class="m mine" id="appr-row"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>11:20</time></div>
+          <div class="card" id="appr-demo">
+            <div class="ch"><span class="ci appr"><svg class="i"><use href="#i-stamp"/></svg></span><span style="min-width:0"><b class="ct">Thanh toán phí liên ngân hàng tháng 10</b><span class="cs">Đề nghị phê duyệt · Thanh toán · 1.284.500 ₫</span></span></div>
+            <div class="chain" id="appr-chain">
+              <span class="step ok"><span class="av s20" style="--p:var(--color-person-7)">TH</span><span>Lê Thị Hoa</span><small>Đã gửi</small></span><span class="sep">›</span>
+              <span class="step wait" data-s="1"><span class="av s20" style="--p:var(--color-person-5)">MĐ</span><span>Trần Minh Đức</span><small>Đang chờ</small></span><span class="sep">›</span>
+              <span class="step" data-s="2"><span class="av s20" style="--p:var(--color-person-2)">BN</span><span>Trần Bảo Ngọc</span><small>Tiếp theo</small></span>
+            </div>
+            <div class="cf"><span class="pill warn" id="appr-st">Chờ Trần Minh Đức duyệt</span><button class="btn ghost sm" type="button">Xem đề nghị</button></div>
+          </div></div></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Nút +</b> nằm đầu ô soạn (cạnh nút đính kèm), mở menu: Bình chọn, Công việc, Tài liệu mới, Đề nghị phê duyệt. Workspace cá nhân không có mục Đề nghị phê duyệt. Trong panel thread cũng có nút +; thẻ khi đó nằm trong thread.</li>
+    <li><b>Bình chọn</b>: câu hỏi tối đa 200 ký tự, 2–10 lựa chọn, tuỳ chọn chọn nhiều, ẩn danh, hạn đóng. Chưa bỏ phiếu thì chỉ thấy các lựa chọn và tổng số người đã bình chọn; bỏ phiếu xong mới thấy thanh phần trăm, số phiếu và avatar người chọn (ẩn danh thì không có avatar). Đổi ý bằng cách bấm lựa chọn khác hoặc “Rút phiếu”. Người tạo và quản lý nhóm đóng được bình chọn sớm (menu Thêm của tin). Đóng rồi thì ai cũng thấy kết quả, lựa chọn nhiều phiếu nhất có nhãn “Nhiều nhất”. Phiếu mới của người khác làm thanh trượt tới giá trị mới (280ms) <span class="need">cần backend</span> sự kiện realtime cho phiếu.</li>
+    <li><b>Công việc</b>: tên việc, người làm (chọn trong thành viên nhóm, không nhập mã), hạn. Thẻ có ô đánh dấu xong cho người được giao và người tạo; trạng thái Chưa làm / Đang làm / Đã xong; việc cũng hiện ở tab Công việc của nhóm.</li>
+    <li><b>Tài liệu mới</b>: tên, loại (Văn bản / Bảng tính), thư mục lưu mặc định là thư mục của nhóm trong Tài liệu. Thẻ hiện vị trí, ai đang sửa, nút Mở. “Chọn từ Tài liệu” vẫn nằm trong nút đính kèm.</li>
+    <li><b>Đề nghị phê duyệt</b>: mở form đề nghị của Phê duyệt (chọn mẫu, điền nội dung, chuỗi duyệt theo mẫu) với “Gửi vào: tên nhóm”. Thẻ hiện chuỗi người duyệt và trạng thái; người đang phải duyệt thấy thêm Duyệt / Từ chối. Ai không có quyền xem đề nghị thì thẻ chỉ hiện tiêu đề và “Bạn không có quyền xem đề nghị này”.</li>
+  </ol>
+</section>
+
 <!-- ============================ CREATE ============================ -->
 <section class="screen" id="create" aria-labelledby="h-create">
   <div class="screen-head">
-    <h2 id="h-create">6 · Tạo nhóm</h2>
+    <h2 id="h-create">7 · Tạo nhóm</h2>
     <p>Hộp thoại một bước: biểu tượng và tên, mô tả, thêm người bằng tìm kiếm (không bao giờ nhập mã), quyền truy cập và kiểu nhóm.</p>
   </div>
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="create-open">Mở hộp thoại</button></div>
@@ -1175,7 +1344,7 @@ html.reduce .sk { animation: none; }
 <!-- ============================ MEMBERS ============================ -->
 <section class="screen" id="members" aria-labelledby="h-members">
   <div class="screen-head">
-    <h2 id="h-members">7 · Thành viên</h2>
+    <h2 id="h-members">8 · Thành viên</h2>
     <p>Panel phải của nhóm: tìm, thêm người, đổi vai trò và xoá khỏi nhóm từ menu của từng người.</p>
   </div>
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="member-menu">Mở menu của Lê Quang Vinh</button><button class="btn sm" type="button" data-act="member-remove">Xoá Vinh khỏi nhóm</button></div>
@@ -1216,7 +1385,7 @@ html.reduce .sk { animation: none; }
 <!-- ============================ BROWSE ============================ -->
 <section class="screen" id="browse" aria-labelledby="h-browse">
   <div class="screen-head">
-    <h2 id="h-browse">8 · Duyệt nhóm <span class="need">cần backend</span></h2>
+    <h2 id="h-browse">9 · Duyệt nhóm <span class="need">cần backend</span></h2>
     <p>Danh sách nhóm mở trong khối mà bạn chưa tham gia. Cần API liệt kê nhóm “mọi người có thể tham gia” và API tự tham gia.</p>
   </div>
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="join">Tham gia “Kiểm soát nội bộ”</button></div>
@@ -1272,10 +1441,17 @@ html.reduce .sk { animation: none; }
   <button class="ibtn" type="button" data-fmt="quote" data-g="block" aria-pressed="false" aria-label="Trích dẫn" title="Trích dẫn"><svg class="i s"><use href="#i-quote"/></svg></button>
 </template>
 <template id="tpl-ctools">
+  <button class="ibtn" type="button" data-act="create-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Tạo trong chat" title="Bình chọn, công việc, tài liệu, phê duyệt"><svg class="i"><use href="#i-plus"/></svg></button>
   <button class="ibtn" type="button" data-act="attach-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Đính kèm" title="Đính kèm"><svg class="i"><use href="#i-clip"/></svg></button>
   <button class="ibtn" type="button" data-act="fmt-toggle" aria-pressed="false" aria-label="Định dạng" title="Định dạng"><svg class="i"><use href="#i-baseline"/></svg></button>
   <button class="ibtn" type="button" aria-label="Biểu tượng cảm xúc" title="Biểu tượng cảm xúc"><svg class="i"><use href="#i-smile"/></svg></button>
-  <div class="menu up" role="menu" aria-label="Đính kèm" hidden>
+  <div class="menu up cm" role="menu" aria-label="Tạo trong chat" hidden>
+    <button type="button" role="menuitem" data-act="mk" data-k="poll"><svg class="i s"><use href="#i-poll"/></svg>Bình chọn</button>
+    <button type="button" role="menuitem" data-act="mk" data-k="task"><svg class="i s"><use href="#i-task"/></svg>Công việc</button>
+    <button type="button" role="menuitem" data-act="mk" data-k="doc"><svg class="i s"><use href="#i-file-plus"/></svg>Tài liệu mới</button>
+    <button type="button" role="menuitem" data-act="mk" data-k="appr" class="org"><svg class="i s"><use href="#i-stamp"/></svg>Đề nghị phê duyệt</button>
+  </div>
+  <div class="menu up am" role="menu" aria-label="Đính kèm" hidden>
     <button type="button" role="menuitem" data-act="pick-local"><svg class="i s"><use href="#i-upload"/></svg>Tải lên từ máy</button>
     <button type="button" role="menuitem" data-act="close-menus"><svg class="i s"><use href="#i-folder"/></svg>Chọn từ Tài liệu</button>
   </div>
@@ -1389,7 +1565,7 @@ html.reduce .sk { animation: none; }
   function closeMenus() {
     document.querySelectorAll('.menu').forEach(function (m) { m.hidden = true; });
     document.querySelectorAll('.more[aria-expanded="true"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
-    document.querySelectorAll('[data-act="attach-menu"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+    document.querySelectorAll('[data-act="attach-menu"], [data-act="create-menu"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
   }
 
   // tab ink, every tab strip
@@ -1720,6 +1896,43 @@ html.reduce .sk { animation: none; }
     var n = insertAnimated(dmS, html); addHact(dmS); dmS.scrollTo({ top: dmS.scrollHeight, behavior: sb() }); return n;
   }
 
+  // ---------- §6 create in chat: poll, task, doc, approval ----------
+  var pollEl = $('poll-demo'), mkScrim = $('mk-scrim'), mkKind = 'poll', otherVotes = 0, apprStep = 1;
+  var MK = { poll: ['Tạo bình chọn', 'Gửi bình chọn'], task: ['Giao việc', 'Giao việc'], doc: ['Tài liệu mới', 'Tạo và gửi'] };
+  function pollPaint() {
+    var opts = pollEl.querySelectorAll('.po'), total = 0, max = 0, voters = Number(pollEl.getAttribute('data-voters') || 6);
+    opts.forEach(function (o) { var n = Number(o.getAttribute('data-n')); total += n; if (n > max) max = n; });
+    opts.forEach(function (o) {
+      var n = Number(o.getAttribute('data-n'));
+      o.style.setProperty('--w', (total ? Math.round(n * 100 / total) : 0) + '%');
+      o.querySelector('.pn').textContent = n; o.classList.toggle('win', n === max && n > 0);
+      o.setAttribute('aria-label', o.querySelector('.pt').textContent + (pollEl.classList.contains('voted') || pollEl.classList.contains('closed') ? ', ' + n + ' phiếu' : ''));
+    });
+    $('poll-total').textContent = (pollEl.classList.contains('closed') ? 'Đã đóng · ' : '') + voters + ' người đã bình chọn';
+    $('poll-unvote').hidden = !pollEl.classList.contains('voted') || pollEl.classList.contains('closed');
+  }
+  function pollVote(o) {
+    if (pollEl.classList.contains('closed')) return;
+    var cur = pollEl.querySelector('.po[aria-checked="true"]');
+    if (cur === o) return;
+    if (cur) { cur.setAttribute('aria-checked', 'false'); cur.setAttribute('data-n', Number(cur.getAttribute('data-n')) - 1); var me = cur.querySelector('.faces .me'); if (me) me.remove(); }
+    else pollEl.setAttribute('data-voters', Number(pollEl.getAttribute('data-voters') || 6) + 1);
+    o.setAttribute('aria-checked', 'true'); o.setAttribute('data-n', Number(o.getAttribute('data-n')) + 1);
+    o.querySelector('.faces').insertAdjacentHTML('afterbegin', '<span class="av s20 me" style="--p:var(--color-person-7)">TH</span>');
+    pollEl.classList.add('voted'); pollPaint();
+  }
+  function openMk(kind) {
+    mkKind = kind;
+    mkScrim.querySelectorAll('[data-form]').forEach(function (f) { f.style.display = f.getAttribute('data-form') === kind ? 'grid' : 'none'; });
+    mkScrim.querySelectorAll('[data-mk]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-mk') === kind)); });
+    $('mk-title').textContent = MK[kind][0]; $('mk-ok').textContent = MK[kind][1];
+    if (mkScrim.hidden) { mkScrim.hidden = false; replay(mkScrim, 'enter'); }
+  }
+  function closeMk() { mkScrim.classList.remove('enter'); exitThen(mkScrim, 'exit', function () { mkScrim.hidden = true; }); }
+  pollPaint();
+  mkScrim.addEventListener('click', function (e) { var b = e.target.closest('[data-mk]'); if (b) openMk(b.getAttribute('data-mk')); });
+  pollEl.addEventListener('click', function (e) { var o = e.target.closest('.po'); if (o) pollVote(o); });
+
   // ---------- main sidebar: rail ----------
   // wrap bare nav labels so the rail can hide them while the link keeps its accessible name
   document.querySelectorAll('.side .nav a').forEach(function (a) {
@@ -1813,6 +2026,61 @@ html.reduce .sk { animation: none; }
       var hc = $('home-count'); hc.textContent = String(Number(hc.textContent) + 1);
       setTimeout(function () { var t = c.querySelector('.tag'); if (t) t.remove(); }, 2400);
     },
+    'create-menu': function (b) {
+      var m = b.closest('.composer').querySelector('.menu.cm'), open = m.hidden; closeMenus();
+      if (open) { m.hidden = false; replay(m, 'enter'); b.setAttribute('aria-expanded', 'true'); }
+    },
+    'cm-demo': function () { var b = $('cmp-mk').querySelector('[data-act="create-menu"]'); $('cards').scrollIntoView({ behavior: sb() }); actions['create-menu'](b); },
+    'mk': function (b) {
+      closeMenus(); var k = b.getAttribute('data-k');
+      if (k === 'appr') { toast($('mk-toasts'), OK + '<span>Mở form đề nghị của Phê duyệt, gửi vào nhóm này</span>', 3000); return; }
+      if (!b.closest('#cards')) $('cards').scrollIntoView({ behavior: sb() });
+      openMk(k);
+    },
+    'mk-close': function () { closeMk(); },
+    'mk-send': function () { closeMk(); },
+    'po-add': function () {
+      var list = $('pol-list'), n = list.children.length; if (n >= 10) return;
+      list.insertAdjacentHTML('beforeend', '<div class="row"><input class="inp" aria-label="Lựa chọn ' + (n + 1) + '" placeholder="Thêm lựa chọn"><button class="ibtn" type="button" aria-label="Bỏ lựa chọn ' + (n + 1) + '" data-act="po-del"><svg class="i s"><use href="#i-x"/></svg></button></div>');
+      list.lastElementChild.querySelector('input').focus();
+    },
+    'po-del': function (b) { var list = $('pol-list'); if (list.children.length > 2) b.closest('.row').remove(); },
+    'poll-unvote': function () {
+      var cur = pollEl.querySelector('.po[aria-checked="true"]'); if (!cur) return;
+      cur.setAttribute('aria-checked', 'false'); cur.setAttribute('data-n', Number(cur.getAttribute('data-n')) - 1);
+      var me = cur.querySelector('.faces .me'); if (me) me.remove();
+      pollEl.setAttribute('data-voters', Number(pollEl.getAttribute('data-voters') || 7) - 1);
+      pollEl.classList.remove('voted'); pollPaint();
+    },
+    'poll-other': function () {
+      if (pollEl.classList.contains('closed')) return;
+      var o = pollEl.querySelectorAll('.po')[otherVotes++ % 2 ? 0 : 1];
+      o.setAttribute('data-n', Number(o.getAttribute('data-n')) + 1);
+      o.querySelector('.faces').insertAdjacentHTML('beforeend', '<span class="av s20" style="--p:var(--color-person-2)">BN</span>');
+      pollEl.setAttribute('data-voters', Number(pollEl.getAttribute('data-voters') || 6) + 1);
+      pollPaint(); trace($('poll-row'), 2);
+    },
+    'poll-close': function () {
+      pollEl.classList.toggle('closed');
+      $('poll-meta').textContent = pollEl.classList.contains('closed') ? 'Bình chọn · Chọn một · Đã đóng lúc 11:30' : 'Bình chọn · Chọn một · Đóng lúc 17:00';
+      pollPaint();
+    },
+    'task-toggle': function (b) {
+      var on = b.getAttribute('aria-checked') !== 'true', st = $('task-st');
+      b.setAttribute('aria-checked', String(on)); $('task-demo').classList.toggle('done', on);
+      st.className = 'pill ' + (on ? 'ok' : 'idle'); st.textContent = on ? 'Đã xong' : 'Chưa làm';
+    },
+    'appr-step': function () {
+      var chain = $('appr-chain'), st = $('appr-st');
+      if (apprStep > 2) { apprStep = 1; chain.querySelectorAll('[data-s]').forEach(function (x) { x.className = 'step'; x.querySelector('small').textContent = 'Tiếp theo'; });
+        var f = chain.querySelector('[data-s="1"]'); f.className = 'step wait'; f.querySelector('small').textContent = 'Đang chờ'; st.className = 'pill warn'; st.textContent = 'Chờ Trần Minh Đức duyệt'; return; }
+      var cur = chain.querySelector('[data-s="' + apprStep + '"]'); cur.className = 'step ok'; cur.querySelector('small').textContent = 'Đã duyệt 11:' + (30 + apprStep * 5);
+      apprStep++;
+      var nx = chain.querySelector('[data-s="' + apprStep + '"]');
+      if (nx) { nx.className = 'step wait'; nx.querySelector('small').textContent = 'Đang chờ'; st.className = 'pill warn'; st.textContent = 'Chờ Trần Bảo Ngọc duyệt'; }
+      else { st.className = 'pill ok'; st.textContent = 'Đã duyệt'; }
+      trace($('appr-row'), 5);
+    },
     'dm-in': function () {
       var t = DM_IN[dmIn++ % DM_IN.length];
       var n = dmAppend('<div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>09:15</time></div><div class="txt">' + esc(t) + '</div></div></div>');
@@ -1904,7 +2172,7 @@ html.reduce .sk { animation: none; }
       else { p.classList.remove('enter'); exitThen(p, 'exit', function () { p.hidden = true; app.classList.remove('with-panel'); btn.setAttribute('aria-pressed', 'false'); }); }
     },
     'attach-menu': function (b) {
-      var m = b.closest('.composer').querySelector('.menu.up'), open = m.hidden; closeMenus();
+      var m = b.closest('.composer').querySelector('.menu.am'), open = m.hidden; closeMenus();
       if (open) { m.hidden = false; replay(m, 'enter'); b.setAttribute('aria-expanded', 'true'); }
     },
     'pick-local': function (b) { closeMenus(); if (b.closest('#pane-b')) $('file-b').click(); },
@@ -1998,6 +2266,7 @@ html.reduce .sk { animation: none; }
     var anyMenu = Array.prototype.some.call(document.querySelectorAll('.menu'), function (m) { return !m.hidden; });
     if (anyMenu) { closeMenus(); return; }
     if (panel.contains(document.activeElement) && !panel.hidden) { closeThread(); return; }
+    if (!mkScrim.hidden) { closeMk(); return; }
     var m = $('create-modal'); if (!m.hidden) actions['create-close']();
   });
 })();
