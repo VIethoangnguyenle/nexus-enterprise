@@ -83,6 +83,22 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .nav a[aria-current="page"] { background: var(--color-raised); color: var(--color-ink); font-weight: 600; }
 .nav a .pill { margin-left: auto; }
 .me { display: flex; align-items: center; gap: 10px; padding: 8px; } .me .r { font-size: 0.75rem; color: var(--color-ink-muted); }
+/* main sidebar: full (232) or icon rail (64); hovering the rail peeks it open over the chat column */
+.app { transition: grid-template-columns var(--duration-layout) var(--ease-out-expo); }
+.app.rail { grid-template-columns: 64px 288px minmax(520px, 1fr); }
+.app.rail.with-panel { grid-template-columns: 64px 288px minmax(480px, 1fr) 360px; }
+.side { position: relative; overflow: hidden; width: 100%; grid-template-columns: minmax(0, 1fr); transition: width var(--duration-layout) var(--ease-out-expo), box-shadow var(--duration-quick) var(--ease-out); }
+.ws .tog { flex: none; margin-left: auto; order: 2; color: var(--color-ink-muted); }
+.ws > div { min-width: 0; white-space: nowrap; }
+.nav a { position: relative; white-space: nowrap; }
+.side .lb, .ws > div, .me > div { transition: opacity 120ms var(--ease-out); }
+.app.rail:not(.peek) .side .lb, .app.rail:not(.peek) .ws > div, .app.rail:not(.peek) .me > div { opacity: 0; pointer-events: none; }
+.app.rail:not(.peek) .ws { flex-direction: column; gap: 8px; padding: 6px 4px; }
+.app.rail:not(.peek) .ws .tog { margin-left: 0; order: -1; }
+.app.rail:not(.peek) .ws > div, .app.rail:not(.peek) .me > div { display: none; }
+.app.rail:not(.peek) .me { padding: 8px 4px; }
+.app.rail:not(.peek) .nav a .pill { position: absolute; top: 3px; left: 22px; height: 16px; min-width: 16px; padding: 0 4px; font-size: 0.625rem; box-shadow: 0 0 0 2px var(--color-sunk); }
+.app.rail.peek .side { width: 232px; z-index: 25; box-shadow: var(--shadow-overlay); border-radius: 0 12px 12px 0; }
 
 /* chat navigator (Google Chat left column) */
 .cnav { display: grid; grid-template-rows: auto 1fr; min-height: 0; background: var(--color-base); }
@@ -512,6 +528,7 @@ html.reduce .sk { animation: none; }
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
   <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
   <symbol id="i-rename" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
+  <symbol id="i-sidebar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></symbol>
   <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
   <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
@@ -595,7 +612,7 @@ html.reduce .sk { animation: none; }
   <div class="scroll">
     <div class="app" id="app-home">
       <aside class="side" aria-label="Điều hướng chính">
-        <div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div>
+        <div class="ws"><button class="ibtn tog" type="button" aria-label="Thu gọn menu chính" aria-expanded="true" data-act="rail-toggle"><svg class="i"><use href="#i-sidebar"/></svg></button><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div>
         <nav class="nav">
           <a href="#home" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">5</span></a>
           <a href="#home"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a>
@@ -713,11 +730,12 @@ html.reduce .sk { animation: none; }
     <button class="btn sm" type="button" data-act="jump">Bấm nút nổi</button>
     <button class="btn sm" type="button" data-act="thread-close">Đóng/mở panel thread</button>
     <button class="btn sm" type="button" data-act="more-menu">Mở menu Thêm của tin</button>
+    <button class="btn sm" type="button" data-act="rail-toggle" data-app="app-space">Thu gọn/mở menu chính</button>
   </div>
   <div class="scroll">
     <div class="app with-panel" id="app-space">
       <aside class="side" aria-label="Điều hướng chính">
-        <div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div>
+        <div class="ws"><button class="ibtn tog" type="button" aria-label="Thu gọn menu chính" aria-expanded="true" data-act="rail-toggle"><svg class="i"><use href="#i-sidebar"/></svg></button><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div>
         <nav class="nav">
           <a href="#space" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">2</span></a>
           <a href="#space"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a>
@@ -820,6 +838,7 @@ html.reduce .sk { animation: none; }
   </div>
   <ol class="notes">
     <li><b>Hai bên</b>: tin của bạn nằm bên phải, bong bóng nền accent wash, không avatar, không tên; tin người khác nằm bên trái, bong bóng nền sunk, có avatar và tên. Đính kèm, cảm xúc và hàng tóm tắt thread bám theo bên của tin; thanh hover actions của tin bạn mở ở góc trái. Áp dụng cả trong panel thread và tin nhắn trực tiếp.</li>
+    <li><b>Menu chính thu gọn</b>: nút ở đầu menu chính (Tin nhắn, Tài liệu, Phê duyệt…) thu nó thành dải icon 64px để chừa chỗ cho chat; số chưa đọc thành badge trên icon, tên hiện bằng tooltip. Trỏ chuột vào dải 300ms thì menu mở tạm, nổi đè lên cột trò chuyện, rời chuột thì thu lại. Trạng thái nhớ theo thiết bị; màn 1024–1279px mặc định thu gọn.</li>
     <li><b>Gom tin</b>: cùng người, cách nhau ≤ 5 phút thì dòng sau không có avatar và tên; giờ hiện ở lề ngoài (trái với người khác, phải với bạn) khi trỏ chuột hoặc focus. Tin có hàng tóm tắt thread, vạch ngày, vạch “Tin mới” đều ngắt nhóm.</li>
     <li><b>Vạch “Tin mới”</b> nằm trước tin chưa đọc đầu tiên, đường accent từ trái, nhãn bên phải. Nhiều hơn một màn thì nhóm mở tại vạch. <b>Nút nổi</b> có hai trạng thái: “Tin mới nhất” khi còn tin phía dưới, “Nhảy tới tin chưa đọc” khi bạn đã nhảy qua vạch. Demo: bấm nút nổi hai lần.</li>
     <li><b>Hàng tóm tắt thread</b>: tối đa 3 avatar người trả lời gần nhất, “N trả lời”, giờ trả lời cuối, pill “M mới” chỉ khi bạn theo dõi thread <span class="need">cần backend</span> (tóm tắt thread do server trả, phase 02).</li>
@@ -846,7 +865,7 @@ html.reduce .sk { animation: none; }
   </div>
   <div class="scroll">
     <div class="app with-panel" id="app-threads">
-      <aside class="side"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div><nav class="nav"><a href="#threads" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn</a><a href="#threads"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#threads"><svg class="i"><use href="#i-check"/></svg>Phê duyệt</a></nav><div></div></aside>
+      <aside class="side"><div class="ws"><button class="ibtn tog" type="button" aria-label="Thu gọn menu chính" aria-expanded="true" data-act="rail-toggle"><svg class="i"><use href="#i-sidebar"/></svg></button><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div><nav class="nav"><a href="#threads" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn</a><a href="#threads"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#threads"><svg class="i"><use href="#i-check"/></svg>Phê duyệt</a></nav><div></div></aside>
       <div class="cnav"><div class="top"><button class="newchat" type="button"><svg class="i"><use href="#i-pen"/></svg>Trò chuyện mới</button></div><div class="body"><div class="sec">Nhóm</div><a class="rl" href="#threads" aria-current="page"><span class="sp s24" style="--p:var(--color-person-4)">Đ</span><span class="t">Đối soát giao dịch</span></a><a class="rl" href="#threads"><span class="sp s24" style="--p:var(--color-person-2)">V</span><span class="t">Vận hành chung</span></a></div></div>
       <div class="content" style="grid-template-rows:auto auto auto minmax(0,1fr) auto">
         <div class="chead">
@@ -1027,7 +1046,7 @@ html.reduce .sk { animation: none; }
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="create-open">Mở hộp thoại</button></div>
   <div class="scroll">
     <div class="app" id="app-create" style="height:820px">
-      <aside class="side"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div><nav class="nav"><a href="#create" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn</a><a href="#create"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#create"><svg class="i"><use href="#i-check"/></svg>Phê duyệt</a></nav><div></div></aside>
+      <aside class="side"><div class="ws"><button class="ibtn tog" type="button" aria-label="Thu gọn menu chính" aria-expanded="true" data-act="rail-toggle"><svg class="i"><use href="#i-sidebar"/></svg></button><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div><nav class="nav"><a href="#create" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn</a><a href="#create"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#create"><svg class="i"><use href="#i-check"/></svg>Phê duyệt</a></nav><div></div></aside>
       <div class="cnav"><div class="top"><button class="newchat" type="button"><svg class="i"><use href="#i-pen"/></svg>Trò chuyện mới</button></div><div class="body"><a class="rl" href="#create" aria-current="page"><svg class="i s h"><use href="#i-home"/></svg><span class="t">Trang chủ</span></a></div></div>
       <div class="content"></div>
       <div class="scrim" id="create-modal">
@@ -1074,7 +1093,7 @@ html.reduce .sk { animation: none; }
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="member-menu">Mở menu của Lê Quang Vinh</button><button class="btn sm" type="button" data-act="member-remove">Xoá Vinh khỏi nhóm</button></div>
   <div class="scroll">
     <div class="app with-panel" id="app-members">
-      <aside class="side"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div><nav class="nav"><a href="#members" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn</a></nav><div></div></aside>
+      <aside class="side"><div class="ws"><button class="ibtn tog" type="button" aria-label="Thu gọn menu chính" aria-expanded="true" data-act="rail-toggle"><svg class="i"><use href="#i-sidebar"/></svg></button><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div><nav class="nav"><a href="#members" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn</a></nav><div></div></aside>
       <div class="cnav"><div class="top"><button class="newchat" type="button"><svg class="i"><use href="#i-pen"/></svg>Trò chuyện mới</button></div><div class="body"><div class="sec">Nhóm</div><a class="rl" href="#members" aria-current="page"><span class="sp s24" style="--p:var(--color-person-4)">Đ</span><span class="t">Đối soát giao dịch</span></a></div></div>
       <div class="content" style="grid-template-rows:auto 1fr"><div class="chead"><span class="sp s40" style="--p:var(--color-person-4)">Đ</span><div class="t"><h3>Đối soát giao dịch</h3><div class="sub">14 thành viên</div></div></div><div></div></div>
       <aside class="panel" aria-label="Thành viên" style="position:relative">
@@ -1115,7 +1134,7 @@ html.reduce .sk { animation: none; }
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="join">Tham gia “Kiểm soát nội bộ”</button></div>
   <div class="scroll">
     <div class="app" id="app-browse">
-      <aside class="side"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div><nav class="nav"><a href="#browse" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn</a></nav><div></div></aside>
+      <aside class="side"><div class="ws"><button class="ibtn tog" type="button" aria-label="Thu gọn menu chính" aria-expanded="true" data-act="rail-toggle"><svg class="i"><use href="#i-sidebar"/></svg></button><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div><nav class="nav"><a href="#browse" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn</a></nav><div></div></aside>
       <div class="cnav"><div class="top"><button class="newchat" type="button"><svg class="i"><use href="#i-pen"/></svg>Trò chuyện mới</button></div><div class="body"><a class="rl browse" href="#browse" aria-current="page"><svg class="i s"><use href="#i-compass"/></svg><span class="t">Duyệt nhóm</span></a></div></div>
       <div class="content" style="grid-template-rows:auto auto 1fr">
         <div class="chead"><div class="t"><h3>Duyệt nhóm</h3><div class="sub">Nhóm mở trong Khối Vận hành</div></div></div>
@@ -1604,6 +1623,25 @@ html.reduce .sk { animation: none; }
     exitThen(vw, 'exit', function () { vw.hidden = true; document.body.style.overflow = ''; if (V.from) V.from.focus({ preventScroll: true }); });
   }
 
+  // ---------- main sidebar: rail ----------
+  // wrap bare nav labels so the rail can hide them while the link keeps its accessible name
+  document.querySelectorAll('.side .nav a').forEach(function (a) {
+    Array.prototype.slice.call(a.childNodes).forEach(function (n) {
+      if (n.nodeType === 3 && n.textContent.trim()) { var sp = document.createElement('span'); sp.className = 'lb'; sp.textContent = n.textContent; n.replaceWith(sp); }
+    });
+  });
+  function setRail(app, on) {
+    app.classList.toggle('rail', on); app.classList.remove('peek');
+    var b = app.querySelector('.ws .tog'); b.setAttribute('aria-expanded', String(!on)); b.setAttribute('aria-label', on ? 'Mở rộng menu chính' : 'Thu gọn menu chính');
+    app.querySelectorAll('.side .nav a').forEach(function (a) { var lb = a.querySelector('.lb'); if (on && lb) a.title = lb.textContent; else a.removeAttribute('title'); });
+  }
+  document.querySelectorAll('.app').forEach(function (app) {
+    var side = app.querySelector('.side'), t = null;
+    if (!side) return;
+    side.addEventListener('mouseenter', function () { if (!app.classList.contains('rail')) return; t = setTimeout(function () { app.classList.add('peek'); }, 300); });
+    side.addEventListener('mouseleave', function () { clearTimeout(t); app.classList.remove('peek'); });
+  });
+
   // ---------- §1 sections ----------
   var hnav = $('home-nav'), hbody = $('home-body'), secMenu = $('sec-menu'), rowMenu = $('row-menu'), sdlg = $('sec-dlg');
   var menuSec = null, menuRow = null, dlgMode = 'create', secSeq = 0, lastDeleted = null;
@@ -1677,6 +1715,10 @@ html.reduce .sk { animation: none; }
       flipMoveToTop(feed, c); trace(c, 3);
       var hc = $('home-count'); hc.textContent = String(Number(hc.textContent) + 1);
       setTimeout(function () { var t = c.querySelector('.tag'); if (t) t.remove(); }, 2400);
+    },
+    'rail-toggle': function (b) {
+      var app = b.getAttribute('data-app') ? $(b.getAttribute('data-app')) : b.closest('.app');
+      setRail(app, !app.classList.contains('rail'));
     },
     'sec-toggle': function (b) {
       var open = b.getAttribute('aria-expanded') !== 'true', body = b.closest('.grp').querySelector('.grp-b');

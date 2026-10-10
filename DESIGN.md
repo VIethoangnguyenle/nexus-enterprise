@@ -137,8 +137,15 @@ Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một
 - **Sidebar** (`--color-sunk`): workspace switcher (tên + avatar, display font), 5 mục chính
   **Tin nhắn · Tài liệu · Phê duyệt · Tài sản · Danh bạ**, đáy: **Thông báo** (mở NotificationPanel,
   §6), **Quản trị** (khi có quyền),
-  **Cài đặt**, người dùng hiện tại. Thu gọn thành rail 64px (icon + tooltip). Tài sản nằm trong
-  shell này, không có layout riêng.
+  **Cài đặt**, người dùng hiện tại. Tài sản nằm trong shell này, không có layout riêng.
+- **Thu gọn sidebar (rail 64px)** (mockup `spaces.html` §2, nút "Thu gọn/mở menu chính"): IconButton
+  "Thu gọn menu chính" (icon khung có cột trái) ở cuối hàng workspace, `aria-expanded`. Thu gọn: cột còn
+  64px, chỉ icon 20; logo workspace và nút mở rộng xếp dọc ở đầu; avatar người dùng ở đáy; số chưa đọc
+  thành badge 16 trên góc icon (viền 2px màu sidebar); tên mục hiện bằng tooltip, tên vẫn là accessible
+  name của link. Đổi bề rộng `grid-template-columns` 280ms `--ease-out-expo`, chữ fade 120ms; giảm chuyển
+  động thì đổi ngay. **Xem tạm:** trỏ chuột vào rail 300ms thì sidebar mở 232px **nổi đè** lên list panel
+  (`--shadow-overlay`, không đẩy layout), rời chuột thì thu lại. Trạng thái nhớ theo thiết bị; 1024–1279
+  mặc định thu gọn, ≥ 1280 mặc định mở. Phần chừa ra dành cho content (luồng chat).
 - **List panel** chỉ ở Tin nhắn và Tài liệu. **Detail panel** mở bằng chọn mục, đóng bằng Esc.
 - **Breakpoints:** ≥ 1280 đủ 4 cột · 1024–1279 detail panel thành overlay bên phải ·
   768–1023 sidebar thành rail, list panel thành cột thay thế content (rail chưa làm: hiện thanh
