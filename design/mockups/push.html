@@ -1,0 +1,559 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thông báo đẩy và cài app</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Push notifications, install prompt and offline/update bars, mobile first (DESIGN.md §5 mobile shell, §6, §7).
+   Phone frames are 360–390 wide. Lock screens imitate the operating system and only illustrate where the push lands. */
+* { box-sizing: border-box; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+[hidden] { display: none !important; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-ink-muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* review chrome */
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 72ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; }
+.check input { width: 18px; height: 18px; accent-color: var(--color-accent); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; }
+.screen-head { display: grid; gap: 6px; max-width: 80ch; }
+.screen-head h2 { font-size: 1.375rem; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); font-size: 0.9375rem; }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.demo .k { font: 600 0.75rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); margin-right: 4px; }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 84ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); }
+.need { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--color-info-wash); color: var(--color-info); font: 600 0.6875rem/1 var(--font-body); margin-left: 4px; vertical-align: 1px; }
+
+/* primitives (same as the other mockups) */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 10px; border: 0; font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink);
+  transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-press) var(--ease-out); }
+.btn:active { transform: scale(0.98); }
+.btn.sm { height: 36px; padding: 0 12px; font-size: 0.8125rem; border-radius: 8px; }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.ghost { background: transparent; } .btn.ghost:hover { background: var(--color-hover); }
+.btn.block { width: 100%; }
+.ibtn { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 10px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; }
+.ibtn:hover { background: var(--color-hover); }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); }
+.sp { --p: var(--color-person-4); width: 32px; height: 32px; border-radius: 9px; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 700 0.8125rem/1 var(--font-display); }
+.pill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font: 600 0.75rem/1 var(--font-body); white-space: nowrap; }
+.pill.count { background: var(--color-accent); color: var(--color-on-accent); height: 18px; padding: 0 6px; font-size: 0.6875rem; min-width: 18px; justify-content: center; }
+.pill.warn { background: var(--color-warning-wash); color: var(--color-warning); }
+.pill.bad { background: var(--color-danger-wash); color: var(--color-danger); }
+.pill.ok { background: var(--color-success-wash); color: var(--color-success); }
+.sw { width: 44px; height: 26px; border-radius: 999px; background: var(--color-line); border: 0; position: relative; cursor: pointer; flex: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: var(--color-raised); box-shadow: 0 1px 2px oklch(0% 0 0 / 0.2); transition: transform var(--duration-quick) var(--ease-out); }
+.sw[aria-checked="true"] { background: var(--color-accent); }
+.sw[aria-checked="true"]::after { transform: translateX(18px); }
+.sw:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* phone */
+.phones { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.ph { display: grid; gap: 10px; justify-items: center; }
+.ph > small { color: var(--color-ink-muted); font-weight: 600; }
+.phone { width: min(390px, calc(100vw - 48px)); height: 780px; border-radius: 32px; background: var(--color-base); overflow: hidden; display: grid; grid-template-rows: auto auto 1fr auto; position: relative; isolation: isolate;
+  box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; }
+.sbar { display: flex; align-items: center; justify-content: space-between; height: 36px; padding: 0 22px; font: 600 0.8125rem/1 var(--font-body); font-variant-numeric: tabular-nums; }
+.sbar .ic { display: flex; gap: 6px; align-items: center; }
+.sbar .ic span { width: 16px; height: 9px; border-radius: 2px; background: currentColor; opacity: 0.85; }
+.topbar { display: flex; align-items: center; gap: 4px; min-height: 48px; padding: 0 4px 0 16px; background: var(--color-base); }
+.topbar .brand { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-ink-muted); font-size: 1rem; }
+.topbar .brand b { font: 700 1rem/1 var(--font-display); color: var(--color-ink); }
+.topbar .back { margin-left: -12px; }
+.topbar h3 { flex: 1; font-size: 1.0625rem; font-weight: 700; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pbody { overflow: auto; min-height: 0; position: relative; }
+.tabbar { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--color-raised); padding: 4px 4px 18px; position: relative; z-index: 20; }
+.tabbar a { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 48px; font-size: 0.6875rem; line-height: 1rem; font-weight: 500; color: var(--color-ink-muted); text-decoration: none; position: relative; }
+.tabbar a .ic { position: relative; display: grid; place-items: center; width: 48px; height: 24px; border-radius: 10px; }
+.tabbar a .ic svg.i { width: 20px; height: 20px; }
+.tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 600; }
+.tabbar a[aria-current="page"] .ic { background: var(--color-accent-wash); }
+.tabbar a .pill.count { position: absolute; top: -6px; right: 2px; box-shadow: 0 0 0 2px var(--color-raised); }
+
+/* conversation list (home of Tin nhắn on mobile) */
+.conv { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 16px; text-decoration: none; color: inherit; min-height: 64px; }
+.conv .nm { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv .pv { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv.unread .nm, .conv.unread .pv { font-weight: 600; color: var(--color-ink); }
+.conv .meta { display: grid; justify-items: end; gap: 4px; font-size: 0.75rem; color: var(--color-ink-muted); }
+.conv .av, .conv .sp { width: 44px; height: 44px; font-size: 0.875rem; }
+.conv .sp { border-radius: 12px; }
+
+/* soft prompt card (asks before the browser does) */
+.ask { margin: 8px 12px; padding: 14px; border-radius: 14px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); display: grid; gap: 12px; }
+.ask .h { display: flex; gap: 12px; align-items: flex-start; }
+.ask .bi { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none; background: var(--color-accent-wash); color: var(--color-accent); }
+.ask b { display: block; font-size: 0.9375rem; }
+.ask p { color: var(--color-ink-muted); font-size: 0.8125rem; margin-top: 2px; }
+.ask .a { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* simulated browser permission prompt (owned by the browser, shown for reference only) */
+.sysdlg { position: absolute; left: 12px; right: 12px; bottom: 96px; z-index: 40; background: oklch(98% 0 0); color: oklch(20% 0 0); border-radius: 18px; padding: 16px; display: grid; gap: 12px; box-shadow: 0 12px 40px oklch(0% 0 0 / 0.28); font-size: 0.875rem; }
+:root[data-theme="dark"] .sysdlg { background: oklch(28% 0 0); color: oklch(95% 0 0); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .sysdlg { background: oklch(28% 0 0); color: oklch(95% 0 0); } }
+.sysdlg .o { font-size: 0.75rem; opacity: 0.7; }
+.sysdlg .a { display: flex; gap: 8px; justify-content: flex-end; }
+.sysdlg button { border: 0; border-radius: 999px; padding: 9px 16px; font: 600 0.8125rem/1 system-ui, sans-serif; cursor: pointer; background: transparent; color: oklch(45% 0.15 255); }
+.sysdlg button.p { background: oklch(52% 0.16 255); color: oklch(99% 0 0); }
+.tag-os { position: absolute; top: 8px; right: 12px; font: 600 0.625rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.6; }
+
+/* toast inside a phone */
+.ptoast { position: absolute; left: 12px; right: 12px; bottom: 92px; z-index: 30; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 12px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); }
+.ptoast svg { color: var(--color-success); }
+
+/* lock screens (operating-system imitation) */
+.lock { width: min(390px, calc(100vw - 48px)); height: 780px; border-radius: 32px; overflow: hidden; position: relative; margin: 8px; box-shadow: 0 0 0 8px var(--color-sunk);
+  background: radial-gradient(120% 80% at 20% 10%, oklch(48% 0.09 200), transparent 60%), radial-gradient(120% 90% at 90% 90%, oklch(40% 0.1 300), transparent 60%), oklch(22% 0.03 240); color: oklch(97% 0 0); }
+.lock .clock { text-align: center; padding-top: 72px; font: 600 4.5rem/1 var(--font-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.lock .date { text-align: center; font-size: 1rem; opacity: 0.9; margin-top: 6px; }
+.lock .stack { position: absolute; left: 10px; right: 10px; bottom: 96px; display: grid; gap: 8px; }
+.lock .hint { position: absolute; bottom: 28px; left: 0; right: 0; text-align: center; font-size: 0.75rem; opacity: 0.7; }
+.pn { display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 10px; row-gap: 2px; padding: 12px 14px; border-radius: 22px; background: oklch(96% 0 0 / 0.86); color: oklch(18% 0 0); backdrop-filter: blur(18px); text-align: left; border: 0; font: inherit; cursor: pointer; width: 100%; }
+.lock.ios .pn { border-radius: 20px; background: oklch(98% 0 0 / 0.72); }
+.pn .ai { grid-row: span 3; width: 22px; height: 22px; border-radius: 6px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 0.75rem/1 var(--font-display); margin-top: 1px; }
+.lock.ios .pn .ai { width: 36px; height: 36px; border-radius: 9px; font-size: 1rem; }
+.lock.ios .pn { grid-template-columns: 36px minmax(0, 1fr); align-items: center; }
+.pn .src { display: flex; gap: 6px; font-size: 0.75rem; opacity: 0.72; min-width: 0; }
+.pn .src span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pn .src time { margin-left: auto; flex: none; }
+.pn .tt { font-weight: 600; font-size: 0.875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pn .bd { font-size: 0.8125rem; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.pn.in { animation: pn-in var(--duration-layout) var(--ease-out-expo) both; }
+@keyframes pn-in { from { opacity: 0; transform: translateY(-18px) scale(0.98); } }
+
+/* chat opened from a push */
+.stream { display: flex; flex-direction: column; gap: 4px; padding: 8px 12px 12px; }
+.m { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 10px; }
+.m .who { display: flex; gap: 8px; align-items: baseline; font-size: 0.8125rem; } .m .who b { font-weight: 600; } .m .who time { color: var(--color-ink-muted); font-size: 0.75rem; }
+.txt { width: fit-content; max-width: 85%; padding: 8px 12px; border-radius: 16px; border-top-left-radius: 4px; background: var(--color-sunk); line-height: 1.5; margin-top: 2px; }
+.m.mine { grid-template-columns: minmax(0, 1fr); justify-items: end; }
+.m.mine .txt { background: var(--color-accent-wash); border-top-left-radius: 16px; border-top-right-radius: 4px; }
+.m.hl .txt { animation: hl 2400ms var(--ease-out) both; }
+@keyframes hl { 0%, 40% { box-shadow: 0 0 0 2px var(--color-accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+.mention { color: var(--color-accent); font-weight: 600; }
+.composer { margin: 8px 12px 0; background: var(--color-raised); border-radius: 14px; padding: 10px 12px; color: var(--color-ink-muted); font-size: 1rem; display: flex; align-items: center; gap: 8px; min-height: 48px; }
+
+/* settings */
+.sgroup { padding: 4px 16px 12px; }
+.sgroup > h4 { font: 600 0.75rem/1.3 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); padding: 14px 0 4px; }
+.srow { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--color-line); min-height: 56px; }
+.srow:last-child { border-bottom: 0; }
+.srow .t { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.srow .t b { font-weight: 600; }
+.srow .t span { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.srow .ri { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; flex: none; background: var(--color-sunk); color: var(--color-ink-muted); }
+.srow.dim .t, .srow.dim .ri { opacity: 0.5; }
+.banner { margin: 8px 16px 4px; padding: 12px 14px; border-radius: 12px; display: grid; gap: 8px; font-size: 0.8125rem; }
+.banner.bad { background: var(--color-danger-wash); color: var(--color-ink); }
+.banner.bad b { color: var(--color-danger); }
+.banner.info { background: var(--color-info-wash); }
+.banner ol { margin: 0; padding-left: 1.2em; display: grid; gap: 2px; }
+.qh { display: flex; gap: 8px; align-items: center; }
+.qh select { height: 40px; border-radius: 8px; border: 0; padding: 0 10px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); color: var(--color-ink); font: 500 1rem/1 var(--font-body); }
+
+/* install prompt + iOS guide */
+.ibar { position: absolute; left: 10px; right: 10px; bottom: 92px; z-index: 25; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px; border-radius: 16px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); }
+.ibar .ap { width: 44px; height: 44px; border-radius: 12px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 1.25rem/1 var(--font-display); }
+.ibar .a { grid-column: 1 / -1; display: flex; gap: 8px; justify-content: flex-end; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--color-overlay); border-radius: 22px 22px 0 0; box-shadow: var(--shadow-overlay); padding: 8px 18px 28px; display: grid; gap: 14px; }
+.sheet .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-line); justify-self: center; }
+.steps { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: s; }
+.steps li { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: center; counter-increment: s; }
+.steps li::before { content: counter(s); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--color-accent-wash); color: var(--color-accent); font-weight: 700; }
+.steps svg { vertical-align: -3px; color: var(--color-accent); }
+.scrim { position: absolute; inset: 0; z-index: 30; background: var(--color-scrim); }
+
+/* offline + update bars */
+.stbar { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 6px 8px 6px 16px; font-size: 0.8125rem; font-weight: 600; }
+.stbar.off { background: var(--color-warning-wash); color: var(--color-ink); }
+.stbar.off svg { color: var(--color-warning); }
+.stbar.up { position: absolute; left: 10px; right: 10px; bottom: 92px; z-index: 25; border-radius: 14px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); }
+.stbar .sp2 { flex: 1; min-width: 0; }
+.skl { display: grid; gap: 14px; padding: 16px; }
+.sk { height: 12px; border-radius: 6px; background: var(--color-sunk); }
+
+.enter { animation: rise var(--duration-layout) var(--ease-out-expo) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(12px); } }
+.fade { animation: fade var(--duration-base) var(--ease-out) both; }
+@keyframes fade { from { opacity: 0; } }
+html.reduce .enter, html.reduce .pn.in, html.reduce .m.hl .txt, html.reduce .fade { animation-name: fade; animation-duration: 120ms; }
+@media (prefers-reduced-motion: reduce) { .enter, .pn.in, .m.hl .txt, .fade { animation-name: fade; animation-duration: 120ms; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+  <symbol id="i-threads" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></symbol>
+  <symbol id="i-task" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-stamp" viewBox="0 0 24 24"><path d="M5 22h14"/><path d="M19.27 13.73A2.5 2.5 0 0 0 17.5 13h-11A2.5 2.5 0 0 0 4 15.5V17a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-1.5c0-.66-.26-1.3-.73-1.77Z"/><path d="M14 13V8.5C14 7 15 7 15 5a3 3 0 0 0-6 0c0 2 1 2 1 3.5V13"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 2v13"/><path d="m16 6-4-4-4 4"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></symbol>
+  <symbol id="i-plus-sq" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 12h8"/><path d="M12 8v8"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/><path d="M5 12.86a10 10 0 0 1 5.17-2.69"/><path d="M19 12.86a10 10 0 0 0-2-1.45"/><path d="M2 8.82a15 15 0 0 1 4.18-2.65"/><path d="M22 8.82a15 15 0 0 0-11.29-3.76"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+</svg>
+
+<div class="page">
+<header>
+  <h1>Thông báo đẩy và cài app</h1>
+  <p>Mobile trước tiên. Thông báo đẩy qua OneSignal tới màn khoá Android và iPhone (iPhone chỉ nhận khi đã thêm Nexus vào màn hình chính), thẻ hỏi trước khi trình duyệt hỏi quyền, Cài đặt → Thông báo, gợi ý cài app, thanh mất kết nối và thanh bản mới. Khung màn khoá chỉ mô phỏng hệ điều hành.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div>
+    <label class="check"><input type="checkbox" id="reduce">Giảm chuyển động</label>
+  </div>
+  <nav class="toc" aria-label="Các màn"><a href="#lock">Màn khoá</a><a href="#ask">Hỏi bật thông báo</a><a href="#settings">Cài đặt thông báo</a><a href="#install">Cài app</a><a href="#bars">Mất kết nối, bản mới</a></nav>
+</header>
+
+<!-- ============================ 1 LOCK SCREEN ============================ -->
+<section class="screen" id="lock" aria-labelledby="h-lock">
+  <div class="screen-head">
+    <h2 id="h-lock">1 · Thông báo trên màn khoá</h2>
+    <p>Mỗi loại sự kiện một câu rõ ai làm gì, ở đâu. Nhiều tin cùng cuộc trò chuyện trong 30 giây gộp thành một. Bấm thông báo mở đúng cuộc trò chuyện hoặc thread, tin được nhắc loé viền.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="push-new">Có tin mới (gộp)</button>
+    <button class="btn sm" type="button" data-act="preview-toggle">Bật/tắt xem trước nội dung</button>
+    <button class="btn sm" type="button" data-act="open-push">Bấm thông báo nhắc tên</button>
+  </div>
+  <div class="phones">
+    <div class="ph"><small>Android · Chrome</small>
+      <div class="lock" id="lock-and">
+        <div class="clock">09:41</div><div class="date">Thứ Bảy, 11 tháng 10</div>
+        <div class="stack" id="stack-and"></div>
+        <div class="hint">Vuốt lên để mở khoá</div>
+      </div>
+    </div>
+    <div class="ph"><small>iPhone · đã thêm vào màn hình chính</small>
+      <div class="lock ios" id="lock-ios">
+        <div class="clock">9:41</div><div class="date">Thứ Bảy, 11 tháng 10</div>
+        <div class="stack" id="stack-ios"></div>
+        <div class="hint">Vuốt lên để mở</div>
+      </div>
+    </div>
+    <div class="ph"><small>Bấm thông báo → mở đúng chỗ</small>
+      <div class="phone" id="ph-open">
+        <div class="sbar"><span>9:41</span><span class="ic"><span></span></span></div>
+        <div class="topbar"><button class="ibtn back" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><span class="sp" style="--p:var(--color-person-4);width:28px;height:28px;border-radius:8px">Đ</span><h3 style="margin-left:8px">Đối soát giao dịch</h3><button class="ibtn" type="button" aria-label="Thread"><svg class="i"><use href="#i-threads"/></svg></button></div>
+        <div class="pbody"><div class="stream" id="open-stream">
+          <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>09:30</time></div><div class="txt">Chiều nay 14:00 anh họp nhanh với ngân hàng.</div></div></div>
+          <div class="m mine"><div><div class="who"><span class="sr">Bạn</span><time>09:33</time></div><div class="txt">Chị đã thêm 3 giao dịch vào biên bản.</div></div></div>
+          <div class="m" id="msg-mention"><span class="av" style="--p:var(--color-person-1)">QV</span><div><div class="who"><b>Lê Quang Vinh</b><time>09:41</time></div><div class="txt"><span class="mention">@Lê Thị Hoa</span> chị xem giúp em 3 giao dịch lệch trước 10:00 nhé.</div></div></div>
+        </div></div>
+        <div style="padding-bottom:22px"><div class="composer">Tin nhắn cho Đối soát giao dịch</div></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Năm loại</b> (mỗi loại tắt được trong Cài đặt): tin nhắn trực tiếp; được nhắc tên; trả lời trong thread bạn theo dõi; công việc giao cho bạn; đề nghị cần bạn duyệt (chỉ workspace tổ chức). Tiêu đề là người gửi hoặc nhóm, dòng trên là "Nexus · tên nhóm". Không bao giờ có mã hay ID.</li>
+    <li><b>Xem trước nội dung</b>: bật thì thân thông báo là đoạn đầu tin (văn bản thuần, 2 dòng); tắt thì chỉ "Tin nhắn mới trong Đối soát giao dịch". Nội dung đi qua máy chủ OneSignal, nên quản trị workspace tắt được cho cả workspace <span class="need">cần backend</span>.</li>
+    <li><b>Gộp</b>: tin mới cùng cuộc trò chuyện trong 30 giây thay thông báo cũ (cùng <code>collapse_id</code>) thành "3 tin mới". Không gửi khi bạn đang mở đúng cuộc trò chuyện đó, trong giờ yên lặng, hoặc khi bạn không còn quyền đọc nhóm.</li>
+    <li><b>Bấm</b>: mở tab đang có hoặc mở app tới đúng cuộc trò chuyện/thread, cuộn tới tin, viền accent loé 2,4s; đánh dấu đã đọc như mở bình thường. iOS: thông báo chỉ có khi Nexus đã được thêm vào màn hình chính và bạn đã bật trong app.</li>
+  </ol>
+</section>
+
+<!-- ============================ 2 SOFT ASK ============================ -->
+<section class="screen" id="ask" aria-labelledby="h-ask">
+  <div class="screen-head">
+    <h2 id="h-ask">2 · Hỏi bật thông báo</h2>
+    <p>Không bật hộp quyền của trình duyệt khi vừa mở app. Thẻ trong app hỏi trước, sau khi bạn gửi tin đầu tiên hoặc mở Thông báo; chỉ khi bạn bấm Bật mới tới hộp của trình duyệt. Từ chối ở hộp của trình duyệt thì không hỏi lại được, nên phải hỏi đúng lúc.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="ask-reset">Hiện lại thẻ hỏi</button>
+  </div>
+  <div class="phones">
+    <div class="ph"><small>Tab Tin nhắn · thẻ hỏi</small>
+      <div class="phone" id="ph-ask">
+        <div class="sbar"><span>9:41</span><span class="ic"><span></span></span></div>
+        <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i"><use href="#i-search"/></svg></button></div>
+        <div class="pbody">
+          <div class="ask" id="ask-card">
+            <div class="h"><span class="bi"><svg class="i"><use href="#i-bell"/></svg></span><div><b>Nhận thông báo khi có tin mới?</b><p>Tin nhắn trực tiếp, khi được nhắc tên và việc cần bạn duyệt sẽ báo ngay cả khi app đang đóng.</p></div></div>
+            <div class="a"><button class="btn ghost sm" type="button" data-act="ask-later">Để sau</button><button class="btn primary sm" type="button" data-act="ask-yes">Bật thông báo</button></div>
+          </div>
+          <a class="conv unread" href="#ask"><span class="sp" style="--p:var(--color-person-4)">Đ</span><span style="min-width:0;display:grid"><span class="nm">Đối soát giao dịch</span><span class="pv">Lê Quang Vinh: @Lê Thị Hoa chị xem giúp em…</span></span><span class="meta">09:41<span class="pill count">3</span></span></a>
+          <a class="conv unread" href="#ask"><span class="av" style="--p:var(--color-person-3)">HY</span><span style="min-width:0;display:grid"><span class="nm">Phạm Hải Yến</span><span class="pv">Chị xem giúp em đề nghị tạm ứng tháng 10 nhé</span></span><span class="meta">08:31<span class="pill count">1</span></span></a>
+          <a class="conv" href="#ask"><span class="sp" style="--p:var(--color-person-2)">V</span><span style="min-width:0;display:grid"><span class="nm">Vận hành chung</span><span class="pv">Bạn: Lịch trực Tết đã cập nhật trong Tài liệu</span></span><span class="meta">Hôm qua</span></a>
+          <a class="conv" href="#ask"><span class="av" style="--p:var(--color-person-6)">TL</span><span style="min-width:0;display:grid"><span class="nm">Nguyễn Thu Lan</span><span class="pv">Dạ xong rồi ạ ✅</span></span><span class="meta">06/10</span></a>
+        </div>
+        <nav class="tabbar" aria-label="Điều hướng di động"><a href="#ask" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg><span class="pill count">4</span></span>Tin nhắn</a><a href="#ask"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#ask"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count">2</span></span>Phê duyệt</a><a href="#ask"><span class="ic"><svg class="i"><use href="#i-grid"/></svg></span>Thêm</a></nav>
+        <div class="sysdlg" id="sys-perm" role="dialog" aria-label="Hộp quyền của trình duyệt (mô phỏng)" hidden><span class="tag-os">Trình duyệt</span>
+          <div><b>nexus.zaneng.xyz muốn hiển thị thông báo</b></div>
+          <div class="a"><button type="button" data-act="sys-block">Chặn</button><button type="button" class="p" data-act="sys-allow">Cho phép</button></div>
+        </div>
+        <div class="ptoast" id="ask-toast" role="status" hidden><svg class="i"><use href="#i-ok"/></svg><span id="ask-toast-t">Đã bật thông báo trên thiết bị này</span></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Khi nào hiện</b>: sau tin đầu tiên bạn gửi, hoặc khi mở Thông báo, trên thiết bị chưa bật và chưa bị chặn. "Để sau" ẩn 7 ngày; ba lần "Để sau" thì không hỏi nữa (vẫn bật được trong Cài đặt).</li>
+    <li><b>Bật thông báo</b> → hộp quyền của trình duyệt (không tuỳ biến được). Cho phép → toast "Đã bật thông báo trên thiết bị này", thiết bị gắn với tài khoản qua OneSignal. Chặn → toast "Trình duyệt đang chặn thông báo" + nút "Cách mở lại" dẫn tới Cài đặt.</li>
+    <li><b>iPhone chưa thêm vào màn hình chính</b>: thẻ đổi thành "Thêm Nexus vào màn hình chính để nhận thông báo" và mở hướng dẫn ở §4.</li>
+  </ol>
+</section>
+
+<!-- ============================ 3 SETTINGS ============================ -->
+<section class="screen" id="settings" aria-labelledby="h-settings">
+  <div class="screen-head">
+    <h2 id="h-settings">3 · Cài đặt → Thông báo</h2>
+    <p>Bật/tắt thông báo đẩy cho thiết bị đang dùng, chọn loại sự kiện, xem trước nội dung, giờ yên lặng. Loại sự kiện và giờ yên lặng theo tài khoản (mọi thiết bị); công tắc đầu tiên chỉ cho thiết bị này.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <div class="seg" role="group" aria-label="Trạng thái quyền"><button type="button" data-perm="on" aria-pressed="true">Đã bật</button><button type="button" data-perm="blocked" aria-pressed="false">Trình duyệt chặn</button><button type="button" data-perm="ios" aria-pressed="false">iPhone chưa cài app</button></div>
+  </div>
+  <div class="phones">
+    <div class="ph"><small>Cài đặt · Thông báo</small>
+      <div class="phone" id="ph-set">
+        <div class="sbar"><span>9:41</span><span class="ic"><span></span></span></div>
+        <div class="topbar"><button class="ibtn back" type="button" aria-label="Quay lại Cài đặt"><svg class="i"><use href="#i-back"/></svg></button><h3>Thông báo</h3></div>
+        <div class="pbody">
+          <div class="banner bad" id="b-blocked" hidden><b>Trình duyệt đang chặn thông báo của Nexus</b><ol><li>Bấm biểu tượng ổ khoá cạnh địa chỉ trang.</li><li>Chọn Quyền → Thông báo → Cho phép.</li><li>Quay lại đây, công tắc sẽ tự bật.</li></ol></div>
+          <div class="banner info" id="b-ios" hidden><b>Thêm Nexus vào màn hình chính để nhận thông báo trên iPhone.</b><button class="btn sm" type="button" style="justify-self:start" onclick="location.hash='#install'">Xem cách thêm</button></div>
+          <div class="sgroup"><h4>Thiết bị này</h4>
+            <div class="srow"><span class="ri"><svg class="i s"><use href="#i-bell"/></svg></span><span class="t"><b>Thông báo đẩy</b><span id="dev-sub">Đang bật trên điện thoại này</span></span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="Thông báo đẩy trên thiết bị này" id="sw-dev"></button></div>
+          </div>
+          <div class="sgroup" id="kinds"><h4>Báo cho tôi khi</h4>
+            <div class="srow"><span class="ri"><svg class="i s"><use href="#i-msg"/></svg></span><span class="t"><b>Tin nhắn trực tiếp</b></span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="Tin nhắn trực tiếp"></button></div>
+            <div class="srow"><span class="ri"><svg class="i s"><use href="#i-at"/></svg></span><span class="t"><b>Được nhắc tên</b><span>Trong nhóm và thread</span></span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="Được nhắc tên"></button></div>
+            <div class="srow"><span class="ri"><svg class="i s"><use href="#i-threads"/></svg></span><span class="t"><b>Thread bạn theo dõi</b><span>Trả lời mới trong thread đang theo dõi</span></span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="Thread bạn theo dõi"></button></div>
+            <div class="srow"><span class="ri"><svg class="i s"><use href="#i-task"/></svg></span><span class="t"><b>Công việc giao cho bạn</b></span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="Công việc giao cho bạn"></button></div>
+            <div class="srow"><span class="ri"><svg class="i s"><use href="#i-stamp"/></svg></span><span class="t"><b>Đề nghị cần bạn duyệt</b></span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="Đề nghị cần bạn duyệt"></button></div>
+          </div>
+          <div class="sgroup" id="more"><h4>Nội dung và giờ</h4>
+            <div class="srow"><span class="ri"><svg class="i s"><use href="#i-eye"/></svg></span><span class="t"><b>Xem trước nội dung tin</b><span>Tắt thì chỉ báo "Tin nhắn mới trong …"</span></span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="Xem trước nội dung tin"></button></div>
+            <div class="srow" style="flex-wrap:wrap"><span class="ri"><svg class="i s"><use href="#i-moon"/></svg></span><span class="t"><b>Giờ yên lặng</b><span>Không báo trong khoảng giờ này</span></span><button class="sw" type="button" role="switch" aria-checked="true" aria-label="Giờ yên lặng" id="sw-quiet"></button>
+              <div class="qh" id="qh" style="width:100%;padding-left:46px"><label class="sr" for="q-from">Từ</label><select id="q-from"><option>22:00</option><option>21:00</option><option>23:00</option></select><span class="muted">đến</span><label class="sr" for="q-to">Đến</label><select id="q-to"><option>07:00</option><option>06:00</option><option>08:00</option></select></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Thiết bị này</b>: bật/tắt đăng ký OneSignal của trình duyệt đang dùng (opt in / opt out). Bị chặn ở trình duyệt thì công tắc khoá và hiện hướng dẫn mở lại; iPhone chưa thêm vào màn hình chính thì hiện thẻ dẫn tới §4.</li>
+    <li><b>Loại sự kiện, xem trước, giờ yên lặng</b>: lưu theo tài khoản, áp cho mọi thiết bị <span class="need">cần backend</span> (bảng tuỳ chọn push). Tắt công tắc thiết bị thì các mục dưới mờ đi nhưng vẫn giữ giá trị.</li>
+    <li>Không có hộp xác nhận: mọi thay đổi lưu ngay, lỗi thì công tắc quay lại và toast nói cách sửa.</li>
+  </ol>
+</section>
+
+<!-- ============================ 4 INSTALL ============================ -->
+<section class="screen" id="install" aria-labelledby="h-install">
+  <div class="screen-head">
+    <h2 id="h-install">4 · Cài Nexus vào màn hình chính</h2>
+    <p>Android: thanh gợi ý nhỏ ở đáy từ lần dùng thứ hai, bấm Cài đặt mở hộp cài của trình duyệt. iPhone: Safari không có nút cài, nên hiện hướng dẫn ba bước một lần.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="install-reset">Hiện lại gợi ý</button>
+  </div>
+  <div class="phones">
+    <div class="ph"><small>Android · thanh gợi ý</small>
+      <div class="phone" id="ph-and">
+        <div class="sbar"><span>9:41</span><span class="ic"><span></span></span></div>
+        <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span></div>
+        <div class="pbody"><div class="skl"><div class="sk" style="width:70%"></div><div class="sk"></div><div class="sk" style="width:85%"></div><div class="sk" style="width:60%"></div></div></div>
+        <nav class="tabbar" aria-label="Điều hướng di động"><a href="#install" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#install"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#install"><span class="ic"><svg class="i"><use href="#i-check"/></svg></span>Phê duyệt</a><a href="#install"><span class="ic"><svg class="i"><use href="#i-grid"/></svg></span>Thêm</a></nav>
+        <div class="ibar" id="ibar"><span class="ap">N</span><span><b>Cài Nexus vào màn hình chính</b><br><span class="muted" style="font-size:0.8125rem">Mở nhanh như app, nhận thông báo</span></span><div class="a"><button class="btn ghost sm" type="button" data-act="install-later">Để sau</button><button class="btn primary sm" type="button" data-act="install-go"><svg class="i s"><use href="#i-download"/></svg>Cài đặt</button></div></div>
+        <div class="sysdlg" id="sys-install" role="dialog" aria-label="Hộp cài của trình duyệt (mô phỏng)" hidden><span class="tag-os">Trình duyệt</span>
+          <div style="display:flex;gap:12px;align-items:center"><span class="ap" style="width:40px;height:40px;border-radius:10px;background:var(--color-accent);color:var(--color-on-accent);display:grid;place-items:center;font:700 1.125rem/1 var(--font-display)">N</span><div><b>Cài đặt ứng dụng?</b><div class="o">Nexus · nexus.zaneng.xyz</div></div></div>
+          <div class="a"><button type="button" data-act="sys-install-cancel">Huỷ</button><button type="button" class="p" data-act="sys-install-ok">Cài đặt</button></div>
+        </div>
+        <div class="ptoast" id="inst-toast" role="status" hidden><svg class="i"><use href="#i-ok"/></svg><span>Đã thêm Nexus vào màn hình chính</span></div>
+      </div>
+    </div>
+    <div class="ph"><small>iPhone · hướng dẫn</small>
+      <div class="phone" id="ph-ios">
+        <div class="sbar"><span>9:41</span><span class="ic"><span></span></span></div>
+        <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span></div>
+        <div class="pbody"><div class="skl"><div class="sk" style="width:70%"></div><div class="sk"></div><div class="sk" style="width:85%"></div></div></div>
+        <nav class="tabbar" aria-label="Điều hướng di động"><a href="#install" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#install"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#install"><span class="ic"><svg class="i"><use href="#i-check"/></svg></span>Phê duyệt</a><a href="#install"><span class="ic"><svg class="i"><use href="#i-grid"/></svg></span>Thêm</a></nav>
+        <div class="scrim" id="ios-scrim"></div>
+        <div class="sheet" id="ios-sheet" role="dialog" aria-labelledby="ios-t">
+          <span class="grab"></span>
+          <div style="display:flex;align-items:center;gap:8px"><h3 id="ios-t" style="font-size:1.125rem;flex:1">Thêm Nexus vào màn hình chính</h3><button class="ibtn" type="button" aria-label="Đóng" data-act="ios-close"><svg class="i"><use href="#i-x"/></svg></button></div>
+          <p class="muted">Mở Nexus như một app và nhận thông báo trên iPhone.</p>
+          <ol class="steps"><li><span>Bấm <svg class="i s"><use href="#i-share"/></svg> <b>Chia sẻ</b> ở thanh dưới của Safari.</span></li><li><span>Chọn <svg class="i s"><use href="#i-plus-sq"/></svg> <b>Thêm vào MH chính</b>.</span></li><li><span>Bấm <b>Thêm</b>, rồi mở Nexus từ màn hình chính.</span></li></ol>
+          <button class="btn primary block" type="button" data-act="ios-close">Đã hiểu</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Android</b>: chỉ hiện khi trình duyệt báo cài được (<code>beforeinstallprompt</code>), từ lần mở thứ hai, chưa cài, chưa "Để sau" trong 14 ngày. Thanh nổi trên thanh đáy, không che ô soạn khi đang trong cuộc trò chuyện (chỉ hiện ở danh sách).</li>
+    <li><b>iPhone</b>: hiện một lần khi mở bằng Safari (không phải app đã cài); "Đã hiểu" thì không hiện lại; xem lại được ở Cài đặt → Thông báo.</li>
+    <li>Tên trên màn hình chính "Nexus", icon chữ N trên nền accent (192, 512, maskable, 180 cho iPhone); màu thanh trạng thái theo giao diện sáng/tối.</li>
+  </ol>
+</section>
+
+<!-- ============================ 5 BARS ============================ -->
+<section class="screen" id="bars" aria-labelledby="h-bars">
+  <div class="screen-head">
+    <h2 id="h-bars">5 · Mất kết nối và bản mới</h2>
+    <p>Mất mạng: khung app vẫn mở, thanh vàng dưới thanh trên, dữ liệu cũ đang hiện giữ nguyên, ô soạn khoá. Có bản mới: thanh nổi "Có bản mới" + Tải lại, không tự tải lại khi bạn đang soạn.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="net-toggle">Mất/có mạng</button>
+    <button class="btn sm" type="button" data-act="update-show">Có bản mới</button>
+  </div>
+  <div class="phones">
+    <div class="ph"><small>Thanh mất kết nối · thanh bản mới</small>
+      <div class="phone" id="ph-bars" style="grid-template-rows:auto auto auto 1fr auto">
+        <div class="sbar"><span>9:41</span><span class="ic"><span></span></span></div>
+        <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i"><use href="#i-search"/></svg></button></div>
+        <div class="stbar off" id="offbar" role="status"><svg class="i s"><use href="#i-wifi-off"/></svg><span class="sp2">Mất kết nối. Đang thử kết nối lại…</span><button class="btn ghost sm" type="button" data-act="net-retry"><svg class="i s"><use href="#i-refresh"/></svg>Thử lại</button></div>
+        <div class="pbody">
+          <a class="conv" href="#bars"><span class="sp" style="--p:var(--color-person-4)">Đ</span><span style="min-width:0;display:grid"><span class="nm">Đối soát giao dịch</span><span class="pv">Lê Quang Vinh: @Lê Thị Hoa chị xem giúp em…</span></span><span class="meta">09:41</span></a>
+          <a class="conv" href="#bars"><span class="av" style="--p:var(--color-person-3)">HY</span><span style="min-width:0;display:grid"><span class="nm">Phạm Hải Yến</span><span class="pv">Chị xem giúp em đề nghị tạm ứng tháng 10 nhé</span></span><span class="meta">08:31</span></a>
+          <a class="conv" href="#bars"><span class="sp" style="--p:var(--color-person-2)">V</span><span style="min-width:0;display:grid"><span class="nm">Vận hành chung</span><span class="pv">Bạn: Lịch trực Tết đã cập nhật trong Tài liệu</span></span><span class="meta">Hôm qua</span></a>
+        </div>
+        <nav class="tabbar" aria-label="Điều hướng di động"><a href="#bars" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#bars"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#bars"><span class="ic"><svg class="i"><use href="#i-check"/></svg></span>Phê duyệt</a><a href="#bars"><span class="ic"><svg class="i"><use href="#i-grid"/></svg></span>Thêm</a></nav>
+        <div class="stbar up" id="upbar" role="status" hidden><svg class="i s" style="color:var(--color-accent)"><use href="#i-refresh"/></svg><span class="sp2">Có bản mới của Nexus</span><button class="btn ghost sm" type="button" data-act="update-later">Để sau</button><button class="btn primary sm" type="button" data-act="update-go">Tải lại</button></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Mất kết nối</b>: hiện sau 2 giây mất WebSocket hoặc <code>offline</code>; tự thử lại (1, 2, 5, 10, 30 giây); có mạng lại thì đổi thành "Đã kết nối lại" màu success 2 giây rồi ẩn, dữ liệu tự làm mới. Không lưu tin nhắn hay tài liệu để đọc offline.</li>
+    <li><b>Bản mới</b>: service worker mới chờ; "Tải lại" kích hoạt và tải lại trang; "Để sau" ẩn tới lần mở sau. Đang có chữ trong ô soạn thì nút đổi thành "Tải lại sau khi gửi".</li>
+  </ol>
+</section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var root = document.documentElement;
+  function $(id) { return document.getElementById(id); }
+  function replay(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-theme-set');
+      if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+      document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    });
+  });
+  $('reduce').addEventListener('change', function (e) { root.classList.toggle('reduce', e.target.checked); });
+
+  // ---------- §1 lock screens ----------
+  var preview = true, groupN = 1;
+  var PUSH = [
+    { k: 'mention', grp: 'Đối soát giao dịch', t: 'Lê Quang Vinh', b: '@Lê Thị Hoa chị xem giúp em 3 giao dịch lệch trước 10:00 nhé.', off: 'Bạn được nhắc tên trong Đối soát giao dịch', time: 'bây giờ' },
+    { k: 'dm', grp: 'Tin nhắn trực tiếp', t: 'Phạm Hải Yến', b: 'Chị xem giúp em đề nghị tạm ứng tháng 10 nhé.', off: 'Tin nhắn mới từ Phạm Hải Yến', time: '8 phút' },
+    { k: 'thread', grp: 'Đối soát giao dịch', t: 'Trần Minh Đức trả lời trong thread bạn theo dõi', b: 'Hai giao dịch còn lại anh đang hỏi ngân hàng.', off: 'Trả lời mới trong thread bạn theo dõi', time: '15 phút' },
+    { k: 'appr', grp: 'Phê duyệt', t: 'Trần Bảo Ngọc cần bạn duyệt', b: 'Thanh toán phí liên ngân hàng tháng 10 · 1.284.500 ₫', off: 'Một đề nghị cần bạn duyệt', time: '32 phút' }
+  ];
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function card(p, extra) {
+    var body = preview ? p.b : p.off;
+    var title = preview ? p.t : 'Nexus';
+    return '<button class="pn' + (extra || '') + '" type="button" data-k="' + p.k + '" data-act="open-push" aria-label="Thông báo Nexus: ' + esc(title) + '. ' + esc(body) + '"><span class="ai">N</span>'
+      + '<span class="src"><span>Nexus · ' + esc(p.grp) + '</span><time>' + p.time + '</time></span><span class="tt">' + esc(title) + '</span><span class="bd">' + esc(body) + '</span></button>';
+  }
+  function paintLock() {
+    var list = PUSH.map(function (p) { return card(p); }).join('');
+    $('stack-and').innerHTML = list; $('stack-ios').innerHTML = list;
+  }
+  paintLock();
+  var groupMsgs = ['Lê Quang Vinh: @Lê Thị Hoa chị xem giúp em 3 giao dịch lệch trước 10:00 nhé.', 'Trần Minh Đức: Anh gửi thêm sao kê sáng nay.', 'Nguyễn Thu Lan: Em cập nhật biên bản rồi ạ.'];
+
+  // ---------- §2 soft ask ----------
+  function show(el) { el.hidden = false; replay(el, 'enter'); }
+  function toastIn(el, text, ms) { if (text) el.querySelector('span').textContent = text; show(el); clearTimeout(el._t); el._t = setTimeout(function () { el.hidden = true; }, ms || 2600); }
+
+  // ---------- §3 settings ----------
+  function setPerm(state) {
+    document.querySelectorAll('[data-perm]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-perm') === state)); });
+    $('b-blocked').hidden = state !== 'blocked'; $('b-ios').hidden = state !== 'ios';
+    var dev = $('sw-dev'), on = state === 'on';
+    dev.disabled = !on; dev.setAttribute('aria-checked', String(on));
+    $('dev-sub').textContent = on ? 'Đang bật trên điện thoại này' : (state === 'blocked' ? 'Trình duyệt đang chặn' : 'Cần thêm Nexus vào màn hình chính');
+    paintDim();
+  }
+  function paintDim() {
+    var on = $('sw-dev').getAttribute('aria-checked') === 'true';
+    document.querySelectorAll('#kinds .srow, #more .srow').forEach(function (r) { r.classList.toggle('dim', !on); });
+    $('qh').hidden = $('sw-quiet').getAttribute('aria-checked') !== 'true';
+  }
+  document.querySelectorAll('.sw').forEach(function (s) {
+    s.addEventListener('click', function () { if (s.disabled) return; s.setAttribute('aria-checked', String(s.getAttribute('aria-checked') !== 'true')); paintDim(); });
+  });
+  document.querySelectorAll('[data-perm]').forEach(function (b) { b.addEventListener('click', function () { setPerm(b.getAttribute('data-perm')); }); });
+  paintDim();
+
+  // ---------- actions ----------
+  var A = {
+    'push-new': function () {
+      groupN = Math.min(groupN + 1, 3);
+      var p = { k: 'mention', grp: 'Đối soát giao dịch', t: 'Đối soát giao dịch · ' + groupN + ' tin mới', b: groupMsgs.slice(0, groupN).reverse().join(' · '), off: groupN + ' tin nhắn mới trong Đối soát giao dịch', time: 'bây giờ' };
+      ['stack-and', 'stack-ios'].forEach(function (id) {
+        var st = $(id), old = st.querySelector('[data-k="mention"]'); if (old) old.remove();
+        st.insertAdjacentHTML('afterbegin', card(p, ' in'));
+      });
+    },
+    'preview-toggle': function () { preview = !preview; groupN = 1; paintLock(); },
+    'open-push': function () {
+      var m = $('msg-mention'); $('ph-open').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      replay(m, 'hl');
+    },
+    'ask-later': function () { $('ask-card').hidden = true; },
+    'ask-yes': function () { show($('sys-perm')); },
+    'ask-reset': function () { $('ask-card').hidden = false; replay($('ask-card'), 'enter'); },
+    'sys-allow': function () { $('sys-perm').hidden = true; $('ask-card').hidden = true; toastIn($('ask-toast'), 'Đã bật thông báo trên thiết bị này'); },
+    'sys-block': function () { $('sys-perm').hidden = true; $('ask-card').hidden = true; toastIn($('ask-toast'), 'Trình duyệt đang chặn thông báo. Mở lại trong Cài đặt → Thông báo', 3600); setPerm('blocked'); },
+    'install-later': function () { $('ibar').hidden = true; },
+    'install-go': function () { show($('sys-install')); },
+    'sys-install-cancel': function () { $('sys-install').hidden = true; },
+    'sys-install-ok': function () { $('sys-install').hidden = true; $('ibar').hidden = true; toastIn($('inst-toast')); },
+    'install-reset': function () { show($('ibar')); $('ios-scrim').hidden = false; show($('ios-sheet')); },
+    'ios-close': function () { $('ios-sheet').hidden = true; $('ios-scrim').hidden = true; },
+    'net-toggle': function () { var b = $('offbar'); if (b.hidden) show(b); else b.hidden = true; },
+    'net-retry': function () {
+      var b = $('offbar'); b.className = 'stbar'; b.style.background = 'var(--color-success-wash)';
+      b.innerHTML = '<svg class="i s" style="color:var(--color-success)"><use href="#i-ok"/></svg><span class="sp2">Đã kết nối lại</span>';
+      setTimeout(function () { b.hidden = true; b.className = 'stbar off'; b.style.background = ''; b.innerHTML = '<svg class="i s"><use href="#i-wifi-off"/></svg><span class="sp2">Mất kết nối. Đang thử kết nối lại…</span><button class="btn ghost sm" type="button" data-act="net-retry"><svg class="i s"><use href="#i-refresh"/></svg>Thử lại</button>'; }, 2000);
+    },
+    'update-show': function () { show($('upbar')); },
+    'update-later': function () { $('upbar').hidden = true; },
+    'update-go': function () { $('upbar').hidden = true; }
+  };
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]'); if (!b) return;
+    var f = A[b.getAttribute('data-act')]; if (f) { e.preventDefault(); f(b); }
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('ios-sheet').hidden) A['ios-close'](); });
+})();
+</script>
+</body>
+</html>

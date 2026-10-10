@@ -417,6 +417,31 @@ này thì cái kia đóng.
   đóng và trả focus về ảnh đã bấm. Phạm vi: các ảnh của **cùng một tin**. Màn chạm: vuốt ngang chuyển ảnh, nút
   trước/sau nằm sát mép.
 
+### Thông báo đẩy, cài app, mất kết nối (mockup `design/mockups/push.html`, mobile trước)
+
+- **Thông báo đẩy (OneSignal):** năm loại, mỗi loại tắt được: tin nhắn trực tiếp, được nhắc tên, trả lời trong thread
+  đang theo dõi, công việc giao cho bạn, đề nghị cần bạn duyệt (chỉ workspace tổ chức). Dòng nguồn "Nexus · tên
+  nhóm/khu vực", tiêu đề là người gửi hoặc câu "X cần bạn duyệt", thân là đoạn đầu văn bản thuần (2 dòng) khi bật
+  "Xem trước nội dung", nếu không thì "Tin nhắn mới trong …". Không ID. Gộp tin cùng cuộc trò chuyện trong 30s thành
+  "N tin mới". Không gửi khi đang mở đúng cuộc trò chuyện, trong giờ yên lặng, hoặc khi người nhận không còn quyền đọc.
+  Bấm: mở/focus app tới đúng cuộc trò chuyện hoặc thread, tin được nhắc có viền accent loé 2,4s.
+- **Hỏi bật thông báo:** thẻ trong app (Card `--color-raised`, viền trong `--color-line`, radius 14, ô icon chuông
+  40 nền accent wash, "Nhận thông báo khi có tin mới?" + một câu lợi ích + Để sau / **Bật thông báo**) hiện sau tin đầu
+  tiên bạn gửi hoặc khi mở Thông báo; chỉ khi bấm Bật mới gọi hộp quyền của trình duyệt. "Để sau" ẩn 7 ngày, ba lần thì
+  thôi. Cho phép → toast success; chặn → toast + hướng dẫn trong Cài đặt. iPhone chưa thêm vào màn hình chính: thẻ đổi
+  thành lời mời thêm vào màn hình chính.
+- **Cài đặt → Thông báo:** nhóm "Thiết bị này" (Switch thông báo đẩy, khoá + banner `danger-wash` có 3 bước mở lại khi
+  trình duyệt chặn; banner `info-wash` cho iPhone chưa cài), "Báo cho tôi khi" (5 Switch theo loại, icon 32 radius 9 nền
+  sunk), "Nội dung và giờ" (Xem trước nội dung, Giờ yên lặng + hai select từ/đến). Lưu ngay, không hộp xác nhận; tắt
+  thiết bị thì các mục dưới mờ 50% nhưng giữ giá trị. Hàng ≥ 56, Switch 44 × 26.
+- **Cài app:** Android — thanh nổi trên thanh đáy (icon app 44, "Cài Nexus vào màn hình chính" + một dòng mờ, Để sau /
+  Cài đặt) từ lần mở thứ hai, chỉ ở danh sách, không trong cuộc trò chuyện; iPhone — sheet một lần với 3 bước có số
+  (Chia sẻ → Thêm vào MH chính → Thêm). Tên "Nexus", icon chữ N trên nền accent.
+- **Mất kết nối:** thanh `--color-warning-wash` dưới thanh trên (icon wifi gạch, "Mất kết nối. Đang thử kết nối lại…",
+  Thử lại) sau 2s mất WebSocket hoặc offline; có lại → "Đã kết nối lại" success 2s rồi ẩn. Dữ liệu đang hiện giữ nguyên,
+  ô soạn khoá; không đọc offline. **Bản mới:** thanh nổi "Có bản mới của Nexus" + Để sau / Tải lại; đang soạn dở thì
+  "Tải lại sau khi gửi".
+
 ### Chat: tạo trong chat — bình chọn, công việc, tài liệu, phê duyệt (mockup `spaces.html` §6)
 
 - **Nút +** (IconButton 32, icon cộng) đứng đầu hàng nút của ô soạn, trước nút đính kèm; có ở ô soạn chính và ô

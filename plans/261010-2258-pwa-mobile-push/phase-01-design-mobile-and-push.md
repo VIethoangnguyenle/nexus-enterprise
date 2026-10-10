@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Thiết kế mobile, cài đặt, xin quyền thông báo"
-status: pending
+status: in-progress
 priority: P0
 effort: "1d"
 dependencies: []
@@ -23,6 +23,13 @@ Thiết kế trước khi code (CLAUDE.md §3): bổ sung DESIGN.md và mockup c
   theo dõi, phê duyệt); giờ yên lặng; trạng thái "Đã chặn trong trình duyệt" + hướng dẫn mở lại.
 - Màn "Mất kết nối" (khung app + thanh báo, nút Thử lại) và thanh "Có bản mới — Tải lại".
 - Splash/icon: dựng icon "Nexus" từ logo hiện có (192, 512, maskable, apple-touch-icon 180), màu nền theo token.
+
+## Tiến độ
+- [x] `design/mockups/push.html` (2026-10-10, theo yêu cầu "làm luôn mockup notification"): push trên màn khoá
+  Android/iPhone + bấm mở đúng chỗ, thẻ hỏi bật thông báo + hộp quyền trình duyệt, Cài đặt → Thông báo (3 trạng
+  thái quyền), gợi ý cài app Android + hướng dẫn iPhone, thanh mất kết nối + thanh bản mới; DESIGN.md mục "Thông báo
+  đẩy, cài app, mất kết nối". **Chờ người dùng duyệt.**
+- [ ] Mockup mobile 390px cho các màn chat mới (luồng hai bên, thread thành sheet, ô soạn với +, menu ⋯ thành sheet).
 
 ## Related Code Files
 - Modify: `DESIGN.md` (§ mobile, mục PWA/push), `design/mockups/spaces.html` và/hoặc mockup mới `design/mockups/mobile.html`
