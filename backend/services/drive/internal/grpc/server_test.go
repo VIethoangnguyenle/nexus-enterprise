@@ -239,8 +239,8 @@ func TestCreateFolder_HappyPath(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folder, err := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "TestFolder", UserNgacNodeId: "ngac-user-1",
+	folder, err := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "TestFolder",
 	})
 
 	require.NoError(t, err)
@@ -255,13 +255,13 @@ func TestCreateFolder_WithParent(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	parent, err := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "Parent", UserNgacNodeId: "ngac-user-1",
+	parent, err := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "Parent",
 	})
 	require.NoError(t, err)
 
-	child, err := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "Child", ParentId: parent.Id, UserNgacNodeId: "ngac-user-1",
+	child, err := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "Child", ParentId: parent.Id,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, parent.Id, child.ParentId)
@@ -272,16 +272,16 @@ func TestListFolder_Root(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	f1, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "ListTest1", UserNgacNodeId: "ngac-user-1",
+	f1, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "ListTest1",
 	})
-	f2, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "ListTest2", UserNgacNodeId: "ngac-user-1",
+	f2, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "ListTest2",
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, f1.Id, f2.Id) })
 
-	list, err := srv.ListFolder(context.Background(), &pb.ListFolderRequest{
-		WorkspaceId: wsID, UserNgacNodeId: "ngac-user-1",
+	list, err := srv.ListFolder(asCaller("", "ngac-user-1"), &pb.ListFolderRequest{
+		WorkspaceId: wsID,
 	})
 
 	require.NoError(t, err)
@@ -294,14 +294,14 @@ func TestListFolder_NGACFiltering(t *testing.T) {
 
 	// Use the allow server to create an item
 	srvAllow := grpcserver.NewDriveServer(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
-	folder, _ := srvAllow.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "DenyTest", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srvAllow.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "DenyTest",
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 
 	// List with deny policy — items should be filtered out
-	list, err := srvDeny.ListFolder(context.Background(), &pb.ListFolderRequest{
-		WorkspaceId: wsID, UserNgacNodeId: "ngac-denied-user",
+	list, err := srvDeny.ListFolder(asCaller("", "ngac-denied-user"), &pb.ListFolderRequest{
+		WorkspaceId: wsID,
 	})
 	require.NoError(t, err)
 	for _, item := range list.Items {
@@ -313,13 +313,13 @@ func TestGetItem_HappyPath(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folder, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "GetItemTest", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "GetItemTest",
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 
-	got, err := srv.GetItem(context.Background(), &pb.GetItemRequest{
-		ItemId: folder.Id, UserNgacNodeId: "ngac-user-1",
+	got, err := srv.GetItem(asCaller("", "ngac-user-1"), &pb.GetItemRequest{
+		ItemId: folder.Id,
 	})
 
 	require.NoError(t, err)
@@ -330,8 +330,8 @@ func TestGetItem_HappyPath(t *testing.T) {
 func TestGetItem_NotFound(t *testing.T) {
 	srv, _ := setupServer(t)
 
-	_, err := srv.GetItem(context.Background(), &pb.GetItemRequest{
-		ItemId: "nonexistent", UserNgacNodeId: "ngac-user-1",
+	_, err := srv.GetItem(asCaller("", "ngac-user-1"), &pb.GetItemRequest{
+		ItemId: "nonexistent",
 	})
 
 	require.Error(t, err)
@@ -344,9 +344,9 @@ func TestCreateFile_HappyPath(t *testing.T) {
 	wsID := getTestWorkspaceID(t, pool)
 	userID := getTestUserID(t, pool)
 
-	resp, err := srv.CreateFile(context.Background(), &pb.CreateFileRequest{
+	resp, err := srv.CreateFile(asCaller(userID, "ngac-user-1"), &pb.CreateFileRequest{
 		WorkspaceId: wsID, Name: "test.pdf", MimeType: "application/pdf",
-		SizeBytes: 2048, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		SizeBytes: 2048,
 	})
 
 	require.NoError(t, err)
@@ -356,8 +356,8 @@ func TestCreateFile_HappyPath(t *testing.T) {
 	t.Cleanup(func() { cleanDriveItems(t, pool, resp.FileId) })
 
 	// Verify item is in pending state
-	item, err := srv.GetItem(context.Background(), &pb.GetItemRequest{
-		ItemId: resp.FileId, UserNgacNodeId: "ngac-user-1",
+	item, err := srv.GetItem(asCaller("", "ngac-user-1"), &pb.GetItemRequest{
+		ItemId: resp.FileId,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "pending", item.Status)
@@ -368,9 +368,9 @@ func TestConfirmFile_HappyPath(t *testing.T) {
 	wsID := getTestWorkspaceID(t, pool)
 	userID := getTestUserID(t, pool)
 
-	created, _ := srv.CreateFile(context.Background(), &pb.CreateFileRequest{
+	created, _ := srv.CreateFile(asCaller(userID, "ngac-user-1"), &pb.CreateFileRequest{
 		WorkspaceId: wsID, Name: "confirm.pdf", MimeType: "application/pdf",
-		SizeBytes: 1024, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		SizeBytes: 1024,
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, created.FileId) })
 
@@ -386,19 +386,19 @@ func TestMoveItem_HappyPath(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folder1, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "MoveFrom", UserNgacNodeId: "ngac-user-1",
+	folder1, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "MoveFrom",
 	})
-	folder2, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "MoveTo", UserNgacNodeId: "ngac-user-1",
+	folder2, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "MoveTo",
 	})
-	child, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "MoveChild", ParentId: folder1.Id, UserNgacNodeId: "ngac-user-1",
+	child, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "MoveChild", ParentId: folder1.Id,
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, child.Id, folder1.Id, folder2.Id) })
 
-	moved, err := srv.MoveItem(context.Background(), &pb.MoveItemRequest{
-		ItemId: child.Id, NewParentId: folder2.Id, UserNgacNodeId: "ngac-user-1",
+	moved, err := srv.MoveItem(asCaller("", "ngac-user-1"), &pb.MoveItemRequest{
+		ItemId: child.Id, NewParentId: folder2.Id,
 	})
 
 	require.NoError(t, err)
@@ -409,18 +409,18 @@ func TestTrashItem_HappyPath(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folder, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "TrashTest", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "TrashTest",
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 
-	_, err := srv.TrashItem(context.Background(), &pb.TrashItemRequest{
-		ItemId: folder.Id, UserNgacNodeId: "ngac-user-1",
+	_, err := srv.TrashItem(asCaller("", "ngac-user-1"), &pb.TrashItemRequest{
+		ItemId: folder.Id,
 	})
 	require.NoError(t, err)
 
-	item, _ := srv.GetItem(context.Background(), &pb.GetItemRequest{
-		ItemId: folder.Id, UserNgacNodeId: "ngac-user-1",
+	item, _ := srv.GetItem(asCaller("", "ngac-user-1"), &pb.GetItemRequest{
+		ItemId: folder.Id,
 	})
 	assert.Equal(t, "trashed", item.Status)
 }
@@ -429,12 +429,12 @@ func TestRestoreItem_HappyPath(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folder, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "RestoreTest", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "RestoreTest",
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 
-	srv.TrashItem(context.Background(), &pb.TrashItemRequest{ItemId: folder.Id, UserNgacNodeId: "ngac-user-1"})
+	srv.TrashItem(asCaller("", "ngac-user-1"), &pb.TrashItemRequest{ItemId: folder.Id})
 
 	restored, err := srv.RestoreItem(context.Background(), &pb.RestoreItemRequest{ItemId: folder.Id})
 	require.NoError(t, err)
@@ -449,21 +449,21 @@ func TestDeleteItem_DeniedWithoutAccess(t *testing.T) {
 	wsID := getTestWorkspaceID(t, pool)
 
 	srvAllow := grpcserver.NewDriveServer(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
-	folder, _ := srvAllow.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "DeleteDenyTest", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srvAllow.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "DeleteDenyTest",
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 
-	_, err := srvDeny.DeleteItem(context.Background(), &pb.DeleteItemRequest{
-		ItemId: folder.Id, UserNgacNodeId: "ngac-denied-user",
+	_, err := srvDeny.DeleteItem(asCaller("", "ngac-denied-user"), &pb.DeleteItemRequest{
+		ItemId: folder.Id,
 	})
 
 	require.Error(t, err, "denied user must not permanently delete an item")
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 
 	// And the item must still be there.
-	item, getErr := srvAllow.GetItem(context.Background(), &pb.GetItemRequest{
-		ItemId: folder.Id, UserNgacNodeId: "ngac-user-1",
+	item, getErr := srvAllow.GetItem(asCaller("", "ngac-user-1"), &pb.GetItemRequest{
+		ItemId: folder.Id,
 	})
 	require.NoError(t, getErr, "item must survive the denied delete")
 	assert.Equal(t, folder.Id, item.Id)
@@ -476,16 +476,16 @@ func TestRestoreItem_DeniedWithoutAccess(t *testing.T) {
 	wsID := getTestWorkspaceID(t, pool)
 
 	srvAllow := grpcserver.NewDriveServer(pool, &mockPolicyRead{}, &mockPolicyWrite{}, &mockDocStorage{})
-	folder, _ := srvAllow.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "RestoreDenyTest", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srvAllow.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "RestoreDenyTest",
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
-	srvAllow.TrashItem(context.Background(), &pb.TrashItemRequest{
-		ItemId: folder.Id, UserNgacNodeId: "ngac-user-1",
+	srvAllow.TrashItem(asCaller("", "ngac-user-1"), &pb.TrashItemRequest{
+		ItemId: folder.Id,
 	})
 
-	_, err := srvDeny.RestoreItem(context.Background(), &pb.RestoreItemRequest{
-		ItemId: folder.Id, UserNgacNodeId: "ngac-denied-user",
+	_, err := srvDeny.RestoreItem(asCaller("", "ngac-denied-user"), &pb.RestoreItemRequest{
+		ItemId: folder.Id,
 	})
 
 	require.Error(t, err, "denied user must not restore a trashed item")
@@ -496,13 +496,13 @@ func TestRenameItem_HappyPath(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folder, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "OldName", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "OldName",
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 
-	renamed, err := srv.RenameItem(context.Background(), &pb.RenameItemRequest{
-		ItemId: folder.Id, NewName: "NewName", UserNgacNodeId: "ngac-user-1",
+	renamed, err := srv.RenameItem(asCaller("", "ngac-user-1"), &pb.RenameItemRequest{
+		ItemId: folder.Id, NewName: "NewName",
 	})
 
 	require.NoError(t, err)
@@ -514,19 +514,19 @@ func TestCopyItem_HappyPath(t *testing.T) {
 	wsID := getTestWorkspaceID(t, pool)
 	userID := getTestUserID(t, pool)
 
-	destFolder, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "CopyDest", UserNgacNodeId: "ngac-user-1",
+	destFolder, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "CopyDest",
 	})
-	created, _ := srv.CreateFile(context.Background(), &pb.CreateFileRequest{
+	created, _ := srv.CreateFile(asCaller(userID, "ngac-user-1"), &pb.CreateFileRequest{
 		WorkspaceId: wsID, Name: "copyable.pdf", MimeType: "application/pdf",
-		SizeBytes: 512, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		SizeBytes: 512,
 	})
 	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
 	t.Cleanup(func() { cleanDriveItems(t, pool, created.FileId, destFolder.Id) })
 
-	copied, err := srv.CopyItem(context.Background(), &pb.CopyItemRequest{
+	copied, err := srv.CopyItem(asCaller(userID, "ngac-user-1"), &pb.CopyItemRequest{
 		ItemId: created.FileId, DestParentId: destFolder.Id,
-		DestWorkspaceId: wsID, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		DestWorkspaceId: wsID,
 	})
 
 	require.NoError(t, err)
@@ -543,14 +543,14 @@ func TestCreateShare_UserShare(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folder, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "ShareTest", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "ShareTest",
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 
-	share, err := srv.CreateShare(context.Background(), &pb.CreateShareRequest{
+	share, err := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
 		ItemId: folder.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{"read"}, UserNgacNodeId: "ngac-user-1",
+		Operations: []string{"read"},
 	})
 
 	require.NoError(t, err)
@@ -565,12 +565,12 @@ func TestListShares_ReturnsShares(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folder, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "ListShareTest", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "ListShareTest",
 	})
-	share, _ := srv.CreateShare(context.Background(), &pb.CreateShareRequest{
+	share, _ := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
 		ItemId: folder.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{"read", "write"}, UserNgacNodeId: "ngac-user-1",
+		Operations: []string{"read", "write"},
 	})
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), "DELETE FROM drive_shares WHERE id = $1", share.Id)
@@ -587,12 +587,12 @@ func TestRevokeShare_HappyPath(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folder, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "RevokeShareTest", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "RevokeShareTest",
 	})
-	share, _ := srv.CreateShare(context.Background(), &pb.CreateShareRequest{
+	share, _ := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
 		ItemId: folder.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{"read"}, UserNgacNodeId: "ngac-user-1",
+		Operations: []string{"read"},
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 
@@ -609,13 +609,13 @@ func TestCreateShare_InvalidType(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folder, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "BadShareType", UserNgacNodeId: "ngac-user-1",
+	folder, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "BadShareType",
 	})
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 
-	_, err := srv.CreateShare(context.Background(), &pb.CreateShareRequest{
-		ItemId: folder.Id, ShareType: "invalid", Operations: []string{"read"}, UserNgacNodeId: "ngac-user-1",
+	_, err := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
+		ItemId: folder.Id, ShareType: "invalid", Operations: []string{"read"},
 	})
 
 	require.Error(t, err)
@@ -655,9 +655,9 @@ func TestQuota_IncrementOnConfirm(t *testing.T) {
 
 	before, _ := srv.GetQuota(context.Background(), &pb.GetQuotaRequest{WorkspaceId: wsID})
 
-	created, _ := srv.CreateFile(context.Background(), &pb.CreateFileRequest{
+	created, _ := srv.CreateFile(asCaller(userID, "ngac-user-1"), &pb.CreateFileRequest{
 		WorkspaceId: wsID, Name: "quota_test.pdf", MimeType: "application/pdf",
-		SizeBytes: 2048, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		SizeBytes: 2048,
 	})
 	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
 	t.Cleanup(func() { cleanDriveItems(t, pool, created.FileId) })
@@ -686,9 +686,9 @@ func TestQuota_ExceededRejectsUpload(t *testing.T) {
 		pool.Exec(context.Background(), "DELETE FROM drive_quotas WHERE workspace_id = $1", wsID)
 	})
 
-	_, err := srv.CreateFile(context.Background(), &pb.CreateFileRequest{
+	_, err := srv.CreateFile(asCaller(userID, "ngac-user-1"), &pb.CreateFileRequest{
 		WorkspaceId: wsID, Name: "too_big.pdf", MimeType: "application/pdf",
-		SizeBytes: 500, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		SizeBytes: 500,
 	})
 
 	require.Error(t, err)
@@ -772,18 +772,18 @@ func TestE2E_UploadShareDownloadRevokeDeny(t *testing.T) {
 	userID := getTestUserID(t, pool)
 
 	// 1. Upload file
-	created, err := srv.CreateFile(context.Background(), &pb.CreateFileRequest{
+	created, err := srv.CreateFile(asCaller(userID, "ngac-user-1"), &pb.CreateFileRequest{
 		WorkspaceId: wsID, Name: "e2e_share_test.pdf", MimeType: "application/pdf",
-		SizeBytes: 1024, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		SizeBytes: 1024,
 	})
 	require.NoError(t, err)
 	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
 	t.Cleanup(func() { cleanDriveItems(t, pool, created.FileId) })
 
 	// 2. Share with user-2
-	share, err := srv.CreateShare(context.Background(), &pb.CreateShareRequest{
+	share, err := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
 		ItemId: created.FileId, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{"read"}, UserNgacNodeId: "ngac-user-1",
+		Operations: []string{"read"},
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, share.Id)
@@ -792,8 +792,8 @@ func TestE2E_UploadShareDownloadRevokeDeny(t *testing.T) {
 	})
 
 	// 3. Verify download URL is accessible
-	dl, err := srv.GetDownloadURL(context.Background(), &pb.GetDownloadURLRequest{
-		FileId: created.FileId, UserNgacNodeId: "ngac-user-1",
+	dl, err := srv.GetDownloadURL(asCaller("", "ngac-user-1"), &pb.GetDownloadURLRequest{
+		FileId: created.FileId,
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, dl.DownloadUrl)
@@ -831,9 +831,9 @@ func TestE2E_ChatFileUpload(t *testing.T) {
 	require.NoError(t, err)
 
 	// 2. Upload file to channel drive
-	created, err := srv.CreateFile(context.Background(), &pb.CreateFileRequest{
+	created, err := srv.CreateFile(asCaller(userID, "ngac-user-1"), &pb.CreateFileRequest{
 		WorkspaceId: wsID, Name: "chat_attachment.png", MimeType: "image/png",
-		SizeBytes: 4096, ParentId: drive.Id, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		SizeBytes: 4096, ParentId: drive.Id,
 	})
 	require.NoError(t, err)
 	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
@@ -845,8 +845,8 @@ func TestE2E_ChatFileUpload(t *testing.T) {
 	assert.Equal(t, drive.Id, channelDrive.Id)
 
 	// 4. List folder to find the file
-	children, err := srv.ListFolder(context.Background(), &pb.ListFolderRequest{
-		WorkspaceId: wsID, FolderId: drive.Id, UserNgacNodeId: "ngac-user-1",
+	children, err := srv.ListFolder(asCaller("", "ngac-user-1"), &pb.ListFolderRequest{
+		WorkspaceId: wsID, FolderId: drive.Id,
 	})
 	require.NoError(t, err)
 	found := false
@@ -859,8 +859,8 @@ func TestE2E_ChatFileUpload(t *testing.T) {
 	assert.True(t, found, "file should appear in channel drive listing")
 
 	// 5. Download URL works
-	dl, err := srv.GetDownloadURL(context.Background(), &pb.GetDownloadURLRequest{
-		FileId: created.FileId, UserNgacNodeId: "ngac-user-1",
+	dl, err := srv.GetDownloadURL(asCaller("", "ngac-user-1"), &pb.GetDownloadURLRequest{
+		FileId: created.FileId,
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, dl.DownloadUrl)
@@ -876,22 +876,22 @@ func TestE2E_FolderSharingInheritance(t *testing.T) {
 	userID := getTestUserID(t, pool)
 
 	// 1. Create folder
-	folder, err := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "SharedFolder", UserNgacNodeId: "ngac-user-1",
+	folder, err := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "SharedFolder",
 	})
 	require.NoError(t, err)
 
 	// 2. Share folder with user-2
-	share, err := srv.CreateShare(context.Background(), &pb.CreateShareRequest{
+	share, err := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
 		ItemId: folder.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{"read", "write"}, UserNgacNodeId: "ngac-user-1",
+		Operations: []string{"read", "write"},
 	})
 	require.NoError(t, err)
 
 	// 3. Add a file inside the shared folder
-	created, err := srv.CreateFile(context.Background(), &pb.CreateFileRequest{
+	created, err := srv.CreateFile(asCaller(userID, "ngac-user-1"), &pb.CreateFileRequest{
 		WorkspaceId: wsID, Name: "inherited_access.doc", MimeType: "application/msword",
-		SizeBytes: 2048, ParentId: folder.Id, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		SizeBytes: 2048, ParentId: folder.Id,
 	})
 	require.NoError(t, err)
 	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
@@ -903,8 +903,8 @@ func TestE2E_FolderSharingInheritance(t *testing.T) {
 
 	// 4. Verify child file inherits NGAC assignment under shared folder's OA
 	// The file's NGAC OA is assigned under the folder's OA (verified by policy mock)
-	childItem, err := srv.GetItem(context.Background(), &pb.GetItemRequest{
-		ItemId: created.FileId, UserNgacNodeId: "ngac-user-1",
+	childItem, err := srv.GetItem(asCaller("", "ngac-user-1"), &pb.GetItemRequest{
+		ItemId: created.FileId,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, folder.Id, childItem.ParentId, "child should be under shared folder")
@@ -919,20 +919,20 @@ func TestE2E_MovePreservesShares(t *testing.T) {
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
 
-	folderA, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "MoveSourceE2E", UserNgacNodeId: "ngac-user-1",
+	folderA, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "MoveSourceE2E",
 	})
-	folderB, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "MoveDestE2E", UserNgacNodeId: "ngac-user-1",
+	folderB, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "MoveDestE2E",
 	})
-	child, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "MoveChild", ParentId: folderA.Id, UserNgacNodeId: "ngac-user-1",
+	child, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "MoveChild", ParentId: folderA.Id,
 	})
 
 	// Share the child
-	share, _ := srv.CreateShare(context.Background(), &pb.CreateShareRequest{
+	share, _ := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
 		ItemId: child.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{"read"}, UserNgacNodeId: "ngac-user-1",
+		Operations: []string{"read"},
 	})
 
 	t.Cleanup(func() {
@@ -941,8 +941,8 @@ func TestE2E_MovePreservesShares(t *testing.T) {
 	})
 
 	// Move child to folderB
-	moved, err := srv.MoveItem(context.Background(), &pb.MoveItemRequest{
-		ItemId: child.Id, NewParentId: folderB.Id, UserNgacNodeId: "ngac-user-1",
+	moved, err := srv.MoveItem(asCaller("", "ngac-user-1"), &pb.MoveItemRequest{
+		ItemId: child.Id, NewParentId: folderB.Id,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, folderB.Id, moved.ParentId, "item should be under new parent")
@@ -959,20 +959,20 @@ func TestE2E_CopyCreatesIndependentFile(t *testing.T) {
 	userID := getTestUserID(t, pool)
 
 	// Create source file
-	created, _ := srv.CreateFile(context.Background(), &pb.CreateFileRequest{
+	created, _ := srv.CreateFile(asCaller(userID, "ngac-user-1"), &pb.CreateFileRequest{
 		WorkspaceId: wsID, Name: "copy_src.pdf", MimeType: "application/pdf",
-		SizeBytes: 1024, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		SizeBytes: 1024,
 	})
 	srv.ConfirmFile(context.Background(), &pb.ConfirmFileRequest{FileId: created.FileId})
 
 	// Share original
-	share, _ := srv.CreateShare(context.Background(), &pb.CreateShareRequest{
+	share, _ := srv.CreateShare(asCaller("", "ngac-user-1"), &pb.CreateShareRequest{
 		ItemId: created.FileId, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{"read"}, UserNgacNodeId: "ngac-user-1",
+		Operations: []string{"read"},
 	})
 
-	destFolder, _ := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "CopyDestE2E", UserNgacNodeId: "ngac-user-1",
+	destFolder, _ := srv.CreateFolder(asCaller("", "ngac-user-1"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "CopyDestE2E",
 	})
 
 	t.Cleanup(func() {
@@ -981,9 +981,9 @@ func TestE2E_CopyCreatesIndependentFile(t *testing.T) {
 	})
 
 	// Copy file
-	copied, err := srv.CopyItem(context.Background(), &pb.CopyItemRequest{
+	copied, err := srv.CopyItem(asCaller(userID, "ngac-user-1"), &pb.CopyItemRequest{
 		ItemId: created.FileId, DestParentId: destFolder.Id,
-		DestWorkspaceId: wsID, UserId: userID, UserNgacNodeId: "ngac-user-1",
+		DestWorkspaceId: wsID,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanDriveItems(t, pool, copied.Id) })

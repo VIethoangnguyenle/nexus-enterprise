@@ -89,19 +89,19 @@ message Channel {
 message CreateChannelRequest {
   string name = 1;
   string workspace_id = 2;
-  string user_id = 3;
-  string user_ngac_node_id = 4;
+  string user_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 4 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string channel_type = 5;
 }
 
 message ListChannelsRequest {
   string workspace_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message GetChannelRequest {
   string channel_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message ChannelList {
@@ -114,19 +114,19 @@ message ChannelList {
 
 message AddChannelMemberRequest {
   string channel_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string target_ngac_node_id = 3;
 }
 
 message RemoveChannelMemberRequest {
   string channel_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string target_ngac_node_id = 3;
 }
 
 message ListChannelMembersRequest {
   string channel_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message ChannelMember {
@@ -145,8 +145,8 @@ message ChannelMemberList {
 
 message SendMessageRequest {
   string channel_id = 1;
-  string sender_id = 2;
-  string sender_ngac_node_id = 3;
+  string sender_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string sender_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string content = 4;
   string message_type = 5;          // "user" (default), "system"
   string parent_message_id = 6;     // Thread: reply to this message
@@ -176,7 +176,7 @@ message Message {
 
 message GetMessagesRequest {
   string channel_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string before = 3;  // cursor: timestamp string
   int32 limit = 4;
 }
@@ -188,13 +188,13 @@ message MessageList {
 
 message GetThreadRequest {
   string message_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message FindThreadsByEntityRequest {
   string entity_type = 1;
   string entity_id = 2;
-  string user_ngac_node_id = 3;
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 // ============================================
@@ -202,14 +202,14 @@ message FindThreadsByEntityRequest {
 // ============================================
 
 message CreateDMRequest {
-  string user_id = 1;
-  string user_ngac_node_id = 2;
+  string user_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string target_user_id = 3;
   string target_ngac_node_id = 4;
 }
 
 message ListDMsRequest {
-  string user_ngac_node_id = 1;
+  string user_ngac_node_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 // ============================================
@@ -311,7 +311,7 @@ message SearchMessagesRequest {
   string channel_id = 1;
   string query = 2;
   int32 limit = 3;
-  string user_ngac_node_id = 4;
+  string user_ngac_node_id = 4 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 // ============================================
@@ -320,8 +320,8 @@ message SearchMessagesRequest {
 
 message CreatePollRequest {
   string channel_id = 1;
-  string user_id = 2;
-  string user_ngac_node_id = 3;
+  string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string question = 4;
   repeated string options = 5;
   bool is_multi = 6;
@@ -373,8 +373,8 @@ message Poll {
 
 message CreateTaskRequest {
   string channel_id = 1;
-  string user_id = 2;
-  string user_ngac_node_id = 3;
+  string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string title = 4;
   string assignee_id = 5;
   string due_date = 6;  // "YYYY-MM-DD"
@@ -429,7 +429,7 @@ message Notification {
 }
 
 message ListNotificationsRequest {
-  string user_id = 1;
+  string user_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   int32 limit = 2;
   int32 offset = 3;
 }
@@ -442,15 +442,15 @@ message NotificationList {
 
 message MarkNotificationReadRequest {
   string notification_id = 1;
-  string user_id = 2;
+  string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message MarkAllNotificationsReadRequest {
-  string user_id = 1;
+  string user_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message GetNotificationUnreadCountRequest {
-  string user_id = 1;
+  string user_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message NotificationUnreadCountResponse {

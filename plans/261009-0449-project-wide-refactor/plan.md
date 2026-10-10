@@ -48,7 +48,7 @@ Audit cũng tìm ra lỗ hổng phân quyền **có thật, đang chạy**. Chú
 |---|---|---|---|---|---|
 | 01 | [CI baseline](phase-01-ci-baseline.md) | P1 | 0.5d | — | done (chờ chạy trên GitHub) |
 | 02 | [Close authorization gaps](phase-02-close-authorization-gaps.md) | P0 | 2-3d | 01 | done (PR #2) — gRPC caller identity moved to 02b |
-| 02b | [gRPC caller identity](phase-02b-grpc-caller-identity.md) | P2 | 3-4d | 01 | pending |
+| 02b | [gRPC caller identity](phase-02b-grpc-caller-identity.md) | P2 | 3-4d | 01 | done |
 | 03 | [PDP correctness and freshness](phase-03-pdp-correctness-and-freshness.md) | P0 | 2-3d | 01 | done (PR #2) — in-RAM prohibitions moved to 03b |
 | 03b | [Prohibitions in the in-memory graph](phase-03b-prohibitions-in-memory.md) | P2 | 1-2d | 01 | done |
 | 04 | [Frontend data layer](phase-04-frontend-data-layer.md) | P1 | 2-3d | 01 | 04a done; 04b đi cùng từng nhóm màn 06 |
@@ -128,10 +128,16 @@ CLAUDE.md §4 yêu cầu mỗi plan đổi hành vi phải nêu capability:
 3. **Asset O nodes (phase 07):** chuyển sang check trên type OA (đề xuất) hay giữ O node và ghi
    ngoại lệ vào spec?
 4. **Shard manager (phase 08):** đề xuất xoá (368 dòng chưa từng chạy production), thêm lại khi có số đo.
-5. **Assets shell (phase 06):** gộp `/assets` vào layout `_workspace` (cần mockup mới cho
-   nav) hay giữ layout riêng nhưng dùng chung guard/WebSocket/logout?
+5. ~~Assets shell~~ **Đã chốt 2026-10-10:** gộp `/assets` vào shell `_workspace` (mockup `assets.html` §0).
 6. ~~Hướng UI~~ **Đã chốt 2026-10-09:** B Tín hiệu, mượn bảng kẻ mảnh của A, light + dark ngay
    từ đầu. Nguồn thiết kế: `DESIGN.md` + `design/mockups/`.
 7. ~~Hotfix 02/03~~ **Đã xong 2026-10-10:** phần chính của 02/03 đã merge trong PR #2; phần còn lại
    tách thành 02b/03b.
 8. **Cổng gRPC (02b):** **Đã xác nhận 2026-10-10** chỉ nội bộ → 02b là phòng thủ chiều sâu, P2.
+9. **Mockup nhóm còn lại:** **Đã duyệt 2026-10-10** `assets.html`, `admin.html`,
+   `contacts-documents-settings.html`, `auth.html` là nguồn cho code.
+10. **Duyệt yêu cầu tài sản:** **Đã chốt 2026-10-10** gán tài sản cụ thể ngay trong bước duyệt (một
+    dialog, backend ghi nguyên tử).
+11. **Op theo vùng tài nguyên (màn quyền của vai trò):** **Đã chốt 2026-10-10** backend trả danh sách
+    op hợp lệ theo loại OA qua endpoint mới; client không hard-code.
+12. **Toggle "Màu theo người":** **Đã chốt 2026-10-10** bỏ — màu là danh tính (DESIGN.md).

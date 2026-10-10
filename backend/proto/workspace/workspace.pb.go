@@ -166,10 +166,12 @@ func (x *Workspace) GetCreatedBy() string {
 }
 
 type CreateWorkspaceRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -211,6 +213,7 @@ func (x *CreateWorkspaceRequest) GetName() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *CreateWorkspaceRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -218,6 +221,7 @@ func (x *CreateWorkspaceRequest) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *CreateWorkspaceRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -226,9 +230,11 @@ func (x *CreateWorkspaceRequest) GetUserNgacNodeId() string {
 }
 
 type ListWorkspacesRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	UserId         string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	UserId string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -263,6 +269,7 @@ func (*ListWorkspacesRequest) Descriptor() ([]byte, []int) {
 	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{3}
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *ListWorkspacesRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -270,6 +277,7 @@ func (x *ListWorkspacesRequest) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *ListWorkspacesRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -366,12 +374,13 @@ func (x *WorkspaceList) GetWorkspaces() []*Workspace {
 }
 
 type InviteMemberRequest struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId       string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	InviterNgacNodeId string                 `protobuf:"bytes,2,opt,name=inviter_ngac_node_id,json=inviterNgacNodeId,proto3" json:"inviter_ngac_node_id,omitempty"`
-	TargetUserId      string                 `protobuf:"bytes,3,opt,name=target_user_id,json=targetUserId,proto3" json:"target_user_id,omitempty"`
-	TargetNgacNodeId  string                 `protobuf:"bytes,4,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
-	RoleIds           []string               `protobuf:"bytes,5,rep,name=role_ids,json=roleIds,proto3" json:"role_ids,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	InviterNgacNodeId string   `protobuf:"bytes,2,opt,name=inviter_ngac_node_id,json=inviterNgacNodeId,proto3" json:"inviter_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	TargetUserId      string   `protobuf:"bytes,3,opt,name=target_user_id,json=targetUserId,proto3" json:"target_user_id,omitempty"`
+	TargetNgacNodeId  string   `protobuf:"bytes,4,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
+	RoleIds           []string `protobuf:"bytes,5,rep,name=role_ids,json=roleIds,proto3" json:"role_ids,omitempty"`
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -413,6 +422,7 @@ func (x *InviteMemberRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *InviteMemberRequest) GetInviterNgacNodeId() string {
 	if x != nil {
 		return x.InviterNgacNodeId
@@ -442,10 +452,11 @@ func (x *InviteMemberRequest) GetRoleIds() []string {
 }
 
 type RemoveMemberRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId         string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	TargetNgacNodeId    string                 `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	RequesterNgacNodeId string `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	TargetNgacNodeId    string `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -487,6 +498,7 @@ func (x *RemoveMemberRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *RemoveMemberRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -666,11 +678,12 @@ func (x *MemberList) GetMembers() []*Member {
 }
 
 type UpdateMemberRolesRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId         string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	TargetNgacNodeId    string                 `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
-	RoleIds             []string               `protobuf:"bytes,4,rep,name=role_ids,json=roleIds,proto3" json:"role_ids,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	RequesterNgacNodeId string   `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	TargetNgacNodeId    string   `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
+	RoleIds             []string `protobuf:"bytes,4,rep,name=role_ids,json=roleIds,proto3" json:"role_ids,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -712,6 +725,7 @@ func (x *UpdateMemberRolesRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *UpdateMemberRolesRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -734,10 +748,11 @@ func (x *UpdateMemberRolesRequest) GetRoleIds() []string {
 }
 
 type TransferOwnershipRequest struct {
-	state                  protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId            string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	CurrentOwnerNgacNodeId string                 `protobuf:"bytes,2,opt,name=current_owner_ngac_node_id,json=currentOwnerNgacNodeId,proto3" json:"current_owner_ngac_node_id,omitempty"`
-	NewOwnerNgacNodeId     string                 `protobuf:"bytes,3,opt,name=new_owner_ngac_node_id,json=newOwnerNgacNodeId,proto3" json:"new_owner_ngac_node_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	CurrentOwnerNgacNodeId string `protobuf:"bytes,2,opt,name=current_owner_ngac_node_id,json=currentOwnerNgacNodeId,proto3" json:"current_owner_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	NewOwnerNgacNodeId     string `protobuf:"bytes,3,opt,name=new_owner_ngac_node_id,json=newOwnerNgacNodeId,proto3" json:"new_owner_ngac_node_id,omitempty"`
 	unknownFields          protoimpl.UnknownFields
 	sizeCache              protoimpl.SizeCache
 }
@@ -779,6 +794,7 @@ func (x *TransferOwnershipRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *TransferOwnershipRequest) GetCurrentOwnerNgacNodeId() string {
 	if x != nil {
 		return x.CurrentOwnerNgacNodeId
@@ -794,10 +810,11 @@ func (x *TransferOwnershipRequest) GetNewOwnerNgacNodeId() string {
 }
 
 type AddOwnerRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId         string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	TargetNgacNodeId    string                 `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	RequesterNgacNodeId string `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	TargetNgacNodeId    string `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -839,6 +856,7 @@ func (x *AddOwnerRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *AddOwnerRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -854,10 +872,11 @@ func (x *AddOwnerRequest) GetTargetNgacNodeId() string {
 }
 
 type RemoveOwnerRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId         string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	TargetNgacNodeId    string                 `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	RequesterNgacNodeId string `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	TargetNgacNodeId    string `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -899,6 +918,7 @@ func (x *RemoveOwnerRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *RemoveOwnerRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -914,10 +934,11 @@ func (x *RemoveOwnerRequest) GetTargetNgacNodeId() string {
 }
 
 type CreateRoleRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId         string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	Name                string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	RequesterNgacNodeId string `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Name                string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -959,6 +980,7 @@ func (x *CreateRoleRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *CreateRoleRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -1122,10 +1144,11 @@ func (x *RoleList) GetRoles() []*Role {
 }
 
 type DeleteRoleRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId         string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	RoleId              string                 `protobuf:"bytes,3,opt,name=role_id,json=roleId,proto3" json:"role_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	RequesterNgacNodeId string `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	RoleId              string `protobuf:"bytes,3,opt,name=role_id,json=roleId,proto3" json:"role_id,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -1167,6 +1190,7 @@ func (x *DeleteRoleRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *DeleteRoleRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -1182,11 +1206,12 @@ func (x *DeleteRoleRequest) GetRoleId() string {
 }
 
 type CreateFolderRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId         string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	Name                string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	ParentOaId          string                 `protobuf:"bytes,4,opt,name=parent_oa_id,json=parentOaId,proto3" json:"parent_oa_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	RequesterNgacNodeId string `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Name                string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	ParentOaId          string `protobuf:"bytes,4,opt,name=parent_oa_id,json=parentOaId,proto3" json:"parent_oa_id,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -1228,6 +1253,7 @@ func (x *CreateFolderRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *CreateFolderRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -1398,10 +1424,11 @@ func (x *FolderList) GetFolders() []*Folder {
 }
 
 type DeleteFolderRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId         string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	FolderId            string                 `protobuf:"bytes,3,opt,name=folder_id,json=folderId,proto3" json:"folder_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	RequesterNgacNodeId string `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	FolderId            string `protobuf:"bytes,3,opt,name=folder_id,json=folderId,proto3" json:"folder_id,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -1443,6 +1470,7 @@ func (x *DeleteFolderRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *DeleteFolderRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -1458,12 +1486,13 @@ func (x *DeleteFolderRequest) GetFolderId() string {
 }
 
 type CreatePermissionRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId         string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	UaId                string                 `protobuf:"bytes,3,opt,name=ua_id,json=uaId,proto3" json:"ua_id,omitempty"`
-	OaId                string                 `protobuf:"bytes,4,opt,name=oa_id,json=oaId,proto3" json:"oa_id,omitempty"`
-	Operations          []string               `protobuf:"bytes,5,rep,name=operations,proto3" json:"operations,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	RequesterNgacNodeId string   `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	UaId                string   `protobuf:"bytes,3,opt,name=ua_id,json=uaId,proto3" json:"ua_id,omitempty"`
+	OaId                string   `protobuf:"bytes,4,opt,name=oa_id,json=oaId,proto3" json:"oa_id,omitempty"`
+	Operations          []string `protobuf:"bytes,5,rep,name=operations,proto3" json:"operations,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -1505,6 +1534,7 @@ func (x *CreatePermissionRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *CreatePermissionRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -1706,10 +1736,11 @@ func (x *PermissionList) GetPermissions() []*Permission {
 }
 
 type DeletePermissionRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId         string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	PermissionId        string                 `protobuf:"bytes,3,opt,name=permission_id,json=permissionId,proto3" json:"permission_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
+	RequesterNgacNodeId string `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	PermissionId        string `protobuf:"bytes,3,opt,name=permission_id,json=permissionId,proto3" json:"permission_id,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -1751,6 +1782,7 @@ func (x *DeletePermissionRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 func (x *DeletePermissionRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -1784,29 +1816,29 @@ const file_proto_workspace_workspace_proto_rawDesc = "" +
 	"\x0fdocuments_oa_id\x18\a \x01(\tR\rdocumentsOaId\x12$\n" +
 	"\x0echannels_oa_id\x18\b \x01(\tR\fchannelsOaId\x12\x1d\n" +
 	"\n" +
-	"created_by\x18\t \x01(\tR\tcreatedBy\"p\n" +
+	"created_by\x18\t \x01(\tR\tcreatedBy\"x\n" +
 	"\x16CreateWorkspaceRequest\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\"[\n" +
-	"\x15ListWorkspacesRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"8\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
+	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"c\n" +
+	"\x15ListWorkspacesRequest\x12\x1b\n" +
+	"\auser_id\x18\x01 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"8\n" +
 	"\x13GetWorkspaceRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"E\n" +
 	"\rWorkspaceList\x124\n" +
 	"\n" +
 	"workspaces\x18\x01 \x03(\v2\x14.workspace.WorkspaceR\n" +
-	"workspaces\"\xd9\x01\n" +
+	"workspaces\"\xdd\x01\n" +
 	"\x13InviteMemberRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12/\n" +
-	"\x14inviter_ngac_node_id\x18\x02 \x01(\tR\x11inviterNgacNodeId\x12$\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
+	"\x14inviter_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x11inviterNgacNodeId\x12$\n" +
 	"\x0etarget_user_id\x18\x03 \x01(\tR\ftargetUserId\x12-\n" +
 	"\x13target_ngac_node_id\x18\x04 \x01(\tR\x10targetNgacNodeId\x12\x19\n" +
-	"\brole_ids\x18\x05 \x03(\tR\aroleIds\"\x9c\x01\n" +
+	"\brole_ids\x18\x05 \x03(\tR\aroleIds\"\xa0\x01\n" +
 	"\x13RemoveMemberRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12-\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12-\n" +
 	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\"7\n" +
 	"\x12ListMembersRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"\xa1\x01\n" +
@@ -1819,27 +1851,27 @@ const file_proto_workspace_workspace_proto_rawDesc = "" +
 	"\bis_owner\x18\x05 \x01(\bR\aisOwner\"9\n" +
 	"\n" +
 	"MemberList\x12+\n" +
-	"\amembers\x18\x01 \x03(\v2\x11.workspace.MemberR\amembers\"\xbc\x01\n" +
+	"\amembers\x18\x01 \x03(\v2\x11.workspace.MemberR\amembers\"\xc0\x01\n" +
 	"\x18UpdateMemberRolesRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12-\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12-\n" +
 	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\x12\x19\n" +
-	"\brole_ids\x18\x04 \x03(\tR\aroleIds\"\xad\x01\n" +
+	"\brole_ids\x18\x04 \x03(\tR\aroleIds\"\xb1\x01\n" +
 	"\x18TransferOwnershipRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12:\n" +
-	"\x1acurrent_owner_ngac_node_id\x18\x02 \x01(\tR\x16currentOwnerNgacNodeId\x122\n" +
-	"\x16new_owner_ngac_node_id\x18\x03 \x01(\tR\x12newOwnerNgacNodeId\"\x98\x01\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12>\n" +
+	"\x1acurrent_owner_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x16currentOwnerNgacNodeId\x122\n" +
+	"\x16new_owner_ngac_node_id\x18\x03 \x01(\tR\x12newOwnerNgacNodeId\"\x9c\x01\n" +
 	"\x0fAddOwnerRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12-\n" +
-	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\"\x9b\x01\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12-\n" +
+	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\"\x9f\x01\n" +
 	"\x12RemoveOwnerRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12-\n" +
-	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\"\x7f\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12-\n" +
+	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\"\x83\x01\n" +
 	"\x11CreateRoleRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12\x12\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\"L\n" +
 	"\x04Role\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
@@ -1849,14 +1881,14 @@ const file_proto_workspace_workspace_proto_rawDesc = "" +
 	"\x10ListRolesRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"1\n" +
 	"\bRoleList\x12%\n" +
-	"\x05roles\x18\x01 \x03(\v2\x0f.workspace.RoleR\x05roles\"\x84\x01\n" +
+	"\x05roles\x18\x01 \x03(\v2\x0f.workspace.RoleR\x05roles\"\x88\x01\n" +
 	"\x11DeleteRoleRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12\x17\n" +
-	"\arole_id\x18\x03 \x01(\tR\x06roleId\"\xa3\x01\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12\x17\n" +
+	"\arole_id\x18\x03 \x01(\tR\x06roleId\"\xa7\x01\n" +
 	"\x13CreateFolderRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12\x12\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12 \n" +
 	"\fparent_oa_id\x18\x04 \x01(\tR\n" +
 	"parentOaId\"N\n" +
@@ -1869,14 +1901,14 @@ const file_proto_workspace_workspace_proto_rawDesc = "" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"9\n" +
 	"\n" +
 	"FolderList\x12+\n" +
-	"\afolders\x18\x01 \x03(\v2\x11.workspace.FolderR\afolders\"\x8a\x01\n" +
+	"\afolders\x18\x01 \x03(\v2\x11.workspace.FolderR\afolders\"\x8e\x01\n" +
 	"\x13DeleteFolderRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12\x1b\n" +
-	"\tfolder_id\x18\x03 \x01(\tR\bfolderId\"\xbb\x01\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12\x1b\n" +
+	"\tfolder_id\x18\x03 \x01(\tR\bfolderId\"\xbf\x01\n" +
 	"\x17CreatePermissionRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12\x13\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12\x13\n" +
 	"\x05ua_id\x18\x03 \x01(\tR\x04uaId\x12\x13\n" +
 	"\x05oa_id\x18\x04 \x01(\tR\x04oaId\x12\x1e\n" +
 	"\n" +
@@ -1895,10 +1927,10 @@ const file_proto_workspace_workspace_proto_rawDesc = "" +
 	"\x16ListPermissionsRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"I\n" +
 	"\x0ePermissionList\x127\n" +
-	"\vpermissions\x18\x01 \x03(\v2\x15.workspace.PermissionR\vpermissions\"\x96\x01\n" +
+	"\vpermissions\x18\x01 \x03(\v2\x15.workspace.PermissionR\vpermissions\"\x9a\x01\n" +
 	"\x17DeletePermissionRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12#\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12#\n" +
 	"\rpermission_id\x18\x03 \x01(\tR\fpermissionId2\xbb\n" +
 	"\n" +
 	"\x10WorkspaceService\x12J\n" +

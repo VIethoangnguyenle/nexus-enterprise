@@ -11,14 +11,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/asset"
-	"ngac-platform/services/asset/internal/caller"
 )
 
-// The guarded RPCs authorize the caller they are handed. These tests pin that
-// the REST layer hands them the authenticated caller from the JWT claims —
-// in the request field where the message has one, otherwise on the context.
+// The guarded RPCs authorize the caller on the context. These tests pin that
+// the REST layer puts the authenticated caller from the JWT claims there, and
+// that nothing the client sends in the body can replace it.
+
+var wantCaller = grpcauth.Caller{UserID: "user-1", NGACNodeID: "ngac-1"}
 
 type captureSvc struct {
 	AssetService
@@ -52,56 +54,57 @@ func (c *captureSvc) UpdateTypeSchema(ctx context.Context, req *pb.UpdateTypeSch
 type captureAssetSvc struct {
 	AssetService
 	AssetRequestService
+	ctx         context.Context
 	getAsset    *pb.GetAssetRequest
 	transitions *pb.GetTransitionsRequest
 	history     *pb.GetHistoryRequest
 	createReq   *pb.CreateAssetRequestReq
 }
 
-func (c *captureAssetSvc) GetAsset(_ context.Context, req *pb.GetAssetRequest) (*pb.Asset, error) {
-	c.getAsset = req
+func (c *captureAssetSvc) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*pb.Asset, error) {
+	c.ctx, c.getAsset = ctx, req
 	return &pb.Asset{}, nil
 }
 
-func (c *captureAssetSvc) GetAvailableTransitions(_ context.Context, req *pb.GetTransitionsRequest) (*pb.TransitionList, error) {
-	c.transitions = req
+func (c *captureAssetSvc) GetAvailableTransitions(ctx context.Context, req *pb.GetTransitionsRequest) (*pb.TransitionList, error) {
+	c.ctx, c.transitions = ctx, req
 	return &pb.TransitionList{}, nil
 }
 
-func (c *captureAssetSvc) GetAssetHistory(_ context.Context, req *pb.GetHistoryRequest) (*pb.TransitionHistoryList, error) {
-	c.history = req
+func (c *captureAssetSvc) GetAssetHistory(ctx context.Context, req *pb.GetHistoryRequest) (*pb.TransitionHistoryList, error) {
+	c.ctx, c.history = ctx, req
 	return &pb.TransitionHistoryList{}, nil
 }
 
-func (c *captureAssetSvc) CreateRequest(_ context.Context, req *pb.CreateAssetRequestReq) (*pb.AssetRequest, error) {
-	c.createReq = req
+func (c *captureAssetSvc) CreateRequest(ctx context.Context, req *pb.CreateAssetRequestReq) (*pb.AssetRequest, error) {
+	c.ctx, c.createReq = ctx, req
 	return &pb.AssetRequest{}, nil
 }
 
 var testClaims = &httputil.Claims{UserID: "user-1", NGACNodeID: "ngac-1"}
 
-func TestGetAsset_ForwardsCaller(t *testing.T) {
+func TestGetAsset_PutsCallerOnContext(t *testing.T) {
 	svc := &captureAssetSvc{}
 	h := NewHandler(svc, nil, svc)
 	call(t, http.MethodGet, "", map[string]string{"assetId": "a-1"}, h.GetAsset)
 	require.NotNil(t, svc.getAsset)
-	assert.Equal(t, "ngac-1", svc.getAsset.UserNgacNodeId)
+	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
 }
 
-func TestGetAvailableTransitions_ForwardsCaller(t *testing.T) {
+func TestGetAvailableTransitions_PutsCallerOnContext(t *testing.T) {
 	svc := &captureAssetSvc{}
 	h := NewHandler(svc, nil, svc)
 	call(t, http.MethodGet, "", map[string]string{"assetId": "a-1"}, h.GetAvailableTransitions)
 	require.NotNil(t, svc.transitions)
-	assert.Equal(t, "ngac-1", svc.transitions.UserNgacNodeId)
+	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
 }
 
-func TestGetAssetHistory_ForwardsCaller(t *testing.T) {
+func TestGetAssetHistory_PutsCallerOnContext(t *testing.T) {
 	svc := &captureAssetSvc{}
 	h := NewHandler(svc, nil, svc)
 	call(t, http.MethodGet, "", map[string]string{"assetId": "a-1"}, h.GetAssetHistory)
 	require.NotNil(t, svc.history)
-	assert.Equal(t, "ngac-1", svc.history.UserNgacNodeId)
+	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
 }
 
 // The requester is who the token says, never who the body says.
@@ -124,8 +127,7 @@ func TestCreateAssetRequest_TakesRequesterFromClaimsNotBody(t *testing.T) {
 	assert.Equal(t, http.StatusCreated, rec.Code)
 
 	require.NotNil(t, svc.createReq)
-	assert.Equal(t, "user-1", svc.createReq.UserId)
-	assert.Equal(t, "ngac-1", svc.createReq.UserNgacNodeId)
+	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
 	assert.Equal(t, "t-1", svc.createReq.TypeId)
 }
 
@@ -145,27 +147,27 @@ func call(t *testing.T, method, body string, params map[string]string, h echo.Ha
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
-func TestListAssets_ForwardsCaller(t *testing.T) {
+func TestListAssets_PutsCallerOnContext(t *testing.T) {
 	svc := &captureSvc{}
 	h := NewHandler(svc, svc, nil)
 	call(t, http.MethodGet, "", map[string]string{"id": "ws-1"}, h.ListAssets)
 	require.NotNil(t, svc.listAssets)
-	assert.Equal(t, "ngac-1", svc.listAssets.UserNgacNodeId)
+	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
 }
 
-func TestGetAssetSummary_ForwardsCaller(t *testing.T) {
+func TestGetAssetSummary_PutsCallerOnContext(t *testing.T) {
 	svc := &captureSvc{}
 	h := NewHandler(svc, svc, nil)
 	call(t, http.MethodGet, "", map[string]string{"id": "ws-1"}, h.GetAssetSummary)
 	require.NotNil(t, svc.listAssets)
-	assert.Equal(t, "ngac-1", svc.listAssets.UserNgacNodeId)
+	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
 }
 
 func TestListAssetTypes_PutsCallerOnContext(t *testing.T) {
 	svc := &captureSvc{}
 	h := NewHandler(svc, svc, nil)
 	call(t, http.MethodGet, "", map[string]string{"id": "ws-1"}, h.ListAssetTypes)
-	assert.Equal(t, caller.Identity{UserID: "user-1", NGACNodeID: "ngac-1"}, caller.FromContext(svc.ctx))
+	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
 }
 
 func TestGetAssetType_PutsCallerOnContext(t *testing.T) {
@@ -173,13 +175,13 @@ func TestGetAssetType_PutsCallerOnContext(t *testing.T) {
 	h := NewHandler(svc, svc, nil)
 	call(t, http.MethodGet, "", map[string]string{"typeId": "t-1"}, h.GetAssetType)
 	require.True(t, svc.getTypeSeen)
-	assert.Equal(t, caller.Identity{UserID: "user-1", NGACNodeID: "ngac-1"}, caller.FromContext(svc.ctx))
+	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
 }
 
-func TestUpdateAssetTypeSchema_ForwardsCaller(t *testing.T) {
+func TestUpdateAssetTypeSchema_PutsCallerOnContext(t *testing.T) {
 	svc := &captureSvc{}
 	h := NewHandler(svc, svc, nil)
 	call(t, http.MethodPut, `{"fields_schema":"{}"}`, map[string]string{"typeId": "t-1"}, h.UpdateAssetTypeSchema)
 	require.NotNil(t, svc.updateType)
-	assert.Equal(t, "ngac-1", svc.updateType.UserNgacNodeId)
+	assert.Equal(t, wantCaller, grpcauth.CallerFrom(svc.ctx))
 }

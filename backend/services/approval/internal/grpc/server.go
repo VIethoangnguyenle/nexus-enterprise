@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/approval"
 	"ngac-platform/services/approval/internal/domain"
 )
@@ -23,6 +24,17 @@ type Server struct {
 // NewServer creates a gRPC handler with domain service dependency.
 func NewServer(svc *domain.Service) *Server {
 	return &Server{svc: svc}
+}
+
+// callerNode returns the NGAC node of the authenticated caller. The caller
+// comes from the request metadata (see package grpcauth), never from the
+// request body.
+func callerNode(ctx context.Context) (string, error) {
+	node := grpcauth.CallerFrom(ctx).NGACNodeID
+	if node == "" {
+		return "", status.Error(codes.Unauthenticated, "caller identity required")
+	}
+	return node, nil
 }
 
 // mapError translates domain sentinel errors to gRPC status codes.
@@ -86,11 +98,12 @@ func auditToProto(e *domain.AuditEntry) *pb.AuditEntry {
 
 // GetPending returns all pending assignments for the requesting user.
 func (s *Server) GetPending(ctx context.Context, req *pb.GetPendingRequest) (*pb.ApprovalList, error) {
-	if req.UserNodeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "user_node_id required")
+	userNodeID, err := callerNode(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	items, err := s.svc.GetPending(ctx, req.UserNodeId)
+	items, err := s.svc.GetPending(ctx, userNodeID)
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -104,11 +117,12 @@ func (s *Server) GetPending(ctx context.Context, req *pb.GetPendingRequest) (*pb
 
 // GetHistory returns actioned assignments with cursor paging.
 func (s *Server) GetHistory(ctx context.Context, req *pb.GetHistoryRequest) (*pb.ApprovalList, error) {
-	if req.UserNodeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "user_node_id required")
+	userNodeID, err := callerNode(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	items, nextCursor, err := s.svc.GetHistory(ctx, req.UserNodeId, req.Cursor, int(req.Limit))
+	items, nextCursor, err := s.svc.GetHistory(ctx, userNodeID, req.Cursor, int(req.Limit))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -122,11 +136,12 @@ func (s *Server) GetHistory(ctx context.Context, req *pb.GetHistoryRequest) (*pb
 
 // GetMyRequests returns requests created by the user.
 func (s *Server) GetMyRequests(ctx context.Context, req *pb.GetMyRequestsRequest) (*pb.ApprovalList, error) {
-	if req.UserNodeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "user_node_id required")
+	userNodeID, err := callerNode(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	items, nextCursor, err := s.svc.GetMyRequests(ctx, req.UserNodeId, req.Cursor, int(req.Limit))
+	items, nextCursor, err := s.svc.GetMyRequests(ctx, userNodeID, req.Cursor, int(req.Limit))
 	if err != nil {
 		return nil, mapError(err)
 	}
@@ -140,11 +155,12 @@ func (s *Server) GetMyRequests(ctx context.Context, req *pb.GetMyRequestsRequest
 
 // GetDepartmentRequests returns requests visible via scope-based access.
 func (s *Server) GetDepartmentRequests(ctx context.Context, req *pb.GetDepartmentRequestsRequest) (*pb.ApprovalList, error) {
-	if req.UserNodeId == "" {
-		return nil, status.Error(codes.InvalidArgument, "user_node_id required")
+	userNodeID, err := callerNode(ctx)
+	if err != nil {
+		return nil, err
 	}
 
-	items, nextCursor, err := s.svc.GetDepartmentRequests(ctx, req.UserNodeId, req.Cursor, int(req.Limit))
+	items, nextCursor, err := s.svc.GetDepartmentRequests(ctx, userNodeID, req.Cursor, int(req.Limit))
 	if err != nil {
 		return nil, mapError(err)
 	}

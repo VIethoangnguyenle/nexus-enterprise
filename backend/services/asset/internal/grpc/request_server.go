@@ -8,9 +8,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
-	"ngac-platform/services/asset/internal/caller"
 	"ngac-platform/services/asset/internal/events"
 	"ngac-platform/services/asset/internal/store"
 )
@@ -40,7 +40,7 @@ func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAs
 	}
 
 	// Check request permission on type OA
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, at.NgacOAID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
@@ -52,7 +52,7 @@ func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAs
 	assetReq := &store.AssetRequest{
 		TypeID:        req.TypeId,
 		WorkspaceID:   req.WorkspaceId,
-		RequesterID:   req.UserId,
+		RequesterID:   grpcauth.CallerFrom(ctx).UserID,
 		Status:        "pending",
 		Justification: req.Justification,
 		Quantity:      quantity,
@@ -66,7 +66,7 @@ func (s *AssetRequestServer) CreateRequest(ctx context.Context, req *pb.CreateAs
 		RequestID:   assetReq.ID,
 		TypeName:    at.Name,
 		TypeID:      req.TypeId,
-		RequesterID: req.UserId,
+		RequesterID: grpcauth.CallerFrom(ctx).UserID,
 		Status:      "pending",
 		WorkspaceID: req.WorkspaceId,
 	})
@@ -88,7 +88,7 @@ func (s *AssetRequestServer) ApproveRequest(ctx context.Context, req *pb.Approve
 	}
 
 	// Cannot approve own request
-	if assetReq.RequesterID == req.UserId {
+	if assetReq.RequesterID == grpcauth.CallerFrom(ctx).UserID {
 		return nil, status.Errorf(codes.PermissionDenied, "cannot approve own request")
 	}
 
@@ -98,11 +98,11 @@ func (s *AssetRequestServer) ApproveRequest(ctx context.Context, req *pb.Approve
 	}
 
 	// Check approve permission on type OA
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, ngac.OpApprove); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, at.NgacOAID, ngac.OpApprove); err != nil {
 		return nil, err
 	}
 
-	if err := s.store.UpdateRequestStatus(ctx, req.RequestId, "approved", req.UserId, req.Comment); err != nil {
+	if err := s.store.UpdateRequestStatus(ctx, req.RequestId, "approved", grpcauth.CallerFrom(ctx).UserID, req.Comment); err != nil {
 		return nil, status.Errorf(codes.Internal, "update request: %v", err)
 	}
 
@@ -112,7 +112,7 @@ func (s *AssetRequestServer) ApproveRequest(ctx context.Context, req *pb.Approve
 		TypeID:      assetReq.TypeID,
 		RequesterID: assetReq.RequesterID,
 		Status:      "approved",
-		ApproverID:  req.UserId,
+		ApproverID:  grpcauth.CallerFrom(ctx).UserID,
 		WorkspaceID: assetReq.WorkspaceID,
 	})
 
@@ -137,11 +137,11 @@ func (s *AssetRequestServer) RejectRequest(ctx context.Context, req *pb.RejectRe
 		return nil, status.Errorf(codes.Internal, "get type: %v", err)
 	}
 
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, ngac.OpApprove); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, at.NgacOAID, ngac.OpApprove); err != nil {
 		return nil, err
 	}
 
-	if err := s.store.UpdateRequestStatus(ctx, req.RequestId, "rejected", req.UserId, req.Reason); err != nil {
+	if err := s.store.UpdateRequestStatus(ctx, req.RequestId, "rejected", grpcauth.CallerFrom(ctx).UserID, req.Reason); err != nil {
 		return nil, status.Errorf(codes.Internal, "update request: %v", err)
 	}
 
@@ -151,7 +151,7 @@ func (s *AssetRequestServer) RejectRequest(ctx context.Context, req *pb.RejectRe
 		TypeID:      assetReq.TypeID,
 		RequesterID: assetReq.RequesterID,
 		Status:      "rejected",
-		ApproverID:  req.UserId,
+		ApproverID:  grpcauth.CallerFrom(ctx).UserID,
 		WorkspaceID: assetReq.WorkspaceID,
 	})
 
@@ -186,7 +186,7 @@ func (s *AssetRequestServer) AssignAsset(ctx context.Context, req *pb.AssignAsse
 	}
 
 	// Check assign permission
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpManage); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpManage); err != nil {
 		return nil, err
 	}
 
@@ -202,7 +202,7 @@ func (s *AssetRequestServer) AssignAsset(ctx context.Context, req *pb.AssignAsse
 		FromState: asset.State,
 		ToState:   "assigned",
 		Action:    "assign",
-		ActorID:   req.UserId,
+		ActorID:   grpcauth.CallerFrom(ctx).UserID,
 		Comment:   "Assigned via request " + req.RequestId,
 	})
 
@@ -219,7 +219,7 @@ func (s *AssetRequestServer) AssignAsset(ctx context.Context, req *pb.AssignAsse
 		AssetName:   asset.Name,
 		ToUserID:    assetReq.RequesterID,
 		Action:      "assign",
-		ActorID:     req.UserId,
+		ActorID:     grpcauth.CallerFrom(ctx).UserID,
 		WorkspaceID: asset.WorkspaceID,
 	})
 
@@ -237,9 +237,9 @@ func (s *AssetRequestServer) ReturnAsset(ctx context.Context, req *pb.ReturnAsse
 	}
 
 	// Either the assigned user or someone with manage permission can return
-	isAssignedUser := asset.AssignedTo != nil && *asset.AssignedTo == req.UserId
+	isAssignedUser := asset.AssignedTo != nil && *asset.AssignedTo == grpcauth.CallerFrom(ctx).UserID
 	if !isAssignedUser {
-		if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpManage); err != nil {
+		if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpManage); err != nil {
 			return nil, status.Errorf(codes.PermissionDenied, "only the assigned user or a manager can return this asset")
 		}
 	}
@@ -262,7 +262,7 @@ func (s *AssetRequestServer) ReturnAsset(ctx context.Context, req *pb.ReturnAsse
 		FromState: asset.State,
 		ToState:   "available",
 		Action:    "return",
-		ActorID:   req.UserId,
+		ActorID:   grpcauth.CallerFrom(ctx).UserID,
 	})
 
 	s.producer.PublishAssignment(events.AssignmentEvent{
@@ -270,7 +270,7 @@ func (s *AssetRequestServer) ReturnAsset(ctx context.Context, req *pb.ReturnAsse
 		AssetName:   asset.Name,
 		FromUserID:  previousUser,
 		Action:      "return",
-		ActorID:     req.UserId,
+		ActorID:     grpcauth.CallerFrom(ctx).UserID,
 		WorkspaceID: asset.WorkspaceID,
 	})
 
@@ -294,23 +294,23 @@ func (s *AssetRequestServer) ListRequests(ctx context.Context, req *pb.ListReque
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list asset types: %v", err)
 	}
-	approvable, err := permittedTypeIDs(ctx, s.policyRead, req.UserNgacNodeId, types, ngac.OpApprove)
+	approvable, err := permittedTypeIDs(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, types, ngac.OpApprove)
 	if err != nil {
 		// Fail closed: an unreadable policy answer must not list anything.
 		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
 	}
-	if req.UserId == "" && len(approvable) == 0 {
+	if grpcauth.CallerFrom(ctx).UserID == "" && len(approvable) == 0 {
 		return &pb.AssetRequestList{}, nil
 	}
 
 	requests, total, err := s.store.ListRequests(ctx, store.ListRequestsFilter{
 		WorkspaceID: req.WorkspaceId,
-		UserID:      req.UserId,
+		UserID:      grpcauth.CallerFrom(ctx).UserID,
 		Status:      req.Status,
 		MineOnly:    req.MineOnly,
 		Limit:       req.Limit,
 		Offset:      req.Offset,
-		Visibility:  &store.RequestVisibility{RequesterID: req.UserId, TypeIDs: approvable},
+		Visibility:  &store.RequestVisibility{RequesterID: grpcauth.CallerFrom(ctx).UserID, TypeIDs: approvable},
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list requests: %v", err)
@@ -325,12 +325,10 @@ func (s *AssetRequestServer) ListRequests(ctx context.Context, req *pb.ListReque
 
 // GetRequest returns one request if the caller may see it (see ListRequests).
 //
-// GetRequestReq has no caller field, so the caller is read from the in-process
-// identity on the context (see package caller). A call without one is denied
-// before the request is even looked up, so an anonymous caller cannot probe
-// which request IDs exist.
+// A call without a caller is denied before the request is even looked up, so
+// an anonymous caller cannot probe which request IDs exist.
 func (s *AssetRequestServer) GetRequest(ctx context.Context, req *pb.GetRequestReq) (*pb.AssetRequest, error) {
-	who := caller.FromContext(ctx)
+	who := grpcauth.CallerFrom(ctx)
 	if who.UserID == "" && who.NGACNodeID == "" {
 		return nil, errDenied(ngac.OpRead)
 	}

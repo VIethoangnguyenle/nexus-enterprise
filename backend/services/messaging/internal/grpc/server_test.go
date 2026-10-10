@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	authpb "ngac-platform/proto/auth"
 	pb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
@@ -269,9 +270,8 @@ func TestCreateChannel_InvalidType(t *testing.T) {
 	wsID := getTestWorkspaceID(t, pool)
 	srv, _ := setupTestServerWithPolicy(t, &mockPolicyReadWithChannelsOA{wsID: wsID})
 
-	_, err := srv.CreateChannel(context.Background(), &pb.CreateChannelRequest{
+	_, err := srv.CreateChannel(asCaller("user-1", "ngac-user-1"), &pb.CreateChannelRequest{
 		Name: "test_bad_type", ChannelType: "invalid_type", WorkspaceId: wsID,
-		UserId: "user-1", UserNgacNodeId: "ngac-user-1",
 	})
 
 	require.Error(t, err)
@@ -289,8 +289,8 @@ func TestListChannels_WithNullWorkspaceID(t *testing.T) {
 	chID := insertTestChannel(t, pool, "test_null_ch", "dm", "")
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
-	result, err := srv.ListChannels(context.Background(), &pb.ListChannelsRequest{
-		WorkspaceId: "some-ws-id", UserNgacNodeId: "ngac-user-1",
+	result, err := srv.ListChannels(asCaller("", "ngac-user-1"), &pb.ListChannelsRequest{
+		WorkspaceId: "some-ws-id",
 	})
 
 	require.NoError(t, err, "ListChannels must not crash on NULL workspace_id")
@@ -306,8 +306,8 @@ func TestListChannels_ReturnsMatchingChannels(t *testing.T) {
 	chID := insertTestChannel(t, pool, "test_matching", "workspace", wsID)
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
-	result, err := srv.ListChannels(context.Background(), &pb.ListChannelsRequest{
-		WorkspaceId: wsID, UserNgacNodeId: "ngac-user-1",
+	result, err := srv.ListChannels(asCaller("", "ngac-user-1"), &pb.ListChannelsRequest{
+		WorkspaceId: wsID,
 	})
 
 	require.NoError(t, err)
@@ -324,8 +324,8 @@ func TestListChannels_ReturnsMatchingChannels(t *testing.T) {
 func TestListChannels_EmptyResult(t *testing.T) {
 	srv, _ := setupTestServer(t)
 
-	result, err := srv.ListChannels(context.Background(), &pb.ListChannelsRequest{
-		WorkspaceId: "nonexistent-ws", UserNgacNodeId: "ngac-user-1",
+	result, err := srv.ListChannels(asCaller("", "ngac-user-1"), &pb.ListChannelsRequest{
+		WorkspaceId: "nonexistent-ws",
 	})
 
 	require.NoError(t, err)
@@ -389,9 +389,9 @@ func TestSendMessage_HappyPath(t *testing.T) {
 	chID := insertTestChannel(t, pool, "test_msg_ch", "workspace", wsID)
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
-	msg, err := srv.SendMessage(context.Background(), &pb.SendMessageRequest{
-		ChannelId: chID, SenderId: userID,
-		SenderNgacNodeId: "ngac-user-1", Content: "Hello test!",
+	msg, err := srv.SendMessage(asCaller(userID, "ngac-user-1"), &pb.SendMessageRequest{
+		ChannelId: chID,
+		Content:   "Hello test!",
 	})
 
 	require.NoError(t, err)
@@ -404,9 +404,9 @@ func TestSendMessage_HappyPath(t *testing.T) {
 func TestSendMessage_ChannelNotFound(t *testing.T) {
 	srv, _ := setupTestServer(t)
 
-	_, err := srv.SendMessage(context.Background(), &pb.SendMessageRequest{
-		ChannelId: "nonexistent", SenderId: "user-1",
-		SenderNgacNodeId: "ngac-user-1", Content: "Hello!",
+	_, err := srv.SendMessage(asCaller("user-1", "ngac-user-1"), &pb.SendMessageRequest{
+		ChannelId: "nonexistent",
+		Content:   "Hello!",
 	})
 
 	require.Error(t, err)
@@ -424,15 +424,15 @@ func TestGetMessages_Pagination(t *testing.T) {
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
 	for i := range 5 {
-		_, err := srv.SendMessage(context.Background(), &pb.SendMessageRequest{
-			ChannelId: chID, SenderId: userID,
-			SenderNgacNodeId: "ngac-user-1", Content: fmt.Sprintf("msg %d", i),
+		_, err := srv.SendMessage(asCaller(userID, "ngac-user-1"), &pb.SendMessageRequest{
+			ChannelId: chID,
+			Content:   fmt.Sprintf("msg %d", i),
 		})
 		require.NoError(t, err)
 	}
 
-	result, err := srv.GetMessages(context.Background(), &pb.GetMessagesRequest{
-		ChannelId: chID, UserNgacNodeId: "ngac-user-1", Limit: 3,
+	result, err := srv.GetMessages(asCaller("", "ngac-user-1"), &pb.GetMessagesRequest{
+		ChannelId: chID, Limit: 3,
 	})
 
 	require.NoError(t, err)
@@ -446,8 +446,8 @@ func TestGetMessages_EmptyChannel(t *testing.T) {
 	chID := insertTestChannel(t, pool, "test_empty_msgs", "workspace", wsID)
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
-	result, err := srv.GetMessages(context.Background(), &pb.GetMessagesRequest{
-		ChannelId: chID, UserNgacNodeId: "ngac-user-1", Limit: 50,
+	result, err := srv.GetMessages(asCaller("", "ngac-user-1"), &pb.GetMessagesRequest{
+		ChannelId: chID, Limit: 50,
 	})
 
 	require.NoError(t, err)
@@ -472,8 +472,8 @@ func TestCreateDM_HappyPath(t *testing.T) {
 		}
 	})
 
-	ch, err := srv.CreateDM(context.Background(), &pb.CreateDMRequest{
-		UserId: userA, UserNgacNodeId: "ngac-user-1",
+	ch, err := srv.CreateDM(asCaller(userA, "ngac-user-1"), &pb.CreateDMRequest{
+
 		TargetUserId: userB, TargetNgacNodeId: "ngac-user-2",
 	})
 	if ch != nil {
@@ -500,16 +500,16 @@ func TestGetThread_ParentAndReplies(t *testing.T) {
 	chID := insertTestChannel(t, pool, "test_thread", "workspace", wsID)
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
-	parent, err := srv.SendMessage(context.Background(), &pb.SendMessageRequest{
-		ChannelId: chID, SenderId: userID,
-		SenderNgacNodeId: "ngac-user-1", Content: "Parent message",
+	parent, err := srv.SendMessage(asCaller(userID, "ngac-user-1"), &pb.SendMessageRequest{
+		ChannelId: chID,
+		Content:   "Parent message",
 	})
 	require.NoError(t, err)
 
 	for _, content := range []string{"Reply 1", "Reply 2"} {
-		_, err := srv.SendMessage(context.Background(), &pb.SendMessageRequest{
-			ChannelId: chID, SenderId: userID,
-			SenderNgacNodeId: "ngac-user-1", Content: content,
+		_, err := srv.SendMessage(asCaller(userID, "ngac-user-1"), &pb.SendMessageRequest{
+			ChannelId:       chID,
+			Content:         content,
 			ParentMessageId: parent.Id,
 		})
 		require.NoError(t, err)
@@ -551,15 +551,15 @@ func TestChannelReads_DeniedWithoutAccess(t *testing.T) {
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
 	t.Run("GetChannel", func(t *testing.T) {
-		_, err := srv.GetChannel(context.Background(), &pb.GetChannelRequest{
-			ChannelId: chID, UserNgacNodeId: "ngac-outsider",
+		_, err := srv.GetChannel(asCaller("", "ngac-outsider"), &pb.GetChannelRequest{
+			ChannelId: chID,
 		})
 		require.Error(t, err)
 	})
 
 	t.Run("ListChannelMembers", func(t *testing.T) {
-		_, err := srv.ListChannelMembers(context.Background(), &pb.ListChannelMembersRequest{
-			ChannelId: chID, UserNgacNodeId: "ngac-outsider",
+		_, err := srv.ListChannelMembers(asCaller("", "ngac-outsider"), &pb.ListChannelMembersRequest{
+			ChannelId: chID,
 		})
 		require.Error(t, err)
 	})
@@ -573,8 +573,8 @@ func TestChannelMembership_DeniedWithoutInvite(t *testing.T) {
 	chID := insertTestChannel(t, pool, "denymember", "workspace", wsID)
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
-	_, err := srv.RemoveChannelMember(context.Background(), &pb.RemoveChannelMemberRequest{
-		ChannelId: chID, RequesterNgacNodeId: "ngac-outsider", TargetNgacNodeId: "ngac-victim",
+	_, err := srv.RemoveChannelMember(asCaller("", "ngac-outsider"), &pb.RemoveChannelMemberRequest{
+		ChannelId: chID, TargetNgacNodeId: "ngac-victim",
 	})
 	require.Error(t, err, "outsider must not remove a channel member")
 }
@@ -587,8 +587,8 @@ func TestChannelReads_DeniedWhenPolicyUnavailable(t *testing.T) {
 	chID := insertTestChannel(t, pool, "policydown", "workspace", wsID)
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
-	_, err := srv.GetChannel(context.Background(), &pb.GetChannelRequest{
-		ChannelId: chID, UserNgacNodeId: "ngac-user-1",
+	_, err := srv.GetChannel(asCaller("", "ngac-user-1"), &pb.GetChannelRequest{
+		ChannelId: chID,
 	})
 	require.Error(t, err, "policy outage must deny, not grant")
 }
@@ -601,8 +601,14 @@ func TestAddMember_RejectedOnDirectMessage(t *testing.T) {
 	dmID := insertTestChannel(t, pool, "dmguard", "dm", "")
 	t.Cleanup(func() { cleanTestData(t, pool, dmID) })
 
-	_, err := srv.AddChannelMember(context.Background(), &pb.AddChannelMemberRequest{
-		ChannelId: dmID, RequesterNgacNodeId: "ngac-user-1", TargetNgacNodeId: "ngac-third-party",
+	_, err := srv.AddChannelMember(asCaller("", "ngac-user-1"), &pb.AddChannelMemberRequest{
+		ChannelId: dmID, TargetNgacNodeId: "ngac-third-party",
 	})
 	require.Error(t, err, "a third participant must not be addable to a DM")
+}
+
+// asCaller returns a context carrying the caller the interceptor would have
+// put there from request metadata.
+func asCaller(userID, nodeID string) context.Context {
+	return grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: userID, NGACNodeID: nodeID})
 }

@@ -14,6 +14,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/workspace"
 	"ngac-platform/services/workspace/internal/domain"
@@ -24,48 +25,45 @@ const callerNode = "u-caller"
 // fakeWorkspaceService records what each handler passes down and returns err.
 type fakeWorkspaceService struct {
 	err       error
-	requester string // requester seen by the last call (field or context)
+	requester string // caller on the context of the last call
 	calls     int
 }
 
-func (f *fakeWorkspaceService) seen(ctx context.Context, field string) error {
+func (f *fakeWorkspaceService) seen(ctx context.Context) error {
 	f.calls++
-	f.requester = field
-	if field == "" {
-		f.requester = domain.RequesterFrom(ctx)
-	}
+	f.requester = grpcauth.CallerFrom(ctx).NGACNodeID
 	return f.err
 }
 
 func (f *fakeWorkspaceService) CreateWorkspace(ctx context.Context, req *pb.CreateWorkspaceRequest) (*pb.Workspace, error) {
-	return &pb.Workspace{}, f.seen(ctx, req.UserNgacNodeId)
+	return &pb.Workspace{}, f.seen(ctx)
 }
 func (f *fakeWorkspaceService) ListWorkspaces(ctx context.Context, req *pb.ListWorkspacesRequest) (*pb.WorkspaceList, error) {
-	return &pb.WorkspaceList{}, f.seen(ctx, req.UserNgacNodeId)
+	return &pb.WorkspaceList{}, f.seen(ctx)
 }
 func (f *fakeWorkspaceService) GetWorkspace(ctx context.Context, _ *pb.GetWorkspaceRequest) (*pb.Workspace, error) {
-	return &pb.Workspace{}, f.seen(ctx, "")
+	return &pb.Workspace{}, f.seen(ctx)
 }
 func (f *fakeWorkspaceService) InviteMember(ctx context.Context, req *pb.InviteMemberRequest) (*pb.Empty, error) {
-	return &pb.Empty{}, f.seen(ctx, req.InviterNgacNodeId)
+	return &pb.Empty{}, f.seen(ctx)
 }
 func (f *fakeWorkspaceService) RemoveMember(ctx context.Context, req *pb.RemoveMemberRequest) (*pb.Empty, error) {
-	return &pb.Empty{}, f.seen(ctx, req.RequesterNgacNodeId)
+	return &pb.Empty{}, f.seen(ctx)
 }
 func (f *fakeWorkspaceService) ListMembers(ctx context.Context, _ *pb.ListMembersRequest) (*pb.MemberList, error) {
-	return &pb.MemberList{}, f.seen(ctx, "")
+	return &pb.MemberList{}, f.seen(ctx)
 }
 func (f *fakeWorkspaceService) CreateRole(ctx context.Context, req *pb.CreateRoleRequest) (*pb.Role, error) {
-	return &pb.Role{}, f.seen(ctx, req.RequesterNgacNodeId)
+	return &pb.Role{}, f.seen(ctx)
 }
 func (f *fakeWorkspaceService) ListRoles(ctx context.Context, _ *pb.ListRolesRequest) (*pb.RoleList, error) {
-	return &pb.RoleList{}, f.seen(ctx, "")
+	return &pb.RoleList{}, f.seen(ctx)
 }
 func (f *fakeWorkspaceService) CreateFolder(ctx context.Context, req *pb.CreateFolderRequest) (*pb.Folder, error) {
-	return &pb.Folder{}, f.seen(ctx, req.RequesterNgacNodeId)
+	return &pb.Folder{}, f.seen(ctx)
 }
 func (f *fakeWorkspaceService) CreatePermission(ctx context.Context, req *pb.CreatePermissionRequest) (*pb.Permission, error) {
-	return &pb.Permission{}, f.seen(ctx, req.RequesterNgacNodeId)
+	return &pb.Permission{}, f.seen(ctx)
 }
 
 type route struct {

@@ -39,10 +39,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 
 // ListDocuments proxies to Drive ListFolder (legacy endpoint).
 func (h *Handler) ListDocuments(c echo.Context) error {
-	claims := httputil.GetClaims(c)
 	resp, err := h.drive.ListFolder(c.Request().Context(), &drivepb.ListFolderRequest{
-		WorkspaceId:    c.Param("id"),
-		UserNgacNodeId: claims.NGACNodeID,
+		WorkspaceId: c.Param("id"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -52,7 +50,6 @@ func (h *Handler) ListDocuments(c echo.Context) error {
 
 // GetUploadURL proxies to Drive CreateFile (legacy endpoint).
 func (h *Handler) GetUploadURL(c echo.Context) error {
-	claims := httputil.GetClaims(c)
 	var body struct {
 		Filename string `json:"filename"`
 		MimeType string `json:"mime_type"`
@@ -63,13 +60,11 @@ func (h *Handler) GetUploadURL(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	resp, err := h.drive.CreateFile(c.Request().Context(), &drivepb.CreateFileRequest{
-		WorkspaceId:    c.Param("id"),
-		Name:           body.Filename,
-		MimeType:       body.MimeType,
-		SizeBytes:      body.Size,
-		ParentId:       body.ParentID,
-		UserId:         claims.UserID,
-		UserNgacNodeId: claims.NGACNodeID,
+		WorkspaceId: c.Param("id"),
+		Name:        body.Filename,
+		MimeType:    body.MimeType,
+		SizeBytes:   body.Size,
+		ParentId:    body.ParentID,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -90,10 +85,8 @@ func (h *Handler) ConfirmUpload(c echo.Context) error {
 
 // GetDownloadURL proxies to Drive GetDownloadURL (legacy endpoint).
 func (h *Handler) GetDownloadURL(c echo.Context) error {
-	claims := httputil.GetClaims(c)
 	resp, err := h.drive.GetDownloadURL(c.Request().Context(), &drivepb.GetDownloadURLRequest{
-		FileId:         c.Param("docId"),
-		UserNgacNodeId: claims.NGACNodeID,
+		FileId: c.Param("docId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)

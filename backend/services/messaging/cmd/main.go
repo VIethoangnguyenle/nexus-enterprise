@@ -23,6 +23,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	authpb "ngac-platform/proto/auth"
 	drivepb "ngac-platform/proto/drive"
@@ -66,21 +67,24 @@ func main() {
 	}
 	defer pool.Close()
 
-	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("messaging")))
 	if err != nil {
 		slog.Error("failed to connect to policy service", "address", policyAddr, "error", err)
 		os.Exit(1)
 	}
 	defer policyConn.Close()
 
-	authConn, err := grpc.NewClient(authAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	authConn, err := grpc.NewClient(authAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("messaging")))
 	if err != nil {
 		slog.Error("failed to connect to auth service", "address", authAddr, "error", err)
 		os.Exit(1)
 	}
 	defer authConn.Close()
 
-	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("messaging")))
 	if err != nil {
 		slog.Warn("drive service unavailable, channel drives disabled", "address", driveAddr, "error", err)
 	}
@@ -150,12 +154,7 @@ func main() {
 		defer producer.Close()
 	}
 
-	srv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			loggingInterceptor,
-			recoveryInterceptor,
-		),
-	)
+	srv := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()}, loggingInterceptor, recoveryInterceptor)...)
 	pb.RegisterMessagingServiceServer(srv, mgrpc.NewMessagingServer(domainSvc, hub, producer))
 
 	notifSrv := mgrpc.NewNotificationServer(pool, hub)

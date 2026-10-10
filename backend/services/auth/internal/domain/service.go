@@ -10,6 +10,7 @@ import (
 	"github.com/redis/go-redis/v9"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
 	workspacepb "ngac-platform/proto/workspace"
@@ -272,8 +273,8 @@ func (s *Service) createTenantForUser(ctx context.Context, name, userID, ngacNod
 		return "", "", "", fmt.Errorf("workspace service unavailable")
 	}
 
-	ws, err := s.wsClient.CreateWorkspace(ctx, &workspacepb.CreateWorkspaceRequest{
-		Name: name, UserId: userID, UserNgacNodeId: ngacNodeID,
+	ws, err := s.wsClient.CreateWorkspace(actingAs(ctx, userID, ngacNodeID), &workspacepb.CreateWorkspaceRequest{
+		Name: name,
 	})
 	if err != nil {
 		return "", "", "", fmt.Errorf("create workspace: %w", err)
@@ -524,6 +525,16 @@ func (s *Service) ListContacts(ctx context.Context, workspaceID, department, loc
 
 // --- Private helpers ---
 
+// actingAs returns ctx carrying the user this service has just authenticated
+// (password, Google token or OTP verified, or an existing session) as the
+// caller of downstream RPCs. Signup and sign-in run before any token exists,
+// so there is no REST-edge caller to forward; auth itself is the authority
+// that established the identity, and the downstream services authorize it like
+// any other caller.
+func actingAs(ctx context.Context, userID, ngacNodeID string) context.Context {
+	return grpcauth.WithCaller(ctx, grpcauth.Caller{UserID: userID, NGACNodeID: ngacNodeID})
+}
+
 // autoProvisionWorkspace creates a default workspace and #general channel (legacy flow).
 func (s *Service) autoProvisionWorkspace(ctx context.Context, userID, username, ngacNodeID string) {
 	if s.wsClient == nil {
@@ -532,8 +543,8 @@ func (s *Service) autoProvisionWorkspace(ctx context.Context, userID, username, 
 	}
 
 	wsName := fmt.Sprintf("%s's Workspace", username)
-	ws, err := s.wsClient.CreateWorkspace(ctx, &workspacepb.CreateWorkspaceRequest{
-		Name: wsName, UserId: userID, UserNgacNodeId: ngacNodeID,
+	ws, err := s.wsClient.CreateWorkspace(actingAs(ctx, userID, ngacNodeID), &workspacepb.CreateWorkspaceRequest{
+		Name: wsName,
 	})
 	if err != nil {
 		slog.Error("auto-provision workspace failed", "user", username, "error", err)
@@ -555,9 +566,8 @@ func (s *Service) autoProvisionChannel(ctx context.Context, workspaceID, userID,
 		slog.Warn("messaging client unavailable, skipping #general channel")
 		return
 	}
-	_, err := s.msgClient.CreateChannel(ctx, &messagingpb.CreateChannelRequest{
-		Name: "general", WorkspaceId: workspaceID,
-		UserId: userID, UserNgacNodeId: ngacNodeID, ChannelType: "workspace",
+	_, err := s.msgClient.CreateChannel(actingAs(ctx, userID, ngacNodeID), &messagingpb.CreateChannelRequest{
+		Name: "general", WorkspaceId: workspaceID, ChannelType: "workspace",
 	})
 	if err != nil {
 		slog.Error("auto-provision #general channel failed", "workspace", workspaceID, "error", err)

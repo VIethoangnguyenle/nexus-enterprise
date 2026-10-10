@@ -183,12 +183,14 @@ func (x *Channel) GetMemberCount() int32 {
 }
 
 type CreateChannelRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	WorkspaceId    string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	ChannelType    string                 `protobuf:"bytes,5,opt,name=channel_type,json=channelType,proto3" json:"channel_type,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Name        string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	WorkspaceId string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserId string `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	ChannelType    string `protobuf:"bytes,5,opt,name=channel_type,json=channelType,proto3" json:"channel_type,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -237,6 +239,7 @@ func (x *CreateChannelRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *CreateChannelRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -244,6 +247,7 @@ func (x *CreateChannelRequest) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *CreateChannelRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -259,9 +263,10 @@ func (x *CreateChannelRequest) GetChannelType() string {
 }
 
 type ListChannelsRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId    string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -303,6 +308,7 @@ func (x *ListChannelsRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *ListChannelsRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -311,9 +317,10 @@ func (x *ListChannelsRequest) GetUserNgacNodeId() string {
 }
 
 type GetChannelRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId      string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -355,6 +362,7 @@ func (x *GetChannelRequest) GetChannelId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *GetChannelRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -407,10 +415,11 @@ func (x *ChannelList) GetChannels() []*Channel {
 }
 
 type AddChannelMemberRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId           string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	TargetNgacNodeId    string                 `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	RequesterNgacNodeId string `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	TargetNgacNodeId    string `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -452,6 +461,7 @@ func (x *AddChannelMemberRequest) GetChannelId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *AddChannelMemberRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -467,10 +477,11 @@ func (x *AddChannelMemberRequest) GetTargetNgacNodeId() string {
 }
 
 type RemoveChannelMemberRequest struct {
-	state               protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId           string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	RequesterNgacNodeId string                 `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"`
-	TargetNgacNodeId    string                 `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	RequesterNgacNodeId string `protobuf:"bytes,2,opt,name=requester_ngac_node_id,json=requesterNgacNodeId,proto3" json:"requester_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	TargetNgacNodeId    string `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -512,6 +523,7 @@ func (x *RemoveChannelMemberRequest) GetChannelId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *RemoveChannelMemberRequest) GetRequesterNgacNodeId() string {
 	if x != nil {
 		return x.RequesterNgacNodeId
@@ -527,9 +539,10 @@ func (x *RemoveChannelMemberRequest) GetTargetNgacNodeId() string {
 }
 
 type ListChannelMembersRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId      string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -571,6 +584,7 @@ func (x *ListChannelMembersRequest) GetChannelId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *ListChannelMembersRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -683,17 +697,19 @@ func (x *ChannelMemberList) GetMembers() []*ChannelMember {
 }
 
 type SendMessageRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId        string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	SenderId         string                 `protobuf:"bytes,2,opt,name=sender_id,json=senderId,proto3" json:"sender_id,omitempty"`
-	SenderNgacNodeId string                 `protobuf:"bytes,3,opt,name=sender_ngac_node_id,json=senderNgacNodeId,proto3" json:"sender_ngac_node_id,omitempty"`
-	Content          string                 `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
-	MessageType      string                 `protobuf:"bytes,5,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`                  // "user" (default), "system"
-	ParentMessageId  string                 `protobuf:"bytes,6,opt,name=parent_message_id,json=parentMessageId,proto3" json:"parent_message_id,omitempty"`    // Thread: reply to this message
-	LinkedEntityType string                 `protobuf:"bytes,7,opt,name=linked_entity_type,json=linkedEntityType,proto3" json:"linked_entity_type,omitempty"` // "asset", "document", "poll", "task"
-	LinkedEntityId   string                 `protobuf:"bytes,8,opt,name=linked_entity_id,json=linkedEntityId,proto3" json:"linked_entity_id,omitempty"`       // ID of the linked entity
-	ContentFormat    string                 `protobuf:"bytes,9,opt,name=content_format,json=contentFormat,proto3" json:"content_format,omitempty"`            // "markdown" (default), "plain"
-	Mentions         []string               `protobuf:"bytes,10,rep,name=mentions,proto3" json:"mentions,omitempty"`                                          // User IDs mentioned in content
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	SenderId string `protobuf:"bytes,2,opt,name=sender_id,json=senderId,proto3" json:"sender_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	SenderNgacNodeId string   `protobuf:"bytes,3,opt,name=sender_ngac_node_id,json=senderNgacNodeId,proto3" json:"sender_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Content          string   `protobuf:"bytes,4,opt,name=content,proto3" json:"content,omitempty"`
+	MessageType      string   `protobuf:"bytes,5,opt,name=message_type,json=messageType,proto3" json:"message_type,omitempty"`                  // "user" (default), "system"
+	ParentMessageId  string   `protobuf:"bytes,6,opt,name=parent_message_id,json=parentMessageId,proto3" json:"parent_message_id,omitempty"`    // Thread: reply to this message
+	LinkedEntityType string   `protobuf:"bytes,7,opt,name=linked_entity_type,json=linkedEntityType,proto3" json:"linked_entity_type,omitempty"` // "asset", "document", "poll", "task"
+	LinkedEntityId   string   `protobuf:"bytes,8,opt,name=linked_entity_id,json=linkedEntityId,proto3" json:"linked_entity_id,omitempty"`       // ID of the linked entity
+	ContentFormat    string   `protobuf:"bytes,9,opt,name=content_format,json=contentFormat,proto3" json:"content_format,omitempty"`            // "markdown" (default), "plain"
+	Mentions         []string `protobuf:"bytes,10,rep,name=mentions,proto3" json:"mentions,omitempty"`                                          // User IDs mentioned in content
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -735,6 +751,7 @@ func (x *SendMessageRequest) GetChannelId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *SendMessageRequest) GetSenderId() string {
 	if x != nil {
 		return x.SenderId
@@ -742,6 +759,7 @@ func (x *SendMessageRequest) GetSenderId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *SendMessageRequest) GetSenderNgacNodeId() string {
 	if x != nil {
 		return x.SenderNgacNodeId
@@ -955,11 +973,12 @@ func (x *Message) GetIsPinned() bool {
 }
 
 type GetMessagesRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId      string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	Before         string                 `protobuf:"bytes,3,opt,name=before,proto3" json:"before,omitempty"` // cursor: timestamp string
-	Limit          int32                  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Before         string `protobuf:"bytes,3,opt,name=before,proto3" json:"before,omitempty"`                                           // cursor: timestamp string
+	Limit          int32  `protobuf:"varint,4,opt,name=limit,proto3" json:"limit,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1001,6 +1020,7 @@ func (x *GetMessagesRequest) GetChannelId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *GetMessagesRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1075,9 +1095,10 @@ func (x *MessageList) GetHasMore() bool {
 }
 
 type GetThreadRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	MessageId      string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	MessageId string                 `protobuf:"bytes,1,opt,name=message_id,json=messageId,proto3" json:"message_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1119,6 +1140,7 @@ func (x *GetThreadRequest) GetMessageId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *GetThreadRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1127,10 +1149,11 @@ func (x *GetThreadRequest) GetUserNgacNodeId() string {
 }
 
 type FindThreadsByEntityRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	EntityType     string                 `protobuf:"bytes,1,opt,name=entity_type,json=entityType,proto3" json:"entity_type,omitempty"`
-	EntityId       string                 `protobuf:"bytes,2,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	EntityType string                 `protobuf:"bytes,1,opt,name=entity_type,json=entityType,proto3" json:"entity_type,omitempty"`
+	EntityId   string                 `protobuf:"bytes,2,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1179,6 +1202,7 @@ func (x *FindThreadsByEntityRequest) GetEntityId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *FindThreadsByEntityRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1187,11 +1211,13 @@ func (x *FindThreadsByEntityRequest) GetUserNgacNodeId() string {
 }
 
 type CreateDMRequest struct {
-	state            protoimpl.MessageState `protogen:"open.v1"`
-	UserId           string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId   string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	TargetUserId     string                 `protobuf:"bytes,3,opt,name=target_user_id,json=targetUserId,proto3" json:"target_user_id,omitempty"`
-	TargetNgacNodeId string                 `protobuf:"bytes,4,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserId string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId   string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	TargetUserId     string `protobuf:"bytes,3,opt,name=target_user_id,json=targetUserId,proto3" json:"target_user_id,omitempty"`
+	TargetNgacNodeId string `protobuf:"bytes,4,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"`
 	unknownFields    protoimpl.UnknownFields
 	sizeCache        protoimpl.SizeCache
 }
@@ -1226,6 +1252,7 @@ func (*CreateDMRequest) Descriptor() ([]byte, []int) {
 	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{17}
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *CreateDMRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -1233,6 +1260,7 @@ func (x *CreateDMRequest) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *CreateDMRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1255,8 +1283,9 @@ func (x *CreateDMRequest) GetTargetNgacNodeId() string {
 }
 
 type ListDMsRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	UserNgacNodeId string                 `protobuf:"bytes,1,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string `protobuf:"bytes,1,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1291,6 +1320,7 @@ func (*ListDMsRequest) Descriptor() ([]byte, []int) {
 	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{18}
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *ListDMsRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -2111,11 +2141,12 @@ func (x *ChannelUnreadList) GetChannels() []*ChannelUnread {
 }
 
 type SearchMessagesRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId      string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	Query          string                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
-	Limit          int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	Query     string                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	Limit     int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2171,6 +2202,7 @@ func (x *SearchMessagesRequest) GetLimit() int32 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *SearchMessagesRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -2179,10 +2211,12 @@ func (x *SearchMessagesRequest) GetUserNgacNodeId() string {
 }
 
 type CreatePollRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId      string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	Question       string                 `protobuf:"bytes,4,opt,name=question,proto3" json:"question,omitempty"`
 	Options        []string               `protobuf:"bytes,5,rep,name=options,proto3" json:"options,omitempty"`
 	IsMulti        bool                   `protobuf:"varint,6,opt,name=is_multi,json=isMulti,proto3" json:"is_multi,omitempty"`
@@ -2229,6 +2263,7 @@ func (x *CreatePollRequest) GetChannelId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *CreatePollRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -2236,6 +2271,7 @@ func (x *CreatePollRequest) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *CreatePollRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -2643,13 +2679,15 @@ func (x *Poll) GetTotalVotes() int32 {
 }
 
 type CreateTaskRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ChannelId      string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	Title          string                 `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
-	AssigneeId     string                 `protobuf:"bytes,5,opt,name=assignee_id,json=assigneeId,proto3" json:"assignee_id,omitempty"`
-	DueDate        string                 `protobuf:"bytes,6,opt,name=due_date,json=dueDate,proto3" json:"due_date,omitempty"` // "YYYY-MM-DD"
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Title          string `protobuf:"bytes,4,opt,name=title,proto3" json:"title,omitempty"`
+	AssigneeId     string `protobuf:"bytes,5,opt,name=assignee_id,json=assigneeId,proto3" json:"assignee_id,omitempty"`
+	DueDate        string `protobuf:"bytes,6,opt,name=due_date,json=dueDate,proto3" json:"due_date,omitempty"` // "YYYY-MM-DD"
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2691,6 +2729,7 @@ func (x *CreateTaskRequest) GetChannelId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *CreateTaskRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -2698,6 +2737,7 @@ func (x *CreateTaskRequest) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *CreateTaskRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -3139,10 +3179,11 @@ func (x *Notification) GetCreatedAt() *timestamppb.Timestamp {
 }
 
 type ListNotificationsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Limit         int32                  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
-	Offset        int32                  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserId        string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Limit         int32  `protobuf:"varint,2,opt,name=limit,proto3" json:"limit,omitempty"`
+	Offset        int32  `protobuf:"varint,3,opt,name=offset,proto3" json:"offset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3177,6 +3218,7 @@ func (*ListNotificationsRequest) Descriptor() ([]byte, []int) {
 	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{47}
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *ListNotificationsRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -3261,9 +3303,10 @@ func (x *NotificationList) GetUnreadCount() int32 {
 type MarkNotificationReadRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	NotificationId string                 `protobuf:"bytes,1,opt,name=notification_id,json=notificationId,proto3" json:"notification_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserId        string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MarkNotificationReadRequest) Reset() {
@@ -3303,6 +3346,7 @@ func (x *MarkNotificationReadRequest) GetNotificationId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *MarkNotificationReadRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -3311,8 +3355,9 @@ func (x *MarkNotificationReadRequest) GetUserId() string {
 }
 
 type MarkAllNotificationsReadRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserId        string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3347,6 +3392,7 @@ func (*MarkAllNotificationsReadRequest) Descriptor() ([]byte, []int) {
 	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{50}
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *MarkAllNotificationsReadRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -3355,8 +3401,9 @@ func (x *MarkAllNotificationsReadRequest) GetUserId() string {
 }
 
 type GetNotificationUnreadCountRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
+	UserId        string `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3391,6 +3438,7 @@ func (*GetNotificationUnreadCountRequest) Descriptor() ([]byte, []int) {
 	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{51}
 }
 
+// Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
 func (x *GetNotificationUnreadCountRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -3464,48 +3512,48 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\x05topic\x18\t \x01(\tR\x05topic\x12 \n" +
 	"\vdescription\x18\n" +
 	" \x01(\tR\vdescription\x12!\n" +
-	"\fmember_count\x18\v \x01(\x05R\vmemberCount\"\xb4\x01\n" +
+	"\fmember_count\x18\v \x01(\x05R\vmemberCount\"\xbc\x01\n" +
 	"\x14CreateChannelRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
-	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x04 \x01(\tR\x0euserNgacNodeId\x12!\n" +
-	"\fchannel_type\x18\x05 \x01(\tR\vchannelType\"c\n" +
+	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x1b\n" +
+	"\auser_id\x18\x03 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x04 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12!\n" +
+	"\fchannel_type\x18\x05 \x01(\tR\vchannelType\"g\n" +
 	"\x13ListChannelsRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"]\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"a\n" +
 	"\x11GetChannelRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"=\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"=\n" +
 	"\vChannelList\x12.\n" +
-	"\bchannels\x18\x01 \x03(\v2\x12.messaging.ChannelR\bchannels\"\x9c\x01\n" +
+	"\bchannels\x18\x01 \x03(\v2\x12.messaging.ChannelR\bchannels\"\xa0\x01\n" +
 	"\x17AddChannelMemberRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12-\n" +
-	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\"\x9f\x01\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12-\n" +
+	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\"\xa3\x01\n" +
 	"\x1aRemoveChannelMemberRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\x123\n" +
-	"\x16requester_ngac_node_id\x18\x02 \x01(\tR\x13requesterNgacNodeId\x12-\n" +
-	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\"e\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x127\n" +
+	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12-\n" +
+	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\"i\n" +
 	"\x19ListChannelMembersRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"f\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"f\n" +
 	"\rChannelMember\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1a\n" +
 	"\busername\x18\x02 \x01(\tR\busername\x12 \n" +
 	"\fngac_node_id\x18\x03 \x01(\tR\n" +
 	"ngacNodeId\"G\n" +
 	"\x11ChannelMemberList\x122\n" +
-	"\amembers\x18\x01 \x03(\v2\x18.messaging.ChannelMemberR\amembers\"\x83\x03\n" +
+	"\amembers\x18\x01 \x03(\v2\x18.messaging.ChannelMemberR\amembers\"\x8b\x03\n" +
 	"\x12SendMessageRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x1b\n" +
-	"\tsender_id\x18\x02 \x01(\tR\bsenderId\x12-\n" +
-	"\x13sender_ngac_node_id\x18\x03 \x01(\tR\x10senderNgacNodeId\x12\x18\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x1f\n" +
+	"\tsender_id\x18\x02 \x01(\tB\x02\x18\x01R\bsenderId\x121\n" +
+	"\x13sender_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x10senderNgacNodeId\x12\x18\n" +
 	"\acontent\x18\x04 \x01(\tR\acontent\x12!\n" +
 	"\fmessage_type\x18\x05 \x01(\tR\vmessageType\x12*\n" +
 	"\x11parent_message_id\x18\x06 \x01(\tR\x0fparentMessageId\x12,\n" +
@@ -3534,32 +3582,32 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\x0econtent_format\x18\f \x01(\tR\rcontentFormat\x12\x1a\n" +
 	"\bmentions\x18\r \x03(\tR\bmentions\x126\n" +
 	"\treactions\x18\x0e \x03(\v2\x18.messaging.ReactionGroupR\treactions\x12\x1b\n" +
-	"\tis_pinned\x18\x0f \x01(\bR\bisPinned\"\x8c\x01\n" +
+	"\tis_pinned\x18\x0f \x01(\bR\bisPinned\"\x90\x01\n" +
 	"\x12GetMessagesRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\x12\x16\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12\x16\n" +
 	"\x06before\x18\x03 \x01(\tR\x06before\x12\x14\n" +
 	"\x05limit\x18\x04 \x01(\x05R\x05limit\"X\n" +
 	"\vMessageList\x12.\n" +
 	"\bmessages\x18\x01 \x03(\v2\x12.messaging.MessageR\bmessages\x12\x19\n" +
-	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"\\\n" +
+	"\bhas_more\x18\x02 \x01(\bR\ahasMore\"`\n" +
 	"\x10GetThreadRequest\x12\x1d\n" +
 	"\n" +
-	"message_id\x18\x01 \x01(\tR\tmessageId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"\x85\x01\n" +
+	"message_id\x18\x01 \x01(\tR\tmessageId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\x89\x01\n" +
 	"\x1aFindThreadsByEntityRequest\x12\x1f\n" +
 	"\ventity_type\x18\x01 \x01(\tR\n" +
 	"entityType\x12\x1b\n" +
-	"\tentity_id\x18\x02 \x01(\tR\bentityId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\"\xaa\x01\n" +
-	"\x0fCreateDMRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\x12$\n" +
+	"\tentity_id\x18\x02 \x01(\tR\bentityId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\xb2\x01\n" +
+	"\x0fCreateDMRequest\x12\x1b\n" +
+	"\auser_id\x18\x01 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12$\n" +
 	"\x0etarget_user_id\x18\x03 \x01(\tR\ftargetUserId\x12-\n" +
-	"\x13target_ngac_node_id\x18\x04 \x01(\tR\x10targetNgacNodeId\";\n" +
-	"\x0eListDMsRequest\x12)\n" +
-	"\x11user_ngac_node_id\x18\x01 \x01(\tR\x0euserNgacNodeId\"b\n" +
+	"\x13target_ngac_node_id\x18\x04 \x01(\tR\x10targetNgacNodeId\"?\n" +
+	"\x0eListDMsRequest\x12-\n" +
+	"\x11user_ngac_node_id\x18\x01 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"b\n" +
 	"\x12AddReactionRequest\x12\x1d\n" +
 	"\n" +
 	"message_id\x18\x01 \x01(\tR\tmessageId\x12\x17\n" +
@@ -3620,18 +3668,18 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\funread_count\x18\x02 \x01(\x05R\vunreadCount\x12/\n" +
 	"\x14last_read_message_id\x18\x03 \x01(\tR\x11lastReadMessageId\"I\n" +
 	"\x11ChannelUnreadList\x124\n" +
-	"\bchannels\x18\x01 \x03(\v2\x18.messaging.ChannelUnreadR\bchannels\"\x8d\x01\n" +
+	"\bchannels\x18\x01 \x03(\v2\x18.messaging.ChannelUnreadR\bchannels\"\x91\x01\n" +
 	"\x15SearchMessagesRequest\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x14\n" +
 	"\x05query\x18\x02 \x01(\tR\x05query\x12\x14\n" +
-	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12)\n" +
-	"\x11user_ngac_node_id\x18\x04 \x01(\tR\x0euserNgacNodeId\"\x9f\x02\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\x12-\n" +
+	"\x11user_ngac_node_id\x18\x04 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\xa7\x02\n" +
 	"\x11CreatePollRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\x12\x1a\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x1b\n" +
+	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12\x1a\n" +
 	"\bquestion\x18\x04 \x01(\tR\bquestion\x12\x18\n" +
 	"\aoptions\x18\x05 \x03(\tR\aoptions\x12\x19\n" +
 	"\bis_multi\x18\x06 \x01(\bR\aisMulti\x12!\n" +
@@ -3672,12 +3720,12 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"created_at\x18\n" +
 	" \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x1f\n" +
 	"\vtotal_votes\x18\v \x01(\x05R\n" +
-	"totalVotes\"\xc8\x01\n" +
+	"totalVotes\"\xd0\x01\n" +
 	"\x11CreateTaskRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\x12\x14\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x1b\n" +
+	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12\x14\n" +
 	"\x05title\x18\x04 \x01(\tR\x05title\x12\x1f\n" +
 	"\vassignee_id\x18\x05 \x01(\tR\n" +
 	"assigneeId\x12\x19\n" +
@@ -3726,22 +3774,22 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\tentity_id\x18\a \x01(\tR\bentityId\x12\x12\n" +
 	"\x04read\x18\b \x01(\bR\x04read\x129\n" +
 	"\n" +
-	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"a\n" +
-	"\x18ListNotificationsRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x14\n" +
+	"created_at\x18\t \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"e\n" +
+	"\x18ListNotificationsRequest\x12\x1b\n" +
+	"\auser_id\x18\x01 \x01(\tB\x02\x18\x01R\x06userId\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
 	"\x06offset\x18\x03 \x01(\x05R\x06offset\"\x8a\x01\n" +
 	"\x10NotificationList\x12=\n" +
 	"\rnotifications\x18\x01 \x03(\v2\x17.messaging.NotificationR\rnotifications\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12!\n" +
-	"\funread_count\x18\x03 \x01(\x05R\vunreadCount\"_\n" +
+	"\funread_count\x18\x03 \x01(\x05R\vunreadCount\"c\n" +
 	"\x1bMarkNotificationReadRequest\x12'\n" +
-	"\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\":\n" +
-	"\x1fMarkAllNotificationsReadRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"<\n" +
-	"!GetNotificationUnreadCountRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"7\n" +
+	"\x0fnotification_id\x18\x01 \x01(\tR\x0enotificationId\x12\x1b\n" +
+	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\">\n" +
+	"\x1fMarkAllNotificationsReadRequest\x12\x1b\n" +
+	"\auser_id\x18\x01 \x01(\tB\x02\x18\x01R\x06userId\"@\n" +
+	"!GetNotificationUnreadCountRequest\x12\x1b\n" +
+	"\auser_id\x18\x01 \x01(\tB\x02\x18\x01R\x06userId\"7\n" +
 	"\x1fNotificationUnreadCountResponse\x12\x14\n" +
 	"\x05count\x18\x01 \x01(\x05R\x05count2\x9e\x0f\n" +
 	"\x10MessagingService\x12D\n" +

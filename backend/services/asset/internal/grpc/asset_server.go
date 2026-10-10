@@ -12,6 +12,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/asset/internal/domain"
@@ -45,7 +46,7 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 	}
 
 	// Check write permission on type's OA
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, at.NgacOAID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, at.NgacOAID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
@@ -103,7 +104,7 @@ func (s *AssetServer) CreateAsset(ctx context.Context, req *pb.CreateAssetReques
 		State:        ld.InitialState,
 		CustomFields: fieldsJSON,
 		NgacNodeID:   ngacNode.Id,
-		CreatedBy:    req.UserId,
+		CreatedBy:    grpcauth.CallerFrom(ctx).UserID,
 	}
 	if err := s.store.CreateAsset(ctx, asset); err != nil {
 		return nil, status.Errorf(codes.Internal, "create asset: %v", err)
@@ -127,7 +128,7 @@ func (s *AssetServer) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*p
 	}
 
 	// Check read permission on asset's NGAC node
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpRead); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 	return assetToProto(asset), nil
@@ -154,7 +155,7 @@ func (s *AssetServer) ListAssets(ctx context.Context, req *pb.ListAssetsRequest)
 		}
 		types = only
 	}
-	readable, err := permittedTypeIDs(ctx, s.policyRead, req.UserNgacNodeId, types, ngac.OpRead)
+	readable, err := permittedTypeIDs(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, types, ngac.OpRead)
 	if err != nil {
 		// Fail closed: an unreadable policy answer must not list everything.
 		return nil, status.Errorf(codes.Internal, "batch access check: %v", err)
@@ -189,7 +190,7 @@ func (s *AssetServer) UpdateAsset(ctx context.Context, req *pb.UpdateAssetReques
 		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
 	}
 
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
@@ -228,7 +229,7 @@ func (s *AssetServer) DeleteAsset(ctx context.Context, req *pb.DeleteAssetReques
 		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
 	}
 
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpManage); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpManage); err != nil {
 		return nil, err
 	}
 
@@ -278,7 +279,7 @@ func (s *AssetServer) TransitionAsset(ctx context.Context, req *pb.TransitionReq
 	}
 
 	// Check NGAC permission for the transition
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, tr.NgacPermission); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, tr.NgacPermission); err != nil {
 		return nil, err
 	}
 
@@ -290,7 +291,7 @@ func (s *AssetServer) TransitionAsset(ctx context.Context, req *pb.TransitionReq
 		FromState: asset.State,
 		ToState:   tr.ToState,
 		Action:    req.Action,
-		ActorID:   req.UserId,
+		ActorID:   grpcauth.CallerFrom(ctx).UserID,
 		Comment:   req.Comment,
 	}, nil); err != nil {
 		return nil, status.Errorf(codes.Internal, "apply transition: %v", err)
@@ -304,7 +305,7 @@ func (s *AssetServer) TransitionAsset(ctx context.Context, req *pb.TransitionReq
 		FromState:   asset.State,
 		ToState:     tr.ToState,
 		Action:      req.Action,
-		ActorID:     req.UserId,
+		ActorID:     grpcauth.CallerFrom(ctx).UserID,
 		WorkspaceID: asset.WorkspaceID,
 	})
 
@@ -345,7 +346,7 @@ func (s *AssetServer) GetAvailableTransitions(ctx context.Context, req *pb.GetTr
 		}
 	}
 	batch, err := s.policyRead.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
-		UserNodeId: req.UserNgacNodeId,
+		UserNodeId: grpcauth.CallerFrom(ctx).NGACNodeID,
 		ObjectIds:  []string{asset.NgacNodeID},
 		Operations: ops,
 	})
@@ -372,7 +373,7 @@ func (s *AssetServer) GetAssetHistory(ctx context.Context, req *pb.GetHistoryReq
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "asset not found: %v", err)
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, asset.NgacNodeID, ngac.OpRead); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.NgacNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 

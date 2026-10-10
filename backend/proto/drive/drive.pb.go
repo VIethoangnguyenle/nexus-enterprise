@@ -329,11 +329,12 @@ func (x *BreadcrumbEntry) GetName() string {
 }
 
 type CreateFolderRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId    string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	ParentId       string                 `protobuf:"bytes,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"` // empty = workspace drive root
-	Name           string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	ParentId    string                 `protobuf:"bytes,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"` // empty = workspace drive root
+	Name        string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	// For channel drives
 	DriveContext   string `protobuf:"bytes,5,opt,name=drive_context,json=driveContext,proto3" json:"drive_context,omitempty"` // "workspace" or "channel"
 	DriveContextId string `protobuf:"bytes,6,opt,name=drive_context_id,json=driveContextId,proto3" json:"drive_context_id,omitempty"`
@@ -392,6 +393,7 @@ func (x *CreateFolderRequest) GetName() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *CreateFolderRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -414,12 +416,13 @@ func (x *CreateFolderRequest) GetDriveContextId() string {
 }
 
 type ListFolderRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId    string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	FolderId       string                 `protobuf:"bytes,2,opt,name=folder_id,json=folderId,proto3" json:"folder_id,omitempty"` // empty = drive root for workspace
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	DriveContext   string                 `protobuf:"bytes,4,opt,name=drive_context,json=driveContext,proto3" json:"drive_context,omitempty"`
-	DriveContextId string                 `protobuf:"bytes,5,opt,name=drive_context_id,json=driveContextId,proto3" json:"drive_context_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	FolderId    string                 `protobuf:"bytes,2,opt,name=folder_id,json=folderId,proto3" json:"folder_id,omitempty"` // empty = drive root for workspace
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	DriveContext   string `protobuf:"bytes,4,opt,name=drive_context,json=driveContext,proto3" json:"drive_context,omitempty"`
+	DriveContextId string `protobuf:"bytes,5,opt,name=drive_context_id,json=driveContextId,proto3" json:"drive_context_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -468,6 +471,7 @@ func (x *ListFolderRequest) GetFolderId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *ListFolderRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -490,9 +494,10 @@ func (x *ListFolderRequest) GetDriveContextId() string {
 }
 
 type GetItemRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ItemId         string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	ItemId string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -534,6 +539,7 @@ func (x *GetItemRequest) GetItemId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *GetItemRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -542,10 +548,11 @@ func (x *GetItemRequest) GetUserNgacNodeId() string {
 }
 
 type RenameItemRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ItemId         string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	NewName        string                 `protobuf:"bytes,2,opt,name=new_name,json=newName,proto3" json:"new_name,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	ItemId  string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	NewName string                 `protobuf:"bytes,2,opt,name=new_name,json=newName,proto3" json:"new_name,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -594,6 +601,7 @@ func (x *RenameItemRequest) GetNewName() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *RenameItemRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -602,10 +610,11 @@ func (x *RenameItemRequest) GetUserNgacNodeId() string {
 }
 
 type MoveItemRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ItemId         string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	NewParentId    string                 `protobuf:"bytes,2,opt,name=new_parent_id,json=newParentId,proto3" json:"new_parent_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	ItemId      string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	NewParentId string                 `protobuf:"bytes,2,opt,name=new_parent_id,json=newParentId,proto3" json:"new_parent_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -654,6 +663,7 @@ func (x *MoveItemRequest) GetNewParentId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *MoveItemRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -668,10 +678,12 @@ type CopyItemRequest struct {
 	DestWorkspaceId    string                 `protobuf:"bytes,3,opt,name=dest_workspace_id,json=destWorkspaceId,proto3" json:"dest_workspace_id,omitempty"`
 	DestDriveContext   string                 `protobuf:"bytes,4,opt,name=dest_drive_context,json=destDriveContext,proto3" json:"dest_drive_context,omitempty"`
 	DestDriveContextId string                 `protobuf:"bytes,5,opt,name=dest_drive_context_id,json=destDriveContextId,proto3" json:"dest_drive_context_id,omitempty"`
-	UserId             string                 `protobuf:"bytes,6,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId     string                 `protobuf:"bytes,7,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserId string `protobuf:"bytes,6,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,7,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CopyItemRequest) Reset() {
@@ -739,6 +751,7 @@ func (x *CopyItemRequest) GetDestDriveContextId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *CopyItemRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -746,6 +759,7 @@ func (x *CopyItemRequest) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *CopyItemRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -754,9 +768,10 @@ func (x *CopyItemRequest) GetUserNgacNodeId() string {
 }
 
 type TrashItemRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ItemId         string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	ItemId string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -798,6 +813,7 @@ func (x *TrashItemRequest) GetItemId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *TrashItemRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -806,9 +822,10 @@ func (x *TrashItemRequest) GetUserNgacNodeId() string {
 }
 
 type RestoreItemRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ItemId         string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	ItemId string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -850,6 +867,7 @@ func (x *RestoreItemRequest) GetItemId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *RestoreItemRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -858,9 +876,10 @@ func (x *RestoreItemRequest) GetUserNgacNodeId() string {
 }
 
 type DeleteItemRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ItemId         string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	ItemId string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -902,6 +921,7 @@ func (x *DeleteItemRequest) GetItemId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *DeleteItemRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -910,16 +930,18 @@ func (x *DeleteItemRequest) GetUserNgacNodeId() string {
 }
 
 type CreateFileRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId    string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	ParentId       string                 `protobuf:"bytes,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"` // folder to upload into
-	Name           string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
-	MimeType       string                 `protobuf:"bytes,4,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
-	SizeBytes      int64                  `protobuf:"varint,5,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
-	UserId         string                 `protobuf:"bytes,6,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,7,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	DriveContext   string                 `protobuf:"bytes,8,opt,name=drive_context,json=driveContext,proto3" json:"drive_context,omitempty"`
-	DriveContextId string                 `protobuf:"bytes,9,opt,name=drive_context_id,json=driveContextId,proto3" json:"drive_context_id,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	ParentId    string                 `protobuf:"bytes,2,opt,name=parent_id,json=parentId,proto3" json:"parent_id,omitempty"` // folder to upload into
+	Name        string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	MimeType    string                 `protobuf:"bytes,4,opt,name=mime_type,json=mimeType,proto3" json:"mime_type,omitempty"`
+	SizeBytes   int64                  `protobuf:"varint,5,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserId string `protobuf:"bytes,6,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,7,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	DriveContext   string `protobuf:"bytes,8,opt,name=drive_context,json=driveContext,proto3" json:"drive_context,omitempty"`
+	DriveContextId string `protobuf:"bytes,9,opt,name=drive_context_id,json=driveContextId,proto3" json:"drive_context_id,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -989,6 +1011,7 @@ func (x *CreateFileRequest) GetSizeBytes() int64 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *CreateFileRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -996,6 +1019,7 @@ func (x *CreateFileRequest) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *CreateFileRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1078,10 +1102,12 @@ func (x *CreateFileResponse) GetObjectKey() string {
 }
 
 type ConfirmFileRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	FileId         string                 `protobuf:"bytes,1,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	FileId string                 `protobuf:"bytes,1,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1123,6 +1149,7 @@ func (x *ConfirmFileRequest) GetFileId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *ConfirmFileRequest) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -1130,6 +1157,7 @@ func (x *ConfirmFileRequest) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *ConfirmFileRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1138,9 +1166,10 @@ func (x *ConfirmFileRequest) GetUserNgacNodeId() string {
 }
 
 type GetDownloadURLRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	FileId         string                 `protobuf:"bytes,1,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	FileId string                 `protobuf:"bytes,1,opt,name=file_id,json=fileId,proto3" json:"file_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1182,6 +1211,7 @@ func (x *GetDownloadURLRequest) GetFileId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *GetDownloadURLRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1263,9 +1293,10 @@ type CreateShareRequest struct {
 	ShareType        string                 `protobuf:"bytes,2,opt,name=share_type,json=shareType,proto3" json:"share_type,omitempty"`                          // "user", "role", "workspace", "public"
 	TargetNgacNodeId string                 `protobuf:"bytes,3,opt,name=target_ngac_node_id,json=targetNgacNodeId,proto3" json:"target_ngac_node_id,omitempty"` // empty for public shares
 	Operations       []string               `protobuf:"bytes,4,rep,name=operations,proto3" json:"operations,omitempty"`                                         // ["read"] or ["read", "write"]
-	UserNgacNodeId   string                 `protobuf:"bytes,5,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`       // requester (must have write access)
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,5,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth); was: requester (must have write access)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CreateShareRequest) Reset() {
@@ -1326,6 +1357,7 @@ func (x *CreateShareRequest) GetOperations() []string {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *CreateShareRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1426,9 +1458,10 @@ func (x *ShareInfo) GetCreatedAt() *timestamppb.Timestamp {
 }
 
 type RevokeShareRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	ShareId        string                 `protobuf:"bytes,1,opt,name=share_id,json=shareId,proto3" json:"share_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	ShareId string                 `protobuf:"bytes,1,opt,name=share_id,json=shareId,proto3" json:"share_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1470,6 +1503,7 @@ func (x *RevokeShareRequest) GetShareId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *RevokeShareRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1482,7 +1516,9 @@ type ListSharesRequest struct {
 	ItemId string                 `protobuf:"bytes,1,opt,name=item_id,json=itemId,proto3" json:"item_id,omitempty"`
 	// Who a file is shared with is itself information about the file, so listing
 	// shares requires the same read right as opening it.
-	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	//
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1524,6 +1560,7 @@ func (x *ListSharesRequest) GetItemId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *ListSharesRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1576,8 +1613,9 @@ func (x *ShareList) GetShares() []*ShareInfo {
 }
 
 type GetSharedWithMeRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	UserNgacNodeId string                 `protobuf:"bytes,1,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,1,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1612,6 +1650,7 @@ func (*GetSharedWithMeRequest) Descriptor() ([]byte, []int) {
 	return file_proto_drive_drive_proto_rawDescGZIP(), []int{23}
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *GetSharedWithMeRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1744,7 +1783,9 @@ type GetQuotaRequest struct {
 	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
 	// Storage consumption describes the workspace, so reading it requires
 	// membership rather than merely a valid token.
-	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	//
+	// Deprecated: Marked as deprecated in proto/drive/drive.proto.
+	UserNgacNodeId string `protobuf:"bytes,2,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -1786,6 +1827,7 @@ func (x *GetQuotaRequest) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/drive/drive.proto.
 func (x *GetQuotaRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -1966,57 +2008,57 @@ const file_proto_drive_drive_proto_rawDesc = "" +
 	"breadcrumb\"5\n" +
 	"\x0fBreadcrumbEntry\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
-	"\x04name\x18\x02 \x01(\tR\x04name\"\xe3\x01\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"\xe7\x01\n" +
 	"\x13CreateFolderRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1b\n" +
 	"\tparent_id\x18\x02 \x01(\tR\bparentId\x12\x12\n" +
-	"\x04name\x18\x03 \x01(\tR\x04name\x12)\n" +
-	"\x11user_ngac_node_id\x18\x04 \x01(\tR\x0euserNgacNodeId\x12#\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12-\n" +
+	"\x11user_ngac_node_id\x18\x04 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12#\n" +
 	"\rdrive_context\x18\x05 \x01(\tR\fdriveContext\x12(\n" +
-	"\x10drive_context_id\x18\x06 \x01(\tR\x0edriveContextId\"\xcd\x01\n" +
+	"\x10drive_context_id\x18\x06 \x01(\tR\x0edriveContextId\"\xd1\x01\n" +
 	"\x11ListFolderRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1b\n" +
-	"\tfolder_id\x18\x02 \x01(\tR\bfolderId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\x12#\n" +
+	"\tfolder_id\x18\x02 \x01(\tR\bfolderId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12#\n" +
 	"\rdrive_context\x18\x04 \x01(\tR\fdriveContext\x12(\n" +
-	"\x10drive_context_id\x18\x05 \x01(\tR\x0edriveContextId\"T\n" +
+	"\x10drive_context_id\x18\x05 \x01(\tR\x0edriveContextId\"X\n" +
 	"\x0eGetItemRequest\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"r\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"v\n" +
 	"\x11RenameItemRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12\x19\n" +
-	"\bnew_name\x18\x02 \x01(\tR\anewName\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\"y\n" +
+	"\bnew_name\x18\x02 \x01(\tR\anewName\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"}\n" +
 	"\x0fMoveItemRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12\"\n" +
-	"\rnew_parent_id\x18\x02 \x01(\tR\vnewParentId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\"\xa1\x02\n" +
+	"\rnew_parent_id\x18\x02 \x01(\tR\vnewParentId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\xa9\x02\n" +
 	"\x0fCopyItemRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12$\n" +
 	"\x0edest_parent_id\x18\x02 \x01(\tR\fdestParentId\x12*\n" +
 	"\x11dest_workspace_id\x18\x03 \x01(\tR\x0fdestWorkspaceId\x12,\n" +
 	"\x12dest_drive_context\x18\x04 \x01(\tR\x10destDriveContext\x121\n" +
-	"\x15dest_drive_context_id\x18\x05 \x01(\tR\x12destDriveContextId\x12\x17\n" +
-	"\auser_id\x18\x06 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\a \x01(\tR\x0euserNgacNodeId\"V\n" +
+	"\x15dest_drive_context_id\x18\x05 \x01(\tR\x12destDriveContextId\x12\x1b\n" +
+	"\auser_id\x18\x06 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\a \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"Z\n" +
 	"\x10TrashItemRequest\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"X\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\\\n" +
 	"\x12RestoreItemRequest\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"W\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"[\n" +
 	"\x11DeleteItemRequest\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"\xb6\x02\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\xbe\x02\n" +
 	"\x11CreateFileRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1b\n" +
 	"\tparent_id\x18\x02 \x01(\tR\bparentId\x12\x12\n" +
 	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1b\n" +
 	"\tmime_type\x18\x04 \x01(\tR\bmimeType\x12\x1d\n" +
 	"\n" +
-	"size_bytes\x18\x05 \x01(\x03R\tsizeBytes\x12\x17\n" +
-	"\auser_id\x18\x06 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\a \x01(\tR\x0euserNgacNodeId\x12#\n" +
+	"size_bytes\x18\x05 \x01(\x03R\tsizeBytes\x12\x1b\n" +
+	"\auser_id\x18\x06 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\a \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12#\n" +
 	"\rdrive_context\x18\b \x01(\tR\fdriveContext\x12(\n" +
 	"\x10drive_context_id\x18\t \x01(\tR\x0edriveContextId\"k\n" +
 	"\x12CreateFileResponse\x12\x17\n" +
@@ -2024,20 +2066,20 @@ const file_proto_drive_drive_proto_rawDesc = "" +
 	"\n" +
 	"upload_url\x18\x02 \x01(\tR\tuploadUrl\x12\x1d\n" +
 	"\n" +
-	"object_key\x18\x03 \x01(\tR\tobjectKey\"q\n" +
+	"object_key\x18\x03 \x01(\tR\tobjectKey\"y\n" +
 	"\x12ConfirmFileRequest\x12\x17\n" +
-	"\afile_id\x18\x01 \x01(\tR\x06fileId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\"[\n" +
+	"\afile_id\x18\x01 \x01(\tR\x06fileId\x12\x1b\n" +
+	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"_\n" +
 	"\x15GetDownloadURLRequest\x12\x17\n" +
-	"\afile_id\x18\x01 \x01(\tR\x06fileId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"\x93\x01\n" +
+	"\afile_id\x18\x01 \x01(\tR\x06fileId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\x93\x01\n" +
 	"\x16GetDownloadURLResponse\x12!\n" +
 	"\fdownload_url\x18\x01 \x01(\tR\vdownloadUrl\x12\x1a\n" +
 	"\bfilename\x18\x02 \x01(\tR\bfilename\x12\x1b\n" +
 	"\tmime_type\x18\x03 \x01(\tR\bmimeType\x12\x1d\n" +
 	"\n" +
-	"size_bytes\x18\x04 \x01(\x03R\tsizeBytes\"\xc6\x01\n" +
+	"size_bytes\x18\x04 \x01(\x03R\tsizeBytes\"\xca\x01\n" +
 	"\x12CreateShareRequest\x12\x17\n" +
 	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12\x1d\n" +
 	"\n" +
@@ -2045,8 +2087,8 @@ const file_proto_drive_drive_proto_rawDesc = "" +
 	"\x13target_ngac_node_id\x18\x03 \x01(\tR\x10targetNgacNodeId\x12\x1e\n" +
 	"\n" +
 	"operations\x18\x04 \x03(\tR\n" +
-	"operations\x12)\n" +
-	"\x11user_ngac_node_id\x18\x05 \x01(\tR\x0euserNgacNodeId\"\x82\x02\n" +
+	"operations\x12-\n" +
+	"\x11user_ngac_node_id\x18\x05 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\x82\x02\n" +
 	"\tShareInfo\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\"\n" +
 	"\rdrive_item_id\x18\x02 \x01(\tR\vdriveItemId\x12\x1d\n" +
@@ -2058,17 +2100,17 @@ const file_proto_drive_drive_proto_rawDesc = "" +
 	"operations\x18\x06 \x03(\tR\n" +
 	"operations\x129\n" +
 	"\n" +
-	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"Z\n" +
+	"created_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\"^\n" +
 	"\x12RevokeShareRequest\x12\x19\n" +
-	"\bshare_id\x18\x01 \x01(\tR\ashareId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"W\n" +
+	"\bshare_id\x18\x01 \x01(\tR\ashareId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"[\n" +
 	"\x11ListSharesRequest\x12\x17\n" +
-	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"5\n" +
+	"\aitem_id\x18\x01 \x01(\tR\x06itemId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"5\n" +
 	"\tShareList\x12(\n" +
-	"\x06shares\x18\x01 \x03(\v2\x10.drive.ShareInfoR\x06shares\"C\n" +
-	"\x16GetSharedWithMeRequest\x12)\n" +
-	"\x11user_ngac_node_id\x18\x01 \x01(\tR\x0euserNgacNodeId\"\xdd\x01\n" +
+	"\x06shares\x18\x01 \x03(\v2\x10.drive.ShareInfoR\x06shares\"G\n" +
+	"\x16GetSharedWithMeRequest\x12-\n" +
+	"\x11user_ngac_node_id\x18\x01 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\xdd\x01\n" +
 	"\x1cCreateDriveForChannelRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1d\n" +
 	"\n" +
@@ -2078,10 +2120,10 @@ const file_proto_drive_drive_proto_rawDesc = "" +
 	"\x12channel_ngac_ua_id\x18\x05 \x01(\tR\x0fchannelNgacUaId\"7\n" +
 	"\x16GetChannelDriveRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\"_\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\"c\n" +
 	"\x0fGetQuotaRequest\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x02 \x01(\tR\x0euserNgacNodeId\"q\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"q\n" +
 	"\x12UpdateQuotaRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1b\n" +
 	"\tmax_bytes\x18\x02 \x01(\x03R\bmaxBytes\x12\x1b\n" +

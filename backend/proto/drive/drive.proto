@@ -80,7 +80,7 @@ message CreateFolderRequest {
   string workspace_id = 1;
   string parent_id = 2;            // empty = workspace drive root
   string name = 3;
-  string user_ngac_node_id = 4;
+  string user_ngac_node_id = 4 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   // For channel drives
   string drive_context = 5;        // "workspace" or "channel"
   string drive_context_id = 6;
@@ -89,26 +89,26 @@ message CreateFolderRequest {
 message ListFolderRequest {
   string workspace_id = 1;
   string folder_id = 2;            // empty = drive root for workspace
-  string user_ngac_node_id = 3;
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string drive_context = 4;
   string drive_context_id = 5;
 }
 
 message GetItemRequest {
   string item_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message RenameItemRequest {
   string item_id = 1;
   string new_name = 2;
-  string user_ngac_node_id = 3;
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message MoveItemRequest {
   string item_id = 1;
   string new_parent_id = 2;
-  string user_ngac_node_id = 3;
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message CopyItemRequest {
@@ -117,23 +117,23 @@ message CopyItemRequest {
   string dest_workspace_id = 3;
   string dest_drive_context = 4;
   string dest_drive_context_id = 5;
-  string user_id = 6;
-  string user_ngac_node_id = 7;
+  string user_id = 6 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 7 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message TrashItemRequest {
   string item_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message RestoreItemRequest {
   string item_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message DeleteItemRequest {
   string item_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 // --- File upload/download ---
@@ -144,8 +144,8 @@ message CreateFileRequest {
   string name = 3;
   string mime_type = 4;
   int64 size_bytes = 5;
-  string user_id = 6;
-  string user_ngac_node_id = 7;
+  string user_id = 6 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 7 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string drive_context = 8;
   string drive_context_id = 9;
 }
@@ -158,13 +158,13 @@ message CreateFileResponse {
 
 message ConfirmFileRequest {
   string file_id = 1;
-  string user_id = 2;
-  string user_ngac_node_id = 3;
+  string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message GetDownloadURLRequest {
   string file_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message GetDownloadURLResponse {
@@ -181,7 +181,7 @@ message CreateShareRequest {
   string share_type = 2;           // "user", "role", "workspace", "public"
   string target_ngac_node_id = 3;  // empty for public shares
   repeated string operations = 4;  // ["read"] or ["read", "write"]
-  string user_ngac_node_id = 5;    // requester (must have write access)
+  string user_ngac_node_id = 5 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth); was: requester (must have write access)
 }
 
 message ShareInfo {
@@ -196,14 +196,14 @@ message ShareInfo {
 
 message RevokeShareRequest {
   string share_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message ListSharesRequest {
   string item_id = 1;
   // Who a file is shared with is itself information about the file, so listing
   // shares requires the same read right as opening it.
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message ShareList {
@@ -211,7 +211,7 @@ message ShareList {
 }
 
 message GetSharedWithMeRequest {
-  string user_ngac_node_id = 1;
+  string user_ngac_node_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 // --- Channel drives ---
@@ -234,7 +234,7 @@ message GetQuotaRequest {
   string workspace_id = 1;
   // Storage consumption describes the workspace, so reading it requires
   // membership rather than merely a valid token.
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message UpdateQuotaRequest {

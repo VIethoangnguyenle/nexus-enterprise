@@ -88,9 +88,9 @@ func TestEvaluate_DoesNotCollapseDifferentRequests(t *testing.T) {
 
 	distinct := []ngac.AccessRequest{
 		{UserNodeID: "u1", ObjectNodeID: "oa1", Operation: "read"},
-		{UserNodeID: "u1", ObjectNodeID: "oa1", Operation: "write"}, // different operation
-		{UserNodeID: "u1", ObjectNodeID: "oa2", Operation: "read"},  // different object
-		{UserNodeID: "u2", ObjectNodeID: "oa1", Operation: "read"},  // different user
+		{UserNodeID: "u1", ObjectNodeID: "oa1", Operation: "write"},                    // different operation
+		{UserNodeID: "u1", ObjectNodeID: "oa2", Operation: "read"},                     // different object
+		{UserNodeID: "u2", ObjectNodeID: "oa1", Operation: "read"},                     // different user
 		{UserNodeID: "u1", ObjectNodeID: "oa1", Operation: "read", WorkspaceID: "ws1"}, // different shard
 	}
 

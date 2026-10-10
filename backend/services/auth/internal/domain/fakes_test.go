@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"ngac-platform/pkg/grpcauth"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
 	workspacepb "ngac-platform/proto/workspace"
@@ -20,6 +21,14 @@ import (
 // fakeWorld is an in-memory stand-in for Postgres plus the workspace,
 // messaging and policy services, so the sign-in rules can be exercised
 // without any of them running.
+// recordCaller notes who a downstream RPC would be attributed to. Callers hold mu.
+func (w *fakeWorld) recordCaller(rpc string, ctx context.Context) {
+	if w.callers == nil {
+		w.callers = map[string]grpcauth.Caller{}
+	}
+	w.callers[rpc] = grpcauth.CallerFrom(ctx)
+}
+
 type fakeWorld struct {
 	mu         sync.Mutex
 	users      map[string]*store.User // by id
@@ -27,6 +36,7 @@ type fakeWorld struct {
 	workspaces map[string]*store.Tenant
 	members    map[string]*store.TenantMembership // tenant|user -> membership
 	channels   []string                           // workspace ids that got #general
+	callers    map[string]grpcauth.Caller         // downstream RPC -> caller on its context
 	seq        int
 }
 
@@ -253,9 +263,10 @@ type fakeWorkspace struct {
 	w *fakeWorld
 }
 
-func (f *fakeWorkspace) CreateWorkspace(_ context.Context, req *workspacepb.CreateWorkspaceRequest, _ ...grpc.CallOption) (*workspacepb.Workspace, error) {
+func (f *fakeWorkspace) CreateWorkspace(ctx context.Context, req *workspacepb.CreateWorkspaceRequest, _ ...grpc.CallOption) (*workspacepb.Workspace, error) {
 	f.w.mu.Lock()
 	defer f.w.mu.Unlock()
+	f.w.recordCaller("CreateWorkspace", ctx)
 	id := f.w.next("ws")
 	f.w.workspaces[id] = &store.Tenant{ID: id, Name: req.Name}
 	return &workspacepb.Workspace{Id: id, Name: req.Name, PcNodeId: "pc-" + id,
@@ -267,9 +278,10 @@ type fakeMessaging struct {
 	w *fakeWorld
 }
 
-func (f *fakeMessaging) CreateChannel(_ context.Context, req *messagingpb.CreateChannelRequest, _ ...grpc.CallOption) (*messagingpb.Channel, error) {
+func (f *fakeMessaging) CreateChannel(ctx context.Context, req *messagingpb.CreateChannelRequest, _ ...grpc.CallOption) (*messagingpb.Channel, error) {
 	f.w.mu.Lock()
 	defer f.w.mu.Unlock()
+	f.w.recordCaller("CreateChannel", ctx)
 	f.w.channels = append(f.w.channels, req.WorkspaceId)
 	return &messagingpb.Channel{Id: "ch-" + req.WorkspaceId, Name: req.Name}, nil
 }

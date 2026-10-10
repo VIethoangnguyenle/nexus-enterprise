@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/messaging"
 )
 
@@ -35,14 +36,14 @@ func (s *NotificationServer) ListNotifications(ctx context.Context, req *pb.List
 	var total, unread int32
 	s.db.QueryRow(ctx,
 		"SELECT COUNT(*), COUNT(*) FILTER (WHERE read = FALSE) FROM notifications WHERE user_id = $1",
-		req.UserId,
+		grpcauth.CallerFrom(ctx).UserID,
 	).Scan(&total, &unread)
 
 	rows, err := s.db.Query(ctx,
 		`SELECT id, user_id, type, title, body, COALESCE(entity_type,''), COALESCE(entity_id,''), read, created_at
 		 FROM notifications WHERE user_id = $1
 		 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-		req.UserId, limit, req.Offset,
+		grpcauth.CallerFrom(ctx).UserID, limit, req.Offset,
 	)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "list notifications: %v", err)
@@ -72,7 +73,7 @@ func (s *NotificationServer) ListNotifications(ctx context.Context, req *pb.List
 func (s *NotificationServer) MarkRead(ctx context.Context, req *pb.MarkNotificationReadRequest) (*pb.Empty, error) {
 	_, err := s.db.Exec(ctx,
 		"UPDATE notifications SET read = TRUE WHERE id = $1 AND user_id = $2",
-		req.NotificationId, req.UserId,
+		req.NotificationId, grpcauth.CallerFrom(ctx).UserID,
 	)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "mark read: %v", err)
@@ -83,7 +84,7 @@ func (s *NotificationServer) MarkRead(ctx context.Context, req *pb.MarkNotificat
 func (s *NotificationServer) MarkAllRead(ctx context.Context, req *pb.MarkAllNotificationsReadRequest) (*pb.Empty, error) {
 	_, err := s.db.Exec(ctx,
 		"UPDATE notifications SET read = TRUE WHERE user_id = $1 AND read = FALSE",
-		req.UserId,
+		grpcauth.CallerFrom(ctx).UserID,
 	)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "mark all read: %v", err)
@@ -95,7 +96,7 @@ func (s *NotificationServer) GetUnreadCount(ctx context.Context, req *pb.GetNoti
 	var count int32
 	err := s.db.QueryRow(ctx,
 		"SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND read = FALSE",
-		req.UserId,
+		grpcauth.CallerFrom(ctx).UserID,
 	).Scan(&count)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "get unread count: %v", err)

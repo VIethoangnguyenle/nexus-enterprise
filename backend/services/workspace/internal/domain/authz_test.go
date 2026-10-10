@@ -636,14 +636,3 @@ func TestReads_DenyWhenPolicyCallErrors(t *testing.T) {
 		})
 	}
 }
-
-// ---------------------------------------------------------------------------
-// Requester context plumbing (used by transports whose request messages carry
-// no requester field).
-// ---------------------------------------------------------------------------
-
-func TestRequesterContextRoundTrip(t *testing.T) {
-	assert.Equal(t, "", domain.RequesterFrom(context.Background()))
-	ctx := domain.WithRequester(context.Background(), owner)
-	assert.Equal(t, owner, domain.RequesterFrom(ctx))
-}

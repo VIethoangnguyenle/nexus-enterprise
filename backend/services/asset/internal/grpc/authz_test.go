@@ -19,9 +19,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
-	"ngac-platform/services/asset/internal/caller"
 	"ngac-platform/services/asset/internal/domain"
 	agrpc "ngac-platform/services/asset/internal/grpc"
 	"ngac-platform/services/asset/internal/store"
@@ -221,7 +221,7 @@ func (f *fixture) policy() *fakePolicyRead {
 }
 
 func asCaller(userID, nodeID string) context.Context {
-	return caller.WithIdentity(context.Background(), caller.Identity{UserID: userID, NGACNodeID: nodeID})
+	return grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: userID, NGACNodeID: nodeID})
 }
 
 var errPolicyDown = errors.New("policy unavailable")
@@ -246,8 +246,8 @@ func TestListAssets_DeniedSeesNothing(t *testing.T) {
 	p.grant("n-member", f.oaA, ngac.OpWrite)
 	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	list, err := srv.ListAssets(context.Background(), &pb.ListAssetsRequest{
-		WorkspaceId: f.wsID, UserNgacNodeId: "n-member",
+	list, err := srv.ListAssets(asCaller("", "n-member"), &pb.ListAssetsRequest{
+		WorkspaceId: f.wsID,
 	})
 
 	require.NoError(t, err)
@@ -261,8 +261,8 @@ func TestListAssets_SeesOnlyPermittedSubset(t *testing.T) {
 	p.grant("n-reader", f.oaA, ngac.OpRead)
 	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	list, err := srv.ListAssets(context.Background(), &pb.ListAssetsRequest{
-		WorkspaceId: f.wsID, UserNgacNodeId: "n-reader",
+	list, err := srv.ListAssets(asCaller("", "n-reader"), &pb.ListAssetsRequest{
+		WorkspaceId: f.wsID,
 	})
 
 	require.NoError(t, err)
@@ -276,8 +276,8 @@ func TestListAssets_TypeFilterOnUnreadableTypeIsEmpty(t *testing.T) {
 	p.grant("n-reader", f.oaA, ngac.OpRead)
 	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	list, err := srv.ListAssets(context.Background(), &pb.ListAssetsRequest{
-		WorkspaceId: f.wsID, UserNgacNodeId: "n-reader", TypeId: f.typeB,
+	list, err := srv.ListAssets(asCaller("", "n-reader"), &pb.ListAssetsRequest{
+		WorkspaceId: f.wsID, TypeId: f.typeB,
 	})
 
 	require.NoError(t, err)
@@ -292,8 +292,8 @@ func TestListAssets_AllowedSeesAll(t *testing.T) {
 	p.grant("n-owner", f.oaB, ngac.OpRead)
 	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	list, err := srv.ListAssets(context.Background(), &pb.ListAssetsRequest{
-		WorkspaceId: f.wsID, UserNgacNodeId: "n-owner",
+	list, err := srv.ListAssets(asCaller("", "n-owner"), &pb.ListAssetsRequest{
+		WorkspaceId: f.wsID,
 	})
 
 	require.NoError(t, err)
@@ -308,8 +308,8 @@ func TestListAssets_PolicyErrorFailsClosed(t *testing.T) {
 	p.failErr = errPolicyDown
 	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	list, err := srv.ListAssets(context.Background(), &pb.ListAssetsRequest{
-		WorkspaceId: f.wsID, UserNgacNodeId: "n-owner",
+	list, err := srv.ListAssets(asCaller("", "n-owner"), &pb.ListAssetsRequest{
+		WorkspaceId: f.wsID,
 	})
 
 	require.Error(t, err)
@@ -336,8 +336,8 @@ func TestListRequests_UnrelatedCallerSeesNothing(t *testing.T) {
 	p.grant("n-other", f.assetsOA(), ngac.OpRead)
 	srv := agrpc.NewAssetRequestServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	list, err := srv.ListRequests(context.Background(), &pb.ListRequestsReq{
-		WorkspaceId: f.wsID, UserId: "someone-else", UserNgacNodeId: "n-other",
+	list, err := srv.ListRequests(asCaller("someone-else", "n-other"), &pb.ListRequestsReq{
+		WorkspaceId: f.wsID,
 	})
 
 	require.NoError(t, err)
@@ -350,8 +350,8 @@ func TestListRequests_RequesterSeesOnlyOwn(t *testing.T) {
 	p := f.policy()
 	srv := agrpc.NewAssetRequestServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	list, err := srv.ListRequests(context.Background(), &pb.ListRequestsReq{
-		WorkspaceId: f.wsID, UserId: f.userX, UserNgacNodeId: "n-x",
+	list, err := srv.ListRequests(asCaller(f.userX, "n-x"), &pb.ListRequestsReq{
+		WorkspaceId: f.wsID,
 	})
 
 	require.NoError(t, err)
@@ -365,8 +365,8 @@ func TestListRequests_ApproverSeesRequestsForApprovableTypes(t *testing.T) {
 	p.grant("n-approver-b", f.oaB, ngac.OpApprove)
 	srv := agrpc.NewAssetRequestServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	list, err := srv.ListRequests(context.Background(), &pb.ListRequestsReq{
-		WorkspaceId: f.wsID, UserId: "approver-b", UserNgacNodeId: "n-approver-b",
+	list, err := srv.ListRequests(asCaller("approver-b", "n-approver-b"), &pb.ListRequestsReq{
+		WorkspaceId: f.wsID,
 	})
 
 	require.NoError(t, err)
@@ -381,8 +381,8 @@ func TestListRequests_PolicyErrorFailsClosed(t *testing.T) {
 	p.failErr = errPolicyDown
 	srv := agrpc.NewAssetRequestServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	list, err := srv.ListRequests(context.Background(), &pb.ListRequestsReq{
-		WorkspaceId: f.wsID, UserId: "approver-b", UserNgacNodeId: "n-approver-b",
+	list, err := srv.ListRequests(asCaller("approver-b", "n-approver-b"), &pb.ListRequestsReq{
+		WorkspaceId: f.wsID,
 	})
 
 	require.Error(t, err)
@@ -466,10 +466,10 @@ func typeCount(t *testing.T, f *fixture) int {
 	return n
 }
 
-func createTypeReq(f *fixture, node string) *pb.CreateTypeRequest {
+func createTypeReq(f *fixture) *pb.CreateTypeRequest {
 	return &pb.CreateTypeRequest{
 		Name: fmt.Sprintf("NewType%d", time.Now().UnixNano()), Category: "hardware",
-		WorkspaceId: f.wsID, UserNgacNodeId: node,
+		WorkspaceId: f.wsID,
 	}
 }
 
@@ -484,7 +484,7 @@ func TestCreateType_DeniedWithoutManageOnAssetsOA(t *testing.T) {
 	srv := agrpc.NewAssetTypeServer(f.st, p, w)
 	before := typeCount(t, f)
 
-	_, err := srv.CreateType(context.Background(), createTypeReq(f, "n-member"))
+	_, err := srv.CreateType(asCaller("", "n-member"), createTypeReq(f))
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 	assert.Empty(t, w.created, "a denied create must not write to the graph")
@@ -500,7 +500,7 @@ func TestCreateType_DeniedWhenPolicyErrors(t *testing.T) {
 	srv := agrpc.NewAssetTypeServer(f.st, p, w)
 	before := typeCount(t, f)
 
-	_, err := srv.CreateType(context.Background(), createTypeReq(f, "n-owner"))
+	_, err := srv.CreateType(asCaller("", "n-owner"), createTypeReq(f))
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 	assert.Empty(t, w.created)
@@ -515,7 +515,7 @@ func TestCreateType_DeniedWhenAssetsOALookupErrors(t *testing.T) {
 	w := &fakePolicyWrite{nodeID: f.oaA}
 	srv := agrpc.NewAssetTypeServer(f.st, p, w)
 
-	_, err := srv.CreateType(context.Background(), createTypeReq(f, "n-owner"))
+	_, err := srv.CreateType(asCaller("", "n-owner"), createTypeReq(f))
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 	assert.Empty(t, w.created)
@@ -529,7 +529,7 @@ func TestCreateType_AllowedWithManageOnAssetsOA(t *testing.T) {
 	srv := agrpc.NewAssetTypeServer(f.st, p, w)
 	before := typeCount(t, f)
 
-	at, err := srv.CreateType(context.Background(), createTypeReq(f, "n-owner"))
+	at, err := srv.CreateType(asCaller("", "n-owner"), createTypeReq(f))
 
 	require.NoError(t, err)
 	assert.Contains(t, p.checks, [3]string{"n-owner", f.assetsOA(), ngac.OpManage})
@@ -550,7 +550,7 @@ func TestCreateType_FirstTypeDeniedWithoutManageOnMgmtOA(t *testing.T) {
 	srv := agrpc.NewAssetTypeServer(f.st, p, w)
 	before := typeCount(t, f)
 
-	_, err := srv.CreateType(context.Background(), createTypeReq(f, "n-member"))
+	_, err := srv.CreateType(asCaller("", "n-member"), createTypeReq(f))
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
 	assert.Empty(t, w.created)
@@ -566,7 +566,7 @@ func TestCreateType_FirstTypeAllowedWithManageOnMgmtOA(t *testing.T) {
 	srv := agrpc.NewAssetTypeServer(f.st, p, w)
 	before := typeCount(t, f)
 
-	_, err := srv.CreateType(context.Background(), createTypeReq(f, "n-owner"))
+	_, err := srv.CreateType(asCaller("", "n-owner"), createTypeReq(f))
 
 	require.NoError(t, err)
 	assert.Contains(t, p.checks, [3]string{"n-owner", f.mgmtOA(), ngac.OpManage})
@@ -591,8 +591,8 @@ func TestUpdateTypeSchema_DeniedWithoutManageOnAssetsOA(t *testing.T) {
 	srv := agrpc.NewAssetTypeServer(f.st, p, &fakePolicyWrite{})
 	before := typeSchema(t, f, f.typeA)
 
-	_, err := srv.UpdateTypeSchema(context.Background(), &pb.UpdateTypeSchemaRequest{
-		TypeId: f.typeA, UserNgacNodeId: "n-member", FieldsSchema: newSchema,
+	_, err := srv.UpdateTypeSchema(asCaller("", "n-member"), &pb.UpdateTypeSchemaRequest{
+		TypeId: f.typeA, FieldsSchema: newSchema,
 	})
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -607,8 +607,8 @@ func TestUpdateTypeSchema_DeniedWhenPolicyErrors(t *testing.T) {
 	srv := agrpc.NewAssetTypeServer(f.st, p, &fakePolicyWrite{})
 	before := typeSchema(t, f, f.typeA)
 
-	_, err := srv.UpdateTypeSchema(context.Background(), &pb.UpdateTypeSchemaRequest{
-		TypeId: f.typeA, UserNgacNodeId: "n-owner", FieldsSchema: newSchema,
+	_, err := srv.UpdateTypeSchema(asCaller("", "n-owner"), &pb.UpdateTypeSchemaRequest{
+		TypeId: f.typeA, FieldsSchema: newSchema,
 	})
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -621,8 +621,8 @@ func TestUpdateTypeSchema_AllowedWithManageOnAssetsOA(t *testing.T) {
 	p.grant("n-owner", f.assetsOA(), ngac.OpManage)
 	srv := agrpc.NewAssetTypeServer(f.st, p, &fakePolicyWrite{})
 
-	at, err := srv.UpdateTypeSchema(context.Background(), &pb.UpdateTypeSchemaRequest{
-		TypeId: f.typeA, UserNgacNodeId: "n-owner", FieldsSchema: newSchema,
+	at, err := srv.UpdateTypeSchema(asCaller("", "n-owner"), &pb.UpdateTypeSchemaRequest{
+		TypeId: f.typeA, FieldsSchema: newSchema,
 	})
 
 	require.NoError(t, err)
@@ -740,9 +740,9 @@ func TestTransitionAsset_FailsWhenHistoryCannotBeRecorded(t *testing.T) {
 	p.grant("n-approver", f.oaA, ngac.OpApprove)
 	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	_, err := srv.TransitionAsset(context.Background(), &pb.TransitionRequest{
-		AssetId: f.assetA, Action: "approve", UserNgacNodeId: "n-approver",
-		UserId: "no-such-user", // actor_id references users, so history cannot be written
+	_, err := srv.TransitionAsset(asCaller("no-such-user", "n-approver"), &pb.TransitionRequest{
+		AssetId: f.assetA, Action: "approve",
+		// actor_id references users, so history cannot be written
 	})
 
 	require.Error(t, err)
@@ -759,8 +759,8 @@ func TestTransitionAsset_RecordsActor(t *testing.T) {
 	p.grant("n-y", f.oaA, ngac.OpApprove)
 	srv := agrpc.NewAssetServer(f.st, p, &fakePolicyWrite{}, nil)
 
-	a, err := srv.TransitionAsset(context.Background(), &pb.TransitionRequest{
-		AssetId: f.assetA, Action: "approve", UserNgacNodeId: "n-y", UserId: f.userY,
+	a, err := srv.TransitionAsset(asCaller(f.userY, "n-y"), &pb.TransitionRequest{
+		AssetId: f.assetA, Action: "approve",
 	})
 
 	require.NoError(t, err)

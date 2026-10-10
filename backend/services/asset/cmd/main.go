@@ -21,6 +21,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	assetpb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
@@ -57,7 +58,9 @@ func main() {
 	}
 	defer pool.Close()
 
-	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	policyConn, err := grpc.NewClient(policyAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("asset")))
 	if err != nil {
 		slog.Error("failed to connect to policy service", "address", policyAddr, "error", err)
 		os.Exit(1)
@@ -82,12 +85,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			loggingInterceptor,
-			recoveryInterceptor,
-		),
-	)
+	srv := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()}, loggingInterceptor, recoveryInterceptor)...)
 	assetTypeSrv := agrpc.NewAssetTypeServer(assetStore, policyRead, policyWrite)
 	assetSrv := agrpc.NewAssetServer(assetStore, policyRead, policyWrite, producer)
 	assetReqSrv := agrpc.NewAssetRequestServer(assetStore, policyRead, policyWrite, producer)

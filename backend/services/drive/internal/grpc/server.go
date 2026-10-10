@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	docpb "ngac-platform/proto/document"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
@@ -118,12 +119,12 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 		if err != nil || parent == nil {
 			return nil, status.Errorf(codes.NotFound, "parent folder not found")
 		}
-		if err := s.checkAccess(ctx, req.UserNgacNodeId, parent.NGACNodeID, ngac.OpWrite); err != nil {
+		if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, parent.NGACNodeID, ngac.OpWrite); err != nil {
 			return nil, err
 		}
 		parentNGACID = parent.NGACNodeID
 	} else {
-		root, err := s.ensureRoot(ctx, req.WorkspaceId, driveCtx, req.DriveContextId, req.UserNgacNodeId)
+		root, err := s.ensureRoot(ctx, req.WorkspaceId, driveCtx, req.DriveContextId, grpcauth.CallerFrom(ctx).NGACNodeID)
 		if err != nil {
 			return nil, err
 		}
@@ -169,7 +170,7 @@ func (s *DriveServer) CreateFolder(ctx context.Context, req *pb.CreateFolderRequ
 		Name:           req.Name,
 		NGACNodeID:     folderNode.Id,
 		ScopeOAID:      scopeOAID,
-		OwnerID:        req.UserNgacNodeId,
+		OwnerID:        grpcauth.CallerFrom(ctx).NGACNodeID,
 		Status:         "active",
 	}
 	if err := s.store.InsertItem(ctx, item); err != nil {
@@ -195,7 +196,7 @@ func (s *DriveServer) ListFolder(ctx context.Context, req *pb.ListFolderRequest)
 		if err != nil || folder == nil {
 			return nil, status.Errorf(codes.NotFound, "folder not found")
 		}
-		if err := s.checkAccess(ctx, req.UserNgacNodeId, folder.NGACNodeID, "read"); err != nil {
+		if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, folder.NGACNodeID, ngac.OpRead); err != nil {
 			return nil, err
 		}
 	}
@@ -216,7 +217,7 @@ func (s *DriveServer) ListFolder(ctx context.Context, req *pb.ListFolderRequest)
 	var visible []*pb.DriveItem
 	if len(objectIDs) > 0 {
 		batch, err := s.policyRead.BatchCheckAccess(ctx, &policypb.BatchCheckAccessRequest{
-			UserNodeId: req.UserNgacNodeId,
+			UserNodeId: grpcauth.CallerFrom(ctx).NGACNodeID,
 			ObjectIds:  objectIDs,
 			Operations: []string{ngac.OpRead},
 		})
@@ -250,7 +251,7 @@ func (s *DriveServer) GetItem(ctx context.Context, req *pb.GetItemRequest) (*pb.
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpRead); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 	return itemToProto(item), nil
@@ -283,7 +284,7 @@ func (s *DriveServer) CreateFile(ctx context.Context, req *pb.CreateFileRequest)
 		parentNGACID = parent.NGACNodeID
 		parentScopeOAID = parent.ScopeOAID
 	} else {
-		root, err := s.ensureRoot(ctx, req.WorkspaceId, driveCtx, req.DriveContextId, req.UserNgacNodeId)
+		root, err := s.ensureRoot(ctx, req.WorkspaceId, driveCtx, req.DriveContextId, grpcauth.CallerFrom(ctx).NGACNodeID)
 		if err != nil {
 			return nil, err
 		}
@@ -302,7 +303,7 @@ func (s *DriveServer) CreateFile(ctx context.Context, req *pb.CreateFileRequest)
 	// Checking here also means the caller is refused before uploading rather
 	// than after, instead of leaving an orphaned object in storage and a
 	// pending row behind.
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, parentNGACID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, parentNGACID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
@@ -336,7 +337,7 @@ func (s *DriveServer) CreateFile(ctx context.Context, req *pb.CreateFileRequest)
 		ObjectKey:      &uploadResp.ObjectKey,
 		NGACNodeID:     fileNGACNodeID,
 		ScopeOAID:      parentScopeOAID,
-		OwnerID:        req.UserId,
+		OwnerID:        grpcauth.CallerFrom(ctx).UserID,
 		Status:         "pending",
 	}
 	if err := s.store.InsertItem(ctx, item); err != nil {
@@ -358,7 +359,7 @@ func (s *DriveServer) ConfirmFile(ctx context.Context, req *pb.ConfirmFileReques
 	}
 	// Confirming publishes the upload and charges it against the workspace
 	// quota, so it takes the same right as creating the file did.
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 	if item.Status != "pending" {
@@ -393,7 +394,7 @@ func (s *DriveServer) GetDownloadURL(ctx context.Context, req *pb.GetDownloadURL
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "file not found")
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpRead); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 
@@ -427,7 +428,7 @@ func (s *DriveServer) RenameItem(ctx context.Context, req *pb.RenameItemRequest)
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 	if err := s.store.UpdateName(ctx, item.ID, req.NewName); err != nil {
@@ -443,14 +444,14 @@ func (s *DriveServer) MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*p
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 	dest, err := s.store.GetItem(ctx, req.NewParentId)
 	if err != nil || dest == nil {
 		return nil, status.Errorf(codes.NotFound, "destination not found")
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, dest.NGACNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, dest.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
@@ -499,7 +500,7 @@ func (s *DriveServer) CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*p
 	if src.ItemType != "file" {
 		return nil, status.Errorf(codes.InvalidArgument, "only files can be copied")
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, src.NGACNodeID, ngac.OpRead); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, src.NGACNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 
@@ -534,7 +535,7 @@ func (s *DriveServer) CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*p
 		ParentID: &destParent, ItemType: "file", Name: src.Name,
 		MimeType: src.MimeType, SizeBytes: src.SizeBytes, ObjectKey: &newKey,
 		NGACNodeID: copyNGACNodeID, ScopeOAID: dest.ScopeOAID,
-		OwnerID: req.UserId, Status: "active",
+		OwnerID: grpcauth.CallerFrom(ctx).UserID, Status: "active",
 	}
 	if err := s.store.InsertItem(ctx, newItem); err != nil {
 		return nil, status.Errorf(codes.Internal, "insert copy: %v", err)
@@ -548,7 +549,7 @@ func (s *DriveServer) TrashItem(ctx context.Context, req *pb.TrashItemRequest) (
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 	s.store.UpdateStatus(ctx, item.ID, "trashed")
@@ -564,7 +565,7 @@ func (s *DriveServer) RestoreItem(ctx context.Context, req *pb.RestoreItemReques
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 	s.store.UpdateStatus(ctx, item.ID, "active")
@@ -583,7 +584,7 @@ func (s *DriveServer) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest)
 	}
 	// Same right as TrashItem: permanent deletion must not be reachable by a
 	// user who cannot perform the reversible version of the same action.
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 

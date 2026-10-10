@@ -299,13 +299,14 @@ func (x *ApprovalStep) GetTimeoutHours() int32 {
 }
 
 type CreateTemplateRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	EntityType    string                 `protobuf:"bytes,2,opt,name=entity_type,json=entityType,proto3" json:"entity_type,omitempty"`
-	Priority      int32                  `protobuf:"varint,3,opt,name=priority,proto3" json:"priority,omitempty"`
-	Conditions    []*ApprovalCondition   `protobuf:"bytes,4,rep,name=conditions,proto3" json:"conditions,omitempty"`
-	Steps         []*ApprovalStep        `protobuf:"bytes,5,rep,name=steps,proto3" json:"steps,omitempty"`
-	UserNodeId    string                 `protobuf:"bytes,6,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Name       string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	EntityType string                 `protobuf:"bytes,2,opt,name=entity_type,json=entityType,proto3" json:"entity_type,omitempty"`
+	Priority   int32                  `protobuf:"varint,3,opt,name=priority,proto3" json:"priority,omitempty"`
+	Conditions []*ApprovalCondition   `protobuf:"bytes,4,rep,name=conditions,proto3" json:"conditions,omitempty"`
+	Steps      []*ApprovalStep        `protobuf:"bytes,5,rep,name=steps,proto3" json:"steps,omitempty"`
+	// Deprecated: Marked as deprecated in proto/approval/approval.proto.
+	UserNodeId    string `protobuf:"bytes,6,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -375,6 +376,7 @@ func (x *CreateTemplateRequest) GetSteps() []*ApprovalStep {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in proto/approval/approval.proto.
 func (x *CreateTemplateRequest) GetUserNodeId() string {
 	if x != nil {
 		return x.UserNodeId
@@ -852,9 +854,10 @@ type CreateApprovalRequestReq struct {
 	EntityId   string                 `protobuf:"bytes,2,opt,name=entity_id,json=entityId,proto3" json:"entity_id,omitempty"`
 	// Entity fields for template matching (JSON map)
 	EntityFieldsJson string `protobuf:"bytes,3,opt,name=entity_fields_json,json=entityFieldsJson,proto3" json:"entity_fields_json,omitempty"`
-	UserNodeId       string `protobuf:"bytes,4,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Deprecated: Marked as deprecated in proto/approval/approval.proto.
+	UserNodeId    string `protobuf:"bytes,4,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateApprovalRequestReq) Reset() {
@@ -908,6 +911,7 @@ func (x *CreateApprovalRequestReq) GetEntityFieldsJson() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/approval/approval.proto.
 func (x *CreateApprovalRequestReq) GetUserNodeId() string {
 	if x != nil {
 		return x.UserNodeId
@@ -916,10 +920,11 @@ func (x *CreateApprovalRequestReq) GetUserNodeId() string {
 }
 
 type ApproveRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	UserNodeId    string                 `protobuf:"bytes,2,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
-	Comment       string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/approval/approval.proto.
+	UserNodeId    string `protobuf:"bytes,2,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Comment       string `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -961,6 +966,7 @@ func (x *ApproveRequest) GetRequestId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/approval/approval.proto.
 func (x *ApproveRequest) GetUserNodeId() string {
 	if x != nil {
 		return x.UserNodeId
@@ -976,10 +982,11 @@ func (x *ApproveRequest) GetComment() string {
 }
 
 type RejectRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	UserNodeId    string                 `protobuf:"bytes,2,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
-	Comment       string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/approval/approval.proto.
+	UserNodeId    string `protobuf:"bytes,2,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Comment       string `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1021,6 +1028,7 @@ func (x *RejectRequest) GetRequestId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/approval/approval.proto.
 func (x *RejectRequest) GetUserNodeId() string {
 	if x != nil {
 		return x.UserNodeId
@@ -1036,10 +1044,11 @@ func (x *RejectRequest) GetComment() string {
 }
 
 type BatchApproveRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RequestIds    []string               `protobuf:"bytes,1,rep,name=request_ids,json=requestIds,proto3" json:"request_ids,omitempty"`
-	UserNodeId    string                 `protobuf:"bytes,2,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
-	Comment       string                 `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	RequestIds []string               `protobuf:"bytes,1,rep,name=request_ids,json=requestIds,proto3" json:"request_ids,omitempty"`
+	// Deprecated: Marked as deprecated in proto/approval/approval.proto.
+	UserNodeId    string `protobuf:"bytes,2,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Comment       string `protobuf:"bytes,3,opt,name=comment,proto3" json:"comment,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1081,6 +1090,7 @@ func (x *BatchApproveRequest) GetRequestIds() []string {
 	return nil
 }
 
+// Deprecated: Marked as deprecated in proto/approval/approval.proto.
 func (x *BatchApproveRequest) GetUserNodeId() string {
 	if x != nil {
 		return x.UserNodeId
@@ -1156,8 +1166,9 @@ func (x *BatchApproveResponse) GetFailedIds() []string {
 }
 
 type GetPendingRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserNodeId    string                 `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/approval/approval.proto.
+	UserNodeId    string `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1192,6 +1203,7 @@ func (*GetPendingRequest) Descriptor() ([]byte, []int) {
 	return file_proto_approval_approval_proto_rawDescGZIP(), []int{15}
 }
 
+// Deprecated: Marked as deprecated in proto/approval/approval.proto.
 func (x *GetPendingRequest) GetUserNodeId() string {
 	if x != nil {
 		return x.UserNodeId
@@ -1200,10 +1212,11 @@ func (x *GetPendingRequest) GetUserNodeId() string {
 }
 
 type GetHistoryRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserNodeId    string                 `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
-	Cursor        string                 `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"` // acted_at cursor for paging
-	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/approval/approval.proto.
+	UserNodeId    string `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Cursor        string `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"`                             // acted_at cursor for paging
+	Limit         int32  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1238,6 +1251,7 @@ func (*GetHistoryRequest) Descriptor() ([]byte, []int) {
 	return file_proto_approval_approval_proto_rawDescGZIP(), []int{16}
 }
 
+// Deprecated: Marked as deprecated in proto/approval/approval.proto.
 func (x *GetHistoryRequest) GetUserNodeId() string {
 	if x != nil {
 		return x.UserNodeId
@@ -1260,10 +1274,11 @@ func (x *GetHistoryRequest) GetLimit() int32 {
 }
 
 type GetMyRequestsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserNodeId    string                 `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
-	Cursor        string                 `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"` // created_at cursor
-	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/approval/approval.proto.
+	UserNodeId    string `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Cursor        string `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"`                             // created_at cursor
+	Limit         int32  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1298,6 +1313,7 @@ func (*GetMyRequestsRequest) Descriptor() ([]byte, []int) {
 	return file_proto_approval_approval_proto_rawDescGZIP(), []int{17}
 }
 
+// Deprecated: Marked as deprecated in proto/approval/approval.proto.
 func (x *GetMyRequestsRequest) GetUserNodeId() string {
 	if x != nil {
 		return x.UserNodeId
@@ -1320,10 +1336,11 @@ func (x *GetMyRequestsRequest) GetLimit() int32 {
 }
 
 type GetDepartmentRequestsRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserNodeId    string                 `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"`
-	Cursor        string                 `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"` // created_at cursor
-	Limit         int32                  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Deprecated: Marked as deprecated in proto/approval/approval.proto.
+	UserNodeId    string `protobuf:"bytes,1,opt,name=user_node_id,json=userNodeId,proto3" json:"user_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Cursor        string `protobuf:"bytes,2,opt,name=cursor,proto3" json:"cursor,omitempty"`                             // created_at cursor
+	Limit         int32  `protobuf:"varint,3,opt,name=limit,proto3" json:"limit,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1358,6 +1375,7 @@ func (*GetDepartmentRequestsRequest) Descriptor() ([]byte, []int) {
 	return file_proto_approval_approval_proto_rawDescGZIP(), []int{18}
 }
 
+// Deprecated: Marked as deprecated in proto/approval/approval.proto.
 func (x *GetDepartmentRequestsRequest) GetUserNodeId() string {
 	if x != nil {
 		return x.UserNodeId
@@ -1656,7 +1674,7 @@ const file_proto_approval_approval_proto_rawDesc = "" +
 	"\rapprover_type\x18\x04 \x01(\tR\fapproverType\x12%\n" +
 	"\x0eapprover_value\x18\x05 \x01(\tR\rapproverValue\x12%\n" +
 	"\x0erequired_count\x18\x06 \x01(\x05R\rrequiredCount\x12#\n" +
-	"\rtimeout_hours\x18\a \x01(\x05R\ftimeoutHours\"\xf5\x01\n" +
+	"\rtimeout_hours\x18\a \x01(\x05R\ftimeoutHours\"\xf9\x01\n" +
 	"\x15CreateTemplateRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1f\n" +
 	"\ventity_type\x18\x02 \x01(\tR\n" +
@@ -1665,8 +1683,8 @@ const file_proto_approval_approval_proto_rawDesc = "" +
 	"\n" +
 	"conditions\x18\x04 \x03(\v2\x1b.approval.ApprovalConditionR\n" +
 	"conditions\x12,\n" +
-	"\x05steps\x18\x05 \x03(\v2\x16.approval.ApprovalStepR\x05steps\x12 \n" +
-	"\fuser_node_id\x18\x06 \x01(\tR\n" +
+	"\x05steps\x18\x05 \x03(\v2\x16.approval.ApprovalStepR\x05steps\x12$\n" +
+	"\fuser_node_id\x18\x06 \x01(\tB\x02\x18\x01R\n" +
 	"userNodeId\"5\n" +
 	"\x12GetTemplateRequest\x12\x1f\n" +
 	"\vtemplate_id\x18\x01 \x01(\tR\n" +
@@ -1718,52 +1736,52 @@ const file_proto_approval_approval_proto_rawDesc = "" +
 	"\fgrant_source\x18\x05 \x01(\tR\vgrantSource\x12\x16\n" +
 	"\x06status\x18\x06 \x01(\tR\x06status\x125\n" +
 	"\bacted_at\x18\a \x01(\v2\x1a.google.protobuf.TimestampR\aactedAt\x12\x18\n" +
-	"\acomment\x18\b \x01(\tR\acomment\"\xa8\x01\n" +
+	"\acomment\x18\b \x01(\tR\acomment\"\xac\x01\n" +
 	"\x18CreateApprovalRequestReq\x12\x1f\n" +
 	"\ventity_type\x18\x01 \x01(\tR\n" +
 	"entityType\x12\x1b\n" +
 	"\tentity_id\x18\x02 \x01(\tR\bentityId\x12,\n" +
-	"\x12entity_fields_json\x18\x03 \x01(\tR\x10entityFieldsJson\x12 \n" +
-	"\fuser_node_id\x18\x04 \x01(\tR\n" +
-	"userNodeId\"k\n" +
+	"\x12entity_fields_json\x18\x03 \x01(\tR\x10entityFieldsJson\x12$\n" +
+	"\fuser_node_id\x18\x04 \x01(\tB\x02\x18\x01R\n" +
+	"userNodeId\"o\n" +
 	"\x0eApproveRequest\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\tR\trequestId\x12 \n" +
-	"\fuser_node_id\x18\x02 \x01(\tR\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12$\n" +
+	"\fuser_node_id\x18\x02 \x01(\tB\x02\x18\x01R\n" +
 	"userNodeId\x12\x18\n" +
-	"\acomment\x18\x03 \x01(\tR\acomment\"j\n" +
+	"\acomment\x18\x03 \x01(\tR\acomment\"n\n" +
 	"\rRejectRequest\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\tR\trequestId\x12 \n" +
-	"\fuser_node_id\x18\x02 \x01(\tR\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12$\n" +
+	"\fuser_node_id\x18\x02 \x01(\tB\x02\x18\x01R\n" +
 	"userNodeId\x12\x18\n" +
-	"\acomment\x18\x03 \x01(\tR\acomment\"r\n" +
+	"\acomment\x18\x03 \x01(\tR\acomment\"v\n" +
 	"\x13BatchApproveRequest\x12\x1f\n" +
 	"\vrequest_ids\x18\x01 \x03(\tR\n" +
-	"requestIds\x12 \n" +
-	"\fuser_node_id\x18\x02 \x01(\tR\n" +
+	"requestIds\x12$\n" +
+	"\fuser_node_id\x18\x02 \x01(\tB\x02\x18\x01R\n" +
 	"userNodeId\x12\x18\n" +
 	"\acomment\x18\x03 \x01(\tR\acomment\"\x7f\n" +
 	"\x14BatchApproveResponse\x12%\n" +
 	"\x0eapproved_count\x18\x01 \x01(\x05R\rapprovedCount\x12!\n" +
 	"\fapproved_ids\x18\x02 \x03(\tR\vapprovedIds\x12\x1d\n" +
 	"\n" +
-	"failed_ids\x18\x03 \x03(\tR\tfailedIds\"5\n" +
-	"\x11GetPendingRequest\x12 \n" +
-	"\fuser_node_id\x18\x01 \x01(\tR\n" +
-	"userNodeId\"c\n" +
-	"\x11GetHistoryRequest\x12 \n" +
-	"\fuser_node_id\x18\x01 \x01(\tR\n" +
+	"failed_ids\x18\x03 \x03(\tR\tfailedIds\"9\n" +
+	"\x11GetPendingRequest\x12$\n" +
+	"\fuser_node_id\x18\x01 \x01(\tB\x02\x18\x01R\n" +
+	"userNodeId\"g\n" +
+	"\x11GetHistoryRequest\x12$\n" +
+	"\fuser_node_id\x18\x01 \x01(\tB\x02\x18\x01R\n" +
 	"userNodeId\x12\x16\n" +
 	"\x06cursor\x18\x02 \x01(\tR\x06cursor\x12\x14\n" +
-	"\x05limit\x18\x03 \x01(\x05R\x05limit\"f\n" +
-	"\x14GetMyRequestsRequest\x12 \n" +
-	"\fuser_node_id\x18\x01 \x01(\tR\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\"j\n" +
+	"\x14GetMyRequestsRequest\x12$\n" +
+	"\fuser_node_id\x18\x01 \x01(\tB\x02\x18\x01R\n" +
 	"userNodeId\x12\x16\n" +
 	"\x06cursor\x18\x02 \x01(\tR\x06cursor\x12\x14\n" +
-	"\x05limit\x18\x03 \x01(\x05R\x05limit\"n\n" +
-	"\x1cGetDepartmentRequestsRequest\x12 \n" +
-	"\fuser_node_id\x18\x01 \x01(\tR\n" +
+	"\x05limit\x18\x03 \x01(\x05R\x05limit\"r\n" +
+	"\x1cGetDepartmentRequestsRequest\x12$\n" +
+	"\fuser_node_id\x18\x01 \x01(\tB\x02\x18\x01R\n" +
 	"userNodeId\x12\x16\n" +
 	"\x06cursor\x18\x02 \x01(\tR\x06cursor\x12\x14\n" +
 	"\x05limit\x18\x03 \x01(\x05R\x05limit\"f\n" +

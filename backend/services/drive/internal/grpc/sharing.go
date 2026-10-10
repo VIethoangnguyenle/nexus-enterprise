@@ -10,9 +10,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
-	"ngac-platform/services/drive/internal/caller"
 	"ngac-platform/services/drive/internal/store"
 )
 
@@ -22,7 +22,7 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpWrite); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
 
@@ -98,7 +98,7 @@ func (s *DriveServer) CreateShare(ctx context.Context, req *pb.CreateShareReques
 		TargetLabel:  &targetLabel,
 		Operations:   req.Operations,
 		NGACShareOA:  shareOA.Id,
-		CreatedBy:    req.UserNgacNodeId,
+		CreatedBy:    grpcauth.CallerFrom(ctx).NGACNodeID,
 	}
 	if err := s.store.InsertShare(ctx, share); err != nil {
 		return nil, status.Errorf(codes.Internal, "insert share: %v", err)
@@ -128,13 +128,13 @@ func (s *DriveServer) RevokeShare(ctx context.Context, req *pb.RevokeShareReques
 	//   - anyone holding share on the OA the item row points at. Without an
 	//     item to authorize against nothing could grant that right, so a
 	//     missing item denies.
-	isCreator := req.UserNgacNodeId != "" && share.CreatedBy == req.UserNgacNodeId
+	isCreator := grpcauth.CallerFrom(ctx).NGACNodeID != "" && share.CreatedBy == grpcauth.CallerFrom(ctx).NGACNodeID
 	if !isCreator {
 		item, err := s.store.GetItem(ctx, share.DriveItemID)
 		if err != nil || item == nil {
 			return nil, status.Errorf(codes.PermissionDenied, "access denied")
 		}
-		if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpShare); err != nil {
+		if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpShare); err != nil {
 			return nil, err
 		}
 	}
@@ -158,7 +158,7 @@ func (s *DriveServer) ListShares(ctx context.Context, req *pb.ListSharesRequest)
 	if err != nil || item == nil {
 		return nil, status.Errorf(codes.NotFound, "item not found")
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, item.NGACNodeID, ngac.OpRead); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 
@@ -187,9 +187,9 @@ func (s *DriveServer) ListShares(ctx context.Context, req *pb.ListSharesRequest)
 func (s *DriveServer) GetSharedWithMe(ctx context.Context, req *pb.GetSharedWithMeRequest) (*pb.DriveItemList, error) {
 	// Find all UAs the user belongs to
 	ancestors, _ := s.policyRead.GetAncestors(ctx, &policypb.GetAncestorsRequest{
-		NodeId: req.UserNgacNodeId,
+		NodeId: grpcauth.CallerFrom(ctx).NGACNodeID,
 	})
-	targetIDs := []string{req.UserNgacNodeId}
+	targetIDs := []string{grpcauth.CallerFrom(ctx).NGACNodeID}
 	if ancestors != nil {
 		for _, n := range ancestors.Nodes {
 			if n.NodeType == ngac.TypeUA {
@@ -284,11 +284,11 @@ func (s *DriveServer) GetChannelDrive(ctx context.Context, req *pb.GetChannelDri
 func (s *DriveServer) GetQuota(ctx context.Context, req *pb.GetQuotaRequest) (*pb.Quota, error) {
 	// Storage consumption describes the workspace, so reading it requires
 	// reaching that workspace's drive rather than merely holding a valid token.
-	root, err := s.ensureRoot(ctx, req.WorkspaceId, "workspace", "", req.UserNgacNodeId)
+	root, err := s.ensureRoot(ctx, req.WorkspaceId, "workspace", "", grpcauth.CallerFrom(ctx).NGACNodeID)
 	if err != nil {
 		return nil, err
 	}
-	if err := s.checkAccess(ctx, req.UserNgacNodeId, root.NGACNodeID, ngac.OpRead); err != nil {
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, root.NGACNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
 
@@ -305,17 +305,14 @@ func (s *DriveServer) GetQuota(ctx context.Context, req *pb.GetQuotaRequest) (*p
 // UpdateQuota sets workspace quota limits.
 //
 // Quota limits are workspace administration, so this takes manage on the
-// workspace's Mgmt OA. UpdateQuotaRequest has no caller field, so the caller is
-// read from the in-process identity on the context (see package caller); a call
-// that arrives without one — which is every call over the network today — is
-// denied.
+// workspace's Mgmt OA, for the caller on the context (see package grpcauth).
 func (s *DriveServer) UpdateQuota(ctx context.Context, req *pb.UpdateQuotaRequest) (*pb.Quota, error) {
-	userNodeID := caller.FromContext(ctx).NGACNodeID
+	userNodeID := grpcauth.CallerFrom(ctx).NGACNodeID
 	if err := s.checkAccessOnNamedOA(ctx, userNodeID, ngac.MgmtOAName(req.WorkspaceId), ngac.OpManage); err != nil {
 		return nil, err
 	}
 	if err := s.store.UpdateQuotaLimits(ctx, req.WorkspaceId, req.MaxBytes, req.MaxFiles); err != nil {
 		return nil, status.Errorf(codes.Internal, "update quota: %v", err)
 	}
-	return s.GetQuota(ctx, &pb.GetQuotaRequest{WorkspaceId: req.WorkspaceId, UserNgacNodeId: userNodeID})
+	return s.GetQuota(ctx, &pb.GetQuotaRequest{WorkspaceId: req.WorkspaceId})
 }

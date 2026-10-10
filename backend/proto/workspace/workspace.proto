@@ -51,13 +51,13 @@ message Workspace {
 
 message CreateWorkspaceRequest {
   string name = 1;
-  string user_id = 2;
-  string user_ngac_node_id = 3;
+  string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message ListWorkspacesRequest {
-  string user_id = 1;
-  string user_ngac_node_id = 2;
+  string user_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message GetWorkspaceRequest {
@@ -70,7 +70,7 @@ message WorkspaceList {
 
 message InviteMemberRequest {
   string workspace_id = 1;
-  string inviter_ngac_node_id = 2;
+  string inviter_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string target_user_id = 3;
   string target_ngac_node_id = 4;
   repeated string role_ids = 5;
@@ -78,7 +78,7 @@ message InviteMemberRequest {
 
 message RemoveMemberRequest {
   string workspace_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string target_ngac_node_id = 3;
 }
 
@@ -100,32 +100,32 @@ message MemberList {
 
 message UpdateMemberRolesRequest {
   string workspace_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string target_ngac_node_id = 3;
   repeated string role_ids = 4;
 }
 
 message TransferOwnershipRequest {
   string workspace_id = 1;
-  string current_owner_ngac_node_id = 2;
+  string current_owner_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string new_owner_ngac_node_id = 3;
 }
 
 message AddOwnerRequest {
   string workspace_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string target_ngac_node_id = 3;
 }
 
 message RemoveOwnerRequest {
   string workspace_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string target_ngac_node_id = 3;
 }
 
 message CreateRoleRequest {
   string workspace_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string name = 3;
 }
 
@@ -145,13 +145,13 @@ message RoleList {
 
 message DeleteRoleRequest {
   string workspace_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string role_id = 3;
 }
 
 message CreateFolderRequest {
   string workspace_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string name = 3;
   string parent_oa_id = 4;
 }
@@ -172,13 +172,13 @@ message FolderList {
 
 message DeleteFolderRequest {
   string workspace_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string folder_id = 3;
 }
 
 message CreatePermissionRequest {
   string workspace_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string ua_id = 3;
   string oa_id = 4;
   repeated string operations = 5;
@@ -203,6 +203,6 @@ message PermissionList {
 
 message DeletePermissionRequest {
   string workspace_id = 1;
-  string requester_ngac_node_id = 2;
+  string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string permission_id = 3;
 }

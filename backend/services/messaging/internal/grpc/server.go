@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/domain"
 	"ngac-platform/services/messaging/internal/events"
@@ -39,8 +40,8 @@ func (s *MessagingServer) CreateChannel(ctx context.Context, req *pb.CreateChann
 	ch, err := s.svc.CreateChannel(ctx, domain.CreateChannelInput{
 		Name:        req.Name,
 		WorkspaceID: req.WorkspaceId,
-		UserID:      req.UserId,
-		UserNodeID:  req.UserNgacNodeId,
+		UserID:      grpcauth.CallerFrom(ctx).UserID,
+		UserNodeID:  grpcauth.CallerFrom(ctx).NGACNodeID,
 		ChannelType: chType,
 	})
 	if err != nil {
@@ -51,7 +52,7 @@ func (s *MessagingServer) CreateChannel(ctx context.Context, req *pb.CreateChann
 
 // ListChannels delegates to domain.Service.ListChannels.
 func (s *MessagingServer) ListChannels(ctx context.Context, req *pb.ListChannelsRequest) (*pb.ChannelList, error) {
-	channels, err := s.svc.ListChannels(ctx, req.WorkspaceId, req.UserNgacNodeId)
+	channels, err := s.svc.ListChannels(ctx, req.WorkspaceId, grpcauth.CallerFrom(ctx).NGACNodeID)
 	if err != nil {
 		return nil, domainError("list channels", err)
 	}
@@ -60,7 +61,7 @@ func (s *MessagingServer) ListChannels(ctx context.Context, req *pb.ListChannels
 
 // GetChannel delegates to domain.Service.GetChannel.
 func (s *MessagingServer) GetChannel(ctx context.Context, req *pb.GetChannelRequest) (*pb.Channel, error) {
-	ch, err := s.svc.GetChannel(ctx, req.ChannelId, req.UserNgacNodeId)
+	ch, err := s.svc.GetChannel(ctx, req.ChannelId, grpcauth.CallerFrom(ctx).NGACNodeID)
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "channel not found")
 	}
@@ -69,7 +70,7 @@ func (s *MessagingServer) GetChannel(ctx context.Context, req *pb.GetChannelRequ
 
 // ListDMs delegates to domain.Service.ListDMs.
 func (s *MessagingServer) ListDMs(ctx context.Context, req *pb.ListDMsRequest) (*pb.ChannelList, error) {
-	channels, err := s.svc.ListDMs(ctx, req.UserNgacNodeId)
+	channels, err := s.svc.ListDMs(ctx, grpcauth.CallerFrom(ctx).NGACNodeID)
 	if err != nil {
 		return nil, domainError("list DMs", err)
 	}
@@ -78,7 +79,7 @@ func (s *MessagingServer) ListDMs(ctx context.Context, req *pb.ListDMsRequest) (
 
 // CreateDM delegates to domain.Service.FindOrCreateDM.
 func (s *MessagingServer) CreateDM(ctx context.Context, req *pb.CreateDMRequest) (*pb.Channel, error) {
-	ch, err := s.svc.FindOrCreateDM(ctx, req.UserId, req.UserNgacNodeId, req.TargetUserId, req.TargetNgacNodeId)
+	ch, err := s.svc.FindOrCreateDM(ctx, grpcauth.CallerFrom(ctx).UserID, grpcauth.CallerFrom(ctx).NGACNodeID, req.TargetUserId, req.TargetNgacNodeId)
 	if err != nil {
 		return nil, domainError("create DM", err)
 	}
@@ -89,8 +90,8 @@ func (s *MessagingServer) CreateDM(ctx context.Context, req *pb.CreateDMRequest)
 func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.Message, error) {
 	msg, err := s.svc.SendMessage(ctx, domain.SendMessageInput{
 		ChannelID:        req.ChannelId,
-		SenderID:         req.SenderId,
-		SenderNodeID:     req.SenderNgacNodeId,
+		SenderID:         grpcauth.CallerFrom(ctx).UserID,
+		SenderNodeID:     grpcauth.CallerFrom(ctx).NGACNodeID,
 		Content:          req.Content,
 		MessageType:      req.MessageType,
 		ParentMessageID:  req.ParentMessageId,
@@ -108,7 +109,7 @@ func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRe
 
 	// Publish to Kafka for async processing (fire-and-forget).
 	if s.producer != nil {
-		s.producer.PublishMessageSent(req.ChannelId, req.SenderId)
+		s.producer.PublishMessageSent(req.ChannelId, grpcauth.CallerFrom(ctx).UserID)
 	}
 
 	return msg, nil
@@ -116,7 +117,7 @@ func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRe
 
 // GetMessages delegates to domain.Service.GetMessages.
 func (s *MessagingServer) GetMessages(ctx context.Context, req *pb.GetMessagesRequest) (*pb.MessageList, error) {
-	list, err := s.svc.GetMessages(ctx, req.ChannelId, req.UserNgacNodeId, req.Before, int(req.Limit))
+	list, err := s.svc.GetMessages(ctx, req.ChannelId, grpcauth.CallerFrom(ctx).NGACNodeID, req.Before, int(req.Limit))
 	if err != nil {
 		return nil, domainError("get messages", err)
 	}
@@ -125,7 +126,7 @@ func (s *MessagingServer) GetMessages(ctx context.Context, req *pb.GetMessagesRe
 
 // GetThread delegates to domain.Service.GetThread.
 func (s *MessagingServer) GetThread(ctx context.Context, req *pb.GetThreadRequest) (*pb.MessageList, error) {
-	list, err := s.svc.GetThread(ctx, req.MessageId, req.UserNgacNodeId)
+	list, err := s.svc.GetThread(ctx, req.MessageId, grpcauth.CallerFrom(ctx).NGACNodeID)
 	if err != nil {
 		return nil, domainError("get thread", err)
 	}
@@ -134,7 +135,7 @@ func (s *MessagingServer) GetThread(ctx context.Context, req *pb.GetThreadReques
 
 // FindThreadsByEntity delegates to domain.Service.FindThreadsByEntity.
 func (s *MessagingServer) FindThreadsByEntity(ctx context.Context, req *pb.FindThreadsByEntityRequest) (*pb.MessageList, error) {
-	list, err := s.svc.FindThreadsByEntity(ctx, req.EntityType, req.EntityId, req.UserNgacNodeId)
+	list, err := s.svc.FindThreadsByEntity(ctx, req.EntityType, req.EntityId, grpcauth.CallerFrom(ctx).NGACNodeID)
 	if err != nil {
 		return nil, domainError("find threads", err)
 	}
@@ -143,7 +144,7 @@ func (s *MessagingServer) FindThreadsByEntity(ctx context.Context, req *pb.FindT
 
 // AddChannelMember delegates to domain.Service.AddMember.
 func (s *MessagingServer) AddChannelMember(ctx context.Context, req *pb.AddChannelMemberRequest) (*pb.Empty, error) {
-	if err := s.svc.AddMember(ctx, req.ChannelId, req.RequesterNgacNodeId, req.TargetNgacNodeId); err != nil {
+	if err := s.svc.AddMember(ctx, req.ChannelId, grpcauth.CallerFrom(ctx).NGACNodeID, req.TargetNgacNodeId); err != nil {
 		return nil, domainError("add member", err)
 	}
 	return &pb.Empty{}, nil
@@ -151,7 +152,7 @@ func (s *MessagingServer) AddChannelMember(ctx context.Context, req *pb.AddChann
 
 // RemoveChannelMember delegates to domain.Service.RemoveMember.
 func (s *MessagingServer) RemoveChannelMember(ctx context.Context, req *pb.RemoveChannelMemberRequest) (*pb.Empty, error) {
-	if err := s.svc.RemoveMember(ctx, req.ChannelId, req.RequesterNgacNodeId, req.TargetNgacNodeId); err != nil {
+	if err := s.svc.RemoveMember(ctx, req.ChannelId, grpcauth.CallerFrom(ctx).NGACNodeID, req.TargetNgacNodeId); err != nil {
 		return nil, domainError("remove member", err)
 	}
 	return &pb.Empty{}, nil
@@ -159,7 +160,7 @@ func (s *MessagingServer) RemoveChannelMember(ctx context.Context, req *pb.Remov
 
 // ListChannelMembers delegates to domain.Service.ListMembers.
 func (s *MessagingServer) ListChannelMembers(ctx context.Context, req *pb.ListChannelMembersRequest) (*pb.ChannelMemberList, error) {
-	members, err := s.svc.ListMembers(ctx, req.ChannelId, req.UserNgacNodeId)
+	members, err := s.svc.ListMembers(ctx, req.ChannelId, grpcauth.CallerFrom(ctx).NGACNodeID)
 	if err != nil {
 		return nil, domainError("list members", err)
 	}

@@ -21,12 +21,14 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	docpb "ngac-platform/proto/document"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	driveGRPC "ngac-platform/services/drive/internal/grpc"
 	"ngac-platform/services/drive/internal/rest"
+	"ngac-platform/services/drive/internal/store"
 )
 
 func main() {
@@ -62,7 +64,7 @@ func main() {
 		docpb.NewDocumentStorageServiceClient(docConn),
 	)
 
-	gs := grpc.NewServer(grpc.ChainUnaryInterceptor(recoveryInterceptor))
+	gs := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()}, recoveryInterceptor)...)
 	pb.RegisterDriveServiceServer(gs, srv)
 
 	healthSrv := health.NewServer()
@@ -79,7 +81,7 @@ func main() {
 	e.HideBanner = true
 	e.Use(echomw.Logger())
 	e.Use(echomw.Recover())
-	restHandler := rest.NewHandler(srv, policypb.NewPolicyReadServiceClient(policyReadConn))
+	restHandler := rest.NewHandler(rest.WithOwnerNames(srv, store.NewStore(db)), policypb.NewPolicyReadServiceClient(policyReadConn))
 	restHandler.RegisterRoutes(e, jwtSecret)
 
 	// Start both servers
@@ -110,7 +112,8 @@ func main() {
 }
 
 func dial(addr string) *grpc.ClientConn {
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("drive")))
 	if err != nil {
 		log.Fatalf("dial %s: %v", addr, err)
 	}

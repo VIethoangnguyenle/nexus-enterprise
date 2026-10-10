@@ -15,6 +15,7 @@ import (
 	grpcstatus "google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	policypb "ngac-platform/proto/policy"
 	pb "ngac-platform/proto/workspace"
 	"ngac-platform/services/workspace/internal/domain"
@@ -170,9 +171,8 @@ func getTestUserNGACNodeID(t *testing.T, pool *pgxpool.Pool) (userID, ngacNodeID
 func createTestWorkspace(t *testing.T, srv *grpcserver.WorkspaceServer, pool *pgxpool.Pool, prefix string) (ws *pb.Workspace, ngacNodeID string) {
 	t.Helper()
 	userID, ngacNodeID := getTestUserNGACNodeID(t, pool)
-	ws, err := srv.CreateWorkspace(context.Background(), &pb.CreateWorkspaceRequest{
-		Name:   fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano()),
-		UserId: userID, UserNgacNodeId: ngacNodeID,
+	ws, err := srv.CreateWorkspace(asCaller(userID, ngacNodeID), &pb.CreateWorkspaceRequest{
+		Name: fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano()),
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -198,8 +198,8 @@ func TestCreateWorkspace_HappyPath(t *testing.T) {
 	userID, ngacNodeID := getTestUserNGACNodeID(t, pool)
 
 	wsName := fmt.Sprintf("TestWS_%d", time.Now().UnixNano())
-	ws, err := srv.CreateWorkspace(context.Background(), &pb.CreateWorkspaceRequest{
-		Name: wsName, UserId: userID, UserNgacNodeId: ngacNodeID,
+	ws, err := srv.CreateWorkspace(asCaller(userID, ngacNodeID), &pb.CreateWorkspaceRequest{
+		Name: wsName,
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -215,7 +215,7 @@ func TestGetWorkspace_HappyPath(t *testing.T) {
 	srv, pool, _ := setupTestServer(t)
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "GetWS")
 
-	ctx := domain.WithRequester(context.Background(), ngacNodeID)
+	ctx := asCaller("", ngacNodeID)
 	got, err := srv.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: ws.Id})
 	require.NoError(t, err)
 	assert.Equal(t, ws.Id, got.Id)
@@ -224,7 +224,7 @@ func TestGetWorkspace_HappyPath(t *testing.T) {
 
 func TestGetWorkspace_NotFound(t *testing.T) {
 	srv, _, _ := setupTestServer(t)
-	ctx := domain.WithRequester(context.Background(), "some-user")
+	ctx := asCaller("", "some-user")
 	_, err := srv.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: "nonexistent-ws"})
 	requireCode(t, err, codes.NotFound)
 }
@@ -233,7 +233,7 @@ func TestGetWorkspace_NonMemberDenied(t *testing.T) {
 	srv, pool, _ := setupTestServer(t)
 	ws, _ := createTestWorkspace(t, srv, pool, "GetWSDeny")
 
-	ctx := domain.WithRequester(context.Background(), "not-a-member")
+	ctx := asCaller("", "not-a-member")
 	_, err := srv.GetWorkspace(ctx, &pb.GetWorkspaceRequest{WorkspaceId: ws.Id})
 	requireCode(t, err, codes.PermissionDenied)
 }
@@ -254,8 +254,8 @@ func TestCreateRole(t *testing.T) {
 	srv, pool, _ := setupTestServer(t)
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "RoleWS")
 
-	role, err := srv.CreateRole(context.Background(), &pb.CreateRoleRequest{
-		WorkspaceId: ws.Id, RequesterNgacNodeId: ngacNodeID, Name: "Editor",
+	role, err := srv.CreateRole(asCaller("", ngacNodeID), &pb.CreateRoleRequest{
+		WorkspaceId: ws.Id, Name: "Editor",
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, role.Id)
@@ -267,8 +267,8 @@ func TestCreateRole_PDPDenyIsPermissionDenied(t *testing.T) {
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "RoleWSDeny")
 	pr.deny = true
 
-	_, err := srv.CreateRole(context.Background(), &pb.CreateRoleRequest{
-		WorkspaceId: ws.Id, RequesterNgacNodeId: ngacNodeID, Name: "Editor",
+	_, err := srv.CreateRole(asCaller("", ngacNodeID), &pb.CreateRoleRequest{
+		WorkspaceId: ws.Id, Name: "Editor",
 	})
 	requireCode(t, err, codes.PermissionDenied)
 }
@@ -291,8 +291,8 @@ func TestCreateFolder(t *testing.T) {
 	srv, pool, _ := setupTestServer(t)
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "FolderWS")
 
-	folder, err := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: ws.Id, RequesterNgacNodeId: ngacNodeID, Name: "Engineering",
+	folder, err := srv.CreateFolder(asCaller("", ngacNodeID), &pb.CreateFolderRequest{
+		WorkspaceId: ws.Id, Name: "Engineering",
 	})
 	require.NoError(t, err)
 	assert.NotEmpty(t, folder.Id)
@@ -304,8 +304,8 @@ func TestCreateFolder_PDPDenyIsPermissionDenied(t *testing.T) {
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "FolderWSDeny")
 	pr.deny = true
 
-	_, err := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: ws.Id, RequesterNgacNodeId: ngacNodeID, Name: "Engineering",
+	_, err := srv.CreateFolder(asCaller("", ngacNodeID), &pb.CreateFolderRequest{
+		WorkspaceId: ws.Id, Name: "Engineering",
 	})
 	requireCode(t, err, codes.PermissionDenied)
 }
@@ -319,9 +319,9 @@ func TestCreatePermission_PDPDenyIsPermissionDenied(t *testing.T) {
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "PermWSDeny")
 	pr.deny = true
 
-	_, err := srv.CreatePermission(context.Background(), &pb.CreatePermissionRequest{
-		WorkspaceId: ws.Id, RequesterNgacNodeId: ngacNodeID,
-		UaId: ws.MembersUaId, OaId: ws.MgmtOaId, Operations: []string{ngac.OpManage},
+	_, err := srv.CreatePermission(asCaller("", ngacNodeID), &pb.CreatePermissionRequest{
+		WorkspaceId: ws.Id,
+		UaId:        ws.MembersUaId, OaId: ws.MgmtOaId, Operations: []string{ngac.OpManage},
 	})
 	requireCode(t, err, codes.PermissionDenied)
 }
@@ -330,9 +330,9 @@ func TestCreatePermission_UnknownOperationIsInvalidArgument(t *testing.T) {
 	srv, pool, _ := setupTestServer(t)
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "PermWSBadOp")
 
-	_, err := srv.CreatePermission(context.Background(), &pb.CreatePermissionRequest{
-		WorkspaceId: ws.Id, RequesterNgacNodeId: ngacNodeID,
-		UaId: ws.MembersUaId, OaId: ws.DocumentsOaId, Operations: []string{"root"},
+	_, err := srv.CreatePermission(asCaller("", ngacNodeID), &pb.CreatePermissionRequest{
+		WorkspaceId: ws.Id,
+		UaId:        ws.MembersUaId, OaId: ws.DocumentsOaId, Operations: []string{"root"},
 	})
 	requireCode(t, err, codes.InvalidArgument)
 }
@@ -341,9 +341,9 @@ func TestCreatePermission_Allowed(t *testing.T) {
 	srv, pool, _ := setupTestServer(t)
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "PermWS")
 
-	p, err := srv.CreatePermission(context.Background(), &pb.CreatePermissionRequest{
-		WorkspaceId: ws.Id, RequesterNgacNodeId: ngacNodeID,
-		UaId: ws.MembersUaId, OaId: ws.DocumentsOaId, Operations: []string{ngac.OpRead},
+	p, err := srv.CreatePermission(asCaller("", ngacNodeID), &pb.CreatePermissionRequest{
+		WorkspaceId: ws.Id,
+		UaId:        ws.MembersUaId, OaId: ws.DocumentsOaId, Operations: []string{ngac.OpRead},
 	})
 	require.NoError(t, err)
 	assert.Equal(t, []string{ngac.OpRead}, p.Operations)
@@ -354,8 +354,8 @@ func TestDeletePermission_PDPDenyIsPermissionDenied(t *testing.T) {
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "DelPermWSDeny")
 	pr.deny = true
 
-	_, err := srv.DeletePermission(context.Background(), &pb.DeletePermissionRequest{
-		WorkspaceId: ws.Id, RequesterNgacNodeId: ngacNodeID, PermissionId: "assoc-1",
+	_, err := srv.DeletePermission(asCaller("", ngacNodeID), &pb.DeletePermissionRequest{
+		WorkspaceId: ws.Id, PermissionId: "assoc-1",
 	})
 	requireCode(t, err, codes.PermissionDenied)
 }
@@ -369,8 +369,8 @@ func TestInviteMember_PDPDenyIsPermissionDenied(t *testing.T) {
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "InviteWSDeny")
 	pr.deny = true
 
-	_, err := srv.InviteMember(context.Background(), &pb.InviteMemberRequest{
-		WorkspaceId: ws.Id, InviterNgacNodeId: ngacNodeID, TargetNgacNodeId: "someone",
+	_, err := srv.InviteMember(asCaller("", ngacNodeID), &pb.InviteMemberRequest{
+		WorkspaceId: ws.Id, TargetNgacNodeId: "someone",
 	})
 	requireCode(t, err, codes.PermissionDenied)
 }
@@ -379,11 +379,17 @@ func TestListMembers_MemberAllowed_NonMemberDenied(t *testing.T) {
 	srv, pool, _ := setupTestServer(t)
 	ws, ngacNodeID := createTestWorkspace(t, srv, pool, "ListMembersWS")
 
-	_, err := srv.ListMembers(domain.WithRequester(context.Background(), ngacNodeID),
+	_, err := srv.ListMembers(asCaller("", ngacNodeID),
 		&pb.ListMembersRequest{WorkspaceId: ws.Id})
 	require.NoError(t, err)
 
-	_, err = srv.ListMembers(domain.WithRequester(context.Background(), "not-a-member"),
+	_, err = srv.ListMembers(asCaller("", "not-a-member"),
 		&pb.ListMembersRequest{WorkspaceId: ws.Id})
 	requireCode(t, err, codes.PermissionDenied)
+}
+
+// asCaller returns a context carrying the caller the interceptor would have
+// put there from request metadata.
+func asCaller(userID, nodeID string) context.Context {
+	return grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: userID, NGACNodeID: nodeID})
 }

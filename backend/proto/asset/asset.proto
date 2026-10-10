@@ -67,7 +67,7 @@ message CreateTypeRequest {
   string description = 2;
   string category = 3;
   string workspace_id = 4;
-  string user_ngac_node_id = 5;
+  string user_ngac_node_id = 5 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string fields_schema = 6;        // JSON Schema string
   LifecycleDefinition lifecycle = 7; // Optional — uses default if not set
 }
@@ -86,7 +86,7 @@ message AssetTypeList {
 
 message UpdateTypeSchemaRequest {
   string type_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string fields_schema = 3;
 }
 
@@ -115,19 +115,19 @@ message CreateAssetRequest {
   string name = 1;
   string type_id = 2;
   string workspace_id = 3;
-  string user_id = 4;
-  string user_ngac_node_id = 5;
+  string user_id = 4 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 5 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   google.protobuf.Struct custom_fields = 6;
 }
 
 message GetAssetRequest {
   string asset_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message ListAssetsRequest {
   string workspace_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string type_id = 3;             // Optional filter
   string state = 4;               // Optional filter
   string assigned_to = 5;         // Optional filter
@@ -142,14 +142,14 @@ message AssetList {
 
 message UpdateAssetRequest {
   string asset_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string name = 3;                // Optional — only update if non-empty
   google.protobuf.Struct custom_fields = 4;
 }
 
 message DeleteAssetRequest {
   string asset_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 // ============================================
@@ -158,15 +158,15 @@ message DeleteAssetRequest {
 
 message TransitionRequest {
   string asset_id = 1;
-  string user_id = 2;
-  string user_ngac_node_id = 3;
+  string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string action = 4;              // Operation name matching TransitionRule.operation
   string comment = 5;
 }
 
 message GetTransitionsRequest {
   string asset_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message AvailableTransition {
@@ -182,7 +182,7 @@ message TransitionList {
 
 message GetHistoryRequest {
   string asset_id = 1;
-  string user_ngac_node_id = 2;
+  string user_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message TransitionRecord {

@@ -72,7 +72,7 @@ message CreateTemplateRequest {
   int32 priority = 3;
   repeated ApprovalCondition conditions = 4;
   repeated ApprovalStep steps = 5;
-  string user_node_id = 6;
+  string user_node_id = 6 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message GetTemplateRequest {
@@ -133,24 +133,24 @@ message CreateApprovalRequestReq {
   string entity_id = 2;
   // Entity fields for template matching (JSON map)
   string entity_fields_json = 3;
-  string user_node_id = 4;
+  string user_node_id = 4 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message ApproveRequest {
   string request_id = 1;
-  string user_node_id = 2;
+  string user_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string comment = 3;
 }
 
 message RejectRequest {
   string request_id = 1;
-  string user_node_id = 2;
+  string user_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string comment = 3;
 }
 
 message BatchApproveRequest {
   repeated string request_ids = 1;
-  string user_node_id = 2;
+  string user_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string comment = 3;
 }
 
@@ -165,23 +165,23 @@ message BatchApproveResponse {
 // ============================================
 
 message GetPendingRequest {
-  string user_node_id = 1;
+  string user_node_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message GetHistoryRequest {
-  string user_node_id = 1;
+  string user_node_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string cursor = 2;         // acted_at cursor for paging
   int32 limit = 3;
 }
 
 message GetMyRequestsRequest {
-  string user_node_id = 1;
+  string user_node_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string cursor = 2;         // created_at cursor
   int32 limit = 3;
 }
 
 message GetDepartmentRequestsRequest {
-  string user_node_id = 1;
+  string user_node_id = 1 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string cursor = 2;         // created_at cursor
   int32 limit = 3;
 }

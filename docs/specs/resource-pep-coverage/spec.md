@@ -9,7 +9,8 @@ Workspace administration is covered by `workspace-admin-authorization`.
 
 ### Requirement: Every PEP fails closed
 Each check listed here SHALL treat an empty caller, an unresolvable OA, a policy-service error,
-or any decision other than ALLOW as a denial. The caller SHALL come from verified JWT claims.
+or any decision other than ALLOW as a denial. The caller SHALL come from verified JWT claims at
+the REST edge and from gRPC request metadata between services (see "Caller identity on gRPC").
 
 #### Scenario: Policy service error
 - **WHEN** the PDP call for any guarded operation errors
@@ -87,3 +88,46 @@ actor, within that tenant.
 #### Scenario: Unrelated caller gets a request
 - **WHEN** a caller who neither created a request nor can approve its type fetches it
 - **THEN** the request is denied with PermissionDenied
+
+### Requirement: Caller identity on gRPC comes from metadata
+The REST edge SHALL put the caller verified from the JWT (user id, NGAC node id, tenant id) on the
+request context (`httputil.SetClaims`), and every gRPC client SHALL forward it as request metadata
+(`grpcauth.ClientInterceptor`). Every gRPC server SHALL reject a request that carries no complete
+caller with `Unauthenticated` (`grpcauth.ServerInterceptor`), except the methods its policy lists,
+and handlers SHALL take the caller from `grpcauth.CallerFrom(ctx)` and never from a field of the
+request body. The caller fields of the request messages (`user_ngac_node_id`, `requester_ngac_node_id`,
+`inviter_ngac_node_id`, `current_owner_ngac_node_id`, `sender_*`, approval `user_node_id`, and the
+`user_id` that accompanies them) are deprecated and ignored; where a body field and the metadata
+disagree, the metadata wins. A request that carries no caller reaches only the methods below.
+
+| Server | Method | Accepted without a user | Why |
+|---|---|---|---|
+| every server | `grpc.health.v1.Health/Check` | no identity at all | liveness and readiness probes |
+| auth | `Register`, `Login`, `Signup`, `Signin` | no identity at all | the request carries the credentials that authenticate it |
+| auth | `IsTokenRevoked` | a named service | token validity is checked from a bare jti |
+| policy | `PolicyWrite/CreateNode`, `PolicyWrite/CreateAssignment`, `PolicyRead/FindNodeByName` | a named service | auth provisions user and tenant nodes during signup and sign-in, before any user is authenticated |
+
+A named service is the `x-service-name` metadata a client interceptor adds when the context holds no
+caller. It attributes the call; it is not a credential. Authenticating services to each other (mTLS or
+an internal token) is not part of this requirement, and the gRPC ports are internal-only.
+
+Where the auth service has itself just authenticated a user (password, Google token, OTP, or an
+existing session) it calls workspace and messaging as that user (`grpcauth.WithCaller`), so those
+servers authorize the new user like any other caller.
+
+#### Scenario: Request without a caller
+- **WHEN** a gRPC request reaches a server with no caller metadata and the method is not exempt
+- **THEN** it is rejected with `Unauthenticated` and no handler runs
+
+#### Scenario: Body and metadata name different users
+- **WHEN** a request body names user A and the metadata names user B
+- **THEN** the decision is taken for user B and A never reaches the policy check
+
+#### Scenario: Asset RPCs without a caller field
+- **WHEN** an authorized caller calls `GetType`, `ListTypes`, `GetRequest` (asset) or `UpdateQuota` (drive) over the network
+- **THEN** the call succeeds, because the caller travels in metadata and not in a process-local context value
+
+#### Scenario: Service identity on a guarded method
+- **WHEN** a request carries only a service identity and the method is not in the table above
+- **THEN** it is rejected with `Unauthenticated`
+

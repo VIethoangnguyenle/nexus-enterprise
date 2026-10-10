@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/events"
 )
@@ -95,16 +96,19 @@ func (h *Hub) Close() {
 // of the channel and takes the same check as fetching its history: read on the
 // channel's content OA. Knowing a channel ID is not a capability. Any failure —
 // no checker, no identity, a policy error — is a refusal.
-func (h *Hub) authorizeSubscribe(channelID, userNodeID string) error {
+//
+// who is the session's verified identity (from the JWT it authenticated with);
+// it rides the context so the policy check runs as that user.
+func (h *Hub) authorizeSubscribe(channelID string, who grpcauth.Caller) error {
 	if h.access == nil {
 		return errors.New("no channel access checker configured")
 	}
-	if channelID == "" || userNodeID == "" {
+	if channelID == "" || who.NGACNodeID == "" {
 		return errors.New("channel and user identity required")
 	}
-	ctx, cancel := context.WithTimeout(h.ctx, subscribeCheckTimeout)
+	ctx, cancel := context.WithTimeout(grpcauth.WithCaller(h.ctx, who), subscribeCheckTimeout)
 	defer cancel()
-	return h.access.AuthorizeChannelAccess(ctx, channelID, userNodeID, ngac.OpRead)
+	return h.access.AuthorizeChannelAccess(ctx, channelID, who.NGACNodeID, ngac.OpRead)
 }
 
 // subscribe adds a client to a local channel group. Callers must have passed
@@ -587,7 +591,7 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 			return
 		}
 		channelID := payload.Subscribe.ChannelId
-		if err := c.hub.authorizeSubscribe(channelID, c.ngacNodeID); err != nil {
+		if err := c.hub.authorizeSubscribe(channelID, grpcauth.Caller{UserID: c.userID, NGACNodeID: c.ngacNodeID, TenantID: c.tenantID}); err != nil {
 			slog.Warn("websocket subscribe denied",
 				"user_id", c.userID, "channel_id", channelID, "error", err)
 			c.sendError(403, "not allowed to subscribe to this channel")

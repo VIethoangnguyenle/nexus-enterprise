@@ -20,6 +20,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/policy"
 	"ngac-platform/services/policy/internal/events"
 	pgrpc "ngac-platform/services/policy/internal/grpc"
@@ -85,12 +86,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			loggingInterceptor,
-			recoveryInterceptor,
-		),
-	)
+	srv := grpc.NewServer(grpcauth.ServerOptions(pgrpc.AuthPolicy(), loggingInterceptor, recoveryInterceptor)...)
 
 	// Shared targeted cache invalidator
 	cacheInvalidator := ngac.NewCacheInvalidator(rdb, store.GetGraph)

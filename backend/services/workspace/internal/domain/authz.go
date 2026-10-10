@@ -20,22 +20,6 @@ import (
 // Every helper here is fail-closed: an empty caller, a missing Mgmt OA, a
 // policy-service error, or any decision other than ALLOW is a denial.
 
-type requesterKey struct{}
-
-// WithRequester attaches the caller's NGAC user node ID to ctx. Transports use
-// it for requests whose wire message has no requester field; the REST layer
-// sets it from verified JWT claims.
-func WithRequester(ctx context.Context, userNodeID string) context.Context {
-	return context.WithValue(ctx, requesterKey{}, userNodeID)
-}
-
-// RequesterFrom returns the caller attached by WithRequester, or "" if none.
-// An empty requester is always denied by the authorization helpers.
-func RequesterFrom(ctx context.Context) string {
-	v, _ := ctx.Value(requesterKey{}).(string)
-	return v
-}
-
 // checkAccess asks the PDP for one decision. Routed through ngac.Allowed so a
 // transport error or an unrecognised decision denies.
 func (s *Service) checkAccess(ctx context.Context, userNodeID, objectNodeID, operation string) error {

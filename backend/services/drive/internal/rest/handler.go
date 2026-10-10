@@ -94,7 +94,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 
 // CreateFolder handles POST /api/workspaces/:id/drive/folders.
 func (h *Handler) CreateFolder(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
@@ -112,7 +112,6 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 		WorkspaceId:    c.Param("id"),
 		Name:           body.Name,
 		ParentId:       body.ParentID,
-		UserNgacNodeId: claims.NGACNodeID,
 		DriveContext:   body.DriveContext,
 		DriveContextId: body.DriveContextID,
 	})
@@ -124,13 +123,12 @@ func (h *Handler) CreateFolder(c echo.Context) error {
 
 // ListRoot handles GET /api/workspaces/:id/drive.
 func (h *Handler) ListRoot(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	resp, err := h.svc.ListFolder(c.Request().Context(), &pb.ListFolderRequest{
 		WorkspaceId:    c.Param("id"),
-		UserNgacNodeId: claims.NGACNodeID,
 		DriveContext:   c.QueryParam("drive_context"),
 		DriveContextId: c.QueryParam("drive_context_id"),
 	})
@@ -142,13 +140,12 @@ func (h *Handler) ListRoot(c echo.Context) error {
 
 // ListFolder handles GET /api/drive/folders/:folderId.
 func (h *Handler) ListFolder(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	resp, err := h.svc.ListFolder(c.Request().Context(), &pb.ListFolderRequest{
-		FolderId:       c.Param("folderId"),
-		UserNgacNodeId: claims.NGACNodeID,
+		FolderId: c.Param("folderId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -158,13 +155,12 @@ func (h *Handler) ListFolder(c echo.Context) error {
 
 // GetItem handles GET /api/drive/items/:itemId.
 func (h *Handler) GetItem(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	resp, err := h.svc.GetItem(c.Request().Context(), &pb.GetItemRequest{
-		ItemId:         c.Param("itemId"),
-		UserNgacNodeId: claims.NGACNodeID,
+		ItemId: c.Param("itemId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -174,7 +170,7 @@ func (h *Handler) GetItem(c echo.Context) error {
 
 // CreateFile handles POST /api/workspaces/:id/drive/files.
 func (h *Handler) CreateFile(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
@@ -189,13 +185,11 @@ func (h *Handler) CreateFile(c echo.Context) error {
 	}
 
 	resp, err := h.svc.CreateFile(c.Request().Context(), &pb.CreateFileRequest{
-		WorkspaceId:    c.Param("id"),
-		Name:           body.Name,
-		MimeType:       body.MimeType,
-		SizeBytes:      body.Size,
-		ParentId:       body.ParentID,
-		UserId:         claims.UserID,
-		UserNgacNodeId: claims.NGACNodeID,
+		WorkspaceId: c.Param("id"),
+		Name:        body.Name,
+		MimeType:    body.MimeType,
+		SizeBytes:   body.Size,
+		ParentId:    body.ParentID,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -205,13 +199,12 @@ func (h *Handler) CreateFile(c echo.Context) error {
 
 // ConfirmFile handles POST /api/drive/files/:fileId/confirm.
 func (h *Handler) ConfirmFile(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	resp, err := h.svc.ConfirmFile(c.Request().Context(), &pb.ConfirmFileRequest{
-		UserNgacNodeId: claims.NGACNodeID,
-		FileId:         c.Param("fileId"),
+		FileId: c.Param("fileId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -221,13 +214,12 @@ func (h *Handler) ConfirmFile(c echo.Context) error {
 
 // GetDownloadURL handles GET /api/drive/files/:fileId/download.
 func (h *Handler) GetDownloadURL(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	resp, err := h.svc.GetDownloadURL(c.Request().Context(), &pb.GetDownloadURLRequest{
-		FileId:         c.Param("fileId"),
-		UserNgacNodeId: claims.NGACNodeID,
+		FileId: c.Param("fileId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -237,7 +229,7 @@ func (h *Handler) GetDownloadURL(c echo.Context) error {
 
 // RenameItem handles PUT /api/drive/items/:itemId/rename.
 func (h *Handler) RenameItem(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
@@ -249,9 +241,8 @@ func (h *Handler) RenameItem(c echo.Context) error {
 	}
 
 	resp, err := h.svc.RenameItem(c.Request().Context(), &pb.RenameItemRequest{
-		ItemId:         c.Param("itemId"),
-		NewName:        body.Name,
-		UserNgacNodeId: claims.NGACNodeID,
+		ItemId:  c.Param("itemId"),
+		NewName: body.Name,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -261,7 +252,7 @@ func (h *Handler) RenameItem(c echo.Context) error {
 
 // MoveItem handles POST /api/drive/items/:itemId/move.
 func (h *Handler) MoveItem(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
@@ -273,9 +264,8 @@ func (h *Handler) MoveItem(c echo.Context) error {
 	}
 
 	resp, err := h.svc.MoveItem(c.Request().Context(), &pb.MoveItemRequest{
-		ItemId:         c.Param("itemId"),
-		NewParentId:    body.TargetFolderID,
-		UserNgacNodeId: claims.NGACNodeID,
+		ItemId:      c.Param("itemId"),
+		NewParentId: body.TargetFolderID,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -285,7 +275,7 @@ func (h *Handler) MoveItem(c echo.Context) error {
 
 // CopyItem handles POST /api/drive/items/:itemId/copy.
 func (h *Handler) CopyItem(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
@@ -297,9 +287,8 @@ func (h *Handler) CopyItem(c echo.Context) error {
 	}
 
 	resp, err := h.svc.CopyItem(c.Request().Context(), &pb.CopyItemRequest{
-		ItemId:         c.Param("itemId"),
-		DestParentId:   body.TargetFolderID,
-		UserNgacNodeId: claims.NGACNodeID,
+		ItemId:       c.Param("itemId"),
+		DestParentId: body.TargetFolderID,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -309,13 +298,12 @@ func (h *Handler) CopyItem(c echo.Context) error {
 
 // TrashItem handles DELETE /api/drive/items/:itemId.
 func (h *Handler) TrashItem(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	_, err = h.svc.TrashItem(c.Request().Context(), &pb.TrashItemRequest{
-		ItemId:         c.Param("itemId"),
-		UserNgacNodeId: claims.NGACNodeID,
+		ItemId: c.Param("itemId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -325,13 +313,12 @@ func (h *Handler) TrashItem(c echo.Context) error {
 
 // RestoreItem handles POST /api/drive/items/:itemId/restore.
 func (h *Handler) RestoreItem(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	resp, err := h.svc.RestoreItem(c.Request().Context(), &pb.RestoreItemRequest{
-		ItemId:         c.Param("itemId"),
-		UserNgacNodeId: claims.NGACNodeID,
+		ItemId: c.Param("itemId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -341,13 +328,12 @@ func (h *Handler) RestoreItem(c echo.Context) error {
 
 // DeleteItem handles DELETE /api/drive/items/:itemId/permanent.
 func (h *Handler) DeleteItem(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	_, err = h.svc.DeleteItem(c.Request().Context(), &pb.DeleteItemRequest{
-		ItemId:         c.Param("itemId"),
-		UserNgacNodeId: claims.NGACNodeID,
+		ItemId: c.Param("itemId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -357,7 +343,7 @@ func (h *Handler) DeleteItem(c echo.Context) error {
 
 // CreateShare handles POST /api/drive/items/:itemId/share.
 func (h *Handler) CreateShare(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
@@ -372,7 +358,6 @@ func (h *Handler) CreateShare(c echo.Context) error {
 
 	resp, err := h.svc.CreateShare(c.Request().Context(), &pb.CreateShareRequest{
 		ItemId:           c.Param("itemId"),
-		UserNgacNodeId:   claims.NGACNodeID,
 		TargetNgacNodeId: body.TargetNodeID,
 		ShareType:        body.ShareType,
 		Operations:       []string{body.Permission},
@@ -385,13 +370,12 @@ func (h *Handler) CreateShare(c echo.Context) error {
 
 // RevokeShare handles DELETE /api/drive/shares/:shareId.
 func (h *Handler) RevokeShare(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	_, err = h.svc.RevokeShare(c.Request().Context(), &pb.RevokeShareRequest{
-		ShareId:        c.Param("shareId"),
-		UserNgacNodeId: claims.NGACNodeID,
+		ShareId: c.Param("shareId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -401,13 +385,12 @@ func (h *Handler) RevokeShare(c echo.Context) error {
 
 // ListShares handles GET /api/drive/items/:itemId/shares.
 func (h *Handler) ListShares(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	resp, err := h.svc.ListShares(c.Request().Context(), &pb.ListSharesRequest{
-		UserNgacNodeId: claims.NGACNodeID,
-		ItemId:         c.Param("itemId"),
+		ItemId: c.Param("itemId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -417,13 +400,11 @@ func (h *Handler) ListShares(c echo.Context) error {
 
 // SharedWithMe handles GET /api/drive/shared-with-me.
 func (h *Handler) SharedWithMe(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
-	resp, err := h.svc.GetSharedWithMe(c.Request().Context(), &pb.GetSharedWithMeRequest{
-		UserNgacNodeId: claims.NGACNodeID,
-	})
+	resp, err := h.svc.GetSharedWithMe(c.Request().Context(), &pb.GetSharedWithMeRequest{})
 	if err != nil {
 		return mapGRPCError(err)
 	}
@@ -432,13 +413,12 @@ func (h *Handler) SharedWithMe(c echo.Context) error {
 
 // GetQuota handles GET /api/workspaces/:id/drive/quota.
 func (h *Handler) GetQuota(c echo.Context) error {
-	claims, err := httputil.RequireClaims(c)
+	_, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	resp, err := h.svc.GetQuota(c.Request().Context(), &pb.GetQuotaRequest{
-		UserNgacNodeId: claims.NGACNodeID,
-		WorkspaceId:    c.Param("id"),
+		WorkspaceId: c.Param("id"),
 	})
 	if err != nil {
 		return mapGRPCError(err)

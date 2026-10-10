@@ -5,6 +5,8 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
+
+	"ngac-platform/pkg/grpcauth"
 )
 
 // Claims holds the JWT payload fields used across all NGAC services.
@@ -21,8 +23,20 @@ type Claims struct {
 // it after validating a token; handler tests call it to stand in for the
 // middleware. It is the only writer of the claims key, so the storage format
 // stays in one place.
+//
+// It also puts the verified caller on the request context, which is what the
+// gRPC client interceptor forwards to other services (see pkg/grpcauth).
 func SetClaims(c echo.Context, claims *Claims) {
 	c.Set(claimsKey, claims)
+	if claims == nil {
+		return
+	}
+	ctx := grpcauth.WithCaller(c.Request().Context(), grpcauth.Caller{
+		UserID:     claims.UserID,
+		NGACNodeID: claims.NGACNodeID,
+		TenantID:   claims.TenantID,
+	})
+	c.SetRequest(c.Request().WithContext(ctx))
 }
 
 // GetClaims extracts the parsed JWT claims from the echo.Context.

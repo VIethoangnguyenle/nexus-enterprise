@@ -21,6 +21,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	drivepb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
@@ -67,7 +68,8 @@ func main() {
 	}
 	defer pool.Close()
 
-	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("workspace")))
 	if err != nil {
 		slog.Error("failed to connect to policy service", "address", policyAddr, "error", err)
 		os.Exit(1)
@@ -76,7 +78,8 @@ func main() {
 
 	policyReadConn := policyConn
 	if policyReadAddr != policyAddr {
-		policyReadConn, err = grpc.NewClient(policyReadAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+		policyReadConn, err = grpc.NewClient(policyReadAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("workspace")))
 		if err != nil {
 			slog.Error("failed to connect to policy read service", "address", policyReadAddr, "error", err)
 			os.Exit(1)
@@ -102,15 +105,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			loggingInterceptor,
-			recoveryInterceptor,
-		),
-	)
+	srv := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()}, loggingInterceptor, recoveryInterceptor)...)
 	// Connect to Drive Service (optional)
 	var driveClient drivepb.DriveServiceClient
-	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("workspace")))
 	if err != nil {
 		slog.Warn("drive service unavailable, workspace drives disabled", "address", driveAddr, "error", err)
 	} else {

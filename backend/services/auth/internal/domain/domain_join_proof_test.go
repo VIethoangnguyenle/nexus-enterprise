@@ -114,3 +114,25 @@ func TestOTP_NewUserNeverAutoJoinsByDomain(t *testing.T) {
 		t.Fatal("an OTP-registered user was auto-joined by domain; OTP does not prove email ownership")
 	}
 }
+
+// Signup runs before any token exists, so the downstream workspace and channel
+// RPCs must carry the user auth just created — otherwise their servers see no
+// caller and refuse.
+func TestSignup_DownstreamRPCsCarryTheNewUserAsCaller(t *testing.T) {
+	w := newFakeWorld()
+	svc := w.service(t)
+
+	res, err := svc.Signup(context.Background(), "new@example.org", "pw-123456", "New", "")
+	if err != nil {
+		t.Fatalf("signup: %v", err)
+	}
+
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for _, rpc := range []string{"CreateWorkspace", "CreateChannel"} {
+		got := w.callers[rpc]
+		if got.UserID != res.UserID || got.NGACNodeID != res.NGACNodeID || !got.Authenticated() {
+			t.Errorf("%s caller = %+v, want user %s node %s", rpc, got, res.UserID, res.NGACNodeID)
+		}
+	}
+}

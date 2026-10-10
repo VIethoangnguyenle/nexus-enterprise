@@ -21,6 +21,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/document"
 	drivepb "ngac-platform/proto/drive"
@@ -91,12 +92,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			loggingInterceptor,
-			recoveryInterceptor,
-		),
-	)
+	srv := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()}, loggingInterceptor, recoveryInterceptor)...)
 	pb.RegisterDocumentStorageServiceServer(srv, dgrpc.NewDocumentStorageServer(pool, minioClient, presignClient))
 
 	healthSrv := health.NewServer()
@@ -105,7 +101,8 @@ func main() {
 
 	// Connect to Drive Service for legacy document endpoint proxying
 	var driveClient drivepb.DriveServiceClient
-	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	driveConn, err := grpc.NewClient(driveAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("document")))
 	if err != nil {
 		slog.Warn("drive service unavailable for document proxy", "address", driveAddr, "error", err)
 	} else {

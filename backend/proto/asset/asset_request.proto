@@ -39,43 +39,43 @@ message AssetRequest {
 message CreateAssetRequestReq {
   string type_id = 1;
   string workspace_id = 2;
-  string user_id = 3;
-  string user_ngac_node_id = 4;
+  string user_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 4 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string justification = 5;
   int32 quantity = 6;
 }
 
 message ApproveRequestReq {
   string request_id = 1;
-  string user_id = 2;
-  string user_ngac_node_id = 3;
+  string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string comment = 4;
 }
 
 message RejectRequestReq {
   string request_id = 1;
-  string user_id = 2;
-  string user_ngac_node_id = 3;
+  string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string reason = 4;
 }
 
 message AssignAssetReq {
   string request_id = 1;
   string asset_id = 2;
-  string user_id = 3;
-  string user_ngac_node_id = 4;
+  string user_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 4 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message ReturnAssetReq {
   string asset_id = 1;
-  string user_id = 2;
-  string user_ngac_node_id = 3;
+  string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
 }
 
 message ListRequestsReq {
   string workspace_id = 1;
-  string user_id = 2;
-  string user_ngac_node_id = 3;
+  string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string status = 4;               // Optional filter
   bool mine_only = 5;              // If true, only return user's own requests
   int32 limit = 6;

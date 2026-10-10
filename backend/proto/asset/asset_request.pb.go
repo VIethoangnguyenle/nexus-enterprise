@@ -179,13 +179,15 @@ func (x *AssetRequest) GetUpdatedAt() *timestamppb.Timestamp {
 }
 
 type CreateAssetRequestReq struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	TypeId         string                 `protobuf:"bytes,1,opt,name=type_id,json=typeId,proto3" json:"type_id,omitempty"`
-	WorkspaceId    string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	Justification  string                 `protobuf:"bytes,5,opt,name=justification,proto3" json:"justification,omitempty"`
-	Quantity       int32                  `protobuf:"varint,6,opt,name=quantity,proto3" json:"quantity,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	TypeId      string                 `protobuf:"bytes,1,opt,name=type_id,json=typeId,proto3" json:"type_id,omitempty"`
+	WorkspaceId string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserId string `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserNgacNodeId string `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Justification  string `protobuf:"bytes,5,opt,name=justification,proto3" json:"justification,omitempty"`
+	Quantity       int32  `protobuf:"varint,6,opt,name=quantity,proto3" json:"quantity,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -234,6 +236,7 @@ func (x *CreateAssetRequestReq) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *CreateAssetRequestReq) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -241,6 +244,7 @@ func (x *CreateAssetRequestReq) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *CreateAssetRequestReq) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -263,11 +267,13 @@ func (x *CreateAssetRequestReq) GetQuantity() int32 {
 }
 
 type ApproveRequestReq struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	RequestId      string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	Comment        string                 `protobuf:"bytes,4,opt,name=comment,proto3" json:"comment,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Comment        string `protobuf:"bytes,4,opt,name=comment,proto3" json:"comment,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -309,6 +315,7 @@ func (x *ApproveRequestReq) GetRequestId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *ApproveRequestReq) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -316,6 +323,7 @@ func (x *ApproveRequestReq) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *ApproveRequestReq) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -331,11 +339,13 @@ func (x *ApproveRequestReq) GetComment() string {
 }
 
 type RejectRequestReq struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	RequestId      string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	Reason         string                 `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Reason         string `protobuf:"bytes,4,opt,name=reason,proto3" json:"reason,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -377,6 +387,7 @@ func (x *RejectRequestReq) GetRequestId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *RejectRequestReq) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -384,6 +395,7 @@ func (x *RejectRequestReq) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *RejectRequestReq) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -399,11 +411,13 @@ func (x *RejectRequestReq) GetReason() string {
 }
 
 type AssignAssetReq struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	RequestId      string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	AssetId        string                 `protobuf:"bytes,2,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	AssetId   string                 `protobuf:"bytes,2,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserId string `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserNgacNodeId string `protobuf:"bytes,4,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -452,6 +466,7 @@ func (x *AssignAssetReq) GetAssetId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *AssignAssetReq) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -459,6 +474,7 @@ func (x *AssignAssetReq) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *AssignAssetReq) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -467,10 +483,12 @@ func (x *AssignAssetReq) GetUserNgacNodeId() string {
 }
 
 type ReturnAssetReq struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	AssetId        string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	AssetId string                 `protobuf:"bytes,1,opt,name=asset_id,json=assetId,proto3" json:"asset_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -512,6 +530,7 @@ func (x *ReturnAssetReq) GetAssetId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *ReturnAssetReq) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -519,6 +538,7 @@ func (x *ReturnAssetReq) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *ReturnAssetReq) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -527,14 +547,16 @@ func (x *ReturnAssetReq) GetUserNgacNodeId() string {
 }
 
 type ListRequestsReq struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	WorkspaceId    string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
-	UserId         string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserNgacNodeId string                 `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"`
-	Status         string                 `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`                      // Optional filter
-	MineOnly       bool                   `protobuf:"varint,5,opt,name=mine_only,json=mineOnly,proto3" json:"mine_only,omitempty"` // If true, only return user's own requests
-	Limit          int32                  `protobuf:"varint,6,opt,name=limit,proto3" json:"limit,omitempty"`
-	Offset         int32                  `protobuf:"varint,7,opt,name=offset,proto3" json:"offset,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
+	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
+	Status         string `protobuf:"bytes,4,opt,name=status,proto3" json:"status,omitempty"`                                           // Optional filter
+	MineOnly       bool   `protobuf:"varint,5,opt,name=mine_only,json=mineOnly,proto3" json:"mine_only,omitempty"`                      // If true, only return user's own requests
+	Limit          int32  `protobuf:"varint,6,opt,name=limit,proto3" json:"limit,omitempty"`
+	Offset         int32  `protobuf:"varint,7,opt,name=offset,proto3" json:"offset,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -576,6 +598,7 @@ func (x *ListRequestsReq) GetWorkspaceId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *ListRequestsReq) GetUserId() string {
 	if x != nil {
 		return x.UserId
@@ -583,6 +606,7 @@ func (x *ListRequestsReq) GetUserId() string {
 	return ""
 }
 
+// Deprecated: Marked as deprecated in proto/asset/asset_request.proto.
 func (x *ListRequestsReq) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
@@ -738,40 +762,40 @@ const file_proto_asset_asset_request_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x0e \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x129\n" +
 	"\n" +
-	"updated_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xd9\x01\n" +
+	"updated_at\x18\x0f \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"\xe1\x01\n" +
 	"\x15CreateAssetRequestReq\x12\x17\n" +
 	"\atype_id\x18\x01 \x01(\tR\x06typeId\x12!\n" +
-	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x04 \x01(\tR\x0euserNgacNodeId\x12$\n" +
+	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x1b\n" +
+	"\auser_id\x18\x03 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x04 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12$\n" +
 	"\rjustification\x18\x05 \x01(\tR\rjustification\x12\x1a\n" +
-	"\bquantity\x18\x06 \x01(\x05R\bquantity\"\x90\x01\n" +
+	"\bquantity\x18\x06 \x01(\x05R\bquantity\"\x98\x01\n" +
 	"\x11ApproveRequestReq\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\tR\trequestId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\x12\x18\n" +
-	"\acomment\x18\x04 \x01(\tR\acomment\"\x8d\x01\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1b\n" +
+	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12\x18\n" +
+	"\acomment\x18\x04 \x01(\tR\acomment\"\x95\x01\n" +
 	"\x10RejectRequestReq\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x01 \x01(\tR\trequestId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\x12\x16\n" +
-	"\x06reason\x18\x04 \x01(\tR\x06reason\"\x8e\x01\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x1b\n" +
+	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12\x16\n" +
+	"\x06reason\x18\x04 \x01(\tR\x06reason\"\x96\x01\n" +
 	"\x0eAssignAssetReq\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x19\n" +
-	"\basset_id\x18\x02 \x01(\tR\aassetId\x12\x17\n" +
-	"\auser_id\x18\x03 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x04 \x01(\tR\x0euserNgacNodeId\"o\n" +
+	"\basset_id\x18\x02 \x01(\tR\aassetId\x12\x1b\n" +
+	"\auser_id\x18\x03 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x04 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"w\n" +
 	"\x0eReturnAssetReq\x12\x19\n" +
-	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\"\xdb\x01\n" +
+	"\basset_id\x18\x01 \x01(\tR\aassetId\x12\x1b\n" +
+	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"\xe3\x01\n" +
 	"\x0fListRequestsReq\x12!\n" +
-	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\x12)\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tR\x0euserNgacNodeId\x12\x16\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x1b\n" +
+	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12\x16\n" +
 	"\x06status\x18\x04 \x01(\tR\x06status\x12\x1b\n" +
 	"\tmine_only\x18\x05 \x01(\bR\bmineOnly\x12\x14\n" +
 	"\x05limit\x18\x06 \x01(\x05R\x05limit\x12\x16\n" +

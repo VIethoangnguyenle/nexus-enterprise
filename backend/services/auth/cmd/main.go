@@ -23,6 +23,7 @@ import (
 	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/status"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/auth"
 	messagingpb "ngac-platform/proto/messaging"
@@ -67,7 +68,8 @@ func main() {
 	}
 	defer pool.Close()
 
-	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("auth")))
 	if err != nil {
 		slog.Error("failed to connect to policy service", "address", policyAddr, "error", err)
 		os.Exit(1)
@@ -78,7 +80,8 @@ func main() {
 
 	// Workspace gRPC client (for auto-provisioning on register)
 	var wsClient workspacepb.WorkspaceServiceClient
-	wsConn, err := grpc.NewClient(workspaceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	wsConn, err := grpc.NewClient(workspaceAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("auth")))
 	if err != nil {
 		slog.Warn("workspace service unavailable, auto-provision disabled", "address", workspaceAddr, "error", err)
 	} else {
@@ -88,7 +91,8 @@ func main() {
 
 	// Messaging gRPC client (for auto-provisioning #general channel)
 	var msgClient messagingpb.MessagingServiceClient
-	msgConn, err := grpc.NewClient(messagingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	msgConn, err := grpc.NewClient(messagingAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("auth")))
 	if err != nil {
 		slog.Warn("messaging service unavailable, auto-provision disabled", "address", messagingAddr, "error", err)
 	} else {
@@ -122,12 +126,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	srv := grpc.NewServer(
-		grpc.ChainUnaryInterceptor(
-			loggingInterceptor,
-			recoveryInterceptor,
-		),
-	)
+	srv := grpc.NewServer(grpcauth.ServerOptions(agrpc.AuthPolicy(), loggingInterceptor, recoveryInterceptor)...)
 	pb.RegisterAuthServiceServer(srv, agrpc.NewAuthServer(svc, rdb))
 
 	healthSrv := health.NewServer()

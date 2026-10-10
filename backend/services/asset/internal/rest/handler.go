@@ -12,35 +12,7 @@ import (
 
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/asset"
-	"ngac-platform/services/asset/internal/caller"
 )
-
-// callerNodeID returns the authenticated caller's NGAC node, or "" — which every
-// guarded RPC treats as unauthenticated and denies.
-func callerNodeID(c echo.Context) string {
-	if claims := httputil.GetClaims(c); claims != nil {
-		return claims.NGACNodeID
-	}
-	return ""
-}
-
-// callerUserID returns the authenticated caller's user ID, or "".
-func callerUserID(c echo.Context) string {
-	if claims := httputil.GetClaims(c); claims != nil {
-		return claims.UserID
-	}
-	return ""
-}
-
-// callerCtx returns the request context carrying the authenticated caller, for
-// RPCs whose request message has no caller field (see package caller).
-func callerCtx(c echo.Context) context.Context {
-	ctx := c.Request().Context()
-	if claims := httputil.GetClaims(c); claims != nil {
-		ctx = caller.WithIdentity(ctx, caller.Identity{UserID: claims.UserID, NGACNodeID: claims.NGACNodeID})
-	}
-	return ctx
-}
 
 // AssetService defines the operations the REST handler needs for assets.
 type AssetService interface {
@@ -119,8 +91,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 // GetAssetSummary returns aggregate counts for the asset dashboard.
 func (h *Handler) GetAssetSummary(c echo.Context) error {
 	resp, err := h.assetSvc.ListAssets(c.Request().Context(), &pb.ListAssetsRequest{
-		WorkspaceId:    c.Param("id"),
-		UserNgacNodeId: callerNodeID(c),
+		WorkspaceId: c.Param("id"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -143,7 +114,6 @@ func (h *Handler) GetAssetSummary(c echo.Context) error {
 // --- Asset Types ---
 
 func (h *Handler) CreateAssetType(c echo.Context) error {
-	claims := httputil.GetClaims(c)
 	var body struct {
 		Name     string `json:"name"`
 		Category string `json:"category"`
@@ -152,10 +122,9 @@ func (h *Handler) CreateAssetType(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	resp, err := h.typeSvc.CreateType(c.Request().Context(), &pb.CreateTypeRequest{
-		WorkspaceId:    c.Param("id"),
-		Name:           body.Name,
-		Category:       body.Category,
-		UserNgacNodeId: claims.NGACNodeID,
+		WorkspaceId: c.Param("id"),
+		Name:        body.Name,
+		Category:    body.Category,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -164,7 +133,7 @@ func (h *Handler) CreateAssetType(c echo.Context) error {
 }
 
 func (h *Handler) ListAssetTypes(c echo.Context) error {
-	resp, err := h.typeSvc.ListTypes(callerCtx(c), &pb.ListTypesRequest{
+	resp, err := h.typeSvc.ListTypes(c.Request().Context(), &pb.ListTypesRequest{
 		WorkspaceId: c.Param("id"),
 	})
 	if err != nil {
@@ -174,7 +143,7 @@ func (h *Handler) ListAssetTypes(c echo.Context) error {
 }
 
 func (h *Handler) GetAssetType(c echo.Context) error {
-	resp, err := h.typeSvc.GetType(callerCtx(c), &pb.GetTypeRequest{
+	resp, err := h.typeSvc.GetType(c.Request().Context(), &pb.GetTypeRequest{
 		TypeId: c.Param("typeId"),
 	})
 	if err != nil {
@@ -191,9 +160,8 @@ func (h *Handler) UpdateAssetTypeSchema(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	resp, err := h.typeSvc.UpdateTypeSchema(c.Request().Context(), &pb.UpdateTypeSchemaRequest{
-		TypeId:         c.Param("typeId"),
-		FieldsSchema:   body.FieldsSchema,
-		UserNgacNodeId: callerNodeID(c),
+		TypeId:       c.Param("typeId"),
+		FieldsSchema: body.FieldsSchema,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -204,7 +172,6 @@ func (h *Handler) UpdateAssetTypeSchema(c echo.Context) error {
 // --- Assets ---
 
 func (h *Handler) CreateAsset(c echo.Context) error {
-	claims := httputil.GetClaims(c)
 	var body struct {
 		TypeID string `json:"type_id"`
 		Name   string `json:"name"`
@@ -213,10 +180,9 @@ func (h *Handler) CreateAsset(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	resp, err := h.assetSvc.CreateAsset(c.Request().Context(), &pb.CreateAssetRequest{
-		WorkspaceId:    c.Param("id"),
-		TypeId:         body.TypeID,
-		Name:           body.Name,
-		UserNgacNodeId: claims.NGACNodeID,
+		WorkspaceId: c.Param("id"),
+		TypeId:      body.TypeID,
+		Name:        body.Name,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -226,9 +192,8 @@ func (h *Handler) CreateAsset(c echo.Context) error {
 
 func (h *Handler) ListAssets(c echo.Context) error {
 	resp, err := h.assetSvc.ListAssets(c.Request().Context(), &pb.ListAssetsRequest{
-		WorkspaceId:    c.Param("id"),
-		TypeId:         c.QueryParam("type_id"),
-		UserNgacNodeId: callerNodeID(c),
+		WorkspaceId: c.Param("id"),
+		TypeId:      c.QueryParam("type_id"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -238,8 +203,7 @@ func (h *Handler) ListAssets(c echo.Context) error {
 
 func (h *Handler) GetAsset(c echo.Context) error {
 	resp, err := h.assetSvc.GetAsset(c.Request().Context(), &pb.GetAssetRequest{
-		AssetId:        c.Param("assetId"),
-		UserNgacNodeId: callerNodeID(c),
+		AssetId: c.Param("assetId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -248,7 +212,6 @@ func (h *Handler) GetAsset(c echo.Context) error {
 }
 
 func (h *Handler) UpdateAsset(c echo.Context) error {
-	claims := httputil.GetClaims(c)
 	var body struct {
 		Name string `json:"name"`
 	}
@@ -256,9 +219,8 @@ func (h *Handler) UpdateAsset(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	resp, err := h.assetSvc.UpdateAsset(c.Request().Context(), &pb.UpdateAssetRequest{
-		AssetId:        c.Param("assetId"),
-		Name:           body.Name,
-		UserNgacNodeId: claims.NGACNodeID,
+		AssetId: c.Param("assetId"),
+		Name:    body.Name,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -267,10 +229,8 @@ func (h *Handler) UpdateAsset(c echo.Context) error {
 }
 
 func (h *Handler) DeleteAsset(c echo.Context) error {
-	claims := httputil.GetClaims(c)
 	_, err := h.assetSvc.DeleteAsset(c.Request().Context(), &pb.DeleteAssetRequest{
-		AssetId:        c.Param("assetId"),
-		UserNgacNodeId: claims.NGACNodeID,
+		AssetId: c.Param("assetId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -290,11 +250,9 @@ func (h *Handler) TransitionAsset(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	resp, err := h.assetSvc.TransitionAsset(c.Request().Context(), &pb.TransitionRequest{
-		AssetId:        c.Param("assetId"),
-		Action:         body.ToState,
-		Comment:        body.Comment,
-		UserId:         callerUserID(c),
-		UserNgacNodeId: callerNodeID(c),
+		AssetId: c.Param("assetId"),
+		Action:  body.ToState,
+		Comment: body.Comment,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -304,8 +262,7 @@ func (h *Handler) TransitionAsset(c echo.Context) error {
 
 func (h *Handler) GetAvailableTransitions(c echo.Context) error {
 	resp, err := h.assetSvc.GetAvailableTransitions(c.Request().Context(), &pb.GetTransitionsRequest{
-		AssetId:        c.Param("assetId"),
-		UserNgacNodeId: callerNodeID(c),
+		AssetId: c.Param("assetId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -315,8 +272,7 @@ func (h *Handler) GetAvailableTransitions(c echo.Context) error {
 
 func (h *Handler) GetAssetHistory(c echo.Context) error {
 	resp, err := h.assetSvc.GetAssetHistory(c.Request().Context(), &pb.GetHistoryRequest{
-		AssetId:        c.Param("assetId"),
-		UserNgacNodeId: callerNodeID(c),
+		AssetId: c.Param("assetId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -339,12 +295,10 @@ func (h *Handler) CreateAssetRequest(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	resp, err := h.requestSvc.CreateRequest(c.Request().Context(), &pb.CreateAssetRequestReq{
-		WorkspaceId:    c.Param("id"),
-		TypeId:         body.TypeID,
-		Justification:  body.Reason,
-		Quantity:       body.Quantity,
-		UserId:         callerUserID(c),
-		UserNgacNodeId: callerNodeID(c),
+		WorkspaceId:   c.Param("id"),
+		TypeId:        body.TypeID,
+		Justification: body.Reason,
+		Quantity:      body.Quantity,
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -368,9 +322,7 @@ func (h *Handler) GetAssetRequest(c echo.Context) error {
 // come from the token only.
 func (h *Handler) ApproveAssetRequest(c echo.Context) error {
 	resp, err := h.requestSvc.ApproveRequest(c.Request().Context(), &pb.ApproveRequestReq{
-		RequestId:      c.Param("reqId"),
-		UserId:         callerUserID(c),
-		UserNgacNodeId: callerNodeID(c),
+		RequestId: c.Param("reqId"),
 	})
 	if err != nil {
 		return mapGRPCError(err)
@@ -386,10 +338,8 @@ func (h *Handler) RejectAssetRequest(c echo.Context) error {
 	}
 	c.Bind(&body)
 	resp, err := h.requestSvc.RejectRequest(c.Request().Context(), &pb.RejectRequestReq{
-		RequestId:      c.Param("reqId"),
-		Reason:         body.Reason,
-		UserId:         callerUserID(c),
-		UserNgacNodeId: callerNodeID(c),
+		RequestId: c.Param("reqId"),
+		Reason:    body.Reason,
 	})
 	if err != nil {
 		return mapGRPCError(err)

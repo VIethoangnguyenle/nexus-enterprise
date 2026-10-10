@@ -14,9 +14,9 @@ import (
 	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
-	"ngac-platform/services/drive/internal/caller"
 	grpcserver "ngac-platform/services/drive/internal/grpc"
 )
 
@@ -96,13 +96,13 @@ func sharedFolder(t *testing.T, name string) (*pb.DriveItem, *pb.ShareInfo) {
 	t.Helper()
 	srv, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
-	folder, err := srv.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: name, UserNgacNodeId: "ngac-owner",
+	folder, err := srv.CreateFolder(asCaller("", "ngac-owner"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: name,
 	})
 	require.NoError(t, err)
-	share, err := srv.CreateShare(context.Background(), &pb.CreateShareRequest{
+	share, err := srv.CreateShare(asCaller("", "ngac-owner"), &pb.CreateShareRequest{
 		ItemId: folder.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{ngac.OpRead}, UserNgacNodeId: "ngac-owner",
+		Operations: []string{ngac.OpRead},
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
@@ -112,7 +112,7 @@ func sharedFolder(t *testing.T, name string) (*pb.DriveItem, *pb.ShareInfo) {
 func shareStillListed(t *testing.T, itemID, shareID string) bool {
 	t.Helper()
 	srv, _ := setupServer(t)
-	list, err := srv.ListShares(context.Background(), &pb.ListSharesRequest{ItemId: itemID, UserNgacNodeId: "ngac-owner"})
+	list, err := srv.ListShares(asCaller("", "ngac-owner"), &pb.ListSharesRequest{ItemId: itemID})
 	require.NoError(t, err)
 	for _, s := range list.Shares {
 		if s.Id == shareID {
@@ -140,8 +140,8 @@ func TestRevokeShare_DeniedWithoutShareRight(t *testing.T) {
 	pw := &recordingPolicyWrite{}
 	srv, _ := newServerWith(t, pr, pw)
 
-	_, err := srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{
-		ShareId: share.Id, UserNgacNodeId: "ngac-intruder",
+	_, err := srv.RevokeShare(asCaller("", "ngac-intruder"), &pb.RevokeShareRequest{
+		ShareId: share.Id,
 	})
 
 	require.Error(t, err)
@@ -173,8 +173,8 @@ func TestRevokeShare_DeniedWhenPolicyErrors(t *testing.T) {
 	pw := &recordingPolicyWrite{}
 	srv, _ := newServerWith(t, pr, pw)
 
-	_, err := srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{
-		ShareId: share.Id, UserNgacNodeId: "ngac-admin",
+	_, err := srv.RevokeShare(asCaller("", "ngac-admin"), &pb.RevokeShareRequest{
+		ShareId: share.Id,
 	})
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -190,8 +190,8 @@ func TestRevokeShare_AllowedWithShareRight(t *testing.T) {
 	pw := &recordingPolicyWrite{}
 	srv, _ := newServerWith(t, pr, pw)
 
-	_, err := srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{
-		ShareId: share.Id, UserNgacNodeId: "ngac-admin",
+	_, err := srv.RevokeShare(asCaller("", "ngac-admin"), &pb.RevokeShareRequest{
+		ShareId: share.Id,
 	})
 
 	require.NoError(t, err)
@@ -210,8 +210,8 @@ func TestRevokeShare_CreatorCanRevokeOwnShareWithoutShareRight(t *testing.T) {
 	pw := &recordingPolicyWrite{}
 	srv, _ := newServerWith(t, pr, pw)
 
-	_, err := srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{
-		ShareId: share.Id, UserNgacNodeId: "ngac-owner",
+	_, err := srv.RevokeShare(asCaller("", "ngac-owner"), &pb.RevokeShareRequest{
+		ShareId: share.Id,
 	})
 
 	require.NoError(t, err)
@@ -230,8 +230,8 @@ func TestRevokeShare_OtherMemberCannotRevokeWithoutShareRight(t *testing.T) {
 	pw := &recordingPolicyWrite{}
 	srv, _ := newServerWith(t, pr, pw)
 
-	_, err := srv.RevokeShare(context.Background(), &pb.RevokeShareRequest{
-		ShareId: share.Id, UserNgacNodeId: "ngac-member-2",
+	_, err := srv.RevokeShare(asCaller("", "ngac-member-2"), &pb.RevokeShareRequest{
+		ShareId: share.Id,
 	})
 
 	assert.Equal(t, codes.PermissionDenied, status.Code(err))
@@ -244,14 +244,14 @@ func TestRevokeShare_OtherMemberCannotRevokeWithoutShareRight(t *testing.T) {
 func TestRevokeShare_EmptyCreatorDoesNotMatchEmptyCaller(t *testing.T) {
 	allow, pool := setupServer(t)
 	wsID := getTestWorkspaceID(t, pool)
-	folder, err := allow.CreateFolder(context.Background(), &pb.CreateFolderRequest{
-		WorkspaceId: wsID, Name: "RevokeAnon", UserNgacNodeId: "ngac-owner",
+	folder, err := allow.CreateFolder(asCaller("", "ngac-owner"), &pb.CreateFolderRequest{
+		WorkspaceId: wsID, Name: "RevokeAnon",
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() { cleanDriveItems(t, pool, folder.Id) })
 	share, err := allow.CreateShare(context.Background(), &pb.CreateShareRequest{
 		ItemId: folder.Id, ShareType: "user", TargetNgacNodeId: "ngac-user-2",
-		Operations: []string{ngac.OpRead}, // no UserNgacNodeId: created_by is ""
+		Operations: []string{ngac.OpRead}, // no caller on the context: created_by is ""
 	})
 	require.NoError(t, err)
 
@@ -301,7 +301,7 @@ func TestUpdateQuota_DeniedWithoutManageOnMgmtOA(t *testing.T) {
 	pr.grant("ngac-member", oaID(ngac.DocumentsOAName(wsID)), ngac.OpManage)
 	pr.grant("ngac-member", oaID(ngac.MgmtOAName(wsID)), ngac.OpRead)
 
-	ctx := caller.WithIdentity(context.Background(), caller.Identity{NGACNodeID: "ngac-member"})
+	ctx := asCaller("", "ngac-member")
 	_, err := srv.UpdateQuota(ctx, &pb.UpdateQuotaRequest{
 		WorkspaceId: wsID, MaxBytes: beforeBytes + 12345, MaxFiles: beforeFiles + 7,
 	})
@@ -339,7 +339,7 @@ func TestUpdateQuota_DeniedWhenPolicyErrors(t *testing.T) {
 	pr.grant("ngac-owner", oaID(ngac.MgmtOAName(wsID)), ngac.OpManage)
 	pr.failErr = errors.New("policy unavailable")
 
-	ctx := caller.WithIdentity(context.Background(), caller.Identity{NGACNodeID: "ngac-owner"})
+	ctx := asCaller("", "ngac-owner")
 	_, err := srv.UpdateQuota(ctx, &pb.UpdateQuotaRequest{
 		WorkspaceId: wsID, MaxBytes: beforeBytes + 1, MaxFiles: 1,
 	})
@@ -359,7 +359,7 @@ func TestUpdateQuota_AllowedWithManageOnMgmtOA(t *testing.T) {
 	// The response re-reads the quota, which takes read on the drive root.
 	pr.grant("ngac-owner", anyObject, ngac.OpRead)
 
-	ctx := caller.WithIdentity(context.Background(), caller.Identity{NGACNodeID: "ngac-owner"})
+	ctx := asCaller("", "ngac-owner")
 	q, err := srv.UpdateQuota(ctx, &pb.UpdateQuotaRequest{
 		WorkspaceId: wsID, MaxBytes: 987654321, MaxFiles: 4321,
 	})
@@ -368,4 +368,10 @@ func TestUpdateQuota_AllowedWithManageOnMgmtOA(t *testing.T) {
 	assert.Contains(t, pr.checks, [3]string{"ngac-owner", oaID(ngac.MgmtOAName(wsID)), ngac.OpManage})
 	assert.Equal(t, int64(987654321), q.MaxBytes)
 	assert.Equal(t, int32(4321), q.MaxFiles)
+}
+
+// asCaller returns a context carrying the caller the interceptor would have
+// put there from request metadata.
+func asCaller(userID, nodeID string) context.Context {
+	return grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: userID, NGACNodeID: nodeID})
 }

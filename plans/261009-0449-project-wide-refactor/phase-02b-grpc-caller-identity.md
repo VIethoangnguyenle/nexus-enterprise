@@ -1,7 +1,7 @@
 ---
 phase: 2b
 title: "gRPC caller identity"
-status: pending
+status: done
 priority: P2
 effort: 3-4d
 dependencies: [1]

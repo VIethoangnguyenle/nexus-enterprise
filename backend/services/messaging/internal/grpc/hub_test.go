@@ -561,8 +561,8 @@ func TestRemoveChannelMember_EndsLiveSubscription(t *testing.T) {
 	subscribeAndWait(t, hub, victim, chID)
 	subscribeAndWait(t, hub, stay, chID)
 
-	_, err := srv.RemoveChannelMember(context.Background(), &pb.RemoveChannelMemberRequest{
-		ChannelId: chID, RequesterNgacNodeId: "ngac-owner", TargetNgacNodeId: "ngac-victim",
+	_, err := srv.RemoveChannelMember(asCaller("", "ngac-owner"), &pb.RemoveChannelMemberRequest{
+		ChannelId: chID, TargetNgacNodeId: "ngac-victim",
 	})
 	require.NoError(t, err)
 
@@ -586,8 +586,8 @@ func TestRemoveChannelMember_DeniedLeavesSubscription(t *testing.T) {
 	member := connect(t, url, identity{"u-member", "member", "ngac-member", "tenant-a"})
 	subscribeAndWait(t, hub, member, chID)
 
-	_, err := srv.RemoveChannelMember(context.Background(), &pb.RemoveChannelMemberRequest{
-		ChannelId: chID, RequesterNgacNodeId: "ngac-outsider", TargetNgacNodeId: "ngac-member",
+	_, err := srv.RemoveChannelMember(asCaller("", "ngac-outsider"), &pb.RemoveChannelMemberRequest{
+		ChannelId: chID, TargetNgacNodeId: "ngac-member",
 	})
 	require.Error(t, err)
 

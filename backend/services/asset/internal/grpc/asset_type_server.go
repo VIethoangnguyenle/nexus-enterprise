@@ -11,9 +11,9 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/asset"
 	policypb "ngac-platform/proto/policy"
-	"ngac-platform/services/asset/internal/caller"
 	"ngac-platform/services/asset/internal/domain"
 	"ngac-platform/services/asset/internal/store"
 )
@@ -38,7 +38,7 @@ func (s *AssetTypeServer) CreateType(ctx context.Context, req *pb.CreateTypeRequ
 
 	// Defining asset types administers the workspace's asset tree. Checked
 	// before anything below writes to the graph.
-	if err := s.authorizeCreateType(ctx, req.UserNgacNodeId, req.WorkspaceId); err != nil {
+	if err := s.authorizeCreateType(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, req.WorkspaceId); err != nil {
 		return nil, err
 	}
 
@@ -112,11 +112,10 @@ func (s *AssetTypeServer) authorizeCreateType(ctx context.Context, userNodeID, w
 // GetType returns one asset type to a caller holding read on its workspace's
 // Assets OA.
 //
-// GetTypeRequest has no caller field, so the caller is read from the
-// in-process identity on the context (see package caller); a call without one
-// is denied before the type is looked up.
+// The caller comes from the context (see package grpcauth); a call without
+// one is denied before the type is looked up.
 func (s *AssetTypeServer) GetType(ctx context.Context, req *pb.GetTypeRequest) (*pb.AssetType, error) {
-	userNodeID := caller.FromContext(ctx).NGACNodeID
+	userNodeID := grpcauth.CallerFrom(ctx).NGACNodeID
 	if userNodeID == "" {
 		return nil, errDenied(ngac.OpRead)
 	}
@@ -137,7 +136,7 @@ func (s *AssetTypeServer) GetType(ctx context.Context, req *pb.GetTypeRequest) (
 // authorized for, so it lists nothing rather than refusing — that is the state
 // of every workspace before its first type is created.
 func (s *AssetTypeServer) ListTypes(ctx context.Context, req *pb.ListTypesRequest) (*pb.AssetTypeList, error) {
-	userNodeID := caller.FromContext(ctx).NGACNodeID
+	userNodeID := grpcauth.CallerFrom(ctx).NGACNodeID
 	if userNodeID == "" {
 		return nil, errDenied(ngac.OpRead)
 	}
@@ -170,7 +169,7 @@ func (s *AssetTypeServer) UpdateTypeSchema(ctx context.Context, req *pb.UpdateTy
 	if err != nil {
 		return nil, status.Errorf(codes.NotFound, "type not found: %v", err)
 	}
-	if err := authorizeOnNamedOA(ctx, s.policyRead, req.UserNgacNodeId, ngac.AssetsOAName(at.WorkspaceID), ngac.OpManage); err != nil {
+	if err := authorizeOnNamedOA(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, ngac.AssetsOAName(at.WorkspaceID), ngac.OpManage); err != nil {
 		return nil, err
 	}
 	if err := domain.ValidateSchema(json.RawMessage(req.FieldsSchema)); err != nil {

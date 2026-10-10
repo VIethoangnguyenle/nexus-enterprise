@@ -21,6 +21,7 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/approval"
 	policypb "ngac-platform/proto/policy"
@@ -53,7 +54,8 @@ func main() {
 	defer db.Close()
 
 	// Connect to Policy Service for scope resolution and access checks
-	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	policyConn, err := grpc.NewClient(policyAddr, grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithChainUnaryInterceptor(grpcauth.ClientInterceptor("approval")))
 	if err != nil {
 		log.Fatalf("connect policy service: %v", err)
 	}
@@ -67,7 +69,7 @@ func main() {
 	svc := domain.NewService(st, policyClient)
 	srv := approvalGRPC.NewServer(svc)
 
-	gs := grpc.NewServer()
+	gs := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()})...)
 	pb.RegisterApprovalServiceServer(gs, srv)
 
 	healthSrv := health.NewServer()
