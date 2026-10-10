@@ -6,9 +6,10 @@
 <style>
 /* Layout: same 4-column shell as core-screens (DESIGN.md §5). In Tin nhắn the list panel becomes
    a Google-Chat-style navigator (new chat, Home, Mentions, Starred, Direct messages, Nhóm).
-   A nhóm (space) has tabs Trò chuyện / Tệp / Công việc and in-line threaded topics. */
+   A nhóm (space) has tabs Trò chuyện / Tệp / Công việc and an in-line threaded stream (DESIGN.md §6 Chat). */
 :root { --space-icon-r: 8px; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; }
 svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 svg.i.s { width: 16px; height: 16px; }
@@ -108,7 +109,8 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .content { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; min-height: 0; background: var(--color-base); position: relative; }
 .chead { display: flex; align-items: center; gap: 12px; padding: 14px 20px 6px; min-width: 0; }
 .chead .t { display: grid; gap: 1px; min-width: 0; }
-.chead h3 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.chead h3 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chead h3 svg { vertical-align: -2px; margin-left: 6px; }
 .chead .sub { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chead .end { flex: none; }
 .chead .end { margin-left: auto; display: flex; align-items: center; gap: 6px; }
@@ -132,32 +134,208 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .conv .meta { display: grid; justify-items: end; gap: 4px; font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
 .conv .tag { font-size: 0.75rem; font-weight: 600; color: var(--p); }
 
-/* space stream with in-line threads */
-.stream { overflow: auto; display: grid; align-content: end; padding: 8px 16px 8px; gap: 10px; }
-.topic { background: var(--color-raised); border-radius: 12px; padding: 4px 0 6px; display: grid; }
-.msg { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; padding: 8px 14px; border-radius: 10px; }
-.msg .who { display: flex; align-items: baseline; gap: 8px; }
-.msg .who b { font-weight: 600; }
-.msg .who time { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
-.msg .txt { line-height: 1.55; max-width: 70ch; }
-.msg .tag { font-size: 0.75rem; font-weight: 600; color: var(--p); }
-.replies { display: flex; align-items: center; gap: 10px; margin: 0 14px 0 58px; padding: 6px 8px; border-radius: 8px; color: var(--color-accent); font-weight: 600; font-size: 0.8125rem; background: transparent; border: 0; cursor: pointer; text-align: left; transition: background-color var(--duration-quick) var(--ease-out); }
-.replies:hover { background: var(--color-hover); }
-.replies .muted { font-weight: 400; }
-.replies .new { margin-left: 4px; color: var(--color-ink); background: var(--color-accent-wash); border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; }
-.reply-cta { margin: 0 14px 0 58px; color: var(--color-ink-muted); font-size: 0.8125rem; display: flex; gap: 8px; align-items: center; }
-.reacts { display: flex; gap: 6px; margin-top: 6px; }
-.react { display: inline-flex; gap: 6px; align-items: center; height: 26px; padding: 0 9px; border-radius: 999px; background: var(--color-sunk); font-size: 0.8125rem; border: 0; color: var(--color-ink); }
+/* in-line stream (DESIGN.md §6 Chat): chronological rows, grouping, dividers, thread summaries */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.convo { position: relative; min-height: 0; display: grid; }
+.stream { position: relative; overflow: auto; display: flex; flex-direction: column; padding: 8px 8px 20px; min-height: 0; }
+.stream > :first-child { margin-top: auto; }
+.m { position: relative; flex: none; display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; padding: 8px 14px 6px; border-radius: 10px; transition: background-color var(--duration-quick) var(--ease-out); }
+.m:hover, .m:focus-within, .m.hov { background: var(--color-hover); }
+.m.cont { padding-top: 2px; }
+.m .gt { padding-top: 3px; text-align: center; font: 500 0.6875rem/1.5 var(--font-body); color: var(--color-ink-muted); font-variant-numeric: tabular-nums; opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.m:hover .gt, .m:focus-within .gt, .m.hov .gt { opacity: 1; }
+.mc { min-width: 0; }
+.who { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.who b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who time { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; flex: none; }
+.who .tag, .tsum .tag { font-size: 0.75rem; font-weight: 600; color: var(--p); flex: none; }
+.txt { line-height: 1.55; max-width: 70ch; overflow-wrap: anywhere; }
+.txt + .txt { margin-top: 4px; }
+.txt strong { font-weight: 600; }
+.txt a { color: var(--color-accent); text-underline-offset: 2px; }
+.txt code { font: 0.8125rem/1.5 var(--font-mono); background: var(--color-sunk); padding: 1px 4px; border-radius: 4px; }
+.txt pre { margin: 6px 0; padding: 10px 12px; border-radius: 8px; background: var(--color-sunk); overflow-x: auto; font: 0.8125rem/1.55 var(--font-mono); }
+.txt pre code { background: none; padding: 0; }
+.txt blockquote { margin: 6px 0; padding-left: 10px; border-left: 3px solid var(--color-line); color: var(--color-ink-muted); }
+.txt ul, .txt ol { margin: 4px 0; padding-left: 1.4em; }
+.dd { display: flex; align-items: center; gap: 12px; flex: none; padding: 14px 14px 6px; font: 600 0.75rem/1 var(--font-body); color: var(--color-ink-muted); }
+.dd::before, .dd::after { content: ""; flex: 1; height: 1px; background: var(--color-line); }
+.dd.unread { color: var(--color-accent); }
+.dd.unread::before { background: var(--color-accent); }
+.dd.unread::after { display: none; }
+.tsum { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; max-width: 100%; margin: 4px 0 2px -8px; padding: 0 10px 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink-muted); font: 400 0.8125rem/1.3 var(--font-body); cursor: pointer; text-align: left; transition: background-color var(--duration-quick) var(--ease-out); }
+.tsum:hover { background: var(--color-raised); }
+.tsum[aria-expanded="true"] { background: var(--color-accent-wash); }
+.tsum .n { color: var(--color-accent); font-weight: 600; white-space: nowrap; }
+.tsum .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tsum .faces .av { box-shadow: 0 0 0 2px var(--color-base); }
+.panel .tsum .faces .av { box-shadow: 0 0 0 2px var(--color-raised); }
+.reacts { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.react { display: inline-flex; gap: 6px; align-items: center; height: 26px; padding: 0 9px; border-radius: 999px; background: var(--color-sunk); font: 400 0.8125rem/1 var(--font-body); border: 0; color: var(--color-ink); cursor: pointer; }
 .react.mine { background: var(--color-accent-wash); }
 .react b { font-weight: 600; font-variant-numeric: tabular-nums; }
-.file { display: inline-flex; align-items: center; gap: 12px; margin-top: 8px; padding: 10px 14px 10px 10px; border-radius: 10px; background: var(--color-base); max-width: 340px; }
-.file .fi { width: 36px; height: 36px; border-radius: 8px; display: grid; place-items: center; background: var(--color-success-wash); color: var(--color-success); }
-.file b { font-weight: 600; display: block; } .file small { color: var(--color-ink-muted); font-size: 0.75rem; }
-.composer { margin: 0 16px 16px; background: var(--color-raised); border-radius: 12px; padding: 10px 10px 10px 14px; display: grid; gap: 8px; }
-.composer .ph { color: var(--color-ink-muted); font-size: 1rem; padding: 4px 0; }
-.composer .bar { display: flex; align-items: center; gap: 2px; }
-.composer .bar .btn { margin-left: auto; }
-.composer .hint { font-size: 0.75rem; color: var(--color-ink-muted); margin-left: 8px; }
+.pinned { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--color-ink-muted); flex: none; }
+.pinned svg { width: 12px; height: 12px; }
+
+/* hover actions (one overlay per message) */
+.hact { position: absolute; top: -14px; right: 12px; z-index: 10; display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); opacity: 0; pointer-events: none; transition: opacity 120ms var(--ease-in); }
+.m:hover .hact, .m:focus-within .hact, .m.hov .hact { opacity: 1; pointer-events: auto; transition: opacity var(--duration-quick) var(--ease-out); }
+.m .menu { top: 22px; right: 12px; }
+.wave { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; margin-left: auto; border-radius: 999px; background: var(--color-sunk); color: var(--color-ink-muted); font: 600 0.6875rem/1 var(--font-body); }
+
+/* attachments in a message */
+.att { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 8px; justify-items: start; min-width: 0; }
+.grid { display: grid; gap: 4px; width: min(360px, 100%); grid-template-columns: 1fr 1fr; }
+.grid.g1 { grid-template-columns: 1fr; }
+.tile { position: relative; display: block; aspect-ratio: 1; border: 0; padding: 0; border-radius: 8px; overflow: hidden; background: var(--color-sunk); cursor: zoom-in; }
+.tile[hidden] { display: none; }
+.grid.g1 .tile { aspect-ratio: 4 / 3; border-radius: 10px; }
+.grid.g3 .tile:first-child { grid-row: span 2; aspect-ratio: auto; }
+.tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tile .plus { position: absolute; right: 8px; bottom: 8px; height: 26px; padding: 0 10px; border-radius: 999px; background: var(--color-overlay); color: var(--color-ink); box-shadow: var(--shadow-overlay); font: 600 0.8125rem/26px var(--font-body); font-variant-numeric: tabular-nums; }
+.file { display: inline-flex; align-items: center; gap: 12px; padding: 10px 8px 10px 10px; border-radius: 10px; background: var(--color-raised); width: min(340px, 100%); }
+.panel .file, .composer .file { background: var(--color-base); }
+.file .fm { min-width: 0; flex: 1; }
+.file b { font-weight: 600; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file small { color: var(--color-ink-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.file .dl { opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.file:hover .dl, .file:focus-within .dl { opacity: 1; }
+.fi { width: 36px; height: 36px; flex: none; border-radius: 8px; display: grid; place-items: center; background: var(--color-success-wash); color: var(--color-success); }
+.fi.pdf, .fi.err { background: var(--color-danger-wash); color: var(--color-danger); }
+.fi.doc { background: var(--color-info-wash); color: var(--color-info); }
+.fi.other { background: var(--color-sunk); color: var(--color-ink-muted); }
+
+/* jump pill */
+.jump { position: absolute; left: 0; right: 0; bottom: 12px; margin-inline: auto; width: max-content; z-index: 20; display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--color-overlay); color: var(--color-ink); box-shadow: var(--shadow-overlay); font: 600 0.8125rem/1 var(--font-body); cursor: pointer; }
+.jump[hidden] { display: none; }
+.jump > svg { color: var(--color-accent); }
+.jump .pill[hidden] { display: none; }
+
+/* header buttons with badge / pressed */
+.ibtn { position: relative; }
+.ibtn[aria-pressed="true"] { background: var(--color-accent-wash); color: var(--color-accent); }
+.ibtn .b { position: absolute; top: -3px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--color-accent); color: var(--color-on-accent); font: 600 0.625rem/16px var(--font-body); text-align: center; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--color-base); }
+.ibtn .b[hidden] { display: none; }
+
+/* composer: formatting toolbar, tray, input, bar */
+.composer { margin: 0 16px 16px; background: var(--color-raised); border-radius: 12px; padding: 10px 10px 10px 14px; display: grid; gap: 8px; position: relative; min-width: 0; }
+.cin { font-size: 1rem; line-height: 1.5; padding: 2px 0; min-height: 28px; overflow-wrap: anywhere; }
+.cin.ph { color: var(--color-ink-muted); }
+.cin strong { font-weight: 600; }
+.cin a { color: var(--color-accent); }
+.caret { display: inline-block; width: 2px; height: 1.15em; background: var(--color-ink); vertical-align: -3px; margin-left: 1px; border-radius: 1px; }
+.cbar { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.cbar .cl { display: contents; }
+.cbar .hint, .cbar .why { font-size: 0.75rem; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cbar .hint { margin-left: 8px; }
+.cbar .why { margin-left: auto; padding-left: 8px; }
+.cbar .btn { margin-left: auto; flex: none; }
+.cbar .why:not(:empty) + .btn { margin-left: 8px; }
+.btn:disabled, .btn.primary:disabled { background: var(--color-hover); color: var(--color-ink-subtle); cursor: not-allowed; transform: none; }
+.menu.up { bottom: 52px; left: 8px; }
+.fmt { display: flex; align-items: center; gap: 2px; padding-bottom: 8px; margin-right: 4px; border-bottom: 1px solid var(--color-line); overflow-x: auto; scrollbar-width: none; }
+.fmt[hidden] { display: none; }
+.fmt .ibtn { flex: none; }
+.fmt .sep { flex: none; width: 1px; height: 20px; background: var(--color-line); margin: 0 4px; }
+.tray { display: flex; flex-wrap: wrap; gap: 8px; max-height: 128px; overflow: auto; padding: 4px 4px 2px 0; }
+.tray[hidden] { display: none; }
+.ti { position: relative; flex: none; border-radius: 8px; overflow: hidden; background: var(--color-base); }
+.ti.img { width: 64px; height: 64px; }
+.ti.img img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.ti.img.up img { opacity: 0.6; }
+.ti.doc { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 10px; align-items: center; width: 240px; max-width: 100%; height: 56px; padding: 0 34px 0 10px; }
+.ti .fi { width: 32px; height: 32px; }
+.ti .fm { min-width: 0; }
+.ti .nm { display: block; font-weight: 600; font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ti small { display: block; font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ti.err small { color: var(--color-danger); }
+.ti .retry { width: 28px; height: 28px; color: var(--color-ink); }
+.ti .x { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; display: grid; place-items: center; border: 0; border-radius: 999px; background: var(--color-overlay); color: var(--color-ink); box-shadow: var(--shadow-overlay); cursor: pointer; }
+.ti .x svg { width: 14px; height: 14px; }
+.ti .bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: var(--color-line); }
+.ti .bar[hidden] { display: none; }
+.ti .bar i { display: block; height: 100%; background: var(--color-accent); transform-origin: left center; transform: scaleX(var(--pct, 0)); transition: transform var(--duration-quick) var(--ease-out); }
+.tray-note { font-size: 0.75rem; color: var(--color-danger); }
+.tray-note:empty { display: none; }
+.drop { position: absolute; inset: 8px; z-index: 20; display: grid; place-content: center; justify-items: center; gap: 6px; padding: 16px; text-align: center; border-radius: 12px; background: var(--color-accent-wash); outline: 2px dashed var(--color-accent); outline-offset: -2px; pointer-events: none; }
+.drop[hidden] { display: none; }
+.drop > svg { width: 24px; height: 24px; color: var(--color-accent); }
+.drop b { font: 600 1.1875rem/1.3 var(--font-display); }
+.drop span { color: var(--color-ink-muted); }
+.ldlg { position: absolute; z-index: 10; left: 8px; bottom: calc(100% + 8px); width: 320px; max-width: calc(100% - 16px); background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 16px; display: grid; gap: 12px; }
+.ldlg[hidden] { display: none; }
+.ldlg .field { gap: 4px; }
+.ldlg .field label { font-weight: 600; font-size: 0.8125rem; }
+.inp { width: 100%; height: 40px; border: 0; border-radius: 8px; padding: 0 12px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); color: var(--color-ink); font: 400 1rem/1 var(--font-body); }
+.inp:focus { outline: none; box-shadow: inset 0 0 0 2px var(--color-focus); }
+.inp[aria-invalid="true"] { box-shadow: inset 0 0 0 2px var(--color-danger); }
+.ferr { font-size: 0.75rem; color: var(--color-danger); }
+.ferr:empty { display: none; }
+
+/* composer showcase panes */
+.cgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 24px; }
+.pane { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; height: 540px; min-width: 0; background: var(--color-base); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--color-line); }
+.pane.wide { grid-column: 1 / -1; height: auto; grid-template-rows: auto auto; }
+.pane .drop { inset: 44px 8px 8px; }
+.pane-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 14px 16px 2px; }
+.pane-h b { font: 700 1rem/1.3 var(--font-display); }
+.pane-h small { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.mini { overflow: auto; display: flex; flex-direction: column; padding: 8px 8px 12px; min-height: 0; }
+.mini > :first-child { margin-top: auto; }
+.pane .composer { margin: 0 12px 12px; }
+.pane.wide .mini { overflow: visible; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); align-content: start; gap: 4px 16px; }
+.pane.wide .mini > :first-child { margin-top: 0; }
+
+/* thread list panel */
+.tl-f { display: flex; gap: 6px; padding: 0 16px 10px; flex-wrap: wrap; }
+.fchip { display: inline-flex; align-items: center; gap: 6px; }
+.fchip[aria-checked="true"] { background: var(--color-accent-wash); color: var(--color-ink); font-weight: 600; }
+.titem { display: grid; gap: 6px; width: 100%; padding: 12px; border: 0; border-radius: 10px; background: transparent; color: var(--color-ink); text-align: left; font: inherit; cursor: pointer; transition: background-color var(--duration-quick) var(--ease-out); }
+.titem:hover { background: var(--color-hover); }
+.titem[hidden] { display: none; }
+.titem .tt { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.titem .tt b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.titem .tt time { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; flex: none; }
+.titem .tt .fl { margin-left: auto; color: var(--color-ink-muted); width: 14px; height: 14px; }
+.titem .tx { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.5; }
+.titem .tx svg { width: 14px; height: 14px; vertical-align: -2px; color: var(--color-ink-muted); }
+.titem .tx .ax { color: var(--color-ink-muted); }
+.titem .tm { display: flex; align-items: center; gap: 8px; font-size: 0.8125rem; color: var(--color-ink-muted); min-width: 0; }
+.titem .tm .n { color: var(--color-accent); font-weight: 600; white-space: nowrap; }
+.titem .tm .faces .av { box-shadow: 0 0 0 2px var(--color-raised); }
+.titem .tm .pill { margin-left: auto; }
+.empty { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 48px 24px; color: var(--color-ink-muted); }
+.empty[hidden] { display: none; }
+.empty > svg { width: 24px; height: 24px; }
+.empty p { max-width: 32ch; color: var(--color-ink); }
+.skl { display: grid; gap: 18px; padding: 12px; }
+.skl[hidden] { display: none; }
+.skl .r { display: grid; grid-template-columns: 24px 1fr; gap: 8px 10px; }
+.sk { height: 10px; border-radius: 6px; background: var(--color-sunk); animation: pulse 1400ms var(--ease-out) infinite; }
+.sk.c { width: 24px; height: 24px; border-radius: 50%; grid-row: span 3; }
+
+/* image viewer */
+.viewer { position: fixed; inset: 0; z-index: 40; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; background: var(--color-sunk); }
+.viewer[hidden] { display: none; }
+.vbar { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 12px 8px 16px; background: var(--color-base); min-width: 0; }
+.vbar .meta { min-width: 0; display: grid; gap: 1px; }
+.vbar .meta b, .vbar .meta small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vbar .meta b { font-weight: 600; }
+.vbar .meta small { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.vbar .acts { margin-left: auto; display: flex; gap: 4px; flex: none; }
+.vstage { position: relative; display: grid; place-items: center; min-height: 0; padding: 24px 72px 8px; }
+.vstage img { position: absolute; top: 24px; left: 72px; width: calc(100% - 144px); height: calc(100% - 32px); object-fit: contain; }
+.vnav { position: absolute; top: 50%; margin-top: -22px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 999px; background: var(--color-overlay); color: var(--color-ink); box-shadow: var(--shadow-overlay); cursor: pointer; }
+.vnav[hidden] { display: none; }
+.vnav.prev { left: 16px; } .vnav.next { right: 16px; }
+.vcount { text-align: center; padding: 8px 0 20px; font-weight: 600; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+@media (max-width: 767px) {
+  .cbar .hint { display: none; }
+  .vstage img { top: 12px; left: 8px; width: calc(100% - 16px); height: calc(100% - 20px); }
+  .vnav.prev { left: 8px; } .vnav.next { right: 8px; }
+}
+.btn[aria-pressed="true"] { background: var(--color-accent-wash); }
+.btn[aria-pressed="true"] svg { color: var(--color-accent); }
 
 /* right panel: thread / members */
 .panel { background: var(--color-raised); margin: 12px 12px 12px 0; border-radius: 10px; display: grid; grid-template-rows: auto 1fr auto; min-height: 0; min-width: 0; }
@@ -167,11 +345,7 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .panel .ph .sub { font-size: 0.75rem; color: var(--color-ink-muted); }
 .panel .ph .ibtn:first-of-type { margin-left: auto; }
 .panel .pb { overflow: auto; padding: 0 4px 8px; display: grid; align-content: start; gap: 2px; }
-.panel .msg { padding: 8px 12px; }
-.panel .div { display: flex; align-items: center; gap: 10px; padding: 6px 12px; font-size: 0.75rem; color: var(--color-ink-muted); font-weight: 600; }
-.panel .div::after { content: ""; height: 1px; flex: 1; background: var(--color-line); }
 .panel .composer { margin: 0 12px 12px; background: var(--color-base); }
-.follow { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; border: 0; background: var(--color-accent-wash); color: var(--color-ink); font: 600 0.75rem/1 var(--font-body); cursor: pointer; }
 .member { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 10px; }
 .member:hover { background: var(--color-hover); }
 .member .n { font-weight: 500; } .member .e { font-size: 0.75rem; color: var(--color-ink-muted); }
@@ -250,9 +424,43 @@ html.reduce .rt .halo { animation: none; }
 html.reduce .ins { animation-duration: 1ms; }
 html.reduce .flip, html.reduce .tabs .ink { transition: none; }
 html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .modal, html.reduce .menu.enter, html.reduce .toast.enter { animation-name: fade; animation-duration: 120ms; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+@keyframes pop { from { opacity: 0; transform: scale(0.6); } }
+@keyframes rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes nudge { from { opacity: 0; transform: translateY(4px); } }
+@keyframes chip-in { from { opacity: 0; transform: scale(0.96); } }
+@keyframes chip-out { to { opacity: 0; transform: scale(0.96); } }
+@keyframes v-zoom { from { opacity: 0; transform: scale(0.98); } }
+@keyframes v-from-r { from { opacity: 0; transform: translateX(16px); } }
+@keyframes v-from-l { from { opacity: 0; transform: translateX(-16px); } }
+.nf { animation: fade var(--duration-quick) var(--ease-out) both; }
+.pop { animation: pop var(--duration-quick) var(--ease-out) both; }
+.out { animation: scrim-out var(--duration-quick) var(--ease-in) both; }
+.swap { animation: fade var(--duration-quick) var(--ease-out) both; }
+.jump.enter { animation: rise var(--duration-base) var(--ease-out) both; }
+.fmt.enter { animation: nudge var(--duration-quick) var(--ease-out) both; }
+.ldlg.enter { animation: pop-in var(--duration-quick) var(--ease-out) both; }
+.drop.enter { animation: fade var(--duration-quick) var(--ease-out) both; }
+.ti.enter { animation: chip-in var(--duration-quick) var(--ease-out) both; }
+.ti.exit { animation: chip-out 120ms var(--ease-in) both; }
+.viewer.enter { animation: fade var(--duration-base) var(--ease-out) both; }
+.viewer.enter .vstage img { animation: v-zoom var(--duration-layout) var(--ease-out-expo) both; }
+.viewer.exit { animation: scrim-out 210ms var(--ease-in) both; }
+.vstage img.from-r { animation: v-from-r var(--duration-quick) var(--ease-out) both; }
+.vstage img.from-l { animation: v-from-l var(--duration-quick) var(--ease-out) both; }
+html.reduce .pop, html.reduce .jump.enter, html.reduce .fmt.enter, html.reduce .ldlg.enter, html.reduce .ti.enter, html.reduce .ti.exit,
+html.reduce .viewer.enter .vstage img, html.reduce .vstage img.from-r, html.reduce .vstage img.from-l { animation-name: fade; animation-duration: 120ms; }
+html.reduce .viewer.enter, html.reduce .viewer.exit { animation-duration: 120ms; }
+html.reduce .ti .bar i { transition: none; }
+html.reduce .sk { animation: none; }
 @media (prefers-reduced-motion: reduce) {
   .rt .halo { animation: none; } .ins { animation-duration: 1ms; } .flip, .tabs .ink { transition: none; }
   .panel.enter, .scrim.enter, .scrim.enter .modal, .menu.enter, .toast.enter { animation-name: fade; animation-duration: 120ms; }
+  .pop, .jump.enter, .fmt.enter, .ldlg.enter, .ti.enter, .ti.exit,
+  .viewer.enter .vstage img, .vstage img.from-r, .vstage img.from-l { animation-name: fade; animation-duration: 120ms; }
+  .viewer.enter, .viewer.exit { animation-duration: 120ms; }
+  .ti .bar i { transition: none; }
+  .sk { animation: none; }
 }
 </style>
 
@@ -285,12 +493,41 @@ html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .mo
   <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m16.24 7.76-1.8 5.4a2 2 0 0 1-1.28 1.28l-5.4 1.8 1.8-5.4a2 2 0 0 1 1.28-1.28z"/></symbol>
   <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
   <symbol id="i-crown" viewBox="0 0 24 24"><path d="M11.56 3.27a.5.5 0 0 1 .88 0l2.95 5.6a1 1 0 0 0 1.52.29l4.27-3.66a.5.5 0 0 1 .82.5l-2.83 10.25a1 1 0 0 1-.97.75H5.81a1 1 0 0 1-.97-.75L2 5.99a.5.5 0 0 1 .82-.5l4.28 3.66a1 1 0 0 0 1.51-.29z"/><path d="M5 21h14"/></symbol>
+  <symbol id="i-smile-plus" viewBox="0 0 24 24"><path d="M22 11v1a10 10 0 1 1-9-10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/><path d="M16 5h6"/><path d="M19 2v6"/></symbol>
+  <symbol id="i-reply-thread" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="m10 7-3 3 3 3"/><path d="M17 13v-1a2 2 0 0 0-2-2H7"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-more-h" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-threads" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></symbol>
+  <symbol id="i-bell-ring" viewBox="0 0 24 24"><path d="M10.27 21a2 2 0 0 0 3.46 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></symbol>
+  <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-quote" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></symbol>
+  <symbol id="i-mail-dot" viewBox="0 0 24 24"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h9"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><circle cx="19" cy="17" r="3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="i-bold" viewBox="0 0 24 24"><path d="M6 12h9a4 4 0 0 1 0 8H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h7a4 4 0 0 1 0 8"/></symbol>
+  <symbol id="i-italic" viewBox="0 0 24 24"><path d="M19 4h-9"/><path d="M14 20H5"/><path d="M15 4 9 20"/></symbol>
+  <symbol id="i-underline" viewBox="0 0 24 24"><path d="M6 4v6a6 6 0 0 0 12 0V4"/><path d="M4 20h16"/></symbol>
+  <symbol id="i-strike" viewBox="0 0 24 24"><path d="M16 4H9a3 3 0 0 0-2.83 4"/><path d="M14 12a4 4 0 0 1 0 8H6"/><path d="M4 12h16"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></symbol>
+  <symbol id="i-list-ol" viewBox="0 0 24 24"><path d="M10 12h11"/><path d="M10 18h11"/><path d="M10 6h11"/><path d="M4 10h2"/><path d="M4 6h1v4"/><path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/></symbol>
+  <symbol id="i-code-block" viewBox="0 0 24 24"><path d="m10 9-3 3 3 3"/><path d="m14 15 3-3-3-3"/><rect x="3" y="3" width="18" height="18" rx="2"/></symbol>
+  <symbol id="i-baseline" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/></symbol>
+  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24"><path d="m5 12 7-7 7 7"/><path d="M12 19V5"/></symbol>
+  <symbol id="i-arrow-down" viewBox="0 0 24 24"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol>
 </svg>
 
 <div class="page">
 <header>
-  <h1>Nexus Hub · Nhóm theo mô hình Google Chat</h1>
-  <p>Trong Tin nhắn, cột danh sách trở thành bộ điều hướng như Google Chat: nút trò chuyện mới, Trang chủ, Được nhắc tới, Đã gắn sao, Tin nhắn trực tiếp và Nhóm. Mỗi nhóm có ba tab Trò chuyện, Tệp, Công việc, và tin nhắn được gom theo chủ đề ngay trong luồng. Nhãn <span class="need">cần backend</span> đánh dấu phần chưa có API.</p>
+  <p>Trong Tin nhắn, cột danh sách trở thành bộ điều hướng như Google Chat: nút trò chuyện mới, Trang chủ, Được nhắc tới, Đã gắn sao, Tin nhắn trực tiếp và Nhóm. Mỗi nhóm có ba tab Trò chuyện, Tệp, Công việc; tin nhắn chạy theo thời gian và trả lời nằm trong thread của từng tin (in-line threading). Nhãn <span class="need">cần backend</span> đánh dấu phần chưa có API.</p>
   <div class="controls">
     <div class="seg" role="group" aria-label="Theme">
       <button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button>
@@ -299,7 +536,7 @@ html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .mo
     </div>
     <label class="check"><input type="checkbox" id="reduce"> Giảm chuyển động</label>
   </div>
-  <nav class="toc" aria-label="Các màn"><a href="#home">Trang chủ</a><a href="#space">Nhóm và chủ đề</a><a href="#create">Tạo nhóm</a><a href="#members">Thành viên</a><a href="#browse">Duyệt nhóm</a></nav>
+  <nav class="toc" aria-label="Các màn"><a href="#home">Trang chủ</a><a href="#space">Luồng và thread</a><a href="#threads">Panel Thread</a><a href="#composer">Ô soạn và đính kèm</a><a href="#create">Tạo nhóm</a><a href="#members">Thành viên</a><a href="#browse">Duyệt nhóm</a></nav>
 </header>
 
 <!-- ============================ HOME ============================ -->
@@ -375,17 +612,19 @@ html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .mo
   </ol>
 </section>
 
-<!-- ============================ SPACE ============================ -->
+<!-- ============================ SPACE: IN-LINE STREAM ============================ -->
 <section class="screen" id="space" aria-labelledby="h-space">
   <div class="screen-head">
-    <h2 id="h-space">2 · Nhóm và chủ đề</h2>
-    <p>Mỗi tin nhắn gốc là một chủ đề, các trả lời gom dưới nó như Google Chat. Bấm “trả lời” mở chủ đề ở panel phải; luồng chính chỉ hiện tóm tắt.</p>
+    <h2 id="h-space">2 · Nhóm: luồng in-line và thread</h2>
+    <p>Tin xếp theo thời gian như Google Chat. Tin liền nhau của cùng một người trong 5 phút được gom lại; trả lời nằm trong thread của từng tin, luồng chính chỉ hiện một hàng tóm tắt. Mở nhóm có tin chưa đọc thì luồng dừng ở vạch “Tin mới”.</p>
   </div>
   <div class="demo"><span class="k">Demo</span>
-    <button class="btn sm" type="button" data-act="thread-toggle">Đóng/mở chủ đề</button>
-    <button class="btn sm" type="button" data-act="thread-reply">Đức trả lời trong chủ đề</button>
-    <button class="btn sm" type="button" data-act="space-topic">Vinh mở chủ đề mới</button>
-    <button class="btn sm" type="button" data-act="tab-next">Chuyển tab</button>
+    <button class="btn sm" type="button" data-act="th-follow-reply">Vinh trả lời thread bạn đang theo dõi</button>
+    <button class="btn sm" type="button" data-act="th-other-reply">Ngọc trả lời thread của Yến (không theo dõi)</button>
+    <button class="btn sm" type="button" data-act="th-follow-toggle">Theo dõi / bỏ theo dõi thread đang mở</button>
+    <button class="btn sm" type="button" data-act="jump">Bấm nút nổi</button>
+    <button class="btn sm" type="button" data-act="thread-close">Đóng/mở panel thread</button>
+    <button class="btn sm" type="button" data-act="more-menu">Mở menu Thêm của tin</button>
   </div>
   <div class="scroll">
     <div class="app with-panel" id="app-space">
@@ -416,61 +655,282 @@ html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .mo
           <a class="rl" href="#space"><span class="sp s24" style="--p:var(--color-person-8)">H</span><span class="t">Hợp đồng đối tác</span></a>
         </div>
       </div>
-      <div class="content" style="grid-template-rows:auto auto auto 1fr auto">
+      <div class="content" style="grid-template-rows:auto auto auto minmax(0,1fr) auto">
         <div class="chead">
           <span class="sp s40" style="--p:var(--color-person-4)">Đ</span>
           <div class="t"><h3>Đối soát giao dịch<svg class="i s muted"><use href="#i-down"/></svg></h3><div class="sub">14 thành viên · Bạn là quản lý nhóm</div></div>
           <div class="end">
             <span class="faces" style="margin-right:6px"><span class="av s24" style="--p:var(--color-person-5)">MĐ</span><span class="av s24" style="--p:var(--color-person-1)">QV</span></span>
             <button class="btn sm" type="button"><svg class="i s"><use href="#i-user-plus"/></svg>Thêm người</button>
-            <button class="ibtn" type="button" aria-label="Tìm trong nhóm"><svg class="i"><use href="#i-search"/></svg></button>
-            <button class="ibtn" type="button" aria-label="Thông tin nhóm"><svg class="i"><use href="#i-info"/></svg></button>
+            <button class="ibtn" type="button" aria-label="Tìm trong nhóm" title="Tìm trong nhóm"><svg class="i"><use href="#i-search"/></svg></button>
+            <button class="ibtn" type="button" id="thr-btn" aria-pressed="false" aria-label="Thread, 1 thread có tin mới" title="Thread" data-act="go-threads"><svg class="i"><use href="#i-threads"/></svg><span class="b" id="thr-badge">1</span></button>
+            <button class="ibtn" type="button" aria-label="Thông tin nhóm" title="Thông tin nhóm"><svg class="i"><use href="#i-info"/></svg></button>
           </div>
         </div>
         <div class="tabs" role="tablist" id="space-tabs">
           <button role="tab" type="button" aria-selected="true">Trò chuyện</button>
           <button role="tab" type="button" aria-selected="false">Tệp</button>
           <button role="tab" type="button" aria-selected="false">Công việc <span class="pill idle tnum">4</span></button>
-          <span class="ink" id="tab-ink"></span>
+          <span class="ink"></span>
         </div>
         <div class="tabline"></div>
-        <div class="stream" id="space-stream">
-          <article class="topic">
-            <div class="msg"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>09:12</time></div><p class="txt">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.</p><div class="file"><span class="fi"><svg class="i"><use href="#i-sheet"/></svg></span><span><b>doi-soat-08-10.xlsx</b><small class="tnum">Bảng tính · 412 KB</small></span></div></div></div>
-            <button class="replies" type="button" data-act="thread-toggle" id="thread-summary"><span class="faces"><span class="av s20" style="--p:var(--color-person-6)">TL</span><span class="av s20" style="--p:var(--color-person-1)">QV</span></span><span id="reply-count">2 trả lời</span><span class="muted" id="reply-last">· Lần cuối 09:20</span></button>
-          </article>
-          <article class="topic">
-            <div class="msg"><span class="av" style="--p:var(--color-person-7)">TH</span><div><div class="who"><b>Lê Thị Hoa</b><time>09:24</time></div><p class="txt">Phí chuyển khoản liên ngân hàng hạch toán vào 6427. Mọi người cập nhật biên bản trước 15:00 nhé.</p><div class="reacts"><span class="react mine">👍 <b>4</b></span></div></div></div>
-            <div class="reply-cta"><svg class="i s"><use href="#i-reply"/></svg>Trả lời</div>
-          </article>
+        <div class="convo">
+          <div class="stream" id="space-stream" role="log" aria-label="Tin nhắn trong Đối soát giao dịch">
+            <div class="dd" role="separator">Hôm qua</div>
+            <div class="m"><span class="av" style="--p:var(--color-person-1)">QV</span><div class="mc"><div class="who"><b>Lê Quang Vinh</b><time>16:40</time></div><p class="txt">Mai mình chốt số liệu tháng 9 với ngân hàng đối tác, mọi người gửi phần của mình trước 10:00 nhé.</p></div></div>
+            <div class="m cont"><time class="gt">16:42</time><div class="mc"><p class="txt">Mẫu tổng hợp vẫn dùng bản cũ trong Tài liệu, thư mục Đối soát / Tháng 9.</p></div></div>
+            <div class="dd" role="separator">Hôm nay</div>
+            <div class="m" id="msg-a" data-thread="a"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>09:12</time><span class="pinned"><svg class="i"><use href="#i-pin"/></svg>Đã ghim</span></div><p class="txt">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.</p><div class="att"><div class="file"><span class="fi"><svg class="i"><use href="#i-sheet"/></svg></span><span class="fm"><b>doi-soat-08-10.xlsx</b><small>Bảng tính · 412 KB</small></span><button class="ibtn dl" type="button" aria-label="Tải xuống doi-soat-08-10.xlsx"><svg class="i s"><use href="#i-download"/></svg></button></div></div><button class="tsum" type="button" data-thread="a"></button></div></div>
+            <div class="m"><span class="av" style="--p:var(--color-person-7)">TH</span><div class="mc"><div class="who"><b>Lê Thị Hoa</b><time>09:24</time></div><p class="txt">Phí chuyển khoản liên ngân hàng hạch toán vào tài khoản 6427.</p></div></div>
+            <div class="m cont" id="msg-d" data-thread="d"><time class="gt">09:25</time><div class="mc"><p class="txt">Mọi người cập nhật biên bản trước 15:00 nhé.</p><div class="reacts"><button class="react mine" type="button" aria-label="Thích, 4 người, có bạn">👍 <b>4</b></button></div><button class="tsum" type="button" data-thread="d"></button></div></div>
+            <div class="dd unread" role="separator" id="unread-div">Tin mới</div>
+            <div class="m" id="msg-b" data-thread="b"><span class="av" style="--p:var(--color-person-1)">QV</span><div class="mc"><div class="who"><b>Lê Quang Vinh</b><time>09:31</time></div><p class="txt">Ảnh chụp sao kê 3 giao dịch lệch, mọi người đối chiếu giúp em với lệnh hoàn tiền.</p>
+              <div class="att"><div class="grid g3" data-who="Lê Quang Vinh" data-ini="QV" data-p="1" data-time="09:31">
+                <button class="tile" type="button" data-size="1,8 MB" aria-label="Mở ảnh sao-ke-gd-01.jpg"><img data-photo="0" alt="sao-ke-gd-01.jpg"></button>
+                <button class="tile" type="button" data-size="1,6 MB" aria-label="Mở ảnh sao-ke-gd-02.jpg"><img data-photo="1" alt="sao-ke-gd-02.jpg"></button>
+                <button class="tile" type="button" data-size="2,1 MB" aria-label="Mở ảnh sao-ke-gd-03.jpg"><img data-photo="2" alt="sao-ke-gd-03.jpg"></button>
+              </div></div><button class="tsum" type="button" data-thread="b"></button></div></div>
+            <div class="m hov" id="msg-c" data-thread="c"><span class="av" style="--p:var(--color-person-3)">HY</span><div class="mc"><div class="who"><b>Phạm Hải Yến</b><time>09:36</time></div><p class="txt">Biên bản đối soát tháng 10 bản nháp, anh Vinh xem giúp em phần phí.</p><div class="att"><div class="file"><span class="fi pdf"><svg class="i"><use href="#i-file-text"/></svg></span><span class="fm"><b>bien-ban-doi-soat-thang-10.pdf</b><small>PDF · 1,2 MB</small></span><button class="ibtn dl" type="button" aria-label="Tải xuống bien-ban-doi-soat-thang-10.pdf"><svg class="i s"><use href="#i-download"/></svg></button></div></div><button class="tsum" type="button" data-thread="c"></button></div>
+              <div class="menu" id="msg-menu" role="menu" aria-label="Thêm thao tác cho tin của Phạm Hải Yến" hidden>
+                <button type="button" role="menuitem" data-act="menu-follow" data-thread="c"><svg class="i s"><use href="#i-bell-ring"/></svg><span>Theo dõi thread</span></button>
+                <button type="button" role="menuitem"><svg class="i s"><use href="#i-copy"/></svg>Sao chép văn bản</button>
+                <hr>
+                <button type="button" role="menuitem"><svg class="i s"><use href="#i-quote"/></svg>Trích dẫn khi trả lời<span class="wave">đợt 3</span></button>
+                <button type="button" role="menuitem"><svg class="i s"><use href="#i-mail-dot"/></svg>Đánh dấu chưa đọc<span class="wave">đợt 3</span></button>
+                <hr>
+                <button type="button" role="menuitem" class="danger"><svg class="i s"><use href="#i-trash"/></svg>Xoá<span class="wave">đợt 3</span></button>
+              </div>
+            </div>
+            <div class="m"><span class="av" style="--p:var(--color-person-2)">BN</span><div class="mc"><div class="who"><b>Trần Bảo Ngọc</b><time>09:41</time></div><p class="txt">Kiểm soát đã nhận file, chiều nay bên em gửi xác nhận.</p></div></div>
+            <div class="m cont"><time class="gt">09:42</time><div class="mc"><p class="txt">Nếu cần bổ sung chứng từ thì anh chị nhắn em nhé.</p><div class="reacts"><button class="react" type="button" aria-label="Cảm ơn, 2 người">🙏 <b>2</b></button></div></div></div>
+            <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>09:44</time></div><p class="txt">Chiều nay 14:00 anh họp nhanh với ngân hàng, ai cần hỏi gì thêm thì ghi vào biên bản trước giờ đó.</p></div></div>
+            <div class="m cont"><time class="gt">09:45</time><div class="mc"><p class="txt">Lan chuẩn bị giúp anh danh sách 3 giao dịch kèm số tiền và giờ chuyển nhé.</p></div></div>
+          </div>
+          <button class="jump" id="jump" type="button" data-act="jump" hidden><svg class="i s"><use href="#i-arrow-down" id="jump-ic"/></svg><span id="jump-t">Tin mới nhất</span><span class="pill count tnum" id="jump-n" hidden>4</span></button>
         </div>
-        <div class="composer"><div class="ph">Tin nhắn cho Đối soát giao dịch</div><div class="bar"><button class="ibtn" type="button" aria-label="Đính kèm"><svg class="i"><use href="#i-clip"/></svg></button><button class="ibtn" type="button" aria-label="Biểu tượng cảm xúc"><svg class="i"><use href="#i-smile"/></svg></button><span class="hint">Mỗi tin gửi ở đây mở một chủ đề mới</span><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div></div>
+        <div class="composer">
+          <div class="fmt" role="toolbar" aria-label="Định dạng" data-fill="fmt" hidden></div>
+          <div class="cin ph">Tin nhắn cho Đối soát giao dịch</div>
+          <div class="cbar"><span class="cl" data-fill="ctools"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button" disabled><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+        </div>
       </div>
-      <aside class="panel" id="thread-panel" aria-label="Chủ đề">
-        <div class="ph"><div><h4>Chủ đề</h4><div class="sub">Đối soát giao dịch</div></div><button class="follow" type="button" style="margin-left:auto"><svg class="i s"><use href="#i-bell"/></svg>Đang theo dõi</button><button class="ibtn" type="button" aria-label="Đóng chủ đề" data-act="thread-toggle"><svg class="i"><use href="#i-x"/></svg></button></div>
-        <div class="pb" id="thread-body">
-          <div class="msg"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>09:12</time></div><p class="txt">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.</p></div></div>
-          <div class="div">2 trả lời</div>
-          <div class="msg"><span class="av" style="--p:var(--color-person-6)">TL</span><div><div class="who"><b>Nguyễn Thu Lan</b><time>09:14</time></div><p class="txt">Tổng chênh lệch 1.284.500 ₫, cả ba đều chuyển sau 22:00.</p></div></div>
-          <div class="msg"><span class="av" style="--p:var(--color-person-1)">QV</span><div><div class="who"><b>Lê Quang Vinh</b><time>09:20</time></div><p class="txt">Đã đối chiếu xong, chênh lệch do phí liên ngân hàng, không phải lỗi hệ thống.</p></div></div>
+      <aside class="panel" id="thread-panel" aria-label="Thread">
+        <div class="ph"><div style="min-width:0"><h4>Thread</h4><div class="sub">Đối soát giao dịch</div></div>
+          <button class="btn sm" id="follow-btn" type="button" aria-pressed="true" data-act="th-follow-toggle" style="margin-left:auto"></button>
+          <button class="ibtn" type="button" aria-label="Đóng thread" title="Đóng (Esc)" data-act="thread-close"><svg class="i"><use href="#i-x"/></svg></button></div>
+        <div class="pb" id="thread-body"></div>
+        <div class="composer">
+          <div class="fmt" role="toolbar" aria-label="Định dạng" data-fill="fmt" hidden></div>
+          <div class="cin ph">Trả lời trong thread</div>
+          <div class="cbar"><span class="cl" data-fill="ctools"></span><button class="btn primary sm" type="button" disabled><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
         </div>
-        <div class="composer"><div class="ph">Trả lời trong chủ đề</div><div class="bar"><button class="ibtn" type="button" aria-label="Biểu tượng cảm xúc"><svg class="i"><use href="#i-smile"/></svg></button><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div></div>
+        <p class="sr" aria-live="polite" id="follow-live"></p>
       </aside>
     </div>
   </div>
   <ol class="notes">
-    <li><b>Chủ đề</b> là thẻ <code>--color-raised</code> trên nền base, trả lời gom thành một dòng tóm tắt (avatar người trả lời, số trả lời, giờ cuối). Dùng <code>reply_count</code> và API thread hiện có.</li>
-    <li><b>Ba tab</b>: Trò chuyện, Tệp (bảng kẻ mảnh của Tài liệu, dùng drive của kênh), Công việc (API tasks hiện có). Vạch chọn trượt 220ms.</li>
-    <li><b>Trả lời mới trong chủ đề</b> do người khác: dòng tóm tắt cập nhật kèm nhãn “mới”, panel chủ đề chèn tin có màu người gửi.</li>
-    <li><b>Theo dõi chủ đề</b> <span class="need">cần backend</span>: bật thông báo cho riêng chủ đề này.</li>
-    <li><b>Quản lý nhóm</b> <span class="need">cần backend</span>: vai trò hiển thị cần API trả về vai trò thành viên (hiện quyền nằm ở association NGAC của kênh).</li>
+    <li><b>Gom tin</b>: cùng người, cách nhau ≤ 5 phút thì dòng sau không có avatar và tên; giờ hiện ở lề trái khi trỏ chuột hoặc focus. Tin có hàng tóm tắt thread, vạch ngày, vạch “Tin mới” đều ngắt nhóm.</li>
+    <li><b>Vạch “Tin mới”</b> nằm trước tin chưa đọc đầu tiên, đường accent từ trái, nhãn bên phải. Nhiều hơn một màn thì nhóm mở tại vạch. <b>Nút nổi</b> có hai trạng thái: “Tin mới nhất” khi còn tin phía dưới, “Nhảy tới tin chưa đọc” khi bạn đã nhảy qua vạch. Demo: bấm nút nổi hai lần.</li>
+    <li><b>Hàng tóm tắt thread</b>: tối đa 3 avatar người trả lời gần nhất, “N trả lời”, giờ trả lời cuối, pill “M mới” chỉ khi bạn theo dõi thread <span class="need">cần backend</span> (tóm tắt thread do server trả, phase 02).</li>
+    <li><b>Realtime</b>: trả lời trong thread đang theo dõi phủ màu người trả lời 2,4s, avatar loé, “mới” tăng, badge Thread ở header tăng. Thread không theo dõi chỉ đổi số, không phủ màu, không “mới”. Thread đang mở ở panel: chèn trả lời, không “mới”.</li>
+    <li><b>Hover actions</b>: Bày tỏ cảm xúc, Trả lời trong thread, Ghim, Thêm. Mục gắn <span class="wave" style="margin:0">đợt 3</span> chỉ để giữ chỗ trong mockup (Sửa chỉ có trên tin của bạn nên không có ở tin của Yến; Xoá tin người khác cần quyền quản lý nhóm); sản phẩm không hiện chúng cho tới khi làm. Màn chạm: nhấn giữ tin mở sheet đáy.</li>
+    <li><b>Panel thread</b>: tin gốc, vạch “N trả lời”, vạch “Tin mới” trong thread, nút <b>Theo dõi / Đang theo dõi</b> <span class="need">cần backend</span>, ô “Trả lời trong thread”. Mở panel đánh dấu thread đã đọc. Bấm hàng tóm tắt khác để đổi thread. Tin nhắn trực tiếp dùng đúng mô hình này; dưới 1024 panel là sheet toàn màn.</li>
+  </ol>
+</section>
+
+<!-- ============================ THREADS PANEL ============================ -->
+<section class="screen" id="threads" aria-labelledby="h-threads">
+  <div class="screen-head">
+    <h2 id="h-threads">3 · Panel Thread của nhóm</h2>
+    <p>Nút Thread ở header mở danh sách mọi thread trong nhóm, mới trả lời nhất ở trên, lọc Tất cả, Đang theo dõi, Chưa đọc. Badge trên nút đếm thread bạn theo dõi có tin mới.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="tl-toggle">Đóng/mở panel Thread</button>
+    <div class="seg" role="group" aria-label="Trạng thái danh sách">
+      <button type="button" data-tl-state="data" aria-pressed="true">Có dữ liệu</button>
+      <button type="button" data-tl-state="loading" aria-pressed="false">Đang tải</button>
+      <button type="button" data-tl-state="empty" aria-pressed="false">Rỗng</button>
+      <button type="button" data-tl-state="error" aria-pressed="false">Lỗi</button>
+    </div>
+  </div>
+  <div class="scroll">
+    <div class="app with-panel" id="app-threads">
+      <aside class="side"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div><nav class="nav"><a href="#threads" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn</a><a href="#threads"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#threads"><svg class="i"><use href="#i-check"/></svg>Phê duyệt</a></nav><div></div></aside>
+      <div class="cnav"><div class="top"><button class="newchat" type="button"><svg class="i"><use href="#i-pen"/></svg>Trò chuyện mới</button></div><div class="body"><div class="sec">Nhóm</div><a class="rl" href="#threads" aria-current="page"><span class="sp s24" style="--p:var(--color-person-4)">Đ</span><span class="t">Đối soát giao dịch</span></a><a class="rl" href="#threads"><span class="sp s24" style="--p:var(--color-person-2)">V</span><span class="t">Vận hành chung</span></a></div></div>
+      <div class="content" style="grid-template-rows:auto auto auto minmax(0,1fr) auto">
+        <div class="chead">
+          <span class="sp s40" style="--p:var(--color-person-4)">Đ</span>
+          <div class="t"><h3>Đối soát giao dịch</h3><div class="sub">14 thành viên</div></div>
+          <div class="end">
+            <button class="ibtn" type="button" aria-label="Tìm trong nhóm"><svg class="i"><use href="#i-search"/></svg></button>
+            <button class="ibtn" type="button" id="tl-btn" aria-pressed="true" aria-label="Thread, 1 thread có tin mới" title="Thread" data-act="tl-toggle"><svg class="i"><use href="#i-threads"/></svg><span class="b">1</span></button>
+            <button class="ibtn" type="button" aria-label="Thông tin nhóm"><svg class="i"><use href="#i-info"/></svg></button>
+          </div>
+        </div>
+        <div class="tabs" role="tablist"><button role="tab" type="button" aria-selected="true">Trò chuyện</button><button role="tab" type="button" aria-selected="false">Tệp</button><button role="tab" type="button" aria-selected="false">Công việc</button><span class="ink"></span></div>
+        <div class="tabline"></div>
+        <div class="convo"><div class="stream">
+          <div class="m"><span class="av" style="--p:var(--color-person-3)">HY</span><div class="mc"><div class="who"><b>Phạm Hải Yến</b><time>09:36</time></div><p class="txt">Biên bản đối soát tháng 10 bản nháp, anh Vinh xem giúp em phần phí.</p><button class="tsum" type="button" aria-label="Thread, 1 trả lời, lần cuối 09:38"><span class="faces"><span class="av s20" style="--p:var(--color-person-1)">QV</span></span><span class="n">1 trả lời</span><span class="l">Lần cuối 09:38</span></button></div></div>
+          <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>09:44</time></div><p class="txt">Chiều nay 14:00 anh họp nhanh với ngân hàng, ai cần hỏi gì thêm thì ghi vào biên bản trước giờ đó.</p></div></div>
+        </div></div>
+        <div class="composer"><div class="cin ph">Tin nhắn cho Đối soát giao dịch</div><div class="cbar"><span class="cl" data-fill="ctools"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button" disabled><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div></div>
+      </div>
+      <aside class="panel" id="tl-panel" aria-label="Thread của nhóm" style="grid-template-rows:auto auto minmax(0,1fr)">
+        <div class="ph"><div><h4>Thread</h4><div class="sub">Đối soát giao dịch</div></div><button class="ibtn" type="button" aria-label="Đóng danh sách thread" data-act="tl-toggle"><svg class="i"><use href="#i-x"/></svg></button></div>
+        <div class="tl-f" role="radiogroup" aria-label="Lọc thread" id="tl-filters">
+          <button class="fchip" type="button" role="radio" aria-checked="true" data-f="all">Tất cả</button>
+          <button class="fchip" type="button" role="radio" aria-checked="false" data-f="follow">Đang theo dõi</button>
+          <button class="fchip" type="button" role="radio" aria-checked="false" data-f="unread">Chưa đọc <span class="pill count tnum">1</span></button>
+        </div>
+        <div class="pb" id="tl-list">
+          <button class="titem" type="button" data-follow="1" data-unread="1">
+            <span class="tt"><span class="av s24" style="--p:var(--color-person-1)">QV</span><b>Lê Quang Vinh</b><time>09:31</time><svg class="i fl" role="img" aria-label="Đang theo dõi"><use href="#i-bell-ring"/></svg></span>
+            <span class="tx">Ảnh chụp sao kê 3 giao dịch lệch, mọi người đối chiếu giúp em với lệnh hoàn tiền. <span class="ax"><svg class="i"><use href="#i-image"/></svg> 3 ảnh</span></span>
+            <span class="tm"><span class="faces"><span class="av s20" style="--p:var(--color-person-6)">TL</span><span class="av s20" style="--p:var(--color-person-5)">MĐ</span></span><span class="n">4 trả lời</span><span>Lần cuối 09:40</span><span class="pill count tnum">2 mới</span></span>
+          </button>
+          <button class="titem" type="button" data-follow="0" data-unread="0">
+            <span class="tt"><span class="av s24" style="--p:var(--color-person-3)">HY</span><b>Phạm Hải Yến</b><time>09:36</time></span>
+            <span class="tx">Biên bản đối soát tháng 10 bản nháp, anh Vinh xem giúp em phần phí. <span class="ax"><svg class="i"><use href="#i-file-text"/></svg> 1 tệp</span></span>
+            <span class="tm"><span class="faces"><span class="av s20" style="--p:var(--color-person-1)">QV</span></span><span class="n">1 trả lời</span><span>Lần cuối 09:38</span></span>
+          </button>
+          <button class="titem" type="button" data-follow="1" data-unread="0">
+            <span class="tt"><span class="av s24" style="--p:var(--color-person-7)">TH</span><b>Lê Thị Hoa</b><time>09:25</time><svg class="i fl" role="img" aria-label="Đang theo dõi"><use href="#i-bell-ring"/></svg></span>
+            <span class="tx">Mọi người cập nhật biên bản trước 15:00 nhé.</span>
+            <span class="tm"><span class="faces"><span class="av s20" style="--p:var(--color-person-6)">TL</span><span class="av s20" style="--p:var(--color-person-5)">MĐ</span></span><span class="n">2 trả lời</span><span>Lần cuối 09:27</span></span>
+          </button>
+          <button class="titem" type="button" data-follow="1" data-unread="0">
+            <span class="tt"><span class="av s24" style="--p:var(--color-person-5)">MĐ</span><b>Trần Minh Đức</b><time>09:12</time><svg class="i fl" role="img" aria-label="Đang theo dõi"><use href="#i-bell-ring"/></svg></span>
+            <span class="tx">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng. <span class="ax"><svg class="i"><use href="#i-file-text"/></svg> 1 tệp</span></span>
+            <span class="tm"><span class="faces"><span class="av s20" style="--p:var(--color-person-1)">QV</span><span class="av s20" style="--p:var(--color-person-6)">TL</span></span><span class="n">3 trả lời</span><span>Lần cuối 09:20</span></span>
+          </button>
+          <button class="titem" type="button" data-follow="0" data-unread="0">
+            <span class="tt"><span class="av s24" style="--p:var(--color-person-1)">QV</span><b>Lê Quang Vinh</b><time>Hôm qua</time></span>
+            <span class="tx">Mai mình chốt số liệu tháng 9 với ngân hàng đối tác, mọi người gửi phần của mình trước 10:00 nhé.</span>
+            <span class="tm"><span class="faces"><span class="av s20" style="--p:var(--color-person-8)">VK</span><span class="av s20" style="--p:var(--color-person-6)">TL</span><span class="av s20" style="--p:var(--color-person-5)">MĐ</span></span><span class="n">5 trả lời</span><span>Hôm qua 17:05</span></span>
+          </button>
+          <div class="skl" id="tl-loading" hidden aria-label="Đang tải danh sách thread">
+            <div class="r"><span class="sk c"></span><span class="sk" style="width:40%"></span><span class="sk" style="width:92%"></span><span class="sk" style="width:55%"></span></div>
+            <div class="r"><span class="sk c"></span><span class="sk" style="width:35%"></span><span class="sk" style="width:86%"></span><span class="sk" style="width:50%"></span></div>
+            <div class="r"><span class="sk c"></span><span class="sk" style="width:45%"></span><span class="sk" style="width:90%"></span><span class="sk" style="width:60%"></span></div>
+            <div class="r"><span class="sk c"></span><span class="sk" style="width:38%"></span><span class="sk" style="width:80%"></span><span class="sk" style="width:52%"></span></div>
+          </div>
+          <div class="empty" id="tl-empty" hidden><svg class="i"><use href="#i-threads"/></svg><p id="tl-empty-t">Chưa có thread nào. Trả lời một tin để bắt đầu thread.</p><button class="btn sm" type="button" id="tl-empty-a" data-tl-all>Xem tất cả</button></div>
+          <div class="empty" id="tl-error" hidden><svg class="i" style="color:var(--color-danger)"><use href="#i-alert"/></svg><p>Không tải được danh sách thread.</p><button class="btn sm" type="button" data-tl-retry>Thử lại</button></div>
+        </div>
+      </aside>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Ba bộ lọc</b> là radio: Tất cả, Đang theo dõi, Chưa đọc (thread đang theo dõi có trả lời chưa đọc). Chip Chưa đọc mang số. <span class="need">cần backend</span> danh sách thread của kênh kèm trạng thái theo dõi và số mới.</li>
+    <li><b>Mỗi mục</b>: người viết tin gốc, giờ, chuông nếu đang theo dõi, tin gốc rút gọn 2 dòng (đính kèm thành “3 ảnh”, “1 tệp”), người trả lời, số trả lời, giờ cuối, “M mới”. Bấm mục: panel chuyển sang thread đó, có nút Quay lại; luồng chính cuộn tới tin gốc.</li>
+    <li><b>Realtime</b>: thread đang theo dõi có trả lời mới trượt lên đầu (FLIP 280ms) với lớp phủ màu người trả lời; thread không theo dõi chỉ đổi chỗ và số.</li>
+    <li><b>Trạng thái</b>: Skeleton 4 mục; rỗng theo từng bộ lọc với một hành động; lỗi có Thử lại. Bấm các nút trạng thái ở trên, hoặc chọn bộ lọc rồi chọn Rỗng.</li>
+  </ol>
+</section>
+
+<!-- ============================ COMPOSER + ATTACHMENTS ============================ -->
+<section class="screen" id="composer" aria-labelledby="h-composer">
+  <div class="screen-head">
+    <h2 id="h-composer">4 · Ô soạn tin: định dạng, đính kèm, trình xem ảnh</h2>
+    <p>Tệp chờ trong ô soạn và đi cùng chữ trong <b>một</b> tin, như Google Chat. Nút A bật thanh định dạng. Ảnh trong tin hiện thành lưới; bấm ảnh để mở trình xem, dùng phím ← → và Esc.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="fmt-demo">Bật/tắt thanh định dạng</button>
+    <button class="btn sm" type="button" data-act="link-open">Mở/đóng hộp chèn link</button>
+    <button class="btn sm" type="button" data-act="tray-add">Thêm 3 tệp vào hàng chờ</button>
+    <button class="btn sm" type="button" data-act="tray-send">Gửi tin kèm tệp</button>
+    <button class="btn sm" type="button" data-act="drop-sim">Mô phỏng kéo tệp vào</button>
+    <button class="btn sm" type="button" data-act="viewer-demo">Mở trình xem ảnh</button>
+  </div>
+  <div class="cgrid">
+    <!-- A: formatting toolbar + link dialog -->
+    <div class="pane" id="pane-fmt">
+      <div class="pane-h"><b>Thanh định dạng và hộp chèn link</b><small>Đậm đang bật theo vùng chọn</small></div>
+      <div class="mini">
+        <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:02</time></div><p class="txt">Chị gửi giúp em số chênh lệch cuối kèm link biên bản nhé.</p></div></div>
+      </div>
+      <div class="composer">
+        <div class="fmt" role="toolbar" aria-label="Định dạng" data-fill="fmt" id="fmt-a"></div>
+        <div class="cin" id="cin-a">Chênh lệch <strong>1.284.500 ₫</strong> do phí liên ngân hàng, chi tiết trong <span id="cin-a-link"></span><span class="caret"></span></div>
+        <div class="cbar"><span class="cl" data-fill="ctools"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+        <div class="ldlg" id="link-dlg" role="dialog" aria-label="Chèn link">
+          <div class="field"><label for="ld-text">Văn bản</label><input class="inp" id="ld-text" value="biên bản tháng 10"></div>
+          <div class="field"><label for="ld-url">Đường liên kết</label><input class="inp" id="ld-url" type="url" value="https://tailieu.novapay.vn/doi-soat/thang-10" aria-describedby="ld-err"><span class="ferr" id="ld-err"></span></div>
+          <div class="actions"><button class="btn ghost sm" type="button" data-act="link-close">Huỷ</button><button class="btn primary sm" type="button" id="ld-ok" data-act="link-insert">Chèn</button></div>
+        </div>
+      </div>
+    </div>
+    <!-- B: attachment tray -->
+    <div class="pane" id="pane-b">
+      <div class="pane-h"><b>Hàng chờ tệp</b><small>Ảnh đang tải, tệp xong, tệp lỗi có Thử lại</small></div>
+      <div class="mini" id="mini-b">
+        <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:05</time></div><p class="txt">Chị Hoa gửi giúp em ảnh biên lai phí và bảng tổng hợp tháng 10 nhé.</p></div></div>
+      </div>
+      <div class="composer" id="cmp-b">
+        <div class="fmt" role="toolbar" aria-label="Định dạng" data-fill="fmt" hidden></div>
+        <div class="tray" id="tray-b" aria-label="Tệp đính kèm chờ gửi"></div>
+        <div class="tray-note" id="note-b" role="status"></div>
+        <div class="cin" id="cin-b">Biên lai phí tháng 10 và bảng tổng hợp đây em.<span class="caret"></span></div>
+        <div class="cbar"><span class="cl" data-fill="ctools"></span><span class="why" id="why-b" role="status"></span><button class="btn primary sm" type="button" id="send-b" data-act="tray-send"><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+      </div>
+      <div class="drop" id="drop-b" hidden><svg class="i"><use href="#i-upload"/></svg><b>Thả tệp để đính kèm</b><span>Tối đa 20 tệp mỗi tin</span></div>
+      <input type="file" id="file-b" multiple hidden>
+    </div>
+    <!-- C: drop zone -->
+    <div class="pane" id="pane-c">
+      <div class="pane-h"><b>Vùng thả tệp</b><small>Khi đang kéo tệp vào khung hội thoại</small></div>
+      <div class="mini">
+        <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>10:11</time></div><p class="txt">Ai còn giữ bản scan hợp đồng phụ lục số 3 thì gửi vào đây giúp anh.</p></div></div>
+      </div>
+      <div class="composer"><div class="cin ph">Tin nhắn cho Đối soát giao dịch</div><div class="cbar"><span class="cl" data-fill="ctools"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button" disabled><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div></div>
+      <div class="drop" id="drop-c"><svg class="i"><use href="#i-upload"/></svg><b>Thả tệp để đính kèm</b><span>Tối đa 20 tệp mỗi tin</span></div>
+    </div>
+    <!-- D: attachments in messages -->
+    <div class="pane wide" id="pane-d">
+      <div class="pane-h"><b>Đính kèm trong tin</b><small>1 ảnh lớn, 2 ảnh, lưới 2 × 2 có “+N”, thẻ tệp, tin có định dạng. Bấm ảnh để mở trình xem.</small></div>
+      <div class="mini">
+        <div>
+          <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:14</time></div><p class="txt">Biên lai phí chuyển khoản ngày 08/10.</p>
+            <div class="att"><div class="grid g1" data-who="Nguyễn Thu Lan" data-ini="TL" data-p="6" data-time="10:14"><button class="tile" type="button" data-size="1,4 MB" aria-label="Mở ảnh bien-lai-phi-08-10.jpg"><img data-photo="4" alt="bien-lai-phi-08-10.jpg"></button></div></div></div></div>
+          <div class="m"><span class="av" style="--p:var(--color-person-1)">QV</span><div class="mc"><div class="who"><b>Lê Quang Vinh</b><time>10:16</time></div><p class="txt">Hai mặt của phiếu hoàn tiền.</p>
+            <div class="att"><div class="grid g2" data-who="Lê Quang Vinh" data-ini="QV" data-p="1" data-time="10:16"><button class="tile" type="button" data-size="980 KB" aria-label="Mở ảnh phieu-hoan-tien-mat-truoc.jpg"><img data-photo="1" alt="phieu-hoan-tien-mat-truoc.jpg"></button><button class="tile" type="button" data-size="1,1 MB" aria-label="Mở ảnh phieu-hoan-tien-mat-sau.jpg"><img data-photo="3" alt="phieu-hoan-tien-mat-sau.jpg"></button></div></div></div></div>
+        </div>
+        <div>
+          <div class="m"><span class="av" style="--p:var(--color-person-3)">HY</span><div class="mc"><div class="who"><b>Phạm Hải Yến</b><time>10:20</time></div><p class="txt">Toàn bộ chứng từ gốc của 3 giao dịch.</p>
+            <div class="att"><div class="grid g4" id="grid-demo" data-who="Phạm Hải Yến" data-ini="HY" data-p="3" data-time="10:20">
+              <button class="tile" type="button" data-size="1,2 MB" aria-label="Mở ảnh chung-tu-01.jpg"><img data-photo="0" alt="chung-tu-01.jpg"></button>
+              <button class="tile" type="button" data-size="1,3 MB" aria-label="Mở ảnh chung-tu-02.jpg"><img data-photo="2" alt="chung-tu-02.jpg"></button>
+              <button class="tile" type="button" data-size="1,1 MB" aria-label="Mở ảnh chung-tu-03.jpg"><img data-photo="4" alt="chung-tu-03.jpg"></button>
+              <button class="tile" type="button" data-size="1,5 MB" aria-label="Mở ảnh chung-tu-04.jpg, còn 2 ảnh nữa"><img data-photo="1" alt="chung-tu-04.jpg"><span class="plus">+2</span></button>
+              <button class="tile" type="button" data-size="1,0 MB" hidden aria-label="Mở ảnh chung-tu-05.jpg"><img data-photo="3" alt="chung-tu-05.jpg"></button>
+              <button class="tile" type="button" data-size="1,2 MB" hidden aria-label="Mở ảnh chung-tu-06.jpg"><img data-photo="5" alt="chung-tu-06.jpg"></button>
+            </div></div></div></div>
+          <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>10:24</time></div><p class="txt">Bản chốt cuối, mọi người kiểm tra trước khi trình ký.</p>
+            <div class="att">
+              <div class="file"><span class="fi"><svg class="i"><use href="#i-sheet"/></svg></span><span class="fm"><b>tong-hop-doi-soat-thang-10.xlsx</b><small>Bảng tính · 86 KB</small></span><button class="ibtn dl" type="button" aria-label="Tải xuống tong-hop-doi-soat-thang-10.xlsx"><svg class="i s"><use href="#i-download"/></svg></button></div>
+              <div class="file"><span class="fi pdf"><svg class="i"><use href="#i-file-text"/></svg></span><span class="fm"><b>bien-ban-doi-soat-thang-10-da-ky.pdf</b><small>PDF · 1,2 MB</small></span><button class="ibtn dl" type="button" aria-label="Tải xuống bien-ban-doi-soat-thang-10-da-ky.pdf"><svg class="i s"><use href="#i-download"/></svg></button></div>
+              <div class="file"><span class="fi doc"><svg class="i"><use href="#i-file-text"/></svg></span><span class="fm"><b>to-trinh-phi-lien-ngan-hang.docx</b><small>Văn bản · 240 KB</small></span><button class="ibtn dl" type="button" aria-label="Tải xuống to-trinh-phi-lien-ngan-hang.docx"><svg class="i s"><use href="#i-download"/></svg></button></div>
+            </div></div></div>
+          <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:26</time></div>
+          <div class="txt"><p><strong>Chốt đối soát tháng 10</strong>, còn hai bước:</p><ol><li>Đối chiếu 3 giao dịch lệch với <a href="#composer">sao kê ngân hàng</a></li><li>Cập nhật cột <code>phi_lien_ngan_hang</code> trong bảng tổng hợp</li></ol><blockquote>Phí liên ngân hàng hạch toán vào tài khoản 6427.</blockquote><pre><code>=SUMIF(C:C; "Phí LNH"; G:G)</code></pre></div></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Thanh định dạng</b>: nút A bật/tắt; Đậm, Nghiêng, Gạch chân, Gạch ngang, Danh sách chấm, Danh sách số, Link, Code, Khối code, Trích dẫn. Nút đang áp dụng có nền accent wash. Danh sách chấm/số loại trừ nhau, Khối code/Trích dẫn loại trừ nhau. Tooltip ghi phím tắt.</li>
+    <li><b>Hộp chèn link</b>: Văn bản + Đường liên kết; Chèn chỉ bật khi URL bắt đầu bằng https://, http:// hoặc mailto:. Thử xoá đường liên kết rồi rời ô để thấy lỗi.</li>
+    <li><b>Hàng chờ</b>: ảnh là thumbnail 64, tệp là chip; đang tải có thanh tiến trình và “Đang tải 64%”; lỗi nói vì sao và có Thử lại. Gửi bị khoá khi còn tệp đang tải hoặc lỗi, lý do hiện cạnh nút. Ảnh đầu dừng ở 64% để giữ trạng thái; bấm Thêm hoặc Thử lại để tải tiếp. Kéo tệp thật vào khung này, hoặc chọn Đính kèm → Tải lên từ máy, cũng thêm vào hàng chờ. Tối đa 20 tệp.</li>
+    <li><b>Gửi</b>: chữ + mọi tệp thành <b>một</b> tin (ảnh thành lưới, tệp thành thẻ). Tin của mình chỉ có animation chèn, không phủ màu. <span class="need">cần backend</span> nhiều đính kèm mỗi tin (phase 06).</li>
+    <li><b>Chọn từ Tài liệu</b> mở Picker cây thư mục, không nhập đường dẫn hay mã. Dán ảnh (Ctrl/Cmd+V) vào ô soạn cũng tạo chip.</li>
+    <li><b>Trình xem ảnh</b>: chỉ các ảnh của cùng một tin; ← → chuyển, Esc đóng và trả focus; nút trước/sau ẩn ở ảnh đầu/cuối. Thanh trên: người gửi, giờ, tên tệp, dung lượng, Tải xuống, Đóng.</li>
   </ol>
 </section>
 
 <!-- ============================ CREATE ============================ -->
 <section class="screen" id="create" aria-labelledby="h-create">
   <div class="screen-head">
-    <h2 id="h-create">3 · Tạo nhóm</h2>
+    <h2 id="h-create">5 · Tạo nhóm</h2>
     <p>Hộp thoại một bước: biểu tượng và tên, mô tả, thêm người bằng tìm kiếm (không bao giờ nhập mã), quyền truy cập và kiểu nhóm.</p>
   </div>
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="create-open">Mở hộp thoại</button></div>
@@ -498,7 +958,7 @@ html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .mo
             </div></div>
           <div class="field"><span class="lab">Kiểu nhóm</span>
             <div class="opts" role="radiogroup">
-              <div class="opt on" role="radio" aria-checked="true"><span class="r"></span><span><b>Trao đổi</b><span>Mọi thành viên đăng tin và trả lời theo chủ đề.</span></span></div>
+              <div class="opt on" role="radio" aria-checked="true"><span class="r"></span><span><b>Trao đổi</b><span>Mọi thành viên đăng tin và trả lời trong thread.</span></span></div>
               <div class="opt" role="radio" aria-checked="false"><span class="r"></span><span><b>Thông báo <span class="need">cần backend</span></b><span>Chỉ quản lý nhóm đăng tin, thành viên bày tỏ cảm xúc.</span></span></div>
             </div></div>
           <div class="actions"><button class="btn ghost" type="button" data-act="create-close">Huỷ</button><button class="btn primary" type="button" data-act="create-done">Tạo nhóm</button></div>
@@ -517,7 +977,7 @@ html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .mo
 <!-- ============================ MEMBERS ============================ -->
 <section class="screen" id="members" aria-labelledby="h-members">
   <div class="screen-head">
-    <h2 id="h-members">4 · Thành viên</h2>
+    <h2 id="h-members">6 · Thành viên</h2>
     <p>Panel phải của nhóm: tìm, thêm người, đổi vai trò và xoá khỏi nhóm từ menu của từng người.</p>
   </div>
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="member-menu">Mở menu của Lê Quang Vinh</button><button class="btn sm" type="button" data-act="member-remove">Xoá Vinh khỏi nhóm</button></div>
@@ -558,7 +1018,7 @@ html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .mo
 <!-- ============================ BROWSE ============================ -->
 <section class="screen" id="browse" aria-labelledby="h-browse">
   <div class="screen-head">
-    <h2 id="h-browse">5 · Duyệt nhóm <span class="need">cần backend</span></h2>
+    <h2 id="h-browse">7 · Duyệt nhóm <span class="need">cần backend</span></h2>
     <p>Danh sách nhóm mở trong khối mà bạn chưa tham gia. Cần API liệt kê nhóm “mọi người có thể tham gia” và API tự tham gia.</p>
   </div>
   <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="join">Tham gia “Kiểm soát nội bộ”</button></div>
@@ -580,10 +1040,63 @@ html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .mo
 </section>
 </div>
 
+<!-- Image viewer: full-screen modal, images of one message only (DESIGN.md §6 Chat) -->
+<div class="viewer" id="viewer" role="dialog" aria-modal="true" aria-label="Trình xem ảnh" hidden>
+  <div class="vbar">
+    <span class="chip"><span class="av" id="v-av">QV</span></span>
+    <div class="meta"><b id="v-name">sao-ke-gd-01.jpg</b><small id="v-sub">Lê Quang Vinh · 09:31 · 1,8 MB</small></div>
+    <div class="acts">
+      <button class="ibtn" type="button" aria-label="Tải xuống" title="Tải xuống"><svg class="i"><use href="#i-download"/></svg></button>
+      <button class="ibtn" type="button" id="v-close" aria-label="Đóng trình xem" title="Đóng (Esc)" data-act="viewer-close"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+  </div>
+  <div class="vstage">
+    <img id="v-img" alt="">
+    <button class="vnav prev" type="button" data-act="v-prev" aria-label="Ảnh trước"><svg class="i"><use href="#i-left"/></svg></button>
+    <button class="vnav next" type="button" data-act="v-next" aria-label="Ảnh sau"><svg class="i"><use href="#i-right"/></svg></button>
+  </div>
+  <div class="vcount" id="v-count" aria-live="polite">1 / 3</div>
+</div>
+
+<template id="tpl-fmt">
+  <button class="ibtn" type="button" data-fmt="b" aria-pressed="false" aria-label="Đậm" title="Đậm (Ctrl+B)"><svg class="i s"><use href="#i-bold"/></svg></button>
+  <button class="ibtn" type="button" data-fmt="i" aria-pressed="false" aria-label="Nghiêng" title="Nghiêng (Ctrl+I)"><svg class="i s"><use href="#i-italic"/></svg></button>
+  <button class="ibtn" type="button" data-fmt="u" aria-pressed="false" aria-label="Gạch chân" title="Gạch chân (Ctrl+U)"><svg class="i s"><use href="#i-underline"/></svg></button>
+  <button class="ibtn" type="button" data-fmt="s" aria-pressed="false" aria-label="Gạch ngang" title="Gạch ngang (Ctrl+Shift+X)"><svg class="i s"><use href="#i-strike"/></svg></button>
+  <span class="sep" aria-hidden="true"></span>
+  <button class="ibtn" type="button" data-fmt="ul" data-g="list" aria-pressed="false" aria-label="Danh sách chấm" title="Danh sách chấm"><svg class="i s"><use href="#i-list"/></svg></button>
+  <button class="ibtn" type="button" data-fmt="ol" data-g="list" aria-pressed="false" aria-label="Danh sách số" title="Danh sách số"><svg class="i s"><use href="#i-list-ol"/></svg></button>
+  <span class="sep" aria-hidden="true"></span>
+  <button class="ibtn" type="button" data-act="link-open" aria-pressed="false" aria-label="Chèn link" title="Chèn link (Ctrl+K)"><svg class="i s"><use href="#i-link"/></svg></button>
+  <span class="sep" aria-hidden="true"></span>
+  <button class="ibtn" type="button" data-fmt="code" aria-pressed="false" aria-label="Code" title="Code"><svg class="i s"><use href="#i-code"/></svg></button>
+  <button class="ibtn" type="button" data-fmt="pre" data-g="block" aria-pressed="false" aria-label="Khối code" title="Khối code"><svg class="i s"><use href="#i-code-block"/></svg></button>
+  <button class="ibtn" type="button" data-fmt="quote" data-g="block" aria-pressed="false" aria-label="Trích dẫn" title="Trích dẫn"><svg class="i s"><use href="#i-quote"/></svg></button>
+</template>
+<template id="tpl-ctools">
+  <button class="ibtn" type="button" data-act="attach-menu" aria-haspopup="menu" aria-expanded="false" aria-label="Đính kèm" title="Đính kèm"><svg class="i"><use href="#i-clip"/></svg></button>
+  <button class="ibtn" type="button" data-act="fmt-toggle" aria-pressed="false" aria-label="Định dạng" title="Định dạng"><svg class="i"><use href="#i-baseline"/></svg></button>
+  <button class="ibtn" type="button" aria-label="Biểu tượng cảm xúc" title="Biểu tượng cảm xúc"><svg class="i"><use href="#i-smile"/></svg></button>
+  <div class="menu up" role="menu" aria-label="Đính kèm" hidden>
+    <button type="button" role="menuitem" data-act="pick-local"><svg class="i s"><use href="#i-upload"/></svg>Tải lên từ máy</button>
+    <button type="button" role="menuitem" data-act="close-menus"><svg class="i s"><use href="#i-folder"/></svg>Chọn từ Tài liệu</button>
+  </div>
+</template>
+<template id="tpl-hact">
+  <div class="hact" role="toolbar" aria-label="Thao tác với tin">
+    <button class="ibtn" type="button" aria-label="Bày tỏ cảm xúc" title="Bày tỏ cảm xúc"><svg class="i s"><use href="#i-smile-plus"/></svg></button>
+    <button class="ibtn" type="button" data-act="hact-reply" aria-label="Trả lời trong thread" title="Trả lời trong thread"><svg class="i s"><use href="#i-reply-thread"/></svg></button>
+    <button class="ibtn" type="button" aria-label="Ghim" title="Ghim"><svg class="i s"><use href="#i-pin"/></svg></button>
+    <button class="ibtn" type="button" data-act="hact-more" aria-haspopup="menu" aria-label="Thêm" title="Thêm"><svg class="i s"><use href="#i-more-h"/></svg></button>
+  </div>
+</template>
+
 <script>
 (function () {
   var root = document.documentElement;
+  function $(id) { return document.getElementById(id); }
   function reduced() { return root.classList.contains('reduce') || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  function sb() { return reduced() ? 'auto' : 'smooth'; }
   function replay(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
   function exitThen(el, cls, done) {
     if (reduced()) { done(); return; }
@@ -591,13 +1104,24 @@ html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .mo
     el.addEventListener('animationend', function h(e) { if (e.target !== el) return; el.removeEventListener('animationend', h); el.classList.remove(cls); done(); });
   }
   function frag(html) { var t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function trace(el, n) { el.style.setProperty('--p', 'var(--color-person-' + n + ')'); el.style.setProperty('--pw', 'var(--color-person-' + n + '-wash)'); replay(el, 'rt'); }
+  // Realtime wash that hands the surface back to its own states (hover, selected) when it ends.
+  function wash(el, n) {
+    trace(el, n); clearTimeout(el._rt);
+    el._rt = setTimeout(function () {
+      el.classList.remove('rt');
+      el.querySelectorAll('.tag').forEach(function (t) { t.remove(); });
+      el.querySelectorAll('.halo').forEach(function (h) { h.classList.remove('halo'); });
+    }, 2450);
+  }
   function insertAnimated(parent, html, before) {
     var wrap = document.createElement('div'); wrap.className = 'ins'; var inner = frag(html); wrap.appendChild(inner);
     if (before) parent.insertBefore(wrap, before); else parent.appendChild(wrap);
     wrap.addEventListener('animationend', function h(e) { if (e.target !== wrap) return; wrap.removeEventListener('animationend', h); parent.replaceChild(inner, wrap); });
     return inner;
   }
+  function fadeOut(el, done) { if (reduced()) { done(); return; } el.classList.add('out'); el.addEventListener('animationend', function h(e) { if (e.target !== el) return; el.removeEventListener('animationend', h); done(); }); }
   function toast(box, html, ms) {
     var t = frag('<div class="toast enter">' + html + '</div>'); box.appendChild(t);
     setTimeout(function () { exitThen(t, 'exit', function () { t.remove(); }); }, ms || 4000);
@@ -622,94 +1146,498 @@ html.reduce .panel.enter, html.reduce .scrim.enter, html.reduce .scrim.enter .mo
       document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
     });
   });
-  var rd = document.getElementById('reduce'); rd.addEventListener('change', function () { root.classList.toggle('reduce', rd.checked); });
+  var rd = $('reduce'); rd.addEventListener('change', function () { root.classList.toggle('reduce', rd.checked); });
 
-  // tab ink
-  var tabs = document.getElementById('space-tabs'); var ink = document.getElementById('tab-ink');
-  function placeInk() {
-    var sel = tabs.querySelector('[aria-selected="true"]'); if (!sel) return;
-    ink.style.width = sel.offsetWidth - 16 + 'px'; ink.style.transform = 'translateX(' + (sel.offsetLeft - 20 + 8) + 'px)';
+  // ---------- mock photo content (image data, not UI colour: paper statements on a desk) ----------
+  var PH = [
+    ['#d9cfc0', '#b3a28a', -3, '#1f6f78', 3], ['#cdd3d8', '#96a2ab', 2.5, '#2b4f8c', 5], ['#ddd2bf', '#bba27e', -1.5, '#1f6f78', 2],
+    ['#c8d0c4', '#95a38f', 3.5, '#5b3d7a', 6], ['#e0d6c8', '#b9a990', -4, '#8a4b2a', 4], ['#d3d0cc', '#a29d96', 1.5, '#2b4f8c', 1]
+  ];
+  function photo(i) {
+    var p = PH[i % PH.length], rows = '';
+    for (var j = 0; j < 9; j++) {
+      var y = 196 + j * 32;
+      if (j === p[4]) rows += '<rect x="248" y="' + (y - 11) + '" width="304" height="26" rx="3" fill="#ffe27a" opacity=".9"/>';
+      rows += '<rect x="262" y="' + y + '" width="' + (96 + (j * 41) % 70) + '" height="6" rx="3" fill="#8d9398"/><rect x="474" y="' + y + '" width="' + (52 + (j * 17) % 24) + '" height="6" rx="3" fill="#53595e"/>';
+    }
+    var s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + p[0] + '"/><stop offset="1" stop-color="' + p[1] + '"/></linearGradient></defs><rect width="800" height="600" fill="url(#g)"/>'
+      + '<g transform="rotate(' + p[2] + ' 400 300)"><rect x="238" y="60" width="336" height="492" rx="4" fill="#000" opacity=".14"/><rect x="232" y="52" width="336" height="492" rx="4" fill="#fbfaf6"/><rect x="232" y="52" width="336" height="66" rx="4" fill="' + p[3] + '"/><rect x="256" y="78" width="118" height="12" rx="4" fill="#fff" opacity=".92"/><rect x="460" y="80" width="84" height="8" rx="4" fill="#fff" opacity=".6"/><rect x="256" y="138" width="176" height="10" rx="4" fill="#33393e"/><rect x="256" y="158" width="120" height="7" rx="3" fill="#9aa0a5"/>'
+      + rows + '<rect x="256" y="492" width="288" height="1.5" fill="#c9ccce"/><rect x="418" y="508" width="126" height="10" rx="4" fill="#33393e"/></g></svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
   }
-  tabs.addEventListener('click', function (e) {
-    var b = e.target.closest('[role="tab"]'); if (!b) return;
-    tabs.querySelectorAll('[role="tab"]').forEach(function (t) { t.setAttribute('aria-selected', String(t === b)); }); placeInk();
-  });
-  placeInk(); window.addEventListener('resize', placeInk);
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeInk);
+  document.querySelectorAll('img[data-photo]').forEach(function (im) { im.src = photo(+im.getAttribute('data-photo')); });
 
-  var replies = 2, minute = 25;
+  // ---------- shared pieces: toolbars, composer tools, hover actions ----------
+  document.querySelectorAll('[data-fill]').forEach(function (el) { el.innerHTML = $('tpl-' + el.getAttribute('data-fill')).innerHTML; });
+  var fmtN = 0;
+  document.querySelectorAll('.composer').forEach(function (c) {
+    var a = c.querySelector('[data-act="fmt-toggle"]'); if (!a) return;
+    var bar = c.querySelector('.fmt');
+    if (!bar) { bar = document.createElement('div'); bar.className = 'fmt'; bar.setAttribute('role', 'toolbar'); bar.setAttribute('aria-label', 'Định dạng'); bar.hidden = true; bar.innerHTML = $('tpl-fmt').innerHTML; c.insertBefore(bar, c.firstChild); }
+    if (!bar.id) bar.id = 'fmt-' + (++fmtN);
+    a.setAttribute('aria-controls', bar.id); a.setAttribute('aria-pressed', String(!bar.hidden));
+  });
+  $('fmt-a').querySelector('[data-fmt="b"]').setAttribute('aria-pressed', 'true');
+  $('fmt-a').querySelector('[data-act="link-open"]').setAttribute('aria-pressed', 'true');
+  function addHact(scope) {
+    scope.querySelectorAll('.m').forEach(function (m) {
+      if (m.querySelector(':scope > .hact')) return;
+      var h = frag($('tpl-hact').innerHTML);
+      if (m.closest('.panel')) h.querySelector('[data-act="hact-reply"]').remove();
+      m.appendChild(h);
+    });
+  }
+  addHact(document);
+  function closeMenus() {
+    document.querySelectorAll('.menu').forEach(function (m) { m.hidden = true; });
+    document.querySelectorAll('[data-act="attach-menu"]').forEach(function (b) { b.setAttribute('aria-expanded', 'false'); });
+  }
+
+  // tab ink, every tab strip
+  document.querySelectorAll('.tabs').forEach(function (tabs) {
+    var ink = tabs.querySelector('.ink');
+    function place() {
+      var sel = tabs.querySelector('[aria-selected="true"]'); if (!sel || !ink) return;
+      ink.style.width = sel.offsetWidth - 16 + 'px'; ink.style.transform = 'translateX(' + (sel.offsetLeft - 20 + 8) + 'px)';
+    }
+    tabs.addEventListener('click', function (e) {
+      var b = e.target.closest('[role="tab"]'); if (!b) return;
+      tabs.querySelectorAll('[role="tab"]').forEach(function (t) { t.setAttribute('aria-selected', String(t === b)); }); place();
+    });
+    place(); window.addEventListener('resize', place);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(place);
+  });
+
+  // ---------- §2 in-line stream: threads ----------
+  var P = { QV: [1, 'Lê Quang Vinh'], 'MĐ': [5, 'Trần Minh Đức'], TL: [6, 'Nguyễn Thu Lan'], TH: [7, 'Lê Thị Hoa'], HY: [3, 'Phạm Hải Yến'], BN: [2, 'Trần Bảo Ngọc'] };
+  function R(ini, time, text) { return { ini: ini, time: time, text: text }; }
+  var TH = {
+    a: { root: R('MĐ', '09:12'), followed: true, unread: 0, replies: [R('TL', '09:14', 'Tổng chênh lệch 1.284.500 ₫, cả ba đều chuyển sau 22:00.'), R('QV', '09:18', 'Đã đối chiếu xong, chênh lệch do phí liên ngân hàng, không phải lỗi hệ thống.'), R('QV', '09:20', 'Em ghi chú vào cột G của file rồi ạ.')] },
+    d: { root: R('TH', '09:25'), followed: true, unread: 0, replies: [R('MĐ', '09:26', 'Rõ chị, em báo lại bên kế toán chi nhánh.'), R('TL', '09:27', 'Em cập nhật biên bản xong trước 14:00 ạ.')] },
+    b: { root: R('QV', '09:31'), followed: true, unread: 2, replies: [R('TL', '09:33', 'Giao dịch thứ hai khớp với lệnh hoàn tiền ngày 07/10.'), R('MĐ', '09:35', 'Hai giao dịch còn lại anh đang hỏi ngân hàng.'), R('TL', '09:39', 'Ngân hàng xác nhận đã ghi có lại cả hai, mai sẽ có trên sao kê.'), R('TL', '09:40', 'Em cập nhật vào biên bản luôn nhé.')] },
+    c: { root: R('HY', '09:36'), followed: false, unread: 0, replies: [R('QV', '09:38', 'Phần phí anh xem rồi, chỉ cần sửa lại số tài khoản ở trang 2.')] }
+  };
+  var openTh = null, panel = $('thread-panel'), app2 = $('app-space'), tbody = $('thread-body'), stream = $('space-stream');
+  function mins(t) { var p = t.split(':'); return +p[0] * 60 + +p[1]; }
+  function avHTML(ini, size, extra) { return '<span class="av' + (size ? ' s' + size : '') + (extra ? ' ' + extra : '') + '" style="--p:var(--color-person-' + P[ini][0] + ')">' + ini + '</span>'; }
+  function rowHTML(r, cont, body, tag) {
+    if (cont) return '<div class="m cont"><time class="gt">' + r.time + '</time><div class="mc">' + body + '</div></div>';
+    return '<div class="m">' + avHTML(r.ini, 0, tag ? 'halo' : '') + '<div class="mc"><div class="who"><b>' + P[r.ini][1] + '</b><time>' + r.time + '</time>'
+      + (tag ? '<span class="tag" style="--p:var(--color-person-' + P[r.ini][0] + ')">vừa trả lời</span>' : '') + '</div>' + body + '</div></div>';
+  }
+  function sumEl(key) { return stream.querySelector('.tsum[data-thread="' + key + '"]'); }
+  function rootBody(key) {
+    var mc = stream.querySelector('.m[data-thread="' + key + '"] > .mc').cloneNode(true);
+    ['.who', '.tsum'].forEach(function (s) { var x = mc.querySelector(s); if (x) x.remove(); });
+    return mc.innerHTML;
+  }
+  function faces(t) {
+    var seen = {}, out = [];
+    for (var i = t.replies.length - 1; i >= 0 && out.length < 3; i--) { var k = t.replies[i].ini; if (!seen[k]) { seen[k] = 1; out.push(k); } }
+    return out;
+  }
+  function renderSum(key, o) {
+    o = o || {}; var t = TH[key], el = sumEl(key), n = t.replies.length, last = t.replies[n - 1].time;
+    var fs = faces(t).map(function (k, i) { return avHTML(k, 20, o.halo && i === 0 ? 'halo' : ''); }).join('');
+    var pill = t.followed && t.unread > 0, c = o.changed ? ' nf' : '';
+    el.innerHTML = '<span class="faces">' + fs + '</span><span class="n' + c + '">' + n + ' trả lời</span><span class="l' + c + '">Lần cuối ' + last + '</span>'
+      + (pill ? '<span class="pill count tnum' + (o.changed ? ' pop' : '') + '">' + t.unread + ' mới</span>' : '')
+      + (o.tag ? '<span class="tag" style="--p:var(--color-person-' + o.tag + ')">vừa trả lời</span>' : '');
+    el.setAttribute('aria-label', 'Thread, ' + n + ' trả lời, lần cuối ' + last + (pill ? ', ' + t.unread + ' trả lời mới' : '') + (t.followed ? ', đang theo dõi' : ''));
+    el.setAttribute('aria-expanded', String(openTh === key && !panel.hidden));
+  }
+  function badge() {
+    var n = Object.keys(TH).filter(function (k) { return TH[k].followed && TH[k].unread > 0; }).length, b = $('thr-badge');
+    if (b.textContent !== String(n) && n) replay(b, 'pop');
+    b.textContent = String(n); b.hidden = !n;
+    $('thr-btn').setAttribute('aria-label', n ? 'Thread, ' + n + ' thread có tin mới' : 'Thread');
+  }
+  function paintFollow() {
+    var t = TH[openTh], b = $('follow-btn');
+    b.setAttribute('aria-pressed', String(t.followed));
+    b.innerHTML = '<svg class="i s"><use href="#i-' + (t.followed ? 'bell-ring' : 'bell') + '"/></svg>' + (t.followed ? 'Đang theo dõi' : 'Theo dõi');
+  }
+  function menuLabel() {
+    var it = $('msg-menu').querySelector('[data-act="menu-follow"]');
+    it.querySelector('use').setAttribute('href', TH.c.followed ? '#i-bell-off' : '#i-bell-ring');
+    it.querySelector('span').textContent = TH.c.followed ? 'Bỏ theo dõi thread' : 'Theo dõi thread';
+  }
+  function renderThread(key, from) {
+    var t = TH[key], h = rowHTML(t.root, false, rootBody(key)), prev = null;
+    h += '<div class="dd" role="separator" id="th-count">' + t.replies.length + ' trả lời</div>';
+    t.replies.forEach(function (r, i) {
+      if (from != null && i === from) { h += '<div class="dd unread" role="separator" id="th-unread">Tin mới</div>'; prev = null; }
+      h += rowHTML(r, prev && prev.ini === r.ini && mins(r.time) - mins(prev.time) <= 5, '<p class="txt">' + esc(r.text) + '</p>'); prev = r;
+    });
+    tbody.innerHTML = h; addHact(tbody); paintFollow();
+    var u = $('th-unread'); tbody.scrollTop = u ? Math.max(0, u.offsetTop - tbody.offsetTop - 48) : tbody.scrollHeight;
+  }
+  function openThread(key, from) {
+    var t = TH[key], had = t.unread, wasHidden = panel.hidden, prevKey = openTh;
+    if (from == null) from = had ? t.replies.length - had : null;
+    t.unread = 0; openTh = key;
+    if (wasHidden) { panel.hidden = false; app2.classList.add('with-panel'); replay(panel, 'enter'); }
+    else if (prevKey && prevKey !== key) replay(tbody, 'swap');
+    renderThread(key, from);
+    Object.keys(TH).forEach(function (k) { if (k !== key) sumEl(k).setAttribute('aria-expanded', 'false'); });
+    var pill = had && sumEl(key).querySelector('.pill');
+    if (pill) fadeOut(pill, function () { renderSum(key); }); else renderSum(key);
+    badge(); setTimeout(updJump, 30);
+  }
+  function closeThread() {
+    if (panel.hidden) return;
+    panel.classList.remove('enter');
+    exitThen(panel, 'exit', function () { panel.hidden = true; app2.classList.remove('with-panel'); Object.keys(TH).forEach(function (k) { sumEl(k).setAttribute('aria-expanded', 'false'); }); updJump(); });
+  }
+  function setFollow(key, v) {
+    var t = TH[key]; t.followed = v; if (!v) t.unread = 0;
+    renderSum(key); if (openTh === key) paintFollow(); badge(); menuLabel();
+    $('follow-live').textContent = v ? 'Đã theo dõi thread' : 'Đã bỏ theo dõi thread';
+  }
+  function scrollToRow(row, cb) {
+    var top = row.offsetTop, st = stream.scrollTop, ch = stream.clientHeight;
+    if (top >= st && top + Math.min(row.offsetHeight, ch / 2) <= st + ch) { cb(); return; }
+    stream.scrollTo({ top: Math.max(0, top - ch / 3), behavior: sb() });
+    setTimeout(cb, reduced() ? 0 : 420);
+  }
+  var clock = 46;
+  function nextTime() { var m = 9 * 60 + clock++; return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+  function reply(key, ini, text) {
+    var t = TH[key], r = R(ini, nextTime(), text); t.replies.push(r);
+    var isOpen = !panel.hidden && openTh === key, attend = t.followed;
+    if (!isOpen && attend) t.unread++;
+    var el = sumEl(key);
+    scrollToRow(el.closest('.m'), function () {
+      renderSum(key, { changed: true, halo: attend, tag: attend ? P[ini][0] : 0 });
+      if (attend) wash(el, P[ini][0]);
+      if (isOpen) {
+        $('th-count').textContent = t.replies.length + ' trả lời';
+        var prev = t.replies[t.replies.length - 2], cont = prev.ini === ini && mins(r.time) - mins(prev.time) <= 5;
+        var node = insertAnimated(tbody, rowHTML(r, cont, '<p class="txt">' + esc(text) + '</p>', !cont && attend));
+        addHact(tbody); if (attend) wash(node, P[ini][0]);
+        tbody.scrollTo({ top: tbody.scrollHeight, behavior: sb() });
+      }
+      badge();
+    });
+  }
+  var followReplies = [['QV', 'Em đã chuyển số liệu 6427 sang bảng tổng hợp.'], ['MĐ', 'Kế toán chi nhánh xác nhận rồi chị.'], ['TL', 'Biên bản đã cập nhật, chị xem lại giúp em.']];
+  var otherReplies = [['BN', 'Bên Kiểm soát cần thêm bản có chữ ký nhé.'], ['TL', 'Em gửi lại bản sửa trang 2 rồi ạ.'], ['BN', 'Đã nhận, cảm ơn em.']];
+  var fi = 0, oi = 0;
+
+  // jump pill: "Tin mới nhất" when far from the end, "Nhảy tới tin chưa đọc" once the reader skipped the divider
+  var udiv = $('unread-div'), jumpBtn = $('jump'), skipped = false, jumping = null, readAll = false, curMode = null, jumpGuard = null;
+  function updJump() {
+    var st = stream.scrollTop, ch = stream.clientHeight, max = stream.scrollHeight - ch, dv = udiv.offsetTop, atEnd = max - st < 8;
+    if (jumping === 'down' && atEnd) { jumping = null; skipped = true; }
+    if (jumping === 'up' && Math.abs(st - Math.max(0, dv - 48)) < 6) jumping = null;
+    if (atEnd) readAll = true;
+    if (jumping) return;
+    if (dv >= st && dv < st + ch) skipped = false;
+    var below = 0;
+    if (!readAll) for (var n = udiv.nextElementSibling; n; n = n.nextElementSibling) if (n.classList.contains('m') && n.offsetTop > st + ch) below++;
+    var mode = skipped && dv < st ? 'up' : (max - st > ch / 2 ? 'down' : null);
+    var cnt = $('jump-n'); cnt.textContent = String(below); cnt.hidden = !(mode === 'down' && below > 0);
+    if (mode === curMode) return;
+    curMode = mode;
+    if (!mode) { jumpBtn.hidden = true; return; }
+    $('jump-ic').setAttribute('href', mode === 'up' ? '#i-arrow-up' : '#i-arrow-down');
+    $('jump-t').textContent = mode === 'up' ? 'Nhảy tới tin chưa đọc' : 'Tin mới nhất';
+    if (jumpBtn.hidden) { jumpBtn.hidden = false; replay(jumpBtn, 'enter'); } else replay($('jump-t'), 'nf');
+  }
+  stream.addEventListener('scroll', updJump, { passive: true });
+  function landAtDivider() { stream.scrollTop = Math.max(0, udiv.offsetTop - 48); updJump(); }
+
+  Object.keys(TH).forEach(function (k) { renderSum(k); });
+  openThread('a', 1); menuLabel(); badge();
+  landAtDivider();
+  var userScrolled = false; stream.addEventListener('wheel', function () { userScrolled = true; }, { passive: true });
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(function () { if (!userScrolled && !jumping && !skipped && !readAll) landAtDivider(); });
+
+  // ---------- §3 thread list panel ----------
+  var tlState = 'data', tlFilter = 'all';
+  var EMPTY = { all: ['Chưa có thread nào. Trả lời một tin để bắt đầu thread.', false], follow: ['Bạn chưa theo dõi thread nào.', true], unread: ['Bạn đã đọc hết các thread đang theo dõi.', true] };
+  function paintTL() {
+    var shown = 0;
+    $('tl-list').querySelectorAll('.titem').forEach(function (it) {
+      var ok = tlState === 'data' && (tlFilter === 'all' || (tlFilter === 'follow' && it.dataset.follow === '1') || (tlFilter === 'unread' && it.dataset.unread === '1'));
+      it.hidden = !ok; if (ok) shown++;
+    });
+    $('tl-loading').hidden = tlState !== 'loading'; $('tl-error').hidden = tlState !== 'error';
+    $('tl-filters').querySelector('.pill').hidden = tlState !== 'data';
+    var empty = tlState === 'empty' || (tlState === 'data' && !shown);
+    $('tl-empty').hidden = !empty;
+    if (empty) { var e = EMPTY[tlState === 'empty' ? tlFilter : tlFilter]; $('tl-empty-t').textContent = e[0]; $('tl-empty-a').hidden = !e[1]; }
+    $('tl-filters').querySelectorAll('[role="radio"]').forEach(function (r) { r.setAttribute('aria-checked', String(r.dataset.f === tlFilter)); });
+    document.querySelectorAll('[data-tl-state]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.tlState === tlState)); });
+    replay($('tl-list'), 'swap');
+  }
+
+  // ---------- §4 composer: formatting, link, tray, drop, viewer ----------
+  function fmtToggle(btn) {
+    var bar = $(btn.getAttribute('aria-controls')), on = bar.hidden;
+    bar.hidden = !on; btn.setAttribute('aria-pressed', String(on));
+    if (on) replay(bar, 'enter'); else if (bar.id === 'fmt-a') closeLink();
+  }
+  function toggleFmt(b) {
+    var on = b.getAttribute('aria-pressed') !== 'true', g = b.getAttribute('data-g');
+    if (on && g) b.parentNode.querySelectorAll('[data-g="' + g + '"]').forEach(function (x) { x.setAttribute('aria-pressed', 'false'); });
+    b.setAttribute('aria-pressed', String(on));
+  }
+  var ldlg = $('link-dlg'), LINK_RE = /^(https?:\/\/\S+|mailto:\S+)$/i;
+  function linkBtn() { return $('fmt-a').querySelector('[data-act="link-open"]'); }
+  function closeLink() { if (ldlg.hidden) return; ldlg.hidden = true; linkBtn().setAttribute('aria-pressed', 'false'); }
+  function vUrl(show) {
+    var u = $('ld-url'), ok = LINK_RE.test(u.value.trim());
+    $('ld-ok').disabled = !ok;
+    if (show || ok) { u.setAttribute('aria-invalid', String(!ok)); $('ld-err').textContent = ok ? '' : 'Chỉ dùng liên kết bắt đầu bằng https://, http:// hoặc mailto:'; }
+  }
+  $('ld-url').addEventListener('input', function () { vUrl(false); });
+  $('ld-url').addEventListener('blur', function () { vUrl(true); });
+  ldlg.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); actions['link-insert'](); } });
+  vUrl(false);
+
+  var KIND = { xls: ['i-sheet', 'Bảng tính'], pdf: ['i-file-text', 'PDF'], doc: ['i-file-text', 'Văn bản'], other: ['i-file-text', 'Tệp'] };
+  var items = [], timer = null, trayEl = $('tray-b');
+  function kindOf(name) { var e = name.split('.').pop().toLowerCase(); return /^(xlsx?|csv)$/.test(e) ? 'xls' : e === 'pdf' ? 'pdf' : /^(docx?|txt|rtf)$/.test(e) ? 'doc' : 'other'; }
+  function fmtSize(b) { return b < 1048576 ? Math.max(1, Math.round(b / 1024)) + ' KB' : (b / 1048576).toFixed(1).replace('.', ',') + ' MB'; }
+  function hasText() { return !$('cin-b').classList.contains('ph'); }
+  function paintItem(o) {
+    var el = o.el, status = o.st === 'up' ? 'Đang tải ' + o.pct + '%' : o.st === 'err' ? o.why : (o.img ? 'Ảnh' : KIND[o.kind][1]) + ' · ' + o.size;
+    el.classList.toggle('up', o.st === 'up'); el.classList.toggle('err', o.st === 'err');
+    el.querySelector('.bar').hidden = o.st !== 'up'; el.querySelector('.bar i').style.setProperty('--pct', String(o.pct / 100));
+    if (!o.img) {
+      el.querySelector('small').textContent = status; el.querySelector('.retry').hidden = o.st !== 'err';
+      var f = el.querySelector('.fi'); f.className = 'fi ' + (o.st === 'err' ? 'err' : o.kind);
+      f.querySelector('use').setAttribute('href', o.st === 'err' ? '#i-alert' : '#' + KIND[o.kind][0]);
+    } else el.title = o.name + ' · ' + status;
+    el.setAttribute('aria-label', o.name + ', ' + status);
+  }
+  function addItem(o, animate) {
+    items.push(o);
+    var el = document.createElement('div'); el.className = 'ti ' + (o.img ? 'img' : 'doc'); el.setAttribute('role', 'group');
+    el.innerHTML = o.img ? '<img alt="">' : '<span class="fi ' + o.kind + '"><svg class="i s"><use href="#' + KIND[o.kind][0] + '"/></svg></span><span class="fm"><span class="nm"></span><small></small></span><button class="ibtn retry" type="button" hidden><svg class="i s"><use href="#i-retry"/></svg></button>';
+    el.insertAdjacentHTML('beforeend', '<span class="bar"><i></i></span><button class="x" type="button"><svg class="i"><use href="#i-x"/></svg></button>');
+    if (o.img) { var im = el.querySelector('img'); im.src = o.src; im.alt = o.name; }
+    else { el.querySelector('.nm').textContent = o.name; var rb = el.querySelector('.retry'); rb.setAttribute('aria-label', 'Thử lại ' + o.name); rb.title = 'Thử lại'; rb.addEventListener('click', function () { o.st = 'up'; o.pct = 0; paintItem(o); run(); sync(); }); }
+    var x = el.querySelector('.x'); x.setAttribute('aria-label', 'Bỏ ' + o.name); x.title = 'Bỏ tệp';
+    x.addEventListener('click', function () { removeItem(o); });
+    o.el = el; trayEl.appendChild(el); paintItem(o); if (animate) replay(el, 'enter');
+  }
+  function removeItem(o) {
+    var el = o.el; items = items.filter(function (x) { return x !== o; });
+    var sibs = Array.prototype.filter.call(trayEl.children, function (n) { return n !== el; }), first = sibs.map(function (n) { return n.getBoundingClientRect(); });
+    exitThen(el, 'exit', function () {
+      el.remove(); sync(); if (reduced()) return;
+      sibs.forEach(function (n, i) {
+        var r = n.getBoundingClientRect(), dx = first[i].left - r.left, dy = first[i].top - r.top; if (!dx && !dy) return;
+        n.style.transition = 'none'; n.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+        requestAnimationFrame(function () { requestAnimationFrame(function () { n.style.transition = 'transform var(--duration-base) var(--ease-out-expo)'; n.style.transform = ''; }); });
+      });
+    });
+  }
+  function sync() {
+    var up = items.filter(function (x) { return x.st === 'up'; }).length, err = items.filter(function (x) { return x.st === 'err'; }).length;
+    $('send-b').disabled = up > 0 || err > 0 || (!items.length && !hasText());
+    $('why-b').textContent = up ? 'Đang tải ' + up + ' tệp…' : err ? 'Thử lại hoặc bỏ tệp lỗi để gửi' : '';
+    trayEl.hidden = !items.length;
+  }
+  function tick() {
+    var any = false;
+    items.forEach(function (o) { if (o.st !== 'up' || o.paused) return; any = true; o.pct = Math.min(100, o.pct + 9 + Math.round(Math.random() * 12)); if (o.pct >= 100) o.st = 'done'; paintItem(o); });
+    sync(); if (!any) { clearInterval(timer); timer = null; }
+  }
+  function run() { items.forEach(function (o) { o.paused = false; }); if (!timer) timer = setInterval(tick, 280); }
+  function addMany(list) {
+    var take = list.slice(0, Math.max(0, 20 - items.length)), skip = list.length - take.length;
+    take.forEach(function (o) { addItem(o, true); });
+    $('note-b').textContent = skip ? 'Mỗi tin tối đa 20 tệp. Đã bỏ qua ' + skip + ' tệp.' : '';
+    run(); sync();
+  }
+  function fromFiles(files) {
+    addMany(Array.prototype.map.call(files, function (f) { var img = /^image\//.test(f.type); return { img: img, kind: img ? null : kindOf(f.name), name: f.name, src: img ? URL.createObjectURL(f) : null, st: 'up', pct: 0, size: fmtSize(f.size) }; }));
+  }
+  $('file-b').addEventListener('change', function (e) { fromFiles(e.target.files); e.target.value = ''; });
+  addItem({ img: true, name: 'bien-lai-phi-08-10.jpg', src: photo(4), st: 'up', pct: 64, size: '1,4 MB', paused: true });
+  addItem({ img: false, kind: 'xls', name: 'tong-hop-phi-thang-10.xlsx', st: 'done', pct: 100, size: '86 KB' });
+  addItem({ img: false, kind: 'pdf', name: 'sao-ke-ngan-hang-thang-10.pdf', st: 'err', pct: 0, size: '3,2 MB', why: 'Mất kết nối, chưa tải lên' });
+  sync();
+  function sendTray() {
+    var imgs = items.filter(function (o) { return o.img; }), docs = items.filter(function (o) { return !o.img; }), text = hasText() ? $('cin-b').textContent.trim() : '';
+    var g = Math.min(imgs.length, 4), att = '';
+    if (imgs.length) att += '<div class="grid g' + g + '" data-who="Lê Thị Hoa" data-ini="TH" data-p="7" data-time="10:07">' + imgs.map(function (o, i) {
+      return '<button class="tile" type="button" data-size="' + esc(o.size) + '"' + (i > 3 ? ' hidden' : '') + ' aria-label="Mở ảnh ' + esc(o.name) + '"><img src="' + esc(o.src) + '" alt="' + esc(o.name) + '">' + (i === 3 && imgs.length > 4 ? '<span class="plus">+' + (imgs.length - 4) + '</span>' : '') + '</button>';
+    }).join('') + '</div>';
+    att += docs.map(function (o) { return '<div class="file"><span class="fi ' + o.kind + '"><svg class="i"><use href="#' + KIND[o.kind][0] + '"/></svg></span><span class="fm"><b>' + esc(o.name) + '</b><small>' + KIND[o.kind][1] + ' · ' + esc(o.size) + '</small></span><button class="ibtn dl" type="button" aria-label="Tải xuống ' + esc(o.name) + '"><svg class="i s"><use href="#i-download"/></svg></button></div>'; }).join('');
+    var mini = $('mini-b');
+    insertAnimated(mini, '<div class="m">' + avHTML('TH') + '<div class="mc"><div class="who"><b>Lê Thị Hoa</b><time>10:07</time></div>' + (text ? '<p class="txt">' + esc(text) + '</p>' : '') + (att ? '<div class="att">' + att + '</div>' : '') + '</div></div>');
+    addHact(mini); mini.scrollTo({ top: mini.scrollHeight, behavior: sb() });
+    items.forEach(function (o) { o.el.remove(); }); items = [];
+    $('cin-b').className = 'cin ph'; $('cin-b').textContent = 'Tin nhắn cho Đối soát giao dịch'; $('note-b').textContent = '';
+    sync();
+  }
+
+  // real drag and drop of files into pane B
+  var paneB = $('pane-b'), dropB = $('drop-b'), depth = 0;
+  function hasFiles(e) { return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0; }
+  paneB.addEventListener('dragenter', function (e) { if (!hasFiles(e)) return; e.preventDefault(); if (depth++ === 0) { dropB.hidden = false; replay(dropB, 'enter'); } });
+  paneB.addEventListener('dragover', function (e) { if (hasFiles(e)) e.preventDefault(); });
+  paneB.addEventListener('dragleave', function (e) { if (!hasFiles(e)) return; if (--depth <= 0) { depth = 0; dropB.hidden = true; } });
+  paneB.addEventListener('drop', function (e) { if (!hasFiles(e)) return; e.preventDefault(); depth = 0; dropB.hidden = true; fromFiles(e.dataTransfer.files); });
+
+  // image viewer
+  var V = { list: [], i: 0, from: null, meta: null }, vw = $('viewer');
+  function paintV(dir) {
+    var it = V.list[V.i], img = $('v-img');
+    img.src = it.src; img.alt = it.name;
+    $('v-name').textContent = it.name; $('v-sub').textContent = V.meta.who + ' · ' + V.meta.time + (it.size ? ' · ' + it.size : '');
+    $('v-count').textContent = (V.i + 1) + ' / ' + V.list.length;
+    var pv = vw.querySelector('.vnav.prev'), nx = vw.querySelector('.vnav.next');
+    pv.hidden = V.i === 0; nx.hidden = V.i === V.list.length - 1;
+    if (document.activeElement && document.activeElement.hidden) (pv.hidden ? (nx.hidden ? $('v-close') : nx) : pv).focus();
+    if (dir) { img.classList.remove('from-r', 'from-l'); void img.offsetWidth; img.classList.add(dir > 0 ? 'from-r' : 'from-l'); }
+  }
+  function openViewer(tile) {
+    var grid = tile.closest('.grid'), tiles = Array.prototype.slice.call(grid.querySelectorAll('.tile'));
+    V.list = tiles.map(function (t) { var im = t.querySelector('img'); return { src: im.src, name: im.alt, size: t.getAttribute('data-size') || '' }; });
+    V.i = Math.max(0, tiles.indexOf(tile)); V.from = tile; V.meta = grid.dataset;
+    var av = $('v-av'); av.textContent = V.meta.ini; av.style.setProperty('--p', 'var(--color-person-' + V.meta.p + ')');
+    vw.hidden = false; $('v-img').classList.remove('from-r', 'from-l'); paintV(0); replay(vw, 'enter');
+    document.body.style.overflow = 'hidden'; $('v-close').focus();
+  }
+  function stepV(d) { var n = V.i + d; if (n < 0 || n >= V.list.length) return; V.i = n; paintV(d); }
+  function closeViewer() {
+    vw.classList.remove('enter');
+    exitThen(vw, 'exit', function () { vw.hidden = true; document.body.style.overflow = ''; if (V.from) V.from.focus({ preventScroll: true }); });
+  }
+
+  // ---------- actions ----------
   var actions = {
     'home-new': function () {
-      var feed = document.getElementById('feed'); var c = feed.querySelector('[data-id="hopdong"]');
+      var feed = $('feed'); var c = feed.querySelector('[data-id="hopdong"]');
       c.classList.add('unread');
       c.querySelector('.pv').textContent = 'Phạm Hải Yến: Em đã gửi bản scan phụ lục số 3';
       c.querySelector('.meta').innerHTML = '<span>Vừa xong</span><span class="pill count">1</span>';
       if (!c.querySelector('.tag')) c.querySelector('.nm').insertAdjacentHTML('beforeend', '<span class="tag" style="--p:var(--color-person-3)">vừa nhắn</span>');
       flipMoveToTop(feed, c); trace(c, 3);
-      var hc = document.getElementById('home-count'); hc.textContent = String(Number(hc.textContent) + 1);
+      var hc = $('home-count'); hc.textContent = String(Number(hc.textContent) + 1);
       setTimeout(function () { var t = c.querySelector('.tag'); if (t) t.remove(); }, 2400);
     },
-    'newchat-menu': function () {
-      var m = document.getElementById('newchat-menu');
-      if (m.hidden) { m.hidden = false; replay(m, 'enter'); } else m.hidden = true;
+    'newchat-menu': function () { var m = $('newchat-menu'); var open = m.hidden; closeMenus(); if (open) { m.hidden = false; replay(m, 'enter'); } },
+    'th-follow-reply': function () { var r = followReplies[fi++ % followReplies.length]; reply('d', r[0], r[1]); },
+    'th-other-reply': function () { var r = otherReplies[oi++ % otherReplies.length]; reply('c', r[0], r[1]); },
+    'th-follow-toggle': function () { setFollow(openTh, !TH[openTh].followed); },
+    'menu-follow': function () { closeMenus(); setFollow('c', !TH.c.followed); },
+    'thread-close': function () { if (panel.hidden) openThread(openTh || 'a'); else closeThread(); },
+    'jump': function (b) {
+      if (!curMode) { if (b && b.id !== 'jump') { skipped = false; readAll = false; jumping = null; stream.scrollTo({ top: Math.max(0, udiv.offsetTop - 48), behavior: sb() }); } return; }
+      clearTimeout(jumpGuard);
+      if (curMode === 'up') { jumping = 'up'; stream.scrollTo({ top: Math.max(0, udiv.offsetTop - 48), behavior: sb() }); }
+      else { jumping = 'down'; stream.scrollTo({ top: stream.scrollHeight, behavior: sb() }); }
+      jumpGuard = setTimeout(function () { if (jumping) { if (jumping === 'down') skipped = true; jumping = null; updJump(); } }, 1200);
     },
-    'thread-toggle': function () {
-      var app = document.getElementById('app-space'); var p = document.getElementById('thread-panel');
-      if (p.hidden) { p.hidden = false; app.classList.add('with-panel'); replay(p, 'enter'); }
-      else { p.classList.remove('enter'); exitThen(p, 'exit', function () { p.hidden = true; app.classList.remove('with-panel'); }); }
+    'more-menu': function () { var m = $('msg-menu'), open = m.hidden; closeMenus(); if (!open) return; scrollToRow($('msg-c'), function () { m.hidden = false; replay(m, 'enter'); }); },
+    'hact-reply': function (b) { var row = b.closest('.m'), k = row && row.getAttribute('data-thread'); if (k && TH[k]) openThread(k); },
+    'hact-more': function (b) { if (b.closest('#msg-c')) actions['more-menu'](); },
+    'go-threads': function () { $('threads').scrollIntoView({ behavior: sb() }); },
+    'tl-toggle': function () {
+      var p = $('tl-panel'), app = $('app-threads'), btn = $('tl-btn');
+      if (p.hidden) { p.hidden = false; app.classList.add('with-panel'); replay(p, 'enter'); btn.setAttribute('aria-pressed', 'true'); }
+      else { p.classList.remove('enter'); exitThen(p, 'exit', function () { p.hidden = true; app.classList.remove('with-panel'); btn.setAttribute('aria-pressed', 'false'); }); }
     },
-    'thread-reply': function () {
-      var p = document.getElementById('thread-panel'); if (p.hidden) actions['thread-toggle']();
-      var el = insertAnimated(document.getElementById('thread-body'), '<div class="msg"><span class="av halo" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>09:' + (minute++) + '</time><span class="tag" style="--p:var(--color-person-5)">vừa trả lời</span></div><p class="txt">Ok, anh đã cập nhật biên bản theo hướng đó.</p></div></div>');
-      trace(el, 5);
-      replies++; document.getElementById('reply-count').textContent = replies + ' trả lời';
-      document.getElementById('reply-last').innerHTML = '· Lần cuối 09:' + (minute - 1) + ' <span class="new">mới</span>';
-      trace(document.getElementById('thread-summary'), 5);
-      setTimeout(function () { var t = el.querySelector('.tag'); if (t) t.remove(); }, 2400);
+    'attach-menu': function (b) {
+      var m = b.closest('.composer').querySelector('.menu.up'), open = m.hidden; closeMenus();
+      if (open) { m.hidden = false; replay(m, 'enter'); b.setAttribute('aria-expanded', 'true'); }
     },
-    'space-topic': function () {
-      var el = insertAnimated(document.getElementById('space-stream'), '<article class="topic"><div class="msg"><span class="av halo" style="--p:var(--color-person-1)">QV</span><div><div class="who"><b>Lê Quang Vinh</b><time>09:' + (minute++) + '</time><span class="tag" style="--p:var(--color-person-1)">chủ đề mới</span></div><p class="txt">Đề xuất tự động hoá bước đối chiếu sao kê từ tuần sau, mọi người góp ý giúp em.</p></div></div><div class="reply-cta"><svg class="i s"><use href="#i-reply"/></svg>Trả lời</div></article>');
-      trace(el, 1); var s = document.getElementById('space-stream'); s.scrollTop = s.scrollHeight;
+    'pick-local': function (b) { closeMenus(); if (b.closest('#pane-b')) $('file-b').click(); },
+    'close-menus': function () { closeMenus(); },
+    'fmt-toggle': function (b) { fmtToggle(b); },
+    'fmt-demo': function () { fmtToggle($('pane-fmt').querySelector('[data-act="fmt-toggle"]')); },
+    'link-open': function (b) {
+      if (b && b.closest('.composer') && !b.closest('#pane-fmt')) return;
+      if (!ldlg.hidden) { closeLink(); return; }
+      var bar = $('fmt-a'); if (bar.hidden) fmtToggle($('pane-fmt').querySelector('[data-act="fmt-toggle"]'));
+      ldlg.hidden = false; replay(ldlg, 'enter'); linkBtn().setAttribute('aria-pressed', 'true');
+      $('ld-url').focus({ preventScroll: true });
     },
-    'tab-next': function () {
-      var all = Array.prototype.slice.call(tabs.querySelectorAll('[role="tab"]'));
-      var i = all.findIndex(function (t) { return t.getAttribute('aria-selected') === 'true'; });
-      all[(i + 1) % all.length].click();
+    'link-close': function () { closeLink(); },
+    'link-insert': function () {
+      if ($('ld-ok').disabled) { vUrl(true); return; }
+      var t = $('ld-text').value.trim() || $('ld-url').value.trim();
+      $('cin-a-link').innerHTML = '<a href="#composer">' + esc(t) + '</a>'; closeLink();
     },
+    'tray-add': function () {
+      addMany([
+        { img: true, name: 'phieu-hoan-tien-01.jpg', src: photo(1), st: 'up', pct: 0, size: '980 KB' },
+        { img: true, name: 'phieu-hoan-tien-02.jpg', src: photo(3), st: 'up', pct: 0, size: '1,1 MB' },
+        { img: false, kind: 'doc', name: 'to-trinh-phi-lien-ngan-hang.docx', st: 'up', pct: 0, size: '240 KB' }
+      ]);
+    },
+    'tray-send': function (b) {
+      if (b && b.id === 'send-b') { if (!$('send-b').disabled) sendTray(); return; }
+      // demo bar: retry failed files, wait for uploads, then send as one message
+      if (!items.length) actions['tray-add']();
+      items.forEach(function (o) { if (o.st === 'err') { o.st = 'up'; o.pct = 0; paintItem(o); } });
+      run(); sync();
+      var wait = setInterval(function () { if (!$('send-b').disabled) { clearInterval(wait); sendTray(); } }, 150);
+    },
+    'drop-sim': function () { var d = $('drop-c'); if (d.hidden) { d.hidden = false; replay(d, 'enter'); } else d.hidden = true; },
+    'viewer-demo': function () { openViewer($('grid-demo').querySelector('.tile')); },
+    'viewer-close': function () { closeViewer(); },
+    'v-prev': function () { stepV(-1); },
+    'v-next': function () { stepV(1); },
     'create-open': function () {
-      var m = document.getElementById('create-modal');
-      document.getElementById('create').scrollIntoView({ behavior: reduced() ? 'auto' : 'smooth' });
+      var m = $('create-modal');
+      $('create').scrollIntoView({ behavior: sb() });
       m.hidden = false; replay(m, 'enter');
-      var nm = document.getElementById('newchat-menu'); if (nm) nm.hidden = true;
+      var nm = $('newchat-menu'); if (nm) nm.hidden = true;
     },
-    'create-close': function () { var m = document.getElementById('create-modal'); m.classList.remove('enter'); exitThen(m, 'exit', function () { m.hidden = true; }); },
+    'create-close': function () { var m = $('create-modal'); m.classList.remove('enter'); exitThen(m, 'exit', function () { m.hidden = true; }); },
     'create-done': function () {
-      var m = document.getElementById('create-modal'); m.classList.remove('enter');
-      exitThen(m, 'exit', function () { m.hidden = true; toast(document.getElementById('create-toasts'), OK + '<span>Đã tạo nhóm “Đối soát tháng 10”</span><button class="btn ghost sm" type="button">Mở</button>', 4000); });
+      var m = $('create-modal'); m.classList.remove('enter');
+      exitThen(m, 'exit', function () { m.hidden = true; toast($('create-toasts'), OK + '<span>Đã tạo nhóm “Đối soát tháng 10”</span><button class="btn ghost sm" type="button">Mở</button>', 4000); });
     },
-    'member-menu': function () { var m = document.getElementById('member-menu'); if (m.hidden) { m.hidden = false; replay(m, 'enter'); } else m.hidden = true; },
+    'member-menu': function () { var m = $('member-menu'), open = m.hidden; closeMenus(); if (open) { m.hidden = false; replay(m, 'enter'); } },
     'member-remove': function () {
-      var m = document.getElementById('member-menu'); m.hidden = true;
-      var row = document.getElementById('m-vinh'); if (!row) return;
-      var done = function () { row.remove(); document.getElementById('member-count').textContent = '13 người';
-        toast(document.getElementById('member-toasts'), OK + '<span>Đã xoá Lê Quang Vinh khỏi nhóm</span><button class="btn ghost sm" type="button">Hoàn tác</button>', 5000); };
+      var m = $('member-menu'); m.hidden = true;
+      var row = $('m-vinh'); if (!row) return;
+      var done = function () { row.remove(); $('member-count').textContent = '13 người';
+        toast($('member-toasts'), OK + '<span>Đã xoá Lê Quang Vinh khỏi nhóm</span><button class="btn ghost sm" type="button">Hoàn tác</button>', 5000); };
       if (reduced()) { done(); return; }
       row.style.transition = 'opacity 160ms var(--ease-in), transform 160ms var(--ease-in)'; row.style.opacity = '0'; row.style.transform = 'translateX(8px)';
       setTimeout(done, 170);
     },
-    'join': function () {
-      var b = document.getElementById('join-btn'); if (!b) return;
-      b.outerHTML = '<span class="pill acc">Đã tham gia</span>';
-    }
+    'join': function () { var b = $('join-btn'); if (!b) return; b.outerHTML = '<span class="pill acc">Đã tham gia</span>'; }
   };
   document.addEventListener('click', function (e) {
-    var b = e.target.closest('[data-act]'); if (!b) return;
-    var f = actions[b.getAttribute('data-act')]; if (f) { e.preventDefault(); f(); }
+    var tile = e.target.closest('.tile'); if (tile) { e.preventDefault(); openViewer(tile); return; }
+    var sum = e.target.closest('#space-stream .tsum');
+    if (sum) { var k = sum.getAttribute('data-thread'); if (!panel.hidden && openTh === k) closeThread(); else openThread(k); return; }
+    var fb = e.target.closest('.fmt [data-fmt]'); if (fb) { toggleFmt(fb); return; }
+    var st = e.target.closest('[data-tl-state]'); if (st) { tlState = st.getAttribute('data-tl-state'); paintTL(); return; }
+    var fr = e.target.closest('#tl-filters [role="radio"]'); if (fr) { tlFilter = fr.getAttribute('data-f'); paintTL(); return; }
+    if (e.target.closest('[data-tl-all]')) { tlFilter = 'all'; if (tlState === 'empty') tlState = 'data'; paintTL(); return; }
+    if (e.target.closest('[data-tl-retry]')) { tlState = 'loading'; paintTL(); setTimeout(function () { tlState = 'data'; paintTL(); }, 900); return; }
+    var b = e.target.closest('[data-act]');
+    if (!b) { if (!e.target.closest('.menu')) closeMenus(); return; }
+    var f = actions[b.getAttribute('data-act')]; if (f) { e.preventDefault(); f(b, e); }
   });
   document.addEventListener('keydown', function (e) {
+    if (!vw.hidden) {
+      if (e.key === 'Escape') { e.preventDefault(); closeViewer(); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); stepV(1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); stepV(-1); }
+      else if (e.key === 'Tab') {
+        var f = Array.prototype.filter.call(vw.querySelectorAll('button'), function (x) { return !x.hidden; }), i = f.indexOf(document.activeElement);
+        e.preventDefault(); f[(i + (e.shiftKey ? f.length - 1 : 1)) % f.length].focus();
+      }
+      return;
+    }
     if (e.key !== 'Escape') return;
-    var m = document.getElementById('create-modal'); if (!m.hidden) actions['create-close']();
-    ['newchat-menu', 'member-menu'].forEach(function (id) { document.getElementById(id).hidden = true; });
+    if (!ldlg.hidden) { closeLink(); return; }
+    var anyMenu = Array.prototype.some.call(document.querySelectorAll('.menu'), function (m) { return !m.hidden; });
+    if (anyMenu) { closeMenus(); return; }
+    if (panel.contains(document.activeElement) && !panel.hidden) { closeThread(); return; }
+    var m = $('create-modal'); if (!m.hidden) actions['create-close']();
   });
 })();
 </script>

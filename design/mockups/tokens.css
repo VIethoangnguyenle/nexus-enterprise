@@ -32,6 +32,7 @@
 
   --font-display: "Bricolage Grotesque", "Be Vietnam Pro", "Segoe UI", Arial, sans-serif;
   --font-body: "Be Vietnam Pro", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace;
 
   --duration-press: 100ms; --duration-quick: 160ms; --duration-base: 220ms; --duration-layout: 280ms;
   --ease-out: cubic-bezier(0.25, 1, 0.5, 1);
