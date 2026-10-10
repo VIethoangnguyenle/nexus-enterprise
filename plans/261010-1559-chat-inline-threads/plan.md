@@ -26,7 +26,8 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
   theo thread; panel "Thread" của nhóm (lọc Theo dõi / Chưa đọc); vạch "Tin mới" + nút nhảy tới chưa đọc.
   Đợt 2: **đính kèm** như Google Chat (hàng chờ trong ô soạn, nhiều tệp + chữ trong một tin, kéo-thả, dán ảnh,
   lưới ảnh, trình xem) và **soạn tin định dạng HTML** (thanh định dạng, phím tắt, cú pháp gõ nhanh, link; server
-  lọc allowlist). Đợt 3: sửa/xoá/trích dẫn/đánh dấu chưa đọc. Đợt 4: mức thông báo + Trang chủ ưu tiên thread.
+  lọc allowlist), sửa/xoá/trích dẫn/đánh dấu chưa đọc, mục trong cột điều hướng, tạo trong chat (bình chọn,
+  công việc, tài liệu, phê duyệt). Đợt 4: mức thông báo + Trang chủ ưu tiên thread.
 - **Non-goals:** huddle/call, bot, chuyển tiếp vào email, soạn chung realtime, E2E, đại tu tìm kiếm, migrate dữ
   liệu tin (reply đã có `parent_message_id`).
 
@@ -34,7 +35,7 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 
 | # | Phase | Đợt | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|
-| 01 | [Thiết kế Chat: thread, đính kèm, định dạng](phase-01-design-inline-threads.md) | 1 | P1 | 1-1.5d | — | in-progress |
+| 01 | [Thiết kế Chat: thread, đính kèm, định dạng](phase-01-design-inline-threads.md) | 1 | P1 | 1-1.5d | — | completed |
 | 02 | [Mô hình dữ liệu và API thread](phase-02-thread-data-model-and-api.md) | 1 | P1 | 2d | 01 (chốt hành vi) | pending |
 | 03 | [Sự kiện realtime cho thread](phase-03-realtime-thread-events.md) | 1 | P1 | 1d | 02 | pending |
 | 04 | [UI luồng in-line, panel Thread](phase-04-inline-stream-ui.md) | 1 | P1 | 2-3d | 01, 02, 03 | pending |
@@ -66,6 +67,7 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 | `chat-cards` | **new** — poll, task, document, approval cards created from chat | 11 |
 
 ## Ground rules (CLAUDE.md §5)
+- **Mobile-first** cho mọi phase UI (04, 06, 07, 08, 10, 11): làm và kiểm 390px trước (người dùng ưu tiên mobile).
 - Thiết kế trước: DESIGN.md + `design/mockups/spaces.html` được duyệt rồi mới code UI.
 - `ak:cook --tdd`: test đỏ trước; mọi nhánh quyền mới có test **deny**.
 - Tin nhắn không là node NGAC → mọi check trên OA kênh (`read`/`write`/`manage`), op từ `backend/ngac`.
@@ -92,4 +94,4 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 - Đổi hành vi gửi tin (Enter = tin chính, không mở chủ đề mới) có thể gây bỡ ngỡ → copy rõ trong composer.
 
 ## Unresolved questions
-- "Đồng thời gửi vào nhóm" khi trả lời thread? Mặc định **không** (Google Chat không có).
+- Không còn. ("Đồng thời gửi vào nhóm": không — chốt khi duyệt mockup.)

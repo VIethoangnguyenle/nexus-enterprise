@@ -13,6 +13,9 @@ dependencies: [1, 2, 3]
 Thay `TopicStream` (thẻ chủ đề) bằng luồng in-line theo mockup đã duyệt ở phase 01, cho cả nhóm và DM.
 
 ## Requirements
+- **Mobile-first** (người dùng ưu tiên mobile, 2026-10-10): dựng và kiểm ở 390px trước, rồi 768/1100/1440; panel
+  thread và panel Thread thành sheet toàn màn dưới 1024; ô soạn dính đáy, không bị bàn phím ảo che; vùng chạm ≥ 44px;
+  menu ⋯ thành sheet đáy (nhấn giữ tin). Theo mockup mobile của plan `261010-2258-pwa-mobile-push` phase 01.
 - `ConversationStream`: theo thời gian, gom tin cùng người ≤ 5 phút, vạch ngày, vạch "Tin mới" (từ
   `last_read_message_id` của kênh), nút nổi nhảy tới chưa đọc / mới nhất, tải thêm khi cuộn lên (`before=`).
 - `ThreadSummary` dưới tin: avatar người trả lời (PersonChip/Avatar, không ID), "N trả lời", giờ cuối, "M mới".

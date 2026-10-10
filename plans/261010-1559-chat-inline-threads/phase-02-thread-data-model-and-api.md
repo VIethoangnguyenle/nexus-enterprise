@@ -31,6 +31,20 @@ Backend cho tóm tắt thread, theo dõi thread và chưa đọc theo thread. Hi
 - Non-functional: truy vấn tóm tắt cho một trang tin là **một** câu SQL (không N+1); index
   `messages(parent_message_id, created_at)`, `thread_follows(user_id, following)`.
 
+## Scout (2026-10-10, trước khi code)
+- Đã có `thread_participants(message_id, user_id, joined_at)` (`data/init.sql`) và `InsertMessage` ghi vào đó trong
+  cùng transaction với `reply_count` (`internal/store/store.go`) → `thread_follows` có thể backfill từ bảng này.
+- `GetMessages`/`GetThread` của domain chỉ nhận `userNodeID`; tóm tắt theo người gọi cần thêm `users.id`
+  (`claims.UserID`) — đổi chữ ký domain + REST + gRPC (caller từ `grpcauth.CallerFrom`).
+- `SendMessage` **không kiểm** `parent_message_id` có cùng kênh với tin gửi → thêm kiểm tra (test deny: trả lời
+  vào tin của kênh khác → 400) trong phase này.
+- `mentions` là mảng `users.id` (comment proto) → auto-follow khi được nhắc dùng thẳng mảng này.
+- `read_receipts` khoá `(user_id, channel_id)`; `GetUnreadCounts` lọc `parent_message_id IS NULL`.
+- Mẫu test domain: `internal/domain/authz_test.go` (`scriptedPolicyRead` cấp đúng một bộ (user, OA, op)) + DB thật
+  qua `testutil` (`TEST_DATABASE_URL`).
+- Công cụ: `protoc` 29.3 + `protoc-gen-go` v1.36.11 + `protoc-gen-go-grpc` v1.6.1 khớp header file sinh hiện có
+  (container này đã cài vào `~/.local/bin`, `~/go/bin`; máy khác: `make -C backend proto-install` + protoc 29.3).
+
 ## Architecture
 Store (`internal/store`) → domain (`internal/domain`, kiểm quyền qua helper kênh có sẵn) → gRPC + REST.
 Proto `messaging.proto`: thêm field vào `Message` + RPC follow/unfollow/read/list threads. `make proto`;
