@@ -2,7 +2,7 @@ import { memo, useRef, useState, type KeyboardEvent } from 'react'
 import { Link } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import {
-  Download, FolderInput, FolderOpen, MoreHorizontal, Pencil, Share2, Trash2,
+  Download, Eye, FolderInput, FolderOpen, MoreHorizontal, Pencil, Share2, Trash2,
 } from 'lucide-react'
 import type { DriveItem } from '../../api/drive'
 import type { ObjectPerms } from '../../api/access'
@@ -34,6 +34,7 @@ export interface RowActions {
   onMove: (item: DriveItem) => void
   onRename: (item: DriveItem) => void
   onDelete: (item: DriveItem) => void
+  onPreview?: (item: DriveItem, el?: HTMLElement) => void
 }
 
 interface DriveTableProps {
@@ -198,7 +199,13 @@ const DriveRow = memo(function DriveRow({ item, perms, people, selected, arrival
           <Pressable
             data-row
             aria-current={selected || undefined}
-            onClick={() => actions.onSelect(item)}
+            onClick={(e) => {
+              if (actions.onPreview) {
+                actions.onPreview(item, e.currentTarget)
+              } else {
+                actions.onSelect(item)
+              }
+            }}
             className={control}
           >
             {item.name}
@@ -267,9 +274,19 @@ function RowMenu({ item, perms, actions }: { item: DriveItem; perms: ObjectPerms
           Chi tiết
         </MenuItem>
       ) : (
-        <MenuItem icon={<Download size={16} strokeWidth={1.75} />} onClick={() => actions.onDownload(item)}>
-          Tải xuống
-        </MenuItem>
+        <>
+          {actions.onPreview && (
+            <MenuItem icon={<Eye size={16} strokeWidth={1.75} />} onClick={() => actions.onPreview?.(item)}>
+              Xem trước
+            </MenuItem>
+          )}
+          <MenuItem icon={<Download size={16} strokeWidth={1.75} />} onClick={() => actions.onDownload(item)}>
+            Tải xuống
+          </MenuItem>
+          <MenuItem icon={<FolderOpen size={16} strokeWidth={1.75} />} onClick={() => actions.onSelect(item)}>
+            Chi tiết
+          </MenuItem>
+        </>
       )}
       {perms.share && (
         <MenuItem icon={<Share2 size={16} strokeWidth={1.75} />} onClick={() => actions.onShare(item)}>

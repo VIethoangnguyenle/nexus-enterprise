@@ -243,13 +243,19 @@ describe('DriveScreen: loading, empty and error', () => {
   })
 })
 
-describe('DriveScreen: detail panel', () => {
-  async function openXlsx(user: ReturnType<typeof userEvent.setup>) {
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await within(table()).findByRole('button', { name: 'doi-soat-08-10.xlsx' }))
-    return screen.findByRole('complementary', { name: 'Chi tiết tệp' })
-  }
+async function openDetailPanel(user: ReturnType<typeof userEvent.setup>, name = 'doi-soat-08-10.xlsx') {
+  await user.click(await within(table()).findByRole('button', { name: `Thao tác với ${name}` }))
+  const menu = await screen.findByRole('menu')
+  await user.click(within(menu).getByRole('menuitem', { name: 'Chi tiết' }))
+  return screen.findByRole('complementary', { name: 'Chi tiết tệp' })
+}
 
+async function openXlsx(user: ReturnType<typeof userEvent.setup>) {
+  await renderDrive(`/drive?folder=${D.doisoat}`)
+  return openDetailPanel(user, 'doi-soat-08-10.xlsx')
+}
+
+describe('DriveScreen: detail panel', () => {
   it('names the file, its owner and who it is shared with, with no ids', async () => {
     const user = userEvent.setup()
     const panel = await openXlsx(user)
@@ -280,8 +286,7 @@ describe('DriveScreen: detail panel', () => {
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Chi tiết tệp' })).toBeNull())
 
-    await user.click(within(table()).getByRole('button', { name: 'doi-soat-08-10.xlsx' }))
-    const panel = await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
+    const panel = await openDetailPanel(user, 'doi-soat-08-10.xlsx')
     await user.click(within(panel).getByRole('button', { name: 'Đóng chi tiết' }))
     await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Chi tiết tệp' })).toBeNull())
   })
@@ -289,8 +294,7 @@ describe('DriveScreen: detail panel', () => {
   it('offers no sharing and no edits on a file I can only read', async () => {
     const user = userEvent.setup()
     await renderDrive()
-    await user.click(await within(table()).findByRole('button', { name: 'huong-dan.pdf' }))
-    const panel = await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
+    const panel = await openDetailPanel(user, 'huong-dan.pdf')
     expect(await within(panel).findByRole('list', { name: 'Người có quyền' })).toHaveTextContent('Phạm Hải Yến')
     expect(within(panel).queryByRole('button', { name: 'Chia sẻ' })).toBeNull()
     expect(calls.some((c) => c.path.endsWith('/shares'))).toBe(false)
@@ -305,7 +309,7 @@ describe('DriveScreen: detail panel', () => {
   it('closes when the user leaves the folder', async () => {
     const user = userEvent.setup()
     const router = await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await within(table()).findByRole('button', { name: 'doi-soat-08-10.xlsx' }))
+    await openDetailPanel(user, 'doi-soat-08-10.xlsx')
     await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
     await act(async () => { await router.navigate({ to: '/drive', search: {} }) })
     await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Chi tiết tệp' })).toBeNull())
@@ -315,9 +319,7 @@ describe('DriveScreen: detail panel', () => {
 describe('DriveScreen: sharing', () => {
   it('shares with a person picked by name, sending the node id the server expects', async () => {
     const user = userEvent.setup()
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await within(table()).findByRole('button', { name: 'doi-soat-08-10.xlsx' }))
-    const panel = await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
+    const panel = await openXlsx(user)
     await user.click(await within(panel).findByRole('button', { name: 'Chia sẻ' }))
 
     const dialog = await screen.findByRole('dialog', { name: 'Chia sẻ “doi-soat-08-10.xlsx”' })
@@ -335,9 +337,7 @@ describe('DriveScreen: sharing', () => {
 
   it('lists current shares by name in the same dialog and revokes one after confirming', async () => {
     const user = userEvent.setup()
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await within(table()).findByRole('button', { name: 'doi-soat-08-10.xlsx' }))
-    const panel = await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
+    const panel = await openXlsx(user)
     await user.click(await within(panel).findByRole('button', { name: 'Chia sẻ' }))
 
     const dialog = await screen.findByRole('dialog', { name: 'Chia sẻ “doi-soat-08-10.xlsx”' })
@@ -355,9 +355,7 @@ describe('DriveScreen: sharing', () => {
 
 describe('DriveScreen: Escape', () => {
   const openShare = async (user: ReturnType<typeof userEvent.setup>) => {
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await within(table()).findByRole('button', { name: 'doi-soat-08-10.xlsx' }))
-    const panel = await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
+    const panel = await openXlsx(user)
     await user.click(await within(panel).findByRole('button', { name: 'Chia sẻ' }))
     return screen.findByRole('dialog', { name: 'Chia sẻ “doi-soat-08-10.xlsx”' })
   }
@@ -375,8 +373,7 @@ describe('DriveScreen: Escape', () => {
 
   it('closes only a row menu, leaving the detail panel open', async () => {
     const user = userEvent.setup()
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await within(table()).findByRole('button', { name: 'doi-soat-08-10.xlsx' }))
+    await openXlsx(user)
     await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
     await user.click(within(table()).getByRole('button', { name: 'Thao tác với sao-ke-ngan-hang-10-2026.pdf' }))
     await screen.findByRole('menu')
@@ -389,9 +386,7 @@ describe('DriveScreen: Escape', () => {
 describe('DriveScreen: detail panel sharing', () => {
   it('changes a person\'s permission inline with the existing share calls', async () => {
     const user = userEvent.setup()
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await within(table()).findByRole('button', { name: 'doi-soat-08-10.xlsx' }))
-    const panel = await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
+    const panel = await openXlsx(user)
     const select = await within(panel).findByRole('combobox', { name: 'Quyền của Lê Thị Hoa' })
     await user.selectOptions(select, 'write')
 
@@ -405,9 +400,7 @@ describe('DriveScreen: detail panel sharing', () => {
 
   it('puts the old permission back when the new one cannot be granted', async () => {
     const user = userEvent.setup()
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await within(table()).findByRole('button', { name: 'doi-soat-08-10.xlsx' }))
-    const panel = await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
+    const panel = await openXlsx(user)
     const select = await within(panel).findByRole('combobox', { name: 'Quyền của Lê Thị Hoa' })
     let n = 0
     api.mockImplementation((path, init) => {
@@ -421,6 +414,50 @@ describe('DriveScreen: detail panel sharing', () => {
     await waitFor(() => expect(calls.filter((c) => c.path === `/drive/items/${D.xlsx}/share`).length).toBe(2))
     const restore = calls.filter((c) => c.path === `/drive/items/${D.xlsx}/share`)[1]
     expect(restore?.body).toEqual({ share_type: 'user', target_node_id: U.hoa.node, permission: 'read' })
+  })
+})
+
+describe('DriveScreen: FileViewer', () => {
+  it('clicking a file opens FileViewer over current folder files with origin drive, no drive open button, and returns focus on close', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    const fileBtn = await within(table()).findByRole('button', { name: 'doi-soat-08-10.xlsx' })
+    await user.click(fileBtn)
+
+    const viewer = await screen.findByRole('dialog', { name: /doi-soat-08-10\.xlsx/i })
+    expect(viewer).toBeInTheDocument()
+
+    // origin: 'drive' words sender as "tải lên", and never offers "Mở trong Tài liệu"
+    expect(within(viewer).getByText(/tải lên/i)).toBeInTheDocument()
+    expect(within(viewer).queryByRole('button', { name: 'Mở trong Tài liệu' })).toBeNull()
+
+    // Prev / next navigates across current folder's files
+    const nextBtn = within(viewer).getAllByRole('button', { name: 'Tệp sau' })[0]!
+    await user.click(nextBtn)
+    expect(within(viewer).getByTitle('sao-ke-ngan-hang-10-2026.pdf')).toBeInTheDocument()
+
+    // Escape closes viewer and returns focus to opener
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(fileBtn).toHaveFocus()
+    noIds()
+  })
+
+  it('DriveDetailPanel gets a "Xem trước" action that opens FileViewer, keeping download action', async () => {
+    const user = userEvent.setup()
+    const panel = await openXlsx(user)
+
+    const previewBtn = within(panel).getByRole('button', { name: /Xem trước/ })
+    expect(previewBtn).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: 'Tải xuống' })).toBeInTheDocument()
+
+    await user.click(previewBtn)
+    const viewer = await screen.findByRole('dialog', { name: /doi-soat-08-10\.xlsx/i })
+    expect(viewer).toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(previewBtn).toHaveFocus()
   })
 })
 

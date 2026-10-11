@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Download, Share2 } from 'lucide-react'
+import { Download, Eye, Share2 } from 'lucide-react'
 import type { DriveItem } from '../../api/drive'
 import type { ObjectPerms } from '../../api/access'
 import { useDownloadFile, useDownloadUrl } from '../../hooks/useDownloadUrl'
@@ -18,13 +18,14 @@ interface DriveDetailPanelProps {
   people: PeopleDirectory
   onClose: () => void
   onShare: (item: DriveItem) => void
+  onPreview?: (item: DriveItem, el?: HTMLElement) => void
 }
 
 /**
  * Right panel of Tài liệu (mockup §2): what the item is, who may open it, and
  * what happened to it. Only people who may share an item can see its shares.
  */
-export function DriveDetailPanel({ item, perms, people, onClose, onShare }: DriveDetailPanelProps) {
+export function DriveDetailPanel({ item, perms, people, onClose, onShare, onPreview }: DriveDetailPanelProps) {
   const folder = item.item_type === 'folder'
   const kind = kindOf(item)
   const Icon = kind.icon
@@ -43,10 +44,23 @@ export function DriveDetailPanel({ item, perms, people, onClose, onShare }: Driv
       onClose={onClose}
       actions={
         !folder ? (
-          <Button variant="soft" size="sm" loading={isDownloading} onClick={() => void download(item)}>
-            <Download size={16} strokeWidth={1.75} aria-hidden="true" />
-            Tải xuống
-          </Button>
+          <div className="flex items-center gap-1.5">
+            {onPreview && (
+              <Button
+                variant="soft"
+                size="sm"
+                onClick={(e) => onPreview(item, e.currentTarget)}
+                aria-label={`Xem trước ${item.name}`}
+              >
+                <Eye size={16} strokeWidth={1.75} aria-hidden="true" />
+                Xem trước
+              </Button>
+            )}
+            <Button variant="soft" size="sm" loading={isDownloading} onClick={() => void download(item)}>
+              <Download size={16} strokeWidth={1.75} aria-hidden="true" />
+              Tải xuống
+            </Button>
+          </div>
         ) : undefined
       }
     >
