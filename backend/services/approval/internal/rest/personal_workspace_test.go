@@ -15,6 +15,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 
+	"ngac-platform/ngac"
 	"ngac-platform/pkg/httputil"
 	"ngac-platform/services/approval/internal/domain"
 	"ngac-platform/services/approval/internal/store"
@@ -32,6 +33,19 @@ type workspaceEnv struct {
 	ws   string
 	user string
 	node string
+	pool *pgxpool.Pool
+}
+
+// dropSchema removes the approval schema the service provisioned during a test.
+func (w *workspaceEnv) dropSchema(t *testing.T) {
+	t.Helper()
+	bg := context.Background()
+	var schema string
+	if err := w.pool.QueryRow(bg, `SELECT schema_name FROM tenant_schemas WHERE tenant_id = $1`, w.ws).Scan(&schema); err != nil {
+		return
+	}
+	w.pool.Exec(bg, fmt.Sprintf(`DROP SCHEMA IF EXISTS %q CASCADE`, schema))
+	w.pool.Exec(bg, `DELETE FROM tenant_schemas WHERE tenant_id = $1`, w.ws)
 }
 
 // newWorkspaceEnv inserts a workspace of the given type (with an approval
@@ -56,11 +70,23 @@ func newWorkspaceEnv(t *testing.T, kind string, withSchema bool) *workspaceEnv {
 			pool.Exec(bg, `DELETE FROM tenant_schemas WHERE tenant_id = $1`, ws)
 		})
 	}
-	return &workspaceEnv{e: routerOver(pool), ws: ws, user: user, node: node}
+	return &workspaceEnv{e: routerOver(pool), ws: ws, user: user, node: node, pool: pool}
 }
 
 func routerOver(pool *pgxpool.Pool) *echo.Echo {
-	svc := domain.NewService(store.NewStore(pool), noScopes{})
+	return routerWith(pool, noScopes{})
+}
+
+// manageAnywhere lets every caller manage every object, so a test can reach what
+// follows the authorization check.
+type manageAnywhere struct{ noScopes }
+
+func (manageAnywhere) CheckAccess(context.Context, string, string, string) (bool, error) {
+	return true, nil
+}
+
+func routerWith(pool *pgxpool.Pool, policy domain.PolicyClient) *echo.Echo {
+	svc := domain.NewService(store.NewStore(pool), policy)
 	e := httputil.NewEcho("approval-test")
 	NewHandler(svc, httputil.NewTenantSchemaResolver(pool), nil).RegisterRoutes(e, personalTestSecret)
 	return e
@@ -93,6 +119,11 @@ const walkBody = `{"template_id":"11111111-1111-4111-8111-111111111111","entity_
 
 func (w *workspaceEnv) do(t *testing.T, r walkedRoute) *httptest.ResponseRecorder {
 	t.Helper()
+	return w.doBody(t, r, walkBody)
+}
+
+func (w *workspaceEnv) doBody(t *testing.T, r walkedRoute, body string) *httptest.ResponseRecorder {
+	t.Helper()
 	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, &httputil.Claims{
 		UserID: w.user, NGACNodeID: w.node, TenantID: w.ws,
 		RegisteredClaims: jwt.RegisteredClaims{ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Hour))},
@@ -101,7 +132,7 @@ func (w *workspaceEnv) do(t *testing.T, r walkedRoute) *httptest.ResponseRecorde
 	if err != nil {
 		t.Fatal(err)
 	}
-	req := httptest.NewRequest(r.method, r.url, strings.NewReader(walkBody))
+	req := httptest.NewRequest(r.method, r.url, strings.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	req.Header.Set(echo.HeaderAuthorization, "Bearer "+signed)
 	rec := httptest.NewRecorder()
@@ -156,11 +187,98 @@ func TestOrganizationWorkspace_RoutesBehaveAsBefore(t *testing.T) {
 			t.Errorf("GET pending status %d body %s; want 200", rec.Code, rec.Body)
 		}
 	})
+	// An organization that has no schema yet (a personal workspace just converted)
+	// gets one on its first approval call, instead of a 404.
 	t.Run("without a schema", func(t *testing.T) {
 		env := newWorkspaceEnv(t, "organization", false)
+		t.Cleanup(func() { env.dropSchema(t) })
 		rec := env.do(t, walkedRoute{http.MethodGet, "", "/api/approval/pending"})
-		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "tenant schema not provisioned") {
-			t.Errorf("status %d body %s; want the unchanged 404", rec.Code, rec.Body)
+		if rec.Code != http.StatusOK {
+			t.Errorf("status %d body %s; want 200 after provisioning on first use", rec.Code, rec.Body)
+		}
+		if again := env.do(t, walkedRoute{http.MethodGet, "", "/api/approval/pending"}); again.Code != http.StatusOK {
+			t.Errorf("second call status %d body %s; want 200", again.Code, again.Body)
 		}
 	})
+}
+
+// A workspace converted from personal can create an approval template at once,
+// with no separate provisioning step.
+func TestConvertedWorkspace_CanCreateTemplateRightAway(t *testing.T) {
+	env := newWorkspaceEnv(t, "personal", false)
+	t.Cleanup(func() { env.dropSchema(t) })
+	bg := context.Background()
+	mgmt := "oa-mgmt-" + env.ws
+	for _, q := range []struct {
+		sql  string
+		args []any
+	}{
+		{`INSERT INTO ngac_nodes (id, name, node_type, properties) VALUES ($1, $2, 'OA', '{}')`, []any{mgmt, ngac.MgmtOAName(ngac.WorkspaceID(env.ws))}},
+		{`INSERT INTO tenant_users (tenant_id, user_id, role, status, ngac_node_id) VALUES ($1, $2, 'member', 'active', $3)`, []any{env.ws, env.user, env.node}},
+	} {
+		if _, err := env.pool.Exec(bg, q.sql, q.args...); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	t.Cleanup(func() {
+		env.pool.Exec(bg, `DELETE FROM tenant_users WHERE tenant_id = $1`, env.ws)
+		env.pool.Exec(bg, `DELETE FROM ngac_nodes WHERE id = $1`, mgmt)
+	})
+	env.e = routerWith(env.pool, manageAnywhere{})
+	create := walkedRoute{http.MethodPost, "", "/api/approval/templates"}
+	body := fmt.Sprintf(`{"name":"Chi phí","entity_type":"expense","steps":[{"step_order":1,"approver_type":"specific_user","approver_value":%q,"required_count":1}]}`, env.node)
+
+	if rec := env.doBody(t, create, body); rec.Code != http.StatusForbidden {
+		t.Fatalf("personal: status %d body %s; want 403", rec.Code, rec.Body)
+	}
+	if _, err := env.pool.Exec(bg, `UPDATE workspaces SET type = 'organization' WHERE id = $1`, env.ws); err != nil {
+		t.Fatalf("convert: %v", err)
+	}
+
+	rec := env.doBody(t, create, body)
+
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("converted: status %d body %s; want 201", rec.Code, rec.Body)
+	}
+	var schemas int
+	if err := env.pool.QueryRow(bg, `SELECT count(*) FROM tenant_schemas WHERE tenant_id = $1 AND status = 'active'`, env.ws).Scan(&schemas); err != nil || schemas != 1 {
+		t.Errorf("active schemas = %d, err %v; want exactly 1", schemas, err)
+	}
+}
+
+// A database failure while looking for the schema is ours: 500, not a 404 that
+// would send the caller to provision something.
+func TestSchemaLookupFailureIs500(t *testing.T) {
+	env := newWorkspaceEnv(t, "organization", true)
+	broken, err := pgxpool.New(context.Background(), testutil.DatabaseURL())
+	if err != nil {
+		t.Fatal(err)
+	}
+	broken.Close()
+	env.e = routerOver(broken)
+	rec := env.do(t, walkedRoute{http.MethodGet, "", "/api/approval/pending"})
+	if rec.Code != http.StatusInternalServerError {
+		t.Errorf("status %d body %s; want 500", rec.Code, rec.Body)
+	}
+}
+
+// An organization whose registry row is not active is not provisioned over: the
+// answer stays 404 and the row keeps its status.
+func TestOrganizationWithADisabledSchemaIsNotRevived(t *testing.T) {
+	env := newWorkspaceEnv(t, "organization", false)
+	bg := context.Background()
+	if _, err := env.pool.Exec(bg, `INSERT INTO tenant_schemas (tenant_id, schema_name, status) VALUES ($1, $2, 'disabled')`, env.ws, "tenant_off_"+env.ws); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { env.pool.Exec(bg, `DELETE FROM tenant_schemas WHERE tenant_id = $1`, env.ws) })
+
+	rec := env.do(t, walkedRoute{http.MethodGet, "", "/api/approval/pending"})
+
+	if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "tenant schema not provisioned") {
+		t.Errorf("status %d body %s; want the 404", rec.Code, rec.Body)
+	}
+	var status string
+	if err := env.pool.QueryRow(bg, `SELECT status FROM tenant_schemas WHERE tenant_id = $1`, env.ws).Scan(&status); err != nil || status != "disabled" {
+		t.Errorf("status = %q, err %v; want it left disabled", status, err)
+	}
 }

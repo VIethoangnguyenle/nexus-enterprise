@@ -27,6 +27,13 @@ type WorkspaceStore interface {
 	// UpdateDetails sets the name and/or description given (nil leaves a field
 	// alone) in one statement and returns both as they are afterwards.
 	UpdateDetails(ctx context.Context, id string, name, description *string) (string, string, error)
+	// ConversionRecord says who converted the workspace and when;
+	// store.ErrWorkspaceNotFound for an unknown workspace.
+	ConversionRecord(ctx context.Context, id string) (*store.ConversionRecord, error)
+	// ConvertToOrganization turns a personal workspace into an organization in one
+	// statement, recording the user behind byNodeID. store.ErrNotPersonal if it
+	// no longer is personal, store.ErrWorkspaceNotFound if there is none.
+	ConvertToOrganization(ctx context.Context, id, byNodeID string) (*store.Conversion, error)
 	// WithOwnerLock runs fn while holding the workspace's owner lock, so checks
 	// of who the owners are and the changes that follow cannot interleave.
 	WithOwnerLock(ctx context.Context, wsID string, fn func(ctx context.Context) error) error

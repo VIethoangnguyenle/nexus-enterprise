@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Chuyển sang tổ chức"
-status: pending
+status: in-progress (backend xong)
 priority: P2
 effort: "1-1.5d"
 dependencies: [3, 4]
@@ -20,3 +20,12 @@ dependencies: [3, 4]
 
 ## Success Criteria
 - [ ] Chủ chuyển được, các mục xuất hiện không cần tải lại; người khác bị từ chối; spec cập nhật.
+
+## Tiến độ
+- [x] Backend (2026-10-11): `POST /api/workspaces/:id/convert-to-organization` (chủ + `manage`, 403/404/409
+  `already_organization`, atomic `UPDATE ... WHERE type='personal'`, realtime `KindUpdated`); migration 046
+  (`converted_by`, `converted_at`); `GET .../details` thêm `type`, `is_owner`, `owner_name`, `converted_by_name`,
+  `converted_at`; approval tự tạo schema khi tổ chức gọi lần đầu; test deny/allow; spec `tenant-identity` +
+  `approval-screens`. Không ghi đồ thị (tổ chức không cần node mà cá nhân thiếu). Không có nhật ký quản trị riêng ở
+  workspace service: `converted_by`/`converted_at` là bản ghi.
+- [ ] Frontend: UI Cài đặt theo mockup (worker khác).

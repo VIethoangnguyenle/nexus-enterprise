@@ -50,7 +50,7 @@ Chat** (người dùng: Chat quan trọng nhất).
 | 02 | [Loại workspace đáng tin](phase-02-workspace-type.md) | P1 | 1d | 01 | completed |
 | 03 | [Chặn ở server](phase-03-server-enforcement.md) | P1 | 1.5d | 02 | completed |
 | 04 | [Ẩn ở frontend](phase-04-frontend.md) | P2 | 1d | 02 | pending |
-| 05 | [Chuyển sang tổ chức](phase-05-convert-to-organization.md) | P2 | 1-1.5d | 03, 04 | pending |
+| 05 | [Chuyển sang tổ chức](phase-05-convert-to-organization.md) | P2 | 1-1.5d | 03, 04 | in-progress (backend xong) |
 | 06 | [Kiểm chứng](phase-06-verification.md) | P2 | 0.5d | 05 | pending |
 
 ## Capabilities in `docs/specs/`

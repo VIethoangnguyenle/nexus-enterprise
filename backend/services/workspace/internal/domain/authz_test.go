@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -133,8 +134,10 @@ type fakePolicyWrite struct {
 	// writer views that differ from the (stale) read side
 	writerChildren, writerDescendants, writerAncestors map[string][]*policypb.NGACNode
 	mutations                                          []string
-	assocs                                             []*policypb.CreateAssociationRequest
-	n                                                  int
+	// onChildren, when set, sees every GetChildren as it is asked.
+	onChildren func(nodeID string)
+	assocs     []*policypb.CreateAssociationRequest
+	n          int
 }
 
 func (f *fakePolicyWrite) GetAssociations(_ context.Context, req *policypb.GetAssociationsRequest, _ ...grpc.CallOption) (*policypb.AssociationList, error) {
@@ -150,6 +153,9 @@ func (f *fakePolicyWrite) GetAssociations(_ context.Context, req *policypb.GetAs
 // Graph reads answer as the writer: by default what the read side has, unless a
 // test gives the writer its own fresher view.
 func (f *fakePolicyWrite) GetChildren(ctx context.Context, req *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	if f.onChildren != nil {
+		f.onChildren(req.NodeId)
+	}
 	if ns, ok := f.writerChildren[req.NodeId]; ok {
 		return &policypb.NodeList{Nodes: ns}, nil
 	}
@@ -216,6 +222,46 @@ type fakeWSStore struct {
 	ws        map[string]*store.Workspace
 	mu        sync.Mutex
 	mutations []string
+	// names are what people are called, keyed by the user node; converted records each conversion.
+	names     map[string]string
+	converted map[string]*store.Conversion
+	// locked is true while the owner lock is held; convertedLocked records whether
+	// it was held when a conversion was written.
+	locked          bool
+	convertedLocked []bool
+	// beforeLock runs just before the owner lock is taken: a change that lands in
+	// that gap.
+	beforeLock func()
+}
+
+// ConversionRecord answers as the real store does.
+func (f *fakeWSStore) ConversionRecord(_ context.Context, id string) (*store.ConversionRecord, error) {
+	if _, ok := f.ws[id]; !ok {
+		return nil, store.ErrWorkspaceNotFound
+	}
+	if c := f.converted[id]; c != nil {
+		return &store.ConversionRecord{ByName: c.ByName, At: &c.At}, nil
+	}
+	return &store.ConversionRecord{}, nil
+}
+
+func (f *fakeWSStore) ConvertToOrganization(_ context.Context, id, byNodeID string) (*store.Conversion, error) {
+	f.convertedLocked = append(f.convertedLocked, f.locked)
+	w, ok := f.ws[id]
+	if !ok {
+		return nil, store.ErrWorkspaceNotFound
+	}
+	if w.Type != "personal" {
+		return nil, store.ErrNotPersonal
+	}
+	f.mutations = append(f.mutations, "convert "+id)
+	w.Type = "organization"
+	c := &store.Conversion{ByName: f.names[byNodeID], At: time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)}
+	if f.converted == nil {
+		f.converted = map[string]*store.Conversion{}
+	}
+	f.converted[id] = c
+	return c, nil
 }
 
 func (f *fakeWSStore) UpdateDetails(_ context.Context, id string, name, desc *string) (string, string, error) {
@@ -231,8 +277,13 @@ func (f *fakeWSStore) UpdateDetails(_ context.Context, id string, name, desc *st
 
 // WithOwnerLock serialises owner changes per process, as the real store does per workspace.
 func (f *fakeWSStore) WithOwnerLock(ctx context.Context, _ string, fn func(context.Context) error) error {
+	if f.beforeLock != nil {
+		f.beforeLock()
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.locked = true
+	defer func() { f.locked = false }()
 	return fn(ctx)
 }
 
@@ -394,7 +445,7 @@ func newFixture(t *testing.T) *fixture {
 	wsStore := &fakeWSStore{ws: map[string]*store.Workspace{
 		ws1: {ID: ws1, Name: "Acme", NGACPcID: pc1},
 		ws2: {ID: ws2, Name: "Globex", NGACPcID: pc2},
-	}}
+	}, names: map[string]string{owner: "Lê Thị Hoa", otherOwner: "Trần Văn Nam"}}
 	root1 := "dept-root-1"
 	depts := &fakeDeptStore{depts: map[string]*store.Department{
 		root1:          {ID: root1, WorkspaceID: ws1, Name: "Root", NGACUaID: "ua-dept-root-1"},

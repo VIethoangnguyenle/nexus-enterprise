@@ -194,3 +194,36 @@ The check fails closed. A workspace that does not exist, or whose type is not ex
 #### Scenario: Organization unchanged
 - **WHEN** the same calls are made in an organization workspace
 - **THEN** they behave as before
+
+### Requirement: An organization's approval schema is created on first use
+The approval schema SHALL be created by the approval service itself when an organization first calls a tenant-scoped
+approval route and the tenant has **no** `tenant_schemas` row at all, so a personal workspace that was converted needs no
+separate provisioning step. The check for a row and the creation run under a per-tenant lock, so two first calls at once
+end with one schema. A personal workspace is still refused (403) and gets no schema. A row that exists but is not
+`active` (`disabled`, `migrating`, `provisioning`) is never created over or reactivated by this path: the call answers
+404 "tenant schema not provisioned" and the row keeps its status. A failure to look the schema up or to create it is an
+internal error (500).
+
+A new schema is named from the whole workspace ID (`tenant_` + the ID lower-cased with every character that is not a
+letter or digit turned into `_`; migration 047), so two workspaces whose IDs begin alike each get their own. A tenant
+that already has a registry row keeps the `schema_name` it has; resolution always goes through `tenant_schemas`.
+
+#### Scenario: A converted workspace creates a template at once
+- **WHEN** a workspace has just been converted and its owner creates an approval template
+- **THEN** the schema is created and the template is saved, with no other step in between
+
+#### Scenario: Two first calls at once
+- **WHEN** two requests reach an organization with no schema at the same moment
+- **THEN** both succeed and the workspace has exactly one active schema
+
+#### Scenario: A schema that is not active
+- **WHEN** an organization's schema is registered as `disabled`, and a member calls an approval route
+- **THEN** the answer is 404 and the schema stays `disabled`
+
+#### Scenario: IDs that begin alike
+- **WHEN** two workspaces whose IDs share their first 8 characters both get an approval schema
+- **THEN** each has its own schema and neither fails
+
+#### Scenario: Schema lookup fails
+- **WHEN** the database cannot be read while looking for the schema
+- **THEN** the answer is 500 and nothing is provisioned

@@ -22,6 +22,10 @@ var (
 	ErrRequestCompleted   = errors.New("request already completed")
 	ErrNoMatchingTemplate = errors.New("no matching approval template")
 
+	// ErrSchemaNotActive: the tenant's schema is registered but not active
+	// (disabled, migrating or still provisioning); it is not created over.
+	ErrSchemaNotActive = errors.New("tenant schema is not active")
+
 	// ErrStale: the template changed since the caller read it (HTTP 409).
 	ErrStale = errors.New("template changed since it was read")
 )

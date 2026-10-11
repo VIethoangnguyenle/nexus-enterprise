@@ -105,3 +105,40 @@ approval operation of its own (a text's `draft`/`active`/`archived` status is no
 #### Scenario: Organization unaffected
 - **WHEN** the same operations are called in an organization workspace
 - **THEN** they are decided by the policy as before
+
+### Requirement: The owner converts a personal workspace to an organization, once
+A personal workspace becomes an organization through `POST /api/workspaces/{id}/convert-to-organization` (workspace
+service). The caller SHALL hold `manage` on the workspace's management OA **and** be an owner of it (a member of its Owners
+group, the same test the owner changes and the last-owner rule use, so an owner added later can convert); either missing is a refusal (403), and a caller who may not convert is refused before anyone
+learns the workspace's type. A workspace that is an organization already, whether made one or converted, answers 409
+`{"reason":"already_organization"}`; an unknown workspace answers 404. Conversion is one way and cannot be repeated.
+
+It changes only `workspaces.type`, in one conditional statement (`... WHERE id = $1 AND type = 'personal'`), together
+with `converted_by` (the user who converted) and `converted_at` (migration 046; both stay empty for a workspace that was
+made an organization). The owner check, the type check and the update run under the workspace's owner lock (the one owner changes take), so a conversion cannot land after the caller stopped being an owner. Of two requests at once exactly one converts and the other gets 409. Nothing is written to the
+policy graph: an organization needs no node a personal workspace lacks (an asset type's OA is created on first use,
+approvals use the tenant schema, which the approval service creates on first use). Nothing is deleted: what the
+workspace held while personal is kept and is usable now. The workspace service announces a workspace update in realtime
+so every open session refreshes. The workspace service has no administrator audit log; `converted_by` and `converted_at`
+are the record of who converted and when, shown by name in the settings screen.
+
+Success answers `200 {"type":"organization","converted_by_name":"<display name>","converted_at":"<RFC 3339>"}`.
+`GET /api/workspaces/{id}/details` also returns `type`, `is_owner` (the caller is in the Owners group) and `owner_name` (the names of the current owners joined with ", ", never an id),
+`converted_by_name` and `converted_at` (RFC 3339, or empty when never converted).
+
+#### Scenario: The owner converts
+- **WHEN** an owner of a personal workspace (the creator or one added later) converts it
+- **THEN** its type becomes `organization`, the answer names who converted it and when, and open sessions refresh
+- **AND** assets and approvals, refused until now, are decided by the policy as in any organization
+
+#### Scenario: Not the owner
+- **WHEN** a member, or someone holding `manage` who is not an owner, or a person from another workspace, converts it
+- **THEN** it fails with 403 and the type is unchanged
+
+#### Scenario: Already an organization
+- **WHEN** the owner converts a workspace that is an organization, or converts it a second time
+- **THEN** it fails with 409 `already_organization` and nothing changes
+
+#### Scenario: Details after conversion
+- **WHEN** a member reads the workspace details after it was converted
+- **THEN** they see type `organization`, the owner's and the converter's names, and the time of conversion

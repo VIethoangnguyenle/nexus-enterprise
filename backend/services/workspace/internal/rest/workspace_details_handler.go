@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -16,12 +17,37 @@ type WorkspaceDetailsService interface {
 	WorkspaceDetails(ctx context.Context, callerNodeID, wsID string) (*domain.WorkspaceDetails, error)
 	UpdateWorkspaceDetails(ctx context.Context, callerNodeID, wsID string, name, description *string) (*domain.WorkspaceDetails, error)
 	LeaveWorkspace(ctx context.Context, callerNodeID, wsID string) error
+	ConvertToOrganization(ctx context.Context, callerNodeID, wsID string) (*domain.Conversion, error)
 }
 
 func (h *AdminHandler) registerWorkspaceDetailsRoutes(api *echo.Group) {
 	api.GET("/workspaces/:id/details", h.GetWorkspaceDetails)
 	api.PATCH("/workspaces/:id/details", h.UpdateWorkspaceDetails)
 	api.POST("/workspaces/:id/leave", h.LeaveWorkspace)
+	api.POST("/workspaces/:id/convert-to-organization", h.ConvertToOrganization)
+}
+
+// ConvertToOrganization handles POST /api/workspaces/:id/convert-to-organization:
+// the owner turns a personal workspace into an organization, for good. The
+// caller is always the one in the verified claims; the body is ignored. A
+// workspace that already is one answers 409 with reason "already_organization".
+func (h *AdminHandler) ConvertToOrganization(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	conv, err := h.domain.ConvertToOrganization(c.Request().Context(), claims.NGACNodeID, c.Param("id"))
+	if err != nil {
+		if errors.Is(err, domain.ErrAlreadyOrganization) {
+			return c.JSON(http.StatusConflict, map[string]string{"reason": "already_organization"})
+		}
+		return detailsError(c, err)
+	}
+	return c.JSON(http.StatusOK, map[string]string{
+		"type":              domain.TypeOrganization,
+		"converted_by_name": conv.ConvertedByName,
+		"converted_at":      conv.ConvertedAt.UTC().Format(time.RFC3339),
+	})
 }
 
 // LeaveWorkspace handles POST /api/workspaces/:id/leave. The person leaving is
@@ -45,9 +71,26 @@ func (h *AdminHandler) LeaveWorkspace(c echo.Context) error {
 }
 
 type workspaceDetailsJSON struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	CanManage   bool   `json:"can_manage"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	CanManage       bool   `json:"can_manage"`
+	Type            string `json:"type"`
+	IsOwner         bool   `json:"is_owner"`
+	OwnerName       string `json:"owner_name"`
+	ConvertedByName string `json:"converted_by_name"`
+	// ConvertedAt is RFC 3339, or empty for a workspace that was never converted.
+	ConvertedAt string `json:"converted_at"`
+}
+
+func detailsJSON(d *domain.WorkspaceDetails) workspaceDetailsJSON {
+	out := workspaceDetailsJSON{
+		Name: d.Name, Description: d.Description, CanManage: d.CanManage,
+		Type: d.Type, IsOwner: d.IsOwner, OwnerName: d.OwnerName, ConvertedByName: d.ConvertedByName,
+	}
+	if d.ConvertedAt != nil {
+		out.ConvertedAt = d.ConvertedAt.UTC().Format(time.RFC3339)
+	}
+	return out
 }
 
 // GetWorkspaceDetails handles GET /api/workspaces/:id/details: a member reads
@@ -61,7 +104,7 @@ func (h *AdminHandler) GetWorkspaceDetails(c echo.Context) error {
 	if err != nil {
 		return detailsError(c, err)
 	}
-	return c.JSON(http.StatusOK, workspaceDetailsJSON{Name: d.Name, Description: d.Description, CanManage: d.CanManage})
+	return c.JSON(http.StatusOK, detailsJSON(d))
 }
 
 // UpdateWorkspaceDetails handles PATCH /api/workspaces/:id/details.
@@ -81,7 +124,7 @@ func (h *AdminHandler) UpdateWorkspaceDetails(c echo.Context) error {
 	if err != nil {
 		return detailsError(c, err)
 	}
-	return c.JSON(http.StatusOK, workspaceDetailsJSON{Name: d.Name, Description: d.Description, CanManage: d.CanManage})
+	return c.JSON(http.StatusOK, detailsJSON(d))
 }
 
 // detailsError answers a domain error with its status. Anything that is not one

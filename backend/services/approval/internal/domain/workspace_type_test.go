@@ -66,6 +66,10 @@ func entryPoints() []entryPoint {
 			_, err := s.ProvisionTenantSchema(ctx, "tenant-1")
 			return err
 		}},
+		{"EnsureTenantSchema", true, func(s *Service, ctx context.Context) error {
+			_, err := s.EnsureTenantSchema(ctx, "tenant-1")
+			return err
+		}},
 		{"GetPending", false, func(s *Service, ctx context.Context) error {
 			_, err := s.GetPending(ctx, "n-u")
 			return err

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/labstack/echo/v4"
 
 	"ngac-platform/pkg/httputil"
@@ -94,20 +95,37 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 }
 
 // tenantSchemaMiddleware resolves the tenant's schema and stores it in context.
+//
+// An organization with no schema yet gets one here, on its first approval call.
+// A workspace that was a personal one has no schema until it is converted, and
+// nothing else provisions it. Two first calls at once both end with the one
+// schema. Only a tenant with no registry row at all is provisioned: a schema
+// that is registered but not active stays as it is and the call answers 404. A
+// personal workspace is refused.
 func (h *Handler) tenantSchemaMiddleware() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			claims := httputil.GetClaims(c)
-			schema, err := h.resolver.Resolve(c.Request().Context(), claims.TenantID)
+			ctx := c.Request().Context()
+			schema, err := h.resolver.Resolve(ctx, claims.TenantID)
 			if err != nil {
+				if !errors.Is(err, pgx.ErrNoRows) {
+					return httputil.Internal(err)
+				}
 				// A personal workspace has no approval schema, and that is not a
 				// missing setup: it is refused as every other approval call is.
-				if gerr := h.svc.RequireOrganization(c.Request().Context(), claims.TenantID); gerr != nil {
+				if gerr := h.svc.RequireOrganization(ctx, claims.TenantID); gerr != nil {
 					return mapDomainError(gerr)
 				}
-				return echo.NewHTTPError(http.StatusNotFound, "tenant schema not provisioned")
+				// Creates the schema only if the tenant has none at all.
+				if schema, err = h.svc.EnsureTenantSchema(ctx, claims.TenantID); err != nil {
+					if errors.Is(err, domain.ErrSchemaNotActive) {
+						return echo.NewHTTPError(http.StatusNotFound, "tenant schema not provisioned")
+					}
+					return mapDomainError(err)
+				}
 			}
-			ctx := httputil.WithTenantSchema(c.Request().Context(), schema)
+			ctx = httputil.WithTenantSchema(ctx, schema)
 			c.SetRequest(c.Request().WithContext(ctx))
 			return next(c)
 		}
