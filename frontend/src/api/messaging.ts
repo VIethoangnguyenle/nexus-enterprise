@@ -24,6 +24,17 @@ export interface ChannelMember { user_id: string; username: string; ngac_node_id
 
 export interface ReactionGroup { emoji: string; count: number; user_ids: string[] }
 
+export interface MessageAttachment {
+  drive_file_id: string
+  file_name: string
+  mime_type: string
+  size_bytes: number
+  width?: number
+  height?: number
+  /** Client-only: local object URL for optimistic previews, revoked on settle */
+  localUrl?: string
+}
+
 export interface Message {
   id: string
   channel_id: string
@@ -58,6 +69,7 @@ export interface Message {
   deleted?: boolean
   /** What the message quotes: the sender's name and the opening of the text. */
   quoted?: QuotedMessage
+  attachments?: MessageAttachment[]
 }
 
 /** What a quote shows of the message it quotes (no body when that message was deleted). */
@@ -117,6 +129,10 @@ export interface ChannelUnread {
   last_read_message_id: string
   /** Unread replies in the threads of this channel the signed-in user follows; omitted when 0. */
   thread_unread_count?: number
+  /** The caller's notification level for this conversation; absent means the default, `main`. */
+  notification_level?: 'all' | 'main' | 'off'
+  /** Unread main messages that mention the caller, at every level. */
+  mention_count?: number
 }
 
 /** The caller's own state of one thread, as follow / unfollow / read answer. */
@@ -143,6 +159,7 @@ export interface SendMessageInput {
   linked_entity_id?: string
   /** A live message of the same channel this one quotes. */
   quoted_message_id?: string
+  attachments?: { drive_file_id: string; width?: number; height?: number }[]
 }
 
 export interface EditMessageInput { content: string; content_format: string }

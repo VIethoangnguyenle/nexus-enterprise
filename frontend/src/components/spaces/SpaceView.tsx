@@ -2,7 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence } from 'motion/react'
-import { ArrowLeft, Info, MessagesSquare, Search, UserPlus, CircleAlert, Lock } from 'lucide-react'
+import { ArrowLeft, Info, MessagesSquare, Search, UserPlus, CircleAlert, Lock, Upload } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useConversations } from '../../hooks/useConversations'
 import { usePeople } from '../../hooks/usePeople'
@@ -16,7 +16,7 @@ import { useTasks } from '../../hooks/useChannelTasks'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { messagingApi, type Message } from '../../api/messaging'
-import { driveApi } from '../../api/drive'
+import { useAttachmentUploads } from '../../hooks/useAttachmentUploads'
 import { statusOf, explain } from '../../lib/errors'
 import { dmPartner, type Conversation } from '../../lib/conversations'
 import { displayName } from '../../lib/people'
@@ -141,25 +141,35 @@ export function SpaceView({ channelId }: { channelId: string }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [panel])
 
-  const handleSend = useCallback(
-    (content: string, mentions: string[]) => {
-      if (!content.trim()) return
-      send.mutate({ content, mentions }, { onError: (err) => toast.error(explain(err, 'gửi tin nhắn')) })
-    },
-    [send],
-  )
+  const uploads = useAttachmentUploads({ workspaceId, channelId })
+  const [isDragging, setIsDragging] = useState(false)
 
-  const handleFileUpload = useCallback(
-    async (file: File) => {
-      if (!workspaceId) return
-      const drive = await driveApi.channelDrive(workspaceId, channelId)
-      const folder = drive?.items?.find((i) => i.item_type === 'folder')
-      const created = await driveApi.createFile(workspaceId, file.name, file.type || 'application/octet-stream', file.size, folder?.id)
-      await driveApi.uploadToStorage(created.upload_url, file)
-      await driveApi.confirmFile(created.file_id)
-      send.mutate({ content: `📎 ${file.name}`, linkedEntity: { type: 'drive_file', id: created.file_id } })
+  const handleSend = useCallback(
+    async (
+      content: string,
+      mentions: string[],
+      attachments?: { drive_file_id: string; width?: number; height?: number }[],
+    ) => {
+      if (!content.trim() && (!attachments || attachments.length === 0)) return
+      const optimisticAttachments = uploads.items
+        .filter((it) => it.status === 'done' && it.fileId)
+        .map((it) => ({
+          drive_file_id: it.fileId!,
+          file_name: it.file.name,
+          mime_type: it.file.type,
+          size_bytes: it.file.size,
+          width: it.width,
+          height: it.height,
+          localUrl: it.file.type.startsWith('image/') ? URL.createObjectURL(it.file) : undefined,
+        }))
+      try {
+        await send.mutateAsync({ content, mentions, attachments, optimisticAttachments })
+      } catch (err) {
+        toast.error(explain(err, 'gửi tin nhắn'))
+        throw err
+      }
     },
-    [workspaceId, channelId, send],
+    [send, uploads.items],
   )
 
   const status = statusOf(messagesQ.error)
@@ -184,7 +194,34 @@ export function SpaceView({ channelId }: { channelId: string }) {
 
   return (
     <div className="relative flex flex-1 min-h-0 min-w-0">
-      <section className="flex-1 flex flex-col min-w-0 min-h-0 bg-base" aria-label={title || 'Cuộc trò chuyện'}>
+      <section
+        className="flex-1 flex flex-col min-w-0 min-h-0 bg-base relative"
+        aria-label={title || 'Cuộc trò chuyện'}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('Files')) {
+            e.preventDefault()
+            setIsDragging(true)
+          }
+        }}
+        onDragLeave={(e) => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+            setIsDragging(false)
+          }
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          setIsDragging(false)
+          const files = Array.from(e.dataTransfer.files)
+          if (files.length) uploads.add(files)
+        }}
+      >
+        {isDragging && (
+          <div className="absolute inset-0 z-dropdown bg-base/80 backdrop-blur-xs border-2 border-dashed border-accent flex flex-col items-center justify-center pointer-events-none text-accent font-semibold text-sm gap-1">
+            <Upload size={24} />
+            <b>Thả tệp để đính kèm</b>
+            <span className="text-xs text-ink-muted font-normal">Tối đa 20 tệp mỗi tin</span>
+          </div>
+        )}
         <header className="flex items-center gap-3 px-4 md:px-5 pt-3.5 pb-1.5 min-w-0">
           <IconButton
             className="lg:hidden"
@@ -371,7 +408,7 @@ export function SpaceView({ channelId }: { channelId: string }) {
                 hint="Enter để gửi · Shift+Enter xuống dòng"
                 onSend={handleSend}
                 onTyping={() => sendTyping(channelId)}
-                onFileUpload={handleFileUpload}
+                uploads={uploads}
                 isPending={send.isPending}
                 // On a phone a message is edited in the composer; on a wide screen, where it stands.
                 edit={phone && lifecycle.editing ? {
@@ -403,8 +440,9 @@ export function SpaceView({ channelId }: { channelId: string }) {
       <AnimatePresence mode="wait">
         {panel?.kind === 'thread' && (
           <ThreadPanel
-            key="thread"
+            key={`thread-${panel.id}`}
             channelId={channelId}
+            workspaceId={workspaceId}
             messageId={panel.id}
             spaceName={title}
             people={people}

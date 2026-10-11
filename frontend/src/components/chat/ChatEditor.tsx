@@ -1,15 +1,18 @@
 import { useEditor, EditorContent } from '@tiptap/react'
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Paperclip, Smile, SendHorizontal, Check } from 'lucide-react'
+import { Paperclip, Smile, SendHorizontal, Check, Upload, Camera, Image as ImageIcon } from 'lucide-react'
 import { EmojiPicker } from './EmojiPicker'
 import { MentionDropdown } from './MentionDropdown'
 import { FormattingToolbar } from './FormattingToolbar'
 import { LinkDialog } from './LinkDialog'
 import { chatExtensions, mentionsOf } from './chat-extensions'
-import { Button, IconButton, Spinner, toast } from '../primitives'
+import { Button, IconButton, Pressable } from '../primitives'
 import { useChannelMembers } from '../../hooks/useMessaging'
 import { useAuthStore } from '../../stores/auth.store'
 import { displayName, EMPTY_DIRECTORY, type PeopleDirectory } from '../../lib/people'
+import { usePhone } from '../../hooks/usePhone'
+import { AttachmentTray } from './AttachmentTray'
+import { type useAttachmentUploads } from '../../hooks/useAttachmentUploads'
 
 /** A message opened for editing in the composer (phones): the bar, the text, "Lưu" in place of "Gửi". */
 export interface ComposerEdit {
@@ -21,7 +24,11 @@ export interface ComposerEdit {
 
 interface ChatEditorProps {
   /** `mentions` are the user ids of the people @-mentioned in the text. */
-  onSend: (content: string, mentions: string[]) => void
+  onSend: (
+    content: string,
+    mentions: string[],
+    attachments?: { drive_file_id: string; width?: number; height?: number }[],
+  ) => void | Promise<unknown>
   onTyping?: () => void
   onFileUpload?: (file: File) => Promise<void>
   isPending?: boolean
@@ -38,6 +45,7 @@ interface ChatEditorProps {
   edit?: ComposerEdit
   /** ↑ in an empty box: open the reader's last message for editing. */
   onEditLast?: () => void
+  uploads?: ReturnType<typeof useAttachmentUploads>
 }
 
 /** Whether the formatting bar is open is remembered per person, on this device. */
@@ -72,18 +80,26 @@ export function ChatEditor({
   people,
   edit,
   onEditLast,
+  uploads: propUploads,
 }: ChatEditorProps) {
   const fileRef = useRef<HTMLInputElement>(null)
+  const cameraRef = useRef<HTMLInputElement>(null)
+  const imageRef = useRef<HTMLInputElement>(null)
   const boxRef = useRef<HTMLDivElement>(null)
   const userId = useAuthStore((s) => s.user?.id)
-  const [uploading, setUploading] = useState(false)
+  const phone = usePhone()
   const [showEmoji, setShowEmoji] = useState(false)
+  const [showAttachMenu, setShowAttachMenu] = useState(false)
+  const [showAttachSheet, setShowAttachSheet] = useState(false)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [empty, setEmpty] = useState(true)
   const [barOpen, setBarOpen] = useState(() => readBar(userId))
   const [link, setLink] = useState<LinkState | null>(null)
   const { data: membersData } = useChannelMembers(channelId)
   const barId = `fmt-${channelId}-${tone}`
+  const uploads = propUploads
+  const uploadsRef = useRef(uploads)
+  uploadsRef.current = uploads
 
   const editing = !!edit
   const editRef = useRef(edit)
@@ -100,6 +116,45 @@ export function ChatEditor({
         'aria-label': placeholder,
         role: 'textbox',
         'aria-multiline': 'true',
+      },
+      handleDOMEvents: {
+        paste: (_view, event) => {
+          if (editRef.current) return false
+          const clipboardData = event.clipboardData
+          if (!clipboardData) return false
+
+          // If clipboard contains plain text or HTML, do not intercept as image attachments.
+          const plainText = typeof clipboardData.getData === 'function' ? clipboardData.getData('text/plain') : ''
+          const htmlText = typeof clipboardData.getData === 'function' ? clipboardData.getData('text/html') : ''
+          const hasText = Boolean(plainText?.trim() || htmlText?.trim())
+          if (hasText) {
+            return false
+          }
+
+          const items = clipboardData.items
+          const files: File[] = []
+          if (items) {
+            for (let i = 0; i < items.length; i++) {
+              const item = items[i]
+              if (item && item.type?.startsWith('image/')) {
+                const f = typeof item.getAsFile === 'function' ? item.getAsFile() : null
+                if (f) files.push(f)
+              }
+            }
+          }
+          if (files.length === 0 && clipboardData.files?.length) {
+            for (let i = 0; i < clipboardData.files.length; i++) {
+              const f = clipboardData.files[i]
+              if (f && f.type?.startsWith('image/')) files.push(f)
+            }
+          }
+          if (files.length > 0) {
+            event.preventDefault()
+            uploadsRef.current?.add(files)
+            return true
+          }
+          return false
+        },
       },
       handleKeyDown: (view, event) => {
         // The mention list handles its keys in the capture phase and marks them
@@ -152,6 +207,22 @@ export function ChatEditor({
   const mentionOpen = useRef(false)
   mentionOpen.current = mentionQuery !== null
 
+  // Close attach menu on outside click
+  useEffect(() => {
+    if (!showAttachMenu) return
+    const onDocClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null
+      if (
+        !target?.closest('[role="menu"][aria-label="Đính kèm"]') &&
+        !target?.closest('[aria-label="Đính kèm"]')
+      ) {
+        setShowAttachMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', onDocClick)
+    return () => document.removeEventListener('mousedown', onDocClick)
+  }, [showAttachMenu])
+
   // Editing takes the box over: the draft is kept aside and comes back when editing ends.
   const draft = useRef('')
   const editKey = edit?.initialHtml
@@ -168,16 +239,57 @@ export function ChatEditor({
     }
   }, [editor, editKey])
 
-  const handleSend = useCallback(() => {
+  const hasUploads = (uploads?.items.length ?? 0) > 0
+  const uploadingCount = uploads?.items.filter((it) => it.status === 'uploading').length ?? 0
+  const errorCount = uploads?.items.filter((it) => it.status === 'error').length ?? 0
+  const hasUploadingOrError = uploadingCount > 0 || errorCount > 0
+
+  const whyStatus = uploadingCount > 0
+    ? `Đang tải ${uploadingCount} tệp…`
+    : errorCount > 0
+      ? 'Thử lại hoặc bỏ tệp lỗi để gửi'
+      : ''
+
+  const isSendDisabled = editing
+    ? false
+    : isPending || hasUploadingOrError || (empty && !hasUploads)
+
+  const handleSend = useCallback(async () => {
     if (!editor) return
     if (editRef.current) {
       editRef.current.onSave(editor.isEmpty ? '' : editor.getHTML(), editor.isEmpty)
       return
     }
-    if (editor.isEmpty) return
-    onSend(editor.getHTML(), mentionsOf(editor))
-    editor.commands.clearContent()
-    setEmpty(true)
+    const currentUploads = uploadsRef.current
+    const items = currentUploads?.items ?? []
+    const hasUploadingOrError = items.some(
+      (it) => it.status === 'uploading' || it.status === 'error',
+    )
+    if (hasUploadingOrError) return
+    if (editor.isEmpty && items.length === 0) return
+
+    const doneAttachments = items
+      .filter((it) => it.status === 'done' && it.fileId)
+      .map((it) => ({
+        drive_file_id: it.fileId!,
+        ...(it.width ? { width: it.width } : {}),
+        ...(it.height ? { height: it.height } : {}),
+      }))
+
+    const content = editor.isEmpty ? '' : editor.getHTML()
+    const mentions = mentionsOf(editor)
+
+    try {
+      const res = doneAttachments.length > 0
+        ? onSend(content, mentions, doneAttachments)
+        : onSend(content, mentions)
+      await Promise.resolve(res)
+      editor.commands.clearContent()
+      setEmpty(true)
+      currentUploads?.clear()
+    } catch {
+      // Send failed: retain editor content and attachments in tray so user does not lose them
+    }
   }, [editor, onSend])
   const sendRef = useRef(handleSend)
   sendRef.current = handleSend
@@ -224,18 +336,19 @@ export function ChatEditor({
     editor?.commands.focus()
   }, [editor])
 
-  const handleFileSelect = async () => {
-    const file = fileRef.current?.files?.[0]
-    if (!file || !onFileUpload) return
-    setUploading(true)
-    try {
-      await onFileUpload(file)
-    } catch {
-      toast.error(`Chưa gửi được “${file.name}”. Kiểm tra kết nối rồi thử lại.`)
-    } finally {
-      setUploading(false)
-      if (fileRef.current) fileRef.current.value = ''
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (!files.length) return
+    if (uploads) {
+      uploads.add(files)
+    } else if (onFileUpload) {
+      for (const file of files) {
+        void onFileUpload(file)
+      }
     }
+    if (fileRef.current) fileRef.current.value = ''
+    if (cameraRef.current) cameraRef.current.value = ''
+    if (imageRef.current) imageRef.current.value = ''
   }
 
   return (
@@ -257,25 +370,87 @@ export function ChatEditor({
           ${tone === 'raised' ? 'bg-raised' : 'bg-base'}`}
       >
         {barOpen && <FormattingToolbar editor={editor} id={barId} onLink={(anchor) => openLink(anchor)} />}
+        {uploads && uploads.items.length > 0 && (
+          <AttachmentTray items={uploads.items} onRemove={uploads.remove} onRetry={uploads.retry} />
+        )}
         <div className="min-w-0 max-h-50 overflow-y-auto py-1" onClick={() => editor?.commands.focus()}>
           <EditorContent editor={editor} />
         </div>
         <div className="flex items-center gap-0.5">
-          {onFileUpload && !editing && (
-            <>
+          {!editing && (uploads || onFileUpload) && (
+            <div className="relative">
               {/* eslint-disable-next-line no-restricted-syntax -- Ô chọn tệp luôn ẩn, chỉ mở hộp
-                  thoại hệ thống qua fileRef.current.click(); không có mặt thị giác để primitive tạo hình. */}
-              <input ref={fileRef} type="file" className="hidden" onChange={handleFileSelect} tabIndex={-1} />
+                  thoại hệ thống qua ref.current.click(); không có mặt thị giác để primitive tạo hình. */}
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={handleFileSelect}
+                tabIndex={-1}
+              />
+              {phone && (
+                <>
+                  {/* eslint-disable-next-line no-restricted-syntax */}
+                  <input
+                    ref={cameraRef}
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={handleFileSelect}
+                    tabIndex={-1}
+                  />
+                  {/* eslint-disable-next-line no-restricted-syntax */}
+                  <input
+                    ref={imageRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileSelect}
+                    tabIndex={-1}
+                  />
+                </>
+              )}
               <IconButton
-                onClick={() => fileRef.current?.click()}
-                disabled={uploading}
+                type="button"
+                onClick={() => {
+                  if (phone) {
+                    setShowAttachSheet(true)
+                  } else {
+                    setShowAttachMenu((v) => !v)
+                  }
+                }}
                 title="Đính kèm"
                 aria-label="Đính kèm"
+                aria-expanded={phone ? showAttachSheet : showAttachMenu}
                 className="max-md:w-11 max-md:h-11"
               >
-                {uploading ? <Spinner size="sm" /> : <Paperclip size={18} strokeWidth={1.75} />}
+                <Paperclip size={18} strokeWidth={1.75} />
               </IconButton>
-            </>
+
+              {showAttachMenu && !phone && (
+                <div
+                  role="menu"
+                  aria-label="Đính kèm"
+                  className="absolute bottom-full left-0 mb-2 z-dropdown py-1 rounded-surface bg-overlay shadow-overlay border border-line min-w-44 flex flex-col"
+                >
+                  <Pressable
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShowAttachMenu(false)
+                      fileRef.current?.click()
+                    }}
+                    className="flex items-center gap-2.5 px-3 py-2 text-small text-ink hover:bg-hover text-left cursor-pointer"
+                  >
+                    <Upload size={16} strokeWidth={1.75} />
+                    Tải lên từ máy
+                  </Pressable>
+                </div>
+              )}
+            </div>
           )}
           <IconButton
             type="button"
@@ -298,12 +473,17 @@ export function ChatEditor({
             <Smile size={18} strokeWidth={1.75} />
           </IconButton>
           {hint && !editing && <span className="ml-2 text-xs text-ink-muted truncate hidden md:inline">{hint}</span>}
+          {whyStatus && !editing && (
+            <span className="ml-auto text-xs text-ink-muted truncate mr-2" role="status">
+              {whyStatus}
+            </span>
+          )}
           <Button
             variant="primary"
             size="sm"
             onClick={handleSend}
-            disabled={editing ? false : isPending || empty}
-            className="ml-auto shrink-0 max-md:min-h-11"
+            disabled={isSendDisabled}
+            className={`${whyStatus ? '' : 'ml-auto'} shrink-0 max-md:min-h-11`}
           >
             {editing
               ? <Check size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -316,6 +496,58 @@ export function ChatEditor({
       {showEmoji && (
         <div className="absolute bottom-full left-0 mb-2 z-dropdown">
           <EmojiPicker onSelect={handleEmojiSelect} onClose={() => setShowEmoji(false)} />
+        </div>
+      )}
+
+      {showAttachSheet && phone && (
+        <div className="fixed inset-0 z-modal flex flex-col justify-end">
+          <div
+            className="absolute inset-0 bg-scrim/40 animate-fade-in"
+            onClick={() => setShowAttachSheet(false)}
+            aria-hidden="true"
+          />
+          <div
+            role="dialog"
+            aria-label="Tạo và đính kèm"
+            className="relative bg-overlay rounded-t-2xl p-4 pb-6 shadow-overlay z-10 flex flex-col gap-3"
+          >
+            <div className="w-9 h-1 rounded-full bg-line mx-auto mb-1" aria-hidden="true" />
+            <div className="grid grid-cols-3 gap-2">
+              <Pressable
+                type="button"
+                onClick={() => {
+                  setShowAttachSheet(false)
+                  cameraRef.current?.click()
+                }}
+                className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-base hover:bg-hover text-ink text-xs font-medium cursor-pointer"
+              >
+                <Camera size={22} strokeWidth={1.75} />
+                Máy ảnh
+              </Pressable>
+              <Pressable
+                type="button"
+                onClick={() => {
+                  setShowAttachSheet(false)
+                  imageRef.current?.click()
+                }}
+                className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-base hover:bg-hover text-ink text-xs font-medium cursor-pointer"
+              >
+                <ImageIcon size={22} strokeWidth={1.75} />
+                Ảnh
+              </Pressable>
+              <Pressable
+                type="button"
+                onClick={() => {
+                  setShowAttachSheet(false)
+                  fileRef.current?.click()
+                }}
+                className="flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl bg-base hover:bg-hover text-ink text-xs font-medium cursor-pointer"
+              >
+                <Upload size={22} strokeWidth={1.75} />
+                Tệp
+              </Pressable>
+            </div>
+          </div>
         </div>
       )}
 

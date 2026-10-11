@@ -1,6 +1,6 @@
-import { useState, type CSSProperties, type ReactNode } from 'react'
+import { useState, useRef, type CSSProperties, type ReactNode } from 'react'
 import { Pin } from 'lucide-react'
-import type { Message } from '../../api/messaging'
+import type { Message, MessageAttachment } from '../../api/messaging'
 import { useLongPress } from '../../hooks/useLongPress'
 import { displayName, type PeopleDirectory } from '../../lib/people'
 import { formatDateTime, formatTime } from '../../lib/format'
@@ -8,9 +8,9 @@ import { Avatar } from '../primitives'
 import { MessageContent } from '../chat/MessageContent'
 import { ReactionBar } from '../chat/ReactionBar'
 import { HoverActionBar } from '../chat/HoverActionBar'
-import { FilePreviewCard } from '../patterns/FilePreviewCard'
-import { ImagePreviewCard, isImageFile } from '../patterns/ImagePreviewCard'
 import { QuoteBlock } from './QuoteBlock'
+import { AttachmentGrid } from '../chat/AttachmentGrid'
+import { ImageViewer } from '../chat/ImageViewer'
 
 export interface MessageActions {
   me: string | undefined
@@ -67,9 +67,28 @@ export function MessageBlock({
   const name = displayName(people, m.sender_id, m.sender_name)
   const avatarUrl = people.byUserId.get(m.sender_id)?.avatarUrl
   const deleted = !!m.deleted
-  const file = !deleted && m.linked_entity_type === 'drive_file' && m.linked_entity_id
+  const [viewerOpen, setViewerOpen] = useState(false)
+  const [viewerIndex, setViewerIndex] = useState(0)
+  const [viewerImages, setViewerImages] = useState<MessageAttachment[]>([])
+  const openerRef = useRef<HTMLElement | null>(null)
+
+  const legacyFilename = !deleted && m.linked_entity_type === 'drive_file' && m.linked_entity_id
     ? m.content.replace(/<[^>]+>/g, '').match(/^📎\s+(.+)$/)?.[1]?.trim()
     : undefined
+
+  const attachments: MessageAttachment[] = m.attachments && m.attachments.length > 0
+    ? m.attachments
+    : legacyFilename && m.linked_entity_id
+      ? [{
+          drive_file_id: m.linked_entity_id,
+          file_name: legacyFilename,
+          mime_type: '',
+          size_bytes: 0,
+        }]
+      : []
+
+  const hasText = !deleted && !!m.content && !legacyFilename && m.content.trim() !== '' && m.content.trim() !== '<p></p>'
+  const hasBubble = hasText || (!deleted && !!m.quoted)
   const pending = !!m._optimistic
   const [timeShown, setTimeShown] = useState(false)
   const press = useLongPress(() => onOpenSheet?.(m), !!onOpenSheet && !pending && !deleted && !editor)
@@ -143,37 +162,49 @@ export function MessageBlock({
           <div id={`${idBase}-text`} className="mt-0.5 w-full flex flex-col">
             <div className={`w-full flex ${mine ? 'justify-end' : ''}`}>{editor}</div>
           </div>
-        ) : file ? (
-          <div id={`${idBase}-text`} className="mt-0.5 max-w-full md:max-w-[min(70ch,85%)]">
-            {isImageFile(file)
-              ? <ImagePreviewCard fileId={m.linked_entity_id!} filename={file} />
-              : <FilePreviewCard fileId={m.linked_entity_id!} filename={file} />}
-          </div>
         ) : (
-          <div
-            id={`${idBase}-text`}
-            className={`mt-0.5 w-fit max-w-[88%] md:max-w-[min(70ch,85%)] px-3 py-1.75 rounded-xl wrap-anywhere
-              [&_code]:bg-base [&_pre]:bg-base
-              ${mine ? 'bg-accent-wash' : 'bg-sunk'} ${pressed ? 'ring-2 ring-accent' : ''}
-              ${grouped ? '' : mine ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
-          >
-            {m.quoted && (
-              <QuoteBlock
-                quote={m.quoted}
-                people={people}
-                me={me}
-                onOpen={onOpenQuote && !m.quoted.deleted ? () => onOpenQuote(m.quoted!.id) : undefined}
+          <>
+            {hasBubble && (
+              <div
+                id={`${idBase}-text`}
+                className={`mt-0.5 w-fit max-w-[88%] md:max-w-[min(70ch,85%)] px-3 py-1.75 rounded-xl wrap-anywhere
+                  [&_code]:bg-base [&_pre]:bg-base
+                  ${mine ? 'bg-accent-wash' : 'bg-sunk'} ${pressed ? 'ring-2 ring-accent' : ''}
+                  ${grouped ? '' : mine ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
+              >
+                {m.quoted && (
+                  <QuoteBlock
+                    quote={m.quoted}
+                    people={people}
+                    me={me}
+                    onOpen={onOpenQuote && !m.quoted.deleted ? () => onOpenQuote(m.quoted!.id) : undefined}
+                  />
+                )}
+                {hasText && (
+                  <div className="flex flex-wrap items-end gap-x-1.5">
+                    <div className="min-w-0 flex-auto">
+                      <MessageContent content={m.content} contentFormat={m.content_format} />
+                    </div>
+                    {m.edited_at != null && (
+                      <span title={`Sửa lúc ${formatDateTime(m.edited_at)}`} className="text-2xs text-ink-muted whitespace-nowrap">đã sửa</span>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+            {attachments.length > 0 && (
+              <AttachmentGrid
+                attachments={attachments}
+                tone={mine ? 'raised' : 'base'}
+                onOpenImage={(idx, imgs, opener) => {
+                  openerRef.current = opener ?? null
+                  setViewerImages(imgs)
+                  setViewerIndex(idx)
+                  setViewerOpen(true)
+                }}
               />
             )}
-            <div className="flex flex-wrap items-end gap-x-1.5">
-              <div className="min-w-0 flex-auto">
-                <MessageContent content={m.content} contentFormat={m.content_format} />
-              </div>
-              {m.edited_at != null && (
-                <span title={`Sửa lúc ${formatDateTime(m.edited_at)}`} className="text-2xs text-ink-muted whitespace-nowrap">đã sửa</span>
-              )}
-            </div>
-          </div>
+          </>
         )}
 
         {!deleted && onToggleReaction && onReact && (
@@ -199,6 +230,18 @@ export function MessageBlock({
           isPinned={m.is_pinned}
           onEdit={onEdit ? () => onEdit(m) : undefined}
           onMore={onMore ? (anchor) => onMore(m, anchor) : undefined}
+        />
+      )}
+
+      {viewerOpen && (
+        <ImageViewer
+          open={viewerOpen}
+          images={viewerImages}
+          initialIndex={viewerIndex}
+          senderName={name}
+          sentAt={m.created_at}
+          onClose={() => setViewerOpen(false)}
+          returnFocusRef={openerRef}
         />
       )}
     </div>

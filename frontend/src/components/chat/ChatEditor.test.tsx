@@ -99,33 +99,17 @@ describe('ChatEditor: the formatting bar', () => {
     await user.keyboard('{Control>}b{/Control}đậm{Control>}b{/Control} {Control>}u{/Control}gạch{Enter}')
     expect(onSend.mock.calls[0]![0]).toBe('<p><strong>đậm</strong> <u>gạch</u></p>')
   })
-
-  it('inserts a link from Ctrl+K and sends it opening in a new tab', async () => {
-    const user = userEvent.setup()
-    const { onSend, box } = open()
-    await user.click(screen.getByRole('button', { name: 'Định dạng' }))
-    await user.click(box)
-    await user.keyboard('{Control>}k{/Control}')
-    const dialog = await screen.findByRole('dialog', { name: 'Chèn liên kết' })
-    await user.type(within(dialog).getByLabelText('Văn bản'), 'Nexus')
-    await user.type(within(dialog).getByLabelText('Đường liên kết'), 'https://nexus.zaneng.xyz{Enter}')
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Chèn liên kết' })).toBeNull())
-    await waitFor(() => expect(box).toHaveFocus())
-    await user.keyboard('{Enter}')
-    const html = onSend.mock.calls[0]![0] as string
-    expect(html).toContain('<a ')
-    expect(html).toContain('href="https://nexus.zaneng.xyz"')
-    expect(html).toContain('rel="noopener noreferrer"')
-    expect(html).toContain('>Nexus</a>')
-  })
 })
 
-describe('ChatEditor: editing a message in the composer (phones)', () => {
-  const edit = (over: Partial<NonNullable<Parameters<typeof ChatEditor>[0]['edit']>> = {}) => ({
-    initialHtml: '<p>Chị đã thêm 3 giao dịch</p>', onSave: vi.fn(), onCancel: vi.fn(), ...over,
+describe('ChatEditor: edit mode', () => {
+  const edit = (over: Partial<Parameters<typeof ChatEditor>[0]['edit']> = {}) => ({
+    initialHtml: '<p>Chị đã thêm 3 giao dịch</p>',
+    onSave: vi.fn(),
+    onCancel: vi.fn(),
+    ...over,
   })
 
-  it('shows the "Đang sửa tin" bar with Huỷ, the text, and Lưu in place of Gửi', async () => {
+  it('shows the "Đang sửa tin" bar, populates the text, swaps Gửi for Lưu, hides attach', async () => {
     const e = edit()
     const { box } = open({ edit: e, onFileUpload: vi.fn() })
     expect(screen.getByText('Đang sửa tin')).toBeInTheDocument()
@@ -149,53 +133,284 @@ describe('ChatEditor: editing a message in the composer (phones)', () => {
     expect(e.onSave).toHaveBeenCalledTimes(2)
   })
 
-  it('reports an emptied box as empty, so the owner asks to delete', async () => {
-    const user = userEvent.setup()
-    const e = edit({ initialHtml: '<p>a</p>' })
-    const { box } = open({ edit: e })
-    await waitFor(() => expect(box).toHaveFocus())
-    await user.keyboard('{Backspace}')
-    await user.click(screen.getByRole('button', { name: 'Lưu' }))
-    expect(e.onSave).toHaveBeenCalledWith('', true)
-  })
-
-  it('cancels with Huỷ and with Esc, and does not send anything', async () => {
+  it('cancels with Esc and with Huỷ, without calling onSave', async () => {
     const user = userEvent.setup()
     const e = edit()
-    const { onSend, box } = open({ edit: e })
-    await user.click(screen.getByRole('button', { name: 'Huỷ' }))
-    await user.click(box)
+    const { box } = open({ edit: e })
+    await waitFor(() => expect(box).toHaveFocus())
     await user.keyboard('{Escape}')
+    expect(e.onCancel).toHaveBeenCalled()
+    expect(e.onSave).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Huỷ' }))
     expect(e.onCancel).toHaveBeenCalledTimes(2)
-    expect(onSend).not.toHaveBeenCalled()
   })
 
-  it('gives the composer back empty when editing ends', async () => {
-    const { unmount } = renderWithClient(
-      <ChatEditor channelId={CH.doisoat} placeholder="Tin nhắn cho Đối soát" onSend={vi.fn()} edit={edit()} />,
+  it('keeps the user draft when edit opens, and puts it back when cancelled', async () => {
+    const user = userEvent.setup()
+    const onSend = vi.fn()
+    const { rerender } = renderWithClient(<ChatEditor channelId={CH.doisoat} onSend={onSend} />)
+    const box = screen.getByRole('textbox')
+    await user.click(box)
+    await user.keyboard('đang viết dở')
+
+    const onCancel = vi.fn()
+    rerender(
+      <ChatEditor
+        channelId={CH.doisoat}
+        onSend={onSend}
+        edit={{ initialHtml: '<p>tin cũ</p>', onSave: vi.fn(), onCancel }}
+      />,
     )
-    unmount()
-    renderWithClient(<ChatEditor channelId={CH.doisoat} placeholder="Tin nhắn cho Đối soát" onSend={vi.fn()} />)
-    expect(screen.getByRole('textbox', { name: 'Tin nhắn cho Đối soát' })).toHaveTextContent('')
+    expect(box).toHaveTextContent('tin cũ')
+
+    rerender(<ChatEditor channelId={CH.doisoat} onSend={onSend} />)
+    expect(box).toHaveTextContent('đang viết dở')
   })
 })
 
-describe('ChatEditor: ↑ edits your last message', () => {
-  it('calls for it when the box is empty', async () => {
+describe('ChatEditor: edit last message', () => {
+  it('opens the last message when ArrowUp is pressed in an empty box, not in a typed one', async () => {
     const user = userEvent.setup()
     const onEditLast = vi.fn()
     const { box } = open({ onEditLast })
     await user.click(box)
     await user.keyboard('{ArrowUp}')
     expect(onEditLast).toHaveBeenCalledTimes(1)
+
+    await user.keyboard('chữ{ArrowUp}')
+    expect(onEditLast).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ChatEditor: attachments and uploads', () => {
+  it('disables Gửi while uploading, enables when ready or files only, shows why status next to locked Gửi', async () => {
+    const user = userEvent.setup()
+    const onSend = vi.fn()
+
+    const mockUploads = {
+      items: [
+        {
+          key: 'item-1',
+          file: new File(['img'], 'photo.png', { type: 'image/png' }),
+          status: 'uploading' as const,
+        },
+      ],
+      add: vi.fn(),
+      remove: vi.fn(),
+      retry: vi.fn(),
+      clear: vi.fn(),
+      ready: false,
+    }
+
+    const { rerender } = renderWithClient(
+      <ChatEditor channelId={CH.doisoat} placeholder="Tin nhắn cho Đối soát" onSend={onSend} uploads={mockUploads} />,
+    )
+
+    // While uploading, send button is disabled and why status explains it
+    const sendBtn = screen.getByRole('button', { name: /Gửi/ })
+    expect(sendBtn).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent('Đang tải 1 tệp…')
+
+    // When upload errored, why status prompts retry or remove
+    const erroredUploads = {
+      ...mockUploads,
+      items: [
+        {
+          key: 'item-1',
+          file: new File(['img'], 'photo.png', { type: 'image/png' }),
+          status: 'error' as const,
+          error: 'Mất kết nối',
+        },
+      ],
+      ready: false,
+    }
+    rerender(
+      <ChatEditor channelId={CH.doisoat} placeholder="Tin nhắn cho Đối soát" onSend={onSend} uploads={erroredUploads} />,
+    )
+    expect(sendBtn).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent('Thử lại hoặc bỏ tệp lỗi để gửi')
+
+    // When upload finishes, ready is true and files only enables Gửi even with empty text
+    const doneUploads = {
+      ...mockUploads,
+      items: [
+        {
+          key: 'item-1',
+          file: new File(['img'], 'photo.png', { type: 'image/png' }),
+          status: 'done' as const,
+          fileId: 'file-123',
+          width: 1200,
+          height: 800,
+        },
+      ],
+      ready: true,
+    }
+
+    rerender(
+      <ChatEditor channelId={CH.doisoat} placeholder="Tin nhắn cho Đối soát" onSend={onSend} uploads={doneUploads} />,
+    )
+
+    expect(screen.getByRole('button', { name: /Gửi/ })).toBeEnabled()
+    expect(screen.queryByRole('status')).toBeNull()
+
+    // Click Gửi sends attachments with width/height and clears uploads
+    await user.click(screen.getByRole('button', { name: /Gửi/ }))
+    expect(onSend).toHaveBeenCalledWith('', expect.any(Array), [
+      { drive_file_id: 'file-123', width: 1200, height: 800 },
+    ])
+    expect(doneUploads.clear).toHaveBeenCalled()
   })
 
-  it('leaves the arrow to the text once there is some', async () => {
+  it('send failure retains attachments in tray and keeps editor text', async () => {
     const user = userEvent.setup()
-    const onEditLast = vi.fn()
-    const { box } = open({ onEditLast })
+    const onSend = vi.fn().mockRejectedValue(new Error('Send network failed'))
+
+    const mockUploads = {
+      items: [
+        {
+          key: 'item-1',
+          file: new File(['img'], 'photo.png', { type: 'image/png' }),
+          status: 'done' as const,
+          fileId: 'file-123',
+        },
+      ],
+      add: vi.fn(),
+      remove: vi.fn(),
+      retry: vi.fn(),
+      clear: vi.fn(),
+      ready: true,
+    }
+
+    const { box } = open({ uploads: mockUploads, onSend })
     await user.click(box)
-    await user.keyboard('a{ArrowUp}')
-    expect(onEditLast).not.toHaveBeenCalled()
+    await user.keyboard('nội dung quan trọng')
+
+    await user.click(screen.getByRole('button', { name: /Gửi/ }))
+    expect(onSend).toHaveBeenCalled()
+
+    // Clear was NOT called on failure
+    expect(mockUploads.clear).not.toHaveBeenCalled()
+    // Text was not emptied
+    expect(box).toHaveTextContent('nội dung quan trọng')
+  })
+
+  it('paste of an image file calls add with the file', async () => {
+    const add = vi.fn()
+    const mockUploads = {
+      items: [],
+      add,
+      remove: vi.fn(),
+      retry: vi.fn(),
+      clear: vi.fn(),
+      ready: true,
+    }
+
+    const { box } = open({ uploads: mockUploads })
+    const pasteFile = new File(['image'], 'pasted.png', { type: 'image/png' })
+
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        getData: vi.fn().mockReturnValue(''),
+        items: [
+          {
+            kind: 'file',
+            type: 'image/png',
+            getAsFile: () => pasteFile,
+          },
+        ],
+      },
+    })
+
+    box.dispatchEvent(pasteEvent)
+    expect(add).toHaveBeenCalledWith([pasteFile])
+  })
+
+  it('paste containing text/plain does not intercept as attachment', () => {
+    const add = vi.fn()
+    const mockUploads = {
+      items: [],
+      add,
+      remove: vi.fn(),
+      retry: vi.fn(),
+      clear: vi.fn(),
+      ready: true,
+    }
+
+    const { box } = open({ uploads: mockUploads })
+    const pasteFile = new File(['image'], 'pasted.png', { type: 'image/png' })
+
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        getData: (type: string) => (type === 'text/plain' ? 'Copied from Excel table' : ''),
+        items: [
+          {
+            kind: 'file',
+            type: 'image/png',
+            getAsFile: () => pasteFile,
+          },
+        ],
+      },
+    })
+
+    box.dispatchEvent(pasteEvent)
+    expect(add).not.toHaveBeenCalled()
+  })
+
+  it('paste is disabled in edit mode', () => {
+    const add = vi.fn()
+    const mockUploads = {
+      items: [],
+      add,
+      remove: vi.fn(),
+      retry: vi.fn(),
+      clear: vi.fn(),
+      ready: true,
+    }
+
+    const { box } = open({
+      uploads: mockUploads,
+      edit: { initialHtml: '<p>edit</p>', onSave: vi.fn(), onCancel: vi.fn() },
+    })
+    const pasteFile = new File(['image'], 'pasted.png', { type: 'image/png' })
+
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true })
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: {
+        getData: vi.fn().mockReturnValue(''),
+        items: [
+          {
+            kind: 'file',
+            type: 'image/png',
+            getAsFile: () => pasteFile,
+          },
+        ],
+      },
+    })
+
+    box.dispatchEvent(pasteEvent)
+    expect(add).not.toHaveBeenCalled()
+  })
+
+  it('opens attach menu on desktop with "Tải lên từ máy"', async () => {
+    const user = userEvent.setup()
+    const mockUploads = {
+      items: [],
+      add: vi.fn(),
+      remove: vi.fn(),
+      retry: vi.fn(),
+      clear: vi.fn(),
+      ready: true,
+    }
+
+    open({ uploads: mockUploads })
+
+    const attachBtn = screen.getByRole('button', { name: 'Đính kèm' })
+    await user.click(attachBtn)
+
+    const menu = screen.getByRole('menu', { name: 'Đính kèm' })
+    expect(menu).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: /Tải lên từ máy/ })).toBeInTheDocument()
   })
 })

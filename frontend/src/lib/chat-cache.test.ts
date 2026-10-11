@@ -75,6 +75,52 @@ describe('convertChatMsgToMessage: a quote', () => {
   })
 })
 
+describe('convertChatMsgToMessage: attachments', () => {
+  it('maps WS proto attachments handling bigint sizeBytes correctly', () => {
+    const raw = {
+      id: 'm',
+      channelId: 'c',
+      senderId: 's',
+      content: 'files',
+      attachments: [
+        {
+          driveFileId: 'df-1',
+          fileName: 'photo.jpg',
+          mimeType: 'image/jpeg',
+          sizeBytes: 1048576n,
+          width: 800,
+          height: 600,
+        },
+        {
+          driveFileId: 'df-2',
+          fileName: 'doc.pdf',
+          mimeType: 'application/pdf',
+          sizeBytes: 2048,
+        },
+      ],
+    }
+    const out = convertChatMsgToMessage(raw as never)
+    expect(out.attachments).toEqual([
+      {
+        drive_file_id: 'df-1',
+        file_name: 'photo.jpg',
+        mime_type: 'image/jpeg',
+        size_bytes: 1048576,
+        width: 800,
+        height: 600,
+      },
+      {
+        drive_file_id: 'df-2',
+        file_name: 'doc.pdf',
+        mime_type: 'application/pdf',
+        size_bytes: 2048,
+        width: undefined,
+        height: undefined,
+      },
+    ])
+  })
+})
+
 const readThread = (root: string) => queryClient.getQueryData<{ messages: Message[] }>(keys.messaging.thread(root))!.messages
 const EDITED_AT = { seconds: '1760000000', nanos: 0 }
 

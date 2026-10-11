@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
-import { Bell, BellRing, CircleAlert } from 'lucide-react'
+import { Bell, BellRing, CircleAlert, Upload } from 'lucide-react'
 import { useThread, useSendReply } from '../../hooks/useMessages'
 import { useMessageActions } from '../../hooks/useMessageActions'
 import { usePhone } from '../../hooks/usePhone'
+import { useAttachmentUploads } from '../../hooks/useAttachmentUploads'
 import { lastEditableOf, toEditorHtml } from '../../lib/message-model'
 import { useFollowThread, useMarkThreadRead } from '../../hooks/useThreads'
 import { useArrivals } from '../../hooks/useArrivals'
@@ -29,6 +30,7 @@ type Msg = Message & { _optimistic?: boolean }
 
 interface ThreadPanelProps {
   channelId: string
+  workspaceId?: string
   /** The root message whose replies to show. */
   messageId: string
   /** Space or DM title, shown under "Thread". */
@@ -50,7 +52,15 @@ const DIVIDER_OFFSET = 48
  * read; the divider stays until the panel closes. Follow / unfollow is the
  * button in the header. Below 1024 it is a full-screen sheet.
  */
-export function ThreadPanel({ channelId, messageId, spaceName, people, me, onBack, onClose }: ThreadPanelProps) {
+export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, people, me, onBack, onClose }: ThreadPanelProps) {
+  const uploads = useAttachmentUploads({ workspaceId: workspaceId ?? '', channelId })
+  const uploadsRef = useRef(uploads)
+  uploadsRef.current = uploads
+
+  useEffect(() => {
+    uploads.clear()
+  }, [messageId])
+  const [isDragging, setIsDragging] = useState(false)
   const motionPresets = useMotionPresets()
   const qc = useQueryClient()
   const { data, isLoading, error, refetch } = useThread(messageId)
@@ -132,6 +142,36 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onBac
     )
   }
 
+  useEffect(() => {
+    const el = (bodyRef.current?.closest('aside') ?? bodyRef.current) as HTMLElement | null
+    if (!el) return
+    const onDragOver = (e: DragEvent) => {
+      if (e.dataTransfer?.types.includes('Files')) {
+        e.preventDefault()
+        setIsDragging(true)
+      }
+    }
+    const onDragLeave = (e: DragEvent) => {
+      if (!el.contains(e.relatedTarget as Node)) {
+        setIsDragging(false)
+      }
+    }
+    const onDrop = (e: DragEvent) => {
+      e.preventDefault()
+      setIsDragging(false)
+      const files = Array.from(e.dataTransfer?.files ?? [])
+      if (files.length) uploadsRef.current.add(files)
+    }
+    el.addEventListener('dragover', onDragOver)
+    el.addEventListener('dragleave', onDragLeave)
+    el.addEventListener('drop', onDrop)
+    return () => {
+      el.removeEventListener('dragover', onDragOver)
+      el.removeEventListener('dragleave', onDragLeave)
+      el.removeEventListener('drop', onDrop)
+    }
+  }, [])
+
   const count = replies.length
   const countLabel = isLoading ? 'Đang tải câu trả lời' : count ? `${count} trả lời` : 'Chưa có câu trả lời'
   return (
@@ -171,10 +211,28 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onBac
             tone="base"
             placeholder="Trả lời trong thread"
             hint="Enter để gửi"
+            uploads={uploads}
             isPending={send.isPending}
-            onSend={(html, mentions) =>
-              send.mutate({ content: html, mentions }, { onError: (err) => toast.error(explain(err, 'gửi câu trả lời')) })
-            }
+            onSend={async (html, mentions, attachments) => {
+              if (!html.trim() && (!attachments || attachments.length === 0)) return
+              const optimisticAttachments = uploads.items
+                .filter((it) => it.status === 'done' && it.fileId)
+                .map((it) => ({
+                  drive_file_id: it.fileId!,
+                  file_name: it.file.name,
+                  mime_type: it.file.type,
+                  size_bytes: it.file.size,
+                  width: it.width,
+                  height: it.height,
+                  localUrl: it.file.type.startsWith('image/') ? URL.createObjectURL(it.file) : undefined,
+                }))
+              try {
+                await send.mutateAsync({ content: html, mentions, attachments, optimisticAttachments })
+              } catch (err) {
+                toast.error(explain(err, 'gửi câu trả lời'))
+                throw err
+              }
+            }}
             edit={phone && lifecycle.editing ? {
               initialHtml: lifecycle.editing.draft ?? toEditorHtml(lifecycle.editing.message),
               onSave: lifecycle.saveEdit,
@@ -188,25 +246,33 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onBac
         </>
       }
     >
-      {error && !root ? (
-        <EmptyState
-          compact
-          icon={<CircleAlert size={24} strokeWidth={1.75} />}
-          text="Chưa tải được thread này."
-          action={<Button variant="soft" size="sm" onClick={() => refetch()}>Thử lại</Button>}
-        />
-      ) : (
-        <div className="grid content-start gap-0.5 pt-1">
-          {root && (
-            <MessageBlock
-              message={root}
-              people={people}
-              idBase={`thread-root-${messageId}`}
-              mine={root.sender_id === me}
-              me={me}
-              className="px-2"
-            />
-          )}
+      <div className="relative min-h-full">
+        {isDragging && (
+          <div className="absolute inset-0 z-dropdown bg-base/80 backdrop-blur-xs border-2 border-dashed border-accent flex flex-col items-center justify-center pointer-events-none text-accent font-semibold text-sm gap-1">
+            <Upload size={24} />
+            <b>Thả tệp để đính kèm</b>
+            <span className="text-xs text-ink-muted font-normal">Tối đa 20 tệp mỗi tin</span>
+          </div>
+        )}
+        {error && !root ? (
+          <EmptyState
+            compact
+            icon={<CircleAlert size={24} strokeWidth={1.75} />}
+            text="Chưa tải được thread này."
+            action={<Button variant="soft" size="sm" onClick={() => refetch()}>Thử lại</Button>}
+          />
+        ) : (
+          <div className="grid content-start gap-0.5 pt-1">
+            {root && (
+              <MessageBlock
+                message={root}
+                people={people}
+                idBase={`thread-root-${messageId}`}
+                mine={root.sender_id === me}
+                me={me}
+                className="px-2"
+              />
+            )}
           <div
             role="separator"
             aria-label={countLabel}
@@ -274,6 +340,7 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onBac
           <div ref={bottomRef} />
         </div>
       )}
+      </div>
       <MessageMenu target={menu} anchorRef={anchorRef} onClose={() => setMenu(null)} lifecycle={lifecycle} />
       <AnimatePresence>
         {sheetFor && (

@@ -35,3 +35,15 @@ one attachment only when the file is a live file of that message's own channel d
 The message list, a thread, the thread list and the live `chat_message` / `thread_reply` frames SHALL carry each
 message's attachments. A message from before attachments that linked one drive file (`linked_entity_type =
 drive_file`) SHALL read as that one attachment. A deleted message carries none.
+
+## Client Implementation & Status
+
+**Status: matches code** (Phase 06 attachments UI completed with review fixes).
+
+- Hook `useAttachmentUploads`: handles client upload queue (`uploading` | `done` | `error`), in-flight upload cancellation via `AbortController` on chip removal, Vietnamese error message mapping, synchronous 20-file limit enforcement, and client-side image dimension measuring (`createImageBitmap` / `Image()`).
+- Composer `ChatEditor`: attachment tray (`AttachmentTray`) above the editor showing real upload progress % and Vietnamese status reasons, clipboard image paste guarded against text/html paste and disabled in mobile edit mode, drag-and-drop onto conversation pane (`SpaceView`) and thread panel (`ThreadPanel`) with mockup copy ("Thả tệp để đính kèm" / "Tối đa 20 tệp mỗi tin"), attachment menu ("Tải lên từ máy") on desktop and mobile "+" sheet (Máy ảnh / Ảnh / Tệp), send button disabled while uploading or errored with explanation whyStatus ("Đang tải X tệp…" / "Thử lại hoặc bỏ tệp lỗi để gửi"); on send error tray items and draft text are preserved.
+- Message display `MessageBlock`: images rendered via `AttachmentGrid` (aspect-ratio clamped between 0.5 and 2.0 without forced crop; 1 large / 2–4 grid, `+N` tile for >4 images; optimistic localUrl preview during send); non-image files rendered as file cards with icon and formatted size via `file-kind.ts`. File downloads trigger `<a download>` with failure toast ("Không tải được tệp. Thử lại."). Legacy `linked_entity_type === 'drive_file'` messages render as one file card with fallback to message content.
+- Lightbox `ImageViewer`: modal image dialog built on `useModalFocus`, portaled to `document.body`, with Tab trap, Esc stopping propagation so parent panels stay open, focus restoration to opener thumbnail on unmount, and download via `useDownloadFile`.
+- **Note on Drive Picker**: "Chọn từ Tài liệu" from mockups is intentionally omitted from the composer attach menu because no drive file picker exists in `components/drive`.
+
+

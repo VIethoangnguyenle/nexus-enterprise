@@ -53,6 +53,14 @@ export function convertChatMsgToMessage(chatMsg: WSChatMessage): Message {
           deleted: chatMsg.quoted.deleted,
         }
       : undefined,
+    attachments: (chatMsg.attachments || []).map((a) => ({
+      drive_file_id: a.driveFileId,
+      file_name: a.fileName,
+      mime_type: a.mimeType,
+      size_bytes: typeof a.sizeBytes === 'bigint' ? Number(a.sizeBytes) : Number(a.sizeBytes || 0),
+      width: a.width || undefined,
+      height: a.height || undefined,
+    })),
   }
 }
 

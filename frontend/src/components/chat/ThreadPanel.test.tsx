@@ -1,10 +1,10 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { buildDirectory } from '../../lib/people'
 import { expectNoIds } from '../../test/no-ids'
-import { CONTACTS, MESSAGES, MSG, THREAD, CH, ME, fixtureApi } from '../../test/chat-fixtures'
+import { CONTACTS, MESSAGES, MSG, THREAD, CH, ME, MSG_IMG1, fixtureApi } from '../../test/chat-fixtures'
 import { apiFetch } from '../../api/client'
 import { queryClient } from '../../lib/query-client'
 import { keys } from '../../hooks/keys'
@@ -16,6 +16,22 @@ vi.mock('../../api/client', async (orig) => {
   return { ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn(fixtureApi) }
 })
 
+vi.mock('../../api/drive', () => ({
+  driveApi: {
+    channelDrive: vi.fn().mockResolvedValue({
+      items: [{ id: 'folder-root', item_type: 'folder', name: 'Channel Files' }],
+    }),
+    createFile: vi.fn().mockImplementation(async (_ws, name) => ({
+      file_id: `file-id-${name}`,
+      upload_url: `https://storage.local/upload/${name}`,
+      object_key: `key-${name}`,
+    })),
+    uploadToStorage: vi.fn().mockResolvedValue(undefined),
+    confirmFile: vi.fn().mockResolvedValue({}),
+    getDownloadUrl: vi.fn().mockResolvedValue({ download_url: 'https://example.com/dl' }),
+  },
+}))
+
 const people = buildDirectory(CONTACTS)
 const calls = () => vi.mocked(apiFetch).mock.calls.map(([path, init]) => `${(init?.method ?? 'GET')} ${path}`)
 
@@ -26,6 +42,11 @@ beforeAll(() => {
   Range.prototype.getBoundingClientRect = () => new DOMRect()
   document.elementFromPoint = () => null
   window.scrollTo = () => {}
+  globalThis.createImageBitmap = vi.fn().mockImplementation(async () => ({
+    width: 800,
+    height: 600,
+    close: vi.fn(),
+  }))
 })
 
 beforeEach(() => {
@@ -40,6 +61,7 @@ function panel(over: Partial<Parameters<typeof ThreadPanel>[0]> = {}) {
   return (
     <ThreadPanel
       channelId={CH.doisoat}
+      workspaceId="ws-test"
       messageId={MSG.t1}
       spaceName="Đối soát giao dịch"
       people={people}
@@ -144,4 +166,91 @@ describe('ThreadPanel', () => {
     renderWithClient(panel())
     expect(await screen.findByText('Chưa tải được thread này.')).toBeInTheDocument()
   })
+
+  it('shows drop zone on dragover and sends attachments with reply', async () => {
+    const user = userEvent.setup()
+    renderWithClient(panel())
+    await screen.findByText(/1\.284\.500/)
+
+    const side = screen.getByRole('complementary', { name: 'Thread' })
+    fireEvent.dragOver(side, {
+      dataTransfer: { types: ['Files'] },
+    })
+
+    // Should show drop zone prompt
+    expect(await screen.findByText('Thả tệp để đính kèm')).toBeInTheDocument()
+    expect(screen.getByText('Tối đa 20 tệp mỗi tin')).toBeInTheDocument()
+
+    const file = new File(['content'], 'test.pdf', { type: 'application/pdf' })
+    fireEvent.drop(side, {
+      dataTransfer: { files: [file] },
+    })
+    expect(screen.queryByText('Thả tệp để đính kèm')).toBeNull()
+
+    // Chip appears
+    await screen.findByText('test.pdf')
+
+    // Wait until upload completes
+    await waitFor(() => {
+      expect(screen.queryByText(/Đang tải/)).toBeNull()
+    })
+
+    // Click Gửi button to send attachment reply
+    const sendBtn = screen.getByRole('button', { name: /Gửi/ })
+    expect(sendBtn).not.toBeDisabled()
+    await user.click(sendBtn)
+
+    // Check that apiFetch was called to post the message with attachments
+    await waitFor(() => {
+      const post = vi.mocked(apiFetch).mock.calls.find(
+        ([p, i]) => p === `/channels/${CH.doisoat}/messages` && i?.method === 'POST',
+      )
+      expect(post).toBeTruthy()
+      const body = JSON.parse(String(post![1]!.body))
+      expect(body).toMatchObject({
+        parent_message_id: MSG.t1,
+        attachments: [
+          expect.objectContaining({
+            drive_file_id: 'file-id-test.pdf',
+          }),
+        ],
+      })
+    })
+  })
+
+  it('Esc with viewer open inside open thread panel closes ONLY the viewer', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    vi.mocked(apiFetch).mockImplementation((p: string, i?: RequestInit) => {
+      if (p === `/messages/${MSG.t1}/thread`) {
+        return Promise.resolve({
+          messages: [...THREAD, { ...MSG_IMG1, id: 'reply-with-img', parent_message_id: MSG.t1 }],
+        })
+      }
+      return fixtureApi(p, i)
+    })
+    renderWithClient(panel({ onClose }))
+    await screen.findByText(/1\.284\.500/)
+
+    const imgBtn = await screen.findByRole('button', { name: 'Mở ảnh bien-lai-phi-08-10.jpg' })
+    await user.click(imgBtn)
+
+    const dialog = await screen.findByRole('dialog', { name: 'Trình xem ảnh' })
+    expect(dialog).toBeInTheDocument()
+    expect(within(dialog).getByText('bien-lai-phi-08-10.jpg')).toBeInTheDocument()
+
+    // Press Escape
+    fireEvent.keyDown(document, { key: 'Escape' })
+
+    // Viewer dialog is closed
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Trình xem ảnh' })).toBeNull()
+    })
+
+    // Thread panel onClose was NOT called
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('complementary', { name: 'Thread' })).toBeInTheDocument()
+  })
 })
+
+

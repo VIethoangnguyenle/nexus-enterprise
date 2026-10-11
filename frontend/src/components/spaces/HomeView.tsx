@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { MessagesSquare, CircleAlert } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
@@ -20,6 +21,7 @@ import { useSectionOverlays } from './SectionOverlays'
 import { EmptyState } from './EmptyState'
 import { CreateSpaceDialog } from './CreateSpaceDialog'
 import { NewChatMenu } from './NewChatMenu'
+import { UnreadThreadsSection } from './UnreadThreadsSection'
 
 const FILTERS: { id: ConversationFilter; label: string; empty: string }[] = [
   { id: 'all', label: 'Tất cả', empty: 'Chưa có cuộc trò chuyện nào.' },
@@ -35,6 +37,7 @@ const FILTERS: { id: ConversationFilter; label: string; empty: string }[] = [
  */
 export function HomeView() {
   const m = useMotionPresets()
+  const navigate = useNavigate()
   const { workspaceId, workspaceName } = useActiveWorkspace()
   const nav = useChatNavigation(workspaceId)
   const { conversations, isLoading, isError, refetch } = nav
@@ -95,6 +98,15 @@ export function HomeView() {
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
+        {/* The phone's Tin nhắn tab mounts its own copy inside PhoneChatList. */}
+        {!phone && !isError && !isLoading && (
+          <UnreadThreadsSection
+            conversations={conversations}
+            people={people}
+            onOpenThread={(channelId, rootId) =>
+              void navigate({ to: '/channels/$channelId', params: { channelId }, search: { thread: rootId } })}
+          />
+        )}
         {isError ? (
           <EmptyState
             icon={<CircleAlert size={24} strokeWidth={1.75} />}

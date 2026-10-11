@@ -7,6 +7,7 @@ import { documentKeys } from './documents'
 import { driveKeys } from './drive'
 import { messagingKeys } from './messaging'
 import { notificationKeys } from './notifications'
+import { notificationLevelKeys } from './notification-levels'
 import { permissionKeys } from './permissions'
 import { workspaceKeys } from './workspaces'
 
@@ -28,6 +29,7 @@ export const keys = {
   drive: driveKeys,
   messaging: messagingKeys,
   notifications: notificationKeys,
+  notificationLevels: notificationLevelKeys,
   permissions: permissionKeys,
   workspaces: workspaceKeys,
 }

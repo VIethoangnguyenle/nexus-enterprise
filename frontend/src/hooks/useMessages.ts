@@ -1,5 +1,5 @@
 import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
-import { messagingApi, type SendMessageInput, type Message, type ReactionGroup } from '../api/messaging'
+import { messagingApi, type SendMessageInput, type Message, type MessageAttachment, type ReactionGroup } from '../api/messaging'
 import { queryClient } from '../lib/query-client'
 import { keepOlderPages } from '../lib/stream-model'
 import { useAuthStore } from '../stores/auth.store'
@@ -25,11 +25,21 @@ export const threadQueryOptions = (messageId: string) =>
 export function useMessages(channelId: string) { return useQuery(messagesQueryOptions(channelId)) }
 export function useThread(messageId: string) { return useQuery(threadQueryOptions(messageId)) }
 
+export type SendMessageParams =
+  | string
+  | {
+      content: string
+      mentions?: string[]
+      linkedEntity?: { type: string; id: string }
+      attachments?: { drive_file_id: string; width?: number; height?: number }[]
+      optimisticAttachments?: MessageAttachment[]
+    }
+
 /** Sends a message with optimistic UI: message appears immediately, no refetch needed. */
 export function useSendMessage(channelId: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: (params: string | { content: string; mentions?: string[]; linkedEntity?: { type: string; id: string } }) => {
+    mutationFn: (params: SendMessageParams) => {
       if (typeof params === 'string') {
         return messagingApi.sendMessage(channelId, params)
       }
@@ -39,6 +49,7 @@ export function useSendMessage(channelId: string) {
         linked_entity_type: params.linkedEntity?.type || '',
         linked_entity_id: params.linkedEntity?.id || '',
         ...(params.mentions?.length ? { mentions: params.mentions } : {}),
+        ...(params.attachments?.length ? { attachments: params.attachments } : {}),
       }
       return messagingApi.sendMessage(channelId, input)
     },
@@ -50,6 +61,16 @@ export function useSendMessage(channelId: string) {
       const user = useAuthStore.getState().user
 
       const content = typeof params === 'string' ? params : params.content
+      const attachments = typeof params === 'string'
+        ? undefined
+        : params.optimisticAttachments ?? params.attachments?.map((a) => ({
+            drive_file_id: a.drive_file_id,
+            file_name: '',
+            mime_type: '',
+            size_bytes: 0,
+            width: a.width,
+            height: a.height,
+          }))
       const tempMsg: Message & { _optimistic: true } = {
         id: `temp-${Date.now()}`,
         channel_id: channelId,
@@ -58,6 +79,7 @@ export function useSendMessage(channelId: string) {
         content,
         content_format: 'html',
         created_at: new Date().toISOString(),
+        attachments,
         _optimistic: true,
       }
 
@@ -95,12 +117,26 @@ export function useSendMessage(channelId: string) {
         queryClient.setQueryData(keys.messaging.messages(channelId), context.previous)
       }
     },
+    onSettled: (_data, _err, vars) => {
+      if (typeof vars !== 'string' && vars?.optimisticAttachments) {
+        vars.optimisticAttachments.forEach((att) => {
+          if (att.localUrl) URL.revokeObjectURL(att.localUrl)
+        })
+      }
+    },
   })
 }
 
 type MessageList = { messages: Message[]; has_more: boolean }
 type Thread = { messages: Message[] }
 type Optimistic = Message & { _optimistic?: boolean }
+
+export type SendReplyParams = {
+  content: string
+  mentions?: string[]
+  attachments?: { drive_file_id: string; width?: number; height?: number }[]
+  optimisticAttachments?: MessageAttachment[]
+}
 
 /**
  * Replies inside a topic, with optimistic UI: the reply shows in the thread
@@ -110,15 +146,27 @@ type Optimistic = Message & { _optimistic?: boolean }
 export function useSendReply(channelId: string, parentId: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: ({ content, mentions }: { content: string; mentions?: string[] }) =>
+    mutationFn: ({ content, mentions, attachments }: SendReplyParams) =>
       messagingApi.sendMessage(channelId, {
-        content, content_format: 'html', parent_message_id: parentId, ...(mentions?.length ? { mentions } : {}),
+        content,
+        content_format: 'html',
+        parent_message_id: parentId,
+        ...(mentions?.length ? { mentions } : {}),
+        ...(attachments?.length ? { attachments } : {}),
       }),
-    onMutate: async ({ content }) => {
+    onMutate: async ({ content, attachments, optimisticAttachments }) => {
       await queryClient.cancelQueries({ queryKey: keys.messaging.thread(parentId) })
       const prevThread = queryClient.getQueryData<Thread>(keys.messaging.thread(parentId))
       const prevList = queryClient.getQueryData<MessageList>(keys.messaging.messages(channelId))
       const user = useAuthStore.getState().user
+      const tempAttachments = optimisticAttachments ?? attachments?.map((a) => ({
+        drive_file_id: a.drive_file_id,
+        file_name: '',
+        mime_type: '',
+        size_bytes: 0,
+        width: a.width,
+        height: a.height,
+      }))
       const temp: Optimistic = {
         id: `temp-${Date.now()}`,
         channel_id: channelId,
@@ -128,6 +176,7 @@ export function useSendReply(channelId: string, parentId: string) {
         content_format: 'html',
         parent_message_id: parentId,
         created_at: new Date().toISOString(),
+        attachments: tempAttachments,
         _optimistic: true,
       }
       queryClient.setQueryData<Thread>(keys.messaging.thread(parentId), (old) =>
@@ -151,6 +200,13 @@ export function useSendReply(channelId: string, parentId: string) {
     onError: (_err, _vars, ctx) => {
       if (ctx?.prevThread) queryClient.setQueryData(keys.messaging.thread(parentId), ctx.prevThread)
       if (ctx?.prevList) queryClient.setQueryData(keys.messaging.messages(channelId), ctx.prevList)
+    },
+    onSettled: (_data, _err, vars) => {
+      if (vars?.optimisticAttachments) {
+        vars.optimisticAttachments.forEach((att) => {
+          if (att.localUrl) URL.revokeObjectURL(att.localUrl)
+        })
+      }
     },
   })
 }
