@@ -23,6 +23,16 @@ afterEach(resetClient)
 
 const noIds = () => expect(document.body.textContent).not.toMatch(UUID_RE)
 
+describe('SpaceView header title', () => {
+  // On a narrow screen the actions take their room first; without growing, the
+  // title block shrank to a few letters ("gene…") with space left beside it.
+  it('lets the name take the free width of the header', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    const heading = await screen.findByRole('heading', { level: 1 })
+    expect(heading.parentElement).toHaveClass('flex-1')
+  })
+})
+
 describe('SpaceView on a phone', () => {
   it('goes back to Trang chủ, the conversation list, since there is no drawer', async () => {
     const user = userEvent.setup()

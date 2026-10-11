@@ -287,7 +287,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
             <ArrowLeft size={18} strokeWidth={1.75} />
           </IconButton>
           {conv ? <ConversationIcon conversation={conv} size={40} /> : <div className="skeleton w-10 h-10 rounded-surface" />}
-          <div className="grid gap-px min-w-0">
+          <div className="grid gap-px min-w-0 flex-1">
             {conv ? (
               <ConversationTitleMenu
                 conversation={conv}
