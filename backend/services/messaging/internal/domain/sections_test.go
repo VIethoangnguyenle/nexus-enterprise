@@ -158,4 +158,25 @@ func TestSections_Deny(t *testing.T) {
 	wrongTenant := domain.Caller{UserID: w.f.userID, NodeID: userNode, TenantID: otherWS}
 	_, err = svc.CreateSection(ctx, w.f.wsID, wrongTenant, domain.NewSection{Name: "x"})
 	require.ErrorIs(t, err, domain.ErrAccessDenied)
+
+	// Someone else's section cannot be moved either.
+	require.ErrorIs(t, svc.MoveSection(ctx, w.f.wsID, other, mine.ID, "up"), domain.ErrNotFound)
+
+	// Taking a conversation out of a section also needs the workspace.
+	require.NoError(t, svc.PlaceChannel(ctx, w.f.wsID, w.me, mine.ID, w.chA))
+	require.ErrorIs(t, svc.UnplaceChannel(ctx, w.f.wsID, stranger, w.chA), domain.ErrAccessDenied)
+	require.ErrorIs(t, svc.UnplaceChannel(ctx, w.f.wsID, wrongTenant, w.chA), domain.ErrAccessDenied)
+	secs, err := svc.ListSections(ctx, w.f.wsID, w.me)
+	require.NoError(t, err)
+	assert.Equal(t, []string{w.chA}, secs[0].ChannelIDs, "a refused unplace changes nothing")
+
+	// Restoring a section (Undo) re-places only what the caller may: an
+	// unreadable channel, or one of another workspace, refuses the whole restore.
+	_, err = svc.CreateSection(ctx, w.f.wsID, w.me, domain.NewSection{Name: "Khôi phục", ChannelIDs: []string{w.chB, closed}})
+	require.ErrorIs(t, err, domain.ErrAccessDenied)
+	_, err = svc.CreateSection(ctx, w.f.wsID, w.me, domain.NewSection{Name: "Khôi phục", ChannelIDs: []string{foreign}})
+	require.ErrorIs(t, err, domain.ErrInvalidInput)
+	secs, err = svc.ListSections(ctx, w.f.wsID, w.me)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Của tôi"}, names(secs), "a refused restore leaves no section behind")
 }

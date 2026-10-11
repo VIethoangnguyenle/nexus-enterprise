@@ -100,6 +100,12 @@ func (s *Store) InsertVote(ctx context.Context, pollID, optionID, userID string,
 	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if replace {
 			// A single-choice poll holds one vote per person: the new one replaces it.
+			// Votes on one poll take its row lock first, so two arriving together
+			// run one after the other and the second deletes the first's row;
+			// without it each delete misses the other's uncommitted insert.
+			if _, err := tx.Exec(ctx, `SELECT 1 FROM polls WHERE id = $1 FOR UPDATE`, pollID); err != nil {
+				return err
+			}
 			if _, err := tx.Exec(ctx,
 				`DELETE FROM poll_votes WHERE poll_id = $1 AND user_id = $2 AND option_id <> $3`,
 				pollID, userID, optionID); err != nil {

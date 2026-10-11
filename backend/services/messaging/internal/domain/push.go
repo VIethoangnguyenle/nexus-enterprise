@@ -45,6 +45,11 @@ const pushWindow = 30 * time.Second
 // previewChars bounds the text shown in a notification.
 const previewChars = 140
 
+// MaxMentionPushes bounds how many mentioned people one message pushes to. The
+// mention list comes from the client; without a bound a writer could page
+// every reader of a channel with one message.
+const MaxMentionPushes = 20
+
 type pushState struct {
 	sender  push.Sender
 	viewing ViewingChecker
@@ -124,7 +129,11 @@ func (s *Service) PushRecipients(ctx context.Context, msg *pb.Message) ([]PushRe
 		add(ps, PushDirect)
 	}
 	if len(msg.Mentions) > 0 {
-		ps, err := s.store.PeopleByID(ctx, msg.Mentions)
+		mentions := msg.Mentions
+		if len(mentions) > MaxMentionPushes {
+			mentions = mentions[:MaxMentionPushes]
+		}
+		ps, err := s.store.PeopleByID(ctx, mentions)
 		if err != nil {
 			return nil, err
 		}
@@ -221,6 +230,11 @@ func (s *Service) PushForMessage(ctx context.Context, msg *pb.Message) {
 	}
 	sender, _ := s.store.DisplayName(ctx, msg.SenderId)
 	for _, r := range recipients {
+		// The caller's deadline bounds the whole delivery, not each send.
+		if ctx.Err() != nil {
+			slog.Warn("push delivery cut short", "message_id", msg.Id, "error", ctx.Err())
+			return
+		}
 		s.deliver(ctx, r.Person.UserID, ch, notificationFor(ch, sender, msg))
 	}
 }
@@ -277,6 +291,8 @@ func (s *Service) deliver(ctx context.Context, userID string, ch *store.Channel,
 	p.mu.Unlock()
 
 	s.send(ctx, m)
+	// The follow-up runs after the request is long over: it gets its own
+	// bounded context from send, not the caller's.
 	time.AfterFunc(p.window, func() {
 		p.mu.Lock()
 		b := p.batches[key]
@@ -291,8 +307,10 @@ func (s *Service) deliver(ctx context.Context, userID string, ch *store.Channel,
 	})
 }
 
+// send delivers one notification within the caller's deadline, and at most
+// 20 seconds; a client hanging up does not cancel it (see PushLater).
 func (s *Service) send(ctx context.Context, m push.Message) {
-	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 20*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 	if err := s.push.sender.Send(ctx, m); err != nil {
 		slog.Warn("push not delivered", "recipients", len(m.ExternalIDs), "error", err)

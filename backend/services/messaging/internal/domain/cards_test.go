@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"context"
+	"sync"
 	"testing"
 	"time"
 
@@ -97,6 +98,32 @@ func TestVotePoll_ReadToVoteSingleChoiceAndHiddenResults(t *testing.T) {
 	require.ErrorIs(t, svc.VotePoll(ctx, id, pho, outsider, "x"), domain.ErrAccessDenied)
 	_, err = svc.GetPoll(ctx, id, "x", outsider)
 	require.ErrorIs(t, err, domain.ErrAccessDenied)
+}
+
+// Two votes from one person arriving together on a single-choice poll leave
+// exactly one: each replace sees the other's row, or waits for it.
+func TestVotePoll_SingleChoiceHoldsUnderConcurrentVotes(t *testing.T) {
+	w := newCardWorld(t)
+	ctx := context.Background()
+	svc := w.f.svc
+	id := w.poll(t, false, false, "Phở", "Cơm", "Bún")
+	p, err := svc.GetPoll(ctx, id, w.f.userID, userNode)
+	require.NoError(t, err)
+
+	for round := 0; round < 20; round++ {
+		var wg sync.WaitGroup
+		for _, o := range p.Options {
+			wg.Add(1)
+			go func(option string) {
+				defer wg.Done()
+				assert.NoError(t, svc.VotePoll(ctx, id, option, w.readerNode, w.reader))
+			}(o.Id)
+		}
+		wg.Wait()
+		mine, err := svc.GetPoll(ctx, id, w.reader, w.readerNode)
+		require.NoError(t, err)
+		require.Len(t, mine.MyOptionIds, 1, "round %d: a single-choice poll holds one vote per person", round)
+	}
 }
 
 func TestVotePoll_AnonymousNeverNamesVoters(t *testing.T) {

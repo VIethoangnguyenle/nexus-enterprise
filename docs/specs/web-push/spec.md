@@ -35,6 +35,8 @@ conversation — or the thread — in the app. The first message of a conversati
 of that conversation to the same person within 30 seconds become one follow-up, "N tin mới", that replaces it on the
 device (`web_push_topic` on the web, `collapse_id` on mobile). The link is absolute, under `APP_BASE_URL`. Every
 request carries an `idempotency_key` kept across its retries, so a retry after a timeout does not deliver twice.
+One message pushes to at most 20 mentioned people (the mention list comes from the client), and the delivery of one
+message ends with its 30-second deadline, however many recipients remain.
 
 #### Scenario: A tab left open elsewhere
 - **WHEN** a person has Nexus open on a desktop, on another conversation or hidden, and a direct message arrives

@@ -3,6 +3,7 @@ package domain_test
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -191,4 +192,47 @@ func TestSavePushPreferences_RejectsNonsense(t *testing.T) {
 	p.TimeZone = "Mars/Olympus"
 	require.ErrorIs(t, w.f.svc.SavePushPreferences(ctx, w.other, p), domain.ErrInvalidInput)
 	require.ErrorIs(t, w.f.svc.SavePushPreferences(ctx, "", store.DefaultPushPreferences), domain.ErrAccessDenied)
+}
+
+// hangingSender never answers: it returns only when its context ends.
+type hangingSender struct{ calls atomic.Int32 }
+
+func (h *hangingSender) Send(ctx context.Context, _ push.Message) error {
+	h.calls.Add(1)
+	<-ctx.Done()
+	return ctx.Err()
+}
+func (h *hangingSender) Enabled() bool { return true }
+
+// The caller's deadline bounds the whole delivery: an unreachable OneSignal
+// must not keep a goroutine per message alive for minutes.
+func TestPush_DeliveryEndsWithTheCallersDeadline(t *testing.T) {
+	w := newPushWorld(t, true)
+	hang := &hangingSender{}
+	w.f.svc.SetPush(hang, w.view)
+	msg, err := w.f.svc.SendMessage(context.Background(), domain.SendMessageInput{
+		ChannelID: w.chID, SenderID: w.f.userID, SenderNodeID: userNode, Content: "alo",
+	})
+	require.NoError(t, err)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	w.f.svc.PushForMessage(ctx, msg)
+	assert.Less(t, time.Since(start), 2*time.Second, "delivery stops at the caller's deadline")
+	assert.EqualValues(t, 1, hang.calls.Load())
+}
+
+// A message pushes to at most MaxMentionPushes mentioned people, however many
+// the client names: a writer cannot page a whole channel through mentions.
+func TestPush_MentionsAreBounded(t *testing.T) {
+	w := newPushWorld(t, false)
+	var mentions []string
+	for i := 0; i < domain.MaxMentionPushes+5; i++ {
+		id, node := testutil.CreateUser(t, w.f.pool)
+		w.f.read.allow[grant{node, w.oaID, ngac.OpRead}] = true
+		mentions = append(mentions, id)
+	}
+	w.send(t, "mọi người ơi", mentions...)
+	assert.Len(t, w.sender.all(), domain.MaxMentionPushes)
 }
