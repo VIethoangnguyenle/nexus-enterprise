@@ -50,9 +50,12 @@ The system SHALL track membership status as one of: `active`, `invited`, `disabl
 Every workspace SHALL have a type, `personal` or `organization` (`workspaces.type`, NOT NULL,
 CHECK-constrained, no default — an insert that does not state it fails), set by how it came to be:
 
-- the workspace sign-in makes for a person who has none (OTP or Google, no company domain) is `personal`;
-- a workspace created on purpose ("Tạo workspace", `POST /api/me/workspaces`) is `organization`;
-- the workspace made for a verified Google Workspace domain (`hd`) is `organization`.
+- every new account gets a `personal` workspace of its own when it is created (OTP or Google, a
+  company account with a Google Workspace domain included); signing in never creates an organization;
+- a workspace created on purpose ("Tạo workspace", `POST /api/me/workspaces` with `type`) has the type
+  the person chose, `personal` or `organization`; a person may have several of either. A request with
+  no `type` (a client older than the choice) creates an `organization`; any other value is refused (400)
+  and nothing is created.
 
 The workspace service's `CreateWorkspace` SHALL refuse a missing or unknown type (`InvalidArgument`)
 before writing anything to the graph or the database. The type is returned with the workspace on
@@ -65,12 +68,13 @@ a workspace named "<someone>'s Workspace" with exactly one active member and no 
 `personal`; every other one is `organization`.
 
 #### Scenario: First sign-in makes a personal workspace
-- **WHEN** a person with no workspace signs in with a one-time code or a consumer Google account
+- **WHEN** a new account is created by a one-time code or by Google, with or without a company domain
 - **THEN** the workspace made for them has type `personal`
+- **AND** a company account whose domain an organization already owns also joins that organization
 
-#### Scenario: A workspace created on purpose is an organization
-- **WHEN** a signed-in person creates a workspace
-- **THEN** it has type `organization`, and so does the one created for a new company domain
+#### Scenario: A workspace created on purpose has the chosen type
+- **WHEN** a signed-in person creates a workspace and chooses `personal` or `organization`
+- **THEN** it has that type
 
 #### Scenario: A type nobody stated is refused
 - **WHEN** `CreateWorkspace` is called with no type, or with any value other than the two

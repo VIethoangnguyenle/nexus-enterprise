@@ -69,15 +69,25 @@ func (s *Service) SignInWithGoogle(ctx context.Context, ext ExternalIdentity) (*
 		}
 	}
 
+	// Every new account gets a workspace of its own, a company account included.
+	// A verified company domain also places the person in the organization that
+	// already owns it; signing in never creates an organization — that is what
+	// "Tạo workspace" is for.
 	preferredTenant := ""
-	switch {
-	case hostedDomain != "":
-		preferredTenant, err = s.joinOrCreateDomainTenant(ctx, hostedDomain, user)
-	case created:
+	if created {
 		preferredTenant, _, _, err = s.createTenantForUser(ctx, personalWorkspaceName(user.DisplayName), WorkspacePersonal, user.ID, user.NGACNodeID)
+		if err != nil {
+			return nil, fmt.Errorf("resolve tenant: %w", err)
+		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("resolve tenant: %w", err)
+	if hostedDomain != "" {
+		tenant, _, err := s.joinTenantByDomain(ctx, hostedDomain, user.ID, user.NGACNodeID)
+		if err != nil {
+			return nil, fmt.Errorf("resolve tenant: %w", err)
+		}
+		if tenant != nil {
+			preferredTenant = tenant.ID
+		}
 	}
 
 	return s.signinResultFor(ctx, user, preferredTenant)
@@ -181,35 +191,6 @@ func (s *Service) createExternalUser(ctx context.Context, email, displayName str
 		ID: userID, Username: username, NGACNodeID: ngacNode,
 		Email: email, UnionID: unionID, DisplayName: displayName,
 	}, nil
-}
-
-// joinOrCreateDomainTenant places the user in the tenant that owns a verified
-// company domain, creating that tenant (user as owner) if none does yet.
-func (s *Service) joinOrCreateDomainTenant(ctx context.Context, companyDomain string, user *store.User) (string, error) {
-	tenant, _, err := s.joinTenantByDomain(ctx, companyDomain, user.ID, user.NGACNodeID)
-	if err != nil {
-		return "", err
-	}
-	if tenant != nil {
-		return tenant.ID, nil
-	}
-
-	tenantID, _, _, err := s.createTenantForUser(ctx, companyDomain, WorkspaceOrganization, user.ID, user.NGACNodeID)
-	if err != nil {
-		return "", err
-	}
-	claimed, err := s.store.ClaimTenantDomain(ctx, tenantID, companyDomain)
-	switch {
-	case err != nil:
-		// The tenant exists and the user owns it; failing the sign-in now would
-		// only strand them. Colleagues will not auto-join until it is fixed.
-		slog.Error("claim tenant domain failed", "tenant", tenantID, "domain", companyDomain, "error", err)
-	case !claimed:
-		// Another sign-in from the same domain won the race and created its own
-		// tenant first. This one stays a regular tenant without a domain.
-		slog.Warn("tenant domain already claimed", "tenant", tenantID, "domain", companyDomain)
-	}
-	return tenantID, nil
 }
 
 // signinResultFor mints a session for user, scoped to preferredTenant when the

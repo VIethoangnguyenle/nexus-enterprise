@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"ngac-platform/services/auth/internal/domain"
@@ -22,27 +23,53 @@ func TestWorkspaceType_FirstGoogleSignInWithoutACompanyIsPersonal(t *testing.T) 
 	}
 }
 
-func TestWorkspaceType_CompanyDomainTenantIsAnOrganization(t *testing.T) {
+func TestWorkspaceType_CompanyAccountsGetAPersonalWorkspaceToo(t *testing.T) {
 	w := newFakeWorld()
-	res, err := w.service(t).SignInWithGoogle(context.Background(), googleIdentity("sub-1", "ceo@newco.io", "newco.io"))
+	acme := w.addTenant("Acme", "acme.com")
+	res, err := w.service(t).SignInWithGoogle(context.Background(), googleIdentity("sub-1", "ceo@acme.com", "acme.com"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := w.workspaceType(res.DefaultTenantID); got != domain.WorkspaceOrganization {
-		t.Errorf("type = %q, want organization", got)
+	tenants, _ := w.ListTenantsByUser(context.Background(), res.UserID)
+	if len(tenants) != 2 {
+		t.Fatalf("tenants = %+v, want the domain organization and a personal workspace", tenants)
+	}
+	for _, tm := range tenants {
+		if tm.TenantID != acme && w.workspaceType(tm.TenantID) != domain.WorkspacePersonal {
+			t.Errorf("own workspace type = %q, want personal", w.workspaceType(tm.TenantID))
+		}
 	}
 }
 
-func TestWorkspaceType_CreatedOnPurposeIsAnOrganization(t *testing.T) {
+// "Tạo workspace" makes either kind, as the person chooses; one person may
+// have several personal workspaces.
+func TestWorkspaceType_CreatedOnPurposeHasTheChosenType(t *testing.T) {
 	w := newFakeWorld()
 	svc := w.service(t)
 	u := verifiedUser(t, w, "maker@example.test")
-	ws, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ Đối soát")
-	if err != nil {
-		t.Fatal(err)
+	for _, typ := range []string{domain.WorkspaceOrganization, domain.WorkspacePersonal, domain.WorkspacePersonal} {
+		ws, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ Đối soát", typ)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ws.Type != typ || w.workspaceType(ws.ID) != typ {
+			t.Errorf("returned %q, stored %q; want %q", ws.Type, w.workspaceType(ws.ID), typ)
+		}
 	}
-	if ws.Type != domain.WorkspaceOrganization || w.workspaceType(ws.ID) != domain.WorkspaceOrganization {
-		t.Errorf("returned %q, stored %q; want organization", ws.Type, w.workspaceType(ws.ID))
+}
+
+func TestWorkspaceType_CreatingRefusesAnUnknownType(t *testing.T) {
+	w := newFakeWorld()
+	svc := w.service(t)
+	u := verifiedUser(t, w, "maker@example.test")
+	before := w.workspaceCount()
+	for _, typ := range []string{"", "team"} {
+		if _, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ", typ); !errors.Is(err, domain.ErrInvalidInput) {
+			t.Errorf("type %q: err = %v, want invalid input", typ, err)
+		}
+	}
+	if w.workspaceCount() != before {
+		t.Error("nothing is created for a type nobody stated")
 	}
 }
 

@@ -86,8 +86,19 @@ func TestSignInWithGoogle_HostedDomainMatchesTenant_JoinsAsMember(t *testing.T) 
 	if res.DefaultTenantID != acme {
 		t.Errorf("default tenant = %q, want the domain tenant %q", res.DefaultTenantID, acme)
 	}
-	if w.workspaceCount() != before {
-		t.Errorf("joining an existing tenant must not create a workspace")
+	// Every new account has a workspace of its own, a company one included.
+	if w.workspaceCount() != before+1 {
+		t.Errorf("workspaces = %d, want the domain tenant plus one personal workspace", w.workspaceCount())
+	}
+	tenants, _ := w.ListTenantsByUser(context.Background(), res.UserID)
+	var personal int
+	for _, tm := range tenants {
+		if tm.TenantID != acme && tm.Role == "owner" && w.workspaceType(tm.TenantID) == domain.WorkspacePersonal {
+			personal++
+		}
+	}
+	if personal != 1 {
+		t.Errorf("tenants = %+v, want one personal workspace owned by the user besides the domain tenant", tenants)
 	}
 	if res.Token == "" || res.SessionID == "" {
 		t.Error("sign-in must mint an access token bound to a session")
@@ -109,6 +120,9 @@ func TestSignInWithGoogle_HostedDomainMatchIsCaseInsensitive(t *testing.T) {
 }
 
 func TestSignInWithGoogle_HostedDomainNew_CreatesTenantAsOwner(t *testing.T) {
+	// Signing in never creates an organization: a company account whose domain
+	// no organization owns gets its personal workspace, like anyone else, and an
+	// organization is made with "Tạo workspace".
 	w := newFakeWorld()
 	svc := w.service(t)
 
@@ -116,29 +130,27 @@ func TestSignInWithGoogle_HostedDomainNew_CreatesTenantAsOwner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("sign in: %v", err)
 	}
-
-	tenant, _ := w.FindTenantByDomain(context.Background(), "newco.io")
-	if tenant == nil {
-		t.Fatal("a new tenant must be created and claim the hosted domain")
+	if tenant, _ := w.FindTenantByDomain(context.Background(), "newco.io"); tenant != nil {
+		t.Fatalf("sign-in claimed the domain for %q; it must not create an organization", tenant.ID)
 	}
-	m := w.membership(tenant.ID, res.UserID)
-	if m == nil || m.Role != "owner" {
-		t.Fatalf("membership = %+v, want owner", m)
+	tenants, _ := w.ListTenantsByUser(context.Background(), res.UserID)
+	if len(tenants) != 1 || tenants[0].Role != "owner" || w.workspaceType(tenants[0].TenantID) != domain.WorkspacePersonal {
+		t.Fatalf("tenants = %+v, want exactly one personal workspace owned by the user", tenants)
 	}
-	if res.DefaultTenantID != tenant.ID {
-		t.Errorf("default tenant = %q, want %q", res.DefaultTenantID, tenant.ID)
+	if res.DefaultTenantID != tenants[0].TenantID {
+		t.Errorf("default tenant = %q, want the personal workspace", res.DefaultTenantID)
 	}
-	if len(w.channels) != 1 || w.channels[0] != tenant.ID {
-		t.Errorf("#general must be provisioned in the new tenant like signup does, got %v", w.channels)
+	if len(w.channels) != 1 || w.channels[0] != tenants[0].TenantID {
+		t.Errorf("#general must be provisioned in the personal workspace, got %v", w.channels)
 	}
 
-	// A colleague signing in next joins the same tenant instead of creating another.
+	// A colleague signing in next gets their own workspace, not the first one's.
 	res2, err := svc.SignInWithGoogle(context.Background(), googleIdentity("sub-2", "dev@newco.io", "newco.io"))
 	if err != nil {
 		t.Fatalf("second sign in: %v", err)
 	}
-	if m := w.membership(tenant.ID, res2.UserID); m == nil || m.Role != "member" {
-		t.Errorf("colleague membership = %+v, want member of the same tenant", m)
+	if w.membership(tenants[0].TenantID, res2.UserID) != nil {
+		t.Error("a colleague must not be placed in someone's personal workspace")
 	}
 }
 

@@ -27,11 +27,17 @@ Chat** (người dùng: Chat quan trọng nhất).
   trang chính; API asset/approval trả 403; chuyển sang tổ chức thì các mục xuất hiện và dùng được ngay.
 
 ## Quyết định (người dùng chốt)
-1. Cá nhân = workspace hệ thống tự tạo khi đăng nhập lần đầu; "Tạo workspace" và Google theo tên miền = tổ chức.
+1. Mỗi tài khoản mới có một workspace cá nhân riêng, kể cả email công ty (Google `hd`, vd vnpay.vn). Đăng
+   nhập không tự tạo tổ chức; nếu đã có tổ chức giữ tên miền đó thì tự vào thêm làm thành viên. Muốn có
+   workspace khác thì dùng "Tạo workspace", **chọn loại Cá nhân hoặc Tổ chức** (một người có thể có nhiều
+   workspace cá nhân). (Chốt lại 2026-10-11, thay cho "Google theo tên miền = tổ chức".)
    Migration workspace cũ: tên dạng "<tên>'s Workspace" + 1 thành viên → cá nhân, còn lại → tổ chức.
 2. Chủ workspace chuyển cá nhân → tổ chức trong Cài đặt (một chiều).
 3. Mobile: ở workspace cá nhân, tab Phê duyệt thay bằng **Danh bạ**.
 4. Duyệt tài liệu: ẩn ở workspace cá nhân.
+5. (2026-10-11, câu hỏi thiết kế) Chỉ Chủ sở hữu được chuyển sang tổ chức; hộp xác nhận chỉ đổi loại (không ô
+   đổi tên) và nói rõ tài sản/yêu cầu phê duyệt đã ẩn sẽ hiện lại; nhãn dưới tên là "Workspace cá nhân".
+   Màn "Tạo workspace" cần thêm lựa chọn loại — cần bổ sung vào mockup trước phase 04.
 
 ## Phases
 

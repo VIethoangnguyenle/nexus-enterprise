@@ -82,20 +82,27 @@ func (h *Handler) ListMyWorkspaces(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"workspaces": out})
 }
 
-// CreateMyWorkspace handles POST /api/me/workspaces. The name is the only
-// input; the caller becomes the owner and the workspace is provisioned in full.
+// CreateMyWorkspace handles POST /api/me/workspaces. Body: name and type
+// ("personal" or "organization"); the caller becomes the owner and the
+// workspace is provisioned in full. A client that sends no type (one built
+// before the choice existed) creates an organization, as it always did.
 func (h *Handler) CreateMyWorkspace(c echo.Context) error {
 	claims, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	var body struct {
-		Name string `json:"name"`
+		Name string  `json:"name"`
+		Type *string `json:"type"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return badBody()
 	}
-	ws, err := h.svc.CreateMyWorkspace(c.Request().Context(), claims.UserID, claims.NGACNodeID, body.Name)
+	wsType := domain.WorkspaceOrganization
+	if body.Type != nil {
+		wsType = *body.Type
+	}
+	ws, err := h.svc.CreateMyWorkspace(c.Request().Context(), claims.UserID, claims.NGACNodeID, body.Name, wsType)
 	if err != nil {
 		return fail(c, err)
 	}

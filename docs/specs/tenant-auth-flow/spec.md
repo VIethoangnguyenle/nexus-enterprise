@@ -110,11 +110,12 @@ The system SHALL place a Google user in a company tenant only on the basis of th
 #### Scenario: Hosted domain matches a tenant
 - **WHEN** a Google user with `hd = 'acme.com'` signs in and a tenant has `domain = 'acme.com'`
 - **THEN** the user is added to that tenant as a `member` (an existing membership is left unchanged, including a disabled one) and the session is scoped to it
+- **AND** a new user also gets a personal workspace of their own as `owner`: every new account has one, a company account included
 
 #### Scenario: Hosted domain has no tenant yet
 - **WHEN** a Google user with `hd = 'newco.io'` signs in and no tenant has that domain
-- **THEN** a new tenant named after the domain is created with the user as `owner`, provisioned like workspace creation (tenant NGAC UAs, `#general` channel), and claims `domain = 'newco.io'` with type `organization`
-- **AND** later users with the same `hd` join it as `member`
+- **THEN** no tenant is created and no domain is claimed: signing in never creates an organization (an organization is made with "Tạo workspace")
+- **AND** a new user gets a personal workspace as `owner`; a colleague with the same `hd` gets their own, and joins no one else's
 
 #### Scenario: Consumer Google account
 - **WHEN** a Google user without `hd` (e.g. `someone@gmail.com`) signs in

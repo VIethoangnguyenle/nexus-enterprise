@@ -39,9 +39,6 @@ type AuthStore interface {
 	FindUserByIdentity(ctx context.Context, provider, subject string) (*store.User, error)
 	GetIdentitySubject(ctx context.Context, provider, userID string) (string, error)
 	LinkIdentity(ctx context.Context, provider, subject, userID, email string) error
-	// ClaimTenantDomain sets a tenant's domain if neither it nor any other
-	// tenant holds that domain yet, and reports whether it did.
-	ClaimTenantDomain(ctx context.Context, tenantID, domain string) (bool, error)
 	// ClearPassword removes a user's password (password sign-in stops working).
 	ClearPassword(ctx context.Context, userID string) error
 }
