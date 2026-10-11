@@ -38,11 +38,16 @@ async function renderAssets(url = '/assets') {
 }
 
 beforeEach(() => {
+  // The fixtures are dated 10 October 2026; "today" is pinned there so a time
+  // reads as 08:52 rather than "Hôm qua" on any later run.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(new Date(2026, 9, 10, 12, 0))
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   resetFixtures()
   api.mockImplementation(assetFixtureApi)
 })
 afterEach(() => {
+  vi.useRealTimers()
   vi.restoreAllMocks()
   resetClient()
   useToastStore.getState().clear()
