@@ -59,6 +59,16 @@ func TestNotificationLevel_DecidesWhatCounts(t *testing.T) {
 	level, err = svc.GetNotificationLevel(ctx, k.chID, k.f.userID, userNode)
 	require.NoError(t, err)
 	assert.Equal(t, domain.NotifyOff, level)
+
+	// A muted group still tells you when someone mentions you: the row's "@".
+	mention, err := svc.SendMessage(ctx, domain.SendMessageInput{
+		ChannelID: k.chID, SenderID: k.replier, SenderNodeID: replierNode, Content: "@ chị xem giúp", Mentions: []string{k.f.userID},
+	})
+	require.NoError(t, err)
+	t.Cleanup(func() { k.f.pool.Exec(ctx, `DELETE FROM messages WHERE id = $1`, mention.Id) })
+	muted := unreadOf(t, k)
+	assert.Zero(t, muted.UnreadCount)
+	assert.EqualValues(t, 1, muted.MentionCount)
 }
 
 func TestNotificationLevel_Deny(t *testing.T) {

@@ -36,7 +36,8 @@ default, also when no row exists) — the main messages and the replies in threa
 counts. `GET /api/channels/{chId}/notification-level` answers `{"level"}`; `PUT` with `{"level"}` sets it.
 Both need `read` on the channel's content OA (403 otherwise); an unknown level is 400. `GET
 /api/channels/unread` reports each channel's `notification_level` with its counts, and under `off` both
-`unread_count` and `thread_unread_count` are 0. The level is the person's own and never widens what they may
+`unread_count` and `thread_unread_count` are 0. Every channel also reports `mention_count`, the unread main messages
+that mention the caller, at every level — a muted group still shows its "@". The level is the person's own and never widens what they may
 read. A direct message is only on (`main`) or `off`: `all` on a DM is 400. Web push follows the level as
 `docs/specs/web-push/spec.md` describes.
 

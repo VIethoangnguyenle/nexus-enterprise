@@ -58,6 +58,8 @@ type ChannelUnread struct {
 	ThreadUnread int32
 	// Level is the user's notification level for the channel ("main" unless set).
 	Level string
+	// MentionCount counts unread main messages that mention the user, at every level.
+	MentionCount int32
 }
 
 // --- Reactions Store ---
@@ -291,7 +293,8 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 		        CASE WHEN l.level = 'off' THEN 0
 		             WHEN l.level = 'all' THEN COALESCE(MAX(atu.n), 0)
 		             ELSE COALESCE(MAX(tu.n), 0) END AS thread_unread,
-		        COALESCE(l.level, 'main') AS level
+		        COALESCE(l.level, 'main') AS level,
+		        COUNT(m.id) FILTER (WHERE m.mentions @> ARRAY[$1]::text[] AND m.sender_id <> $1) AS mention_count
 		 FROM (SELECT DISTINCT unnest($2::text[]) AS channel_id) cm
 		 LEFT JOIN read_receipts rr ON rr.user_id = $1 AND rr.channel_id = cm.channel_id
 		 LEFT JOIN messages m ON m.channel_id = cm.channel_id
@@ -310,7 +313,7 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 	var results []ChannelUnread
 	for rows.Next() {
 		var u ChannelUnread
-		if err := rows.Scan(&u.ChannelID, &u.UnreadCount, &u.LastReadMsgID, &u.ThreadUnread, &u.Level); err != nil {
+		if err := rows.Scan(&u.ChannelID, &u.UnreadCount, &u.LastReadMsgID, &u.ThreadUnread, &u.Level, &u.MentionCount); err != nil {
 			return nil, err
 		}
 		results = append(results, u)

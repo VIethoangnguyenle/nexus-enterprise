@@ -367,6 +367,7 @@ message ChannelUnread {
   string last_read_message_id = 3;
   int32 thread_unread_count = 4;    // Unread replies in the threads of this channel the caller follows
   string notification_level = 5;    // "all" | "main" | "off": the caller's choice for this conversation
+  int32 mention_count = 6;          // Unread messages that mention the caller (counted at every level)
 }
 
 message ChannelUnreadList {
