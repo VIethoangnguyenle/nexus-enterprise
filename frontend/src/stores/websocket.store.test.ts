@@ -73,6 +73,47 @@ const authOk = () => deliver({ oneofKind: 'authResponse', authResponse: { ok: tr
 const ackWorkspace = (seq = '0', workspaceId = 'ws-1') =>
   deliver({ oneofKind: 'workspaceSubscribed', workspaceSubscribed: { workspaceId, seq, denied: false } })
 
+describe('thread events', () => {
+  it("a thread state reaches the root's cached summary and the unread counts", () => {
+    queryClient.setQueryData(keys.messaging.messages('c1'), {
+      messages: [{ id: 'root', channel_id: 'c1', sender_id: 'u1', content: 'x', thread_unread_count: 0 }],
+      has_more: false,
+    })
+    seed(keys.messaging.unreadCounts())
+    deliver({
+      oneofKind: 'threadState',
+      threadState: { rootMessageId: 'root', channelId: 'c1', following: true, unreadCount: 2 },
+    })
+    const root = queryClient.getQueryData<{ messages: { thread_unread_count?: number }[] }>(
+      keys.messaging.messages('c1'),
+    )!.messages[0]!
+    expect(root.thread_unread_count).toBe(2)
+    expect(invalidated(keys.messaging.unreadCounts())).toBe(true)
+  })
+
+  it('a thread reply carries the server summary onto the root', () => {
+    queryClient.setQueryData(keys.messaging.messages('c1'), {
+      messages: [{ id: 'root', channel_id: 'c1', sender_id: 'u1', content: 'x', reply_count: 1 }],
+      has_more: false,
+    })
+    deliver({
+      oneofKind: 'threadReply',
+      threadReply: {
+        parentMessageId: 'root', replyCount: 7, replyParticipantIds: ['u2'],
+        message: {
+          id: 'r', channelId: 'c1', senderId: 'u2', senderName: 'B', content: 'hi', messageType: 'user',
+          parentMessageId: 'root', replyCount: 0, contentFormat: '', mentions: [], linkedEntityType: '', linkedEntityId: '',
+        },
+      },
+    })
+    const root = queryClient.getQueryData<{ messages: { reply_count?: number }[] }>(
+      keys.messaging.messages('c1'),
+    )!.messages[0]!
+    expect(root.reply_count).toBe(7)
+    expect(useWebSocketStore.getState().lastMessages['c1']?.content).toBe('hi')
+  })
+})
+
 describe('websocket events invalidate the keys the screens actually cache under', () => {
   it('reconnect resync refreshes permissions and the workspace root listing', () => {
     seed(keys.permissions.object('tenant-1', 'node-1'))

@@ -61,6 +61,7 @@ message ServerEnvelope {
     PresenceEvent      presence_event = 17;
     DomainEvent        domain_event   = 18;
     WorkspaceSubscribed workspace_subscribed = 19;
+    ThreadStateEvent   thread_state   = 20;
   }
   // asset_updated, drive_object and drive_perm were replaced by domain_event.
   reserved 7, 13, 14;
@@ -116,6 +117,22 @@ message UnreadCountEvent {
 message ThreadReplyEvent {
   ChatMessage message          = 1;
   string      parent_message_id = 2;
+  // The thread's summary after this reply, the same for every subscriber.
+  int32                     reply_count           = 3;
+  google.protobuf.Timestamp last_reply_at         = 4;
+  repeated string           reply_participant_ids = 5; // users.id of the 3 most recent distinct repliers, newest first
+}
+
+// ThreadStateEvent is one user's own state of one thread, sent only to that
+// user's sessions: after a reply in a thread they follow, and when they
+// follow, unfollow or read it on any device.
+message ThreadStateEvent {
+  string root_message_id = 1;
+  string channel_id      = 2;
+  bool   following       = 3;
+  int32  unread_count    = 4;
+  // When the server read this state; a client keeps the newest per thread.
+  google.protobuf.Timestamp as_of = 5;
 }
 
 // ═══════════════════════════════════════════════

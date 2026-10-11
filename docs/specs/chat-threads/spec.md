@@ -62,6 +62,11 @@ is not a message is 404; a reply's id, or an unknown filter or a malformed `befo
 - **WHEN** a user with no read on the channel follows one of its threads
 - **THEN** the answer is 403 and no follow is recorded
 
+### Requirement: Thread changes are live
+A reply SHALL update every open view of the channel with the thread's new summary, and each follower's own unread
+count, without a refetch; following, unfollowing and reading a thread SHALL update the caller's other sessions. The
+delivery rules are in `realtime-event-delivery`.
+
 ### Requirement: The thread list of a channel
 `GET /api/channels/{id}/threads?filter=all|following|unread&before=&limit=` SHALL return the root messages of the
 channel that have at least one reply, most recently active first, each with the caller's thread summary. `following`

@@ -103,6 +103,75 @@ func (s *Store) MarkThreadRead(ctx context.Context, userID, rootID string) error
 	return nil
 }
 
+// ThreadFollower is one user who follows a thread, with the NGAC node their
+// sessions authenticate as and their own unread count.
+type ThreadFollower struct {
+	UserID string
+	NodeID string
+	Unread int32
+}
+
+// ThreadFollowers lists everyone who follows a thread — with a follow row or
+// implicitly as its starter or a user its root mentions — in one query.
+func (s *Store) ThreadFollowers(ctx context.Context, rootID string) ([]ThreadFollower, error) {
+	rows, err := s.db.Query(ctx,
+		`WITH candidates AS (
+		   SELECT tf.user_id FROM thread_follows tf WHERE tf.root_message_id = $1
+		   UNION
+		   SELECT m.sender_id FROM messages m WHERE m.id = $1
+		   UNION
+		   SELECT unnest(COALESCE(m.mentions, '{}')) FROM messages m WHERE m.id = $1
+		 )
+		 SELECT u.id, COALESCE(u.ngac_node, ''),
+		        (SELECT COUNT(*)::int FROM messages r
+		         WHERE r.parent_message_id = m.id AND r.sender_id <> u.id
+		           AND r.created_at > COALESCE(tf.last_read_at, m.created_at))
+		 FROM candidates c
+		 JOIN users u ON u.id = c.user_id
+		 JOIN messages m ON m.id = $1
+		 LEFT JOIN thread_follows tf ON tf.root_message_id = m.id AND tf.user_id = u.id
+		 WHERE COALESCE(tf.following, m.sender_id = u.id OR u.id = ANY(COALESCE(m.mentions, '{}')))`,
+		rootID)
+	if err != nil {
+		return nil, fmt.Errorf("thread followers: %w", err)
+	}
+	defer rows.Close()
+	var out []ThreadFollower
+	for rows.Next() {
+		var f ThreadFollower
+		if err := rows.Scan(&f.UserID, &f.NodeID, &f.Unread); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+// ThreadSummaryRow is what every viewer of a channel sees of one thread.
+type ThreadSummaryRow struct {
+	ChannelID    string
+	ReplyCount   int32
+	LastReplyAt  *time.Time
+	Participants []string
+}
+
+// ThreadSummary returns the channel-wide summary of a thread; nil when the
+// root message does not exist.
+func (s *Store) ThreadSummary(ctx context.Context, rootID string) (*ThreadSummaryRow, error) {
+	var r ThreadSummaryRow
+	err := s.db.QueryRow(ctx,
+		`SELECT m.channel_id, m.reply_count, m.last_reply_at, `+threadParticipantsExpr+`
+		 FROM messages m WHERE m.id = $1`, rootID).
+		Scan(&r.ChannelID, &r.ReplyCount, &r.LastReplyAt, &r.Participants)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("thread summary: %w", err)
+	}
+	return &r, nil
+}
+
 // ListThreads returns the threads of a channel — root messages with at least
 // one reply — most recently active first, each with the caller's thread state.
 // before pages by last reply time, and beforeID — the root id of the last

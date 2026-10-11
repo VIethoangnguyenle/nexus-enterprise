@@ -17,7 +17,8 @@ import (
 // Broadcaster pushes real-time events to WebSocket clients.
 type Broadcaster interface {
 	BroadcastToChannel(channelID string, msg *pb.Message)
-	BroadcastThreadReply(channelID string, msg *pb.Message)
+	BroadcastThreadReply(channelID string, ev *pb.ThreadReplyEvent)
+	SendThreadStates(tenantID string, states map[string]*pb.ThreadStateEvent)
 }
 
 // Handler serves messaging REST endpoints.
@@ -206,11 +207,7 @@ func (h *Handler) SendMessage(c echo.Context) error {
 		return httputil.MapDomainError(err)
 	}
 
-	// Broadcast via WebSocket hub (fire-and-forget).
-	if h.hub != nil {
-		h.hub.BroadcastToChannel(c.Param("chId"), msg)
-	}
-
+	h.announceMessage(c.Request().Context(), claims.TenantID, msg)
 	return c.JSON(http.StatusCreated, msg)
 }
 

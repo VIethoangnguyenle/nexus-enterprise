@@ -31,6 +31,14 @@ export interface Message {
   content_format?: string
   mentions?: string[]
   reply_count?: number
+  /** Thread summary of a root message: unset until the first reply. Same shape as created_at. */
+  last_reply_at?: unknown
+  /** users.id of the three most recent distinct repliers, newest first. */
+  reply_participant_ids?: string[]
+  /** The signed-in user follows this message's thread. */
+  following?: boolean
+  /** Replies in this thread the signed-in user has not read; 0 when not following. */
+  thread_unread_count?: number
   /** Set on thread replies; empty on top-level messages (topics). */
   parent_message_id?: string
   /** Client-only: the optimistic id this message replaced, kept as a stable React key. */

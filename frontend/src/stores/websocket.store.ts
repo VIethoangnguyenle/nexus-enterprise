@@ -14,6 +14,7 @@ import type { Message } from '../api/messaging'
 import {
   applyPin, applyReaction, applyTaskUpdate, convertChatMsgToMessage, previewText, timestampToIso,
 } from '../lib/chat-cache'
+import { applyThreadReplySummary, applyThreadState } from '../lib/thread-cache'
 import {
   createBatcher,
   emptySeq,
@@ -414,10 +415,29 @@ function handleServerMessage(
     case 'threadReply': {
       const reply = envelope.payload.threadReply
       if (reply.message) {
-        injectReply({ ...reply.message, parentMessageId: reply.message.parentMessageId || reply.parentMessageId }, set)
+        const m = reply.message
+        // A reply still moves its conversation: preview and order, as before replies had their own frame.
+        set((s) => ({
+          lastMessages: {
+            ...s.lastMessages,
+            [m.channelId]: {
+              content: previewText(m.content),
+              timestamp: timestampToIso(m.createdAt),
+              senderName: m.senderName || '',
+              senderId: m.senderId,
+            },
+          },
+        }))
+        injectReply({ ...m, parentMessageId: m.parentMessageId || reply.parentMessageId }, set)
       }
+      // The server's summary replaces the local reply-count guess.
+      applyThreadReplySummary(reply)
       break
     }
+
+    case 'threadState':
+      applyThreadState(envelope.payload.threadState)
+      break
 
     case 'reactionEvent':
       applyReaction(envelope.payload.reactionEvent)

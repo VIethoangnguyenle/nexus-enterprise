@@ -3,11 +3,13 @@ package domain_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"ngac-platform/ngac"
+	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/domain"
 	"ngac-platform/testutil"
 )
@@ -26,7 +28,10 @@ func newThreadTalk(t *testing.T) *threadTalk {
 	t.Helper()
 	k := newTalk(t, "threads")
 	ctx := context.Background()
-	replier, _ := testutil.CreateUser(t, k.f.pool)
+	replier, replierUserNode := testutil.CreateUser(t, k.f.pool)
+	// Live state goes to a follower's own node (users.ngac_node), which must read the channel.
+	k.f.read.allow[grant{"u-" + k.f.userID, k.oaID, ngac.OpRead}] = true
+	k.f.read.allow[grant{replierUserNode, k.oaID, ngac.OpRead}] = true
 	k.f.read.allow[grant{replierNode, k.oaID, ngac.OpRead}] = true
 	k.f.read.allow[grant{replierNode, k.oaID, ngac.OpWrite}] = true
 	reply, err := k.f.svc.SendMessage(ctx, domain.SendMessageInput{
@@ -67,21 +72,139 @@ func TestFollowUnfollowAndReadThread_AllowedWithRead(t *testing.T) {
 	k.f.read.allow[grant{"ngac-reader", k.oaID, ngac.OpRead}] = true
 	reader, _ := testutil.CreateUser(t, k.f.pool)
 
-	require.NoError(t, svc.FollowThread(ctx, k.rootID, reader, "ngac-reader"))
+	require.NoError(t, errOf(svc.FollowThread(ctx, k.rootID, reader, "ngac-reader")))
 	threads, err := svc.ListThreads(ctx, k.chID, reader, "ngac-reader", "following", "", "", 20)
 	require.NoError(t, err)
 	require.Len(t, threads.Messages, 1)
 	assert.Equal(t, k.rootID, threads.Messages[0].Id)
 
-	require.NoError(t, svc.MarkThreadRead(ctx, k.rootID, k.f.userID, userNode))
+	require.NoError(t, errOf(svc.MarkThreadRead(ctx, k.rootID, k.f.userID, userNode)))
 	threads, err = svc.ListThreads(ctx, k.chID, k.f.userID, userNode, "unread", "", "", 20)
 	require.NoError(t, err)
 	assert.Empty(t, threads.Messages)
 
-	require.NoError(t, svc.UnfollowThread(ctx, k.rootID, k.f.userID, userNode))
+	require.NoError(t, errOf(svc.UnfollowThread(ctx, k.rootID, k.f.userID, userNode)))
 	threads, err = svc.ListThreads(ctx, k.chID, k.f.userID, userNode, "following", "", "", 20)
 	require.NoError(t, err)
 	assert.Empty(t, threads.Messages)
+}
+
+// A reply produces the channel-wide summary and one state per follower, keyed
+// by the follower's NGAC node; the follow actions return the caller's new state.
+func TestThreadFanout_SummaryAndFollowerStates(t *testing.T) {
+	k := newThreadTalk(t)
+	ctx := context.Background()
+
+	thread, err := k.f.svc.GetThread(ctx, k.rootID, k.f.userID, userNode)
+	require.NoError(t, err)
+	fan, err := k.f.svc.ThreadReplyFanout(ctx, thread.Messages[1], "")
+	require.NoError(t, err)
+	require.NotNil(t, fan)
+	assert.Equal(t, k.rootID, fan.Reply.ParentMessageId)
+	assert.EqualValues(t, 1, fan.Reply.ReplyCount)
+	assert.Equal(t, []string{k.replier}, fan.Reply.ReplyParticipantIds)
+	require.NotNil(t, fan.Reply.LastReplyAt)
+	starter := fan.States["u-"+k.f.userID]
+	require.NotNil(t, starter, "the starter follows")
+	assert.True(t, starter.Following)
+	assert.EqualValues(t, 1, starter.UnreadCount)
+	assert.Equal(t, k.chID, starter.ChannelId)
+
+	// A root message has no thread to fan out.
+	none, err := k.f.svc.ThreadReplyFanout(ctx, thread.Messages[0], "")
+	require.NoError(t, err)
+	assert.Nil(t, none)
+
+	st, err := k.f.svc.MarkThreadRead(ctx, k.rootID, k.f.userID, userNode)
+	require.NoError(t, err)
+	assert.Equal(t, k.rootID, st.RootMessageId)
+	assert.True(t, st.Following)
+	assert.Zero(t, st.UnreadCount)
+	st, err = k.f.svc.UnfollowThread(ctx, k.rootID, k.f.userID, userNode)
+	require.NoError(t, err)
+	assert.False(t, st.Following)
+	st, err = k.f.svc.FollowThread(ctx, k.rootID, k.f.userID, userNode)
+	require.NoError(t, err)
+	assert.True(t, st.Following)
+}
+
+// A follower who cannot read the channel — mentioned without being a member,
+// or removed after following — never receives the thread's state.
+func TestThreadFanout_SkipsFollowersWhoCannotReadTheChannel(t *testing.T) {
+	k := newThreadTalk(t)
+	ctx := context.Background()
+	outsiderID, outsiderNode := testutil.CreateUser(t, k.f.pool)
+	// Mentioned in a reply: follows the thread, holds no read on the channel.
+	reply, err := k.f.svc.SendMessage(ctx, domain.SendMessageInput{
+		ChannelID: k.chID, SenderID: k.replier, SenderNodeID: replierNode, Content: "cc", ParentMessageID: k.rootID,
+		Mentions: []string{outsiderID},
+	})
+	require.NoError(t, err)
+
+	fan, err := k.f.svc.ThreadReplyFanout(ctx, reply, "")
+	require.NoError(t, err)
+	assert.NotContains(t, fan.States, outsiderNode, "no read on the channel, no thread state")
+	assert.Contains(t, fan.States, "u-"+k.f.userID, "the starter, who reads the channel, still gets it")
+	assert.Contains(t, k.f.read.asked(), grant{outsiderNode, k.oaID, ngac.OpRead})
+	assert.Equal(t, k.f.wsID, fan.TenantID, "a workspace channel's events stay in its workspace")
+
+	// The policy service unreachable: nobody is told anything private.
+	k.f.read.err = assert.AnError
+	fan, err = k.f.svc.ThreadReplyFanout(ctx, reply, "")
+	require.NoError(t, err)
+	assert.Empty(t, fan.States)
+	require.NotNil(t, fan.Reply, "the summary still reaches the channel's subscribers")
+}
+
+type recordingAnnouncer struct {
+	replies chan *pb.ThreadReplyEvent
+	states  chan map[string]*pb.ThreadStateEvent
+	tenants chan string
+}
+
+func newRecordingAnnouncer() *recordingAnnouncer {
+	return &recordingAnnouncer{
+		replies: make(chan *pb.ThreadReplyEvent, 4),
+		states:  make(chan map[string]*pb.ThreadStateEvent, 4),
+		tenants: make(chan string, 4),
+	}
+}
+
+func (r *recordingAnnouncer) BroadcastThreadReply(_ string, ev *pb.ThreadReplyEvent) { r.replies <- ev }
+func (r *recordingAnnouncer) SendThreadStates(tenantID string, states map[string]*pb.ThreadStateEvent) {
+	r.tenants <- tenantID
+	r.states <- states
+}
+
+// The announcement outlives the request that caused it, and a reply goes out
+// even when its thread summary cannot be built.
+func TestAnnounceReply_SurvivesTheRequestAndFallsBackToTheBareReply(t *testing.T) {
+	k := newThreadTalk(t)
+	thread, err := k.f.svc.GetThread(context.Background(), k.rootID, k.f.userID, userNode)
+	require.NoError(t, err)
+
+	gone, cancel := context.WithCancel(context.Background())
+	cancel() // the client hung up right after posting
+	to := newRecordingAnnouncer()
+	k.f.svc.AnnounceReply(gone, thread.Messages[1], "", to)
+	select {
+	case ev := <-to.replies:
+		assert.EqualValues(t, 1, ev.ReplyCount, "the full summary, despite the cancelled request")
+		assert.Equal(t, k.f.wsID, <-to.tenants)
+		assert.Contains(t, <-to.states, "u-"+k.f.userID)
+	case <-time.After(5 * time.Second):
+		t.Fatal("reply never announced")
+	}
+
+	orphan := &pb.Message{Id: "orphan", ChannelId: k.chID, ParentMessageId: "no-such-root"}
+	k.f.svc.AnnounceReply(context.Background(), orphan, "", to)
+	select {
+	case ev := <-to.replies:
+		assert.Equal(t, "orphan", ev.Message.Id, "the bare reply still goes out")
+		assert.Zero(t, ev.ReplyCount)
+	case <-time.After(5 * time.Second):
+		t.Fatal("bare reply never announced")
+	}
 }
 
 func TestThreadEndpoints_DeniedWithoutRead(t *testing.T) {
@@ -90,9 +213,9 @@ func TestThreadEndpoints_DeniedWithoutRead(t *testing.T) {
 	svc := k.f.svc
 	stranger, _ := testutil.CreateUser(t, k.f.pool)
 
-	require.ErrorIs(t, svc.FollowThread(ctx, k.rootID, stranger, outsider), domain.ErrAccessDenied)
-	require.ErrorIs(t, svc.UnfollowThread(ctx, k.rootID, stranger, outsider), domain.ErrAccessDenied)
-	require.ErrorIs(t, svc.MarkThreadRead(ctx, k.rootID, stranger, outsider), domain.ErrAccessDenied)
+	require.ErrorIs(t, errOf(svc.FollowThread(ctx, k.rootID, stranger, outsider)), domain.ErrAccessDenied)
+	require.ErrorIs(t, errOf(svc.UnfollowThread(ctx, k.rootID, stranger, outsider)), domain.ErrAccessDenied)
+	require.ErrorIs(t, errOf(svc.MarkThreadRead(ctx, k.rootID, stranger, outsider)), domain.ErrAccessDenied)
 	_, err := svc.ListThreads(ctx, k.chID, stranger, outsider, "all", "", "", 20)
 	require.ErrorIs(t, err, domain.ErrAccessDenied)
 
@@ -109,11 +232,11 @@ func TestThreadEndpoints_RejectBadInput(t *testing.T) {
 	ctx := context.Background()
 	svc := k.f.svc
 
-	require.ErrorIs(t, svc.FollowThread(ctx, "", k.f.userID, userNode), domain.ErrInvalidInput)
-	require.ErrorIs(t, svc.FollowThread(ctx, "no-such-message", k.f.userID, userNode), domain.ErrNotFound)
-	require.ErrorIs(t, svc.FollowThread(ctx, k.replyID, k.f.userID, userNode), domain.ErrInvalidInput,
+	require.ErrorIs(t, errOf(svc.FollowThread(ctx, "", k.f.userID, userNode)), domain.ErrInvalidInput)
+	require.ErrorIs(t, errOf(svc.FollowThread(ctx, "no-such-message", k.f.userID, userNode)), domain.ErrNotFound)
+	require.ErrorIs(t, errOf(svc.FollowThread(ctx, k.replyID, k.f.userID, userNode)), domain.ErrInvalidInput,
 		"a thread is named by its root message, not by a reply")
-	require.ErrorIs(t, svc.MarkThreadRead(ctx, k.replyID, k.f.userID, userNode), domain.ErrInvalidInput)
+	require.ErrorIs(t, errOf(svc.MarkThreadRead(ctx, k.replyID, k.f.userID, userNode)), domain.ErrInvalidInput)
 	_, err := svc.ListThreads(ctx, k.chID, k.f.userID, userNode, "everything", "", "", 20)
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
 	_, err = svc.ListThreads(ctx, k.chID, k.f.userID, userNode, "all", "yesterday", "", 20)
@@ -193,3 +316,6 @@ func TestGetUnreadCounts_CoversExactlyTheChannelsTheCallerMayRead(t *testing.T) 
 	require.NoError(t, err)
 	assert.Empty(t, counts)
 }
+
+// errOf drops the state a thread action returns, for assertions on its error.
+func errOf(_ *pb.ThreadStateEvent, err error) error { return err }

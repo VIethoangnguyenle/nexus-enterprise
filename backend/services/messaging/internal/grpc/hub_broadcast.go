@@ -237,18 +237,13 @@ func (h *Hub) SendUnreadCount(userID string, count int32) {
 	h.sendToUser(userID, data)
 }
 
-// BroadcastThreadReply sends a thread reply event to channel subscribers.
-func (h *Hub) BroadcastThreadReply(channelID string, msg *pb.Message) {
-	chatMsg := messageToChatMessage(msg)
-	env := &pb.ServerEnvelope{
-		Payload: &pb.ServerEnvelope_ThreadReply{
-			ThreadReply: &pb.ThreadReplyEvent{
-				Message:         chatMsg,
-				ParentMessageId: msg.ParentMessageId,
-			},
-		},
+// BroadcastThreadReply sends a thread reply, with the thread's new summary, to
+// the channel's subscribers.
+func (h *Hub) BroadcastThreadReply(channelID string, ev *pb.ThreadReplyEvent) {
+	if channelID == "" || ev == nil {
+		return
 	}
-	data := marshalEnvelope(env)
+	data := marshalEnvelope(&pb.ServerEnvelope{Payload: &pb.ServerEnvelope_ThreadReply{ThreadReply: ev}})
 	if data == nil {
 		return
 	}
@@ -261,6 +256,28 @@ func (h *Hub) BroadcastThreadReply(channelID string, msg *pb.Message) {
 		return
 	}
 	h.broadcastLocal(channelID, data)
+}
+
+// SendThreadStates delivers each user's own thread state to that user's
+// sessions in the tenant, keyed by NGAC node, and to nobody else. It rides the
+// user-addressed domain route, so it reaches the user on every hub instance
+// and never a session of the same node id in another tenant. Without a tenant
+// there is no boundary to stay inside, and nothing is sent.
+func (h *Hub) SendThreadStates(tenantID string, states map[string]*pb.ThreadStateEvent) {
+	if tenantID == "" || strings.Contains(tenantID, ":") {
+		return
+	}
+	for node, st := range states {
+		if node == "" || st == nil || strings.Contains(node, ":") {
+			continue
+		}
+		data := marshalEnvelope(&pb.ServerEnvelope{Payload: &pb.ServerEnvelope_ThreadState{ThreadState: st}})
+		if data == nil {
+			continue
+		}
+		node := node
+		h.route(userEventPrefix+tenantID+":"+node, data, func() { h.deliverToUserNode(tenantID, node, data) })
+	}
 }
 
 // BroadcastApprovalEvent sends an approval status change to the users the

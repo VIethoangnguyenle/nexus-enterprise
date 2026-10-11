@@ -66,6 +66,40 @@ func (w *threadWorld) state(t *testing.T, user, root string) store.ThreadState {
 	return states[root]
 }
 
+// After a reply, everyone who follows the thread — with or without a follow
+// row — is listed with their NGAC node and their own unread count; whoever
+// unfollowed, or never followed, is not.
+func TestThreadFollowers_ListsEveryFollowerWithTheirUnread(t *testing.T) {
+	w := newThreadWorld(t, 5)
+	starter, mentioned, replier, quitter, stranger := w.users[0], w.users[1], w.users[2], w.users[3], w.users[4]
+	ctx := context.Background()
+	root := w.post(t, starter, "", mentioned)
+	w.post(t, quitter, root.ID)
+	require.NoError(t, w.st.SetThreadFollow(ctx, quitter, root.ID, false))
+	w.post(t, replier, root.ID)
+
+	followers, err := w.st.ThreadFollowers(ctx, root.ID)
+	require.NoError(t, err)
+	got := map[string]store.ThreadFollower{}
+	for _, f := range followers {
+		got[f.UserID] = f
+	}
+	assert.Len(t, got, 3)
+	assert.Equal(t, "u-"+starter, got[starter].NodeID)
+	assert.EqualValues(t, 2, got[starter].Unread)
+	assert.EqualValues(t, 2, got[mentioned].Unread)
+	assert.EqualValues(t, 0, got[replier].Unread, "the replier has read up to their own reply")
+	assert.NotContains(t, got, quitter)
+	assert.NotContains(t, got, stranger)
+
+	summary, err := w.st.ThreadSummary(ctx, root.ID)
+	require.NoError(t, err)
+	assert.Equal(t, w.chID, summary.ChannelID)
+	assert.EqualValues(t, 2, summary.ReplyCount)
+	require.NotNil(t, summary.LastReplyAt)
+	assert.Equal(t, []string{replier, quitter}, summary.Participants)
+}
+
 func TestInsertMessage_AReplyMovesTheThreadsLastReplyTime(t *testing.T) {
 	w := newThreadWorld(t, 2)
 	root := w.post(t, w.users[0], "")

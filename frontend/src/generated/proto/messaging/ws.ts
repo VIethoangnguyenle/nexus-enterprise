@@ -205,6 +205,12 @@ export interface ServerEnvelope {
          */
         workspaceSubscribed: WorkspaceSubscribed;
     } | {
+        oneofKind: "threadState";
+        /**
+         * @generated from protobuf field: messaging.ThreadStateEvent thread_state = 20
+         */
+        threadState: ThreadStateEvent;
+    } | {
         oneofKind: undefined;
     };
 }
@@ -362,6 +368,51 @@ export interface ThreadReplyEvent {
      * @generated from protobuf field: string parent_message_id = 2
      */
     parentMessageId: string;
+    /**
+     * The thread's summary after this reply, the same for every subscriber.
+     *
+     * @generated from protobuf field: int32 reply_count = 3
+     */
+    replyCount: number;
+    /**
+     * @generated from protobuf field: google.protobuf.Timestamp last_reply_at = 4
+     */
+    lastReplyAt?: Timestamp;
+    /**
+     * @generated from protobuf field: repeated string reply_participant_ids = 5
+     */
+    replyParticipantIds: string[]; // users.id of the 3 most recent distinct repliers, newest first
+}
+/**
+ * ThreadStateEvent is one user's own state of one thread, sent only to that
+ * user's sessions: after a reply in a thread they follow, and when they
+ * follow, unfollow or read it on any device.
+ *
+ * @generated from protobuf message messaging.ThreadStateEvent
+ */
+export interface ThreadStateEvent {
+    /**
+     * @generated from protobuf field: string root_message_id = 1
+     */
+    rootMessageId: string;
+    /**
+     * @generated from protobuf field: string channel_id = 2
+     */
+    channelId: string;
+    /**
+     * @generated from protobuf field: bool following = 3
+     */
+    following: boolean;
+    /**
+     * @generated from protobuf field: int32 unread_count = 4
+     */
+    unreadCount: number;
+    /**
+     * When the server read this state; a client keeps the newest per thread.
+     *
+     * @generated from protobuf field: google.protobuf.Timestamp as_of = 5
+     */
+    asOf?: Timestamp;
 }
 // ═══════════════════════════════════════════════
 // NEW: Lark Chat Parity Events
@@ -920,7 +971,8 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
             { no: 16, name: "approval_event", kind: "message", oneof: "payload", T: () => ApprovalEvent },
             { no: 17, name: "presence_event", kind: "message", oneof: "payload", T: () => PresenceEvent },
             { no: 18, name: "domain_event", kind: "message", oneof: "payload", T: () => DomainEvent },
-            { no: 19, name: "workspace_subscribed", kind: "message", oneof: "payload", T: () => WorkspaceSubscribed }
+            { no: 19, name: "workspace_subscribed", kind: "message", oneof: "payload", T: () => WorkspaceSubscribed },
+            { no: 20, name: "thread_state", kind: "message", oneof: "payload", T: () => ThreadStateEvent }
         ]);
     }
     create(value?: PartialMessage<ServerEnvelope>): ServerEnvelope {
@@ -1031,6 +1083,12 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
                         workspaceSubscribed: WorkspaceSubscribed.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).workspaceSubscribed)
                     };
                     break;
+                case /* messaging.ThreadStateEvent thread_state */ 20:
+                    message.payload = {
+                        oneofKind: "threadState",
+                        threadState: ThreadStateEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).threadState)
+                    };
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -1091,6 +1149,9 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
         /* messaging.WorkspaceSubscribed workspace_subscribed = 19; */
         if (message.payload.oneofKind === "workspaceSubscribed")
             WorkspaceSubscribed.internalBinaryWrite(message.payload.workspaceSubscribed, writer.tag(19, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.ThreadStateEvent thread_state = 20; */
+        if (message.payload.oneofKind === "threadState")
+            ThreadStateEvent.internalBinaryWrite(message.payload.threadState, writer.tag(20, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1563,12 +1624,17 @@ class ThreadReplyEvent$Type extends MessageType<ThreadReplyEvent> {
     constructor() {
         super("messaging.ThreadReplyEvent", [
             { no: 1, name: "message", kind: "message", T: () => ChatMessage },
-            { no: 2, name: "parent_message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 2, name: "parent_message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "reply_count", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
+            { no: 4, name: "last_reply_at", kind: "message", T: () => Timestamp },
+            { no: 5, name: "reply_participant_ids", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ }
         ]);
     }
     create(value?: PartialMessage<ThreadReplyEvent>): ThreadReplyEvent {
         const message = globalThis.Object.create((this.messagePrototype!));
         message.parentMessageId = "";
+        message.replyCount = 0;
+        message.replyParticipantIds = [];
         if (value !== undefined)
             reflectionMergePartial<ThreadReplyEvent>(this, message, value);
         return message;
@@ -1583,6 +1649,15 @@ class ThreadReplyEvent$Type extends MessageType<ThreadReplyEvent> {
                     break;
                 case /* string parent_message_id */ 2:
                     message.parentMessageId = reader.string();
+                    break;
+                case /* int32 reply_count */ 3:
+                    message.replyCount = reader.int32();
+                    break;
+                case /* google.protobuf.Timestamp last_reply_at */ 4:
+                    message.lastReplyAt = Timestamp.internalBinaryRead(reader, reader.uint32(), options, message.lastReplyAt);
+                    break;
+                case /* repeated string reply_participant_ids */ 5:
+                    message.replyParticipantIds.push(reader.string());
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1602,6 +1677,15 @@ class ThreadReplyEvent$Type extends MessageType<ThreadReplyEvent> {
         /* string parent_message_id = 2; */
         if (message.parentMessageId !== "")
             writer.tag(2, WireType.LengthDelimited).string(message.parentMessageId);
+        /* int32 reply_count = 3; */
+        if (message.replyCount !== 0)
+            writer.tag(3, WireType.Varint).int32(message.replyCount);
+        /* google.protobuf.Timestamp last_reply_at = 4; */
+        if (message.lastReplyAt)
+            Timestamp.internalBinaryWrite(message.lastReplyAt, writer.tag(4, WireType.LengthDelimited).fork(), options).join();
+        /* repeated string reply_participant_ids = 5; */
+        for (let i = 0; i < message.replyParticipantIds.length; i++)
+            writer.tag(5, WireType.LengthDelimited).string(message.replyParticipantIds[i]);
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1612,6 +1696,84 @@ class ThreadReplyEvent$Type extends MessageType<ThreadReplyEvent> {
  * @generated MessageType for protobuf message messaging.ThreadReplyEvent
  */
 export const ThreadReplyEvent = new ThreadReplyEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class ThreadStateEvent$Type extends MessageType<ThreadStateEvent> {
+    constructor() {
+        super("messaging.ThreadStateEvent", [
+            { no: 1, name: "root_message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "following", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 4, name: "unread_count", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
+            { no: 5, name: "as_of", kind: "message", T: () => Timestamp }
+        ]);
+    }
+    create(value?: PartialMessage<ThreadStateEvent>): ThreadStateEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.rootMessageId = "";
+        message.channelId = "";
+        message.following = false;
+        message.unreadCount = 0;
+        if (value !== undefined)
+            reflectionMergePartial<ThreadStateEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: ThreadStateEvent): ThreadStateEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string root_message_id */ 1:
+                    message.rootMessageId = reader.string();
+                    break;
+                case /* string channel_id */ 2:
+                    message.channelId = reader.string();
+                    break;
+                case /* bool following */ 3:
+                    message.following = reader.bool();
+                    break;
+                case /* int32 unread_count */ 4:
+                    message.unreadCount = reader.int32();
+                    break;
+                case /* google.protobuf.Timestamp as_of */ 5:
+                    message.asOf = Timestamp.internalBinaryRead(reader, reader.uint32(), options, message.asOf);
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: ThreadStateEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string root_message_id = 1; */
+        if (message.rootMessageId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.rootMessageId);
+        /* string channel_id = 2; */
+        if (message.channelId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.channelId);
+        /* bool following = 3; */
+        if (message.following !== false)
+            writer.tag(3, WireType.Varint).bool(message.following);
+        /* int32 unread_count = 4; */
+        if (message.unreadCount !== 0)
+            writer.tag(4, WireType.Varint).int32(message.unreadCount);
+        /* google.protobuf.Timestamp as_of = 5; */
+        if (message.asOf)
+            Timestamp.internalBinaryWrite(message.asOf, writer.tag(5, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.ThreadStateEvent
+ */
+export const ThreadStateEvent = new ThreadStateEvent$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class ReactionEvent$Type extends MessageType<ReactionEvent> {
     constructor() {

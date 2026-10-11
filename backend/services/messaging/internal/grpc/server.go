@@ -102,9 +102,14 @@ func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRe
 		return nil, domainError("send message", err)
 	}
 
-	// Broadcast via WebSocket hub (fire-and-forget).
+	// Broadcast via WebSocket hub (fire-and-forget): a root message as it is,
+	// a reply as its thread's summary plus each follower's own state.
 	if s.hub != nil {
-		s.hub.BroadcastToChannel(req.ChannelId, msg)
+		if msg.ParentMessageId == "" {
+			s.hub.BroadcastToChannel(req.ChannelId, msg)
+		} else {
+			s.svc.AnnounceReply(ctx, msg, grpcauth.CallerFrom(ctx).TenantID, s.hub)
+		}
 	}
 
 	// Publish to Kafka for async processing (fire-and-forget).
@@ -135,31 +140,37 @@ func (s *MessagingServer) GetThread(ctx context.Context, req *pb.GetThreadReques
 	return list, nil
 }
 
+// threadStateAnswer sends the caller's new thread state to their sessions.
+func (s *MessagingServer) threadStateAnswer(ctx context.Context, what string, st *pb.ThreadStateEvent, err error) (*pb.Empty, error) {
+	if err != nil {
+		return nil, domainError(what, err)
+	}
+	if s.hub != nil {
+		caller := grpcauth.CallerFrom(ctx)
+		s.hub.SendThreadStates(caller.TenantID, map[string]*pb.ThreadStateEvent{caller.NGACNodeID: st})
+	}
+	return &pb.Empty{}, nil
+}
+
 // FollowThread delegates to domain.Service.FollowThread.
 func (s *MessagingServer) FollowThread(ctx context.Context, req *pb.ThreadRequest) (*pb.Empty, error) {
 	caller := grpcauth.CallerFrom(ctx)
-	if err := s.svc.FollowThread(ctx, req.MessageId, caller.UserID, caller.NGACNodeID); err != nil {
-		return nil, domainError("follow thread", err)
-	}
-	return &pb.Empty{}, nil
+	st, err := s.svc.FollowThread(ctx, req.MessageId, caller.UserID, caller.NGACNodeID)
+	return s.threadStateAnswer(ctx, "follow thread", st, err)
 }
 
 // UnfollowThread delegates to domain.Service.UnfollowThread.
 func (s *MessagingServer) UnfollowThread(ctx context.Context, req *pb.ThreadRequest) (*pb.Empty, error) {
 	caller := grpcauth.CallerFrom(ctx)
-	if err := s.svc.UnfollowThread(ctx, req.MessageId, caller.UserID, caller.NGACNodeID); err != nil {
-		return nil, domainError("unfollow thread", err)
-	}
-	return &pb.Empty{}, nil
+	st, err := s.svc.UnfollowThread(ctx, req.MessageId, caller.UserID, caller.NGACNodeID)
+	return s.threadStateAnswer(ctx, "unfollow thread", st, err)
 }
 
 // MarkThreadRead delegates to domain.Service.MarkThreadRead.
 func (s *MessagingServer) MarkThreadRead(ctx context.Context, req *pb.ThreadRequest) (*pb.Empty, error) {
 	caller := grpcauth.CallerFrom(ctx)
-	if err := s.svc.MarkThreadRead(ctx, req.MessageId, caller.UserID, caller.NGACNodeID); err != nil {
-		return nil, domainError("mark thread read", err)
-	}
-	return &pb.Empty{}, nil
+	st, err := s.svc.MarkThreadRead(ctx, req.MessageId, caller.UserID, caller.NGACNodeID)
+	return s.threadStateAnswer(ctx, "mark thread read", st, err)
 }
 
 // ListThreads delegates to domain.Service.ListThreads.
