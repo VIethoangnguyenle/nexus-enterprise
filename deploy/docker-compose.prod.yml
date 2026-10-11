@@ -380,6 +380,11 @@ services:
       APP_ENV: production
       INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
       INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
+      # Web push through OneSignal. Both empty: push off. Only one set: messaging refuses to start.
+      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-}
+      ONESIGNAL_REST_API_KEY: ${ONESIGNAL_REST_API_KEY:-}
+      # The web app a notification opens: web push needs an absolute address.
+      APP_BASE_URL: ${APP_BASE_URL:-https://nexus.zaneng.xyz}
       GOMEMLIMIT: 100MiB
     depends_on:
       policy: { condition: service_healthy }
@@ -434,11 +439,16 @@ services:
     networks:
       nexus:
         aliases: [nexus-drive]
+      previews: {}
     environment:
       DATABASE_URL: *database-url
       POLICY_SERVICE_ADDR: policy:50051
       POLICY_READ_SERVICE_ADDR: policy-read:50061
       DOCUMENT_SERVICE_ADDR: document:50054
+      GOTENBERG_URL: http://gotenberg:3000
+      # Signed storage URLs name the public host; the drive connects to MinIO directly on the
+      # internal network instead (plain http, same Host header), see docs/deployment.md.
+      PREVIEW_STORAGE_DIAL_ADDR: nexus-minio:9000
       GRPC_PORT: "50057"
       REST_PORT: "8080"
       JWT_SECRET: ${JWT_SECRET}
@@ -496,6 +506,32 @@ services:
         limits: { memory: 128M }
 
   # ============================================
+  # Office -> PDF conversion for the file viewer
+  # ============================================
+  # LibreOffice inside Gotenberg opens documents users uploaded, so it sits on `previews`: an
+  # internal network (no route out) shared with the drive service alone. The drive hands it a
+  # file and reads the PDF back. Nothing else reaches it and it reaches nothing.
+  gotenberg:
+    image: gotenberg/gotenberg:8.37.0
+    restart: unless-stopped
+    networks: [previews]
+    security_opt: ["no-new-privileges:true"]
+    logging: *log-rotation
+    # Only the LibreOffice route is wanted: the Chromium, PDF-engine, webhook and download-from
+    # features are the ones that fetch URLs or take other input, so they are off. LibreOffice may
+    # not fetch from private addresses (drive and the rest of the stack).
+    command: ["gotenberg", "--api-timeout=70s", "--chromium-disable-routes=true", "--pdfengines-disable-routes=true", "--webhook-disable=true", "--api-disable-download-from=true", "--libreoffice-deny-private-ips=true", "--libreoffice-idle-shutdown-timeout=120s", "--prometheus-disable-collect=true"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits: { memory: 600M, cpus: "1.0", pids: 300 }
+
+  # ============================================
   # Frontend (SPA served by nginx)
   # ============================================
   nexus-frontend:
@@ -539,6 +575,9 @@ networks:
         # edge's fixed 10.77.231.10 can never be taken by another container first.
         - subnet: 10.77.231.0/24
           ip_range: 10.77.231.128/25
+  # No route out: the conversion server (see `gotenberg`) cannot fetch a link inside a document.
+  previews:
+    internal: true
   traefik:
     external: true
     name: traefik

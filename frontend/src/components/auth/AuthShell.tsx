@@ -1,19 +1,11 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Avatar, Heading, Text } from '../primitives'
+import { useMotionPresets } from '../../lib/motion'
 import { personStyle } from '../../lib/person-hue'
-
-/** The mark: the product's initial on the accent. */
-function Mark({ className = '' }: { className?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      className={`inline-grid place-items-center shrink-0 w-8 h-8 rounded-surface bg-accent text-on-accent
-        font-display font-bold text-base leading-none ${className}`}
-    >
-      N
-    </span>
-  )
-}
+import { NexusLogo } from '../brand/NexusLogo'
+import { AuthGraph } from './AuthGraph'
+import { useLogoAssembly } from './auth-motion'
+import './auth-motion.css'
 
 /**
  * Three recent changes, each with its author's name and colour: the product's
@@ -26,40 +18,39 @@ const SAMPLE_ACTIVITY = [
   { name: 'Lê Quang Vinh', did: 'đã nhắn trong Đối soát giao dịch', when: '12 phút trước', fresh: false },
 ]
 
-function BrandPane() {
+function BrandPane({ assemble }: { assemble: boolean }) {
   return (
-    <aside aria-hidden="true" className="hidden lg:grid grid-rows-[auto_1fr_auto] gap-6 p-10 bg-sunk">
-      <div className="flex items-center gap-2.5">
-        <Mark />
-        <div>
-          <div className="font-display font-bold text-base leading-tight text-ink">Nexus Hub</div>
-          <div className="text-xs text-ink-muted">Không gian làm việc chung</div>
-        </div>
-      </div>
+    <aside aria-hidden="true" className="relative overflow-hidden hidden lg:grid grid-rows-[auto_1fr_auto] gap-6 p-10 bg-sunk">
+      <AuthGraph />
+      <NexusLogo size={44} assemble={assemble} subtitle="Không gian làm việc chung" className="relative" />
 
-      <div className="self-center grid gap-4 max-w-sm">
+      <div className="relative self-center grid gap-4 max-w-sm">
         <Heading as="h2" className="font-display text-xl font-semibold text-ink leading-snug">
           Mỗi thay đổi đều mang tên và màu của người làm.
         </Heading>
-        <ol className="grid gap-3 m-0 p-0 list-none">
-          {SAMPLE_ACTIVITY.map((a) => (
+        <ol className="auth-acts grid gap-3 m-0 p-0 list-none">
+          {/* Oldest first on arrival: the newest change lands last and carries the wash. */}
+          {SAMPLE_ACTIVITY.map((a, i) => (
             <li
               key={a.name}
-              style={a.fresh ? personStyle(a.name) : undefined}
-              className={`grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2.5 items-start
-                ${a.fresh ? 'rounded-surface p-2 -m-2 bg-(--pw)' : ''}`}
+              style={{ ...(a.fresh ? personStyle(a.name) : {}), '--n': SAMPLE_ACTIVITY.length - 1 - i } as CSSProperties}
+              className={`grid grid-cols-[1.5rem_minmax(0,1fr)] gap-2.5 items-start rounded-surface p-2 -m-2
+                ${a.fresh ? 'auth-fresh' : ''}`}
             >
               <Avatar name={a.name} size={24} />
               <span className="text-sm leading-snug text-ink">
                 <b className="font-semibold">{a.name}</b> {a.did}
-                <time className="block text-xs text-ink-muted">{a.when}</time>
+                <time className="block text-xs text-ink-muted">
+                  {a.when}
+                  {a.fresh && <span className="auth-tag">vừa tải lên</span>}
+                </time>
               </span>
             </li>
           ))}
         </ol>
       </div>
 
-      <Text variant="caption" muted>Chat, tài liệu, phê duyệt và tài sản trong một chỗ.</Text>
+      <Text variant="caption" muted className="relative">Chat, tài liệu, phê duyệt và tài sản trong một chỗ.</Text>
     </aside>
   )
 }
@@ -71,15 +62,14 @@ function BrandPane() {
  * the workspace list, whose rows carry more text than a form field.
  */
 export function AuthShell({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
+  const { reduced } = useMotionPresets()
+  const assemble = useLogoAssembly()
   return (
-    <div className="min-h-dvh grid lg:grid-cols-2 bg-base text-ink">
-      <BrandPane />
+    <div className="auth-shell min-h-dvh grid lg:grid-cols-2 bg-base text-ink" data-reduced={reduced ? 'true' : undefined}>
+      <BrandPane assemble={assemble} />
       <main className="grid place-items-center px-4 py-8 sm:px-6 lg:p-10">
         <div className={`w-full ${wide ? 'max-w-105' : 'max-w-95'} grid gap-5`}>
-          <div className="flex items-center gap-2.5 lg:hidden">
-            <Mark />
-            <span className="font-display font-bold text-base text-ink">Nexus Hub</span>
-          </div>
+          <NexusLogo size={36} assemble={assemble} className="lg:hidden" />
           {children}
         </div>
       </main>

@@ -72,6 +72,24 @@ interface DownloadURLResponse {
   download_url: string
 }
 
+/** Why a file has no preview. Mirrors docs/specs/file-preview. */
+export type PreviewUnavailableReason =
+  | 'unsupported'
+  | 'too_large'
+  | 'conversion_failed'
+  | 'conversion_unavailable'
+  | 'conversion_busy'
+
+/**
+ * How to show a file: `native` and `sheet` point at the original (signed GET),
+ * `pdf` at a PDF the server made from an Office file, `unavailable` says why not.
+ */
+export type FilePreview =
+  | { kind: 'native'; url: string; mime: string }
+  | { kind: 'pdf'; url: string; source_mime: string }
+  | { kind: 'sheet'; url: string; mime: string }
+  | { kind: 'unavailable'; reason: PreviewUnavailableReason }
+
 export const driveApi = {
   // — Folders —
   listRoot: (wsId: string) =>
@@ -153,6 +171,10 @@ export const driveApi = {
 
   getDownloadUrl: (fileId: string) =>
     apiFetch<DownloadURLResponse>(`/drive/files/${fileId}/download`),
+
+  /** Blocks while an Office file is converted for the first time (up to ~45 s). */
+  preview: (fileId: string) =>
+    apiFetch<FilePreview>(`/drive/files/${fileId}/preview`),
 
   // — Sharing —
   createShare: (itemId: string, shareType: string, targetNodeId: string, permission: SharePermission) =>

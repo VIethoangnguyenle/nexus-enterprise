@@ -423,6 +423,34 @@ func TestMyWorkspaces_CreateTakesAName_AndNothingElse(t *testing.T) {
 	}
 }
 
+// The person chooses the kind; an older client that sends none keeps
+// creating an organization; anything else is refused before anything is made.
+func TestMyWorkspaces_CreateTakesTheChosenType(t *testing.T) {
+	a := newAcctApp(t, false, nil)
+	a.st.add("me", "me@example.test")
+	a.st.verified["me"] = true
+
+	for body, want := range map[string]string{
+		`{"name":"Riêng","type":"personal"}`:  "personal",
+		`{"name":"Tổ","type":"organization"}`: "organization",
+		`{"name":"Không chọn"}`:               "organization",
+	} {
+		rec := a.do(http.MethodPost, "/api/me/workspaces", a.token("me"), body)
+		if rec.Code != http.StatusCreated || decode(t, rec)["type"] != want {
+			t.Errorf("%s: %d %s, want 201 type %s", body, rec.Code, rec.Body, want)
+		}
+	}
+	before := a.ws.n
+	for _, body := range []string{`{"name":"Tổ","type":"team"}`, `{"name":"Tổ","type":""}`} {
+		if rec := a.do(http.MethodPost, "/api/me/workspaces", a.token("me"), body); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: %d, want 400", body, rec.Code)
+		}
+	}
+	if a.ws.n != before {
+		t.Error("an unknown type creates nothing")
+	}
+}
+
 func TestMyWorkspaces_CreateNeedsAVerifiedAddress(t *testing.T) {
 	a := newAcctApp(t, false, nil)
 	a.st.add("fixed", "fixed@example.test") // signed in with the test-only code: unverified

@@ -6,6 +6,7 @@ import {
   type OTPVerifyPayload,
   type ProfilePatch,
 } from '../api/auth'
+import type { WorkspaceType } from '../api/workspaces'
 import { queryClient } from '../lib/query-client'
 import { tenantIdFromToken, useAuthStore } from '../stores/auth.store'
 import { keys } from './keys'
@@ -74,11 +75,15 @@ export function useMyWorkspaces() {
   })
 }
 
-/** Creates a workspace from its name alone. */
+/** Creates a workspace from its name and optional type. */
 export function useCreateMyWorkspace() {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: (name: string) => authApi.createWorkspace(name),
+    mutationFn: (arg: string | { name: string; type?: WorkspaceType }) => {
+      const name = typeof arg === 'string' ? arg : arg.name
+      const type = typeof arg === 'string' ? undefined : arg.type
+      return authApi.createWorkspace(name, type)
+    },
     onSuccess: () =>
       Promise.all([
         queryClient.invalidateQueries({ queryKey: keys.workspaces.all() }),

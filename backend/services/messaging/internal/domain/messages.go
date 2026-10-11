@@ -5,7 +5,9 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,6 +30,39 @@ type SendMessageInput struct {
 	ParentMessageID  string
 	LinkedEntityType string
 	LinkedEntityID   string
+	Attachments      []AttachmentInput
+	QuotedMessageID  string
+}
+
+// The linked_entity_type values a message may carry.
+const (
+	linkedDocument  = "document"
+	linkedDriveFile = "drive_file"
+	linkedPoll      = "poll"
+	linkedTask      = "task"
+)
+
+// isLinkedCard reports whether a message of this linked type is a card: it
+// names an object and may have no text. The object is not disclosed by the
+// message; each viewer's card is fetched under that viewer's own rights.
+func isLinkedCard(linkedType string) bool {
+	return linkedType == linkedDocument || linkedType == linkedApproval
+}
+
+// validateLinkedEntity refuses a link to a type the platform does not know, or
+// a typed link with no id. No link at all is valid.
+func validateLinkedEntity(linkedType, linkedID string) error {
+	switch linkedType {
+	case "":
+		return nil
+	case linkedDocument, linkedApproval, linkedDriveFile, linkedPoll, linkedTask:
+		if strings.TrimSpace(linkedID) == "" {
+			return fmt.Errorf("%w: a linked %s needs an id", ErrInvalidInput, linkedType)
+		}
+		return nil
+	default:
+		return fmt.Errorf("%w: unknown linked type", ErrInvalidInput)
+	}
 }
 
 // SendMessage sends a message after access checking.
@@ -42,10 +77,40 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 		msgType = "user"
 	}
 
+	// Only what a person sends is judged: the service's own system lines carry
+	// link types of their own.
+	if msgType == "user" {
+		if err := validateLinkedEntity(in.LinkedEntityType, in.LinkedEntityID); err != nil {
+			return nil, err
+		}
+	}
+	if err := s.requireApprovalsAvailable(ctx, ch, in.LinkedEntityType); err != nil {
+		return nil, err
+	}
 	if msgType == "user" {
 		if err := s.checkAccess(ctx, in.SenderNodeID, ch.NGACOaID, ngac.OpWrite); err != nil {
 			return nil, err
 		}
+	}
+	if in.ParentMessageID != "" {
+		if err := s.checkReplyParent(ctx, in.ParentMessageID, in.ChannelID); err != nil {
+			return nil, err
+		}
+	}
+	if in.QuotedMessageID != "" {
+		if err := s.checkQuote(ctx, in.QuotedMessageID, in.ChannelID); err != nil {
+			return nil, err
+		}
+	}
+	// An old-style file link is an attachment by another name: it goes through
+	// the same check, so it cannot name a file outside the channel's drive.
+	if in.LinkedEntityType == linkedDriveFile {
+		in.Attachments = append([]AttachmentInput{{DriveFileID: in.LinkedEntityID}}, in.Attachments...)
+		in.LinkedEntityType, in.LinkedEntityID = "", ""
+	}
+	attachments, err := s.resolveAttachments(ctx, in.ChannelID, in.Attachments)
+	if err != nil {
+		return nil, err
 	}
 
 	now := time.Now()
@@ -53,31 +118,50 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 	if contentFormat == "" {
 		contentFormat = "markdown"
 	}
+	content, contentText, contentFormat, err := prepareContent(contentFormat, in.Content)
+	if err != nil {
+		return nil, err
+	}
+	// Judged after filtering: markup that filters down to nothing is no text.
+	// A card links an object and carries no text of its own.
+	if msgType == "user" && strings.TrimSpace(contentText) == "" && len(attachments) == 0 && !isLinkedCard(in.LinkedEntityType) {
+		return nil, fmt.Errorf("%w: a message needs text or a file", ErrInvalidInput)
+	}
 	msg := &store.Message{
 		ID:               uuid.New().String(),
 		ChannelID:        in.ChannelID,
 		SenderID:         in.SenderID,
-		Content:          in.Content,
+		Content:          content,
+		ContentText:      contentText,
 		ContentFormat:    contentFormat,
 		Mentions:         in.Mentions,
 		MessageType:      msgType,
 		ParentMessageID:  in.ParentMessageID,
 		LinkedEntityType: in.LinkedEntityType,
 		LinkedEntityID:   in.LinkedEntityID,
+		Attachments:      attachments,
+		QuotedMessageID:  in.QuotedMessageID,
 		CreatedAt:        now,
 	}
 
 	if err := s.store.InsertMessage(ctx, msg); err != nil {
+		if errors.Is(err, store.ErrParentGone) {
+			return nil, fmt.Errorf("%w: the message replied to was deleted", ErrInvalidInput)
+		}
 		return nil, fmt.Errorf("send message: %w", err)
 	}
 
 	msg.SenderName = s.lookupUsername(ctx, in.SenderID)
+	if err := s.attachQuotes(ctx, []*store.Message{msg}); err != nil {
+		return nil, err
+	}
 
 	return messageToProto(msg), nil
 }
 
-// GetMessages returns paginated messages for a channel.
-func (s *Service) GetMessages(ctx context.Context, channelID, userNodeID, before string, limit int) (*pb.MessageList, error) {
+// GetMessages returns paginated messages for a channel, each root message with
+// the caller's thread summary.
+func (s *Service) GetMessages(ctx context.Context, channelID, userID, userNodeID, before string, limit int) (*pb.MessageList, error) {
 	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
@@ -103,6 +187,9 @@ func (s *Service) GetMessages(ctx context.Context, channelID, userNodeID, before
 	if err := s.EnrichMessagesWithMetadata(ctx, msgs, channelID); err != nil {
 		return nil, err
 	}
+	if err := s.applyThreadStates(ctx, userID, msgs); err != nil {
+		return nil, err
+	}
 
 	return &pb.MessageList{
 		Messages: messagesToProto(msgs),
@@ -110,8 +197,8 @@ func (s *Service) GetMessages(ctx context.Context, channelID, userNodeID, before
 	}, nil
 }
 
-// GetThread returns the parent message plus all replies.
-func (s *Service) GetThread(ctx context.Context, messageID, userNodeID string) (*pb.MessageList, error) {
+// GetThread returns the parent message, with the caller's thread summary, plus all replies.
+func (s *Service) GetThread(ctx context.Context, messageID, userID, userNodeID string) (*pb.MessageList, error) {
 	if err := s.authorizeMessage(ctx, messageID, userNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
@@ -124,6 +211,9 @@ func (s *Service) GetThread(ctx context.Context, messageID, userNodeID string) (
 	// Enrich with reactions and pin status; thread messages share the parent's channel.
 	if len(msgs) > 0 {
 		if err := s.EnrichMessagesWithMetadata(ctx, msgs, msgs[0].ChannelID); err != nil {
+			return nil, err
+		}
+		if err := s.applyThreadStates(ctx, userID, msgs[:1]); err != nil {
 			return nil, err
 		}
 	}
@@ -168,6 +258,10 @@ func messageToProto(m *store.Message) *pb.Message {
 			UserIds: rg.UserIDs,
 		})
 	}
+	var lastReplyAt *timestamppb.Timestamp
+	if m.LastReplyAt != nil {
+		lastReplyAt = timestamppb.New(*m.LastReplyAt)
+	}
 	return &pb.Message{
 		Id:               m.ID,
 		ChannelId:        m.ChannelID,
@@ -184,6 +278,19 @@ func messageToProto(m *store.Message) *pb.Message {
 		Reactions:        reactions,
 		IsPinned:         m.IsPinned,
 		CreatedAt:        timestamppb.New(m.CreatedAt),
+
+		LastReplyAt:         lastReplyAt,
+		ReplyParticipantIds: m.ReplyParticipantIDs,
+		Following:           m.Following,
+		ThreadUnreadCount:   m.ThreadUnread,
+		Attachments:         attachmentsToProto(m.Attachments),
+		EditedAt:            editedAtProto(m),
+		Deleted:             m.Deleted,
+		Quoted:              quoteToProto(m.Quoted),
+
+		Starred:   m.StarredAt != nil,
+		StarredAt: starredAtProto(m),
+		Unread:    m.Unread,
 	}
 }
 

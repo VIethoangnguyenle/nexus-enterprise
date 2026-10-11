@@ -14,11 +14,13 @@ export function useTasks(channelId: string, status?: string) {
   })
 }
 
+type CreateTaskInput = Parameters<typeof messagingApi.createTask>[1]
+
 /** Creates a task with optimistic insert into task list. */
 export function useCreateTask(channelId: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: (data: { title: string; assignee_id?: string; due_date?: string }) =>
+    mutationFn: (data: CreateTaskInput) =>
       messagingApi.createTask(channelId, data),
     onMutate: async (data) => {
       await queryClient.cancelQueries({ queryKey: keys.messaging.tasksOf(channelId) })
@@ -42,7 +44,7 @@ export function useCreateTask(channelId: string) {
 
       queryClient.setQueriesData<{ tasks: ChatTask[] }>(
         { queryKey: keys.messaging.tasksOf(channelId) },
-        (old) => old ? { ...old, tasks: [tempTask, ...old.tasks] } : old,
+        (old) => old ? { ...old, tasks: [tempTask, ...(old.tasks ?? [])] } : old,
       )
       return { previous }
     },
@@ -53,7 +55,7 @@ export function useCreateTask(channelId: string) {
           if (!old) return old
           return {
             ...old,
-            tasks: old.tasks.map((t) => t.id.startsWith('temp-') ? serverTask : t),
+            tasks: (old.tasks ?? []).map((t) => t.id.startsWith('temp-') ? serverTask : t),
           }
         },
       )
@@ -82,7 +84,7 @@ export function useUpdateTask(channelId: string) {
           if (!old) return old
           return {
             ...old,
-            tasks: old.tasks.map((t) =>
+            tasks: (old.tasks ?? []).map((t) =>
               t.id === taskId ? { ...t, ...data, updated_at: new Date().toISOString() } : t,
             ),
           }

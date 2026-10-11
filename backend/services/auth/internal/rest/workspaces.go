@@ -61,7 +61,7 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 // workspaceJSON is a workspace as the picker needs it. The identifier is for
 // navigation; no screen prints it.
 func workspaceJSON(w domain.WorkspaceInfo) map[string]any {
-	return map[string]any{"id": w.ID, "name": w.Name, "role": w.Role, "member_count": w.MemberCount, "domain": w.Domain}
+	return map[string]any{"id": w.ID, "name": w.Name, "role": w.Role, "member_count": w.MemberCount, "domain": w.Domain, "type": w.Type}
 }
 
 // ListMyWorkspaces handles GET /api/me/workspaces: the workspaces the caller
@@ -82,20 +82,27 @@ func (h *Handler) ListMyWorkspaces(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]any{"workspaces": out})
 }
 
-// CreateMyWorkspace handles POST /api/me/workspaces. The name is the only
-// input; the caller becomes the owner and the workspace is provisioned in full.
+// CreateMyWorkspace handles POST /api/me/workspaces. Body: name and type
+// ("personal" or "organization"); the caller becomes the owner and the
+// workspace is provisioned in full. A client that sends no type (one built
+// before the choice existed) creates an organization, as it always did.
 func (h *Handler) CreateMyWorkspace(c echo.Context) error {
 	claims, err := httputil.RequireClaims(c)
 	if err != nil {
 		return err
 	}
 	var body struct {
-		Name string `json:"name"`
+		Name string  `json:"name"`
+		Type *string `json:"type"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return badBody()
 	}
-	ws, err := h.svc.CreateMyWorkspace(c.Request().Context(), claims.UserID, claims.NGACNodeID, body.Name)
+	wsType := domain.WorkspaceOrganization
+	if body.Type != nil {
+		wsType = *body.Type
+	}
+	ws, err := h.svc.CreateMyWorkspace(c.Request().Context(), claims.UserID, claims.NGACNodeID, body.Name, wsType)
 	if err != nil {
 		return fail(c, err)
 	}

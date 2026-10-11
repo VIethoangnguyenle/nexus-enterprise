@@ -1,31 +1,49 @@
 import { useState } from 'react'
-import { Pin } from 'lucide-react'
+import { ChevronRight, Pin } from 'lucide-react'
 import { useUpdateChannel } from '../../hooks/useMessaging'
 import { usePins } from '../../hooks/useMessages'
 import { explain } from '../../lib/errors'
 import { formatDateTime, formatListTime } from '../../lib/format'
 import { displayName, type PeopleDirectory, type Person } from '../../lib/people'
-import { Avatar, Button, PersonChip, Pressable, TextField, toast } from '../primitives'
+import type { NotificationLevel } from '../../api/notification-levels'
+import { optionFor } from '../../lib/notification-level-copy'
+import { Avatar, Button, PersonChip, Pressable, Spinner, TextField, toast } from '../primitives'
+import { LEVEL_ICON } from './ConversationTitleMenu'
+import { NotificationLevelSheet } from './NotificationLevelSheet'
 import { SidePanel } from './SidePanel'
 
 function plain(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
-/** About a conversation: the name (renamable for spaces), and pinned messages. */
-export function SpaceInfoPanel({ channelId, kind, title, memberCount, partner, people, onOpenTopic, onClose }: {
+/** What the phone's info screen needs to show and set the notification level. */
+export interface InfoNotification {
+  level: NotificationLevel
+  /** A save is taking long enough to say so. */
+  saving: boolean
+  onChoose: (level: NotificationLevel) => void
+}
+
+/**
+ * About a conversation: on a phone the Thông báo row first (it opens the level
+ * sheet), then the name (renamable for spaces), and pinned messages.
+ */
+export function SpaceInfoPanel({ channelId, kind, title, memberCount, partner, people, notification, onOpenTopic, onClose }: {
   channelId: string
   kind: 'dm' | 'space'
   title: string
   memberCount: number
   partner?: Person
   people: PeopleDirectory
+  /** Phone only: the desktop sets the level from the header menu. */
+  notification?: InfoNotification
   onOpenTopic: (id: string) => void
   onClose: () => void
 }) {
   const pins = usePins(channelId)
   const rename = useUpdateChannel(channelId)
   const [editing, setEditing] = useState(false)
+  const [levelSheet, setLevelSheet] = useState(false)
   const [name, setName] = useState(title)
   const list = pins.data?.pins ?? []
 
@@ -56,6 +74,17 @@ export function SpaceInfoPanel({ channelId, kind, title, memberCount, partner, p
       onClose={onClose}
     >
       <div className="grid gap-4 px-3 pb-3">
+        {notification && (
+          <NotificationRow kind={kind} notification={notification} onOpen={() => setLevelSheet(true)} />
+        )}
+        {notification && levelSheet && (
+          <NotificationLevelSheet
+            conversation={{ kind, title }}
+            level={notification.level}
+            onChoose={notification.onChoose}
+            onClose={() => setLevelSheet(false)}
+          />
+        )}
         {kind === 'space' ? (
           editing ? (
             <form
@@ -125,5 +154,40 @@ export function SpaceInfoPanel({ channelId, kind, title, memberCount, partner, p
         </div>
       </div>
     </SidePanel>
+  )
+}
+
+/** The first row of the phone's info screen: the level in force, and a tap to change it. */
+function NotificationRow({ kind, notification, onOpen }: {
+  kind: 'dm' | 'space'
+  notification: InfoNotification
+  onOpen: () => void
+}) {
+  const option = optionFor(kind, notification.level)
+  const Icon = LEVEL_ICON[option.level]
+  return (
+    <Pressable
+      onClick={onOpen}
+      aria-haspopup="dialog"
+      className="flex items-center gap-3 w-full min-h-14 px-2 rounded-surface text-left hover:bg-hover"
+    >
+      <span aria-hidden="true" className="grid place-items-center w-8 h-8 rounded-md bg-sunk text-ink-muted shrink-0">
+        <Icon size={16} strokeWidth={1.75} />
+      </span>
+      <span className="grid min-w-0 flex-1">
+        <span className="font-semibold text-ink">Thông báo</span>
+        <span className="flex items-center gap-1.5 text-small text-ink-muted">
+          {notification.saving ? (
+            <>
+              <Spinner size="sm" />
+              Đang lưu…
+            </>
+          ) : (
+            <span className="truncate">{option.title}</span>
+          )}
+        </span>
+      </span>
+      <ChevronRight size={18} strokeWidth={1.75} aria-hidden="true" className="text-ink-muted shrink-0" />
+    </Pressable>
   )
 }

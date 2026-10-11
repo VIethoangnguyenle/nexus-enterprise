@@ -1,6 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { AssetsScreen } from '../../components/assets/AssetsScreen'
 import { validateAssetsSearch } from '../../lib/assets-search'
+import { redirectIfPersonal } from '../../lib/workspace-areas'
 
 // The tab, the filters, the page and the open asset, request or type are part of
 // the URL, so reload, Back/Forward and links keep the place. `?ws=` is kept by
@@ -8,5 +9,6 @@ import { validateAssetsSearch } from '../../lib/assets-search'
 // WebSocket, one workspace switcher, one logout.
 export const Route = createFileRoute('/_workspace/assets')({
   validateSearch: validateAssetsSearch,
+  beforeLoad: redirectIfPersonal,
   component: AssetsScreen,
 })

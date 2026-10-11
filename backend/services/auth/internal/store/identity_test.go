@@ -17,7 +17,7 @@ func insertTestWorkspace(t *testing.T, pool *pgxpool.Pool, ownerID string) strin
 	t.Helper()
 	id := fmt.Sprintf("test-ws-%d", time.Now().UnixNano())
 	_, err := pool.Exec(context.Background(),
-		"INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $2, $3)", id, "Test "+id, ownerID)
+		"INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $2, $3, 'organization')", id, "Test "+id, ownerID)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), "DELETE FROM workspaces WHERE id = $1", id)

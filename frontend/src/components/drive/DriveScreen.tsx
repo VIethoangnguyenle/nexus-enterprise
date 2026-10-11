@@ -33,6 +33,7 @@ import { useDriveActions } from './useDriveActions'
 import {
   itemVersion, matchesName, ownerOf, sortItems,
 } from './drive-model'
+import { FileViewer, type ViewerFile } from '../files/FileViewer'
 
 /** Items without an NGAC node are never checked; they can be seen and nothing else. */
 const READ_ONLY: ObjectPerms = { ...NO_PERMS, read: true }
@@ -155,6 +156,39 @@ export function DriveScreen() {
     return () => window.removeEventListener('keydown', onKey)
   }, [selected, selectItem])
 
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const previewOpenerRef = useRef<HTMLElement | null>(null)
+
+  const folderFiles = useMemo(() => items.filter((i) => i.item_type === 'file'), [items])
+
+  const viewerFiles = useMemo<ViewerFile[]>(() => {
+    return folderFiles.map((f) => {
+      const owner = ownerOf(f, people)
+      return {
+        id: f.id,
+        name: f.name,
+        mime: f.mime_type,
+        size: f.size_bytes,
+        uploaderName: owner.name,
+        uploaderAvatarUrl: owner.avatarUrl,
+        uploaderId: f.owner_id,
+        time: f.updated_at ?? f.created_at,
+        parentFolderId: f.parent_id,
+      }
+    })
+  }, [folderFiles, people])
+
+  const openPreview = useCallback(
+    (item: DriveItem, openerEl?: HTMLElement | null) => {
+      const idx = folderFiles.findIndex((f) => f.id === item.id)
+      if (idx >= 0) {
+        if (openerEl) previewOpenerRef.current = openerEl
+        setPreviewIndex(idx)
+      }
+    },
+    [folderFiles],
+  )
+
   const openFolder = useCallback(
     (id?: string) => void navigate({ to: '/drive', search: (prev: DriveSearch) => folderSearch(prev, id) }),
     [navigate],
@@ -168,8 +202,9 @@ export function DriveScreen() {
       onMove: (item) => setDialog({ kind: 'move', item }),
       onRename: (item) => setDialog({ kind: 'rename', item }),
       onDelete: (item) => setDialog({ kind: 'delete', item }),
+      onPreview: (item, el) => openPreview(item, el),
     }),
-    [selectItem, download],
+    [selectItem, download, openPreview],
   )
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -321,6 +356,7 @@ export function DriveScreen() {
             people={people}
             onClose={() => selectItem(null)}
             onShare={actions.onShare}
+            onPreview={openPreview}
           />
         )}
       </AnimatePresence>
@@ -376,6 +412,16 @@ export function DriveScreen() {
         onConfirm={(item) => void submitDelete(item)}
         onClose={closeDialog}
       />
+
+      {previewIndex !== null && (
+        <FileViewer
+          files={viewerFiles}
+          index={previewIndex}
+          origin="drive"
+          onClose={() => setPreviewIndex(null)}
+          returnFocusRef={previewOpenerRef}
+        />
+      )}
     </div>
   )
 }

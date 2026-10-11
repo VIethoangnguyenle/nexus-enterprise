@@ -76,6 +76,10 @@ The workspace service SHALL answer, for a workspace, which resource areas a role
 - **WHEN** the workspace has no Assets OA
 - **THEN** the assets area is not listed
 
+#### Scenario: A personal workspace
+- **WHEN** the workspace is personal (it refuses assets), even if its Assets OA exists
+- **THEN** the assets area is not listed, and setting a role's permissions on assets answers 404 and writes nothing
+
 #### Scenario: Non-member
 - **WHEN** a user outside the workspace asks
 - **THEN** the answer is 403

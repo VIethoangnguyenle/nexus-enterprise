@@ -12,8 +12,14 @@ import type {
 } from '../generated/proto/messaging/ws'
 import type { Message } from '../api/messaging'
 import {
-  applyPin, applyReaction, applyTaskUpdate, convertChatMsgToMessage, previewText, timestampToIso,
+  applyMessageDeleted, applyMessageEdited, applyPin, applyReaction, applyTaskUpdate, convertChatMsgToMessage,
+  previewText, timestampToIso,
 } from '../lib/chat-cache'
+import { applyThreadReplySummary, applyThreadState } from '../lib/thread-cache'
+import { invalidateUnreadThreadsFor } from '../lib/unread-threads-cache'
+import { mentionsMe } from '../lib/shortcut-feed'
+import { onSessionEnd } from '../lib/session-end'
+import { invalidatePollOnVote } from '../hooks/usePolls'
 import {
   createBatcher,
   emptySeq,
@@ -122,12 +128,36 @@ interface WebSocketState {
   subscribeMany: (channelIds: string[]) => () => void
   /** Follow a workspace's live changes; returns the matching release. */
   followWorkspace: (workspaceId: string) => () => void
+  /**
+   * The conversation on screen; returns the matching release. The server holds
+   * back push for it while the page is visible. Subscribing is not viewing.
+   */
+  viewChannel: (channelId: string) => () => void
 }
 
 /** Send a binary-encoded ClientEnvelope over WebSocket. */
 function sendEnvelope(ws: WebSocket, envelope: Parameters<typeof ClientEnvelope.toBinary>[0]) {
   if (ws.readyState !== WebSocket.OPEN) return
   ws.send(ClientEnvelope.toBinary(envelope))
+}
+
+/** The conversation the screen shows, if any. Re-announced on reconnect. */
+let viewedChannel: string | null = null
+/** What the server was last told this socket views, so nothing is repeated. */
+let announcedView: { ws: WebSocket; channelId: string } | null = null
+
+/**
+ * Tells the server what this session is looking at: the viewed conversation
+ * while the page is visible and the channel is subscribed (the server refuses
+ * a view of anything else), otherwise nothing.
+ */
+function announceView(ws: WebSocket | null, authenticated: boolean) {
+  if (!ws || !authenticated) return
+  const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden'
+  const channelId = viewedChannel && visible && subscribedChannels.has(viewedChannel) ? viewedChannel : ''
+  if (announcedView?.ws === ws ? announcedView.channelId === channelId : channelId === '') return
+  announcedView = { ws, channelId }
+  sendEnvelope(ws, { payload: { oneofKind: 'view', view: { channelId } } })
 }
 
 /** Calculate exponential backoff delay with jitter. */
@@ -258,6 +288,7 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
       sendEnvelope(ws, {
         payload: { oneofKind: 'subscribe', subscribe: { channelId, workspaceId: '' } },
       })
+      if (channelId === viewedChannel) announceView(ws, true)
     }
   },
 
@@ -273,6 +304,8 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
       sendEnvelope(ws, {
         payload: { oneofKind: 'unsubscribe', unsubscribe: { channelId, workspaceId: '' } },
       })
+      // The server stops counting a view with the subscription.
+      if (announcedView?.ws === ws && announcedView.channelId === channelId) announcedView = { ws, channelId: '' }
     }
   },
 
@@ -302,7 +335,35 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
       for (const id of channelIds) get().sendUnsubscribe(id)
     }
   },
+
+  viewChannel: (channelId) => {
+    viewedChannel = channelId
+    announceView(get().ws, get().authenticated)
+    return () => {
+      if (viewedChannel !== channelId) return
+      viewedChannel = null
+      announceView(get().ws, get().authenticated)
+    }
+  },
 }))
+
+// A hidden page views nothing: push resumes for the conversation it shows.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    const { ws, authenticated } = useWebSocketStore.getState()
+    announceView(ws, authenticated)
+  })
+}
+
+/**
+ * A message that names me is a new item of "Được nhắc tới" and of its pill. The
+ * server decides what counts (a direct @you, muted conversations included); the
+ * client only asks for the feed again.
+ */
+function invalidateMentionsFor(msg: Pick<WSChatMessage, 'mentions' | 'senderId'>) {
+  if (!mentionsMe(msg.mentions, msg.senderId, useAuthStore.getState().user?.id)) return
+  invalidations.add([keys.shortcuts.mentionsAll(), keys.shortcuts.mentionsUnreadAll()])
+}
 
 /** Route decoded ServerEnvelope payloads to TanStack Query cache invalidation. */
 function handleServerMessage(
@@ -319,6 +380,7 @@ function handleServerMessage(
         // the socket was down. With a workspace followed the refetch waits for
         // its acknowledgement (see 'workspaceSubscribed').
         resubscribeChannels(ws)
+        announceView(ws, true)
         if (followedWorkspace) {
           sendEnvelope(ws, {
             payload: { oneofKind: 'subscribe', subscribe: { channelId: '', workspaceId: followedWorkspace } },
@@ -371,6 +433,7 @@ function handleServerMessage(
           },
         )
       }
+      invalidateMentionsFor(msg)
       // Unread counts still need server aggregation
       queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
       break
@@ -409,15 +472,51 @@ function handleServerMessage(
     case 'unreadCount':
       queryClient.invalidateQueries({ queryKey: keys.notifications.unreadCount() })
       queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
+      // Read here or on another device: what the mention pill counts may have gone down.
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() })
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsUnreadAll() })
       break
 
     case 'threadReply': {
       const reply = envelope.payload.threadReply
       if (reply.message) {
-        injectReply({ ...reply.message, parentMessageId: reply.message.parentMessageId || reply.parentMessageId }, set)
+        const m = reply.message
+        // A reply still moves its conversation: preview and order, as before replies had their own frame.
+        set((s) => ({
+          lastMessages: {
+            ...s.lastMessages,
+            [m.channelId]: {
+              content: previewText(m.content),
+              timestamp: timestampToIso(m.createdAt),
+              senderName: m.senderName || '',
+              senderId: m.senderId,
+            },
+          },
+        }))
+        injectReply({ ...m, parentMessageId: m.parentMessageId || reply.parentMessageId }, set)
+        invalidateMentionsFor(m)
       }
+      // The server's summary replaces the local reply-count guess.
+      applyThreadReplySummary(reply)
+      invalidateUnreadThreadsFor(envelope.payload.oneofKind)
       break
     }
+
+    case 'threadState':
+      applyThreadState(envelope.payload.threadState)
+      // A thread read elsewhere settles the unread mentions inside it.
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() })
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsUnreadAll() })
+      invalidateUnreadThreadsFor(envelope.payload.oneofKind)
+      break
+
+    case 'messageEdited':
+      applyMessageEdited(envelope.payload.messageEdited)
+      break
+
+    case 'messageDeleted':
+      applyMessageDeleted(envelope.payload.messageDeleted)
+      break
 
     case 'reactionEvent':
       applyReaction(envelope.payload.reactionEvent)
@@ -428,7 +527,7 @@ function handleServerMessage(
       break
 
     case 'pollVote':
-      // No screen renders polls, so there is no cache to patch.
+      void invalidatePollOnVote(queryClient, envelope.payload.pollVote)
       break
 
     case 'taskUpdate':
@@ -655,3 +754,9 @@ function resyncAfterReconnect() {
   invalidations.add(workspaceResyncKeys(followedWorkspace ?? ''))
   invalidations.flush()
 }
+
+// Previews, replies, typing and presence are what this user's session saw: the
+// next person to sign in on this tab must start without them.
+onSessionEnd(() => useWebSocketStore.setState({
+  lastMessages: {}, lastReplies: {}, typingUsers: {}, onlineUsers: {}, approvalActivity: {}, recentChanges: {},
+}))

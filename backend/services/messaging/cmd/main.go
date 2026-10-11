@@ -19,6 +19,7 @@ import (
 	"ngac-platform/pkg/bootstrap/redisconn"
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/pkg/push"
 	"ngac-platform/pkg/realtime"
 	authpb "ngac-platform/proto/auth"
 	drivepb "ngac-platform/proto/drive"
@@ -121,6 +122,14 @@ func main() {
 	domainSvc.SetEmitter(rt)
 	// Removing a channel member also ends their live subscriptions.
 	domainSvc.SetSubscriptionRevoker(hub)
+	// Web push through OneSignal; without ONESIGNAL_* set it stays off. The hub
+	// tells who has a conversation open, so they are not pushed about it.
+	pushSender, err := push.FromEnv()
+	if err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
+	domainSvc.SetPush(pushSender, hub)
 
 	// Start WebSocket server with graceful shutdown support
 	wsMux := http.NewServeMux()

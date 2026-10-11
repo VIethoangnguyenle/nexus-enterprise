@@ -124,7 +124,7 @@ func TestListWorkspaceSummaries_RoleAndHeadcount(t *testing.T) {
 
 	mkWorkspace := func(tag string) string {
 		id := fmt.Sprintf("pfw-%s-%d", tag, f.n)
-		_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $2, $3)`, id, "Khối "+tag, me)
+		_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $2, $3, 'organization')`, id, "Khối "+tag, me)
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			f.pool.Exec(context.Background(), `DELETE FROM tenant_users WHERE tenant_id = $1`, id)
@@ -150,7 +150,7 @@ func TestListWorkspaceSummaries_RoleAndHeadcount(t *testing.T) {
 		byName[w.Name] = w
 	}
 	require.Len(t, byName, 2, "only the workspaces this person is an active member of")
-	assert.Equal(t, store.WorkspaceSummary{ID: mine, Name: "Khối mine", Role: "owner", MemberCount: 1}, byName["Khối mine"])
+	assert.Equal(t, store.WorkspaceSummary{ID: mine, Name: "Khối mine", Role: "owner", MemberCount: 1, Type: "organization"}, byName["Khối mine"])
 	_, err = f.pool.Exec(f.ctx, `UPDATE workspaces SET domain = $2 WHERE id = $1`, shared, fmt.Sprintf("novapay-%d.vn", f.n))
 	require.NoError(t, err)
 	again, err := f.st.ListWorkspaceSummaries(f.ctx, me)
@@ -162,9 +162,64 @@ func TestListWorkspaceSummaries_RoleAndHeadcount(t *testing.T) {
 			assert.Empty(t, w.Domain, "a personal workspace has none")
 		}
 	}
-	assert.Equal(t, store.WorkspaceSummary{ID: shared, Name: "Khối shared", Role: "member", MemberCount: 2}, byName["Khối shared"],
+	assert.Equal(t, store.WorkspaceSummary{ID: shared, Name: "Khối shared", Role: "member", MemberCount: 2, Type: "organization"}, byName["Khối shared"],
 		"a disabled member is not counted")
 	assert.NotContains(t, byName, "Khối notmine")
+}
+
+// The workspace's type travels with every view of a membership.
+func TestWorkspaceType_IsReadWithTheMembership(t *testing.T) {
+	f := newProfileFixture(t)
+	me := f.user(t, "typed", "")
+	id := fmt.Sprintf("pfw-typed-%d", f.n)
+	_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, 'Khối typed', $2, 'personal')`, id, me)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		f.pool.Exec(context.Background(), `DELETE FROM tenant_users WHERE tenant_id = $1`, id)
+		f.pool.Exec(context.Background(), `DELETE FROM workspaces WHERE id = $1`, id)
+	})
+	require.NoError(t, f.st.InsertTenantUser(f.ctx, id, me, "owner", "active", f.node("typed")))
+
+	m, err := f.st.GetTenantUser(f.ctx, id, me)
+	require.NoError(t, err)
+	assert.Equal(t, "personal", m.TenantType)
+	list, err := f.st.ListWorkspaceSummaries(f.ctx, me)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "personal", list[0].Type)
+}
+
+// The personal workspace made at sign-up carries the person's name, so when
+// they change it (first of all at the profile step, from the handle sign-up
+// gave them) the workspace follows — unless someone has renamed it since.
+func TestUpdateProfile_ThePersonalWorkspaceFollowsTheName(t *testing.T) {
+	f := newProfileFixture(t)
+	me := f.user(t, "named", "")
+	mk := func(tag, name, typ string) string {
+		id := fmt.Sprintf("pfw-%s-%d", tag, f.n)
+		_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $2, $3, $4)`, id, name, me, typ)
+		require.NoError(t, err)
+		t.Cleanup(func() { f.pool.Exec(context.Background(), `DELETE FROM workspaces WHERE id = $1`, id) })
+		return id
+	}
+	own := mk("own", "Initial Name", "personal")
+	renamed := mk("renamed", "Sổ tay", "personal")
+	org := mk("org", "Initial Name", "organization")
+	name := func(id string) string {
+		var n string
+		require.NoError(t, f.pool.QueryRow(f.ctx, `SELECT name FROM workspaces WHERE id = $1`, id).Scan(&n))
+		return n
+	}
+
+	require.NoError(t, f.st.UpdateProfile(f.ctx, me, store.ProfileChanges{DisplayName: str("Lê Thị Lan")}))
+	assert.Equal(t, "Lê Thị Lan", name(own))
+	assert.Equal(t, "Sổ tay", name(renamed), "a name someone chose is kept")
+	assert.Equal(t, "Initial Name", name(org), "an organization is never renamed after a person")
+
+	require.NoError(t, f.st.UpdateProfile(f.ctx, me, store.ProfileChanges{Title: str("Kế toán")}))
+	assert.Equal(t, "Lê Thị Lan", name(own), "no name sent, nothing renamed")
+	require.NoError(t, f.st.UpdateProfile(f.ctx, me, store.ProfileChanges{DisplayName: str("Lan Lê")}))
+	assert.Equal(t, "Lan Lê", name(own))
 }
 
 func TestGetUserByID_CarriesTheProfile(t *testing.T) {
@@ -194,7 +249,7 @@ func newDirectoryFixture(t *testing.T) *directoryFixture {
 	d.dept = fmt.Sprintf("dept-%d", f.n)
 	owner := f.user(t, "own", "")
 	for _, id := range []string{d.ws, d.other} {
-		_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, id, owner)
+		_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $1, $2, 'organization')`, id, owner)
 		require.NoError(t, err)
 	}
 	t.Cleanup(func() {

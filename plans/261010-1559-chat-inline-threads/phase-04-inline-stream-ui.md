@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "UI luồng in-line, panel Thread"
-status: pending
+status: completed
 priority: P1
 effort: "2-3d"
 dependencies: [1, 2, 3]
@@ -39,8 +39,8 @@ Thay `TopicStream` (thẻ chủ đề) bằng luồng in-line theo mockup đã d
 4. Gates: `npm test`, `npm run lint`, `npm run typecheck:diff`, bundle production.
 
 ## Success Criteria
-- [ ] Ảnh chụp khớp mockup ở 1440px, 1100px, 390px, light + dark.
-- [ ] Mọi gate frontend xanh; không còn import `TopicStream`.
+- [x] Ảnh chụp khớp mockup ở 1440px, 1100px, 390px (+ 768px), light + dark — `reports/phase-04-screens/`; lệch và chỗ mockup chưa phủ: xem báo cáo `fullstack-developer-261011-0800-phase-04.md`.
+- [x] Mọi gate frontend xanh (trừ lỗi AssetsScreen có sẵn); không còn import `TopicStream`.
 
 ## Risk Assessment
 - Cuộn ngược + vạch tin mới dễ nhảy layout → giữ vị trí cuộn khi chèn trang cũ (anchor); tín hiệu: test cuộn thất bại → dùng `overflow-anchor` + đo lại.

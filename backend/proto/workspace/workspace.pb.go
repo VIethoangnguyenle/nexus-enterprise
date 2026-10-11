@@ -68,6 +68,9 @@ type Workspace struct {
 	DocumentsOaId string                 `protobuf:"bytes,7,opt,name=documents_oa_id,json=documentsOaId,proto3" json:"documents_oa_id,omitempty"`
 	ChannelsOaId  string                 `protobuf:"bytes,8,opt,name=channels_oa_id,json=channelsOaId,proto3" json:"channels_oa_id,omitempty"`
 	CreatedBy     string                 `protobuf:"bytes,9,opt,name=created_by,json=createdBy,proto3" json:"created_by,omitempty"`
+	// "personal" (made for one person when they first signed in) or
+	// "organization" (created on purpose, or owned by a company domain).
+	Type          string `protobuf:"bytes,10,opt,name=type,proto3" json:"type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -165,6 +168,13 @@ func (x *Workspace) GetCreatedBy() string {
 	return ""
 }
 
+func (x *Workspace) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
 type CreateWorkspaceRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
@@ -172,8 +182,10 @@ type CreateWorkspaceRequest struct {
 	UserId string `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
 	// Deprecated: Marked as deprecated in proto/workspace/workspace.proto.
 	UserNgacNodeId string `protobuf:"bytes,3,opt,name=user_ngac_node_id,json=userNgacNodeId,proto3" json:"user_ngac_node_id,omitempty"` // ignored: the caller comes from request metadata (pkg/grpcauth)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// "personal" or "organization"; required — a workspace's type is set when it is made.
+	Type          string `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateWorkspaceRequest) Reset() {
@@ -225,6 +237,13 @@ func (x *CreateWorkspaceRequest) GetUserId() string {
 func (x *CreateWorkspaceRequest) GetUserNgacNodeId() string {
 	if x != nil {
 		return x.UserNgacNodeId
+	}
+	return ""
+}
+
+func (x *CreateWorkspaceRequest) GetType() string {
+	if x != nil {
+		return x.Type
 	}
 	return ""
 }
@@ -1620,7 +1639,7 @@ var File_proto_workspace_workspace_proto protoreflect.FileDescriptor
 const file_proto_workspace_workspace_proto_rawDesc = "" +
 	"\n" +
 	"\x1fproto/workspace/workspace.proto\x12\tworkspace\"\a\n" +
-	"\x05Empty\"\x9e\x02\n" +
+	"\x05Empty\"\xb2\x02\n" +
 	"\tWorkspace\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
@@ -1634,11 +1653,14 @@ const file_proto_workspace_workspace_proto_rawDesc = "" +
 	"\x0fdocuments_oa_id\x18\a \x01(\tR\rdocumentsOaId\x12$\n" +
 	"\x0echannels_oa_id\x18\b \x01(\tR\fchannelsOaId\x12\x1d\n" +
 	"\n" +
-	"created_by\x18\t \x01(\tR\tcreatedBy\"x\n" +
+	"created_by\x18\t \x01(\tR\tcreatedBy\x12\x12\n" +
+	"\x04type\x18\n" +
+	" \x01(\tR\x04type\"\x8c\x01\n" +
 	"\x16CreateWorkspaceRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1b\n" +
 	"\auser_id\x18\x02 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
-	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"c\n" +
+	"\x11user_ngac_node_id\x18\x03 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\x12\x12\n" +
+	"\x04type\x18\x04 \x01(\tR\x04type\"c\n" +
 	"\x15ListWorkspacesRequest\x12\x1b\n" +
 	"\auser_id\x18\x01 \x01(\tB\x02\x18\x01R\x06userId\x12-\n" +
 	"\x11user_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x0euserNgacNodeId\"8\n" +

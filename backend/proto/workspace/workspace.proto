@@ -51,12 +51,17 @@ message Workspace {
   string documents_oa_id = 7;
   string channels_oa_id = 8;
   string created_by = 9;
+  // "personal" (made for one person when they first signed in) or
+  // "organization" (created on purpose, or owned by a company domain).
+  string type = 10;
 }
 
 message CreateWorkspaceRequest {
   string name = 1;
   string user_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string user_ngac_node_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
+  // "personal" or "organization"; required — a workspace's type is set when it is made.
+  string type = 4;
 }
 
 message ListWorkspacesRequest {

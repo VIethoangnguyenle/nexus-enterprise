@@ -1,0 +1,209 @@
+{
+  "criteria": [
+    {
+      "id": "1a",
+      "name": "Personal workspace after first sign-in (type=personal, named for the person)",
+      "result": "PASS",
+      "evidence": "GET /api/workspaces 200; personal=[\"PWS Kiểm Thử\"]; switcher=\"P PWS Kiểm Thử Workspace cá nhân\""
+    },
+    {
+      "id": "1b",
+      "name": "Desktop sidebar has no Tài sản / Phê duyệt entries (personal)",
+      "result": "PASS",
+      "evidence": "visible a[href=/assets]=false, a[href=/approval]=false; recorded only: admin=true, contacts=true"
+    },
+    {
+      "id": "1c",
+      "name": "Phone tab bar and Thêm sheet have no Tài sản / Phê duyệt (personal)",
+      "result": "PASS",
+      "evidence": "tabs=Tin nhắn→/channels?ws=534d1583-a2c9-4ae4-9eac-cff52519a63c | Tài liệu→/drive?ws=534d1583-a2c9-4ae4-9eac-cff52519a63c | Danh bạ→/contacts?ws=534d1583-a2c9-4ae4-9eac-cff52519a63c; Thêm sheet=/admin?ws=534d1583-a2c9-4ae4-9eac-cff52519a63c, /settings?ws=534d1583-a2c9-4ae4-9eac-cff52519a63c"
+    },
+    {
+      "id": "2-assets",
+      "name": "Deep link /assets as personal redirects; area never fetched",
+      "result": "PASS",
+      "evidence": "pushState /assets → landed /channels; area API calls in window=0"
+    },
+    {
+      "id": "2-approval",
+      "name": "Deep link /approval as personal redirects; area never fetched",
+      "result": "PASS",
+      "evidence": "pushState /approval → landed /channels; area API calls in window=0"
+    },
+    {
+      "id": "3a",
+      "name": "Personal: GET /api/workspaces/{ws}/assets refused (403)",
+      "result": "PASS",
+      "evidence": "status 403; body {\"message\":\"not available in a personal workspace\",\"reason\":\"personal_workspace\"}\n"
+    },
+    {
+      "id": "3b",
+      "name": "Personal: POST /api/approval/requests refused (403)",
+      "result": "PASS",
+      "evidence": "status 403; body {\"message\":\"access denied: not available in a personal workspace\"}\n"
+    },
+    {
+      "id": "6",
+      "name": "Admin → Roles permission areas of the personal workspace: no Tài sản area",
+      "result": "PASS",
+      "evidence": "matrix text found; 'Tài sản' present=false"
+    },
+    {
+      "id": "4a",
+      "name": "Convert card → organization without reload; Phê duyệt + Tài sản appear in sidebar",
+      "result": "PASS",
+      "evidence": "type after=organization; sidebar assets=true, approval=true"
+    },
+    {
+      "id": "4b",
+      "name": "Phone after convert: Phê duyệt in tab bar or Thêm, Tài sản in Thêm",
+      "result": "PASS",
+      "evidence": "tabs=/channels,/drive,/approval; Thêm=/assets,/contacts,/admin,/settings"
+    },
+    {
+      "id": "4c",
+      "name": "After convert: asset + approval calls no longer refused for reason \"personal\"",
+      "result": "PASS",
+      "evidence": "assets=200; approval=404 {\"message\":\"get template: not found\"}\n"
+    },
+    {
+      "id": "4d",
+      "name": "Precondition: new account can verify email (required by Tạo workspace)",
+      "result": "INCONCLUSIVE",
+      "evidence": "POST /api/me/email/verify → 503 {\"code\":\"verification_unavailable\",\"message\":\"email verification by code is not available\"}\n"
+    },
+    {
+      "id": "5a",
+      "name": "Tạo workspace: default type Cá nhân; created workspace is personal",
+      "result": "INCONCLUSIVE",
+      "evidence": "BLOCKED by environment: create screen gated (\"Cần xác minh …\", type picker count=0) on new and pre-existing accounts; POST /api/me/email/verify → 503 verification_unavailable"
+    },
+    {
+      "id": "5b",
+      "name": "Quay lại on Tạo workspace returns to the origin screen",
+      "result": "INCONCLUSIVE",
+      "evidence": "BLOCKED: same gate as 5a; create screen has no Quay lại to exercise beyond the gate view"
+    },
+    {
+      "id": "6-personal-create",
+      "name": "Admin → Roles on the workspace created in step 5",
+      "result": "INCONCLUSIVE",
+      "evidence": "BLOCKED: no workspace created in step 5; criterion 6 evaluated on the personal workspace in step 3b"
+    }
+  ],
+  "steps": {
+    "1-personal-nav": {
+      "started": "2026-10-11T06:00:03.997Z",
+      "ok": true,
+      "ended": "2026-10-11T06:00:06.718Z"
+    },
+    "2-deeplinks": {
+      "started": "2026-10-11T06:00:06.718Z",
+      "ok": true,
+      "ended": "2026-10-11T06:00:12.439Z"
+    },
+    "3-api-refused-personal": {
+      "started": "2026-10-11T06:00:12.439Z",
+      "ok": true,
+      "ended": "2026-10-11T06:00:12.461Z"
+    },
+    "3b-admin-roles-personal": {
+      "started": "2026-10-11T06:00:12.461Z",
+      "ok": true,
+      "ended": "2026-10-11T06:00:15.919Z"
+    },
+    "4-convert-to-organization": {
+      "started": "2026-10-11T06:00:15.919Z",
+      "ok": true,
+      "ended": "2026-10-11T06:00:21.768Z"
+    },
+    "4-api-after-convert": {
+      "started": "2026-10-11T06:00:21.768Z",
+      "ok": true,
+      "ended": "2026-10-11T06:00:21.788Z"
+    },
+    "4d-verify-email-probe": {
+      "started": "2026-10-11T06:00:21.788Z",
+      "ok": true,
+      "ended": "2026-10-11T06:00:21.792Z"
+    },
+    "5-create-workspace": {
+      "started": "2026-10-11T06:00:21.814Z",
+      "ok": true,
+      "ended": "2026-10-11T06:00:27.083Z"
+    }
+  },
+  "accounts": [
+    {
+      "email": "pws-1791698399660@example.org",
+      "displayName": "PWS Kiểm Thử",
+      "note": "created by this run (new account, page 1)"
+    },
+    {
+      "email": "smoke1791570521@example.org",
+      "note": "pre-existing account, page 2 (steps 5–6 only)"
+    }
+  ],
+  "findings": [],
+  "step3": {
+    "assetList": {
+      "status": 403,
+      "body": "{\"message\":\"not available in a personal workspace\",\"reason\":\"personal_workspace\"}\n"
+    },
+    "approvalCreate": {
+      "status": 403,
+      "body": "{\"message\":\"access denied: not available in a personal workspace\"}\n"
+    }
+  },
+  "step4Api": {
+    "assetList": {
+      "status": 200,
+      "body": "{}\n"
+    },
+    "approvalCreate": {
+      "status": 404,
+      "body": "{\"message\":\"get template: not found\"}\n"
+    }
+  },
+  "emailVerifyProbe": {
+    "status": 503,
+    "body": "{\"code\":\"verification_unavailable\",\"message\":\"email verification by code is not available\"}\n"
+  },
+  "createGate": {
+    "gated": true,
+    "typePickerCount": 0,
+    "snippet": "Nexus Không gian làm việc chung Mỗi thay đổi đều mang tên và màu của người làm. TL Nguyễn Thu Lan đã tải lên doi-soat-09-10.xlsx Vừa xongvừa tải lên VK Đỗ Văn Khải đã duyệt Tạm ứng công tác phí 5 phút"
+  },
+  "consoleErrors": {
+    "3-api-refused-personal": [
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+    ],
+    "4-api-after-convert": [
+      "Failed to load resource: the server responded with a status of 404 (Not Found)"
+    ],
+    "4d-verify-email-probe": [
+      "Failed to load resource: the server responded with a status of 503 (Service Unavailable)"
+    ]
+  },
+  "apiFailures": {
+    "3-api-refused-personal": [
+      "403 GET /api/workspaces/534d1583-a2c9-4ae4-9eac-cff52519a63c/assets",
+      "403 POST /api/approval/requests"
+    ],
+    "4-api-after-convert": [
+      "404 POST /api/approval/requests"
+    ],
+    "4d-verify-email-probe": [
+      "503 POST /api/me/email/verify"
+    ]
+  },
+  "personalWorkspace": {
+    "name": "PWS Kiểm Thử",
+    "id": "534d1583-a2c9-4ae4-9eac-cff52519a63c"
+  },
+  "page2Workspace": {
+    "name": "Dự án PWS 99660",
+    "id": null
+  }
+}

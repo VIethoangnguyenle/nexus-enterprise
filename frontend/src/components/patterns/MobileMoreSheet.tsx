@@ -1,9 +1,9 @@
 import { useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { AnimatePresence, motion, useDragControls, type PanInfo } from 'motion/react'
 import {
-  ArrowLeft, Check, ChevronRight, LogOut, Package, RefreshCw, Settings, ShieldCheck, Users, X,
+  ArrowLeft, Check, ChevronRight, LogOut, Package, Plus, RefreshCw, Settings, ShieldCheck, Users, X,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { logoutSession } from '../../api/client'
@@ -11,6 +11,7 @@ import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useModalFocus } from '../../hooks/useModalFocus'
 import { usePeople } from '../../hooks/usePeople'
 import { useWorkspaceSwitcher } from '../../hooks/useSwitchWorkspace'
+import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { workspaceRowDetail } from '../../lib/auth-flow'
 import { useMotionPresets } from '../../lib/motion'
 import { UNKNOWN_PERSON } from '../../lib/people'
@@ -136,9 +137,13 @@ function MenuView({ onClose, pathname, entryRef, onPickWorkspace }: {
   const user = useAuthStore((s) => s.user)
   const setActiveModule = useUiStore((s) => s.setActiveModule)
   const { workspaceId, workspaceName } = useActiveWorkspace()
+  const { isPersonal } = useWorkspaceType()
   const people = usePeople(workspaceId)
   const me = user?.id ? people.byUserId.get(user.id) : undefined
   const name = workspaceDisplayName(workspaceName)
+  const items = isPersonal
+    ? MORE_ITEMS.filter((item) => item.id !== 'assets' && item.id !== 'contacts')
+    : MORE_ITEMS
 
   return (
     <div className="grid gap-1">
@@ -166,7 +171,7 @@ function MenuView({ onClose, pathname, entryRef, onPickWorkspace }: {
       </Pressable>
 
       <nav aria-label="Thêm" className="grid gap-0.5 pt-2">
-        {MORE_ITEMS.map((item) => {
+        {items.map((item) => {
           const active = pathname === item.to || pathname.startsWith(`${item.to}/`)
           return (
             <Link
@@ -206,6 +211,8 @@ function MenuView({ onClose, pathname, entryRef, onPickWorkspace }: {
 function WorkspaceView({ onDone }: { onDone: () => void }) {
   const { currentId, workspaces, isLoading, isError, refetch, choose, switchingId } = useWorkspaceSwitcher()
   const busy = switchingId !== undefined
+  // Where "Tạo workspace" sends Back to: the screen the person is on now.
+  const here = useLocation({ select: (l) => l.href })
 
   if (isError) {
     return (
@@ -236,37 +243,55 @@ function WorkspaceView({ onDone }: { onDone: () => void }) {
     )
   }
   return (
-    <ul role="listbox" aria-label="Workspace của bạn" className="grid gap-0.5 m-0 p-0">
-      {workspaces.map((w) => {
-        const name = workspaceDisplayName(w.name)
-        const current = w.id === currentId
-        return (
-          <li key={w.id} role="presentation" className="list-none">
-            <Pressable
-              role="option"
-              aria-selected={current}
-              disabled={busy}
-              onClick={() => choose(w.id, onDone)}
-              className={`grid grid-cols-[2.5rem_minmax(0,1fr)_1.25rem] items-center gap-3 w-full min-h-14 px-3 py-2
-                rounded-surface hover:bg-hover transition-colors duration-quick ${current ? 'bg-raised' : ''}`}
-            >
-              <span
-                aria-hidden="true"
-                className="grid place-items-center w-10 h-10 rounded-surface bg-accent text-on-accent font-display text-lg font-bold"
+    <>
+      <ul role="listbox" aria-label="Workspace của bạn" className="grid gap-0.5 m-0 p-0">
+        {workspaces.map((w) => {
+          const name = workspaceDisplayName(w.name)
+          const current = w.id === currentId
+          return (
+            <li key={w.id} role="presentation" className="list-none">
+              <Pressable
+                role="option"
+                aria-selected={current}
+                disabled={busy}
+                onClick={() => choose(w.id, onDone)}
+                className={`grid grid-cols-[2.5rem_minmax(0,1fr)_1.25rem] items-center gap-3 w-full min-h-14 px-3 py-2
+                  rounded-surface hover:bg-hover transition-colors duration-quick ${current ? 'bg-raised' : ''}`}
               >
-                {spaceLetter(name)}
-              </span>
-              <span className="grid min-w-0">
-                <span className="font-semibold text-ink truncate">{name}</span>
-                <span className="text-xs text-ink-muted truncate">{workspaceRowDetail(w)}</span>
-              </span>
-              {switchingId === w.id
-                ? <Spinner size="sm" />
-                : current && <Check size={16} strokeWidth={1.75} aria-hidden="true" className="text-accent" />}
-            </Pressable>
-          </li>
-        )
-      })}
-    </ul>
+                <span
+                  aria-hidden="true"
+                  className="grid place-items-center w-10 h-10 rounded-surface bg-accent text-on-accent font-display text-lg font-bold"
+                >
+                  {spaceLetter(name)}
+                </span>
+                <span className="grid min-w-0">
+                  <span className="font-semibold text-ink truncate">{name}</span>
+                  <span className="text-xs text-ink-muted truncate">{workspaceRowDetail(w)}</span>
+                </span>
+                {switchingId === w.id
+                  ? <Spinner size="sm" />
+                  : current && <Check size={16} strokeWidth={1.75} aria-hidden="true" className="text-accent" />}
+              </Pressable>
+            </li>
+          )
+        })}
+      </ul>
+      <div role="separator" className="h-px my-2 bg-line" />
+      <Link
+        to="/onboarding"
+        search={{ from: here }}
+        onClick={onDone}
+        className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-3 w-full min-h-14 px-3 py-2 rounded-surface
+          text-ink no-underline hover:bg-hover transition-colors duration-quick focus-ring"
+      >
+        <span
+          aria-hidden="true"
+          className="grid place-items-center w-10 h-10 rounded-surface bg-sunk text-ink-muted"
+        >
+          <Plus size={20} strokeWidth={1.75} />
+        </span>
+        <span className="font-semibold text-ink">Tạo workspace</span>
+      </Link>
+    </>
   )
 }

@@ -1,15 +1,21 @@
 import { useRef, useState } from 'react'
-import { PenLine, UserPlus, Users } from 'lucide-react'
-import { MenuItem, Popover, Pressable } from '../primitives'
+import { FolderPlus, PenLine, UserPlus, Users } from 'lucide-react'
+import { MenuItem, MenuSeparator, Popover, Pressable } from '../primitives'
 import { CreateSpaceDialog } from './CreateSpaceDialog'
 import { StartChatDialog } from './StartChatDialog'
 
 /**
- * "Trò chuyện mới": a menu with Nhắn tin trực tiếp and Tạo nhóm, and the two
+ * "Trò chuyện mới": a menu with Nhắn tin trực tiếp, Tạo nhóm and (when the view
+ * can name sections) Tạo mục, and the two
  * dialogs behind it. The navigator column draws it on desktop; Trang chủ draws
  * it on phones, where that column is not on screen.
  */
-export function NewChatMenu({ className, placement = 'bottom-start' }: { className: string; placement?: 'bottom-start' | 'bottom-end' }) {
+export function NewChatMenu({ className, placement = 'bottom-start', onNewSection }: {
+  className: string
+  placement?: 'bottom-start' | 'bottom-end'
+  /** Adds "Tạo mục"; the view that owns the section name popover opens it, anchored here. */
+  onNewSection?: (trigger: HTMLElement | null) => void
+}) {
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [menuOpen, setMenuOpen] = useState(false)
   const [dialog, setDialog] = useState<'space' | 'dm' | null>(null)
@@ -42,6 +48,14 @@ export function NewChatMenu({ className, placement = 'bottom-start' }: { classNa
         <MenuItem icon={<Users size={16} strokeWidth={1.75} />} onClick={() => setDialog('space')}>
           Tạo nhóm
         </MenuItem>
+        {onNewSection && (
+          <>
+            <MenuSeparator />
+            <MenuItem icon={<FolderPlus size={16} strokeWidth={1.75} />} onClick={() => onNewSection(triggerRef.current)}>
+              Tạo mục
+            </MenuItem>
+          </>
+        )}
       </Popover>
       <CreateSpaceDialog open={dialog === 'space'} onClose={() => setDialog(null)} />
       <StartChatDialog open={dialog === 'dm'} onClose={() => setDialog(null)} />

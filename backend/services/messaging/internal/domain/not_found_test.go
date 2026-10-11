@@ -26,7 +26,7 @@ func TestUnknownChannelAndMessageAreNotFound(t *testing.T) {
 	_, err = f.svc.GetChannel(ctx, "no-such-channel", userNode)
 	require.ErrorIs(t, err, domain.ErrNotFound)
 
-	_, err = f.svc.GetThread(ctx, "no-such-message", userNode)
+	_, err = f.svc.GetThread(ctx, "no-such-message", f.userID, userNode)
 	require.ErrorIs(t, err, domain.ErrNotFound)
 	require.Empty(t, f.read.asked(), "an unknown id is refused before policy is asked")
 }
@@ -51,7 +51,7 @@ func TestSendAndReadMessagesInAnUnknownChannelAreNotFound(t *testing.T) {
 	_, err := f.svc.SendMessage(ctx, domain.SendMessageInput{ChannelID: "no-such-channel", SenderNodeID: userNode, Content: "hi"})
 	require.ErrorIs(t, err, domain.ErrNotFound)
 
-	_, err = f.svc.GetMessages(ctx, "no-such-channel", userNode, "", 10)
+	_, err = f.svc.GetMessages(ctx, "no-such-channel", f.userID, userNode, "", 10)
 	require.ErrorIs(t, err, domain.ErrNotFound)
 }
 
@@ -60,10 +60,10 @@ func TestGetMessagesRefusesAMalformedCursor(t *testing.T) {
 	chID, oaID := f.insertChannel(t, "cursor")
 	f.read.allow[grant{userNode, oaID, ngac.OpRead}] = true
 
-	_, err := f.svc.GetMessages(context.Background(), chID, userNode, "yesterday", 10)
+	_, err := f.svc.GetMessages(context.Background(), chID, f.userID, userNode, "yesterday", 10)
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
 
-	_, err = f.svc.GetMessages(context.Background(), chID, userNode, "2026-10-10T08:00:00Z", 10)
+	_, err = f.svc.GetMessages(context.Background(), chID, f.userID, userNode, "2026-10-10T08:00:00Z", 10)
 	require.NoError(t, err)
 }
 
@@ -88,7 +88,7 @@ func TestPollAndTaskLookupFailuresAreNotNotFound(t *testing.T) {
 	t.Cleanup(down.Close)
 	svc := domain.NewService(store.NewStore(down), f.read, f.write, stubAuth{}, nil)
 
-	_, err = svc.GetPoll(context.Background(), "p1", userNode)
+	_, err = svc.GetPoll(context.Background(), "p1", "", userNode)
 	require.Error(t, err)
 	require.NotErrorIs(t, err, domain.ErrNotFound)
 
@@ -96,6 +96,6 @@ func TestPollAndTaskLookupFailuresAreNotNotFound(t *testing.T) {
 	require.Error(t, err)
 	require.NotErrorIs(t, err, domain.ErrNotFound)
 
-	_, err = f.svc.GetPoll(context.Background(), "no-such-poll", userNode)
+	_, err = f.svc.GetPoll(context.Background(), "no-such-poll", "", userNode)
 	require.ErrorIs(t, err, domain.ErrNotFound)
 }

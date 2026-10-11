@@ -1,9 +1,9 @@
 import { validateWorkspaceSearch } from './workspace'
 
-/** The three tabs of Cài đặt, as they appear in the address (`?tab=giao-dien`). */
-export type SettingsTab = 'ho-so' | 'workspace' | 'giao-dien'
+/** The tabs of Cài đặt, as they appear in the address (`?tab=giao-dien`). */
+export type SettingsTab = 'ho-so' | 'workspace' | 'giao-dien' | 'thong-bao'
 
-export const SETTINGS_TABS: readonly SettingsTab[] = ['ho-so', 'workspace', 'giao-dien']
+export const SETTINGS_TABS: readonly SettingsTab[] = ['ho-so', 'workspace', 'giao-dien', 'thong-bao']
 
 export interface SettingsSearch {
   ws?: string
@@ -14,7 +14,7 @@ export interface SettingsSearch {
 /** `validateSearch` for /settings: an unknown tab opens Hồ sơ rather than an error page. */
 export function validateSettingsSearch(search: Record<string, unknown>): SettingsSearch {
   const out: SettingsSearch = { ...validateWorkspaceSearch(search) }
-  if (search.tab === 'workspace' || search.tab === 'giao-dien') out.tab = search.tab
+  if (search.tab === 'workspace' || search.tab === 'giao-dien' || search.tab === 'thong-bao') out.tab = search.tab
   return out
 }
 

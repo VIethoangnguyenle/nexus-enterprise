@@ -1,4 +1,4 @@
-# Nexus Hub Design System: Tín hiệu
+# Nexus Design System: Tín hiệu
 
 > **Nguồn thiết kế duy nhất của frontend.** Chọn ngày 2026-10-09 từ
 > [brainstorm](plans/261009-0449-project-wide-refactor/reports/brainstorm-261009-0457-new-ui-direction.html)
@@ -8,7 +8,7 @@
 
 ## 1. Thesis
 
-Nexus Hub là nơi nhiều người cùng sửa một thứ: tin nhắn, thư mục, đề nghị phê duyệt. Câu hỏi
+Nexus là nơi nhiều người cùng sửa một thứ: tin nhắn, thư mục, đề nghị phê duyệt. Câu hỏi
 người dùng đặt ra liên tục là **"ai vừa làm gì"**, nên đó là bản sắc của giao diện: mỗi người có
 một màu riêng, và mỗi thay đổi đến từ người khác mang màu đó trong chốc lát rồi tan.
 
@@ -94,7 +94,7 @@ Chữ trên avatar: `--color-on-accent` light value (`oklch(98.5% …)`) ở c�
   `latin` + `vietnamese`; preload Be Vietnam Pro 400.
 - Fallback: `"Be Vietnam Pro", "Segoe UI", "Helvetica Neue", Arial, sans-serif`.
 - **Mono** (`--font-mono`: `"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace`, không tải
-  webfont): chỉ cho code và khối code trong tin nhắn, 13px.
+  webfont): chỉ cho code và khối code trong tin nhắn, 14px.
 - `font-variant-numeric: tabular-nums` cho giờ, số tiền, dung lượng, bộ đếm, cột bảng.
 - Tiếng Việt có dấu chồng (ặ, ẫ, ổ): line-height thân chữ ≥ 1.5, tiêu đề ≥ 1.2, không tracking âm
   quá `-0.01em`.
@@ -103,14 +103,38 @@ Scale 1.2, `rem`:
 
 | Token | Size / line | Weight | Dùng cho |
 |---|---|---|---|
-| `text-xs` | 12 / 16 | 500 | nhãn phụ, giờ, badge |
-| `text-sm` | 14 / 21 | 400 | mặc định: tin nhắn, ô bảng, mô tả |
-| `text-base` | 16 / 24 | 400 | input (tránh zoom mobile), đọc dài |
+| `text-xs` | 12 / 16 | 500 | nhãn phụ, giờ, badge, "đã sửa" |
+| `text-sm` | 14 / 21 | 400 | mặc định giao diện: ô bảng, mô tả, form; tiêu đề mục chat, hàng tóm tắt thread, trích dẫn, code trong tin |
+| `text-md` | 15 / 23 | 400 | **đọc chat trên máy tính**: tin nhắn, tên người gửi (600), hàng cột điều hướng, tên hàng ở feed |
+| `text-base` | 16 / 24 | 400 | input và ô soạn (tránh zoom mobile), **tin nhắn và tên hàng danh sách trên điện thoại**, đọc dài |
 | `text-lg` | 19 / 26 | 600 display | tiêu đề panel, tên kênh |
 | `text-xl` | 23 / 30 | 700 display | tiêu đề trang |
 | `text-2xl` | 28 / 34 | 600 display | số tiền, con số trọng tâm |
 
+Chữ chat cố ý to hơn Google Chat (14px) 1px trên máy tính và 2px trên điện thoại (người dùng chốt 2026-10-11:
+"chỉ phần chat", tin nhắn điện thoại 16px). Màn dày dữ liệu (bảng, quản trị) và chữ giao diện giữ 14.
+
 Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một nhãn cho mỗi panel.
+
+### Logo và tên (mockup `design/mockups/logo.html`, hướng A "Lối đi", duyệt 2026-10-11)
+
+Tên sản phẩm hiển thị ở mọi nơi là **Nexus** (không "Nexus Hub", không "Nexus Enterprise"). Tên trong
+mã backend, email và tài liệu kỹ thuật không đổi.
+
+- **Dấu hiệu:** chữ N là một đường đi qua bốn nút trên lưới 48: nét 6, nút r5, nút cuối (nơi tới
+  được) r5.5. Hai màu chỉ trên nền trung tính: nét và ba nút đầu `--color-accent`, nút cuối
+  `--color-person-1`. Trên nền accent chỉ một màu `--color-on-accent`. Component: `NexusMark`,
+  `NexusLogo` ở `frontend/src/components/brand/`; không vẽ lại dấu ở chỗ khác.
+- **Lockup:** dấu, rồi chữ "Nexus" Bricolage Grotesque 700, tracking −0.01em, cao chữ hoa bằng ~62%
+  cạnh dấu; dòng phụ "Không gian làm việc chung" (12px, `--color-ink-muted`) chỉ ở brand pane.
+  Khoảng cách dấu-chữ 10px.
+- **Khoảng trống quanh dấu:** tối thiểu bằng bán kính một nút (5/48 cạnh dấu).
+- **Cỡ nhỏ:** từ 24px trở xuống dùng bản nhỏ (nét 8, bỏ ba nút đầu, giữ nút đích) để favicon 16px
+  không thành vệt mờ. Từ 25px dùng bản đầy đủ.
+- **Text alternative:** đứng một mình có `role="img"` tên "Nexus"; cạnh chữ "Nexus" thì `aria-hidden`.
+- **Icon app và favicon** nằm ở `frontend/public/` (`favicon.svg` đổi màu theo giao diện của tab,
+  `favicon-32/16.png`, `apple-touch-icon.png`, `icon-192/512.png`, `icon-maskable-192/512.png`): dấu
+  một màu trên ô accent; bản maskable tràn viền, dấu trong ô 320/512 nằm gọn vòng an toàn 80%.
 
 ## 4. Space, radius, depth, layers
 
@@ -129,8 +153,8 @@ Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một
 ┌─────────┬──────────────┬───────────────────────────┬──────────────┐
 │ Sidebar │ List panel   │ Content                   │ Detail panel │
 │ 232px   │ 280px        │ flex, min 480px           │ 360px        │
-│ (rail   │ (kênh, cây   │                           │ (có điều     │
-│  64px)  │  thư mục…)   │                           │  kiện)       │
+│ (dải    │ (kênh, cây   │                           │ (có điều     │
+│  72px)  │  thư mục…)   │                           │  kiện)       │
 └─────────┴──────────────┴───────────────────────────┴──────────────┘
 ```
 
@@ -138,14 +162,29 @@ Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một
   **Tin nhắn · Tài liệu · Phê duyệt · Tài sản · Danh bạ**, đáy: **Thông báo** (mở NotificationPanel,
   §6), **Quản trị** (khi có quyền),
   **Cài đặt**, người dùng hiện tại. Tài sản nằm trong shell này, không có layout riêng.
-- **Thu gọn sidebar (rail 64px)** (mockup `spaces.html` §3, nút "Thu gọn/mở menu chính"): IconButton
-  "Thu gọn menu chính" (icon khung có cột trái) ở cuối hàng workspace, `aria-expanded`. Thu gọn: cột còn
-  64px, chỉ icon 20; logo workspace và nút mở rộng xếp dọc ở đầu; avatar người dùng ở đáy; số chưa đọc
-  thành badge 16 trên góc icon (viền 2px màu sidebar); tên mục hiện bằng tooltip, tên vẫn là accessible
-  name của link. Đổi bề rộng `grid-template-columns` 280ms `--ease-out-expo`, chữ fade 120ms; giảm chuyển
-  động thì đổi ngay. **Xem tạm:** trỏ chuột vào rail 300ms thì sidebar mở 232px **nổi đè** lên list panel
-  (`--shadow-overlay`, không đẩy layout), rời chuột thì thu lại. Trạng thái nhớ theo thiết bị; 1024–1279
-  mặc định thu gọn, ≥ 1280 mặc định mở. Phần chừa ra dành cho content (luồng chat).
+- **Menu chính: mở rộng hoặc dải icon** (mockup `design/mockups/app-rail.html`). Hai trạng thái, người dùng tự
+  chọn, nhớ theo người trên từng máy; **mặc định thu gọn** (người dùng chốt 2026-10-11, cùng phím tắt, mục Thông báo, nền bo nhẹ) ở mọi bề rộng máy tính và một lựa chọn chung cho mọi
+  phân hệ. Cả cột là `<nav aria-label="Điều hướng chính">`.
+  - *Nút chuyển:* IconButton 32 (icon khung có cột trái) nằm riêng hàng trên cùng ở cả hai trạng thái, tâm cách
+    mép trái 36px nên không đổi chỗ. `aria-expanded` (true = mở rộng), `aria-label` "Thu gọn menu chính" /
+    "Mở rộng menu chính", phím tắt **Ctrl+\\** (⌘\\ trên macOS, `aria-keyshortcuts`), ghi trong tooltip.
+  - *Mở rộng (232px):* như hiện nay: workspace switcher (logo 32 + tên + dòng phụ + chevron), NavRow, đáy
+    Thông báo · Quản trị · Cài đặt · hàng người dùng có nút Đăng xuất.
+  - *Thu gọn (72px, đệm 12/4):* ô chữ cái workspace 40 (radius 10) trong nút 48; mỗi mục là link 64×56: icon 20
+    trong nền 48×28 radius 10 + nhãn 11px/500 bên dưới (đủ tên, không viết tắt). Đang chọn: nền
+    `--color-accent-wash`, icon `--color-accent`, nhãn `--color-ink` 600, `aria-current="page"`; hover nền
+    `--color-hover`. Số đếm: pill 16 ở góc trên phải icon, viền 2px `--color-sunk`, `99+`, ẩn khi 0; chữ ẩn
+    ", N chưa đọc" trong link. Đáy: Thông báo · Quản trị · Cài đặt, rồi avatar 32 (presence) mở menu tài
+    khoản: tên, vai trò, trạng thái, Cài đặt tài khoản, Đăng xuất.
+  - *Đổi workspace:* bấm ô chữ cái (hay tên khi mở rộng) mở cùng một menu; đầu menu ghi đầy đủ tên workspace
+    đang mở (xuống dòng, không cắt) + dòng phụ ("Workspace cá nhân" hoặc tên tổ chức) · vai trò; danh sách
+    "Chuyển sang" cũng xuống dòng thay vì cắt. Workspace cá nhân không có Tài sản, Phê duyệt, Quản trị.
+  - *Tooltip* chỉ ở chỗ chữ bị ẩn (ô workspace, avatar, nút chuyển): `--color-overlay`, `--shadow-overlay`,
+    radius 8, 12px, cách 8px bên phải, `--z-tooltip`; trỏ chuột 400ms, focus bàn phím hiện ngay, Esc ẩn.
+    Tooltip không bao giờ là nguồn tên duy nhất.
+  - *Chuyển trạng thái:* nội dung cột fade ra 100ms `--ease-in`, bề rộng cột 280ms `--ease-out-expo`, nội dung
+    fade vào 120ms; giảm chuyển động thì đổi ngay. Không còn "xem tạm" khi trỏ chuột vào dải.
+  - Dưới 1024 không có menu này: thanh trên + thanh đáy như dưới đây.
 - **List panel** chỉ ở Tin nhắn và Tài liệu. **Detail panel** mở bằng chọn mục, đóng bằng Esc.
 - **Breakpoints:** ≥ 1280 đủ 4 cột · 1024–1279 detail panel thành overlay bên phải ·
   768–1023 sidebar thành rail, list panel thành cột thay thế content (rail chưa làm: hiện thanh
@@ -241,21 +280,22 @@ Primitive sống ở `frontend/src/components/primitives/`; không component nà
 ### Chat: cột điều hướng và mục (mockup `design/mockups/spaces.html` §1)
 
 Thứ tự trong cột: nút "Trò chuyện mới" · lối tắt (Trang chủ, Được nhắc tới, Đã gắn sao) · **mục của bạn** ·
-Tin nhắn trực tiếp · Nhóm · "Duyệt nhóm" · "Tạo mục".
+Tin nhắn trực tiếp · Nhóm · "Duyệt nhóm". ("Tạo mục" nằm trong menu "Trò chuyện mới", không có nút riêng cuối cột —
+người dùng chốt 2026-10-11.)
 
 - **Mục (ChatSection):** người dùng tự tạo để gom nhóm và tin nhắn trực tiếp, như Google Chat. Mục là **của
   riêng từng người** trong từng workspace; người khác không thấy và không bị ảnh hưởng. Tên 1–40 ký tự, không
   trùng (không phân biệt hoa thường) trong các mục của bạn. Một cuộc trò chuyện nằm trong **tối đa một** mục;
   đã vào mục thì không lặp lại ở Tin nhắn trực tiếp hay Nhóm. Mục chỉ là cách sắp xếp, không đổi quyền hay
   thành viên.
-- **Tiêu đề mục:** `button` có `aria-expanded`, chevron 16 xoay −90° khi thu gọn (160ms), tên 13px/600
+- **Tiêu đề mục:** `button` có `aria-expanded`, chevron 16 xoay −90° khi thu gọn (160ms), tên 14px/600
   `--color-ink` (mục mặc định `--color-ink-muted`). Thu gọn thì cuối tiêu đề hiện pill đếm = tổng chưa đọc
   trong mục. Mục của bạn có IconButton 28 "⋯" (hiện khi hover hoặc focus) mở menu: **Đổi tên mục · Chuyển
   lên · Chuyển xuống** (mục đầu/cuối thì mục tương ứng disabled) · divider · **Xoá mục** (`danger`). Mục mặc
   định có nút "+" (Nhắn tin trực tiếp / Tạo nhóm) như cũ, không đổi tên hay xoá được. Trạng thái thu gọn
   nhớ theo thiết bị.
 - **Tạo / đổi tên:** popover nổi trong cột (không modal): ô "Tên mục" + Huỷ / Tạo (Lưu); Enter xác nhận,
-  Esc đóng, lỗi nói rõ ("Nhập tên mục", "Bạn đã có mục tên này"). Mở từ "Tạo mục" cuối cột, từ menu "Trò
+  Esc đóng, lỗi nói rõ ("Nhập tên mục", "Bạn đã có mục tên này"). Mở từ "Tạo mục" trong menu "Trò
   chuyện mới" hoặc "Mục mới…" trong menu của một cuộc trò chuyện (khi đó cuộc trò chuyện vào luôn mục vừa
   tạo). Mục mới nằm cuối các mục của bạn; rỗng thì hiện gợi ý 13px mờ cách mở menu ⋯ để chuyển vào.
 - **Chuyển cuộc trò chuyện:** mỗi hàng có IconButton 28 "⋯" ở mép phải, hiện khi hover hoặc focus (thay chỗ
@@ -267,6 +307,9 @@ Tin nhắn trực tiếp · Nhóm · "Duyệt nhóm" · "Tạo mục".
 - **Xoá mục:** không hỏi xác nhận vì không mất dữ liệu: các cuộc trò chuyện trở về Tin nhắn trực tiếp hoặc
   Nhóm, toast "Đã xoá mục “…”" có **Hoàn tác** (5s) khôi phục mục, vị trí và các cuộc trò chuyện.
 - **Mobile:** tab Tin nhắn dùng cùng thứ tự và cùng mục; menu ⋯ thành sheet đáy.
+- **Lối tắt Được nhắc tới / Đã gắn sao** (mockup `design/mockups/shortcuts.html`): "Được nhắc tới" có pill đếm = số tin nhắc tên bạn chưa đọc (99+); là tập con của Trang chủ, không cộng vào tab Tin nhắn. Màn Được nhắc tới: mọi tin (tin chính và trả lời trong thread) nhắc tên bạn ở các cuộc trò chuyện bạn đọc được, mới nhất trên, chia theo vạch ngày; mỗi mục là liên kết: icon cuộc trò chuyện 24 + tên 13px · (trả lời) "Trả lời trong thread của X: “tin gốc…”" 12px mờ · Avatar 32 + tên + giờ · bong bóng rút gọn 3 dòng; @tên bạn là chữ accent 600 trên `--color-accent-wash` bo 4 (cả trong luồng). Chưa đọc: chữ `--color-ink`, tên 600, chấm 8 accent + chữ ẩn; đã đọc: `--color-ink-muted`. Xem danh sách không đánh dấu đã đọc. Bấm: mở cuộc trò chuyện, tin vào giữa, bong bóng loé viền accent 2,4s; trả lời thì mở thêm panel thread và loé trong panel. 25 mỗi trang + "Tải thêm"; Skeleton 4; Rỗng "Chưa ai nhắc tên bạn…" + "Về Trang chủ"; Lỗi + "Thử lại"; tin nhắc mới chèn đầu với lớp phủ màu người.
+- **Đã gắn sao**: gắn sao là của riêng bạn, áp cho cuộc trò chuyện và từng tin. Cột điều hướng có mục hệ thống **Đã gắn sao** ngay dưới lối tắt (ẩn khi trống, thu gọn được, không ⋯/+); cuộc trò chuyện đã gắn sao chỉ hiện ở đó (người dùng chốt 2026-10-11), vẫn nhớ mục cũ và về lại khi bỏ sao; menu ⋯ của nó chỉ có Bỏ gắn sao · Tắt thông báo. Gắn/bỏ sao cuộc trò chuyện: menu ⋯, menu tên ở đầu cuộc trò chuyện (đã gắn thì sao 16 accent sau tên), sheet nhấn giữ. Gắn sao tin: menu Thêm (sau Theo dõi thread) và sheet nhấn giữ; tin đã gắn có sao 12 accent sau giờ. Màn Đã gắn sao: phần Cuộc trò chuyện (hàng như cột điều hướng + IconButton sao `aria-pressed`) và phần Tin nhắn (thẻ như Được nhắc tới, xếp theo lúc gắn sao), mỗi phần có trạng thái rỗng riêng. Mọi thao tác lạc quan; toast "Đã gắn sao “…”"/"Đã bỏ gắn sao …" + Hoàn tác, gắn sao tin + "Xem"; lỗi hoàn lại + toast lỗi + Thử lại.
+- **Điện thoại**: tab Tin nhắn là Trang chủ nên hai lối tắt còn lại là hai ô cao 64 (icon + pill đếm / nhãn) đầu danh sách; hai màn mở toàn màn có Quay lại.
 
 ### Chat: luồng in-line, thread, ô soạn (mockup `design/mockups/spaces.html` §2–§5; §2 là tin nhắn trực tiếp với tin hai bên)
 
@@ -279,7 +322,7 @@ này thì cái kia đóng.
 - **Luồng (MessageStream):** nền `--color-base`, cũ trên mới dưới, tin xếp **hai bên**. Tin của người khác
   bên trái: Avatar 32 + tên hiển thị 600 + giờ `text-xs` mờ tabular phía trên bong bóng. **Tin của bạn bên
   phải**: không avatar, không tên (chữ ẩn "Bạn" cho trình đọc màn hình), chỉ giờ ở trên, căn phải. Bong bóng:
-  `text-sm` line-height 1.55, padding 7 × 12, radius 16, rộng tối đa min(70ch, 85%) cột tin, co theo nội
+  `text-md` (điện thoại `text-base`), padding 7 × 12, radius 16, rộng tối đa min(70ch, 85%) cột tin, co theo nội
   dung; người khác nền `--color-sunk`, của bạn nền `--color-accent-wash`; góc phía người gửi của bong bóng
   đầu nhóm là 4 (trên trái với người khác, trên phải với bạn). `code` và khối code trong bong bóng nền
   `--color-base`. Đính kèm (lưới ảnh, thẻ tệp), cảm xúc và hàng tóm tắt thread nằm ngoài bong bóng, bám
@@ -313,7 +356,7 @@ này thì cái kia đóng.
     luôn cuộn tới cuối.
 - **Hàng tóm tắt thread (ThreadSummary):** dưới nội dung của tin có ≥ 1 trả lời, thẳng lề chữ; là `button` cao
   32, radius 8, hover `--color-raised`. Thứ tự: cụm Avatar 20 của **tối đa 3 người trả lời gần nhất** (mới nhất
-  bên trái, viền 2px màu nền) · **"N trả lời"** 13px/600 `--color-accent` · "Lần cuối 09:20" mờ (giờ theo §8; hôm
+  bên trái, viền 2px màu nền) · **"N trả lời"** 14px/600 `--color-accent` · "Lần cuối 09:20" mờ (giờ theo §8; hôm
   qua "Hôm qua 17:05", cũ hơn "06/10") · pill **"M mới"** (pill đếm accent) **chỉ khi bạn đang theo dõi thread
   và có trả lời chưa đọc**. Thread không theo dõi không bao giờ có "mới", số trả lời vẫn đúng. Thread đang mở ở
   panel: nền `--color-accent-wash`, `aria-expanded="true"`. `aria-label` đọc đủ: "Thread, 3 trả lời, lần cuối
@@ -334,7 +377,7 @@ này thì cái kia đóng.
   (tin gần nhất của bạn trong cuộc trò chuyện hoặc thread đang mở). Bong bóng thành ô sửa tại chỗ: nền
   `--color-raised`, viền trong 2px `--color-accent`, radius 12, rộng tối đa min(560, 85%); dưới chữ: "Esc huỷ ·
   Enter lưu" 12px mờ + Huỷ (ghost sm) + Lưu (primary sm). Enter lưu, Shift+Enter xuống dòng, Esc huỷ (trả nguyên
-  bản). Trích dẫn và đính kèm giữ nguyên. Lưu xong cuối bong bóng có nhãn **"đã sửa"** 11px mờ (cả người khác
+  bản). Trích dẫn và đính kèm giữ nguyên. Lưu xong cuối bong bóng có nhãn **"đã sửa"** 12px mờ (cả người khác
   thấy). Lưu chữ rỗng = hỏi xoá tin. Người khác thấy chữ đổi tại chỗ (fade 160ms), không tính là tin mới, không
   thông báo. Thẻ (bình chọn, công việc…) không sửa được.
 - **Xoá tin:** luôn qua hộp xác nhận (`alertdialog`, rộng 420): "Xoá tin nhắn?" + câu nói rõ hậu quả ("Tin sẽ bị
@@ -395,7 +438,7 @@ này thì cái kia đóng.
   `--color-accent-wash`, icon `--color-accent`, `aria-pressed="true"`. Tooltip có phím tắt ("Đậm (Ctrl+B)", macOS
   hiện ⌘). ←/→ di chuyển trong thanh (roving tabindex). Trạng thái bật/tắt nhớ theo người dùng. Dưới 768: thanh
   cuộn ngang trong ô soạn, không xuống dòng. Phím tắt và cú pháp gõ nhanh theo phase 07 của plan chat.
-- **Hiển thị định dạng trong tin:** đậm 600; code inline `--font-mono` 13px trên `--color-sunk`, radius 4, padding
+- **Hiển thị định dạng trong tin:** đậm 600; code inline `--font-mono` 14px trên `--color-sunk`, radius 4, padding
   1 × 4; khối code `--color-sunk`, radius 8, padding 10 × 12, cuộn ngang; trích dẫn: vạch trái 3px `--color-line`,
   chữ `--color-ink-muted`; link `--color-accent` gạch chân, mở tab mới. Không màu chữ hay font tuỳ ý.
 - **Hộp chèn link (LinkDialog):** popover neo vào nút Link (hoặc Ctrl/Cmd+K), rộng 320, `--color-overlay`, radius
@@ -409,13 +452,27 @@ này thì cái kia đóng.
   `button` "Mở ảnh <tên tệp>", alt lấy từ tên tệp; khi đang tải: Skeleton đúng tỉ lệ từ kích thước đã lưu, không
   nhảy layout. **Thẻ tệp:** `--color-raised` (trong panel `--color-base`), radius 10, padding 10 14 10 10, rộng tối
   đa 340: ô icon 36 theo loại (bảng tính `success`, PDF `danger`, văn bản `info`, khác `--color-sunk`) + tên 600
-  (cắt …) + "PDF · 1,2 MB" 12px mờ tabular; hover hiện IconButton Tải xuống; bấm mở xem trước trong Tài liệu.
-- **Trình xem ảnh (ImageViewer):** modal toàn màn (`--z-modal`, focus trap), nền `--color-sunk`. Thanh trên nền
-  `--color-base`, cao 56: PersonChip người gửi + giờ · tên tệp · dung lượng; phải: **Tải xuống**, **Đóng**. Ảnh
-  giữa, `object-fit: contain`, đệm ngang 72 cho nút **Ảnh trước / Ảnh sau** (IconButton tròn 44 `--color-overlay`
-  + shadow, giữa mép trái/phải; ẩn ở ảnh đầu/cuối, không quay vòng). Dưới ảnh: "2 / 4" tabular. ←/→ chuyển ảnh, Esc
-  đóng và trả focus về ảnh đã bấm. Phạm vi: các ảnh của **cùng một tin**. Màn chạm: vuốt ngang chuyển ảnh, nút
-  trước/sau nằm sát mép.
+  (cắt …) + "PDF · 1,2 MB" 12px mờ tabular; hover hiện IconButton Tải xuống; bấm thẻ mở **Trình xem tệp**.
+- **Trình xem tệp (FileViewer)** (mockup `design/mockups/file-viewer.html`), một trình xem cho mọi tệp mở từ tin, thread, tab Tệp và Tài liệu.
+  - **Hộp:** ≥ 768 là hộp thoại phủ (`--z-modal`, cách mép 32, radius 12, `--shadow-overlay`, nền `--color-scrim`). Dưới 768 toàn màn.
+  - **Thanh trên** (`--color-base`, 56): ô loại 36 theo `file-kind`, tên cắt giữa (giữ đuôi), "Loại · dung lượng · PersonChip 20 + gửi lúc/tải lên + giờ". Phải: Mở trong Tài liệu (ghost; chỉ khi tệp nằm trong thư mục người xem mở được, và không hiện khi mở từ Tài liệu), Tải xuống, Đóng. Dưới 1024 các nút chỉ còn icon.
+  - **Sân khấu** (`--color-sunk`): nút trước/sau tròn 44 ở mép, "n / N" dưới, chỉ trong cùng tin hoặc cùng danh sách, không quay vòng.
+  - **Thân theo loại:**
+    - Ảnh: vừa khung / 100% + kéo.
+    - PDF và Office (đổi trên máy chủ): trang dọc rộng tối đa 816 + viên "Trang [n] / N · − % +". Office thêm dòng mờ "Bản xem trước từ tệp Word, có thể khác bản gốc đôi chút."
+    - Video, âm thanh: `controls` gốc.
+    - Bảng tính (xlsx, xls, ods; người dùng chốt 2026-10-11): bảng như CSV, mỗi sheet một tab, 500 dòng đầu, công thức hiện giá trị — không đổi sang PDF.
+    - Văn bản, mã, CSV: mono 13; mã có số dòng; CSV là bảng tiêu đề dính, hàng 36. Tối đa 500 dòng / 1 MB; mã chưa tô màu cú pháp, dải đáy "Đang xem N dòng đầu trên M dòng." + Tải xuống để xem đủ.
+    - Loại khác: icon 64 + "Không xem trước được loại tệp này" + Tải xuống (primary).
+  - **Trạng thái:**
+    - Skeleton (sau 300ms).
+    - "Đang chuẩn bị bản xem trước…" (Office lần đầu, thanh tiến độ không giá trị, Tải xuống thay vì chờ, aria-live khi xong).
+    - Lỗi chuyển đổi và quá lớn (nói lý do + Tải xuống).
+    - 403 "Bạn không có quyền xem tệp này": không tên, loại, dung lượng, người gửi; không có thao tác.
+    - 404 "Tệp này đã bị xoá": tên mờ, không có thao tác.
+  - **Điện thoại:** Đóng trái, ⋯ phải (sheet: tên đầy đủ, người gửi, Tải xuống, Mở trong Tài liệu). Thanh đáy ‹ n / N ›, nút tắt ở hai đầu. Phóng bằng chụm hai ngón.
+  - **Bàn phím:** Esc (sheet trước), ←/→ (trừ khi đang ở media/ô số trang), + − 0. Focus trap, trang sau `inert`, mở thì focus vào Đóng, đóng thì trả focus về chỗ đã bấm.
+  - **Giới hạn (người dùng chốt 2026-10-11):** đổi Office tối đa 50 MB nguồn, 45 giây, PDF ≤ 80 MB; trong lúc máy chủ đổi, request chờ và thân hiện "Đang chuẩn bị bản xem trước…". 403 giữ ẩn tên tệp, chưa có "Xin quyền xem".
 
 ### Chat trên điện thoại (mockup `design/mockups/chat-mobile.html`)
 
@@ -424,7 +481,7 @@ Bản 390px của Chat; hành vi theo các mục "Chat: …" ở trên, chỉ kh
   nút nổi "Trò chuyện mới" (cao 52, radius 16, `--color-accent-wash`) góc phải trên thanh đáy, ẩn khi cuộn xuống. Nhấn
   giữ hàng mở sheet Chuyển tới mục / Mục mới… / Bỏ khỏi mục / Gắn sao / Tắt thông báo.
 - **Luồng:** thanh trên có quay lại, icon nhóm 28, tên + "N thành viên", nút Thread (badge) và Thông tin; bong bóng tối đa
-  88%, chữ 15px; hàng tóm tắt thread cao 36. Không hover: chạm tin hiện giờ trong cụm.
+  88%, chữ 16px; hàng tóm tắt thread cao 36. Không hover: chạm tin hiện giờ trong cụm.
 - **Thread và danh sách Thread:** màn toàn màn trượt lên (280ms), quay lại giữ vị trí cuộn của luồng; nút Theo dõi /
   Đang theo dõi (pill 36) trên thanh trên; danh sách Thread có chip lọc cuộn ngang (cao 36).
 - **Nhấn giữ tin (400ms):** sheet đáy có hàng 6 cảm xúc nhanh (48) + thao tác (hàng 52): Trả lời trong thread, Theo dõi /
@@ -523,8 +580,29 @@ lớp phủ realtime). Không `transition: all`. Đóng chạy bằng ~75% thờ
 | Vạch "Tin mới" | tĩnh khi mở | fade 220ms (khi bạn gửi tin) |
 | Số "N trả lời", pill "M mới" | đổi số fade 160ms; pill vào `scale(.6)` → 1 + fade 160ms ease-out | fade 160ms khi đã đọc |
 | Panel thread ↔ panel Thread (cùng khe) | đổi nội dung fade 160ms, không trượt | không |
-| Trình xem ảnh | scrim fade 220ms + ảnh `scale(.98)` → 1, 280ms expo | 210ms ease-in |
-| Đổi ảnh trong trình xem | `translateX(±16px)` + fade theo hướng, 160ms | không |
+| Trình xem tệp | desktop: như Modal; điện thoại: scrim fade 220ms + `scale(.98)` → 1, 280ms expo | 210ms ease-in |
+| Bản xem trước sẵn sàng | fade 160ms | không |
+| Đổi tệp trong trình xem | `translateX(±16px)` + fade theo hướng, 160ms | không |
+
+**Ngoại lệ: màn đăng nhập** (mockup `design/mockups/auth-motion.html`, duyệt 2026-10-11). Hai bước
+đăng nhập là một luồng đi tới, nên được trượt; mọi thứ vẫn dùng token ở trên, chỉ `transform` và `opacity`.
+
+| Chuyển động | Vào | Ra |
+|---|---|---|
+| Bước 1 → bước 2 (quay lại: ngược hướng) | `translateX(±16px)` + fade, 280ms expo | `translateX(∓12px)` + fade, 210ms ease-in |
+| Email bay từ ô nhập sang "Đã gửi tới …" | `translate` + `scale` của chính dòng chữ, 280ms expo, một bản duy nhất | không |
+| Form vào lần lượt | từng phần `translateY(8px)` + fade, 220ms ease-out, lệch 40ms, bắt đầu sau 200ms (160ms ở bước sau) | không |
+| Logo tự lắp | nút `scale(.6)` → 1 + fade 160ms, nét `scaleX` 0 → 1 160ms, nút đích 280ms expo; lệch 40 đến 60ms, ~840ms; **một lần mỗi phiên trình duyệt** (cờ `sessionStorage`), các lần sau đứng yên | không |
+| Hoạt động ở brand pane | hàng vào như "Chèn hàng"; hàng mới nhất phủ màu người 2400ms + nhãn "vừa tải lên" | lớp phủ tan theo mẫu realtime |
+| Nền đồ thị thuộc tính ở brand pane | fade 280ms expo; hai lớp trôi tối đa 16px, một lần khoảng **30s** rồi **đứng yên**; dừng khi tab ẩn | không |
+| Gõ một số của mã | ô `scale(.92)` → 1, số `translateY(6px)` → 0 + fade, 160ms ease-out | không |
+| Mã sai | rung `translateX` ±6px một lần, 280ms ease-out, viền danger, thông báo "Mã chưa đúng. Còn N lần thử." (aria-live) | không |
+| Mã đúng | ô phủ success-wash lệch 40ms, gom vào giữa 220ms ease-in, huy hiệu ✓ `scale(.6)` → 1 280ms expo, thông báo "Đã xác minh." (aria-live), giữ ~700ms rồi chuyển route | route fade 160ms như thường |
+
+Giảm chuyển động (hệ điều hành hoặc "Luôn bật" trong Cài đặt): không có `transform`; mỗi dòng trên
+thành fade tối đa 120ms hoặc đổi màu; nền đồ thị **không được vẽ**; email không bay; logo hiện bằng
+fade 120ms; lớp phủ realtime ở brand pane vẫn hiện. Không chuyển động nào chặn thao tác: ô nhập nhận
+phím và focus ngay từ khung đầu tiên.
 
 **Realtime (bản sắc của hệ):**
 - Thay đổi do **người khác** gây ra: avatar tác giả loé vòng `--color-person-N-wash` 900ms; hàng

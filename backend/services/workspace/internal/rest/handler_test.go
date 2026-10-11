@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -137,6 +138,8 @@ type fakeDeptService struct {
 	caller string
 	wsID   string
 	calls  int
+	// details, when set, is what WorkspaceDetails answers.
+	details *domain.WorkspaceDetails
 
 	lastName, lastRole, lastArea, lastNode, lastEmail, lastDept, lastUser, lastInvitation string
 	lastOps                                                                               []string
@@ -168,10 +171,20 @@ func (f *fakeDeptService) UpdateMemberDepartment(_ context.Context, caller, wsID
 }
 
 func (f *fakeDeptService) WorkspaceDetails(_ context.Context, caller, wsID string) (*domain.WorkspaceDetails, error) {
+	if f.details != nil {
+		return f.details, f.rec(caller, wsID)
+	}
 	return &domain.WorkspaceDetails{}, f.rec(caller, wsID)
 }
 func (f *fakeDeptService) UpdateWorkspaceDetails(_ context.Context, caller, wsID string, _, _ *string) (*domain.WorkspaceDetails, error) {
 	return &domain.WorkspaceDetails{}, f.rec(caller, wsID)
+}
+
+func (f *fakeDeptService) ConvertToOrganization(_ context.Context, caller, wsID string) (*domain.Conversion, error) {
+	if err := f.rec(caller, wsID); err != nil {
+		return nil, err
+	}
+	return &domain.Conversion{ConvertedByName: "Lê Thị Hoa", ConvertedAt: time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)}, nil
 }
 
 func (f *fakeDeptService) LeaveWorkspace(_ context.Context, caller, wsID string) error {
@@ -265,6 +278,7 @@ func adminRoutes() []adminRoute {
 		{"UpdateMemberDepartment", http.MethodPut, `{"department_id":"d"}`, []string{"id", "nodeId"}, func(h *AdminHandler) echo.HandlerFunc { return h.UpdateMemberDepartment }},
 		{"ListPermissionAreas", http.MethodGet, "", []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.ListPermissionAreas }},
 		{"LeaveWorkspace", http.MethodPost, `{"nodeId":"u-victim",` + spoof + `}`, []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.LeaveWorkspace }},
+		{"ConvertToOrganization", http.MethodPost, `{"requester_ngac_node_id":"u-attacker"}`, []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.ConvertToOrganization }},
 		{"GetWorkspaceDetails", http.MethodGet, "", []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.GetWorkspaceDetails }},
 		{"UpdateWorkspaceDetails", http.MethodPatch, `{"name":"Ops",` + spoof + `}`, []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.UpdateWorkspaceDetails }},
 		{"ListRoles", http.MethodGet, "", []string{"id"}, func(h *AdminHandler) echo.HandlerFunc { return h.ListRoles }},
@@ -598,4 +612,75 @@ func TestLeaveRoute_TakesTheCallerFromClaimsAndMapsTheLastOwner(t *testing.T) {
 	require.NoError(t, r.handler(NewAdminHandler(last))(c))
 	assert.Equal(t, http.StatusConflict, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"reason":"last_owner"`)
+}
+
+func TestAdminHandler_ConvertToOrganizationWireShapeAndErrors(t *testing.T) {
+	r := find("ConvertToOrganization")
+
+	code, body := call(t, &fakeDeptService{}, "convert", r)
+	assert.Equal(t, http.StatusOK, code)
+	assert.JSONEq(t, `{"type":"organization","converted_by_name":"Lê Thị Hoa","converted_at":"2026-10-11T09:00:00Z"}`, body)
+
+	code, body = call(t, &fakeDeptService{err: fmt.Errorf("%w", domain.ErrAlreadyOrganization)}, "again", r)
+	assert.Equal(t, http.StatusConflict, code)
+	assert.JSONEq(t, `{"reason":"already_organization"}`, body)
+
+	for name, tc := range map[string]struct {
+		err  error
+		want int
+	}{
+		"not the owner": {domain.ErrAccessDenied, http.StatusForbidden},
+		"unknown":       {domain.ErrNotFound, http.StatusNotFound},
+		"database":      {errors.New("pq: relation workspaces is gone"), http.StatusInternalServerError},
+	} {
+		t.Run(name, func(t *testing.T) {
+			c, _ := newCtx(t, route2(r), true)
+			err := r.handler(NewAdminHandler(&fakeDeptService{err: tc.err}))(c)
+			var he *echo.HTTPError
+			require.True(t, errors.As(err, &he), "err = %v", err)
+			assert.Equal(t, tc.want, he.Code)
+			assert.NotContains(t, fmt.Sprint(he.Message), "relation", "database text never reaches a client")
+		})
+	}
+}
+
+func TestAdminHandler_DetailsCarryTypeOwnerAndConversion(t *testing.T) {
+	at := time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
+	f := &fakeDeptService{details: &domain.WorkspaceDetails{
+		Name: "Acme", Description: "d", CanManage: true, Type: "organization", IsOwner: true,
+		OwnerName: "Lê Thị Hoa", OwnerNames: []string{"Lê Thị Hoa"}, ConvertedByName: "Lê Thị Hoa", ConvertedAt: &at,
+	}}
+	code, body := call(t, f, "details", find("GetWorkspaceDetails"))
+	assert.Equal(t, http.StatusOK, code)
+	assert.JSONEq(t, `{"name":"Acme","description":"d","can_manage":true,"type":"organization","is_owner":true,
+		"owner_name":"Lê Thị Hoa","owner_names":["Lê Thị Hoa"],"converted_by_name":"Lê Thị Hoa","converted_at":"2026-10-11T09:00:00Z"}`, body)
+
+	f = &fakeDeptService{details: &domain.WorkspaceDetails{Name: "Mine", Type: "personal", OwnerName: "Lê Thị Hoa", OwnerNames: []string{"Lê Thị Hoa"}}}
+	_, body = call(t, f, "never converted", find("GetWorkspaceDetails"))
+	assert.JSONEq(t, `{"name":"Mine","description":"","can_manage":false,"type":"personal","is_owner":false,
+		"owner_name":"Lê Thị Hoa","owner_names":["Lê Thị Hoa"],"converted_by_name":"","converted_at":""}`, body)
+}
+
+func TestAdminHandler_DetailsOwnerNamesPreservesCommaInName(t *testing.T) {
+	f := &fakeDeptService{details: &domain.WorkspaceDetails{
+		Name: "Acme", Description: "d", CanManage: false, Type: "personal", IsOwner: false,
+		OwnerName: "Nguyễn, Hoàng Hoa, Trần Văn Bình",
+		OwnerNames: []string{"Nguyễn, Hoàng Hoa", "Trần Văn Bình"},
+	}}
+	code, body := call(t, f, "comma in name", find("GetWorkspaceDetails"))
+	assert.Equal(t, http.StatusOK, code)
+	assert.JSONEq(t, `{"name":"Acme","description":"d","can_manage":false,"type":"personal","is_owner":false,
+		"owner_name":"Nguyễn, Hoàng Hoa, Trần Văn Bình",
+		"owner_names":["Nguyễn, Hoàng Hoa","Trần Văn Bình"],
+		"converted_by_name":"","converted_at":""}`, body)
+}
+
+func TestAdminHandler_GetWorkspaceDetailsNonMemberGetsForbidden(t *testing.T) {
+	f := &fakeDeptService{err: domain.ErrAccessDenied}
+	r := find("GetWorkspaceDetails")
+	c, _ := newCtx(t, route2(r), true)
+	err := r.handler(NewAdminHandler(f))(c)
+	var he *echo.HTTPError
+	require.True(t, errors.As(err, &he))
+	assert.Equal(t, http.StatusForbidden, he.Code)
 }

@@ -156,23 +156,70 @@ func (s *Service) MarkChannelRead(ctx context.Context, userID, userNodeID, chann
 	return s.store.UpsertReadReceipt(ctx, userID, channelID, lastMessageID)
 }
 
-// GetUnreadCounts returns unread message counts for all channels a user is a member of.
-// The query is already scoped to the caller's own receipts, so it needs no
-// further authorization — a user can only ever see their own unread state.
-func (s *Service) GetUnreadCounts(ctx context.Context, userID string) ([]*pb.ChannelUnread, error) {
-	unreads, err := s.store.GetUnreadCounts(ctx, userID)
+// GetUnreadCounts returns the caller's unread counts for every channel they may
+// read: the channels of the workspace they are signed in to and their DMs —
+// the channels the sidebar lists. A channel the caller may not read is never
+// named; the counts come from the caller's own receipts and thread follows.
+func (s *Service) GetUnreadCounts(ctx context.Context, userID, userNodeID, workspaceID string) ([]*pb.ChannelUnread, error) {
+	if userID == "" || userNodeID == "" {
+		return nil, ErrInvalidInput
+	}
+	channelIDs, err := s.readableChannelIDs(ctx, workspaceID, userNodeID)
+	if err != nil {
+		return nil, err
+	}
+	unreads, err := s.store.GetUnreadCounts(ctx, userID, channelIDs)
+	if err != nil {
+		return nil, fmt.Errorf("unread counts: %w", err)
+	}
+	starred, err := s.store.StarredConversations(ctx, userID, channelIDs)
 	if err != nil {
 		return nil, fmt.Errorf("unread counts: %w", err)
 	}
 	var result []*pb.ChannelUnread
 	for _, u := range unreads {
-		result = append(result, &pb.ChannelUnread{
+		at, isStarred := starred[u.ChannelID]
+		item := &pb.ChannelUnread{
 			ChannelId:         u.ChannelID,
 			UnreadCount:       u.UnreadCount,
 			LastReadMessageId: u.LastReadMsgID,
-		})
+			ThreadUnreadCount: u.ThreadUnread,
+			NotificationLevel: u.Level,
+			MentionCount:      u.MentionCount,
+			Starred:           isStarred,
+		}
+		if isStarred {
+			item.StarredAt = timestamppb.New(at)
+		}
+		result = append(result, item)
 	}
 	return result, nil
+}
+
+// readableChannelIDs lists the channels the sidebar shows the user: the
+// workspace's channels and the DMs, each kept only when the user holds read on
+// its content OA (one batch check, failing closed like the channel list).
+func (s *Service) readableChannelIDs(ctx context.Context, workspaceID, userNodeID string) ([]string, error) {
+	var candidates []*store.Channel
+	if workspaceID != "" {
+		channels, err := s.store.ListChannelsByWorkspace(ctx, workspaceID)
+		if err != nil {
+			return nil, fmt.Errorf("list channels: %w", err)
+		}
+		candidates = append(candidates, channels...)
+	}
+	dms, err := s.store.ListAllDMs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list DMs: %w", err)
+	}
+	candidates = append(candidates, dms...)
+
+	readable := s.filterAccessible(ctx, candidates, userNodeID)
+	ids := make([]string, 0, len(readable))
+	for _, ch := range readable {
+		ids = append(ids, ch.Id)
+	}
+	return ids, nil
 }
 
 // --- Search ---
@@ -192,7 +239,7 @@ func (s *Service) SearchMessages(ctx context.Context, channelID, userNodeID, que
 	return &pb.MessageList{Messages: messagesToProto(msgs)}, nil
 }
 
-// EnrichMessagesWithMetadata adds reactions and pin status to a slice of messages.
+// EnrichMessagesWithMetadata adds reactions, pin status and attachments to a slice of messages.
 func (s *Service) EnrichMessagesWithMetadata(ctx context.Context, msgs []*store.Message, channelID string) error {
 	if len(msgs) == 0 {
 		return nil
@@ -214,11 +261,20 @@ func (s *Service) EnrichMessagesWithMetadata(ctx context.Context, msgs []*store.
 		return fmt.Errorf("load pins: %w", err)
 	}
 
+	// Batch load attachments
+	attachments, err := s.store.ListAttachmentsForMessages(ctx, msgIDs)
+	if err != nil {
+		return fmt.Errorf("load attachments: %w", err)
+	}
+
 	for _, m := range msgs {
 		if groups, ok := reactionsMap[m.ID]; ok {
 			m.Reactions = groups
 		}
 		m.IsPinned = pinnedSet[m.ID]
+		if !m.Deleted {
+			m.Attachments = attachments[m.ID]
+		}
 	}
-	return nil
+	return s.attachQuotes(ctx, msgs)
 }

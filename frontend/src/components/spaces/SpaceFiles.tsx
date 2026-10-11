@@ -1,11 +1,13 @@
-import { useMemo, useRef, type KeyboardEvent } from 'react'
+import { useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useNavigate } from '@tanstack/react-router'
 import { FolderOpen, CircleAlert } from 'lucide-react'
 import { useChannelDrive, useDriveFolder } from '../../hooks/useDrive'
-import { useDownloadFile } from '../../hooks/useDownloadUrl'
+import { folderSearch, type DriveSearch } from '../../lib/drive-search'
 import { fileKind } from '../../lib/file-kind'
 import { formatBytes, formatDateTime, formatRelative, toMillis } from '../../lib/format'
 import { displayName, type PeopleDirectory } from '../../lib/people'
 import { Button, PersonChip, Pressable } from '../primitives'
+import { FileViewer, type ViewerFile } from '../files/FileViewer'
 import { EmptyState } from './EmptyState'
 
 interface SpaceFilesProps {
@@ -20,13 +22,16 @@ interface SpaceFilesProps {
  * Files shared in a space, in the hairline table of Tài liệu (DESIGN.md §6
  * Table). The channel drive's root holds one folder per space; chat uploads
  * land inside it, so both levels are listed. Rows are real buttons with ↑/↓
- * between them; Enter downloads.
+ * between them; activating opens FileViewer.
  */
 export function SpaceFiles({ workspaceId, channelId, people, onGoToChat }: SpaceFilesProps) {
+  const navigate = useNavigate()
   const root = useChannelDrive(workspaceId, channelId)
   const folder = root.data?.items?.find((i) => i.item_type === 'folder')
   const inner = useDriveFolder(workspaceId, folder?.id)
   const listRef = useRef<HTMLDivElement>(null)
+  const openerRef = useRef<HTMLElement | null>(null)
+  const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   const files = useMemo(() => {
     const all = [...(root.data?.items ?? []), ...(folder ? inner.data?.items ?? [] : [])]
@@ -35,9 +40,24 @@ export function SpaceFiles({ workspaceId, channelId, people, onGoToChat }: Space
       .sort((a, b) => toMillis(b.updated_at) - toMillis(a.updated_at))
   }, [root.data, inner.data, folder])
 
-  const loading = root.isLoading || (!!folder && inner.isLoading)
+  const viewerFiles = useMemo<ViewerFile[]>(() => {
+    return files.map((f) => {
+      const owner = people.byUserId.get(f.owner_id)
+      return {
+        id: f.id,
+        name: f.name,
+        mime: f.mime_type,
+        size: f.size_bytes,
+        uploaderName: owner?.name ?? f.owner_name,
+        uploaderAvatarUrl: owner?.avatarUrl,
+        uploaderId: f.owner_id,
+        time: f.updated_at ?? f.created_at,
+        parentFolderId: f.parent_id,
+      }
+    })
+  }, [files, people])
 
-  const { download } = useDownloadFile()
+  const loading = root.isLoading || (!!folder && inner.isLoading)
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return
@@ -85,7 +105,7 @@ export function SpaceFiles({ workspaceId, channelId, people, onGoToChat }: Space
                 <div className="skeleton h-3.5 w-2/3 rounded-sm" />
               </div>
             ))
-          : files.map((f) => {
+          : files.map((f, idx) => {
               const kind = fileKind(f.name, f.mime_type)
               const Icon = kind.icon
               const owner = people.byUserId.get(f.owner_id)
@@ -93,8 +113,11 @@ export function SpaceFiles({ workspaceId, channelId, people, onGoToChat }: Space
                 <Pressable
                   key={f.id}
                   data-row
-                  onClick={() => void download(f)}
-                  aria-label={`Tải xuống ${f.name}`}
+                  onClick={(e) => {
+                    openerRef.current = e.currentTarget
+                    setOpenIndex(idx)
+                  }}
+                  aria-label={`Xem trước ${f.name}`}
                   className={`${cols} w-full h-11 border-b border-line text-sm text-ink rounded-none
                     hover:bg-hover transition-colors duration-quick`}
                 >
@@ -115,6 +138,20 @@ export function SpaceFiles({ workspaceId, channelId, people, onGoToChat }: Space
               )
             })}
       </div>
+      {openIndex !== null && (
+        <FileViewer
+          files={viewerFiles}
+          index={openIndex}
+          origin="chat"
+          onClose={() => setOpenIndex(null)}
+          onOpenInDrive={(vf) => {
+            if (vf.parentFolderId) {
+              void navigate({ to: '/drive', search: (prev: DriveSearch) => folderSearch(prev, vf.parentFolderId) })
+            }
+          }}
+          returnFocusRef={openerRef}
+        />
+      )}
     </div>
   )
 }

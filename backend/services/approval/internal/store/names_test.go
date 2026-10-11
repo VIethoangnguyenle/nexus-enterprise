@@ -48,7 +48,7 @@ func seedTenant(t *testing.T, pool *pgxpool.Pool, label string) tenantRows {
 	exec(`INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $2, 'UA')`, r.plainRole, "Plain "+label)
 	exec(`INSERT INTO ngac_assignments (id, child_id, parent_id) VALUES ($1, $2, $3), ($4, $5, $3)`, "a1-"+sfx, r.role, pc, "a2-"+sfx, r.plainRole)
 	exec(`INSERT INTO users (id, username, password) VALUES ($1, $1, '')`, owner)
-	exec(`INSERT INTO workspaces (id, name, owner_id) VALUES ($1, 'ws', $2)`, r.ws, owner)
+	exec(`INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, 'ws', $2, 'organization')`, r.ws, owner)
 	exec(`INSERT INTO users (id, username, password, ngac_node, display_name) VALUES ($1, $1, '', $2, 'Lê Thị Hoa '||$3::text)`, personUser, r.person, label)
 	exec(`INSERT INTO users (id, username, password, ngac_node, display_name) VALUES ($1, 'bare-'||$3::text, '', $2, '')`, bareUser, r.bare, sfx)
 	exec(`INSERT INTO users (id, username, password, ngac_node, display_name) VALUES ($1, $1, '', $2, 'Người ngoài')`, strangerUser, r.stranger)

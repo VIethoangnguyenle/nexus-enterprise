@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -12,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"ngac-platform/pkg/httputil"
+	"ngac-platform/services/approval/internal/domain"
 )
 
 // dbConn is what a store method runs its statements on: a tenant-scoped
@@ -81,6 +83,39 @@ func (s *Store) ProvisionSchema(ctx context.Context, tenantID string) (string, e
 	err := s.db.QueryRow(ctx, `SELECT provision_tenant_schema($1)`, tenantID).Scan(&schema)
 	if err != nil {
 		return "", fmt.Errorf("provision schema: %w", err)
+	}
+	return schema, nil
+}
+
+// EnsureSchema returns the tenant's schema, creating it only if the tenant has no
+// registry row at all. A row that is not active (disabled, migrating, still
+// provisioning) is someone else's state: it is left exactly as it is and
+// domain.ErrSchemaNotActive comes back, where ProvisionSchema would set it active.
+// The check and the creation run under a per-tenant lock, so two first calls at
+// once both end with the one schema.
+func (s *Store) EnsureSchema(ctx context.Context, tenantID string) (string, error) {
+	var schema string
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, "approval-schema:"+tenantID); err != nil {
+			return fmt.Errorf("lock tenant schema: %w", err)
+		}
+		var status string
+		err := tx.QueryRow(ctx, `SELECT schema_name, status FROM tenant_schemas WHERE tenant_id = $1`, tenantID).Scan(&schema, &status)
+		switch {
+		case err == nil && status == "active":
+			return nil
+		case err == nil:
+			return domain.ErrSchemaNotActive
+		case !errors.Is(err, pgx.ErrNoRows):
+			return fmt.Errorf("look up tenant schema: %w", err)
+		}
+		if err := tx.QueryRow(ctx, `SELECT provision_tenant_schema($1)`, tenantID).Scan(&schema); err != nil {
+			return fmt.Errorf("provision schema: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return "", err
 	}
 	return schema, nil
 }

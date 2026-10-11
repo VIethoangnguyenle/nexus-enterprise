@@ -2,13 +2,29 @@ import { queryClient } from './query-client'
 import { keys } from '../hooks/keys'
 import type {
   ChatMessage as WSChatMessage,
+  MessageDeletedEvent,
+  MessageEditedEvent,
   PinEvent,
   ReactionEvent,
   TaskUpdateEvent,
 } from '../generated/proto/messaging/ws'
 import type { Message, ReactionGroup, ChatTask } from '../api/messaging'
+import { useAuthStore } from '../stores/auth.store'
 
 type MessageList = { messages: Message[]; has_more: boolean }
+
+/** The message as the open screens hold it, if any. */
+function cachedMessage(channelId: string, id: string, parentId: string | undefined): Message | undefined {
+  const find = (list: { messages: Message[] } | undefined) => list?.messages.find((m) => m.id === id)
+  return (!parentId ? find(queryClient.getQueryData<MessageList>(keys.messaging.messages(channelId))) : undefined)
+    ?? find(queryClient.getQueryData<{ messages: Message[] }>(keys.messaging.thread(parentId || id)))
+}
+
+/** The "Được nhắc tới" pill and feed asked for again: what they count changed. */
+function refreshMentions(): void {
+  queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() })
+  queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsUnreadAll() })
+}
 
 /** Plain-text preview of a message body: tags stripped, whitespace folded, capped. */
 export function previewText(content: string): string {
@@ -41,7 +57,127 @@ export function convertChatMsgToMessage(chatMsg: WSChatMessage): Message {
     linked_entity_id: chatMsg.linkedEntityId || '',
     reactions: [],
     is_pinned: false,
+    message_type: chatMsg.messageType || undefined,
+    quoted: chatMsg.quoted && chatMsg.quoted.id
+      ? {
+          id: chatMsg.quoted.id,
+          sender_id: chatMsg.quoted.senderId,
+          sender_name: chatMsg.quoted.senderName,
+          text: chatMsg.quoted.text,
+          deleted: chatMsg.quoted.deleted,
+        }
+      : undefined,
+    attachments: (chatMsg.attachments || []).map((a) => ({
+      drive_file_id: a.driveFileId,
+      file_name: a.fileName,
+      mime_type: a.mimeType,
+      size_bytes: typeof a.sizeBytes === 'bigint' ? Number(a.sizeBytes) : Number(a.sizeBytes || 0),
+      width: a.width || undefined,
+      height: a.height || undefined,
+    })),
   }
+}
+
+/** Applies `fn` to the message with this id in a cached list; the list itself is returned untouched when it is not there. */
+function mapMessage(old: MessageList | undefined, id: string, fn: (m: Message) => Message): MessageList | undefined {
+  if (!old || !(old.messages || []).some((m) => m.id === id)) return old
+  return { ...old, messages: old.messages.map((m) => (m.id === id ? fn(m) : m)) }
+}
+
+/**
+ * A message of the open conversation changed text: take the stored text and
+ * the edit time into every cache that holds it. A root lives in its channel's
+ * stream and at the head of its own thread; a reply only in its thread. It is
+ * not a new message, so nothing else moves.
+ */
+export function applyMessageEdited(ev: MessageEditedEvent): void {
+  const m = ev.message
+  if (!m?.id) return
+  // The pill counts mentions of me: an edit that adds or removes me moves it, whoever is looking.
+  const me = useAuthStore.getState().user?.id
+  const before = cachedMessage(m.channelId, m.id, m.parentMessageId)
+  if (me && (m.mentions?.includes(me) || before?.mentions?.includes(me))) refreshMentions()
+  patchMessage(m.channelId, m.id, m.parentMessageId, (cur) =>
+    cur.deleted
+      ? cur
+      : {
+          ...cur,
+          content: m.content,
+          content_format: m.contentFormat || cur.content_format,
+          // The frame carries the whole list after the edit: an empty one means every mention was removed.
+          mentions: m.mentions ?? cur.mentions,
+          edited_at: ev.editedAt,
+        })
+}
+
+/**
+ * Applies `fn` to one message wherever it is cached: a root in its channel's
+ * stream and at the head of its own thread, a reply (`parentId` set) only in
+ * its thread. The thread lists are marked stale, since they show a root's first line.
+ */
+export function patchMessage(channelId: string, id: string, parentId: string | undefined, fn: (m: Message) => Message): void {
+  if (!parentId) {
+    queryClient.setQueryData(keys.messaging.messages(channelId), (old: MessageList | undefined) => mapMessage(old, id, fn))
+  }
+  queryClient.setQueryData(
+    keys.messaging.thread(parentId || id),
+    (old: { messages: Message[] } | undefined) => mapMessage(old as MessageList | undefined, id, fn),
+  )
+  if (!parentId) queryClient.invalidateQueries({ queryKey: keys.messaging.threadsListOf(channelId) })
+}
+
+/** What is left of a deleted message: no text, files, reactions or pin. */
+const tombstone = (m: Message): Message => ({
+  ...m, deleted: true, content: '', reactions: [], is_pinned: false, mentions: [], quoted: undefined,
+})
+
+/**
+ * A message was deleted. A root that has replies stays as a placeholder so its
+ * thread survives; any other message leaves the view. A deleted reply leaves
+ * its thread and the root takes the reply count the server computed. Messages
+ * that quote it now show the quote as deleted. Applying it twice changes
+ * nothing: the sender's own request and its frame both arrive.
+ */
+export function applyMessageDeleted(ev: MessageDeletedEvent): void {
+  const { messageId: id, channelId, parentMessageId: parent } = ev
+  // The frame names no one: a message not held here may have named me, so only a known miss skips the refresh.
+  const me = useAuthStore.getState().user?.id
+  const known = cachedMessage(channelId, id, parent)
+  if (me && (!known || known.mentions?.includes(me))) refreshMentions()
+  const without = (old: MessageList | undefined): MessageList | undefined =>
+    old && old.messages.some((m) => m.id === id) ? { ...old, messages: old.messages.filter((m) => m.id !== id) } : old
+
+  if (parent) {
+    queryClient.setQueryData(keys.messaging.thread(parent), (old: MessageList | undefined) => {
+      const kept = without(old)
+      return mapMessage(kept, parent, (root) => withReplyCount(root, ev.replyCount))
+    })
+    queryClient.setQueryData(keys.messaging.messages(channelId), (old: MessageList | undefined) =>
+      mapMessage(old, parent, (root) => withReplyCount(root, ev.replyCount)))
+  } else if (ev.keepPlaceholder) {
+    queryClient.setQueryData(keys.messaging.messages(channelId), (old: MessageList | undefined) => mapMessage(old, id, tombstone))
+    queryClient.setQueryData(keys.messaging.thread(id), (old: MessageList | undefined) => mapMessage(old, id, tombstone))
+  } else {
+    queryClient.setQueryData(keys.messaging.messages(channelId), without)
+    queryClient.setQueryData(keys.messaging.thread(id), (old: MessageList | undefined) => mapMessage(old, id, tombstone))
+  }
+
+  const unquote = (m: Message): Message =>
+    m.quoted?.id === id ? { ...m, quoted: { ...m.quoted, text: '', deleted: true } } : m
+  const unquoteAll = (old: MessageList | undefined): MessageList | undefined =>
+    old && old.messages.some((m) => m.quoted?.id === id) ? { ...old, messages: old.messages.map(unquote) } : old
+  queryClient.setQueryData(keys.messaging.messages(channelId), unquoteAll)
+  queryClient.setQueriesData({ queryKey: keys.messaging.threadsAll() }, unquoteAll)
+
+  queryClient.invalidateQueries({ queryKey: keys.messaging.threadsListOf(channelId) })
+  queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
+}
+
+/** The root's summary after a reply was deleted: the server's count, and nobody replied when it is zero. */
+function withReplyCount(root: Message, count: number): Message {
+  return count > 0
+    ? { ...root, reply_count: count }
+    : { ...root, reply_count: 0, last_reply_at: undefined, reply_participant_ids: [], thread_unread_count: 0 }
 }
 
 /** Inject a reaction change directly into the channel's messages cache. */

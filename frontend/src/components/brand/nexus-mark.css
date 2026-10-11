@@ -1,0 +1,35 @@
+/* The Nexus mark (design/mockups/logo.html, direction A). Colour comes from tokens only:
+   the path in --color-accent, the node you reach in person colour 1; on the accent fill
+   both become --color-on-accent. Only transform and opacity animate; durations and
+   curves are the DESIGN.md §7 tokens. */
+.nexus-mark { display: block; flex: none; overflow: visible; color: var(--color-accent); }
+.nexus-mark .nm-edge, .nexus-mark .nm-node { fill: var(--color-accent); }
+.nexus-mark .nm-end { fill: var(--color-person-1); }
+.nexus-mark .nm-line { stroke: var(--color-accent); }
+.nexus-mark[data-tone="on-accent"] .nm-edge,
+.nexus-mark[data-tone="on-accent"] .nm-node,
+.nexus-mark[data-tone="on-accent"] .nm-end { fill: var(--color-on-accent); }
+.nexus-mark[data-tone="on-accent"] .nm-line { stroke: var(--color-on-accent); }
+
+.nexus-mark .nm-edge { transform-box: fill-box; transform-origin: 0% 50%; }
+.nexus-mark .nm-node { transform-box: fill-box; transform-origin: 50% 50%; }
+
+/* Assembly, ~840ms in all: node, then the bar that leaves it, 200ms apart; the last node lands on expo. */
+.nexus-mark[data-assemble] .nm-node { animation: nm-pop var(--duration-quick) var(--ease-out) backwards; }
+.nexus-mark[data-assemble] .nm-edge { animation: nm-draw var(--duration-quick) var(--ease-out) backwards; }
+.nexus-mark[data-assemble] [data-nexus-node="1"] { animation-delay: 0ms; }
+.nexus-mark[data-assemble] [data-nexus-edge="1"] { animation-delay: 60ms; }
+.nexus-mark[data-assemble] [data-nexus-node="2"] { animation-delay: 200ms; }
+.nexus-mark[data-assemble] [data-nexus-edge="2"] { animation-delay: 240ms; }
+.nexus-mark[data-assemble] [data-nexus-node="3"] { animation-delay: 380ms; }
+.nexus-mark[data-assemble] [data-nexus-edge="3"] { animation-delay: 420ms; }
+.nexus-mark[data-assemble] [data-nexus-node="end"] { animation: nm-pop var(--duration-layout) var(--ease-out-expo) 560ms backwards; }
+
+/* Reduced motion: the whole mark fades in, no movement. */
+.nexus-mark[data-assemble][data-reduced] .nm-node,
+.nexus-mark[data-assemble][data-reduced] .nm-edge { animation: none; }
+.nexus-mark[data-assemble][data-reduced] { animation: nm-fade 120ms linear backwards; }
+
+@keyframes nm-pop { from { opacity: 0; transform: scale(0.6); } }
+@keyframes nm-draw { from { transform: scaleX(0); } }
+@keyframes nm-fade { from { opacity: 0; } }

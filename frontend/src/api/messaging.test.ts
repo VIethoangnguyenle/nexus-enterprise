@@ -72,6 +72,29 @@ describe('messagingApi', () => {
     )
   })
 
+  it('sendMessage carries the quoted message when there is one', async () => {
+    await messagingApi.sendMessage('ch-1', { content: 'ok', content_format: 'html', quoted_message_id: 'msg-9' })
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/channels/ch-1/messages',
+      expect.objectContaining({ body: JSON.stringify({ content: 'ok', content_format: 'html', quoted_message_id: 'msg-9' }) }),
+    )
+  })
+
+  it('editMessage patches the message with its new text and format', async () => {
+    await messagingApi.editMessage('msg-7', { content: '<p>sửa</p>', content_format: 'html' })
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/messages/msg-7',
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ content: '<p>sửa</p>', content_format: 'html' }) }),
+    )
+  })
+
+  it('deleteMessage and markMessageUnread address the message', async () => {
+    await messagingApi.deleteMessage('msg-7')
+    expect(mockFetch).toHaveBeenLastCalledWith('/api/messages/msg-7', expect.objectContaining({ method: 'DELETE' }))
+    await messagingApi.markMessageUnread('msg-7')
+    expect(mockFetch).toHaveBeenLastCalledWith('/api/messages/msg-7/unread', expect.objectContaining({ method: 'POST' }))
+  })
+
   it('getThread builds correct URL', async () => {
     await messagingApi.getThread('msg-42')
     expect(mockFetch).toHaveBeenCalledWith(

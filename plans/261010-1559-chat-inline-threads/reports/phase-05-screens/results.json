@@ -1,0 +1,17 @@
+{
+  "criteria": [],
+  "gates": {},
+  "delays": {},
+  "consoleErrors": {
+    "A": [],
+    "B": []
+  },
+  "networkErrors": {
+    "A": [],
+    "B": []
+  },
+  "measurements": {},
+  "findings": [
+    "Fatal error: OTP request failed 429: {\"code\":\"otp_rate_limited\",\"message\":\"too many codes requested, try again later\",\"retry_after_seconds\":24}\n\nError: OTP request failed 429: {\"code\":\"otp_rate_limited\",\"message\":\"too many codes requested, try again later\",\"retry_after_seconds\":24}\n\n    at apiSession (file:///home/zane/Desktop/projects/nexus-enterprise/frontend/e2e/wave1-two-people.mjs:67:25)\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async run (file:///home/zane/Desktop/projects/nexus-enterprise/frontend/e2e/wave1-two-people.mjs:339:19)"
+  ]
+}

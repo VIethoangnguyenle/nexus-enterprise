@@ -126,6 +126,18 @@ func TestListPermissionAreas_OmitsAnAreaThisWorkspaceDoesNotHave(t *testing.T) {
 	assert.Len(t, areas, len(ngac.Areas())-1)
 }
 
+// A personal workspace has no Assets area to grant on, even when its OA exists:
+// the area is refused there, so offering it would hand out a right that never works.
+func TestListPermissionAreas_PersonalWorkspaceHasNoAssetsArea(t *testing.T) {
+	f := personalFixture(t)
+	areas, err := f.svc.ListPermissionAreas(ctx(), member, ws1)
+	require.NoError(t, err)
+	for _, a := range areas {
+		assert.NotEqual(t, ngac.AreaAssets, a.Area)
+	}
+	assert.Len(t, areas, len(ngac.Areas())-1)
+}
+
 func TestListPermissionAreas_DeniesNonMembers(t *testing.T) {
 	for _, caller := range []string{outsider, otherOwner, ""} {
 		f := newAdminFixture(t)
@@ -246,6 +258,13 @@ func TestSetRolePermissions_DeniesWhenPolicyCannotAnswer(t *testing.T) {
 	f.read.checkErr = errors.New("policy down")
 	_, err := f.svc.SetRolePermissions(ctx(), owner, ws1, roleRead, ngac.AreaDocuments, []string{ngac.OpRead})
 	assert.ErrorIs(t, err, domain.ErrAccessDenied)
+	assert.Empty(t, f.write.mutations)
+}
+
+func TestSetRolePermissions_RefusesAssetsInAPersonalWorkspace(t *testing.T) {
+	f := personalFixture(t)
+	_, err := f.svc.SetRolePermissions(ctx(), owner, ws1, roleRead, ngac.AreaAssets, []string{ngac.OpRead})
+	assert.ErrorIs(t, err, domain.ErrNotFound)
 	assert.Empty(t, f.write.mutations)
 }
 

@@ -18,12 +18,21 @@ import '@fontsource/bricolage-grotesque/vietnamese-600.css'
 import '@fontsource/bricolage-grotesque/latin-700.css'
 import '@fontsource/bricolage-grotesque/vietnamese-700.css'
 import './index.css'
+import { trackAppHeight } from './lib/app-height'
+import { registerPwa } from './lib/pwa-register'
+import { startPushAuthSync } from './lib/push'
 
 const router = createRouter({ routeTree, context: { queryClient } })
 
 declare module '@tanstack/react-router' {
   interface Register { router: typeof router }
 }
+
+// Size the shell to the visible viewport so the on-screen keyboard never covers the composer.
+trackAppHeight(window.visualViewport)
+
+void registerPwa()
+startPushAuthSync()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

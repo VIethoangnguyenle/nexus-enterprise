@@ -1,0 +1,92 @@
+/* Motion of the sign-in screens (design/mockups/auth-motion.html). The approved exception in
+   DESIGN.md §7: durations and curves are the §7 tokens, staggered 40ms apart; the only long
+   animation is the graph behind the brand pane, which drifts once for about 30s and settles.
+   Only transform and opacity move. Reduced motion is decided in JS (AuthShell sets data-reduced
+   on the shell from the person's choice or the OS) so it follows the in-app "Luôn bật" too:
+   every movement below becomes a fade of at most 120ms, and the graph is not rendered at all. */
+
+@keyframes auth-fade { from { opacity: 0; } }
+@keyframes auth-rise-in { from { opacity: 0; transform: translateY(8px); } }
+@keyframes auth-wash { 0%, 40% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes auth-drift-a { to { transform: translate(-16px, 10px); } }
+@keyframes auth-drift-b { to { transform: translate(12px, -14px); } }
+
+/* ---------- form: its parts come in one after another ---------- */
+.auth-rise > * {
+  --i: 8;
+  animation: auth-rise-in var(--duration-base) var(--ease-out) backwards;
+  animation-delay: calc(var(--rise-start, 200ms) + var(--i) * 40ms);
+}
+.auth-rise > :nth-child(1) { --i: 0; }
+.auth-rise > :nth-child(2) { --i: 1; }
+.auth-rise > :nth-child(3) { --i: 2; }
+.auth-rise > :nth-child(4) { --i: 3; }
+.auth-rise > :nth-child(5) { --i: 4; }
+.auth-rise > :nth-child(6) { --i: 5; }
+.auth-rise > :nth-child(7) { --i: 6; }
+.auth-rise--step { --rise-start: var(--duration-quick); }
+.auth-shell[data-reduced] .auth-rise > * { animation: auth-fade 120ms linear backwards; animation-delay: 0ms; }
+
+/* ---------- brand pane: the graph ---------- */
+.auth-graph {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  -webkit-mask-image: linear-gradient(to right, transparent 62%, black 88%);
+  mask-image: linear-gradient(to right, transparent 62%, black 88%);
+  animation: auth-fade var(--duration-layout) var(--ease-out-expo) backwards;
+}
+.auth-graph svg { display: block; width: 100%; height: 100%; }
+.auth-graph .ed { stroke: var(--color-line); stroke-width: 1.5; }
+.auth-graph .oa { fill: var(--color-sunk); stroke: var(--color-ink-subtle); stroke-width: 1.5; opacity: 0.7; }
+.auth-graph .u { opacity: 0.6; }
+.auth-graph .l1 { animation: auth-drift-a 30s var(--ease-in-out) forwards; /* length/count/fill also set inline from GRAPH_SETTLE_SECONDS */ }
+.auth-graph .l2 { animation: auth-drift-b 30s var(--ease-in-out) forwards; }
+.auth-graph[data-paused] .l1,
+.auth-graph[data-paused] .l2 { animation-play-state: paused; }
+
+/* ---------- brand pane: recent changes arrive like realtime changes (§7) ---------- */
+.auth-acts > li {
+  position: relative;
+  isolation: isolate;
+  animation: auth-rise-in var(--duration-base) var(--ease-out) backwards;
+  animation-delay: calc(700ms + var(--n, 0) * 360ms);
+}
+.auth-shell[data-reduced] .auth-acts > li { animation: none; }
+/* The newest change is washed in its author's colour and labelled, then both fade (2400ms). */
+.auth-acts > li.auth-fresh::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--pw);
+  opacity: 0;
+  animation: auth-wash var(--duration-realtime) linear backwards;
+  animation-delay: calc(700ms + var(--n, 0) * 360ms + var(--duration-base));
+}
+.auth-acts .auth-tag {
+  margin-left: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--p);
+  opacity: 0;
+  animation: auth-wash var(--duration-realtime) linear backwards;
+  animation-delay: calc(700ms + var(--n, 0) * 360ms + var(--duration-base));
+}
+/* Reduced motion keeps the wash (it is information) and starts it straight away. */
+.auth-shell[data-reduced] .auth-acts > li.auth-fresh::before,
+.auth-shell[data-reduced] .auth-acts .auth-tag { animation-delay: 0ms; }
+
+/* ---------- the address flying from the field to the code step ---------- */
+.auth-flyer {
+  position: fixed;
+  z-index: var(--z-toast);
+  margin: 0;
+  font: 500 1rem/1.2 var(--font-body);
+  color: var(--color-ink);
+  white-space: nowrap;
+  transform-origin: 0 0;
+  pointer-events: none;
+}

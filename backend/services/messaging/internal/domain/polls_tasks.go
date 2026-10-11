@@ -3,7 +3,9 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +15,22 @@ import (
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/store"
 )
+
+// announcementError turns the store's refusal of a reply whose parent was
+// deleted between the check and the write into the same answer a reply gets.
+func announcementError(err error) error {
+	if errors.Is(err, store.ErrParentGone) {
+		return fmt.Errorf("%w: the message replied to was deleted", ErrInvalidInput)
+	}
+	return err
+}
+
+// announcementProto is the stored announcement as the live stream and the
+// caller see it.
+func (s *Service) announcementProto(ctx context.Context, msg *store.Message) *pb.Message {
+	msg.SenderName = s.lookupUsername(ctx, msg.SenderID)
+	return messageToProto(msg)
+}
 
 // --- Polls ---
 
@@ -26,23 +44,36 @@ type CreatePollInput struct {
 	IsMulti     bool
 	IsAnonymous bool
 	EndsAt      *time.Time
+	// ParentMessageID, when set, makes the announcement a reply in that
+	// message's thread instead of a message of the main stream.
+	ParentMessageID string
 }
 
 // authorizePoll authorizes an operation on the channel that owns a poll.
 // Polls, like messages, are not graph nodes — the check lands on the channel.
-func (s *Service) authorizePoll(ctx context.Context, pollID, userNodeID, operation string) error {
+func (s *Service) authorizePoll(ctx context.Context, pollID, userNodeID, operation string) (*store.Poll, []store.PollOption, error) {
 	if pollID == "" {
-		return ErrInvalidInput
+		return nil, nil, ErrInvalidInput
 	}
-	poll, _, err := s.store.GetPoll(ctx, pollID)
+	poll, options, err := s.store.GetPoll(ctx, pollID)
 	if err != nil {
-		return fmt.Errorf("load poll: %w", err)
+		return nil, nil, fmt.Errorf("load poll: %w", err)
 	}
 	if poll == nil {
-		return ErrNotFound
+		return nil, nil, ErrNotFound
 	}
-	_, err = s.authorizeChannel(ctx, poll.ChannelID, userNodeID, operation)
-	return err
+	if _, err := s.authorizeChannel(ctx, poll.ChannelID, userNodeID, operation); err != nil {
+		return nil, nil, err
+	}
+	return poll, options, nil
+}
+
+// maxPollOptions is how many choices a poll offers at most.
+const maxPollOptions = 10
+
+// pollClosed reports whether a poll takes no more votes: closed early, or past its end.
+func pollClosed(p *store.Poll) bool {
+	return p.ClosedAt != nil || (p.EndsAt != nil && time.Now().After(*p.EndsAt))
 }
 
 // authorizeTask authorizes an operation on the channel that owns a task.
@@ -63,11 +94,33 @@ func (s *Service) authorizeTask(ctx context.Context, taskID, userNodeID, operati
 
 // CreatePoll creates a poll with a linked system message.
 func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll, error) {
-	if in.Question == "" || len(in.Options) < 2 {
-		return nil, ErrInvalidInput
-	}
+	poll, _, err := s.CreatePollMessage(ctx, in)
+	return poll, err
+}
+
+// CreatePollMessage creates a poll and also returns the message that announces
+// it, so a caller can tell live sessions about it (a reply in a thread needs
+// the thread's summary pushed like any reply).
+func (s *Service) CreatePollMessage(ctx context.Context, in CreatePollInput) (*pb.Poll, *pb.Message, error) {
 	if _, err := s.authorizeChannel(ctx, in.ChannelID, in.UserNodeID, ngac.OpWrite); err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if strings.TrimSpace(in.Question) == "" || len(in.Options) < 2 || len(in.Options) > maxPollOptions {
+		return nil, nil, fmt.Errorf("%w: a poll asks a question with 2 to %d choices", ErrInvalidInput, maxPollOptions)
+	}
+	for i, o := range in.Options {
+		if in.Options[i] = strings.TrimSpace(o); in.Options[i] == "" {
+			return nil, nil, fmt.Errorf("%w: a choice is empty", ErrInvalidInput)
+		}
+	}
+	if in.EndsAt != nil && !in.EndsAt.After(time.Now()) {
+		return nil, nil, fmt.Errorf("%w: a poll ends in the future", ErrInvalidInput)
+	}
+
+	if in.ParentMessageID != "" {
+		if err := s.checkReplyParent(ctx, in.ParentMessageID, in.ChannelID); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	pollID := uuid.New().String()
@@ -81,6 +134,7 @@ func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll,
 		Content:          fmt.Sprintf("📊 Poll: %s", in.Question),
 		ContentFormat:    "plain",
 		MessageType:      "system",
+		ParentMessageID:  in.ParentMessageID,
 		LinkedEntityType: "poll",
 		LinkedEntityID:   pollID,
 		CreatedAt:        time.Now(),
@@ -102,10 +156,14 @@ func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll,
 	}
 	// The announcement, the poll and its options stand or fall together.
 	if err := s.store.InsertPollWithMessage(ctx, msg, poll, options); err != nil {
-		return nil, err
+		return nil, nil, announcementError(err)
 	}
 
-	return s.GetPoll(ctx, pollID, in.UserNodeID)
+	out, err := s.GetPoll(ctx, pollID, in.UserID, in.UserNodeID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, s.announcementProto(ctx, msg), nil
 }
 
 // VotePoll records a user's vote on a poll option.
@@ -113,8 +171,13 @@ func (s *Service) VotePoll(ctx context.Context, pollID, optionID, userNodeID, us
 	if pollID == "" || optionID == "" {
 		return ErrInvalidInput
 	}
-	if err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpWrite); err != nil {
+	// Voting is answering a question put to everyone who reads the channel.
+	poll, _, err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpRead)
+	if err != nil {
 		return err
+	}
+	if pollClosed(poll) {
+		return fmt.Errorf("%w: the poll is closed", ErrInvalidInput)
 	}
 	// The tally of an option is counted by option, so the option must be this
 	// poll's: authorising on one poll must not let a vote land in another.
@@ -125,7 +188,7 @@ func (s *Service) VotePoll(ctx context.Context, pollID, optionID, userNodeID, us
 	if !ok {
 		return fmt.Errorf("%w: option %s is not part of this poll", ErrInvalidInput, optionID)
 	}
-	return s.store.InsertVote(ctx, pollID, optionID, userID)
+	return s.store.InsertVote(ctx, pollID, optionID, userID, !poll.IsMulti)
 }
 
 // RemoveVote removes a user's vote from a poll option.
@@ -133,25 +196,43 @@ func (s *Service) RemoveVote(ctx context.Context, pollID, optionID, userNodeID, 
 	if pollID == "" || optionID == "" {
 		return ErrInvalidInput
 	}
-	if err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpWrite); err != nil {
+	poll, _, err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpRead)
+	if err != nil {
 		return err
+	}
+	if pollClosed(poll) {
+		return fmt.Errorf("%w: the poll is closed", ErrInvalidInput)
 	}
 	return s.store.DeleteVote(ctx, pollID, optionID, userID)
 }
 
-// GetPoll retrieves a poll with its options and vote counts.
-func (s *Service) GetPoll(ctx context.Context, pollID, userNodeID string) (*pb.Poll, error) {
-	if err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpRead); err != nil {
+// ClosePoll closes a poll before its end: its creator may (with write on the
+// channel), and so may anyone who manages the channel.
+func (s *Service) ClosePoll(ctx context.Context, pollID, userID, userNodeID string) (*pb.Poll, error) {
+	poll, _, err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpRead)
+	if err != nil {
 		return nil, err
 	}
-	poll, options, err := s.store.GetPoll(ctx, pollID)
+	op := ngac.OpManage
+	if poll.CreatedBy == userID {
+		op = ngac.OpWrite
+	}
+	if _, err := s.authorizeChannel(ctx, poll.ChannelID, userNodeID, op); err != nil {
+		return nil, err
+	}
+	if err := s.store.ClosePoll(ctx, pollID, userID); err != nil {
+		return nil, err
+	}
+	return s.GetPoll(ctx, pollID, userID, userNodeID)
+}
+
+// GetPoll retrieves a poll with its options and vote counts.
+func (s *Service) GetPoll(ctx context.Context, pollID, userID, userNodeID string) (*pb.Poll, error) {
+	poll, options, err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpRead)
 	if err != nil {
-		return nil, fmt.Errorf("get poll: %w", err)
+		return nil, err
 	}
-	if poll == nil {
-		return nil, ErrNotFound
-	}
-	return pollToProto(poll, options), nil
+	return pollToProto(poll, options, userID), nil
 }
 
 // --- Tasks ---
@@ -164,15 +245,42 @@ type CreateTaskInput struct {
 	Title      string
 	AssigneeID string
 	DueDate    string // "YYYY-MM-DD"
+	// ParentMessageID, when set, makes the announcement a reply in that
+	// message's thread instead of a message of the main stream.
+	ParentMessageID string
 }
 
 // CreateTask creates a task with a linked system message.
 func (s *Service) CreateTask(ctx context.Context, in CreateTaskInput) (*pb.ChatTask, error) {
+	task, _, err := s.CreateTaskMessage(ctx, in)
+	return task, err
+}
+
+// CreateTaskMessage creates a task and also returns the message that announces
+// it (see CreatePollMessage).
+func (s *Service) CreateTaskMessage(ctx context.Context, in CreateTaskInput) (*pb.ChatTask, *pb.Message, error) {
 	if in.Title == "" {
-		return nil, ErrInvalidInput
+		return nil, nil, ErrInvalidInput
 	}
-	if _, err := s.authorizeChannel(ctx, in.ChannelID, in.UserNodeID, ngac.OpWrite); err != nil {
-		return nil, err
+	ch, err := s.authorizeChannel(ctx, in.ChannelID, in.UserNodeID, ngac.OpWrite)
+	if err != nil {
+		return nil, nil, err
+	}
+	if in.ParentMessageID != "" {
+		if err := s.checkReplyParent(ctx, in.ParentMessageID, in.ChannelID); err != nil {
+			return nil, nil, err
+		}
+	}
+	// The assignee must read the channel: work handed to someone who cannot
+	// see the conversation is work nobody can do.
+	if in.AssigneeID != "" {
+		node, err := s.store.UserNode(ctx, in.AssigneeID)
+		if err != nil {
+			return nil, nil, err
+		}
+		if node == "" || s.checkAccess(ctx, node, ch.NGACOaID, ngac.OpRead) != nil {
+			return nil, nil, fmt.Errorf("%w: the assignee is not a member of this conversation", ErrInvalidInput)
+		}
 	}
 
 	taskID := uuid.New().String()
@@ -185,6 +293,7 @@ func (s *Service) CreateTask(ctx context.Context, in CreateTaskInput) (*pb.ChatT
 		Content:          fmt.Sprintf("📋 Task: %s", in.Title),
 		ContentFormat:    "plain",
 		MessageType:      "system",
+		ParentMessageID:  in.ParentMessageID,
 		LinkedEntityType: "task",
 		LinkedEntityID:   taskID,
 		CreatedAt:        time.Now(),
@@ -211,10 +320,14 @@ func (s *Service) CreateTask(ctx context.Context, in CreateTaskInput) (*pb.ChatT
 	}
 	// The announcement and the task stand or fall together.
 	if err := s.store.InsertTaskWithMessage(ctx, msg, task); err != nil {
-		return nil, err
+		return nil, nil, announcementError(err)
 	}
 
-	return s.getTaskProto(ctx, taskID)
+	out, err := s.getTaskProto(ctx, taskID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, s.announcementProto(ctx, msg), nil
 }
 
 // UpdateTaskInput holds parameters for updating a task.
@@ -229,9 +342,55 @@ type UpdateTaskInput struct {
 }
 
 // UpdateTask updates a task's mutable fields.
+//
+// Who may change what:
+//   - the status (done, reopened): the assignee or the creator, who need only
+//     read the conversation; anyone else needs manage;
+//   - the assignee: the creator or someone with manage, and only to a person
+//     who reads the conversation — otherwise a writer could take a task over
+//     and then mark it done;
+//   - the title and due date: write.
 func (s *Service) UpdateTask(ctx context.Context, in UpdateTaskInput) (*pb.ChatTask, error) {
-	if err := s.authorizeTask(ctx, in.TaskID, in.UserNodeID, ngac.OpWrite); err != nil {
+	if in.TaskID == "" {
+		return nil, ErrInvalidInput
+	}
+	t, err := s.store.GetTask(ctx, in.TaskID)
+	if err != nil {
+		return nil, fmt.Errorf("load task: %w", err)
+	}
+	if t == nil {
+		return nil, ErrNotFound
+	}
+	ch, err := s.authorizeChannel(ctx, t.ChannelID, in.UserNodeID, ngac.OpRead)
+	if err != nil {
 		return nil, err
+	}
+	isOwner := in.UserID != "" && (in.UserID == t.AssigneeID || in.UserID == t.CreatedBy)
+	manages := func() error { return s.checkAccess(ctx, in.UserNodeID, ch.NGACOaID, ngac.OpManage) }
+
+	if in.Status != "" && !isOwner {
+		if err := manages(); err != nil {
+			return nil, err
+		}
+	}
+	if in.AssigneeID != "" && in.AssigneeID != t.AssigneeID {
+		if in.UserID == "" || in.UserID != t.CreatedBy {
+			if err := manages(); err != nil {
+				return nil, err
+			}
+		}
+		node, err := s.store.UserNode(ctx, in.AssigneeID)
+		if err != nil {
+			return nil, err
+		}
+		if node == "" || s.checkAccess(ctx, node, ch.NGACOaID, ngac.OpRead) != nil {
+			return nil, fmt.Errorf("%w: the assignee is not a member of this conversation", ErrInvalidInput)
+		}
+	}
+	if in.Title != "" || in.DueDate != "" {
+		if err := s.checkAccess(ctx, in.UserNodeID, ch.NGACOaID, ngac.OpWrite); err != nil {
+			return nil, err
+		}
 	}
 
 	var dueDate *time.Time
@@ -258,7 +417,8 @@ func (s *Service) ListTasks(ctx context.Context, channelID, userNodeID, status s
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}
-	var result []*pb.ChatTask
+	// Never nil: an empty list is `[]` on the wire, not `null`.
+	result := make([]*pb.ChatTask, 0, len(tasks))
 	for i := range tasks {
 		result = append(result, taskToProto(&tasks[i]))
 	}
@@ -279,37 +439,54 @@ func (s *Service) getTaskProto(ctx context.Context, taskID string) (*pb.ChatTask
 
 // --- Proto conversions ---
 
-func pollToProto(p *store.Poll, options []store.PollOption) *pb.Poll {
+func pollToProto(p *store.Poll, options []store.PollOption, viewerID string) *pb.Poll {
+	// What the viewer chose, and whether they may see the results: once they
+	// voted, or once the poll is closed.
+	var mine []string
+	for _, o := range options {
+		for _, v := range o.VoterIDs {
+			if v == viewerID {
+				mine = append(mine, o.ID)
+			}
+		}
+	}
+	closed := pollClosed(p)
+	visible := closed || len(mine) > 0
+
 	var pbOpts []*pb.PollOption
 	var totalVotes int32
 	for _, o := range options {
-		pbOpt := &pb.PollOption{
-			Id:        o.ID,
-			Text:      o.Text,
-			Position:  int32(o.Position),
-			VoteCount: o.VoteCount,
-		}
-		if !p.IsAnonymous {
-			pbOpt.VoterIds = o.VoterIDs
+		pbOpt := &pb.PollOption{Id: o.ID, Text: o.Text, Position: int32(o.Position)}
+		if visible {
+			pbOpt.VoteCount = o.VoteCount
+			totalVotes += o.VoteCount
+			if !p.IsAnonymous {
+				pbOpt.VoterIds = o.VoterIDs
+			}
 		}
 		pbOpts = append(pbOpts, pbOpt)
-		totalVotes += o.VoteCount
 	}
 
 	result := &pb.Poll{
-		Id:          p.ID,
-		MessageId:   p.MessageID,
-		ChannelId:   p.ChannelID,
-		Question:    p.Question,
-		Options:     pbOpts,
-		IsMulti:     p.IsMulti,
-		IsAnonymous: p.IsAnonymous,
-		CreatedBy:   p.CreatedBy,
-		CreatedAt:   timestamppb.New(p.CreatedAt),
-		TotalVotes:  totalVotes,
+		Id:             p.ID,
+		MessageId:      p.MessageID,
+		ChannelId:      p.ChannelID,
+		Question:       p.Question,
+		Options:        pbOpts,
+		IsMulti:        p.IsMulti,
+		IsAnonymous:    p.IsAnonymous,
+		CreatedBy:      p.CreatedBy,
+		CreatedAt:      timestamppb.New(p.CreatedAt),
+		TotalVotes:     totalVotes,
+		ResultsVisible: visible,
+		MyOptionIds:    mine,
+		Closed:         closed,
 	}
 	if p.EndsAt != nil {
 		result.EndsAt = timestamppb.New(*p.EndsAt)
+	}
+	if p.ClosedAt != nil {
+		result.ClosedAt = timestamppb.New(*p.ClosedAt)
 	}
 	return result
 }

@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexus Hub · Trích dẫn đang chờ trong ô soạn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Pending quote in the composer (DESIGN.md §6 Chat: Ô soạn, Trích dẫn, Sửa tin, Nhấn giữ tin).
+   Desktop rules are copied verbatim from spaces.html; phone rules are copied from chat-mobile.html and scoped
+   under .mob because both files use the same class names (.composer, .btn, .ibtn, .m, .txt) with different sizes.
+   New in this file: .qp (quote strip, desktop), .mob .qp (phone), .mob .eb (phone edit bar). */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+.muted { color: var(--color-ink-muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* review chrome (spaces.html) */
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 70ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; }
+.screen-head { display: grid; gap: 6px; max-width: 78ch; }
+.screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 82ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+
+/* primitives (spaces.html) */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0; font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink);
+  transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-press) var(--ease-out); }
+.btn:hover { background: var(--color-line); }
+.btn:active { transform: scale(0.98); }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.primary:hover { background: var(--color-accent-hover); }
+.btn.ghost { background: transparent; } .btn.ghost:hover { background: var(--color-hover); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.ibtn { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; transition: background-color var(--duration-quick) var(--ease-out); }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); position: relative; }
+.av.s20 { width: 20px; height: 20px; font-size: 0.5625rem; }
+
+/* messages (spaces.html) */
+.m { position: relative; flex: none; display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; padding: 8px 14px 2px; border-radius: 10px; }
+.mc { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.mc > * { max-width: 100%; }
+.who { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.who b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who time { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; flex: none; }
+.txt { line-height: 1.55; width: fit-content; max-width: min(70ch, 85%); overflow-wrap: anywhere; margin-top: 2px; padding: 7px 12px; border-radius: 16px; background: var(--color-sunk); }
+.who + .txt { border-top-left-radius: 4px; }
+.txt.editing { width: min(560px, 85%); max-width: min(560px, 85%); padding: 8px 10px; background: var(--color-raised) !important; box-shadow: inset 0 0 0 2px var(--color-accent); border-radius: 12px !important; display: grid; gap: 8px; }
+.txt .ed { outline: none; min-height: 24px; white-space: pre-wrap; }
+.txt .eda { display: flex; align-items: center; gap: 6px; }
+.txt .eda small { color: var(--color-ink-muted); font-size: 0.75rem; margin-right: auto; }
+.txt .q { display: grid; gap: 2px; margin: 1px -6px 6px; padding: 7px 10px 8px; border-radius: 10px; background: var(--color-raised); font-size: 0.8125rem; line-height: 1.45; }
+.txt .q .qa { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+.txt .q .qa svg { width: 12px; height: 12px; color: var(--color-accent); }
+.txt .q .qt { color: var(--color-ink-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.m.mine { grid-template-columns: minmax(0, 1fr) 32px; }
+.m.mine .mc { grid-column: 1; grid-row: 1; align-items: flex-end; }
+.m.mine .who { justify-content: flex-end; }
+.m.mine .txt { background: var(--color-accent-wash); }
+.m.mine .who + .txt { border-top-left-radius: 16px; border-top-right-radius: 4px; }
+.att-img { display: grid; grid-template-columns: repeat(3, 72px); gap: 4px; margin-top: 6px; }
+.att-img span { height: 72px; border-radius: 8px; background: linear-gradient(135deg, var(--color-person-4-wash), var(--color-sunk)); }
+.card { width: min(300px, 100%); margin-top: 6px; padding: 12px; border-radius: 12px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); display: grid; gap: 4px; }
+.card .ct { font-weight: 600; } .card small { color: var(--color-ink-muted); font-size: 0.75rem; }
+
+/* composer (spaces.html) */
+.composer { margin: 0 16px 16px; background: var(--color-raised); border-radius: 12px; padding: 10px 10px 10px 14px; display: grid; gap: 8px; position: relative; min-width: 0; }
+.cin { font-size: 1rem; line-height: 1.5; padding: 2px 0; min-height: 28px; overflow-wrap: anywhere; outline: none; }
+.cin:empty::before { content: attr(data-ph); color: var(--color-ink-muted); }
+.cbar { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.cbar .hint, .cbar .why { font-size: 0.75rem; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cbar .hint { margin-left: 8px; }
+.cbar .btn { margin-left: auto; flex: none; }
+.btn:disabled, .btn.primary:disabled { background: var(--color-hover); color: var(--color-ink-subtle); cursor: not-allowed; transform: none; }
+@media (max-width: 767px) { .cbar .hint { display: none; } }
+
+/* showcase panes (spaces.html) */
+.cgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr)); gap: 24px; }
+.pane { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr) auto auto; min-height: 400px; min-width: 0; background: var(--color-base); border-radius: 12px; box-shadow: inset 0 0 0 1px var(--color-line); }
+.pane-h { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding: 14px 16px 2px; }
+.pane-h b { font: 700 1rem/1.3 var(--font-display); }
+.pane-h small { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.mini { overflow: auto; display: flex; flex-direction: column; padding: 8px 8px 12px; min-height: 0; }
+.mini > :first-child { margin-top: auto; }
+.pane .composer { margin: 0 12px 12px; }
+.pane .demo { padding: 0 12px 12px; }
+/* thread panel: panel is raised, its composer is base (spaces.html .panel .composer) */
+.pane.thr { background: var(--color-raised); }
+.pane.thr .composer { background: var(--color-base); }
+.pane.thr .txt .q { background: var(--color-base); }
+
+/* NEW — quote strip (desktop). First row of the composer, above the formatting toolbar and the file tray. */
+.qp { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; margin-right: 0; padding: 0 2px 0 10px; border-radius: 10px; background: var(--color-sunk);
+  animation: qin var(--duration-quick) var(--ease-out) both; }
+.qp .qb { display: grid; gap: 1px; min-width: 0; min-height: 44px; padding: 5px 0 6px; border: 0; background: transparent; color: var(--color-ink); font: 400 0.8125rem/1.45 var(--font-body); text-align: left; cursor: pointer; }
+.qp .qb:hover .qt { color: var(--color-ink); }
+.qp .qa { display: flex; align-items: center; gap: 6px; font-weight: 600; min-width: 0; }
+.qp .qa > span:last-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qp .qa svg { width: 12px; height: 12px; color: var(--color-accent); }
+.qp .qt { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--color-ink-muted); }
+.qp .qt > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.qp .qt svg { width: 13px; height: 13px; }
+.qp .x { position: relative; }
+.qp .x::after { content: ""; position: absolute; inset: -6px; }  /* 44px hit area around the 32px button */
+/* deleted while pending: no fill, 1px line, italic — same language as the deleted bubble */
+.qp.gone { background: transparent; box-shadow: inset 0 0 0 1px var(--color-line); }
+.qp.gone .qa svg { color: var(--color-ink-muted); }
+.qp.gone .qt span { font-style: italic; }
+.qp .qn { grid-column: 1 / -1; margin: -2px 0 7px; font-size: 0.75rem; color: var(--color-ink-muted); }
+.pane.thr .qp { background: var(--color-sunk); }
+@keyframes qin { from { opacity: 0; transform: translateY(4px); } }
+@media (prefers-reduced-motion: reduce) { .qp, .mob .qp { animation: qfade 120ms linear both; } }
+@keyframes qfade { from { opacity: 0; } }
+
+/* ---------- phone (chat-mobile.html, scoped) ---------- */
+.phones { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.ph { display: grid; gap: 10px; justify-items: center; }
+.ph > small { color: var(--color-ink-muted); font-weight: 600; text-align: center; max-width: 340px; }
+.mob .phone { width: min(390px, calc(100vw - 48px)); height: 520px; border-radius: 32px; background: var(--color-base); overflow: hidden; display: grid; grid-template-rows: auto auto 1fr auto; position: relative; isolation: isolate; box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; }
+.mob .sbar { display: flex; align-items: center; justify-content: space-between; height: 34px; padding: 0 22px; font: 600 0.8125rem/1 var(--font-body); }
+.mob .sbar span:last-child { width: 22px; height: 10px; border-radius: 3px; background: currentColor; opacity: 0.8; }
+.mob .topbar { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 4px; }
+.mob .topbar .ti { flex: 1; min-width: 0; display: grid; }
+.mob .topbar .ti b { font: 700 1rem/1.25 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mob .topbar .ti small { color: var(--color-ink-muted); font-size: 0.75rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mob .pbody { overflow: auto; min-height: 0; display: flex; flex-direction: column; }
+.mob .ibtn { width: 44px; height: 44px; display: inline-grid; place-items: center; border-radius: 10px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; position: relative; flex: none; }
+.mob .btn.sm { height: 36px; padding: 0 12px; font-size: 0.8125rem; border-radius: 8px; }
+.mob .stream { display: flex; flex-direction: column; padding: 4px 10px 12px; margin-top: auto; }
+.mob .m { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 8px; padding: 8px 0 0; }
+.mob .who { display: flex; gap: 8px; align-items: baseline; font-size: 0.8125rem; padding-left: 2px; } .mob .who time { color: var(--color-ink-muted); font-size: 0.75rem; }
+.mob .txt { width: fit-content; max-width: 88%; padding: 8px 12px; border-radius: 18px; background: var(--color-sunk); line-height: 1.5; margin-top: 2px; overflow-wrap: anywhere; font-size: 0.9375rem; }
+.mob .who + .txt { border-top-left-radius: 4px; }
+.mob .m.mine { grid-template-columns: minmax(0, 1fr); }
+.mob .m.mine .who + .txt { border-top-left-radius: 18px; border-top-right-radius: 4px; }
+.mob .m.pressed .txt { box-shadow: 0 0 0 2px var(--color-accent); }
+.mob .att-img { grid-template-columns: repeat(3, 64px); }
+.mob .att-img span { height: 64px; }
+.mob .cwrap { padding: 6px 8px 22px; background: var(--color-base); display: grid; gap: 6px; }
+.mob .composer { margin: 0; background: var(--color-raised); border-radius: 22px; padding: 6px 6px 6px 4px; display: flex; align-items: flex-end; gap: 2px; min-height: 48px; }
+.mob .composer .cin { flex: 1; min-width: 0; padding: 10px 4px; font-size: 1rem; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mob .composer .cin.on { color: var(--color-ink); white-space: normal; }
+.mob .composer .ibtn { width: 40px; height: 40px; }
+.mob .send { width: 40px; height: 40px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--color-accent); color: var(--color-on-accent); flex: none; }
+.mob .send:disabled { background: var(--color-hover); color: var(--color-ink-muted); }
+/* NEW — phone quote strip and edit bar: a card above the pill composer, radius 16, ✕ / Huỷ at 44 */
+.mob .qp { padding: 0 0 0 12px; border-radius: 16px; background: var(--color-raised); }
+.mob .qp .qb { min-height: 48px; font-size: 0.8125rem; }
+.mob .qp.gone { background: transparent; }
+.mob .qp .qn { margin: -4px 0 9px; }
+.mob .qp.eb { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px; padding: 0 4px 0 12px; border-radius: 16px; background: var(--color-raised); box-shadow: inset 0 0 0 2px var(--color-accent); }
+.mob .eb .qb { cursor: default; }
+.mob .eb .qa svg { color: var(--color-accent); }
+.mob .eb .btn { height: 44px; }
+.mob .eb .qn { margin: -4px 0 9px; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-quote" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+  <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-baseline" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="m6 16 6-12 6 12"/><path d="M8 12h8"/></symbol>
+  <symbol id="i-poll" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+</svg>
+
+<template id="tpl-ctools">
+  <button class="ibtn" type="button" aria-label="Tạo trong chat" title="Bình chọn, công việc, tài liệu, phê duyệt"><svg class="i"><use href="#i-plus"/></svg></button>
+  <button class="ibtn" type="button" aria-label="Đính kèm" title="Đính kèm"><svg class="i"><use href="#i-clip"/></svg></button>
+  <button class="ibtn" type="button" aria-pressed="false" aria-label="Định dạng" title="Định dạng"><svg class="i"><use href="#i-baseline"/></svg></button>
+  <button class="ibtn" type="button" aria-label="Biểu tượng cảm xúc" title="Biểu tượng cảm xúc"><svg class="i"><use href="#i-smile"/></svg></button>
+</template>
+
+<main class="page">
+  <header>
+    <h1>Trích dẫn đang chờ trong ô soạn</h1>
+    <p>Chọn “Trích dẫn khi trả lời” (menu Thêm) hoặc “Trích dẫn” (nhấn giữ tin) thì ô soạn hiện một dải cho biết tin sẽ được trích. Dải là hàng đầu của ô soạn; ✕ hoặc Esc bỏ trích dẫn; bấm vào dải để tới tin gốc. Gửi xong, tin hiện khối trích dẫn như §6.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div>
+    </div>
+  </header>
+  <p class="sr" role="status" aria-live="polite" id="live"></p>
+
+  <!-- ============================ DESKTOP ============================ -->
+  <section class="screen" id="desk" aria-labelledby="h-desk">
+    <div class="screen-head">
+      <h2 id="h-desk">1 · Máy tính (ô soạn chính và panel thread)</h2>
+      <p>Thứ tự trong ô soạn: dải trích dẫn → thanh định dạng → hàng chờ tệp → ô nhập → thanh công cụ. Mỗi ô soạn giữ tối đa một trích dẫn; chọn trích tin khác thì dải đổi sang tin mới.</p>
+    </div>
+    <div class="cgrid">
+      <!-- 1: just chosen -->
+      <div class="pane" id="p1">
+        <div class="pane-h"><b>Vừa chọn Trích dẫn</b><small>focus chuyển vào ô nhập, Gửi còn tắt</small></div>
+        <div class="mini">
+          <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:02</time></div><p class="txt">Em thấy kỳ trước để 6427 nhưng sổ chi nhánh lại ghi 6425, chị kiểm tra lại giúp em với ạ.</p></div></div>
+        </div>
+        <div class="composer">
+          <div class="qp" role="region" aria-label="Đang trích dẫn tin của Nguyễn Thu Lan">
+            <button class="qb" type="button" title="Đi tới tin gốc"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-6)">TL</span><span>Nguyễn Thu Lan</span></span><span class="qt"><span>Em thấy kỳ trước để 6427 nhưng sổ chi nhánh lại ghi 6425, chị kiểm tra lại giúp em với ạ.</span></span></button>
+            <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn" title="Bỏ trích dẫn (Esc)"><svg class="i s"><use href="#i-x"/></svg></button>
+          </div>
+          <div class="cin" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Tin nhắn cho Đối soát giao dịch" data-ph="Tin nhắn cho Đối soát giao dịch"></div>
+          <div class="cbar"><span data-fill="ctools" style="display:contents"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button" disabled><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+        </div>
+        <div class="demo"><button class="btn sm" type="button" data-act="requote">Trích dẫn lại</button></div>
+      </div>
+
+      <!-- 2: with text -->
+      <div class="pane" id="p2">
+        <div class="pane-h"><b>Đã gõ chữ</b><small>Enter gửi tin kèm trích dẫn</small></div>
+        <div class="mini" id="mini2">
+          <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:02</time></div><p class="txt">Em thấy kỳ trước để 6427 nhưng sổ chi nhánh lại ghi 6425, chị kiểm tra lại giúp em với ạ.</p></div></div>
+        </div>
+        <div class="composer">
+          <div class="qp" role="region" aria-label="Đang trích dẫn tin của Nguyễn Thu Lan">
+            <button class="qb" type="button" title="Đi tới tin gốc"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-6)">TL</span><span>Nguyễn Thu Lan</span></span><span class="qt"><span>Em thấy kỳ trước để 6427 nhưng sổ chi nhánh lại ghi 6425, chị kiểm tra lại giúp em với ạ.</span></span></button>
+            <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn" title="Bỏ trích dẫn (Esc)"><svg class="i s"><use href="#i-x"/></svg></button>
+          </div>
+          <div class="cin" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Tin nhắn cho Đối soát giao dịch" data-ph="Tin nhắn cho Đối soát giao dịch">Vẫn 6427 nhé em, chi nhánh ghi nhầm, chị đã báo bên đó sửa.</div>
+          <div class="cbar"><span data-fill="ctools" style="display:contents"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button" data-act="send"><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+        </div>
+      </div>
+
+      <!-- 3: attachments / card -->
+      <div class="pane" id="p3">
+        <div class="pane-h"><b>Trích tin chỉ có tệp hoặc thẻ</b><small>dòng tóm tắt thay cho chữ</small></div>
+        <div class="mini">
+          <div class="m"><span class="av" style="--p:var(--color-person-1)">QV</span><div class="mc"><div class="who"><b>Lê Quang Vinh</b><time>09:31</time></div><div class="att-img" aria-label="3 ảnh"><span></span><span></span><span></span></div></div></div>
+          <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>10:30</time></div><div class="card"><span class="ct">Chốt lịch họp đối soát với ngân hàng?</span><small>Bình chọn · Chọn một · Đóng lúc 17:00</small></div></div></div>
+        </div>
+        <div class="composer">
+          <div class="qp" role="region" aria-label="Đang trích dẫn tin của Lê Quang Vinh">
+            <button class="qb" type="button" title="Đi tới tin gốc"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-1)">QV</span><span>Lê Quang Vinh</span></span><span class="qt"><svg class="i"><use href="#i-image"/></svg><span>3 ảnh</span></span></button>
+            <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn" title="Bỏ trích dẫn (Esc)"><svg class="i s"><use href="#i-x"/></svg></button>
+          </div>
+          <div class="cin" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Tin nhắn cho Đối soát giao dịch" data-ph="Tin nhắn cho Đối soát giao dịch">Ảnh thứ hai là lệnh hoàn tiền ngày 07/10 nhé.</div>
+          <div class="cbar"><span data-fill="ctools" style="display:contents"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+        </div>
+        <div class="demo" role="group" aria-label="Các dạng tóm tắt">
+          <div class="qp" style="flex:1 1 100%" role="region" aria-label="Ví dụ: trích tin có tệp của Lê Thị Hoa"><span class="qb"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-3)">LH</span><span>Lê Thị Hoa</span></span><span class="qt"><svg class="i"><use href="#i-file-text"/></svg><span>Bảng tổng hợp phí tháng 10.xlsx</span></span></span></div>
+          <div class="qp" style="flex:1 1 100%" role="region" aria-label="Ví dụ: trích bình chọn của Trần Minh Đức"><span class="qb"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-5)">MĐ</span><span>Trần Minh Đức</span></span><span class="qt"><svg class="i"><use href="#i-poll"/></svg><span>Bình chọn: Chốt lịch họp đối soát với ngân hàng?</span></span></span></div>
+        </div>
+      </div>
+
+      <!-- 4: deleted while pending -->
+      <div class="pane" id="p4">
+        <div class="pane-h"><b>Tin được trích bị xoá khi đang chờ</b><small>vẫn gửi được, gửi không kèm trích dẫn</small></div>
+        <div class="mini">
+          <div class="m"><span class="av" style="--p:var(--color-person-1)">QV</span><div class="mc"><div class="who"><b>Lê Quang Vinh</b><time>09:41</time></div><p class="txt">Chị Hoa xem giúp em 3 giao dịch lệch trước 10:00 nhé.</p></div></div>
+        </div>
+        <div class="composer">
+          <div class="qp gone" role="region" aria-label="Đang trích dẫn tin của Lê Quang Vinh, tin này đã bị xoá">
+            <span class="qb" style="cursor:default"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-1)">QV</span><span>Lê Quang Vinh</span></span><span class="qt"><span>Tin nhắn đã bị xoá</span></span></span>
+            <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn" title="Bỏ trích dẫn (Esc)"><svg class="i s"><use href="#i-x"/></svg></button>
+            <p class="qn">Tin của bạn sẽ được gửi không kèm trích dẫn.</p>
+          </div>
+          <div class="cin" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Tin nhắn cho Đối soát giao dịch" data-ph="Tin nhắn cho Đối soát giao dịch">Chị xem xong rồi, cả 3 giao dịch đã khớp với lệnh hoàn tiền.</div>
+          <div class="cbar"><span data-fill="ctools" style="display:contents"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+        </div>
+      </div>
+
+      <!-- 5: thread panel -->
+      <div class="pane thr" id="p5">
+        <div class="pane-h"><b>Thread</b><small>Đối soát giao dịch · trích một trả lời trong thread</small></div>
+        <div class="mini">
+          <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>09:39</time></div><p class="txt">Ngân hàng xác nhận đã ghi có lại cả hai, mai sẽ có trên sao kê.</p></div></div>
+          <div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>09:44</time></div><div class="txt"><span class="q"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-5)">MĐ</span>Trần Minh Đức</span><span class="qt">Hai giao dịch còn lại anh đang hỏi ngân hàng.</span></span>Em ghi chú vào biên bản là chờ ngân hàng nhé.</div></div></div>
+        </div>
+        <div class="composer">
+          <div class="qp" role="region" aria-label="Đang trích dẫn tin của Nguyễn Thu Lan">
+            <button class="qb" type="button" title="Đi tới tin gốc"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-6)">TL</span><span>Nguyễn Thu Lan</span></span><span class="qt"><span>Ngân hàng xác nhận đã ghi có lại cả hai, mai sẽ có trên sao kê.</span></span></button>
+            <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn" title="Bỏ trích dẫn (Esc)"><svg class="i s"><use href="#i-x"/></svg></button>
+          </div>
+          <div class="cin" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Trả lời trong thread" data-ph="Trả lời trong thread"></div>
+          <div class="cbar"><span data-fill="ctools" style="display:contents"></span><button class="btn primary sm" type="button" disabled><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+        </div>
+      </div>
+
+      <!-- 6: edit in place while a quote is pending -->
+      <div class="pane" id="p6">
+        <div class="pane-h"><b>Sửa tin khi đang có trích dẫn chờ</b><small>máy tính sửa tại chỗ, ô soạn giữ nguyên</small></div>
+        <div class="mini">
+          <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:02</time></div><p class="txt">Chị gửi giúp em số chênh lệch cuối nhé.</p></div></div>
+          <div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>10:04</time></div><div class="txt editing"><div class="ed" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Sửa tin">Chênh lệch 1.284.500 ₫ do phí liên ngân hàng.</div><div class="eda"><small>Esc huỷ · Enter lưu</small><button class="btn ghost sm" type="button">Huỷ</button><button class="btn primary sm" type="button">Lưu</button></div></div></div></div>
+        </div>
+        <div class="composer">
+          <div class="qp" role="region" aria-label="Đang trích dẫn tin của Nguyễn Thu Lan">
+            <button class="qb" type="button" title="Đi tới tin gốc"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-6)">TL</span><span>Nguyễn Thu Lan</span></span><span class="qt"><span>Chị gửi giúp em số chênh lệch cuối nhé.</span></span></button>
+            <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn" title="Bỏ trích dẫn (Esc)"><svg class="i s"><use href="#i-x"/></svg></button>
+          </div>
+          <div class="cin" contenteditable="true" role="textbox" aria-multiline="true" aria-label="Tin nhắn cho Đối soát giao dịch" data-ph="Tin nhắn cho Đối soát giao dịch"></div>
+          <div class="cbar"><span data-fill="ctools" style="display:contents"></span><span class="hint">Enter để gửi · Shift+Enter xuống dòng</span><button class="btn primary sm" type="button" disabled><svg class="i s"><use href="#i-send"/></svg>Gửi</button></div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li><b>Dải trích dẫn</b>: nền <code>--color-sunk</code>, radius 10, chiều cao 44 (đủ vùng chạm), icon trích dẫn 12 accent + Avatar 20 + tên 600 · một dòng trích 13px mờ cắt “…”. Cùng ngôn ngữ với khối trích dẫn trong bong bóng, chỉ rút còn một dòng. Bấm phần chữ = tới tin gốc (như khối đã gửi). ✕ là IconButton 32, vùng chạm 44.</li>
+      <li><b>Chọn Trích dẫn</b>: dải hiện (fade + trượt 4px, 160ms; giảm chuyển động chỉ fade), focus vào ô nhập, chữ đang gõ giữ nguyên. Trình đọc màn hình nghe “Đang trích dẫn tin của Nguyễn Thu Lan. Esc để bỏ.” Tin của bạn: “Đang trích dẫn tin của bạn”, dải ghi “Bạn”.</li>
+      <li><b>Bỏ</b>: ✕ hoặc Esc trong ô nhập (Esc đóng popover, gợi ý nhắc tên, hộp link trước; hết thứ đó mới bỏ trích dẫn). Focus về ô nhập, báo “Đã bỏ trích dẫn”. Có trích dẫn chờ thì ↑ không mở sửa tin cuối (ô soạn không coi là trống).</li>
+      <li><b>Gửi</b>: trích dẫn không tự thành tin; Gửi vẫn tắt khi không có chữ lẫn tệp. Gửi xong dải tắt cùng ô nhập.</li>
+      <li><b>Tóm tắt khi tin không có chữ</b>: icon 13 + “3 ảnh” / tên tệp (một tệp) / “2 tệp” / “Bình chọn: câu hỏi” / “Công việc: tiêu đề”. Tin có chữ luôn trích chữ.</li>
+      <li><b>Tin được trích bị xoá</b>: dải đổi sang không nền, viền 1px, “Tin nhắn đã bị xoá” nghiêng + dòng “Tin của bạn sẽ được gửi không kèm trích dẫn.”; không còn bấm tới tin gốc. Gửi vẫn bật; gửi = gửi không kèm trích dẫn. Báo <code>aria-live</code> “Tin bạn đang trích dẫn đã bị xoá”.</li>
+      <li><b>Thread</b>: trích tin nào thì dải vào ô soạn của nơi chứa tin đó (tin trong panel thread → ô soạn của panel). Trong panel nền dải vẫn <code>--color-sunk</code>.</li>
+      <li><b>Sửa tin trên máy tính</b> là sửa tại chỗ trong bong bóng nên không đụng ô soạn: trích dẫn đang chờ ở ô soạn giữ nguyên. Ô sửa không có “Trích dẫn” (trích dẫn của tin đã gửi không đổi được khi sửa).</li>
+    </ul>
+  </section>
+
+  <!-- ============================ PHONE ============================ -->
+  <section class="screen mob" id="phone" aria-labelledby="h-phone">
+    <div class="screen-head">
+      <h2 id="h-phone">2 · Điện thoại (390)</h2>
+      <p>Dải là một thẻ bo 16 nằm trên ô soạn bo 22, cùng đi lên với bàn phím ảo. ✕ và Huỷ cao 44.</p>
+    </div>
+    <div class="phones">
+      <div class="ph"><small>Vừa chọn Trích dẫn trong sheet nhấn giữ</small>
+        <div class="phone">
+          <div class="sbar"><span>9:41</span><span></span></div>
+          <div class="topbar"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><span class="ti"><b>Đối soát giao dịch</b><small>14 thành viên</small></span></div>
+          <div class="pbody"><div class="stream">
+            <div class="m pressed"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:02</time></div><div class="txt">Em thấy kỳ trước để 6427 nhưng sổ chi nhánh lại ghi 6425, chị kiểm tra lại giúp em với ạ.</div></div></div>
+          </div></div>
+          <div class="cwrap">
+            <div class="qp" role="region" aria-label="Đang trích dẫn tin của Nguyễn Thu Lan">
+              <button class="qb" type="button" title="Đi tới tin gốc"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-6)">TL</span><span>Nguyễn Thu Lan</span></span><span class="qt"><span>Em thấy kỳ trước để 6427 nhưng sổ chi nhánh lại ghi 6425…</span></span></button>
+              <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn"><svg class="i s"><use href="#i-x"/></svg></button>
+            </div>
+            <div class="composer"><button class="ibtn" type="button" aria-label="Tạo và đính kèm"><svg class="i"><use href="#i-plus"/></svg></button><span class="cin">Tin nhắn cho Đối soát giao dịch</span><button class="ibtn" type="button" aria-label="Định dạng"><svg class="i"><use href="#i-baseline"/></svg></button><button class="send" type="button" disabled aria-label="Gửi"><svg class="i"><use href="#i-send"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ph"><small>Đã gõ chữ</small>
+        <div class="phone">
+          <div class="sbar"><span>9:41</span><span></span></div>
+          <div class="topbar"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><span class="ti"><b>Đối soát giao dịch</b><small>14 thành viên</small></span></div>
+          <div class="pbody"><div class="stream">
+            <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:02</time></div><div class="txt">Em thấy kỳ trước để 6427 nhưng sổ chi nhánh lại ghi 6425, chị kiểm tra lại giúp em với ạ.</div></div></div>
+          </div></div>
+          <div class="cwrap">
+            <div class="qp" role="region" aria-label="Đang trích dẫn tin của Nguyễn Thu Lan">
+              <button class="qb" type="button" title="Đi tới tin gốc"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-6)">TL</span><span>Nguyễn Thu Lan</span></span><span class="qt"><span>Em thấy kỳ trước để 6427 nhưng sổ chi nhánh lại ghi 6425…</span></span></button>
+              <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn"><svg class="i s"><use href="#i-x"/></svg></button>
+            </div>
+            <div class="composer"><button class="ibtn" type="button" aria-label="Tạo và đính kèm"><svg class="i"><use href="#i-plus"/></svg></button><span class="cin on">Vẫn 6427 nhé em, chi nhánh ghi nhầm.</span><button class="ibtn" type="button" aria-label="Định dạng"><svg class="i"><use href="#i-baseline"/></svg></button><button class="send" type="button" aria-label="Gửi"><svg class="i"><use href="#i-send"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ph"><small>Trích tin chỉ có ảnh</small>
+        <div class="phone">
+          <div class="sbar"><span>9:41</span><span></span></div>
+          <div class="topbar"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><span class="ti"><b>Đối soát giao dịch</b><small>14 thành viên</small></span></div>
+          <div class="pbody"><div class="stream">
+            <div class="m"><span class="av" style="--p:var(--color-person-1)">QV</span><div class="mc"><div class="who"><b>Lê Quang Vinh</b><time>09:31</time></div><div class="att-img" aria-label="3 ảnh"><span></span><span></span><span></span></div></div></div>
+          </div></div>
+          <div class="cwrap">
+            <div class="qp" role="region" aria-label="Đang trích dẫn tin của Lê Quang Vinh">
+              <button class="qb" type="button" title="Đi tới tin gốc"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-1)">QV</span><span>Lê Quang Vinh</span></span><span class="qt"><svg class="i"><use href="#i-image"/></svg><span>3 ảnh</span></span></button>
+              <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn"><svg class="i s"><use href="#i-x"/></svg></button>
+            </div>
+            <div class="composer"><button class="ibtn" type="button" aria-label="Tạo và đính kèm"><svg class="i"><use href="#i-plus"/></svg></button><span class="cin">Tin nhắn cho Đối soát giao dịch</span><button class="ibtn" type="button" aria-label="Định dạng"><svg class="i"><use href="#i-baseline"/></svg></button><button class="send" type="button" disabled aria-label="Gửi"><svg class="i"><use href="#i-send"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ph"><small>Tin được trích bị xoá khi đang chờ</small>
+        <div class="phone">
+          <div class="sbar"><span>9:41</span><span></span></div>
+          <div class="topbar"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><span class="ti"><b>Đối soát giao dịch</b><small>14 thành viên</small></span></div>
+          <div class="pbody"><div class="stream">
+            <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:06</time></div><div class="txt">Em gửi lại bảng tổng hợp bản đúng ở dưới ạ.</div></div></div>
+          </div></div>
+          <div class="cwrap">
+            <div class="qp gone" role="region" aria-label="Đang trích dẫn tin của Lê Quang Vinh, tin này đã bị xoá">
+              <span class="qb" style="cursor:default"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-1)">QV</span><span>Lê Quang Vinh</span></span><span class="qt"><span>Tin nhắn đã bị xoá</span></span></span>
+              <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn"><svg class="i s"><use href="#i-x"/></svg></button>
+              <p class="qn">Tin của bạn sẽ được gửi không kèm trích dẫn.</p>
+            </div>
+            <div class="composer"><button class="ibtn" type="button" aria-label="Tạo và đính kèm"><svg class="i"><use href="#i-plus"/></svg></button><span class="cin on">Chị xem xong, cả 3 giao dịch đã khớp.</span><button class="ibtn" type="button" aria-label="Định dạng"><svg class="i"><use href="#i-baseline"/></svg></button><button class="send" type="button" aria-label="Gửi"><svg class="i"><use href="#i-send"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ph"><small>Thread toàn màn</small>
+        <div class="phone">
+          <div class="sbar"><span>9:41</span><span></span></div>
+          <div class="topbar"><button class="ibtn" type="button" aria-label="Quay lại nhóm"><svg class="i"><use href="#i-back"/></svg></button><span class="ti"><b>Thread</b><small>Đối soát giao dịch</small></span></div>
+          <div class="pbody"><div class="stream">
+            <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div class="mc"><div class="who"><b>Trần Minh Đức</b><time>09:35</time></div><div class="txt">Hai giao dịch còn lại anh đang hỏi ngân hàng.</div></div></div>
+            <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>09:39</time></div><div class="txt">Ngân hàng xác nhận đã ghi có lại cả hai, mai sẽ có trên sao kê.</div></div></div>
+          </div></div>
+          <div class="cwrap">
+            <div class="qp" role="region" aria-label="Đang trích dẫn tin của Nguyễn Thu Lan">
+              <button class="qb" type="button" title="Đi tới tin gốc"><span class="qa"><svg class="i"><use href="#i-quote"/></svg><span class="av s20" style="--p:var(--color-person-6)">TL</span><span>Nguyễn Thu Lan</span></span><span class="qt"><span>Ngân hàng xác nhận đã ghi có lại cả hai, mai sẽ có…</span></span></button>
+              <button class="ibtn x" type="button" data-act="unquote" aria-label="Bỏ trích dẫn"><svg class="i s"><use href="#i-x"/></svg></button>
+            </div>
+            <div class="composer"><button class="ibtn" type="button" aria-label="Tạo và đính kèm"><svg class="i"><use href="#i-plus"/></svg></button><span class="cin">Trả lời trong thread</span><button class="ibtn" type="button" aria-label="Định dạng"><svg class="i"><use href="#i-baseline"/></svg></button><button class="send" type="button" disabled aria-label="Gửi"><svg class="i"><use href="#i-send"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="ph"><small>Sửa tin khi đang có trích dẫn chờ: thanh “Đang sửa tin” thay chỗ, trích dẫn cất lại</small>
+        <div class="phone">
+          <div class="sbar"><span>9:41</span><span></span></div>
+          <div class="topbar"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><span class="ti"><b>Đối soát giao dịch</b><small>14 thành viên</small></span></div>
+          <div class="pbody"><div class="stream">
+            <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div class="mc"><div class="who"><b>Nguyễn Thu Lan</b><time>10:02</time></div><div class="txt">Chị gửi giúp em số chênh lệch cuối nhé.</div></div></div>
+            <div class="m mine pressed"><div class="mc" style="align-items:flex-end"><div class="who"><span class="sr">Bạn</span><time>10:04</time></div><div class="txt" style="background:var(--color-accent-wash)">Chênh lệch 1.284.500 ₫ do phí liên ngân hàng.</div></div></div>
+          </div></div>
+          <div class="cwrap">
+            <div class="qp eb" role="region" aria-label="Đang sửa tin">
+              <span class="qb"><span class="qa"><svg class="i"><use href="#i-pen"/></svg><span>Đang sửa tin</span></span><span class="qt"><span>Chênh lệch 1.284.500 ₫ do phí liên ngân hàng.</span></span></span>
+              <button class="btn ghost sm" type="button">Huỷ</button>
+              <p class="qn">Trích dẫn tin của Nguyễn Thu Lan sẽ quay lại sau khi sửa xong.</p>
+            </div>
+            <div class="composer"><button class="ibtn" type="button" aria-label="Tạo và đính kèm" disabled style="opacity:.4"><svg class="i"><use href="#i-plus"/></svg></button><span class="cin on">Chênh lệch 1.284.500 ₫ do phí liên ngân hàng tháng 10.</span><button class="ibtn" type="button" aria-label="Định dạng"><svg class="i"><use href="#i-baseline"/></svg></button><button class="send" type="button" aria-label="Lưu"><svg class="i"><use href="#i-send"/></svg></button></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li><b>Một thanh ngữ cảnh mỗi lúc</b>: trên điện thoại ô soạn vừa là nơi viết vừa là nơi sửa, nên khi vào sửa thì thanh “Đang sửa tin” thay chỗ dải trích dẫn; trích dẫn và chữ đang soạn được cất lại, Lưu hoặc Huỷ xong thì quay về đúng như trước. Trong lúc sửa, sheet nhấn giữ không có “Trích dẫn” (sửa không đổi được trích dẫn của tin), nút + tắt (sửa không thêm tệp).</li>
+      <li>Nút gửi trong chế độ sửa có nhãn “Lưu”.</li>
+    </ul>
+  </section>
+</main>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var root = document.documentElement, live = $('live');
+  function say(t) { live.textContent = ''; setTimeout(function () { live.textContent = t; }, 30); }
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-theme-set');
+      if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+      document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    });
+  });
+  document.querySelectorAll('[data-fill]').forEach(function (el) { el.innerHTML = $('tpl-' + el.getAttribute('data-fill')).innerHTML; });
+
+  var saved = new WeakMap();
+  function unquote(strip) {
+    var host = strip.parentNode, cin = host.querySelector('.cin');
+    saved.set(host, strip); strip.remove(); say('Đã bỏ trích dẫn');
+    if (cin && cin.isContentEditable) cin.focus();
+  }
+  function sendState(c) {
+    var cin = c.querySelector('.cin[contenteditable]'), btn = c.querySelector('.cbar .btn.primary');
+    if (cin && btn) btn.disabled = !cin.textContent.trim();
+  }
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]'); if (!b) return;
+    var a = b.getAttribute('data-act');
+    if (a === 'unquote') unquote(b.closest('.qp'));
+    if (a === 'requote') {
+      var c = b.closest('.pane').querySelector('.composer'), s = saved.get(c);
+      if (s && !c.querySelector('.qp')) { c.insertBefore(s, c.firstChild); c.querySelector('.cin').focus(); say('Đang trích dẫn tin của Nguyễn Thu Lan. Esc để bỏ.'); }
+    }
+    if (a === 'send') send(b.closest('.composer'));
+  });
+  function send(c) {
+    var cin = c.querySelector('.cin'), v = cin.textContent.trim(); if (!v) return;
+    var q = c.querySelector('.qp:not(.gone)'), qh = '';
+    if (q) qh = '<span class="q"><span class="qa"><svg class="i"><use href="#i-quote"/></svg>' + q.querySelector('.av').outerHTML + q.querySelector('.qa > span:last-child').textContent + '</span><span class="qt">' + q.querySelector('.qt').textContent + '</span></span>';
+    var row = document.createElement('div'); row.className = 'm mine';
+    row.innerHTML = '<div class="mc"><div class="who"><span class="sr">Bạn</span><time>10:05</time></div><div class="txt">' + qh + v.replace(/</g, '&lt;') + '</div></div>';
+    c.closest('.pane').querySelector('.mini').appendChild(row);
+    if (q) q.remove(); cin.textContent = ''; sendState(c); cin.focus();
+  }
+  document.querySelectorAll('.composer').forEach(function (c) {
+    var cin = c.querySelector('.cin[contenteditable]'); if (!cin) return;
+    cin.addEventListener('input', function () { sendState(c); });
+    cin.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') { var s = c.querySelector('.qp'); if (s) { e.preventDefault(); unquote(s); } }
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (c.querySelector('[data-act="send"]')) send(c); }
+    });
+  });
+})();
+</script>
+</body>
+</html>

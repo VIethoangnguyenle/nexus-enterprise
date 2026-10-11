@@ -20,6 +20,9 @@ func (s *AssetService) TransitionAsset(ctx context.Context, req *pb.TransitionRe
 	if err != nil {
 		return nil, lookupErr(err, "asset")
 	}
+	if err := requireOrganization(ctx, s.store, asset.WorkspaceID); err != nil {
+		return nil, err
+	}
 	if asset.Deleted {
 		return nil, conflict("cannot transition deleted asset")
 	}
@@ -89,6 +92,9 @@ func (s *AssetService) GetAvailableTransitions(ctx context.Context, req *pb.GetT
 	if err != nil {
 		return nil, lookupErr(err, "asset")
 	}
+	if err := requireOrganization(ctx, s.store, asset.WorkspaceID); err != nil {
+		return nil, err
+	}
 	// An asset's state is read like the asset: on its type's OA.
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpRead); err != nil {
 		return nil, err
@@ -142,6 +148,9 @@ func (s *AssetService) GetAssetHistory(ctx context.Context, req *pb.GetHistoryRe
 	if err != nil {
 		return nil, lookupErr(err, "asset")
 	}
+	if err := requireOrganization(ctx, s.store, asset.WorkspaceID); err != nil {
+		return nil, err
+	}
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpRead); err != nil {
 		return nil, err
 	}
@@ -178,6 +187,9 @@ func (s *AssetService) HandOverAsset(ctx context.Context, req *pb.HandOverReques
 	asset, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil || asset.Deleted {
 		return nil, notFound("asset not found")
+	}
+	if err := requireOrganization(ctx, s.store, asset.WorkspaceID); err != nil {
+		return nil, err
 	}
 	who := grpcauth.CallerFrom(ctx)
 	if err := s.checkAccess(ctx, who.NGACNodeID, asset.TypeOAID, ngac.OpManage); err != nil {

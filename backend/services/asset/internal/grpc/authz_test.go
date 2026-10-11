@@ -204,7 +204,7 @@ func newFixture(t *testing.T) *fixture {
 	if err := pool.QueryRow(ctx, "SELECT id FROM ngac_nodes WHERE node_type = 'PC' ORDER BY id LIMIT 1").Scan(&pcID); err != nil {
 		t.Skip("need a PC node in the test DB")
 	}
-	exec(`INSERT INTO workspaces (id, name, owner_id, ngac_pc_id) VALUES ($1, $1, $2, $3)`, f.wsID, f.userX, pcID)
+	exec(`INSERT INTO workspaces (id, name, owner_id, ngac_pc_id, type) VALUES ($1, $1, $2, $3, 'organization')`, f.wsID, f.userX, pcID)
 	exec(`INSERT INTO asset_types (id, name, category, workspace_id, ngac_oa_id) VALUES
 	      ($1, $1, 'hardware', $3, $4), ($2, $2, 'hardware', $3, $5)`, f.typeA, f.typeB, f.wsID, f.oaA, f.oaB)
 	exec(`INSERT INTO assets (id, name, type_id, workspace_id, created_by) VALUES

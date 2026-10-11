@@ -51,6 +51,9 @@ and joins the shared external network `traefik` with exactly two containers:
   auth, then workspace). It has the fixed address `10.77.231.10`.
 - `nexus-minio`: only for presigned file URLs on `storage.nexus.zaneng.xyz`.
 
+- `gotenberg` (Office to PDF for the file viewer) is on its own internal network `previews`, shared only with
+  `drive`, and has no route out; see "File previews" below.
+
 Everything else is on `nexus` alone. No container publishes a host port (Docker-published ports
 bypass ufw). Names on the shared network are `nexus-` prefixed, and nginx reaches the services by
 `nexus-<service>` aliases, so another app cannot shadow them. Same-origin traffic means there is no
@@ -272,9 +275,79 @@ image later is safe: the data lives in the `miniodata` volume.
 
 ## Resources and limits
 
-Memory limits total about 3 GB for the whole stack (postgres 512M, redpanda 640M, redis 256M,
-minio 256M, policy 256M, policy-read 192M, the rest 128-160M, nginx 48M). Go services also get
+Memory limits total about 3.6 GB for the whole stack (postgres 512M, redpanda 640M, redis 256M,
+minio 256M, gotenberg 600M (1 CPU), policy 256M, policy-read 192M, the rest 128-160M, nginx 48M). Go services also get
 `GOMEMLIMIT` just under their limit. `policy-read` runs one replica (dev runs two).
+
+## File previews (Gotenberg)
+
+Opening a Word, PowerPoint, OpenDocument text/presentation or RTF file (doc, docx, ppt, pptx, odt, odp, rtf) in the
+viewer makes the drive service send it to `gotenberg` (image `gotenberg/gotenberg:8.37.0`, LibreOffice inside,
+from Docker Hub), which answers a PDF; the PDF is kept in MinIO under `drive/previews/` and reused. Spreadsheets
+(xls, xlsx, ods) are not converted: the viewer reads them as tables. A file is converted on the machine that runs
+the stack, by a container with no route out; it is not sent to any outside service.
+
+`gotenberg` is limited to 600M, 1 CPU and 300 processes, and runs only its LibreOffice route (Chromium, PDF-engine,
+webhook and download-from features are switched off; LibreOffice may not fetch from private addresses). It sits on
+the `previews` network (`internal: true`, no route out, no published port) with `drive` as its only peer; `drive`
+finds it through `GOTENBERG_URL=http://gotenberg:3000`. Optional tuning on `drive`: `PREVIEW_MAX_SOURCE_MB` (50),
+`PREVIEW_MAX_PDF_MB` (80), `PREVIEW_MAX_CONCURRENT` (2), `PREVIEW_CONVERT_TIMEOUT_SECONDS` (45, under nginx's 60 s
+read timeout) and `PREVIEW_FAILURE_TTL_MINUTES` (10, how long a file that failed is not retried). The PDF is
+spooled to a temporary file in the drive container, never held in memory.
+
+`drive` fetches the original and stores the PDF through the signed MinIO URLs that browsers use. Those name the
+public host (`storage.nexus.zaneng.xyz`, part of the signature), which from inside the stack would mean going out
+through the shared Traefik and back. Instead `PREVIEW_STORAGE_DIAL_ADDR=nexus-minio:9000` makes `drive` connect to
+MinIO directly on the `nexus` network, in plain http, still sending the public host as `Host`, so the signature
+holds. Unset (dev), URLs are used as they are.
+
+If Gotenberg is down or a document cannot be converted, previews answer "unavailable" (the viewer offers the
+download) and the drive logs a warning; nothing else is affected. A permanently deleted file takes its PDF with it.
+Dev: `docker compose up -d gotenberg` (also part of `make dev-infra`) publishes it on `127.0.0.1:3050`, which a
+native drive uses by default.
+
+Checks after a deploy that includes previews (the drive image has `wget`):
+
+```bash
+docker exec nexus-drive-1 wget -qO- http://nexus-minio:9000/minio/health/live && echo minio-ok   # drive reaches MinIO directly
+docker exec nexus-drive-1 wget -qO- http://gotenberg:3000/health                                  # and the converter
+```
+
+## Web push (OneSignal)
+
+The messaging service sends web push notifications through OneSignal's REST API for direct messages,
+mentions and replies in threads a person follows. It needs two values in `/opt/nexus/.env`:
+
+- `ONESIGNAL_APP_ID` — the app's id, from the OneSignal dashboard (public; the frontend uses the same value
+  as `VITE_ONESIGNAL_APP_ID`).
+- `ONESIGNAL_REST_API_KEY` — the app's REST API key (secret; never in git, never in the frontend).
+
+For the frontend, `VITE_ONESIGNAL_APP_ID` is baked into the SPA bundle at build time via Docker build arg
+(`ARG VITE_ONESIGNAL_APP_ID` in `frontend/Dockerfile`). In `.github/workflows/deploy.yml`, it is read from
+the repository variable `vars.VITE_ONESIGNAL_APP_ID` (Settings → Secrets and variables → Actions → Variables;
+it is public, never stored as a secret). When absent or empty, the SDK is not loaded and push UI remains hidden.
+
+Both empty: push is off and nothing is sent. Only one set: messaging refuses to start, so a half-configured
+deployment never silently sends nothing. Devices are linked to people by OneSignal's `external_id`, set to the
+user's id at sign-in. Each recipient is checked for `read` on the channel when the push is sent.
+
+A notification opens `APP_BASE_URL` plus the conversation's path (web push needs an absolute address), and
+replaces an earlier one about the same conversation through `web_push_topic`. Each request carries an
+`idempotency_key`, so a retry after a timeout does not deliver twice. A conversation is not pushed to a
+person while one of their sessions has it on screen with the page visible; a tab that is merely open, or
+subscribed to the conversation for the navigator, does not hold push back.
+
+## Installable app (PWA)
+
+The frontend build contains `sw.js` (the service worker), `manifest.webmanifest` and the icons. nginx serves
+`/sw.js` and `/manifest.webmanifest` with `Cache-Control: no-cache` (`deploy/nginx/default.conf`), so an installed
+app learns of a new release on its next open. Every other static file (`.js .css .png .svg .woff2 …`) is cached for 30
+days as immutable: the hashed files under `assets/` are safe, but the fixed-name icons (`/icon-*.png`, `/favicon.svg`,
+`/apple-touch-icon.png`) are too, so a changed icon reaches home-screen installs only after that time (rename it to
+force one).
+The worker lives at the site root, so its scope is already `/` and no `Service-Worker-Allowed` header is needed.
+Traefik adds nothing here and does not cache. Browsers install only over HTTPS (the production host is). The worker
+precaches the app shell and never `/api/*`; a release shows installed apps a "Có bản mới của Nexus" bar.
 
 ## Email sign-in codes (Gmail SMTP)
 

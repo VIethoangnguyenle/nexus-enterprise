@@ -21,6 +21,7 @@ type Poll struct {
 	IsAnonymous bool
 	CreatedBy   string
 	EndsAt      *time.Time
+	ClosedAt    *time.Time // closed early by its creator or a channel manager
 	CreatedAt   time.Time
 }
 
@@ -93,14 +94,42 @@ func (s *Store) PollHasOption(ctx context.Context, pollID, optionID string) (boo
 	return ok, err
 }
 
-// InsertVote records a user's vote. Idempotent via UNIQUE constraint.
-func (s *Store) InsertVote(ctx context.Context, pollID, optionID, userID string) error {
-	_, err := s.db.Exec(ctx,
-		`INSERT INTO poll_votes (poll_id, option_id, user_id) VALUES ($1, $2, $3)
-		 ON CONFLICT DO NOTHING`,
-		pollID, optionID, userID)
+// InsertVote records a user's vote, idempotently (UNIQUE constraint); replace
+// first drops the person's other votes on the poll.
+func (s *Store) InsertVote(ctx context.Context, pollID, optionID, userID string, replace bool) error {
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		if replace {
+			// A single-choice poll holds one vote per person: the new one replaces it.
+			// Votes on one poll take its row lock first, so two arriving together
+			// run one after the other and the second deletes the first's row;
+			// without it each delete misses the other's uncommitted insert.
+			if _, err := tx.Exec(ctx, `SELECT 1 FROM polls WHERE id = $1 FOR UPDATE`, pollID); err != nil {
+				return err
+			}
+			if _, err := tx.Exec(ctx,
+				`DELETE FROM poll_votes WHERE poll_id = $1 AND user_id = $2 AND option_id <> $3`,
+				pollID, userID, optionID); err != nil {
+				return err
+			}
+		}
+		_, err := tx.Exec(ctx,
+			`INSERT INTO poll_votes (poll_id, option_id, user_id) VALUES ($1, $2, $3)
+			 ON CONFLICT DO NOTHING`,
+			pollID, optionID, userID)
+		return err
+	})
 	if err != nil {
 		return fmt.Errorf("insert vote: %w", err)
+	}
+	return nil
+}
+
+// ClosePoll closes a poll early; an already closed poll stays as it was.
+func (s *Store) ClosePoll(ctx context.Context, pollID, byUserID string) error {
+	if _, err := s.db.Exec(ctx,
+		`UPDATE polls SET closed_at = NOW(), closed_by = $2 WHERE id = $1 AND closed_at IS NULL`,
+		pollID, byUserID); err != nil {
+		return fmt.Errorf("close poll: %w", err)
 	}
 	return nil
 }
@@ -121,10 +150,10 @@ func (s *Store) GetPoll(ctx context.Context, pollID string) (*Poll, []PollOption
 	var p Poll
 	var endsAt *time.Time
 	err := s.db.QueryRow(ctx,
-		`SELECT id, message_id, channel_id, question, is_multi, is_anonymous, created_by, ends_at, created_at
+		`SELECT id, message_id, channel_id, question, is_multi, is_anonymous, created_by, ends_at, created_at, closed_at
 		 FROM polls WHERE id = $1`, pollID).
 		Scan(&p.ID, &p.MessageID, &p.ChannelID, &p.Question,
-			&p.IsMulti, &p.IsAnonymous, &p.CreatedBy, &endsAt, &p.CreatedAt)
+			&p.IsMulti, &p.IsAnonymous, &p.CreatedBy, &endsAt, &p.CreatedAt, &p.ClosedAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil, nil
 	}
@@ -236,6 +265,20 @@ func (s *Store) GetTask(ctx context.Context, id string) (*ChatTask, error) {
 	return &t, nil
 }
 
+// UserNode returns the NGAC node a user's sessions authenticate as; empty
+// when there is no such user.
+func (s *Store) UserNode(ctx context.Context, userID string) (string, error) {
+	var node string
+	err := s.db.QueryRow(ctx, `SELECT COALESCE(ngac_node, '') FROM users WHERE id = $1`, userID).Scan(&node)
+	if err == pgx.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("user node: %w", err)
+	}
+	return node, nil
+}
+
 // ListTasksByChannel returns tasks for a channel, optionally filtered by status.
 func (s *Store) ListTasksByChannel(ctx context.Context, channelID, status string) ([]ChatTask, error) {
 	query := `SELECT t.id, t.message_id, t.channel_id, t.title,
@@ -273,11 +316,15 @@ func (s *Store) ListTasksByChannel(ctx context.Context, channelID, status string
 }
 
 // InsertPollWithMessage stores a poll, its options and the system message that
-// announces it in one transaction: an announcement with no poll behind it is a
+// announces it in one transaction (a reply in its thread when msg has a parent,
+// counted like any reply): an announcement with no poll behind it is a
 // message nobody can answer.
 func (s *Store) InsertPollWithMessage(ctx context.Context, msg *Message, p *Poll, options []PollOptionInput) error {
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if err := insertMessage(ctx, tx, msg); err != nil {
+			return fmt.Errorf("create poll message: %w", err)
+		}
+		if err := recordReply(ctx, tx, msg); err != nil {
 			return fmt.Errorf("create poll message: %w", err)
 		}
 		if err := insertPoll(ctx, tx, p); err != nil {
@@ -303,6 +350,9 @@ type PollOptionInput struct {
 func (s *Store) InsertTaskWithMessage(ctx context.Context, msg *Message, t *ChatTask) error {
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if err := insertMessage(ctx, tx, msg); err != nil {
+			return fmt.Errorf("create task message: %w", err)
+		}
+		if err := recordReply(ctx, tx, msg); err != nil {
 			return fmt.Errorf("create task message: %w", err)
 		}
 		if err := insertTask(ctx, tx, t); err != nil {

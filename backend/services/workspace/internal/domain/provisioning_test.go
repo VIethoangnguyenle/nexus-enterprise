@@ -81,7 +81,7 @@ func TestCreateWorkspace_Succeeds(t *testing.T) {
 	w := testutil.NewFakePolicyWrite()
 	f := newWriteFixture(t, w)
 
-	ws, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", UserID: "u1", UserNGACNodeID: owner})
+	ws, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", Type: domain.TypeOrganization, UserID: "u1", UserNGACNodeID: owner})
 
 	require.NoError(t, err)
 	assert.Len(t, w.LiveNodes(), 8, "PC, Owners, Members, Mgmt, Documents, DraftDocs, ApprovedDocs, Channels")
@@ -94,7 +94,7 @@ func TestCreateWorkspace_Succeeds(t *testing.T) {
 
 func TestCreateWorkspace_RollsBackWhereverItFails(t *testing.T) {
 	probe := testutil.NewFakePolicyWrite()
-	_, err := newWriteFixture(t, probe).svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", UserID: "u1", UserNGACNodeID: owner})
+	_, err := newWriteFixture(t, probe).svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", Type: domain.TypeOrganization, UserID: "u1", UserNGACNodeID: owner})
 	require.NoError(t, err)
 	steps := probe.Calls()
 	require.Greater(t, steps, 15, "the probe run must exercise every node, assignment and association")
@@ -104,7 +104,7 @@ func TestCreateWorkspace_RollsBackWhereverItFails(t *testing.T) {
 		w.FailAt = k
 		f := newWriteFixture(t, w)
 
-		_, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", UserID: "u1", UserNGACNodeID: owner})
+		_, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", Type: domain.TypeOrganization, UserID: "u1", UserNGACNodeID: owner})
 
 		require.Errorf(t, err, "failure injected at write %d must surface", k)
 		assertNothingLeft(t, w, fmt.Sprintf("failure at write %d", k))
@@ -117,11 +117,34 @@ func TestCreateWorkspace_RollsBackWhenTheRowCannotBeStored(t *testing.T) {
 	f := newWriteFixture(t, w)
 	f.svc = domain.NewService(&failingWSStore{fakeWSStore: f.wsStore, err: errors.New("db down")}, f.depts, f.read, w, nil, nil)
 
-	_, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", UserID: "u1", UserNGACNodeID: owner})
+	_, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", Type: domain.TypeOrganization, UserID: "u1", UserNGACNodeID: owner})
 
 	require.ErrorContains(t, err, "db down")
 	assertNothingLeft(t, w, "row insert")
 	assert.NotEmpty(t, created(w.Log()), "the graph writes did happen before the insert failed")
+}
+
+// A workspace's type is decided when it is made and stored with it, so later
+// checks can trust it.
+func TestCreateWorkspace_RecordsItsType(t *testing.T) {
+	for _, typ := range []string{domain.TypePersonal, domain.TypeOrganization} {
+		f := newWriteFixture(t, testutil.NewFakePolicyWrite())
+		ws, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", Type: typ, UserID: "u1", UserNGACNodeID: owner})
+		require.NoError(t, err)
+		assert.Equal(t, typ, ws.Type)
+		assert.Equal(t, typ, f.wsStore.ws[ws.ID].Type)
+	}
+}
+
+func TestCreateWorkspace_RefusesAMissingOrUnknownType(t *testing.T) {
+	for _, typ := range []string{"", "team", "Personal"} {
+		w := testutil.NewFakePolicyWrite()
+		f := newWriteFixture(t, w)
+		_, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", Type: typ, UserID: "u1", UserNGACNodeID: owner})
+		require.ErrorIs(t, err, domain.ErrInvalidInput, "type %q", typ)
+		assert.Empty(t, w.Log(), "type %q: nothing is written to the graph", typ)
+		assert.Len(t, f.wsStore.ws, 2, "type %q: no row", typ)
+	}
 }
 
 func createSales(t *testing.T, f *fixture, caller, ws string) *domain.DepartmentResult {

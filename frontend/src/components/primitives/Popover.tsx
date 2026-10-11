@@ -6,7 +6,8 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useMotionPresets } from '../../lib/motion'
 
-type Placement = 'bottom-start' | 'bottom-end' | 'top-start'
+/** `right-*` hang beside the anchor (the icon rail), top- or bottom-aligned with it. */
+type Placement = 'bottom-start' | 'bottom-end' | 'top-start' | 'right-start' | 'right-end'
 
 interface PopoverProps {
   open: boolean
@@ -22,6 +23,9 @@ interface PopoverProps {
 }
 
 const GAP = 6
+const SIDE_GAP = 8
+/** Rows the arrow keys visit: plain items and radio items (a "move to" list), not disabled ones. */
+const MENU_ITEMS = '[role="menuitem"]:not(:disabled), [role="menuitemradio"]:not(:disabled)'
 
 /**
  * Overlay anchored to a trigger, rendered in a portal so no `overflow: hidden`
@@ -39,6 +43,8 @@ export function Popover({
     const a = anchorRef.current?.getBoundingClientRect()
     if (!a) return
     if (placement === 'bottom-end') setPos({ top: a.bottom + GAP, right: window.innerWidth - a.right })
+    else if (placement === 'right-start') setPos({ top: a.top, left: a.right + SIDE_GAP })
+    else if (placement === 'right-end') setPos({ bottom: window.innerHeight - a.bottom, left: a.right + SIDE_GAP })
     else if (placement === 'top-start') setPos({ bottom: window.innerHeight - a.top + GAP, left: a.left })
     else setPos({ top: a.bottom + GAP, left: a.left })
   }, [anchorRef, placement])
@@ -59,7 +65,7 @@ export function Popover({
     if (!open) return
     const id = requestAnimationFrame(() => {
       const first = panelRef.current?.querySelector<HTMLElement>(
-        role === 'menu' ? '[role="menuitem"]' : 'input, button, [href], [tabindex]:not([tabindex="-1"])',
+        role === 'menu' ? MENU_ITEMS : 'input, button, [href], [tabindex]:not([tabindex="-1"])',
       )
       first?.focus()
     })
@@ -90,7 +96,7 @@ export function Popover({
 
   const onMenuKeys = (e: KeyboardEvent<HTMLDivElement>) => {
     if (role !== 'menu') return
-    const items = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+    const items = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(MENU_ITEMS) ?? [])
     const i = items.indexOf(document.activeElement as HTMLElement)
     let next = -1
     if (e.key === 'ArrowDown') next = (i + 1) % items.length

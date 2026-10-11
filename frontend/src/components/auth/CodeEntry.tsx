@@ -1,11 +1,12 @@
-import { useEffect, useId, useState } from 'react'
-import { AlertCircle } from 'lucide-react'
+import { useEffect, useId, useRef, useState } from 'react'
+import { AlertCircle, Check } from 'lucide-react'
 import type { OTPVerifyResponse } from '../../api/auth'
 import {
   useConfirmEmailVerification, useRequestEmailVerification, useRequestOTP, useVerifyOTP,
 } from '../../hooks/useAuth'
 import { describeAuthError, formatCountdown, type DescribedError, type Identifier } from '../../lib/auth-flow'
 import { formatTime } from '../../lib/format'
+import { useMotionPresets } from '../../lib/motion'
 import { Button, OtpInput } from '../primitives'
 import { Notice } from './Notice'
 
@@ -41,6 +42,14 @@ type CodeEntryProps = CodeEntryCommon &
       }
   )
 
+/**
+ * Sign-in only: how long the right code stays on screen so the boxes can gather
+ * into the check badge (wash, gather, badge: ~680ms) before the parent moves on.
+ * Under reduced motion it is only long enough to read the colour change.
+ */
+export const SUCCESS_HOLD_MS = 700
+const SUCCESS_HOLD_REDUCED_MS = 240
+
 /** Failures that mean "this code" rather than "the service". */
 const ABOUT_THE_CODE = new Set<DescribedError['kind']>(['wrong-code', 'locked', 'expired'])
 
@@ -51,6 +60,7 @@ const ABOUT_THE_CODE = new Set<DescribedError['kind']>(['wrong-code', 'locked', 
  */
 export function CodeEntry(props: CodeEntryProps) {
   const { identifier, session: initial, autoFocus = true } = props
+  const m = useMotionPresets()
   const proving = props.mode === 'verify-email'
   const messageId = useId()
   const signInVerify = useVerifyOTP()
@@ -66,6 +76,21 @@ export function CodeEntry(props: CodeEntryProps) {
   const [errorKey, setErrorKey] = useState(0)
   const [resendError, setResendError] = useState<DescribedError | null>(null)
   const [cooldown, setCooldown] = useState(RESEND_SECONDS)
+  const [verified, setVerified] = useState(false)
+  const handOff = useRef<ReturnType<typeof setTimeout>>(undefined)
+  // The hand-off still owed once the code is accepted. The person is signed in
+  // from that moment, so leaving the screen during the badge does not cancel
+  // it: it happens at once instead.
+  const pendingHandOff = useRef<(() => void) | null>(null)
+  useEffect(
+    () => () => {
+      clearTimeout(handOff.current)
+      const owed = pendingHandOff.current
+      pendingHandOff.current = null
+      owed?.()
+    },
+    [],
+  )
 
   const counting = cooldown > 0
   useEffect(() => {
@@ -92,7 +117,16 @@ export function CodeEntry(props: CodeEntryProps) {
       return
     }
     const done = props.onVerified
-    signInVerify.mutate({ session_id: session.sessionId, code: value }, { onSuccess: done, onError: failed })
+    const landed = (res: OTPVerifyResponse) => {
+      setVerified(true)
+      const go = () => {
+        pendingHandOff.current = null
+        done(res)
+      }
+      pendingHandOff.current = go
+      handOff.current = setTimeout(go, m.reduced ? SUCCESS_HOLD_REDUCED_MS : SUCCESS_HOLD_MS)
+    }
+    signInVerify.mutate({ session_id: session.sessionId, code: value }, { onSuccess: landed, onError: failed })
   }
 
   const resend = () => {
@@ -141,7 +175,12 @@ export function CodeEntry(props: CodeEntryProps) {
           describedBy={messageId}
         />
         <div id={messageId} aria-live="polite" className="min-h-5 text-sm">
-          {aboutTheCode ? (
+          {verified ? (
+            <span className="flex items-center gap-1.5 text-success">
+              <Check size={16} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
+              Đã xác minh.
+            </span>
+          ) : aboutTheCode ? (
             <span className="flex items-center gap-1.5 text-danger">
               <AlertCircle size={16} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
               {error.message}
@@ -160,7 +199,7 @@ export function CodeEntry(props: CodeEntryProps) {
         <Button
           variant="link"
           size="link"
-          disabled={resendLocked || requesting.isPending}
+          disabled={resendLocked || requesting.isPending || verified}
           onClick={resend}
         >
           Gửi lại

@@ -2,12 +2,15 @@ import { adminKeys } from './admin'
 import { authKeys } from './auth'
 import { approvalKeys } from './approval'
 import { assetKeys } from './assets'
+import { chatCardKeys } from './chat-cards'
 import { contactKeys } from './contacts'
 import { documentKeys } from './documents'
 import { driveKeys } from './drive'
 import { messagingKeys } from './messaging'
 import { notificationKeys } from './notifications'
+import { notificationLevelKeys } from './notification-levels'
 import { permissionKeys } from './permissions'
+import { shortcutKeys } from './shortcuts'
 import { workspaceKeys } from './workspaces'
 
 /**
@@ -23,11 +26,14 @@ export const keys = {
   approval: approvalKeys,
   assets: assetKeys,
   auth: authKeys,
+  chatCards: chatCardKeys,
   contacts: contactKeys,
   documents: documentKeys,
   drive: driveKeys,
   messaging: messagingKeys,
   notifications: notificationKeys,
+  notificationLevels: notificationLevelKeys,
   permissions: permissionKeys,
+  shortcuts: shortcutKeys,
   workspaces: workspaceKeys,
 }

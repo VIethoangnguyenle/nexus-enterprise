@@ -24,6 +24,15 @@ service MessagingService {
   // Threads
   rpc GetThread(GetThreadRequest) returns (MessageList);
   rpc FindThreadsByEntity(FindThreadsByEntityRequest) returns (MessageList);
+  rpc FollowThread(ThreadRequest) returns (Empty);
+  rpc UnfollowThread(ThreadRequest) returns (Empty);
+  rpc MarkThreadRead(ThreadRequest) returns (Empty);
+  rpc ListThreads(ListThreadsRequest) returns (MessageList);
+
+  // Message lifecycle
+  rpc EditMessage(EditMessageRequest) returns (Message);
+  rpc DeleteMessage(MessageRef) returns (Empty);
+  rpc MarkMessageUnread(MessageRef) returns (Empty);
 
   // DMs
   rpc CreateDM(CreateDMRequest) returns (Channel);
@@ -51,6 +60,7 @@ service MessagingService {
   rpc VotePoll(VotePollRequest) returns (Empty);
   rpc RemoveVote(RemoveVoteRequest) returns (Empty);
   rpc GetPoll(GetPollRequest) returns (Poll);
+  rpc ClosePoll(ClosePollRequest) returns (Poll);
 
   // Tasks
   rpc CreateTask(CreateTaskRequest) returns (ChatTask);
@@ -84,6 +94,7 @@ message Channel {
   string topic = 9;           // Short topic line shown below channel name
   string description = 10;    // Longer channel description
   int32 member_count = 11;    // Denormalized member count
+  bool starred = 12;          // The caller starred this conversation (set where a caller is known)
 }
 
 message CreateChannelRequest {
@@ -154,6 +165,11 @@ message SendMessageRequest {
   string linked_entity_id = 8;      // ID of the linked entity
   string content_format = 9;        // "markdown" (default), "plain"
   repeated string mentions = 10;    // User IDs mentioned in content
+  // Files from the channel's drive to send with the text in this one message
+  // (at most 20). Only drive_file_id, width and height are read; the server
+  // fills in the rest from the file.
+  repeated MessageAttachment attachments = 11;
+  string quoted_message_id = 12;    // A message of the same channel this one quotes
 }
 
 message Message {
@@ -172,6 +188,50 @@ message Message {
   repeated string mentions = 13;    // User IDs mentioned
   repeated ReactionGroup reactions = 14;  // Aggregated reactions
   bool is_pinned = 15;              // Whether message is pinned
+  // Thread summary of a root message. last_reply_at is unset until the first
+  // reply; the other three are as seen by the caller.
+  google.protobuf.Timestamp last_reply_at = 16;
+  repeated string reply_participant_ids = 17; // User IDs of the 3 most recent distinct repliers, newest first
+  bool following = 18;                        // Caller follows the thread
+  int32 thread_unread_count = 19;             // Replies the caller has not read; 0 when not following
+  repeated MessageAttachment attachments = 20; // In the order they were attached
+  google.protobuf.Timestamp edited_at = 21;    // Set once its sender changed the text
+  bool deleted = 22;                           // Deleted: no body, kept only as a thread's placeholder
+  QuotedMessage quoted = 23;                   // The message this one quotes, when any
+  // Set only in the caller's starred and mentions feeds, never in a channel's own list.
+  bool starred = 24;                           // Starred feed: always true
+  google.protobuf.Timestamp starred_at = 25;   // Starred feed: when the caller starred it
+  bool unread = 26;                            // Mentions feed: the caller has not read it yet
+}
+
+// QuotedMessage is what a quote shows of the message it quotes.
+message QuotedMessage {
+  string id          = 1;
+  string sender_id   = 2;
+  string sender_name = 3;
+  string text        = 4;   // The opening of its plain text; empty when deleted
+  bool   deleted     = 5;
+}
+
+// MessageRef names one message.
+message MessageRef {
+  string message_id = 1;
+}
+
+message EditMessageRequest {
+  string message_id     = 1;
+  string content        = 2;
+  string content_format = 3;
+}
+
+// MessageAttachment is one file of the channel's drive shown in a message.
+message MessageAttachment {
+  string drive_file_id = 1;
+  string file_name     = 2;
+  string mime_type     = 3;
+  int64  size_bytes    = 4;
+  int32  width         = 5;   // Pixels, images only; 0 when unknown
+  int32  height        = 6;
 }
 
 message GetMessagesRequest {
@@ -184,6 +244,19 @@ message GetMessagesRequest {
 message MessageList {
   repeated Message messages = 1;
   bool has_more = 2;
+}
+
+// ThreadRequest names a thread by its root message.
+message ThreadRequest {
+  string message_id = 1;
+}
+
+message ListThreadsRequest {
+  string channel_id = 1;
+  string filter = 2;   // "all" (default), "following" or "unread"
+  string before = 3;   // RFC 3339 last-reply time: return threads that moved before it
+  int32 limit = 4;
+  string before_id = 5; // root message id of the last thread of the previous page; breaks ties on before
 }
 
 message GetThreadRequest {
@@ -297,6 +370,11 @@ message ChannelUnread {
   string channel_id = 1;
   int32 unread_count = 2;
   string last_read_message_id = 3;
+  int32 thread_unread_count = 4;    // Unread replies in the threads of this channel the caller follows
+  string notification_level = 5;    // "all" | "main" | "off": the caller's choice for this conversation
+  int32 mention_count = 6;          // Unread messages that mention the caller (counted at every level)
+  bool starred = 7;                 // The caller starred this conversation
+  google.protobuf.Timestamp starred_at = 8; // When the caller starred it; unset when not starred
 }
 
 message ChannelUnreadList {
@@ -365,6 +443,16 @@ message Poll {
   google.protobuf.Timestamp ends_at = 9;
   google.protobuf.Timestamp created_at = 10;
   int32 total_votes = 11;
+  // As the caller sees it: results show once they voted or the poll closed;
+  // until then vote counts, totals and voters are left out.
+  bool results_visible = 12;
+  repeated string my_option_ids = 13;
+  bool closed = 14;                       // Closed early, or past ends_at
+  google.protobuf.Timestamp closed_at = 15;
+}
+
+message ClosePollRequest {
+  string poll_id = 1;
 }
 
 // ============================================

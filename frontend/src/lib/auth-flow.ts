@@ -1,5 +1,6 @@
 import { ApiError } from '../api/client'
 import { toDate } from './format'
+import type { WorkspaceType } from '../api/workspaces'
 
 /**
  * The words and decisions of the sign-in screens, kept apart from the markup so
@@ -64,6 +65,19 @@ export function afterSignIn(needsProfile: boolean): '/register' | '/workspace-se
   return needsProfile ? '/register' : '/workspace-select'
 }
 
+/**
+ * Where a screen the person left from may send them back (`?from=`). Only a path
+ * inside this app counts: anything that could leave the site, or is not a plain
+ * path, is dropped so the caller falls back to its default.
+ */
+export function returnPath(raw: unknown): string | undefined {
+  if (typeof raw !== 'string' || raw.length === 0 || raw.length > 512) return undefined
+  if (!raw.startsWith('/') || raw.startsWith('//') || raw.startsWith('/\\')) return undefined
+  // Control characters never belong in a path.
+  if (/[\u0000-\u001f\u007f]/.test(raw)) return undefined
+  return raw
+}
+
 // --- labels ----------------------------------------------------------------
 
 const ROLE_LABELS: Record<string, string> = {
@@ -77,10 +91,21 @@ export function roleLabel(role: string): string {
   return ROLE_LABELS[role] ?? 'Thành viên'
 }
 
-/** `novapay.vn · 64 thành viên · Thành viên`; the company only when the workspace claimed one. */
-export function workspaceRowDetail(w: { member_count: number; role: string; domain: string } | undefined): string {
+/**
+ * Subtitle for workspace rows: personal, organization, or (for a type this build
+ * does not know) the headcount. The phone adds the person's role; the desktop
+ * switcher passes `withRole: false`.
+ */
+export function workspaceRowDetail(
+  w: { member_count?: number; role?: string; domain?: string; type?: WorkspaceType } | undefined,
+  { withRole = true }: { withRole?: boolean } = {},
+): string {
   if (!w) return ''
-  const own = `${w.member_count} thành viên · ${roleLabel(w.role)}`
+  const role = withRole && w.role ? roleLabel(w.role) : ''
+  const join = (head: string) => (role ? `${head} · ${role}` : head)
+  if (w.type === 'personal') return join('Workspace cá nhân')
+  if (w.type === 'organization') return join(w.domain || 'Workspace tổ chức')
+  const own = join(`${w.member_count} thành viên`)
   return w.domain ? `${w.domain} · ${own}` : own
 }
 

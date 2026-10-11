@@ -1,0 +1,1069 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexus · Workspace cá nhân và workspace tổ chức</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Workspace type: what a personal workspace leaves out (Tài sản, Phê duyệt, duyệt tài liệu) next to
+   an organization workspace, and the one-way conversion in Cài đặt → Workspace. Same kit as
+   core-screens / contacts-documents-settings; tokens only. Review chrome (frames, captions, notes)
+   is not product UI. */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5;
+  padding-inline: 16px; padding-block: 0 64px; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+svg.i.l { width: 20px; height: 20px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance; line-height: 1.25; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-ink-muted); }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* ---------- review chrome ---------- */
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 65ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; min-height: 44px;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; min-height: 44px; }
+.check input { width: 18px; height: 18px; accent-color: var(--color-accent); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 10px 12px; border-radius: 999px; background: var(--color-sunk); }
+.toc a:hover { background: var(--color-hover); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+.screen-head { display: grid; gap: 6px; max-width: 75ch; }
+.screen-head h2 { font-size: 1.4375rem; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.pair { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1100px) { .pair { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .pair.three { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.col { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.cap { display: flex; align-items: center; gap: 8px; font-weight: 600; flex-wrap: wrap; }
+.cap small { font-weight: 400; color: var(--color-ink-muted); font-size: 0.8125rem; }
+.tag { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 999px; font: 600 0.75rem/1 var(--font-body); }
+.tag.personal { background: var(--color-accent-wash); color: var(--color-accent); }
+.tag.org { background: var(--color-sunk); color: var(--color-ink); }
+.frame { background: var(--color-base); border-radius: 12px; box-shadow: 0 0 0 1px var(--color-line); overflow: hidden; min-width: 0; }
+.scroll { overflow-x: auto; border-radius: 12px; }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 85ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.demo span.k { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-right: 4px; }
+.gone { display: flex; align-items: center; gap: 8px; color: var(--color-ink-muted); font-size: 0.8125rem; }
+.gone s { text-decoration-thickness: 1px; }
+
+/* ---------- primitives ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0;
+  font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink); text-decoration: none;
+  transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-press) var(--ease-out); }
+.btn:hover { background: var(--color-line); }
+.btn:active { transform: scale(0.98); }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.primary:hover { background: var(--color-accent-hover); }
+.btn.ghost { background: transparent; }
+.btn.ghost:hover { background: var(--color-hover); }
+.btn.danger { background: var(--color-danger); color: var(--color-on-person); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.btn[aria-busy="true"] { cursor: progress; }
+.spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; border-right-color: transparent; animation: spin 700ms linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ibtn { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; position: relative; flex: none;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.ibtn::before { content: ""; position: absolute; inset: -6px; }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); }
+.av.s20 { width: 20px; height: 20px; font-size: 0.5625rem; }
+.av.s24 { width: 24px; height: 24px; font-size: 0.625rem; }
+.av.s40 { width: 40px; height: 40px; font-size: 0.875rem; }
+.chip { display: inline-flex; align-items: center; gap: 6px; min-width: 0; vertical-align: middle; }
+.chip .nm { font-weight: 500; }
+.pill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font: 600 0.75rem/1 var(--font-body); white-space: nowrap; }
+.pill.wait { background: var(--color-warning-wash); color: var(--color-warning); }
+.pill.ok { background: var(--color-success-wash); color: var(--color-success); }
+.pill.idle { background: var(--color-sunk); color: var(--color-ink-muted); }
+.pill.acc { background: var(--color-accent-wash); color: var(--color-accent); }
+.pill.count { background: var(--color-accent); color: var(--color-on-accent); height: 18px; padding: 0 6px; font-size: 0.6875rem; min-width: 18px; justify-content: center; }
+.label { font: 600 0.75rem/1.3 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); }
+
+/* ---------- desktop sidebar ---------- */
+.shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); height: 540px; }
+.side { background: var(--color-sunk); display: grid; grid-template-rows: auto 1fr auto; padding: 12px; gap: 12px; min-height: 0; }
+.ws { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 10px; min-width: 0; }
+.ws .logo { width: 32px; height: 32px; border-radius: 10px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 0.9375rem/1 var(--font-display); flex: none; }
+.ws .n { font: 700 1rem/1.2 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ws .s { font-size: 0.75rem; color: var(--color-ink-muted); }
+.ws > div { min-width: 0; }
+.nav { display: grid; gap: 2px; align-content: start; }
+.nav a { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 10px; color: var(--color-ink-muted); text-decoration: none; font-weight: 500; overflow: hidden;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.nav a:hover { background: var(--color-hover); color: var(--color-ink); }
+.nav a[aria-current="page"] { background: var(--color-raised); color: var(--color-ink); font-weight: 600; }
+.nav a .pill { margin-left: auto; }
+.me { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; }
+.me .r { font-size: 0.75rem; color: var(--color-ink-muted); }
+.stage { display: grid; align-content: start; gap: 12px; padding: 20px; min-width: 0; }
+.stage h3 { font-size: 1.1875rem; font-weight: 700; }
+.ghostrow { height: 12px; border-radius: 6px; background: var(--color-sunk); }
+@media (max-width: 599px) { .shell { grid-template-columns: minmax(0, 1fr); } .shell .stage { display: none; } }
+/* conversion: the two new rows arrive (height + fade 220ms) and carry an accent wash that fades out */
+.nav a.arrive { animation: arrive var(--duration-base) var(--ease-out) both, settle var(--rt-total) var(--ease-out) both; }
+@keyframes arrive { from { height: 0; opacity: 0; } to { height: 36px; opacity: 1; } }
+@keyframes settle { 0%, 40% { background: var(--color-accent-wash); color: var(--color-ink); } 100% { background: transparent; } }
+
+/* ---------- phone ---------- */
+.phones { display: flex; flex-wrap: wrap; gap: 16px; }
+.phone { flex: 1 1 300px; width: 100%; max-width: 360px; height: 680px; border-radius: 24px; background: var(--color-base); box-shadow: 0 0 0 1px var(--color-line); overflow: hidden;
+  display: grid; grid-template-rows: auto 1fr auto; position: relative; isolation: isolate; }
+.topbar { display: flex; align-items: center; gap: 2px; min-height: 48px; padding: 0 4px 0 16px; }
+.topbar .brand { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-ink-muted); font-size: 1rem; }
+.topbar .brand b { font: 700 1rem/1 var(--font-display); color: var(--color-ink); }
+.topbar .ibtn { width: 44px; height: 44px; }
+.pbody { overflow: hidden; min-height: 0; display: grid; align-content: start; }
+.ptitle { padding: 4px 16px 8px; font: 700 1.4375rem/1.3 var(--font-display); }
+.psearch { margin: 0 16px 8px; display: flex; align-items: center; gap: 8px; height: 40px; padding: 0 12px; border-radius: 8px; background: var(--color-sunk); color: var(--color-ink-muted); font-size: 1rem; }
+.prow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 16px; min-height: 60px; }
+.prow .nm { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow .pv { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.prow .ricon { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--color-warning-wash); color: var(--color-warning); }
+.tabbar { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--color-raised); padding: 4px 4px 18px; }
+.tabbar a { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 48px; font-size: 0.6875rem; line-height: 1rem; font-weight: 500; color: var(--color-ink-muted); text-decoration: none; }
+.tabbar a .ic { position: relative; display: grid; place-items: center; width: 48px; height: 24px; border-radius: 10px; }
+.tabbar a .ic svg.i { width: 20px; height: 20px; }
+.tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 600; }
+.tabbar a[aria-current="page"] .ic { background: var(--color-accent-wash); }
+.tabbar a .pill.count { position: absolute; top: -6px; right: 2px; box-shadow: 0 0 0 2px var(--color-raised); }
+.tabbar a .dot { position: absolute; top: -1px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--color-accent); box-shadow: 0 0 0 2px var(--color-raised); }
+.tabbar a.swap { animation: fadein var(--duration-quick) var(--ease-out) both; }
+@keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
+.scrim { position: absolute; inset: 0; z-index: 30; background: var(--color-scrim); }
+.msheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 40; background: var(--color-overlay); border-radius: 12px 12px 0 0; box-shadow: var(--shadow-overlay);
+  padding: 8px 16px 34px; display: grid; gap: 2px; max-height: 85%; }
+.msheet .gh { display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; }
+.msheet .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-line); justify-self: center; grid-column: 2; }
+.msheet .ibtn { grid-column: 3; justify-self: end; }
+.wsrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px; border-radius: 10px; margin-bottom: 4px; }
+.wsrow .logo { width: 40px; height: 40px; border-radius: 10px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 1.0625rem/1 var(--font-display); }
+.wsrow .n { font: 700 1rem/1.25 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wsrow .who { display: flex; align-items: center; gap: 6px; font-size: 0.8125rem; min-width: 0; white-space: nowrap; overflow: hidden; }
+.wsrow .who .r { color: var(--color-ink-muted); }
+.sitem { display: flex; align-items: center; gap: 12px; height: 48px; padding: 0 8px; border-radius: 10px; color: var(--color-ink); text-decoration: none; font-weight: 500; }
+.sitem svg { color: var(--color-ink-muted); }
+.sitem .pill { margin-left: auto; }
+.sitem.out, .sitem.out svg { color: var(--color-danger); }
+.msheet hr { border: 0; height: 1px; background: var(--color-line); margin: 4px 8px; }
+
+/* ---------- document editor header ---------- */
+.chead { display: flex; align-items: center; gap: 12px 16px; padding: 16px 20px 12px; min-width: 0; flex-wrap: wrap; }
+.chead .t { display: grid; gap: 2px; min-width: 0; flex: 1 1 220px; }
+.chead h3 { font-size: 1.1875rem; font-weight: 700; }
+.crumbs { display: flex; align-items: center; gap: 4px; font-size: 0.8125rem; color: var(--color-ink-muted); }
+.crumbs a { color: inherit; text-decoration: none; }
+.saved { display: inline-flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--color-ink-muted); }
+.chead .end { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.faces { display: flex; }
+.faces .av { box-shadow: 0 0 0 2px var(--color-base); }
+.faces .av + .av { margin-left: -6px; }
+.canvas { background: var(--color-sunk); padding: 20px; }
+.sheetdoc { background: var(--color-raised); border-radius: 10px; padding: 24px; max-width: 720px; margin-inline: auto; display: grid; gap: 10px; }
+.sheetdoc h4 { font-size: 1.25rem; font-weight: 700; }
+.menu { background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 6px; display: grid; gap: 2px; width: 248px; max-width: 100%; }
+.menu .mi { display: flex; align-items: center; gap: 10px; height: 40px; padding: 0 10px; border-radius: 8px; font-weight: 500; }
+.menu .mi .ti { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; }
+.ti.a { background: var(--color-accent-wash); color: var(--color-accent); }
+.ti.s { background: var(--color-success-wash); color: var(--color-success); }
+.ti.i { background: var(--color-info-wash); color: var(--color-info); }
+.ti.w { background: var(--color-warning-wash); color: var(--color-warning); }
+.composer { display: flex; align-items: center; gap: 4px; background: var(--color-raised); border-radius: 12px; padding: 8px; }
+.composer .ph { flex: 1; color: var(--color-ink-muted); padding-left: 8px; }
+.menu-stage { display: grid; gap: 8px; padding: 16px; align-content: end; }
+
+/* ---------- admin ---------- */
+.panel { background: var(--color-raised); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
+.dh { display: flex; align-items: center; gap: 12px; }
+.dh h4 { font-size: 1.1875rem; font-weight: 700; }
+.rdot { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--color-sunk); color: var(--color-ink-muted); flex: none; }
+.areas { display: grid; gap: 8px; }
+.area { display: grid; gap: 8px; padding: 12px; border-radius: 10px; background: var(--color-base); }
+.area .h { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.area .h .muted { font-weight: 400; margin-left: auto; font-size: 0.8125rem; }
+.ops { display: flex; flex-wrap: wrap; gap: 6px; }
+.tbl { display: grid; min-width: 720px; }
+.tbl .tr { display: grid; grid-template-columns: minmax(180px, 1.6fr) repeat(7, minmax(64px, 1fr)); align-items: center; min-height: 52px; border-bottom: 1px solid var(--color-line); }
+.tbl .th { min-height: 40px; font: 600 0.75rem/1.3 var(--font-body); color: var(--color-ink-muted); }
+.tbl .tr > span { padding: 0 8px; }
+.tbl .c { text-align: center; }
+.cb { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--color-sunk); box-shadow: inset 0 0 0 1px var(--color-line); }
+.cb.on { background: var(--color-accent); color: var(--color-on-accent); box-shadow: none; }
+.cb svg { width: 14px; height: 14px; stroke-width: 2.5; }
+.na { color: var(--color-ink-subtle); }
+.tbl .nm { display: flex; align-items: center; gap: 8px; }
+.tbl small { display: block; color: var(--color-ink-muted); font-size: 0.75rem; }
+
+/* ---------- settings ---------- */
+.sett { display: grid; gap: 16px; padding: 16px 20px 24px; }
+.sett > h3 { font-size: 1.4375rem; font-weight: 700; }
+.tabs { display: flex; gap: 4px; overflow-x: auto; }
+.tabs button { font: 600 0.875rem/1 var(--font-body); background: transparent; border: 0; color: var(--color-ink-muted); padding: 0 12px; min-height: 40px; border-radius: 8px; cursor: pointer; }
+.tabs button[aria-selected="true"] { background: var(--color-raised); color: var(--color-ink); }
+.setform { display: grid; gap: 20px; max-width: 560px; }
+.fld { display: grid; gap: 6px; }
+.lab { font-weight: 600; }
+.inp { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 8px 12px; border-radius: 8px; background: var(--color-raised); font-size: 1rem; }
+.ro { color: var(--color-ink); font-size: 1rem; }
+.lockline { display: flex; gap: 8px; align-items: flex-start; color: var(--color-ink-muted); }
+.lockline svg { margin-top: 2px; }
+.wtype { background: var(--color-raised); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
+.wtype .top { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: start; }
+.wtype .ic { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--color-sunk); color: var(--color-ink-muted); }
+.wtype .ic.acc { background: var(--color-accent-wash); color: var(--color-accent); }
+.wtype .t { display: grid; gap: 4px; }
+.wtype .t b { font-weight: 600; font-size: 1rem; }
+.wtype .t span { color: var(--color-ink-muted); }
+.wtype .act { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-left: 52px; }
+.wtype .audit { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 8px; align-items: start; padding-left: 52px; color: var(--color-ink-muted); }
+.wtype .audit .av { margin-top: 1px; }
+.wtype .audit b { color: var(--color-ink); font-weight: 600; }
+@media (max-width: 479px) { .wtype .act, .wtype .audit { padding-left: 0; } .wtype .act .btn { width: 100%; white-space: normal; height: auto; min-height: 44px; padding-block: 10px; } }
+.srow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: 10px; background: var(--color-sunk); }
+.srow .t { display: grid; gap: 2px; flex: 1 1 220px; }
+.srow .t span { color: var(--color-ink-muted); }
+.danger-zone { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: 10px; background: var(--color-danger-wash); }
+.danger-zone .t { display: grid; gap: 2px; flex: 1 1 220px; }
+
+/* ---------- modal (static frame + live dialog) ---------- */
+.modal-stage { position: relative; min-height: 600px; display: grid; place-items: center; padding: 16px; isolation: isolate; }
+.modal-stage .scrim { z-index: 0; }
+.modal { position: relative; z-index: 1; width: 100%; max-width: 520px; background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 20px; display: grid; gap: 16px; color: var(--color-ink); }
+.modal .mh { display: flex; align-items: flex-start; gap: 12px; }
+.modal .mh h3 { font-size: 1.1875rem; font-weight: 700; flex: 1; }
+.modal .mh .ibtn { margin: -4px -4px 0 0; }
+.gain { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.gain li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: center; padding: 8px 0; }
+.gain .ti { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; }
+.gain b { font-weight: 600; display: block; }
+.gain span { color: var(--color-ink-muted); }
+.callout { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 10px; background: var(--color-warning-wash); color: var(--color-ink); }
+.callout svg { color: var(--color-warning); margin-top: 1px; }
+.callout b { font-weight: 600; }
+.mf { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 479px) { .mf { flex-direction: column-reverse; } .mf .btn { width: 100%; height: 44px; } }
+dialog.modal { border: 0; margin: auto; max-height: calc(100dvh - 32px); overflow: auto; width: calc(100% - 32px); }
+dialog.modal::backdrop { background: var(--color-scrim); }
+dialog.modal[open] { animation: pop var(--duration-layout) var(--ease-out-expo) both; }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(0.985); } to { opacity: 1; transform: none; } }
+
+/* toast (static in frame, live fixed) */
+.toast { display: flex; align-items: center; gap: 10px; background: var(--color-overlay); color: var(--color-ink); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 10px 12px 10px 14px; max-width: 360px; }
+.toast svg { color: var(--color-success); }
+.toast-live { position: fixed; z-index: 50; right: 16px; bottom: 16px; left: auto; animation: fadein var(--duration-base) var(--ease-out) both; }
+@media (max-width: 599px) { .toast-live { left: 16px; right: 16px; margin-inline: auto; } }
+
+/* convert dialog: what stays and what comes back */
+.keep { display: grid; gap: 4px; color: var(--color-ink-muted); }
+
+/* ---------- create workspace (auth shell, same as auth-motion.html: brand pane from 1024, form on base) ---------- */
+.cw { background: var(--color-base); border-radius: 12px; box-shadow: 0 0 0 1px var(--color-line); overflow: hidden; position: relative; isolation: isolate; min-width: 0; }
+.cw.split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); min-width: 980px; min-height: 760px; }
+.cw.single { display: grid; border-radius: 24px; }
+.cw-brand { background: var(--color-sunk); padding: 40px; display: grid; grid-template-rows: auto 1fr auto; gap: 24px; }
+.cw.single .cw-brand { display: none; }
+.cw-brand .mid { align-self: center; display: grid; gap: 20px; max-width: 360px; }
+.cw-brand .mid h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 600; }
+.cw-brand .acts { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.cw-brand .acts li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; }
+.cw-brand .acts li.still { border-radius: 10px; padding: 8px; margin: -8px; background: var(--pw); }
+.cw-brand .acts time { display: block; font-size: 0.75rem; color: var(--color-ink-muted); }
+.cw-brand .foot { font-size: 0.75rem; color: var(--color-ink-muted); }
+.lockup { display: inline-flex; align-items: center; gap: 10px; }
+.lockup .wm { font: 700 1.1875rem/1.1 var(--font-display); letter-spacing: -0.01em; }
+.lockup .wm small { display: block; font: 500 0.75rem/1.4 var(--font-body); color: var(--color-ink-muted); }
+.amark { display: block; flex: none; }
+.amark .e, .amark .n { fill: var(--color-accent); }
+.amark .n.end { fill: var(--color-person-1); }
+.cw-side { display: grid; place-items: center; padding: 40px; min-width: 0; }
+.cw.single .cw-side { place-items: start stretch; padding: 8px 16px 24px; }
+.cw-mob { display: none; }
+.cw.single .cw-mob { display: flex; align-items: center; min-height: 48px; }
+.cw-form { width: 100%; max-width: 400px; display: grid; gap: 20px; min-width: 0; }
+.cw-back { width: 44px; height: 44px; margin: 0 0 -8px -10px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.cw-back:hover { background: var(--color-hover); color: var(--color-ink); }
+.cw-back:disabled { opacity: 0.5; cursor: not-allowed; }
+.cw-t { display: grid; gap: 6px; }
+.cw-t h3 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.cw-t p { color: var(--color-ink-muted); font-size: 0.9375rem; }
+.cw-alert { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: var(--color-danger-wash); color: var(--color-ink); }
+.cw-alert svg { color: var(--color-danger); margin-top: 1px; }
+.cw-alert[hidden] { display: none; }
+/* type choice: native radios inside label cards; the card is the hit area (≥ 44), arrows move between them */
+.cw-types { border: 0; margin: 0; padding: 0; display: grid; gap: 8px; min-width: 0; }
+.cw-types legend { padding: 0; margin-bottom: 8px; font-weight: 600; }
+.cw-opt { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px 14px 14px 12px; border-radius: 10px;
+  background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out), box-shadow var(--duration-quick) var(--ease-out), opacity var(--duration-quick) var(--ease-out); }
+.cw-opt:hover { background: var(--color-hover); }
+.cw-opt input { position: absolute; top: 16px; left: 13px; width: 18px; height: 18px; margin: 0; opacity: 0; }
+.cw-opt:has(input:checked) { background: var(--color-accent-wash); box-shadow: inset 0 0 0 1.5px var(--color-accent); }
+.cw-opt:has(input:focus-visible) { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.cw-r { width: 18px; height: 18px; border-radius: 50%; margin-top: 2px; box-shadow: inset 0 0 0 1.5px var(--color-ink-muted); transition: box-shadow var(--duration-quick) var(--ease-out); }
+.cw-opt:has(input:checked) .cw-r { box-shadow: inset 0 0 0 5px var(--color-accent); }
+.cw-ob { display: grid; gap: 4px; min-width: 0; }
+.cw-oh { display: flex; align-items: center; gap: 8px; font-weight: 600; font-size: 1rem; }
+.cw-oh svg { color: var(--color-ink-muted); }
+.cw-opt:has(input:checked) .cw-oh svg { color: var(--color-accent); }
+.cw-od { color: var(--color-ink-muted); }
+.cw-mods { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.8125rem; color: var(--color-ink-muted); }
+.cw-mods li { display: inline-flex; align-items: center; gap: 4px; }
+.cw-mods svg.i { width: 14px; height: 14px; }
+.cw-mods .lead { flex-basis: 100%; }
+.cw-mods .plus { color: var(--color-ink); font-weight: 600; }
+.cw-types:disabled .cw-opt { cursor: default; }
+.cw-types:disabled .cw-opt:hover { background: var(--color-raised); }
+.cw-types:disabled .cw-opt:has(input:checked):hover { background: var(--color-accent-wash); }
+.cw-types:disabled .cw-opt:not(:has(input:checked)) { opacity: 0.55; }
+.cw-note { display: flex; gap: 8px; align-items: flex-start; color: var(--color-ink-muted); font-size: 0.8125rem; margin-top: -8px; }
+.cw-note svg { margin-top: 1px; }
+.cw-fld { display: grid; gap: 6px; min-width: 0; }
+.cw-fld label { font-weight: 600; }
+.cw-fld input { width: 100%; height: 44px; border: 0; border-radius: 8px; padding: 0 12px; font: 400 1rem/1 var(--font-body); color: var(--color-ink); background: var(--color-raised);
+  box-shadow: inset 0 0 0 1px var(--color-line); outline: none; transition: box-shadow var(--duration-quick) var(--ease-out); }
+.cw-fld input::placeholder { color: var(--color-ink-muted); }
+.cw-fld input:focus-visible { box-shadow: inset 0 0 0 1px var(--color-line), 0 0 0 2px var(--color-focus); }
+.cw-fld input[aria-invalid="true"] { box-shadow: inset 0 0 0 1.5px var(--color-danger); }
+.cw-fld input[aria-invalid="true"]:focus-visible { box-shadow: inset 0 0 0 1.5px var(--color-danger), 0 0 0 2px var(--color-focus); }
+.cw-fld input[readonly] { color: var(--color-ink-muted); }
+.cw-under { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; font-size: 0.75rem; color: var(--color-ink-muted); }
+.cw-under .err { color: var(--color-danger); font-size: 0.8125rem; font-weight: 500; display: flex; gap: 6px; align-items: center; }
+.cw .btn.wide { width: 100%; height: 44px; font-size: 0.9375rem; }
+.cw-states { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 840px) { .cw-states { grid-template-columns: repeat(2, minmax(0, 390px)); } }
+@media (min-width: 1240px) { .cw-states { grid-template-columns: repeat(3, minmax(0, 390px)); } }
+.cw-state { display: grid; gap: 8px; align-content: start; min-width: 0; max-width: 390px; }
+.cw-demo-out { color: var(--color-ink-muted); font-size: 0.8125rem; }
+
+/* ---------- workspace switcher with the "Tạo workspace" entry ---------- */
+.sw-shell { position: relative; height: 560px; }
+.ws-btn { width: 100%; border: 0; background: transparent; font: inherit; color: inherit; text-align: left; cursor: pointer; transition: background-color var(--duration-quick) var(--ease-out); }
+.ws-btn:hover, .ws-btn[aria-expanded="true"] { background: var(--color-hover); }
+.wsm { position: absolute; z-index: 5; top: 60px; left: 12px; width: 300px; max-width: calc(100% - 24px); background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 6px; display: grid; gap: 2px; }
+.wsm .label { padding: 8px 10px 4px; }
+.wsm ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.wsm a { display: grid; grid-template-columns: 28px minmax(0, 1fr) 16px; gap: 10px; align-items: center; min-height: 44px; padding: 6px 8px; border-radius: 8px; color: var(--color-ink); text-decoration: none;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.wsm a:hover { background: var(--color-hover); }
+.wsm .lg { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--p, var(--color-accent)); color: var(--color-on-person); font: 700 0.8125rem/1 var(--font-display); }
+.wsm .lg.add { background: var(--color-sunk); color: var(--color-ink-muted); }
+.wsm .tx { display: grid; min-width: 0; }
+.wsm .tx b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wsm .tx small { font-size: 0.75rem; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wsm .tick { color: var(--color-accent); }
+.wsm hr, .sheet-ws hr { border: 0; height: 1px; background: var(--color-line); margin: 4px 8px; }
+.sh-top { display: grid; grid-template-columns: 44px minmax(0, 1fr) 44px; align-items: center; min-height: 44px; }
+.sh-top h4 { font: 700 1rem/1.3 var(--font-display); text-align: center; }
+.sh-top .ibtn { width: 44px; height: 44px; grid-row: 1; }
+.sh-top .ibtn:first-child { grid-column: 1; justify-self: start; }
+.sh-top h4 { grid-column: 2; grid-row: 1; }
+.sheet-ws ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.sheet-ws a { display: grid; grid-template-columns: 40px minmax(0, 1fr) 18px; gap: 12px; align-items: center; min-height: 60px; padding: 8px; border-radius: 10px; color: var(--color-ink); text-decoration: none; }
+.sheet-ws a:hover { background: var(--color-hover); }
+.sheet-ws .lg { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--p, var(--color-accent)); color: var(--color-on-person); font: 700 1rem/1 var(--font-display); }
+.sheet-ws .lg.add { background: var(--color-sunk); color: var(--color-ink-muted); }
+.sheet-ws .tx { display: grid; min-width: 0; }
+.sheet-ws .tx b { font: 700 1rem/1.25 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-ws .tx small { font-size: 0.8125rem; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sheet-ws .tick { color: var(--color-accent); }
+.sheet-ws .add-t { font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+}
+html.reduce *, html.reduce *::before, html.reduce *::after { animation-duration: 1ms !important; animation-iteration-count: 1 !important; transition-duration: 1ms !important; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+<symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+<symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></symbol>
+<symbol id="i-box" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/></symbol>
+<symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+<symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+<symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+<symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+<symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></symbol>
+<symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+<symbol id="i-doc" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+<symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+<symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+<symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+<symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></symbol>
+<symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+<symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+<symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+<symbol id="i-chart" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></symbol>
+<symbol id="i-list" viewBox="0 0 24 24"><path d="M3 12h.01"/><path d="M3 18h.01"/><path d="M3 6h.01"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M8 6h13"/></symbol>
+<symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+<symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="m21 2-9.6 9.6"/><path d="m15.5 7.5 3 3L22 7l-3-3"/></symbol>
+<symbol id="i-building" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></symbol>
+<symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+<symbol id="i-logout" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+<symbol id="i-cloud" viewBox="0 0 24 24"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/><path d="m9 14 2 2 4-4"/></symbol>
+<symbol id="i-checkmark" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+<symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+<symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+<symbol id="i-vote" viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M7 16h8"/><path d="M7 11h12"/><path d="M7 6h3"/></symbol>
+<symbol id="i-task" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/></symbol>
+</svg>
+
+<main class="page">
+<header>
+  <h1>Workspace cá nhân và workspace tổ chức</h1>
+  <p>Mỗi tài khoản mới có sẵn một workspace cá nhân, kể cả tài khoản Google công ty; nếu một tổ chức đã sở hữu tên miền đó thì người dùng vào thêm tổ chức ấy với vai trò thành viên. Đăng nhập không bao giờ tạo tổ chức. Workspace khác được tạo bằng "Tạo workspace", ở đó người dùng chọn Cá nhân hoặc Tổ chức; một người có thể có nhiều workspace cá nhân. Workspace cá nhân không có Tài sản, Phê duyệt và duyệt tài liệu. Chủ sở hữu chuyển cá nhân thành tổ chức trong Cài đặt → Workspace, chỉ một chiều. Mỗi màn đặt hai loại cạnh nhau.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div>
+    <label class="check"><input type="checkbox" id="reduce"> Giảm chuyển động</label>
+  </div>
+  <nav class="toc" aria-label="Các màn"><a href="#sidebar">Sidebar</a><a href="#mobile">Di động</a><a href="#document">Tài liệu và chat</a><a href="#admin">Quản trị</a><a href="#settings">Cài đặt → Workspace</a><a href="#confirm">Hộp xác nhận</a><a href="#after">Sau khi chuyển</a><a href="#create">Tạo workspace</a><a href="#switcher">Lối vào Tạo workspace</a></nav>
+</header>
+
+<!-- ============================ 1 · SIDEBAR ============================ -->
+<section class="screen" id="sidebar" aria-labelledby="h-sb">
+  <div class="screen-head">
+    <h2 id="h-sb">1 · Sidebar trên máy tính</h2>
+    <p>Workspace cá nhân có ba mục chính: Tin nhắn, Tài liệu, Danh bạ. Không để chỗ trống, không mục mờ, không khoá: mục không tồn tại thì không vẽ. Dòng phụ dưới tên workspace nói loại.</p>
+  </div>
+  <div class="pair">
+    <div class="col">
+      <div class="cap"><span class="tag personal"><svg class="i s"><use href="#i-user"/></svg>Workspace cá nhân</span><small>Chủ sở hữu đang xem</small></div>
+      <div class="frame shell">
+        <aside class="side" aria-label="Điều hướng chính (workspace cá nhân)">
+          <div class="ws"><span class="logo">H</span><div><div class="n">Không gian của bạn</div><div class="s">Workspace cá nhân</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></div>
+          <nav class="nav" aria-label="Phân hệ"><a href="#sidebar" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">2</span></a><a href="#sidebar"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#sidebar"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav>
+          <div class="nav"><a href="#sidebar"><svg class="i"><use href="#i-bell"/></svg>Thông báo<span class="pill count tnum">1</span></a><a href="#sidebar"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a><a href="#sidebar"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH</span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Chủ sở hữu</div></div></div></div>
+        </aside>
+        <div class="stage"><h3>Tin nhắn</h3><div class="ghostrow" style="width:70%"></div><div class="ghostrow" style="width:55%"></div><div class="ghostrow" style="width:62%"></div>
+          <p class="gone"><svg class="i s"><use href="#i-minus"/></svg>Không có: <s>Phê duyệt</s>, <s>Tài sản</s></p></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="cap"><span class="tag org"><svg class="i s"><use href="#i-building"/></svg>Workspace tổ chức</span><small>Như hiện nay, không đổi</small></div>
+      <div class="frame shell">
+        <aside class="side" aria-label="Điều hướng chính (workspace tổ chức)">
+          <div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></div>
+          <nav class="nav" aria-label="Phân hệ"><a href="#sidebar" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">4</span></a><a href="#sidebar"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#sidebar"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a><a href="#sidebar"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#sidebar"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav>
+          <div class="nav"><a href="#sidebar"><svg class="i"><use href="#i-bell"/></svg>Thông báo<span class="pill count tnum">3</span></a><a href="#sidebar"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a><a href="#sidebar"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH</span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div></div>
+        </aside>
+        <div class="stage"><h3>Tin nhắn</h3><div class="ghostrow" style="width:70%"></div><div class="ghostrow" style="width:55%"></div><div class="ghostrow" style="width:62%"></div></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Dòng phụ của workspace:</b> workspace cá nhân ghi "Workspace cá nhân"; workspace tổ chức giữ tên tổ chức như hiện nay. Danh sách đổi workspace dùng cùng dòng phụ (§9), nên người có cả hai loại, hay có nhiều workspace cá nhân, phân biệt được ngay.</li>
+    <li><b>Rail 64px</b> theo cùng quy tắc: workspace cá nhân có ba icon chính, không có ô trống.</li>
+    <li><b>Đường dẫn cũ:</b> mở <code>/assets</code> hay <code>/approval</code> trong workspace cá nhân thì về Tin nhắn (trang chính), không có màn lỗi riêng; server trả 403 cho mọi thao tác của hai phân hệ.</li>
+  </ol>
+</section>
+
+<!-- ============================ 2 · MOBILE ============================ -->
+<section class="screen" id="mobile" aria-labelledby="h-mb">
+  <div class="screen-head">
+    <h2 id="h-mb">2 · Thanh đáy và sheet Thêm trên điện thoại</h2>
+    <p>Ở workspace cá nhân, tab thứ ba là <b>Danh bạ</b> thay cho Phê duyệt. Sheet Thêm bỏ Tài sản, và bỏ cả Danh bạ vì nó đã nằm trên thanh đáy. Thanh đáy luôn 4 cột.</p>
+  </div>
+  <div class="pair">
+    <div class="col">
+      <div class="cap"><span class="tag personal"><svg class="i s"><use href="#i-user"/></svg>Workspace cá nhân</span></div>
+      <div class="phones">
+        <div class="phone">
+          <div class="topbar"><span class="brand"><b>Nexus</b> · Không gian của bạn</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i l"><use href="#i-search"/></svg></button></div>
+          <div class="pbody">
+            <h3 class="ptitle">Danh bạ</h3>
+            <div class="psearch"><svg class="i s"><use href="#i-search"/></svg>Tìm theo tên hoặc email</div>
+            <div class="prow"><span class="av s40" style="--p:var(--color-person-7)">TH</span><div style="min-width:0"><div class="nm">Lê Thị Hoa</div><div class="pv">Chủ sở hữu</div></div><span></span></div>
+            <div class="prow"><span class="av s40" style="--p:var(--color-person-5)">MĐ</span><div style="min-width:0"><div class="nm">Trần Minh Đức</div><div class="pv">Thành viên</div></div><span class="pill ok">Trực tuyến</span></div>
+            <div class="prow"><span class="av s40" style="--p:var(--color-person-3)">HY</span><div style="min-width:0"><div class="nm">Phạm Hải Yến</div><div class="pv">Thành viên</div></div><span></span></div>
+          </div>
+          <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-msg"/></svg><span class="pill count tnum">2</span></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile" aria-current="page"><span class="ic"><svg class="i"><use href="#i-users"/></svg></span>Danh bạ</a><a href="#mobile" aria-label="Thêm, 1 thông báo chưa đọc"><span class="ic"><svg class="i"><use href="#i-more"/></svg><span class="dot"></span></span>Thêm</a></nav>
+        </div>
+        <div class="phone">
+          <div class="topbar"><span class="brand"><b>Nexus</b> · Không gian của bạn</span></div>
+          <div class="pbody"><h3 class="ptitle">Cài đặt</h3></div>
+          <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-msg"/></svg><span class="pill count tnum">2</span></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-users"/></svg></span>Danh bạ</a><a href="#mobile" aria-current="page"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+          <div class="scrim"></div>
+          <div class="msheet" role="dialog" aria-modal="true" aria-label="Thêm">
+            <div class="gh"><span class="grab"></span><button class="ibtn" type="button" aria-label="Đóng"><svg class="i"><use href="#i-x"/></svg></button></div>
+            <a class="wsrow sitem" href="#mobile" style="height:auto"><span class="logo">H</span><span style="min-width:0;display:grid;gap:2px"><span class="n">Không gian của bạn</span><span class="who"><span class="av s20" style="--p:var(--color-person-7)">TH</span>Lê Thị Hoa <span class="r">Chủ sở hữu</span></span></span><svg class="i s"><use href="#i-right"/></svg></a>
+            <a class="sitem" href="#mobile"><svg class="i"><use href="#i-bell"/></svg>Thông báo<span class="pill count tnum">1</span></a>
+            <a class="sitem" href="#mobile"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a>
+            <a class="sitem" href="#mobile" aria-current="page"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a>
+            <hr>
+            <a class="sitem out" href="#mobile"><svg class="i"><use href="#i-logout"/></svg>Đăng xuất</a>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="cap"><span class="tag org"><svg class="i s"><use href="#i-building"/></svg>Workspace tổ chức</span><small>Như hiện nay</small></div>
+      <div class="phones">
+        <div class="phone">
+          <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span></div>
+          <div class="pbody">
+            <h3 class="ptitle">Phê duyệt</h3>
+            <div class="prow"><span class="ricon"><svg class="i"><use href="#i-check"/></svg></span><div style="min-width:0"><div class="nm">Thanh toán nhà cung cấp tháng 10</div><div class="pv tnum">12.450.000 ₫ · Nguyễn Thu Lan</div></div><span class="pill wait">Chờ bạn</span></div>
+            <div class="prow"><span class="ricon"><svg class="i"><use href="#i-check"/></svg></span><div style="min-width:0"><div class="nm">Tạm ứng công tác Đà Nẵng</div><div class="pv tnum">6.000.000 ₫ · Lê Quang Vinh</div></div><span class="pill wait">Chờ bạn</span></div>
+          </div>
+          <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-msg"/></svg><span class="pill count tnum">4</span></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile" aria-current="page" aria-label="Phê duyệt, 2 chờ bạn"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count tnum">2</span></span>Phê duyệt</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+        </div>
+        <div class="phone">
+          <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span></div>
+          <div class="pbody"><h3 class="ptitle">Cài đặt</h3></div>
+          <nav class="tabbar" aria-label="Điều hướng di động"><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-msg"/></svg><span class="pill count tnum">4</span></span>Tin nhắn</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#mobile"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count tnum">2</span></span>Phê duyệt</a><a href="#mobile" aria-current="page"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+          <div class="scrim"></div>
+          <div class="msheet" role="dialog" aria-modal="true" aria-label="Thêm">
+            <div class="gh"><span class="grab"></span><button class="ibtn" type="button" aria-label="Đóng"><svg class="i"><use href="#i-x"/></svg></button></div>
+            <a class="wsrow sitem" href="#mobile" style="height:auto"><span class="logo">V</span><span style="min-width:0;display:grid;gap:2px"><span class="n">Khối Vận hành</span><span class="who"><span class="av s20" style="--p:var(--color-person-7)">TH</span>Lê Thị Hoa <span class="r">Kế toán trưởng</span></span></span><svg class="i s"><use href="#i-right"/></svg></a>
+            <a class="sitem" href="#mobile"><svg class="i"><use href="#i-bell"/></svg>Thông báo<span class="pill count tnum">3</span></a>
+            <a class="sitem" href="#mobile"><svg class="i"><use href="#i-box"/></svg>Tài sản</a>
+            <a class="sitem" href="#mobile"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a>
+            <a class="sitem" href="#mobile"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a>
+            <a class="sitem" href="#mobile" aria-current="page"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a>
+            <hr>
+            <a class="sitem out" href="#mobile"><svg class="i"><use href="#i-logout"/></svg>Đăng xuất</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Danh bạ ở tab thứ ba:</b> icon <code>Users</code>, không có số (Danh bạ không có gì "chờ"). Thanh đáy không gọi số chờ duyệt ở workspace cá nhân.</li>
+    <li><b>Thêm sáng</b> khi đang ở Quản trị hoặc Cài đặt (cá nhân); ở tổ chức như cũ: Tài sản, Danh bạ, Quản trị, Cài đặt.</li>
+    <li><b>Đổi workspace</b> trong sheet: thanh đáy đổi theo loại của workspace vừa chọn, tab thứ ba fade 160ms. Nếu đang đứng ở Danh bạ mà sang workspace tổ chức thì vẫn ở Danh bạ, khi đó Thêm sáng.</li>
+  </ol>
+</section>
+
+<!-- ============================ 3 · DOCUMENT + CHAT ============================ -->
+<section class="screen" id="document" aria-labelledby="h-dc">
+  <div class="screen-head">
+    <h2 id="h-dc">3 · Văn bản và nút + trong chat</h2>
+    <p>Văn bản ở workspace cá nhân không có <b>Gửi duyệt</b>. Trạng thái văn bản (Bản nháp, Đang dùng, Lưu trữ) không phải phê duyệt nên giữ nguyên. Menu + của ô soạn chat bỏ Đề nghị phê duyệt (DESIGN.md đã ghi).</p>
+  </div>
+  <div class="pair">
+    <div class="col">
+      <div class="cap"><span class="tag personal"><svg class="i s"><use href="#i-user"/></svg>Workspace cá nhân</span></div>
+      <div class="frame">
+        <div class="chead">
+          <button class="ibtn" type="button" aria-label="Quay lại danh sách văn bản"><svg class="i"><use href="#i-back"/></svg></button>
+          <div class="t"><nav class="crumbs" aria-label="Đường dẫn"><a href="#document">Văn bản</a><svg class="i s"><use href="#i-right"/></svg><span>Bản nháp</span></nav><h3>Kế hoạch học tiếng Nhật</h3></div>
+          <span class="saved" role="status"><svg class="i s"><use href="#i-cloud"/></svg>Đã lưu 09:41</span>
+          <div class="end">
+            <span class="pill wait">Bản nháp</span>
+            <button class="btn sm" type="button"><svg class="i s"><use href="#i-user-plus"/></svg>Chia sẻ</button>
+            <button class="ibtn" type="button" aria-label="Thêm thao tác"><svg class="i"><use href="#i-more"/></svg></button>
+          </div>
+        </div>
+        <div class="canvas"><article class="sheetdoc"><h4>Kế hoạch học tiếng Nhật</h4><p class="muted">Mỗi sáng 30 phút, ôn từ vựng bằng thẻ, cuối tuần luyện nghe.</p><div class="ghostrow" style="width:80%"></div><div class="ghostrow" style="width:64%"></div></article></div>
+      </div>
+      <div class="frame menu-stage">
+        <div class="menu" role="menu" aria-label="Tạo trong chat">
+          <div class="mi" role="menuitem"><span class="ti a"><svg class="i s"><use href="#i-vote"/></svg></span>Bình chọn</div>
+          <div class="mi" role="menuitem"><span class="ti s"><svg class="i s"><use href="#i-task"/></svg></span>Công việc</div>
+          <div class="mi" role="menuitem"><span class="ti i"><svg class="i s"><use href="#i-doc"/></svg></span>Tài liệu mới</div>
+        </div>
+        <div class="composer"><button class="ibtn" type="button" aria-label="Tạo" aria-expanded="true"><svg class="i"><use href="#i-plus"/></svg></button><button class="ibtn" type="button" aria-label="Đính kèm"><svg class="i"><use href="#i-clip"/></svg></button><span class="ph">Nhắn cho Trần Minh Đức</span><button class="ibtn" type="button" aria-label="Gửi"><svg class="i"><use href="#i-send"/></svg></button></div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="cap"><span class="tag org"><svg class="i s"><use href="#i-building"/></svg>Workspace tổ chức</span><small>Như hiện nay</small></div>
+      <div class="frame">
+        <div class="chead">
+          <button class="ibtn" type="button" aria-label="Quay lại danh sách văn bản"><svg class="i"><use href="#i-back"/></svg></button>
+          <div class="t"><nav class="crumbs" aria-label="Đường dẫn"><a href="#document">Văn bản</a><svg class="i s"><use href="#i-right"/></svg><span>Bản nháp</span></nav><h3>Quy trình đối soát cuối ngày</h3></div>
+          <span class="saved" role="status"><svg class="i s"><use href="#i-cloud"/></svg>Đã lưu 09:41</span>
+          <div class="end">
+            <span class="faces"><span class="av s24" style="--p:var(--color-person-1)">QV</span><span class="av s24" style="--p:var(--color-person-6)">TL</span></span>
+            <button class="btn sm" type="button"><svg class="i s"><use href="#i-user-plus"/></svg>Chia sẻ</button>
+            <button class="btn primary sm" type="button">Gửi duyệt</button>
+            <button class="ibtn" type="button" aria-label="Thêm thao tác"><svg class="i"><use href="#i-more"/></svg></button>
+          </div>
+        </div>
+        <div class="canvas"><article class="sheetdoc"><h4>Quy trình đối soát cuối ngày</h4><p class="muted">Áp dụng cho tổ Đối soát từ 15/10/2026.</p><div class="ghostrow" style="width:80%"></div><div class="ghostrow" style="width:64%"></div></article></div>
+      </div>
+      <div class="frame menu-stage">
+        <div class="menu" role="menu" aria-label="Tạo trong chat">
+          <div class="mi" role="menuitem"><span class="ti a"><svg class="i s"><use href="#i-vote"/></svg></span>Bình chọn</div>
+          <div class="mi" role="menuitem"><span class="ti s"><svg class="i s"><use href="#i-task"/></svg></span>Công việc</div>
+          <div class="mi" role="menuitem"><span class="ti i"><svg class="i s"><use href="#i-doc"/></svg></span>Tài liệu mới</div>
+          <div class="mi" role="menuitem"><span class="ti w"><svg class="i s"><use href="#i-check"/></svg></span>Đề nghị phê duyệt</div>
+        </div>
+        <div class="composer"><button class="ibtn" type="button" aria-label="Tạo" aria-expanded="true"><svg class="i"><use href="#i-plus"/></svg></button><button class="ibtn" type="button" aria-label="Đính kèm"><svg class="i"><use href="#i-clip"/></svg></button><span class="ph">Nhắn vào Đối soát</span><button class="ibtn" type="button" aria-label="Gửi"><svg class="i"><use href="#i-send"/></svg></button></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Không có nút primary</b> ở đầu văn bản cá nhân: Chia sẻ giữ kiểu secondary, không "thăng cấp" để lấp chỗ. Menu Thêm thao tác của văn bản cũng không có mục Gửi duyệt.</li>
+    <li><b>Danh sách văn bản</b> không đổi cột: cột trạng thái là trạng thái văn bản, không phải trạng thái duyệt.</li>
+    <li><b>Thông báo</b> ở workspace cá nhân không có loại Phê duyệt / Tài sản; trạng thái trống của bảng Thông báo đổi hành động "Xem đề nghị của bạn" thành "Mở Tin nhắn".</li>
+  </ol>
+</section>
+
+<!-- ============================ 4 · ADMIN ============================ -->
+<section class="screen" id="admin" aria-labelledby="h-ad">
+  <div class="screen-head">
+    <h2 id="h-ad">4 · Quản trị → Vai trò</h2>
+    <p>Vùng tài nguyên Phê duyệt và Tài sản không có ở workspace cá nhân, nên không xuất hiện trong "Được phép" của vai trò, trong ma trận sửa quyền, hay trong hoạt động quản trị. Cột <b>Duyệt</b> cũng biến mất vì không vùng nào còn dùng nó.</p>
+  </div>
+  <div class="pair">
+    <div class="col">
+      <div class="cap"><span class="tag personal"><svg class="i s"><use href="#i-user"/></svg>Workspace cá nhân</span></div>
+      <div class="panel" aria-label="Chi tiết vai trò Thành viên">
+        <div class="dh"><span class="rdot"><svg class="i"><use href="#i-key"/></svg></span><div><h4>Thành viên</h4><div class="muted">Vai trò hệ thống · 3 người</div></div></div>
+        <div class="label">Được phép</div>
+        <div class="areas">
+          <div class="area"><div class="h"><svg class="i s"><use href="#i-folder"/></svg>Tài liệu<span class="muted">Không gian của bạn</span></div><div class="ops"><span class="pill acc">Xem</span><span class="pill acc">Sửa</span><span class="pill acc">Tải lên</span><span class="pill acc">Chia sẻ</span></div></div>
+          <div class="area"><div class="h"><svg class="i s"><use href="#i-msg"/></svg>Tin nhắn<span class="muted">Không gian của bạn</span></div><div class="ops"><span class="pill acc">Xem</span><span class="pill acc">Sửa</span><span class="pill acc">Tạo nhóm chat</span></div></div>
+        </div>
+      </div>
+      <div class="scroll" tabindex="0" aria-label="Ma trận quyền, cuộn ngang">
+        <div class="tbl" role="grid" aria-label="Quyền của vai trò Thành viên">
+          <div class="tr th" role="row"><span role="columnheader">Vùng tài nguyên</span><span class="c" role="columnheader">Xem</span><span class="c" role="columnheader">Sửa</span><span class="c" role="columnheader">Tải lên</span><span class="c" role="columnheader">Chia sẻ</span><span class="c" role="columnheader">Quản lý</span><span class="c" role="columnheader">Mời</span><span class="c" role="columnheader">Tạo nhóm chat</span></div>
+          <div class="tr" role="row"><span class="nm"><svg class="i s muted"><use href="#i-folder"/></svg><span>Tài liệu<small>Mọi thư mục con</small></span></span><span class="c"><span class="cb on"><svg class="i"><use href="#i-checkmark"/></svg></span></span><span class="c"><span class="cb on"><svg class="i"><use href="#i-checkmark"/></svg></span></span><span class="c"><span class="cb on"><svg class="i"><use href="#i-checkmark"/></svg></span></span><span class="c"><span class="cb on"><svg class="i"><use href="#i-checkmark"/></svg></span></span><span class="c"><span class="cb"></span></span><span class="c"><span class="na" aria-label="Không áp dụng">—</span></span><span class="c"><span class="na" aria-label="Không áp dụng">—</span></span></div>
+          <div class="tr" role="row"><span class="nm"><svg class="i s muted"><use href="#i-msg"/></svg><span>Tin nhắn<small>Kênh và nhóm</small></span></span><span class="c"><span class="cb on"><svg class="i"><use href="#i-checkmark"/></svg></span></span><span class="c"><span class="cb on"><svg class="i"><use href="#i-checkmark"/></svg></span></span><span class="c"><span class="cb"></span></span><span class="c"><span class="na" aria-label="Không áp dụng">—</span></span><span class="c"><span class="cb"></span></span><span class="c"><span class="cb"></span></span><span class="c"><span class="cb on"><svg class="i"><use href="#i-checkmark"/></svg></span></span></div>
+          <div class="tr" role="row"><span class="nm"><svg class="i s muted"><use href="#i-users"/></svg><span>Thành viên<small>Danh bạ và lời mời</small></span></span><span class="c"><span class="cb on"><svg class="i"><use href="#i-checkmark"/></svg></span></span><span class="c"><span class="na" aria-label="Không áp dụng">—</span></span><span class="c"><span class="na" aria-label="Không áp dụng">—</span></span><span class="c"><span class="na" aria-label="Không áp dụng">—</span></span><span class="c"><span class="cb"></span></span><span class="c"><span class="cb"></span></span><span class="c"><span class="na" aria-label="Không áp dụng">—</span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="cap"><span class="tag org"><svg class="i s"><use href="#i-building"/></svg>Workspace tổ chức</span><small>Như <code>admin.html</code> §4 và §5</small></div>
+      <div class="panel" aria-label="Chi tiết vai trò Kế toán">
+        <div class="dh"><span class="rdot"><svg class="i"><use href="#i-key"/></svg></span><div><h4>Kế toán</h4><div class="muted">Vai trò tuỳ chỉnh · 14 người</div></div></div>
+        <div class="label">Được phép</div>
+        <div class="areas">
+          <div class="area"><div class="h"><svg class="i s"><use href="#i-folder"/></svg>Tài liệu<span class="muted">Khối Vận hành</span></div><div class="ops"><span class="pill acc">Xem</span><span class="pill acc">Sửa</span><span class="pill acc">Tải lên</span><span class="pill acc">Chia sẻ</span></div></div>
+          <div class="area"><div class="h"><svg class="i s"><use href="#i-check"/></svg>Phê duyệt<span class="muted">Khối Vận hành</span></div><div class="ops"><span class="pill acc">Xem</span><span class="pill acc">Duyệt</span></div></div>
+          <div class="area"><div class="h"><svg class="i s"><use href="#i-msg"/></svg>Tin nhắn<span class="muted">Khối Vận hành</span></div><div class="ops"><span class="pill acc">Xem</span><span class="pill acc">Sửa</span><span class="pill acc">Tạo nhóm chat</span></div></div>
+          <div class="area"><div class="h"><svg class="i s"><use href="#i-box"/></svg>Tài sản<span class="muted">Khối Vận hành</span></div><div class="ops"><span class="pill acc">Xem</span></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Nguồn của danh sách vùng</b> là server (<code>GET /permission-areas</code>): ở workspace cá nhân server không trả Phê duyệt, Tài sản; giao diện chỉ vẽ cái được trả, không tự lọc theo loại.</li>
+    <li><b>Người dùng:</b> bảng và panel người dùng không đổi (pill trạng thái thành viên chỉ mượn component StatusPill, không phải phê duyệt).</li>
+  </ol>
+</section>
+
+<!-- ============================ 5 · SETTINGS ============================ -->
+<section class="screen" id="settings" aria-labelledby="h-st">
+  <div class="screen-head">
+    <h2 id="h-st">5 · Cài đặt → Workspace: thẻ loại workspace</h2>
+    <p>Thẻ "Loại workspace" nằm dưới Tên và Mô tả, trên dòng Quản trị và vùng Rời workspace. Chủ sở hữu thấy nút <b>Chuyển thành workspace tổ chức</b>; người khác chỉ thấy loại và một câu giải thích.</p>
+  </div>
+  <div class="pair">
+    <div class="col">
+      <div class="cap"><span class="tag personal"><svg class="i s"><use href="#i-user"/></svg>Cá nhân</span><small>Chủ sở hữu</small></div>
+      <div class="frame sett">
+        <h3>Cài đặt</h3>
+        <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Hồ sơ</button><button role="tab" aria-selected="true" type="button">Workspace</button><button role="tab" aria-selected="false" type="button">Giao diện</button></div>
+        <div class="setform">
+          <div class="fld"><span class="lab">Tên workspace</span><div class="inp">Không gian của bạn</div></div>
+          <div class="fld"><span class="lab">Mô tả <span class="muted" style="font-weight:400">(không bắt buộc)</span></span><div class="inp" style="min-height:72px"></div></div>
+          <div style="display:flex;gap:8px"><button class="btn primary" type="button" disabled style="opacity:.5;cursor:not-allowed">Lưu thay đổi</button><button class="btn ghost" type="button" disabled style="opacity:.5;cursor:not-allowed">Huỷ</button></div>
+          <section class="wtype" aria-labelledby="wt-a">
+            <div class="top"><span class="ic"><svg class="i l"><use href="#i-user"/></svg></span><div class="t"><b id="wt-a">Workspace cá nhân</b><span>Có Tin nhắn, Tài liệu và Danh bạ. Không có Tài sản, Phê duyệt và duyệt tài liệu.</span></div></div>
+            <div class="act"><button class="btn" type="button" data-open="convert"><svg class="i s"><use href="#i-building"/></svg>Chuyển thành workspace tổ chức</button></div>
+          </section>
+          <div class="srow"><span class="t"><b style="font-weight:600">3 thành viên, 2 vai trò</b><span>Mời người, đổi vai trò ở Quản trị.</span></span><a class="btn" href="#admin">Mở Quản trị<svg class="i s"><use href="#i-arrow"/></svg></a></div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="cap"><span class="tag personal"><svg class="i s"><use href="#i-user"/></svg>Cá nhân</span><small>Thành viên khác (không phải chủ sở hữu)</small></div>
+      <div class="frame sett">
+        <h3>Cài đặt</h3>
+        <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Hồ sơ</button><button role="tab" aria-selected="true" type="button">Workspace</button><button role="tab" aria-selected="false" type="button">Giao diện</button></div>
+        <div class="setform">
+          <div class="fld"><span class="lab">Tên workspace</span><div class="ro">Không gian của Lê Thị Hoa</div></div>
+          <div class="fld"><span class="lab">Mô tả</span><div class="ro muted">Chưa có mô tả.</div></div>
+          <section class="wtype" aria-labelledby="wt-b">
+            <div class="top"><span class="ic"><svg class="i l"><use href="#i-user"/></svg></span><div class="t"><b id="wt-b">Workspace cá nhân</b><span>Có Tin nhắn, Tài liệu và Danh bạ. Không có Tài sản, Phê duyệt và duyệt tài liệu.</span></div></div>
+            <p class="lockline" style="padding-left:52px"><svg class="i s"><use href="#i-lock"/></svg><span>Chỉ chủ sở hữu, <span class="chip"><span class="av s20" style="--p:var(--color-person-7)">TH</span><span class="nm">Lê Thị Hoa</span></span>, mới chuyển được workspace này thành workspace tổ chức.</span></p>
+          </section>
+          <p class="lockline"><svg class="i s"><use href="#i-lock"/></svg>Chỉ người có quyền Quản lý mới đổi được tên và mô tả.</p>
+          <div class="danger-zone"><span class="t"><b style="font-weight:600">Rời workspace này</b><span>Bạn mất quyền truy cập tin nhắn và tài liệu của workspace này.</span></span><button class="btn danger" type="button">Rời workspace</button></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Ai thấy nút:</b> chỉ người có vai trò Chủ sở hữu. Người có quyền Quản lý nhưng không phải chủ sở hữu thấy như cột phải (sửa được tên, mô tả; không chuyển được loại).</li>
+    <li><b>Nút là secondary,</b> không primary: Lưu thay đổi của biểu mẫu vẫn là hành động chính duy nhất; chuyển loại là việc hiếm.</li>
+    <li><b>Workspace tổ chức</b> có cùng thẻ ở chế độ chỉ đọc ("Workspace tổ chức · có đủ ...", icon toà nhà), không nút, không câu giải thích chuyển ngược.</li>
+    <li><b>Trên điện thoại</b> nút giãn hết chiều ngang, chữ xuống dòng được, cao ≥ 44.</li>
+  </ol>
+</section>
+
+<!-- ============================ 6 · CONFIRM ============================ -->
+<section class="screen" id="confirm" aria-labelledby="h-cf">
+  <div class="screen-head">
+    <h2 id="h-cf">6 · Hộp xác nhận</h2>
+    <p>Modal 520 vì đây là thao tác không hoàn tác. Nói đúng ba thứ sẽ xuất hiện, điều gì giữ nguyên, rằng tài sản và đề nghị đã bị ẩn sẽ hiện lại, và rằng không chuyển ngược lại được. Không bắt gõ lại tên, không có ô đổi tên: không có gì bị xoá, tên đổi ở thẻ phía trên.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-open="convert">Mở hộp thật</button><button class="btn sm" type="button" data-act="fail">Mở hộp và thử lỗi mạng</button></div>
+  <div class="frame modal-stage">
+    <div class="scrim"></div>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="cf-t-static">
+      <div class="mh"><h3 id="cf-t-static">Chuyển thành workspace tổ chức?</h3><button class="ibtn" type="button" aria-label="Đóng"><svg class="i"><use href="#i-x"/></svg></button></div>
+      <p>Mọi người trong <b>Không gian của bạn</b> sẽ thấy thêm:</p>
+      <ul class="gain">
+        <li><span class="ti w"><svg class="i s"><use href="#i-box"/></svg></span><span><b>Tài sản</b><span>Kho tài sản, cấp và thu hồi tài sản.</span></span></li>
+        <li><span class="ti w"><svg class="i s"><use href="#i-check"/></svg></span><span><b>Phê duyệt</b><span>Tạo đề nghị, chuỗi người duyệt, Duyệt và Từ chối.</span></span></li>
+        <li><span class="ti w"><svg class="i s"><use href="#i-doc"/></svg></span><span><b>Duyệt tài liệu</b><span>Nút Gửi duyệt trong văn bản.</span></span></li>
+      </ul>
+      <div class="keep"><p>Tin nhắn, tài liệu, thành viên và vai trò giữ nguyên.</p><p>Tài sản và đề nghị phê duyệt có từ trước, đang bị ẩn, sẽ hiện lại cho người có quyền xem.</p></div>
+      <div class="callout"><svg class="i"><use href="#i-alert"/></svg><span><b>Không chuyển ngược lại được.</b> Workspace tổ chức không trở về workspace cá nhân.</span></div>
+      <div class="mf"><button class="btn ghost" type="button">Huỷ</button><button class="btn primary" type="button">Chuyển thành tổ chức</button></div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Icon ba mục</b> dùng wash warning như ChatCard Phê duyệt: báo "có thứ mới", không phải lỗi. Callout cảnh báo có chữ "Không chuyển ngược lại được", không dựa vào màu.</li>
+    <li><b>Focus</b> mở vào nút Huỷ (thao tác một chiều thì mặc định an toàn); Esc, Huỷ, nút Đóng đều đóng và trả focus về nút Chuyển.</li>
+    <li><b>Đang chuyển:</b> nút primary hiện spinner, giữ chiều rộng, Huỷ bị tắt. <b>Lỗi:</b> hộp giữ nguyên, toast "Không chuyển được workspace. Kiểm tra kết nối rồi thử lại.". Server trả "không phải chủ sở hữu": toast "Chỉ chủ sở hữu mới chuyển được workspace này." và thẻ tải lại.</li>
+    <li><b>Điện thoại:</b> cùng modal, cách mép 16, hai nút xếp dọc rộng hết, primary ở trên.</li>
+    <li><b>Dữ liệu bị ẩn hiện lại:</b> câu thứ hai dưới danh sách luôn có mặt, không phụ thuộc workspace có dữ liệu loại đó hay không (câu đúng trong cả hai trường hợp, và giao diện không phải hỏi server trước khi mở hộp). "cho người có quyền xem" vì quyền vẫn do vai trò quyết định, không phải ai cũng thấy hết.</li>
+  </ol>
+</section>
+
+<!-- ============================ 7 · AFTER ============================ -->
+<section class="screen" id="after" aria-labelledby="h-af">
+  <div class="screen-head">
+    <h2 id="h-af">7 · Sau khi chuyển</h2>
+    <p>Hộp đóng, toast "Đã chuyển thành workspace tổ chức". Thẻ đổi thành Workspace tổ chức kèm ai chuyển và khi nào, và một lối tắt đặt quyền cho hai phân hệ mới. Sidebar chèn Phê duyệt và Tài sản ngay, không cần tải lại.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-act="replay">Chạy lại hiệu ứng chèn mục</button></div>
+  <div class="pair three">
+    <div class="col">
+      <div class="cap"><span class="tag org"><svg class="i s"><use href="#i-building"/></svg>Vừa chuyển</span><small>Thẻ trong Cài đặt</small></div>
+      <div class="frame sett">
+        <section class="wtype" aria-labelledby="wt-c">
+          <div class="top"><span class="ic acc"><svg class="i l"><use href="#i-building"/></svg></span><div class="t"><b id="wt-c">Workspace tổ chức</b><span>Có đủ Tin nhắn, Tài liệu, Phê duyệt, Tài sản và Danh bạ.</span></div></div>
+          <p class="audit"><span class="av s20" style="--p:var(--color-person-7)">TH</span><span><b>Lê Thị Hoa</b> đã chuyển sang workspace tổ chức · <time datetime="2026-10-11T10:42" title="11/10/2026 10:42">vừa xong</time></span></p>
+          <div class="act"><a class="btn" href="#admin"><svg class="i s"><use href="#i-key"/></svg>Đặt quyền Phê duyệt và Tài sản</a></div>
+        </section>
+        <div class="toast" role="status"><svg class="i"><use href="#i-ok"/></svg>Đã chuyển thành workspace tổ chức</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="cap"><span class="tag org"><svg class="i s"><use href="#i-building"/></svg>Vừa chuyển</span><small>Sidebar</small></div>
+      <div class="frame shell" style="grid-template-columns:minmax(0,1fr)">
+        <aside class="side" aria-label="Điều hướng chính (vừa chuyển)">
+          <div class="ws"><span class="logo">H</span><div><div class="n">Không gian của bạn</div><div class="s">Workspace tổ chức</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></div>
+          <nav class="nav" aria-label="Phân hệ" id="after-nav"><a href="#after"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">2</span></a><a href="#after"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#after" class="arrive"><svg class="i"><use href="#i-check"/></svg>Phê duyệt</a><a href="#after" class="arrive"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#after"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav>
+          <div class="nav"><a href="#after"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a><a href="#after" aria-current="page"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a></div>
+        </aside>
+      </div>
+    </div>
+    <div class="col">
+      <div class="cap"><span class="tag org"><svg class="i s"><use href="#i-building"/></svg>Vừa chuyển</span><small>Thanh đáy</small></div>
+      <div class="phone" style="height:300px">
+        <div class="topbar"><span class="brand"><b>Nexus</b> · Không gian của bạn</span></div>
+        <div class="pbody"><h3 class="ptitle">Cài đặt</h3></div>
+        <nav class="tabbar" aria-label="Điều hướng di động" id="after-tabs"><a href="#after"><span class="ic"><svg class="i"><use href="#i-msg"/></svg><span class="pill count tnum">2</span></span>Tin nhắn</a><a href="#after"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#after" class="swap"><span class="ic"><svg class="i"><use href="#i-check"/></svg></span>Phê duyệt</a><a href="#after" aria-current="page"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Chèn mục:</b> hai NavRow mới cao từ 0 lên 36 trong 220ms rồi mang nền <code>--color-accent-wash</code> tan dần trong 2400ms (cùng nhịp lớp phủ realtime, nhưng màu accent vì đây là hệ thống, không phải một người). Giảm chuyển động: hiện ngay, không nền.</li>
+    <li><b>Thanh đáy:</b> tab thứ ba đổi Danh bạ → Phê duyệt bằng fade 160ms; Danh bạ trở lại sheet Thêm cùng Tài sản.</li>
+    <li><b>Người khác đang mở workspace:</b> giao diện đổi theo sự kiện realtime và hiện toast "Lê Thị Hoa đã chuyển workspace này thành workspace tổ chức" (có tên người làm, không id).</li>
+    <li><b>Dữ liệu cũ:</b> tài sản hay đề nghị có từ trước (đã ẩn khi workspace là cá nhân) sẽ hiện lại, đúng như hộp xác nhận đã báo; không có gì bị xoá.</li>
+  </ol>
+</section>
+
+<!-- ============================ 8 · CREATE WORKSPACE ============================ -->
+<section class="screen" id="create" aria-labelledby="h-cw">
+  <div class="screen-head">
+    <h2 id="h-cw">8 · Tạo workspace: chọn loại</h2>
+    <p>Màn hiện nay chỉ có ô tên. Thêm một lựa chọn <b>Loại workspace</b> đặt trước ô tên: Cá nhân hoặc Tổ chức, mỗi loại một câu nói dùng cho ai và có gì. Mặc định chọn <b>Cá nhân</b>, vì đó là lựa chọn còn đổi được: cá nhân chuyển thành tổ chức được về sau, tổ chức thì không trở lại. Nút tạo nói rõ loại sẽ tạo.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span><button class="btn sm" type="button" data-cw="empty">Bấm Tạo khi chưa có tên</button><button class="btn sm" type="button" data-cw="fail">Lần tạo tới lỗi mạng</button><button class="btn sm" type="button" data-cw="reset">Đặt lại</button><span class="cw-demo-out" id="cw-out" role="status"></span></div>
+  <div class="cap">Máy tính, từ 1024px <small>Bản chạy được: chọn loại, gõ tên, bấm Tạo</small></div>
+  <div class="scroll"><div class="cw split" id="cw-desk">
+    <aside class="cw-brand" aria-hidden="true">
+      <span class="lockup"><svg class="amark" width="44" height="44" viewBox="0 0 48 48"><g transform="translate(12 37) rotate(-90)"><rect class="e" x="0" y="-3" width="26" height="6"/></g><g transform="translate(12 11) rotate(47.29)"><rect class="e" x="0" y="-3" width="35.38" height="6"/></g><g transform="translate(36 37) rotate(-90)"><rect class="e" x="0" y="-3" width="26" height="6"/></g><circle class="n" cx="12" cy="37" r="5"/><circle class="n" cx="12" cy="11" r="5"/><circle class="n" cx="36" cy="37" r="5"/><circle class="n end" cx="36" cy="11" r="5.5"/></svg><span class="wm">Nexus<small>Không gian làm việc chung</small></span></span>
+      <div class="mid"><h2>Mỗi thay đổi đều mang tên và màu của người làm.</h2>
+        <ol class="acts">
+          <li class="still" style="--pw:var(--color-person-6-wash)"><span class="av s24" style="--p:var(--color-person-6)">TL</span><p><b>Nguyễn Thu Lan</b> đã tải lên doi-soat-09-10.xlsx<time>Vừa xong</time></p></li>
+          <li><span class="av s24" style="--p:var(--color-person-4)">VK</span><p><b>Đỗ Văn Khải</b> đã duyệt Tạm ứng công tác phí<time>5 phút trước</time></p></li>
+          <li><span class="av s24" style="--p:var(--color-person-1)">QV</span><p><b>Lê Quang Vinh</b> đã nhắn trong Đối soát giao dịch<time>12 phút trước</time></p></li>
+        </ol></div>
+      <span class="foot">Chat, tài liệu, phê duyệt và tài sản trong một chỗ.</span>
+    </aside>
+    <div class="cw-side" data-cw-form="cwd"></div>
+  </div></div>
+
+  <div class="cap" style="margin-top:8px">Điện thoại, 390px <small>Không có brand pane; logo ở đầu như <code>auth-motion.html</code></small></div>
+  <div class="cw-states">
+    <div class="cw-state"><div class="cap">1 · Mặc định <small>Cá nhân được chọn sẵn</small></div><div class="cw single"><div class="cw-side" data-cw-form="cw1"></div></div></div>
+    <div class="cw-state"><div class="cap">2 · Chọn Tổ chức <small>Gợi ý tên và nút đổi theo</small></div><div class="cw single"><div class="cw-side" data-cw-form="cw2" data-type="org" data-name="Tổ Đối soát"></div></div></div>
+    <div class="cw-state"><div class="cap">3 · Chưa có tên <small>Bấm Tạo, focus về ô tên</small></div><div class="cw single"><div class="cw-side" data-cw-form="cw3" data-err="1"></div></div></div>
+    <div class="cw-state"><div class="cap">4 · Lỗi mạng <small>Giữ nguyên loại và tên</small></div><div class="cw single"><div class="cw-side" data-cw-form="cw4" data-type="org" data-name="Tổ Đối soát" data-fail="1"></div></div></div>
+    <div class="cw-state"><div class="cap">5 · Đang tạo <small>Mọi ô khoá, nút giữ chiều rộng</small></div><div class="cw single"><div class="cw-side" data-cw-form="cw5" data-type="org" data-name="Tổ Đối soát" data-busy="1"></div></div></div>
+  </div>
+  <ol class="notes">
+    <li><b>Thứ tự:</b> Loại rồi mới Tên, vì loại đổi cả gợi ý tên ("Ví dụ: Việc nhà, Nhóm chạy bộ" và "Ví dụ: Tổ Đối soát") lẫn nhãn nút. Không tự focus ô tên nữa: trên máy tính focus đầu tiên là lựa chọn đang chọn; trên điện thoại không tự focus (không bật bàn phím khi chưa cần).</li>
+    <li><b>Lựa chọn</b> là <code>fieldset</code> + <code>legend</code> "Loại workspace" với hai <code>input type=radio</code> thật, cả thẻ là vùng bấm (cao hơn 44), ↑↓ đổi lựa chọn. Thẻ đang chọn: nền <code>--color-accent-wash</code>, viền trong 1.5 accent, chấm radio đặc. Không màu nào mang nghĩa một mình: chấm radio và <code>aria-checked</code> của radio nói trạng thái.</li>
+    <li><b>Mỗi thẻ</b>: icon (<code>User</code> / <code>Building</code>, cùng icon với thẻ Loại workspace ở §5), tên loại, một câu "dùng cho ai", rồi danh sách phân hệ. Tổ chức ghi "Như Cá nhân, thêm:" và chỉ liệt kê ba phần thêm (in đậm), để thấy ngay khác nhau ở đâu.</li>
+    <li><b>Dòng ghi chú</b> dưới hai thẻ (gắn bằng <code>aria-describedby</code> vào fieldset) nói luật một chiều, để người chọn Cá nhân biết mình không bị khoá.</li>
+    <li><b>Nút</b> đổi nhãn theo lựa chọn: "Tạo workspace cá nhân" / "Tạo workspace tổ chức". Không có trạng thái "chưa chọn loại" nên không có lỗi cho phần này; lỗi chỉ có ở tên (bỏ trống, hoặc server trả 400 thì hiện câu của server dưới ô) và lỗi khác (mạng, 5xx) hiện ở hộp báo đỏ đầu form, như <code>Notice</code> hiện nay.</li>
+    <li><b>Đang tạo:</b> spinner thay chữ, nút giữ chiều rộng, <code>fieldset disabled</code> (thẻ không chọn mờ 55%), ô tên <code>readonly</code>, nút Quay lại tắt. Xong thì vào thẳng Tin nhắn của workspace mới, sidebar theo loại (§1).</li>
+    <li><b>Bước 3/3</b> (thanh <code>Steps</code>) không còn cần: tài khoản mới luôn có workspace cá nhân, nên không ai tới màn này khi chưa có workspace nào. Các nhánh "chưa xác minh email" và "tài khoản số điện thoại" giữ nguyên như code hiện nay.</li>
+  </ol>
+</section>
+
+<!-- ============================ 9 · SWITCHER ENTRY ============================ -->
+<section class="screen" id="switcher" aria-labelledby="h-sw">
+  <div class="screen-head">
+    <h2 id="h-sw">9 · Lối vào "Tạo workspace" trong danh sách đổi workspace</h2>
+    <p>Hiện nay chỉ màn Chọn workspace có nút "Tạo workspace mới"; trong ứng dụng không có lối vào. Thêm một hàng <b>Tạo workspace</b> ở cuối danh sách đổi workspace, trên máy tính (menu dưới tên workspace ở sidebar) và trên điện thoại (sheet Đổi workspace). Mỗi hàng workspace có dòng phụ nói loại, nên hai workspace cá nhân đứng cạnh nhau vẫn không lẫn.</p>
+  </div>
+  <div class="pair">
+    <div class="col">
+      <div class="cap">Máy tính <small>Bấm tên workspace ở đầu sidebar</small></div>
+      <div class="frame shell sw-shell">
+        <aside class="side" aria-label="Điều hướng chính">
+          <button class="ws ws-btn" type="button" aria-expanded="true" aria-controls="wsm-d"><span class="logo">K</span><div><div class="n">Không gian của bạn</div><div class="s">Workspace cá nhân</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></button>
+          <nav class="nav" aria-label="Phân hệ"><a href="#switcher" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn</a><a href="#switcher"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#switcher"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav>
+          <div class="nav"><a href="#switcher"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH</span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Chủ sở hữu</div></div></div></div>
+        </aside>
+        <div class="stage"><h3>Tin nhắn</h3><div class="ghostrow" style="width:70%"></div><div class="ghostrow" style="width:55%"></div><div class="ghostrow" style="width:62%"></div></div>
+        <div class="wsm" id="wsm-d" aria-label="Đổi workspace">
+          <div class="label">Workspace của bạn</div>
+          <ul>
+            <li><a href="#switcher" aria-current="true"><span class="lg" style="--p:var(--color-accent);color:var(--color-on-accent)">K</span><span class="tx"><b>Không gian của bạn</b><small>Workspace cá nhân</small></span><svg class="i s tick" role="img" aria-label="Đang mở"><use href="#i-checkmark"/></svg></a></li>
+            <li><a href="#switcher"><span class="lg" style="--p:var(--color-person-3)">N</span><span class="tx"><b>Nhóm chạy bộ</b><small>Workspace cá nhân</small></span><span></span></a></li>
+            <li><a href="#switcher"><span class="lg" style="--p:var(--color-person-4)">V</span><span class="tx"><b>Khối Vận hành</b><small>NovaPay</small></span><span></span></a></li>
+            <li><a href="#switcher"><span class="lg" style="--p:var(--color-person-6)">D</span><span class="tx"><b>Dự án Ví điện tử 2026</b><small>NovaPay</small></span><span></span></a></li>
+          </ul>
+          <hr>
+          <a href="#create"><span class="lg add"><svg class="i s"><use href="#i-plus"/></svg></span><span class="tx"><b>Tạo workspace</b></span><span></span></a>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="cap">Điện thoại <small>Thêm → hàng workspace → Đổi workspace</small></div>
+      <div class="phones">
+        <div class="phone">
+          <div class="topbar"><span class="brand"><b>Nexus</b> · Không gian của bạn</span></div>
+          <div class="pbody"><h3 class="ptitle">Tin nhắn</h3></div>
+          <nav class="tabbar" aria-label="Điều hướng di động"><a href="#switcher"><span class="ic"><svg class="i"><use href="#i-msg"/></svg></span>Tin nhắn</a><a href="#switcher"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#switcher"><span class="ic"><svg class="i"><use href="#i-users"/></svg></span>Danh bạ</a><a href="#switcher" aria-current="page"><span class="ic"><svg class="i"><use href="#i-more"/></svg></span>Thêm</a></nav>
+          <div class="scrim"></div>
+          <div class="msheet sheet-ws" role="dialog" aria-modal="true" aria-labelledby="sw-t">
+            <div class="sh-top"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><h4 id="sw-t">Đổi workspace</h4><button class="ibtn" type="button" aria-label="Đóng Thêm"><svg class="i"><use href="#i-x"/></svg></button></div>
+            <ul>
+              <li><a href="#switcher" aria-current="true"><span class="lg" style="--p:var(--color-accent);color:var(--color-on-accent)">K</span><span class="tx"><b>Không gian của bạn</b><small>Workspace cá nhân · Chủ sở hữu</small></span><svg class="i tick" role="img" aria-label="Đang mở"><use href="#i-checkmark"/></svg></a></li>
+              <li><a href="#switcher"><span class="lg" style="--p:var(--color-person-3)">N</span><span class="tx"><b>Nhóm chạy bộ</b><small>Workspace cá nhân · Chủ sở hữu</small></span><span></span></a></li>
+              <li><a href="#switcher"><span class="lg" style="--p:var(--color-person-4)">V</span><span class="tx"><b>Khối Vận hành</b><small>NovaPay · Kế toán trưởng</small></span><span></span></a></li>
+              <li><a href="#switcher"><span class="lg" style="--p:var(--color-person-6)">D</span><span class="tx"><b>Dự án Ví điện tử 2026</b><small>NovaPay · Thành viên</small></span><span></span></a></li>
+            </ul>
+            <hr>
+            <a href="#create"><span class="lg add"><svg class="i"><use href="#i-plus"/></svg></span><span class="tx"><span class="add-t">Tạo workspace</span></span><span></span></a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Vị trí:</b> hàng cuối, sau divider, như mọi lệnh "thêm mới" cuối một danh sách chọn. Ô icon <code>Plus</code> nền <code>--color-sunk</code> cùng cỡ ô chữ cái (28 trên máy tính, 40 trên điện thoại) để thẳng cột, chữ 600, không phải nút primary (người mở menu này chủ yếu để đổi workspace).</li>
+    <li><b>Đi tới đâu:</b> mở màn Tạo workspace (§8) trong auth shell. Nút Quay lại ở đó trả về nơi người dùng vừa rời: về workspace đang mở nếu đến từ menu này, về Chọn workspace nếu đến từ màn đó (hiện code luôn về Chọn workspace).</li>
+    <li><b>Dòng phụ</b> theo §1: workspace cá nhân ghi "Workspace cá nhân", tổ chức ghi tên tổ chức; điện thoại thêm vai trò của bạn sau dấu chấm giữa. Màn Chọn workspace (<code>auth.html</code> §4) dùng cùng dòng phụ.</li>
+    <li><b>Hàng cao 44</b> trên máy tính, 60 trên điện thoại; workspace đang mở có dấu tích và <code>aria-current</code>. Không có id hay mã nào trên hàng.</li>
+  </ol>
+</section>
+</main>
+
+<!-- live dialog (same content as the static frame) -->
+<dialog class="modal" id="convert" aria-labelledby="cf-t">
+  <div class="mh"><h3 id="cf-t">Chuyển thành workspace tổ chức?</h3><button class="ibtn" type="button" aria-label="Đóng" data-close><svg class="i"><use href="#i-x"/></svg></button></div>
+  <p>Mọi người trong <b>Không gian của bạn</b> sẽ thấy thêm:</p>
+  <ul class="gain">
+    <li><span class="ti w"><svg class="i s"><use href="#i-box"/></svg></span><span><b>Tài sản</b><span>Kho tài sản, cấp và thu hồi tài sản.</span></span></li>
+    <li><span class="ti w"><svg class="i s"><use href="#i-check"/></svg></span><span><b>Phê duyệt</b><span>Tạo đề nghị, chuỗi người duyệt, Duyệt và Từ chối.</span></span></li>
+    <li><span class="ti w"><svg class="i s"><use href="#i-doc"/></svg></span><span><b>Duyệt tài liệu</b><span>Nút Gửi duyệt trong văn bản.</span></span></li>
+  </ul>
+  <div class="keep"><p>Tin nhắn, tài liệu, thành viên và vai trò giữ nguyên.</p><p>Tài sản và đề nghị phê duyệt có từ trước, đang bị ẩn, sẽ hiện lại cho người có quyền xem.</p></div>
+  <div class="callout"><svg class="i"><use href="#i-alert"/></svg><span><b>Không chuyển ngược lại được.</b> Workspace tổ chức không trở về workspace cá nhân.</span></div>
+  <div class="mf"><button class="btn ghost" type="button" data-close autofocus>Huỷ</button><button class="btn primary" type="button" id="cf-go">Chuyển thành tổ chức</button></div>
+</dialog>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-theme-set');
+      if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+      document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    });
+  });
+  var initial = new URLSearchParams(location.search).get('theme');
+  if (initial === 'light' || initial === 'dark') document.querySelector('[data-theme-set="' + initial + '"]').click();
+  document.getElementById('reduce').addEventListener('change', function (e) { root.classList.toggle('reduce', e.target.checked); });
+
+  var dlg = document.getElementById('convert');
+  var go = document.getElementById('cf-go');
+  var opener = null, failNext = false;
+  function open(btn) { opener = btn; go.removeAttribute('aria-busy'); go.textContent = 'Chuyển thành tổ chức'; dlg.querySelectorAll('[data-close]').forEach(function (c) { c.disabled = false; }); dlg.showModal(); }
+  document.querySelectorAll('[data-open="convert"]').forEach(function (b) { b.addEventListener('click', function () { failNext = false; open(b); }); });
+  document.querySelector('[data-act="fail"]').addEventListener('click', function (e) { failNext = true; open(e.currentTarget); });
+  dlg.querySelectorAll('[data-close]').forEach(function (c) { c.addEventListener('click', function () { dlg.close(); }); });
+  dlg.addEventListener('close', function () { if (opener) opener.focus(); });
+  dlg.addEventListener('click', function (e) { if (e.target === dlg && !go.hasAttribute('aria-busy')) dlg.close(); });
+
+  function toast(text, ok) {
+    var t = document.createElement('div');
+    t.className = 'toast toast-live'; t.setAttribute('role', 'status');
+    t.innerHTML = '<svg class="i" style="color:var(--color-' + (ok ? 'success' : 'danger') + ')"><use href="#i-' + (ok ? 'ok' : 'alert') + '"/></svg><span></span>';
+    t.querySelector('span').textContent = text;
+    document.body.appendChild(t);
+    setTimeout(function () { t.remove(); }, 5000);
+  }
+  go.addEventListener('click', function () {
+    if (go.hasAttribute('aria-busy')) return;
+    var w = go.offsetWidth;
+    go.setAttribute('aria-busy', 'true'); go.style.width = w + 'px'; go.innerHTML = '<span class="spin" aria-hidden="true"></span><span class="vh">Đang chuyển</span>';
+    dlg.querySelectorAll('[data-close]').forEach(function (c) { c.disabled = true; });
+    setTimeout(function () {
+      go.style.width = '';
+      if (failNext) {
+        go.removeAttribute('aria-busy'); go.textContent = 'Chuyển thành tổ chức';
+        dlg.querySelectorAll('[data-close]').forEach(function (c) { c.disabled = false; });
+        toast('Không chuyển được workspace. Kiểm tra kết nối rồi thử lại.', false);
+        failNext = false; return;
+      }
+      opener = null; dlg.close();
+      toast('Đã chuyển thành workspace tổ chức', true);
+      document.getElementById('after').scrollIntoView({ behavior: root.classList.contains('reduce') ? 'auto' : 'smooth' });
+      replay();
+    }, 900);
+  });
+
+  function replay() {
+    document.querySelectorAll('#after-nav .arrive, #after-tabs .swap').forEach(function (a) {
+      var c = a.classList.contains('arrive') ? 'arrive' : 'swap';
+      a.classList.remove(c); void a.offsetWidth; a.classList.add(c);
+    });
+  }
+  document.querySelector('[data-act="replay"]').addEventListener('click', replay);
+
+  /* ---------- 8 · Tạo workspace: one template for every frame, so states cannot drift apart ---------- */
+  var CW = {
+    personal: { btn: 'Tạo workspace cá nhân', ph: 'Ví dụ: Việc nhà, Nhóm chạy bộ' },
+    org: { btn: 'Tạo workspace tổ chức', ph: 'Ví dụ: Tổ Đối soát' }
+  };
+  var NAME_MAX = 80;
+  function ic(id, cls) { return '<svg class="i' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#i-' + id + '"/></svg>'; }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function under(p, err, len) {
+    return (err ? '<span class="err" id="' + p + '-e">' + ic('alert', 's') + 'Nhập tên workspace.</span>' : '<span id="' + p + '-h">Mời người sau, trong Quản trị.</span>') +
+      '<span class="tnum" aria-hidden="true">' + len + '/' + NAME_MAX + '</span>';
+  }
+  function cwForm(p, s) {
+    var t = s.type || 'personal', name = s.name || '';
+    var opt = function (v, icon, title, desc, mods) {
+      return '<label class="cw-opt"><input type="radio" name="' + p + '-type" value="' + v + '"' + (t === v ? ' checked' : '') + '>' +
+        '<span class="cw-r" aria-hidden="true"></span><span class="cw-ob"><span class="cw-oh">' + ic(icon) + title + '</span>' +
+        '<span class="cw-od">' + desc + '</span><ul class="cw-mods">' + mods + '</ul></span></label>';
+    };
+    return '<form class="cw-form" novalidate aria-labelledby="' + p + '-t"' + (s.busy ? ' aria-busy="true"' : '') + '>' +
+      '<div class="cw-mob"><span class="lockup"><svg class="amark" width="32" height="32" viewBox="0 0 48 48" aria-hidden="true"><g transform="translate(12 37) rotate(-90)"><rect class="e" x="0" y="-3" width="26" height="6"/></g><g transform="translate(12 11) rotate(47.29)"><rect class="e" x="0" y="-3" width="35.38" height="6"/></g><g transform="translate(36 37) rotate(-90)"><rect class="e" x="0" y="-3" width="26" height="6"/></g><circle class="n" cx="12" cy="37" r="5"/><circle class="n" cx="12" cy="11" r="5"/><circle class="n" cx="36" cy="37" r="5"/><circle class="n end" cx="36" cy="11" r="5.5"/></svg><span class="wm">Nexus</span></span></div>' +
+      '<div><button class="cw-back" type="button" aria-label="Quay lại"' + (s.busy ? ' disabled' : '') + '>' + ic('back') + '</button></div>' +
+      '<div class="cw-t"><h3 id="' + p + '-t">Tạo workspace</h3><p>Mỗi workspace có thành viên, tin nhắn và tài liệu riêng.</p></div>' +
+      '<div class="cw-alert" role="alert"' + (s.fail ? '' : ' hidden') + '>' + ic('alert', 's') + '<span>Không tạo được workspace. Kiểm tra kết nối rồi thử lại.</span></div>' +
+      '<fieldset class="cw-types" aria-describedby="' + p + '-n"' + (s.busy ? ' disabled' : '') + '><legend>Loại workspace</legend>' +
+        opt('personal', 'user', 'Cá nhân', 'Cho việc của bạn, hoặc một nhóm nhỏ không cần quy trình duyệt.',
+          '<li>' + ic('msg') + 'Tin nhắn</li><li>' + ic('folder') + 'Tài liệu</li><li>' + ic('users') + 'Danh bạ</li>') +
+        opt('org', 'building', 'Tổ chức', 'Cho phòng ban, công ty: có quy trình duyệt và quản lý tài sản.',
+          '<li class="lead">Như Cá nhân, thêm:</li><li class="plus">' + ic('box') + 'Tài sản</li><li class="plus">' + ic('check') + 'Phê duyệt</li><li class="plus">' + ic('doc') + 'Duyệt tài liệu</li>') +
+      '</fieldset>' +
+      '<p class="cw-note" id="' + p + '-n">' + ic('info', 's') + '<span>Workspace cá nhân chuyển thành workspace tổ chức được về sau, trong Cài đặt. Không chuyển ngược lại.</span></p>' +
+      '<div class="cw-fld"><label for="' + p + '-name">Tên workspace</label>' +
+        '<input id="' + p + '-name" type="text" autocomplete="off" maxlength="' + NAME_MAX + '" placeholder="' + CW[t].ph + '" value="' + esc(name) + '"' +
+          (s.err ? ' aria-invalid="true" aria-describedby="' + p + '-e"' : ' aria-describedby="' + p + '-h"') + (s.busy ? ' readonly' : '') + '>' +
+        '<div class="cw-under">' + under(p, s.err, name.length) + '</div></div>' +
+      '<button class="btn primary wide" type="submit"' + (s.busy ? ' aria-busy="true"' : '') + '>' +
+        (s.busy ? '<span class="spin" aria-hidden="true"></span><span class="vh">Đang tạo</span>' : CW[t].btn) + '</button>' +
+      '</form>';
+  }
+
+  var out = document.getElementById('cw-out');
+  function wire(host) {
+    var p = host.getAttribute('data-cw-form');
+    var form = host.querySelector('form'), input = form.querySelector('input[type=text]'), btn = form.querySelector('button[type=submit]');
+    var alertBox = form.querySelector('.cw-alert'), fs = form.querySelector('fieldset'), back = form.querySelector('.cw-back');
+    var under$ = form.querySelector('.cw-under');
+    var type = function () { return form.querySelector('input[type=radio]:checked').value; };
+    function setErr(on) {
+      under$.innerHTML = under(p, on, input.value.length);
+      if (on) { input.setAttribute('aria-invalid', 'true'); input.setAttribute('aria-describedby', p + '-e'); }
+      else { input.removeAttribute('aria-invalid'); input.setAttribute('aria-describedby', p + '-h'); }
+    }
+    form.addEventListener('change', function (e) {
+      if (e.target.type !== 'radio') return;
+      input.placeholder = CW[type()].ph;
+      if (!btn.hasAttribute('aria-busy')) btn.textContent = CW[type()].btn;
+    });
+    input.addEventListener('input', function () { setErr(false); });
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (btn.hasAttribute('aria-busy')) return;
+      if (!input.value.trim()) { setErr(true); input.focus(); return; }
+      alertBox.hidden = true;
+      var w = btn.offsetWidth;
+      btn.style.width = w + 'px'; btn.setAttribute('aria-busy', 'true');
+      btn.innerHTML = '<span class="spin" aria-hidden="true"></span><span class="vh">Đang tạo</span>';
+      fs.disabled = true; input.readOnly = true; back.disabled = true;
+      setTimeout(function () {
+        btn.style.width = ''; btn.removeAttribute('aria-busy'); btn.textContent = CW[type()].btn;
+        fs.disabled = false; input.readOnly = false; back.disabled = false;
+        if (host.dataset.failNext) { delete host.dataset.failNext; alertBox.hidden = false; return; }
+        if (out && p === 'cwd') out.textContent = 'Đã tạo "' + input.value.trim() + '" (' + (type() === 'org' ? 'tổ chức' : 'cá nhân') + '): ứng dụng mở Tin nhắn của workspace này.';
+      }, 1100);
+    });
+    return { form: form, input: input };
+  }
+  var desk = null;
+  document.querySelectorAll('[data-cw-form]').forEach(function (host) {
+    var d = host.dataset;
+    host.innerHTML = cwForm(d.cwForm, { type: d.type, name: d.name, err: !!d.err, fail: !!d.fail, busy: !!d.busy });
+    if (!d.busy) { var w = wire(host); if (d.cwForm === 'cwd') desk = w; }
+  });
+  var deskHost = document.querySelector('[data-cw-form="cwd"]');
+  document.querySelector('[data-cw="empty"]').addEventListener('click', function () { desk.input.value = ''; out.textContent = ''; desk.form.requestSubmit(); });
+  document.querySelector('[data-cw="fail"]').addEventListener('click', function () {
+    deskHost.dataset.failNext = '1'; if (!desk.input.value.trim()) desk.input.value = 'Tổ Đối soát';
+    desk.input.dispatchEvent(new Event('input')); out.textContent = ''; desk.form.requestSubmit();
+  });
+  document.querySelector('[data-cw="reset"]').addEventListener('click', function () {
+    deskHost.innerHTML = cwForm('cwd', {}); desk = wire(deskHost); out.textContent = '';
+  });
+})();
+</script>
+</body>
+</html>

@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	"ngac-platform/services/approval/internal/domain"
 	"ngac-platform/services/approval/internal/store"
@@ -26,7 +27,7 @@ func scratchTenant(t *testing.T) (context.Context, *store.Store, *pgxpool.Pool) 
 	owner, _ := testutil.CreateUser(t, pool)
 	bg := context.Background()
 	id := "z" + strings.ReplaceAll(uuid.NewString(), "-", "")[:7]
-	if _, err := pool.Exec(bg, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, 'scratch', $2)`, id, owner); err != nil {
+	if _, err := pool.Exec(bg, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, 'scratch', $2, 'organization')`, id, owner); err != nil {
 		t.Fatalf("workspace: %v", err)
 	}
 	var schema string
@@ -38,7 +39,10 @@ func scratchTenant(t *testing.T) (context.Context, *store.Store, *pgxpool.Pool) 
 		pool.Exec(bg, `DELETE FROM tenant_schemas WHERE tenant_id = $1`, id)
 		pool.Exec(bg, `DELETE FROM workspaces WHERE id = $1`, id)
 	})
-	return httputil.WithTenantSchema(bg, schema), store.NewStore(pool), pool
+	// The context is the one a real call has: the tenant's schema, and the
+	// caller signed in to that tenant (which is what the workspace-type check reads).
+	ctx := grpcauth.WithCaller(httputil.WithTenantSchema(bg, schema), grpcauth.Caller{TenantID: id})
+	return ctx, store.NewStore(pool), pool
 }
 
 func newRequest(tmplID string) (*domain.Request, *domain.AssignmentRecord) {

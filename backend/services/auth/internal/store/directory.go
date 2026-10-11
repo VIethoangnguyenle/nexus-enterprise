@@ -20,18 +20,36 @@ type ProfileChanges struct {
 // completed the first time anything is saved. It returns ErrNoSuchUser when
 // the account does not exist.
 func (s *Store) UpdateProfile(ctx context.Context, userID string, ch ProfileChanges) error {
-	tag, err := s.db.Exec(ctx,
-		`UPDATE users SET
-		     display_name = COALESCE($2, display_name),
-		     title        = COALESCE($3, title),
-		     location     = COALESCE($4, location),
-		     profile_completed_at = COALESCE(profile_completed_at, NOW())
-		 WHERE id = $1`,
-		userID, ch.DisplayName, ch.Title, ch.Location)
+	// The personal workspaces this person owns that still carry their previous
+	// name follow the new one, in the same statement: the one made at sign-up
+	// is named after them (first after the handle sign-up gave them). One they
+	// renamed, or an organization, keeps its name.
+	var updated bool
+	err := s.db.QueryRow(ctx,
+		`WITH old AS (
+		     -- The statement's snapshot: the name before this update. (No FOR UPDATE:
+		     -- it would skip the row the UPDATE below changes in the same statement.)
+		     SELECT display_name FROM users WHERE id = $1
+		 ), upd AS (
+		     UPDATE users SET
+		         display_name = COALESCE($2, display_name),
+		         title        = COALESCE($3, title),
+		         location     = COALESCE($4, location),
+		         profile_completed_at = COALESCE(profile_completed_at, NOW())
+		     WHERE id = $1
+		     RETURNING id
+		 ), ws AS (
+		     UPDATE workspaces w SET name = $2
+		       FROM old
+		      WHERE $2::text IS NOT NULL AND w.owner_id = $1 AND w.type = 'personal'
+		        AND w.name = old.display_name AND old.display_name IS DISTINCT FROM $2
+		 )
+		 SELECT EXISTS (SELECT 1 FROM upd)`,
+		userID, ch.DisplayName, ch.Title, ch.Location).Scan(&updated)
 	if err != nil {
 		return fmt.Errorf("update profile: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if !updated {
 		return ErrNoSuchUser
 	}
 	return nil
@@ -47,6 +65,8 @@ type WorkspaceSummary struct {
 	// Domain is the company domain the workspace claimed (acme.com), when it
 	// is a company's; empty for a personal or unclaimed one.
 	Domain string
+	// Type is "personal" or "organization".
+	Type string
 }
 
 // ListWorkspaceSummaries returns the workspaces userID is an active member of,
@@ -55,7 +75,7 @@ func (s *Store) ListWorkspaceSummaries(ctx context.Context, userID string) ([]Wo
 	rows, err := s.db.Query(ctx,
 		`SELECT w.id, w.name, mine.role,
 		        (SELECT count(*) FROM tenant_users m WHERE m.tenant_id = w.id AND m.status = 'active'),
-		        COALESCE(w.domain, '')
+		        COALESCE(w.domain, ''), w.type
 		   FROM tenant_users mine
 		   JOIN workspaces w ON w.id = mine.tenant_id
 		  WHERE mine.user_id = $1 AND mine.status = 'active'
@@ -67,7 +87,7 @@ func (s *Store) ListWorkspaceSummaries(ctx context.Context, userID string) ([]Wo
 	var out []WorkspaceSummary
 	for rows.Next() {
 		var w WorkspaceSummary
-		if err := rows.Scan(&w.ID, &w.Name, &w.Role, &w.MemberCount, &w.Domain); err != nil {
+		if err := rows.Scan(&w.ID, &w.Name, &w.Role, &w.MemberCount, &w.Domain, &w.Type); err != nil {
 			return nil, fmt.Errorf("scan workspace summary: %w", err)
 		}
 		out = append(out, w)

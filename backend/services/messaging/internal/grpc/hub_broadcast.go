@@ -7,23 +7,13 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "ngac-platform/proto/messaging"
+	"ngac-platform/services/messaging/internal/domain"
 	"ngac-platform/services/messaging/internal/events"
 )
 
-// messageToChatMessage converts a gRPC Message to a WebSocket ChatMessage.
-func messageToChatMessage(m *pb.Message) *pb.ChatMessage {
-	return &pb.ChatMessage{
-		Id:              m.Id,
-		ChannelId:       m.ChannelId,
-		SenderId:        m.SenderId,
-		SenderName:      m.SenderName,
-		Content:         m.Content,
-		CreatedAt:       m.CreatedAt,
-		MessageType:     m.MessageType,
-		ParentMessageId: m.ParentMessageId,
-		ReplyCount:      m.ReplyCount,
-	}
-}
+// messageToChatMessage converts a gRPC Message to a WebSocket ChatMessage,
+// with the one conversion every frame that carries a message uses.
+func messageToChatMessage(m *pb.Message) *pb.ChatMessage { return domain.ChatMessageOf(m) }
 
 // marshalEnvelope serializes a ServerEnvelope to protobuf bytes.
 func marshalEnvelope(env *pb.ServerEnvelope) []byte {
@@ -237,18 +227,13 @@ func (h *Hub) SendUnreadCount(userID string, count int32) {
 	h.sendToUser(userID, data)
 }
 
-// BroadcastThreadReply sends a thread reply event to channel subscribers.
-func (h *Hub) BroadcastThreadReply(channelID string, msg *pb.Message) {
-	chatMsg := messageToChatMessage(msg)
-	env := &pb.ServerEnvelope{
-		Payload: &pb.ServerEnvelope_ThreadReply{
-			ThreadReply: &pb.ThreadReplyEvent{
-				Message:         chatMsg,
-				ParentMessageId: msg.ParentMessageId,
-			},
-		},
+// BroadcastThreadReply sends a thread reply, with the thread's new summary, to
+// the channel's subscribers.
+func (h *Hub) BroadcastThreadReply(channelID string, ev *pb.ThreadReplyEvent) {
+	if channelID == "" || ev == nil {
+		return
 	}
-	data := marshalEnvelope(env)
+	data := marshalEnvelope(&pb.ServerEnvelope{Payload: &pb.ServerEnvelope_ThreadReply{ThreadReply: ev}})
 	if data == nil {
 		return
 	}
@@ -261,6 +246,76 @@ func (h *Hub) BroadcastThreadReply(channelID string, msg *pb.Message) {
 		return
 	}
 	h.broadcastLocal(channelID, data)
+}
+
+// BroadcastMessageEdited tells the channel's subscribers a message's text changed.
+func (h *Hub) BroadcastMessageEdited(channelID string, msg *pb.Message) {
+	if channelID == "" || msg == nil {
+		return
+	}
+	h.publishToChannel(channelID, &pb.ServerEnvelope{Payload: &pb.ServerEnvelope_MessageEdited{
+		MessageEdited: &pb.MessageEditedEvent{Message: messageToChatMessage(msg), EditedAt: msg.EditedAt},
+	}})
+}
+
+// BroadcastMessageDeleted tells the channel's subscribers a message was deleted.
+// The event carries ids only; the deleted body is never sent.
+func (h *Hub) BroadcastMessageDeleted(channelID string, ev *pb.MessageDeletedEvent) {
+	if channelID == "" || ev == nil {
+		return
+	}
+	h.publishToChannel(channelID, &pb.ServerEnvelope{Payload: &pb.ServerEnvelope_MessageDeleted{MessageDeleted: ev}})
+}
+
+// BroadcastPollChanged tells the channel's subscribers a poll changed. It
+// names the poll only; each client refetches it under its own view, since
+// counts would show results to members who have not voted.
+func (h *Hub) BroadcastPollChanged(channelID, pollID string) {
+	if channelID == "" || pollID == "" {
+		return
+	}
+	h.publishToChannel(channelID, &pb.ServerEnvelope{Payload: &pb.ServerEnvelope_PollVote{
+		PollVote: &pb.PollVoteEvent{PollId: pollID, ChannelId: channelID},
+	}})
+}
+
+// publishToChannel delivers an envelope to a channel's subscribers on every
+// instance (Redis), or locally when Redis is absent or fails.
+func (h *Hub) publishToChannel(channelID string, env *pb.ServerEnvelope) {
+	data := marshalEnvelope(env)
+	if data == nil {
+		return
+	}
+	if h.rdb != nil {
+		if err := h.rdb.Publish(h.ctx, redisChanKey(channelID), data).Err(); err != nil {
+			slog.Warn("redis channel publish failed", "error", err)
+			h.broadcastLocal(channelID, data)
+		}
+		return
+	}
+	h.broadcastLocal(channelID, data)
+}
+
+// SendThreadStates delivers each user's own thread state to that user's
+// sessions in the tenant, keyed by NGAC node, and to nobody else. It rides the
+// user-addressed domain route, so it reaches the user on every hub instance
+// and never a session of the same node id in another tenant. Without a tenant
+// there is no boundary to stay inside, and nothing is sent.
+func (h *Hub) SendThreadStates(tenantID string, states map[string]*pb.ThreadStateEvent) {
+	if tenantID == "" || strings.Contains(tenantID, ":") {
+		return
+	}
+	for node, st := range states {
+		if node == "" || st == nil || strings.Contains(node, ":") {
+			continue
+		}
+		data := marshalEnvelope(&pb.ServerEnvelope{Payload: &pb.ServerEnvelope_ThreadState{ThreadState: st}})
+		if data == nil {
+			continue
+		}
+		node := node
+		h.route(userEventPrefix+tenantID+":"+node, data, func() { h.deliverToUserNode(tenantID, node, data) })
+	}
 }
 
 // BroadcastApprovalEvent sends an approval status change to the users the

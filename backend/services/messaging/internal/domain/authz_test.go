@@ -57,6 +57,26 @@ func (p *scriptedPolicyRead) CheckAccess(_ context.Context, req *policypb.CheckA
 	return &policypb.AccessDecision{Decision: ngac.DecisionDeny}, nil
 }
 
+// BatchCheckAccess answers each (object, operation) from the same grants as
+// CheckAccess, so a list filtered in one batch obeys the scripted world too.
+func (p *scriptedPolicyRead) BatchCheckAccess(_ context.Context, req *policypb.BatchCheckAccessRequest, _ ...grpc.CallOption) (*policypb.BatchAccessResult, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.err != nil {
+		return nil, p.err
+	}
+	results := make(map[string]*policypb.ObjectPermissions, len(req.ObjectIds))
+	for _, id := range req.ObjectIds {
+		perms := make(map[string]bool, len(req.Operations))
+		for _, op := range req.Operations {
+			p.checks = append(p.checks, grant{req.UserNodeId, id, op})
+			perms[op] = p.allow[grant{req.UserNodeId, id, op}]
+		}
+		results[id] = &policypb.ObjectPermissions{Permissions: perms}
+	}
+	return &policypb.BatchAccessResult{Results: results}, nil
+}
+
 // IsAssigned reports no existing edges: the scripted world starts empty.
 func (p *scriptedPolicyRead) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {
 	return &policypb.BoolResponse{}, nil

@@ -23,6 +23,22 @@ type mockStore struct {
 	// set of approver keys that exist in the tenant.
 	departments map[string]string
 	approvers   map[string]bool
+	// workspaceType is what WorkspaceType answers ("" means organization);
+	// workspaceErr, when set, is what it fails with.
+	workspaceType string
+	workspaceErr  error
+}
+
+// WorkspaceType answers "organization" for every tenant unless a test sets
+// workspaceType (or workspaceErr) to say otherwise.
+func (m *mockStore) WorkspaceType(_ context.Context, _ string) (string, error) {
+	if m.workspaceErr != nil {
+		return "", m.workspaceErr
+	}
+	if m.workspaceType == "" {
+		return workspaceTypeOrganization, nil
+	}
+	return m.workspaceType, nil
 }
 
 func newMockStore() *mockStore {

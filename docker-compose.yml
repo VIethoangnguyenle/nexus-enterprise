@@ -107,6 +107,26 @@ services:
       retries: 10
       start_period: 10s
 
+  # Converts Office files to PDF for the file viewer (LibreOffice inside). The drive service posts
+  # a document to it and reads the PDF back; nothing leaves the machine. Published on loopback
+  # only (host port 3050: 3000 is taken by too many dev tools) so a native `make dev` drive can
+  # reach it; the containerised drive uses gotenberg:3000.
+  gotenberg:
+    image: gotenberg/gotenberg:8.37.0
+    command: ["gotenberg", "--api-timeout=70s", "--chromium-disable-routes=true", "--pdfengines-disable-routes=true", "--webhook-disable=true", "--api-disable-download-from=true", "--libreoffice-deny-private-ips=true", "--libreoffice-idle-shutdown-timeout=120s", "--prometheus-disable-collect=true"]
+    ports:
+      - "127.0.0.1:3050:3000"
+    restart: unless-stopped
+    mem_limit: 600m
+    cpus: 1.0
+    pids_limit: 300
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
   # ============================================
   # Microservices
   # ============================================
@@ -320,7 +340,7 @@ services:
       # No strip-prefix: the hub serves /api/ws itself, as it does behind nginx in production.
       - "traefik.http.services.ws.loadbalancer.server.port=8081"
       # REST router — channels, messages, DMs, threads, notifications
-      - "traefik.http.routers.messaging.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/channels`) || PathPrefix(`/api/messages`) || PathPrefix(`/api/dms`) || PathPrefix(`/api/threads`) || PathPrefix(`/api/notifications`) || PathPrefix(`/api/polls`) || PathPrefix(`/api/tasks`) || PathRegexp(`/api/workspaces/[^/]+/channels`))"
+      - "traefik.http.routers.messaging.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/channels`) || PathPrefix(`/api/messages`) || PathPrefix(`/api/me/push-preferences`) || PathPrefix(`/api/dms`) || PathPrefix(`/api/threads`) || PathPrefix(`/api/notifications`) || PathPrefix(`/api/polls`) || PathPrefix(`/api/tasks`) || PathRegexp(`/api/workspaces/[^/]+/(channels|chat-sections)`))"
       - "traefik.http.routers.messaging.entrypoints=web"
       - "traefik.http.routers.messaging.priority=120"
       - "traefik.http.routers.messaging.service=messaging"
@@ -377,6 +397,7 @@ services:
       POLICY_SERVICE_ADDR: policy:50051
       POLICY_READ_SERVICE_ADDR: policy-read:50061
       DOCUMENT_SERVICE_ADDR: document:50054
+      GOTENBERG_URL: http://gotenberg:3000
       GRPC_PORT: "50057"
       REST_PORT: "8080"
       JWT_SECRET: ngac-super-secret-key-change-in-production

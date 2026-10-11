@@ -41,6 +41,7 @@ export function PermissionEditor({ workspaceId, roleId, onDone }: PermissionEdit
   const [draft, setDraft] = useState<Grants | null>(null)
 
   const role = detail.data?.role
+  // Exactly the areas the server offers this workspace; the client never filters by type.
   const areas = useMemo<PermissionArea[]>(() => areasQ.data ?? [], [areasQ.data])
   const saved = useMemo(() => grantsOf(detail.data?.permissions ?? []), [detail.data])
   const current = draft ?? saved

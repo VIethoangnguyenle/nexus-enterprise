@@ -16,6 +16,7 @@ message ClientEnvelope {
     SubscribeRequest   subscribe   = 2;
     UnsubscribeRequest unsubscribe = 3;
     TypingRequest      typing      = 4;
+    ViewRequest        view        = 5;
   }
 }
 
@@ -36,6 +37,14 @@ message UnsubscribeRequest {
 }
 
 message TypingRequest {
+  string channel_id = 1;
+}
+
+// ViewRequest says which conversation this session has on screen right now,
+// while its page is visible; an empty channel_id means none. Being subscribed
+// is not viewing: the navigator subscribes to every listed conversation. Push
+// is held back only for the conversation a session is actually looking at.
+message ViewRequest {
   string channel_id = 1;
 }
 
@@ -61,6 +70,9 @@ message ServerEnvelope {
     PresenceEvent      presence_event = 17;
     DomainEvent        domain_event   = 18;
     WorkspaceSubscribed workspace_subscribed = 19;
+    ThreadStateEvent   thread_state   = 20;
+    MessageEditedEvent  message_edited  = 21;
+    MessageDeletedEvent message_deleted = 22;
   }
   // asset_updated, drive_object and drive_perm were replaced by domain_event.
   reserved 7, 13, 14;
@@ -87,6 +99,27 @@ message ChatMessage {
   repeated string mentions = 11;  // User IDs mentioned
   string linked_entity_type = 12;
   string linked_entity_id = 13;
+  repeated ChatAttachment attachments = 14;
+  ChatQuote quoted = 15;  // The message this one quotes, when any
+}
+
+// ChatQuote is what a quote shows (see messaging.QuotedMessage).
+message ChatQuote {
+  string id          = 1;
+  string sender_id   = 2;
+  string sender_name = 3;
+  string text        = 4;
+  bool   deleted     = 5;
+}
+
+// ChatAttachment is one file of a message (see messaging.MessageAttachment).
+message ChatAttachment {
+  string drive_file_id = 1;
+  string file_name     = 2;
+  string mime_type     = 3;
+  int64  size_bytes    = 4;
+  int32  width         = 5;
+  int32  height        = 6;
 }
 
 message TypingEvent {
@@ -116,6 +149,22 @@ message UnreadCountEvent {
 message ThreadReplyEvent {
   ChatMessage message          = 1;
   string      parent_message_id = 2;
+  // The thread's summary after this reply, the same for every subscriber.
+  int32                     reply_count           = 3;
+  google.protobuf.Timestamp last_reply_at         = 4;
+  repeated string           reply_participant_ids = 5; // users.id of the 3 most recent distinct repliers, newest first
+}
+
+// ThreadStateEvent is one user's own state of one thread, sent only to that
+// user's sessions: after a reply in a thread they follow, and when they
+// follow, unfollow or read it on any device.
+message ThreadStateEvent {
+  string root_message_id = 1;
+  string channel_id      = 2;
+  bool   following       = 3;
+  int32  unread_count    = 4;
+  // When the server read this state; a client keeps the newest per thread.
+  google.protobuf.Timestamp as_of = 5;
 }
 
 // ═══════════════════════════════════════════════
@@ -144,6 +193,10 @@ message ReadReceiptEvent {
   string last_message_id = 3;
 }
 
+// PollVoteEvent says a poll changed (a vote, a withdrawal, a close). It names
+// the poll only: counts would show results to members who have not voted, so
+// clients refetch the poll under their own view. vote_count and total_votes are
+// no longer filled.
 message PollVoteEvent {
   string poll_id    = 1;
   string channel_id = 2;
@@ -213,4 +266,20 @@ message ApprovalEvent {
   string template_name  = 5;
   string tenant_id      = 6;
   string workspace_id   = 7;
+}
+
+// MessageEditedEvent carries a message whose sender changed its text.
+message MessageEditedEvent {
+  ChatMessage               message   = 1;
+  google.protobuf.Timestamp edited_at = 2;
+}
+
+// MessageDeletedEvent says a message was deleted. A root message with replies
+// stays as a placeholder (keep_placeholder); any other leaves the view.
+message MessageDeletedEvent {
+  string message_id        = 1;
+  string channel_id        = 2;
+  string parent_message_id = 3;
+  bool   keep_placeholder  = 4;
+  int32  reply_count       = 5;   // The thread's count after a reply was deleted
 }

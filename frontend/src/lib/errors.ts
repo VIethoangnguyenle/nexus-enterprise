@@ -5,7 +5,7 @@ export function statusOf(err: unknown): number | undefined {
   return err instanceof ApiError ? err.status : undefined
 }
 
-/** The machine-readable `reason` a 409 carries, when the server gave one. */
+/** The machine-readable `reason` a refusal (409, 413, or a 400 of a send) carries, when the server gave one. */
 export function reasonOf(err: unknown): string | undefined {
   const body = err instanceof ApiError ? (err.body as { reason?: unknown } | undefined) : undefined
   return typeof body?.reason === 'string' ? body.reason : undefined
@@ -16,6 +16,9 @@ export const FOLDER_HAS_DOCUMENTS = 'folder_has_documents'
 
 /** The workspace's drive is full: the server answers 413 with this reason. */
 export const QUOTA_EXCEEDED = 'quota_exceeded'
+
+/** A send is refused because the message it quotes is gone, unknown, or in another channel (400). */
+export const QUOTED_MESSAGE_UNAVAILABLE = 'quoted_message_unavailable'
 
 export const isForbidden = (err: unknown) => statusOf(err) === 403
 

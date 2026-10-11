@@ -73,6 +73,104 @@ const authOk = () => deliver({ oneofKind: 'authResponse', authResponse: { ok: tr
 const ackWorkspace = (seq = '0', workspaceId = 'ws-1') =>
   deliver({ oneofKind: 'workspaceSubscribed', workspaceSubscribed: { workspaceId, seq, denied: false } })
 
+describe('thread events', () => {
+  it("a thread state reaches the root's cached summary and the unread counts", () => {
+    queryClient.setQueryData(keys.messaging.messages('c1'), {
+      messages: [{ id: 'root', channel_id: 'c1', sender_id: 'u1', content: 'x', thread_unread_count: 0 }],
+      has_more: false,
+    })
+    seed(keys.messaging.unreadCounts())
+    deliver({
+      oneofKind: 'threadState',
+      threadState: { rootMessageId: 'root', channelId: 'c1', following: true, unreadCount: 2 },
+    })
+    const root = queryClient.getQueryData<{ messages: { thread_unread_count?: number }[] }>(
+      keys.messaging.messages('c1'),
+    )!.messages[0]!
+    expect(root.thread_unread_count).toBe(2)
+    expect(invalidated(keys.messaging.unreadCounts())).toBe(true)
+  })
+
+  it('a thread reply carries the server summary onto the root', () => {
+    queryClient.setQueryData(keys.messaging.messages('c1'), {
+      messages: [{ id: 'root', channel_id: 'c1', sender_id: 'u1', content: 'x', reply_count: 1 }],
+      has_more: false,
+    })
+    deliver({
+      oneofKind: 'threadReply',
+      threadReply: {
+        parentMessageId: 'root', replyCount: 7, replyParticipantIds: ['u2'],
+        message: {
+          id: 'r', channelId: 'c1', senderId: 'u2', senderName: 'B', content: 'hi', messageType: 'user',
+          parentMessageId: 'root', replyCount: 0, contentFormat: '', mentions: [], linkedEntityType: '', linkedEntityId: '',
+          attachments: [],
+        },
+      },
+    })
+    const root = queryClient.getQueryData<{ messages: { reply_count?: number }[] }>(
+      keys.messaging.messages('c1'),
+    )!.messages[0]!
+    expect(root.reply_count).toBe(7)
+    expect(useWebSocketStore.getState().lastMessages['c1']?.content).toBe('hi')
+  })
+})
+
+describe('message lifecycle events', () => {
+  const listOf = (c: string) =>
+    queryClient.getQueryData<{ messages: { id: string; content: string; deleted?: boolean; edited_at?: unknown }[] }>(
+      keys.messaging.messages(c),
+    )!.messages
+  const seedList = () =>
+    queryClient.setQueryData(keys.messaging.messages('c1'), {
+      messages: [
+        { id: 'a', channel_id: 'c1', sender_id: 'u1', content: 'cũ' },
+        { id: 'b', channel_id: 'c1', sender_id: 'u1', content: 'giữ', reply_count: 2 },
+      ],
+      has_more: false,
+    })
+
+  it('an edit changes the text in the cache and marks it edited, without a new-message preview', () => {
+    seedList()
+    const previewBefore = useWebSocketStore.getState().lastMessages['c1']
+    deliver({
+      oneofKind: 'messageEdited',
+      messageEdited: {
+        editedAt: { seconds: '1760000000', nanos: 0 },
+        message: {
+          id: 'a', channelId: 'c1', senderId: 'u1', senderName: 'A', content: '<p>mới</p>', messageType: 'user',
+          parentMessageId: '', replyCount: 0, contentFormat: 'html', mentions: [], linkedEntityType: '', linkedEntityId: '',
+          attachments: [],
+        },
+      },
+    })
+    expect(listOf('c1')[0]).toMatchObject({ id: 'a', content: '<p>mới</p>' })
+    expect(listOf('c1')[0]!.edited_at).toBeTruthy()
+    expect(useWebSocketStore.getState().lastMessages['c1']).toBe(previewBefore)
+  })
+
+  it('a delete removes a message with no thread and keeps one with a thread as a placeholder', () => {
+    seedList()
+    deliver({
+      oneofKind: 'messageDeleted',
+      messageDeleted: { messageId: 'a', channelId: 'c1', parentMessageId: '', keepPlaceholder: false, replyCount: 0 },
+    })
+    deliver({
+      oneofKind: 'messageDeleted',
+      messageDeleted: { messageId: 'b', channelId: 'c1', parentMessageId: '', keepPlaceholder: true, replyCount: 0 },
+    })
+    expect(listOf('c1')).toEqual([expect.objectContaining({ id: 'b', deleted: true, content: '' })])
+  })
+
+  it('a deleted reply takes the count the server sent onto its root', () => {
+    seedList()
+    deliver({
+      oneofKind: 'messageDeleted',
+      messageDeleted: { messageId: 'r', channelId: 'c1', parentMessageId: 'b', keepPlaceholder: false, replyCount: 1 },
+    })
+    expect((listOf('c1')[1] as { reply_count?: number }).reply_count).toBe(1)
+  })
+})
+
 describe('websocket events invalidate the keys the screens actually cache under', () => {
   it('reconnect resync refreshes permissions and the workspace root listing', () => {
     seed(keys.permissions.object('tenant-1', 'node-1'))
@@ -139,6 +237,19 @@ describe('websocket events invalidate the keys the screens actually cache under'
     deliver({ oneofKind: 'unreadCount', unreadCount: { channelId: 'c-1', count: 3 } } as ServerEnvelopeInit)
     expect(invalidated(keys.messaging.unreadCounts())).toBe(true)
     expect(invalidated(keys.notifications.unreadCount())).toBe(true)
+  })
+
+  it('an unread-count event or a thread state (read on another device) refreshes the mention pill', () => {
+    seed(keys.shortcuts.mentionsUnread('ws-1'))
+    seed(keys.shortcuts.mentions('ws-1'))
+    deliver({ oneofKind: 'unreadCount', unreadCount: { channelId: 'c-1', count: 0 } } as ServerEnvelopeInit)
+    expect(invalidated(keys.shortcuts.mentionsUnread('ws-1'))).toBe(true)
+    expect(invalidated(keys.shortcuts.mentions('ws-1'))).toBe(true)
+
+    queryClient.clear()
+    seed(keys.shortcuts.mentionsUnread('ws-1'))
+    deliver({ oneofKind: 'threadState', threadState: { rootMessageId: 'root', channelId: 'c1', following: true, unreadCount: 0 } })
+    expect(invalidated(keys.shortcuts.mentionsUnread('ws-1'))).toBe(true)
   })
 
   it('a permission event drops the permission cache and the listings the user sees through it', () => {
@@ -469,5 +580,157 @@ describe('permission events', () => {
     settle()
     expect(invalidated(keys.drive.shares('i-1'))).toBe(true)
     expect(invalidated(keys.permissions.object('tenant-1', 'node-1'))).toBe(false)
+  })
+})
+
+describe('viewing a conversation', () => {
+  const views = () =>
+    FakeSocket.last!.sent.flatMap((e) => (e.payload.oneofKind === 'view' ? [e.payload.view.channelId] : []))
+  const setVisibility = (state: 'visible' | 'hidden') => {
+    Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  }
+  afterEach(() => setVisibility('visible'))
+
+  it('tells the server which subscribed conversation is on screen, and when none is', () => {
+    authOk()
+    const store = useWebSocketStore.getState()
+    const releaseSub = store.subscribeMany(['c1', 'c2'])
+    const release = store.viewChannel('c1')
+    expect(views()).toEqual(['c1'])
+
+    release()
+    expect(views()).toEqual(['c1', ''])
+    releaseSub()
+  })
+
+  it('announces the view again when the conversation is subscribed anew', () => {
+    authOk()
+    const store = useWebSocketStore.getState()
+    const release = store.viewChannel('c1')
+    store.subscribeMany(['c1'])() // subscribed, then dropped: the server forgets the view
+    store.subscribeMany(['c1'])
+    expect(views()).toEqual(['c1', 'c1'])
+    release()
+  })
+
+  it('views nothing while the page is hidden, and the conversation again when it returns', () => {
+    authOk()
+    const store = useWebSocketStore.getState()
+    const releaseSub = store.subscribeMany(['c1'])
+    const release = store.viewChannel('c1')
+    setVisibility('hidden')
+    setVisibility('visible')
+    expect(views()).toEqual(['c1', '', 'c1'])
+    release()
+    releaseSub()
+  })
+
+  it('never claims a conversation before subscribing to it, and resumes after a reconnect', () => {
+    const store = useWebSocketStore.getState()
+    const release = store.viewChannel('c1') // before auth and before the subscription
+    authOk()
+    expect(views()).toEqual([])
+    const releaseSub = store.subscribeMany(['c1'])
+    expect(views()).toEqual(['c1'])
+
+    // The connection drops and comes back on its own.
+    const old = FakeSocket.last!
+    old.onclose!({ code: 1006 })
+    vi.advanceTimersByTime(60_000)
+    expect(FakeSocket.last).not.toBe(old)
+    FakeSocket.last!.onopen!()
+    authOk()
+    expect(views()).toEqual(['c1'])
+    release()
+    releaseSub()
+  })
+})
+
+describe('shortcut, poll and unread-thread frames', () => {
+  const chat = (over: Partial<{ id: string; senderId: string; mentions: string[]; parentMessageId: string }> = {}) => ({
+    id: 'm1', channelId: 'c1', senderId: 'u-other', senderName: 'B', content: 'hi', messageType: 'user',
+    parentMessageId: '', replyCount: 0, contentFormat: '', mentions: [] as string[], linkedEntityType: '',
+    linkedEntityId: '', attachments: [], ...over,
+  })
+  const mentionKeys = () => [keys.shortcuts.mentions('ws-1'), keys.shortcuts.mentionsUnread('ws-1')]
+
+  beforeEach(() => {
+    useAuthStore.setState({ user: { id: 'me', username: 'me' } as never })
+    for (const k of mentionKeys()) seed(k)
+  })
+  afterEach(() => useAuthStore.setState({ user: null }))
+
+  it('a message that mentions me refreshes the mentions feed and its badge', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat({ mentions: ['me'] }) })
+    settle()
+    for (const k of mentionKeys()) expect(invalidated(k)).toBe(true)
+  })
+
+  it('a message that mentions someone else leaves the mentions feed alone', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat({ mentions: ['u-3'] }) })
+    settle()
+    for (const k of mentionKeys()) expect(invalidated(k)).toBe(false)
+  })
+
+  it('my own message that mentions me is not a new mention', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat({ senderId: 'me', mentions: ['me'] }) })
+    settle()
+    for (const k of mentionKeys()) expect(invalidated(k)).toBe(false)
+  })
+
+  it('a thread reply that mentions me refreshes the mentions feed too', () => {
+    deliver({
+      oneofKind: 'threadReply',
+      threadReply: { parentMessageId: 'root', replyCount: 1, replyParticipantIds: [], message: chat({ id: 'r', parentMessageId: 'root', mentions: ['me'] }) },
+    })
+    settle()
+    for (const k of mentionKeys()) expect(invalidated(k)).toBe(true)
+  })
+
+  it('a thread reply that mentions nobody does not', () => {
+    deliver({
+      oneofKind: 'threadReply',
+      threadReply: { parentMessageId: 'root', replyCount: 1, replyParticipantIds: [], message: chat({ id: 'r', parentMessageId: 'root' }) },
+    })
+    settle()
+    for (const k of mentionKeys()) expect(invalidated(k)).toBe(false)
+  })
+
+  it('a threadReply frame refreshes the unread threads of Trang chủ', () => {
+    seed(keys.notificationLevels.unreadThreads())
+    deliver({
+      oneofKind: 'threadReply',
+      threadReply: { parentMessageId: 'root', replyCount: 1, replyParticipantIds: [], message: chat({ id: 'r', parentMessageId: 'root' }) },
+    })
+    expect(invalidated(keys.notificationLevels.unreadThreads())).toBe(true)
+  })
+
+  it('a threadState frame refreshes the unread threads of Trang chủ', () => {
+    seed(keys.notificationLevels.unreadThreads())
+    deliver({ oneofKind: 'threadState', threadState: { rootMessageId: 'root', channelId: 'c1', following: true, unreadCount: 0 } })
+    expect(invalidated(keys.notificationLevels.unreadThreads())).toBe(true)
+  })
+
+  it('a plain chat message leaves the unread threads alone', () => {
+    seed(keys.notificationLevels.unreadThreads())
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat() })
+    expect(invalidated(keys.notificationLevels.unreadThreads())).toBe(false)
+  })
+
+  const pollVote = (pollId: string) => ({ pollId, channelId: 'c1', optionId: 'o', voteCount: 0, totalVotes: 0 })
+
+  it('a pollVote frame refetches that poll only', () => {
+    seed(keys.chatCards.poll('p1'))
+    seed(keys.chatCards.poll('p2'))
+    deliver({ oneofKind: 'pollVote', pollVote: pollVote('p1') })
+    expect(invalidated(keys.chatCards.poll('p1'))).toBe(true)
+    expect(invalidated(keys.chatCards.poll('p2'))).toBe(false)
+  })
+
+  it('a pollVote frame without a poll is ignored', () => {
+    seed(keys.chatCards.poll('p1'))
+    deliver({ oneofKind: 'pollVote', pollVote: pollVote('') })
+    expect(invalidated(keys.chatCards.poll('p1'))).toBe(false)
   })
 })

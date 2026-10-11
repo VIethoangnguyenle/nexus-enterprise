@@ -49,6 +49,9 @@ func (s *AssetService) CreateAsset(ctx context.Context, req *pb.CreateAssetReque
 	if err != nil {
 		return nil, lookupErr(err, "asset type")
 	}
+	if err := requireOrganization(ctx, s.store, at.WorkspaceID); err != nil {
+		return nil, err
+	}
 
 	// Check write permission on type's OA
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, at.NgacOAID, ngac.OpWrite); err != nil {
@@ -112,6 +115,9 @@ func (s *AssetService) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*
 	if err != nil {
 		return nil, lookupErr(err, "asset")
 	}
+	if err := requireOrganization(ctx, s.store, asset.WorkspaceID); err != nil {
+		return nil, err
+	}
 	if asset.Deleted {
 		return nil, notFound("asset has been deleted")
 	}
@@ -131,6 +137,9 @@ func (s *AssetService) GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*
 // pagination and the total count cover only what the caller can see — a
 // post-query filter would still report how many hidden assets exist.
 func (s *AssetService) ListAssets(ctx context.Context, req *pb.ListAssetsRequest) (*pb.AssetList, error) {
+	if err := requireOrganization(ctx, s.store, req.WorkspaceId); err != nil {
+		return nil, err
+	}
 	types, err := s.store.ListTypes(ctx, req.WorkspaceId)
 	if err != nil {
 		return nil, fmt.Errorf("list asset types: %w", err)
@@ -179,6 +188,9 @@ func (s *AssetService) UpdateAsset(ctx context.Context, req *pb.UpdateAssetReque
 	if err != nil {
 		return nil, lookupErr(err, "asset")
 	}
+	if err := requireOrganization(ctx, s.store, asset.WorkspaceID); err != nil {
+		return nil, err
+	}
 
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpWrite); err != nil {
 		return nil, err
@@ -224,6 +236,9 @@ func (s *AssetService) DeleteAsset(ctx context.Context, req *pb.DeleteAssetReque
 	asset, err := s.store.GetAsset(ctx, req.AssetId)
 	if err != nil {
 		return nil, lookupErr(err, "asset")
+	}
+	if err := requireOrganization(ctx, s.store, asset.WorkspaceID); err != nil {
+		return nil, err
 	}
 
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, asset.TypeOAID, ngac.OpManage); err != nil {

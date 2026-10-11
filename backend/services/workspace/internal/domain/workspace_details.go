@@ -2,12 +2,16 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/realtime"
+	"ngac-platform/services/workspace/internal/store"
 )
 
 // Limits of a workspace's name and description, in characters.
@@ -23,6 +27,47 @@ type WorkspaceDetails struct {
 	Name        string
 	Description string
 	CanManage   bool
+	// Type is TypePersonal or TypeOrganization.
+	Type string
+	// IsOwner is whether the caller is the workspace's owner; OwnerName is who
+	// that is, as a name; OwnerNames is the list of display names.
+	IsOwner    bool
+	OwnerName  string
+	OwnerNames []string
+	// ConvertedByName and ConvertedAt say who turned a personal workspace into an
+	// organization and when; empty and nil for one that was never converted.
+	ConvertedByName string
+	ConvertedAt     *time.Time
+}
+
+// withOwnership fills in the type, the owners and the conversion record. The
+// owners are the people in the workspace's Owners group, the same source the
+// owner changes and the last-owner rule use. If the group cannot be read, the
+// caller is not shown as an owner (fail closed) and the owners go unnamed.
+func (s *Service) withOwnership(ctx context.Context, d *WorkspaceDetails, ws *WorkspaceResult, callerNodeID, wsType string) (*WorkspaceDetails, error) {
+	rec, err := s.store.ConversionRecord(ctx, d.ID)
+	if err != nil {
+		if errors.Is(err, store.ErrWorkspaceNotFound) {
+			return nil, fmt.Errorf("%w: workspace", ErrNotFound)
+		}
+		return nil, err
+	}
+	d.Type, d.ConvertedAt = wsType, rec.At
+	if rec.At != nil {
+		d.ConvertedByName = readableName(rec.ByName, neutralPerson)
+	}
+	if _, owners, err := s.ownersOf(ctx, ws); err != nil {
+		slog.Warn("could not read the workspace owners", "workspace", d.ID, "error", err)
+	} else {
+		d.IsOwner = containsNode(owners, callerNodeID) && callerNodeID != ""
+		names := make([]string, 0, len(owners))
+		for _, p := range s.peopleFor(ctx, d.ID, owners) {
+			names = append(names, p.DisplayName)
+		}
+		d.OwnerNames = names
+		d.OwnerName = strings.Join(names, ", ")
+	}
+	return d, nil
 }
 
 // WorkspaceDetails returns a workspace's name and description to a member of it,
@@ -40,7 +85,7 @@ func (s *Service) WorkspaceDetails(ctx context.Context, callerNodeID, wsID strin
 	if mgmtID, err := s.mgmtOAID(ctx, ws); err == nil {
 		out.CanManage = s.checkAccess(ctx, callerNodeID, mgmtID, ngac.OpManage) == nil
 	}
-	return out, nil
+	return s.withOwnership(ctx, out, ws, callerNodeID, row.Type)
 }
 
 // UpdateWorkspaceDetails changes a workspace's name and/or description. It
@@ -77,5 +122,5 @@ func (s *Service) UpdateWorkspaceDetails(ctx context.Context, callerNodeID, wsID
 		return nil, err
 	}
 	s.announce(ctx, realtime.KindUpdated, ws.ID, ws.ID)
-	return &WorkspaceDetails{ID: ws.ID, Name: gotName, Description: gotDesc, CanManage: true}, nil
+	return s.withOwnership(ctx, &WorkspaceDetails{ID: ws.ID, Name: gotName, Description: gotDesc, CanManage: true}, ws, callerNodeID, ws.Type)
 }

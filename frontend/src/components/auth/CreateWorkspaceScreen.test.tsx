@@ -18,9 +18,9 @@ vi.mock('../../api/auth', async (orig) => ({
   leaveFor: vi.fn(),
 }))
 
-const open = () => renderAuthScreen(CreateWorkspaceScreen, '/onboarding')
+const open = (url = '/onboarding') => renderAuthScreen(CreateWorkspaceScreen, '/onboarding', url)
 const nameField = () => screen.findByLabelText(/Tên workspace/)
-const create = () => screen.getByRole('button', { name: 'Tạo workspace' })
+const create = () => screen.getByRole('button', { name: /^Tạo workspace/ })
 const posts = (path: string) => calls.filter((c) => c.method === 'POST' && c.path === path)
 
 beforeEach(() => {
@@ -31,27 +31,52 @@ beforeEach(() => {
 afterEach(() => vi.restoreAllMocks())
 
 describe('Create workspace', () => {
-  it('asks for a name and nothing else: no URL, no slug, no logo, no invites', async () => {
+  it('asks for type and name: no URL, no slug, no logo, no invites', async () => {
     await open()
     expect(await screen.findByRole('heading', { level: 1, name: 'Tạo workspace' })).toBeInTheDocument()
-    expect(await nameField()).toHaveFocus()
+    expect(await nameField()).toBeInTheDocument()
     expect(screen.getAllByRole('textbox')).toHaveLength(1)
+    expect(await screen.findByRole('radio', { name: /Cá nhân/ })).toBeChecked()
+    expect(screen.getByRole('radio', { name: /Tổ chức/ })).not.toBeChecked()
     expect(document.body.textContent).not.toMatch(/URL|enterpriseflow|logo/i)
     expect(screen.queryByLabelText(/Mời|email/i)).not.toBeInTheDocument()
     expect(document.querySelector('input[type="file"]')).toBeNull()
   })
 
-  it('sends only the name, trimmed, then opens the new workspace', async () => {
+  it('renders type cards defaulting to personal, switching to organization updates placeholder and button label', async () => {
+    await open()
+    const personalRadio = await screen.findByRole('radio', { name: /Cá nhân/ })
+    const orgRadio = screen.getByRole('radio', { name: /Tổ chức/ })
+    expect(personalRadio).toBeChecked()
+    expect(await nameField()).toHaveAttribute('placeholder', 'Ví dụ: Việc nhà, Nhóm chạy bộ')
+    expect(screen.getByRole('button', { name: 'Tạo workspace cá nhân' })).toBeInTheDocument()
+    expect(screen.getByText(/Workspace cá nhân chuyển thành workspace tổ chức được về sau/)).toBeInTheDocument()
+
+    await userEvent.click(orgRadio)
+    expect(orgRadio).toBeChecked()
+    expect(await nameField()).toHaveAttribute('placeholder', 'Ví dụ: Tổ Đối soát')
+    expect(screen.getByRole('button', { name: 'Tạo workspace tổ chức' })).toBeInTheDocument()
+  })
+
+  it('sends name and type personal by default, then opens the new workspace', async () => {
     const router = await open()
-    await userEvent.type(await nameField(), '  Tổ Đối soát  {Enter}')
+    await userEvent.type(await nameField(), '  Việc nhà  {Enter}')
     await waitFor(() => expect(where(router).path).toBe('/channels'))
-    expect(posts('/me/workspaces')).toEqual([{ method: 'POST', path: '/me/workspaces', body: { name: 'Tổ Đối soát' } }])
+    expect(posts('/me/workspaces')).toEqual([{ method: 'POST', path: '/me/workspaces', body: { name: 'Việc nhà', type: 'personal' } }])
     const created = world.workspaces[world.workspaces.length - 1]!
-    expect(created.name).toBe('Tổ Đối soát')
+    expect(created.name).toBe('Việc nhà')
     expect(where(router).search).toEqual({ ws: created.id })
     // The session now speaks for the workspace it just opened.
     expect(posts('/auth/switch-tenant')[0]?.body).toEqual({ tenant_id: created.id })
     expect(tenantIdFromToken(useAuthStore.getState().accessToken)).toBe(created.id)
+  })
+
+  it('sends type organization when selected', async () => {
+    const router = await open()
+    await userEvent.click(await screen.findByRole('radio', { name: /Tổ chức/ }))
+    await userEvent.type(await nameField(), 'Tổ Đối soát{Enter}')
+    await waitFor(() => expect(where(router).path).toBe('/channels'))
+    expect(posts('/me/workspaces')).toEqual([{ method: 'POST', path: '/me/workspaces', body: { name: 'Tổ Đối soát', type: 'organization' } }])
   })
 
   it('shows the button busy and sends one request on a double tap', async () => {
@@ -125,23 +150,53 @@ describe('Create workspace', () => {
     await waitFor(() => expect(where(router).path).toBe('/workspace-select'))
   })
 
-  it('shows the step bar only to someone who has no workspace yet', async () => {
-    world.summaries = []
-    await open()
-    expect(await screen.findByRole('img', { name: 'Bước 3 trên 3' })).toBeInTheDocument()
-  })
-
-  it('shows no step bar to someone who already has workspaces', async () => {
-    await open()
-    await nameField()
-    await waitFor(() => expect(calls.some((c) => c.path === '/me/workspaces')).toBe(true))
-    expect(screen.queryByRole('img', { name: /Bước/ })).not.toBeInTheDocument()
-  })
-
   it('shows no identifier', async () => {
     await open()
     await userEvent.type(await nameField(), 'Tổ Đối soát')
     expectNoIds()
+  })
+
+  describe('Back', () => {
+    const back = async () => userEvent.click(await screen.findByRole('button', { name: 'Quay lại' }))
+
+    it('returns to where the person came from, kept with its workspace', async () => {
+      const router = await open('/onboarding?from=%2Fchannels%3Fws%3Dp-1')
+      await back()
+      await waitFor(() => expect(where(router).path).toBe('/channels'))
+      expect(where(router).search).toEqual({ ws: 'p-1' })
+    })
+
+    it('goes to Chọn workspace when it was opened from there', async () => {
+      const router = await open()
+      await back()
+      await waitFor(() => expect(where(router).path).toBe('/workspace-select'))
+    })
+
+    it.each(['https://evil.example/x', '//evil.example/x', 'channels'])('ignores a return address that leaves the app: %s', async (from) => {
+      const router = await open(`/onboarding?from=${encodeURIComponent(from)}`)
+      await back()
+      await waitFor(() => expect(where(router).path).toBe('/workspace-select'))
+    })
+  })
+
+  it('puts the first focus on the selected type on desktop, not in the name field', async () => {
+    await open()
+    const radio = await screen.findByRole('radio', { name: /Cá nhân/ })
+    await waitFor(() => expect(radio).toHaveFocus())
+  })
+
+  it('outlines the selected type card with a ring width Tailwind generates (no ring-1.5)', async () => {
+    await open()
+    const radio = await screen.findByRole('radio', { name: /Cá nhân/ })
+    const card = radio.closest('label')!
+    expect(card).toHaveClass('ring-2', 'ring-accent')
+    expect(document.body.innerHTML).not.toMatch(/ring-1\.5/)
+  })
+
+  it('shows a focus ring on the type card that holds the keyboard focus', async () => {
+    await open()
+    const radio = await screen.findByRole('radio', { name: /Cá nhân/ })
+    expect(radio.closest('label')).toHaveClass('has-[:focus-visible]:outline-2')
   })
 })
 
@@ -192,3 +247,4 @@ describe('Create workspace: an address nobody has proved', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/xác minh email/)
   })
 })
+

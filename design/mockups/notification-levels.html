@@ -1,0 +1,927 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mức thông báo theo cuộc trò chuyện</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Chat đợt 4: mức thông báo theo cuộc trò chuyện + "Thread có tin mới" trên Trang chủ.
+   Addition to spaces.html (desktop) and chat-mobile.html (phone). Component classes (.app, .cnav, .rl, .rlw, .menu,
+   .conv, .chead, .toast, .phone, .sheet, .lsec …) are copied verbatim from those files so this page renders the same
+   primitives; only the classes under "new in this file" are new. */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+svg.i.xs { width: 14px; height: 14px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-ink-muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* review chrome (spaces.html) */
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 72ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; min-height: 36px; }
+.check input { width: 18px; height: 18px; accent-color: var(--color-accent); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.toc a:hover { background: var(--color-hover); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+.screen-head { display: grid; gap: 6px; max-width: 80ch; }
+.screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.demo .k { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-right: 4px; }
+.scroll { overflow-x: auto; border-radius: 12px; position: relative; }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 84ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+.need { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--color-info-wash); color: var(--color-info); font: 600 0.6875rem/1 var(--font-body); margin-left: 4px; vertical-align: 1px; }
+.decide { display: grid; gap: 10px; max-width: 92ch; padding: 16px 18px; border-radius: 12px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); }
+.decide h2 { font-size: 1.0625rem; }
+.decide ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; color: var(--color-ink-muted); }
+.decide b { color: var(--color-ink); }
+.q { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--color-warning-wash); color: var(--color-warning); font: 600 0.6875rem/1 var(--font-body); margin-left: 4px; vertical-align: 1px; }
+
+/* primitives (spaces.html) */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0; font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink);
+  transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-press) var(--ease-out); }
+.btn:hover { background: var(--color-line); }
+.btn:active { transform: scale(0.98); }
+.btn.ghost { background: transparent; } .btn.ghost:hover { background: var(--color-hover); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.demo .btn.sm { height: 36px; }
+.ibtn { position: relative; width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; transition: background-color var(--duration-quick) var(--ease-out); flex: none; }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+.ibtn .b { position: absolute; top: -3px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--color-accent); color: var(--color-on-accent); font: 600 0.625rem/16px var(--font-body); text-align: center; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--color-base); }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); position: relative; }
+.av.s20 { width: 20px; height: 20px; font-size: 0.5625rem; } .av.s24 { width: 24px; height: 24px; font-size: 0.625rem; } .av.s40 { width: 40px; height: 40px; font-size: 0.875rem; } .av.s44 { width: 44px; height: 44px; font-size: 0.875rem; } .av.s64 { width: 64px; height: 64px; font-size: 1.25rem; }
+.sp { --p: var(--color-person-4); width: 32px; height: 32px; border-radius: 8px; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 700 0.8125rem/1 var(--font-display); }
+.sp.s24 { width: 24px; height: 24px; font-size: 0.6875rem; border-radius: 7px; } .sp.s28 { width: 28px; height: 28px; border-radius: 8px; font-size: 0.75rem; } .sp.s40 { width: 40px; height: 40px; font-size: 1rem; border-radius: 10px; } .sp.s44 { width: 44px; height: 44px; border-radius: 12px; font-size: 0.9375rem; } .sp.s64 { width: 64px; height: 64px; border-radius: 16px; font-size: 1.5rem; }
+.pill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font: 600 0.75rem/1 var(--font-body); white-space: nowrap; }
+.pill.count { background: var(--color-accent); color: var(--color-on-accent); height: 18px; padding: 0 6px; font-size: 0.6875rem; min-width: 18px; justify-content: center; font-variant-numeric: tabular-nums; }
+.pill.idle { background: var(--color-sunk); color: var(--color-ink-muted); }
+.faces { display: flex; align-items: center; }
+.faces .av { box-shadow: 0 0 0 2px var(--color-raised); }
+.faces .av + .av { margin-left: -6px; }
+
+/* shell (spaces.html) */
+.app { display: grid; grid-template-columns: 232px 288px minmax(520px, 1fr); height: 720px; min-width: 1240px; background: var(--color-base); border-radius: 12px; overflow: hidden; position: relative; isolation: isolate; }
+.side { background: var(--color-sunk); display: grid; grid-template-rows: auto 1fr auto; padding: 12px; gap: 12px; min-height: 0; }
+.ws { display: flex; align-items: center; gap: 10px; padding: 6px 8px; }
+.ws .logo { width: 32px; height: 32px; border-radius: 10px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 0.9375rem/1 var(--font-display); }
+.ws .n { font: 700 1rem/1.2 var(--font-display); } .ws .s { font-size: 0.75rem; color: var(--color-ink-muted); }
+.nav { display: grid; gap: 2px; align-content: start; }
+.nav a { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 10px; color: var(--color-ink-muted); text-decoration: none; font-weight: 500; }
+.nav a:hover { background: var(--color-hover); color: var(--color-ink); }
+.nav a[aria-current="page"] { background: var(--color-raised); color: var(--color-ink); font-weight: 600; }
+.nav a .pill { margin-left: auto; }
+.me { display: flex; align-items: center; gap: 10px; padding: 8px; } .me .r { font-size: 0.75rem; color: var(--color-ink-muted); }
+.cnav { display: grid; grid-template-rows: auto 1fr; min-height: 0; background: var(--color-base); position: relative; }
+.cnav .top { padding: 16px 12px 8px; }
+.newchat { height: 44px; padding: 0 18px 0 14px; border-radius: 14px; background: var(--color-accent-wash); color: var(--color-ink); font: 600 0.9375rem/1 var(--font-body); border: 0; display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.newchat svg { color: var(--color-accent); }
+.cnav .body { overflow: auto; padding: 0 8px 16px; display: grid; gap: 2px; align-content: start; }
+.sec { display: flex; align-items: center; gap: 6px; padding: 10px 4px 2px 10px; height: 34px; color: var(--color-ink-muted); font: 600 0.8125rem/1 var(--font-body); }
+.sec.usr { color: var(--color-ink); }
+.rl { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 10px; color: var(--color-ink); text-decoration: none; min-width: 0; transition: background-color var(--duration-quick) var(--ease-out); }
+.rl:hover { background: var(--color-hover); }
+.rl[aria-current="page"] { background: var(--color-raised); font-weight: 600; }
+.rl.unread { font-weight: 600; }
+.rl .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl .end { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.rl .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-accent); flex: none; }
+.rl .h { color: var(--color-ink-muted); }
+.rlw { position: relative; }
+.rlw .more { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; opacity: 0; background: var(--color-hover); transition: opacity var(--duration-quick) var(--ease-out); }
+.rlw:hover .more, .rlw:focus-within .more, .rlw .more[aria-expanded="true"] { opacity: 1; }
+.rlw:hover .rl .end, .rlw:focus-within .rl .end, .rlw:has(.more[aria-expanded="true"]) .rl .end { visibility: hidden; }
+.content { display: grid; grid-template-rows: auto 1fr; min-width: 0; min-height: 0; background: var(--color-base); position: relative; }
+.chead { display: flex; align-items: center; gap: 12px; padding: 14px 20px 6px; min-width: 0; position: relative; }
+.chead .t { display: grid; gap: 1px; min-width: 0; }
+.chead h3 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chead .sub { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.chead .end { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+.filters { display: flex; gap: 6px; padding: 4px 0 10px; }
+.fchip { height: 32px; padding: 0 12px; border-radius: 8px; border: 0; background: var(--color-sunk); color: var(--color-ink); font: 500 0.8125rem/1 var(--font-body); cursor: pointer; }
+.fchip[aria-pressed="true"] { background: var(--color-accent-wash); font-weight: 600; }
+.feed { overflow: auto; padding: 4px 12px 16px; display: grid; align-content: start; gap: 2px; }
+.conv { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px; border-radius: 10px; text-decoration: none; color: inherit; transition: background-color var(--duration-quick) var(--ease-out); }
+.conv:hover { background: var(--color-raised); }
+.conv .nm { font-weight: 500; display: flex; gap: 6px; align-items: center; min-width: 0; }
+.conv .nm > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv .pv { color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv.unread .nm, .conv.unread .pv { font-weight: 600; color: var(--color-ink); }
+.conv .meta { display: grid; justify-items: end; gap: 4px; font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.menu { position: absolute; z-index: 10; min-width: 220px; background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 6px; display: grid; gap: 2px; }
+.menu button { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink); font: 500 0.875rem/1 var(--font-body); cursor: pointer; text-align: left; }
+.menu button:hover, .menu button:focus-visible { background: var(--color-hover); }
+.menu button svg { color: var(--color-ink-muted); }
+.menu hr { border: 0; height: 1px; background: var(--color-line); margin: 4px 6px; }
+.menu .mlabel { padding: 8px 10px 4px; font: 600 0.75rem/1 var(--font-body); color: var(--color-ink-muted); }
+.menu button[role="menuitemradio"][aria-checked="true"]::after { content: "✓"; margin-left: auto; color: var(--color-accent); font-weight: 700; }
+.toasts { position: absolute; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 50; justify-items: end; pointer-events: none; }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 12px; min-width: 280px; max-width: 420px; padding: 10px 10px 10px 14px; border-radius: 12px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); }
+.toast .ok { color: var(--color-success); } .toast .bad { color: var(--color-danger); } .toast .btn { margin-left: auto; }
+.toast p { line-height: 1.4; }
+.toast.err { box-shadow: var(--shadow-overlay), inset 3px 0 0 var(--color-danger); }
+.m { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; padding: 8px 14px 2px; }
+.who { display: flex; align-items: baseline; gap: 8px; } .who b { font-weight: 600; } .who time { font-size: 0.75rem; color: var(--color-ink-muted); }
+.txt { line-height: 1.55; width: fit-content; max-width: min(70ch, 85%); margin-top: 2px; padding: 7px 12px; border-radius: 16px; border-top-left-radius: 4px; background: var(--color-sunk); }
+.tsum { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; margin: 4px 0 2px -8px; padding: 0 10px 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink-muted); font: 400 0.8125rem/1.3 var(--font-body); cursor: pointer; }
+.tsum .n { color: var(--color-accent); font-weight: 600; }
+.tsum .faces .av { box-shadow: 0 0 0 2px var(--color-base); }
+.stream { overflow: auto; display: flex; flex-direction: column; justify-content: flex-end; padding: 8px 8px 20px; min-height: 0; }
+.dd { display: flex; align-items: center; gap: 12px; padding: 14px 14px 4px; font: 600 0.75rem/1 var(--font-body); color: var(--color-ink-muted); }
+.dd::before, .dd::after { content: ""; flex: 1; height: 1px; background: var(--color-line); }
+
+/* ===== new in this file ===== */
+/* muted state of a conversation row (navigator, Home feed, phone list) */
+.mute-ic { color: var(--color-ink-subtle); }
+.rl.off, .rl.off .t { color: var(--color-ink-muted); font-weight: 400; }
+.rl.off .sp, .rl.off .av, .conv.off .sp, .conv.off .av { opacity: 0.72; }
+.conv.off .nm { color: var(--color-ink-muted); }
+.pill.at { background: var(--color-accent); color: var(--color-on-accent); height: 18px; padding: 0 6px; font-size: 0.6875rem; gap: 2px; }
+.pill.at svg { width: 11px; height: 11px; stroke-width: 2.25; }
+
+/* group header: the name is the menu button (Google Chat) */
+.ttl { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; min-height: 36px; margin-left: -8px; padding: 2px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink); cursor: pointer; text-align: left; }
+.ttl:hover, .ttl[aria-expanded="true"] { background: var(--color-hover); }
+.ttl .chev { color: var(--color-ink-muted); transition: transform var(--duration-quick) var(--ease-out); }
+.ttl[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.lvbadge { display: inline-flex; align-items: center; color: var(--color-ink-muted); }
+.saving { display: inline-flex; align-items: center; gap: 6px; color: var(--color-ink-muted); }
+.spin { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--color-line); border-top-color: var(--color-accent); animation: spin 800ms linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* level menu: three menuitemradio with a description line */
+.menu.lv { width: 344px; }
+.menu button.lvi { display: grid; grid-template-columns: 16px minmax(0, 1fr) 16px; align-items: start; column-gap: 12px; min-height: 56px; padding: 10px 10px; line-height: 1.35; white-space: normal; }
+.menu button.lvi svg { margin-top: 1px; }
+.menu button.lvi[aria-checked="true"] svg { color: var(--color-accent); }
+.menu button.lvi .lt { font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.menu button.lvi .ld { grid-column: 2; font: 400 0.75rem/1.45 var(--font-body); color: var(--color-ink-muted); margin-top: 2px; }
+.menu button.lvi[role="menuitemradio"][aria-checked="true"]::after { grid-column: 3; grid-row: 1; margin: 0; }
+.tagdef { height: 18px; padding: 0 6px; border-radius: 999px; background: var(--color-sunk); color: var(--color-ink-muted); font: 600 0.6875rem/18px var(--font-body); }
+
+/* Home: Thread có tin mới */
+.home { overflow: auto; padding: 0 20px 16px; display: grid; align-content: start; gap: 6px; }
+.hsec { display: flex; align-items: center; gap: 8px; min-height: 36px; padding-top: 8px; }
+.hsec h4 { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); }
+.hsec .tog { margin-left: auto; }
+.tnew { display: grid; gap: 2px; padding: 4px; border-radius: 12px; background: var(--color-raised); }
+.tn { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; column-gap: 12px; align-items: start; width: 100%; min-height: 64px; padding: 10px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--color-ink); font: inherit; text-align: left; cursor: pointer; text-decoration: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.tn:hover { background: var(--color-hover); }
+.tn .src { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--color-ink-muted); min-width: 0; }
+.tn .src span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tn .tx { display: block; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+.tn .tx b { font-weight: 600; }
+.tn .tm { display: flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 0.8125rem; color: var(--color-ink-muted); }
+.tn .tm .n { color: var(--color-accent); font-weight: 600; }
+.tn .end { display: grid; justify-items: end; gap: 6px; font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; padding-top: 2px; }
+.tmore { justify-self: start; }
+.hdiv { display: flex; align-items: center; gap: 8px; min-height: 36px; padding-top: 10px; }
+.hdiv h4 { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); }
+.home .feed { padding: 0; overflow: visible; }
+
+/* state board */
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(344px, 1fr)); gap: 20px 24px; padding: 20px; background: var(--color-sunk); border-radius: 12px; min-width: 1240px; position: relative; }
+.spec { display: grid; gap: 10px; align-content: start; }
+.spec > small { font: 600 0.75rem/1.3 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); }
+.spec .menu { position: static; }
+.spec .toast { min-width: 0; }
+.spec .rowdemo { background: var(--color-base); border-radius: 12px; padding: 6px; display: grid; gap: 2px; }
+
+/* phone (chat-mobile.html) */
+.phones { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.ph { display: grid; gap: 10px; justify-items: center; min-width: 0; }
+.ph > small { color: var(--color-ink-muted); font-weight: 600; }
+.phone { width: min(390px, calc(100vw - 48px)); height: 800px; border-radius: 32px; background: var(--color-base); overflow: hidden; display: grid; grid-template-rows: auto auto 1fr auto; position: relative; isolation: isolate; box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; }
+.phone .ibtn { width: 44px; height: 44px; border-radius: 10px; }
+.sbar { display: flex; align-items: center; justify-content: space-between; height: 34px; padding: 0 22px; font: 600 0.8125rem/1 var(--font-body); }
+.sbar span:last-child { width: 22px; height: 10px; border-radius: 3px; background: currentColor; opacity: 0.8; }
+.topbar { display: flex; align-items: center; gap: 2px; min-height: 52px; padding: 0 4px 0 16px; min-width: 0; }
+.topbar .brand { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-ink-muted); font-size: 1rem; }
+.topbar .brand b { font: 700 1rem/1 var(--font-display); color: var(--color-ink); }
+.topbar.chat { padding-left: 4px; gap: 8px; }
+.topbar .ti { flex: 1; min-width: 0; display: grid; }
+.topbar .ti b { font: 700 1rem/1.25 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .ti small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.pbody { overflow: auto; min-height: 0; position: relative; overscroll-behavior: contain; }
+.tabbar { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--color-raised); padding: 4px 4px 18px; }
+.tabbar a { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 48px; font-size: 0.6875rem; line-height: 1rem; font-weight: 500; color: var(--color-ink-muted); text-decoration: none; }
+.tabbar a .ic { position: relative; display: grid; place-items: center; width: 48px; height: 24px; border-radius: 10px; }
+.tabbar a .ic svg.i { width: 20px; height: 20px; }
+.tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 600; }
+.tabbar a[aria-current="page"] .ic { background: var(--color-accent-wash); }
+.tabbar a .pill.count { position: absolute; top: -6px; right: 2px; box-shadow: 0 0 0 2px var(--color-raised); }
+.lsec { display: flex; align-items: center; gap: 6px; padding: 14px 16px 4px; color: var(--color-ink-muted); font: 600 0.8125rem/1 var(--font-body); }
+.lsec.usr { color: var(--color-ink); }
+.lsec .pill { margin-left: auto; }
+.phone .conv { grid-template-columns: 44px minmax(0, 1fr) auto; padding: 8px 16px; min-height: 64px; border-radius: 0; }
+.phone .conv .pv { font-size: 0.8125rem; }
+.phone .tnew { margin: 0 12px; }
+.phone .tn { grid-template-columns: 28px minmax(0, 1fr) auto; min-height: 68px; }
+.phone .tmore { margin: 2px 12px 0; min-height: 44px; }
+.scrim { position: absolute; inset: 0; z-index: 30; background: var(--color-scrim); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--color-overlay); border-radius: 22px 22px 0 0; box-shadow: var(--shadow-overlay); padding: 8px 8px 24px; display: grid; gap: 4px; max-height: 88%; overflow: auto; }
+.sheet .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-line); justify-self: center; margin-bottom: 6px; }
+.sheet .item { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 14px; border: 0; border-radius: 12px; background: transparent; color: var(--color-ink); font: 500 1rem/1.3 var(--font-body); text-align: left; cursor: pointer; }
+.sheet .item:active, .sheet .item:hover { background: var(--color-hover); }
+.sheet .item svg { color: var(--color-ink-muted); }
+.sheet hr { border: 0; height: 1px; background: var(--color-line); margin: 4px 14px; }
+.sheet .shead { padding: 2px 14px 8px; display: grid; gap: 2px; }
+.sheet .shead b { font: 700 1.0625rem/1.3 var(--font-display); }
+.sheet .shead small { color: var(--color-ink-muted); font-size: 0.8125rem; }
+/* phone level picker: radios in a sheet */
+.lvr { display: grid; grid-template-columns: 20px minmax(0, 1fr) 22px; column-gap: 14px; align-items: start; min-height: 64px; padding: 12px 14px; border: 0; border-radius: 12px; background: transparent; color: var(--color-ink); text-align: left; font: inherit; cursor: pointer; width: 100%; }
+.lvr:hover { background: var(--color-hover); }
+.lvr > svg { margin-top: 2px; color: var(--color-ink-muted); width: 20px; height: 20px; }
+.lvr[aria-checked="true"] > svg { color: var(--color-accent); }
+.lvr .lt { font: 600 1rem/1.35 var(--font-body); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.lvr .ld { font-size: 0.8125rem; line-height: 1.45; color: var(--color-ink-muted); margin-top: 2px; }
+.lvr .rd { width: 22px; height: 22px; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--color-ink-subtle); margin-top: 1px; transition: box-shadow var(--duration-quick) var(--ease-out); }
+.lvr[aria-checked="true"] .rd { box-shadow: inset 0 0 0 2px var(--color-accent), inset 0 0 0 6px var(--color-overlay), inset 0 0 0 11px var(--color-accent); }
+/* phone info screen */
+.info-h { display: grid; justify-items: center; gap: 8px; padding: 12px 16px 20px; text-align: center; }
+.info-h b { font: 700 1.25rem/1.25 var(--font-display); display: inline-flex; align-items: center; gap: 6px; }
+.info-h small { color: var(--color-ink-muted); }
+.irows { display: grid; margin: 0 12px; padding: 4px; border-radius: 14px; background: var(--color-raised); }
+.irow { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; column-gap: 12px; align-items: center; min-height: 56px; padding: 8px 10px; border: 0; border-radius: 10px; background: transparent; color: var(--color-ink); font: 500 1rem/1.3 var(--font-body); text-align: left; cursor: pointer; width: 100%; }
+.irow:hover { background: var(--color-hover); }
+.irow .ic { width: 32px; height: 32px; border-radius: 9px; background: var(--color-sunk); display: grid; place-items: center; color: var(--color-ink-muted); }
+.irow .v { display: block; font: 400 0.8125rem/1.4 var(--font-body); color: var(--color-ink-muted); margin-top: 1px; }
+.irow > svg { color: var(--color-ink-subtle); }
+.ptoasts { position: absolute; left: 12px; right: 12px; bottom: 96px; z-index: 40; display: grid; gap: 8px; pointer-events: none; }
+.ptoasts .toast { min-width: 0; max-width: none; }
+.ptoasts .toast .btn { min-height: 44px; height: 44px; }
+@media (max-width: 767px) {
+  .toast .btn { min-height: 44px; height: 44px; }
+}
+
+/* motion */
+.menu.enter { animation: pop-in var(--duration-quick) var(--ease-out) both; transform-origin: top left; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+.toast.enter { animation: toast-in var(--duration-base) var(--ease-out) both; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+.up { animation: up var(--duration-layout) var(--ease-out-expo) both; }
+@keyframes up { from { transform: translateY(100%); } }
+.fade { animation: fade var(--duration-base) var(--ease-out) both; }
+@keyframes fade { from { opacity: 0; } }
+html.reduce .menu.enter, html.reduce .toast.enter, html.reduce .up, html.reduce .fade { animation: fade 120ms linear both; }
+html.reduce .spin { animation: pulse 1200ms linear infinite; border-top-color: var(--color-line); background: var(--color-accent); }
+@keyframes pulse { 50% { opacity: 0.35; } }
+@media (prefers-reduced-motion: reduce) {
+  .menu.enter, .toast.enter, .up, .fade { animation: fade 120ms linear both; }
+  .spin { animation: pulse 1200ms linear infinite; border-top-color: var(--color-line); background: var(--color-accent); }
+  .ttl .chev { transition: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M11.53 2.3a.53.53 0 0 1 .94 0l2.31 4.68a2.12 2.12 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.12 2.12 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.12 2.12 0 0 0-1.97 0L6.4 21.01a.53.53 0 0 1-.77-.56l.88-5.14a2.12 2.12 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.12 2.12 0 0 0 1.6-1.16z"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></symbol>
+  <symbol id="i-more-h" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-threads" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-bell-ring" viewBox="0 0 24 24"><path d="M10.27 21a2 2 0 0 0 3.46 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></symbol>
+  <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-sheet" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/></symbol>
+</svg>
+
+<div class="page">
+<header>
+  <h1>Mức thông báo theo cuộc trò chuyện</h1>
+  <p>Chat đợt 4 (phase 09), bổ sung cho <code>spaces.html</code> và <code>chat-mobile.html</code>. Mỗi người tự chọn cho từng nhóm một trong ba mức như Google Chat: <b>Tất cả</b>, <b>Tin chính và thread đang theo dõi</b> (mặc định), <b>Tắt</b>. Tin nhắn trực tiếp chỉ có Tất cả / Tắt. Trang chủ có thêm mục <b>Thread có tin mới</b> phía trên danh sách cuộc trò chuyện. Mọi số trên trang tính từ cùng một trạng thái nên đổi ở đâu cũng thấy ngay ở mọi chỗ.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div>
+    <label class="check"><input type="checkbox" id="reduce">Giảm chuyển động</label>
+    <label class="check"><input type="checkbox" id="slow">Mạng chậm (lưu mất 1,5s)</label>
+    <label class="check"><input type="checkbox" id="fail">Lần lưu tới bị lỗi</label>
+  </div>
+  <nav class="toc" aria-label="Các màn"><a href="#rules">Quy tắc</a><a href="#d-home">Trang chủ và điều hướng</a><a href="#d-group">Menu ở header nhóm</a><a href="#states">Các trạng thái</a><a href="#p-list">Điện thoại: danh sách</a><a href="#p-info">Điện thoại: thông tin nhóm</a></nav>
+</header>
+
+<!-- ============================ RULES ============================ -->
+<section class="decide" id="rules" aria-labelledby="h-rules">
+  <h2 id="h-rules">Ba mức làm gì (đề xuất)</h2>
+  <ol>
+    <li><b>Tất cả</b>: mọi tin trong luồng và mọi trả lời trong mọi thread của nhóm đều tính vào số chưa đọc, có thông báo trong app và (nếu Cài đặt cho phép) thông báo đẩy. Thread chưa theo dõi vẫn <b>không</b> có pill "mới" trên hàng tóm tắt: theo dõi vẫn là tín hiệu riêng của thread.</li>
+    <li><b>Tin chính và thread đang theo dõi</b> (mặc định, giữ đúng hành vi hiện tại): tin trong luồng + trả lời trong thread bạn theo dõi tính vào số chưa đọc; đẩy cho trả lời thread theo dõi và khi được nhắc tên. Trả lời ở thread khác chỉ cập nhật số trả lời.</li>
+    <li><b>Tắt</b>: không tính số chưa đọc, không lớp phủ màu khi có tin, không thông báo. <b>Vẫn báo khi có người nhắc tên bạn</b> (pill "@" trên hàng, thông báo loại "Được nhắc tên") <span class="q">câu hỏi mở</span>. Thread của nhóm đã Tắt không lên "Thread có tin mới".</li>
+    <li><b>Tin nhắn trực tiếp</b>: chỉ <b>Tất cả</b> (mặc định) / <b>Tắt</b>; ở DM mọi tin đều gửi cho bạn nên mức giữa không có nghĩa. Dùng cùng một menu, hai lựa chọn.</li>
+    <li><b>Bật thông báo</b> (hàng điều hướng, khi đang Tắt) đưa về mức mặc định; <b>Hoàn tác</b> trên toast đưa về đúng mức trước đó.</li>
+    <li>Số tổng (Tin nhắn ở thanh bên, Trang chủ, tiêu đề mục thu gọn, tab điện thoại) cộng theo mức của từng cuộc trò chuyện; cuộc trò chuyện Tắt chỉ góp số lần nhắc tên.</li>
+  </ol>
+</section>
+
+<!-- ============================ DESKTOP HOME ============================ -->
+<section class="screen" id="d-home" aria-labelledby="h-dhome">
+  <div class="screen-head">
+    <h2 id="h-dhome">1 · Trang chủ, "Thread có tin mới" và hàng đã tắt thông báo (1440)</h2>
+    <p>Hàng đã Tắt: tên mờ không đậm, icon chuông gạch 14 ở cuối hàng thay số chưa đọc; ai nhắc tên bạn thì thêm pill "@". Menu ⋯ của hàng đổi "Tắt thông báo" ↔ "Bật thông báo". Phía trên danh sách Trang chủ là các thread bạn theo dõi có trả lời chưa đọc, mới nhất trên.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="row-menu" data-k="hopdong" data-frame="a">Menu ⋯ của Hợp đồng đối tác (đang Tắt)</button>
+    <button class="btn sm" type="button" data-act="row-menu" data-k="doisoat" data-frame="a">Menu ⋯ của Đối soát giao dịch</button>
+    <button class="btn sm" type="button" data-act="read-threads">Đọc hết thread</button>
+    <button class="btn sm" type="button" data-act="reset">Đặt lại</button>
+  </div>
+  <div class="scroll">
+    <div class="app" id="app-a">
+      <aside class="side" aria-label="Điều hướng chính">
+        <div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div>
+        <nav class="nav">
+          <a href="#d-home" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum" data-total></span></a>
+          <a href="#d-home"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a>
+          <a href="#d-home"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a>
+          <a href="#d-home"><svg class="i"><use href="#i-box"/></svg>Tài sản</a>
+          <a href="#d-home"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a>
+        </nav>
+        <div class="nav">
+          <a href="#d-home"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a>
+          <div class="me"><span class="av" style="--p:var(--color-person-7)">TH</span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div>
+        </div>
+      </aside>
+      <div class="cnav">
+        <div class="top"><button class="newchat" type="button"><svg class="i"><use href="#i-pen"/></svg>Trò chuyện mới</button></div>
+        <div class="body" data-nav="a" data-current="home"></div>
+        <div class="menu" id="row-menu-a" role="menu" hidden></div>
+      </div>
+      <div class="content">
+        <div class="chead"><div class="t"><h3>Trang chủ</h3><div class="sub">Mọi cuộc trò chuyện của bạn trong Khối Vận hành</div></div></div>
+        <div class="home">
+          <div id="tnew-a-wrap">
+            <div class="hsec"><h4 id="tnew-a-h">Thread có tin mới</h4><span class="pill count" data-tcount></span><button class="btn ghost sm tog" type="button" aria-expanded="true" aria-controls="tnew-a" data-act="tnew-toggle">Thu gọn</button></div>
+            <div class="tnew" id="tnew-a" role="list" aria-labelledby="tnew-a-h" data-tlist="a"></div>
+          </div>
+          <div class="hdiv"><h4>Cuộc trò chuyện</h4></div>
+          <div class="filters" role="group" aria-label="Lọc"><button class="fchip" type="button" aria-pressed="true">Tất cả</button><button class="fchip" type="button" aria-pressed="false">Chưa đọc</button><button class="fchip" type="button" aria-pressed="false">Nhóm</button><button class="fchip" type="button" aria-pressed="false">Trực tiếp</button></div>
+          <div class="feed" data-feed></div>
+        </div>
+      </div>
+      <div class="toasts" id="toasts-a" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Hàng đã Tắt</b>: tên <code>--color-ink-muted</code> 400 (kể cả khi có tin chưa đọc), icon nhóm/avatar mờ 72%, cuối hàng icon <b>chuông gạch 14</b> <code>--color-ink-subtle</code>; trình đọc màn hình nghe "…, đã tắt thông báo". Không pill số. Có người nhắc tên → <b>pill "@"</b> accent (cùng cỡ pill đếm) đứng trước chuông gạch, <code>aria-label</code> "1 lần nhắc tên bạn".</li>
+    <li><b>Menu ⋯ của hàng</b>: mục cuối là <b>Tắt thông báo</b> (chuông gạch) khi mức đang khác Tắt, và <b>Bật thông báo</b> (chuông) khi đang Tắt. Không có submenu mức ở đây: ba mức nằm ở header nhóm; menu hàng chỉ là lối tắt bật/tắt.</li>
+    <li><b>Thread có tin mới</b>: chỉ thread bạn <b>đang theo dõi</b> có trả lời chưa đọc, của cuộc trò chuyện không Tắt; xếp theo <code>last_reply_at</code> mới nhất trên; tối đa 3 mục, còn lại sau nút "Xem thêm N thread". Mỗi mục là một <code>button</code> trong <code>role="list"</code>: icon nhóm 24 · dòng nguồn (tên nhóm, 12px mờ) · tác giả tin gốc 600 + tin gốc 1 dòng · cụm Avatar 20 người trả lời + "N trả lời mới" accent + "Lần cuối 09:40"; cuối hàng pill đếm. Bấm → mở nhóm, cuộn tới tin gốc và mở panel thread (§3 spaces.html); pill tắt khi panel mở như hiện nay.</li>
+    <li>Không có thread nào → cả mục ẩn (không trạng thái rỗng), danh sách cuộc trò chuyện lên sát header. Thu gọn mục được, nhớ theo thiết bị như mục ở cột điều hướng.</li>
+    <li>Cuộc trò chuyện Tắt vẫn xếp theo hoạt động mới nhất trên Trang chủ nhưng <b>không mang lớp phủ màu người gửi</b> và không trượt lên với hiệu ứng: im lặng là đúng nghĩa của Tắt.</li>
+  </ol>
+</section>
+
+<!-- ============================ DESKTOP GROUP HEADER ============================ -->
+<section class="screen" id="d-group" aria-labelledby="h-dgroup">
+  <div class="screen-head">
+    <h2 id="h-dgroup">2 · Menu thông báo ở header nhóm (1440)</h2>
+    <p>Tên nhóm ở header là nút mở menu (chevron đã có trong spaces.html §3, nay có nội dung). Đầu menu là nhóm "Thông báo" gồm ba <code>menuitemradio</code> có một dòng giải thích. Mức khác mặc định hiện icon nhỏ sau tên nhóm để biết trạng thái mà không cần mở menu.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="group-menu">Mở menu nhóm</button>
+    <button class="btn sm" type="button" data-act="set" data-k="doisoat" data-lv="all" data-frame="b">Chọn Tất cả</button>
+    <button class="btn sm" type="button" data-act="set" data-k="doisoat" data-lv="main" data-frame="b">Chọn mặc định</button>
+    <button class="btn sm" type="button" data-act="set" data-k="doisoat" data-lv="off" data-frame="b">Chọn Tắt</button>
+    <button class="btn sm" type="button" data-act="dm-view">Xem như tin nhắn trực tiếp</button>
+  </div>
+  <div class="scroll">
+    <div class="app" id="app-b">
+      <aside class="side" aria-label="Điều hướng chính">
+        <div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div>
+        <nav class="nav">
+          <a href="#d-group" aria-current="page"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum" data-total></span></a>
+          <a href="#d-group"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a>
+          <a href="#d-group"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a>
+          <a href="#d-group"><svg class="i"><use href="#i-box"/></svg>Tài sản</a>
+          <a href="#d-group"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a>
+        </nav>
+        <div class="nav">
+          <a href="#d-group"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a>
+          <div class="me"><span class="av" style="--p:var(--color-person-7)">TH</span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div>
+        </div>
+      </aside>
+      <div class="cnav">
+        <div class="top"><button class="newchat" type="button"><svg class="i"><use href="#i-pen"/></svg>Trò chuyện mới</button></div>
+        <div class="body" data-nav="b" data-current="doisoat"></div>
+        <div class="menu" id="row-menu-b" role="menu" hidden></div>
+      </div>
+      <div class="content">
+        <div class="chead" id="chead-b"></div>
+        <div class="stream" id="stream-b">
+          <div class="dd" role="separator">Hôm nay</div>
+          <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>09:12</time></div><p class="txt">File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.</p></div></div>
+          <div class="m"><span class="av" style="--p:var(--color-person-1)">QV</span><div><div class="who"><b>Lê Quang Vinh</b><time>09:31</time></div><p class="txt">Ảnh chụp sao kê 3 giao dịch lệch, mọi người đối chiếu giúp em với lệnh hoàn tiền.</p>
+            <button class="tsum" type="button" aria-label="Thread, 4 trả lời, lần cuối 09:40, 2 trả lời mới"><span class="faces"><span class="av s20" style="--p:var(--color-person-6)">TL</span><span class="av s20" style="--p:var(--color-person-5)">MĐ</span></span><span class="n">4 trả lời</span><span>Lần cuối 09:40</span><span class="pill count">2 mới</span></button></div></div>
+          <div class="m"><span class="av" style="--p:var(--color-person-6)">TL</span><div><div class="who"><b>Nguyễn Thu Lan</b><time>09:44</time></div><p class="txt">Em gửi biên bản đối chiếu tháng 9 lên thư mục chung rồi ạ.</p></div></div>
+        </div>
+      </div>
+      <div class="toasts" id="toasts-b" role="status" aria-live="polite"></div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Nút tên nhóm</b> (<code>aria-haspopup="menu"</code>, <code>aria-expanded</code>, cao ≥ 36): tên + icon trạng thái + chevron 16 xoay 180° khi mở. Menu rộng 344, mở dưới nút (popover 160ms). Thứ tự: nhãn <b>Thông báo</b> · Tất cả · Tin chính và thread đang theo dõi (tag "Mặc định") · Tắt · divider · Gắn sao · Thông tin nhóm. Tin nhắn trực tiếp: cùng menu, chỉ hai lựa chọn (bấm "Xem như tin nhắn trực tiếp").</li>
+    <li><b>Mỗi lựa chọn</b> là <code>menuitemradio</code> trong <code>role="group"</code> có <code>aria-labelledby</code> = nhãn "Thông báo"; <code>aria-checked</code> trên mục đang chọn (✓ accent ở mép phải, icon mức đổi sang accent); icon đầu dòng: chuông reo / chuông / chuông gạch. Dòng giải thích 12px mờ là <code>aria-describedby</code> của mục. Bàn phím: mở menu → focus vào mục đang chọn; ↑/↓ đi vòng, Home/End, Enter/Space chọn, Esc đóng và trả focus về nút tên.</li>
+    <li><b>Icon sau tên nhóm</b> (16, <code>--color-ink-muted</code>): Tắt → chuông gạch, Tất cả → chuông reo, mặc định → không có. Có chữ ẩn ("đã tắt thông báo" / "thông báo mọi tin").</li>
+    <li><b>Lưu</b>: chọn là đóng menu và đổi ngay (lạc quan) ở header, hàng điều hướng, Trang chủ, số tổng. Quá 300ms chưa xong thì dòng phụ header thêm "· Đang lưu…" với vòng quay 12. Xong: toast "Đã … thông báo của “Đối soát giao dịch”" + <b>Hoàn tác</b> (5s). Lỗi: trả về mức cũ ở mọi chỗ + toast lỗi "Chưa đổi được thông báo của “…”. Kiểm tra kết nối rồi thử lại." + <b>Thử lại</b> (<code>role="alert"</code>, không tự ẩn trước 8s).</li>
+    <li>Không đổi gì trong panel thread: nút Theo dõi / Đang theo dõi vẫn là cách chọn từng thread; mức nhóm chỉ quyết định thread theo dõi có tính vào số và có báo hay không.</li>
+  </ol>
+</section>
+
+<!-- ============================ STATE BOARD ============================ -->
+<section class="screen" id="states" aria-labelledby="h-states">
+  <div class="screen-head">
+    <h2 id="h-states">3 · Các trạng thái (bảng tĩnh)</h2>
+    <p>Từng mức được chọn, menu tin nhắn trực tiếp, hàng điều hướng ở mỗi trạng thái và các toast. Bảng tĩnh để duyệt nhanh; hành vi thật ở §1, §2.</p>
+  </div>
+  <div class="scroll"><div class="board" id="board"></div></div>
+</section>
+
+<!-- ============================ PHONE LIST ============================ -->
+<section class="screen" id="p-list" aria-labelledby="h-plist">
+  <div class="screen-head">
+    <h2 id="h-plist">4 · Điện thoại: tab Tin nhắn (390)</h2>
+    <p>Trên điện thoại tab Tin nhắn là Trang chủ: "Thread có tin mới" nằm đầu danh sách (tối đa 2 mục + "Xem thêm"). Hàng đã Tắt dùng cùng dấu hiệu như máy tính. Nhấn giữ hàng mở sheet có Tắt / Bật thông báo.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="press" data-k="hopdong">Nhấn giữ Hợp đồng đối tác</button>
+    <button class="btn sm" type="button" data-act="press" data-k="yen">Nhấn giữ Phạm Hải Yến</button>
+    <button class="btn sm" type="button" data-act="close-sheet" data-ph="p1">Đóng sheet</button>
+  </div>
+  <div class="phones">
+    <div class="ph"><small>Tin nhắn · Thread có tin mới</small>
+      <div class="phone" id="p1">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i"><use href="#i-search"/></svg></button></div>
+        <div class="pbody">
+          <div id="tnew-p-wrap">
+            <div class="lsec"><span id="tnew-p-h">Thread có tin mới</span><span class="pill count" data-tcount></span></div>
+            <div class="tnew" role="list" aria-labelledby="tnew-p-h" data-tlist="p"></div>
+          </div>
+          <div data-plist></div>
+          <div style="height:96px"></div>
+        </div>
+        <nav class="tabbar" aria-label="Điều hướng di động"><a href="#p-list" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg><span class="pill count" data-total></span></span>Tin nhắn</a><a href="#p-list"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#p-list"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count">2</span></span>Phê duyệt</a><a href="#p-list"><span class="ic"><svg class="i"><use href="#i-grid"/></svg></span>Thêm</a></nav>
+        <div class="scrim" data-act="close-sheet" data-ph="p1" hidden></div>
+        <div class="sheet" id="p1-sheet" role="dialog" aria-modal="true" aria-labelledby="p1-sheet-t" hidden></div>
+        <div class="ptoasts" id="toasts-p1" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>Mục thread: hàng ≥ 68, icon nhóm 28, cả hàng là vùng chạm. Chạm → mở nhóm, rồi thread toàn màn trượt lên trên luồng (280ms); quay lại từ thread về luồng nhóm, quay lại lần nữa về danh sách.</li>
+    <li>Sheet nhấn giữ: Chuyển tới mục · Mục mới… · Bỏ khỏi mục (khi đang ở trong mục) · Gắn sao · <b>Tắt thông báo / Bật thông báo</b>, hàng 52. Chọn xong sheet đóng, toast nổi trên thanh đáy.</li>
+    <li>Số trên tab Tin nhắn cộng theo cùng quy tắc mức như máy tính.</li>
+  </ol>
+</section>
+
+<!-- ============================ PHONE INFO ============================ -->
+<section class="screen" id="p-info" aria-labelledby="h-pinfo">
+  <div class="screen-head">
+    <h2 id="h-pinfo">5 · Điện thoại: Thông tin nhóm → Thông báo (390)</h2>
+    <p>Nút Thông tin (hoặc chạm tên nhóm) ở thanh trên của luồng mở màn Thông tin nhóm. Hàng đầu là <b>Thông báo</b> với mức hiện tại; chạm mở sheet chọn mức (radio, hàng 64).</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="lv-sheet">Mở sheet Thông báo</button>
+    <button class="btn sm" type="button" data-act="close-sheet" data-ph="p2">Đóng sheet</button>
+    <button class="btn sm" type="button" data-act="p2-conv" data-k="doisoat">Nhóm Đối soát giao dịch</button>
+    <button class="btn sm" type="button" data-act="p2-conv" data-k="vinh">Tin nhắn trực tiếp Lê Quang Vinh</button>
+  </div>
+  <div class="phones">
+    <div class="ph"><small>Thông tin · sheet mức thông báo</small>
+      <div class="phone" id="p2" style="grid-template-rows:auto auto 1fr">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="topbar chat"><button class="ibtn" type="button" aria-label="Quay lại cuộc trò chuyện"><svg class="i"><use href="#i-back"/></svg></button><span class="ti"><b id="p2-title">Thông tin nhóm</b></span></div>
+        <div class="pbody" id="p2-body"></div>
+        <div class="scrim" data-act="close-sheet" data-ph="p2" hidden></div>
+        <div class="sheet" id="p2-sheet" role="dialog" aria-modal="true" aria-labelledby="p2-sheet-t" hidden></div>
+        <div class="ptoasts" id="toasts-p2" role="status" aria-live="polite" style="bottom:24px"></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>Hàng <b>Thông báo</b> (≥ 56): icon theo mức trong ô 32 nền sunk · "Thông báo" · dưới là tên mức 13px mờ · chevron. Đang lưu → dòng dưới là "Đang lưu…" + vòng quay; lỗi → trả về mức cũ + toast lỗi có Thử lại.</li>
+    <li><b>Sheet</b>: tiêu đề "Thông báo" + tên cuộc trò chuyện; <code>role="radiogroup"</code>, mỗi hàng <code>role="radio"</code> + <code>aria-checked</code>, hàng 64 với icon mức, tên mức (+ tag Mặc định), dòng giải thích, nút radio 22 bên phải. Chạm chọn → radio đổi ngay, sheet đóng sau 160ms, lưu như máy tính.</li>
+    <li>Thanh trên của luồng: nhóm đã Tắt có chuông gạch 14 sau tên (như header máy tính).</li>
+    <li>Các hàng khác của màn Thông tin (Thành viên, Gắn sao) chỉ để định vị; màn này chưa có mockup đầy đủ.</li>
+  </ol>
+</section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var root = document.documentElement;
+  function $(id) { return document.getElementById(id); }
+  function replay(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-theme-set');
+      if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+      document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    });
+  });
+  $('reduce').addEventListener('change', function (e) { root.classList.toggle('reduce', e.target.checked); });
+
+  // ---- levels ----
+  var LV = {
+    all:  { t: 'Tất cả', i: 'i-bell-ring', d: 'Mọi tin và mọi trả lời trong thread đều tính vào số chưa đọc và báo cho bạn.' },
+    main: { t: 'Tin chính và thread đang theo dõi', i: 'i-bell', d: 'Tin mới trong luồng và trả lời trong thread bạn theo dõi. Trả lời ở thread khác chỉ cập nhật số trả lời.' },
+    off:  { t: 'Tắt', i: 'i-bell-off', d: 'Không tính số chưa đọc, không thông báo. Vẫn báo khi có người nhắc tên bạn.' }
+  };
+  var LV_DM = {
+    all: { t: 'Tất cả', i: 'i-bell-ring', d: 'Mọi tin nhắn đều tính vào số chưa đọc và báo cho bạn.' },
+    off: { t: 'Tắt', i: 'i-bell-off', d: 'Không tính số chưa đọc, không thông báo.' }
+  };
+  function levels(c) { return c.kind === 'dm' ? LV_DM : LV; }
+  function defLevel(c) { return c.kind === 'dm' ? 'all' : 'main'; }
+
+  // u: unread main messages (m), replies in followed threads (f), replies in other threads (o); at: mentions of me
+  var SEED = [
+    { k: 'doisoat', kind: 'sp', sec: 'q4', name: 'Đối soát giao dịch', p: 4, ini: 'Đ', lv: 'main', u: { m: 2, f: 5, o: 4 }, at: 0, pv: 'Nguyễn Thu Lan: Em gửi biên bản đối chiếu tháng 9 lên thư mục chung rồi ạ', t: '09:44', members: 14 },
+    { k: 'hopdong', kind: 'sp', sec: 'q4', name: 'Hợp đồng đối tác', p: 8, ini: 'H', lv: 'off', u: { m: 4, f: 0, o: 2 }, at: 0, pv: 'Đỗ Văn Khải: Bản ký của ngân hàng đối tác đã về', t: '09:02', members: 6 },
+    { k: 'lan', kind: 'dm', sec: 'q4', name: 'Nguyễn Thu Lan', p: 6, ini: 'TL', lv: 'all', u: { m: 0, f: 0, o: 0 }, at: 0, pv: 'Bạn: Ok em, chiều chị gửi', t: '08:50' },
+    { k: 'yen', kind: 'dm', sec: 'dm', name: 'Phạm Hải Yến', p: 3, ini: 'HY', lv: 'all', u: { m: 1, f: 0, o: 0 }, at: 0, pv: 'Chị xem giúp em đề nghị tạm ứng tháng 10 nhé', t: '08:31' },
+    { k: 'vinh', kind: 'dm', sec: 'dm', name: 'Lê Quang Vinh', p: 1, ini: 'QV', lv: 'off', u: { m: 2, f: 0, o: 0 }, at: 0, pv: 'Tối nay em gửi bảng kê bổ sung', t: 'Hôm qua' },
+    { k: 'thongbao', kind: 'sp', sec: 'sp', name: 'Thông báo khối', p: 5, ini: 'T', lv: 'all', u: { m: 1, f: 1, o: 4 }, at: 0, pv: 'Trần Minh Đức: Lịch trực Tết 2027 đã lên Tài liệu', t: '09:12' },
+    { k: 'vanhanh', kind: 'sp', sec: 'sp', name: 'Vận hành chung', p: 2, ini: 'V', lv: 'off', u: { m: 7, f: 2, o: 3 }, at: 1, pv: 'Đỗ Văn Khải: @Lê Thị Hoa chị duyệt giúp lịch bảo trì', t: '07:58' }
+  ];
+  var THREADS = [
+    { g: 'doisoat', a: 'Lê Quang Vinh', x: 'Ảnh chụp sao kê 3 giao dịch lệch, mọi người đối chiếu giúp em với lệnh hoàn tiền.', n: 2, last: '09:40', f: [['TL', 6], ['MĐ', 5]] },
+    { g: 'thongbao', a: 'Trần Minh Đức', x: 'Lịch trực Tết 2027 đã lên Tài liệu, mọi người đăng ký ca trước thứ Sáu.', n: 1, last: '09:12', f: [['HY', 3]] },
+    { g: 'vanhanh', a: 'Đỗ Văn Khải', x: 'Lịch bảo trì hệ thống thanh toán cuối tuần này.', n: 2, last: '08:15', f: [['QV', 1]] },
+    { g: 'doisoat', a: 'Bạn', x: 'Biên bản đối chiếu tháng 9 cần chữ ký của hai bên trước 15/10.', n: 3, last: 'Hôm qua 17:05', f: [['QV', 1], ['TL', 6], ['MĐ', 5]] },
+    { g: 'yen', a: 'Phạm Hải Yến', x: 'Đề nghị tạm ứng công tác Đà Nẵng, chị xem giúp em phần chi phí đi lại.', n: 1, last: '07/10', f: [['HY', 3]] }
+  ];
+  var C, threadsRead = false, tnewMore = { a: false, p: false }, p2Key = 'doisoat';
+  function reset() { C = SEED.map(function (c) { return Object.assign({}, c, { u: Object.assign({}, c.u) }); }); threadsRead = false; }
+  reset();
+  function byK(k) { return C.filter(function (c) { return c.k === k; })[0]; }
+  function count(c) { return c.lv === 'off' ? 0 : c.lv === 'all' ? c.u.m + c.u.f + c.u.o : c.u.m + c.u.f; }
+  function total() { return C.reduce(function (s, c) { return s + count(c) + (c.lv === 'off' ? c.at : 0); }, 0); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (ch) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]; }); }
+  function icon(c, size) {
+    return c.kind === 'dm' ? '<span class="av ' + size + '" style="--p:var(--color-person-' + c.p + ')">' + c.ini + '</span>'
+      : '<span class="sp ' + size + '" style="--p:var(--color-person-' + c.p + ')">' + c.ini + '</span>';
+  }
+  function endBits(c) {
+    var n = count(c), h = '';
+    if (c.lv === 'off') {
+      if (c.at) h += '<span class="pill at" aria-label="' + c.at + ' lần nhắc tên bạn"><svg class="i"><use href="#i-at"/></svg>' + c.at + '</span>';
+      h += '<svg class="i xs mute-ic" aria-hidden="true"><use href="#i-bell-off"/></svg><span class="sr">đã tắt thông báo</span>';
+    } else if (n) h += '<span class="pill count" aria-label="' + n + ' chưa đọc">' + n + '</span>';
+    return h;
+  }
+
+  // ---- desktop navigator ----
+  var SECS = [['q4', 'Quyết toán quý 4', true], ['dm', 'Tin nhắn trực tiếp'], ['sp', 'Nhóm']];
+  function renderNav(el) {
+    var f = el.getAttribute('data-frame') || el.getAttribute('data-nav'), cur = el.getAttribute('data-current');
+    var h = '<a class="rl"' + (cur === 'home' ? ' aria-current="page"' : '') + ' href="#d-home"><svg class="i s h"><use href="#i-home"/></svg><span class="t">Trang chủ</span><span class="end"><span class="pill count">' + total() + '</span></span></a>'
+      + '<a class="rl" href="#d-home"><svg class="i s h"><use href="#i-at"/></svg><span class="t">Được nhắc tới</span><span class="end"><span class="dot" aria-label="có mục mới"></span></span></a>'
+      + '<a class="rl" href="#d-home"><svg class="i s h"><use href="#i-star"/></svg><span class="t">Đã gắn sao</span></a>';
+    SECS.forEach(function (s) {
+      h += '<div class="sec' + (s[2] ? ' usr' : '') + '"><svg class="i s"><use href="#i-down"/></svg><span>' + s[1] + '</span></div>';
+      C.filter(function (c) { return c.sec === s[0]; }).forEach(function (c) {
+        var n = count(c), cls = 'rl' + (c.lv === 'off' ? ' off' : n ? ' unread' : '');
+        h += '<div class="rlw"><a class="' + cls + '" href="#d-group" data-nav-k="' + c.k + '"' + (cur === c.k ? ' aria-current="page"' : '') + '>' + icon(c, 's24') + '<span class="t">' + esc(c.name) + '</span><span class="end">' + endBits(c) + '</span></a>'
+          + '<button class="ibtn more" type="button" aria-label="Tuỳ chọn cho ' + esc(c.name) + '" aria-haspopup="menu" aria-expanded="false" data-act="row-menu" data-k="' + c.k + '" data-frame="' + f + '"><svg class="i s"><use href="#i-more-h"/></svg></button></div>';
+      });
+    });
+    el.innerHTML = h;
+  }
+  function renderFeed(el) {
+    var list = C.slice().sort(function (a, b) { return order(a) - order(b); });
+    el.innerHTML = list.map(function (c) {
+      var n = count(c), cls = 'conv' + (c.lv === 'off' ? ' off' : n ? ' unread' : '');
+      return '<a class="' + cls + '" href="#d-group" data-feed-k="' + c.k + '">' + icon(c, 's40') + '<span style="min-width:0;display:grid;gap:2px"><span class="nm"><span>' + esc(c.name) + '</span></span><span class="pv">' + esc(c.pv) + '</span></span><span class="meta"><span>' + c.t + '</span><span style="display:inline-flex;gap:6px;align-items:center;min-height:18px">' + endBits(c) + '</span></span></a>';
+    }).join('');
+  }
+  var ORDER = ['doisoat', 'thongbao', 'hopdong', 'lan', 'yen', 'vanhanh', 'vinh'];
+  function order(c) { return ORDER.indexOf(c.k); }
+
+  // ---- thread section ----
+  function visibleThreads() {
+    if (threadsRead) return [];
+    return THREADS.filter(function (t) { var c = byK(t.g); return c && c.lv !== 'off'; });
+  }
+  function renderThreads(el) {
+    var key = el.getAttribute('data-tlist'), phone = key === 'p', max = phone ? 2 : 3, all = visibleThreads();
+    var wrap = $(key === 'p' ? 'tnew-p-wrap' : 'tnew-a-wrap');
+    wrap.hidden = !all.length;
+    document.querySelectorAll('#' + wrap.id + ' [data-tcount]').forEach(function (p) { p.textContent = all.length; p.setAttribute('aria-label', all.length + ' thread'); });
+    var shown = tnewMore[key] ? all : all.slice(0, max);
+    var h = shown.map(function (t) {
+      var c = byK(t.g);
+      return '<div role="listitem"><a class="tn" href="#d-group" data-thread-k="' + t.g + '" data-thread-last="' + t.last + '" aria-label="Thread của ' + esc(t.a) + ' trong ' + esc(c.name) + ', ' + t.n + ' trả lời mới, lần cuối ' + t.last + '">'
+        + icon(c, phone ? 's28' : 's24')
+        + '<span style="min-width:0"><span class="src"><span>' + esc(c.name) + '</span></span><span class="tx"><b>' + esc(t.a) + ':</b> ' + esc(t.x) + '</span>'
+        + '<span class="tm"><span class="faces">' + t.f.map(function (a) { return '<span class="av s20" style="--p:var(--color-person-' + a[1] + ')">' + a[0] + '</span>'; }).join('') + '</span><span class="n">' + t.n + ' trả lời mới</span></span></span>'
+        + '<span class="end"><span>' + t.last + '</span><span class="pill count">' + t.n + '</span></span></a></div>';
+    }).join('');
+    if (all.length > max) h += '<button class="btn ghost sm tmore" type="button" data-act="tnew-more" data-key="' + key + '" aria-expanded="' + tnewMore[key] + '">' + (tnewMore[key] ? 'Ẩn bớt' : 'Xem thêm ' + (all.length - max) + ' thread') + '</button>';
+    el.innerHTML = h;
+  }
+
+  // ---- group header (frame b) ----
+  var headKey = 'doisoat', saving = {};
+  function lvIcon(c) {
+    if (c.lv === 'off') return '<span class="lvbadge"><svg class="i s" aria-hidden="true"><use href="#i-bell-off"/></svg><span class="sr">, đã tắt thông báo</span></span>';
+    if (c.lv === 'all' && c.kind !== 'dm') return '<span class="lvbadge"><svg class="i s" aria-hidden="true"><use href="#i-bell-ring"/></svg><span class="sr">, thông báo mọi tin</span></span>';
+    return '';
+  }
+  function renderHead() {
+    var c = byK(headKey), open = !$('lv-menu') ? false : !$('lv-menu').hidden;
+    var sub = c.kind === 'dm' ? 'Tin nhắn trực tiếp · Đang hoạt động' : c.members + ' thành viên · Bạn là quản lý nhóm';
+    if (saving[c.k]) sub += ' · <span class="saving"><span class="spin" aria-hidden="true"></span>Đang lưu…</span>';
+    $('chead-b').innerHTML = icon(c, 's40')
+      + '<div class="t"><button class="ttl" type="button" id="ttl-b" aria-haspopup="menu" aria-expanded="' + open + '" aria-controls="lv-menu" data-act="group-menu"><h3>' + esc(c.name) + '</h3>' + lvIcon(c) + '<svg class="i s chev" aria-hidden="true"><use href="#i-down"/></svg></button><div class="sub">' + sub + '</div></div>'
+      + '<div class="end">' + (c.kind === 'dm' ? '' : '<button class="btn sm" type="button"><svg class="i s"><use href="#i-user-plus"/></svg>Thêm người</button>')
+      + '<button class="ibtn" type="button" aria-label="Tìm trong cuộc trò chuyện" title="Tìm"><svg class="i"><use href="#i-search"/></svg></button>'
+      + '<button class="ibtn" type="button" aria-label="Thread, 1 thread có tin mới" title="Thread"><svg class="i"><use href="#i-threads"/></svg><span class="b">1</span></button>'
+      + '<button class="ibtn" type="button" aria-label="Thông tin" title="Thông tin"><svg class="i"><use href="#i-info"/></svg></button></div>'
+      + '<div class="menu lv" id="lv-menu" role="menu" aria-label="Tuỳ chọn cho ' + esc(c.name) + '" style="top:58px;left:64px"' + (open ? '' : ' hidden') + '>' + lvMenuItems(c, 'b', true) + '</div>';
+  }
+  function lvMenuItems(c, frame, interactive) {
+    var L = levels(c), uid = frame + '-' + c.k;
+    var h = '<div class="mlabel" id="lvl-' + uid + '">Thông báo</div><div role="group" aria-labelledby="lvl-' + uid + '" style="display:grid;gap:2px">';
+    Object.keys(L).forEach(function (k) {
+      var on = c.lv === k;
+      h += '<button type="button" class="lvi" role="menuitemradio" aria-checked="' + on + '" aria-describedby="lvd-' + uid + '-' + k + '"' + (interactive ? ' data-act="set" data-k="' + c.k + '" data-lv="' + k + '" data-frame="' + frame + '"' : ' tabindex="-1"') + '>'
+        + '<svg class="i s" aria-hidden="true"><use href="#' + L[k].i + '"/></svg><span class="lt">' + L[k].t + (k === defLevel(c) ? ' <span class="tagdef">Mặc định</span>' : '') + '</span>'
+        + '<span class="ld" id="lvd-' + uid + '-' + k + '">' + L[k].d + '</span></button>';
+    });
+    h += '</div><hr><button type="button" role="menuitem"' + (interactive ? '' : ' tabindex="-1"') + '><svg class="i s"><use href="#i-star"/></svg>Gắn sao</button>'
+      + '<button type="button" role="menuitem"' + (interactive ? '' : ' tabindex="-1"') + '><svg class="i s"><use href="#i-info"/></svg>' + (c.kind === 'dm' ? 'Xem hồ sơ' : 'Thông tin nhóm') + '</button>';
+    return h;
+  }
+
+  // ---- row menu (navigator ⋯) ----
+  function rowMenuItems(c, frame, interactive) {
+    var ta = interactive ? '' : ' tabindex="-1"';
+    var h = '<div class="mlabel">Chuyển tới mục</div>'
+      + '<button type="button" role="menuitemradio" aria-checked="' + (c.sec === 'q4') + '"' + ta + '><svg class="i s"><use href="#i-folder"/></svg>Quyết toán quý 4</button>'
+      + '<button type="button" role="menuitem"' + ta + '><svg class="i s"><use href="#i-folder-plus"/></svg>Mục mới…</button><hr>'
+      + (c.sec === 'q4' ? '<button type="button" role="menuitem"' + ta + '><svg class="i s"><use href="#i-x"/></svg>Bỏ khỏi mục</button>' : '')
+      + '<button type="button" role="menuitem"' + ta + '><svg class="i s"><use href="#i-star"/></svg>Gắn sao</button>';
+    h += c.lv === 'off'
+      ? '<button type="button" role="menuitem"' + ta + (interactive ? ' data-act="set" data-k="' + c.k + '" data-lv="' + defLevel(c) + '" data-frame="' + frame + '"' : '') + '><svg class="i s"><use href="#i-bell"/></svg>Bật thông báo</button>'
+      : '<button type="button" role="menuitem"' + ta + (interactive ? ' data-act="set" data-k="' + c.k + '" data-lv="off" data-frame="' + frame + '"' : '') + '><svg class="i s"><use href="#i-bell-off"/></svg>Tắt thông báo</button>';
+    return h;
+  }
+  var openMenu = null;
+  function closeMenus(focusBack) {
+    if (!openMenu) return;
+    openMenu.menu.hidden = true;
+    if (openMenu.trigger) { openMenu.trigger.setAttribute('aria-expanded', 'false'); if (focusBack && document.contains(openMenu.trigger)) openMenu.trigger.focus(); }
+    openMenu = null;
+  }
+  function showMenu(menu, trigger) {
+    closeMenus(false);
+    menu.hidden = false; replay(menu, 'enter');
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    openMenu = { menu: menu, trigger: trigger };
+    var first = menu.querySelector('[aria-checked="true"].lvi') || menu.querySelector('[role^="menuitem"]');
+    if (first) first.focus({ preventScroll: true });
+  }
+  function openRowMenu(k, frame) {
+    var c = byK(k), menu = $('row-menu-' + frame), nav = document.querySelector('[data-nav="' + frame + '"]');
+    var trig = nav.querySelector('[data-act="row-menu"][data-k="' + k + '"]');
+    menu.setAttribute('aria-label', 'Tuỳ chọn cho ' + c.name);
+    menu.innerHTML = rowMenuItems(c, frame, true);
+    var r = trig.getBoundingClientRect(), pr = menu.parentElement.getBoundingClientRect();
+    menu.style.top = Math.min(r.bottom - pr.top + 4, pr.height - 260) + 'px'; menu.style.left = '40px';
+    showMenu(menu, trig);
+  }
+  function openGroupMenu() { renderHead(); showMenu($('lv-menu'), $('ttl-b')); }
+
+  // ---- toasts ----
+  function toast(where, html, err) {
+    var box = $(where), t = document.createElement('div');
+    t.className = 'toast enter' + (err ? ' err' : '');
+    if (err) t.setAttribute('role', 'alert');
+    t.innerHTML = html; box.appendChild(t);
+    while (box.children.length > 2) box.removeChild(box.firstChild);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, err ? 8000 : 5000);
+    return t;
+  }
+  function verb(c, lv) {
+    if (lv === 'off') return 'Đã tắt thông báo của “' + c.name + '”';
+    if (lv === 'all') return 'Thông báo mọi tin của “' + c.name + '”';
+    return c.lvPrev === 'off' ? 'Đã bật lại thông báo của “' + c.name + '”' : 'Thông báo tin chính và thread theo dõi của “' + c.name + '”';
+  }
+
+  // ---- save (optimistic) ----
+  var lastSave = null;
+  function setLevel(k, lv, frame, opts) {
+    opts = opts || {};
+    var c = byK(k); if (!c || (c.lv === lv && !opts.retry)) { closeMenus(true); return; }
+    var prev = opts.retry ? opts.prev : c.lv;
+    c.lvPrev = prev; c.lv = lv;
+    var trig = openMenu && openMenu.trigger, sel = trig ? focusKey(trig) : null;
+    closeMenus(false); renderAll();
+    if (sel && document.querySelector(sel)) document.querySelector(sel).focus({ preventScroll: true });
+    var slow = $('slow').checked, fail = $('fail').checked, where = toastBox(frame);
+    var savingTimer = setTimeout(function () { saving[k] = true; renderAll(); }, 300);
+    setTimeout(function () {
+      clearTimeout(savingTimer); saving[k] = false;
+      if (fail) {
+        $('fail').checked = false;
+        c.lv = prev; renderAll();
+        lastSave = { k: k, lv: lv, frame: frame, prev: prev };
+        toast(where, '<svg class="i bad" aria-hidden="true"><use href="#i-alert"/></svg><p>Chưa đổi được thông báo của “' + esc(c.name) + '”. Kiểm tra kết nối rồi thử lại.</p><button class="btn ghost sm" type="button" data-act="retry">Thử lại</button>', true);
+      } else {
+        renderAll();
+        var undo = '<button class="btn ghost sm" type="button" data-act="undo" data-k="' + k + '" data-lv="' + prev + '" data-frame="' + frame + '">Hoàn tác</button>';
+        if (!opts.undo) toast(where, '<svg class="i ok" aria-hidden="true"><use href="#i-ok"/></svg><p>' + esc(verb(c, lv)) + '</p>' + undo);
+      }
+    }, slow ? 1500 : 220);
+  }
+  function toastBox(frame) { return frame === 'a' ? 'toasts-a' : frame === 'b' ? 'toasts-b' : frame === 'p1' ? 'toasts-p1' : 'toasts-p2'; }
+
+  // ---- phone ----
+  function renderPList(el) {
+    var h = '';
+    SECS.forEach(function (s) {
+      h += '<div class="lsec' + (s[2] ? ' usr' : '') + '"><svg class="i s"><use href="#i-down"/></svg>' + s[1] + '</div>';
+      C.filter(function (c) { return c.sec === s[0]; }).forEach(function (c) {
+        var n = count(c), cls = 'conv' + (c.lv === 'off' ? ' off' : n ? ' unread' : '');
+        h += '<a class="' + cls + '" href="#p-info" data-press-k="' + c.k + '">' + icon(c, 's44') + '<span style="min-width:0;display:grid"><span class="nm"><span>' + esc(c.name) + '</span></span><span class="pv">' + esc(c.pv) + '</span></span><span class="meta"><span>' + c.t + '</span><span style="display:inline-flex;gap:6px;align-items:center;min-height:18px">' + endBits(c) + '</span></span></a>';
+      });
+    });
+    el.innerHTML = h;
+  }
+  function openSheet(ph, html, labelId) {
+    var sh = $(ph + '-sheet'); sh.innerHTML = '<div class="grab" aria-hidden="true"></div>' + html;
+    sh.hidden = false; $(ph).querySelector('.scrim').hidden = false; replay(sh, 'up');
+    var f = sh.querySelector('[aria-checked="true"]') || sh.querySelector('button'); if (f) f.focus({ preventScroll: true });
+  }
+  function closeSheet(ph) { $(ph + '-sheet').hidden = true; $(ph).querySelector('.scrim').hidden = true; }
+  function pressSheet(k) {
+    var c = byK(k);
+    openSheet('p1', '<div class="shead"><b id="p1-sheet-t">' + esc(c.name) + '</b></div>'
+      + '<button class="item" type="button"><svg class="i"><use href="#i-folder"/></svg>Chuyển tới mục</button>'
+      + '<button class="item" type="button"><svg class="i"><use href="#i-folder-plus"/></svg>Mục mới…</button>'
+      + (c.sec === 'q4' ? '<button class="item" type="button"><svg class="i"><use href="#i-x"/></svg>Bỏ khỏi mục</button>' : '')
+      + '<button class="item" type="button"><svg class="i"><use href="#i-star"/></svg>Gắn sao</button>'
+      + (c.lv === 'off'
+        ? '<button class="item" type="button" data-act="set" data-k="' + k + '" data-lv="' + defLevel(c) + '" data-frame="p1"><svg class="i"><use href="#i-bell"/></svg>Bật thông báo</button>'
+        : '<button class="item" type="button" data-act="set" data-k="' + k + '" data-lv="off" data-frame="p1"><svg class="i"><use href="#i-bell-off"/></svg>Tắt thông báo</button>'));
+  }
+  function renderP2() {
+    var c = byK(p2Key), L = levels(c);
+    $('p2-title').textContent = c.kind === 'dm' ? 'Thông tin' : 'Thông tin nhóm';
+    $('p2-body').innerHTML = '<div class="info-h">' + icon(c, c.kind === 'dm' ? 'av s64' : 's64').replace('av av', 'av') + '<b>' + esc(c.name) + lvIcon(c) + '</b><small>' + (c.kind === 'dm' ? 'Tin nhắn trực tiếp' : c.members + ' thành viên') + '</small></div>'
+      + '<div class="irows">'
+      + '<button class="irow" type="button" data-act="lv-sheet" aria-haspopup="dialog"><span class="ic"><svg class="i"><use href="#' + L[c.lv].i + '"/></svg></span><span>Thông báo<span class="v">'
+      + (saving[c.k] ? '<span class="saving"><span class="spin" aria-hidden="true"></span>Đang lưu…</span>' : L[c.lv].t) + '</span></span><svg class="i s"><use href="#i-right"/></svg></button>'
+      + (c.kind === 'dm' ? '' : '<button class="irow" type="button" data-p2-row="members"><span class="ic"><svg class="i"><use href="#i-users"/></svg></span><span>Thành viên<span class="v">' + c.members + ' người</span></span><svg class="i s"><use href="#i-right"/></svg></button>')
+      + '<button class="irow" type="button" data-p2-row="star"><span class="ic"><svg class="i"><use href="#i-star"/></svg></span><span>Gắn sao</span><svg class="i s"><use href="#i-right"/></svg></button>'
+      + '</div>';
+    var sh = $('p2-sheet'); if (!sh.hidden) sh.querySelectorAll('.lvr').forEach(function (r) { r.setAttribute('aria-checked', String(r.getAttribute('data-lv') === c.lv)); });
+  }
+  function lvSheet() {
+    var c = byK(p2Key), L = levels(c);
+    var h = '<div class="shead"><b id="p2-sheet-t">Thông báo</b><small>' + esc(c.name) + '</small></div><div role="radiogroup" aria-labelledby="p2-sheet-t" style="display:grid;gap:2px">';
+    Object.keys(L).forEach(function (k) {
+      h += '<button type="button" class="lvr" role="radio" aria-checked="' + (c.lv === k) + '" data-lv="' + k + '" data-act="p2-pick" aria-describedby="p2d-' + k + '"><svg class="i" aria-hidden="true"><use href="#' + L[k].i + '"/></svg><span><span class="lt">' + L[k].t + (k === defLevel(c) ? ' <span class="tagdef">Mặc định</span>' : '') + '</span><span class="ld" id="p2d-' + k + '">' + L[k].d + '</span></span><span class="rd" aria-hidden="true"></span></button>';
+    });
+    openSheet('p2', h + '</div>');
+  }
+
+  // ---- static state board ----
+  function renderBoard() {
+    function grp(lv) { return { k: 'doisoat', kind: 'sp', name: 'Đối soát giao dịch', lv: lv }; }
+    function row(c) { var n = count(c), cls = 'rl' + (c.lv === 'off' ? ' off' : n ? ' unread' : ''); return '<span class="' + cls + '">' + icon(c, 's24') + '<span class="t">' + esc(c.name) + '</span><span class="end">' + endBits(c) + '</span></span>'; }
+    var base = { kind: 'sp', p: 4, ini: 'Đ', name: 'Đối soát giao dịch', u: { m: 2, f: 5, o: 4 }, at: 0, sec: 'q4' };
+    function v(o) { return Object.assign({}, base, o); }
+    var h = '';
+    ['all', 'main', 'off'].forEach(function (lv) {
+      h += '<div class="spec"><small>Nhóm · đang chọn ' + LV[lv].t + '</small><div class="menu lv" role="menu" aria-label="Mẫu menu, ' + LV[lv].t + '">' + lvMenuItems(grp(lv), 'sb' + lv, false) + '</div></div>';
+    });
+    h += '<div class="spec"><small>Tin nhắn trực tiếp · Tất cả / Tắt</small><div class="menu lv" role="menu" aria-label="Mẫu menu tin nhắn trực tiếp">' + lvMenuItems({ k: 'vinh', kind: 'dm', lv: 'off' }, 'sbdm', false) + '</div></div>';
+    h += '<div class="spec"><small>Hàng điều hướng theo mức (cùng 2 tin chính, 5 trả lời thread theo dõi, 4 trả lời thread khác)</small><div class="rowdemo">'
+      + row(v({ lv: 'all', name: 'Tất cả → 11' })) + row(v({ lv: 'main', name: 'Mặc định → 7' })) + row(v({ lv: 'off', name: 'Tắt → không số' })) + row(v({ lv: 'off', at: 1, name: 'Tắt, có người nhắc tên' }))
+      + row(v({ lv: 'main', u: { m: 0, f: 0, o: 3 }, name: 'Mặc định, chỉ thread khác → không số' })) + '</div></div>';
+    h += '<div class="spec"><small>Menu ⋯ của hàng đang Tắt</small><div class="menu" role="menu" aria-label="Mẫu menu hàng">' + rowMenuItems(v({ lv: 'off' }), 'sbrow', false) + '</div></div>';
+    h += '<div class="spec"><small>Toast · đã lưu</small><div class="toast"><svg class="i ok" aria-hidden="true"><use href="#i-ok"/></svg><p>Đã tắt thông báo của “Hợp đồng đối tác”</p><button class="btn ghost sm" type="button" tabindex="-1">Hoàn tác</button></div>'
+      + '<div class="toast"><svg class="i ok" aria-hidden="true"><use href="#i-ok"/></svg><p>Đã bật lại thông báo của “Hợp đồng đối tác”</p><button class="btn ghost sm" type="button" tabindex="-1">Hoàn tác</button></div></div>';
+    h += '<div class="spec"><small>Đang lưu (quá 300ms) · lỗi</small><div class="rowdemo" style="padding:10px 12px"><span class="saving"><span class="spin" aria-hidden="true"></span>14 thành viên · Đang lưu…</span></div>'
+      + '<div class="toast err"><svg class="i bad" aria-hidden="true"><use href="#i-alert"/></svg><p>Chưa đổi được thông báo của “Đối soát giao dịch”. Kiểm tra kết nối rồi thử lại.</p><button class="btn ghost sm" type="button" tabindex="-1">Thử lại</button></div></div>';
+    $('board').innerHTML = h;
+  }
+
+  // re-rendering replaces nodes; keep keyboard focus on the equivalent control
+  function focusKey(el) {
+    if (!el || el === document.body) return null;
+    if (el.id) return '#' + el.id;
+    var attrs = [];
+    for (var i = 0; i < el.attributes.length; i++) {
+      var attr = el.attributes[i];
+      if (attr.name.indexOf('data-') === 0) {
+        attrs.push('[' + attr.name + '="' + attr.value + '"]');
+      }
+    }
+    if (!attrs.length) return null;
+    var s = el.tagName.toLowerCase() + attrs.join('');
+    var host = el.closest('.demo') || el.closest('.menu') || el.closest('.sheet') || (el.parentElement && el.parentElement.closest('[id]'));
+    if (host) {
+      if (host.id) return '#' + host.id + ' ' + s;
+      if (host.className) return '.' + host.className.trim().split(/\s+/)[0] + ' ' + s;
+    }
+    return s;
+  }
+  function renderAll() {
+    var fk = focusKey(document.activeElement);
+    paint();
+    if (fk && (!document.activeElement || document.activeElement === document.body)) {
+      var n = document.querySelector(fk); if (n) n.focus({ preventScroll: true });
+    }
+  }
+  function paint() {
+    document.querySelectorAll('[data-nav]').forEach(renderNav);
+    document.querySelectorAll('[data-feed]').forEach(renderFeed);
+    document.querySelectorAll('[data-tlist]').forEach(renderThreads);
+    document.querySelectorAll('[data-plist]').forEach(renderPList);
+    document.querySelectorAll('[data-total]').forEach(function (p) { var n = total(); p.textContent = n; p.hidden = !n; });
+    renderHead(); renderP2();
+  }
+  renderAll(); renderBoard();
+
+  // ---- events ----
+  document.addEventListener('click', function (e) {
+    var b = e.target.closest('[data-act]');
+    if (!b) { if (openMenu && !e.target.closest('.menu')) closeMenus(false); return; }
+    var a = b.getAttribute('data-act');
+    if (a === 'row-menu') { e.preventDefault(); var fr = b.getAttribute('data-frame'); if (openMenu && openMenu.trigger && openMenu.trigger.getAttribute('data-k') === b.getAttribute('data-k') && openMenu.menu.id === 'row-menu-' + fr) closeMenus(true); else openRowMenu(b.getAttribute('data-k'), fr); }
+    else if (a === 'group-menu') { if (openMenu && openMenu.menu.id === 'lv-menu') closeMenus(true); else openGroupMenu(); }
+    else if (a === 'set') { var fr2 = b.getAttribute('data-frame'); if (fr2 === 'p1') closeSheet('p1'); setLevel(b.getAttribute('data-k'), b.getAttribute('data-lv'), fr2); }
+    else if (a === 'undo') { b.closest('.toast').remove(); setLevel(b.getAttribute('data-k'), b.getAttribute('data-lv'), b.getAttribute('data-frame'), { undo: true }); }
+    else if (a === 'retry') { b.closest('.toast').remove(); if (lastSave) { var c = byK(lastSave.k); c.lv = lastSave.prev; setLevel(lastSave.k, lastSave.lv, lastSave.frame); } }
+    else if (a === 'read-threads') { threadsRead = !threadsRead; b.textContent = threadsRead ? 'Có thread mới trở lại' : 'Đọc hết thread'; renderAll(); }
+    else if (a === 'tnew-more') { var key = b.getAttribute('data-key'); tnewMore[key] = !tnewMore[key]; renderAll(); }
+    else if (a === 'tnew-toggle') { var ex = b.getAttribute('aria-expanded') === 'true'; b.setAttribute('aria-expanded', String(!ex)); b.textContent = ex ? 'Mở rộng' : 'Thu gọn'; $('tnew-a').hidden = ex; }
+    else if (a === 'reset') { closeMenus(false); reset(); tnewMore = { a: false, p: false }; headKey = 'doisoat'; renderAll(); }
+    else if (a === 'dm-view') { closeMenus(false); headKey = headKey === 'vinh' ? 'doisoat' : 'vinh'; b.textContent = headKey === 'vinh' ? 'Xem như nhóm' : 'Xem như tin nhắn trực tiếp'; document.querySelector('[data-nav="b"]').setAttribute('data-current', headKey); renderAll(); openGroupMenu(); }
+    else if (a === 'press') { pressSheet(b.getAttribute('data-k')); }
+    else if (a === 'close-sheet') { closeSheet(b.getAttribute('data-ph')); }
+    else if (a === 'lv-sheet') { lvSheet(); }
+    else if (a === 'p2-pick') {
+      var lv = b.getAttribute('data-lv');
+      b.parentElement.querySelectorAll('.lvr').forEach(function (r) { r.setAttribute('aria-checked', String(r === b)); });
+      setTimeout(function () { closeSheet('p2'); setLevel(p2Key, lv, 'p2'); }, 160);
+    }
+    else if (a === 'p2-conv') { p2Key = b.getAttribute('data-k'); closeSheet('p2'); renderP2(); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!openMenu) {
+      if (e.key === 'Escape') ['p1', 'p2'].forEach(function (p) { if (!$(p + '-sheet').hidden) closeSheet(p); });
+      return;
+    }
+    var items = Array.prototype.slice.call(openMenu.menu.querySelectorAll('[role^="menuitem"]'));
+    var i = items.indexOf(document.activeElement);
+    if (e.key === 'Escape') { e.preventDefault(); closeMenus(true); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); items[(i + 1) % items.length].focus(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+    else if (e.key === 'Home') { e.preventDefault(); items[0].focus(); }
+    else if (e.key === 'End') { e.preventDefault(); items[items.length - 1].focus(); }
+    else if (e.key === 'Tab') { closeMenus(false); }
+  });
+})();
+</script>
+</body>
+</html>

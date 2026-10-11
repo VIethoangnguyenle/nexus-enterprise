@@ -79,6 +79,13 @@ export const MSG = {
   t2: '44444444-aaaa-4bbb-8ccc-000000000002',
   r1: '44444444-aaaa-4bbb-8ccc-000000000003',
   r2: '44444444-aaaa-4bbb-8ccc-000000000004',
+  attImg1: '44444444-aaaa-4bbb-8ccc-000000000010',
+  attImg2: '44444444-aaaa-4bbb-8ccc-000000000011',
+  attImg4: '44444444-aaaa-4bbb-8ccc-000000000012',
+  attImg6: '44444444-aaaa-4bbb-8ccc-000000000013',
+  attDoc: '44444444-aaaa-4bbb-8ccc-000000000014',
+  attNoText: '44444444-aaaa-4bbb-8ccc-000000000015',
+  legacyFile: '44444444-aaaa-4bbb-8ccc-000000000016',
 }
 
 /** Newest first, as GET /channels/:id/messages returns them. */
@@ -93,8 +100,92 @@ export const MESSAGES: Message[] = [
     id: MSG.t1, channel_id: CH.doisoat, sender_id: U.duc.id, sender_name: 'duc',
     content: 'File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.',
     content_format: 'plain', created_at: ts(9, 12), reply_count: 2, reactions: [],
+    last_reply_at: ts(9, 20), reply_participant_ids: [U.vinh.id, U.lan.id], following: true, thread_unread_count: 1,
   },
 ]
+
+export const MSG_IMG1: Message = {
+  id: MSG.attImg1, channel_id: CH.doisoat, sender_id: U.lan.id, sender_name: 'lan',
+  content: 'Biên lai phí chuyển khoản ngày 08/10.',
+  created_at: ts(10, 14),
+  attachments: [{
+    drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000010',
+    file_name: 'bien-lai-phi-08-10.jpg',
+    mime_type: 'image/jpeg',
+    size_bytes: 1.4 * 1024 * 1024,
+    width: 1200,
+    height: 800,
+  }],
+}
+
+export const MSG_IMG2: Message = {
+  id: MSG.attImg2, channel_id: CH.doisoat, sender_id: U.hoa.id, sender_name: 'hoa',
+  content: 'Hai mặt của phiếu hoàn tiền.',
+  created_at: ts(10, 16),
+  attachments: [
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000011', file_name: 'phieu-hoan-tien-mat-truoc.jpg', mime_type: 'image/jpeg', size_bytes: 980 * 1024, width: 800, height: 600 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000012', file_name: 'phieu-hoan-tien-mat-sau.jpg', mime_type: 'image/jpeg', size_bytes: 1.1 * 1024 * 1024, width: 800, height: 600 },
+  ],
+}
+
+export const MSG_IMG4: Message = {
+  id: MSG.attImg4, channel_id: CH.doisoat, sender_id: U.yen.id, sender_name: 'yen',
+  content: 'Chứng từ gốc.',
+  created_at: ts(10, 20),
+  attachments: [
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000021', file_name: 'chung-tu-01.jpg', mime_type: 'image/jpeg', size_bytes: 1.2 * 1024 * 1024, width: 800, height: 600 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000022', file_name: 'chung-tu-02.jpg', mime_type: 'image/jpeg', size_bytes: 1.3 * 1024 * 1024, width: 800, height: 600 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000023', file_name: 'chung-tu-03.jpg', mime_type: 'image/jpeg', size_bytes: 1.1 * 1024 * 1024, width: 800, height: 600 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000024', file_name: 'chung-tu-04.jpg', mime_type: 'image/jpeg', size_bytes: 1.5 * 1024 * 1024, width: 800, height: 600 },
+  ],
+}
+
+export const MSG_IMG6: Message = {
+  id: MSG.attImg6, channel_id: CH.doisoat, sender_id: U.yen.id, sender_name: 'yen',
+  content: 'Toàn bộ chứng từ gốc của 3 giao dịch.',
+  created_at: ts(10, 20),
+  attachments: [
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000031', file_name: 'chung-tu-01.jpg', mime_type: 'image/jpeg', size_bytes: 1.2 * 1024 * 1024, width: 800, height: 600 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000032', file_name: 'chung-tu-02.jpg', mime_type: 'image/jpeg', size_bytes: 1.3 * 1024 * 1024, width: 800, height: 600 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000033', file_name: 'chung-tu-03.jpg', mime_type: 'image/jpeg', size_bytes: 1.1 * 1024 * 1024, width: 800, height: 600 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000034', file_name: 'chung-tu-04.jpg', mime_type: 'image/jpeg', size_bytes: 1.5 * 1024 * 1024, width: 800, height: 600 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000035', file_name: 'chung-tu-05.jpg', mime_type: 'image/jpeg', size_bytes: 1.0 * 1024 * 1024, width: 800, height: 600 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000036', file_name: 'chung-tu-06.jpg', mime_type: 'image/jpeg', size_bytes: 1.2 * 1024 * 1024, width: 800, height: 600 },
+  ],
+}
+
+export const MSG_DOCS: Message = {
+  id: MSG.attDoc, channel_id: CH.doisoat, sender_id: U.duc.id, sender_name: 'duc',
+  content: 'Bản chốt cuối, mọi người kiểm tra trước khi trình ký.',
+  created_at: ts(10, 24),
+  attachments: [
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000041', file_name: 'tong-hop-doi-soat-thang-10.xlsx', mime_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', size_bytes: 86 * 1024 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000042', file_name: 'bien-ban-doi-soat-thang-10-da-ky.pdf', mime_type: 'application/pdf', size_bytes: 1.2 * 1024 * 1024 },
+    { drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000043', file_name: 'to-trinh-phi-lien-ngan-hang.docx', mime_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size_bytes: 240 * 1024 },
+  ],
+}
+
+export const MSG_NO_TEXT: Message = {
+  id: MSG.attNoText, channel_id: CH.doisoat, sender_id: U.lan.id, sender_name: 'lan',
+  content: '',
+  created_at: ts(10, 30),
+  attachments: [{
+    drive_file_id: '55555555-aaaa-4bbb-8ccc-000000000050',
+    file_name: 'hinh-anh.jpg',
+    mime_type: 'image/jpeg',
+    size_bytes: 500 * 1024,
+    width: 600,
+    height: 400,
+  }],
+}
+
+export const MSG_LEGACY: Message = {
+  id: MSG.legacyFile, channel_id: CH.doisoat, sender_id: U.duc.id, sender_name: 'duc',
+  content: '📎 bien-ban.pdf',
+  linked_entity_type: 'drive_file',
+  linked_entity_id: '55555555-aaaa-4bbb-8ccc-000000000060',
+  created_at: ts(10, 35),
+}
 
 /** GET /messages/:id/thread: parent first, then replies oldest first. */
 export const THREAD: Message[] = [
@@ -108,6 +199,15 @@ export const THREAD: Message[] = [
     content: 'Đã đối chiếu xong, chênh lệch do phí liên ngân hàng, không phải lỗi hệ thống.', content_format: 'plain', created_at: ts(9, 20),
   },
 ]
+
+/** A thread nobody follows, with one reply, for the thread list. */
+export const MSG_QUIET = '44444444-aaaa-4bbb-8ccc-000000000007'
+export const QUIET_ROOT: Message = {
+  id: MSG_QUIET, channel_id: CH.doisoat, sender_id: U.yen.id, sender_name: 'yen',
+  content: 'Biên bản đối soát tháng 10 bản nháp, anh Vinh xem giúp em phần phí.',
+  content_format: 'plain', created_at: ts(8, 40), reply_count: 1, reactions: [],
+  last_reply_at: ts(8, 55), reply_participant_ids: [U.vinh.id],
+}
 
 export const MEMBERS = [
   { user_id: U.hoa.id, username: 'hoa', ngac_node_id: U.hoa.node },
@@ -155,6 +255,7 @@ export function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
   if (p === '/workspaces') return ok({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành' }] })
   if (p === `/workspaces/${WS_ID}/channels` && method === 'GET') return ok({ channels: SPACES })
   if (p === `/workspaces/${WS_ID}/contacts`) return ok({ contacts: CONTACTS, total: CONTACTS.length })
+  if (p === `/workspaces/${WS_ID}/chat-sections` && method === 'GET') return ok({ sections: [] })
   if (p === '/dms' && method === 'GET') return ok({ channels: DMS })
   if (p === '/channels/unread') return ok({ channels: UNREAD })
   if (p === `/channels/${CH.doisoat}/messages` && method === 'GET') return ok({ messages: MESSAGES, has_more: false })
@@ -164,6 +265,43 @@ export function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
   if (p === `/messages/${MSG.t1}/thread`) return ok({ messages: THREAD })
   if (p === `/workspaces/${WS_ID}/drive`) return ok(DRIVE_ROOT)
   if (p === `/drive/folders/${DRIVE_ROOT.items[0]!.id}`) return ok(DRIVE_FOLDER)
+  if (p === `/channels/${CH.doisoat}/threads` && method === 'GET') {
+    const filter = new URLSearchParams(path.split('?')[1] ?? '').get('filter') ?? 'all'
+    const all = [MESSAGES[1]!, QUIET_ROOT]
+    const rows = filter === 'following' ? all.filter((m) => m.following) : filter === 'unread' ? all.filter((m) => (m.thread_unread_count ?? 0) > 0) : all
+    return ok({ messages: rows, has_more: false })
+  }
+  if (p.endsWith('/follow') && (method === 'POST' || method === 'DELETE')) {
+    return ok({ root_message_id: p.split('/')[2], channel_id: CH.doisoat, following: method === 'POST', unread_count: 0, as_of: { seconds: '2000000000', nanos: 0 } })
+  }
+  if (p.endsWith('/thread/read') && method === 'POST') {
+    return ok({ root_message_id: p.split('/')[2], channel_id: CH.doisoat, following: true, unread_count: 0, as_of: { seconds: '2000000000', nanos: 0 } })
+  }
   if (p.endsWith('/read') && method === 'POST') return ok({})
+  if (p.endsWith('/messages') && method === 'POST') {
+    const body = init?.body ? JSON.parse(String(init.body)) : {}
+    return ok({
+      id: '44444444-aaaa-4bbb-8ccc-999999999999',
+      channel_id: CH.doisoat,
+      sender_id: ME.id,
+      sender_name: 'hoa',
+      content: body.content || '',
+      content_format: body.content_format || 'html',
+      parent_message_id: body.parent_message_id || '',
+      mentions: body.mentions || [],
+      attachments: (body.attachments || []).map((a: any) => ({
+        drive_file_id: a.drive_file_id,
+        file_name: a.file_name || 'test.pdf',
+        mime_type: a.mime_type || 'application/pdf',
+        size_bytes: a.size_bytes || 1024,
+        width: a.width,
+        height: a.height,
+      })),
+      created_at: new Date().toISOString(),
+      reply_count: 0,
+      reactions: [],
+      is_pinned: false,
+    })
+  }
   return Promise.reject(new Error(`fixtureApi: unexpected ${method} ${path}`))
 }

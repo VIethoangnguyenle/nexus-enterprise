@@ -1,7 +1,7 @@
 ---
 phase: 11
 title: "Tạo trong chat: bình chọn, công việc, tài liệu, phê duyệt"
-status: pending
+status: in-progress
 priority: P2
 effort: "2.5-3d"
 dependencies: [1, 5]
@@ -40,3 +40,7 @@ chọn 2026-10-10).
 ## Success Criteria
 - [ ] Bốn loại thẻ khớp mockup ở light/dark/390px; realtime phiếu và trạng thái duyệt.
 - [ ] Test deny đủ các nhánh quyền; mọi gate xanh; không ID nào lên màn hình.
+
+## Tiến độ
+- Backend (bình chọn, công việc) xong 2026-10-11: 2–10 lựa chọn, `ends_at` được đọc, bỏ phiếu cần `read`, chọn một thay phiếu cũ, đóng sớm (người tạo/manage, migration 042), ẩn kết quả tới khi bỏ phiếu/đóng, ẩn danh không lộ người bỏ phiếu, sự kiện chỉ mang id; người được giao phải đọc được kênh; đổi trạng thái công việc chỉ người được giao/người tạo/manage. Spec `chat-cards`. **Còn:** UI menu +, các thẻ; thẻ tài liệu/phê duyệt lấy chi tiết qua dịch vụ gốc theo quyền người xem.
+- Review: `plans/reports/code-reviewer-261011-0830-chat-wave2-backend.md` (C1, H1, H2, M1–M5, M8 đã sửa; M6 bằng dòng hệ thống; M7 — sửa tin không đổi danh sách nhắc tên — giữ nguyên, ghi vào câu hỏi mở).

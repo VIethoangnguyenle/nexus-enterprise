@@ -27,22 +27,31 @@ Chat** (người dùng: Chat quan trọng nhất).
   trang chính; API asset/approval trả 403; chuyển sang tổ chức thì các mục xuất hiện và dùng được ngay.
 
 ## Quyết định (người dùng chốt)
-1. Cá nhân = workspace hệ thống tự tạo khi đăng nhập lần đầu; "Tạo workspace" và Google theo tên miền = tổ chức.
+1. Mỗi tài khoản mới có một workspace cá nhân riêng, kể cả email công ty (Google `hd`, vd vnpay.vn). Đăng
+   nhập không tự tạo tổ chức; nếu đã có tổ chức giữ tên miền đó thì tự vào thêm làm thành viên. Muốn có
+   workspace khác thì dùng "Tạo workspace", **chọn loại Cá nhân hoặc Tổ chức** (một người có thể có nhiều
+   workspace cá nhân). (Chốt lại 2026-10-11, thay cho "Google theo tên miền = tổ chức".)
    Migration workspace cũ: tên dạng "<tên>'s Workspace" + 1 thành viên → cá nhân, còn lại → tổ chức.
 2. Chủ workspace chuyển cá nhân → tổ chức trong Cài đặt (một chiều).
 3. Mobile: ở workspace cá nhân, tab Phê duyệt thay bằng **Danh bạ**.
 4. Duyệt tài liệu: ẩn ở workspace cá nhân.
+5. (2026-10-11, câu hỏi thiết kế) Chỉ Chủ sở hữu được chuyển sang tổ chức; hộp xác nhận chỉ đổi loại (không ô
+   đổi tên) và nói rõ tài sản/yêu cầu phê duyệt đã ẩn sẽ hiện lại; nhãn dưới tên là "Workspace cá nhân".
+   Màn "Tạo workspace" cần thêm lựa chọn loại — cần bổ sung vào mockup trước phase 04.
+6. (2026-10-11) Mockup `personal-workspace.html` §6/§8/§9 **đã duyệt**; "Tạo workspace" mặc định chọn **Cá nhân**.
+   Workspace tổ chức tạo mới luôn **độc lập** (không gắn tên miền, vào bằng lời mời). Workspace cá nhân tự tạo lúc
+   đăng ký **mang tên người dùng** (tên hiển thị), không còn "<tên>'s Workspace" / "Không gian của bạn".
 
 ## Phases
 
 | # | Phase | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
-| 01 | [Thiết kế](phase-01-design.md) | P2 | 0.5d | — | pending |
-| 02 | [Loại workspace đáng tin](phase-02-workspace-type.md) | P1 | 1d | 01 | pending |
-| 03 | [Chặn ở server](phase-03-server-enforcement.md) | P1 | 1.5d | 02 | pending |
-| 04 | [Ẩn ở frontend](phase-04-frontend.md) | P2 | 1d | 02 | pending |
-| 05 | [Chuyển sang tổ chức](phase-05-convert-to-organization.md) | P2 | 1-1.5d | 03, 04 | pending |
-| 06 | [Kiểm chứng](phase-06-verification.md) | P2 | 0.5d | 05 | pending |
+| 01 | [Thiết kế](phase-01-design.md) | P2 | 0.5d | — | completed (mockup duyệt 2026-10-11) |
+| 02 | [Loại workspace đáng tin](phase-02-workspace-type.md) | P1 | 1d | 01 | completed |
+| 03 | [Chặn ở server](phase-03-server-enforcement.md) | P1 | 1.5d | 02 | completed |
+| 04 | [Ẩn ở frontend](phase-04-frontend.md) | P2 | 1d | 02 | completed (f55e072; còn: link thẳng hiện trang ~1s trước khi chuyển) |
+| 05 | [Chuyển sang tổ chức](phase-05-convert-to-organization.md) | P2 | 1-1.5d | 03, 04 | completed (backend 8a1ba62 + UI f55e072) |
+| 06 | [Kiểm chứng](phase-06-verification.md) | P2 | 0.5d | 05 | completed (A1–A4 PASS trên stack thật; tạo workspace mới chưa thử được ở dev vì không có SMTP để xác minh email) |
 
 ## Capabilities in `docs/specs/`
 | Capability | Action | Phase |

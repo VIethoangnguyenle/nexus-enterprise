@@ -104,6 +104,34 @@ A frame SHALL contain the domain, the kind of change, the tenant and workspace, 
 - **WHEN** a frame says an item moved from folder A to folder B
 - **THEN** the listings of both folders and the item's detail are refreshed, and the quota is not
 
+### Requirement: Thread replies carry a summary; thread state goes to its owner only
+A thread reply SHALL reach the channel's subscribers as a `thread_reply` frame carrying the reply and the thread's
+new summary: reply count, last reply time and the users of the three most recent distinct repliers — the same for
+every viewer, and nothing a channel reader could not already see. Each user who follows the thread SHALL receive a
+`thread_state` frame with their own follow state and unread count on the user-addressed route: every session of
+that user's NGAC node in the channel's workspace (for a direct message, the tenant the reply was sent from), on
+every hub instance, and no other session. Following is not access: each recipient SHALL be checked for `read` on the
+channel's content OA when the frame is built, and one who fails the check — a mentioned non-member, a member since
+removed — or whose check cannot be answered SHALL receive nothing. Each state carries the time it was read
+(`as_of`); a client keeps the newest per thread, and ignores a summary whose reply count is below the one shown.
+The frames are built after the reply commits and off the request path; a reply whose summary cannot be built is
+still delivered, without it. A follow, unfollow
+or read of a thread SHALL send the caller's new state the same way, so their other devices agree within a second.
+A state without a tenant SHALL NOT be sent. Root messages keep their `chat_message` frame.
+
+#### Scenario: A reply in a followed thread
+- **WHEN** B replies to a thread A follows while A and C both watch the channel
+- **THEN** A and C see the new summary; only A's sessions receive A's unread count; a session of the same node id
+  in another tenant receives nothing
+
+#### Scenario: Mentioned without access
+- **WHEN** a reply mentions D, who cannot read the channel
+- **THEN** D receives no `thread_state` for it, now or on later replies
+
+#### Scenario: Read on the phone
+- **WHEN** A opens the thread on their phone
+- **THEN** A's laptop shows the thread with nothing unread
+
 ### Requirement: Permission events are narrow and wait for replicas
 A permission event SHALL name only the users whose own standing a write changed: for an assignment, the users at or beneath the child (never the parent's other members); for an association, the users beneath the user attribute; for a prohibition, the users beneath its subject; for a deleted node, the users it held. An object attribute has no audience: a folder created, moved or deleted, or a channel created, reaches people through its own event, and the permission cache is dropped on a move.
 

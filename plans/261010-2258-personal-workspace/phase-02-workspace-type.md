@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Loại workspace đáng tin"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: [1]
@@ -27,4 +27,14 @@ mọi đường khác mặc định 'personal' → cột không tin được. Pr
 3. Hiện thực; gates.
 
 ## Success Criteria
-- [ ] Mọi workspace có loại đúng; proto hai phía đã sinh lại; test xanh.
+- [x] Mọi workspace có loại đúng; proto hai phía đã sinh lại; test xanh.
+
+## Kết quả (2026-10-11)
+- Loại gán lúc tạo: đăng nhập lần đầu (OTP, Google không `hd`) = `personal`; "Tạo workspace" và Google theo
+  tên miền = `organization`. `CreateWorkspace` từ chối loại thiếu/lạ trước mọi ghi đồ thị/DB.
+- Migration 044: backfill một lần (đánh dấu bằng comment cột), DB dev 37 personal / 23 organization; bỏ
+  DEFAULT 'personal' — insert không ghi loại thì lỗi. Mọi fixture test ghi rõ loại.
+- `workspace.proto` chỉ Go dùng (frontend sinh TS từ `ws.proto`), nên chỉ `make proto`.
+- API: `GET /api/workspaces`, `GET /api/me/workspaces`, `GET /api/me` (`current_tenant.type`); hook
+  `useWorkspaceType()` (không đoán khi chưa biết).
+- Review: `plans/reports/code-reviewer-261011-0845-workspace-type.md` — M1 (default) và M2 (fake) đã sửa.

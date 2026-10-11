@@ -180,6 +180,9 @@ func (s *AssetRequestService) loadForDecision(ctx context.Context, requestID, op
 	if err != nil {
 		return nil, nil, errDenied(op)
 	}
+	if err := requireOrganization(ctx, s.store, r.WorkspaceID); err != nil {
+		return nil, nil, err
+	}
 	at, err := s.store.GetType(ctx, r.TypeID)
 	if err != nil {
 		return nil, nil, errDenied(op)

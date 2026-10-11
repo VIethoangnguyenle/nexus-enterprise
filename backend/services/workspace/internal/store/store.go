@@ -20,8 +20,8 @@ func New(db *pgxpool.Pool) *Store {
 // Insert persists a new workspace row.
 func (s *Store) Insert(ctx context.Context, ws *Workspace) error {
 	_, err := s.db.Exec(ctx,
-		"INSERT INTO workspaces (id, name, description, owner_id, ngac_pc_id, documents_oa_id) VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''))",
-		ws.ID, ws.Name, ws.Desc, ws.OwnerID, ws.NGACPcID, ws.DocumentsOAID,
+		"INSERT INTO workspaces (id, name, description, owner_id, ngac_pc_id, documents_oa_id, type) VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7)",
+		ws.ID, ws.Name, ws.Desc, ws.OwnerID, ws.NGACPcID, ws.DocumentsOAID, ws.Type,
 	)
 	if err != nil {
 		return fmt.Errorf("insert workspace: %w", err)
@@ -33,8 +33,8 @@ func (s *Store) Insert(ctx context.Context, ws *Workspace) error {
 func (s *Store) GetByID(ctx context.Context, id string) (*Workspace, error) {
 	var ws Workspace
 	err := s.db.QueryRow(ctx,
-		"SELECT id, name, COALESCE(description, ''), ngac_pc_id FROM workspaces WHERE id = $1", id,
-	).Scan(&ws.ID, &ws.Name, &ws.Desc, &ws.NGACPcID)
+		"SELECT id, name, COALESCE(description, ''), ngac_pc_id, type FROM workspaces WHERE id = $1", id,
+	).Scan(&ws.ID, &ws.Name, &ws.Desc, &ws.NGACPcID, &ws.Type)
 	if err != nil {
 		return nil, fmt.Errorf("get workspace %s: %w", id, err)
 	}
@@ -58,7 +58,7 @@ func (s *Store) UpdateDetails(ctx context.Context, id string, name, description 
 // ListAll returns all workspaces ordered by creation time descending.
 func (s *Store) ListAll(ctx context.Context) ([]*Workspace, error) {
 	rows, err := s.db.Query(ctx,
-		"SELECT id, name, ngac_pc_id FROM workspaces ORDER BY created_at DESC",
+		"SELECT id, name, ngac_pc_id, type FROM workspaces ORDER BY created_at DESC",
 	)
 	if err != nil {
 		return nil, fmt.Errorf("list workspaces: %w", err)
@@ -68,7 +68,7 @@ func (s *Store) ListAll(ctx context.Context) ([]*Workspace, error) {
 	var result []*Workspace
 	for rows.Next() {
 		var ws Workspace
-		if err := rows.Scan(&ws.ID, &ws.Name, &ws.NGACPcID); err != nil {
+		if err := rows.Scan(&ws.ID, &ws.Name, &ws.NGACPcID, &ws.Type); err != nil {
 			return nil, fmt.Errorf("scan workspace: %w", err)
 		}
 		result = append(result, &ws)

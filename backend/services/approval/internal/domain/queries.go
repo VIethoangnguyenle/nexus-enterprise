@@ -16,6 +16,9 @@ const defaultPageLimit = 20
 
 // GetPending returns all pending assignments for a user (Tab 1 — no paging).
 func (s *Service) GetPending(ctx context.Context, userNodeID string) ([]*RequestWithAssignment, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, err
+	}
 	if userNodeID == "" {
 		return nil, ErrInvalidInput
 	}
@@ -36,6 +39,9 @@ func (s *Service) GetPending(ctx context.Context, userNodeID string) ([]*Request
 
 // GetHistory returns actioned assignments with cursor paging (Tab 2).
 func (s *Service) GetHistory(ctx context.Context, userNodeID, cursor string, limit int) ([]*RequestWithAssignment, string, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, "", err
+	}
 	if userNodeID == "" {
 		return nil, "", ErrInvalidInput
 	}
@@ -51,6 +57,9 @@ func (s *Service) GetHistory(ctx context.Context, userNodeID, cursor string, lim
 
 // GetMyRequests returns requests created by the user with cursor paging (Tab 3).
 func (s *Service) GetMyRequests(ctx context.Context, userNodeID, cursor string, limit int) ([]*Request, string, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, "", err
+	}
 	if userNodeID == "" {
 		return nil, "", ErrInvalidInput
 	}
@@ -67,6 +76,9 @@ func (s *Service) GetMyRequests(ctx context.Context, userNodeID, cursor string, 
 // GetDepartmentRequests returns requests visible via scope-based access (Tab 4).
 // Uses ResolveAccessibleScopes to determine which OA scopes the user can see.
 func (s *Service) GetDepartmentRequests(ctx context.Context, userNodeID, cursor string, limit int) ([]*Request, string, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, "", err
+	}
 	if userNodeID == "" {
 		return nil, "", ErrInvalidInput
 	}
@@ -96,6 +108,9 @@ func (s *Service) GetDepartmentRequests(ctx context.Context, userNodeID, cursor 
 // scope includes it. Anyone else is denied; the trail names every actor and
 // carries the form-level detail of each action.
 func (s *Service) GetAuditLog(ctx context.Context, userNodeID, requestID string) ([]*AuditEntry, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, err
+	}
 	// Request ids are UUIDs; anything else is a malformed request (400), not a
 	// database error (500).
 	if _, err := uuid.Parse(requestID); err != nil {
@@ -131,6 +146,9 @@ func (s *Service) GetAuditLog(ctx context.Context, userNodeID, requestID string)
 // three paths GetAuditLog accepts. Anyone else, and a request that does not
 // exist, get ErrAccessDenied, so the answer does not reveal which ids are real.
 func (s *Service) GetRequestDetail(ctx context.Context, userNodeID, requestID string) (*RequestDetail, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, err
+	}
 	if _, err := uuid.Parse(requestID); err != nil {
 		return nil, ErrInvalidInput
 	}

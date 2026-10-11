@@ -345,6 +345,7 @@ func (s *Service) DeleteItem(ctx context.Context, req *pb.DeleteItemRequest) (*p
 	for _, f := range files {
 		// Files inherit their folder's OA: no NGAC node of their own to delete.
 		if f.ObjectKey != nil {
+			s.removeRendition(ctx, f)
 			if _, err := s.docStorage.DeleteObject(ctx, &docpb.DeleteObjectRequest{
 				WorkspaceId: f.WorkspaceID, ObjectKey: *f.ObjectKey,
 			}); err != nil {

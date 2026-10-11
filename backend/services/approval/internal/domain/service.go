@@ -29,6 +29,7 @@ type Store interface {
 	RequestStore
 	AuditStore
 	DirectoryStore
+	WorkspaceStore
 	Transactor
 }
 

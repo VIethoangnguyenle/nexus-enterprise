@@ -1,6 +1,7 @@
 import { createFileRoute, Outlet, useRouterState } from '@tanstack/react-router'
 import { motion } from 'motion/react'
 import { AuthShell } from '../components/auth/AuthShell'
+import { OfflineBar } from '../components/app/OfflineBar'
 import { useMotionPresets } from '../lib/motion'
 
 export const Route = createFileRoute('/_auth')({
@@ -18,11 +19,15 @@ function AuthLayout() {
   const m = useMotionPresets()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   return (
-    <AuthShell wide={pathname === '/workspace-select'}>
-      {/* Route change: the content fades in, no slide (DESIGN.md §7). */}
-      <motion.div key={pathname} initial={m.route.initial} animate={m.route.animate} className="grid gap-5">
-        <Outlet />
-      </motion.div>
-    </AuthShell>
+    <>
+      <OfflineBar />
+      <AuthShell wide={pathname === '/workspace-select'}>
+        {/* Route change: the content fades in, no slide (DESIGN.md §7). */}
+        <motion.div key={pathname} initial={m.route.initial} animate={m.route.animate} className="grid gap-5">
+          <Outlet />
+        </motion.div>
+      </AuthShell>
+    </>
+
   )
 }

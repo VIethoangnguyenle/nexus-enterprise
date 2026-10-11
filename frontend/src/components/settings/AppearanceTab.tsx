@@ -158,7 +158,7 @@ export function AppearanceTab() {
       <section className="flex items-center gap-4">
         <div className="grid flex-1 min-w-0">
           <span id={`${themeId}-rail`} className="font-semibold text-ink">Thu gọn sidebar</span>
-          <span className="text-sm text-ink-muted">Chỉ hiện icon, tên mục hiện khi rê chuột.</span>
+          <span className="text-sm text-ink-muted">Menu chính thành dải icon 72px, mỗi mục một nhãn nhỏ bên dưới. Phím tắt Ctrl+\ (⌘\ trên macOS).</span>
         </div>
         <Pressable
           role="switch"

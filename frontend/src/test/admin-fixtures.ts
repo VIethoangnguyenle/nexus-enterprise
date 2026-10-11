@@ -128,10 +128,12 @@ export interface Mode {
   invitationsForbidden: boolean
   /** The workspace has no Assets OA yet. */
   noAssets: boolean
+  /** The workspace is personal. */
+  personal?: boolean
   /** What the server says the areas offer, instead of the real table (to prove the screen follows the answer). */
   areas: PermissionArea[] | null
 }
-const DEFAULT_MODE: Mode = { forbidden: false, membersError: false, empty: false, hang: false, listError: false, inviteStatus: 0, invitationsForbidden: false, saveStatus: 0, noAssets: false, areas: null }
+const DEFAULT_MODE: Mode = { forbidden: false, membersError: false, empty: false, hang: false, listError: false, inviteStatus: 0, invitationsForbidden: false, saveStatus: 0, noAssets: false, personal: false, areas: null }
 export const mode: Mode = { ...DEFAULT_MODE }
 
 let departments = structuredClone(DEPARTMENTS0)
@@ -176,7 +178,7 @@ export function adminFixtureApi(path: string, init?: RequestInit): Promise<unkno
   calls.push({ method, path: p, ...(body ? { body } : {}) })
   const ok = (v: unknown) => Promise.resolve(structuredClone(v))
 
-  if (p === '/workspaces') return ok({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành' }] })
+  if (p === '/workspaces') return ok({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành', type: mode.personal ? 'personal' : undefined }] })
   const prefix = `/workspaces/${WS_ID}`
   if (!p.startsWith(prefix)) return Promise.reject(new Error(`adminFixtureApi: unexpected ${method} ${path}`))
   const rest = p.slice(prefix.length)

@@ -2,6 +2,9 @@ import { screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
+import { apiFetch } from '../../api/client'
+import { routerState } from '../../test/router-mock'
+import { CH, fixtureApi } from '../../test/chat-fixtures'
 import { UUID_RE } from '../../test/chat-fixtures'
 import { HomeView } from './HomeView'
 
@@ -65,5 +68,28 @@ describe('HomeView filter chips', () => {
     renderWithClient(<HomeView />)
     await screen.findByText('Phạm Hải Yến')
     expect(document.body.textContent).not.toMatch(UUID_RE)
+  })
+})
+
+describe('HomeView Thread có tin mới', () => {
+  it('lists followed threads with news above the conversations and opens one in its group', async () => {
+    vi.mocked(apiFetch).mockImplementation((path: string, init?: RequestInit) =>
+      path.startsWith('/threads/unread')
+        ? Promise.resolve({
+            messages: [{
+              id: '44444444-aaaa-4bbb-8ccc-000000000099', channel_id: CH.doisoat, sender_id: 'x', sender_name: 'Lê Quang Vinh',
+              content: 'Ảnh sao kê', thread_unread_count: 2, reply_count: 3, last_reply_at: { seconds: 1760000000, nanos: 0 },
+            }],
+          })
+        : fixtureApi(path, init))
+    const user = userEvent.setup()
+    renderWithClient(<HomeView />)
+    const row = await screen.findByRole('button', { name: /^Thread của Lê Quang Vinh trong Đối soát giao dịch, 2 trả lời mới/ })
+    await user.click(row)
+    expect(routerState.navigate).toHaveBeenCalledWith({
+      to: '/channels/$channelId', params: { channelId: CH.doisoat }, search: { thread: '44444444-aaaa-4bbb-8ccc-000000000099' },
+    })
+    expect(document.body.textContent).not.toMatch(UUID_RE)
+    vi.mocked(apiFetch).mockImplementation(fixtureApi as never)
   })
 })

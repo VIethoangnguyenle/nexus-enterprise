@@ -3,6 +3,7 @@
 package rest
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -17,7 +18,11 @@ import (
 // Broadcaster pushes real-time events to WebSocket clients.
 type Broadcaster interface {
 	BroadcastToChannel(channelID string, msg *pb.Message)
-	BroadcastThreadReply(channelID string, msg *pb.Message)
+	BroadcastThreadReply(channelID string, ev *pb.ThreadReplyEvent)
+	SendThreadStates(tenantID string, states map[string]*pb.ThreadStateEvent)
+	BroadcastMessageEdited(channelID string, msg *pb.Message)
+	BroadcastMessageDeleted(channelID string, ev *pb.MessageDeletedEvent)
+	BroadcastPollChanged(channelID, pollID string)
 }
 
 // Handler serves messaging REST endpoints.
@@ -49,6 +54,37 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// Threads
 	api.GET("/messages/:msgId/thread", h.GetThread)
 	api.GET("/threads/entity/:entityType/:entityId", h.FindThreadsByEntity)
+	api.POST("/messages/:msgId/follow", h.FollowThread)
+	api.DELETE("/messages/:msgId/follow", h.UnfollowThread)
+	api.POST("/messages/:msgId/thread/read", h.MarkThreadRead)
+	api.GET("/channels/:chId/threads", h.ListThreads)
+	api.GET("/threads/unread", h.UnreadThreads)
+
+	// The caller's stars, and the messages that mention them
+	api.PUT("/channels/:chId/star", h.StarConversation)
+	api.DELETE("/channels/:chId/star", h.UnstarConversation)
+	api.PUT("/messages/:msgId/star", h.StarMessage)
+	api.DELETE("/messages/:msgId/star", h.UnstarMessage)
+	api.GET("/messages/starred", h.StarredMessages)
+	api.GET("/messages/mentions", h.Mentions)
+	api.GET("/messages/mentions/unread-count", h.UnreadMentionCount)
+
+	// The caller's push preferences (the rest of /api/me is the auth service's)
+	api.GET("/me/push-preferences", h.GetPushPreferences)
+	api.PUT("/me/push-preferences", h.PutPushPreferences)
+
+	// Personal navigator sections
+	api.GET("/workspaces/:id/chat-sections", h.ListSections)
+	api.POST("/workspaces/:id/chat-sections", h.CreateSection)
+	api.PATCH("/workspaces/:id/chat-sections/:sectionId", h.UpdateSection)
+	api.DELETE("/workspaces/:id/chat-sections/:sectionId", h.DeleteSection)
+	api.PUT("/workspaces/:id/chat-sections/:sectionId/channels/:chId", h.PlaceChannel)
+	api.DELETE("/workspaces/:id/chat-sections/channels/:chId", h.UnplaceChannel)
+
+	// Message lifecycle
+	api.PATCH("/messages/:msgId", h.EditMessage)
+	api.DELETE("/messages/:msgId", h.DeleteMessage)
+	api.POST("/messages/:msgId/unread", h.MarkMessageUnread)
 
 	// Channel Members
 	api.POST("/channels/:chId/members", h.AddChannelMember)
@@ -73,6 +109,10 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/channels/:chId/read", h.MarkChannelRead)
 	api.GET("/channels/unread", h.GetUnreadCounts)
 
+	// Notification level: the caller's own, per conversation they read.
+	api.GET("/channels/:chId/notification-level", h.GetNotificationLevel)
+	api.PUT("/channels/:chId/notification-level", h.SetNotificationLevel)
+
 	// Search
 	api.GET("/channels/:chId/search", h.SearchMessages)
 
@@ -81,6 +121,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/polls/:pollId/vote", h.VotePoll)
 	api.DELETE("/polls/:pollId/vote", h.RemoveVote)
 	api.GET("/polls/:pollId", h.GetPoll)
+	api.POST("/polls/:pollId/close", h.ClosePoll)
 
 	// Tasks
 	api.POST("/channels/:chId/tasks", h.CreateTask)
@@ -143,7 +184,7 @@ func (h *Handler) GetChannel(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	ch, err := h.svc.GetChannel(c.Request().Context(), c.Param("chId"), claims.NGACNodeID)
+	ch, err := h.svc.GetChannelFor(c.Request().Context(), c.Param("chId"), claims.UserID, claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -169,6 +210,18 @@ func (h *Handler) UpdateChannel(c echo.Context) error {
 	return c.JSON(http.StatusOK, ch)
 }
 
+// mapSendError answers a refused send. A quote that names no live message of the
+// channel is a 400 with a reason, so the client can drop that quote and keep the
+// rest of the message; everything else maps as everywhere.
+func mapSendError(err error) *echo.HTTPError {
+	if errors.Is(err, domain.ErrQuoteUnavailable) {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]any{
+			"message": err.Error(), "reason": domain.ReasonQuotedMessageUnavailable,
+		})
+	}
+	return httputil.MapDomainError(err)
+}
+
 // SendMessage handles POST /api/channels/:chId/messages.
 func (h *Handler) SendMessage(c echo.Context) error {
 	claims, err := httputil.RequireClaims(c)
@@ -182,9 +235,19 @@ func (h *Handler) SendMessage(c echo.Context) error {
 		LinkedEntityType string   `json:"linked_entity_type"`
 		LinkedEntityID   string   `json:"linked_entity_id"`
 		ParentMessageID  string   `json:"parent_message_id"`
+		QuotedMessageID  string   `json:"quoted_message_id"`
+		Attachments      []struct {
+			DriveFileID string `json:"drive_file_id"`
+			Width       int32  `json:"width"`
+			Height      int32  `json:"height"`
+		} `json:"attachments"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	attachments := make([]domain.AttachmentInput, 0, len(body.Attachments))
+	for _, a := range body.Attachments {
+		attachments = append(attachments, domain.AttachmentInput{DriveFileID: a.DriveFileID, Width: a.Width, Height: a.Height})
 	}
 
 	msg, err := h.svc.SendMessage(c.Request().Context(), domain.SendMessageInput{
@@ -197,16 +260,14 @@ func (h *Handler) SendMessage(c echo.Context) error {
 		ParentMessageID:  body.ParentMessageID,
 		LinkedEntityType: body.LinkedEntityType,
 		LinkedEntityID:   body.LinkedEntityID,
+		Attachments:      attachments,
+		QuotedMessageID:  body.QuotedMessageID,
 	})
 	if err != nil {
-		return httputil.MapDomainError(err)
+		return mapSendError(err)
 	}
 
-	// Broadcast via WebSocket hub (fire-and-forget).
-	if h.hub != nil {
-		h.hub.BroadcastToChannel(c.Param("chId"), msg)
-	}
-
+	h.announceMessage(c.Request().Context(), claims.TenantID, msg)
 	return c.JSON(http.StatusCreated, msg)
 }
 
@@ -225,7 +286,7 @@ func (h *Handler) GetMessages(c echo.Context) error {
 		}
 	}
 
-	msgs, err := h.svc.GetMessages(c.Request().Context(), c.Param("chId"), claims.NGACNodeID, before, limit)
+	msgs, err := h.svc.GetMessages(c.Request().Context(), c.Param("chId"), claims.UserID, claims.NGACNodeID, before, limit)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -238,7 +299,7 @@ func (h *Handler) GetThread(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	msgs, err := h.svc.GetThread(c.Request().Context(), c.Param("msgId"), claims.NGACNodeID)
+	msgs, err := h.svc.GetThread(c.Request().Context(), c.Param("msgId"), claims.UserID, claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

@@ -1,7 +1,7 @@
 ---
 phase: 10
 title: "Mục trong cột điều hướng (như Google Chat)"
-status: pending
+status: in-progress
 priority: P2
 effort: "1.5d"
 dependencies: [1, 5]
@@ -33,3 +33,8 @@ DESIGN.md "Chat: cột điều hướng và mục" + mockup `spaces.html` §1.
 - [ ] Tạo, đổi tên, sắp xếp, xoá mục; chuyển/bỏ cuộc trò chuyện; Hoàn tác — khớp mockup.
 - [ ] Test deny đủ ba trường hợp trên; migration áp dụng bằng `make db-migrate` và kiểm chứng.
 - [ ] Mọi gate xanh; không ID nào lên màn hình.
+
+## Tiến độ
+- Backend xong 2026-10-11: migration 041, REST `/api/workspaces/:id/chat-sections` (+ vite regex, Traefik, nginx), Undo bằng tạo lại từ ảnh chụp trả về khi xoá; test deny (mục người khác, kênh không đọc được, kênh workspace khác, ngoài workspace). Spec `chat-sections`. **Còn:** UI cột điều hướng.
+- UI xong 2026-10-11 (vitest xanh, chưa kiểm trình duyệt 390/1440): cột điều hướng (`ChatNavigator`), tab Tin nhắn điện thoại (`PhoneChatList`, nhấn giữ -> sheet), menu mục, popover tên mục, kéo thả, Hoàn tác. Bỏ: Gắn sao, Tắt thông báo (chưa có backend). **Còn:** ảnh chụp trình duyệt.
+- Review: `plans/reports/code-reviewer-261011-0830-chat-wave2-backend.md` (C1, H1, H2, M1–M5, M8 đã sửa; M6 bằng dòng hệ thống; M7 — sửa tin không đổi danh sách nhắc tên — giữ nguyên, ghi vào câu hỏi mở).

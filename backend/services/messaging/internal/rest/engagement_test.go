@@ -39,6 +39,19 @@ func (a answerPolicy) CheckAccess(context.Context, *policypb.CheckAccessRequest,
 	return &policypb.AccessDecision{Decision: ngac.DecisionDeny}, nil
 }
 
+// BatchCheckAccess answers every (object, operation) the same way.
+func (a answerPolicy) BatchCheckAccess(_ context.Context, req *policypb.BatchCheckAccessRequest, _ ...grpc.CallOption) (*policypb.BatchAccessResult, error) {
+	results := make(map[string]*policypb.ObjectPermissions, len(req.ObjectIds))
+	for _, id := range req.ObjectIds {
+		perms := make(map[string]bool, len(req.Operations))
+		for _, op := range req.Operations {
+			perms[op] = a.allow
+		}
+		results[id] = &policypb.ObjectPermissions{Permissions: perms}
+	}
+	return &policypb.BatchAccessResult{Results: results}, nil
+}
+
 type namedUser struct{ authpb.AuthServiceClient }
 
 func (namedUser) GetUserByID(_ context.Context, r *authpb.GetUserByIDRequest, _ ...grpc.CallOption) (*authpb.UserInfo, error) {
@@ -46,6 +59,7 @@ func (namedUser) GetUserByID(_ context.Context, r *authpb.GetUserByIDRequest, _ 
 }
 
 type chat struct {
+	ws    string
 	pool  *pgxpool.Pool
 	user  string
 	node  string
@@ -60,7 +74,7 @@ func newChat(t *testing.T) *chat {
 	user, node := testutil.CreateUser(t, pool)
 	ws, _ := testutil.CreateWorkspace(t, pool, user)
 	n := time.Now().UnixNano()
-	c := &chat{pool: pool, user: user, node: node, chID: fmt.Sprintf("rest-ch-%d", n), msgID: fmt.Sprintf("rest-msg-%d", n)}
+	c := &chat{ws: ws, pool: pool, user: user, node: node, chID: fmt.Sprintf("rest-ch-%d", n), msgID: fmt.Sprintf("rest-msg-%d", n)}
 	oa := fmt.Sprintf("rest-oa-%d", n)
 	_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $2, $3)`, oa, "rest-oa-"+oa, ngac.TypeOA)
 	require.NoError(t, err)
@@ -86,7 +100,7 @@ func (c *chat) echo(allow bool) *echo.Echo {
 	e := httputil.NewEcho("messaging")
 	as := func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
-			httputil.SetClaims(ctx, &httputil.Claims{UserID: c.user, NGACNodeID: c.node})
+			httputil.SetClaims(ctx, &httputil.Claims{UserID: c.user, NGACNodeID: c.node, TenantID: c.ws})
 			return next(ctx)
 		}
 	}
@@ -107,9 +121,44 @@ func (c *chat) echo(allow bool) *echo.Echo {
 	e.PATCH("/api/tasks/:taskId", h.UpdateTask, as)
 	e.GET("/api/channels/:chId/tasks", h.ListTasks, as)
 	e.GET("/api/channels/:chId/messages", h.GetMessages, as)
+	e.POST("/api/channels/:chId/messages", h.SendMessage, as)
 	e.GET("/api/messages/:msgId/thread", h.GetThread, as)
 	e.GET("/api/channels/:chId", h.GetChannel, as)
+	e.POST("/api/messages/:msgId/follow", h.FollowThread, as)
+	e.DELETE("/api/messages/:msgId/follow", h.UnfollowThread, as)
+	e.POST("/api/messages/:msgId/thread/read", h.MarkThreadRead, as)
+	e.GET("/api/channels/:chId/threads", h.ListThreads, as)
+	e.GET("/api/channels/:chId/notification-level", h.GetNotificationLevel, as)
+	e.PUT("/api/channels/:chId/notification-level", h.SetNotificationLevel, as)
+	e.GET("/api/threads/unread", h.UnreadThreads, as)
+	e.PUT("/api/channels/:chId/star", h.StarConversation, as)
+	e.DELETE("/api/channels/:chId/star", h.UnstarConversation, as)
+	e.PUT("/api/messages/:msgId/star", h.StarMessage, as)
+	e.DELETE("/api/messages/:msgId/star", h.UnstarMessage, as)
+	e.GET("/api/messages/starred", h.StarredMessages, as)
+	e.GET("/api/messages/mentions", h.Mentions, as)
+	e.GET("/api/messages/mentions/unread-count", h.UnreadMentionCount, as)
 	return e
+}
+
+func TestUnreadThreadsRoute_AnswersAList(t *testing.T) {
+	c := newChat(t)
+	rec := call(c.echo(true), http.MethodGet, "/api/threads/unread?limit=5", ``)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	rec = call(c.echo(true), http.MethodGet, "/api/threads/unread?limit=x", ``)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestNotificationLevelRoutes_ReadAndSet(t *testing.T) {
+	c := newChat(t)
+	e := c.echo(true)
+	path := "/api/channels/" + c.chID + "/notification-level"
+	rec := call(e, http.MethodGet, path, ``)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "main", decode(t, rec)["level"], "the default")
+	rec = call(e, http.MethodPut, path, `{"level":"off"}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "off", decode(t, call(e, http.MethodGet, path, ``))["level"])
 }
 
 func call(e *echo.Echo, method, path, body string) *httptest.ResponseRecorder {
@@ -145,6 +194,8 @@ func TestEngagementRoutes_AnswerForbiddenWhenPolicyRefuses(t *testing.T) {
 		"messages":        {http.MethodGet, "/api/channels/" + c.chID + "/messages", ``},
 		"thread":          {http.MethodGet, "/api/messages/" + c.msgID + "/thread", ``},
 		"channel":         {http.MethodGet, "/api/channels/" + c.chID, ``},
+		"get level":       {http.MethodGet, "/api/channels/" + c.chID + "/notification-level", ``},
+		"set level":       {http.MethodPut, "/api/channels/" + c.chID + "/notification-level", `{"level":"off"}`},
 	} {
 		rec := call(e, tc.method, tc.path, tc.body)
 		assert.Equal(t, http.StatusForbidden, rec.Code, "%s: %s", name, rec.Body)
@@ -169,6 +220,8 @@ func TestEngagementRoutes_BadBodiesAreRefusedBeforeAnyWork(t *testing.T) {
 		"reaction empty": {http.MethodPost, "/api/messages/" + c.msgID + "/reactions", `{"emoji":""}`},
 		"poll one opt":   {http.MethodPost, "/api/channels/" + c.chID + "/polls", `{"question":"q","options":["a"]}`},
 		"task no title":  {http.MethodPost, "/api/channels/" + c.chID + "/tasks", `{}`},
+		"level json":     {http.MethodPut, "/api/channels/" + c.chID + "/notification-level", `{`},
+		"level unknown":  {http.MethodPut, "/api/channels/" + c.chID + "/notification-level", `{"level":"loud"}`},
 	} {
 		rec := call(e, tc.method, tc.path, tc.body)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, "%s: %s", name, rec.Body)

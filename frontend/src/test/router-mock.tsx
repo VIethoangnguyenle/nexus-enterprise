@@ -10,6 +10,9 @@ export const routerState = {
   pathname: '/channels',
   search: {} as Record<string, unknown>,
   navigate: vi.fn(),
+  /** Whether the app's own history has an entry before this one. */
+  canGoBack: false,
+  back: vi.fn(),
 }
 
 export function routerMockFactory() {
@@ -27,6 +30,8 @@ export function routerMockFactory() {
       )
     },
     useNavigate: () => routerState.navigate,
+    useCanGoBack: () => routerState.canGoBack,
+    useRouter: () => ({ history: { back: routerState.back } }),
     useParams: () => routerState.params,
     useSearch: () => routerState.search,
     useRouterState: ({ select }: { select: (s: { location: { pathname: string } }) => unknown }) =>

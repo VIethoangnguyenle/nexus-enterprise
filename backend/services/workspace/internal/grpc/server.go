@@ -55,7 +55,7 @@ func (s *WorkspaceServer) CreateWorkspace(ctx context.Context, req *pb.CreateWor
 		return nil, status.Error(codes.InvalidArgument, "name required")
 	}
 	res, err := s.svc.CreateWorkspace(ctx, domain.CreateWorkspaceInput{
-		Name: req.Name, UserID: grpcauth.CallerFrom(ctx).UserID, UserNGACNodeID: grpcauth.CallerFrom(ctx).NGACNodeID,
+		Name: req.Name, Type: req.Type, UserID: grpcauth.CallerFrom(ctx).UserID, UserNGACNodeID: grpcauth.CallerFrom(ctx).NGACNodeID,
 	})
 	if err != nil {
 		return nil, mapError(err)

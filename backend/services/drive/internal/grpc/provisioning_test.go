@@ -440,7 +440,7 @@ func TestCreateDriveForChannel_DoesNotAdoptAnotherWorkspacesRootOA(t *testing.T)
 	ch := insertTestChannel(t, pool, "mine", ws)
 	other := "drive-test-ws-other-" + uuid.NewString()
 	ctx := context.Background()
-	_, err := pool.Exec(ctx, `INSERT INTO workspaces (id, name, owner_id) SELECT $1, $1, owner_id FROM workspaces WHERE id = $2`, other, ws)
+	_, err := pool.Exec(ctx, `INSERT INTO workspaces (id, name, owner_id, type) SELECT $1, $1, owner_id, type FROM workspaces WHERE id = $2`, other, ws)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		pool.Exec(ctx, "DELETE FROM drive_items WHERE workspace_id = $1", other)

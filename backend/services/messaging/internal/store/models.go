@@ -19,19 +19,40 @@ type Channel struct {
 
 // Message represents a row in the messages table.
 type Message struct {
-	ID               string
-	ChannelID        string
-	SenderID         string
-	SenderName       string
-	Content          string
+	ID         string
+	ChannelID  string
+	SenderID   string
+	SenderName string
+	Content    string
+	// ContentText is the readable text (no markup) kept for search and previews;
+	// empty means the content is its own text.
+	ContentText      string
 	MessageType      string
 	ParentMessageID  string
 	LinkedEntityType string
 	LinkedEntityID   string
 	ReplyCount       int32
+	LastReplyAt      *time.Time // nil until the first reply
 	ContentFormat    string
 	Mentions         []string
 	IsPinned         bool
 	Reactions        []ReactionGroup
+	Attachments      []Attachment
 	CreatedAt        time.Time
+
+	EditedAt        *time.Time // nil until its sender changes the text
+	Deleted         bool       // soft-deleted: body and files are never returned
+	QuotedMessageID string     // the message this one quotes, when any
+	Quoted          *Quote     // filled for display where a page is enriched
+
+	// Thread state as seen by one caller; filled only where a caller is known.
+	Following           bool
+	ThreadUnread        int32
+	ReplyParticipantIDs []string
+
+	// Set only where a caller's own feed is listed: when the caller starred the
+	// message (the starred feed), and whether the caller has yet to read it (the
+	// mentions feed).
+	StarredAt *time.Time
+	Unread    bool
 }

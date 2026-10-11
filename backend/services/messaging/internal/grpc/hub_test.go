@@ -460,6 +460,60 @@ func TestTyping_DeliveredWhenSubscribed(t *testing.T) {
 	assert.Nil(t, alice.next(t, isError(403), quiet))
 }
 
+func (c *wsTestClient) view(t *testing.T, channelID string) {
+	t.Helper()
+	c.send(t, &pb.ClientEnvelope{Payload: &pb.ClientEnvelope_View{View: &pb.ViewRequest{ChannelId: channelID}}})
+}
+
+// viewingSoon waits for the hub to agree that userID is (or is not) viewing.
+func viewingSoon(hub *grpcserver.Hub, userID, channelID string, want bool) bool {
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(10 * time.Millisecond) {
+		if hub.IsViewing(userID, channelID) == want {
+			return true
+		}
+	}
+	return false
+}
+
+// Being subscribed is not viewing: the navigator subscribes to every listed
+// conversation, and a tab left open must not silence a person's phone.
+func TestIsViewing_OnlyTheConversationOnScreen(t *testing.T) {
+	access := &fakeAccess{allow: map[[3]string]bool{
+		{"ch-1", "n-alice", ngac.OpRead}: true,
+		{"ch-2", "n-alice", ngac.OpRead}: true,
+	}}
+	hub, url := startHub(t, access)
+	alice := connect(t, url, identity{"u-alice", "alice", "n-alice", "tenant-a"})
+	subscribeAndWait(t, hub, alice, "ch-1")
+	subscribeAndWait(t, hub, alice, "ch-2")
+	assert.False(t, hub.IsViewing("u-alice", "ch-1"), "subscribed alone is not viewing")
+
+	alice.view(t, "ch-1")
+	require.True(t, viewingSoon(hub, "u-alice", "ch-1", true), "the conversation on screen is viewed")
+	assert.False(t, hub.IsViewing("u-alice", "ch-2"), "another subscribed conversation is not")
+
+	alice.view(t, "") // page hidden, or nothing open
+	assert.True(t, viewingSoon(hub, "u-alice", "ch-1", false), "a hidden page views nothing")
+}
+
+// Deny: a session cannot claim to view a conversation it may not read, and
+// viewing ends with the subscription.
+func TestIsViewing_NeedsTheSubscription(t *testing.T) {
+	access := &fakeAccess{allow: map[[3]string]bool{{"ch-1", "n-alice", ngac.OpRead}: true}}
+	hub, url := startHub(t, access)
+	alice := connect(t, url, identity{"u-alice", "alice", "n-alice", "tenant-a"})
+
+	alice.view(t, "ch-1")
+	require.NotNil(t, alice.next(t, isError(403), 2*time.Second), "viewing an unsubscribed conversation answers 403")
+	assert.False(t, hub.IsViewing("u-alice", "ch-1"))
+
+	subscribeAndWait(t, hub, alice, "ch-1")
+	alice.view(t, "ch-1")
+	require.True(t, viewingSoon(hub, "u-alice", "ch-1", true))
+	alice.send(t, &pb.ClientEnvelope{Payload: &pb.ClientEnvelope_Unsubscribe{Unsubscribe: &pb.UnsubscribeRequest{ChannelId: "ch-1"}}})
+	assert.True(t, viewingSoon(hub, "u-alice", "ch-1", false), "unsubscribed: no longer viewing")
+}
+
 // ---------------------------------------------------------------------------
 // Revocation — a removed member's live subscription is dropped
 // ---------------------------------------------------------------------------

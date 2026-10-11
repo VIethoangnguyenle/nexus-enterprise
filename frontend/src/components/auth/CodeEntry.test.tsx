@@ -8,7 +8,7 @@ import { queryClient } from '../../lib/query-client'
 import { useAuthStore } from '../../stores/auth.store'
 import { calls, apiError, world } from '../../test/auth-fixtures'
 import { startAuthTest } from '../../test/auth-render'
-import { CodeEntry } from './CodeEntry'
+import { CodeEntry, SUCCESS_HOLD_MS } from './CodeEntry'
 
 vi.mock('../../api/client', async (orig) => ({
   ...(await orig<typeof import('../../api/client')>()),
@@ -148,8 +148,40 @@ describe('CodeEntry: the code field', () => {
   it('reports success to its parent with the whole response', async () => {
     const { onVerified } = mount()
     await user().type(screen.getByLabelText('Mã xác minh'), '481209')
-    await waitFor(() => expect(onVerified).toHaveBeenCalledTimes(1))
+    await screen.findByText('Đã xác minh.')
+    await act(async () => { vi.advanceTimersByTime(SUCCESS_HOLD_MS) })
+    expect(onVerified).toHaveBeenCalledTimes(1)
     expect(onVerified.mock.calls[0]?.[0]).toMatchObject({ is_new_user: false, needs_profile: false })
+  })
+
+  it('announces "Đã xác minh." in the live region and lets the check badge land before it moves on', async () => {
+    const { onVerified } = mount()
+    await user().type(screen.getByLabelText('Mã xác minh'), '481209')
+    const message = await screen.findByText('Đã xác minh.')
+    expect(message.closest('[aria-live="polite"]')).not.toBeNull()
+    expect(onVerified).not.toHaveBeenCalled()
+    await act(async () => { vi.advanceTimersByTime(SUCCESS_HOLD_MS) })
+    expect(onVerified).toHaveBeenCalledTimes(1)
+  })
+
+  // Signed in from the moment the code is accepted: leaving the screen during
+  // the badge must not strand the person on the sign-in page.
+  it('moves on at once if the screen is left while the badge is landing', async () => {
+    const { onVerified, unmount } = mount()
+    await user().type(screen.getByLabelText('Mã xác minh'), '481209')
+    await screen.findByText('Đã xác minh.')
+    unmount()
+    expect(onVerified).toHaveBeenCalledTimes(1)
+    await act(async () => { vi.advanceTimersByTime(SUCCESS_HOLD_MS * 2) })
+    expect(onVerified).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers no new code once the code is accepted', async () => {
+    mount()
+    await user().type(screen.getByLabelText('Mã xác minh'), '481209')
+    await screen.findByText('Đã xác minh.')
+    const resend = screen.queryByRole('button', { name: /Gửi lại/ })
+    if (resend) expect(resend).toBeDisabled()
   })
 
   it('shows the checking state, then stays busy until the parent moves on', async () => {

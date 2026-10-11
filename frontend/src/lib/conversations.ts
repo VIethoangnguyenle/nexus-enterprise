@@ -1,4 +1,5 @@
-import type { Channel } from '../api/messaging'
+import type { Channel, ChannelUnread } from '../api/messaging'
+import type { NotificationLevel } from '../api/notification-levels'
 import { displayName, type PeopleDirectory, type Person } from './people'
 
 export type ConversationKind = 'dm' | 'space'
@@ -27,6 +28,22 @@ export interface Conversation {
   previewAuthor?: string
   /** Who wrote the latest message, for realtime attribution. Not rendered. */
   lastSenderId?: string
+  /** The caller's notification level here; absent means the default, `main`. A DM is never `all`. */
+  level?: NotificationLevel
+  /** Unread main messages that mention the caller, at every level. */
+  mentions?: number
+  /** The caller starred this conversation: it is listed under "Đã gắn sao" only. */
+  starred?: boolean
+  /** When it was starred, in ms: the order of "Đã gắn sao". */
+  starredAt?: number
+}
+
+/** What the unread list says about one conversation besides how many messages are unread. */
+export interface ConversationMeta {
+  level?: NotificationLevel
+  mentions?: number
+  starred?: boolean
+  starredAt?: number
 }
 
 export type ConversationFilter = 'all' | 'unread' | 'spaces' | 'direct'
@@ -70,12 +87,14 @@ interface BuildInput {
   spaces: Channel[]
   dms: Channel[]
   unread: Record<string, number>
+  /** Level, @mentions and star per conversation, from the unread list. */
+  meta?: Record<string, ConversationMeta>
   lastMessages: Record<string, LastMessage>
   me: { id?: string; username?: string }
   dir: PeopleDirectory
 }
 
-export function buildConversations({ spaces, dms, unread, lastMessages, me, dir }: BuildInput): Conversation[] {
+export function buildConversations({ spaces, dms, unread, meta = {}, lastMessages, me, dir }: BuildInput): Conversation[] {
   const seen = new Set<string>()
   const out: Conversation[] = []
   const push = (ch: Channel, kind: ConversationKind) => {
@@ -83,10 +102,18 @@ export function buildConversations({ spaces, dms, unread, lastMessages, me, dir 
     seen.add(ch.id)
     const last = lastMessages[ch.id]
     const fromMe = !!last && !!me.id && last.senderId === me.id
+    const m = meta[ch.id]
+    // A direct message has no middle level: "all" is read as the default there.
+    const level: NotificationLevel = kind === 'dm' && m?.level === 'all' ? 'main' : (m?.level ?? 'main')
     const base = {
       id: ch.id,
       kind,
-      unread: unread[ch.id] ?? 0,
+      // A muted conversation counts nothing of its own; only its @mentions reach the totals.
+      unread: level === 'off' ? 0 : (unread[ch.id] ?? 0),
+      level,
+      mentions: m?.mentions ?? 0,
+      starred: !!m?.starred,
+      starredAt: m?.starred ? m.starredAt : undefined,
       memberCount: ch.member_count ?? 0,
       lastActivity: last ? Date.parse(last.timestamp) || 0 : 0,
       preview: last?.content || undefined,
@@ -126,7 +153,8 @@ export function sortConversations(list: Conversation[]): Conversation[] {
 export function filterConversations(list: Conversation[], filter: ConversationFilter): Conversation[] {
   switch (filter) {
     case 'unread':
-      return list.filter((c) => c.unread > 0)
+      // The same count the badge shows: a muted conversation qualifies by its unread @mentions.
+      return list.filter((c) => unreadOf(c) > 0)
     case 'spaces':
       return list.filter((c) => c.kind === 'space')
     case 'direct':
@@ -136,6 +164,23 @@ export function filterConversations(list: Conversation[], filter: ConversationFi
   }
 }
 
+/**
+ * What a conversation adds to a total (Tin nhắn on the sidebar, Trang chủ, a
+ * folded section, the phone tab): its unread messages, or, once muted, only
+ * the times someone named the caller.
+ */
+export function unreadOf(c: Pick<Conversation, 'unread' | 'level' | 'mentions'>): number {
+  return c.level === 'off' ? (c.mentions ?? 0) : c.unread
+}
+
 export function totalUnread(list: Conversation[]): number {
-  return list.reduce((n, c) => n + c.unread, 0)
+  return list.reduce((n, c) => n + unreadOf(c), 0)
+}
+
+/** The same total over the raw unread list, for the sidebar badge that needs no conversation titles. */
+export function unreadByLevel(channels: ChannelUnread[] | undefined): number {
+  return (channels ?? []).reduce(
+    (n, c) => n + (c.notification_level === 'off' ? (c.mention_count ?? 0) : c.unread_count),
+    0,
+  )
 }

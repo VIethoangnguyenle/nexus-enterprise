@@ -53,8 +53,8 @@ func (s *Service) joinTenantByDomain(ctx context.Context, companyDomain, userID,
 // and assigns the user as owner. It is the lenient path sign-in uses: a tenant
 // graph that is only partly built is logged and repaired later, because the
 // person must still get into their new account.
-func (s *Service) createTenantForUser(ctx context.Context, name, userID, ngacNodeID string) (string, string, string, error) {
-	return s.provisionTenant(ctx, name, userID, ngacNodeID, false)
+func (s *Service) createTenantForUser(ctx context.Context, name, wsType, userID, ngacNodeID string) (string, string, string, error) {
+	return s.provisionTenant(ctx, name, wsType, userID, ngacNodeID, false)
 }
 
 // provisionTenant is createTenantForUser with a choice of what a failure means.
@@ -65,13 +65,13 @@ func (s *Service) createTenantForUser(ctx context.Context, name, userID, ngacNod
 // Strict (a person creating a workspace on purpose): any failure after the
 // workspace exists undoes it through the workspace service and is returned, so
 // no half-built workspace that nobody can use stays in the system.
-func (s *Service) provisionTenant(ctx context.Context, name, userID, ngacNodeID string, strict bool) (string, string, string, error) {
+func (s *Service) provisionTenant(ctx context.Context, name, wsType, userID, ngacNodeID string, strict bool) (string, string, string, error) {
 	if s.wsClient == nil {
 		return "", "", "", fmt.Errorf("workspace service unavailable")
 	}
 
 	ws, err := s.wsClient.CreateWorkspace(actingAs(ctx, userID, ngacNodeID), &workspacepb.CreateWorkspaceRequest{
-		Name: name,
+		Name: name, Type: wsType,
 	})
 	if err != nil {
 		return "", "", "", fmt.Errorf("create workspace: %w", err)
@@ -195,6 +195,7 @@ func (s *Service) GetMe(ctx context.Context, userID, tenantID string) (*UserInfo
 		tInfo = &TenantInfo{
 			ID: membership.TenantID, Name: membership.TenantName,
 			Role: membership.Role, OpenID: membership.OpenID, Department: membership.DepartmentName,
+			Type: membership.TenantType,
 		}
 	}
 	return uInfo, tInfo, nil

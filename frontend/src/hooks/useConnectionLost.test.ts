@@ -47,3 +47,14 @@ describe('useConnectionLost', () => {
     expect(result.current).toBe(false)
   })
 })
+
+describe('useConnectionLost grace', () => {
+  it('takes the grace period as an argument', () => {
+    const { result } = renderHook(() => useConnectionLost(2_000))
+    act(() => { window.dispatchEvent(new Event('offline')) })
+    act(() => { vi.advanceTimersByTime(1_900) })
+    expect(result.current).toBe(false)
+    act(() => { vi.advanceTimersByTime(200) })
+    expect(result.current).toBe(true)
+  })
+})

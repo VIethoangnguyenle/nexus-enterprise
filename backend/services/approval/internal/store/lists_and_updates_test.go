@@ -329,7 +329,7 @@ func TestProvisionSchemaAndFindNodeID(t *testing.T) {
 	bg := context.Background()
 	owner, _ := testutil.CreateUser(t, pool)
 	id := "y" + uuid.NewString()[:7]
-	if _, err := pool.Exec(bg, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, 'prov', $2)`, id, owner); err != nil {
+	if _, err := pool.Exec(bg, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, 'prov', $2, 'organization')`, id, owner); err != nil {
 		t.Fatal(err)
 	}
 	schema, err := st.ProvisionSchema(bg, id)

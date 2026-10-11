@@ -173,3 +173,57 @@ Approving, rejecting and creating a request SHALL each be one change that includ
 #### Scenario: Two approvals at once
 - **WHEN** two people approve a step that needs two approvals at the same moment
 - **THEN** the step completes; it is not left waiting for a third
+
+### Requirement: A personal workspace has no approvals
+Every approval operation SHALL be refused in a workspace whose type is `personal` (`workspaces.type`, see `tenant-identity`): all 16 REST routes of the approval service (templates, permissions, creating a request, approve, reject, batch approve, the four lists, a request and its audit trail, and tenant provisioning) and every gRPC method of `ApprovalService`. The refusal is PermissionDenied (REST 403, "not available in a personal workspace") and names no identifier. The workspace is the one the caller is signed in to (the tenant of the token, which also names the schema read); a template write that names another tenant needs that tenant to be an organization too. The check is made first — before the schema is read, so a personal workspace with no approval schema answers 403 and not 404, before validation, and before the policy is asked. Batch approval refuses the whole call; it does not report an empty list of approved requests. Approvals already stored in a personal workspace are kept, hidden, and usable again if the workspace becomes an organization. The type is a business attribute of the workspace, not a node: the graph is unchanged.
+
+The check fails closed. A workspace that does not exist, or whose type is not exactly `organization`, is refused; a failure to read the type is an internal error and never an allow. An organization workspace behaves exactly as without this requirement, including the 404 for one that has no schema yet. Hiding the screens is the frontend's part (a later change); the refusal here does not depend on it.
+
+#### Scenario: A personal workspace without a schema
+- **WHEN** a member of a personal workspace that has no approval schema calls any approval route
+- **THEN** the answer is 403, not "tenant schema not provisioned"
+
+#### Scenario: A personal workspace with a schema
+- **WHEN** a member of a personal workspace that has a schema calls any approval route, or gRPC method
+- **THEN** the answer is 403 / PermissionDenied and nothing is read or written
+
+#### Scenario: Batch approval
+- **WHEN** a member of a personal workspace batch-approves several requests
+- **THEN** the call fails with 403; it does not succeed with zero approved
+
+#### Scenario: Organization unchanged
+- **WHEN** the same calls are made in an organization workspace
+- **THEN** they behave as before
+
+### Requirement: An organization's approval schema is created on first use
+The approval schema SHALL be created by the approval service itself when an organization first calls a tenant-scoped
+approval route and the tenant has **no** `tenant_schemas` row at all, so a personal workspace that was converted needs no
+separate provisioning step. The check for a row and the creation run under a per-tenant lock, so two first calls at once
+end with one schema. A personal workspace is still refused (403) and gets no schema. A row that exists but is not
+`active` (`disabled`, `migrating`, `provisioning`) is never created over or reactivated by this path: the call answers
+404 "tenant schema not provisioned" and the row keeps its status. A failure to look the schema up or to create it is an
+internal error (500).
+
+A new schema is named from the whole workspace ID (`tenant_` + the ID lower-cased with every character that is not a
+letter or digit turned into `_`; migration 047), so two workspaces whose IDs begin alike each get their own. A tenant
+that already has a registry row keeps the `schema_name` it has; resolution always goes through `tenant_schemas`.
+
+#### Scenario: A converted workspace creates a template at once
+- **WHEN** a workspace has just been converted and its owner creates an approval template
+- **THEN** the schema is created and the template is saved, with no other step in between
+
+#### Scenario: Two first calls at once
+- **WHEN** two requests reach an organization with no schema at the same moment
+- **THEN** both succeed and the workspace has exactly one active schema
+
+#### Scenario: A schema that is not active
+- **WHEN** an organization's schema is registered as `disabled`, and a member calls an approval route
+- **THEN** the answer is 404 and the schema stays `disabled`
+
+#### Scenario: IDs that begin alike
+- **WHEN** two workspaces whose IDs share their first 8 characters both get an approval schema
+- **THEN** each has its own schema and neither fails
+
+#### Scenario: Schema lookup fails
+- **WHEN** the database cannot be read while looking for the schema
+- **THEN** the answer is 500 and nothing is provisioned

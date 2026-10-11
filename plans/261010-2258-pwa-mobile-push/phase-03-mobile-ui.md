@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Tối ưu giao diện mobile"
-status: pending
+status: completed
 priority: P0
 effort: "2-3d"
 dependencies: [1]
@@ -28,4 +28,7 @@ Rà và sửa mọi màn ở 390px và 768px theo DESIGN.md §5 (thanh đáy 3 t
 - Create: `frontend/e2e/mobile-audit.spec.ts` (hoặc script trong `scripts/`)
 
 ## Success Criteria
-- [ ] 0 màn tràn ngang ở 390px; mọi nút ≥ 44px; ảnh chụp khớp mockup; gates xanh.
+- [x] 0 màn tràn ngang ở 390px; mọi nút ≥ 44px (trừ tên thư mục trong hàng Drive 44px); gates xanh.
+- [ ] Màn chat mới: làm cùng chat phase 04 (mobile-first).
+
+Kết quả: [reports/mobile-audit-261011.md](reports/mobile-audit-261011.md).

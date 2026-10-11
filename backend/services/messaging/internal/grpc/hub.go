@@ -142,6 +142,30 @@ func (h *Hub) isSubscribed(channelID string, client *Client) bool {
 	return h.channels[channelID][client]
 }
 
+// IsViewing reports whether one of the user's sessions on this instance has
+// the channel on screen: it said so with a view frame and still holds the
+// subscription. Subscribing alone is not viewing — the navigator subscribes to
+// every listed conversation. A session on another instance is not seen; the
+// worst outcome is a push for a conversation open elsewhere.
+func (h *Hub) IsViewing(userID, channelID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	subs := h.channels[channelID]
+	for c := range h.users[userID] {
+		if c.viewing == channelID && subs[c] {
+			return true
+		}
+	}
+	return false
+}
+
+// setViewing records the conversation a session has on screen ("" for none).
+func (h *Hub) setViewing(c *Client, channelID string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	c.viewing = channelID
+}
+
 // Unsubscribe removes a client from a channel group.
 func (h *Hub) Unsubscribe(channelID string, client *Client) {
 	h.mu.Lock()

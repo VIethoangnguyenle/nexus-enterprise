@@ -32,6 +32,9 @@ func MatchConditions(conditions []*Condition, fields EntityFields) bool {
 // ResolveTemplate finds the highest-priority active template that matches
 // the given entity type and field values.
 func (s *Service) ResolveTemplate(ctx context.Context, entityType string, fields EntityFields) (*Template, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, err
+	}
 	templates, err := s.store.ListTemplates(ctx, entityType, true)
 	if err != nil {
 		return nil, fmt.Errorf("list templates: %w", err)

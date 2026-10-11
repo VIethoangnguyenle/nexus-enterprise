@@ -55,6 +55,9 @@ func (s *AssetRequestService) CreateRequest(ctx context.Context, req *pb.CreateA
 	if err != nil {
 		return nil, lookupErr(err, "asset type")
 	}
+	if err := requireOrganization(ctx, s.store, at.WorkspaceID); err != nil {
+		return nil, err
+	}
 
 	// Check request permission on type OA
 	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, at.NgacOAID, ngac.OpWrite); err != nil {
@@ -240,6 +243,9 @@ func (s *AssetRequestService) ReturnAsset(ctx context.Context, req *pb.ReturnAss
 	if err != nil || asset.Deleted {
 		return nil, notFound("asset not found")
 	}
+	if err := requireOrganization(ctx, s.store, asset.WorkspaceID); err != nil {
+		return nil, err
+	}
 
 	who := grpcauth.CallerFrom(ctx)
 	isAssignedUser := asset.AssignedTo != nil && who.UserID != "" && *asset.AssignedTo == who.UserID
@@ -286,6 +292,9 @@ func (s *AssetRequestService) ReturnAsset(ctx context.Context, req *pb.ReturnAss
 // ListRequests returns the requests in a workspace the caller may see.
 // Visibility is pushed into the query so the total counts only those.
 func (s *AssetRequestService) ListRequests(ctx context.Context, req *pb.ListRequestsReq) (*pb.AssetRequestList, error) {
+	if err := requireOrganization(ctx, s.store, req.WorkspaceId); err != nil {
+		return nil, err
+	}
 	types, err := s.store.ListTypes(ctx, req.WorkspaceId)
 	if err != nil {
 		return nil, fmt.Errorf("list asset types: %w", err)
@@ -376,6 +385,9 @@ func (s *AssetRequestService) GetRequest(ctx context.Context, req *pb.GetRequest
 	r, err := s.store.GetRequest(ctx, req.RequestId)
 	if err != nil {
 		return nil, lookupErr(err, "request")
+	}
+	if err := requireOrganization(ctx, s.store, r.WorkspaceID); err != nil {
+		return nil, err
 	}
 	if who.UserID == "" || r.RequesterID != who.UserID {
 		at, err := s.store.GetType(ctx, r.TypeID)

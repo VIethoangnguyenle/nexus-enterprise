@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { render, screen, fireEvent, act } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, it, expect, vi } from 'vitest'
+import { updatePreferences } from '../../lib/preferences'
 import { OtpInput } from './OtpInput'
 
 type Props = Partial<Parameters<typeof OtpInput>[0]>
@@ -151,11 +152,41 @@ describe('OtpInput', () => {
       expect(boxes().every((b) => b.className.includes('field-danger'))).toBe(true)
     })
 
-    it('error: the colour comes with a fade, not a shake or any transform', () => {
+    it('error: one sideways jolt of the row, then still', () => {
       const { container } = render(<Harness initial="481209" status="error" errorKey={1} />)
-      expect(container.innerHTML).not.toMatch(/shake/i)
-      const style = container.querySelector('[data-otp-box]')!.parentElement!.getAttribute('style') ?? ''
-      expect(style).not.toMatch(/translate|rotate/)
+      expect(container.querySelector('[data-otp-row]')).toHaveAttribute('data-jolt', 'true')
+    })
+
+    it('error under reduced motion: the colour changes with a fade and nothing moves', () => {
+      updatePreferences({ motion: 'reduce' })
+      try {
+        const { container } = render(<Harness initial="481209" status="error" errorKey={1} />)
+        const row = container.querySelector('[data-otp-row]')!
+        expect(row).not.toHaveAttribute('data-jolt')
+        expect(row.getAttribute('style') ?? '').not.toMatch(/translate|rotate/)
+      } finally {
+        updatePreferences({ motion: 'system' })
+      }
+    })
+
+    it('a typed digit pops in: the box from .92, the digit from 6px below', async () => {
+      render(<Harness />)
+      await userEvent.type(input(), '4')
+      const box = boxes()[0]!
+      expect(box.getAttribute('style') ?? '').toMatch(/scale/)
+      expect(box.querySelector('[data-otp-digit]')!.getAttribute('style') ?? '').toMatch(/translateY\(6px\)|translate/)
+    })
+
+    it('a typed digit under reduced motion just appears: no transform', async () => {
+      updatePreferences({ motion: 'reduce' })
+      try {
+        render(<Harness />)
+        await userEvent.type(input(), '4')
+        expect(boxes()[0]!.getAttribute('style') ?? '').not.toMatch(/scale|translate/)
+        expect(boxes()[0]!.textContent).toBe('4')
+      } finally {
+        updatePreferences({ motion: 'system' })
+      }
     })
 
     it('pending: keeps the code, ignores typing and says it is busy', async () => {
@@ -172,6 +203,18 @@ describe('OtpInput', () => {
       render(<Harness initial="481209" status="success" />)
       expect(input()).toHaveAttribute('readonly')
       expect(boxes().every((b) => b.dataset.status === 'success')).toBe(true)
+    })
+
+    it('success: the boxes gather into a check badge, which is decoration for the message beside it', () => {
+      const { container } = render(<Harness initial="481209" status="success" />)
+      const badge = container.querySelector('[data-otp-badge]')!
+      expect(badge).toHaveAttribute('aria-hidden', 'true')
+      expect(badge.querySelector('svg')).not.toBeNull()
+    })
+
+    it('no badge before the code is right', () => {
+      const { container } = render(<Harness initial="481209" status="pending" />)
+      expect(container.querySelector('[data-otp-badge]')).toBeNull()
     })
 
     it('disabled: the input is disabled', () => {

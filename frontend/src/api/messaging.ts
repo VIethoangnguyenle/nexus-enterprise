@@ -14,13 +14,28 @@ export interface Channel {
   topic?: string
   description?: string
   member_count?: number
+  /** The content object attribute messages are authorized on; used to ask what the caller may do here. */
+  ngac_oa_id?: string
   created_at?: unknown
+  /** The signed-in user starred this conversation; omitted when not. */
+  starred?: boolean
 }
 
 /** A channel member as the messaging service returns it. Ids are for API calls only. */
 export interface ChannelMember { user_id: string; username: string; ngac_node_id: string }
 
 export interface ReactionGroup { emoji: string; count: number; user_ids: string[] }
+
+export interface MessageAttachment {
+  drive_file_id: string
+  file_name: string
+  mime_type: string
+  size_bytes: number
+  width?: number
+  height?: number
+  /** Client-only: local object URL for optimistic previews, revoked on settle */
+  localUrl?: string
+}
 
 export interface Message {
   id: string
@@ -31,6 +46,14 @@ export interface Message {
   content_format?: string
   mentions?: string[]
   reply_count?: number
+  /** Thread summary of a root message: unset until the first reply. Same shape as created_at. */
+  last_reply_at?: unknown
+  /** users.id of the three most recent distinct repliers, newest first. */
+  reply_participant_ids?: string[]
+  /** The signed-in user follows this message's thread. */
+  following?: boolean
+  /** Replies in this thread the signed-in user has not read; 0 when not following. */
+  thread_unread_count?: number
   /** Set on thread replies; empty on top-level messages (topics). */
   parent_message_id?: string
   /** Client-only: the optimistic id this message replaced, kept as a stable React key. */
@@ -40,6 +63,26 @@ export interface Message {
   created_at?: unknown
   linked_entity_type?: string
   linked_entity_id?: string
+  /** "user" or "system" (a manager's deletion leaves a system line). */
+  message_type?: string
+  /** Same shape as created_at; set once the sender has changed the text. */
+  edited_at?: unknown
+  /** Deleted: no body, kept only as the placeholder of a thread. */
+  deleted?: boolean
+  /** What the message quotes: the sender's name and the opening of the text. */
+  quoted?: QuotedMessage
+  attachments?: MessageAttachment[]
+  /** The signed-in user starred this message; omitted when not. */
+  starred?: boolean
+}
+
+/** What a quote shows of the message it quotes (no body when that message was deleted). */
+export interface QuotedMessage {
+  id: string
+  sender_id: string
+  sender_name?: string
+  text?: string
+  deleted?: boolean
 }
 
 export interface PinnedMessage {
@@ -88,7 +131,30 @@ export interface ChannelUnread {
   channel_id: string
   unread_count: number
   last_read_message_id: string
+  /** Unread replies in the threads of this channel the signed-in user follows; omitted when 0. */
+  thread_unread_count?: number
+  /** The caller's notification level for this conversation; absent means the default, `main`. */
+  notification_level?: 'all' | 'main' | 'off'
+  /** Unread main messages that mention the caller, at every level. */
+  mention_count?: number
+  /** The signed-in user starred this conversation; omitted when not. */
+  starred?: boolean
+  /** When the caller starred it (a protobuf timestamp, or an RFC 3339 string on a fresh optimistic star); omitted when not starred. */
+  starred_at?: unknown
 }
+
+/** The caller's own state of one thread, as follow / unfollow / read answer. */
+export interface ThreadState {
+  root_message_id: string
+  channel_id: string
+  following: boolean
+  unread_count?: number
+  as_of?: unknown
+}
+
+export type ThreadFilter = 'all' | 'following' | 'unread'
+
+export interface ThreadPage { messages: Message[]; has_more: boolean }
 
 export interface CreateChannelInput { name: string; channel_type: string }
 
@@ -99,7 +165,12 @@ export interface SendMessageInput {
   parent_message_id?: string
   linked_entity_type?: string
   linked_entity_id?: string
+  /** A live message of the same channel this one quotes. */
+  quoted_message_id?: string
+  attachments?: { drive_file_id: string; width?: number; height?: number }[]
 }
+
+export interface EditMessageInput { content: string; content_format: string; mentions?: string[] }
 
 export const messagingApi = {
   // Channels
@@ -112,7 +183,7 @@ export const messagingApi = {
 
   // Messages
   listMessages: (channelId: string, before?: string) => {
-    const qs = before ? `?before=${before}` : ''
+    const qs = before ? `?before=${encodeURIComponent(before)}` : ''
     return apiFetch<{ messages: Message[]; has_more: boolean }>(`/channels/${channelId}/messages${qs}`)
   },
   sendMessage: (channelId: string, data: string | SendMessageInput) => {
@@ -124,7 +195,35 @@ export const messagingApi = {
       body: JSON.stringify(body),
     })
   },
+  /** Changes the text of the caller's own message; answers with the message as stored (filtered). */
+  editMessage: (messageId: string, data: EditMessageInput) =>
+    apiFetch<Message>(`/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  /** Soft delete: the sender, or whoever manages the channel. */
+  deleteMessage: (messageId: string) =>
+    apiFetch<{ status: string }>(`/messages/${messageId}`, { method: 'DELETE' }),
+  /** Moves the caller's read position to just before this message. */
+  markMessageUnread: (messageId: string) =>
+    apiFetch<{ status: string }>(`/messages/${messageId}/unread`, { method: 'POST' }),
   getThread: (messageId: string) => apiFetch<{ messages: Message[] }>(`/messages/${messageId}/thread`),
+
+  // Thread follow, read position and the channel's thread list
+  followThread: (messageId: string) =>
+    apiFetch<ThreadState>(`/messages/${messageId}/follow`, { method: 'POST' }),
+  unfollowThread: (messageId: string) =>
+    apiFetch<ThreadState>(`/messages/${messageId}/follow`, { method: 'DELETE' }),
+  markThreadRead: (messageId: string) =>
+    apiFetch<ThreadState>(`/messages/${messageId}/thread/read`, { method: 'POST' }),
+  /** Root messages that have replies, most recently active first. `before` is the last reply time (RFC 3339) of the previous page's last item, `beforeId` its root id. */
+  listThreads: (channelId: string, q: { filter: ThreadFilter; before?: string; beforeId?: string; limit?: number }) => {
+    const qs = new URLSearchParams({ filter: q.filter })
+    if (q.before) qs.set('before', q.before)
+    if (q.beforeId) qs.set('before_id', q.beforeId)
+    if (q.limit) qs.set('limit', String(q.limit))
+    // The server leaves empty fields out: an empty page is just `{}` or `{ "has_more": false }`.
+    return apiFetch<Partial<ThreadPage>>(`/channels/${channelId}/threads?${qs}`).then(
+      (page): ThreadPage => ({ messages: page.messages ?? [], has_more: !!page.has_more }),
+    )
+  },
 
   // Direct messages (not workspace-scoped on the backend)
   listDMs: () => apiFetch<{ channels: Channel[] | null }>(`/dms`),
@@ -183,12 +282,13 @@ export const messagingApi = {
     apiFetch<Poll>(`/polls/${pollId}`),
 
   // Tasks
-  createTask: (channelId: string, data: { title: string; assignee_id?: string; due_date?: string }) =>
+  createTask: (channelId: string, data: { title: string; assignee_id?: string; due_date?: string; parent_message_id?: string }) =>
     apiFetch<ChatTask>(`/channels/${channelId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
   updateTask: (taskId: string, data: { status?: string; assignee_id?: string; title?: string; due_date?: string }) =>
     apiFetch<ChatTask>(`/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   listTasks: (channelId: string, status?: string) => {
     const qs = status ? `?status=${status}` : ''
-    return apiFetch<{ tasks: ChatTask[] }>(`/channels/${channelId}/tasks${qs}`)
+    // The server answers a conversation with no task as `{"tasks": null}`.
+    return apiFetch<{ tasks: ChatTask[] | null }>(`/channels/${channelId}/tasks${qs}`).then((r) => ({ ...r, tasks: r.tasks ?? [] }))
   },
 }

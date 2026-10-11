@@ -16,6 +16,12 @@ interface DialogProps {
   initialFocusRef?: RefObject<HTMLElement | null>
   /** Wrap the body in a form so Enter submits. */
   onSubmit?: () => void
+  /** `alertdialog` for a question that must be answered before going on (a confirmation). */
+  role?: 'dialog' | 'alertdialog'
+  /** The element that says what the question is about; read out after the title. */
+  descriptionId?: string
+  /** `sm` is 420px wide, for a short confirmation. */
+  width?: 'md' | 'sm'
 }
 
 /**
@@ -25,7 +31,9 @@ interface DialogProps {
  *
  * Modals are a last resort; prefer a detail panel or an in-place action + Undo.
  */
-export function Dialog({ open, onClose, title, children, footer, initialFocusRef, onSubmit }: DialogProps) {
+export function Dialog({
+  open, onClose, title, children, footer, initialFocusRef, onSubmit, role = 'dialog', descriptionId, width = 'md',
+}: DialogProps) {
   const m = useMotionPresets()
   const titleId = useId()
   const surfaceRef = useRef<HTMLDivElement>(null)
@@ -53,11 +61,12 @@ export function Dialog({ open, onClose, title, children, footer, initialFocusRef
           <motion.div
             ref={surfaceRef}
             {...m.modal}
-            role="dialog"
+            role={role}
             aria-modal="true"
             aria-labelledby={titleId}
-            className="relative w-full max-w-130 max-h-full overflow-y-auto rounded-overlay bg-overlay
-              shadow-overlay p-5"
+            aria-describedby={descriptionId}
+            className={`relative w-full ${width === 'sm' ? 'max-w-105' : 'max-w-130'} max-h-full overflow-y-auto
+              rounded-overlay bg-overlay shadow-overlay p-5`}
           >
             {onSubmit ? (
               <form

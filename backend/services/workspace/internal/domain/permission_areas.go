@@ -23,7 +23,8 @@ type AreaGrant struct {
 
 // areaOAs resolves, among the direct children of the workspace's PC, the OA of
 // every area this workspace has. An area whose OA has not been created (a
-// workspace that never used assets has no Assets OA) is simply absent.
+// workspace that never used assets has no Assets OA) is simply absent, and so
+// is Assets in a personal workspace.
 func (s *Service) areaOAs(ctx context.Context, ws *WorkspaceResult) (map[ngac.Area]string, error) {
 	children, err := s.policyWrite.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeID})
 	if err != nil {
@@ -37,6 +38,10 @@ func (s *Service) areaOAs(ctx context.Context, ws *WorkspaceResult) (map[ngac.Ar
 	}
 	out := make(map[ngac.Area]string, len(ngac.Areas()))
 	for _, a := range ngac.Areas() {
+		// A personal workspace refuses assets, so the area is not one to grant on.
+		if a == ngac.AreaAssets && ws.Type == TypePersonal {
+			continue
+		}
 		name, _ := ngac.AreaOAName(a, ngac.WorkspaceID(ws.ID))
 		if id, ok := byName[name]; ok {
 			out[a] = id

@@ -3,6 +3,7 @@ package rest
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/labstack/echo/v4"
 
@@ -21,12 +22,23 @@ func (h *Handler) CreatePoll(c echo.Context) error {
 		IsMulti     bool     `json:"is_multi"`
 		IsAnonymous bool     `json:"is_anonymous"`
 		EndsAt      string   `json:"ends_at"`
+		// ParentMessageID posts the poll as a reply in that message's thread.
+		ParentMessageID string `json:"parent_message_id"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	poll, err := h.svc.CreatePoll(c.Request().Context(), domain.CreatePollInput{
+	var endsAt *time.Time
+	if body.EndsAt != "" {
+		t, err := time.Parse(time.RFC3339, body.EndsAt)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusBadRequest, "ends_at must be an RFC 3339 time")
+		}
+		endsAt = &t
+	}
+
+	poll, msg, err := h.svc.CreatePollMessage(c.Request().Context(), domain.CreatePollInput{
 		ChannelID:   c.Param("chId"),
 		UserID:      claims.UserID,
 		UserNodeID:  claims.NGACNodeID,
@@ -34,10 +46,14 @@ func (h *Handler) CreatePoll(c echo.Context) error {
 		Options:     body.Options,
 		IsMulti:     body.IsMulti,
 		IsAnonymous: body.IsAnonymous,
+		EndsAt:      endsAt,
+
+		ParentMessageID: body.ParentMessageID,
 	})
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
+	h.announceMessage(c.Request().Context(), claims.TenantID, msg)
 	return c.JSON(http.StatusCreated, poll)
 }
 
@@ -54,7 +70,7 @@ func (h *Handler) VotePoll(c echo.Context) error {
 	if err := h.svc.VotePoll(c.Request().Context(), c.Param("pollId"), body.OptionID, claims.NGACNodeID, claims.UserID); err != nil {
 		return httputil.MapDomainError(err)
 	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	return h.pollAnswer(c, claims.UserID, claims.NGACNodeID)
 }
 
 // RemoveVote handles DELETE /api/polls/:pollId/vote.
@@ -70,15 +86,44 @@ func (h *Handler) RemoveVote(c echo.Context) error {
 	if err := h.svc.RemoveVote(c.Request().Context(), c.Param("pollId"), body.OptionID, claims.NGACNodeID, claims.UserID); err != nil {
 		return httputil.MapDomainError(err)
 	}
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	return h.pollAnswer(c, claims.UserID, claims.NGACNodeID)
 }
 
 // GetPoll handles GET /api/polls/:pollId.
 func (h *Handler) GetPoll(c echo.Context) error {
 	claims := httputil.GetClaims(c)
-	poll, err := h.svc.GetPoll(c.Request().Context(), c.Param("pollId"), claims.NGACNodeID)
+	poll, err := h.svc.GetPoll(c.Request().Context(), c.Param("pollId"), claims.UserID, claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
+	}
+	return c.JSON(http.StatusOK, poll)
+}
+
+// ClosePoll handles POST /api/polls/:pollId/close.
+func (h *Handler) ClosePoll(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	poll, err := h.svc.ClosePoll(c.Request().Context(), c.Param("pollId"), claims.UserID, claims.NGACNodeID)
+	if err != nil {
+		return httputil.MapDomainError(err)
+	}
+	if h.hub != nil {
+		h.hub.BroadcastPollChanged(poll.ChannelId, poll.Id)
+	}
+	return c.JSON(http.StatusOK, poll)
+}
+
+// pollAnswer returns the poll as the caller now sees it, and tells the
+// channel's other viewers it changed.
+func (h *Handler) pollAnswer(c echo.Context, userID, nodeID string) error {
+	poll, err := h.svc.GetPoll(c.Request().Context(), c.Param("pollId"), userID, nodeID)
+	if err != nil {
+		return httputil.MapDomainError(err)
+	}
+	if h.hub != nil {
+		h.hub.BroadcastPollChanged(poll.ChannelId, poll.Id)
 	}
 	return c.JSON(http.StatusOK, poll)
 }
@@ -92,22 +137,27 @@ func (h *Handler) CreateTask(c echo.Context) error {
 		Title      string `json:"title"`
 		AssigneeID string `json:"assignee_id"`
 		DueDate    string `json:"due_date"`
+		// ParentMessageID posts the task as a reply in that message's thread.
+		ParentMessageID string `json:"parent_message_id"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	task, err := h.svc.CreateTask(c.Request().Context(), domain.CreateTaskInput{
+	task, msg, err := h.svc.CreateTaskMessage(c.Request().Context(), domain.CreateTaskInput{
 		ChannelID:  c.Param("chId"),
 		UserID:     claims.UserID,
 		UserNodeID: claims.NGACNodeID,
 		Title:      body.Title,
 		AssigneeID: body.AssigneeID,
 		DueDate:    body.DueDate,
+
+		ParentMessageID: body.ParentMessageID,
 	})
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
+	h.announceMessage(c.Request().Context(), claims.TenantID, msg)
 	return c.JSON(http.StatusCreated, task)
 }
 

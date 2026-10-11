@@ -45,3 +45,24 @@ export function useLeaveWorkspace(wsId: string) {
     },
   })
 }
+
+/** Converts a personal workspace to an organization workspace. */
+export function useConvertToOrganization(wsId: string) {
+  return useMutation({
+    meta: { silentError: true },
+    mutationFn: () => workspaceApi.convertToOrganization(wsId),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: keys.workspaces.all() }),
+        queryClient.invalidateQueries({ queryKey: keys.workspaces.details(wsId) }),
+        queryClient.invalidateQueries({ queryKey: keys.auth.workspaces() }),
+        queryClient.invalidateQueries({ queryKey: keys.auth.me() }),
+        queryClient.invalidateQueries({ queryKey: keys.approval.all() }),
+        queryClient.invalidateQueries({ queryKey: keys.assets.listsAll() }),
+        queryClient.invalidateQueries({ queryKey: keys.assets.typesAll() }),
+        queryClient.invalidateQueries({ queryKey: keys.assets.summaries() }),
+        queryClient.invalidateQueries({ queryKey: keys.assets.requestsAll() }),
+      ])
+    },
+  })
+}

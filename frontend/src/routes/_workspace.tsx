@@ -7,12 +7,15 @@ import { useActiveWorkspace } from '../hooks/useActiveWorkspace'
 import { usePreferencesSync } from '../hooks/usePreferences'
 import { useWorkspaceRealtime } from '../hooks/useWorkspaceRealtime'
 import { useUnreadCounts } from '../hooks/useMessaging'
-import { validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
+import { isConversationPath, validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
+import { unreadByLevel } from '../lib/conversations'
 import { useResizable } from '../hooks/useResizable'
 import { AppSidebar } from '../components/patterns/AppSidebar'
 import { ListPanel } from '../components/patterns/ListPanel'
 import { MobileNav } from '../components/patterns/MobileNav'
 import { MobileTopBar } from '../components/patterns/MobileTopBar'
+import { OfflineBar } from '../components/app/OfflineBar'
+import { UpdateBar } from '../components/app/UpdateBar'
 import { Button, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { apiFetch, logoutSession } from '../api/client'
@@ -33,7 +36,8 @@ function WorkspaceLayout() {
   usePreferencesSync()
   useWorkspaceRealtime(wsId, !!token)
   const { data: unreadData } = useUnreadCounts()
-  const unreadMessages = (unreadData?.channels ?? []).reduce((n, c) => n + c.unread_count, 0)
+  // By notification level: a muted conversation adds only the times someone named the reader.
+  const unreadMessages = unreadByLevel(unreadData?.channels)
 
   const listPanelWidth = useUiStore((s) => s.listPanelWidth)
   const setListPanelWidth = useUiStore((s) => s.setListPanelWidth)
@@ -92,7 +96,7 @@ function WorkspaceLayout() {
 
   if (isError) {
     return (
-      <div className="flex h-dvh bg-background overflow-hidden">
+      <div className="flex h-app bg-background overflow-hidden">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center px-4">
             <Text variant="body" muted>Unable to load workspaces</Text>
@@ -106,7 +110,7 @@ function WorkspaceLayout() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-dvh bg-background">
+      <div className="flex items-center justify-center h-app bg-background">
         <Spinner size="lg" />
       </div>
     )
@@ -114,7 +118,7 @@ function WorkspaceLayout() {
 
   if (workspaces.length === 0) {
     return (
-      <div className="flex h-dvh bg-background overflow-hidden">
+      <div className="flex h-app bg-background overflow-hidden">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center px-4">
             <Spinner size="lg" />
@@ -128,7 +132,7 @@ function WorkspaceLayout() {
   }
 
   return (
-    <div className="flex flex-col h-dvh bg-background overflow-hidden">
+    <div className="flex flex-col h-app bg-background overflow-hidden">
       {/* Row 2: Sidebar + Content */}
       <div className="flex flex-1 min-h-0">
         {/* Column 1: AppSidebar — hidden on mobile, visible on lg+ */}
@@ -151,8 +155,10 @@ function WorkspaceLayout() {
         )}
 
         {/* Column 3: Content */}
-        <main className="flex-1 flex flex-col min-w-0 pb-tabbar lg:pb-0 isolate overflow-hidden">
+        {/* Inside a conversation the phone's tab bar steps aside, so no room is kept for it. */}
+        <main className={`flex-1 flex flex-col min-w-0 ${isConversationPath(currentPath) ? '' : 'pb-tabbar'} lg:pb-0 isolate overflow-hidden`}>
           <MobileTopBar scope={screenEl} />
+          <OfflineBar />
           <div ref={setScreenEl} className="flex-1 flex flex-col min-h-0 min-w-0">
             <ErrorBoundary moduleName="workspace-content">
               <Outlet />
@@ -163,6 +169,7 @@ function WorkspaceLayout() {
 
       {/* Mobile bottom navigation */}
       <MobileNav />
+      <UpdateBar />
     </div>
   )
 }

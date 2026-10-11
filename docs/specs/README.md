@@ -61,6 +61,7 @@ Verified against the codebase on 2026-07-31.
 | `drive-tree-navigation` | Matches code |
 | `drive-realtime-sync` | Matches code (divergence closed 2026-10-10; see its Status) |
 | `drive-permission-engine` | Matches code (tenant-keyed cache; divergence closed 2026-08-02) |
+| `file-preview` | Matches code for the server part (added 2026-10-11; viewer follows) |
 
 **Realtime**
 
@@ -69,6 +70,20 @@ Verified against the codebase on 2026-07-31.
 | `realtime-event-delivery` | Matches code (added 2026-10-10) |
 | `notifications` | Matches code (added 2026-10-10) |
 | `chat-channel-integrity` | Matches code (added 2026-10-10) |
+| `chat-threads` | Matches code (added 2026-10-11; screens 2026-10-11) |
+| `chat-attachments` | Matches code (added 2026-10-11; screens follow) |
+| `chat-rich-text` | Matches code (added 2026-10-11; toolbar follows) |
+| `chat-message-lifecycle` | Matches code (added 2026-10-11; screens follow) |
+| `chat-sections` | Matches code (added 2026-10-11; screens follow) |
+| `chat-shortcuts` | Matches code (added 2026-10-11; screens follow) |
+| `chat-cards` | Matches code for polls and tasks (added 2026-10-11; cards follow) |
+| `web-push` | Matches code for sending (added 2026-10-11; device sign-up follows) |
+
+**Installation and offline shell**
+
+| Capability | State |
+|---|---|
+| `pwa-install` | Matches code except the gaps under its Status (added 2026-10-11) |
 
 **Approval**
 
@@ -98,7 +113,7 @@ Verified against the codebase on 2026-07-31.
 
 | Capability | State |
 |---|---|
-| `lark-messaging-layout` | Partly unverifiable by inspection |
+| `lark-messaging-layout` | Superseded 2026-10-11 by in-line threading (`chat-threads`); only the thread peek panel stands |
 | `lark-data-table-layout` | **Partially implemented** — breadcrumb missing in Drive |
 | `lark-sidebar-layout` | **Diverges** — 280px and no collapse toggle |
 

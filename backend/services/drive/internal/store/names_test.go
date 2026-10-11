@@ -86,7 +86,7 @@ func TestGetBreadcrumb_OrderedRootFirst(t *testing.T) {
 
 	_, err := pool.Exec(ctx, `INSERT INTO users (id, username, password) VALUES ($1, $1, '')`, owner)
 	require.NoError(t, err)
-	_, err = pool.Exec(ctx, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, ws, owner)
+	_, err = pool.Exec(ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $1, $2, 'organization')`, ws, owner)
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		c := context.Background()

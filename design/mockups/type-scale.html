@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexus · Cỡ chữ chat: hiện tại và đề xuất</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Type-scale proposal (2026-10-11): "So với Google Chat thì Nexus cần chữ to hơn 1 xíu".
+   Same markup rendered twice; only the type variables differ between .cur (what ships today, read from
+   frontend/src) and .new (proposal). Everything else (colors, radii, spacing, row heights) is unchanged,
+   so any difference you see is the type scale alone. Styles condensed from spaces.html and chat-mobile.html. */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding: 0 16px 64px; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 48px; }
+.page > header { padding-top: 40px; display: grid; gap: 14px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 72ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 10px; background: var(--color-sunk); justify-self: start; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 0 12px; min-height: 36px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+section { display: grid; gap: 16px; min-width: 0; }
+section > h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+section > p { max-width: 80ch; color: var(--color-ink-muted); }
+
+/* ---------- type variables: the only thing that differs ---------- */
+.v { --msg: 14px; --msg-lh: 1.55; --name: 14px; --time: 12px; --nav: 14px; --navsec: 13px;
+     --tsum: 13px; --tsum-lh: 18px; --quote: 13px; --quote-lh: 1.375; --edit: 11px; --code: 13px;
+     --cin: 16px; --lname: 14px; --lprev: 14px; --lsec: 13px; }
+.v.new { --msg: 15px; --msg-lh: 23px; --name: 15px; --nav: 15px; --navsec: 14px;
+     --tsum: 14px; --tsum-lh: 20px; --quote: 14px; --quote-lh: 20px; --edit: 12px; --code: 14px; }
+.v.ph.new { --msg: 16px; --msg-lh: 24px; --name: 15px; --lname: 16px; --lprev: 14px; --lsec: 14px; }
+
+/* ---------- comparison grid ---------- */
+.cmp { display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr); }
+@media (min-width: 1400px) { .cmp.desk { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 840px) { .cmp.phones { grid-template-columns: repeat(2, minmax(0, 390px)); justify-content: start; } }
+.cell { display: grid; gap: 10px; min-width: 0; align-content: start; }
+.tag { display: inline-flex; align-items: center; gap: 8px; justify-self: start; height: 26px; padding: 0 10px; border-radius: 999px; font: 600 0.8125rem/1 var(--font-body); background: var(--color-sunk); color: var(--color-ink-muted); }
+.tag.new { background: var(--color-accent-wash); color: var(--color-accent); }
+.scroll { overflow-x: auto; border-radius: 12px; }
+.spec { margin: 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.spec b { color: var(--color-ink); font-weight: 600; }
+
+/* ---------- primitives ---------- */
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); }
+.av.s20 { width: 20px; height: 20px; font-size: 0.5625rem; } .av.s40 { width: 40px; height: 40px; font-size: 0.875rem; }
+.sp { --p: var(--color-person-4); width: 24px; height: 24px; border-radius: 7px; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 700 0.6875rem/1 var(--font-display); }
+.sp.s40 { width: 40px; height: 40px; border-radius: 10px; font-size: 1rem; } .sp.s28 { width: 28px; height: 28px; border-radius: 8px; font-size: 0.75rem; }
+.pill { display: inline-flex; align-items: center; justify-content: center; height: 18px; min-width: 18px; padding: 0 6px; border-radius: 999px; background: var(--color-accent); color: var(--color-on-accent); font: 600 0.6875rem/1 var(--font-body); font-variant-numeric: tabular-nums; flex: none; }
+.ibtn { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; flex: none; }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+.btn { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 8px; border: 0; font: 600 0.8125rem/1 var(--font-body); background: var(--color-accent); color: var(--color-on-accent); cursor: pointer; flex: none; }
+.faces { display: flex; } .faces .av { box-shadow: 0 0 0 2px var(--color-base); } .faces .av + .av { margin-left: -6px; }
+
+/* ---------- desktop frame: navigator 288 + conversation ---------- */
+.app { display: grid; grid-template-columns: 288px minmax(380px, 1fr); height: 780px; min-width: 668px; border-radius: 12px; overflow: hidden; background: var(--color-base); box-shadow: inset 0 0 0 1px var(--color-line); }
+.cnav { background: var(--color-base); border-right: 1px solid var(--color-line); padding: 12px 8px; display: grid; gap: 2px; align-content: start; overflow: hidden; }
+.newchat { justify-self: start; height: 44px; margin: 4px 4px 6px; padding: 0 18px 0 14px; border-radius: 14px; border: 0; background: var(--color-accent-wash); color: var(--color-ink); font: 600 0.9375rem/1 var(--font-body); display: inline-flex; align-items: center; gap: 10px; }
+.newchat svg { color: var(--color-accent); }
+.sec { display: flex; align-items: center; gap: 6px; height: 28px; margin-top: 8px; padding: 0 8px; color: var(--color-ink-muted); font-weight: 600; font-size: var(--navsec); line-height: 1; }
+.sec.usr { color: var(--color-ink); }
+.rl { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 10px; color: var(--color-ink); text-decoration: none; min-width: 0; font-size: var(--nav); line-height: 1.4; }
+.rl:hover { background: var(--color-hover); }
+.rl[aria-current="page"] { background: var(--color-raised); font-weight: 600; }
+.rl.unread { font-weight: 600; }
+.rl .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.rl .pill { margin-left: auto; }
+
+.content { display: grid; grid-template-rows: auto 1fr auto; min-width: 0; min-height: 0; }
+.chead { display: flex; align-items: center; gap: 12px; padding: 14px 20px 10px; border-bottom: 1px solid var(--color-line); min-width: 0; }
+.chead .t { display: grid; gap: 1px; min-width: 0; }
+.chead h3 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chead .sub { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stream { overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; padding: 8px 8px 12px; min-height: 0; }
+.dd { display: flex; align-items: center; gap: 12px; padding: 10px 14px 4px; font: 600 0.75rem/1 var(--font-body); color: var(--color-ink-muted); }
+.dd::before, .dd::after { content: ""; flex: 1; height: 1px; background: var(--color-line); }
+.m { display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; padding: 8px 14px 2px; border-radius: 10px; flex: none; }
+.m.cont { padding-top: 2px; }
+.m.mine { grid-template-columns: minmax(0, 1fr) 32px; }
+.m.mine .mc { grid-column: 1; grid-row: 1; align-items: flex-end; }
+.mc { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.mc > * { max-width: 100%; }
+.who { display: flex; align-items: baseline; gap: 8px; min-width: 0; font-size: var(--name); line-height: 1.4; }
+.who b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who time, .gt { font-size: var(--time); color: var(--color-ink-muted); font-variant-numeric: tabular-nums; flex: none; }
+.txt { font-size: var(--msg); line-height: var(--msg-lh); width: fit-content; max-width: min(70ch, 85%); overflow-wrap: anywhere; margin-top: 2px; padding: 7px 12px; border-radius: 16px; background: var(--color-sunk); }
+.txt + .txt { margin-top: 4px; }
+.who + .txt { border-top-left-radius: 4px; }
+.m.mine .txt { background: var(--color-accent-wash); }
+.txt code { font-family: var(--font-mono); font-size: var(--code); background: var(--color-base); padding: 1px 4px; border-radius: 4px; }
+.txt .edm { margin-left: 6px; font-size: var(--edit); color: var(--color-ink-muted); white-space: nowrap; }
+.q { display: grid; gap: 2px; margin: 1px -6px 6px; padding: 7px 10px 8px; border-radius: 10px; background: var(--color-raised); font-size: var(--quote); line-height: var(--quote-lh); }
+.q b { font-weight: 600; } .q span { color: var(--color-ink-muted); }
+.tsum { border: 0; background: transparent; font-family: inherit; cursor: pointer; text-align: left; display: inline-flex; align-items: center; gap: 8px; min-height: 32px; max-width: 100%; margin: 4px 0 2px -8px; padding: 0 10px 0 8px; border-radius: 8px; color: var(--color-ink-muted); font-size: var(--tsum); line-height: var(--tsum-lh); }
+.tsum .n { color: var(--color-accent); font-weight: 600; white-space: nowrap; }
+.tsum .l { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.composer { margin: 0 16px 16px; background: var(--color-raised); border-radius: 12px; padding: 10px 10px 10px 14px; display: grid; gap: 8px; box-shadow: inset 0 0 0 1px var(--color-line); }
+.cin { font-size: var(--cin); line-height: 1.5; padding: 2px 0; overflow-wrap: anywhere; }
+.cbar { display: flex; align-items: center; gap: 2px; min-width: 0; }
+.cbar .hint { margin-left: 8px; font-size: 0.75rem; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cbar .btn { margin-left: auto; }
+
+/* ---------- phone frame (390) ---------- */
+.phone { width: 100%; max-width: 390px; height: 720px; border-radius: 28px; overflow: hidden; background: var(--color-base); box-shadow: inset 0 0 0 1px var(--color-line); display: grid; grid-template-rows: auto auto 1fr auto; }
+.sbar { display: flex; justify-content: space-between; align-items: center; height: 34px; padding: 0 22px; font: 600 0.8125rem/1 var(--font-body); }
+.topbar { display: flex; align-items: center; gap: 8px; height: 56px; padding: 0 8px 0 4px; border-bottom: 1px solid var(--color-line); min-width: 0; }
+.topbar .ibtn { width: 44px; height: 44px; }
+.topbar .ti { display: grid; min-width: 0; flex: 1; }
+.topbar .ti b { font: 700 1rem/1.25 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .ti small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.phone .list { overflow: hidden; display: grid; align-content: start; }
+.lsec { display: flex; align-items: center; gap: 6px; padding: 14px 16px 4px; color: var(--color-ink-muted); font-weight: 600; font-size: var(--lsec); line-height: 1; }
+.conv { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 16px; min-height: 64px; color: inherit; text-decoration: none; }
+.conv .nm { font-size: var(--lname); line-height: 1.375; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv .pv { font-size: var(--lprev); line-height: 1.43; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv.unread .nm, .conv.unread .pv { font-weight: 600; color: var(--color-ink); }
+.conv .meta { display: grid; justify-items: end; gap: 4px; font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.tabbar { display: grid; grid-template-columns: repeat(4, 1fr); border-top: 1px solid var(--color-line); background: var(--color-raised); padding: 4px 0 18px; }
+.tabbar a { display: grid; justify-items: center; gap: 2px; min-height: 48px; align-content: center; font-size: 0.6875rem; line-height: 1rem; font-weight: 500; color: var(--color-ink-muted); text-decoration: none; }
+.tabbar a[aria-current="page"] { color: var(--color-accent); }
+.phone .stream { padding: 4px 10px 12px; }
+.phone .m { column-gap: 8px; padding: 8px 0 2px; }
+.phone .m.cont { padding-top: 2px; }
+.phone .txt { max-width: 88%; padding: 8px 12px; border-radius: 18px; }
+.phone .tsum { min-height: 36px; margin-left: -4px; }
+.pcomp { display: flex; align-items: center; gap: 4px; margin: 0 10px 18px; padding: 4px 4px 4px 6px; border-radius: 22px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); }
+.pcomp .ibtn { width: 40px; height: 40px; border-radius: 50%; }
+.pcomp .cin { flex: 1; min-width: 0; padding: 8px 4px; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pcomp .send { background: var(--color-accent); color: var(--color-on-accent); }
+
+/* ---------- token table ---------- */
+.tbl { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.tbl th { text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); padding: 8px 10px; border-bottom: 1px solid var(--color-line); white-space: nowrap; }
+.tbl td { padding: 10px; border-bottom: 1px solid var(--color-line); vertical-align: top; }
+.tbl td.up { color: var(--color-accent); font-weight: 600; }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 82ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+  <symbol id="i-msgs" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="M22 2 11 13M22 2l-7 20-4-9-9-4z"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></symbol>
+  <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2M9 9h.01M15 9h.01"/></symbol>
+  <symbol id="i-type" viewBox="0 0 24 24"><path d="M4 7V4h16v3M9 20h6M12 4v16"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-doc" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></symbol>
+</svg>
+
+<main class="page">
+  <header>
+    <h1>Cỡ chữ chat: hiện tại và đề xuất</h1>
+    <p>Yêu cầu: chữ Nexus to hơn Google Chat một chút. Hai bản dưới dùng cùng nội dung, cùng màu, cùng chiều cao hàng; chỉ khác cỡ chữ. Đề xuất tăng 1px ở chỗ đọc nhiều nhất (tin nhắn, tên người gửi, hàng điều hướng, hàng tóm tắt thread) và 2px cho tin nhắn trên điện thoại. Bảng, form, trang quản trị giữ nguyên 14px.</p>
+    <div class="seg" role="group" aria-label="Giao diện">
+      <button type="button" data-theme-set="auto" aria-pressed="true">Theo máy</button>
+      <button type="button" data-theme-set="light" aria-pressed="false">Sáng</button>
+      <button type="button" data-theme-set="dark" aria-pressed="false">Tối</button>
+    </div>
+  </header>
+
+  <section aria-labelledby="s1">
+    <h2 id="s1">1. Máy tính: cột điều hướng, luồng tin, ô soạn</h2>
+    <p>Cột điều hướng 288px, hàng cao 36 như cũ. Dòng số đo dưới mỗi khung đọc thẳng từ trình duyệt (cỡ chữ / chiều cao dòng).</p>
+    <div class="cmp desk" id="desk"></div>
+  </section>
+
+  <section aria-labelledby="s2">
+    <h2 id="s2">2. Điện thoại 390: tab Tin nhắn và luồng</h2>
+    <p>Tin nhắn 14 → 16 (bằng ô soạn, đã 16 để iOS không phóng to). Hàng danh sách giữ 64, tên 16, dòng xem trước 14.</p>
+    <div class="cmp phones" id="phones"></div>
+  </section>
+
+  <section aria-labelledby="s3">
+    <h2 id="s3">3. Thay đổi token</h2>
+    <div class="scroll">
+      <table class="tbl">
+        <thead><tr><th scope="col">Vai trò</th><th scope="col">Hiện tại</th><th scope="col">Đề xuất</th><th scope="col">Google Chat (ước lượng)</th><th scope="col">Lớp trong code</th></tr></thead>
+        <tbody>
+          <tr><td>Tin nhắn, máy tính</td><td>14 / 21,7</td><td class="up">15 / 23</td><td>14 / 20</td><td><code>text-sm leading-[1.55]</code> → <code>md:text-md</code></td></tr>
+          <tr><td>Tin nhắn, điện thoại</td><td>14 / 21,7</td><td class="up">16 / 24</td><td>≈ 15–16</td><td>→ <code>text-base</code></td></tr>
+          <tr><td>Tên người gửi</td><td>14 / 600</td><td class="up">15 / 600</td><td>14 / 500</td><td>→ <code>text-md</code></td></tr>
+          <tr><td>Giờ, nhãn phụ, badge</td><td>12</td><td>12</td><td>12</td><td><code>text-xs</code> giữ</td></tr>
+          <tr><td>Hàng điều hướng (36)</td><td>14</td><td class="up">15</td><td>14</td><td><code>text-sm</code> → <code>text-md</code></td></tr>
+          <tr><td>Tiêu đề mục</td><td>13 / 600</td><td class="up">14 / 600</td><td>≈ 14 / 500</td><td><code>text-small</code> → <code>text-sm</code></td></tr>
+          <tr><td>Hàng tóm tắt thread</td><td>13</td><td class="up">14</td><td>≈ 12–13</td><td><code>text-small</code> → <code>text-sm</code></td></tr>
+          <tr><td>Trích dẫn trong tin</td><td>13</td><td class="up">14</td><td>—</td><td><code>text-small</code> → <code>text-sm</code></td></tr>
+          <tr><td>Code trong tin (mono)</td><td>13</td><td class="up">14</td><td>—</td><td><code>.message-html code</code></td></tr>
+          <tr><td>Nhãn "đã sửa"</td><td>11</td><td class="up">12</td><td>12</td><td><code>text-2xs</code> → <code>text-xs</code></td></tr>
+          <tr><td>Danh sách điện thoại: tên / xem trước</td><td>14 / 14</td><td class="up">16 / 14</td><td>≈ 16 / 14</td><td><code>ConversationRow</code></td></tr>
+          <tr><td>Ô soạn</td><td>16 / 24</td><td>16 / 24</td><td>14 / 20</td><td>giữ</td></tr>
+          <tr><td>Chữ giao diện, bảng, form</td><td>14 / 21</td><td>14 / 21</td><td>14</td><td><code>text-sm</code> giữ</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <ul class="notes">
+      <li><b>Token mới duy nhất:</b> <code>--text-md: 0.9375rem; --text-md--line-height: 1.4375rem;</code> (15/23) trong <code>@theme</code>. Không đổi <code>text-sm</code> toàn cục, nên bảng và trang quản trị không xê dịch.</li>
+      <li><b>Hàng cao giữ nguyên:</b> điều hướng 36, tóm tắt thread 32 (máy tính) / 36 (điện thoại), danh sách điện thoại 64.</li>
+      <li><b>Tên cắt sớm hơn khoảng 7%</b> trong cột 288: tên nhóm dài mất khoảng hai ký tự trước dấu "…".</li>
+      <li><b>Thanh rail của app</b> (app-rail.html) không đổi: nhãn sidebar chính vẫn 14/500, tooltip và badge giữ cỡ cũ.</li>
+    </ul>
+  </section>
+</main>
+
+<template id="tpl-desk">
+  <div class="cell">
+    <span class="tag"></span>
+    <div class="scroll">
+      <div class="app v">
+        <nav class="cnav" aria-label="Điều hướng chat">
+          <button class="newchat" type="button"><svg class="i"><use href="#i-plus"/></svg>Trò chuyện mới</button>
+          <a class="rl" href="#" data-m="Hàng điều hướng"><svg class="i"><use href="#i-home"/></svg><span class="t">Trang chủ</span></a>
+          <a class="rl unread" href="#"><svg class="i"><use href="#i-at"/></svg><span class="t">Được nhắc đến</span><span class="pill">2</span></a>
+          <div class="sec usr" data-m="Tiêu đề mục"><svg class="i s"><use href="#i-chev"/></svg>Dự án quý 4</div>
+          <a class="rl" href="#" aria-current="page"><span class="sp" style="--p:var(--color-person-4)">K</span><span class="t">Kế toán quý 4 · đối chiếu công nợ</span></a>
+          <a class="rl unread" href="#"><span class="sp" style="--p:var(--color-person-6)">D</span><span class="t">Dự án Cổng nhân sự</span><span class="pill">5</span></a>
+          <div class="sec"><svg class="i s"><use href="#i-chev"/></svg>Tin nhắn trực tiếp</div>
+          <a class="rl unread" href="#"><span class="av s20" style="--p:var(--color-person-1)">N</span><span class="t">Nguyễn Thị Hồng Nhung</span><span class="pill">1</span></a>
+          <a class="rl" href="#"><span class="av s20" style="--p:var(--color-person-5)">P</span><span class="t">Trần Đức Phương</span></a>
+          <a class="rl" href="#"><span class="av s20" style="--p:var(--color-person-3)">Á</span><span class="t">Lê Hoàng Ánh</span></a>
+          <div class="sec"><svg class="i s"><use href="#i-chev"/></svg>Nhóm</div>
+          <a class="rl" href="#"><span class="sp" style="--p:var(--color-person-2)">P</span><span class="t">Phòng Kinh doanh miền Bắc</span></a>
+          <a class="rl" href="#"><span class="sp" style="--p:var(--color-person-7)">Đ</span><span class="t">Đào tạo nghiệp vụ</span></a>
+        </nav>
+        <div class="content">
+          <div class="chead">
+            <span class="sp s40" style="--p:var(--color-person-4)">K</span>
+            <div class="t"><h3>Kế toán quý 4 · đối chiếu công nợ</h3><span class="sub">12 thành viên</span></div>
+          </div>
+          <div class="stream">
+            <div class="dd" role="separator">Hôm nay</div>
+            <div class="m">
+              <span class="av" style="--p:var(--color-person-1)">N</span>
+              <div class="mc">
+                <div class="who" data-m="Tên người gửi"><b>Nguyễn Thị Hồng Nhung</b><time data-m="Giờ">09:12</time></div>
+                <p class="txt" data-m="Tin nhắn">Chị đã đẩy bảng đối chiếu công nợ tháng 9 lên mục Tài liệu. Mọi người kiểm tra giúp phần chênh lệch ở dòng <code>TK 331</code> trước 15:00 nhé.</p>
+                <button class="tsum" type="button" data-m="Tóm tắt thread"><span class="faces"><span class="av s20" style="--p:var(--color-person-5)">P</span><span class="av s20" style="--p:var(--color-person-3)">Á</span></span><span class="n">3 trả lời</span><span class="l">Lần cuối 09:40</span></button>
+              </div>
+            </div>
+            <div class="m">
+              <span class="av" style="--p:var(--color-person-5)">P</span>
+              <div class="mc">
+                <div class="who"><b>Trần Đức Phương</b><time>10:05</time></div>
+                <p class="txt">Em thấy khoản ứng trước của nhà cung cấp Hưng Thịnh bị ghi hai lần, đã sửa trong bản mới.<span class="edm" data-m="đã sửa">đã sửa</span></p>
+              </div>
+            </div>
+            <div class="m mine">
+              <div class="mc">
+                <div class="txt"><div class="q" data-m="Trích dẫn"><b>Trần Đức Phương</b><span>Em thấy khoản ứng trước của nhà cung cấp Hưng Thịnh bị ghi hai lần…</span></div>Cảm ơn Phương. Mình duyệt bản này luôn, chiều nay gửi kiểm toán.</div>
+              </div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="cin" data-m="Ô soạn">Nhớ đính kèm biên bản đối chiếu đã ký</div>
+            <div class="cbar">
+              <button class="ibtn" type="button" aria-label="Định dạng"><svg class="i"><use href="#i-type"/></svg></button>
+              <button class="ibtn" type="button" aria-label="Đính kèm"><svg class="i"><use href="#i-clip"/></svg></button>
+              <button class="ibtn" type="button" aria-label="Cảm xúc"><svg class="i"><use href="#i-smile"/></svg></button>
+              <span class="hint">Enter gửi · Shift+Enter xuống dòng</span>
+              <button class="btn" type="button"><svg class="i s"><use href="#i-send"/></svg>Gửi</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="spec" aria-label="Số đo"></ul>
+  </div>
+</template>
+
+<template id="tpl-list">
+  <div class="cell">
+    <span class="tag"></span>
+    <div class="phone v ph">
+      <div class="sbar" aria-hidden="true"><span>9:41</span><span>5G</span></div>
+      <div class="topbar"><span style="width:8px"></span><div class="ti"><b>Tin nhắn</b><small>Công ty Minh Phát</small></div></div>
+      <div class="list">
+        <div class="lsec" data-m="Tiêu đề mục">Tin nhắn trực tiếp</div>
+        <a class="conv unread" href="#"><span class="av s40" style="--p:var(--color-person-1)">N</span><span style="display:grid;min-width:0"><span class="nm" data-m="Tên hàng">Nguyễn Thị Hồng Nhung</span><span class="pv" data-m="Xem trước">Chị gửi bảng đối chiếu rồi nhé</span></span><span class="meta"><span>09:12</span><span class="pill">1</span></span></a>
+        <a class="conv" href="#"><span class="av s40" style="--p:var(--color-person-5)">P</span><span style="display:grid;min-width:0"><span class="nm">Trần Đức Phương</span><span class="pv">Bạn: Cảm ơn Phương, mình duyệt luôn</span></span><span class="meta"><span>Hôm qua</span></span></a>
+        <div class="lsec">Nhóm</div>
+        <a class="conv unread" href="#"><span class="sp s40" style="--p:var(--color-person-4)">K</span><span style="display:grid;min-width:0"><span class="nm">Kế toán quý 4 · đối chiếu công nợ</span><span class="pv">Phương: Em đã sửa trong bản mới</span></span><span class="meta"><span>10:05</span><span class="pill">3</span></span></a>
+        <a class="conv" href="#"><span class="sp s40" style="--p:var(--color-person-6)">D</span><span style="display:grid;min-width:0"><span class="nm">Dự án Cổng nhân sự</span><span class="pv">Ánh: Lịch demo dời sang thứ Năm</span></span><span class="meta"><span>T3</span></span></a>
+        <a class="conv" href="#"><span class="sp s40" style="--p:var(--color-person-2)">P</span><span style="display:grid;min-width:0"><span class="nm">Phòng Kinh doanh miền Bắc</span><span class="pv">Bảo: Đã chốt đơn với đối tác Hải Phòng</span></span><span class="meta"><span>T2</span></span></a>
+      </div>
+      <nav class="tabbar" aria-label="Điều hướng chính">
+        <a href="#" aria-current="page"><svg class="i"><use href="#i-msgs"/></svg>Tin nhắn</a>
+        <a href="#"><svg class="i"><use href="#i-doc"/></svg>Tài liệu</a>
+        <a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt</a>
+        <a href="#"><svg class="i"><use href="#i-more"/></svg>Thêm</a>
+      </nav>
+    </div>
+    <ul class="spec" aria-label="Số đo"></ul>
+  </div>
+</template>
+
+<template id="tpl-conv">
+  <div class="cell">
+    <span class="tag"></span>
+    <div class="phone v ph">
+      <div class="sbar" aria-hidden="true"><span>9:41</span><span>5G</span></div>
+      <div class="topbar">
+        <button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button>
+        <span class="sp s28" style="--p:var(--color-person-4)">K</span>
+        <div class="ti"><b>Kế toán quý 4 · đối chiếu công nợ</b><small>12 thành viên</small></div>
+        <button class="ibtn" type="button" aria-label="Thông tin"><svg class="i"><use href="#i-info"/></svg></button>
+      </div>
+      <div class="stream">
+        <div class="dd" role="separator">Hôm nay</div>
+        <div class="m">
+          <span class="av" style="--p:var(--color-person-1)">N</span>
+          <div class="mc">
+            <div class="who" data-m="Tên người gửi"><b>Nguyễn Thị Hồng Nhung</b><time>09:12</time></div>
+            <p class="txt" data-m="Tin nhắn">Chị đã đẩy bảng đối chiếu công nợ tháng 9 lên mục Tài liệu. Mọi người kiểm tra giúp phần chênh lệch trước 15:00 nhé.</p>
+            <button class="tsum" type="button" data-m="Tóm tắt thread"><span class="faces"><span class="av s20" style="--p:var(--color-person-5)">P</span><span class="av s20" style="--p:var(--color-person-3)">Á</span></span><span class="n">3 trả lời</span><span class="l">Lần cuối 09:40</span></button>
+          </div>
+        </div>
+        <div class="m">
+          <span class="av" style="--p:var(--color-person-5)">P</span>
+          <div class="mc">
+            <div class="who"><b>Trần Đức Phương</b><time>10:05</time></div>
+            <p class="txt">Khoản ứng trước của Hưng Thịnh bị ghi hai lần, em sửa rồi ạ.</p>
+          </div>
+        </div>
+        <div class="m mine">
+          <div class="mc"><p class="txt">Cảm ơn Phương. Chiều nay mình gửi kiểm toán.</p></div>
+        </div>
+      </div>
+      <div class="pcomp">
+        <button class="ibtn" type="button" aria-label="Thêm"><svg class="i"><use href="#i-plus"/></svg></button>
+        <span class="cin" data-m="Ô soạn">Nhắn tin trong nhóm</span>
+        <button class="ibtn send" type="button" aria-label="Gửi"><svg class="i"><use href="#i-send"/></svg></button>
+      </div>
+    </div>
+    <ul class="spec" aria-label="Số đo"></ul>
+  </div>
+</template>
+
+<script>
+// Render each template twice (current / proposed), then measure the live computed sizes so the spec
+// strips are what the browser actually paints, not what we claim.
+(function () {
+  const variants = [['cur', 'Hiện tại'], ['new', 'Đề xuất']];
+  function mount(tplId, hostId) {
+    const host = document.getElementById(hostId);
+    for (const [cls, label] of variants) {
+      const node = document.getElementById(tplId).content.firstElementChild.cloneNode(true);
+      node.querySelector('.v').classList.add(cls);
+      const tag = node.querySelector('.tag');
+      tag.textContent = label;
+      if (cls === 'new') tag.classList.add('new');
+      host.appendChild(node);
+    }
+  }
+  function measure(row, cell) {
+    const ul = cell.querySelector('.spec');
+    cell.querySelectorAll('[data-m]').forEach(el => {
+      const cs = getComputedStyle(el);
+      const li = document.createElement('li');
+      const lh = cs.lineHeight === 'normal' ? '–' : Math.round(parseFloat(cs.lineHeight) * 10) / 10;
+      li.innerHTML = el.dataset.m + ' <b>' + parseFloat(cs.fontSize) + '/' + lh + '</b>';
+      ul.appendChild(li);
+    });
+  }
+  mount('tpl-desk', 'desk');
+  mount('tpl-list', 'phones');
+  mount('tpl-conv', 'phones');
+  document.querySelectorAll('.cell').forEach(c => measure(null, c));
+
+  const root = document.documentElement;
+  document.querySelectorAll('[data-theme-set]').forEach(b => b.addEventListener('click', () => {
+    const t = b.dataset.themeSet;
+    if (t === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', t);
+    document.querySelectorAll('[data-theme-set]').forEach(x => x.setAttribute('aria-pressed', String(x === b)));
+  }));
+})();
+</script>
+</body>
+</html>

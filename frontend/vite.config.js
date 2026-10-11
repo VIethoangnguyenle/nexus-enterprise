@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // Dev mode: proxy directly to native Go services (each on unique port)
 // Docker mode: proxy to Traefik on :80 (single entrypoint)
@@ -14,6 +15,8 @@ const devProxy = {
   // Messaging service — :8183 (REST) + :8081 (WebSocket)
   // IMPORTANT: /api/messages MUST come before /api/me (prefix collision)
   '/api/messages': { target: 'http://localhost:8183', changeOrigin: true },
+  // Push preferences are messaging's; declared before /api/me (auth) for the same reason.
+  '/api/me/push-preferences': { target: 'http://localhost:8183', changeOrigin: true },
   // /api/me, /api/me/profile and /api/me/workspaces (list, create) are all the auth service.
   '/api/me': { target: 'http://localhost:8180', changeOrigin: true },
 
@@ -33,8 +36,8 @@ const devProxy = {
         if (/^\/api\/workspaces\/[^/]+\/documents/.test(url)) {
           return originalWeb(req, res, { ...opts, target: 'http://localhost:8182' })
         }
-        // /api/workspaces/:id/channels/* → messaging service
-        if (/^\/api\/workspaces\/[^/]+\/channels/.test(url)) {
+        // /api/workspaces/:id/channels/* and /chat-sections/* → messaging service
+        if (/^\/api\/workspaces\/[^/]+\/(channels|chat-sections)/.test(url)) {
           return originalWeb(req, res, { ...opts, target: 'http://localhost:8183' })
         }
         // /api/workspaces/:id/contacts → auth service
@@ -98,10 +101,49 @@ const dockerProxy = {
 }
 
 export default defineConfig({
+  // Build-time constant for the service worker: import.meta.env is not forwarded
+  // to the injectManifest SW build, but `define` constants are.
+  define: {
+    __ONESIGNAL__: JSON.stringify(!!process.env.VITE_ONESIGNAL_APP_ID),
+  },
   plugins: [
     TanStackRouterVite({ routesDirectory: './src/routes', generatedRouteTree: './src/routeTree.gen.ts' }),
     tailwindcss(),
     react(),
+    // App shell only: the worker is src/sw.ts (injectManifest) and registers in production builds only.
+    VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      registerType: 'prompt',
+      injectRegister: false,
+      manifestFilename: 'manifest.webmanifest',
+      injectManifest: {
+        rollupFormat: 'iife',
+        // The app is one ~2 MB entry chunk; it is the shell and must be precached whole.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        globPatterns: ['**/*.{html,js,css,woff2,svg,png,webmanifest}'],
+        globIgnores: ['**/favicon-*.png'],
+      },
+      manifest: {
+        name: 'Nexus',
+        short_name: 'Nexus',
+        description: 'Không gian làm việc: tin nhắn, tài liệu, phê duyệt và tài sản.',
+        lang: 'vi',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        // DESIGN.md --color-base (light) and the --color-accent icon ground, as hex for the manifest.
+        theme_color: '#f1f8f7',
+        background_color: '#f1f8f7',
+        icons: [
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+    }),
   ],
   server: {
     proxy: isDev ? devProxy : dockerProxy,

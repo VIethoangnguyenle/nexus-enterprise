@@ -836,7 +836,7 @@ func TestCustomFields_APersonMustBeAMemberOfTheTypesWorkspace(t *testing.T) {
 		args []any
 	}{
 		{`INSERT INTO users (id, username, password) VALUES ($1, $1, '')`, []any{outsider}},
-		{`INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, []any{otherWS, outsider}},
+		{`INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $1, $2, 'organization')`, []any{otherWS, outsider}},
 		{`INSERT INTO tenant_users (tenant_id, user_id) VALUES ($1, $2)`, []any{otherWS, outsider}},
 	} {
 		_, err := f.pool.Exec(context.Background(), q.sql, q.args...)

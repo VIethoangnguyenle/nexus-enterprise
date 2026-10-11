@@ -29,6 +29,8 @@
   --text-xs--line-height: 1rem;
   --text-sm: 0.875rem;
   --text-sm--line-height: 1.3125rem;
+  --text-md: 0.9375rem;
+  --text-md--line-height: 1.4375rem;
   --text-base: 1rem;
   --text-base--line-height: 1.5rem;
   --text-lg: 1.1875rem;
@@ -322,6 +324,8 @@ h1, h2, h3, h4 {
 @utility pb-sheet { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
 @utility bottom-above-bar { bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
 @utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+/* The visible viewport (lib/app-height.ts): shrinks with the on-screen keyboard, unlike 100dvh on iOS. */
+@utility h-app { height: var(--app-height, 100dvh); }
 @utility max-h-sheet { max-height: 85dvh; }
 
 /* Field outlines drawn inside the box so focus never shifts layout (§6 Input). */
@@ -553,51 +557,86 @@ h1, h2, h3, h4 {
   float: left;
   height: 0;
 }
+.chat-editor-content strong { font-weight: 600; }
 .chat-editor-content code {
-  background: var(--color-surface-container);
+  background: var(--color-sunk);
   padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 0.8125rem;
-  color: var(--color-primary);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
 }
 .chat-editor-content pre {
-  background: var(--color-surface-container-low);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem;
+  background: var(--color-sunk);
+  border-radius: 8px;
+  padding: 10px 12px;
   margin: 0.25rem 0;
-  font-size: 0.75rem;
+  overflow-x: auto;
 }
+.chat-editor-content pre code { background: transparent; padding: 0; }
 .chat-editor-content blockquote {
-  border-left: 2px solid var(--color-line);
+  border-left: 3px solid var(--color-line);
   padding-left: 0.75rem;
   margin: 0.25rem 0;
-  color: var(--color-on-surface-variant);
+  color: var(--color-ink-muted);
 }
-.chat-editor-content ul, .chat-editor-content ol {
-  padding-left: 1.25rem;
-  margin: 0.25rem 0;
+.chat-editor-content ul, .chat-editor-content ol { padding-left: 1.25rem; margin: 0.25rem 0; }
+.chat-editor-content ul { list-style: disc; }
+.chat-editor-content ol { list-style: decimal; }
+.chat-editor-content a { color: var(--color-accent); text-decoration: underline; }
+.chat-editor-content [data-mention] {
+  color: var(--color-accent);
+  font-weight: 600;
+  background: var(--color-accent-wash);
+  padding: 0 4px;
+  border-radius: 4px;
 }
 
-/* Message HTML rendering */
+/* Message HTML rendering (DESIGN.md "Hiển thị định dạng trong tin"): no colour or font a sender chose. */
+.message-html strong, .message-html b { font-weight: 600; }
+.message-html p { margin: 0; }
 .message-html code {
-  background: var(--color-surface-container);
+  background: var(--color-sunk);
   padding: 1px 4px;
-  border-radius: 3px;
-  font-size: 0.8125rem;
-  color: var(--color-primary);
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
 }
 .message-html pre {
-  background: var(--color-surface-container-low);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem;
+  background: var(--color-sunk);
+  border-radius: 8px;
+  padding: 10px 12px;
   margin: 0.25rem 0;
-  font-size: 0.75rem;
+  overflow-x: auto;
 }
+.message-html pre code { background: transparent; padding: 0; }
 .message-html blockquote {
-  border-left: 2px solid var(--color-line);
+  border-left: 3px solid var(--color-line);
   padding-left: 0.75rem;
   margin: 0.25rem 0;
-  color: var(--color-on-surface-variant);
+  color: var(--color-ink-muted);
+}
+.message-html ul, .message-html ol { padding-left: 1.25rem; margin: 0.25rem 0; }
+.message-html ul { list-style: disc; }
+.message-html ol { list-style: decimal; }
+.message-html a { color: var(--color-accent); text-decoration: underline; }
+/* @others are accent text; a mention of the reader also washes (SelfMentionStyle names the reader). */
+.message-html [data-mention] {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* A message opened from a link (push, Được nhắc tới, Đã gắn sao, Trang chủ): outlined 2.4s (useFocusMessage). */
+@keyframes focus-flash {
+  0%, 40% { box-shadow: 0 0 0 2px var(--color-accent); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
+[data-flash] {
+  border-radius: var(--radius-surface, 12px);
+  animation: focus-flash var(--duration-realtime) var(--ease-out) both;
+}
+/* The outline is information and holds, then drops at the end; only the fade goes. */
+@media (prefers-reduced-motion: reduce) {
+  [data-flash] { animation-timing-function: steps(1, end); }
 }
 
 
@@ -677,6 +716,41 @@ h1, h2, h3, h4 {
 @utility bg-nexus-auth {
   background-image: radial-gradient(circle at 100% 0%, var(--color-surface-container-high) 0%, transparent 40%),
                     radial-gradient(circle at 0% 100%, var(--color-surface-container) 0%, transparent 40%);
+}
+
+/* ========================= */
+/* Touch (DESIGN.md §6, §9)  */
+/* ========================= */
+@media (pointer: coarse) {
+  /* Inputs are 16px: below that iOS zooms the page when a field takes focus. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea, select, [contenteditable='true'] {
+    font-size: 16px;
+  }
+  /* Every tap target reaches 44 × 44 without changing how it looks: an
+     invisible ::after grows the hit area to 44 on each axis that is shorter.
+     :where() keeps it at zero specificity, so a component that styles its own
+     ::after wins. */
+  :where(button, [role='button'], [role='tab'], [role='menuitem'], [role='switch'], summary)::after {
+    content: '';
+    position: absolute;
+    top: min(0px, calc((100% - 44px) / 2));
+    bottom: min(0px, calc((100% - 44px) / 2));
+    left: min(0px, calc((100% - 44px) / 2));
+    right: min(0px, calc((100% - 44px) / 2));
+  }
+}
+
+/* The tap-area ::after above needs its button positioned. In the base layer, so a
+   component's own `absolute` / `fixed` / `sticky` utility wins: unlayered, this rule
+   beat every utility and dropped absolutely placed buttons into the flow on touch
+   screens (the navigator's ⋯ pushed its rows apart). */
+@layer base {
+  @media (pointer: coarse) {
+    :where(button, [role='button'], [role='tab'], [role='menuitem'], [role='switch'], summary) {
+      position: relative;
+    }
+  }
 }
 
 /* Reduced motion (DESIGN.md §7): no transforms, fades only and at most 120ms. */

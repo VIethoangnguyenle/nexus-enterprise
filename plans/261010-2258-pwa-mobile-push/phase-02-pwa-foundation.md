@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Nền tảng PWA"
-status: pending
+status: completed
 priority: P1
 effort: "1-1.5d"
 dependencies: [1]
@@ -34,4 +34,4 @@ App cài được vào màn hình chính và có khung app khi mất mạng.
 3. Gates: test, lint, typecheck, bundle.
 
 ## Success Criteria
-- [ ] Lighthouse "installable" đạt; mất mạng vẫn mở được khung app; không cache dữ liệu API.
+- [x] Lighthouse "installable" đạt; mất mạng vẫn mở được khung app; không cache dữ liệu API.

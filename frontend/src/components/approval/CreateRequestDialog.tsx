@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { ArrowRight } from 'lucide-react'
-import type { ApprovalTemplate } from '../../api/approval'
+import type { ApprovalRequest, ApprovalTemplate } from '../../api/approval'
 import { useApprovalTemplate, useApprovalTemplates, useCreateRequest } from '../../hooks/useApproval'
 import { entityLabel } from '../../lib/approval-model'
 import { explain } from '../../lib/errors'
@@ -12,8 +12,8 @@ import { DynamicFormRenderer } from './DynamicFormRenderer'
 interface CreateRequestDialogProps {
   open: boolean
   onClose: () => void
-  /** The request was sent; the screen shows it on "Tôi đã gửi". */
-  onCreated: () => void
+  /** The request was sent, and this is it: the screen shows it on "Tôi đã gửi", a chat posts its card. */
+  onCreated: (request: ApprovalRequest) => void
 }
 
 /**
@@ -32,7 +32,7 @@ export function CreateRequestDialog({ open, onClose, onCreated }: CreateRequestD
 
 function RequestForm({ onClose, onCreated, createMut }: {
   onClose: () => void
-  onCreated: () => void
+  onCreated: (request: ApprovalRequest) => void
   createMut: ReturnType<typeof useCreateRequest>
 }) {
   const templates = useApprovalTemplates()
@@ -61,14 +61,15 @@ function RequestForm({ onClose, onCreated, createMut }: {
     setErrors(missing)
     if (Object.keys(missing).length > 0) return
     setFailure(undefined)
+    let created: ApprovalRequest
     try {
-      await createMut.mutateAsync({ template_id: chosen.id, form_data_json: JSON.stringify(values) })
+      created = await createMut.mutateAsync({ template_id: chosen.id, form_data_json: JSON.stringify(values) })
     } catch (err) {
       setFailure(explain(err, 'gửi đề nghị'))
       return
     }
     toast('Đã gửi đề nghị')
-    onCreated()
+    onCreated(created)
     onClose()
   }
 

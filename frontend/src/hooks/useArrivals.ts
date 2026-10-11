@@ -35,6 +35,11 @@ interface Options<T> {
   ready: boolean
   /** Changing this (e.g. the channel id) forgets what has been seen. */
   scope?: string
+  /**
+   * Items that join the list as history (an older page loaded on scroll) and
+   * must not be announced as news. They are remembered as seen, silently.
+   */
+  isHistory?: (item: T) => boolean
 }
 
 /**
@@ -43,7 +48,7 @@ interface Options<T> {
  * change of your own only gets the insert animation. Three or more changes
  * from others inside 2s also produce a `burst` for a single summary line.
  */
-export function useArrivals<T>(items: T[], { keyOf, authorOf, me, ready, scope }: Options<T>) {
+export function useArrivals<T>(items: T[], { keyOf, authorOf, me, ready, scope, isHistory }: Options<T>) {
   const seen = useRef<Set<string> | null>(null)
   const seenScope = useRef<string | undefined>(scope)
   const [fresh, setFresh] = useState<Map<string, Arrival>>(() => new Map())
@@ -70,6 +75,7 @@ export function useArrivals<T>(items: T[], { keyOf, authorOf, me, ready, scope }
       const k = keyOf(item)
       if (seen.current.has(k)) continue
       seen.current.add(k)
+      if (isHistory?.(item)) continue
       const author = authorOf(item)
       added.push([k, { source: author && author === me ? 'mine' : 'other', author, at: now }])
     }

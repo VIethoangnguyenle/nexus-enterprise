@@ -15,6 +15,9 @@ import (
 	workspacepb "ngac-platform/proto/workspace"
 	"ngac-platform/services/auth/internal/auth"
 	"ngac-platform/services/auth/internal/domain"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"ngac-platform/services/auth/internal/store"
 )
 
@@ -193,9 +196,30 @@ func (w *fakeWorld) ListTenantsByUser(_ context.Context, userID string) ([]store
 func (w *fakeWorld) GetTenantUser(_ context.Context, tenantID, userID string) (*store.TenantMembership, error) {
 	if m := w.membership(tenantID, userID); m != nil {
 		cp := *m
+		cp.TenantType = w.workspaceType(tenantID)
 		return &cp, nil
 	}
 	return nil, nil
+}
+
+// workspaceType is the type the workspace was created with.
+func (w *fakeWorld) workspaceType(id string) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if ws, ok := w.workspaces[id]; ok {
+		return ws.Type
+	}
+	return ""
+}
+
+// workspaceName is the name the workspace was created with.
+func (w *fakeWorld) workspaceName(id string) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if ws, ok := w.workspaces[id]; ok {
+		return ws.Name
+	}
+	return ""
 }
 
 func (w *fakeWorld) FindTenantByDomain(_ context.Context, d string) (*store.Tenant, error) {
@@ -244,7 +268,11 @@ func (w *fakeWorld) ListWorkspaceSummaries(_ context.Context, userID string) ([]
 				count++
 			}
 		}
-		out = append(out, store.WorkspaceSummary{ID: m.TenantID, Name: m.TenantName, Role: m.Role, MemberCount: count})
+		var typ string
+		if ws, ok := w.workspaces[m.TenantID]; ok {
+			typ = ws.Type
+		}
+		out = append(out, store.WorkspaceSummary{ID: m.TenantID, Name: m.TenantName, Role: m.Role, MemberCount: count, Type: typ})
 	}
 	return out, nil
 }
@@ -319,9 +347,13 @@ func (f *fakeWorkspace) CreateWorkspace(ctx context.Context, req *workspacepb.Cr
 	f.w.mu.Lock()
 	defer f.w.mu.Unlock()
 	f.w.recordCaller("CreateWorkspace", ctx)
+	// Like the real service: a workspace's type is stated when it is made.
+	if req.Type != domain.WorkspacePersonal && req.Type != domain.WorkspaceOrganization {
+		return nil, status.Error(codes.InvalidArgument, "type must be personal or organization")
+	}
 	id := f.w.next("ws")
-	f.w.workspaces[id] = &store.Tenant{ID: id, Name: req.Name}
-	return &workspacepb.Workspace{Id: id, Name: req.Name, PcNodeId: "pc-" + id,
+	f.w.workspaces[id] = &store.Tenant{ID: id, Name: req.Name, Type: req.Type}
+	return &workspacepb.Workspace{Id: id, Name: req.Name, Type: req.Type, PcNodeId: "pc-" + id,
 		OwnersUaId: "owners-" + id, MembersUaId: "members-" + id}, nil
 }
 

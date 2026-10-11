@@ -60,7 +60,7 @@ func TestCreateMyWorkspace_ProvisionsLikeSignup(t *testing.T) {
 	svc := w.service(t)
 	u := verifiedUser(t, w, "maker@example.test")
 
-	ws, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "  Tổ Đối soát  ")
+	ws, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "  Tổ Đối soát  ", domain.WorkspaceOrganization)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +95,7 @@ func TestCreateMyWorkspace_RefusesBadNamesAndCreatesNothing(t *testing.T) {
 		"only spaces": "  ",
 	} {
 		before := w.workspaceCount()
-		if _, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, in); !errors.Is(err, domain.ErrInvalidInput) {
+		if _, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, in, domain.WorkspaceOrganization); !errors.Is(err, domain.ErrInvalidInput) {
 			t.Errorf("%s: err = %v, want ErrInvalidInput", name, err)
 		}
 		if w.workspaceCount() != before {
@@ -106,7 +106,7 @@ func TestCreateMyWorkspace_RefusesBadNamesAndCreatesNothing(t *testing.T) {
 
 func TestCreateMyWorkspace_NeedsACaller(t *testing.T) {
 	svc := newFakeWorld().service(t)
-	if _, err := svc.CreateMyWorkspace(context.Background(), "", "", "Ok"); !errors.Is(err, domain.ErrInvalidInput) {
+	if _, err := svc.CreateMyWorkspace(context.Background(), "", "", "Ok", domain.WorkspaceOrganization); !errors.Is(err, domain.ErrInvalidInput) {
 		t.Fatalf("err = %v, want ErrInvalidInput", err)
 	}
 }
@@ -119,12 +119,12 @@ func TestCreateMyWorkspace_IsRateLimitedPerPerson(t *testing.T) {
 	t.Cleanup(func() { rdb.Del(context.Background(), "ws_create_rl:"+u.ID, "ws_create_rl:"+other.ID) })
 
 	for i := 0; i < domain.WorkspaceCreateLimit; i++ {
-		if _, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Nhóm"); err != nil {
+		if _, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Nhóm", domain.WorkspaceOrganization); err != nil {
 			t.Fatalf("creation %d: %v", i+1, err)
 		}
 	}
 	before := w.workspaceCount()
-	_, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Một nhóm nữa")
+	_, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Một nhóm nữa", domain.WorkspaceOrganization)
 	if !errors.Is(err, domain.ErrRateLimited) {
 		t.Fatalf("err = %v, want ErrRateLimited", err)
 	}
@@ -134,7 +134,7 @@ func TestCreateMyWorkspace_IsRateLimitedPerPerson(t *testing.T) {
 	if w.workspaceCount() != before {
 		t.Error("a refused creation must not create a workspace")
 	}
-	if _, err := svc.CreateMyWorkspace(context.Background(), other.ID, other.NGACNodeID, "Nhóm của người khác"); err != nil {
+	if _, err := svc.CreateMyWorkspace(context.Background(), other.ID, other.NGACNodeID, "Nhóm của người khác", domain.WorkspaceOrganization); err != nil {
 		t.Errorf("another person's budget is separate: %v", err)
 	}
 }
@@ -149,7 +149,7 @@ func TestCreateMyWorkspace_NeedsAVerifiedAddress(t *testing.T) {
 	phoneOnly.Email = ""
 
 	for name, u := range map[string]*store.User{"an unverified address": unverified, "no address at all": phoneOnly} {
-		_, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ Đối soát")
+		_, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ Đối soát", domain.WorkspaceOrganization)
 		if !errors.Is(err, domain.ErrEmailUnverified) {
 			t.Errorf("%s: err = %v, want ErrEmailUnverified", name, err)
 		}
@@ -161,14 +161,14 @@ func TestCreateMyWorkspace_NeedsAVerifiedAddress(t *testing.T) {
 	if _, err := w.MarkEmailVerified(context.Background(), unverified.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.CreateMyWorkspace(context.Background(), unverified.ID, unverified.NGACNodeID, "Tổ Đối soát"); err != nil {
+	if _, err := svc.CreateMyWorkspace(context.Background(), unverified.ID, unverified.NGACNodeID, "Tổ Đối soát", domain.WorkspaceOrganization); err != nil {
 		t.Errorf("once the address is proved: %v", err)
 	}
 }
 
 func TestCreateMyWorkspace_UnknownAccountIsNotFound(t *testing.T) {
 	svc := newFakeWorld().service(t)
-	if _, err := svc.CreateMyWorkspace(context.Background(), "ghost", "node", "Ok"); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := svc.CreateMyWorkspace(context.Background(), "ghost", "node", "Ok", domain.WorkspaceOrganization); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("err = %v, want ErrNotFound", err)
 	}
 }
@@ -212,7 +212,7 @@ func TestCreateMyWorkspace_UndoesTheWorkspaceWhereverProvisioningFails(t *testin
 			u := verifiedUser(t, auth_, "undo@example.test")
 			svc := tc.build(auth_)
 
-			ws, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ Đối soát")
+			ws, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ Đối soát", domain.WorkspaceOrganization)
 
 			if err == nil || ws != nil {
 				t.Fatalf("got %+v, %v: the failure must be returned", ws, err)
@@ -243,7 +243,7 @@ func TestCreateMyWorkspace_ReportsTheFailureEvenWhenTheUndoFails(t *testing.T) {
 	svc := w.service(t)
 	u := verifiedUser(t, w, "undo2@example.test")
 
-	_, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ Đối soát")
+	_, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ Đối soát", domain.WorkspaceOrganization)
 
 	if err == nil || !strings.Contains(err.Error(), "messaging down") {
 		t.Fatalf("err = %v, want the original failure", err)
@@ -255,7 +255,7 @@ func TestCreateMyWorkspace_NothingToUndoWhenTheWorkspaceItselfFails(t *testing.T
 	u := verifiedUser(t, w, "undo3@example.test")
 	svc := domain.NewService(w, nil, &fakePolicyRead{}, &fakePolicyWrite{w: w}, failingCreateWorkspace{&fakeWorkspace{w: w}}, &fakeMessaging{w: w})
 
-	if _, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ"); err == nil {
+	if _, err := svc.CreateMyWorkspace(context.Background(), u.ID, u.NGACNodeID, "Tổ", domain.WorkspaceOrganization); err == nil {
 		t.Fatal("expected an error")
 	}
 	if len(w.deleted) != 0 {

@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
 import { CH, UUID_RE } from '../../test/chat-fixtures'
+import { useNavCollapseStore } from '../../stores/nav-collapse.store'
 import { ChatNavigator } from './ChatNavigator'
 
 vi.mock('@tanstack/react-router', async () => (await import('../../test/router-mock')).routerMockFactory())
@@ -16,7 +17,11 @@ beforeEach(() => {
   routerState.params = {}
   routerState.pathname = '/channels'
 })
-afterEach(resetClient)
+afterEach(() => {
+  resetClient()
+  // Folded sections are remembered on the device; a test must not inherit the last one's.
+  useNavCollapseStore.setState({ collapsed: {} })
+})
 
 describe('ChatNavigator', () => {
   it('files DMs under "Tin nhắn trực tiếp" and spaces under "Nhóm"', async () => {
