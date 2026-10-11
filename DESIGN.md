@@ -449,13 +449,27 @@ này thì cái kia đóng.
   `button` "Mở ảnh <tên tệp>", alt lấy từ tên tệp; khi đang tải: Skeleton đúng tỉ lệ từ kích thước đã lưu, không
   nhảy layout. **Thẻ tệp:** `--color-raised` (trong panel `--color-base`), radius 10, padding 10 14 10 10, rộng tối
   đa 340: ô icon 36 theo loại (bảng tính `success`, PDF `danger`, văn bản `info`, khác `--color-sunk`) + tên 600
-  (cắt …) + "PDF · 1,2 MB" 12px mờ tabular; hover hiện IconButton Tải xuống; bấm mở xem trước trong Tài liệu.
-- **Trình xem ảnh (ImageViewer):** modal toàn màn (`--z-modal`, focus trap), nền `--color-sunk`. Thanh trên nền
-  `--color-base`, cao 56: PersonChip người gửi + giờ · tên tệp · dung lượng; phải: **Tải xuống**, **Đóng**. Ảnh
-  giữa, `object-fit: contain`, đệm ngang 72 cho nút **Ảnh trước / Ảnh sau** (IconButton tròn 44 `--color-overlay`
-  + shadow, giữa mép trái/phải; ẩn ở ảnh đầu/cuối, không quay vòng). Dưới ảnh: "2 / 4" tabular. ←/→ chuyển ảnh, Esc
-  đóng và trả focus về ảnh đã bấm. Phạm vi: các ảnh của **cùng một tin**. Màn chạm: vuốt ngang chuyển ảnh, nút
-  trước/sau nằm sát mép.
+  (cắt …) + "PDF · 1,2 MB" 12px mờ tabular; hover hiện IconButton Tải xuống; bấm thẻ mở **Trình xem tệp**.
+- **Trình xem tệp (FileViewer)** (mockup `design/mockups/file-viewer.html`), một trình xem cho mọi tệp mở từ tin, thread, tab Tệp và Tài liệu.
+  - **Hộp:** ≥ 768 là hộp thoại phủ (`--z-modal`, cách mép 32, radius 12, `--shadow-overlay`, nền `--color-scrim`). Dưới 768 toàn màn.
+  - **Thanh trên** (`--color-base`, 56): ô loại 36 theo `file-kind`, tên cắt giữa (giữ đuôi), "Loại · dung lượng · PersonChip 20 + gửi lúc/tải lên + giờ". Phải: Mở trong Tài liệu (ghost; chỉ khi tệp nằm trong thư mục người xem mở được, và không hiện khi mở từ Tài liệu), Tải xuống, Đóng. Dưới 1024 các nút chỉ còn icon.
+  - **Sân khấu** (`--color-sunk`): nút trước/sau tròn 44 ở mép, "n / N" dưới, chỉ trong cùng tin hoặc cùng danh sách, không quay vòng.
+  - **Thân theo loại:**
+    - Ảnh: vừa khung / 100% + kéo.
+    - PDF và Office (đổi trên máy chủ): trang dọc rộng tối đa 816 + viên "Trang [n] / N · − % +". Office thêm dòng mờ "Bản xem trước từ tệp Word, có thể khác bản gốc đôi chút."
+    - Video, âm thanh: `controls` gốc.
+    - Bảng tính (xlsx, xls, ods; người dùng chốt 2026-10-11): bảng như CSV, mỗi sheet một tab, 500 dòng đầu, công thức hiện giá trị — không đổi sang PDF.
+    - Văn bản, mã, CSV: mono 13; mã có số dòng; CSV là bảng tiêu đề dính, hàng 36. Tối đa 500 dòng / 1 MB; mã chưa tô màu cú pháp, dải đáy "Đang xem N dòng đầu trên M dòng." + Tải xuống để xem đủ.
+    - Loại khác: icon 64 + "Không xem trước được loại tệp này" + Tải xuống (primary).
+  - **Trạng thái:**
+    - Skeleton (sau 300ms).
+    - "Đang chuẩn bị bản xem trước…" (Office lần đầu, thanh tiến độ không giá trị, Tải xuống thay vì chờ, aria-live khi xong).
+    - Lỗi chuyển đổi và quá lớn (nói lý do + Tải xuống).
+    - 403 "Bạn không có quyền xem tệp này": không tên, loại, dung lượng, người gửi; không có thao tác.
+    - 404 "Tệp này đã bị xoá": tên mờ, không có thao tác.
+  - **Điện thoại:** Đóng trái, ⋯ phải (sheet: tên đầy đủ, người gửi, Tải xuống, Mở trong Tài liệu). Thanh đáy ‹ n / N ›, nút tắt ở hai đầu. Phóng bằng chụm hai ngón.
+  - **Bàn phím:** Esc (sheet trước), ←/→ (trừ khi đang ở media/ô số trang), + − 0. Focus trap, trang sau `inert`, mở thì focus vào Đóng, đóng thì trả focus về chỗ đã bấm.
+  - **Giới hạn (người dùng chốt 2026-10-11):** đổi Office tối đa 50 MB nguồn, 45 giây, PDF ≤ 80 MB; trong lúc máy chủ đổi, request chờ và thân hiện "Đang chuẩn bị bản xem trước…". 403 giữ ẩn tên tệp, chưa có "Xin quyền xem".
 
 ### Chat trên điện thoại (mockup `design/mockups/chat-mobile.html`)
 
@@ -563,8 +577,9 @@ lớp phủ realtime). Không `transition: all`. Đóng chạy bằng ~75% thờ
 | Vạch "Tin mới" | tĩnh khi mở | fade 220ms (khi bạn gửi tin) |
 | Số "N trả lời", pill "M mới" | đổi số fade 160ms; pill vào `scale(.6)` → 1 + fade 160ms ease-out | fade 160ms khi đã đọc |
 | Panel thread ↔ panel Thread (cùng khe) | đổi nội dung fade 160ms, không trượt | không |
-| Trình xem ảnh | scrim fade 220ms + ảnh `scale(.98)` → 1, 280ms expo | 210ms ease-in |
-| Đổi ảnh trong trình xem | `translateX(±16px)` + fade theo hướng, 160ms | không |
+| Trình xem tệp | desktop: như Modal; điện thoại: scrim fade 220ms + `scale(.98)` → 1, 280ms expo | 210ms ease-in |
+| Bản xem trước sẵn sàng | fade 160ms | không |
+| Đổi tệp trong trình xem | `translateX(±16px)` + fade theo hướng, 160ms | không |
 
 **Ngoại lệ: màn đăng nhập** (mockup `design/mockups/auth-motion.html`, duyệt 2026-10-11). Hai bước
 đăng nhập là một luồng đi tới, nên được trượt; mọi thứ vẫn dùng token ở trên, chỉ `transform` và `opacity`.
