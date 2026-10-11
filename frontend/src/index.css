@@ -324,8 +324,9 @@ h1, h2, h3, h4 {
 @utility pb-sheet { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
 @utility bottom-above-bar { bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
 @utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
-/* The visible viewport (lib/app-height.ts): shrinks with the on-screen keyboard, unlike 100dvh on iOS. */
-@utility h-app { height: var(--app-height, 100dvh); }
+/* The visible viewport (lib/app-height.ts): shrinks with the on-screen keyboard, unlike 100dvh on iOS,
+   and moves down when iOS scrolls the page to show the focused field. */
+@utility h-app { height: var(--app-height, 100dvh); translate: var(--app-shift, none); }
 @utility max-h-sheet { max-height: 85dvh; }
 
 /* Field outlines drawn inside the box so focus never shifts layout (§6 Input). */
