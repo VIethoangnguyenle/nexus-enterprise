@@ -51,7 +51,7 @@ Chat** (người dùng: Chat quan trọng nhất).
 | 03 | [Chặn ở server](phase-03-server-enforcement.md) | P1 | 1.5d | 02 | completed |
 | 04 | [Ẩn ở frontend](phase-04-frontend.md) | P2 | 1d | 02 | completed (f55e072; còn: link thẳng hiện trang ~1s trước khi chuyển) |
 | 05 | [Chuyển sang tổ chức](phase-05-convert-to-organization.md) | P2 | 1-1.5d | 03, 04 | completed (backend 8a1ba62 + UI f55e072) |
-| 06 | [Kiểm chứng](phase-06-verification.md) | P2 | 0.5d | 05 | pending |
+| 06 | [Kiểm chứng](phase-06-verification.md) | P2 | 0.5d | 05 | completed (A1–A4 PASS trên stack thật; tạo workspace mới chưa thử được ở dev vì không có SMTP để xác minh email) |
 
 ## Capabilities in `docs/specs/`
 | Capability | Action | Phase |
