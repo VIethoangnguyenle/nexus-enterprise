@@ -35,7 +35,12 @@ func (s *Service) liveMessage(ctx context.Context, id string) (*store.MessageFac
 // EditMessage changes the text of the caller's own message. It needs write on
 // the channel; a card (poll, task…) is not edited as text, and an edit to
 // nothing is refused — removing the text is a delete.
-func (s *Service) EditMessage(ctx context.Context, messageID, userID, userNodeID, content, format string) (*pb.Message, error) {
+//
+// mentions is the message's mention list after the edit; nil leaves it as it
+// was. Only the people the edit adds to it are notified (see pushNewMentions);
+// people already mentioned are not told again, and removing a mention tells
+// nobody.
+func (s *Service) EditMessage(ctx context.Context, messageID, userID, userNodeID, content, format string, mentions []string) (*pb.Message, error) {
 	f, err := s.liveMessage(ctx, messageID)
 	if err != nil {
 		return nil, err
@@ -60,7 +65,8 @@ func (s *Service) EditMessage(ctx context.Context, messageID, userID, userNodeID
 	if strings.TrimSpace(text) == "" {
 		return nil, fmt.Errorf("%w: an edit needs text", ErrInvalidInput)
 	}
-	if _, err := s.store.UpdateMessageContent(ctx, messageID, stored, text, format); err != nil {
+	added, err := s.store.UpdateMessageContent(ctx, messageID, stored, text, format, cleanMentions(mentions))
+	if err != nil {
 		if errors.Is(err, store.ErrMessageGone) {
 			return nil, fmt.Errorf("%w: message not found", ErrNotFound)
 		}
@@ -74,7 +80,26 @@ func (s *Service) EditMessage(ctx context.Context, messageID, userID, userNodeID
 	if err := s.EnrichMessagesWithMetadata(ctx, []*store.Message{edited}, ch.ID); err != nil {
 		return nil, err
 	}
-	return messageToProto(edited), nil
+	out := messageToProto(edited)
+	s.pushNewMentions(ctx, out, added)
+	return out, nil
+}
+
+// cleanMentions drops blank and repeated ids; nil stays nil (no change).
+func cleanMentions(ids []string) []string {
+	if ids == nil {
+		return nil
+	}
+	out := make([]string, 0, len(ids))
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		if _, dup := seen[id]; id == "" || dup {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	return out
 }
 
 // DeleteOutcome is what a delete tells the live views: the deletion itself,

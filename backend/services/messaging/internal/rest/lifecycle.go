@@ -18,12 +18,14 @@ func (h *Handler) EditMessage(c echo.Context) error {
 	var body struct {
 		Content       string `json:"content"`
 		ContentFormat string `json:"content_format"`
+		// Mentions is the mention list after the edit; absent leaves it as it was.
+		Mentions []string `json:"mentions"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	msg, err := h.svc.EditMessage(c.Request().Context(), c.Param("msgId"), claims.UserID, claims.NGACNodeID,
-		body.Content, body.ContentFormat)
+		body.Content, body.ContentFormat, body.Mentions)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

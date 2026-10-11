@@ -11,6 +11,10 @@ A stored chat message (not a system line) SHALL be pushed to: the other side of 
 users it mentions (`mention`), and the followers of the thread it replies in (`thread_reply`); never to its sender.
 Someone concerned for several reasons is pushed once, as the strongest: mention, then direct, then thread reply.
 
+A message edited to mention people it did not mention before SHALL be pushed as a `mention` to those people only
+(`chat-message-lifecycle`): not to anyone already mentioned, not to the direct-message or thread-follower audience,
+and not for a removed mention. The same recipient checks apply, and the same limit of 20.
+
 ### Requirement: Every recipient is checked when the push is sent
 A recipient SHALL be pushed only when, at that moment, they hold `read` on the channel's content OA (a removed member
 or a mentioned non-member gets nothing; a policy error sends nothing), they have that kind of push on, the time is
@@ -39,7 +43,7 @@ The recipient's notification level for the conversation (`docs/specs/notificatio
 `all` every message of a group is pushed to them (no per-kind switch applies — the level is the wish); under `off`
 nothing is pushed, except a mention in a group; a direct message under `off` is silent, mention or not. Quiet hours
 and the read check still apply to all of it.
-One message pushes to at most 20 mentioned people (the mention list comes from the client), and the delivery of one
+One message (or one edit) pushes to at most 20 mentioned people (the mention list comes from the client), and the delivery of one
 message ends with its 30-second deadline, however many recipients remain.
 
 #### Scenario: A tab left open elsewhere

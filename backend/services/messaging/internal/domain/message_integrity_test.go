@@ -67,7 +67,7 @@ func TestSendMessage_MarkupIsFilteredWhateverTheLabel(t *testing.T) {
 	})
 	require.ErrorIs(t, err, domain.ErrInvalidInput, "nothing left once filtered")
 
-	_, err = k.f.svc.EditMessage(ctx, k.msgID, k.f.userID, userNode, `<b>sửa</b><iframe src="x"></iframe>`, "plain")
+	_, err = k.f.svc.EditMessage(ctx, k.msgID, k.f.userID, userNode, `<b>sửa</b><iframe src="x"></iframe>`, "plain", nil)
 	require.NoError(t, err)
 	got := listed(t, k, k.msgID)
 	assert.Equal(t, "<b>sửa</b>", got.Content, "an edit cannot relabel its way past the filter")

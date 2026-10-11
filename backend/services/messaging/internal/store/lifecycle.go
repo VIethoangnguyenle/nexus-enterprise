@@ -59,21 +59,74 @@ func (s *Store) GetMessageFacts(ctx context.Context, id string) (*MessageFacts, 
 	return &f, nil
 }
 
-// UpdateMessageContent replaces a live message's text and returns when it was
-// edited.
-func (s *Store) UpdateMessageContent(ctx context.Context, id, content, text, format string) (time.Time, error) {
-	var at time.Time
-	err := s.db.QueryRow(ctx,
-		`UPDATE messages SET content = $2, content_text = $3, content_format = $4, edited_at = NOW()
-		 WHERE id = $1 AND deleted_at IS NULL
-		 RETURNING edited_at`, id, content, text, format).Scan(&at)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return time.Time{}, ErrMessageGone
-	}
+// UpdateMessageContent replaces a live message's text. A non-nil mentions
+// replaces its mention list (nil leaves it as it is) and the users it adds —
+// mentioned now, not before — are returned. When the message is a reply, the
+// added users follow its thread, as for a reply sent with them.
+func (s *Store) UpdateMessageContent(ctx context.Context, id, content, text, format string, mentions []string) ([]string, error) {
+	var added []string
+	err := pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
+		var prev []string
+		var parent, sender string
+		err := tx.QueryRow(ctx,
+			`SELECT COALESCE(mentions, '{}'), COALESCE(parent_message_id, ''), sender_id
+			 FROM messages WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, id).Scan(&prev, &parent, &sender)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrMessageGone
+		}
+		if err != nil {
+			return fmt.Errorf("edit message: %w", err)
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE messages SET content = $2, content_text = $3, content_format = $4, edited_at = NOW(),
+			        mentions = COALESCE($5::text[], mentions)
+			 WHERE id = $1`, id, content, text, format, mentions); err != nil {
+			return fmt.Errorf("edit message: %w", err)
+		}
+		if mentions == nil {
+			return nil
+		}
+		added = Difference(mentions, prev)
+		if parent == "" || len(added) == 0 {
+			return nil
+		}
+		return followMentioned(ctx, tx, added, parent, sender)
+	})
 	if err != nil {
-		return time.Time{}, fmt.Errorf("edit message: %w", err)
+		return nil, err
 	}
-	return at, nil
+	return added, nil
+}
+
+// Difference returns the ids of a that are not in b, once each, in a's order.
+func Difference(a, b []string) []string {
+	have := make(map[string]struct{}, len(b))
+	for _, id := range b {
+		have[id] = struct{}{}
+	}
+	var out []string
+	for _, id := range a {
+		if _, ok := have[id]; !ok {
+			have[id] = struct{}{}
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// followMentioned makes the users a reply mentions follow the thread of its
+// root. Ids that are not users are dropped rather than failing the write.
+func followMentioned(ctx context.Context, tx pgx.Tx, users []string, rootID, senderID string) error {
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO thread_follows (user_id, root_message_id, following, last_read_at, updated_at)
+		 SELECT u.id, root.id, TRUE, root.created_at, NOW()
+		 FROM users u, messages root
+		 WHERE u.id = ANY($1) AND u.id <> $3 AND root.id = $2
+		 ON CONFLICT (user_id, root_message_id) DO UPDATE SET following = TRUE, updated_at = NOW()`,
+		users, rootID, senderID); err != nil {
+		return fmt.Errorf("follow mentioned users: %w", err)
+	}
+	return nil
 }
 
 // DeletedMessage is the outcome of a delete, for the live views.

@@ -261,18 +261,9 @@ func (s *Store) InsertMessage(ctx context.Context, msg *Message) error {
 			   updated_at = NOW()`, msg.SenderID, msg.ParentMessageID, msg.CreatedAt); err != nil {
 			return fmt.Errorf("follow thread: %w", err)
 		}
-		// A mention in a reply makes the mentioned user follow the thread. Ids
-		// that are not users are dropped rather than failing the send.
+		// A mention in a reply makes the mentioned user follow the thread.
 		if len(msg.Mentions) > 0 {
-			if _, err := tx.Exec(ctx,
-				`INSERT INTO thread_follows (user_id, root_message_id, following, last_read_at, updated_at)
-				 SELECT u.id, root.id, TRUE, root.created_at, NOW()
-				 FROM users u, messages root
-				 WHERE u.id = ANY($1) AND u.id <> $3 AND root.id = $2
-				 ON CONFLICT (user_id, root_message_id) DO UPDATE SET following = TRUE, updated_at = NOW()`,
-				msg.Mentions, msg.ParentMessageID, msg.SenderID); err != nil {
-				return fmt.Errorf("follow mentioned users: %w", err)
-			}
+			return followMentioned(ctx, tx, msg.Mentions, msg.ParentMessageID, msg.SenderID)
 		}
 		return nil
 	})

@@ -58,6 +58,8 @@ type pushState struct {
 	now     func() time.Time
 	window  time.Duration
 
+	pending sync.WaitGroup // pushes started by PushLater / pushNewMentions
+
 	mu      sync.Mutex
 	batches map[string]*pushBatch // by user and conversation
 }
@@ -89,8 +91,22 @@ type PushRecipient struct {
 	Kind   PushKind
 }
 
+// WaitPushForTest blocks until the pushes started so far have been delivered.
+func WaitPushForTest(s *Service) {
+	if s.push != nil {
+		s.push.pending.Wait()
+	}
+}
+
 // PushRecipients returns who a message should be pushed to, after every check.
 func (s *Service) PushRecipients(ctx context.Context, msg *pb.Message) ([]PushRecipient, error) {
+	return s.recipients(ctx, msg, msg.GetMentions(), false)
+}
+
+// recipients resolves who is pushed for msg. mentions is the mentioned people
+// to consider; mentionsOnly drops every other reason (direct message, thread
+// follower, "all"), as when an edit adds mentions to a message already pushed.
+func (s *Service) recipients(ctx context.Context, msg *pb.Message, mentions []string, mentionsOnly bool) ([]PushRecipient, error) {
 	if msg == nil || (msg.MessageType != "" && msg.MessageType != "user") {
 		return nil, nil
 	}
@@ -112,7 +128,7 @@ func (s *Service) PushRecipients(ctx context.Context, msg *pb.Message) ([]PushRe
 			people[p.UserID] = p
 		}
 	}
-	if msg.ParentMessageId != "" {
+	if msg.ParentMessageId != "" && !mentionsOnly {
 		followers, err := s.store.ThreadFollowers(ctx, msg.ParentMessageId)
 		if err != nil {
 			return nil, err
@@ -123,15 +139,14 @@ func (s *Service) PushRecipients(ctx context.Context, msg *pb.Message) ([]PushRe
 		}
 		add(ps, PushThreadReply)
 	}
-	if ch.ChannelType == "dm" {
+	if ch.ChannelType == "dm" && !mentionsOnly {
 		ps, err := s.store.ChannelPeople(ctx, ch.ID)
 		if err != nil {
 			return nil, err
 		}
 		add(ps, PushDirect)
 	}
-	if len(msg.Mentions) > 0 {
-		mentions := msg.Mentions
+	if len(mentions) > 0 {
 		if len(mentions) > MaxMentionPushes {
 			mentions = mentions[:MaxMentionPushes]
 		}
@@ -142,7 +157,7 @@ func (s *Service) PushRecipients(ctx context.Context, msg *pb.Message) ([]PushRe
 		add(ps, PushMention)
 	}
 	// "all" on a group: every message concerns the people who chose it.
-	if ch.ChannelType != "dm" {
+	if ch.ChannelType != "dm" && !mentionsOnly {
 		ps, err := s.store.PeopleWithLevel(ctx, ch.ID, NotifyAll)
 		if err != nil {
 			return nil, err
@@ -245,6 +260,11 @@ func (s *Service) PushForMessage(ctx context.Context, msg *pb.Message) {
 		return
 	}
 	recipients, err := s.PushRecipients(ctx, msg)
+	s.pushTo(ctx, msg, recipients, err)
+}
+
+// pushTo delivers msg to the resolved recipients.
+func (s *Service) pushTo(ctx context.Context, msg *pb.Message, recipients []PushRecipient, err error) {
 	if err != nil {
 		slog.Warn("push recipients not resolved", "message_id", msg.Id, "error", err)
 		return
@@ -273,10 +293,32 @@ func (s *Service) PushLater(ctx context.Context, msg *pb.Message) {
 	if s.push == nil || msg == nil {
 		return
 	}
+	s.later(ctx, func(ctx context.Context) { s.PushForMessage(ctx, msg) })
+}
+
+// pushNewMentions tells the people an edit newly mentioned, and nobody else:
+// the message was pushed when it was sent. The same checks apply as for any
+// mention; at most MaxMentionPushes are told. Runs off the request path.
+func (s *Service) pushNewMentions(ctx context.Context, msg *pb.Message, added []string) {
+	if s.push == nil || msg == nil || len(added) == 0 {
+		return
+	}
+	s.later(ctx, func(ctx context.Context) {
+		recipients, err := s.recipients(ctx, msg, added, true)
+		s.pushTo(ctx, msg, recipients, err)
+	})
+}
+
+// later runs fn in the background with its own deadline: the caller's response
+// does not wait for it, and a client that hangs up does not cancel it.
+func (s *Service) later(ctx context.Context, fn func(context.Context)) {
+	p := s.push
+	p.pending.Add(1)
 	go func() {
+		defer p.pending.Done()
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		s.PushForMessage(ctx, msg)
+		fn(ctx)
 	}()
 }
 

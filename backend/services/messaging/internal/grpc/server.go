@@ -196,7 +196,7 @@ func (s *MessagingServer) ListThreads(ctx context.Context, req *pb.ListThreadsRe
 // EditMessage delegates to domain.Service.EditMessage and tells the channel.
 func (s *MessagingServer) EditMessage(ctx context.Context, req *pb.EditMessageRequest) (*pb.Message, error) {
 	caller := grpcauth.CallerFrom(ctx)
-	msg, err := s.svc.EditMessage(ctx, req.MessageId, caller.UserID, caller.NGACNodeID, req.Content, req.ContentFormat)
+	msg, err := s.svc.EditMessage(ctx, req.MessageId, caller.UserID, caller.NGACNodeID, req.Content, req.ContentFormat, nil)
 	if err != nil {
 		return nil, domainError("edit message", err)
 	}

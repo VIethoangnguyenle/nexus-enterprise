@@ -13,9 +13,23 @@ filtered like a send (see `chat-rich-text`); an edit to no text is refused (400)
 card (poll, task…) is not edited as text (400). The message records when it was edited and the channel's viewers
 receive a `message_edited` frame.
 
+An edit MAY carry `mentions` (user ids, as a send does): the mention list after the edit, replacing the stored one;
+absent, the list is left as it was, and `[]` clears it. Only the people the edit **adds** — mentioned now and not
+before — are notified: a `mention` push (see `web-push`), and, when the message is a reply, they follow its thread
+(a root's mentioned already follow it). People already mentioned are not notified again, and removing a mention
+notifies nobody. The mention push runs after the edit has answered.
+
 #### Scenario: Someone else's message
 - **WHEN** a member with write on the channel edits a message another member sent
 - **THEN** the answer is 403 and the text is unchanged
+
+#### Scenario: An edit adds a mention
+- **WHEN** a sender edits their message so it mentions Lan, who was not mentioned before, and Minh, who was
+- **THEN** only Lan is notified
+
+#### Scenario: An edit mentions someone who cannot read
+- **WHEN** an edit adds a mention of a user without `read` on the channel
+- **THEN** the mention is stored and that user receives no push
 
 ### Requirement: The sender, or a manager, deletes a message
 `DELETE /api/messages/{id}` (gRPC `DeleteMessage`) SHALL delete a live message for its sender holding `write`, or for

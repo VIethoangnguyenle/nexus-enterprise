@@ -30,26 +30,26 @@ func TestEditMessage_OnlyTheSenderEditsTheirOwnText(t *testing.T) {
 	ctx := context.Background()
 	svc := k.f.svc
 
-	edited, err := svc.EditMessage(ctx, k.msgID, k.f.userID, userNode, `<p>sửa <b>lại</b><script>x()</script></p>`, "html")
+	edited, err := svc.EditMessage(ctx, k.msgID, k.f.userID, userNode, `<p>sửa <b>lại</b><script>x()</script></p>`, "html", nil)
 	require.NoError(t, err)
 	assert.Equal(t, `<p>sửa <b>lại</b></p>`, edited.Content, "an edit is filtered like a send")
 	assert.NotNil(t, edited.EditedAt)
 	assert.NotNil(t, listed(t, k, k.msgID).EditedAt)
 
-	_, err = svc.EditMessage(ctx, k.msgID, k.f.userID, userNode, "   ", "markdown")
+	_, err = svc.EditMessage(ctx, k.msgID, k.f.userID, userNode, "   ", "markdown", nil)
 	require.ErrorIs(t, err, domain.ErrInvalidInput, "an edit to nothing is a delete, not an edit")
 
 	// Deny: someone else, even with write on the channel, cannot edit it.
 	other, _ := testutil.CreateUser(t, k.f.pool)
 	k.f.read.allow[grant{"ngac-other", k.oaID, ngac.OpWrite}] = true
-	_, err = svc.EditMessage(ctx, k.msgID, other, "ngac-other", "chiếm quyền", "markdown")
+	_, err = svc.EditMessage(ctx, k.msgID, other, "ngac-other", "chiếm quyền", "markdown", nil)
 	require.ErrorIs(t, err, domain.ErrAccessDenied)
 	// Deny: the sender who lost write on the channel.
-	_, err = svc.EditMessage(ctx, k.msgID, k.f.userID, outsider, "x", "markdown")
+	_, err = svc.EditMessage(ctx, k.msgID, k.f.userID, outsider, "x", "markdown", nil)
 	require.ErrorIs(t, err, domain.ErrAccessDenied)
 	assert.Equal(t, `<p>sửa <b>lại</b></p>`, listed(t, k, k.msgID).Content, "a refused edit changes nothing")
 
-	_, err = svc.EditMessage(ctx, "no-such-message", k.f.userID, userNode, "x", "markdown")
+	_, err = svc.EditMessage(ctx, "no-such-message", k.f.userID, userNode, "x", "markdown", nil)
 	require.ErrorIs(t, err, domain.ErrNotFound)
 }
 
@@ -61,7 +61,7 @@ func TestEditMessage_RefusesACard(t *testing.T) {
 		LinkedEntityType: "poll", LinkedEntityID: "poll-1",
 	})
 	require.NoError(t, err)
-	_, err = k.f.svc.EditMessage(ctx, card.Id, k.f.userID, userNode, "khác", "markdown")
+	_, err = k.f.svc.EditMessage(ctx, card.Id, k.f.userID, userNode, "khác", "markdown", nil)
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
 }
 
