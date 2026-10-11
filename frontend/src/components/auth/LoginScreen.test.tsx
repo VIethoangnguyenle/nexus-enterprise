@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { startGoogleSignIn } from '../../api/auth'
@@ -7,6 +7,7 @@ import { ID, calls, apiError, world } from '../../test/auth-fixtures'
 import { renderAuthScreen, startAuthTest, where } from '../../test/auth-render'
 import { expectNoIds } from '../../test/no-ids'
 import { useAuthStore } from '../../stores/auth.store'
+import { updatePreferences } from '../../lib/preferences'
 import { LoginScreen } from './LoginScreen'
 
 vi.mock('../../api/client', async (orig) => ({
@@ -397,5 +398,65 @@ describe('Login: nothing internal on screen', () => {
     await screen.findByText('Nhập mã 6 số')
     expectNoIds()
     expect(within(document.body).queryByText(/session-\d/)).not.toBeInTheDocument()
+  })
+})
+
+describe('Login: motion', () => {
+  let land!: () => void
+  const animate = vi.fn(() => ({ finished: new Promise<void>((r) => (land = r)), cancel: vi.fn() }))
+  beforeEach(() => {
+    animate.mockClear()
+    Element.prototype.animate = animate as unknown as typeof Element.prototype.animate
+  })
+  afterEach(() => {
+    delete (Element.prototype as { animate?: unknown }).animate
+    updatePreferences({ motion: 'system' })
+  })
+
+  it('names the product "Nexus" in the heading', async () => {
+    await login()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Đăng nhập vào Nexus' })).toBeInTheDocument()
+  })
+
+  it('the form is usable at once: the field is enabled and focused while the parts come in', async () => {
+    await login()
+    expect(await field()).toBeEnabled()
+    await waitFor(() => expect(screen.getByLabelText('Email hoặc số điện thoại')).toHaveFocus())
+  })
+
+  it('the parts of the form come in one after another', async () => {
+    await login()
+    await field()
+    expect(document.querySelector('.auth-rise')).not.toBeNull()
+  })
+
+  it('the address flies from the field to the code step, then lands in "Đã gửi tới"', async () => {
+    await login()
+    await userEvent.type(await field(), 'hoa.le@novapay.vn{Enter}')
+    await screen.findByText('Nhập mã 6 số')
+    const flyer = await waitFor(() => {
+      const el = document.querySelector('[data-auth-flyer]')
+      expect(el).not.toBeNull()
+      return el!
+    })
+    expect(flyer).toHaveAttribute('aria-hidden', 'true')
+    expect(flyer.textContent).toBe('hoa.le@novapay.vn')
+    const [keyframes, options] = animate.mock.calls[animate.mock.calls.length - 1] as unknown as [Keyframe[], KeyframeAnimationOptions]
+    expect(JSON.stringify(keyframes)).toMatch(/translate/)
+    expect(options.duration).toBe(280)
+    // While it flies the real text waits; when it lands the flyer goes and the real text is back.
+    expect(screen.getAllByText('hoa.le@novapay.vn')).toHaveLength(2)
+    act(() => land())
+    await waitFor(() => expect(document.querySelector('[data-auth-flyer]')).toBeNull())
+    expect(screen.getAllByText('hoa.le@novapay.vn')).toHaveLength(1)
+  })
+
+  it('under reduced motion the address does not fly and the step only fades', async () => {
+    updatePreferences({ motion: 'reduce' })
+    await login()
+    await userEvent.type(await field(), 'hoa.le@novapay.vn{Enter}')
+    await screen.findByText('Nhập mã 6 số')
+    expect(document.querySelector('[data-auth-flyer]')).toBeNull()
+    expect(screen.getByText('hoa.le@novapay.vn')).toBeInTheDocument()
   })
 })

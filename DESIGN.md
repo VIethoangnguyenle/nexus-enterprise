@@ -1,4 +1,4 @@
-# Nexus Hub Design System: Tín hiệu
+# Nexus Design System: Tín hiệu
 
 > **Nguồn thiết kế duy nhất của frontend.** Chọn ngày 2026-10-09 từ
 > [brainstorm](plans/261009-0449-project-wide-refactor/reports/brainstorm-261009-0457-new-ui-direction.html)
@@ -8,7 +8,7 @@
 
 ## 1. Thesis
 
-Nexus Hub là nơi nhiều người cùng sửa một thứ: tin nhắn, thư mục, đề nghị phê duyệt. Câu hỏi
+Nexus là nơi nhiều người cùng sửa một thứ: tin nhắn, thư mục, đề nghị phê duyệt. Câu hỏi
 người dùng đặt ra liên tục là **"ai vừa làm gì"**, nên đó là bản sắc của giao diện: mỗi người có
 một màu riêng, và mỗi thay đổi đến từ người khác mang màu đó trong chốc lát rồi tan.
 
@@ -111,6 +111,26 @@ Scale 1.2, `rem`:
 | `text-2xl` | 28 / 34 | 600 display | số tiền, con số trọng tâm |
 
 Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một nhãn cho mỗi panel.
+
+### Logo và tên (mockup `design/mockups/logo.html`, hướng A "Lối đi", duyệt 2026-10-11)
+
+Tên sản phẩm hiển thị ở mọi nơi là **Nexus** (không "Nexus Hub", không "Nexus Enterprise"). Tên trong
+mã backend, email và tài liệu kỹ thuật không đổi.
+
+- **Dấu hiệu:** chữ N là một đường đi qua bốn nút trên lưới 48: nét 6, nút r5, nút cuối (nơi tới
+  được) r5.5. Hai màu chỉ trên nền trung tính: nét và ba nút đầu `--color-accent`, nút cuối
+  `--color-person-1`. Trên nền accent chỉ một màu `--color-on-accent`. Component: `NexusMark`,
+  `NexusLogo` ở `frontend/src/components/brand/`; không vẽ lại dấu ở chỗ khác.
+- **Lockup:** dấu, rồi chữ "Nexus" Bricolage Grotesque 700, tracking −0.01em, cao chữ hoa bằng ~62%
+  cạnh dấu; dòng phụ "Không gian làm việc chung" (12px, `--color-ink-muted`) chỉ ở brand pane.
+  Khoảng cách dấu-chữ 10px.
+- **Khoảng trống quanh dấu:** tối thiểu bằng bán kính một nút (5/48 cạnh dấu).
+- **Cỡ nhỏ:** từ 24px trở xuống dùng bản nhỏ (nét 8, bỏ ba nút đầu, giữ nút đích) để favicon 16px
+  không thành vệt mờ. Từ 25px dùng bản đầy đủ.
+- **Text alternative:** đứng một mình có `role="img"` tên "Nexus"; cạnh chữ "Nexus" thì `aria-hidden`.
+- **Icon app và favicon** nằm ở `frontend/public/` (`favicon.svg` đổi màu theo giao diện của tab,
+  `favicon-32/16.png`, `apple-touch-icon.png`, `icon-192/512.png`, `icon-maskable-192/512.png`): dấu
+  một màu trên ô accent; bản maskable tràn viền, dấu trong ô 320/512 nằm gọn vòng an toàn 80%.
 
 ## 4. Space, radius, depth, layers
 
@@ -525,6 +545,26 @@ lớp phủ realtime). Không `transition: all`. Đóng chạy bằng ~75% thờ
 | Panel thread ↔ panel Thread (cùng khe) | đổi nội dung fade 160ms, không trượt | không |
 | Trình xem ảnh | scrim fade 220ms + ảnh `scale(.98)` → 1, 280ms expo | 210ms ease-in |
 | Đổi ảnh trong trình xem | `translateX(±16px)` + fade theo hướng, 160ms | không |
+
+**Ngoại lệ: màn đăng nhập** (mockup `design/mockups/auth-motion.html`, duyệt 2026-10-11). Hai bước
+đăng nhập là một luồng đi tới, nên được trượt; mọi thứ vẫn dùng token ở trên, chỉ `transform` và `opacity`.
+
+| Chuyển động | Vào | Ra |
+|---|---|---|
+| Bước 1 → bước 2 (quay lại: ngược hướng) | `translateX(±16px)` + fade, 280ms expo | `translateX(∓12px)` + fade, 210ms ease-in |
+| Email bay từ ô nhập sang "Đã gửi tới …" | `translate` + `scale` của chính dòng chữ, 280ms expo, một bản duy nhất | không |
+| Form vào lần lượt | từng phần `translateY(8px)` + fade, 220ms ease-out, lệch 40ms, bắt đầu sau 200ms (160ms ở bước sau) | không |
+| Logo tự lắp | nút `scale(.6)` → 1 + fade 160ms, nét `scaleX` 0 → 1 160ms, nút đích 280ms expo; lệch 40 đến 60ms, ~840ms; **một lần mỗi phiên trình duyệt** (cờ `sessionStorage`), các lần sau đứng yên | không |
+| Hoạt động ở brand pane | hàng vào như "Chèn hàng"; hàng mới nhất phủ màu người 2400ms + nhãn "vừa tải lên" | lớp phủ tan theo mẫu realtime |
+| Nền đồ thị thuộc tính ở brand pane | fade 280ms expo; hai lớp trôi tối đa 16px, một lần khoảng **30s** rồi **đứng yên**; dừng khi tab ẩn | không |
+| Gõ một số của mã | ô `scale(.92)` → 1, số `translateY(6px)` → 0 + fade, 160ms ease-out | không |
+| Mã sai | rung `translateX` ±6px một lần, 280ms ease-out, viền danger, thông báo "Mã chưa đúng. Còn N lần thử." (aria-live) | không |
+| Mã đúng | ô phủ success-wash lệch 40ms, gom vào giữa 220ms ease-in, huy hiệu ✓ `scale(.6)` → 1 280ms expo, thông báo "Đã xác minh." (aria-live), giữ ~700ms rồi chuyển route | route fade 160ms như thường |
+
+Giảm chuyển động (hệ điều hành hoặc "Luôn bật" trong Cài đặt): không có `transform`; mỗi dòng trên
+thành fade tối đa 120ms hoặc đổi màu; nền đồ thị **không được vẽ**; email không bay; logo hiện bằng
+fade 120ms; lớp phủ realtime ở brand pane vẫn hiện. Không chuyển động nào chặn thao tác: ô nhập nhận
+phím và focus ngay từ khung đầu tiên.
 
 **Realtime (bản sắc của hệ):**
 - Thay đổi do **người khác** gây ra: avatar tác giả loé vòng `--color-person-N-wash` 900ms; hàng

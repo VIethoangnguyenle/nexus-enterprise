@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { ArrowLeft, Lock, RefreshCw } from 'lucide-react'
@@ -10,13 +10,17 @@ import {
 } from '../../lib/auth-flow'
 import { useMotionPresets } from '../../lib/motion'
 import { Button, Heading, IconButton, Text, TextField } from '../primitives'
+import { AddressFlight, canFly, type FlightOrigin } from './AddressFlight'
+import { stepPresets, STEP_SHIFT } from './auth-motion'
 import { CodeEntry, type CodeSession } from './CodeEntry'
 import { GoogleLogo } from './GoogleLogo'
 import { Notice } from './Notice'
 
 const WIDE = 'w-full h-11'
 
-type Step = { name: 'identity' } | { name: 'code'; identifier: Identifier; session: CodeSession }
+type Step = { name: 'identity' } | { name: 'code'; identifier: Identifier; session: CodeSession; from?: FlightOrigin }
+
+type Direction = 1 | -1
 
 /**
  * Sign in (design/mockups/auth.html §1, §2): Google, or a six-digit code sent
@@ -26,20 +30,44 @@ type Step = { name: 'identity' } | { name: 'code'; identifier: Identifier; sessi
 export function LoginScreen() {
   const m = useMotionPresets()
   const [step, setStep] = useState<Step>({ name: 'identity' })
+  const [direction, setDirection] = useState<Direction>(1)
+  // The first screen is introduced by the shell; later steps rise a beat sooner.
+  const [moved, setMoved] = useState(false)
   // Held here so the address survives a trip to the code step and back.
   const [raw, setRaw] = useState('')
 
+  const go = (next: Step, dir: Direction) => {
+    setDirection(dir)
+    setMoved(true)
+    setStep(next)
+  }
+
+  // Which way a step travels is read when it leaves, so it is passed as `custom`.
+  const variants = {
+    enter: (d: Direction) => stepPresets(m.reduced, d).initial,
+    center: (d: Direction) => stepPresets(m.reduced, d).animate,
+    leave: (d: Direction) => stepPresets(m.reduced, d).exit,
+  }
+
   return (
-    <AnimatePresence mode="wait" initial={false}>
-      <motion.div key={step.name} {...m.route} className="grid gap-5">
+    <AnimatePresence mode="wait" initial={false} custom={direction}>
+      <motion.div
+        key={step.name}
+        custom={direction}
+        variants={variants}
+        initial="enter"
+        animate="center"
+        exit="leave"
+        className={`auth-rise ${moved ? 'auth-rise--step' : ''} grid gap-5`}
+      >
         {step.name === 'identity' ? (
           <IdentityStep
             raw={raw}
             onRaw={setRaw}
-            onSent={(identifier, session) => setStep({ name: 'code', identifier, session })}
+            onSent={(identifier, session, from) => go({ name: 'code', identifier, session, from }, 1)}
           />
         ) : (
-          <CodeStep step={step} onBack={() => setStep({ name: 'identity' })} />
+          <CodeStep step={step} onBack={() => go({ name: 'identity' }, -1)} />
         )}
       </motion.div>
     </AnimatePresence>
@@ -49,7 +77,7 @@ export function LoginScreen() {
 function IdentityStep({ raw, onRaw, onSent }: {
   raw: string
   onRaw: (value: string) => void
-  onSent: (id: Identifier, session: CodeSession) => void
+  onSent: (id: Identifier, session: CodeSession, from?: FlightOrigin) => void
 }) {
   const search = useSearch({ strict: false }) as { error?: string }
   const providers = useProviders()
@@ -74,11 +102,16 @@ function IdentityStep({ raw, onRaw, onSent }: {
     const identifier = parseIdentifier(raw)
     if (!identifier) return
     setFailure(null)
+    // Where the address sits now, for it to leave from once the code step is up.
+    const typed = e.currentTarget.querySelector('input')
+    const from: FlightOrigin | undefined = typed
+      ? { rect: typed.getBoundingClientRect(), text: displayIdentifier(identifier) }
+      : undefined
     request.mutate(
       { identifier: identifier.value, type: identifier.kind },
       {
         onSuccess: (res) => {
-          onSent(identifier, { sessionId: res.session_id, expiresAt: new Date(Date.now() + res.expires_in * 1000) })
+          onSent(identifier, { sessionId: res.session_id, expiresAt: new Date(Date.now() + res.expires_in * 1000) }, from)
         },
         onError: (err) => setFailure(describeAuthError(err, 'request-code')),
       },
@@ -106,7 +139,7 @@ function IdentityStep({ raw, onRaw, onSent }: {
   return (
     <>
       <div className="grid gap-1.5">
-        <Heading as="h1" look="page">Đăng nhập vào Nexus Hub</Heading>
+        <Heading as="h1" look="page">Đăng nhập vào Nexus</Heading>
         <Text variant="body" muted className="block">Dùng email công việc hoặc số điện thoại.</Text>
       </div>
 
@@ -160,7 +193,11 @@ function IdentityStep({ raw, onRaw, onSent }: {
 function CodeStep({ step, onBack }: { step: Extract<Step, { name: 'code' }>; onBack: () => void }) {
   const navigate = useNavigate()
   const { ws } = useSearch({ strict: false }) as { ws?: string }
-  const { identifier, session } = step
+  const { identifier, session, from } = step
+  const m = useMotionPresets()
+  const address = useRef<HTMLElement>(null)
+  // The address leaves the field and lands here; until it does, the real text waits.
+  const [flying, setFlying] = useState(() => !!from && !m.reduced && canFly())
 
   const done = (res: OTPVerifyResponse) => {
     // Only the workspace asked for in the link rides along; a Google error
@@ -176,7 +213,10 @@ function CodeStep({ step, onBack }: { step: Extract<Step, { name: 'code' }>; onB
       <div className="grid gap-1.5">
         <Heading as="h1" look="page">Nhập mã 6 số</Heading>
         <Text variant="body" muted className="block">
-          Đã gửi tới <b className="font-semibold text-ink">{displayIdentifier(identifier)}</b>.{' '}
+          Đã gửi tới{' '}
+          <b ref={address} className="font-semibold text-ink" style={flying ? { opacity: 0 } : undefined}>
+            {displayIdentifier(identifier)}
+          </b>.{' '}
           <Button variant="link" size="link" onClick={onBack}>
             {identifier.kind === 'email' ? 'Đổi email' : 'Đổi số'}
           </Button>
@@ -187,6 +227,9 @@ function CodeStep({ step, onBack }: { step: Extract<Step, { name: 'code' }>; onB
         <Text variant="small" muted className="block text-center">
           Không thấy thư? Kiểm tra mục Thư rác.
         </Text>
+      )}
+      {flying && from && (
+        <AddressFlight from={from} target={address} shift={m.reduced ? 0 : STEP_SHIFT} onDone={() => setFlying(false)} />
       )}
     </>
   )
