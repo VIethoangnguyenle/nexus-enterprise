@@ -41,14 +41,19 @@ export function refreshAccessToken(): Promise<string | null> {
         credentials: 'include',
       })
       if (!res.ok) {
-        useAuthStore.getState().logout()
+        // Only the server refusing the session ends it. A failing server
+        // (5xx) is not an answer about the session: keep it and try later.
+        if (res.status === 401 || res.status === 403) useAuthStore.getState().logout()
         return null
       }
       const { access_token } = (await res.json()) as { access_token: string }
       useAuthStore.getState().setAccessToken(access_token)
       return access_token
     } catch {
-      useAuthStore.getState().logout()
+      // No network (the installed app opened offline): the session is not
+      // over, the server simply cannot be asked. Keep it — the shell shows
+      // with the connection bar — and refresh once the network is back.
+      retryWhenOnline()
       return null
     } finally {
       refreshInFlight = null
@@ -56,6 +61,22 @@ export function refreshAccessToken(): Promise<string | null> {
   })()
 
   return refreshInFlight
+}
+
+let waitingForNetwork = false
+
+/** Refreshes once, the next time the browser reports the network is back. */
+function retryWhenOnline() {
+  if (waitingForNetwork || typeof window === 'undefined') return
+  waitingForNetwork = true
+  window.addEventListener(
+    'online',
+    () => {
+      waitingForNetwork = false
+      if (useAuthStore.getState().user) void refreshAccessToken()
+    },
+    { once: true },
+  )
 }
 
 /**

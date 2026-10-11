@@ -77,6 +77,12 @@ Verified against the codebase on 2026-07-31.
 | `chat-cards` | Matches code for polls and tasks (added 2026-10-11; cards follow) |
 | `web-push` | Matches code for sending (added 2026-10-11; device sign-up follows) |
 
+**Installation and offline shell**
+
+| Capability | State |
+|---|---|
+| `pwa-install` | Matches code except the gaps under its Status (added 2026-10-11) |
+
 **Approval**
 
 | Capability | State |

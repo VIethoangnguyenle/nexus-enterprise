@@ -140,6 +140,34 @@ describe('bootstrapSession', () => {
     expect(state.setBootstrapped).toHaveBeenCalled()
   })
 
+  // Opening the installed app with no network: the session is not over, the
+  // server simply cannot be asked. Keep it, show the shell, and finish the
+  // refresh once the network is back.
+  it('keeps the session when the network is down, and refreshes when it returns', async () => {
+    state.accessToken = null
+    mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    await bootstrapSession()
+
+    expect(state.logout).not.toHaveBeenCalled()
+    expect(state.user).not.toBeNull()
+    expect(state.setBootstrapped).toHaveBeenCalled()
+
+    mockFetch.mockResolvedValueOnce(ok({ access_token: 'back-online' }))
+    window.dispatchEvent(new Event('online'))
+    await vi.waitFor(() => expect(state.setAccessToken).toHaveBeenCalledWith('back-online'))
+  })
+
+  it('keeps the session when the server is failing, and ends it only when the server refuses it', async () => {
+    mockFetch.mockResolvedValueOnce({ ok: false, status: 503, json: () => Promise.resolve({}) })
+    expect(await refreshAccessToken()).toBeNull()
+    expect(state.logout).not.toHaveBeenCalled()
+
+    mockFetch.mockResolvedValueOnce(unauthorized())
+    expect(await refreshAccessToken()).toBeNull()
+    expect(state.logout).toHaveBeenCalled()
+  })
+
   it('does not call refresh when nobody was signed in', async () => {
     state.user = null
     state.accessToken = null

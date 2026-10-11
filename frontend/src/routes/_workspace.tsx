@@ -13,6 +13,8 @@ import { AppSidebar } from '../components/patterns/AppSidebar'
 import { ListPanel } from '../components/patterns/ListPanel'
 import { MobileNav } from '../components/patterns/MobileNav'
 import { MobileTopBar } from '../components/patterns/MobileTopBar'
+import { OfflineBar } from '../components/app/OfflineBar'
+import { UpdateBar } from '../components/app/UpdateBar'
 import { Button, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { apiFetch, logoutSession } from '../api/client'
@@ -153,6 +155,7 @@ function WorkspaceLayout() {
         {/* Column 3: Content */}
         <main className="flex-1 flex flex-col min-w-0 pb-tabbar lg:pb-0 isolate overflow-hidden">
           <MobileTopBar scope={screenEl} />
+          <OfflineBar />
           <div ref={setScreenEl} className="flex-1 flex flex-col min-h-0 min-w-0">
             <ErrorBoundary moduleName="workspace-content">
               <Outlet />
@@ -163,6 +166,7 @@ function WorkspaceLayout() {
 
       {/* Mobile bottom navigation */}
       <MobileNav />
+      <UpdateBar />
     </div>
   )
 }

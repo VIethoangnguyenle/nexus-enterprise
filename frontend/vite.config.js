@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
+import { VitePWA } from 'vite-plugin-pwa'
 
 // Dev mode: proxy directly to native Go services (each on unique port)
 // Docker mode: proxy to Traefik on :80 (single entrypoint)
@@ -104,6 +105,40 @@ export default defineConfig({
     TanStackRouterVite({ routesDirectory: './src/routes', generatedRouteTree: './src/routeTree.gen.ts' }),
     tailwindcss(),
     react(),
+    // App shell only: the worker is src/sw.ts (injectManifest) and registers in production builds only.
+    VitePWA({
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      registerType: 'prompt',
+      injectRegister: false,
+      manifestFilename: 'manifest.webmanifest',
+      injectManifest: {
+        rollupFormat: 'iife',
+        // The app is one ~2 MB entry chunk; it is the shell and must be precached whole.
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        globPatterns: ['**/*.{html,js,css,woff2,svg,png,webmanifest}'],
+        globIgnores: ['**/favicon-*.png'],
+      },
+      manifest: {
+        name: 'Nexus',
+        short_name: 'Nexus',
+        description: 'Không gian làm việc: tin nhắn, tài liệu, phê duyệt và tài sản.',
+        lang: 'vi',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
+        // DESIGN.md --color-base (light) and the --color-accent icon ground, as hex for the manifest.
+        theme_color: '#f1f8f7',
+        background_color: '#f1f8f7',
+        icons: [
+          { src: '/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icon-maskable-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+      },
+    }),
   ],
   server: {
     proxy: isDev ? devProxy : dockerProxy,

@@ -295,6 +295,18 @@ replaces an earlier one about the same conversation through `web_push_topic`. Ea
 person while one of their sessions has it on screen with the page visible; a tab that is merely open, or
 subscribed to the conversation for the navigator, does not hold push back.
 
+## Installable app (PWA)
+
+The frontend build contains `sw.js` (the service worker), `manifest.webmanifest` and the icons. nginx serves
+`/sw.js` and `/manifest.webmanifest` with `Cache-Control: no-cache` (`deploy/nginx/default.conf`), so an installed
+app learns of a new release on its next open. Every other static file (`.js .css .png .svg .woff2 …`) is cached for 30
+days as immutable: the hashed files under `assets/` are safe, but the fixed-name icons (`/icon-*.png`, `/favicon.svg`,
+`/apple-touch-icon.png`) are too, so a changed icon reaches home-screen installs only after that time (rename it to
+force one).
+The worker lives at the site root, so its scope is already `/` and no `Service-Worker-Allowed` header is needed.
+Traefik adds nothing here and does not cache. Browsers install only over HTTPS (the production host is). The worker
+precaches the app shell and never `/api/*`; a release shows installed apps a "Có bản mới của Nexus" bar.
+
 ## Email sign-in codes (Gmail SMTP)
 
 The auth service sends one-time sign-in codes by email through SMTP (Go standard library, no
