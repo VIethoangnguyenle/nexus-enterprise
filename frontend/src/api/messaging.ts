@@ -17,6 +17,8 @@ export interface Channel {
   /** The content object attribute messages are authorized on; used to ask what the caller may do here. */
   ngac_oa_id?: string
   created_at?: unknown
+  /** The signed-in user starred this conversation; omitted when not. */
+  starred?: boolean
 }
 
 /** A channel member as the messaging service returns it. Ids are for API calls only. */
@@ -70,6 +72,8 @@ export interface Message {
   /** What the message quotes: the sender's name and the opening of the text. */
   quoted?: QuotedMessage
   attachments?: MessageAttachment[]
+  /** The signed-in user starred this message; omitted when not. */
+  starred?: boolean
 }
 
 /** What a quote shows of the message it quotes (no body when that message was deleted). */
@@ -133,6 +137,8 @@ export interface ChannelUnread {
   notification_level?: 'all' | 'main' | 'off'
   /** Unread main messages that mention the caller, at every level. */
   mention_count?: number
+  /** The signed-in user starred this conversation; omitted when not. */
+  starred?: boolean
 }
 
 /** The caller's own state of one thread, as follow / unfollow / read answer. */
@@ -162,7 +168,7 @@ export interface SendMessageInput {
   attachments?: { drive_file_id: string; width?: number; height?: number }[]
 }
 
-export interface EditMessageInput { content: string; content_format: string }
+export interface EditMessageInput { content: string; content_format: string; mentions?: string[] }
 
 export const messagingApi = {
   // Channels
@@ -274,7 +280,7 @@ export const messagingApi = {
     apiFetch<Poll>(`/polls/${pollId}`),
 
   // Tasks
-  createTask: (channelId: string, data: { title: string; assignee_id?: string; due_date?: string }) =>
+  createTask: (channelId: string, data: { title: string; assignee_id?: string; due_date?: string; parent_message_id?: string }) =>
     apiFetch<ChatTask>(`/channels/${channelId}/tasks`, { method: 'POST', body: JSON.stringify(data) }),
   updateTask: (taskId: string, data: { status?: string; assignee_id?: string; title?: string; due_date?: string }) =>
     apiFetch<ChatTask>(`/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(data) }),

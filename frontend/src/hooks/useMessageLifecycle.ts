@@ -1,5 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
-import { messagingApi, type Message } from '../api/messaging'
+import { messagingApi, type EditMessageInput, type Message } from '../api/messaging'
+import { mentionsFromHtml } from '../components/chat/chat-extensions'
 import { applyMessageDeleted, patchMessage } from '../lib/chat-cache'
 import { queryClient } from '../lib/query-client'
 import { keys } from './keys'
@@ -10,6 +11,9 @@ type MessageList = { messages: Message[] }
 const rootOf = (channelId: string, rootId: string) =>
   queryClient.getQueryData<MessageList>(keys.messaging.messages(channelId))?.messages.find((m) => m.id === rootId)
 
+/** The edit request as the server reads it: the whole list of people mentioned in the new text. */
+type EditRequest = EditMessageInput & { mentions: string[] }
+
 /**
  * Changes the text of your own message. The new text shows at once; the
  * server's answer (filtered, with the edit time) replaces it, and a refusal
@@ -18,11 +22,15 @@ const rootOf = (channelId: string, rootId: string) =>
 export function useEditMessage(channelId: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: ({ message, content }: { message: Message; content: string }) =>
-      messagingApi.editMessage(message.id, { content, content_format: 'html' }),
+    mutationFn: ({ message, content }: { message: Message; content: string }) => {
+      // Always the full list: leaving it out would keep the old mentions, and the server tells
+      // who the edit added by comparing the two lists.
+      const request: EditRequest = { content, content_format: 'html', mentions: mentionsFromHtml(content) }
+      return messagingApi.editMessage(message.id, request)
+    },
     onMutate: ({ message, content }) => {
       patchMessage(channelId, message.id, message.parent_message_id, (m) => ({
-        ...m, content, content_format: 'html', edited_at: new Date().toISOString(),
+        ...m, content, content_format: 'html', mentions: mentionsFromHtml(content), edited_at: new Date().toISOString(),
       }))
       return { before: message }
     },
@@ -34,7 +42,7 @@ export function useEditMessage(channelId: string) {
     onError: (_err, { message }, ctx) => {
       if (!ctx) return
       patchMessage(channelId, message.id, message.parent_message_id, (m) => ({
-        ...m, content: ctx.before.content, content_format: ctx.before.content_format, edited_at: ctx.before.edited_at,
+        ...m, content: ctx.before.content, content_format: ctx.before.content_format, mentions: ctx.before.mentions, edited_at: ctx.before.edited_at,
       }))
     },
   })

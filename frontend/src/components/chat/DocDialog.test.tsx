@@ -86,4 +86,16 @@ describe('DocDialog', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(messagingApi.sendMessage).not.toHaveBeenCalled()
   })
+
+  it('posts the document as a reply when it is made inside a thread', async () => {
+    const user = userEvent.setup()
+    vi.mocked(documentApi.create).mockResolvedValue(textDoc())
+    renderWithClient(<DocDialog open onClose={vi.fn()} workspaceId="ws" channelId="ch" parentMessageId="root-1" />)
+    await user.type(screen.getByLabelText('Tên tài liệu'), 'Biên bản')
+    await user.click(screen.getByRole('button', { name: 'Tạo tài liệu' }))
+    await waitFor(() => expect(messagingApi.sendMessage).toHaveBeenCalled())
+    expect(vi.mocked(messagingApi.sendMessage).mock.calls[0]![1]).toMatchObject({
+      parent_message_id: 'root-1', linked_entity_type: 'document', linked_entity_id: DOC_ID,
+    })
+  })
 })

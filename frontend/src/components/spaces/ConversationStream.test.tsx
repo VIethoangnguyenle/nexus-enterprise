@@ -9,6 +9,9 @@ import type { Message } from '../../api/messaging'
 import type { MessageLifecycle } from '../../hooks/useMessageActions'
 import { ConversationStream, type ConversationStreamProps } from './ConversationStream'
 
+// The card reads its own poll from the server; these tests are about the stream around it.
+vi.mock('../chat/PollCard', () => ({ PollCard: () => <div data-testid="poll-card" /> }))
+
 afterEach(() => {
   resetClient()
   vi.useRealTimers()
@@ -220,10 +223,10 @@ describe('ConversationStream: actions', () => {
     act(() => { vi.advanceTimersByTime(2) })
     const sheet = screen.getByRole('dialog', { name: 'Thao tác với tin' })
     expect(within(sheet).getByRole('group', { name: 'Cảm xúc nhanh' })).toBeInTheDocument()
-    for (const name of ['Trả lời trong thread', 'Bỏ theo dõi thread', 'Sao chép', 'Ghim']) {
+    for (const name of ['Trả lời trong thread', 'Bỏ theo dõi thread', 'Gắn sao tin', 'Sao chép', 'Trích dẫn khi trả lời', 'Ghim']) {
       expect(within(sheet).getByRole('button', { name })).toBeInTheDocument()
     }
-    expect(within(sheet).queryByRole('button', { name: /Sửa tin|Xoá tin|Trích dẫn|chưa đọc/ })).toBeNull()
+    expect(within(sheet).queryByRole('button', { name: /Sửa tin|Xoá tin|chưa đọc/ })).toBeNull()
   })
 
   // Text selection is off on touch screens (the long press opens the sheet),
@@ -566,7 +569,9 @@ describe('ConversationStream: edit, delete and mark unread', () => {
     renderWithClient(stream([mineMsg()], { lifecycle: lifecycleStub() }))
     await user.click(within(article(/Bạn/)).getByRole('button', { name: 'Thêm' }))
     const menu = await screen.findByRole('menu', { name: 'Thêm thao tác cho tin' })
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Theo dõi thread', 'Sao chép văn bản', 'Sửa tin', 'Xoá tin'])
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
+      'Theo dõi thread', 'Gắn sao tin', 'Sao chép văn bản', 'Trích dẫn khi trả lời', 'Sửa tin', 'Xoá tin',
+    ])
     expect(within(menu).getByRole('separator')).toBeInTheDocument()
   })
 
@@ -575,7 +580,9 @@ describe('ConversationStream: edit, delete and mark unread', () => {
     renderWithClient(stream([theirMsg()], { lifecycle: lifecycleStub() }))
     await user.click(within(article(/Nguyễn Thu Lan/)).getByRole('button', { name: 'Thêm' }))
     const menu = await screen.findByRole('menu')
-    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Theo dõi thread', 'Sao chép văn bản', 'Đánh dấu chưa đọc'])
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
+      'Theo dõi thread', 'Gắn sao tin', 'Sao chép văn bản', 'Trích dẫn khi trả lời', 'Đánh dấu chưa đọc',
+    ])
   })
 
   it('lets a manager delete someone else’s message', async () => {

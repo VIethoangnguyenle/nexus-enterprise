@@ -1,9 +1,12 @@
 import { useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, useDragControls, type PanInfo } from 'motion/react'
-import { Bell, BellOff, Copy, MailOpen, MessageSquareReply, Pen, Pin, PinOff, Plus, Trash2 } from 'lucide-react'
+import { Bell, BellOff, Copy, MailOpen, MessageSquareReply, Pen, Pin, PinOff, Plus, Quote, Star, StarOff, Trash2 } from 'lucide-react'
 import type { Message } from '../../api/messaging'
 import { useModalFocus } from '../../hooks/useModalFocus'
+import { useStarMessage } from '../../hooks/useShortcuts'
+import { canQuote, canStar } from '../../lib/message-actions'
+import { quoteMessage, scopeOf, useDraftsStore } from '../../stores/drafts.store'
 import { useMotionPresets } from '../../lib/motion'
 import { previewText } from '../../lib/chat-cache'
 import { displayName, type PeopleDirectory } from '../../lib/people'
@@ -51,6 +54,9 @@ export function MessageActionSheet({
   const surfaceRef = useRef<HTMLDivElement>(null)
   const dragControls = useDragControls()
   useModalFocus({ active: true, surfaceRef, onClose })
+  const star = useStarMessage()
+  // While this composer holds a message being edited (phones) there is no quote to offer.
+  const composerEditing = useDraftsStore((d) => !!d.editing[scopeOf(m)])
 
   const author = m.sender_id === me ? 'Bạn' : displayName(people, m.sender_id, m.sender_name)
   const following = !!m.following
@@ -128,9 +134,22 @@ export function MessageActionSheet({
               {following ? 'Bỏ theo dõi thread' : 'Theo dõi thread'}
             </SheetItem>
           )}
+          {canStar(m) && (
+            <SheetItem
+              icon={m.starred ? <StarOff size={18} strokeWidth={1.75} /> : <Star size={18} strokeWidth={1.75} />}
+              onClick={done(() => void star({ message: m, starred: !m.starred }))}
+            >
+              {m.starred ? 'Bỏ gắn sao tin' : 'Gắn sao tin'}
+            </SheetItem>
+          )}
           <SheetItem icon={<Copy size={18} strokeWidth={1.75} />} onClick={done(() => copyText(m.content))}>
             Sao chép
           </SheetItem>
+          {canQuote(m) && !composerEditing && (
+            <SheetItem icon={<Quote size={18} strokeWidth={1.75} />} onClick={done(() => quoteMessage(m))}>
+              Trích dẫn khi trả lời
+            </SheetItem>
+          )}
           {onPin && (
             <SheetItem
               icon={m.is_pinned ? <PinOff size={18} strokeWidth={1.75} /> : <Pin size={18} strokeWidth={1.75} />}

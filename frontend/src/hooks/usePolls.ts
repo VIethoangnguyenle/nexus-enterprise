@@ -52,12 +52,19 @@ export function useClosePoll(pollId: string) {
   })
 }
 
-/** The poll arrives in the conversation as a message; the list is refetched in case the frame is late. */
-export function useCreatePoll(channelId: string) {
+/**
+ * The poll arrives in the conversation as a message (a reply when `parentMessageId`
+ * names a thread root); the list is refetched in case the frame is late.
+ */
+export function useCreatePoll(channelId: string, parentMessageId?: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: (input: CreatePollInput) => pollApi.create(channelId, input),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: keys.messaging.messages(channelId) }),
+    mutationFn: (input: CreatePollInput) =>
+      pollApi.create(channelId, parentMessageId ? { ...input, parent_message_id: parentMessageId } : input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: keys.messaging.messages(channelId) })
+      if (parentMessageId) void queryClient.invalidateQueries({ queryKey: keys.messaging.thread(parentMessageId) })
+    },
   })
 }
 

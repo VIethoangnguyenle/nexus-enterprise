@@ -33,7 +33,11 @@ export interface MessageLifecycle {
  * server refuses (DESIGN.md "Sửa tin", "Xoá tin"). The menus, the sheet and the
  * dialog only read this.
  */
-export function useMessageActions(channelId: string, me: string | undefined): MessageLifecycle {
+export function useMessageActions(
+  channelId: string,
+  me: string | undefined,
+  opts: { onMarkedUnread?: (m: Message) => void } = {},
+): MessageLifecycle {
   const canManage = useCanManageChannel(channelId)
   const edit = useEditMessage(channelId)
   const remove = useDeleteMessage(channelId)
@@ -87,7 +91,10 @@ export function useMessageActions(channelId: string, me: string | undefined): Me
 
   const markUnread = (m: Message) => {
     unread.mutate(m, {
-      onSuccess: () => toast('Đã đánh dấu chưa đọc'),
+      onSuccess: () => {
+        toast('Đã đánh dấu chưa đọc')
+        opts.onMarkedUnread?.(m)
+      },
       onError: (err) => toast.error(explain(err, 'đánh dấu chưa đọc')),
     })
   }

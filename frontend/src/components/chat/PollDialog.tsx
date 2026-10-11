@@ -50,6 +50,8 @@ interface PollDialogProps {
   open: boolean
   onClose: () => void
   channelId: string
+  /** Made inside a thread: the poll is posted as a reply to this root. */
+  parentMessageId?: string
 }
 
 /**
@@ -57,8 +59,8 @@ interface PollDialogProps {
  * multiple answers, anonymity and a closing time. The poll reaches the
  * conversation as a message once the server accepts it.
  */
-export function PollDialog({ open, onClose, channelId }: PollDialogProps) {
-  const create = useCreatePoll(channelId)
+export function PollDialog({ open, onClose, channelId, parentMessageId }: PollDialogProps) {
+  const create = useCreatePoll(channelId, parentMessageId)
   return (
     <Dialog open={open} onClose={create.isPending ? () => {} : onClose} title="Tạo bình chọn">
       {/* Mounted only while open, so every opening starts blank. */}

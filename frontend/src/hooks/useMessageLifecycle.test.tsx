@@ -29,13 +29,53 @@ beforeEach(() => {
   queryClient.setQueryData(keys.messaging.messages('c1'), { messages: [msg({ id: 'm0' }), msg()], has_more: false })
 })
 
+describe('useEditMessage: mentions', () => {
+  const lan = '<span data-mention="u-lan">@Lan</span>'
+  const duc = '<span data-mention="u-duc">@Đức</span>'
+
+  it('sends the people mentioned in the edited text, ones added by the edit included', async () => {
+    api.editMessage.mockResolvedValue(msg())
+    const { result } = renderHook(() => useEditMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ message: msg({ content: `<p>${lan}</p>`, mentions: ['u-lan'] }), content: `<p>${lan} ${duc}</p>` }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.editMessage).toHaveBeenCalledWith('m1', expect.objectContaining({ mentions: ['u-lan', 'u-duc'] }))
+  })
+
+  it('sends the same list when the edit adds nobody', async () => {
+    api.editMessage.mockResolvedValue(msg())
+    const { result } = renderHook(() => useEditMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ message: msg({ content: `<p>${lan}</p>`, mentions: ['u-lan'] }), content: `<p>${lan} sửa chữ</p>` }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.editMessage).toHaveBeenCalledWith('m1', expect.objectContaining({ mentions: ['u-lan'] }))
+  })
+
+  it('sends an empty list when every mention was taken out', async () => {
+    api.editMessage.mockResolvedValue(msg())
+    const { result } = renderHook(() => useEditMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ message: msg({ content: `<p>${lan}</p>`, mentions: ['u-lan'] }), content: '<p>không ai</p>' }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.editMessage).toHaveBeenCalledWith('m1', expect.objectContaining({ mentions: [] }))
+  })
+
+  it('puts the old mentions back when the server refuses', async () => {
+    api.editMessage.mockRejectedValue(new Error('403'))
+    const before = msg({ content: `<p>${lan}</p>`, mentions: ['u-lan'] })
+    queryClient.setQueryData(keys.messaging.messages('c1'), { messages: [msg({ id: 'm0' }), before], has_more: false })
+    const { result } = renderHook(() => useEditMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ message: before, content: `<p>${lan} ${duc}</p>` }))
+    await waitFor(() => expect(list()[1]!.mentions).toEqual(['u-lan', 'u-duc']))
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(list()[1]!.mentions).toEqual(['u-lan'])
+  })
+})
+
 describe('useEditMessage', () => {
   it('shows the new text at once, then keeps what the server stored (filtered, edit time)', async () => {
     api.editMessage.mockResolvedValue(msg({ content: '<p>mới</p>', edited_at: { seconds: 1760000000, nanos: 0 } }))
     const { result } = renderHook(() => useEditMessage('c1'), { wrapper })
     act(() => result.current.mutate({ message: msg(), content: '<p>mới <script>x</script></p>' }))
     await waitFor(() => expect(list()[1]!.content).toContain('mới'))
-    expect(api.editMessage).toHaveBeenCalledWith('m1', { content: '<p>mới <script>x</script></p>', content_format: 'html' })
+    expect(api.editMessage).toHaveBeenCalledWith('m1', { content: '<p>mới <script>x</script></p>', content_format: 'html', mentions: [] })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(list()[1]).toMatchObject({ content: '<p>mới</p>', edited_at: { seconds: 1760000000, nanos: 0 } })
   })

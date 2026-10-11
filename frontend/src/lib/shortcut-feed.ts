@@ -105,3 +105,8 @@ export interface OpenTarget {
 export function openTarget(m: FeedMessage): OpenTarget {
   return { channelId: m.channel_id, messageId: m.id, rootId: m.parent_message_id || undefined }
 }
+
+/** Whether a message just received puts a new item in my mentions feed: someone else's, naming me. */
+export function mentionsMe(mentions: readonly string[] | undefined, senderId: string, me: string | undefined): boolean {
+  return !!me && senderId !== me && !!mentions?.includes(me)
+}

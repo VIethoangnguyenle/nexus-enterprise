@@ -2,9 +2,12 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from '../api/client'
 import { messagingApi } from '../api/messaging'
 import { queryClient } from '../lib/query-client'
-import { useSendMessage, useSendReply } from './useMessages'
+import { useDraftsStore } from '../stores/drafts.store'
+import { useSendCardMessage, useSendMessage, useSendReply } from './useMessages'
+import { keys } from './keys'
 
 vi.mock('../api/messaging', async (orig) => {
   const real = await orig<typeof import('../api/messaging')>()
@@ -17,6 +20,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 const stored = { id: 'm1', channel_id: 'c1', sender_id: 'me', content: '<p>x</p>' }
 
 beforeEach(() => {
+  useDraftsStore.getState().reset()
   queryClient.clear()
   vi.clearAllMocks()
   send.mockResolvedValue(stored)
@@ -42,5 +46,93 @@ describe('sending rich text', () => {
     act(() => result.current.mutate({ content: '<p>x</p>' }))
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(send.mock.calls[0]![1]).not.toHaveProperty('mentions')
+  })
+})
+
+const quote = (id = 'q1') => ({ id, sender_id: 'u2', sender_name: 'Lan', text: 'Chào cả nhà' })
+
+describe('sending with a pending quote', () => {
+  it('sends the quote of this conversation and clears it once the message is stored', async () => {
+    useDraftsStore.getState().setQuote('c1', quote())
+    useDraftsStore.getState().setQuote('c2', quote('other'))
+    const { result } = renderHook(() => useSendMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ content: '<p>ok</p>' }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(send).toHaveBeenCalledWith('c1', expect.objectContaining({ quoted_message_id: 'q1' }))
+    expect(useDraftsStore.getState().drafts['c1']?.quote).toBeUndefined()
+    expect(useDraftsStore.getState().drafts['c2']?.quote?.id).toBe('other')
+  })
+
+  it('shows the quote on the optimistic message', async () => {
+    useDraftsStore.getState().setQuote('c1', quote())
+    queryClient.setQueryData(keys.messaging.messages('c1'), { messages: [], has_more: false })
+    send.mockReturnValue(new Promise(() => {}))
+    const { result } = renderHook(() => useSendMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ content: '<p>ok</p>' }))
+    await waitFor(() => {
+      const list = queryClient.getQueryData<{ messages: { quoted?: { id: string; text?: string } }[] }>(keys.messaging.messages('c1'))
+      expect(list?.messages[0]?.quoted).toMatchObject({ id: 'q1', text: 'Chào cả nhà' })
+    })
+  })
+
+  it('sends a reply with the thread composer\'s quote only', async () => {
+    useDraftsStore.getState().setQuote('thread:root', quote('r1'))
+    useDraftsStore.getState().setQuote('c1', quote('main'))
+    const { result } = renderHook(() => useSendReply('c1', 'root'), { wrapper })
+    act(() => result.current.mutate({ content: '<p>ok</p>' }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(send).toHaveBeenCalledWith('c1', expect.objectContaining({ quoted_message_id: 'r1', parent_message_id: 'root' }))
+    expect(useDraftsStore.getState().drafts['c1']?.quote?.id).toBe('main')
+  })
+
+  it('sends without a quote that was deleted while pending', async () => {
+    useDraftsStore.getState().setQuote('c1', quote())
+    useDraftsStore.getState().markQuoteDeleted('c1', 'q1')
+    const { result } = renderHook(() => useSendMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ content: '<p>ok</p>' }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(send.mock.calls[0]![1]).not.toHaveProperty('quoted_message_id')
+  })
+
+  it('a card link never carries the quote', async () => {
+    useDraftsStore.getState().setQuote('c1', quote())
+    const { result } = renderHook(() => useSendMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ content: '', linkedEntity: { type: 'document', id: 'd1' } }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(send.mock.calls[0]![1]).not.toHaveProperty('quoted_message_id')
+    expect(useDraftsStore.getState().drafts['c1']?.quote?.id).toBe('q1')
+  })
+
+  it('keeps the text and the quote when the server refuses (400), and shows the quote as deleted', async () => {
+    useDraftsStore.getState().setQuote('c1', quote())
+    send.mockRejectedValue(new ApiError('bad', 400))
+    const { result } = renderHook(() => useSendMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ content: '<p>ok</p>' }))
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(useDraftsStore.getState().drafts['c1']?.quote).toMatchObject({ id: 'q1', deleted: true })
+  })
+
+  it('leaves the quote alone when the failure is not about it (network)', async () => {
+    useDraftsStore.getState().setQuote('c1', quote())
+    send.mockRejectedValue(new Error('offline'))
+    const { result } = renderHook(() => useSendMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ content: '<p>ok</p>' }))
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(useDraftsStore.getState().drafts['c1']?.quote?.deleted).toBeUndefined()
+  })
+})
+
+describe('sending a card as a message', () => {
+  it('goes to the conversation without a parent', async () => {
+    const { result } = renderHook(() => useSendCardMessage('c1'), { wrapper })
+    await act(() => result.current.send({ type: 'document', id: 'd1' }))
+    expect(send).toHaveBeenCalledWith('c1', expect.objectContaining({ linked_entity_type: 'document', linked_entity_id: 'd1' }))
+    expect(send.mock.calls[0]![1]).not.toHaveProperty('parent_message_id')
+  })
+
+  it('goes into the thread as a reply when a root is given', async () => {
+    const { result } = renderHook(() => useSendCardMessage('c1', 'root'), { wrapper })
+    await act(() => result.current.send({ type: 'approval', id: 'a1' }))
+    expect(send).toHaveBeenCalledWith('c1', expect.objectContaining({ parent_message_id: 'root', linked_entity_type: 'approval', linked_entity_id: 'a1' }))
   })
 })

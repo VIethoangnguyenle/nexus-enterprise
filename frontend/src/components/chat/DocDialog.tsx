@@ -3,7 +3,7 @@ import { Folder } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { driveApi } from '../../api/drive'
 import { useCreateTextDocument } from '../../hooks/useDocuments'
-import { useSendMessage } from '../../hooks/useMessages'
+import { useSendCardMessage } from '../../hooks/useMessages'
 import { chatCardKeys } from '../../hooks/keys/chat-cards'
 import { explain } from '../../lib/errors'
 import { queryClient } from '../../lib/query-client'
@@ -29,6 +29,8 @@ interface DocDialogProps {
   onClose: () => void
   workspaceId: string
   channelId: string
+  /** Made inside a thread: the card is posted as a reply to this root. */
+  parentMessageId?: string
 }
 
 /**
@@ -36,9 +38,9 @@ interface DocDialogProps {
  * folder and posted to it as a card. If the post fails after the document
  * exists, "Gửi lại" posts that same document instead of making another.
  */
-export function DocDialog({ open, onClose, workspaceId, channelId }: DocDialogProps) {
+export function DocDialog({ open, onClose, workspaceId, channelId, parentMessageId }: DocDialogProps) {
   const create = useCreateTextDocument(workspaceId)
-  const send = useSendMessage(channelId)
+  const send = useSendCardMessage(channelId, parentMessageId)
   return (
     <Dialog open={open} onClose={create.isPending || send.isPending ? () => {} : onClose} title="Tạo tài liệu">
       <DocForm workspaceId={workspaceId} channelId={channelId} onClose={onClose} create={create} send={send} />
@@ -51,7 +53,7 @@ function DocForm({ workspaceId, channelId, onClose, create, send }: {
   channelId: string
   onClose: () => void
   create: ReturnType<typeof useCreateTextDocument>
-  send: ReturnType<typeof useSendMessage>
+  send: ReturnType<typeof useSendCardMessage>
 }) {
   const [title, setTitle] = useState('')
   const [titleError, setTitleError] = useState<string>()
@@ -63,7 +65,7 @@ function DocForm({ workspaceId, channelId, onClose, create, send }: {
 
   const post = async (docId: string) => {
     try {
-      await send.mutateAsync({ content: '', linkedEntity: { type: 'document', id: docId } })
+      await send.send({ type: 'document', id: docId })
     } catch {
       setMade(docId)
       setFailure('Đã tạo tài liệu nhưng chưa gửi được vào nhóm. Thử gửi lại.')

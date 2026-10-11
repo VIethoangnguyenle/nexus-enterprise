@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { Editor } from '@tiptap/core'
-import { chatExtensions, isAllowedLink, mentionsOf } from './chat-extensions'
+import { chatExtensions, isAllowedLink, mentionsFromHtml, mentionsOf } from './chat-extensions'
 
 let editor: Editor | null = null
 function open(content = '') {
@@ -124,5 +124,18 @@ describe('chatExtensions: mentions', () => {
     ed.commands.focus('end')
     ed.commands.insertContent([{ type: 'text', text: ' ' }, { type: 'mention', attrs: { id: 'u-lan', label: 'Lan' } }, { type: 'text', text: ' ' }])
     expect(ed.getHTML()).toBe('<p>chào <span data-mention="u-lan">@Lan</span> </p>')
+  })
+})
+
+describe('mentionsFromHtml', () => {
+  it('lists each mentioned user once, in order, from the mention spans of saved html', () => {
+    const html = '<p><span data-mention="u-lan">@Lan</span> và <span data-mention="u-duc">@Đức</span> <span data-mention="u-lan">@Lan</span></p>'
+    expect(mentionsFromHtml(html)).toEqual(['u-lan', 'u-duc'])
+  })
+
+  it('is empty when nobody is mentioned, or the span has no id', () => {
+    expect(mentionsFromHtml('<p>không ai</p>')).toEqual([])
+    expect(mentionsFromHtml('<p><span data-mention="">@x</span></p>')).toEqual([])
+    expect(mentionsFromHtml('')).toEqual([])
   })
 })

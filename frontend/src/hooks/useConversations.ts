@@ -3,7 +3,9 @@ import { useChannels, useDirectMessages, useUnreadCounts } from './useMessaging'
 import { usePeople } from './usePeople'
 import { useAuthStore } from '../stores/auth.store'
 import { useWebSocketStore } from '../stores/websocket.store'
-import { buildConversations, sortConversations, totalUnread, type Conversation } from '../lib/conversations'
+import {
+  buildConversations, sortConversations, totalUnread, type Conversation, type ConversationMeta,
+} from '../lib/conversations'
 
 export interface ConversationsState {
   conversations: Conversation[]
@@ -38,6 +40,15 @@ export function useConversations(workspaceId: string): ConversationsState {
     return map
   }, [unreadQ.data])
 
+  // Level, @mentions and star come with the same unread list: one request for all three.
+  const meta = useMemo(() => {
+    const map: Record<string, ConversationMeta> = {}
+    for (const u of unreadQ.data?.channels ?? []) {
+      map[u.channel_id] = { level: u.notification_level, mentions: u.mention_count, starred: u.starred }
+    }
+    return map
+  }, [unreadQ.data])
+
   const conversations = useMemo(
     () =>
       sortConversations(
@@ -45,12 +56,13 @@ export function useConversations(workspaceId: string): ConversationsState {
           spaces: spacesQ.data?.channels ?? [],
           dms: dmsQ.data?.channels ?? [],
           unread,
+          meta,
           lastMessages,
           me: { id: user?.id, username: user?.username },
           dir: people,
         }),
       ),
-    [spacesQ.data, dmsQ.data, unread, lastMessages, user, people],
+    [spacesQ.data, dmsQ.data, unread, meta, lastMessages, user, people],
   )
 
   const ids = useMemo(() => conversations.map((c) => c.id).sort().join(','), [conversations])

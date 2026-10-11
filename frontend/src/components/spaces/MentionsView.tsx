@@ -1,8 +1,11 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { AnimatePresence } from 'motion/react'
 import { useAuthStore } from '../../stores/auth.store'
 import type { FeedMessage } from '../../api/shortcuts'
 import type { Conversation } from '../../lib/conversations'
+import { toMillis } from '../../lib/format'
 import { groupByDay } from '../../lib/shortcut-feed'
+import { useArrivals } from '../../hooks/useArrivals'
 import { useMentionsFeed, useMentionsUnreadCount, useOpenMention, useThreadRoots } from '../../hooks/useShortcuts'
 import { Heading } from '../primitives'
 import { BackBar, FeedCard, FeedEmpty, FeedError, FeedFooter, FeedSkeleton } from './FeedParts'
@@ -32,6 +35,21 @@ export function MentionsView({ workspaceId, conversationOf, onOpen, onHome, onBa
   const opened = useOpenMention()
   const items = useMemo(() => feed.data?.pages.flatMap((p) => p.messages) ?? [], [feed.data])
   const roots = useThreadRoots(items)
+  // A mention that lands while the list is open grows in at the top, washed in its sender's colour.
+  // What the first page held, and the older pages "Tải thêm" adds below it, are history, not news.
+  const newest = useRef<number | null>(null)
+  const { fresh } = useArrivals(items, {
+    keyOf: (m) => m.id,
+    authorOf: (m) => m.sender_id,
+    me,
+    ready: feed.isSuccess,
+    scope: workspaceId,
+    isHistory: (m) => newest.current !== null && toMillis(m.created_at) <= newest.current,
+  })
+  useEffect(() => {
+    if (!feed.isSuccess) return
+    newest.current = Math.max(newest.current ?? 0, ...items.map((m) => toMillis(m.created_at)))
+  }, [feed.isSuccess, items])
   // Day labels are relative to now; recompute whenever the feed does.
   const now = useMemo(() => new Date(), [feed.dataUpdatedAt])
   const groups = useMemo(() => groupByDay(items, now), [items, now])
@@ -68,19 +86,22 @@ export function MentionsView({ workspaceId, conversationOf, onOpen, onHome, onBa
                   {g.label}
                 </h4>
                 <ul aria-labelledby={`mention-day-${gi}`} className="m-0 p-0 grid gap-0.5">
-                  {g.items.map((m) => (
-                    <FeedCard
-                      key={m.id}
-                      item={m}
-                      kind="mention"
-                      conversation={conversationOf(m.channel_id)}
-                      me={me}
-                      now={now}
-                      root={m.parent_message_id ? roots.get(m.parent_message_id) : undefined}
-                      href={hrefOf?.(m)}
-                      onOpen={(item) => { opened(item); onOpen(item) }}
-                    />
-                  ))}
+                  <AnimatePresence initial={false}>
+                    {g.items.map((m) => (
+                      <FeedCard
+                        key={m.id}
+                        item={m}
+                        kind="mention"
+                        conversation={conversationOf(m.channel_id)}
+                        me={me}
+                        now={now}
+                        root={m.parent_message_id ? roots.get(m.parent_message_id) : undefined}
+                        href={hrefOf?.(m)}
+                        arrival={fresh.get(m.id)}
+                        onOpen={(item) => { opened(item); onOpen(item) }}
+                      />
+                    ))}
+                  </AnimatePresence>
                 </ul>
               </div>
             ))}

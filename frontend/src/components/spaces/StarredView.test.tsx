@@ -154,3 +154,31 @@ describe('StarredView', () => {
     expect(api.listStarred).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 25, cursor: expect.objectContaining({ beforeId: 'sm-1' }) }))
   })
 })
+
+describe('StarredView unstarring', () => {
+  it('lets a card go and calls the server, after it collapses', async () => {
+    const user = userEvent.setup()
+    api.listStarred.mockResolvedValue({ messages: [star()], has_more: false })
+    view()
+    await user.click(await screen.findByRole('button', { name: /^Gắn sao tin của/ }))
+    expect(api.unstarMessage).toHaveBeenCalledWith('sm-1')
+    await waitFor(() => expect(screen.queryByText('Dạ xong rồi ạ')).toBeNull())
+  })
+
+  it('lets a starred conversation go from the list when its star is taken off', async () => {
+    const user = userEvent.setup()
+    api.listStarred.mockResolvedValue({ messages: [], has_more: false })
+    const { rerender } = (() => {
+      const props = {
+        workspaceId: WS_ID, starredConversations: [VANHANH], conversationOf: (id: string) => byId.get(id),
+        onOpen: vi.fn(), onOpenConversation: vi.fn(), onHome: vi.fn(),
+      }
+      const r = renderWithClient(<StarredView {...props} />)
+      return { rerender: (list: Conversation[]) => r.rerender(<StarredView {...props} starredConversations={list} />) }
+    })()
+    await user.click(await screen.findByRole('button', { name: 'Gắn sao Vận hành chung' }))
+    expect(api.unstarConversation).toHaveBeenCalledWith(CH.vanhanh)
+    rerender([])
+    await waitFor(() => expect(screen.queryByRole('link', { name: /Vận hành chung/ })).toBeNull())
+  })
+})

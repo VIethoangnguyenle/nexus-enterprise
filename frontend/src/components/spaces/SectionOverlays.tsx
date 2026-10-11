@@ -1,6 +1,8 @@
 import { useRef, useState, type ComponentType, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Check, Folder, FolderPlus, Pencil, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Bell, BellOff, Check, Folder, FolderPlus, Pencil, Star, Trash2, X } from 'lucide-react'
 import type { ChatSectionsApi, ConversationRef } from '../../hooks/useChatSections'
+import { useStarConversation } from '../../hooks/useShortcuts'
+import { changeNotificationLevel } from '../../hooks/useNotificationLevel'
 import { explain, statusOf } from '../../lib/errors'
 import { MAX_SECTION_NAME, sectionOfChannel, validateSectionName, type ChatSection } from '../../lib/chat-sections'
 import { Button, MenuItem, MenuSeparator, Popover, TextField } from '../primitives'
@@ -8,8 +10,15 @@ import { NavSheet, SheetItem, SheetLabel, SheetSeparator } from './NavSheet'
 
 type Placement = 'bottom-start' | 'bottom-end' | 'top-start'
 
+/** A conversation the row menu opens for: its name for the toasts, and the state the menu changes. */
+export interface RowTarget extends ConversationRef {
+  starred?: boolean
+  /** Notification level is `off`. */
+  muted?: boolean
+}
+
 type Overlay =
-  | { kind: 'row'; conversation: ConversationRef }
+  | { kind: 'row'; conversation: RowTarget }
   | { kind: 'section'; sectionId: string }
   | { kind: 'create'; conversation?: ConversationRef; placement: Placement }
   | { kind: 'rename'; sectionId: string }
@@ -69,12 +78,15 @@ const sheetKit: Kit = {
   ),
 }
 
+/** The id of the system section, for its folded state. */
+export const STARRED_SECTION = 'starred'
+
 const ICON = { size: 16, strokeWidth: 1.75 } as const
 const ICON_SHEET = { size: 18, strokeWidth: 1.75 } as const
 
 /**
  * Everything that opens from the navigator's section controls: the menu of a
- * conversation ("Chuyển tới mục"), the menu of a section, and the name form
+ * conversation ("Chuyển tới mục", Gắn sao, Tắt thông báo), the menu of a section, and the name form
  * ("Tên mục mới" / "Đổi tên mục"). On a desktop they are popovers hung from the
  * control that opened them; on a phone they are bottom sheets
  * (design/mockups/spaces.html §1, chat-mobile.html).
@@ -98,6 +110,7 @@ export function useSectionOverlays(api: ChatSectionsApi, phone: boolean, onRevea
   // close runs; closing only if still current keeps the new one.
   const closeIfCurrent = (overlay: Overlay) => () => setOpen((cur) => (cur === overlay ? null : cur))
 
+  const star = useStarConversation()
   const { Item, Separator, Radios } = phone ? sheetKit : popoverKit
   const icon = phone ? ICON_SHEET : ICON
   const sections = api.sections
@@ -114,11 +127,13 @@ export function useSectionOverlays(api: ChatSectionsApi, phone: boolean, onRevea
   if (open?.kind === 'row') {
     const c = open.conversation
     const current = sectionOfChannel(sections, c.id)
+    // A starred conversation is listed under Đã gắn sao only: it keeps its section on the server, and moving it waits for the unstar.
+    const arrange = !c.starred
     node = renderMenu(
       open,
       `Tuỳ chọn cho ${c.title}`,
       <>
-        {sections.length > 0 && (
+        {arrange && sections.length > 0 && (
           <Radios label="Chuyển tới mục">
             {sections.map((s) => (
               <Item
@@ -137,26 +152,45 @@ export function useSectionOverlays(api: ChatSectionsApi, phone: boolean, onRevea
             ))}
           </Radios>
         )}
-        <Item
-          icon={<FolderPlus {...icon} />}
-          onClick={() => show({ kind: 'create', conversation: c, placement: 'bottom-start' }, anchor.current)}
-        >
-          Mục mới…
-        </Item>
-        {current && (
-          <>
-            <Separator />
-            <Item
-              icon={<X {...icon} />}
-              onClick={() => {
-                if (phone) close()
-                void api.unplaceConversation(c)
-              }}
-            >
-              Bỏ khỏi mục
-            </Item>
-          </>
+        {arrange && (
+          <Item
+            icon={<FolderPlus {...icon} />}
+            onClick={() => show({ kind: 'create', conversation: c, placement: 'bottom-start' }, anchor.current)}
+          >
+            Mục mới…
+          </Item>
         )}
+        {arrange && current && (
+          <Item
+            icon={<X {...icon} />}
+            onClick={() => {
+              if (phone) close()
+              void api.unplaceConversation(c)
+            }}
+          >
+            Bỏ khỏi mục
+          </Item>
+        )}
+        {arrange && <Separator />}
+        <Item
+          icon={<Star {...icon} />}
+          onClick={() => {
+            close()
+            if (!c.starred) onReveal?.(STARRED_SECTION)
+            void star({ channelId: c.id, name: c.title, starred: !c.starred })
+          }}
+        >
+          {c.starred ? 'Bỏ gắn sao' : 'Gắn sao'}
+        </Item>
+        <Item
+          icon={c.muted ? <Bell {...icon} /> : <BellOff {...icon} />}
+          onClick={() => {
+            close()
+            void changeNotificationLevel({ channelId: c.id, name: c.title, level: c.muted ? 'main' : 'off' })
+          }}
+        >
+          {c.muted ? 'Bật thông báo' : 'Tắt thông báo'}
+        </Item>
       </>,
     )
   } else if (open?.kind === 'section') {
@@ -243,7 +277,7 @@ export function useSectionOverlays(api: ChatSectionsApi, phone: boolean, onRevea
   }
 
   return {
-    openRowMenu: (conversation: ConversationRef, el: HTMLElement | null) => show({ kind: 'row', conversation }, el),
+    openRowMenu: (conversation: RowTarget, el: HTMLElement | null) => show({ kind: 'row', conversation }, el),
     openSectionMenu: (sectionId: string, el: HTMLElement | null) => show({ kind: 'section', sectionId }, el),
     openCreate: (el: HTMLElement | null, conversation?: ConversationRef, placement: Placement = 'bottom-start') =>
       show({ kind: 'create', conversation, placement }, el),

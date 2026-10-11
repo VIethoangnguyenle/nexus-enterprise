@@ -17,23 +17,33 @@ interface TaskDialogProps {
   open: boolean
   onClose: () => void
   channelId: string
+  /** Made inside a thread: the task is posted as a reply to this root. */
+  parentMessageId?: string
 }
+
+/** The create request with the thread it belongs to; the server reads `parent_message_id`. */
+type TaskRequest = Parameters<ReturnType<typeof useCreateTask>['mutateAsync']>[0] & { parent_message_id?: string }
 
 /**
  * "Tạo công việc": what to do, who does it (picked from the people in this
  * conversation, never typed as an id) and by when. The task reaches the
  * conversation as a card once the server accepts it.
  */
-export function TaskDialog({ open, onClose, channelId }: TaskDialogProps) {
+export function TaskDialog({ open, onClose, channelId, parentMessageId }: TaskDialogProps) {
   const create = useCreateTask(channelId)
   return (
     <Dialog open={open} onClose={create.isPending ? () => {} : onClose} title="Tạo công việc">
-      <TaskForm channelId={channelId} onClose={onClose} create={create} />
+      <TaskForm channelId={channelId} parentMessageId={parentMessageId} onClose={onClose} create={create} />
     </Dialog>
   )
 }
 
-function TaskForm({ channelId, onClose, create }: { channelId: string; onClose: () => void; create: ReturnType<typeof useCreateTask> }) {
+function TaskForm({ channelId, parentMessageId, onClose, create }: {
+  channelId: string
+  parentMessageId?: string
+  onClose: () => void
+  create: ReturnType<typeof useCreateTask>
+}) {
   const labelId = useId()
   const [title, setTitle] = useState('')
   const [assignee, setAssignee] = useState<Person[]>([])
@@ -63,16 +73,19 @@ function TaskForm({ channelId, onClose, create }: { channelId: string; onClose: 
     setTitleError(undefined)
     setFailure(undefined)
     try {
-      await create.mutateAsync({
+      const request: TaskRequest = {
         title: title.trim(),
         ...(assignee[0] ? { assignee_id: assignee[0].userId } : {}),
         ...(due ? { due_date: due } : {}),
-      })
+        ...(parentMessageId ? { parent_message_id: parentMessageId } : {}),
+      }
+      await create.mutateAsync(request)
     } catch (err) {
       setFailure(explain(err, 'tạo công việc'))
       return
     }
     void queryClient.invalidateQueries({ queryKey: keys.messaging.messages(channelId) })
+    if (parentMessageId) void queryClient.invalidateQueries({ queryKey: keys.messaging.thread(parentMessageId) })
     onClose()
   }
 

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { validateChannelSearch, ChannelRoute, Route } from './_workspace/channels.$channelId'
 
-let currentSearch: { ws?: string; thread?: string } = {}
+let currentSearch: { ws?: string; thread?: string; message?: string } = {}
 
 vi.mock('@tanstack/react-router', async () => {
   const actual = await vi.importActual('@tanstack/react-router')
@@ -13,8 +13,8 @@ vi.mock('@tanstack/react-router', async () => {
 })
 
 vi.mock('../components/spaces/SpaceView', () => ({
-  SpaceView: ({ channelId }: { channelId: string }) => (
-    <div data-testid="space-view" data-channel-id={channelId}>
+  SpaceView: ({ channelId, initialThreadId, focusMessageId }: { channelId: string; initialThreadId?: string; focusMessageId?: string }) => (
+    <div data-testid="space-view" data-channel-id={channelId} data-thread={initialThreadId} data-message={focusMessageId}>
       SpaceView Content
     </div>
   ),
@@ -48,6 +48,18 @@ describe('channels.$channelId route & ?thread= handling', () => {
       })
     })
 
+    it('keeps a message id to focus, with or without a thread', () => {
+      expect(validateChannelSearch({ message: 'msg-1' })).toEqual({ message: 'msg-1' })
+      expect(validateChannelSearch({ thread: 't-1', message: 'msg-1' })).toEqual({ thread: 't-1', message: 'msg-1' })
+    })
+
+    it('drops a message that is empty, not a string, or not shaped like an id', () => {
+      expect(validateChannelSearch({ message: '' })).toEqual({})
+      expect(validateChannelSearch({ message: 5 as unknown as string })).toEqual({})
+      expect(validateChannelSearch({ message: '"] x[y="' })).toEqual({})
+      expect(validateChannelSearch({ thread: 'a b' })).toEqual({})
+    })
+
     it('ignores invalid types for thread and ws', () => {
       expect(validateChannelSearch({ ws: '', thread: 123 as unknown as string })).toEqual({})
     })
@@ -69,6 +81,21 @@ describe('channels.$channelId route & ?thread= handling', () => {
       const sv = screen.getByTestId('space-view')
       expect(sv).toBeInTheDocument()
       expect(sv).toHaveAttribute('data-channel-id', 'ch-1')
+    })
+
+    it('hands the thread and the message to SpaceView as its focus target', () => {
+      currentSearch = { thread: 'root-1', message: 'reply-9' }
+      render(<ChannelRoute />)
+      const sv = screen.getByTestId('space-view')
+      expect(sv).toHaveAttribute('data-thread', 'root-1')
+      expect(sv).toHaveAttribute('data-message', 'reply-9')
+    })
+
+    it('has no focus target when the link names none', () => {
+      currentSearch = {}
+      render(<ChannelRoute />)
+      expect(screen.getByTestId('space-view')).not.toHaveAttribute('data-thread')
+      expect(screen.getByTestId('space-view')).not.toHaveAttribute('data-message')
     })
 
     it('does not render a separate ThreadPanel (H3 fix)', () => {

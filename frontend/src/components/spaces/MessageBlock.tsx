@@ -1,5 +1,5 @@
 import { useState, useRef, type CSSProperties, type ReactNode } from 'react'
-import { Pin } from 'lucide-react'
+import { Pin, Star } from 'lucide-react'
 import type { Message, MessageAttachment } from '../../api/messaging'
 import { useLongPress } from '../../hooks/useLongPress'
 import { displayName, type PeopleDirectory } from '../../lib/people'
@@ -10,7 +10,8 @@ import { ReactionBar } from '../chat/ReactionBar'
 import { HoverActionBar } from '../chat/HoverActionBar'
 import { QuoteBlock } from './QuoteBlock'
 import { AttachmentGrid } from '../chat/AttachmentGrid'
-import { ImageViewer } from '../chat/ImageViewer'
+import { cardKindOf, MessageCard } from '../chat/MessageCard'
+import { FileViewer, type ViewerFile } from '../files/FileViewer'
 
 export interface MessageActions {
   me: string | undefined
@@ -67,9 +68,7 @@ export function MessageBlock({
   const name = displayName(people, m.sender_id, m.sender_name)
   const avatarUrl = people.byUserId.get(m.sender_id)?.avatarUrl
   const deleted = !!m.deleted
-  const [viewerOpen, setViewerOpen] = useState(false)
-  const [viewerIndex, setViewerIndex] = useState(0)
-  const [viewerImages, setViewerImages] = useState<MessageAttachment[]>([])
+  const [viewer, setViewer] = useState<{ files: ViewerFile[]; index: number } | null>(null)
   const openerRef = useRef<HTMLElement | null>(null)
 
   const legacyFilename = !deleted && m.linked_entity_type === 'drive_file' && m.linked_entity_id
@@ -87,7 +86,9 @@ export function MessageBlock({
         }]
       : []
 
-  const hasText = !deleted && !!m.content && !legacyFilename && m.content.trim() !== '' && m.content.trim() !== '<p></p>'
+  // A poll or task message carries a fallback line of text for clients without cards; the card replaces it.
+  const card = deleted ? undefined : cardKindOf(m)
+  const hasText = !deleted && !card?.match(/^(poll|task)$/) && !!m.content && !legacyFilename && m.content.trim() !== '' && m.content.trim() !== '<p></p>'
   const hasBubble = hasText || (!deleted && !!m.quoted)
   const pending = !!m._optimistic
   const [timeShown, setTimeShown] = useState(false)
@@ -101,6 +102,11 @@ export function MessageBlock({
     >
       {pending ? 'Đang gửi' : formatTime(m.created_at)}
     </time>
+  )
+  const starred = !!m.starred && !deleted && (
+    <span role="img" aria-label="Bạn đã gắn sao" title="Bạn đã gắn sao" className="inline-flex shrink-0 text-accent">
+      <Star size={12} strokeWidth={1.75} fill="currentColor" aria-hidden="true" />
+    </span>
   )
   const pinned = m.is_pinned && !deleted && (
     <span className="inline-flex items-center gap-1 text-xs text-ink-muted shrink-0">
@@ -136,6 +142,7 @@ export function MessageBlock({
           <>
             <span id={`${idBase}-who`} className="sr-only">{mine ? 'Bạn' : name}</span>
             {pinned}
+            {starred}
           </>
         ) : (
           <div className={`flex items-baseline gap-2 min-w-0 max-w-full ${mine ? 'justify-end' : ''}`}>
@@ -144,6 +151,7 @@ export function MessageBlock({
               : <span id={`${idBase}-who`} className="text-md font-semibold text-ink truncate">{name}</span>}
             {time}
             {pinned}
+            {starred}
             {tag && (
               <span className="rt-tag text-xs font-semibold shrink-0" style={tagStyle}>{tag}</span>
             )}
@@ -196,13 +204,16 @@ export function MessageBlock({
               <AttachmentGrid
                 attachments={attachments}
                 tone={mine ? 'raised' : 'base'}
-                onOpenImage={(idx, imgs, opener) => {
+                onOpen={(idx, files, opener) => {
                   openerRef.current = opener ?? null
-                  setViewerImages(imgs)
-                  setViewerIndex(idx)
-                  setViewerOpen(true)
+                  setViewer({ files: files.map(viewerFileOf(name, m)), index: idx })
                 }}
               />
+            )}
+            {card && (
+              <div className="mt-1 w-full max-w-105 [&>*]:max-w-full">
+                <MessageCard message={m} />
+              </div>
             )}
           </>
         )}
@@ -233,20 +244,32 @@ export function MessageBlock({
         />
       )}
 
-      {viewerOpen && (
-        <ImageViewer
-          open={viewerOpen}
-          images={viewerImages}
-          initialIndex={viewerIndex}
-          senderName={name}
-          sentAt={m.created_at}
-          onClose={() => setViewerOpen(false)}
+      {viewer && (
+        <FileViewer
+          files={viewer.files}
+          index={viewer.index}
+          origin="chat"
+          onClose={() => setViewer(null)}
           returnFocusRef={openerRef}
         />
       )}
     </div>
   )
 }
+
+/**
+ * A message's file as the viewer reads it. The header names who sent it and when;
+ * a message file carries no folder, so "Mở trong Tài liệu" is not offered.
+ */
+const viewerFileOf = (sender: string, m: Message) => (a: MessageAttachment): ViewerFile => ({
+  id: a.drive_file_id,
+  name: a.file_name,
+  mime: a.mime_type || undefined,
+  size: a.size_bytes || undefined,
+  uploaderName: sender,
+  uploaderId: m.sender_id,
+  time: m.created_at,
+})
 
 /** The time of a grouped line, in the avatar column: shown on hover, focus or tap. */
 function GutterTime({ shown, className, children }: { shown: boolean; className: string; children: ReactNode }) {

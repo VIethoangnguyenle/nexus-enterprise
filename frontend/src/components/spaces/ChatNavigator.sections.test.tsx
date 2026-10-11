@@ -186,8 +186,9 @@ describe('moving a conversation', () => {
     expect(within(menu).getByRole('menuitemradio', { name: 'Quyết toán quý 4' })).not.toBeChecked()
     expect(within(menu).getByRole('menuitem', { name: 'Mục mới…' })).toBeInTheDocument()
     expect(within(menu).getByRole('menuitem', { name: 'Bỏ khỏi mục' })).toBeInTheDocument()
-    // No starring or muting: the backend has none, so they are not offered.
-    expect(within(menu).queryByText(/Gắn sao|Tắt thông báo/)).toBeNull()
+    // The star and the mute close the menu, after the section rows.
+    expect(within(menu).getByRole('menuitem', { name: 'Gắn sao' })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: 'Tắt thông báo' })).toBeInTheDocument()
   })
 
   it('does not offer "Bỏ khỏi mục" for a conversation in no section', async () => {

@@ -69,6 +69,18 @@ export function mentionsOf(editor: Editor): string[] {
   return ids
 }
 
+/** The people mentioned in saved html (an edit's text), by user id: each once, in the order they appear. */
+export function mentionsFromHtml(html: string): string[] {
+  if (!html) return []
+  const doc = new DOMParser().parseFromString(html, 'text/html')
+  const ids: string[] = []
+  doc.querySelectorAll('[data-mention]').forEach((el) => {
+    const id = el.getAttribute('data-mention') ?? ''
+    if (id && !ids.includes(id)) ids.push(id)
+  })
+  return ids
+}
+
 /**
  * What the composer and the in-place editor understand: the formatting of the
  * toolbar and nothing else. StarterKit carries underline, lists, code, code

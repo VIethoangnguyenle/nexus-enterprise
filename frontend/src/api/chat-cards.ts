@@ -22,6 +22,8 @@ export interface CreatePollInput {
   is_anonymous: boolean
   /** RFC 3339, in the future; omitted for a poll that closes only by hand. */
   ends_at?: string
+  /** A thread root of the same conversation: the poll is posted as a reply to it. */
+  parent_message_id?: string
 }
 
 /** Every call answers with the poll as the caller now sees it. */

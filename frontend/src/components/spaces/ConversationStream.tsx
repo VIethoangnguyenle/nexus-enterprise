@@ -14,6 +14,7 @@ import { Pressable, Spinner } from '../primitives'
 import { usePhone } from '../../hooks/usePhone'
 import type { MessageLifecycle } from '../../hooks/useMessageActions'
 import { toEditorHtml } from '../../lib/message-model'
+import { cardKindOf } from '../chat/MessageCard'
 import { MessageBlock } from './MessageBlock'
 import { MessageActionSheet } from './MessageActionSheet'
 import { MessageMenu, type MessageMenuTarget } from './MessageMenu'
@@ -252,7 +253,8 @@ export function ConversationStream(props: ConversationStreamProps) {
     const byOther = a?.source === 'other'
     const ra = replyArrivals.fresh.get(`${item.key}:${t.reply_count ?? 0}`)
     const idBase = `msg-${item.key}`
-    if (item.system) return <SystemNote message={t} people={people} />
+    // A poll or task is posted as a system message, but it is a card of its sender, not a note.
+    if (item.system && !cardKindOf(t)) return <SystemNote message={t} people={people} />
     const can = lifecycle?.abilities(t)
     const editingHere = lifecycle?.editing?.message.id === t.id && !phone
     return (

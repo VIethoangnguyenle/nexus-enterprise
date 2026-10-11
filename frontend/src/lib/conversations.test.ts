@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { buildConversations, dmPartner, filterConversations, sortConversations, totalUnread } from './conversations'
+import {
+  buildConversations, dmPartner, filterConversations, sortConversations, totalUnread, unreadByLevel, unreadOf,
+  type Conversation,
+} from './conversations'
 import { buildDirectory } from './people'
 import { CONTACTS, DMS, SPACES, CH, U, ME, UUID_RE } from '../test/chat-fixtures'
 
@@ -47,5 +50,59 @@ describe('sortConversations / filterConversations', () => {
     expect(filterConversations(base, 'spaces').every((c) => c.kind === 'space')).toBe(true)
     expect(filterConversations(base, 'direct').every((c) => c.kind === 'dm')).toBe(true)
     expect(totalUnread(base)).toBe(4)
+  })
+})
+
+describe('what a conversation says it has unread, by notification level', () => {
+  const c = (over: Partial<Conversation>): Conversation => ({
+    id: 'x', kind: 'space', title: 'x', hueKey: 'x', unread: 0, memberCount: 0, lastActivity: 0, ...over,
+  })
+
+  it('counts every unread message at the default and "all" levels', () => {
+    expect(unreadOf(c({ unread: 4, mentions: 1 }))).toBe(4)
+    expect(unreadOf(c({ unread: 4, level: 'all' }))).toBe(4)
+  })
+
+  it('a muted conversation adds only its @mentions, never its unread messages', () => {
+    expect(unreadOf(c({ unread: 9, level: 'off', mentions: 2 }))).toBe(2)
+    expect(unreadOf(c({ unread: 9, level: 'off' }))).toBe(0)
+  })
+
+  it('totals the list by those rules', () => {
+    const list = [c({ unread: 3 }), c({ unread: 7, level: 'off', mentions: 1 }), c({ unread: 2, level: 'all' })]
+    expect(totalUnread(list)).toBe(3 + 1 + 2)
+  })
+
+  it('totals the raw unread list the same way (the sidebar badge)', () => {
+    expect(unreadByLevel([
+      { channel_id: 'a', unread_count: 3, last_read_message_id: '' },
+      { channel_id: 'b', unread_count: 8, last_read_message_id: '', notification_level: 'off', mention_count: 2 },
+      { channel_id: 'c', unread_count: 5, last_read_message_id: '', notification_level: 'off' },
+    ])).toBe(3 + 2 + 0)
+    expect(unreadByLevel(undefined)).toBe(0)
+  })
+})
+
+describe('buildConversations with per-conversation state', () => {
+  it('carries the level, the @mention count and the star; a muted conversation shows no unread count', () => {
+    const list = buildConversations({
+      spaces: SPACES, dms: DMS, unread, me, dir, lastMessages: {},
+      meta: {
+        [CH.doisoat]: { level: 'off', mentions: 2 },
+        [CH.hopdong]: { starred: true },
+        [CH.dmYen]: { level: 'all' },
+      },
+    })
+    const by = (id: string) => list.find((x) => x.id === id)!
+    expect(by(CH.doisoat)).toMatchObject({ level: 'off', mentions: 2, unread: 0 })
+    expect(by(CH.hopdong)).toMatchObject({ starred: true, level: 'main' })
+    expect(by(CH.vanhanh).starred).toBe(false)
+  })
+
+  it('never offers "all" on a direct message: it is read as the default', () => {
+    const list = buildConversations({
+      spaces: SPACES, dms: DMS, unread, me, dir, lastMessages: {}, meta: { [CH.dmYen]: { level: 'all' } },
+    })
+    expect(list.find((x) => x.id === CH.dmYen)!.level).toBe('main')
   })
 })

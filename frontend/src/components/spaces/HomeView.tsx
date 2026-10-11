@@ -58,6 +58,8 @@ export function HomeView() {
     me,
     ready: !isLoading,
     scope: workspaceId,
+    // A muted conversation is quiet: what it receives is neither washed nor counted into the burst line.
+    isHistory: (c) => c.level === 'off',
   })
 
   const visible = useMemo(() => filterConversations(conversations, filter), [conversations, filter])
@@ -145,7 +147,7 @@ export function HomeView() {
               {visible.map((c) => (
                 <motion.li
                   key={c.id}
-                  layout={m.layoutProp}
+                  layout={c.level === 'off' ? false : m.layoutProp}
                   transition={m.layout}
                   {...m.row}
                 >

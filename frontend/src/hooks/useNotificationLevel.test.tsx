@@ -7,7 +7,7 @@ import type { ChannelUnread } from '../api/messaging'
 import { useToastStore } from '../components/primitives'
 import { queryClient } from '../lib/query-client'
 import { keys } from './keys'
-import { useNotificationLevel } from './useNotificationLevel'
+import { changeNotificationLevel, useNotificationLevel } from './useNotificationLevel'
 
 vi.mock('../api/notification-levels', async (orig) => {
   const real = await orig<typeof import('../api/notification-levels')>()
@@ -108,6 +108,13 @@ describe('useNotificationLevel', () => {
     expect(api.setNotificationLevel).toHaveBeenLastCalledWith('c1', 'off')
   })
 
+  it('asks the server for the level only when it is not already known from the unread list', async () => {
+    const { result } = renderHook(() => useNotificationLevel('c1', 'x', { fetchLevel: false }), { wrapper })
+    await act(async () => {})
+    expect(api.getNotificationLevel).not.toHaveBeenCalled()
+    expect(result.current.level).toBe('main')
+  })
+
   it('does nothing when the level is already the chosen one', async () => {
     const { result } = await ready()
     act(() => result.current.setLevel('main'))
@@ -121,5 +128,24 @@ describe('useNotificationLevel', () => {
     act(() => result.current.setLevel('off'))
     await waitFor(() => expect(queryClient.getQueryState(keys.notificationLevels.unreadThreads())!.isInvalidated).toBe(true))
     expect(queryClient.getQueryState(keys.messaging.unreadCounts())!.isInvalidated).toBe(true)
+  })
+})
+
+describe('changeNotificationLevel (a row menu, no component bound to the conversation)', () => {
+  it('mutes a conversation that is not open: its count goes, its mentions stay, the others are untouched', async () => {
+    api.setNotificationLevel.mockResolvedValue({ level: 'off' })
+    await changeNotificationLevel({ channelId: 'c2', name: 'Hợp đồng đối tác', level: 'off' })
+    const rows = queryClient.getQueryData<{ channels: ChannelUnread[] }>(keys.messaging.unreadCounts())!.channels
+    expect(rows[1]).toMatchObject({ notification_level: 'off', unread_count: 0, mention_count: 1 })
+    expect(rows[0]).toMatchObject({ notification_level: 'main', unread_count: 4 })
+    expect(toasts()[0]!.message).toBe('Đã tắt thông báo của “Hợp đồng đối tác”')
+  })
+
+  it('puts the row back when the server refuses', async () => {
+    api.setNotificationLevel.mockRejectedValueOnce(new Error('500'))
+    await changeNotificationLevel({ channelId: 'c2', name: 'x', level: 'off' })
+    const rows = queryClient.getQueryData<{ channels: ChannelUnread[] }>(keys.messaging.unreadCounts())!.channels
+    expect(rows[1]).toMatchObject({ notification_level: 'main', unread_count: 4 })
+    expect(toasts()[0]!.tone).toBe('error')
   })
 })

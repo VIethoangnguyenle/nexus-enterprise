@@ -16,6 +16,9 @@ import {
   previewText, timestampToIso,
 } from '../lib/chat-cache'
 import { applyThreadReplySummary, applyThreadState } from '../lib/thread-cache'
+import { invalidateUnreadThreadsFor } from '../lib/unread-threads-cache'
+import { mentionsMe } from '../lib/shortcut-feed'
+import { invalidatePollOnVote } from '../hooks/usePolls'
 import {
   createBatcher,
   emptySeq,
@@ -351,6 +354,16 @@ if (typeof document !== 'undefined') {
   })
 }
 
+/**
+ * A message that names me is a new item of "Được nhắc tới" and of its pill. The
+ * server decides what counts (a direct @you, muted conversations included); the
+ * client only asks for the feed again.
+ */
+function invalidateMentionsFor(msg: Pick<WSChatMessage, 'mentions' | 'senderId'>) {
+  if (!mentionsMe(msg.mentions, msg.senderId, useAuthStore.getState().user?.id)) return
+  invalidations.add([keys.shortcuts.mentionsAll(), keys.shortcuts.mentionsUnreadAll()])
+}
+
 /** Route decoded ServerEnvelope payloads to TanStack Query cache invalidation. */
 function handleServerMessage(
   envelope: ServerEnvelopeType,
@@ -419,6 +432,7 @@ function handleServerMessage(
           },
         )
       }
+      invalidateMentionsFor(msg)
       // Unread counts still need server aggregation
       queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
       break
@@ -476,14 +490,17 @@ function handleServerMessage(
           },
         }))
         injectReply({ ...m, parentMessageId: m.parentMessageId || reply.parentMessageId }, set)
+        invalidateMentionsFor(m)
       }
       // The server's summary replaces the local reply-count guess.
       applyThreadReplySummary(reply)
+      invalidateUnreadThreadsFor(envelope.payload.oneofKind)
       break
     }
 
     case 'threadState':
       applyThreadState(envelope.payload.threadState)
+      invalidateUnreadThreadsFor(envelope.payload.oneofKind)
       break
 
     case 'messageEdited':
@@ -503,7 +520,7 @@ function handleServerMessage(
       break
 
     case 'pollVote':
-      // No screen renders polls, so there is no cache to patch.
+      void invalidatePollOnVote(queryClient, envelope.payload.pollVote)
       break
 
     case 'taskUpdate':

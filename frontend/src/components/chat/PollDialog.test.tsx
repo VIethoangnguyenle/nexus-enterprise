@@ -129,4 +129,24 @@ describe('PollDialog', () => {
     expect(onClose).not.toHaveBeenCalled()
     expect(screen.getByLabelText('Câu hỏi')).toHaveValue('Họp lúc nào?')
   })
+
+  it('creates the poll as a reply when it is made inside a thread, and in the main stream otherwise', async () => {
+    const user = userEvent.setup()
+    vi.mocked(pollApi.create).mockResolvedValue({} as never)
+    const fill = async () => {
+      await user.type(screen.getByLabelText('Câu hỏi'), 'Họp lúc nào?')
+      await user.type(screen.getByLabelText('Lựa chọn 1'), 'Sáng')
+      await user.type(screen.getByLabelText('Lựa chọn 2'), 'Chiều')
+      await user.click(screen.getByRole('button', { name: 'Gửi bình chọn' }))
+    }
+    const thread = renderWithClient(<PollDialog open onClose={vi.fn()} channelId="ch" parentMessageId="root-1" />)
+    await fill()
+    await waitFor(() => expect(pollApi.create).toHaveBeenCalledWith('ch', expect.objectContaining({ parent_message_id: 'root-1' })))
+    thread.unmount()
+    vi.mocked(pollApi.create).mockClear()
+    open()
+    await fill()
+    await waitFor(() => expect(pollApi.create).toHaveBeenCalled())
+    expect(vi.mocked(pollApi.create).mock.calls[0]![1]).not.toHaveProperty('parent_message_id')
+  })
 })

@@ -2,7 +2,9 @@ import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
 import { messagingApi, type SendMessageInput, type Message, type MessageAttachment, type ReactionGroup } from '../api/messaging'
 import { queryClient } from '../lib/query-client'
 import { keepOlderPages } from '../lib/stream-model'
+import { statusOf } from '../lib/errors'
 import { useAuthStore } from '../stores/auth.store'
+import { threadScope, useDraftsStore, type PendingQuote } from '../stores/drafts.store'
 import { keys } from './keys'
 
 // --- Messages ---
@@ -35,6 +37,33 @@ export type SendMessageParams =
       optimisticAttachments?: MessageAttachment[]
     }
 
+
+/**
+ * The quote waiting in a composer, for a message that is about to leave it. A
+ * card link (a document or an approval posted as a message) never carries it,
+ * and neither does a quote whose message was deleted meanwhile.
+ */
+function liveQuote(scope: string, linked: unknown): PendingQuote | undefined {
+  if (linked) return undefined
+  const q = useDraftsStore.getState().drafts[scope]?.quote
+  return q && !q.deleted ? q : undefined
+}
+
+/** What the optimistic copy of a message shows of the message it quotes. */
+const quotedOf = (q: PendingQuote | undefined): Message['quoted'] =>
+  q ? { id: q.id, sender_id: q.sender_id, sender_name: q.sender_name, text: q.text || q.summary?.label } : undefined
+
+/** The quote is spent once the message is stored; a 400 means the server found it gone. */
+function settleQuote(scope: string, sent: PendingQuote | undefined, err?: unknown) {
+  if (!sent) return
+  const store = useDraftsStore.getState()
+  if (!err) {
+    if (store.drafts[scope]?.quote?.id === sent.id) store.setQuote(scope, null)
+  } else if (statusOf(err) === 400) {
+    store.markQuoteDeleted(scope, sent.id)
+  }
+}
+
 /** Sends a message with optimistic UI: message appears immediately, no refetch needed. */
 export function useSendMessage(channelId: string) {
   return useMutation({
@@ -43,6 +72,7 @@ export function useSendMessage(channelId: string) {
       if (typeof params === 'string') {
         return messagingApi.sendMessage(channelId, params)
       }
+      const quote = liveQuote(channelId, params.linkedEntity)
       const input: SendMessageInput = {
         content: params.content,
         content_format: 'html',
@@ -50,6 +80,7 @@ export function useSendMessage(channelId: string) {
         linked_entity_id: params.linkedEntity?.id || '',
         ...(params.mentions?.length ? { mentions: params.mentions } : {}),
         ...(params.attachments?.length ? { attachments: params.attachments } : {}),
+        ...(quote ? { quoted_message_id: quote.id } : {}),
       }
       return messagingApi.sendMessage(channelId, input)
     },
@@ -61,6 +92,7 @@ export function useSendMessage(channelId: string) {
       const user = useAuthStore.getState().user
 
       const content = typeof params === 'string' ? params : params.content
+      const quote = typeof params === 'string' ? undefined : liveQuote(channelId, params.linkedEntity)
       const attachments = typeof params === 'string'
         ? undefined
         : params.optimisticAttachments ?? params.attachments?.map((a) => ({
@@ -80,6 +112,7 @@ export function useSendMessage(channelId: string) {
         content_format: 'html',
         created_at: new Date().toISOString(),
         attachments,
+        quoted: quotedOf(quote),
         _optimistic: true,
       }
 
@@ -88,11 +121,12 @@ export function useSendMessage(channelId: string) {
         (old) => old ? { ...old, messages: [tempMsg as Message, ...(old.messages || [])] } : old,
       )
 
-      return { previous }
+      return { previous, quote }
     },
 
     // Replace temp message with server response (WS event will dedup via ID match)
-    onSuccess: (serverMsg) => {
+    onSuccess: (serverMsg, _vars, ctx) => {
+      settleQuote(channelId, ctx?.quote)
       queryClient.setQueryData<{ messages: Message[]; has_more: boolean }>(
         keys.messaging.messages(channelId),
         (old) => {
@@ -112,7 +146,8 @@ export function useSendMessage(channelId: string) {
     },
 
     // Rollback on error
-    onError: (_err, _vars, context) => {
+    onError: (err, _vars, context) => {
+      settleQuote(channelId, context?.quote, err)
       if (context?.previous) {
         queryClient.setQueryData(keys.messaging.messages(channelId), context.previous)
       }
@@ -134,6 +169,8 @@ type Optimistic = Message & { _optimistic?: boolean }
 export type SendReplyParams = {
   content: string
   mentions?: string[]
+  /** A card posted as the reply (a document, an approval request). */
+  linkedEntity?: { type: string; id: string }
   attachments?: { drive_file_id: string; width?: number; height?: number }[]
   optimisticAttachments?: MessageAttachment[]
 }
@@ -146,15 +183,20 @@ export type SendReplyParams = {
 export function useSendReply(channelId: string, parentId: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: ({ content, mentions, attachments }: SendReplyParams) =>
-      messagingApi.sendMessage(channelId, {
+    mutationFn: ({ content, mentions, attachments, linkedEntity }: SendReplyParams) => {
+      const quote = liveQuote(threadScope(parentId), linkedEntity)
+      return messagingApi.sendMessage(channelId, {
         content,
         content_format: 'html',
         parent_message_id: parentId,
+        ...(linkedEntity ? { linked_entity_type: linkedEntity.type, linked_entity_id: linkedEntity.id } : {}),
         ...(mentions?.length ? { mentions } : {}),
         ...(attachments?.length ? { attachments } : {}),
-      }),
-    onMutate: async ({ content, attachments, optimisticAttachments }) => {
+        ...(quote ? { quoted_message_id: quote.id } : {}),
+      })
+    },
+    onMutate: async ({ content, attachments, optimisticAttachments, linkedEntity }) => {
+      const quote = liveQuote(threadScope(parentId), linkedEntity)
       await queryClient.cancelQueries({ queryKey: keys.messaging.thread(parentId) })
       const prevThread = queryClient.getQueryData<Thread>(keys.messaging.thread(parentId))
       const prevList = queryClient.getQueryData<MessageList>(keys.messaging.messages(channelId))
@@ -177,6 +219,8 @@ export function useSendReply(channelId: string, parentId: string) {
         parent_message_id: parentId,
         created_at: new Date().toISOString(),
         attachments: tempAttachments,
+        ...(linkedEntity ? { linked_entity_type: linkedEntity.type, linked_entity_id: linkedEntity.id } : {}),
+        quoted: quotedOf(quote),
         _optimistic: true,
       }
       queryClient.setQueryData<Thread>(keys.messaging.thread(parentId), (old) =>
@@ -187,9 +231,10 @@ export function useSendReply(channelId: string, parentId: string) {
           ? { ...old, messages: old.messages.map((m) => (m.id === parentId ? { ...m, reply_count: (m.reply_count || 0) + 1 } : m)) }
           : old,
       )
-      return { prevThread, prevList }
+      return { prevThread, prevList, quote }
     },
-    onSuccess: (serverMsg) => {
+    onSuccess: (serverMsg, _vars, ctx) => {
+      settleQuote(threadScope(parentId), ctx?.quote)
       queryClient.setQueryData<Thread>(keys.messaging.thread(parentId), (old) => {
         if (!old) return old
         const already = old.messages.some((m) => m.id === serverMsg.id)
@@ -197,7 +242,8 @@ export function useSendReply(channelId: string, parentId: string) {
         return { ...old, messages: already ? rest : [...rest, serverMsg] }
       })
     },
-    onError: (_err, _vars, ctx) => {
+    onError: (err, _vars, ctx) => {
+      settleQuote(threadScope(parentId), ctx?.quote, err)
       if (ctx?.prevThread) queryClient.setQueryData(keys.messaging.thread(parentId), ctx.prevThread)
       if (ctx?.prevList) queryClient.setQueryData(keys.messaging.messages(channelId), ctx.prevList)
     },
@@ -209,6 +255,22 @@ export function useSendReply(channelId: string, parentId: string) {
       }
     },
   })
+}
+
+/**
+ * Posts a card (a new document, an approval request) as a message of its own:
+ * in the conversation, or as a reply when a thread root is given.
+ */
+export function useSendCardMessage(channelId: string, parentMessageId?: string) {
+  const main = useSendMessage(channelId)
+  const reply = useSendReply(channelId, parentMessageId ?? '')
+  return {
+    isPending: parentMessageId ? reply.isPending : main.isPending,
+    send: (linkedEntity: { type: string; id: string }) =>
+      parentMessageId
+        ? reply.mutateAsync({ content: '', linkedEntity })
+        : main.mutateAsync({ content: '', linkedEntity }),
+  }
 }
 
 // --- Reactions ---

@@ -25,6 +25,7 @@ import { MessageActionSheet } from '../spaces/MessageActionSheet'
 import { MessageEditBox } from '../spaces/MessageEditBox'
 import { DeleteMessageDialog } from '../spaces/DeleteMessageDialog'
 import { keys } from '../../hooks/keys'
+import { threadScope } from '../../stores/drafts.store'
 
 type Msg = Message & { _optimistic?: boolean }
 
@@ -66,7 +67,14 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
   const { data, isLoading, error, refetch } = useThread(messageId)
   const send = useSendReply(channelId, messageId)
   const phone = usePhone()
-  const lifecycle = useMessageActions(channelId, me)
+  // A reply marked unread from inside the panel keeps the thread unread until the panel is left:
+  // the read that follows an opening must not undo it at once.
+  const heldUnread = useRef<string | null>(null)
+  const lifecycle = useMessageActions(channelId, me, {
+    onMarkedUnread: (m) => {
+      if (m.parent_message_id === messageId || m.id === messageId) heldUnread.current = messageId
+    },
+  })
   const [menu, setMenu] = useState<MessageMenuTarget | null>(null)
   const [sheetFor, setSheetFor] = useState<Message | null>(null)
   const anchorRef = useRef<HTMLElement | null>(null)
@@ -108,7 +116,7 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
   // Opening the thread reads it; so does a reply that lands while it is open.
   const markReadMutate = markRead.mutate
   useEffect(() => {
-    if (seen.resolved && following && unreadNow > 0) markReadMutate(messageId)
+    if (seen.resolved && following && unreadNow > 0 && heldUnread.current !== messageId) markReadMutate(messageId)
   }, [seen.resolved, following, unreadNow, messageId, markReadMutate])
 
   // At the divider when there are unread replies, otherwise at the newest reply.
@@ -212,6 +220,8 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
             placeholder="Trả lời trong thread"
             hint="Enter để gửi"
             uploads={uploads}
+            parentMessageId={messageId}
+            draftKey={threadScope(messageId)}
             isPending={send.isPending}
             onSend={async (html, mentions, attachments) => {
               if (!html.trim() && (!attachments || attachments.length === 0)) return
@@ -304,6 +314,7 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
                 <motion.div key={item.key} {...motionPresets.row}>
                   <div
                     data-realtime={a?.source}
+                    data-message-id={r.id}
                     style={byOther ? personStyle(a!.author ?? r.sender_id) : undefined}
                     className={`rounded-surface ${byOther ? 'rt-wash' : ''}`}
                   >

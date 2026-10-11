@@ -8,7 +8,12 @@ import { IconButton, Pressable } from '../primitives'
 export interface AttachmentGridProps {
   attachments: MessageAttachment[]
   tone?: 'raised' | 'base'
-  onOpenImage?: (index: number, images: MessageAttachment[], openerEl?: HTMLElement | null) => void
+  /**
+   * A picture or a file was pressed. `files` is every attachment in display order
+   * (pictures first, then files) and `index` the pressed one's place in it: the
+   * viewer walks that one list.
+   */
+  onOpen?: (index: number, files: MessageAttachment[], openerEl?: HTMLElement | null) => void
 }
 
 export function isImageAttachment(att: MessageAttachment): boolean {
@@ -77,9 +82,11 @@ function ImageTile({
 function FileCard({
   attachment,
   tone = 'raised',
+  onOpen,
 }: {
   attachment: MessageAttachment
   tone?: 'raised' | 'base'
+  onOpen?: (el: HTMLElement | null) => void
 }) {
   const kind = fileKind(attachment.file_name || '', attachment.mime_type)
   const Icon = kind.icon
@@ -96,18 +103,24 @@ function FileCard({
         tone === 'base' ? 'bg-base' : 'bg-raised'
       }`}
     >
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${kind.tile}`}>
-        <Icon size={18} strokeWidth={1.75} />
-      </div>
-
-      <div className="min-w-0 flex-1">
-        <div className="text-xs sm:text-sm font-semibold text-ink truncate leading-snug">
-          {attachment.file_name}
-        </div>
-        <div className="text-2xs sm:text-xs text-ink-muted tnum leading-tight mt-0.5 truncate">
-          {kind.label} · {formatBytes(attachment.size_bytes)}
-        </div>
-      </div>
+      <Pressable
+        type="button"
+        onClick={(e) => onOpen?.(e.currentTarget)}
+        aria-label={`Mở tệp ${attachment.file_name}`}
+        className="flex items-center gap-2.5 min-w-0 flex-1 text-left rounded-lg focus-visible:field-focus"
+      >
+        <span className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${kind.tile}`}>
+          <Icon size={18} strokeWidth={1.75} />
+        </span>
+        <span className="min-w-0 flex-1 grid">
+          <span className="text-xs sm:text-sm font-semibold text-ink truncate leading-snug">
+            {attachment.file_name}
+          </span>
+          <span className="text-2xs sm:text-xs text-ink-muted tnum leading-tight mt-0.5 truncate">
+            {kind.label} · {formatBytes(attachment.size_bytes)}
+          </span>
+        </span>
+      </Pressable>
 
       <IconButton
         type="button"
@@ -125,12 +138,14 @@ function FileCard({
 export function AttachmentGrid({
   attachments,
   tone = 'raised',
-  onOpenImage,
+  onOpen,
 }: AttachmentGridProps) {
   if (!attachments || attachments.length === 0) return null
 
   const images = attachments.filter(isImageAttachment)
   const docs = attachments.filter((a) => !isImageAttachment(a))
+  // The viewer walks one list: the pictures first, as the grid shows them, then the files.
+  const ordered = [...images, ...docs]
 
   const count = images.length
   const visibleImages = count > 4 ? images.slice(0, 4) : images
@@ -146,7 +161,7 @@ export function AttachmentGrid({
           <ImageTile
             attachment={images[0]!}
             total={1}
-            onClick={(el) => onOpenImage?.(0, images, el)}
+            onClick={(el) => onOpen?.(0, ordered, el)}
           />
         </div>
       )}
@@ -167,7 +182,7 @@ export function AttachmentGrid({
               attachment={img}
               total={count}
               extraCount={idx === 3 && extraCount > 0 ? extraCount : undefined}
-              onClick={(el) => onOpenImage?.(idx, images, el)}
+              onClick={(el) => onOpen?.(idx, ordered, el)}
             />
           ))}
         </div>
@@ -175,8 +190,13 @@ export function AttachmentGrid({
 
       {docs.length > 0 && (
         <div className="grid gap-1.5 max-w-full">
-          {docs.map((doc) => (
-            <FileCard key={doc.drive_file_id} attachment={doc} tone={tone} />
+          {docs.map((doc, i) => (
+            <FileCard
+              key={doc.drive_file_id}
+              attachment={doc}
+              tone={tone}
+              onOpen={(el) => onOpen?.(images.length + i, ordered, el)}
+            />
           ))}
         </div>
       )}

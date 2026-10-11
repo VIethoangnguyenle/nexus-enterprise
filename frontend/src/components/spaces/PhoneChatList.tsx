@@ -1,27 +1,33 @@
 import { useId, useRef, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { Link, useNavigate } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { ChevronDown, Ellipsis } from 'lucide-react'
+import { AtSign, ChevronDown, Ellipsis, Star } from 'lucide-react'
 import type { ChatNavigation } from '../../hooks/useChatNavigation'
 import type { Arrival } from '../../hooks/useArrivals'
 import { useLongPress } from '../../hooks/useLongPress'
+import { usePeople } from '../../hooks/usePeople'
+import { useMentionsUnreadCount } from '../../hooks/useShortcuts'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { collapseKey, useNavCollapseStore } from '../../stores/nav-collapse.store'
 import { useMotionPresets } from '../../lib/motion'
 import { formatCount } from '../../lib/format'
-import type { Conversation } from '../../lib/conversations'
+import { totalUnread, type Conversation } from '../../lib/conversations'
 import { Pressable } from '../primitives'
 import { ConversationRow } from './ConversationRow'
-import type { SectionOverlays } from './SectionOverlays'
+import { STARRED_SECTION, type SectionOverlays } from './SectionOverlays'
+import { UnreadThreadsSection } from './UnreadThreadsSection'
 
 /** Controls that keep their own press; unlike the shared default, a link is not one: the row is a link. */
 const OWN_PRESS = 'button, input, textarea, select, [role="button"], [contenteditable="true"]'
 
 /**
- * The Tin nhắn tab on a phone (design/mockups/chat-mobile.html §1): the same
- * order as the navigator column (the user's sections, Tin nhắn trực tiếp,
- * Nhóm), 64px rows, folding sections that total their unread while folded.
- * Long-pressing a row opens the sheet "Chuyển tới mục"; a section's "⋯" opens
- * its own sheet. Starring and muting are not offered: the backend has neither.
+ * The Tin nhắn tab on a phone (design/mockups/chat-mobile.html §1): the two
+ * shortcut tiles (Được nhắc tới, Đã gắn sao), the followed threads with news,
+ * then the same order as the navigator column (Đã gắn sao, the user's
+ * sections, Tin nhắn trực tiếp, Nhóm), 64px rows, folding sections that total
+ * their unread by notification level while folded. Long-pressing a row opens
+ * its sheet ("Chuyển tới mục", Gắn sao, Tắt thông báo); a section's "⋯" opens
+ * its own sheet. A muted row is drawn quiet, with an "@" for a mention.
  */
 export function PhoneChatList({ nav, workspaceId, fresh, overlays }: {
   nav: ChatNavigation
@@ -31,11 +37,19 @@ export function PhoneChatList({ nav, workspaceId, fresh, overlays }: {
   overlays: SectionOverlays
 }) {
   const { arranged } = nav
+  const navigate = useNavigate()
+  const people = usePeople(workspaceId)
   const onlineUsers = useWebSocketStore((s) => s.onlineUsers)
+  const mentionsUnread = useMentionsUnreadCount(workspaceId).data ?? 0
 
   const rows = (items: Conversation[]) =>
     items.map((c) => (
-      <PressableRow key={c.id} onMenu={(el) => overlays.openRowMenu({ id: c.id, title: c.title }, el)}>
+      <PressableRow
+        key={c.id}
+        // A muted conversation does not slide to the top when it speaks: silence is what muting means.
+        slide={c.level !== 'off'}
+        onMenu={(el) => overlays.openRowMenu({ id: c.id, title: c.title, starred: c.starred, muted: c.level === 'off' }, el)}
+      >
         <ConversationRow
           conversation={c}
           arrival={fresh.get(`${c.id}:${c.lastActivity}`)}
@@ -46,6 +60,22 @@ export function PhoneChatList({ nav, workspaceId, fresh, overlays }: {
 
   return (
     <div className="grid gap-1">
+      <nav aria-label="Lối tắt" className="grid grid-cols-2 gap-2 px-1.5 pt-1 pb-1.5">
+        <Tile to="/channels/mentions" label="Được nhắc tới" icon={<AtSign size={18} strokeWidth={1.75} aria-hidden="true" />} count={mentionsUnread} />
+        <Tile to="/channels/starred" label="Đã gắn sao" icon={<Star size={18} strokeWidth={1.75} aria-hidden="true" />} />
+      </nav>
+      <UnreadThreadsSection
+        conversations={nav.conversations}
+        people={people}
+        max={2}
+        onOpenThread={(channelId, rootId) =>
+          void navigate({ to: '/channels/$channelId', params: { channelId }, search: { thread: rootId } })}
+      />
+      {arranged.starred.length > 0 && (
+        <Group id={STARRED_SECTION} workspaceId={workspaceId} title="Đã gắn sao" unread={totalUnread(arranged.starred)}>
+          {rows(arranged.starred)}
+        </Group>
+      )}
       {arranged.sections.map((s) => (
         <Group
           key={s.id}
@@ -61,12 +91,12 @@ export function PhoneChatList({ nav, workspaceId, fresh, overlays }: {
         </Group>
       ))}
       {arranged.directs.length > 0 && (
-        <Group id="dm" workspaceId={workspaceId} title="Tin nhắn trực tiếp" unread={arranged.directs.reduce((n, c) => n + c.unread, 0)}>
+        <Group id="dm" workspaceId={workspaceId} title="Tin nhắn trực tiếp" unread={totalUnread(arranged.directs)}>
           {rows(arranged.directs)}
         </Group>
       )}
       {arranged.spaces.length > 0 && (
-        <Group id="spaces" workspaceId={workspaceId} title="Nhóm" unread={arranged.spaces.reduce((n, c) => n + c.unread, 0)}>
+        <Group id="spaces" workspaceId={workspaceId} title="Nhóm" unread={totalUnread(arranged.spaces)}>
           {rows(arranged.spaces)}
         </Group>
       )}
@@ -79,8 +109,10 @@ export function PhoneChatList({ nav, workspaceId, fresh, overlays }: {
  * The tap that ends a long press is swallowed so the conversation does not
  * open behind the sheet.
  */
-function PressableRow({ onMenu, children }: {
+function PressableRow({ onMenu, slide = true, children }: {
   onMenu: (el: HTMLElement) => void
+  /** Rows re-order with a slide; a muted one just jumps. */
+  slide?: boolean
   children: ReactNode
 }) {
   const m = useMotionPresets()
@@ -94,7 +126,7 @@ function PressableRow({ onMenu, children }: {
   return (
     <motion.li
       ref={ref}
-      layout={m.layoutProp}
+      layout={slide ? m.layoutProp : false}
       transition={m.layout}
       {...m.row}
       {...press}
@@ -118,6 +150,29 @@ function PressableRow({ onMenu, children }: {
     >
       {children}
     </motion.li>
+  )
+}
+
+/** A 48px shortcut tile at the head of the list (design/mockups/shortcuts.html §5). */
+function Tile({ to, label, icon, count = 0 }: { to: '/channels/mentions' | '/channels/starred'; label: string; icon: ReactNode; count?: number }) {
+  return (
+    <Link
+      to={to}
+      className="flex items-center gap-2.5 min-h-12 px-3.5 rounded-xl bg-raised text-sm font-semibold text-ink
+        no-underline focus-ring active:bg-hover"
+    >
+      <span className="text-ink-muted shrink-0">{icon}</span>
+      <span className="truncate">{label}</span>
+      {count > 0 && (
+        <span
+          className="ml-auto inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full bg-accent
+            text-on-accent text-2xs font-semibold tnum shrink-0"
+          aria-label={`${count} tin nhắc tên bạn chưa đọc`}
+        >
+          {formatCount(count)}
+        </span>
+      )}
+    </Link>
   )
 }
 

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
-import { CH, UUID_RE } from '../../test/chat-fixtures'
+import { CH, MSG, UUID_RE } from '../../test/chat-fixtures'
 import { SpaceView } from './SpaceView'
 
 vi.mock('@tanstack/react-router', async () => (await import('../../test/router-mock')).routerMockFactory())
@@ -160,5 +160,49 @@ describe('SpaceView and push', () => {
     } finally {
       useWebSocketStore.setState({ viewChannel: original })
     }
+  })
+})
+
+describe('SpaceView focus target', () => {
+  const flashed = () => [...document.querySelectorAll('[data-flash]')]
+
+  it('opens the thread panel of the root a link names', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} initialThreadId={MSG.t1} />)
+    const thread = await screen.findByRole('complementary', { name: 'Thread' })
+    await within(thread).findByText(/1\.284\.500/)
+  })
+
+  it('opens no panel without a thread id', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    await screen.findByText(/lệch 3 giao dịch/)
+    expect(screen.queryByRole('complementary', { name: 'Thread' })).toBeNull()
+  })
+
+  it('outlines the message of the stream a link names, once it is on screen', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} focusMessageId={MSG.t2} />)
+    await waitFor(() => expect(flashed()).toHaveLength(1))
+    expect(flashed()[0]).toHaveAttribute('data-message-id', MSG.t2)
+    expect(screen.queryByRole('complementary', { name: 'Thread' })).toBeNull()
+  })
+
+  it('outlines a reply inside the thread panel, not in the stream', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} initialThreadId={MSG.t1} focusMessageId={MSG.r2} />)
+    const thread = await screen.findByRole('complementary', { name: 'Thread' })
+    await waitFor(() => expect(flashed()).toHaveLength(1))
+    expect(thread).toContainElement(flashed()[0] as HTMLElement)
+    expect(flashed()[0]).toHaveTextContent(/không phải lỗi hệ thống/)
+  })
+
+  it('outlines nothing for a message that is not in the conversation', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} focusMessageId="44444444-aaaa-4bbb-8ccc-0000000000ff" />)
+    await screen.findByText(/lệch 3 giao dịch/)
+    expect(flashed()).toHaveLength(0)
+  })
+
+  it('moves to the next target when the link changes inside the same conversation', async () => {
+    const { rerender } = renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    await screen.findByText(/lệch 3 giao dịch/)
+    rerender(<SpaceView channelId={CH.doisoat} initialThreadId={MSG.t1} />)
+    expect(await screen.findByRole('complementary', { name: 'Thread' })).toBeInTheDocument()
   })
 })

@@ -38,6 +38,14 @@ describe('CreateMenuItems', () => {
     expect(onSelect).toHaveBeenCalledWith('approval')
   })
 
+  it('opens with a separator as the second group of a menu, and without one as a menu of its own', () => {
+    const { unmount } = render(<CreateMenuItems onSelect={vi.fn()} />)
+    expect(screen.getByRole('separator')).toBeInTheDocument()
+    unmount()
+    render(<CreateMenuItems onSelect={vi.fn()} separator={false} />)
+    expect(screen.queryByRole('separator')).toBeNull()
+  })
+
   it('makes each row a 44px target on a phone', () => {
     phone = true
     render(<CreateMenuItems onSelect={vi.fn()} />)

@@ -1,4 +1,4 @@
-import type { Conversation } from './conversations'
+import { unreadOf, type Conversation } from './conversations'
 
 /**
  * A personal section of the chat navigator (docs/specs/chat-sections). It only
@@ -32,11 +32,13 @@ export interface NavSection {
   id: string
   name: string
   items: Conversation[]
-  /** Unread in the whole section; the header shows it while collapsed. */
+  /** Unread in the whole section, by notification level; the header shows it while collapsed. */
   unread: number
 }
 
 export interface Arranged {
+  /** Starred conversations: listed here only, whatever section they belong to on the server. */
+  starred: Conversation[]
   sections: NavSection[]
   /** Direct messages that sit in no section. */
   directs: Conversation[]
@@ -48,19 +50,24 @@ const byPosition = (a: ChatSection, b: ChatSection) => a.position - b.position
 
 /**
  * Splits the conversations between the user's sections and the two default
- * lists. A conversation is listed once: in the first section that claims it,
- * else in its default list. Conversations keep the order they came in.
+ * lists. A conversation is listed once: starred, else in the first section
+ * that claims it, else in its default list (a starred one keeps its section on
+ * the server and goes back to it when unstarred). Conversations keep the order
+ * they came in.
  */
-export function arrange(conversations: Conversation[], sections: ChatSection[]): Arranged {
+export function arrange(all: Conversation[], sections: ChatSection[]): Arranged {
+  const starred = all.filter((c) => c.starred)
+  const conversations = all.filter((c) => !c.starred)
   const taken = new Set<string>()
   const out: NavSection[] = [...sections].sort(byPosition).map((s) => {
     const claimed = new Set(s.channel_ids)
     const items = conversations.filter((c) => claimed.has(c.id) && !taken.has(c.id))
     items.forEach((c) => taken.add(c.id))
-    return { id: s.id, name: s.name, items, unread: items.reduce((n, c) => n + c.unread, 0) }
+    return { id: s.id, name: s.name, items, unread: items.reduce((n, c) => n + unreadOf(c), 0) }
   })
   const rest = conversations.filter((c) => !taken.has(c.id))
   return {
+    starred,
     sections: out,
     directs: rest.filter((c) => c.kind === 'dm'),
     spaces: rest.filter((c) => c.kind === 'space'),

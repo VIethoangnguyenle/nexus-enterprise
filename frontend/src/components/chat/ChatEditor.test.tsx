@@ -5,10 +5,12 @@ import { renderWithClient } from '../../test/render'
 import { queryClient } from '../../lib/query-client'
 import { keys } from '../../hooks/keys'
 import { CH, MEMBERS } from '../../test/chat-fixtures'
+import { useDraftsStore } from '../../stores/drafts.store'
 import { ChatEditor } from './ChatEditor'
 
 beforeEach(() => {
   localStorage.clear()
+  useDraftsStore.getState().reset()
   queryClient.setQueryData(keys.messaging.members(CH.doisoat), { members: MEMBERS })
 })
 

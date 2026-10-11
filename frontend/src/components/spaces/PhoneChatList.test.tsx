@@ -81,7 +81,7 @@ describe('Tin nhắn on a phone', () => {
 })
 
 describe('long press on a conversation', () => {
-  it('opens a sheet with the sections as radios (current checked), Mục mới… and Bỏ khỏi mục, and no promise the backend cannot keep', async () => {
+  it('opens a sheet with the sections as radios (current checked), Mục mới…, Bỏ khỏi mục, then the star and the mute', async () => {
     await ready()
     pressLong(row(/Đối soát giao dịch/))
     const sheet = await screen.findByRole('dialog', { name: 'Tuỳ chọn cho Đối soát giao dịch' })
@@ -90,7 +90,9 @@ describe('long press on a conversation', () => {
     expect(within(group).getByRole('radio', { name: 'Nội bộ kế toán' })).not.toBeChecked()
     expect(within(sheet).getByRole('button', { name: 'Mục mới…' })).toBeInTheDocument()
     expect(within(sheet).getByRole('button', { name: 'Bỏ khỏi mục' })).toBeInTheDocument()
-    expect(within(sheet).queryByText(/Gắn sao|Tắt thông báo/)).toBeNull()
+    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual(
+      expect.arrayContaining(['Gắn sao', 'Tắt thông báo']),
+    )
   })
 
   it('does not open for a short press, a scroll, or a mouse, and the tap still opens the conversation', async () => {

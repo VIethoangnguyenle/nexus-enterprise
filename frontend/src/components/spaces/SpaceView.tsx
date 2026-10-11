@@ -1,5 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence } from 'motion/react'
 import { ArrowLeft, Info, MessagesSquare, Search, UserPlus, CircleAlert, Lock, Upload } from 'lucide-react'
@@ -8,6 +8,10 @@ import { useConversations } from '../../hooks/useConversations'
 import { usePeople } from '../../hooks/usePeople'
 import { usePhone } from '../../hooks/usePhone'
 import { useMessageActions } from '../../hooks/useMessageActions'
+import { useFocusMessage } from '../../hooks/useFocusMessage'
+import { useDelayedFlag } from '../../hooks/useDelayedFlag'
+import { useNotificationLevel } from '../../hooks/useNotificationLevel'
+import { useStarConversation } from '../../hooks/useShortcuts'
 import { lastEditableOf, toEditorHtml } from '../../lib/message-model'
 import { useMarkRead, useChannelMembers, useUnreadCounts } from '../../hooks/useMessaging'
 import { useFollowThread, useLoadOlderMessages, useThreadsList } from '../../hooks/useThreads'
@@ -20,11 +24,12 @@ import { useAttachmentUploads } from '../../hooks/useAttachmentUploads'
 import { statusOf, explain } from '../../lib/errors'
 import { dmPartner, type Conversation } from '../../lib/conversations'
 import { displayName } from '../../lib/people'
-import { Avatar, Button, Heading, IconButton, Pressable, TabBar, toast } from '../primitives'
+import { Avatar, Button, IconButton, Pressable, Spinner, TabBar, toast } from '../primitives'
 import { ChatEditor } from '../chat/ChatEditor'
 import { EmojiPicker } from '../chat/EmojiPicker'
 import { ThreadPanel } from '../chat/ThreadPanel'
 import { ConversationIcon } from './ConversationIcon'
+import { ConversationTitleMenu } from './ConversationTitleMenu'
 import { ConversationStream } from './ConversationStream'
 import { ThreadsPanel } from './ThreadsPanel'
 import { MembersPanel } from './MembersPanel'
@@ -32,6 +37,7 @@ import { SpaceFiles } from './SpaceFiles'
 import { SpaceTasks } from './SpaceTasks'
 import { SpaceSearchPanel } from './SpaceSearchPanel'
 import { SpaceInfoPanel } from './SpaceInfoPanel'
+import { SelfMentionStyle } from './SelfMentionStyle'
 import { EmptyState } from './EmptyState'
 import { keys } from '../../hooks/keys'
 
@@ -47,15 +53,24 @@ type Panel =
  * A space or DM (design/mockups/spaces.html §2–§4): header, tabs Trò chuyện / Tệp /
  * Công việc, the in-line stream with its composer, and one right panel at a
  * time (thread, thread list, members, search, info). Esc closes the panel.
+ *
+ * A link can name where to land: `initialThreadId` opens that thread's panel,
+ * `focusMessageId` brings a message to the middle and outlines it for 2.4 s, in
+ * the panel when a thread is named and in the stream otherwise.
  */
-export function SpaceView({ channelId }: { channelId: string }) {
+export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
+  channelId: string
+  initialThreadId?: string
+  focusMessageId?: string
+}) {
   const navigate = useNavigate()
   const { workspaceId } = useActiveWorkspace()
   const { conversations, isLoading: listLoading } = useConversations(workspaceId)
   const people = usePeople(workspaceId)
   const me = useAuthStore((s) => s.user)
   const [tab, setTab] = useState<Tab>('chat')
-  const [panel, setPanel] = useState<Panel | null>(null)
+  const [panel, setPanel] = useState<Panel | null>(() => (initialThreadId ? { kind: 'thread', id: initialThreadId } : null))
+  const viewRef = useRef<HTMLDivElement>(null)
   const [emojiTarget, setEmojiTarget] = useState<string | null>(null)
 
   // Title, kind and counts come from the lists already loaded for the
@@ -75,11 +90,16 @@ export function SpaceView({ channelId }: { channelId: string }) {
     return {
       id: ch.id, kind: dm ? 'dm' : 'space', title: p?.title ?? ch.name, partner: p?.partner,
       hueKey: p?.partner?.userId || ch.id, unread: 0, memberCount: ch.member_count ?? 0, lastActivity: 0,
+      starred: !!ch.starred,
     }
   }, [listed, single.data, me?.username, people])
 
   const messagesQ = useMessages(channelId)
   const phone = usePhone()
+  // The level and the star ride on the unread list the navigator already holds, so no request of their own.
+  const notify = useNotificationLevel(channelId, conv?.title ?? '', { fetchLevel: false })
+  const star = useStarConversation()
+  const savingLate = useDelayedFlag(notify.isSaving, 300)
   const lifecycle = useMessageActions(channelId, me?.id)
   const send = useSendMessage(channelId)
   const toggleReaction = useToggleReaction(channelId)
@@ -105,6 +125,21 @@ export function SpaceView({ channelId }: { channelId: string }) {
   const channelUnread = (unreadQ.data?.channels ?? []).find((c) => c.channel_id === channelId)
   const threadsWithNews = unreadThreadsQ.data?.pages.flatMap((p) => p.messages).length ?? 0
   const [atEnd, setAtEnd] = useState(true)
+
+  // A link into this conversation: the thread it names opens, and the stream is the tab that shows the message.
+  useEffect(() => {
+    if (initialThreadId) setPanel((p) => (p?.kind === 'thread' && p.id === initialThreadId ? p : { kind: 'thread', id: initialThreadId }))
+    if (initialThreadId || focusMessageId) setTab('chat')
+  }, [initialThreadId, focusMessageId])
+  const hasMoreOlder = !!messagesQ.data?.has_more
+  const loadOlder = older.loadOlder
+  const olderBusy = older.loading || older.failed
+  const askOlder = useCallback(() => {
+    if (!hasMoreOlder || olderBusy) return false
+    void loadOlder()
+    return true
+  }, [hasMoreOlder, olderBusy, loadOlder])
+  useFocusMessage(viewRef, focusMessageId, initialThreadId ? 'panel' : 'stream', askOlder)
 
   useEffect(() => {
     sendSubscribe(channelId)
@@ -191,9 +226,13 @@ export function SpaceView({ channelId }: { channelId: string }) {
   const onlineMembers = (membersQ.data?.members ?? []).filter((mm) => mm.user_id !== me?.id && onlineUsers[mm.user_id])
   const typingNames = (typingUsers ?? []).map((u) => displayName(people, undefined, u))
   const idPrefix = `space-${channelId}`
+  // The unread list is the source of the level and the star; the hook's own answer covers a conversation it does not list yet.
+  const level = conv?.level ?? notify.level
+  const starred = !!conv?.starred
 
   return (
-    <div className="relative flex flex-1 min-h-0 min-w-0">
+    <div ref={viewRef} className="relative flex flex-1 min-h-0 min-w-0">
+      <SelfMentionStyle userId={me?.id} />
       <section
         className="flex-1 flex flex-col min-w-0 min-h-0 bg-base relative"
         aria-label={title || 'Cuộc trò chuyện'}
@@ -233,7 +272,15 @@ export function SpaceView({ channelId }: { channelId: string }) {
           {conv ? <ConversationIcon conversation={conv} size={40} /> : <div className="skeleton w-10 h-10 rounded-surface" />}
           <div className="grid gap-px min-w-0">
             {conv ? (
-              <Heading as="h1" look="panel" className="truncate">{title}</Heading>
+              <ConversationTitleMenu
+                conversation={conv}
+                level={level}
+                starred={starred}
+                phone={phone}
+                onChooseLevel={notify.setLevel}
+                onToggleStar={() => void star({ channelId, name: title, starred: !starred })}
+                onOpenInfo={() => setPanel({ kind: 'info' })}
+              />
             ) : (
               <div className="skeleton h-5 w-40 rounded-sm" />
             )}
@@ -243,9 +290,13 @@ export function SpaceView({ channelId }: { channelId: string }) {
                 className="justify-self-start text-small text-ink-muted hover:text-ink rounded-sm tnum"
               >
                 {memberCount} thành viên
+                {savingLate && <Saving />}
               </Pressable>
             ) : (
-              <span className="text-small text-ink-muted truncate">{conv?.partner?.role || 'Tin nhắn trực tiếp'}</span>
+              <span className="text-small text-ink-muted truncate">
+                {conv?.partner?.role || 'Tin nhắn trực tiếp'}
+                {savingLate && <Saving />}
+              </span>
             )}
           </div>
           <div className="ml-auto flex items-center gap-1.5 shrink-0">
@@ -495,6 +546,7 @@ export function SpaceView({ channelId }: { channelId: string }) {
             memberCount={memberCount}
             partner={conv.partner}
             people={people}
+            notification={phone ? { level, saving: savingLate, onChoose: notify.setLevel } : undefined}
             onOpenTopic={(id) => {
               setTab('chat')
               setPanel({ kind: 'thread', id })
@@ -504,6 +556,15 @@ export function SpaceView({ channelId }: { channelId: string }) {
         )}
       </AnimatePresence>
     </div>
+  )
+}
+
+/** "· Đang lưu…" after the sub line, once a save has taken longer than 300ms. */
+function Saving() {
+  return (
+    <span className="inline-flex items-center gap-1.5 ml-1.5" role="status">
+      · <Spinner size="sm" />Đang lưu…
+    </span>
   )
 }
 

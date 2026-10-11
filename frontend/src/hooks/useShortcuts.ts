@@ -6,7 +6,6 @@ import { toast } from '../components/primitives'
 import { feedCursor } from '../lib/shortcut-feed'
 import { queryClient } from '../lib/query-client'
 import { keys } from './keys'
-import { shortcutKeys } from './keys/shortcuts'
 
 /** Items per feed page; the screens add "Tải thêm" for the next. */
 export const FEED_PAGE = 25
@@ -14,8 +13,6 @@ export const FEED_PAGE = 25
 type MessageList = { messages: Message[]; has_more: boolean }
 type Thread = { messages: Message[] }
 type Feed = InfiniteData<FeedPage, unknown>
-/** The server sends `starred` on messages and on unread-list items; the shared types do not declare it yet. */
-type WithStar<T> = T & { starred?: boolean }
 
 // --- Pure cache patches ------------------------------------------------------
 
@@ -27,18 +24,18 @@ function withStar<T extends { starred?: boolean }>(item: T, starred: boolean): T
 /** One message of a cached list flagged (or unflagged); the same list when it is not there. */
 export function setMessageStarred<L extends { messages: Message[] }>(list: L | undefined, id: string, starred: boolean): L | undefined {
   if (!list || !list.messages.some((x) => x.id === id)) return list
-  return { ...list, messages: list.messages.map((x) => (x.id === id ? withStar(x as WithStar<Message>, starred) : x)) }
+  return { ...list, messages: list.messages.map((x) => (x.id === id ? withStar(x, starred) : x)) }
 }
 
 /** One conversation of the unread list flagged; the same list when it is not there. */
 export function setUnreadListStarred<L extends { channels: ChannelUnread[] }>(list: L | undefined, channelId: string, starred: boolean): L | undefined {
   if (!list || !list.channels.some((c) => c.channel_id === channelId)) return list
-  return { ...list, channels: list.channels.map((c) => (c.channel_id === channelId ? withStar(c as WithStar<ChannelUnread>, starred) : c)) }
+  return { ...list, channels: list.channels.map((c) => (c.channel_id === channelId ? withStar(c, starred) : c)) }
 }
 
 /** A conversation's own record flagged. */
 export function setChannelRecordStarred(ch: Channel | undefined, starred: boolean): Channel | undefined {
-  return ch ? withStar(ch as WithStar<Channel>, starred) : ch
+  return ch ? withStar(ch, starred) : ch
 }
 
 function mapFeed(feed: Feed | undefined, fn: (page: FeedPage) => FeedPage): Feed | undefined {
@@ -70,7 +67,7 @@ export function markFeedRead(feed: Feed | undefined, id: string): Feed | undefin
 /** Every message that mentions me, newest first, a page at a time. Reading the list marks nothing read. */
 export function useMentionsFeed(wsId: string) {
   return useInfiniteQuery({
-    queryKey: shortcutKeys.mentions(wsId),
+    queryKey: keys.shortcuts.mentions(wsId),
     initialPageParam: undefined as Parameters<typeof shortcutsApi.listMentions>[0]['cursor'],
     queryFn: ({ pageParam }) => shortcutsApi.listMentions({ cursor: pageParam, limit: FEED_PAGE }),
     getNextPageParam: (page) => feedCursor(page, 'created_at'),
@@ -81,7 +78,7 @@ export function useMentionsFeed(wsId: string) {
 /** The messages I starred, newest star first, a page at a time. */
 export function useStarredFeed(wsId: string) {
   return useInfiniteQuery({
-    queryKey: shortcutKeys.starredMessages(wsId),
+    queryKey: keys.shortcuts.starredMessages(wsId),
     initialPageParam: undefined as Parameters<typeof shortcutsApi.listStarred>[0]['cursor'],
     queryFn: ({ pageParam }) => shortcutsApi.listStarred({ cursor: pageParam, limit: FEED_PAGE }),
     getNextPageParam: (page) => feedCursor(page, 'starred_at'),
@@ -92,7 +89,7 @@ export function useStarredFeed(wsId: string) {
 /** The pill on the "Được nhắc tới" shortcut: unread mentions, counted by the server. */
 export function useMentionsUnreadCount(wsId: string) {
   return useQuery({
-    queryKey: shortcutKeys.mentionsUnread(wsId),
+    queryKey: keys.shortcuts.mentionsUnread(wsId),
     queryFn: () => shortcutsApi.mentionsUnreadCount(),
     enabled: !!wsId,
   })
@@ -120,8 +117,8 @@ export function useThreadRoots(items: FeedMessage[]): Map<string, Message | unde
 export function useOpenMention(): (m: FeedMessage) => void {
   return useCallback((m) => {
     if (!m.unread) return
-    queryClient.setQueriesData<Feed>({ queryKey: shortcutKeys.mentionsAll() }, (old) => markFeedRead(old, m.id))
-    queryClient.setQueriesData<number>({ queryKey: shortcutKeys.mentionsUnreadAll() }, (n) => (typeof n === 'number' ? Math.max(0, n - 1) : n))
+    queryClient.setQueriesData<Feed>({ queryKey: keys.shortcuts.mentionsAll() }, (old) => markFeedRead(old, m.id))
+    queryClient.setQueriesData<number>({ queryKey: keys.shortcuts.mentionsUnreadAll() }, (n) => (typeof n === 'number' ? Math.max(0, n - 1) : n))
   }, [])
 }
 
@@ -153,7 +150,7 @@ export function useStarMessage(opts: { onView?: () => void } = {}): (input: Star
     const parent = message.parent_message_id || undefined
     const listKey = keys.messaging.messages(message.channel_id)
     const threadKey = keys.messaging.thread(parent || message.id)
-    const feedKey = shortcutKeys.starredMessagesAll()
+    const feedKey = keys.shortcuts.starredMessagesAll()
     const before = {
       list: parent ? undefined : queryClient.getQueryData<MessageList>(listKey),
       thread: queryClient.getQueryData<Thread>(threadKey),

@@ -6,8 +6,8 @@ import {
   type ChatSection,
 } from './chat-sections'
 
-const conv = (id: string, kind: 'dm' | 'space', unread = 0): Conversation => ({
-  id, kind, title: id, hueKey: id, unread, memberCount: 0, lastActivity: 0,
+const conv = (id: string, kind: 'dm' | 'space', unread = 0, extra: Partial<Conversation> = {}): Conversation => ({
+  id, kind, title: id, hueKey: id, unread, memberCount: 0, lastActivity: 0, ...extra,
 })
 
 const sec = (id: string, name: string, position: number, ids: string[] = []): ChatSection => ({
@@ -34,6 +34,25 @@ describe('arrange', () => {
   it('totals unread per section for the collapsed header', () => {
     const r = arrange(all, [sec('s1', 'Q4', 0, ['a', 'b'])])
     expect(r.sections[0]!.unread).toBe(3)
+  })
+
+  it('a muted conversation adds only its @mentions to the collapsed header', () => {
+    const list = [conv('a', 'space', 5, { level: 'off', mentions: 1 }), conv('b', 'space', 2)]
+    expect(arrange(list, [sec('s1', 'Q4', 0, ['a', 'b'])]).sections[0]!.unread).toBe(3)
+  })
+
+  it('lists a starred conversation only in the starred list, in no section and no default list', () => {
+    const list = [conv('a', 'space', 2, { starred: true }), conv('b', 'dm', 1, { starred: true }), conv('c', 'space')]
+    const r = arrange(list, [sec('s1', 'Q4', 0, ['a'])])
+    expect(r.starred.map((c) => c.id)).toEqual(['a', 'b'])
+    expect(r.sections[0]!.items).toEqual([])
+    expect(r.sections[0]!.unread).toBe(0)
+    expect(r.spaces.map((c) => c.id)).toEqual(['c'])
+    expect(r.directs).toEqual([])
+  })
+
+  it('has an empty starred list when nothing is starred', () => {
+    expect(arrange(all, []).starred).toEqual([])
   })
 
   it('orders sections by position whatever order they arrive in', () => {

@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
@@ -9,12 +9,15 @@ import { apiFetch } from '../../api/client'
 import { queryClient } from '../../lib/query-client'
 import { keys } from '../../hooks/keys'
 import type { Message } from '../../api/messaging'
+import { useDraftsStore } from '../../stores/drafts.store'
 import { ThreadPanel } from './ThreadPanel'
 
 vi.mock('../../api/client', async (orig) => {
   const { fixtureApi } = await import('../../test/chat-fixtures')
   return { ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn(fixtureApi) }
 })
+
+vi.mock('../../hooks/useActiveWorkspace', () => ({ useActiveWorkspace: () => ({ workspaceId: 'ws-test', workspaces: [], isLoading: false }) }))
 
 vi.mock('../../api/drive', () => ({
   driveApi: {
@@ -50,6 +53,7 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
+  useDraftsStore.getState().reset()
   vi.mocked(apiFetch).mockImplementation(fixtureApi as never)
   vi.mocked(apiFetch).mockClear()
   // The channel stream the thread was opened from.
@@ -235,16 +239,15 @@ describe('ThreadPanel', () => {
     const imgBtn = await screen.findByRole('button', { name: 'Mở ảnh bien-lai-phi-08-10.jpg' })
     await user.click(imgBtn)
 
-    const dialog = await screen.findByRole('dialog', { name: 'Trình xem ảnh' })
+    const dialog = await screen.findByRole('dialog', { name: /bien-lai-phi-08-10\.jpg/ })
     expect(dialog).toBeInTheDocument()
-    expect(within(dialog).getByText('bien-lai-phi-08-10.jpg')).toBeInTheDocument()
 
     // Press Escape
     fireEvent.keyDown(document, { key: 'Escape' })
 
     // Viewer dialog is closed
     await waitFor(() => {
-      expect(screen.queryByRole('dialog', { name: 'Trình xem ảnh' })).toBeNull()
+      expect(screen.queryByRole('dialog', { name: /bien-lai-phi-08-10\.jpg/ })).toBeNull()
     })
 
     // Thread panel onClose was NOT called
@@ -253,4 +256,126 @@ describe('ThreadPanel', () => {
   })
 })
 
+/** The block of the message whose text matches (its hover bar is inside). */
+const blockOf = (text: RegExp) => screen.getByText(text).closest<HTMLElement>('.group')!
 
+describe('ThreadPanel: cards and quotes in the thread composer', () => {
+  const bodyOf = (path: string) => {
+    const call = vi.mocked(apiFetch).mock.calls.find(([p, i]) => p === path && i?.method === 'POST')
+    return call ? JSON.parse(String(call[1]!.body)) : undefined
+  }
+
+  it('creates a poll as a reply to the root of the thread', async () => {
+    const user = userEvent.setup()
+    renderWithClient(panel())
+    await screen.findByText(/1\.284\.500/)
+    await user.click(screen.getByRole('button', { name: 'Tạo trong chat' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Bình chọn' }))
+    await user.type(await screen.findByLabelText('Câu hỏi'), 'Họp lúc nào?')
+    await user.type(screen.getByLabelText('Lựa chọn 1'), 'Sáng')
+    await user.type(screen.getByLabelText('Lựa chọn 2'), 'Chiều')
+    vi.mocked(apiFetch).mockImplementation((p: string, i?: RequestInit) =>
+      p === `/channels/${CH.doisoat}/polls` ? Promise.resolve({ id: 'poll-1' }) : fixtureApi(p, i))
+    await user.click(screen.getByRole('button', { name: 'Gửi bình chọn' }))
+    await waitFor(() => expect(bodyOf(`/channels/${CH.doisoat}/polls`)).toMatchObject({ parent_message_id: MSG.t1, question: 'Họp lúc nào?' }))
+  })
+
+  it('quoting a reply puts the quote in the thread composer, and the reply goes out with it', async () => {
+    const user = userEvent.setup()
+    renderWithClient(panel())
+    await screen.findByText(/1\.284\.500/)
+    await user.click(within(blockOf(/Tổng chênh lệch/)).getByRole('button', { name: 'Thêm' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Trích dẫn khi trả lời' }))
+
+    const side = screen.getByRole('complementary', { name: 'Thread' })
+    const strip = within(side).getByRole('region', { name: 'Đang trích dẫn tin của Nguyễn Thu Lan' })
+    expect(strip).toHaveTextContent('Tổng chênh lệch')
+    expect(useDraftsStore.getState().drafts[`thread:${MSG.t1}`]?.quote?.id).toBe(MSG.r1)
+    expect(useDraftsStore.getState().drafts[CH.doisoat]).toBeUndefined()
+
+    await user.click(within(side).getByRole('textbox', { name: 'Trả lời trong thread' }))
+    await user.keyboard('Cảm ơn Lan{Enter}')
+    await waitFor(() => expect(bodyOf(`/channels/${CH.doisoat}/messages`)).toMatchObject({
+      parent_message_id: MSG.t1, quoted_message_id: MSG.r1,
+    }))
+    await waitFor(() => expect(within(side).queryByRole('region', { name: /Đang trích dẫn/ })).toBeNull())
+  })
+
+  it('stars a reply from its "Thêm" menu', async () => {
+    const user = userEvent.setup()
+    vi.mocked(apiFetch).mockImplementation((p: string, i?: RequestInit) =>
+      p === `/messages/${MSG.r1}/star` ? Promise.resolve(undefined) : fixtureApi(p, i))
+    renderWithClient(panel())
+    await screen.findByText(/1\.284\.500/)
+    await user.click(within(blockOf(/Tổng chênh lệch/)).getByRole('button', { name: 'Thêm' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Gắn sao tin' }))
+    await waitFor(() => expect(calls()).toContain(`PUT /messages/${MSG.r1}/star`))
+    expect(await screen.findByRole('img', { name: 'Bạn đã gắn sao' })).toBeInTheDocument()
+  })
+
+  it('tags each reply so a quote can scroll to it', async () => {
+    renderWithClient(panel())
+    await screen.findByText(/1\.284\.500/)
+    expect(document.querySelector(`[data-message-id="${MSG.r1}"]`)).not.toBeNull()
+  })
+})
+
+describe('ThreadPanel: marking a reply unread inside the thread', () => {
+  const readCalls = () => calls().filter((c) => c === `POST /messages/${MSG.t1}/thread/read`).length
+  const unreadAgain = () =>
+    queryClient.setQueryData(keys.messaging.thread(MSG.t1), {
+      messages: THREAD.map((m) => (m.id === MSG.t1 ? { ...m, thread_unread_count: 2 } : m)),
+    })
+  const markReplyUnread = async (user: ReturnType<typeof userEvent.setup>) => {
+    vi.mocked(apiFetch).mockImplementation((p: string, i?: RequestInit) =>
+      p === `/messages/${MSG.r2}/unread` ? Promise.resolve({ status: 'ok' }) : fixtureApi(p, i))
+    await user.click(within(blockOf(/Đã đối chiếu xong/)).getByRole('button', { name: 'Thêm' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Đánh dấu chưa đọc' }))
+    await waitFor(() => expect(calls()).toContain(`POST /messages/${MSG.r2}/unread`))
+  }
+
+  it('does not read the thread again while the panel stays open, and reads it the next time it opens', async () => {
+    const user = userEvent.setup()
+    const first = renderWithClient(panel())
+    await screen.findByText(/1\.284\.500/)
+    await waitFor(() => expect(readCalls()).toBe(1))
+
+    await markReplyUnread(user)
+    // The thread is unread again (the server's frame, or the refetch).
+    act(() => unreadAgain())
+    await screen.findByText(/Đã đối chiếu xong/)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(readCalls()).toBe(1)
+
+    // Left and opened again: now it is read.
+    first.unmount()
+    queryClient.setQueryData(keys.messaging.thread(MSG.t1), {
+      messages: THREAD.map((m) => (m.id === MSG.t1 ? { ...m, thread_unread_count: 2 } : m)),
+    })
+    renderWithClient(panel())
+    await screen.findByText(/1\.284\.500/)
+    await waitFor(() => expect(readCalls()).toBe(2))
+  })
+
+  it('still reads a reply that arrives while open when the reader did not mark anything unread', async () => {
+    renderWithClient(panel())
+    await screen.findByText(/1\.284\.500/)
+    await waitFor(() => expect(readCalls()).toBe(1))
+    act(() => unreadAgain())
+    await waitFor(() => expect(readCalls()).toBe(2))
+  })
+
+  it('does not hold the read back when the mark failed', async () => {
+    const user = userEvent.setup()
+    renderWithClient(panel())
+    await screen.findByText(/1\.284\.500/)
+    await waitFor(() => expect(readCalls()).toBe(1))
+    vi.mocked(apiFetch).mockImplementation((p: string, i?: RequestInit) =>
+      p === `/messages/${MSG.r2}/unread` ? Promise.reject(new Error('403')) : fixtureApi(p, i))
+    await user.click(within(blockOf(/Đã đối chiếu xong/)).getByRole('button', { name: 'Thêm' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Đánh dấu chưa đọc' }))
+    await waitFor(() => expect(calls()).toContain(`POST /messages/${MSG.r2}/unread`))
+    act(() => unreadAgain())
+    await waitFor(() => expect(readCalls()).toBe(2))
+  })
+})

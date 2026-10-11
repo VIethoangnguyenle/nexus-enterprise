@@ -1,4 +1,4 @@
-import { screen, within, waitFor } from '@testing-library/react'
+import { act, cleanup, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
@@ -7,6 +7,8 @@ import { CH, ME, U, WS_ID } from '../../test/chat-fixtures'
 import { messagingApi } from '../../api/messaging'
 import { shortcutsApi, type FeedMessage } from '../../api/shortcuts'
 import type { Conversation } from '../../lib/conversations'
+import { queryClient } from '../../lib/query-client'
+import { keys } from '../../hooks/keys'
 import { MentionsView } from './MentionsView'
 
 vi.mock('../../api/shortcuts', async (orig) => {
@@ -162,5 +164,46 @@ describe('MentionsView', () => {
     expect(await screen.findByText('Không tải thêm được.')).toBeInTheDocument()
     expect(screen.getByText('Phạm Hải Yến')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Thử lại' })).toBeInTheDocument()
+  })
+})
+
+describe('MentionsView while it is open', () => {
+  // Unmount before the shared afterEach clears the cache, or the live view refetches into the next test.
+  afterEach(cleanup)
+  const refetch = () => act(async () => { await queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() }) })
+
+  it('puts a new mention at the top, washed in its sender\'s colour; what was already there is not news', async () => {
+    feed(main())
+    view()
+    await screen.findByText('Phạm Hải Yến')
+    expect(screen.getByRole('link')).not.toHaveClass('rt-wash')
+    feed(main({ id: 'mm-new', sender_id: U.duc.id, sender_name: 'Trần Minh Đức', created_at: stamp(0, 9, 40) }), main())
+    await refetch()
+    await waitFor(() => expect(screen.getAllByRole('link')).toHaveLength(2))
+    const [fresh, old] = screen.getAllByRole('link')
+    expect(fresh).toHaveTextContent('Trần Minh Đức')
+    expect(fresh).toHaveClass('rt-wash')
+    expect(fresh).toHaveAttribute('data-realtime', 'other')
+    expect(old).not.toHaveClass('rt-wash')
+  })
+
+  it('does not wash an older page that "Tải thêm" brings in', async () => {
+    const user = userEvent.setup()
+    api.listMentions
+      .mockResolvedValueOnce({ messages: [main()], has_more: true })
+      .mockResolvedValueOnce({ messages: [main({ id: 'mm-old', sender_name: 'Trần Minh Đức', created_at: stamp(3, 8, 0), unread: undefined })], has_more: false })
+    view()
+    await screen.findByText('Phạm Hải Yến')
+    await user.click(screen.getByRole('button', { name: 'Tải thêm' }))
+    const older = (await screen.findByText('Trần Minh Đức')).closest('a')!
+    expect(older).not.toHaveClass('rt-wash')
+  })
+
+  it('washes nothing when a refetch brings nothing new', async () => {
+    feed(main())
+    view()
+    await screen.findByText('Phạm Hải Yến')
+    await refetch()
+    expect(screen.getByRole('link')).not.toHaveClass('rt-wash')
   })
 })

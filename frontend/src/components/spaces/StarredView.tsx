@@ -1,9 +1,12 @@
 import { useMemo } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import { Star } from 'lucide-react'
 import { useAuthStore } from '../../stores/auth.store'
 import type { FeedMessage } from '../../api/shortcuts'
 import type { Conversation } from '../../lib/conversations'
 import { formatCount } from '../../lib/format'
+import { feedItemMotion } from '../../lib/feed-motion'
+import { useMotionPresets } from '../../lib/motion'
 import { useStarConversation, useStarMessage, useStarredFeed, useThreadRoots } from '../../hooks/useShortcuts'
 import { Heading, Pressable } from '../primitives'
 import { BackBar, FeedCard, FeedEmpty, FeedError, FeedFooter, FeedSkeleton } from './FeedParts'
@@ -34,6 +37,7 @@ export function StarredView({ workspaceId, starredConversations, conversationOf,
   hrefOf?: (item: FeedMessage) => string
   phone?: boolean
 }) {
+  const m = useMotionPresets()
   const me = useAuthStore((s) => s.user?.id)
   const feed = useStarredFeed(workspaceId)
   const starMessage = useStarMessage()
@@ -75,8 +79,13 @@ export function StarredView({ workspaceId, starredConversations, conversationOf,
               </p>
             ) : (
               <ul aria-labelledby="starred-conversations" className="m-0 p-0 grid gap-0.5">
+                <AnimatePresence initial={false}>
                 {starredConversations.map((c) => (
-                  <li key={c.id} className="relative list-none">
+                  <motion.li
+                    key={c.id}
+                    {...feedItemMotion(m.reduced, false)}
+                    className="relative list-none overflow-clip [overflow-clip-margin:4px]"
+                  >
                     <a
                       href="#"
                       onClick={(e) => { e.preventDefault(); onOpenConversation(c) }}
@@ -106,8 +115,9 @@ export function StarredView({ workspaceId, starredConversations, conversationOf,
                     >
                       <Star size={16} strokeWidth={1.75} fill="currentColor" aria-hidden="true" />
                     </Pressable>
-                  </li>
+                  </motion.li>
                 ))}
+                </AnimatePresence>
               </ul>
             )}
 
@@ -122,20 +132,22 @@ export function StarredView({ workspaceId, starredConversations, conversationOf,
             ) : (
               <>
                 <ul aria-labelledby="starred-messages" className="m-0 p-0 grid gap-0.5">
-                  {items.map((m) => (
-                    <FeedCard
-                      key={m.id}
-                      item={m}
-                      kind="star"
-                      conversation={conversationOf(m.channel_id)}
-                      me={me}
-                      now={now}
-                      root={m.parent_message_id ? roots.get(m.parent_message_id) : undefined}
-                      href={hrefOf?.(m)}
-                      onOpen={onOpen}
-                      onUnstar={(item) => void starMessage({ message: item, starred: false })}
-                    />
-                  ))}
+                  <AnimatePresence initial={false}>
+                    {items.map((msg) => (
+                      <FeedCard
+                        key={msg.id}
+                        item={msg}
+                        kind="star"
+                        conversation={conversationOf(msg.channel_id)}
+                        me={me}
+                        now={now}
+                        root={msg.parent_message_id ? roots.get(msg.parent_message_id) : undefined}
+                        href={hrefOf?.(msg)}
+                        onOpen={onOpen}
+                        onUnstar={(item) => void starMessage({ message: item, starred: false })}
+                      />
+                    ))}
+                  </AnimatePresence>
                 </ul>
                 <FeedFooter
                   hasMore={!!feed.hasNextPage}

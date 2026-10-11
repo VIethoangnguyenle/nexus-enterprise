@@ -1,10 +1,15 @@
 import { useMemo, type ReactNode } from 'react'
+import { motion } from 'motion/react'
 import { AtSign, ChevronLeft, CircleAlert, Paperclip, Star, CornerDownRight } from 'lucide-react'
 import type { FeedMessage } from '../../api/shortcuts'
 import type { Message } from '../../api/messaging'
 import type { Conversation } from '../../lib/conversations'
 import { cardTime, messageSegments, type Segment } from '../../lib/shortcut-feed'
 import { formatTime } from '../../lib/format'
+import { feedItemMotion } from '../../lib/feed-motion'
+import { useMotionPresets } from '../../lib/motion'
+import { personStyle } from '../../lib/person-hue'
+import type { Arrival } from '../../hooks/useArrivals'
 import { Avatar, Button, Pressable } from '../primitives'
 import { ConversationIcon } from './ConversationIcon'
 import { EmptyState } from './EmptyState'
@@ -54,9 +59,10 @@ const preview = (m: Message, me: string | undefined, max: number): string => {
  * One message of a feed as a link: the conversation it is in, who wrote it and
  * when, the opening of the text with the reader's own @name washed. An unread
  * mention is bold with a dot; a starred card is always plain and carries its
- * star button outside the link, so no button sits inside a link.
+ * star button outside the link, so no button sits inside a link. Inside an
+ * `AnimatePresence`, a card that leaves collapses (220ms) rather than vanishing.
  */
-export function FeedCard({ item, kind, conversation, me, now, root, href, onOpen, onUnstar }: {
+export function FeedCard({ item, kind, conversation, me, now, root, href, arrival, onOpen, onUnstar }: {
   item: FeedMessage
   kind: 'mention' | 'star'
   conversation: Conversation | undefined
@@ -65,9 +71,13 @@ export function FeedCard({ item, kind, conversation, me, now, root, href, onOpen
   /** The root of the thread this reply belongs to, once fetched. */
   root: Message | undefined
   href?: string
+  /** A mention that arrived while the list was open: it grows in and is washed in its sender's colour. */
+  arrival?: Arrival
   onOpen: (m: FeedMessage) => void
   onUnstar?: (m: FeedMessage) => void
 }) {
+  const m = useMotionPresets()
+  const byOther = arrival?.source === 'other'
   const unread = kind === 'mention' && !!item.unread
   const segments = useMemo(() => messageSegments(item.content, item.content_format, me), [item.content, item.content_format, me])
   const author = item.sender_name || 'Người dùng'
@@ -79,9 +89,15 @@ export function FeedCard({ item, kind, conversation, me, now, root, href, onOpen
     : 'Trả lời trong thread'
 
   return (
-    <li className="relative list-none">
+    <motion.li
+      {...feedItemMotion(m.reduced, !!arrival)}
+      // Clip the collapse, with room left for the focus ring.
+      className="relative list-none overflow-clip [overflow-clip-margin:4px]"
+    >
       <a
         href={href ?? '#'}
+        data-realtime={arrival?.source}
+        style={byOther ? personStyle(arrival!.author ?? item.sender_id) : undefined}
         onClick={(e) => {
           if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return
           e.preventDefault()
@@ -89,7 +105,7 @@ export function FeedCard({ item, kind, conversation, me, now, root, href, onOpen
         }}
         data-unread={unread || undefined}
         className={`grid grid-cols-[32px_minmax(0,1fr)_auto] gap-x-3 gap-y-1.5 items-start no-underline rounded-surface
-          px-4 py-3 lg:px-3 hover:bg-raised focus-ring ${ink} ${onUnstar ? 'pr-14 lg:pr-12' : ''}`}
+          px-4 py-3 lg:px-3 hover:bg-raised focus-ring ${ink} ${onUnstar ? 'pr-14 lg:pr-12' : ''} ${byOther ? 'rt-wash' : ''}`}
       >
         <span className="col-span-3 flex items-center gap-2 min-w-0">
           {conversation && <ConversationIcon conversation={conversation} size={24} />}
@@ -140,7 +156,7 @@ export function FeedCard({ item, kind, conversation, me, now, root, href, onOpen
           <Star size={16} strokeWidth={1.75} fill="currentColor" aria-hidden="true" />
         </Pressable>
       )}
-    </li>
+    </motion.li>
   )
 }
 

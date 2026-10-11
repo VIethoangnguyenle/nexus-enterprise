@@ -10,15 +10,16 @@ export type CreateKind = 'poll' | 'task' | 'doc' | 'approval'
  * message can carry as a card. "Đề nghị phê duyệt" is left out of a personal
  * workspace, where the server would refuse it anyway. Mount it inside the
  * popover (desktop) or the bottom sheet (phone); rows are 44px on a phone.
+ * `separator={false}` when the group is a menu of its own (the "+" menu).
  */
-export function CreateMenuItems({ onSelect }: { onSelect: (kind: CreateKind) => void }) {
+export function CreateMenuItems({ onSelect, separator = true }: { onSelect: (kind: CreateKind) => void; separator?: boolean }) {
   const { isPersonal } = useWorkspaceType()
   const phone = usePhone()
   const row = phone ? 'h-11' : ''
   const icon = { size: 16, strokeWidth: 1.75, 'aria-hidden': true } as const
   return (
     <>
-      <MenuSeparator />
+      {separator && <MenuSeparator />}
       <MenuItem className={row} icon={<BarChart3 {...icon} />} onClick={() => onSelect('poll')}>Bình chọn</MenuItem>
       <MenuItem className={row} icon={<ListChecks {...icon} />} onClick={() => onSelect('task')}>Công việc</MenuItem>
       <MenuItem className={row} icon={<FilePlus {...icon} />} onClick={() => onSelect('doc')}>Tài liệu mới</MenuItem>

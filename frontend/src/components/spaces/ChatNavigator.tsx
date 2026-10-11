@@ -1,26 +1,31 @@
 import { useId, useState, type DragEvent, type ReactNode } from 'react'
 import { Link, useParams, useRouterState } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { ChevronDown, Ellipsis, House, Plus } from 'lucide-react'
+import { AtSign, ChevronDown, Ellipsis, House, Plus, Star } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useChatNavigation } from '../../hooks/useChatNavigation'
+import { useMentionsUnreadCount } from '../../hooks/useShortcuts'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { collapseKey, useNavCollapseStore } from '../../stores/nav-collapse.store'
 import { useMotionPresets } from '../../lib/motion'
 import { formatCount } from '../../lib/format'
-import type { Conversation } from '../../lib/conversations'
+import { totalUnread, type Conversation } from '../../lib/conversations'
 import { Button, IconButton, Pressable } from '../primitives'
 import { NewChatMenu } from './NewChatMenu'
 import { ConversationIcon } from './ConversationIcon'
 import { CreateSpaceDialog } from './CreateSpaceDialog'
 import { StartChatDialog } from './StartChatDialog'
-import { useSectionOverlays } from './SectionOverlays'
+import { STARRED_SECTION, useSectionOverlays } from './SectionOverlays'
+import { MentionPill, MutedMark, MutedText } from './ConversationBadges'
 
 /**
  * Left column of Tin nhắn, in the Google Chat model (design/mockups/spaces.html §1):
  * "Trò chuyện mới", Trang chủ with the unread total, the user's own sections,
- * then collapsible "Tin nhắn trực tiếp" and "Nhóm" ("Tạo mục" lives in "Trò chuyện mới"). Mentions,
- * Starred and Browse spaces are not shown: the backend has no API for them yet.
+ * the shortcuts Được nhắc tới (with the count of unread mentions) and Đã gắn sao,
+ * the system section "Đã gắn sao", the user's own sections, then collapsible
+ * "Tin nhắn trực tiếp" and "Nhóm" ("Tạo mục" lives in "Trò chuyện mới").
+ * A starred conversation is listed under Đã gắn sao only; a muted one is drawn
+ * quiet, with an "@" when someone named the reader.
  */
 export function ChatNavigator() {
   const { workspaceId } = useActiveWorkspace()
@@ -31,6 +36,8 @@ export function ChatNavigator() {
   const params = useParams({ strict: false }) as { channelId?: string }
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const onHome = /^\/channels\/?$/.test(pathname)
+  const mentionsUnread = useMentionsUnreadCount(workspaceId).data ?? 0
+  const m = useMotionPresets()
 
   const [dialog, setDialog] = useState<'space' | 'dm' | null>(null)
   const [dragging, setDragging] = useState<Conversation | null>(null)
@@ -43,7 +50,7 @@ export function ChatNavigator() {
       conversation={c}
       current={params.channelId === c.id}
       online={!!c.partner && !!onlineUsers[c.partner.userId]}
-      onMenu={(el) => overlays.openRowMenu({ id: c.id, title: c.title }, el)}
+      onMenu={(el) => overlays.openRowMenu({ id: c.id, title: c.title, starred: c.starred, muted: c.level === 'off' }, el)}
       onDragStart={() => setDragging(c)}
       onDragEnd={() => setDragging(null)}
     />
@@ -78,6 +85,28 @@ export function ChatNavigator() {
           <span className="truncate">Trang chủ</span>
           {unreadTotal > 0 && <CountPill n={unreadTotal} label={`${unreadTotal} tin chưa đọc`} />}
         </Link>
+        <ShortcutLink
+          to="/channels/mentions"
+          icon={<AtSign size={16} strokeWidth={1.75} className="text-ink-muted shrink-0" aria-hidden="true" />}
+          label="Được nhắc tới"
+          current={pathname === '/channels/mentions'}
+          end={
+            <AnimatePresence initial={false}>
+              {mentionsUnread > 0 && (
+                // Opening a mention turns the pill down; the last one fades out (160ms).
+                <motion.span key="pill" {...m.route} className="ml-auto inline-flex">
+                  <CountPill n={mentionsUnread} label={`${mentionsUnread} tin nhắc tên bạn chưa đọc`} />
+                </motion.span>
+              )}
+            </AnimatePresence>
+          }
+        />
+        <ShortcutLink
+          to="/channels/starred"
+          icon={<Star size={16} strokeWidth={1.75} className="text-ink-muted shrink-0" aria-hidden="true" />}
+          label="Đã gắn sao"
+          current={pathname === '/channels/starred'}
+        />
 
         {isError ? (
           <div className="grid gap-2 justify-items-start px-2.5 pt-4 text-sm text-ink-muted">
@@ -86,6 +115,19 @@ export function ChatNavigator() {
           </div>
         ) : (
           <>
+            {!isLoading && arranged.starred.length > 0 && (
+              <Section
+                id={STARRED_SECTION}
+                title="Đã gắn sao"
+                unread={totalUnread(arranged.starred)}
+                loading={false}
+                empty=""
+                plain
+                bare
+              >
+                {arranged.starred.map(row)}
+              </Section>
+            )}
             {!isLoading && arranged.sections.map((s) => (
               <Section
                 key={s.id}
@@ -107,6 +149,7 @@ export function ChatNavigator() {
               title="Tin nhắn trực tiếp"
               addLabel="Nhắn tin trực tiếp"
               onAdd={() => setDialog('dm')}
+              unread={totalUnread(arranged.directs)}
               loading={isLoading}
               empty="Chưa có tin nhắn trực tiếp."
               plain
@@ -118,6 +161,7 @@ export function ChatNavigator() {
               title="Nhóm"
               addLabel="Tạo nhóm"
               onAdd={() => setDialog('space')}
+              unread={totalUnread(arranged.spaces)}
               loading={isLoading}
               empty="Bạn chưa ở nhóm nào."
               plain
@@ -132,6 +176,27 @@ export function ChatNavigator() {
       <CreateSpaceDialog open={dialog === 'space'} onClose={() => setDialog(null)} />
       <StartChatDialog open={dialog === 'dm'} onClose={() => setDialog(null)} />
     </nav>
+  )
+}
+
+function ShortcutLink({ to, icon, label, current, end }: {
+  to: '/channels/mentions' | '/channels/starred'
+  icon: ReactNode
+  label: string
+  current: boolean
+  end?: ReactNode
+}) {
+  return (
+    <Link
+      to={to}
+      aria-current={current ? 'page' : undefined}
+      className={`flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-md no-underline focus-ring
+        transition-colors duration-quick ${current ? 'bg-raised text-ink font-semibold' : 'text-ink hover:bg-hover'}`}
+    >
+      {icon}
+      <span className="truncate">{label}</span>
+      {end}
+    </Link>
   )
 }
 
@@ -155,7 +220,10 @@ function ConversationLink({ conversation: c, current, online, onMenu, onDragStar
   onDragStart: () => void
   onDragEnd: () => void
 }) {
-  const unread = c.unread > 0
+  const muted = c.level === 'off'
+  // A muted conversation has no count of its own: unread is never shown for it (it is 0 or stale).
+  const unread = !muted && c.unread > 0
+  const mentions = muted ? (c.mentions ?? 0) : 0
   return (
     <li
       className="group relative"
@@ -173,18 +241,28 @@ function ConversationLink({ conversation: c, current, online, onMenu, onDragStar
         params={{ channelId: c.id }}
         aria-current={current ? 'page' : undefined}
         data-unread={unread || undefined}
-        className={`flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-md text-ink no-underline min-w-0
-          focus-ring transition-colors duration-quick
+        data-muted={muted || undefined}
+        className={`flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-md no-underline min-w-0
+          focus-ring transition-colors duration-quick ${muted ? 'text-ink-muted' : 'text-ink'}
           ${current ? 'bg-raised' : 'hover:bg-hover'} ${unread || current ? 'font-semibold' : ''}`}
       >
-        <ConversationIcon conversation={c} size={24} online={online} />
+        <span className={muted ? 'opacity-[0.72] inline-flex' : 'inline-flex'}>
+          <ConversationIcon conversation={c} size={24} online={online} />
+        </span>
         <span className="truncate">{c.title}</span>
+        {muted && <MutedText />}
         {unread && (
           <CountPill
             n={c.unread}
             label={`${c.unread} tin chưa đọc`}
             className="group-hover:invisible group-focus-within:invisible pointer-coarse:visible pointer-coarse:mr-7"
           />
+        )}
+        {muted && (
+          <span className="ml-auto inline-flex items-center gap-1.5 shrink-0 group-hover:invisible group-focus-within:invisible pointer-coarse:visible pointer-coarse:mr-7">
+            {mentions > 0 && <MentionPill n={mentions} />}
+            <MutedMark />
+          </span>
         )}
       </Link>
       <IconButton
@@ -205,12 +283,12 @@ function ConversationLink({ conversation: c, current, online, onMenu, onDragStar
 
 /**
  * A collapsible group of the column. `plain` is a default one (Tin nhắn trực
- * tiếp, Nhóm): a "+" and no menu. Otherwise it is one of the user's sections: a
+ * tiếp, Nhóm): a "+" and no menu; `bare` is the system one (Đã gắn sao): neither. Otherwise it is one of the user's sections: a
  * "⋯" menu, a drop target for rows, the unread total while folded, and a hint
  * when empty. Folded state is remembered per device.
  */
 function Section({
-  id, title, addLabel, onAdd, menuLabel, onMenu, unread = 0, loading, empty, plain, dragging, onDropRow, children,
+  id, title, addLabel, onAdd, menuLabel, onMenu, unread = 0, loading, empty, plain, bare, dragging, onDropRow, children,
 }: {
   id: string
   title: string
@@ -222,6 +300,8 @@ function Section({
   loading: boolean
   empty: string
   plain?: boolean
+  /** A system section: no "+" and no menu (Đã gắn sao). */
+  bare?: boolean
   dragging?: boolean
   onDropRow?: () => void
   children: ReactNode[]
@@ -261,7 +341,7 @@ function Section({
           <span className="truncate">{title}</span>
           {!open && unread > 0 && <CountPill n={unread} label={`${unread} tin chưa đọc`} />}
         </Pressable>
-        {plain ? (
+        {bare ? null : plain ? (
           <IconButton size="sm" aria-label={addLabel} title={addLabel} onClick={onAdd}>
             <Plus size={16} strokeWidth={1.75} />
           </IconButton>

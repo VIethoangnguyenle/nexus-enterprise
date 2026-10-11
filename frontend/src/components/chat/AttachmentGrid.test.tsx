@@ -34,14 +34,14 @@ describe('AttachmentGrid', () => {
 
   it('renders 1, 2, 4, 6 images with layout classes and +2 tile, passes opener element', async () => {
     const user = userEvent.setup()
-    const onOpenImage = vi.fn()
+    const onOpen = vi.fn()
 
     const images6 = Array.from({ length: 6 }, (_, i) =>
       createImage(`11111111-aaaa-4bbb-8ccc-00000000000${i}`, `photo-${i + 1}.jpg`),
     )
 
     const { container, rerender } = renderWithClient(
-      <AttachmentGrid attachments={[images6[0]!]} onOpenImage={onOpenImage} />,
+      <AttachmentGrid attachments={[images6[0]!]} onOpen={onOpen} />,
     )
     const firstTile = screen.getByRole('button', { name: 'Mở ảnh photo-1.jpg' })
     expect(firstTile).toBeInTheDocument()
@@ -52,23 +52,23 @@ describe('AttachmentGrid', () => {
     expect(singleWrapper).toHaveStyle({ aspectRatio: '1.3333333333333333' })
 
     // 2 images
-    rerender(<AttachmentGrid attachments={images6.slice(0, 2)} onOpenImage={onOpenImage} />)
+    rerender(<AttachmentGrid attachments={images6.slice(0, 2)} onOpen={onOpen} />)
     expect(screen.getAllByRole('button', { name: /Mở ảnh/ })).toHaveLength(2)
 
     // 4 images
-    rerender(<AttachmentGrid attachments={images6.slice(0, 4)} onOpenImage={onOpenImage} />)
+    rerender(<AttachmentGrid attachments={images6.slice(0, 4)} onOpen={onOpen} />)
     expect(screen.getAllByRole('button', { name: /Mở ảnh/ })).toHaveLength(4)
     expect(screen.queryByText(/\+/)).not.toBeInTheDocument()
 
     // 6 images -> shows 4 tiles, 4th has "+2"
-    rerender(<AttachmentGrid attachments={images6} onOpenImage={onOpenImage} />)
+    rerender(<AttachmentGrid attachments={images6} onOpen={onOpen} />)
     expect(screen.getByText('+2')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Mở ảnh photo-4.jpg, còn 2 ảnh nữa/ })).toBeInTheDocument()
     expect(container.textContent).not.toMatch(UUID_RE)
 
-    // Clicking tile calls onOpenImage with (index, images, openerElement)
+    // Clicking tile calls onOpen with (index, every file in display order, openerElement)
     await user.click(screen.getByRole('button', { name: 'Mở ảnh photo-1.jpg' }))
-    expect(onOpenImage).toHaveBeenCalledWith(0, images6, expect.any(HTMLElement))
+    expect(onOpen).toHaveBeenCalledWith(0, images6, expect.any(HTMLElement))
   })
 
   it('keeps measured aspect ratio for single portrait image', () => {
@@ -114,5 +114,38 @@ describe('AttachmentGrid', () => {
       expect(toasts.length).toBeGreaterThan(0)
       expect(toasts[0]?.tone).toBe('error')
     })
+  })
+
+  it('lists pictures first and files after them as one sequence, and opens a file by its position in it', async () => {
+    const user = userEvent.setup()
+    const onOpen = vi.fn()
+    const pdf: MessageAttachment = { drive_file_id: 'p-1', file_name: 'bien-ban.pdf', mime_type: 'application/pdf', size_bytes: 2048 }
+    const xls: MessageAttachment = { drive_file_id: 'x-1', file_name: 'phi.xlsx', mime_type: '', size_bytes: 4096 }
+    const a = createImage('i-1', 'a.jpg')
+    const b = createImage('i-2', 'b.jpg')
+    // Sent in this order; shown as the pictures, then the files.
+    renderWithClient(<AttachmentGrid attachments={[pdf, a, xls, b]} onOpen={onOpen} />)
+
+    await user.click(screen.getByRole('button', { name: 'Mở ảnh b.jpg' }))
+    expect(onOpen).toHaveBeenLastCalledWith(1, [a, b, pdf, xls], expect.any(HTMLElement))
+
+    await user.click(screen.getByRole('button', { name: 'Mở tệp phi.xlsx' }))
+    expect(onOpen).toHaveBeenLastCalledWith(3, [a, b, pdf, xls], expect.any(HTMLElement))
+  })
+
+  it('downloading a file does not open it', async () => {
+    const user = userEvent.setup()
+    const onOpen = vi.fn()
+    const pdf: MessageAttachment = { drive_file_id: 'p-1', file_name: 'bien-ban.pdf', mime_type: 'application/pdf', size_bytes: 2048 }
+    renderWithClient(<AttachmentGrid attachments={[pdf]} onOpen={onOpen} />)
+    await user.click(screen.getByRole('button', { name: /Tải xuống bien-ban\.pdf/ }))
+    expect(onOpen).not.toHaveBeenCalled()
+  })
+
+  it('shows no id on a file card', () => {
+    const pdf: MessageAttachment = { drive_file_id: '22222222-aaaa-4bbb-8ccc-000000000009', file_name: 'a.pdf', mime_type: 'application/pdf', size_bytes: 1 }
+    const { container } = renderWithClient(<AttachmentGrid attachments={[pdf]} onOpen={vi.fn()} />)
+    expect(container.textContent).not.toMatch(UUID_RE)
+    expect(container.innerHTML).not.toMatch(UUID_RE)
   })
 })

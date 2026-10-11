@@ -33,6 +33,8 @@ import { Route as WorkspaceAdminIndexRouteImport } from './routes/_workspace/adm
 import { Route as AuthGoogleDoneRouteImport } from './routes/auth.google.done'
 import { Route as AssetsRequestNewRouteImport } from './routes/assets/request/new'
 import { Route as WorkspaceDocumentsDocIdRouteImport } from './routes/_workspace/documents.$docId'
+import { Route as WorkspaceChannelsStarredRouteImport } from './routes/_workspace/channels.starred'
+import { Route as WorkspaceChannelsMentionsRouteImport } from './routes/_workspace/channels.mentions'
 import { Route as WorkspaceChannelsChannelIdRouteImport } from './routes/_workspace/channels.$channelId'
 import { Route as WorkspaceAdminUsersRouteImport } from './routes/_workspace/admin/users'
 import { Route as WorkspaceAdminRolesRouteImport } from './routes/_workspace/admin/roles'
@@ -155,6 +157,18 @@ const WorkspaceDocumentsDocIdRoute = WorkspaceDocumentsDocIdRouteImport.update({
   path: '/documents/$docId',
   getParentRoute: () => WorkspaceRoute,
 } as any)
+const WorkspaceChannelsStarredRoute =
+  WorkspaceChannelsStarredRouteImport.update({
+    id: '/channels/starred',
+    path: '/channels/starred',
+    getParentRoute: () => WorkspaceRoute,
+  } as any)
+const WorkspaceChannelsMentionsRoute =
+  WorkspaceChannelsMentionsRouteImport.update({
+    id: '/channels/mentions',
+    path: '/channels/mentions',
+    getParentRoute: () => WorkspaceRoute,
+  } as any)
 const WorkspaceChannelsChannelIdRoute =
   WorkspaceChannelsChannelIdRouteImport.update({
     id: '/channels/$channelId',
@@ -192,6 +206,8 @@ export interface FileRoutesByFullPath {
   '/admin/roles': typeof WorkspaceAdminRolesRoute
   '/admin/users': typeof WorkspaceAdminUsersRoute
   '/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
+  '/channels/mentions': typeof WorkspaceChannelsMentionsRoute
+  '/channels/starred': typeof WorkspaceChannelsStarredRoute
   '/documents/$docId': typeof WorkspaceDocumentsDocIdRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
   '/auth/google/done': typeof AuthGoogleDoneRoute
@@ -218,6 +234,8 @@ export interface FileRoutesByTo {
   '/admin/roles': typeof WorkspaceAdminRolesRoute
   '/admin/users': typeof WorkspaceAdminUsersRoute
   '/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
+  '/channels/mentions': typeof WorkspaceChannelsMentionsRoute
+  '/channels/starred': typeof WorkspaceChannelsStarredRoute
   '/documents/$docId': typeof WorkspaceDocumentsDocIdRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
   '/auth/google/done': typeof AuthGoogleDoneRoute
@@ -248,6 +266,8 @@ export interface FileRoutesById {
   '/_workspace/admin/roles': typeof WorkspaceAdminRolesRoute
   '/_workspace/admin/users': typeof WorkspaceAdminUsersRoute
   '/_workspace/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
+  '/_workspace/channels/mentions': typeof WorkspaceChannelsMentionsRoute
+  '/_workspace/channels/starred': typeof WorkspaceChannelsStarredRoute
   '/_workspace/documents/$docId': typeof WorkspaceDocumentsDocIdRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
   '/auth/google/done': typeof AuthGoogleDoneRoute
@@ -277,6 +297,8 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/users'
     | '/channels/$channelId'
+    | '/channels/mentions'
+    | '/channels/starred'
     | '/documents/$docId'
     | '/assets/request/new'
     | '/auth/google/done'
@@ -303,6 +325,8 @@ export interface FileRouteTypes {
     | '/admin/roles'
     | '/admin/users'
     | '/channels/$channelId'
+    | '/channels/mentions'
+    | '/channels/starred'
     | '/documents/$docId'
     | '/assets/request/new'
     | '/auth/google/done'
@@ -332,6 +356,8 @@ export interface FileRouteTypes {
     | '/_workspace/admin/roles'
     | '/_workspace/admin/users'
     | '/_workspace/channels/$channelId'
+    | '/_workspace/channels/mentions'
+    | '/_workspace/channels/starred'
     | '/_workspace/documents/$docId'
     | '/assets/request/new'
     | '/auth/google/done'
@@ -523,6 +549,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceDocumentsDocIdRouteImport
       parentRoute: typeof WorkspaceRoute
     }
+    '/_workspace/channels/starred': {
+      id: '/_workspace/channels/starred'
+      path: '/channels/starred'
+      fullPath: '/channels/starred'
+      preLoaderRoute: typeof WorkspaceChannelsStarredRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/_workspace/channels/mentions': {
+      id: '/_workspace/channels/mentions'
+      path: '/channels/mentions'
+      fullPath: '/channels/mentions'
+      preLoaderRoute: typeof WorkspaceChannelsMentionsRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
     '/_workspace/channels/$channelId': {
       id: '/_workspace/channels/$channelId'
       path: '/channels/$channelId'
@@ -587,6 +627,8 @@ interface WorkspaceRouteChildren {
   WorkspaceDriveRoute: typeof WorkspaceDriveRoute
   WorkspaceSettingsRoute: typeof WorkspaceSettingsRoute
   WorkspaceChannelsChannelIdRoute: typeof WorkspaceChannelsChannelIdRoute
+  WorkspaceChannelsMentionsRoute: typeof WorkspaceChannelsMentionsRoute
+  WorkspaceChannelsStarredRoute: typeof WorkspaceChannelsStarredRoute
   WorkspaceDocumentsDocIdRoute: typeof WorkspaceDocumentsDocIdRoute
   WorkspaceChannelsIndexRoute: typeof WorkspaceChannelsIndexRoute
   WorkspaceDocumentsIndexRoute: typeof WorkspaceDocumentsIndexRoute
@@ -600,6 +642,8 @@ const WorkspaceRouteChildren: WorkspaceRouteChildren = {
   WorkspaceDriveRoute: WorkspaceDriveRoute,
   WorkspaceSettingsRoute: WorkspaceSettingsRoute,
   WorkspaceChannelsChannelIdRoute: WorkspaceChannelsChannelIdRoute,
+  WorkspaceChannelsMentionsRoute: WorkspaceChannelsMentionsRoute,
+  WorkspaceChannelsStarredRoute: WorkspaceChannelsStarredRoute,
   WorkspaceDocumentsDocIdRoute: WorkspaceDocumentsDocIdRoute,
   WorkspaceChannelsIndexRoute: WorkspaceChannelsIndexRoute,
   WorkspaceDocumentsIndexRoute: WorkspaceDocumentsIndexRoute,

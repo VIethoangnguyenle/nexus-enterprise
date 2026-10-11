@@ -619,12 +619,24 @@ h1, h2, h3, h4 {
 .message-html ul { list-style: disc; }
 .message-html ol { list-style: decimal; }
 .message-html a { color: var(--color-accent); text-decoration: underline; }
+/* @others are accent text; a mention of the reader also washes (SelfMentionStyle names the reader). */
 .message-html [data-mention] {
   color: var(--color-accent);
   font-weight: 600;
-  background: var(--color-accent-wash);
-  padding: 0 4px;
-  border-radius: 4px;
+}
+
+/* A message opened from a link (push, Được nhắc tới, Đã gắn sao, Trang chủ): outlined 2.4s (useFocusMessage). */
+@keyframes focus-flash {
+  0%, 40% { box-shadow: 0 0 0 2px var(--color-accent); }
+  100% { box-shadow: 0 0 0 2px transparent; }
+}
+[data-flash] {
+  border-radius: var(--radius-surface, 12px);
+  animation: focus-flash var(--duration-realtime) var(--ease-out) both;
+}
+/* The outline is information and holds, then drops at the end; only the fade goes. */
+@media (prefers-reduced-motion: reduce) {
+  [data-flash] { animation-timing-function: steps(1, end); }
 }
 
 

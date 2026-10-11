@@ -1,18 +1,23 @@
 import { useEditor, EditorContent } from '@tiptap/react'
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { Paperclip, Smile, SendHorizontal, Check, Upload, Camera, Image as ImageIcon } from 'lucide-react'
+import { Paperclip, Plus, Smile, SendHorizontal, Check, Upload, Camera, Image as ImageIcon } from 'lucide-react'
 import { EmojiPicker } from './EmojiPicker'
 import { MentionDropdown } from './MentionDropdown'
 import { FormattingToolbar } from './FormattingToolbar'
 import { LinkDialog } from './LinkDialog'
 import { chatExtensions, mentionsOf } from './chat-extensions'
-import { Button, IconButton, Pressable } from '../primitives'
+import { Button, IconButton, Popover, Pressable } from '../primitives'
 import { useChannelMembers } from '../../hooks/useMessaging'
 import { useAuthStore } from '../../stores/auth.store'
 import { displayName, EMPTY_DIRECTORY, type PeopleDirectory } from '../../lib/people'
 import { usePhone } from '../../hooks/usePhone'
 import { AttachmentTray } from './AttachmentTray'
 import { type useAttachmentUploads } from '../../hooks/useAttachmentUploads'
+import { useDraftsStore } from '../../stores/drafts.store'
+import { ComposerCreate } from './ComposerCreate'
+import { CreateMenuItems, type CreateKind } from './CreateMenuItems'
+import { QuoteStrip } from './QuoteStrip'
+import { useQuoteWatch } from './use-quote-watch'
 
 /** A message opened for editing in the composer (phones): the bar, the text, "Lưu" in place of "Gửi". */
 export interface ComposerEdit {
@@ -46,6 +51,16 @@ interface ChatEditorProps {
   /** ↑ in an empty box: open the reader's last message for editing. */
   onEditLast?: () => void
   uploads?: ReturnType<typeof useAttachmentUploads>
+  /**
+   * The composer of a thread: what the "+" menu creates is posted as a reply to this root.
+   * Absent in the main composer.
+   */
+  parentMessageId?: string
+  /**
+   * Which draft this box shows: the typed text and the pending quote are kept per
+   * key for the session. Defaults to the conversation; a thread passes its own.
+   */
+  draftKey?: string
 }
 
 /** Whether the formatting bar is open is remembered per person, on this device. */
@@ -81,6 +96,8 @@ export function ChatEditor({
   edit,
   onEditLast,
   uploads: propUploads,
+  parentMessageId,
+  draftKey,
 }: ChatEditorProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -91,6 +108,9 @@ export function ChatEditor({
   const [showEmoji, setShowEmoji] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [showAttachSheet, setShowAttachSheet] = useState(false)
+  const [showCreateMenu, setShowCreateMenu] = useState(false)
+  const [createKind, setCreateKind] = useState<CreateKind | null>(null)
+  const createRef = useRef<HTMLButtonElement>(null)
   const [mentionQuery, setMentionQuery] = useState<string | null>(null)
   const [empty, setEmpty] = useState(true)
   const [barOpen, setBarOpen] = useState(() => readBar(userId))
@@ -104,12 +124,40 @@ export function ChatEditor({
   const editing = !!edit
   const editRef = useRef(edit)
   editRef.current = edit
+
+  // The draft (typed text and pending quote) of this composer is kept per conversation or thread.
+  const scope = draftKey ?? channelId
+  const scopeRef = useRef(scope)
+  const quote = useDraftsStore((d) => d.drafts[scope]?.quote)
+  const quoteRef = useRef(quote)
+  quoteRef.current = quote
+  useQuoteWatch(scope, channelId, quote)
+  const [announce, setAnnounce] = useState('')
+  const editorRef = useRef<ReturnType<typeof useEditor>>(null)
+  // The lists the Esc key closes before it takes the quote away.
+  const popoversOpen = useRef(false)
+  popoversOpen.current = showEmoji || showAttachMenu || showCreateMenu
+  const closePopovers = useRef(() => {})
+  closePopovers.current = () => {
+    setShowEmoji(false)
+    setShowAttachMenu(false)
+    setShowCreateMenu(false)
+  }
+  const clearQuote = useCallback(() => {
+    useDraftsStore.getState().setQuote(scopeRef.current, null)
+    setAnnounce('Đã bỏ trích dẫn')
+    editorRef.current?.commands.focus()
+  }, [])
+  const clearQuoteRef = useRef(clearQuote)
+  clearQuoteRef.current = clearQuote
+
   const onEditLastRef = useRef(onEditLast)
   onEditLastRef.current = onEditLast
   const openLinkRef = useRef<() => void>(() => {})
 
   const editor = useEditor({
     extensions: chatExtensions(placeholder),
+    content: useDraftsStore.getState().drafts[scope]?.html ?? '',
     editorProps: {
       attributes: {
         class: 'chat-editor-content',
@@ -167,12 +215,26 @@ export function ChatEditor({
           editRef.current.onCancel()
           return true
         }
+        // Esc takes away one thing at a time: open lists first, then the pending quote.
+        // With neither, it is left to the panel behind.
+        if (event.key === 'Escape' && !mentionOpen.current) {
+          if (popoversOpen.current) {
+            event.preventDefault()
+            closePopovers.current()
+            return true
+          }
+          if (quoteRef.current) {
+            event.preventDefault()
+            clearQuoteRef.current()
+            return true
+          }
+        }
         if (mod && !event.shiftKey && event.key.toLowerCase() === 'k') {
           event.preventDefault()
           openLinkRef.current()
           return true
         }
-        if (event.key === 'ArrowUp' && !mod && !event.shiftKey && onEditLastRef.current && !editRef.current && view.state.doc.textContent === '' && !view.state.doc.firstChild?.isAtom && view.state.doc.childCount === 1) {
+        if (event.key === 'ArrowUp' && !mod && !event.shiftKey && onEditLastRef.current && !editRef.current && !quoteRef.current && view.state.doc.textContent === '' && !view.state.doc.firstChild?.isAtom && view.state.doc.childCount === 1) {
           event.preventDefault()
           onEditLastRef.current()
           return true
@@ -190,7 +252,10 @@ export function ChatEditor({
       },
     },
     onUpdate: ({ editor: ed }) => {
-      if (!editRef.current) onTyping?.()
+      if (!editRef.current) {
+        onTyping?.()
+        useDraftsStore.getState().setHtml(scopeRef.current, ed.isEmpty ? '' : ed.getHTML())
+      }
       setEmpty(ed.isEmpty)
       const { from } = ed.state.selection
       const textBefore = ed.state.doc.textBetween(Math.max(0, from - 20), from, '\n', '\0')
@@ -206,6 +271,50 @@ export function ChatEditor({
 
   const mentionOpen = useRef(false)
   mentionOpen.current = mentionQuery !== null
+  editorRef.current = editor
+
+  // A box made with a draft in it (restored on return, or rebuilt for a new placeholder) is not empty.
+  useEffect(() => {
+    if (editor) setEmpty(editor.isEmpty)
+  }, [editor])
+
+  // Another conversation or thread: show its draft. (A rebuilt editor reads it when it is made.)
+  useEffect(() => {
+    if (!editor || scopeRef.current === scope) return
+    scopeRef.current = scope
+    if (editRef.current) return
+    editor.commands.setContent(useDraftsStore.getState().drafts[scope]?.html ?? '')
+    setEmpty(editor.isEmpty)
+  }, [editor, scope])
+
+  // The menus read this to leave "Trích dẫn" out while the box is an editor (phones).
+  useEffect(() => {
+    if (!editing) return
+    useDraftsStore.getState().setEditing(scope, true)
+    return () => useDraftsStore.getState().setEditing(scope, false)
+  }, [editing, scope])
+
+  // A quote just chosen (not one restored with the draft): the box takes focus, and it is announced.
+  const quotedId = quote?.id
+  const seenQuote = useRef(quotedId)
+  useEffect(() => {
+    if (seenQuote.current === quotedId) return
+    seenQuote.current = quotedId
+    if (!quote || editing) return
+    const own = !!userId && quote.sender_id === userId
+    const who = own ? 'bạn' : displayName(people ?? EMPTY_DIRECTORY, quote.sender_id, quote.sender_name)
+    setAnnounce(`Đang trích dẫn tin của ${who}. Esc để bỏ.`)
+    editor?.commands.focus('end')
+  }, [quotedId])
+  const quoteGone = !!quote?.deleted
+  useEffect(() => {
+    if (quoteGone) setAnnounce('Tin bạn đang trích dẫn đã bị xoá')
+  }, [quoteGone, quotedId])
+
+  const goToQuoted = useCallback(() => {
+    if (!quotedId) return
+    document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(quotedId)}"]`)?.scrollIntoView?.({ block: 'center' })
+  }, [quotedId])
 
   // Close attach menu on outside click
   useEffect(() => {
@@ -239,6 +348,7 @@ export function ChatEditor({
     }
   }, [editor, editKey])
 
+  const canAttach = !!uploads || !!onFileUpload
   const hasUploads = (uploads?.items.length ?? 0) > 0
   const uploadingCount = uploads?.items.filter((it) => it.status === 'uploading').length ?? 0
   const errorCount = uploads?.items.filter((it) => it.status === 'error').length ?? 0
@@ -285,6 +395,7 @@ export function ChatEditor({
         : onSend(content, mentions)
       await Promise.resolve(res)
       editor.commands.clearContent()
+      useDraftsStore.getState().setHtml(scopeRef.current, '')
       setEmpty(true)
       currentUploads?.clear()
     } catch {
@@ -364,11 +475,26 @@ export function ChatEditor({
           <Button type="button" variant="ghost" size="sm" className="ml-auto max-md:min-h-11" onClick={edit.onCancel}>Huỷ</Button>
         </div>
       )}
+      {editing && quote && (
+        <p className="mb-1.5 px-1 text-xs text-ink-muted">
+          Trích dẫn tin của {!!userId && quote.sender_id === userId ? 'bạn' : displayName(people ?? EMPTY_DIRECTORY, quote.sender_id, quote.sender_name)} sẽ quay lại sau khi sửa xong.
+        </p>
+      )}
+      <p className="sr-only" aria-live="polite" data-composer-live>{announce}</p>
       <div
         ref={boxRef}
         className={`grid gap-2 py-2.5 pr-2.5 pl-3.5 rounded-lg focus-within:field-focus
           ${tone === 'raised' ? 'bg-raised' : 'bg-base'}`}
       >
+        {quote && !editing && (
+          <QuoteStrip
+            quote={quote}
+            people={people ?? EMPTY_DIRECTORY}
+            me={userId}
+            onClear={clearQuote}
+            onGoTo={goToQuoted}
+          />
+        )}
         {barOpen && <FormattingToolbar editor={editor} id={barId} onLink={(anchor) => openLink(anchor)} />}
         {uploads && uploads.items.length > 0 && (
           <AttachmentTray items={uploads.items} onRemove={uploads.remove} onRetry={uploads.retry} />
@@ -377,7 +503,38 @@ export function ChatEditor({
           <EditorContent editor={editor} />
         </div>
         <div className="flex items-center gap-0.5">
-          {!editing && (uploads || onFileUpload) && (
+          {!editing && !phone && (
+            <>
+              <IconButton
+                ref={createRef}
+                type="button"
+                onClick={() => setShowCreateMenu((v) => !v)}
+                title="Bình chọn, công việc, tài liệu, phê duyệt"
+                aria-label="Tạo trong chat"
+                aria-haspopup="menu"
+                aria-expanded={showCreateMenu}
+              >
+                <Plus size={18} strokeWidth={1.75} />
+              </IconButton>
+              <Popover
+                open={showCreateMenu}
+                onClose={() => setShowCreateMenu(false)}
+                anchorRef={createRef}
+                role="menu"
+                label="Tạo trong chat"
+                placement="top-start"
+              >
+                <CreateMenuItems
+                  separator={false}
+                  onSelect={(k) => {
+                    setShowCreateMenu(false)
+                    setCreateKind(k)
+                  }}
+                />
+              </Popover>
+            </>
+          )}
+          {!editing && (canAttach || phone) && (
             <div className="relative">
               {/* eslint-disable-next-line no-restricted-syntax -- Ô chọn tệp luôn ẩn, chỉ mở hộp
                   thoại hệ thống qua ref.current.click(); không có mặt thị giác để primitive tạo hình. */}
@@ -389,7 +546,7 @@ export function ChatEditor({
                 onChange={handleFileSelect}
                 tabIndex={-1}
               />
-              {phone && (
+              {phone && canAttach && (
                 <>
                   {/* eslint-disable-next-line no-restricted-syntax */}
                   <input
@@ -422,12 +579,12 @@ export function ChatEditor({
                     setShowAttachMenu((v) => !v)
                   }
                 }}
-                title="Đính kèm"
-                aria-label="Đính kèm"
+                title={canAttach ? 'Đính kèm' : 'Tạo trong chat'}
+                aria-label={canAttach ? 'Đính kèm' : 'Tạo trong chat'}
                 aria-expanded={phone ? showAttachSheet : showAttachMenu}
                 className="max-md:w-11 max-md:h-11"
               >
-                <Paperclip size={18} strokeWidth={1.75} />
+                {canAttach ? <Paperclip size={18} strokeWidth={1.75} /> : <Plus size={18} strokeWidth={1.75} />}
               </IconButton>
 
               {showAttachMenu && !phone && (
@@ -512,7 +669,7 @@ export function ChatEditor({
             className="relative bg-overlay rounded-t-2xl p-4 pb-6 shadow-overlay z-10 flex flex-col gap-3"
           >
             <div className="w-9 h-1 rounded-full bg-line mx-auto mb-1" aria-hidden="true" />
-            <div className="grid grid-cols-3 gap-2">
+            {canAttach && <div className="grid grid-cols-3 gap-2">
               <Pressable
                 type="button"
                 onClick={() => {
@@ -546,9 +703,27 @@ export function ChatEditor({
                 <Upload size={22} strokeWidth={1.75} />
                 Tệp
               </Pressable>
+            </div>}
+            <div className="flex flex-col">
+              <CreateMenuItems
+                separator={canAttach}
+                onSelect={(k) => {
+                  setShowAttachSheet(false)
+                  setCreateKind(k)
+                }}
+              />
             </div>
           </div>
         </div>
+      )}
+
+      {createKind && (
+        <ComposerCreate
+          kind={createKind}
+          channelId={channelId}
+          parentMessageId={parentMessageId}
+          onClose={() => setCreateKind(null)}
+        />
       )}
 
       <LinkDialog

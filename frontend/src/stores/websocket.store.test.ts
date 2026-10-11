@@ -633,3 +633,91 @@ describe('viewing a conversation', () => {
     releaseSub()
   })
 })
+
+describe('shortcut, poll and unread-thread frames', () => {
+  const chat = (over: Partial<{ id: string; senderId: string; mentions: string[]; parentMessageId: string }> = {}) => ({
+    id: 'm1', channelId: 'c1', senderId: 'u-other', senderName: 'B', content: 'hi', messageType: 'user',
+    parentMessageId: '', replyCount: 0, contentFormat: '', mentions: [] as string[], linkedEntityType: '',
+    linkedEntityId: '', attachments: [], ...over,
+  })
+  const mentionKeys = () => [keys.shortcuts.mentions('ws-1'), keys.shortcuts.mentionsUnread('ws-1')]
+
+  beforeEach(() => {
+    useAuthStore.setState({ user: { id: 'me', username: 'me' } as never })
+    for (const k of mentionKeys()) seed(k)
+  })
+  afterEach(() => useAuthStore.setState({ user: null }))
+
+  it('a message that mentions me refreshes the mentions feed and its badge', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat({ mentions: ['me'] }) })
+    settle()
+    for (const k of mentionKeys()) expect(invalidated(k)).toBe(true)
+  })
+
+  it('a message that mentions someone else leaves the mentions feed alone', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat({ mentions: ['u-3'] }) })
+    settle()
+    for (const k of mentionKeys()) expect(invalidated(k)).toBe(false)
+  })
+
+  it('my own message that mentions me is not a new mention', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat({ senderId: 'me', mentions: ['me'] }) })
+    settle()
+    for (const k of mentionKeys()) expect(invalidated(k)).toBe(false)
+  })
+
+  it('a thread reply that mentions me refreshes the mentions feed too', () => {
+    deliver({
+      oneofKind: 'threadReply',
+      threadReply: { parentMessageId: 'root', replyCount: 1, replyParticipantIds: [], message: chat({ id: 'r', parentMessageId: 'root', mentions: ['me'] }) },
+    })
+    settle()
+    for (const k of mentionKeys()) expect(invalidated(k)).toBe(true)
+  })
+
+  it('a thread reply that mentions nobody does not', () => {
+    deliver({
+      oneofKind: 'threadReply',
+      threadReply: { parentMessageId: 'root', replyCount: 1, replyParticipantIds: [], message: chat({ id: 'r', parentMessageId: 'root' }) },
+    })
+    settle()
+    for (const k of mentionKeys()) expect(invalidated(k)).toBe(false)
+  })
+
+  it('a threadReply frame refreshes the unread threads of Trang chủ', () => {
+    seed(keys.notificationLevels.unreadThreads())
+    deliver({
+      oneofKind: 'threadReply',
+      threadReply: { parentMessageId: 'root', replyCount: 1, replyParticipantIds: [], message: chat({ id: 'r', parentMessageId: 'root' }) },
+    })
+    expect(invalidated(keys.notificationLevels.unreadThreads())).toBe(true)
+  })
+
+  it('a threadState frame refreshes the unread threads of Trang chủ', () => {
+    seed(keys.notificationLevels.unreadThreads())
+    deliver({ oneofKind: 'threadState', threadState: { rootMessageId: 'root', channelId: 'c1', following: true, unreadCount: 0 } })
+    expect(invalidated(keys.notificationLevels.unreadThreads())).toBe(true)
+  })
+
+  it('a plain chat message leaves the unread threads alone', () => {
+    seed(keys.notificationLevels.unreadThreads())
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat() })
+    expect(invalidated(keys.notificationLevels.unreadThreads())).toBe(false)
+  })
+
+  const pollVote = (pollId: string) => ({ pollId, channelId: 'c1', optionId: 'o', voteCount: 0, totalVotes: 0 })
+
+  it('a pollVote frame refetches that poll only', () => {
+    seed(keys.chatCards.poll('p1'))
+    seed(keys.chatCards.poll('p2'))
+    deliver({ oneofKind: 'pollVote', pollVote: pollVote('p1') })
+    expect(invalidated(keys.chatCards.poll('p1'))).toBe(true)
+    expect(invalidated(keys.chatCards.poll('p2'))).toBe(false)
+  })
+
+  it('a pollVote frame without a poll is ignored', () => {
+    seed(keys.chatCards.poll('p1'))
+    deliver({ oneofKind: 'pollVote', pollVote: pollVote('') })
+    expect(invalidated(keys.chatCards.poll('p1'))).toBe(false)
+  })
+})

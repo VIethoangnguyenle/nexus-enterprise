@@ -69,4 +69,13 @@ describe('TaskDialog', () => {
     await user.click(screen.getByRole('button', { name: 'Gửi công việc' }))
     await waitFor(() => expect(messagingApi.createTask).toHaveBeenCalledWith('ch', { title: 'Gọi ngân hàng' }))
   })
+
+  it('creates the task as a reply when it is made inside a thread', async () => {
+    const user = userEvent.setup()
+    vi.mocked(messagingApi.createTask).mockResolvedValue({} as never)
+    renderWithClient(<TaskDialog open onClose={vi.fn()} channelId="ch" parentMessageId="root-1" />)
+    await user.type(screen.getByLabelText('Việc cần làm'), 'Gọi ngân hàng')
+    await user.click(screen.getByRole('button', { name: 'Gửi công việc' }))
+    await waitFor(() => expect(messagingApi.createTask).toHaveBeenCalledWith('ch', { title: 'Gọi ngân hàng', parent_message_id: 'root-1' }))
+  })
 })

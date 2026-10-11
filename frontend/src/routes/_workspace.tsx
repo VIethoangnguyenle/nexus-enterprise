@@ -8,6 +8,7 @@ import { usePreferencesSync } from '../hooks/usePreferences'
 import { useWorkspaceRealtime } from '../hooks/useWorkspaceRealtime'
 import { useUnreadCounts } from '../hooks/useMessaging'
 import { isConversationPath, validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
+import { unreadByLevel } from '../lib/conversations'
 import { useResizable } from '../hooks/useResizable'
 import { AppSidebar } from '../components/patterns/AppSidebar'
 import { ListPanel } from '../components/patterns/ListPanel'
@@ -35,7 +36,8 @@ function WorkspaceLayout() {
   usePreferencesSync()
   useWorkspaceRealtime(wsId, !!token)
   const { data: unreadData } = useUnreadCounts()
-  const unreadMessages = (unreadData?.channels ?? []).reduce((n, c) => n + c.unread_count, 0)
+  // By notification level: a muted conversation adds only the times someone named the reader.
+  const unreadMessages = unreadByLevel(unreadData?.channels)
 
   const listPanelWidth = useUiStore((s) => s.listPanelWidth)
   const setListPanelWidth = useUiStore((s) => s.setListPanelWidth)

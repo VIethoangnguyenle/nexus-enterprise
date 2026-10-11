@@ -65,7 +65,7 @@ describe('useMessageActions: editing', () => {
     act(() => result.current.startEdit(mine()))
     act(() => result.current.saveEdit('<p>mới</p>'))
     expect(result.current.editing).toBeNull()
-    await waitFor(() => expect(api.editMessage).toHaveBeenCalledWith('m1', { content: '<p>mới</p>', content_format: 'html' }))
+    await waitFor(() => expect(api.editMessage).toHaveBeenCalledWith('m1', { content: '<p>mới</p>', content_format: 'html', mentions: [] }))
   })
 
   it('closes without a request when nothing changed', () => {
@@ -155,5 +155,25 @@ describe('useMessageActions: mark unread', () => {
     const { result } = setup()
     act(() => result.current.markUnread(mine({ sender_id: 'lan' })))
     await waitFor(() => expect(toast.error).toHaveBeenCalled())
+  })
+})
+
+describe('useMessageActions: marking unread', () => {
+  it('tells the caller which message was marked unread once the server has accepted it', async () => {
+    api.markMessageUnread.mockResolvedValue({ status: 'ok' })
+    const onMarkedUnread = vi.fn()
+    const { result } = renderHook(() => useMessageActions('c1', 'me', { onMarkedUnread }), { wrapper })
+    act(() => result.current.markUnread(mine({ id: 'm9', sender_id: 'lan' })))
+    await waitFor(() => expect(onMarkedUnread).toHaveBeenCalledWith(expect.objectContaining({ id: 'm9' })))
+  })
+
+  it('says nothing when the server refuses', async () => {
+    api.markMessageUnread.mockRejectedValue(new Error('403'))
+    const onMarkedUnread = vi.fn()
+    const { result } = renderHook(() => useMessageActions('c1', 'me', { onMarkedUnread }), { wrapper })
+    act(() => result.current.markUnread(mine({ id: 'm9', sender_id: 'lan' })))
+    await waitFor(() => expect(api.markMessageUnread).toHaveBeenCalled())
+    await waitFor(() => expect(toast.error).toHaveBeenCalled())
+    expect(onMarkedUnread).not.toHaveBeenCalled()
   })
 })
