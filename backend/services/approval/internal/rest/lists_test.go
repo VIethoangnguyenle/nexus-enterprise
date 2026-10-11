@@ -32,6 +32,11 @@ type listStore struct {
 	limit       int
 }
 
+// WorkspaceType: every tenant these tests use is an organization.
+func (s *listStore) WorkspaceType(context.Context, string) (string, error) {
+	return "organization", nil
+}
+
 func (s *listStore) ListPending(_ context.Context, user string, groups []string) ([]*domain.RequestWithAssignment, error) {
 	s.pendingUser, s.groups = user, groups
 	return s.pending, s.err

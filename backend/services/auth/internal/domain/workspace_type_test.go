@@ -23,6 +23,33 @@ func TestWorkspaceType_FirstGoogleSignInWithoutACompanyIsPersonal(t *testing.T) 
 	}
 }
 
+// The personal workspace made at sign-up carries the person's name, nothing
+// added: a person may have several personal workspaces, and this one is theirs.
+func TestPersonalWorkspace_IsNamedAfterThePerson(t *testing.T) {
+	w := newFakeWorld()
+	res, err := w.service(t).SignInWithGoogle(context.Background(), googleIdentity("sub-1", "alice@gmail.com", ""))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := w.workspaceName(res.DefaultTenantID); got != "Alice Example" {
+		t.Errorf("name = %q, want the person's display name", got)
+	}
+
+	svc, ow, _ := otpService(t, nil)
+	sid, err := svc.RequestOTP(context.Background(), "lan@example.org", "email")
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := svc.VerifyOTP(context.Background(), sid, "999999")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tenants, _ := ow.ListTenantsByUser(context.Background(), r.UserID)
+	if len(tenants) != 1 || ow.workspaceName(tenants[0].TenantID) != r.Username {
+		t.Errorf("OTP workspace = %+v, want it named like the account until the person names themselves", tenants)
+	}
+}
+
 func TestWorkspaceType_CompanyAccountsGetAPersonalWorkspaceToo(t *testing.T) {
 	w := newFakeWorld()
 	acme := w.addTenant("Acme", "acme.com")

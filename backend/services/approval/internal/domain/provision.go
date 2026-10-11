@@ -15,6 +15,10 @@ type TenantProvisioner interface {
 // by calling the provision_tenant_schema() SQL function.
 // Returns the created schema name.
 func (s *Service) ProvisionTenantSchema(ctx context.Context, tenantID string) (string, error) {
+	// A personal workspace has no approvals, so it gets no approval schema.
+	if err := s.RequireOrganization(ctx, tenantID); err != nil {
+		return "", err
+	}
 	if tenantID == "" {
 		return "", ErrInvalidInput
 	}

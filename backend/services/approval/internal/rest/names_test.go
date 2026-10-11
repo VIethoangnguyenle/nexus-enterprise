@@ -61,6 +61,11 @@ type fakeStore struct {
 	mine        []*domain.Request
 }
 
+// WorkspaceType: every tenant these tests use is an organization.
+func (f *fakeStore) WorkspaceType(context.Context, string) (string, error) {
+	return "organization", nil
+}
+
 func (f *fakeStore) GetRequest(_ context.Context, id string) (*domain.Request, error) {
 	if f.req == nil || f.req.ID != id {
 		return nil, domain.ErrNotFound

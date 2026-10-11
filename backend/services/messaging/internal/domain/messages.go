@@ -46,6 +46,9 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 		msgType = "user"
 	}
 
+	if err := s.requireApprovalsAvailable(ctx, ch, in.LinkedEntityType); err != nil {
+		return nil, err
+	}
 	if msgType == "user" {
 		if err := s.checkAccess(ctx, in.SenderNodeID, ch.NGACOaID, ngac.OpWrite); err != nil {
 			return nil, err

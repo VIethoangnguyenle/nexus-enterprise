@@ -230,7 +230,12 @@ func (s *Service) signinResultFor(ctx context.Context, user *store.User, preferr
 	return result, nil
 }
 
-// personalWorkspaceName names the workspace created for a user with no company.
+// personalWorkspaceName names the personal workspace made at sign-up: the
+// person's name, nothing added. It follows their name while nobody renames it
+// (see store.UpdateProfile).
 func personalWorkspaceName(displayName string) string {
-	return fmt.Sprintf("%s's Workspace", displayName)
+	if name := strings.TrimSpace(displayName); name != "" {
+		return name
+	}
+	return "Workspace cá nhân"
 }

@@ -22,6 +22,11 @@ type pendingStore struct {
 	scopeLookup [][]string // scope sets passed to ListByScopes
 }
 
+// WorkspaceType: every tenant these tests use is an organization.
+func (p *pendingStore) WorkspaceType(context.Context, string) (string, error) {
+	return "organization", nil
+}
+
 func (p *pendingStore) ListByScopes(_ context.Context, scopes []string, _ string, _ int) ([]*domain.Request, string, error) {
 	p.scopeLookup = append(p.scopeLookup, scopes)
 	return []*domain.Request{{ID: "visible", ScopeOAID: scopes[0]}}, "", nil

@@ -34,6 +34,9 @@ func (s *AssetTypeService) CreateType(ctx context.Context, req *pb.CreateTypeReq
 	if req.Name == "" || req.WorkspaceId == "" || req.Category == "" {
 		return nil, invalid("name, workspace_id, and category are required")
 	}
+	if err := requireOrganization(ctx, s.store, req.WorkspaceId); err != nil {
+		return nil, err
+	}
 
 	// Defining asset types administers the workspace's asset tree. Checked
 	// before anything below writes to the graph.
@@ -129,6 +132,9 @@ func (s *AssetTypeService) GetType(ctx context.Context, req *pb.GetTypeRequest) 
 	if err != nil {
 		return nil, errDenied(ngac.OpRead)
 	}
+	if err := requireOrganization(ctx, s.store, at.WorkspaceID); err != nil {
+		return nil, err
+	}
 	held, err := heldOnTypes(ctx, s.policyRead, userNodeID, []*store.AssetType{at}, typeOps)
 	if err != nil || len(held[at.ID]) == 0 {
 		return nil, errDenied(ngac.OpRead)
@@ -164,6 +170,9 @@ var typeOps = []string{ngac.OpRead, ngac.OpWrite, ngac.OpApprove, ngac.OpManage}
 //
 // CanManage says whether the caller may define types and edit their fields.
 func (s *AssetTypeService) ListTypes(ctx context.Context, req *pb.ListTypesRequest) (*pb.AssetTypeList, error) {
+	if err := requireOrganization(ctx, s.store, req.WorkspaceId); err != nil {
+		return nil, err
+	}
 	userNodeID := grpcauth.CallerFrom(ctx).NGACNodeID
 	if userNodeID == "" {
 		return nil, errDenied(ngac.OpRead)
@@ -194,6 +203,9 @@ func (s *AssetTypeService) UpdateTypeSchema(ctx context.Context, req *pb.UpdateT
 	at, err := s.store.GetType(ctx, req.TypeId)
 	if err != nil {
 		return nil, lookupErr(err, "type")
+	}
+	if err := requireOrganization(ctx, s.store, at.WorkspaceID); err != nil {
+		return nil, err
 	}
 	if err := authorizeOnNamedOA(ctx, s.policyRead, grpcauth.CallerFrom(ctx).NGACNodeID, ngac.AssetsOAName(ngac.WorkspaceID(at.WorkspaceID)), ngac.OpManage); err != nil {
 		return nil, err

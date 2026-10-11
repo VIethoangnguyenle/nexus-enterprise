@@ -37,6 +37,11 @@ func newMemStore() *memStore {
 	return &memStore{requests: map[string]*domain.Request{}}
 }
 
+// WorkspaceType: every tenant these tests use is an organization.
+func (m *memStore) WorkspaceType(context.Context, string) (string, error) {
+	return "organization", nil
+}
+
 // InTx runs fn; this fake has no rollback to demonstrate.
 func (m *memStore) InTx(ctx context.Context, fn func(ctx context.Context) error) error {
 	return fn(ctx)

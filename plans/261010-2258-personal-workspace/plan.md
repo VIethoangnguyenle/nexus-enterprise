@@ -38,14 +38,17 @@ Chat** (người dùng: Chat quan trọng nhất).
 5. (2026-10-11, câu hỏi thiết kế) Chỉ Chủ sở hữu được chuyển sang tổ chức; hộp xác nhận chỉ đổi loại (không ô
    đổi tên) và nói rõ tài sản/yêu cầu phê duyệt đã ẩn sẽ hiện lại; nhãn dưới tên là "Workspace cá nhân".
    Màn "Tạo workspace" cần thêm lựa chọn loại — cần bổ sung vào mockup trước phase 04.
+6. (2026-10-11) Mockup `personal-workspace.html` §6/§8/§9 **đã duyệt**; "Tạo workspace" mặc định chọn **Cá nhân**.
+   Workspace tổ chức tạo mới luôn **độc lập** (không gắn tên miền, vào bằng lời mời). Workspace cá nhân tự tạo lúc
+   đăng ký **mang tên người dùng** (tên hiển thị), không còn "<tên>'s Workspace" / "Không gian của bạn".
 
 ## Phases
 
 | # | Phase | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
-| 01 | [Thiết kế](phase-01-design.md) | P2 | 0.5d | — | pending |
+| 01 | [Thiết kế](phase-01-design.md) | P2 | 0.5d | — | completed (mockup duyệt 2026-10-11) |
 | 02 | [Loại workspace đáng tin](phase-02-workspace-type.md) | P1 | 1d | 01 | completed |
-| 03 | [Chặn ở server](phase-03-server-enforcement.md) | P1 | 1.5d | 02 | pending |
+| 03 | [Chặn ở server](phase-03-server-enforcement.md) | P1 | 1.5d | 02 | completed |
 | 04 | [Ẩn ở frontend](phase-04-frontend.md) | P2 | 1d | 02 | pending |
 | 05 | [Chuyển sang tổ chức](phase-05-convert-to-organization.md) | P2 | 1-1.5d | 03, 04 | pending |
 | 06 | [Kiểm chứng](phase-06-verification.md) | P2 | 0.5d | 05 | pending |

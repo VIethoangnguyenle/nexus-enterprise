@@ -14,7 +14,13 @@ import (
 
 // readableTypes returns the IDs of the workspace's asset types the caller may
 // read, failing closed when the policy service cannot answer.
+//
+// It is the one door of GetSummary and ListActivity, so it also refuses a
+// workspace that is not an organization.
 func (s *AssetService) readableTypes(ctx context.Context, workspaceID string) ([]string, error) {
+	if err := requireOrganization(ctx, s.store, workspaceID); err != nil {
+		return nil, err
+	}
 	types, err := s.store.ListTypes(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("list asset types: %w", err)

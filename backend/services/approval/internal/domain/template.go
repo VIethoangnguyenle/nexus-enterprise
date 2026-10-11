@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 )
 
 // FormFieldInput defines a form field for template creation/update.
@@ -89,6 +90,11 @@ func (s *Service) authorizeTemplates(ctx context.Context, callerNodeID, tenantID
 // CanManageTemplates reports whether the caller may create and edit templates.
 // A denial is an answer (false), not an error.
 func (s *Service) CanManageTemplates(ctx context.Context, callerNodeID, tenantID string) (bool, error) {
+	// Unlike a denial by the policy, which is an answer (false), a personal
+	// workspace is a refusal: there is nothing to manage.
+	if err := s.RequireOrganization(ctx, tenantID); err != nil {
+		return false, err
+	}
 	err := s.authorizeTemplates(ctx, callerNodeID, tenantID)
 	if errors.Is(err, ErrAccessDenied) {
 		return false, nil
@@ -165,9 +171,25 @@ func buildFormFields(in []FormFieldInput) []*FormField {
 	return out
 }
 
+// requireTemplateOrganization is the check for a call that names its tenant: the
+// workspace the schema belongs to, and the one the input says it manages, must
+// both be organizations.
+func (s *Service) requireTemplateOrganization(ctx context.Context, tenantID string) error {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return err
+	}
+	if tenantID != grpcauth.CallerFrom(ctx).TenantID {
+		return s.RequireOrganization(ctx, tenantID)
+	}
+	return nil
+}
+
 // CreateTemplate validates and persists a new approval template. The caller
 // must hold manage on the tenant.
 func (s *Service) CreateTemplate(ctx context.Context, creatorNodeID string, in CreateTemplateInput) (*Template, error) {
+	if err := s.requireTemplateOrganization(ctx, in.TenantID); err != nil {
+		return nil, err
+	}
 	if err := s.authorizeTemplates(ctx, creatorNodeID, in.TenantID); err != nil {
 		return nil, err
 	}
@@ -207,6 +229,9 @@ func (s *Service) CreateTemplate(ctx context.Context, creatorNodeID string, in C
 
 // GetTemplate retrieves a template by ID.
 func (s *Service) GetTemplate(ctx context.Context, id string) (*Template, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, err
+	}
 	if id == "" {
 		return nil, ErrInvalidInput
 	}
@@ -219,6 +244,9 @@ func (s *Service) GetTemplate(ctx context.Context, id string) (*Template, error)
 
 // ListTemplates returns templates filtered by entity type and active status.
 func (s *Service) ListTemplates(ctx context.Context, entityType string, activeOnly bool) ([]*Template, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, err
+	}
 	templates, err := s.store.ListTemplates(ctx, entityType, activeOnly)
 	if err != nil {
 		return nil, fmt.Errorf("list templates: %w", err)
@@ -247,6 +275,9 @@ type UpdateTemplateInput struct {
 
 // UpdateTemplate updates a template. The caller must hold manage on the tenant.
 func (s *Service) UpdateTemplate(ctx context.Context, callerNodeID, id string, in UpdateTemplateInput) (*Template, error) {
+	if err := s.requireTemplateOrganization(ctx, in.TenantID); err != nil {
+		return nil, err
+	}
 	if err := s.authorizeTemplates(ctx, callerNodeID, in.TenantID); err != nil {
 		return nil, err
 	}

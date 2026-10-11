@@ -24,6 +24,11 @@ type tmplStore struct {
 	updated int
 }
 
+// WorkspaceType: every tenant these tests use is an organization.
+func (s *tmplStore) WorkspaceType(context.Context, string) (string, error) {
+	return "organization", nil
+}
+
 func (s *tmplStore) FindNodeID(_ context.Context, name, nodeType string) (string, error) {
 	if nodeType == ngac.TypeOA && name == ngac.MgmtOAName("tenant-a") {
 		return "mgmt-oa", nil

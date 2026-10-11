@@ -20,18 +20,36 @@ type ProfileChanges struct {
 // completed the first time anything is saved. It returns ErrNoSuchUser when
 // the account does not exist.
 func (s *Store) UpdateProfile(ctx context.Context, userID string, ch ProfileChanges) error {
-	tag, err := s.db.Exec(ctx,
-		`UPDATE users SET
-		     display_name = COALESCE($2, display_name),
-		     title        = COALESCE($3, title),
-		     location     = COALESCE($4, location),
-		     profile_completed_at = COALESCE(profile_completed_at, NOW())
-		 WHERE id = $1`,
-		userID, ch.DisplayName, ch.Title, ch.Location)
+	// The personal workspaces this person owns that still carry their previous
+	// name follow the new one, in the same statement: the one made at sign-up
+	// is named after them (first after the handle sign-up gave them). One they
+	// renamed, or an organization, keeps its name.
+	var updated bool
+	err := s.db.QueryRow(ctx,
+		`WITH old AS (
+		     -- The statement's snapshot: the name before this update. (No FOR UPDATE:
+		     -- it would skip the row the UPDATE below changes in the same statement.)
+		     SELECT display_name FROM users WHERE id = $1
+		 ), upd AS (
+		     UPDATE users SET
+		         display_name = COALESCE($2, display_name),
+		         title        = COALESCE($3, title),
+		         location     = COALESCE($4, location),
+		         profile_completed_at = COALESCE(profile_completed_at, NOW())
+		     WHERE id = $1
+		     RETURNING id
+		 ), ws AS (
+		     UPDATE workspaces w SET name = $2
+		       FROM old
+		      WHERE $2::text IS NOT NULL AND w.owner_id = $1 AND w.type = 'personal'
+		        AND w.name = old.display_name AND old.display_name IS DISTINCT FROM $2
+		 )
+		 SELECT EXISTS (SELECT 1 FROM upd)`,
+		userID, ch.DisplayName, ch.Title, ch.Location).Scan(&updated)
 	if err != nil {
 		return fmt.Errorf("update profile: %w", err)
 	}
-	if tag.RowsAffected() == 0 {
+	if !updated {
 		return ErrNoSuchUser
 	}
 	return nil

@@ -100,6 +100,11 @@ func (h *Handler) tenantSchemaMiddleware() echo.MiddlewareFunc {
 			claims := httputil.GetClaims(c)
 			schema, err := h.resolver.Resolve(c.Request().Context(), claims.TenantID)
 			if err != nil {
+				// A personal workspace has no approval schema, and that is not a
+				// missing setup: it is refused as every other approval call is.
+				if gerr := h.svc.RequireOrganization(c.Request().Context(), claims.TenantID); gerr != nil {
+					return mapDomainError(gerr)
+				}
 				return echo.NewHTTPError(http.StatusNotFound, "tenant schema not provisioned")
 			}
 			ctx := httputil.WithTenantSchema(c.Request().Context(), schema)

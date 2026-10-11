@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Thiết kế"
-status: pending
+status: completed
 priority: P2
 effort: "0.5d"
 dependencies: []

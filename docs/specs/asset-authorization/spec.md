@@ -171,3 +171,24 @@ A type with no custom fields SHALL accept no custom values; a required field SHA
 #### Scenario: Person of another tenant
 - **WHEN** a custom field names a user who belongs only to another workspace
 - **THEN** the write is refused (InvalidArgument, reason `not_a_member`)
+
+### Requirement: A personal workspace has no assets
+Every asset operation SHALL be refused in a workspace whose type is `personal` (`workspaces.type`, see `tenant-identity`): all 22 REST routes of the asset service and every method of the asset, asset-type and asset-request gRPC services — creating, reading, listing, updating, deleting, moving an asset through its lifecycle, handing over, returning, summary and activity, types and their schemas, and requests with their decisions. The refusal is PermissionDenied (REST 403) with reason `personal_workspace` and the message "not available in a personal workspace"; it names no identifier. The workspace is the request's (`workspace_id`), or that of the asset, type or request the call names. The check is made first, before the policy is asked, and changes nothing: data already there is kept and shows again if the workspace becomes an organization. The type is a business attribute of the workspace, not a node: the graph is unchanged.
+
+The check fails closed. A workspace that does not exist, or whose type is not exactly `organization`, is refused (PermissionDenied, without the reason); a failure to read the type is an internal error and never an allow. An organization workspace behaves exactly as without this requirement.
+
+#### Scenario: Everything is refused in a personal workspace
+- **WHEN** a caller who holds every operation on every OA calls any asset, type or request method, or route, in a personal workspace
+- **THEN** it fails with PermissionDenied (403), reason `personal_workspace`, and the policy service was not asked
+
+#### Scenario: Organization unchanged
+- **WHEN** the same calls are made in an organization workspace
+- **THEN** they are decided by the policy exactly as before
+
+#### Scenario: Asset named by ID
+- **WHEN** a caller reads, changes or deletes an asset, or decides a request, by ID, and its workspace is personal
+- **THEN** it is refused for the workspace type before any permission is judged
+
+#### Scenario: Type cannot be read
+- **WHEN** the database cannot answer which type the workspace is
+- **THEN** the call fails with a generic internal error; nothing is allowed

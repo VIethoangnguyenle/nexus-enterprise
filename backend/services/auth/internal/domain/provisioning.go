@@ -31,7 +31,7 @@ func (s *Service) autoProvisionWorkspace(ctx context.Context, userID, username, 
 		return
 	}
 
-	wsName := fmt.Sprintf("%s's Workspace", username)
+	wsName := personalWorkspaceName(username)
 	ws, err := s.wsClient.CreateWorkspace(actingAs(ctx, userID, ngacNodeID), &workspacepb.CreateWorkspaceRequest{
 		Name: wsName, Type: WorkspacePersonal,
 	})

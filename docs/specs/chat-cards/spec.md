@@ -41,4 +41,6 @@ done. Changing the title or due date SHALL require `write`.
 ### Requirement: Document and approval cards
 A message MAY link a document or an approval request (`linked_entity_type` `document` / `approval`). Its card's details
 are fetched from the owning service under the viewer's own authorization, so a viewer without access to the object sees
-no details. Approval cards are not offered in a personal workspace.
+no details. Approval cards are not offered in a personal workspace, and the server refuses one there: sending a
+message with `linked_entity_type` `approval` in a personal workspace fails with 403 and stores nothing (a direct message is
+judged by the workspace the sender is signed in to; an unknown workspace is refused). See `tenant-identity`.

@@ -51,7 +51,10 @@ Every workspace SHALL have a type, `personal` or `organization` (`workspaces.typ
 CHECK-constrained, no default — an insert that does not state it fails), set by how it came to be:
 
 - every new account gets a `personal` workspace of its own when it is created (OTP or Google, a
-  company account with a Google Workspace domain included); signing in never creates an organization;
+  company account with a Google Workspace domain included); signing in never creates an organization.
+  That workspace is named after the person (their display name, nothing added) and follows their name
+  when they change it — first of all at the profile step, from the handle sign-up gave them — for as
+  long as it still carries their previous name; a workspace someone renamed keeps its name;
 - a workspace created on purpose ("Tạo workspace", `POST /api/me/workspaces` with `type`) has the type
   the person chose, `personal` or `organization`; a person may have several of either. A request with
   no `type` (a client older than the choice) creates an `organization`; any other value is refused (400)
@@ -79,3 +82,26 @@ a workspace named "<someone>'s Workspace" with exactly one active member and no 
 #### Scenario: A type nobody stated is refused
 - **WHEN** `CreateWorkspace` is called with no type, or with any value other than the two
 - **THEN** it fails with `InvalidArgument` and nothing is created
+
+### Requirement: A personal workspace has no assets and no approvals
+The workspace type SHALL be enforced by the services that own the features, not only hidden by the screens. In a
+`personal` workspace the asset service and the approval service refuse every operation (PermissionDenied, REST 403;
+see `asset-authorization` and `approval-screens`), and the messaging service refuses a message that links an
+approval request (`linked_entity_type` `approval`; a direct message is judged by the workspace the sender is signed in
+to). Each reads `workspaces.type` itself, before it asks the policy, and fails closed: an unknown workspace or a
+type that is not `organization` is a refusal, and a failure to read it is an internal error. Nothing is deleted:
+what a personal workspace already holds is kept, hidden, and is usable again if it becomes an organization. The type is
+not a node of the policy graph and no decision of the policy service depends on it. The document service has no
+approval operation of its own (a text's `draft`/`active`/`archived` status is not an approval), so it has nothing to refuse.
+
+#### Scenario: Assets and approvals refuse in a personal workspace
+- **WHEN** any asset or approval operation is called in a personal workspace, by anyone, whatever they hold in the graph
+- **THEN** it fails with PermissionDenied / 403 and changes nothing
+
+#### Scenario: An approval card in a personal workspace
+- **WHEN** a message linking an approval request is sent in a personal workspace
+- **THEN** it is refused (403) and not stored; other messages and cards are sent as usual
+
+#### Scenario: Organization unaffected
+- **WHEN** the same operations are called in an organization workspace
+- **THEN** they are decided by the policy as before

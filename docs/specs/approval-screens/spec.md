@@ -173,3 +173,24 @@ Approving, rejecting and creating a request SHALL each be one change that includ
 #### Scenario: Two approvals at once
 - **WHEN** two people approve a step that needs two approvals at the same moment
 - **THEN** the step completes; it is not left waiting for a third
+
+### Requirement: A personal workspace has no approvals
+Every approval operation SHALL be refused in a workspace whose type is `personal` (`workspaces.type`, see `tenant-identity`): all 16 REST routes of the approval service (templates, permissions, creating a request, approve, reject, batch approve, the four lists, a request and its audit trail, and tenant provisioning) and every gRPC method of `ApprovalService`. The refusal is PermissionDenied (REST 403, "not available in a personal workspace") and names no identifier. The workspace is the one the caller is signed in to (the tenant of the token, which also names the schema read); a template write that names another tenant needs that tenant to be an organization too. The check is made first — before the schema is read, so a personal workspace with no approval schema answers 403 and not 404, before validation, and before the policy is asked. Batch approval refuses the whole call; it does not report an empty list of approved requests. Approvals already stored in a personal workspace are kept, hidden, and usable again if the workspace becomes an organization. The type is a business attribute of the workspace, not a node: the graph is unchanged.
+
+The check fails closed. A workspace that does not exist, or whose type is not exactly `organization`, is refused; a failure to read the type is an internal error and never an allow. An organization workspace behaves exactly as without this requirement, including the 404 for one that has no schema yet. Hiding the screens is the frontend's part (a later change); the refusal here does not depend on it.
+
+#### Scenario: A personal workspace without a schema
+- **WHEN** a member of a personal workspace that has no approval schema calls any approval route
+- **THEN** the answer is 403, not "tenant schema not provisioned"
+
+#### Scenario: A personal workspace with a schema
+- **WHEN** a member of a personal workspace that has a schema calls any approval route, or gRPC method
+- **THEN** the answer is 403 / PermissionDenied and nothing is read or written
+
+#### Scenario: Batch approval
+- **WHEN** a member of a personal workspace batch-approves several requests
+- **THEN** the call fails with 403; it does not succeed with zero approved
+
+#### Scenario: Organization unchanged
+- **WHEN** the same calls are made in an organization workspace
+- **THEN** they behave as before

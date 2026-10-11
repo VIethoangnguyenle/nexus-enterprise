@@ -212,6 +212,16 @@ func (w *fakeWorld) workspaceType(id string) string {
 	return ""
 }
 
+// workspaceName is the name the workspace was created with.
+func (w *fakeWorld) workspaceName(id string) string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if ws, ok := w.workspaces[id]; ok {
+		return ws.Name
+	}
+	return ""
+}
+
 func (w *fakeWorld) FindTenantByDomain(_ context.Context, d string) (*store.Tenant, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()

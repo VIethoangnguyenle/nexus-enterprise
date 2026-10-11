@@ -189,6 +189,39 @@ func TestWorkspaceType_IsReadWithTheMembership(t *testing.T) {
 	assert.Equal(t, "personal", list[0].Type)
 }
 
+// The personal workspace made at sign-up carries the person's name, so when
+// they change it (first of all at the profile step, from the handle sign-up
+// gave them) the workspace follows — unless someone has renamed it since.
+func TestUpdateProfile_ThePersonalWorkspaceFollowsTheName(t *testing.T) {
+	f := newProfileFixture(t)
+	me := f.user(t, "named", "")
+	mk := func(tag, name, typ string) string {
+		id := fmt.Sprintf("pfw-%s-%d", tag, f.n)
+		_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $2, $3, $4)`, id, name, me, typ)
+		require.NoError(t, err)
+		t.Cleanup(func() { f.pool.Exec(context.Background(), `DELETE FROM workspaces WHERE id = $1`, id) })
+		return id
+	}
+	own := mk("own", "Initial Name", "personal")
+	renamed := mk("renamed", "Sổ tay", "personal")
+	org := mk("org", "Initial Name", "organization")
+	name := func(id string) string {
+		var n string
+		require.NoError(t, f.pool.QueryRow(f.ctx, `SELECT name FROM workspaces WHERE id = $1`, id).Scan(&n))
+		return n
+	}
+
+	require.NoError(t, f.st.UpdateProfile(f.ctx, me, store.ProfileChanges{DisplayName: str("Lê Thị Lan")}))
+	assert.Equal(t, "Lê Thị Lan", name(own))
+	assert.Equal(t, "Sổ tay", name(renamed), "a name someone chose is kept")
+	assert.Equal(t, "Initial Name", name(org), "an organization is never renamed after a person")
+
+	require.NoError(t, f.st.UpdateProfile(f.ctx, me, store.ProfileChanges{Title: str("Kế toán")}))
+	assert.Equal(t, "Lê Thị Lan", name(own), "no name sent, nothing renamed")
+	require.NoError(t, f.st.UpdateProfile(f.ctx, me, store.ProfileChanges{DisplayName: str("Lan Lê")}))
+	assert.Equal(t, "Lan Lê", name(own))
+}
+
 func TestGetUserByID_CarriesTheProfile(t *testing.T) {
 	f := newProfileFixture(t)
 	id := f.user(t, "prof", "")

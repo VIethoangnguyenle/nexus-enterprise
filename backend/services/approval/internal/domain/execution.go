@@ -57,6 +57,9 @@ type BatchApproveInput struct {
 // form (see fieldsFor), never on figures the client states separately: a form
 // that says 500 million cannot be routed through the "under 10 million" chain.
 func (s *Service) CreateApprovalRequest(ctx context.Context, in CreateRequestInput) (*Request, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, err
+	}
 	if (in.EntityType == "" && in.TemplateID == "") || in.CreatedBy == "" {
 		return nil, fmt.Errorf("entity_type or template_id, created_by: %w", ErrInvalidInput)
 	}
@@ -219,6 +222,15 @@ func (s *Service) decide(ctx context.Context, row *AssignmentRecord, group bool,
 
 // Approve processes a single approval action.
 func (s *Service) Approve(ctx context.Context, in ApproveInput) error {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return err
+	}
+	return s.approve(ctx, in)
+}
+
+// approve is Approve once the workspace has been checked, so BatchApprove
+// checks it once, not once per request.
+func (s *Service) approve(ctx context.Context, in ApproveInput) error {
 	if in.RequestID == "" || in.UserNodeID == "" {
 		return ErrInvalidInput
 	}
@@ -270,6 +282,9 @@ func (s *Service) lockPending(ctx context.Context, requestID string) (*Request, 
 
 // Reject processes a rejection — immediately terminates the request.
 func (s *Service) Reject(ctx context.Context, in RejectInput) error {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return err
+	}
 	if in.RequestID == "" || in.UserNodeID == "" {
 		return ErrInvalidInput
 	}
@@ -326,13 +341,17 @@ func (s *Service) Reject(ctx context.Context, in RejectInput) error {
 // Requests the caller may not approve are skipped rather than failing the whole
 // batch: the caller gets back exactly the set that succeeded.
 func (s *Service) BatchApprove(ctx context.Context, in BatchApproveInput) ([]string, error) {
+	if err := s.requireCallerOrganization(ctx); err != nil {
+		return nil, err
+	}
+
 	if len(in.RequestIDs) == 0 || in.UserNodeID == "" {
 		return nil, ErrInvalidInput
 	}
 
 	var approved []string
 	for _, reqID := range in.RequestIDs {
-		err := s.Approve(ctx, ApproveInput{
+		err := s.approve(ctx, ApproveInput{
 			RequestID:  reqID,
 			UserNodeID: in.UserNodeID,
 			Comment:    in.Comment,
