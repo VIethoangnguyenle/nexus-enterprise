@@ -122,3 +122,13 @@ The Thread button of a conversation SHALL open its threads, filtered Tất cả 
 a page at a time (the last thread's reply time and root id are the cursor). Its badge SHALL count the conversation's
 threads with unread replies for the reader. Every thread, face and author on these screens is shown by display name;
 no identifier is rendered or typed.
+
+### Requirement: Followed threads with news, across conversations
+`GET /api/threads/unread?limit=` SHALL return the caller's followed threads that have unread replies, across every
+conversation the navigator lists for them (the channels of the workspace they are signed in to that they read, and
+their direct messages), newest reply first, at most 50; a conversation set to `off` contributes none. Trang chủ's
+"Thread có tin mới" reads it. A conversation the caller cannot read never contributes a thread.
+
+#### Scenario: A thread read is a thread gone
+- **WHEN** the caller opens a thread with unread replies and reads it
+- **THEN** it no longer appears in the list

@@ -291,6 +291,38 @@ func TestGetUnreadCounts_IncludesThreadUnread(t *testing.T) {
 	assert.True(t, found)
 }
 
+// Trang chủ's "Thread có tin mới": the followed threads with unread replies,
+// across the conversations the caller reads, newest reply first; a muted
+// conversation contributes none, and a thread read is a thread gone.
+func TestUnreadThreads_AcrossConversations(t *testing.T) {
+	k := newThreadTalk(t) // the caller started a thread with one reply by someone else
+	ctx := context.Background()
+	svc := k.f.svc
+
+	list, err := svc.UnreadThreads(ctx, k.f.userID, userNode, k.f.wsID, 10)
+	require.NoError(t, err)
+	require.Len(t, list.Messages, 1)
+	assert.Equal(t, k.rootID, list.Messages[0].Id)
+	assert.EqualValues(t, 1, list.Messages[0].ThreadUnreadCount)
+
+	// Deny: someone who cannot read the conversation sees none of its threads.
+	other, err := svc.UnreadThreads(ctx, k.replier, "ngac-no-read", k.f.wsID, 10)
+	require.NoError(t, err)
+	assert.Empty(t, other.Messages)
+
+	require.NoError(t, svc.SetNotificationLevel(ctx, k.chID, k.f.userID, userNode, domain.NotifyOff))
+	muted, err := svc.UnreadThreads(ctx, k.f.userID, userNode, k.f.wsID, 10)
+	require.NoError(t, err)
+	assert.Empty(t, muted.Messages, "a muted conversation's threads do not appear")
+	require.NoError(t, svc.SetNotificationLevel(ctx, k.chID, k.f.userID, userNode, domain.NotifyMain))
+
+	_, err = svc.MarkThreadRead(ctx, k.rootID, k.f.userID, userNode)
+	require.NoError(t, err)
+	read, err := svc.UnreadThreads(ctx, k.f.userID, userNode, k.f.wsID, 10)
+	require.NoError(t, err)
+	assert.Empty(t, read.Messages)
+}
+
 // Unread counts cover every channel of the workspace the caller may read —
 // joined or not, as the sidebar lists them — and no channel they may not read.
 func TestGetUnreadCounts_CoversExactlyTheChannelsTheCallerMayRead(t *testing.T) {

@@ -115,7 +115,16 @@ func (c *chat) echo(allow bool) *echo.Echo {
 	e.GET("/api/channels/:chId/threads", h.ListThreads, as)
 	e.GET("/api/channels/:chId/notification-level", h.GetNotificationLevel, as)
 	e.PUT("/api/channels/:chId/notification-level", h.SetNotificationLevel, as)
+	e.GET("/api/threads/unread", h.UnreadThreads, as)
 	return e
+}
+
+func TestUnreadThreadsRoute_AnswersAList(t *testing.T) {
+	c := newChat(t)
+	rec := call(c.echo(true), http.MethodGet, "/api/threads/unread?limit=5", ``)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	rec = call(c.echo(true), http.MethodGet, "/api/threads/unread?limit=x", ``)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func TestNotificationLevelRoutes_ReadAndSet(t *testing.T) {

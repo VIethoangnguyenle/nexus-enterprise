@@ -229,6 +229,49 @@ func (s *Store) ListThreads(ctx context.Context, channelID, userID, filter strin
 	return msgs, hasMore, nil
 }
 
+// UnreadThreads returns, across the given channels, the threads the user
+// follows that have unread replies, newest reply first — leaving out the
+// channels the user muted ("off").
+func (s *Store) UnreadThreads(ctx context.Context, userID string, channelIDs []string, limit int) ([]*Message, error) {
+	if len(channelIDs) == 0 {
+		return nil, nil
+	}
+	rows, err := s.db.Query(ctx,
+		`WITH t AS (
+		   SELECT m.id, `+threadFollowingExpr+` AS following, `+threadUnreadExpr+` AS unread,
+		          `+threadParticipantsExpr+` AS participants
+		   FROM messages m `+threadFollowJoin+`
+		   WHERE m.channel_id = ANY($2::text[]) AND m.parent_message_id IS NULL AND m.reply_count > 0
+		     AND m.deleted_at IS NULL
+		     AND NOT EXISTS (SELECT 1 FROM channel_notification_levels l
+		                     WHERE l.user_id = $1 AND l.channel_id = m.channel_id AND l.level = 'off')
+		 )
+		 SELECT `+messageCols+`, t.following, t.unread, t.participants
+		 FROM t JOIN messages m ON m.id = t.id
+		 LEFT JOIN users u ON m.sender_id = u.id
+		 WHERE t.unread > 0
+		 ORDER BY m.last_reply_at DESC, m.id DESC
+		 LIMIT $3`, userID, channelIDs, limit)
+	if err != nil {
+		return nil, fmt.Errorf("unread threads: %w", err)
+	}
+	defer rows.Close()
+	var msgs []*Message
+	for rows.Next() {
+		m := &Message{}
+		if err := rows.Scan(&m.ID, &m.ChannelID, &m.SenderID, &m.SenderName,
+			&m.Content, &m.CreatedAt, &m.MessageType, &m.ParentMessageID,
+			&m.LinkedEntityType, &m.LinkedEntityID, &m.ReplyCount,
+			&m.ContentFormat, &m.Mentions, &m.LastReplyAt,
+			&m.EditedAt, &m.Deleted, &m.QuotedMessageID,
+			&m.Following, &m.ThreadUnread, &m.ReplyParticipantIDs); err != nil {
+			return nil, err
+		}
+		msgs = append(msgs, m)
+	}
+	return msgs, rows.Err()
+}
+
 // MessageThreadInfo returns the channel and parent of a message; found is false
 // when there is no such message.
 func (s *Store) MessageThreadInfo(ctx context.Context, messageID string) (channelID, parentID string, found bool, err error) {

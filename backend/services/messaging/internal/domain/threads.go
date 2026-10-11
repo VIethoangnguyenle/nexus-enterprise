@@ -269,6 +269,38 @@ func (s *Service) ListThreads(ctx context.Context, channelID, userID, userNodeID
 	return &pb.MessageList{Messages: messagesToProto(msgs), HasMore: hasMore}, nil
 }
 
+// UnreadThreads returns the caller's followed threads with unread replies
+// across every conversation they read in the workspace and their direct
+// messages (the channels the navigator lists), newest reply first; a muted
+// conversation contributes none. limit is capped at threadPageLimit.
+func (s *Service) UnreadThreads(ctx context.Context, userID, userNodeID, workspaceID string, limit int) (*pb.MessageList, error) {
+	if userID == "" || userNodeID == "" {
+		return nil, ErrInvalidInput
+	}
+	if limit <= 0 || limit > threadPageLimit {
+		limit = threadPageLimit
+	}
+	channelIDs, err := s.readableChannelIDs(ctx, workspaceID, userNodeID)
+	if err != nil {
+		return nil, err
+	}
+	msgs, err := s.store.UnreadThreads(ctx, userID, channelIDs, limit)
+	if err != nil {
+		return nil, err
+	}
+	// Reactions, pins and attachments are per channel.
+	byChannel := map[string][]*store.Message{}
+	for _, m := range msgs {
+		byChannel[m.ChannelID] = append(byChannel[m.ChannelID], m)
+	}
+	for ch, group := range byChannel {
+		if err := s.EnrichMessagesWithMetadata(ctx, group, ch); err != nil {
+			return nil, err
+		}
+	}
+	return &pb.MessageList{Messages: messagesToProto(msgs)}, nil
+}
+
 // applyThreadStates fills the caller's thread summary into the root messages
 // of a page, with one query for the whole page. Replies are left as they are.
 func (s *Service) applyThreadStates(ctx context.Context, userID string, msgs []*store.Message) error {

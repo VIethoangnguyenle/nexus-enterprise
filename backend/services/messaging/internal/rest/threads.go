@@ -86,3 +86,22 @@ func (h *Handler) ListThreads(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, list)
 }
+
+// UnreadThreads handles GET /api/threads/unread?limit=: the caller's followed
+// threads with unread replies across the conversations they read in the
+// workspace they are signed in to, newest reply first.
+func (h *Handler) UnreadThreads(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	limit, err := intQuery(c, "limit")
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.UnreadThreads(c.Request().Context(), claims.UserID, claims.NGACNodeID, claims.TenantID, limit)
+	if err != nil {
+		return httputil.MapDomainError(err)
+	}
+	return c.JSON(http.StatusOK, list)
+}
