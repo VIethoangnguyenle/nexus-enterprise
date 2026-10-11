@@ -98,6 +98,10 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/channels/:chId/read", h.MarkChannelRead)
 	api.GET("/channels/unread", h.GetUnreadCounts)
 
+	// Notification level: the caller's own, per conversation they read.
+	api.GET("/channels/:chId/notification-level", h.GetNotificationLevel)
+	api.PUT("/channels/:chId/notification-level", h.SetNotificationLevel)
+
 	// Search
 	api.GET("/channels/:chId/search", h.SearchMessages)
 

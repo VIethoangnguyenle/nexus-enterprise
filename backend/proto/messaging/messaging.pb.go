@@ -2515,6 +2515,7 @@ type ChannelUnread struct {
 	UnreadCount       int32                  `protobuf:"varint,2,opt,name=unread_count,json=unreadCount,proto3" json:"unread_count,omitempty"`
 	LastReadMessageId string                 `protobuf:"bytes,3,opt,name=last_read_message_id,json=lastReadMessageId,proto3" json:"last_read_message_id,omitempty"`
 	ThreadUnreadCount int32                  `protobuf:"varint,4,opt,name=thread_unread_count,json=threadUnreadCount,proto3" json:"thread_unread_count,omitempty"` // Unread replies in the threads of this channel the caller follows
+	NotificationLevel string                 `protobuf:"bytes,5,opt,name=notification_level,json=notificationLevel,proto3" json:"notification_level,omitempty"`    // "all" | "main" | "off": the caller's choice for this conversation
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2575,6 +2576,13 @@ func (x *ChannelUnread) GetThreadUnreadCount() int32 {
 		return x.ThreadUnreadCount
 	}
 	return 0
+}
+
+func (x *ChannelUnread) GetNotificationLevel() string {
+	if x != nil {
+		return x.NotificationLevel
+	}
+	return ""
 }
 
 type ChannelUnreadList struct {
@@ -4264,13 +4272,14 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12&\n" +
 	"\x0flast_message_id\x18\x03 \x01(\tR\rlastMessageId\"1\n" +
 	"\x16GetUnreadCountsRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xb2\x01\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xe1\x01\n" +
 	"\rChannelUnread\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x12!\n" +
 	"\funread_count\x18\x02 \x01(\x05R\vunreadCount\x12/\n" +
 	"\x14last_read_message_id\x18\x03 \x01(\tR\x11lastReadMessageId\x12.\n" +
-	"\x13thread_unread_count\x18\x04 \x01(\x05R\x11threadUnreadCount\"I\n" +
+	"\x13thread_unread_count\x18\x04 \x01(\x05R\x11threadUnreadCount\x12-\n" +
+	"\x12notification_level\x18\x05 \x01(\tR\x11notificationLevel\"I\n" +
 	"\x11ChannelUnreadList\x124\n" +
 	"\bchannels\x18\x01 \x03(\v2\x18.messaging.ChannelUnreadR\bchannels\"\x91\x01\n" +
 	"\x15SearchMessagesRequest\x12\x1d\n" +

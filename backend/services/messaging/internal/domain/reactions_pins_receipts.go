@@ -179,6 +179,7 @@ func (s *Service) GetUnreadCounts(ctx context.Context, userID, userNodeID, works
 			UnreadCount:       u.UnreadCount,
 			LastReadMessageId: u.LastReadMsgID,
 			ThreadUnreadCount: u.ThreadUnread,
+			NotificationLevel: u.Level,
 		})
 	}
 	return result, nil

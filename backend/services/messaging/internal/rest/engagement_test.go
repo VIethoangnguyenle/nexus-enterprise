@@ -113,7 +113,21 @@ func (c *chat) echo(allow bool) *echo.Echo {
 	e.DELETE("/api/messages/:msgId/follow", h.UnfollowThread, as)
 	e.POST("/api/messages/:msgId/thread/read", h.MarkThreadRead, as)
 	e.GET("/api/channels/:chId/threads", h.ListThreads, as)
+	e.GET("/api/channels/:chId/notification-level", h.GetNotificationLevel, as)
+	e.PUT("/api/channels/:chId/notification-level", h.SetNotificationLevel, as)
 	return e
+}
+
+func TestNotificationLevelRoutes_ReadAndSet(t *testing.T) {
+	c := newChat(t)
+	e := c.echo(true)
+	path := "/api/channels/" + c.chID + "/notification-level"
+	rec := call(e, http.MethodGet, path, ``)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "main", decode(t, rec)["level"], "the default")
+	rec = call(e, http.MethodPut, path, `{"level":"off"}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Equal(t, "off", decode(t, call(e, http.MethodGet, path, ``))["level"])
 }
 
 func call(e *echo.Echo, method, path, body string) *httptest.ResponseRecorder {
@@ -149,6 +163,8 @@ func TestEngagementRoutes_AnswerForbiddenWhenPolicyRefuses(t *testing.T) {
 		"messages":        {http.MethodGet, "/api/channels/" + c.chID + "/messages", ``},
 		"thread":          {http.MethodGet, "/api/messages/" + c.msgID + "/thread", ``},
 		"channel":         {http.MethodGet, "/api/channels/" + c.chID, ``},
+		"get level":       {http.MethodGet, "/api/channels/" + c.chID + "/notification-level", ``},
+		"set level":       {http.MethodPut, "/api/channels/" + c.chID + "/notification-level", `{"level":"off"}`},
 	} {
 		rec := call(e, tc.method, tc.path, tc.body)
 		assert.Equal(t, http.StatusForbidden, rec.Code, "%s: %s", name, rec.Body)
@@ -173,6 +189,8 @@ func TestEngagementRoutes_BadBodiesAreRefusedBeforeAnyWork(t *testing.T) {
 		"reaction empty": {http.MethodPost, "/api/messages/" + c.msgID + "/reactions", `{"emoji":""}`},
 		"poll one opt":   {http.MethodPost, "/api/channels/" + c.chID + "/polls", `{"question":"q","options":["a"]}`},
 		"task no title":  {http.MethodPost, "/api/channels/" + c.chID + "/tasks", `{}`},
+		"level json":     {http.MethodPut, "/api/channels/" + c.chID + "/notification-level", `{`},
+		"level unknown":  {http.MethodPut, "/api/channels/" + c.chID + "/notification-level", `{"level":"loud"}`},
 	} {
 		rec := call(e, tc.method, tc.path, tc.body)
 		assert.Equal(t, http.StatusBadRequest, rec.Code, "%s: %s", name, rec.Body)

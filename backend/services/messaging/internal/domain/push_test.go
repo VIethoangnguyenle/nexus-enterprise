@@ -236,3 +236,55 @@ func TestPush_MentionsAreBounded(t *testing.T) {
 	w.send(t, "mọi người ơi", mentions...)
 	assert.Len(t, w.sender.all(), domain.MaxMentionPushes)
 }
+
+// The notification level shapes push: "all" pushes every message of a group,
+// "off" silences it except when the person is mentioned, and a direct message
+// is only on or off.
+func TestPush_FollowsTheNotificationLevel(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("all: every message of the group", func(t *testing.T) {
+		w := newPushWorld(t, false)
+		_, err := w.f.pool.Exec(ctx, `INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2)`, w.chID, w.otherNode)
+		require.NoError(t, err)
+		t.Cleanup(func() { w.f.pool.Exec(ctx, `DELETE FROM channel_members WHERE channel_id = $1`, w.chID) })
+
+		w.send(t, "tin thường")
+		assert.Empty(t, w.sender.all(), "by default a plain group message pushes nobody")
+
+		require.NoError(t, w.f.svc.SetNotificationLevel(ctx, w.chID, w.other, w.otherNode, domain.NotifyAll))
+		domain.SetPushWindowForTest(w.f.svc, time.Millisecond)
+		w.send(t, "tin thường nữa")
+		sent := w.sender.all()
+		require.Len(t, sent, 1)
+		assert.Equal(t, []string{w.other}, sent[0].ExternalIDs)
+	})
+
+	t.Run("off: only a mention gets through", func(t *testing.T) {
+		w := newPushWorld(t, false)
+		require.NoError(t, w.f.svc.SetNotificationLevel(ctx, w.chID, w.other, w.otherNode, domain.NotifyOff))
+		w.send(t, "@ bạn", w.other)
+		assert.Len(t, w.sender.all(), 1, "a mention still notifies when the group is off")
+	})
+
+	t.Run("off: a followed thread is silent", func(t *testing.T) {
+		k := newThreadTalk(t)
+		sender := &recordingSender{}
+		k.f.svc.SetPush(sender, viewing{})
+		require.NoError(t, k.f.svc.SetNotificationLevel(ctx, k.chID, k.f.userID, userNode, domain.NotifyOff))
+		reply, err := k.f.svc.SendMessage(ctx, domain.SendMessageInput{
+			ChannelID: k.chID, SenderID: k.replier, SenderNodeID: replierNode, Content: "thêm", ParentMessageID: k.rootID,
+		})
+		require.NoError(t, err)
+		k.f.svc.PushForMessage(ctx, reply)
+		assert.Empty(t, sender.all())
+	})
+
+	t.Run("a direct message is on or off", func(t *testing.T) {
+		w := newPushWorld(t, true)
+		require.ErrorIs(t, w.f.svc.SetNotificationLevel(ctx, w.chID, w.other, w.otherNode, domain.NotifyAll), domain.ErrInvalidInput)
+		require.NoError(t, w.f.svc.SetNotificationLevel(ctx, w.chID, w.other, w.otherNode, domain.NotifyOff))
+		w.send(t, "chào", w.other)
+		assert.Empty(t, w.sender.all(), "a muted direct message is silent, mention or not")
+	})
+}

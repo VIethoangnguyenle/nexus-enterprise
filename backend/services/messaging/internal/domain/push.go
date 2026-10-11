@@ -30,6 +30,8 @@ const (
 	PushDirect      PushKind = "direct"
 	PushMention     PushKind = "mention"
 	PushThreadReply PushKind = "thread_reply"
+	// PushEveryMessage: the person set the group to "all".
+	PushEveryMessage PushKind = "message"
 )
 
 // ViewingChecker reports whether a user has the conversation open right now.
@@ -139,10 +141,31 @@ func (s *Service) PushRecipients(ctx context.Context, msg *pb.Message) ([]PushRe
 		}
 		add(ps, PushMention)
 	}
+	// "all" on a group: every message concerns the people who chose it.
+	if ch.ChannelType != "dm" {
+		ps, err := s.store.PeopleWithLevel(ctx, ch.ID, NotifyAll)
+		if err != nil {
+			return nil, err
+		}
+		add(ps, PushEveryMessage)
+	}
+
+	ids := make([]string, 0, len(kinds))
+	for id := range kinds {
+		ids = append(ids, id)
+	}
+	levels, err := s.store.NotificationLevels(ctx, ch.ID, ids)
+	if err != nil {
+		return nil, err
+	}
 
 	var out []PushRecipient
 	for id, k := range kinds {
 		p := people[id]
+		// "off" silences the conversation; in a group a mention still gets through.
+		if levels[id] == NotifyOff && (k != PushMention || ch.ChannelType == "dm") {
+			continue
+		}
 		// Following or being mentioned is not access: a removed member, or a
 		// mentioned non-member, is told nothing; a policy error tells nobody.
 		if p.NodeID == "" || s.checkAccess(ctx, p.NodeID, ch.NGACOaID, ngac.OpRead) != nil {
@@ -169,8 +192,10 @@ func rank(k PushKind) int {
 		return 3
 	case PushDirect:
 		return 2
-	default:
+	case PushThreadReply:
 		return 1
+	default:
+		return 0
 	}
 }
 
@@ -180,8 +205,11 @@ func wants(p store.PushPreferences, k PushKind) bool {
 		return p.Direct
 	case PushMention:
 		return p.Mention
-	default:
+	case PushThreadReply:
 		return p.ThreadReply
+	default:
+		// "all" was chosen for this very conversation: that choice is the wish.
+		return true
 	}
 }
 

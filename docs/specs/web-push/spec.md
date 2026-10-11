@@ -35,6 +35,10 @@ conversation — or the thread — in the app. The first message of a conversati
 of that conversation to the same person within 30 seconds become one follow-up, "N tin mới", that replaces it on the
 device (`web_push_topic` on the web, `collapse_id` on mobile). The link is absolute, under `APP_BASE_URL`. Every
 request carries an `idempotency_key` kept across its retries, so a retry after a timeout does not deliver twice.
+The recipient's notification level for the conversation (`docs/specs/notifications/spec.md`) shapes this: under
+`all` every message of a group is pushed to them (no per-kind switch applies — the level is the wish); under `off`
+nothing is pushed, except a mention in a group; a direct message under `off` is silent, mention or not. Quiet hours
+and the read check still apply to all of it.
 One message pushes to at most 20 mentioned people (the mention list comes from the client), and the delivery of one
 message ends with its 30-second deadline, however many recipients remain.
 

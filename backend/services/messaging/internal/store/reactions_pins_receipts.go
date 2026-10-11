@@ -53,8 +53,11 @@ type ChannelUnread struct {
 	ChannelID     string
 	UnreadCount   int32
 	LastReadMsgID string
-	// ThreadUnread counts unread replies in the threads of the channel the user follows.
+	// ThreadUnread counts unread replies in the threads of the channel the user
+	// follows — every thread's, when the level is "all".
 	ThreadUnread int32
+	// Level is the user's notification level for the channel ("main" unless set).
+	Level string
 }
 
 // --- Reactions Store ---
@@ -267,18 +270,37 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 		   JOIN messages r ON r.parent_message_id = f.id AND r.sender_id <> $1 AND r.deleted_at IS NULL
 		     AND r.created_at > f.last_read_at
 		   GROUP BY root.channel_id
+		 ), levels AS (
+		   SELECT channel_id, level FROM channel_notification_levels
+		   WHERE user_id = $1 AND channel_id = ANY($2::text[])
+		 ), all_thread_unread AS (
+		   -- "all": every reply by someone else counts — after the thread's own
+		   -- read position when the user follows it, else after the channel's.
+		   SELECT r.channel_id, COUNT(r.id)::int AS n
+		   FROM messages r
+		   JOIN levels l ON l.channel_id = r.channel_id AND l.level = 'all'
+		   LEFT JOIN read_receipts rr2 ON rr2.user_id = $1 AND rr2.channel_id = r.channel_id
+		   LEFT JOIN followed f ON f.id = r.parent_message_id
+		   WHERE r.parent_message_id IS NOT NULL AND r.sender_id <> $1 AND r.deleted_at IS NULL
+		     AND r.created_at > COALESCE(f.last_read_at, rr2.last_read_at, '-infinity'::timestamptz)
+		   GROUP BY r.channel_id
 		 )
 		 SELECT cm.channel_id,
-		        COUNT(m.id) AS unread_count,
+		        CASE WHEN l.level = 'off' THEN 0 ELSE COUNT(m.id) END AS unread_count,
 		        COALESCE(rr.last_message_id, '') AS last_read_msg,
-		        COALESCE(MAX(tu.n), 0) AS thread_unread
+		        CASE WHEN l.level = 'off' THEN 0
+		             WHEN l.level = 'all' THEN COALESCE(MAX(atu.n), 0)
+		             ELSE COALESCE(MAX(tu.n), 0) END AS thread_unread,
+		        COALESCE(l.level, 'main') AS level
 		 FROM (SELECT DISTINCT unnest($2::text[]) AS channel_id) cm
 		 LEFT JOIN read_receipts rr ON rr.user_id = $1 AND rr.channel_id = cm.channel_id
 		 LEFT JOIN messages m ON m.channel_id = cm.channel_id
 		   AND m.parent_message_id IS NULL AND m.deleted_at IS NULL
 		   AND (rr.last_read_at IS NULL OR m.created_at > rr.last_read_at)
 		 LEFT JOIN thread_unread tu ON tu.channel_id = cm.channel_id
-		 GROUP BY cm.channel_id, rr.last_message_id`,
+		 LEFT JOIN all_thread_unread atu ON atu.channel_id = cm.channel_id
+		 LEFT JOIN levels l ON l.channel_id = cm.channel_id
+		 GROUP BY cm.channel_id, rr.last_message_id, l.level`,
 		userID, channelIDs)
 	if err != nil {
 		return nil, fmt.Errorf("unread counts: %w", err)
@@ -288,7 +310,7 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 	var results []ChannelUnread
 	for rows.Next() {
 		var u ChannelUnread
-		if err := rows.Scan(&u.ChannelID, &u.UnreadCount, &u.LastReadMsgID, &u.ThreadUnread); err != nil {
+		if err := rows.Scan(&u.ChannelID, &u.UnreadCount, &u.LastReadMsgID, &u.ThreadUnread, &u.Level); err != nil {
 			return nil, err
 		}
 		results = append(results, u)

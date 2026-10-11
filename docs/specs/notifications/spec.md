@@ -28,3 +28,26 @@ A notification request that fails for a reason of the server's SHALL answer `500
 
 ### Requirement: A page that is not a number is refused
 `limit` or `offset` that is present but not a whole number SHALL answer 400 `{"message": "limit must be a number"}` (or `offset`) and read nothing. Absent means the default; a number out of range is still clamped as above.
+
+### Requirement: Each person chooses how much of a conversation counts
+Every person SHALL have, per conversation they read, a notification level (`channel_notification_levels`,
+migration 045): `all` — every message and every reply by someone else counts toward the badge; `main` (the
+default, also when no row exists) — the main messages and the replies in threads they follow; `off` — nothing
+counts. `GET /api/channels/{chId}/notification-level` answers `{"level"}`; `PUT` with `{"level"}` sets it.
+Both need `read` on the channel's content OA (403 otherwise); an unknown level is 400. `GET
+/api/channels/unread` reports each channel's `notification_level` with its counts, and under `off` both
+`unread_count` and `thread_unread_count` are 0. The level is the person's own and never widens what they may
+read. A direct message is only on (`main`) or `off`: `all` on a DM is 400. Web push follows the level as
+`docs/specs/web-push/spec.md` describes.
+
+#### Scenario: Muted conversation
+- **WHEN** a person sets a group to `off` and others keep writing in it
+- **THEN** its badge stays at 0 and nothing from it is counted
+
+#### Scenario: Everything counts
+- **WHEN** a person sets a group to `all` and someone replies in a thread they do not follow
+- **THEN** that reply counts as unread for them
+
+#### Scenario: Not a reader
+- **WHEN** someone who cannot read a conversation asks for or sets its level
+- **THEN** the answer is 403 and nothing is stored
