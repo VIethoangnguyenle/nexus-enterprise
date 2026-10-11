@@ -172,6 +172,10 @@ func (s *Service) GetUnreadCounts(ctx context.Context, userID, userNodeID, works
 	if err != nil {
 		return nil, fmt.Errorf("unread counts: %w", err)
 	}
+	starred, err := s.store.StarredConversations(ctx, userID, channelIDs)
+	if err != nil {
+		return nil, fmt.Errorf("unread counts: %w", err)
+	}
 	var result []*pb.ChannelUnread
 	for _, u := range unreads {
 		result = append(result, &pb.ChannelUnread{
@@ -181,6 +185,7 @@ func (s *Service) GetUnreadCounts(ctx context.Context, userID, userNodeID, works
 			ThreadUnreadCount: u.ThreadUnread,
 			NotificationLevel: u.Level,
 			MentionCount:      u.MentionCount,
+			Starred:           starred[u.ChannelID],
 		})
 	}
 	return result, nil

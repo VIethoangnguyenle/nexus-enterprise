@@ -70,6 +70,12 @@ func TestRegisterRoutes_MountsTheThreadRoutes(t *testing.T) {
 		"DELETE /api/workspaces/:id/chat-sections/:sectionId",
 		"PUT /api/workspaces/:id/chat-sections/:sectionId/channels/:chId",
 		"DELETE /api/workspaces/:id/chat-sections/channels/:chId",
+		"PUT /api/channels/:chId/star",
+		"DELETE /api/channels/:chId/star",
+		"PUT /api/messages/:msgId/star",
+		"DELETE /api/messages/:msgId/star",
+		"GET /api/messages/starred",
+		"GET /api/messages/mentions",
 		"GET /api/me/push-preferences",
 		"PUT /api/me/push-preferences",
 	} {

@@ -39,6 +39,19 @@ func (a answerPolicy) CheckAccess(context.Context, *policypb.CheckAccessRequest,
 	return &policypb.AccessDecision{Decision: ngac.DecisionDeny}, nil
 }
 
+// BatchCheckAccess answers every (object, operation) the same way.
+func (a answerPolicy) BatchCheckAccess(_ context.Context, req *policypb.BatchCheckAccessRequest, _ ...grpc.CallOption) (*policypb.BatchAccessResult, error) {
+	results := make(map[string]*policypb.ObjectPermissions, len(req.ObjectIds))
+	for _, id := range req.ObjectIds {
+		perms := make(map[string]bool, len(req.Operations))
+		for _, op := range req.Operations {
+			perms[op] = a.allow
+		}
+		results[id] = &policypb.ObjectPermissions{Permissions: perms}
+	}
+	return &policypb.BatchAccessResult{Results: results}, nil
+}
+
 type namedUser struct{ authpb.AuthServiceClient }
 
 func (namedUser) GetUserByID(_ context.Context, r *authpb.GetUserByIDRequest, _ ...grpc.CallOption) (*authpb.UserInfo, error) {
@@ -46,6 +59,7 @@ func (namedUser) GetUserByID(_ context.Context, r *authpb.GetUserByIDRequest, _ 
 }
 
 type chat struct {
+	ws    string
 	pool  *pgxpool.Pool
 	user  string
 	node  string
@@ -60,7 +74,7 @@ func newChat(t *testing.T) *chat {
 	user, node := testutil.CreateUser(t, pool)
 	ws, _ := testutil.CreateWorkspace(t, pool, user)
 	n := time.Now().UnixNano()
-	c := &chat{pool: pool, user: user, node: node, chID: fmt.Sprintf("rest-ch-%d", n), msgID: fmt.Sprintf("rest-msg-%d", n)}
+	c := &chat{ws: ws, pool: pool, user: user, node: node, chID: fmt.Sprintf("rest-ch-%d", n), msgID: fmt.Sprintf("rest-msg-%d", n)}
 	oa := fmt.Sprintf("rest-oa-%d", n)
 	_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $2, $3)`, oa, "rest-oa-"+oa, ngac.TypeOA)
 	require.NoError(t, err)
@@ -86,7 +100,7 @@ func (c *chat) echo(allow bool) *echo.Echo {
 	e := httputil.NewEcho("messaging")
 	as := func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(ctx echo.Context) error {
-			httputil.SetClaims(ctx, &httputil.Claims{UserID: c.user, NGACNodeID: c.node})
+			httputil.SetClaims(ctx, &httputil.Claims{UserID: c.user, NGACNodeID: c.node, TenantID: c.ws})
 			return next(ctx)
 		}
 	}
@@ -116,6 +130,12 @@ func (c *chat) echo(allow bool) *echo.Echo {
 	e.GET("/api/channels/:chId/notification-level", h.GetNotificationLevel, as)
 	e.PUT("/api/channels/:chId/notification-level", h.SetNotificationLevel, as)
 	e.GET("/api/threads/unread", h.UnreadThreads, as)
+	e.PUT("/api/channels/:chId/star", h.StarConversation, as)
+	e.DELETE("/api/channels/:chId/star", h.UnstarConversation, as)
+	e.PUT("/api/messages/:msgId/star", h.StarMessage, as)
+	e.DELETE("/api/messages/:msgId/star", h.UnstarMessage, as)
+	e.GET("/api/messages/starred", h.StarredMessages, as)
+	e.GET("/api/messages/mentions", h.Mentions, as)
 	return e
 }
 

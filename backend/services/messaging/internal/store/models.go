@@ -49,4 +49,10 @@ type Message struct {
 	Following           bool
 	ThreadUnread        int32
 	ReplyParticipantIDs []string
+
+	// Set only where a caller's own feed is listed: when the caller starred the
+	// message (the starred feed), and whether the caller has yet to read it (the
+	// mentions feed).
+	StarredAt *time.Time
+	Unread    bool
 }

@@ -59,6 +59,14 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.GET("/channels/:chId/threads", h.ListThreads)
 	api.GET("/threads/unread", h.UnreadThreads)
 
+	// The caller's stars, and the messages that mention them
+	api.PUT("/channels/:chId/star", h.StarConversation)
+	api.DELETE("/channels/:chId/star", h.UnstarConversation)
+	api.PUT("/messages/:msgId/star", h.StarMessage)
+	api.DELETE("/messages/:msgId/star", h.UnstarMessage)
+	api.GET("/messages/starred", h.StarredMessages)
+	api.GET("/messages/mentions", h.Mentions)
+
 	// The caller's push preferences (the rest of /api/me is the auth service's)
 	api.GET("/me/push-preferences", h.GetPushPreferences)
 	api.PUT("/me/push-preferences", h.PutPushPreferences)
@@ -174,7 +182,7 @@ func (h *Handler) GetChannel(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	ch, err := h.svc.GetChannel(c.Request().Context(), c.Param("chId"), claims.NGACNodeID)
+	ch, err := h.svc.GetChannelFor(c.Request().Context(), c.Param("chId"), claims.UserID, claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

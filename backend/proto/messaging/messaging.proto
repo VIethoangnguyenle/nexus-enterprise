@@ -94,6 +94,7 @@ message Channel {
   string topic = 9;           // Short topic line shown below channel name
   string description = 10;    // Longer channel description
   int32 member_count = 11;    // Denormalized member count
+  bool starred = 12;          // The caller starred this conversation (set where a caller is known)
 }
 
 message CreateChannelRequest {
@@ -197,6 +198,10 @@ message Message {
   google.protobuf.Timestamp edited_at = 21;    // Set once its sender changed the text
   bool deleted = 22;                           // Deleted: no body, kept only as a thread's placeholder
   QuotedMessage quoted = 23;                   // The message this one quotes, when any
+  // Set only in the caller's starred and mentions feeds, never in a channel's own list.
+  bool starred = 24;                           // Starred feed: always true
+  google.protobuf.Timestamp starred_at = 25;   // Starred feed: when the caller starred it
+  bool unread = 26;                            // Mentions feed: the caller has not read it yet
 }
 
 // QuotedMessage is what a quote shows of the message it quotes.
@@ -368,6 +373,7 @@ message ChannelUnread {
   int32 thread_unread_count = 4;    // Unread replies in the threads of this channel the caller follows
   string notification_level = 5;    // "all" | "main" | "off": the caller's choice for this conversation
   int32 mention_count = 6;          // Unread messages that mention the caller (counted at every level)
+  bool starred = 7;                 // The caller starred this conversation
 }
 
 message ChannelUnreadList {

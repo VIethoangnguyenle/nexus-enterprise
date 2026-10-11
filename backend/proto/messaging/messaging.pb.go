@@ -71,6 +71,7 @@ type Channel struct {
 	Topic         string                 `protobuf:"bytes,9,opt,name=topic,proto3" json:"topic,omitempty"`                                  // Short topic line shown below channel name
 	Description   string                 `protobuf:"bytes,10,opt,name=description,proto3" json:"description,omitempty"`                     // Longer channel description
 	MemberCount   int32                  `protobuf:"varint,11,opt,name=member_count,json=memberCount,proto3" json:"member_count,omitempty"` // Denormalized member count
+	Starred       bool                   `protobuf:"varint,12,opt,name=starred,proto3" json:"starred,omitempty"`                            // The caller starred this conversation (set where a caller is known)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -180,6 +181,13 @@ func (x *Channel) GetMemberCount() int32 {
 		return x.MemberCount
 	}
 	return 0
+}
+
+func (x *Channel) GetStarred() bool {
+	if x != nil {
+		return x.Starred
+	}
+	return false
 }
 
 type CreateChannelRequest struct {
@@ -862,8 +870,12 @@ type Message struct {
 	EditedAt            *timestamppb.Timestamp `protobuf:"bytes,21,opt,name=edited_at,json=editedAt,proto3" json:"edited_at,omitempty"`                                    // Set once its sender changed the text
 	Deleted             bool                   `protobuf:"varint,22,opt,name=deleted,proto3" json:"deleted,omitempty"`                                                     // Deleted: no body, kept only as a thread's placeholder
 	Quoted              *QuotedMessage         `protobuf:"bytes,23,opt,name=quoted,proto3" json:"quoted,omitempty"`                                                        // The message this one quotes, when any
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Set only in the caller's starred and mentions feeds, never in a channel's own list.
+	Starred       bool                   `protobuf:"varint,24,opt,name=starred,proto3" json:"starred,omitempty"`                     // Starred feed: always true
+	StarredAt     *timestamppb.Timestamp `protobuf:"bytes,25,opt,name=starred_at,json=starredAt,proto3" json:"starred_at,omitempty"` // Starred feed: when the caller starred it
+	Unread        bool                   `protobuf:"varint,26,opt,name=unread,proto3" json:"unread,omitempty"`                       // Mentions feed: the caller has not read it yet
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Message) Reset() {
@@ -1055,6 +1067,27 @@ func (x *Message) GetQuoted() *QuotedMessage {
 		return x.Quoted
 	}
 	return nil
+}
+
+func (x *Message) GetStarred() bool {
+	if x != nil {
+		return x.Starred
+	}
+	return false
+}
+
+func (x *Message) GetStarredAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StarredAt
+	}
+	return nil
+}
+
+func (x *Message) GetUnread() bool {
+	if x != nil {
+		return x.Unread
+	}
+	return false
 }
 
 // QuotedMessage is what a quote shows of the message it quotes.
@@ -2517,6 +2550,7 @@ type ChannelUnread struct {
 	ThreadUnreadCount int32                  `protobuf:"varint,4,opt,name=thread_unread_count,json=threadUnreadCount,proto3" json:"thread_unread_count,omitempty"` // Unread replies in the threads of this channel the caller follows
 	NotificationLevel string                 `protobuf:"bytes,5,opt,name=notification_level,json=notificationLevel,proto3" json:"notification_level,omitempty"`    // "all" | "main" | "off": the caller's choice for this conversation
 	MentionCount      int32                  `protobuf:"varint,6,opt,name=mention_count,json=mentionCount,proto3" json:"mention_count,omitempty"`                  // Unread messages that mention the caller (counted at every level)
+	Starred           bool                   `protobuf:"varint,7,opt,name=starred,proto3" json:"starred,omitempty"`                                                // The caller starred this conversation
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -2591,6 +2625,13 @@ func (x *ChannelUnread) GetMentionCount() int32 {
 		return x.MentionCount
 	}
 	return 0
+}
+
+func (x *ChannelUnread) GetStarred() bool {
+	if x != nil {
+		return x.Starred
+	}
+	return false
 }
 
 type ChannelUnreadList struct {
@@ -4070,7 +4111,7 @@ var File_proto_messaging_messaging_proto protoreflect.FileDescriptor
 const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\n" +
 	"\x1fproto/messaging/messaging.proto\x12\tmessaging\x1a\x1fgoogle/protobuf/timestamp.proto\"\a\n" +
-	"\x05Empty\"\xe4\x02\n" +
+	"\x05Empty\"\xfe\x02\n" +
 	"\aChannel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12!\n" +
@@ -4087,7 +4128,8 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\x05topic\x18\t \x01(\tR\x05topic\x12 \n" +
 	"\vdescription\x18\n" +
 	" \x01(\tR\vdescription\x12!\n" +
-	"\fmember_count\x18\v \x01(\x05R\vmemberCount\"\xbc\x01\n" +
+	"\fmember_count\x18\v \x01(\x05R\vmemberCount\x12\x18\n" +
+	"\astarred\x18\f \x01(\bR\astarred\"\xbc\x01\n" +
 	"\x14CreateChannelRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
 	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x1b\n" +
@@ -4138,7 +4180,7 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\bmentions\x18\n" +
 	" \x03(\tR\bmentions\x12>\n" +
 	"\vattachments\x18\v \x03(\v2\x1c.messaging.MessageAttachmentR\vattachments\x12*\n" +
-	"\x11quoted_message_id\x18\f \x01(\tR\x0fquotedMessageId\"\xb2\a\n" +
+	"\x11quoted_message_id\x18\f \x01(\tR\x0fquotedMessageId\"\x9f\b\n" +
 	"\aMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -4167,7 +4209,11 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\vattachments\x18\x14 \x03(\v2\x1c.messaging.MessageAttachmentR\vattachments\x127\n" +
 	"\tedited_at\x18\x15 \x01(\v2\x1a.google.protobuf.TimestampR\beditedAt\x12\x18\n" +
 	"\adeleted\x18\x16 \x01(\bR\adeleted\x120\n" +
-	"\x06quoted\x18\x17 \x01(\v2\x18.messaging.QuotedMessageR\x06quoted\"\x8b\x01\n" +
+	"\x06quoted\x18\x17 \x01(\v2\x18.messaging.QuotedMessageR\x06quoted\x12\x18\n" +
+	"\astarred\x18\x18 \x01(\bR\astarred\x129\n" +
+	"\n" +
+	"starred_at\x18\x19 \x01(\v2\x1a.google.protobuf.TimestampR\tstarredAt\x12\x16\n" +
+	"\x06unread\x18\x1a \x01(\bR\x06unread\"\x8b\x01\n" +
 	"\rQuotedMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
 	"\tsender_id\x18\x02 \x01(\tR\bsenderId\x12\x1f\n" +
@@ -4280,7 +4326,7 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12&\n" +
 	"\x0flast_message_id\x18\x03 \x01(\tR\rlastMessageId\"1\n" +
 	"\x16GetUnreadCountsRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\"\x86\x02\n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\"\xa0\x02\n" +
 	"\rChannelUnread\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x12!\n" +
@@ -4288,7 +4334,8 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\x14last_read_message_id\x18\x03 \x01(\tR\x11lastReadMessageId\x12.\n" +
 	"\x13thread_unread_count\x18\x04 \x01(\x05R\x11threadUnreadCount\x12-\n" +
 	"\x12notification_level\x18\x05 \x01(\tR\x11notificationLevel\x12#\n" +
-	"\rmention_count\x18\x06 \x01(\x05R\fmentionCount\"I\n" +
+	"\rmention_count\x18\x06 \x01(\x05R\fmentionCount\x12\x18\n" +
+	"\astarred\x18\a \x01(\bR\astarred\"I\n" +
 	"\x11ChannelUnreadList\x124\n" +
 	"\bchannels\x18\x01 \x03(\v2\x18.messaging.ChannelUnreadR\bchannels\"\x91\x01\n" +
 	"\x15SearchMessagesRequest\x12\x1d\n" +
@@ -4556,108 +4603,109 @@ var file_proto_messaging_messaging_proto_depIdxs = []int32{
 	16, // 7: messaging.Message.attachments:type_name -> messaging.MessageAttachment
 	60, // 8: messaging.Message.edited_at:type_name -> google.protobuf.Timestamp
 	13, // 9: messaging.Message.quoted:type_name -> messaging.QuotedMessage
-	12, // 10: messaging.MessageList.messages:type_name -> messaging.Message
-	60, // 11: messaging.Reaction.created_at:type_name -> google.protobuf.Timestamp
-	28, // 12: messaging.ReactionList.reactions:type_name -> messaging.Reaction
-	12, // 13: messaging.PinnedMessage.message:type_name -> messaging.Message
-	60, // 14: messaging.PinnedMessage.pinned_at:type_name -> google.protobuf.Timestamp
-	34, // 15: messaging.PinnedMessageList.pins:type_name -> messaging.PinnedMessage
-	38, // 16: messaging.ChannelUnreadList.channels:type_name -> messaging.ChannelUnread
-	60, // 17: messaging.CreatePollRequest.ends_at:type_name -> google.protobuf.Timestamp
-	45, // 18: messaging.Poll.options:type_name -> messaging.PollOption
-	60, // 19: messaging.Poll.ends_at:type_name -> google.protobuf.Timestamp
-	60, // 20: messaging.Poll.created_at:type_name -> google.protobuf.Timestamp
-	60, // 21: messaging.Poll.closed_at:type_name -> google.protobuf.Timestamp
-	60, // 22: messaging.ChatTask.created_at:type_name -> google.protobuf.Timestamp
-	60, // 23: messaging.ChatTask.updated_at:type_name -> google.protobuf.Timestamp
-	51, // 24: messaging.ChatTaskList.tasks:type_name -> messaging.ChatTask
-	60, // 25: messaging.Notification.created_at:type_name -> google.protobuf.Timestamp
-	53, // 26: messaging.NotificationList.notifications:type_name -> messaging.Notification
-	2,  // 27: messaging.MessagingService.CreateChannel:input_type -> messaging.CreateChannelRequest
-	3,  // 28: messaging.MessagingService.ListChannels:input_type -> messaging.ListChannelsRequest
-	4,  // 29: messaging.MessagingService.GetChannel:input_type -> messaging.GetChannelRequest
-	6,  // 30: messaging.MessagingService.AddChannelMember:input_type -> messaging.AddChannelMemberRequest
-	7,  // 31: messaging.MessagingService.RemoveChannelMember:input_type -> messaging.RemoveChannelMemberRequest
-	8,  // 32: messaging.MessagingService.ListChannelMembers:input_type -> messaging.ListChannelMembersRequest
-	11, // 33: messaging.MessagingService.SendMessage:input_type -> messaging.SendMessageRequest
-	17, // 34: messaging.MessagingService.GetMessages:input_type -> messaging.GetMessagesRequest
-	21, // 35: messaging.MessagingService.GetThread:input_type -> messaging.GetThreadRequest
-	22, // 36: messaging.MessagingService.FindThreadsByEntity:input_type -> messaging.FindThreadsByEntityRequest
-	19, // 37: messaging.MessagingService.FollowThread:input_type -> messaging.ThreadRequest
-	19, // 38: messaging.MessagingService.UnfollowThread:input_type -> messaging.ThreadRequest
-	19, // 39: messaging.MessagingService.MarkThreadRead:input_type -> messaging.ThreadRequest
-	20, // 40: messaging.MessagingService.ListThreads:input_type -> messaging.ListThreadsRequest
-	15, // 41: messaging.MessagingService.EditMessage:input_type -> messaging.EditMessageRequest
-	14, // 42: messaging.MessagingService.DeleteMessage:input_type -> messaging.MessageRef
-	14, // 43: messaging.MessagingService.MarkMessageUnread:input_type -> messaging.MessageRef
-	23, // 44: messaging.MessagingService.CreateDM:input_type -> messaging.CreateDMRequest
-	24, // 45: messaging.MessagingService.ListDMs:input_type -> messaging.ListDMsRequest
-	25, // 46: messaging.MessagingService.AddReaction:input_type -> messaging.AddReactionRequest
-	26, // 47: messaging.MessagingService.RemoveReaction:input_type -> messaging.RemoveReactionRequest
-	27, // 48: messaging.MessagingService.ListReactions:input_type -> messaging.ListReactionsRequest
-	31, // 49: messaging.MessagingService.PinMessage:input_type -> messaging.PinMessageRequest
-	32, // 50: messaging.MessagingService.UnpinMessage:input_type -> messaging.UnpinMessageRequest
-	33, // 51: messaging.MessagingService.ListPins:input_type -> messaging.ListPinsRequest
-	36, // 52: messaging.MessagingService.MarkChannelRead:input_type -> messaging.MarkChannelReadRequest
-	37, // 53: messaging.MessagingService.GetUnreadCounts:input_type -> messaging.GetUnreadCountsRequest
-	40, // 54: messaging.MessagingService.SearchMessages:input_type -> messaging.SearchMessagesRequest
-	41, // 55: messaging.MessagingService.CreatePoll:input_type -> messaging.CreatePollRequest
-	42, // 56: messaging.MessagingService.VotePoll:input_type -> messaging.VotePollRequest
-	43, // 57: messaging.MessagingService.RemoveVote:input_type -> messaging.RemoveVoteRequest
-	44, // 58: messaging.MessagingService.GetPoll:input_type -> messaging.GetPollRequest
-	47, // 59: messaging.MessagingService.ClosePoll:input_type -> messaging.ClosePollRequest
-	48, // 60: messaging.MessagingService.CreateTask:input_type -> messaging.CreateTaskRequest
-	49, // 61: messaging.MessagingService.UpdateTask:input_type -> messaging.UpdateTaskRequest
-	50, // 62: messaging.MessagingService.ListTasks:input_type -> messaging.ListTasksRequest
-	54, // 63: messaging.NotificationService.ListNotifications:input_type -> messaging.ListNotificationsRequest
-	56, // 64: messaging.NotificationService.MarkRead:input_type -> messaging.MarkNotificationReadRequest
-	57, // 65: messaging.NotificationService.MarkAllRead:input_type -> messaging.MarkAllNotificationsReadRequest
-	58, // 66: messaging.NotificationService.GetUnreadCount:input_type -> messaging.GetNotificationUnreadCountRequest
-	1,  // 67: messaging.MessagingService.CreateChannel:output_type -> messaging.Channel
-	5,  // 68: messaging.MessagingService.ListChannels:output_type -> messaging.ChannelList
-	1,  // 69: messaging.MessagingService.GetChannel:output_type -> messaging.Channel
-	0,  // 70: messaging.MessagingService.AddChannelMember:output_type -> messaging.Empty
-	0,  // 71: messaging.MessagingService.RemoveChannelMember:output_type -> messaging.Empty
-	10, // 72: messaging.MessagingService.ListChannelMembers:output_type -> messaging.ChannelMemberList
-	12, // 73: messaging.MessagingService.SendMessage:output_type -> messaging.Message
-	18, // 74: messaging.MessagingService.GetMessages:output_type -> messaging.MessageList
-	18, // 75: messaging.MessagingService.GetThread:output_type -> messaging.MessageList
-	18, // 76: messaging.MessagingService.FindThreadsByEntity:output_type -> messaging.MessageList
-	0,  // 77: messaging.MessagingService.FollowThread:output_type -> messaging.Empty
-	0,  // 78: messaging.MessagingService.UnfollowThread:output_type -> messaging.Empty
-	0,  // 79: messaging.MessagingService.MarkThreadRead:output_type -> messaging.Empty
-	18, // 80: messaging.MessagingService.ListThreads:output_type -> messaging.MessageList
-	12, // 81: messaging.MessagingService.EditMessage:output_type -> messaging.Message
-	0,  // 82: messaging.MessagingService.DeleteMessage:output_type -> messaging.Empty
-	0,  // 83: messaging.MessagingService.MarkMessageUnread:output_type -> messaging.Empty
-	1,  // 84: messaging.MessagingService.CreateDM:output_type -> messaging.Channel
-	5,  // 85: messaging.MessagingService.ListDMs:output_type -> messaging.ChannelList
-	0,  // 86: messaging.MessagingService.AddReaction:output_type -> messaging.Empty
-	0,  // 87: messaging.MessagingService.RemoveReaction:output_type -> messaging.Empty
-	30, // 88: messaging.MessagingService.ListReactions:output_type -> messaging.ReactionList
-	0,  // 89: messaging.MessagingService.PinMessage:output_type -> messaging.Empty
-	0,  // 90: messaging.MessagingService.UnpinMessage:output_type -> messaging.Empty
-	35, // 91: messaging.MessagingService.ListPins:output_type -> messaging.PinnedMessageList
-	0,  // 92: messaging.MessagingService.MarkChannelRead:output_type -> messaging.Empty
-	39, // 93: messaging.MessagingService.GetUnreadCounts:output_type -> messaging.ChannelUnreadList
-	18, // 94: messaging.MessagingService.SearchMessages:output_type -> messaging.MessageList
-	46, // 95: messaging.MessagingService.CreatePoll:output_type -> messaging.Poll
-	0,  // 96: messaging.MessagingService.VotePoll:output_type -> messaging.Empty
-	0,  // 97: messaging.MessagingService.RemoveVote:output_type -> messaging.Empty
-	46, // 98: messaging.MessagingService.GetPoll:output_type -> messaging.Poll
-	46, // 99: messaging.MessagingService.ClosePoll:output_type -> messaging.Poll
-	51, // 100: messaging.MessagingService.CreateTask:output_type -> messaging.ChatTask
-	51, // 101: messaging.MessagingService.UpdateTask:output_type -> messaging.ChatTask
-	52, // 102: messaging.MessagingService.ListTasks:output_type -> messaging.ChatTaskList
-	55, // 103: messaging.NotificationService.ListNotifications:output_type -> messaging.NotificationList
-	0,  // 104: messaging.NotificationService.MarkRead:output_type -> messaging.Empty
-	0,  // 105: messaging.NotificationService.MarkAllRead:output_type -> messaging.Empty
-	59, // 106: messaging.NotificationService.GetUnreadCount:output_type -> messaging.NotificationUnreadCountResponse
-	67, // [67:107] is the sub-list for method output_type
-	27, // [27:67] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	60, // 10: messaging.Message.starred_at:type_name -> google.protobuf.Timestamp
+	12, // 11: messaging.MessageList.messages:type_name -> messaging.Message
+	60, // 12: messaging.Reaction.created_at:type_name -> google.protobuf.Timestamp
+	28, // 13: messaging.ReactionList.reactions:type_name -> messaging.Reaction
+	12, // 14: messaging.PinnedMessage.message:type_name -> messaging.Message
+	60, // 15: messaging.PinnedMessage.pinned_at:type_name -> google.protobuf.Timestamp
+	34, // 16: messaging.PinnedMessageList.pins:type_name -> messaging.PinnedMessage
+	38, // 17: messaging.ChannelUnreadList.channels:type_name -> messaging.ChannelUnread
+	60, // 18: messaging.CreatePollRequest.ends_at:type_name -> google.protobuf.Timestamp
+	45, // 19: messaging.Poll.options:type_name -> messaging.PollOption
+	60, // 20: messaging.Poll.ends_at:type_name -> google.protobuf.Timestamp
+	60, // 21: messaging.Poll.created_at:type_name -> google.protobuf.Timestamp
+	60, // 22: messaging.Poll.closed_at:type_name -> google.protobuf.Timestamp
+	60, // 23: messaging.ChatTask.created_at:type_name -> google.protobuf.Timestamp
+	60, // 24: messaging.ChatTask.updated_at:type_name -> google.protobuf.Timestamp
+	51, // 25: messaging.ChatTaskList.tasks:type_name -> messaging.ChatTask
+	60, // 26: messaging.Notification.created_at:type_name -> google.protobuf.Timestamp
+	53, // 27: messaging.NotificationList.notifications:type_name -> messaging.Notification
+	2,  // 28: messaging.MessagingService.CreateChannel:input_type -> messaging.CreateChannelRequest
+	3,  // 29: messaging.MessagingService.ListChannels:input_type -> messaging.ListChannelsRequest
+	4,  // 30: messaging.MessagingService.GetChannel:input_type -> messaging.GetChannelRequest
+	6,  // 31: messaging.MessagingService.AddChannelMember:input_type -> messaging.AddChannelMemberRequest
+	7,  // 32: messaging.MessagingService.RemoveChannelMember:input_type -> messaging.RemoveChannelMemberRequest
+	8,  // 33: messaging.MessagingService.ListChannelMembers:input_type -> messaging.ListChannelMembersRequest
+	11, // 34: messaging.MessagingService.SendMessage:input_type -> messaging.SendMessageRequest
+	17, // 35: messaging.MessagingService.GetMessages:input_type -> messaging.GetMessagesRequest
+	21, // 36: messaging.MessagingService.GetThread:input_type -> messaging.GetThreadRequest
+	22, // 37: messaging.MessagingService.FindThreadsByEntity:input_type -> messaging.FindThreadsByEntityRequest
+	19, // 38: messaging.MessagingService.FollowThread:input_type -> messaging.ThreadRequest
+	19, // 39: messaging.MessagingService.UnfollowThread:input_type -> messaging.ThreadRequest
+	19, // 40: messaging.MessagingService.MarkThreadRead:input_type -> messaging.ThreadRequest
+	20, // 41: messaging.MessagingService.ListThreads:input_type -> messaging.ListThreadsRequest
+	15, // 42: messaging.MessagingService.EditMessage:input_type -> messaging.EditMessageRequest
+	14, // 43: messaging.MessagingService.DeleteMessage:input_type -> messaging.MessageRef
+	14, // 44: messaging.MessagingService.MarkMessageUnread:input_type -> messaging.MessageRef
+	23, // 45: messaging.MessagingService.CreateDM:input_type -> messaging.CreateDMRequest
+	24, // 46: messaging.MessagingService.ListDMs:input_type -> messaging.ListDMsRequest
+	25, // 47: messaging.MessagingService.AddReaction:input_type -> messaging.AddReactionRequest
+	26, // 48: messaging.MessagingService.RemoveReaction:input_type -> messaging.RemoveReactionRequest
+	27, // 49: messaging.MessagingService.ListReactions:input_type -> messaging.ListReactionsRequest
+	31, // 50: messaging.MessagingService.PinMessage:input_type -> messaging.PinMessageRequest
+	32, // 51: messaging.MessagingService.UnpinMessage:input_type -> messaging.UnpinMessageRequest
+	33, // 52: messaging.MessagingService.ListPins:input_type -> messaging.ListPinsRequest
+	36, // 53: messaging.MessagingService.MarkChannelRead:input_type -> messaging.MarkChannelReadRequest
+	37, // 54: messaging.MessagingService.GetUnreadCounts:input_type -> messaging.GetUnreadCountsRequest
+	40, // 55: messaging.MessagingService.SearchMessages:input_type -> messaging.SearchMessagesRequest
+	41, // 56: messaging.MessagingService.CreatePoll:input_type -> messaging.CreatePollRequest
+	42, // 57: messaging.MessagingService.VotePoll:input_type -> messaging.VotePollRequest
+	43, // 58: messaging.MessagingService.RemoveVote:input_type -> messaging.RemoveVoteRequest
+	44, // 59: messaging.MessagingService.GetPoll:input_type -> messaging.GetPollRequest
+	47, // 60: messaging.MessagingService.ClosePoll:input_type -> messaging.ClosePollRequest
+	48, // 61: messaging.MessagingService.CreateTask:input_type -> messaging.CreateTaskRequest
+	49, // 62: messaging.MessagingService.UpdateTask:input_type -> messaging.UpdateTaskRequest
+	50, // 63: messaging.MessagingService.ListTasks:input_type -> messaging.ListTasksRequest
+	54, // 64: messaging.NotificationService.ListNotifications:input_type -> messaging.ListNotificationsRequest
+	56, // 65: messaging.NotificationService.MarkRead:input_type -> messaging.MarkNotificationReadRequest
+	57, // 66: messaging.NotificationService.MarkAllRead:input_type -> messaging.MarkAllNotificationsReadRequest
+	58, // 67: messaging.NotificationService.GetUnreadCount:input_type -> messaging.GetNotificationUnreadCountRequest
+	1,  // 68: messaging.MessagingService.CreateChannel:output_type -> messaging.Channel
+	5,  // 69: messaging.MessagingService.ListChannels:output_type -> messaging.ChannelList
+	1,  // 70: messaging.MessagingService.GetChannel:output_type -> messaging.Channel
+	0,  // 71: messaging.MessagingService.AddChannelMember:output_type -> messaging.Empty
+	0,  // 72: messaging.MessagingService.RemoveChannelMember:output_type -> messaging.Empty
+	10, // 73: messaging.MessagingService.ListChannelMembers:output_type -> messaging.ChannelMemberList
+	12, // 74: messaging.MessagingService.SendMessage:output_type -> messaging.Message
+	18, // 75: messaging.MessagingService.GetMessages:output_type -> messaging.MessageList
+	18, // 76: messaging.MessagingService.GetThread:output_type -> messaging.MessageList
+	18, // 77: messaging.MessagingService.FindThreadsByEntity:output_type -> messaging.MessageList
+	0,  // 78: messaging.MessagingService.FollowThread:output_type -> messaging.Empty
+	0,  // 79: messaging.MessagingService.UnfollowThread:output_type -> messaging.Empty
+	0,  // 80: messaging.MessagingService.MarkThreadRead:output_type -> messaging.Empty
+	18, // 81: messaging.MessagingService.ListThreads:output_type -> messaging.MessageList
+	12, // 82: messaging.MessagingService.EditMessage:output_type -> messaging.Message
+	0,  // 83: messaging.MessagingService.DeleteMessage:output_type -> messaging.Empty
+	0,  // 84: messaging.MessagingService.MarkMessageUnread:output_type -> messaging.Empty
+	1,  // 85: messaging.MessagingService.CreateDM:output_type -> messaging.Channel
+	5,  // 86: messaging.MessagingService.ListDMs:output_type -> messaging.ChannelList
+	0,  // 87: messaging.MessagingService.AddReaction:output_type -> messaging.Empty
+	0,  // 88: messaging.MessagingService.RemoveReaction:output_type -> messaging.Empty
+	30, // 89: messaging.MessagingService.ListReactions:output_type -> messaging.ReactionList
+	0,  // 90: messaging.MessagingService.PinMessage:output_type -> messaging.Empty
+	0,  // 91: messaging.MessagingService.UnpinMessage:output_type -> messaging.Empty
+	35, // 92: messaging.MessagingService.ListPins:output_type -> messaging.PinnedMessageList
+	0,  // 93: messaging.MessagingService.MarkChannelRead:output_type -> messaging.Empty
+	39, // 94: messaging.MessagingService.GetUnreadCounts:output_type -> messaging.ChannelUnreadList
+	18, // 95: messaging.MessagingService.SearchMessages:output_type -> messaging.MessageList
+	46, // 96: messaging.MessagingService.CreatePoll:output_type -> messaging.Poll
+	0,  // 97: messaging.MessagingService.VotePoll:output_type -> messaging.Empty
+	0,  // 98: messaging.MessagingService.RemoveVote:output_type -> messaging.Empty
+	46, // 99: messaging.MessagingService.GetPoll:output_type -> messaging.Poll
+	46, // 100: messaging.MessagingService.ClosePoll:output_type -> messaging.Poll
+	51, // 101: messaging.MessagingService.CreateTask:output_type -> messaging.ChatTask
+	51, // 102: messaging.MessagingService.UpdateTask:output_type -> messaging.ChatTask
+	52, // 103: messaging.MessagingService.ListTasks:output_type -> messaging.ChatTaskList
+	55, // 104: messaging.NotificationService.ListNotifications:output_type -> messaging.NotificationList
+	0,  // 105: messaging.NotificationService.MarkRead:output_type -> messaging.Empty
+	0,  // 106: messaging.NotificationService.MarkAllRead:output_type -> messaging.Empty
+	59, // 107: messaging.NotificationService.GetUnreadCount:output_type -> messaging.NotificationUnreadCountResponse
+	68, // [68:108] is the sub-list for method output_type
+	28, // [28:68] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_proto_messaging_messaging_proto_init() }

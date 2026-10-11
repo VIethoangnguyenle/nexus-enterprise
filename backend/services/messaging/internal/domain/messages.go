@@ -248,6 +248,10 @@ func messageToProto(m *store.Message) *pb.Message {
 		EditedAt:            editedAtProto(m),
 		Deleted:             m.Deleted,
 		Quoted:              quoteToProto(m.Quoted),
+
+		Starred:   m.StarredAt != nil,
+		StarredAt: starredAtProto(m),
+		Unread:    m.Unread,
 	}
 }
 

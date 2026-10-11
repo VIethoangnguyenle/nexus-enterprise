@@ -74,6 +74,7 @@ Verified against the codebase on 2026-07-31.
 | `chat-rich-text` | Matches code (added 2026-10-11; toolbar follows) |
 | `chat-message-lifecycle` | Matches code (added 2026-10-11; screens follow) |
 | `chat-sections` | Matches code (added 2026-10-11; screens follow) |
+| `chat-shortcuts` | Matches code (added 2026-10-11; screens follow) |
 | `chat-cards` | Matches code for polls and tasks (added 2026-10-11; cards follow) |
 | `web-push` | Matches code for sending (added 2026-10-11; device sign-up follows) |
 
