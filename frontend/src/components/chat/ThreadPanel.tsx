@@ -89,6 +89,11 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
     ?.messages.find((x) => x.id === messageId)
   const root = all.find((x) => x.id === messageId) ?? fromList
   const replies = useMemo(() => all.filter((x) => x.id !== messageId), [all, messageId])
+  // The link named a thread of another conversation: a reply from here would be refused by the server.
+  const foreign = !isLoading && !!root?.channel_id && root.channel_id !== channelId
+  useEffect(() => {
+    if (foreign) onClose()
+  }, [foreign, onClose])
   const following = !!root?.following
   const unreadNow = root?.thread_unread_count ?? 0
 
@@ -352,7 +357,7 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
         </div>
       )}
       </div>
-      <MessageMenu target={menu} anchorRef={anchorRef} onClose={() => setMenu(null)} lifecycle={lifecycle} />
+      <MessageMenu target={menu} anchorRef={anchorRef} onClose={() => setMenu(null)} lifecycle={lifecycle} composeScope={threadScope(messageId)} />
       <AnimatePresence>
         {sheetFor && (
           <MessageActionSheet
@@ -363,6 +368,7 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
             onEdit={lifecycle.abilities(sheetFor).edit ? () => lifecycle.startEdit(sheetFor) : undefined}
             onMarkUnread={lifecycle.abilities(sheetFor).markUnread ? () => lifecycle.markUnread(sheetFor) : undefined}
             onDelete={lifecycle.abilities(sheetFor).remove ? () => lifecycle.askDelete(sheetFor) : undefined}
+            composeScope={threadScope(messageId)}
             onClose={() => setSheetFor(null)}
           />
         )}

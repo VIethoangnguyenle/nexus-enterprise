@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Message } from '../api/messaging'
 import {
-  deleteConsequence, isDeletedPlaceholder, lastEditableOf, messageAbilities, messageText, quoteSummary, toEditorHtml,
+  cardKindOf, deleteConsequence, isDeletedPlaceholder, lastEditableOf, messageAbilities, messageText, quoteSummary, toEditorHtml,
 } from './message-model'
 
 const msg = (over: Partial<Message> = {}): Message =>
@@ -108,5 +108,14 @@ describe('messageText', () => {
 
   it('reads a plain body as it is', () => {
     expect(messageText('a < b')).toBe('a < b')
+  })
+})
+
+describe('cardKindOf', () => {
+  it('names the card a message links to, and nothing for an unknown kind or a link without an id', () => {
+    expect(cardKindOf({ linked_entity_type: 'poll', linked_entity_id: 'p1' })).toBe('poll')
+    expect(cardKindOf({ linked_entity_type: 'approval', linked_entity_id: 'a1' })).toBe('approval')
+    expect(cardKindOf({ linked_entity_type: 'drive_file', linked_entity_id: 'f1' })).toBeUndefined()
+    expect(cardKindOf({ linked_entity_type: 'poll', linked_entity_id: '' })).toBeUndefined()
   })
 })

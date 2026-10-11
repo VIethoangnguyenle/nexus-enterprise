@@ -5,6 +5,7 @@ import { Bell, BellOff, Copy, MailOpen, MessageSquareReply, Pen, Pin, PinOff, Pl
 import type { Message } from '../../api/messaging'
 import { useModalFocus } from '../../hooks/useModalFocus'
 import { useStarMessage } from '../../hooks/useShortcuts'
+import { useOpenStarred } from '../../hooks/useShortcutScreen'
 import { canQuote, canStar } from '../../lib/message-actions'
 import { quoteMessage, scopeOf, useDraftsStore } from '../../stores/drafts.store'
 import { useMotionPresets } from '../../lib/motion'
@@ -38,6 +39,8 @@ interface MessageActionSheetProps {
   onMarkUnread?: () => void
   /** Your own message, or any message when you manage the channel. */
   onDelete?: () => void
+  /** The composer a quote goes to when it is not the message's own: the thread panel's, for the thread root. */
+  composeScope?: string
   onClose: () => void
 }
 
@@ -48,15 +51,15 @@ interface MessageActionSheetProps {
  * rules are `useModalFocus`'s; dragging the handle down closes it.
  */
 export function MessageActionSheet({
-  message: m, people, me, onReply, onToggleFollow, onPin, onReact, onMoreReactions, onEdit, onMarkUnread, onDelete, onClose,
+  message: m, people, me, onReply, onToggleFollow, onPin, onReact, onMoreReactions, onEdit, onMarkUnread, onDelete, composeScope, onClose,
 }: MessageActionSheetProps) {
   const motionPresets = useMotionPresets()
   const surfaceRef = useRef<HTMLDivElement>(null)
   const dragControls = useDragControls()
   useModalFocus({ active: true, surfaceRef, onClose })
-  const star = useStarMessage()
+  const star = useStarMessage({ onView: useOpenStarred() })
   // While this composer holds a message being edited (phones) there is no quote to offer.
-  const composerEditing = useDraftsStore((d) => !!d.editing[scopeOf(m)])
+  const composerEditing = useDraftsStore((d) => !!d.editing[composeScope ?? scopeOf(m)])
 
   const author = m.sender_id === me ? 'Bạn' : displayName(people, m.sender_id, m.sender_name)
   const following = !!m.following
@@ -146,7 +149,7 @@ export function MessageActionSheet({
             Sao chép
           </SheetItem>
           {canQuote(m) && !composerEditing && (
-            <SheetItem icon={<Quote size={18} strokeWidth={1.75} />} onClick={done(() => quoteMessage(m))}>
+            <SheetItem icon={<Quote size={18} strokeWidth={1.75} />} onClick={done(() => quoteMessage(m, composeScope))}>
               Trích dẫn khi trả lời
             </SheetItem>
           )}

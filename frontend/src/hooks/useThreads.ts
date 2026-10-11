@@ -36,7 +36,11 @@ export function useMarkThreadRead(channelId: string) {
     onMutate: (rootId) => {
       patchRoot(channelId, rootId, (m) => ((m.thread_unread_count ?? 0) > 0 ? { thread_unread_count: 0 } : null))
     },
-    onSuccess: (st) => applyThreadStateAnswer(st),
+    onSuccess: (st) => {
+      applyThreadStateAnswer(st)
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() })
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsUnreadAll() })
+    },
   })
 }
 

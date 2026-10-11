@@ -74,6 +74,28 @@ A message MAY quote one live message of the same channel (`quoted_message_id`); 
 quote never carries another channel's text. A message is returned with what its quote shows: the quoted message's
 sender name and the opening of its text, or that it was deleted, without text.
 
+That refusal SHALL carry the machine-readable reason `quoted_message_unavailable` in its body
+(`{"message": …, "reason": "quoted_message_unavailable"}`), and no other refusal of a send SHALL carry it, so a client
+tells a quote that is gone from any other bad request without reading prose. The reason is the same whether the message
+was deleted, never existed, or lives in another channel: the answer must not reveal what another channel holds. It is
+judged after the caller's `write` on the channel, so a caller without write gets 403 and no reason.
+
+#### Scenario: The quoted message was deleted
+- **WHEN** a send names a message of this channel that has been deleted
+- **THEN** the answer is 400 with reason `quoted_message_unavailable` and nothing is stored
+
+#### Scenario: The quoted message is in another channel
+- **WHEN** a send names a message of another channel
+- **THEN** the answer is 400 with the same reason, and the body does not contain that message's text
+
+#### Scenario: Another reason for a bad request
+- **WHEN** a send that quotes a live message has no text and no file
+- **THEN** the answer is 400 without the reason
+
+#### Scenario: No write access
+- **WHEN** a caller without `write` on the channel sends a message quoting a deleted message
+- **THEN** the answer is 403 without the reason
+
 ### Requirement: Marking a message unread
 `POST /api/messages/{id}/unread` (gRPC `MarkMessageUnread`) SHALL, for a caller with `read` on the channel, move their
 read position to just before the message: in the channel for a root message, in its thread for a reply, so that
@@ -92,4 +114,44 @@ read as a quiet system line, not a bubble. No message id reaches the screen.
 #### Scenario: A manager deletes a colleague's message
 - **WHEN** a manager chooses "Xoá tin" on a colleague's message
 - **THEN** the dialog names the colleague, and after confirming the message is gone for everyone and a system line says who deleted whose message
+
+### Requirement: A quote waits in the composer of the conversation or thread it will be sent in
+"Trích dẫn khi trả lời" SHALL set the pending quote of the composer the message is answered in: the conversation's for a
+message of the stream, the thread's for a reply, and, inside the thread panel, the thread's for the thread root too. A
+quote and the text typed beside it are kept per conversation and per thread, for the session in memory only: they
+survive leaving the conversation and coming back, and they are dropped when the person signs out. Sending takes the
+quote off the composer at once, so a second message sent before the first is answered does not repeat it. When the send
+fails the text and the quote come back, unless something new was typed or quoted meanwhile; the quote then shows as
+"Tin nhắn đã bị xoá" (the message is sent without it) only when the server answered 400 with the reason
+`quoted_message_unavailable` — any other failure leaves a quote that is still good. A quote taken from a message deleted
+while it was pending shows the same way. A card posted as a message (a document or an approval request) never carries a
+quote. On a phone, a composer that is editing a sent message takes no quote until the edit is saved or cancelled.
+
+The text leaves the draft when the send starts, not when the server answers: a composer closed before the answer (another
+conversation, a closed thread panel) comes back empty. If the send fails, the text returns to the composer it was typed
+in, and only when that composer holds no newer text.
+
+#### Scenario: Sending from a thread panel while quoting its root
+- **WHEN** a reader chooses "Trích dẫn khi trả lời" on the thread root inside the thread panel
+- **THEN** the quote appears in the thread's reply box, not in the conversation's
+
+#### Scenario: A send fails for another reason
+- **WHEN** a message with a pending quote is refused with 400 because of a bad attachment
+- **THEN** the text and the quote return to the composer and the quote is not marked deleted
+
+### Requirement: A thread stays unread after "Đánh dấu chưa đọc" until its panel is left
+When a reader marks a message of an open thread unread, the thread panel SHALL NOT read the thread again as part of the
+same visit; the next time the thread is opened it is read as usual. A failed mark-unread holds nothing.
+
+### Requirement: An edit sends the whole mention list
+The client SHALL send, with an edit of a message written as rich text, the full list of people mentioned in the edited
+text (`[]` when it mentions nobody), and the `message_edited` frame SHALL carry the whole list after the edit, so
+that a viewer holding the message replaces its mentions with it, an empty list included. A viewer's "Được nhắc tới" count
+SHALL be asked for again when an edit adds or removes the viewer, when a message that named the viewer is deleted (or may
+have, when it is not held), when a conversation or a thread is read here or on another device, and when the unread
+counts change.
+
+#### Scenario: An edit removes every mention
+- **WHEN** a sender edits a message so that it mentions nobody
+- **THEN** every viewer who holds it shows no mention on it, without reloading
 

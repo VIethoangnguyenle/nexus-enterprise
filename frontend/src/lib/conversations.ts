@@ -34,6 +34,8 @@ export interface Conversation {
   mentions?: number
   /** The caller starred this conversation: it is listed under "Đã gắn sao" only. */
   starred?: boolean
+  /** When it was starred, in ms: the order of "Đã gắn sao". */
+  starredAt?: number
 }
 
 /** What the unread list says about one conversation besides how many messages are unread. */
@@ -41,6 +43,7 @@ export interface ConversationMeta {
   level?: NotificationLevel
   mentions?: number
   starred?: boolean
+  starredAt?: number
 }
 
 export type ConversationFilter = 'all' | 'unread' | 'spaces' | 'direct'
@@ -110,6 +113,7 @@ export function buildConversations({ spaces, dms, unread, meta = {}, lastMessage
       level,
       mentions: m?.mentions ?? 0,
       starred: !!m?.starred,
+      starredAt: m?.starred ? m.starredAt : undefined,
       memberCount: ch.member_count ?? 0,
       lastActivity: last ? Date.parse(last.timestamp) || 0 : 0,
       preview: last?.content || undefined,
@@ -149,7 +153,8 @@ export function sortConversations(list: Conversation[]): Conversation[] {
 export function filterConversations(list: Conversation[], filter: ConversationFilter): Conversation[] {
   switch (filter) {
     case 'unread':
-      return list.filter((c) => c.unread > 0)
+      // The same count the badge shows: a muted conversation qualifies by its unread @mentions.
+      return list.filter((c) => unreadOf(c) > 0)
     case 'spaces':
       return list.filter((c) => c.kind === 'space')
     case 'direct':

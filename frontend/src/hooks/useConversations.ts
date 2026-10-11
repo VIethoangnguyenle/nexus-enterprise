@@ -3,6 +3,7 @@ import { useChannels, useDirectMessages, useUnreadCounts } from './useMessaging'
 import { usePeople } from './usePeople'
 import { useAuthStore } from '../stores/auth.store'
 import { useWebSocketStore } from '../stores/websocket.store'
+import { timestampToRfc3339 } from '../lib/stream-model'
 import {
   buildConversations, sortConversations, totalUnread, type Conversation, type ConversationMeta,
 } from '../lib/conversations'
@@ -44,7 +45,10 @@ export function useConversations(workspaceId: string): ConversationsState {
   const meta = useMemo(() => {
     const map: Record<string, ConversationMeta> = {}
     for (const u of unreadQ.data?.channels ?? []) {
-      map[u.channel_id] = { level: u.notification_level, mentions: u.mention_count, starred: u.starred }
+      map[u.channel_id] = {
+        level: u.notification_level, mentions: u.mention_count, starred: u.starred,
+        starredAt: Date.parse(timestampToRfc3339(u.starred_at)) || undefined,
+      }
     }
     return map
   }, [unreadQ.data])

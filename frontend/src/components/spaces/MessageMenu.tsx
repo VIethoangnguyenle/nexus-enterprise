@@ -3,6 +3,7 @@ import { Bell, BellOff, Copy, MailOpen, Pen, Quote, Star, StarOff, Trash2 } from
 import type { Message } from '../../api/messaging'
 import type { MessageLifecycle } from '../../hooks/useMessageActions'
 import { useStarMessage } from '../../hooks/useShortcuts'
+import { useOpenStarred } from '../../hooks/useShortcutScreen'
 import { canQuote, canStar } from '../../lib/message-actions'
 import { quoteMessage, scopeOf, useDraftsStore } from '../../stores/drafts.store'
 import { MenuItem, MenuSeparator, Popover } from '../primitives'
@@ -18,6 +19,8 @@ interface MessageMenuProps {
   lifecycle?: MessageLifecycle
   /** Follow or unfollow the thread of a root message; absent inside the thread panel. */
   onFollow?: (m: Message, follow: boolean) => void
+  /** The composer a quote goes to when it is not the message's own: the thread panel's, for the thread root. */
+  composeScope?: string
 }
 
 /**
@@ -26,12 +29,12 @@ interface MessageMenuProps {
  * mark unread (someone else's message), edit (yours), a divider, delete. An
  * action the reader cannot take is not listed.
  */
-export function MessageMenu({ target, anchorRef, onClose, lifecycle, onFollow }: MessageMenuProps) {
+export function MessageMenu({ target, anchorRef, onClose, lifecycle, onFollow, composeScope }: MessageMenuProps) {
   const m = target?.message
   const can = m && lifecycle ? lifecycle.abilities(m) : undefined
-  const star = useStarMessage()
+  const star = useStarMessage({ onView: useOpenStarred() })
   // A phone's composer that is editing a message takes no quote until it is saved or cancelled.
-  const composerEditing = useDraftsStore((d) => (m ? !!d.editing[scopeOf(m)] : false))
+  const composerEditing = useDraftsStore((d) => (m ? !!d.editing[composeScope ?? scopeOf(m)] : false))
   return (
     <Popover
       open={!!target}
@@ -63,7 +66,7 @@ export function MessageMenu({ target, anchorRef, onClose, lifecycle, onFollow }:
         </MenuItem>
       )}
       {m && canQuote(m) && !composerEditing && (
-        <MenuItem icon={<Quote size={16} strokeWidth={1.75} />} onClick={() => quoteMessage(m)}>
+        <MenuItem icon={<Quote size={16} strokeWidth={1.75} />} onClick={() => quoteMessage(m, composeScope)}>
           Trích dẫn khi trả lời
         </MenuItem>
       )}

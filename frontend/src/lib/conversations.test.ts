@@ -51,6 +51,20 @@ describe('sortConversations / filterConversations', () => {
     expect(filterConversations(base, 'direct').every((c) => c.kind === 'dm')).toBe(true)
     expect(totalUnread(base)).toBe(4)
   })
+
+  it('lists a muted conversation under "Chưa đọc" only while an @mention of the caller is unread', () => {
+    const row = (over: Partial<Conversation>): Conversation => ({
+      id: 'x', kind: 'space', title: 'x', hueKey: 'x', unread: 0, memberCount: 0, lastActivity: 0, ...over,
+    })
+    const list = [
+      row({ id: 'muted-mention', level: 'off', unread: 0, mentions: 2 }),
+      row({ id: 'muted-quiet', level: 'off', unread: 0, mentions: 0 }),
+      row({ id: 'normal', unread: 1 }),
+      row({ id: 'read' }),
+    ]
+    // The filter matches the badge the row would show.
+    expect(filterConversations(list, 'unread').map((c) => c.id)).toEqual(['muted-mention', 'normal'])
+  })
 })
 
 describe('what a conversation says it has unread, by notification level', () => {
@@ -89,13 +103,13 @@ describe('buildConversations with per-conversation state', () => {
       spaces: SPACES, dms: DMS, unread, me, dir, lastMessages: {},
       meta: {
         [CH.doisoat]: { level: 'off', mentions: 2 },
-        [CH.hopdong]: { starred: true },
+        [CH.hopdong]: { starred: true, starredAt: 1760000000000 },
         [CH.dmYen]: { level: 'all' },
       },
     })
     const by = (id: string) => list.find((x) => x.id === id)!
     expect(by(CH.doisoat)).toMatchObject({ level: 'off', mentions: 2, unread: 0 })
-    expect(by(CH.hopdong)).toMatchObject({ starred: true, level: 'main' })
+    expect(by(CH.hopdong)).toMatchObject({ starred: true, starredAt: 1760000000000, level: 'main' })
     expect(by(CH.vanhanh).starred).toBe(false)
   })
 

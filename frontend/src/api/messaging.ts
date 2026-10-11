@@ -139,6 +139,8 @@ export interface ChannelUnread {
   mention_count?: number
   /** The signed-in user starred this conversation; omitted when not. */
   starred?: boolean
+  /** When the caller starred it (a protobuf timestamp, or an RFC 3339 string on a fresh optimistic star); omitted when not starred. */
+  starred_at?: unknown
 }
 
 /** The caller's own state of one thread, as follow / unfollow / read answer. */

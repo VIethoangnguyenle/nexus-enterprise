@@ -35,6 +35,7 @@ beforeEach(() => {
   routerState.pathname = '/channels/mentions'
   routerState.search = {}
   routerState.navigate.mockClear()
+  routerState.canGoBack = false
   serve({}, 1, { mentions: [mention()] })
 })
 afterEach(() => {
@@ -98,11 +99,11 @@ describe('Được nhắc tới as a screen', () => {
     vi.stubGlobal('matchMedia', (q: string) => ({
       matches: q.includes('1023.98px'), media: q, addEventListener() {}, removeEventListener() {},
     }))
-    const back = vi.spyOn(window.history, 'back').mockImplementation(() => {})
-    vi.spyOn(window.history, 'length', 'get').mockReturnValue(3)
+    routerState.canGoBack = true
+    routerState.back.mockClear()
     renderWithClient(<MentionsRoute />)
     await user.click(await screen.findByRole('button', { name: /Quay lại/ }))
-    expect(back).toHaveBeenCalled()
+    expect(routerState.back).toHaveBeenCalled()
   })
 
   it('on a phone with nothing to go back to, Quay lại lands on Tin nhắn (Trang chủ)', async () => {
@@ -110,7 +111,9 @@ describe('Được nhắc tới as a screen', () => {
     vi.stubGlobal('matchMedia', (q: string) => ({
       matches: q.includes('1023.98px'), media: q, addEventListener() {}, removeEventListener() {},
     }))
-    vi.spyOn(window.history, 'length', 'get').mockReturnValue(1)
+    // The browser's own history may be long; only the app's own entries count.
+    routerState.canGoBack = false
+    vi.spyOn(window.history, 'length', 'get').mockReturnValue(5)
     renderWithClient(<MentionsRoute />)
     await user.click(await screen.findByRole('button', { name: /Quay lại/ }))
     expect(routerState.navigate).toHaveBeenCalledWith({ to: '/channels' })
@@ -131,6 +134,19 @@ describe('Đã gắn sao as a screen', () => {
     await waitFor(() => expect(within(convs).getByText('Hợp đồng đối tác')).toBeInTheDocument())
     expect(await screen.findByText('Bản chốt hợp đồng')).toBeInTheDocument()
     expect(within(convs).queryByText('Vận hành chung')).toBeNull()
+  })
+
+  it('orders the starred conversations by when each was starred, newest first', async () => {
+    serve({
+      [CH.hopdong]: { starred: true, starred_at: { seconds: 1760000000, nanos: 0 } },
+      [CH.vanhanh]: { starred: true, starred_at: { seconds: 1760009000, nanos: 0 } },
+    }, 0, { starred: [] })
+    renderWithClient(<StarredRoute />)
+    const convs = await screen.findByRole('list', { name: 'Cuộc trò chuyện' })
+    await waitFor(() => expect(within(convs).getAllByRole('link')).toHaveLength(2))
+    expect(within(convs).getAllByRole('link').map((a) => a.textContent)).toEqual([
+      expect.stringContaining('Vận hành chung'), expect.stringContaining('Hợp đồng đối tác'),
+    ])
   })
 
   it('opens a starred conversation, and a starred message with its message id', async () => {

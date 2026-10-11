@@ -1,7 +1,7 @@
 import { Download } from 'lucide-react'
 import type { MessageAttachment } from '../../api/messaging'
 import { useDownloadUrl, useDownloadFile } from '../../hooks/useDownloadUrl'
-import { fileKind } from '../../lib/file-kind'
+import { fileKind, isImageAttachment } from '../../lib/file-kind'
 import { formatBytes } from '../../lib/format'
 import { IconButton, Pressable } from '../primitives'
 
@@ -14,11 +14,6 @@ export interface AttachmentGridProps {
    * viewer walks that one list.
    */
   onOpen?: (index: number, files: MessageAttachment[], openerEl?: HTMLElement | null) => void
-}
-
-export function isImageAttachment(att: MessageAttachment): boolean {
-  if (att.mime_type?.startsWith('image/')) return true
-  return /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(att.file_name)
 }
 
 function singleAspectRatio(attachment: MessageAttachment): string {

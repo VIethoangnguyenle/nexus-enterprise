@@ -131,6 +131,7 @@ func TestSendMessage_QuotesAMessageOfTheSameChannel(t *testing.T) {
 		ChannelID: k.chID, SenderID: k.f.userID, SenderNodeID: userNode, Content: "lộ", QuotedMessageID: foreign.Id,
 	})
 	require.ErrorIs(t, err, domain.ErrInvalidInput, "quoting another channel would show its text here")
+	require.ErrorIs(t, err, domain.ErrQuoteUnavailable, "the refusal is told apart from other bad input")
 
 	// A quoted message deleted later shows as deleted, without its text.
 	require.NoError(t, delErr(k.f.svc.DeleteMessage(ctx, k.msgID, k.f.userID, userNode)))

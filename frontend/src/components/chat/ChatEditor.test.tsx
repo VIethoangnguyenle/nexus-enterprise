@@ -416,3 +416,81 @@ describe('ChatEditor: attachments and uploads', () => {
     expect(within(menu).getByRole('menuitem', { name: /Tải lên từ máy/ })).toBeInTheDocument()
   })
 })
+
+describe('ChatEditor: a send that is still pending', () => {
+  const deferred = () => {
+    let resolve!: () => void
+    let reject!: (e: Error) => void
+    const promise = new Promise<void>((res, rej) => { resolve = res; reject = rej })
+    return { promise, resolve, reject }
+  }
+  const draftOf = (scope: string) => useDraftsStore.getState().drafts[scope]?.html ?? ''
+  const mount = (onSend: () => Promise<void>) => {
+    const props = { channelId: CH.doisoat, placeholder: 'Tin nhắn cho Đối soát', onSend }
+    const view = renderWithClient(<ChatEditor {...props} />)
+    return { view, props, box: () => screen.getByRole('textbox', { name: 'Tin nhắn cho Đối soát' }) }
+  }
+
+  it('takes the text out of the draft at once, not when the server answers', async () => {
+    const user = userEvent.setup()
+    const d = deferred()
+    const { box } = mount(() => d.promise)
+    await user.click(box())
+    await user.keyboard('đã gửi{Enter}')
+    expect(draftOf(CH.doisoat)).toBe('')
+    expect(box()).toHaveTextContent('')
+    d.resolve()
+  })
+
+  it('comes back empty when the composer was closed before the answer', async () => {
+    const user = userEvent.setup()
+    const d = deferred()
+    const { view, props, box } = mount(() => d.promise)
+    await user.click(box())
+    await user.keyboard('đã gửi{Enter}')
+    view.unmount()
+    d.resolve()
+    await d.promise
+    expect(draftOf(CH.doisoat)).toBe('')
+
+    renderWithClient(<ChatEditor {...props} />)
+    expect(screen.getByRole('textbox', { name: 'Tin nhắn cho Đối soát' })).toHaveTextContent('')
+  })
+
+  it('puts the text back when the send fails and nothing new was typed', async () => {
+    const user = userEvent.setup()
+    const d = deferred()
+    const { box } = mount(() => d.promise)
+    await user.click(box())
+    await user.keyboard('thử lại{Enter}')
+    d.reject(new Error('offline'))
+    await waitFor(() => expect(box()).toHaveTextContent('thử lại'))
+    expect(draftOf(CH.doisoat)).toBe('<p>thử lại</p>')
+  })
+
+  it('does not overwrite what was typed meanwhile when the send fails', async () => {
+    const user = userEvent.setup()
+    const d = deferred()
+    const { box } = mount(() => d.promise)
+    await user.click(box())
+    await user.keyboard('cũ{Enter}')
+    await user.keyboard('mới')
+    d.reject(new Error('offline'))
+    await waitFor(() => expect(draftOf(CH.doisoat)).toBe('<p>mới</p>'))
+    expect(box()).toHaveTextContent('mới')
+    expect(box()).not.toHaveTextContent('cũ')
+  })
+
+  it('restores a failed send to its own conversation after switching to another', async () => {
+    const user = userEvent.setup()
+    const d = deferred()
+    const { view, props, box } = mount(() => d.promise)
+    await user.click(box())
+    await user.keyboard('của đối soát{Enter}')
+    view.rerender(<ChatEditor {...props} channelId={CH.vanhanh} />)
+    d.reject(new Error('offline'))
+    await waitFor(() => expect(draftOf(CH.doisoat)).toBe('<p>của đối soát</p>'))
+    expect(draftOf(CH.vanhanh)).toBe('')
+    expect(box()).not.toHaveTextContent('của đối soát')
+  })
+})

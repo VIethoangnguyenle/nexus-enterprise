@@ -61,7 +61,12 @@ export function useMarkRead(channelId: string) {
     // failure is not theirs to be told about.
     meta: { silentError: true },
     mutationFn: (lastMessageId: string) => messagingApi.markRead(channelId, lastMessageId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() }),
+    onSuccess: () => {
+      // Reading a conversation also reads the mentions in it: the pill and the feed count again.
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() })
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsUnreadAll() })
+      return queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
+    },
   })
 }
 

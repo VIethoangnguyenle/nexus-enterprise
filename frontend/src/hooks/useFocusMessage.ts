@@ -5,7 +5,9 @@ export const FLASH_MS = 2400
 /** Pages of older messages asked for, at most, while looking for the target. */
 const MAX_PAGES = 12
 /** Give up looking after this long. */
-const GIVE_UP_MS = 15_000
+export const GIVE_UP_MS = 15_000
+/** After the list has settled, a message still not on screen is not coming. */
+export const MISSING_GRACE_MS = 400
 /** The stream settles its own position when it opens; the target is centred again after that. */
 const SETTLE_MS = 300
 
@@ -33,20 +35,32 @@ const reducedMotion = () =>
  * the accent for 2.4 s. It waits for the message to render (a link can arrive
  * before the list does) and, in the stream, asks `loadMore` for older pages
  * while the message is not among those held; `loadMore` answers whether it
- * started one. A target it never finds is left alone.
+ * started one. A target it never finds is left alone, and `missing.onMissing`
+ * hears of it once (`onDone` hears when the link has been served, found or not, so the caller can drop it from the URL): when `missing.settled` (everything that could hold the
+ * message has loaded) and it is still not there, or after 15 s whatever.
  */
 export function useFocusMessage(
   root: RefObject<HTMLElement | null>,
   target: string | undefined,
   scope: FocusScope,
   loadMore?: () => boolean,
+  missing?: { settled: boolean; onMissing: () => void },
+  onDone?: () => void,
 ): void {
   const more = useRef(loadMore)
   more.current = loadMore
+  const onMissing = useRef(missing?.onMissing)
+  onMissing.current = missing?.onMissing
+  const served = useRef(onDone)
+  served.current = onDone
+  /** The target already found or already reported: neither happens twice. */
+  const resolved = useRef<string | undefined>(undefined)
+  const settled = !!missing?.settled
 
   useEffect(() => {
     const host = root.current
     if (!host || !target) return
+    resolved.current = undefined
     let done = false
     let pages = 0
     const timers: ReturnType<typeof setTimeout>[] = []
@@ -63,18 +77,24 @@ export function useFocusMessage(
         return
       }
       done = true
+      resolved.current = target
       observer.disconnect()
       clearTimeout(giveUp)
       flashed = el
       center(el)
       el.setAttribute('data-flash', '')
       timers.push(setTimeout(() => center(el), SETTLE_MS))
-      timers.push(setTimeout(() => el.removeAttribute('data-flash'), FLASH_MS))
+      timers.push(setTimeout(() => { el.removeAttribute('data-flash'); served.current?.() }, FLASH_MS))
     }
 
     const observer = new MutationObserver(attempt)
     observer.observe(host, { childList: true, subtree: true })
-    const giveUp = setTimeout(() => { done = true; observer.disconnect() }, GIVE_UP_MS)
+    const giveUp = setTimeout(() => {
+      if (done) return
+      done = true
+      observer.disconnect()
+      if (resolved.current !== target) { resolved.current = target; onMissing.current?.(); served.current?.() }
+    }, GIVE_UP_MS)
     attempt()
 
     return () => {
@@ -85,4 +105,17 @@ export function useFocusMessage(
       flashed?.removeAttribute('data-flash')
     }
   }, [root, target, scope])
+
+  // Everything that could hold the message has loaded and it is not on screen.
+  useEffect(() => {
+    const host = root.current
+    if (!host || !target || !settled) return
+    const t = setTimeout(() => {
+      if (resolved.current === target || locate(host, target, scope)) return
+      resolved.current = target
+      onMissing.current?.()
+      served.current?.()
+    }, MISSING_GRACE_MS)
+    return () => clearTimeout(t)
+  }, [root, target, scope, settled])
 }

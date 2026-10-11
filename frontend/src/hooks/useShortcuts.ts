@@ -30,7 +30,12 @@ export function setMessageStarred<L extends { messages: Message[] }>(list: L | u
 /** One conversation of the unread list flagged; the same list when it is not there. */
 export function setUnreadListStarred<L extends { channels: ChannelUnread[] }>(list: L | undefined, channelId: string, starred: boolean): L | undefined {
   if (!list || !list.channels.some((c) => c.channel_id === channelId)) return list
-  return { ...list, channels: list.channels.map((c) => (c.channel_id === channelId ? withStar(c, starred) : c)) }
+  // Starring stamps the time now, so the section lists it first before the server answers.
+  const patch = (c: ChannelUnread): ChannelUnread => {
+    const { starred_at: _drop, ...rest } = withStar(c, starred)
+    return starred ? { ...rest, starred_at: new Date().toISOString() } : rest
+  }
+  return { ...list, channels: list.channels.map((c) => (c.channel_id === channelId ? patch(c) : c)) }
 }
 
 /** A conversation's own record flagged. */
@@ -124,6 +129,16 @@ export function useOpenMention(): (m: FeedMessage) => void {
 
 // --- Starring ----------------------------------------------------------------
 
+/**
+ * Stops the refetches in flight on these keys before an optimistic patch: a
+ * response that left before the patch would land after it with the old flag.
+ * Awaited only when something is fetching, so the patch is otherwise immediate.
+ */
+function cancelFetches(...queryKeys: (readonly unknown[])[]): Promise<unknown> | undefined {
+  const busy = queryKeys.filter((queryKey) => queryClient.isFetching({ queryKey }) > 0)
+  return busy.length > 0 ? Promise.all(busy.map((queryKey) => queryClient.cancelQueries({ queryKey }))) : undefined
+}
+
 const failure = (starred: boolean) =>
   `${starred ? 'Không gắn sao được' : 'Không bỏ gắn sao được'}. Kiểm tra kết nối rồi thử lại.`
 
@@ -151,33 +166,34 @@ export function useStarMessage(opts: { onView?: () => void } = {}): (input: Star
     const listKey = keys.messaging.messages(message.channel_id)
     const threadKey = keys.messaging.thread(parent || message.id)
     const feedKey = keys.shortcuts.starredMessagesAll()
-    const before = {
-      list: parent ? undefined : queryClient.getQueryData<MessageList>(listKey),
-      thread: queryClient.getQueryData<Thread>(threadKey),
-      feeds: queryClient.getQueriesData<Feed>({ queryKey: feedKey }),
-    }
+    const cancelling = cancelFetches(feedKey, threadKey, ...(parent ? [] : [listKey]))
+    if (cancelling) await cancelling
+    const before = { feeds: queryClient.getQueriesData<Feed>({ queryKey: feedKey }) }
 
     for (const [key, feed] of input.restoreFeeds ?? []) queryClient.setQueryData(key, feed)
     if (!parent) queryClient.setQueryData<MessageList>(listKey, (old) => setMessageStarred(old, message.id, starred))
     queryClient.setQueryData<Thread>(threadKey, (old) => setMessageStarred(old, message.id, starred))
     if (!starred) queryClient.setQueriesData<Feed>({ queryKey: feedKey }, (old) => dropFromFeed(old, message.id))
 
-    if (!input.quiet) {
-      toast(starred ? 'Đã gắn sao tin' : 'Đã bỏ gắn sao tin', {
-        action: starred
-          ? onView.current && { label: 'Xem', onClick: () => onView.current?.() }
-          : { label: 'Hoàn tác', onClick: () => void run({ message, starred: true, restoreFeeds: before.feeds, quiet: true }) },
-      })
-    }
-
     try {
       await (starred ? shortcutsApi.starMessage(message.id) : shortcutsApi.unstarMessage(message.id))
+      // Said once the server has agreed: a refusal must not follow a success toast with an error one.
+      if (!input.quiet) {
+        toast(starred ? 'Đã gắn sao tin' : 'Đã bỏ gắn sao tin', {
+          action: starred
+            ? onView.current && { label: 'Xem', onClick: () => onView.current?.() }
+            : { label: 'Hoàn tác', onClick: () => void run({ message, starred: true, restoreFeeds: before.feeds, quiet: true }) },
+        })
+      }
       // A new star lands at the top of the feed; an unstar already left it, and a refetch would move an undo.
       if (starred) await queryClient.invalidateQueries({ queryKey: feedKey })
     } catch {
-      if (!parent) queryClient.setQueryData(listKey, before.list)
-      queryClient.setQueryData(threadKey, before.thread)
-      for (const [key, feed] of before.feeds) queryClient.setQueryData(key, feed)
+      // Undo only this star, item by item: whole-list snapshots would also undo
+      // what the socket delivered while the request was out.
+      if (!parent) queryClient.setQueryData<MessageList>(listKey, (old) => setMessageStarred(old, message.id, !starred))
+      queryClient.setQueryData<Thread>(threadKey, (old) => setMessageStarred(old, message.id, !starred))
+      // A card the unstar took out of the feed returns with the server's own copy.
+      if (!starred) void queryClient.invalidateQueries({ queryKey: feedKey })
       toast.error(failure(starred), { action: { label: 'Thử lại', onClick: () => void run({ message, starred, quiet: true }) } })
     }
   }, [])
@@ -202,25 +218,24 @@ export function useStarConversation(): (input: StarConversationInput) => Promise
     const { channelId, name, starred } = input
     const unreadKey = keys.messaging.unreadCounts()
     const channelKey = keys.messaging.channel(channelId)
-    const before = {
-      unread: queryClient.getQueryData<{ channels: ChannelUnread[] }>(unreadKey),
-      channel: queryClient.getQueryData<Channel>(channelKey),
-    }
+    const cancelling = cancelFetches(unreadKey, channelKey)
+    if (cancelling) await cancelling
     queryClient.setQueryData<{ channels: ChannelUnread[] }>(unreadKey, (old) => setUnreadListStarred(old, channelId, starred))
     queryClient.setQueryData<Channel>(channelKey, (old) => setChannelRecordStarred(old, starred))
 
-    if (!input.quiet) {
-      toast(starred ? `Đã gắn sao “${name}”` : `Đã bỏ gắn sao “${name}”`, {
-        action: { label: 'Hoàn tác', onClick: () => void run({ channelId, name, starred: !starred, quiet: true }) },
-      })
-    }
-
     try {
       await (starred ? shortcutsApi.starConversation(channelId) : shortcutsApi.unstarConversation(channelId))
+      if (!input.quiet) {
+        toast(starred ? `Đã gắn sao “${name}”` : `Đã bỏ gắn sao “${name}”`, {
+          action: { label: 'Hoàn tác', onClick: () => void run({ channelId, name, starred: !starred, quiet: true }) },
+        })
+      }
     } catch {
-      queryClient.setQueryData(unreadKey, before.unread)
-      queryClient.setQueryData(channelKey, before.channel)
+      queryClient.setQueryData<{ channels: ChannelUnread[] }>(unreadKey, (old) => setUnreadListStarred(old, channelId, !starred))
+      queryClient.setQueryData<Channel>(channelKey, (old) => setChannelRecordStarred(old, !starred))
       toast.error(failure(starred), { action: { label: 'Thử lại', onClick: () => void run({ channelId, name, starred, quiet: true }) } })
     }
+    // Settled either way: the server's list carries the true order of the starred section.
+    void queryClient.invalidateQueries({ queryKey: unreadKey })
   }, [])
 }

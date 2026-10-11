@@ -20,10 +20,16 @@ export function levelToast(name: string, level: NotificationLevel, prev: Notific
     : `Thông báo tin chính và thread theo dõi của “${name}”`
 }
 
+/**
+ * The level in force now. The unread list comes first: it is refreshed by the
+ * socket, so a change made on another device is in it, whereas the level query
+ * keeps whatever an earlier optimistic change wrote (nothing refetches it when
+ * the screen reads the list instead).
+ */
 function currentLevel(channelId: string): NotificationLevel {
-  return queryClient.getQueryData<{ level: NotificationLevel }>(keys.notificationLevels.level(channelId))?.level
-    ?? queryClient.getQueryData<UnreadAnswer>(keys.messaging.unreadCounts())
-      ?.channels.find((c) => c.channel_id === channelId)?.notification_level
+  return queryClient.getQueryData<UnreadAnswer>(keys.messaging.unreadCounts())
+    ?.channels.find((c) => c.channel_id === channelId)?.notification_level
+    ?? queryClient.getQueryData<{ level: NotificationLevel }>(keys.notificationLevels.level(channelId))?.level
     ?? DEFAULT_LEVEL
 }
 
@@ -80,6 +86,8 @@ export async function changeNotificationLevel(input: ChangeLevelInput): Promise<
     // The counts and the followed-thread list are the server's numbers; ask again either way.
     void queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
     void queryClient.invalidateQueries({ queryKey: keys.notificationLevels.unreadThreads() })
+    // The optimistic value in the level query is a guess; the next reader gets the server's.
+    void queryClient.invalidateQueries({ queryKey: levelKey })
   }
   if (!quiet) {
     toast(levelToast(name, level, prev), {
@@ -104,6 +112,9 @@ export function useNotificationLevel(channelId: string, name: string, opts: { fe
     queryKey: keys.notificationLevels.level(channelId),
     queryFn: () => notificationLevelApi.getNotificationLevel(channelId),
     enabled: !!channelId && (opts.fetchLevel ?? true),
+    // Opening the menu asks again: the level may have been changed on another device since.
+    staleTime: 0,
+    refetchOnMount: 'always',
   })
   const [saving, setSaving] = useState(0)
 

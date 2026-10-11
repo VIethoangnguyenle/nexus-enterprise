@@ -23,8 +23,13 @@ though a star set earlier can be removed. Stars disappear with their channel, me
 - **THEN** the answer is 403 and nothing is stored
 
 ### Requirement: Starred conversations
-`GET /api/channels/unread` SHALL carry `starred` on each item and `GET /api/channels/{id}` SHALL carry `starred`,
-both for the caller (omitted when false).
+`GET /api/channels/unread` SHALL carry `starred` and `starred_at` (when the caller starred it) on each item and
+`GET /api/channels/{id}` SHALL carry `starred`, both for the caller (omitted when not starred). The navigator's
+Đã gắn sao section lists conversations by `starred_at`, newest star first.
+
+#### Scenario: The unread list says when a conversation was starred
+- **WHEN** the caller stars a conversation and then reads `GET /api/channels/unread`
+- **THEN** its item has `starred: true` and a `starred_at`; after unstarring, neither is present
 
 ### Requirement: Starred messages feed
 `GET /api/messages/starred?before=&before_id=&limit=` SHALL list the messages the caller starred, newest star first,

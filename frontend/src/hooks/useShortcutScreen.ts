@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useCanGoBack, useNavigate, useRouter } from '@tanstack/react-router'
 import type { FeedMessage } from '../api/shortcuts'
 import type { Conversation } from '../lib/conversations'
 import { openTarget } from '../lib/shortcut-feed'
@@ -11,6 +11,20 @@ import { useChatNavigation } from './useChatNavigation'
 export function feedSearch(item: FeedMessage): { thread?: string; message: string } {
   const t = openTarget(item)
   return t.rootId ? { thread: t.rootId, message: t.messageId } : { message: t.messageId }
+}
+
+/**
+ * Back inside the app, or Trang chủ when this screen was the first one opened. The browser's own
+ * history length would also count pages of other sites, and Quay lại could leave the app.
+ */
+export function useBackOrHome(): () => void {
+  const router = useRouter()
+  const navigate = useNavigate()
+  const canGoBack = useCanGoBack()
+  return useCallback(() => {
+    if (canGoBack) router.history.back()
+    else void navigate({ to: '/channels' })
+  }, [canGoBack, router, navigate])
 }
 
 /**
@@ -37,11 +51,7 @@ export function useShortcutScreen() {
     [navigate],
   )
   const home = useCallback(() => void navigate({ to: '/channels' }), [navigate])
-  /** History back, or Trang chủ when the screen was the first one opened. */
-  const back = useCallback(() => {
-    if (window.history.length > 1) window.history.back()
-    else home()
-  }, [home])
+  const back = useBackOrHome()
   /** A real link for each card, so it opens in a new tab; the workspace travels with it. */
   const hrefOf = useCallback((item: FeedMessage) => {
     const q = new URLSearchParams()

@@ -26,9 +26,11 @@ const NOT_MINE_WS = '0c0b8e30-4d5f-4071-8cbd-3e4f5a6b7c8d'
 const tokenFor = (tenant: string) => `h.${btoa(JSON.stringify({ tenant_id: tenant }))}.s`
 
 let pending = 2
+let unread: Array<{ channel_id: string; unread_count: number; last_read_message_id: string; notification_level?: 'all' | 'main' | 'off'; mention_count?: number }> = []
 let switchError: unknown = null
 
 function answer(path: string, init?: RequestInit) {
+  if (path === '/channels/unread') return Promise.resolve({ channels: unread })
   if (path === '/approval/pending') return Promise.resolve({ items: [], total: pending })
   // The graph can reach more workspaces than the person may enter.
   if (path === '/workspaces') {
@@ -74,6 +76,7 @@ function viewport(narrow: boolean) {
 beforeEach(() => {
   viewport(true)
   pending = 2
+  unread = []
   switchError = null
   api.mockReset()
   api.mockImplementation(answer as typeof apiFetch)
@@ -160,6 +163,33 @@ describe('MobileNav bar', () => {
     await screen.findByRole('navigation', { name: 'Điều hướng di động' })
     expect(Array.from(document.body.querySelectorAll('.fixed'))).toHaveLength(1)
     expect(document.body.querySelector('img, [data-avatar]')).toBeNull()
+  })
+})
+
+describe('MobileNav Tin nhắn badge', () => {
+  const row = (id: string, unread_count: number, over: Partial<(typeof unread)[number]> = {}) =>
+    ({ channel_id: id, unread_count, last_read_message_id: '', ...over })
+
+  it('counts unread by notification level: a muted conversation adds only the times you were named', async () => {
+    unread = [row('c1', 3), row('c2', 5, { notification_level: 'off', mention_count: 1 }), row('c3', 7, { notification_level: 'off' })]
+    await renderBar()
+    const link = await screen.findByRole('link', { name: 'Tin nhắn, 4 chưa đọc' })
+    expect(link).toHaveTextContent('4')
+    expect(await screen.findByRole('link', { name: 'Phê duyệt, 2 chờ bạn' })).toBeInTheDocument()
+  })
+
+  it('caps at 99+', async () => {
+    unread = [row('c1', 150)]
+    await renderBar()
+    expect(await screen.findByRole('link', { name: 'Tin nhắn, 150 chưa đọc' })).toHaveTextContent('99+')
+  })
+
+  it('shows no badge when only muted conversations are unread', async () => {
+    unread = [row('c1', 9, { notification_level: 'off' })]
+    await renderBar()
+    const link = await screen.findByRole('link', { name: 'Tin nhắn' })
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/channels/unread'))
+    expect(link).not.toHaveTextContent(/\d/)
   })
 })
 

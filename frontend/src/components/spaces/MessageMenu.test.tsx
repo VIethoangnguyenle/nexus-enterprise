@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useToastStore } from '../primitives'
 import { renderWithClient, resetClient } from '../../test/render'
 import { shortcutsApi } from '../../api/shortcuts'
 import type { Message } from '../../api/messaging'
@@ -9,6 +10,8 @@ import { useDraftsStore } from '../../stores/drafts.store'
 import { Button } from '../primitives'
 import { MessageMenu } from './MessageMenu'
 
+const openStarred = vi.hoisted(() => vi.fn())
+vi.mock('../../hooks/useShortcutScreen', () => ({ useOpenStarred: () => openStarred }))
 vi.mock('../../api/shortcuts', async (orig) => {
   const real = await orig<typeof import('../../api/shortcuts')>()
   return { ...real, shortcutsApi: { ...real.shortcutsApi, starMessage: vi.fn().mockResolvedValue(undefined), unstarMessage: vi.fn().mockResolvedValue(undefined) } }
@@ -24,19 +27,28 @@ const msg = (over: Partial<Message> = {}): Message => ({
   id: 'm1', channel_id: 'c1', sender_id: 'u-lan', sender_name: 'Lan', content: '<p>Chốt 6427 nhé</p>', content_format: 'html', ...over,
 })
 
-function Host({ message }: { message: Message }) {
+function Host({ message, composeScope }: { message: Message; composeScope?: string }) {
   const anchor = useRef<HTMLElement | null>(null)
   return (
     <>
       <Button ref={(el) => { anchor.current = el }}>anchor</Button>
-      <MessageMenu target={{ message, up: false }} anchorRef={anchor} onClose={vi.fn()} />
+      <MessageMenu target={{ message, up: false }} anchorRef={anchor} onClose={vi.fn()} composeScope={composeScope} />
     </>
   )
 }
-const open = (message: Message) => renderWithClient(<Host message={message} />)
+const open = (message: Message, composeScope?: string) => renderWithClient(<Host message={message} composeScope={composeScope} />)
 const items = () => within(screen.getByRole('menu')).getAllByRole('menuitem').map((i) => i.textContent)
 
 describe('MessageMenu: star', () => {
+  it('offers Xem after starring, which opens Đã gắn sao', async () => {
+    const user = userEvent.setup()
+    open(msg())
+    await user.click(screen.getByRole('menuitem', { name: 'Gắn sao tin' }))
+    await waitFor(() => expect(useToastStore.getState().toasts[0]?.action?.label).toBe('Xem'))
+    useToastStore.getState().toasts[0]!.action!.onClick()
+    expect(openStarred).toHaveBeenCalled()
+  })
+
   it('stars an unstarred message', async () => {
     const user = userEvent.setup()
     open(msg())
@@ -82,6 +94,14 @@ describe('MessageMenu: quote', () => {
     open(msg({ id: 'r1', parent_message_id: 'root' }))
     await user.click(screen.getByRole('menuitem', { name: 'Trích dẫn khi trả lời' }))
     expect(useDraftsStore.getState().drafts['thread:root']?.quote?.id).toBe('r1')
+    expect(useDraftsStore.getState().drafts['c1']).toBeUndefined()
+  })
+
+  it('inside the thread panel, quotes the thread root into the thread composer, not the hidden channel one', async () => {
+    const user = userEvent.setup()
+    open(msg({ id: 'root' }), 'thread:root')
+    await user.click(screen.getByRole('menuitem', { name: 'Trích dẫn khi trả lời' }))
+    expect(useDraftsStore.getState().drafts['thread:root']?.quote?.id).toBe('root')
     expect(useDraftsStore.getState().drafts['c1']).toBeUndefined()
   })
 

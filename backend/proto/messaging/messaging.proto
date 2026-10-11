@@ -374,6 +374,7 @@ message ChannelUnread {
   string notification_level = 5;    // "all" | "main" | "off": the caller's choice for this conversation
   int32 mention_count = 6;          // Unread messages that mention the caller (counted at every level)
   bool starred = 7;                 // The caller starred this conversation
+  google.protobuf.Timestamp starred_at = 8; // When the caller starred it; unset when not starred
 }
 
 message ChannelUnreadList {

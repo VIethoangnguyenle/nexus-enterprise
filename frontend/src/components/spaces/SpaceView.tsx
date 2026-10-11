@@ -15,7 +15,7 @@ import { useStarConversation } from '../../hooks/useShortcuts'
 import { lastEditableOf, toEditorHtml } from '../../lib/message-model'
 import { useMarkRead, useChannelMembers, useUnreadCounts } from '../../hooks/useMessaging'
 import { useFollowThread, useLoadOlderMessages, useThreadsList } from '../../hooks/useThreads'
-import { useMessages, useSendMessage, useTogglePin, useToggleReaction } from '../../hooks/useMessages'
+import { useMessages, useSendMessage, useThread, useTogglePin, useToggleReaction } from '../../hooks/useMessages'
 import { useTasks } from '../../hooks/useChannelTasks'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
@@ -139,7 +139,24 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
     void loadOlder()
     return true
   }, [hasMoreOlder, olderBusy, loadOlder])
-  useFocusMessage(viewRef, focusMessageId, initialThreadId ? 'panel' : 'stream', askOlder)
+  // Where the message may be has loaded: the thread, or every page of the stream.
+  const threadQ = useThread(initialThreadId ?? '')
+  const focusSettled = initialThreadId
+    ? threadQ.isSuccess || threadQ.isError
+    : (messagesQ.isSuccess && !hasMoreOlder && !older.loading) || messagesQ.isError
+  useFocusMessage(viewRef, focusMessageId, initialThreadId ? 'panel' : 'stream', askOlder, {
+    settled: focusSettled,
+    onMissing: () => toast.info('Không tìm thấy tin nhắn này. Có thể tin đã bị xoá hoặc bạn không còn xem được.'),
+  }, () => {
+    // The link is served: leaving it in the address would make the same link a no-op the next time.
+    if (!initialThreadId && !focusMessageId) return
+    void navigate({
+      to: '/channels/$channelId',
+      params: { channelId },
+      search: (prev: { ws?: string }) => ({ ws: prev.ws }),
+      replace: true,
+    })
+  })
 
   useEffect(() => {
     sendSubscribe(channelId)

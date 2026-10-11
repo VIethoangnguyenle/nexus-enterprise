@@ -3,6 +3,7 @@
 package rest
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"time"
@@ -209,6 +210,18 @@ func (h *Handler) UpdateChannel(c echo.Context) error {
 	return c.JSON(http.StatusOK, ch)
 }
 
+// mapSendError answers a refused send. A quote that names no live message of the
+// channel is a 400 with a reason, so the client can drop that quote and keep the
+// rest of the message; everything else maps as everywhere.
+func mapSendError(err error) *echo.HTTPError {
+	if errors.Is(err, domain.ErrQuoteUnavailable) {
+		return echo.NewHTTPError(http.StatusBadRequest, map[string]any{
+			"message": err.Error(), "reason": domain.ReasonQuotedMessageUnavailable,
+		})
+	}
+	return httputil.MapDomainError(err)
+}
+
 // SendMessage handles POST /api/channels/:chId/messages.
 func (h *Handler) SendMessage(c echo.Context) error {
 	claims, err := httputil.RequireClaims(c)
@@ -251,7 +264,7 @@ func (h *Handler) SendMessage(c echo.Context) error {
 		QuotedMessageID:  body.QuotedMessageID,
 	})
 	if err != nil {
-		return httputil.MapDomainError(err)
+		return mapSendError(err)
 	}
 
 	h.announceMessage(c.Request().Context(), claims.TenantID, msg)

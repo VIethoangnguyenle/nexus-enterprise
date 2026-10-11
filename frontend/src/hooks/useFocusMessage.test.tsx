@@ -2,15 +2,18 @@ import { act, render } from '@testing-library/react'
 import { useRef, useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Pressable } from '../components/primitives'
-import { FLASH_MS, useFocusMessage } from './useFocusMessage'
+import { FLASH_MS, GIVE_UP_MS, MISSING_GRACE_MS, useFocusMessage } from './useFocusMessage'
 
-function Harness({ target, scope, loadMore }: {
+function Harness({ target, scope, loadMore, settled = false, onMissing, onDone }: {
   target?: string
   scope: 'stream' | 'panel'
   loadMore?: () => boolean
+  settled?: boolean
+  onMissing?: () => void
+  onDone?: () => void
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  useFocusMessage(ref, target, scope, loadMore)
+  useFocusMessage(ref, target, scope, loadMore, onMissing && { settled, onMissing }, onDone)
   return (
     <div ref={ref} data-testid="root">
       <div role="log"><article data-message-id="m1" /><article data-message-id="m2" /></div>
@@ -100,5 +103,69 @@ describe('useFocusMessage', () => {
     render(<Harness target="m1" scope="stream" />)
     expect(spy).toHaveBeenCalledWith({ block: 'center', behavior: 'auto' })
     vi.unstubAllGlobals()
+  })
+
+  describe('a target that never loads', () => {
+    it('says so once the list has settled and the message is still not there', () => {
+      const onMissing = vi.fn()
+      const { rerender } = render(<Harness target="gone" scope="stream" settled={false} onMissing={onMissing} />)
+      act(() => { vi.advanceTimersByTime(MISSING_GRACE_MS + 1) })
+      expect(onMissing).not.toHaveBeenCalled()
+      rerender(<Harness target="gone" scope="stream" settled onMissing={onMissing} />)
+      act(() => { vi.advanceTimersByTime(MISSING_GRACE_MS + 1) })
+      expect(onMissing).toHaveBeenCalledTimes(1)
+      act(() => { vi.advanceTimersByTime(GIVE_UP_MS + 1) })
+      expect(onMissing).toHaveBeenCalledTimes(1)
+    })
+
+    it('says so in the panel too', () => {
+      const onMissing = vi.fn()
+      render(<Harness target="nope" scope="panel" settled onMissing={onMissing} />)
+      act(() => { vi.advanceTimersByTime(MISSING_GRACE_MS + 1) })
+      expect(onMissing).toHaveBeenCalledTimes(1)
+    })
+
+    it('gives up after a while even if the list never settles', () => {
+      const onMissing = vi.fn()
+      render(<Harness target="gone" scope="stream" onMissing={onMissing} />)
+      act(() => { vi.advanceTimersByTime(GIVE_UP_MS + 1) })
+      expect(onMissing).toHaveBeenCalledTimes(1)
+    })
+
+    it('stays quiet for a message that is there, and for no target at all', () => {
+      const onMissing = vi.fn()
+      render(<Harness target="m1" scope="stream" settled onMissing={onMissing} />)
+      render(<Harness scope="stream" settled onMissing={onMissing} />)
+      act(() => { vi.advanceTimersByTime(GIVE_UP_MS + 1) })
+      expect(onMissing).not.toHaveBeenCalled()
+    })
+  })
+})
+
+describe('useFocusMessage: done', () => {
+  it('says so when the flash is over, not before', () => {
+    const onDone = vi.fn()
+    render(<Harness target="m2" scope="stream" onDone={onDone} />)
+    act(() => { vi.advanceTimersByTime(FLASH_MS - 1) })
+    expect(onDone).not.toHaveBeenCalled()
+    act(() => { vi.advanceTimersByTime(2) })
+    expect(onDone).toHaveBeenCalledOnce()
+  })
+
+  it('says so after reporting a message that never came', () => {
+    const onDone = vi.fn()
+    const onMissing = vi.fn()
+    render(<Harness target="nope" scope="stream" onMissing={onMissing} onDone={onDone} />)
+    act(() => { vi.advanceTimersByTime(GIVE_UP_MS + 1) })
+    expect(onMissing).toHaveBeenCalledOnce()
+    expect(onDone).toHaveBeenCalledOnce()
+  })
+
+  it('says nothing when the target changes before the flash is over', () => {
+    const onDone = vi.fn()
+    const { rerender } = render(<Harness target="m1" scope="stream" onDone={onDone} />)
+    rerender(<Harness target={undefined} scope="stream" onDone={onDone} />)
+    act(() => { vi.advanceTimersByTime(FLASH_MS + 1) })
+    expect(onDone).not.toHaveBeenCalled()
   })
 })

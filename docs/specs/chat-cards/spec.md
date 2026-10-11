@@ -69,3 +69,27 @@ are fetched from the owning service under the viewer's own authorization, so a v
 no details. Approval cards are not offered in a personal workspace, and the server refuses one there: sending a
 message with `linked_entity_type` `approval` in a personal workspace fails with 403 and stores nothing (a direct message is
 judged by the workspace the sender is signed in to; an unknown workspace is refused). See `tenant-identity`.
+
+### Requirement: The composer creates cards where the person is writing
+The composer SHALL offer "Tạo trong chat" — Bình chọn, Công việc, Tài liệu mới, Đề nghị phê duyệt — beside its attach
+control (one sheet with the attach rows on a phone), and not while a sent message is being edited. Created from a
+thread's reply box, a poll or a task is sent with that thread's root as `parent_message_id`, and a document or an
+approval request is posted as a reply in that thread; from the conversation's box they land in the main stream. The
+approval entry is not offered in a personal workspace. An approval request is posted as a message after it is created; if
+posting fails the person is offered "Thử lại" rather than a second request.
+
+A card is drawn outside the bubble of its message, by `linked_entity_type`; the fallback line a poll or task message
+carries ("📊 Poll: …") is not shown, and these messages are cards of their sender, not system notes. Before voting, a poll
+shows no counts and no "N người đã bình chọn" — the server leaves them out, and the client never computes them. A task
+card marks done with its checkbox, not a separate button. Neither a "Mở trong Công việc" link (that area has no route) nor an
+inline Duyệt / Từ chối on an approval card is offered. Quoting a card names it ("Bình chọn: …", "Công việc: …") when its
+title is already loaded, and never shows an id.
+
+#### Scenario: A poll made inside a thread
+- **WHEN** a member creates a poll from the reply box of a thread
+- **THEN** the poll appears as a reply in that thread and not in the main stream
+
+#### Scenario: A poll before voting
+- **WHEN** a member who has not voted looks at an open poll
+- **THEN** the card shows the question and the choices without counts or voters
+

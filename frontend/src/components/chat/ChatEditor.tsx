@@ -389,17 +389,31 @@ export function ChatEditor({
     const content = editor.isEmpty ? '' : editor.getHTML()
     const mentions = mentionsOf(editor)
 
+    // The text leaves the draft now, not when the server answers: the composer can be gone by then
+    // (another conversation, a closed thread) and a draft left behind would be sent a second time.
+    const sentScope = scopeRef.current
+    const drafts = useDraftsStore.getState()
+    drafts.setHtml(sentScope, '')
+    editor.commands.clearContent()
+    setEmpty(true)
+
     try {
       const res = doneAttachments.length > 0
         ? onSend(content, mentions, doneAttachments)
         : onSend(content, mentions)
       await Promise.resolve(res)
-      editor.commands.clearContent()
-      useDraftsStore.getState().setHtml(scopeRef.current, '')
-      setEmpty(true)
       currentUploads?.clear()
     } catch {
-      // Send failed: retain editor content and attachments in tray so user does not lose them
+      // Send failed: the text and the attachments in the tray stay, so nothing is lost. The text
+      // returns only to a composer that has not been given new text meanwhile.
+      if (content && !useDraftsStore.getState().drafts[sentScope]?.html) {
+        if (!editor.isDestroyed && scopeRef.current === sentScope) {
+          editor.commands.setContent(content)
+          setEmpty(editor.isEmpty)
+        } else {
+          useDraftsStore.getState().setHtml(sentScope, content)
+        }
+      }
     }
   }, [editor, onSend])
   const sendRef = useRef(handleSend)

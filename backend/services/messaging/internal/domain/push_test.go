@@ -68,13 +68,14 @@ func newPushWorld(t *testing.T, dm bool) *pushWorld {
 	return w
 }
 
-func (w *pushWorld) send(t *testing.T, content string, mentions ...string) {
+func (w *pushWorld) send(t *testing.T, content string, mentions ...string) string {
 	t.Helper()
 	msg, err := w.f.svc.SendMessage(context.Background(), domain.SendMessageInput{
 		ChannelID: w.chID, SenderID: w.f.userID, SenderNodeID: userNode, Content: content, Mentions: mentions,
 	})
 	require.NoError(t, err)
 	w.f.svc.PushForMessage(context.Background(), msg)
+	return msg.Id
 }
 
 func TestPush_DirectMessageReachesTheOtherSideOnly(t *testing.T) {
@@ -92,8 +93,9 @@ func TestPush_MentionAndTheDenyCases(t *testing.T) {
 	w := newPushWorld(t, false)
 	ctx := context.Background()
 
-	w.send(t, "hello", w.other)
+	id := w.send(t, "hello", w.other)
 	require.Len(t, w.sender.all(), 1, "a mention in a group is pushed")
+	assert.Equal(t, "/channels/"+w.chID+"?message="+id, w.sender.all()[0].URL, "a mention in the stream lights the message")
 
 	// Deny: mentioned but cannot read the channel (removed, or never a member).
 	stranger, _ := testutil.CreateUser(t, w.f.pool)
@@ -168,7 +170,7 @@ func TestPush_AReplyReachesTheThreadsFollowers(t *testing.T) {
 	sent := sender.all()
 	require.Len(t, sent, 1)
 	assert.Equal(t, []string{k.f.userID}, sent[0].ExternalIDs, "the starter follows the thread")
-	assert.Equal(t, "/channels/"+k.chID+"?thread="+k.rootID, sent[0].URL)
+	assert.Equal(t, "/channels/"+k.chID+"?thread="+k.rootID+"&message="+reply.Id, sent[0].URL, "a reply opens its thread and lights itself")
 
 	_, err = k.f.svc.UnfollowThread(ctx, k.rootID, k.f.userID, userNode)
 	require.NoError(t, err)

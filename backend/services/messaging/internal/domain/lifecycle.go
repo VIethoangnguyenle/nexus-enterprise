@@ -183,7 +183,7 @@ func (s *Service) checkQuote(ctx context.Context, quotedID, channelID string) er
 		return fmt.Errorf("load quoted message: %w", err)
 	}
 	if f == nil || f.Deleted || f.ChannelID != channelID {
-		return fmt.Errorf("%w: a quote names a message of this channel", ErrInvalidInput)
+		return ErrQuoteUnavailable
 	}
 	return nil
 }

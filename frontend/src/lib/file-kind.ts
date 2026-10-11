@@ -1,5 +1,6 @@
 import { FileText, FileSpreadsheet, Presentation, Image, Film, Music, Archive, FileCode, File } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
+import type { MessageAttachment } from '../api/messaging'
 
 /**
  * What a file is, in words, with an icon and a tile tone from the semantic
@@ -45,4 +46,10 @@ export function fileKind(name: string, mime?: string): FileKind {
   if (top === 'audio') return AUDIO
   if (top === 'text') return DOC
   return OTHER
+}
+
+/** A picture is shown inline; any other attachment is a file. The mime type decides, the name when it is missing. */
+export function isImageAttachment(att: MessageAttachment): boolean {
+  if (att.mime_type?.startsWith('image/')) return true
+  return /\.(png|jpe?g|gif|webp|svg|avif)$/i.test(att.file_name)
 }

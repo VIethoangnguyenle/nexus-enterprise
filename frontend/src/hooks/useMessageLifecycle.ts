@@ -7,12 +7,21 @@ import { keys } from './keys'
 
 type MessageList = { messages: Message[] }
 
+/**
+ * The mentions an edit leaves the message with. Rich text carries them as spans, so the edited
+ * text is the whole truth. A message written before rich text names people in plain text: no
+ * span says so, and reading only spans would drop every one of them, so its stored list stays
+ * and only a person picked while editing is added.
+ */
+function mentionsAfterEdit(message: Message, content: string): string[] {
+  const found = mentionsFromHtml(content)
+  if (message.content_format === 'html') return found
+  return [...new Set([...(message.mentions ?? []), ...found])]
+}
+
 /** The message a reply belongs to, as the channel's stream holds it. */
 const rootOf = (channelId: string, rootId: string) =>
   queryClient.getQueryData<MessageList>(keys.messaging.messages(channelId))?.messages.find((m) => m.id === rootId)
-
-/** The edit request as the server reads it: the whole list of people mentioned in the new text. */
-type EditRequest = EditMessageInput & { mentions: string[] }
 
 /**
  * Changes the text of your own message. The new text shows at once; the
@@ -25,12 +34,12 @@ export function useEditMessage(channelId: string) {
     mutationFn: ({ message, content }: { message: Message; content: string }) => {
       // Always the full list: leaving it out would keep the old mentions, and the server tells
       // who the edit added by comparing the two lists.
-      const request: EditRequest = { content, content_format: 'html', mentions: mentionsFromHtml(content) }
+      const request: EditMessageInput = { content, content_format: 'html', mentions: mentionsAfterEdit(message, content) }
       return messagingApi.editMessage(message.id, request)
     },
     onMutate: ({ message, content }) => {
       patchMessage(channelId, message.id, message.parent_message_id, (m) => ({
-        ...m, content, content_format: 'html', mentions: mentionsFromHtml(content), edited_at: new Date().toISOString(),
+        ...m, content, content_format: 'html', mentions: mentionsAfterEdit(message, content), edited_at: new Date().toISOString(),
       }))
       return { before: message }
     },

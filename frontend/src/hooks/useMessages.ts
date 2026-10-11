@@ -2,7 +2,7 @@ import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
 import { messagingApi, type SendMessageInput, type Message, type MessageAttachment, type ReactionGroup } from '../api/messaging'
 import { queryClient } from '../lib/query-client'
 import { keepOlderPages } from '../lib/stream-model'
-import { statusOf } from '../lib/errors'
+import { QUOTED_MESSAGE_UNAVAILABLE, reasonOf, statusOf } from '../lib/errors'
 import { useAuthStore } from '../stores/auth.store'
 import { threadScope, useDraftsStore, type PendingQuote } from '../stores/drafts.store'
 import { keys } from './keys'
@@ -53,15 +53,31 @@ function liveQuote(scope: string, linked: unknown): PendingQuote | undefined {
 const quotedOf = (q: PendingQuote | undefined): Message['quoted'] =>
   q ? { id: q.id, sender_id: q.sender_id, sender_name: q.sender_name, text: q.text || q.summary?.label } : undefined
 
-/** The quote is spent once the message is stored; a 400 means the server found it gone. */
-function settleQuote(scope: string, sent: PendingQuote | undefined, err?: unknown) {
+/** Quotes a send in flight took from their composers, by the params object of that send. */
+const taken = new WeakMap<object, PendingQuote | undefined>()
+
+/**
+ * A send takes the quote off the composer's strip at once, so a second message
+ * sent before the first is answered does not carry it again.
+ */
+function takeQuote(scope: string, linked: unknown, send: object): PendingQuote | undefined {
+  const q = liveQuote(scope, linked)
+  if (q) useDraftsStore.getState().setQuote(scope, null)
+  taken.set(send, q)
+  return q
+}
+
+/**
+ * A failed send gives the quote back, unless another was chosen meanwhile. It
+ * shows as deleted only when the server says the quoted message is unavailable:
+ * any other refusal leaves a quote that is still good.
+ */
+function returnQuote(scope: string, sent: PendingQuote | undefined, err: unknown) {
   if (!sent) return
   const store = useDraftsStore.getState()
-  if (!err) {
-    if (store.drafts[scope]?.quote?.id === sent.id) store.setQuote(scope, null)
-  } else if (statusOf(err) === 400) {
-    store.markQuoteDeleted(scope, sent.id)
-  }
+  if (store.drafts[scope]?.quote) return
+  const gone = statusOf(err) === 400 && reasonOf(err) === QUOTED_MESSAGE_UNAVAILABLE
+  store.setQuote(scope, gone ? { ...sent, deleted: true } : sent)
 }
 
 /** Sends a message with optimistic UI: message appears immediately, no refetch needed. */
@@ -72,7 +88,7 @@ export function useSendMessage(channelId: string) {
       if (typeof params === 'string') {
         return messagingApi.sendMessage(channelId, params)
       }
-      const quote = liveQuote(channelId, params.linkedEntity)
+      const quote = taken.get(params)
       const input: SendMessageInput = {
         content: params.content,
         content_format: 'html',
@@ -87,12 +103,12 @@ export function useSendMessage(channelId: string) {
 
     // Optimistic: insert temp message BEFORE server responds
     onMutate: async (params) => {
+      const quote = typeof params === 'string' ? undefined : takeQuote(channelId, params.linkedEntity, params)
       await queryClient.cancelQueries({ queryKey: keys.messaging.messages(channelId) })
       const previous = queryClient.getQueryData<{ messages: Message[]; has_more: boolean }>(keys.messaging.messages(channelId))
       const user = useAuthStore.getState().user
 
       const content = typeof params === 'string' ? params : params.content
-      const quote = typeof params === 'string' ? undefined : liveQuote(channelId, params.linkedEntity)
       const attachments = typeof params === 'string'
         ? undefined
         : params.optimisticAttachments ?? params.attachments?.map((a) => ({
@@ -125,8 +141,7 @@ export function useSendMessage(channelId: string) {
     },
 
     // Replace temp message with server response (WS event will dedup via ID match)
-    onSuccess: (serverMsg, _vars, ctx) => {
-      settleQuote(channelId, ctx?.quote)
+    onSuccess: (serverMsg) => {
       queryClient.setQueryData<{ messages: Message[]; has_more: boolean }>(
         keys.messaging.messages(channelId),
         (old) => {
@@ -147,7 +162,7 @@ export function useSendMessage(channelId: string) {
 
     // Rollback on error
     onError: (err, _vars, context) => {
-      settleQuote(channelId, context?.quote, err)
+      returnQuote(channelId, context?.quote, err)
       if (context?.previous) {
         queryClient.setQueryData(keys.messaging.messages(channelId), context.previous)
       }
@@ -183,8 +198,9 @@ export type SendReplyParams = {
 export function useSendReply(channelId: string, parentId: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: ({ content, mentions, attachments, linkedEntity }: SendReplyParams) => {
-      const quote = liveQuote(threadScope(parentId), linkedEntity)
+    mutationFn: (params: SendReplyParams) => {
+      const { content, mentions, attachments, linkedEntity } = params
+      const quote = taken.get(params)
       return messagingApi.sendMessage(channelId, {
         content,
         content_format: 'html',
@@ -195,8 +211,9 @@ export function useSendReply(channelId: string, parentId: string) {
         ...(quote ? { quoted_message_id: quote.id } : {}),
       })
     },
-    onMutate: async ({ content, attachments, optimisticAttachments, linkedEntity }) => {
-      const quote = liveQuote(threadScope(parentId), linkedEntity)
+    onMutate: async (params) => {
+      const { content, attachments, optimisticAttachments, linkedEntity } = params
+      const quote = takeQuote(threadScope(parentId), linkedEntity, params)
       await queryClient.cancelQueries({ queryKey: keys.messaging.thread(parentId) })
       const prevThread = queryClient.getQueryData<Thread>(keys.messaging.thread(parentId))
       const prevList = queryClient.getQueryData<MessageList>(keys.messaging.messages(channelId))
@@ -233,8 +250,7 @@ export function useSendReply(channelId: string, parentId: string) {
       )
       return { prevThread, prevList, quote }
     },
-    onSuccess: (serverMsg, _vars, ctx) => {
-      settleQuote(threadScope(parentId), ctx?.quote)
+    onSuccess: (serverMsg) => {
       queryClient.setQueryData<Thread>(keys.messaging.thread(parentId), (old) => {
         if (!old) return old
         const already = old.messages.some((m) => m.id === serverMsg.id)
@@ -243,7 +259,7 @@ export function useSendReply(channelId: string, parentId: string) {
       })
     },
     onError: (err, _vars, ctx) => {
-      settleQuote(threadScope(parentId), ctx?.quote, err)
+      returnQuote(threadScope(parentId), ctx?.quote, err)
       if (ctx?.prevThread) queryClient.setQueryData(keys.messaging.thread(parentId), ctx.prevThread)
       if (ctx?.prevList) queryClient.setQueryData(keys.messaging.messages(channelId), ctx.prevList)
     },

@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import type { ChatTask, Message } from '../api/messaging'
-import { isImageAttachment } from '../components/chat/AttachmentGrid'
+import { isImageAttachment } from '../lib/file-kind'
 import { chatCardKeys } from '../hooks/keys/chat-cards'
 import { keys } from '../hooks/keys'
 import { queryClient } from '../lib/query-client'
+import { onSessionEnd } from '../lib/session-end'
 import { messageText } from '../lib/message-model'
 import type { PollView } from '../api/chat-cards'
 
@@ -129,6 +130,9 @@ export const useDraftsStore = create<DraftsState>()((set, get) => ({
   reset: () => set({ drafts: {}, editing: {} }),
 }))
 
+// What one person typed or quoted must not greet whoever signs in next in this tab.
+onSessionEnd(() => useDraftsStore.getState().reset())
+
 /** The question or title of a poll or task card, when it is already loaded: a quote of a card names it. */
 function cardTitleOf(m: Message): string | undefined {
   if (!m.linked_entity_id) return undefined
@@ -142,7 +146,11 @@ function cardTitleOf(m: Message): string | undefined {
   return undefined
 }
 
-/** "Trích dẫn khi trả lời": the message becomes the pending quote of the composer it is answered in. */
-export function quoteMessage(m: Message): void {
-  useDraftsStore.getState().setQuote(scopeOf(m), quoteFromMessage(m, { cardTitle: cardTitleOf(m) }))
+/**
+ * "Trích dẫn khi trả lời": the message becomes the pending quote of the composer it is answered in.
+ * `scope` names that composer when the message is shown inside a panel whose composer is not the
+ * message's own (the root of a thread, shown in the thread panel, is answered in the thread).
+ */
+export function quoteMessage(m: Message, scope: string = scopeOf(m)): void {
+  useDraftsStore.getState().setQuote(scope, quoteFromMessage(m, { cardTitle: cardTitleOf(m) }))
 }

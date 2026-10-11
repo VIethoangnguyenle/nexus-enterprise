@@ -57,6 +57,26 @@ describe('useEditMessage: mentions', () => {
     expect(api.editMessage).toHaveBeenCalledWith('m1', expect.objectContaining({ mentions: [] }))
   })
 
+  it('keeps the mentions of a message written before rich text, whose names are plain text', async () => {
+    api.editMessage.mockResolvedValue(msg())
+    const legacy = msg({ content: 'chào @Lan', content_format: 'markdown', mentions: ['u-lan'] })
+    queryClient.setQueryData(keys.messaging.messages('c1'), { messages: [msg({ id: 'm0' }), legacy], has_more: false })
+    const { result } = renderHook(() => useEditMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ message: legacy, content: '<p>chào @Lan nhé</p>' }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.editMessage).toHaveBeenCalledWith('m1', expect.objectContaining({ mentions: ['u-lan'] }))
+  })
+
+  it('adds a mention picked while editing such a message to the ones it had', async () => {
+    api.editMessage.mockResolvedValue(msg())
+    const legacy = msg({ content: 'chào @Lan', content_format: 'markdown', mentions: ['u-lan'] })
+    queryClient.setQueryData(keys.messaging.messages('c1'), { messages: [msg({ id: 'm0' }), legacy], has_more: false })
+    const { result } = renderHook(() => useEditMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ message: legacy, content: `<p>chào @Lan ${duc}</p>` }))
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.editMessage).toHaveBeenCalledWith('m1', expect.objectContaining({ mentions: ['u-lan', 'u-duc'] }))
+  })
+
   it('puts the old mentions back when the server refuses', async () => {
     api.editMessage.mockRejectedValue(new Error('403'))
     const before = msg({ content: `<p>${lan}</p>`, mentions: ['u-lan'] })

@@ -77,6 +77,14 @@ function panel(over: Partial<Parameters<typeof ThreadPanel>[0]> = {}) {
 }
 
 describe('ThreadPanel', () => {
+  it('closes itself for a thread that belongs to another conversation than the one on screen', async () => {
+    const onClose = vi.fn()
+    // An old or crafted link: the thread is real, but of a different channel.
+    renderWithClient(panel({ channelId: CH.vanhanh, onClose }))
+    await waitFor(() => expect(onClose).toHaveBeenCalled())
+    expect(calls().filter((c) => c.startsWith('POST'))).not.toContain(`POST /channels/${CH.vanhanh}/messages`)
+  })
+
   it('shows the root, the reply count and the replies by name', async () => {
     renderWithClient(panel())
     const side = await screen.findByRole('complementary', { name: 'Thread' })

@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useToastStore } from '../primitives'
 import { renderWithClient, resetClient } from '../../test/render'
 import { shortcutsApi } from '../../api/shortcuts'
 import type { Message } from '../../api/messaging'
@@ -9,6 +10,8 @@ import { CONTACTS } from '../../test/chat-fixtures'
 import { useDraftsStore } from '../../stores/drafts.store'
 import { MessageActionSheet } from './MessageActionSheet'
 
+const openStarred = vi.hoisted(() => vi.fn())
+vi.mock('../../hooks/useShortcutScreen', () => ({ useOpenStarred: () => openStarred }))
 vi.mock('../../api/shortcuts', async (orig) => {
   const real = await orig<typeof import('../../api/shortcuts')>()
   return { ...real, shortcutsApi: { ...real.shortcutsApi, starMessage: vi.fn().mockResolvedValue(undefined), unstarMessage: vi.fn().mockResolvedValue(undefined) } }
@@ -28,6 +31,15 @@ const open = (m: Message, props: Partial<Parameters<typeof MessageActionSheet>[0
   renderWithClient(<MessageActionSheet message={m} people={people} me="me" onClose={vi.fn()} {...props} />)
 
 describe('MessageActionSheet: star and quote', () => {
+  it('offers Xem after starring, which opens Đã gắn sao', async () => {
+    const user = userEvent.setup()
+    open(msg())
+    await user.click(screen.getByRole('button', { name: 'Gắn sao tin' }))
+    await waitFor(() => expect(useToastStore.getState().toasts[0]?.action?.label).toBe('Xem'))
+    useToastStore.getState().toasts[0]!.action!.onClick()
+    expect(openStarred).toHaveBeenCalled()
+  })
+
   it('lists Gắn sao tin after the follow row and Trích dẫn khi trả lời after the copy', () => {
     open(msg(), { onReply: vi.fn(), onToggleFollow: vi.fn(), onPin: vi.fn() })
     const names = within(screen.getByRole('dialog')).getAllByRole('button').map((b) => b.textContent)
@@ -55,6 +67,14 @@ describe('MessageActionSheet: star and quote', () => {
     open(msg({ id: 'r1', parent_message_id: 'root' }))
     await user.click(screen.getByRole('button', { name: 'Trích dẫn khi trả lời' }))
     expect(useDraftsStore.getState().drafts['thread:root']?.quote).toMatchObject({ id: 'r1', text: 'Chốt 6427 nhé' })
+  })
+
+  it('inside the thread panel, quotes the thread root into the thread composer', async () => {
+    const user = userEvent.setup()
+    open(msg({ id: 'root' }), { composeScope: 'thread:root' })
+    await user.click(screen.getByRole('button', { name: 'Trích dẫn khi trả lời' }))
+    expect(useDraftsStore.getState().drafts['thread:root']?.quote?.id).toBe('root')
+    expect(useDraftsStore.getState().drafts['c1']).toBeUndefined()
   })
 
   it('has no Trích dẫn while the phone composer is editing a message, but keeps the star', () => {

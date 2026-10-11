@@ -84,6 +84,8 @@ describe('useNotificationLevel', () => {
   it('turning back on from off says it is back on', async () => {
     api.getNotificationLevel.mockResolvedValue({ level: 'off' })
     api.setNotificationLevel.mockResolvedValue({ level: 'main' })
+    // The server reports the same level in both answers.
+    queryClient.setQueryData(keys.messaging.unreadCounts(), { channels: [unread({ notification_level: 'off', unread_count: 0 })] })
     const { result } = await ready()
     act(() => result.current.setLevel('main'))
     await waitFor(() => expect(toasts()).toHaveLength(1))
@@ -147,5 +149,31 @@ describe('changeNotificationLevel (a row menu, no component bound to the convers
     const rows = queryClient.getQueryData<{ channels: ChannelUnread[] }>(keys.messaging.unreadCounts())!.channels
     expect(rows[1]).toMatchObject({ notification_level: 'main', unread_count: 4 })
     expect(toasts()[0]!.tone).toBe('error')
+  })
+})
+
+describe('a level changed on another device', () => {
+  it('is respected: the unread list outranks a level cached by an earlier optimistic change', async () => {
+    api.setNotificationLevel.mockResolvedValue({ level: 'all' })
+    // An earlier choice of "all" left this behind; another device has since made it "off".
+    queryClient.setQueryData(keys.notificationLevels.level('c1'), { level: 'all' })
+    queryClient.setQueryData(keys.messaging.unreadCounts(), { channels: [unread({ notification_level: 'off' })] })
+    await act(async () => { await changeNotificationLevel({ channelId: 'c1', name: 'Lan', level: 'all' }) })
+    expect(api.setNotificationLevel).toHaveBeenCalledWith('c1', 'all')
+    expect(toasts().find((t) => t.action?.label === 'Hoàn tác')).toBeTruthy()
+  })
+
+  it('is fetched again when the menu opens, whatever the cache holds', async () => {
+    queryClient.setQueryData(keys.notificationLevels.level('c1'), { level: 'all' })
+    api.getNotificationLevel.mockResolvedValue({ level: 'off' })
+    const { result } = renderHook(() => useNotificationLevel('c1', 'Lan'), { wrapper })
+    await waitFor(() => expect(result.current.level).toBe('off'))
+    expect(api.getNotificationLevel).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves no stale level behind once a change settles', async () => {
+    api.setNotificationLevel.mockResolvedValue({ level: 'off' })
+    await act(async () => { await changeNotificationLevel({ channelId: 'c1', name: 'Lan', level: 'off' }) })
+    expect(queryClient.getQueryState(keys.notificationLevels.level('c1'))!.isInvalidated).toBe(true)
   })
 })

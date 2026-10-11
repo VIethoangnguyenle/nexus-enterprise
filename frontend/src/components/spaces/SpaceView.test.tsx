@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
 import { CH, MSG, UUID_RE } from '../../test/chat-fixtures'
+import { useToastStore } from '../primitives'
 import { SpaceView } from './SpaceView'
 
 vi.mock('@tanstack/react-router', async () => (await import('../../test/router-mock')).routerMockFactory())
@@ -193,10 +194,51 @@ describe('SpaceView focus target', () => {
     expect(flashed()[0]).toHaveTextContent(/không phải lỗi hệ thống/)
   })
 
-  it('outlines nothing for a message that is not in the conversation', async () => {
+  const NOT_FOUND = 'Không tìm thấy tin nhắn này. Có thể tin đã bị xoá hoặc bạn không còn xem được.'
+  const toastMessages = () => useToastStore.getState().toasts.map((t) => t.message)
+
+  it('outlines nothing for a message that is not in the conversation, says so, and keeps the conversation open', async () => {
+    useToastStore.getState().clear()
     renderWithClient(<SpaceView channelId={CH.doisoat} focusMessageId="44444444-aaaa-4bbb-8ccc-0000000000ff" />)
     await screen.findByText(/lệch 3 giao dịch/)
+    await waitFor(() => expect(toastMessages()).toEqual([NOT_FOUND]))
     expect(flashed()).toHaveLength(0)
+    expect(screen.getByRole('heading', { name: 'Đối soát giao dịch' })).toBeInTheDocument()
+    expect(screen.getByRole('log', { name: 'Tin nhắn trong Đối soát giao dịch' })).toBeInTheDocument()
+  })
+
+  it('says so for a reply that is not in its thread, and keeps the thread open', async () => {
+    useToastStore.getState().clear()
+    renderWithClient(<SpaceView channelId={CH.doisoat} initialThreadId={MSG.t1} focusMessageId="44444444-aaaa-4bbb-8ccc-0000000000ff" />)
+    const thread = await screen.findByRole('complementary', { name: 'Thread' })
+    await within(thread).findByText(/1\.284\.500/)
+    await waitFor(() => expect(toastMessages()).toEqual([NOT_FOUND]))
+    expect(screen.getByRole('complementary', { name: 'Thread' })).toBeInTheDocument()
+  })
+
+  it('drops the thread and message from the address once the link has been served, so the same link works again', async () => {
+    routerState.navigate.mockClear()
+    renderWithClient(<SpaceView channelId={CH.doisoat} initialThreadId={MSG.t1} focusMessageId="44444444-aaaa-4bbb-8ccc-0000000000ff" />)
+    await waitFor(() => expect(routerState.navigate).toHaveBeenCalled())
+    const call = routerState.navigate.mock.calls[routerState.navigate.mock.calls.length - 1]![0] as { to: string; params: unknown; replace: boolean; search: (p: Record<string, unknown>) => Record<string, unknown> }
+    expect(call).toMatchObject({ to: '/channels/$channelId', params: { channelId: CH.doisoat }, replace: true })
+    expect(call.search({ ws: 'w1', thread: MSG.t1, message: 'x' })).toEqual({ ws: 'w1' })
+  })
+
+  it('does not touch the address when nothing was asked for', async () => {
+    routerState.navigate.mockClear()
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    await screen.findByText(/lệch 3 giao dịch/)
+    await new Promise((r) => setTimeout(r, 600))
+    expect(routerState.navigate).not.toHaveBeenCalled()
+  })
+
+  it('stays quiet when the message is found', async () => {
+    useToastStore.getState().clear()
+    renderWithClient(<SpaceView channelId={CH.doisoat} focusMessageId={MSG.t2} />)
+    await waitFor(() => expect(flashed()).toHaveLength(1))
+    await new Promise((r) => setTimeout(r, 600))
+    expect(toastMessages()).toEqual([])
   })
 
   it('moves to the next target when the link changes inside the same conversation', async () => {

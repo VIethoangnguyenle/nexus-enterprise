@@ -121,6 +121,7 @@ func (c *chat) echo(allow bool) *echo.Echo {
 	e.PATCH("/api/tasks/:taskId", h.UpdateTask, as)
 	e.GET("/api/channels/:chId/tasks", h.ListTasks, as)
 	e.GET("/api/channels/:chId/messages", h.GetMessages, as)
+	e.POST("/api/channels/:chId/messages", h.SendMessage, as)
 	e.GET("/api/messages/:msgId/thread", h.GetThread, as)
 	e.GET("/api/channels/:chId", h.GetChannel, as)
 	e.POST("/api/messages/:msgId/follow", h.FollowThread, as)

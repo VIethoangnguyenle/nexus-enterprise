@@ -35,7 +35,8 @@ not hold back pushes to the person's phone.
 ### Requirement: Content and grouping
 A push SHALL be titled by the sender (direct message) or the group's name (group, with the sender before the text),
 carry the opening of the message's plain text (140 characters at most; "📎 Tệp đính kèm" for files alone), and open the
-conversation — or the thread — in the app. The first message of a conversation is pushed at once; further messages
+conversation — or the thread — in the app: the link of a thread reply carries `?thread=<root id>&message=<reply id>`, that of a
+mention in the main stream `?message=<message id>`, so the app brings that message into view and outlines it. The first message of a conversation is pushed at once; further messages
 of that conversation to the same person within 30 seconds become one follow-up, "N tin mới", that replaces it on the
 device (`web_push_topic` on the web, `collapse_id` on mobile). The link is absolute, under `APP_BASE_URL`. Every
 request carries an `idempotency_key` kept across its retries, so a retry after a timeout does not deliver twice.
@@ -45,6 +46,10 @@ nothing is pushed, except a mention in a group; a direct message under `off` is 
 and the read check still apply to all of it.
 One message (or one edit) pushes to at most 20 mentioned people (the mention list comes from the client), and the delivery of one
 message ends with its 30-second deadline, however many recipients remain.
+
+#### Scenario: A reply or a mention names its message
+- **WHEN** a thread reply is pushed to a follower, or a mention in the main stream is pushed
+- **THEN** the link opens the thread with `message` set to the reply, or the conversation with `message` set to the mention; a plain group or direct message links to the conversation alone
 
 #### Scenario: A tab left open elsewhere
 - **WHEN** a person has Nexus open on a desktop, on another conversation or hidden, and a direct message arrives

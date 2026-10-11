@@ -78,7 +78,7 @@ func (s *Service) GetChannelFor(ctx context.Context, channelID, userID, userNode
 	if err != nil {
 		return nil, fmt.Errorf("load star: %w", err)
 	}
-	ch.Starred = starred[channelID]
+	_, ch.Starred = starred[channelID]
 	return ch, nil
 }
 

@@ -76,18 +76,26 @@ func TestStarRoutes_StarUnstarAndFeed(t *testing.T) {
 	rec = call(e, http.MethodGet, "/api/channels/unread", "")
 	require.Equal(t, http.StatusOK, rec.Code)
 	var starred bool
+	var starredAt any
 	for _, it := range decode(t, rec)["channels"].([]any) {
 		if it.(map[string]any)["channel_id"] == c.chID {
 			starred, _ = it.(map[string]any)["starred"].(bool)
+			starredAt = it.(map[string]any)["starred_at"]
 		}
 	}
 	assert.True(t, starred)
+	assert.NotEmpty(t, starredAt, "the unread list says when the conversation was starred")
 
 	assert.Equal(t, http.StatusNoContent, call(e, http.MethodDelete, star, "").Code)
 	assert.Equal(t, http.StatusNoContent, call(e, http.MethodDelete, star, "").Code, "idempotent")
 	assert.Equal(t, http.StatusNoContent, call(e, http.MethodDelete, conv, "").Code)
 	rec = call(e, http.MethodGet, "/api/channels/"+c.chID, "")
 	assert.Nil(t, decode(t, rec)["starred"])
+	for _, it := range decode(t, call(e, http.MethodGet, "/api/channels/unread", ""))["channels"].([]any) {
+		if it.(map[string]any)["channel_id"] == c.chID {
+			assert.Nil(t, it.(map[string]any)["starred_at"], "unstarred: no time")
+		}
+	}
 	assert.Empty(t, decode(t, call(e, http.MethodGet, "/api/messages/starred", ""))["messages"])
 
 	// Bad requests.

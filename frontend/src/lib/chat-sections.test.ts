@@ -51,6 +51,16 @@ describe('arrange', () => {
     expect(r.directs).toEqual([])
   })
 
+  it('orders the starred list by when each was starred, newest first; one with no time goes last', () => {
+    const list = [
+      conv('old', 'space', 0, { starred: true, starredAt: 1000 }),
+      conv('none', 'dm', 0, { starred: true }),
+      conv('new', 'space', 0, { starred: true, starredAt: 3000 }),
+      conv('mid', 'dm', 0, { starred: true, starredAt: 2000 }),
+    ]
+    expect(arrange(list, []).starred.map((c) => c.id)).toEqual(['new', 'mid', 'old', 'none'])
+  })
+
   it('has an empty starred list when nothing is starred', () => {
     expect(arrange(all, []).starred).toEqual([])
   })

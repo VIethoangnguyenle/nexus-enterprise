@@ -50,6 +50,40 @@ func TestStarConversation_AllowedWithReadAndIdempotent(t *testing.T) {
 	assert.False(t, ch.Starred)
 }
 
+// The unread list says when each conversation was starred, so the navigator can
+// order Đã gắn sao by it; an unstarred one carries no time.
+func TestStarConversation_UnreadListCarriesWhenItWasStarred(t *testing.T) {
+	k := newTalk(t, "star-conv-at")
+	ctx := context.Background()
+	svc := k.f.svc
+	t.Cleanup(func() { k.f.pool.Exec(ctx, `DELETE FROM starred_conversations WHERE channel_id = $1`, k.chID) })
+	starredAt := func() *pb.ChannelUnread {
+		counts, err := svc.GetUnreadCounts(ctx, k.f.userID, userNode, k.f.wsID)
+		require.NoError(t, err)
+		for _, c := range counts {
+			if c.ChannelId == k.chID {
+				return c
+			}
+		}
+		t.Fatalf("channel %s not listed", k.chID)
+		return nil
+	}
+
+	assert.Nil(t, starredAt().StarredAt, "not starred: no time")
+	before := time.Now().Add(-time.Minute)
+	require.NoError(t, svc.StarConversation(ctx, k.chID, k.f.userID, userNode))
+	got := starredAt()
+	require.NotNil(t, got.StarredAt)
+	assert.True(t, got.StarredAt.AsTime().After(before) && !got.StarredAt.AsTime().After(time.Now().Add(time.Minute)))
+
+	_, err := k.f.pool.Exec(ctx, `UPDATE starred_conversations SET created_at = '2026-01-01T10:00:00Z' WHERE channel_id = $1 AND user_id = $2`, k.chID, k.f.userID)
+	require.NoError(t, err)
+	assert.Equal(t, time.Date(2026, 1, 1, 10, 0, 0, 0, time.UTC), starredAt().StarredAt.AsTime())
+
+	require.NoError(t, svc.UnstarConversation(ctx, k.chID, k.f.userID, userNode))
+	assert.Nil(t, starredAt().StarredAt, "unstarred: no time again")
+}
+
 func TestStarConversation_DeniedWithoutRead(t *testing.T) {
 	k := newTalk(t, "star-conv-deny")
 	ctx := context.Background()

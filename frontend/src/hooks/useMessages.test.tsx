@@ -103,13 +103,59 @@ describe('sending with a pending quote', () => {
     expect(useDraftsStore.getState().drafts['c1']?.quote?.id).toBe('q1')
   })
 
-  it('keeps the text and the quote when the server refuses (400), and shows the quote as deleted', async () => {
+  it('shows the quote as deleted only when the server says the quoted message is unavailable', async () => {
     useDraftsStore.getState().setQuote('c1', quote())
-    send.mockRejectedValue(new ApiError('bad', 400))
+    send.mockRejectedValue(new ApiError('bad', 400, { message: 'bad', reason: 'quoted_message_unavailable' }))
     const { result } = renderHook(() => useSendMessage('c1'), { wrapper })
     act(() => result.current.mutate({ content: '<p>ok</p>' }))
     await waitFor(() => expect(result.current.isError).toBe(true))
     expect(useDraftsStore.getState().drafts['c1']?.quote).toMatchObject({ id: 'q1', deleted: true })
+  })
+
+  it('keeps a live quote when the 400 is about something else (an attachment, an empty message)', async () => {
+    useDraftsStore.getState().setQuote('c1', quote())
+    send.mockRejectedValue(new ApiError('bad attachment', 400, { message: 'bad attachment' }))
+    const { result } = renderHook(() => useSendMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ content: '<p>ok</p>' }))
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    const q = useDraftsStore.getState().drafts['c1']?.quote
+    expect(q?.id).toBe('q1')
+    expect(q?.deleted).toBeUndefined()
+  })
+
+  it('does the same for a reply', async () => {
+    useDraftsStore.getState().setQuote('thread:root', quote('r1'))
+    send.mockRejectedValue(new ApiError('bad', 400, { message: 'bad', reason: 'quoted_message_unavailable' }))
+    const { result } = renderHook(() => useSendReply('c1', 'root'), { wrapper })
+    act(() => result.current.mutate({ content: '<p>ok</p>' }))
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(useDraftsStore.getState().drafts['thread:root']?.quote).toMatchObject({ id: 'r1', deleted: true })
+  })
+
+  it('takes the quote off the strip while the send is pending, so a second message does not repeat it', async () => {
+    useDraftsStore.getState().setQuote('c1', quote())
+    send.mockReturnValueOnce(new Promise(() => {}))
+    const { result } = renderHook(() => useSendMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ content: '<p>một</p>' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(1))
+    expect(useDraftsStore.getState().drafts['c1']?.quote).toBeUndefined()
+    act(() => result.current.mutate({ content: '<p>hai</p>' }))
+    await waitFor(() => expect(send).toHaveBeenCalledTimes(2))
+    expect(send.mock.calls[0]![1]).toHaveProperty('quoted_message_id', 'q1')
+    expect(send.mock.calls[1]![1]).not.toHaveProperty('quoted_message_id')
+  })
+
+  it('does not bring a failed quote back over one chosen meanwhile', async () => {
+    useDraftsStore.getState().setQuote('c1', quote())
+    let fail!: (e: Error) => void
+    send.mockReturnValueOnce(new Promise((_, rej) => { fail = rej }))
+    const { result } = renderHook(() => useSendMessage('c1'), { wrapper })
+    act(() => result.current.mutate({ content: '<p>ok</p>' }))
+    await waitFor(() => expect(send).toHaveBeenCalled())
+    act(() => useDraftsStore.getState().setQuote('c1', quote('newer')))
+    fail(new Error('offline'))
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    expect(useDraftsStore.getState().drafts['c1']?.quote?.id).toBe('newer')
   })
 
   it('leaves the quote alone when the failure is not about it (network)', async () => {

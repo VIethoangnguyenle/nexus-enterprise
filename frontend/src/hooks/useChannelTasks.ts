@@ -14,11 +14,13 @@ export function useTasks(channelId: string, status?: string) {
   })
 }
 
+type CreateTaskInput = Parameters<typeof messagingApi.createTask>[1]
+
 /** Creates a task with optimistic insert into task list. */
 export function useCreateTask(channelId: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: (data: { title: string; assignee_id?: string; due_date?: string }) =>
+    mutationFn: (data: CreateTaskInput) =>
       messagingApi.createTask(channelId, data),
     onMutate: async (data) => {
       await queryClient.cancelQueries({ queryKey: keys.messaging.tasksOf(channelId) })

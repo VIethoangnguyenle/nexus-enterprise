@@ -8,6 +8,15 @@ import type { Message, QuotedMessage } from '../api/messaging'
 
 type Pending = Message & { _optimistic?: boolean }
 
+export type CardKind = 'poll' | 'task' | 'document' | 'approval'
+
+/** The card a message carries, if any: the object it links to is shown in place of (or besides) its text. */
+export function cardKindOf(m: Pick<Message, 'linked_entity_type' | 'linked_entity_id'>): CardKind | undefined {
+  if (!m.linked_entity_id) return undefined
+  const t = m.linked_entity_type
+  return t === 'poll' || t === 'task' || t === 'document' || t === 'approval' ? t : undefined
+}
+
 export interface MessageAbilities {
   /** Its sender changes the text (cards and files are not text). */
   edit: boolean

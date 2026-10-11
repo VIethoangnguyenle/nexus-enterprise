@@ -63,6 +63,10 @@ describe('cache patches', () => {
     const unread = { channels: [{ channel_id: 'c1', unread_count: 2, last_read_message_id: '' }, { channel_id: 'c2', unread_count: 0, last_read_message_id: '' }] }
     expect(setUnreadListStarred(unread, 'c2', true)!.channels.map((c) => (c as { starred?: boolean }).starred)).toEqual([undefined, true])
     expect(setUnreadListStarred(unread, 'nope', true)).toBe(unread)
+    // Starring stamps the time at once, so the section orders it first before the server answers; unstarring drops it.
+    const starred = setUnreadListStarred(unread, 'c2', true)!
+    expect(Date.parse(String((starred.channels[1] as { starred_at?: unknown }).starred_at))).toBeGreaterThan(Date.now() - 5000)
+    expect('starred_at' in setUnreadListStarred(starred, 'c2', false)!.channels[1]!).toBe(false)
     const ch: Channel = { id: 'c1', name: 'Vận hành chung', channel_type: 'workspace', workspace_id: 'w' }
     expect(setChannelRecordStarred(ch, true)).toMatchObject({ starred: true })
     expect(setChannelRecordStarred(undefined, true)).toBeUndefined()

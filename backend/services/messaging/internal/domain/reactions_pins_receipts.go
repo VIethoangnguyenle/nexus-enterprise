@@ -178,15 +178,20 @@ func (s *Service) GetUnreadCounts(ctx context.Context, userID, userNodeID, works
 	}
 	var result []*pb.ChannelUnread
 	for _, u := range unreads {
-		result = append(result, &pb.ChannelUnread{
+		at, isStarred := starred[u.ChannelID]
+		item := &pb.ChannelUnread{
 			ChannelId:         u.ChannelID,
 			UnreadCount:       u.UnreadCount,
 			LastReadMessageId: u.LastReadMsgID,
 			ThreadUnreadCount: u.ThreadUnread,
 			NotificationLevel: u.Level,
 			MentionCount:      u.MentionCount,
-			Starred:           starred[u.ChannelID],
-		})
+			Starred:           isStarred,
+		}
+		if isStarred {
+			item.StarredAt = timestamppb.New(at)
+		}
+		result = append(result, item)
 	}
 	return result, nil
 }

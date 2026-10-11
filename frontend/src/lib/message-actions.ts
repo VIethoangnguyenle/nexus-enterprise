@@ -1,6 +1,5 @@
 import type { Message } from '../api/messaging'
-import { cardKindOf } from '../components/chat/MessageCard'
-import { isSystemLine } from './message-model'
+import { cardKindOf, isSystemLine } from './message-model'
 
 type Pending = Message & { _optimistic?: boolean }
 

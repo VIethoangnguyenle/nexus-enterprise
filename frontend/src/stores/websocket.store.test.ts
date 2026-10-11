@@ -239,6 +239,19 @@ describe('websocket events invalidate the keys the screens actually cache under'
     expect(invalidated(keys.notifications.unreadCount())).toBe(true)
   })
 
+  it('an unread-count event or a thread state (read on another device) refreshes the mention pill', () => {
+    seed(keys.shortcuts.mentionsUnread('ws-1'))
+    seed(keys.shortcuts.mentions('ws-1'))
+    deliver({ oneofKind: 'unreadCount', unreadCount: { channelId: 'c-1', count: 0 } } as ServerEnvelopeInit)
+    expect(invalidated(keys.shortcuts.mentionsUnread('ws-1'))).toBe(true)
+    expect(invalidated(keys.shortcuts.mentions('ws-1'))).toBe(true)
+
+    queryClient.clear()
+    seed(keys.shortcuts.mentionsUnread('ws-1'))
+    deliver({ oneofKind: 'threadState', threadState: { rootMessageId: 'root', channelId: 'c1', following: true, unreadCount: 0 } })
+    expect(invalidated(keys.shortcuts.mentionsUnread('ws-1'))).toBe(true)
+  })
+
   it('a permission event drops the permission cache and the listings the user sees through it', () => {
     seed(keys.permissions.object('tenant-1', 'node-1'))
     seed(keys.permissions.object('tenant-1', 'node-2'))

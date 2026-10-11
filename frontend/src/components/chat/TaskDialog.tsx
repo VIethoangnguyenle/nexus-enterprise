@@ -21,9 +21,6 @@ interface TaskDialogProps {
   parentMessageId?: string
 }
 
-/** The create request with the thread it belongs to; the server reads `parent_message_id`. */
-type TaskRequest = Parameters<ReturnType<typeof useCreateTask>['mutateAsync']>[0] & { parent_message_id?: string }
-
 /**
  * "Tạo công việc": what to do, who does it (picked from the people in this
  * conversation, never typed as an id) and by when. The task reaches the
@@ -73,7 +70,7 @@ function TaskForm({ channelId, parentMessageId, onClose, create }: {
     setTitleError(undefined)
     setFailure(undefined)
     try {
-      const request: TaskRequest = {
+      const request: Parameters<typeof create.mutateAsync>[0] = {
         title: title.trim(),
         ...(assignee[0] ? { assignee_id: assignee[0].userId } : {}),
         ...(due ? { due_date: due } : {}),

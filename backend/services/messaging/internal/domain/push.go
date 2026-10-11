@@ -283,7 +283,7 @@ func (s *Service) pushTo(ctx context.Context, msg *pb.Message, recipients []Push
 			slog.Warn("push delivery cut short", "message_id", msg.Id, "error", ctx.Err())
 			return
 		}
-		s.deliver(ctx, r.Person.UserID, ch, notificationFor(ch, sender, msg))
+		s.deliver(ctx, r.Person.UserID, ch, notificationFor(ch, sender, msg, r.Kind))
 	}
 }
 
@@ -322,7 +322,10 @@ func (s *Service) later(ctx context.Context, fn func(context.Context)) {
 	}()
 }
 
-func notificationFor(ch *store.Channel, sender string, msg *pb.Message) push.Message {
+// notificationFor builds the push. Its link opens the conversation; a reply
+// also names its thread and the reply itself, and a mention in the main stream
+// names the message, so the app can bring it into view.
+func notificationFor(ch *store.Channel, sender string, msg *pb.Message, kind PushKind) push.Message {
 	text := plainText(msg.ContentFormat, msg.Content)
 	if strings.TrimSpace(text) == "" && len(msg.Attachments) > 0 {
 		text = "📎 Tệp đính kèm"
@@ -332,8 +335,11 @@ func notificationFor(ch *store.Channel, sender string, msg *pb.Message) push.Mes
 		text = string([]rune(text)[:previewChars-1]) + "…"
 	}
 	m := push.Message{CollapseID: "ch-" + ch.ID, URL: "/channels/" + ch.ID}
-	if msg.ParentMessageId != "" {
-		m.URL += "?thread=" + msg.ParentMessageId
+	switch {
+	case msg.ParentMessageId != "":
+		m.URL += "?thread=" + msg.ParentMessageId + "&message=" + msg.Id
+	case kind == PushMention:
+		m.URL += "?message=" + msg.Id
 	}
 	if ch.ChannelType == "dm" {
 		m.Title, m.Body = sender, text

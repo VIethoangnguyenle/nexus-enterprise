@@ -18,6 +18,7 @@ import {
 import { applyThreadReplySummary, applyThreadState } from '../lib/thread-cache'
 import { invalidateUnreadThreadsFor } from '../lib/unread-threads-cache'
 import { mentionsMe } from '../lib/shortcut-feed'
+import { onSessionEnd } from '../lib/session-end'
 import { invalidatePollOnVote } from '../hooks/usePolls'
 import {
   createBatcher,
@@ -471,6 +472,9 @@ function handleServerMessage(
     case 'unreadCount':
       queryClient.invalidateQueries({ queryKey: keys.notifications.unreadCount() })
       queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
+      // Read here or on another device: what the mention pill counts may have gone down.
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() })
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsUnreadAll() })
       break
 
     case 'threadReply': {
@@ -500,6 +504,9 @@ function handleServerMessage(
 
     case 'threadState':
       applyThreadState(envelope.payload.threadState)
+      // A thread read elsewhere settles the unread mentions inside it.
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() })
+      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsUnreadAll() })
       invalidateUnreadThreadsFor(envelope.payload.oneofKind)
       break
 
@@ -747,3 +754,9 @@ function resyncAfterReconnect() {
   invalidations.add(workspaceResyncKeys(followedWorkspace ?? ''))
   invalidations.flush()
 }
+
+// Previews, replies, typing and presence are what this user's session saw: the
+// next person to sign in on this tab must start without them.
+onSessionEnd(() => useWebSocketStore.setState({
+  lastMessages: {}, lastReplies: {}, typingUsers: {}, onlineUsers: {}, approvalActivity: {}, recentChanges: {},
+}))

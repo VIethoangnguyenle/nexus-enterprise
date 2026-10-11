@@ -56,7 +56,8 @@ const byPosition = (a: ChatSection, b: ChatSection) => a.position - b.position
  * they came in.
  */
 export function arrange(all: Conversation[], sections: ChatSection[]): Arranged {
-  const starred = all.filter((c) => c.starred)
+  // Newest star first; one with no known time goes last (the sort is stable).
+  const starred = all.filter((c) => c.starred).sort((a, b) => (b.starredAt ?? 0) - (a.starredAt ?? 0))
   const conversations = all.filter((c) => !c.starred)
   const taken = new Set<string>()
   const out: NavSection[] = [...sections].sort(byPosition).map((s) => {

@@ -2,6 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { useAuthStore, tenantIdFromToken } from './auth.store'
 import { queryClient } from '../lib/query-client'
 import { keys } from '../hooks/keys'
+import { useDraftsStore } from './drafts.store'
+import { useWebSocketStore } from './websocket.store'
 
 describe('auth store logout', () => {
   beforeEach(() => {
@@ -17,6 +19,23 @@ describe('auth store logout', () => {
     useAuthStore.getState().logout()
 
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+  })
+
+  it('drops unsent drafts, pending quotes and what the socket learned of the messages', () => {
+    useDraftsStore.getState().setHtml('c1', '<p>chưa gửi</p>')
+    useDraftsStore.getState().setQuote('c1', { id: 'm1', sender_id: 'u1', text: 'trích' })
+    useDraftsStore.getState().setEditing('c1', true)
+    useWebSocketStore.setState({
+      lastMessages: { c1: { senderId: 'u1', senderName: 'Lan', content: 'riêng tư', timestamp: 't' } as never },
+      typingUsers: { c1: ['Lan'] },
+    })
+
+    useAuthStore.getState().logout()
+
+    expect(useDraftsStore.getState().drafts).toEqual({})
+    expect(useDraftsStore.getState().editing).toEqual({})
+    expect(useWebSocketStore.getState().lastMessages).toEqual({})
+    expect(useWebSocketStore.getState().typingUsers).toEqual({})
   })
 
   it('clears the session fields', () => {

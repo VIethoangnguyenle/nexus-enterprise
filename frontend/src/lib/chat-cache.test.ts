@@ -6,6 +6,7 @@ import {
   applyMessageDeleted, applyMessageEdited, applyReaction, convertChatMsgToMessage, previewText, timestampToIso,
 } from './chat-cache'
 import { queryClient } from './query-client'
+import { useAuthStore } from '../stores/auth.store'
 
 const msg = (over: Partial<Message> = {}): Message =>
   ({ id: 'm1', channel_id: 'c1', sender_id: 'u1', content: 'x', reactions: [], ...over }) as Message
@@ -230,5 +231,73 @@ describe('applyMessageDeleted', () => {
     applyMessageDeleted(del())
     expect(queryClient.getQueryState(keys.messaging.threadsList('c1', 'all'))!.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(keys.messaging.unreadCounts())!.isInvalidated).toBe(true)
+  })
+})
+
+describe('the "Được nhắc tới" count follows edits and deletes', () => {
+  const stale = (key: readonly unknown[]) => queryClient.getQueryState(key)!.isInvalidated
+  const seedFeeds = () => {
+    queryClient.setQueryData(keys.shortcuts.mentionsUnread('w1'), 2)
+    queryClient.setQueryData(keys.shortcuts.mentions('w1'), { pages: [], pageParams: [] })
+  }
+  const frame = (mentions: string[]) =>
+    ({ message: { id: 'm1', channelId: 'c1', senderId: 'u1', content: '<p>mới</p>', contentFormat: 'html', parentMessageId: '', mentions }, editedAt: EDITED_AT }) as never
+  const del = () => ({ messageId: 'm1', channelId: 'c1', parentMessageId: '', keepPlaceholder: false, replyCount: 0 }) as never
+
+  beforeEach(() => {
+    useAuthStore.setState({ user: { id: 'me', username: 'me' } })
+    seedFeeds()
+  })
+
+  it('refreshes when an edit adds me', () => {
+    seed([msg({ mentions: [] })])
+    applyMessageEdited(frame(['me']))
+    expect(stale(keys.shortcuts.mentionsUnread('w1'))).toBe(true)
+    expect(stale(keys.shortcuts.mentions('w1'))).toBe(true)
+  })
+
+  it('refreshes when an edit removes me', () => {
+    seed([msg({ mentions: ['me'] })])
+    applyMessageEdited(frame([]))
+    expect(stale(keys.shortcuts.mentionsUnread('w1'))).toBe(true)
+  })
+
+  it('leaves it alone when an edit does not involve me', () => {
+    seed([msg({ mentions: ['u9'] })])
+    applyMessageEdited(frame(['u9', 'u8']))
+    expect(stale(keys.shortcuts.mentionsUnread('w1'))).toBe(false)
+  })
+
+  it('refreshes when a message that named me is deleted, or one that may have', () => {
+    seed([msg({ mentions: ['me'] })])
+    applyMessageDeleted(del())
+    expect(stale(keys.shortcuts.mentionsUnread('w1'))).toBe(true)
+
+    queryClient.clear(); seedFeeds()
+    applyMessageDeleted(del())
+    expect(stale(keys.shortcuts.mentionsUnread('w1'))).toBe(true)
+  })
+
+  it('leaves it alone when the deleted message is known not to name me', () => {
+    seed([msg({ mentions: ['u9'] })])
+    applyMessageDeleted(del())
+    expect(stale(keys.shortcuts.mentionsUnread('w1'))).toBe(false)
+  })
+})
+
+describe('applyMessageEdited: mentions', () => {
+  const frame = (mentions: string[]) =>
+    ({ message: { id: 'm1', channelId: 'c1', senderId: 'u1', content: '<p>x</p>', contentFormat: 'html', parentMessageId: '', mentions }, editedAt: EDITED_AT }) as never
+
+  it('clears the mentions for viewers when the edit removes them all', () => {
+    seed([msg({ mentions: ['u2', 'u3'] })])
+    applyMessageEdited(frame([]))
+    expect(read()[0]!.mentions).toEqual([])
+  })
+
+  it('replaces them with the edited list', () => {
+    seed([msg({ mentions: ['u2'] })])
+    applyMessageEdited(frame(['u3']))
+    expect(read()[0]!.mentions).toEqual(['u3'])
   })
 })

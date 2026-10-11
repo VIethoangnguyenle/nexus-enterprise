@@ -4,8 +4,10 @@ import { ClipboardCheck, Ellipsis, FolderOpen, MessageSquare, Users } from 'luci
 import type { LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { approvalPendingOptions } from '../../hooks/useApproval'
+import { useUnreadCounts } from '../../hooks/useMessaging'
 import { useBottomBarLayout } from '../../hooks/usePhone'
 import { useWorkspaceType } from '../../hooks/useWorkspaceType'
+import { unreadByLevel } from '../../lib/conversations'
 import { formatCount } from '../../lib/format'
 import { isConversationPath } from '../../lib/workspace'
 import { useUiStore } from '../../stores/ui.store'
@@ -54,6 +56,8 @@ export function MobileNav() {
   // and composer, chat-mobile mockup): the bar steps aside until you go back.
   const shown = useBottomBarLayout() && !isConversationPath(pathname)
   const pending = useQuery({ ...approvalPendingOptions(), enabled: shown && !isPersonal && !isLoading }).data?.total ?? 0
+  // Same rule as the sidebar badge: a muted conversation adds only the times someone named you.
+  const unreadMessages = unreadByLevel(useUnreadCounts().data?.channels)
   const [moreOpen, setMoreOpen] = useState(false)
   const moreItems = isPersonal
     ? MORE_ITEMS.filter((item) => item.id !== 'assets' && item.id !== 'contacts')
@@ -71,14 +75,16 @@ export function MobileNav() {
       >
         {tabs.map((tab) => {
           const active = tab.matches.some((prefix) => under(pathname, prefix))
-          const badge = tab.id === 'approval' && pending > 0
+          const count = tab.id === 'approval' ? pending : tab.id === 'messaging' ? unreadMessages : 0
+          const badge = count > 0
+          const hint = tab.id === 'approval' ? 'chờ bạn' : 'chưa đọc'
           return (
             <Link
               key={tab.id}
               to={tab.to}
               onClick={() => setActiveModule(tab.id)}
               aria-current={active ? 'page' : undefined}
-              aria-label={badge ? `${tab.label}, ${pending} chờ bạn` : undefined}
+              aria-label={badge ? `${tab.label}, ${count} ${hint}` : undefined}
               className={`${TAB_CELL} ${active ? 'text-accent font-semibold' : 'text-ink-muted'}`}
             >
               <span className={`${TAB_ICON} ${active ? 'bg-accent-wash' : ''}`}>
@@ -89,7 +95,7 @@ export function MobileNav() {
                     className="absolute -top-1.5 right-0.5 inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5
                       rounded-full bg-accent text-on-accent text-2xs font-semibold tnum ring-2 ring-raised"
                   >
-                    {formatCount(pending)}
+                    {formatCount(count)}
                   </span>
                 )}
               </span>

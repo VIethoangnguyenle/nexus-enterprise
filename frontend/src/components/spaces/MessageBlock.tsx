@@ -10,7 +10,8 @@ import { ReactionBar } from '../chat/ReactionBar'
 import { HoverActionBar } from '../chat/HoverActionBar'
 import { QuoteBlock } from './QuoteBlock'
 import { AttachmentGrid } from '../chat/AttachmentGrid'
-import { cardKindOf, MessageCard } from '../chat/MessageCard'
+import { MessageCard } from '../chat/MessageCard'
+import { cardKindOf } from '../../lib/message-model'
 import { FileViewer, type ViewerFile } from '../files/FileViewer'
 
 export interface MessageActions {

@@ -9,8 +9,22 @@ import type {
   TaskUpdateEvent,
 } from '../generated/proto/messaging/ws'
 import type { Message, ReactionGroup, ChatTask } from '../api/messaging'
+import { useAuthStore } from '../stores/auth.store'
 
 type MessageList = { messages: Message[]; has_more: boolean }
+
+/** The message as the open screens hold it, if any. */
+function cachedMessage(channelId: string, id: string, parentId: string | undefined): Message | undefined {
+  const find = (list: { messages: Message[] } | undefined) => list?.messages.find((m) => m.id === id)
+  return (!parentId ? find(queryClient.getQueryData<MessageList>(keys.messaging.messages(channelId))) : undefined)
+    ?? find(queryClient.getQueryData<{ messages: Message[] }>(keys.messaging.thread(parentId || id)))
+}
+
+/** The "Được nhắc tới" pill and feed asked for again: what they count changed. */
+function refreshMentions(): void {
+  queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() })
+  queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsUnreadAll() })
+}
 
 /** Plain-text preview of a message body: tags stripped, whitespace folded, capped. */
 export function previewText(content: string): string {
@@ -79,6 +93,10 @@ function mapMessage(old: MessageList | undefined, id: string, fn: (m: Message) =
 export function applyMessageEdited(ev: MessageEditedEvent): void {
   const m = ev.message
   if (!m?.id) return
+  // The pill counts mentions of me: an edit that adds or removes me moves it, whoever is looking.
+  const me = useAuthStore.getState().user?.id
+  const before = cachedMessage(m.channelId, m.id, m.parentMessageId)
+  if (me && (m.mentions?.includes(me) || before?.mentions?.includes(me))) refreshMentions()
   patchMessage(m.channelId, m.id, m.parentMessageId, (cur) =>
     cur.deleted
       ? cur
@@ -86,7 +104,8 @@ export function applyMessageEdited(ev: MessageEditedEvent): void {
           ...cur,
           content: m.content,
           content_format: m.contentFormat || cur.content_format,
-          mentions: m.mentions?.length ? m.mentions : cur.mentions,
+          // The frame carries the whole list after the edit: an empty one means every mention was removed.
+          mentions: m.mentions ?? cur.mentions,
           edited_at: ev.editedAt,
         })
 }
@@ -121,6 +140,10 @@ const tombstone = (m: Message): Message => ({
  */
 export function applyMessageDeleted(ev: MessageDeletedEvent): void {
   const { messageId: id, channelId, parentMessageId: parent } = ev
+  // The frame names no one: a message not held here may have named me, so only a known miss skips the refresh.
+  const me = useAuthStore.getState().user?.id
+  const known = cachedMessage(channelId, id, parent)
+  if (me && (!known || known.mentions?.includes(me))) refreshMentions()
   const without = (old: MessageList | undefined): MessageList | undefined =>
     old && old.messages.some((m) => m.id === id) ? { ...old, messages: old.messages.filter((m) => m.id !== id) } : old
 

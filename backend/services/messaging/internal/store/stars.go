@@ -36,14 +36,15 @@ func (s *Store) SetMessageStar(ctx context.Context, userID, messageID string, st
 	return nil
 }
 
-// StarredConversations returns which of the given channels the user starred.
-func (s *Store) StarredConversations(ctx context.Context, userID string, channelIDs []string) (map[string]bool, error) {
-	out := map[string]bool{}
+// StarredConversations returns, for each of the given channels the user
+// starred, when they starred it. A channel not starred is absent.
+func (s *Store) StarredConversations(ctx context.Context, userID string, channelIDs []string) (map[string]time.Time, error) {
+	out := map[string]time.Time{}
 	if len(channelIDs) == 0 {
 		return out, nil
 	}
 	rows, err := s.db.Query(ctx,
-		`SELECT channel_id FROM starred_conversations WHERE user_id = $1 AND channel_id = ANY($2::text[])`,
+		`SELECT channel_id, created_at FROM starred_conversations WHERE user_id = $1 AND channel_id = ANY($2::text[])`,
 		userID, channelIDs)
 	if err != nil {
 		return nil, fmt.Errorf("starred conversations: %w", err)
@@ -51,10 +52,11 @@ func (s *Store) StarredConversations(ctx context.Context, userID string, channel
 	defer rows.Close()
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		var at time.Time
+		if err := rows.Scan(&id, &at); err != nil {
 			return nil, err
 		}
-		out[id] = true
+		out[id] = at
 	}
 	return out, rows.Err()
 }

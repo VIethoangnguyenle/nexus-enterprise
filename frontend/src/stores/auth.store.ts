@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { queryClient } from '../lib/query-client'
+import { endSession } from '../lib/session-end'
 
 interface User {
   id: string
@@ -85,6 +86,8 @@ export const useAuthStore = create<AuthState>()(
         // person to sign in on this tab is served the previous user's data
         // until each query happens to refetch.
         queryClient.clear()
+        // Client stores holding chat content (drafts, previews) go the same way.
+        endSession()
         set({ accessToken: null, tenantId: null, user: null, bootstrapping: false })
       },
 
