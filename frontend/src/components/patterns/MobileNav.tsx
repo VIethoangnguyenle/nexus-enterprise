@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { approvalPendingOptions } from '../../hooks/useApproval'
 import { useBottomBarLayout } from '../../hooks/usePhone'
 import { formatCount } from '../../lib/format'
+import { isConversationPath } from '../../lib/workspace'
 import { useUiStore } from '../../stores/ui.store'
 import { Pressable } from '../primitives'
 import { MORE_ITEMS, MobileMoreSheet } from './MobileMoreSheet'
@@ -41,7 +42,9 @@ export function MobileNav() {
   const { pathname } = useLocation()
   const setActiveModule = useUiStore((s) => s.setActiveModule)
   // Above the bar's widths nothing shows the count, so nothing asks for it.
-  const shown = useBottomBarLayout()
+  // Inside a conversation the phone shows only the conversation (its header
+  // and composer, chat-mobile mockup): the bar steps aside until you go back.
+  const shown = useBottomBarLayout() && !isConversationPath(pathname)
   const pending = useQuery({ ...approvalPendingOptions(), enabled: shown }).data?.total ?? 0
   const [moreOpen, setMoreOpen] = useState(false)
   const moreCurrent = MORE_ITEMS.some((item) => under(pathname, item.to))

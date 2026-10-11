@@ -22,3 +22,12 @@ export function validateWorkspaceSearch(search: Record<string, unknown>): { ws?:
   if (typeof ws === 'number' && Number.isFinite(ws)) return { ws: String(ws) }
   return {}
 }
+
+/**
+ * One conversation open (`/channels/<id>`), not the list of them. On a phone a
+ * conversation is a full screen of its own: the app's top bar and tab bar step
+ * aside (chat-mobile mockup).
+ */
+export function isConversationPath(pathname: string): boolean {
+  return /^\/channels\/[^/]+\/?$/.test(pathname)
+}

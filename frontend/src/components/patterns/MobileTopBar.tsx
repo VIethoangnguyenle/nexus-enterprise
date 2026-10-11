@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useRouterState } from '@tanstack/react-router'
 import { Search } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useBottomBarLayout } from '../../hooks/usePhone'
-import { workspaceDisplayName } from '../../lib/workspace'
+import { isConversationPath, workspaceDisplayName } from '../../lib/workspace'
 import { IconButton } from '../primitives'
 
 const SEARCH = '[data-module-search]'
@@ -19,7 +20,9 @@ const findSearch = (root: ParentNode) => root.querySelector<HTMLElement>(SEARCH)
  * appears and disappears with the screen's own search.
  */
 export function MobileTopBar({ scope }: { scope: HTMLElement | null }) {
-  const shown = useBottomBarLayout()
+  // A conversation carries its own header on a phone; this bar steps aside.
+  const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const shown = useBottomBarLayout() && !isConversationPath(pathname)
   const { workspaceName } = useActiveWorkspace()
   const [hasSearch, setHasSearch] = useState(false)
 

@@ -139,6 +139,16 @@ describe('MobileNav bar', () => {
     expect(screen.getByRole('link', { name: 'Tin nhắn' })).not.toHaveAttribute('aria-current')
   })
 
+  // A conversation on a phone is a full screen of its own (chat-mobile mockup):
+  // its header and composer, no tab bar. The list of conversations keeps it.
+  it('steps aside inside a conversation, and is back on the conversation list', async () => {
+    await renderBar('/channels/99999999-aaaa-4bbb-8ccc-000000000002')
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Điều hướng di động' })).toBeNull())
+    cleanup()
+    await renderBar('/channels')
+    expect(await screen.findByRole('navigation', { name: 'Điều hướng di động' })).toBeInTheDocument()
+  })
+
   it('lights Thêm when the screen is one that lives in it', async () => {
     await renderBar('/assets')
     expect(await screen.findByRole('button', { name: 'Thêm' })).toHaveAttribute('data-current', 'true')

@@ -233,8 +233,8 @@ export function SpaceView({ channelId }: { channelId: string }) {
               aria-label={kind === 'space' ? 'Tìm trong nhóm' : 'Tìm trong cuộc trò chuyện'}
               title="Tìm kiếm"
               data-module-search
-              // Under 1024 the phone top bar carries the search action and clicks this one.
-              className="max-lg:hidden"
+              // A conversation has no phone top bar (it steps aside here), so its
+              // own header carries search at every width.
               active={panel?.kind === 'search'}
               onClick={() => setPanel(panel?.kind === 'search' ? null : { kind: 'search' })}
             >

@@ -4,6 +4,7 @@ import { cleanup, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
+import { routerState } from '../../test/router-mock'
 import { WS_ID } from '../../test/chat-fixtures'
 import { apiFetch } from '../../api/client'
 import { Button, SearchField } from '../primitives'
@@ -49,6 +50,17 @@ describe('MobileTopBar', () => {
     expect(await screen.findByText(/Khối Vận hành/)).toHaveTextContent('Nexus · Khối Vận hành')
     expect(screen.queryByRole('button', { name: /menu/i })).toBeNull()
     expect(screen.getByRole('heading', { name: 'Phê duyệt' })).toBeInTheDocument()
+  })
+
+  it('steps aside inside a conversation, which has its own header', async () => {
+    routerState.pathname = '/channels/c-1'
+    try {
+      renderWithClient(<Shell screen={<h1>Đối soát</h1>} />)
+      await screen.findByRole('heading', { name: 'Đối soát' })
+      expect(screen.queryByText(/Nexus ·/)).toBeNull()
+    } finally {
+      routerState.pathname = '/channels'
+    }
   })
 
   it('has no search action on a screen without a search of its own', async () => {

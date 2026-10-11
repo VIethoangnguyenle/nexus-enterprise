@@ -7,7 +7,7 @@ import { useActiveWorkspace } from '../hooks/useActiveWorkspace'
 import { usePreferencesSync } from '../hooks/usePreferences'
 import { useWorkspaceRealtime } from '../hooks/useWorkspaceRealtime'
 import { useUnreadCounts } from '../hooks/useMessaging'
-import { validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
+import { isConversationPath, validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
 import { useResizable } from '../hooks/useResizable'
 import { AppSidebar } from '../components/patterns/AppSidebar'
 import { ListPanel } from '../components/patterns/ListPanel'
@@ -153,7 +153,8 @@ function WorkspaceLayout() {
         )}
 
         {/* Column 3: Content */}
-        <main className="flex-1 flex flex-col min-w-0 pb-tabbar lg:pb-0 isolate overflow-hidden">
+        {/* Inside a conversation the phone's tab bar steps aside, so no room is kept for it. */}
+        <main className={`flex-1 flex flex-col min-w-0 ${isConversationPath(currentPath) ? '' : 'pb-tabbar'} lg:pb-0 isolate overflow-hidden`}>
           <MobileTopBar scope={screenEl} />
           <OfflineBar />
           <div ref={setScreenEl} className="flex-1 flex flex-col min-h-0 min-w-0">
