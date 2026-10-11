@@ -103,12 +103,16 @@ Scale 1.2, `rem`:
 
 | Token | Size / line | Weight | Dùng cho |
 |---|---|---|---|
-| `text-xs` | 12 / 16 | 500 | nhãn phụ, giờ, badge |
-| `text-sm` | 14 / 21 | 400 | mặc định: tin nhắn, ô bảng, mô tả |
-| `text-base` | 16 / 24 | 400 | input (tránh zoom mobile), đọc dài |
+| `text-xs` | 12 / 16 | 500 | nhãn phụ, giờ, badge, "đã sửa" |
+| `text-sm` | 14 / 21 | 400 | mặc định giao diện: ô bảng, mô tả, form; tiêu đề mục chat, hàng tóm tắt thread, trích dẫn, code trong tin |
+| `text-md` | 15 / 23 | 400 | **đọc chat trên máy tính**: tin nhắn, tên người gửi (600), hàng cột điều hướng, tên hàng ở feed |
+| `text-base` | 16 / 24 | 400 | input và ô soạn (tránh zoom mobile), **tin nhắn và tên hàng danh sách trên điện thoại**, đọc dài |
 | `text-lg` | 19 / 26 | 600 display | tiêu đề panel, tên kênh |
 | `text-xl` | 23 / 30 | 700 display | tiêu đề trang |
 | `text-2xl` | 28 / 34 | 600 display | số tiền, con số trọng tâm |
+
+Chữ chat cố ý to hơn Google Chat (14px) 1px trên máy tính và 2px trên điện thoại (người dùng chốt 2026-10-11:
+"chỉ phần chat", tin nhắn điện thoại 16px). Màn dày dữ liệu (bảng, quản trị) và chữ giao diện giữ 14.
 
 Nhãn viết hoa (`label`): 12px, 600, `letter-spacing: 0.06em`, tối đa một nhãn cho mỗi panel.
 
@@ -149,8 +153,8 @@ mã backend, email và tài liệu kỹ thuật không đổi.
 ┌─────────┬──────────────┬───────────────────────────┬──────────────┐
 │ Sidebar │ List panel   │ Content                   │ Detail panel │
 │ 232px   │ 280px        │ flex, min 480px           │ 360px        │
-│ (rail   │ (kênh, cây   │                           │ (có điều     │
-│  64px)  │  thư mục…)   │                           │  kiện)       │
+│ (dải    │ (kênh, cây   │                           │ (có điều     │
+│  72px)  │  thư mục…)   │                           │  kiện)       │
 └─────────┴──────────────┴───────────────────────────┴──────────────┘
 ```
 
@@ -158,14 +162,29 @@ mã backend, email và tài liệu kỹ thuật không đổi.
   **Tin nhắn · Tài liệu · Phê duyệt · Tài sản · Danh bạ**, đáy: **Thông báo** (mở NotificationPanel,
   §6), **Quản trị** (khi có quyền),
   **Cài đặt**, người dùng hiện tại. Tài sản nằm trong shell này, không có layout riêng.
-- **Thu gọn sidebar (rail 64px)** (mockup `spaces.html` §3, nút "Thu gọn/mở menu chính"): IconButton
-  "Thu gọn menu chính" (icon khung có cột trái) ở cuối hàng workspace, `aria-expanded`. Thu gọn: cột còn
-  64px, chỉ icon 20; logo workspace và nút mở rộng xếp dọc ở đầu; avatar người dùng ở đáy; số chưa đọc
-  thành badge 16 trên góc icon (viền 2px màu sidebar); tên mục hiện bằng tooltip, tên vẫn là accessible
-  name của link. Đổi bề rộng `grid-template-columns` 280ms `--ease-out-expo`, chữ fade 120ms; giảm chuyển
-  động thì đổi ngay. **Xem tạm:** trỏ chuột vào rail 300ms thì sidebar mở 232px **nổi đè** lên list panel
-  (`--shadow-overlay`, không đẩy layout), rời chuột thì thu lại. Trạng thái nhớ theo thiết bị; 1024–1279
-  mặc định thu gọn, ≥ 1280 mặc định mở. Phần chừa ra dành cho content (luồng chat).
+- **Menu chính: mở rộng hoặc dải icon** (mockup `design/mockups/app-rail.html`). Hai trạng thái, người dùng tự
+  chọn, nhớ theo người trên từng máy; **mặc định thu gọn** (người dùng chốt 2026-10-11, cùng phím tắt, mục Thông báo, nền bo nhẹ) ở mọi bề rộng máy tính và một lựa chọn chung cho mọi
+  phân hệ. Cả cột là `<nav aria-label="Điều hướng chính">`.
+  - *Nút chuyển:* IconButton 32 (icon khung có cột trái) nằm riêng hàng trên cùng ở cả hai trạng thái, tâm cách
+    mép trái 36px nên không đổi chỗ. `aria-expanded` (true = mở rộng), `aria-label` "Thu gọn menu chính" /
+    "Mở rộng menu chính", phím tắt **Ctrl+\\** (⌘\\ trên macOS, `aria-keyshortcuts`), ghi trong tooltip.
+  - *Mở rộng (232px):* như hiện nay: workspace switcher (logo 32 + tên + dòng phụ + chevron), NavRow, đáy
+    Thông báo · Quản trị · Cài đặt · hàng người dùng có nút Đăng xuất.
+  - *Thu gọn (72px, đệm 12/4):* ô chữ cái workspace 40 (radius 10) trong nút 48; mỗi mục là link 64×56: icon 20
+    trong nền 48×28 radius 10 + nhãn 11px/500 bên dưới (đủ tên, không viết tắt). Đang chọn: nền
+    `--color-accent-wash`, icon `--color-accent`, nhãn `--color-ink` 600, `aria-current="page"`; hover nền
+    `--color-hover`. Số đếm: pill 16 ở góc trên phải icon, viền 2px `--color-sunk`, `99+`, ẩn khi 0; chữ ẩn
+    ", N chưa đọc" trong link. Đáy: Thông báo · Quản trị · Cài đặt, rồi avatar 32 (presence) mở menu tài
+    khoản: tên, vai trò, trạng thái, Cài đặt tài khoản, Đăng xuất.
+  - *Đổi workspace:* bấm ô chữ cái (hay tên khi mở rộng) mở cùng một menu; đầu menu ghi đầy đủ tên workspace
+    đang mở (xuống dòng, không cắt) + dòng phụ ("Workspace cá nhân" hoặc tên tổ chức) · vai trò; danh sách
+    "Chuyển sang" cũng xuống dòng thay vì cắt. Workspace cá nhân không có Tài sản, Phê duyệt, Quản trị.
+  - *Tooltip* chỉ ở chỗ chữ bị ẩn (ô workspace, avatar, nút chuyển): `--color-overlay`, `--shadow-overlay`,
+    radius 8, 12px, cách 8px bên phải, `--z-tooltip`; trỏ chuột 400ms, focus bàn phím hiện ngay, Esc ẩn.
+    Tooltip không bao giờ là nguồn tên duy nhất.
+  - *Chuyển trạng thái:* nội dung cột fade ra 100ms `--ease-in`, bề rộng cột 280ms `--ease-out-expo`, nội dung
+    fade vào 120ms; giảm chuyển động thì đổi ngay. Không còn "xem tạm" khi trỏ chuột vào dải.
+  - Dưới 1024 không có menu này: thanh trên + thanh đáy như dưới đây.
 - **List panel** chỉ ở Tin nhắn và Tài liệu. **Detail panel** mở bằng chọn mục, đóng bằng Esc.
 - **Breakpoints:** ≥ 1280 đủ 4 cột · 1024–1279 detail panel thành overlay bên phải ·
   768–1023 sidebar thành rail, list panel thành cột thay thế content (rail chưa làm: hiện thanh
@@ -300,7 +319,7 @@ này thì cái kia đóng.
 - **Luồng (MessageStream):** nền `--color-base`, cũ trên mới dưới, tin xếp **hai bên**. Tin của người khác
   bên trái: Avatar 32 + tên hiển thị 600 + giờ `text-xs` mờ tabular phía trên bong bóng. **Tin của bạn bên
   phải**: không avatar, không tên (chữ ẩn "Bạn" cho trình đọc màn hình), chỉ giờ ở trên, căn phải. Bong bóng:
-  `text-sm` line-height 1.55, padding 7 × 12, radius 16, rộng tối đa min(70ch, 85%) cột tin, co theo nội
+  `text-md` (điện thoại `text-base`), padding 7 × 12, radius 16, rộng tối đa min(70ch, 85%) cột tin, co theo nội
   dung; người khác nền `--color-sunk`, của bạn nền `--color-accent-wash`; góc phía người gửi của bong bóng
   đầu nhóm là 4 (trên trái với người khác, trên phải với bạn). `code` và khối code trong bong bóng nền
   `--color-base`. Đính kèm (lưới ảnh, thẻ tệp), cảm xúc và hàng tóm tắt thread nằm ngoài bong bóng, bám
