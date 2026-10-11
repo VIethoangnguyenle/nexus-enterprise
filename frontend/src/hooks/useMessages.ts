@@ -1,13 +1,23 @@
 import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
 import { messagingApi, type SendMessageInput, type Message, type ReactionGroup } from '../api/messaging'
 import { queryClient } from '../lib/query-client'
+import { keepOlderPages } from '../lib/stream-model'
 import { useAuthStore } from '../stores/auth.store'
 import { keys } from './keys'
 
 // --- Messages ---
 
 export const messagesQueryOptions = (channelId: string) =>
-  queryOptions({ queryKey: keys.messaging.messages(channelId), queryFn: () => messagingApi.listMessages(channelId), enabled: !!channelId })
+  queryOptions({
+    queryKey: keys.messaging.messages(channelId),
+    // The newest page; older pages the reader loaded by scrolling up survive a refetch.
+    queryFn: async () =>
+      keepOlderPages(
+        await messagingApi.listMessages(channelId),
+        queryClient.getQueryData<{ messages: Message[]; has_more: boolean }>(keys.messaging.messages(channelId)),
+      ),
+    enabled: !!channelId,
+  })
 
 export const threadQueryOptions = (messageId: string) =>
   queryOptions({ queryKey: keys.messaging.thread(messageId), queryFn: () => messagingApi.getThread(messageId), enabled: !!messageId })

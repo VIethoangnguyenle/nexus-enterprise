@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
-import { CircleAlert } from 'lucide-react'
+import { Bell, BellRing, CircleAlert } from 'lucide-react'
 import { useThread, useSendReply } from '../../hooks/useMessages'
+import { useFollowThread, useMarkThreadRead } from '../../hooks/useThreads'
 import { useArrivals } from '../../hooks/useArrivals'
 import { useMotionPresets } from '../../lib/motion'
 import { personStyle } from '../../lib/person-hue'
 import { explain } from '../../lib/errors'
+import { buildStream, firstUnreadReplyId } from '../../lib/stream-model'
 import type { PeopleDirectory } from '../../lib/people'
 import type { Message } from '../../api/messaging'
 import { Button, toast } from '../primitives'
@@ -20,26 +22,35 @@ type Msg = Message & { _optimistic?: boolean }
 
 interface ThreadPanelProps {
   channelId: string
-  /** The topic (top-level message) whose replies to show. */
+  /** The root message whose replies to show. */
   messageId: string
-  /** Space or DM title, shown under "Chủ đề". */
+  /** Space or DM title, shown under "Thread". */
   spaceName: string
   people: PeopleDirectory
   me: string | undefined
+  /** Set when the thread was opened from the thread list: a way back to it. */
+  onBack?: () => void
   onClose: () => void
 }
 
+/** Where "Tin mới" lands below the top of the panel when the thread has unread replies. */
+const DIVIDER_OFFSET = 48
+
 /**
- * A topic opened at the side (design/mockups/spaces.html §2): the opening
- * message, a divider with the reply count, the replies, and a reply box.
- * Replies from others arrive in their hue with "vừa trả lời"; yours only slide in.
- * "Đang theo dõi" from the mockup is not shown: there is no follow API yet.
+ * A thread at the side (DESIGN.md "Panel thread"): the root message, a divider
+ * with the reply count, the replies grouped by sender, a "Tin mới" divider
+ * before the first unread reply, and a reply box. Opening it marks the thread
+ * read; the divider stays until the panel closes. Follow / unfollow is the
+ * button in the header. Below 1024 it is a full-screen sheet.
  */
-export function ThreadPanel({ channelId, messageId, spaceName, people, me, onClose }: ThreadPanelProps) {
-  const m = useMotionPresets()
+export function ThreadPanel({ channelId, messageId, spaceName, people, me, onBack, onClose }: ThreadPanelProps) {
+  const motionPresets = useMotionPresets()
   const qc = useQueryClient()
   const { data, isLoading, error, refetch } = useThread(messageId)
   const send = useSendReply(channelId, messageId)
+  const follow = useFollowThread(channelId)
+  const markRead = useMarkThreadRead(channelId)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const all = (data?.messages ?? []) as Msg[]
@@ -48,6 +59,21 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onClo
     ?.messages.find((x) => x.id === messageId)
   const root = all.find((x) => x.id === messageId) ?? fromList
   const replies = useMemo(() => all.filter((x) => x.id !== messageId), [all, messageId])
+  const following = !!root?.following
+  const unreadNow = root?.thread_unread_count ?? 0
+
+  // The divider is fixed from the moment the thread is first shown: reading moves the position, not the line.
+  const [seen, setSeen] = useState<{ scope: string; resolved: boolean; unread: number }>({ scope: messageId, resolved: false, unread: 0 })
+  if (seen.scope !== messageId) {
+    setSeen({ scope: messageId, resolved: false, unread: 0 })
+  } else if (!seen.resolved && !isLoading && root) {
+    setSeen({ scope: messageId, resolved: true, unread: following ? unreadNow : 0 })
+  }
+  const unreadReplyId = seen.resolved ? firstUnreadReplyId(replies, seen.unread, me) : null
+  const rows = useMemo(
+    () => buildStream(replies, { me, unreadFromId: unreadReplyId }).filter((i) => i.kind !== 'day'),
+    [replies, me, unreadReplyId],
+  )
 
   const { fresh } = useArrivals(replies, {
     keyOf: (r) => r.id,
@@ -57,49 +83,138 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onClo
     scope: messageId,
   })
 
+  // Opening the thread reads it; so does a reply that lands while it is open.
+  const markReadMutate = markRead.mutate
   useEffect(() => {
-    bottomRef.current?.scrollIntoView?.({ block: 'end', behavior: m.reduced ? 'auto' : 'smooth' })
-  }, [replies.length, m.reduced])
+    if (seen.resolved && following && unreadNow > 0) markReadMutate(messageId)
+  }, [seen.resolved, following, unreadNow, messageId, markReadMutate])
 
+  // At the divider when there are unread replies, otherwise at the newest reply.
+  const placed = useRef('')
+  const placedCount = useRef(0)
+  useLayoutEffect(() => {
+    const body = bodyRef.current
+    if (!body || !seen.resolved || placed.current === messageId) return
+    placed.current = messageId
+    placedCount.current = replies.length
+    const d = body.querySelector<HTMLElement>('[data-unread-divider]')
+    body.scrollTop = d ? Math.max(0, d.offsetTop - DIVIDER_OFFSET) : body.scrollHeight
+  }, [seen.resolved, messageId, replies.length])
+  // A reply that arrives after that moves the view to it.
+  useEffect(() => {
+    if (placed.current !== messageId || replies.length <= placedCount.current) return
+    placedCount.current = replies.length
+    bottomRef.current?.scrollIntoView?.({ block: 'end', behavior: motionPresets.reduced ? 'auto' : 'smooth' })
+  }, [replies.length, messageId, motionPresets.reduced])
+
+  // "Đã theo dõi thread" is said once, after a change the reader made.
+  const [announce, setAnnounce] = useState('')
+  const toggleFollow = () => {
+    const next = !following
+    follow.mutate(
+      { rootId: messageId, follow: next },
+      {
+        onSuccess: () => setAnnounce(next ? 'Đã theo dõi thread' : 'Đã bỏ theo dõi thread'),
+        onError: (err) => toast.error(explain(err, next ? 'theo dõi thread' : 'bỏ theo dõi thread')),
+      },
+    )
+  }
+
+  const count = replies.length
+  const countLabel = isLoading ? 'Đang tải câu trả lời' : count ? `${count} trả lời` : 'Chưa có câu trả lời'
   return (
     <SidePanel
-      label="Chủ đề"
-      title="Chủ đề"
+      label="Thread"
+      title="Thread"
       sub={spaceName}
-      closeLabel="chủ đề"
+      closeLabel="thread"
+      sheetBelow="lg"
+      backOnSheet
+      onBack={onBack}
       onClose={onClose}
+      bodyRef={bodyRef}
+      actions={
+        root && (
+          <Button
+            variant={following ? 'tonal' : 'soft'}
+            size="sm"
+            aria-pressed={following}
+            disabled={follow.isPending}
+            onClick={toggleFollow}
+            className="min-h-9 md:min-h-0"
+          >
+            {following
+              ? <BellRing size={16} strokeWidth={1.75} aria-hidden="true" className="text-accent" />
+              : <Bell size={16} strokeWidth={1.75} aria-hidden="true" />}
+            {following ? 'Đang theo dõi' : 'Theo dõi'}
+          </Button>
+        )
+      }
       footer={
-        <ChatEditor
-          channelId={channelId}
-          people={people}
-          tone="base"
-          placeholder="Trả lời trong chủ đề"
-          isPending={send.isPending}
-          onSend={(html) =>
-            send.mutate(html, { onError: (err) => toast.error(explain(err, 'gửi câu trả lời')) })
-          }
-        />
+        <>
+          <p className="sr-only" role="status" aria-live="polite">{announce}</p>
+          <ChatEditor
+            channelId={channelId}
+            people={people}
+            tone="base"
+            placeholder="Trả lời trong thread"
+            hint="Enter để gửi"
+            isPending={send.isPending}
+            onSend={(html) =>
+              send.mutate(html, { onError: (err) => toast.error(explain(err, 'gửi câu trả lời')) })
+            }
+          />
+        </>
       }
     >
       {error && !root ? (
         <EmptyState
           compact
           icon={<CircleAlert size={24} strokeWidth={1.75} />}
-          text="Chưa tải được chủ đề này."
+          text="Chưa tải được thread này."
           action={<Button variant="soft" size="sm" onClick={() => refetch()}>Thử lại</Button>}
         />
       ) : (
-        <div className="grid content-start gap-0.5">
-          {root && <MessageBlock message={root} people={people} idBase={`thread-root-${messageId}`} me={me} className="px-3" />}
-          <div className="flex items-center gap-2.5 px-3 py-1.5 text-xs font-semibold text-ink-muted after:content-[''] after:h-px after:flex-1 after:bg-line">
-            {isLoading ? 'Đang tải câu trả lời' : replies.length ? `${replies.length} trả lời` : 'Chưa có câu trả lời'}
+        <div className="grid content-start gap-0.5 pt-1">
+          {root && (
+            <MessageBlock
+              message={root}
+              people={people}
+              idBase={`thread-root-${messageId}`}
+              mine={root.sender_id === me}
+              me={me}
+              className="px-2"
+            />
+          )}
+          <div
+            role="separator"
+            aria-label={countLabel}
+            className="flex items-center gap-2.5 px-3 py-1.5 text-xs font-semibold text-ink-muted
+              before:content-[''] before:h-px before:flex-1 before:bg-line after:content-[''] after:h-px after:flex-1 after:bg-line"
+          >
+            {countLabel}
           </div>
           <AnimatePresence initial={false}>
-            {replies.map((r) => {
-              const a = fresh.get(r.id)
+            {rows.map((item) => {
+              if (item.kind === 'unread') {
+                return (
+                  <motion.div key={item.key} data-unread-divider initial={false} exit={{ opacity: 0 }}>
+                    <div
+                      role="separator"
+                      aria-label="Tin mới"
+                      className="flex items-center gap-3 px-3 pt-3 pb-1.5 text-xs font-semibold text-accent before:content-[''] before:h-px before:flex-1 before:bg-accent"
+                    >
+                      Tin mới
+                    </div>
+                  </motion.div>
+                )
+              }
+              if (item.kind !== 'message') return null
+              const r = item.message as Msg
+              const a = fresh.get(item.key)
               const byOther = a?.source === 'other'
               return (
-                <motion.div key={r.id} {...m.row}>
+                <motion.div key={item.key} {...motionPresets.row}>
                   <div
                     data-realtime={a?.source}
                     style={byOther ? personStyle(a!.author ?? r.sender_id) : undefined}
@@ -108,11 +223,13 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onClo
                     <MessageBlock
                       message={r}
                       people={people}
-                      idBase={`reply-${r.id}`}
+                      idBase={`reply-${item.key}`}
+                      mine={item.mine}
+                      grouped={item.grouped}
                       me={me}
                       halo={byOther}
                       tag={byOther ? 'vừa trả lời' : undefined}
-                      className="px-3"
+                      className="px-2"
                     />
                   </div>
                 </motion.div>

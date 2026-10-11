@@ -1,7 +1,7 @@
-import { useRef, useSyncExternalStore, type ReactNode } from 'react'
+import { useRef, useSyncExternalStore, type ReactNode, type Ref } from 'react'
 import { createPortal } from 'react-dom'
 import { motion } from 'motion/react'
-import { X } from 'lucide-react'
+import { ArrowLeft, X } from 'lucide-react'
 import { useModalFocus } from '../../hooks/useModalFocus'
 import { useMotionPresets } from '../../lib/motion'
 import { Heading, IconButton } from '../primitives'
@@ -18,15 +18,43 @@ interface SidePanelProps {
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
+  /**
+   * Below which width the panel is a full-screen sheet: `md` (768) by default,
+   * `lg` (1024) for the thread panels (DESIGN.md "Panel thread").
+   */
+  sheetBelow?: 'md' | 'lg'
+  /**
+   * Back to where the panel was opened from (the thread list). Beside the title
+   * on a wide screen; on a sheet the back arrow replaces the close button.
+   */
+  onBack?: () => void
+  /** Sheets lead with a back arrow instead of ending with a close button. */
+  backOnSheet?: boolean
+  /** The scrolling body, for panels that place the scroll themselves. */
+  bodyRef?: Ref<HTMLDivElement>
 }
 
-const PHONE = '(max-width: 767.98px)'
-const subscribePhone = (cb: () => void) => {
-  const mq = window.matchMedia?.(PHONE)
+const QUERY = { md: '(max-width: 767.98px)', lg: '(max-width: 1023.98px)' } as const
+const subscribeTo = (query: string) => (cb: () => void) => {
+  const mq = window.matchMedia?.(query)
   mq?.addEventListener('change', cb)
   return () => mq?.removeEventListener('change', cb)
 }
-const onPhone = () => !!window.matchMedia?.(PHONE).matches
+const WATCH = {
+  md: { subscribe: subscribeTo(QUERY.md), snapshot: () => !!window.matchMedia?.(QUERY.md).matches },
+  lg: { subscribe: subscribeTo(QUERY.lg), snapshot: () => !!window.matchMedia?.(QUERY.lg).matches },
+}
+
+// Whole class names, so Tailwind sees them.
+const SURFACE = {
+  md: `max-md:fixed max-md:inset-0 max-md:z-modal max-md:pt-safe
+    md:absolute md:right-3 md:inset-y-3 md:w-90 md:rounded-surface md:shadow-overlay md:z-sticky
+    xl:static xl:my-3 xl:mr-3 xl:shadow-none xl:shrink-0`,
+  // h-app follows the visual viewport, so the reply box rides above the on-screen keyboard.
+  lg: `max-lg:fixed max-lg:inset-x-0 max-lg:top-0 max-lg:h-app max-lg:z-modal max-lg:pt-safe
+    lg:absolute lg:right-3 lg:inset-y-3 lg:w-90 lg:rounded-surface lg:shadow-overlay lg:z-sticky
+    xl:static xl:my-3 xl:mr-3 xl:shadow-none xl:shrink-0`,
+}
 
 /**
  * Right detail panel (DESIGN.md §5–§7): raised, radius 10, 12px off the
@@ -40,9 +68,11 @@ const onPhone = () => !!window.matchMedia?.(PHONE).matches
  * and focus returns to what opened it. Wider than that it stays a plain
  * complementary region beside the content.
  */
-export function SidePanel({ label, title, sub, actions, closeLabel, onClose, children, footer }: SidePanelProps) {
+export function SidePanel({
+  label, title, sub, actions, closeLabel, onClose, children, footer, sheetBelow = 'md', onBack, backOnSheet, bodyRef,
+}: SidePanelProps) {
   const m = useMotionPresets()
-  const sheet = useSyncExternalStore(subscribePhone, onPhone, () => false)
+  const sheet = useSyncExternalStore(WATCH[sheetBelow].subscribe, WATCH[sheetBelow].snapshot, () => false)
   const surfaceRef = useRef<HTMLElement>(null)
   useModalFocus({ active: sheet, surfaceRef, onClose })
 
@@ -53,24 +83,34 @@ export function SidePanel({ label, title, sub, actions, closeLabel, onClose, chi
       aria-modal={sheet || undefined}
       aria-label={label}
       {...m.panel}
-      className="flex flex-col min-h-0 min-w-0 bg-raised
-        max-md:fixed max-md:inset-0 max-md:z-modal
-        md:absolute md:right-3 md:inset-y-3 md:w-90 md:rounded-surface md:shadow-overlay md:z-sticky
-        xl:static xl:my-3 xl:mr-3 xl:shadow-none xl:shrink-0"
+      className={`flex flex-col min-h-0 min-w-0 bg-raised ${SURFACE[sheetBelow]}`}
     >
-      <div className="flex items-center gap-2 pt-3.5 pr-3 pb-2.5 pl-4">
+      <div className={`flex items-center gap-2 pt-3.5 pr-3 pb-2.5 ${sheet && backOnSheet ? 'pl-2' : onBack ? 'pl-2' : 'pl-4'}`}>
+        {sheet && backOnSheet ? (
+          <IconButton aria-label={`Đóng ${closeLabel}`} title="Đóng" onClick={onBack ?? onClose}>
+            <ArrowLeft size={18} strokeWidth={1.75} />
+          </IconButton>
+        ) : (
+          onBack && (
+            <IconButton aria-label="Quay lại danh sách Thread" title="Quay lại" onClick={onBack}>
+              <ArrowLeft size={18} strokeWidth={1.75} />
+            </IconButton>
+          )
+        )}
         <div className="grid min-w-0">
           <Heading as="h2" look="section" className="truncate">{title}</Heading>
           {sub && <span className="text-xs text-ink-muted truncate">{sub}</span>}
         </div>
         <div className="ml-auto flex items-center gap-1 shrink-0">
           {actions}
-          <IconButton aria-label={`Đóng ${closeLabel}`} title="Đóng" onClick={onClose}>
-            <X size={18} strokeWidth={1.75} />
-          </IconButton>
+          {!(sheet && backOnSheet) && (
+            <IconButton aria-label={`Đóng ${closeLabel}`} title="Đóng" onClick={onClose}>
+              <X size={18} strokeWidth={1.75} />
+            </IconButton>
+          )}
         </div>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-1 pb-2">{children}</div>
+      <div ref={bodyRef} className="flex-1 min-h-0 overflow-y-auto px-1 pb-2">{children}</div>
       {footer}
     </motion.aside>
   )

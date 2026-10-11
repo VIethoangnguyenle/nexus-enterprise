@@ -93,6 +93,7 @@ export const MESSAGES: Message[] = [
     id: MSG.t1, channel_id: CH.doisoat, sender_id: U.duc.id, sender_name: 'duc',
     content: 'File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.',
     content_format: 'plain', created_at: ts(9, 12), reply_count: 2, reactions: [],
+    last_reply_at: ts(9, 20), reply_participant_ids: [U.vinh.id, U.lan.id], following: true, thread_unread_count: 1,
   },
 ]
 
@@ -108,6 +109,15 @@ export const THREAD: Message[] = [
     content: 'Đã đối chiếu xong, chênh lệch do phí liên ngân hàng, không phải lỗi hệ thống.', content_format: 'plain', created_at: ts(9, 20),
   },
 ]
+
+/** A thread nobody follows, with one reply, for the thread list. */
+export const MSG_QUIET = '44444444-aaaa-4bbb-8ccc-000000000007'
+export const QUIET_ROOT: Message = {
+  id: MSG_QUIET, channel_id: CH.doisoat, sender_id: U.yen.id, sender_name: 'yen',
+  content: 'Biên bản đối soát tháng 10 bản nháp, anh Vinh xem giúp em phần phí.',
+  content_format: 'plain', created_at: ts(8, 40), reply_count: 1, reactions: [],
+  last_reply_at: ts(8, 55), reply_participant_ids: [U.vinh.id],
+}
 
 export const MEMBERS = [
   { user_id: U.hoa.id, username: 'hoa', ngac_node_id: U.hoa.node },
@@ -164,6 +174,18 @@ export function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
   if (p === `/messages/${MSG.t1}/thread`) return ok({ messages: THREAD })
   if (p === `/workspaces/${WS_ID}/drive`) return ok(DRIVE_ROOT)
   if (p === `/drive/folders/${DRIVE_ROOT.items[0]!.id}`) return ok(DRIVE_FOLDER)
+  if (p === `/channels/${CH.doisoat}/threads` && method === 'GET') {
+    const filter = new URLSearchParams(path.split('?')[1] ?? '').get('filter') ?? 'all'
+    const all = [MESSAGES[1]!, QUIET_ROOT]
+    const rows = filter === 'following' ? all.filter((m) => m.following) : filter === 'unread' ? all.filter((m) => (m.thread_unread_count ?? 0) > 0) : all
+    return ok({ messages: rows, has_more: false })
+  }
+  if (p.endsWith('/follow') && (method === 'POST' || method === 'DELETE')) {
+    return ok({ root_message_id: p.split('/')[2], channel_id: CH.doisoat, following: method === 'POST', unread_count: 0, as_of: { seconds: '2000000000', nanos: 0 } })
+  }
+  if (p.endsWith('/thread/read') && method === 'POST') {
+    return ok({ root_message_id: p.split('/')[2], channel_id: CH.doisoat, following: true, unread_count: 0, as_of: { seconds: '2000000000', nanos: 0 } })
+  }
   if (p.endsWith('/read') && method === 'POST') return ok({})
   return Promise.reject(new Error(`fixtureApi: unexpected ${method} ${path}`))
 }

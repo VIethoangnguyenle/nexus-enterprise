@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { keys } from '../hooks/keys'
 import type { ThreadReplyEvent, ThreadStateEvent } from '../generated/proto/messaging/ws'
 import type { Message } from '../api/messaging'
-import { applyThreadReplySummary, applyThreadState, resetThreadStateClock } from './thread-cache'
+import { applyThreadReplySummary, applyThreadState, applyThreadStateAnswer, resetThreadStateClock } from './thread-cache'
 import { queryClient } from './query-client'
 
 const msg = (over: Partial<Message> = {}): Message =>
@@ -99,5 +99,22 @@ describe('applyThreadState', () => {
     applyThreadState(state())
     expect(queryClient.getQueryState(keys.messaging.unreadCounts())!.isInvalidated).toBe(true)
     expect(queryClient.getQueryState(keys.messaging.threadsList('c1', 'unread'))!.isInvalidated).toBe(true)
+  })
+})
+
+describe('applyThreadStateAnswer', () => {
+  it('applies the caller\'s state from a follow answer to the root in the stream and in the open thread', () => {
+    seedChannel([msg({ following: false })])
+    seedThread([msg({ following: false })])
+    applyThreadStateAnswer({ root_message_id: 'root', channel_id: 'c1', following: true, unread_count: 0, as_of: { seconds: '300', nanos: 0 } })
+    expect(channel()[0]!.following).toBe(true)
+    expect(thread()[0]!.following).toBe(true)
+  })
+
+  it('does not undo a newer state that arrived over the socket first', () => {
+    seedChannel([msg()])
+    applyThreadState(state({ following: false, unreadCount: 0, asOf: { seconds: '400', nanos: 0 } }))
+    applyThreadStateAnswer({ root_message_id: 'root', channel_id: 'c1', following: true, unread_count: 2, as_of: { seconds: '300', nanos: 0 } })
+    expect(channel()[0]!.following).toBe(false)
   })
 })

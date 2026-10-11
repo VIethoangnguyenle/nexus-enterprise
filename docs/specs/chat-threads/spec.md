@@ -89,3 +89,36 @@ named.
 #### Scenario: Policy service down
 - **WHEN** the batch read check fails
 - **THEN** the answer is an empty list, never every channel
+
+## Screens
+
+The stream and the thread panels (`ConversationStream`, `ThreadSummary`, `ThreadPanel`, `ThreadsPanel`) draw what
+the requirements above return; they add the rules below. Layout and motion are in DESIGN.md, "Chat: luồng in-line,
+thread, ô soạn" and "Chat trên điện thoại".
+
+### Requirement: The stream opens where the reader stopped
+A conversation SHALL show its messages oldest first, grouped by sender within five minutes, and SHALL place a
+"Tin mới" divider before the first message from someone else after the reader's read position. The divider is
+decided once per visit and stays until the reader leaves or sends a message. When the unread run fits in one screen
+the stream opens at its end; when it is longer the stream opens with the divider 48px below its top. Messages older
+than the loaded page SHALL load when the reader scrolls to the top, without moving the line being read.
+
+#### Scenario: Long unread run
+- **WHEN** a reader with more unread messages than fit on a screen opens the conversation
+- **THEN** the stream opens at "Tin mới", and the conversation is not marked read until the reader reaches the end
+
+### Requirement: A thread is read by opening it
+Opening a thread panel SHALL mark the thread read once its unread replies are known, and again for any reply that
+arrives while it is open. Its "Tin mới" divider SHALL keep the position it had on opening until the panel closes.
+Only a followed thread has unread replies, so only a followed thread shows "M mới" on its summary row or in the
+thread list.
+
+#### Scenario: Reply to an unfollowed thread
+- **WHEN** someone replies to a thread the reader does not follow
+- **THEN** its summary row shows the new reply count and no "mới", and nothing is washed
+
+### Requirement: The thread list
+The Thread button of a conversation SHALL open its threads, filtered Tất cả / Đang theo dõi / Chưa đọc by the server,
+a page at a time (the last thread's reply time and root id are the cursor). Its badge SHALL count the conversation's
+threads with unread replies for the reader. Every thread, face and author on these screens is shown by display name;
+no identifier is rendered or typed.

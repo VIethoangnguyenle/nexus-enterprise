@@ -96,7 +96,22 @@ export interface ChannelUnread {
   channel_id: string
   unread_count: number
   last_read_message_id: string
+  /** Unread replies in the threads of this channel the signed-in user follows; omitted when 0. */
+  thread_unread_count?: number
 }
+
+/** The caller's own state of one thread, as follow / unfollow / read answer. */
+export interface ThreadState {
+  root_message_id: string
+  channel_id: string
+  following: boolean
+  unread_count?: number
+  as_of?: unknown
+}
+
+export type ThreadFilter = 'all' | 'following' | 'unread'
+
+export interface ThreadPage { messages: Message[]; has_more: boolean }
 
 export interface CreateChannelInput { name: string; channel_type: string }
 
@@ -120,7 +135,7 @@ export const messagingApi = {
 
   // Messages
   listMessages: (channelId: string, before?: string) => {
-    const qs = before ? `?before=${before}` : ''
+    const qs = before ? `?before=${encodeURIComponent(before)}` : ''
     return apiFetch<{ messages: Message[]; has_more: boolean }>(`/channels/${channelId}/messages${qs}`)
   },
   sendMessage: (channelId: string, data: string | SendMessageInput) => {
@@ -133,6 +148,25 @@ export const messagingApi = {
     })
   },
   getThread: (messageId: string) => apiFetch<{ messages: Message[] }>(`/messages/${messageId}/thread`),
+
+  // Thread follow, read position and the channel's thread list
+  followThread: (messageId: string) =>
+    apiFetch<ThreadState>(`/messages/${messageId}/follow`, { method: 'POST' }),
+  unfollowThread: (messageId: string) =>
+    apiFetch<ThreadState>(`/messages/${messageId}/follow`, { method: 'DELETE' }),
+  markThreadRead: (messageId: string) =>
+    apiFetch<ThreadState>(`/messages/${messageId}/thread/read`, { method: 'POST' }),
+  /** Root messages that have replies, most recently active first. `before` is the last reply time (RFC 3339) of the previous page's last item, `beforeId` its root id. */
+  listThreads: (channelId: string, q: { filter: ThreadFilter; before?: string; beforeId?: string; limit?: number }) => {
+    const qs = new URLSearchParams({ filter: q.filter })
+    if (q.before) qs.set('before', q.before)
+    if (q.beforeId) qs.set('before_id', q.beforeId)
+    if (q.limit) qs.set('limit', String(q.limit))
+    // The server leaves empty fields out: an empty page is just `{}` or `{ "has_more": false }`.
+    return apiFetch<Partial<ThreadPage>>(`/channels/${channelId}/threads?${qs}`).then(
+      (page): ThreadPage => ({ messages: page.messages ?? [], has_more: !!page.has_more }),
+    )
+  },
 
   // Direct messages (not workspace-scoped on the backend)
   listDMs: () => apiFetch<{ channels: Channel[] | null }>(`/dms`),

@@ -2,11 +2,12 @@ import { useNavigate } from '@tanstack/react-router'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence } from 'motion/react'
-import { ArrowLeft, Info, Search, UserPlus, CircleAlert, Lock } from 'lucide-react'
+import { ArrowLeft, Info, MessagesSquare, Search, UserPlus, CircleAlert, Lock } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useConversations } from '../../hooks/useConversations'
 import { usePeople } from '../../hooks/usePeople'
-import { useMarkRead, useChannelMembers } from '../../hooks/useMessaging'
+import { useMarkRead, useChannelMembers, useUnreadCounts } from '../../hooks/useMessaging'
+import { useFollowThread, useLoadOlderMessages, useThreadsList } from '../../hooks/useThreads'
 import { useMessages, useSendMessage, useTogglePin, useToggleReaction } from '../../hooks/useMessages'
 import { useTasks } from '../../hooks/useChannelTasks'
 import { useAuthStore } from '../../stores/auth.store'
@@ -21,7 +22,8 @@ import { ChatEditor } from '../chat/ChatEditor'
 import { EmojiPicker } from '../chat/EmojiPicker'
 import { ThreadPanel } from '../chat/ThreadPanel'
 import { ConversationIcon } from './ConversationIcon'
-import { TopicStream } from './TopicStream'
+import { ConversationStream } from './ConversationStream'
+import { ThreadsPanel } from './ThreadsPanel'
 import { MembersPanel } from './MembersPanel'
 import { SpaceFiles } from './SpaceFiles'
 import { SpaceTasks } from './SpaceTasks'
@@ -32,15 +34,16 @@ import { keys } from '../../hooks/keys'
 
 type Tab = 'chat' | 'files' | 'tasks'
 type Panel =
-  | { kind: 'thread'; id: string }
+  | { kind: 'thread'; id: string; /** Opened from the thread list: the panel can go back to it. */ fromList?: boolean }
+  | { kind: 'threads' }
   | { kind: 'members'; adding?: boolean }
   | { kind: 'search' }
   | { kind: 'info' }
 
 /**
- * A space or DM (design/mockups/spaces.html §2): header, tabs Trò chuyện / Tệp /
- * Công việc, the topic stream with its composer, and one right panel at a
- * time (thread, members, search, info). Esc closes the panel.
+ * A space or DM (design/mockups/spaces.html §2–§4): header, tabs Trò chuyện / Tệp /
+ * Công việc, the in-line stream with its composer, and one right panel at a
+ * time (thread, thread list, members, search, info). Esc closes the panel.
  */
 export function SpaceView({ channelId }: { channelId: string }) {
   const navigate = useNavigate()
@@ -77,6 +80,10 @@ export function SpaceView({ channelId }: { channelId: string }) {
   const toggleReaction = useToggleReaction(channelId)
   const togglePin = useTogglePin(channelId)
   const markRead = useMarkRead(channelId)
+  const follow = useFollowThread(channelId)
+  const older = useLoadOlderMessages(channelId)
+  const unreadQ = useUnreadCounts()
+  const unreadThreadsQ = useThreadsList(channelId, 'unread')
   const tasksQ = useTasks(channelId)
   const membersQ = useChannelMembers(channelId)
   const typingUsers = useWebSocketStore((s) => s.typingUsers[channelId])
@@ -85,25 +92,38 @@ export function SpaceView({ channelId }: { channelId: string }) {
   const sendSubscribe = useWebSocketStore((s) => s.sendSubscribe)
   const sendUnsubscribe = useWebSocketStore((s) => s.sendUnsubscribe)
 
-  const messages = useMemo(() => [...(messagesQ.data?.messages ?? [])].reverse(), [messagesQ.data])
+  // The cache is newest first; the stream reads oldest first. Replies live in their thread.
+  const messages = useMemo(
+    () => [...(messagesQ.data?.messages ?? [])].reverse().filter((m) => !m.parent_message_id),
+    [messagesQ.data],
+  )
+  const channelUnread = (unreadQ.data?.channels ?? []).find((c) => c.channel_id === channelId)
+  const threadsWithNews = unreadThreadsQ.data?.pages.flatMap((p) => p.messages).length ?? 0
+  const [atEnd, setAtEnd] = useState(true)
 
   useEffect(() => {
     sendSubscribe(channelId)
     return () => sendUnsubscribe(channelId)
   }, [channelId, sendSubscribe, sendUnsubscribe])
 
-  // Mark read a second after the newest persisted message settles. The
-  // optimistic placeholder (`temp-…`) is not a row in messages, and
-  // read_receipts has a foreign key onto that table, so it is skipped.
+  // This conversation is on screen: no push about it while the page is visible.
+  const viewChannel = useWebSocketStore((s) => s.viewChannel)
+  useEffect(() => viewChannel(channelId), [channelId, viewChannel])
+
+  // Mark read a second after the newest persisted message settles, once the
+  // reader is at the end of the stream: a long unread run opened at "Tin mới"
+  // stays unread until they get through it. The optimistic placeholder
+  // (`temp-…`) is not a row in messages, and read_receipts has a foreign key
+  // onto that table, so it is skipped.
   const lastPersisted = [...messages].reverse().find(
     (m) => m.id && !(m as { _optimistic?: boolean })._optimistic && !m.id.startsWith('temp-'),
   )?.id
   useEffect(() => {
-    if (!lastPersisted) return
+    if (!lastPersisted || !atEnd || tab !== 'chat') return
     const timer = setTimeout(() => markRead.mutate(lastPersisted), 1000)
     return () => clearTimeout(timer)
-    // markRead is a fresh object every render; the message id is the trigger.
-  }, [lastPersisted, channelId])
+    // markRead is a fresh object every render; the message id and position are the trigger.
+  }, [lastPersisted, channelId, atEnd, tab])
 
   // Esc closes the side panel (dialogs and menus stop the event before it gets here).
   useEffect(() => {
@@ -160,7 +180,7 @@ export function SpaceView({ channelId }: { channelId: string }) {
   return (
     <div className="relative flex flex-1 min-h-0 min-w-0">
       <section className="flex-1 flex flex-col min-w-0 min-h-0 bg-base" aria-label={title || 'Cuộc trò chuyện'}>
-        <header className="flex items-center gap-3 px-5 pt-3.5 pb-1.5 min-w-0">
+        <header className="flex items-center gap-3 px-4 md:px-5 pt-3.5 pb-1.5 min-w-0">
           <IconButton
             className="lg:hidden"
             aria-label="Về danh sách trò chuyện"
@@ -204,7 +224,7 @@ export function SpaceView({ channelId }: { channelId: string }) {
               </span>
             )}
             {kind === 'space' && (
-              <Button variant="soft" size="sm" onClick={() => setPanel({ kind: 'members', adding: true })}>
+              <Button variant="soft" size="sm" className="max-md:hidden" onClick={() => setPanel({ kind: 'members', adding: true })}>
                 <UserPlus size={16} strokeWidth={1.75} aria-hidden="true" />
                 <span className="max-sm:sr-only">Thêm người</span>
               </Button>
@@ -213,10 +233,31 @@ export function SpaceView({ channelId }: { channelId: string }) {
               aria-label={kind === 'space' ? 'Tìm trong nhóm' : 'Tìm trong cuộc trò chuyện'}
               title="Tìm kiếm"
               data-module-search
+              // Under 1024 the phone top bar carries the search action and clicks this one.
+              className="max-lg:hidden"
               active={panel?.kind === 'search'}
               onClick={() => setPanel(panel?.kind === 'search' ? null : { kind: 'search' })}
             >
               <Search size={18} strokeWidth={1.75} />
+            </IconButton>
+            <IconButton
+              aria-label={threadsWithNews > 0 ? `Thread, ${threadsWithNews} thread có tin mới` : 'Thread'}
+              title="Thread"
+              active={panel?.kind === 'threads'}
+              aria-pressed={panel?.kind === 'threads'}
+              onClick={() => setPanel(panel?.kind === 'threads' ? null : { kind: 'threads' })}
+              className="relative"
+            >
+              <MessagesSquare size={18} strokeWidth={1.75} />
+              {threadsWithNews > 0 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -top-0.5 -right-1 inline-flex items-center justify-center min-w-4 h-4 px-1 rounded-full
+                    bg-accent text-on-accent text-2xs font-semibold leading-none tnum ring-2 ring-base"
+                >
+                  {threadsWithNews > 9 ? '9+' : threadsWithNews}
+                </span>
+              )}
             </IconButton>
             <IconButton
               aria-label={kind === 'space' ? 'Thông tin nhóm' : 'Thông tin'}
@@ -269,17 +310,34 @@ export function SpaceView({ channelId }: { channelId: string }) {
                   />
                 </div>
               ) : (
-                <TopicStream
+                <ConversationStream
                   channelId={channelId}
+                  label={title ? `Tin nhắn trong ${title}` : 'Tin nhắn'}
                   messages={messages}
                   ready={!messagesQ.isLoading}
+                  hasMore={!!messagesQ.data?.has_more}
+                  loadingOlder={older.loading}
+                  olderFailed={older.failed}
+                  onLoadOlder={older.loadOlder}
                   me={me?.id}
                   people={people}
+                  unread={{
+                    ready: unreadQ.isSuccess || unreadQ.isError,
+                    lastReadId: channelUnread?.last_read_message_id ?? '',
+                    count: channelUnread?.unread_count ?? 0,
+                  }}
                   activeThreadId={panel?.kind === 'thread' ? panel.id : null}
                   onOpenThread={(id) => setPanel({ kind: 'thread', id })}
                   onReact={(id) => setEmojiTarget(id)}
                   onToggleReaction={(id, emoji, hasReacted) => toggleReaction.mutate({ messageId: id, emoji, hasReacted })}
                   onPin={(m: Message) => togglePin.mutate({ messageId: m.id, isPinned: !!m.is_pinned })}
+                  onFollow={(m, on) =>
+                    follow.mutate(
+                      { rootId: m.id, follow: on },
+                      { onError: (err) => toast.error(explain(err, on ? 'theo dõi thread' : 'bỏ theo dõi thread')) },
+                    )
+                  }
+                  onAtEndChange={setAtEnd}
                 />
               )}
 
@@ -304,7 +362,7 @@ export function SpaceView({ channelId }: { channelId: string }) {
                 channelId={channelId}
                 people={people}
                 placeholder={title ? `Tin nhắn cho ${title}` : 'Viết tin nhắn'}
-                hint={kind === 'space' ? 'Mỗi tin gửi ở đây mở một chủ đề mới' : undefined}
+                hint="Enter để gửi · Shift+Enter xuống dòng"
                 onSend={handleSend}
                 onTyping={() => sendTyping(channelId)}
                 onFileUpload={handleFileUpload}
@@ -335,6 +393,17 @@ export function SpaceView({ channelId }: { channelId: string }) {
             spaceName={title}
             people={people}
             me={me?.id}
+            onBack={panel.fromList ? () => setPanel({ kind: 'threads' }) : undefined}
+            onClose={() => setPanel(null)}
+          />
+        )}
+        {panel?.kind === 'threads' && (
+          <ThreadsPanel
+            key="threads"
+            channelId={channelId}
+            spaceName={title}
+            people={people}
+            onOpenThread={(id) => setPanel({ kind: 'thread', id, fromList: true })}
             onClose={() => setPanel(null)}
           />
         )}

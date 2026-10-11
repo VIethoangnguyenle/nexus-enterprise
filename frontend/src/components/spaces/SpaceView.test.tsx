@@ -1,4 +1,4 @@
-import { screen, within, waitFor } from '@testing-library/react'
+import { fireEvent, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
@@ -12,7 +12,9 @@ vi.mock('../../api/client', async (orig) => {
   return { ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn(fixtureApi) }
 })
 
-beforeEach(() => {
+beforeEach(async () => {
+  const { apiFetch } = await import('../../api/client')
+  vi.mocked(apiFetch).mockClear()
   routerState.params = { channelId: CH.doisoat }
   routerState.pathname = `/channels/${CH.doisoat}`
 })
@@ -35,12 +37,14 @@ describe('SpaceView on a phone', () => {
 })
 
 describe('SpaceView', () => {
-  it('shows the space by name with its member count, and its topics', async () => {
+  it('shows the space by name with its member count, and its messages in a log', async () => {
     renderWithClient(<SpaceView channelId={CH.doisoat} />)
     expect(await screen.findByRole('heading', { name: 'Đối soát giao dịch' })).toBeInTheDocument()
     expect(await screen.findByText('14 thành viên')).toBeInTheDocument()
     expect(await screen.findByText(/lệch 3 giao dịch/)).toBeInTheDocument()
-    expect(screen.getByText('Mỗi tin gửi ở đây mở một chủ đề mới')).toBeInTheDocument()
+    expect(screen.getByRole('log', { name: 'Tin nhắn trong Đối soát giao dịch' })).toBeInTheDocument()
+    expect(screen.getByText('Enter để gửi · Shift+Enter xuống dòng')).toBeInTheDocument()
+    expect(screen.queryByText(/mở một chủ đề/)).toBeNull()
     noIds()
   })
 
@@ -51,9 +55,15 @@ describe('SpaceView', () => {
     noIds()
 
     // Thread panel
-    await user.click(screen.getByRole('button', { name: /2 trả lời/ }))
-    const thread = await screen.findByRole('complementary', { name: 'Chủ đề' })
+    await user.click(screen.getByRole('button', { name: /^Thread, 2 trả lời/ }))
+    const thread = await screen.findByRole('complementary', { name: 'Thread' })
     await within(thread).findByText(/1\.284\.500/)
+    noIds()
+
+    // Thread list
+    await user.click(screen.getByRole('button', { name: /^Thread, 1 thread có tin mới/ }))
+    const list = await screen.findByRole('complementary', { name: 'Thread của nhóm' })
+    await within(list).findByText(/Biên bản đối soát tháng 10/)
     noIds()
 
     // Members panel
@@ -82,9 +92,73 @@ describe('SpaceView', () => {
   it('closes the side panel with Escape', async () => {
     const user = userEvent.setup()
     renderWithClient(<SpaceView channelId={CH.doisoat} />)
-    await user.click(await screen.findByRole('button', { name: /2 trả lời/ }))
-    await screen.findByRole('complementary', { name: 'Chủ đề' })
+    await user.click(await screen.findByRole('button', { name: /^Thread, 2 trả lời/ }))
+    await screen.findByRole('complementary', { name: 'Thread' })
     await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Chủ đề' })).toBeNull())
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Thread' })).toBeNull())
+  })
+})
+
+describe('SpaceView threads', () => {
+  it('badges the Thread button with the threads that have news', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    const button = await screen.findByRole('button', { name: 'Thread, 1 thread có tin mới' })
+    expect(button).toHaveTextContent('1')
+  })
+
+  it('opens a thread from the list, can go back to the list, and Esc closes the panel', async () => {
+    const user = userEvent.setup()
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    await user.click(await screen.findByRole('button', { name: /^Thread, 1 thread có tin mới/ }))
+    const list = await screen.findByRole('complementary', { name: 'Thread của nhóm' })
+    await user.click(await within(list).findByRole('button', { name: /lệch 3 giao dịch/ }))
+    const thread = await screen.findByRole('complementary', { name: 'Thread' })
+    await within(thread).findByText(/1\.284\.500/)
+    await user.click(within(thread).getByRole('button', { name: 'Quay lại danh sách Thread' }))
+    expect(await screen.findByRole('complementary', { name: 'Thread của nhóm' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Thread của nhóm' })).toBeNull())
+  })
+
+  const readCalls = async () => {
+    const { apiFetch } = await import('../../api/client')
+    return vi.mocked(apiFetch).mock.calls.filter(([p, i]) => p === `/channels/${CH.doisoat}/read` && i?.method === 'POST')
+  }
+
+  it('marks the channel read once the newest message settles at the end of the stream', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    await screen.findByText(/lệch 3 giao dịch/)
+    await waitFor(async () => expect(await readCalls()).toHaveLength(1), { timeout: 3000 })
+  })
+
+  it('does not mark it read while the reader is away from the end', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    await screen.findByText(/lệch 3 giao dịch/)
+    const log = screen.getByRole('log')
+    for (const [k, v] of Object.entries({ scrollHeight: 3000, clientHeight: 600, scrollTop: 100 })) {
+      Object.defineProperty(log, k, { configurable: true, writable: true, value: v })
+    }
+    fireEvent.scroll(log)
+    await new Promise((r) => setTimeout(r, 1300))
+    expect(await readCalls()).toHaveLength(0)
+  })
+})
+
+describe('SpaceView and push', () => {
+  it('tells the server this conversation is on screen while it is open, and stops when it closes', async () => {
+    const { useWebSocketStore } = await import('../../stores/websocket.store')
+    const release = vi.fn()
+    const viewChannel = vi.fn(() => release)
+    const original = useWebSocketStore.getState().viewChannel
+    useWebSocketStore.setState({ viewChannel })
+    try {
+      const { unmount } = renderWithClient(<SpaceView channelId={CH.doisoat} />)
+      await screen.findByRole('heading', { name: 'Đối soát giao dịch' })
+      expect(viewChannel).toHaveBeenCalledWith(CH.doisoat)
+      unmount()
+      expect(release).toHaveBeenCalled()
+    } finally {
+      useWebSocketStore.setState({ viewChannel: original })
+    }
   })
 })

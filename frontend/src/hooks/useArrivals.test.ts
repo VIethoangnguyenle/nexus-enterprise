@@ -41,6 +41,17 @@ describe('useArrivals', () => {
     expect(result.current.burst).toBeNull()
   })
 
+  it('remembers history that joins later (an older page) without announcing it', () => {
+    const { result, rerender } = renderHook(
+      ({ items }) => useArrivals(items, { keyOf, authorOf, me: 'me', ready: true, isHistory: (i: Item) => i.id.startsWith('old') }),
+      { initialProps: { items: [{ id: 'a', by: 'bob' }] } },
+    )
+    rerender({ items: [{ id: 'a', by: 'bob' }, { id: 'old1', by: 'cam' }] })
+    expect(result.current.fresh.size).toBe(0)
+    rerender({ items: [{ id: 'a', by: 'bob' }, { id: 'old1', by: 'cam' }, { id: 'b', by: 'cam' }] })
+    expect(result.current.fresh.get('b')?.source).toBe('other')
+  })
+
   it('forgets the wash after the realtime window', () => {
     const { result, rerender } = setup([])
     rerender({ items: [{ id: 'b', by: 'bob' }], ready: true, scope: undefined })
