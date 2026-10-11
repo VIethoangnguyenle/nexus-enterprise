@@ -44,7 +44,7 @@ export function useCreateTask(channelId: string) {
 
       queryClient.setQueriesData<{ tasks: ChatTask[] }>(
         { queryKey: keys.messaging.tasksOf(channelId) },
-        (old) => old ? { ...old, tasks: [tempTask, ...old.tasks] } : old,
+        (old) => old ? { ...old, tasks: [tempTask, ...(old.tasks ?? [])] } : old,
       )
       return { previous }
     },
@@ -55,7 +55,7 @@ export function useCreateTask(channelId: string) {
           if (!old) return old
           return {
             ...old,
-            tasks: old.tasks.map((t) => t.id.startsWith('temp-') ? serverTask : t),
+            tasks: (old.tasks ?? []).map((t) => t.id.startsWith('temp-') ? serverTask : t),
           }
         },
       )
@@ -84,7 +84,7 @@ export function useUpdateTask(channelId: string) {
           if (!old) return old
           return {
             ...old,
-            tasks: old.tasks.map((t) =>
+            tasks: (old.tasks ?? []).map((t) =>
               t.id === taskId ? { ...t, ...data, updated_at: new Date().toISOString() } : t,
             ),
           }

@@ -288,6 +288,7 @@ export const messagingApi = {
     apiFetch<ChatTask>(`/tasks/${taskId}`, { method: 'PATCH', body: JSON.stringify(data) }),
   listTasks: (channelId: string, status?: string) => {
     const qs = status ? `?status=${status}` : ''
-    return apiFetch<{ tasks: ChatTask[] }>(`/channels/${channelId}/tasks${qs}`)
+    // The server answers a conversation with no task as `{"tasks": null}`.
+    return apiFetch<{ tasks: ChatTask[] | null }>(`/channels/${channelId}/tasks${qs}`).then((r) => ({ ...r, tasks: r.tasks ?? [] }))
   },
 }

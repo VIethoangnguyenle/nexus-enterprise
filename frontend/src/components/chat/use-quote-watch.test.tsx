@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { QueryClientProvider, useQuery } from '@tanstack/react-query'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Message } from '../../api/messaging'
 import { keys } from '../../hooks/keys'
 import { queryClient } from '../../lib/query-client'
@@ -67,5 +67,28 @@ describe('useQuoteWatch', () => {
     renderHook(() => useQuoteWatch('c1', 'c1', quote), { wrapper })
     expect(queryClient.isFetching()).toBe(0)
     expect(useDraftsStore.getState().drafts['c1']?.quote?.deleted).toBeUndefined()
+  })
+
+  it('leaves the list its screen loads alone: a refresh still runs the screen\'s own fetch', async () => {
+    useDraftsStore.getState().setQuote('c1', quote)
+    const load = vi.fn(async () => ({ messages: [msg('q1', 5)], has_more: false }))
+    const { result } = renderHook(
+      () => {
+        const list = useQuery({ queryKey: keys.messaging.messages('c1'), queryFn: load })
+        useQuoteWatch('c1', 'c1', quote)
+        return list
+      },
+      { wrapper },
+    )
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    load.mockClear()
+
+    await act(async () => {
+      await queryClient.invalidateQueries({ queryKey: keys.messaging.messages('c1') })
+    })
+
+    expect(load).toHaveBeenCalledTimes(1)
+    expect(result.current.isError).toBe(false)
+    expect(result.current.data?.messages).toHaveLength(1)
   })
 })

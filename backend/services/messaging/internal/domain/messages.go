@@ -34,6 +34,37 @@ type SendMessageInput struct {
 	QuotedMessageID  string
 }
 
+// The linked_entity_type values a message may carry.
+const (
+	linkedDocument  = "document"
+	linkedDriveFile = "drive_file"
+	linkedPoll      = "poll"
+	linkedTask      = "task"
+)
+
+// isLinkedCard reports whether a message of this linked type is a card: it
+// names an object and may have no text. The object is not disclosed by the
+// message; each viewer's card is fetched under that viewer's own rights.
+func isLinkedCard(linkedType string) bool {
+	return linkedType == linkedDocument || linkedType == linkedApproval
+}
+
+// validateLinkedEntity refuses a link to a type the platform does not know, or
+// a typed link with no id. No link at all is valid.
+func validateLinkedEntity(linkedType, linkedID string) error {
+	switch linkedType {
+	case "":
+		return nil
+	case linkedDocument, linkedApproval, linkedDriveFile, linkedPoll, linkedTask:
+		if strings.TrimSpace(linkedID) == "" {
+			return fmt.Errorf("%w: a linked %s needs an id", ErrInvalidInput, linkedType)
+		}
+		return nil
+	default:
+		return fmt.Errorf("%w: unknown linked type", ErrInvalidInput)
+	}
+}
+
 // SendMessage sends a message after access checking.
 func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Message, error) {
 	ch, err := s.loadChannel(ctx, in.ChannelID)
@@ -46,6 +77,13 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 		msgType = "user"
 	}
 
+	// Only what a person sends is judged: the service's own system lines carry
+	// link types of their own.
+	if msgType == "user" {
+		if err := validateLinkedEntity(in.LinkedEntityType, in.LinkedEntityID); err != nil {
+			return nil, err
+		}
+	}
 	if err := s.requireApprovalsAvailable(ctx, ch, in.LinkedEntityType); err != nil {
 		return nil, err
 	}
@@ -66,7 +104,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 	}
 	// An old-style file link is an attachment by another name: it goes through
 	// the same check, so it cannot name a file outside the channel's drive.
-	if in.LinkedEntityType == "drive_file" {
+	if in.LinkedEntityType == linkedDriveFile {
 		in.Attachments = append([]AttachmentInput{{DriveFileID: in.LinkedEntityID}}, in.Attachments...)
 		in.LinkedEntityType, in.LinkedEntityID = "", ""
 	}
@@ -85,7 +123,8 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 		return nil, err
 	}
 	// Judged after filtering: markup that filters down to nothing is no text.
-	if msgType == "user" && strings.TrimSpace(contentText) == "" && len(attachments) == 0 {
+	// A card links an object and carries no text of its own.
+	if msgType == "user" && strings.TrimSpace(contentText) == "" && len(attachments) == 0 && !isLinkedCard(in.LinkedEntityType) {
 		return nil, fmt.Errorf("%w: a message needs text or a file", ErrInvalidInput)
 	}
 	msg := &store.Message{

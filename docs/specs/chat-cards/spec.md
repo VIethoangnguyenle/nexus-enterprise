@@ -70,6 +70,22 @@ no details. Approval cards are not offered in a personal workspace, and the serv
 message with `linked_entity_type` `approval` in a personal workspace fails with 403 and stores nothing (a direct message is
 judged by the workspace the sender is signed in to; an unknown workspace is refused). See `tenant-identity`.
 
+Such a message needs no text: it links the object and nothing else. Only write on the channel is checked, and the message
+does not disclose the linked object. A person's message with a `linked_entity_type` the platform does not know, or a
+linked type with an empty `linked_entity_id`, is refused with 400 and stores nothing.
+
+#### Scenario: A document card without text
+- **WHEN** a member with write on the channel posts `linked_entity_type` `document` with an id and empty content
+- **THEN** the message is stored
+
+#### Scenario: A link that is refused
+- **WHEN** a message names an unknown linked type, or a known one with an empty id
+- **THEN** the answer is 400 and nothing is stored
+
+#### Scenario: A card from someone who cannot write
+- **WHEN** a caller without write on the channel posts a document card
+- **THEN** the answer is 403 and nothing is stored
+
 ### Requirement: The composer creates cards where the person is writing
 The composer SHALL offer "Tạo trong chat" — Bình chọn, Công việc, Tài liệu mới, Đề nghị phê duyệt — beside its attach
 control (one sheet with the attach rows on a phone), and not while a sent message is being edited. Created from a

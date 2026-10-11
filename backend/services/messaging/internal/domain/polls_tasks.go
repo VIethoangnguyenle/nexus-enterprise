@@ -417,7 +417,8 @@ func (s *Service) ListTasks(ctx context.Context, channelID, userNodeID, status s
 	if err != nil {
 		return nil, fmt.Errorf("list tasks: %w", err)
 	}
-	var result []*pb.ChatTask
+	// Never nil: an empty list is `[]` on the wire, not `null`.
+	result := make([]*pb.ChatTask, 0, len(tasks))
 	for i := range tasks {
 		result = append(result, taskToProto(&tasks[i]))
 	}

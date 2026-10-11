@@ -2,6 +2,8 @@ import { screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { messagingApi } from '../../api/messaging'
+import { keys } from '../../hooks/keys'
+import { queryClient } from '../../lib/query-client'
 import { TaskDialog } from './TaskDialog'
 import { renderWithClient, resetClient } from '../../test/render'
 import { buildDirectory } from '../../lib/people'
@@ -77,5 +79,17 @@ describe('TaskDialog', () => {
     await user.type(screen.getByLabelText('Việc cần làm'), 'Gọi ngân hàng')
     await user.click(screen.getByRole('button', { name: 'Gửi công việc' }))
     await waitFor(() => expect(messagingApi.createTask).toHaveBeenCalledWith('ch', { title: 'Gọi ngân hàng', parent_message_id: 'root-1' }))
+  })
+
+  it('still sends when the conversation has no task yet and its cached list is empty of tasks', async () => {
+    const user = userEvent.setup()
+    vi.mocked(messagingApi.createTask).mockResolvedValue({} as never)
+    // The server answers an empty list as `{"tasks": null}`.
+    queryClient.setQueryData(keys.messaging.tasks('ch'), { tasks: null })
+    renderWithClient(<TaskDialog open onClose={vi.fn()} channelId="ch" />)
+    await user.type(screen.getByLabelText('Việc cần làm'), 'Gọi ngân hàng')
+    await user.click(screen.getByRole('button', { name: 'Gửi công việc' }))
+    await waitFor(() => expect(messagingApi.createTask).toHaveBeenCalledWith('ch', { title: 'Gọi ngân hàng' }))
+    expect(screen.queryByText(/Kiểm tra kết nối mạng/)).not.toBeInTheDocument()
   })
 })

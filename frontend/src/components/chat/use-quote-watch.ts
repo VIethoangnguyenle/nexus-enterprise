@@ -1,5 +1,5 @@
-import { useEffect } from 'react'
-import { skipToken, useQuery } from '@tanstack/react-query'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import type { Message } from '../../api/messaging'
 import { keys } from '../../hooks/keys'
 import { toMillis } from '../../lib/format'
@@ -31,8 +31,12 @@ export function isQuoteGone(quote: PendingQuote, messages: Message[] | undefined
 export function useQuoteWatch(scope: string, channelId: string, quote: PendingQuote | undefined) {
   const inThread = scope.startsWith('thread:')
   const key = inThread ? keys.messaging.thread(scope.slice('thread:'.length)) : keys.messaging.messages(channelId)
-  // Read-only: the lists are loaded by their screens; this never fetches.
-  const { data } = useQuery<{ messages: Message[] }>({ queryKey: key, queryFn: skipToken })
+  // Read-only: the lists are loaded by their screens. This watches the cache and
+  // is no query observer — an observer without a queryFn would be asked to fetch
+  // when the list is refreshed, and fail it.
+  const client = useQueryClient()
+  const subscribe = useCallback((notify: () => void) => client.getQueryCache().subscribe(notify), [client])
+  const data = useSyncExternalStore(subscribe, () => client.getQueryData<{ messages: Message[] }>(key))
   const gone = !!quote && !quote.deleted && isQuoteGone(quote, data?.messages, inThread)
   const id = quote?.id
   useEffect(() => {
