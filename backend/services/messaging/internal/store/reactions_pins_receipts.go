@@ -272,6 +272,18 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 		   JOIN messages r ON r.parent_message_id = f.id AND r.sender_id <> $1 AND r.deleted_at IS NULL
 		     AND r.created_at > f.last_read_at
 		   GROUP BY root.channel_id
+		 ), mention_unread AS (
+		   -- Main messages that mention the user and are unread for them: after
+		   -- the channel read position from when the message was sent, or from
+		   -- the edit that added the user to it.
+		   SELECT m.channel_id, COUNT(*)::int AS n
+		   FROM messages m
+		   LEFT JOIN read_receipts rr3 ON rr3.user_id = $1 AND rr3.channel_id = m.channel_id
+		   LEFT JOIN message_mention_times mt ON mt.message_id = m.id AND mt.user_id = $1
+		   WHERE m.channel_id = ANY($2::text[]) AND m.parent_message_id IS NULL AND m.deleted_at IS NULL
+		     AND m.mentions @> ARRAY[$1]::text[] AND m.sender_id <> $1
+		     AND GREATEST(m.created_at, mt.mentioned_at) > COALESCE(rr3.last_read_at, '-infinity'::timestamptz)
+		   GROUP BY m.channel_id
 		 ), levels AS (
 		   SELECT channel_id, level FROM channel_notification_levels
 		   WHERE user_id = $1 AND channel_id = ANY($2::text[])
@@ -294,7 +306,7 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 		             WHEN l.level = 'all' THEN COALESCE(MAX(atu.n), 0)
 		             ELSE COALESCE(MAX(tu.n), 0) END AS thread_unread,
 		        COALESCE(l.level, 'main') AS level,
-		        COUNT(m.id) FILTER (WHERE m.mentions @> ARRAY[$1]::text[] AND m.sender_id <> $1) AS mention_count
+		        COALESCE(MAX(mu.n), 0) AS mention_count
 		 FROM (SELECT DISTINCT unnest($2::text[]) AS channel_id) cm
 		 LEFT JOIN read_receipts rr ON rr.user_id = $1 AND rr.channel_id = cm.channel_id
 		 LEFT JOIN messages m ON m.channel_id = cm.channel_id
@@ -302,6 +314,7 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 		   AND (rr.last_read_at IS NULL OR m.created_at > rr.last_read_at)
 		 LEFT JOIN thread_unread tu ON tu.channel_id = cm.channel_id
 		 LEFT JOIN all_thread_unread atu ON atu.channel_id = cm.channel_id
+		 LEFT JOIN mention_unread mu ON mu.channel_id = cm.channel_id
 		 LEFT JOIN levels l ON l.channel_id = cm.channel_id
 		 GROUP BY cm.channel_id, rr.last_message_id, l.level`,
 		userID, channelIDs)

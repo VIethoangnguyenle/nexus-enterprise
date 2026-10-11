@@ -113,16 +113,18 @@ const (
 	mentionsFrom = `FROM messages m
 		 LEFT JOIN read_receipts rr ON rr.user_id = $1 AND rr.channel_id = m.channel_id
 		 LEFT JOIN messages root ON root.id = m.parent_message_id
+		 LEFT JOIN message_mention_times mt ON mt.message_id = m.id AND mt.user_id = $1
 		 LEFT JOIN thread_follows tf ON tf.user_id = $1 AND tf.root_message_id = m.parent_message_id`
 
 	mentionsWhere = `m.channel_id = ANY($2::text[]) AND m.mentions @> ARRAY[$1]::text[]
 		   AND m.sender_id <> $1 AND m.deleted_at IS NULL`
 
-	// A main message is unread after the channel read position; a reply after
-	// its thread's (the root's creation when never read).
+	// A mention dates from the message, or from the edit that added the user to
+	// it. A main message is unread after the channel read position; a reply
+	// after its thread's (the root's creation when never read).
 	mentionUnreadExpr = `CASE WHEN m.parent_message_id IS NULL
-		             THEN m.created_at > COALESCE(rr.last_read_at, '-infinity'::timestamptz)
-		             ELSE m.created_at > COALESCE(tf.last_read_at, root.created_at, '-infinity'::timestamptz)
+		             THEN GREATEST(m.created_at, mt.mentioned_at) > COALESCE(rr.last_read_at, '-infinity'::timestamptz)
+		             ELSE GREATEST(m.created_at, mt.mentioned_at) > COALESCE(tf.last_read_at, root.created_at, '-infinity'::timestamptz)
 		        END`
 )
 

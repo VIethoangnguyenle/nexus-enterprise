@@ -44,7 +44,10 @@ messages and thread replies — sent by someone else, not deleted, in the conver
 scope as the starred feed), newest first, as `{messages, has_more}`. Each message carries `unread` (omitted when
 false): a main message is unread when sent after the caller's read position in the channel; a reply when sent after
 the caller's read position in its thread (the root's creation time when never read). A conversation the caller muted
-is included: a mention always counts. `before` is the `created_at` of the last message of the previous page, with
+is included: a mention always counts. A mention dates from the message, except for a person an edit added to it
+(see `chat-message-lifecycle`): for them it dates from that edit, so it is unread when the edit came after their read
+position even though the message is older; a mention the edit removed is neither listed nor counted. Listing order
+stays by the message's `created_at`. `before` is the `created_at` of the last message of the previous page, with
 `before_id` as above; `limit` defaults to and is capped at 50.
 
 #### Scenario: A mention in a thread reply
@@ -54,6 +57,15 @@ is included: a mention always counts. `before` is the `created_at` of the last m
 #### Scenario: Muted conversation
 - **WHEN** the caller set a conversation's notification level to off and is mentioned there
 - **THEN** the mention is still listed
+
+#### Scenario: Added to an old message by an edit
+- **WHEN** a sender edits a message the caller already read past, so that it now mentions the caller
+- **THEN** the message is listed with `unread`, the badge counts it, and after the caller reads past the edit it is
+  listed without `unread` and no longer counts
+
+#### Scenario: The mention is removed again
+- **WHEN** a later edit removes the caller from the message's mentions
+- **THEN** the message is no longer listed and no longer counts
 
 ### Requirement: Mentions badge
 `GET /api/messages/mentions/unread-count` SHALL answer `{"count": n}`: the number of unread messages of the mentions

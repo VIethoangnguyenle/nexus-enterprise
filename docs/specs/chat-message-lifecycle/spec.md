@@ -19,6 +19,15 @@ before — are notified: a `mention` push (see `web-push`), and, when the messag
 (a root's mentioned already follow it). People already mentioned are not notified again, and removing a mention
 notifies nobody. The mention push runs after the edit has answered.
 
+A person an edit adds also has an **unread mention** from the time of the edit — in the mentions feed and badge
+(`chat-shortcuts`) and in `mention_count` of `GET /api/channels/unread` (`notifications`) — until they read past it,
+although the message is older than their read position. The time is kept per person and message
+(`message_mention_times`); a person mentioned when the message was sent has none, and their mention dates from the
+message. A later edit that removes the mention drops it; one that adds the person back dates it afresh. A deleted
+message never counts. Where the unread mention appears follows the existing rules: a main message against the
+channel read position, a reply against its thread's (and only main messages in `mention_count`), whatever the
+conversation's notification level.
+
 #### Scenario: Someone else's message
 - **WHEN** a member with write on the channel edits a message another member sent
 - **THEN** the answer is 403 and the text is unchanged
@@ -26,6 +35,15 @@ notifies nobody. The mention push runs after the edit has answered.
 #### Scenario: An edit adds a mention
 - **WHEN** a sender edits their message so it mentions Lan, who was not mentioned before, and Minh, who was
 - **THEN** only Lan is notified
+
+#### Scenario: An edit adds an unread mention
+- **WHEN** a sender edits a message that Lan has already read past, so that it mentions Lan
+- **THEN** Lan's mention badge, the message's `unread` in her mentions feed and the channel's `mention_count` count it,
+  until she reads past the edit
+
+#### Scenario: A later edit removes the mention
+- **WHEN** the sender edits the message again without Lan
+- **THEN** it no longer counts for Lan and is not in her mentions feed
 
 #### Scenario: An edit mentions someone who cannot read
 - **WHEN** an edit adds a mention of a user without `read` on the channel

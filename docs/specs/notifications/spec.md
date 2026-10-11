@@ -37,7 +37,8 @@ counts. `GET /api/channels/{chId}/notification-level` answers `{"level"}`; `PUT`
 Both need `read` on the channel's content OA (403 otherwise); an unknown level is 400. `GET
 /api/channels/unread` reports each channel's `notification_level` with its counts, and under `off` both
 `unread_count` and `thread_unread_count` are 0. Every channel also reports `mention_count`, the unread main messages
-that mention the caller, at every level — a muted group still shows its "@". The level is the person's own and never widens what they may
+that mention the caller, at every level — a muted group still shows its "@". A mention an edit added counts from the
+edit (see `chat-message-lifecycle`), not from the message's creation. The level is the person's own and never widens what they may
 read. A direct message is only on (`main`) or `off`: `all` on a DM is 400. Web push follows the level as
 `docs/specs/web-push/spec.md` describes.
 

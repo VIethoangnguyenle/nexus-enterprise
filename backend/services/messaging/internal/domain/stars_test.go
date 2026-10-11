@@ -396,3 +396,115 @@ func TestStarConversation_KeepsSectionMembership(t *testing.T) {
 	require.NoError(t, svc.UnstarConversation(ctx, w.chA, w.f.userID, userNode))
 	assert.Equal(t, 1, items(), "so does unstarring")
 }
+
+// A person an edit adds to a message older than their read position gets an
+// unread mention in the badge, the feed and the channel count, even in a muted
+// conversation; reading past it, removing the mention, deleting the message, or
+// losing read on the conversation takes it away.
+func TestEditMentions_AddedPersonHasAnUnreadMentionUntilTheyReadPastIt(t *testing.T) {
+	k, other := mentionTalk(t)
+	ctx := context.Background()
+	svc := k.f.svc
+	me := k.f.userID
+	otherNode := "ngac-other-sender"
+	k.f.read.allow[grant{otherNode, k.oaID, ngac.OpWrite}] = true
+	k.f.read.allow[grant{otherNode, k.oaID, ngac.OpRead}] = true
+
+	old := k.send(t, other, otherNode, "plain text", "")
+	time.Sleep(15 * time.Millisecond)
+	require.NoError(t, svc.MarkChannelRead(ctx, me, userNode, k.chID, ""))
+	edit := func(mentions []string) {
+		t.Helper()
+		time.Sleep(15 * time.Millisecond)
+		_, err := svc.EditMessage(ctx, old.Id, other, otherNode, "now with a mention", "markdown", mentions)
+		require.NoError(t, err)
+		domain.WaitPushForTest(svc)
+	}
+	badge := func() int {
+		n, err := svc.UnreadMentionCount(ctx, me, userNode, k.f.wsID)
+		require.NoError(t, err)
+		return n
+	}
+	channelCount := func() int32 {
+		counts, err := svc.GetUnreadCounts(ctx, me, userNode, k.f.wsID)
+		require.NoError(t, err)
+		for _, c := range counts {
+			if c.ChannelId == k.chID {
+				return c.MentionCount
+			}
+		}
+		return -1
+	}
+	feedUnread := func() (listed int, unread bool) {
+		list, err := svc.Mentions(ctx, me, userNode, k.f.wsID, "", "", 10)
+		require.NoError(t, err)
+		for _, m := range list.Messages {
+			if m.Id == old.Id {
+				return len(list.Messages), m.Unread
+			}
+		}
+		return len(list.Messages), false
+	}
+	require.Zero(t, badge())
+
+	edit([]string{me})
+	assert.Equal(t, 1, badge())
+	assert.EqualValues(t, 1, channelCount())
+	listed, unread := feedUnread()
+	assert.Equal(t, 1, listed)
+	assert.True(t, unread)
+
+	// Muted: a mention still counts.
+	require.NoError(t, svc.SetNotificationLevel(ctx, k.chID, me, userNode, domain.NotifyOff))
+	assert.Equal(t, 1, badge())
+	assert.EqualValues(t, 1, channelCount())
+
+	// Deny: a caller who can no longer read the conversation sees nothing.
+	delete(k.f.read.allow, grant{userNode, k.oaID, ngac.OpRead})
+	assert.Zero(t, badge())
+	listed, _ = feedUnread()
+	assert.Zero(t, listed)
+	k.f.read.allow[grant{userNode, k.oaID, ngac.OpRead}] = true
+
+	// Reading past the edit clears the unread, not the entry.
+	time.Sleep(15 * time.Millisecond)
+	require.NoError(t, svc.MarkChannelRead(ctx, me, userNode, k.chID, ""))
+	assert.Zero(t, badge())
+	assert.Zero(t, channelCount())
+	listed, unread = feedUnread()
+	assert.Equal(t, 1, listed)
+	assert.False(t, unread)
+
+	// A later edit that removes the mention takes the entry away; one that adds
+	// the caller again is unread again; deleting the message ends it.
+	edit([]string{})
+	listed, _ = feedUnread()
+	assert.Zero(t, listed)
+	edit([]string{me})
+	assert.Equal(t, 1, badge())
+	_, err := svc.DeleteMessage(ctx, old.Id, other, otherNode)
+	require.NoError(t, err)
+	assert.Zero(t, badge())
+	assert.Zero(t, channelCount())
+}
+
+// Someone the edit does not mention never gets a count.
+func TestEditMentions_APersonNotMentionedGetsNoCount(t *testing.T) {
+	k, other := mentionTalk(t)
+	ctx := context.Background()
+	svc := k.f.svc
+	otherNode := "ngac-other-sender"
+	k.f.read.allow[grant{otherNode, k.oaID, ngac.OpWrite}] = true
+	k.f.read.allow[grant{otherNode, k.oaID, ngac.OpRead}] = true
+	old := k.send(t, other, otherNode, "plain text", "")
+	_, err := svc.EditMessage(ctx, old.Id, other, otherNode, "edited", "markdown", []string{other})
+	require.NoError(t, err)
+	domain.WaitPushForTest(svc)
+
+	n, err := svc.UnreadMentionCount(ctx, k.f.userID, userNode, k.f.wsID)
+	require.NoError(t, err)
+	assert.Zero(t, n)
+	list, err := svc.Mentions(ctx, k.f.userID, userNode, k.f.wsID, "", "", 10)
+	require.NoError(t, err)
+	assert.Empty(t, list.Messages)
+}

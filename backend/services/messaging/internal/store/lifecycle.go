@@ -87,6 +87,9 @@ func (s *Store) UpdateMessageContent(ctx context.Context, id, content, text, for
 			return nil
 		}
 		added = Difference(mentions, prev)
+		if err := recordMentionTimes(ctx, tx, id, mentions, added); err != nil {
+			return err
+		}
 		if parent == "" || len(added) == 0 {
 			return nil
 		}
@@ -96,6 +99,29 @@ func (s *Store) UpdateMessageContent(ctx context.Context, id, content, text, for
 		return nil, err
 	}
 	return added, nil
+}
+
+// recordMentionTimes keeps message_mention_times in step with an edit's new
+// mention list: a person the edit removed loses their row, and a person it
+// added gets one dated now, which is what makes the mention unread for them.
+// Ids that are not users are dropped rather than failing the write.
+func recordMentionTimes(ctx context.Context, tx pgx.Tx, messageID string, now, added []string) error {
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM message_mention_times WHERE message_id = $1 AND NOT (user_id = ANY($2::text[]))`,
+		messageID, now); err != nil {
+		return fmt.Errorf("drop mention times: %w", err)
+	}
+	if len(added) == 0 {
+		return nil
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO message_mention_times (message_id, user_id, mentioned_at)
+		 SELECT $1, u.id, NOW() FROM users u WHERE u.id = ANY($2::text[])
+		 ON CONFLICT (message_id, user_id) DO UPDATE SET mentioned_at = EXCLUDED.mentioned_at`,
+		messageID, added); err != nil {
+		return fmt.Errorf("record mention times: %w", err)
+	}
+	return nil
 }
 
 // Difference returns the ids of a that are not in b, once each, in a's order.

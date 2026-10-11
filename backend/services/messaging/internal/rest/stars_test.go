@@ -127,6 +127,49 @@ func TestMentionsRoute_FlagsUnread(t *testing.T) {
 	assert.EqualValues(t, 0, decode(t, rec)["count"], "without read nothing counts")
 }
 
+// A person an edit adds to an old message has the unread mention on all three
+// in-app signals; without read on the conversation they get none.
+func TestMentionSignals_ForAPersonAddedByAnEdit(t *testing.T) {
+	c := newChat(t)
+	ctx := context.Background()
+	other, _ := testutil.CreateUser(t, c.pool)
+	t.Cleanup(func() { c.pool.Exec(ctx, `DELETE FROM messages WHERE channel_id = $1`, c.chID) })
+	id := c.msgID + "-e"
+	_, err := c.pool.Exec(ctx, `INSERT INTO messages (id, channel_id, sender_id, content, message_type, created_at)
+		VALUES ($1, $2, $3, 'hey', 'user', now() - interval '1 hour')`, id, c.chID, other)
+	require.NoError(t, err)
+	_, err = c.pool.Exec(ctx, `INSERT INTO read_receipts (user_id, channel_id, last_read_at) VALUES ($1, $2, now() - interval '1 minute')`, c.user, c.chID)
+	require.NoError(t, err)
+
+	e := c.echo(true)
+	count := func(e *echo.Echo) any {
+		return decode(t, call(e, http.MethodGet, "/api/messages/mentions/unread-count", ""))["count"]
+	}
+	assert.EqualValues(t, 0, count(e))
+
+	_, err = store.NewStore(c.pool).UpdateMessageContent(ctx, id, "edited", "edited", "markdown", []string{c.user})
+	require.NoError(t, err)
+
+	assert.EqualValues(t, 1, count(e))
+	feed, _ := decode(t, call(e, http.MethodGet, "/api/messages/mentions", ""))["messages"].([]any)
+	require.Len(t, feed, 1)
+	assert.Equal(t, true, feed[0].(map[string]any)["unread"])
+	rec := call(e, http.MethodGet, "/api/channels/unread", "")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.Contains(t, rec.Body.String(), `"mention_count":1`)
+
+	// Deny: without read there is no count and no feed item.
+	denied := c.echo(false)
+	assert.EqualValues(t, 0, count(denied))
+	none, _ := decode(t, call(denied, http.MethodGet, "/api/messages/mentions", ""))["messages"].([]any)
+	assert.Empty(t, none)
+
+	// Reading past the edit clears it.
+	time.Sleep(15 * time.Millisecond)
+	require.Equal(t, http.StatusOK, call(e, http.MethodPost, "/api/channels/"+c.chID+"/read", `{}`).Code)
+	assert.EqualValues(t, 0, count(e))
+}
+
 // The production router: no session is 401, and the two feeds are reached
 // instead of being read as a message id.
 func TestStarRoutes_ProductionRouter(t *testing.T) {
