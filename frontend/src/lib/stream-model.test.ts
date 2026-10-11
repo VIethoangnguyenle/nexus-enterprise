@@ -210,6 +210,13 @@ describe('firstUnreadReplyId', () => {
 })
 
 describe('keepOlderPages', () => {
+  // The server's JSON leaves an empty list out: a conversation with no message yet answers `{}`.
+  it('reads an answer with no messages field as an empty conversation', () => {
+    const empty = {} as { messages: Message[]; has_more: boolean }
+    expect(keepOlderPages(empty, undefined)).toEqual({ messages: [], has_more: false })
+    expect(keepOlderPages(empty, { messages: [], has_more: false })).toEqual({ messages: [], has_more: false })
+  })
+
   // Lists are newest first, as the API returns them.
   const m = (id: string, h: number) => msg('x', at(h, 0), { id })
   const fresh = { messages: [m('n3', 12), m('n2', 11), m('n1', 10)], has_more: true }

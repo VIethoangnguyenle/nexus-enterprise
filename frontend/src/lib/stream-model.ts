@@ -189,6 +189,8 @@ export function keepOlderPages(
   fresh: { messages: Message[]; has_more: boolean },
   previous: { messages: Message[]; has_more: boolean } | undefined,
 ): { messages: Message[]; has_more: boolean } {
+  // The server's JSON omits an empty list, so a conversation with no message yet arrives as `{}`.
+  if (!fresh.messages) fresh = { messages: [], has_more: fresh.has_more ?? false }
   const oldestFresh = fresh.messages[fresh.messages.length - 1]
   if (!previous || !oldestFresh) return fresh
   const cutoff = toMillis(oldestFresh.created_at)
