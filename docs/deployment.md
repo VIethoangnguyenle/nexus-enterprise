@@ -322,6 +322,11 @@ mentions and replies in threads a person follows. It needs two values in `/opt/n
   as `VITE_ONESIGNAL_APP_ID`).
 - `ONESIGNAL_REST_API_KEY` — the app's REST API key (secret; never in git, never in the frontend).
 
+For the frontend, `VITE_ONESIGNAL_APP_ID` is baked into the SPA bundle at build time via Docker build arg
+(`ARG VITE_ONESIGNAL_APP_ID` in `frontend/Dockerfile`). In `.github/workflows/deploy.yml`, it is read from
+the repository variable `vars.VITE_ONESIGNAL_APP_ID` (Settings → Secrets and variables → Actions → Variables;
+it is public, never stored as a secret). When absent or empty, the SDK is not loaded and push UI remains hidden.
+
 Both empty: push is off and nothing is sent. Only one set: messaging refuses to start, so a half-configured
 deployment never silently sends nothing. Devices are linked to people by OneSignal's `external_id`, set to the
 user's id at sign-in. Each recipient is checked for `read` on the channel when the push is sent.

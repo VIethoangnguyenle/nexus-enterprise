@@ -4,11 +4,13 @@ import { Heading, TabBar, type TabItem } from '../primitives'
 import { AppearanceTab } from './AppearanceTab'
 import { ProfileTab } from './ProfileTab'
 import { WorkspaceTab } from './WorkspaceTab'
+import { NotificationSettings } from './NotificationSettings'
 
 const TABS: TabItem[] = [
   { id: 'ho-so', label: 'Hồ sơ' },
   { id: 'workspace', label: 'Workspace' },
   { id: 'giao-dien', label: 'Giao diện' },
+  { id: 'thong-bao', label: 'Thông báo' },
 ]
 
 /**
@@ -43,6 +45,7 @@ export function SettingsScreen() {
         {tab === 'ho-so' && <ProfileTab />}
         {tab === 'workspace' && <WorkspaceTab />}
         {tab === 'giao-dien' && <AppearanceTab />}
+        {tab === 'thong-bao' && <NotificationSettings />}
       </div>
     </section>
   )

@@ -101,6 +101,11 @@ const dockerProxy = {
 }
 
 export default defineConfig({
+  // Build-time constant for the service worker: import.meta.env is not forwarded
+  // to the injectManifest SW build, but `define` constants are.
+  define: {
+    __ONESIGNAL__: JSON.stringify(!!process.env.VITE_ONESIGNAL_APP_ID),
+  },
   plugins: [
     TanStackRouterVite({ routesDirectory: './src/routes', generatedRouteTree: './src/routeTree.gen.ts' }),
     tailwindcss(),

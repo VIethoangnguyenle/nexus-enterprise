@@ -1,6 +1,16 @@
 /// Nexus service worker (injectManifest). Hand-written so the push worker can be
 /// merged in later. It caches the app shell and nothing else: no /api response and
 /// no WebSocket ever passes through a cache here.
+declare function importScripts(...urls: string[]): void
+declare const __ONESIGNAL__: boolean
+if (__ONESIGNAL__ && typeof importScripts === 'function') {
+  try {
+    importScripts('https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.sw.js')
+  } catch (e) {
+    console.warn('[sw] OneSignal push script unavailable — push disabled, offline shell intact', e)
+  }
+}
+
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching'
 import { NavigationRoute, registerRoute } from 'workbox-routing'
 

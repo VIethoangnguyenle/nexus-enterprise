@@ -118,7 +118,7 @@ describe('SettingsScreen: tabs', () => {
   it('opens Hồ sơ, with the three tabs in the mockup\'s order', async () => {
     await renderSettings()
     expect(await screen.findByRole('heading', { level: 1, name: 'Cài đặt' })).toBeInTheDocument()
-    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Hồ sơ', 'Workspace', 'Giao diện'])
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Hồ sơ', 'Workspace', 'Giao diện', 'Thông báo'])
     expect(screen.getByRole('tab', { name: 'Hồ sơ' })).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByRole('form', { name: 'Hồ sơ' })).toBeInTheDocument()
   })

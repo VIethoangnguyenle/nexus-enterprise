@@ -115,6 +115,8 @@ jobs:
           file: ${{ matrix.file }}
           push: true
           provenance: false
+          build-args: |
+            ${{ matrix.image == 'frontend' && format('VITE_ONESIGNAL_APP_ID={0}', vars.VITE_ONESIGNAL_APP_ID || '') || '' }}
           tags: |
             ghcr.io/${{ needs.meta.outputs.owner }}/nexus-${{ matrix.image }}:${{ needs.meta.outputs.sha }}
             ghcr.io/${{ needs.meta.outputs.owner }}/nexus-${{ matrix.image }}:main

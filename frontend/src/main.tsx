@@ -20,6 +20,7 @@ import '@fontsource/bricolage-grotesque/vietnamese-700.css'
 import './index.css'
 import { trackAppHeight } from './lib/app-height'
 import { registerPwa } from './lib/pwa-register'
+import { startPushAuthSync } from './lib/push'
 
 const router = createRouter({ routeTree, context: { queryClient } })
 
@@ -31,6 +32,7 @@ declare module '@tanstack/react-router' {
 trackAppHeight(window.visualViewport)
 
 void registerPwa()
+startPushAuthSync()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
