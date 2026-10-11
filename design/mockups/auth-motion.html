@@ -1,0 +1,657 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexus · Đăng nhập có chuyển động</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Sign-in with motion. Same screens as auth.html §1, §2 and §4 (identity → code → workspace),
+   same split layout (brand pane on --color-sunk from 1024px, form on --color-base), new mark from
+   logo.html direction A. Every duration and curve below is a DESIGN.md §7 token, read at runtime
+   from tokens.css; sequences are built by staggering token-length steps (40ms apart), never by
+   inventing longer durations. Two documented exceptions, both ambient and both off under reduced
+   motion: the background drift (24s / 36s loop) and the edge pulse (900ms, the same length as the
+   realtime avatar halo). Only transform and opacity animate. */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding: 0 16px 64px; }
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.muted { color: var(--color-ink-muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* ---------- review chrome ---------- */
+.page { max-width: 1240px; margin-inline: auto; display: grid; gap: 48px; }
+.page > header { padding-top: 40px; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 68ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; background: var(--color-sunk); border-radius: 10px; padding: 4px; gap: 4px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 0 12px; min-height: 36px; cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; min-height: 44px; }
+.check input { width: 18px; height: 18px; accent-color: var(--color-accent); }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.demo .k { font: 600 0.75rem/1.3 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); margin-right: 4px; }
+.screen { display: grid; gap: 16px; }
+.screen-head { display: grid; gap: 6px; max-width: 75ch; }
+.screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.scroll { overflow-x: auto; border-radius: 12px; }
+.tblwrap { overflow-x: auto; border-radius: 12px; background: var(--color-raised); }
+table { width: 100%; border-collapse: collapse; min-width: 720px; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--color-line); vertical-align: top; }
+th { font: 600 0.75rem/1.3 var(--font-body); color: var(--color-ink-muted); }
+td code { font-family: var(--font-mono); font-size: 0.8125rem; }
+.notes { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; color: var(--color-ink-muted); max-width: 80ch; }
+.notes b { color: var(--color-ink); font-weight: 600; }
+
+/* ---------- primitives ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0;
+  font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink);
+  transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-press) var(--ease-out); }
+.btn:hover { background: var(--color-line); }
+.btn:active { transform: scale(0.98); }
+.btn.sm { height: 36px; padding: 0 12px; font-size: 0.8125rem; }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.primary:hover { background: var(--color-accent-hover); }
+.btn.g { background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); }
+.btn.g:hover { background: var(--color-hover); }
+.btn.wide { width: 100%; height: 44px; }
+.btn[disabled] { opacity: 0.5; cursor: not-allowed; transform: none; }
+.link { background: none; border: 0; padding: 0; font: 600 inherit/inherit var(--font-body); font-size: inherit; color: var(--color-accent); cursor: pointer; }
+.link:hover { text-decoration: underline; }
+.link[disabled] { color: var(--color-ink-subtle); cursor: not-allowed; text-decoration: none; }
+.ibtn { width: 44px; height: 44px; margin-left: -10px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+.av { --p: var(--color-person-1); width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  background: var(--p); color: var(--color-on-person); font: 600 0.625rem/1 var(--font-body); }
+.pill { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 999px; font: 600 0.75rem/1 var(--font-body); white-space: nowrap; }
+.pill.wait { background: var(--color-warning-wash); color: var(--color-warning); }
+.pill.idle { background: var(--color-sunk); color: var(--color-ink-muted); }
+
+/* ---------- mark (logo.html direction A, built from parts so each part can animate) ---------- */
+.amark { display: block; flex: none; overflow: visible; }
+.amark .e { fill: var(--color-accent); transform-box: fill-box; transform-origin: 0% 50%; }
+.amark .n { fill: var(--color-accent); transform-box: fill-box; transform-origin: 50% 50%; }
+.amark .n.end { fill: var(--color-person-1); }
+.amark .halo { fill: none; stroke: var(--color-person-1); stroke-width: 2; transform-box: fill-box; transform-origin: 50% 50%; opacity: 0; }
+.lockup { display: inline-flex; align-items: center; gap: 10px; }
+.lockup .wm { font: 700 1.1875rem/1.1 var(--font-display); letter-spacing: -0.01em; color: var(--color-ink); }
+.lockup .wm small { display: block; font: 500 0.75rem/1.4 var(--font-body); letter-spacing: 0; color: var(--color-ink-muted); }
+
+/* ---------- frame ---------- */
+.frame { position: relative; overflow: hidden; border-radius: 12px; background: var(--color-base); isolation: isolate; }
+.frame.split { width: 1200px; height: 720px; display: grid; grid-template-columns: 1fr 1fr; }
+.frame.single { width: 100%; max-width: 390px; height: 800px; display: grid; }
+.brand { position: relative; background: var(--color-sunk); padding: 40px; display: grid; grid-template-rows: auto 1fr auto; gap: 24px; overflow: hidden; }
+.brand > :not(.bg) { position: relative; z-index: 1; }
+.single .brand { display: none; }
+.brand .mid { align-self: center; display: grid; gap: 20px; max-width: 360px; }
+.brand .mid h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 600; }
+.acts { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+.acts li { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 10px; align-items: start; border-radius: 10px; padding: 8px; margin: -8px; position: relative; }
+.acts li::before { content: ""; position: absolute; inset: 0; border-radius: 10px; background: var(--pw, transparent); opacity: 0; z-index: -1; }
+.acts li.rt::before { animation: rt var(--rt-total) linear both; }
+@keyframes rt { 0%, 40% { opacity: 1; } 100% { opacity: 0; } }
+.acts li p { line-height: 1.45; }
+.acts li time { display: block; font-size: 0.75rem; color: var(--color-ink-muted); }
+.acts .tag { font-size: 0.75rem; font-weight: 600; color: var(--p); margin-left: 6px; }
+.brand .foot { font-size: 0.75rem; color: var(--color-ink-muted); text-align: left; }
+
+/* ambient graph: two drifting layers, masked to the side away from text */
+.bg { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.brand .bg { -webkit-mask-image: linear-gradient(to right, transparent 62%, black 88%); mask-image: linear-gradient(to right, transparent 62%, black 88%); }
+.formside .bg { display: none; }
+.single .formside .bg { display: block; bottom: auto; height: 200px; -webkit-mask-image: linear-gradient(to bottom, black 10%, transparent 90%); mask-image: linear-gradient(to bottom, black 10%, transparent 90%); }
+.bg svg { width: 100%; height: 100%; display: block; }
+.bg .ed { stroke: var(--color-line); stroke-width: 1.5; }
+.single .bg .ed { stroke-width: 2; }
+.bg .oa { fill: var(--color-sunk); stroke: var(--color-ink-subtle); stroke-width: 1.5; opacity: 0.7; }
+.single .bg .oa { fill: var(--color-base); }
+.bg .u { opacity: 0.6; }
+.bg .pulse { opacity: 0; }
+.bg .ring { fill: none; stroke-width: 2; opacity: 0; transform-box: fill-box; transform-origin: 50% 50%; }
+.bg .l1 { animation: drift1 24s ease-in-out infinite alternate; }
+.bg .l2 { animation: drift2 36s ease-in-out infinite alternate; }
+@keyframes drift1 { from { transform: translate(0, 0); } to { transform: translate(-16px, 10px); } }
+@keyframes drift2 { from { transform: translate(0, 0); } to { transform: translate(12px, -14px); } }
+.frame.paused .bg .l1, .frame.paused .bg .l2, html.ambient-off .bg .l1, html.ambient-off .bg .l2 { animation-play-state: paused; }
+
+.formside { position: relative; display: grid; place-items: center; padding: 40px; min-width: 0; }
+.single .formside { place-items: start center; padding: 24px 16px; }
+.box { position: relative; z-index: 1; width: 100%; max-width: 380px; display: grid; gap: 24px; }
+.mob-head { display: none; }
+.single .mob-head { display: flex; align-items: center; justify-content: space-between; min-height: 48px; }
+
+/* steps share one grid cell, so the box keeps its height and never jumps between steps */
+.stage { display: grid; }
+.step { grid-area: 1 / 1; display: grid; gap: 20px; align-content: start; min-width: 0; }
+.step:not(.on) { visibility: hidden; }
+.step .t { display: grid; gap: 6px; }
+.step .t h3 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.step .t p { color: var(--color-ink-muted); font-size: 0.9375rem; }
+.step .t b { color: var(--color-ink); font-weight: 600; }
+.or { display: flex; align-items: center; gap: 12px; color: var(--color-ink-muted); }
+.or::before, .or::after { content: ""; height: 1px; flex: 1; background: var(--color-line); }
+.fld { display: grid; gap: 6px; }
+.fld label { font-weight: 600; }
+.fld input { height: 44px; border-radius: 8px; border: 0; padding: 0 12px; font: 400 1rem/1 var(--font-body); color: var(--color-ink); background: var(--color-raised);
+  box-shadow: inset 0 0 0 1px var(--color-line); outline: none; transition: box-shadow var(--duration-quick) var(--ease-out); width: 100%; }
+.fld input:focus-visible { box-shadow: inset 0 0 0 1px var(--color-line), 0 0 0 2px var(--color-focus); }
+.fld .hint { font-size: 0.75rem; color: var(--color-ink-muted); }
+.foot { font-size: 0.8125rem; color: var(--color-ink-muted); text-align: center; }
+.gicon { width: 18px; height: 18px; }
+.spin { width: 18px; height: 18px; display: none; animation: spin 700ms linear infinite; }
+.btn.loading .spin { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* code cells: one real input over six drawn cells */
+.otp { position: relative; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; }
+.otp .c { position: relative; height: 56px; border-radius: 8px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line);
+  display: grid; place-items: center; font: 600 1.4375rem/1 var(--font-display); font-variant-numeric: tabular-nums; color: var(--color-ink); }
+.otp .c::before { content: ""; position: absolute; inset: 0; border-radius: 8px; box-shadow: 0 0 0 2px var(--color-focus); opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.otp .c::after { content: ""; position: absolute; inset: 0; border-radius: 8px; background: var(--color-success-wash); box-shadow: inset 0 0 0 1.5px var(--color-success); opacity: 0; z-index: -1;
+  transition: opacity var(--duration-quick) var(--ease-out); transition-delay: calc(var(--i) * 40ms); }
+.otp .c { z-index: 0; isolation: isolate; }
+.otp:focus-within .c.cur::before { opacity: 1; }
+.otp .c.cur .caret { position: absolute; width: 2px; height: 24px; border-radius: 1px; background: var(--color-accent); animation: caret 1s steps(1) infinite; }
+.otp:not(:focus-within) .c.cur .caret { display: none; }
+@keyframes caret { 50% { opacity: 0; } }
+.otp.err .c { box-shadow: inset 0 0 0 1.5px var(--color-danger); color: var(--color-danger); }
+.otp.ok .c::after { opacity: 1; }
+.otp.ok .c { color: var(--color-success); }
+.otp input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; border: 0; font-size: 16px; cursor: text; }
+.msg { font-size: 0.8125rem; color: var(--color-ink-muted); min-height: 20px; }
+.msg.bad { color: var(--color-danger); font-weight: 500; }
+.resend { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; color: var(--color-ink-muted); }
+
+/* success + workspace hand-off */
+.okbadge { width: 56px; height: 56px; border-radius: 50%; background: var(--color-success-wash); color: var(--color-success); display: grid; place-items: center; }
+.okbadge svg { width: 28px; height: 28px; stroke-width: 2.25; }
+.wsl { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.wsr { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 64px; padding: 12px; border-radius: 10px; background: var(--color-raised);
+  color: inherit; text-decoration: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.wsr:hover { background: var(--color-hover); }
+.wsr .lg { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--p, var(--color-accent)); color: var(--color-on-person); font: 700 1rem/1 var(--font-display); }
+.wsr b { display: block; font-weight: 600; }
+.wsr small { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.wsr .pill { justify-self: end; }
+
+/* the email address flying from the field to the code step */
+.flyer { position: absolute; z-index: 5; font: 500 1rem/1.2 var(--font-body); color: var(--color-ink); white-space: nowrap; transform-origin: 0 0; pointer-events: none; }
+
+/* ---------- reduced motion: no transform anywhere, fades ≤ 120ms, no ambient ---------- */
+html.reduce .bg .l1, html.reduce .bg .l2, html.reduce .spin, html.reduce .otp .c.cur .caret { animation: none; }
+html.reduce .btn:active { transform: none; }
+html.reduce .otp .c::after { transition-duration: 120ms; transition-delay: 0ms; }
+@media (prefers-reduced-motion: reduce) {
+  .bg .l1, .bg .l2, .spin, .otp .c.cur .caret { animation: none; }
+  .btn:active { transform: none; }
+  .otp .c::after { transition-duration: 120ms; transition-delay: 0ms; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5M12 19l-7-7 7-7"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <!-- Google brand colours are the one allowed raw-colour exception (as in auth.html). -->
+  <symbol id="g-logo" viewBox="0 0 48 48"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></symbol>
+</svg>
+
+<div class="page">
+<header>
+  <h1>Nexus · Đăng nhập có chuyển động</h1>
+  <p>Cùng luồng với <code>auth.html</code> (nhập email hoặc số điện thoại, nhập mã 6 số, chọn workspace), thêm chuyển động có chủ đích: logo tự lắp, form vào lần lượt, nền đồ thị trôi nhẹ, email bay sang bước mã, ô mã bật khi gõ, rung khi sai, gom lại khi đúng. Mọi thời lượng là token ở DESIGN.md §7. Gõ thử mã vào ô ở bước 2: mã gõ tay luôn đúng; nút "Mã sai" để xem trạng thái sai.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div>
+    <label class="check"><input type="checkbox" id="opt-reduce"> Giảm chuyển động</label>
+    <label class="check"><input type="checkbox" id="opt-ambient" checked> Nền đồ thị chuyển động</label>
+  </div>
+  <div class="demo" role="group" aria-label="Phát lại chuyển động"><span class="k">Phát lại</span>
+    <button class="btn sm" type="button" data-play="intro">Vào màn</button>
+    <button class="btn sm" type="button" data-play="logo">Logo tự lắp</button>
+    <button class="btn sm" type="button" data-play="pulse">Xung trên đồ thị</button>
+    <button class="btn sm" type="button" data-play="code">Sang bước mã</button>
+    <button class="btn sm" type="button" data-play="wrong">Mã sai</button>
+    <button class="btn sm" type="button" data-play="right">Mã đúng và vào workspace</button>
+    <button class="btn sm" type="button" data-play="back">Quay lại bước 1</button>
+  </div>
+</header>
+
+<section class="screen" aria-labelledby="h-desk">
+  <div class="screen-head"><h2 id="h-desk">Máy tính · từ 1024px</h2><p>Brand pane trên <code>--color-sunk</code>, nền đồ thị nằm ở nửa phải của pane, xa chữ. Form trên <code>--color-base</code>.</p></div>
+  <div class="scroll"><div class="frame split" data-frame="desk"></div></div>
+</section>
+
+<section class="screen" aria-labelledby="h-mob">
+  <div class="screen-head"><h2 id="h-mob">Điện thoại · 390px</h2><p>Không có brand pane: logo ở đầu, đồ thị chỉ là một dải mờ phía trên, tan dần trước khi tới tiêu đề. Nút Quay lại 44px ở bước mã.</p></div>
+  <div class="frame single" data-frame="mob"></div>
+</section>
+
+<section class="screen" aria-labelledby="h-spec">
+  <div class="screen-head"><h2 id="h-spec">Bảng chuyển động</h2><p>Mọi dòng dùng token §7. "Lệch" là khoảng cách giữa hai phần tử liên tiếp trong một chuỗi.</p></div>
+  <div class="tblwrap"><table>
+    <thead><tr><th scope="col">Chuyển động</th><th scope="col">Vào</th><th scope="col">Ra / kết thúc</th><th scope="col">Giảm chuyển động</th></tr></thead>
+    <tbody>
+      <tr><td>Logo tự lắp (một lần khi mở)</td><td>Nút: <code>scale(.6)</code> → 1 + fade, 160ms ease-out. Nét: <code>scaleX</code> 0 → 1, 160ms ease-out. Nút đích: 280ms expo. Lệch 40 đến 60ms, tổng ~840ms</td><td>Không</td><td>Cả dấu fade 120ms</td></tr>
+      <tr><td>Form vào lần lượt</td><td><code>translateY(8px)</code> + fade, 220ms ease-out, lệch 40ms, bắt đầu sau 200ms</td><td>Không</td><td>Fade 120ms cùng lúc</td></tr>
+      <tr><td>Hoạt động ở brand pane</td><td>Chèn hàng như §7 (<code>translateY(8px)</code> + fade 220ms); hàng mới nhất phủ màu người 2400ms + nhãn "vừa tải lên"</td><td>Lớp phủ tan theo §7</td><td>Hiện ngay; lớp phủ vẫn hiện (là thông tin)</td></tr>
+      <tr><td>Nền đồ thị (ambient)</td><td>Fade 280ms expo. Hai lớp trôi ≤ 16px, 24s và 36s, ease-in-out qua lại</td><td>Dừng khi tab ẩn, khung ra khỏi màn, hoặc tắt</td><td>Đứng yên, không xung</td></tr>
+      <tr><td>Xung trên cạnh</td><td>Chấm màu người chạy theo một cạnh 900ms ease-out, nút tới loé vòng 900ms; mỗi 3,2s một lần</td><td>Fade cùng vòng</td><td>Không có</td></tr>
+      <tr><td>Nút "Nhận mã"</td><td>Nhấn <code>scale(.98)</code> 100ms. Đang gửi: spinner quay 700ms (chỉ loader được quay vô hạn)</td><td>—</td><td>Không nhấn lún, không quay; chữ "Đang gửi mã…"</td></tr>
+      <tr><td>Bước 1 → bước 2</td><td>Bước mới <code>translateX(16px)</code> → 0 + fade 280ms expo, con lệch 40ms (220ms ease-out). Email bay từ ô nhập vào câu "Đã gửi tới" (FLIP) 280ms expo</td><td>Bước cũ <code>translateX(-12px)</code> + fade 210ms ease-in</td><td>Fade 120ms, email không bay</td></tr>
+      <tr><td>Quay lại</td><td>Như trên, ngược hướng</td><td>Như trên, ngược hướng</td><td>Fade 120ms</td></tr>
+      <tr><td>Gõ một số</td><td>Ô <code>scale(.92)</code> → 1, số <code>translateY(6px)</code> → 0 + fade, 160ms ease-out. Vòng focus sang ô kế 160ms</td><td>Xoá: số fade 120ms ease-in</td><td>Số hiện ngay</td></tr>
+      <tr><td>Mã sai</td><td>Rung <code>translateX</code> ±6px một lần, 280ms ease-out; viền danger; thông báo "Mã chưa đúng. Còn 4 lần thử."</td><td>Sau 600ms số rơi khỏi ô từ phải sang trái, 120ms ease-in lệch 40ms</td><td>Không rung, chỉ đổi màu, xoá ngay</td></tr>
+      <tr><td>Mã đúng</td><td>Ô phủ success-wash lần lượt, 160ms lệch 40ms; ô gom vào giữa 220ms ease-in; huy hiệu ✓ <code>scale(.6)</code> → 1 280ms expo; nút đích của logo loé vòng 900ms</td><td>—</td><td>Đổi màu và fade 120ms</td></tr>
+      <tr><td>Bàn giao vào Chọn workspace</td><td>Content fade 160ms (chuyển route §7), hàng workspace vào lệch 40ms, 220ms ease-out</td><td>—</td><td>Fade 120ms</td></tr>
+    </tbody>
+  </table></div>
+  <ol class="notes">
+    <li><b>Không có chuyển động nào chặn thao tác.</b> Ô nhập nhận phím ngay từ khung đầu tiên; chuỗi vào màn chỉ là lớp trình bày.</li>
+    <li><b>Logo chỉ tự lắp một lần mỗi phiên</b> (lần mở trang đầu); quay lại bước 1 không lắp lại.</li>
+    <li><b>Vì sao không còn "content fade 160ms, không trượt"</b> như §7 cho chuyển route: hai bước của đăng nhập là một luồng tiến lên, trượt 16px nói hướng. Cần thêm một dòng ngoại lệ vào §7 nếu duyệt.</li>
+  </ol>
+</section>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var root = document.documentElement;
+  var css = getComputedStyle(root);
+  var D = { press: 100, quick: 160, base: 220, layout: 280 };
+  ['press', 'quick', 'base', 'layout'].forEach(function (k) { var v = parseFloat(css.getPropertyValue('--duration-' + k)); if (v) D[k] = v; });
+  D.exit = Math.round(D.layout * 0.75); /* closes run at ~75% of the opening, §7 */
+  var E = {};
+  ['out', 'out-expo', 'in'].forEach(function (k) { E[k] = css.getPropertyValue('--ease-' + k).trim() || 'ease-out'; });
+  var STAGGER = 40, HALO = 900, REDUCED_FADE = 120;
+
+  var mq = window.matchMedia ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
+  function reduced() { return root.classList.contains('reduce') || (mq && mq.matches); }
+
+  /* One door for every animation. Under reduced motion transforms are dropped: if opacity
+     changes the step becomes a ≤120ms fade with no delay, otherwise it is instant. */
+  function A(el, kf, dur, ease, delay) {
+    if (!el) return Promise.resolve();
+    if (reduced()) {
+      var ops = kf.map(function (f) { return f.opacity === undefined ? 1 : f.opacity; });
+      if (ops[0] === ops[ops.length - 1] && ops.every(function (o) { return o === ops[0]; })) return Promise.resolve();
+      return el.animate(ops.map(function (o) { return { opacity: o }; }), { duration: Math.min(REDUCED_FADE, dur), easing: 'linear', fill: 'both' }).finished.catch(function () {});
+    }
+    return el.animate(kf, { duration: dur, easing: ease || E.out, delay: delay || 0, fill: 'both' }).finished.catch(function () {});
+  }
+  function clearAnims(scope) {
+    scope.querySelectorAll('*').forEach(function (n) { if (n.getAnimations) n.getAnimations().forEach(function (a) { if (!(a instanceof CSSAnimation) && !(a instanceof CSSTransition)) a.cancel(); }); });
+  }
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  /* ---------- markup ---------- */
+  var MARK = function (size) {
+    return '<svg class="amark" width="' + size + '" height="' + size + '" viewBox="0 0 48 48" aria-hidden="true">' +
+      '<g transform="translate(12 37) rotate(-90)"><rect class="e" data-e="1" x="0" y="-3" width="26" height="6"/></g>' +
+      '<g transform="translate(12 11) rotate(47.29)"><rect class="e" data-e="2" x="0" y="-3" width="35.38" height="6"/></g>' +
+      '<g transform="translate(36 37) rotate(-90)"><rect class="e" data-e="3" x="0" y="-3" width="26" height="6"/></g>' +
+      '<circle class="n" data-n="1" cx="12" cy="37" r="5"/><circle class="n" data-n="2" cx="12" cy="11" r="5"/>' +
+      '<circle class="n" data-n="3" cx="36" cy="37" r="5"/><circle class="halo" cx="36" cy="11" r="5.5"/><circle class="n end" data-n="4" cx="36" cy="11" r="5.5"/></svg>';
+  };
+  /* A small attribute graph: rings are attributes, filled dots are people (person hues). */
+  var NODES = [[360, 90, 'oa'], [470, 150, 'u', 5], [540, 70, 'oa'], [420, 250, 'oa'], [560, 260, 'u', 3], [330, 340, 'u', 1], [480, 380, 'oa'],
+    [580, 430, 'oa'], [380, 470, 'oa'], [520, 540, 'u', 6], [300, 590, 'oa'], [440, 640, 'oa'], [570, 650, 'u', 8], [250, 200, 'u', 4]];
+  var EDGES = [[0, 1], [1, 2], [1, 3], [3, 4], [3, 5], [3, 6], [6, 7], [6, 8], [8, 9], [8, 10], [9, 11], [11, 12], [7, 9], [0, 13], [13, 5], [2, 4], [10, 11]];
+  NODES = NODES.map(function (n) { var c = n.slice(); c[0] = Math.round(380 + (n[0] - 250) * 0.65); return c; });
+  function graph() {
+    var l1 = '', l2 = '';
+    EDGES.forEach(function (e, i) { var a = NODES[e[0]], b = NODES[e[1]]; var s = '<line class="ed" x1="' + a[0] + '" y1="' + a[1] + '" x2="' + b[0] + '" y2="' + b[1] + '"/>'; if (i % 2) l2 += s; else l1 += s; });
+    NODES.forEach(function (n, i) {
+      var s = n[2] === 'oa' ? '<circle class="oa" cx="' + n[0] + '" cy="' + n[1] + '" r="7"/>' : '<circle class="u" cx="' + n[0] + '" cy="' + n[1] + '" r="5" style="fill:var(--color-person-' + n[3] + ')"/>';
+      if (i % 2) l2 += s; else l1 += s;
+    });
+    return '<div class="bg" aria-hidden="true"><svg viewBox="0 0 600 720" preserveAspectRatio="xMaxYMid slice"><g class="l1">' + l1 + '</g><g class="l2">' + l2 + '</g>' +
+      '<circle class="pulse" r="4" cx="0" cy="0"/><circle class="ring" r="7" cx="0" cy="0"/></svg></div>';
+  }
+  function build(frame, p) {
+    frame.innerHTML =
+      '<aside class="brand" aria-hidden="true">' + graph() +
+        '<span class="lockup">' + MARK(44) + '<span class="wm">Nexus<small>Không gian làm việc chung</small></span></span>' +
+        '<div class="mid"><h2 data-s>Mỗi thay đổi đều mang tên và màu của người làm.</h2>' +
+          '<ol class="acts">' +
+            '<li data-a="3" style="--p:var(--color-person-6);--pw:var(--color-person-6-wash)"><span class="av" style="--p:var(--color-person-6)">TL</span><p><b>Nguyễn Thu Lan</b> đã tải lên doi-soat-09-10.xlsx<time>Vừa xong</time></p></li>' +
+            '<li data-a="2"><span class="av" style="--p:var(--color-person-4)">VK</span><p><b>Đỗ Văn Khải</b> đã duyệt Tạm ứng công tác phí<time>5 phút trước</time></p></li>' +
+            '<li data-a="1"><span class="av" style="--p:var(--color-person-1)">QV</span><p><b>Lê Quang Vinh</b> đã nhắn trong Đối soát giao dịch<time>12 phút trước</time></p></li>' +
+          '</ol></div>' +
+        '<span class="foot" data-s>Chat, tài liệu, phê duyệt và tài sản trong một chỗ.</span>' +
+      '</aside>' +
+      '<main class="formside">' + graph() +
+        '<div class="box">' +
+          '<div class="mob-head"><span class="lockup">' + MARK(36) + '<span class="wm">Nexus</span></span></div>' +
+          '<div class="stage">' +
+            /* step 1 */
+            '<form class="step on" data-step="id" novalidate>' +
+              '<div class="t" data-s><h3>Đăng nhập vào Nexus</h3><p>Dùng email công việc hoặc số điện thoại.</p></div>' +
+              '<button class="btn g wide" type="button" data-s><svg class="gicon" aria-hidden="true"><use href="#g-logo"/></svg>Tiếp tục với Google</button>' +
+              '<div class="or" data-s>hoặc nhận mã đăng nhập</div>' +
+              '<div class="fld" data-s><label for="' + p + '-id">Email hoặc số điện thoại</label><input id="' + p + '-id" type="text" inputmode="email" autocomplete="username" autocapitalize="none" spellcheck="false" value="hoa.le@novapay.vn" aria-describedby="' + p + '-idh"><span class="hint" id="' + p + '-idh">Chúng tôi gửi mã 6 số, có hiệu lực 5 phút.</span></div>' +
+              '<button class="btn primary wide" type="submit" data-s data-send><svg class="spin" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.5" stroke-dasharray="40 100" stroke-linecap="round"/></svg><span>Nhận mã đăng nhập</span></button>' +
+              '<p class="foot" data-s>Chưa có tài khoản? Nhập email ở trên, tài khoản được tạo sau khi xác minh.</p>' +
+            '</form>' +
+            /* step 2 */
+            '<div class="step" data-step="code">' +
+              (p === 'mob' ? '<div data-s><button class="ibtn" type="button" aria-label="Quay lại" data-back><svg class="i"><use href="#i-back"/></svg></button></div>' : '') +
+              '<div class="t" data-s><h3>Nhập mã 6 số</h3><p>Đã gửi tới <b data-dest>hoa.le@novapay.vn</b>. <button class="link" type="button" data-back>Đổi email</button></p></div>' +
+              '<div class="fld" data-s><span class="sr" id="' + p + '-ol">Mã xác minh 6 số</span>' +
+                '<div class="otp" role="group" aria-labelledby="' + p + '-ol">' +
+                  [0, 1, 2, 3, 4, 5].map(function (i) { return '<span class="c" style="--i:' + i + '" aria-hidden="true"><span class="d"></span></span>'; }).join('') +
+                  '<input aria-labelledby="' + p + '-ol" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]*">' +
+                '</div>' +
+                '<span class="msg" aria-live="polite" data-msg>Mã có hiệu lực tới 09:47.</span></div>' +
+              '<div class="resend" data-s><span class="tnum" data-count>Gửi lại mã sau 0:42</span><button class="link" type="button" disabled data-resend>Gửi lại</button></div>' +
+              '<p class="foot" data-s>Không thấy thư? Kiểm tra mục Thư rác.</p>' +
+            '</div>' +
+            /* step 3: verified */
+            '<div class="step" data-step="ok" aria-live="polite">' +
+              '<div class="okbadge" data-badge><svg class="i"><use href="#i-check"/></svg></div>' +
+              '<div class="t" data-s><h3>Đã xác minh</h3><p>Đang mở các không gian làm việc của bạn…</p></div>' +
+            '</div>' +
+            /* step 4: workspace select (auth.html §4) */
+            '<div class="step" data-step="ws">' +
+              '<div class="t" data-s><h3>Chào chị Hoa</h3><p>Chọn nơi làm việc hôm nay.</p></div>' +
+              '<ul class="wsl">' +
+                '<li data-s><a class="wsr" href="#ws"><span class="lg">N</span><span><b>Novapay</b><small>Quản trị · 48 người</small></span><span class="pill idle">Lần trước</span></a></li>' +
+                '<li data-s><a class="wsr" href="#ws"><span class="lg" style="--p:var(--color-person-5)">K</span><span><b>Kế toán Hà Nội</b><small>Thành viên · 12 người</small></span><svg class="i" aria-hidden="true"><use href="#i-right"/></svg></a></li>' +
+                '<li data-s><a class="wsr" href="#ws"><span class="lg" style="--p:var(--color-person-2)">M</span><span><b>Công ty Minh Long</b><small>Đỗ Văn Khải mời bạn</small></span><span class="pill wait">Lời mời</span></a></li>' +
+              '</ul>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+      '</main>';
+  }
+
+  /* ---------- per-frame controller ---------- */
+  function Frame(el, p) {
+    build(el, p);
+    var self = this;
+    this.el = el; this.p = p; this.paused = false; this.busy = false; this.left = 42; this.wrongNext = false;
+    this.step = function (n) { return el.querySelector('[data-step="' + n + '"]'); };
+    this.cur = function () { return el.querySelector('.step.on'); };
+    this.input = el.querySelector('.otp input');
+    this.cells = Array.prototype.slice.call(el.querySelectorAll('.otp .c'));
+    this.msg = el.querySelector('[data-msg]');
+
+    el.querySelector('[data-step="id"]').addEventListener('submit', function (e) { e.preventDefault(); self.toCode(true); });
+    el.querySelectorAll('[data-back]').forEach(function (b) { b.addEventListener('click', function () { self.toIdentity(); }); });
+    this.input.addEventListener('input', function () { self.onDigits(); });
+    el.querySelectorAll('.wsr').forEach(function (a) { a.addEventListener('click', function (e) { e.preventDefault(); }); });
+    this.paintCells('');
+  }
+  Frame.prototype.marks = function () { return this.el.querySelectorAll('.amark'); };
+  Frame.prototype.visibleMark = function () { return this.el.classList.contains('single') ? this.el.querySelector('.mob-head .amark') : this.el.querySelector('.brand .amark'); };
+
+  Frame.prototype.reset = function () {
+    clearAnims(this.el);
+    var self = this;
+    this.el.querySelectorAll('.step').forEach(function (s) { s.classList.toggle('on', s.getAttribute('data-step') === 'id'); s.setAttribute('aria-hidden', String(s.getAttribute('data-step') !== 'id')); });
+    var send = this.el.querySelector('[data-send]'); send.classList.remove('loading'); send.disabled = false; send.querySelector('span').textContent = 'Nhận mã đăng nhập';
+    this.input.value = ''; this.paintCells(''); this.setMsg('Mã có hiệu lực tới 09:47.', false);
+    this.el.querySelector('.otp').classList.remove('err', 'ok');
+    this.el.querySelector('[data-dest]').style.opacity = '';
+    this.el.querySelectorAll('.flyer').forEach(function (f) { f.remove(); });
+    this.el.querySelectorAll('.acts li').forEach(function (li) { li.classList.remove('rt'); var t = li.querySelector('.tag'); if (t) t.remove(); });
+    this.busy = false; self.left = 42;
+  };
+
+  Frame.prototype.assemble = function () {
+    this.marks().forEach(function (m) {
+      clearAnims(m);
+      if (reduced()) { A(m, [{ opacity: 0 }, { opacity: 1 }], REDUCED_FADE); return; }
+      var pop = function (n, at, d, e) { return A(m.querySelector('[data-n="' + n + '"]'), [{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'scale(1)' }], d || D.quick, e || E.out, at); };
+      var draw = function (n, at) { return A(m.querySelector('[data-e="' + n + '"]'), [{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }], D.quick, E.out, at); };
+      pop(1, 0); draw(1, 60); pop(2, 200); draw(2, 240); pop(3, 380); draw(3, 420); pop(4, 560, D.layout, E['out-expo']);
+    });
+  };
+  Frame.prototype.stagger = function (scope, start) {
+    var items = scope.querySelectorAll('[data-s]');
+    if (reduced()) { items.forEach(function (n) { A(n, [{ opacity: 0 }, { opacity: 1 }], REDUCED_FADE); }); return wait(REDUCED_FADE); }
+    items.forEach(function (n, i) { A(n, [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }], D.base, E.out, (start || 0) + i * STAGGER); });
+    return wait((start || 0) + items.length * STAGGER + D.base);
+  };
+  Frame.prototype.activity = function (start) {
+    var rows = this.el.querySelectorAll('.acts li');
+    if (!rows.length || this.el.classList.contains('single')) return;
+    var order = Array.prototype.slice.call(rows).sort(function (a, b) { return a.getAttribute('data-a') - b.getAttribute('data-a'); });
+    order.forEach(function (li, i) {
+      li.classList.remove('rt');
+      var t0 = reduced() ? 0 : start + i * 360;
+      if (reduced()) li.style.opacity = '1'; else A(li, [{ opacity: 0, transform: 'translateY(8px)' }, { opacity: 1, transform: 'translateY(0)' }], D.base, E.out, t0);
+      if (li.getAttribute('data-a') === '3') setTimeout(function () {
+        var p = li.querySelector('p'); var old = p.querySelector('.tag'); if (old) old.remove();
+        p.querySelector('b').insertAdjacentHTML('afterend', '<span class="tag">vừa tải lên</span>');
+        void li.offsetWidth; li.classList.add('rt');
+        setTimeout(function () { var tg = li.querySelector('.tag'); if (tg) tg.remove(); }, 2400);
+      }, t0 + D.base);
+    });
+  };
+  Frame.prototype.intro = function () {
+    this.reset();
+    var bgs = this.el.querySelectorAll('.bg');
+    bgs.forEach(function (b) { A(b, [{ opacity: 0 }, { opacity: 1 }], D.layout, E['out-expo']); });
+    this.assemble();
+    this.stagger(this.el.querySelector('.brand') || this.el, 200);
+    this.stagger(this.step('id'), 200);
+    this.activity(700);
+  };
+
+  /* step change: forward = new from the right; back = new from the left */
+  Frame.prototype.swap = function (from, to, dir) {
+    var self = this;
+    to.classList.add('on'); to.setAttribute('aria-hidden', 'false');
+    if (reduced()) {
+      A(from, [{ opacity: 1 }, { opacity: 0 }], REDUCED_FADE).then(function () { from.classList.remove('on'); from.setAttribute('aria-hidden', 'true'); clearAnims(from); from.getAnimations().forEach(function (a) { a.cancel(); }); });
+      return A(to, [{ opacity: 0 }, { opacity: 1 }], REDUCED_FADE);
+    }
+    A(from, [{ opacity: 1, transform: 'translateX(0)' }, { opacity: 0, transform: 'translateX(' + (-12 * dir) + 'px)' }], D.exit, E.in).then(function () {
+      from.classList.remove('on'); from.setAttribute('aria-hidden', 'true'); from.getAnimations().forEach(function (a) { a.cancel(); }); clearAnims(from);
+    });
+    A(to, [{ opacity: 0, transform: 'translateX(' + (16 * dir) + 'px)' }, { opacity: 1, transform: 'translateX(0)' }], D.layout, E['out-expo'], D.quick);
+    return this.stagger(to, D.quick);
+  };
+
+  Frame.prototype.toCode = function (fromUser) {
+    var self = this;
+    if (this.busy) return Promise.resolve();
+    if (!this.step('id').classList.contains('on')) { this.reset(); }
+    this.busy = true;
+    var send = this.el.querySelector('[data-send]');
+    send.classList.add('loading'); send.disabled = true; send.querySelector('span').textContent = 'Đang gửi mã…';
+    return wait(600).then(function () {
+      var field = self.el.querySelector('[data-step="id"] input');
+      var dest = self.el.querySelector('[data-dest]');
+      dest.textContent = field.value.trim() || 'hoa.le@novapay.vn';
+      self.left = 42; self.tick();
+      var fr = self.el.getBoundingClientRect();
+      if (!reduced()) {
+        /* FLIP: the address leaves the field and lands in "Đã gửi tới …" */
+        var src = field.getBoundingClientRect(), dst = dest.getBoundingClientRect();
+        var fl = document.createElement('span'); fl.className = 'flyer'; fl.textContent = dest.textContent; fl.setAttribute('aria-hidden', 'true');
+        self.el.appendChild(fl);
+        var x0 = src.left - fr.left + 12, y0 = src.top - fr.top + (src.height - fl.offsetHeight) / 2;
+        fl.style.left = x0 + 'px'; fl.style.top = y0 + 'px';
+        var s = dst.width / fl.offsetWidth;
+        dest.style.opacity = '0';
+        A(fl, [{ transform: 'translate(0,0) scale(1)' }, { transform: 'translate(' + (dst.left - fr.left - x0) + 'px,' + (dst.top - fr.top - y0 + (dst.height - fl.offsetHeight * s) / 2) + 'px) scale(' + s + ')' }], D.layout, E['out-expo'], 60)
+          .then(function () { dest.style.opacity = ''; fl.remove(); });
+      }
+      return self.swap(self.step('id'), self.step('code'), 1);
+    }).then(function () {
+      self.busy = false;
+      send.classList.remove('loading'); send.disabled = false; send.querySelector('span').textContent = 'Nhận mã đăng nhập';
+      if (fromUser) self.input.focus({ preventScroll: true });
+    });
+  };
+  Frame.prototype.toIdentity = function () {
+    var cur = this.cur(); if (!cur || cur.getAttribute('data-step') === 'id') return Promise.resolve();
+    this.input.value = ''; this.paintCells(''); this.el.querySelector('.otp').classList.remove('err', 'ok'); this.setMsg('Mã có hiệu lực tới 09:47.', false);
+    return this.swap(cur, this.step('id'), -1);
+  };
+
+  Frame.prototype.setMsg = function (t, bad) { this.msg.textContent = t; this.msg.classList.toggle('bad', !!bad); };
+  Frame.prototype.paintCells = function (v, popIndex) {
+    this.cells.forEach(function (c, i) {
+      var d = c.querySelector('.d'); d.textContent = v[i] || '';
+      c.classList.toggle('cur', i === Math.min(v.length, 5) && v.length < 6);
+      var caret = c.querySelector('.caret');
+      if (c.classList.contains('cur') && !v[i]) { if (!caret) c.insertAdjacentHTML('beforeend', '<span class="caret"></span>'); }
+      else if (caret) caret.remove();
+    });
+    if (popIndex !== undefined && this.cells[popIndex]) {
+      var c = this.cells[popIndex];
+      A(c, [{ transform: 'scale(.92)' }, { transform: 'scale(1)' }], D.quick, E.out);
+      A(c.querySelector('.d'), [{ opacity: 0, transform: 'translateY(6px)' }, { opacity: 1, transform: 'translateY(0)' }], D.quick, E.out);
+    }
+  };
+  Frame.prototype.onDigits = function () {
+    var v = this.input.value.replace(/\D/g, '').slice(0, 6);
+    var prev = this.cells.filter(function (c) { return c.querySelector('.d').textContent; }).length;
+    this.input.value = v;
+    var otp = this.el.querySelector('.otp');
+    if (otp.classList.contains('err')) { otp.classList.remove('err'); this.setMsg('Mã có hiệu lực tới 09:47.', false); }
+    this.paintCells(v, v.length > prev ? v.length - 1 : undefined);
+    if (v.length === 6) this.verify();
+  };
+  Frame.prototype.verify = function () {
+    var self = this, wrong = this.wrongNext; this.wrongNext = false;
+    this.input.disabled = true;
+    this.setMsg('Đang kiểm tra mã…', false);
+    return wait(500).then(function () { return wrong ? self.wrong() : self.right(); });
+  };
+  Frame.prototype.wrong = function () {
+    var self = this, otp = this.el.querySelector('.otp');
+    otp.classList.add('err');
+    this.setMsg('Mã chưa đúng. Còn 4 lần thử.', true);
+    A(otp, [{ transform: 'translateX(0)' }, { transform: 'translateX(-6px)' }, { transform: 'translateX(6px)' }, { transform: 'translateX(-4px)' }, { transform: 'translateX(4px)' }, { transform: 'translateX(0)' }], D.layout, E.out);
+    return wait(reduced() ? 0 : 600).then(function () {
+      var ds = self.cells.map(function (c) { return c.querySelector('.d'); }).reverse();
+      return Promise.all(ds.map(function (d, i) { return A(d, [{ opacity: 1, transform: 'translateY(0)' }, { opacity: 0, transform: 'translateY(6px)' }], REDUCED_FADE, E.in, i * STAGGER); }));
+    }).then(function () {
+      self.cells.forEach(function (c) { c.querySelector('.d').getAnimations().forEach(function (a) { a.cancel(); }); });
+      self.input.disabled = false; self.input.value = ''; self.paintCells('');
+    });
+  };
+  Frame.prototype.right = function () {
+    var self = this, otp = this.el.querySelector('.otp');
+    otp.classList.add('ok');
+    this.setMsg('Mã đúng.', false);
+    var mark = this.visibleMark();
+    if (mark && !reduced()) {
+      A(mark.querySelector('.halo'), [{ opacity: 0.9, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(2.2)' }], HALO, E.out, 200);
+    }
+    return wait(reduced() ? 160 : D.quick + 5 * STAGGER + 120).then(function () {
+      /* cells gather to the centre and the badge takes their place */
+      var center = otp.getBoundingClientRect(); var cx = center.left + center.width / 2;
+      self.cells.forEach(function (c) {
+        var r = c.getBoundingClientRect();
+        A(c, [{ opacity: 1, transform: 'translateX(0) scale(1)' }, { opacity: 0, transform: 'translateX(' + (cx - (r.left + r.width / 2)) + 'px) scale(.6)' }], D.base, E.in);
+      });
+      return wait(reduced() ? 0 : D.base - 40);
+    }).then(function () {
+      var ok = self.step('ok'), code = self.step('code');
+      ok.classList.add('on'); ok.setAttribute('aria-hidden', 'false');
+      A(code, [{ opacity: 1 }, { opacity: 0 }], reduced() ? REDUCED_FADE : D.quick, E.in).then(function () { code.classList.remove('on'); code.setAttribute('aria-hidden', 'true'); code.getAnimations().forEach(function (a) { a.cancel(); }); clearAnims(code); });
+      A(self.el.querySelector('[data-badge]'), [{ opacity: 0, transform: 'scale(.6)' }, { opacity: 1, transform: 'scale(1)' }], D.layout, E['out-expo']);
+      A(self.el.querySelector('[data-badge] svg'), [{ opacity: 0, transform: 'scale(.8)' }, { opacity: 1, transform: 'scale(1)' }], D.base, E.out, 60);
+      self.stagger(ok, 120);
+      return wait(1100);
+    }).then(function () {
+      /* hand-off: route change = content fade 160ms (§7), then rows enter */
+      var ok = self.step('ok'), ws = self.step('ws');
+      ws.classList.add('on'); ws.setAttribute('aria-hidden', 'false');
+      A(ok, [{ opacity: 1 }, { opacity: 0 }], reduced() ? REDUCED_FADE : D.quick, E.in).then(function () { ok.classList.remove('on'); ok.setAttribute('aria-hidden', 'true'); clearAnims(ok); });
+      A(ws, [{ opacity: 0 }, { opacity: 1 }], reduced() ? REDUCED_FADE : D.quick, E.out, reduced() ? 0 : D.quick);
+      self.input.disabled = false;
+      return self.stagger(ws, D.quick);
+    });
+  };
+  Frame.prototype.typeCode = function (code, wrong) {
+    var self = this;
+    var go = this.cur() && this.cur().getAttribute('data-step') === 'code' ? Promise.resolve() : (this.reset(), this.toCode(false));
+    return go.then(function () {
+      self.wrongNext = wrong; self.input.value = ''; self.paintCells('');
+      self.el.querySelector('.otp').classList.remove('err', 'ok');
+      var i = 0;
+      return new Promise(function (res) {
+        (function next() {
+          if (i >= code.length) { res(); return; }
+          self.input.value += code[i++]; self.onDigits(); setTimeout(next, 110);
+        })();
+      });
+    });
+  };
+  Frame.prototype.tick = function () {
+    var c = this.el.querySelector('[data-count]'), r = this.el.querySelector('[data-resend]');
+    if (this.left > 0) { c.textContent = 'Gửi lại mã sau 0:' + String(this.left).padStart(2, '0'); r.disabled = true; }
+    else { c.textContent = 'Chưa nhận được mã?'; r.disabled = false; }
+  };
+
+  /* ambient pulse along one edge: a person-hued dot runs to the next node, which rings */
+  Frame.prototype.pulse = function () {
+    if (reduced() || this.paused || document.hidden || root.classList.contains('ambient-off')) return;
+    var bgs = Array.prototype.filter.call(this.el.querySelectorAll('.bg'), function (b) { return b.offsetParent !== null; });
+    bgs.forEach(function (bg) {
+      var e = EDGES[Math.floor(Math.random() * EDGES.length)], a = NODES[e[0]], b = NODES[e[1]];
+      var hue = 'var(--color-person-' + (1 + Math.floor(Math.random() * 8)) + ')';
+      var dot = bg.querySelector('.pulse'), ring = bg.querySelector('.ring');
+      dot.style.fill = hue; ring.style.stroke = hue;
+      dot.animate([{ opacity: 0, transform: 'translate(' + a[0] + 'px,' + a[1] + 'px)' }, { opacity: 1, offset: 0.2 }, { opacity: 1, offset: 0.8 }, { opacity: 0, transform: 'translate(' + b[0] + 'px,' + b[1] + 'px)' }], { duration: HALO, easing: E.out });
+      ring.setAttribute('cx', b[0]); ring.setAttribute('cy', b[1]);
+      ring.animate([{ opacity: 0.8, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(2.4)' }], { duration: HALO, easing: E.out, delay: HALO * 0.7 });
+    });
+  };
+
+  var frames = Array.prototype.map.call(document.querySelectorAll('[data-frame]'), function (el) { return new Frame(el, el.getAttribute('data-frame')); });
+
+  /* pause the ambient layer when a frame is off-screen or the tab is hidden */
+  if ('IntersectionObserver' in window) {
+    var io = new IntersectionObserver(function (es) { es.forEach(function (en) { var f = frames.filter(function (x) { return x.el === en.target; })[0]; if (f) { f.paused = !en.isIntersecting; f.el.classList.toggle('paused', f.paused); } }); });
+    frames.forEach(function (f) { io.observe(f.el); });
+  }
+  document.addEventListener('visibilitychange', function () { frames.forEach(function (f) { f.el.classList.toggle('paused', document.hidden || f.paused); }); });
+  setInterval(function () { frames.forEach(function (f) { f.pulse(); }); }, 3200);
+  setInterval(function () { frames.forEach(function (f) { var s = f.cur(); if (s && s.getAttribute('data-step') === 'code' && f.left > 0) { f.left--; f.tick(); } }); }, 1000);
+
+  /* controls */
+  var qs = /[?&]theme=(light|dark)/.exec(location.search); if (qs) root.setAttribute('data-theme', qs[1]);
+  if (/[?&]reduce=1/.test(location.search)) { root.classList.add('reduce'); document.getElementById('opt-reduce').checked = true; }
+  function syncSeg() { var v = root.getAttribute('data-theme') || 'system'; document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o.getAttribute('data-theme-set') === v)); }); }
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () { var v = b.getAttribute('data-theme-set'); if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v); syncSeg(); });
+  });
+  syncSeg();
+  document.getElementById('opt-reduce').addEventListener('change', function (e) { root.classList.toggle('reduce', e.target.checked); });
+  document.getElementById('opt-ambient').addEventListener('change', function (e) { root.classList.toggle('ambient-off', !e.target.checked); });
+  var PLAY = {
+    intro: function (f) { f.intro(); },
+    logo: function (f) { f.assemble(); },
+    pulse: function (f) { var was = f.paused; f.paused = false; f.pulse(); f.paused = was; },
+    code: function (f) { f.reset(); f.toCode(false); },
+    wrong: function (f) { f.typeCode('482915', true); },
+    right: function (f) { f.typeCode('482915', false); },
+    back: function (f) { f.toIdentity(); }
+  };
+  document.querySelectorAll('[data-play]').forEach(function (b) { b.addEventListener('click', function () { var k = b.getAttribute('data-play'); frames.forEach(function (f) { PLAY[k](f); }); }); });
+  window.NEXUS_MOTION = { frames: frames, PLAY: PLAY };
+  frames.forEach(function (f) { f.intro(); });
+});
+</script>
+</body>
+</html>

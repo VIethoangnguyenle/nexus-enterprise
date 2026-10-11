@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexus · Logo, ba hướng</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Logo review page. Marks are inline SVG <symbol>s coloured only through custom properties
+   (--mk-accent, --mk-ink, --mk-warm), so one drawing serves every background. The four tile
+   contexts below pin light or dark token values regardless of the page theme, so a reviewer sees
+   both themes side by side; the page chrome itself follows the theme toggle. */
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding: 0 16px 64px; }
+h1, h2, h3, p { margin: 0; }
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.muted { color: var(--color-ink-muted); }
+
+/* light / dark token copies (values from tokens.css) so tiles can show both themes at once */
+:root {
+  --L-raised: oklch(99.3% 0.003 190); --L-sunk: oklch(94.6% 0.011 190); --L-ink: oklch(23% 0.02 200); --L-muted: oklch(46% 0.02 200);
+  --L-accent: oklch(50% 0.1 180); --L-on-accent: oklch(98.5% 0.005 180);
+  --D-base: oklch(18% 0.014 200); --D-raised: oklch(22.5% 0.016 200); --D-ink: oklch(94% 0.008 190); --D-muted: oklch(73% 0.016 195);
+  --D-accent: oklch(76% 0.11 178); --D-on-accent: oklch(18% 0.014 200);
+  --warm: var(--color-person-1);
+}
+.ctx-ln { background: var(--L-raised); color: var(--L-ink); --mk-accent: var(--L-accent); --mk-ink: var(--L-ink); --mk-warm: var(--warm); --mk-sub: var(--L-muted); }
+.ctx-la { background: var(--L-accent); color: var(--L-on-accent); --mk-accent: var(--L-on-accent); --mk-ink: var(--L-on-accent); --mk-warm: var(--L-on-accent); --mk-sub: var(--L-on-accent); }
+.ctx-dn { background: var(--D-base); color: var(--D-ink); --mk-accent: var(--D-accent); --mk-ink: var(--D-ink); --mk-warm: oklch(72% 0.13 45); --mk-sub: var(--D-muted); }
+.ctx-da { background: var(--D-accent); color: var(--D-on-accent); --mk-accent: var(--D-on-accent); --mk-ink: var(--D-on-accent); --mk-warm: var(--D-on-accent); --mk-sub: var(--D-on-accent); }
+/* page-theme context: follows the toggle */
+.ctx-page { --mk-accent: var(--color-accent); --mk-ink: var(--color-ink); --mk-warm: var(--color-person-1); --mk-sub: var(--color-ink-muted); }
+
+/* review chrome */
+.page { max-width: 1200px; margin-inline: auto; display: grid; gap: 64px; }
+.page > header { padding-top: 40px; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 65ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.seg { display: inline-flex; background: var(--color-sunk); border-radius: 10px; padding: 4px; gap: 4px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 0 12px; min-height: 36px; cursor: pointer;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.toc { display: flex; gap: 8px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 8px 12px; border-radius: 999px; background: var(--color-sunk); min-height: 36px; display: inline-flex; align-items: center; }
+.toc a:hover { background: var(--color-hover); }
+
+.dir { display: grid; gap: 24px; scroll-margin-top: 16px; }
+.dir-head { display: grid; gap: 8px; max-width: 72ch; }
+.dir-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.dir-head p { color: var(--color-ink-muted); font-size: 1rem; line-height: 1.6; }
+.rec { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 10px; border-radius: 999px; background: var(--color-accent); color: var(--color-on-accent); font: 600 0.75rem/1 var(--font-body); }
+.label { font: 600 0.75rem/1.3 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); }
+
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.tile { border-radius: 12px; min-height: 148px; padding: 20px; display: grid; align-content: space-between; gap: 16px; }
+.tile .cap { font: 600 0.75rem/1.3 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--mk-sub); opacity: 0.9; }
+.lockup { display: inline-flex; align-items: center; gap: 12px; }
+.lockup svg { width: 44px; height: 44px; flex: none; }
+.lockup .wm { font: 700 1.875rem/1 var(--font-display); letter-spacing: -0.01em; color: var(--mk-ink); }
+.lockup .wm small { display: block; font: 500 0.75rem/1.4 var(--font-body); letter-spacing: 0; color: var(--mk-sub); margin-top: 4px; }
+
+.row { display: flex; flex-wrap: wrap; gap: 24px; align-items: flex-end; }
+.spec { display: grid; gap: 8px; justify-items: start; }
+.spec figcaption { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+figure { margin: 0; }
+.ic { display: block; filter: drop-shadow(0 1px 2px oklch(23% 0.02 200 / 0.12)); }
+.mask { position: relative; width: 120px; height: 120px; }
+.mask svg { position: absolute; inset: 0; width: 120px; height: 120px; }
+.mask.circle svg.full { clip-path: circle(50%); }
+.mask.squircle svg.full { clip-path: inset(0 round 30%); }
+
+/* browser tab mock for 16 / 32 */
+.tabbar { border-radius: 10px; padding: 8px 8px 0; display: flex; gap: 4px; min-width: 0; max-width: 100%; overflow: hidden; }
+.tabbar.l { background: var(--L-sunk); color: var(--L-ink); }
+.tabbar.d { background: oklch(15.5% 0.012 200); color: var(--D-ink); }
+.tab { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: 8px 8px 0 0; font-size: 0.8125rem; white-space: nowrap; min-width: 0; }
+.tabbar.l .tab.on { background: var(--L-raised); }
+.tabbar.d .tab.on { background: var(--D-raised); }
+.tab svg { width: 16px; height: 16px; flex: none; }
+.tab span { overflow: hidden; text-overflow: ellipsis; }
+.sizes { display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap; padding: 16px 20px; border-radius: 12px; }
+.sizes svg { display: block; }
+.sizes .s { display: grid; justify-items: center; gap: 6px; font-size: 0.75rem; font-variant-numeric: tabular-nums; color: var(--mk-sub); }
+
+.panel { background: var(--color-raised); border-radius: 12px; padding: 20px; display: grid; gap: 16px; align-content: start; }
+.grid2 { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+
+/* construction drawing */
+.construct { width: 100%; max-width: 280px; aspect-ratio: 1; }
+.construct .g { stroke: var(--color-line); stroke-width: 0.15; }
+.construct .d { stroke: var(--color-ink-subtle); stroke-width: 0.2; stroke-dasharray: 0.8 0.8; fill: none; }
+.construct text { font: 600 2.2px var(--font-body); fill: var(--color-ink-muted); }
+
+table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--color-line); vertical-align: top; }
+th { font: 600 0.75rem/1.3 var(--font-body); color: var(--color-ink-muted); }
+.tblwrap { overflow-x: auto; border-radius: 12px; background: var(--color-raised); }
+.notes { margin: 0; padding-left: 1.2em; display: grid; gap: 6px; color: var(--color-ink-muted); max-width: 80ch; }
+.notes b { color: var(--color-ink); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- ======================= MARK SYMBOLS (48 grid) ======================= -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <!-- A · Lối đi: the letter N drawn as one path through four nodes. Last node = the place you reach. -->
+  <symbol id="mk-a" viewBox="0 0 48 48">
+    <path d="M12 37V11L36 37V11" fill="none" style="stroke:var(--mk-accent)" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="12" cy="37" r="5" style="fill:var(--mk-accent)"/>
+    <circle cx="12" cy="11" r="5" style="fill:var(--mk-accent)"/>
+    <circle cx="36" cy="37" r="5" style="fill:var(--mk-accent)"/>
+    <circle cx="36" cy="11" r="5.5" style="fill:var(--mk-warm)"/>
+  </symbol>
+  <!-- A, optical size for 16-24px: heavier stroke, nodes kept as bumps -->
+  <symbol id="mk-a-s" viewBox="0 0 48 48">
+    <path d="M12 37V11L36 37V11" fill="none" style="stroke:var(--mk-accent)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="36" cy="11" r="6.5" style="fill:var(--mk-warm)"/>
+  </symbol>
+
+  <!-- B · Giao điểm: two rings (người, tài nguyên); the lens where they overlap is where access exists -->
+  <symbol id="mk-b" viewBox="0 0 48 48">
+    <path d="M24 13.61A12 12 0 0 1 24 34.39A12 12 0 0 1 24 13.61Z" style="fill:var(--mk-accent)"/>
+    <circle cx="18" cy="24" r="12" fill="none" style="stroke:var(--mk-ink)" stroke-width="4"/>
+    <circle cx="30" cy="24" r="12" fill="none" style="stroke:var(--mk-ink)" stroke-width="4"/>
+  </symbol>
+  <symbol id="mk-b-s" viewBox="0 0 48 48">
+    <path d="M24 13.61A12 12 0 0 1 24 34.39A12 12 0 0 1 24 13.61Z" style="fill:var(--mk-accent)"/>
+    <circle cx="18" cy="24" r="12" fill="none" style="stroke:var(--mk-ink)" stroke-width="5.5"/>
+    <circle cx="30" cy="24" r="12" fill="none" style="stroke:var(--mk-ink)" stroke-width="5.5"/>
+  </symbol>
+
+  <!-- C · Tín hiệu: a geometric N whose right stem stops short; the dot above is someone who just acted -->
+  <symbol id="mk-c" viewBox="0 0 48 48">
+    <path d="M13 37V13L35 37V22" fill="none" style="stroke:var(--mk-ink)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="35" cy="11.5" r="4.5" style="fill:var(--mk-warm)"/>
+  </symbol>
+  <symbol id="mk-c-s" viewBox="0 0 48 48">
+    <path d="M13 37V13L35 37V24" fill="none" style="stroke:var(--mk-ink)" stroke-width="8.5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="35" cy="10.5" r="5.5" style="fill:var(--mk-warm)"/>
+  </symbol>
+</svg>
+
+<div class="page">
+<header>
+  <h1>Nexus · Logo, ba hướng</h1>
+  <p>Ba hướng cho dấu hiệu và chữ "Nexus", vẽ trên lưới 48, chỉ dùng màu token (accent ngọc lam, cam đất của màu người số 1). Mỗi hướng có: bộ chữ ngang trên nền sáng, tối, accent; icon app 512 và 192; vùng an toàn maskable; favicon 32 và 16 trong thanh tab thật. Hướng A được đề xuất.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Giao diện trang"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div>
+  </div>
+  <nav class="toc" aria-label="Các hướng"><a href="#dir-a">A · Lối đi</a><a href="#dir-b">B · Giao điểm</a><a href="#dir-c">C · Tín hiệu</a><a href="#compare">So sánh</a></nav>
+</header>
+<main style="display:grid;gap:64px"></main>
+</div>
+
+<template id="tpl-dir">
+<section class="dir">
+  <div class="dir-head">
+    <h2><span data-f="title"></span><span data-f="rec"></span></h2>
+    <p data-f="desc"></p>
+  </div>
+
+  <div class="tiles">
+    <div class="tile ctx-ln"><span class="cap">Sáng · nền trung tính</span><span class="lockup"><svg aria-hidden="true"><use data-mk/></svg><span class="wm">Nexus<small>Không gian làm việc chung</small></span></span></div>
+    <div class="tile ctx-la"><span class="cap">Sáng · nền accent</span><span class="lockup"><svg aria-hidden="true"><use data-mk/></svg><span class="wm">Nexus<small>Không gian làm việc chung</small></span></span></div>
+    <div class="tile ctx-dn"><span class="cap">Tối · nền trung tính</span><span class="lockup"><svg aria-hidden="true"><use data-mk/></svg><span class="wm">Nexus<small>Không gian làm việc chung</small></span></span></div>
+    <div class="tile ctx-da"><span class="cap">Tối · nền accent</span><span class="lockup"><svg aria-hidden="true"><use data-mk/></svg><span class="wm">Nexus<small>Không gian làm việc chung</small></span></span></div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <span class="label">Icon app</span>
+      <div class="row">
+        <figure class="spec"><svg class="ic ctx-la" style="background:none" width="128" height="128" viewBox="0 0 512 512" role="img" data-aria="512"><rect width="512" height="512" rx="115" fill="var(--L-accent)"/><use data-mk x="96" y="96" width="320" height="320"/></svg><figcaption>512 · sáng (hiển thị 128)</figcaption></figure>
+        <figure class="spec"><svg class="ic ctx-da" style="background:none" width="72" height="72" viewBox="0 0 512 512" role="img" data-aria="192"><rect width="512" height="512" rx="115" fill="var(--D-accent)"/><use data-mk x="96" y="96" width="320" height="320"/></svg><figcaption>192 · tối (hiển thị 72)</figcaption></figure>
+        <figure class="spec"><svg class="ic ctx-la" style="background:none" width="40" height="40" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="115" fill="var(--L-accent)"/><use data-mk x="96" y="96" width="320" height="320"/></svg><figcaption>40</figcaption></figure>
+      </div>
+    </div>
+    <div class="panel">
+      <span class="label">Maskable (Android)</span>
+      <div class="row">
+        <figure class="spec"><div class="mask"><svg class="full ctx-la" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" fill="var(--L-accent)"/><use data-mk x="96" y="96" width="320" height="320"/></svg><svg viewBox="0 0 512 512" aria-hidden="true"><circle cx="256" cy="256" r="204.8" fill="none" stroke="var(--L-on-accent)" stroke-width="4" stroke-dasharray="14 12" opacity="0.8"/></svg></div><figcaption>Tràn viền, vòng = vùng an toàn 80%</figcaption></figure>
+        <figure class="spec"><div class="mask circle"><svg class="full ctx-la" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" fill="var(--L-accent)"/><use data-mk x="96" y="96" width="320" height="320"/></svg></div><figcaption>Cắt tròn</figcaption></figure>
+        <figure class="spec"><div class="mask squircle"><svg class="full ctx-da" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" fill="var(--D-accent)"/><use data-mk x="96" y="96" width="320" height="320"/></svg></div><figcaption>Cắt squircle · tối</figcaption></figure>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel">
+      <span class="label">Favicon trong thanh tab</span>
+      <div class="tabbar l"><span class="tab on"><svg class="ctx-la" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="96" fill="var(--L-accent)"/><use data-mk-s x="72" y="72" width="368" height="368"/></svg><span>Đối soát giao dịch · Nexus</span></span><span class="tab"><span>Hộp thư</span></span></div>
+      <div class="tabbar d"><span class="tab on"><svg class="ctx-da" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="96" fill="var(--D-accent)"/><use data-mk-s x="72" y="72" width="368" height="368"/></svg><span>Phê duyệt · Nexus</span></span><span class="tab"><span>Lịch</span></span></div>
+    </div>
+    <div class="panel">
+      <span class="label">Cỡ nhỏ (mark trần)</span>
+      <div class="sizes ctx-ln">
+        <span class="s"><svg width="48" height="48" aria-hidden="true"><use data-mk/></svg>48</span>
+        <span class="s"><svg width="32" height="32" aria-hidden="true"><use data-mk/></svg>32</span>
+        <span class="s"><svg width="24" height="24" aria-hidden="true"><use data-mk-s/></svg>24</span>
+        <span class="s"><svg width="16" height="16" aria-hidden="true"><use data-mk-s/></svg>16</span>
+        <span class="s ctx-la" style="padding:6px;border-radius:6px;background:var(--L-accent)"><svg width="16" height="16" aria-hidden="true"><use data-mk-s/></svg></span>
+      </div>
+      <div class="sizes ctx-dn">
+        <span class="s"><svg width="48" height="48" aria-hidden="true"><use data-mk/></svg>48</span>
+        <span class="s"><svg width="32" height="32" aria-hidden="true"><use data-mk/></svg>32</span>
+        <span class="s"><svg width="24" height="24" aria-hidden="true"><use data-mk-s/></svg>24</span>
+        <span class="s"><svg width="16" height="16" aria-hidden="true"><use data-mk-s/></svg>16</span>
+      </div>
+    </div>
+  </div>
+  <div data-f="extra"></div>
+</section>
+</template>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  var root = document.documentElement;
+  var qs = /[?&]theme=(light|dark)/.exec(location.search); if (qs) root.setAttribute('data-theme', qs[1]);
+  function syncSeg() {
+    var v = root.getAttribute('data-theme') || 'system';
+    document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o.getAttribute('data-theme-set') === v)); });
+  }
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-theme-set');
+      if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+      syncSeg();
+    });
+  });
+  syncSeg();
+
+  var DIRS = [
+    { id: 'a', title: 'A · Lối đi', rec: true,
+      desc: 'Chữ N là một đường đi qua bốn nút, đúng cách Nexus quyết định quyền: đi từ người tới tài nguyên trên đồ thị, tới được thì được phép. Nút cuối mang màu cam đất của màu người số 1, nhắc rằng mỗi thay đổi có người làm. Nét dày 6/48 và nút tròn giữ được hình N ở 16px; ở cỡ nhỏ chỉ còn nét và nút đích.' },
+    { id: 'b', title: 'B · Giao điểm',
+      desc: 'Hai vòng tròn là phía người dùng và phía tài nguyên; phần giao màu accent là nơi quyền tồn tại, đúng nguyên tắc giao nhau của NGAC. Hình trừu tượng, hiện đại, nhưng không gợi chữ N và dễ trùng với nhiều thương hiệu tài chính, thanh toán.' },
+    { id: 'c', title: 'C · Tín hiệu',
+      desc: 'Chữ N hình học, thân phải dừng sớm để nhường chỗ cho một chấm: ai đó vừa làm gì, bản sắc "tín hiệu" của hệ thiết kế. Gần với icon chữ N hiện tại nhất nên chuyển đổi nhẹ nhàng, nhưng ý về đồ thị quyền không còn.' }
+  ];
+  var tpl = document.getElementById('tpl-dir');
+  var main = document.querySelector('main');
+  DIRS.forEach(function (d) {
+    var n = tpl.content.cloneNode(true);
+    var sec = n.querySelector('section');
+    sec.id = 'dir-' + d.id;
+    sec.setAttribute('aria-labelledby', 'h-' + d.id);
+    var h = sec.querySelector('h2'); h.id = 'h-' + d.id;
+    sec.querySelector('[data-f="title"]').textContent = d.title;
+    var rec = sec.querySelector('[data-f="rec"]');
+    if (d.rec) { rec.className = 'rec'; rec.textContent = 'Đề xuất'; } else rec.remove();
+    sec.querySelector('[data-f="desc"]').textContent = d.desc;
+    sec.querySelectorAll('use[data-mk]').forEach(function (u) { u.setAttribute('href', '#mk-' + d.id); });
+    sec.querySelectorAll('use[data-mk-s]').forEach(function (u) { u.setAttribute('href', '#mk-' + d.id + '-s'); });
+    sec.querySelectorAll('svg[data-aria]').forEach(function (s) { s.setAttribute('aria-label', 'Icon Nexus ' + s.getAttribute('data-aria') + ' px, hướng ' + d.title); });
+    var extra = sec.querySelector('[data-f="extra"]');
+    if (d.id === 'a') extra.replaceWith(document.getElementById('tpl-construct').content.cloneNode(true));
+    else extra.remove();
+    main.appendChild(n);
+  });
+  main.appendChild(document.getElementById('tpl-compare').content.cloneNode(true));
+});
+</script>
+
+<template id="tpl-construct">
+  <div class="grid2">
+    <div class="panel">
+      <span class="label">Dựng hình hướng A</span>
+      <svg class="construct ctx-page" viewBox="0 0 48 48" role="img" aria-label="Lưới dựng hình của dấu hiệu Lối đi">
+        <g class="g"><path d="M0 4H48M0 8H48M0 12H48M0 16H48M0 20H48M0 24H48M0 28H48M0 32H48M0 36H48M0 40H48M0 44H48M4 0V48M8 0V48M12 0V48M16 0V48M20 0V48M24 0V48M28 0V48M32 0V48M36 0V48M40 0V48M44 0V48"/></g>
+        <circle class="d" cx="24" cy="24" r="19.2"/>
+        <use href="#mk-a" width="48" height="48"/>
+        <text x="1" y="47">lưới 48 · nét 6 · nút r5 · nút đích r5.5</text>
+      </svg>
+    </div>
+    <div class="panel">
+      <span class="label">Quy tắc dùng</span>
+      <ol class="notes">
+        <li><b>Hai màu chỉ trên nền trung tính</b>: nét accent, nút đích cam đất (<code>--color-person-1</code>). Trên nền accent: một màu <code>--color-on-accent</code>.</li>
+        <li><b>Cỡ ≤ 24px dùng bản nhỏ</b> (<code>mk-a-s</code>): nét 8, bỏ ba nút đầu, giữ nút đích, để favicon 16 không thành vệt mờ.</li>
+        <li><b>Khoảng trống quanh dấu</b> tối thiểu bằng bán kính một nút (5/48 cạnh). Icon app: dấu nằm trong ô 320 giữa ô 512, nằm gọn trong vòng an toàn maskable.</li>
+        <li><b>Chữ "Nexus"</b>: Bricolage Grotesque 700, tracking −0.01em, cao chữ hoa bằng ~62% cạnh dấu. Bản giao cho dev sẽ chuyển chữ thành path để không phụ thuộc font.</li>
+        <li>Dấu là đường đi một nét, nên vẽ ra được như animation: các nút hiện, nét nối lần lượt (xem <code>auth-motion.html</code>).</li>
+      </ol>
+    </div>
+  </div>
+</template>
+
+<template id="tpl-compare">
+<section class="dir" id="compare" aria-labelledby="h-cmp">
+  <div class="dir-head"><h2 id="h-cmp">So sánh</h2><p>Cả ba trên cùng một thanh tab ở 16px, rồi bảng tiêu chí.</p></div>
+  <div class="tabbar l" style="flex-wrap:wrap">
+    <span class="tab on"><svg class="ctx-la" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="96" fill="var(--L-accent)"/><use href="#mk-a-s" x="72" y="72" width="368" height="368"/></svg><span>A · Lối đi</span></span>
+    <span class="tab"><svg class="ctx-la" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="96" fill="var(--L-accent)"/><use href="#mk-b-s" x="72" y="72" width="368" height="368"/></svg><span>B · Giao điểm</span></span>
+    <span class="tab"><svg class="ctx-la" viewBox="0 0 512 512" aria-hidden="true"><rect width="512" height="512" rx="96" fill="var(--L-accent)"/><use href="#mk-c-s" x="72" y="72" width="368" height="368"/></svg><span>C · Tín hiệu</span></span>
+  </div>
+  <div class="tblwrap">
+    <table>
+      <thead><tr><th scope="col">Tiêu chí</th><th scope="col">A · Lối đi</th><th scope="col">B · Giao điểm</th><th scope="col">C · Tín hiệu</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Đọc ở 16px</th><td>Rõ, vẫn là chữ N</td><td>Rõ, thành hai vòng</td><td>Rõ nhất</td></tr>
+        <tr><th scope="row">Nói được Nexus làm gì</th><td>Có: đường đi trên đồ thị quyền</td><td>Có: nguyên tắc giao nhau</td><td>Một phần: người vừa làm gì</td></tr>
+        <tr><th scope="row">Gắn với hệ thiết kế "Tín hiệu"</th><td>Nút đích màu người</td><td>Chỉ dùng accent</td><td>Chấm màu người</td></tr>
+        <tr><th scope="row">Dễ trùng thương hiệu khác</th><td>Thấp</td><td>Cao (Mastercard, nhiều ví)</td><td>Trung bình</td></tr>
+        <tr><th scope="row">Làm animation</th><td>Tự nhiên: nút hiện, nét nối</td><td>Hai vòng trượt vào nhau</td><td>Chấm loé</td></tr>
+        <tr><th scope="row">Đổi từ icon chữ N hiện tại</th><td>Nhẹ</td><td>Lớn</td><td>Rất nhẹ</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+</template>
+</body>
+</html>
