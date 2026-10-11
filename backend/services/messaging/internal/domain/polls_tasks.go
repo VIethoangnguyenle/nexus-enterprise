@@ -3,6 +3,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -14,6 +15,22 @@ import (
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/store"
 )
+
+// announcementError turns the store's refusal of a reply whose parent was
+// deleted between the check and the write into the same answer a reply gets.
+func announcementError(err error) error {
+	if errors.Is(err, store.ErrParentGone) {
+		return fmt.Errorf("%w: the message replied to was deleted", ErrInvalidInput)
+	}
+	return err
+}
+
+// announcementProto is the stored announcement as the live stream and the
+// caller see it.
+func (s *Service) announcementProto(ctx context.Context, msg *store.Message) *pb.Message {
+	msg.SenderName = s.lookupUsername(ctx, msg.SenderID)
+	return messageToProto(msg)
+}
 
 // --- Polls ---
 
@@ -27,6 +44,9 @@ type CreatePollInput struct {
 	IsMulti     bool
 	IsAnonymous bool
 	EndsAt      *time.Time
+	// ParentMessageID, when set, makes the announcement a reply in that
+	// message's thread instead of a message of the main stream.
+	ParentMessageID string
 }
 
 // authorizePoll authorizes an operation on the channel that owns a poll.
@@ -74,19 +94,33 @@ func (s *Service) authorizeTask(ctx context.Context, taskID, userNodeID, operati
 
 // CreatePoll creates a poll with a linked system message.
 func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll, error) {
+	poll, _, err := s.CreatePollMessage(ctx, in)
+	return poll, err
+}
+
+// CreatePollMessage creates a poll and also returns the message that announces
+// it, so a caller can tell live sessions about it (a reply in a thread needs
+// the thread's summary pushed like any reply).
+func (s *Service) CreatePollMessage(ctx context.Context, in CreatePollInput) (*pb.Poll, *pb.Message, error) {
 	if _, err := s.authorizeChannel(ctx, in.ChannelID, in.UserNodeID, ngac.OpWrite); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if strings.TrimSpace(in.Question) == "" || len(in.Options) < 2 || len(in.Options) > maxPollOptions {
-		return nil, fmt.Errorf("%w: a poll asks a question with 2 to %d choices", ErrInvalidInput, maxPollOptions)
+		return nil, nil, fmt.Errorf("%w: a poll asks a question with 2 to %d choices", ErrInvalidInput, maxPollOptions)
 	}
 	for i, o := range in.Options {
 		if in.Options[i] = strings.TrimSpace(o); in.Options[i] == "" {
-			return nil, fmt.Errorf("%w: a choice is empty", ErrInvalidInput)
+			return nil, nil, fmt.Errorf("%w: a choice is empty", ErrInvalidInput)
 		}
 	}
 	if in.EndsAt != nil && !in.EndsAt.After(time.Now()) {
-		return nil, fmt.Errorf("%w: a poll ends in the future", ErrInvalidInput)
+		return nil, nil, fmt.Errorf("%w: a poll ends in the future", ErrInvalidInput)
+	}
+
+	if in.ParentMessageID != "" {
+		if err := s.checkReplyParent(ctx, in.ParentMessageID, in.ChannelID); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	pollID := uuid.New().String()
@@ -100,6 +134,7 @@ func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll,
 		Content:          fmt.Sprintf("📊 Poll: %s", in.Question),
 		ContentFormat:    "plain",
 		MessageType:      "system",
+		ParentMessageID:  in.ParentMessageID,
 		LinkedEntityType: "poll",
 		LinkedEntityID:   pollID,
 		CreatedAt:        time.Now(),
@@ -121,10 +156,14 @@ func (s *Service) CreatePoll(ctx context.Context, in CreatePollInput) (*pb.Poll,
 	}
 	// The announcement, the poll and its options stand or fall together.
 	if err := s.store.InsertPollWithMessage(ctx, msg, poll, options); err != nil {
-		return nil, err
+		return nil, nil, announcementError(err)
 	}
 
-	return s.GetPoll(ctx, pollID, in.UserID, in.UserNodeID)
+	out, err := s.GetPoll(ctx, pollID, in.UserID, in.UserNodeID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, s.announcementProto(ctx, msg), nil
 }
 
 // VotePoll records a user's vote on a poll option.
@@ -206,26 +245,41 @@ type CreateTaskInput struct {
 	Title      string
 	AssigneeID string
 	DueDate    string // "YYYY-MM-DD"
+	// ParentMessageID, when set, makes the announcement a reply in that
+	// message's thread instead of a message of the main stream.
+	ParentMessageID string
 }
 
 // CreateTask creates a task with a linked system message.
 func (s *Service) CreateTask(ctx context.Context, in CreateTaskInput) (*pb.ChatTask, error) {
+	task, _, err := s.CreateTaskMessage(ctx, in)
+	return task, err
+}
+
+// CreateTaskMessage creates a task and also returns the message that announces
+// it (see CreatePollMessage).
+func (s *Service) CreateTaskMessage(ctx context.Context, in CreateTaskInput) (*pb.ChatTask, *pb.Message, error) {
 	if in.Title == "" {
-		return nil, ErrInvalidInput
+		return nil, nil, ErrInvalidInput
 	}
 	ch, err := s.authorizeChannel(ctx, in.ChannelID, in.UserNodeID, ngac.OpWrite)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if in.ParentMessageID != "" {
+		if err := s.checkReplyParent(ctx, in.ParentMessageID, in.ChannelID); err != nil {
+			return nil, nil, err
+		}
 	}
 	// The assignee must read the channel: work handed to someone who cannot
 	// see the conversation is work nobody can do.
 	if in.AssigneeID != "" {
 		node, err := s.store.UserNode(ctx, in.AssigneeID)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if node == "" || s.checkAccess(ctx, node, ch.NGACOaID, ngac.OpRead) != nil {
-			return nil, fmt.Errorf("%w: the assignee is not a member of this conversation", ErrInvalidInput)
+			return nil, nil, fmt.Errorf("%w: the assignee is not a member of this conversation", ErrInvalidInput)
 		}
 	}
 
@@ -239,6 +293,7 @@ func (s *Service) CreateTask(ctx context.Context, in CreateTaskInput) (*pb.ChatT
 		Content:          fmt.Sprintf("📋 Task: %s", in.Title),
 		ContentFormat:    "plain",
 		MessageType:      "system",
+		ParentMessageID:  in.ParentMessageID,
 		LinkedEntityType: "task",
 		LinkedEntityID:   taskID,
 		CreatedAt:        time.Now(),
@@ -265,10 +320,14 @@ func (s *Service) CreateTask(ctx context.Context, in CreateTaskInput) (*pb.ChatT
 	}
 	// The announcement and the task stand or fall together.
 	if err := s.store.InsertTaskWithMessage(ctx, msg, task); err != nil {
-		return nil, err
+		return nil, nil, announcementError(err)
 	}
 
-	return s.getTaskProto(ctx, taskID)
+	out, err := s.getTaskProto(ctx, taskID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return out, s.announcementProto(ctx, msg), nil
 }
 
 // UpdateTaskInput holds parameters for updating a task.

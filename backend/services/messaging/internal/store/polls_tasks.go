@@ -316,11 +316,15 @@ func (s *Store) ListTasksByChannel(ctx context.Context, channelID, status string
 }
 
 // InsertPollWithMessage stores a poll, its options and the system message that
-// announces it in one transaction: an announcement with no poll behind it is a
+// announces it in one transaction (a reply in its thread when msg has a parent,
+// counted like any reply): an announcement with no poll behind it is a
 // message nobody can answer.
 func (s *Store) InsertPollWithMessage(ctx context.Context, msg *Message, p *Poll, options []PollOptionInput) error {
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if err := insertMessage(ctx, tx, msg); err != nil {
+			return fmt.Errorf("create poll message: %w", err)
+		}
+		if err := recordReply(ctx, tx, msg); err != nil {
 			return fmt.Errorf("create poll message: %w", err)
 		}
 		if err := insertPoll(ctx, tx, p); err != nil {
@@ -346,6 +350,9 @@ type PollOptionInput struct {
 func (s *Store) InsertTaskWithMessage(ctx context.Context, msg *Message, t *ChatTask) error {
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if err := insertMessage(ctx, tx, msg); err != nil {
+			return fmt.Errorf("create task message: %w", err)
+		}
+		if err := recordReply(ctx, tx, msg); err != nil {
 			return fmt.Errorf("create task message: %w", err)
 		}
 		if err := insertTask(ctx, tx, t); err != nil {

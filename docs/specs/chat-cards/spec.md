@@ -38,6 +38,31 @@ done. Handing a task to another person SHALL be for its creator or someone with 
 assignee must read the channel (400) — otherwise a writer could make themselves the assignee and then mark the task
 done. Changing the title or due date SHALL require `write`.
 
+### Requirement: A poll or task may be created inside a thread
+`POST /api/channels/{ch}/polls` and `POST /api/channels/{ch}/tasks` SHALL accept an optional `parent_message_id`. When
+it is set, the message that announces the card SHALL be a reply in that message's thread, exactly like a message sent
+with a parent: the parent must be a root message of the same channel and not deleted (400 otherwise, one answer for a
+parent that is missing or in another channel), the reply is counted on the thread, its creator follows the thread and
+becomes a participant, and it goes out live as the thread's reply event, never as a main-stream message. When it is
+absent the card is a main-stream message, announced to the channel live exactly as a sent root message is. Creating the card still SHALL require `write` on the channel,
+judged before the parent is looked at (403), and a refused request SHALL store no message, poll or task.
+
+#### Scenario: Poll created from a thread
+- **WHEN** a member with write posts a poll with the `parent_message_id` of a root message of the channel
+- **THEN** the poll's message is a reply in that thread, the thread's reply count rises by one, and the live stream carries a thread reply event
+
+#### Scenario: Card created in the main stream
+- **WHEN** a member with write posts a poll or task without a `parent_message_id`
+- **THEN** the live stream carries the same new-message event a sent root message does, and no thread reply event
+
+#### Scenario: Parent is not a thread root of the channel
+- **WHEN** the `parent_message_id` names a message of another channel, a reply, a deleted message or no message
+- **THEN** the answer is 400 and no message, poll or task is stored
+
+#### Scenario: No access to the channel
+- **WHEN** a caller without write on the channel posts a card with a `parent_message_id`
+- **THEN** the answer is 403 and nothing is stored
+
 ### Requirement: Document and approval cards
 A message MAY link a document or an approval request (`linked_entity_type` `document` / `approval`). Its card's details
 are fetched from the owning service under the viewer's own authorization, so a viewer without access to the object sees

@@ -227,46 +227,52 @@ func (s *Store) InsertMessage(ctx context.Context, msg *Message) error {
 		if err := insertAttachments(ctx, tx, msg); err != nil {
 			return err
 		}
-		if msg.ParentMessageID == "" {
-			// The sender and anyone mentioned follow a new thread implicitly
-			// (see threadFollowingExpr), so a root message writes no follow row.
-			return nil
-		}
-		// A reply that was stored but not counted would show a thread with the
-		// wrong number of replies for ever, so these writes stand or fall together.
-		tag, err := tx.Exec(ctx,
-			`UPDATE messages SET reply_count = reply_count + 1,
-			        last_reply_at = GREATEST(COALESCE(last_reply_at, $2), $2)
-			 WHERE id = $1 AND deleted_at IS NULL`, msg.ParentMessageID, msg.CreatedAt)
-		if err != nil {
-			return fmt.Errorf("count reply: %w", err)
-		}
-		if tag.RowsAffected() == 0 {
-			// The parent was deleted between the check and this write.
-			return ErrParentGone
-		}
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO thread_participants (message_id, user_id) VALUES ($1, $2)
-			 ON CONFLICT DO NOTHING`, msg.ParentMessageID, msg.SenderID); err != nil {
-			return fmt.Errorf("track thread participant: %w", err)
-		}
-		// Replying follows the thread again even after an unfollow, and the
-		// replier has read everything up to their own reply.
-		if _, err := tx.Exec(ctx,
-			`INSERT INTO thread_follows (user_id, root_message_id, following, last_read_at, updated_at)
-			 VALUES ($1, $2, TRUE, $3, NOW())
-			 ON CONFLICT (user_id, root_message_id) DO UPDATE SET
-			   following = TRUE,
-			   last_read_at = GREATEST(thread_follows.last_read_at, EXCLUDED.last_read_at),
-			   updated_at = NOW()`, msg.SenderID, msg.ParentMessageID, msg.CreatedAt); err != nil {
-			return fmt.Errorf("follow thread: %w", err)
-		}
-		// A mention in a reply makes the mentioned user follow the thread.
-		if len(msg.Mentions) > 0 {
-			return followMentioned(ctx, tx, msg.Mentions, msg.ParentMessageID, msg.SenderID)
-		}
-		return nil
+		return recordReply(ctx, tx, msg)
 	})
+}
+
+// recordReply does the thread bookkeeping of a stored message that is a reply
+// (a root message needs none). A reply that was stored but not counted would
+// show a thread with the wrong number of replies for ever, so the caller runs
+// this in the transaction that stored the message.
+func recordReply(ctx context.Context, tx pgx.Tx, msg *Message) error {
+	if msg.ParentMessageID == "" {
+		// The sender and anyone mentioned follow a new thread implicitly
+		// (see threadFollowingExpr), so a root message writes no follow row.
+		return nil
+	}
+	tag, err := tx.Exec(ctx,
+		`UPDATE messages SET reply_count = reply_count + 1,
+		        last_reply_at = GREATEST(COALESCE(last_reply_at, $2), $2)
+		 WHERE id = $1 AND deleted_at IS NULL`, msg.ParentMessageID, msg.CreatedAt)
+	if err != nil {
+		return fmt.Errorf("count reply: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		// The parent was deleted between the check and this write.
+		return ErrParentGone
+	}
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO thread_participants (message_id, user_id) VALUES ($1, $2)
+		 ON CONFLICT DO NOTHING`, msg.ParentMessageID, msg.SenderID); err != nil {
+		return fmt.Errorf("track thread participant: %w", err)
+	}
+	// Replying follows the thread again even after an unfollow, and the
+	// replier has read everything up to their own reply.
+	if _, err := tx.Exec(ctx,
+		`INSERT INTO thread_follows (user_id, root_message_id, following, last_read_at, updated_at)
+		 VALUES ($1, $2, TRUE, $3, NOW())
+		 ON CONFLICT (user_id, root_message_id) DO UPDATE SET
+		   following = TRUE,
+		   last_read_at = GREATEST(thread_follows.last_read_at, EXCLUDED.last_read_at),
+		   updated_at = NOW()`, msg.SenderID, msg.ParentMessageID, msg.CreatedAt); err != nil {
+		return fmt.Errorf("follow thread: %w", err)
+	}
+	// A mention in a reply makes the mentioned user follow the thread.
+	if len(msg.Mentions) > 0 {
+		return followMentioned(ctx, tx, msg.Mentions, msg.ParentMessageID, msg.SenderID)
+	}
+	return nil
 }
 
 // ListMessages returns paginated messages for a channel, excluding thread replies.

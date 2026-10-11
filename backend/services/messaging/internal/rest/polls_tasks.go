@@ -22,6 +22,8 @@ func (h *Handler) CreatePoll(c echo.Context) error {
 		IsMulti     bool     `json:"is_multi"`
 		IsAnonymous bool     `json:"is_anonymous"`
 		EndsAt      string   `json:"ends_at"`
+		// ParentMessageID posts the poll as a reply in that message's thread.
+		ParentMessageID string `json:"parent_message_id"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
@@ -36,7 +38,7 @@ func (h *Handler) CreatePoll(c echo.Context) error {
 		endsAt = &t
 	}
 
-	poll, err := h.svc.CreatePoll(c.Request().Context(), domain.CreatePollInput{
+	poll, msg, err := h.svc.CreatePollMessage(c.Request().Context(), domain.CreatePollInput{
 		ChannelID:   c.Param("chId"),
 		UserID:      claims.UserID,
 		UserNodeID:  claims.NGACNodeID,
@@ -45,10 +47,13 @@ func (h *Handler) CreatePoll(c echo.Context) error {
 		IsMulti:     body.IsMulti,
 		IsAnonymous: body.IsAnonymous,
 		EndsAt:      endsAt,
+
+		ParentMessageID: body.ParentMessageID,
 	})
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
+	h.announceMessage(c.Request().Context(), claims.TenantID, msg)
 	return c.JSON(http.StatusCreated, poll)
 }
 
@@ -132,22 +137,27 @@ func (h *Handler) CreateTask(c echo.Context) error {
 		Title      string `json:"title"`
 		AssigneeID string `json:"assignee_id"`
 		DueDate    string `json:"due_date"`
+		// ParentMessageID posts the task as a reply in that message's thread.
+		ParentMessageID string `json:"parent_message_id"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 
-	task, err := h.svc.CreateTask(c.Request().Context(), domain.CreateTaskInput{
+	task, msg, err := h.svc.CreateTaskMessage(c.Request().Context(), domain.CreateTaskInput{
 		ChannelID:  c.Param("chId"),
 		UserID:     claims.UserID,
 		UserNodeID: claims.NGACNodeID,
 		Title:      body.Title,
 		AssigneeID: body.AssigneeID,
 		DueDate:    body.DueDate,
+
+		ParentMessageID: body.ParentMessageID,
 	})
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
+	h.announceMessage(c.Request().Context(), claims.TenantID, msg)
 	return c.JSON(http.StatusCreated, task)
 }
 
