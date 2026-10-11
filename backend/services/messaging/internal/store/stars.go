@@ -106,6 +106,42 @@ func (s *Store) StarredMessages(ctx context.Context, userID string, channelIDs [
 	return trimPage(msgs, limit)
 }
 
+// The mentions feed and its unread count share one definition of "a mention
+// of $1 in the channels $2" and of "unread", so the badge always equals the
+// unread items of the list.
+const (
+	mentionsFrom = `FROM messages m
+		 LEFT JOIN read_receipts rr ON rr.user_id = $1 AND rr.channel_id = m.channel_id
+		 LEFT JOIN messages root ON root.id = m.parent_message_id
+		 LEFT JOIN thread_follows tf ON tf.user_id = $1 AND tf.root_message_id = m.parent_message_id`
+
+	mentionsWhere = `m.channel_id = ANY($2::text[]) AND m.mentions @> ARRAY[$1]::text[]
+		   AND m.sender_id <> $1 AND m.deleted_at IS NULL`
+
+	// A main message is unread after the channel read position; a reply after
+	// its thread's (the root's creation when never read).
+	mentionUnreadExpr = `CASE WHEN m.parent_message_id IS NULL
+		             THEN m.created_at > COALESCE(rr.last_read_at, '-infinity'::timestamptz)
+		             ELSE m.created_at > COALESCE(tf.last_read_at, root.created_at, '-infinity'::timestamptz)
+		        END`
+)
+
+// CountUnreadMentions counts, in one query, the unread messages that mention
+// the user in the given channels: the unread items of MentionsOf.
+func (s *Store) CountUnreadMentions(ctx context.Context, userID string, channelIDs []string) (int, error) {
+	if len(channelIDs) == 0 {
+		return 0, nil
+	}
+	var n int
+	err := s.db.QueryRow(ctx,
+		`SELECT COUNT(*)::int `+mentionsFrom+`
+		 WHERE `+mentionsWhere+` AND `+mentionUnreadExpr, userID, channelIDs).Scan(&n)
+	if err != nil {
+		return 0, fmt.Errorf("unread mentions: %w", err)
+	}
+	return n, nil
+}
+
 // MentionsOf lists the messages by someone else that mention the user in the
 // given channels, newest first, leaving out deleted ones. Unread is set per
 // message: a main message is unread after the user's channel read position, a
@@ -117,18 +153,10 @@ func (s *Store) MentionsOf(ctx context.Context, userID string, channelIDs []stri
 		return nil, false, nil
 	}
 	rows, err := s.db.Query(ctx,
-		`SELECT `+messageCols+`,
-		        CASE WHEN m.parent_message_id IS NULL
-		             THEN m.created_at > COALESCE(rr.last_read_at, '-infinity'::timestamptz)
-		             ELSE m.created_at > COALESCE(tf.last_read_at, root.created_at, '-infinity'::timestamptz)
-		        END
-		 FROM messages m
+		`SELECT `+messageCols+`, `+mentionUnreadExpr+`
+		 `+mentionsFrom+`
 		 LEFT JOIN users u ON m.sender_id = u.id
-		 LEFT JOIN read_receipts rr ON rr.user_id = $1 AND rr.channel_id = m.channel_id
-		 LEFT JOIN messages root ON root.id = m.parent_message_id
-		 LEFT JOIN thread_follows tf ON tf.user_id = $1 AND tf.root_message_id = m.parent_message_id
-		 WHERE m.channel_id = ANY($2::text[]) AND m.mentions @> ARRAY[$1]::text[]
-		   AND m.sender_id <> $1 AND m.deleted_at IS NULL
+		 WHERE `+mentionsWhere+`
 		   AND ($3::timestamptz IS NULL OR m.created_at < $3
 		        OR ($5 <> '' AND m.created_at = $3 AND m.id < $5))
 		 ORDER BY m.created_at DESC, m.id DESC

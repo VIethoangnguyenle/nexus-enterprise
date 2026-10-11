@@ -112,6 +112,19 @@ func (s *Service) Mentions(ctx context.Context, userID, userNodeID, workspaceID,
 	return s.messageFeed(ctx, userID, userNodeID, workspaceID, before, beforeID, limit, s.store.MentionsOf)
 }
 
+// UnreadMentionCount is the number on the "mentioned" shortcut: the unread
+// messages of the Mentions feed, counted over the same conversations.
+func (s *Service) UnreadMentionCount(ctx context.Context, userID, userNodeID, workspaceID string) (int, error) {
+	if userID == "" || userNodeID == "" {
+		return 0, ErrInvalidInput
+	}
+	channelIDs, err := s.readableChannelIDs(ctx, workspaceID, userNodeID)
+	if err != nil {
+		return 0, err
+	}
+	return s.store.CountUnreadMentions(ctx, userID, channelIDs)
+}
+
 type feedQuery func(ctx context.Context, userID string, channelIDs []string, before *time.Time, beforeID string, limit int) ([]*store.Message, bool, error)
 
 func (s *Service) messageFeed(ctx context.Context, userID, userNodeID, workspaceID, before, beforeID string, limit int, query feedQuery) (*pb.MessageList, error) {

@@ -55,7 +55,20 @@ is included: a mention always counts. `before` is the `created_at` of the last m
 - **WHEN** the caller set a conversation's notification level to off and is mentioned there
 - **THEN** the mention is still listed
 
+### Requirement: Mentions badge
+`GET /api/messages/mentions/unread-count` SHALL answer `{"count": n}`: the number of unread messages of the mentions
+feed, counted in one query over exactly the feed's scope (the conversations the caller can read in the workspace they
+are signed in to, and their direct messages), with exactly the feed's `unread` rule — thread replies included, muted
+conversations included. A conversation the caller can no longer read contributes nothing.
+
+#### Scenario: A removed member's old mentions
+- **WHEN** a member who has unread mentions in a conversation loses `read` on it
+- **THEN** the count no longer includes them
+
+### Requirement: Stars leave sections alone
+Starring or unstarring a conversation SHALL NOT change its place in the caller's chat sections.
+
 ### Requirement: API
 `PUT|DELETE /api/channels/{id}/star`, `PUT|DELETE /api/messages/{id}/star` (204), `GET /api/messages/starred` and
-`GET /api/messages/mentions`, routed to messaging by the existing `/api/channels` and `/api/messages` rules of the dev
+`GET /api/messages/mentions`, `GET /api/messages/mentions/unread-count`, routed to messaging by the existing `/api/channels` and `/api/messages` rules of the dev
 proxy, Docker (Traefik) and production (nginx). The static `starred` and `mentions` paths are not read as a message id.

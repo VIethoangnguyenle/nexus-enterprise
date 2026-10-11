@@ -118,6 +118,13 @@ func TestMentionsRoute_FlagsUnread(t *testing.T) {
 	require.Len(t, msgs, 1)
 	assert.Equal(t, c.msgID+"-m", msgs[0].(map[string]any)["id"])
 	assert.Equal(t, true, msgs[0].(map[string]any)["unread"])
+
+	rec = call(c.echo(true), http.MethodGet, "/api/messages/mentions/unread-count", "")
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.EqualValues(t, 1, decode(t, rec)["count"])
+	rec = call(c.echo(false), http.MethodGet, "/api/messages/mentions/unread-count", "")
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.EqualValues(t, 0, decode(t, rec)["count"], "without read nothing counts")
 }
 
 // The production router: no session is 401, and the two feeds are reached
@@ -151,6 +158,7 @@ func TestStarRoutes_ProductionRouter(t *testing.T) {
 		{http.MethodDelete, "/api/messages/" + c.msgID + "/star"},
 		{http.MethodGet, "/api/messages/starred"},
 		{http.MethodGet, "/api/messages/mentions"},
+		{http.MethodGet, "/api/messages/mentions/unread-count"},
 	}
 	for _, r := range routes {
 		assert.Equal(t, http.StatusUnauthorized, send(r[0], r[1], false).Code, "%s %s without a session", r[0], r[1])
@@ -161,6 +169,9 @@ func TestStarRoutes_ProductionRouter(t *testing.T) {
 		require.Equal(t, http.StatusOK, rec.Code, p)
 		assert.Contains(t, rec.Header().Get(echo.HeaderContentType), "json")
 	}
-	rec := send(http.MethodGet, "/api/messages/starred", true)
+	rec := send(http.MethodGet, "/api/messages/mentions/unread-count", true)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.EqualValues(t, 0, decode(t, rec)["count"], "the count, not a lookup of a message called \"mentions\"")
+	rec = send(http.MethodGet, "/api/messages/starred", true)
 	assert.Contains(t, rec.Body.String(), c.msgID, "the feed, not a lookup of a message called \"starred\"")
 }

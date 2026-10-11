@@ -88,3 +88,17 @@ func (h *Handler) Mentions(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, list)
 }
+
+// UnreadMentionCount handles GET /api/messages/mentions/unread-count: how many
+// messages of the mentions feed the caller has not read.
+func (h *Handler) UnreadMentionCount(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	n, err := h.svc.UnreadMentionCount(c.Request().Context(), claims.UserID, claims.NGACNodeID, claims.TenantID)
+	if err != nil {
+		return httputil.MapDomainError(err)
+	}
+	return c.JSON(http.StatusOK, map[string]int{"count": n})
+}

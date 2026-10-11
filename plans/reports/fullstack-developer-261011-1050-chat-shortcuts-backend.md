@@ -10,6 +10,11 @@ Status: DONE. Nothing committed, git index untouched.
 - `starred` added on each `GET /api/channels/unread` item and on `GET /api/channels/{id}`. Not on other message payloads.
 - limit default and cap 50; bad `limit`/`before` -> 400.
 
+## Follow-up: mentions badge
+- `GET /api/messages/mentions/unread-count` -> `{"count": n}`. One query (`Store.CountUnreadMentions`) sharing the FROM/WHERE/unread expression constants with `MentionsOf`, so badge == unread items of the feed (replies and muted included, same read scope).
+- Tests: domain count vs feed across read positions, muted, other workspace, removed member, invalid input; rest count + deny (0) + production-router order/401; starred conversation keeps its `chat_section_items` row (star and unstar).
+- Spec updated (Mentions badge, Stars leave sections alone). Gates: go vet/test messaging, check-layering, check-ngac. Dev messaging restarted.
+
 ## Frontend must know
 - Proto changes (additive): `Message.starred=24, starred_at=25, unread=26`; `Channel.starred=12`; `ChannelUnread.starred=7`. `make proto` run; `npm run proto:gen` run, no diff (frontend only consumes ws.proto).
 - JSON omits false/empty fields: `unread`, `starred`, `has_more` are absent when false.

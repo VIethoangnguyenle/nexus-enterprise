@@ -312,3 +312,87 @@ func TestMentions_PagesWithATieBreak(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, capped.Messages, 3)
 }
+
+func TestUnreadMentionCount_MatchesTheFeedsUnreadItems(t *testing.T) {
+	k, other := mentionTalk(t)
+	ctx := context.Background()
+	svc := k.f.svc
+	me := k.f.userID
+	otherNode := "ngac-other-sender"
+	k.f.read.allow[grant{otherNode, k.oaID, ngac.OpWrite}] = true
+	count := func() int {
+		n, err := svc.UnreadMentionCount(ctx, me, userNode, k.f.wsID)
+		require.NoError(t, err)
+		return n
+	}
+	feedUnread := func() int {
+		list, err := svc.Mentions(ctx, me, userNode, k.f.wsID, "", "", 50)
+		require.NoError(t, err)
+		n := 0
+		for _, m := range list.Messages {
+			if m.Unread {
+				n++
+			}
+		}
+		return n
+	}
+	assert.Zero(t, count())
+
+	root := k.send(t, other, otherNode, "thread root", "")
+	k.send(t, other, otherNode, "old @me", "", me)
+	k.send(t, other, otherNode, "old reply @me", root.Id, me)
+	k.send(t, me, userNode, "myself @me", "", me) // own: not counted
+	k.send(t, other, otherNode, "no mention", "") // not counted
+	assert.Equal(t, 2, count(), "a main message and a thread reply")
+	assert.Equal(t, feedUnread(), count())
+
+	time.Sleep(10 * time.Millisecond)
+	require.NoError(t, svc.MarkChannelRead(ctx, me, userNode, k.chID, ""))
+	assert.Equal(t, 1, count(), "the channel position clears the main message; the reply waits for its thread")
+	_, err := svc.MarkThreadRead(ctx, root.Id, me, userNode)
+	require.NoError(t, err)
+	assert.Zero(t, count())
+	time.Sleep(10 * time.Millisecond)
+	k.send(t, other, otherNode, "new @me", "", me)
+	k.send(t, other, otherNode, "new reply @me", root.Id, me)
+	assert.Equal(t, 2, count())
+	assert.Equal(t, feedUnread(), count())
+
+	// A muted conversation still counts.
+	require.NoError(t, svc.SetNotificationLevel(ctx, k.chID, me, userNode, domain.NotifyOff))
+	assert.Equal(t, 2, count())
+
+	// Scope: another workspace, or a conversation the caller no longer reads, counts nothing.
+	n, err := svc.UnreadMentionCount(ctx, me, userNode, "some-other-workspace")
+	require.NoError(t, err)
+	assert.Zero(t, n)
+	delete(k.f.read.allow, grant{userNode, k.oaID, ngac.OpRead})
+	assert.Zero(t, count(), "a removed member's old mentions do not count")
+
+	_, err = svc.UnreadMentionCount(ctx, "", userNode, k.f.wsID)
+	require.ErrorIs(t, err, domain.ErrInvalidInput)
+}
+
+// Starring a conversation changes nothing about where it sits in the caller's sections.
+func TestStarConversation_KeepsSectionMembership(t *testing.T) {
+	w := newSectionWorld(t)
+	ctx := context.Background()
+	svc := w.f.svc
+	sec, err := svc.CreateSection(ctx, w.f.wsID, w.me, domain.NewSection{Name: "Giữ chỗ"})
+	require.NoError(t, err)
+	require.NoError(t, svc.PlaceChannel(ctx, w.f.wsID, w.me, sec.ID, w.chA))
+	t.Cleanup(func() { w.f.pool.Exec(ctx, `DELETE FROM starred_conversations WHERE channel_id = $1`, w.chA) })
+
+	items := func() int {
+		var n int
+		require.NoError(t, w.f.pool.QueryRow(ctx,
+			`SELECT count(*) FROM chat_section_items WHERE section_id = $1 AND channel_id = $2 AND user_id = $3`,
+			sec.ID, w.chA, w.f.userID).Scan(&n))
+		return n
+	}
+	require.Equal(t, 1, items())
+	require.NoError(t, svc.StarConversation(ctx, w.chA, w.f.userID, userNode))
+	assert.Equal(t, 1, items(), "starring leaves the section row alone")
+	require.NoError(t, svc.UnstarConversation(ctx, w.chA, w.f.userID, userNode))
+	assert.Equal(t, 1, items(), "so does unstarring")
+}

@@ -66,6 +66,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.DELETE("/messages/:msgId/star", h.UnstarMessage)
 	api.GET("/messages/starred", h.StarredMessages)
 	api.GET("/messages/mentions", h.Mentions)
+	api.GET("/messages/mentions/unread-count", h.UnreadMentionCount)
 
 	// The caller's push preferences (the rest of /api/me is the auth service's)
 	api.GET("/me/push-preferences", h.GetPushPreferences)

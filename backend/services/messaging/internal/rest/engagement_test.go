@@ -136,6 +136,7 @@ func (c *chat) echo(allow bool) *echo.Echo {
 	e.DELETE("/api/messages/:msgId/star", h.UnstarMessage, as)
 	e.GET("/api/messages/starred", h.StarredMessages, as)
 	e.GET("/api/messages/mentions", h.Mentions, as)
+	e.GET("/api/messages/mentions/unread-count", h.UnreadMentionCount, as)
 	return e
 }
 

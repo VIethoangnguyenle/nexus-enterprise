@@ -76,6 +76,7 @@ func TestRegisterRoutes_MountsTheThreadRoutes(t *testing.T) {
 		"DELETE /api/messages/:msgId/star",
 		"GET /api/messages/starred",
 		"GET /api/messages/mentions",
+		"GET /api/messages/mentions/unread-count",
 		"GET /api/me/push-preferences",
 		"PUT /api/me/push-preferences",
 	} {
