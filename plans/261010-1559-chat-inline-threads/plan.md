@@ -41,10 +41,10 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 | 04 | [UI luồng in-line, panel Thread](phase-04-inline-stream-ui.md) | 1 | P1 | 2-3d | 01, 02, 03 | completed |
 | 05 | [Kiểm chứng đợt 1](phase-05-wave1-verification.md) | 1 | P1 | 0.5d | 04 | pending |
 | 06 | [Đính kèm như Google Chat](phase-06-attachments.md) | 2 | P1 | 2-2.5d | 05 | in-progress (backend xong) |
-| 07 | [Soạn tin định dạng HTML](phase-07-rich-text-messages.md) | 2 | P1 | 1.5d | 05 | in-progress (backend xong) |
-| 08 | [Vòng đời tin nhắn: sửa, xoá, trích dẫn, đánh dấu chưa đọc](phase-08-message-lifecycle.md) | 2 | P1 | 2d | 05, 07 | in-progress (backend xong) |
+| 07 | [Soạn tin định dạng HTML](phase-07-rich-text-messages.md) | 2 | P1 | 1.5d | 05 | in-progress (backend + UI xong, chờ kiểm trình duyệt đủ) |
+| 08 | [Vòng đời tin nhắn: sửa, xoá, trích dẫn, đánh dấu chưa đọc](phase-08-message-lifecycle.md) | 2 | P1 | 2d | 05, 07 | in-progress (backend + UI xong; thiếu "Trích dẫn khi trả lời" ở ô soạn, chờ thiết kế) |
 | 09 | [Mức thông báo, Trang chủ theo thread](phase-09-notification-levels.md) | 4 | P3 | 1.5d | 08 | pending |
-| 10 | [Mục trong cột điều hướng](phase-10-navigator-sections.md) | 2 | P2 | 1.5d | 01, 05 | in-progress (backend xong) |
+| 10 | [Mục trong cột điều hướng](phase-10-navigator-sections.md) | 2 | P2 | 1.5d | 01, 05 | in-progress (backend + UI xong, chờ kiểm trình duyệt) |
 | 11 | [Tạo trong chat: bình chọn, công việc, tài liệu, phê duyệt](phase-11-in-chat-create.md) | 2 | P2 | 2.5-3d | 01, 05 | in-progress (backend xong) |
 
 ```text

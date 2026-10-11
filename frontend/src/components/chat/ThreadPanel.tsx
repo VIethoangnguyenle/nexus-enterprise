@@ -3,6 +3,9 @@ import { useQueryClient } from '@tanstack/react-query'
 import { AnimatePresence, motion } from 'motion/react'
 import { Bell, BellRing, CircleAlert } from 'lucide-react'
 import { useThread, useSendReply } from '../../hooks/useMessages'
+import { useMessageActions } from '../../hooks/useMessageActions'
+import { usePhone } from '../../hooks/usePhone'
+import { lastEditableOf, toEditorHtml } from '../../lib/message-model'
 import { useFollowThread, useMarkThreadRead } from '../../hooks/useThreads'
 import { useArrivals } from '../../hooks/useArrivals'
 import { useMotionPresets } from '../../lib/motion'
@@ -16,6 +19,10 @@ import { ChatEditor } from './ChatEditor'
 import { SidePanel } from '../spaces/SidePanel'
 import { MessageBlock } from '../spaces/MessageBlock'
 import { EmptyState } from '../spaces/EmptyState'
+import { MessageMenu, type MessageMenuTarget } from '../spaces/MessageMenu'
+import { MessageActionSheet } from '../spaces/MessageActionSheet'
+import { MessageEditBox } from '../spaces/MessageEditBox'
+import { DeleteMessageDialog } from '../spaces/DeleteMessageDialog'
 import { keys } from '../../hooks/keys'
 
 type Msg = Message & { _optimistic?: boolean }
@@ -48,6 +55,11 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onBac
   const qc = useQueryClient()
   const { data, isLoading, error, refetch } = useThread(messageId)
   const send = useSendReply(channelId, messageId)
+  const phone = usePhone()
+  const lifecycle = useMessageActions(channelId, me)
+  const [menu, setMenu] = useState<MessageMenuTarget | null>(null)
+  const [sheetFor, setSheetFor] = useState<Message | null>(null)
+  const anchorRef = useRef<HTMLElement | null>(null)
   const follow = useFollowThread(channelId)
   const markRead = useMarkThreadRead(channelId)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -160,9 +172,18 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onBac
             placeholder="Trả lời trong thread"
             hint="Enter để gửi"
             isPending={send.isPending}
-            onSend={(html) =>
-              send.mutate(html, { onError: (err) => toast.error(explain(err, 'gửi câu trả lời')) })
+            onSend={(html, mentions) =>
+              send.mutate({ content: html, mentions }, { onError: (err) => toast.error(explain(err, 'gửi câu trả lời')) })
             }
+            edit={phone && lifecycle.editing ? {
+              initialHtml: lifecycle.editing.draft ?? toEditorHtml(lifecycle.editing.message),
+              onSave: lifecycle.saveEdit,
+              onCancel: lifecycle.cancelEdit,
+            } : undefined}
+            onEditLast={() => {
+              const last = lastEditableOf(replies, me)
+              if (last) lifecycle.startEdit(last)
+            }}
           />
         </>
       }
@@ -230,6 +251,20 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onBac
                       halo={byOther}
                       tag={byOther ? 'vừa trả lời' : undefined}
                       className="px-2"
+                      pressed={sheetFor?.id === r.id}
+                      onEdit={lifecycle.abilities(r).edit ? (m) => lifecycle.startEdit(m) : undefined}
+                      onMore={(m, anchor) => {
+                        anchorRef.current = anchor
+                        setMenu({ message: m, up: false })
+                      }}
+                      onOpenSheet={(m) => setSheetFor(m)}
+                      editor={lifecycle.editing?.message.id === r.id && !phone ? (
+                        <MessageEditBox
+                          initialHtml={lifecycle.editing.draft ?? toEditorHtml(r)}
+                          onSave={lifecycle.saveEdit}
+                          onCancel={lifecycle.cancelEdit}
+                        />
+                      ) : undefined}
                     />
                   </div>
                 </motion.div>
@@ -239,6 +274,29 @@ export function ThreadPanel({ channelId, messageId, spaceName, people, me, onBac
           <div ref={bottomRef} />
         </div>
       )}
+      <MessageMenu target={menu} anchorRef={anchorRef} onClose={() => setMenu(null)} lifecycle={lifecycle} />
+      <AnimatePresence>
+        {sheetFor && (
+          <MessageActionSheet
+            key={sheetFor.id}
+            message={sheetFor}
+            people={people}
+            me={me}
+            onEdit={lifecycle.abilities(sheetFor).edit ? () => lifecycle.startEdit(sheetFor) : undefined}
+            onMarkUnread={lifecycle.abilities(sheetFor).markUnread ? () => lifecycle.markUnread(sheetFor) : undefined}
+            onDelete={lifecycle.abilities(sheetFor).remove ? () => lifecycle.askDelete(sheetFor) : undefined}
+            onClose={() => setSheetFor(null)}
+          />
+        )}
+      </AnimatePresence>
+      <DeleteMessageDialog
+        message={lifecycle.deleting}
+        me={me}
+        people={people}
+        busy={lifecycle.deleteBusy}
+        onConfirm={lifecycle.confirmDelete}
+        onCancel={lifecycle.cancelDelete}
+      />
     </SidePanel>
   )
 }

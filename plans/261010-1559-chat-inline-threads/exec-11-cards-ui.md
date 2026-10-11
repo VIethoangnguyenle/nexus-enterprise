@@ -65,3 +65,5 @@ do not redesign): `design/mockups/spaces.html` section `#cards` (`#poll-demo`, `
 ## Gates, rules, report
 Same as `exec-06-attachments-ui.md`: vitest (only the known AssetsScreen failure), lint, typecheck:diff, build;
 no commits, no git index; report to `plans/reports/agy-<date>-chat-11-cards-ui.md`.
+PROGRESS LOG (mandatory): after EVERY step append one line to `plans/reports/agy-progress-chat-11.log`
+(`<time> | step | files | result`); when resuming, read it first and skip what is done.

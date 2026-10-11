@@ -6,6 +6,9 @@ import { ArrowLeft, Info, MessagesSquare, Search, UserPlus, CircleAlert, Lock } 
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useConversations } from '../../hooks/useConversations'
 import { usePeople } from '../../hooks/usePeople'
+import { usePhone } from '../../hooks/usePhone'
+import { useMessageActions } from '../../hooks/useMessageActions'
+import { lastEditableOf, toEditorHtml } from '../../lib/message-model'
 import { useMarkRead, useChannelMembers, useUnreadCounts } from '../../hooks/useMessaging'
 import { useFollowThread, useLoadOlderMessages, useThreadsList } from '../../hooks/useThreads'
 import { useMessages, useSendMessage, useTogglePin, useToggleReaction } from '../../hooks/useMessages'
@@ -76,6 +79,8 @@ export function SpaceView({ channelId }: { channelId: string }) {
   }, [listed, single.data, me?.username, people])
 
   const messagesQ = useMessages(channelId)
+  const phone = usePhone()
+  const lifecycle = useMessageActions(channelId, me?.id)
   const send = useSendMessage(channelId)
   const toggleReaction = useToggleReaction(channelId)
   const togglePin = useTogglePin(channelId)
@@ -137,9 +142,9 @@ export function SpaceView({ channelId }: { channelId: string }) {
   }, [panel])
 
   const handleSend = useCallback(
-    (content: string) => {
+    (content: string, mentions: string[]) => {
       if (!content.trim()) return
-      send.mutate({ content }, { onError: (err) => toast.error(explain(err, 'gửi tin nhắn')) })
+      send.mutate({ content, mentions }, { onError: (err) => toast.error(explain(err, 'gửi tin nhắn')) })
     },
     [send],
   )
@@ -338,6 +343,7 @@ export function SpaceView({ channelId }: { channelId: string }) {
                     )
                   }
                   onAtEndChange={setAtEnd}
+                  lifecycle={lifecycle}
                 />
               )}
 
@@ -367,6 +373,16 @@ export function SpaceView({ channelId }: { channelId: string }) {
                 onTyping={() => sendTyping(channelId)}
                 onFileUpload={handleFileUpload}
                 isPending={send.isPending}
+                // On a phone a message is edited in the composer; on a wide screen, where it stands.
+                edit={phone && lifecycle.editing ? {
+                  initialHtml: lifecycle.editing.draft ?? toEditorHtml(lifecycle.editing.message),
+                  onSave: lifecycle.saveEdit,
+                  onCancel: lifecycle.cancelEdit,
+                } : undefined}
+                onEditLast={() => {
+                  const last = lastEditableOf(messages, me?.id)
+                  if (last) lifecycle.startEdit(last)
+                }}
               />
               </div>
             </>

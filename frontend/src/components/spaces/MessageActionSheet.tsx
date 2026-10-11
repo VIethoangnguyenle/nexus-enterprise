@@ -1,26 +1,14 @@
 import { useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { motion, useDragControls, type PanInfo } from 'motion/react'
-import { Bell, BellOff, Copy, MessageSquareReply, Pin, PinOff, Plus } from 'lucide-react'
+import { Bell, BellOff, Copy, MailOpen, MessageSquareReply, Pen, Pin, PinOff, Plus, Trash2 } from 'lucide-react'
 import type { Message } from '../../api/messaging'
 import { useModalFocus } from '../../hooks/useModalFocus'
 import { useMotionPresets } from '../../lib/motion'
 import { previewText } from '../../lib/chat-cache'
 import { displayName, type PeopleDirectory } from '../../lib/people'
-import { Pressable, toast } from '../primitives'
-
-/**
- * Copies a message as plain text, line breaks kept: text selection is off on
- * touch screens (the long press opens this sheet), so this is how a phone copies.
- */
-function copyText(content: string) {
-  const doc = new DOMParser().parseFromString(content.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li)>/gi, '$&\n'), 'text/html')
-  const text = (doc.body.textContent ?? '').replace(/\n{3,}/g, '\n\n').trim()
-  navigator.clipboard?.writeText(text).then(
-    () => toast('Đã sao chép'),
-    () => toast('Không sao chép được'),
-  )
-}
+import { Pressable } from '../primitives'
+import { copyText } from './copy-message'
 
 /** The six quick reactions of the sheet; the sixth button opens the full picker. */
 export const QUICK_REACTIONS = ['👍', '❤️', '😂', '🙏', '✅'] as const
@@ -36,9 +24,17 @@ interface MessageActionSheetProps {
   onReply?: () => void
   /** Follow or unfollow the thread of this message. */
   onToggleFollow?: () => void
-  onPin: () => void
-  onReact: (emoji: string) => void
-  onMoreReactions: () => void
+  /** Pin or unpin; absent where pins are not offered (the thread panel). */
+  onPin?: () => void
+  /** Quick reactions; absent where reactions are not offered (the thread panel). */
+  onReact?: (emoji: string) => void
+  onMoreReactions?: () => void
+  /** Your own text message: open it for editing. */
+  onEdit?: () => void
+  /** Someone else's message: move the read position back to it. */
+  onMarkUnread?: () => void
+  /** Your own message, or any message when you manage the channel. */
+  onDelete?: () => void
   onClose: () => void
 }
 
@@ -49,7 +45,7 @@ interface MessageActionSheetProps {
  * rules are `useModalFocus`'s; dragging the handle down closes it.
  */
 export function MessageActionSheet({
-  message: m, people, me, onReply, onToggleFollow, onPin, onReact, onMoreReactions, onClose,
+  message: m, people, me, onReply, onToggleFollow, onPin, onReact, onMoreReactions, onEdit, onMarkUnread, onDelete, onClose,
 }: MessageActionSheetProps) {
   const motionPresets = useMotionPresets()
   const surfaceRef = useRef<HTMLDivElement>(null)
@@ -90,25 +86,29 @@ export function MessageActionSheet({
           <span aria-hidden="true" className="w-9 h-1 rounded-full bg-line" />
         </div>
         <div className="min-h-0 overflow-y-auto grid gap-1">
-          <div role="group" aria-label="Cảm xúc nhanh" className="flex justify-between px-2.5 pt-1 pb-2">
-            {QUICK_REACTIONS.map((emoji) => (
-              <Pressable
-                key={emoji}
-                aria-label={emoji}
-                onClick={done(() => onReact(emoji))}
-                className="grid place-items-center w-12 h-12 rounded-full bg-sunk text-xl hover:bg-hover"
-              >
-                {emoji}
-              </Pressable>
-            ))}
-            <Pressable
-              aria-label="Thêm cảm xúc"
-              onClick={done(onMoreReactions)}
-              className="grid place-items-center w-12 h-12 rounded-full bg-sunk text-ink-muted hover:bg-hover"
-            >
-              <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
-            </Pressable>
-          </div>
+          {onReact && (
+            <div role="group" aria-label="Cảm xúc nhanh" className="flex justify-between px-2.5 pt-1 pb-2">
+              {QUICK_REACTIONS.map((emoji) => (
+                <Pressable
+                  key={emoji}
+                  aria-label={emoji}
+                  onClick={done(() => onReact(emoji))}
+                  className="grid place-items-center w-12 h-12 rounded-full bg-sunk text-xl hover:bg-hover"
+                >
+                  {emoji}
+                </Pressable>
+              ))}
+              {onMoreReactions && (
+                <Pressable
+                  aria-label="Thêm cảm xúc"
+                  onClick={done(onMoreReactions)}
+                  className="grid place-items-center w-12 h-12 rounded-full bg-sunk text-ink-muted hover:bg-hover"
+                >
+                  <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
+                </Pressable>
+              )}
+            </div>
+          )}
 
           <div className="mx-3.5 mb-1.5 px-3 py-2.5 rounded-lg bg-sunk text-sm">
             <span className="block mb-0.5 text-xs font-semibold text-ink-muted">{author}</span>
@@ -131,12 +131,30 @@ export function MessageActionSheet({
           <SheetItem icon={<Copy size={18} strokeWidth={1.75} />} onClick={done(() => copyText(m.content))}>
             Sao chép
           </SheetItem>
-          <SheetItem
-            icon={m.is_pinned ? <PinOff size={18} strokeWidth={1.75} /> : <Pin size={18} strokeWidth={1.75} />}
-            onClick={done(onPin)}
-          >
-            {m.is_pinned ? 'Bỏ ghim' : 'Ghim'}
-          </SheetItem>
+          {onPin && (
+            <SheetItem
+              icon={m.is_pinned ? <PinOff size={18} strokeWidth={1.75} /> : <Pin size={18} strokeWidth={1.75} />}
+              onClick={done(onPin)}
+            >
+              {m.is_pinned ? 'Bỏ ghim' : 'Ghim'}
+            </SheetItem>
+          )}
+          {onEdit && (
+            <SheetItem icon={<Pen size={18} strokeWidth={1.75} />} onClick={done(onEdit)}>Sửa tin</SheetItem>
+          )}
+          {onMarkUnread && (
+            <SheetItem icon={<MailOpen size={18} strokeWidth={1.75} />} onClick={done(onMarkUnread)}>
+              Đánh dấu chưa đọc
+            </SheetItem>
+          )}
+          {onDelete && (
+            <>
+              <div role="separator" className="h-px mx-3.5 my-1 bg-line" />
+              <SheetItem icon={<Trash2 size={18} strokeWidth={1.75} />} tone="danger" onClick={done(onDelete)}>
+                Xoá tin
+              </SheetItem>
+            </>
+          )}
         </div>
       </motion.div>
     </div>,
@@ -144,14 +162,16 @@ export function MessageActionSheet({
   )
 }
 
-function SheetItem({ icon, onClick, children }: { icon: ReactNode; onClick: () => void; children: ReactNode }) {
+function SheetItem({
+  icon, onClick, children, tone = 'default',
+}: { icon: ReactNode; onClick: () => void; children: ReactNode; tone?: 'default' | 'danger' }) {
   return (
     <Pressable
       onClick={onClick}
-      className="flex items-center gap-3.5 w-full min-h-13 px-3.5 rounded-lg text-base font-medium text-ink
-        hover:bg-hover active:bg-hover transition-colors duration-quick"
+      className={`flex items-center gap-3.5 w-full min-h-13 px-3.5 rounded-lg text-base font-medium
+        hover:bg-hover active:bg-hover transition-colors duration-quick ${tone === 'danger' ? 'text-danger' : 'text-ink'}`}
     >
-      <span aria-hidden="true" className="text-ink-muted">{icon}</span>
+      <span aria-hidden="true" className={tone === 'danger' ? 'text-danger' : 'text-ink-muted'}>{icon}</span>
       {children}
     </Pressable>
   )

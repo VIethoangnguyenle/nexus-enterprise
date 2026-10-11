@@ -29,7 +29,7 @@ export function useThread(messageId: string) { return useQuery(threadQueryOption
 export function useSendMessage(channelId: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: (params: string | { content: string; linkedEntity?: { type: string; id: string } }) => {
+    mutationFn: (params: string | { content: string; mentions?: string[]; linkedEntity?: { type: string; id: string } }) => {
       if (typeof params === 'string') {
         return messagingApi.sendMessage(channelId, params)
       }
@@ -38,6 +38,7 @@ export function useSendMessage(channelId: string) {
         content_format: 'html',
         linked_entity_type: params.linkedEntity?.type || '',
         linked_entity_id: params.linkedEntity?.id || '',
+        ...(params.mentions?.length ? { mentions: params.mentions } : {}),
       }
       return messagingApi.sendMessage(channelId, input)
     },
@@ -109,9 +110,11 @@ type Optimistic = Message & { _optimistic?: boolean }
 export function useSendReply(channelId: string, parentId: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: (content: string) =>
-      messagingApi.sendMessage(channelId, { content, content_format: 'html', parent_message_id: parentId }),
-    onMutate: async (content) => {
+    mutationFn: ({ content, mentions }: { content: string; mentions?: string[] }) =>
+      messagingApi.sendMessage(channelId, {
+        content, content_format: 'html', parent_message_id: parentId, ...(mentions?.length ? { mentions } : {}),
+      }),
+    onMutate: async ({ content }) => {
       await queryClient.cancelQueries({ queryKey: keys.messaging.thread(parentId) })
       const prevThread = queryClient.getQueryData<Thread>(keys.messaging.thread(parentId))
       const prevList = queryClient.getQueryData<MessageList>(keys.messaging.messages(channelId))

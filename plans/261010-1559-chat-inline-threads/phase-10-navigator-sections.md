@@ -36,4 +36,5 @@ DESIGN.md "Chat: cột điều hướng và mục" + mockup `spaces.html` §1.
 
 ## Tiến độ
 - Backend xong 2026-10-11: migration 041, REST `/api/workspaces/:id/chat-sections` (+ vite regex, Traefik, nginx), Undo bằng tạo lại từ ảnh chụp trả về khi xoá; test deny (mục người khác, kênh không đọc được, kênh workspace khác, ngoài workspace). Spec `chat-sections`. **Còn:** UI cột điều hướng.
+- UI xong 2026-10-11 (vitest xanh, chưa kiểm trình duyệt 390/1440): cột điều hướng (`ChatNavigator`), tab Tin nhắn điện thoại (`PhoneChatList`, nhấn giữ -> sheet), menu mục, popover tên mục, kéo thả, Hoàn tác. Bỏ: Gắn sao, Tắt thông báo (chưa có backend). **Còn:** ảnh chụp trình duyệt.
 - Review: `plans/reports/code-reviewer-261011-0830-chat-wave2-backend.md` (C1, H1, H2, M1–M5, M8 đã sửa; M6 bằng dòng hệ thống; M7 — sửa tin không đổi danh sách nhắc tên — giữ nguyên, ghi vào câu hỏi mở).

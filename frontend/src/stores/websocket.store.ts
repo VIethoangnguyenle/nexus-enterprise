@@ -12,7 +12,8 @@ import type {
 } from '../generated/proto/messaging/ws'
 import type { Message } from '../api/messaging'
 import {
-  applyPin, applyReaction, applyTaskUpdate, convertChatMsgToMessage, previewText, timestampToIso,
+  applyMessageDeleted, applyMessageEdited, applyPin, applyReaction, applyTaskUpdate, convertChatMsgToMessage,
+  previewText, timestampToIso,
 } from '../lib/chat-cache'
 import { applyThreadReplySummary, applyThreadState } from '../lib/thread-cache'
 import {
@@ -483,6 +484,14 @@ function handleServerMessage(
 
     case 'threadState':
       applyThreadState(envelope.payload.threadState)
+      break
+
+    case 'messageEdited':
+      applyMessageEdited(envelope.payload.messageEdited)
+      break
+
+    case 'messageDeleted':
+      applyMessageDeleted(envelope.payload.messageDeleted)
       break
 
     case 'reactionEvent':

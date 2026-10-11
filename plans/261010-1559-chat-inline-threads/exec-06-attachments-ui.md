@@ -70,6 +70,9 @@ Backend is DONE (commit e3582b3): `POST /api/channels/{id}/messages` takes
 `npm run lint` · `npm run typecheck:diff` · `npm run build`.
 
 ## Rules for the executor
+- PROGRESS LOG (mandatory): after EVERY step (a test written, a test turned green, a file changed, a gate run)
+  append one line to `plans/reports/agy-progress-chat-06.log`: `<time> | step | files | result`. Work must be
+  resumable from this log if you stop (quota, error). Read it first when resuming and skip what is done.
 - Do NOT commit; do NOT run `git add`/`git reset`/anything touching the git index.
 - Touch only the files listed (+ their tests). Ask (report NEEDS_CONTEXT) instead of inventing UI not in
   the mockup.

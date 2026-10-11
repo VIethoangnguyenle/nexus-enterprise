@@ -10,6 +10,7 @@ import { ReactionBar } from '../chat/ReactionBar'
 import { HoverActionBar } from '../chat/HoverActionBar'
 import { FilePreviewCard } from '../patterns/FilePreviewCard'
 import { ImagePreviewCard, isImageFile } from '../patterns/ImagePreviewCard'
+import { QuoteBlock } from './QuoteBlock'
 
 export interface MessageActions {
   me: string | undefined
@@ -18,10 +19,14 @@ export interface MessageActions {
   onPin?: (m: Message) => void
   /** Open the message's thread; absent inside the thread panel itself. */
   onReply?: (id: string) => void
+  /** Your own text message: the pencil of the hover bar opens it for editing. */
+  onEdit?: (m: Message) => void
   /** The "Thêm" button was pressed; the menu hangs from `anchor`. */
   onMore?: (m: Message, anchor: HTMLElement) => void
   /** Long press on a touch screen, or the Menu key: open the action sheet. */
   onOpenSheet?: (m: Message) => void
+  /** The quote was pressed: go to the message it quotes. Absent when that message is not loaded. */
+  onOpenQuote?: (quotedId: string) => void
 }
 
 interface MessageBlockProps extends MessageActions {
@@ -41,6 +46,8 @@ interface MessageBlockProps extends MessageActions {
   className?: string
   /** Its action sheet is open: the bubble is ringed in the accent. */
   pressed?: boolean
+  /** The message is being edited where it stands: this replaces the bubble. */
+  editor?: ReactNode
   /** Under the bubble, on the message's side: the thread summary row. */
   children?: ReactNode
 }
@@ -49,20 +56,23 @@ interface MessageBlockProps extends MessageActions {
  * One message in the stream (DESIGN.md "Chat: luồng in-line"): others on the
  * left with avatar and name, yours on the right with neither, the text in a
  * bubble, and attachments, reactions and the thread summary outside it on the
- * same side. Shared by the main stream and the thread panel.
+ * same side. A quote sits inside the bubble, "đã sửa" ends it, and a deleted
+ * root that keeps its thread is a quiet "Tin nhắn đã bị xoá" frame without
+ * files or reactions. Shared by the main stream and the thread panel.
  */
 export function MessageBlock({
-  message: m, people, idBase, mine = false, grouped = false, pressed = false, halo, tag, tagStyle, className = '', children,
-  me, onReact, onToggleReaction, onPin, onReply, onMore, onOpenSheet,
+  message: m, people, idBase, mine = false, grouped = false, pressed = false, halo, tag, tagStyle, className = '', editor, children,
+  me, onReact, onToggleReaction, onPin, onReply, onEdit, onMore, onOpenSheet, onOpenQuote,
 }: MessageBlockProps) {
   const name = displayName(people, m.sender_id, m.sender_name)
   const avatarUrl = people.byUserId.get(m.sender_id)?.avatarUrl
-  const file = m.linked_entity_type === 'drive_file' && m.linked_entity_id
+  const deleted = !!m.deleted
+  const file = !deleted && m.linked_entity_type === 'drive_file' && m.linked_entity_id
     ? m.content.replace(/<[^>]+>/g, '').match(/^📎\s+(.+)$/)?.[1]?.trim()
     : undefined
   const pending = !!m._optimistic
   const [timeShown, setTimeShown] = useState(false)
-  const press = useLongPress(() => onOpenSheet?.(m), !!onOpenSheet && !pending)
+  const press = useLongPress(() => onOpenSheet?.(m), !!onOpenSheet && !pending && !deleted && !editor)
 
   const time = (
     <time
@@ -73,11 +83,12 @@ export function MessageBlock({
       {pending ? 'Đang gửi' : formatTime(m.created_at)}
     </time>
   )
-  const pinned = m.is_pinned && (
+  const pinned = m.is_pinned && !deleted && (
     <span className="inline-flex items-center gap-1 text-xs text-ink-muted shrink-0">
       <Pin size={12} strokeWidth={1.75} aria-hidden="true" /> Đã ghim
     </span>
   )
+  const showBar = !pending && !deleted && !editor && (onMore || onEdit || (onReact && onPin))
 
   return (
     <div
@@ -87,7 +98,7 @@ export function MessageBlock({
         if (grouped && !(e.target as HTMLElement).closest('a, button, [role="button"]')) setTimeShown((v) => !v)
       }}
       onKeyDown={(e) => {
-        if (onOpenSheet && !pending && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) {
+        if (onOpenSheet && !pending && !deleted && !editor && (e.key === 'ContextMenu' || (e.key === 'F10' && e.shiftKey))) {
           e.preventDefault()
           onOpenSheet(m)
         }
@@ -120,7 +131,19 @@ export function MessageBlock({
           </div>
         )}
 
-        {file ? (
+        {deleted ? (
+          <div
+            id={`${idBase}-text`}
+            className="mt-0.5 w-fit max-w-[88%] md:max-w-[min(70ch,85%)] px-3 py-1.75 rounded-xl text-sm italic text-ink-muted
+              ring-1 ring-inset ring-line"
+          >
+            Tin nhắn đã bị xoá
+          </div>
+        ) : editor ? (
+          <div id={`${idBase}-text`} className="mt-0.5 w-full flex flex-col">
+            <div className={`w-full flex ${mine ? 'justify-end' : ''}`}>{editor}</div>
+          </div>
+        ) : file ? (
           <div id={`${idBase}-text`} className="mt-0.5 max-w-full md:max-w-[min(70ch,85%)]">
             {isImageFile(file)
               ? <ImagePreviewCard fileId={m.linked_entity_id!} filename={file} />
@@ -134,11 +157,26 @@ export function MessageBlock({
               ${mine ? 'bg-accent-wash' : 'bg-sunk'} ${pressed ? 'ring-2 ring-accent' : ''}
               ${grouped ? '' : mine ? 'rounded-tr-sm' : 'rounded-tl-sm'}`}
           >
-            <MessageContent content={m.content} contentFormat={m.content_format} />
+            {m.quoted && (
+              <QuoteBlock
+                quote={m.quoted}
+                people={people}
+                me={me}
+                onOpen={onOpenQuote && !m.quoted.deleted ? () => onOpenQuote(m.quoted!.id) : undefined}
+              />
+            )}
+            <div className="flex flex-wrap items-end gap-x-1.5">
+              <div className="min-w-0 flex-auto">
+                <MessageContent content={m.content} contentFormat={m.content_format} />
+              </div>
+              {m.edited_at != null && (
+                <span title={`Sửa lúc ${formatDateTime(m.edited_at)}`} className="text-2xs text-ink-muted whitespace-nowrap">đã sửa</span>
+              )}
+            </div>
           </div>
         )}
 
-        {onToggleReaction && onReact && (
+        {!deleted && onToggleReaction && onReact && (
           <ReactionBar
             reactions={m.reactions || []}
             currentUserId={me ?? ''}
@@ -152,13 +190,14 @@ export function MessageBlock({
         {children}
       </div>
 
-      {!pending && onReact && onPin && (
+      {showBar && (
         <HoverActionBar
           mine={mine}
-          onReact={() => onReact(m.id)}
+          onReact={onReact && onPin ? () => onReact(m.id) : undefined}
           onReply={onReply ? () => onReply(m.id) : undefined}
-          onPin={() => onPin(m)}
+          onPin={onReact && onPin ? () => onPin(m) : undefined}
           isPinned={m.is_pinned}
+          onEdit={onEdit ? () => onEdit(m) : undefined}
           onMore={onMore ? (anchor) => onMore(m, anchor) : undefined}
         />
       )}

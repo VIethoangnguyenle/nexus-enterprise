@@ -1,5 +1,6 @@
 import type { Message } from '../api/messaging'
 import { formatDate, formatTime, toDate, toMillis } from './format'
+import { isSystemLine } from './message-model'
 
 /**
  * The shape of a conversation stream (DESIGN.md "Chat: luồng in-line"): which
@@ -39,8 +40,8 @@ export function dayLabel(value: unknown, now: Date = new Date()): string {
   return formatDate(d)
 }
 
-/** Task notes and other system lines sit between messages and do not group. */
-export const isSystemMessage = (m: Message): boolean => m.linked_entity_type === 'task'
+/** Task notes and other system lines (a manager's deletion is logged) sit between messages and do not group. */
+export const isSystemMessage = isSystemLine
 
 export const keyOfMessage = (m: Message & { _clientKey?: string }): string => m._clientKey ?? m.id
 

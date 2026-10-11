@@ -555,51 +555,74 @@ h1, h2, h3, h4 {
   float: left;
   height: 0;
 }
+.chat-editor-content strong { font-weight: 600; }
 .chat-editor-content code {
-  background: var(--color-surface-container);
+  background: var(--color-sunk);
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
   font-size: 0.8125rem;
-  color: var(--color-primary);
 }
 .chat-editor-content pre {
-  background: var(--color-surface-container-low);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem;
+  background: var(--color-sunk);
+  border-radius: 8px;
+  padding: 10px 12px;
   margin: 0.25rem 0;
-  font-size: 0.75rem;
+  overflow-x: auto;
 }
+.chat-editor-content pre code { background: transparent; padding: 0; }
 .chat-editor-content blockquote {
-  border-left: 2px solid var(--color-line);
+  border-left: 3px solid var(--color-line);
   padding-left: 0.75rem;
   margin: 0.25rem 0;
-  color: var(--color-on-surface-variant);
+  color: var(--color-ink-muted);
 }
-.chat-editor-content ul, .chat-editor-content ol {
-  padding-left: 1.25rem;
-  margin: 0.25rem 0;
+.chat-editor-content ul, .chat-editor-content ol { padding-left: 1.25rem; margin: 0.25rem 0; }
+.chat-editor-content ul { list-style: disc; }
+.chat-editor-content ol { list-style: decimal; }
+.chat-editor-content a { color: var(--color-accent); text-decoration: underline; }
+.chat-editor-content [data-mention] {
+  color: var(--color-accent);
+  font-weight: 600;
+  background: var(--color-accent-wash);
+  padding: 0 4px;
+  border-radius: 4px;
 }
 
-/* Message HTML rendering */
+/* Message HTML rendering (DESIGN.md "Hiển thị định dạng trong tin"): no colour or font a sender chose. */
+.message-html strong, .message-html b { font-weight: 600; }
+.message-html p { margin: 0; }
 .message-html code {
-  background: var(--color-surface-container);
+  background: var(--color-sunk);
   padding: 1px 4px;
-  border-radius: 3px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
   font-size: 0.8125rem;
-  color: var(--color-primary);
 }
 .message-html pre {
-  background: var(--color-surface-container-low);
-  border-radius: var(--radius-sm);
-  padding: 0.5rem;
+  background: var(--color-sunk);
+  border-radius: 8px;
+  padding: 10px 12px;
   margin: 0.25rem 0;
-  font-size: 0.75rem;
+  overflow-x: auto;
 }
+.message-html pre code { background: transparent; padding: 0; }
 .message-html blockquote {
-  border-left: 2px solid var(--color-line);
+  border-left: 3px solid var(--color-line);
   padding-left: 0.75rem;
   margin: 0.25rem 0;
-  color: var(--color-on-surface-variant);
+  color: var(--color-ink-muted);
+}
+.message-html ul, .message-html ol { padding-left: 1.25rem; margin: 0.25rem 0; }
+.message-html ul { list-style: disc; }
+.message-html ol { list-style: decimal; }
+.message-html a { color: var(--color-accent); text-decoration: underline; }
+.message-html [data-mention] {
+  color: var(--color-accent);
+  font-weight: 600;
+  background: var(--color-accent-wash);
+  padding: 0 4px;
+  border-radius: 4px;
 }
 
 
@@ -694,9 +717,6 @@ h1, h2, h3, h4 {
      invisible ::after grows the hit area to 44 on each axis that is shorter.
      :where() keeps it at zero specificity, so a component that styles its own
      ::after wins. */
-  :where(button, [role='button'], [role='tab'], [role='menuitem'], [role='switch'], summary) {
-    position: relative;
-  }
   :where(button, [role='button'], [role='tab'], [role='menuitem'], [role='switch'], summary)::after {
     content: '';
     position: absolute;
@@ -704,6 +724,18 @@ h1, h2, h3, h4 {
     bottom: min(0px, calc((100% - 44px) / 2));
     left: min(0px, calc((100% - 44px) / 2));
     right: min(0px, calc((100% - 44px) / 2));
+  }
+}
+
+/* The tap-area ::after above needs its button positioned. In the base layer, so a
+   component's own `absolute` / `fixed` / `sticky` utility wins: unlayered, this rule
+   beat every utility and dropped absolutely placed buttons into the flow on touch
+   screens (the navigator's ⋯ pushed its rows apart). */
+@layer base {
+  @media (pointer: coarse) {
+    :where(button, [role='button'], [role='tab'], [role='menuitem'], [role='switch'], summary) {
+      position: relative;
+    }
   }
 }
 

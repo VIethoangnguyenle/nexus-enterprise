@@ -22,6 +22,8 @@ interface PopoverProps {
 }
 
 const GAP = 6
+/** Rows the arrow keys visit: plain items and radio items (a "move to" list), not disabled ones. */
+const MENU_ITEMS = '[role="menuitem"]:not(:disabled), [role="menuitemradio"]:not(:disabled)'
 
 /**
  * Overlay anchored to a trigger, rendered in a portal so no `overflow: hidden`
@@ -59,7 +61,7 @@ export function Popover({
     if (!open) return
     const id = requestAnimationFrame(() => {
       const first = panelRef.current?.querySelector<HTMLElement>(
-        role === 'menu' ? '[role="menuitem"]' : 'input, button, [href], [tabindex]:not([tabindex="-1"])',
+        role === 'menu' ? MENU_ITEMS : 'input, button, [href], [tabindex]:not([tabindex="-1"])',
       )
       first?.focus()
     })
@@ -90,7 +92,7 @@ export function Popover({
 
   const onMenuKeys = (e: KeyboardEvent<HTMLDivElement>) => {
     if (role !== 'menu') return
-    const items = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+    const items = Array.from(panelRef.current?.querySelectorAll<HTMLElement>(MENU_ITEMS) ?? [])
     const i = items.indexOf(document.activeElement as HTMLElement)
     let next = -1
     if (e.key === 'ArrowDown') next = (i + 1) % items.length

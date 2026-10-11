@@ -23,3 +23,13 @@ filters again when it renders.
 Each message SHALL keep its readable text — markup removed, one line per paragraph or list item, entities decoded —
 beside its body, and full-text search SHALL match that text: a search for a tag name does not match formatting.
 Plain and markdown bodies are their own text.
+
+### Requirement: The composer writes only what the server keeps
+The composer SHALL offer bold, italic, underline, strike, bullet and numbered lists, link, code, code block and quote
+(a formatting bar the reader opens with the "A" button and that remembers whether it was open), with Ctrl/Cmd+B, I, U,
+Shift+X and K, and the quick syntax `*bold*`, `_italic_`, `~strike~`, `` `code` ``, `- ` and `1. `. A link SHALL be
+accepted only when it starts with `https://`, `http://` or `mailto:`, and opens in a new tab with `rel` noopener
+noreferrer. A person mentioned SHALL be written as the `span` carrying their user id, and their ids SHALL be sent with
+the message; a typed `@word` in an HTML body SHALL NOT be treated as a mention when it is shown. Enter sends and
+Shift+Enter breaks the line, except that inside a list or a code block Enter makes the next line and Ctrl/Cmd+Enter sends.
+

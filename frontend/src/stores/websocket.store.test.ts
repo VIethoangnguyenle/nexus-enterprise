@@ -115,6 +115,62 @@ describe('thread events', () => {
   })
 })
 
+describe('message lifecycle events', () => {
+  const listOf = (c: string) =>
+    queryClient.getQueryData<{ messages: { id: string; content: string; deleted?: boolean; edited_at?: unknown }[] }>(
+      keys.messaging.messages(c),
+    )!.messages
+  const seedList = () =>
+    queryClient.setQueryData(keys.messaging.messages('c1'), {
+      messages: [
+        { id: 'a', channel_id: 'c1', sender_id: 'u1', content: 'cũ' },
+        { id: 'b', channel_id: 'c1', sender_id: 'u1', content: 'giữ', reply_count: 2 },
+      ],
+      has_more: false,
+    })
+
+  it('an edit changes the text in the cache and marks it edited, without a new-message preview', () => {
+    seedList()
+    const previewBefore = useWebSocketStore.getState().lastMessages['c1']
+    deliver({
+      oneofKind: 'messageEdited',
+      messageEdited: {
+        editedAt: { seconds: '1760000000', nanos: 0 },
+        message: {
+          id: 'a', channelId: 'c1', senderId: 'u1', senderName: 'A', content: '<p>mới</p>', messageType: 'user',
+          parentMessageId: '', replyCount: 0, contentFormat: 'html', mentions: [], linkedEntityType: '', linkedEntityId: '',
+          attachments: [],
+        },
+      },
+    })
+    expect(listOf('c1')[0]).toMatchObject({ id: 'a', content: '<p>mới</p>' })
+    expect(listOf('c1')[0]!.edited_at).toBeTruthy()
+    expect(useWebSocketStore.getState().lastMessages['c1']).toBe(previewBefore)
+  })
+
+  it('a delete removes a message with no thread and keeps one with a thread as a placeholder', () => {
+    seedList()
+    deliver({
+      oneofKind: 'messageDeleted',
+      messageDeleted: { messageId: 'a', channelId: 'c1', parentMessageId: '', keepPlaceholder: false, replyCount: 0 },
+    })
+    deliver({
+      oneofKind: 'messageDeleted',
+      messageDeleted: { messageId: 'b', channelId: 'c1', parentMessageId: '', keepPlaceholder: true, replyCount: 0 },
+    })
+    expect(listOf('c1')).toEqual([expect.objectContaining({ id: 'b', deleted: true, content: '' })])
+  })
+
+  it('a deleted reply takes the count the server sent onto its root', () => {
+    seedList()
+    deliver({
+      oneofKind: 'messageDeleted',
+      messageDeleted: { messageId: 'r', channelId: 'c1', parentMessageId: 'b', keepPlaceholder: false, replyCount: 1 },
+    })
+    expect((listOf('c1')[1] as { reply_count?: number }).reply_count).toBe(1)
+  })
+})
+
 describe('websocket events invalidate the keys the screens actually cache under', () => {
   it('reconnect resync refreshes permissions and the workspace root listing', () => {
     seed(keys.permissions.object('tenant-1', 'node-1'))

@@ -1,6 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowDown, ArrowUp, Bell, BellOff, ListChecks, MessagesSquare } from 'lucide-react'
+import { ArrowDown, ArrowUp, ListChecks, MessagesSquare, Trash2 } from 'lucide-react'
 import type { Message } from '../../api/messaging'
 import { useArrivals } from '../../hooks/useArrivals'
 import { DURATION, useMotionPresets } from '../../lib/motion'
@@ -10,9 +10,15 @@ import { displayName, type PeopleDirectory } from '../../lib/people'
 import {
   buildStream, keyOfMessage, unreadStartId, type StreamItem, type StreamMessage,
 } from '../../lib/stream-model'
-import { MenuItem, Popover, Pressable, Spinner } from '../primitives'
+import { Pressable, Spinner } from '../primitives'
+import { usePhone } from '../../hooks/usePhone'
+import type { MessageLifecycle } from '../../hooks/useMessageActions'
+import { toEditorHtml } from '../../lib/message-model'
 import { MessageBlock } from './MessageBlock'
 import { MessageActionSheet } from './MessageActionSheet'
+import { MessageMenu, type MessageMenuTarget } from './MessageMenu'
+import { MessageEditBox } from './MessageEditBox'
+import { DeleteMessageDialog } from './DeleteMessageDialog'
 import { ThreadSummary } from './ThreadSummary'
 import { EmptyState } from './EmptyState'
 
@@ -40,6 +46,8 @@ export interface ConversationStreamProps {
   onFollow: (m: Message, follow: boolean) => void
   /** The newest message is on screen (or within a few lines of it). */
   onAtEndChange?: (atEnd: boolean) => void
+  /** Editing, deleting and un-reading; without it the stream offers none of them. */
+  lifecycle?: MessageLifecycle
 }
 
 /** Distance from the end that still counts as "at the end". */
@@ -73,8 +81,9 @@ const INITIAL_VIEW: ViewState = { end: true, far: false, dividerAbove: false }
 export function ConversationStream(props: ConversationStreamProps) {
   const {
     channelId, label, messages, ready, hasMore, loadingOlder, olderFailed, onLoadOlder, me, people, unread,
-    activeThreadId, onOpenThread, onReact, onToggleReaction, onPin, onFollow, onAtEndChange,
+    activeThreadId, onOpenThread, onReact, onToggleReaction, onPin, onFollow, onAtEndChange, lifecycle,
   } = props
+  const phone = usePhone()
   const motionPresets = useMotionPresets()
   const scroller = useRef<HTMLDivElement>(null)
 
@@ -221,12 +230,17 @@ export function ConversationStream(props: ConversationStreamProps) {
 
   // --- menus ---------------------------------------------------------------
   const [sheetFor, setSheetFor] = useState<StreamMessage | null>(null)
-  const [menu, setMenu] = useState<{ message: StreamMessage; up: boolean } | null>(null)
+  const [menu, setMenu] = useState<MessageMenuTarget | null>(null)
   const anchorRef = useRef<HTMLElement | null>(null)
   const openMenu = (m: Message, anchor: HTMLElement) => {
     anchorRef.current = anchor
     const room = (scroller.current?.getBoundingClientRect().bottom ?? window.innerHeight) - anchor.getBoundingClientRect().bottom
     setMenu({ message: m as StreamMessage, up: room < 140 })
+  }
+  const loadedIds = useMemo(() => new Set(messages.map((x) => x.id)), [messages])
+  const openQuote = (id: string) => {
+    const el = scroller.current?.querySelector<HTMLElement>(`[data-message-id="${id}"]`)
+    el?.scrollIntoView?.({ block: 'center', behavior: motionPresets.reduced ? 'auto' : 'smooth' })
   }
   const hasReacted = (m: Message, emoji: string) =>
     !!m.reactions?.some((r) => r.emoji === emoji && r.user_ids?.includes(me ?? ''))
@@ -238,11 +252,14 @@ export function ConversationStream(props: ConversationStreamProps) {
     const byOther = a?.source === 'other'
     const ra = replyArrivals.fresh.get(`${item.key}:${t.reply_count ?? 0}`)
     const idBase = `msg-${item.key}`
-    if (item.system) return <TaskNote message={t} people={people} />
+    if (item.system) return <SystemNote message={t} people={people} />
+    const can = lifecycle?.abilities(t)
+    const editingHere = lifecycle?.editing?.message.id === t.id && !phone
     return (
       <article
         aria-labelledby={`${idBase}-who ${idBase}-text`}
         data-realtime={a?.source}
+        data-message-id={t.id}
         style={byOther ? personStyle(a!.author ?? t.sender_id) : undefined}
         className={`rounded-surface ${byOther ? 'rt-wash' : ''}`}
       >
@@ -261,6 +278,15 @@ export function ConversationStream(props: ConversationStreamProps) {
           onPin={onPin}
           onReply={onOpenThread}
           onMore={openMenu}
+          onEdit={can?.edit ? (m) => lifecycle!.startEdit(m) : undefined}
+          onOpenQuote={t.quoted && loadedIds.has(t.quoted.id) ? openQuote : undefined}
+          editor={editingHere ? (
+            <MessageEditBox
+              initialHtml={lifecycle!.editing!.draft ?? toEditorHtml(t)}
+              onSave={lifecycle!.saveEdit}
+              onCancel={lifecycle!.cancelEdit}
+            />
+          ) : undefined}
           onOpenSheet={(m) => setSheetFor(m as StreamMessage)}
         >
           {!t._optimistic && (
@@ -397,23 +423,7 @@ export function ConversationStream(props: ConversationStreamProps) {
         </div>
       )}
 
-      <Popover
-        open={!!menu}
-        onClose={() => setMenu(null)}
-        anchorRef={anchorRef}
-        role="menu"
-        label="Thêm thao tác cho tin"
-        placement={menu?.up ? 'top-start' : 'bottom-end'}
-      >
-        {menu && (
-          <MenuItem
-            icon={menu.message.following ? <BellOff size={16} strokeWidth={1.75} /> : <Bell size={16} strokeWidth={1.75} />}
-            onClick={() => onFollow(menu.message, !menu.message.following)}
-          >
-            {menu.message.following ? 'Bỏ theo dõi thread' : 'Theo dõi thread'}
-          </MenuItem>
-        )}
-      </Popover>
+      <MessageMenu target={menu} anchorRef={anchorRef} onClose={() => setMenu(null)} lifecycle={lifecycle} onFollow={onFollow} />
 
       <AnimatePresence>
         {sheetFor && (
@@ -427,24 +437,43 @@ export function ConversationStream(props: ConversationStreamProps) {
             onPin={() => onPin(sheetFor)}
             onReact={(emoji) => onToggleReaction(sheetFor.id, emoji, hasReacted(sheetFor, emoji))}
             onMoreReactions={() => onReact(sheetFor.id)}
+            onEdit={lifecycle?.abilities(sheetFor).edit ? () => lifecycle.startEdit(sheetFor) : undefined}
+            onMarkUnread={lifecycle?.abilities(sheetFor).markUnread ? () => lifecycle.markUnread(sheetFor) : undefined}
+            onDelete={lifecycle?.abilities(sheetFor).remove ? () => lifecycle.askDelete(sheetFor) : undefined}
             onClose={() => setSheetFor(null)}
           />
         )}
       </AnimatePresence>
+
+      {lifecycle && (
+        <DeleteMessageDialog
+          message={lifecycle.deleting}
+          me={me}
+          people={people}
+          busy={lifecycle.deleteBusy}
+          onConfirm={lifecycle.confirmDelete}
+          onCancel={lifecycle.cancelDelete}
+        />
+      )}
     </div>
   )
 }
 
-/** A task created in the conversation: a quiet line instead of a bubble. */
-function TaskNote({ message: t, people }: { message: StreamMessage; people: PeopleDirectory }) {
+/** A line the product wrote into the conversation, not a bubble: a task created, or a manager's deletion logged. */
+function SystemNote({ message: t, people }: { message: StreamMessage; people: PeopleDirectory }) {
+  const deletion = t.linked_entity_type === 'message_deleted'
   const title = t.content.replace(/^📋\s*Task:\s*/i, '').trim()
   return (
     <div className="flex items-center gap-2 px-3.5 py-1.5 text-small text-ink-muted">
-      <ListChecks size={16} strokeWidth={1.75} aria-hidden="true" />
-      <span>
-        <span className="font-semibold text-ink">{displayName(people, t.sender_id, t.sender_name)}</span>
-        {' '}đã tạo công việc “{title}”
-      </span>
+      {deletion ? <Trash2 size={16} strokeWidth={1.75} aria-hidden="true" /> : <ListChecks size={16} strokeWidth={1.75} aria-hidden="true" />}
+      {deletion ? (
+        <span>{t.content}</span>
+      ) : (
+        <span>
+          <span className="font-semibold text-ink">{displayName(people, t.sender_id, t.sender_name)}</span>
+          {' '}đã tạo công việc “{title}”
+        </span>
+      )}
       <time className="ml-auto text-xs tnum">{formatTime(t.created_at)}</time>
     </div>
   )

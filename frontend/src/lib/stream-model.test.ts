@@ -69,6 +69,14 @@ describe('buildStream grouping', () => {
     expect(rows.map((r) => r.kind === 'message' && [r.system, r.grouped])).toEqual([[false, false], [true, false], [false, false]])
   })
 
+  it('treats the line a manager leaves when deleting a message as a system line too', () => {
+    const a = msg('x', at(9, 0))
+    const t = msg('x', at(9, 1), { message_type: 'system', linked_entity_type: 'message_deleted', content: 'Hoa đã xoá một tin nhắn của Lan' })
+    const b = msg('x', at(9, 2))
+    const rows = buildStream([a, t, b], { me: 'me', now: NOW }).filter((i) => i.kind === 'message')
+    expect(rows.map((r) => r.kind === 'message' && [r.system, r.grouped])).toEqual([[false, false], [true, false], [false, false]])
+  })
+
   it('marks your own messages', () => {
     const rows = buildStream([msg('me', at(9, 0)), msg('y', at(9, 1))], { me: 'me', now: NOW }).filter((i) => i.kind === 'message')
     expect(rows.map((r) => r.kind === 'message' && r.mine)).toEqual([true, false])

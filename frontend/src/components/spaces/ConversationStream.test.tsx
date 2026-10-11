@@ -6,6 +6,7 @@ import { buildDirectory } from '../../lib/people'
 import { expectNoIds } from '../../test/no-ids'
 import { CONTACTS, MESSAGES, MSG, U, CH, ME } from '../../test/chat-fixtures'
 import type { Message } from '../../api/messaging'
+import type { MessageLifecycle } from '../../hooks/useMessageActions'
 import { ConversationStream, type ConversationStreamProps } from './ConversationStream'
 
 afterEach(() => {
@@ -434,5 +435,232 @@ describe('ConversationStream: realtime attribution', () => {
     const quiet = { ...ascending[0]!, following: false, reply_count: 5, reply_participant_ids: [U.yen.id] }
     view.rerender(stream([quiet, ascending[1]!]))
     expect(within(article(/Trần Minh Đức/)).getByRole('button', { name: /^Thread/ }).className).not.toContain('rt-wash')
+  })
+})
+
+// --- message lifecycle: edit, delete, quote, mark unread ----------------------
+
+const abilitiesFor = (manager = false) => (m: Message) => ({
+  edit: m.sender_id === ME.id && !m.linked_entity_type && !m.deleted,
+  remove: !m.deleted && (m.sender_id === ME.id || manager),
+  markUnread: !m.deleted && m.sender_id !== ME.id,
+})
+
+function lifecycleStub(over: Partial<MessageLifecycle> = {}, manager = false): MessageLifecycle {
+  return {
+    me: ME.id, abilities: abilitiesFor(manager), editing: null, startEdit: vi.fn(), cancelEdit: vi.fn(), saveEdit: vi.fn(),
+    deleting: null, deleteBusy: false, askDelete: vi.fn(), cancelDelete: vi.fn(), confirmDelete: vi.fn(), markUnread: vi.fn(),
+    ...over,
+  }
+}
+
+const mineMsg = (extra: Partial<Message> = {}) =>
+  said('44444444-aaaa-4bbb-8ccc-0000000000b1', ME.id, 'hoa', at(10, 0), 'Tin của tôi', extra)
+const theirMsg = (extra: Partial<Message> = {}) =>
+  said('44444444-aaaa-4bbb-8ccc-0000000000b2', U.lan.id, 'lan', at(10, 5), 'Tin của Lan', extra)
+
+describe('ConversationStream: edited and deleted messages', () => {
+  it('ends an edited message with "đã sửa", for the reader too', () => {
+    renderWithClient(stream([theirMsg({ edited_at: { seconds: 1760000000, nanos: 0 } })]))
+    expect(within(article(/Nguyễn Thu Lan/)).getByText('đã sửa')).toBeInTheDocument()
+  })
+
+  it('has no "đã sửa" on a message that was never edited', () => {
+    renderWithClient(stream([theirMsg()]))
+    expect(screen.queryByText('đã sửa')).toBeNull()
+  })
+
+  it('shows a deleted root with a thread as the placeholder, keeping the thread summary and dropping text and reactions', () => {
+    const gone = theirMsg({
+      deleted: true, content: '', reply_count: 2, last_reply_at: at(10, 20), reply_participant_ids: [U.vinh.id],
+      reactions: [{ emoji: '👍', count: 1, user_ids: [U.hoa.id] }],
+    })
+    renderWithClient(stream([gone]))
+    const a = article(/Nguyễn Thu Lan/)
+    expect(within(a).getByText('Tin nhắn đã bị xoá')).toBeInTheDocument()
+    expect(within(a).getByRole('button', { name: /Thread, 2 trả lời/ })).toBeInTheDocument()
+    expect(within(a).queryByText('👍')).toBeNull()
+    expect(within(a).queryByRole('button', { name: 'Thêm' })).toBeNull()
+  })
+
+  it('does not open the sheet on a deleted placeholder', () => {
+    fakeAllTimers()
+    renderWithClient(stream([theirMsg({ deleted: true, content: '', reply_count: 1 })], { lifecycle: lifecycleStub() }))
+    fireEvent.pointerDown(screen.getByText('Tin nhắn đã bị xoá'), { pointerType: 'touch', clientX: 1, clientY: 1 })
+    act(() => { vi.advanceTimersByTime(600) })
+    expect(screen.queryByRole('dialog', { name: 'Thao tác với tin' })).toBeNull()
+  })
+
+  it('shows the line a manager leaves when deleting as a quiet system line, not a bubble', () => {
+    const log = said('44444444-aaaa-4bbb-8ccc-0000000000c1', U.duc.id, 'duc', at(10, 9), 'Trần Minh Đức đã xoá một tin nhắn của Nguyễn Thu Lan', {
+      message_type: 'system', linked_entity_type: 'message_deleted',
+    })
+    renderWithClient(stream([log]))
+    expect(screen.getByText('Trần Minh Đức đã xoá một tin nhắn của Nguyễn Thu Lan')).toBeInTheDocument()
+    expect(screen.queryByRole('article', { name: /Trần Minh Đức/ })).toBeNull()
+    expectNoIds()
+  })
+})
+
+describe('ConversationStream: a quote', () => {
+  const quoting = (quoted: Message['quoted']) => theirMsg({ quoted })
+
+  it('shows the quoted name and the opening of the text inside the bubble', () => {
+    renderWithClient(stream([quoting({ id: 'q1', sender_id: U.vinh.id, sender_name: 'vinh', text: 'Em thấy kỳ trước để 6427' })]))
+    const a = article(/Nguyễn Thu Lan/)
+    expect(within(a).getByText('Lê Quang Vinh')).toBeInTheDocument()
+    expect(within(a).getByText('Em thấy kỳ trước để 6427')).toBeInTheDocument()
+    expectNoIds()
+  })
+
+  it('calls your own quoted message "Bạn"', () => {
+    renderWithClient(stream([quoting({ id: 'q1', sender_id: ME.id, sender_name: 'hoa', text: 'Vẫn 6427 nhé' })]))
+    expect(within(article(/Nguyễn Thu Lan/)).getByText('Bạn')).toBeInTheDocument()
+  })
+
+  it('says a deleted original is deleted instead of showing its text', () => {
+    renderWithClient(stream([quoting({ id: 'q1', sender_id: U.vinh.id, sender_name: 'vinh', text: '', deleted: true })]))
+    expect(within(article(/Nguyễn Thu Lan/)).getByText('Tin nhắn đã bị xoá')).toBeInTheDocument()
+  })
+
+  it('scrolls to the original when it is loaded, and is plain text when it is not', async () => {
+    const user = userEvent.setup()
+    const original = said('44444444-aaaa-4bbb-8ccc-0000000000d1', U.vinh.id, 'vinh', at(9, 50), 'Bản gốc')
+    const reply = quoting({ id: original.id, sender_id: U.vinh.id, sender_name: 'vinh', text: 'Bản gốc' })
+    const { unmount } = renderWithClient(stream([original, reply]))
+    const target = document.querySelector<HTMLElement>(`[data-message-id="${original.id}"]`)!
+    const scrollIntoView = vi.fn()
+    target.scrollIntoView = scrollIntoView
+    await user.click(within(article(/Nguyễn Thu Lan/)).getByRole('button', { name: /Lê Quang Vinh/ }))
+    expect(scrollIntoView).toHaveBeenCalledWith(expect.objectContaining({ block: 'center' }))
+    unmount()
+
+    renderWithClient(stream([reply]))
+    expect(within(article(/Nguyễn Thu Lan/)).queryByRole('button', { name: /Lê Quang Vinh/ })).toBeNull()
+  })
+})
+
+describe('ConversationStream: edit, delete and mark unread', () => {
+  it('puts a pencil on your own text message and not on someone else’s', () => {
+    renderWithClient(stream([theirMsg(), mineMsg()], { lifecycle: lifecycleStub() }))
+    expect(within(article(/Bạn/)).getByRole('button', { name: 'Sửa tin' })).toBeInTheDocument()
+    expect(within(article(/Nguyễn Thu Lan/)).queryByRole('button', { name: 'Sửa tin' })).toBeNull()
+  })
+
+  it('offers no pencil on a card', () => {
+    renderWithClient(stream([mineMsg({ linked_entity_type: 'poll', linked_entity_id: 'p' })], { lifecycle: lifecycleStub() }))
+    expect(screen.queryByRole('button', { name: 'Sửa tin' })).toBeNull()
+  })
+
+  it('opens the message for editing from the pencil', async () => {
+    const user = userEvent.setup()
+    const startEdit = vi.fn()
+    const m = mineMsg()
+    renderWithClient(stream([m], { lifecycle: lifecycleStub({ startEdit }) }))
+    await user.click(within(article(/Bạn/)).getByRole('button', { name: 'Sửa tin' }))
+    expect(startEdit).toHaveBeenCalledWith(expect.objectContaining({ id: m.id }))
+  })
+
+  it('lists, in the design order, what "Thêm" holds for your own message', async () => {
+    const user = userEvent.setup()
+    renderWithClient(stream([mineMsg()], { lifecycle: lifecycleStub() }))
+    await user.click(within(article(/Bạn/)).getByRole('button', { name: 'Thêm' }))
+    const menu = await screen.findByRole('menu', { name: 'Thêm thao tác cho tin' })
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Theo dõi thread', 'Sao chép văn bản', 'Sửa tin', 'Xoá tin'])
+    expect(within(menu).getByRole('separator')).toBeInTheDocument()
+  })
+
+  it('lists mark-unread, and no edit or delete, for someone else’s message when you do not manage', async () => {
+    const user = userEvent.setup()
+    renderWithClient(stream([theirMsg()], { lifecycle: lifecycleStub() }))
+    await user.click(within(article(/Nguyễn Thu Lan/)).getByRole('button', { name: 'Thêm' }))
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getAllByRole('menuitem').map((i) => i.textContent)).toEqual(['Theo dõi thread', 'Sao chép văn bản', 'Đánh dấu chưa đọc'])
+  })
+
+  it('lets a manager delete someone else’s message', async () => {
+    const user = userEvent.setup()
+    const askDelete = vi.fn()
+    renderWithClient(stream([theirMsg()], { lifecycle: lifecycleStub({ askDelete }, true) }))
+    await user.click(within(article(/Nguyễn Thu Lan/)).getByRole('button', { name: 'Thêm' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Xoá tin' }))
+    expect(askDelete).toHaveBeenCalledWith(expect.objectContaining({ sender_id: U.lan.id }))
+  })
+
+  it('marks a message unread from the menu', async () => {
+    const user = userEvent.setup()
+    const markUnread = vi.fn()
+    renderWithClient(stream([theirMsg()], { lifecycle: lifecycleStub({ markUnread }) }))
+    await user.click(within(article(/Nguyễn Thu Lan/)).getByRole('button', { name: 'Thêm' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Đánh dấu chưa đọc' }))
+    expect(markUnread).toHaveBeenCalledTimes(1)
+  })
+
+  it('has the same actions in the long-press sheet: edit and delete for yours, mark unread for others', () => {
+    fakeAllTimers()
+    const { unmount } = renderWithClient(stream([mineMsg()], { lifecycle: lifecycleStub() }))
+    fireEvent.pointerDown(within(article(/Bạn/)).getByText('Tin của tôi'), { pointerType: 'touch', clientX: 1, clientY: 1 })
+    act(() => { vi.advanceTimersByTime(401) })
+    let sheet = screen.getByRole('dialog', { name: 'Thao tác với tin' })
+    for (const name of ['Sao chép', 'Ghim', 'Sửa tin', 'Xoá tin']) expect(within(sheet).getByRole('button', { name })).toBeInTheDocument()
+    expect(within(sheet).queryByRole('button', { name: 'Đánh dấu chưa đọc' })).toBeNull()
+    expect(within(sheet).getByRole('button', { name: 'Xoá tin' })).toHaveClass('text-danger')
+    unmount()
+
+    renderWithClient(stream([theirMsg()], { lifecycle: lifecycleStub() }))
+    fireEvent.pointerDown(within(article(/Nguyễn Thu Lan/)).getByText('Tin của Lan'), { pointerType: 'touch', clientX: 1, clientY: 1 })
+    act(() => { vi.advanceTimersByTime(401) })
+    sheet = screen.getByRole('dialog', { name: 'Thao tác với tin' })
+    expect(within(sheet).getByRole('button', { name: 'Đánh dấu chưa đọc' })).toBeInTheDocument()
+    expect(within(sheet).queryByRole('button', { name: /Sửa tin|Xoá tin/ })).toBeNull()
+  })
+
+  it('runs a sheet action once and closes the sheet', () => {
+    fakeAllTimers()
+    const askDelete = vi.fn()
+    renderWithClient(stream([mineMsg()], { lifecycle: lifecycleStub({ askDelete }) }))
+    fireEvent.pointerDown(within(article(/Bạn/)).getByText('Tin của tôi'), { pointerType: 'touch', clientX: 1, clientY: 1 })
+    act(() => { vi.advanceTimersByTime(401) })
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Thao tác với tin' })).getByRole('button', { name: 'Xoá tin' }))
+    expect(askDelete).toHaveBeenCalledTimes(1)
+    return vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thao tác với tin' })).toBeNull())
+  })
+
+  it('edits in place on a wide screen: the bubble becomes the editor', () => {
+    const m = mineMsg({ content: '<p>Tin của tôi</p>', content_format: 'html' })
+    renderWithClient(stream([m], { lifecycle: lifecycleStub({ editing: { message: m } }) }))
+    const a = article(/Bạn/)
+    expect(within(a).getByRole('textbox', { name: 'Sửa tin' })).toHaveTextContent('Tin của tôi')
+    expect(within(a).getByText('Esc huỷ · Enter lưu')).toBeInTheDocument()
+  })
+
+  it('leaves editing to the composer on a phone', () => {
+    const original = window.matchMedia
+    window.matchMedia = ((q: string) => ({
+      matches: q.includes('max-width: 767'), media: q, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia
+    try {
+      const m = mineMsg()
+      renderWithClient(stream([m], { lifecycle: lifecycleStub({ editing: { message: m } }) }))
+      expect(screen.queryByRole('textbox', { name: 'Sửa tin' })).toBeNull()
+      expect(within(article(/Bạn/)).getByText('Tin của tôi')).toBeInTheDocument()
+    } finally {
+      window.matchMedia = original
+    }
+  })
+
+  it('asks before deleting, in an alert dialog that names a colleague’s message', () => {
+    renderWithClient(stream([theirMsg()], { lifecycle: lifecycleStub({ deleting: theirMsg() }, true) }))
+    const dialog = screen.getByRole('alertdialog', { name: 'Xoá tin nhắn?' })
+    expect(dialog).toHaveTextContent('Tin của Nguyễn Thu Lan')
+    expectNoIds()
+  })
+
+  it('offers none of it without lifecycle actions', async () => {
+    const user = userEvent.setup()
+    renderWithClient(stream([mineMsg()]))
+    expect(screen.queryByRole('button', { name: 'Sửa tin' })).toBeNull()
+    await user.click(within(article(/Bạn/)).getByRole('button', { name: 'Thêm' }))
+    expect(within(await screen.findByRole('menu')).queryByRole('menuitem', { name: /Xoá tin|Sửa tin|chưa đọc/ })).toBeNull()
   })
 })

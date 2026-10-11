@@ -13,8 +13,11 @@ const INTERACTIVE = 'a, button, input, textarea, select, [role="button"], [conte
  * vibration where the device has one. A press that starts on a control inside
  * the element (a reaction, the thread summary) is left to that control, and the
  * browser's own long-press menu is suppressed for touch.
+ *
+ * `ignore` is the selector of controls that keep their own press; a row that is
+ * itself a link passes one without `a`.
  */
-export function useLongPress(onLongPress: () => void, enabled = true) {
+export function useLongPress(onLongPress: () => void, enabled = true, ignore = INTERACTIVE) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const origin = useRef<{ x: number; y: number } | null>(null)
   const touching = useRef(false)
@@ -34,7 +37,7 @@ export function useLongPress(onLongPress: () => void, enabled = true) {
     onPointerDown: (e: PointerEvent<HTMLElement>) => {
       touching.current = e.pointerType !== 'mouse'
       if (!enabled || !touching.current) return
-      if ((e.target as HTMLElement).closest(INTERACTIVE)) return
+      if ((e.target as HTMLElement).closest(ignore)) return
       origin.current = { x: e.clientX, y: e.clientY }
       timer.current = setTimeout(() => {
         timer.current = null

@@ -165,6 +165,7 @@ export function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
   if (p === '/workspaces') return ok({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành' }] })
   if (p === `/workspaces/${WS_ID}/channels` && method === 'GET') return ok({ channels: SPACES })
   if (p === `/workspaces/${WS_ID}/contacts`) return ok({ contacts: CONTACTS, total: CONTACTS.length })
+  if (p === `/workspaces/${WS_ID}/chat-sections` && method === 'GET') return ok({ sections: [] })
   if (p === '/dms' && method === 'GET') return ok({ channels: DMS })
   if (p === '/channels/unread') return ok({ channels: UNREAD })
   if (p === `/channels/${CH.doisoat}/messages` && method === 'GET') return ok({ messages: MESSAGES, has_more: false })

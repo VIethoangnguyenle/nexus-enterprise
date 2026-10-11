@@ -14,6 +14,8 @@ export interface Channel {
   topic?: string
   description?: string
   member_count?: number
+  /** The content object attribute messages are authorized on; used to ask what the caller may do here. */
+  ngac_oa_id?: string
   created_at?: unknown
 }
 
@@ -48,6 +50,23 @@ export interface Message {
   created_at?: unknown
   linked_entity_type?: string
   linked_entity_id?: string
+  /** "user" or "system" (a manager's deletion leaves a system line). */
+  message_type?: string
+  /** Same shape as created_at; set once the sender has changed the text. */
+  edited_at?: unknown
+  /** Deleted: no body, kept only as the placeholder of a thread. */
+  deleted?: boolean
+  /** What the message quotes: the sender's name and the opening of the text. */
+  quoted?: QuotedMessage
+}
+
+/** What a quote shows of the message it quotes (no body when that message was deleted). */
+export interface QuotedMessage {
+  id: string
+  sender_id: string
+  sender_name?: string
+  text?: string
+  deleted?: boolean
 }
 
 export interface PinnedMessage {
@@ -122,7 +141,11 @@ export interface SendMessageInput {
   parent_message_id?: string
   linked_entity_type?: string
   linked_entity_id?: string
+  /** A live message of the same channel this one quotes. */
+  quoted_message_id?: string
 }
+
+export interface EditMessageInput { content: string; content_format: string }
 
 export const messagingApi = {
   // Channels
@@ -147,6 +170,15 @@ export const messagingApi = {
       body: JSON.stringify(body),
     })
   },
+  /** Changes the text of the caller's own message; answers with the message as stored (filtered). */
+  editMessage: (messageId: string, data: EditMessageInput) =>
+    apiFetch<Message>(`/messages/${messageId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  /** Soft delete: the sender, or whoever manages the channel. */
+  deleteMessage: (messageId: string) =>
+    apiFetch<{ status: string }>(`/messages/${messageId}`, { method: 'DELETE' }),
+  /** Moves the caller's read position to just before this message. */
+  markMessageUnread: (messageId: string) =>
+    apiFetch<{ status: string }>(`/messages/${messageId}/unread`, { method: 'POST' }),
   getThread: (messageId: string) => apiFetch<{ messages: Message[] }>(`/messages/${messageId}/thread`),
 
   // Thread follow, read position and the channel's thread list

@@ -46,3 +46,18 @@ sender name and the opening of its text, or that it was deleted, without text.
 `POST /api/messages/{id}/unread` (gRPC `MarkMessageUnread`) SHALL, for a caller with `read` on the channel, move their
 read position to just before the message: in the channel for a root message, in its thread for a reply, so that
 message and everything after it count as unread again. Following the thread does not change.
+
+### Requirement: The client offers only what the server would accept
+The conversation SHALL list an action on a message only when the reader may take it: "Sửa tin" on the reader's own text
+messages (not cards, files or system lines), "Xoá tin" on their own messages or on any message when they manage the
+channel, "Đánh dấu chưa đọc" on other people's messages. Deleting SHALL always be confirmed first, in a dialog that names
+the sender when the message is not the reader's, says the group's log records it in that case, and says a thread stays
+when the message has one. A deleted root with replies SHALL show as "Tin nhắn đã bị xoá" without files or reactions and
+keep its thread summary; any other deleted message SHALL leave the stream for everyone watching, as the
+`message_deleted` frame says. An edited message SHALL end with "đã sửa". The log line a manager's deletion leaves SHALL
+read as a quiet system line, not a bubble. No message id reaches the screen.
+
+#### Scenario: A manager deletes a colleague's message
+- **WHEN** a manager chooses "Xoá tin" on a colleague's message
+- **THEN** the dialog names the colleague, and after confirming the message is gone for everyone and a system line says who deleted whose message
+

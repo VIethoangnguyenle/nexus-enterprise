@@ -10,14 +10,17 @@ interface MessageContentProps {
   contentFormat?: string
 }
 
-/** Renders message content as markdown or HTML. Supports code blocks with copy, @mention highlighting. */
+/**
+ * Renders message content as markdown or HTML. HTML is the composer's rich text, filtered again here;
+ * a mention in it is a `span[data-mention]` node, styled by `.message-html`, never found by pattern.
+ */
 export function MessageContent({ content, contentFormat }: MessageContentProps) {
   // If content is HTML from TipTap, render it directly
   if (contentFormat === 'html' || content.startsWith('<')) {
     return (
       <div
         className="message-html text-sm text-ink leading-[1.55] break-words"
-        dangerouslySetInnerHTML={{ __html: sanitizeHtml(highlightMentions(content)) }}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
       />
     )
   }
@@ -94,14 +97,6 @@ function FencedCodeBlock({ code, language }: { code: string; language?: string }
         </code>
       </pre>
     </div>
-  )
-}
-
-/** Wrap @mentions in highlight spans for HTML content. */
-function highlightMentions(html: string): string {
-  return html.replace(
-    /@(\w+)/g,
-    '<span class="text-accent font-semibold bg-accent-wash px-1 rounded-sm">@$1</span>'
   )
 }
 
