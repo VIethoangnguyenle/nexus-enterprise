@@ -1,0 +1,46 @@
+{
+  "criteria": [
+    {
+      "id": 2,
+      "name": "Unfollowed thread shows reply count but no \"mới\"",
+      "result": "PASS",
+      "evidence": "Summary visible: true, \"mới\" visible: false"
+    },
+    {
+      "id": 3,
+      "name": "Opening thread clears \"mới\" count",
+      "result": "PASS",
+      "evidence": "\"mới\" before: true, after opening: false"
+    },
+    {
+      "id": 4,
+      "name": "\"Tin mới\" divider and jump button",
+      "result": "PASS",
+      "evidence": "Divider visible: true, Jump button visible: true"
+    }
+  ],
+  "gates": {},
+  "delays": {},
+  "consoleErrors": {
+    "A": [],
+    "B": [
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[WS] server error (403): not allowed to subscribe to this workspace",
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[WS] server error (403): not allowed to subscribe to this workspace",
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[WS] server error (403): not allowed to subscribe to this workspace",
+      "Failed to load resource: the server responded with a status of 403 (Forbidden)",
+      "[WS] server error (403): not allowed to subscribe to this workspace",
+      "[WS] server error (403): not allowed to subscribe to this workspace"
+    ]
+  },
+  "networkErrors": {
+    "A": [],
+    "B": []
+  },
+  "measurements": {},
+  "findings": [
+    "Email verification is disabled (otp_proves_email=false) — cannot invite B through UI. Invite API result: 404. Using direct DB insertion as workaround."
+  ]
+}
