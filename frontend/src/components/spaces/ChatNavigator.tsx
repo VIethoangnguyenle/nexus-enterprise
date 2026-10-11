@@ -1,7 +1,7 @@
 import { useId, useRef, useState, type DragEvent, type ReactNode } from 'react'
 import { Link, useParams, useRouterState } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { ChevronDown, Ellipsis, FolderPlus, House, Plus } from 'lucide-react'
+import { ChevronDown, Ellipsis, House, Plus } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useChatNavigation } from '../../hooks/useChatNavigation'
 import { useWebSocketStore } from '../../stores/websocket.store'
@@ -19,7 +19,7 @@ import { useSectionOverlays } from './SectionOverlays'
 /**
  * Left column of Tin nhắn, in the Google Chat model (design/mockups/spaces.html §1):
  * "Trò chuyện mới", Trang chủ with the unread total, the user's own sections,
- * then collapsible "Tin nhắn trực tiếp" and "Nhóm", and "Tạo mục". Mentions,
+ * then collapsible "Tin nhắn trực tiếp" and "Nhóm" ("Tạo mục" lives in "Trò chuyện mới"). Mentions,
  * Starred and Browse spaces are not shown: the backend has no API for them yet.
  */
 export function ChatNavigator() {
@@ -34,7 +34,6 @@ export function ChatNavigator() {
 
   const [dialog, setDialog] = useState<'space' | 'dm' | null>(null)
   const [dragging, setDragging] = useState<Conversation | null>(null)
-  const newSectionRef = useRef<HTMLButtonElement>(null)
 
   const overlays = useSectionOverlays(sectionsApi, false, (id) => setCollapsed(collapseKey(workspaceId, id), false))
 
@@ -125,16 +124,6 @@ export function ChatNavigator() {
             >
               {arranged.spaces.map(row)}
             </Section>
-
-            <Pressable
-              ref={newSectionRef}
-              onClick={(e) => overlays.openCreate(e.currentTarget, undefined, 'top-start')}
-              className="flex items-center gap-2.5 w-full h-9 mt-2 px-2.5 rounded-surface text-sm text-ink-muted
-                hover:text-ink hover:bg-hover transition-colors duration-quick"
-            >
-              <FolderPlus size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
-              <span className="truncate">Tạo mục</span>
-            </Pressable>
           </>
         )}
       </div>

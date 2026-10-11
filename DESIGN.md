@@ -261,7 +261,8 @@ Primitive sống ở `frontend/src/components/primitives/`; không component nà
 ### Chat: cột điều hướng và mục (mockup `design/mockups/spaces.html` §1)
 
 Thứ tự trong cột: nút "Trò chuyện mới" · lối tắt (Trang chủ, Được nhắc tới, Đã gắn sao) · **mục của bạn** ·
-Tin nhắn trực tiếp · Nhóm · "Duyệt nhóm" · "Tạo mục".
+Tin nhắn trực tiếp · Nhóm · "Duyệt nhóm". ("Tạo mục" nằm trong menu "Trò chuyện mới", không có nút riêng cuối cột —
+người dùng chốt 2026-10-11.)
 
 - **Mục (ChatSection):** người dùng tự tạo để gom nhóm và tin nhắn trực tiếp, như Google Chat. Mục là **của
   riêng từng người** trong từng workspace; người khác không thấy và không bị ảnh hưởng. Tên 1–40 ký tự, không
@@ -275,7 +276,7 @@ Tin nhắn trực tiếp · Nhóm · "Duyệt nhóm" · "Tạo mục".
   định có nút "+" (Nhắn tin trực tiếp / Tạo nhóm) như cũ, không đổi tên hay xoá được. Trạng thái thu gọn
   nhớ theo thiết bị.
 - **Tạo / đổi tên:** popover nổi trong cột (không modal): ô "Tên mục" + Huỷ / Tạo (Lưu); Enter xác nhận,
-  Esc đóng, lỗi nói rõ ("Nhập tên mục", "Bạn đã có mục tên này"). Mở từ "Tạo mục" cuối cột, từ menu "Trò
+  Esc đóng, lỗi nói rõ ("Nhập tên mục", "Bạn đã có mục tên này"). Mở từ "Tạo mục" trong menu "Trò
   chuyện mới" hoặc "Mục mới…" trong menu của một cuộc trò chuyện (khi đó cuộc trò chuyện vào luôn mục vừa
   tạo). Mục mới nằm cuối các mục của bạn; rỗng thì hiện gợi ý 13px mờ cách mở menu ⋯ để chuyển vào.
 - **Chuyển cuộc trò chuyện:** mỗi hàng có IconButton 28 "⋯" ở mép phải, hiện khi hover hoặc focus (thay chỗ

@@ -33,6 +33,12 @@ afterEach(() => {
 const list = (name: string) => screen.getByRole('list', { name })
 const rowNames = (name: string) =>
   within(list(name)).getAllByRole('link').map((a) => a.querySelector('.truncate')?.textContent)
+/** "Tạo mục" lives in "Trò chuyện mới" (and "Mục mới…" on a row), not at the foot of the column. */
+const openCreate = async (user: ReturnType<typeof userEvent.setup>) => {
+  await user.click(screen.getByRole('button', { name: 'Trò chuyện mới' }))
+  await user.click(await screen.findByRole('menuitem', { name: 'Tạo mục' }))
+}
+
 const ready = async () => {
   renderWithClient(<ChatNavigator />)
   await screen.findByRole('list', { name: 'Quyết toán quý 4' })
@@ -93,7 +99,7 @@ describe('creating a section', () => {
   it('"Tạo mục" opens a name popover; Enter creates the section at the end and says so', async () => {
     const user = userEvent.setup()
     await ready()
-    await user.click(screen.getByRole('button', { name: 'Tạo mục' }))
+    await openCreate(user)
     const dialog = await screen.findByRole('dialog', { name: 'Tên mục mới' })
     const field = within(dialog).getByLabelText('Tên mục mới')
     await waitFor(() => expect(field).toHaveFocus())
@@ -112,7 +118,7 @@ describe('creating a section', () => {
   it('says why a name cannot be used, without calling the server', async () => {
     const user = userEvent.setup()
     await ready()
-    await user.click(screen.getByRole('button', { name: 'Tạo mục' }))
+    await openCreate(user)
     const dialog = await screen.findByRole('dialog', { name: 'Tên mục mới' })
     const field = within(dialog).getByLabelText('Tên mục mới')
 
@@ -129,7 +135,7 @@ describe('creating a section', () => {
   it('shows the server\'s refusal of a taken name inline and keeps the popover open', async () => {
     const user = userEvent.setup()
     await ready()
-    await user.click(screen.getByRole('button', { name: 'Tạo mục' }))
+    await openCreate(user)
     const dialog = await screen.findByRole('dialog', { name: 'Tên mục mới' })
     server.failNext('', 409)
     await user.type(within(dialog).getByLabelText('Tên mục mới'), 'Mới{Enter}')
@@ -140,15 +146,20 @@ describe('creating a section', () => {
   it('closes on Huỷ and on Esc, giving focus back to the button that opened it', async () => {
     const user = userEvent.setup()
     await ready()
-    const open = screen.getByRole('button', { name: 'Tạo mục' })
-    await user.click(open)
+    const open = screen.getByRole('button', { name: 'Trò chuyện mới' })
+    await openCreate(user)
     await user.click(within(await screen.findByRole('dialog', { name: 'Tên mục mới' })).getByRole('button', { name: 'Huỷ' }))
     expect(screen.queryByRole('dialog')).toBeNull()
-    await user.click(open)
+    await openCreate(user)
     await screen.findByRole('dialog', { name: 'Tên mục mới' })
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(open).toHaveFocus()
+  })
+
+  it('has no separate "Tạo mục" button at the foot of the column', async () => {
+    await ready()
+    expect(screen.queryByRole('button', { name: 'Tạo mục' })).toBeNull()
   })
 
   it('is also offered by "Trò chuyện mới"', async () => {
@@ -385,7 +396,7 @@ describe('an empty section', () => {
   it('tells where to move a conversation from', async () => {
     const user = userEvent.setup()
     await ready()
-    await user.click(screen.getByRole('button', { name: 'Tạo mục' }))
+    await openCreate(user)
     await user.type(within(await screen.findByRole('dialog')).getByLabelText('Tên mục mới'), 'Trống{Enter}')
     expect(await screen.findByText(/Chưa có cuộc trò chuyện\. Mở menu ⋯ của một cuộc trò chuyện để chuyển vào đây\./)).toBeInTheDocument()
   })
@@ -396,7 +407,7 @@ describe('failure wording', () => {
   it('explains a failed create in the popover instead of a toast', async () => {
     const user = userEvent.setup()
     await ready()
-    await user.click(screen.getByRole('button', { name: 'Tạo mục' }))
+    await openCreate(user)
     const dialog = await screen.findByRole('dialog')
     server.failNext('', 500)
     await user.type(within(dialog).getByLabelText('Tên mục mới'), 'Mới{Enter}')
