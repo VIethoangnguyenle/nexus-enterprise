@@ -8,6 +8,7 @@
  */
 import { ApiError } from '../api/client'
 import type { AuthProviders, MeResponse, MyWorkspace, OTPVerifyResponse } from '../api/auth'
+import type { WorkspaceType } from '../api/workspaces'
 import type { MyInvitation } from '../api/invitations'
 import { UUID_RE } from './chat-fixtures'
 
@@ -32,7 +33,7 @@ export const calls: Call[] = []
 export interface World {
   providers: AuthProviders | Error | 'pending'
   me: MeResponse['user']
-  workspaces: { id: string; name: string }[]
+  workspaces: { id: string; name: string; type?: WorkspaceType }[]
   summaries: MyWorkspace[] | Error
   invitations: MyInvitation[]
   invitationsError?: Error
@@ -181,16 +182,17 @@ async function answer(path: string, options: RequestInit): Promise<unknown> {
   }
 
   if (method === 'POST' && path === '/me/workspaces') {
-    expectKeys(path, body, ['name'])
+    expectKeys(path, body, ['name', 'type'])
     if (world.createError) throw world.createError
     const id = `7c1d0000-1111-4a00-8000-0000000fff${world.workspaces.length}`
     // The server refuses an account whose address nobody has proved.
     if (!world.me.email_verified) throw api(403, { code: 'email_unverified' })
-    world.workspaces.push({ id, name: String(body?.name) })
+    const wsType = (body?.type as WorkspaceType) || 'personal'
+    world.workspaces.push({ id, name: String(body?.name), type: wsType })
     if (Array.isArray(world.summaries)) {
-      world.summaries.push({ id, name: String(body?.name), role: 'owner', member_count: 1, domain: '' })
+      world.summaries.push({ id, name: String(body?.name), role: 'owner', member_count: 1, domain: '', type: wsType })
     }
-    return { id, name: body?.name, role: 'owner', member_count: 1 }
+    return { id, name: String(body?.name), role: 'owner', member_count: 1, domain: '', type: wsType } satisfies MyWorkspace
   }
 
   if (method === 'GET' && path === '/invitations') {

@@ -1,10 +1,11 @@
 import { useState } from 'react'
 import { Link, useLocation } from '@tanstack/react-router'
-import { ClipboardCheck, Ellipsis, FolderOpen, MessageSquare } from 'lucide-react'
+import { ClipboardCheck, Ellipsis, FolderOpen, MessageSquare, Users } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { approvalPendingOptions } from '../../hooks/useApproval'
 import { useBottomBarLayout } from '../../hooks/usePhone'
+import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { formatCount } from '../../lib/format'
 import { isConversationPath } from '../../lib/workspace'
 import { useUiStore } from '../../stores/ui.store'
@@ -12,7 +13,7 @@ import { Pressable } from '../primitives'
 import { MORE_ITEMS, MobileMoreSheet } from './MobileMoreSheet'
 
 type Tab = {
-  id: 'messaging' | 'drive' | 'approval'
+  id: 'messaging' | 'drive' | 'approval' | 'contacts'
   icon: LucideIcon
   label: string
   to: string
@@ -28,6 +29,12 @@ const TABS: Tab[] = [
   { id: 'approval', icon: ClipboardCheck, label: 'Phê duyệt', to: '/approval', matches: ['/approval'] },
 ]
 
+const PERSONAL_TABS: Tab[] = [
+  { id: 'messaging', icon: MessageSquare, label: 'Tin nhắn', to: '/channels', matches: ['/channels'] },
+  { id: 'drive', icon: FolderOpen, label: 'Tài liệu', to: '/drive', matches: ['/drive', '/documents'] },
+  { id: 'contacts', icon: Users, label: 'Danh bạ', to: '/contacts', matches: ['/contacts'] },
+]
+
 const under = (pathname: string, prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
 
 const TAB_CELL = 'relative grid justify-items-center content-center gap-0.5 min-h-12 text-2xs font-medium no-underline focus-ring rounded-surface'
@@ -41,14 +48,19 @@ const TAB_ICON = 'relative grid place-items-center w-12 h-6 rounded-surface tran
 export function MobileNav() {
   const { pathname } = useLocation()
   const setActiveModule = useUiStore((s) => s.setActiveModule)
+  const { isPersonal, isLoading } = useWorkspaceType()
   // Above the bar's widths nothing shows the count, so nothing asks for it.
   // Inside a conversation the phone shows only the conversation (its header
   // and composer, chat-mobile mockup): the bar steps aside until you go back.
   const shown = useBottomBarLayout() && !isConversationPath(pathname)
-  const pending = useQuery({ ...approvalPendingOptions(), enabled: shown }).data?.total ?? 0
+  const pending = useQuery({ ...approvalPendingOptions(), enabled: shown && !isPersonal && !isLoading }).data?.total ?? 0
   const [moreOpen, setMoreOpen] = useState(false)
-  const moreCurrent = MORE_ITEMS.some((item) => under(pathname, item.to))
+  const moreItems = isPersonal
+    ? MORE_ITEMS.filter((item) => item.id !== 'assets' && item.id !== 'contacts')
+    : MORE_ITEMS
+  const moreCurrent = moreItems.some((item) => under(pathname, item.to))
   const moreLit = moreCurrent || moreOpen
+  const tabs = isPersonal ? PERSONAL_TABS : TABS
 
   if (!shown) return null
   return (
@@ -57,7 +69,7 @@ export function MobileNav() {
         aria-label="Điều hướng di động"
         className="fixed bottom-0 inset-x-0 z-sticky lg:hidden grid grid-cols-4 gap-1 px-1 pt-1 pb-bar bg-raised"
       >
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const active = tab.matches.some((prefix) => under(pathname, prefix))
           const badge = tab.id === 'approval' && pending > 0
           return (

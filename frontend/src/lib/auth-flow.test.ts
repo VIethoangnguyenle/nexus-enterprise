@@ -113,6 +113,14 @@ describe('workspaceRowDetail', () => {
   it('names the company first when the workspace claimed a domain', () => {
     expect(workspaceRowDetail({ member_count: 64, role: 'member', domain: 'novapay.vn' })).toBe('novapay.vn · 64 thành viên · Thành viên')
   })
+  it('shows Workspace cá nhân and role for personal workspaces', () => {
+    expect(workspaceRowDetail({ role: 'owner', type: 'personal' })).toBe('Workspace cá nhân · Chủ sở hữu')
+    expect(workspaceRowDetail({ role: 'member', type: 'personal' })).toBe('Workspace cá nhân · Thành viên')
+  })
+  it('shows domain or Workspace tổ chức and role for organization workspaces', () => {
+    expect(workspaceRowDetail({ role: 'admin', type: 'organization', domain: 'novapay.vn' })).toBe('novapay.vn · Quản trị viên')
+    expect(workspaceRowDetail({ role: 'member', type: 'organization', domain: '' })).toBe('Workspace tổ chức · Thành viên')
+  })
   it('says nothing it does not know', () => {
     expect(workspaceRowDetail(undefined)).toBe('')
   })

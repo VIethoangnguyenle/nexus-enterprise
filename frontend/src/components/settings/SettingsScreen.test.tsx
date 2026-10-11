@@ -9,6 +9,7 @@ import { renderWithClient, resetClient } from '../../test/render'
 import { CONTACTS, U, WS_ID } from '../../test/chat-fixtures'
 import { expectNoIds } from '../../test/no-ids'
 import { ApiError, apiFetch } from '../../api/client'
+import type { WorkspaceDetails } from '../../api/workspaces'
 import { validateSettingsSearch } from '../../lib/settings-search'
 import { loadPreferences, switchPreferencesTo } from '../../lib/preferences'
 import { queryClient } from '../../lib/query-client'
@@ -22,12 +23,13 @@ const api = vi.mocked(apiFetch)
 interface Call { method: string; path: string; body?: Record<string, unknown> }
 const calls: Call[] = []
 let canManage = true
-let details = { name: 'Khối Vận hành', description: 'Đối soát, thanh toán và hỗ trợ đối tác.' }
+let details: Omit<WorkspaceDetails, 'can_manage'> = { name: 'Khối Vận hành', description: 'Đối soát, thanh toán và hỗ trợ đối tác.' }
 let profile = CONTACTS.map((c) => ({ ...c }))
 let detailsFails: ApiError | null = null
 let profileFails: ApiError | null = null
 let detailsLoadFails = false
 let leaveFails: ApiError | null = null
+let convertFails: ApiError | null = null
 let assignedDepartment = 'Đối soát'
 
 function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
@@ -56,6 +58,20 @@ function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
       details = { ...details, ...body }
     } else if (detailsLoadFails) return Promise.reject(new ApiError('boom', 500))
     return ok({ ...details, can_manage: canManage })
+  }
+  if (path === `/workspaces/${WS_ID}/convert-to-organization` && method === 'POST') {
+    if (convertFails) return Promise.reject(convertFails)
+    details = {
+      ...details,
+      type: 'organization',
+      converted_by_name: 'Lê Thị Hoa',
+      converted_at: '2026-10-11T10:42:00Z',
+    }
+    return ok({
+      type: 'organization',
+      converted_by_name: 'Lê Thị Hoa',
+      converted_at: '2026-10-11T10:42:00Z',
+    })
   }
   if (path === '/me/profile' && method === 'PATCH') {
     if (profileFails) return Promise.reject(profileFails)
@@ -98,6 +114,7 @@ beforeEach(() => {
   profileFails = null
   detailsLoadFails = false
   leaveFails = null
+  convertFails = null
   assignedDepartment = 'Đối soát'
   localStorage.clear()
   switchPreferencesTo(U.hoa.id)
@@ -482,3 +499,142 @@ describe('SettingsScreen: Rời workspace', () => {
     expect(router.state.location.pathname).toBe('/settings')
   })
 })
+
+describe('SettingsScreen: Loại workspace và chuyển đổi', () => {
+  it('shows personal workspace card for owner with convert button, opens dialog with focus on Cancel', async () => {
+    const user = userEvent.setup()
+    details = {
+      name: 'Không gian của bạn',
+      description: '',
+      type: 'personal',
+      is_owner: true,
+      owner_name: 'Lê Thị Hoa',
+    }
+    await renderSettings('/settings?tab=workspace')
+
+    expect(await screen.findByRole('heading', { level: 3, name: 'Workspace cá nhân' })).toBeInTheDocument()
+    expect(screen.getByText('Có Tin nhắn, Tài liệu và Danh bạ. Không có Tài sản, Phê duyệt và duyệt tài liệu.')).toBeInTheDocument()
+    const convertBtn = screen.getByRole('button', { name: 'Chuyển thành workspace tổ chức' })
+    expect(convertBtn).toBeInTheDocument()
+
+    await user.click(convertBtn)
+    const dialog = await screen.findByRole('alertdialog')
+    expect(within(dialog).getByRole('heading', { name: 'Chuyển thành workspace tổ chức?' })).toBeInTheDocument()
+    expect(within(dialog).getByText('Tài sản')).toBeInTheDocument()
+    expect(within(dialog).getByText('Phê duyệt')).toBeInTheDocument()
+    expect(within(dialog).getByText('Duyệt tài liệu')).toBeInTheDocument()
+    expect(within(dialog).getByText(/Không chuyển ngược lại được/)).toBeInTheDocument()
+
+    // Focus starts on Huỷ
+    const cancelBtn = within(dialog).getByRole('button', { name: 'Huỷ' })
+    await waitFor(() => expect(cancelBtn).toHaveFocus())
+
+    // Cancel closes dialog
+    await user.click(cancelBtn)
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(calls.filter((c) => c.path.endsWith('/convert-to-organization'))).toHaveLength(0)
+  })
+
+  it('owner converts successfully: dialog closes, toast appears, card updates to organization with audit line and admin link', async () => {
+    const user = userEvent.setup()
+    details = {
+      name: 'Không gian của bạn',
+      description: '',
+      type: 'personal',
+      is_owner: true,
+      owner_name: 'Lê Thị Hoa',
+    }
+    await renderSettings('/settings?tab=workspace')
+
+    await user.click(await screen.findByRole('button', { name: 'Chuyển thành workspace tổ chức' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Chuyển thành tổ chức' }))
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(toasts()).toContain('Đã chuyển thành workspace tổ chức')
+    expect(calls.filter((c) => c.method === 'POST' && c.path.endsWith('/convert-to-organization'))).toHaveLength(1)
+
+    // Card now displays organization
+    expect(await screen.findByRole('heading', { level: 3, name: 'Workspace tổ chức' })).toBeInTheDocument()
+    expect(await screen.findByText(/đã chuyển sang workspace tổ chức/)).toBeInTheDocument()
+    expect(screen.getByText('Lê Thị Hoa')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /Đặt quyền Phê duyệt và Tài sản/ })).toBeInTheDocument()
+  })
+
+  it('shows explanation naming owner when user is not the owner', async () => {
+    details = {
+      name: 'Không gian của bạn',
+      description: '',
+      type: 'personal',
+      is_owner: false,
+      owner_name: 'Lê Thị Hoa',
+    }
+    await renderSettings('/settings?tab=workspace')
+
+    expect(await screen.findByRole('heading', { level: 3, name: 'Workspace cá nhân' })).toBeInTheDocument()
+    expect(screen.getByText(/Chỉ chủ sở hữu,/)).toBeInTheDocument()
+    expect(screen.getByText('Lê Thị Hoa')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Chuyển thành workspace tổ chức' })).toBeNull()
+  })
+
+  it('handles 403 refusal: shows toast and keeps dialog open', async () => {
+    const user = userEvent.setup()
+    convertFails = new ApiError('forbidden', 403)
+    details = {
+      name: 'Không gian của bạn',
+      description: '',
+      type: 'personal',
+      is_owner: true,
+      owner_name: 'Lê Thị Hoa',
+    }
+    await renderSettings('/settings?tab=workspace')
+
+    await user.click(await screen.findByRole('button', { name: 'Chuyển thành workspace tổ chức' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Chuyển thành tổ chức' }))
+
+    await waitFor(() => expect(toasts()).toContain('Chỉ chủ sở hữu mới chuyển được workspace này.'))
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+  })
+
+  it('handles 409 conflict: shows toast and closes dialog', async () => {
+    const user = userEvent.setup()
+    convertFails = new ApiError('conflict', 409)
+    details = {
+      name: 'Không gian của bạn',
+      description: '',
+      type: 'personal',
+      is_owner: true,
+      owner_name: 'Lê Thị Hoa',
+    }
+    await renderSettings('/settings?tab=workspace')
+
+    await user.click(await screen.findByRole('button', { name: 'Chuyển thành workspace tổ chức' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Chuyển thành tổ chức' }))
+
+    await waitFor(() => expect(toasts()).toContain('Workspace này đã là workspace tổ chức.'))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+  })
+
+  it('handles network failure: shows error toast and keeps dialog open', async () => {
+    const user = userEvent.setup()
+    convertFails = new ApiError('network error', 500)
+    details = {
+      name: 'Không gian của bạn',
+      description: '',
+      type: 'personal',
+      is_owner: true,
+      owner_name: 'Lê Thị Hoa',
+    }
+    await renderSettings('/settings?tab=workspace')
+
+    await user.click(await screen.findByRole('button', { name: 'Chuyển thành workspace tổ chức' }))
+    const dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Chuyển thành tổ chức' }))
+
+    await waitFor(() => expect(toasts()).toContain('Không chuyển được workspace. Kiểm tra kết nối rồi thử lại.'))
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+  })
+})
+

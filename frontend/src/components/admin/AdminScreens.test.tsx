@@ -927,4 +927,20 @@ describe('the tabs', () => {
     await within(await screen.findByRole('table', { name: 'Vai trò' })).findByText('Kế toán')
     expect(screen.getByRole('tab', { name: 'Vai trò' })).toHaveAttribute('aria-selected', 'true')
   })
+
+  it('hides Tài sản and Phê duyệt in RolePanel and hides Duyệt column in PermissionMatrix in personal workspace', async () => {
+    mode.personal = true
+    const user = userEvent.setup()
+    await renderAdmin('/admin/roles')
+    await user.click(await within(await screen.findByRole('table')).findByRole('button', { name: 'Kế toán' }))
+    const panel = await screen.findByRole('complementary', { name: 'Vai trò' })
+    expect(within(panel).queryByRole('list', { name: 'Quyền trên Tài sản' })).toBeNull()
+    expect(within(panel).queryByRole('list', { name: 'Quyền trên Phê duyệt' })).toBeNull()
+
+    await user.click(within(panel).getByRole('button', { name: 'Sửa quyền' }))
+    const grid = await screen.findByRole('grid', { name: 'Quyền của Kế toán' })
+    expect(within(grid).getAllByRole('columnheader').map((h) => h.textContent)).not.toContain('Duyệt')
+    expect(within(grid).queryByRole('rowheader', { name: /Tài sản/ })).toBeNull()
+    expect(within(grid).queryByRole('rowheader', { name: /Phê duyệt/ })).toBeNull()
+  })
 })

@@ -124,9 +124,11 @@ export const authApi = {
     apiFetch<{ url: string }>('/me/email/verify/google', { method: 'POST' }),
 
   listMyWorkspaces: () => apiFetch<{ workspaces: MyWorkspace[] }>('/me/workspaces'),
-  /** The name is the only input: a workspace is addressed by its ID, never by a slug. */
-  createWorkspace: (name: string) =>
-    apiFetch<MyWorkspace>('/me/workspaces', { method: 'POST', body: JSON.stringify({ name }) }),
+  createWorkspace: (name: string, type?: WorkspaceType) =>
+    apiFetch<MyWorkspace>('/me/workspaces', {
+      method: 'POST',
+      body: JSON.stringify({ name, ...(type ? { type } : {}) }),
+    }),
 
   /** Re-scopes the session to a workspace the person actively belongs to. */
   switchTenant: (tenantId: string) =>

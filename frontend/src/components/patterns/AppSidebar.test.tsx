@@ -98,4 +98,49 @@ describe('AppSidebar', () => {
     expect(queryClient.getQueryData(['drive', 'old'])).toBeUndefined()
     await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull())
   })
+
+  it('hides Phê duyệt and Tài sản in a personal workspace, and labels it Workspace cá nhân', async () => {
+    api.mockImplementation((path: string) =>
+      path === '/workspaces'
+        ? Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Không gian của bạn', type: 'personal' }] })
+        : path === '/me/workspaces'
+          ? Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Không gian của bạn', role: 'owner', member_count: 1, domain: '', type: 'personal' }] })
+          : path.endsWith('/contacts')
+            ? Promise.resolve({ contacts: CONTACTS, total: CONTACTS.length })
+            : Promise.reject(new Error(`unexpected ${path}`)))
+
+    await renderSidebar()
+    const nav = await screen.findByRole('navigation', { name: 'Phân hệ' })
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual([
+      'Tin nhắn3', 'Tài liệu', 'Danh bạ',
+    ])
+    expect(within(nav).queryByRole('link', { name: /Phê duyệt/ })).toBeNull()
+    expect(within(nav).queryByRole('link', { name: /Tài sản/ })).toBeNull()
+    expect(await screen.findByText('Workspace cá nhân')).toBeInTheDocument()
+  })
+
+  it('shows each workspace type line and a Tạo workspace link in switcher dropdown', async () => {
+    api.mockImplementation((path: string) =>
+      path === '/workspaces'
+        ? Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Không gian của bạn', type: 'personal' }, { id: OTHER_WS, name: 'Khối Vận hành', type: 'organization' }] })
+        : path === '/me/workspaces'
+          ? Promise.resolve({ workspaces: [
+              { id: WS_ID, name: 'Không gian của bạn', role: 'owner', member_count: 1, domain: '', type: 'personal' },
+              { id: OTHER_WS, name: 'Khối Vận hành', role: 'member', member_count: 12, domain: 'NovaPay', type: 'organization' },
+            ] })
+          : path.endsWith('/contacts')
+            ? Promise.resolve({ contacts: CONTACTS, total: CONTACTS.length })
+            : Promise.reject(new Error(`unexpected ${path}`)))
+
+    await renderSidebar()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Khối Vận hành/ }))
+    const list = await screen.findByRole('listbox', { name: 'Không gian làm việc' })
+    expect(within(list).getByText('Workspace của bạn')).toBeInTheDocument()
+    expect(within(list).getByText('Workspace cá nhân')).toBeInTheDocument()
+    expect(within(list).getByText('NovaPay')).toBeInTheDocument()
+
+    const createLink = within(list).getByRole('link', { name: 'Tạo workspace' })
+    expect(createLink).toHaveAttribute('href', '/onboarding')
+  })
 })

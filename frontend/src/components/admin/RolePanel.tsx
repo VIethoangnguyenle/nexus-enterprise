@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { CircleAlert, Lock, Trash2 } from 'lucide-react'
 import type { RoleSummary } from '../../api/admin'
 import { useDeleteRole, useRole } from '../../hooks/useAdmin'
+import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { areaLabel, opLabel, roleName } from '../../lib/admin-model'
 import { statusOf } from '../../lib/errors'
 import { formatCount } from '../../lib/format'
@@ -37,12 +38,16 @@ function holdersLine(names: string[], total: number): string {
 export function RolePanel({ workspaceId, role, onEdit, onClose }: RolePanelProps) {
   const detail = useRole(workspaceId, role.id)
   const remove = useDeleteRole(workspaceId)
+  const { isPersonal } = useWorkspaceType()
   const [confirming, setConfirming] = useState(false)
 
   const custom = role.kind === 'custom'
   const name = roleName(role)
   const d = detail.data
   const count = d?.role.member_count ?? role.member_count
+  const permissions = d
+    ? (isPersonal ? d.permissions.filter((g) => g.area !== 'assets' && g.area !== 'approval') : d.permissions)
+    : []
 
   return (
     <SidePanel
@@ -100,13 +105,13 @@ export function RolePanel({ workspaceId, role, onEdit, onClose }: RolePanelProps
                   <Button variant="soft" size="sm" className="ml-auto" onClick={onEdit}>Sửa quyền</Button>
                 )}
               </div>
-              {d.permissions.length === 0 ? (
+              {permissions.length === 0 ? (
                 <p className="m-0 text-sm text-ink-muted">
                   {custom ? 'Vai trò này chưa cho quyền nào. Chọn Sửa quyền để thêm.' : 'Vai trò này chưa có quyền nào.'}
                 </p>
               ) : (
                 <ul aria-label="Quyền theo vùng" className="grid gap-2 m-0 p-0 list-none">
-                  {d.permissions.map((g) => (
+                  {permissions.map((g) => (
                     <li key={g.area} className="grid gap-1.5 p-3 rounded-surface bg-sunk">
                       <span className="text-sm font-semibold">{areaLabel(g.area)}</span>
                       <ul aria-label={`Quyền trên ${areaLabel(g.area)}`} className="flex flex-wrap gap-1.5 m-0 p-0 list-none">

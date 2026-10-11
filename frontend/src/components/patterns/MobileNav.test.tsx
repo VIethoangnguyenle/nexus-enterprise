@@ -277,4 +277,33 @@ describe('switching workspace from the sheet', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(api).not.toHaveBeenCalledWith('/auth/switch-tenant', expect.anything())
   })
+
+  it('uses Danh bạ as 3rd tab and leaves Tài sản and Danh bạ out of sheet in personal workspace', async () => {
+    api.mockImplementation((path: string, init?: RequestInit) => {
+      if (path === '/workspaces') {
+        return Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Không gian của bạn', type: 'personal' }] })
+      }
+      if (path === '/me/workspaces') {
+        return Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Không gian của bạn', role: 'owner', member_count: 1, domain: '', type: 'personal' }] })
+      }
+      return answer(path, init)
+    })
+
+    await renderBar()
+    const nav = await screen.findByRole('navigation', { name: 'Điều hướng di động' })
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['Tin nhắn', 'Tài liệu', 'Danh bạ'])
+    expect(api).not.toHaveBeenCalledWith('/approval/pending')
+
+    const { dialog } = await openSheet()
+    const sheetNav = within(dialog).getByRole('navigation', { name: 'Thêm' })
+    expect(within(sheetNav).getAllByRole('link').map((a) => a.textContent)).toEqual(['Quản trị', 'Cài đặt'])
+  })
+
+  it('renders Tạo workspace link at the end of the Đổi workspace sheet', async () => {
+    await renderBar()
+    const { dialog } = await openList()
+    const createLink = within(dialog).getByRole('link', { name: /Tạo workspace/ })
+    expect(createLink).toBeInTheDocument()
+    expect(createLink).toHaveAttribute('href', '/onboarding')
+  })
 })

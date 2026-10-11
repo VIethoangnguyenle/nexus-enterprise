@@ -4,6 +4,7 @@ import { ChevronRight, CircleAlert, Lock, TriangleAlert } from 'lucide-react'
 import type { PermissionArea } from '../../api/admin'
 import { usePermissionAreas, useRole, useSaveRolePermissions } from '../../hooks/useAdmin'
 import { usePhone } from '../../hooks/usePhone'
+import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import {
   changeCount, changesBetween, consequenceLine, grantsOf, roleName, setOp, type Grants,
 } from '../../lib/admin-model'
@@ -38,10 +39,14 @@ export function PermissionEditor({ workspaceId, roleId, onDone }: PermissionEdit
   const detail = useRole(workspaceId, roleId)
   const areasQ = usePermissionAreas(workspaceId)
   const save = useSaveRolePermissions(workspaceId, roleId)
+  const { isPersonal } = useWorkspaceType()
   const [draft, setDraft] = useState<Grants | null>(null)
 
   const role = detail.data?.role
-  const areas = useMemo<PermissionArea[]>(() => areasQ.data ?? [], [areasQ.data])
+  const areas = useMemo<PermissionArea[]>(() => {
+    const list = areasQ.data ?? []
+    return isPersonal ? list.filter((a) => a.area !== 'assets' && a.area !== 'approval') : list
+  }, [areasQ.data, isPersonal])
   const saved = useMemo(() => grantsOf(detail.data?.permissions ?? []), [detail.data])
   const current = draft ?? saved
   const changes = useMemo(() => changesBetween(saved, current, areas), [saved, current, areas])

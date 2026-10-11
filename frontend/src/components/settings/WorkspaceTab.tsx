@@ -1,11 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from '@tanstack/react-router'
-import { CircleAlert, Lock } from 'lucide-react'
+import {
+  AlertCircle, Building2, CircleAlert, ClipboardCheck, FileText, Key, Lock, Package, User,
+} from 'lucide-react'
+import { ApiError } from '../../api/client'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useMemberDirectory, useRoles } from '../../hooks/useAdmin'
-import { useUpdateWorkspaceDetails, useWorkspaceDetails } from '../../hooks/useWorkspaces'
+import {
+  useConvertToOrganization, useUpdateWorkspaceDetails, useWorkspaceDetails,
+} from '../../hooks/useWorkspaces'
+import { formatDateTime, formatRelative } from '../../lib/format'
 import { workspaceDisplayName } from '../../lib/workspace'
-import { Button, Textarea, TextField, toast } from '../primitives'
+import type { WorkspaceDetails } from '../../api/workspaces'
+import { Avatar, Button, Textarea, TextField, toast } from '../primitives'
+import { Dialog } from '../composites/Dialog'
 import { EmptyState } from '../spaces/EmptyState'
 import { LeaveWorkspace } from './LeaveWorkspace'
 
@@ -25,6 +33,7 @@ export function WorkspaceTab() {
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
   const q = useWorkspaceDetails(wsId)
   const save = useUpdateWorkspaceDetails(wsId)
+  const [convertOpen, setConvertOpen] = useState(false)
 
   const initial: Form = { name: q.data?.name ?? '', description: q.data?.description ?? '' }
   const [form, setForm] = useState<Form>(initial)
@@ -38,7 +47,6 @@ export function WorkspaceTab() {
     const pristine = !seeded.current || (form.name === seeded.current.name && form.description === seeded.current.description)
     seeded.current = initial
     if (pristine) setForm(initial)
-     
   }, [q.data])
 
   if (q.isError) {
@@ -92,62 +100,88 @@ export function WorkspaceTab() {
       <div className="grid gap-5 max-w-130">
         <ReadOnly label="Tên workspace" value={workspaceDisplayName(initial.name)} />
         <ReadOnly label="Mô tả" value={initial.description || 'Chưa có mô tả.'} />
+        <WorkspaceTypeCard
+          details={q.data}
+          onOpenConvert={() => setConvertOpen(true)}
+        />
         <p className="m-0 flex items-center gap-2 text-sm text-ink-muted">
           <Lock size={16} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
           Chỉ người có quyền Quản lý mới đổi được tên và mô tả. Nhờ quản trị viên của {workspaceDisplayName(workspaceName)}.
         </p>
         <LeaveWorkspace />
+        <ConvertDialog
+          open={convertOpen}
+          onClose={() => setConvertOpen(false)}
+          workspaceName={workspaceName}
+          wsId={wsId}
+          onSuccess={() => void q.refetch()}
+        />
       </div>
     )
   }
 
   return (
-    <form
-      aria-label="Workspace"
-      noValidate
-      onSubmit={(e) => { e.preventDefault(); void submit() }}
-      className="grid gap-5 max-w-130"
-    >
-      <TextField
-        ref={nameRef}
-        label="Tên workspace"
-        value={form.name}
-        maxLength={NAME_MAX + 20}
-        error={nameError}
-        onChange={(e) => {
-          setForm((f) => ({ ...f, name: e.target.value }))
-          if (nameError) setNameError(checkName(e.target.value))
-        }}
-        onBlur={() => setNameError(checkName(form.name))}
-      />
-      <div className="grid gap-1.5">
-        <label htmlFor="workspace-description" className="text-sm font-semibold text-ink">
-          Mô tả <span className="font-normal text-ink-muted">(không bắt buộc)</span>
-        </label>
-        <Textarea
-          id="workspace-description"
-          rows={3}
-          maxLength={DESCRIPTION_MAX}
-          value={form.description}
-          onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+    <>
+      <form
+        aria-label="Workspace"
+        noValidate
+        onSubmit={(e) => { e.preventDefault(); void submit() }}
+        className="grid gap-5 max-w-130"
+      >
+        <TextField
+          ref={nameRef}
+          label="Tên workspace"
+          value={form.name}
+          maxLength={NAME_MAX + 20}
+          error={nameError}
+          onChange={(e) => {
+            setForm((f) => ({ ...f, name: e.target.value }))
+            if (nameError) setNameError(checkName(e.target.value))
+          }}
+          onBlur={() => setNameError(checkName(form.name))}
         />
-      </div>
+        <div className="grid gap-1.5">
+          <label htmlFor="workspace-description" className="text-sm font-semibold text-ink">
+            Mô tả <span className="font-normal text-ink-muted">(không bắt buộc)</span>
+          </label>
+          <Textarea
+            id="workspace-description"
+            rows={3}
+            maxLength={DESCRIPTION_MAX}
+            value={form.description}
+            onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+          />
+        </div>
 
-      <div className="flex items-center gap-2">
-        <Button type="submit" loading={save.isPending} disabled={!changed}>Lưu thay đổi</Button>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={!changed || save.isPending}
-          onClick={() => { setForm(initial); setNameError(undefined) }}
-        >
-          Huỷ
-        </Button>
-      </div>
+        <div className="flex items-center gap-2">
+          <Button type="submit" loading={save.isPending} disabled={!changed}>Lưu thay đổi</Button>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={!changed || save.isPending}
+            onClick={() => { setForm(initial); setNameError(undefined) }}
+          >
+            Huỷ
+          </Button>
+        </div>
 
-      <AdminPointer />
-      <LeaveWorkspace />
-    </form>
+        <WorkspaceTypeCard
+          details={q.data}
+          onOpenConvert={() => setConvertOpen(true)}
+        />
+
+        <AdminPointer />
+        <LeaveWorkspace />
+      </form>
+
+      <ConvertDialog
+        open={convertOpen}
+        onClose={() => setConvertOpen(false)}
+        workspaceName={workspaceName}
+        wsId={wsId}
+        onSuccess={() => void q.refetch()}
+      />
+    </>
   )
 }
 
@@ -186,5 +220,247 @@ function AdminPointer() {
         Mở Quản trị
       </Link>
     </div>
+  )
+}
+
+function WorkspaceTypeCard({
+  details,
+  onOpenConvert,
+}: {
+  details: WorkspaceDetails
+  onOpenConvert: () => void
+}) {
+  const isPersonal = details.type === 'personal'
+  const isOwner = !!details.is_owner
+
+  if (isPersonal) {
+    return (
+      <section aria-labelledby="workspace-type-title" className="grid gap-3 p-4 rounded-surface bg-raised">
+        <div className="flex items-start gap-3">
+          <span
+            aria-hidden="true"
+            className="grid place-items-center w-10 h-10 rounded-lg bg-sunk text-ink-muted shrink-0"
+          >
+            <User size={20} strokeWidth={1.75} />
+          </span>
+          <div className="grid gap-1 min-w-0">
+            <h3 id="workspace-type-title" className="font-semibold text-base text-ink m-0">
+              Workspace cá nhân
+            </h3>
+            <span className="text-sm text-ink-muted">
+              Có Tin nhắn, Tài liệu và Danh bạ. Không có Tài sản, Phê duyệt và duyệt tài liệu.
+            </span>
+          </div>
+        </div>
+
+        {isOwner ? (
+          <div className="pl-13 max-sm:pl-0">
+            <Button
+              type="button"
+              variant="soft"
+              onClick={onOpenConvert}
+              className="max-sm:w-full min-h-9"
+            >
+              <Building2 size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
+              Chuyển thành workspace tổ chức
+            </Button>
+          </div>
+        ) : (
+          <p className="m-0 flex items-center gap-2 pl-13 max-sm:pl-0 text-sm text-ink-muted flex-wrap">
+            <Lock size={16} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
+            <span>
+              Chỉ chủ sở hữu,{' '}
+              <span className="inline-flex items-center gap-1.5 align-middle">
+                <Avatar size={20} name={details.owner_name || 'chủ sở hữu'} />
+                <span className="font-medium text-ink">{details.owner_name || 'chủ sở hữu'}</span>
+              </span>
+              , mới chuyển được workspace này thành workspace tổ chức.
+            </span>
+          </p>
+        )}
+      </section>
+    )
+  }
+
+  return (
+    <section aria-labelledby="workspace-type-title" className="grid gap-3 p-4 rounded-surface bg-raised">
+      <div className="flex items-start gap-3">
+        <span
+          aria-hidden="true"
+          className="grid place-items-center w-10 h-10 rounded-lg bg-accent-wash text-accent shrink-0"
+        >
+          <Building2 size={20} strokeWidth={1.75} />
+        </span>
+        <div className="grid gap-1 min-w-0">
+          <h3 id="workspace-type-title" className="font-semibold text-base text-ink m-0">
+            Workspace tổ chức
+          </h3>
+          <span className="text-sm text-ink-muted">
+            Có đủ Tin nhắn, Tài liệu, Phê duyệt, Tài sản và Danh bạ.
+          </span>
+        </div>
+      </div>
+
+      {details.converted_by_name && (
+        <div className="flex items-center gap-2 pl-13 max-sm:pl-0 text-sm text-ink-muted flex-wrap">
+          <Avatar size={20} name={details.converted_by_name} />
+          <span>
+            <strong className="text-ink font-semibold">{details.converted_by_name}</strong> đã chuyển sang workspace tổ chức
+            {details.converted_at && (
+              <>
+                {' · '}
+                <time dateTime={details.converted_at} title={formatDateTime(details.converted_at)}>
+                  {formatRelative(details.converted_at) || 'vừa xong'}
+                </time>
+              </>
+            )}
+          </span>
+        </div>
+      )}
+
+      {details.converted_by_name && (
+        <div className="pl-13 max-sm:pl-0">
+          <Link
+            to="/admin"
+            search={(prev: { ws?: string }) => (prev.ws ? { ws: prev.ws } : {})}
+            className="inline-flex items-center gap-2 h-8 px-3 rounded-md bg-hover text-small-ui font-semibold text-ink no-underline
+              hover:bg-line focus-ring transition-colors duration-quick max-sm:w-full max-sm:justify-center"
+          >
+            <Key size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
+            Đặt quyền Phê duyệt và Tài sản
+          </Link>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function ConvertDialog({
+  open,
+  onClose,
+  workspaceName,
+  wsId,
+  onSuccess,
+}: {
+  open: boolean
+  onClose: () => void
+  workspaceName: string
+  wsId: string
+  onSuccess: () => void
+}) {
+  const cancelBtnRef = useRef<HTMLButtonElement>(null)
+  const convertMutation = useConvertToOrganization(wsId)
+
+  const handleConvert = async () => {
+    try {
+      await convertMutation.mutateAsync()
+      onSuccess()
+      onClose()
+      toast('Đã chuyển thành workspace tổ chức')
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.status === 403) {
+          toast('Chỉ chủ sở hữu mới chuyển được workspace này.')
+          onSuccess()
+          return
+        }
+        if (err.status === 409) {
+          toast('Workspace này đã là workspace tổ chức.')
+          onSuccess()
+          onClose()
+          return
+        }
+      }
+      toast('Không chuyển được workspace. Kiểm tra kết nối rồi thử lại.')
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onClose={() => {
+        if (!convertMutation.isPending) onClose()
+      }}
+      title="Chuyển thành workspace tổ chức?"
+      initialFocusRef={cancelBtnRef}
+      role="alertdialog"
+      footer={
+        <div className="flex justify-end gap-2 max-sm:flex-col-reverse w-full sm:w-auto">
+          <Button
+            ref={cancelBtnRef}
+            type="button"
+            variant="ghost"
+            disabled={convertMutation.isPending}
+            onClick={onClose}
+            className="max-sm:w-full min-h-11 sm:min-h-9"
+          >
+            Huỷ
+          </Button>
+          <Button
+            type="button"
+            variant="primary"
+            loading={convertMutation.isPending}
+            onClick={() => void handleConvert()}
+            className="max-sm:w-full min-h-11 sm:min-h-9"
+          >
+            Chuyển thành tổ chức
+          </Button>
+        </div>
+      }
+    >
+      <div className="grid gap-4 text-sm text-ink">
+        <p className="m-0">
+          Mọi người trong <strong>{workspaceDisplayName(workspaceName)}</strong> sẽ thấy thêm:
+        </p>
+        <ul className="grid gap-2 m-0 p-0 list-none">
+          <li className="grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-3 py-1">
+            <span
+              aria-hidden="true"
+              className="grid place-items-center w-8 h-8 rounded-lg bg-warning-wash text-warning shrink-0"
+            >
+              <Package size={16} strokeWidth={1.75} />
+            </span>
+            <span className="grid gap-0.5">
+              <strong className="font-semibold text-ink">Tài sản</strong>
+              <span className="text-ink-muted">Kho tài sản, cấp và thu hồi tài sản.</span>
+            </span>
+          </li>
+          <li className="grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-3 py-1">
+            <span
+              aria-hidden="true"
+              className="grid place-items-center w-8 h-8 rounded-lg bg-warning-wash text-warning shrink-0"
+            >
+              <ClipboardCheck size={16} strokeWidth={1.75} />
+            </span>
+            <span className="grid gap-0.5">
+              <strong className="font-semibold text-ink">Phê duyệt</strong>
+              <span className="text-ink-muted">Tạo đề nghị, chuỗi người duyệt, Duyệt và Từ chối.</span>
+            </span>
+          </li>
+          <li className="grid grid-cols-[2rem_minmax(0,1fr)] items-center gap-3 py-1">
+            <span
+              aria-hidden="true"
+              className="grid place-items-center w-8 h-8 rounded-lg bg-warning-wash text-warning shrink-0"
+            >
+              <FileText size={16} strokeWidth={1.75} />
+            </span>
+            <span className="grid gap-0.5">
+              <strong className="font-semibold text-ink">Duyệt tài liệu</strong>
+              <span className="text-ink-muted">Nút Gửi duyệt trong văn bản.</span>
+            </span>
+          </li>
+        </ul>
+        <div className="grid gap-1 text-sm text-ink-muted">
+          <p className="m-0">Tin nhắn, tài liệu, thành viên và vai trò giữ nguyên.</p>
+          <p className="m-0">Tài sản và đề nghị phê duyệt có từ trước, đang bị ẩn, sẽ hiện lại cho người có quyền xem.</p>
+        </div>
+        <div className="flex gap-2.5 items-start p-3 rounded-lg bg-warning-wash text-ink text-sm">
+          <AlertCircle size={18} className="text-warning shrink-0 mt-0.5" aria-hidden="true" />
+          <span>
+            <strong>Không chuyển ngược lại được.</strong> Workspace tổ chức không trở về workspace cá nhân.
+          </span>
+        </div>
+      </div>
+    </Dialog>
   )
 }

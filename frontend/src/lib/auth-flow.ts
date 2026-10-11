@@ -1,5 +1,6 @@
 import { ApiError } from '../api/client'
 import { toDate } from './format'
+import type { WorkspaceType } from '../api/workspaces'
 
 /**
  * The words and decisions of the sign-in screens, kept apart from the markup so
@@ -77,10 +78,20 @@ export function roleLabel(role: string): string {
   return ROLE_LABELS[role] ?? 'Thành viên'
 }
 
-/** `novapay.vn · 64 thành viên · Thành viên`; the company only when the workspace claimed one. */
-export function workspaceRowDetail(w: { member_count: number; role: string; domain: string } | undefined): string {
+/** Subtitle for workspace rows: personal, organization, or legacy headcount detail. */
+export function workspaceRowDetail(
+  w: { member_count?: number; role?: string; domain?: string; type?: WorkspaceType } | undefined,
+): string {
   if (!w) return ''
-  const own = `${w.member_count} thành viên · ${roleLabel(w.role)}`
+  const role = w.role ? roleLabel(w.role) : ''
+  if (w.type === 'personal') {
+    return role ? `Workspace cá nhân · ${role}` : 'Workspace cá nhân'
+  }
+  if (w.type === 'organization') {
+    const org = w.domain || 'Workspace tổ chức'
+    return role ? `${org} · ${role}` : org
+  }
+  const own = `${w.member_count} thành viên · ${role}`
   return w.domain ? `${w.domain} · ${own}` : own
 }
 
