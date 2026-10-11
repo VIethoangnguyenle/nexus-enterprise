@@ -29,6 +29,11 @@ service MessagingService {
   rpc MarkThreadRead(ThreadRequest) returns (Empty);
   rpc ListThreads(ListThreadsRequest) returns (MessageList);
 
+  // Message lifecycle
+  rpc EditMessage(EditMessageRequest) returns (Message);
+  rpc DeleteMessage(MessageRef) returns (Empty);
+  rpc MarkMessageUnread(MessageRef) returns (Empty);
+
   // DMs
   rpc CreateDM(CreateDMRequest) returns (Channel);
   rpc ListDMs(ListDMsRequest) returns (ChannelList);
@@ -55,6 +60,7 @@ service MessagingService {
   rpc VotePoll(VotePollRequest) returns (Empty);
   rpc RemoveVote(RemoveVoteRequest) returns (Empty);
   rpc GetPoll(GetPollRequest) returns (Poll);
+  rpc ClosePoll(ClosePollRequest) returns (Poll);
 
   // Tasks
   rpc CreateTask(CreateTaskRequest) returns (ChatTask);
@@ -158,6 +164,11 @@ message SendMessageRequest {
   string linked_entity_id = 8;      // ID of the linked entity
   string content_format = 9;        // "markdown" (default), "plain"
   repeated string mentions = 10;    // User IDs mentioned in content
+  // Files from the channel's drive to send with the text in this one message
+  // (at most 20). Only drive_file_id, width and height are read; the server
+  // fills in the rest from the file.
+  repeated MessageAttachment attachments = 11;
+  string quoted_message_id = 12;    // A message of the same channel this one quotes
 }
 
 message Message {
@@ -182,6 +193,40 @@ message Message {
   repeated string reply_participant_ids = 17; // User IDs of the 3 most recent distinct repliers, newest first
   bool following = 18;                        // Caller follows the thread
   int32 thread_unread_count = 19;             // Replies the caller has not read; 0 when not following
+  repeated MessageAttachment attachments = 20; // In the order they were attached
+  google.protobuf.Timestamp edited_at = 21;    // Set once its sender changed the text
+  bool deleted = 22;                           // Deleted: no body, kept only as a thread's placeholder
+  QuotedMessage quoted = 23;                   // The message this one quotes, when any
+}
+
+// QuotedMessage is what a quote shows of the message it quotes.
+message QuotedMessage {
+  string id          = 1;
+  string sender_id   = 2;
+  string sender_name = 3;
+  string text        = 4;   // The opening of its plain text; empty when deleted
+  bool   deleted     = 5;
+}
+
+// MessageRef names one message.
+message MessageRef {
+  string message_id = 1;
+}
+
+message EditMessageRequest {
+  string message_id     = 1;
+  string content        = 2;
+  string content_format = 3;
+}
+
+// MessageAttachment is one file of the channel's drive shown in a message.
+message MessageAttachment {
+  string drive_file_id = 1;
+  string file_name     = 2;
+  string mime_type     = 3;
+  int64  size_bytes    = 4;
+  int32  width         = 5;   // Pixels, images only; 0 when unknown
+  int32  height        = 6;
 }
 
 message GetMessagesRequest {
@@ -389,6 +434,16 @@ message Poll {
   google.protobuf.Timestamp ends_at = 9;
   google.protobuf.Timestamp created_at = 10;
   int32 total_votes = 11;
+  // As the caller sees it: results show once they voted or the poll closed;
+  // until then vote counts, totals and voters are left out.
+  bool results_visible = 12;
+  repeated string my_option_ids = 13;
+  bool closed = 14;                       // Closed early, or past ends_at
+  google.protobuf.Timestamp closed_at = 15;
+}
+
+message ClosePollRequest {
+  string poll_id = 1;
 }
 
 // ============================================

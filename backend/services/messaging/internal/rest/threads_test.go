@@ -61,6 +61,15 @@ func TestRegisterRoutes_MountsTheThreadRoutes(t *testing.T) {
 		"DELETE /api/messages/:msgId/follow",
 		"POST /api/messages/:msgId/thread/read",
 		"GET /api/channels/:chId/threads",
+		"PATCH /api/messages/:msgId",
+		"DELETE /api/messages/:msgId",
+		"POST /api/messages/:msgId/unread",
+		"GET /api/workspaces/:id/chat-sections",
+		"POST /api/workspaces/:id/chat-sections",
+		"PATCH /api/workspaces/:id/chat-sections/:sectionId",
+		"DELETE /api/workspaces/:id/chat-sections/:sectionId",
+		"PUT /api/workspaces/:id/chat-sections/:sectionId/channels/:chId",
+		"DELETE /api/workspaces/:id/chat-sections/channels/:chId",
 	} {
 		assert.True(t, mounted[want], want)
 	}

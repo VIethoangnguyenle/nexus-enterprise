@@ -209,18 +209,18 @@ func TestPolls_CreateVoteRemoveAndDeny(t *testing.T) {
 	require.ErrorIs(t, svc.VotePoll(ctx, poll.Id, opt, outsider, k.f.userID), domain.ErrAccessDenied)
 	require.NoError(t, svc.VotePoll(ctx, poll.Id, opt, userNode, k.f.userID))
 	require.NoError(t, svc.VotePoll(ctx, poll.Id, opt, userNode, k.f.userID), "voting twice is idempotent")
-	got, err := svc.GetPoll(ctx, poll.Id, userNode)
+	got, err := svc.GetPoll(ctx, poll.Id, k.f.userID, userNode)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, got.Options[0].VoteCount)
 
-	_, err = svc.GetPoll(ctx, poll.Id, outsider)
+	_, err = svc.GetPoll(ctx, poll.Id, k.f.userID, outsider)
 	require.ErrorIs(t, err, domain.ErrAccessDenied)
 	require.ErrorIs(t, svc.RemoveVote(ctx, poll.Id, opt, outsider, k.f.userID), domain.ErrAccessDenied)
-	got, _ = svc.GetPoll(ctx, poll.Id, userNode)
+	got, _ = svc.GetPoll(ctx, poll.Id, k.f.userID, userNode)
 	assert.EqualValues(t, 1, got.Options[0].VoteCount, "a denied removal keeps the vote")
 
 	require.NoError(t, svc.RemoveVote(ctx, poll.Id, opt, userNode, k.f.userID))
-	got, _ = svc.GetPoll(ctx, poll.Id, userNode)
+	got, _ = svc.GetPoll(ctx, poll.Id, k.f.userID, userNode)
 	assert.EqualValues(t, 0, got.Options[0].VoteCount)
 
 	require.ErrorIs(t, svc.VotePoll(ctx, "", opt, userNode, k.f.userID), domain.ErrInvalidInput)
@@ -248,9 +248,10 @@ func TestPolls_RefuseAnOptionOfAnotherPoll(t *testing.T) {
 
 	err = svc.VotePoll(ctx, mine.Id, theirs.Options[0].Id, userNode, here.f.userID)
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
-	got, err := svc.GetPoll(ctx, theirs.Id, userNode)
-	require.NoError(t, err)
-	assert.EqualValues(t, 0, got.Options[0].VoteCount, "the other poll's tally is untouched")
+	// Counted in the table: results are hidden from a member who has not voted.
+	var votes int
+	require.NoError(t, here.f.pool.QueryRow(ctx, `SELECT count(*) FROM poll_votes WHERE poll_id = $1`, theirs.Id).Scan(&votes))
+	assert.Zero(t, votes, "the other poll's tally is untouched")
 }
 
 func TestTasks_CreateUpdateListAndDeny(t *testing.T) {

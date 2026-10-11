@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Vòng đời tin nhắn (đợt 2)"
-status: pending
+status: in-progress
 priority: P2
 effort: "2d"
 dependencies: [5, 7]
@@ -33,3 +33,7 @@ Sửa, xoá, trích dẫn khi trả lời, đánh dấu chưa đọc — như Go
 
 ## Risk Assessment
 - Tìm kiếm còn trả nội dung tin đã xoá → lọc `deleted_at IS NULL` trong `SearchMessages`; có test.
+
+## Tiến độ
+- Backend xong 2026-10-11: PATCH/DELETE `/api/messages/:id`, `POST /api/messages/:id/unread`, trích dẫn `quoted_message_id`, migration 040, WS `message_edited`/`message_deleted`; quản lý xoá tin người khác → dòng hệ thống trong nhóm; test deny. Spec `chat-message-lifecycle`. **Còn:** UI (nhãn Đã chỉnh sửa, hộp xác nhận, khối trích dẫn, ↑ sửa tin cuối).
+- Review: `plans/reports/code-reviewer-261011-0830-chat-wave2-backend.md` (C1, H1, H2, M1–M5, M8 đã sửa; M6 bằng dòng hệ thống; M7 — sửa tin không đổi danh sách nhắc tên — giữ nguyên, ghi vào câu hỏi mở).

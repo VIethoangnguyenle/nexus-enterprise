@@ -33,8 +33,8 @@ const devProxy = {
         if (/^\/api\/workspaces\/[^/]+\/documents/.test(url)) {
           return originalWeb(req, res, { ...opts, target: 'http://localhost:8182' })
         }
-        // /api/workspaces/:id/channels/* → messaging service
-        if (/^\/api\/workspaces\/[^/]+\/channels/.test(url)) {
+        // /api/workspaces/:id/channels/* and /chat-sections/* → messaging service
+        if (/^\/api\/workspaces\/[^/]+\/(channels|chat-sections)/.test(url)) {
           return originalWeb(req, res, { ...opts, target: 'http://localhost:8183' })
         }
         // /api/workspaces/:id/contacts → auth service

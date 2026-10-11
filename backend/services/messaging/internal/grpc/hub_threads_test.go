@@ -60,6 +60,24 @@ func TestThreadEvents_SummaryToTheChannelStateToTheFollowerOnly(t *testing.T) {
 	assert.Nil(t, sameNodeOtherTenant.next(t, isThreadReply("root-1"), quiet))
 }
 
+// Edits and deletions reach the channel's subscribers, and a deletion carries
+// no body.
+func TestLifecycleEvents_ReachTheChannelsSubscribers(t *testing.T) {
+	hub, url := startDomainHub(t, allowAll())
+	c := connect(t, url, identity{"u-a1", "alice", "n-a1", "tenant-a"})
+	subscribeAndWait(t, hub, c, "ch-1")
+
+	hub.BroadcastMessageEdited("ch-1", &pb.Message{Id: "m-1", ChannelId: "ch-1", Content: "sửa"})
+	got := c.next(t, func(e *pb.ServerEnvelope) bool { return e.GetMessageEdited() != nil }, 2*time.Second)
+	require.NotNil(t, got)
+	assert.Equal(t, "sửa", got.GetMessageEdited().Message.Content)
+
+	hub.BroadcastMessageDeleted("ch-1", &pb.MessageDeletedEvent{MessageId: "m-1", ChannelId: "ch-1", KeepPlaceholder: true})
+	got = c.next(t, func(e *pb.ServerEnvelope) bool { return e.GetMessageDeleted() != nil }, 2*time.Second)
+	require.NotNil(t, got)
+	assert.True(t, got.GetMessageDeleted().KeepPlaceholder)
+}
+
 // Without a tenant there is no boundary to deliver inside: nothing is sent.
 func TestThreadEvents_StateWithoutTenantIsDropped(t *testing.T) {
 	hub, url := startDomainHub(t, allowAll())

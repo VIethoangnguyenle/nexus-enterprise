@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Đính kèm như Google Chat (đợt 2)"
-status: pending
+status: in-progress
 priority: P1
 effort: "2-2.5d"
 dependencies: [5]
@@ -54,3 +54,7 @@ gửi **cùng** nội dung trong **một** tin, nhiều tệp mỗi tin, ảnh h
 ## Risk Assessment
 - Upload thất bại giữa chừng để lại tệp mồ côi trong drive kênh → tệp chưa gửi được xoá khi bỏ khỏi hàng chờ; tệp
   mồ côi do đóng tab: giữ nguyên (drive vẫn quản lý), ghi nhận trong spec.
+
+## Tiến độ
+- Backend xong 2026-10-11: migration 038, gửi chữ + tối đa 20 tệp trong một tin, tệp phải là tệp đã confirm nằm dưới root drive của chính kênh (kiểm theo chuỗi thư mục cha), `drive_file` kiểu cũ đi qua cùng phép kiểm; test deny (kênh khác, drive workspace, chưa confirm, trùng, quá 20). Spec `chat-attachments`. **Còn:** UI (hàng chờ, lưới ảnh, trình xem).
+- Review: `plans/reports/code-reviewer-261011-0830-chat-wave2-backend.md` (C1, H1, H2, M1–M5, M8 đã sửa; M6 bằng dòng hệ thống; M7 — sửa tin không đổi danh sách nhắc tên — giữ nguyên, ghi vào câu hỏi mở).

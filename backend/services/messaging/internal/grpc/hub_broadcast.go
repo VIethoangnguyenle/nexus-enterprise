@@ -7,23 +7,13 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	pb "ngac-platform/proto/messaging"
+	"ngac-platform/services/messaging/internal/domain"
 	"ngac-platform/services/messaging/internal/events"
 )
 
-// messageToChatMessage converts a gRPC Message to a WebSocket ChatMessage.
-func messageToChatMessage(m *pb.Message) *pb.ChatMessage {
-	return &pb.ChatMessage{
-		Id:              m.Id,
-		ChannelId:       m.ChannelId,
-		SenderId:        m.SenderId,
-		SenderName:      m.SenderName,
-		Content:         m.Content,
-		CreatedAt:       m.CreatedAt,
-		MessageType:     m.MessageType,
-		ParentMessageId: m.ParentMessageId,
-		ReplyCount:      m.ReplyCount,
-	}
-}
+// messageToChatMessage converts a gRPC Message to a WebSocket ChatMessage,
+// with the one conversion every frame that carries a message uses.
+func messageToChatMessage(m *pb.Message) *pb.ChatMessage { return domain.ChatMessageOf(m) }
 
 // marshalEnvelope serializes a ServerEnvelope to protobuf bytes.
 func marshalEnvelope(env *pb.ServerEnvelope) []byte {
@@ -251,6 +241,54 @@ func (h *Hub) BroadcastThreadReply(channelID string, ev *pb.ThreadReplyEvent) {
 	if h.rdb != nil {
 		if err := h.rdb.Publish(h.ctx, redisChanKey(channelID), data).Err(); err != nil {
 			slog.Warn("redis thread reply publish failed", "error", err)
+			h.broadcastLocal(channelID, data)
+		}
+		return
+	}
+	h.broadcastLocal(channelID, data)
+}
+
+// BroadcastMessageEdited tells the channel's subscribers a message's text changed.
+func (h *Hub) BroadcastMessageEdited(channelID string, msg *pb.Message) {
+	if channelID == "" || msg == nil {
+		return
+	}
+	h.publishToChannel(channelID, &pb.ServerEnvelope{Payload: &pb.ServerEnvelope_MessageEdited{
+		MessageEdited: &pb.MessageEditedEvent{Message: messageToChatMessage(msg), EditedAt: msg.EditedAt},
+	}})
+}
+
+// BroadcastMessageDeleted tells the channel's subscribers a message was deleted.
+// The event carries ids only; the deleted body is never sent.
+func (h *Hub) BroadcastMessageDeleted(channelID string, ev *pb.MessageDeletedEvent) {
+	if channelID == "" || ev == nil {
+		return
+	}
+	h.publishToChannel(channelID, &pb.ServerEnvelope{Payload: &pb.ServerEnvelope_MessageDeleted{MessageDeleted: ev}})
+}
+
+// BroadcastPollChanged tells the channel's subscribers a poll changed. It
+// names the poll only; each client refetches it under its own view, since
+// counts would show results to members who have not voted.
+func (h *Hub) BroadcastPollChanged(channelID, pollID string) {
+	if channelID == "" || pollID == "" {
+		return
+	}
+	h.publishToChannel(channelID, &pb.ServerEnvelope{Payload: &pb.ServerEnvelope_PollVote{
+		PollVote: &pb.PollVoteEvent{PollId: pollID, ChannelId: channelID},
+	}})
+}
+
+// publishToChannel delivers an envelope to a channel's subscribers on every
+// instance (Redis), or locally when Redis is absent or fails.
+func (h *Hub) publishToChannel(channelID string, env *pb.ServerEnvelope) {
+	data := marshalEnvelope(env)
+	if data == nil {
+		return
+	}
+	if h.rdb != nil {
+		if err := h.rdb.Publish(h.ctx, redisChanKey(channelID), data).Err(); err != nil {
+			slog.Warn("redis channel publish failed", "error", err)
 			h.broadcastLocal(channelID, data)
 		}
 		return

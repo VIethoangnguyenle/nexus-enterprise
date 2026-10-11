@@ -240,11 +240,11 @@ func TestListThreads_OrdersByActivityAndFilters(t *testing.T) {
 	w := newThreadWorld(t, 3)
 	a, b, c := w.users[0], w.users[1], w.users[2]
 	ctx := context.Background()
-	quiet := w.post(t, a, "")        // no replies: not a thread
-	older := w.post(t, b, "")        // a does not follow
-	followed := w.post(t, a, "")     // a follows, read
-	w.post(t, c, older.ID)           // older moves first
-	w.post(t, c, followed.ID)        // then followed
+	quiet := w.post(t, a, "")    // no replies: not a thread
+	older := w.post(t, b, "")    // a does not follow
+	followed := w.post(t, a, "") // a follows, read
+	w.post(t, c, older.ID)       // older moves first
+	w.post(t, c, followed.ID)    // then followed
 	require.NoError(t, w.st.MarkThreadRead(ctx, a, followed.ID))
 	unread := w.post(t, a, "")
 	w.post(t, b, unread.ID) // newest activity, unread for a

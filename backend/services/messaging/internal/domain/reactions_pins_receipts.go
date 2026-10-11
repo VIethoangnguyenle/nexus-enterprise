@@ -227,7 +227,7 @@ func (s *Service) SearchMessages(ctx context.Context, channelID, userNodeID, que
 	return &pb.MessageList{Messages: messagesToProto(msgs)}, nil
 }
 
-// EnrichMessagesWithMetadata adds reactions and pin status to a slice of messages.
+// EnrichMessagesWithMetadata adds reactions, pin status and attachments to a slice of messages.
 func (s *Service) EnrichMessagesWithMetadata(ctx context.Context, msgs []*store.Message, channelID string) error {
 	if len(msgs) == 0 {
 		return nil
@@ -249,11 +249,20 @@ func (s *Service) EnrichMessagesWithMetadata(ctx context.Context, msgs []*store.
 		return fmt.Errorf("load pins: %w", err)
 	}
 
+	// Batch load attachments
+	attachments, err := s.store.ListAttachmentsForMessages(ctx, msgIDs)
+	if err != nil {
+		return fmt.Errorf("load attachments: %w", err)
+	}
+
 	for _, m := range msgs {
 		if groups, ok := reactionsMap[m.ID]; ok {
 			m.Reactions = groups
 		}
 		m.IsPinned = pinnedSet[m.ID]
+		if !m.Deleted {
+			m.Attachments = attachments[m.ID]
+		}
 	}
-	return nil
+	return s.attachQuotes(ctx, msgs)
 }

@@ -40,12 +40,12 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 | 03 | [Sự kiện realtime cho thread](phase-03-realtime-thread-events.md) | 1 | P1 | 1d | 02 | completed |
 | 04 | [UI luồng in-line, panel Thread](phase-04-inline-stream-ui.md) | 1 | P1 | 2-3d | 01, 02, 03 | pending |
 | 05 | [Kiểm chứng đợt 1](phase-05-wave1-verification.md) | 1 | P1 | 0.5d | 04 | pending |
-| 06 | [Đính kèm như Google Chat](phase-06-attachments.md) | 2 | P1 | 2-2.5d | 05 | pending |
-| 07 | [Soạn tin định dạng HTML](phase-07-rich-text-messages.md) | 2 | P1 | 1.5d | 05 | pending |
-| 08 | [Vòng đời tin nhắn: sửa, xoá, trích dẫn, đánh dấu chưa đọc](phase-08-message-lifecycle.md) | 2 | P1 | 2d | 05, 07 | pending |
+| 06 | [Đính kèm như Google Chat](phase-06-attachments.md) | 2 | P1 | 2-2.5d | 05 | in-progress (backend xong) |
+| 07 | [Soạn tin định dạng HTML](phase-07-rich-text-messages.md) | 2 | P1 | 1.5d | 05 | in-progress (backend xong) |
+| 08 | [Vòng đời tin nhắn: sửa, xoá, trích dẫn, đánh dấu chưa đọc](phase-08-message-lifecycle.md) | 2 | P1 | 2d | 05, 07 | in-progress (backend xong) |
 | 09 | [Mức thông báo, Trang chủ theo thread](phase-09-notification-levels.md) | 4 | P3 | 1.5d | 08 | pending |
-| 10 | [Mục trong cột điều hướng](phase-10-navigator-sections.md) | 2 | P2 | 1.5d | 01, 05 | pending |
-| 11 | [Tạo trong chat: bình chọn, công việc, tài liệu, phê duyệt](phase-11-in-chat-create.md) | 2 | P2 | 2.5-3d | 01, 05 | pending |
+| 10 | [Mục trong cột điều hướng](phase-10-navigator-sections.md) | 2 | P2 | 1.5d | 01, 05 | in-progress (backend xong) |
+| 11 | [Tạo trong chat: bình chọn, công việc, tài liệu, phê duyệt](phase-11-in-chat-create.md) | 2 | P2 | 2.5-3d | 01, 05 | in-progress (backend xong) |
 
 ```text
 01 design (cả 4 đợt) ──► 02 data+API ──► 03 realtime ──► 04 UI ──► 05 verify   │ đợt 1 (merge riêng)

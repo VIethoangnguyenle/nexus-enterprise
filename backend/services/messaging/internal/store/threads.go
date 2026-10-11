@@ -37,12 +37,12 @@ const (
 
 	threadUnreadExpr = `CASE WHEN ` + threadFollowingExpr + ` THEN
 		(SELECT COUNT(*)::int FROM messages r
-		 WHERE r.parent_message_id = m.id AND r.sender_id <> $1
+		 WHERE r.parent_message_id = m.id AND r.sender_id <> $1 AND r.deleted_at IS NULL
 		   AND r.created_at > COALESCE(tf.last_read_at, m.created_at))
 		ELSE 0 END`
 
 	threadParticipantsExpr = `ARRAY(SELECT p.sender_id FROM messages p
-		WHERE p.parent_message_id = m.id
+		WHERE p.parent_message_id = m.id AND p.deleted_at IS NULL
 		GROUP BY p.sender_id ORDER BY MAX(p.created_at) DESC LIMIT 3)`
 
 	threadFollowJoin = `LEFT JOIN thread_follows tf ON tf.root_message_id = m.id AND tf.user_id = $1`
@@ -124,7 +124,7 @@ func (s *Store) ThreadFollowers(ctx context.Context, rootID string) ([]ThreadFol
 		 )
 		 SELECT u.id, COALESCE(u.ngac_node, ''),
 		        (SELECT COUNT(*)::int FROM messages r
-		         WHERE r.parent_message_id = m.id AND r.sender_id <> u.id
+		         WHERE r.parent_message_id = m.id AND r.sender_id <> u.id AND r.deleted_at IS NULL
 		           AND r.created_at > COALESCE(tf.last_read_at, m.created_at))
 		 FROM candidates c
 		 JOIN users u ON u.id = c.user_id
@@ -212,9 +212,11 @@ func (s *Store) ListThreads(ctx context.Context, channelID, userID, filter strin
 			&m.Content, &m.CreatedAt, &m.MessageType, &m.ParentMessageID,
 			&m.LinkedEntityType, &m.LinkedEntityID, &m.ReplyCount,
 			&m.ContentFormat, &m.Mentions, &m.LastReplyAt,
+			&m.EditedAt, &m.Deleted, &m.QuotedMessageID,
 			&m.Following, &m.ThreadUnread, &m.ReplyParticipantIDs); err != nil {
 			return nil, false, err
 		}
+		m.redactIfDeleted()
 		msgs = append(msgs, m)
 	}
 	if err := rows.Err(); err != nil {

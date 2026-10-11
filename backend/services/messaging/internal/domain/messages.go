@@ -5,7 +5,9 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -28,6 +30,8 @@ type SendMessageInput struct {
 	ParentMessageID  string
 	LinkedEntityType string
 	LinkedEntityID   string
+	Attachments      []AttachmentInput
+	QuotedMessageID  string
 }
 
 // SendMessage sends a message after access checking.
@@ -52,31 +56,63 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 			return nil, err
 		}
 	}
+	if in.QuotedMessageID != "" {
+		if err := s.checkQuote(ctx, in.QuotedMessageID, in.ChannelID); err != nil {
+			return nil, err
+		}
+	}
+	// An old-style file link is an attachment by another name: it goes through
+	// the same check, so it cannot name a file outside the channel's drive.
+	if in.LinkedEntityType == "drive_file" {
+		in.Attachments = append([]AttachmentInput{{DriveFileID: in.LinkedEntityID}}, in.Attachments...)
+		in.LinkedEntityType, in.LinkedEntityID = "", ""
+	}
+	attachments, err := s.resolveAttachments(ctx, in.ChannelID, in.Attachments)
+	if err != nil {
+		return nil, err
+	}
 
 	now := time.Now()
 	contentFormat := in.ContentFormat
 	if contentFormat == "" {
 		contentFormat = "markdown"
 	}
+	content, contentText, contentFormat, err := prepareContent(contentFormat, in.Content)
+	if err != nil {
+		return nil, err
+	}
+	// Judged after filtering: markup that filters down to nothing is no text.
+	if msgType == "user" && strings.TrimSpace(contentText) == "" && len(attachments) == 0 {
+		return nil, fmt.Errorf("%w: a message needs text or a file", ErrInvalidInput)
+	}
 	msg := &store.Message{
 		ID:               uuid.New().String(),
 		ChannelID:        in.ChannelID,
 		SenderID:         in.SenderID,
-		Content:          in.Content,
+		Content:          content,
+		ContentText:      contentText,
 		ContentFormat:    contentFormat,
 		Mentions:         in.Mentions,
 		MessageType:      msgType,
 		ParentMessageID:  in.ParentMessageID,
 		LinkedEntityType: in.LinkedEntityType,
 		LinkedEntityID:   in.LinkedEntityID,
+		Attachments:      attachments,
+		QuotedMessageID:  in.QuotedMessageID,
 		CreatedAt:        now,
 	}
 
 	if err := s.store.InsertMessage(ctx, msg); err != nil {
+		if errors.Is(err, store.ErrParentGone) {
+			return nil, fmt.Errorf("%w: the message replied to was deleted", ErrInvalidInput)
+		}
 		return nil, fmt.Errorf("send message: %w", err)
 	}
 
 	msg.SenderName = s.lookupUsername(ctx, in.SenderID)
+	if err := s.attachQuotes(ctx, []*store.Message{msg}); err != nil {
+		return nil, err
+	}
 
 	return messageToProto(msg), nil
 }
@@ -205,6 +241,10 @@ func messageToProto(m *store.Message) *pb.Message {
 		ReplyParticipantIds: m.ReplyParticipantIDs,
 		Following:           m.Following,
 		ThreadUnreadCount:   m.ThreadUnread,
+		Attachments:         attachmentsToProto(m.Attachments),
+		EditedAt:            editedAtProto(m),
+		Deleted:             m.Deleted,
+		Quoted:              quoteToProto(m.Quoted),
 	}
 }
 

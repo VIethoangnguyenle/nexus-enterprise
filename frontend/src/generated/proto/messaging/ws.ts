@@ -211,6 +211,18 @@ export interface ServerEnvelope {
          */
         threadState: ThreadStateEvent;
     } | {
+        oneofKind: "messageEdited";
+        /**
+         * @generated from protobuf field: messaging.MessageEditedEvent message_edited = 21
+         */
+        messageEdited: MessageEditedEvent;
+    } | {
+        oneofKind: "messageDeleted";
+        /**
+         * @generated from protobuf field: messaging.MessageDeletedEvent message_deleted = 22
+         */
+        messageDeleted: MessageDeletedEvent;
+    } | {
         oneofKind: undefined;
     };
 }
@@ -287,6 +299,72 @@ export interface ChatMessage {
      * @generated from protobuf field: string linked_entity_id = 13
      */
     linkedEntityId: string;
+    /**
+     * @generated from protobuf field: repeated messaging.ChatAttachment attachments = 14
+     */
+    attachments: ChatAttachment[];
+    /**
+     * @generated from protobuf field: messaging.ChatQuote quoted = 15
+     */
+    quoted?: ChatQuote; // The message this one quotes, when any
+}
+/**
+ * ChatQuote is what a quote shows (see messaging.QuotedMessage).
+ *
+ * @generated from protobuf message messaging.ChatQuote
+ */
+export interface ChatQuote {
+    /**
+     * @generated from protobuf field: string id = 1
+     */
+    id: string;
+    /**
+     * @generated from protobuf field: string sender_id = 2
+     */
+    senderId: string;
+    /**
+     * @generated from protobuf field: string sender_name = 3
+     */
+    senderName: string;
+    /**
+     * @generated from protobuf field: string text = 4
+     */
+    text: string;
+    /**
+     * @generated from protobuf field: bool deleted = 5
+     */
+    deleted: boolean;
+}
+/**
+ * ChatAttachment is one file of a message (see messaging.MessageAttachment).
+ *
+ * @generated from protobuf message messaging.ChatAttachment
+ */
+export interface ChatAttachment {
+    /**
+     * @generated from protobuf field: string drive_file_id = 1
+     */
+    driveFileId: string;
+    /**
+     * @generated from protobuf field: string file_name = 2
+     */
+    fileName: string;
+    /**
+     * @generated from protobuf field: string mime_type = 3
+     */
+    mimeType: string;
+    /**
+     * @generated from protobuf field: int64 size_bytes = 4
+     */
+    sizeBytes: string;
+    /**
+     * @generated from protobuf field: int32 width = 5
+     */
+    width: number;
+    /**
+     * @generated from protobuf field: int32 height = 6
+     */
+    height: number;
 }
 /**
  * @generated from protobuf message messaging.TypingEvent
@@ -486,6 +564,11 @@ export interface ReadReceiptEvent {
     lastMessageId: string;
 }
 /**
+ * PollVoteEvent says a poll changed (a vote, a withdrawal, a close). It names
+ * the poll only: counts would show results to members who have not voted, so
+ * clients refetch the poll under their own view. vote_count and total_votes are
+ * no longer filled.
+ *
  * @generated from protobuf message messaging.PollVoteEvent
  */
 export interface PollVoteEvent {
@@ -667,6 +750,49 @@ export interface ApprovalEvent {
      * @generated from protobuf field: string workspace_id = 7
      */
     workspaceId: string;
+}
+/**
+ * MessageEditedEvent carries a message whose sender changed its text.
+ *
+ * @generated from protobuf message messaging.MessageEditedEvent
+ */
+export interface MessageEditedEvent {
+    /**
+     * @generated from protobuf field: messaging.ChatMessage message = 1
+     */
+    message?: ChatMessage;
+    /**
+     * @generated from protobuf field: google.protobuf.Timestamp edited_at = 2
+     */
+    editedAt?: Timestamp;
+}
+/**
+ * MessageDeletedEvent says a message was deleted. A root message with replies
+ * stays as a placeholder (keep_placeholder); any other leaves the view.
+ *
+ * @generated from protobuf message messaging.MessageDeletedEvent
+ */
+export interface MessageDeletedEvent {
+    /**
+     * @generated from protobuf field: string message_id = 1
+     */
+    messageId: string;
+    /**
+     * @generated from protobuf field: string channel_id = 2
+     */
+    channelId: string;
+    /**
+     * @generated from protobuf field: string parent_message_id = 3
+     */
+    parentMessageId: string;
+    /**
+     * @generated from protobuf field: bool keep_placeholder = 4
+     */
+    keepPlaceholder: boolean;
+    /**
+     * @generated from protobuf field: int32 reply_count = 5
+     */
+    replyCount: number; // The thread's count after a reply was deleted
 }
 // @generated message type with reflection information, may provide speed optimized methods
 class ClientEnvelope$Type extends MessageType<ClientEnvelope> {
@@ -972,7 +1098,9 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
             { no: 17, name: "presence_event", kind: "message", oneof: "payload", T: () => PresenceEvent },
             { no: 18, name: "domain_event", kind: "message", oneof: "payload", T: () => DomainEvent },
             { no: 19, name: "workspace_subscribed", kind: "message", oneof: "payload", T: () => WorkspaceSubscribed },
-            { no: 20, name: "thread_state", kind: "message", oneof: "payload", T: () => ThreadStateEvent }
+            { no: 20, name: "thread_state", kind: "message", oneof: "payload", T: () => ThreadStateEvent },
+            { no: 21, name: "message_edited", kind: "message", oneof: "payload", T: () => MessageEditedEvent },
+            { no: 22, name: "message_deleted", kind: "message", oneof: "payload", T: () => MessageDeletedEvent }
         ]);
     }
     create(value?: PartialMessage<ServerEnvelope>): ServerEnvelope {
@@ -1089,6 +1217,18 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
                         threadState: ThreadStateEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).threadState)
                     };
                     break;
+                case /* messaging.MessageEditedEvent message_edited */ 21:
+                    message.payload = {
+                        oneofKind: "messageEdited",
+                        messageEdited: MessageEditedEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).messageEdited)
+                    };
+                    break;
+                case /* messaging.MessageDeletedEvent message_deleted */ 22:
+                    message.payload = {
+                        oneofKind: "messageDeleted",
+                        messageDeleted: MessageDeletedEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).messageDeleted)
+                    };
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -1152,6 +1292,12 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
         /* messaging.ThreadStateEvent thread_state = 20; */
         if (message.payload.oneofKind === "threadState")
             ThreadStateEvent.internalBinaryWrite(message.payload.threadState, writer.tag(20, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.MessageEditedEvent message_edited = 21; */
+        if (message.payload.oneofKind === "messageEdited")
+            MessageEditedEvent.internalBinaryWrite(message.payload.messageEdited, writer.tag(21, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.MessageDeletedEvent message_deleted = 22; */
+        if (message.payload.oneofKind === "messageDeleted")
+            MessageDeletedEvent.internalBinaryWrite(message.payload.messageDeleted, writer.tag(22, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1241,7 +1387,9 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
             { no: 10, name: "content_format", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
             { no: 11, name: "mentions", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ },
             { no: 12, name: "linked_entity_type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
-            { no: 13, name: "linked_entity_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+            { no: 13, name: "linked_entity_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 14, name: "attachments", kind: "message", repeat: 2 /*RepeatType.UNPACKED*/, T: () => ChatAttachment },
+            { no: 15, name: "quoted", kind: "message", T: () => ChatQuote }
         ]);
     }
     create(value?: PartialMessage<ChatMessage>): ChatMessage {
@@ -1258,6 +1406,7 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
         message.mentions = [];
         message.linkedEntityType = "";
         message.linkedEntityId = "";
+        message.attachments = [];
         if (value !== undefined)
             reflectionMergePartial<ChatMessage>(this, message, value);
         return message;
@@ -1305,6 +1454,12 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
                     break;
                 case /* string linked_entity_id */ 13:
                     message.linkedEntityId = reader.string();
+                    break;
+                case /* repeated messaging.ChatAttachment attachments */ 14:
+                    message.attachments.push(ChatAttachment.internalBinaryRead(reader, reader.uint32(), options));
+                    break;
+                case /* messaging.ChatQuote quoted */ 15:
+                    message.quoted = ChatQuote.internalBinaryRead(reader, reader.uint32(), options, message.quoted);
                     break;
                 default:
                     let u = options.readUnknownField;
@@ -1357,6 +1512,12 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
         /* string linked_entity_id = 13; */
         if (message.linkedEntityId !== "")
             writer.tag(13, WireType.LengthDelimited).string(message.linkedEntityId);
+        /* repeated messaging.ChatAttachment attachments = 14; */
+        for (let i = 0; i < message.attachments.length; i++)
+            ChatAttachment.internalBinaryWrite(message.attachments[i], writer.tag(14, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.ChatQuote quoted = 15; */
+        if (message.quoted)
+            ChatQuote.internalBinaryWrite(message.quoted, writer.tag(15, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1367,6 +1528,172 @@ class ChatMessage$Type extends MessageType<ChatMessage> {
  * @generated MessageType for protobuf message messaging.ChatMessage
  */
 export const ChatMessage = new ChatMessage$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class ChatQuote$Type extends MessageType<ChatQuote> {
+    constructor() {
+        super("messaging.ChatQuote", [
+            { no: 1, name: "id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "sender_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "sender_name", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "text", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "deleted", kind: "scalar", T: 8 /*ScalarType.BOOL*/ }
+        ]);
+    }
+    create(value?: PartialMessage<ChatQuote>): ChatQuote {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.id = "";
+        message.senderId = "";
+        message.senderName = "";
+        message.text = "";
+        message.deleted = false;
+        if (value !== undefined)
+            reflectionMergePartial<ChatQuote>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: ChatQuote): ChatQuote {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string id */ 1:
+                    message.id = reader.string();
+                    break;
+                case /* string sender_id */ 2:
+                    message.senderId = reader.string();
+                    break;
+                case /* string sender_name */ 3:
+                    message.senderName = reader.string();
+                    break;
+                case /* string text */ 4:
+                    message.text = reader.string();
+                    break;
+                case /* bool deleted */ 5:
+                    message.deleted = reader.bool();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: ChatQuote, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string id = 1; */
+        if (message.id !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.id);
+        /* string sender_id = 2; */
+        if (message.senderId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.senderId);
+        /* string sender_name = 3; */
+        if (message.senderName !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.senderName);
+        /* string text = 4; */
+        if (message.text !== "")
+            writer.tag(4, WireType.LengthDelimited).string(message.text);
+        /* bool deleted = 5; */
+        if (message.deleted !== false)
+            writer.tag(5, WireType.Varint).bool(message.deleted);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.ChatQuote
+ */
+export const ChatQuote = new ChatQuote$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class ChatAttachment$Type extends MessageType<ChatAttachment> {
+    constructor() {
+        super("messaging.ChatAttachment", [
+            { no: 1, name: "drive_file_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "file_name", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "mime_type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "size_bytes", kind: "scalar", T: 3 /*ScalarType.INT64*/ },
+            { no: 5, name: "width", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
+            { no: 6, name: "height", kind: "scalar", T: 5 /*ScalarType.INT32*/ }
+        ]);
+    }
+    create(value?: PartialMessage<ChatAttachment>): ChatAttachment {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.driveFileId = "";
+        message.fileName = "";
+        message.mimeType = "";
+        message.sizeBytes = "0";
+        message.width = 0;
+        message.height = 0;
+        if (value !== undefined)
+            reflectionMergePartial<ChatAttachment>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: ChatAttachment): ChatAttachment {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string drive_file_id */ 1:
+                    message.driveFileId = reader.string();
+                    break;
+                case /* string file_name */ 2:
+                    message.fileName = reader.string();
+                    break;
+                case /* string mime_type */ 3:
+                    message.mimeType = reader.string();
+                    break;
+                case /* int64 size_bytes */ 4:
+                    message.sizeBytes = reader.int64().toString();
+                    break;
+                case /* int32 width */ 5:
+                    message.width = reader.int32();
+                    break;
+                case /* int32 height */ 6:
+                    message.height = reader.int32();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: ChatAttachment, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string drive_file_id = 1; */
+        if (message.driveFileId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.driveFileId);
+        /* string file_name = 2; */
+        if (message.fileName !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.fileName);
+        /* string mime_type = 3; */
+        if (message.mimeType !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.mimeType);
+        /* int64 size_bytes = 4; */
+        if (message.sizeBytes !== "0")
+            writer.tag(4, WireType.Varint).int64(message.sizeBytes);
+        /* int32 width = 5; */
+        if (message.width !== 0)
+            writer.tag(5, WireType.Varint).int32(message.width);
+        /* int32 height = 6; */
+        if (message.height !== 0)
+            writer.tag(6, WireType.Varint).int32(message.height);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.ChatAttachment
+ */
+export const ChatAttachment = new ChatAttachment$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class TypingEvent$Type extends MessageType<TypingEvent> {
     constructor() {
@@ -2485,3 +2812,135 @@ class ApprovalEvent$Type extends MessageType<ApprovalEvent> {
  * @generated MessageType for protobuf message messaging.ApprovalEvent
  */
 export const ApprovalEvent = new ApprovalEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class MessageEditedEvent$Type extends MessageType<MessageEditedEvent> {
+    constructor() {
+        super("messaging.MessageEditedEvent", [
+            { no: 1, name: "message", kind: "message", T: () => ChatMessage },
+            { no: 2, name: "edited_at", kind: "message", T: () => Timestamp }
+        ]);
+    }
+    create(value?: PartialMessage<MessageEditedEvent>): MessageEditedEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        if (value !== undefined)
+            reflectionMergePartial<MessageEditedEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: MessageEditedEvent): MessageEditedEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* messaging.ChatMessage message */ 1:
+                    message.message = ChatMessage.internalBinaryRead(reader, reader.uint32(), options, message.message);
+                    break;
+                case /* google.protobuf.Timestamp edited_at */ 2:
+                    message.editedAt = Timestamp.internalBinaryRead(reader, reader.uint32(), options, message.editedAt);
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: MessageEditedEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* messaging.ChatMessage message = 1; */
+        if (message.message)
+            ChatMessage.internalBinaryWrite(message.message, writer.tag(1, WireType.LengthDelimited).fork(), options).join();
+        /* google.protobuf.Timestamp edited_at = 2; */
+        if (message.editedAt)
+            Timestamp.internalBinaryWrite(message.editedAt, writer.tag(2, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.MessageEditedEvent
+ */
+export const MessageEditedEvent = new MessageEditedEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class MessageDeletedEvent$Type extends MessageType<MessageDeletedEvent> {
+    constructor() {
+        super("messaging.MessageDeletedEvent", [
+            { no: 1, name: "message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "parent_message_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "keep_placeholder", kind: "scalar", T: 8 /*ScalarType.BOOL*/ },
+            { no: 5, name: "reply_count", kind: "scalar", T: 5 /*ScalarType.INT32*/ }
+        ]);
+    }
+    create(value?: PartialMessage<MessageDeletedEvent>): MessageDeletedEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.messageId = "";
+        message.channelId = "";
+        message.parentMessageId = "";
+        message.keepPlaceholder = false;
+        message.replyCount = 0;
+        if (value !== undefined)
+            reflectionMergePartial<MessageDeletedEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: MessageDeletedEvent): MessageDeletedEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string message_id */ 1:
+                    message.messageId = reader.string();
+                    break;
+                case /* string channel_id */ 2:
+                    message.channelId = reader.string();
+                    break;
+                case /* string parent_message_id */ 3:
+                    message.parentMessageId = reader.string();
+                    break;
+                case /* bool keep_placeholder */ 4:
+                    message.keepPlaceholder = reader.bool();
+                    break;
+                case /* int32 reply_count */ 5:
+                    message.replyCount = reader.int32();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: MessageDeletedEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string message_id = 1; */
+        if (message.messageId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.messageId);
+        /* string channel_id = 2; */
+        if (message.channelId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.channelId);
+        /* string parent_message_id = 3; */
+        if (message.parentMessageId !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.parentMessageId);
+        /* bool keep_placeholder = 4; */
+        if (message.keepPlaceholder !== false)
+            writer.tag(4, WireType.Varint).bool(message.keepPlaceholder);
+        /* int32 reply_count = 5; */
+        if (message.replyCount !== 0)
+            writer.tag(5, WireType.Varint).int32(message.replyCount);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.MessageDeletedEvent
+ */
+export const MessageDeletedEvent = new MessageDeletedEvent$Type();

@@ -33,6 +33,9 @@ const (
 	MessagingService_UnfollowThread_FullMethodName      = "/messaging.MessagingService/UnfollowThread"
 	MessagingService_MarkThreadRead_FullMethodName      = "/messaging.MessagingService/MarkThreadRead"
 	MessagingService_ListThreads_FullMethodName         = "/messaging.MessagingService/ListThreads"
+	MessagingService_EditMessage_FullMethodName         = "/messaging.MessagingService/EditMessage"
+	MessagingService_DeleteMessage_FullMethodName       = "/messaging.MessagingService/DeleteMessage"
+	MessagingService_MarkMessageUnread_FullMethodName   = "/messaging.MessagingService/MarkMessageUnread"
 	MessagingService_CreateDM_FullMethodName            = "/messaging.MessagingService/CreateDM"
 	MessagingService_ListDMs_FullMethodName             = "/messaging.MessagingService/ListDMs"
 	MessagingService_AddReaction_FullMethodName         = "/messaging.MessagingService/AddReaction"
@@ -48,6 +51,7 @@ const (
 	MessagingService_VotePoll_FullMethodName            = "/messaging.MessagingService/VotePoll"
 	MessagingService_RemoveVote_FullMethodName          = "/messaging.MessagingService/RemoveVote"
 	MessagingService_GetPoll_FullMethodName             = "/messaging.MessagingService/GetPoll"
+	MessagingService_ClosePoll_FullMethodName           = "/messaging.MessagingService/ClosePoll"
 	MessagingService_CreateTask_FullMethodName          = "/messaging.MessagingService/CreateTask"
 	MessagingService_UpdateTask_FullMethodName          = "/messaging.MessagingService/UpdateTask"
 	MessagingService_ListTasks_FullMethodName           = "/messaging.MessagingService/ListTasks"
@@ -75,6 +79,10 @@ type MessagingServiceClient interface {
 	UnfollowThread(ctx context.Context, in *ThreadRequest, opts ...grpc.CallOption) (*Empty, error)
 	MarkThreadRead(ctx context.Context, in *ThreadRequest, opts ...grpc.CallOption) (*Empty, error)
 	ListThreads(ctx context.Context, in *ListThreadsRequest, opts ...grpc.CallOption) (*MessageList, error)
+	// Message lifecycle
+	EditMessage(ctx context.Context, in *EditMessageRequest, opts ...grpc.CallOption) (*Message, error)
+	DeleteMessage(ctx context.Context, in *MessageRef, opts ...grpc.CallOption) (*Empty, error)
+	MarkMessageUnread(ctx context.Context, in *MessageRef, opts ...grpc.CallOption) (*Empty, error)
 	// DMs
 	CreateDM(ctx context.Context, in *CreateDMRequest, opts ...grpc.CallOption) (*Channel, error)
 	ListDMs(ctx context.Context, in *ListDMsRequest, opts ...grpc.CallOption) (*ChannelList, error)
@@ -96,6 +104,7 @@ type MessagingServiceClient interface {
 	VotePoll(ctx context.Context, in *VotePollRequest, opts ...grpc.CallOption) (*Empty, error)
 	RemoveVote(ctx context.Context, in *RemoveVoteRequest, opts ...grpc.CallOption) (*Empty, error)
 	GetPoll(ctx context.Context, in *GetPollRequest, opts ...grpc.CallOption) (*Poll, error)
+	ClosePoll(ctx context.Context, in *ClosePollRequest, opts ...grpc.CallOption) (*Poll, error)
 	// Tasks
 	CreateTask(ctx context.Context, in *CreateTaskRequest, opts ...grpc.CallOption) (*ChatTask, error)
 	UpdateTask(ctx context.Context, in *UpdateTaskRequest, opts ...grpc.CallOption) (*ChatTask, error)
@@ -244,6 +253,36 @@ func (c *messagingServiceClient) ListThreads(ctx context.Context, in *ListThread
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MessageList)
 	err := c.cc.Invoke(ctx, MessagingService_ListThreads_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) EditMessage(ctx context.Context, in *EditMessageRequest, opts ...grpc.CallOption) (*Message, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Message)
+	err := c.cc.Invoke(ctx, MessagingService_EditMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) DeleteMessage(ctx context.Context, in *MessageRef, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, MessagingService_DeleteMessage_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) MarkMessageUnread(ctx context.Context, in *MessageRef, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, MessagingService_MarkMessageUnread_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -400,6 +439,16 @@ func (c *messagingServiceClient) GetPoll(ctx context.Context, in *GetPollRequest
 	return out, nil
 }
 
+func (c *messagingServiceClient) ClosePoll(ctx context.Context, in *ClosePollRequest, opts ...grpc.CallOption) (*Poll, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Poll)
+	err := c.cc.Invoke(ctx, MessagingService_ClosePoll_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *messagingServiceClient) CreateTask(ctx context.Context, in *CreateTaskRequest, opts ...grpc.CallOption) (*ChatTask, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ChatTask)
@@ -452,6 +501,10 @@ type MessagingServiceServer interface {
 	UnfollowThread(context.Context, *ThreadRequest) (*Empty, error)
 	MarkThreadRead(context.Context, *ThreadRequest) (*Empty, error)
 	ListThreads(context.Context, *ListThreadsRequest) (*MessageList, error)
+	// Message lifecycle
+	EditMessage(context.Context, *EditMessageRequest) (*Message, error)
+	DeleteMessage(context.Context, *MessageRef) (*Empty, error)
+	MarkMessageUnread(context.Context, *MessageRef) (*Empty, error)
 	// DMs
 	CreateDM(context.Context, *CreateDMRequest) (*Channel, error)
 	ListDMs(context.Context, *ListDMsRequest) (*ChannelList, error)
@@ -473,6 +526,7 @@ type MessagingServiceServer interface {
 	VotePoll(context.Context, *VotePollRequest) (*Empty, error)
 	RemoveVote(context.Context, *RemoveVoteRequest) (*Empty, error)
 	GetPoll(context.Context, *GetPollRequest) (*Poll, error)
+	ClosePoll(context.Context, *ClosePollRequest) (*Poll, error)
 	// Tasks
 	CreateTask(context.Context, *CreateTaskRequest) (*ChatTask, error)
 	UpdateTask(context.Context, *UpdateTaskRequest) (*ChatTask, error)
@@ -529,6 +583,15 @@ func (UnimplementedMessagingServiceServer) MarkThreadRead(context.Context, *Thre
 func (UnimplementedMessagingServiceServer) ListThreads(context.Context, *ListThreadsRequest) (*MessageList, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListThreads not implemented")
 }
+func (UnimplementedMessagingServiceServer) EditMessage(context.Context, *EditMessageRequest) (*Message, error) {
+	return nil, status.Error(codes.Unimplemented, "method EditMessage not implemented")
+}
+func (UnimplementedMessagingServiceServer) DeleteMessage(context.Context, *MessageRef) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteMessage not implemented")
+}
+func (UnimplementedMessagingServiceServer) MarkMessageUnread(context.Context, *MessageRef) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method MarkMessageUnread not implemented")
+}
 func (UnimplementedMessagingServiceServer) CreateDM(context.Context, *CreateDMRequest) (*Channel, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateDM not implemented")
 }
@@ -573,6 +636,9 @@ func (UnimplementedMessagingServiceServer) RemoveVote(context.Context, *RemoveVo
 }
 func (UnimplementedMessagingServiceServer) GetPoll(context.Context, *GetPollRequest) (*Poll, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPoll not implemented")
+}
+func (UnimplementedMessagingServiceServer) ClosePoll(context.Context, *ClosePollRequest) (*Poll, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClosePoll not implemented")
 }
 func (UnimplementedMessagingServiceServer) CreateTask(context.Context, *CreateTaskRequest) (*ChatTask, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateTask not implemented")
@@ -856,6 +922,60 @@ func _MessagingService_ListThreads_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MessagingService_EditMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EditMessageRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).EditMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_EditMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).EditMessage(ctx, req.(*EditMessageRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_DeleteMessage_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MessageRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).DeleteMessage(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_DeleteMessage_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).DeleteMessage(ctx, req.(*MessageRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_MarkMessageUnread_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MessageRef)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).MarkMessageUnread(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_MarkMessageUnread_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).MarkMessageUnread(ctx, req.(*MessageRef))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MessagingService_CreateDM_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateDMRequest)
 	if err := dec(in); err != nil {
@@ -1126,6 +1246,24 @@ func _MessagingService_GetPoll_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MessagingService_ClosePoll_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ClosePollRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).ClosePoll(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_ClosePoll_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).ClosePoll(ctx, req.(*ClosePollRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MessagingService_CreateTask_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(CreateTaskRequest)
 	if err := dec(in); err != nil {
@@ -1244,6 +1382,18 @@ var MessagingService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _MessagingService_ListThreads_Handler,
 		},
 		{
+			MethodName: "EditMessage",
+			Handler:    _MessagingService_EditMessage_Handler,
+		},
+		{
+			MethodName: "DeleteMessage",
+			Handler:    _MessagingService_DeleteMessage_Handler,
+		},
+		{
+			MethodName: "MarkMessageUnread",
+			Handler:    _MessagingService_MarkMessageUnread_Handler,
+		},
+		{
 			MethodName: "CreateDM",
 			Handler:    _MessagingService_CreateDM_Handler,
 		},
@@ -1302,6 +1452,10 @@ var MessagingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetPoll",
 			Handler:    _MessagingService_GetPoll_Handler,
+		},
+		{
+			MethodName: "ClosePoll",
+			Handler:    _MessagingService_ClosePoll_Handler,
 		},
 		{
 			MethodName: "CreateTask",

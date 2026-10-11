@@ -19,6 +19,9 @@ type Broadcaster interface {
 	BroadcastToChannel(channelID string, msg *pb.Message)
 	BroadcastThreadReply(channelID string, ev *pb.ThreadReplyEvent)
 	SendThreadStates(tenantID string, states map[string]*pb.ThreadStateEvent)
+	BroadcastMessageEdited(channelID string, msg *pb.Message)
+	BroadcastMessageDeleted(channelID string, ev *pb.MessageDeletedEvent)
+	BroadcastPollChanged(channelID, pollID string)
 }
 
 // Handler serves messaging REST endpoints.
@@ -55,6 +58,19 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/messages/:msgId/thread/read", h.MarkThreadRead)
 	api.GET("/channels/:chId/threads", h.ListThreads)
 
+	// Personal navigator sections
+	api.GET("/workspaces/:id/chat-sections", h.ListSections)
+	api.POST("/workspaces/:id/chat-sections", h.CreateSection)
+	api.PATCH("/workspaces/:id/chat-sections/:sectionId", h.UpdateSection)
+	api.DELETE("/workspaces/:id/chat-sections/:sectionId", h.DeleteSection)
+	api.PUT("/workspaces/:id/chat-sections/:sectionId/channels/:chId", h.PlaceChannel)
+	api.DELETE("/workspaces/:id/chat-sections/channels/:chId", h.UnplaceChannel)
+
+	// Message lifecycle
+	api.PATCH("/messages/:msgId", h.EditMessage)
+	api.DELETE("/messages/:msgId", h.DeleteMessage)
+	api.POST("/messages/:msgId/unread", h.MarkMessageUnread)
+
 	// Channel Members
 	api.POST("/channels/:chId/members", h.AddChannelMember)
 	api.GET("/channels/:chId/members", h.ListChannelMembers)
@@ -86,6 +102,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/polls/:pollId/vote", h.VotePoll)
 	api.DELETE("/polls/:pollId/vote", h.RemoveVote)
 	api.GET("/polls/:pollId", h.GetPoll)
+	api.POST("/polls/:pollId/close", h.ClosePoll)
 
 	// Tasks
 	api.POST("/channels/:chId/tasks", h.CreateTask)
@@ -187,9 +204,19 @@ func (h *Handler) SendMessage(c echo.Context) error {
 		LinkedEntityType string   `json:"linked_entity_type"`
 		LinkedEntityID   string   `json:"linked_entity_id"`
 		ParentMessageID  string   `json:"parent_message_id"`
+		QuotedMessageID  string   `json:"quoted_message_id"`
+		Attachments      []struct {
+			DriveFileID string `json:"drive_file_id"`
+			Width       int32  `json:"width"`
+			Height      int32  `json:"height"`
+		} `json:"attachments"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	attachments := make([]domain.AttachmentInput, 0, len(body.Attachments))
+	for _, a := range body.Attachments {
+		attachments = append(attachments, domain.AttachmentInput{DriveFileID: a.DriveFileID, Width: a.Width, Height: a.Height})
 	}
 
 	msg, err := h.svc.SendMessage(c.Request().Context(), domain.SendMessageInput{
@@ -202,6 +229,8 @@ func (h *Handler) SendMessage(c echo.Context) error {
 		ParentMessageID:  body.ParentMessageID,
 		LinkedEntityType: body.LinkedEntityType,
 		LinkedEntityID:   body.LinkedEntityID,
+		Attachments:      attachments,
+		QuotedMessageID:  body.QuotedMessageID,
 	})
 	if err != nil {
 		return httputil.MapDomainError(err)

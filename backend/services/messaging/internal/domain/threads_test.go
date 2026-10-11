@@ -17,9 +17,9 @@ import (
 // threadTalk is a talk whose first message has one reply by a second user.
 type threadTalk struct {
 	*talk
-	rootID   string
-	replier  string // users.id of the replier
-	replyID  string
+	rootID  string
+	replier string // users.id of the replier
+	replyID string
 }
 
 const replierNode = "ngac-user-replier"

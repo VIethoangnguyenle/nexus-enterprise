@@ -22,16 +22,17 @@ const threadPageLimit = 50
 // of this channel add to a thread they may not write, and nested replies are
 // not part of the in-line thread model.
 func (s *Service) checkReplyParent(ctx context.Context, parentID, channelID string) error {
-	parentChannel, grandparent, found, err := s.store.MessageThreadInfo(ctx, parentID)
+	parent, err := s.store.GetMessageFacts(ctx, parentID)
 	if err != nil {
 		return fmt.Errorf("load parent message: %w", err)
 	}
 	switch {
-	case !found:
-		return fmt.Errorf("%w: unknown parent message %s", ErrInvalidInput, parentID)
-	case parentChannel != channelID:
-		return fmt.Errorf("%w: parent message %s is not in this channel", ErrInvalidInput, parentID)
-	case grandparent != "":
+	case parent == nil || parent.ChannelID != channelID:
+		// One answer for both, so a writer learns nothing of other channels' ids.
+		return fmt.Errorf("%w: the parent message is not one of this channel's", ErrInvalidInput)
+	case parent.Deleted:
+		return fmt.Errorf("%w: the message replied to was deleted", ErrInvalidInput)
+	case parent.ParentMessageID != "":
 		return fmt.Errorf("%w: a reply cannot be replied to; reply to the thread's root message", ErrInvalidInput)
 	}
 	return nil
@@ -143,7 +144,7 @@ func (s *Service) ThreadReplyFanout(ctx context.Context, reply *pb.Message, call
 		return nil, err
 	}
 	ev := &pb.ThreadReplyEvent{
-		Message:             chatMessageOf(reply),
+		Message:             ChatMessageOf(reply),
 		ParentMessageId:     rootID,
 		ReplyCount:          summary.ReplyCount,
 		ReplyParticipantIds: summary.Participants,
@@ -205,7 +206,7 @@ func (s *Service) AnnounceReply(ctx context.Context, reply *pb.Message, callerTe
 		if err != nil || fan == nil {
 			slog.Warn("thread summary not built; announcing the reply alone", "message_id", reply.Id, "error", err)
 			to.BroadcastThreadReply(reply.ChannelId, &pb.ThreadReplyEvent{
-				Message: chatMessageOf(reply), ParentMessageId: reply.ParentMessageId,
+				Message: ChatMessageOf(reply), ParentMessageId: reply.ParentMessageId,
 			})
 			return
 		}
@@ -214,13 +215,21 @@ func (s *Service) AnnounceReply(ctx context.Context, reply *pb.Message, callerTe
 	}()
 }
 
-// chatMessageOf is the live-stream form of a stored message.
-func chatMessageOf(m *pb.Message) *pb.ChatMessage {
-	return &pb.ChatMessage{
+// ChatMessageOf is the live-stream form of a stored message: the one
+// conversion every frame that carries a message uses.
+func ChatMessageOf(m *pb.Message) *pb.ChatMessage {
+	cm := &pb.ChatMessage{
 		Id: m.Id, ChannelId: m.ChannelId, SenderId: m.SenderId, SenderName: m.SenderName,
 		Content: m.Content, CreatedAt: m.CreatedAt, MessageType: m.MessageType,
 		ParentMessageId: m.ParentMessageId, ReplyCount: m.ReplyCount,
+		ContentFormat: m.ContentFormat, Mentions: m.Mentions,
+		LinkedEntityType: m.LinkedEntityType, LinkedEntityId: m.LinkedEntityId,
+		Attachments: chatAttachments(m.Attachments),
 	}
+	if q := m.Quoted; q != nil {
+		cm.Quoted = &pb.ChatQuote{Id: q.Id, SenderId: q.SenderId, SenderName: q.SenderName, Text: q.Text, Deleted: q.Deleted}
+	}
+	return cm
 }
 
 // ListThreads returns the threads of a channel, most recently active first,

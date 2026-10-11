@@ -88,7 +88,7 @@ func TestPollAndTaskLookupFailuresAreNotNotFound(t *testing.T) {
 	t.Cleanup(down.Close)
 	svc := domain.NewService(store.NewStore(down), f.read, f.write, stubAuth{}, nil)
 
-	_, err = svc.GetPoll(context.Background(), "p1", userNode)
+	_, err = svc.GetPoll(context.Background(), "p1", "", userNode)
 	require.Error(t, err)
 	require.NotErrorIs(t, err, domain.ErrNotFound)
 
@@ -96,6 +96,6 @@ func TestPollAndTaskLookupFailuresAreNotNotFound(t *testing.T) {
 	require.Error(t, err)
 	require.NotErrorIs(t, err, domain.ErrNotFound)
 
-	_, err = f.svc.GetPoll(context.Background(), "no-such-poll", userNode)
+	_, err = f.svc.GetPoll(context.Background(), "no-such-poll", "", userNode)
 	require.ErrorIs(t, err, domain.ErrNotFound)
 }

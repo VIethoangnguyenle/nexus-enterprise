@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Soạn tin định dạng HTML (đợt 2)"
-status: pending
+status: in-progress
 priority: P1
 effort: "1.5d"
 dependencies: [5]
@@ -50,3 +50,7 @@ Google Chat và lọc ở server.
 
 ## Risk Assessment
 - Tin cũ dạng markdown → giữ đường render markdown hiện có theo `content_format`; không chuyển đổi dữ liệu.
+
+## Tiến độ
+- Backend xong 2026-10-11: bluemonday allowlist, nội dung có markup bị lọc như html bất kể nhãn, `content_format` lạ → 400, rỗng sau lọc → 400, migration 039 `content_text` + `search_vector` theo văn bản thuần. Spec `chat-rich-text`. **Còn:** thanh định dạng, phím tắt, hộp link (UI).
+- Review: `plans/reports/code-reviewer-261011-0830-chat-wave2-backend.md` (C1, H1, H2, M1–M5, M8 đã sửa; M6 bằng dòng hệ thống; M7 — sửa tin không đổi danh sách nhắc tên — giữ nguyên, ghi vào câu hỏi mở).

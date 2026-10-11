@@ -264,7 +264,8 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 		   SELECT root.channel_id, COUNT(r.id)::int AS n
 		   FROM followed f
 		   JOIN messages root ON root.id = f.id
-		   JOIN messages r ON r.parent_message_id = f.id AND r.sender_id <> $1 AND r.created_at > f.last_read_at
+		   JOIN messages r ON r.parent_message_id = f.id AND r.sender_id <> $1 AND r.deleted_at IS NULL
+		     AND r.created_at > f.last_read_at
 		   GROUP BY root.channel_id
 		 )
 		 SELECT cm.channel_id,
@@ -274,7 +275,7 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 		 FROM (SELECT DISTINCT unnest($2::text[]) AS channel_id) cm
 		 LEFT JOIN read_receipts rr ON rr.user_id = $1 AND rr.channel_id = cm.channel_id
 		 LEFT JOIN messages m ON m.channel_id = cm.channel_id
-		   AND m.parent_message_id IS NULL
+		   AND m.parent_message_id IS NULL AND m.deleted_at IS NULL
 		   AND (rr.last_read_at IS NULL OR m.created_at > rr.last_read_at)
 		 LEFT JOIN thread_unread tu ON tu.channel_id = cm.channel_id
 		 GROUP BY cm.channel_id, rr.last_message_id`,
@@ -305,7 +306,7 @@ func (s *Store) SearchMessages(ctx context.Context, channelID, query string, lim
 	rows, err := s.db.Query(ctx,
 		`SELECT `+messageCols+`
 		 FROM messages m LEFT JOIN users u ON m.sender_id = u.id
-		 WHERE m.channel_id = $1 AND m.search_vector @@ plainto_tsquery('english', $2)
+		 WHERE m.channel_id = $1 AND m.deleted_at IS NULL AND m.search_vector @@ plainto_tsquery('english', $2)
 		 ORDER BY ts_rank(m.search_vector, plainto_tsquery('english', $2)) DESC
 		 LIMIT $3`,
 		channelID, query, limit)

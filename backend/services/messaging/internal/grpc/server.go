@@ -88,7 +88,15 @@ func (s *MessagingServer) CreateDM(ctx context.Context, req *pb.CreateDMRequest)
 
 // SendMessage delegates to domain.Service.SendMessage and broadcasts via WebSocket.
 func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRequest) (*pb.Message, error) {
+	attachments := make([]domain.AttachmentInput, 0, len(req.Attachments))
+	for _, a := range req.Attachments {
+		attachments = append(attachments, domain.AttachmentInput{DriveFileID: a.DriveFileId, Width: a.Width, Height: a.Height})
+	}
 	msg, err := s.svc.SendMessage(ctx, domain.SendMessageInput{
+		Attachments:      attachments,
+		QuotedMessageID:  req.QuotedMessageId,
+		ContentFormat:    req.ContentFormat,
+		Mentions:         req.Mentions,
 		ChannelID:        req.ChannelId,
 		SenderID:         grpcauth.CallerFrom(ctx).UserID,
 		SenderNodeID:     grpcauth.CallerFrom(ctx).NGACNodeID,
@@ -181,6 +189,44 @@ func (s *MessagingServer) ListThreads(ctx context.Context, req *pb.ListThreadsRe
 		return nil, domainError("list threads", err)
 	}
 	return list, nil
+}
+
+// EditMessage delegates to domain.Service.EditMessage and tells the channel.
+func (s *MessagingServer) EditMessage(ctx context.Context, req *pb.EditMessageRequest) (*pb.Message, error) {
+	caller := grpcauth.CallerFrom(ctx)
+	msg, err := s.svc.EditMessage(ctx, req.MessageId, caller.UserID, caller.NGACNodeID, req.Content, req.ContentFormat)
+	if err != nil {
+		return nil, domainError("edit message", err)
+	}
+	if s.hub != nil {
+		s.hub.BroadcastMessageEdited(msg.ChannelId, msg)
+	}
+	return msg, nil
+}
+
+// DeleteMessage delegates to domain.Service.DeleteMessage and tells the channel.
+func (s *MessagingServer) DeleteMessage(ctx context.Context, req *pb.MessageRef) (*pb.Empty, error) {
+	caller := grpcauth.CallerFrom(ctx)
+	out, err := s.svc.DeleteMessage(ctx, req.MessageId, caller.UserID, caller.NGACNodeID)
+	if err != nil {
+		return nil, domainError("delete message", err)
+	}
+	if s.hub != nil {
+		s.hub.BroadcastMessageDeleted(out.Event.ChannelId, out.Event)
+		if out.Notice != nil {
+			s.hub.BroadcastToChannel(out.Notice.ChannelId, out.Notice)
+		}
+	}
+	return &pb.Empty{}, nil
+}
+
+// MarkMessageUnread delegates to domain.Service.MarkMessageUnread.
+func (s *MessagingServer) MarkMessageUnread(ctx context.Context, req *pb.MessageRef) (*pb.Empty, error) {
+	caller := grpcauth.CallerFrom(ctx)
+	if err := s.svc.MarkMessageUnread(ctx, req.MessageId, caller.UserID, caller.NGACNodeID); err != nil {
+		return nil, domainError("mark message unread", err)
+	}
+	return &pb.Empty{}, nil
 }
 
 // FindThreadsByEntity delegates to domain.Service.FindThreadsByEntity.
