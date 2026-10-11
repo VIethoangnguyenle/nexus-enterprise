@@ -1,20 +1,24 @@
-import { useState, useRef, useEffect } from 'react'
-import { Link, useLocation, useMatches } from '@tanstack/react-router'
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Link, useLocation, useMatches, useNavigate } from '@tanstack/react-router'
 import { useAuthStore } from '../../stores/auth.store'
 import { useUiStore } from '../../stores/ui.store'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { usePeople } from '../../hooks/usePeople'
 import { useWorkspaceSwitcher } from '../../hooks/useSwitchWorkspace'
-import { usePreferences } from '../../hooks/usePreferences'
 import { useWorkspaceType } from '../../hooks/useWorkspaceType'
+import { sidebarShortcutLabel, useSidebarCollapsed } from '../../hooks/useSidebarCollapsed'
+import { useUnreadNotificationCount } from '../../hooks/useNotifications'
 import { logoutSession } from '../../api/client'
 import { workspaceRowDetail } from '../../lib/auth-flow'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { formatCount } from '../../lib/format'
+import { DURATION, useMotionPresets } from '../../lib/motion'
 import { UNKNOWN_PERSON } from '../../lib/people'
-import { Avatar, IconButton } from '../primitives'
+import { Avatar, IconButton, MenuItem, MenuSeparator, Popover, Pressable, Tooltip } from '../primitives'
+import { NotificationPanel } from './NotificationPanel'
 import {
-  MessageSquare, FolderOpen, Users, Package, ClipboardCheck, Settings, LogOut, ChevronDown, Check, ShieldCheck, Plus,
+  MessageSquare, FolderOpen, Users, Package, ClipboardCheck, Settings, LogOut, ChevronDown, ShieldCheck, Plus,
+  Bell, PanelLeft,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -27,7 +31,7 @@ type NavItem = {
   to: string
 }
 
-/** DESIGN.md §5: five main destinations, then administration and settings at the foot. */
+/** DESIGN.md §5: five main destinations, then Thông báo, Quản trị and Cài đặt at the foot. */
 const mainNavItems: NavItem[] = [
   { id: 'messaging', icon: MessageSquare, label: 'Tin nhắn', to: '/channels' },
   { id: 'drive', icon: FolderOpen, label: 'Tài liệu', to: '/drive' },
@@ -40,15 +44,22 @@ const footNavItems: NavItem[] = [
   { id: 'settings', icon: Settings, label: 'Cài đặt', to: '/settings' },
 ]
 
+/** What the number on a destination counts, for the hidden text read after its name. */
+const countUnit = (id: string) => (id === 'approval' ? 'chờ bạn' : 'chưa đọc')
+
+const initialOf = (name: string) => Array.from(name.trim())[0]?.toLocaleUpperCase('vi') ?? 'N'
+
 interface AppSidebarProps {
   workspaceName?: string
   unreadCounts?: Partial<Record<string, number>>
 }
 
 /**
- * App sidebar (DESIGN.md §5, design/mockups/core-screens.html): sunk tone,
- * 232px, workspace switcher on top, main destinations, then Quản trị, Cài đặt
- * and the signed-in person at the foot.
+ * Main menu (DESIGN.md §5 "Menu chính", design/mockups/app-rail.html). One
+ * `<nav>` in two states the person chooses between: the 72px rail (icon and a
+ * small label per destination, the default) and the 232px sidebar. The toggle
+ * sits alone on the top row in both, Ctrl+\ (⌘\) does the same, and the choice
+ * is remembered per person on this device.
  */
 export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps) {
   const user = useAuthStore((s) => s.user)
@@ -58,33 +69,45 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
   const { isPersonal } = useWorkspaceType()
   // Only workspaces the person can enter, and choosing one re-scopes the session.
   const switcher = useWorkspaceSwitcher()
-  const workspaces = switcher.workspaces
   const people = usePeople(workspaceId)
-  const { prefs } = usePreferences()
-  // Rail: icons only, 64px (DESIGN.md §5); every label moves to the tooltip.
-  const rail = prefs.sidebarCollapsed
   const meAsPerson = user?.id ? people.byUserId.get(user.id) : undefined
+  const notificationCount = useUnreadNotificationCount()
+  const navigate = useNavigate()
+  const motion = useMotionPresets()
 
-  const [wsDropdownOpen, setWsDropdownOpen] = useState(false)
-  const wsDropdownRef = useRef<HTMLDivElement>(null)
+  const [wsOpen, setWsOpen] = useState(false)
+  const [acctOpen, setAcctOpen] = useState(false)
+  const [notifOpen, setNotifOpen] = useState(false)
+  const navRef = useRef<HTMLElement>(null)
+  const wsRef = useRef<HTMLButtonElement | null>(null)
+  const acctRef = useRef<HTMLButtonElement | null>(null)
+  const bellRef = useRef<HTMLButtonElement>(null)
 
+  // Toggle with the transition of DESIGN.md §5: content fades out (100ms), the
+  // column changes width (280ms), content fades in. Reduced motion swaps at once.
+  const [swapping, setSwapping] = useState(false)
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([])
+  const swapRef = useRef<() => void>(() => {})
+  const onShortcut = useCallback(() => swapRef.current(), [])
+  const { collapsed: rail, toggle } = useSidebarCollapsed({ shortcut: onShortcut })
   useEffect(() => {
-    if (!wsDropdownOpen) return
-    const handleClick = (e: MouseEvent) => {
-      if (wsDropdownRef.current && !wsDropdownRef.current.contains(e.target as Node)) setWsDropdownOpen(false)
+    swapRef.current = () => {
+      setWsOpen(false)
+      setAcctOpen(false)
+      setNotifOpen(false)
+      if (motion.reduced) return toggle()
+      if (timers.current.length > 0) return
+      setSwapping(true)
+      timers.current = [setTimeout(() => {
+        toggle()
+        timers.current = [setTimeout(() => {
+          setSwapping(false)
+          timers.current = []
+        }, DURATION.layout * 1000)]
+      }, 100)]
     }
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setWsDropdownOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    document.addEventListener('keydown', handleKey)
-    return () => {
-      document.removeEventListener('mousedown', handleClick)
-      document.removeEventListener('keydown', handleKey)
-    }
-  }, [wsDropdownOpen])
-
-  const handleSwitchWorkspace = (wsId: string) => switcher.choose(wsId, () => setWsDropdownOpen(false))
+  })
+  useEffect(() => () => timers.current.forEach(clearTimeout), [])
 
   const matches = useMatches()
   // Where "Tạo workspace" sends Back to: the screen the person is on now.
@@ -104,164 +127,288 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
   })()
 
   const name = workspaceName || 'Không gian làm việc'
+  const current = switcher.workspaces.find((w) => w.id === workspaceId)
+  const others = switcher.workspaces.filter((w) => w.id !== workspaceId)
+  const typeLine = isPersonal ? 'Workspace cá nhân' : workspaceRowDetail(current, { withRole: false })
+  const myName = meAsPerson?.name || UNKNOWN_PERSON
+  const myRole = meAsPerson?.role
+
+  const itemClass = (active: boolean) => rail
+    ? `group relative flex flex-col items-center justify-center gap-1 w-16 h-14 rounded-surface text-2xs leading-3.5 no-underline
+        focus-ring ${active ? 'text-ink font-semibold' : 'text-ink-muted font-medium hover:text-ink'}`
+    : `relative flex items-center gap-2.5 h-9 px-2.5 w-full rounded-surface text-sm no-underline focus-ring
+        transition-colors duration-quick ${active ? 'bg-raised text-ink font-semibold' : 'text-ink-muted font-medium hover:bg-hover hover:text-ink'}`
+
+  /** Icon, visible label and count of one destination; the label is its accessible name. */
+  const itemInner = (Icon: LucideIcon, label: string, active: boolean, count: number | undefined, unit: string): ReactNode => (
+    <>
+      {rail ? (
+        <span
+          className={`grid place-items-center w-12 h-7 rounded-surface transition-colors duration-quick
+            ${active ? 'bg-accent-wash text-accent' : 'group-hover:bg-hover'}`}
+        >
+          <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
+        </span>
+      ) : (
+        <Icon size={18} strokeWidth={1.75} aria-hidden="true" />
+      )}
+      <span className={rail ? 'max-w-16 truncate' : 'flex-1 truncate text-left'}>{label}</span>
+      {count && count > 0 ? (
+        <>
+          <span
+            aria-hidden="true"
+            className={rail
+              ? `absolute top-0.5 left-1/2 ml-1 inline-flex items-center justify-center h-4 min-w-4 px-1 rounded-full bg-accent
+                text-on-accent text-[0.625rem] font-semibold tnum ring-2 ring-sunk`
+              : `inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full bg-accent
+                text-on-accent text-2xs font-semibold tnum`}
+          >
+            {formatCount(count)}
+          </span>
+          <span className="sr-only">, {count} {unit}</span>
+        </>
+      ) : null}
+    </>
+  )
+
   const navLink = (item: NavItem) => {
     const active = effectiveActive === item.id
-    const count = unreadCounts[item.id]
     return (
       <Link
         key={item.id}
         to={item.to}
-        onClick={() => setActiveModule(item.id)}
+        onClick={() => { setActiveModule(item.id); setNotifOpen(false) }}
         aria-current={active ? 'page' : undefined}
-        aria-label={rail ? (count && count > 0 ? `${item.label}, ${count} chưa đọc` : item.label) : undefined}
-        title={rail ? item.label : undefined}
-        className={`relative flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-sm no-underline focus-ring
-          transition-colors duration-quick ${rail ? 'justify-center' : ''}
-          ${active ? 'bg-raised text-ink font-semibold' : 'text-ink-muted font-medium hover:bg-hover hover:text-ink'}`}
+        className={itemClass(active)}
       >
-        <item.icon size={18} strokeWidth={1.75} aria-hidden="true" />
-        {!rail && <span className="flex-1 truncate">{item.label}</span>}
-        {count && count > 0 ? (
-          <span
-            className={`inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full bg-accent
-              text-on-accent text-2xs font-semibold tnum ${rail ? 'absolute top-0 right-0' : ''}`}
-            aria-label={`${count} chưa đọc`}
-          >
-            {formatCount(count)}
-          </span>
-        ) : null}
+        {itemInner(item.icon, item.label, active, unreadCounts[item.id], countUnit(item.id))}
       </Link>
     )
   }
 
+  const toggleLabel = rail ? 'Mở rộng menu chính' : 'Thu gọn menu chính'
+  const itemsGap = rail ? 'justify-items-center gap-1' : 'gap-0.5'
+
   return (
-    <aside
+    <nav
+      ref={navRef}
       aria-label="Điều hướng chính"
       data-rail={rail || undefined}
-      className={`hidden lg:grid grid-rows-[auto_1fr_auto] shrink-0 bg-sunk h-full p-3 gap-3 overflow-hidden
-        ${rail ? 'w-16' : 'w-58'}`}
+      data-swapping={swapping || undefined}
+      style={{ transitionTimingFunction: 'var(--ease-out-expo)' }}
+      className={`hidden lg:grid grid-rows-[auto_1fr_auto] shrink-0 bg-sunk h-full py-3 gap-3 overflow-x-hidden overflow-y-auto
+        [scrollbar-width:none] transition-[width] duration-layout motion-reduce:transition-none
+        *:transition-opacity ${swapping ? '*:opacity-0 *:duration-100 *:ease-in' : '*:duration-120 *:ease-out'}
+        ${rail ? 'w-18 px-1' : 'w-58 px-3'}`}
     >
-      <div className="relative" ref={wsDropdownRef}>
-        {/* eslint-disable-next-line no-restricted-syntax -- Nút đổi không gian làm việc: logo 32px +
-            tên (font display) + chevron xoay khi mở; không phải Button (canh giữa, hình học cố định)
-            cũng không phải một hàng điều hướng. */}
-        <button
-          type="button"
-          onClick={() => setWsDropdownOpen(!wsDropdownOpen)}
-          aria-haspopup="listbox"
-          aria-expanded={wsDropdownOpen}
-          aria-label={rail ? `Không gian làm việc: ${name}` : undefined}
-          title={rail ? name : undefined}
-          className={`flex items-center gap-2.5 w-full px-2 py-1.5 rounded-surface border-none bg-transparent
-            cursor-pointer text-left focus-ring transition-colors duration-quick hover:bg-hover ${rail ? 'justify-center' : ''}`}
-        >
-          <span
-            aria-hidden="true"
-            className="grid place-items-center w-8 h-8 rounded-surface bg-accent text-on-accent font-display
-              text-section font-bold shrink-0"
+      <div className={`grid gap-2 ${rail ? 'justify-items-center' : ''}`}>
+        <div className={rail ? '' : 'ml-2'}>
+          <Tooltip
+            content={<>{toggleLabel}<kbd className="ml-1.5 px-1.5 py-0.5 rounded-sm bg-sunk font-sans text-2xs font-semibold">{sidebarShortcutLabel()}</kbd></>}
           >
-            {Array.from(name.trim())[0]?.toLocaleUpperCase('vi') ?? 'N'}
-          </span>
-          {!rail && (
-            <span className="grid min-w-0 flex-1 text-left">
-              <span className="font-display text-base font-bold text-ink truncate">{name}</span>
-              {isPersonal && <span className="text-xs text-ink-muted truncate">Workspace cá nhân</span>}
-            </span>
-          )}
-          {!rail && (
-            <ChevronDown
-              size={16}
-              strokeWidth={1.75}
-              aria-hidden="true"
-              className={`text-ink-muted shrink-0 transition-transform duration-quick motion-reduce:transition-none
-                ${wsDropdownOpen ? 'rotate-180' : ''}`}
-            />
-          )}
-        </button>
+            {(t) => (
+              <IconButton
+                {...t}
+                size="md"
+                aria-label={toggleLabel}
+                aria-expanded={!rail}
+                aria-keyshortcuts="Control+Backslash"
+                onClick={() => swapRef.current()}
+              >
+                <PanelLeft size={18} strokeWidth={1.75} aria-hidden="true" />
+              </IconButton>
+            )}
+          </Tooltip>
+        </div>
 
-        {wsDropdownOpen && workspaces.length > 0 && (
-          <div
-            className={`absolute left-0 top-full mt-1.5 z-dropdown p-1.5 rounded-overlay bg-overlay shadow-overlay
-              max-h-80 overflow-y-auto animate-fade-in ${rail ? 'w-56' : 'right-0'}`}
-          >
-            <div className="text-label text-ink-muted px-2.5 pt-2 pb-1">Workspace của bạn</div>
-            <div role="listbox" aria-label="Không gian làm việc">
-              <ul className="grid gap-0.5 m-0 p-0 list-none">
-                {workspaces.map((ws) => {
-                  const wsName = workspaceDisplayName(ws.name)
-                  const typeLine = workspaceRowDetail(ws, { withRole: false })
-                  const current = ws.id === workspaceId
-                  return (
-                    <li key={ws.id} role="presentation" className="list-none">
-                      {/* eslint-disable-next-line no-restricted-syntax -- Lựa chọn trong listbox (role=option) */}
-                      <button
-                        type="button"
-                        role="option"
-                        aria-selected={current}
-                        disabled={switcher.switchingId !== undefined}
-                        onClick={() => handleSwitchWorkspace(ws.id)}
-                        className="w-full grid grid-cols-[1.75rem_minmax(0,1fr)_1rem] items-center gap-2.5 min-h-11 px-2.5 py-1.5 rounded-md border-none bg-transparent
-                          cursor-pointer text-sm text-ink text-left focus-ring hover:bg-hover disabled:opacity-50"
-                      >
-                        <span
-                          aria-hidden="true"
-                          className="grid place-items-center w-7 h-7 rounded-md bg-accent text-on-accent font-display text-xs font-bold shrink-0"
-                        >
-                          {Array.from(wsName.trim())[0]?.toLocaleUpperCase('vi') ?? 'N'}
-                        </span>
-                        <span className="grid min-w-0">
-                          <span className="font-semibold text-ink truncate">{wsName}</span>
-                          <span className="text-xs text-ink-muted truncate">{typeLine}</span>
-                        </span>
-                        {current && <Check size={16} strokeWidth={1.75} className="text-accent shrink-0" />}
-                      </button>
-                    </li>
-                  )
-                })}
-              </ul>
-            </div>
-            <div role="separator" className="h-px my-1 mx-2 bg-line" />
-            <Link
-              to="/onboarding"
-              search={{ from: here }}
-              onClick={() => setWsDropdownOpen(false)}
-              className="grid grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-2.5 min-h-11 px-2.5 py-1.5 rounded-md text-sm text-ink no-underline
-                hover:bg-hover transition-colors duration-quick focus-ring"
+        <Tooltip
+          disabled={!rail}
+          content={<><b className="block text-sm font-semibold">{name}</b><span className="text-ink-muted">{typeLine ? `${typeLine} · ` : ''}bấm để đổi workspace</span></>}
+        >
+          {(t) => (
+            <Pressable
+              {...t}
+              ref={(el) => { wsRef.current = el; t.ref(el) }}
+              onClick={() => { setNotifOpen(false); setWsOpen(!wsOpen) }}
+              aria-haspopup="dialog"
+              aria-expanded={wsOpen}
+              aria-label={rail ? `Đổi workspace, đang ở ${name}${typeLine ? ` (${typeLine})` : ''}` : undefined}
+              className={rail
+                ? 'grid place-items-center w-12 h-12 rounded-surface bg-transparent transition-colors duration-quick hover:bg-hover'
+                : `flex items-center gap-2.5 w-full px-2 py-1.5 rounded-surface bg-transparent
+                  transition-colors duration-quick hover:bg-hover`}
             >
-              <span className="grid place-items-center w-7 h-7 rounded-md bg-sunk text-ink-muted shrink-0">
-                <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
+              <span
+                aria-hidden="true"
+                className={`grid place-items-center rounded-surface bg-accent text-on-accent font-display font-bold shrink-0
+                  ${rail ? 'w-10 h-10 text-lg' : 'w-8 h-8 text-section'}`}
+              >
+                {initialOf(name)}
               </span>
-              <span className="font-semibold text-ink truncate">Tạo workspace</span>
-            </Link>
+              {!rail && (
+                <>
+                  <span className="grid min-w-0 flex-1 text-left">
+                    <span className="font-display text-base font-bold text-ink truncate">{name}</span>
+                    {isPersonal && <span className="text-xs text-ink-muted truncate">Workspace cá nhân</span>}
+                  </span>
+                  <ChevronDown
+                    size={16}
+                    strokeWidth={1.75}
+                    aria-hidden="true"
+                    className={`text-ink-muted shrink-0 transition-transform duration-quick motion-reduce:transition-none
+                      ${wsOpen ? 'rotate-180' : ''}`}
+                  />
+                </>
+              )}
+            </Pressable>
+          )}
+        </Tooltip>
+
+        <Popover
+          open={wsOpen}
+          onClose={() => setWsOpen(false)}
+          anchorRef={wsRef}
+          placement={rail ? 'right-start' : 'bottom-start'}
+          role="dialog"
+          label="Đổi workspace"
+          className="w-75 max-w-[calc(100vw-1.5rem)] max-h-[calc(100vh-1.5rem)] overflow-y-auto"
+        >
+          <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-3 px-2.5 pt-2.5 pb-2">
+            <span aria-hidden="true" className="grid place-items-center w-10 h-10 rounded-surface bg-accent text-on-accent font-display text-lg font-bold">
+              {initialOf(name)}
+            </span>
+            <span className="grid min-w-0">
+              <h2 className="m-0 font-display text-base font-bold leading-tight text-ink break-words">{name}</h2>
+              {current && <span className="text-xs text-ink-muted break-words">{workspaceRowDetail(current)}</span>}
+            </span>
+          </div>
+          {others.length > 0 && (
+            <>
+              <MenuSeparator />
+              <div className="text-label text-ink-muted px-2.5 pt-2 pb-1">Chuyển sang</div>
+              <div role="listbox" aria-label="Chuyển sang">
+                <ul className="grid gap-0.5 m-0 p-0 list-none">
+                  {others.map((ws) => {
+                    const wsName = workspaceDisplayName(ws.name)
+                    return (
+                      <li key={ws.id} role="presentation" className="list-none">
+                        <Pressable
+                          role="option"
+                          aria-selected={false}
+                          disabled={switcher.switchingId !== undefined}
+                          onClick={() => switcher.choose(ws.id, () => setWsOpen(false))}
+                          className="w-full grid grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-2.5 min-h-11 px-2.5 py-1.5 rounded-md
+                            bg-transparent text-sm text-ink hover:bg-hover"
+                        >
+                          <span aria-hidden="true" className="grid place-items-center w-7 h-7 rounded-md bg-accent text-on-accent font-display text-xs font-bold shrink-0">
+                            {initialOf(wsName)}
+                          </span>
+                          <span className="grid min-w-0">
+                            <span className="font-semibold text-ink break-words">{wsName}</span>
+                            <span className="text-xs text-ink-muted break-words">{workspaceRowDetail(ws, { withRole: false })}</span>
+                          </span>
+                        </Pressable>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            </>
+          )}
+          <MenuSeparator />
+          <Link
+            to="/onboarding"
+            search={{ from: here }}
+            onClick={() => setWsOpen(false)}
+            className="grid grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-2.5 min-h-11 px-2.5 py-1.5 rounded-md text-sm text-ink no-underline
+              hover:bg-hover transition-colors duration-quick focus-ring"
+          >
+            <span className="grid place-items-center w-7 h-7 rounded-md bg-sunk text-ink-muted shrink-0">
+              <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
+            </span>
+            <span className="font-semibold text-ink truncate">Tạo workspace</span>
+          </Link>
+        </Popover>
+      </div>
+
+      <div className={`grid content-start ${itemsGap}`}>
+        {(isPersonal ? mainNavItems.filter((i) => i.id !== 'approval' && i.id !== 'assets') : mainNavItems).map(navLink)}
+      </div>
+
+      <div className={`grid ${itemsGap}`}>
+        <Pressable
+          ref={bellRef}
+          onClick={() => setNotifOpen(!notifOpen)}
+          aria-haspopup="dialog"
+          aria-expanded={notifOpen}
+          className={`${itemClass(notifOpen)} bg-transparent ${rail ? '' : 'text-left'}`}
+        >
+          {itemInner(Bell, 'Thông báo', notifOpen, notificationCount, 'chưa đọc')}
+        </Pressable>
+        {footNavItems.map(navLink)}
+
+        {rail ? (
+          <>
+            <Tooltip
+              content={<><b className="block text-sm font-semibold">{myName}</b><span className="text-ink-muted">{myRole ? `${myRole} · ` : ''}Đang hoạt động</span></>}
+            >
+              {(t) => (
+                <Pressable
+                  {...t}
+                  ref={(el) => { acctRef.current = el; t.ref(el) }}
+                  onClick={() => { setNotifOpen(false); setAcctOpen(!acctOpen) }}
+                  aria-haspopup="menu"
+                  aria-expanded={acctOpen}
+                  aria-label={`Tài khoản: ${myName}${myRole ? `, ${myRole}` : ''}, đang hoạt động`}
+                  className="grid place-items-center w-12 h-12 rounded-surface bg-transparent transition-colors duration-quick hover:bg-hover"
+                >
+                  <Avatar name={myName} hueKey={user?.id} src={meAsPerson?.avatarUrl} online size={32} />
+                </Pressable>
+              )}
+            </Tooltip>
+            <Popover
+              open={acctOpen}
+              onClose={() => setAcctOpen(false)}
+              anchorRef={acctRef}
+              placement="right-end"
+              role="menu"
+              label="Tài khoản"
+              className="w-65"
+            >
+              <div className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-3 p-2.5">
+                <Avatar name={myName} hueKey={user?.id} src={meAsPerson?.avatarUrl} online size={40} />
+                <span className="grid min-w-0">
+                  <b className="font-semibold text-ink break-words">{myName}</b>
+                  <span className="text-xs text-ink-muted">{myRole ? `${myRole} · ` : ''}Đang hoạt động</span>
+                </span>
+              </div>
+              <MenuSeparator />
+              <MenuItem
+                icon={<Settings size={16} strokeWidth={1.75} aria-hidden="true" />}
+                onClick={() => { setActiveModule('settings'); void navigate({ to: '/settings' }) }}
+              >
+                Cài đặt tài khoản
+              </MenuItem>
+              <MenuItem icon={<LogOut size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void logoutSession()}>
+                Đăng xuất
+              </MenuItem>
+            </Popover>
+          </>
+        ) : (
+          <div className="flex items-center gap-2.5 p-2">
+            <Avatar name={myName} hueKey={user?.id} src={meAsPerson?.avatarUrl} online size={32} />
+            <span className="grid min-w-0 flex-1">
+              <span className="font-semibold text-ink truncate">{myName}</span>
+              {myRole && <span className="text-xs text-ink-muted truncate">{myRole}</span>}
+            </span>
+            <IconButton size="sm" aria-label="Đăng xuất" title="Đăng xuất" onClick={() => void logoutSession()}>
+              <LogOut size={16} strokeWidth={1.75} />
+            </IconButton>
           </div>
         )}
       </div>
 
-      <nav aria-label="Phân hệ" className="grid content-start gap-0.5">
-        {(isPersonal ? mainNavItems.filter((i) => i.id !== 'approval' && i.id !== 'assets') : mainNavItems).map(navLink)}
-      </nav>
-
-      <div className="grid gap-0.5">
-        {footNavItems.map(navLink)}
-        <div className={`flex items-center gap-2.5 p-2 ${rail ? 'flex-col' : ''}`}>
-          <Avatar
-            name={meAsPerson?.name || UNKNOWN_PERSON}
-            hueKey={user?.id}
-            src={meAsPerson?.avatarUrl}
-            online
-            size={32}
-          />
-          {!rail && (
-            <span className="grid min-w-0 flex-1">
-              <span className="font-semibold text-ink truncate">{meAsPerson?.name || UNKNOWN_PERSON}</span>
-              {meAsPerson?.role && <span className="text-xs text-ink-muted truncate">{meAsPerson.role}</span>}
-            </span>
-          )}
-          <IconButton size="sm" aria-label="Đăng xuất" title="Đăng xuất" onClick={() => void logoutSession()}>
-            <LogOut size={16} strokeWidth={1.75} />
-          </IconButton>
-        </div>
-      </div>
-    </aside>
+      <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} anchorRef={bellRef} sideRef={navRef} />
+    </nav>
   )
 }

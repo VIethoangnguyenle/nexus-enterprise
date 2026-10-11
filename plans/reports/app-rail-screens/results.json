@@ -1,0 +1,62 @@
+[
+  {
+    "check": "default is rail",
+    "rail": true,
+    "width": 72
+  },
+  {
+    "file": "1280-light-rail.png",
+    "navWidth": 72,
+    "pageOverflow": false,
+    "labelOverflow": []
+  },
+  {
+    "file": "1280-light-expanded.png",
+    "navWidth": 232,
+    "pageOverflow": false,
+    "labelOverflow": []
+  },
+  {
+    "file": "1280-dark-rail.png",
+    "navWidth": 72,
+    "pageOverflow": false,
+    "labelOverflow": []
+  },
+  {
+    "file": "1280-dark-expanded.png",
+    "navWidth": 232,
+    "pageOverflow": false,
+    "labelOverflow": []
+  },
+  {
+    "file": "1440-light-rail.png",
+    "navWidth": 72,
+    "pageOverflow": false,
+    "labelOverflow": []
+  },
+  {
+    "file": "1440-light-expanded.png",
+    "navWidth": 232,
+    "pageOverflow": false,
+    "labelOverflow": []
+  },
+  {
+    "file": "1440-dark-rail.png",
+    "navWidth": 72,
+    "pageOverflow": false,
+    "labelOverflow": []
+  },
+  {
+    "file": "1440-dark-expanded.png",
+    "navWidth": 232,
+    "pageOverflow": false,
+    "labelOverflow": []
+  },
+  {
+    "check": "console errors",
+    "errors": [
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+      "Failed to load resource: the server responded with a status of 500 (Internal Server Error)"
+    ]
+  }
+]

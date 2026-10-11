@@ -6,7 +6,8 @@ import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'motion/react'
 import { useMotionPresets } from '../../lib/motion'
 
-type Placement = 'bottom-start' | 'bottom-end' | 'top-start'
+/** `right-*` hang beside the anchor (the icon rail), top- or bottom-aligned with it. */
+type Placement = 'bottom-start' | 'bottom-end' | 'top-start' | 'right-start' | 'right-end'
 
 interface PopoverProps {
   open: boolean
@@ -22,6 +23,7 @@ interface PopoverProps {
 }
 
 const GAP = 6
+const SIDE_GAP = 8
 /** Rows the arrow keys visit: plain items and radio items (a "move to" list), not disabled ones. */
 const MENU_ITEMS = '[role="menuitem"]:not(:disabled), [role="menuitemradio"]:not(:disabled)'
 
@@ -41,6 +43,8 @@ export function Popover({
     const a = anchorRef.current?.getBoundingClientRect()
     if (!a) return
     if (placement === 'bottom-end') setPos({ top: a.bottom + GAP, right: window.innerWidth - a.right })
+    else if (placement === 'right-start') setPos({ top: a.top, left: a.right + SIDE_GAP })
+    else if (placement === 'right-end') setPos({ bottom: window.innerHeight - a.bottom, left: a.right + SIDE_GAP })
     else if (placement === 'top-start') setPos({ bottom: window.innerHeight - a.top + GAP, left: a.left })
     else setPos({ top: a.bottom + GAP, left: a.left })
   }, [anchorRef, placement])

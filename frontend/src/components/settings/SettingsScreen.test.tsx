@@ -340,10 +340,10 @@ describe('SettingsScreen: Giao diện', () => {
     const user = userEvent.setup()
     await renderSettings('/settings?tab=giao-dien')
     const sw = await screen.findByRole('switch', { name: 'Thu gọn sidebar' })
-    expect(sw).not.toBeChecked()
+    expect(sw).toBeChecked() // the rail is the default
     await user.click(sw)
-    expect(sw).toBeChecked()
-    expect(loadPreferences(U.hoa.id).sidebarCollapsed).toBe(true)
+    expect(sw).not.toBeChecked()
+    expect(loadPreferences(U.hoa.id).sidebarCollapsed).toBe(false)
   })
 
   it('has no switch for realtime colour: it is information, not a preference', async () => {
@@ -691,7 +691,7 @@ describe('SettingsScreen: Loại workspace và chuyển đổi', () => {
       details = { name: 'Không gian của bạn', description: '', type: 'personal', is_owner: true, owner_name: 'Lê Thị Hoa' }
       await renderSettings('/settings?tab=workspace', { withNav: true })
 
-      const sidebar = await screen.findByRole('navigation', { name: 'Phân hệ' })
+      const sidebar = await screen.findByRole('navigation', { name: 'Điều hướng chính' })
       const phoneBar = await screen.findByRole('navigation', { name: 'Điều hướng di động' })
       await within(sidebar).findByRole('link', { name: 'Danh bạ' })
       expect(within(sidebar).queryByRole('link', { name: 'Phê duyệt' })).toBeNull()

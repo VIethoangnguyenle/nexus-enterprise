@@ -26,6 +26,12 @@ describe('parsePreferences', () => {
     expect(parsePreferences(JSON.stringify({ contactsView: 'mosaic' })).contactsView).toBe('table')
   })
 
+  it('starts with the main menu collapsed, and keeps an explicit choice to expand it', () => {
+    expect(DEFAULT_PREFERENCES.sidebarCollapsed).toBe(true)
+    expect(parsePreferences(JSON.stringify({ theme: 'dark' })).sidebarCollapsed).toBe(true)
+    expect(parsePreferences(JSON.stringify({ sidebarCollapsed: false })).sidebarCollapsed).toBe(false)
+  })
+
   it('keeps valid values', () => {
     const raw = JSON.stringify({ theme: 'dark', motion: 'reduce', sidebarCollapsed: true })
     expect(parsePreferences(raw)).toEqual({ theme: 'dark', motion: 'reduce', sidebarCollapsed: true, contactsView: 'table' })

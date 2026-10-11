@@ -1,6 +1,6 @@
 /**
  * How this person likes the app to look on this device: theme, motion and the
- * sidebar. Kept in localStorage under the user, so two people sharing a browser
+ * sidebar (collapsed to the 72px rail unless the person expands it). Kept in localStorage under the user, so two people sharing a browser
  * keep their own. Nothing here is sent to the server.
  */
 export type ThemePref = 'system' | 'light' | 'dark'
@@ -17,7 +17,7 @@ export interface Preferences {
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  theme: 'system', motion: 'system', sidebarCollapsed: false, contactsView: 'table',
+  theme: 'system', motion: 'system', sidebarCollapsed: true, contactsView: 'table',
 }
 
 const THEMES: readonly ThemePref[] = ['system', 'light', 'dark']
@@ -37,7 +37,7 @@ export function parsePreferences(raw: string | null): Preferences {
     return {
       theme: THEMES.includes(v.theme as ThemePref) ? (v.theme as ThemePref) : DEFAULT_PREFERENCES.theme,
       motion: MOTIONS.includes(v.motion as MotionPref) ? (v.motion as MotionPref) : DEFAULT_PREFERENCES.motion,
-      sidebarCollapsed: v.sidebarCollapsed === true,
+      sidebarCollapsed: typeof v.sidebarCollapsed === 'boolean' ? v.sidebarCollapsed : DEFAULT_PREFERENCES.sidebarCollapsed,
       contactsView: v.contactsView === 'cards' ? 'cards' : 'table',
     }
   } catch {
