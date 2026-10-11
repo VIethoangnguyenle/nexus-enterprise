@@ -74,13 +74,15 @@ function Unavailable({
  * viewer in a frame, so its page and zoom controls are the browser's.
  */
 export function FileViewerBody({
-  file, preview, zoom, onZoom, onDownload,
+  file, preview, zoom, onZoom, onDownload, onPrevious, onNext,
 }: {
   file: ViewerFile
   preview: UseQueryResult<FilePreview, unknown>
   zoom: ImageZoom
   onZoom: (z: ImageZoom) => void
   onDownload: () => void
+  onPrevious?: () => void
+  onNext?: () => void
 }) {
   if (preview.isError) {
     const failure = failureOf(preview.error)
@@ -111,7 +113,18 @@ export function FileViewerBody({
       )
     case 'native': {
       const { url, mime } = p
-      if (mime.startsWith('image/')) return <ImageBody url={url} name={file.name} zoom={zoom} onZoom={onZoom} />
+      if (mime.startsWith('image/')) {
+        return (
+          <ImageBody
+            url={url}
+            name={file.name}
+            zoom={zoom}
+            onZoom={onZoom}
+            onPrevious={onPrevious}
+            onNext={onNext}
+          />
+        )
+      }
       if (mime === 'application/pdf') {
         return <iframe src={url} title={`Bản xem trước ${file.name}`} className="w-full h-full border-0 bg-base" />
       }

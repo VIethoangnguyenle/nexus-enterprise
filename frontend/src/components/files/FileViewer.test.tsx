@@ -174,6 +174,24 @@ describe('FileViewer navigation', () => {
     expect(screen.getByRole('dialog', { name: 'c.png' })).toBeInTheDocument()
   })
 
+  it('swipes horizontally at fit to navigate between files', async () => {
+    mockPreview(answers)
+    open(list)
+    const stage = await screen.findByTestId('image-stage')
+    // Swipe left to go to next file
+    fireEvent.pointerDown(stage, { pointerId: 1, clientX: 200, clientY: 100 })
+    fireEvent.pointerMove(stage, { pointerId: 1, clientX: 120, clientY: 100 })
+    fireEvent.pointerUp(stage, { pointerId: 1, clientX: 120, clientY: 100 })
+    expect(await screen.findByRole('dialog', { name: 'b.png' })).toBeInTheDocument()
+
+    // Swipe right to go back to previous file
+    const stage2 = await screen.findByTestId('image-stage')
+    fireEvent.pointerDown(stage2, { pointerId: 1, clientX: 100, clientY: 100 })
+    fireEvent.pointerMove(stage2, { pointerId: 1, clientX: 180, clientY: 100 })
+    fireEvent.pointerUp(stage2, { pointerId: 1, clientX: 180, clientY: 100 })
+    expect(await screen.findByRole('dialog', { name: 'a.png' })).toBeInTheDocument()
+  })
+
   it('has no previous/next for a single file', () => {
     mockPreview({ 'f-1': native('application/pdf') })
     open([file()])

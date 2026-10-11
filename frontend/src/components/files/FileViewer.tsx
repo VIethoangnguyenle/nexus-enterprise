@@ -286,7 +286,15 @@ export function FileViewer({ files, index, onClose, origin = 'chat', onOpenInDri
           </header>
 
           <div className="relative min-h-0">
-            <FileViewerBody file={file} preview={preview} zoom={zoom} onZoom={setZoom} onDownload={onDownload} />
+            <FileViewerBody
+              file={file}
+              preview={preview}
+              zoom={zoom}
+              onZoom={setZoom}
+              onDownload={onDownload}
+              onPrevious={() => go(pos - 1)}
+              onNext={() => go(pos + 1)}
+            />
             {isImage && <ImageTools zoom={zoom} onZoom={setZoom} />}
             {count > 1 && (
               <>
