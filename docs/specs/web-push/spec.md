@@ -15,7 +15,10 @@ Someone concerned for several reasons is pushed once, as the strongest: mention,
 A recipient SHALL be pushed only when, at that moment, they hold `read` on the channel's content OA (a removed member
 or a mentioned non-member gets nothing; a policy error sends nothing), they have that kind of push on, the time is
 outside their quiet hours (in their time zone; a window may wrap midnight), and none of their live sessions has the
-conversation open.
+conversation on screen. A session says what it shows with a `view` frame on the WebSocket (the conversation open while
+the page is visible; empty when hidden or none), accepted only for a conversation it is subscribed to (403 otherwise).
+Being subscribed is not viewing: the navigator subscribes to every listed conversation, and a tab merely left open must
+not hold back pushes to the person's phone.
 
 #### Scenario: Mentioned without access
 - **WHEN** a member mentions someone who cannot read the channel
@@ -30,7 +33,12 @@ A push SHALL be titled by the sender (direct message) or the group's name (group
 carry the opening of the message's plain text (140 characters at most; "📎 Tệp đính kèm" for files alone), and open the
 conversation — or the thread — in the app. The first message of a conversation is pushed at once; further messages
 of that conversation to the same person within 30 seconds become one follow-up, "N tin mới", that replaces it on the
-device.
+device (`web_push_topic` on the web, `collapse_id` on mobile). The link is absolute, under `APP_BASE_URL`. Every
+request carries an `idempotency_key` kept across its retries, so a retry after a timeout does not deliver twice.
+
+#### Scenario: A tab left open elsewhere
+- **WHEN** a person has Nexus open on a desktop, on another conversation or hidden, and a direct message arrives
+- **THEN** the push is sent
 
 ### Requirement: Preferences
 `GET|PUT /api/me/push-preferences` SHALL read and store the caller's own preferences: each kind on or off, and quiet

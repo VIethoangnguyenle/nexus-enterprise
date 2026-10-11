@@ -283,24 +283,54 @@ type UpdateTaskInput struct {
 }
 
 // UpdateTask updates a task's mutable fields.
+//
+// Who may change what:
+//   - the status (done, reopened): the assignee or the creator, who need only
+//     read the conversation; anyone else needs manage;
+//   - the assignee: the creator or someone with manage, and only to a person
+//     who reads the conversation — otherwise a writer could take a task over
+//     and then mark it done;
+//   - the title and due date: write.
 func (s *Service) UpdateTask(ctx context.Context, in UpdateTaskInput) (*pb.ChatTask, error) {
-	if err := s.authorizeTask(ctx, in.TaskID, in.UserNodeID, ngac.OpWrite); err != nil {
+	if in.TaskID == "" {
+		return nil, ErrInvalidInput
+	}
+	t, err := s.store.GetTask(ctx, in.TaskID)
+	if err != nil {
+		return nil, fmt.Errorf("load task: %w", err)
+	}
+	if t == nil {
+		return nil, ErrNotFound
+	}
+	ch, err := s.authorizeChannel(ctx, t.ChannelID, in.UserNodeID, ngac.OpRead)
+	if err != nil {
 		return nil, err
 	}
-	// Marking a task done or reopening it is for its assignee or its creator;
-	// anyone else needs to manage the channel.
-	if in.Status != "" {
-		t, err := s.store.GetTask(ctx, in.TaskID)
-		if err != nil {
-			return nil, fmt.Errorf("load task: %w", err)
+	isOwner := in.UserID != "" && (in.UserID == t.AssigneeID || in.UserID == t.CreatedBy)
+	manages := func() error { return s.checkAccess(ctx, in.UserNodeID, ch.NGACOaID, ngac.OpManage) }
+
+	if in.Status != "" && !isOwner {
+		if err := manages(); err != nil {
+			return nil, err
 		}
-		if t == nil {
-			return nil, ErrNotFound
-		}
-		if in.UserID != t.AssigneeID && in.UserID != t.CreatedBy {
-			if err := s.authorizeTask(ctx, in.TaskID, in.UserNodeID, ngac.OpManage); err != nil {
+	}
+	if in.AssigneeID != "" && in.AssigneeID != t.AssigneeID {
+		if in.UserID == "" || in.UserID != t.CreatedBy {
+			if err := manages(); err != nil {
 				return nil, err
 			}
+		}
+		node, err := s.store.UserNode(ctx, in.AssigneeID)
+		if err != nil {
+			return nil, err
+		}
+		if node == "" || s.checkAccess(ctx, node, ch.NGACOaID, ngac.OpRead) != nil {
+			return nil, fmt.Errorf("%w: the assignee is not a member of this conversation", ErrInvalidInput)
+		}
+	}
+	if in.Title != "" || in.DueDate != "" {
+		if err := s.checkAccess(ctx, in.UserNodeID, ch.NGACOaID, ngac.OpWrite); err != nil {
+			return nil, err
 		}
 	}
 

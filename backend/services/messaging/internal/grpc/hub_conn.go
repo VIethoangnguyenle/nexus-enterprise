@@ -35,6 +35,9 @@ type Client struct {
 	send          chan []byte
 	authenticated bool
 	jwtSecret     string
+	// viewing is the conversation this session has on screen, "" for none.
+	// Guarded by hub.mu.
+	viewing string
 }
 
 // WSClaims are JWT claims for WebSocket authentication.
@@ -244,6 +247,19 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 			return
 		}
 		c.hub.broadcastTyping(payload.Typing.ChannelId, c.username, c)
+
+	case *pb.ClientEnvelope_View:
+		if !c.authenticated {
+			return
+		}
+		// Viewing holds back push for the conversation, so it is only accepted
+		// for one the session is subscribed to — which already required read.
+		channelID := payload.View.ChannelId
+		if channelID != "" && !c.hub.isSubscribed(channelID, c) {
+			c.sendError(403, "not subscribed to this channel")
+			return
+		}
+		c.hub.setViewing(c, channelID)
 	}
 }
 

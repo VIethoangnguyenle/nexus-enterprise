@@ -47,6 +47,12 @@ export interface ClientEnvelope {
          */
         typing: TypingRequest;
     } | {
+        oneofKind: "view";
+        /**
+         * @generated from protobuf field: messaging.ViewRequest view = 5
+         */
+        view: ViewRequest;
+    } | {
         oneofKind: undefined;
     };
 }
@@ -92,6 +98,20 @@ export interface UnsubscribeRequest {
  * @generated from protobuf message messaging.TypingRequest
  */
 export interface TypingRequest {
+    /**
+     * @generated from protobuf field: string channel_id = 1
+     */
+    channelId: string;
+}
+/**
+ * ViewRequest says which conversation this session has on screen right now,
+ * while its page is visible; an empty channel_id means none. Being subscribed
+ * is not viewing: the navigator subscribes to every listed conversation. Push
+ * is held back only for the conversation a session is actually looking at.
+ *
+ * @generated from protobuf message messaging.ViewRequest
+ */
+export interface ViewRequest {
     /**
      * @generated from protobuf field: string channel_id = 1
      */
@@ -801,7 +821,8 @@ class ClientEnvelope$Type extends MessageType<ClientEnvelope> {
             { no: 1, name: "auth", kind: "message", oneof: "payload", T: () => AuthRequest },
             { no: 2, name: "subscribe", kind: "message", oneof: "payload", T: () => SubscribeRequest },
             { no: 3, name: "unsubscribe", kind: "message", oneof: "payload", T: () => UnsubscribeRequest },
-            { no: 4, name: "typing", kind: "message", oneof: "payload", T: () => TypingRequest }
+            { no: 4, name: "typing", kind: "message", oneof: "payload", T: () => TypingRequest },
+            { no: 5, name: "view", kind: "message", oneof: "payload", T: () => ViewRequest }
         ]);
     }
     create(value?: PartialMessage<ClientEnvelope>): ClientEnvelope {
@@ -840,6 +861,12 @@ class ClientEnvelope$Type extends MessageType<ClientEnvelope> {
                         typing: TypingRequest.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).typing)
                     };
                     break;
+                case /* messaging.ViewRequest view */ 5:
+                    message.payload = {
+                        oneofKind: "view",
+                        view: ViewRequest.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).view)
+                    };
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -864,6 +891,9 @@ class ClientEnvelope$Type extends MessageType<ClientEnvelope> {
         /* messaging.TypingRequest typing = 4; */
         if (message.payload.oneofKind === "typing")
             TypingRequest.internalBinaryWrite(message.payload.typing, writer.tag(4, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.ViewRequest view = 5; */
+        if (message.payload.oneofKind === "view")
+            ViewRequest.internalBinaryWrite(message.payload.view, writer.tag(5, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -1078,6 +1108,53 @@ class TypingRequest$Type extends MessageType<TypingRequest> {
  * @generated MessageType for protobuf message messaging.TypingRequest
  */
 export const TypingRequest = new TypingRequest$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class ViewRequest$Type extends MessageType<ViewRequest> {
+    constructor() {
+        super("messaging.ViewRequest", [
+            { no: 1, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ }
+        ]);
+    }
+    create(value?: PartialMessage<ViewRequest>): ViewRequest {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.channelId = "";
+        if (value !== undefined)
+            reflectionMergePartial<ViewRequest>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: ViewRequest): ViewRequest {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string channel_id */ 1:
+                    message.channelId = reader.string();
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: ViewRequest, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string channel_id = 1; */
+        if (message.channelId !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.channelId);
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.ViewRequest
+ */
+export const ViewRequest = new ViewRequest$Type();
 // @generated message type with reflection information, may provide speed optimized methods
 class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
     constructor() {

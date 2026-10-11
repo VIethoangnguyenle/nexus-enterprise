@@ -383,6 +383,8 @@ services:
       # Web push through OneSignal. Both empty: push off. Only one set: messaging refuses to start.
       ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-}
       ONESIGNAL_REST_API_KEY: ${ONESIGNAL_REST_API_KEY:-}
+      # The web app a notification opens: web push needs an absolute address.
+      APP_BASE_URL: ${APP_BASE_URL:-https://nexus.zaneng.xyz}
       GOMEMLIMIT: 100MiB
     depends_on:
       policy: { condition: service_healthy }

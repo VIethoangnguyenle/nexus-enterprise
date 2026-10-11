@@ -16,6 +16,7 @@ message ClientEnvelope {
     SubscribeRequest   subscribe   = 2;
     UnsubscribeRequest unsubscribe = 3;
     TypingRequest      typing      = 4;
+    ViewRequest        view        = 5;
   }
 }
 
@@ -36,6 +37,14 @@ message UnsubscribeRequest {
 }
 
 message TypingRequest {
+  string channel_id = 1;
+}
+
+// ViewRequest says which conversation this session has on screen right now,
+// while its page is visible; an empty channel_id means none. Being subscribed
+// is not viewing: the navigator subscribes to every listed conversation. Push
+// is held back only for the conversation a session is actually looking at.
+message ViewRequest {
   string channel_id = 1;
 }
 

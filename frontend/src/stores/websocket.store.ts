@@ -123,12 +123,36 @@ interface WebSocketState {
   subscribeMany: (channelIds: string[]) => () => void
   /** Follow a workspace's live changes; returns the matching release. */
   followWorkspace: (workspaceId: string) => () => void
+  /**
+   * The conversation on screen; returns the matching release. The server holds
+   * back push for it while the page is visible. Subscribing is not viewing.
+   */
+  viewChannel: (channelId: string) => () => void
 }
 
 /** Send a binary-encoded ClientEnvelope over WebSocket. */
 function sendEnvelope(ws: WebSocket, envelope: Parameters<typeof ClientEnvelope.toBinary>[0]) {
   if (ws.readyState !== WebSocket.OPEN) return
   ws.send(ClientEnvelope.toBinary(envelope))
+}
+
+/** The conversation the screen shows, if any. Re-announced on reconnect. */
+let viewedChannel: string | null = null
+/** What the server was last told this socket views, so nothing is repeated. */
+let announcedView: { ws: WebSocket; channelId: string } | null = null
+
+/**
+ * Tells the server what this session is looking at: the viewed conversation
+ * while the page is visible and the channel is subscribed (the server refuses
+ * a view of anything else), otherwise nothing.
+ */
+function announceView(ws: WebSocket | null, authenticated: boolean) {
+  if (!ws || !authenticated) return
+  const visible = typeof document === 'undefined' || document.visibilityState !== 'hidden'
+  const channelId = viewedChannel && visible && subscribedChannels.has(viewedChannel) ? viewedChannel : ''
+  if (announcedView?.ws === ws ? announcedView.channelId === channelId : channelId === '') return
+  announcedView = { ws, channelId }
+  sendEnvelope(ws, { payload: { oneofKind: 'view', view: { channelId } } })
 }
 
 /** Calculate exponential backoff delay with jitter. */
@@ -259,6 +283,7 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
       sendEnvelope(ws, {
         payload: { oneofKind: 'subscribe', subscribe: { channelId, workspaceId: '' } },
       })
+      if (channelId === viewedChannel) announceView(ws, true)
     }
   },
 
@@ -274,6 +299,8 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
       sendEnvelope(ws, {
         payload: { oneofKind: 'unsubscribe', unsubscribe: { channelId, workspaceId: '' } },
       })
+      // The server stops counting a view with the subscription.
+      if (announcedView?.ws === ws && announcedView.channelId === channelId) announcedView = { ws, channelId: '' }
     }
   },
 
@@ -303,7 +330,25 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
       for (const id of channelIds) get().sendUnsubscribe(id)
     }
   },
+
+  viewChannel: (channelId) => {
+    viewedChannel = channelId
+    announceView(get().ws, get().authenticated)
+    return () => {
+      if (viewedChannel !== channelId) return
+      viewedChannel = null
+      announceView(get().ws, get().authenticated)
+    }
+  },
 }))
+
+// A hidden page views nothing: push resumes for the conversation it shows.
+if (typeof document !== 'undefined') {
+  document.addEventListener('visibilitychange', () => {
+    const { ws, authenticated } = useWebSocketStore.getState()
+    announceView(ws, authenticated)
+  })
+}
 
 /** Route decoded ServerEnvelope payloads to TanStack Query cache invalidation. */
 function handleServerMessage(
@@ -320,6 +365,7 @@ function handleServerMessage(
         // the socket was down. With a workspace followed the refetch waits for
         // its acknowledgement (see 'workspaceSubscribed').
         resubscribeChannels(ws)
+        announceView(ws, true)
         if (followedWorkspace) {
           sendEnvelope(ws, {
             payload: { oneofKind: 'subscribe', subscribe: { channelId: '', workspaceId: followedWorkspace } },

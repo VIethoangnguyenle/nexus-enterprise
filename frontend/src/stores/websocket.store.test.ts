@@ -103,6 +103,7 @@ describe('thread events', () => {
         message: {
           id: 'r', channelId: 'c1', senderId: 'u2', senderName: 'B', content: 'hi', messageType: 'user',
           parentMessageId: 'root', replyCount: 0, contentFormat: '', mentions: [], linkedEntityType: '', linkedEntityId: '',
+          attachments: [],
         },
       },
     })
@@ -510,5 +511,69 @@ describe('permission events', () => {
     settle()
     expect(invalidated(keys.drive.shares('i-1'))).toBe(true)
     expect(invalidated(keys.permissions.object('tenant-1', 'node-1'))).toBe(false)
+  })
+})
+
+describe('viewing a conversation', () => {
+  const views = () =>
+    FakeSocket.last!.sent.flatMap((e) => (e.payload.oneofKind === 'view' ? [e.payload.view.channelId] : []))
+  const setVisibility = (state: 'visible' | 'hidden') => {
+    Object.defineProperty(document, 'visibilityState', { value: state, configurable: true })
+    document.dispatchEvent(new Event('visibilitychange'))
+  }
+  afterEach(() => setVisibility('visible'))
+
+  it('tells the server which subscribed conversation is on screen, and when none is', () => {
+    authOk()
+    const store = useWebSocketStore.getState()
+    const releaseSub = store.subscribeMany(['c1', 'c2'])
+    const release = store.viewChannel('c1')
+    expect(views()).toEqual(['c1'])
+
+    release()
+    expect(views()).toEqual(['c1', ''])
+    releaseSub()
+  })
+
+  it('announces the view again when the conversation is subscribed anew', () => {
+    authOk()
+    const store = useWebSocketStore.getState()
+    const release = store.viewChannel('c1')
+    store.subscribeMany(['c1'])() // subscribed, then dropped: the server forgets the view
+    store.subscribeMany(['c1'])
+    expect(views()).toEqual(['c1', 'c1'])
+    release()
+  })
+
+  it('views nothing while the page is hidden, and the conversation again when it returns', () => {
+    authOk()
+    const store = useWebSocketStore.getState()
+    const releaseSub = store.subscribeMany(['c1'])
+    const release = store.viewChannel('c1')
+    setVisibility('hidden')
+    setVisibility('visible')
+    expect(views()).toEqual(['c1', '', 'c1'])
+    release()
+    releaseSub()
+  })
+
+  it('never claims a conversation before subscribing to it, and resumes after a reconnect', () => {
+    const store = useWebSocketStore.getState()
+    const release = store.viewChannel('c1') // before auth and before the subscription
+    authOk()
+    expect(views()).toEqual([])
+    const releaseSub = store.subscribeMany(['c1'])
+    expect(views()).toEqual(['c1'])
+
+    // The connection drops and comes back on its own.
+    const old = FakeSocket.last!
+    old.onclose!({ code: 1006 })
+    vi.advanceTimersByTime(60_000)
+    expect(FakeSocket.last).not.toBe(old)
+    FakeSocket.last!.onopen!()
+    authOk()
+    expect(views()).toEqual(['c1'])
+    release()
+    releaseSub()
   })
 })

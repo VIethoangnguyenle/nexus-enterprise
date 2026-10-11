@@ -289,6 +289,12 @@ Both empty: push is off and nothing is sent. Only one set: messaging refuses to 
 deployment never silently sends nothing. Devices are linked to people by OneSignal's `external_id`, set to the
 user's id at sign-in. Each recipient is checked for `read` on the channel when the push is sent.
 
+A notification opens `APP_BASE_URL` plus the conversation's path (web push needs an absolute address), and
+replaces an earlier one about the same conversation through `web_push_topic`. Each request carries an
+`idempotency_key`, so a retry after a timeout does not deliver twice. A conversation is not pushed to a
+person while one of their sessions has it on screen with the page visible; a tab that is merely open, or
+subscribed to the conversation for the navigator, does not hold push back.
+
 ## Email sign-in codes (Gmail SMTP)
 
 The auth service sends one-time sign-in codes by email through SMTP (Go standard library, no

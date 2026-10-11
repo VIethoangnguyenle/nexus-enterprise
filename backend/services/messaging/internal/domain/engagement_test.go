@@ -275,7 +275,7 @@ func TestTasks_CreateUpdateListAndDeny(t *testing.T) {
 	require.Len(t, listed, 1)
 	assert.Equal(t, "todo", listed[0].Status, "a denied update changes nothing")
 
-	updated, err := svc.UpdateTask(ctx, domain.UpdateTaskInput{TaskID: task.Id, UserNodeID: userNode, Status: "done"})
+	updated, err := svc.UpdateTask(ctx, domain.UpdateTaskInput{TaskID: task.Id, UserID: k.f.userID, UserNodeID: userNode, Status: "done"})
 	require.NoError(t, err)
 	assert.Equal(t, "done", updated.Status)
 

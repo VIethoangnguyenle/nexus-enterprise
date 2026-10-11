@@ -9,10 +9,12 @@ package push
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -57,19 +59,22 @@ type OneSignal struct {
 	appID    string
 	key      string
 	endpoint string
-	http     *http.Client
-	backoff  time.Duration
+	// appURL is the web app's origin; a notification's path opens under it.
+	appURL  string
+	http    *http.Client
+	backoff time.Duration
 }
 
-func newOneSignal(appID, key, endpoint string) *OneSignal {
-	return &OneSignal{appID: appID, key: key, endpoint: endpoint,
+func newOneSignal(appID, key, endpoint, appURL string) *OneSignal {
+	return &OneSignal{appID: appID, key: key, endpoint: endpoint, appURL: strings.TrimRight(appURL, "/"),
 		http: &http.Client{Timeout: requestTimeout}, backoff: 500 * time.Millisecond}
 }
 
 // FromEnv builds a sender from ONESIGNAL_APP_ID and ONESIGNAL_REST_API_KEY.
 // Neither set: a sender that does nothing. Only one set: an error, so a
 // half-configured deployment never silently sends nothing. The error never
-// echoes the key.
+// echoes the key. APP_BASE_URL is the web app the notifications open; web push
+// needs an absolute address.
 func FromEnv() (Sender, error) {
 	appID := strings.TrimSpace(os.Getenv("ONESIGNAL_APP_ID"))
 	key := strings.TrimSpace(os.Getenv("ONESIGNAL_REST_API_KEY"))
@@ -79,7 +84,26 @@ func FromEnv() (Sender, error) {
 	case appID == "" || key == "":
 		return nil, errors.New("push: set both ONESIGNAL_APP_ID and ONESIGNAL_REST_API_KEY, or neither")
 	}
-	return newOneSignal(appID, key, defaultEndpoint), nil
+	appURL := strings.TrimSpace(os.Getenv("APP_BASE_URL"))
+	if appURL == "" {
+		appURL = "http://localhost:5173"
+	}
+	if u, err := url.Parse(appURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		return nil, fmt.Errorf("push: APP_BASE_URL must be an absolute http(s) URL, got %q", appURL)
+	}
+	return newOneSignal(appID, key, defaultEndpoint, appURL), nil
+}
+
+// newIdempotencyKey is a random UUID (version 4): OneSignal drops a second
+// request with the same key, so a retry after a timeout does not deliver twice.
+func newIdempotencyKey() (string, error) {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return "", err
+	}
+	b[6] = b[6]&0x0f | 0x40
+	b[8] = b[8]&0x3f | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16]), nil
 }
 
 // Enabled is true.
@@ -92,7 +116,11 @@ type request struct {
 	Headings       map[string]string   `json:"headings"`
 	Contents       map[string]string   `json:"contents"`
 	WebURL         string              `json:"web_url,omitempty"`
-	CollapseID     string              `json:"collapse_id,omitempty"`
+	// WebPushTopic replaces an earlier web notification with the same topic;
+	// CollapseID does the same on mobile.
+	WebPushTopic   string `json:"web_push_topic,omitempty"`
+	CollapseID     string `json:"collapse_id,omitempty"`
+	IdempotencyKey string `json:"idempotency_key"`
 }
 
 // Send delivers a notification, retrying a server error or a rate limit a
@@ -101,14 +129,24 @@ func (s *OneSignal) Send(ctx context.Context, m Message) error {
 	if len(m.ExternalIDs) == 0 {
 		return nil
 	}
+	idem, err := newIdempotencyKey()
+	if err != nil {
+		return fmt.Errorf("push: idempotency key: %w", err)
+	}
+	webURL := m.URL
+	if strings.HasPrefix(webURL, "/") {
+		webURL = s.appURL + webURL
+	}
 	body, err := json.Marshal(request{
 		AppID: s.appID, TargetChannel: "push",
 		IncludeAliases: map[string][]string{"external_id": m.ExternalIDs},
 		// "en" is the language OneSignal requires; the text is the same for all.
-		Headings:   map[string]string{"en": m.Title, "vi": m.Title},
-		Contents:   map[string]string{"en": m.Body, "vi": m.Body},
-		WebURL:     m.URL,
-		CollapseID: m.CollapseID,
+		Headings:       map[string]string{"en": m.Title, "vi": m.Title},
+		Contents:       map[string]string{"en": m.Body, "vi": m.Body},
+		WebURL:         webURL,
+		WebPushTopic:   m.CollapseID,
+		CollapseID:     m.CollapseID,
+		IdempotencyKey: idem,
 	})
 	if err != nil {
 		return fmt.Errorf("push: encode: %w", err)

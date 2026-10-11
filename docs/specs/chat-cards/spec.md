@@ -33,6 +33,10 @@ counts; each client refetches the poll under its own view.
 ### Requirement: Tasks
 A task's assignee SHALL be someone who reads the channel (400 otherwise). Changing a task's status (done, reopened)
 SHALL be for its assignee, its creator, or someone with `manage` on the channel; any other writer is refused (403).
+The assignee and the creator need only `read` to change the status, so a read-only assignee can mark their own task
+done. Handing a task to another person SHALL be for its creator or someone with `manage` (403 otherwise), and the new
+assignee must read the channel (400) — otherwise a writer could make themselves the assignee and then mark the task
+done. Changing the title or due date SHALL require `write`.
 
 ### Requirement: Document and approval cards
 A message MAY link a document or an approval request (`linked_entity_type` `document` / `approval`). Its card's details

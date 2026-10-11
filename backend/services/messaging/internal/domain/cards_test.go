@@ -184,3 +184,54 @@ func TestUpdateTask_StatusByAssigneeCreatorOrManager(t *testing.T) {
 	_, err = svc.UpdateTask(ctx, domain.UpdateTaskInput{TaskID: task.Id, UserID: w.f.userID, UserNodeID: userNode, Status: "todo"})
 	require.NoError(t, err, "the creator")
 }
+
+// The assignee marks their own task done even when they only read the
+// conversation; changing anything else about it still takes write.
+func TestUpdateTask_AReadOnlyAssigneeCompletesTheirTask(t *testing.T) {
+	w := newCardWorld(t)
+	ctx := context.Background()
+	w.f.read.allow[grant{w.readerNode, w.oaID, ngac.OpRead}] = true
+	w.f.read.allow[grant{"u-" + w.reader, w.oaID, ngac.OpRead}] = true
+	task, err := w.f.svc.CreateTask(ctx, domain.CreateTaskInput{
+		ChannelID: w.chID, UserID: w.f.userID, UserNodeID: userNode, Title: "Gửi báo cáo", AssigneeID: w.reader,
+	})
+	require.NoError(t, err)
+
+	done, err := w.f.svc.UpdateTask(ctx, domain.UpdateTaskInput{TaskID: task.Id, UserID: w.reader, UserNodeID: w.readerNode, Status: "done"})
+	require.NoError(t, err)
+	assert.Equal(t, "done", done.Status)
+
+	_, err = w.f.svc.UpdateTask(ctx, domain.UpdateTaskInput{TaskID: task.Id, UserID: w.reader, UserNodeID: w.readerNode, Title: "Đổi tên"})
+	require.ErrorIs(t, err, domain.ErrAccessDenied, "renaming takes write")
+
+	// Deny: a reader who is not the assignee cannot touch it at all.
+	other, otherNode := testutil.CreateUser(t, w.f.pool)
+	w.f.read.allow[grant{otherNode, w.oaID, ngac.OpRead}] = true
+	_, err = w.f.svc.UpdateTask(ctx, domain.UpdateTaskInput{TaskID: task.Id, UserID: other, UserNodeID: otherNode, Status: "todo"})
+	require.ErrorIs(t, err, domain.ErrAccessDenied)
+}
+
+// Handing a task to someone else is for its creator or a channel manager: a
+// writer must not make themselves the assignee and then mark it done.
+func TestUpdateTask_ReassignIsForCreatorOrManager(t *testing.T) {
+	w := newCardWorld(t)
+	ctx := context.Background()
+	svc := w.f.svc
+	writer, writerNode := testutil.CreateUser(t, w.f.pool)
+	w.f.read.allow[grant{writerNode, w.oaID, ngac.OpWrite}] = true
+	w.f.read.allow[grant{writerNode, w.oaID, ngac.OpRead}] = true
+	task, err := svc.CreateTask(ctx, domain.CreateTaskInput{ChannelID: w.chID, UserID: w.f.userID, UserNodeID: userNode, Title: "x"})
+	require.NoError(t, err)
+
+	_, err = svc.UpdateTask(ctx, domain.UpdateTaskInput{TaskID: task.Id, UserID: writer, UserNodeID: writerNode, AssigneeID: writer})
+	require.ErrorIs(t, err, domain.ErrAccessDenied, "a writer cannot take the task over")
+
+	// Deny: even the creator cannot hand it to someone who cannot read the channel.
+	stranger, _ := testutil.CreateUser(t, w.f.pool)
+	_, err = svc.UpdateTask(ctx, domain.UpdateTaskInput{TaskID: task.Id, UserID: w.f.userID, UserNodeID: userNode, AssigneeID: stranger})
+	require.ErrorIs(t, err, domain.ErrInvalidInput)
+
+	got, err := svc.UpdateTask(ctx, domain.UpdateTaskInput{TaskID: task.Id, UserID: w.f.userID, UserNodeID: userNode, AssigneeID: writer})
+	require.NoError(t, err, "the creator hands it to a member")
+	assert.Equal(t, writer, got.AssigneeId)
+}

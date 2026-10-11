@@ -3,11 +3,14 @@ package push
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -26,7 +29,7 @@ func TestOneSignal_SendsOneRequestAddressedByExternalID(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	err := newOneSignal("app-1", "key-1", srv.URL).Send(context.Background(), Message{
+	err := newOneSignal("app-1", "key-1", srv.URL, "https://nexus.example").Send(context.Background(), Message{
 		ExternalIDs: []string{"user-1"}, Title: "Nhóm Kế toán", Body: "Lan: đã gửi báo cáo",
 		URL: "/channels/c1?thread=m1", CollapseID: "channel-c1",
 	})
@@ -40,8 +43,10 @@ func TestOneSignal_SendsOneRequestAddressedByExternalID(t *testing.T) {
 		"app_id":          "app-1",
 		"target_channel":  "push",
 		"include_aliases": map[string]any{"external_id": []any{"user-1"}},
-		"web_url":         "/channels/c1?thread=m1",
-		"collapse_id":     "channel-c1",
+		// Web push opens an absolute address and replaces by topic.
+		"web_url":        "https://nexus.example/channels/c1?thread=m1",
+		"web_push_topic": "channel-c1",
+		"collapse_id":    "channel-c1",
 	}
 	for k, v := range want {
 		if !reflect.DeepEqual(got[k], v) {
@@ -55,12 +60,20 @@ func TestOneSignal_SendsOneRequestAddressedByExternalID(t *testing.T) {
 
 func TestOneSignal_RetriesAServerErrorThenGivesUp(t *testing.T) {
 	var calls atomic.Int32
+	var mu sync.Mutex
+	keys := map[string]bool{}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls.Add(1)
+		var got map[string]any
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &got)
+		mu.Lock()
+		keys[fmt.Sprint(got["idempotency_key"])] = true
+		mu.Unlock()
 		w.WriteHeader(http.StatusServiceUnavailable)
 	}))
 	defer srv.Close()
-	s := newOneSignal("app", "key", srv.URL)
+	s := newOneSignal("app", "key", srv.URL, "https://nexus.example")
 	s.backoff = time.Millisecond
 
 	err := s.Send(context.Background(), Message{ExternalIDs: []string{"u"}, Title: "t", Body: "secret body"})
@@ -73,6 +86,27 @@ func TestOneSignal_RetriesAServerErrorThenGivesUp(t *testing.T) {
 	if strings.Contains(err.Error(), "secret body") {
 		t.Error("an error never carries the message body")
 	}
+	// A retry after a timeout must not deliver twice: every attempt carries the
+	// same idempotency key, a UUID as OneSignal requires.
+	if len(keys) != 1 {
+		t.Fatalf("attempts carried %d idempotency keys, want 1: %v", len(keys), keys)
+	}
+	for k := range keys {
+		if !uuidPattern.MatchString(k) {
+			t.Errorf("idempotency key %q is not a UUID", k)
+		}
+	}
+}
+
+var uuidPattern = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
+
+func TestFromEnv_NeedsAnAbsoluteAppAddress(t *testing.T) {
+	t.Setenv("ONESIGNAL_APP_ID", "app")
+	t.Setenv("ONESIGNAL_REST_API_KEY", "key")
+	t.Setenv("APP_BASE_URL", "nexus.example")
+	if _, err := FromEnv(); err == nil {
+		t.Fatal("a relative APP_BASE_URL would make every notification link unusable")
+	}
 }
 
 func TestOneSignal_DoesNotRetryARefusal(t *testing.T) {
@@ -82,7 +116,7 @@ func TestOneSignal_DoesNotRetryARefusal(t *testing.T) {
 		w.WriteHeader(http.StatusBadRequest)
 	}))
 	defer srv.Close()
-	if err := newOneSignal("app", "key", srv.URL).Send(context.Background(), Message{ExternalIDs: []string{"u"}}); err == nil {
+	if err := newOneSignal("app", "key", srv.URL, "https://nexus.example").Send(context.Background(), Message{ExternalIDs: []string{"u"}}); err == nil {
 		t.Fatal("want an error")
 	}
 	if calls.Load() != 1 {
@@ -118,7 +152,7 @@ func TestSend_NobodyToTellIsANoOp(t *testing.T) {
 		t.Error("no request for no recipient")
 	}))
 	defer srv.Close()
-	if err := newOneSignal("app", "key", srv.URL).Send(context.Background(), Message{}); err != nil {
+	if err := newOneSignal("app", "key", srv.URL, "https://nexus.example").Send(context.Background(), Message{}); err != nil {
 		t.Fatal(err)
 	}
 }
