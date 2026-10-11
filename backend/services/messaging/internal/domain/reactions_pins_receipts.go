@@ -156,11 +156,19 @@ func (s *Service) MarkChannelRead(ctx context.Context, userID, userNodeID, chann
 	return s.store.UpsertReadReceipt(ctx, userID, channelID, lastMessageID)
 }
 
-// GetUnreadCounts returns unread message counts for all channels a user is a member of.
-// The query is already scoped to the caller's own receipts, so it needs no
-// further authorization — a user can only ever see their own unread state.
-func (s *Service) GetUnreadCounts(ctx context.Context, userID string) ([]*pb.ChannelUnread, error) {
-	unreads, err := s.store.GetUnreadCounts(ctx, userID)
+// GetUnreadCounts returns the caller's unread counts for every channel they may
+// read: the channels of the workspace they are signed in to and their DMs —
+// the channels the sidebar lists. A channel the caller may not read is never
+// named; the counts come from the caller's own receipts and thread follows.
+func (s *Service) GetUnreadCounts(ctx context.Context, userID, userNodeID, workspaceID string) ([]*pb.ChannelUnread, error) {
+	if userID == "" || userNodeID == "" {
+		return nil, ErrInvalidInput
+	}
+	channelIDs, err := s.readableChannelIDs(ctx, workspaceID, userNodeID)
+	if err != nil {
+		return nil, err
+	}
+	unreads, err := s.store.GetUnreadCounts(ctx, userID, channelIDs)
 	if err != nil {
 		return nil, fmt.Errorf("unread counts: %w", err)
 	}
@@ -170,9 +178,36 @@ func (s *Service) GetUnreadCounts(ctx context.Context, userID string) ([]*pb.Cha
 			ChannelId:         u.ChannelID,
 			UnreadCount:       u.UnreadCount,
 			LastReadMessageId: u.LastReadMsgID,
+			ThreadUnreadCount: u.ThreadUnread,
 		})
 	}
 	return result, nil
+}
+
+// readableChannelIDs lists the channels the sidebar shows the user: the
+// workspace's channels and the DMs, each kept only when the user holds read on
+// its content OA (one batch check, failing closed like the channel list).
+func (s *Service) readableChannelIDs(ctx context.Context, workspaceID, userNodeID string) ([]string, error) {
+	var candidates []*store.Channel
+	if workspaceID != "" {
+		channels, err := s.store.ListChannelsByWorkspace(ctx, workspaceID)
+		if err != nil {
+			return nil, fmt.Errorf("list channels: %w", err)
+		}
+		candidates = append(candidates, channels...)
+	}
+	dms, err := s.store.ListAllDMs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list DMs: %w", err)
+	}
+	candidates = append(candidates, dms...)
+
+	readable := s.filterAccessible(ctx, candidates, userNodeID)
+	ids := make([]string, 0, len(readable))
+	for _, ch := range readable {
+		ids = append(ids, ch.Id)
+	}
+	return ids, nil
 }
 
 // --- Search ---

@@ -53,6 +53,8 @@ type ChannelUnread struct {
 	ChannelID     string
 	UnreadCount   int32
 	LastReadMsgID string
+	// ThreadUnread counts unread replies in the threads of the channel the user follows.
+	ThreadUnread int32
 }
 
 // --- Reactions Store ---
@@ -235,20 +237,48 @@ func (s *Store) UpsertReadReceipt(ctx context.Context, userID, channelID, lastMe
 	return nil
 }
 
-// GetUnreadCounts returns unread message counts for all channels a user is a member of.
-func (s *Store) GetUnreadCounts(ctx context.Context, userID string) ([]ChannelUnread, error) {
+// GetUnreadCounts returns the user's unread message and thread-reply counts
+// for the given channels.
+func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs []string) ([]ChannelUnread, error) {
+	if len(channelIDs) == 0 {
+		return nil, nil
+	}
+	// The caller decides which channels to count (the ones the user may read);
+	// the read position and thread follows are keyed by the user.
+	//
+	// Thread unread is counted from the threads the user follows — explicit
+	// follow rows, plus the threads they started or were mentioned in that have
+	// no row (the same rule as threadFollowingExpr) — rather than from every
+	// thread of every channel: the followed set is small, and this query runs
+	// each time a message arrives.
 	rows, err := s.db.Query(ctx,
-		`SELECT cm.channel_id,
+		`WITH followed AS (
+		   SELECT tf.root_message_id AS id, tf.last_read_at
+		   FROM thread_follows tf WHERE tf.user_id = $1 AND tf.following
+		   UNION ALL
+		   SELECT m.id, m.created_at FROM messages m
+		   WHERE m.parent_message_id IS NULL AND m.reply_count > 0
+		     AND (m.sender_id = $1 OR m.mentions @> ARRAY[$1]::text[])
+		     AND NOT EXISTS (SELECT 1 FROM thread_follows tf WHERE tf.user_id = $1 AND tf.root_message_id = m.id)
+		 ), thread_unread AS (
+		   SELECT root.channel_id, COUNT(r.id)::int AS n
+		   FROM followed f
+		   JOIN messages root ON root.id = f.id
+		   JOIN messages r ON r.parent_message_id = f.id AND r.sender_id <> $1 AND r.created_at > f.last_read_at
+		   GROUP BY root.channel_id
+		 )
+		 SELECT cm.channel_id,
 		        COUNT(m.id) AS unread_count,
-		        COALESCE(rr.last_message_id, '') AS last_read_msg
-		 FROM channel_members cm
+		        COALESCE(rr.last_message_id, '') AS last_read_msg,
+		        COALESCE(MAX(tu.n), 0) AS thread_unread
+		 FROM (SELECT DISTINCT unnest($2::text[]) AS channel_id) cm
 		 LEFT JOIN read_receipts rr ON rr.user_id = $1 AND rr.channel_id = cm.channel_id
 		 LEFT JOIN messages m ON m.channel_id = cm.channel_id
 		   AND m.parent_message_id IS NULL
 		   AND (rr.last_read_at IS NULL OR m.created_at > rr.last_read_at)
-		 WHERE cm.ngac_node_id = (SELECT ngac_node_id FROM users WHERE id = $1)
+		 LEFT JOIN thread_unread tu ON tu.channel_id = cm.channel_id
 		 GROUP BY cm.channel_id, rr.last_message_id`,
-		userID)
+		userID, channelIDs)
 	if err != nil {
 		return nil, fmt.Errorf("unread counts: %w", err)
 	}
@@ -257,12 +287,12 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string) ([]ChannelUn
 	var results []ChannelUnread
 	for rows.Next() {
 		var u ChannelUnread
-		if err := rows.Scan(&u.ChannelID, &u.UnreadCount, &u.LastReadMsgID); err != nil {
+		if err := rows.Scan(&u.ChannelID, &u.UnreadCount, &u.LastReadMsgID, &u.ThreadUnread); err != nil {
 			return nil, err
 		}
 		results = append(results, u)
 	}
-	return results, nil
+	return results, rows.Err()
 }
 
 // --- Search Store ---

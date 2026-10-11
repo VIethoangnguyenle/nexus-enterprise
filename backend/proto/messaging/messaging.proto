@@ -24,6 +24,10 @@ service MessagingService {
   // Threads
   rpc GetThread(GetThreadRequest) returns (MessageList);
   rpc FindThreadsByEntity(FindThreadsByEntityRequest) returns (MessageList);
+  rpc FollowThread(ThreadRequest) returns (Empty);
+  rpc UnfollowThread(ThreadRequest) returns (Empty);
+  rpc MarkThreadRead(ThreadRequest) returns (Empty);
+  rpc ListThreads(ListThreadsRequest) returns (MessageList);
 
   // DMs
   rpc CreateDM(CreateDMRequest) returns (Channel);
@@ -172,6 +176,12 @@ message Message {
   repeated string mentions = 13;    // User IDs mentioned
   repeated ReactionGroup reactions = 14;  // Aggregated reactions
   bool is_pinned = 15;              // Whether message is pinned
+  // Thread summary of a root message. last_reply_at is unset until the first
+  // reply; the other three are as seen by the caller.
+  google.protobuf.Timestamp last_reply_at = 16;
+  repeated string reply_participant_ids = 17; // User IDs of the 3 most recent distinct repliers, newest first
+  bool following = 18;                        // Caller follows the thread
+  int32 thread_unread_count = 19;             // Replies the caller has not read; 0 when not following
 }
 
 message GetMessagesRequest {
@@ -184,6 +194,19 @@ message GetMessagesRequest {
 message MessageList {
   repeated Message messages = 1;
   bool has_more = 2;
+}
+
+// ThreadRequest names a thread by its root message.
+message ThreadRequest {
+  string message_id = 1;
+}
+
+message ListThreadsRequest {
+  string channel_id = 1;
+  string filter = 2;   // "all" (default), "following" or "unread"
+  string before = 3;   // RFC 3339 last-reply time: return threads that moved before it
+  int32 limit = 4;
+  string before_id = 5; // root message id of the last thread of the previous page; breaks ties on before
 }
 
 message GetThreadRequest {
@@ -297,6 +320,7 @@ message ChannelUnread {
   string channel_id = 1;
   int32 unread_count = 2;
   string last_read_message_id = 3;
+  int32 thread_unread_count = 4;    // Unread replies in the threads of this channel the caller follows
 }
 
 message ChannelUnreadList {

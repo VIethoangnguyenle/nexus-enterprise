@@ -102,7 +102,7 @@ func (h *Handler) MarkChannelRead(c echo.Context) error {
 // GetUnreadCounts handles GET /api/channels/unread.
 func (h *Handler) GetUnreadCounts(c echo.Context) error {
 	claims := httputil.GetClaims(c)
-	unreads, err := h.svc.GetUnreadCounts(c.Request().Context(), claims.UserID)
+	unreads, err := h.svc.GetUnreadCounts(c.Request().Context(), claims.UserID, claims.NGACNodeID, claims.TenantID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

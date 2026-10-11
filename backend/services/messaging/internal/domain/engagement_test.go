@@ -150,7 +150,7 @@ func TestReadReceipts_MarkAndCountAndDeny(t *testing.T) {
 	svc := k.f.svc
 
 	require.NoError(t, svc.MarkChannelRead(ctx, k.f.userID, userNode, k.chID, k.msgID))
-	counts, err := svc.GetUnreadCounts(ctx, k.f.userID)
+	counts, err := svc.GetUnreadCounts(ctx, k.f.userID, userNode, k.f.wsID)
 	require.NoError(t, err)
 	for _, c := range counts {
 		if c.ChannelId == k.chID {

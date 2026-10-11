@@ -29,9 +29,15 @@ type Message struct {
 	LinkedEntityType string
 	LinkedEntityID   string
 	ReplyCount       int32
+	LastReplyAt      *time.Time // nil until the first reply
 	ContentFormat    string
 	Mentions         []string
 	IsPinned         bool
 	Reactions        []ReactionGroup
 	CreatedAt        time.Time
+
+	// Thread state as seen by one caller; filled only where a caller is known.
+	Following           bool
+	ThreadUnread        int32
+	ReplyParticipantIDs []string
 }

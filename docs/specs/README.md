@@ -69,6 +69,7 @@ Verified against the codebase on 2026-07-31.
 | `realtime-event-delivery` | Matches code (added 2026-10-10) |
 | `notifications` | Matches code (added 2026-10-10) |
 | `chat-channel-integrity` | Matches code (added 2026-10-10) |
+| `chat-threads` | Matches code (added 2026-10-11) |
 
 **Approval**
 

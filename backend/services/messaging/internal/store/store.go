@@ -185,7 +185,7 @@ func collectChannels(rows pgx.Rows) ([]*Channel, error) {
 const messageCols = `m.id, m.channel_id, m.sender_id, COALESCE(u.username,''), m.content, m.created_at,
 	COALESCE(m.message_type,'user'), COALESCE(m.parent_message_id,''),
 	COALESCE(m.linked_entity_type,''), COALESCE(m.linked_entity_id,''), m.reply_count,
-	COALESCE(m.content_format,'markdown'), COALESCE(m.mentions, '{}')`
+	COALESCE(m.content_format,'markdown'), COALESCE(m.mentions, '{}'), m.last_reply_at`
 
 // execer is what a statement runs on: the pool, or a transaction on it.
 type execer interface {
@@ -211,26 +211,55 @@ func insertMessage(ctx context.Context, x execer, msg *Message) error {
 	return nil
 }
 
-// InsertMessage persists a new message. A reply is counted on its parent and its
-// sender joins the thread, all in one transaction.
+// InsertMessage persists a new message. A reply is counted on its parent, moves
+// the thread's last reply time, and makes its sender and the users it mentions
+// follow the thread, all in one transaction.
 func (s *Store) InsertMessage(ctx context.Context, msg *Message) error {
 	return pgx.BeginFunc(ctx, s.db, func(tx pgx.Tx) error {
 		if err := insertMessage(ctx, tx, msg); err != nil {
 			return err
 		}
 		if msg.ParentMessageID == "" {
+			// The sender and anyone mentioned follow a new thread implicitly
+			// (see threadFollowingExpr), so a root message writes no follow row.
 			return nil
 		}
 		// A reply that was stored but not counted would show a thread with the
-		// wrong number of replies for ever, so the three writes stand or fall together.
+		// wrong number of replies for ever, so these writes stand or fall together.
 		if _, err := tx.Exec(ctx,
-			`UPDATE messages SET reply_count = reply_count + 1 WHERE id = $1`, msg.ParentMessageID); err != nil {
+			`UPDATE messages SET reply_count = reply_count + 1,
+			        last_reply_at = GREATEST(COALESCE(last_reply_at, $2), $2)
+			 WHERE id = $1`, msg.ParentMessageID, msg.CreatedAt); err != nil {
 			return fmt.Errorf("count reply: %w", err)
 		}
 		if _, err := tx.Exec(ctx,
 			`INSERT INTO thread_participants (message_id, user_id) VALUES ($1, $2)
 			 ON CONFLICT DO NOTHING`, msg.ParentMessageID, msg.SenderID); err != nil {
 			return fmt.Errorf("track thread participant: %w", err)
+		}
+		// Replying follows the thread again even after an unfollow, and the
+		// replier has read everything up to their own reply.
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO thread_follows (user_id, root_message_id, following, last_read_at, updated_at)
+			 VALUES ($1, $2, TRUE, $3, NOW())
+			 ON CONFLICT (user_id, root_message_id) DO UPDATE SET
+			   following = TRUE,
+			   last_read_at = GREATEST(thread_follows.last_read_at, EXCLUDED.last_read_at),
+			   updated_at = NOW()`, msg.SenderID, msg.ParentMessageID, msg.CreatedAt); err != nil {
+			return fmt.Errorf("follow thread: %w", err)
+		}
+		// A mention in a reply makes the mentioned user follow the thread. Ids
+		// that are not users are dropped rather than failing the send.
+		if len(msg.Mentions) > 0 {
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO thread_follows (user_id, root_message_id, following, last_read_at, updated_at)
+				 SELECT u.id, root.id, TRUE, root.created_at, NOW()
+				 FROM users u, messages root
+				 WHERE u.id = ANY($1) AND u.id <> $3 AND root.id = $2
+				 ON CONFLICT (user_id, root_message_id) DO UPDATE SET following = TRUE, updated_at = NOW()`,
+				msg.Mentions, msg.ParentMessageID, msg.SenderID); err != nil {
+				return fmt.Errorf("follow mentioned users: %w", err)
+			}
 		}
 		return nil
 	})
@@ -305,7 +334,7 @@ func scanMessages(rows pgx.Rows) ([]*Message, error) {
 		if err := rows.Scan(&m.ID, &m.ChannelID, &m.SenderID, &m.SenderName,
 			&m.Content, &ca, &m.MessageType, &m.ParentMessageID,
 			&m.LinkedEntityType, &m.LinkedEntityID, &m.ReplyCount,
-			&m.ContentFormat, &m.Mentions); err != nil {
+			&m.ContentFormat, &m.Mentions, &m.LastReplyAt); err != nil {
 			return nil, err
 		}
 		m.CreatedAt = ca

@@ -109,6 +109,10 @@ func (c *chat) echo(allow bool) *echo.Echo {
 	e.GET("/api/channels/:chId/messages", h.GetMessages, as)
 	e.GET("/api/messages/:msgId/thread", h.GetThread, as)
 	e.GET("/api/channels/:chId", h.GetChannel, as)
+	e.POST("/api/messages/:msgId/follow", h.FollowThread, as)
+	e.DELETE("/api/messages/:msgId/follow", h.UnfollowThread, as)
+	e.POST("/api/messages/:msgId/thread/read", h.MarkThreadRead, as)
+	e.GET("/api/channels/:chId/threads", h.ListThreads, as)
 	return e
 }
 

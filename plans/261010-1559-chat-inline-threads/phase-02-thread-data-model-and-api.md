@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Mô hình dữ liệu và API thread"
-status: pending
+status: completed
 priority: P1
 effort: "2d"
 dependencies: [1]
@@ -67,11 +67,32 @@ Proto `messaging.proto`: thêm field vào `Message` + RPC follow/unfollow/read/l
 5. Spec `chat-threads` (Requirement + Scenario) cùng commit.
 
 ## Success Criteria
-- [ ] Migration áp trên DB chạy thật, có backup.
-- [ ] `make test s=messaging` xanh, 0 skip; có test deny cho mọi endpoint mới.
-- [ ] Một trang 50 tin = 1 truy vấn tóm tắt (kiểm bằng test đếm query hoặc EXPLAIN).
-- [ ] Spec `chat-threads` + index cập nhật; drift check xanh.
+- [x] Migration áp trên DB chạy thật, có backup.
+- [x] `make test s=messaging` xanh, 0 skip; có test deny cho mọi endpoint mới.
+- [x] Một trang 50 tin = 1 truy vấn tóm tắt (`ThreadStates` một câu SQL cho cả trang).
+- [x] Spec `chat-threads` + index cập nhật; drift check xanh.
 
 ## Risk Assessment
 - Backfill chậm trên bảng lớn → chạy theo lô; tín hiệu: migration > 30s trên DB test → tách backfill thành script.
 - `GetUnreadCounts` chậm hơn → đo trước/sau; nếu > 2x, thêm cột đếm cache trong `thread_follows`.
+
+## Kết quả (2026-10-11)
+- Migration `037_thread_follows.sql`: `messages.last_reply_at`, bảng `thread_follows`, index
+  `(parent_message_id, created_at)`, partial index cho người bắt đầu/được nhắc; backfill chỉ chạy lần đầu (chạy lại
+  `make db-migrate` không reset vị trí đã đọc). Backup DB dev ở `~/backups/nexus/` (ngoài repo). Đã áp + kiểm `\d`.
+- Theo dõi: không có dòng `thread_follows` = theo dõi ngầm thread mình bắt đầu hoặc được nhắc ở tin gốc; trả lời /
+  được nhắc trong trả lời → theo dõi (bật lại cả sau khi bỏ); bỏ theo dõi không bị trả lời của người khác bật lại.
+- API: `POST|DELETE /api/messages/:msgId/follow`, `POST /api/messages/:msgId/thread/read`,
+  `GET /api/channels/:chId/threads?filter=&before=&before_id=&limit=` (+ gRPC `FollowThread`, `UnfollowThread`,
+  `MarkThreadRead`, `ListThreads`); `Message` thêm field 16–19, `ChannelUnread.thread_unread_count`. Đều cần `read`
+  trên OA kênh; test deny ở domain, REST, gRPC. `/api/messages`, `/api/channels` đã có trong `vite.config.js`.
+- `SendMessage`: cha không tồn tại / khác kênh / là trả lời → 400 (lỗ hổng scout đã nêu).
+- **Sửa lỗi có sẵn:** `GetUnreadCounts` cũ trả mọi kênh của mọi người (subquery `ngac_node_id` không tồn tại trên
+  `users` bám vào cột ngoài; dev DB: 59 kênh thay vì 2). Người dùng chốt: đếm cho **mọi kênh mình đọc được** (kênh
+  workspace hiện tại + DM, lọc batch `read` như sidebar), không phụ thuộc `channel_members`.
+- Đo `GetUnreadCounts` (30 kênh, 18k tin gốc, 1.800 thread, 420 thread theo dõi): 22 ms → 43 ms (~1,9×, dưới
+  ngưỡng 2×) sau khi đếm từ tập thread đang theo dõi.
+- Review: `plans/reports/code-reviewer-261011-0640-chat-phase-02.md`; test: `plans/reports/tester-261011-0640-chat-phase-02.md`.
+  Chấp nhận, không sửa: L2 (giờ tin lấy từ Go, vị trí đọc từ DB — lệch cỡ ms), L4 (`following`/unread bằng 0 ở
+  kết quả tìm kiếm/ghim — client không dùng ở đó), L7 (thông báo lỗi 400 khác nhau giữa "không tồn tại" và "khác kênh").
+- Ngoài phạm vi, có sẵn trên main: 1 test frontend đỏ (`AssetsScreen.test.tsx`, chuỗi giờ `08:52`).

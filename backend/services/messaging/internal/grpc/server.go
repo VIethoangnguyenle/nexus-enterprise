@@ -117,7 +117,8 @@ func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRe
 
 // GetMessages delegates to domain.Service.GetMessages.
 func (s *MessagingServer) GetMessages(ctx context.Context, req *pb.GetMessagesRequest) (*pb.MessageList, error) {
-	list, err := s.svc.GetMessages(ctx, req.ChannelId, grpcauth.CallerFrom(ctx).NGACNodeID, req.Before, int(req.Limit))
+	caller := grpcauth.CallerFrom(ctx)
+	list, err := s.svc.GetMessages(ctx, req.ChannelId, caller.UserID, caller.NGACNodeID, req.Before, int(req.Limit))
 	if err != nil {
 		return nil, domainError("get messages", err)
 	}
@@ -126,9 +127,47 @@ func (s *MessagingServer) GetMessages(ctx context.Context, req *pb.GetMessagesRe
 
 // GetThread delegates to domain.Service.GetThread.
 func (s *MessagingServer) GetThread(ctx context.Context, req *pb.GetThreadRequest) (*pb.MessageList, error) {
-	list, err := s.svc.GetThread(ctx, req.MessageId, grpcauth.CallerFrom(ctx).NGACNodeID)
+	caller := grpcauth.CallerFrom(ctx)
+	list, err := s.svc.GetThread(ctx, req.MessageId, caller.UserID, caller.NGACNodeID)
 	if err != nil {
 		return nil, domainError("get thread", err)
+	}
+	return list, nil
+}
+
+// FollowThread delegates to domain.Service.FollowThread.
+func (s *MessagingServer) FollowThread(ctx context.Context, req *pb.ThreadRequest) (*pb.Empty, error) {
+	caller := grpcauth.CallerFrom(ctx)
+	if err := s.svc.FollowThread(ctx, req.MessageId, caller.UserID, caller.NGACNodeID); err != nil {
+		return nil, domainError("follow thread", err)
+	}
+	return &pb.Empty{}, nil
+}
+
+// UnfollowThread delegates to domain.Service.UnfollowThread.
+func (s *MessagingServer) UnfollowThread(ctx context.Context, req *pb.ThreadRequest) (*pb.Empty, error) {
+	caller := grpcauth.CallerFrom(ctx)
+	if err := s.svc.UnfollowThread(ctx, req.MessageId, caller.UserID, caller.NGACNodeID); err != nil {
+		return nil, domainError("unfollow thread", err)
+	}
+	return &pb.Empty{}, nil
+}
+
+// MarkThreadRead delegates to domain.Service.MarkThreadRead.
+func (s *MessagingServer) MarkThreadRead(ctx context.Context, req *pb.ThreadRequest) (*pb.Empty, error) {
+	caller := grpcauth.CallerFrom(ctx)
+	if err := s.svc.MarkThreadRead(ctx, req.MessageId, caller.UserID, caller.NGACNodeID); err != nil {
+		return nil, domainError("mark thread read", err)
+	}
+	return &pb.Empty{}, nil
+}
+
+// ListThreads delegates to domain.Service.ListThreads.
+func (s *MessagingServer) ListThreads(ctx context.Context, req *pb.ListThreadsRequest) (*pb.MessageList, error) {
+	caller := grpcauth.CallerFrom(ctx)
+	list, err := s.svc.ListThreads(ctx, req.ChannelId, caller.UserID, caller.NGACNodeID, req.Filter, req.Before, req.BeforeId, int(req.Limit))
+	if err != nil {
+		return nil, domainError("list threads", err)
 	}
 	return list, nil
 }

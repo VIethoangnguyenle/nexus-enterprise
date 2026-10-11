@@ -49,6 +49,10 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// Threads
 	api.GET("/messages/:msgId/thread", h.GetThread)
 	api.GET("/threads/entity/:entityType/:entityId", h.FindThreadsByEntity)
+	api.POST("/messages/:msgId/follow", h.FollowThread)
+	api.DELETE("/messages/:msgId/follow", h.UnfollowThread)
+	api.POST("/messages/:msgId/thread/read", h.MarkThreadRead)
+	api.GET("/channels/:chId/threads", h.ListThreads)
 
 	// Channel Members
 	api.POST("/channels/:chId/members", h.AddChannelMember)
@@ -225,7 +229,7 @@ func (h *Handler) GetMessages(c echo.Context) error {
 		}
 	}
 
-	msgs, err := h.svc.GetMessages(c.Request().Context(), c.Param("chId"), claims.NGACNodeID, before, limit)
+	msgs, err := h.svc.GetMessages(c.Request().Context(), c.Param("chId"), claims.UserID, claims.NGACNodeID, before, limit)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
@@ -238,7 +242,7 @@ func (h *Handler) GetThread(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	msgs, err := h.svc.GetThread(c.Request().Context(), c.Param("msgId"), claims.NGACNodeID)
+	msgs, err := h.svc.GetThread(c.Request().Context(), c.Param("msgId"), claims.UserID, claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}

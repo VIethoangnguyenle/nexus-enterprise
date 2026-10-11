@@ -36,7 +36,7 @@ Liên quan, không chặn: `project:261009-0449-project-wide-refactor` phase 06 
 | # | Phase | Đợt | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|---|
 | 01 | [Thiết kế Chat: thread, đính kèm, định dạng](phase-01-design-inline-threads.md) | 1 | P1 | 1-1.5d | — | completed |
-| 02 | [Mô hình dữ liệu và API thread](phase-02-thread-data-model-and-api.md) | 1 | P1 | 2d | 01 (chốt hành vi) | pending |
+| 02 | [Mô hình dữ liệu và API thread](phase-02-thread-data-model-and-api.md) | 1 | P1 | 2d | 01 (chốt hành vi) | completed |
 | 03 | [Sự kiện realtime cho thread](phase-03-realtime-thread-events.md) | 1 | P1 | 1d | 02 | pending |
 | 04 | [UI luồng in-line, panel Thread](phase-04-inline-stream-ui.md) | 1 | P1 | 2-3d | 01, 02, 03 | pending |
 | 05 | [Kiểm chứng đợt 1](phase-05-wave1-verification.md) | 1 | P1 | 0.5d | 04 | pending |

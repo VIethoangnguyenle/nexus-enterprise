@@ -47,6 +47,11 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 			return nil, err
 		}
 	}
+	if in.ParentMessageID != "" {
+		if err := s.checkReplyParent(ctx, in.ParentMessageID, in.ChannelID); err != nil {
+			return nil, err
+		}
+	}
 
 	now := time.Now()
 	contentFormat := in.ContentFormat
@@ -76,8 +81,9 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 	return messageToProto(msg), nil
 }
 
-// GetMessages returns paginated messages for a channel.
-func (s *Service) GetMessages(ctx context.Context, channelID, userNodeID, before string, limit int) (*pb.MessageList, error) {
+// GetMessages returns paginated messages for a channel, each root message with
+// the caller's thread summary.
+func (s *Service) GetMessages(ctx context.Context, channelID, userID, userNodeID, before string, limit int) (*pb.MessageList, error) {
 	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
@@ -103,6 +109,9 @@ func (s *Service) GetMessages(ctx context.Context, channelID, userNodeID, before
 	if err := s.EnrichMessagesWithMetadata(ctx, msgs, channelID); err != nil {
 		return nil, err
 	}
+	if err := s.applyThreadStates(ctx, userID, msgs); err != nil {
+		return nil, err
+	}
 
 	return &pb.MessageList{
 		Messages: messagesToProto(msgs),
@@ -110,8 +119,8 @@ func (s *Service) GetMessages(ctx context.Context, channelID, userNodeID, before
 	}, nil
 }
 
-// GetThread returns the parent message plus all replies.
-func (s *Service) GetThread(ctx context.Context, messageID, userNodeID string) (*pb.MessageList, error) {
+// GetThread returns the parent message, with the caller's thread summary, plus all replies.
+func (s *Service) GetThread(ctx context.Context, messageID, userID, userNodeID string) (*pb.MessageList, error) {
 	if err := s.authorizeMessage(ctx, messageID, userNodeID, ngac.OpRead); err != nil {
 		return nil, err
 	}
@@ -124,6 +133,9 @@ func (s *Service) GetThread(ctx context.Context, messageID, userNodeID string) (
 	// Enrich with reactions and pin status; thread messages share the parent's channel.
 	if len(msgs) > 0 {
 		if err := s.EnrichMessagesWithMetadata(ctx, msgs, msgs[0].ChannelID); err != nil {
+			return nil, err
+		}
+		if err := s.applyThreadStates(ctx, userID, msgs[:1]); err != nil {
 			return nil, err
 		}
 	}
@@ -168,6 +180,10 @@ func messageToProto(m *store.Message) *pb.Message {
 			UserIds: rg.UserIDs,
 		})
 	}
+	var lastReplyAt *timestamppb.Timestamp
+	if m.LastReplyAt != nil {
+		lastReplyAt = timestamppb.New(*m.LastReplyAt)
+	}
 	return &pb.Message{
 		Id:               m.ID,
 		ChannelId:        m.ChannelID,
@@ -184,6 +200,11 @@ func messageToProto(m *store.Message) *pb.Message {
 		Reactions:        reactions,
 		IsPinned:         m.IsPinned,
 		CreatedAt:        timestamppb.New(m.CreatedAt),
+
+		LastReplyAt:         lastReplyAt,
+		ReplyParticipantIds: m.ReplyParticipantIDs,
+		Following:           m.Following,
+		ThreadUnreadCount:   m.ThreadUnread,
 	}
 }
 
