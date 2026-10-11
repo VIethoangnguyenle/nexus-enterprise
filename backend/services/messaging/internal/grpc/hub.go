@@ -142,6 +142,22 @@ func (h *Hub) isSubscribed(channelID string, client *Client) bool {
 	return h.channels[channelID][client]
 }
 
+// IsViewing reports whether one of the user's sessions on this instance has
+// the channel open (subscribed to its live stream). A session on another
+// instance is not seen; the worst outcome is a push for a conversation open
+// elsewhere.
+func (h *Hub) IsViewing(userID, channelID string) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	subs := h.channels[channelID]
+	for c := range h.users[userID] {
+		if subs[c] {
+			return true
+		}
+	}
+	return false
+}
+
 // Unsubscribe removes a client from a channel group.
 func (h *Hub) Unsubscribe(channelID string, client *Client) {
 	h.mu.Lock()

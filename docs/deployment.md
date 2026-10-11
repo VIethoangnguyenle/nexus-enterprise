@@ -276,6 +276,19 @@ Memory limits total about 3 GB for the whole stack (postgres 512M, redpanda 640M
 minio 256M, policy 256M, policy-read 192M, the rest 128-160M, nginx 48M). Go services also get
 `GOMEMLIMIT` just under their limit. `policy-read` runs one replica (dev runs two).
 
+## Web push (OneSignal)
+
+The messaging service sends web push notifications through OneSignal's REST API for direct messages,
+mentions and replies in threads a person follows. It needs two values in `/opt/nexus/.env`:
+
+- `ONESIGNAL_APP_ID` — the app's id, from the OneSignal dashboard (public; the frontend uses the same value
+  as `VITE_ONESIGNAL_APP_ID`).
+- `ONESIGNAL_REST_API_KEY` — the app's REST API key (secret; never in git, never in the frontend).
+
+Both empty: push is off and nothing is sent. Only one set: messaging refuses to start, so a half-configured
+deployment never silently sends nothing. Devices are linked to people by OneSignal's `external_id`, set to the
+user's id at sign-in. Each recipient is checked for `read` on the channel when the push is sent.
+
 ## Email sign-in codes (Gmail SMTP)
 
 The auth service sends one-time sign-in codes by email through SMTP (Go standard library, no

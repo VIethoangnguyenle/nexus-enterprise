@@ -16,6 +16,7 @@ import (
 // reply goes to the channel as the thread's new summary, and to each follower
 // as their own unread count.
 func (h *Handler) announceMessage(ctx context.Context, tenantID string, msg *pb.Message) {
+	h.svc.PushLater(ctx, msg)
 	if h.hub == nil {
 		return
 	}

@@ -31,6 +31,7 @@ type Service struct {
 	driveClient drivepb.DriveServiceClient
 	revoker     SubscriptionRevoker
 	emitter     realtime.Emitter
+	push        *pushState // nil: web push off
 }
 
 // SetEmitter wires the announcer of committed channel changes. A nil emitter

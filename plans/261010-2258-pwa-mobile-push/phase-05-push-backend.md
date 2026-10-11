@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Gửi push từ backend"
-status: pending
+status: in-progress
 priority: P1
 effort: "2d"
 dependencies: [4]
@@ -38,3 +38,13 @@ Backend gửi push qua OneSignal REST API khi có sự kiện đáng báo, tôn 
 
 ## Success Criteria
 - [ ] Push thật tới thiết bị test ≤ 10s; test deny xanh; không secret nào trong git.
+
+## Tiến độ (2026-10-11)
+- Xong: `backend/pkg/push` (OneSignal, không cấu hình → không gửi, cấu hình nửa vời → không khởi động, thử lại có giới
+  hạn, log không chứa nội dung), migration 043 `push_preferences`, `GET|PUT /api/me/push-preferences` (vite, Traefik,
+  nginx), người nhận: DM / nhắc tên / người theo dõi thread; lọc: còn `read` trên kênh, loại bật, ngoài giờ yên lặng,
+  không đang xem kênh (hub, theo instance); gộp 30s (`N tin mới`, cùng `collapse_id`). Test deny xanh. Spec `web-push`,
+  `docs/deployment.md`, `deploy/env.example`, compose prod (chỉ tên biến).
+- Chưa: việc được giao / đề nghị cần duyệt (đi qua pipeline thông báo đang nằm trong stash phần thông báo — làm khi
+  gộp lại); quản trị workspace tắt xem trước nội dung cho cả workspace (quyết định 2026-10-10) — cần màn quản trị;
+  push thật tới thiết bị (phase 06, cần App ID + REST key của bạn).

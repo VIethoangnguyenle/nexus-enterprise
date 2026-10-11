@@ -380,6 +380,9 @@ services:
       APP_ENV: production
       INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
       INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
+      # Web push through OneSignal. Both empty: push off. Only one set: messaging refuses to start.
+      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-}
+      ONESIGNAL_REST_API_KEY: ${ONESIGNAL_REST_API_KEY:-}
       GOMEMLIMIT: 100MiB
     depends_on:
       policy: { condition: service_healthy }

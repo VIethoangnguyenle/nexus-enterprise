@@ -58,6 +58,10 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/messages/:msgId/thread/read", h.MarkThreadRead)
 	api.GET("/channels/:chId/threads", h.ListThreads)
 
+	// The caller's push preferences (the rest of /api/me is the auth service's)
+	api.GET("/me/push-preferences", h.GetPushPreferences)
+	api.PUT("/me/push-preferences", h.PutPushPreferences)
+
 	// Personal navigator sections
 	api.GET("/workspaces/:id/chat-sections", h.ListSections)
 	api.POST("/workspaces/:id/chat-sections", h.CreateSection)

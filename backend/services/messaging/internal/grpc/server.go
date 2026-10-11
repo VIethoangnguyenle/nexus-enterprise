@@ -110,6 +110,8 @@ func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRe
 		return nil, domainError("send message", err)
 	}
 
+	s.svc.PushLater(ctx, msg)
+
 	// Broadcast via WebSocket hub (fire-and-forget): a root message as it is,
 	// a reply as its thread's summary plus each follower's own state.
 	if s.hub != nil {
