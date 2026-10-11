@@ -12,7 +12,7 @@ import {
 import { formatDateTime, formatRelative } from '../../lib/format'
 import { workspaceDisplayName } from '../../lib/workspace'
 import type { WorkspaceDetails } from '../../api/workspaces'
-import { Avatar, Button, Textarea, TextField, toast } from '../primitives'
+import { Avatar, Button, PersonChip, Textarea, TextField, toast } from '../primitives'
 import { Dialog } from '../composites/Dialog'
 import { EmptyState } from '../spaces/EmptyState'
 import { LeaveWorkspace } from './LeaveWorkspace'
@@ -232,6 +232,17 @@ function WorkspaceTypeCard({
 }) {
   const isPersonal = details.type === 'personal'
   const isOwner = !!details.is_owner
+  // The server joins the owners' names with ", ".
+  const owners = (details.owner_name ?? '').split(', ').map((n) => n.trim()).filter(Boolean)
+
+  // After a conversion the button that opened the dialog is gone; keyboard focus
+  // goes to the next step instead of falling to the page.
+  const adminLinkRef = useRef<HTMLAnchorElement>(null)
+  const wasPersonal = useRef(isPersonal)
+  useEffect(() => {
+    if (wasPersonal.current && !isPersonal) adminLinkRef.current?.focus()
+    wasPersonal.current = isPersonal
+  }, [isPersonal])
 
   if (isPersonal) {
     return (
@@ -259,7 +270,7 @@ function WorkspaceTypeCard({
               type="button"
               variant="soft"
               onClick={onOpenConvert}
-              className="max-sm:w-full min-h-9"
+              className="max-sm:w-full max-sm:min-h-11"
             >
               <Building2 size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />
               Chuyển thành workspace tổ chức
@@ -270,9 +281,10 @@ function WorkspaceTypeCard({
             <Lock size={16} strokeWidth={1.75} className="shrink-0" aria-hidden="true" />
             <span>
               Chỉ chủ sở hữu,{' '}
-              <span className="inline-flex items-center gap-1.5 align-middle">
-                <Avatar size={20} name={details.owner_name || 'chủ sở hữu'} />
-                <span className="font-medium text-ink">{details.owner_name || 'chủ sở hữu'}</span>
+              <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 align-middle">
+                {(owners.length ? owners : ['chủ sở hữu']).map((owner) => (
+                  <PersonChip key={owner} name={owner} className="font-medium text-ink" />
+                ))}
               </span>
               , mới chuyển được workspace này thành workspace tổ chức.
             </span>
@@ -281,6 +293,9 @@ function WorkspaceTypeCard({
       </section>
     )
   }
+
+  // A type this build does not know is not guessed at: the card is left out.
+  if (details.type !== 'organization') return null
 
   return (
     <section aria-labelledby="workspace-type-title" className="grid gap-3 p-4 rounded-surface bg-raised">
@@ -321,9 +336,10 @@ function WorkspaceTypeCard({
       {details.converted_by_name && (
         <div className="pl-13 max-sm:pl-0">
           <Link
+            ref={adminLinkRef}
             to="/admin"
             search={(prev: { ws?: string }) => (prev.ws ? { ws: prev.ws } : {})}
-            className="inline-flex items-center gap-2 h-8 px-3 rounded-md bg-hover text-small-ui font-semibold text-ink no-underline
+            className="inline-flex items-center gap-2 h-8 max-sm:min-h-11 px-3 rounded-md bg-hover text-small-ui font-semibold text-ink no-underline
               hover:bg-line focus-ring transition-colors duration-quick max-sm:w-full max-sm:justify-center"
           >
             <Key size={16} strokeWidth={1.75} aria-hidden="true" className="shrink-0" />

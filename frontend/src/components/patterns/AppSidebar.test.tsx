@@ -136,11 +136,37 @@ describe('AppSidebar', () => {
     const user = userEvent.setup()
     await user.click(await screen.findByRole('button', { name: /Khối Vận hành/ }))
     const list = await screen.findByRole('listbox', { name: 'Không gian làm việc' })
-    expect(within(list).getByText('Workspace của bạn')).toBeInTheDocument()
     expect(within(list).getByText('Workspace cá nhân')).toBeInTheDocument()
     expect(within(list).getByText('NovaPay')).toBeInTheDocument()
 
-    const createLink = within(list).getByRole('link', { name: 'Tạo workspace' })
-    expect(createLink).toHaveAttribute('href', '/onboarding')
+    // The listbox holds only options; the label and the create link sit beside it.
+    expect(within(list).getAllByRole('option')).toHaveLength(2)
+    expect(within(list).queryByRole('link')).toBeNull()
+    const label = screen.getByText('Workspace của bạn')
+    expect(list.contains(label)).toBe(false)
+    const createLink = screen.getByRole('link', { name: 'Tạo workspace' })
+    expect(list.contains(createLink)).toBe(false)
+
+    // It carries where the person is, so Back on that screen returns here.
+    const href = new URL(createLink.getAttribute('href')!, 'http://app.test')
+    expect(href.pathname).toBe('/onboarding')
+    expect(href.searchParams.get('from')).toBe('/drive')
+  })
+
+  it('falls back to the headcount for a workspace type it does not know', async () => {
+    api.mockImplementation((path: string) =>
+      path === '/workspaces'
+        ? Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành' }] })
+        : path === '/me/workspaces'
+          ? Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành', role: 'admin', member_count: 64, domain: '', type: 'galaxy' }] })
+          : path.endsWith('/contacts')
+            ? Promise.resolve({ contacts: CONTACTS, total: CONTACTS.length })
+            : Promise.reject(new Error(`unexpected ${path}`)))
+    await renderSidebar()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Khối Vận hành/ }))
+    const list = await screen.findByRole('listbox', { name: 'Không gian làm việc' })
+    expect(within(list).getByText('64 thành viên')).toBeInTheDocument()
+    expect(within(list).queryByText('Workspace tổ chức')).toBeNull()
   })
 })

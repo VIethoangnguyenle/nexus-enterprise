@@ -1,6 +1,6 @@
 import { useRef, useState, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
-import { Link } from '@tanstack/react-router'
+import { Link, useLocation } from '@tanstack/react-router'
 import { AnimatePresence, motion, useDragControls, type PanInfo } from 'motion/react'
 import {
   ArrowLeft, Check, ChevronRight, LogOut, Package, Plus, RefreshCw, Settings, ShieldCheck, Users, X,
@@ -211,6 +211,8 @@ function MenuView({ onClose, pathname, entryRef, onPickWorkspace }: {
 function WorkspaceView({ onDone }: { onDone: () => void }) {
   const { currentId, workspaces, isLoading, isError, refetch, choose, switchingId } = useWorkspaceSwitcher()
   const busy = switchingId !== undefined
+  // Where "Tạo workspace" sends Back to: the screen the person is on now.
+  const here = useLocation({ select: (l) => l.href })
 
   if (isError) {
     return (
@@ -277,9 +279,10 @@ function WorkspaceView({ onDone }: { onDone: () => void }) {
       <div role="separator" className="h-px my-2 bg-line" />
       <Link
         to="/onboarding"
+        search={{ from: here }}
         onClick={onDone}
         className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-center gap-3 w-full min-h-14 px-3 py-2 rounded-surface
-          text-ink no-underline hover:bg-hover transition-colors duration-quick"
+          text-ink no-underline hover:bg-hover transition-colors duration-quick focus-ring"
       >
         <span
           aria-hidden="true"

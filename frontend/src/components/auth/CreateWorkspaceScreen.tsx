@@ -1,13 +1,14 @@
-import { useState, type FormEvent } from 'react'
-import { useNavigate } from '@tanstack/react-router'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useNavigate, useRouter, useSearch } from '@tanstack/react-router'
 import {
   ArrowLeft, Building2, ClipboardCheck, FileText, FolderOpen, Info, MessageSquare, Package, User, Users,
 } from 'lucide-react'
 import type { WorkspaceType } from '../../api/workspaces'
 import { keys } from '../../hooks/keys'
+import { usePhone } from '../../hooks/usePhone'
 import { useCreateMyWorkspace, useMe, useProviders, useSwitchToWorkspace } from '../../hooks/useAuth'
 import { queryClient } from '../../lib/query-client'
-import { describeAuthError, type DescribedError } from '../../lib/auth-flow'
+import { describeAuthError, returnPath, type DescribedError } from '../../lib/auth-flow'
 import { statusOf } from '../../lib/errors'
 import { Button, Heading, IconButton, Text, TextField, toast } from '../primitives'
 import { Notice } from './Notice'
@@ -22,6 +23,12 @@ const NAME_MAX = 80
  */
 export function CreateWorkspaceScreen() {
   const navigate = useNavigate()
+  const router = useRouter()
+  // Where the person was when they chose "Tạo workspace" (the switcher adds it);
+  // opened from Chọn workspace there is none, and Back returns there.
+  const from = returnPath((useSearch({ strict: false }) as { from?: unknown }).from)
+  const phone = usePhone()
+  const personalRef = useRef<HTMLInputElement>(null)
   const me = useMe()
   const providers = useProviders()
   const create = useCreateMyWorkspace()
@@ -68,6 +75,13 @@ export function CreateWorkspaceScreen() {
   // that could only be turned down.
   const mayCreate = !!account && !!email && account.email_verified
 
+  // Desktop: the first focus is the selected type, not the name (no keyboard
+  // pops up on a phone before it is needed).
+  useEffect(() => {
+    if (mayCreate && !phone) personalRef.current?.focus()
+  // Only when the form first appears; later changes of `phone` must not steal focus.
+  }, [mayCreate])
+
   return (
     <form onSubmit={submit} noValidate className="grid gap-5">
       <IconButton
@@ -75,7 +89,7 @@ export function CreateWorkspaceScreen() {
         size="lg"
         disabled={busy}
         className="-ml-2 w-11 h-11"
-        onClick={() => void navigate({ to: '/workspace-select' })}
+        onClick={() => (from ? router.history.push(from) : void navigate({ to: '/workspace-select' }))}
         type="button"
       >
         <ArrowLeft size={18} strokeWidth={1.75} />
@@ -117,9 +131,9 @@ export function CreateWorkspaceScreen() {
           <legend className="p-0 mb-2 font-semibold text-ink text-sm">Loại workspace</legend>
           <label
             className={`relative grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 items-start p-3.5 rounded-surface cursor-pointer
-              transition-colors duration-quick
+              transition-colors duration-quick has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-focus has-[:focus-visible]:outline-offset-2
               ${type === 'personal'
-                ? 'bg-accent-wash ring-1.5 ring-accent'
+                ? 'bg-accent-wash ring-2 ring-accent'
                 : 'bg-raised ring-1 ring-line hover:bg-hover'}`}
           >
             {/* eslint-disable-next-line no-restricted-syntax -- Thẻ radio chọn loại workspace */}
@@ -127,6 +141,7 @@ export function CreateWorkspaceScreen() {
               type="radio"
               name="cw-type"
               value="personal"
+              ref={personalRef}
               aria-label="Cá nhân"
               checked={type === 'personal'}
               onChange={() => setType('personal')}
@@ -135,7 +150,7 @@ export function CreateWorkspaceScreen() {
             <span
               aria-hidden="true"
               className={`w-4.5 h-4.5 rounded-full mt-0.5 transition-shadow duration-quick
-                ${type === 'personal' ? 'ring-5 ring-accent' : 'ring-1.5 ring-ink-muted'}`}
+                ${type === 'personal' ? 'ring-5 ring-accent' : 'ring-2 ring-ink-muted'}`}
             />
             <span className="grid gap-1 min-w-0">
               <span className={`flex items-center gap-2 font-semibold text-base ${type === 'personal' ? 'text-accent' : 'text-ink'}`}>
@@ -164,9 +179,9 @@ export function CreateWorkspaceScreen() {
 
           <label
             className={`relative grid grid-cols-[1.25rem_minmax(0,1fr)] gap-3 items-start p-3.5 rounded-surface cursor-pointer
-              transition-colors duration-quick
+              transition-colors duration-quick has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-focus has-[:focus-visible]:outline-offset-2
               ${type === 'organization'
-                ? 'bg-accent-wash ring-1.5 ring-accent'
+                ? 'bg-accent-wash ring-2 ring-accent'
                 : 'bg-raised ring-1 ring-line hover:bg-hover'}`}
           >
             {/* eslint-disable-next-line no-restricted-syntax -- Thẻ radio chọn loại workspace */}
@@ -182,7 +197,7 @@ export function CreateWorkspaceScreen() {
             <span
               aria-hidden="true"
               className={`w-4.5 h-4.5 rounded-full mt-0.5 transition-shadow duration-quick
-                ${type === 'organization' ? 'ring-5 ring-accent' : 'ring-1.5 ring-ink-muted'}`}
+                ${type === 'organization' ? 'ring-5 ring-accent' : 'ring-2 ring-ink-muted'}`}
             />
             <span className="grid gap-1 min-w-0">
               <span className={`flex items-center gap-2 font-semibold text-base ${type === 'organization' ? 'text-accent' : 'text-ink'}`}>

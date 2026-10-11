@@ -18,7 +18,7 @@ vi.mock('../../api/auth', async (orig) => ({
   leaveFor: vi.fn(),
 }))
 
-const open = () => renderAuthScreen(CreateWorkspaceScreen, '/onboarding')
+const open = (url = '/onboarding') => renderAuthScreen(CreateWorkspaceScreen, '/onboarding', url)
 const nameField = () => screen.findByLabelText(/Tên workspace/)
 const create = () => screen.getByRole('button', { name: /^Tạo workspace/ })
 const posts = (path: string) => calls.filter((c) => c.method === 'POST' && c.path === path)
@@ -155,6 +155,49 @@ describe('Create workspace', () => {
     await userEvent.type(await nameField(), 'Tổ Đối soát')
     expectNoIds()
   })
+
+  describe('Back', () => {
+    const back = async () => userEvent.click(await screen.findByRole('button', { name: 'Quay lại' }))
+
+    it('returns to where the person came from, kept with its workspace', async () => {
+      const router = await open('/onboarding?from=%2Fchannels%3Fws%3Dp-1')
+      await back()
+      await waitFor(() => expect(where(router).path).toBe('/channels'))
+      expect(where(router).search).toEqual({ ws: 'p-1' })
+    })
+
+    it('goes to Chọn workspace when it was opened from there', async () => {
+      const router = await open()
+      await back()
+      await waitFor(() => expect(where(router).path).toBe('/workspace-select'))
+    })
+
+    it.each(['https://evil.example/x', '//evil.example/x', 'channels'])('ignores a return address that leaves the app: %s', async (from) => {
+      const router = await open(`/onboarding?from=${encodeURIComponent(from)}`)
+      await back()
+      await waitFor(() => expect(where(router).path).toBe('/workspace-select'))
+    })
+  })
+
+  it('puts the first focus on the selected type on desktop, not in the name field', async () => {
+    await open()
+    const radio = await screen.findByRole('radio', { name: /Cá nhân/ })
+    await waitFor(() => expect(radio).toHaveFocus())
+  })
+
+  it('outlines the selected type card with a ring width Tailwind generates (no ring-1.5)', async () => {
+    await open()
+    const radio = await screen.findByRole('radio', { name: /Cá nhân/ })
+    const card = radio.closest('label')!
+    expect(card).toHaveClass('ring-2', 'ring-accent')
+    expect(document.body.innerHTML).not.toMatch(/ring-1\.5/)
+  })
+
+  it('shows a focus ring on the type card that holds the keyboard focus', async () => {
+    await open()
+    const radio = await screen.findByRole('radio', { name: /Cá nhân/ })
+    expect(radio.closest('label')).toHaveClass('has-[:focus-visible]:outline-2')
+  })
 })
 
 describe('Create workspace: an address nobody has proved', () => {
@@ -204,3 +247,4 @@ describe('Create workspace: an address nobody has proved', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/xác minh email/)
   })
 })
+

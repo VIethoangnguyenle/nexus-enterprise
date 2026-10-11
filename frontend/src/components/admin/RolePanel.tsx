@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { CircleAlert, Lock, Trash2 } from 'lucide-react'
 import type { RoleSummary } from '../../api/admin'
 import { useDeleteRole, useRole } from '../../hooks/useAdmin'
-import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { areaLabel, opLabel, roleName } from '../../lib/admin-model'
 import { statusOf } from '../../lib/errors'
 import { formatCount } from '../../lib/format'
@@ -38,16 +37,13 @@ function holdersLine(names: string[], total: number): string {
 export function RolePanel({ workspaceId, role, onEdit, onClose }: RolePanelProps) {
   const detail = useRole(workspaceId, role.id)
   const remove = useDeleteRole(workspaceId)
-  const { isPersonal } = useWorkspaceType()
   const [confirming, setConfirming] = useState(false)
 
   const custom = role.kind === 'custom'
   const name = roleName(role)
   const d = detail.data
   const count = d?.role.member_count ?? role.member_count
-  const permissions = d
-    ? (isPersonal ? d.permissions.filter((g) => g.area !== 'assets' && g.area !== 'approval') : d.permissions)
-    : []
+  const permissions = d ? d.permissions : []
 
   return (
     <SidePanel

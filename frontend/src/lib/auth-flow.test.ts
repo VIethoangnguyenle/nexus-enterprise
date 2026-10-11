@@ -10,6 +10,7 @@ import {
   parseIdentifier,
   displayIdentifier,
   roleLabel,
+  returnPath,
   workspaceRowDetail,
   verifyErrorMessage,
 } from './auth-flow'
@@ -120,6 +121,11 @@ describe('workspaceRowDetail', () => {
   it('shows domain or Workspace tổ chức and role for organization workspaces', () => {
     expect(workspaceRowDetail({ role: 'admin', type: 'organization', domain: 'novapay.vn' })).toBe('novapay.vn · Quản trị viên')
     expect(workspaceRowDetail({ role: 'member', type: 'organization', domain: '' })).toBe('Workspace tổ chức · Thành viên')
+  })
+  it('leaves the role out where the row is too narrow for it', () => {
+    expect(workspaceRowDetail({ role: 'owner', type: 'personal' }, { withRole: false })).toBe('Workspace cá nhân')
+    expect(workspaceRowDetail({ role: 'admin', type: 'organization', domain: 'novapay.vn' }, { withRole: false })).toBe('novapay.vn')
+    expect(workspaceRowDetail({ member_count: 64, role: 'member', domain: '' }, { withRole: false })).toBe('64 thành viên')
   })
   it('says nothing it does not know', () => {
     expect(workspaceRowDetail(undefined)).toBe('')
@@ -307,3 +313,18 @@ describe('verifyErrorMessage', () => {
     expect(verifyErrorMessage(undefined, 'a@b.vn')).toBeNull()
   })
 })
+
+describe('returnPath', () => {
+  it('keeps an in-app path with its query', () => {
+    expect(returnPath('/channels')).toBe('/channels')
+    expect(returnPath('/drive?ws=abc')).toBe('/drive?ws=abc')
+  })
+
+  it.each([
+    undefined, null, 42, '', 'channels', 'https://evil.example/x', '//evil.example/x', '/\\evil.example', 'javascript:alert(1)',
+    '/a\nb', '/' + 'x'.repeat(600),
+  ])('refuses %j', (v) => {
+    expect(returnPath(v)).toBeUndefined()
+  })
+})
+

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Link, useMatches } from '@tanstack/react-router'
+import { Link, useLocation, useMatches } from '@tanstack/react-router'
 import { useAuthStore } from '../../stores/auth.store'
 import { useUiStore } from '../../stores/ui.store'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
@@ -8,6 +8,7 @@ import { useWorkspaceSwitcher } from '../../hooks/useSwitchWorkspace'
 import { usePreferences } from '../../hooks/usePreferences'
 import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { logoutSession } from '../../api/client'
+import { workspaceRowDetail } from '../../lib/auth-flow'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { formatCount } from '../../lib/format'
 import { UNKNOWN_PERSON } from '../../lib/people'
@@ -86,6 +87,8 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
   const handleSwitchWorkspace = (wsId: string) => switcher.choose(wsId, () => setWsDropdownOpen(false))
 
   const matches = useMatches()
+  // Where "Tạo workspace" sends Back to: the screen the person is on now.
+  const here = useLocation({ select: (l) => l.href })
   const currentPath = matches[matches.length - 1]?.pathname || ''
   const effectiveActive: ModuleId = (() => {
     if (currentPath.includes('/admin')) return 'admin'
@@ -178,51 +181,52 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
 
         {wsDropdownOpen && workspaces.length > 0 && (
           <div
-            role="listbox"
-            aria-label="Không gian làm việc"
             className={`absolute left-0 top-full mt-1.5 z-dropdown p-1.5 rounded-overlay bg-overlay shadow-overlay
               max-h-80 overflow-y-auto animate-fade-in ${rail ? 'w-56' : 'right-0'}`}
           >
             <div className="text-label text-ink-muted px-2.5 pt-2 pb-1">Workspace của bạn</div>
-            <ul className="grid gap-0.5 m-0 p-0 list-none">
-              {workspaces.map((ws) => {
-                const wsName = workspaceDisplayName(ws.name)
-                const typeLine = ws.type === 'personal' ? 'Workspace cá nhân' : (ws.domain || 'Workspace tổ chức')
-                const current = ws.id === workspaceId
-                return (
-                  <li key={ws.id} role="presentation" className="list-none">
-                    {/* eslint-disable-next-line no-restricted-syntax -- Lựa chọn trong listbox (role=option) */}
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={current}
-                      disabled={switcher.switchingId !== undefined}
-                      onClick={() => handleSwitchWorkspace(ws.id)}
-                      className="w-full grid grid-cols-[1.75rem_minmax(0,1fr)_1rem] items-center gap-2.5 min-h-11 px-2.5 py-1.5 rounded-md border-none bg-transparent
-                        cursor-pointer text-sm text-ink text-left focus-ring hover:bg-hover disabled:opacity-50"
-                    >
-                      <span
-                        aria-hidden="true"
-                        className="grid place-items-center w-7 h-7 rounded-md bg-accent text-on-accent font-display text-xs font-bold shrink-0"
+            <div role="listbox" aria-label="Không gian làm việc">
+              <ul className="grid gap-0.5 m-0 p-0 list-none">
+                {workspaces.map((ws) => {
+                  const wsName = workspaceDisplayName(ws.name)
+                  const typeLine = workspaceRowDetail(ws, { withRole: false })
+                  const current = ws.id === workspaceId
+                  return (
+                    <li key={ws.id} role="presentation" className="list-none">
+                      {/* eslint-disable-next-line no-restricted-syntax -- Lựa chọn trong listbox (role=option) */}
+                      <button
+                        type="button"
+                        role="option"
+                        aria-selected={current}
+                        disabled={switcher.switchingId !== undefined}
+                        onClick={() => handleSwitchWorkspace(ws.id)}
+                        className="w-full grid grid-cols-[1.75rem_minmax(0,1fr)_1rem] items-center gap-2.5 min-h-11 px-2.5 py-1.5 rounded-md border-none bg-transparent
+                          cursor-pointer text-sm text-ink text-left focus-ring hover:bg-hover disabled:opacity-50"
                       >
-                        {Array.from(wsName.trim())[0]?.toLocaleUpperCase('vi') ?? 'N'}
-                      </span>
-                      <span className="grid min-w-0">
-                        <span className="font-semibold text-ink truncate">{wsName}</span>
-                        <span className="text-xs text-ink-muted truncate">{typeLine}</span>
-                      </span>
-                      {current && <Check size={16} strokeWidth={1.75} className="text-accent shrink-0" />}
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+                        <span
+                          aria-hidden="true"
+                          className="grid place-items-center w-7 h-7 rounded-md bg-accent text-on-accent font-display text-xs font-bold shrink-0"
+                        >
+                          {Array.from(wsName.trim())[0]?.toLocaleUpperCase('vi') ?? 'N'}
+                        </span>
+                        <span className="grid min-w-0">
+                          <span className="font-semibold text-ink truncate">{wsName}</span>
+                          <span className="text-xs text-ink-muted truncate">{typeLine}</span>
+                        </span>
+                        {current && <Check size={16} strokeWidth={1.75} className="text-accent shrink-0" />}
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
+            </div>
             <div role="separator" className="h-px my-1 mx-2 bg-line" />
             <Link
               to="/onboarding"
+              search={{ from: here }}
               onClick={() => setWsDropdownOpen(false)}
               className="grid grid-cols-[1.75rem_minmax(0,1fr)] items-center gap-2.5 min-h-11 px-2.5 py-1.5 rounded-md text-sm text-ink no-underline
-                hover:bg-hover transition-colors duration-quick"
+                hover:bg-hover transition-colors duration-quick focus-ring"
             >
               <span className="grid place-items-center w-7 h-7 rounded-md bg-sunk text-ink-muted shrink-0">
                 <Plus size={16} strokeWidth={1.75} aria-hidden="true" />

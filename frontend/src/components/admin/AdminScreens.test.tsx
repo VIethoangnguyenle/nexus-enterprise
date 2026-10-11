@@ -6,7 +6,7 @@ import {
 } from '@tanstack/react-router'
 import { renderWithClient, resetClient } from '../../test/render'
 import {
-  D, RID, U, UUID_RE, WS_ID, adminFixtureApi, calls, mode, resetFixtures,
+  AREAS, D, RID, U, UUID_RE, WS_ID, adminFixtureApi, calls, mode, resetFixtures,
 } from '../../test/admin-fixtures'
 import { validateAdminSearch } from '../../lib/admin-search'
 import { apiFetch } from '../../api/client'
@@ -928,8 +928,10 @@ describe('the tabs', () => {
     expect(screen.getByRole('tab', { name: 'Vai trò' })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('hides Tài sản and Phê duyệt in RolePanel and hides Duyệt column in PermissionMatrix in personal workspace', async () => {
+  it('draws exactly the areas the server returns for a personal workspace, without filtering by type', async () => {
+    // The server leaves Tài sản and Phê duyệt out of a personal workspace; the screen draws what it is given.
     mode.personal = true
+    mode.areas = AREAS.filter((a) => a.area !== 'assets')
     const user = userEvent.setup()
     await renderAdmin('/admin/roles')
     await user.click(await within(await screen.findByRole('table')).findByRole('button', { name: 'Kế toán' }))
@@ -941,6 +943,16 @@ describe('the tabs', () => {
     const grid = await screen.findByRole('grid', { name: 'Quyền của Kế toán' })
     expect(within(grid).getAllByRole('columnheader').map((h) => h.textContent)).not.toContain('Duyệt')
     expect(within(grid).queryByRole('rowheader', { name: /Tài sản/ })).toBeNull()
-    expect(within(grid).queryByRole('rowheader', { name: /Phê duyệt/ })).toBeNull()
+  })
+
+  it('shows every area the server returns, even in a personal workspace', async () => {
+    mode.personal = true
+    const user = userEvent.setup()
+    await renderAdmin('/admin/roles')
+    await user.click(await within(await screen.findByRole('table')).findByRole('button', { name: 'Kế toán' }))
+    const panel = await screen.findByRole('complementary', { name: 'Vai trò' })
+    await user.click(within(panel).getByRole('button', { name: 'Sửa quyền' }))
+    const grid = await screen.findByRole('grid', { name: 'Quyền của Kế toán' })
+    expect(within(grid).getByRole('rowheader', { name: /Tài sản/ })).toBeInTheDocument()
   })
 })
