@@ -14,7 +14,7 @@ func Workspace(r *domain.WorkspaceResult) *pb.Workspace {
 		Id: r.ID, Name: r.Name, PcNodeId: r.PcNodeID,
 		OwnersUaId: r.OwnersUaID, MembersUaId: r.MembersUaID,
 		MgmtOaId: r.MgmtOaID, DocumentsOaId: r.DocumentsOaID,
-		ChannelsOaId: r.ChannelsOaID, CreatedBy: r.CreatedBy,
+		ChannelsOaId: r.ChannelsOaID, CreatedBy: r.CreatedBy, Type: r.Type,
 	}
 }
 

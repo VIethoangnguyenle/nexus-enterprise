@@ -92,7 +92,7 @@ func newFlowFixture(t *testing.T) *flowFixture {
 		require.NoError(t, err, q)
 	}
 	exec(`INSERT INTO users (id, username, password) VALUES ($1, $1, ''), ($2, $2, '')`, f.requester, f.approver)
-	exec(`INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, f.wsID, f.approver)
+	exec(`INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $1, $2, 'organization')`, f.wsID, f.approver)
 	exec(`INSERT INTO asset_types (id, name, category, workspace_id, ngac_oa_id, lifecycle)
 	      VALUES ($1, $1, 'hardware', $2, $3, $4)`, f.typeID, f.wsID, f.oaID, lifecycle)
 	exec(`INSERT INTO assets (id, name, type_id, workspace_id, state, created_by)

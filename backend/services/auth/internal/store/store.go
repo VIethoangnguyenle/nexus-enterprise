@@ -42,6 +42,8 @@ type TenantMembership struct {
 	// DepartmentName is the department an administrator placed the person in,
 	// in this workspace. Empty when there is none. Filled by GetTenantUser only.
 	DepartmentName string
+	// TenantType is the workspace's type. Filled by GetTenantUser only.
+	TenantType string
 }
 
 // Tenant represents a workspace used as a tenant.
@@ -49,6 +51,8 @@ type Tenant struct {
 	ID     string
 	Name   string
 	Domain string
+	// Type is "personal" or "organization", fixed when the workspace was made.
+	Type string
 }
 
 // userColumns is the column list every single-user lookup selects, in the order
@@ -181,12 +185,12 @@ func (s *Store) ListTenantsByUser(ctx context.Context, userID string) ([]TenantM
 func (s *Store) GetTenantUser(ctx context.Context, tenantID, userID string) (*TenantMembership, error) {
 	var m TenantMembership
 	err := s.db.QueryRow(ctx,
-		`SELECT tu.tenant_id, w.name, tu.user_id, tu.role, tu.status, tu.open_id, COALESCE(tu.ngac_node_id,''), COALESCE(d.name,'')
+		`SELECT tu.tenant_id, w.name, tu.user_id, tu.role, tu.status, tu.open_id, COALESCE(tu.ngac_node_id,''), COALESCE(d.name,''), w.type
 		 FROM tenant_users tu
 		 JOIN workspaces w ON w.id = tu.tenant_id
 		 LEFT JOIN departments d ON d.id = tu.department_id AND d.workspace_id = tu.tenant_id
 		 WHERE tu.tenant_id = $1 AND tu.user_id = $2`,
-		tenantID, userID).Scan(&m.TenantID, &m.TenantName, &m.UserID, &m.Role, &m.Status, &m.OpenID, &m.NGACNodeID, &m.DepartmentName)
+		tenantID, userID).Scan(&m.TenantID, &m.TenantName, &m.UserID, &m.Role, &m.Status, &m.OpenID, &m.NGACNodeID, &m.DepartmentName, &m.TenantType)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -201,10 +205,10 @@ func (s *Store) GetTenantUser(ctx context.Context, tenantID, userID string) (*Te
 func (s *Store) FindTenantByDomain(ctx context.Context, domain string) (*Tenant, error) {
 	var t Tenant
 	err := s.db.QueryRow(ctx,
-		`SELECT id, name, COALESCE(domain,'') FROM workspaces
+		`SELECT id, name, COALESCE(domain,''), type FROM workspaces
 		 WHERE domain IS NOT NULL AND lower(domain) = lower($1)
 		 ORDER BY created_at LIMIT 1`,
-		domain).Scan(&t.ID, &t.Name, &t.Domain)
+		domain).Scan(&t.ID, &t.Name, &t.Domain, &t.Type)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}

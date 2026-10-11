@@ -75,10 +75,22 @@ func NewService(
 
 // CreateWorkspaceInput holds the parameters for creating a workspace.
 type CreateWorkspaceInput struct {
-	Name           string
+	Name string
+	// Type is TypePersonal or TypeOrganization; nothing else is accepted.
+	Type           string
 	UserID         string
 	UserNGACNodeID string
 }
+
+// The two kinds of workspace. A personal one is made for a person when they
+// first sign in; an organization is created on purpose or owns a company
+// domain. The type is fixed when the workspace is made, so checks can trust it.
+const (
+	TypePersonal     = "personal"
+	TypeOrganization = "organization"
+)
+
+func validType(t string) bool { return t == TypePersonal || t == TypeOrganization }
 
 // WorkspaceResult is the domain output for workspace operations.
 type WorkspaceResult struct {
@@ -91,6 +103,7 @@ type WorkspaceResult struct {
 	DocumentsOaID string
 	ChannelsOaID  string
 	CreatedBy     string
+	Type          string
 }
 
 // CreateWorkspace provisions a new workspace: NGAC graph, DB row, MinIO bucket, Drive root.
@@ -101,6 +114,9 @@ type WorkspaceResult struct {
 func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) (*WorkspaceResult, error) {
 	if in.Name == "" {
 		return nil, fmt.Errorf("%w: name required", ErrInvalidInput)
+	}
+	if !validType(in.Type) {
+		return nil, fmt.Errorf("%w: type must be %q or %q", ErrInvalidInput, TypePersonal, TypeOrganization)
 	}
 
 	wsID := uuid.New().String()
@@ -192,7 +208,7 @@ func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) 
 
 	// Persist to DB
 	if err := s.store.Insert(ctx, &store.Workspace{
-		ID: wsID, Name: in.Name, Desc: "", OwnerID: in.UserID, NGACPcID: pc.Id, DocumentsOAID: docsOA.Id,
+		ID: wsID, Name: in.Name, Desc: "", OwnerID: in.UserID, NGACPcID: pc.Id, DocumentsOAID: docsOA.Id, Type: in.Type,
 	}); err != nil {
 		return nil, prov.Fail(ctx, err)
 	}
@@ -208,7 +224,7 @@ func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) 
 		ID: wsID, Name: in.Name, PcNodeID: pc.Id,
 		OwnersUaID: ownersUA.Id, MembersUaID: membersUA.Id,
 		MgmtOaID: mgmtOA.Id, DocumentsOaID: docsOA.Id,
-		ChannelsOaID: channelsOA.Id, CreatedBy: in.UserID,
+		ChannelsOaID: channelsOA.Id, CreatedBy: in.UserID, Type: in.Type,
 	}, nil
 }
 
@@ -224,7 +240,7 @@ func (s *Service) GetWorkspace(ctx context.Context, id string) (*WorkspaceResult
 	if err != nil {
 		return nil, fmt.Errorf("%w: workspace %s", ErrNotFound, id)
 	}
-	return &WorkspaceResult{ID: ws.ID, Name: ws.Name, PcNodeID: ws.NGACPcID}, nil
+	return &WorkspaceResult{ID: ws.ID, Name: ws.Name, PcNodeID: ws.NGACPcID, Type: ws.Type}, nil
 }
 
 // ListAccessibleWorkspaces returns workspaces the given user has access to.
@@ -261,7 +277,7 @@ func (s *Service) ListAccessibleWorkspaces(ctx context.Context, userNGACNodeID s
 	for _, ws := range allWS {
 		if reachable[ws.NGACPcID] {
 			accessible = append(accessible, &WorkspaceResult{
-				ID: ws.ID, Name: ws.Name, PcNodeID: ws.NGACPcID,
+				ID: ws.ID, Name: ws.Name, PcNodeID: ws.NGACPcID, Type: ws.Type,
 			})
 		}
 	}

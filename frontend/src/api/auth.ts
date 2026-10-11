@@ -1,5 +1,6 @@
 import { apiFetch, publicFetch, refreshAccessToken } from './client'
 import { useAuthStore } from '../stores/auth.store'
+import type { WorkspaceType } from './workspaces'
 
 /** What the sign-in endpoints say about the account that signed in. */
 export interface SessionUser {
@@ -60,7 +61,7 @@ export interface MeResponse {
    * one the caller is an active member of. `department` is the one an
    * administrator assigned there; nobody can set their own.
    */
-  current_tenant?: { id: string; name: string; role: string; open_id: string; department: string }
+  current_tenant?: { id: string; name: string; role: string; open_id: string; department: string; type?: WorkspaceType }
 }
 
 /**
@@ -82,6 +83,7 @@ export interface MyWorkspace {
   member_count: number
   /** The company domain the workspace claimed (novapay.vn); empty for a personal one. */
   domain: string
+  type?: WorkspaceType
 }
 
 /**

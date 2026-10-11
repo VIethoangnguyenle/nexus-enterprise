@@ -33,7 +33,7 @@ func (s *Service) autoProvisionWorkspace(ctx context.Context, userID, username, 
 
 	wsName := fmt.Sprintf("%s's Workspace", username)
 	ws, err := s.wsClient.CreateWorkspace(actingAs(ctx, userID, ngacNodeID), &workspacepb.CreateWorkspaceRequest{
-		Name: wsName,
+		Name: wsName, Type: WorkspacePersonal,
 	})
 	if err != nil {
 		slog.Error("auto-provision workspace failed", "user", username, "error", err)

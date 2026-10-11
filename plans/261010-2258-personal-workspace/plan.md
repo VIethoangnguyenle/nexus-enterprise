@@ -38,7 +38,7 @@ Chat** (người dùng: Chat quan trọng nhất).
 | # | Phase | Priority | Effort | Depends on | Status |
 |---|---|---|---|---|---|
 | 01 | [Thiết kế](phase-01-design.md) | P2 | 0.5d | — | pending |
-| 02 | [Loại workspace đáng tin](phase-02-workspace-type.md) | P1 | 1d | 01 | pending |
+| 02 | [Loại workspace đáng tin](phase-02-workspace-type.md) | P1 | 1d | 01 | completed |
 | 03 | [Chặn ở server](phase-03-server-enforcement.md) | P1 | 1.5d | 02 | pending |
 | 04 | [Ẩn ở frontend](phase-04-frontend.md) | P2 | 1d | 02 | pending |
 | 05 | [Chuyển sang tổ chức](phase-05-convert-to-organization.md) | P2 | 1-1.5d | 03, 04 | pending |

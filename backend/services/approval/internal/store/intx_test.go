@@ -26,7 +26,7 @@ func scratchTenant(t *testing.T) (context.Context, *store.Store, *pgxpool.Pool) 
 	owner, _ := testutil.CreateUser(t, pool)
 	bg := context.Background()
 	id := "z" + strings.ReplaceAll(uuid.NewString(), "-", "")[:7]
-	if _, err := pool.Exec(bg, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, 'scratch', $2)`, id, owner); err != nil {
+	if _, err := pool.Exec(bg, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, 'scratch', $2, 'organization')`, id, owner); err != nil {
 		t.Fatalf("workspace: %v", err)
 	}
 	var schema string

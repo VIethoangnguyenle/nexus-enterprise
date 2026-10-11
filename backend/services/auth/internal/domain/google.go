@@ -74,7 +74,7 @@ func (s *Service) SignInWithGoogle(ctx context.Context, ext ExternalIdentity) (*
 	case hostedDomain != "":
 		preferredTenant, err = s.joinOrCreateDomainTenant(ctx, hostedDomain, user)
 	case created:
-		preferredTenant, _, _, err = s.createTenantForUser(ctx, personalWorkspaceName(user.DisplayName), user.ID, user.NGACNodeID)
+		preferredTenant, _, _, err = s.createTenantForUser(ctx, personalWorkspaceName(user.DisplayName), WorkspacePersonal, user.ID, user.NGACNodeID)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("resolve tenant: %w", err)
@@ -194,7 +194,7 @@ func (s *Service) joinOrCreateDomainTenant(ctx context.Context, companyDomain st
 		return tenant.ID, nil
 	}
 
-	tenantID, _, _, err := s.createTenantForUser(ctx, companyDomain, user.ID, user.NGACNodeID)
+	tenantID, _, _, err := s.createTenantForUser(ctx, companyDomain, WorkspaceOrganization, user.ID, user.NGACNodeID)
 	if err != nil {
 		return "", err
 	}

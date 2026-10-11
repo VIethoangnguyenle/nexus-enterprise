@@ -124,7 +124,7 @@ func TestListWorkspaceSummaries_RoleAndHeadcount(t *testing.T) {
 
 	mkWorkspace := func(tag string) string {
 		id := fmt.Sprintf("pfw-%s-%d", tag, f.n)
-		_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $2, $3)`, id, "Khối "+tag, me)
+		_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $2, $3, 'organization')`, id, "Khối "+tag, me)
 		require.NoError(t, err)
 		t.Cleanup(func() {
 			f.pool.Exec(context.Background(), `DELETE FROM tenant_users WHERE tenant_id = $1`, id)
@@ -150,7 +150,7 @@ func TestListWorkspaceSummaries_RoleAndHeadcount(t *testing.T) {
 		byName[w.Name] = w
 	}
 	require.Len(t, byName, 2, "only the workspaces this person is an active member of")
-	assert.Equal(t, store.WorkspaceSummary{ID: mine, Name: "Khối mine", Role: "owner", MemberCount: 1}, byName["Khối mine"])
+	assert.Equal(t, store.WorkspaceSummary{ID: mine, Name: "Khối mine", Role: "owner", MemberCount: 1, Type: "organization"}, byName["Khối mine"])
 	_, err = f.pool.Exec(f.ctx, `UPDATE workspaces SET domain = $2 WHERE id = $1`, shared, fmt.Sprintf("novapay-%d.vn", f.n))
 	require.NoError(t, err)
 	again, err := f.st.ListWorkspaceSummaries(f.ctx, me)
@@ -162,9 +162,31 @@ func TestListWorkspaceSummaries_RoleAndHeadcount(t *testing.T) {
 			assert.Empty(t, w.Domain, "a personal workspace has none")
 		}
 	}
-	assert.Equal(t, store.WorkspaceSummary{ID: shared, Name: "Khối shared", Role: "member", MemberCount: 2}, byName["Khối shared"],
+	assert.Equal(t, store.WorkspaceSummary{ID: shared, Name: "Khối shared", Role: "member", MemberCount: 2, Type: "organization"}, byName["Khối shared"],
 		"a disabled member is not counted")
 	assert.NotContains(t, byName, "Khối notmine")
+}
+
+// The workspace's type travels with every view of a membership.
+func TestWorkspaceType_IsReadWithTheMembership(t *testing.T) {
+	f := newProfileFixture(t)
+	me := f.user(t, "typed", "")
+	id := fmt.Sprintf("pfw-typed-%d", f.n)
+	_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, 'Khối typed', $2, 'personal')`, id, me)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		f.pool.Exec(context.Background(), `DELETE FROM tenant_users WHERE tenant_id = $1`, id)
+		f.pool.Exec(context.Background(), `DELETE FROM workspaces WHERE id = $1`, id)
+	})
+	require.NoError(t, f.st.InsertTenantUser(f.ctx, id, me, "owner", "active", f.node("typed")))
+
+	m, err := f.st.GetTenantUser(f.ctx, id, me)
+	require.NoError(t, err)
+	assert.Equal(t, "personal", m.TenantType)
+	list, err := f.st.ListWorkspaceSummaries(f.ctx, me)
+	require.NoError(t, err)
+	require.Len(t, list, 1)
+	assert.Equal(t, "personal", list[0].Type)
 }
 
 func TestGetUserByID_CarriesTheProfile(t *testing.T) {
@@ -194,7 +216,7 @@ func newDirectoryFixture(t *testing.T) *directoryFixture {
 	d.dept = fmt.Sprintf("dept-%d", f.n)
 	owner := f.user(t, "own", "")
 	for _, id := range []string{d.ws, d.other} {
-		_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, id, owner)
+		_, err := f.pool.Exec(f.ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $1, $2, 'organization')`, id, owner)
 		require.NoError(t, err)
 	}
 	t.Cleanup(func() {

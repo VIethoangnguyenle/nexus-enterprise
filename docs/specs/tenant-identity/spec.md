@@ -45,3 +45,33 @@ The system SHALL track membership status as one of: `active`, `invited`, `disabl
 #### Scenario: Invited user completes signup
 - **WHEN** an invited user registers with the invited email
 - **THEN** the system updates the `tenant_users` status from `invited` to `active`
+
+### Requirement: A workspace's type is decided when it is made
+Every workspace SHALL have a type, `personal` or `organization` (`workspaces.type`, NOT NULL,
+CHECK-constrained, no default — an insert that does not state it fails), set by how it came to be:
+
+- the workspace sign-in makes for a person who has none (OTP or Google, no company domain) is `personal`;
+- a workspace created on purpose ("Tạo workspace", `POST /api/me/workspaces`) is `organization`;
+- the workspace made for a verified Google Workspace domain (`hd`) is `organization`.
+
+The workspace service's `CreateWorkspace` SHALL refuse a missing or unknown type (`InvalidArgument`)
+before writing anything to the graph or the database. The type is returned with the workspace on
+`GetWorkspace`, `ListWorkspaces` (`GET /api/workspaces`), `GET /api/me/workspaces` and
+`GET /api/me` (`current_tenant.type`); the frontend reads it through `useWorkspaceType()`, which
+reports nothing (not `personal`) while the type is unknown.
+
+Workspaces that existed before the type was set at creation were backfilled once by migration 044:
+a workspace named "<someone>'s Workspace" with exactly one active member and no claimed domain is
+`personal`; every other one is `organization`.
+
+#### Scenario: First sign-in makes a personal workspace
+- **WHEN** a person with no workspace signs in with a one-time code or a consumer Google account
+- **THEN** the workspace made for them has type `personal`
+
+#### Scenario: A workspace created on purpose is an organization
+- **WHEN** a signed-in person creates a workspace
+- **THEN** it has type `organization`, and so does the one created for a new company domain
+
+#### Scenario: A type nobody stated is refused
+- **WHEN** `CreateWorkspace` is called with no type, or with any value other than the two
+- **THEN** it fails with `InvalidArgument` and nothing is created

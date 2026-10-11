@@ -438,7 +438,7 @@ func TestFolderOfAnotherWorkspaceIsNotFound(t *testing.T) {
 	// about the workspace missing.
 	foreign := "drive-test-foreign-" + f.wsID
 	_, err := f.pool.Exec(context.Background(),
-		`INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, foreign, getTestUserID(t, f.pool))
+		`INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $1, $2, 'organization')`, foreign, getTestUserID(t, f.pool))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		f.pool.Exec(context.Background(), `DELETE FROM drive_quotas WHERE workspace_id = $1`, foreign)

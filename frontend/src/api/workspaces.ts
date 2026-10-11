@@ -1,6 +1,9 @@
 import { apiFetch } from './client'
 
-export interface Workspace { id: string; name: string; created_at?: string }
+/** "personal" is made for one person on first sign-in; "organization" is created on purpose or owns a company domain. */
+export type WorkspaceType = 'personal' | 'organization'
+
+export interface Workspace { id: string; name: string; type?: WorkspaceType; created_at?: string }
 
 export interface WorkspaceMember { ngac_node_id: string; role: string; username?: string }
 

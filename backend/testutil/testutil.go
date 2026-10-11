@@ -101,7 +101,7 @@ func CreateWorkspace(t *testing.T, pool *pgxpool.Pool, ownerID string) (wsID, pc
 	exec(t, pool, `INSERT INTO ngac_nodes (id, name, node_type, properties) VALUES ($1, $1, 'PC', '{}')`, pcID)
 	// The name differs from the ID on purpose: name-keyed and ID-keyed NGAC
 	// node names must not coincide, or a test cannot tell them apart.
-	exec(t, pool, `INSERT INTO workspaces (id, name, owner_id, ngac_pc_id) VALUES ($1, $2, $3, $4)`, wsID, "Workspace "+wsID, ownerID, pcID)
+	exec(t, pool, `INSERT INTO workspaces (id, name, owner_id, ngac_pc_id, type) VALUES ($1, $2, $3, $4, 'organization')`, wsID, "Workspace "+wsID, ownerID, pcID)
 	t.Cleanup(func() {
 		ctx := context.Background()
 		if _, err := pool.Exec(ctx, `DELETE FROM workspaces WHERE id = $1`, wsID); err != nil {

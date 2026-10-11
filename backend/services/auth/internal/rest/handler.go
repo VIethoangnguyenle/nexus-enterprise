@@ -156,6 +156,8 @@ func (h *Handler) GetMe(c echo.Context) error {
 			"role": tenant.Role, "open_id": tenant.OpenID,
 			// Assigned by an administrator in this workspace; read-only here.
 			"department": tenant.Department,
+			// "personal" or "organization": decides which areas the workspace offers.
+			"type": tenant.Type,
 		}
 	}
 	return c.JSON(http.StatusOK, result)

@@ -68,6 +68,8 @@ type TenantInfo struct {
 	OpenID string
 	// Department is the one an administrator assigned in this workspace.
 	Department string
+	// Type is WorkspacePersonal or WorkspaceOrganization.
+	Type string
 }
 
 // UserInfo is the domain representation of a user (no password).

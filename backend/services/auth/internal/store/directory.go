@@ -47,6 +47,8 @@ type WorkspaceSummary struct {
 	// Domain is the company domain the workspace claimed (acme.com), when it
 	// is a company's; empty for a personal or unclaimed one.
 	Domain string
+	// Type is "personal" or "organization".
+	Type string
 }
 
 // ListWorkspaceSummaries returns the workspaces userID is an active member of,
@@ -55,7 +57,7 @@ func (s *Store) ListWorkspaceSummaries(ctx context.Context, userID string) ([]Wo
 	rows, err := s.db.Query(ctx,
 		`SELECT w.id, w.name, mine.role,
 		        (SELECT count(*) FROM tenant_users m WHERE m.tenant_id = w.id AND m.status = 'active'),
-		        COALESCE(w.domain, '')
+		        COALESCE(w.domain, ''), w.type
 		   FROM tenant_users mine
 		   JOIN workspaces w ON w.id = mine.tenant_id
 		  WHERE mine.user_id = $1 AND mine.status = 'active'
@@ -67,7 +69,7 @@ func (s *Store) ListWorkspaceSummaries(ctx context.Context, userID string) ([]Wo
 	var out []WorkspaceSummary
 	for rows.Next() {
 		var w WorkspaceSummary
-		if err := rows.Scan(&w.ID, &w.Name, &w.Role, &w.MemberCount, &w.Domain); err != nil {
+		if err := rows.Scan(&w.ID, &w.Name, &w.Role, &w.MemberCount, &w.Domain, &w.Type); err != nil {
 			return nil, fmt.Errorf("scan workspace summary: %w", err)
 		}
 		out = append(out, w)

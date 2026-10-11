@@ -192,7 +192,7 @@ func tenantFor(t *testing.T) *testTenant {
 	tt := &testTenant{wsID: "drive-test-ws-" + sfx, userID: "drive-test-user-" + sfx}
 	_, err = pool.Exec(ctx, `INSERT INTO users (id, username, password) VALUES ($1, $1, '')`, tt.userID)
 	require.NoError(t, err)
-	_, err = pool.Exec(ctx, `INSERT INTO workspaces (id, name, owner_id) VALUES ($1, $1, $2)`, tt.wsID, tt.userID)
+	_, err = pool.Exec(ctx, `INSERT INTO workspaces (id, name, owner_id, type) VALUES ($1, $1, $2, 'organization')`, tt.wsID, tt.userID)
 	require.NoError(t, err)
 	tenants.Store(t, tt)
 

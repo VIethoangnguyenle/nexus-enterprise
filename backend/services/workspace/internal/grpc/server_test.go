@@ -172,7 +172,7 @@ func createTestWorkspace(t *testing.T, srv *grpcserver.WorkspaceServer, pool *pg
 	t.Helper()
 	userID, ngacNodeID := getTestUserNGACNodeID(t, pool)
 	ws, err := srv.CreateWorkspace(asCaller(userID, ngacNodeID), &pb.CreateWorkspaceRequest{
-		Name: fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano()),
+		Name: fmt.Sprintf("%s_%d", prefix, time.Now().UnixNano()), Type: "organization",
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -199,7 +199,7 @@ func TestCreateWorkspace_HappyPath(t *testing.T) {
 
 	wsName := fmt.Sprintf("TestWS_%d", time.Now().UnixNano())
 	ws, err := srv.CreateWorkspace(asCaller(userID, ngacNodeID), &pb.CreateWorkspaceRequest{
-		Name: wsName,
+		Name: wsName, Type: "personal",
 	})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -209,6 +209,29 @@ func TestCreateWorkspace_HappyPath(t *testing.T) {
 	assert.NotEmpty(t, ws.Id)
 	assert.Equal(t, wsName, ws.Name)
 	assert.NotEmpty(t, ws.PcNodeId)
+	assert.Equal(t, "personal", ws.Type)
+
+	// The type is stored, not just echoed: reading the workspace back and
+	// listing it both carry it.
+	got, err := srv.GetWorkspace(asCaller(userID, ngacNodeID), &pb.GetWorkspaceRequest{WorkspaceId: ws.Id})
+	require.NoError(t, err)
+	assert.Equal(t, "personal", got.Type)
+	list, err := srv.ListWorkspaces(asCaller(userID, ngacNodeID), &pb.ListWorkspacesRequest{})
+	require.NoError(t, err)
+	var listed string
+	for _, w := range list.Workspaces {
+		if w.Id == ws.Id {
+			listed = w.Type
+		}
+	}
+	assert.Equal(t, "personal", listed)
+}
+
+func TestCreateWorkspace_UnknownTypeIsInvalid(t *testing.T) {
+	srv, pool, _ := setupTestServer(t)
+	userID, ngacNodeID := getTestUserNGACNodeID(t, pool)
+	_, err := srv.CreateWorkspace(asCaller(userID, ngacNodeID), &pb.CreateWorkspaceRequest{Name: "NoType", Type: "team"})
+	requireCode(t, err, codes.InvalidArgument)
 }
 
 func TestGetWorkspace_HappyPath(t *testing.T) {

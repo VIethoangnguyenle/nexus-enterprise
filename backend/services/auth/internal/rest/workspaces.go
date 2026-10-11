@@ -61,7 +61,7 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 // workspaceJSON is a workspace as the picker needs it. The identifier is for
 // navigation; no screen prints it.
 func workspaceJSON(w domain.WorkspaceInfo) map[string]any {
-	return map[string]any{"id": w.ID, "name": w.Name, "role": w.Role, "member_count": w.MemberCount, "domain": w.Domain}
+	return map[string]any{"id": w.ID, "name": w.Name, "role": w.Role, "member_count": w.MemberCount, "domain": w.Domain, "type": w.Type}
 }
 
 // ListMyWorkspaces handles GET /api/me/workspaces: the workspaces the caller

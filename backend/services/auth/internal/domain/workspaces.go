@@ -24,7 +24,17 @@ type WorkspaceInfo struct {
 	MemberCount int
 	// Domain is the company domain the workspace claimed, when it is a company's.
 	Domain string
+	// Type is WorkspacePersonal or WorkspaceOrganization.
+	Type string
 }
+
+// The two kinds of workspace, decided by how it came to be: the one made for a
+// person on first sign-in is personal; one created on purpose, or owned by a
+// company domain, is an organization.
+const (
+	WorkspacePersonal     = "personal"
+	WorkspaceOrganization = "organization"
+)
 
 // ListMyWorkspaces returns the workspaces userID is an active member of.
 func (s *Service) ListMyWorkspaces(ctx context.Context, userID string) ([]WorkspaceInfo, error) {
@@ -37,7 +47,7 @@ func (s *Service) ListMyWorkspaces(ctx context.Context, userID string) ([]Worksp
 	}
 	out := make([]WorkspaceInfo, len(rows))
 	for i, r := range rows {
-		out[i] = WorkspaceInfo{ID: r.ID, Name: r.Name, Role: r.Role, MemberCount: r.MemberCount, Domain: r.Domain}
+		out[i] = WorkspaceInfo{ID: r.ID, Name: r.Name, Role: r.Role, MemberCount: r.MemberCount, Domain: r.Domain, Type: r.Type}
 	}
 	return out, nil
 }
@@ -75,11 +85,11 @@ func (s *Service) CreateMyWorkspace(ctx context.Context, userID, ngacNodeID, nam
 		return nil, err
 	}
 
-	id, wsName, role, err := s.provisionTenant(ctx, name, userID, ngacNodeID, true)
+	id, wsName, role, err := s.provisionTenant(ctx, name, WorkspaceOrganization, userID, ngacNodeID, true)
 	if err != nil {
 		return nil, fmt.Errorf("create workspace: %w", err)
 	}
-	return &WorkspaceInfo{ID: id, Name: wsName, Role: role, MemberCount: 1}, nil
+	return &WorkspaceInfo{ID: id, Name: wsName, Role: role, MemberCount: 1, Type: WorkspaceOrganization}, nil
 }
 
 // takeWorkspaceCreation spends one of the caller's creations for this window.
