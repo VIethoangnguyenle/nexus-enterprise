@@ -92,7 +92,7 @@ function WorkspaceLayout() {
 
   if (isError) {
     return (
-      <div className="flex h-dvh bg-background overflow-hidden">
+      <div className="flex h-app bg-background overflow-hidden">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center px-4">
             <Text variant="body" muted>Unable to load workspaces</Text>
@@ -106,7 +106,7 @@ function WorkspaceLayout() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-dvh bg-background">
+      <div className="flex items-center justify-center h-app bg-background">
         <Spinner size="lg" />
       </div>
     )
@@ -114,7 +114,7 @@ function WorkspaceLayout() {
 
   if (workspaces.length === 0) {
     return (
-      <div className="flex h-dvh bg-background overflow-hidden">
+      <div className="flex h-app bg-background overflow-hidden">
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center px-4">
             <Spinner size="lg" />
@@ -128,7 +128,7 @@ function WorkspaceLayout() {
   }
 
   return (
-    <div className="flex flex-col h-dvh bg-background overflow-hidden">
+    <div className="flex flex-col h-app bg-background overflow-hidden">
       {/* Row 2: Sidebar + Content */}
       <div className="flex flex-1 min-h-0">
         {/* Column 1: AppSidebar — hidden on mobile, visible on lg+ */}

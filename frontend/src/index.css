@@ -322,6 +322,8 @@ h1, h2, h3, h4 {
 @utility pb-sheet { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
 @utility bottom-above-bar { bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
 @utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+/* The visible viewport (lib/app-height.ts): shrinks with the on-screen keyboard, unlike 100dvh on iOS. */
+@utility h-app { height: var(--app-height, 100dvh); }
 @utility max-h-sheet { max-height: 85dvh; }
 
 /* Field outlines drawn inside the box so focus never shifts layout (§6 Input). */
@@ -677,6 +679,32 @@ h1, h2, h3, h4 {
 @utility bg-nexus-auth {
   background-image: radial-gradient(circle at 100% 0%, var(--color-surface-container-high) 0%, transparent 40%),
                     radial-gradient(circle at 0% 100%, var(--color-surface-container) 0%, transparent 40%);
+}
+
+/* ========================= */
+/* Touch (DESIGN.md §6, §9)  */
+/* ========================= */
+@media (pointer: coarse) {
+  /* Inputs are 16px: below that iOS zooms the page when a field takes focus. */
+  input:not([type='checkbox']):not([type='radio']):not([type='range']),
+  textarea, select, [contenteditable='true'] {
+    font-size: 16px;
+  }
+  /* Every tap target reaches 44 × 44 without changing how it looks: an
+     invisible ::after grows the hit area to 44 on each axis that is shorter.
+     :where() keeps it at zero specificity, so a component that styles its own
+     ::after wins. */
+  :where(button, [role='button'], [role='tab'], [role='menuitem'], [role='switch'], summary) {
+    position: relative;
+  }
+  :where(button, [role='button'], [role='tab'], [role='menuitem'], [role='switch'], summary)::after {
+    content: '';
+    position: absolute;
+    top: min(0px, calc((100% - 44px) / 2));
+    bottom: min(0px, calc((100% - 44px) / 2));
+    left: min(0px, calc((100% - 44px) / 2));
+    right: min(0px, calc((100% - 44px) / 2));
+  }
 }
 
 /* Reduced motion (DESIGN.md §7): no transforms, fades only and at most 120ms. */

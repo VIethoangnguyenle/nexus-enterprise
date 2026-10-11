@@ -1,7 +1,7 @@
 ---
 title: "PWA, mobile UI and OneSignal push"
 description: "Make the app installable to the home screen (PWA), optimise every screen for phones, and send push notifications through OneSignal."
-status: pending
+status: in-progress
 priority: P0
 effort: 8-10d
 issue:
@@ -47,7 +47,7 @@ báo đẩy về, dùng OneSignal").
 |---|---|---|---|---|---|
 | 01 | [Thiết kế mobile, cài đặt, xin quyền thông báo](phase-01-design-mobile-and-push.md) | P0 | 1d | — | pending |
 | 02 | [Nền tảng PWA](phase-02-pwa-foundation.md) | P1 | 1-1.5d | 01 | pending |
-| 03 | [Tối ưu giao diện mobile](phase-03-mobile-ui.md) | P0 | 2-3d | 01 (màn không phải chat: làm ngay; màn chat: cùng chat phase 04) | pending |
+| 03 | [Tối ưu giao diện mobile](phase-03-mobile-ui.md) | P0 | 2-3d | 01 (màn không phải chat: làm ngay; màn chat: cùng chat phase 04) | completed (màn chat: cùng chat 04) |
 | 04 | [OneSignal phía frontend](phase-04-onesignal-frontend.md) | P1 | 1d | 02 | pending |
 | 05 | [Gửi push từ backend](phase-05-push-backend.md) | P1 | 2d | 04 | pending |
 | 06 | [Kiểm chứng trên thiết bị thật](phase-06-device-verification.md) | P1 | 0.5-1d | 03, 05 | pending |
