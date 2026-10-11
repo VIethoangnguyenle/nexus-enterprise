@@ -31,7 +31,7 @@ export function QuoteBlock({ quote, people, me, onOpen }: QuoteBlockProps) {
       <span className={`line-clamp-2 wrap-anywhere text-ink-muted ${view.deleted ? 'italic' : ''}`}>{view.text}</span>
     </>
   )
-  const frame = 'grid gap-0.5 w-full text-left -mx-1.5 mt-px mb-1.5 px-2.5 pt-1.75 pb-2 rounded-lg bg-raised text-small leading-snug'
+  const frame = 'grid gap-0.5 w-full text-left -mx-1.5 mt-px mb-1.5 px-2.5 pt-1.75 pb-2 rounded-lg bg-raised text-sm leading-snug'
   if (!onOpen) return <div className={frame}>{body}</div>
   return (
     <Pressable onClick={onOpen} title="Đi tới tin gốc" className={`${frame} hover:bg-hover`}>

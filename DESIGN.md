@@ -94,7 +94,7 @@ Chữ trên avatar: `--color-on-accent` light value (`oklch(98.5% …)`) ở c�
   `latin` + `vietnamese`; preload Be Vietnam Pro 400.
 - Fallback: `"Be Vietnam Pro", "Segoe UI", "Helvetica Neue", Arial, sans-serif`.
 - **Mono** (`--font-mono`: `"JetBrains Mono", ui-monospace, "SF Mono", Menlo, Monaco, monospace`, không tải
-  webfont): chỉ cho code và khối code trong tin nhắn, 13px.
+  webfont): chỉ cho code và khối code trong tin nhắn, 14px.
 - `font-variant-numeric: tabular-nums` cho giờ, số tiền, dung lượng, bộ đếm, cột bảng.
 - Tiếng Việt có dấu chồng (ặ, ẫ, ổ): line-height thân chữ ≥ 1.5, tiêu đề ≥ 1.2, không tracking âm
   quá `-0.01em`.
@@ -288,7 +288,7 @@ người dùng chốt 2026-10-11.)
   trùng (không phân biệt hoa thường) trong các mục của bạn. Một cuộc trò chuyện nằm trong **tối đa một** mục;
   đã vào mục thì không lặp lại ở Tin nhắn trực tiếp hay Nhóm. Mục chỉ là cách sắp xếp, không đổi quyền hay
   thành viên.
-- **Tiêu đề mục:** `button` có `aria-expanded`, chevron 16 xoay −90° khi thu gọn (160ms), tên 13px/600
+- **Tiêu đề mục:** `button` có `aria-expanded`, chevron 16 xoay −90° khi thu gọn (160ms), tên 14px/600
   `--color-ink` (mục mặc định `--color-ink-muted`). Thu gọn thì cuối tiêu đề hiện pill đếm = tổng chưa đọc
   trong mục. Mục của bạn có IconButton 28 "⋯" (hiện khi hover hoặc focus) mở menu: **Đổi tên mục · Chuyển
   lên · Chuyển xuống** (mục đầu/cuối thì mục tương ứng disabled) · divider · **Xoá mục** (`danger`). Mục mặc
@@ -356,7 +356,7 @@ này thì cái kia đóng.
     luôn cuộn tới cuối.
 - **Hàng tóm tắt thread (ThreadSummary):** dưới nội dung của tin có ≥ 1 trả lời, thẳng lề chữ; là `button` cao
   32, radius 8, hover `--color-raised`. Thứ tự: cụm Avatar 20 của **tối đa 3 người trả lời gần nhất** (mới nhất
-  bên trái, viền 2px màu nền) · **"N trả lời"** 13px/600 `--color-accent` · "Lần cuối 09:20" mờ (giờ theo §8; hôm
+  bên trái, viền 2px màu nền) · **"N trả lời"** 14px/600 `--color-accent` · "Lần cuối 09:20" mờ (giờ theo §8; hôm
   qua "Hôm qua 17:05", cũ hơn "06/10") · pill **"M mới"** (pill đếm accent) **chỉ khi bạn đang theo dõi thread
   và có trả lời chưa đọc**. Thread không theo dõi không bao giờ có "mới", số trả lời vẫn đúng. Thread đang mở ở
   panel: nền `--color-accent-wash`, `aria-expanded="true"`. `aria-label` đọc đủ: "Thread, 3 trả lời, lần cuối
@@ -377,7 +377,7 @@ này thì cái kia đóng.
   (tin gần nhất của bạn trong cuộc trò chuyện hoặc thread đang mở). Bong bóng thành ô sửa tại chỗ: nền
   `--color-raised`, viền trong 2px `--color-accent`, radius 12, rộng tối đa min(560, 85%); dưới chữ: "Esc huỷ ·
   Enter lưu" 12px mờ + Huỷ (ghost sm) + Lưu (primary sm). Enter lưu, Shift+Enter xuống dòng, Esc huỷ (trả nguyên
-  bản). Trích dẫn và đính kèm giữ nguyên. Lưu xong cuối bong bóng có nhãn **"đã sửa"** 11px mờ (cả người khác
+  bản). Trích dẫn và đính kèm giữ nguyên. Lưu xong cuối bong bóng có nhãn **"đã sửa"** 12px mờ (cả người khác
   thấy). Lưu chữ rỗng = hỏi xoá tin. Người khác thấy chữ đổi tại chỗ (fade 160ms), không tính là tin mới, không
   thông báo. Thẻ (bình chọn, công việc…) không sửa được.
 - **Xoá tin:** luôn qua hộp xác nhận (`alertdialog`, rộng 420): "Xoá tin nhắn?" + câu nói rõ hậu quả ("Tin sẽ bị
@@ -438,7 +438,7 @@ này thì cái kia đóng.
   `--color-accent-wash`, icon `--color-accent`, `aria-pressed="true"`. Tooltip có phím tắt ("Đậm (Ctrl+B)", macOS
   hiện ⌘). ←/→ di chuyển trong thanh (roving tabindex). Trạng thái bật/tắt nhớ theo người dùng. Dưới 768: thanh
   cuộn ngang trong ô soạn, không xuống dòng. Phím tắt và cú pháp gõ nhanh theo phase 07 của plan chat.
-- **Hiển thị định dạng trong tin:** đậm 600; code inline `--font-mono` 13px trên `--color-sunk`, radius 4, padding
+- **Hiển thị định dạng trong tin:** đậm 600; code inline `--font-mono` 14px trên `--color-sunk`, radius 4, padding
   1 × 4; khối code `--color-sunk`, radius 8, padding 10 × 12, cuộn ngang; trích dẫn: vạch trái 3px `--color-line`,
   chữ `--color-ink-muted`; link `--color-accent` gạch chân, mở tab mới. Không màu chữ hay font tuỳ ý.
 - **Hộp chèn link (LinkDialog):** popover neo vào nút Link (hoặc Ctrl/Cmd+K), rộng 320, `--color-overlay`, radius
@@ -481,7 +481,7 @@ Bản 390px của Chat; hành vi theo các mục "Chat: …" ở trên, chỉ kh
   nút nổi "Trò chuyện mới" (cao 52, radius 16, `--color-accent-wash`) góc phải trên thanh đáy, ẩn khi cuộn xuống. Nhấn
   giữ hàng mở sheet Chuyển tới mục / Mục mới… / Bỏ khỏi mục / Gắn sao / Tắt thông báo.
 - **Luồng:** thanh trên có quay lại, icon nhóm 28, tên + "N thành viên", nút Thread (badge) và Thông tin; bong bóng tối đa
-  88%, chữ 15px; hàng tóm tắt thread cao 36. Không hover: chạm tin hiện giờ trong cụm.
+  88%, chữ 16px; hàng tóm tắt thread cao 36. Không hover: chạm tin hiện giờ trong cụm.
 - **Thread và danh sách Thread:** màn toàn màn trượt lên (280ms), quay lại giữ vị trí cuộn của luồng; nút Theo dõi /
   Đang theo dõi (pill 36) trên thanh trên; danh sách Thread có chip lọc cuộn ngang (cao 36).
 - **Nhấn giữ tin (400ms):** sheet đáy có hàng 6 cảm xúc nhanh (48) + thao tác (hàng 52): Trả lời trong thread, Theo dõi /

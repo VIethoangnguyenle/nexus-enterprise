@@ -29,6 +29,8 @@
   --text-xs--line-height: 1rem;
   --text-sm: 0.875rem;
   --text-sm--line-height: 1.3125rem;
+  --text-md: 0.9375rem;
+  --text-md--line-height: 1.4375rem;
   --text-base: 1rem;
   --text-base--line-height: 1.5rem;
   --text-lg: 1.1875rem;
@@ -561,7 +563,7 @@ h1, h2, h3, h4 {
   padding: 1px 4px;
   border-radius: 4px;
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
 }
 .chat-editor-content pre {
   background: var(--color-sunk);
@@ -597,7 +599,7 @@ h1, h2, h3, h4 {
   padding: 1px 4px;
   border-radius: 4px;
   font-family: var(--font-mono);
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
 }
 .message-html pre {
   background: var(--color-sunk);

@@ -38,11 +38,11 @@ export function ConversationRow({ conversation: c, arrival, online }: {
     >
       <ConversationIcon conversation={c} size={40} online={online} halo={byOther} />
       <span className="grid gap-0.5 min-w-0">
-        <span className={`flex items-center gap-1.5 min-w-0 ${unread ? 'font-semibold' : 'font-medium'}`}>
+        <span className={`flex items-center gap-1.5 min-w-0 max-md:text-base md:text-md ${unread ? 'font-semibold' : 'font-medium'}`}>
           <span className="truncate">{c.title}</span>
           {byOther && <span className="rt-tag shrink-0 text-xs font-semibold">vừa nhắn</span>}
         </span>
-        <span className={`truncate ${unread ? 'font-semibold text-ink' : 'text-ink-muted'}`}>{preview}</span>
+        <span className={`truncate text-sm ${unread ? 'font-semibold text-ink' : 'text-ink-muted'}`}>{preview}</span>
       </span>
       <span id={metaId} className="grid justify-items-end gap-1 text-xs text-ink-muted tnum">
         <span>{c.lastActivity ? formatListTime(c.lastActivity / 1000) : ''}</span>

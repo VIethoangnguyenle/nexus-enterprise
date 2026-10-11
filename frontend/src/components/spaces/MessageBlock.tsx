@@ -141,7 +141,7 @@ export function MessageBlock({
           <div className={`flex items-baseline gap-2 min-w-0 max-w-full ${mine ? 'justify-end' : ''}`}>
             {mine
               ? <span id={`${idBase}-who`} className="sr-only">Bạn</span>
-              : <span id={`${idBase}-who`} className="font-semibold text-ink truncate">{name}</span>}
+              : <span id={`${idBase}-who`} className="text-md font-semibold text-ink truncate">{name}</span>}
             {time}
             {pinned}
             {tag && (
@@ -153,7 +153,7 @@ export function MessageBlock({
         {deleted ? (
           <div
             id={`${idBase}-text`}
-            className="mt-0.5 w-fit max-w-[88%] md:max-w-[min(70ch,85%)] px-3 py-1.75 rounded-xl text-sm italic text-ink-muted
+            className="mt-0.5 w-fit max-w-[88%] md:max-w-[min(70ch,85%)] px-3 py-1.75 rounded-xl text-base md:text-md italic text-ink-muted
               ring-1 ring-inset ring-line"
           >
             Tin nhắn đã bị xoá
@@ -186,7 +186,7 @@ export function MessageBlock({
                       <MessageContent content={m.content} contentFormat={m.content_format} />
                     </div>
                     {m.edited_at != null && (
-                      <span title={`Sửa lúc ${formatDateTime(m.edited_at)}`} className="text-2xs text-ink-muted whitespace-nowrap">đã sửa</span>
+                      <span title={`Sửa lúc ${formatDateTime(m.edited_at)}`} className="text-xs text-ink-muted whitespace-nowrap">đã sửa</span>
                     )}
                   </div>
                 )}

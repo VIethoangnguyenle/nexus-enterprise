@@ -34,7 +34,7 @@ export function ThreadSummary({ message, people, open, mine, washStyle, onOpen, 
       aria-label={s.label}
       aria-expanded={open ?? false}
       style={washStyle}
-      className={`flex items-center gap-2 max-w-full min-h-9 md:min-h-8 mt-1 mb-0.5 pl-2 pr-2.5 rounded-md text-small
+      className={`flex items-center gap-2 max-w-full min-h-9 md:min-h-8 mt-1 mb-0.5 pl-2 pr-2.5 rounded-md text-sm
         text-ink-muted transition-colors duration-quick hover:bg-raised
         ${mine ? '-mr-2' : '-ml-2'}
         ${open ? 'bg-accent-wash hover:bg-accent-wash' : ''} ${washStyle ? 'rt-wash' : ''}`}

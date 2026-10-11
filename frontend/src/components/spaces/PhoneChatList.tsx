@@ -145,7 +145,7 @@ function Group({ id, workspaceId, title, unread, menuLabel, onMenu, empty, child
           aria-expanded={open}
           aria-controls={listId}
           onClick={() => setCollapsed(key, open)}
-          className={`flex-1 min-w-0 flex items-center gap-2 min-h-11 px-2.5 rounded-md text-small font-semibold
+          className={`flex-1 min-w-0 flex items-center gap-2 min-h-11 px-2.5 rounded-md text-sm font-semibold
             ${own ? 'text-ink' : 'text-ink-muted'}`}
         >
           <ChevronDown

@@ -19,7 +19,7 @@ export function MessageContent({ content, contentFormat }: MessageContentProps) 
   if (contentFormat === 'html' || content.startsWith('<')) {
     return (
       <div
-        className="message-html text-sm text-ink leading-[1.55] break-words"
+        className="message-html text-base md:text-md text-ink break-words"
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
       />
     )
@@ -27,7 +27,7 @@ export function MessageContent({ content, contentFormat }: MessageContentProps) 
 
   // Markdown rendering with custom code block component
   return (
-    <div className="message-markdown text-sm text-ink leading-[1.55] break-words [&_p]:m-0 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:my-1 [&_blockquote]:text-on-surface-variant [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-1 [&_a]:text-primary [&_a]:underline [&_strong]:text-on-surface">
+    <div className="message-markdown text-base md:text-md text-ink break-words [&_p]:m-0 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:my-1 [&_blockquote]:text-on-surface-variant [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-1 [&_a]:text-primary [&_a]:underline [&_strong]:text-on-surface">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -49,7 +49,7 @@ function CodeBlock({ className, children, ...props }: any) {
   if (!isBlock) {
     // Inline code
     return (
-      <code className="bg-surface-container px-1.5 py-0.5 rounded text-small text-primary font-mono" {...props}>
+      <code className="bg-surface-container px-1.5 py-0.5 rounded text-sm text-primary font-mono" {...props}>
         {children}
       </code>
     )
@@ -92,7 +92,7 @@ function FencedCodeBlock({ code, language }: { code: string; language?: string }
       </div>
       {/* Code content */}
       <pre className="m-0 px-3 py-3 bg-surface-container overflow-x-auto">
-        <code className="text-small font-mono text-on-surface leading-relaxed whitespace-pre">
+        <code className="text-sm font-mono text-on-surface leading-relaxed whitespace-pre">
           {code}
         </code>
       </pre>

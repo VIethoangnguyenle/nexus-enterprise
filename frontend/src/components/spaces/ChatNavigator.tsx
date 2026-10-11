@@ -71,7 +71,7 @@ export function ChatNavigator() {
         <Link
           to="/channels"
           aria-current={onHome ? 'page' : undefined}
-          className={`flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-sm no-underline focus-ring
+          className={`flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-md no-underline focus-ring
             transition-colors duration-quick ${onHome ? 'bg-raised text-ink font-semibold' : 'text-ink hover:bg-hover'}`}
         >
           <House size={16} strokeWidth={1.75} className="text-ink-muted shrink-0" aria-hidden="true" />
@@ -173,7 +173,7 @@ function ConversationLink({ conversation: c, current, online, onMenu, onDragStar
         params={{ channelId: c.id }}
         aria-current={current ? 'page' : undefined}
         data-unread={unread || undefined}
-        className={`flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-sm text-ink no-underline min-w-0
+        className={`flex items-center gap-2.5 h-9 px-2.5 rounded-surface text-md text-ink no-underline min-w-0
           focus-ring transition-colors duration-quick
           ${current ? 'bg-raised' : 'hover:bg-hover'} ${unread || current ? 'font-semibold' : ''}`}
       >
@@ -249,7 +249,7 @@ function Section({
           aria-expanded={open}
           aria-controls={listId}
           onClick={() => setCollapsed(key, open)}
-          className={`flex-1 min-w-0 flex items-center gap-1.5 h-7 px-1.5 rounded-md text-small font-semibold
+          className={`flex-1 min-w-0 flex items-center gap-1.5 h-7 px-1.5 rounded-md text-sm font-semibold
             ${plain ? 'text-ink-muted hover:text-ink' : 'text-ink'}`}
         >
           <ChevronDown
