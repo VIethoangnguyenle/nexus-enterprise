@@ -1,0 +1,1064 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lối tắt: Được nhắc tới và Đã gắn sao</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Chat: lối tắt "Được nhắc tới" và "Đã gắn sao" + gắn sao cuộc trò chuyện / tin.
+   Addition to spaces.html (desktop) and chat-mobile.html (phone). Component classes (.app, .cnav, .rl, .rlw, .sec,
+   .menu, .chead, .m, .txt, .hact, .panel, .toast, .phone, .sheet, .lsec …) are copied verbatim from those files (via
+   notification-levels.html, which copies the same set) so this page renders the same primitives; only the classes under
+   "new in this file" are new. */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+svg.i.xs { width: 14px; height: 14px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-ink-muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* review chrome (spaces.html) */
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 72ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; min-height: 36px; }
+.check input { width: 18px; height: 18px; accent-color: var(--color-accent); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.toc a:hover { background: var(--color-hover); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+.screen-head { display: grid; gap: 6px; max-width: 80ch; }
+.screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.demo .k { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-right: 4px; }
+.scroll { overflow-x: auto; border-radius: 12px; position: relative; }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 84ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+.need { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--color-info-wash); color: var(--color-info); font: 600 0.6875rem/1 var(--font-body); margin-left: 4px; vertical-align: 1px; }
+.decide { display: grid; gap: 10px; max-width: 92ch; padding: 16px 18px; border-radius: 12px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); }
+.decide h2 { font-size: 1.0625rem; }
+.decide ol { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; color: var(--color-ink-muted); }
+.decide b { color: var(--color-ink); }
+.q { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--color-warning-wash); color: var(--color-warning); font: 600 0.6875rem/1 var(--font-body); margin-left: 4px; vertical-align: 1px; }
+
+/* primitives (spaces.html) */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0; font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink);
+  transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-press) var(--ease-out); }
+.btn:hover { background: var(--color-line); }
+.btn:active { transform: scale(0.98); }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.primary:hover { background: var(--color-accent-hover); }
+.btn.ghost { background: transparent; } .btn.ghost:hover { background: var(--color-hover); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.demo .btn.sm { height: 36px; }
+.ibtn { position: relative; width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; transition: background-color var(--duration-quick) var(--ease-out); flex: none; }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+.ibtn .b { position: absolute; top: -3px; right: -5px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 999px; background: var(--color-accent); color: var(--color-on-accent); font: 600 0.625rem/16px var(--font-body); text-align: center; font-variant-numeric: tabular-nums; box-shadow: 0 0 0 2px var(--color-base); }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); position: relative; }
+.av.s20 { width: 20px; height: 20px; font-size: 0.5625rem; } .av.s24 { width: 24px; height: 24px; font-size: 0.625rem; } .av.s40 { width: 40px; height: 40px; font-size: 0.875rem; } .av.s44 { width: 44px; height: 44px; font-size: 0.875rem; }
+.sp { --p: var(--color-person-4); width: 32px; height: 32px; border-radius: 8px; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 700 0.8125rem/1 var(--font-display); }
+.sp.s24 { width: 24px; height: 24px; font-size: 0.6875rem; border-radius: 7px; } .sp.s28 { width: 28px; height: 28px; border-radius: 8px; font-size: 0.75rem; } .sp.s40 { width: 40px; height: 40px; font-size: 1rem; border-radius: 10px; } .sp.s44 { width: 44px; height: 44px; border-radius: 12px; font-size: 0.9375rem; }
+.pill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font: 600 0.75rem/1 var(--font-body); white-space: nowrap; }
+.pill.count { background: var(--color-accent); color: var(--color-on-accent); height: 18px; padding: 0 6px; font-size: 0.6875rem; min-width: 18px; justify-content: center; font-variant-numeric: tabular-nums; }
+.pill.idle { background: var(--color-sunk); color: var(--color-ink-muted); }
+.faces { display: flex; align-items: center; }
+.faces .av { box-shadow: 0 0 0 2px var(--color-raised); }
+.faces .av + .av { margin-left: -6px; }
+
+/* shell (spaces.html) */
+.app { display: grid; grid-template-columns: 232px 288px minmax(520px, 1fr); height: 760px; min-width: 1240px; background: var(--color-base); border-radius: 12px; overflow: hidden; position: relative; isolation: isolate; }
+.app.with-panel { grid-template-columns: 232px 288px minmax(480px, 1fr) 360px; }
+.side { background: var(--color-sunk); display: grid; grid-template-rows: auto 1fr auto; padding: 12px; gap: 12px; min-height: 0; }
+.ws { display: flex; align-items: center; gap: 10px; padding: 6px 8px; }
+.ws .logo { width: 32px; height: 32px; border-radius: 10px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 0.9375rem/1 var(--font-display); }
+.ws .n { font: 700 1rem/1.2 var(--font-display); } .ws .s { font-size: 0.75rem; color: var(--color-ink-muted); }
+.nav { display: grid; gap: 2px; align-content: start; }
+.nav a { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 10px; color: var(--color-ink-muted); text-decoration: none; font-weight: 500; }
+.nav a:hover { background: var(--color-hover); color: var(--color-ink); }
+.nav a[aria-current="page"] { background: var(--color-raised); color: var(--color-ink); font-weight: 600; }
+.nav a .pill { margin-left: auto; }
+.me { display: flex; align-items: center; gap: 10px; padding: 8px; } .me .r { font-size: 0.75rem; color: var(--color-ink-muted); }
+.cnav { display: grid; grid-template-rows: auto 1fr; min-height: 0; background: var(--color-base); position: relative; }
+.cnav .top { padding: 16px 12px 8px; }
+.newchat { height: 44px; padding: 0 18px 0 14px; border-radius: 14px; background: var(--color-accent-wash); color: var(--color-ink); font: 600 0.9375rem/1 var(--font-body); border: 0; display: inline-flex; align-items: center; gap: 10px; cursor: pointer; }
+.newchat svg { color: var(--color-accent); }
+.cnav .body { overflow: auto; padding: 0 8px 16px; display: grid; gap: 2px; align-content: start; }
+.rl { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border-radius: 10px; color: var(--color-ink); text-decoration: none; min-width: 0; transition: background-color var(--duration-quick) var(--ease-out); }
+.rl:hover { background: var(--color-hover); }
+.rl[aria-current="page"] { background: var(--color-raised); font-weight: 600; }
+.rl.unread { font-weight: 600; }
+.rl .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl .end { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; flex: none; }
+.rl .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-accent); flex: none; }
+.rl .h { color: var(--color-ink-muted); }
+.rlw { position: relative; }
+.rlw .more { position: absolute; top: 4px; right: 4px; width: 28px; height: 28px; opacity: 0; background: var(--color-hover); transition: opacity var(--duration-quick) var(--ease-out); }
+.rlw:hover .more, .rlw:focus-within .more, .rlw .more[aria-expanded="true"] { opacity: 1; }
+.rlw:hover .rl .end, .rlw:focus-within .rl .end, .rlw:has(.more[aria-expanded="true"]) .rl .end { visibility: hidden; }
+/* sections (spaces.html) */
+.grp { position: relative; display: grid; gap: 2px; }
+.grp-b { display: grid; gap: 2px; }
+.sec { display: flex; align-items: center; gap: 6px; padding: 10px 4px 2px 6px; color: var(--color-ink-muted); font: 600 0.8125rem/1 var(--font-body); }
+.sec svg { transition: transform var(--duration-quick) var(--ease-out); }
+.sec-t { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 4px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.sec-t:hover { background: var(--color-hover); }
+.sec-t .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sec-t[aria-expanded="false"] > svg { transform: rotate(-90deg); }
+.sec-t .pill { margin-left: auto; }
+.sec-t[aria-expanded="true"] .pill { display: none; }
+.sec.usr { color: var(--color-ink); }
+.sec-hint { padding: 4px 10px 8px 34px; font-size: 0.8125rem; color: var(--color-ink-muted); }
+/* content */
+.content { display: grid; grid-template-rows: auto 1fr; min-width: 0; min-height: 0; background: var(--color-base); position: relative; }
+.chead { display: flex; align-items: center; gap: 12px; padding: 14px 20px 6px; min-width: 0; position: relative; }
+.chead .t { display: grid; gap: 1px; min-width: 0; }
+.chead h3 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chead .sub { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
+.chead .end { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+/* group header: the name is the menu button (notification-levels.html) */
+.ttl { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; min-height: 36px; margin-left: -8px; padding: 2px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink); cursor: pointer; text-align: left; }
+.ttl:hover, .ttl[aria-expanded="true"] { background: var(--color-hover); }
+.ttl .chev { color: var(--color-ink-muted); transition: transform var(--duration-quick) var(--ease-out); }
+.ttl[aria-expanded="true"] .chev { transform: rotate(180deg); }
+.menu { position: absolute; z-index: 10; min-width: 220px; background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 6px; display: grid; gap: 2px; }
+.menu button { display: flex; align-items: center; gap: 10px; min-height: 36px; padding: 0 10px; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink); font: 500 0.875rem/1 var(--font-body); cursor: pointer; text-align: left; }
+.menu button:hover, .menu button:focus-visible { background: var(--color-hover); }
+.menu button svg { color: var(--color-ink-muted); }
+.menu button.danger, .menu button.danger svg { color: var(--color-danger); }
+.menu hr { border: 0; height: 1px; background: var(--color-line); margin: 4px 6px; }
+.menu .mlabel { padding: 8px 10px 4px; font: 600 0.75rem/1 var(--font-body); color: var(--color-ink-muted); }
+.menu button[role="menuitemradio"][aria-checked="true"]::after { content: "✓"; margin-left: auto; color: var(--color-accent); font-weight: 700; }
+.toasts { position: absolute; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 50; justify-items: end; pointer-events: none; }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 12px; min-width: 280px; max-width: 420px; padding: 10px 10px 10px 14px; border-radius: 12px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); }
+.toast .ok { color: var(--color-success); } .toast .bad { color: var(--color-danger); } .toast .btn { margin-left: auto; }
+.toast p { line-height: 1.4; }
+.toast.err { box-shadow: var(--shadow-overlay), inset 3px 0 0 var(--color-danger); }
+/* stream (spaces.html) */
+.convo { position: relative; min-height: 0; display: grid; }
+.stream { position: relative; overflow: auto; display: flex; flex-direction: column; padding: 8px 8px 20px; min-height: 0; }
+.stream > :first-child { margin-top: auto; }
+.m { position: relative; flex: none; display: grid; grid-template-columns: 32px minmax(0, 1fr); column-gap: 12px; padding: 8px 14px 2px; border-radius: 10px; }
+.mc { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.mc > * { max-width: 100%; }
+.who { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.who b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.who time { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; flex: none; }
+.txt { line-height: 1.55; width: fit-content; max-width: min(70ch, 85%); overflow-wrap: anywhere; margin-top: 2px; padding: 7px 12px; border-radius: 16px; background: var(--color-sunk); }
+.who + .txt { border-top-left-radius: 4px; }
+.m.mine { grid-template-columns: minmax(0, 1fr) 32px; }
+.m.mine .mc { grid-column: 1; grid-row: 1; align-items: flex-end; }
+.m.mine .who { justify-content: flex-end; }
+.m.mine .txt { background: var(--color-accent-wash); }
+.m.mine .who + .txt { border-top-left-radius: 16px; border-top-right-radius: 4px; }
+.m.mine .hact, .m.mine .menu { right: 52px; left: auto; }
+.dd { display: flex; align-items: center; gap: 12px; flex: none; padding: 14px 14px 6px; font: 600 0.75rem/1 var(--font-body); color: var(--color-ink-muted); }
+.dd::before, .dd::after { content: ""; flex: 1; height: 1px; background: var(--color-line); }
+.dd.unread { color: var(--color-accent); }
+.dd.unread::before { background: var(--color-accent); }
+.dd.unread::after { display: none; }
+.tsum { display: inline-flex; align-items: center; gap: 8px; min-height: 32px; max-width: 100%; margin: 4px 0 2px -8px; padding: 0 10px 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink-muted); font: 400 0.8125rem/1.3 var(--font-body); cursor: pointer; text-align: left; }
+.tsum:hover { background: var(--color-raised); }
+.tsum[aria-expanded="true"] { background: var(--color-accent-wash); }
+.tsum .n { color: var(--color-accent); font-weight: 600; white-space: nowrap; }
+.tsum .faces .av { box-shadow: 0 0 0 2px var(--color-base); }
+.pinned { display: inline-flex; align-items: center; gap: 4px; font-size: 0.75rem; color: var(--color-ink-muted); flex: none; }
+.pinned svg { width: 12px; height: 12px; }
+.hact { position: absolute; top: -14px; right: 12px; z-index: 10; display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); opacity: 0; pointer-events: none; transition: opacity 120ms var(--ease-in); }
+.m:hover .hact, .m:focus-within .hact, .m.hov .hact { opacity: 1; pointer-events: auto; transition: opacity var(--duration-quick) var(--ease-out); }
+.m .menu { top: 22px; right: 12px; }
+.ibtn[aria-pressed="true"] { background: var(--color-accent-wash); color: var(--color-accent); }
+.composer { margin: 0 16px 16px; background: var(--color-raised); border-radius: 12px; padding: 10px 10px 10px 14px; display: grid; gap: 8px; position: relative; min-width: 0; }
+.cin { font-size: 1rem; line-height: 1.5; padding: 2px 0; min-height: 28px; color: var(--color-ink-muted); }
+/* right panel (spaces.html) */
+.panel { background: var(--color-raised); margin: 12px 12px 12px 0; border-radius: 10px; display: grid; grid-template-rows: auto 1fr; min-height: 0; min-width: 0; }
+.panel .ph { display: flex; align-items: center; gap: 8px; padding: 14px 12px 10px 16px; }
+.panel .ph h4 { font-size: 1.0625rem; font-weight: 700; }
+.panel .ph .sub { font-size: 0.75rem; color: var(--color-ink-muted); }
+.panel .ph .ibtn:first-of-type { margin-left: auto; }
+.panel .pb { overflow: auto; padding: 0 4px 8px; display: grid; align-content: start; gap: 2px; }
+.panel .txt { background: var(--color-sunk); }
+/* empty, skeleton (spaces.html) */
+.empty { display: grid; justify-items: center; gap: 12px; text-align: center; padding: 48px 24px; color: var(--color-ink-muted); }
+.empty > svg { width: 24px; height: 24px; }
+.empty p { max-width: 36ch; color: var(--color-ink); }
+.sk { height: 10px; border-radius: 6px; background: var(--color-sunk); animation: pulse 1400ms var(--ease-out) infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+
+/* state board (notification-levels.html) */
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(344px, 1fr)); gap: 20px 24px; padding: 20px; background: var(--color-sunk); border-radius: 12px; min-width: 1240px; position: relative; }
+.spec { display: grid; gap: 10px; align-content: start; }
+.spec > small { font: 600 0.75rem/1.3 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); }
+.spec .menu { position: static; }
+.spec .toast { min-width: 0; }
+.spec .rowdemo { background: var(--color-base); border-radius: 12px; padding: 6px; display: grid; gap: 2px; }
+
+/* phone (chat-mobile.html) */
+.phones { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.ph { display: grid; gap: 10px; justify-items: center; min-width: 0; }
+.ph > small { color: var(--color-ink-muted); font-weight: 600; }
+.phone { width: min(390px, calc(100vw - 48px)); height: 800px; border-radius: 32px; background: var(--color-base); overflow: hidden; display: grid; grid-template-rows: auto auto 1fr auto; position: relative; isolation: isolate; box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; }
+.phone .ibtn { width: 44px; height: 44px; border-radius: 10px; }
+.sbar { display: flex; align-items: center; justify-content: space-between; height: 34px; padding: 0 22px; font: 600 0.8125rem/1 var(--font-body); }
+.sbar span:last-child { width: 22px; height: 10px; border-radius: 3px; background: currentColor; opacity: 0.8; }
+.topbar { display: flex; align-items: center; gap: 2px; min-height: 52px; padding: 0 4px 0 16px; min-width: 0; }
+.topbar .brand { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--color-ink-muted); font-size: 1rem; }
+.topbar .brand b { font: 700 1rem/1 var(--font-display); color: var(--color-ink); }
+.topbar.chat { padding-left: 4px; gap: 8px; }
+.topbar .ti { flex: 1; min-width: 0; display: grid; }
+.topbar .ti b { font: 700 1rem/1.25 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.topbar .ti small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.pbody { overflow: auto; min-height: 0; position: relative; overscroll-behavior: contain; }
+.tabbar { display: grid; grid-template-columns: repeat(4, 1fr); background: var(--color-raised); padding: 4px 4px 18px; }
+.tabbar a { display: grid; justify-items: center; align-content: center; gap: 2px; min-height: 48px; font-size: 0.6875rem; line-height: 1rem; font-weight: 500; color: var(--color-ink-muted); text-decoration: none; }
+.tabbar a .ic { position: relative; display: grid; place-items: center; width: 48px; height: 24px; border-radius: 10px; }
+.tabbar a .ic svg.i { width: 20px; height: 20px; }
+.tabbar a[aria-current="page"] { color: var(--color-accent); font-weight: 600; }
+.tabbar a[aria-current="page"] .ic { background: var(--color-accent-wash); }
+.tabbar a .pill.count { position: absolute; top: -6px; right: 2px; box-shadow: 0 0 0 2px var(--color-raised); }
+.lsec { display: flex; align-items: center; gap: 6px; padding: 14px 16px 4px; color: var(--color-ink-muted); font: 600 0.8125rem/1 var(--font-body); }
+.lsec.usr { color: var(--color-ink); }
+.lsec .pill { margin-left: auto; }
+.conv { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 16px; text-decoration: none; color: inherit; min-height: 64px; }
+.conv .nm { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.conv .nm > span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv .pv { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv.unread .nm, .conv.unread .pv { font-weight: 600; color: var(--color-ink); }
+.conv .meta { display: grid; justify-items: end; gap: 4px; font-size: 0.75rem; color: var(--color-ink-muted); }
+.scrim { position: absolute; inset: 0; z-index: 30; background: var(--color-scrim); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--color-overlay); border-radius: 22px 22px 0 0; box-shadow: var(--shadow-overlay); padding: 8px 8px 24px; display: grid; gap: 4px; max-height: 88%; overflow: auto; }
+.sheet .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-line); justify-self: center; margin-bottom: 6px; }
+.sheet .item { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 14px; border: 0; border-radius: 12px; background: transparent; color: var(--color-ink); font: 500 1rem/1.3 var(--font-body); text-align: left; cursor: pointer; }
+.sheet .item:active, .sheet .item:hover { background: var(--color-hover); }
+.sheet .item svg { color: var(--color-ink-muted); }
+.sheet .item.danger, .sheet .item.danger svg { color: var(--color-danger); }
+.sheet hr { border: 0; height: 1px; background: var(--color-line); margin: 4px 14px; }
+.sheet .shead { padding: 2px 14px 8px; display: grid; gap: 2px; }
+.sheet .shead b { font: 700 1.0625rem/1.3 var(--font-display); }
+.sheet .shead small { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.quick { display: flex; justify-content: space-between; padding: 4px 10px 8px; }
+.quick button { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--color-sunk); font-size: 1.375rem; cursor: pointer; }
+.full { position: absolute; inset: 0; z-index: 25; background: var(--color-base); display: grid; grid-template-rows: auto auto 1fr; }
+.ptoasts { position: absolute; left: 12px; right: 12px; bottom: 96px; z-index: 40; display: grid; gap: 8px; pointer-events: none; }
+.ptoasts .toast { min-width: 0; max-width: none; }
+.ptoasts .toast .btn { min-height: 44px; height: 44px; }
+.phone .m { column-gap: 8px; padding: 8px 10px 0; }
+.phone .m.mine { grid-template-columns: minmax(0, 1fr); }
+.phone .txt { max-width: 88%; padding: 8px 12px; border-radius: 18px; font-size: 0.9375rem; line-height: 1.5; }
+.phone .who + .txt { border-top-left-radius: 4px; }
+.phone .m.mine .who + .txt { border-top-left-radius: 18px; border-top-right-radius: 4px; }
+.phone .stream { padding: 4px 6px 12px; overflow: visible; }
+.phone .tsum { min-height: 44px; }
+.phone .m.pressed .txt { box-shadow: 0 0 0 2px var(--color-accent); }
+@media (max-width: 767px) { .toast .btn { min-height: 44px; height: 44px; } }
+
+/* ===== new in this file ===== */
+svg.i.fill { fill: currentColor; }
+/* @mention in text: others = accent text (chat-mobile.html); you = accent text on accent wash */
+.mention { color: var(--color-accent); font-weight: 600; }
+.mention.self { background: var(--color-accent-wash); border-radius: 4px; padding: 0 3px; margin: 0 -1px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+/* star mark: navigator row end, Home feed row name, header title, message meta */
+.smark { display: inline-flex; color: var(--color-accent); flex: none; }
+.smark svg { width: 12px; height: 12px; fill: currentColor; }
+.chead h3 .smark svg { width: 16px; height: 16px; }
+.chead h3 .smark { vertical-align: -1px; margin-left: 6px; }
+/* star toggle button (aria-pressed): outline when off, filled accent when on; no wash background */
+.ibtn.star[aria-pressed="true"] { background: transparent; color: var(--color-accent); }
+.ibtn.star[aria-pressed="true"]:hover { background: var(--color-hover); }
+.ibtn.star[aria-pressed="true"] svg { fill: currentColor; }
+/* shortcut view body */
+.vbody { overflow: auto; min-height: 0; padding: 0 20px 24px; }
+.vwrap { max-width: 760px; display: grid; gap: 2px; }
+.vsub { color: var(--color-ink-muted); font-size: 0.8125rem; }
+h4.dd { font-family: var(--font-body); padding: 16px 4px 6px; margin: 0; }
+.vwrap > h4.dd:first-child { padding-top: 8px; }
+.hsec { display: flex; align-items: center; gap: 8px; min-height: 36px; padding: 12px 4px 4px; }
+.hsec h4 { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); }
+/* MentionItem / StarredMessage: card that links to the message */
+.mlist { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.mi-w { position: relative; }
+.mi { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; column-gap: 12px; row-gap: 6px; padding: 12px 14px; border-radius: 12px; color: inherit; text-decoration: none; transition: background-color var(--duration-quick) var(--ease-out); }
+.mi:hover { background: var(--color-raised); }
+.mi .ci { grid-column: 1; grid-row: 1; display: grid; place-items: center; }
+.mi .src { grid-column: 2; grid-row: 1; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.8125rem; color: var(--color-ink-muted); }
+.mi .src .cn { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mi .end { grid-column: 3; grid-row: 1; display: inline-flex; align-items: center; gap: 8px; min-height: 20px; }
+.mi .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-accent); flex: none; }
+.mi .ctx { grid-column: 2 / 4; grid-row: 2; display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 0.75rem; color: var(--color-ink-muted); }
+.mi .ctx span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mi .ctx svg { width: 14px; height: 14px; }
+.mi > .av { grid-column: 1; align-self: start; }
+.mi .bd { grid-column: 2 / 4; min-width: 0; display: grid; justify-items: start; }
+.mi .bd .txt { max-width: 100%; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.mi .bd .ax { display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; font-size: 0.75rem; color: var(--color-ink-muted); }
+.mi.mine .bd .txt { background: var(--color-accent-wash); border-top-left-radius: 16px; }
+.mi .who b { font-weight: 500; color: var(--color-ink-muted); }
+.mi .bd .txt { color: var(--color-ink-muted); }
+.mi.unread .src .cn, .mi.unread .who b { color: var(--color-ink); font-weight: 600; }
+.mi.unread .bd .txt { color: var(--color-ink); }
+.mi.st .who b, .mi.st .bd .txt { color: var(--color-ink); }
+.mi.st .who b { font-weight: 600; }
+.mi-w .ibtn.star { position: absolute; top: 6px; right: 6px; }
+.mi-w.has-star .mi { padding-right: 48px; }
+.vmore { display: flex; align-items: center; gap: 12px; padding: 12px 4px; color: var(--color-ink-muted); font-size: 0.8125rem; }
+.sk-mi { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 8px 12px; padding: 14px; }
+.sk-mi .sk.c { width: 32px; height: 32px; border-radius: 50%; grid-row: span 3; }
+.sk-mi .sk.b { height: 40px; border-radius: 16px; width: 70%; }
+/* starred conversations inside the view: navigator rows + star toggle */
+.srows { display: grid; gap: 2px; padding: 0 0 4px; }
+.srows .rlw .rl { padding-right: 44px; }
+.srows .rlw .ibtn.star { position: absolute; top: 2px; right: 4px; }
+/* opening a mention / starred message: the bubble flashes an accent ring for 2,4s (push.html) */
+@keyframes hl { 0%, 40% { box-shadow: 0 0 0 2px var(--color-accent); } 100% { box-shadow: 0 0 0 2px transparent; } }
+.m.flash .txt { animation: hl var(--rt-total) var(--ease-out) both; }
+/* realtime insert (spaces.html §7) */
+@keyframes rt-wash { 0%, 40% { background-color: var(--pw); } 100% { background-color: transparent; } }
+.rt { animation: rt-wash var(--rt-total) var(--ease-out) both; }
+/* phone: shortcut tiles at the top of the Tin nhắn tab */
+.scuts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 4px 12px 6px; }
+.scut { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; min-height: 64px; padding: 10px 12px; border-radius: 14px; background: var(--color-raised); color: var(--color-ink); text-decoration: none; font: 600 0.875rem/1.25 var(--font-body); min-width: 0; }
+.scut:active { background: var(--color-hover); }
+.scut svg { color: var(--color-ink-muted); }
+.scut span.t { grid-column: 1 / -1; grid-row: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scut .pill { grid-column: 2; grid-row: 1; justify-self: end; }
+.phone .mi { padding: 12px 16px; border-radius: 0; min-height: 44px; }
+.phone .mi:hover { background: transparent; }
+.phone .mi:active { background: var(--color-hover); }
+.phone .mi .bd .txt { font-size: 0.9375rem; }
+.phone h4.dd { padding: 14px 16px 2px; }
+.phone .hsec { padding: 14px 16px 2px; }
+.phone .mi-w .ibtn.star { top: 2px; right: 4px; }
+.phone .mi-w.has-star .mi { padding-right: 52px; }
+.phone .srows .conv { padding-right: 56px; }
+.phone .srows .rlw .ibtn.star { top: 10px; right: 6px; }
+.phone .vmore { padding: 12px 16px; }
+.phone .vmore .btn { min-height: 44px; }
+.phone .empty { padding: 40px 24px; }
+.phone .empty .btn { min-height: 44px; }
+
+/* motion */
+.menu.enter { animation: pop-in var(--duration-quick) var(--ease-out) both; transform-origin: top left; }
+@keyframes pop-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
+.toast.enter { animation: toast-in var(--duration-base) var(--ease-out) both; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
+.up { animation: up var(--duration-layout) var(--ease-out-expo) both; }
+@keyframes up { from { transform: translateY(100%); } }
+.fade { animation: fade var(--duration-base) var(--ease-out) both; }
+@keyframes fade { from { opacity: 0; } }
+.gone { animation: gone var(--duration-base) var(--ease-in) both; overflow: hidden; }
+@keyframes gone { to { opacity: 0; transform: scale(0.98); } }
+html.reduce .menu.enter, html.reduce .toast.enter, html.reduce .up, html.reduce .fade { animation: fade 120ms linear both; }
+html.reduce .gone { animation: gone 120ms linear both; }
+html.reduce .m.flash .txt { animation: hl var(--rt-total) steps(1, end) both; }
+html.reduce .rt { animation: none; }
+html.reduce .sk { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .menu.enter, .toast.enter, .up, .fade { animation: fade 120ms linear both; }
+  .gone { animation: gone 120ms linear both; }
+  .m.flash .txt { animation: hl var(--rt-total) steps(1, end) both; }
+  .rt { animation: none; } .sk { animation: none; }
+  .ttl .chev, .sec svg { transition: none; }
+}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-folder-plus" viewBox="0 0 24 24"><path d="M12 10v6"/><path d="M9 13h6"/><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-sidebar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .71-1.53l7-6a2 2 0 0 1 2.58 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-at" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M11.53 2.3a.53.53 0 0 1 .94 0l2.31 4.68a2.12 2.12 0 0 0 1.6 1.16l5.16.76a.53.53 0 0 1 .3.9l-3.74 3.64a2.12 2.12 0 0 0-.61 1.88l.88 5.14a.53.53 0 0 1-.77.56l-4.62-2.43a2.12 2.12 0 0 0-1.97 0L6.4 21.01a.53.53 0 0 1-.77-.56l.88-5.14a2.12 2.12 0 0 0-.61-1.88L2.16 9.8a.53.53 0 0 1 .3-.9l5.16-.76a2.12 2.12 0 0 0 1.6-1.16z"/></symbol>
+  <symbol id="i-star-off" viewBox="0 0 24 24"><path d="M8.34 8.34 2 9.27l5 4.87L5.82 21 12 17.77 18.18 21l-.59-3.43"/><path d="M18.42 12.76 22 9.27l-6.91-1L12 2l-1.44 2.91"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-more-h" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-threads" viewBox="0 0 24 24"><path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z"/><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1"/></symbol>
+  <symbol id="i-reply-thread" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="m10 7-3 3 3 3"/><path d="M17 13v-1a2 2 0 0 0-2-2H7"/></symbol>
+  <symbol id="i-smile-plus" viewBox="0 0 24 24"><path d="M22 11v1a10 10 0 1 1-9-10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/><path d="M16 5h6"/><path d="M19 2v6"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-bell-ring" viewBox="0 0 24 24"><path d="M10.27 21a2 2 0 0 0 3.46 0"/><path d="M22 8c0-2.3-.8-4.3-2-6"/><path d="M3.26 15.33A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.67C19.41 13.96 18 12.5 18 8A6 6 0 0 0 6 8c0 4.5-1.41 5.96-2.74 7.33"/><path d="M4 2C2.8 3.7 2 5.7 2 8"/></symbol>
+  <symbol id="i-bell-off" viewBox="0 0 24 24"><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5"/><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-quote" viewBox="0 0 24 24"><path d="M16 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/><path d="M5 3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2 1 1 0 0 1 1 1v1a2 2 0 0 1-2 2 1 1 0 0 0-1 1v2a1 1 0 0 0 1 1 6 6 0 0 0 6-6V5a2 2 0 0 0-2-2z"/></symbol>
+  <symbol id="i-mail-dot" viewBox="0 0 24 24"><path d="M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12c0 1.1.9 2 2 2h9"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/><circle cx="19" cy="17" r="3"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></symbol>
+  <symbol id="i-ok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-clip" viewBox="0 0 24 24"><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
+</svg>
+
+<div class="page">
+<header>
+  <h1>Lối tắt: Được nhắc tới và Đã gắn sao</h1>
+  <p>Hai lối tắt dưới Trang chủ trong cột điều hướng (như Google Chat). <b>Được nhắc tới</b> gom mọi tin có nhắc tên bạn, cả tin chính lẫn trả lời trong thread, ở mọi cuộc trò chuyện bạn đọc được. <b>Đã gắn sao</b> gom cuộc trò chuyện và tin bạn đã gắn sao. Gắn sao là của riêng bạn, người khác không thấy. Bổ sung cho <code>spaces.html</code> và <code>chat-mobile.html</code>.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div>
+    <label class="check"><input type="checkbox" id="reduce">Giảm chuyển động</label>
+  </div>
+  <nav class="toc" aria-label="Các màn"><a href="#mentions">1 · Được nhắc tới</a><a href="#starred">2 · Đã gắn sao</a><a href="#starring">3 · Gắn sao</a><a href="#board">4 · Menu và toast</a><a href="#phone">5 · Điện thoại</a></nav>
+  <section class="decide" aria-labelledby="dec-h">
+    <h2 id="dec-h">Quyết định thiết kế</h2>
+    <ol>
+      <li><b>"Đã gắn sao" là một mục hệ thống trong cột điều hướng</b>, ngay dưới lối tắt và trên mục của bạn, như Google Chat. Ẩn khi chưa gắn sao gì. Cuộc trò chuyện đã gắn sao <b>chỉ hiện ở đó</b> (giữ luật "một cuộc trò chuyện một chỗ"); nó vẫn nhớ mục cũ, bỏ sao là về lại mục đó. Menu ⋯ của hàng đã gắn sao không có "Chuyển tới mục".</li>
+      <li><b>Lối tắt "Được nhắc tới" có pill đếm</b> = số tin nhắc tên bạn chưa đọc (accent, quá 99 thì "99+"). Nhắc tên là tin gọi đích danh bạn nên đáng một con số, không chỉ chấm. Số này là tập con của Trang chủ, không cộng thêm vào tab Tin nhắn. "Đã gắn sao" không có số.</li>
+      <li><b>Chưa đọc</b> của một tin nhắc tên đi theo read receipt của cuộc trò chuyện (tin chính) hoặc của thread (trả lời). Xem danh sách không đánh dấu đã đọc; mở tin mới đánh dấu.</li>
+      <li><b>Mở một mục</b>: tin chính → mở cuộc trò chuyện, cuộn tin vào giữa, bong bóng loé viền accent 2,4s (như mở từ thông báo đẩy). Trả lời trong thread → mở cuộc trò chuyện ở tin gốc + panel thread, trả lời loé viền trong panel.</li>
+      <li><b>Gắn sao tin</b> nằm trong menu Thêm (mục thứ hai, sau Theo dõi thread) và sheet nhấn giữ, không thêm nút vào thanh hover (đã đủ 4 nút; gắn sao là việc riêng, ít dùng hơn cảm xúc hay trả lời). Tin đã gắn sao có ngôi sao 12px accent cạnh giờ.</li>
+    </ol>
+  </section>
+</header>
+
+<!-- ============================ 1 MENTIONS ============================ -->
+<section class="screen" id="mentions" aria-labelledby="h-mentions">
+  <div class="screen-head">
+    <h2 id="h-mentions">1 · Được nhắc tới (1440)</h2>
+    <p>Mọi tin nhắc tên bạn, mới nhất trên, chia theo ngày như luồng chat. Mỗi mục: cuộc trò chuyện ở dòng nguồn, người gửi và giờ, tin rút gọn 3 dòng với tên bạn được tô. Trả lời trong thread có dòng "Trả lời trong thread của …". Chưa đọc: chữ đậm + chấm accent. Bấm một mục để mở đúng tin.</p>
+  </div>
+  <div class="demo"><span class="k">Trạng thái</span>
+    <div class="seg" role="group" aria-label="Trạng thái danh sách Được nhắc tới" data-seg="A"><button type="button" data-state="data" aria-pressed="true">Có tin</button><button type="button" data-state="loading" aria-pressed="false">Đang tải</button><button type="button" data-state="empty" aria-pressed="false">Rỗng</button><button type="button" data-state="error" aria-pressed="false">Lỗi</button></div>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="rt-mention">Khải nhắc bạn trong Vận hành chung</button>
+    <button class="btn sm" type="button" data-act="open-first" data-frame="A" data-id="dm1">Mở tin nhắc trong luồng</button>
+    <button class="btn sm" type="button" data-act="open-first" data-frame="A" data-id="dr1">Mở trả lời trong thread</button>
+    <button class="btn sm" type="button" data-act="back-view" data-frame="A">Quay lại Được nhắc tới</button>
+  </div>
+  <div class="scroll"><div class="app" id="app-A" data-frame="A"></div></div>
+  <ol class="notes">
+    <li><b>Đầu</b>: "Được nhắc tới" <code>text-lg</code> + dòng phụ "N chưa đọc · tin nhắc tên bạn trong mọi cuộc trò chuyện bạn đọc được". Không có bộ lọc ở đợt này.</li>
+    <li><b>Mục</b> là <code>&lt;a&gt;</code> trong <code>&lt;ul&gt;</code> theo từng ngày (tiêu đề ngày là <code>h4</code>, <code>aria-labelledby</code>): icon cuộc trò chuyện 20 + tên (13px) · chấm 8 accent + chữ ẩn "Chưa đọc" · (trả lời) icon thread 14 + "Trả lời trong thread của &lt;người viết tin gốc&gt;: “tin gốc…”" 12px mờ · Avatar 32 + tên + giờ · bong bóng tin, tối đa 3 dòng. Tin của bạn không bao giờ có ở đây.</li>
+    <li><b>@tên bạn</b> trong tin: chữ accent 600 trên nền <code>--color-accent-wash</code>, bo 4. @người khác chỉ chữ accent (như luồng). Áp dụng cả trong luồng chính và panel thread.</li>
+    <li><b>Đã đọc</b>: tên và chữ <code>--color-ink-muted</code>, không chấm. Mở mục thì chấm tắt ngay (lạc quan), pill đếm ở lối tắt giảm (fade 160ms).</li>
+    <li><b>Phân trang</b>: 25 mục mỗi lần theo con trỏ; cuối danh sách là "Tải thêm" (Button <code>sm</code>, như bảng thông báo; không tự cuộn vô hạn để bàn phím và trình đọc màn hình không bị dời chỗ). Đang tải thêm: 2 Skeleton dưới cùng. Hết: "Đã hiện hết tin nhắc tên bạn". Lỗi khi tải thêm: dòng "Không tải thêm được." + "Thử lại", giữ các mục đã có.</li>
+    <li><b>Realtime</b>: có tin nhắc mới khi đang mở danh sách thì chèn lên đầu (grow 220ms) với lớp phủ màu người gửi 2,4s; pill đếm tăng. Tin bị xoá hoặc bạn mất quyền đọc cuộc trò chuyện thì mục biến mất ở lần tải sau (server lọc).</li>
+    <li><b>Trạng thái</b>: Skeleton 4 mục; Rỗng: icon @ + "Chưa ai nhắc tên bạn. Khi có người gõ @tên bạn, tin sẽ hiện ở đây." + "Về Trang chủ"; Lỗi: "Không tải được tin nhắc tên bạn." + "Thử lại".</li>
+  </ol>
+</section>
+
+<!-- ============================ 2 STARRED ============================ -->
+<section class="screen" id="starred" aria-labelledby="h-starred">
+  <div class="screen-head">
+    <h2 id="h-starred">2 · Đã gắn sao (1440)</h2>
+    <p>Hai phần: <b>Cuộc trò chuyện</b> (hàng y như cột điều hướng, có nút sao để bỏ nhanh) và <b>Tin nhắn</b> (thẻ như Được nhắc tới, mới gắn sao trên). Bỏ gắn sao: mục thu lại, toast có Hoàn tác.</p>
+  </div>
+  <div class="demo"><span class="k">Trạng thái</span>
+    <div class="seg" role="group" aria-label="Trạng thái Đã gắn sao" data-seg="B"><button type="button" data-state="data" aria-pressed="true">Có mục</button><button type="button" data-state="nomsg" aria-pressed="false">Chưa gắn sao tin</button><button type="button" data-state="empty" aria-pressed="false">Rỗng cả hai</button><button type="button" data-state="loading" aria-pressed="false">Đang tải</button><button type="button" data-state="error" aria-pressed="false">Lỗi</button></div>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="demo-unstar-msg">Bỏ gắn sao tin đầu tiên</button>
+    <button class="btn sm" type="button" data-act="demo-unstar-conv">Bỏ gắn sao Nguyễn Thu Lan</button>
+    <button class="btn sm" type="button" data-act="back-view" data-frame="B">Quay lại Đã gắn sao</button>
+  </div>
+  <div class="scroll"><div class="app" id="app-B" data-frame="B"></div></div>
+  <ol class="notes">
+    <li><b>Cuộc trò chuyện</b>: tiêu đề phần "Cuộc trò chuyện" + pill số; hàng <code>.rl</code> của cột điều hướng (icon 24, tên, pill chưa đọc) + IconButton sao 28 luôn hiện (<code>aria-pressed="true"</code>, nhãn "Gắn sao &lt;tên&gt;", tooltip "Bỏ gắn sao"). Cùng thứ tự với mục "Đã gắn sao" trong cột điều hướng. Bấm hàng mở cuộc trò chuyện như bình thường.</li>
+    <li><b>Tin nhắn</b>: thẻ như Được nhắc tới nhưng không có chấm chưa đọc, chữ luôn <code>--color-ink</code>; giờ ghi theo §8 ("09:12", "Hôm qua 17:20", "03/10"); có đính kèm thì thêm "icon + 1 tệp". Xếp theo lúc gắn sao, mới nhất trên. Sao ở góc trên phải thẻ, nằm ngoài liên kết (không lồng nút trong link).</li>
+    <li><b>Bỏ gắn sao</b> ở đây: lạc quan, thẻ/hàng thu lại 220ms, toast "Đã bỏ gắn sao tin" / "Đã bỏ gắn sao “Nguyễn Thu Lan”" + <b>Hoàn tác</b> 5s (gắn lại, về đúng chỗ). Lỗi: hoàn lại + toast lỗi có "Thử lại".</li>
+    <li><b>Rỗng từng phần</b> (khung <code>--color-sunk</code> nhỏ, không chiếm cả màn): "Chưa gắn sao cuộc trò chuyện nào. Mở menu ⋯ của một cuộc trò chuyện rồi chọn Gắn sao." / "Chưa gắn sao tin nào. Trỏ vào một tin, chọn Thêm rồi Gắn sao tin." Rỗng cả hai: một Empty state lớn với cả hai câu. Tin bị xoá hoặc mất quyền đọc thì không còn trong danh sách.</li>
+    <li>Phần Tin nhắn phân trang như Được nhắc tới (25, "Tải thêm"); phần Cuộc trò chuyện không phân trang (lấy từ danh sách cuộc trò chuyện đã có <code>starred</code>).</li>
+  </ol>
+</section>
+
+<!-- ============================ 3 STARRING ============================ -->
+<section class="screen" id="starring" aria-labelledby="h-starring">
+  <div class="screen-head">
+    <h2 id="h-starring">3 · Gắn sao cuộc trò chuyện và tin (1440)</h2>
+    <p>Cuộc trò chuyện: menu ⋯ của hàng, menu tên nhóm ở đầu cuộc trò chuyện, nhấn giữ trên điện thoại. Tin: menu Thêm của thanh hover, nhấn giữ trên điện thoại. Mọi chỗ đọc cùng một trạng thái nên gắn ở đâu cũng thấy ngay ở mọi chỗ (thử ở khung này rồi xem khung 1 và 2).</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="demo-row-menu" data-k="hopdong">Menu ⋯ của Hợp đồng đối tác</button>
+    <button class="btn sm" type="button" data-act="demo-row-menu" data-k="doisoat">Menu ⋯ của Đối soát giao dịch (đã gắn sao)</button>
+    <button class="btn sm" type="button" data-act="demo-head-menu">Menu tên nhóm</button>
+    <button class="btn sm" type="button" data-act="demo-msg-menu" data-id="dx2">Menu Thêm của tin Vinh</button>
+    <button class="btn sm" type="button" data-act="demo-star-msg" data-id="dx2">Gắn sao / bỏ gắn sao tin Vinh</button>
+    <button class="btn sm" type="button" data-act="demo-fail">Gắn sao thất bại</button>
+  </div>
+  <div class="scroll"><div class="app" id="app-C" data-frame="C"></div></div>
+  <ol class="notes">
+    <li><b>Mục "Đã gắn sao" trong cột điều hướng</b>: tiêu đề như mục mặc định (chữ mờ, chevron, thu gọn được, thu gọn thì pill tổng chưa đọc), không có ⋯ và không có +. Không có hàng nào thì ẩn cả mục. Hàng trong mục không cần dấu sao (tiêu đề mục đã nói).</li>
+    <li><b>Menu ⋯ của hàng</b> chưa gắn sao: như cũ, "Gắn sao" đứng trước "Tắt thông báo". Hàng đã gắn sao: <b>Bỏ gắn sao · Tắt thông báo</b> (không có Chuyển tới mục; muốn chuyển thì bỏ sao trước). Gắn sao xong: hàng rời chỗ cũ, fade vào mục Đã gắn sao (mục tự mở), toast "Đã gắn sao “…”" + Hoàn tác. Bỏ sao: hàng về mục cũ (hoặc Tin nhắn trực tiếp / Nhóm), toast "Đã bỏ gắn sao “…”" + Hoàn tác.</li>
+    <li><b>Đầu cuộc trò chuyện</b>: tên nhóm/người là nút mở menu (đã có ở <code>notification-levels.html</code>); mục "Gắn sao" / "Bỏ gắn sao" trong đó. Đã gắn sao thì sau tên có sao 16 accent (chữ ẩn "Đã gắn sao").</li>
+    <li><b>Tin</b>: menu Thêm → "Gắn sao tin" / "Bỏ gắn sao tin" (mục thứ hai). Đã gắn sao: sao 12 accent sau giờ (cạnh "Đã ghim" nếu có), <code>role="img"</code> + nhãn "Bạn đã gắn sao". Không bấm được để tránh bỏ nhầm. Gắn xong toast "Đã gắn sao tin" + <b>Xem</b> (mở Đã gắn sao); bỏ: "Đã bỏ gắn sao tin" + Hoàn tác.</li>
+    <li>Mọi thao tác gắn sao là lạc quan; lỗi thì hoàn lại + toast lỗi viền danger "Không gắn sao được. Kiểm tra kết nối rồi thử lại." + Thử lại.</li>
+  </ol>
+</section>
+
+<!-- ============================ 4 BOARD ============================ -->
+<section class="screen" id="board" aria-labelledby="h-board">
+  <div class="screen-head">
+    <h2 id="h-board">4 · Menu, dấu sao, toast</h2>
+    <p>Các mảnh đứng yên để đối chiếu khi dựng.</p>
+  </div>
+  <div class="scroll"><div class="board" id="board-el"></div></div>
+</section>
+
+<!-- ============================ 5 PHONE ============================ -->
+<section class="screen" id="phone" aria-labelledby="h-phone">
+  <div class="screen-head">
+    <h2 id="h-phone">5 · Điện thoại (390)</h2>
+    <p>Tab Tin nhắn là Trang chủ, nên hai lối tắt còn lại thành hai ô ở đầu danh sách. Mỗi lối tắt mở màn toàn màn có nút quay lại. Nhấn giữ hàng hoặc tin mở sheet có Gắn sao.</p>
+  </div>
+  <div class="demo"><span class="k">Trạng thái</span>
+    <div class="seg" role="group" aria-label="Trạng thái trên điện thoại" data-seg="P"><button type="button" data-state="data" aria-pressed="true">Có mục</button><button type="button" data-state="loading" aria-pressed="false">Đang tải</button><button type="button" data-state="empty" aria-pressed="false">Rỗng</button><button type="button" data-state="error" aria-pressed="false">Lỗi</button></div>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-act="p-press-conv" data-k="doisoat">Nhấn giữ Đối soát giao dịch</button>
+    <button class="btn sm" type="button" data-act="p-press-conv" data-k="yen">Nhấn giữ Phạm Hải Yến</button>
+    <button class="btn sm" type="button" data-act="p-open" data-id="dm1">Chạm tin nhắc đầu tiên</button>
+    <button class="btn sm" type="button" data-act="p-close">Đóng</button>
+  </div>
+  <div class="phones">
+    <div class="ph"><small>Tin nhắn · lối tắt và Đã gắn sao</small>
+      <div class="phone" id="P1">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="topbar"><span class="brand"><b>Nexus</b> · Khối Vận hành</span><button class="ibtn" type="button" aria-label="Tìm kiếm"><svg class="i"><use href="#i-search"/></svg></button></div>
+        <div class="pbody" id="P1-body"></div>
+        <nav class="tabbar" aria-label="Điều hướng di động"><a href="#phone" aria-current="page"><span class="ic"><svg class="i"><use href="#i-msg"/></svg><span class="pill count">5</span></span>Tin nhắn</a><a href="#phone"><span class="ic"><svg class="i"><use href="#i-folder"/></svg></span>Tài liệu</a><a href="#phone"><span class="ic"><svg class="i"><use href="#i-check"/></svg><span class="pill count">2</span></span>Phê duyệt</a><a href="#phone"><span class="ic"><svg class="i"><use href="#i-grid"/></svg></span>Thêm</a></nav>
+        <div class="scrim" data-act="p-close" hidden></div>
+        <div class="sheet" id="P1-sheet" role="dialog" aria-modal="true" aria-labelledby="P1-sheet-t" hidden></div>
+        <div class="ptoasts" id="P1-toasts" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="ph"><small>Được nhắc tới</small>
+      <div class="phone" id="P2" style="grid-template-rows:auto auto 1fr">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="topbar chat"><button class="ibtn" type="button" aria-label="Quay lại Tin nhắn"><svg class="i"><use href="#i-back"/></svg></button><span class="ti"><b>Được nhắc tới</b><small id="P2-sub"></small></span></div>
+        <div class="pbody" id="P2-body"></div>
+        <div class="full" id="P2-full" hidden></div>
+        <div class="ptoasts" id="P2-toasts" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="ph"><small>Đã gắn sao</small>
+      <div class="phone" id="P3" style="grid-template-rows:auto auto 1fr">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="topbar chat"><button class="ibtn" type="button" aria-label="Quay lại Tin nhắn"><svg class="i"><use href="#i-back"/></svg></button><span class="ti"><b>Đã gắn sao</b><small>Chỉ bạn thấy</small></span></div>
+        <div class="pbody" id="P3-body"></div>
+        <div class="ptoasts" id="P3-toasts" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+    <div class="ph"><small>Nhấn giữ tin · Gắn sao tin</small>
+      <div class="phone" id="P4" style="grid-template-rows:auto auto 1fr">
+        <div class="sbar"><span>9:41</span><span></span></div>
+        <div class="topbar chat"><button class="ibtn" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><span class="sp s28" style="--p:var(--color-person-4)">Đ</span><span class="ti"><b>Đối soát giao dịch</b><small>14 thành viên</small></span></div>
+        <div class="pbody" id="P4-body"></div>
+        <div class="scrim fade"></div>
+        <div class="sheet up" role="dialog" aria-modal="true" aria-label="Thao tác với tin của Lê Quang Vinh" id="P4-sheet"></div>
+        <div class="ptoasts" id="P4-toasts" role="status" aria-live="polite"></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Hai ô lối tắt</b> (cao 48, bo 14, <code>--color-raised</code>) đầu danh sách: "Được nhắc tới" + pill đếm chưa đọc, "Đã gắn sao". Dưới là mục "Đã gắn sao" (nếu có), rồi mục của bạn, Tin nhắn trực tiếp, Nhóm như cũ. Hàng đã gắn sao không có dấu sao (tiêu đề mục đã nói); ở nơi khác (kết quả tìm kiếm) có sao 12 sau tên.</li>
+    <li><b>Màn Được nhắc tới / Đã gắn sao</b>: toàn màn trượt từ phải như điều hướng thường, thanh trên có Quay lại; mục rộng hết màn, padding 16, chạm cả mục; sao ở thẻ là IconButton 44.</li>
+    <li><b>Chạm một mục</b>: mở luồng (hoặc thread toàn màn nếu là trả lời), cuộn tới tin, viền accent loé 2,4s; quay lại về đúng chỗ trong danh sách, mục đã thành đã đọc.</li>
+    <li><b>Sheet nhấn giữ hàng</b>: hàng đã gắn sao → Bỏ gắn sao · Tắt thông báo; hàng chưa gắn sao → Chuyển tới mục · Mục mới… · Gắn sao · Tắt thông báo. <b>Sheet nhấn giữ tin</b>: "Gắn sao tin" / "Bỏ gắn sao tin" sau Theo dõi thread. Chọn xong sheet đóng, toast nổi trên thanh đáy.</li>
+  </ol>
+</section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var root = document.documentElement;
+  function $(id) { return document.getElementById(id); }
+  function reduced() { return root.classList.contains('reduce') || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  function replay(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function frag(html) { var t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild; }
+  function ic(id, cls) { return '<svg class="i' + (cls ? ' ' + cls : '') + '" aria-hidden="true"><use href="#' + id + '"/></svg>'; }
+
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-theme-set');
+      if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+      document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    });
+  });
+  $('reduce').addEventListener('change', function (e) { root.classList.toggle('reduce', e.target.checked); });
+
+  // ---------------- data ----------------
+  var CONV = {
+    doisoat: { name: 'Đối soát giao dịch', kind: 'sp', p: 4, ini: 'Đ', sec: 'q4', n: 3, sub: '14 thành viên' },
+    hopdong: { name: 'Hợp đồng đối tác', kind: 'sp', p: 8, ini: 'H', sec: 'q4', n: 0, sub: '9 thành viên' },
+    lan: { name: 'Nguyễn Thu Lan', kind: 'dm', p: 6, ini: 'TL', sec: 'q4', n: 0, sub: 'Kế toán viên' },
+    vinh: { name: 'Lê Quang Vinh', kind: 'dm', p: 1, ini: 'QV', sec: 'noibo', n: 1, sub: 'Kế toán tổng hợp' },
+    vanhanh: { name: 'Vận hành chung', kind: 'sp', p: 2, ini: 'V', sec: 'noibo', n: 0, sub: '32 thành viên' },
+    yen: { name: 'Phạm Hải Yến', kind: 'dm', p: 3, ini: 'HY', sec: 'dm', n: 1, sub: 'Chuyên viên thanh toán' },
+    thongbao: { name: 'Thông báo khối', kind: 'sp', p: 5, ini: 'T', sec: 'sp', n: 0, sub: '120 thành viên' }
+  };
+  var SECS = [['q4', 'Quyết toán quý 4', true], ['noibo', 'Nội bộ kế toán', true], ['dm', 'Tin nhắn trực tiếp'], ['sp', 'Nhóm']];
+  var P = { 'Lê Quang Vinh': [1, 'QV'], 'Trần Minh Đức': [5, 'MĐ'], 'Nguyễn Thu Lan': [6, 'TL'], 'Đỗ Văn Khải': [8, 'VK'], 'Trần Bảo Ngọc': [2, 'BN'], 'Phạm Hải Yến': [3, 'HY'] };
+  // day: divider label; when: short label for the starred list (DESIGN.md §8)
+  var MSG = {
+    dm0: { c: 'doisoat', who: 'Lê Quang Vinh', day: 'Thứ Ba, 06/10', t: '10:12', when: '06/10', x: 'Số dư tài khoản 1121 đã khớp, @me chị ký xác nhận giúp em nhé.', at: 1 },
+    dx1: { c: 'doisoat', who: 'Trần Minh Đức', day: 'Hôm nay', t: '09:12', when: '09:12', x: 'File đối soát ngày 08/10 đã lên Tài liệu, lệch 3 giao dịch so với sao kê ngân hàng.', ax: '1 tệp', pin: 1 },
+    dr0: { c: 'doisoat', parent: 'dx1', who: 'Lê Quang Vinh', day: 'Hôm nay', t: '09:20', x: 'Em kiểm tra giao dịch thứ nhất, lệch do phí liên ngân hàng.' },
+    dr1: { c: 'doisoat', parent: 'dx1', who: 'Nguyễn Thu Lan', day: 'Hôm nay', t: '09:33', x: 'Giao dịch thứ hai khớp với lệnh hoàn tiền ngày 07/10, @me chị duyệt bút toán điều chỉnh giúp em.', at: 1, unread: 1 },
+    dr2: { c: 'doisoat', parent: 'dx1', who: 'Trần Minh Đức', day: 'Hôm nay', t: '09:35', x: 'Hai giao dịch còn lại anh đang hỏi ngân hàng.' },
+    dme: { c: 'doisoat', mine: 1, day: 'Hôm nay', t: '09:24', x: 'Phí chuyển khoản liên ngân hàng hạch toán vào tài khoản 6427.' },
+    dx2: { c: 'doisoat', who: 'Lê Quang Vinh', day: 'Hôm nay', t: '09:31', when: '09:31', x: 'Ảnh chụp sao kê 3 giao dịch lệch, mọi người đối chiếu giúp em với lệnh hoàn tiền.' },
+    dm1: { c: 'doisoat', who: 'Lê Quang Vinh', day: 'Hôm nay', t: '09:41', x: '@me chị xem giúp em 3 giao dịch lệch trước 10:00 nhé.', at: 1, unread: 1 },
+    vx1: { c: 'vanhanh', mine: 1, day: 'Hôm qua', t: '16:02', when: 'Hôm qua 16:02', x: 'Lịch trực Tết đã cập nhật trong Tài liệu, thư mục Vận hành / Lịch trực.' },
+    vm1: { c: 'vanhanh', who: 'Đỗ Văn Khải', day: 'Hôm nay', t: '07:58', x: '@me chị duyệt giúp lịch bảo trì hệ thống thanh toán cuối tuần.', at: 1 },
+    vm2: { c: 'vanhanh', who: 'Đỗ Văn Khải', day: 'Hôm nay', t: '09:44', x: '@me chị xem lại giúp em số ca trực đêm thứ Bảy nhé.', at: 1, unread: 1, hidden: 1 },
+    hx0: { c: 'hopdong', who: 'Đỗ Văn Khải', day: '29/09/2026', t: '14:05', x: '@me chị xem điều khoản thanh toán trong bản nháp hợp đồng giúp em.', at: 1 },
+    hx1: { c: 'hopdong', who: 'Đỗ Văn Khải', day: 'Hôm qua', t: '15:10', x: 'Bản ký của ngân hàng đối tác đã về, em để trong Tài liệu / Pháp chế.' },
+    hr1: { c: 'hopdong', parent: 'hx1', who: 'Trần Bảo Ngọc', day: 'Hôm qua', t: '17:05', x: 'Phụ lục 2 em đã đối chiếu, còn điều khoản phí phạt cần @me xác nhận.', at: 1 },
+    hr2: { c: 'hopdong', parent: 'hx1', who: 'Nguyễn Thu Lan', day: 'Hôm qua', t: '17:20', when: 'Hôm qua 17:20', x: 'Mẫu hợp đồng chuẩn 2026 em để ở Tài liệu / Pháp chế / Mẫu.' },
+    tx0: { c: 'thongbao', who: 'Trần Minh Đức', day: '03/10/2026', t: '08:30', x: '@me chị tổng hợp giúp anh chi phí quý 3 trước thứ Hai.', at: 1 },
+    tx1: { c: 'thongbao', who: 'Trần Minh Đức', day: 'Hôm qua', t: '16:20', x: 'Các trưởng bộ phận gửi lịch nghỉ lễ trước thứ Sáu: @me, @khai.', at: 1 },
+    yx1: { c: 'yen', who: 'Phạm Hải Yến', day: '03/10/2026', t: '11:15', when: '03/10', x: 'Hạn nộp đề nghị tạm ứng tháng 10 là ngày 15, quá hạn chuyển sang kỳ sau.' },
+    qx1: { c: 'vinh', who: 'Lê Quang Vinh', day: '01/10/2026', t: '17:40', x: '@me em gửi chị bảng lương tháng 9 bản cuối.', at: 1 },
+    lx1: { c: 'lan', who: 'Nguyễn Thu Lan', day: 'Hôm nay', t: '09:04', x: 'Dạ xong rồi ạ ✅' }
+  };
+  var MAIN = { doisoat: ['dm0', 'dx1', 'dme', 'dx2', 'dm1'], vanhanh: ['vx1', 'vm1', 'vm2'], hopdong: ['hx0', 'hx1'], thongbao: ['tx0', 'tx1'], yen: ['yx1'], vinh: ['qx1'], lan: ['lx1'] };
+  var THREAD = { dx1: ['dr0', 'dr1', 'dr2'], hx1: ['hr1', 'hr2'] };
+  var MORDER = ['vm2', 'dm1', 'dr1', 'vm1', 'hr1', 'tx1', 'dm0', 'tx0', 'qx1', 'hx0'];
+  var PAGE1 = 7; // first page (6 visible + realtime slot) ; rest arrive with "Tải thêm"
+  var ST = { conv: { doisoat: 1, lan: 1 }, msg: { dx1: 1, hr2: 1, vx1: 1, yx1: 1 }, sorder: ['dx1', 'hr2', 'vx1', 'yx1'], corder: ['doisoat', 'lan'], collapsed: {} };
+  var F = { A: { view: 'mentions', state: 'data', more: 0 }, B: { view: 'starred', state: 'data' }, C: { view: 'conv', k: 'doisoat' } };
+  var PH = { state: 'data' };
+
+  function mentions() { return MORDER.filter(function (id) { return !MSG[id].hidden; }); }
+  function unreadMentions() { return mentions().filter(function (id) { return MSG[id].unread; }).length; }
+  function starredMsgs() { return ST.sorder.filter(function (id) { return ST.msg[id]; }); }
+  function starredConvs() { return ST.corder.filter(function (k) { return ST.conv[k]; }); }
+  function text(x) {
+    return esc(x).replace(/@me/g, '<span class="mention self">@Lê Thị Hoa</span>').replace(/@khai/g, '<span class="mention">@Đỗ Văn Khải</span>');
+  }
+  function plain(x) { return x.replace(/@me/g, '@Lê Thị Hoa').replace(/@khai/g, '@Đỗ Văn Khải'); }
+  function cicon(k, size) { var c = CONV[k]; return '<span class="' + (c.kind === 'dm' ? 'av' : 'sp') + ' ' + size + '" style="--p:var(--color-person-' + c.p + ')" aria-hidden="true">' + c.ini + '</span>'; }
+  function pav(who, size, extra) { var p = P[who] || [7, 'TH']; return '<span class="av' + (size ? ' ' + size : '') + '" style="--p:var(--color-person-' + p[0] + ')' + (extra ? ';' + extra : '') + '" aria-hidden="true">' + p[1] + '</span>'; }
+  function trunc(s, n) { s = plain(s); return s.length > n ? s.slice(0, n - 1) + '…' : s; }
+
+  // ---------------- MentionItem / StarredMessage ----------------
+  function itemHTML(id, kind, phone) {
+    var m = MSG[id], c = CONV[m.c], unread = kind === 'mention' && m.unread, par = m.parent ? MSG[m.parent] : null;
+    var cls = 'mi' + (unread ? ' unread' : '') + (kind === 'star' ? ' st' : '') + (m.mine ? ' mine' : '');
+    var h = '<li class="mi-w' + (kind === 'star' ? ' has-star' : '') + '" data-mid="' + id + '">'
+      + '<a class="' + cls + '" href="#" data-act="open" data-id="' + id + '">'
+      + '<span class="ci">' + cicon(m.c, phone ? 's24' : 's24') + '</span>'
+      + '<span class="src"><span class="cn">' + esc(c.name) + '</span></span>'
+      + '<span class="end">' + (unread ? '<span class="dot" aria-hidden="true"></span><span class="sr">Chưa đọc</span>' : '') + '</span>';
+    var row = 2;
+    if (par) { h += '<span class="ctx">' + ic('i-threads') + '<span>Trả lời trong thread của ' + esc(par.who || 'bạn') + ': “' + esc(trunc(par.x, 60)) + '”</span></span>'; row = 3; }
+    h += (m.mine ? '<span class="av" style="--p:var(--color-person-7);grid-row:' + row + '" aria-hidden="true">TH</span>' : pav(m.who, '', 'grid-row:' + row))
+      + '<span class="bd" style="grid-row:' + row + '"><span class="who"><b>' + (m.mine ? 'Bạn' : esc(m.who)) + '</b><time>' + esc(kind === 'star' ? m.when : m.t) + '</time></span>'
+      + '<span class="txt">' + text(m.x) + '</span>'
+      + (m.ax ? '<span class="ax">' + ic('i-clip', 'xs') + esc(m.ax) + '</span>' : '') + '</span></a>';
+    if (kind === 'star') h += '<button class="ibtn star" type="button" aria-pressed="true" aria-label="Gắn sao tin của ' + esc(m.mine ? 'bạn' : m.who) + '" title="Bỏ gắn sao" data-act="star-msg" data-id="' + id + '">' + ic('i-star', 's') + '</button>';
+    return h + '</li>';
+  }
+  function skeleton(n) {
+    var h = ''; for (var i = 0; i < n; i++) h += '<div class="sk-mi" aria-hidden="true"><span class="sk c"></span><span class="sk" style="width:' + (30 + (i * 13) % 25) + '%"></span><span class="sk" style="width:22%"></span><span class="sk b"></span></div>';
+    return h;
+  }
+  function emptyHTML(icon, line, btn, act) { return '<div class="empty">' + ic(icon) + '<p>' + line + '</p>' + (btn ? '<button class="btn sm" type="button"' + (act ? ' data-act="' + act + '"' : '') + '>' + btn + '</button>' : '') + '</div>'; }
+
+  function mentionsBody(f, phone) {
+    var st = f.state, uid = phone ? 'p' : 'd';
+    if (st === 'loading') return '<div class="vwrap" aria-busy="true"><span class="sr">Đang tải</span>' + skeleton(4) + '</div>';
+    if (st === 'empty') return emptyHTML('i-at', 'Chưa ai nhắc tên bạn. Khi có người gõ @tên bạn, tin sẽ hiện ở đây.', (phone ? 'Về Tin nhắn' : 'Về Trang chủ'));
+    if (st === 'error') return emptyHTML('i-alert', 'Không tải được tin nhắc tên bạn.', 'Thử lại', 'retry');
+    var ids = mentions(), lim = f.more ? ids.length : Math.min(ids.length, PAGE1 - (MSG.vm2.hidden ? 1 : 0)), shown = ids.slice(0, lim);
+    var h = '<div class="vwrap">', day = null, n = 0;
+    shown.forEach(function (id) {
+      var m = MSG[id];
+      if (m.day !== day) { if (day !== null) h += '</ul>'; day = m.day; n++; h += '<h4 class="dd" id="md-' + uid + n + '">' + esc(day) + '</h4><ul class="mlist" aria-labelledby="md-' + uid + n + '">'; }
+      h += itemHTML(id, 'mention', phone);
+    });
+    h += '</ul>';
+    if (f.loadingMore) h += skeleton(2);
+    else if (!f.more) h += '<div class="vmore"><button class="btn sm" type="button" data-act="load-more">Tải thêm</button></div>';
+    else h += '<div class="vmore">Đã hiện hết tin nhắc tên bạn</div>';
+    return h + '</div>';
+  }
+  function starRowHTML(k, phone) {
+    var c = CONV[k];
+    if (phone) return '<div class="rlw"><a class="conv' + (c.n ? ' unread' : '') + '" href="#" data-act="open-conv" data-k="' + k + '">' + cicon(k, 's44') + '<span style="min-width:0;display:grid"><span class="nm"><span>' + esc(c.name) + '</span></span><span class="pv">' + esc(previewOf(k)) + '</span></span><span class="meta">' + (c.n ? '<span class="pill count" aria-label="' + c.n + ' chưa đọc">' + c.n + '</span>' : '') + '</span></a>'
+      + '<button class="ibtn star" type="button" aria-pressed="true" aria-label="Gắn sao ' + esc(c.name) + '" title="Bỏ gắn sao" data-act="star-conv" data-k="' + k + '">' + ic('i-star') + '</button></div>';
+    return '<div class="rlw"><a class="rl' + (c.n ? ' unread' : '') + '" href="#" data-act="open-conv" data-k="' + k + '">' + cicon(k, 's24') + '<span class="t">' + esc(c.name) + '</span><span class="end">' + (c.n ? '<span class="pill count" aria-label="' + c.n + ' chưa đọc">' + c.n + '</span>' : '') + '</span></a>'
+      + '<button class="ibtn star" type="button" style="width:28px;height:28px;top:4px" aria-pressed="true" aria-label="Gắn sao ' + esc(c.name) + '" title="Bỏ gắn sao" data-act="star-conv" data-k="' + k + '">' + ic('i-star', 's') + '</button></div>';
+  }
+  function previewOf(k) { var ids = MAIN[k].filter(function (id) { return !MSG[id].hidden; }), m = MSG[ids[ids.length - 1]]; return (m.mine ? 'Bạn' : m.who) + ': ' + plain(m.x); }
+  function miniEmpty(line) { return '<p style="margin:0 4px;padding:12px 14px;border-radius:12px;background:var(--color-sunk);color:var(--color-ink-muted);font-size:0.8125rem">' + line + '</p>'; }
+  function starredBody(f, phone) {
+    var st = f.state, cs = starredConvs(), ms = starredMsgs(), uid = phone ? 'p' : 'd';
+    if (st === 'nomsg') ms = [];
+    if (st === 'empty') { cs = []; ms = []; }
+    if (st === 'loading') return '<div class="vwrap" aria-busy="true"><span class="sr">Đang tải</span><div class="hsec"><span class="sk" style="width:120px"></span></div>' + skeleton(3) + '</div>';
+    if (st === 'error') return emptyHTML('i-alert', 'Không tải được mục đã gắn sao.', 'Thử lại', 'retry');
+    if (!cs.length && !ms.length) return emptyHTML('i-star', 'Chưa gắn sao gì. Gắn sao cuộc trò chuyện bằng menu ⋯ của hàng, gắn sao tin bằng Thêm → Gắn sao tin.', (phone ? 'Về Tin nhắn' : 'Về Trang chủ'));
+    var h = '<div class="vwrap">'
+      + '<div class="hsec"><h4 id="sc-' + uid + '">Cuộc trò chuyện</h4><span class="pill idle tnum">' + cs.length + '</span></div>';
+    h += cs.length ? '<div class="srows" role="list" aria-labelledby="sc-' + uid + '">' + cs.map(function (k) { return starRowHTML(k, phone).replace('<div class="rlw">', '<div class="rlw" role="listitem" data-k="' + k + '">'); }).join('') + '</div>'
+      : miniEmpty('Chưa gắn sao cuộc trò chuyện nào. ' + (phone ? 'Nhấn giữ một cuộc trò chuyện' : 'Mở menu ⋯ của một cuộc trò chuyện') + ' rồi chọn Gắn sao.');
+    h += '<div class="hsec"><h4 id="sm-' + uid + '">Tin nhắn</h4><span class="pill idle tnum">' + ms.length + '</span></div>';
+    h += ms.length ? '<ul class="mlist" aria-labelledby="sm-' + uid + '">' + ms.map(function (id) { return itemHTML(id, 'star', phone); }).join('') + '</ul>'
+      : miniEmpty('Chưa gắn sao tin nào. ' + (phone ? 'Nhấn giữ một tin' : 'Trỏ vào một tin, chọn Thêm') + ' rồi Gắn sao tin.');
+    return h + '</div>';
+  }
+
+  // ---------------- desktop frame ----------------
+  function navHTML(fk) {
+    var f = F[fk], cur = f.view === 'conv' ? f.k : f.view, um = unreadMentions(), home = Object.keys(CONV).reduce(function (s, k) { return s + CONV[k].n; }, 0);
+    var h = '<a class="rl" href="#" data-act="nav-home"><svg class="i s h"><use href="#i-home"/></svg><span class="t">Trang chủ</span><span class="end"><span class="pill count" aria-label="' + home + ' chưa đọc">' + home + '</span></span></a>'
+      + '<a class="rl" href="#" data-act="nav" data-view="mentions"' + (cur === 'mentions' ? ' aria-current="page"' : '') + '><svg class="i s h"><use href="#i-at"/></svg><span class="t">Được nhắc tới</span><span class="end">' + (um ? '<span class="pill count fade" aria-label="' + um + ' tin nhắc tên bạn chưa đọc">' + um + '</span>' : '') + '</span></a>'
+      + '<a class="rl" href="#" data-act="nav" data-view="starred"' + (cur === 'starred' ? ' aria-current="page"' : '') + '><svg class="i s h"><use href="#i-star"/></svg><span class="t">Đã gắn sao</span></a>';
+    var groups = [['star', 'Đã gắn sao']].concat(SECS);
+    groups.forEach(function (s) {
+      var keys = s[0] === 'star' ? starredConvs() : Object.keys(CONV).filter(function (k) { return CONV[k].sec === s[0] && !ST.conv[k]; });
+      if (s[0] === 'star' && !keys.length) return;
+      var col = ST.collapsed[s[0]], tot = keys.reduce(function (a, k) { return a + CONV[k].n; }, 0), gid = 'g-' + fk + '-' + s[0];
+      h += '<div class="grp" data-sec="' + s[0] + '"><div class="sec' + (s[2] ? ' usr' : '') + '"><button class="sec-t" type="button" aria-expanded="' + !col + '" aria-controls="' + gid + '" data-act="sec-toggle" data-sec="' + s[0] + '">' + ic('i-down', 's') + '<span class="nm">' + esc(s[1]) + '</span>' + (tot ? '<span class="pill count tnum">' + tot + '</span>' : '') + '</button></div>'
+        + '<div class="grp-b" id="' + gid + '" role="list"' + (col ? ' hidden' : '') + '>';
+      keys.forEach(function (k) {
+        var c = CONV[k];
+        h += '<div class="rlw" role="listitem" data-k="' + k + '"><a class="rl' + (c.n ? ' unread' : '') + '" href="#" data-act="open-conv" data-k="' + k + '"' + (cur === k ? ' aria-current="page"' : '') + '>' + cicon(k, 's24') + '<span class="t">' + esc(c.name) + '</span><span class="end">' + (c.n ? '<span class="pill count" aria-label="' + c.n + ' chưa đọc">' + c.n + '</span>' : '') + '</span></a>'
+          + '<button class="ibtn more" type="button" aria-label="Tuỳ chọn cho ' + esc(c.name) + '" aria-haspopup="menu" aria-expanded="false" data-act="row-menu" data-k="' + k + '">' + ic('i-more-h', 's') + '</button></div>';
+      });
+      if (!keys.length) h += '<p class="sec-hint">Chưa có cuộc trò chuyện nào. Mở menu ⋯ của một cuộc trò chuyện để chuyển vào.</p>';
+      h += '</div></div>';
+    });
+    return h;
+  }
+  function msgHTML(id, opt) {
+    var m = MSG[id], star = ST.msg[id], tid = THREAD[id];
+    var meta = (m.pin ? '<span class="pinned">' + ic('i-pin') + 'Đã ghim</span>' : '') + (star ? '<span class="smark" role="img" aria-label="Bạn đã gắn sao" title="Bạn đã gắn sao">' + ic('i-star') + '</span>' : '');
+    var hact = opt && opt.phone ? '' : '<div class="hact" role="toolbar" aria-label="Thao tác với tin">'
+      + '<button class="ibtn" type="button" aria-label="Bày tỏ cảm xúc" title="Bày tỏ cảm xúc">' + ic('i-smile-plus', 's') + '</button>'
+      + (opt && opt.inPanel ? '' : '<button class="ibtn" type="button" aria-label="Trả lời trong thread" title="Trả lời trong thread">' + ic('i-reply-thread', 's') + '</button>')
+      + '<button class="ibtn" type="button" aria-label="Ghim" title="Ghim">' + ic('i-pin', 's') + '</button>'
+      + (m.mine ? '<button class="ibtn" type="button" aria-label="Sửa tin" title="Sửa tin">' + ic('i-pen', 's') + '</button>' : '')
+      + '<button class="ibtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Thêm" title="Thêm" data-act="msg-more" data-id="' + id + '">' + ic('i-more-h', 's') + '</button></div>';
+    var ts = tid && !(opt && opt.inPanel) ? '<button class="tsum" type="button" data-act="open-thread" data-id="' + id + '" aria-label="Thread, ' + tid.length + ' trả lời"><span class="faces">' + tid.slice(-3).reverse().map(function (r) { return pav(MSG[r].who, 's20'); }).join('') + '</span><span class="n">' + tid.length + ' trả lời</span><span>Lần cuối ' + MSG[tid[tid.length - 1]].t + '</span></button>' : '';
+    if (m.mine) return '<div class="m mine" data-mid="' + id + '"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>' + m.t + '</time>' + meta + '</div><p class="txt">' + text(m.x) + '</p>' + ts + '</div>' + hact + '</div>';
+    return '<div class="m" data-mid="' + id + '">' + pav(m.who) + '<div class="mc"><div class="who"><b>' + esc(m.who) + '</b><time>' + m.t + '</time>' + meta + '</div><p class="txt">' + text(m.x) + '</p>' + ts + '</div>' + hact + '</div>';
+  }
+  function streamHTML(k, opt) {
+    var day = null, h = '';
+    MAIN[k].forEach(function (id) { var m = MSG[id]; if (m.hidden) return; if (m.day !== day) { day = m.day; h += '<div class="dd" role="separator">' + esc(day) + '</div>'; } h += msgHTML(id, opt); });
+    return h;
+  }
+  function convHead(k, fk) {
+    var c = CONV[k];
+    return '<div class="chead">' + cicon(k, 's40') + '<div class="t"><h3><button class="ttl" type="button" aria-haspopup="menu" aria-expanded="false" data-act="head-menu" data-k="' + k + '"><span>' + esc(c.name) + '</span>' + (ST.conv[k] ? '<span class="smark" role="img" aria-label="Đã gắn sao">' + ic('i-star') + '</span>' : '') + ic('i-down', 's chev') + '</button></h3><div class="sub">' + esc(c.sub) + '</div></div>'
+      + '<div class="end"><button class="ibtn" type="button" aria-label="Tìm trong cuộc trò chuyện" title="Tìm">' + ic('i-search') + '</button><button class="ibtn" type="button" aria-label="Thread" title="Thread">' + ic('i-threads') + '</button><button class="ibtn" type="button" aria-label="Thông tin" title="Thông tin">' + ic('i-info') + '</button></div></div>';
+  }
+  function contentHTML(fk) {
+    var f = F[fk];
+    if (f.view === 'mentions') {
+      var um = unreadMentions();
+      return '<div class="content"><div class="chead"><div class="t"><h3>Được nhắc tới</h3><div class="sub">' + (f.state === 'data' && um ? um + ' chưa đọc · ' : '') + 'Tin nhắc tên bạn trong mọi cuộc trò chuyện bạn đọc được</div></div></div><div class="vbody" data-vbody>' + mentionsBody(f) + '</div></div>';
+    }
+    if (f.view === 'starred') return '<div class="content"><div class="chead"><div class="t"><h3>Đã gắn sao</h3><div class="sub">Cuộc trò chuyện và tin bạn đã gắn sao · chỉ bạn thấy</div></div></div><div class="vbody" data-vbody>' + starredBody(f) + '</div></div>';
+    var k = f.k;
+    return '<div class="content" style="grid-template-rows:auto minmax(0,1fr) auto">' + convHead(k, fk) + '<div class="convo"><div class="stream" data-stream role="log" aria-label="Tin nhắn trong ' + esc(CONV[k].name) + '">' + streamHTML(k) + '</div></div><div class="composer"><div class="cin">Tin nhắn cho ' + esc(CONV[k].name) + '</div></div></div>';
+  }
+  function panelHTML(pid, target) {
+    var m = MSG[pid], ids = THREAD[pid];
+    return '<aside class="panel enter" aria-label="Thread"><div class="ph"><div><h4>Thread</h4><div class="sub">' + esc(CONV[m.c].name) + '</div></div><button class="ibtn" type="button" aria-label="Đóng thread" data-act="close-panel">' + ic('i-x') + '</button></div>'
+      + '<div class="pb" data-pb>' + msgHTML(pid, { inPanel: 1 }) + '<div class="dd" role="separator">' + ids.length + ' trả lời</div>' + ids.map(function (r) { return msgHTML(r, { inPanel: 1 }); }).join('') + '</div></aside>';
+  }
+  function renderFrame(fk) {
+    var app = $('app-' + fk), f = F[fk];
+    app.classList.toggle('with-panel', !!f.panel);
+    app.innerHTML = '<aside class="side" aria-label="Điều hướng chính"><div class="ws"><button class="ibtn" type="button" aria-label="Thu gọn menu chính">' + ic('i-sidebar') + '</button><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div></div>'
+      + '<nav class="nav" aria-label="Khu vực"><a href="#" aria-current="page">' + ic('i-msg') + 'Tin nhắn<span class="pill count tnum">5</span></a><a href="#">' + ic('i-folder') + 'Tài liệu</a><a href="#">' + ic('i-check') + 'Phê duyệt<span class="pill count tnum">2</span></a><a href="#">' + ic('i-box') + 'Tài sản</a><a href="#">' + ic('i-users') + 'Danh bạ</a></nav>'
+      + '<div class="nav"><a href="#">' + ic('i-gear') + 'Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH</span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div></div></aside>'
+      + '<div class="cnav" data-cnav><div class="top"><button class="newchat" type="button">' + ic('i-pen') + 'Trò chuyện mới</button></div><nav class="body" aria-label="Cuộc trò chuyện">' + navHTML(fk) + '</nav></div>'
+      + contentHTML(fk) + (f.panel ? panelHTML(f.panel, f.target) : '')
+      + '<div class="toasts" data-toasts role="status" aria-live="polite"></div>';
+    if (f.view === 'conv') { var s = app.querySelector('[data-stream]'); s.scrollTop = s.scrollHeight; }
+    if (f.view === 'conv' && f.k === 'doisoat' && fk === 'C' && !f.noHov) { var hm = app.querySelector('[data-mid="dx2"]'); if (hm) hm.classList.add('hov'); }
+  }
+  function renderAll() { ['A', 'B', 'C'].forEach(renderFrame); renderBoard(); renderPhones(); }
+
+  function toastIn(box, html, opt) {
+    if (!box) return;
+    var t = frag('<div class="toast enter' + (opt && opt.err ? ' err' : '') + '">' + html + '</div>');
+    box.appendChild(t);
+    while (box.children.length > 3) box.removeChild(box.firstElementChild);
+    setTimeout(function () { if (t.parentNode) t.remove(); }, (opt && opt.ms) || 5000);
+    return t;
+  }
+  var OK = ic('i-ok', 'ok'), BAD = ic('i-alert', 'bad');
+  function boxOf(el) { var app = el && el.closest('.app, .phone'); return app ? (app.querySelector('[data-toasts]') || app.querySelector('.ptoasts')) : null; }
+
+  // ---------------- open a mention / starred message ----------------
+  function openMsg(fk, id) {
+    var m = MSG[id], f = F[fk], pid = m.parent;
+    m.unread = 0; f.view = 'conv'; f.k = m.c; f.panel = pid || null; f.target = id; f.noHov = 1;
+    renderAll();
+    var app = $('app-' + fk), s = app.querySelector('[data-stream]');
+    var anchor = s.querySelector('[data-mid="' + (pid || id) + '"]');
+    if (anchor) { s.scrollTop = Math.max(0, anchor.offsetTop - s.clientHeight / 2 + anchor.offsetHeight / 2); if (!pid) anchor.classList.add('flash'); }
+    if (pid) {
+      var pb = app.querySelector('[data-pb]'), r = pb.querySelector('[data-mid="' + id + '"]');
+      var ts = anchor && anchor.querySelector('.tsum'); if (ts) ts.setAttribute('aria-expanded', 'true');
+      if (r) { pb.scrollTop = Math.max(0, r.offsetTop - pb.clientHeight / 2); r.classList.add('flash'); }
+    }
+  }
+
+  // ---------------- star toggles ----------------
+  function setConvStar(k, on, box, quiet) {
+    var c = CONV[k];
+    if (on) { ST.conv[k] = 1; if (ST.corder.indexOf(k) < 0) ST.corder.unshift(k); delete ST.collapsed.star; } else delete ST.conv[k];
+    renderAll();
+    if (quiet) return;
+    var t = toastIn(boxOf(box) || box, OK + '<p>' + (on ? 'Đã gắn sao' : 'Đã bỏ gắn sao') + ' “' + esc(c.name) + '”</p><button class="btn ghost sm" type="button" data-act="undo-conv" data-k="' + k + '" data-on="' + (on ? 0 : 1) + '">Hoàn tác</button>');
+    void t;
+  }
+  function setMsgStar(id, on, box, from) {
+    if (on) { ST.msg[id] = 1; if (ST.sorder.indexOf(id) < 0) ST.sorder.unshift(id); } else delete ST.msg[id];
+    var target = boxOf(box) || box;
+    renderAll();
+    if (on) toastIn(target, OK + '<p>Đã gắn sao tin</p><button class="btn ghost sm" type="button" data-act="nav" data-view="starred" data-frame-go="1">Xem</button>');
+    else toastIn(target, OK + '<p>Đã bỏ gắn sao tin</p><button class="btn ghost sm" type="button" data-act="undo-msg" data-id="' + id + '">Hoàn tác</button>');
+    void from;
+  }
+  function collapseThen(el, done) {
+    if (!el || reduced()) { done(); return; }
+    var hgt = el.offsetHeight; el.style.height = hgt + 'px'; el.classList.add('gone');
+    el.addEventListener('animationend', function h() { el.removeEventListener('animationend', h); done(); });
+  }
+
+  // ---------------- menus ----------------
+  var openMenu = null;
+  function closeMenu(focusBack) {
+    if (!openMenu) return;
+    var b = openMenu.btn; openMenu.el.remove(); if (b) { b.setAttribute('aria-expanded', 'false'); if (focusBack) b.focus(); }
+    openMenu = null;
+  }
+  function showMenu(host, html, btn, style, label) {
+    closeMenu();
+    var el = frag('<div class="menu enter" role="menu" aria-label="' + esc(label) + '" style="' + style + '">' + html + '</div>');
+    host.appendChild(el); if (btn) btn.setAttribute('aria-expanded', 'true');
+    openMenu = { el: el, btn: btn };
+    var first = el.querySelector('button'); if (first) first.focus({ preventScroll: true });
+  }
+  function rowMenuItems(k) {
+    var c = CONV[k];
+    if (ST.conv[k]) return '<button type="button" role="menuitem" data-act="m-star-conv" data-k="' + k + '" data-on="0">' + ic('i-star-off', 's') + 'Bỏ gắn sao</button><button type="button" role="menuitem">' + ic('i-bell-off', 's') + 'Tắt thông báo</button>';
+    var h = '<div class="mlabel">Chuyển tới mục</div>';
+    SECS.filter(function (s) { return s[2]; }).forEach(function (s) { h += '<button type="button" role="menuitemradio" aria-checked="' + (c.sec === s[0]) + '">' + ic('i-folder', 's') + esc(s[1]) + '</button>'; });
+    h += '<button type="button" role="menuitem">' + ic('i-folder-plus', 's') + 'Mục mới…</button><hr>';
+    if (c.sec === 'q4' || c.sec === 'noibo') h += '<button type="button" role="menuitem">' + ic('i-x', 's') + 'Bỏ khỏi mục</button>';
+    return h + '<button type="button" role="menuitem" data-act="m-star-conv" data-k="' + k + '" data-on="1">' + ic('i-star', 's') + 'Gắn sao</button><button type="button" role="menuitem">' + ic('i-bell-off', 's') + 'Tắt thông báo</button>';
+  }
+  function headMenuItems(k) {
+    var on = ST.conv[k];
+    return '<button type="button" role="menuitem" data-act="m-star-conv" data-k="' + k + '" data-on="' + (on ? 0 : 1) + '">' + ic(on ? 'i-star-off' : 'i-star', 's') + (on ? 'Bỏ gắn sao' : 'Gắn sao') + '</button>'
+      + '<button type="button" role="menuitem">' + ic('i-bell', 's') + 'Thông báo…</button><button type="button" role="menuitem">' + ic('i-info', 's') + (CONV[k].kind === 'dm' ? 'Xem hồ sơ' : 'Thông tin nhóm') + '</button>';
+  }
+  function msgMenuItems(id) {
+    var m = MSG[id], on = ST.msg[id];
+    return (THREAD[id] ? '<button type="button" role="menuitem">' + ic('i-bell-ring', 's') + 'Theo dõi thread</button>' : '')
+      + '<button type="button" role="menuitem" data-act="m-star-msg" data-id="' + id + '" data-on="' + (on ? 0 : 1) + '">' + ic(on ? 'i-star-off' : 'i-star', 's') + (on ? 'Bỏ gắn sao tin' : 'Gắn sao tin') + '</button>'
+      + '<button type="button" role="menuitem">' + ic('i-copy', 's') + 'Sao chép văn bản</button>'
+      + '<button type="button" role="menuitem">' + ic('i-quote', 's') + 'Trích dẫn khi trả lời</button>'
+      + (m.mine ? '<button type="button" role="menuitem">' + ic('i-pen', 's') + 'Sửa tin</button><hr><button type="button" role="menuitem" class="danger">' + ic('i-trash', 's') + 'Xoá tin</button>'
+        : '<button type="button" role="menuitem">' + ic('i-mail-dot', 's') + 'Đánh dấu chưa đọc</button>');
+  }
+  function openRowMenu(btn) {
+    var cnav = btn.closest('[data-cnav]'), r = btn.getBoundingClientRect(), cr = cnav.getBoundingClientRect(), k = btn.getAttribute('data-k');
+    var top = r.bottom - cr.top + 4; if (top > cr.height - 260) top = r.top - cr.top - (ST.conv[k] ? 92 : 250);
+    showMenu(cnav, rowMenuItems(k), btn, 'top:' + top + 'px;right:8px;width:240px', 'Tuỳ chọn cho ' + CONV[k].name);
+  }
+  function openMsgMenu(btn) {
+    var m = btn.closest('.m'); showMenu(m, msgMenuItems(btn.getAttribute('data-id')), btn, '', 'Thêm thao tác cho tin');
+    var sc = m.closest('[data-stream], [data-pb]'), mr = openMenu.el.getBoundingClientRect();
+    if (sc && mr.bottom > sc.getBoundingClientRect().bottom) { openMenu.el.style.top = 'auto'; openMenu.el.style.bottom = 'calc(100% + 18px)'; }
+  }
+
+  // ---------------- board ----------------
+  function renderBoard() {
+    var b = $('board-el'), sm = '<span class="smark" role="img" aria-label="Bạn đã gắn sao">' + ic('i-star') + '</span>';
+    var spec = function (title, inner) { return '<div class="spec"><small>' + title + '</small>' + inner + '</div>'; };
+    var tmpMenu = function (html, label) { return '<div class="menu" role="menu" aria-label="' + label + '">' + html.replace(/data-act="[^"]*"/g, '').replace(/<button /g, '<button tabindex="-1" ') + '</div>'; };
+    var saveC = ST.conv.hopdong, saveM = ST.msg.dx2;
+    delete ST.conv.hopdong; var m1 = rowMenuItems('hopdong'); var h1 = headMenuItems('hopdong');
+    var m2 = rowMenuItems('doisoat');
+    delete ST.msg.dx2; var mm1 = msgMenuItems('dx2'); ST.msg.dx2 = 1; var mm2 = msgMenuItems('dx2');
+    if (!saveM) delete ST.msg.dx2; if (saveC) ST.conv.hopdong = 1;
+    b.innerHTML = spec('Menu ⋯ · chưa gắn sao', tmpMenu(m1, 'Tuỳ chọn cho Hợp đồng đối tác (mẫu)'))
+      + spec('Menu ⋯ · đã gắn sao', tmpMenu(m2, 'Tuỳ chọn cho Đối soát giao dịch (mẫu)'))
+      + spec('Menu tên nhóm', tmpMenu(h1, 'Menu Hợp đồng đối tác (mẫu)'))
+      + spec('Menu Thêm của tin · chưa / đã gắn sao', tmpMenu(mm1, 'Thêm thao tác (mẫu, chưa gắn sao)') + tmpMenu(mm2, 'Thêm thao tác (mẫu, đã gắn sao)'))
+      + spec('Dấu sao trên tin (người khác / của bạn)', '<div class="rowdemo" style="padding:14px 6px">'
+        + '<div class="m">' + pav('Lê Quang Vinh') + '<div class="mc"><div class="who"><b>Lê Quang Vinh</b><time>09:31</time>' + sm + '</div><p class="txt">Ảnh chụp sao kê 3 giao dịch lệch.</p></div></div>'
+        + '<div class="m mine"><div class="mc"><div class="who"><span class="sr">Bạn</span><time>09:24</time><span class="pinned">' + ic('i-pin') + 'Đã ghim</span>' + sm + '</div><p class="txt">Phí chuyển khoản hạch toán vào 6427.</p></div></div></div>')
+      + spec('Lối tắt và mục Đã gắn sao trong cột điều hướng', '<div class="rowdemo">'
+        + '<a class="rl" href="#board" tabindex="-1"><svg class="i s h"><use href="#i-at"/></svg><span class="t">Được nhắc tới</span><span class="end"><span class="pill count">2</span></span></a>'
+        + '<a class="rl" href="#board" tabindex="-1"><svg class="i s h"><use href="#i-at"/></svg><span class="t">Được nhắc tới (≥ 100)</span><span class="end"><span class="pill count">99+</span></span></a>'
+        + '<div class="sec"><span class="sec-t" style="cursor:default">' + ic('i-down', 's') + '<span class="nm">Đã gắn sao</span></span></div>'
+        + '<a class="rl unread" href="#board" tabindex="-1">' + cicon('doisoat', 's24') + '<span class="t">Đối soát giao dịch</span><span class="end"><span class="pill count">3</span></span></a>'
+        + '<div class="sec"><span class="sec-t" style="cursor:default">' + ic('i-down', 's').replace('class="i s"', 'class="i s" style="transform:rotate(-90deg)"') + '<span class="nm">Đã gắn sao (thu gọn)</span><span class="pill count tnum" style="margin-left:auto">3</span></span></div></div>')
+      + spec('Toast', '<div style="display:grid;gap:8px">'
+        + '<div class="toast">' + OK + '<p>Đã gắn sao “Hợp đồng đối tác”</p><button class="btn ghost sm" type="button" tabindex="-1">Hoàn tác</button></div>'
+        + '<div class="toast">' + OK + '<p>Đã bỏ gắn sao “Nguyễn Thu Lan”</p><button class="btn ghost sm" type="button" tabindex="-1">Hoàn tác</button></div>'
+        + '<div class="toast">' + OK + '<p>Đã gắn sao tin</p><button class="btn ghost sm" type="button" tabindex="-1">Xem</button></div>'
+        + '<div class="toast">' + OK + '<p>Đã bỏ gắn sao tin</p><button class="btn ghost sm" type="button" tabindex="-1">Hoàn tác</button></div>'
+        + '<div class="toast err">' + BAD + '<p>Không gắn sao được. Kiểm tra kết nối rồi thử lại.</p><button class="btn ghost sm" type="button" tabindex="-1">Thử lại</button></div></div>');
+  }
+
+  // ---------------- phones ----------------
+  function renderPhones() {
+    var um = unreadMentions(), cs = starredConvs();
+    var p1 = '<div class="scuts"><a class="scut" href="#P2" data-act="none">' + ic('i-at') + '<span class="t">Được nhắc tới</span>' + (um ? '<span class="pill count" aria-label="' + um + ' chưa đọc">' + um + '</span>' : '') + '</a><a class="scut" href="#P3" data-act="none">' + ic('i-star') + '<span class="t">Đã gắn sao</span></a></div>';
+    if (cs.length) p1 += '<div class="lsec" id="p1-star">' + ic('i-down', 's') + 'Đã gắn sao</div><div role="list" aria-labelledby="p1-star">' + cs.map(function (k) { return convRow(k); }).join('') + '</div>';
+    SECS.forEach(function (s) {
+      var keys = Object.keys(CONV).filter(function (k) { return CONV[k].sec === s[0] && !ST.conv[k]; });
+      if (!keys.length) return;
+      p1 += '<div class="lsec' + (s[2] ? ' usr' : '') + '" id="p1-' + s[0] + '">' + ic('i-down', 's') + esc(s[1]) + '</div><div role="list" aria-labelledby="p1-' + s[0] + '">' + keys.map(function (k) { return convRow(k); }).join('') + '</div>';
+    });
+    $('P1-body').innerHTML = p1 + '<div style="height:24px"></div>';
+    $('P2-sub').textContent = PH.state === 'data' && um ? um + ' chưa đọc' : 'Tin nhắc tên bạn';
+    $('P2-body').innerHTML = mentionsBody({ state: PH.state, more: F.A.more }, true);
+    $('P3-body').innerHTML = starredBody({ state: PH.state === 'empty' ? 'empty' : PH.state }, true);
+    // P4: long-press a message
+    $('P4-body').innerHTML = '<div class="stream">' + ['dx1', 'dx2'].map(function (id) { return msgHTML(id, { phone: 1 }); }).join('') + '</div>';
+    var pm = $('P4-body').querySelector('[data-mid="dx2"]'); if (pm) pm.classList.add('pressed');
+    var on = ST.msg.dx2;
+    $('P4-sheet').innerHTML = '<span class="grab"></span><div class="quick" role="group" aria-label="Cảm xúc nhanh"><button type="button" aria-label="Thích">👍</button><button type="button" aria-label="Yêu thích">❤️</button><button type="button" aria-label="Cười">😂</button><button type="button" aria-label="Cảm ơn">🙏</button><button type="button" aria-label="Xong">✅</button></div>'
+      + '<button class="item" type="button">' + ic('i-reply-thread') + 'Trả lời trong thread</button>'
+      + '<button class="item" type="button" data-act="p-star-msg" data-id="dx2">' + ic(on ? 'i-star-off' : 'i-star') + (on ? 'Bỏ gắn sao tin' : 'Gắn sao tin') + '</button>'
+      + '<button class="item" type="button">' + ic('i-copy') + 'Sao chép văn bản</button><button class="item" type="button">' + ic('i-quote') + 'Trích dẫn khi trả lời</button><button class="item" type="button">' + ic('i-pin') + 'Ghim</button><button class="item" type="button">' + ic('i-mail-dot') + 'Đánh dấu chưa đọc</button>';
+  }
+  function convRow(k) {
+    var c = CONV[k];
+    return '<a class="conv' + (c.n ? ' unread' : '') + '" role="listitem" href="#phone" data-act="none">' + cicon(k, 's44') + '<span style="min-width:0;display:grid"><span class="nm"><span>' + esc(c.name) + '</span></span><span class="pv">' + esc(previewOf(k)) + '</span></span><span class="meta">' + esc(MSG[MAIN[k].filter(function (id) { return !MSG[id].hidden; }).slice(-1)[0]].t) + (c.n ? '<span class="pill count" aria-label="' + c.n + ' chưa đọc">' + c.n + '</span>' : '') + '</span></a>';
+  }
+  function pressConv(k) {
+    var c = CONV[k], on = ST.conv[k], items = on
+      ? '<button class="item" type="button" data-act="p-star-conv" data-k="' + k + '" data-on="0">' + ic('i-star-off') + 'Bỏ gắn sao</button><button class="item" type="button">' + ic('i-bell-off') + 'Tắt thông báo</button>'
+      : '<button class="item" type="button">' + ic('i-folder') + 'Chuyển tới mục</button><button class="item" type="button">' + ic('i-folder-plus') + 'Mục mới…</button><hr><button class="item" type="button" data-act="p-star-conv" data-k="' + k + '" data-on="1">' + ic('i-star') + 'Gắn sao</button><button class="item" type="button">' + ic('i-bell-off') + 'Tắt thông báo</button>';
+    var sh = $('P1-sheet');
+    sh.innerHTML = '<span class="grab"></span><div class="shead"><b id="P1-sheet-t">' + esc(c.name) + '</b><small>' + esc(c.sub) + '</small></div>' + items;
+    sh.hidden = false; $('P1').querySelector('.scrim').hidden = false; replay(sh, 'up');
+    var f = sh.querySelector('.item'); if (f) f.focus({ preventScroll: true });
+  }
+  function closeP1() { $('P1-sheet').hidden = true; $('P1').querySelector('.scrim').hidden = true; }
+  function pOpen(id) {
+    var m = MSG[id], k = m.c, full = $('P2-full'), pid = m.parent;
+    m.unread = 0;
+    var ids = pid ? [pid].concat(THREAD[pid]) : MAIN[k].filter(function (x) { return !MSG[x].hidden; }).slice(-4);
+    full.innerHTML = '<div class="sbar"><span>9:41</span><span></span></div><div class="topbar chat"><button class="ibtn" type="button" data-act="p-close" aria-label="Quay lại Được nhắc tới">' + ic('i-back') + '</button>' + cicon(k, 's28') + '<span class="ti"><b>' + (pid ? 'Thread' : esc(CONV[k].name)) + '</b><small>' + (pid ? esc(CONV[k].name) : esc(CONV[k].sub)) + '</small></span></div>'
+      + '<div class="pbody"><div class="stream">' + ids.map(function (x) { return msgHTML(x, { phone: 1 }); }).join('') + '</div></div>';
+    full.hidden = false; replay(full, 'up');
+    renderAll();
+    var t = full.querySelector('[data-mid="' + id + '"]'); if (t) t.classList.add('flash');
+  }
+
+  // ---------------- events ----------------
+  document.addEventListener('click', function (e) {
+    var sb = e.target.closest('[data-seg] [data-state]');
+    if (sb) {
+      var seg = sb.parentNode, key = seg.getAttribute('data-seg'), v = sb.getAttribute('data-state');
+      seg.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', String(o === sb)); });
+      if (key === 'P') { PH.state = v; renderPhones(); } else { var f = F[key]; f.view = key === 'A' ? 'mentions' : 'starred'; f.state = v; f.panel = null; renderFrame(key); }
+      return;
+    }
+    var b = e.target.closest('[data-act]');
+    if (openMenu && !(b && openMenu.el.contains(b)) && !(b && b === openMenu.btn)) closeMenu();
+    if (!b) return;
+    var a = b.getAttribute('data-act'), app = b.closest('.app'), fk = app ? app.getAttribute('data-frame') : null;
+    if (b.tagName === 'A') e.preventDefault();
+    if (a === 'nav') {
+      var target = fk || (b.closest('.toast') ? null : null);
+      if (!target && b.getAttribute('data-frame-go')) { var ap = b.closest('.app'); target = ap && ap.getAttribute('data-frame'); }
+      if (!target) return;
+      F[target].view = b.getAttribute('data-view'); F[target].panel = null; if (!F[target].state) F[target].state = 'data';
+      renderFrame(target); return;
+    }
+    if (a === 'open' && fk) { openMsg(fk, b.getAttribute('data-id')); return; }
+    if (a === 'open' && b.closest('#P2')) { pOpen(b.getAttribute('data-id')); return; }
+    if (a === 'open-first') { var k1 = b.getAttribute('data-frame'); F[k1].view = 'mentions'; F[k1].state = 'data'; openMsg(k1, b.getAttribute('data-id')); return; }
+    if (a === 'back-view') { var k2 = b.getAttribute('data-frame'); F[k2].view = k2 === 'A' ? 'mentions' : 'starred'; F[k2].panel = null; renderFrame(k2); return; }
+    if (a === 'open-conv' && fk) { F[fk].view = 'conv'; F[fk].k = b.getAttribute('data-k'); F[fk].panel = null; F[fk].noHov = 1; renderFrame(fk); return; }
+    if (a === 'open-thread' && fk) { F[fk].panel = b.getAttribute('data-id'); renderFrame(fk); var tb = $('app-' + fk).querySelector('.tsum[data-id="' + F[fk].panel + '"]'); if (tb) tb.setAttribute('aria-expanded', 'true'); return; }
+    if (a === 'close-panel' && fk) { F[fk].panel = null; renderFrame(fk); return; }
+    if (a === 'sec-toggle') { var s = b.getAttribute('data-sec'); ST.collapsed[s] = !ST.collapsed[s]; renderAll(); return; }
+    if (a === 'load-more') {
+      F.A.loadingMore = 1; renderAll();
+      setTimeout(function () { F.A.loadingMore = 0; F.A.more = 1; renderAll(); }, 700); return;
+    }
+    if (a === 'retry') { if (fk) { F[fk].state = 'data'; renderFrame(fk); } else { PH.state = 'data'; renderPhones(); } return; }
+    if (a === 'row-menu') { if (openMenu && openMenu.btn === b) { closeMenu(); return; } openRowMenu(b); return; }
+    if (a === 'head-menu') { if (openMenu && openMenu.btn === b) { closeMenu(); return; } showMenu(b.closest('.chead'), headMenuItems(b.getAttribute('data-k')), b, 'top:58px;left:64px;width:240px', 'Menu ' + CONV[b.getAttribute('data-k')].name); return; }
+    if (a === 'msg-more') { if (openMenu && openMenu.btn === b) { closeMenu(); return; } openMsgMenu(b); return; }
+    if (a === 'm-star-conv') { var box = boxOf(b); closeMenu(); setConvStar(b.getAttribute('data-k'), b.getAttribute('data-on') === '1', box); return; }
+    if (a === 'm-star-msg') { var box2 = boxOf(b); closeMenu(); setMsgStar(b.getAttribute('data-id'), b.getAttribute('data-on') === '1', box2); return; }
+    if (a === 'star-msg') {
+      var id = b.getAttribute('data-id'), li = b.closest('.mi-w'), bx = boxOf(b);
+      b.setAttribute('aria-pressed', 'false');
+      collapseThen(li, function () { setMsgStar(id, false, bx); }); return;
+    }
+    if (a === 'star-conv') {
+      var kk = b.getAttribute('data-k'), row = b.closest('.rlw'), bx2 = boxOf(b);
+      b.setAttribute('aria-pressed', 'false');
+      collapseThen(row, function () { setConvStar(kk, false, bx2); }); return;
+    }
+    if (a === 'undo-conv') { var tb2 = boxOf(b); b.closest('.toast').remove(); setConvStar(b.getAttribute('data-k'), b.getAttribute('data-on') === '1', tb2, true); return; }
+    if (a === 'undo-msg') { b.closest('.toast').remove(); ST.msg[b.getAttribute('data-id')] = 1; renderAll(); return; }
+    if (a === 'rt-mention') {
+      if (!MSG.vm2.hidden) return;
+      MSG.vm2.hidden = 0; F.A.view = 'mentions'; F.A.state = 'data'; F.A.panel = null; renderAll();
+      var it = $('app-A').querySelector('.mi-w[data-mid="vm2"] .mi');
+      if (it) { it.style.setProperty('--pw', 'var(--color-person-8-wash)'); replay(it, 'rt'); }
+      return;
+    }
+    if (a === 'demo-unstar-msg') { var first = $('app-B').querySelector('.mi-w .ibtn.star'); if (F.B.view !== 'starred') { F.B.view = 'starred'; F.B.panel = null; renderFrame('B'); first = $('app-B').querySelector('.mi-w .ibtn.star'); } if (first) first.click(); return; }
+    if (a === 'demo-unstar-conv') { if (F.B.view !== 'starred') { F.B.view = 'starred'; F.B.panel = null; renderFrame('B'); } var cb = $('app-B').querySelector('.rlw[data-k="lan"] .ibtn.star'); if (cb) cb.click(); return; }
+    if (a === 'demo-row-menu') { if (F.C.view !== 'conv') { F.C.view = 'conv'; renderFrame('C'); } var rb = $('app-C').querySelector('.rlw[data-k="' + b.getAttribute('data-k') + '"] .more'); if (rb) { e.stopPropagation(); openRowMenu(rb); } return; }
+    if (a === 'demo-head-menu') { F.C.view = 'conv'; F.C.k = 'doisoat'; F.C.panel = null; renderFrame('C'); var hb = $('app-C').querySelector('.ttl'); showMenu(hb.closest('.chead'), headMenuItems('doisoat'), hb, 'top:58px;left:64px;width:240px', 'Menu Đối soát giao dịch'); return; }
+    if (a === 'demo-msg-menu') { F.C.view = 'conv'; F.C.k = 'doisoat'; F.C.panel = null; F.C.noHov = 0; renderFrame('C'); var mb = $('app-C').querySelector('[data-mid="' + b.getAttribute('data-id') + '"] [data-act="msg-more"]'); if (mb) openMsgMenu(mb); return; }
+    if (a === 'demo-star-msg') { F.C.view = 'conv'; F.C.k = 'doisoat'; F.C.panel = null; renderFrame('C'); var id2 = b.getAttribute('data-id'); setMsgStar(id2, !ST.msg[id2], $('app-C').querySelector('[data-toasts]')); return; }
+    if (a === 'demo-fail') { toastIn($('app-C').querySelector('[data-toasts]'), BAD + '<p>Không gắn sao được. Kiểm tra kết nối rồi thử lại.</p><button class="btn ghost sm" type="button">Thử lại</button>', { err: 1 }); return; }
+    if (a === 'p-press-conv') { pressConv(b.getAttribute('data-k')); return; }
+    if (a === 'p-star-conv') { var k3 = b.getAttribute('data-k'), on3 = b.getAttribute('data-on') === '1'; closeP1(); setConvStar(k3, on3, $('P1-toasts')); return; }
+    if (a === 'p-star-msg') { var on4 = !ST.msg.dx2; setMsgStar('dx2', on4, $('P4-toasts')); return; }
+    if (a === 'p-open') { pOpen(b.getAttribute('data-id')); return; }
+    if (a === 'p-close') { closeP1(); $('P2-full').hidden = true; return; }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { if (openMenu) closeMenu(true); else { closeP1(); $('P2-full').hidden = true; } }
+    if (openMenu && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+      var items = Array.prototype.slice.call(openMenu.el.querySelectorAll('button')), i = items.indexOf(document.activeElement);
+      e.preventDefault(); items[(i + (e.key === 'ArrowDown' ? 1 : items.length - 1)) % items.length].focus();
+    }
+  });
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
