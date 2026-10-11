@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"strconv"
+	"time"
 
 	echomw "github.com/labstack/echo/v4/middleware"
 	"google.golang.org/grpc"
@@ -20,6 +22,7 @@ import (
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/drive/internal/domain"
+	"ngac-platform/services/drive/internal/gotenberg"
 	driveGRPC "ngac-platform/services/drive/internal/grpc"
 	"ngac-platform/services/drive/internal/rest"
 	"ngac-platform/services/drive/internal/store"
@@ -66,6 +69,17 @@ func main() {
 		docpb.NewDocumentStorageServiceClient(docConn),
 	)
 
+	// Office previews: without a reachable Gotenberg they answer "unavailable",
+	// so a missing converter never takes the drive down.
+	svc.SetConverter(gotenberg.New(bootstrap.Env("GOTENBERG_URL", "http://localhost:3050")), domain.PreviewConfig{
+		MaxConvertBytes: int64(envInt("PREVIEW_MAX_SOURCE_MB", domain.DefaultMaxConvertBytes>>20)) << 20,
+		MaxPDFBytes:     int64(envInt("PREVIEW_MAX_PDF_MB", domain.DefaultMaxPDFBytes>>20)) << 20,
+		MaxConcurrent:   envInt("PREVIEW_MAX_CONCURRENT", domain.DefaultMaxConcurrent),
+		ConvertTimeout:  time.Duration(envInt("PREVIEW_CONVERT_TIMEOUT_SECONDS", int(domain.DefaultConvertTimeout/time.Second))) * time.Second,
+		FailureTTL:      time.Duration(envInt("PREVIEW_FAILURE_TTL_MINUTES", int(domain.DefaultFailureTTL/time.Minute))) * time.Minute,
+		StorageDialAddr: bootstrap.Env("PREVIEW_STORAGE_DIAL_ADDR", ""),
+	})
+
 	rt := realtime.Connect("drive")
 	defer rt.Close()
 	svc.SetEmitter(rt)
@@ -104,6 +118,20 @@ func main() {
 	}()
 
 	bootstrap.Shutdown{GRPC: gs, Health: healthSrv, HTTP: []bootstrap.HTTPServer{e}, Cancel: cancel}.Wait()
+}
+
+// envInt reads a positive integer setting; anything else falls back, loudly.
+func envInt(key string, fallback int) int {
+	raw := bootstrap.Env(key, "")
+	if raw == "" {
+		return fallback
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n <= 0 {
+		slog.Warn("ignoring invalid setting", "key", key, "value", raw, "using", fallback)
+		return fallback
+	}
+	return n
 }
 
 // dial opens a connection to another service, or exits: drive cannot serve

@@ -32,6 +32,7 @@ type Service struct {
 	policyWrite policypb.PolicyWriteServiceClient
 	docStorage  docpb.DocumentStorageServiceClient
 	emitter     realtime.Emitter
+	preview     *previewer
 }
 
 // NewService creates the drive service with all required dependencies.

@@ -28,7 +28,7 @@ Yêu cầu (người dùng, 2026-10-11): "Tất cả attachment trên Nexus đ�
 | # | Phase | Status |
 |---|---|---|
 | 01 | Thiết kế trình xem tệp chung (mockup `design/mockups/file-viewer.html`) | in-progress |
-| 02 | Backend: Gotenberg + `GET /api/drive/files/{id}/preview` + cache MinIO | in-progress |
+| 02 | Backend: Gotenberg + `GET /api/drive/files/{id}/preview` + cache MinIO | done 2026-10-11 |
 | 03 | Frontend: `FileViewer` dùng chung (chat, Tài liệu, thẻ tệp) — thay `ImageViewer` của chat 06 | pending |
 | 04 | Kiểm chứng trên stack thật (mọi loại, 2 cỡ màn, quyền) | pending |
 

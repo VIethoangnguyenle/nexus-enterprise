@@ -25,6 +25,7 @@ type DriveService interface {
 	CreateFile(ctx context.Context, req *pb.CreateFileRequest) (*pb.CreateFileResponse, error)
 	ConfirmFile(ctx context.Context, req *pb.ConfirmFileRequest) (*pb.DriveItem, error)
 	GetDownloadURL(ctx context.Context, req *pb.GetDownloadURLRequest) (*pb.GetDownloadURLResponse, error)
+	GetPreview(ctx context.Context, fileID string) (*domain.Preview, error)
 	RenameItem(ctx context.Context, req *pb.RenameItemRequest) (*pb.DriveItem, error)
 	MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*pb.DriveItem, error)
 	CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*pb.DriveItem, error)
@@ -93,6 +94,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/workspaces/:id/drive/files", h.CreateFile)
 	api.POST("/drive/files/:fileId/confirm", h.ConfirmFile)
 	api.GET("/drive/files/:fileId/download", h.GetDownloadURL)
+	api.GET("/drive/files/:fileId/preview", h.GetPreview)
 
 	// Sharing
 	api.POST("/drive/items/:itemId/share", h.CreateShare)
@@ -239,6 +241,18 @@ func (h *Handler) GetDownloadURL(c echo.Context) error {
 	resp, err := h.svc.GetDownloadURL(c.Request().Context(), &pb.GetDownloadURLRequest{
 		FileId: c.Param("fileId"),
 	})
+	if err != nil {
+		return mapError(err)
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+// GetPreview handles GET /api/drive/files/:fileId/preview.
+func (h *Handler) GetPreview(c echo.Context) error {
+	if _, err := httputil.RequireClaims(c); err != nil {
+		return err
+	}
+	resp, err := h.svc.GetPreview(c.Request().Context(), c.Param("fileId"))
 	if err != nil {
 		return mapError(err)
 	}

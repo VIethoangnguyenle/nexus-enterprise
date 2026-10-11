@@ -61,6 +61,7 @@ Verified against the codebase on 2026-07-31.
 | `drive-tree-navigation` | Matches code |
 | `drive-realtime-sync` | Matches code (divergence closed 2026-10-10; see its Status) |
 | `drive-permission-engine` | Matches code (tenant-keyed cache; divergence closed 2026-08-02) |
+| `file-preview` | Matches code for the server part (added 2026-10-11; viewer follows) |
 
 **Realtime**
 

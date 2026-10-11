@@ -12,11 +12,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/httputil"
 	pb "ngac-platform/proto/drive"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/drive/internal/domain"
 )
 
 // spy is the domain as the handlers see it: it keeps the last request it was
@@ -40,6 +42,9 @@ func (s *spy) ConfirmFile(_ context.Context, r *pb.ConfirmFileRequest) (*pb.Driv
 }
 func (s *spy) GetDownloadURL(_ context.Context, r *pb.GetDownloadURLRequest) (*pb.GetDownloadURLResponse, error) {
 	return &pb.GetDownloadURLResponse{}, s.take(r)
+}
+func (s *spy) GetPreview(_ context.Context, id string) (*domain.Preview, error) {
+	return &domain.Preview{Kind: domain.PreviewUnavailable, Reason: domain.ReasonUnsupported}, s.take(wrapperspb.String(id))
 }
 func (s *spy) RenameItem(_ context.Context, r *pb.RenameItemRequest) (*pb.DriveItem, error) {
 	return &pb.DriveItem{Id: "i"}, s.take(r)
@@ -106,6 +111,7 @@ func routes(sp *spy, pol policypb.PolicyReadServiceClient, signedIn bool) *echo.
 	e.POST("/ws/:id/files", h.CreateFile, as)
 	e.POST("/files/:fileId/confirm", h.ConfirmFile, as)
 	e.GET("/files/:fileId/download", h.GetDownloadURL, as)
+	e.GET("/files/:fileId/preview", h.GetPreview, as)
 	e.PUT("/items/:itemId/rename", h.RenameItem, as)
 	e.POST("/items/:itemId/move", h.MoveItem, as)
 	e.POST("/items/:itemId/copy", h.CopyItem, as)
@@ -142,6 +148,7 @@ func allRoutes() []route {
 			&pb.CreateFileRequest{WorkspaceId: "w1", Name: "a.pdf", MimeType: "application/pdf", SizeBytes: 42, ParentId: "p1"}},
 		{"confirm", "POST", "/files/f1/confirm", ``, 200, &pb.ConfirmFileRequest{FileId: "f1"}},
 		{"download", "GET", "/files/f1/download", ``, 200, &pb.GetDownloadURLRequest{FileId: "f1"}},
+		{"preview", "GET", "/files/f1/preview", ``, 200, wrapperspb.String("f1")},
 		{"rename", "PUT", "/items/i1/rename", `{"name":"new"}`, 200, &pb.RenameItemRequest{ItemId: "i1", NewName: "new"}},
 		{"move", "POST", "/items/i1/move", `{"target_folder_id":"t1"}`, 200, &pb.MoveItemRequest{ItemId: "i1", NewParentId: "t1"}},
 		{"copy", "POST", "/items/i1/copy", `{"target_folder_id":"t1"}`, 200, &pb.CopyItemRequest{ItemId: "i1", DestParentId: "t1"}},

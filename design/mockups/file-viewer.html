@@ -1,0 +1,968 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nexus · Trình xem tệp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Universal file viewer (FileViewer). Extends the ImageViewer of spaces.html #viewer: same bar
+   (--color-base, 56), same stage (--color-sunk), same round prev/next (44, --color-overlay), same "n / N".
+   New: a body per file kind, a tools pill, states, a phone layout driven by a container query, and an
+   action sheet on phone. Page chrome, primitives, attachments and keyframes are copied from spaces.html. */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-ink-muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
+
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 70ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; }
+.check input { width: 18px; height: 18px; accent-color: var(--color-accent); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.toc a:hover { background: var(--color-hover); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+.screen-head { display: grid; gap: 6px; max-width: 78ch; }
+.screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.demo .k { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-right: 4px; }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 82ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+.need { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--color-info-wash); color: var(--color-info); font: 600 0.6875rem/1 var(--font-body); margin-left: 4px; vertical-align: 1px; }
+code { font: 400 0.8125rem/1 var(--font-mono); }
+
+/* primitives (same as core-screens) */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0; font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink);
+  transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-press) var(--ease-out); }
+.btn:hover { background: var(--color-line); }
+.btn:active { transform: scale(0.98); }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.primary:hover { background: var(--color-accent-hover); }
+.btn.ghost { background: transparent; } .btn.ghost:hover { background: var(--color-hover); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.ibtn { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; transition: background-color var(--duration-quick) var(--ease-out); position: relative; }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+.ibtn::before { content: ""; position: absolute; inset: -6px; }
+.ibtn:disabled { color: var(--color-ink-subtle); cursor: default; background: transparent; }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); position: relative; }
+.av.s20 { width: 20px; height: 20px; font-size: 0.5625rem; } .av.s24 { width: 24px; height: 24px; font-size: 0.625rem; }
+.chip { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.chip .nm { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* attachments in a message (spaces.html) */
+.att { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 8px; justify-items: start; min-width: 0; align-self: stretch; }
+.grid { display: grid; gap: 4px; width: min(360px, 100%); grid-template-columns: 1fr 1fr; }
+.tile { position: relative; display: block; aspect-ratio: 1; border: 0; padding: 0; border-radius: 8px; overflow: hidden; background: var(--color-sunk); cursor: zoom-in; }
+.tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.file { display: inline-flex; align-items: center; gap: 12px; padding: 10px 8px 10px 10px; border-radius: 10px; background: var(--color-raised); width: min(340px, 100%); }
+.panel .file { background: var(--color-base); }
+.file .fm { min-width: 0; flex: 1; }
+.file b { font-weight: 600; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.file small { color: var(--color-ink-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.file .dl { opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.file:hover .dl, .file:focus-within .dl { opacity: 1; }
+.fi { width: 36px; height: 36px; flex: none; border-radius: 8px; display: grid; place-items: center; background: var(--color-success-wash); color: var(--color-success); }
+.fi.pdf, .fi.err { background: var(--color-danger-wash); color: var(--color-danger); }
+.fi.doc { background: var(--color-info-wash); color: var(--color-info); }
+.fi.other { background: var(--color-sunk); color: var(--color-ink-muted); }
+/* new tones, already in frontend/src/lib/file-kind.ts */
+.fi.slides { background: var(--color-warning-wash); color: var(--color-warning); }
+.fi.media { background: var(--color-accent-wash); color: var(--color-accent); }
+/* the card opens the viewer; the download button stays separate */
+.file { transition: background-color var(--duration-quick) var(--ease-out); }
+.file:hover { background: var(--color-hover); }
+.file .fopen { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; border: 0; background: none; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; border-radius: 6px; }
+.sk { height: 10px; border-radius: 6px; background: var(--color-sunk); animation: pulse 1400ms var(--ease-out) infinite; }
+
+/* §1 openers */
+.openers { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: 16px; }
+.ocard { background: var(--color-raised); border-radius: 10px; padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.ocard > h3 { font-size: 1.1875rem; line-height: 1.3; font-weight: 600; }
+.ocard > .src { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.msg { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 0 12px; }
+.msg .who { display: flex; gap: 8px; align-items: baseline; }
+.msg .who b { font-weight: 600; }
+.msg .who time { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.thread { background: var(--color-base); border-radius: 10px; padding: 12px; display: grid; gap: 12px; }
+.thread .file { background: var(--color-raised); }
+.thread .file:hover { background: var(--color-hover); }
+.tabs { display: flex; gap: 4px; box-shadow: inset 0 -1px 0 var(--color-line); }
+.tabs span { padding: 8px 12px; font-weight: 600; color: var(--color-ink-muted); }
+.tabs span[aria-current] { color: var(--color-ink); box-shadow: inset 0 -2px 0 var(--color-accent); }
+.crumb { display: flex; gap: 6px; align-items: center; color: var(--color-ink-muted); font-weight: 500; }
+.crumb b { color: var(--color-ink); font-weight: 600; }
+.tblw { overflow-x: auto; }
+.tbl { display: grid; min-width: 460px; }
+.tbl .tr { display: grid; grid-template-columns: minmax(0, 1fr) 150px 64px 72px; gap: 12px; align-items: center; min-height: 44px; padding: 0 8px; border: 0; background: none; color: inherit; font: inherit; text-align: left; box-shadow: inset 0 -1px 0 var(--color-line); cursor: pointer; border-radius: 0; }
+.tbl .tr:not(.th):hover { background: var(--color-hover); }
+.tbl .th { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); cursor: default; min-height: 36px; }
+.tbl .r { text-align: right; font-variant-numeric: tabular-nums; color: var(--color-ink-muted); }
+.tbl .nm { display: flex; gap: 10px; align-items: center; min-width: 0; font-weight: 500; }
+.tbl .nm span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tbl .fi { width: 28px; height: 28px; border-radius: 6px; }
+.tbl .fi svg.i { width: 16px; height: 16px; }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; max-width: 82ch; color: var(--color-ink-muted); }
+.kv dt { font-weight: 600; color: var(--color-ink); }
+.kv dd { margin: 0; }
+kbd { font: 600 0.75rem/1 var(--font-body); padding: 3px 6px; border-radius: 6px; background: var(--color-sunk); color: var(--color-ink); }
+
+/* frames that show the viewer in place on this review page */
+.frames { display: grid; gap: 16px; }
+.phones { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 16px; }
+.wlabel { display: block; font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); margin-bottom: 8px; }
+
+/* ================= FILE VIEWER ================= */
+/* .vwrap is the size container: the dialog lays itself out by its own width, so the phone layout
+   is the same code in the live overlay at 390 and in the phone frames on this page. */
+.vwrap { container: vw / inline-size; display: grid; }
+.vwrap.live { position: fixed; inset: 0; z-index: 40; padding: 32px; background: var(--color-scrim); }
+.vwrap.frame { position: relative; height: 620px; padding: 24px; background: var(--color-scrim); border-radius: 12px; overflow: hidden; }
+.vwrap.frame.ph { height: 760px; padding: 0; width: min(390px, 100%); }
+@media (max-width: 767px) { .vwrap.live, .vwrap.frame { padding: 0; } }
+.vdlg { position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; min-height: 0; min-width: 0; background: var(--color-sunk); border-radius: 12px; box-shadow: var(--shadow-overlay); overflow: hidden; }
+
+/* bar (spaces.html .vbar, plus type tile, middle truncation and labelled actions) */
+.vbar { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 12px 8px 16px; background: var(--color-base); min-width: 0; }
+.vbar .meta { min-width: 0; display: grid; gap: 1px; }
+.vbar .meta small { font-size: 0.75rem; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; min-width: 0; }
+.vbar .meta small .chip { gap: 6px; }
+.vbar .meta small .chip .nm { color: var(--color-ink); font-weight: 500; }
+.vbar .acts { margin-left: auto; display: flex; gap: 4px; flex: none; align-items: center; }
+.vbar .vsep { width: 1px; height: 20px; background: var(--color-line); margin: 0 4px; }
+.vbar .more { display: none; }
+.mid { display: flex; min-width: 0; font-weight: 600; }
+.mid .a { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.mid .b { flex: none; white-space: pre; }
+.vbar.deny .meta b { color: var(--color-ink-muted); }
+
+/* stage (spaces.html .vstage; the scrolling now lives in .vbody so nav and tools stay put) */
+.vstage { position: relative; min-height: 0; overflow: hidden; }
+.vbody { position: absolute; inset: 0; overflow: auto; padding: 24px 72px 72px; display: grid; place-items: center; outline-offset: -2px; }
+.vnav { position: absolute; top: 50%; margin-top: -22px; width: 44px; height: 44px; display: grid; place-items: center; border: 0; border-radius: 999px; background: var(--color-overlay); color: var(--color-ink); box-shadow: var(--shadow-overlay); cursor: pointer; z-index: 3; }
+.vnav[hidden] { display: none; }
+.vnav.prev { left: 16px; } .vnav.next { right: 16px; }
+.vfoot { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 0 20px; }
+.vcount { text-align: center; font-weight: 600; color: var(--color-ink-muted); font-variant-numeric: tabular-nums; min-width: 6ch; }
+.vfoot .fnav { display: none; }
+
+/* tools pill: one overlay over the stage, like the hover-actions bar */
+.vtools { position: absolute; left: 0; right: 0; bottom: 16px; margin-inline: auto; width: max-content; max-width: calc(100% - 32px); display: flex; align-items: center; gap: 2px; padding: 4px; border-radius: 10px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); z-index: 2; }
+.vtools:empty { display: none; }
+.vtools .tb { height: 32px; padding: 0 10px; border: 0; border-radius: 8px; background: transparent; color: var(--color-ink-muted); font: 600 0.8125rem/1 var(--font-body); cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.vtools .tb:hover { background: var(--color-hover); color: var(--color-ink); }
+.vtools .tb[aria-pressed="true"] { background: var(--color-accent-wash); color: var(--color-accent); }
+.vtools .sep { width: 1px; height: 20px; background: var(--color-line); margin: 0 4px; }
+.vtools .pg { display: inline-flex; align-items: center; gap: 6px; padding: 0 6px 0 8px; color: var(--color-ink-muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+.vtools .pg input { width: 40px; height: 28px; border: 0; border-radius: 6px; background: var(--color-sunk); color: var(--color-ink); text-align: center; font: 600 0.8125rem/1 var(--font-body); font-variant-numeric: tabular-nums; }
+.vtools .zv { min-width: 52px; justify-content: center; }
+
+/* bodies */
+.vbody.img { overflow: hidden; }
+.vbody.img img { position: absolute; top: 24px; left: 72px; width: calc(100% - 144px); height: calc(100% - 96px); object-fit: contain; cursor: zoom-in; }
+.vbody.img.one { overflow: auto; place-items: start; cursor: grab; }
+.vbody.img.one.drag { cursor: grabbing; }
+.vbody.img.one img { position: static; width: 1600px; height: auto; max-width: none; cursor: inherit; margin: auto; }
+.vbody.pdf { place-items: start center; align-content: start; }
+.pages { display: grid; gap: 16px; width: min(100%, 816px); justify-items: center; }
+.pages.z { max-width: none; }
+/* paper stays paper in dark mode: it is the document's own content, like a photo */
+.pages img { display: block; width: 100%; height: auto; border-radius: 2px; }
+.pages .pg-sk { width: 100%; aspect-ratio: 612 / 792; border-radius: 2px; }
+.vnote { width: min(100%, 816px); display: flex; gap: 8px; align-items: center; color: var(--color-ink-muted); font-size: 0.75rem; justify-self: center; }
+.vnote svg.i { width: 14px; height: 14px; }
+.vbody.doc { padding: 24px 72px; place-items: stretch center; overflow: hidden; }
+.vdoc { width: min(100%, 1040px); min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr) auto; background: var(--color-raised); border-radius: 10px; overflow: hidden; }
+.vdoc .scr { overflow: auto; outline-offset: -2px; }
+.vdoc pre { margin: 0; padding: 16px 20px; font: 400 0.8125rem/1.6 var(--font-mono); color: var(--color-ink); tab-size: 4; }
+.vdoc.text pre { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 88ch; }
+.vdoc.code pre { white-space: pre; padding-left: 0; }
+.vdoc.code .ln { display: inline-block; width: 6ch; padding-right: 2ch; margin-right: 12px; text-align: right; color: var(--color-ink-muted); user-select: none; box-shadow: inset -1px 0 0 var(--color-line); }
+.vdoc.code .cm { color: var(--color-ink-muted); }
+.vdoc table { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: 0.875rem; }
+.vdoc th { position: sticky; top: 0; z-index: 1; background: var(--color-raised); height: 36px; padding: 0 16px; text-align: left; font: 600 0.75rem/1.3 var(--font-body); color: var(--color-ink-muted); white-space: nowrap; box-shadow: inset 0 -1px 0 var(--color-line); }
+.vdoc td { height: 36px; padding: 0 16px; white-space: nowrap; box-shadow: inset 0 -1px 0 var(--color-line); }
+.vdoc .r { text-align: right; font-variant-numeric: tabular-nums; }
+.vdoc .n { color: var(--color-ink-muted); text-align: right; font-variant-numeric: tabular-nums; padding-right: 8px; position: sticky; left: 0; background: var(--color-raised); }
+.vdoc th.n { z-index: 2; }
+.vtrunc { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 10px 16px; background: var(--color-base); color: var(--color-ink-muted); }
+.vbody.media { padding: 24px 72px 72px; }
+.vbody.media video { display: block; width: min(100%, 1120px); max-height: 100%; aspect-ratio: 16 / 9; border-radius: 10px; background: var(--color-ink); }
+.vaudio { width: min(100%, 520px); display: grid; justify-items: center; gap: 12px; padding: 32px 24px; border-radius: 12px; background: var(--color-raised); text-align: center; }
+.vaudio b { font-weight: 600; overflow-wrap: anywhere; }
+.vaudio audio { width: 100%; }
+
+/* states: icon + one sentence + one action (DESIGN.md §6 Empty / Error state), sized up for a stage */
+.vstate { display: grid; justify-items: center; text-align: center; gap: 8px; max-width: 420px; padding: 24px; }
+.vstate .ic { width: 64px; height: 64px; border-radius: 16px; display: grid; place-items: center; background: var(--color-raised); color: var(--color-ink-muted); margin-bottom: 8px; }
+.vstate .ic svg.i { width: 32px; height: 32px; stroke-width: 1.5; }
+.vstate .ic.bad { background: var(--color-danger-wash); color: var(--color-danger); }
+.vstate .ic.doc { background: var(--color-info-wash); color: var(--color-info); }
+.vstate .ic.slides { background: var(--color-warning-wash); color: var(--color-warning); }
+.vstate .ic.sheet { background: var(--color-success-wash); color: var(--color-success); }
+.vstate b { font-size: 1rem; line-height: 1.5; font-weight: 600; }
+.vstate p { color: var(--color-ink-muted); max-width: 40ch; }
+.vstate .acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.prog { width: 240px; height: 4px; border-radius: 999px; background: var(--color-line); overflow: hidden; margin-top: 8px; }
+.prog i { display: block; height: 100%; background: var(--color-accent); transform-origin: left; transform: scaleX(0.04); transition: transform var(--duration-quick) var(--ease-out); }
+.vsk { display: grid; gap: 16px; width: min(100%, 816px); align-self: start; }
+.vsk .sk { height: auto; aspect-ratio: 612 / 792; border-radius: 2px; background: var(--color-raised); }
+.vsk.img .sk { aspect-ratio: 4 / 3; border-radius: 10px; }
+
+/* phone action sheet (chat-mobile.html .sheet) */
+.vsheet { position: absolute; inset: 0; z-index: 6; }
+.vsheet .scrim { position: absolute; inset: 0; background: var(--color-scrim); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; z-index: 35; background: var(--color-overlay); border-radius: 22px 22px 0 0; box-shadow: var(--shadow-overlay); padding: 8px 8px 24px; display: grid; gap: 4px; max-height: 88%; overflow: auto; }
+.sheet .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-line); justify-self: center; margin-bottom: 6px; }
+.sheet .item { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 14px; border: 0; border-radius: 12px; background: transparent; color: var(--color-ink); font: 500 1rem/1.3 var(--font-body); text-align: left; cursor: pointer; }
+.sheet .item:active, .sheet .item:hover { background: var(--color-hover); }
+.sheet .item svg { color: var(--color-ink-muted); }
+.sheet hr { border: 0; height: 1px; background: var(--color-line); margin: 4px 14px; }
+.sheet .shd { display: grid; grid-template-columns: 36px minmax(0, 1fr) 44px; gap: 4px 12px; align-items: start; padding: 0 0 8px 14px; }
+.sheet .shd b { font-weight: 600; overflow-wrap: anywhere; padding-top: 2px; }
+.sheet .shd small { grid-column: 2; color: var(--color-ink-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; display: flex; flex-wrap: wrap; gap: 4px 6px; align-items: center; }
+.sheet .shd .ibtn { width: 44px; height: 44px; grid-row: 1 / span 3; grid-column: 3; }
+.sheet .shd .fi { grid-row: 1 / span 2; }
+
+/* ---------- tablet widths: labels collapse to icons ---------- */
+@container vw (max-width: 1023px) {
+  .vbar .acts .btn { width: 36px; padding: 0; }
+  .vbar .acts .btn .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .vbar .meta small .verb { display: none; }
+}
+/* ---------- phone: full screen, compact bar, buttons not swipes, actions in a sheet ---------- */
+@container vw (max-width: 767px) {
+  .vdlg { border-radius: 0; box-shadow: none; }
+  .vbar { gap: 4px; padding: 6px 4px; padding-top: max(6px, env(safe-area-inset-top)); }
+  .vbar .ibtn { width: 44px; height: 44px; }
+  .vbar .ibtn::before { inset: 0; }
+  .vbar .vclose { order: -1; }
+  .vbar .fi, .vbar .vsep, .vbar .who, .vbar .acts .btn { display: none; }
+  .vbar .more { display: inline-grid; }
+  .vbar .meta { padding-left: 4px; }
+  .vnav { display: none !important; }
+  .vbody { padding: 12px 8px 72px; }
+  .vbody.img img { top: 12px; left: 8px; width: calc(100% - 16px); height: calc(100% - 84px); }
+  .vbody.doc { padding: 8px; }
+  .vbody.media { padding: 12px 8px 24px; }
+  .vtools { bottom: 12px; }
+  .vtools .zoom { display: none; }
+  .vfoot { justify-content: space-between; padding: 4px 8px; padding-bottom: max(4px, env(safe-area-inset-bottom)); background: var(--color-base); }
+  .vfoot .fnav { display: inline-grid; width: 44px; height: 44px; }
+  .vfoot .fnav::before { inset: 0; }
+  .vdoc { border-radius: 8px; }
+}
+@container vw (min-width: 768px) { .vsheet { display: none !important; } }
+
+/* motion (DESIGN.md §7: Modal / Trình xem ảnh / Đổi ảnh) */
+@keyframes fade { from { opacity: 0; } }
+@keyframes scrim-out { to { opacity: 0; } }
+@keyframes modal-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } }
+@keyframes v-zoom { from { opacity: 0; transform: scale(0.98); } }
+@keyframes v-from-r { from { opacity: 0; transform: translateX(16px); } }
+@keyframes v-from-l { from { opacity: 0; transform: translateX(-16px); } }
+@keyframes sheet-in { from { transform: translateY(100%); } }
+@keyframes pulse { 50% { opacity: 0.5; } }
+.vwrap.live.enter { animation: fade var(--duration-base) var(--ease-out) both; }
+.vwrap.live.enter .vdlg { animation: modal-in var(--duration-layout) var(--ease-out-expo) both; }
+.vwrap.live.exit { animation: scrim-out 210ms var(--ease-in) both; }
+@media (max-width: 767px) { .vwrap.live.enter .vdlg { animation-name: v-zoom; } }
+.vbody.from-r { animation: v-from-r var(--duration-quick) var(--ease-out) both; }
+.vbody.from-l { animation: v-from-l var(--duration-quick) var(--ease-out) both; }
+.vbody.swap { animation: fade var(--duration-quick) var(--ease-out) both; }
+.vsheet.enter .scrim { animation: fade var(--duration-base) var(--ease-out) both; }
+.vsheet.enter .sheet { animation: sheet-in var(--duration-layout) var(--ease-out-expo) both; }
+html.reduce .vwrap.live.enter .vdlg, html.reduce .vbody.from-r, html.reduce .vbody.from-l, html.reduce .vsheet.enter .sheet { animation-name: fade; animation-duration: 120ms; }
+html.reduce .vwrap.live.enter, html.reduce .vwrap.live.exit { animation-duration: 120ms; }
+html.reduce .prog i { transition: none; }
+html.reduce .sk { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .vwrap.live.enter .vdlg, .vbody.from-r, .vbody.from-l, .vsheet.enter .sheet { animation-name: fade; animation-duration: 120ms; }
+  .vwrap.live.enter, .vwrap.live.exit { animation-duration: 120ms; }
+  .prog i { transition: none; }
+  .sk { animation: none; }
+}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-more-h" viewBox="0 0 24 24"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol>
+  <symbol id="i-sheet" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M8 13h2"/><path d="M14 13h2"/><path d="M8 17h2"/><path d="M14 17h2"/></symbol>
+  <symbol id="i-file-text" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M10 9H8"/><path d="M16 13H8"/><path d="M16 17H8"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <!-- lucide, same stroke: film, music, archive, presentation, file-code, file-x, file, minus, plus, scan -->
+  <symbol id="i-film" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M7 3v18"/><path d="M3 7.5h4"/><path d="M3 12h18"/><path d="M3 16.5h4"/><path d="M17 3v18"/><path d="M17 7.5h4"/><path d="M17 16.5h4"/></symbol>
+  <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-archive" viewBox="0 0 24 24"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8"/><path d="M10 12h4"/></symbol>
+  <symbol id="i-slides" viewBox="0 0 24 24"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></symbol>
+  <symbol id="i-file-code" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m10 13-2 2 2 2"/><path d="m14 17 2-2-2-2"/></symbol>
+  <symbol id="i-file-x" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m14.5 12.5-5 5"/><path d="m9.5 12.5 5 5"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-scan" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/></symbol>
+</svg>
+
+<template id="tpl-viewer">
+  <div class="vdlg">
+    <div class="vbar">
+      <span class="fi" data-r="tile"><svg class="i"><use data-r="icon" href="#i-file"/></svg></span>
+      <div class="meta"><b class="mid" data-r="name"><span class="a"></span><span class="b"></span></b><small data-r="sub"></small></div>
+      <div class="acts">
+        <button class="btn ghost sm" type="button" data-v="drive" aria-label="Mở trong Tài liệu" title="Mở thư mục chứa tệp trong Tài liệu"><svg class="i s"><use href="#i-folder"/></svg><span class="lbl">Mở trong Tài liệu</span></button>
+        <button class="btn sm" type="button" data-v="dl" aria-label="Tải xuống" title="Tải xuống"><svg class="i s"><use href="#i-download"/></svg><span class="lbl">Tải xuống</span></button>
+        <span class="vsep" aria-hidden="true"></span>
+        <button class="ibtn more" type="button" data-v="sheet" aria-label="Thao tác với tệp" aria-haspopup="dialog" aria-expanded="false"><svg class="i"><use href="#i-more-h"/></svg></button>
+      </div>
+      <button class="ibtn vclose" type="button" data-v="close" aria-label="Đóng trình xem" title="Đóng (Esc)"><svg class="i"><use href="#i-x"/></svg></button>
+    </div>
+    <div class="vstage">
+      <div class="vbody" data-r="body"></div>
+      <div class="vtools" data-r="tools" role="toolbar" aria-label="Xem"></div>
+      <button class="vnav prev" type="button" data-v="prev" aria-label="Tệp trước" title="Tệp trước (←)"><svg class="i"><use href="#i-left"/></svg></button>
+      <button class="vnav next" type="button" data-v="next" aria-label="Tệp sau" title="Tệp sau (→)"><svg class="i"><use href="#i-right"/></svg></button>
+    </div>
+    <div class="vfoot" data-r="foot">
+      <button class="ibtn fnav" type="button" data-v="prev" aria-label="Tệp trước"><svg class="i"><use href="#i-left"/></svg></button>
+      <span class="vcount" data-r="count"></span>
+      <button class="ibtn fnav" type="button" data-v="next" aria-label="Tệp sau"><svg class="i"><use href="#i-right"/></svg></button>
+    </div>
+    <div class="sr" aria-live="polite" data-r="live"></div>
+    <div class="vsheet" data-r="sheet" hidden>
+      <div class="scrim" data-v="sheet-close"></div>
+      <div class="sheet" role="dialog" aria-modal="true" aria-label="Thao tác với tệp">
+        <div class="grab" aria-hidden="true"></div>
+        <div class="shd" data-r="shd"></div>
+        <hr>
+        <button class="item" type="button" data-v="dl"><svg class="i"><use href="#i-download"/></svg>Tải xuống</button>
+        <button class="item" type="button" data-v="drive"><svg class="i"><use href="#i-folder"/></svg>Mở trong Tài liệu</button>
+      </div>
+    </div>
+  </div>
+</template>
+
+<div class="page" id="page">
+<header>
+  <h1>Trình xem tệp</h1>
+  <p>Một trình xem cho mọi tệp ở Nexus: ảnh, PDF, Word, Excel, PowerPoint, video, âm thanh, văn bản, mã và CSV. Mở từ tin nhắn, thread, tab Tệp của nhóm hay Tài liệu đều ra cùng một màn. Office được máy chủ đổi sang PDF, nên lần đầu mở mất vài giây; lần sau mở ngay. Nhãn <span class="need">cần backend</span> đánh dấu phần chưa có API.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Giao diện">
+      <button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button>
+      <button type="button" data-theme-set="light" aria-pressed="false">Sáng</button>
+      <button type="button" data-theme-set="dark" aria-pressed="false">Tối</button>
+    </div>
+    <label class="check"><input type="checkbox" id="reduce"> Giảm chuyển động</label>
+  </div>
+  <nav class="toc" aria-label="Các phần"><a href="#open">Mở từ đâu</a><a href="#kinds">Theo loại tệp</a><a href="#states">Trạng thái</a><a href="#phone">Điện thoại</a><a href="#keys">Bàn phím</a></nav>
+</header>
+
+<!-- ============================ 1 · OPENERS ============================ -->
+<section class="screen" id="open" aria-labelledby="h-open">
+  <div class="screen-head">
+    <h2 id="h-open">1 · Mở từ đâu</h2>
+    <p>Bấm bất kỳ ảnh, thẻ tệp hay hàng tệp nào dưới đây để mở trình xem thật. ←/→ đi qua các tệp <b>cùng một tin</b> (tin nhắn, thread) hoặc <b>cùng một danh sách</b> (tab Tệp, thư mục). Đóng thì focus quay về đúng chỗ đã bấm.</p>
+  </div>
+  <div class="openers">
+    <div class="ocard">
+      <span class="src">Tin nhắn · nhóm Đối soát</span>
+      <div class="msg">
+        <span class="av" style="--p:var(--color-person-3)">HY</span>
+        <div style="min-width:0">
+          <div class="who"><b>Phạm Hải Yến</b><time>09:36</time></div>
+          <p>Gửi anh chị bộ hồ sơ đối soát tháng 10. Biên bản em để trong thư mục Đối soát.</p>
+          <div class="att" data-list="m1"></div>
+        </div>
+      </div>
+    </div>
+    <div class="ocard">
+      <span class="src">Thread · trả lời tin của Phạm Hải Yến</span>
+      <div class="thread panel">
+        <div class="msg">
+          <span class="av" style="--p:var(--color-person-5)">MĐ</span>
+          <div style="min-width:0">
+            <div class="who"><b>Trần Minh Đức</b><time>09:52</time></div>
+            <p>Em chạy lại đối chiếu, ra 3 giao dịch lệch. Script và ghi chú ca đêm đây ạ.</p>
+            <div class="att" data-list="th"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ocard">
+      <span class="src">Nhóm Đối soát · tab Tệp</span>
+      <div class="tabs" aria-hidden="true"><span>Trò chuyện</span><span aria-current="page">Tệp</span><span>Công việc</span></div>
+      <div class="tblw"><div class="tbl" data-list="tab" role="table" aria-label="Tệp trong nhóm Đối soát"></div></div>
+    </div>
+    <div class="ocard">
+      <span class="src">Tài liệu</span>
+      <div class="crumb"><svg class="i s" style="color:var(--color-accent)"><use href="#i-folder"/></svg>Khối Vận hành <svg class="i s"><use href="#i-right"/></svg><b>Báo cáo quý</b></div>
+      <div class="tblw"><div class="tbl" data-list="docs" role="table" aria-label="Tệp trong Báo cáo quý"></div></div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Thẻ tệp đổi hành vi:</b> bấm thẻ mở trình xem (trước đây: tải xuống trong code, "mở xem trước trong Tài liệu" trong DESIGN.md). Nút Tải xuống khi trỏ chuột vẫn ở cuối thẻ, là nút riêng. Accessible name của thẻ: "Xem trước &lt;tên tệp&gt;".</li>
+    <li><b>Phạm vi ←/→:</b> ảnh và tệp của cùng một tin gộp chung một dãy theo thứ tự hiển thị (ảnh trước, tệp sau). Tab Tệp và thư mục: dãy là danh sách đang thấy, theo sắp xếp và bộ lọc hiện tại. Không quay vòng.</li>
+    <li><b>Bản Word trong tin của Yến</b> chưa có bản PDF: lần đầu mở sẽ thấy "Đang chuẩn bị bản xem trước…" khoảng 4 giây (thật: tới ~10 giây), mở lại thì có ngay. Bản PowerPoint trong Báo cáo quý đã có sẵn bản PDF nên mở ngay.</li>
+    <li><b>Mở trong Tài liệu</b> chỉ hiện khi tệp nằm trong một thư mục của Tài liệu mà người xem mở được. Mở từ chính Tài liệu thì không hiện (đang ở đó rồi). <span class="need">cần backend</span> trả kèm thư mục chứa tệp và quyền đọc thư mục đó.</li>
+  </ol>
+</section>
+
+<!-- ============================ 2 · KINDS ============================ -->
+<section class="screen" id="kinds" aria-labelledby="h-kinds">
+  <div class="screen-head">
+    <h2 id="h-kinds">2 · Thân theo loại tệp</h2>
+    <p>Thanh trên và nút trước/sau giữ nguyên cho mọi loại; chỉ phần giữa và viên công cụ ở đáy đổi theo loại. Khung này là bản dựng tại chỗ của đúng trình xem ở trên (1440, desktop).</p>
+  </div>
+  <div class="demo"><span class="k">Loại</span><div class="seg" role="group" aria-label="Chọn loại tệp" id="seg-kinds"></div></div>
+  <div class="vwrap frame" id="fr-kinds" inert></div>
+  <ol class="notes">
+    <li><b>Ảnh:</b> vừa khung (<code>object-fit: contain</code>) là mặc định. Viên công cụ: <b>Vừa khung</b> / <b>100%</b>; bấm vào ảnh cũng đổi qua lại. Ở 100% kéo để di chuyển, cuộn bằng chuột hoặc bàn di. Đổi tệp thì về Vừa khung.</li>
+    <li><b>PDF:</b> các trang xếp dọc, cuộn như trình đọc PDF; trang chỉ được vẽ khi gần tới (bản dựng chưa tới là khung giấy đang tải). Viên công cụ: <b>Trang [n] / N</b> (gõ số rồi Enter để nhảy) · thu nhỏ · mức hiện tại (bấm để về vừa chiều ngang) · phóng to. Bước 25%, từ 50% tới 200%. Có lớp chữ để bôi đen, chép và đọc bằng trình đọc màn hình.</li>
+    <li><b>Office</b> (Word, Excel, PowerPoint, OpenDocument): cùng thân PDF, thêm một dòng mờ trên trang đầu "Bản xem trước từ tệp Word, có thể khác bản gốc đôi chút." Trình chiếu là trang ngang, bảng tính là các trang in của sheet.</li>
+    <li><b>Video, âm thanh:</b> điều khiển gốc của trình duyệt (<code>controls</code>, <code>preload="metadata"</code>), không tự phát. Âm thanh là thẻ giữa sân khấu với tên và thời lượng.</li>
+    <li><b>Văn bản, mã, CSV:</b> chữ đơn cách 13px (<code>--font-mono</code>). Văn bản xuống dòng, tối đa 88 ký tự. Mã giữ dòng, có số dòng (không chọn được khi bôi đen), cuộn ngang. CSV là bảng kẻ mảnh, tiêu đề dính trên, cột số thứ tự dính trái, cột số căn phải. Chỉ hiện <b>500 dòng</b> hoặc <b>1 MB</b> đầu; dải đáy luôn nói đang xem bao nhiêu và có <b>Tải xuống để xem đủ</b>.</li>
+    <li><b>Không xem được</b> (tệp nén, loại lạ): icon lớn theo loại + "Không xem trước được loại tệp này" + Tải xuống (primary).</li>
+  </ol>
+</section>
+
+<!-- ============================ 3 · STATES ============================ -->
+<section class="screen" id="states" aria-labelledby="h-states">
+  <div class="screen-head">
+    <h2 id="h-states">3 · Trạng thái</h2>
+    <p>Thanh trên vẽ ngay từ dữ liệu nơi mở (tên, loại, dung lượng, người gửi); chỉ phần giữa chờ. Lỗi luôn nói vì sao và còn lại việc gì làm được.</p>
+  </div>
+  <div class="demo"><span class="k">Trạng thái</span><div class="seg" role="group" aria-label="Chọn trạng thái" id="seg-states"></div></div>
+  <div class="vwrap frame" id="fr-states" inert></div>
+  <ol class="notes">
+    <li><b>Đang tải:</b> khung xương đúng hình (trang giấy cho PDF/Office, khung ảnh theo tỉ lệ đã lưu), chỉ hiện sau 300ms để tệp nhanh không nhấp nháy. Không spinner toàn màn.</li>
+    <li><b>Đang chuẩn bị</b> (Office, lần đầu): thanh tiến độ "cảm giác" (nhanh lúc đầu, chậm dần, dừng ở ~92% tới khi xong), không ghi phần trăm vì máy chủ không báo tiến độ thật. Sau 15 giây câu phụ đổi thành "Tệp lớn cần lâu hơn một chút…". Xong thì trang mờ dần vào chỗ (160ms) và trình đọc màn hình nghe "Bản xem trước đã sẵn sàng". Đi sang tệp khác vẫn không huỷ việc chuyển đổi; quay lại là thấy kết quả.</li>
+    <li><b>Lỗi chuyển đổi</b> nói lý do máy chủ trả về: có mật khẩu, tệp hỏng, quá thời gian (chỉ ca này có <b>Thử lại</b>). <b>Quá lớn</b> nói dung lượng tệp và giới hạn. Cả hai có Tải xuống là việc chính.</li>
+    <li><b>Không có quyền (403):</b> không hiện tên tệp, loại, dung lượng hay người gửi, ở cả thanh trên lẫn sheet; không có Tải xuống. ←/→ vẫn đi tiếp được sang tệp khác trong dãy.</li>
+    <li><b>Đã xoá (404):</b> giữ tên nơi mở đã biết (người xem đã thấy nó trong tin hoặc thư mục), chữ mờ; không có Tải xuống, không có Mở trong Tài liệu.</li>
+    <li><b>Lỗi mạng:</b> "Không tải được tệp" + Thử lại, như các trạng thái lỗi khác của hệ.</li>
+  </ol>
+</section>
+
+<!-- ============================ 4 · PHONE ============================ -->
+<section class="screen" id="phone" aria-labelledby="h-phone">
+  <div class="screen-head">
+    <h2 id="h-phone">4 · Điện thoại (390)</h2>
+    <p>Toàn màn. Thanh trên gọn: Đóng bên trái, tên và "loại · dung lượng" ở giữa, ⋯ bên phải mở sheet thao tác. Trước/sau là nút ở thanh đáy, trong tầm ngón cái, không phải vuốt.</p>
+  </div>
+  <div class="phones" id="phones"></div>
+  <ol class="notes">
+    <li><b>Sheet ⋯:</b> đầu sheet là tên đầy đủ (xuống dòng, không cắt), loại · dung lượng, người gửi và lúc gửi; rồi Tải xuống, Mở trong Tài liệu (khi có). Đóng bằng chạm nền, Esc, nút Đóng hoặc kéo tay nắm xuống như §5 của DESIGN.md.</li>
+    <li><b>Thanh đáy:</b> nút 44 ở hai đầu, "2 / 5" giữa. Ở tệp đầu/cuối nút bị tắt (không ẩn) để vị trí không nhảy. Một tệp duy nhất thì không có thanh đáy.</li>
+    <li><b>Phóng:</b> ảnh và PDF dùng chụm hai ngón; viên công cụ chỉ còn Vừa khung / 100% (ảnh) hoặc "n / N" trang (PDF). Vuốt ngang vẫn được nhận như lối tắt, nhưng không bắt buộc.</li>
+  </ol>
+</section>
+
+<!-- ============================ 5 · KEYS ============================ -->
+<section class="screen" id="keys" aria-labelledby="h-keys">
+  <div class="screen-head">
+    <h2 id="h-keys">5 · Bàn phím và trợ năng</h2>
+  </div>
+  <dl class="kv">
+    <dt><kbd>Esc</kbd></dt><dd>Đóng sheet nếu đang mở, không thì đóng trình xem và trả focus về ảnh, thẻ hoặc hàng đã bấm.</dd>
+    <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>Tệp trước / sau. Bỏ qua khi focus ở ô số trang hoặc điều khiển video/âm thanh (ở đó phím mũi tên tua).</dd>
+    <dt><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd></dt><dd>Phóng to, thu nhỏ, về vừa khung (ảnh, PDF, Office).</dd>
+    <dt><kbd>Tab</kbd></dt><dd>Vòng trong trình xem (focus trap); trang phía sau là <code>inert</code>. Mở ra thì focus vào Đóng.</dd>
+    <dt>Vai trò</dt><dd><code>role="dialog"</code> + <code>aria-modal</code>, tên là tên tệp (<code>aria-labelledby</code>), 403 thì "Trình xem tệp". Vùng nội dung cuộn được là <code>region</code> có <code>tabindex="0"</code> ("Nội dung tệp") để cuộn bằng phím. Viên công cụ là <code>toolbar</code>; Vừa khung / 100% là nút <code>aria-pressed</code>. Vùng <code>aria-live="polite"</code> đọc "Tệp 2 / 5, tên tệp" khi đổi tệp và báo khi bản xem trước sẵn sàng. Thanh chuẩn bị là <code>progressbar</code> không có giá trị (vì không có tiến độ thật).</dd>
+    <dt>Chuyển động</dt><dd>Desktop như Modal: nền mờ dần 220ms, hộp <code>translateY(8px) scale(.98)</code> → 0, 280ms expo; đóng 210ms ease-in. Điện thoại như Trình xem ảnh: <code>scale(.98)</code> → 1. Đổi tệp: <code>translateX(±16px)</code> + mờ, 160ms. Sheet: trượt lên 280ms expo. Giảm chuyển động: chỉ mờ ≤ 120ms, thanh tiến độ không chuyển tiếp.</dd>
+  </dl>
+</section>
+</div>
+
+<!-- live viewer: one instance, painted per file -->
+<div class="vwrap live" id="viewer" hidden></div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  function $(id) { return document.getElementById(id); }
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function reduced() { return root.classList.contains('reduce') || (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  function replay(el, cls) { el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+  function exitThen(el, cls, done) {
+    if (reduced()) { done(); return; }
+    el.classList.add(cls);
+    el.addEventListener('animationend', function h(e) { if (e.target !== el) return; el.removeEventListener('animationend', h); el.classList.remove(cls); done(); });
+  }
+
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-theme-set');
+      if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+      document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    });
+  });
+  var rd = $('reduce'); rd.addEventListener('change', function () { root.classList.toggle('reduce', rd.checked); });
+
+  // ---------- mock content (image data, not UI colour). photo() is spaces.html's statement photo. ----------
+  var PH = [
+    ['#d9cfc0', '#b3a28a', -3, '#1f6f78', 3], ['#cdd3d8', '#96a2ab', 2.5, '#2b4f8c', 5], ['#ddd2bf', '#bba27e', -1.5, '#1f6f78', 2],
+    ['#c8d0c4', '#95a38f', 3.5, '#5b3d7a', 6], ['#e0d6c8', '#b9a990', -4, '#8a4b2a', 4], ['#d3d0cc', '#a29d96', 1.5, '#2b4f8c', 1]
+  ];
+  function photo(i) {
+    var p = PH[i % PH.length], rows = '';
+    for (var j = 0; j < 9; j++) {
+      var y = 196 + j * 32;
+      if (j === p[4]) rows += '<rect x="248" y="' + (y - 11) + '" width="304" height="26" rx="3" fill="#ffe27a" opacity=".9"/>';
+      rows += '<rect x="262" y="' + y + '" width="' + (96 + (j * 41) % 70) + '" height="6" rx="3" fill="#8d9398"/><rect x="474" y="' + y + '" width="' + (52 + (j * 17) % 24) + '" height="6" rx="3" fill="#53595e"/>';
+    }
+    var s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="' + p[0] + '"/><stop offset="1" stop-color="' + p[1] + '"/></linearGradient></defs><rect width="800" height="600" fill="url(#g)"/>'
+      + '<g transform="rotate(' + p[2] + ' 400 300)"><rect x="238" y="60" width="336" height="492" rx="4" fill="#000" opacity=".14"/><rect x="232" y="52" width="336" height="492" rx="4" fill="#fbfaf6"/><rect x="232" y="52" width="336" height="66" rx="4" fill="' + p[3] + '"/><rect x="256" y="78" width="118" height="12" rx="4" fill="#fff" opacity=".92"/><rect x="460" y="80" width="84" height="8" rx="4" fill="#fff" opacity=".6"/><rect x="256" y="138" width="176" height="10" rx="4" fill="#33393e"/><rect x="256" y="158" width="120" height="7" rx="3" fill="#9aa0a5"/>'
+      + rows + '<rect x="256" y="492" width="288" height="1.5" fill="#c9ccce"/><rect x="418" y="508" width="126" height="10" rx="4" fill="#33393e"/></g></svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
+  }
+  // A rendered PDF page (what the server-side PDF looks like once drawn). Paper is document content.
+  function pageSVG(kind, n, total) {
+    var W = 612, H = 792, s = '', y, j;
+    if (kind === 'slides') { W = 960; H = 540; }
+    if (kind === 'excel') { W = 792; H = 612; }
+    s += '<rect width="' + W + '" height="' + H + '" fill="#fdfdfb"/>';
+    if (kind === 'slides') {
+      s += '<rect width="' + W + '" height="96" fill="#1f6f78"/><rect x="56" y="36" width="' + (260 + n * 13 % 120) + '" height="22" rx="4" fill="#fff" opacity=".95"/>';
+      for (j = 0; j < 4; j++) s += '<circle cx="70" cy="' + (156 + j * 52) + '" r="5" fill="#1f6f78"/><rect x="88" y="' + (150 + j * 52) + '" width="' + (300 - (j * 47 + n * 11) % 120) + '" height="11" rx="4" fill="#6b7175"/>';
+      for (j = 0; j < 5; j++) { var h = 60 + ((j * 53 + n * 29) % 170); s += '<rect x="' + (560 + j * 64) + '" y="' + (440 - h) + '" width="40" height="' + h + '" rx="3" fill="' + (j === 3 ? '#c8553d' : '#8fb6ba') + '"/>'; }
+      s += '<rect x="548" y="440" width="340" height="1.5" fill="#9aa0a5"/>';
+    } else if (kind === 'excel') {
+      s += '<rect x="48" y="48" width="220" height="14" rx="4" fill="#33393e"/>';
+      for (j = 0; j < 22; j++) {
+        y = 88 + j * 22;
+        if (j === 0) s += '<rect x="48" y="' + y + '" width="696" height="22" fill="#e3efe6"/>';
+        if (j === 7 || j === 15) s += '<rect x="48" y="' + y + '" width="696" height="22" fill="#fff3c4"/>';
+        s += '<rect x="48" y="' + (y + 22) + '" width="696" height="1" fill="#d5d8da"/>';
+        for (var c = 0; c < 6; c++) { var w = c === 0 ? 70 : 40 + ((j * 7 + c * 13) % 40); s += '<rect x="' + (58 + c * 116 + (c > 2 ? 116 - w - 20 : 0)) + '" y="' + (y + 8) + '" width="' + w + '" height="6" rx="3" fill="' + (j === 0 ? '#2f6b3f' : '#7a8085') + '"/>'; }
+      }
+      for (c = 0; c <= 6; c++) s += '<rect x="' + (48 + c * 116) + '" y="88" width="1" height="484" fill="#d5d8da"/>';
+    } else {
+      y = 72;
+      if (n === 1) { s += '<rect x="72" y="72" width="300" height="18" rx="4" fill="#23292d"/><rect x="72" y="100" width="200" height="9" rx="4" fill="#9aa0a5"/>'; y = 140; }
+      for (j = 0; y < H - 96; j++) {
+        if (j % 9 === 0 && j) { y += 12; s += '<rect x="72" y="' + y + '" width="' + (140 + (j * 31 + n * 7) % 120) + '" height="11" rx="4" fill="#23292d"/>'; y += 26; continue; }
+        s += '<rect x="72" y="' + y + '" width="' + (j % 9 === 8 ? 220 + (n * 37 + j * 13) % 160 : 468 - (j * 17 + n * 5) % 36) + '" height="7" rx="3" fill="#8d9398"/>';
+        y += 17;
+      }
+    }
+    s += '<text x="' + (W / 2) + '" y="' + (H - 28) + '" font-family="Arial, sans-serif" font-size="10" fill="#9aa0a5" text-anchor="middle">' + n + ' / ' + total + '</text>';
+    return { src: 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' + W + ' ' + H + '">' + s + '</svg>'), w: W, h: H };
+  }
+  function videoPoster() {
+    var s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720"><rect width="1280" height="720" fill="#1d2629"/><rect x="120" y="90" width="1040" height="540" rx="10" fill="#eef1f0"/><rect x="120" y="90" width="220" height="540" fill="#dfe5e3"/>'
+      + '<rect x="150" y="130" width="140" height="14" rx="5" fill="#1f6f78"/><rect x="150" y="170" width="120" height="10" rx="4" fill="#8d9398"/><rect x="150" y="196" width="150" height="10" rx="4" fill="#8d9398"/><rect x="380" y="130" width="360" height="18" rx="5" fill="#23292d"/>'
+      + '<rect x="380" y="180" width="740" height="1.5" fill="#c9ccce"/><rect x="380" y="200" width="740" height="30" fill="#fff3c4"/><rect x="380" y="250" width="620" height="9" rx="4" fill="#8d9398"/><rect x="380" y="280" width="680" height="9" rx="4" fill="#8d9398"/><rect x="380" y="310" width="540" height="9" rx="4" fill="#8d9398"/>'
+      + '<circle cx="640" cy="360" r="56" fill="#000" opacity=".45"/><path d="M622 330 L668 360 L622 390 Z" fill="#fff"/></svg>';
+    return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(s);
+  }
+
+  var TEXT = 'GHI CHÚ CA ĐÊM · 10/10/2026\n\n22:40  Sao kê Vietcombank về muộn 35 phút, đã báo anh Vinh.\n23:05  Chạy đối chiếu lần 1: lệch 5 giao dịch.\n23:20  2 giao dịch hoàn tiền đã khớp sau khi ngân hàng gửi bổ sung.\n23:48  Còn 3 giao dịch lệch, tổng 12.450.000 ₫, chuyển chị Yến xử lý sáng mai.\n\nViệc cần làm ca sáng:\n- Gọi ngân hàng xác nhận 3 giao dịch trên.\n- Cập nhật biên bản đối soát tháng 10 (bản nháp trong thư mục Đối soát).\n- Nếu đã khớp, gửi phê duyệt cho chị Hoa trước 11:00.\n\nGhi chú thêm: cổng thanh toán báo trễ webhook từ 22:10 đến 22:25. Các giao dịch trong khoảng này cần soát kỹ hơn, đặc biệt những giao dịch có trạng thái "đang xử lý" ở phía ngân hàng nhưng đã "thành công" ở phía mình.';
+  var CODE = [
+    ['# Đối chiếu sao kê ngân hàng với giao dịch nội bộ', 1],
+    ['# Chạy: python doi-chieu-sao-ke.py sao-ke.csv giao-dich.csv', 1],
+    ['import csv', 0], ['import sys', 0], ['from decimal import Decimal', 0], ['', 0],
+    ['NGUONG_LECH = Decimal("0")', 0], ['', 0],
+    ['def doc(duong_dan):', 0],
+    ['    with open(duong_dan, newline="", encoding="utf-8") as f:', 0],
+    ['        return {dong["ma_tham_chieu"]: dong for dong in csv.DictReader(f)}', 0], ['', 0],
+    ['def doi_chieu(sao_ke, noi_bo):', 0],
+    ['    lech = []', 0],
+    ['    for ma, dong in sao_ke.items():', 0],
+    ['        khop = noi_bo.get(ma)', 0],
+    ['        if khop is None:', 0],
+    ['            lech.append((ma, "thiếu ở hệ thống", dong["so_tien"]))', 0],
+    ['            continue', 0],
+    ['        chenh = Decimal(dong["so_tien"]) - Decimal(khop["so_tien"])', 0],
+    ['        if abs(chenh) > NGUONG_LECH:', 0],
+    ['            lech.append((ma, "lệch số tiền", str(chenh)))', 0],
+    ['    return lech', 0], ['', 0],
+    ['if __name__ == "__main__":', 0],
+    ['    sao_ke, noi_bo = doc(sys.argv[1]), doc(sys.argv[2])', 0],
+    ['    ket_qua = doi_chieu(sao_ke, noi_bo)', 0],
+    ['    # In ra để dán vào biên bản đối soát', 1],
+    ['    for ma, ly_do, so_tien in ket_qua:', 0],
+    ['        print(f"{ma}\\t{ly_do}\\t{so_tien}")', 0],
+    ['    print(f"Tổng: {len(ket_qua)} giao dịch lệch")', 0]
+  ];
+  var BANKS = ['Vietcombank', 'Techcombank', 'BIDV', 'MB Bank', 'ACB'], ND = ['Thanh toán đơn hàng', 'Hoàn tiền', 'Nạp ví', 'Phí dịch vụ', 'Chuyển khoản'];
+  function money(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+
+  // ---------- data: people and files (names only, never ids) ----------
+  var P = { yen: ['Phạm Hải Yến', 'HY', 3], duc: ['Trần Minh Đức', 'MĐ', 5], vinh: ['Lê Quang Vinh', 'QV', 1], lan: ['Nguyễn Thu Lan', 'TL', 6], khai: ['Đỗ Văn Khải', 'VK', 4], hoa: ['Lê Thị Hoa', 'TH', 7] };
+  // kind -> label (file-kind.ts), tile tone, icon
+  var K = {
+    image: ['Ảnh', 'media', 'i-image'], pdf: ['PDF', 'pdf', 'i-file-text'], word: ['Văn bản', 'doc', 'i-file-text'],
+    excel: ['Bảng tính', '', 'i-sheet'], slides: ['Trình chiếu', 'slides', 'i-slides'], odt: ['Văn bản', 'doc', 'i-file-text'],
+    video: ['Video', 'media', 'i-film'], audio: ['Âm thanh', 'media', 'i-music'], text: ['Văn bản', 'doc', 'i-file-text'],
+    code: ['Mã nguồn', 'other', 'i-file-code'], csv: ['Bảng tính', '', 'i-sheet'], zip: ['Tệp nén', 'other', 'i-archive']
+  };
+  var OFFICE = { word: 'Word', excel: 'Excel', slides: 'PowerPoint', odt: 'OpenDocument' };
+  var STATE_IC = { word: 'doc', odt: 'doc', slides: 'slides', excel: 'sheet' };
+  function f(n, k, s, o) { o = o || {}; o.n = n; o.k = k; o.s = s; return o; }
+  var L = {
+    m1: { from: 'chat', verb: 'gửi lúc', who: 'yen', when: '09:36', full: '10/10/2026 09:36', files: [
+      f('sao-ke-gd-01.jpg', 'image', '1,8 MB', { ph: 0 }), f('sao-ke-gd-02.jpg', 'image', '2,1 MB', { ph: 1 }),
+      f('bien-ban-doi-soat-thang-10.docx', 'word', '248 KB', { pages: 4, cold: true, drive: true }),
+      f('tong-hop-doi-soat-thang-10.xlsx', 'excel', '86 KB', { pages: 2 }),
+      f('quy-trinh-doi-soat-cuoi-ngay-ban-cap-nhat-thang-10.pdf', 'pdf', '1,2 MB', { pages: 12, drive: true })] },
+    th: { from: 'chat', verb: 'gửi lúc', who: 'duc', when: '09:52', full: '10/10/2026 09:52', files: [
+      f('doi-chieu-sao-ke.py', 'code', '6 KB'), f('giao-dich-lech-10-10.csv', 'csv', '2,1 MB', { rows: 12480 }), f('ghi-chu-ca-dem.txt', 'text', '3 KB')] },
+    tab: { from: 'chat', verb: 'gửi', files: [
+      f('huong-dan-cong-cu-doi-soat.mp4', 'video', '38 MB', { who: 'vinh', when: '08/10', full: '08/10/2026 15:12', dur: '6:24' }),
+      f('ghi-am-giao-ban-thu-hai.m4a', 'audio', '4,2 MB', { who: 'lan', when: '06/10', full: '06/10/2026 08:30', dur: '12:40' }),
+      f('chung-tu-goc-thang-10.zip', 'zip', '24 MB', { who: 'yen', when: '05/10', full: '05/10/2026 17:02' }),
+      f('bao-cao-kiem-toan-2025.pdf', 'pdf', '186 MB', { who: 'khai', when: '02/10', full: '02/10/2026 10:15', state: 'large' }),
+      f('hop-dong-ngan-hang-doi-tac.docx', 'word', '1,4 MB', { who: 'duc', when: '01/10', full: '01/10/2026 14:40', state: 'fail' }),
+      f('bang-luong-thang-9.xlsx', 'excel', '320 KB', { who: 'hoa', when: '30/09', full: '30/09/2026 16:05', state: 'deny' })] },
+    docs: { from: 'docs', verb: 'tải lên', files: [
+      f('bao-cao-van-hanh-quy-3.pptx', 'slides', '3,4 MB', { who: 'khai', when: '03/10', full: '03/10/2026 11:20', pages: 8 }),
+      f('Quy chế tạm ứng 2026.pdf', 'pdf', '640 KB', { who: 'khai', when: '02/10', full: '02/10/2026 09:00', pages: 6 }),
+      f('so-tay-van-hanh.odt', 'odt', '412 KB', { who: 'hoa', when: '28/09', full: '28/09/2026 10:45', pages: 5, cold: true }),
+      f('ke-hoach-quy-4-ban-cu.docx', 'word', '96 KB', { who: 'lan', when: '20/09', full: '20/09/2026 13:30', state: 'gone' })] }
+  };
+  function whoOf(list, file) { return P[file.who || list.who]; }
+  function whenOf(list, file) { return [file.when || list.when, file.full || list.full]; }
+
+  // ---------- render helpers ----------
+  function splitName(n) { var dot = n.lastIndexOf('.'), cut = Math.max(0, (dot > 0 ? dot : n.length) - 6); return n.length <= 18 ? [n, ''] : [n.slice(0, cut), n.slice(cut)]; }
+  function av(p, cls) { return '<span class="av ' + (cls || 's20') + '" style="--p:var(--color-person-' + p[2] + ')" aria-hidden="true">' + p[1] + '</span>'; }
+  function kindLine(file) { return K[file.k][0] + ' · ' + file.s; }
+
+  function pagesHTML(file) {
+    var total = file.pages || 4, h = '', kind = file.k === 'pdf' ? 'doc' : file.k;
+    if (OFFICE[file.k]) h += '<p class="vnote"><svg class="i"><use href="#i-info"/></svg>Bản xem trước từ tệp ' + OFFICE[file.k] + ', có thể khác bản gốc đôi chút.</p>';
+    h += '<div class="pages">';
+    for (var i = 1; i <= total; i++) {
+      if (i > 6) { h += '<div class="pg-sk sk" data-page="' + i + '" aria-hidden="true"></div>'; continue; } // not drawn yet: far from view
+      var pg = pageSVG(kind === 'word' || kind === 'odt' ? 'doc' : kind, i, total);
+      h += '<img data-page="' + i + '" src="' + pg.src + '" width="' + pg.w + '" height="' + pg.h + '" alt="Trang ' + i + '" loading="lazy">';
+    }
+    return h + '</div>';
+  }
+  function csvHTML(file) {
+    var h = '<div class="vdoc csv"><div class="scr" tabindex="0" role="region" aria-label="Nội dung tệp"><table><thead><tr><th class="n" scope="col"><span class="sr">Dòng</span></th><th scope="col">Ngày</th><th scope="col">Giờ</th><th scope="col">Ngân hàng</th><th scope="col">Nội dung</th><th scope="col" class="r">Số tiền (₫)</th><th scope="col" class="r">Hệ thống (₫)</th><th scope="col">Ghi chú</th></tr></thead><tbody>';
+    for (var i = 1; i <= 500; i++) {
+      var a = 150000 + ((i * 7919) % 9000) * 1000, lech = i % 97 === 3;
+      h += '<tr><td class="n">' + i + '</td><td class="tnum">10/10/2026</td><td class="tnum">' + String(8 + (i * 7) % 15).padStart(2, '0') + ':' + String((i * 13) % 60).padStart(2, '0') + '</td><td>' + BANKS[i % 5] + '</td><td>' + ND[(i * 3) % 5] + '</td><td class="r">' + money(a) + '</td><td class="r">' + money(lech ? a - 50000 : a) + '</td><td>' + (lech ? 'Lệch 50.000' : '') + '</td></tr>';
+    }
+    return h + '</tbody></table></div><div class="vtrunc"><span>Đang xem 500 dòng đầu trên <span class="tnum">' + money(file.rows) + '</span> dòng.</span><button class="btn sm" type="button" data-v="dl"><svg class="i s"><use href="#i-download"/></svg>Tải xuống để xem đủ</button></div></div>';
+  }
+  function codeHTML() {
+    var h = '<div class="vdoc code"><div class="scr" tabindex="0" role="region" aria-label="Nội dung tệp"><pre>';
+    CODE.forEach(function (l, i) { h += '<span class="ln">' + (i + 1) + '</span>' + (l[1] ? '<span class="cm">' + esc(l[0]) + '</span>' : esc(l[0])) + '\n'; });
+    return h + '</pre></div></div>';
+  }
+  function stateHTML(ic, icon, title, sub, acts, extra) {
+    return '<div class="vstate"><span class="ic ' + ic + '" aria-hidden="true"><svg class="i"><use href="#' + icon + '"/></svg></span><b>' + title + '</b>' + (sub ? '<p>' + sub + '</p>' : '') + (extra || '') + (acts ? '<div class="acts">' + acts + '</div>' : '') + '</div>';
+  }
+  var DL_PRIMARY = '<button class="btn primary" type="button" data-v="dl"><svg class="i s"><use href="#i-download"/></svg>Tải xuống</button>';
+
+  // state: ok | loading | prep | fail | large | deny | gone | net
+  function body(file, st, ctx) {
+    var k = file.k, ic = STATE_IC[k] || (k === 'pdf' ? 'bad' : '');
+    if (st === 'loading') return { cls: 'pdf', html: k === 'image' ? '<div class="vsk img" aria-hidden="true"><div class="sk"></div></div>' : '<div class="vsk" aria-hidden="true"><div class="sk"></div><div class="sk"></div></div>', busy: true };
+    if (st === 'prep') return { cls: '', busy: true, html: stateHTML(ic, K[k][2], 'Đang chuẩn bị bản xem trước…', ctx.slow ? 'Tệp lớn cần lâu hơn một chút. Bạn có thể tải xuống thay vì chờ.' : 'Lần đầu mở tệp ' + OFFICE[k] + ' cần vài giây. Những lần sau sẽ mở ngay.', '<button class="btn ghost sm" type="button" data-v="dl"><svg class="i s"><use href="#i-download"/></svg>Tải xuống thay vì chờ</button>', '<div class="prog" role="progressbar" aria-label="Đang chuẩn bị bản xem trước"><i data-r="prog"></i></div>') };
+    if (st === 'fail') return { cls: '', html: stateHTML('bad', 'i-alert', 'Không tạo được bản xem trước', 'Tệp ' + OFFICE[k] + ' này có mật khẩu nên máy chủ không mở được. Tải xuống rồi mở bằng ' + OFFICE[k] + '.', DL_PRIMARY) };
+    if (st === 'large') return { cls: '', html: stateHTML(ic || 'bad', K[k][2], 'Tệp quá lớn để xem trước', 'Tệp này ' + file.s + ', vượt giới hạn xem trước 100 MB. Tải xuống để mở trên máy.', DL_PRIMARY) };
+    if (st === 'deny') return { cls: '', html: stateHTML('', 'i-lock', 'Bạn không có quyền xem tệp này', 'Hỏi người đã chia sẻ để được cấp quyền.', '') };
+    if (st === 'gone') return { cls: '', html: stateHTML('', 'i-file-x', 'Tệp này đã bị xoá', 'Người tải lên hoặc chủ thư mục đã xoá tệp, nên không còn bản nào để xem hay tải xuống.', '') };
+    if (st === 'net') return { cls: '', html: stateHTML('bad', 'i-alert', 'Không tải được tệp', 'Kết nối tới máy chủ bị gián đoạn. Kiểm tra mạng rồi thử lại.', '<button class="btn" type="button" data-v="retry"><svg class="i s"><use href="#i-retry"/></svg>Thử lại</button>') };
+    if (k === 'image') return { cls: 'img' + (ctx.one ? ' one' : ''), html: '<img src="' + photo(file.ph || 0) + '" alt="' + esc(file.n) + '" data-v="toggle-zoom">', tools: 'img' };
+    if (k === 'pdf' || OFFICE[k]) return { cls: 'pdf', html: pagesHTML(file), tools: 'pdf', region: true };
+    if (k === 'video') return { cls: 'media', html: '<video controls preload="none" poster="' + videoPoster() + '" aria-label="' + esc(file.n) + '"></video>' };
+    if (k === 'audio') return { cls: 'media', html: '<div class="vaudio"><span class="fi media" style="width:56px;height:56px;border-radius:12px" aria-hidden="true"><svg class="i" style="width:28px;height:28px"><use href="#i-music"/></svg></span><b>' + esc(file.n) + '</b><small class="muted tnum">Âm thanh · ' + file.s + ' · ' + file.dur + '</small><audio controls preload="none" aria-label="' + esc(file.n) + '"></audio></div>' };
+    if (k === 'text') return { cls: 'doc', html: '<div class="vdoc text"><div class="scr" tabindex="0" role="region" aria-label="Nội dung tệp"><pre>' + esc(TEXT) + '</pre></div></div>' };
+    if (k === 'code') return { cls: 'doc', html: codeHTML() };
+    if (k === 'csv') return { cls: 'doc', html: csvHTML(file) };
+    return { cls: '', html: stateHTML('', K[k][2], 'Không xem trước được loại tệp này', K[k][0] + ' · ' + file.s + '. Tải xuống để mở bằng ứng dụng trên máy.', DL_PRIMARY) };
+  }
+  function toolsHTML(kind, ctx, file) {
+    if (kind === 'img') return '<button class="tb" type="button" data-v="fit" aria-pressed="' + !ctx.one + '"><svg class="i s"><use href="#i-scan"/></svg>Vừa khung</button><button class="tb" type="button" data-v="one" aria-pressed="' + !!ctx.one + '">100%</button>';
+    if (kind === 'pdf') return '<span class="pg"><span class="sr">Trang</span><span aria-hidden="true" class="zoom">Trang</span><input type="text" inputmode="numeric" value="' + (ctx.page || 1) + '" aria-label="Trang hiện tại, gõ số rồi Enter để tới trang" data-r="pgin">/ ' + (file.pages || 4) + '</span>'
+      + '<span class="sep zoom" aria-hidden="true"></span><button class="tb zoom" type="button" data-v="zout" aria-label="Thu nhỏ" title="Thu nhỏ (−)"><svg class="i s"><use href="#i-minus"/></svg></button><button class="tb zv zoom" type="button" data-v="zfit" title="Vừa chiều ngang (0)" aria-label="Mức phóng ' + Math.round((ctx.z || 1) * 100) + '%, bấm để vừa chiều ngang">' + Math.round((ctx.z || 1) * 100) + '%</button><button class="tb zoom" type="button" data-v="zin" aria-label="Phóng to" title="Phóng to (+)"><svg class="i s"><use href="#i-plus"/></svg></button>';
+    return '';
+  }
+
+  // paint one viewer (live or frame). ctx: {list, i, state?, one?, z?, page?, slow?, prog?}
+  function paint(wrap, ctx, dir) {
+    var d = wrap.querySelector('.vdlg'), list = ctx.list, file = list.files[ctx.i], N = list.files.length;
+    var st = ctx.state || (file.state) || (file.cold && OFFICE[file.k] ? 'prep' : 'ok');
+    ctx.st = st;
+    var deny = st === 'deny', gone = st === 'gone', p = whoOf(list, file), w = whenOf(list, file);
+    var r = function (n) { return d.querySelector('[data-r="' + n + '"]'); };
+    var tile = r('tile'); tile.className = 'fi ' + (deny ? 'other' : K[file.k][1]); r('icon').setAttribute('href', '#' + (deny ? 'i-lock' : K[file.k][2]));
+    var nm = r('name'), parts = deny ? ['Trình xem tệp', ''] : splitName(file.n);
+    nm.querySelector('.a').textContent = parts[0]; nm.querySelector('.b').textContent = parts[1];
+    nm.title = deny ? '' : file.n;
+    nm.id = nm.id || ('vn-' + Math.random().toString(36).slice(2, 8));
+    d.setAttribute('aria-labelledby', nm.id);
+    d.querySelector('.vbar').classList.toggle('deny', deny || gone);
+    var verb = '<span class="verb">' + list.verb + ' </span>';
+    r('sub').innerHTML = deny ? '' : esc(kindLine(file)) + '<span aria-hidden="true" class="who">·</span><span class="who chip">' + av(p) + '<span class="nm">' + esc(p[0]) + '</span></span><span class="who">' + verb + '<time title="' + w[1] + '">' + w[0] + '</time></span>' + (gone ? '<span aria-hidden="true">·</span><span>Đã xoá</span>' : '');
+    var canDl = !deny && !gone, canDrive = canDl && file.drive && list.from !== 'docs';
+    d.querySelectorAll('[data-v="dl"]').forEach(function (b) { if (b.closest('.vbar, .sheet')) b.hidden = !canDl; });
+    d.querySelectorAll('[data-v="drive"]').forEach(function (b) { b.hidden = !canDrive; });
+    d.querySelector('.more').hidden = !canDl; // nothing to act on: no sheet
+    d.querySelector('.vsep').hidden = !canDl;
+    // sheet head (phone): full name, kind, who + when
+    r('shd').innerHTML = deny ? '' : '<span class="fi ' + K[file.k][1] + '" aria-hidden="true"><svg class="i"><use href="#' + K[file.k][2] + '"/></svg></span><b>' + esc(file.n) + '</b><small>' + esc(kindLine(file)) + '</small><small>' + av(p) + '<span>' + esc(p[0]) + ' ' + list.verb + ' <time title="' + w[1] + '">' + w[0] + '</time></span></small><button class="ibtn" type="button" data-v="sheet-close" aria-label="Đóng"><svg class="i"><use href="#i-x"/></svg></button>';
+    // nav
+    d.querySelectorAll('.vnav.prev').forEach(function (b) { b.hidden = ctx.i === 0 || N < 2; });
+    d.querySelectorAll('.vnav.next').forEach(function (b) { b.hidden = ctx.i === N - 1 || N < 2; });
+    d.querySelectorAll('.fnav[data-v="prev"]').forEach(function (b) { b.disabled = ctx.i === 0; });
+    d.querySelectorAll('.fnav[data-v="next"]').forEach(function (b) { b.disabled = ctx.i === N - 1; });
+    r('foot').hidden = N < 2;
+    r('count').textContent = (ctx.i + 1) + ' / ' + N;
+    r('count').setAttribute('aria-label', 'Tệp ' + (ctx.i + 1) + ' trên ' + N);
+    // body + tools
+    var b = body(file, st, ctx), bd = r('body');
+    bd.className = 'vbody ' + b.cls;
+    bd.innerHTML = b.html;
+    bd.setAttribute('aria-busy', String(!!b.busy));
+    if (b.region) { bd.setAttribute('tabindex', '0'); bd.setAttribute('role', 'region'); bd.setAttribute('aria-label', 'Nội dung tệp'); }
+    else { bd.removeAttribute('tabindex'); bd.removeAttribute('role'); bd.removeAttribute('aria-label'); }
+    r('tools').innerHTML = toolsHTML(b.tools, ctx, file);
+    if (b.tools === 'pdf') { applyZoom(d, ctx); trackPages(d, ctx); }
+    if (st === 'prep') setProg(d, ctx.prog || 0.06);
+    if (b.cls.indexOf('one') > -1) bd.scrollTo((bd.scrollWidth - bd.clientWidth) / 2, (bd.scrollHeight - bd.clientHeight) / 2);
+    if (dir) { bd.classList.remove('from-r', 'from-l', 'swap'); void bd.offsetWidth; bd.classList.add(dir > 0 ? 'from-r' : dir < 0 ? 'from-l' : 'swap'); }
+  }
+  function setProg(d, v) { var i = d.querySelector('[data-r="prog"]'); if (i) i.style.transform = 'scaleX(' + v.toFixed(3) + ')'; }
+  function applyZoom(d, ctx) {
+    var pg = d.querySelector('.pages'); if (!pg) return; var z = ctx.z || 1;
+    pg.classList.toggle('z', z !== 1); pg.style.width = z === 1 ? '' : (816 * z) + 'px';
+    var note = d.querySelector('.vnote'); if (note) note.style.width = z === 1 ? '' : (816 * z) + 'px';
+  }
+  function trackPages(d, ctx) {
+    var bd = d.querySelector('.vbody'), inp = d.querySelector('[data-r="pgin"]');
+    if (!('IntersectionObserver' in window) || !inp) return;
+    var io = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting && document.activeElement !== inp) { ctx.page = +e.target.getAttribute('data-page'); inp.value = ctx.page; } });
+    }, { root: bd, rootMargin: '-45% 0px -50% 0px' });
+    bd.querySelectorAll('[data-page]').forEach(function (n) { io.observe(n); });
+  }
+  function mount(wrap) { wrap.innerHTML = ''; wrap.appendChild($('tpl-viewer').content.cloneNode(true)); return wrap; }
+
+  // ---------- openers ----------
+  function fileCard(file, li, i) {
+    return '<div class="file"><button class="fopen" type="button" data-open="' + li + ':' + i + '" aria-label="Xem trước ' + esc(file.n) + '"><span class="fi ' + K[file.k][1] + '" aria-hidden="true"><svg class="i"><use href="#' + K[file.k][2] + '"/></svg></span><span class="fm"><b>' + esc(file.n) + '</b><small>' + esc(kindLine(file)) + '</small></span></button><button class="ibtn dl" type="button" aria-label="Tải xuống ' + esc(file.n) + '"><svg class="i s"><use href="#i-download"/></svg></button></div>';
+  }
+  document.querySelectorAll('.att[data-list]').forEach(function (el) {
+    var li = el.getAttribute('data-list'), files = L[li].files, imgs = '', h = '';
+    files.forEach(function (file, i) {
+      if (file.k === 'image') imgs += '<button class="tile" type="button" data-open="' + li + ':' + i + '" aria-label="Mở ảnh ' + esc(file.n) + '"><img src="' + photo(file.ph) + '" alt="' + esc(file.n) + '"></button>';
+      else h += fileCard(file, li, i);
+    });
+    el.innerHTML = (imgs ? '<div class="grid">' + imgs + '</div>' : '') + h;
+  });
+  document.querySelectorAll('.tbl[data-list]').forEach(function (el) {
+    var li = el.getAttribute('data-list'), list = L[li];
+    var h = '<div class="tr th" role="row"><span role="columnheader">Tên</span><span role="columnheader">' + (list.from === 'docs' ? 'Người tải lên' : 'Người gửi') + '</span><span role="columnheader" class="r">Ngày</span><span role="columnheader" class="r">Dung lượng</span></div>';
+    list.files.forEach(function (file, i) {
+      var p = whoOf(list, file);
+      h += '<button class="tr" type="button" role="row" data-open="' + li + ':' + i + '" aria-label="Xem trước ' + esc(file.n) + '"><span class="nm" role="cell"><span class="fi ' + K[file.k][1] + '" aria-hidden="true"><svg class="i"><use href="#' + K[file.k][2] + '"/></svg></span><span>' + esc(file.n) + '</span></span><span class="chip" role="cell">' + av(p) + '<span class="nm">' + esc(p[0]) + '</span></span><span class="r" role="cell">' + file.when + '</span><span class="r" role="cell">' + file.s + '</span></button>';
+    });
+    el.innerHTML = h;
+  });
+
+  // ---------- live viewer ----------
+  var vw = mount($('viewer')), V = null, page = $('page'), progT = null;
+  function announce(t) { var l = vw.querySelector('[data-r="live"]'); l.textContent = ''; setTimeout(function () { l.textContent = t; }, 30); }
+  function nameFor(file) { return file.state === 'deny' ? 'không có quyền xem' : file.n; }
+  function runPrep() {
+    clearInterval(progT);
+    var file = V.list.files[V.i];
+    if (!(file.cold && OFFICE[file.k])) return;
+    if (!file.readyAt) file.readyAt = Date.now() + 4000;
+    var start = file.readyAt - 4000;
+    progT = setInterval(function () {
+      var t = Date.now() - start;
+      if (Date.now() >= file.readyAt) {
+        clearInterval(progT); setProg(vw, 1); file.cold = false;
+        setTimeout(function () { if (V && V.list.files[V.i] === file) { paint(vw, V, 0); announce('Bản xem trước đã sẵn sàng'); } }, 160);
+        return;
+      }
+      V.prog = 0.92 * (1 - Math.exp(-t / 1600)); setProg(vw, Math.max(0.06, V.prog));
+      if (t > 15000 && !V.slow) { V.slow = true; paint(vw, V); }
+    }, 200);
+  }
+  function openLive(li, i, opener) {
+    V = { list: L[li], i: i, from: opener, z: 1, page: 1 };
+    vw.hidden = false; page.inert = true; document.body.style.overflow = 'hidden';
+    paint(vw, V); replay(vw, 'enter'); runPrep();
+    vw.querySelector('.vclose').focus();
+    announce('Tệp ' + (i + 1) + ' / ' + V.list.files.length + ', ' + nameFor(V.list.files[i]));
+  }
+  function closeLive() {
+    if (!V) return; clearInterval(progT);
+    var from = V.from; V = null; closeSheet(true);
+    vw.classList.remove('enter');
+    exitThen(vw, 'exit', function () { vw.hidden = true; page.inert = false; document.body.style.overflow = ''; if (from) from.focus({ preventScroll: true }); });
+  }
+  function step(dlt) {
+    var n = V.i + dlt; if (n < 0 || n >= V.list.files.length) return;
+    V.i = n; V.one = false; V.z = 1; V.page = 1; V.slow = false; V.prog = 0;
+    var had = document.activeElement; paint(vw, V, dlt); runPrep();
+    if (!had || had.hidden || had.disabled || !vw.contains(had)) {
+      var nx = vw.querySelector('.vnav.' + (dlt > 0 ? 'next' : 'prev'));
+      (nx && !nx.hidden && nx.offsetParent ? nx : vw.querySelector('.vclose')).focus();
+    }
+    announce('Tệp ' + (n + 1) + ' / ' + V.list.files.length + ', ' + nameFor(V.list.files[n]));
+  }
+  function openSheet() {
+    var s = vw.querySelector('.vsheet'); s.hidden = false; replay(s, 'enter');
+    vw.querySelector('.more').setAttribute('aria-expanded', 'true');
+    var first = s.querySelector('.item:not([hidden])'); if (first) first.focus();
+  }
+  function closeSheet(silent) {
+    var s = vw.querySelector('.vsheet'); if (s.hidden) return false;
+    s.hidden = true; vw.querySelector('.more').setAttribute('aria-expanded', 'false');
+    if (!silent) vw.querySelector('.more').focus();
+    return true;
+  }
+  function zoom(kind) {
+    var file = V.list.files[V.i];
+    if (V.st !== 'ok') return;
+    if (file.k === 'image') { V.one = kind === 'in' ? true : kind === 'toggle' ? !V.one : false; paint(vw, V); return; }
+    if (file.k === 'pdf' || OFFICE[file.k]) {
+      V.z = kind === 'in' ? Math.min(2, V.z + 0.25) : kind === 'out' ? Math.max(0.5, V.z - 0.25) : 1;
+      var zv = vw.querySelector('[data-v="zfit"]'); zv.textContent = Math.round(V.z * 100) + '%'; zv.setAttribute('aria-label', 'Mức phóng ' + Math.round(V.z * 100) + '%, bấm để vừa chiều ngang');
+      applyZoom(vw, V);
+    }
+  }
+  function gotoPage(n) {
+    var file = V.list.files[V.i], max = file.pages || 4; n = Math.max(1, Math.min(max, n | 0));
+    var el = vw.querySelector('[data-page="' + n + '"]'), bd = vw.querySelector('.vbody');
+    if (el) bd.scrollTo({ top: el.offsetTop - 24, behavior: reduced() ? 'auto' : 'smooth' });
+    V.page = n;
+  }
+  vw.addEventListener('click', function (e) {
+    var t = e.target.closest('[data-v]'); if (!t || !V) return;
+    var a = t.getAttribute('data-v');
+    if (a === 'close') closeLive();
+    else if (a === 'prev') step(-1);
+    else if (a === 'next') step(1);
+    else if (a === 'sheet') openSheet();
+    else if (a === 'sheet-close') closeSheet();
+    else if (a === 'fit') zoom('fit');
+    else if (a === 'one') zoom('in');
+    else if (a === 'toggle-zoom') { if (!vw.querySelector('.vbody').classList.contains('drag-moved')) zoom('toggle'); }
+    else if (a === 'zin') zoom('in');
+    else if (a === 'zout') zoom('out');
+    else if (a === 'zfit') zoom('fit');
+    else if (a === 'retry') paint(vw, V, 0);
+  });
+  vw.addEventListener('keydown', function (e) {
+    if (e.target.getAttribute && e.target.getAttribute('data-r') === 'pgin' && e.key === 'Enter') { gotoPage(+e.target.value); e.target.blur(); }
+  });
+  // pan at 100%
+  var drag = null;
+  vw.addEventListener('pointerdown', function (e) {
+    var bd = e.target.closest('.vbody.one'); if (!bd) return;
+    drag = { bd: bd, x: e.clientX, y: e.clientY, l: bd.scrollLeft, t: bd.scrollTop, moved: false }; bd.classList.add('drag'); bd.classList.remove('drag-moved');
+  });
+  window.addEventListener('pointermove', function (e) {
+    if (!drag) return; var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 4) { drag.moved = true; drag.bd.classList.add('drag-moved'); }
+    drag.bd.scrollLeft = drag.l - dx; drag.bd.scrollTop = drag.t - dy;
+  });
+  window.addEventListener('pointerup', function () { if (!drag) return; var bd = drag.bd; bd.classList.remove('drag'); setTimeout(function () { bd.classList.remove('drag-moved'); }, 0); drag = null; });
+
+  function focusables(scope) {
+    return Array.prototype.filter.call(scope.querySelectorAll('button, a[href], input, video, audio, [tabindex]:not([tabindex="-1"])'), function (n) { return !n.disabled && !n.hidden && n.offsetParent !== null && !n.closest('[hidden]'); });
+  }
+  document.addEventListener('keydown', function (e) {
+    if (!V) return;
+    var tag = e.target.tagName, inMedia = tag === 'VIDEO' || tag === 'AUDIO', inInput = tag === 'INPUT';
+    if (e.key === 'Escape') { e.preventDefault(); if (!closeSheet()) closeLive(); return; }
+    if (e.key === 'Tab') {
+      var sh = vw.querySelector('.vsheet'), scope = sh.hidden ? vw.querySelector('.vdlg') : sh.querySelector('.sheet');
+      var fs = focusables(scope); if (!fs.length) return;
+      var first = fs[0], last = fs[fs.length - 1];
+      if (!scope.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+      return;
+    }
+    if (inMedia || inInput || !vw.querySelector('.vsheet').hidden) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); step(1); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); step(-1); }
+    else if (e.key === '+' || e.key === '=') zoom('in');
+    else if (e.key === '-') zoom('out');
+    else if (e.key === '0') zoom('fit');
+  });
+  document.addEventListener('click', function (e) {
+    var o = e.target.closest('[data-open]'); if (!o) return;
+    var p = o.getAttribute('data-open').split(':'); openLive(p[0], +p[1], o);
+  });
+
+  // ---------- frames (review only; inert) ----------
+  var KINDS = [['Ảnh', 'm1', 0], ['PDF', 'm1', 4], ['Word', 'm1', 2], ['Bảng tính', 'm1', 3], ['Trình chiếu', 'docs', 0], ['Video', 'tab', 0], ['Âm thanh', 'tab', 1], ['Văn bản', 'th', 2], ['Mã nguồn', 'th', 0], ['CSV', 'th', 1], ['Tệp nén', 'tab', 2]];
+  var STATES = [['Đang tải', 'm1', 4, 'loading'], ['Đang chuẩn bị', 'm1', 2, 'prep', { prog: 0.58 }], ['Lỗi chuyển đổi', 'tab', 4, 'fail'], ['Quá lớn', 'tab', 3, 'large'], ['Không có quyền', 'tab', 5, 'deny'], ['Đã xoá', 'docs', 3, 'gone'], ['Lỗi mạng', 'm1', 3, 'net']];
+  function frameSeg(segId, frameId, items) {
+    var seg = $(segId), fr = mount($(frameId));
+    items.forEach(function (it, n) {
+      var b = document.createElement('button'); b.type = 'button'; b.textContent = it[0]; b.setAttribute('aria-pressed', String(n === 0));
+      b.addEventListener('click', function () {
+        seg.querySelectorAll('button').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+        show(it);
+      });
+      seg.appendChild(b);
+    });
+    function show(it) {
+      var ctx = { list: L[it[1]], i: it[2], state: it[3] || 'ok', z: 1, page: 1 };
+      if (it[4]) for (var k in it[4]) ctx[k] = it[4][k];
+      paint(fr, ctx);
+    }
+    show(items[0]);
+  }
+  frameSeg('seg-kinds', 'fr-kinds', KINDS);
+  frameSeg('seg-states', 'fr-states', STATES);
+
+  var PHONES = [
+    ['Ảnh · thanh đáy trước/sau', 'm1', 0, 'ok'],
+    ['PDF · trang 1 / 12', 'm1', 4, 'ok'],
+    ['Word · sheet thao tác', 'm1', 2, 'ok', true],
+    ['Đang chuẩn bị (Office lần đầu)', 'docs', 2, 'prep', false, { prog: 0.42 }],
+    ['CSV · 500 dòng đầu', 'th', 1, 'ok'],
+    ['Không có quyền (403)', 'tab', 5, 'deny']
+  ];
+  PHONES.forEach(function (p) {
+    var box = document.createElement('div');
+    box.innerHTML = '<span class="wlabel">390 · ' + p[0] + '</span><div class="vwrap frame ph" inert></div>';
+    $('phones').appendChild(box);
+    var fr = mount(box.querySelector('.vwrap')), ctx = { list: L[p[1]], i: p[2], state: p[3], z: 1, page: 1 };
+    if (p[5]) for (var k in p[5]) ctx[k] = p[5][k];
+    paint(fr, ctx);
+    if (p[4]) { fr.querySelector('.vsheet').hidden = false; fr.querySelector('.more').setAttribute('aria-expanded', 'true'); }
+  });
+})();
+</script>
+</body>
+</html>
