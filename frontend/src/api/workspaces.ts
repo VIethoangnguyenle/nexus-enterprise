@@ -15,6 +15,7 @@ export interface WorkspaceDetails {
   type?: WorkspaceType
   is_owner?: boolean
   owner_name?: string
+  owner_names?: string[]
   converted_by_name?: string
   converted_at?: string
 }

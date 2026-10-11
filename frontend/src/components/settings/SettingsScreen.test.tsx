@@ -660,6 +660,22 @@ describe('SettingsScreen: Loại workspace và chuyển đổi', () => {
     expect(screen.queryByText(/Lê Thị Hoa, Trần Văn Bình/)).toBeNull()
   })
 
+  it('renders a name with a comma as one person chip when owner_names is provided', async () => {
+    details = {
+      name: 'Không gian của bạn',
+      description: '',
+      type: 'personal',
+      is_owner: false,
+      owner_name: 'Nguyễn, Hoàng Hoa, Trần Văn Bình',
+      owner_names: ['Nguyễn, Hoàng Hoa', 'Trần Văn Bình'],
+    }
+    await renderSettings('/settings?tab=workspace')
+    expect(await screen.findByText('Nguyễn, Hoàng Hoa')).toBeInTheDocument()
+    expect(screen.getByText('Trần Văn Bình')).toBeInTheDocument()
+    expect(screen.queryByText('Nguyễn')).toBeNull()
+    expect(screen.queryByText('Hoàng Hoa')).toBeNull()
+  })
+
   it('makes the convert button and the admin link at least 44px tall on a phone', async () => {
     const user = userEvent.setup()
     details = { name: 'Không gian của bạn', description: '', type: 'personal', is_owner: true, owner_name: 'Lê Thị Hoa' }

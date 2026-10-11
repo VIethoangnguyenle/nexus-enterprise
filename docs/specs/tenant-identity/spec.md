@@ -123,8 +123,8 @@ so every open session refreshes. The workspace service has no administrator audi
 are the record of who converted and when, shown by name in the settings screen.
 
 Success answers `200 {"type":"organization","converted_by_name":"<display name>","converted_at":"<RFC 3339>"}`.
-`GET /api/workspaces/{id}/details` also returns `type`, `is_owner` (the caller is in the Owners group) and `owner_name` (the names of the current owners joined with ", ", never an id),
-`converted_by_name` and `converted_at` (RFC 3339, or empty when never converted).
+`GET /api/workspaces/{id}/details` also returns `type`, `is_owner` (the caller is in the Owners group), `owner_name` (the names of the current owners joined with ", ", never an id),
+`owner_names` (the names of the current owners as an array, never an id), `converted_by_name` and `converted_at` (RFC 3339, or empty when never converted).
 
 #### Scenario: The owner converts
 - **WHEN** an owner of a personal workspace (the creator or one added later) converts it

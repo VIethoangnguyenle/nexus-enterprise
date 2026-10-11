@@ -71,21 +71,26 @@ func (h *AdminHandler) LeaveWorkspace(c echo.Context) error {
 }
 
 type workspaceDetailsJSON struct {
-	Name            string `json:"name"`
-	Description     string `json:"description"`
-	CanManage       bool   `json:"can_manage"`
-	Type            string `json:"type"`
-	IsOwner         bool   `json:"is_owner"`
-	OwnerName       string `json:"owner_name"`
-	ConvertedByName string `json:"converted_by_name"`
+	Name            string   `json:"name"`
+	Description     string   `json:"description"`
+	CanManage       bool     `json:"can_manage"`
+	Type            string   `json:"type"`
+	IsOwner         bool     `json:"is_owner"`
+	OwnerName       string   `json:"owner_name"`
+	OwnerNames      []string `json:"owner_names"`
+	ConvertedByName string   `json:"converted_by_name"`
 	// ConvertedAt is RFC 3339, or empty for a workspace that was never converted.
 	ConvertedAt string `json:"converted_at"`
 }
 
 func detailsJSON(d *domain.WorkspaceDetails) workspaceDetailsJSON {
+	ownerNames := d.OwnerNames
+	if ownerNames == nil {
+		ownerNames = []string{}
+	}
 	out := workspaceDetailsJSON{
 		Name: d.Name, Description: d.Description, CanManage: d.CanManage,
-		Type: d.Type, IsOwner: d.IsOwner, OwnerName: d.OwnerName, ConvertedByName: d.ConvertedByName,
+		Type: d.Type, IsOwner: d.IsOwner, OwnerName: d.OwnerName, OwnerNames: ownerNames, ConvertedByName: d.ConvertedByName,
 	}
 	if d.ConvertedAt != nil {
 		out.ConvertedAt = d.ConvertedAt.UTC().Format(time.RFC3339)

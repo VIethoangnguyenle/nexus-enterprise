@@ -28,6 +28,17 @@ func TestWorkspaceDetails_AMemberReadsAndLearnsWhetherTheyMayEdit(t *testing.T) 
 	assert.True(t, d.CanManage)
 }
 
+func TestWorkspaceDetails_OwnerNamesIncludesNamesWithComma(t *testing.T) {
+	f := newAdminFixture(t)
+	f.dir.profiles[owner].DisplayName = "Nguyễn, Hoàng Hoa"
+	f.dir.profiles[target].DisplayName = "Trần Văn Bình"
+
+	d, err := f.svc.WorkspaceDetails(context.Background(), member, ws1)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Nguyễn, Hoàng Hoa", "Trần Văn Bình"}, d.OwnerNames)
+	assert.Equal(t, "Nguyễn, Hoàng Hoa, Trần Văn Bình", d.OwnerName)
+}
+
 func TestWorkspaceDetails_NonMembersAreDenied(t *testing.T) {
 	for _, caller := range []string{outsider, otherOwner, ""} {
 		t.Run(caller, func(t *testing.T) {

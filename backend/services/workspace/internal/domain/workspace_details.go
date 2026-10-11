@@ -30,9 +30,10 @@ type WorkspaceDetails struct {
 	// Type is TypePersonal or TypeOrganization.
 	Type string
 	// IsOwner is whether the caller is the workspace's owner; OwnerName is who
-	// that is, as a name.
-	IsOwner   bool
-	OwnerName string
+	// that is, as a name; OwnerNames is the list of display names.
+	IsOwner    bool
+	OwnerName  string
+	OwnerNames []string
 	// ConvertedByName and ConvertedAt say who turned a personal workspace into an
 	// organization and when; empty and nil for one that was never converted.
 	ConvertedByName string
@@ -63,6 +64,7 @@ func (s *Service) withOwnership(ctx context.Context, d *WorkspaceDetails, ws *Wo
 		for _, p := range s.peopleFor(ctx, d.ID, owners) {
 			names = append(names, p.DisplayName)
 		}
+		d.OwnerNames = names
 		d.OwnerName = strings.Join(names, ", ")
 	}
 	return d, nil

@@ -232,8 +232,10 @@ function WorkspaceTypeCard({
 }) {
   const isPersonal = details.type === 'personal'
   const isOwner = !!details.is_owner
-  // The server joins the owners' names with ", ".
-  const owners = (details.owner_name ?? '').split(', ').map((n) => n.trim()).filter(Boolean)
+  // The server returns owner_names as a list; fall back to splitting owner_name when absent.
+  const owners = (details.owner_names ?? (details.owner_name ?? '').split(', '))
+    .map((n) => n.trim())
+    .filter(Boolean)
 
   // After a conversion the button that opened the dialog is gone; keyboard focus
   // goes to the next step instead of falling to the page.

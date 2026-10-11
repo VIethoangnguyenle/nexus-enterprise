@@ -648,15 +648,39 @@ func TestAdminHandler_DetailsCarryTypeOwnerAndConversion(t *testing.T) {
 	at := time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
 	f := &fakeDeptService{details: &domain.WorkspaceDetails{
 		Name: "Acme", Description: "d", CanManage: true, Type: "organization", IsOwner: true,
-		OwnerName: "Lê Thị Hoa", ConvertedByName: "Lê Thị Hoa", ConvertedAt: &at,
+		OwnerName: "Lê Thị Hoa", OwnerNames: []string{"Lê Thị Hoa"}, ConvertedByName: "Lê Thị Hoa", ConvertedAt: &at,
 	}}
 	code, body := call(t, f, "details", find("GetWorkspaceDetails"))
 	assert.Equal(t, http.StatusOK, code)
 	assert.JSONEq(t, `{"name":"Acme","description":"d","can_manage":true,"type":"organization","is_owner":true,
-		"owner_name":"Lê Thị Hoa","converted_by_name":"Lê Thị Hoa","converted_at":"2026-10-11T09:00:00Z"}`, body)
+		"owner_name":"Lê Thị Hoa","owner_names":["Lê Thị Hoa"],"converted_by_name":"Lê Thị Hoa","converted_at":"2026-10-11T09:00:00Z"}`, body)
 
-	f = &fakeDeptService{details: &domain.WorkspaceDetails{Name: "Mine", Type: "personal", OwnerName: "Lê Thị Hoa"}}
+	f = &fakeDeptService{details: &domain.WorkspaceDetails{Name: "Mine", Type: "personal", OwnerName: "Lê Thị Hoa", OwnerNames: []string{"Lê Thị Hoa"}}}
 	_, body = call(t, f, "never converted", find("GetWorkspaceDetails"))
 	assert.JSONEq(t, `{"name":"Mine","description":"","can_manage":false,"type":"personal","is_owner":false,
-		"owner_name":"Lê Thị Hoa","converted_by_name":"","converted_at":""}`, body)
+		"owner_name":"Lê Thị Hoa","owner_names":["Lê Thị Hoa"],"converted_by_name":"","converted_at":""}`, body)
+}
+
+func TestAdminHandler_DetailsOwnerNamesPreservesCommaInName(t *testing.T) {
+	f := &fakeDeptService{details: &domain.WorkspaceDetails{
+		Name: "Acme", Description: "d", CanManage: false, Type: "personal", IsOwner: false,
+		OwnerName: "Nguyễn, Hoàng Hoa, Trần Văn Bình",
+		OwnerNames: []string{"Nguyễn, Hoàng Hoa", "Trần Văn Bình"},
+	}}
+	code, body := call(t, f, "comma in name", find("GetWorkspaceDetails"))
+	assert.Equal(t, http.StatusOK, code)
+	assert.JSONEq(t, `{"name":"Acme","description":"d","can_manage":false,"type":"personal","is_owner":false,
+		"owner_name":"Nguyễn, Hoàng Hoa, Trần Văn Bình",
+		"owner_names":["Nguyễn, Hoàng Hoa","Trần Văn Bình"],
+		"converted_by_name":"","converted_at":""}`, body)
+}
+
+func TestAdminHandler_GetWorkspaceDetailsNonMemberGetsForbidden(t *testing.T) {
+	f := &fakeDeptService{err: domain.ErrAccessDenied}
+	r := find("GetWorkspaceDetails")
+	c, _ := newCtx(t, route2(r), true)
+	err := r.handler(NewAdminHandler(f))(c)
+	var he *echo.HTTPError
+	require.True(t, errors.As(err, &he))
+	assert.Equal(t, http.StatusForbidden, he.Code)
 }
