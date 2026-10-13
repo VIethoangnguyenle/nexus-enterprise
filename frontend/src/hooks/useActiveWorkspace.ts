@@ -1,12 +1,15 @@
 import { useMemo } from 'react'
 import { useSearch } from '@tanstack/react-router'
+import { tenantIdFromToken, useAuthStore } from '../stores/auth.store'
 import { useWorkspaces } from './useWorkspaces'
 
 /**
  * The workspace the user is currently looking at, and the only way to get it.
  *
  * Reads the `?ws=` parameter the sidebar switcher sets, falling back to the
- * first workspace the user can reach. Routes that render workspace data declare
+ * workspace the session token speaks for, then the first one the user can reach.
+ * The token's workspace comes first because tenant-scoped reads answer for it:
+ * showing another one would pair that workspace's name with this one's data. Routes that render workspace data declare
  * the parameter with `validateSearch`, so it arrives here already typed and the
  * router, not `window.location`, is what this subscribes to.
  *
@@ -24,14 +27,18 @@ import { useWorkspaces } from './useWorkspaces'
 export function useActiveWorkspace() {
   const { data, isLoading, isError } = useWorkspaces()
   const { ws: requested } = useSearch({ strict: false }) as { ws?: string }
+  const tokenTenant = useAuthStore((s) => tenantIdFromToken(s.accessToken))
 
   return useMemo(() => {
     const workspaces = data?.workspaces ?? []
 
     // Only honour a requested workspace the user actually has, so a stale or
-    // hand-edited parameter degrades to their own workspace instead of a run
-    // of 403s against one they cannot reach.
-    const active = workspaces.find((w) => w.id === requested) ?? workspaces[0]
+    // hand-edited parameter degrades to the session's workspace instead of a
+    // run of 403s against one they cannot reach.
+    const active =
+      workspaces.find((w) => w.id === requested) ??
+      workspaces.find((w) => w.id === tokenTenant) ??
+      workspaces[0]
 
     return {
       workspaceId: active?.id ?? '',
@@ -40,5 +47,5 @@ export function useActiveWorkspace() {
       isLoading,
       isError,
     }
-  }, [data, isLoading, isError, requested])
+  }, [data, isLoading, isError, requested, tokenTenant])
 }

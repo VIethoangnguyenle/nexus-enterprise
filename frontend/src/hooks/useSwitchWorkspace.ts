@@ -33,12 +33,30 @@ export function resetTenantScopedState() {
 }
 
 /**
+ * Makes the session speak for a workspace: the token is re-scoped with the same
+ * call the workspace picker makes, and only when that succeeds is it replaced
+ * and the previous workspace's data dropped. A refusal throws and leaves the
+ * token and the cache as they were. Shared by the switcher and by the layout's
+ * tenant sync, so both re-scope identically.
+ */
+export async function rescopeSession(workspaceId: string) {
+  const { accessToken, setAccessToken } = useAuthStore.getState()
+  let token: string | null = null
+  if (tenantIdFromToken(accessToken) !== workspaceId) {
+    token = (await authApi.switchTenant(workspaceId)).access_token
+    // Requests still in flight were made for the old workspace.
+    await queryClient.cancelQueries()
+  }
+  if (token) setAccessToken(token)
+  resetTenantScopedState()
+}
+
+/**
  * Opens another workspace from inside the app. Services that keep
  * per-workspace data read the workspace from the token, so the session is
- * re-scoped first (the same call the workspace picker makes); only when that
- * succeeds is the token replaced and the old workspace's data dropped. A
- * refusal leaves the person exactly where they were. The new workspace opens
- * on the module the person is in, or, with `landOnChat`, on Trang chủ of Chat.
+ * re-scoped first (`rescopeSession`). A refusal leaves the person exactly where
+ * they were. The new workspace opens on the module the person is in, or, with
+ * `landOnChat`, on Trang chủ of Chat.
  */
 export function useSwitchWorkspace({ landOnChat = false }: { landOnChat?: boolean } = {}) {
   const navigate = useNavigate()
@@ -46,15 +64,7 @@ export function useSwitchWorkspace({ landOnChat = false }: { landOnChat?: boolea
   return useMutation({
     meta: { action: 'chuyển workspace' },
     mutationFn: async (workspaceId: string) => {
-      const { accessToken, setAccessToken } = useAuthStore.getState()
-      let token: string | null = null
-      if (tenantIdFromToken(accessToken) !== workspaceId) {
-        token = (await authApi.switchTenant(workspaceId)).access_token
-        // Requests still in flight were made for the old workspace.
-        await queryClient.cancelQueries()
-      }
-      if (token) setAccessToken(token)
-      resetTenantScopedState()
+      await rescopeSession(workspaceId)
       await navigate({ to: landOnChat ? '/channels' : moduleRootOf(pathname), search: { ws: workspaceId } })
       return workspaceId
     },
