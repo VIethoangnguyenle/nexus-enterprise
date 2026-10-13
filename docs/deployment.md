@@ -112,7 +112,7 @@ NAT, set `rtc.node_ip: 160.187.146.173` in the inline config.
 3. The shared Traefik must have TCP routers enabled on its `websecure` entryPoint (it does by default
    with the docker provider). Without the TURN router, calls still work except on networks that block
    UDP and everything but 443.
-4. Generate a key pair and add it to `/opt/nexus/.env` (the deploy fails until both exist):
+4. Re-run `deploy/server-bootstrap.sh` (it appends a generated `LIVEKIT_API_KEY`/`LIVEKIT_API_SECRET` when absent; the deploy fails until both exist), or generate them by hand:
    `docker run --rm livekit/livekit-server:v1.13.7 generate-keys` ->
    `LIVEKIT_API_KEY=<API Key>` and `LIVEKIT_API_SECRET=<API Secret>` (secret >= 32 characters).
 

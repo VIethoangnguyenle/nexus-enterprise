@@ -97,6 +97,8 @@ ensure_key GOOGLE_CLIENT_ID "" \
   "# >>> FILL IN: Google OAuth client id. Empty = Google sign-in off. Production has no other sign-in:
 # the OTP test code is disabled and the services ship no email/SMS sender."
 ensure_key GOOGLE_CLIENT_SECRET "" "# >>> FILL IN: Google OAuth client secret (a literal \$ must be written \$\$)."
+ensure_key LIVEKIT_API_KEY "API$(rand_hex 6)" "# Calls: messaging signs LiveKit tickets with this key pair and nexus-livekit verifies them."
+ensure_key LIVEKIT_API_SECRET "$(rand_hex 32)"
 
 if [[ ${#added[@]} -gt 0 ]]; then say "added keys: ${added[*]}"; else say "nothing to add; file already complete"; fi
 todo=()
