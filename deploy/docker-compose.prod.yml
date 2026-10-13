@@ -566,6 +566,11 @@ services:
           tcp_port: 7881
           udp_port: 7882
           use_external_ip: true
+          # Media only on the `nexus` address, where Docker forwards the published ports. On the
+          # `traefik` address too, LiveKit answered from it and the replies left by another route
+          # than the requests came in, so no connection from the Internet ever completed.
+          ips:
+            includes: [10.77.231.0/24]
         room:
           auto_create: false
           max_participants: 20

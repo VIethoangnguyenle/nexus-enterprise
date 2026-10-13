@@ -101,7 +101,9 @@ allows nothing else. Docker-published ports bypass ufw: they are reachable as so
 whatever ufw says, so there is no ufw step — a host firewall in front (the provider's) must let them
 through. LiveKit is also on the shared `traefik` network for the TURN router, so its API (7880, every call
 needs a key-signed token) is reachable from other containers there; that is the accepted cost of TURN/TLS.
-Rooms are opened only by messaging (`room.auto_create: false`), and TURN listens on TLS only (`udp_port: 0`).
+Media binds only the `nexus` address (`rtc.ips.includes: [10.77.231.0/24]`): Docker forwards the published ports
+there, and answering from the `traefik` address sent replies out by another route, so no call from the Internet
+connected. Rooms are opened only by messaging (`room.auto_create: false`), and TURN listens on TLS only (`udp_port: 0`).
 `use_external_ip` makes LiveKit discover the VPS address through STUN; if it picks the wrong one behind
 NAT, set `rtc.node_ip: 160.187.146.173` in the inline config.
 
