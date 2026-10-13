@@ -43,19 +43,21 @@ previous release's files, so it never uses a compose file newer than its images.
 
 The Go services speak unauthenticated gRPC to each other, so they must not share a network with
 other apps. Compose project `nexus` has an internal network `nexus` (fixed subnet `10.77.231.0/24`)
-and joins the shared external network `traefik` with exactly two containers:
+and joins the shared external network `traefik` with exactly three containers:
 
 - `nexus-frontend`: nginx. Traefik sends every request for `nexus.zaneng.xyz` here. nginx serves the
   SPA and proxies `/api/*` to the services over `nexus`, with the same path rules and precedence as
   the dev Traefik routers (WebSocket first, then document/messaging/asset/drive/approval, then
   auth, then workspace). It has the fixed address `10.77.231.10`.
 - `nexus-minio`: only for presigned file URLs on `storage.nexus.zaneng.xyz`.
+- `nexus-livekit`: only for the TURN/TLS router on `turn.nexus.zaneng.xyz` (see "Calls (LiveKit)").
 
 - `gotenberg` (Office to PDF for the file viewer) is on its own internal network `previews`, shared only with
   `drive`, and has no route out; see "File previews" below.
 
 Everything else is on `nexus` alone. No container publishes a host port (Docker-published ports
-bypass ufw). Names on the shared network are `nexus-` prefixed, and nginx reaches the services by
+bypass ufw) except `nexus-livekit`: `7881/tcp` and `7882/udp`, exactly, because WebRTC media cannot go
+through an HTTP edge. `deploy/check-compose-env.sh` fails if any other service, or LiveKit with other ports, publishes. Names on the shared network are `nexus-` prefixed, and nginx reaches the services by
 `nexus-<service>` aliases, so another app cannot shadow them. Same-origin traffic means there is no
 CORS middleware.
 
@@ -72,10 +74,58 @@ per-app http redirect is needed. Router names are `nexus-*` because Traefik's na
 Routes the frontend uses, all covered: `/api/auth`, `/api/me[/...]`, `/api/workspaces/...`
 (including `documents`, `channels`, `asset*`, `drive`, `contacts` sub-paths), `/api/invitations`,
 `/api/documents`, `/api/channels`, `/api/messages`, `/api/dms`, `/api/threads`,
-`/api/notifications`, `/api/polls`, `/api/tasks`, `/api/assets`, `/api/asset-types`,
-`/api/asset-requests`, `/api/drive`, `/api/approval`, `/api/ws`. Not routed publicly, on purpose
-(also unrouted in dev Traefik): `/api/admin` (tenant provisioning in the approval service). Any
+`/api/notifications`, `/api/polls`, `/api/tasks`, `/api/calls`, `/api/assets`, `/api/asset-types`,
+`/api/asset-requests`, `/api/drive`, `/api/approval`, `/api/ws`, and `/livekit/` (call signalling, WebSocket,
+to `nexus-livekit:7880` with the prefix stripped). Not routed publicly, on purpose
+(also unrouted in dev Traefik): `/api/admin` (tenant provisioning in the approval service) and
+`/internal/livekit/webhook` (LiveKit reaches messaging over the `nexus` network). Any
 other `/api/...` returns a JSON 404.
+
+## Calls (LiveKit)
+
+Voice and video calls run on a self-hosted `livekit-server` (`nexus-livekit`, image pinned in
+`deploy/docker-compose.prod.yml`; dev: `livekit` in `docker-compose.yml`, config
+`deploy/livekit/livekit.dev.yaml`). The messaging service signs call tokens and receives LiveKit's
+webhooks; browsers talk to LiveKit directly.
+
+```
+browser --wss://nexus.zaneng.xyz/livekit/--> Traefik --> nginx (/livekit/) --> nexus-livekit:7880   signalling
+browser --UDP 7882 / TCP 7881 (host ports)----------------------------------> nexus-livekit        media
+browser --TLS turn.nexus.zaneng.xyz:443--> Traefik (TCP router, SNI) --> nexus-livekit:443          TURN/TLS, UDP-blocked networks
+nexus-livekit --http://nexus-messaging:8080/internal/livekit/webhook--> messaging                    room events
+```
+
+**Port exception.** `nexus-livekit` is the only container that publishes host ports: `7881/tcp` (ICE-TCP
+fallback) and `7882/udp` (all media on one UDP port, instead of a 50000-60000 range). Docker-published
+ports bypass ufw, so these are the only two to open and the check script allows nothing else.
+`use_external_ip` makes LiveKit discover the VPS address through STUN; if it picks the wrong one behind
+NAT, set `rtc.node_ip: 160.187.146.173` in the inline config.
+
+**One-time steps on the server (done by hand; `server-bootstrap.sh` does not touch ufw or Traefik):**
+
+1. `ufw allow 7881/tcp` and `ufw allow 7882/udp`.
+2. DNS: A record `turn.nexus.zaneng.xyz` -> `160.187.146.173`.
+3. The shared Traefik must have TCP routers enabled on its `websecure` entryPoint (it does by default
+   with the docker provider). Without the TURN router, calls still work except on networks that block
+   UDP and everything but 443.
+4. Generate a key pair and add it to `/opt/nexus/.env` (the deploy fails until both exist):
+   `docker run --rm livekit/livekit-server:v1.13.7 generate-keys` ->
+   `LIVEKIT_API_KEY=<API Key>` and `LIVEKIT_API_SECRET=<API Secret>` (secret >= 32 characters).
+
+**Environment.** `nexus-livekit` takes the key pair as `LIVEKIT_KEYS`. `messaging` gets
+`LIVEKIT_URL=http://nexus-livekit:7880` (server API), `LIVEKIT_PUBLIC_URL=wss://nexus.zaneng.xyz/livekit`
+(what browsers connect to), `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET`. Dev values are in `.env.example`
+(`ws://localhost:5173/livekit` through the Vite `/livekit` proxy).
+
+**Check.** `curl https://nexus.zaneng.xyz/livekit/` answers `200 OK`. TURN/TLS:
+`openssl s_client -connect turn.nexus.zaneng.xyz:443 -servername turn.nexus.zaneng.xyz` presents the
+Let's Encrypt certificate. Media: a call between two networks, one with UDP blocked, shows a `relay`
+candidate in `chrome://webrtc-internals`.
+
+**LiveKit Cloud instead.** Set `LIVEKIT_URL` to the project's `https://<project>.livekit.cloud`,
+`LIVEKIT_PUBLIC_URL` to its `wss://` address and the key pair to the project's; remove `nexus-livekit`,
+the `/livekit/` nginx location and the Traefik TURN router, and point the cloud project's webhook at a
+public messaging endpoint (the webhook is not routed publicly here).
 
 ## One-time setup
 
