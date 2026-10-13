@@ -55,6 +55,17 @@ The invitations a person sees depend on `email_verified`. A person whose address
 - **WHEN** the address is unverified and the only code available is the fixed test code
 - **THEN** no "send a code" button is shown, because that code proves nothing
 
+### Requirement: Waiting offers are visible from inside a workspace
+A person already inside a workspace SHALL see their open offers without signing in again. The workspace menu (desktop rail and sidebar; on a phone the workspace list in the Thêm sheet) shows a row "Lời mời" with the count (`99+` beyond 99; hidden text "N lời mời đang chờ") while at least one offer is open, and an accent dot on the workspace button (hidden text ", có lời mời") shows while the menu is closed. The row leads to `/workspace-select`, where Tham gia and Từ chối work as before; on a phone its target is 56px high. Nothing is shown without an offer, and nothing is requested, when the account's address is not verified (`email_verified`). The count comes from `GET /api/invitations`, looked up again every 60 seconds and when the window regains focus, and shares its cache with the selection screen. A new offer also arrives as a notification (`docs/specs/notifications/spec.md`).
+
+#### Scenario: An offer while signed in
+- **WHEN** a verified person with an open offer opens the workspace menu
+- **THEN** it shows "Lời mời" with the count, the workspace button carries the dot, and pressing the row opens Chọn workspace
+
+#### Scenario: No offers or unverified
+- **WHEN** the person has no open offer, or the address is not verified
+- **THEN** there is no row and no dot, and an unverified person's invitations are not requested
+
 ### Requirement: A workspace is created from its name
 The create screen has one field, the name (1 to 80 characters), and no URL, slug, logo or invitation field; colleagues are invited later from Quản trị. It calls `POST /api/me/workspaces {name}`, then opens the new workspace. A person whose address is unverified (or has none) does not see the form: the screen shows the same calm verify path as workspace selection, because the server refuses with 403 `email_unverified`; a phone-only account is told a workspace needs an email address. A workspace created but not opened says so and returns to the list. The step bar appears only for a person who has no workspace yet.
 

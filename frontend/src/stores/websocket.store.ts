@@ -13,8 +13,9 @@ import type {
 import type { Message } from '../api/messaging'
 import {
   applyMessageDeleted, applyMessageEdited, applyPin, applyReaction, applyTaskUpdate, convertChatMsgToMessage,
-  previewText, timestampToIso,
+  lastMessageOf, previewText, timestampToIso, withEditedLiveMessage, withoutLiveMessage,
 } from '../lib/chat-cache'
+import type { LastMessage } from '../lib/conversations'
 import { applyThreadReplySummary, applyThreadState } from '../lib/thread-cache'
 import { invalidateUnreadThreadsFor } from '../lib/unread-threads-cache'
 import { mentionsMe } from '../lib/shortcut-feed'
@@ -96,7 +97,7 @@ function clearTimers() {
 /** Who last changed an entity, for the wash on its row; see `ChangeInfo`. */
 const CHANGE_TTL_MS = 10_000
 
-export interface LastMessageInfo { content: string; timestamp: string; senderName: string; senderId: string }
+export type LastMessageInfo = LastMessage
 export interface LastReplyInfo { senderId: string; senderName: string; timestamp: string }
 /** Who last acted on an approval request this session, for attributing realtime changes. */
 export interface ApprovalActivityInfo { actorNodeId: string; action: string; at: number }
@@ -109,8 +110,10 @@ interface WebSocketState {
   authenticated: boolean
   typingUsers: Record<string, string[]>
   reconnectAttempt: number
-  /** Last message per channel, seen this session: previews and Home ordering. */
+  /** Newest main-stream message per channel, seen this session: previews and Home ordering. */
   lastMessages: Record<string, LastMessageInfo>
+  /** Newest thread reply per channel, seen this session; kept apart so it never hides a newer main message. */
+  lastThreadMessages: Record<string, LastMessageInfo>
   /** Latest reply per topic (parent message id), seen this session. */
   lastReplies: Record<string, LastReplyInfo>
   /** Online user IDs + usernames — updated via PresenceEvent. */
@@ -186,6 +189,7 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
   typingUsers: {},
   reconnectAttempt: 0,
   lastMessages: {},
+  lastThreadMessages: {},
   lastReplies: {},
   onlineUsers: {},
   approvalActivity: {},
@@ -397,18 +401,7 @@ function handleServerMessage(
 
     case 'chatMessage': {
       const msg = envelope.payload.chatMessage
-      const timestamp = timestampToIso(msg.createdAt)
-      set((s) => ({
-        lastMessages: {
-          ...s.lastMessages,
-          [msg.channelId]: {
-            content: previewText(msg.content),
-            timestamp,
-            senderName: msg.senderName || '',
-            senderId: msg.senderId,
-          },
-        },
-      }))
+      set((s) => liveMessageSlot(s, lastMessageOf(msg, msg.parentMessageId), msg.channelId))
       // The hub broadcasts thread replies as plain chat messages carrying a
       // parent id. Prepending those to the channel list would turn every reply
       // into a new topic, so they are routed to their thread instead.
@@ -482,17 +475,7 @@ function handleServerMessage(
       if (reply.message) {
         const m = reply.message
         // A reply still moves its conversation: preview and order, as before replies had their own frame.
-        set((s) => ({
-          lastMessages: {
-            ...s.lastMessages,
-            [m.channelId]: {
-              content: previewText(m.content),
-              timestamp: timestampToIso(m.createdAt),
-              senderName: m.senderName || '',
-              senderId: m.senderId,
-            },
-          },
-        }))
+        set((s) => liveMessageSlot(s, lastMessageOf(m, m.parentMessageId || reply.parentMessageId), m.channelId))
         injectReply({ ...m, parentMessageId: m.parentMessageId || reply.parentMessageId }, set)
         invalidateMentionsFor(m)
       }
@@ -510,13 +493,37 @@ function handleServerMessage(
       invalidateUnreadThreadsFor(envelope.payload.oneofKind)
       break
 
-    case 'messageEdited':
-      applyMessageEdited(envelope.payload.messageEdited)
+    case 'messageEdited': {
+      const ev = envelope.payload.messageEdited
+      // The list previews quote the text: the entry showing this message takes the new text in place.
+      applyMessageEdited(ev)
+      const edited = ev.message
+      if (edited?.id) {
+        const edit = { content: previewText(edited.content), mentions: edited.mentions?.length ? edited.mentions : undefined }
+        set((s) => {
+          const lastMessages = withEditedLiveMessage(s.lastMessages, edited.channelId, edited.id, edit)
+          const lastThreadMessages = withEditedLiveMessage(s.lastThreadMessages, edited.channelId, edited.id, edit)
+          return lastMessages === s.lastMessages && lastThreadMessages === s.lastThreadMessages
+            ? s
+            : { lastMessages, lastThreadMessages }
+        })
+      }
       break
+    }
 
-    case 'messageDeleted':
-      applyMessageDeleted(envelope.payload.messageDeleted)
+    case 'messageDeleted': {
+      const ev = envelope.payload.messageDeleted
+      // The cache drops or refreshes the server previews; a live preview of the deleted message goes at once.
+      applyMessageDeleted(ev)
+      set((s) => {
+        const lastMessages = withoutLiveMessage(s.lastMessages, ev.channelId, ev.messageId)
+        const lastThreadMessages = withoutLiveMessage(s.lastThreadMessages, ev.channelId, ev.messageId)
+        return lastMessages === s.lastMessages && lastThreadMessages === s.lastThreadMessages
+          ? s
+          : { lastMessages, lastThreadMessages }
+      })
       break
+    }
 
     case 'reactionEvent':
       applyReaction(envelope.payload.reactionEvent)
@@ -708,6 +715,13 @@ function noteChanges(
  * The sender's own reply was already counted optimistically by useSendReply,
  * so only other people's replies move the count here.
  */
+/** Files a live message under its channel's main slot, or its thread slot when it is a reply. */
+function liveMessageSlot(s: WebSocketState, line: LastMessageInfo, channelId: string): Partial<WebSocketState> {
+  return line.parentId
+    ? { lastThreadMessages: { ...s.lastThreadMessages, [channelId]: line } }
+    : { lastMessages: { ...s.lastMessages, [channelId]: line } }
+}
+
 function injectReply(msg: WSChatMessage, set: (fn: (s: WebSocketState) => Partial<WebSocketState>) => void) {
   const parentId = msg.parentMessageId
   if (!parentId) return
@@ -758,5 +772,5 @@ function resyncAfterReconnect() {
 // Previews, replies, typing and presence are what this user's session saw: the
 // next person to sign in on this tab must start without them.
 onSessionEnd(() => useWebSocketStore.setState({
-  lastMessages: {}, lastReplies: {}, typingUsers: {}, onlineUsers: {}, approvalActivity: {}, recentChanges: {},
+  lastMessages: {}, lastThreadMessages: {}, lastReplies: {}, typingUsers: {}, onlineUsers: {}, approvalActivity: {}, recentChanges: {},
 }))

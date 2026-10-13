@@ -28,6 +28,9 @@ type Invitation struct {
 	Status       string
 	CreatedAt    time.Time
 	ExpiresAt    time.Time
+	// Created is set by UpsertInvitation: true when the call opened a new offer,
+	// false when it refreshed the one already open.
+	Created bool
 }
 
 const invitationColumns = `id, workspace_id, email, COALESCE(role_id,''), COALESCE(department_id,''),
@@ -52,8 +55,8 @@ func (s *Store) UpsertInvitation(ctx context.Context, inv *Invitation) error {
 		 ON CONFLICT (workspace_id, email) WHERE status = 'pending'
 		 DO UPDATE SET role_id = EXCLUDED.role_id, department_id = EXCLUDED.department_id,
 		               invited_by = EXCLUDED.invited_by, created_at = NOW(), expires_at = EXCLUDED.expires_at
-		 RETURNING id`,
-		inv.WorkspaceID, inv.Email, inv.RoleID, inv.DepartmentID, inv.InvitedBy, inv.ExpiresAt).Scan(&inv.ID)
+		 RETURNING id, (xmax = 0)`,
+		inv.WorkspaceID, inv.Email, inv.RoleID, inv.DepartmentID, inv.InvitedBy, inv.ExpiresAt).Scan(&inv.ID, &inv.Created)
 	if err != nil {
 		return fmt.Errorf("upsert invitation: %w", err)
 	}
@@ -166,6 +169,27 @@ func (s *Store) VerifiedEmailByNode(ctx context.Context, nodeID string) (string,
 		return "", fmt.Errorf("verified email by node: %w", err)
 	}
 	return email, nil
+}
+
+// VerifiedUserIDsByEmail returns the users.id of every account whose PROVED
+// address is email (already lower-cased). An unverified address is only a claim
+// and matches nothing, so an unknown or unproved address returns an empty list.
+func (s *Store) VerifiedUserIDsByEmail(ctx context.Context, email string) ([]string, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT id FROM users WHERE email_verified_at IS NOT NULL AND lower(email) = $1`, email)
+	if err != nil {
+		return nil, fmt.Errorf("verified users by email: %w", err)
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("verified users by email: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
 }
 
 // RevokePendingForEmail withdraws every pending invitation to an address in a

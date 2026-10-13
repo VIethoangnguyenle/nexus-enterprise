@@ -12,19 +12,22 @@ export const routerState = {
   navigate: vi.fn(),
   /** Whether the app's own history has an entry before this one. */
   canGoBack: false,
+  /** The history state of the current entry. */
+  historyState: {} as Record<string, unknown>,
   back: vi.fn(),
 }
 
 export function routerMockFactory() {
   return {
-    Link: ({ to, params, children, className, ...rest }: {
-      to: string; params?: Record<string, string>; children?: ReactNode; className?: string
+    Link: ({ to, params, search, children, className, ...rest }: {
+      to: string; params?: Record<string, string>; search?: unknown; children?: ReactNode; className?: string
       [k: string]: unknown
     }) => {
       const href = params ? Object.entries(params).reduce((h, [k, v]) => h.replace(`$${k}`, v), to) : to
-      const { activeProps: _a, search: _s, preload: _p, ...anchorProps } = rest as Record<string, unknown>
+      const { activeProps: _a, preload: _p, ...anchorProps } = rest as Record<string, unknown>
       return (
-        <a href={href} className={className} {...(anchorProps as object)}>
+        // The search the real link would put after the address, for tests that open a thread or a tab.
+        <a href={href} className={className} data-search={search ? JSON.stringify(search) : undefined} {...(anchorProps as object)}>
           {children}
         </a>
       )
@@ -34,7 +37,7 @@ export function routerMockFactory() {
     useRouter: () => ({ history: { back: routerState.back } }),
     useParams: () => routerState.params,
     useSearch: () => routerState.search,
-    useRouterState: ({ select }: { select: (s: { location: { pathname: string } }) => unknown }) =>
-      select({ location: { pathname: routerState.pathname } }),
+    useRouterState: ({ select }: { select: (s: { location: { pathname: string; state: Record<string, unknown> } }) => unknown }) =>
+      select({ location: { pathname: routerState.pathname, state: routerState.historyState } }),
   }
 }

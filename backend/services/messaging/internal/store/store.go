@@ -112,6 +112,21 @@ func (s *Store) ListAllDMs(ctx context.Context) ([]*Channel, error) {
 	return collectChannels(rows)
 }
 
+// ListDMsOf returns the DM channels the node is recorded in. The member cache
+// only narrows the candidates a caller puts to the policy service: the access
+// decision itself stays with NGAC.
+func (s *Store) ListDMsOf(ctx context.Context, userNodeID string) ([]*Channel, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT `+channelCols+` FROM channels c
+		 WHERE c.channel_type = 'dm'
+		   AND c.id IN (SELECT channel_id FROM channel_members WHERE ngac_node_id = $1)`, userNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("list DMs of member: %w", err)
+	}
+	defer rows.Close()
+	return collectChannels(rows)
+}
+
 // FindDMByMembers finds an existing DM between two users using a DB-level join.
 // This replaces the O(N) full-table-scan + N gRPC calls approach.
 func (s *Store) FindDMByMembers(ctx context.Context, userNodeID, targetNodeID string) (*Channel, error) {

@@ -17,6 +17,9 @@ interface UiState {
   resetListPanelWidth: () => void
   starredChannels: string[]
   toggleStarChannel: (channelId: string) => void
+  /** True while the phone's Chat bottom bar is on screen; what floats above the bottom edge makes room for it. */
+  chatBarShown: boolean
+  setChatBarShown: (shown: boolean) => void
 }
 
 export const useUiStore = create<UiState>()(
@@ -30,6 +33,8 @@ export const useUiStore = create<UiState>()(
       listPanelWidth: LIST_PANEL_DEFAULT_WIDTH,
       setListPanelWidth: (w) => set({ listPanelWidth: w }),
       resetListPanelWidth: () => set({ listPanelWidth: LIST_PANEL_DEFAULT_WIDTH }),
+      chatBarShown: false,
+      setChatBarShown: (shown) => set({ chatBarShown: shown }),
       starredChannels: [],
       toggleStarChannel: (channelId) => set((s) => ({
         starredChannels: s.starredChannels.includes(channelId)

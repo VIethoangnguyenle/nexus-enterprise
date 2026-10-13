@@ -197,7 +197,7 @@ func (s *Service) GetUnreadCounts(ctx context.Context, userID, userNodeID, works
 }
 
 // readableChannelIDs lists the channels the sidebar shows the user: the
-// workspace's channels and the DMs, each kept only when the user holds read on
+// workspace's channels and the DMs the user is in, each kept only when the user holds read on
 // its content OA (one batch check, failing closed like the channel list).
 func (s *Service) readableChannelIDs(ctx context.Context, workspaceID, userNodeID string) ([]string, error) {
 	var candidates []*store.Channel
@@ -208,7 +208,7 @@ func (s *Service) readableChannelIDs(ctx context.Context, workspaceID, userNodeI
 		}
 		candidates = append(candidates, channels...)
 	}
-	dms, err := s.store.ListAllDMs(ctx)
+	dms, err := s.store.ListDMsOf(ctx, userNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("list DMs: %w", err)
 	}
@@ -241,6 +241,25 @@ func (s *Service) SearchMessages(ctx context.Context, channelID, userNodeID, que
 
 // EnrichMessagesWithMetadata adds reactions, pin status and attachments to a slice of messages.
 func (s *Service) EnrichMessagesWithMetadata(ctx context.Context, msgs []*store.Message, channelID string) error {
+	return s.enrichMessages(ctx, msgs, []string{channelID})
+}
+
+// enrichMessagesAcrossChannels does the same for messages that come from
+// several channels: reactions, attachments, pins and quotes are each loaded
+// once for the whole page instead of once per channel.
+func (s *Service) enrichMessagesAcrossChannels(ctx context.Context, msgs []*store.Message) error {
+	seen := map[string]bool{}
+	var channelIDs []string
+	for _, m := range msgs {
+		if !seen[m.ChannelID] {
+			seen[m.ChannelID] = true
+			channelIDs = append(channelIDs, m.ChannelID)
+		}
+	}
+	return s.enrichMessages(ctx, msgs, channelIDs)
+}
+
+func (s *Service) enrichMessages(ctx context.Context, msgs []*store.Message, channelIDs []string) error {
 	if len(msgs) == 0 {
 		return nil
 	}
@@ -256,7 +275,7 @@ func (s *Service) EnrichMessagesWithMetadata(ctx context.Context, msgs []*store.
 	}
 
 	// Batch load pin status
-	pinnedSet, err := s.store.PinnedMessageIDs(ctx, channelID)
+	pinnedSet, err := s.store.PinnedMessageIDsIn(ctx, channelIDs)
 	if err != nil {
 		return fmt.Errorf("load pins: %w", err)
 	}

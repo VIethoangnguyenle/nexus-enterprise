@@ -9,18 +9,15 @@ import { usePeople } from '../../hooks/usePeople'
 import { useArrivals } from '../../hooks/useArrivals'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { collapseKey, useNavCollapseStore } from '../../stores/nav-collapse.store'
 import { useMotionPresets } from '../../lib/motion'
 import { filterConversations, type ConversationFilter } from '../../lib/conversations'
 import { displayName, type PeopleDirectory } from '../../lib/people'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { Button, FilterChip, Heading } from '../primitives'
 import { ConversationRow } from './ConversationRow'
-import { PhoneChatList } from './PhoneChatList'
-import { useSectionOverlays } from './SectionOverlays'
+import { PhoneChatHome } from './PhoneChatHome'
 import { EmptyState } from './EmptyState'
 import { CreateSpaceDialog } from './CreateSpaceDialog'
-import { NewChatMenu } from './NewChatMenu'
 import { UnreadThreadsSection } from './UnreadThreadsSection'
 
 const FILTERS: { id: ConversationFilter; label: string; empty: string }[] = [
@@ -33,7 +30,8 @@ const FILTERS: { id: ConversationFilter; label: string; empty: string }[] = [
 /**
  * Trang chủ (design/mockups/spaces.html §1): every conversation, newest
  * activity first, unread in bold. When someone writes, the row slides to the
- * top (layout animation) and carries the writer's hue for 2.4s.
+ * top (layout animation) and carries the writer's hue for 2.4s. Below 1024px
+ * the four tabs of the phone take over (`PhoneChatHome`).
  */
 export function HomeView() {
   const m = useMotionPresets()
@@ -41,11 +39,8 @@ export function HomeView() {
   const { workspaceId, workspaceName } = useActiveWorkspace()
   const nav = useChatNavigation(workspaceId)
   const { conversations, isLoading, isError, refetch } = nav
-  // Below 1024px the navigator column is not on screen, so this view is the
-  // Tin nhắn tab of the phone design: the user's sections, then the default lists.
+  // Below 1024px the navigator column is not on screen, so this view is the phone's Chat: its four tabs.
   const phone = useBottomBarLayout()
-  const setCollapsed = useNavCollapseStore((s) => s.setCollapsed)
-  const overlays = useSectionOverlays(nav.sectionsApi, true, (id) => setCollapsed(collapseKey(workspaceId, id), false))
   const people = usePeople(workspaceId)
   const me = useAuthStore((s) => s.user?.id)
   const onlineUsers = useWebSocketStore((s) => s.onlineUsers)
@@ -65,6 +60,8 @@ export function HomeView() {
   const visible = useMemo(() => filterConversations(conversations, filter), [conversations, filter])
   const current = FILTERS.find((f) => f.id === filter)!
 
+  if (phone) return <PhoneChatHome nav={nav} workspaceId={workspaceId} fresh={fresh} />
+
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0 bg-base">
       <header className="flex items-start gap-3 px-5 pt-3.5 pb-1.5">
@@ -74,24 +71,15 @@ export function HomeView() {
             Mọi cuộc trò chuyện của bạn trong {workspaceDisplayName(workspaceName)}
           </span>
         </div>
-        {/* The navigator column that holds this menu on desktop is not on a phone. */}
-        <div className="lg:hidden shrink-0">
-          <NewChatMenu
-            onNewSection={phone ? (el) => overlays.openCreate(el, undefined, 'bottom-end') : undefined}
-            placement="bottom-end"
-            className="press inline-flex items-center gap-2 h-10 pl-3 pr-4 rounded-xl bg-accent-wash text-sm
-              font-semibold text-ink hover:bg-hover"
-          />
-        </div>
       </header>
 
-      {!phone && <div role="group" aria-label="Lọc" className="flex flex-wrap gap-1.5 px-5 pt-1 pb-2.5">
+      <div role="group" aria-label="Lọc" className="flex flex-wrap gap-1.5 px-5 pt-1 pb-2.5">
         {FILTERS.map((f) => (
           <FilterChip key={f.id} pressed={filter === f.id} onClick={() => setFilter(f.id)}>
             {f.label}
           </FilterChip>
         ))}
-      </div>}
+      </div>
 
       {burst && (
         <div role="status" className="mx-5 mb-1 text-small text-ink-muted">
@@ -100,8 +88,7 @@ export function HomeView() {
       )}
 
       <div className="flex-1 min-h-0 overflow-y-auto px-3 pb-4">
-        {/* The phone's Tin nhắn tab mounts its own copy inside PhoneChatList. */}
-        {!phone && !isError && !isLoading && (
+        {!isError && !isLoading && (
           <UnreadThreadsSection
             conversations={conversations}
             people={people}
@@ -127,8 +114,6 @@ export function HomeView() {
               </div>
             ))}
           </div>
-        ) : phone && conversations.length > 0 ? (
-          <PhoneChatList nav={nav} workspaceId={workspaceId} fresh={fresh} overlays={overlays} />
         ) : visible.length === 0 ? (
           <EmptyState
             icon={<MessagesSquare size={24} strokeWidth={1.75} />}
@@ -163,7 +148,6 @@ export function HomeView() {
         )}
       </div>
 
-      {overlays.node}
       <CreateSpaceDialog open={creating} onClose={() => setCreating(false)} />
     </div>
   )

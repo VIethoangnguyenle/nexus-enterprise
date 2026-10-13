@@ -16,6 +16,17 @@ A person's notifications are listed, counted and marked read over REST by the me
 - **WHEN** two people have notifications
 - **THEN** each list, count and total covers only the caller's own
 
+### Requirement: An invitation notifies the invited account
+When a workspace invitation is newly opened for an address that is the **verified** address of an account, the messaging service SHALL store one notification for that account's `users.id` and push it live like any other: type `workspace_invitation`, title "Lời mời vào workspace", body "<inviter display name> mời bạn vào <workspace name>" (names only; "Một quản trị viên" when the inviter has no name), `entity_type` `invitation`, `entity_id` the invitation. It arrives from the workspace service on the Redpanda topic `workspace.invitation`; a record that names no account or no invitation creates nothing. No notification is created for an address with no account or an unverified one, and the list, count and live push reach only the addressed account. The notification panel shows the body of this type (and only this type), labelled "Lời mời", and opening it goes to `/workspace-select`, where the offer is answered. Web push is not sent for it: the push path (`docs/specs/web-push/spec.md`) serves chat messages only.
+
+#### Scenario: An offer arrives
+- **WHEN** a person with a verified address is invited while signed in
+- **THEN** their Thông báo shows "<inviter> mời bạn vào <workspace>" as unread, and opening it goes to Chọn workspace
+
+#### Scenario: Nobody else sees it
+- **WHEN** an address that has no account, or whose account is unverified, is invited
+- **THEN** no notification exists for anyone
+
 ### Requirement: Marking read is the caller's own
 `POST /api/notifications/{id}/read` and `POST /api/notifications/read-all` SHALL change only notifications belonging to the signed-in person. Marking another person's notification matches nothing and changes nothing, and still answers `{"status":"ok"}`. A request with no session is 401.
 

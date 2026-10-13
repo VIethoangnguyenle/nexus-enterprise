@@ -37,9 +37,10 @@ export function resetTenantScopedState() {
  * per-workspace data read the workspace from the token, so the session is
  * re-scoped first (the same call the workspace picker makes); only when that
  * succeeds is the token replaced and the old workspace's data dropped. A
- * refusal leaves the person exactly where they were.
+ * refusal leaves the person exactly where they were. The new workspace opens
+ * on the module the person is in, or, with `landOnChat`, on Trang chủ of Chat.
  */
-export function useSwitchWorkspace() {
+export function useSwitchWorkspace({ landOnChat = false }: { landOnChat?: boolean } = {}) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   return useMutation({
@@ -54,7 +55,7 @@ export function useSwitchWorkspace() {
       }
       if (token) setAccessToken(token)
       resetTenantScopedState()
-      await navigate({ to: moduleRootOf(pathname), search: { ws: workspaceId } })
+      await navigate({ to: landOnChat ? '/channels' : moduleRootOf(pathname), search: { ws: workspaceId } })
       return workspaceId
     },
   })
@@ -65,10 +66,10 @@ export function useSwitchWorkspace() {
  * (their own memberships, the list the picker uses), which one is open, and a
  * `choose` that switches. Choosing the open one does nothing but report done.
  */
-export function useWorkspaceSwitcher() {
+export function useWorkspaceSwitcher(opts: { landOnChat?: boolean } = {}) {
   const { workspaceId } = useActiveWorkspace()
   const mine = useMyWorkspaces()
-  const switchTo = useSwitchWorkspace()
+  const switchTo = useSwitchWorkspace(opts)
   const choose = useCallback(
     (id: string, onDone?: () => void) => {
       if (id === workspaceId) return onDone?.()

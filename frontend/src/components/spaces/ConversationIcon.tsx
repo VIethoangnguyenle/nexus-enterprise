@@ -4,7 +4,7 @@ import { Avatar, SpaceIcon } from '../primitives'
 /** A DM shows the other person's avatar (round); a space its icon (rounded square). */
 export function ConversationIcon({ conversation: c, size, online, halo }: {
   conversation: Pick<Conversation, 'kind' | 'title' | 'hueKey' | 'partner'>
-  size: 24 | 32 | 40
+  size: 24 | 32 | 36 | 40 | 44
   online?: boolean
   halo?: boolean
 }) {

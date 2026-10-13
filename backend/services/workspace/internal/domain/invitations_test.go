@@ -42,6 +42,7 @@ func (f *fakeInvites) UpsertInvitation(_ context.Context, inv *store.Invitation)
 		if e.WorkspaceID == inv.WorkspaceID && e.Email == inv.Email && e.Status == store.InvitationPending {
 			e.RoleID, e.DepartmentID, e.InvitedBy, e.ExpiresAt = inv.RoleID, inv.DepartmentID, inv.InvitedBy, inv.ExpiresAt
 			inv.ID = e.ID
+			inv.Created = false
 			return nil
 		}
 	}
@@ -51,6 +52,7 @@ func (f *fakeInvites) UpsertInvitation(_ context.Context, inv *store.Invitation)
 	c.Status = store.InvitationPending
 	f.byID[c.ID] = &c
 	inv.ID = c.ID
+	inv.Created = true
 	return nil
 }
 
@@ -145,6 +147,19 @@ func (f *fakeInvites) UserEmail(_ context.Context, userID string) (string, error
 
 func (f *fakeInvites) VerifiedEmailByNode(_ context.Context, node string) (string, error) {
 	return f.byNode[node], nil
+}
+
+func (f *fakeInvites) VerifiedUserIDsByEmail(_ context.Context, email string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []string
+	for id, e := range f.emails {
+		if e == email {
+			out = append(out, id)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func (f *fakeInvites) RevokePendingForEmail(_ context.Context, ws, email string, _ time.Time) (int, error) {

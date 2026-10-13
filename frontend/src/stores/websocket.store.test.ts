@@ -111,8 +111,80 @@ describe('thread events', () => {
       keys.messaging.messages('c1'),
     )!.messages[0]!
     expect(root.reply_count).toBe(7)
-    expect(useWebSocketStore.getState().lastMessages['c1']?.content).toBe('hi')
+    expect(useWebSocketStore.getState().lastThreadMessages['c1']?.content).toBe('hi')
   })
+})
+
+describe('the newest message of a conversation', () => {
+  const chat = (over: Record<string, unknown>) => ({
+    id: 'm1', channelId: 'c1', senderId: 'u2', senderName: 'B', content: '<p>chào</p>', messageType: 'user',
+    parentMessageId: '', replyCount: 0, contentFormat: 'html', mentions: [] as string[], linkedEntityType: '',
+    linkedEntityId: '', attachments: [] as { driveFileId: string; fileName: string; mimeType: string; sizeBytes: string; width: number; height: number }[],
+    ...over,
+  })
+  const last = () => useWebSocketStore.getState().lastMessages['c1']
+
+  it('keeps its id, the people it names and the root of a thread reply', () => {
+    deliver({
+      oneofKind: 'chatMessage',
+      chatMessage: chat({ id: 'm2', parentMessageId: 'root', mentions: ['u1'], content: '@A xem giúp' }),
+    })
+    expect(useWebSocketStore.getState().lastThreadMessages['c1']).toMatchObject({
+      id: 'm2', content: '@A xem giúp', parentId: 'root', mentions: ['u1'], kind: 'text',
+    })
+    expect(last()).toBeUndefined()
+  })
+
+  it('keeps the newest main message when a thread reply comes after it', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat({ id: 'm2', content: 'chính' }) })
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat({ id: 'm3', parentMessageId: 'm2', content: 'trả lời' }) })
+    expect(last()).toMatchObject({ id: 'm2' })
+    expect(useWebSocketStore.getState().lastThreadMessages['c1']).toMatchObject({ id: 'm3', parentId: 'm2' })
+  })
+
+  it('has no thread for a main-stream message', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat({}) })
+    expect(last()?.parentId).toBeUndefined()
+  })
+
+  it('names the first file of a message with files, and the kind of a card', () => {
+    deliver({
+      oneofKind: 'chatMessage',
+      chatMessage: chat({
+        content: '',
+        attachments: [{ driveFileId: 'f1', fileName: 'ke-hoach.xlsx', mimeType: 'x', sizeBytes: '1', width: 0, height: 0 }],
+      }),
+    })
+    expect(last()).toMatchObject({ kind: 'attachment', attachmentName: 'ke-hoach.xlsx' })
+    deliver({
+      oneofKind: 'chatMessage',
+      chatMessage: chat({ id: 'm3', content: 'Họp?', linkedEntityType: 'poll', linkedEntityId: 'p1' }),
+    })
+    expect(last()).toMatchObject({ kind: 'poll' })
+    deliver({
+      oneofKind: 'chatMessage',
+      chatMessage: chat({ id: 'm4', content: '', linkedEntityType: 'document', linkedEntityId: 'd1' }),
+    })
+    expect(last()).toMatchObject({ kind: 'card' })
+  })
+
+  it('a thread reply frame also names its thread', () => {
+    deliver({
+      oneofKind: 'threadReply',
+      threadReply: {
+        parentMessageId: 'root', replyCount: 2, replyParticipantIds: ['u2'],
+        message: chat({ id: 'r9', parentMessageId: 'root', content: 'ok' }),
+      },
+    })
+    expect(useWebSocketStore.getState().lastThreadMessages['c1']).toMatchObject({ id: 'r9', parentId: 'root' })
+  })
+})
+
+const liveChat = (over: Record<string, unknown>) => ({
+  id: 'm1', channelId: 'c1', senderId: 'u2', senderName: 'B', content: '<p>chào</p>', messageType: 'user',
+  parentMessageId: '', replyCount: 0, contentFormat: 'html', mentions: [] as string[], linkedEntityType: '',
+  linkedEntityId: '', attachments: [] as { driveFileId: string; fileName: string; mimeType: string; sizeBytes: string; width: number; height: number }[],
+  ...over,
 })
 
 describe('message lifecycle events', () => {
@@ -128,6 +200,85 @@ describe('message lifecycle events', () => {
       ],
       has_more: false,
     })
+
+  const activityOf = (over: Record<string, unknown> = {}) => ({
+    channel_id: 'c1',
+    latest: { id: 'a', sender_id: 'u1', sender_name: 'A', preview: 'cũ', kind: 'text', created_at: '2026-10-13T01:00:00Z' },
+    ...over,
+  })
+  const seedActivity = (row: Record<string, unknown> = activityOf()) =>
+    queryClient.setQueryData(keys.messaging.conversationActivity(), [row])
+  const cachedActivity = () =>
+    queryClient.getQueryData<{ channel_id: string; latest: { preview: string }; latest_reply?: { preview: string } }[]>(
+      keys.messaging.conversationActivity(),
+    )!
+  const editFrame = (id: string, content: string, parentMessageId = '') => ({
+    oneofKind: 'messageEdited' as const,
+    messageEdited: {
+      editedAt: { seconds: '1760000000', nanos: 0 },
+      message: {
+        id, channelId: 'c1', senderId: 'u1', senderName: 'A', content, messageType: 'user', parentMessageId,
+        replyCount: 0, contentFormat: 'html', mentions: [], linkedEntityType: '', linkedEntityId: '', attachments: [],
+      },
+    },
+  })
+  const deleteFrame = (id: string, parentMessageId = '') => ({
+    oneofKind: 'messageDeleted' as const,
+    messageDeleted: { messageId: id, channelId: 'c1', parentMessageId, keepPlaceholder: false, replyCount: 0 },
+  })
+
+  it('an edit of the message a preview shows rewrites that preview in place, without asking again', () => {
+    seedActivity(activityOf({
+      latest_reply: { id: 'r', sender_id: 'u2', sender_name: 'B', preview: 'trả lời', kind: 'text', created_at: '2026-10-13T02:00:00Z', parent_message_id: 'a' },
+    }))
+    deliver(editFrame('a', '<p>mới</p>'))
+    expect(cachedActivity()[0]!.latest.preview).toBe('mới')
+    expect(cachedActivity()[0]!.latest_reply!.preview).toBe('trả lời')
+    deliver(editFrame('r', '<p>sửa lại</p>', 'a'))
+    expect(cachedActivity()[0]!.latest_reply!.preview).toBe('sửa lại')
+    expect(invalidated(keys.messaging.conversationActivity())).toBe(false)
+  })
+
+  it('an edit of a message no preview shows leaves the previews alone', () => {
+    seedActivity()
+    const before = cachedActivity()
+    deliver(editFrame('other', '<p>khác</p>'))
+    expect(cachedActivity()).toBe(before)
+    expect(invalidated(keys.messaging.conversationActivity())).toBe(false)
+  })
+
+  it('a delete asks again for the previews only when the deleted message was one of them', () => {
+    seedActivity()
+    deliver(deleteFrame('other'))
+    expect(invalidated(keys.messaging.conversationActivity())).toBe(false)
+    deliver(deleteFrame('a'))
+    expect(invalidated(keys.messaging.conversationActivity())).toBe(true)
+  })
+
+  it('a deleted message no longer stands as the live preview of its conversation', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: liveChat({ id: 'm9', content: '<p>bí mật</p>' }) })
+    expect(useWebSocketStore.getState().lastMessages['c1']?.id).toBe('m9')
+    deliver(deleteFrame('other'))
+    expect(useWebSocketStore.getState().lastMessages['c1']?.id).toBe('m9')
+    deliver(deleteFrame('m9'))
+    expect(useWebSocketStore.getState().lastMessages['c1']).toBeUndefined()
+  })
+
+  it('a deleted reply leaves the live reply slot and not the main one', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: liveChat({ id: 'm9' }) })
+    deliver({ oneofKind: 'chatMessage', chatMessage: liveChat({ id: 'r9', parentMessageId: 'm9' }) })
+    expect(useWebSocketStore.getState().lastMessages['c1']?.id).toBe('m9')
+    expect(useWebSocketStore.getState().lastThreadMessages['c1']?.id).toBe('r9')
+    deliver(deleteFrame('r9', 'm9'))
+    expect(useWebSocketStore.getState().lastThreadMessages['c1']).toBeUndefined()
+    expect(useWebSocketStore.getState().lastMessages['c1']?.id).toBe('m9')
+  })
+
+  it('an edit of a live preview message changes its text there too', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: liveChat({ id: 'm9', content: '<p>cũ</p>' }) })
+    deliver(editFrame('m9', '<p>mới</p>'))
+    expect(useWebSocketStore.getState().lastMessages['c1']).toMatchObject({ id: 'm9', content: 'mới' })
+  })
 
   it('an edit changes the text in the cache and marks it edited, without a new-message preview', () => {
     seedList()
@@ -384,6 +535,17 @@ describe('resync', () => {
     deliver(domainEvent({ domain: 'document', kind: 'created', seq: '10' }))
     settle()
     expect(invalidated(keys.documents.list('ws-1'))).toBe(true)
+  })
+
+  it('a reconnect asks again for the previews and followed threads of the conversation list', () => {
+    useWebSocketStore.getState().followWorkspace('ws-1')
+    seed(keys.messaging.conversationActivity())
+    seed(keys.messaging.followedThreads())
+    authOk()
+    ackWorkspace('12')
+    settle()
+    expect(invalidated(keys.messaging.conversationActivity())).toBe(true)
+    expect(invalidated(keys.messaging.followedThreads())).toBe(true)
   })
 
   it('a hole in the sequence refreshes everything for the workspace', () => {

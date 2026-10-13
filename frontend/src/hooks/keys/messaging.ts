@@ -27,6 +27,12 @@ export const messagingKeys = {
   pins: (channelId: string) => ['pins', channelId] as const,
   /** Per-channel unread counts for the signed-in user. */
   unreadCounts: () => ['unread-counts'] as const,
+  /** Newest message and thread reply of every conversation the signed-in user reads (list previews). */
+  conversationActivity: () => ['conversation-activity'] as const,
+  /** Threads the signed-in user follows, across every conversation they read. */
+  followedThreads: () => ['followed-threads'] as const,
+  /** Search across every conversation the signed-in user reads. */
+  searchAll: (query: string, hasFile = false) => ['search-all', query, hasFile] as const,
   search: (channelId: string, query: string) => ['search', channelId, query] as const,
   tasksAll: () => ['tasks'] as const,
   /** Prefix of a channel's task lists, whatever the status filter. */

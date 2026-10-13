@@ -12,7 +12,7 @@ export interface NotificationItem {
   entity_id?: string
 }
 
-export type NotificationDomain = 'approval' | 'asset'
+export type NotificationDomain = 'approval' | 'asset' | 'invitation'
 
 /**
  * What a notification says, built here from its `type`. The server's `title`
@@ -32,18 +32,28 @@ const COPY: Record<string, { text: string; domain: NotificationDomain }> = {
   asset_lifecycle: { text: 'Bạn đã đổi trạng thái của một tài sản.', domain: 'asset' },
 }
 
-export function describeNotification(n: Pick<NotificationItem, 'type'>): { text: string; domain: NotificationDomain | null } {
+/**
+ * An invitation is the one type whose server `body` is shown: the messaging
+ * service writes it as "<người mời> mời bạn vào <workspace>", names only and no
+ * identifier, and the list has no other way to name them.
+ */
+const INVITATION_FALLBACK = 'Bạn có một lời mời vào workspace.'
+
+export function describeNotification(n: Pick<NotificationItem, 'type'> & { body?: string }): { text: string; domain: NotificationDomain | null } {
+  if (n.type === 'workspace_invitation') return { text: n.body?.trim() || INVITATION_FALLBACK, domain: 'invitation' }
   return COPY[n.type] ?? { text: 'Bạn có một thông báo mới.', domain: null }
 }
 
-export const DOMAIN_LABEL: Record<NotificationDomain, string> = { approval: 'Phê duyệt', asset: 'Tài sản' }
+export const DOMAIN_LABEL: Record<NotificationDomain, string> = { approval: 'Phê duyệt', asset: 'Tài sản', invitation: 'Lời mời' }
 
 export type NotificationTarget =
   | { to: '/approval'; search: { request: string } }
   | { to: '/assets'; search: { asset: string } | { section: 'requests'; request: string } }
+  | { to: '/workspace-select' }
 
 /** Where a notification leads, or null when it names nothing the app can open. */
-export function notificationTarget(n: Pick<NotificationItem, 'entity_type' | 'entity_id'>): NotificationTarget | null {
+export function notificationTarget(n: Pick<NotificationItem, 'entity_type' | 'entity_id'> & { type?: string }): NotificationTarget | null {
+  if (n.type === 'workspace_invitation') return { to: '/workspace-select' }
   const id = n.entity_id
   if (!id) return null
   if (n.entity_type === 'approval') return { to: '/approval', search: { request: id } }

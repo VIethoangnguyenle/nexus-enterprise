@@ -3,14 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
-import { CH, UUID_RE, WS_ID, U } from '../../test/chat-fixtures'
+import { CH, WS_ID } from '../../test/chat-fixtures'
 import { createChatStateServer } from '../../test/chat-state-server'
 import { apiFetch } from '../../api/client'
-import type { Message } from '../../api/messaging'
 import { useChatNavigation } from '../../hooks/useChatNavigation'
 import { useToastStore } from '../primitives'
 import { useNavCollapseStore } from '../../stores/nav-collapse.store'
-import { PhoneChatList } from './PhoneChatList'
+import { PhoneSectionsList } from './PhoneSectionsList'
 import { useSectionOverlays } from './SectionOverlays'
 
 vi.mock('@tanstack/react-router', async () => (await import('../../test/router-mock')).routerMockFactory())
@@ -27,7 +26,7 @@ function Host() {
   const overlays = useSectionOverlays(nav.sectionsApi, true)
   return (
     <>
-      <PhoneChatList nav={nav} workspaceId={WS_ID} fresh={new Map()} overlays={overlays} />
+      <PhoneSectionsList nav={nav} workspaceId={WS_ID} overlays={overlays} />
       {overlays.node}
     </>
   )
@@ -56,27 +55,6 @@ const pressLong = (el: HTMLElement) => {
   act(() => { vi.advanceTimersByTime(401) })
 }
 const titles = (name: string) => within(screen.getByRole('list', { name })).getAllByRole('link').map((a) => a.getAttribute('aria-label'))
-
-describe('the two shortcut tiles', () => {
-  it('open Được nhắc tới and Đã gắn sao from the top of the list, 48px high', async () => {
-    serve({}, 3)
-    await ready()
-    const mentions = screen.getByRole('link', { name: /Được nhắc tới/ })
-    const starred = screen.getByRole('link', { name: /Đã gắn sao/ })
-    expect(mentions).toHaveAttribute('href', '/channels/mentions')
-    expect(starred).toHaveAttribute('href', '/channels/starred')
-    expect(mentions.className).toContain('min-h-12')
-    await waitFor(() => expect(within(mentions).getByLabelText('3 tin nhắc tên bạn chưa đọc')).toBeInTheDocument())
-    expect(within(starred).queryByLabelText(/chưa đọc/)).toBeNull()
-  })
-
-  it('come before every list, and are not part of one', async () => {
-    await ready()
-    const tiles = screen.getByRole('link', { name: /Được nhắc tới/ })
-    const firstList = screen.getAllByRole('list')[0]!
-    expect(tiles.compareDocumentPosition(firstList) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-  })
-})
 
 describe('Đã gắn sao on a phone', () => {
   it('is hidden with nothing starred', async () => {
@@ -165,31 +143,43 @@ describe('muted rows on a phone', () => {
   })
 })
 
-describe('Thread có tin mới on a phone', () => {
-  const root = (n: number): Message => ({
-    id: `1b8f6c1e-2b3d-4e5f-8a9b-1c2d3e4f5a0${n}`, channel_id: CH.doisoat, sender_id: U.vinh.id, sender_name: 'Lê Quang Vinh',
-    content: `<p>Ảnh sao kê số ${n}</p>`, content_format: 'html', reply_count: 4, thread_unread_count: n,
-    last_reply_at: { seconds: 1760000000 + n, nanos: 0 }, reply_participant_ids: [],
+describe('the long-press sheet: Đánh dấu đã đọc', () => {
+  const latest = {
+    id: '55555555-aaaa-4bbb-8ccc-000000000001', sender_id: '11111111-aaaa-4bbb-8ccc-000000000002', sender_name: 'yen',
+    preview: 'Chị xem giúp em', kind: 'text' as const, created_at: '2026-10-13T01:00:00Z',
+  }
+  const activity = [{ channel_id: CH.doisoat, latest }, { channel_id: CH.vanhanh, latest: { ...latest, id: 'other' } }]
+
+  it('is the last choice on a row with unread messages, and reads up to the message the row quotes', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    serve({}, 0, { activity })
+    await ready()
+    await waitFor(() => expect(screen.getByLabelText('3 tin chưa đọc')).toBeInTheDocument())
+    pressLong(row('Đối soát giao dịch'))
+    const sheet = await screen.findByRole('dialog', { name: 'Tuỳ chọn cho Đối soát giao dịch' })
+    const labels = within(sheet).getAllByRole('button').map((b) => b.textContent)
+    expect(labels[labels.length - 1]).toBe('Đánh dấu đã đọc')
+    await user.click(within(sheet).getByRole('button', { name: 'Đánh dấu đã đọc' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(server.calls).toContainEqual({
+      method: 'POST', path: `/channels/${CH.doisoat}/read`, body: { last_message_id: latest.id },
+    }))
+    await waitFor(() => expect(screen.queryByLabelText('3 tin chưa đọc')).toBeNull())
   })
 
-  it('sits at the top of the list, two rows and "Xem thêm", and opens the group on that thread', async () => {
-    const user = userEvent.setup()
-    serve({}, 0, { threads: [root(1), root(2), root(3)] })
+  it('is not offered on a row with nothing unread', async () => {
+    serve({}, 0, { activity })
     await ready()
-    const heading = await screen.findByRole('heading', { name: 'Thread có tin mới' })
-    const rows = within(screen.getByRole('list', { name: 'Thread có tin mới' })).getAllByRole('button', { name: /^Thread của/ })
-    expect(rows).toHaveLength(2)
-    expect(screen.getByRole('button', { name: 'Xem thêm 1 thread' })).toBeInTheDocument()
-    expect(heading.compareDocumentPosition(screen.getByRole('list', { name: 'Nhóm' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    await user.click(rows[0]!)
-    expect(routerState.navigate).toHaveBeenCalledWith({
-      to: '/channels/$channelId', params: { channelId: CH.doisoat }, search: { thread: root(1).id },
-    })
-    expect(document.body.textContent).not.toMatch(UUID_RE)
+    pressLong(row('Vận hành chung'))
+    const sheet = await screen.findByRole('dialog', { name: 'Tuỳ chọn cho Vận hành chung' })
+    expect(within(sheet).queryByRole('button', { name: 'Đánh dấu đã đọc' })).toBeNull()
   })
 
-  it('is not there when no followed thread has news', async () => {
+  it('is not offered where the list does not know the last message', async () => {
+    serve()
     await ready()
-    expect(screen.queryByRole('heading', { name: 'Thread có tin mới' })).toBeNull()
+    pressLong(row('Đối soát giao dịch'))
+    const sheet = await screen.findByRole('dialog', { name: 'Tuỳ chọn cho Đối soát giao dịch' })
+    expect(within(sheet).queryByRole('button', { name: 'Đánh dấu đã đọc' })).toBeNull()
   })
 })

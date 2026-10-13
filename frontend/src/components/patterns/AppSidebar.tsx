@@ -8,44 +8,20 @@ import { useWorkspaceSwitcher } from '../../hooks/useSwitchWorkspace'
 import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { sidebarShortcutLabel, useSidebarCollapsed } from '../../hooks/useSidebarCollapsed'
 import { useUnreadNotificationCount } from '../../hooks/useNotifications'
+import { useOpenInvitationCount } from '../../hooks/useInvitations'
 import { logoutSession } from '../../api/client'
 import { workspaceRowDetail } from '../../lib/auth-flow'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { formatCount } from '../../lib/format'
 import { DURATION, useMotionPresets } from '../../lib/motion'
 import { UNKNOWN_PERSON } from '../../lib/people'
+import {
+  countUnit, footDestinations, mainDestinations, moduleOfPath, type ModuleId, type NavDestination,
+} from '../../lib/nav-destinations'
 import { Avatar, IconButton, MenuItem, MenuSeparator, Popover, Pressable, Tooltip } from '../primitives'
 import { NotificationPanel } from './NotificationPanel'
-import {
-  MessageSquare, FolderOpen, Users, Package, ClipboardCheck, Settings, LogOut, ChevronDown, ShieldCheck, Plus,
-  Bell, PanelLeft,
-} from 'lucide-react'
+import { Settings, LogOut, ChevronDown, Plus, Bell, Mail, PanelLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-
-type ModuleId = 'messaging' | 'documents' | 'drive' | 'assets' | 'contacts' | 'approval' | 'admin' | 'settings'
-
-type NavItem = {
-  id: ModuleId
-  icon: LucideIcon
-  label: string
-  to: string
-}
-
-/** DESIGN.md §5: five main destinations, then Thông báo, Quản trị and Cài đặt at the foot. */
-const mainNavItems: NavItem[] = [
-  { id: 'messaging', icon: MessageSquare, label: 'Tin nhắn', to: '/channels' },
-  { id: 'drive', icon: FolderOpen, label: 'Tài liệu', to: '/drive' },
-  { id: 'approval', icon: ClipboardCheck, label: 'Phê duyệt', to: '/approval' },
-  { id: 'assets', icon: Package, label: 'Tài sản', to: '/assets' },
-  { id: 'contacts', icon: Users, label: 'Danh bạ', to: '/contacts' },
-]
-const footNavItems: NavItem[] = [
-  { id: 'admin', icon: ShieldCheck, label: 'Quản trị', to: '/admin' },
-  { id: 'settings', icon: Settings, label: 'Cài đặt', to: '/settings' },
-]
-
-/** What the number on a destination counts, for the hidden text read after its name. */
-const countUnit = (id: string) => (id === 'approval' ? 'chờ bạn' : 'chưa đọc')
 
 const initialOf = (name: string) => Array.from(name.trim())[0]?.toLocaleUpperCase('vi') ?? 'N'
 
@@ -72,6 +48,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
   const people = usePeople(workspaceId)
   const meAsPerson = user?.id ? people.byUserId.get(user.id) : undefined
   const notificationCount = useUnreadNotificationCount()
+  const offerCount = useOpenInvitationCount()
   const navigate = useNavigate()
   const motion = useMotionPresets()
 
@@ -113,18 +90,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
   // Where "Tạo workspace" sends Back to: the screen the person is on now.
   const here = useLocation({ select: (l) => l.href })
   const currentPath = matches[matches.length - 1]?.pathname || ''
-  const effectiveActive: ModuleId = (() => {
-    if (currentPath.includes('/admin')) return 'admin'
-    if (currentPath.includes('/contacts')) return 'contacts'
-    if (currentPath.includes('/drive')) return 'drive'
-    if (currentPath.includes('/approval')) return 'approval'
-    if (currentPath.includes('/channels')) return 'messaging'
-    if (currentPath.includes('/assets')) return 'assets'
-    if (currentPath.includes('/settings')) return 'settings'
-    // Văn bản is a group inside Tài liệu, so its pages light up Tài liệu.
-    if (currentPath.includes('/documents')) return 'drive'
-    return activeModule
-  })()
+  const effectiveActive: ModuleId = moduleOfPath(currentPath) ?? activeModule
 
   const name = workspaceName || 'Không gian làm việc'
   const current = switcher.workspaces.find((w) => w.id === workspaceId)
@@ -171,7 +137,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
     </>
   )
 
-  const navLink = (item: NavItem) => {
+  const navLink = (item: NavDestination) => {
     const active = effectiveActive === item.id
     return (
       <Link
@@ -223,7 +189,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
 
         <Tooltip
           disabled={!rail}
-          content={<><b className="block text-sm font-semibold">{name}</b><span className="text-ink-muted">{typeLine ? `${typeLine} · ` : ''}bấm để đổi workspace</span></>}
+          content={<><b className="block text-sm font-semibold">{name}</b><span className="text-ink-muted">{typeLine ? `${typeLine} · ` : ''}bấm để đổi workspace{offerCount > 0 ? ' · có lời mời' : ''}</span></>}
         >
           {(t) => (
             <Pressable
@@ -232,7 +198,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
               onClick={() => { setNotifOpen(false); setWsOpen(!wsOpen) }}
               aria-haspopup="dialog"
               aria-expanded={wsOpen}
-              aria-label={rail ? `Đổi workspace, đang ở ${name}${typeLine ? ` (${typeLine})` : ''}` : undefined}
+              aria-label={rail ? `Đổi workspace, đang ở ${name}${typeLine ? ` (${typeLine})` : ''}${offerCount > 0 ? ', có lời mời' : ''}` : undefined}
               className={rail
                 ? 'grid place-items-center w-12 h-12 rounded-surface bg-transparent transition-colors duration-quick hover:bg-hover'
                 : `flex items-center gap-2.5 w-full px-2 py-1.5 rounded-surface bg-transparent
@@ -240,10 +206,16 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
             >
               <span
                 aria-hidden="true"
-                className={`grid place-items-center rounded-surface bg-accent text-on-accent font-display font-bold shrink-0
+                className={`relative grid place-items-center rounded-surface bg-accent text-on-accent font-display font-bold shrink-0
                   ${rail ? 'w-10 h-10 text-lg' : 'w-8 h-8 text-section'}`}
               >
                 {initialOf(name)}
+                {offerCount > 0 && (
+                  <span
+                    data-testid="invitation-dot"
+                    className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-accent ring-2 ring-sunk"
+                  />
+                )}
               </span>
               {!rail && (
                 <>
@@ -260,6 +232,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
                   />
                 </>
               )}
+              {!rail && offerCount > 0 && <span className="sr-only">, có lời mời</span>}
             </Pressable>
           )}
         </Tooltip>
@@ -315,6 +288,29 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
               </div>
             </>
           )}
+          {offerCount > 0 && (
+            <>
+              <MenuSeparator />
+              <Link
+                to="/workspace-select"
+                onClick={() => setWsOpen(false)}
+                className="grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-2.5 min-h-11 px-2.5 py-1.5 rounded-md text-sm text-ink no-underline
+                  hover:bg-hover transition-colors duration-quick focus-ring"
+              >
+                <span className="grid place-items-center w-7 h-7 rounded-md bg-sunk text-ink-muted shrink-0">
+                  <Mail size={16} strokeWidth={1.75} aria-hidden="true" />
+                </span>
+                <span className="font-semibold text-ink truncate">Lời mời</span>
+                <span
+                  aria-hidden="true"
+                  className="inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full bg-accent text-on-accent text-2xs font-semibold tnum"
+                >
+                  {formatCount(offerCount)}
+                </span>
+                <span className="sr-only">, {offerCount} lời mời đang chờ</span>
+              </Link>
+            </>
+          )}
           <MenuSeparator />
           <Link
             to="/onboarding"
@@ -332,7 +328,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
       </div>
 
       <div className={`grid content-start ${itemsGap}`}>
-        {(isPersonal ? mainNavItems.filter((i) => i.id !== 'approval' && i.id !== 'assets') : mainNavItems).map(navLink)}
+        {mainDestinations(isPersonal).map(navLink)}
       </div>
 
       <div className={`grid ${itemsGap}`}>
@@ -345,7 +341,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
         >
           {itemInner(Bell, 'Thông báo', notifOpen, notificationCount, 'chưa đọc')}
         </Pressable>
-        {footNavItems.map(navLink)}
+        {footDestinations(isPersonal).map(navLink)}
 
         {rail ? (
           <>

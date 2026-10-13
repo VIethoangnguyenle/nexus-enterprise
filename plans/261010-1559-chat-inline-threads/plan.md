@@ -14,6 +14,9 @@ created: 2026-10-10
 
 # Chat — in-line threading như Google Chat
 
+Cập nhật 2026-10-12: Trang chủ trên điện thoại (dòng hoạt động, tab Chat, menu ☰) chuyển sang plan
+`261012-0841-chat-mobile-shell`; phase 09 chỉ còn phần máy tính của "Trang chủ ưu tiên thread".
+
 Cập nhật 2026-10-10: tin xếp hai bên (của bạn bên phải, bong bóng) và mục trong cột điều hướng (phase 10), theo yêu cầu người dùng.
 
 Nguồn: [brainstorm](../reports/brainstorm-261010-1559-chat-inline-threads.md) (đã chấp nhận). Nền: `main` @ 61616dc.

@@ -56,3 +56,4 @@ Thumbs.db
 .claude/rules/
 .claude/worktrees/
 dump.rdb
+.dev-backups/

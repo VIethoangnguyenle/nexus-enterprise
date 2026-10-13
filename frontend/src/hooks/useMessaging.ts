@@ -55,18 +55,30 @@ export function useUnreadCounts() {
   })
 }
 
+/** Reading a conversation also reads the mentions in it: the pill and the feed count again. */
+function refreshAfterRead() {
+  queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() })
+  queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsUnreadAll() })
+  return queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
+}
+
 export function useMarkRead(channelId: string) {
   return useMutation({
     // A background side effect of reading; the user did not ask for it, so a
     // failure is not theirs to be told about.
     meta: { silentError: true },
     mutationFn: (lastMessageId: string) => messagingApi.markRead(channelId, lastMessageId),
-    onSuccess: () => {
-      // Reading a conversation also reads the mentions in it: the pill and the feed count again.
-      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsAll() })
-      queryClient.invalidateQueries({ queryKey: keys.shortcuts.mentionsUnreadAll() })
-      return queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
-    },
+    onSuccess: refreshAfterRead,
+  })
+}
+
+/** "Đánh dấu đã đọc" on a row of a list: any conversation, up to the message the row quotes. */
+export function useMarkConversationRead() {
+  return useMutation({
+    meta: { action: 'đánh dấu đã đọc' },
+    mutationFn: ({ channelId, lastMessageId }: { channelId: string; lastMessageId: string }) =>
+      messagingApi.markRead(channelId, lastMessageId),
+    onSuccess: refreshAfterRead,
   })
 }
 

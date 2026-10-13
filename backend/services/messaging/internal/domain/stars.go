@@ -143,15 +143,8 @@ func (s *Service) messageFeed(ctx context.Context, userID, userNodeID, workspace
 	if err != nil {
 		return nil, err
 	}
-	// Reactions, pins and attachments are per channel.
-	byChannel := map[string][]*store.Message{}
-	for _, m := range msgs {
-		byChannel[m.ChannelID] = append(byChannel[m.ChannelID], m)
-	}
-	for ch, group := range byChannel {
-		if err := s.EnrichMessagesWithMetadata(ctx, group, ch); err != nil {
-			return nil, err
-		}
+	if err := s.enrichMessagesAcrossChannels(ctx, msgs); err != nil {
+		return nil, err
 	}
 	if err := s.applyThreadStates(ctx, userID, msgs); err != nil {
 		return nil, err

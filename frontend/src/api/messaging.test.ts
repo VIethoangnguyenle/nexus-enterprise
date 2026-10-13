@@ -24,6 +24,22 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('messagingApi', () => {
+  it('searchAll builds the query string and normalises an empty page', async () => {
+    const page = await messagingApi.searchAll({ q: 'đối soát', hasFile: true, before: '2026-01-01T00:00:00Z', beforeId: 'm-1', limit: 25 })
+    const url = mockFetch.mock.calls[0]?.[0] as string
+    expect(url.startsWith('/api/messages/search?')).toBe(true)
+    const qs = new URLSearchParams(url.split('?')[1] ?? '')
+    expect(qs.get('q')).toBe('đối soát')
+    expect(qs.get('has_file')).toBe('true')
+    expect(qs.get('before')).toBe('2026-01-01T00:00:00Z')
+    expect(qs.get('before_id')).toBe('m-1')
+    expect(qs.get('limit')).toBe('25')
+    expect(page).toEqual({ messages: [], has_more: false })
+
+    await messagingApi.searchAll({ q: 'kế hoạch' })
+    expect(mockFetch.mock.calls[1]?.[0]).toBe('/api/messages/search?q=k%E1%BA%BF+ho%E1%BA%A1ch')
+  })
+
   it('listChannels builds correct URL', async () => {
     await messagingApi.listChannels('ws-123')
     expect(mockFetch).toHaveBeenCalledWith(

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { queryClient } from '../lib/query-client'
+import { clearAllRecent } from '../lib/recent-searches'
 import { endSession } from '../lib/session-end'
 
 interface User {
@@ -88,6 +89,8 @@ export const useAuthStore = create<AuthState>()(
         queryClient.clear()
         // Client stores holding chat content (drafts, previews) go the same way.
         endSession()
+        // What the person searched for stays on the device, so it goes at sign-out too.
+        clearAllRecent()
         set({ accessToken: null, tenantId: null, user: null, bootstrapping: false })
       },
 

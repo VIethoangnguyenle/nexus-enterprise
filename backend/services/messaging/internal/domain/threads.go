@@ -288,17 +288,44 @@ func (s *Service) UnreadThreads(ctx context.Context, userID, userNodeID, workspa
 	if err != nil {
 		return nil, err
 	}
-	// Reactions, pins and attachments are per channel.
-	byChannel := map[string][]*store.Message{}
-	for _, m := range msgs {
-		byChannel[m.ChannelID] = append(byChannel[m.ChannelID], m)
-	}
-	for ch, group := range byChannel {
-		if err := s.EnrichMessagesWithMetadata(ctx, group, ch); err != nil {
-			return nil, err
-		}
+	if err := s.enrichMessagesAcrossChannels(ctx, msgs); err != nil {
+		return nil, err
 	}
 	return &pb.MessageList{Messages: messagesToProto(msgs)}, nil
+}
+
+// FollowedThreads returns the threads the caller follows across every
+// conversation they read — the channels the navigator lists and their direct
+// messages — most recently active first, read or not, muted or not. before is
+// an RFC 3339 last-reply time to page from and beforeID the root id of the last
+// thread of the previous page. limit is capped at threadPageLimit.
+func (s *Service) FollowedThreads(ctx context.Context, userID, userNodeID, workspaceID, before, beforeID string, limit int) (*pb.MessageList, error) {
+	if userID == "" || userNodeID == "" {
+		return nil, ErrInvalidInput
+	}
+	if limit <= 0 || limit > threadPageLimit {
+		limit = threadPageLimit
+	}
+	var beforeTime *time.Time
+	if before != "" {
+		t, err := time.Parse(time.RFC3339Nano, before)
+		if err != nil {
+			return nil, fmt.Errorf("%w: before must be an RFC 3339 time", ErrInvalidInput)
+		}
+		beforeTime = &t
+	}
+	channelIDs, err := s.readableChannelIDs(ctx, workspaceID, userNodeID)
+	if err != nil {
+		return nil, err
+	}
+	msgs, hasMore, err := s.store.FollowedThreads(ctx, userID, channelIDs, beforeTime, beforeID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("followed threads: %w", err)
+	}
+	if err := s.enrichMessagesAcrossChannels(ctx, msgs); err != nil {
+		return nil, err
+	}
+	return &pb.MessageList{Messages: messagesToProto(msgs), HasMore: hasMore}, nil
 }
 
 // applyThreadStates fills the caller's thread summary into the root messages

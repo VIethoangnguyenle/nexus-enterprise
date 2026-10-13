@@ -112,3 +112,35 @@ func TestEvents_MalformedOrUnstorableOnesAreSkippedNotFatal(t *testing.T) {
 	c.handleLifecycleEvent(context.Background(), []byte(`{"asset_id":"a1","actor_id":"u"}`))
 	assert.Len(t, n.got, 1, "the failure is logged and the handler returns")
 }
+
+func TestInvitationEvent_TellsOnlyTheAddressedAccount(t *testing.T) {
+	c, n := consumer()
+	c.handleInvitationEvent(context.Background(), []byte(`{"invitation_id":"inv1","user_id":"u-invitee","workspace_name":"NovaPay Kế toán","inviter_name":"Lê Thị Hoa"}`))
+
+	require.Len(t, n.got, 1)
+	assert.Equal(t, "u-invitee", n.got[0].user)
+	assert.Equal(t, "workspace_invitation", n.got[0].kind)
+	assert.Equal(t, "Lê Thị Hoa mời bạn vào NovaPay Kế toán", n.got[0].body)
+	assert.Equal(t, "invitation", n.got[0].entityType)
+	assert.Equal(t, "inv1", n.got[0].entityID)
+}
+
+func TestInvitationEvent_AnonymousInviterStillReadsAsASentence(t *testing.T) {
+	c, n := consumer()
+	c.handleInvitationEvent(context.Background(), []byte(`{"invitation_id":"inv1","user_id":"u-invitee","workspace_name":"NovaPay"}`))
+	require.Len(t, n.got, 1)
+	assert.Equal(t, "Một quản trị viên mời bạn vào NovaPay", n.got[0].body)
+}
+
+func TestInvitationEvent_NamingNoAccountOrNoOfferCreatesNothing(t *testing.T) {
+	for _, body := range []string{
+		`{"invitation_id":"inv1","workspace_name":"NovaPay"}`,
+		`{"user_id":"u-invitee","workspace_name":"NovaPay"}`,
+		`{}`,
+		`not json`,
+	} {
+		c, n := consumer()
+		c.handleInvitationEvent(context.Background(), []byte(body))
+		assert.Empty(t, n.got, body)
+	}
+}

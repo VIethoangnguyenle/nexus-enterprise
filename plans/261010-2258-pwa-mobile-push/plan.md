@@ -7,7 +7,7 @@ effort: 8-10d
 issue:
 branch: claude/inspiring-cray-32y4n1
 tags: [feature, frontend, backend, mobile, pwa, notifications]
-blockedBy: []
+blockedBy: [261012-0841-chat-mobile-shell]
 blocks: []
 created: 2026-10-10
 ---
@@ -50,7 +50,7 @@ báo đẩy về, dùng OneSignal").
 | 03 | [Tối ưu giao diện mobile](phase-03-mobile-ui.md) | P0 | 2-3d | 01 (màn không phải chat: làm ngay; màn chat: cùng chat phase 04) | completed (màn chat: cùng chat 04) |
 | 04 | [OneSignal phía frontend](phase-04-onesignal-frontend.md) | P1 | 1d | 02 | completed (cfdb6a5; review fixes applied) |
 | 05 | [Gửi push từ backend](phase-05-push-backend.md) | P1 | 2d | 04 | completed (backend + frontend; chờ deploy) |
-| 06 | [Kiểm chứng trên thiết bị thật](phase-06-device-verification.md) | P1 | 0.5-1d | 03, 05 | pending |
+| 06 | [Kiểm chứng trên thiết bị thật](phase-06-device-verification.md) | P1 | 0.5-1d | 03, 05, plan `261012-0841-chat-mobile-shell` (vỏ điện thoại mới) | pending |
 
 ```text
 01 design ──► 02 PWA ──► 04 OneSignal FE ──► 05 push BE ──┐

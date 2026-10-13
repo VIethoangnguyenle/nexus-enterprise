@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { useChannels, useDirectMessages, useUnreadCounts } from './useMessaging'
+import { useConversationActivity } from './useConversationActivity'
 import { usePeople } from './usePeople'
 import { useAuthStore } from '../stores/auth.store'
 import { useWebSocketStore } from '../stores/websocket.store'
@@ -19,9 +20,9 @@ export interface ConversationsState {
 }
 
 /**
- * Spaces of the workspace plus the user's DMs, with unread counts and the
- * latest activity seen over the WebSocket, sorted for Home. Three requests in
- * total, never one per conversation.
+ * Spaces of the workspace plus the user's DMs, with unread counts, what each
+ * last said (the activity list, then live events when newer), sorted for Home.
+ * Four requests in total, never one per conversation.
  *
  * While mounted it also subscribes to every listed conversation, so Home and
  * the navigator move when someone writes anywhere, not only in the open one.
@@ -30,8 +31,10 @@ export function useConversations(workspaceId: string): ConversationsState {
   const spacesQ = useChannels(workspaceId)
   const dmsQ = useDirectMessages()
   const unreadQ = useUnreadCounts()
+  const activityQ = useConversationActivity()
   const people = usePeople(workspaceId)
   const lastMessages = useWebSocketStore((s) => s.lastMessages)
+  const lastThreadMessages = useWebSocketStore((s) => s.lastThreadMessages)
   const subscribeMany = useWebSocketStore((s) => s.subscribeMany)
   const user = useAuthStore((s) => s.user)
 
@@ -61,12 +64,14 @@ export function useConversations(workspaceId: string): ConversationsState {
           dms: dmsQ.data?.channels ?? [],
           unread,
           meta,
+          activity: activityQ.data,
           lastMessages,
+          lastThreadMessages,
           me: { id: user?.id, username: user?.username },
           dir: people,
         }),
       ),
-    [spacesQ.data, dmsQ.data, unread, meta, lastMessages, user, people],
+    [spacesQ.data, dmsQ.data, unread, meta, activityQ.data, lastMessages, lastThreadMessages, user, people],
   )
 
   const ids = useMemo(() => conversations.map((c) => c.id).sort().join(','), [conversations])
@@ -85,6 +90,7 @@ export function useConversations(workspaceId: string): ConversationsState {
     refetch: () => {
       void spacesQ.refetch()
       void dmsQ.refetch()
+      void activityQ.refetch()
     },
   }
 }

@@ -90,6 +90,24 @@ named.
 - **WHEN** the batch read check fails
 - **THEN** the answer is an empty list, never every channel
 
+### Requirement: Followed threads across conversations
+`GET /api/threads/followed?limit=&before=&before_id=` SHALL return the threads the caller follows, read or not, across
+every conversation the navigator lists for them (the channels of the workspace they are signed in to that they read,
+and their direct messages), most recently active first, each with the caller's thread summary — the same shape as
+`GET /api/threads/unread`, plus `has_more`. `before` (an RFC 3339 last-reply time) and `before_id` (the root id of the
+last thread of the previous page) page to older threads; `limit` is at most 50. A muted conversation still
+contributes its followed threads; a thread whose root message was deleted does not. A conversation the caller cannot
+read SHALL never contribute a thread, whether they follow it or were removed from it; when the policy service cannot
+answer, none is named. Trang chủ's "Đang theo dõi" and the tab Thêm read it.
+
+#### Scenario: Followed and read
+- **WHEN** the caller has read every reply of a thread they follow
+- **THEN** it is still listed here, and absent from `/api/threads/unread`
+
+#### Scenario: Removed from the group
+- **WHEN** the caller follows a thread in a group they are then removed from
+- **THEN** the thread is no longer listed
+
 ## Screens
 
 The stream and the thread panels (`ConversationStream`, `ThreadSummary`, `ThreadPanel`, `ThreadsPanel`) draw what

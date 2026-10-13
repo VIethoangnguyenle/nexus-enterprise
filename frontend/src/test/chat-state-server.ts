@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { ChannelUnread, Message } from '../api/messaging'
+import type { ChannelUnread, ConversationActivity, Message } from '../api/messaging'
 import type { FeedMessage } from '../api/shortcuts'
 import type { NotificationLevel } from '../api/notification-levels'
 import { ApiError } from '../api/client'
@@ -14,7 +14,13 @@ import { CH, UNREAD, fixtureApi } from './chat-fixtures'
 export function createChatStateServer(
   initial: Record<string, Partial<ChannelUnread>> = {},
   mentionsUnread = 0,
-  feeds: { mentions?: FeedMessage[]; starred?: FeedMessage[]; threads?: Message[] } = {},
+  feeds: {
+    mentions?: FeedMessage[]; starred?: FeedMessage[]; threads?: Message[]
+    /** What `GET /channels/activity` answers. */
+    activity?: ConversationActivity[]
+    /** What `GET /threads/followed` answers. */
+    followed?: Message[]
+  } = {},
 ) {
   const base = new Map<string, ChannelUnread>(UNREAD.map((u) => [u.channel_id, { ...u }]))
   const state = new Map<string, ChannelUnread>()
@@ -38,6 +44,20 @@ export function createChatStateServer(
     if (method === 'DELETE' && /^\/messages\/[^/]+\/star$/.test(p)) {
       calls.push({ method, path: p })
       return {}
+    }
+    const read = p.match(/^\/channels\/([^/]+)\/read$/)
+    if (method === 'POST' && read) {
+      calls.push({ method, path: p, body })
+      state.get(read[1]!)!.unread_count = 0
+      return {}
+    }
+    if (method === 'GET' && p === '/channels/activity') {
+      calls.push({ method, path: p })
+      return structuredClone({ channels: feeds.activity ?? [] })
+    }
+    if (method === 'GET' && p === '/threads/followed') {
+      calls.push({ method, path: p })
+      return structuredClone({ messages: feeds.followed ?? [], has_more: false })
     }
     if (!(p === '/channels/unread' || star || level || p === '/messages/mentions/unread-count' || p === '/threads/unread')) {
       return fixtureApi(path, init)

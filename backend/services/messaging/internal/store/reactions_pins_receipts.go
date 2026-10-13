@@ -206,16 +206,19 @@ func (s *Store) IsPinned(ctx context.Context, messageID string) (bool, error) {
 	return exists, err
 }
 
-// PinnedMessageIDs returns the set of pinned message IDs for a channel.
-func (s *Store) PinnedMessageIDs(ctx context.Context, channelID string) (map[string]bool, error) {
+// PinnedMessageIDsIn returns the set of pinned message ids of the channels, in one query.
+func (s *Store) PinnedMessageIDsIn(ctx context.Context, channelIDs []string) (map[string]bool, error) {
+	result := make(map[string]bool)
+	if len(channelIDs) == 0 {
+		return result, nil
+	}
 	rows, err := s.db.Query(ctx,
-		`SELECT message_id FROM message_pins WHERE channel_id = $1`, channelID)
+		`SELECT message_id FROM message_pins WHERE channel_id = ANY($1)`, channelIDs)
 	if err != nil {
 		return nil, fmt.Errorf("pinned ids: %w", err)
 	}
 	defer rows.Close()
 
-	result := make(map[string]bool)
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
@@ -223,7 +226,7 @@ func (s *Store) PinnedMessageIDs(ctx context.Context, channelID string) (map[str
 		}
 		result[id] = true
 	}
-	return result, nil
+	return result, rows.Err()
 }
 
 // --- Read Receipts Store ---
@@ -332,27 +335,6 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 		results = append(results, u)
 	}
 	return results, rows.Err()
-}
-
-// --- Search Store ---
-
-// SearchMessages performs full-text search on messages in a channel.
-func (s *Store) SearchMessages(ctx context.Context, channelID, query string, limit int) ([]*Message, error) {
-	if limit <= 0 || limit > 50 {
-		limit = 20
-	}
-	rows, err := s.db.Query(ctx,
-		`SELECT `+messageCols+`
-		 FROM messages m LEFT JOIN users u ON m.sender_id = u.id
-		 WHERE m.channel_id = $1 AND m.deleted_at IS NULL AND m.search_vector @@ plainto_tsquery('english', $2)
-		 ORDER BY ts_rank(m.search_vector, plainto_tsquery('english', $2)) DESC
-		 LIMIT $3`,
-		channelID, query, limit)
-	if err != nil {
-		return nil, fmt.Errorf("search messages: %w", err)
-	}
-	defer rows.Close()
-	return scanMessages(rows)
 }
 
 // --- Helper to create store with external pool reference ---

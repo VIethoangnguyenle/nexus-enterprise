@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, ty
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { AlertCircle, Bell, Box, Check, CheckCheck, ClipboardCheck, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Bell, Box, Check, CheckCheck, ClipboardCheck, Mail, X } from 'lucide-react'
 import { DURATION, EASE, useMotionPresets } from '../../lib/motion'
 import {
   DOMAIN_LABEL, describeNotification, groupByDay, notificationTarget, notificationTime,
@@ -24,7 +24,7 @@ interface NotificationPanelProps {
 }
 
 const GAP = 12
-const DOMAIN_ICON = { approval: ClipboardCheck, asset: Box } as const
+const DOMAIN_ICON = { approval: ClipboardCheck, asset: Box, invitation: Mail } as const
 
 /**
  * Notification panel (DESIGN.md §6, design/mockups/notifications.html): a large
@@ -98,7 +98,7 @@ export function NotificationPanel({ open, onClose, anchorRef, sideRef }: Notific
   )
 }
 
-function PanelContent({ titleId, onClose }: { titleId: string; onClose: () => void }) {
+export function PanelContent({ titleId, onClose, back = false }: { titleId: string; onClose: () => void; back?: boolean }) {
   const list = useNotificationList(true)
   const badge = useUnreadNotificationCount()
   const unread = list.unread ?? badge
@@ -109,10 +109,17 @@ function PanelContent({ titleId, onClose }: { titleId: string; onClose: () => vo
     <>
       <div className="grid gap-1 pt-4 pr-3 pb-2 pl-4">
         <div className="flex items-center gap-2">
+          {back && (
+            <IconButton size="md" aria-label="Quay lại" onClick={onClose} className="-ml-2">
+              <ArrowLeft size={18} strokeWidth={1.75} aria-hidden="true" />
+            </IconButton>
+          )}
           <Heading as="h2" look="panel" id={titleId}>Thông báo</Heading>
-          <IconButton size="md" aria-label="Đóng thông báo" onClick={onClose} className="ml-auto">
-            <X size={18} strokeWidth={1.75} aria-hidden="true" />
-          </IconButton>
+          {!back && (
+            <IconButton size="md" aria-label="Đóng thông báo" onClick={onClose} className="ml-auto">
+              <X size={18} strokeWidth={1.75} aria-hidden="true" />
+            </IconButton>
+          )}
         </div>
         <div className="flex items-center gap-2 min-h-8">
           <span className="text-sm text-ink-muted tnum">{list.isError || list.isLoading ? '' : `${unread} chưa đọc`}</span>
@@ -208,6 +215,8 @@ function Row({ n, onClose }: { n: NotificationItem; onClose: () => void }) {
   let main: ReactNode
   if (target?.to === '/approval') {
     main = <Link to="/approval" search={target.search} onClick={open} className={linkClass}>{face}{body}</Link>
+  } else if (target?.to === '/workspace-select') {
+    main = <Link to="/workspace-select" onClick={open} className={linkClass}>{face}{body}</Link>
   } else if (target?.to === '/assets') {
     main = <Link to="/assets" search={target.search} onClick={open} className={linkClass}>{face}{body}</Link>
   } else {

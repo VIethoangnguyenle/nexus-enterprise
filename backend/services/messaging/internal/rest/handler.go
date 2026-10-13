@@ -59,6 +59,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/messages/:msgId/thread/read", h.MarkThreadRead)
 	api.GET("/channels/:chId/threads", h.ListThreads)
 	api.GET("/threads/unread", h.UnreadThreads)
+	api.GET("/threads/followed", h.FollowedThreads)
 
 	// The caller's stars, and the messages that mention them
 	api.PUT("/channels/:chId/star", h.StarConversation)
@@ -67,6 +68,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.DELETE("/messages/:msgId/star", h.UnstarMessage)
 	api.GET("/messages/starred", h.StarredMessages)
 	api.GET("/messages/mentions", h.Mentions)
+	api.GET("/messages/search", h.SearchAllMessages)
 	api.GET("/messages/mentions/unread-count", h.UnreadMentionCount)
 
 	// The caller's push preferences (the rest of /api/me is the auth service's)
@@ -108,6 +110,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// Read Receipts
 	api.POST("/channels/:chId/read", h.MarkChannelRead)
 	api.GET("/channels/unread", h.GetUnreadCounts)
+	api.GET("/channels/activity", h.ConversationActivity)
 
 	// Notification level: the caller's own, per conversation they read.
 	api.GET("/channels/:chId/notification-level", h.GetNotificationLevel)

@@ -5,14 +5,14 @@ Give the workspace a single persistent navigation surface that can yield screen 
 
 ## Status
 
-Updated 2026-10-11. The main menu (`frontend/src/components/patterns/AppSidebar.tsx`) has the two states
+Updated 2026-10-13: phone navigation is the search bar, the ☰ drawer and the Chat bar (`design/mockups/chat-mobile-home.html`). Updated 2026-10-11. The main menu (`frontend/src/components/patterns/AppSidebar.tsx`) has the two states
 below, designed in `design/mockups/app-rail.html`. The global search input is still not in the
 sidebar; that requirement stays as written.
 
 ## Requirements
 
 ### Requirement: Main menu in two states
-The workspace SHALL show one persistent main menu on the left at 1024px and wider, a single `<nav aria-label="Điều hướng chính">`, in two states: the **rail** (72px wide: the workspace letter tile, then each destination as an icon with its full label under it, 11px) and the **expanded sidebar** (232px: workspace switcher, then each destination as an icon and label in a row). Both SHALL hold the same destinations in the same order: Tin nhắn, Tài liệu, Phê duyệt, Tài sản, Danh bạ, then at the foot Thông báo, Quản trị, Cài đặt and the signed-in person. A personal workspace SHALL NOT offer Phê duyệt or Tài sản. A destination's count SHALL show as a pill (`99+` above 99, hidden at 0) with the number also in text for screen readers, and the open destination SHALL carry `aria-current="page"`. The **rail is the default** at every desktop width, until the person expands it.
+The workspace SHALL show one persistent main menu on the left at 1024px and wider, a single `<nav aria-label="Điều hướng chính">`, in two states: the **rail** (72px wide: the workspace letter tile, then each destination as an icon with its full label under it, 11px) and the **expanded sidebar** (232px: workspace switcher, then each destination as an icon and label in a row). Both SHALL hold the same destinations in the same order: Tin nhắn, Tài liệu, Phê duyệt, Tài sản, Danh bạ, then at the foot Thông báo, Quản trị, Cài đặt and the signed-in person. A personal workspace SHALL NOT offer Phê duyệt, Tài sản or Quản trị. A destination's count SHALL show as a pill (`99+` above 99, hidden at 0) with the number also in text for screen readers, and the open destination SHALL carry `aria-current="page"`. The **rail is the default** at every desktop width, until the person expands it.
 
 #### Scenario: A first visit
 - **WHEN** someone with no stored choice opens the workspace on a desktop
@@ -43,14 +43,30 @@ The sidebar SHALL contain a global search input at the top (below workspace swit
 - **THEN** a global search input SHALL be visible and usable
 
 ### Requirement: Phone Navigation And Workspace Switching
-Where the sidebar is not shown, a bottom bar SHALL offer three labelled tabs, Tin nhắn, Tài liệu and Phê duyệt (with the number of requests waiting on the person, `99+` above 99, hidden at 0), and a fourth, Thêm, that opens a modal bottom sheet holding the current workspace and person, Tài sản, Danh bạ, Quản trị, Cài đặt and Đăng xuất (through the one logout path). No avatar floats over the screens. The sheet traps focus, takes focus on open, closes on Esc, the scrim, its Đóng button or a downward drag, and returns focus to Thêm.
+Below 1024px, where the sidebar is not shown, every list screen of every module SHALL start with a **search bar**: a pill holding a ☰ button (`aria-label` "Mở menu chính", `aria-haspopup="dialog"`, with a dot when a request waits on the person in an organization workspace or a notification is unread), a hint that names the module's search ("Tìm trong chat", "Tìm tài liệu", "Tìm đề nghị", "Tìm tài sản", "Tìm người", "Tìm cài đặt") and the person's avatar. The hint SHALL go to the search of the screen below it (`[data-module-search]`: a box takes focus, a button opens its panel); a screen with none SHALL show the module's name there instead, never a button that does nothing. The bar SHALL NOT be drawn inside a conversation or a document, which carry their own header.
 
-The workspace switcher in the sidebar and in the sheet SHALL list only the workspaces from `GET /api/me/workspaces`. Choosing one SHALL re-scope the session with `POST /api/auth/switch-tenant`, replace the access token, drop the whole query cache and the Tài liệu client state, and open the module the person was in under `?ws=` of the new workspace with no folder or view carried over. A refusal leaves the token, the data and the screen as they were and says so in a toast.
+☰ SHALL open the **main menu**, a modal drawer from the left: the workspace block (name and kind; pressing it unfolds the workspaces the person can enter, the open one ticked, "Lời mời" when offers wait, "Tạo workspace"), then Chat, Tài liệu, Phê duyệt, Tài sản, Danh bạ, then Thông báo, Quản trị, Cài đặt, and the person's name and role last. The destinations and what hides them SHALL be the sidebar's (`frontend/src/lib/nav-destinations.ts`): a personal workspace SHALL NOT offer Phê duyệt, Tài sản or Quản trị. Counts SHALL show as in the sidebar (Chat unread by notification level, Phê duyệt "N chờ bạn", Thông báo unread, `99+` above 99) and be part of each link's accessible name; the open module SHALL carry `aria-current="page"`. Thông báo SHALL open the notification list as a full screen with Quay lại. The drawer traps focus, takes it on the workspace block, closes on Esc, the scrim or a drag to the left, returns focus to ☰, and under reduced motion fades instead of sliding. The avatar SHALL open a sheet with the person's name, role and workspace, a link to the notification settings, Cài đặt tài khoản, Cài đặt and Đăng xuất (through the one logout path).
 
-#### Scenario: Switch from the sheet
-- **WHEN** the person opens Thêm, picks another workspace in the list and the server accepts
-- **THEN** the token is the new workspace's, the old workspace's cached data is gone, the sheet closes and the same module opens on the new workspace
+On the list of conversations (`/channels`) only, a floating **Chat bar** SHALL offer four icon-only links to `/channels?tab=home|direct|sections|more` (Trang chủ, Trực tiếp, Mục, Thêm; Trang chủ is the address without a tab, and an unknown tab opens Trang chủ). Each link's `aria-label` carries what it reports: Trang chủ a dot when anything is unread, Trực tiếp the unread direct messages, Mục the groups with unread messages, Thêm a dot when someone has named the person (`99+` above 99, nothing at 0, counts by notification level). Beside it a 64px **+** button SHALL open the sheet "Trò chuyện mới" (Nhắn tin trực tiếp, Tạo nhóm, Tạo mục). The bar is not drawn inside a conversation or in any other module, nor at 1024px and wider; while it is on screen the list keeps 108px plus the safe-area inset under its last row and toasts float 16px above it.
+
+The workspace switcher in the sidebar and in the drawer SHALL list only the workspaces from `GET /api/me/workspaces`. Choosing one SHALL re-scope the session with `POST /api/auth/switch-tenant`, replace the access token, drop the whole query cache and the Tài liệu client state, and open under `?ws=` of the new workspace with no folder or view carried over: the module the person was in from the sidebar, Trang chủ of Chat from the drawer. A refusal leaves the token, the data and the screen as they were and says so in a toast.
+
+#### Scenario: A list screen on a phone
+- **WHEN** a person opens Phê duyệt at 390px
+- **THEN** the screen starts with the search bar saying "Tìm đề nghị" when the screen has a search of its own, ☰ and the avatar, and no Chat bar
+
+#### Scenario: Reaching another module
+- **WHEN** the person opens ☰ and picks Tài sản
+- **THEN** the drawer closes, Tài sản opens and focus is back on ☰
+
+#### Scenario: Switch from the drawer
+- **WHEN** the person opens ☰, unfolds the workspaces, picks another one and the server accepts
+- **THEN** the token is the new workspace's, the old workspace's cached data is gone, the drawer closes and Trang chủ of Chat opens on the new workspace
 
 #### Scenario: Switch refused
 - **WHEN** switch-tenant answers 403
-- **THEN** the token and cached data are unchanged, the sheet stays open and a toast says the switch failed
+- **THEN** the token and cached data are unchanged, the drawer stays open and a toast says the switch failed
+
+#### Scenario: Inside a conversation
+- **WHEN** the person opens one conversation
+- **THEN** neither the search bar nor the Chat bar is drawn, and the list does not keep room under it

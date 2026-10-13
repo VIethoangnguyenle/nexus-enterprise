@@ -86,6 +86,14 @@ export function formatListTime(value: unknown, now: Date = new Date()): string {
   return formatDate(d)
 }
 
+/** The time on a Trang chủ row: "1 phút", "09:02", "Hôm qua", `07/10`. `ms` is epoch milliseconds; 0 is unknown. */
+export function formatFeedTime(ms: number, now: Date = new Date()): string {
+  if (!ms) return ''
+  const minutes = Math.floor((now.getTime() - ms) / 60_000)
+  if (minutes >= 0 && minutes < 60 && dayDiff(new Date(ms), now) === 0) return `${Math.max(1, minutes)} phút`
+  return formatListTime(new Date(ms), now)
+}
+
 const decimal = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 1 })
 const integer = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 })
 

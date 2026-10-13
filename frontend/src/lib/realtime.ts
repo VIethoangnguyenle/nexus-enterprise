@@ -59,6 +59,8 @@ export function workspaceResyncKeys(wsId: string): QueryKey[] {
     keys.messaging.dms(),
     keys.messaging.messagesAll(),
     keys.messaging.unreadCounts(),
+    keys.messaging.conversationActivity(),
+    keys.messaging.followedThreads(),
     keys.messaging.pinsAll(),
     keys.messaging.tasksAll(),
     keys.messaging.reactionsAll(),

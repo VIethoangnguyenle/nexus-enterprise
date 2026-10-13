@@ -381,6 +381,31 @@ message ChannelUnreadList {
   repeated ChannelUnread channels = 1;
 }
 
+// ActivityMessage is the opening of one message, as the conversation list previews it.
+message ActivityMessage {
+  string id = 1;
+  string sender_id = 2;
+  string sender_name = 3;
+  string preview = 4;               // Plain text, at most 140 characters
+  string kind = 5;                  // "text" | "attachment" | "poll" | "task" | "card"
+  string attachment_name = 6;       // File name of the first attachment; only when kind is "attachment"
+  repeated string mentions = 7;     // User IDs mentioned
+  google.protobuf.Timestamp created_at = 8;
+  string parent_message_id = 9;     // Set only on a thread reply
+}
+
+// ConversationActivity is the latest main-stream message of a conversation the
+// caller reads, and its latest thread reply when that is newer.
+message ConversationActivity {
+  string channel_id = 1;
+  ActivityMessage latest = 2;
+  ActivityMessage latest_reply = 3;
+}
+
+message ConversationActivityList {
+  repeated ConversationActivity channels = 1;
+}
+
 // ============================================
 // Search Messages
 // ============================================

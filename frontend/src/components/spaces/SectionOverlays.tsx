@@ -1,9 +1,11 @@
 import { useRef, useState, type ComponentType, type ReactNode } from 'react'
-import { ArrowDown, ArrowUp, Bell, BellOff, Check, Folder, FolderPlus, Pencil, Star, Trash2, X } from 'lucide-react'
+import { ArrowDown, ArrowUp, Bell, BellOff, Check, CheckCheck, Folder, FolderPlus, Pencil, Star, Trash2, X } from 'lucide-react'
 import type { ChatSectionsApi, ConversationRef } from '../../hooks/useChatSections'
+import { useMarkConversationRead } from '../../hooks/useMessaging'
 import { useStarConversation } from '../../hooks/useShortcuts'
 import { changeNotificationLevel } from '../../hooks/useNotificationLevel'
 import { explain, statusOf } from '../../lib/errors'
+import type { Conversation } from '../../lib/conversations'
 import { MAX_SECTION_NAME, sectionOfChannel, validateSectionName, type ChatSection } from '../../lib/chat-sections'
 import { Button, MenuItem, MenuSeparator, Popover, TextField } from '../primitives'
 import { NavSheet, SheetItem, SheetLabel, SheetSeparator } from './NavSheet'
@@ -15,6 +17,23 @@ export interface RowTarget extends ConversationRef {
   starred?: boolean
   /** Notification level is `off`. */
   muted?: boolean
+  /**
+   * Offers "Đánh dấu đã đọc": the conversation has unread messages, up to this
+   * one. Left out where the list cannot say (the desktop navigator).
+   */
+  markRead?: string
+}
+
+/** The row menu's target for a conversation of the phone lists. */
+export function rowTargetOf(c: Conversation): RowTarget {
+  const unread = c.level === 'off' ? 0 : c.unread
+  return {
+    id: c.id,
+    title: c.title,
+    starred: c.starred,
+    muted: c.level === 'off',
+    markRead: unread > 0 ? c.main?.id || undefined : undefined,
+  }
 }
 
 type Overlay =
@@ -111,6 +130,7 @@ export function useSectionOverlays(api: ChatSectionsApi, phone: boolean, onRevea
   const closeIfCurrent = (overlay: Overlay) => () => setOpen((cur) => (cur === overlay ? null : cur))
 
   const star = useStarConversation()
+  const markRead = useMarkConversationRead()
   const { Item, Separator, Radios } = phone ? sheetKit : popoverKit
   const icon = phone ? ICON_SHEET : ICON
   const sections = api.sections
@@ -191,6 +211,17 @@ export function useSectionOverlays(api: ChatSectionsApi, phone: boolean, onRevea
         >
           {c.muted ? 'Bật thông báo' : 'Tắt thông báo'}
         </Item>
+        {c.markRead && (
+          <Item
+            icon={<CheckCheck {...icon} />}
+            onClick={() => {
+              close()
+              markRead.mutate({ channelId: c.id, lastMessageId: c.markRead! })
+            }}
+          >
+            Đánh dấu đã đọc
+          </Item>
+        )}
       </>,
     )
   } else if (open?.kind === 'section') {

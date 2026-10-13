@@ -2,340 +2,159 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter,
-} from '@tanstack/react-router'
-import { renderWithClient, resetClient } from '../../test/render'
-import { CONTACTS, WS_ID } from '../../test/chat-fixtures'
-import { apiFetch, logoutSession } from '../../api/client'
-import { queryClient } from '../../lib/query-client'
-import { validateWorkspaceSearch } from '../../lib/workspace'
-import { useAuthStore } from '../../stores/auth.store'
-import { useDriveStore } from '../../stores/drive.store'
+import { resetClient } from '../../test/render'
+import { CH, UUID_RE } from '../../test/chat-fixtures'
+import { apiFetch } from '../../api/client'
+import { useUiStore } from '../../stores/ui.store'
 import { MobileNav } from './MobileNav'
+import { DIRECT, GROUP, GROUP_2, answer, renderShell, resetServer, server, unreadRow, viewport } from './phone-shell-harness'
 
-vi.mock('../../api/client', async (orig) => ({
-  ...(await orig<typeof import('../../api/client')>()),
-  apiFetch: vi.fn(),
-  logoutSession: vi.fn(),
-}))
+vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn() }))
 const api = vi.mocked(apiFetch)
-
-const OTHER_WS = '0b9a7d2f-3c4e-4f60-9bac-2d3e4f5a6b7c'
-const NOT_MINE_WS = '0c0b8e30-4d5f-4071-8cbd-3e4f5a6b7c8d'
-const tokenFor = (tenant: string) => `h.${btoa(JSON.stringify({ tenant_id: tenant }))}.s`
-
-let pending = 2
-let unread: Array<{ channel_id: string; unread_count: number; last_read_message_id: string; notification_level?: 'all' | 'main' | 'off'; mention_count?: number }> = []
-let switchError: unknown = null
-
-function answer(path: string, init?: RequestInit) {
-  if (path === '/channels/unread') return Promise.resolve({ channels: unread })
-  if (path === '/approval/pending') return Promise.resolve({ items: [], total: pending })
-  // The graph can reach more workspaces than the person may enter.
-  if (path === '/workspaces') {
-    return Promise.resolve({ workspaces: [
-      { id: WS_ID, name: 'Khối Vận hành' }, { id: OTHER_WS, name: 'NovaPay Kế toán' }, { id: NOT_MINE_WS, name: 'Chỉ xem được' },
-    ] })
-  }
-  if (path === '/me/workspaces') {
-    return Promise.resolve({ workspaces: [
-      { id: WS_ID, name: 'Khối Vận hành', role: 'admin', member_count: 64, domain: 'novapay.vn' },
-      { id: OTHER_WS, name: 'NovaPay Kế toán', role: 'member', member_count: 12, domain: '' },
-    ] })
-  }
-  if (path === '/auth/switch-tenant') {
-    if (switchError) return Promise.reject(switchError)
-    return Promise.resolve({ access_token: tokenFor(JSON.parse(String(init?.body)).tenant_id) })
-  }
-  if (path.endsWith('/contacts')) return Promise.resolve({ contacts: CONTACTS, total: CONTACTS.length })
-  return Promise.reject(new Error(`unexpected ${path}`))
-}
-
-async function renderBar(url = '/channels') {
-  const root = createRootRoute({ component: MobileNav })
-  const pages = ['/channels', '/drive', '/approval', '/assets', '/contacts', '/admin', '/settings', '/documents/$docId'].map((path) =>
-    createRoute({ getParentRoute: () => root, path, validateSearch: validateWorkspaceSearch, component: () => null }))
-  const router = createRouter({ routeTree: root.addChildren(pages), history: createMemoryHistory({ initialEntries: [url] }) })
-  await router.load()
-  renderWithClient(<RouterProvider router={router} />)
-  useAuthStore.setState({ accessToken: tokenFor(WS_ID) })
-  return router
-}
-
-/** The viewport: the bar's widths (below 1024) or the desktop's. */
-function viewport(narrow: boolean) {
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    matches: narrow && query.includes('max-width'),
-    media: query,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }))
-}
 
 beforeEach(() => {
   viewport(true)
-  pending = 2
-  unread = []
-  switchError = null
+  resetServer()
   api.mockReset()
   api.mockImplementation(answer as typeof apiFetch)
-  vi.mocked(logoutSession).mockClear()
+  useUiStore.setState({ chatBarShown: false })
 })
 afterEach(() => {
   vi.unstubAllGlobals()
   cleanup()
   resetClient()
-  useDriveStore.setState({ selectedItemId: null, expandedFolders: new Set() })
 })
 
-const openSheet = async () => {
-  const user = userEvent.setup()
-  await user.click(await screen.findByRole('button', { name: 'Thêm' }))
-  const dialog = await screen.findByRole('dialog', { name: 'Thêm' })
-  return { user, dialog }
-}
+const chatBar = () => screen.findByRole('navigation', { name: 'Điều hướng Chat' })
 
-describe('MobileNav on a desktop width', () => {
-  it('draws no bar and never asks for the pending count', async () => {
+describe('where the Chat bar shows', () => {
+  it('shows on the conversation list, with the + button beside it', async () => {
+    await renderShell(<MobileNav />, '/channels')
+    expect(await chatBar()).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Trò chuyện mới' })).toBeInTheDocument()
+  })
+
+  it.each(['/channels/99999999-aaaa-4bbb-8ccc-000000000002', '/channels/mentions', '/drive', '/approval', '/settings'])(
+    'is not on %s',
+    async (url) => {
+      await renderShell(<MobileNav />, url)
+      await waitFor(() => expect(api).not.toHaveBeenCalledWith('/dms'))
+      expect(screen.queryByRole('navigation', { name: 'Điều hướng Chat' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Trò chuyện mới' })).toBeNull()
+    },
+  )
+
+  it('draws nothing and asks for nothing at desktop widths', async () => {
     viewport(false)
-    await renderBar()
-    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Điều hướng di động' })).toBeNull())
+    await renderShell(<MobileNav />, '/channels')
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Điều hướng Chat' })).toBeNull())
+    expect(api).not.toHaveBeenCalledWith('/dms')
     expect(api).not.toHaveBeenCalledWith('/approval/pending')
   })
 
-  it('asks for the pending count once the viewport is narrow', async () => {
-    await renderBar()
-    await screen.findByRole('link', { name: 'Phê duyệt, 2 chờ bạn' })
-    expect(api).toHaveBeenCalledWith('/approval/pending')
+  it('tells the floating things the bar is there while it is, and that it is gone after', async () => {
+    const router = await renderShell(<MobileNav />, '/channels')
+    await chatBar()
+    expect(useUiStore.getState().chatBarShown).toBe(true)
+    await router.navigate({ to: '/drive' })
+    await waitFor(() => expect(useUiStore.getState().chatBarShown).toBe(false))
   })
 })
 
-describe('MobileNav bar', () => {
-  it('has three labelled tabs and Thêm, nothing else', async () => {
-    await renderBar()
-    const nav = await screen.findByRole('navigation', { name: 'Điều hướng di động' })
-    await screen.findByRole('link', { name: 'Phê duyệt, 2 chờ bạn' })
-    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['Tin nhắn', 'Tài liệu', '2Phê duyệt'])
-    expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual(['Thêm'])
+describe('the four icons', () => {
+  it('are Trang chủ, Trực tiếp, Mục and Thêm in order, named only by their label', async () => {
+    await renderShell(<MobileNav />)
+    const nav = await chatBar()
+    const links = within(nav).getAllByRole('link')
+    expect(links.map((a) => a.getAttribute('aria-label'))).toEqual(['Trang chủ', 'Trực tiếp', 'Mục', 'Thêm'])
+    for (const a of links) expect(a.textContent).toBe('')
   })
 
-  it('shows the number waiting on the person on Phê duyệt only, capped at 99+', async () => {
-    pending = 120
-    await renderBar()
-    const link = await screen.findByRole('link', { name: 'Phê duyệt, 120 chờ bạn' })
-    expect(link).toHaveTextContent('99+')
-    expect(screen.getByRole('link', { name: 'Tin nhắn' })).not.toHaveTextContent(/\d/)
+  it('opens Trang chủ without a tab, the others with theirs', async () => {
+    await renderShell(<MobileNav />)
+    const nav = await chatBar()
+    const hrefs = within(nav).getAllByRole('link').map((a) => a.getAttribute('href'))
+    expect(hrefs).toEqual(['/channels', '/channels?tab=direct', '/channels?tab=sections', '/channels?tab=more'])
   })
 
-  it('shows no badge when nothing waits', async () => {
-    pending = 0
-    await renderBar()
-    const link = await screen.findByRole('link', { name: 'Phê duyệt' })
-    await waitFor(() => expect(api).toHaveBeenCalledWith('/approval/pending'))
-    expect(link).not.toHaveTextContent(/\d/)
+  it('marks Trang chủ when the address names no tab or a tab it does not know', async () => {
+    await renderShell(<MobileNav />, '/channels?tab=nope')
+    const nav = await chatBar()
+    expect(within(nav).getByRole('link', { name: 'Trang chủ' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getAllByRole('link').filter((a) => a.hasAttribute('aria-current'))).toHaveLength(1)
   })
 
-  it('marks the current tab, and Tài liệu on a document', async () => {
-    await renderBar('/documents/99999999-aaaa-4bbb-8ccc-000000000001')
-    expect(await screen.findByRole('link', { name: 'Tài liệu' })).toHaveAttribute('aria-current', 'page')
-    expect(screen.getByRole('link', { name: 'Tin nhắn' })).not.toHaveAttribute('aria-current')
+  it.each([['direct', 'Trực tiếp'], ['sections', 'Mục'], ['more', 'Thêm']])('marks %s from the address', async (tab, name) => {
+    await renderShell(<MobileNav />, `/channels?tab=${tab}`)
+    const nav = await chatBar()
+    expect(within(nav).getByRole('link', { name })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).getByRole('link', { name: 'Trang chủ' })).not.toHaveAttribute('aria-current')
   })
 
-  // A conversation on a phone is a full screen of its own (chat-mobile mockup):
-  // its header and composer, no tab bar. The list of conversations keeps it.
-  it('steps aside inside a conversation, and is back on the conversation list', async () => {
-    await renderBar('/channels/99999999-aaaa-4bbb-8ccc-000000000002')
-    await waitFor(() => expect(screen.queryByRole('navigation', { name: 'Điều hướng di động' })).toBeNull())
-    cleanup()
-    await renderBar('/channels')
-    expect(await screen.findByRole('navigation', { name: 'Điều hướng di động' })).toBeInTheDocument()
-  })
-
-  it('lights Thêm when the screen is one that lives in it', async () => {
-    await renderBar('/assets')
-    expect(await screen.findByRole('button', { name: 'Thêm' })).toHaveAttribute('data-current', 'true')
-    for (const link of screen.getAllByRole('link')) expect(link).not.toHaveAttribute('aria-current')
-  })
-
-  it('draws no floating avatar: the bar is the only fixed thing on the screen', async () => {
-    await renderBar()
-    await screen.findByRole('navigation', { name: 'Điều hướng di động' })
-    expect(Array.from(document.body.querySelectorAll('.fixed'))).toHaveLength(1)
-    expect(document.body.querySelector('img, [data-avatar]')).toBeNull()
+  it('moves the current mark when another icon is pressed', async () => {
+    const user = userEvent.setup()
+    const router = await renderShell(<MobileNav />)
+    const nav = await chatBar()
+    await user.click(within(nav).getByRole('link', { name: 'Mục' }))
+    await waitFor(() => expect(router.state.location.search).toMatchObject({ tab: 'sections' }))
+    expect(within(nav).getByRole('link', { name: 'Mục' })).toHaveAttribute('aria-current', 'page')
+    await user.click(within(nav).getByRole('link', { name: 'Trang chủ' }))
+    await waitFor(() => expect(within(nav).getByRole('link', { name: 'Trang chủ' })).toHaveAttribute('aria-current', 'page'))
+    expect(router.state.location.search).not.toHaveProperty('tab')
   })
 })
 
-describe('MobileNav Tin nhắn badge', () => {
-  const row = (id: string, unread_count: number, over: Partial<(typeof unread)[number]> = {}) =>
-    ({ channel_id: id, unread_count, last_read_message_id: '', ...over })
-
-  it('counts unread by notification level: a muted conversation adds only the times you were named', async () => {
-    unread = [row('c1', 3), row('c2', 5, { notification_level: 'off', mention_count: 1 }), row('c3', 7, { notification_level: 'off' })]
-    await renderBar()
-    const link = await screen.findByRole('link', { name: 'Tin nhắn, 4 chưa đọc' })
-    expect(link).toHaveTextContent('4')
-    expect(await screen.findByRole('link', { name: 'Phê duyệt, 2 chờ bạn' })).toBeInTheDocument()
-  })
-
-  it('caps at 99+', async () => {
-    unread = [row('c1', 150)]
-    await renderBar()
-    expect(await screen.findByRole('link', { name: 'Tin nhắn, 150 chưa đọc' })).toHaveTextContent('99+')
-  })
-
-  it('shows no badge when only muted conversations are unread', async () => {
-    unread = [row('c1', 9, { notification_level: 'off' })]
-    await renderBar()
-    const link = await screen.findByRole('link', { name: 'Tin nhắn' })
+describe('what they report', () => {
+  it('says nothing when nothing is unread', async () => {
+    await renderShell(<MobileNav />)
+    const nav = await chatBar()
     await waitFor(() => expect(api).toHaveBeenCalledWith('/channels/unread'))
-    expect(link).not.toHaveTextContent(/\d/)
-  })
-})
-
-describe('Thêm sheet', () => {
-  it('lists the rest in order, with the person and Đăng xuất', async () => {
-    await renderBar()
-    const { dialog } = await openSheet()
-    expect(dialog).toHaveAttribute('aria-modal', 'true')
-    const nav = within(dialog).getByRole('navigation', { name: 'Thêm' })
-    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['Tài sản', 'Danh bạ', 'Quản trị', 'Cài đặt'])
-    expect(within(nav).getByRole('button', { name: 'Đăng xuất' })).toBeInTheDocument()
-    expect(await within(dialog).findByText(/Lê Thị Hoa/)).toBeInTheDocument()
-    expect(within(dialog).getByRole('button', { name: /Đổi workspace, đang ở Khối Vận hành/ })).toBeInTheDocument()
+    expect(within(nav).getAllByRole('link').map((a) => a.getAttribute('aria-label'))).toEqual(['Trang chủ', 'Trực tiếp', 'Mục', 'Thêm'])
+    expect(nav).not.toHaveTextContent(/\d/)
   })
 
-  it('puts focus on the first row, and gives it back to Thêm on Esc', async () => {
-    await renderBar()
-    const { user, dialog } = await openSheet()
-    await waitFor(() => expect(within(dialog).getByRole('button', { name: /Đổi workspace/ })).toHaveFocus())
-    await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(screen.getByRole('button', { name: 'Thêm' })).toHaveFocus()
+  it('dots Trang chủ when anything is unread', async () => {
+    server.unread = [unreadRow(GROUP, 3)]
+    await renderShell(<MobileNav />)
+    expect(await screen.findByRole('link', { name: 'Trang chủ, có tin chưa đọc' })).toBeInTheDocument()
   })
 
-  it('keeps Tab inside the sheet', async () => {
-    await renderBar()
-    const { user, dialog } = await openSheet()
-    await waitFor(() => expect(dialog.contains(document.activeElement)).toBe(true))
-    for (let i = 0; i < 12; i++) {
-      await user.tab()
-      expect(dialog.contains(document.activeElement)).toBe(true)
-    }
+  it('counts unread direct messages on Trực tiếp and the groups with news on Mục', async () => {
+    server.unread = [unreadRow(DIRECT, 2), unreadRow(CH.dmLan, 3), unreadRow(GROUP, 5), unreadRow(GROUP_2, 1)]
+    await renderShell(<MobileNav />)
+    const direct = await screen.findByRole('link', { name: 'Trực tiếp, 5 chưa đọc' })
+    expect(direct).toHaveTextContent('5')
+    const sections = await screen.findByRole('link', { name: 'Mục, 2 chưa đọc' })
+    expect(sections).toHaveTextContent('2')
   })
 
-  it('closes from the Đóng button', async () => {
-    await renderBar()
-    const { user, dialog } = await openSheet()
-    await user.click(within(dialog).getByRole('button', { name: 'Đóng Thêm' }))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  it('counts by notification level: a muted group adds only when someone named you, a muted direct only its mentions', async () => {
+    server.unread = [
+      unreadRow(GROUP, 3, { notification_level: 'off' }),
+      unreadRow(GROUP_2, 4, { notification_level: 'off', mention_count: 1 }),
+      unreadRow(DIRECT, 9, { notification_level: 'off' }),
+    ]
+    await renderShell(<MobileNav />)
+    expect(await screen.findByRole('link', { name: 'Mục, 1 chưa đọc' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Trực tiếp' })).not.toHaveTextContent(/\d/)
   })
 
-  it('goes to the chosen destination and closes', async () => {
-    const router = await renderBar()
-    const { user, dialog } = await openSheet()
-    await user.click(within(dialog).getByRole('link', { name: 'Danh bạ' }))
-    await waitFor(() => expect(router.state.location.pathname).toBe('/contacts'))
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  it('caps a number at 99+', async () => {
+    server.unread = [unreadRow(DIRECT, 150)]
+    await renderShell(<MobileNav />)
+    expect(await screen.findByRole('link', { name: 'Trực tiếp, 150 chưa đọc' })).toHaveTextContent('99+')
   })
 
-  it('signs out through the one logout path', async () => {
-    await renderBar()
-    const { user, dialog } = await openSheet()
-    await user.click(within(dialog).getByRole('button', { name: 'Đăng xuất' }))
-    expect(logoutSession).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('switching workspace from the sheet', () => {
-  const openList = async () => {
-    const opened = await openSheet()
-    await opened.user.click(within(opened.dialog).getByRole('button', { name: /Đổi workspace, đang ở/ }))
-    const list = await within(opened.dialog).findByRole('listbox', { name: 'Workspace của bạn' })
-    return { ...opened, list }
-  }
-
-  it('offers only the workspaces the person can enter, the open one ticked', async () => {
-    await renderBar()
-    const { list } = await openList()
-    const options = within(list).getAllByRole('option')
-    expect(options.map((o) => o.getAttribute('aria-selected'))).toEqual(['true', 'false'])
-    expect(options[0]).toHaveTextContent('Khối Vận hành')
-    expect(options[1]).toHaveTextContent('NovaPay Kế toán')
-    expect(within(list).queryByText('Chỉ xem được')).toBeNull()
+  it('dots Thêm when someone has named you', async () => {
+    server.mentionsUnread = 2
+    await renderShell(<MobileNav />)
+    expect(await screen.findByRole('link', { name: 'Thêm, có lượt nhắc tên mới' })).toBeInTheDocument()
   })
 
-  it('re-scopes the token, drops the old data, resets Tài liệu and opens the workspace', async () => {
-    const router = await renderBar('/drive')
-    queryClient.setQueryData(['drive', 'old'], { items: ['x'] })
-    useDriveStore.setState({ selectedItemId: 'item-1', expandedFolders: new Set(['f1']) })
-    const { user, list, dialog } = await openList()
-
-    await user.click(within(list).getByRole('option', { name: /NovaPay Kế toán/ }))
-
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(api).toHaveBeenCalledWith('/auth/switch-tenant', expect.objectContaining({ method: 'POST', body: JSON.stringify({ tenant_id: OTHER_WS }) }))
-    expect(useAuthStore.getState().accessToken).toBe(tokenFor(OTHER_WS))
-    expect(useAuthStore.getState().tenantId).toBe(OTHER_WS)
-    expect(queryClient.getQueryData(['drive', 'old'])).toBeUndefined()
-    expect(useDriveStore.getState().selectedItemId).toBeNull()
-    expect(useDriveStore.getState().expandedFolders.size).toBe(0)
-    expect(router.state.location.pathname).toBe('/drive')
-    expect(router.state.location.search).toEqual({ ws: OTHER_WS })
-    expect(dialog).not.toBeInTheDocument()
-  })
-
-  it('leaves everything as it was when the server refuses', async () => {
-    switchError = Object.assign(new Error('forbidden'), { status: 403 })
-    await renderBar('/drive')
-    queryClient.setQueryData(['drive', 'old'], { items: ['x'] })
-    const { user, list } = await openList()
-
-    await user.click(within(list).getByRole('option', { name: /NovaPay Kế toán/ }))
-
-    await waitFor(() => expect(api).toHaveBeenCalledWith('/auth/switch-tenant', expect.anything()))
-    await waitFor(() => expect(within(list).getAllByRole('option')[1]).not.toBeDisabled())
-    expect(useAuthStore.getState().accessToken).toBe(tokenFor(WS_ID))
-    expect(queryClient.getQueryData(['drive', 'old'])).toBeDefined()
-    expect(screen.getByRole('dialog')).toBeInTheDocument()
-  })
-
-  it('does nothing but close when the open workspace is chosen', async () => {
-    await renderBar()
-    const { user, list } = await openList()
-    await user.click(within(list).getAllByRole('option')[0]!)
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(api).not.toHaveBeenCalledWith('/auth/switch-tenant', expect.anything())
-  })
-
-  it('uses Danh bạ as 3rd tab and leaves Tài sản and Danh bạ out of sheet in personal workspace', async () => {
-    api.mockImplementation((path: string, init?: RequestInit) => {
-      if (path === '/workspaces') {
-        return Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Không gian của bạn', type: 'personal' }] })
-      }
-      if (path === '/me/workspaces') {
-        return Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Không gian của bạn', role: 'owner', member_count: 1, domain: '', type: 'personal' }] })
-      }
-      return answer(path, init)
-    })
-
-    await renderBar()
-    const nav = await screen.findByRole('navigation', { name: 'Điều hướng di động' })
-    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['Tin nhắn', 'Tài liệu', 'Danh bạ'])
-    expect(api).not.toHaveBeenCalledWith('/approval/pending')
-
-    const { dialog } = await openSheet()
-    const sheetNav = within(dialog).getByRole('navigation', { name: 'Thêm' })
-    expect(within(sheetNav).getAllByRole('link').map((a) => a.textContent)).toEqual(['Quản trị', 'Cài đặt'])
-  })
-
-  it('renders Tạo workspace link at the end of the Đổi workspace sheet', async () => {
-    await renderBar()
-    const { dialog } = await openList()
-    const createLink = within(dialog).getByRole('link', { name: /Tạo workspace/ })
-    expect(createLink).toBeInTheDocument()
-    const href = new URL(createLink.getAttribute('href')!, 'http://app.test')
-    expect(href.pathname).toBe('/onboarding')
-    expect(href.searchParams.get('from')).toBe('/channels')
+  it('never puts an identifier on the screen', async () => {
+    server.unread = [unreadRow(GROUP, 3), unreadRow(DIRECT, 1)]
+    await renderShell(<MobileNav />)
+    await screen.findByRole('link', { name: 'Trực tiếp, 1 chưa đọc' })
+    expect(document.body.textContent).not.toMatch(UUID_RE)
   })
 })

@@ -24,7 +24,7 @@ vi.mock('../components/patterns/AppSidebar', () => ({
 }))
 vi.mock('../components/patterns/ListPanel', () => ({ ListPanel: () => null }))
 vi.mock('../components/patterns/MobileNav', () => ({ MobileNav: () => null }))
-vi.mock('../components/patterns/MobileTopBar', () => ({ MobileTopBar: () => null }))
+vi.mock('../components/patterns/PhoneSearchBar', () => ({ PhoneSearchBar: () => null }))
 vi.mock('../components/app/OfflineBar', () => ({ OfflineBar: () => null }))
 vi.mock('../components/app/UpdateBar', () => ({ UpdateBar: () => null }))
 
@@ -51,5 +51,30 @@ describe('workspace layout: sidebar Tin nhắn badge', () => {
   it('is zero when only muted conversations without a mention are unread', () => {
     channels = [row('c1', 9, { notification_level: 'off' })]
     expect(badge()).toBe('0')
+  })
+})
+
+describe('workspace layout: room under the list for the phone Chat bar', () => {
+  const stubViewport = (narrow: boolean) =>
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: narrow && query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+    }))
+  const main = () => {
+    const Layout = Route.options.component as () => ReactElement
+    const { container } = renderWithClient(<Layout />)
+    return container.querySelector('main')!
+  }
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('keeps 108px and the safe-area inset under the list of conversations on a phone', () => {
+    stubViewport(true)
+    channels = []
+    expect(main().className).toContain('pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))]')
+  })
+
+  it('keeps nothing at desktop widths', () => {
+    stubViewport(false)
+    channels = []
+    expect(main().className).not.toContain('pb-[calc(6.75rem')
   })
 })

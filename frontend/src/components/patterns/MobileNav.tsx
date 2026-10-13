@@ -1,122 +1,112 @@
-import { useState } from 'react'
-import { Link, useLocation } from '@tanstack/react-router'
-import { ClipboardCheck, Ellipsis, FolderOpen, MessageSquare, Users } from 'lucide-react'
+import { useEffect } from 'react'
+import { Link, useLocation, useSearch } from '@tanstack/react-router'
+import { Ellipsis, House, MessageCircle, Rows3 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
-import { approvalPendingOptions } from '../../hooks/useApproval'
-import { useUnreadCounts } from '../../hooks/useMessaging'
+import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
+import { useConversations } from '../../hooks/useConversations'
 import { useBottomBarLayout } from '../../hooks/usePhone'
-import { useWorkspaceType } from '../../hooks/useWorkspaceType'
-import { unreadByLevel } from '../../lib/conversations'
+import { useMentionsUnreadCount } from '../../hooks/useShortcuts'
+import { totalUnread, unreadOf } from '../../lib/conversations'
 import { formatCount } from '../../lib/format'
-import { isConversationPath } from '../../lib/workspace'
+import { chatTabOf, isChatListPath, type ChatTab } from '../../lib/nav-destinations'
 import { useUiStore } from '../../stores/ui.store'
-import { Pressable } from '../primitives'
-import { MORE_ITEMS, MobileMoreSheet } from './MobileMoreSheet'
+import { NewChatButton } from '../spaces/NewChatButton'
 
-type Tab = {
-  id: 'messaging' | 'drive' | 'approval' | 'contacts'
-  icon: LucideIcon
-  label: string
-  to: string
-  /** Path prefixes that light this tab up. */
-  matches: string[]
-}
-
-/** DESIGN.md §5, Điều hướng di động: three labelled tabs; everything else is under Thêm. */
-const TABS: Tab[] = [
-  { id: 'messaging', icon: MessageSquare, label: 'Tin nhắn', to: '/channels', matches: ['/channels'] },
-  // Văn bản is a group inside Tài liệu, so its pages light up Tài liệu.
-  { id: 'drive', icon: FolderOpen, label: 'Tài liệu', to: '/drive', matches: ['/drive', '/documents'] },
-  { id: 'approval', icon: ClipboardCheck, label: 'Phê duyệt', to: '/approval', matches: ['/approval'] },
+const TABS: { id: ChatTab; icon: LucideIcon; label: string }[] = [
+  { id: 'home', icon: House, label: 'Trang chủ' },
+  { id: 'direct', icon: MessageCircle, label: 'Trực tiếp' },
+  { id: 'sections', icon: Rows3, label: 'Mục' },
+  { id: 'more', icon: Ellipsis, label: 'Thêm' },
 ]
-
-const PERSONAL_TABS: Tab[] = [
-  { id: 'messaging', icon: MessageSquare, label: 'Tin nhắn', to: '/channels', matches: ['/channels'] },
-  { id: 'drive', icon: FolderOpen, label: 'Tài liệu', to: '/drive', matches: ['/drive', '/documents'] },
-  { id: 'contacts', icon: Users, label: 'Danh bạ', to: '/contacts', matches: ['/contacts'] },
-]
-
-const under = (pathname: string, prefix: string) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-
-const TAB_CELL = 'relative grid justify-items-center content-center gap-0.5 min-h-12 text-2xs font-medium no-underline focus-ring rounded-surface'
-const TAB_ICON = 'relative grid place-items-center w-12 h-6 rounded-surface transition-colors duration-quick'
 
 /**
- * Phone bottom bar (DESIGN.md §5): Tin nhắn, Tài liệu, Phê duyệt (with the
- * number waiting on the person) and Thêm, which opens the sheet holding the
- * rest. Rendered only where the sidebar is not shown (below 1024px).
+ * The phone's Chat bar (DESIGN.md §5, Điều hướng di động): on the list of
+ * conversations only, never inside one and never in another module (those are
+ * reached from ☰). Where the desktop's sidebar is shown it is not drawn at all,
+ * and nothing below it asks for any data.
  */
 export function MobileNav() {
   const { pathname } = useLocation()
-  const setActiveModule = useUiStore((s) => s.setActiveModule)
-  const { isPersonal, isLoading } = useWorkspaceType()
-  // Above the bar's widths nothing shows the count, so nothing asks for it.
-  // Inside a conversation the phone shows only the conversation (its header
-  // and composer, chat-mobile mockup): the bar steps aside until you go back.
-  const shown = useBottomBarLayout() && !isConversationPath(pathname)
-  const pending = useQuery({ ...approvalPendingOptions(), enabled: shown && !isPersonal && !isLoading }).data?.total ?? 0
-  // Same rule as the sidebar badge: a muted conversation adds only the times someone named you.
-  const unreadMessages = unreadByLevel(useUnreadCounts().data?.channels)
-  const [moreOpen, setMoreOpen] = useState(false)
-  const moreItems = isPersonal
-    ? MORE_ITEMS.filter((item) => item.id !== 'assets' && item.id !== 'contacts')
-    : MORE_ITEMS
-  const moreCurrent = moreItems.some((item) => under(pathname, item.to))
-  const moreLit = moreCurrent || moreOpen
-  const tabs = isPersonal ? PERSONAL_TABS : TABS
+  return useBottomBarLayout() && isChatListPath(pathname) ? <ChatTabBar /> : null
+}
 
-  if (!shown) return null
+/** A floating pill of four icons, and the + beside it. The name of each is its `aria-label`, with what it reports. */
+function ChatTabBar() {
+  const { workspaceId } = useActiveWorkspace()
+  const { spaces, directs, unreadTotal } = useConversations(workspaceId)
+  const mentions = useMentionsUnreadCount(workspaceId).data ?? 0
+  const current = chatTabOf(useSearch({ strict: false }) as { tab?: unknown })
+  const setChatBarShown = useUiStore((s) => s.setChatBarShown)
+
+  // What floats at the bottom edge (toasts, the update notice) lifts itself above the bar while it is here.
+  useEffect(() => {
+    setChatBarShown(true)
+    return () => setChatBarShown(false)
+  }, [setChatBarShown])
+
+  // Counted the way the sidebar counts: a muted conversation adds only the times someone named you.
+  const directUnread = totalUnread(directs)
+  const groupsWithNews = spaces.filter((c) => unreadOf(c) > 0).length
+
+  const report = (id: ChatTab): { count: number; dot: boolean; label: string } => {
+    const label = TABS.find((t) => t.id === id)!.label
+    switch (id) {
+      case 'home':
+        return { count: 0, dot: unreadTotal > 0, label: unreadTotal > 0 ? `${label}, có tin chưa đọc` : label }
+      case 'direct':
+        return { count: directUnread, dot: false, label: directUnread > 0 ? `${label}, ${directUnread} chưa đọc` : label }
+      case 'sections':
+        return { count: groupsWithNews, dot: false, label: groupsWithNews > 0 ? `${label}, ${groupsWithNews} chưa đọc` : label }
+      case 'more':
+        return { count: 0, dot: mentions > 0, label: mentions > 0 ? `${label}, có lượt nhắc tên mới` : label }
+    }
+  }
+
   return (
     <>
       <nav
-        aria-label="Điều hướng di động"
-        className="fixed bottom-0 inset-x-0 z-sticky lg:hidden grid grid-cols-4 gap-1 px-1 pt-1 pb-bar bg-raised"
+        aria-label="Điều hướng Chat"
+        className="fixed left-3.5 right-22.5 bottom-[calc(1.375rem+env(safe-area-inset-bottom,0px))] z-sticky lg:hidden
+          grid grid-cols-4 items-center h-16 px-1.5 rounded-full bg-overlay/90 backdrop-blur-lg shadow-overlay
+          ring-1 ring-inset ring-line"
       >
-        {tabs.map((tab) => {
-          const active = tab.matches.some((prefix) => under(pathname, prefix))
-          const count = tab.id === 'approval' ? pending : tab.id === 'messaging' ? unreadMessages : 0
-          const badge = count > 0
-          const hint = tab.id === 'approval' ? 'chờ bạn' : 'chưa đọc'
+        {TABS.map((tab) => {
+          const active = current === tab.id
+          const { count, dot, label } = report(tab.id)
           return (
             <Link
               key={tab.id}
-              to={tab.to}
-              onClick={() => setActiveModule(tab.id)}
+              to="/channels"
+              search={tab.id === 'home' ? {} : { tab: tab.id }}
+              // Trang chủ is the bare address, which every other tab's address also starts with.
+              activeOptions={{ exact: true }}
               aria-current={active ? 'page' : undefined}
-              aria-label={badge ? `${tab.label}, ${count} ${hint}` : undefined}
-              className={`${TAB_CELL} ${active ? 'text-accent font-semibold' : 'text-ink-muted'}`}
+              aria-label={label}
+              className={`relative grid place-items-center h-13 rounded-full no-underline focus-ring ${active ? 'text-accent' : 'text-ink-muted'}`}
             >
-              <span className={`${TAB_ICON} ${active ? 'bg-accent-wash' : ''}`}>
-                <tab.icon size={20} strokeWidth={1.75} aria-hidden="true" />
-                {badge && (
+              <span
+                className={`relative grid place-items-center w-15 h-11 rounded-full transition-colors duration-quick
+                  motion-reduce:transition-none ${active ? 'bg-accent-wash' : ''}`}
+              >
+                <tab.icon size={24} strokeWidth={active ? 2.1 : 1.75} aria-hidden="true" />
+                {count > 0 && (
                   <span
                     aria-hidden="true"
-                    className="absolute -top-1.5 right-0.5 inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5
-                      rounded-full bg-accent text-on-accent text-2xs font-semibold tnum ring-2 ring-raised"
+                    className="absolute top-0.5 right-1.5 inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full
+                      bg-accent text-on-accent text-2xs font-semibold tnum ring-2 ring-overlay"
                   >
                     {formatCount(count)}
                   </span>
                 )}
+                {dot && (
+                  <span aria-hidden="true" className="absolute top-2 right-3.5 w-2.5 h-2.5 rounded-full bg-accent ring-2 ring-overlay" />
+                )}
               </span>
-              {tab.label}
             </Link>
           )
         })}
-        <Pressable
-          onClick={() => setMoreOpen(true)}
-          aria-haspopup="dialog"
-          aria-expanded={moreOpen}
-          data-current={moreCurrent || undefined}
-          className={`${TAB_CELL} text-center ${moreLit ? 'text-accent font-semibold' : 'text-ink-muted'}`}
-        >
-          <span className={`${TAB_ICON} ${moreLit ? 'bg-accent-wash' : ''}`}>
-            <Ellipsis size={20} strokeWidth={1.75} aria-hidden="true" />
-          </span>
-          Thêm
-        </Pressable>
       </nav>
-      <MobileMoreSheet open={moreOpen} onClose={() => setMoreOpen(false)} pathname={pathname} />
+      <NewChatButton />
     </>
   )
 }

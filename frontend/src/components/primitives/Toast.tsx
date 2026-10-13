@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { AnimatePresence, motion } from 'motion/react'
 import { CircleCheck, CircleAlert, Info } from 'lucide-react'
 import { useMotionPresets } from '../../lib/motion'
+import { useUiStore } from '../../stores/ui.store'
 
 type Tone = 'success' | 'error' | 'info'
 
@@ -122,13 +123,19 @@ function ToastView({ item }: { item: ToastItem }) {
   )
 }
 
-/** Mount once near the root. Bottom-centre on mobile, bottom-right on desktop. */
+/**
+ * Mount once near the root. Bottom-centre on mobile, bottom-right on desktop.
+ * On a phone it keeps 16px (and the safe-area inset) off the bottom edge, or 16px
+ * above the Chat bar while that is on screen.
+ */
 export function Toaster() {
   const toasts = useToastStore((s) => s.toasts)
+  const aboveChatBar = useUiStore((s) => s.chatBarShown)
   return (
     <div
-      className="fixed z-toast bottom-4 max-lg:bottom-above-bar inset-x-4 md:inset-x-auto md:right-4 flex flex-col items-center
-        md:items-end gap-2 pointer-events-none"
+      data-above-bar={aboveChatBar || undefined}
+      className={`fixed z-toast bottom-4 ${aboveChatBar ? 'max-lg:bottom-[calc(6.375rem+env(safe-area-inset-bottom,0px))]' : 'max-lg:bottom-[calc(1rem+env(safe-area-inset-bottom,0px))]'}
+        inset-x-4 md:inset-x-auto md:right-4 flex flex-col items-center md:items-end gap-2 pointer-events-none`}
       aria-live="polite"
     >
       <AnimatePresence initial={false}>
