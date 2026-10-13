@@ -9,6 +9,8 @@ import {
   createRouter,
 } from '@tanstack/react-router'
 import { validateWorkspaceSearch } from '../lib/workspace'
+import { useAuthStore } from '../stores/auth.store'
+import { jwtFor } from '../test/auth-fixtures'
 
 const workspaces = [
   { id: 'ws-1', name: 'Khối Vận hành' },
@@ -42,6 +44,7 @@ async function activeFor(url: string) {
 
 beforeEach(() => {
   document.body.innerHTML = ''
+  useAuthStore.setState({ accessToken: null })
 })
 
 describe('useActiveWorkspace', () => {
@@ -55,6 +58,28 @@ describe('useActiveWorkspace', () => {
 
   it('ignores a workspace the user does not belong to', async () => {
     expect(await activeFor('/?ws=someone-elses')).toBe('ws-1|Khối Vận hành')
+  })
+})
+
+describe('useActiveWorkspace: the session workspace', () => {
+  it('falls back to the workspace the token speaks for when the URL names none', async () => {
+    useAuthStore.setState({ accessToken: jwtFor('ws-2') })
+    expect(await activeFor('/')).toBe('ws-2|Khối Kinh doanh')
+  })
+
+  it('falls back to it when the URL names a workspace the user does not belong to', async () => {
+    useAuthStore.setState({ accessToken: jwtFor('ws-2') })
+    expect(await activeFor('/?ws=someone-elses')).toBe('ws-2|Khối Kinh doanh')
+  })
+
+  it('still prefers the URL over the token', async () => {
+    useAuthStore.setState({ accessToken: jwtFor('ws-2') })
+    expect(await activeFor('/?ws=ws-1')).toBe('ws-1|Khối Vận hành')
+  })
+
+  it('uses the first workspace when the token workspace is not in the list', async () => {
+    useAuthStore.setState({ accessToken: jwtFor('elsewhere') })
+    expect(await activeFor('/')).toBe('ws-1|Khối Vận hành')
   })
 })
 

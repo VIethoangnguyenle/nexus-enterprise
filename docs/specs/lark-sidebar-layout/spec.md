@@ -51,6 +51,12 @@ On the list of conversations (`/channels`) only, a floating **Chat bar** SHALL o
 
 The workspace switcher in the sidebar and in the drawer SHALL list only the workspaces from `GET /api/me/workspaces`. Choosing one SHALL re-scope the session with `POST /api/auth/switch-tenant`, replace the access token, drop the whole query cache and the Tài liệu client state, and open under `?ws=` of the new workspace with no folder or view carried over: the module the person was in from the sidebar, Trang chủ of Chat from the drawer. A refusal leaves the token, the data and the screen as they were and says so in a toast.
 
+The workspace on screen and the session token SHALL always be the same workspace. With no `?ws=`, or one the person does not belong to, the workspace is the one the token speaks for, then the first listed. When the URL names another workspace (deep link, reload, shared link), the workspace shell SHALL re-scope the session with `POST /api/auth/switch-tenant` once for that workspace, without navigating, and render nothing tenant-scoped (so no tenant-scoped request) until the token matches. If the switch is refused, the address SHALL fall back to the token's workspace (`ws` replaced, no history entry) with the same toast.
+
+#### Scenario: A link to another workspace
+- **WHEN** a person whose token speaks for workspace A opens a link with `?ws=B`, a workspace they belong to
+- **THEN** the screen shows the loading state, the session is re-scoped to B once, and only then do the lists and previews load, all for B
+
 #### Scenario: A list screen on a phone
 - **WHEN** a person opens Phê duyệt at 390px
 - **THEN** the screen starts with the search bar saying "Tìm đề nghị" when the screen has a search of its own, ☰ and the avatar, and no Chat bar

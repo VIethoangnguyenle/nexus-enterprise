@@ -1,21 +1,31 @@
 import type { ReactElement } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, screen } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { QueryClientProvider } from '@tanstack/react-query'
+import { queryClient } from '../lib/query-client'
+import { ME } from '../test/chat-fixtures'
 import { renderWithClient, resetClient } from '../test/render'
+import { jwtFor } from '../test/auth-fixtures'
+import { useAuthStore } from '../stores/auth.store'
 import { Route } from './_workspace'
+
+const switchTenant = vi.fn()
+const unreadTokens: Array<string | null> = []
+const navigate = vi.fn()
+vi.mock('../api/auth', () => ({ authApi: { switchTenant: (id: string) => switchTenant(id) } }))
 
 let channels: Array<{ channel_id: string; unread_count: number; last_read_message_id: string; notification_level?: 'all' | 'main' | 'off'; mention_count?: number }> = []
 
 vi.mock('@tanstack/react-router', async () => {
   const actual = await vi.importActual<typeof import('@tanstack/react-router')>('@tanstack/react-router')
-  return { ...actual, Outlet: () => null, Navigate: () => null, useMatches: () => [{ pathname: '/channels' }] }
+  return { ...actual, useNavigate: () => navigate, Outlet: () => null, Navigate: () => null, useMatches: () => [{ pathname: '/channels' }] }
 })
 vi.mock('../hooks/useActiveWorkspace', () => ({
   useActiveWorkspace: () => ({ workspaceId: 'w1', workspaceName: 'Khối Vận hành', workspaces: [{ id: 'w1' }], isLoading: false, isError: false }),
 }))
 vi.mock('../hooks/usePreferences', () => ({ usePreferencesSync: () => {} }))
 vi.mock('../hooks/useWorkspaceRealtime', () => ({ useWorkspaceRealtime: () => {} }))
-vi.mock('../hooks/useMessaging', () => ({ useUnreadCounts: () => ({ data: { channels } }) }))
+vi.mock('../hooks/useMessaging', () => ({ useUnreadCounts: () => { unreadTokens.push(useAuthStore.getState().accessToken); return { data: { channels } } } }))
 vi.mock('../stores/websocket.store', () => ({
   useWebSocketStore: (select: (s: { connect: () => void; disconnect: () => void }) => unknown) => select({ connect: () => {}, disconnect: () => {} }),
 }))
@@ -29,6 +39,8 @@ vi.mock('../components/app/OfflineBar', () => ({ OfflineBar: () => null }))
 vi.mock('../components/app/UpdateBar', () => ({ UpdateBar: () => null }))
 
 afterEach(() => {
+  unreadTokens.length = 0
+  vi.clearAllMocks()
   cleanup()
   resetClient()
 })
@@ -76,5 +88,46 @@ describe('workspace layout: room under the list for the phone Chat bar', () => {
     stubViewport(false)
     channels = []
     expect(main().className).not.toContain('pb-[calc(6.75rem')
+  })
+})
+
+describe('workspace layout: the session follows the open workspace', () => {
+  // renderWithClient seeds its own token, so mount with the app's client directly and keep the one under test.
+  const mountSignedInFor = (tenant: string) => {
+    useAuthStore.setState({ user: ME, accessToken: jwtFor(tenant), tenantId: tenant, bootstrapping: false })
+    queryClient.setDefaultOptions({ queries: { retry: false, staleTime: Infinity } })
+    const Layout = Route.options.component as () => ReactElement
+    return render(<QueryClientProvider client={queryClient}><Layout /></QueryClientProvider>)
+  }
+
+  it('re-scopes a token for another workspace before any tenant-scoped query runs', async () => {
+    channels = []
+    switchTenant.mockResolvedValue({ access_token: jwtFor('w1') })
+    mountSignedInFor('w0')
+    expect(screen.queryByTestId('sidebar')).toBeNull()
+    expect(unreadTokens).toEqual([])
+    expect(await screen.findByTestId('sidebar')).toBeTruthy()
+    expect(switchTenant).toHaveBeenCalledTimes(1)
+    expect(switchTenant).toHaveBeenCalledWith('w1')
+    expect(unreadTokens.length).toBeGreaterThan(0)
+    expect(unreadTokens.every((t) => t === jwtFor('w1'))).toBe(true)
+    expect(navigate).not.toHaveBeenCalled()
+  })
+
+  it('does not switch when the token already speaks for the open workspace', () => {
+    channels = []
+    mountSignedInFor('w1')
+    expect(screen.getByTestId('sidebar')).toBeTruthy()
+    expect(switchTenant).not.toHaveBeenCalled()
+  })
+
+  it('keeps the shell away when the switch is refused, and drops the address back to the token workspace', async () => {
+    channels = []
+    switchTenant.mockRejectedValue(new Error('forbidden'))
+    mountSignedInFor('w0')
+    await waitFor(() => expect(navigate).toHaveBeenCalledTimes(1))
+    expect(navigate.mock.calls[0]![0]).toMatchObject({ replace: true })
+    expect(screen.queryByTestId('sidebar')).toBeNull()
+    expect(unreadTokens).toEqual([])
   })
 })

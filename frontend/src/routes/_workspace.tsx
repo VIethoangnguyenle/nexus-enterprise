@@ -4,6 +4,7 @@ import { useAuthStore } from '../stores/auth.store'
 import { useWebSocketStore } from '../stores/websocket.store'
 import { useUiStore } from '../stores/ui.store'
 import { useActiveWorkspace } from '../hooks/useActiveWorkspace'
+import { useTenantSync } from '../hooks/useTenantSync'
 import { usePreferencesSync } from '../hooks/usePreferences'
 import { useWorkspaceRealtime } from '../hooks/useWorkspaceRealtime'
 import { useUnreadCounts } from '../hooks/useMessaging'
@@ -32,10 +33,76 @@ export const Route = createFileRoute('/_workspace')({
 
 function WorkspaceLayout() {
   const token = useAuthStore((s) => s.accessToken)
+  const { workspaces, isLoading, isError } = useActiveWorkspace()
+  const { syncing } = useTenantSync()
+  usePreferencesSync()
+
+  // When workspaces is empty after loading, verify session is still valid.
+  const verifiedRef = useRef(false)
+  useEffect(() => {
+    if (!isLoading && workspaces.length === 0 && token && !verifiedRef.current) {
+      verifiedRef.current = true
+      apiFetch('/me').catch(() => { void logoutSession() })
+    }
+  }, [isLoading, workspaces, token])
+
+  if (!token) return <Navigate to="/login" search={Object.fromEntries(new URLSearchParams(window.location.search))} />
+
+  if (isError) {
+    return (
+      <div className="flex h-app bg-background overflow-hidden">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center px-4">
+            <Text variant="body" muted>Unable to load workspaces</Text>
+            <Button variant="link" size="link" onClick={() => window.location.reload()} className="mt-4">Retry</Button>
+            <Button variant="ghost" size="link" onClick={() => void logoutSession()} className="mt-2 block mx-auto">Logout</Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-app bg-background">
+        <Spinner size="lg" />
+      </div>
+    )
+  }
+
+  if (workspaces.length === 0) {
+    return (
+      <div className="flex h-app bg-background overflow-hidden">
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center px-4">
+            <Spinner size="lg" />
+            <Text variant="body" muted className="mt-4">Setting up your workspace...</Text>
+            <Button variant="link" size="link" onClick={() => window.location.reload()} className="mt-4">Refresh if this takes too long</Button>
+            <Button variant="ghost" size="link" onClick={() => void logoutSession()} className="mt-2 block mx-auto">Logout and re-login</Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // The token still speaks for another workspace: nothing tenant-scoped may
+  // mount or fetch until the session has been re-scoped to the open one.
+  if (syncing) {
+    return (
+      <div className="flex items-center justify-center h-app bg-background">
+        <Spinner size="lg" />
+      </div>
+    )
+  }
+
+  return <WorkspaceShell />
+}
+
+function WorkspaceShell() {
+  const token = useAuthStore((s) => s.accessToken)
   const connect = useWebSocketStore((s) => s.connect)
   const disconnect = useWebSocketStore((s) => s.disconnect)
-  const { workspaceId: wsId, workspaceName, workspaces, isLoading, isError } = useActiveWorkspace()
-  usePreferencesSync()
+  const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
   useWorkspaceRealtime(wsId, !!token)
   const { data: unreadData } = useUnreadCounts()
   // By notification level: a muted conversation adds only the times someone named the reader.
@@ -87,54 +154,6 @@ function WorkspaceLayout() {
   useEffect(() => {
     if (token) { connect(token); return () => disconnect() }
   }, [token])
-
-  // When workspaces is empty after loading, verify session is still valid.
-  const verifiedRef = useRef(false)
-  useEffect(() => {
-    if (!isLoading && workspaces.length === 0 && token && !verifiedRef.current) {
-      verifiedRef.current = true
-      apiFetch('/me').catch(() => { void logoutSession() })
-    }
-  }, [isLoading, workspaces, token])
-
-  if (!token) return <Navigate to="/login" search={Object.fromEntries(new URLSearchParams(window.location.search))} />
-
-  if (isError) {
-    return (
-      <div className="flex h-app bg-background overflow-hidden">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center px-4">
-            <Text variant="body" muted>Unable to load workspaces</Text>
-            <Button variant="link" size="link" onClick={() => window.location.reload()} className="mt-4">Retry</Button>
-            <Button variant="ghost" size="link" onClick={() => void logoutSession()} className="mt-2 block mx-auto">Logout</Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-app bg-background">
-        <Spinner size="lg" />
-      </div>
-    )
-  }
-
-  if (workspaces.length === 0) {
-    return (
-      <div className="flex h-app bg-background overflow-hidden">
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center px-4">
-            <Spinner size="lg" />
-            <Text variant="body" muted className="mt-4">Setting up your workspace...</Text>
-            <Button variant="link" size="link" onClick={() => window.location.reload()} className="mt-4">Refresh if this takes too long</Button>
-            <Button variant="ghost" size="link" onClick={() => void logoutSession()} className="mt-2 block mx-auto">Logout and re-login</Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="flex flex-col h-app bg-background overflow-hidden">
