@@ -93,14 +93,17 @@ func TestTokenWithTamperedPayloadIsRefused(t *testing.T) {
 
 func TestTokenWithTamperedSignatureIsRefused(t *testing.T) {
 	tok, _ := mint(keysA, userClaims, checkMethod)
-	flipped := tok[:len(tok)-1]
-	if strings.HasSuffix(tok, "A") {
-		flipped += "B"
-	} else {
-		flipped += "A"
+	// Flip the first character of the signature: every bit of it is
+	// significant. The last character carries base64 padding bits, so changing
+	// it can decode to the very same signature and the token stays valid.
+	sig := strings.LastIndex(tok, ".") + 1
+	replacement := "A"
+	if tok[sig] == 'A' {
+		replacement = "B"
 	}
+	flipped := tok[:sig] + replacement + tok[sig+1:]
 	for name, bad := range map[string]string{
-		"flipped last char": flipped,
+		"flipped signature char": flipped,
 		"no signature":      strings.Split(tok, ".")[0] + ".",
 		"no separator":      strings.ReplaceAll(tok, ".", ""),
 		"extra part":        tok + ".AAAA",
