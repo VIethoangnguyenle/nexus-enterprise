@@ -123,7 +123,7 @@ export default defineConfig({
         // The app is one ~2 MB entry chunk; it is the shell and must be precached whole.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         globPatterns: ['**/*.{html,js,css,woff2,svg,png,webmanifest}'],
-        globIgnores: ['**/favicon-*.png'],
+        globIgnores: ['**/favicon-*.png', 'OneSignalSDKWorker.js'],
       },
       manifest: {
         name: 'Nexus',

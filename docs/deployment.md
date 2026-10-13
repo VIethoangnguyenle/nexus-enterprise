@@ -358,6 +358,9 @@ force one).
 The worker lives at the site root, so its scope is already `/` and no `Service-Worker-Allowed` header is needed.
 Traefik adds nothing here and does not cache. Browsers install only over HTTPS (the production host is). The worker
 precaches the app shell and never `/api/*`; a release shows installed apps a "Có bản mới của Nexus" bar.
+With push configured, OneSignal registers the worker as `/OneSignalSDKWorker.js` (the name on its dashboard wins over
+`serviceWorkerPath` in code). That file only imports `/sw.js` and is served `no-cache` too; without it the
+registration 404s and no device can turn push on.
 
 ## Email sign-in codes (Gmail SMTP)
 
