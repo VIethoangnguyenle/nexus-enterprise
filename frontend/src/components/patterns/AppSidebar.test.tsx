@@ -20,7 +20,7 @@ const HIDDEN_WS = '0c0b8e30-4d5f-4071-8cbd-3e4f5a6b7c8d'
 
 async function renderSidebar(url = '/drive', unreadCounts: Record<string, number> = { messaging: 3 }) {
   const root = createRootRoute({ component: () => <AppSidebar workspaceName="Khối Vận hành" unreadCounts={unreadCounts} /> })
-  const pages = ['/drive', '/documents/$docId', '/contacts', '/settings', '/channels', '/onboarding', '/approval', '/assets'].map((path) =>
+  const pages = ['/drive', '/documents/$docId', '/contacts', '/settings', '/channels', '/onboarding', '/approval', '/assets', '/workspace-select'].map((path) =>
     createRoute({ getParentRoute: () => root, path, component: () => null }))
   const router = createRouter({ routeTree: root.addChildren(pages), history: createMemoryHistory({ initialEntries: [url] }) })
   await router.load()
@@ -375,5 +375,67 @@ describe('AppSidebar, Thông báo', () => {
     await screen.findByRole('dialog', { name: 'Thông báo' })
     fireEvent.keyDown(document, { key: '\\', ctrlKey: true })
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thông báo' })).toBeNull())
+  })
+})
+
+describe('AppSidebar, offers waiting', () => {
+  beforeEach(expandMenu)
+
+  const offer = (id: string) => ({
+    id, workspace_name: 'NovaPay Kế toán', inviter_name: 'Lê Thị Hoa', role_name: '', department_name: '',
+    created_at: '2026-10-01T08:00:00Z', expires_at: '2026-10-08T08:00:00Z',
+  })
+  /** Answers /me and /invitations on top of the default fixtures. */
+  function withOffers(count: number, verified = true) {
+    const base = api.getMockImplementation()!
+    api.mockImplementation(((path: string, init?: RequestInit) =>
+      path === '/me' ? Promise.resolve({ user: { id: 'u1', email: 'hoa@novapay.vn', email_verified: verified } })
+      : path === '/invitations' ? Promise.resolve({ invitations: Array.from({ length: count }, (_, i) => offer(`o${i}`)) })
+      : base(path, init)) as typeof apiFetch)
+  }
+  const openMenu = async () => {
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /Khối Vận hành/ }))
+    return { user, menu: await screen.findByRole('dialog', { name: 'Đổi workspace' }) }
+  }
+
+  it('shows Lời mời with the count and a dot on the workspace button, and opens Chọn workspace', async () => {
+    withOffers(3)
+    const router = await renderSidebar()
+    const button = await screen.findByRole('button', { name: /Khối Vận hành.*có lời mời/ })
+    expect(within(button).getByTestId('invitation-dot')).toBeInTheDocument()
+    const user = userEvent.setup()
+    await user.click(button)
+    const menu = await screen.findByRole('dialog', { name: 'Đổi workspace' })
+    const row = within(menu).getByRole('link', { name: /Lời mời.*3 lời mời đang chờ/ })
+    expect(row).toHaveTextContent('3')
+    await user.click(row)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/workspace-select'))
+  })
+
+  it('caps the pill at 99+', async () => {
+    withOffers(120)
+    await renderSidebar()
+    const { menu } = await openMenu()
+    expect(await within(menu).findByText('99+')).toBeInTheDocument()
+  })
+
+  it('shows neither row nor dot when there are no offers', async () => {
+    withOffers(0)
+    await renderSidebar()
+    const { menu } = await openMenu()
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/invitations'))
+    expect(within(menu).queryByRole('link', { name: /Lời mời/ })).toBeNull()
+    expect(screen.queryByTestId('invitation-dot')).toBeNull()
+  })
+
+  it('shows nothing and never asks when the address is not verified', async () => {
+    withOffers(2, false)
+    await renderSidebar()
+    const { menu } = await openMenu()
+    await waitFor(() => expect(api).toHaveBeenCalledWith('/me'))
+    expect(within(menu).queryByRole('link', { name: /Lời mời/ })).toBeNull()
+    expect(screen.queryByTestId('invitation-dot')).toBeNull()
+    expect(api).not.toHaveBeenCalledWith('/invitations')
   })
 })

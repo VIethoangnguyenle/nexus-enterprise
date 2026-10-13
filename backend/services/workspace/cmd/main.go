@@ -22,6 +22,7 @@ import (
 	policypb "ngac-platform/proto/policy"
 	pb "ngac-platform/proto/workspace"
 	"ngac-platform/services/workspace/internal/domain"
+	"ngac-platform/services/workspace/internal/events"
 	wgrpc "ngac-platform/services/workspace/internal/grpc"
 	"ngac-platform/services/workspace/internal/rest"
 	"ngac-platform/services/workspace/internal/store"
@@ -120,8 +121,11 @@ func main() {
 	rt := realtime.Connect("workspace")
 	defer rt.Close()
 
+	invitationNotices := events.Connect()
+	defer invitationNotices.Close()
+
 	wsStore := store.New(pool)
-	wsSvc := domain.NewService(wsStore, wsStore, policyReadClient, policyWriteClient, minioClient, driveClient).WithDirectory(wsStore).WithInvitations(wsStore).WithEmitter(rt)
+	wsSvc := domain.NewService(wsStore, wsStore, policyReadClient, policyWriteClient, minioClient, driveClient).WithDirectory(wsStore).WithInvitations(wsStore).WithEmitter(rt).WithInvitationNotifier(invitationNotices)
 	if err := configureInviteMail(wsSvc); err != nil {
 		slog.Error("refusing to start", "error", err)
 		os.Exit(1)

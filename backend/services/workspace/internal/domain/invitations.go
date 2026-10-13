@@ -47,6 +47,9 @@ type InvitationStore interface {
 	UserEmail(ctx context.Context, userID string) (string, error)
 	// VerifiedEmailByNode is the same for the account behind a user node.
 	VerifiedEmailByNode(ctx context.Context, nodeID string) (string, error)
+	// VerifiedUserIDsByEmail lists the accounts whose PROVED address is email
+	// (lower-cased); an unknown or unverified address has none.
+	VerifiedUserIDsByEmail(ctx context.Context, email string) ([]string, error)
 	// RevokePendingForEmail withdraws every open offer to an address in a workspace.
 	RevokePendingForEmail(ctx context.Context, wsID, email string, now time.Time) (int, error)
 }
@@ -166,6 +169,7 @@ func (s *Service) InviteByEmail(ctx context.Context, callerNodeID, wsID string, 
 	}
 	// After the commit, off the request: the answer is the same for every address.
 	s.emailInvitation(ctx, ws.Name, inv)
+	s.notifyInvitee(ctx, ws.Name, inv)
 	return nil
 }
 

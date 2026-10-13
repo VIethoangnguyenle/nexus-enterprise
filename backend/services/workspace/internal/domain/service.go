@@ -61,6 +61,8 @@ type Service struct {
 	mailResend time.Duration
 	mailSlots  chan struct{}
 	mailWG     sync.WaitGroup
+	// notifier files an in-app notification for an invitee; see WithInvitationNotifier.
+	notifier InvitationNotifier
 	// emitter announces committed changes to live clients; see WithEmitter.
 	emitter realtime.Emitter
 }

@@ -109,7 +109,7 @@ func NewConsumer(brokers []string, notifSv NotificationCreator, broadcast Approv
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup("messaging-notification-consumer"),
-		kgo.ConsumeTopics("asset.lifecycle", "asset.request", "asset.assignment", "approval.events"),
+		kgo.ConsumeTopics("asset.lifecycle", "asset.request", "asset.assignment", "approval.events", InvitationTopic),
 		kgo.AllowAutoTopicCreation(),
 	)
 	if err != nil {
@@ -161,6 +161,8 @@ func (c *Consumer) run(ctx context.Context) {
 				c.handleAssignmentEvent(ctx, record.Value)
 			case "approval.events":
 				c.handleApprovalEvent(ctx, record.Value)
+			case InvitationTopic:
+				c.handleInvitationEvent(ctx, record.Value)
 			}
 		})
 	}
@@ -307,4 +309,43 @@ func (c *Consumer) notify(ctx context.Context, userID, notifType, title, body, e
 	if err := c.notifSv.CreateNotification(ctx, userID, notifType, title, body, entityType, entityID); err != nil {
 		slog.Error("notification not recorded", "user", userID, "type", notifType, "entity", entityID, "error", err)
 	}
+}
+
+// InvitationTopic is where the workspace service announces a new offer to an
+// account that can see it (a proved address).
+const InvitationTopic = "workspace.invitation"
+
+// InvitationOfferedEvent matches the record the workspace service publishes. It
+// names the one account the offer is for.
+type InvitationOfferedEvent struct {
+	InvitationID  string `json:"invitation_id"`
+	UserID        string `json:"user_id"`
+	WorkspaceName string `json:"workspace_name"`
+	InviterName   string `json:"inviter_name"`
+	Timestamp     int64  `json:"timestamp"`
+}
+
+// handleInvitationEvent tells the addressed account, and nobody else, that a
+// workspace invited them. The body is written for the person to read: names
+// only, no identifier. A record that names no account or no offer is dropped.
+func (c *Consumer) handleInvitationEvent(ctx context.Context, data []byte) {
+	var evt InvitationOfferedEvent
+	if err := json.Unmarshal(data, &evt); err != nil {
+		slog.Warn("failed to unmarshal invitation event", "error", err)
+		return
+	}
+	if evt.UserID == "" || evt.InvitationID == "" {
+		slog.Warn("invitation event names no account or no offer, dropped")
+		return
+	}
+	inviter := evt.InviterName
+	if inviter == "" {
+		inviter = "Một quản trị viên"
+	}
+	workspace := evt.WorkspaceName
+	if workspace == "" {
+		workspace = "một workspace"
+	}
+	c.notify(ctx, evt.UserID, "workspace_invitation", "Lời mời vào workspace",
+		fmt.Sprintf("%s mời bạn vào %s", inviter, workspace), "invitation", evt.InvitationID)
 }

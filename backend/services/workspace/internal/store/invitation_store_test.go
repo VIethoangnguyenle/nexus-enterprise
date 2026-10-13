@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -142,6 +143,35 @@ func TestInvitationStore(t *testing.T) {
 		e, err = st.UserEmail(ctx, "no-such-user")
 		require.NoError(t, err)
 		assert.Empty(t, e)
+	})
+
+	t.Run("only an account with a proved address is found by it, and a refresh is not a new offer", func(t *testing.T) {
+		uid, _ := testutil.CreateUser(t, pool)
+		addr := "found." + uuid.NewString()[:8] + "@Example.VN"
+		_, err := pool.Exec(ctx, `UPDATE users SET email = $2 WHERE id = $1`, uid, addr)
+		require.NoError(t, err)
+
+		ids, err := st.VerifiedUserIDsByEmail(ctx, strings.ToLower(addr))
+		require.NoError(t, err)
+		assert.Empty(t, ids, "an unproved address is only a claim")
+
+		_, err = pool.Exec(ctx, `UPDATE users SET email_verified_at = NOW() WHERE id = $1`, uid)
+		require.NoError(t, err)
+		ids, err = st.VerifiedUserIDsByEmail(ctx, strings.ToLower(addr))
+		require.NoError(t, err)
+		assert.Equal(t, []string{uid}, ids)
+
+		ids, err = st.VerifiedUserIDsByEmail(ctx, "no.such."+uuid.NewString()[:8]+"@example.vn")
+		require.NoError(t, err)
+		assert.Empty(t, ids)
+
+		first := mk(wsA, strings.ToLower(addr), week)
+		require.NoError(t, st.UpsertInvitation(ctx, first))
+		assert.True(t, first.Created, "the first call opens an offer")
+		again := mk(wsA, strings.ToLower(addr), week)
+		require.NoError(t, st.UpsertInvitation(ctx, again))
+		assert.False(t, again.Created, "the second only refreshes it")
+		assert.Equal(t, first.ID, again.ID)
 	})
 
 	t.Run("withdrawing everything open for an address in one workspace", func(t *testing.T) {

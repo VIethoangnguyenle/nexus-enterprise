@@ -8,6 +8,7 @@ import { useWorkspaceSwitcher } from '../../hooks/useSwitchWorkspace'
 import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { sidebarShortcutLabel, useSidebarCollapsed } from '../../hooks/useSidebarCollapsed'
 import { useUnreadNotificationCount } from '../../hooks/useNotifications'
+import { useOpenInvitationCount } from '../../hooks/useInvitations'
 import { logoutSession } from '../../api/client'
 import { workspaceRowDetail } from '../../lib/auth-flow'
 import { workspaceDisplayName } from '../../lib/workspace'
@@ -18,7 +19,7 @@ import { Avatar, IconButton, MenuItem, MenuSeparator, Popover, Pressable, Toolti
 import { NotificationPanel } from './NotificationPanel'
 import {
   MessageSquare, FolderOpen, Users, Package, ClipboardCheck, Settings, LogOut, ChevronDown, ShieldCheck, Plus,
-  Bell, PanelLeft,
+  Bell, Mail, PanelLeft,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
@@ -72,6 +73,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
   const people = usePeople(workspaceId)
   const meAsPerson = user?.id ? people.byUserId.get(user.id) : undefined
   const notificationCount = useUnreadNotificationCount()
+  const offerCount = useOpenInvitationCount()
   const navigate = useNavigate()
   const motion = useMotionPresets()
 
@@ -223,7 +225,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
 
         <Tooltip
           disabled={!rail}
-          content={<><b className="block text-sm font-semibold">{name}</b><span className="text-ink-muted">{typeLine ? `${typeLine} · ` : ''}bấm để đổi workspace</span></>}
+          content={<><b className="block text-sm font-semibold">{name}</b><span className="text-ink-muted">{typeLine ? `${typeLine} · ` : ''}bấm để đổi workspace{offerCount > 0 ? ' · có lời mời' : ''}</span></>}
         >
           {(t) => (
             <Pressable
@@ -232,7 +234,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
               onClick={() => { setNotifOpen(false); setWsOpen(!wsOpen) }}
               aria-haspopup="dialog"
               aria-expanded={wsOpen}
-              aria-label={rail ? `Đổi workspace, đang ở ${name}${typeLine ? ` (${typeLine})` : ''}` : undefined}
+              aria-label={rail ? `Đổi workspace, đang ở ${name}${typeLine ? ` (${typeLine})` : ''}${offerCount > 0 ? ', có lời mời' : ''}` : undefined}
               className={rail
                 ? 'grid place-items-center w-12 h-12 rounded-surface bg-transparent transition-colors duration-quick hover:bg-hover'
                 : `flex items-center gap-2.5 w-full px-2 py-1.5 rounded-surface bg-transparent
@@ -240,10 +242,16 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
             >
               <span
                 aria-hidden="true"
-                className={`grid place-items-center rounded-surface bg-accent text-on-accent font-display font-bold shrink-0
+                className={`relative grid place-items-center rounded-surface bg-accent text-on-accent font-display font-bold shrink-0
                   ${rail ? 'w-10 h-10 text-lg' : 'w-8 h-8 text-section'}`}
               >
                 {initialOf(name)}
+                {offerCount > 0 && (
+                  <span
+                    data-testid="invitation-dot"
+                    className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-accent ring-2 ring-sunk"
+                  />
+                )}
               </span>
               {!rail && (
                 <>
@@ -260,6 +268,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
                   />
                 </>
               )}
+              {!rail && offerCount > 0 && <span className="sr-only">, có lời mời</span>}
             </Pressable>
           )}
         </Tooltip>
@@ -313,6 +322,29 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
                   })}
                 </ul>
               </div>
+            </>
+          )}
+          {offerCount > 0 && (
+            <>
+              <MenuSeparator />
+              <Link
+                to="/workspace-select"
+                onClick={() => setWsOpen(false)}
+                className="grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-2.5 min-h-11 px-2.5 py-1.5 rounded-md text-sm text-ink no-underline
+                  hover:bg-hover transition-colors duration-quick focus-ring"
+              >
+                <span className="grid place-items-center w-7 h-7 rounded-md bg-sunk text-ink-muted shrink-0">
+                  <Mail size={16} strokeWidth={1.75} aria-hidden="true" />
+                </span>
+                <span className="font-semibold text-ink truncate">Lời mời</span>
+                <span
+                  aria-hidden="true"
+                  className="inline-flex items-center justify-center h-4.5 min-w-4.5 px-1.5 rounded-full bg-accent text-on-accent text-2xs font-semibold tnum"
+                >
+                  {formatCount(offerCount)}
+                </span>
+                <span className="sr-only">, {offerCount} lời mời đang chờ</span>
+              </Link>
             </>
           )}
           <MenuSeparator />

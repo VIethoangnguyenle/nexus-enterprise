@@ -24,6 +24,14 @@ describe('describeNotification', () => {
     expect(describeNotification(item({ type }))).toEqual({ text, domain })
   })
 
+  it('writes an invitation from the sentence the server made of names, and falls back without one', () => {
+    const inv = { type: 'workspace_invitation', body: 'Lê Thị Hoa mời bạn vào NovaPay Kế toán' }
+    expect(describeNotification(item(inv))).toEqual({ text: 'Lê Thị Hoa mời bạn vào NovaPay Kế toán', domain: 'invitation' })
+    expect(describeNotification(item({ type: 'workspace_invitation', body: '  ' }))).toEqual({
+      text: 'Bạn có một lời mời vào workspace.', domain: 'invitation',
+    })
+  })
+
   it('does not print the title or body of the server, or any id', () => {
     const d = describeNotification(item({ type: 'something_new', title: 'Raw English', body: 'r1' }))
     expect(d).toEqual({ text: 'Bạn có một thông báo mới.', domain: null })
@@ -37,6 +45,11 @@ describe('notificationTarget', () => {
     expect(notificationTarget(item({ entity_type: 'asset_request', entity_id: 'q1' }))).toEqual({
       to: '/assets', search: { section: 'requests', request: 'q1' },
     })
+  })
+
+  it('sends an invitation to Chọn workspace, whatever id it carries', () => {
+    expect(notificationTarget(item({ type: 'workspace_invitation', entity_type: 'invitation', entity_id: 'i1' }))).toEqual({ to: '/workspace-select' })
+    expect(notificationTarget(item({ type: 'workspace_invitation', entity_type: undefined, entity_id: undefined }))).toEqual({ to: '/workspace-select' })
   })
 
   it('has no target when the notification names no entity, or one it does not know', () => {

@@ -44,7 +44,7 @@ async function renderPanel(open = true) {
       </>
     ),
   })
-  const pages = ['/approval', '/assets', '/channels'].map((path) => createRoute({ getParentRoute: () => root, path, component: () => null }))
+  const pages = ['/approval', '/assets', '/channels', '/workspace-select'].map((path) => createRoute({ getParentRoute: () => root, path, component: () => null }))
   const router = createRouter({ routeTree: root.addChildren(pages), history: createMemoryHistory({ initialEntries: ['/channels'] }) })
   await router.load()
   renderWithClient(<RouterProvider router={router} />)
@@ -122,6 +122,27 @@ describe('NotificationPanel', () => {
 
     await userEvent.setup().click(link)
     await waitFor(() => expect(router.state.location.pathname).toBe('/approval'))
+  })
+
+  it('shows an invitation in words made of names and opens Chọn workspace', async () => {
+    const invitationId = '5b5b5b5b-1111-4222-8333-444455556666'
+    serve({
+      notifications: [N({
+        id: 'n9', type: 'workspace_invitation', title: 'Lời mời vào workspace', body: 'Lê Thị Hoa mời bạn vào NovaPay Kế toán',
+        entity_type: 'invitation', entity_id: invitationId,
+      })],
+      total: 1, unread_count: 1,
+    })
+    const router = await renderPanel()
+    const panel = await screen.findByRole('dialog', { name: 'Thông báo' })
+    const link = (await within(panel).findByText('Lê Thị Hoa mời bạn vào NovaPay Kế toán')).closest('a')!
+    expect(link.getAttribute('href')).toBe('/workspace-select')
+    expect(within(panel).getByText('Lời mời')).toBeInTheDocument()
+    expect(panel.textContent).not.toContain(invitationId)
+
+    await userEvent.setup().click(link)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/workspace-select'))
+    await waitFor(() => expect(posts()).toEqual(['/notifications/n9/read']))
   })
 
   it('clicking an unread row marks it read and closes the panel; a read row only closes it', async () => {

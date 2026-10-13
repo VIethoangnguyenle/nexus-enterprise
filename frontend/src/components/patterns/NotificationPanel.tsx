@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode, ty
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { AlertCircle, Bell, Box, Check, CheckCheck, ClipboardCheck, X } from 'lucide-react'
+import { AlertCircle, Bell, Box, Check, CheckCheck, ClipboardCheck, Mail, X } from 'lucide-react'
 import { DURATION, EASE, useMotionPresets } from '../../lib/motion'
 import {
   DOMAIN_LABEL, describeNotification, groupByDay, notificationTarget, notificationTime,
@@ -24,7 +24,7 @@ interface NotificationPanelProps {
 }
 
 const GAP = 12
-const DOMAIN_ICON = { approval: ClipboardCheck, asset: Box } as const
+const DOMAIN_ICON = { approval: ClipboardCheck, asset: Box, invitation: Mail } as const
 
 /**
  * Notification panel (DESIGN.md §6, design/mockups/notifications.html): a large
@@ -208,6 +208,8 @@ function Row({ n, onClose }: { n: NotificationItem; onClose: () => void }) {
   let main: ReactNode
   if (target?.to === '/approval') {
     main = <Link to="/approval" search={target.search} onClick={open} className={linkClass}>{face}{body}</Link>
+  } else if (target?.to === '/workspace-select') {
+    main = <Link to="/workspace-select" onClick={open} className={linkClass}>{face}{body}</Link>
   } else if (target?.to === '/assets') {
     main = <Link to="/assets" search={target.search} onClick={open} className={linkClass}>{face}{body}</Link>
   } else {
