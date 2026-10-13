@@ -426,8 +426,8 @@ func (s *Service) participantJoined(ctx context.Context, call *store.Call, userI
 }
 
 // endDirectCallLeftAlone closes the room of an answered direct call once fewer
-// than two people are in it: hanging up a call between two people ends it for
-// both. LiveKit's room_finished then marks it ended. A ringing call is left to
+// than two people are in it for longer than a short grace: hanging up a call
+// between two people ends it for both. LiveKit's room_finished then marks it ended. A ringing call is left to
 // ring out or be cancelled; a group call goes on while anyone is in it.
 func (s *Service) endDirectCallLeftAlone(ctx context.Context, call *store.Call) error {
 	if call.Status != callActive {
@@ -441,9 +441,36 @@ func (s *Service) endDirectCallLeftAlone(ctx context.Context, call *store.Call) 
 	if err != nil || len(present) >= 2 {
 		return err
 	}
-	s.closeRoom(call.ID)
+	// A reload or a reconnect also leaves before it joins again: decide once
+	// the grace has passed, on the call as it is then.
+	time.AfterFunc(s.hangUpGrace(), func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		now, err := s.store.GetCall(ctx, call.ID)
+		if err != nil || now == nil || now.Status != callActive {
+			return
+		}
+		if present, err := s.store.CallPresent(ctx, call.ID); err == nil && len(present) < 2 {
+			s.closeRoom(call.ID)
+		}
+	})
 	return nil
 }
+
+// callHangUpGrace is how long a direct call waits, after one of its two people
+// left, for them to come back before it ends for both.
+const callHangUpGrace = 15 * time.Second
+
+func (s *Service) hangUpGrace() time.Duration {
+	if s.callHangUpGrace > 0 {
+		return s.callHangUpGrace
+	}
+	return callHangUpGrace
+}
+
+// SetCallHangUpGraceForTest shortens the wait before a direct call left with
+// one person ends.
+func SetCallHangUpGraceForTest(s *Service, d time.Duration) { s.callHangUpGrace = d }
 
 // roomFinished closes a call whose room LiveKit closed: a call that was
 // running ended; one still ringing was not answered.

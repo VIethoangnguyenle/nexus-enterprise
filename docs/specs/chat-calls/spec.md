@@ -110,8 +110,9 @@ A direct call's ringing, and the missed call that replaces it, SHALL be pushed t
 `web-push`, besides the live `call_event`.
 
 ### Requirement: One-to-one calls end for both
-When an answered direct call has fewer than two people left in it (one hung up), its room SHALL be closed, so
-LiveKit's `room_finished` ends it for both. A group call goes on while anyone is in it.
+When an answered direct call has fewer than two people left in it (one hung up) and still has after a 15-second
+grace — a page reload or a reconnect also leaves before it joins again — its room SHALL be closed, so LiveKit's
+`room_finished` ends it for both. A group call goes on while anyone is in it.
 
 ### Requirement: The screens
 The screens render DESIGN.md §6 "Cuộc gọi video và thoại" and `design/mockups/video-call.html`:

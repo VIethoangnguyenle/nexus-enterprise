@@ -6,6 +6,7 @@ package domain
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/realtime"
@@ -35,6 +36,8 @@ type Service struct {
 
 	media        CallMedia    // nil: calls unavailable
 	callObserver CallObserver // nil: call changes are not announced
+
+	callHangUpGrace time.Duration // 0: the default wait before a direct call left alone ends
 }
 
 // SetEmitter wires the announcer of committed channel changes. A nil emitter

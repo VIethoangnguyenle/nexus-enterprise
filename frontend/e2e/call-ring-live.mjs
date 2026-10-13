@@ -155,7 +155,8 @@ async function main() {
   await B.getByRole('button', { name: 'Rời cuộc gọi' }).click().catch(() => {})
   // Hanging up a call between two people ends it for both.
   let ended = false
-  for (let i = 0; i < 20 && !ended; i++) {
+  // The server waits 15 s for a reconnect before it ends a call left with one person.
+  for (let i = 0; i < 35 && !ended; i++) {
     await A.waitForTimeout(1000)
     ended = (await api(A, 'A', 'GET', `/calls/${firstId}`)).json?.status === 'ended'
   }

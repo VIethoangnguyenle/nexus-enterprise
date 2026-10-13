@@ -29,6 +29,12 @@ func newFakeMedia() *fakeMedia {
 	return &fakeMedia{rooms: map[string]bool{}, present: map[string][]string{}}
 }
 
+func (m *fakeMedia) hasRoom(name string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.rooms[name]
+}
+
 func (m *fakeMedia) PublicURL() string { return "wss://calls.test/livekit" }
 func (m *fakeMedia) CreateRoom(_ context.Context, name string, _ uint32, _ time.Duration) error {
 	m.mu.Lock()
@@ -359,20 +365,41 @@ func TestDirectCall_AnsweredWhenThePeerJoins(t *testing.T) {
 func TestDirectCall_EndsWhenOneHangsUp(t *testing.T) {
 	w := newCallWorld(t)
 	w.asDM(t)
+	domain.SetCallHangUpGraceForTest(w.f.svc, 50*time.Millisecond)
 	ctx := context.Background()
 	id := w.start(t, "video")
 	w.joined(t, id, w.f.userID)
 	w.joined(t, id, w.peer)
 	require.True(t, w.media.rooms[id])
 	require.NoError(t, w.f.svc.HandleCallEvent(ctx, domain.CallEvent{Kind: domain.CallEventLeft, Room: id, Identity: w.peer}))
-	assert.False(t, w.media.rooms[id], "the room is closed; LiveKit's room_finished ends the call")
+	assert.True(t, w.media.hasRoom(id), "not at once: a reload or a reconnect also leaves first")
+	require.Eventually(t, func() bool { return !w.media.hasRoom(id) }, 2*time.Second, 10*time.Millisecond,
+		"after the grace the room is closed; LiveKit's room_finished ends the call")
 
 	g := newCallWorld(t)
+	domain.SetCallHangUpGraceForTest(g.f.svc, 50*time.Millisecond)
 	gid := g.start(t, "video")
 	g.joined(t, gid, g.f.userID)
 	g.joined(t, gid, g.peer)
 	require.NoError(t, g.f.svc.HandleCallEvent(ctx, domain.CallEvent{Kind: domain.CallEventLeft, Room: gid, Identity: g.peer}))
-	assert.True(t, g.media.rooms[gid], "a group call goes on")
+	time.Sleep(150 * time.Millisecond)
+	assert.True(t, g.media.hasRoom(gid), "a group call goes on")
+}
+
+// Someone who drops and comes back within the grace keeps the call going: a
+// page reload or a reconnect leaves before it joins again.
+func TestDirectCall_AReconnectDoesNotEndIt(t *testing.T) {
+	w := newCallWorld(t)
+	w.asDM(t)
+	domain.SetCallHangUpGraceForTest(w.f.svc, 100*time.Millisecond)
+	ctx := context.Background()
+	id := w.start(t, "video")
+	w.joined(t, id, w.f.userID)
+	w.joined(t, id, w.peer)
+	require.NoError(t, w.f.svc.HandleCallEvent(ctx, domain.CallEvent{Kind: domain.CallEventLeft, Room: id, Identity: w.peer, Participant: "PA_old"}))
+	w.joined(t, id, w.peer)
+	time.Sleep(300 * time.Millisecond)
+	assert.True(t, w.media.hasRoom(id), "the peer came back: the call goes on")
 }
 
 func TestDeclineAndCancel(t *testing.T) {
