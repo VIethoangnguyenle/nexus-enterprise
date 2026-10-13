@@ -37,6 +37,8 @@ export function NotificationSettings() {
 
   // M3: null = unknown/loading. Never show the switch as 'on' before the SDK confirms.
   const [deviceOptedIn, setDeviceOptedIn] = useState<boolean | null>(null)
+  const [deviceFailed, setDeviceFailed] = useState(false)
+  const [attempt, setAttempt] = useState(0)
   const [deviceBusy, setDeviceBusy] = useState(false)
   const [permission, setPermission] = useState<NotificationPermission>(getNotificationPermission)
   const [quietError, setQuietError] = useState<string | null>(null)
@@ -46,38 +48,57 @@ export function NotificationSettings() {
   useEffect(() => {
     if (!appId) return
 
-    // Initial state from SDK
-    void isSubscriptionOptedIn().then((on) => setDeviceOptedIn(on))
+    let cancelled = false
+    setDeviceFailed(false)
+    setDeviceOptedIn(null)
 
     // Subscribe to permission changes via the Permissions API (fires when the user
     // toggles "Allow notifications" in browser settings — fulfils the "công tắc sẽ tự bật" promise).
     let permStatus: PermissionStatus | null = null
     const onPermChange = () => setPermission(getNotificationPermission())
     if (navigator.permissions?.query) {
-      void navigator.permissions.query({ name: 'notifications' }).then((status) => {
-        permStatus = status
-        permStatus.addEventListener('change', onPermChange)
-      })
+      navigator.permissions
+        .query({ name: 'notifications' })
+        .then((status) => {
+          if (cancelled) return
+          permStatus = status
+          permStatus.addEventListener('change', onPermChange)
+        })
+        .catch(() => {
+          // Permissions API unsupported for notifications (older Safari): the SDK events cover it.
+        })
     }
 
-    // Subscribe to OneSignal SDK events for reactive state.
-    let subListener: ((arg: unknown) => void) | null = null
-    void initOneSignal(appId).then((sdk) => {
-      if (!sdk) return
-      subListener = () => setDeviceOptedIn(!!sdk.User.PushSubscription.optedIn)
-      sdk.User.PushSubscription.addEventListener('change', subListener)
-      sdk.Notifications.addEventListener('permissionChange', onPermChange)
-    })
+    // Initial state and reactive updates from the SDK. A failed or timed-out init must
+    // surface as a retryable state, never as an endless "checking".
+    let detach: (() => void) | null = null
+    isSubscriptionOptedIn(appId)
+      .then(async (on) => {
+        if (cancelled) return
+        setDeviceOptedIn(on)
+        const sdk = await initOneSignal(appId)
+        if (!sdk || cancelled) return
+        const subListener = () => setDeviceOptedIn(!!sdk.User.PushSubscription.optedIn)
+        sdk.User.PushSubscription.addEventListener('change', subListener)
+        sdk.Notifications.addEventListener('permissionChange', onPermChange)
+        detach = () => {
+          sdk.User.PushSubscription.removeEventListener('change', subListener)
+          sdk.Notifications.removeEventListener('permissionChange', onPermChange)
+        }
+      })
+      .catch((err) => {
+        console.warn('[push] could not read device subscription', err)
+        if (cancelled) return
+        setDeviceOptedIn(null)
+        setDeviceFailed(true)
+      })
 
     return () => {
+      cancelled = true
       permStatus?.removeEventListener('change', onPermChange)
-      void initOneSignal(appId).then((sdk) => {
-        if (!sdk || !subListener) return
-        sdk.User.PushSubscription.removeEventListener('change', subListener)
-        sdk.Notifications.removeEventListener('permissionChange', onPermChange)
-      })
+      detach?.()
     }
-  }, [appId])
+  }, [appId, attempt])
 
   const { data: preferences, isLoading, isError, refetch } = useQuery({
     queryKey: pushQueryKeys.preferences,
@@ -139,7 +160,9 @@ export function NotificationSettings() {
     setDeviceBusy(true)
     try {
       await setSubscriptionOptIn(next)
-    } catch {
+      setPermission(getNotificationPermission())
+    } catch (err) {
+      console.warn('[push] could not change device subscription', err)
       setDeviceOptedIn(!next)
       toast.error('Không thay đổi được cài đặt thiết bị')
     } finally {
@@ -181,11 +204,13 @@ export function NotificationSettings() {
     ? 'Trình duyệt đang chặn'
     : isIos
       ? 'Cần thêm Nexus vào màn hình chính'
-      : deviceOptedIn === null
-        ? 'Đang kiểm tra…'
-        : deviceOptedIn
-          ? 'Đang bật trên thiết bị này'
-          : 'Đang tắt trên thiết bị này'
+      : deviceFailed
+        ? 'Chưa kết nối được dịch vụ thông báo'
+        : deviceOptedIn === null
+          ? 'Đang kiểm tra…'
+          : deviceOptedIn
+            ? 'Đang bật trên thiết bị này'
+            : 'Đang tắt trên thiết bị này'
 
   const deviceDisabled = isBlocked || isIos || deviceBusy || deviceOptedIn === null
   const dimmed = deviceOptedIn === false || deviceOptedIn === null || isBlocked
@@ -233,6 +258,16 @@ export function NotificationSettings() {
                 Thông báo đẩy
               </span>
               <span className="text-xs text-ink-muted">{deviceSubtext}</span>
+              {deviceFailed && !isBlocked && !isIos ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="justify-self-start"
+                  onClick={() => setAttempt((n) => n + 1)}
+                >
+                  Thử lại
+                </Button>
+              ) : null}
             </div>
           </div>
           <Pressable

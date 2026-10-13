@@ -153,7 +153,7 @@ export function CreateWorkspaceScreen() {
                 ${type === 'personal' ? 'ring-5 ring-accent' : 'ring-2 ring-ink-muted'}`}
             />
             <span className="grid gap-1 min-w-0">
-              <span className={`flex items-center gap-2 font-semibold text-base ${type === 'personal' ? 'text-accent' : 'text-ink'}`}>
+              <span className={`flex items-center gap-2 font-semibold text-16 ${type === 'personal' ? 'text-accent' : 'text-ink'}`}>
                 <User size={18} strokeWidth={1.75} aria-hidden="true" />
                 Cá nhân
               </span>
@@ -200,7 +200,7 @@ export function CreateWorkspaceScreen() {
                 ${type === 'organization' ? 'ring-5 ring-accent' : 'ring-2 ring-ink-muted'}`}
             />
             <span className="grid gap-1 min-w-0">
-              <span className={`flex items-center gap-2 font-semibold text-base ${type === 'organization' ? 'text-accent' : 'text-ink'}`}>
+              <span className={`flex items-center gap-2 font-semibold text-16 ${type === 'organization' ? 'text-accent' : 'text-ink'}`}>
                 <Building2 size={18} strokeWidth={1.75} aria-hidden="true" />
                 Tổ chức
               </span>

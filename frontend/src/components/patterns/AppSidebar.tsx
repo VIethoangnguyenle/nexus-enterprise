@@ -220,7 +220,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
               {!rail && (
                 <>
                   <span className="grid min-w-0 flex-1 text-left">
-                    <span className="font-display text-base font-bold text-ink truncate">{name}</span>
+                    <span className="font-display text-16 font-bold text-ink truncate">{name}</span>
                     {isPersonal && <span className="text-xs text-ink-muted truncate">Workspace cá nhân</span>}
                   </span>
                   <ChevronDown
@@ -251,7 +251,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
               {initialOf(name)}
             </span>
             <span className="grid min-w-0">
-              <h2 className="m-0 font-display text-base font-bold leading-tight text-ink break-words">{name}</h2>
+              <h2 className="m-0 font-display text-16 font-bold leading-tight text-ink break-words">{name}</h2>
               {current && <span className="text-xs text-ink-muted break-words">{workspaceRowDetail(current)}</span>}
             </span>
           </div>

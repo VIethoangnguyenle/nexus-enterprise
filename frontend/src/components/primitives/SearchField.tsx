@@ -28,7 +28,7 @@ export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(
         data-module-search={moduleSearch || undefined}
         aria-label={label}
         placeholder={placeholder ?? label}
-        className="flex-1 min-w-0 h-11 bg-transparent border-none outline-none text-base text-ink placeholder:text-ink-muted
+        className="flex-1 min-w-0 h-11 bg-transparent border-none outline-none text-16 text-ink placeholder:text-ink-muted
           [&::-webkit-search-cancel-button]:hidden"
         {...props}
       />

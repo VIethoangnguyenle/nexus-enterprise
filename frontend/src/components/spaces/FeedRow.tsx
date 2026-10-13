@@ -95,7 +95,7 @@ export function FeedRow({ conversation: c, arrival, online }: {
             aria-label={muted ? `${c.title}, đã tắt thông báo` : c.title}
             aria-describedby={metaId}
             // The pseudo-element stretches this link over the whole row.
-            className={`flex-1 min-w-0 flex items-baseline gap-1.5 text-base no-underline text-ink focus-ring
+            className={`flex-1 min-w-0 flex items-baseline gap-1.5 text-16 no-underline text-ink focus-ring
               after:absolute after:inset-0 ${unread ? 'font-bold' : 'font-medium'}`}
           >
             <span className="truncate">{c.title}</span>

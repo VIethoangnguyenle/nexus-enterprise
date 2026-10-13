@@ -96,11 +96,11 @@ export function PhoneSearchBar({ scope }: { scope: HTMLElement | null }) {
           )}
         </Pressable>
         {module === 'messaging' || hasSearch ? (
-          <Pressable onClick={module === 'messaging' ? openSearch : goToSearch} className="flex-1 min-w-0 h-11 px-1 truncate text-base text-ink-muted">
+          <Pressable onClick={module === 'messaging' ? openSearch : goToSearch} className="flex-1 min-w-0 h-11 px-1 truncate text-16 text-ink-muted">
             {searchHintOf(module)}
           </Pressable>
         ) : (
-          <span className="flex-1 min-w-0 px-1 truncate text-base text-ink-muted">{phoneNameOf(module)}</span>
+          <span className="flex-1 min-w-0 px-1 truncate text-16 text-ink-muted">{phoneNameOf(module)}</span>
         )}
         <Pressable
           onClick={() => setLayer('account')}

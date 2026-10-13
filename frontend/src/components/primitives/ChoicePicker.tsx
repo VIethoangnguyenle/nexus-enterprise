@@ -117,7 +117,7 @@ export function ChoicePicker({
           onFocus={() => setOpen(true)}
           onBlur={() => setOpen(false)}
           onKeyDown={onKeyDown}
-          className="flex-1 min-w-20 h-7 bg-transparent border-none outline-none text-base text-ink placeholder:text-ink-muted"
+          className="flex-1 min-w-20 h-7 bg-transparent border-none outline-none text-16 text-ink placeholder:text-ink-muted"
         />
       </div>
       {open && (

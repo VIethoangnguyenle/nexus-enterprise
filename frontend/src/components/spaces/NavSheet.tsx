@@ -71,7 +71,7 @@ export function SheetItem({ icon, onClick, tone = 'default', checked, disabled, 
       aria-checked={radio ? checked : undefined}
       disabled={disabled}
       onClick={onClick}
-      className={`flex items-center gap-3.5 w-full min-h-13 px-3.5 rounded-lg text-base font-medium
+      className={`flex items-center gap-3.5 w-full min-h-13 px-3.5 rounded-lg text-16 font-medium
         hover:bg-hover active:bg-hover transition-colors duration-quick ${tone === 'danger' ? 'text-danger' : 'text-ink'}`}
     >
       {icon && <span aria-hidden="true" className={tone === 'danger' ? '' : 'text-ink-muted'}>{icon}</span>}

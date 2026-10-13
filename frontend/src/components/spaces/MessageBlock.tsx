@@ -162,7 +162,7 @@ export function MessageBlock({
         {deleted ? (
           <div
             id={`${idBase}-text`}
-            className="mt-0.5 w-fit max-w-[88%] md:max-w-[min(70ch,85%)] px-3 py-1.75 rounded-xl text-base md:text-md italic text-ink-muted
+            className="mt-0.5 w-fit max-w-[88%] md:max-w-[min(70ch,85%)] px-3 py-1.75 rounded-xl text-16 md:text-md italic text-ink-muted
               ring-1 ring-inset ring-line"
           >
             Tin nhắn đã bị xoá

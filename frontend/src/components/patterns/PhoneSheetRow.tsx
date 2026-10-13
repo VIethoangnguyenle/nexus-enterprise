@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from '@tanstack/react-router'
 import { Pressable } from '../primitives'
 
-const ROW = `flex items-center gap-3.5 w-full min-h-14 px-3.5 rounded-lg text-left text-base font-medium no-underline
+const ROW = `flex items-center gap-3.5 w-full min-h-14 px-3.5 rounded-lg text-left text-16 font-medium no-underline
   hover:bg-hover active:bg-hover transition-colors duration-quick focus-ring`
 
 interface PhoneSheetRowProps {

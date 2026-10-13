@@ -107,7 +107,7 @@ export function DepartmentPicker({ label, departments, value, onChange, noneLabe
         aria-controls={listId}
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
-        className={`flex items-center gap-2 min-h-10 px-3 rounded-md bg-raised w-full min-w-0 text-base
+        className={`flex items-center gap-2 min-h-10 px-3 rounded-md bg-raised w-full min-w-0 text-16
           ${open ? 'field-focus' : 'field-line'}`}
       >
         <Building2 size={16} strokeWidth={1.75} className="text-ink-muted shrink-0" aria-hidden="true" />

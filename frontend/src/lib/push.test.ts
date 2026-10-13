@@ -54,6 +54,7 @@ describe('push notifications lib', () => {
       },
     }
     window.OneSignal = mockOneSignal
+    window.OneSignalDeferred = []
 
     // jsdom runs on localhost, which triggers isLocalDev(). Override the env
     // flag so init proceeds as if on a real domain.
@@ -105,6 +106,65 @@ describe('push notifications lib', () => {
       mockOneSignal.init = vi.fn().mockResolvedValue(undefined)
       const sdk = await initOneSignal('test-app-id')
       expect(sdk).toBe(mockOneSignal)
+    })
+
+    it('calls OneSignal.init once; a timed-out caller does not discard it and a later call gets the late result', async () => {
+      vi.useFakeTimers()
+      try {
+        let finishInit!: () => void
+        mockOneSignal.init = vi.fn().mockImplementation(
+          () => new Promise<void>((resolve) => { finishInit = resolve }),
+        )
+
+        const first = initOneSignal('test-app-id')
+        const firstOutcome = first.then(() => 'ok', (e: Error) => e.message)
+        await vi.advanceTimersByTimeAsync(20_001)
+        expect(await firstOutcome).toBe('OneSignal init timed out')
+
+        const second = initOneSignal('test-app-id')
+        finishInit()
+        await expect(second).resolves.toBe(mockOneSignal)
+        expect(mockOneSignal.init).toHaveBeenCalledTimes(1)
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('shares one init between concurrent callers', async () => {
+      const [a, b] = await Promise.all([initOneSignal('test-app-id'), initOneSignal('test-app-id')])
+      expect(a).toBe(b)
+      expect(mockOneSignal.init).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not re-run init after it failed', async () => {
+      mockOneSignal.init = vi.fn().mockRejectedValue(new Error('domain mismatch'))
+      await expect(initOneSignal('test-app-id')).rejects.toThrow('domain mismatch')
+      await expect(initOneSignal('test-app-id')).rejects.toThrow('domain mismatch')
+      expect(mockOneSignal.init).toHaveBeenCalledTimes(1)
+    })
+
+    it('allows loading the script again after the script failed to load', async () => {
+      window.OneSignal = undefined
+      const appended: HTMLScriptElement[] = []
+      vi.spyOn(document.head, 'appendChild').mockImplementation((node: Node) => {
+        appended.push(node as HTMLScriptElement)
+        return node
+      })
+
+      const first = initOneSignal('test-app-id')
+      const firstOutcome = first.then(() => 'ok', (e: Error) => e.message)
+      appended[0]!.onerror?.(new Event('error'))
+      expect(await firstOutcome).toMatch(/Failed to load OneSignal SDK script/)
+
+      const second = initOneSignal('test-app-id')
+      await vi.waitFor(() => expect(appended).toHaveLength(2))
+      window.OneSignalDeferred = window.OneSignalDeferred || []
+      appended[1]!.onload?.(new Event('load'))
+      await vi.waitFor(() => expect(window.OneSignalDeferred!.length).toBeGreaterThan(0))
+      const queue = window.OneSignalDeferred!
+      await queue[queue.length - 1]!(mockOneSignal)
+      await expect(second).resolves.toBe(mockOneSignal)
+      expect(mockOneSignal.init).toHaveBeenCalledTimes(1)
     })
 
     it('does not inject a script tag when no appId is provided (L5)', async () => {
@@ -189,6 +249,27 @@ describe('push notifications lib', () => {
       expect(mockOneSignal.User.PushSubscription.optOut).toHaveBeenCalled()
 
       await setSubscriptionOptIn(true, 'test-app-id')
+      expect(mockOneSignal.User.PushSubscription.optIn).toHaveBeenCalled()
+    })
+
+    it('asks for permission before opting in when it has not been decided', async () => {
+      await setSubscriptionOptIn(true, 'test-app-id')
+      expect(mockOneSignal.Notifications.requestPermission).toHaveBeenCalled()
+      expect(mockOneSignal.User.PushSubscription.optIn).toHaveBeenCalled()
+    })
+
+    it('does not opt in when the permission prompt is refused', async () => {
+      mockOneSignal.Notifications.requestPermission = vi.fn().mockImplementation(async () => {
+        Object.defineProperty(window.Notification, 'permission', { value: 'denied', configurable: true })
+      })
+      await setSubscriptionOptIn(true, 'test-app-id')
+      expect(mockOneSignal.User.PushSubscription.optIn).not.toHaveBeenCalled()
+    })
+
+    it('does not prompt again when permission is already granted', async () => {
+      Object.defineProperty(window.Notification, 'permission', { value: 'granted', configurable: true })
+      await setSubscriptionOptIn(true, 'test-app-id')
+      expect(mockOneSignal.Notifications.requestPermission).not.toHaveBeenCalled()
       expect(mockOneSignal.User.PushSubscription.optIn).toHaveBeenCalled()
     })
 
