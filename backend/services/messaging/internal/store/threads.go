@@ -256,6 +256,12 @@ func (s *Store) UnreadThreads(ctx context.Context, userID string, channelIDs []s
 		return nil, fmt.Errorf("unread threads: %w", err)
 	}
 	defer rows.Close()
+	return scanThreadRows(rows)
+}
+
+// scanThreadRows reads root messages selected as messageCols followed by the
+// caller's following flag, unread count and the recent repliers.
+func scanThreadRows(rows pgx.Rows) ([]*Message, error) {
 	var msgs []*Message
 	for rows.Next() {
 		m := &Message{}
@@ -270,6 +276,46 @@ func (s *Store) UnreadThreads(ctx context.Context, userID string, channelIDs []s
 		msgs = append(msgs, m)
 	}
 	return msgs, rows.Err()
+}
+
+// FollowedThreads returns, across the given channels, every thread the user
+// follows — with or without unread replies, in a muted conversation or not —
+// most recently active first. before pages by last reply time and beforeID —
+// the root id of the last thread already shown — breaks a tie between threads
+// that moved at the same instant.
+func (s *Store) FollowedThreads(ctx context.Context, userID string, channelIDs []string, before *time.Time, beforeID string, limit int) ([]*Message, bool, error) {
+	if len(channelIDs) == 0 {
+		return nil, false, nil
+	}
+	rows, err := s.db.Query(ctx,
+		`WITH t AS (
+		   SELECT m.id, `+threadFollowingExpr+` AS following, `+threadUnreadExpr+` AS unread,
+		          `+threadParticipantsExpr+` AS participants
+		   FROM messages m `+threadFollowJoin+`
+		   WHERE m.channel_id = ANY($2::text[]) AND m.parent_message_id IS NULL AND m.reply_count > 0
+		     AND m.deleted_at IS NULL
+		     AND ($3::timestamptz IS NULL OR m.last_reply_at < $3
+		          OR ($5 <> '' AND m.last_reply_at = $3 AND m.id < $5))
+		 )
+		 SELECT `+messageCols+`, t.following, t.unread, t.participants
+		 FROM t JOIN messages m ON m.id = t.id
+		 LEFT JOIN users u ON m.sender_id = u.id
+		 WHERE t.following
+		 ORDER BY m.last_reply_at DESC, m.id DESC
+		 LIMIT $4`, userID, channelIDs, before, limit+1, beforeID)
+	if err != nil {
+		return nil, false, fmt.Errorf("followed threads: %w", err)
+	}
+	defer rows.Close()
+	msgs, err := scanThreadRows(rows)
+	if err != nil {
+		return nil, false, err
+	}
+	hasMore := len(msgs) > limit
+	if hasMore {
+		msgs = msgs[:limit]
+	}
+	return msgs, hasMore, nil
 }
 
 // MessageThreadInfo returns the channel and parent of a message; found is false

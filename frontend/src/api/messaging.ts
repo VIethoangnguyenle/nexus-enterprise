@@ -152,6 +152,30 @@ export interface ThreadState {
   as_of?: unknown
 }
 
+/** The opening of one message, as a conversation list previews it. */
+export interface ActivityMessage {
+  id: string
+  sender_id: string
+  sender_name: string
+  /** Plain text, at most 140 characters; empty for a file or card sent without text. */
+  preview: string
+  kind: 'text' | 'attachment' | 'poll' | 'task' | 'card'
+  /** File name of the first attachment; only when `kind` is `attachment`. */
+  attachment_name?: string
+  mentions?: string[]
+  /** A protobuf timestamp (RFC 3339 on the wire). */
+  created_at: string
+  /** Set only on a thread reply. */
+  parent_message_id?: string
+}
+
+/** What one conversation last said: its newest main-stream message, and its newest thread reply when that is newer. */
+export interface ConversationActivity {
+  channel_id: string
+  latest: ActivityMessage
+  latest_reply?: ActivityMessage
+}
+
 export type ThreadFilter = 'all' | 'following' | 'unread'
 
 export interface ThreadPage { messages: Message[]; has_more: boolean }
@@ -266,6 +290,22 @@ export const messagingApi = {
     apiFetch(`/channels/${channelId}/read`, { method: 'POST', body: JSON.stringify({ last_message_id: lastMessageId }) }),
   getUnreadCounts: () =>
     apiFetch<{ channels: ChannelUnread[] }>(`/channels/unread`),
+  /** The newest message and newest thread reply of every conversation the signed-in user reads; conversations with no message are absent. */
+  conversationActivity: () =>
+    apiFetch<{ channels: ConversationActivity[] | null }>(`/channels/activity`).then(
+      (r): ConversationActivity[] => r.channels ?? [],
+    ),
+  /** Threads the signed-in user follows across every conversation they read, most recently active first. Paged like `listThreads`. */
+  followedThreads: (q: { before?: string; beforeId?: string; limit?: number } = {}) => {
+    const qs = new URLSearchParams()
+    if (q.before) qs.set('before', q.before)
+    if (q.beforeId) qs.set('before_id', q.beforeId)
+    if (q.limit) qs.set('limit', String(q.limit))
+    const suffix = qs.size ? `?${qs}` : ''
+    return apiFetch<Partial<ThreadPage>>(`/threads/followed${suffix}`).then(
+      (page): ThreadPage => ({ messages: page.messages ?? [], has_more: !!page.has_more }),
+    )
+  },
 
   // Search
   searchMessages: (channelId: string, query: string, limit = 20) =>

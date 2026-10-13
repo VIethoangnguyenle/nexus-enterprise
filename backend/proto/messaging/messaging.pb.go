@@ -2686,6 +2686,221 @@ func (x *ChannelUnreadList) GetChannels() []*ChannelUnread {
 	return nil
 }
 
+// ActivityMessage is the opening of one message, as the conversation list previews it.
+type ActivityMessage struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	Id              string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	SenderId        string                 `protobuf:"bytes,2,opt,name=sender_id,json=senderId,proto3" json:"sender_id,omitempty"`
+	SenderName      string                 `protobuf:"bytes,3,opt,name=sender_name,json=senderName,proto3" json:"sender_name,omitempty"`
+	Preview         string                 `protobuf:"bytes,4,opt,name=preview,proto3" json:"preview,omitempty"`                                     // Plain text, at most 140 characters
+	Kind            string                 `protobuf:"bytes,5,opt,name=kind,proto3" json:"kind,omitempty"`                                           // "text" | "attachment" | "poll" | "task" | "card"
+	AttachmentName  string                 `protobuf:"bytes,6,opt,name=attachment_name,json=attachmentName,proto3" json:"attachment_name,omitempty"` // File name of the first attachment; only when kind is "attachment"
+	Mentions        []string               `protobuf:"bytes,7,rep,name=mentions,proto3" json:"mentions,omitempty"`                                   // User IDs mentioned
+	CreatedAt       *timestamppb.Timestamp `protobuf:"bytes,8,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
+	ParentMessageId string                 `protobuf:"bytes,9,opt,name=parent_message_id,json=parentMessageId,proto3" json:"parent_message_id,omitempty"` // Set only on a thread reply
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ActivityMessage) Reset() {
+	*x = ActivityMessage{}
+	mi := &file_proto_messaging_messaging_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ActivityMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ActivityMessage) ProtoMessage() {}
+
+func (x *ActivityMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_messaging_messaging_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ActivityMessage.ProtoReflect.Descriptor instead.
+func (*ActivityMessage) Descriptor() ([]byte, []int) {
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *ActivityMessage) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ActivityMessage) GetSenderId() string {
+	if x != nil {
+		return x.SenderId
+	}
+	return ""
+}
+
+func (x *ActivityMessage) GetSenderName() string {
+	if x != nil {
+		return x.SenderName
+	}
+	return ""
+}
+
+func (x *ActivityMessage) GetPreview() string {
+	if x != nil {
+		return x.Preview
+	}
+	return ""
+}
+
+func (x *ActivityMessage) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *ActivityMessage) GetAttachmentName() string {
+	if x != nil {
+		return x.AttachmentName
+	}
+	return ""
+}
+
+func (x *ActivityMessage) GetMentions() []string {
+	if x != nil {
+		return x.Mentions
+	}
+	return nil
+}
+
+func (x *ActivityMessage) GetCreatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return nil
+}
+
+func (x *ActivityMessage) GetParentMessageId() string {
+	if x != nil {
+		return x.ParentMessageId
+	}
+	return ""
+}
+
+// ConversationActivity is the latest main-stream message of a conversation the
+// caller reads, and its latest thread reply when that is newer.
+type ConversationActivity struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ChannelId     string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	Latest        *ActivityMessage       `protobuf:"bytes,2,opt,name=latest,proto3" json:"latest,omitempty"`
+	LatestReply   *ActivityMessage       `protobuf:"bytes,3,opt,name=latest_reply,json=latestReply,proto3" json:"latest_reply,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConversationActivity) Reset() {
+	*x = ConversationActivity{}
+	mi := &file_proto_messaging_messaging_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConversationActivity) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConversationActivity) ProtoMessage() {}
+
+func (x *ConversationActivity) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_messaging_messaging_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConversationActivity.ProtoReflect.Descriptor instead.
+func (*ConversationActivity) Descriptor() ([]byte, []int) {
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *ConversationActivity) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *ConversationActivity) GetLatest() *ActivityMessage {
+	if x != nil {
+		return x.Latest
+	}
+	return nil
+}
+
+func (x *ConversationActivity) GetLatestReply() *ActivityMessage {
+	if x != nil {
+		return x.LatestReply
+	}
+	return nil
+}
+
+type ConversationActivityList struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Channels      []*ConversationActivity `protobuf:"bytes,1,rep,name=channels,proto3" json:"channels,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConversationActivityList) Reset() {
+	*x = ConversationActivityList{}
+	mi := &file_proto_messaging_messaging_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConversationActivityList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConversationActivityList) ProtoMessage() {}
+
+func (x *ConversationActivityList) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_messaging_messaging_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConversationActivityList.ProtoReflect.Descriptor instead.
+func (*ConversationActivityList) Descriptor() ([]byte, []int) {
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *ConversationActivityList) GetChannels() []*ConversationActivity {
+	if x != nil {
+		return x.Channels
+	}
+	return nil
+}
+
 type SearchMessagesRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	ChannelId string                 `protobuf:"bytes,1,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
@@ -2699,7 +2914,7 @@ type SearchMessagesRequest struct {
 
 func (x *SearchMessagesRequest) Reset() {
 	*x = SearchMessagesRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[40]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2711,7 +2926,7 @@ func (x *SearchMessagesRequest) String() string {
 func (*SearchMessagesRequest) ProtoMessage() {}
 
 func (x *SearchMessagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[40]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2724,7 +2939,7 @@ func (x *SearchMessagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SearchMessagesRequest.ProtoReflect.Descriptor instead.
 func (*SearchMessagesRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{40}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *SearchMessagesRequest) GetChannelId() string {
@@ -2774,7 +2989,7 @@ type CreatePollRequest struct {
 
 func (x *CreatePollRequest) Reset() {
 	*x = CreatePollRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[41]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2786,7 +3001,7 @@ func (x *CreatePollRequest) String() string {
 func (*CreatePollRequest) ProtoMessage() {}
 
 func (x *CreatePollRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[41]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2799,7 +3014,7 @@ func (x *CreatePollRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreatePollRequest.ProtoReflect.Descriptor instead.
 func (*CreatePollRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{41}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *CreatePollRequest) GetChannelId() string {
@@ -2871,7 +3086,7 @@ type VotePollRequest struct {
 
 func (x *VotePollRequest) Reset() {
 	*x = VotePollRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[42]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2883,7 +3098,7 @@ func (x *VotePollRequest) String() string {
 func (*VotePollRequest) ProtoMessage() {}
 
 func (x *VotePollRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[42]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2896,7 +3111,7 @@ func (x *VotePollRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VotePollRequest.ProtoReflect.Descriptor instead.
 func (*VotePollRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{42}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *VotePollRequest) GetPollId() string {
@@ -2931,7 +3146,7 @@ type RemoveVoteRequest struct {
 
 func (x *RemoveVoteRequest) Reset() {
 	*x = RemoveVoteRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[43]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2943,7 +3158,7 @@ func (x *RemoveVoteRequest) String() string {
 func (*RemoveVoteRequest) ProtoMessage() {}
 
 func (x *RemoveVoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[43]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2956,7 +3171,7 @@ func (x *RemoveVoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RemoveVoteRequest.ProtoReflect.Descriptor instead.
 func (*RemoveVoteRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{43}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *RemoveVoteRequest) GetPollId() string {
@@ -2989,7 +3204,7 @@ type GetPollRequest struct {
 
 func (x *GetPollRequest) Reset() {
 	*x = GetPollRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[44]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3001,7 +3216,7 @@ func (x *GetPollRequest) String() string {
 func (*GetPollRequest) ProtoMessage() {}
 
 func (x *GetPollRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[44]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3014,7 +3229,7 @@ func (x *GetPollRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetPollRequest.ProtoReflect.Descriptor instead.
 func (*GetPollRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{44}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *GetPollRequest) GetPollId() string {
@@ -3037,7 +3252,7 @@ type PollOption struct {
 
 func (x *PollOption) Reset() {
 	*x = PollOption{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[45]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3049,7 +3264,7 @@ func (x *PollOption) String() string {
 func (*PollOption) ProtoMessage() {}
 
 func (x *PollOption) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[45]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3062,7 +3277,7 @@ func (x *PollOption) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PollOption.ProtoReflect.Descriptor instead.
 func (*PollOption) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{45}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *PollOption) GetId() string {
@@ -3125,7 +3340,7 @@ type Poll struct {
 
 func (x *Poll) Reset() {
 	*x = Poll{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[46]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3137,7 +3352,7 @@ func (x *Poll) String() string {
 func (*Poll) ProtoMessage() {}
 
 func (x *Poll) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[46]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3150,7 +3365,7 @@ func (x *Poll) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Poll.ProtoReflect.Descriptor instead.
 func (*Poll) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{46}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *Poll) GetId() string {
@@ -3267,7 +3482,7 @@ type ClosePollRequest struct {
 
 func (x *ClosePollRequest) Reset() {
 	*x = ClosePollRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[47]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3279,7 +3494,7 @@ func (x *ClosePollRequest) String() string {
 func (*ClosePollRequest) ProtoMessage() {}
 
 func (x *ClosePollRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[47]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3292,7 +3507,7 @@ func (x *ClosePollRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClosePollRequest.ProtoReflect.Descriptor instead.
 func (*ClosePollRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{47}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *ClosePollRequest) GetPollId() string {
@@ -3318,7 +3533,7 @@ type CreateTaskRequest struct {
 
 func (x *CreateTaskRequest) Reset() {
 	*x = CreateTaskRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[48]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3330,7 +3545,7 @@ func (x *CreateTaskRequest) String() string {
 func (*CreateTaskRequest) ProtoMessage() {}
 
 func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[48]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3343,7 +3558,7 @@ func (x *CreateTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateTaskRequest.ProtoReflect.Descriptor instead.
 func (*CreateTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{48}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *CreateTaskRequest) GetChannelId() string {
@@ -3404,7 +3619,7 @@ type UpdateTaskRequest struct {
 
 func (x *UpdateTaskRequest) Reset() {
 	*x = UpdateTaskRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[49]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3416,7 +3631,7 @@ func (x *UpdateTaskRequest) String() string {
 func (*UpdateTaskRequest) ProtoMessage() {}
 
 func (x *UpdateTaskRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[49]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3429,7 +3644,7 @@ func (x *UpdateTaskRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateTaskRequest.ProtoReflect.Descriptor instead.
 func (*UpdateTaskRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{49}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *UpdateTaskRequest) GetTaskId() string {
@@ -3484,7 +3699,7 @@ type ListTasksRequest struct {
 
 func (x *ListTasksRequest) Reset() {
 	*x = ListTasksRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[50]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3496,7 +3711,7 @@ func (x *ListTasksRequest) String() string {
 func (*ListTasksRequest) ProtoMessage() {}
 
 func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[50]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3509,7 +3724,7 @@ func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListTasksRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{50}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *ListTasksRequest) GetChannelId() string {
@@ -3545,7 +3760,7 @@ type ChatTask struct {
 
 func (x *ChatTask) Reset() {
 	*x = ChatTask{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[51]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3557,7 +3772,7 @@ func (x *ChatTask) String() string {
 func (*ChatTask) ProtoMessage() {}
 
 func (x *ChatTask) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[51]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3570,7 +3785,7 @@ func (x *ChatTask) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatTask.ProtoReflect.Descriptor instead.
 func (*ChatTask) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{51}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *ChatTask) GetId() string {
@@ -3659,7 +3874,7 @@ type ChatTaskList struct {
 
 func (x *ChatTaskList) Reset() {
 	*x = ChatTaskList{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[52]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3671,7 +3886,7 @@ func (x *ChatTaskList) String() string {
 func (*ChatTaskList) ProtoMessage() {}
 
 func (x *ChatTaskList) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[52]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3684,7 +3899,7 @@ func (x *ChatTaskList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ChatTaskList.ProtoReflect.Descriptor instead.
 func (*ChatTaskList) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{52}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ChatTaskList) GetTasks() []*ChatTask {
@@ -3711,7 +3926,7 @@ type Notification struct {
 
 func (x *Notification) Reset() {
 	*x = Notification{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[53]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3723,7 +3938,7 @@ func (x *Notification) String() string {
 func (*Notification) ProtoMessage() {}
 
 func (x *Notification) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[53]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3736,7 +3951,7 @@ func (x *Notification) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Notification.ProtoReflect.Descriptor instead.
 func (*Notification) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{53}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *Notification) GetId() string {
@@ -3814,7 +4029,7 @@ type ListNotificationsRequest struct {
 
 func (x *ListNotificationsRequest) Reset() {
 	*x = ListNotificationsRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[54]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3826,7 +4041,7 @@ func (x *ListNotificationsRequest) String() string {
 func (*ListNotificationsRequest) ProtoMessage() {}
 
 func (x *ListNotificationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[54]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3839,7 +4054,7 @@ func (x *ListNotificationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListNotificationsRequest.ProtoReflect.Descriptor instead.
 func (*ListNotificationsRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{54}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{57}
 }
 
 // Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
@@ -3875,7 +4090,7 @@ type NotificationList struct {
 
 func (x *NotificationList) Reset() {
 	*x = NotificationList{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[55]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3887,7 +4102,7 @@ func (x *NotificationList) String() string {
 func (*NotificationList) ProtoMessage() {}
 
 func (x *NotificationList) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[55]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3900,7 +4115,7 @@ func (x *NotificationList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotificationList.ProtoReflect.Descriptor instead.
 func (*NotificationList) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{55}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *NotificationList) GetNotifications() []*Notification {
@@ -3935,7 +4150,7 @@ type MarkNotificationReadRequest struct {
 
 func (x *MarkNotificationReadRequest) Reset() {
 	*x = MarkNotificationReadRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[56]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3947,7 +4162,7 @@ func (x *MarkNotificationReadRequest) String() string {
 func (*MarkNotificationReadRequest) ProtoMessage() {}
 
 func (x *MarkNotificationReadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[56]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3960,7 +4175,7 @@ func (x *MarkNotificationReadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarkNotificationReadRequest.ProtoReflect.Descriptor instead.
 func (*MarkNotificationReadRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{56}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *MarkNotificationReadRequest) GetNotificationId() string {
@@ -3988,7 +4203,7 @@ type MarkAllNotificationsReadRequest struct {
 
 func (x *MarkAllNotificationsReadRequest) Reset() {
 	*x = MarkAllNotificationsReadRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[57]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4000,7 +4215,7 @@ func (x *MarkAllNotificationsReadRequest) String() string {
 func (*MarkAllNotificationsReadRequest) ProtoMessage() {}
 
 func (x *MarkAllNotificationsReadRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[57]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4013,7 +4228,7 @@ func (x *MarkAllNotificationsReadRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarkAllNotificationsReadRequest.ProtoReflect.Descriptor instead.
 func (*MarkAllNotificationsReadRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{57}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{60}
 }
 
 // Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
@@ -4034,7 +4249,7 @@ type GetNotificationUnreadCountRequest struct {
 
 func (x *GetNotificationUnreadCountRequest) Reset() {
 	*x = GetNotificationUnreadCountRequest{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[58]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4046,7 +4261,7 @@ func (x *GetNotificationUnreadCountRequest) String() string {
 func (*GetNotificationUnreadCountRequest) ProtoMessage() {}
 
 func (x *GetNotificationUnreadCountRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[58]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4059,7 +4274,7 @@ func (x *GetNotificationUnreadCountRequest) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use GetNotificationUnreadCountRequest.ProtoReflect.Descriptor instead.
 func (*GetNotificationUnreadCountRequest) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{58}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{61}
 }
 
 // Deprecated: Marked as deprecated in proto/messaging/messaging.proto.
@@ -4079,7 +4294,7 @@ type NotificationUnreadCountResponse struct {
 
 func (x *NotificationUnreadCountResponse) Reset() {
 	*x = NotificationUnreadCountResponse{}
-	mi := &file_proto_messaging_messaging_proto_msgTypes[59]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4091,7 +4306,7 @@ func (x *NotificationUnreadCountResponse) String() string {
 func (*NotificationUnreadCountResponse) ProtoMessage() {}
 
 func (x *NotificationUnreadCountResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_messaging_messaging_proto_msgTypes[59]
+	mi := &file_proto_messaging_messaging_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4104,7 +4319,7 @@ func (x *NotificationUnreadCountResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NotificationUnreadCountResponse.ProtoReflect.Descriptor instead.
 func (*NotificationUnreadCountResponse) Descriptor() ([]byte, []int) {
-	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{59}
+	return file_proto_messaging_messaging_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *NotificationUnreadCountResponse) GetCount() int32 {
@@ -4347,7 +4562,26 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\n" +
 	"starred_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tstarredAt\"I\n" +
 	"\x11ChannelUnreadList\x124\n" +
-	"\bchannels\x18\x01 \x03(\v2\x18.messaging.ChannelUnreadR\bchannels\"\x91\x01\n" +
+	"\bchannels\x18\x01 \x03(\v2\x18.messaging.ChannelUnreadR\bchannels\"\xb9\x02\n" +
+	"\x0fActivityMessage\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1b\n" +
+	"\tsender_id\x18\x02 \x01(\tR\bsenderId\x12\x1f\n" +
+	"\vsender_name\x18\x03 \x01(\tR\n" +
+	"senderName\x12\x18\n" +
+	"\apreview\x18\x04 \x01(\tR\apreview\x12\x12\n" +
+	"\x04kind\x18\x05 \x01(\tR\x04kind\x12'\n" +
+	"\x0fattachment_name\x18\x06 \x01(\tR\x0eattachmentName\x12\x1a\n" +
+	"\bmentions\x18\a \x03(\tR\bmentions\x129\n" +
+	"\n" +
+	"created_at\x18\b \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12*\n" +
+	"\x11parent_message_id\x18\t \x01(\tR\x0fparentMessageId\"\xa8\x01\n" +
+	"\x14ConversationActivity\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\x122\n" +
+	"\x06latest\x18\x02 \x01(\v2\x1a.messaging.ActivityMessageR\x06latest\x12=\n" +
+	"\flatest_reply\x18\x03 \x01(\v2\x1a.messaging.ActivityMessageR\vlatestReply\"W\n" +
+	"\x18ConversationActivityList\x12;\n" +
+	"\bchannels\x18\x01 \x03(\v2\x1f.messaging.ConversationActivityR\bchannels\"\x91\x01\n" +
 	"\x15SearchMessagesRequest\x12\x1d\n" +
 	"\n" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\x12\x14\n" +
@@ -4538,7 +4772,7 @@ func file_proto_messaging_messaging_proto_rawDescGZIP() []byte {
 	return file_proto_messaging_messaging_proto_rawDescData
 }
 
-var file_proto_messaging_messaging_proto_msgTypes = make([]protoimpl.MessageInfo, 60)
+var file_proto_messaging_messaging_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
 var file_proto_messaging_messaging_proto_goTypes = []any{
 	(*Empty)(nil),                             // 0: messaging.Empty
 	(*Channel)(nil),                           // 1: messaging.Channel
@@ -4580,143 +4814,150 @@ var file_proto_messaging_messaging_proto_goTypes = []any{
 	(*GetUnreadCountsRequest)(nil),            // 37: messaging.GetUnreadCountsRequest
 	(*ChannelUnread)(nil),                     // 38: messaging.ChannelUnread
 	(*ChannelUnreadList)(nil),                 // 39: messaging.ChannelUnreadList
-	(*SearchMessagesRequest)(nil),             // 40: messaging.SearchMessagesRequest
-	(*CreatePollRequest)(nil),                 // 41: messaging.CreatePollRequest
-	(*VotePollRequest)(nil),                   // 42: messaging.VotePollRequest
-	(*RemoveVoteRequest)(nil),                 // 43: messaging.RemoveVoteRequest
-	(*GetPollRequest)(nil),                    // 44: messaging.GetPollRequest
-	(*PollOption)(nil),                        // 45: messaging.PollOption
-	(*Poll)(nil),                              // 46: messaging.Poll
-	(*ClosePollRequest)(nil),                  // 47: messaging.ClosePollRequest
-	(*CreateTaskRequest)(nil),                 // 48: messaging.CreateTaskRequest
-	(*UpdateTaskRequest)(nil),                 // 49: messaging.UpdateTaskRequest
-	(*ListTasksRequest)(nil),                  // 50: messaging.ListTasksRequest
-	(*ChatTask)(nil),                          // 51: messaging.ChatTask
-	(*ChatTaskList)(nil),                      // 52: messaging.ChatTaskList
-	(*Notification)(nil),                      // 53: messaging.Notification
-	(*ListNotificationsRequest)(nil),          // 54: messaging.ListNotificationsRequest
-	(*NotificationList)(nil),                  // 55: messaging.NotificationList
-	(*MarkNotificationReadRequest)(nil),       // 56: messaging.MarkNotificationReadRequest
-	(*MarkAllNotificationsReadRequest)(nil),   // 57: messaging.MarkAllNotificationsReadRequest
-	(*GetNotificationUnreadCountRequest)(nil), // 58: messaging.GetNotificationUnreadCountRequest
-	(*NotificationUnreadCountResponse)(nil),   // 59: messaging.NotificationUnreadCountResponse
-	(*timestamppb.Timestamp)(nil),             // 60: google.protobuf.Timestamp
+	(*ActivityMessage)(nil),                   // 40: messaging.ActivityMessage
+	(*ConversationActivity)(nil),              // 41: messaging.ConversationActivity
+	(*ConversationActivityList)(nil),          // 42: messaging.ConversationActivityList
+	(*SearchMessagesRequest)(nil),             // 43: messaging.SearchMessagesRequest
+	(*CreatePollRequest)(nil),                 // 44: messaging.CreatePollRequest
+	(*VotePollRequest)(nil),                   // 45: messaging.VotePollRequest
+	(*RemoveVoteRequest)(nil),                 // 46: messaging.RemoveVoteRequest
+	(*GetPollRequest)(nil),                    // 47: messaging.GetPollRequest
+	(*PollOption)(nil),                        // 48: messaging.PollOption
+	(*Poll)(nil),                              // 49: messaging.Poll
+	(*ClosePollRequest)(nil),                  // 50: messaging.ClosePollRequest
+	(*CreateTaskRequest)(nil),                 // 51: messaging.CreateTaskRequest
+	(*UpdateTaskRequest)(nil),                 // 52: messaging.UpdateTaskRequest
+	(*ListTasksRequest)(nil),                  // 53: messaging.ListTasksRequest
+	(*ChatTask)(nil),                          // 54: messaging.ChatTask
+	(*ChatTaskList)(nil),                      // 55: messaging.ChatTaskList
+	(*Notification)(nil),                      // 56: messaging.Notification
+	(*ListNotificationsRequest)(nil),          // 57: messaging.ListNotificationsRequest
+	(*NotificationList)(nil),                  // 58: messaging.NotificationList
+	(*MarkNotificationReadRequest)(nil),       // 59: messaging.MarkNotificationReadRequest
+	(*MarkAllNotificationsReadRequest)(nil),   // 60: messaging.MarkAllNotificationsReadRequest
+	(*GetNotificationUnreadCountRequest)(nil), // 61: messaging.GetNotificationUnreadCountRequest
+	(*NotificationUnreadCountResponse)(nil),   // 62: messaging.NotificationUnreadCountResponse
+	(*timestamppb.Timestamp)(nil),             // 63: google.protobuf.Timestamp
 }
 var file_proto_messaging_messaging_proto_depIdxs = []int32{
-	60, // 0: messaging.Channel.created_at:type_name -> google.protobuf.Timestamp
+	63, // 0: messaging.Channel.created_at:type_name -> google.protobuf.Timestamp
 	1,  // 1: messaging.ChannelList.channels:type_name -> messaging.Channel
 	9,  // 2: messaging.ChannelMemberList.members:type_name -> messaging.ChannelMember
 	16, // 3: messaging.SendMessageRequest.attachments:type_name -> messaging.MessageAttachment
-	60, // 4: messaging.Message.created_at:type_name -> google.protobuf.Timestamp
+	63, // 4: messaging.Message.created_at:type_name -> google.protobuf.Timestamp
 	29, // 5: messaging.Message.reactions:type_name -> messaging.ReactionGroup
-	60, // 6: messaging.Message.last_reply_at:type_name -> google.protobuf.Timestamp
+	63, // 6: messaging.Message.last_reply_at:type_name -> google.protobuf.Timestamp
 	16, // 7: messaging.Message.attachments:type_name -> messaging.MessageAttachment
-	60, // 8: messaging.Message.edited_at:type_name -> google.protobuf.Timestamp
+	63, // 8: messaging.Message.edited_at:type_name -> google.protobuf.Timestamp
 	13, // 9: messaging.Message.quoted:type_name -> messaging.QuotedMessage
-	60, // 10: messaging.Message.starred_at:type_name -> google.protobuf.Timestamp
+	63, // 10: messaging.Message.starred_at:type_name -> google.protobuf.Timestamp
 	12, // 11: messaging.MessageList.messages:type_name -> messaging.Message
-	60, // 12: messaging.Reaction.created_at:type_name -> google.protobuf.Timestamp
+	63, // 12: messaging.Reaction.created_at:type_name -> google.protobuf.Timestamp
 	28, // 13: messaging.ReactionList.reactions:type_name -> messaging.Reaction
 	12, // 14: messaging.PinnedMessage.message:type_name -> messaging.Message
-	60, // 15: messaging.PinnedMessage.pinned_at:type_name -> google.protobuf.Timestamp
+	63, // 15: messaging.PinnedMessage.pinned_at:type_name -> google.protobuf.Timestamp
 	34, // 16: messaging.PinnedMessageList.pins:type_name -> messaging.PinnedMessage
-	60, // 17: messaging.ChannelUnread.starred_at:type_name -> google.protobuf.Timestamp
+	63, // 17: messaging.ChannelUnread.starred_at:type_name -> google.protobuf.Timestamp
 	38, // 18: messaging.ChannelUnreadList.channels:type_name -> messaging.ChannelUnread
-	60, // 19: messaging.CreatePollRequest.ends_at:type_name -> google.protobuf.Timestamp
-	45, // 20: messaging.Poll.options:type_name -> messaging.PollOption
-	60, // 21: messaging.Poll.ends_at:type_name -> google.protobuf.Timestamp
-	60, // 22: messaging.Poll.created_at:type_name -> google.protobuf.Timestamp
-	60, // 23: messaging.Poll.closed_at:type_name -> google.protobuf.Timestamp
-	60, // 24: messaging.ChatTask.created_at:type_name -> google.protobuf.Timestamp
-	60, // 25: messaging.ChatTask.updated_at:type_name -> google.protobuf.Timestamp
-	51, // 26: messaging.ChatTaskList.tasks:type_name -> messaging.ChatTask
-	60, // 27: messaging.Notification.created_at:type_name -> google.protobuf.Timestamp
-	53, // 28: messaging.NotificationList.notifications:type_name -> messaging.Notification
-	2,  // 29: messaging.MessagingService.CreateChannel:input_type -> messaging.CreateChannelRequest
-	3,  // 30: messaging.MessagingService.ListChannels:input_type -> messaging.ListChannelsRequest
-	4,  // 31: messaging.MessagingService.GetChannel:input_type -> messaging.GetChannelRequest
-	6,  // 32: messaging.MessagingService.AddChannelMember:input_type -> messaging.AddChannelMemberRequest
-	7,  // 33: messaging.MessagingService.RemoveChannelMember:input_type -> messaging.RemoveChannelMemberRequest
-	8,  // 34: messaging.MessagingService.ListChannelMembers:input_type -> messaging.ListChannelMembersRequest
-	11, // 35: messaging.MessagingService.SendMessage:input_type -> messaging.SendMessageRequest
-	17, // 36: messaging.MessagingService.GetMessages:input_type -> messaging.GetMessagesRequest
-	21, // 37: messaging.MessagingService.GetThread:input_type -> messaging.GetThreadRequest
-	22, // 38: messaging.MessagingService.FindThreadsByEntity:input_type -> messaging.FindThreadsByEntityRequest
-	19, // 39: messaging.MessagingService.FollowThread:input_type -> messaging.ThreadRequest
-	19, // 40: messaging.MessagingService.UnfollowThread:input_type -> messaging.ThreadRequest
-	19, // 41: messaging.MessagingService.MarkThreadRead:input_type -> messaging.ThreadRequest
-	20, // 42: messaging.MessagingService.ListThreads:input_type -> messaging.ListThreadsRequest
-	15, // 43: messaging.MessagingService.EditMessage:input_type -> messaging.EditMessageRequest
-	14, // 44: messaging.MessagingService.DeleteMessage:input_type -> messaging.MessageRef
-	14, // 45: messaging.MessagingService.MarkMessageUnread:input_type -> messaging.MessageRef
-	23, // 46: messaging.MessagingService.CreateDM:input_type -> messaging.CreateDMRequest
-	24, // 47: messaging.MessagingService.ListDMs:input_type -> messaging.ListDMsRequest
-	25, // 48: messaging.MessagingService.AddReaction:input_type -> messaging.AddReactionRequest
-	26, // 49: messaging.MessagingService.RemoveReaction:input_type -> messaging.RemoveReactionRequest
-	27, // 50: messaging.MessagingService.ListReactions:input_type -> messaging.ListReactionsRequest
-	31, // 51: messaging.MessagingService.PinMessage:input_type -> messaging.PinMessageRequest
-	32, // 52: messaging.MessagingService.UnpinMessage:input_type -> messaging.UnpinMessageRequest
-	33, // 53: messaging.MessagingService.ListPins:input_type -> messaging.ListPinsRequest
-	36, // 54: messaging.MessagingService.MarkChannelRead:input_type -> messaging.MarkChannelReadRequest
-	37, // 55: messaging.MessagingService.GetUnreadCounts:input_type -> messaging.GetUnreadCountsRequest
-	40, // 56: messaging.MessagingService.SearchMessages:input_type -> messaging.SearchMessagesRequest
-	41, // 57: messaging.MessagingService.CreatePoll:input_type -> messaging.CreatePollRequest
-	42, // 58: messaging.MessagingService.VotePoll:input_type -> messaging.VotePollRequest
-	43, // 59: messaging.MessagingService.RemoveVote:input_type -> messaging.RemoveVoteRequest
-	44, // 60: messaging.MessagingService.GetPoll:input_type -> messaging.GetPollRequest
-	47, // 61: messaging.MessagingService.ClosePoll:input_type -> messaging.ClosePollRequest
-	48, // 62: messaging.MessagingService.CreateTask:input_type -> messaging.CreateTaskRequest
-	49, // 63: messaging.MessagingService.UpdateTask:input_type -> messaging.UpdateTaskRequest
-	50, // 64: messaging.MessagingService.ListTasks:input_type -> messaging.ListTasksRequest
-	54, // 65: messaging.NotificationService.ListNotifications:input_type -> messaging.ListNotificationsRequest
-	56, // 66: messaging.NotificationService.MarkRead:input_type -> messaging.MarkNotificationReadRequest
-	57, // 67: messaging.NotificationService.MarkAllRead:input_type -> messaging.MarkAllNotificationsReadRequest
-	58, // 68: messaging.NotificationService.GetUnreadCount:input_type -> messaging.GetNotificationUnreadCountRequest
-	1,  // 69: messaging.MessagingService.CreateChannel:output_type -> messaging.Channel
-	5,  // 70: messaging.MessagingService.ListChannels:output_type -> messaging.ChannelList
-	1,  // 71: messaging.MessagingService.GetChannel:output_type -> messaging.Channel
-	0,  // 72: messaging.MessagingService.AddChannelMember:output_type -> messaging.Empty
-	0,  // 73: messaging.MessagingService.RemoveChannelMember:output_type -> messaging.Empty
-	10, // 74: messaging.MessagingService.ListChannelMembers:output_type -> messaging.ChannelMemberList
-	12, // 75: messaging.MessagingService.SendMessage:output_type -> messaging.Message
-	18, // 76: messaging.MessagingService.GetMessages:output_type -> messaging.MessageList
-	18, // 77: messaging.MessagingService.GetThread:output_type -> messaging.MessageList
-	18, // 78: messaging.MessagingService.FindThreadsByEntity:output_type -> messaging.MessageList
-	0,  // 79: messaging.MessagingService.FollowThread:output_type -> messaging.Empty
-	0,  // 80: messaging.MessagingService.UnfollowThread:output_type -> messaging.Empty
-	0,  // 81: messaging.MessagingService.MarkThreadRead:output_type -> messaging.Empty
-	18, // 82: messaging.MessagingService.ListThreads:output_type -> messaging.MessageList
-	12, // 83: messaging.MessagingService.EditMessage:output_type -> messaging.Message
-	0,  // 84: messaging.MessagingService.DeleteMessage:output_type -> messaging.Empty
-	0,  // 85: messaging.MessagingService.MarkMessageUnread:output_type -> messaging.Empty
-	1,  // 86: messaging.MessagingService.CreateDM:output_type -> messaging.Channel
-	5,  // 87: messaging.MessagingService.ListDMs:output_type -> messaging.ChannelList
-	0,  // 88: messaging.MessagingService.AddReaction:output_type -> messaging.Empty
-	0,  // 89: messaging.MessagingService.RemoveReaction:output_type -> messaging.Empty
-	30, // 90: messaging.MessagingService.ListReactions:output_type -> messaging.ReactionList
-	0,  // 91: messaging.MessagingService.PinMessage:output_type -> messaging.Empty
-	0,  // 92: messaging.MessagingService.UnpinMessage:output_type -> messaging.Empty
-	35, // 93: messaging.MessagingService.ListPins:output_type -> messaging.PinnedMessageList
-	0,  // 94: messaging.MessagingService.MarkChannelRead:output_type -> messaging.Empty
-	39, // 95: messaging.MessagingService.GetUnreadCounts:output_type -> messaging.ChannelUnreadList
-	18, // 96: messaging.MessagingService.SearchMessages:output_type -> messaging.MessageList
-	46, // 97: messaging.MessagingService.CreatePoll:output_type -> messaging.Poll
-	0,  // 98: messaging.MessagingService.VotePoll:output_type -> messaging.Empty
-	0,  // 99: messaging.MessagingService.RemoveVote:output_type -> messaging.Empty
-	46, // 100: messaging.MessagingService.GetPoll:output_type -> messaging.Poll
-	46, // 101: messaging.MessagingService.ClosePoll:output_type -> messaging.Poll
-	51, // 102: messaging.MessagingService.CreateTask:output_type -> messaging.ChatTask
-	51, // 103: messaging.MessagingService.UpdateTask:output_type -> messaging.ChatTask
-	52, // 104: messaging.MessagingService.ListTasks:output_type -> messaging.ChatTaskList
-	55, // 105: messaging.NotificationService.ListNotifications:output_type -> messaging.NotificationList
-	0,  // 106: messaging.NotificationService.MarkRead:output_type -> messaging.Empty
-	0,  // 107: messaging.NotificationService.MarkAllRead:output_type -> messaging.Empty
-	59, // 108: messaging.NotificationService.GetUnreadCount:output_type -> messaging.NotificationUnreadCountResponse
-	69, // [69:109] is the sub-list for method output_type
-	29, // [29:69] is the sub-list for method input_type
-	29, // [29:29] is the sub-list for extension type_name
-	29, // [29:29] is the sub-list for extension extendee
-	0,  // [0:29] is the sub-list for field type_name
+	63, // 19: messaging.ActivityMessage.created_at:type_name -> google.protobuf.Timestamp
+	40, // 20: messaging.ConversationActivity.latest:type_name -> messaging.ActivityMessage
+	40, // 21: messaging.ConversationActivity.latest_reply:type_name -> messaging.ActivityMessage
+	41, // 22: messaging.ConversationActivityList.channels:type_name -> messaging.ConversationActivity
+	63, // 23: messaging.CreatePollRequest.ends_at:type_name -> google.protobuf.Timestamp
+	48, // 24: messaging.Poll.options:type_name -> messaging.PollOption
+	63, // 25: messaging.Poll.ends_at:type_name -> google.protobuf.Timestamp
+	63, // 26: messaging.Poll.created_at:type_name -> google.protobuf.Timestamp
+	63, // 27: messaging.Poll.closed_at:type_name -> google.protobuf.Timestamp
+	63, // 28: messaging.ChatTask.created_at:type_name -> google.protobuf.Timestamp
+	63, // 29: messaging.ChatTask.updated_at:type_name -> google.protobuf.Timestamp
+	54, // 30: messaging.ChatTaskList.tasks:type_name -> messaging.ChatTask
+	63, // 31: messaging.Notification.created_at:type_name -> google.protobuf.Timestamp
+	56, // 32: messaging.NotificationList.notifications:type_name -> messaging.Notification
+	2,  // 33: messaging.MessagingService.CreateChannel:input_type -> messaging.CreateChannelRequest
+	3,  // 34: messaging.MessagingService.ListChannels:input_type -> messaging.ListChannelsRequest
+	4,  // 35: messaging.MessagingService.GetChannel:input_type -> messaging.GetChannelRequest
+	6,  // 36: messaging.MessagingService.AddChannelMember:input_type -> messaging.AddChannelMemberRequest
+	7,  // 37: messaging.MessagingService.RemoveChannelMember:input_type -> messaging.RemoveChannelMemberRequest
+	8,  // 38: messaging.MessagingService.ListChannelMembers:input_type -> messaging.ListChannelMembersRequest
+	11, // 39: messaging.MessagingService.SendMessage:input_type -> messaging.SendMessageRequest
+	17, // 40: messaging.MessagingService.GetMessages:input_type -> messaging.GetMessagesRequest
+	21, // 41: messaging.MessagingService.GetThread:input_type -> messaging.GetThreadRequest
+	22, // 42: messaging.MessagingService.FindThreadsByEntity:input_type -> messaging.FindThreadsByEntityRequest
+	19, // 43: messaging.MessagingService.FollowThread:input_type -> messaging.ThreadRequest
+	19, // 44: messaging.MessagingService.UnfollowThread:input_type -> messaging.ThreadRequest
+	19, // 45: messaging.MessagingService.MarkThreadRead:input_type -> messaging.ThreadRequest
+	20, // 46: messaging.MessagingService.ListThreads:input_type -> messaging.ListThreadsRequest
+	15, // 47: messaging.MessagingService.EditMessage:input_type -> messaging.EditMessageRequest
+	14, // 48: messaging.MessagingService.DeleteMessage:input_type -> messaging.MessageRef
+	14, // 49: messaging.MessagingService.MarkMessageUnread:input_type -> messaging.MessageRef
+	23, // 50: messaging.MessagingService.CreateDM:input_type -> messaging.CreateDMRequest
+	24, // 51: messaging.MessagingService.ListDMs:input_type -> messaging.ListDMsRequest
+	25, // 52: messaging.MessagingService.AddReaction:input_type -> messaging.AddReactionRequest
+	26, // 53: messaging.MessagingService.RemoveReaction:input_type -> messaging.RemoveReactionRequest
+	27, // 54: messaging.MessagingService.ListReactions:input_type -> messaging.ListReactionsRequest
+	31, // 55: messaging.MessagingService.PinMessage:input_type -> messaging.PinMessageRequest
+	32, // 56: messaging.MessagingService.UnpinMessage:input_type -> messaging.UnpinMessageRequest
+	33, // 57: messaging.MessagingService.ListPins:input_type -> messaging.ListPinsRequest
+	36, // 58: messaging.MessagingService.MarkChannelRead:input_type -> messaging.MarkChannelReadRequest
+	37, // 59: messaging.MessagingService.GetUnreadCounts:input_type -> messaging.GetUnreadCountsRequest
+	43, // 60: messaging.MessagingService.SearchMessages:input_type -> messaging.SearchMessagesRequest
+	44, // 61: messaging.MessagingService.CreatePoll:input_type -> messaging.CreatePollRequest
+	45, // 62: messaging.MessagingService.VotePoll:input_type -> messaging.VotePollRequest
+	46, // 63: messaging.MessagingService.RemoveVote:input_type -> messaging.RemoveVoteRequest
+	47, // 64: messaging.MessagingService.GetPoll:input_type -> messaging.GetPollRequest
+	50, // 65: messaging.MessagingService.ClosePoll:input_type -> messaging.ClosePollRequest
+	51, // 66: messaging.MessagingService.CreateTask:input_type -> messaging.CreateTaskRequest
+	52, // 67: messaging.MessagingService.UpdateTask:input_type -> messaging.UpdateTaskRequest
+	53, // 68: messaging.MessagingService.ListTasks:input_type -> messaging.ListTasksRequest
+	57, // 69: messaging.NotificationService.ListNotifications:input_type -> messaging.ListNotificationsRequest
+	59, // 70: messaging.NotificationService.MarkRead:input_type -> messaging.MarkNotificationReadRequest
+	60, // 71: messaging.NotificationService.MarkAllRead:input_type -> messaging.MarkAllNotificationsReadRequest
+	61, // 72: messaging.NotificationService.GetUnreadCount:input_type -> messaging.GetNotificationUnreadCountRequest
+	1,  // 73: messaging.MessagingService.CreateChannel:output_type -> messaging.Channel
+	5,  // 74: messaging.MessagingService.ListChannels:output_type -> messaging.ChannelList
+	1,  // 75: messaging.MessagingService.GetChannel:output_type -> messaging.Channel
+	0,  // 76: messaging.MessagingService.AddChannelMember:output_type -> messaging.Empty
+	0,  // 77: messaging.MessagingService.RemoveChannelMember:output_type -> messaging.Empty
+	10, // 78: messaging.MessagingService.ListChannelMembers:output_type -> messaging.ChannelMemberList
+	12, // 79: messaging.MessagingService.SendMessage:output_type -> messaging.Message
+	18, // 80: messaging.MessagingService.GetMessages:output_type -> messaging.MessageList
+	18, // 81: messaging.MessagingService.GetThread:output_type -> messaging.MessageList
+	18, // 82: messaging.MessagingService.FindThreadsByEntity:output_type -> messaging.MessageList
+	0,  // 83: messaging.MessagingService.FollowThread:output_type -> messaging.Empty
+	0,  // 84: messaging.MessagingService.UnfollowThread:output_type -> messaging.Empty
+	0,  // 85: messaging.MessagingService.MarkThreadRead:output_type -> messaging.Empty
+	18, // 86: messaging.MessagingService.ListThreads:output_type -> messaging.MessageList
+	12, // 87: messaging.MessagingService.EditMessage:output_type -> messaging.Message
+	0,  // 88: messaging.MessagingService.DeleteMessage:output_type -> messaging.Empty
+	0,  // 89: messaging.MessagingService.MarkMessageUnread:output_type -> messaging.Empty
+	1,  // 90: messaging.MessagingService.CreateDM:output_type -> messaging.Channel
+	5,  // 91: messaging.MessagingService.ListDMs:output_type -> messaging.ChannelList
+	0,  // 92: messaging.MessagingService.AddReaction:output_type -> messaging.Empty
+	0,  // 93: messaging.MessagingService.RemoveReaction:output_type -> messaging.Empty
+	30, // 94: messaging.MessagingService.ListReactions:output_type -> messaging.ReactionList
+	0,  // 95: messaging.MessagingService.PinMessage:output_type -> messaging.Empty
+	0,  // 96: messaging.MessagingService.UnpinMessage:output_type -> messaging.Empty
+	35, // 97: messaging.MessagingService.ListPins:output_type -> messaging.PinnedMessageList
+	0,  // 98: messaging.MessagingService.MarkChannelRead:output_type -> messaging.Empty
+	39, // 99: messaging.MessagingService.GetUnreadCounts:output_type -> messaging.ChannelUnreadList
+	18, // 100: messaging.MessagingService.SearchMessages:output_type -> messaging.MessageList
+	49, // 101: messaging.MessagingService.CreatePoll:output_type -> messaging.Poll
+	0,  // 102: messaging.MessagingService.VotePoll:output_type -> messaging.Empty
+	0,  // 103: messaging.MessagingService.RemoveVote:output_type -> messaging.Empty
+	49, // 104: messaging.MessagingService.GetPoll:output_type -> messaging.Poll
+	49, // 105: messaging.MessagingService.ClosePoll:output_type -> messaging.Poll
+	54, // 106: messaging.MessagingService.CreateTask:output_type -> messaging.ChatTask
+	54, // 107: messaging.MessagingService.UpdateTask:output_type -> messaging.ChatTask
+	55, // 108: messaging.MessagingService.ListTasks:output_type -> messaging.ChatTaskList
+	58, // 109: messaging.NotificationService.ListNotifications:output_type -> messaging.NotificationList
+	0,  // 110: messaging.NotificationService.MarkRead:output_type -> messaging.Empty
+	0,  // 111: messaging.NotificationService.MarkAllRead:output_type -> messaging.Empty
+	62, // 112: messaging.NotificationService.GetUnreadCount:output_type -> messaging.NotificationUnreadCountResponse
+	73, // [73:113] is the sub-list for method output_type
+	33, // [33:73] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_proto_messaging_messaging_proto_init() }
@@ -4730,7 +4971,7 @@ func file_proto_messaging_messaging_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_messaging_messaging_proto_rawDesc), len(file_proto_messaging_messaging_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   60,
+			NumMessages:   63,
 			NumExtensions: 0,
 			NumServices:   2,
 		},

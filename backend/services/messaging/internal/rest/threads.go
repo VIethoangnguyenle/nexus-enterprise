@@ -105,3 +105,23 @@ func (h *Handler) UnreadThreads(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, list)
 }
+
+// FollowedThreads handles GET /api/threads/followed?limit=&before=&before_id=:
+// the threads the caller follows across the conversations they read in the
+// workspace they are signed in to, most recently active first.
+func (h *Handler) FollowedThreads(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	limit, err := intQuery(c, "limit")
+	if err != nil {
+		return err
+	}
+	list, err := h.svc.FollowedThreads(c.Request().Context(), claims.UserID, claims.NGACNodeID, claims.TenantID,
+		c.QueryParam("before"), c.QueryParam("before_id"), limit)
+	if err != nil {
+		return httputil.MapDomainError(err)
+	}
+	return c.JSON(http.StatusOK, list)
+}

@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "API tóm tắt hoạt động theo cuộc trò chuyện"
-status: pending
+status: completed
 priority: P0
 effort: "1-1.5d"
 dependencies: [1]
@@ -58,10 +58,17 @@ transport (`rest/`) → domain `Service.ConversationActivity(ctx, userID, userNo
 5. Spec `chat-activity-feed` (Requirements + Scenarios, có scenario deny).
 
 ## Success Criteria
-- [ ] `make test s=messaging` xanh, có test deny; `make check-layering`, `make check-ngac`, `make build-check` xanh.
+- [x] `make test s=messaging` xanh, có test deny; `make check-layering`, `make check-ngac`, `make build-check` xanh.
 - [ ] Trên stack thật: gọi endpoint với 2 người, gỡ một người khỏi nhóm → nhóm biến mất khỏi kết quả của người đó.
-- [ ] `EXPLAIN ANALYZE` ghi vào report, dùng index.
-- [ ] Proto sinh cả Go và TS.
+- [x] `EXPLAIN ANALYZE` ghi vào report, dùng index.
+- [x] Proto sinh cả Go và TS.
+
+## Kết quả
+- `DISTINCT ON` đo trên 300k tin: 3 s (đọc + sắp xếp mọi tin, kể cả khi có index một phần). Thay bằng `unnest + LATERAL ... LIMIT 1`
+  (vẫn một câu lệnh cho mọi kênh) + migration `050_messages_latest_per_channel.sql` (hai index một phần): 37 ms.
+  Chi tiết: `plans/reports/activity-api-explain-261013.md`.
+- `npm run proto:gen` chỉ sinh `ws.proto`; kiểu REST của `messaging.proto` viết tay trong `frontend/src/api/messaging.ts`.
+- Chưa kiểm trên stack thật bằng 2 người (chưa chạy `make dev`); test deny Go (domain + REST) phủ cùng đường `readableChannelIDs`.
 
 ## Risk Assessment
 - Nhiều kênh (hàng trăm) → `DISTINCT ON` vẫn một lần quét theo index; nếu > 50ms ở dữ liệu thật thì thêm index một phần
