@@ -102,7 +102,7 @@ func TestPush_MentionAndTheDenyCases(t *testing.T) {
 	w.send(t, "hello", stranger)
 	assert.Len(t, w.sender.all(), 1, "no read on the channel, no push")
 
-	// A plain group message concerns nobody in particular.
+	// Deny: a plain group message reaches members only, and the stranger is none.
 	w.send(t, "không nhắc ai")
 	assert.Len(t, w.sender.all(), 1)
 
@@ -239,27 +239,59 @@ func TestPush_MentionsAreBounded(t *testing.T) {
 	assert.Len(t, w.sender.all(), domain.MaxMentionPushes)
 }
 
-// The notification level shapes push: "all" pushes every message of a group,
-// "off" silences it except when the person is mentioned, and a direct message
-// is only on or off.
+// The notification level shapes push: by default every main message of a group
+// reaches its members, "all" adds every reply, "off" silences it except when the
+// person is mentioned, and a direct message is only on or off.
 func TestPush_FollowsTheNotificationLevel(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("all: every message of the group", func(t *testing.T) {
+	t.Run("a group pushes every main message to its members; replies only under all", func(t *testing.T) {
 		w := newPushWorld(t, false)
-		_, err := w.f.pool.Exec(ctx, `INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2)`, w.chID, w.otherNode)
-		require.NoError(t, err)
-		t.Cleanup(func() { w.f.pool.Exec(ctx, `DELETE FROM channel_members WHERE channel_id = $1`, w.chID) })
-
-		w.send(t, "tin thường")
-		assert.Empty(t, w.sender.all(), "by default a plain group message pushes nobody")
-
-		require.NoError(t, w.f.svc.SetNotificationLevel(ctx, w.chID, w.other, w.otherNode, domain.NotifyAll))
 		domain.SetPushWindowForTest(w.f.svc, time.Millisecond)
-		w.send(t, "tin thường nữa")
+		join := func(node string) {
+			_, err := w.f.pool.Exec(ctx, `INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2)`, w.chID, node)
+			require.NoError(t, err)
+		}
+		t.Cleanup(func() { w.f.pool.Exec(ctx, `DELETE FROM channel_members WHERE channel_id = $1`, w.chID) })
+		join("u-" + w.f.userID)
+		join(w.otherNode)
+		muted, mutedNode := testutil.CreateUser(t, w.f.pool)
+		w.f.read.allow[grant{mutedNode, w.oaID, ngac.OpRead}] = true
+		join(mutedNode)
+		require.NoError(t, w.f.svc.SetNotificationLevel(ctx, w.chID, muted, mutedNode, domain.NotifyOff))
+		_, removedNode := testutil.CreateUser(t, w.f.pool)
+		join(removedNode) // still listed, but no longer reads the group
+		watching, watchingNode := testutil.CreateUser(t, w.f.pool)
+		w.f.read.allow[grant{watchingNode, w.oaID, ngac.OpRead}] = true
+		join(watchingNode)
+		w.view[watching+"/"+w.chID] = true
+
+		root := w.send(t, "tin thường")
 		sent := w.sender.all()
-		require.Len(t, sent, 1)
+		require.Len(t, sent, 1, "not the sender, the muted, the removed nor the one looking at it")
 		assert.Equal(t, []string{w.other}, sent[0].ExternalIDs)
+		assert.Equal(t, "/channels/"+w.chID, sent[0].URL)
+
+		// A reply in a thread the member does not follow is not pushed by default...
+		_, err := w.f.svc.SendMessage(ctx, domain.SendMessageInput{
+			ChannelID: w.chID, SenderID: w.f.userID, SenderNodeID: userNode, Content: "trả lời", ParentMessageID: root,
+		})
+		require.NoError(t, err)
+		reply := func() {
+			msg, err := w.f.svc.SendMessage(ctx, domain.SendMessageInput{
+				ChannelID: w.chID, SenderID: w.f.userID, SenderNodeID: userNode, Content: "trả lời nữa", ParentMessageID: root,
+			})
+			require.NoError(t, err)
+			w.f.svc.PushForMessage(ctx, msg)
+		}
+		reply()
+		assert.Len(t, w.sender.all(), 1)
+
+		// ...but under "all" every reply is.
+		require.NoError(t, w.f.svc.SetNotificationLevel(ctx, w.chID, w.other, w.otherNode, domain.NotifyAll))
+		reply()
+		require.Len(t, w.sender.all(), 2)
+		assert.Equal(t, []string{w.other}, w.sender.all()[1].ExternalIDs)
 	})
 
 	t.Run("off: only a mention gets through", func(t *testing.T) {
