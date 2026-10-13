@@ -7,9 +7,10 @@ import { getOneSignalAppId } from './push'
  * source modules and the proxy table, and a worker would sit in front of both.
  * A failed registration leaves the app working as a plain web page.
  *
- * When OneSignal is configured it registers `/sw.js?appId=…&sdkVersion=…` itself,
- * so we must NOT call registerSW (which registers `/sw.js` — a different URL for the
- * same scope, causing an update loop on every load). Instead we attach to the
+ * When OneSignal is configured it registers the worker itself, at the URL its dashboard
+ * names (`/OneSignalSDKWorker.js?appId=…`, which imports `/sw.js`), so we must NOT call
+ * registerSW (which registers `/sw.js` — a different URL for the same scope, causing an
+ * update loop on every load). Instead we attach to the
  * existing registration and listen for updatefound / waiting worker so that the
  * "Có bản mới" update bar still works.
  */

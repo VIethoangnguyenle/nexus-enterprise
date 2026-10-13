@@ -64,6 +64,12 @@ Invalid hours or an unknown time zone are refused (400).
 Settings › Notifications shows a per-device push switch whose state is read from the OneSignal SDK. The SDK is
 initialised at most once per page; a caller that stops waiting (20 s) leaves that init running and a later call
 receives its result. Turning the switch on while permission is undecided asks for permission inside the same tap.
+The worker OneSignal registers is `/OneSignalSDKWorker.js`, which runs the app worker (`/sw.js`); both are served
+`no-cache`, so a device gets one worker for the offline shell and for push.
+
+#### Scenario: Turning push on
+- **WHEN** a person turns the switch on and allows notifications
+- **THEN** the worker registers and the device is subscribed on OneSignal
 
 #### Scenario: The notification service cannot be reached
 - **WHEN** the SDK fails to load or does not finish starting while the switch is being read
