@@ -30,7 +30,8 @@ const (
 	PushDirect      PushKind = "direct"
 	PushMention     PushKind = "mention"
 	PushThreadReply PushKind = "thread_reply"
-	// PushEveryMessage: the person set the group to "all".
+	// PushEveryMessage: a main message of a group the person is a member of,
+	// or any reply in a group they set to "all".
 	PushEveryMessage PushKind = "message"
 )
 
@@ -156,9 +157,16 @@ func (s *Service) recipients(ctx context.Context, msg *pb.Message, mentions []st
 		}
 		add(ps, PushMention)
 	}
-	// "all" on a group: every message concerns the people who chose it.
+	// A group: every main message concerns its members ("off" is dropped
+	// below); a reply concerns only the people who chose "all", beside the
+	// thread's followers above.
 	if ch.ChannelType != "dm" && !mentionsOnly {
-		ps, err := s.store.PeopleWithLevel(ctx, ch.ID, NotifyAll)
+		var ps []store.Person
+		if msg.ParentMessageId == "" {
+			ps, err = s.store.ChannelPeople(ctx, ch.ID)
+		} else {
+			ps, err = s.store.PeopleWithLevel(ctx, ch.ID, NotifyAll)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -223,7 +231,7 @@ func wants(p store.PushPreferences, k PushKind) bool {
 	case PushThreadReply:
 		return p.ThreadReply
 	default:
-		// "all" was chosen for this very conversation: that choice is the wish.
+		// The level of this very conversation decides; "off" is the way out.
 		return true
 	}
 }
