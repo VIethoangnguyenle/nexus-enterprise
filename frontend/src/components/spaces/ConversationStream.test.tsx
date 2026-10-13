@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { MotionGlobalConfig } from 'motion/react'
 import { renderWithClient, resetClient } from '../../test/render'
 import { buildDirectory } from '../../lib/people'
 import { expectNoIds } from '../../test/no-ids'
@@ -624,16 +625,18 @@ describe('ConversationStream: edit, delete and mark unread', () => {
 
   it('runs a sheet action once and closes the sheet', () => {
     fakeAllTimers()
+    // The sheet leaves through an exit animation driven by the animation frame
+    // loop, which a loaded machine does not run to the end in time under fake
+    // timers. What is under test is that the sheet goes, not how it moves.
+    MotionGlobalConfig.skipAnimations = true
+    onTestFinished(() => { MotionGlobalConfig.skipAnimations = false })
     const askDelete = vi.fn()
     renderWithClient(stream([mineMsg()], { lifecycle: lifecycleStub({ askDelete }) }))
     fireEvent.pointerDown(within(article(/Bạn/)).getByText('Tin của tôi'), { pointerType: 'touch', clientX: 1, clientY: 1 })
     act(() => { vi.advanceTimersByTime(401) })
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Thao tác với tin' })).getByRole('button', { name: 'Xoá tin' }))
     expect(askDelete).toHaveBeenCalledTimes(1)
-    // The sheet closes after its exit animation. Run its timers, then allow the
-    // wall clock enough room for a busy machine (the default second is not).
-    act(() => { vi.advanceTimersByTime(1000) })
-    return vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thao tác với tin' })).toBeNull(), { timeout: 5000 })
+    return vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thao tác với tin' })).toBeNull())
   })
 
   it('edits in place on a wide screen: the bubble becomes the editor', () => {
