@@ -16,7 +16,7 @@ import { queryClient } from '../../lib/query-client'
 import { keys } from '../../hooks/keys'
 import { useToastStore } from '../primitives'
 import { AppSidebar } from '../patterns/AppSidebar'
-import { MobileNav } from '../patterns/MobileNav'
+import { PhoneSearchBar } from '../patterns/PhoneSearchBar'
 import { SettingsScreen } from './SettingsScreen'
 
 vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn() }))
@@ -97,7 +97,7 @@ function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
 
 async function renderSettings(url = '/settings', { withNav = false } = {}) {
   const root = createRootRoute(withNav
-    ? { component: () => (<><AppSidebar workspaceName={details.name} /><MobileNav /><Outlet /></>) }
+    ? { component: () => (<><AppSidebar workspaceName={details.name} /><PhoneSearchBar scope={null} /><Outlet /></>) }
     : undefined)
   const settings = createRoute({ getParentRoute: () => root, path: '/settings', validateSearch: validateSettingsSearch, component: SettingsScreen })
   const admin = createRoute({ getParentRoute: () => root, path: '/admin', component: () => <p>Quản trị</p> })
@@ -708,11 +708,15 @@ describe('SettingsScreen: Loại workspace và chuyển đổi', () => {
       await renderSettings('/settings?tab=workspace', { withNav: true })
 
       const sidebar = await screen.findByRole('navigation', { name: 'Điều hướng chính' })
-      const phoneBar = await screen.findByRole('navigation', { name: 'Điều hướng di động' })
       await within(sidebar).findByRole('link', { name: 'Danh bạ' })
       expect(within(sidebar).queryByRole('link', { name: 'Phê duyệt' })).toBeNull()
       expect(within(sidebar).queryByRole('link', { name: 'Tài sản' })).toBeNull()
-      expect(within(phoneBar).queryByRole('link', { name: 'Phê duyệt' })).toBeNull()
+      await user.click(await screen.findByRole('button', { name: /Mở menu chính/ }))
+      const menu = await screen.findByRole('dialog', { name: 'Menu chính' })
+      expect(within(menu).queryByRole('link', { name: /Phê duyệt/ })).toBeNull()
+      expect(within(menu).queryByRole('link', { name: /Tài sản/ })).toBeNull()
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Menu chính' })).toBeNull())
 
       await user.click(await screen.findByRole('button', { name: 'Chuyển thành workspace tổ chức' }))
       const dialog = await screen.findByRole('alertdialog')
@@ -721,10 +725,10 @@ describe('SettingsScreen: Loại workspace và chuyển đổi', () => {
 
       expect(await within(sidebar).findByRole('link', { name: 'Phê duyệt' })).toBeInTheDocument()
       expect(within(sidebar).getByRole('link', { name: 'Tài sản' })).toBeInTheDocument()
-      expect(await within(phoneBar).findByRole('link', { name: 'Phê duyệt' })).toBeInTheDocument()
-      await user.click(within(phoneBar).getByRole('button', { name: 'Thêm' }))
-      const sheet = await screen.findByRole('dialog')
-      expect(within(sheet).getByRole('link', { name: /Tài sản/ })).toBeInTheDocument()
+      await user.click(await screen.findByRole('button', { name: /Mở menu chính/ }))
+      const opened = await screen.findByRole('dialog', { name: 'Menu chính' })
+      expect(await within(opened).findByRole('link', { name: /Phê duyệt/ })).toBeInTheDocument()
+      expect(within(opened).getByRole('link', { name: /Tài sản/ })).toBeInTheDocument()
     } finally {
       vi.unstubAllGlobals()
     }

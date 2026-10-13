@@ -49,8 +49,8 @@ Nguồn: [brainstorm](../reports/brainstorm-261012-0827-chat-mobile-google-style
 |---|---|---|---|---|---|
 | 01 | [Thiết kế: mockup + DESIGN.md](phase-01-design.md) | P0 | — | — | completed |
 | 02 | [API tóm tắt hoạt động + thread theo dõi xuyên kênh](phase-02-activity-api.md) | P0 | 1-1.5d | 01 | completed |
-| 03 | [API tìm tin trên mọi cuộc trò chuyện](phase-03-search-api.md) | P1 | 1-1.5d | 01 | pending |
-| 04 | [Vỏ điện thoại: ô tìm, menu ☰, sheet tài khoản, thanh đáy Chat, nút +](phase-04-phone-shell.md) | P0 | 2d | 01 | pending |
+| 03 | [API tìm tin trên mọi cuộc trò chuyện](phase-03-search-api.md) | P1 | 1-1.5d | 01 | completed |
+| 04 | [Vỏ điện thoại: ô tìm, menu ☰, sheet tài khoản, thanh đáy Chat, nút +](phase-04-phone-shell.md) | P0 | 2d | 01 | completed |
 | 05 | [Tab Trang chủ, Trực tiếp, Mục, Thêm](phase-05-chat-tabs.md) | P0 | 2d | 02, 04 | pending |
 | 06 | [Màn Tìm trong chat](phase-06-chat-search-screen.md) | P1 | 1d | 03, 04 | pending |
 | 07 | [Kiểm chứng](phase-07-verification.md) | P0 | 0.5-1d | 05, 06 | pending |

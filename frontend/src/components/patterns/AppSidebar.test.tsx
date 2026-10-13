@@ -98,7 +98,7 @@ describe('AppSidebar, expanded', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Đổi workspace' })).toBeNull())
   })
 
-  it('hides Phê duyệt and Tài sản in a personal workspace, and labels it Workspace cá nhân', async () => {
+  it('hides Phê duyệt, Tài sản and Quản trị in a personal workspace, and labels it Workspace cá nhân', async () => {
     api.mockImplementation((path: string) =>
       path === '/workspaces'
         ? Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Không gian của bạn', type: 'personal' }] })
@@ -111,7 +111,7 @@ describe('AppSidebar, expanded', () => {
 
     await renderSidebar()
     const nav = await screen.findByRole('navigation', { name: 'Điều hướng chính' })
-    expect(mainLinks(nav)).toEqual(['Tin nhắn, 3 chưa đọc', 'Tài liệu', 'Danh bạ', 'Quản trị', 'Cài đặt'])
+    expect(mainLinks(nav)).toEqual(['Tin nhắn, 3 chưa đọc', 'Tài liệu', 'Danh bạ', 'Cài đặt'])
     expect(within(nav).queryByRole('link', { name: /Phê duyệt/ })).toBeNull()
     expect(within(nav).queryByRole('link', { name: /Tài sản/ })).toBeNull()
     expect(await screen.findByText('Workspace cá nhân')).toBeInTheDocument()

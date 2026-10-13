@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useIsFetching, useIsMutating } from '@tanstack/react-query'
 import { RefreshCw } from 'lucide-react'
 import { usePwaStore } from '../../lib/pwa'
+import { useUiStore } from '../../stores/ui.store'
 import { Button } from '../primitives'
 
 /** How often the bar re-reads what is being typed. Programmatic clears (a sent message) raise no event. */
@@ -89,6 +90,7 @@ export function UpdateBar() {
   const [dismissed, setDismissed] = useState(false)
   const [armed, setArmed] = useState(false)
   const busy = useIsMutating() + useIsFetching() > 0
+  const aboveChatBar = useUiStore((s) => s.chatBarShown)
   const visible = needRefresh && !dismissed
   const { draft, composer } = useWorkState(visible)
 
@@ -111,7 +113,9 @@ export function UpdateBar() {
           data-placement={composer ? 'top' : 'bottom'}
           style={composer ? { top: 'calc(env(safe-area-inset-top, 0px) + 0.75rem)' } : undefined}
           className={`fixed left-2.5 right-2.5 z-sticky flex items-center gap-2.5 min-h-11 pl-4 pr-2 py-1.5 rounded-2xl text-sm font-semibold bg-overlay text-ink shadow-overlay lg:left-auto lg:right-6 lg:max-w-md ${
-            composer ? '' : 'bottom-tabbar mb-3 lg:bottom-6 lg:mb-0'
+            composer ? '' : aboveChatBar
+              ? 'bottom-[calc(6.375rem+env(safe-area-inset-bottom,0px))] lg:bottom-6'
+              : 'bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] lg:bottom-6'
           }`}
         >
           <RefreshCw size={16} strokeWidth={1.75} className="text-accent shrink-0" aria-hidden />

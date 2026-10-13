@@ -15,38 +15,13 @@ import { workspaceDisplayName } from '../../lib/workspace'
 import { formatCount } from '../../lib/format'
 import { DURATION, useMotionPresets } from '../../lib/motion'
 import { UNKNOWN_PERSON } from '../../lib/people'
+import {
+  countUnit, footDestinations, mainDestinations, moduleOfPath, type ModuleId, type NavDestination,
+} from '../../lib/nav-destinations'
 import { Avatar, IconButton, MenuItem, MenuSeparator, Popover, Pressable, Tooltip } from '../primitives'
 import { NotificationPanel } from './NotificationPanel'
-import {
-  MessageSquare, FolderOpen, Users, Package, ClipboardCheck, Settings, LogOut, ChevronDown, ShieldCheck, Plus,
-  Bell, Mail, PanelLeft,
-} from 'lucide-react'
+import { Settings, LogOut, ChevronDown, Plus, Bell, Mail, PanelLeft } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-
-type ModuleId = 'messaging' | 'documents' | 'drive' | 'assets' | 'contacts' | 'approval' | 'admin' | 'settings'
-
-type NavItem = {
-  id: ModuleId
-  icon: LucideIcon
-  label: string
-  to: string
-}
-
-/** DESIGN.md §5: five main destinations, then Thông báo, Quản trị and Cài đặt at the foot. */
-const mainNavItems: NavItem[] = [
-  { id: 'messaging', icon: MessageSquare, label: 'Tin nhắn', to: '/channels' },
-  { id: 'drive', icon: FolderOpen, label: 'Tài liệu', to: '/drive' },
-  { id: 'approval', icon: ClipboardCheck, label: 'Phê duyệt', to: '/approval' },
-  { id: 'assets', icon: Package, label: 'Tài sản', to: '/assets' },
-  { id: 'contacts', icon: Users, label: 'Danh bạ', to: '/contacts' },
-]
-const footNavItems: NavItem[] = [
-  { id: 'admin', icon: ShieldCheck, label: 'Quản trị', to: '/admin' },
-  { id: 'settings', icon: Settings, label: 'Cài đặt', to: '/settings' },
-]
-
-/** What the number on a destination counts, for the hidden text read after its name. */
-const countUnit = (id: string) => (id === 'approval' ? 'chờ bạn' : 'chưa đọc')
 
 const initialOf = (name: string) => Array.from(name.trim())[0]?.toLocaleUpperCase('vi') ?? 'N'
 
@@ -115,18 +90,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
   // Where "Tạo workspace" sends Back to: the screen the person is on now.
   const here = useLocation({ select: (l) => l.href })
   const currentPath = matches[matches.length - 1]?.pathname || ''
-  const effectiveActive: ModuleId = (() => {
-    if (currentPath.includes('/admin')) return 'admin'
-    if (currentPath.includes('/contacts')) return 'contacts'
-    if (currentPath.includes('/drive')) return 'drive'
-    if (currentPath.includes('/approval')) return 'approval'
-    if (currentPath.includes('/channels')) return 'messaging'
-    if (currentPath.includes('/assets')) return 'assets'
-    if (currentPath.includes('/settings')) return 'settings'
-    // Văn bản is a group inside Tài liệu, so its pages light up Tài liệu.
-    if (currentPath.includes('/documents')) return 'drive'
-    return activeModule
-  })()
+  const effectiveActive: ModuleId = moduleOfPath(currentPath) ?? activeModule
 
   const name = workspaceName || 'Không gian làm việc'
   const current = switcher.workspaces.find((w) => w.id === workspaceId)
@@ -173,7 +137,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
     </>
   )
 
-  const navLink = (item: NavItem) => {
+  const navLink = (item: NavDestination) => {
     const active = effectiveActive === item.id
     return (
       <Link
@@ -364,7 +328,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
       </div>
 
       <div className={`grid content-start ${itemsGap}`}>
-        {(isPersonal ? mainNavItems.filter((i) => i.id !== 'approval' && i.id !== 'assets') : mainNavItems).map(navLink)}
+        {mainDestinations(isPersonal).map(navLink)}
       </div>
 
       <div className={`grid ${itemsGap}`}>
@@ -377,7 +341,7 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
         >
           {itemInner(Bell, 'Thông báo', notifOpen, notificationCount, 'chưa đọc')}
         </Pressable>
-        {footNavItems.map(navLink)}
+        {footDestinations(isPersonal).map(navLink)}
 
         {rail ? (
           <>

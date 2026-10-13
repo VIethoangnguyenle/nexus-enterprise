@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Vỏ điện thoại: ô tìm, menu ☰, sheet tài khoản, thanh đáy Chat, nút +"
-status: pending
+status: completed
 priority: P0
 effort: "2d"
 dependencies: [1]

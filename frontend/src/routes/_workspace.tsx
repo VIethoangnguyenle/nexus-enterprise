@@ -7,13 +7,15 @@ import { useActiveWorkspace } from '../hooks/useActiveWorkspace'
 import { usePreferencesSync } from '../hooks/usePreferences'
 import { useWorkspaceRealtime } from '../hooks/useWorkspaceRealtime'
 import { useUnreadCounts } from '../hooks/useMessaging'
-import { isConversationPath, validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
+import { validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
+import { isChatListPath } from '../lib/nav-destinations'
 import { unreadByLevel } from '../lib/conversations'
 import { useResizable } from '../hooks/useResizable'
+import { useBottomBarLayout } from '../hooks/usePhone'
 import { AppSidebar } from '../components/patterns/AppSidebar'
 import { ListPanel } from '../components/patterns/ListPanel'
 import { MobileNav } from '../components/patterns/MobileNav'
-import { MobileTopBar } from '../components/patterns/MobileTopBar'
+import { PhoneSearchBar } from '../components/patterns/PhoneSearchBar'
 import { OfflineBar } from '../components/app/OfflineBar'
 import { UpdateBar } from '../components/app/UpdateBar'
 import { Button, Spinner, Text } from '../components/primitives'
@@ -67,6 +69,9 @@ function WorkspaceLayout() {
     }
   }, [currentPath])
 
+  // The floating Chat bar sits over the bottom of the list; only then does the screen keep room under its last row.
+  const chatBarShown = useBottomBarLayout() && isChatListPath(currentPath)
+
   const { size, isDragging, handleProps } = useResizable({
     direction: 'horizontal',
     defaultSize: 240,
@@ -76,7 +81,7 @@ function WorkspaceLayout() {
     onResize: setListPanelWidth,
   })
 
-  /* The screen under the phone top bar; the bar watches it for the screen's own search. */
+  /* The screen under the phone search bar; the bar watches it for the screen's own search. */
   const [screenEl, setScreenEl] = useState<HTMLElement | null>(null)
 
   useEffect(() => {
@@ -155,9 +160,9 @@ function WorkspaceLayout() {
         )}
 
         {/* Column 3: Content */}
-        {/* Inside a conversation the phone's tab bar steps aside, so no room is kept for it. */}
-        <main className={`flex-1 flex flex-col min-w-0 ${isConversationPath(currentPath) ? '' : 'pb-tabbar'} lg:pb-0 isolate overflow-hidden`}>
-          <MobileTopBar scope={screenEl} />
+        {/* 108px: the bar's 64, its 22 off the edge and 22 of air; the safe-area inset comes on top. */}
+        <main className={`flex-1 flex flex-col min-w-0 ${chatBarShown ? 'pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))]' : ''} lg:pb-0 isolate overflow-hidden`}>
+          <PhoneSearchBar scope={screenEl} />
           <OfflineBar />
           <div ref={setScreenEl} className="flex-1 flex flex-col min-h-0 min-w-0">
             <ErrorBoundary moduleName="workspace-content">
@@ -167,7 +172,7 @@ function WorkspaceLayout() {
         </main>
       </div>
 
-      {/* Mobile bottom navigation */}
+      {/* Phone: Chat's bottom bar and the + beside it, on the conversation list only */}
       <MobileNav />
       <UpdateBar />
     </div>
