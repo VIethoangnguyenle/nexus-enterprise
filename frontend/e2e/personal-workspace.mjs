@@ -275,19 +275,20 @@ async function run() {
       await shot(page, '01-phone-personal-tabbar')
       const phoneNav = await navState(page)
       const tabs = await page.locator('nav a:visible').evaluateAll((els) => els.map((e) => `${e.textContent.trim()}→${e.getAttribute('href')}`))
-      await page.getByRole('button', { name: 'Thêm', exact: true }).click().catch(() => {})
+      await page.getByRole('button', { name: 'Mở menu chính' }).click().catch(() => {})
+      await page.getByRole('dialog', { name: 'Menu chính' }).waitFor({ timeout: 8000 }).catch(() => {})
       await page.waitForTimeout(700)
-      await shot(page, '01-phone-personal-more-sheet')
-      const sheet = await page.locator('nav[aria-label="Thêm"] a:visible').evaluateAll((els) => els.map((e) => e.getAttribute('href')))
-      await page.locator('button[aria-label="Đóng Thêm"]').click().catch(() => {})
+      await shot(page, '01-phone-personal-drawer')
+      const sheet = await page.locator('[role="dialog"][aria-label="Menu chính"] nav[aria-label="Các phần của Nexus"] a:visible').evaluateAll((els) => els.map((e) => e.getAttribute('href')))
+      await page.keyboard.press('Escape')
       await page.waitForTimeout(400)
       await page.setViewportSize(DESKTOP)
       await page.waitForTimeout(500)
       const tabHrefs = tabs.map((t) => t.split('→')[1])
-      crit('1c', 'Phone tab bar and Thêm sheet have no Tài sản / Phê duyệt (personal)',
+      crit('1c', 'Phone tab bar and ☰ drawer have no Tài sản / Phê duyệt (personal)',
         !phoneNav.approval && !phoneNav.assets
           && !sheet.some((h) => /^\/(assets|approval)/.test(h)) && !tabHrefs.some((h) => /^\/(assets|approval)/.test(h)),
-        `tabs=${tabs.join(' | ')}; Thêm sheet=${sheet.join(', ')}`)
+        `tabs=${tabs.join(' | ')}; drawer=${sheet.join(', ')}`)
     })
 
     // ── 2. Deep links /assets and /approval redirect as in-app navigations ──
@@ -387,18 +388,19 @@ async function run() {
       await page.waitForTimeout(900)
       await shot(page, '04-phone-organization-tabbar')
       const tabs = await page.locator('nav a:visible').evaluateAll((els) => els.map((e) => e.getAttribute('href')))
-      await page.getByRole('button', { name: 'Thêm', exact: true }).click().catch(() => {})
+      await page.getByRole('button', { name: 'Mở menu chính' }).click().catch(() => {})
+      await page.getByRole('dialog', { name: 'Menu chính' }).waitFor({ timeout: 8000 }).catch(() => {})
       await page.waitForTimeout(600)
-      const sheet = await page.locator('nav[aria-label="Thêm"] a:visible').evaluateAll((els) => els.map((e) => e.getAttribute('href')))
-      await shot(page, '04-phone-organization-more-sheet')
-      await page.locator('button[aria-label="Đóng Thêm"]').click().catch(() => {})
+      const sheet = await page.locator('[role="dialog"][aria-label="Menu chính"] nav[aria-label="Các phần của Nexus"] a:visible').evaluateAll((els) => els.map((e) => e.getAttribute('href')))
+      await shot(page, '04-phone-organization-drawer')
+      await page.keyboard.press('Escape')
       await page.waitForTimeout(400)
       await page.setViewportSize(DESKTOP)
       await page.waitForTimeout(500)
       const tabPaths = tabs.map((h) => (h || '').split('?')[0])
-      crit('4b', 'Phone after convert: Phê duyệt in tab bar or Thêm, Tài sản in Thêm',
-        (tabPaths.includes('/approval') || sheet.some((h) => h.startsWith('/approval'))) && sheet.some((h) => h.startsWith('/assets')),
-        `tabs=${tabs.join(',')}; Thêm=${sheet.join(',')}`)
+      crit('4b', 'Phone after convert: Phê duyệt and Tài sản in the ☰ drawer',
+        sheet.some((h) => h.startsWith('/approval')) && sheet.some((h) => h.startsWith('/assets')),
+        `tabs=${tabs.join(',')}; drawer=${sheet.join(',')}`)
     })
 
     await step('4-api-after-convert', async () => {

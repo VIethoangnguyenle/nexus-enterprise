@@ -1,0 +1,196 @@
+{
+  "light-home": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-home-unread-only": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-home-bottom-clearance": {
+    "lastRowBottom": 559,
+    "barTop": 724,
+    "hidden": false
+  },
+  "light-direct": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-sections": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-more": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-drawer-org-items": [
+    "Chat",
+    "Tài liệu",
+    "Phê duyệt",
+    "Tài sản",
+    "Danh bạ",
+    "Thông báo",
+    "Quản trị",
+    "Cài đặt"
+  ],
+  "light-drawer-org": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-drawer-workspace-list": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-module-approval": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": null
+  },
+  "light-search-results": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-plus-sheet": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-account-sheet": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-threads-followed": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-thread-screen": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": null
+  },
+  "dark-home": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-home-unread-only": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-home-bottom-clearance": {
+    "lastRowBottom": 559,
+    "barTop": 724,
+    "hidden": false
+  },
+  "dark-direct": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-sections": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-more": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-drawer-org-items": [
+    "Chat",
+    "Tài liệu",
+    "Phê duyệt",
+    "Tài sản",
+    "Danh bạ",
+    "Thông báo",
+    "Quản trị",
+    "Cài đặt"
+  ],
+  "dark-drawer-org": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-drawer-workspace-list": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-module-approval": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": null
+  },
+  "dark-search-results": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-plus-sheet": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-account-sheet": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-threads-followed": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-thread-screen": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": null
+  },
+  "light-drawer-personal-items": [
+    "Chat",
+    "Tài liệu",
+    "Danh bạ",
+    "Thông báo",
+    "Cài đặt"
+  ],
+  "light-drawer-personal": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "light-B-home-personal": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-drawer-personal-items": [
+    "Chat",
+    "Tài liệu",
+    "Danh bạ",
+    "Thông báo",
+    "Cài đặt"
+  ],
+  "dark-drawer-personal": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  },
+  "dark-B-home-personal": {
+    "scrollW": 390,
+    "innerW": 390,
+    "barTop": 724
+  }
+}

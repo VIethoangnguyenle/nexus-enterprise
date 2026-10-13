@@ -1,7 +1,7 @@
 ---
 title: "Chat điện thoại theo hướng Google Chat + menu ☰"
 description: "Thay vỏ điện thoại: ô tìm viên thuốc có ☰ và avatar, menu ☰ sang mọi module, thanh đáy chỉ của Chat (Trang chủ · Trực tiếp · Mục · Thêm) chỉ icon, nút + riêng; Trang chủ là dòng hoạt động có xem trước và dòng trả lời thread; tìm tin trên mọi cuộc trò chuyện."
-status: pending
+status: completed
 priority: P0
 effort: 7-9d
 issue:
@@ -53,7 +53,7 @@ Nguồn: [brainstorm](../reports/brainstorm-261012-0827-chat-mobile-google-style
 | 04 | [Vỏ điện thoại: ô tìm, menu ☰, sheet tài khoản, thanh đáy Chat, nút +](phase-04-phone-shell.md) | P0 | 2d | 01 | completed |
 | 05 | [Tab Trang chủ, Trực tiếp, Mục, Thêm](phase-05-chat-tabs.md) | P0 | 2d | 02, 04 | completed |
 | 06 | [Màn Tìm trong chat](phase-06-chat-search-screen.md) | P1 | 1d | 03, 04 | completed |
-| 07 | [Kiểm chứng](phase-07-verification.md) | P0 | 0.5-1d | 05, 06 | pending |
+| 07 | [Kiểm chứng](phase-07-verification.md) | P0 | 0.5-1d | 05, 06 | completed |
 
 ```text
 01 ──┬─► 02 API hoạt động ─────────┐
@@ -86,3 +86,12 @@ danh sách → làm tuần tự 05 rồi 06.
 
 ## Unresolved questions
 - (Đã đặt mặc định ở trên) Tìm tin toàn cục làm ngay hay để sau; máy tính bảng dùng vỏ điện thoại hay chờ rail.
+
+## Kết quả (2026-10-13)
+- Phase 02–07 xong. Kiểm chứng: `../reports/tester-261013-chat-mobile-shell-verification.md` (deny trên stack thật đạt,
+  ảnh 390px sáng/tối ở `../reports/chat-mobile-shell-screens/`); review: `../reports/code-reviewer-261013-chat-mobile-shell.md`
+  (đã sửa các mục high/medium).
+- **Để sau (người dùng chọn 2026-10-13):** "Duyệt nhóm" (tab Thêm, sheet nút +) — cần API duyệt/tham gia nhóm và spec NGAC
+  riêng; DESIGN.md đã ghi chú.
+- Còn mở: deep link `?ws=<tổ chức>` không đổi tenant (có từ trước); safe-area chưa đo trên iPhone thật (phase 06 của
+  `261010-2258-pwa-mobile-push`).

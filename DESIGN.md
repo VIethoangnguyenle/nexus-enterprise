@@ -222,7 +222,7 @@ mã backend, email và tài liệu kỹ thuật không đổi.
     pill số tin trực tiếp chưa đọc; Mục pill số cuộc nhóm chưa đọc (theo mức thông báo); Thêm chấm khi có lượt nhắc
     mới; pill `99+` khi quá 99, ẩn khi 0; `aria-label` đọc cả số ("Trực tiếp, 2 chưa đọc").
   - *Nút + (Trò chuyện mới):* 64×64, radius 20, `--color-accent-wash`, icon + 28 accent, cạnh phải thanh đáy, cùng
-    đáy; mở sheet Nhắn tin trực tiếp · Tạo nhóm · Duyệt nhóm · Tạo mục (ô icon 40 + nhãn + một dòng mờ).
+    đáy; mở sheet Nhắn tin trực tiếp · Tạo nhóm · Duyệt nhóm · Tạo mục (ô icon 40 + nhãn + một dòng mờ). "Duyệt nhóm" chỉ hiện khi có tính năng duyệt và tham gia nhóm (việc sau, cần backend + spec NGAC riêng).
   - Danh sách phía trên thanh đáy đệm đáy 108 + safe-area để hàng cuối không bị che. Toast nổi trên thanh đáy (cách
     16), ở màn không có thanh đáy thì cách đáy 16 + safe-area.
 
@@ -498,7 +498,7 @@ theo §5 "Điều hướng di động".
   báo. Nhấn giữ hàng như Trang chủ; nhấn giữ tiêu đề mục của bạn: Đổi tên, Lên/Xuống, Xoá mục. "Mục mới" (accent) cuối
   danh sách. Gập/mở dùng chung trạng thái với cột điều hướng máy tính.
 - **Thêm:** tiêu đề "Thêm"; hàng 60: Được nhắc tới (pill số) · Tin đã gắn sao · Thread đang theo dõi ("N có tin mới") ·
-  Duyệt nhóm · divider · Thông báo của Chat. Module khác không lặp ở đây (đã ở menu ☰).
+  Duyệt nhóm (chỉ khi tính năng có, xem nút +) · divider · Thông báo của Chat. Module khác không lặp ở đây (đã ở menu ☰).
 - **Tìm trong chat:** chạm ô tìm mở màn toàn màn (fade 220ms): ô nhập viên thuốc viền accent 2px, quay lại và xoá; chip
   lọc Tất cả · Người · Nhóm · Tin nhắn · Có tệp (cao 36, cuộn ngang); kết quả theo nhóm "Nhóm và người", "Tin nhắn"
   (người gửi · cuộc trò chuyện, đoạn có từ khớp tô `--color-warning-wash`, giờ), khi chưa gõ thì "Tìm gần đây". Chỉ

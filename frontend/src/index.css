@@ -317,12 +317,7 @@ h1, h2, h3, h4 {
 @utility z-toast { z-index: var(--z-toast); }
 @utility z-tooltip { z-index: var(--z-tooltip); }
 
-/* Phone tab bar (DESIGN.md §5): 56px of bar plus the home-indicator inset. */
-@utility pb-tabbar { padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px)); }
-@utility bottom-tabbar { bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px)); }
-@utility pb-bar { padding-bottom: calc(0.25rem + env(safe-area-inset-bottom, 0px)); }
 @utility pb-sheet { padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px)); }
-@utility bottom-above-bar { bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px)); }
 @utility pt-safe { padding-top: env(safe-area-inset-top, 0px); }
 /* The visible viewport (lib/app-height.ts): shrinks with the on-screen keyboard, unlike 100dvh on iOS,
    and moves down when iOS scrolls the page to show the focused field. */

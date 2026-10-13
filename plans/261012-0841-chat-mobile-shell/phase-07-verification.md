@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Kiểm chứng"
-status: pending
+status: completed
 priority: P0
 effort: "0.5-1d"
 dependencies: [5, 6]
