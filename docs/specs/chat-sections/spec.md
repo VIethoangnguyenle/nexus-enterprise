@@ -37,7 +37,8 @@ Below 1024px the sections are the tab Mục of the phone's Chat (`/channels?tab=
 sections, Tin nhắn trực tiếp, Nhóm. Rows are 56px with a 36px avatar and show the name only (bold when unread) with a
 count, "@" for a mention in a muted conversation, or a bell-off. A header folds and opens its section with the same
 state as the desktop column (`ngac-nav-collapse`), totals the unread by notification level while folded, and has its
-own pill that lists only the unread conversations of that section (local to the screen, not stored). Long-pressing a
+own pill that lists only the unread conversations of that section (remembered on the device for the person, section by
+section: `ngac-section-unread-only:<user>:<workspace>:<section>`). Long-pressing a
 row opens its sheet (Chuyển tới mục, Mục mới…, Bỏ khỏi mục, Gắn sao, Tắt thông báo, and Đánh dấu đã đọc when it has
 unread messages); long-pressing the header of one of the user's own sections opens Đổi tên mục, Chuyển lên, Chuyển
 xuống and Xoá mục. "Mục mới" ends the list and asks for a name. The two shortcut tiles and the followed-thread block
@@ -46,6 +47,10 @@ that used to head the list are gone from it (see `chat-shortcuts`, `chat-activit
 #### Scenario: Unread filter of one section
 - **WHEN** a person turns on the unread pill of "Quyết toán quý 4"
 - **THEN** that section lists only its conversations with unread messages and the other sections are unchanged
+
+#### Scenario: The filter is remembered
+- **WHEN** the same person returns to Mục on that device
+- **THEN** the pill of "Quyết toán quý 4" is still on, the other sections are not affected, and another person on the device sees it off
 
 #### Scenario: Menu of an own section
 - **WHEN** a person long-presses the header of one of their sections

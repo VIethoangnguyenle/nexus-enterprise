@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   chatTabOf, footDestinations, footNavItems, isChatListPath, isPhoneDetailPath, mainDestinations, moduleOfPath, phoneNameOf,
-  searchHintOf, validateChannelsSearch,
+  searchHintOf, validateChannelsSearch, chatOverlayOf,
 } from './nav-destinations'
 
 describe('destinations by workspace type', () => {
@@ -95,5 +95,33 @@ describe('the Chat tab in the address', () => {
 
   it('does not write the default into the address, and keeps the workspace', () => {
     expect(validateChannelsSearch({ tab: 'home', ws: 'w1' })).toEqual({ ws: 'w1' })
+  })
+})
+
+describe('the full-screen layers of the Chat list in the address', () => {
+  it('keeps the search screen for 1, "1" and true, and drops anything else', () => {
+    for (const v of [1, '1', true]) expect(validateChannelsSearch({ search: v }).search).toBe(1)
+    for (const v of [0, '0', 'yes', false, 2, null, {}]) expect(validateChannelsSearch({ search: v }).search).toBeUndefined()
+  })
+
+  it('keeps a Thread list that exists and drops one that does not', () => {
+    expect(validateChannelsSearch({ threads: 'new' }).threads).toBe('new')
+    expect(validateChannelsSearch({ threads: 'followed' }).threads).toBe('followed')
+    expect(validateChannelsSearch({ threads: 'all' }).threads).toBeUndefined()
+    expect(validateChannelsSearch({ threads: 7 }).threads).toBeUndefined()
+  })
+
+  it('names the layer to show; the search screen wins when both are asked for', () => {
+    expect(chatOverlayOf({})).toBeNull()
+    expect(chatOverlayOf({ search: 1 })).toEqual({ kind: 'search' })
+    expect(chatOverlayOf({ threads: 'new' })).toEqual({ kind: 'threads', chip: 'unread' })
+    expect(chatOverlayOf({ threads: 'followed' })).toEqual({ kind: 'threads', chip: 'following' })
+    expect(chatOverlayOf({ search: 1, threads: 'new' })).toEqual({ kind: 'search' })
+    expect(chatOverlayOf({ search: 'x', threads: 'x' })).toBeNull()
+  })
+
+  it('keeps the tab and the workspace beside a layer', () => {
+    expect(validateChannelsSearch({ tab: 'more', ws: 'w1', threads: 'followed' }))
+      .toEqual({ tab: 'more', ws: 'w1', threads: 'followed' })
   })
 })

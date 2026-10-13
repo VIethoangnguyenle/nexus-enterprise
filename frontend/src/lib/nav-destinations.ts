@@ -98,13 +98,33 @@ export interface ChannelsSearch {
   ws?: string
   /** Absent means Trang chủ. */
   tab?: Exclude<ChatTab, 'home'>
+  /** The Tìm trong chat screen is open. */
+  search?: 1
+  /** The Thread screen is open, on Có tin mới (`new`) or Đang theo dõi (`followed`). */
+  threads?: 'new' | 'followed'
 }
 
-/** `validateSearch` for `/channels`: an unknown tab opens Trang chủ rather than an error page. */
+/** A full-screen layer over the Chat list; each owns a history entry so the system back gesture closes it. */
+export type ChatOverlay = { kind: 'search' } | { kind: 'threads'; chip: 'unread' | 'following' }
+
+/**
+ * `validateSearch` for `/channels`: an unknown tab opens Trang chủ rather than an error page, and an
+ * unknown layer is dropped. The desktop has no such layers and ignores both.
+ */
 export function validateChannelsSearch(search: Record<string, unknown>): ChannelsSearch {
   const out: ChannelsSearch = { ...validateWorkspaceSearch(search) }
   if (search.tab === 'direct' || search.tab === 'sections' || search.tab === 'more') out.tab = search.tab
+  if (search.search === 1 || search.search === '1' || search.search === true) out.search = 1
+  if (search.threads === 'new' || search.threads === 'followed') out.threads = search.threads
   return out
+}
+
+/** The layer to show over the Chat list; the search screen wins if both are asked for. */
+export function chatOverlayOf(s: { search?: unknown; threads?: unknown }): ChatOverlay | null {
+  if (s.search === 1) return { kind: 'search' }
+  if (s.threads === 'new') return { kind: 'threads', chip: 'unread' }
+  if (s.threads === 'followed') return { kind: 'threads', chip: 'following' }
+  return null
 }
 
 /** The tab to show; Trang chủ unless the address names another that exists. */

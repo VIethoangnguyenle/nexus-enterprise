@@ -12,6 +12,8 @@ export const routerState = {
   navigate: vi.fn(),
   /** Whether the app's own history has an entry before this one. */
   canGoBack: false,
+  /** The history state of the current entry. */
+  historyState: {} as Record<string, unknown>,
   back: vi.fn(),
 }
 
@@ -35,7 +37,7 @@ export function routerMockFactory() {
     useRouter: () => ({ history: { back: routerState.back } }),
     useParams: () => routerState.params,
     useSearch: () => routerState.search,
-    useRouterState: ({ select }: { select: (s: { location: { pathname: string } }) => unknown }) =>
-      select({ location: { pathname: routerState.pathname } }),
+    useRouterState: ({ select }: { select: (s: { location: { pathname: string; state: Record<string, unknown> } }) => unknown }) =>
+      select({ location: { pathname: routerState.pathname, state: routerState.historyState } }),
   }
 }

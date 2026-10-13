@@ -1,8 +1,8 @@
-import { useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { CircleAlert } from 'lucide-react'
 import type { Arrival } from '../../hooks/useArrivals'
 import type { ChatNavigation } from '../../hooks/useChatNavigation'
+import { useChatOverlay } from '../../hooks/useChatOverlay'
 import { usePeople } from '../../hooks/usePeople'
 import { usePullToRefresh } from '../../hooks/usePullToRefresh'
 import { useUnreadThreads } from '../../hooks/useUnreadThreads'
@@ -15,7 +15,8 @@ import { EmptyState } from './EmptyState'
 import { PhoneHomeFeed } from './PhoneHomeFeed'
 import { PhoneMoreList } from './PhoneMoreList'
 import { PhoneSectionsList } from './PhoneSectionsList'
-import { PhoneThreadsScreen, type ThreadsChip } from './PhoneThreadsScreen'
+import { PhoneThreadsScreen } from './PhoneThreadsScreen'
+import { ChatSearchScreen } from './ChatSearchScreen'
 import { useSectionOverlays } from './SectionOverlays'
 
 /** Everything the conversation lists show, asked for again: the pull-down reload. */
@@ -33,8 +34,8 @@ function reloadLists(workspaceId: string): Promise<unknown> {
 /**
  * Chat below 1024px (DESIGN.md "Chat trên điện thoại"): the tab named by
  * `?tab=` — Trang chủ, Trực tiếp, Mục or Thêm — in one scrolling column that
- * reloads when pulled down from the top, and the full-screen Thread list over
- * any of them. The shell around it (search pill, bottom bar, +) is not its job.
+ * reloads when pulled down from the top, and the full-screen Thread list and search
+ * over any of them (both live in the address, so the system back closes them). The shell around it (search pill, bottom bar, +) is not its job.
  */
 export function PhoneChatHome({ nav, workspaceId, fresh }: {
   nav: ChatNavigation
@@ -46,7 +47,7 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
   const people = usePeople(workspaceId)
   const setCollapsed = useNavCollapseStore((s) => s.setCollapsed)
   const overlays = useSectionOverlays(nav.sectionsApi, true, (id) => setCollapsed(collapseKey(workspaceId, id), false))
-  const [threads, setThreads] = useState<ThreadsChip | null>(null)
+  const { overlay, openThreads, close } = useChatOverlay()
   const threadsWithNews = useUnreadThreads().data?.length ?? 0
   const { bind, pull, refreshing } = usePullToRefresh(() => reloadLists(workspaceId))
 
@@ -88,7 +89,7 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
           <PhoneMoreList
             workspaceId={workspaceId}
             threadsWithNews={threadsWithNews}
-            onOpenFollowedThreads={() => setThreads('following')}
+            onOpenFollowedThreads={() => openThreads('following')}
           />
         ) : (
           <PhoneHomeFeed
@@ -98,17 +99,24 @@ export function PhoneChatHome({ nav, workspaceId, fresh }: {
             fresh={fresh}
             overlays={overlays}
             threadsWithNews={threadsWithNews}
-            onOpenThreads={() => setThreads('unread')}
+            onOpenThreads={() => openThreads('unread')}
           />
         )}
       </div>
 
-      {threads && (
-        <PhoneThreadsScreen
-          initial={threads}
+      {overlay?.kind === 'search' && (
+        <ChatSearchScreen
           conversations={nav.conversations}
           people={people}
-          onClose={() => setThreads(null)}
+          onClose={close}
+        />
+      )}
+      {overlay?.kind === 'threads' && (
+        <PhoneThreadsScreen
+          initial={overlay.chip}
+          conversations={nav.conversations}
+          people={people}
+          onClose={close}
           onOpen={(channelId, rootId) =>
             void navigate({ to: '/channels/$channelId', params: { channelId }, search: { thread: rootId } })}
         />

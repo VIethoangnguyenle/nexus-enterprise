@@ -114,10 +114,18 @@ full-screen list over the tabs, with the chips Có tin mới (`GET /api/threads/
 document's `GET /api/threads/followed`, a page at a time with "Xem thêm thread"). A row names the conversation, the
 author and opening of the thread, its replies and last reply, and how many are new; choosing it opens the conversation
 on that thread. A thread of a conversation the list does not hold is left out, and an empty chip says so in words.
+The screen is part of the address of `/channels` (`?threads=new` for Có tin mới, `?threads=followed` for Đang theo dõi;
+any other value is dropped, and the desktop ignores it) and owns a history entry: opening it pushes one, and the system
+back gesture or Quay lại closes it back to the tab it covered instead of leaving Chat. When the page was opened on that
+address there is no entry of its own to go back to, so closing replaces the address with the same one minus `threads`.
 
 #### Scenario: From Thêm
 - **WHEN** the person chooses Thread đang theo dõi in Thêm
 - **THEN** the Thread screen opens with Đang theo dõi chosen
+
+#### Scenario: Back closes the screen
+- **WHEN** the Thread screen is open and the person uses the system back gesture
+- **THEN** the screen closes and the tab it covered is shown; Chat is not left
 
 ## Status
 Matches code.

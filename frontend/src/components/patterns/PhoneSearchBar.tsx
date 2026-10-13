@@ -5,6 +5,7 @@ import { Menu } from 'lucide-react'
 import { approvalPendingOptions } from '../../hooks/useApproval'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useUnreadNotificationCount } from '../../hooks/useNotifications'
+import { useChatOverlay } from '../../hooks/useChatOverlay'
 import { useBottomBarLayout } from '../../hooks/usePhone'
 import { usePeople } from '../../hooks/usePeople'
 import { useWorkspaceType } from '../../hooks/useWorkspaceType'
@@ -32,7 +33,8 @@ type Layer = 'menu' | 'account' | 'notifications' | null
  * The hint goes to the search of the screen below (`[data-module-search]`):
  * a box takes focus, a button opens its panel. A screen with none gets the
  * module's name there instead of a button that does nothing. `scope` is the
- * element holding the screen; it is watched so this follows the screen.
+ * element holding the screen; it is watched so this follows the screen. In Chat
+ * it opens the Tìm trong chat screen, which owns a history entry of `/channels`.
  */
 export function PhoneSearchBar({ scope }: { scope: HTMLElement | null }) {
   // A conversation or a document carries its own header on a phone; this bar steps aside.
@@ -45,6 +47,7 @@ export function PhoneSearchBar({ scope }: { scope: HTMLElement | null }) {
   const me = user?.id ? people.byUserId.get(user.id) : undefined
   const pending = useQuery({ ...approvalPendingOptions(), enabled: shown && !isPersonal && !isLoading }).data?.total ?? 0
   const unreadNotifications = useUnreadNotificationCount()
+  const { openSearch } = useChatOverlay()
   const [layer, setLayer] = useState<Layer>(null)
   const [hasSearch, setHasSearch] = useState(false)
   const module = moduleOfPath(pathname)
@@ -92,8 +95,8 @@ export function PhoneSearchBar({ scope }: { scope: HTMLElement | null }) {
             />
           )}
         </Pressable>
-        {hasSearch ? (
-          <Pressable onClick={goToSearch} className="flex-1 min-w-0 h-11 px-1 truncate text-base text-ink-muted">
+        {module === 'messaging' || hasSearch ? (
+          <Pressable onClick={module === 'messaging' ? openSearch : goToSearch} className="flex-1 min-w-0 h-11 px-1 truncate text-base text-ink-muted">
             {searchHintOf(module)}
           </Pressable>
         ) : (

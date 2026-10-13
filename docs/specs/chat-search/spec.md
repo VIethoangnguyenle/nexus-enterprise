@@ -98,6 +98,41 @@ change nothing in the database.
 - **WHEN** a member searches a group for `đối so`
 - **THEN** the group's message `Báo cáo đối soát` is found, as in the search across conversations
 
+### Requirement: The Tìm trong chat screen on a phone
+Below 1024px the search pill of Chat opens a full-screen dialog "Tìm trong chat" (from any Chat screen). The box takes
+focus at once; Quay lại, Esc and the system back gesture close it and focus returns to the pill. The screen is part of
+the address of `/channels` (`?search=1`) and owns a history entry: opening pushes one, and closing goes back when the
+screen pushed it, otherwise replaces the address with the same one minus `search`; an unknown value is dropped and the
+desktop ignores it. Chips Tất cả · Người · Nhóm · Tin nhắn · Có tệp filter what is shown. Groups and people are matched
+in the browser from the loaded lists, ignoring case, accents and đ ("doi soat" finds "Đối soát giao dịch"), every word
+of the query required; the person using the app is never listed. A group opens its conversation; a person opens the
+direct message that exists, or creates it. Messages come from `GET /api/messages/search` once typing pauses for 250 ms
+and the words reach 2 characters, 25 a page with "Tải thêm"; a row shows the sender (and the group for a group message),
+the opening of the text with the words found marked, and the time, and opens the conversation on that message (its
+thread when it is a reply). Before anything is typed the screen lists the person's recent searches (at most 8, newest
+first, kept per person on the device in `ngac-chat-recent-searches:<user>`, removable one by one); a search is kept when
+a result is opened or the box is submitted. No id reaches the screen.
+
+#### Scenario: Group without accents
+- **WHEN** a member types `doi soat` on the screen
+- **THEN** the group "Đối soát giao dịch" is listed with the words marked, without waiting for the server
+
+#### Scenario: Nothing found
+- **WHEN** the words match no message
+- **THEN** the screen says "Không tìm thấy “…” — thử từ khác." and, for words typed without accents, "Thử gõ có dấu."
+
+#### Scenario: Search failed
+- **WHEN** the server cannot answer
+- **THEN** the screen says "Chưa tìm được tin nhắn." and Thử lại asks again
+
+#### Scenario: Back closes the screen
+- **WHEN** the screen is open and the person uses the system back gesture
+- **THEN** it closes and the Chat list underneath is shown; Chat is not left
+
+#### Scenario: Recent searches
+- **WHEN** the box is empty
+- **THEN** the person's recent searches are listed, a tap puts one in the box, and storage that is blocked leaves the list empty without an error
+
 ## Known limits
 - Search without diacritics does not work: `doi soat` does not find `đối soát`. It would need the `unaccent`
   extension wrapped as an IMMUTABLE function in the generated column; it is out of scope for now.

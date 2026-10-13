@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Màn Tìm trong chat"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: [3, 4]
@@ -29,9 +29,9 @@ dependencies: [3, 4]
 - Modify: `components/patterns/PhoneSearchBar.tsx` (Chat mở màn này thay cho fallback)
 
 ## Success Criteria
-- [ ] "doi soat" tìm ra nhóm "Đối soát giao dịch" (client); "đối soát" ra tin (server).
+- [x] "doi soat" tìm ra nhóm "Đối soát giao dịch" (client); "đối soát" ra tin (server).
 - [ ] Kết quả không có tin của nhóm đã bị gỡ (dựa API phase 03; kiểm trên stack thật ở phase 07).
-- [ ] Gate frontend xanh.
+- [x] Gate frontend xanh.
 
 ## Risk Assessment
 - Tìm tin không dấu chưa hỗ trợ ở server (phase 03) → chữ gợi ý trong trạng thái rỗng: "Thử gõ có dấu".

@@ -41,7 +41,9 @@ const serve = (...args: Parameters<typeof createChatStateServer>) => {
 
 beforeEach(() => {
   routerState.search = {}
+  routerState.historyState = {}
   routerState.navigate.mockClear()
+  routerState.back.mockClear()
   localStorage.clear()
   serve({}, 0, {
     activity: [
@@ -63,9 +65,9 @@ afterEach(() => {
   useNavCollapseStore.setState({ collapsed: {} })
 })
 
-const show = async (tab?: string) => {
+const show = async (tab?: string, layer: Record<string, unknown> = {}) => {
   viewport(true)
-  routerState.search = tab ? { tab } : {}
+  routerState.search = { ...(tab ? { tab } : {}), ...layer }
   renderWithClient(<HomeView />)
   await screen.findByRole('heading', { level: 1 })
 }
@@ -106,8 +108,7 @@ describe('Chat below 1024px', () => {
 
   it('opens the conversation on a thread from the Thread screen', async () => {
     const user = userEvent.setup()
-    await show()
-    await user.click(await screen.findByRole('button', { name: 'Thread, 2 thread có tin mới' }))
+    await show(undefined, { threads: 'new' })
     const dialog = await screen.findByRole('dialog', { name: 'Thread' })
     const rows = await within(dialog).findAllByRole('button', { name: /^Thread của/ })
     expect(rows).toHaveLength(2)
@@ -117,22 +118,49 @@ describe('Chat below 1024px', () => {
     })
   })
 
+  it('asks the address for the Thread screen, as a new history entry', async () => {
+    const user = userEvent.setup()
+    await show()
+    await user.click(await screen.findByRole('button', { name: 'Thread, 2 thread có tin mới' }))
+    expect(routerState.navigate).toHaveBeenCalledWith({
+      to: '/channels', search: { threads: 'new' }, state: { chatOverlay: true },
+    })
+  })
+
   it('opens the Thread screen on Đang theo dõi from Thêm', async () => {
     const user = userEvent.setup()
     await show('more')
     await user.click(await screen.findByRole('button', { name: /Thread đang theo dõi/ }))
+    expect(routerState.navigate).toHaveBeenCalledWith({
+      to: '/channels', search: { tab: 'more', threads: 'followed' }, state: { chatOverlay: true },
+    })
+    cleanup()
+    await show('more', { threads: 'followed' })
     const dialog = await screen.findByRole('dialog', { name: 'Thread' })
     expect(within(dialog).getByRole('radio', { name: 'Đang theo dõi' })).toBeChecked()
     await waitFor(() => expect(within(dialog).getAllByRole('button', { name: /^Thread của/ })).toHaveLength(3))
   })
 
-  it('closes the Thread screen back to the list', async () => {
+  it('shows no Thread screen for a value the address does not know', async () => {
+    await show(undefined, { threads: 'everything' })
+    expect(screen.queryByRole('dialog', { name: 'Thread' })).toBeNull()
+  })
+
+  it('closes the Thread screen with the system back when it pushed its entry', async () => {
     const user = userEvent.setup()
-    await show()
-    await user.click(await screen.findByRole('button', { name: /^Thread, 2/ }))
+    routerState.historyState = { chatOverlay: true }
+    await show(undefined, { threads: 'new' })
     await user.click(await screen.findByRole('button', { name: 'Đóng danh sách thread' }))
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thread' })).toBeNull())
-    expect(screen.getByRole('heading', { level: 1, name: 'Trang chủ' })).toBeInTheDocument()
+    expect(routerState.back).toHaveBeenCalledTimes(1)
+    expect(routerState.navigate).not.toHaveBeenCalled()
+  })
+
+  it('closes the Thread screen by replacing the address when the page was opened on it', async () => {
+    const user = userEvent.setup()
+    await show('direct', { threads: 'new' })
+    await user.click(await screen.findByRole('button', { name: 'Đóng danh sách thread' }))
+    expect(routerState.back).not.toHaveBeenCalled()
+    expect(routerState.navigate).toHaveBeenCalledWith({ to: '/channels', search: { tab: 'direct' }, replace: true })
   })
 
   describe('pull down to reload', () => {

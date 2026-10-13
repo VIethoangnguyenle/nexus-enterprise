@@ -1,8 +1,10 @@
-import { useId, useState } from 'react'
+import { useId } from 'react'
 import { Link } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { ChevronDown, FolderPlus } from 'lucide-react'
 import type { ChatNavigation } from '../../hooks/useChatNavigation'
+import { usePersistedFlag } from '../../hooks/usePersistedFlag'
+import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { collapseKey, useNavCollapseStore } from '../../stores/nav-collapse.store'
 import { useMotionPresets } from '../../lib/motion'
@@ -86,7 +88,9 @@ function Group({ id, workspaceId, title, items, overlays, own = false, empty }: 
   const key = collapseKey(workspaceId, id)
   const open = !useNavCollapseStore((s) => !!s.collapsed[key])
   const setCollapsed = useNavCollapseStore((s) => s.setCollapsed)
-  const [unreadOnly, setUnreadOnly] = useState(false)
+  const me = useAuthStore((st) => st.user?.id ?? '')
+  // Remembered on this device for this person, section by section.
+  const [unreadOnly, setUnreadOnly] = usePersistedFlag(`ngac-section-unread-only:${me}:${key}`)
   const unread = totalUnread(items)
   const shown = unreadOnly ? items.filter((c) => unreadOf(c) > 0) : items
   const { ref, props } = useMenuPress<HTMLDivElement>((el) => own && overlays.openSectionMenu(id, el), OWN_PRESS)

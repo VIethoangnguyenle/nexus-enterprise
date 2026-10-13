@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom/vitest'
 import { useState, type ReactNode } from 'react'
-import { cleanup, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { resetClient } from '../../test/render'
@@ -73,7 +73,7 @@ describe('where it shows', () => {
 describe('the search hint', () => {
   it.each([
     ['/drive', 'Tìm tài liệu'], ['/approval', 'Tìm đề nghị'], ['/assets', 'Tìm tài sản'],
-    ['/contacts', 'Tìm người'], ['/settings', 'Tìm cài đặt'], ['/admin', 'Tìm cài đặt'], ['/channels', 'Tìm trong chat'],
+    ['/contacts', 'Tìm người'], ['/settings', 'Tìm cài đặt'], ['/admin', 'Tìm cài đặt'],
   ])('on %s says "%s" once the screen has a search', async (url, hint) => {
     await renderShell(<Shell body={<Button data-module-search>Tìm</Button>} />, url)
     expect(await within(await bar()).findByRole('button', { name: hint })).toBeInTheDocument()
@@ -89,9 +89,28 @@ describe('the search hint', () => {
   it('presses the search button of a screen whose search is a panel', async () => {
     const user = userEvent.setup()
     const open = vi.fn()
-    await renderShell(<Shell body={<Button data-module-search onClick={open}>Tìm trong nhóm</Button>} />, '/channels')
-    await user.click(await within(await bar()).findByRole('button', { name: 'Tìm trong chat' }))
+    await renderShell(<Shell body={<Button data-module-search onClick={open}>Tìm trong nhóm</Button>} />, '/drive')
+    await user.click(await within(await bar()).findByRole('button', { name: 'Tìm tài liệu' }))
     expect(open).toHaveBeenCalledTimes(1)
+  })
+
+  describe('in Chat', () => {
+    it('opens the Tìm trong chat screen as a new history entry, whatever the list below draws', async () => {
+      const user = userEvent.setup()
+      const screenSearch = vi.fn()
+      const router = await renderShell(<Shell body={<Button data-module-search onClick={screenSearch}>Tìm trong nhóm</Button>} />, '/channels?tab=direct')
+      await user.click(await within(await bar()).findByRole('button', { name: 'Tìm trong chat' }))
+      expect(screenSearch).not.toHaveBeenCalled()
+      await waitFor(() => expect(router.state.location.search).toEqual({ tab: 'direct', search: 1 }))
+      expect(router.state.location.state.chatOverlay).toBe(true)
+      await act(async () => router.history.back())
+      await waitFor(() => expect(router.state.location.search).toEqual({ tab: 'direct' }))
+    })
+
+    it('is a button even when the list has no search of its own', async () => {
+      await renderShell(<Shell body={<p>Trang chủ</p>} />, '/channels')
+      expect(await within(await bar()).findByRole('button', { name: 'Tìm trong chat' })).toBeInTheDocument()
+    })
   })
 
   it('names the module, with no button, on a screen without a search of its own', async () => {

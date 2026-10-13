@@ -2,7 +2,7 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
-import { CH, UUID_RE, WS_ID } from '../../test/chat-fixtures'
+import { CH, ME, UUID_RE, WS_ID } from '../../test/chat-fixtures'
 import { createSectionsServer } from '../../test/chat-sections-server'
 import { apiFetch } from '../../api/client'
 import { useChatNavigation } from '../../hooks/useChatNavigation'
@@ -39,6 +39,7 @@ afterEach(() => {
   resetClient()
   useToastStore.getState().clear()
   useNavCollapseStore.setState({ collapsed: {} })
+  localStorage.clear()
 })
 
 const ready = async () => {
@@ -244,6 +245,27 @@ describe('the header of a section', () => {
     await user.click(screen.getByRole('button', { name: 'Chỉ hiện chưa đọc trong Nội bộ kế toán' }))
     expect(screen.queryByRole('list', { name: 'Nội bộ kế toán' })).toBeNull()
     expect(screen.getByText('Không có tin chưa đọc trong Nội bộ kế toán.')).toBeInTheDocument()
+  })
+
+  it('is remembered on this device for this person and this section only', async () => {
+    const user = userEvent.setup()
+    const first = renderWithClient(<Host />)
+    await screen.findByRole('list', { name: 'Quyết toán quý 4' })
+    await user.click(screen.getByRole('button', { name: 'Chỉ hiện chưa đọc trong Quyết toán quý 4' }))
+    first.unmount()
+    resetClient()
+    renderWithClient(<Host />)
+    await screen.findByRole('list', { name: 'Quyết toán quý 4' })
+    expect(screen.getByRole('button', { name: 'Chỉ hiện chưa đọc trong Quyết toán quý 4' })).toHaveAttribute('aria-pressed', 'true')
+    expect(titles(sectionOf('Quyết toán quý 4'))).toEqual(['Đối soát giao dịch'])
+    expect(screen.getByRole('button', { name: 'Chỉ hiện chưa đọc trong Nhóm' })).toHaveAttribute('aria-pressed', 'false')
+    expect(localStorage.getItem(`ngac-section-unread-only:${ME.id}:${WS_ID}:q4`)).toBe('1')
+  })
+
+  it('does not carry over to another person on the same device', async () => {
+    localStorage.setItem(`ngac-section-unread-only:someone-else:${WS_ID}:q4`, '1')
+    await ready()
+    expect(screen.getByRole('button', { name: 'Chỉ hiện chưa đọc trong Quyết toán quý 4' })).toHaveAttribute('aria-pressed', 'false')
   })
 
   it('does not fold the section when the pill is tapped', async () => {
