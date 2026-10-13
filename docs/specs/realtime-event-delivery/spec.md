@@ -177,7 +177,7 @@ When a list refetches after an event whose actor is somebody other than the sign
 | `asset` | `updated`, `request_changed`, `assigned` | asset or request | workspace |
 | `permission` | `changed` | none | user (the users whose own standing the write changed; see "Permission events are narrow") |
 | approval (`ApprovalEvent`) | created, approved, rejected, step_advanced | the request | the people the request names |
-| call (`CallEvent`, envelope field 23) | `ring`, `cancel`, `answered`, `declined`, `missed`, `state` | the call, its conversation, who is in it | both people of a direct call on every session (ringing), the conversation's subscribers (`state`); see `chat-calls` |
+| call (`CallEvent`, envelope field 23) | `ring`, `cancel`, `answered`, `declined`, `missed`, `state`, `invited` | the call, its conversation, who is in it | both people of a direct call on every session (ringing), the conversation's subscribers (`state`); see `chat-calls` |
 
 There is no channel "archive" in the system, so there is no archive event.
 

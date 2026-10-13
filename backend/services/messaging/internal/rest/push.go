@@ -19,6 +19,9 @@ type pushPreferencesJSON struct {
 		Direct      bool `json:"direct"`
 		Mention     bool `json:"mention"`
 		ThreadReply bool `json:"thread_reply"`
+		// IncomingCall is a pointer so a client that does not know the field yet
+		// leaves the setting as it is instead of turning it off.
+		IncomingCall *bool `json:"incoming_call,omitempty"`
 	} `json:"kinds"`
 	QuietHours struct {
 		Enabled  bool   `json:"enabled"`
@@ -50,6 +53,7 @@ func (h *Handler) GetPushPreferences(c echo.Context) error {
 	}
 	var out pushPreferencesJSON
 	out.Kinds.Direct, out.Kinds.Mention, out.Kinds.ThreadReply = p.Direct, p.Mention, p.ThreadReply
+	out.Kinds.IncomingCall = &p.IncomingCall
 	out.QuietHours.Enabled, out.QuietHours.TimeZone = p.QuietEnabled, p.TimeZone
 	out.QuietHours.Start, out.QuietHours.End = clock(p.QuietStart), clock(p.QuietEnd)
 	return c.JSON(http.StatusOK, out)
@@ -76,6 +80,16 @@ func (h *Handler) PutPushPreferences(c echo.Context) error {
 	p := store.PushPreferences{
 		Direct: in.Kinds.Direct, Mention: in.Kinds.Mention, ThreadReply: in.Kinds.ThreadReply,
 		QuietEnabled: in.QuietHours.Enabled, QuietStart: start, QuietEnd: end, TimeZone: in.QuietHours.TimeZone,
+	}
+	if in.Kinds.IncomingCall != nil {
+		p.IncomingCall = *in.Kinds.IncomingCall
+	} else {
+		current, err := h.svc.GetPushPreferences(c.Request().Context(), claims.UserID)
+		if err != nil {
+			return httputil.MapDomainError(err)
+		}
+		p.IncomingCall = current.IncomingCall
+		in.Kinds.IncomingCall = &p.IncomingCall
 	}
 	if err := h.svc.SavePushPreferences(c.Request().Context(), claims.UserID, p); err != nil {
 		return httputil.MapDomainError(err)

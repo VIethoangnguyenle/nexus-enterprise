@@ -49,7 +49,7 @@ video và thoại" đã cập nhật; `design/mockups/tokens.css` có token stag
 | 01 | [Thiết kế: mockup + DESIGN.md + token stage](phase-01-design.md) | P1 | — | — | completed |
 | 02 | [Hạ tầng LiveKit: dev, prod, TURN, proxy](phase-02-livekit-infra.md) | P1 | 1-1.5d | 01 | completed |
 | 03 | [Backend cuộc gọi: dữ liệu, quyền, vé, webhook, thẻ](phase-03-calls-backend.md) | P1 | 2-2.5d | 01 | completed |
-| 04 | [Đổ chuông, sự kiện realtime, thông báo đẩy](phase-04-ringing-push.md) | P1 | 1d | 03 | pending |
+| 04 | [Đổ chuông, sự kiện realtime, thông báo đẩy](phase-04-ringing-push.md) | P1 | 1d | 03 | completed |
 | 05 | [Frontend lõi cuộc gọi: provider, kiểm tra trước, stage, điện thoại](phase-05-call-ui.md) | P1 | 3d | 02, 03 | pending |
 | 06 | [Frontend điểm bắt đầu, thẻ, cuộc gọi đến, cài đặt](phase-06-entry-cards-incoming.md) | P1 | 1.5d | 04, 05 | pending |
 | 07 | [Kiểm chứng: thiết bị thật, mạng chặn UDP, tải 20 người, deny](phase-07-verification.md) | P1 | 1d | 06 | pending |

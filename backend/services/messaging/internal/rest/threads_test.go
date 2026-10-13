@@ -79,6 +79,13 @@ func TestRegisterRoutes_MountsTheThreadRoutes(t *testing.T) {
 		"GET /api/messages/mentions/unread-count",
 		"GET /api/me/push-preferences",
 		"PUT /api/me/push-preferences",
+		"POST /api/channels/:chId/calls",
+		"GET /api/calls/:callId",
+		"POST /api/calls/:callId/token",
+		"POST /api/calls/:callId/decline",
+		"POST /api/calls/:callId/cancel",
+		"POST /api/calls/:callId/invite",
+		"POST /internal/livekit/webhook",
 	} {
 		assert.True(t, mounted[want], want)
 	}

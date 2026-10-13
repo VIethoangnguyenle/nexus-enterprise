@@ -823,8 +823,9 @@ export interface MessageDeletedEvent {
 /**
  * CallEvent is a change of a call. ring, cancel, answered, declined and missed
  * go to every device of the two people of a direct call (answered stops the
- * other devices ringing); state goes to the conversation's subscribers, so a
- * card or a "Join" button follows who is in the call.
+ * other devices ringing); invited to every device of the people invited; state
+ * goes to the conversation's subscribers, so a card or a "Join" button follows
+ * who is in the call.
  *
  * @generated from protobuf message messaging.CallEvent
  */
@@ -832,7 +833,7 @@ export interface CallEvent {
     /**
      * @generated from protobuf field: string type = 1
      */
-    type: string; // ring | cancel | answered | declined | missed | state
+    type: string; // ring | cancel | answered | declined | missed | state | invited
     /**
      * @generated from protobuf field: string call_id = 2
      */

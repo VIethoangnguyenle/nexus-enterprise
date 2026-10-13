@@ -2373,11 +2373,12 @@ func (x *MessageDeletedEvent) GetReplyCount() int32 {
 
 // CallEvent is a change of a call. ring, cancel, answered, declined and missed
 // go to every device of the two people of a direct call (answered stops the
-// other devices ringing); state goes to the conversation's subscribers, so a
-// card or a "Join" button follows who is in the call.
+// other devices ringing); invited to every device of the people invited; state
+// goes to the conversation's subscribers, so a card or a "Join" button follows
+// who is in the call.
 type CallEvent struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
-	Type             string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // ring | cancel | answered | declined | missed | state
+	Type             string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // ring | cancel | answered | declined | missed | state | invited
 	CallId           string                 `protobuf:"bytes,2,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
 	ChannelId        string                 `protobuf:"bytes,3,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
 	Kind             string                 `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"`     // audio | video

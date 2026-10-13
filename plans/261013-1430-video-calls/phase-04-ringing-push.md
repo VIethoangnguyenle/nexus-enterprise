@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Đổ chuông, sự kiện realtime, thông báo đẩy"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: [3]
@@ -32,3 +32,11 @@ dependencies: [3]
 - [ ] Test: ring tới mọi thiết bị người được gọi; answered làm thiết bị khác nhận `answered`; người ngoài kênh không nhận
   `state` (deny); đẩy tắt khi preference tắt hoặc giờ yên lặng.
 - [ ] Proto sinh hai phía; gate xanh.
+
+## Ghi chú triển khai (2026-10-13)
+- Khung `call_event` đã làm ở phase 03; ở đây thêm loại `invited` (chuỗi `invite` trùng tên operation NGAC nên lint chặn).
+- Đẩy: "Cuộc gọi đến" (collapse `call-<id>`, mở `/calls/<id>?answer=…`); hết giờ **hoặc người gọi huỷ** → "Cuộc gọi nhỡ"
+  thay thế; từ chối/trả lời → không đẩy thêm. Tuỳ chọn `incoming_call` (PUT thiếu trường thì giữ giá trị cũ).
+- Mời: `POST /api/calls/{id}/invite` (chỉ người có write mới được mời) + @nhắc trong 2 phút đầu cuộc gọi nhóm → "X mời
+  bạn vào cuộc gọi" (theo tuỳ chọn `mention`).
+- Màn cài đặt bật/tắt "Cuộc gọi đến" thuộc phase 06.

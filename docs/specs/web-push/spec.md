@@ -64,7 +64,19 @@ message ends with its 30-second deadline, however many recipients remain.
 ### Requirement: Preferences
 `GET|PUT /api/me/push-preferences` SHALL read and store the caller's own preferences: each kind on or off, and quiet
 hours (`HH:MM` start and end, time zone). Without stored preferences every kind is on and there are no quiet hours.
-Invalid hours or an unknown time zone are refused (400).
+Invalid hours or an unknown time zone are refused (400). The kinds are `direct`, `mention`, `thread_reply` and
+`incoming_call`; a request that leaves `incoming_call` out keeps its stored value (an older client does not switch it
+off).
+
+### Requirement: Calls
+A direct call SHALL push "Cuộc gọi đến" to the other person: titled by the caller, "đang gọi video cho bạn" /
+"đang gọi thoại cho bạn", opening `/calls/{id}?answer=video|audio`, collapse id `call-{id}`. When it stops ringing
+unanswered (missed after 45 seconds, or cancelled by the caller) a "📹 Cuộc gọi nhỡ" / "📞 Cuộc gọi nhỡ" with the same
+collapse id replaces it and opens the conversation; a declined or answered call pushes nothing more. These need
+`incoming_call` on, outside quiet hours, and are not sent while the person has the conversation open (the app rings).
+A group call rings nobody. Inviting people to a call (`POST /api/calls/{id}/invite`), or @mentioning them in the main
+stream within two minutes of a group call starting, pushes "<name> mời bạn vào cuộc gọi" opening `/calls/{id}`, under
+the `mention` preference. See `chat-calls`.
 
 ### Requirement: Device switch
 Settings › Notifications shows a per-device push switch whose state is read from the OneSignal SDK. The SDK is

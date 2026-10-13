@@ -104,3 +104,32 @@ func TestStartCall_WithoutMediaAnswersUnavailable(t *testing.T) {
 	require.NoError(t, c.pool.QueryRow(context.Background(), `SELECT count(*) FROM calls WHERE channel_id = $1`, c.chID).Scan(&n))
 	assert.Zero(t, n)
 }
+
+// A client that does not know incoming_call yet leaves it as it was; one that
+// sends it sets it.
+func TestPushPreferences_IncomingCallSurvivesAnOlderClient(t *testing.T) {
+	c := newChat(t)
+	svc := domain.NewService(store.NewStore(c.pool), answerPolicy{allow: true}, nil, namedUser{}, nil)
+	h := NewHandler(svc, nil, nil)
+	e := httputil.NewEcho("messaging")
+	as := func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(ctx echo.Context) error {
+			httputil.SetClaims(ctx, &httputil.Claims{UserID: c.user, NGACNodeID: c.node, TenantID: c.ws})
+			return next(ctx)
+		}
+	}
+	e.GET("/api/me/push-preferences", h.GetPushPreferences, as)
+	e.PUT("/api/me/push-preferences", h.PutPushPreferences, as)
+	t.Cleanup(func() { c.pool.Exec(context.Background(), `DELETE FROM push_preferences WHERE user_id = $1`, c.user) })
+
+	quiet := `"quiet_hours":{"enabled":false,"start":"22:00","end":"07:00","time_zone":"UTC"}`
+	rec := call(e, http.MethodPut, "/api/me/push-preferences",
+		`{"kinds":{"direct":true,"mention":true,"thread_reply":true,"incoming_call":false},`+quiet+`}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+
+	rec = call(e, http.MethodPut, "/api/me/push-preferences", `{"kinds":{"direct":true,"mention":true,"thread_reply":false},`+quiet+`}`)
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	got := decode(t, call(e, http.MethodGet, "/api/me/push-preferences", ""))["kinds"].(map[string]any)
+	assert.Equal(t, false, got["incoming_call"], "an older client did not turn it back on")
+	assert.Equal(t, false, got["thread_reply"])
+}

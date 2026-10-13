@@ -307,3 +307,25 @@ func (s *Store) DMOthers(ctx context.Context, channelID, userID string) ([]strin
 	}
 	return out, rows.Err()
 }
+
+// WorkspaceNodes maps user ids to the NGAC node each acts as in a workspace:
+// their workspace node (tenant_users), else their own. Unknown ids are left out.
+func (s *Store) WorkspaceNodes(ctx context.Context, workspaceID string, userIDs []string) (map[string]string, error) {
+	rows, err := s.db.Query(ctx,
+		`SELECT u.id, COALESCE(tu.ngac_node_id, u.ngac_node, '')
+		 FROM users u LEFT JOIN tenant_users tu ON tu.user_id = u.id AND tu.tenant_id = $1
+		 WHERE u.id = ANY($2)`, workspaceID, userIDs)
+	if err != nil {
+		return nil, fmt.Errorf("workspace nodes: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]string{}
+	for rows.Next() {
+		var id, node string
+		if err := rows.Scan(&id, &node); err != nil {
+			return nil, fmt.Errorf("workspace nodes: %w", err)
+		}
+		out[id] = node
+	}
+	return out, rows.Err()
+}

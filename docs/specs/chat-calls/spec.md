@@ -87,11 +87,22 @@ card does not show as edited. The card SHALL NOT be pushed as a message notifica
 
 ### Requirement: Live changes
 Each committed change SHALL be announced as a `call_event` (`ServerEnvelope` field 23): `type` (`ring`, `cancel`,
-`answered`, `declined`, `missed`, `state`), the call's id, conversation, kind, status, caller (name, avatar),
+`answered`, `declined`, `missed`, `state`, `invited`), the call's id, conversation, kind, status, caller (name, avatar),
 `participant_count`, `participant_ids`, `started_at`, `ended_at`. `ring`, `cancel`, `answered`, `declined` and `missed`
 go to every session of both people of a direct call, whatever workspace they are in (so another device stops ringing
 when one answers); every change goes as `state` to the conversation's subscribers; nobody else receives it. When the
 card's text changed, the card goes to the subscribers as an edited message.
+
+### Requirement: Inviting people to a call
+`POST /api/calls/{id}/invite` with `{"user_ids": [...]}` SHALL require `write` on the conversation (403 otherwise) and
+an open call (409 `call_ended`). Of the people named (at most 20), only those who hold `write` there — who could join —
+are invited; the rest are skipped without a word. Each invitee's open app hears a `call_event` of type `invited`, and
+their devices a push (see `web-push`). A person @mentioned in the main stream within two minutes of a group call
+starting is invited the same way.
+
+### Requirement: Ringing reaches devices
+A direct call's ringing, and the missed call that replaces it, SHALL be pushed to the other person as specified in
+`web-push`, besides the live `call_event`.
 
 ### Requirement: Configuration
 Calls SHALL be on only when `LIVEKIT_URL`, `LIVEKIT_PUBLIC_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` are all
@@ -103,5 +114,5 @@ set; otherwise starting a call or asking for a ticket answers 503 `calls_unavail
 - iOS home-screen apps cannot ring while closed (a notification only) and cannot present the screen.
 
 ## Status
-Added 2026-10-13 with the server part (lifecycle, tickets, webhook, card, live events). Ringing notifications, the
-call screens and the entry points follow.
+Added 2026-10-13 with the server part (lifecycle, tickets, webhook, card, live events, ringing notifications,
+invitations). The call screens and the entry points follow.

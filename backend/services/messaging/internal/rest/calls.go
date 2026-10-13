@@ -39,6 +39,7 @@ func (h *Handler) registerCallRoutes(e *echo.Echo, api *echo.Group) {
 	api.POST("/calls/:callId/token", h.CallToken)
 	api.POST("/calls/:callId/decline", h.DeclineCall)
 	api.POST("/calls/:callId/cancel", h.CancelCall)
+	api.POST("/calls/:callId/invite", h.InviteToCall)
 	e.POST("/internal/livekit/webhook", h.LiveKitWebhook)
 }
 
@@ -135,6 +136,24 @@ func (h *Handler) CancelCall(c echo.Context) error {
 		return callError(err)
 	}
 	return c.JSON(http.StatusOK, call)
+}
+
+// InviteToCall handles POST /api/calls/:callId/invite with {"user_ids": [...]}.
+func (h *Handler) InviteToCall(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	var body struct {
+		UserIDs []string `json:"user_ids"`
+	}
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
+	}
+	if err := h.svc.InviteToCall(c.Request().Context(), c.Param("callId"), claims.UserID, claims.NGACNodeID, body.UserIDs); err != nil {
+		return callError(err)
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 // LiveKitWebhook handles POST /internal/livekit/webhook. A request not signed

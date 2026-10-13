@@ -85,6 +85,7 @@ const (
 	CallChangeDeclined = "declined"
 	CallChangeMissed   = "missed"
 	CallChangeState    = "state" // who is in it, or it ended
+	CallChangeInvite   = "invited" // someone asked the people named to join
 )
 
 // CallChange is a committed change of a call. Users, when set, are the people
@@ -110,6 +111,7 @@ func (s *Service) announceCall(ctx context.Context, c CallChange) {
 	if s.callObserver != nil {
 		s.callObserver.CallChanged(ctx, c)
 	}
+	s.pushCallChange(ctx, c)
 }
 
 // CallCardText is what a call's card says, which the conversation previews and
