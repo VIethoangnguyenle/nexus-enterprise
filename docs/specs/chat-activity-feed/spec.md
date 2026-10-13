@@ -43,7 +43,8 @@ users mentioned), `created_at`, and — on a reply — `parent_message_id`. `pre
 (formatting removed, lines joined by a space) of at most 140 characters, counted in characters not bytes; a longer
 text is cut at a word boundary when it has one, else at the limit, and ends with an ellipsis within the 140.
 `kind` is `attachment` when the message has files (and `attachment_name` is the first file's name), else `poll`,
-`task` or `card` (a document or approval) from the object it links, else `text`.
+`task`, `card` (a document or approval) or `call` (a call's card, whose text says how the call went — see
+`chat-calls`) from the object it links, else `text`.
 
 #### Scenario: Formatted message
 - **WHEN** the newest message is `<p>xem <strong>kế hoạch</strong></p>`

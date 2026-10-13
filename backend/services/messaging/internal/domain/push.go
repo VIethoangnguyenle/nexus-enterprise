@@ -285,11 +285,17 @@ func (s *Service) pushTo(ctx context.Context, msg *pb.Message, recipients []Push
 		return
 	}
 	sender, _ := s.store.DisplayName(ctx, msg.SenderId)
+	invite := s.mentionInvite(ctx, ch, msg)
 	for _, r := range recipients {
 		// The caller's deadline bounds the whole delivery, not each send.
 		if ctx.Err() != nil {
 			slog.Warn("push delivery cut short", "message_id", msg.Id, "error", ctx.Err())
 			return
+		}
+		// Mentioned while the group's call has just begun: an invitation to it.
+		if invite != nil && r.Kind == PushMention {
+			s.send(ctx, callInvitePush(ch, invite.ID, sender, r.Person.UserID))
+			continue
 		}
 		s.deliver(ctx, r.Person.UserID, ch, notificationFor(ch, sender, msg, r.Kind))
 	}

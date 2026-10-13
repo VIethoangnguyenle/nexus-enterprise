@@ -9,6 +9,14 @@ import { VitePWA } from 'vite-plugin-pwa'
 const isDev = process.env.VITE_DEV_MODE === 'true'
 
 const devProxy = {
+  // LiveKit signalling (WebSocket) — :7880, prefix stripped. Matches nginx /livekit/ in production.
+  '/livekit': {
+    target: 'http://localhost:7880',
+    ws: true,
+    changeOrigin: true,
+    rewrite: (path) => path.replace(/^\/livekit/, ''),
+  },
+
   // Auth service — :8180
   '/api/auth': { target: 'http://localhost:8180', changeOrigin: true },
 
@@ -77,6 +85,7 @@ const devProxy = {
   '/api/notifications': { target: 'http://localhost:8183', changeOrigin: true },
   '/api/polls': { target: 'http://localhost:8183', changeOrigin: true },
   '/api/tasks': { target: 'http://localhost:8183', changeOrigin: true },
+  '/api/calls': { target: 'http://localhost:8183', changeOrigin: true },
 
   // Asset service — :8184
   '/api/assets': { target: 'http://localhost:8184', changeOrigin: true },

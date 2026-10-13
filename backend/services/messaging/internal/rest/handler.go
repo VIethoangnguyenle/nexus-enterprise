@@ -30,6 +30,8 @@ type Handler struct {
 	svc    *domain.Service
 	notifs *domain.NotificationService
 	hub    Broadcaster
+
+	webhooks CallWebhooks // nil: the LiveKit webhook refuses everything
 }
 
 // NewHandler creates a messaging REST handler.
@@ -136,6 +138,9 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/notifications/:notifId/read", h.MarkRead)
 	api.POST("/notifications/read-all", h.MarkAllRead)
 	api.GET("/notifications/unread-count", h.UnreadCount)
+
+	// Calls, and the webhook LiveKit reports their rooms to
+	h.registerCallRoutes(e, api)
 }
 
 // CreateChannel handles POST /api/workspaces/:id/channels.

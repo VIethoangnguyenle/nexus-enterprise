@@ -299,6 +299,7 @@ export interface PushPreferences {
     direct: boolean
     mention: boolean
     thread_reply: boolean
+    incoming_call: boolean
   }
   quiet_hours: {
     enabled: boolean

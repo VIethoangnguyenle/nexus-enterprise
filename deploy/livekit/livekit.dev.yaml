@@ -1,0 +1,26 @@
+# Local LiveKit server (docker-compose.yml, service livekit). Keys come from LIVEKIT_KEYS.
+# webhook.api_key must equal the dev API key (LIVEKIT_API_KEY, default devkey).
+# Messaging runs natively on the host, so the webhook goes to the host gateway. Browsers on this
+# machine reach media through the published 7881/tcp and 7882/udp, advertised as 127.0.0.1.
+# On macOS Docker Desktop, if media does not connect, run `livekit-server --dev` outside Docker.
+port: 7880
+rtc:
+  tcp_port: 7881
+  udp_port: 7882
+  use_external_ip: false
+  node_ip: 127.0.0.1
+room:
+  # Messaging opens each call's room; a stale ticket must not bring a closed one back.
+  auto_create: false
+  max_participants: 20
+  empty_timeout: 30
+webhook:
+  api_key: devkey
+  urls:
+    - http://host.docker.internal:8183/internal/livekit/webhook
+turn:
+  enabled: true
+  domain: turn.localhost
+  udp_port: 3478
+  tls_port: 5349
+  external_tls: true

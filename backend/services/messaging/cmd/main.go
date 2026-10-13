@@ -28,6 +28,7 @@ import (
 	"ngac-platform/services/messaging/internal/domain"
 	"ngac-platform/services/messaging/internal/events"
 	mgrpc "ngac-platform/services/messaging/internal/grpc"
+	"ngac-platform/services/messaging/internal/livekit"
 	"ngac-platform/services/messaging/internal/rest"
 	"ngac-platform/services/messaging/internal/store"
 )
@@ -130,6 +131,22 @@ func main() {
 		os.Exit(1)
 	}
 	domainSvc.SetPush(pushSender, hub)
+	// Calls run on a LiveKit server; without LIVEKIT_* set they are off.
+	lk := livekit.Config{
+		URL:       os.Getenv("LIVEKIT_URL"),
+		PublicURL: os.Getenv("LIVEKIT_PUBLIC_URL"),
+		APIKey:    os.Getenv("LIVEKIT_API_KEY"),
+		APISecret: os.Getenv("LIVEKIT_API_SECRET"),
+	}
+	var lkClient *livekit.Client
+	if lk.Enabled() {
+		lkClient = livekit.New(lk)
+		domainSvc.SetCallMedia(lkClient)
+		domainSvc.SetCallObserver(hub)
+		go expireRingingCalls(ctx, domainSvc)
+	} else {
+		slog.Info("LIVEKIT_* not set, calls disabled")
+	}
 
 	// Start WebSocket server with graceful shutdown support
 	wsMux := http.NewServeMux()
@@ -185,6 +202,10 @@ func main() {
 	}
 	if rtConsumer != nil {
 		defer rtConsumer.Close()
+		// Someone removed from a conversation or a workspace leaves its calls.
+		if lkClient != nil {
+			rtConsumer.SetCallEvictor(domainSvc)
+		}
 	}
 
 	healthSrv := health.NewServer()
@@ -195,6 +216,9 @@ func main() {
 	e := httputil.NewEcho("messaging", echomw.Logger())
 	restHandler := rest.NewHandler(domainSvc, notifications, hub)
 	restHandler.RegisterRoutes(e, jwtSecret)
+	if lkClient != nil {
+		restHandler.SetCallWebhooks(lkClient)
+	}
 
 	// Graceful shutdown for the gRPC, WebSocket and REST servers.
 	go bootstrap.Shutdown{
@@ -214,5 +238,40 @@ func main() {
 	if err := srv.Serve(lis); err != nil {
 		slog.Error("server exited", "error", err)
 		os.Exit(1)
+	}
+}
+
+// ringSweepEvery is how often direct calls that rang unanswered are marked
+// missed. The ring lasts 45 seconds; a few seconds late is not noticed.
+const ringSweepEvery = 5 * time.Second
+
+// callEvictEvery is how often every open call is checked for people who no
+// longer hold the right to be in it.
+const callEvictEvery = 30 * time.Second
+
+// expireRingingCalls marks unanswered direct calls missed, and sweeps open
+// calls of people who lost access, until ctx ends. Every instance sweeps; each
+// call is expired by exactly one, and putting someone out twice is harmless.
+func expireRingingCalls(ctx context.Context, svc *domain.Service) {
+	ring := time.NewTicker(ringSweepEvery)
+	defer ring.Stop()
+	evict := time.NewTicker(callEvictEvery)
+	defer evict.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ring.C:
+			if _, err := svc.ExpireRingingCalls(ctx, now); err != nil && ctx.Err() == nil {
+				slog.Warn("ringing calls not swept", "error", err)
+			}
+		case <-evict.C:
+			// The safety net behind the sweeps a lost right triggers: an event
+			// missed while this instance restarted still leaves nobody in a call
+			// they may no longer be in for longer than this.
+			if err := svc.EvictLostCallParticipants(ctx, "", ""); err != nil && ctx.Err() == nil {
+				slog.Warn("open calls not swept", "error", err)
+			}
+		}
 	}
 }

@@ -1,0 +1,112 @@
+[
+  {
+    "name": "scratch group with both",
+    "ok": true,
+    "detail": "200"
+  },
+  {
+    "name": "start call (201/200)",
+    "ok": true,
+    "detail": "201"
+  },
+  {
+    "name": "pre-join shows",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "A joined the stage",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "B joined on phone",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "A sees 2 tiles",
+    "ok": true,
+    "detail": "2"
+  },
+  {
+    "name": "A has video elements playing",
+    "ok": true,
+    "detail": "2"
+  },
+  {
+    "name": "A sees B hand raised",
+    "ok": true,
+    "detail": "1"
+  },
+  {
+    "name": "A sees B reaction",
+    "ok": true,
+    "detail": "1"
+  },
+  {
+    "name": "B sees A reaction",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "people panel lists both",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "chat message sent from call panel",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "A presenting (prebar)",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "B (phone) sees the presentation",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "A navigated away: mini tile shows",
+    "ok": true,
+    "detail": "url=http://localhost:5173/channels?ws=c4e727e1-36e9-4c54-8a27-1cd35bbfd385"
+  },
+  {
+    "name": "B still sees both (A still in the call)",
+    "ok": true,
+    "detail": "2"
+  },
+  {
+    "name": "A reopens the same call",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "B minimised to chat with mini tile",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "A removes B from the group",
+    "ok": true,
+    "detail": "200"
+  },
+  {
+    "name": "B is cut off with the danger banner",
+    "ok": true,
+    "detail": ""
+  },
+  {
+    "name": "B is cut off within 5 s",
+    "ok": true,
+    "detail": "1323 ms"
+  },
+  {
+    "name": "A leave shows summary",
+    "ok": true,
+    "detail": ""
+  }
+]

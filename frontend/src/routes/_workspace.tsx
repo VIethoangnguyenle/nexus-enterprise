@@ -21,6 +21,8 @@ import { OfflineBar } from '../components/app/OfflineBar'
 import { UpdateBar } from '../components/app/UpdateBar'
 import { Button, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
+import { CallProvider } from '../components/calls/CallProvider'
+import { IncomingCallLayer } from '../components/calls/IncomingCallLayer'
 import { apiFetch, logoutSession } from '../api/client'
 
 export const Route = createFileRoute('/_workspace')({
@@ -95,7 +97,8 @@ function WorkspaceLayout() {
     )
   }
 
-  return <WorkspaceShell />
+  // The call room lives above every screen, so a call survives moving around the app.
+  return <CallProvider><WorkspaceShell /></CallProvider>
 }
 
 function WorkspaceShell() {
@@ -194,6 +197,8 @@ function WorkspaceShell() {
       {/* Phone: Chat's bottom bar and the + beside it, on the conversation list only */}
       <MobileNav />
       <UpdateBar />
+      {/* A call ringing this person, on every screen of the workspace */}
+      <IncomingCallLayer />
     </div>
   )
 }

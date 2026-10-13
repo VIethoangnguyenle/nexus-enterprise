@@ -25,6 +25,7 @@ describe('NotificationSettings component', () => {
       direct: true,
       mention: true,
       thread_reply: true,
+      incoming_call: true,
     },
     quiet_hours: {
       enabled: false,
@@ -135,6 +136,31 @@ describe('NotificationSettings component', () => {
         kinds: {
           ...defaultPrefs.kinds,
           direct: false,
+        },
+      })
+    })
+  })
+
+  it('toggles incoming_call kind and sends PUT', async () => {
+    const user = userEvent.setup()
+    const updateSpy = vi.spyOn(pushLib.pushApi, 'updatePreferences').mockResolvedValue({
+      ...defaultPrefs,
+      kinds: { ...defaultPrefs.kinds, incoming_call: false },
+    })
+
+    renderWithQuery(<NotificationSettings />)
+
+    const callSwitch = await screen.findByRole('switch', { name: 'Cuộc gọi đến' })
+    expect(callSwitch).toHaveAttribute('aria-checked', 'true')
+
+    await user.click(callSwitch)
+
+    await waitFor(() => {
+      expect(updateSpy).toHaveBeenCalledWith({
+        ...defaultPrefs,
+        kinds: {
+          ...defaultPrefs.kinds,
+          incoming_call: false,
         },
       })
     })

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
+import { hashKey, notifyManager, useQueryClient } from '@tanstack/react-query'
 import type { Message } from '../../api/messaging'
 import { keys } from '../../hooks/keys'
 import { toMillis } from '../../lib/format'
@@ -35,7 +35,21 @@ export function useQuoteWatch(scope: string, channelId: string, quote: PendingQu
   // is no query observer — an observer without a queryFn would be asked to fetch
   // when the list is refreshed, and fail it.
   const client = useQueryClient()
-  const subscribe = useCallback((notify: () => void) => client.getQueryCache().subscribe(notify), [client])
+  // Only this list's events, and never synchronously: the cache flushes its
+  // events when any component's query ends a batch — possibly while that other
+  // component renders (a card mounting its query) — and React refuses a store
+  // update in the middle of another component's render. Query observers defer
+  // the same way.
+  const hash = hashKey(key)
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      const later = notifyManager.batchCalls(notify)
+      return client.getQueryCache().subscribe((event) => {
+        if (event.query.queryHash === hash) later()
+      })
+    },
+    [client, hash],
+  )
   const data = useSyncExternalStore(subscribe, () => client.getQueryData<{ messages: Message[] }>(key))
   const gone = !!quote && !quote.deleted && isQuoteGone(quote, data?.messages, inThread)
   const id = quote?.id

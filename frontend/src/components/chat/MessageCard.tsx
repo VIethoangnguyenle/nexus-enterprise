@@ -4,11 +4,13 @@ import { ApprovalCard } from './ApprovalCard'
 import { DocCard } from './DocCard'
 import { PollCard } from './PollCard'
 import { TaskCard } from './TaskCard'
+import { CallCard } from '../calls/CallCard'
 
 /**
- * The card of a message (DESIGN.md "Thẻ"): a poll, a task, a document or an
- * approval request, read live from its own service under the viewer's access.
- * The task card gets no "open in Công việc" link: that area has no route yet.
+ * The card of a message (DESIGN.md "Thẻ"): a poll, a task, a document, an
+ * approval request, or a call — read live from its own service under the
+ * viewer's access. The task card gets no "open in Công việc" link: that area
+ * has no route yet. Call cards have no thread affordance.
  */
 export function MessageCard({ message: m }: { message: Message }) {
   const kind = cardKindOf(m)
@@ -17,5 +19,6 @@ export function MessageCard({ message: m }: { message: Message }) {
   if (kind === 'task') return <TaskCard taskId={id} channelId={m.channel_id} />
   if (kind === 'document') return <DocCard docId={id} />
   if (kind === 'approval') return <ApprovalCard requestId={id} />
+  if (kind === 'call') return <CallCard callId={id} channelId={m.channel_id} />
   return null
 }

@@ -24,6 +24,7 @@ const (
 	kindPoll       = "poll"
 	kindTask       = "task"
 	kindCard       = "card"
+	kindCall       = "call"
 )
 
 // previewText is the opening of a message as one line of plain text. Longer
@@ -63,6 +64,8 @@ func messageKind(m *store.Message, attachments []store.Attachment) string {
 		return kindPoll
 	case m.LinkedEntityType == linkedTask:
 		return kindTask
+	case m.LinkedEntityType == linkedCall:
+		return kindCall
 	case isLinkedCard(m.LinkedEntityType):
 		return kindCard
 	}

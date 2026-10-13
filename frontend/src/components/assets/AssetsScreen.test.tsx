@@ -406,7 +406,8 @@ describe('AssetsScreen: list', () => {
       await user.click(await within(panel).findByRole('button', { name: 'Ngừng dùng' }))
       const dialog = await screen.findByRole('dialog', { name: 'Ngừng dùng?' })
       expect(dialog).toHaveTextContent('Bước này không hoàn tác được')
-      expect(within(dialog).getByRole('button', { name: 'Huỷ' })).toHaveFocus()
+      // The dialog moves focus once it has mounted: on a busy machine that is a beat after it appears.
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Huỷ' })).toHaveFocus())
       expect(posts(`/assets/${A.mac4}/transition`)).toHaveLength(0)
 
       await user.keyboard('{Escape}')

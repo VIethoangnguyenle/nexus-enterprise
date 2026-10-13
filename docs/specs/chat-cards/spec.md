@@ -86,6 +86,10 @@ linked type with an empty `linked_entity_id`, is refused with 400 and stores not
 - **WHEN** a caller without write on the channel posts a document card
 - **THEN** the answer is 403 and nothing is stored
 
+### Requirement: Call cards
+A call's card is posted by the call itself, never by the composer: a system message with `linked_entity_type: "call"`
+whose text follows the call's state. It is specified in `chat-calls`.
+
 ### Requirement: The composer creates cards where the person is writing
 The composer SHALL offer "Tạo trong chat" — Bình chọn, Công việc, Tài liệu mới, Đề nghị phê duyệt — beside its attach
 control (one sheet with the attach rows on a phone), and not while a sent message is being edited. Created from a

@@ -73,6 +73,7 @@ message ServerEnvelope {
     ThreadStateEvent   thread_state   = 20;
     MessageEditedEvent  message_edited  = 21;
     MessageDeletedEvent message_deleted = 22;
+    CallEvent           call_event      = 23;
   }
   // asset_updated, drive_object and drive_perm were replaced by domain_event.
   reserved 7, 13, 14;
@@ -282,4 +283,24 @@ message MessageDeletedEvent {
   string parent_message_id = 3;
   bool   keep_placeholder  = 4;
   int32  reply_count       = 5;   // The thread's count after a reply was deleted
+}
+
+// CallEvent is a change of a call. ring, cancel, answered, declined and missed
+// go to every device of the two people of a direct call (answered stops the
+// other devices ringing); invited to every device of the people invited; state
+// goes to the conversation's subscribers, so a card or a "Join" button follows
+// who is in the call.
+message CallEvent {
+  string type                 = 1;  // ring | cancel | answered | declined | missed | state | invited
+  string call_id              = 2;
+  string channel_id           = 3;
+  string kind                 = 4;  // audio | video
+  string status               = 5;  // ringing | active | ended | missed | declined | cancelled
+  string caller_id            = 6;
+  string caller_name          = 7;
+  string caller_avatar_url    = 8;
+  int32  participant_count    = 9;
+  repeated string participant_ids = 10;
+  google.protobuf.Timestamp started_at = 11;
+  google.protobuf.Timestamp ended_at   = 12;
 }

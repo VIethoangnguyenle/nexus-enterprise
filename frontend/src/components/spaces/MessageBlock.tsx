@@ -87,9 +87,10 @@ export function MessageBlock({
         }]
       : []
 
-  // A poll or task message carries a fallback line of text for clients without cards; the card replaces it.
+  // A poll, task or call message carries a fallback line of text for clients without cards; the card replaces it.
   const card = deleted ? undefined : cardKindOf(m)
-  const hasText = !deleted && !card?.match(/^(poll|task)$/) && !!m.content && !legacyFilename && m.content.trim() !== '' && m.content.trim() !== '<p></p>'
+  const isCallCard = card === 'call'
+  const hasText = !deleted && !card?.match(/^(poll|task|call)$/) && !!m.content && !legacyFilename && m.content.trim() !== '' && m.content.trim() !== '<p></p>'
   const hasBubble = hasText || (!deleted && !!m.quoted)
   const pending = !!m._optimistic
   const [timeShown, setTimeShown] = useState(false)
@@ -230,7 +231,8 @@ export function MessageBlock({
             onAddReaction={() => onReact(m.id)}
           />
         )}
-        {children}
+        {/* Call cards have no thread affordance (DESIGN.md §6, mockup §1 note 3). */}
+        {!isCallCard && children}
       </div>
 
       {showBar && (

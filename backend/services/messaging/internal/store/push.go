@@ -12,6 +12,7 @@ import (
 // PushPreferences is what a user wants pushed to their devices.
 type PushPreferences struct {
 	Direct, Mention, ThreadReply bool
+	IncomingCall                 bool // a call ringing them, and the call they missed
 	QuietEnabled                 bool
 	QuietStart, QuietEnd         int // minutes after midnight
 	TimeZone                     string
@@ -19,16 +20,16 @@ type PushPreferences struct {
 
 // DefaultPushPreferences: everything on, no quiet hours.
 var DefaultPushPreferences = PushPreferences{
-	Direct: true, Mention: true, ThreadReply: true, QuietStart: 22 * 60, QuietEnd: 7 * 60, TimeZone: "Asia/Ho_Chi_Minh",
+	Direct: true, Mention: true, ThreadReply: true, IncomingCall: true, QuietStart: 22 * 60, QuietEnd: 7 * 60, TimeZone: "Asia/Ho_Chi_Minh",
 }
 
 // GetPushPreferences returns a user's preferences, or the defaults.
 func (s *Store) GetPushPreferences(ctx context.Context, userID string) (PushPreferences, error) {
 	p := DefaultPushPreferences
 	err := s.db.QueryRow(ctx,
-		`SELECT direct, mention, thread_reply, quiet_enabled, quiet_start, quiet_end, time_zone
+		`SELECT direct, mention, thread_reply, incoming_call, quiet_enabled, quiet_start, quiet_end, time_zone
 		 FROM push_preferences WHERE user_id = $1`, userID).
-		Scan(&p.Direct, &p.Mention, &p.ThreadReply, &p.QuietEnabled, &p.QuietStart, &p.QuietEnd, &p.TimeZone)
+		Scan(&p.Direct, &p.Mention, &p.ThreadReply, &p.IncomingCall, &p.QuietEnabled, &p.QuietStart, &p.QuietEnd, &p.TimeZone)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return DefaultPushPreferences, nil
 	}
@@ -41,11 +42,11 @@ func (s *Store) GetPushPreferences(ctx context.Context, userID string) (PushPref
 // SavePushPreferences stores a user's preferences.
 func (s *Store) SavePushPreferences(ctx context.Context, userID string, p PushPreferences) error {
 	if _, err := s.db.Exec(ctx,
-		`INSERT INTO push_preferences (user_id, direct, mention, thread_reply, quiet_enabled, quiet_start, quiet_end, time_zone, updated_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+		`INSERT INTO push_preferences (user_id, direct, mention, thread_reply, quiet_enabled, quiet_start, quiet_end, time_zone, incoming_call, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
 		 ON CONFLICT (user_id) DO UPDATE SET direct = $2, mention = $3, thread_reply = $4, quiet_enabled = $5,
-		   quiet_start = $6, quiet_end = $7, time_zone = $8, updated_at = NOW()`,
-		userID, p.Direct, p.Mention, p.ThreadReply, p.QuietEnabled, p.QuietStart, p.QuietEnd, p.TimeZone); err != nil {
+		   quiet_start = $6, quiet_end = $7, time_zone = $8, incoming_call = $9, updated_at = NOW()`,
+		userID, p.Direct, p.Mention, p.ThreadReply, p.QuietEnabled, p.QuietStart, p.QuietEnd, p.TimeZone, p.IncomingCall); err != nil {
 		return fmt.Errorf("save push preferences: %w", err)
 	}
 	return nil

@@ -37,6 +37,19 @@ dùng. Accent ≤ 10% bề mặt, chỉ cho hành động chính, mục đang ch
 | `--color-hover` | `oklch(93.4% 0.012 190)` | `oklch(25% 0.016 200)` | hover trên sunk/base |
 | `--color-scrim` | `oklch(23% 0.02 200 / 0.32)` | `oklch(8% 0.01 200 / 0.6)` | nền sau modal |
 
+**Màn gọi** (mockup `design/mockups/video-call.html`): luôn tối, **giống nhau ở hai giao diện** — video đọc tốt trên nền
+tối và tách rõ "đang trong cuộc gọi" khỏi workspace. Chỉ dùng trong stage của cuộc gọi.
+
+| Token | Giá trị | Dùng cho |
+|---|---|---|
+| `--color-stage` | `oklch(16% 0.012 200)` | nền stage, xem trước camera |
+| `--color-stage-tile` | `oklch(23% 0.016 200)` | ô người không bật camera, sheet trên stage |
+| `--color-stage-raised` | `oklch(28% 0.018 200)` | nút điều khiển, chip, popover trên stage |
+| `--color-stage-hover` | `oklch(33% 0.018 200)` | hover/nhấn trên stage |
+| `--color-on-stage` / `--color-on-stage-muted` | `oklch(95% 0.008 190)` / `oklch(75% 0.014 195)` | chữ, icon trên stage |
+| `--color-stage-accent` | `oklch(76% 0.11 178)` | viền người đang nói, sóng micro, nút đang bật, badge |
+| `--color-stage-danger` | `oklch(60% 0.19 25)` | Rời / Từ chối |
+
 ### Ink
 
 | Token | Light | Dark | Dùng cho |
@@ -567,6 +580,59 @@ theo §5 "Điều hướng di động".
   `warning`, Tiếp theo mờ; ngăn bằng "›"), StatusPill tổng ("Chờ … duyệt" `warn`, "Đã duyệt" `ok`, "Từ chối"
   `bad`), "Xem đề nghị". Người đang phải duyệt thấy thêm Duyệt / Từ chối ngay trên thẻ. Người không có quyền
   đọc đề nghị chỉ thấy tiêu đề và "Bạn không có quyền xem đề nghị này".
+### Cuộc gọi video và thoại (mockup `design/mockups/video-call.html`, duyệt 2026-10-13)
+
+Cuộc gọi luôn thuộc một cuộc trò chuyện. Tin nhắn trực tiếp: gọi thì đổ chuông. Nhóm (tối đa 20 người): bắt đầu thì
+ai trong nhóm cũng tham gia được, không đổ chuông cả nhóm. Đợt đầu: chia sẻ màn hình, chat trong cuộc gọi, giơ tay,
+thả cảm xúc; không ghi hình, không quyền chủ phòng.
+- **Điểm bắt đầu:** thanh đầu tin nhắn trực tiếp có IconButton **Gọi thoại** và **Gọi video** (trước Thông tin). Nhóm có
+  nút pill 36 "Bắt đầu cuộc gọi" (`--color-accent-wash`, icon video accent); khi đang có cuộc gọi đổi thành **Tham gia**
+  (`--color-success`, chữ `--color-on-accent`) + pill `--color-success-wash` "Đang gọi · mm:ss" có chấm success nhấp nháy
+  (giảm chuyển động: tĩnh). Không có quyền gửi tin thì không có nút.
+- **Thẻ cuộc gọi trong luồng** (tin hệ thống của người bắt đầu, luồng chính, không có thread): Card `--color-raised`,
+  viền trong `--color-line`, radius 14, rộng tối đa 420; ô icon 44 radius 12 — đang diễn ra `--color-success-wash`/success,
+  kết thúc `--color-accent-wash`/accent, nhỡ `--color-danger-wash`/danger. Đang diễn ra: avatar 20 tối đa 3 + "và N
+  người" + đồng hồ + Button sm **Tham gia** (success); bạn đang ở trong: "Mở lại cuộc gọi". Kết thúc: số người · thời
+  lượng · giờ bắt đầu–kết thúc. Nhỡ: "Phạm Hải Yến gọi lúc 08:33" + Button sm primary "Gọi lại". Xem trước/Trang chủ:
+  "📹 Cuộc gọi video · 32 phút", "📹 Cuộc gọi nhỡ".
+- **Kiểm tra trước khi vào** (nhóm; DM gọi đi và trả lời vào thẳng): xem trước 16:10 nền `--color-stage` radius 18, gương
+  lật; camera tắt → avatar 88 + "Camera đang tắt"; đo micro 5 vạch `--color-stage-accent`; nút tròn micro/camera trên
+  xem trước. Bên phải: "Sẵn sàng tham gia?", ai đang trong cuộc gọi, Select Micro / Camera / Loa (tên thiết bị do hệ
+  điều hành đặt, không ID; "Thử loa"), banner `danger-wash` khi trình duyệt chặn (cách mở lại; vẫn vào để nghe được),
+  Button lg primary "Tham gia ngay" + Huỷ. Đủ 20 người: "Cuộc gọi đã đầy (20/20)" disabled. Nhớ lựa chọn theo người trên
+  thiết bị.
+- **Cuộc gọi đến:** máy tính — thẻ nổi `--color-overlay` radius 16 rộng 360 góc trên phải (cách 16) ở mọi màn: avatar 56
+  có vòng success lan ra, tên, "đang gọi video cho bạn…", ba nút Từ chối (danger) · Thoại · Video (success); chuông tới
+  45 giây; Esc tắt chuông. Điện thoại app mở — màn đổ chuông toàn màn trên `--color-stage`: avatar 112, tên 26/700,
+  ba nút tròn 68 (Từ chối `--color-stage-danger`, Thoại, Video success). App đóng — thông báo đẩy loại "Cuộc gọi đến"
+  (Trả lời mở thẳng cuộc gọi; hết 45 giây thành "Cuộc gọi nhỡ"). Trả lời ở một thiết bị thì thiết bị khác ngừng đổ
+  chuông. Đang trong cuộc gọi khác: "Kết thúc và trả lời".
+- **Stage (máy tính):** nền `--color-stage`; thanh trên 52 (tên cuộc trò chuyện display 700, đồng hồ, chip số người,
+  chip "Chỉ thành viên nhóm", Bố cục); lưới ô 16:9 radius 14, khe 10: 1 người khác → người đó lớn + ô bạn nhỏ góc;
+  2–4 → 2 cột; 5–9 → 3 cột; 10–20 → 4 cột, phân trang. Ô: video hoặc avatar 88 trên `--color-stage-tile`; nhãn tên tối
+  (đen 62%) góc trái dưới; micro góc phải trên (sóng accent khi nói, gạch đỏ khi tắt); chip "Mạng yếu"; huy hiệu vàng
+  "✋ thứ tự" khi giơ tay; người nói viền trong 3px `--color-stage-accent`. Thanh dưới 84: nút tròn 52
+  `--color-stage-raised` — Micro (Ctrl+D) · Camera (Ctrl+E) · Trình bày · Giơ tay (Ctrl+Alt+H) · Cảm xúc · **Rời**
+  72×52 `--color-stage-danger`; phải: Chat · Người tham gia (badge `--color-stage-accent`) · Thêm (vuông 44 radius 12);
+  trái: giờ · tên. Tắt micro/camera: nền đỏ nhạt; đang bật trình bày/giơ tay: `--color-stage-accent`. Space giữ để nói.
+- **Panel trong cuộc gọi** (rộng 340, `--color-raised`, radius 16, nằm trên stage): tab Chat / Người tham gia. Chat là
+  luồng chính của chính cuộc trò chuyện (rút gọn, ô soạn cuối). Người tham gia: Đang giơ tay (thứ tự) · Trong cuộc gọi ·
+  Trong nhóm chưa vào (+ "Mời" gửi thông báo).
+- **Cảm xúc:** 6 biểu tượng trong popover viên thuốc; bay lên 3 giây từ góc trái dưới kèm tên (giảm chuyển động: tĩnh
+  3 giây); không lưu. Giơ tay: tiếng nhẹ cho người khác; tự hạ 2 giây sau khi người đó nói xong.
+- **Trình bày:** bản trình bày lớn + dải 200px bên phải (tối đa 4 ô + "N người khác"); nhãn "X đang trình bày"; người
+  trình bày thấy viên thuốc `--color-stage-accent` "Bạn đang trình bày …" + "Dừng trình bày" ở giữa thanh trên. Một
+  người trình bày mỗi lúc (người sau được hỏi "Thay người đang trình bày?"). Điện thoại không trình bày (ẩn nút).
+- **Điện thoại:** toàn màn trên `--color-stage`; thanh trên: Thu nhỏ (chevron xuống) · tên + đồng hồ · Loa ngoài. 1–1:
+  người kia toàn màn radius 20 + ô của bạn 104×148 kéo được vào 4 góc. Nhóm: lưới 2 cột ô 3:4, vuốt ngang qua trang
+  (chấm trang). Dưới: nút tròn 56 Micro · Camera · Đổi camera · Thêm · Rời. Thêm = sheet `--color-stage-tile`: hàng 6
+  cảm xúc 48, Giơ tay, Chat trong cuộc gọi, Người tham gia, Micro/camera/loa. Chạm màn ẩn/hiện điều khiển (tự ẩn 4 giây,
+  trừ khi sheet mở hoặc dùng trình đọc màn hình). Thu nhỏ/vuốt xuống → ô nổi 132 rộng (người đang nói + đồng hồ + Rời)
+  trên mọi màn, kéo về hai góc; máy tính dùng Picture-in-Picture khi rời tab. iPhone PWA: "Chạm để bật âm thanh" khi cần.
+- **Trạng thái:** đang kết nối lại (lớp phủ, giữ chỗ 30 giây) → không kết nối được (gợi ý mạng công ty) + Thử lại; mạng
+  yếu → hạ chất lượng trước, chip trên thanh trên; kết thúc → tổng kết (thời lượng, số người, số tin) + Về cuộc trò
+  chuyện / Vào lại; đang ở cuộc gọi khác → "Rời và vào"; bị gỡ khỏi nhóm → ngắt ngay + banner danger.
+
 ## 7. Motion
 
 Mọi duration/easing là token. Chỉ animate `transform` và `opacity` (cộng `background-color` cho

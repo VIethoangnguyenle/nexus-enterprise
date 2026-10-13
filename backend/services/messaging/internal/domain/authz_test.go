@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	authpb "ngac-platform/proto/auth"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/messaging/internal/domain"
@@ -39,15 +40,20 @@ type scriptedPolicyRead struct {
 	err         error
 	children    map[string][]*policypb.NGACNode
 	checks      []grant
+	callers     map[string]grpcauth.Caller // the caller on the context of the last check, by user node
 	noGlobal    bool  // PC_Global cannot be found
 	childrenErr error // GetChildren fails
 }
 
-func (p *scriptedPolicyRead) CheckAccess(_ context.Context, req *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
+func (p *scriptedPolicyRead) CheckAccess(ctx context.Context, req *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	g := grant{req.UserNodeId, req.ObjectNodeId, req.Operation}
 	p.checks = append(p.checks, g)
+	if p.callers == nil {
+		p.callers = map[string]grpcauth.Caller{}
+	}
+	p.callers[req.UserNodeId] = grpcauth.CallerFrom(ctx)
 	if p.err != nil {
 		return nil, p.err
 	}

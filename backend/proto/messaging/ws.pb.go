@@ -417,6 +417,7 @@ type ServerEnvelope struct {
 	//	*ServerEnvelope_ThreadState
 	//	*ServerEnvelope_MessageEdited
 	//	*ServerEnvelope_MessageDeleted
+	//	*ServerEnvelope_CallEvent
 	Payload       isServerEnvelope_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -630,6 +631,15 @@ func (x *ServerEnvelope) GetMessageDeleted() *MessageDeletedEvent {
 	return nil
 }
 
+func (x *ServerEnvelope) GetCallEvent() *CallEvent {
+	if x != nil {
+		if x, ok := x.Payload.(*ServerEnvelope_CallEvent); ok {
+			return x.CallEvent
+		}
+	}
+	return nil
+}
+
 type isServerEnvelope_Payload interface {
 	isServerEnvelope_Payload()
 }
@@ -710,6 +720,10 @@ type ServerEnvelope_MessageDeleted struct {
 	MessageDeleted *MessageDeletedEvent `protobuf:"bytes,22,opt,name=message_deleted,json=messageDeleted,proto3,oneof"`
 }
 
+type ServerEnvelope_CallEvent struct {
+	CallEvent *CallEvent `protobuf:"bytes,23,opt,name=call_event,json=callEvent,proto3,oneof"`
+}
+
 func (*ServerEnvelope_AuthResponse) isServerEnvelope_Payload() {}
 
 func (*ServerEnvelope_ChatMessage) isServerEnvelope_Payload() {}
@@ -747,6 +761,8 @@ func (*ServerEnvelope_ThreadState) isServerEnvelope_Payload() {}
 func (*ServerEnvelope_MessageEdited) isServerEnvelope_Payload() {}
 
 func (*ServerEnvelope_MessageDeleted) isServerEnvelope_Payload() {}
+
+func (*ServerEnvelope_CallEvent) isServerEnvelope_Payload() {}
 
 type AuthResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -2355,6 +2371,143 @@ func (x *MessageDeletedEvent) GetReplyCount() int32 {
 	return 0
 }
 
+// CallEvent is a change of a call. ring, cancel, answered, declined and missed
+// go to every device of the two people of a direct call (answered stops the
+// other devices ringing); invited to every device of the people invited; state
+// goes to the conversation's subscribers, so a card or a "Join" button follows
+// who is in the call.
+type CallEvent struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Type             string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"` // ring | cancel | answered | declined | missed | state | invited
+	CallId           string                 `protobuf:"bytes,2,opt,name=call_id,json=callId,proto3" json:"call_id,omitempty"`
+	ChannelId        string                 `protobuf:"bytes,3,opt,name=channel_id,json=channelId,proto3" json:"channel_id,omitempty"`
+	Kind             string                 `protobuf:"bytes,4,opt,name=kind,proto3" json:"kind,omitempty"`     // audio | video
+	Status           string                 `protobuf:"bytes,5,opt,name=status,proto3" json:"status,omitempty"` // ringing | active | ended | missed | declined | cancelled
+	CallerId         string                 `protobuf:"bytes,6,opt,name=caller_id,json=callerId,proto3" json:"caller_id,omitempty"`
+	CallerName       string                 `protobuf:"bytes,7,opt,name=caller_name,json=callerName,proto3" json:"caller_name,omitempty"`
+	CallerAvatarUrl  string                 `protobuf:"bytes,8,opt,name=caller_avatar_url,json=callerAvatarUrl,proto3" json:"caller_avatar_url,omitempty"`
+	ParticipantCount int32                  `protobuf:"varint,9,opt,name=participant_count,json=participantCount,proto3" json:"participant_count,omitempty"`
+	ParticipantIds   []string               `protobuf:"bytes,10,rep,name=participant_ids,json=participantIds,proto3" json:"participant_ids,omitempty"`
+	StartedAt        *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
+	EndedAt          *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *CallEvent) Reset() {
+	*x = CallEvent{}
+	mi := &file_proto_messaging_ws_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CallEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CallEvent) ProtoMessage() {}
+
+func (x *CallEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_messaging_ws_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CallEvent.ProtoReflect.Descriptor instead.
+func (*CallEvent) Descriptor() ([]byte, []int) {
+	return file_proto_messaging_ws_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *CallEvent) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *CallEvent) GetCallId() string {
+	if x != nil {
+		return x.CallId
+	}
+	return ""
+}
+
+func (x *CallEvent) GetChannelId() string {
+	if x != nil {
+		return x.ChannelId
+	}
+	return ""
+}
+
+func (x *CallEvent) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *CallEvent) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *CallEvent) GetCallerId() string {
+	if x != nil {
+		return x.CallerId
+	}
+	return ""
+}
+
+func (x *CallEvent) GetCallerName() string {
+	if x != nil {
+		return x.CallerName
+	}
+	return ""
+}
+
+func (x *CallEvent) GetCallerAvatarUrl() string {
+	if x != nil {
+		return x.CallerAvatarUrl
+	}
+	return ""
+}
+
+func (x *CallEvent) GetParticipantCount() int32 {
+	if x != nil {
+		return x.ParticipantCount
+	}
+	return 0
+}
+
+func (x *CallEvent) GetParticipantIds() []string {
+	if x != nil {
+		return x.ParticipantIds
+	}
+	return nil
+}
+
+func (x *CallEvent) GetStartedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.StartedAt
+	}
+	return nil
+}
+
+func (x *CallEvent) GetEndedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.EndedAt
+	}
+	return nil
+}
+
 var File_proto_messaging_ws_proto protoreflect.FileDescriptor
 
 const file_proto_messaging_ws_proto_rawDesc = "" +
@@ -2382,7 +2535,7 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"channel_id\x18\x01 \x01(\tR\tchannelId\",\n" +
 	"\vViewRequest\x12\x1d\n" +
 	"\n" +
-	"channel_id\x18\x01 \x01(\tR\tchannelId\"\xa5\n" +
+	"channel_id\x18\x01 \x01(\tR\tchannelId\"\xdc\n" +
 	"\n" +
 	"\x0eServerEnvelope\x12>\n" +
 	"\rauth_response\x18\x01 \x01(\v2\x17.messaging.AuthResponseH\x00R\fauthResponse\x12;\n" +
@@ -2405,7 +2558,9 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\x14workspace_subscribed\x18\x13 \x01(\v2\x1e.messaging.WorkspaceSubscribedH\x00R\x13workspaceSubscribed\x12@\n" +
 	"\fthread_state\x18\x14 \x01(\v2\x1b.messaging.ThreadStateEventH\x00R\vthreadState\x12F\n" +
 	"\x0emessage_edited\x18\x15 \x01(\v2\x1d.messaging.MessageEditedEventH\x00R\rmessageEdited\x12I\n" +
-	"\x0fmessage_deleted\x18\x16 \x01(\v2\x1e.messaging.MessageDeletedEventH\x00R\x0emessageDeletedB\t\n" +
+	"\x0fmessage_deleted\x18\x16 \x01(\v2\x1e.messaging.MessageDeletedEventH\x00R\x0emessageDeleted\x125\n" +
+	"\n" +
+	"call_event\x18\x17 \x01(\v2\x14.messaging.CallEventH\x00R\tcallEventB\t\n" +
 	"\apayloadJ\x04\b\a\x10\bJ\x04\b\r\x10\x0eJ\x04\b\x0e\x10\x0fR\rasset_updatedR\fdrive_objectR\n" +
 	"drive_perm\"O\n" +
 	"\fAuthResponse\x12\x0e\n" +
@@ -2559,7 +2714,24 @@ const file_proto_messaging_ws_proto_rawDesc = "" +
 	"\x11parent_message_id\x18\x03 \x01(\tR\x0fparentMessageId\x12)\n" +
 	"\x10keep_placeholder\x18\x04 \x01(\bR\x0fkeepPlaceholder\x12\x1f\n" +
 	"\vreply_count\x18\x05 \x01(\x05R\n" +
-	"replyCountB\x1fZ\x1dngac-platform/proto/messagingb\x06proto3"
+	"replyCount\"\xb5\x03\n" +
+	"\tCallEvent\x12\x12\n" +
+	"\x04type\x18\x01 \x01(\tR\x04type\x12\x17\n" +
+	"\acall_id\x18\x02 \x01(\tR\x06callId\x12\x1d\n" +
+	"\n" +
+	"channel_id\x18\x03 \x01(\tR\tchannelId\x12\x12\n" +
+	"\x04kind\x18\x04 \x01(\tR\x04kind\x12\x16\n" +
+	"\x06status\x18\x05 \x01(\tR\x06status\x12\x1b\n" +
+	"\tcaller_id\x18\x06 \x01(\tR\bcallerId\x12\x1f\n" +
+	"\vcaller_name\x18\a \x01(\tR\n" +
+	"callerName\x12*\n" +
+	"\x11caller_avatar_url\x18\b \x01(\tR\x0fcallerAvatarUrl\x12+\n" +
+	"\x11participant_count\x18\t \x01(\x05R\x10participantCount\x12'\n" +
+	"\x0fparticipant_ids\x18\n" +
+	" \x03(\tR\x0eparticipantIds\x129\n" +
+	"\n" +
+	"started_at\x18\v \x01(\v2\x1a.google.protobuf.TimestampR\tstartedAt\x125\n" +
+	"\bended_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\aendedAtB\x1fZ\x1dngac-platform/proto/messagingb\x06proto3"
 
 var (
 	file_proto_messaging_ws_proto_rawDescOnce sync.Once
@@ -2573,7 +2745,7 @@ func file_proto_messaging_ws_proto_rawDescGZIP() []byte {
 	return file_proto_messaging_ws_proto_rawDescData
 }
 
-var file_proto_messaging_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_proto_messaging_ws_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_proto_messaging_ws_proto_goTypes = []any{
 	(*ClientEnvelope)(nil),        // 0: messaging.ClientEnvelope
 	(*AuthRequest)(nil),           // 1: messaging.AuthRequest
@@ -2603,7 +2775,8 @@ var file_proto_messaging_ws_proto_goTypes = []any{
 	(*ApprovalEvent)(nil),         // 25: messaging.ApprovalEvent
 	(*MessageEditedEvent)(nil),    // 26: messaging.MessageEditedEvent
 	(*MessageDeletedEvent)(nil),   // 27: messaging.MessageDeletedEvent
-	(*timestamppb.Timestamp)(nil), // 28: google.protobuf.Timestamp
+	(*CallEvent)(nil),             // 28: messaging.CallEvent
+	(*timestamppb.Timestamp)(nil), // 29: google.protobuf.Timestamp
 }
 var file_proto_messaging_ws_proto_depIdxs = []int32{
 	1,  // 0: messaging.ClientEnvelope.auth:type_name -> messaging.AuthRequest
@@ -2630,19 +2803,22 @@ var file_proto_messaging_ws_proto_depIdxs = []int32{
 	16, // 21: messaging.ServerEnvelope.thread_state:type_name -> messaging.ThreadStateEvent
 	26, // 22: messaging.ServerEnvelope.message_edited:type_name -> messaging.MessageEditedEvent
 	27, // 23: messaging.ServerEnvelope.message_deleted:type_name -> messaging.MessageDeletedEvent
-	28, // 24: messaging.ChatMessage.created_at:type_name -> google.protobuf.Timestamp
-	10, // 25: messaging.ChatMessage.attachments:type_name -> messaging.ChatAttachment
-	9,  // 26: messaging.ChatMessage.quoted:type_name -> messaging.ChatQuote
-	8,  // 27: messaging.ThreadReplyEvent.message:type_name -> messaging.ChatMessage
-	28, // 28: messaging.ThreadReplyEvent.last_reply_at:type_name -> google.protobuf.Timestamp
-	28, // 29: messaging.ThreadStateEvent.as_of:type_name -> google.protobuf.Timestamp
-	8,  // 30: messaging.MessageEditedEvent.message:type_name -> messaging.ChatMessage
-	28, // 31: messaging.MessageEditedEvent.edited_at:type_name -> google.protobuf.Timestamp
-	32, // [32:32] is the sub-list for method output_type
-	32, // [32:32] is the sub-list for method input_type
-	32, // [32:32] is the sub-list for extension type_name
-	32, // [32:32] is the sub-list for extension extendee
-	0,  // [0:32] is the sub-list for field type_name
+	28, // 24: messaging.ServerEnvelope.call_event:type_name -> messaging.CallEvent
+	29, // 25: messaging.ChatMessage.created_at:type_name -> google.protobuf.Timestamp
+	10, // 26: messaging.ChatMessage.attachments:type_name -> messaging.ChatAttachment
+	9,  // 27: messaging.ChatMessage.quoted:type_name -> messaging.ChatQuote
+	8,  // 28: messaging.ThreadReplyEvent.message:type_name -> messaging.ChatMessage
+	29, // 29: messaging.ThreadReplyEvent.last_reply_at:type_name -> google.protobuf.Timestamp
+	29, // 30: messaging.ThreadStateEvent.as_of:type_name -> google.protobuf.Timestamp
+	8,  // 31: messaging.MessageEditedEvent.message:type_name -> messaging.ChatMessage
+	29, // 32: messaging.MessageEditedEvent.edited_at:type_name -> google.protobuf.Timestamp
+	29, // 33: messaging.CallEvent.started_at:type_name -> google.protobuf.Timestamp
+	29, // 34: messaging.CallEvent.ended_at:type_name -> google.protobuf.Timestamp
+	35, // [35:35] is the sub-list for method output_type
+	35, // [35:35] is the sub-list for method input_type
+	35, // [35:35] is the sub-list for extension type_name
+	35, // [35:35] is the sub-list for extension extendee
+	0,  // [0:35] is the sub-list for field type_name
 }
 
 func init() { file_proto_messaging_ws_proto_init() }
@@ -2677,6 +2853,7 @@ func file_proto_messaging_ws_proto_init() {
 		(*ServerEnvelope_ThreadState)(nil),
 		(*ServerEnvelope_MessageEdited)(nil),
 		(*ServerEnvelope_MessageDeleted)(nil),
+		(*ServerEnvelope_CallEvent)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2684,7 +2861,7 @@ func file_proto_messaging_ws_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_messaging_ws_proto_rawDesc), len(file_proto_messaging_ws_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   28,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

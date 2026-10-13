@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bell, BellOff, MessageSquare, AtSign, MessagesSquare, Moon, AlertTriangle } from 'lucide-react'
+import { Bell, BellOff, MessageSquare, AtSign, MessagesSquare, Moon, AlertTriangle, Phone } from 'lucide-react'
 import {
   getOneSignalAppId,
   getNotificationPermission,
@@ -22,6 +22,7 @@ const DEFAULT_PREFERENCES: PushPreferences = {
     direct: true,
     mention: true,
     thread_reply: true,
+    incoming_call: true,
   },
   quiet_hours: {
     enabled: false,
@@ -402,6 +403,38 @@ export function NotificationSettings() {
               aria-hidden="true"
               className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-raised shadow-overlay
                 transition-transform duration-press ${prefs.kinds.thread_reply ? 'translate-x-5' : ''}`}
+            />
+          </Pressable>
+        </div>
+
+        {/* Kind 4: Cuộc gọi đến */}
+        <div className="flex items-center justify-between gap-4 py-2 border-b border-line">
+          <div className="flex items-center gap-3 min-w-0">
+            <span aria-hidden="true" className="w-8 h-8 rounded-lg bg-sunk text-ink-muted flex items-center justify-center shrink-0">
+              <Phone size={16} strokeWidth={1.75} />
+            </span>
+            <span id="label-incoming-call" className="text-sm font-semibold text-ink">
+              Cuộc gọi đến
+            </span>
+          </div>
+          <Pressable
+            role="switch"
+            aria-checked={prefs.kinds.incoming_call}
+            aria-label="Cuộc gọi đến"
+            disabled={isLoading || mutation.isPending}
+            onClick={() => updateKinds('incoming_call')}
+            className="relative shrink-0 w-11 h-6 rounded-full cursor-pointer"
+          >
+            <span
+              aria-hidden="true"
+              className={`absolute inset-0 rounded-full transition-colors duration-press ${
+                prefs.kinds.incoming_call ? 'bg-accent' : 'bg-sunk field-line'
+              }`}
+            />
+            <span
+              aria-hidden="true"
+              className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-raised shadow-overlay
+                transition-transform duration-press ${prefs.kinds.incoming_call ? 'translate-x-5' : ''}`}
             />
           </Pressable>
         </div>

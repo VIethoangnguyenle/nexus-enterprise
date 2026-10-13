@@ -3,7 +3,8 @@
 #   - every service sets the environment variables its cmd/main.go reads (derived from the source,
 #     so a variable added to a service later fails here until the compose file sets it);
 #   - every *_ADDR points at a service that exists;
-#   - no published port, no host networking; only the nginx edge and MinIO are on `traefik`;
+#   - no published port except nexus-livekit's 7881/tcp and 7882/udp, no host networking; only the
+#     nginx edge, MinIO and LiveKit (TURN/TLS router) are on `traefik`;
 #   - the OTP test code is off and auth trusts proxy headers from the nginx edge only.
 # Run from the repository root. Needs docker compose and jq.
 set -euo pipefail
@@ -35,10 +36,14 @@ fail=0
 bad() { printf 'FAIL: %s\n' "$*" >&2; fail=1; }
 
 # --- structure ----------------------------------------------------------------------------
-[[ $(jq '[.services[] | select(has("ports"))] | length' <<<"$cfg") -eq 0 ]] || bad "a service publishes ports"
+publishers=$(jq -r '[.services | to_entries[] | select(.value | has("ports")) | .key] | sort | join(" ")' <<<"$cfg")
+[[ -z $publishers || $publishers == "nexus-livekit" ]] || bad "services publishing ports: '$publishers' (only nexus-livekit may)"
+# WebRTC media cannot go through the HTTP edge, so LiveKit publishes exactly these two ports.
+livekit_ports=$(jq -r '[.services["nexus-livekit"].ports // [] | .[] | "\(.published)/\(.protocol)"] | sort | join(" ")' <<<"$cfg")
+[[ $livekit_ports == "7881/tcp 7882/udp" ]] || bad "nexus-livekit publishes '$livekit_ports' (want exactly: 7881/tcp 7882/udp)"
 [[ $(jq '[.services[] | select(has("network_mode"))] | length' <<<"$cfg") -eq 0 ]] || bad "a service sets network_mode"
 on_traefik=$(jq -r '[.services | to_entries[] | select(.value.networks | has("traefik")) | .key] | sort | join(" ")' <<<"$cfg")
-[[ $on_traefik == "nexus-frontend nexus-minio" ]] || bad "services on the traefik network: '$on_traefik' (want: nexus-frontend nexus-minio)"
+[[ $on_traefik == "nexus-frontend nexus-livekit nexus-minio" ]] || bad "services on the traefik network: '$on_traefik' (want: nexus-frontend nexus-livekit nexus-minio)"
 [[ $(jq -r '.services.auth.environment.AUTH_FIXED_OTP_CODE | if . == null then "unset" else . end' <<<"$cfg") == "" ]] ||
   bad "auth: AUTH_FIXED_OTP_CODE must be set and empty"
 edge_ip=$(jq -r '.services["nexus-frontend"].networks.nexus.ipv4_address' <<<"$cfg")

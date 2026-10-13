@@ -4,7 +4,8 @@
 # Single edge: behind the shared Traefik, only `nexus-frontend` (nginx: SPA plus an /api/* reverse
 # proxy, see nginx/default.conf) and `nexus-minio` (presigned URLs, own host) join the external
 # `traefik` network. Every Go service lives on the internal `nexus` network alone, so their
-# unauthenticated gRPC ports are unreachable from the shared network. Nothing publishes a host port.
+# unauthenticated gRPC ports are unreachable from the shared network. Nothing publishes a host port
+# except `nexus-livekit` (7881/tcp and 7882/udp, WebRTC media).
 #
 #   cd /opt/nexus/releases/<tag>
 #   export COMPOSE_ENV_FILES=/opt/nexus/.env NEXUS_HOME=/opt/nexus NEXUS_OWNER=<owner> NEXUS_TAG=<tag>
@@ -385,6 +386,12 @@ services:
       ONESIGNAL_REST_API_KEY: ${ONESIGNAL_REST_API_KEY:-}
       # The web app a notification opens: web push needs an absolute address.
       APP_BASE_URL: ${APP_BASE_URL:-https://nexus.zaneng.xyz}
+      # Calls: tokens are signed with the key/secret, rooms are managed over the internal address,
+      # browsers connect to the public one (nginx /livekit).
+      LIVEKIT_URL: http://nexus-livekit:7880
+      LIVEKIT_PUBLIC_URL: wss://nexus.zaneng.xyz/livekit
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:?LIVEKIT_API_KEY missing from .env}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET missing from .env}
       GOMEMLIMIT: 100MiB
     depends_on:
       policy: { condition: service_healthy }
@@ -534,6 +541,59 @@ services:
   # ============================================
   # Frontend (SPA served by nginx)
   # ============================================
+  # LiveKit media server for chat calls. The one container allowed to publish host ports: WebRTC
+  # media cannot cross nginx or Traefik HTTP routing. 7881/tcp (ICE-TCP fallback) and 7882/udp
+  # (all media through one UDP port) are opened in ufw by hand (docs/deployment.md). Signalling
+  # (7880) stays internal and reaches browsers through nginx at /livekit. TURN/TLS for networks that
+  # block UDP: Traefik's TCP router on turn.nexus.zaneng.xyz terminates TLS and forwards plain TCP to
+  # tls_port; clients dial that same port, so it is 443 inside this container.
+  # The config is inline so the API key can be interpolated into webhook.api_key; the secret itself
+  # reaches the server only through LIVEKIT_KEYS.
+  nexus-livekit:
+    image: livekit/livekit-server:v1.13.7
+    restart: unless-stopped
+    networks: [nexus, traefik]
+    security_opt: ["no-new-privileges:true"]
+    logging: *log-rotation
+    ports:
+      - "7881:7881/tcp"
+      - "7882:7882/udp"
+    environment:
+      LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?LIVEKIT_API_KEY missing from .env}: ${LIVEKIT_API_SECRET:?LIVEKIT_API_SECRET missing from .env}"
+      LIVEKIT_CONFIG: |
+        port: 7880
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          use_external_ip: true
+        room:
+          auto_create: false
+          max_participants: 20
+          empty_timeout: 30
+        webhook:
+          api_key: ${LIVEKIT_API_KEY}
+          urls:
+            - http://nexus-messaging:8080/internal/livekit/webhook
+        turn:
+          enabled: true
+          domain: turn.nexus.zaneng.xyz
+          tls_port: 443
+          # Only TURN/TLS through Traefik is reachable; no TURN/UDP listener to advertise.
+          udp_port: 0
+          external_tls: true
+    labels:
+      - "traefik.enable=true"
+      - *traefik-label
+      - "traefik.tcp.routers.nexus-turn.rule=HostSNI(`turn.nexus.zaneng.xyz`)"
+      - "traefik.tcp.routers.nexus-turn.entrypoints=websecure"
+      - "traefik.tcp.routers.nexus-turn.tls=true"
+      - "traefik.tcp.routers.nexus-turn.tls.certresolver=le"
+      - "traefik.tcp.routers.nexus-turn.service=nexus-turn"
+      - "traefik.tcp.services.nexus-turn.loadbalancer.server.port=443"
+    deploy:
+      resources:
+        limits: { memory: 1G }
+
   nexus-frontend:
     image: ghcr.io/${NEXUS_OWNER}/nexus-frontend:${NEXUS_TAG}
     restart: unless-stopped

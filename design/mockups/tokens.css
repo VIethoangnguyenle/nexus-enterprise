@@ -40,6 +40,10 @@
   --ease-in: cubic-bezier(0.5, 0, 0.75, 0);
   --ease-spring: cubic-bezier(0.175, 0.885, 0.32, 1.275);
   --rt-total: 2400ms;
+  /* Call stage: always dark, the same in both themes (DESIGN.md §2 "Màn gọi"). */
+  --color-stage: oklch(16% 0.012 200); --color-stage-tile: oklch(23% 0.016 200); --color-stage-raised: oklch(28% 0.018 200);
+  --color-stage-hover: oklch(33% 0.018 200); --color-on-stage: oklch(95% 0.008 190); --color-on-stage-muted: oklch(75% 0.014 195);
+  --color-stage-accent: oklch(76% 0.11 178); --color-stage-danger: oklch(60% 0.19 25);
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {

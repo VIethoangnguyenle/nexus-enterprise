@@ -1,0 +1,632 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cuộc gọi video</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Video and voice calls in Chat (2026-10-13). Calls belong to a conversation: started from a DM or group header,
+   shown in the stream as a call card, joined through a pre-join check. The call stage is always dark (video reads
+   better on a dark surround, and it separates "in a call" from the workspace), using stage tokens below. */
+* { box-sizing: border-box; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; } svg.i.xs { width: 13px; height: 13px; stroke-width: 2; } svg.i.l { width: 24px; height: 24px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+[hidden] { display: none !important; }
+.muted { color: var(--color-ink-muted); }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* review chrome */
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 80ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; flex-wrap: wrap; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; min-height: 36px; }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; }
+.check input { width: 18px; height: 18px; accent-color: var(--color-accent); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+.screen-head { display: grid; gap: 6px; max-width: 84ch; }
+.screen-head h2 { font-size: 1.375rem; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); font-size: 0.9375rem; }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 90ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); }
+.row { display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start; }
+.cap { display: grid; gap: 10px; min-width: 0; max-width: 100%; }
+.cap > small { color: var(--color-ink-muted); font-weight: 600; }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.demo .k { font: 600 0.75rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); margin-right: 4px; }
+
+/* primitives */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 10px; border: 0; font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; border-radius: 8px; }
+.btn.lg { height: 48px; padding: 0 22px; font-size: 0.9375rem; border-radius: 12px; }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.danger { background: var(--color-danger); color: var(--color-on-accent); }
+.ibtn { width: 36px; height: 36px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; flex: none; }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); }
+.av.s20 { width: 20px; height: 20px; font-size: 0.5625rem; } .av.s24 { width: 24px; height: 24px; font-size: 0.625rem; } .av.s40 { width: 40px; height: 40px; font-size: 0.875rem; } .av.s56 { width: 56px; height: 56px; font-size: 1.125rem; } .av.s88 { width: 88px; height: 88px; font-size: 1.75rem; } .av.s112 { width: 112px; height: 112px; font-size: 2.125rem; }
+.sp { --p: var(--color-person-4); width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 700 0.75rem/1 var(--font-display); }
+.faces { display: flex; } .faces .av { box-shadow: 0 0 0 2px var(--color-raised); } .faces .av + .av { margin-left: -6px; }
+.live { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border-radius: 999px; background: var(--color-success-wash); color: var(--color-ink); font: 600 0.75rem/1 var(--font-body); }
+.live::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); animation: pulse 1.6s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: 0.35; } }
+
+/* desktop frame (conversation) */
+.frame { width: 100%; max-width: 1180px; overflow-x: auto; border-radius: 16px; box-shadow: 0 0 0 1px var(--color-line); background: var(--color-base); }
+.conv { min-width: 860px; display: grid; grid-template-columns: minmax(0, 1fr); }
+.chead { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 12px 0 20px; background: var(--color-raised); }
+.chead b { font: 700 1rem/1.2 var(--font-display); } .chead small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.chead .sp1 { flex: 1; }
+.callbtn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 12px; border-radius: 999px; border: 0; background: var(--color-accent-wash); color: var(--color-ink); font: 600 0.8125rem/1 var(--font-body); cursor: pointer; }
+.callbtn svg { color: var(--color-accent); }
+.callbtn.join { background: var(--color-success); color: var(--color-on-accent); } .callbtn.join svg { color: inherit; }
+.stream { padding: 16px 24px 24px; display: grid; gap: 14px; }
+.m { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; }
+.who { display: flex; gap: 8px; align-items: baseline; font-size: 0.8125rem; } .who b { font-weight: 600; } .who time { color: var(--color-ink-muted); font-size: 0.75rem; }
+.txt { width: fit-content; max-width: 70ch; padding: 7px 12px; border-radius: 16px; border-top-left-radius: 4px; background: var(--color-sunk); margin-top: 2px; }
+.ccard { width: min(420px, 100%); margin-top: 4px; padding: 14px; border-radius: 14px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 12px; align-items: center; }
+.ccard .ic { width: 44px; height: 44px; border-radius: 12px; display: grid; place-items: center; background: var(--color-accent-wash); color: var(--color-accent); }
+.ccard.on .ic { background: var(--color-success-wash); color: var(--color-success); }
+.ccard.miss .ic { background: var(--color-danger-wash); color: var(--color-danger); }
+.ccard b { display: block; font-weight: 600; } .ccard small { display: flex; gap: 8px; align-items: center; color: var(--color-ink-muted); font-size: 0.8125rem; margin-top: 2px; } .ccard small > span:last-child { min-width: 0; }
+.syscall { display: flex; justify-content: center; } .syscall span { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); color: var(--color-ink-muted); font-size: 0.8125rem; }
+
+/* stage (always dark) */
+.stage { position: relative; min-width: 860px; height: 640px; background: var(--color-stage); color: var(--color-on-stage); display: grid; grid-template-rows: 52px minmax(0, 1fr) 84px; overflow: hidden; }
+.stage.withpanel { grid-template-columns: minmax(0, 1fr) 340px; }
+.stage.withpanel > .stop, .stage.withpanel > .sbar2 { grid-column: 1 / -1; }
+.stop { display: flex; align-items: center; gap: 12px; padding: 0 16px 0 20px; }
+.stop b { font: 700 1rem/1 var(--font-display); } .stop .t { color: var(--color-on-stage-muted); font-size: 0.8125rem; }
+.stop .sp1 { flex: 1; }
+.chip-s { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; background: var(--color-stage-raised); color: var(--color-on-stage); font: 600 0.75rem/1 var(--font-body); }
+.chip-s.warn { background: oklch(40% 0.08 70); }
+.grid { display: grid; gap: 10px; padding: 0 16px; min-height: 0; align-content: center; }
+.g2 { grid-template-columns: repeat(2, 1fr); } .g3 { grid-template-columns: repeat(3, 1fr); } .g4 { grid-template-columns: repeat(4, 1fr); }
+.tile { position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; background: var(--color-stage-tile); display: grid; place-items: center; min-height: 0; }
+.tile.cam { --p: var(--color-person-4); background:
+  radial-gradient(circle at 50% 40%, color-mix(in oklch, var(--p) 30%, oklch(80% 0.04 60)) 0 15%, transparent 15.5%),
+  radial-gradient(ellipse 32% 38% at 50% 98%, color-mix(in oklch, var(--p) 60%, black) 0 99%, transparent 100%),
+  linear-gradient(160deg, color-mix(in oklch, var(--p) 30%, oklch(40% 0.02 200)), oklch(22% 0.02 200)); }
+.tile.speaking { box-shadow: inset 0 0 0 3px var(--color-stage-accent); }
+.tile .nm { position: absolute; left: 10px; bottom: 10px; display: inline-flex; align-items: center; gap: 6px; max-width: calc(100% - 20px); height: 28px; padding: 0 10px; border-radius: 8px; background: oklch(10% 0.01 200 / 0.62); font: 600 0.8125rem/1 var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tile .mic { position: absolute; right: 10px; top: 10px; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: oklch(10% 0.01 200 / 0.62); }
+.tile .mic.off { color: oklch(78% 0.13 25); }
+.tile .hand { position: absolute; left: 10px; top: 10px; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 10px; border-radius: 999px; background: oklch(82% 0.13 85); color: oklch(22% 0.02 85); font: 700 0.8125rem/1 var(--font-body); }
+.tile .poor { position: absolute; right: 46px; top: 10px; height: 30px; padding: 0 8px; display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; background: oklch(10% 0.01 200 / 0.62); color: oklch(85% 0.12 75); font: 600 0.75rem/1 var(--font-body); }
+.wave { display: inline-flex; gap: 2px; align-items: center; height: 12px; } .wave i { width: 3px; border-radius: 2px; background: var(--color-stage-accent); animation: wv 0.9s ease-in-out infinite; } .wave i:nth-child(1) { height: 6px; } .wave i:nth-child(2) { height: 12px; animation-delay: .15s; } .wave i:nth-child(3) { height: 8px; animation-delay: .3s; }
+@keyframes wv { 50% { transform: scaleY(0.4); } }
+.sbar2 { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 16px; position: relative; }
+.sbar2 .left { position: absolute; left: 20px; color: var(--color-on-stage-muted); font-size: 0.8125rem; display: flex; gap: 10px; align-items: center; }
+.sbar2 .right { position: absolute; right: 16px; display: flex; gap: 6px; }
+.cb { position: relative; width: 52px; height: 52px; border-radius: 999px; border: 0; display: grid; place-items: center; background: var(--color-stage-raised); color: var(--color-on-stage); cursor: pointer; }
+.cb:hover { background: var(--color-stage-hover); }
+.cb.off { background: oklch(88% 0.04 25); color: oklch(30% 0.08 25); }
+.cb.on { background: var(--color-stage-accent); color: var(--color-stage); }
+.cb.end { width: 72px; background: var(--color-stage-danger); color: white; }
+.cb.sq { width: 44px; height: 44px; border-radius: 12px; background: transparent; }
+.cb.sq:hover, .cb.sq[aria-pressed="true"] { background: var(--color-stage-raised); }
+.cb .n { position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--color-stage-accent); color: var(--color-stage); font: 700 0.6875rem/18px var(--font-body); text-align: center; }
+.tip { position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); padding: 6px 10px; border-radius: 8px; background: var(--color-stage-raised); font-size: 0.75rem; white-space: nowrap; }
+.react-pop { position: absolute; bottom: 92px; left: 50%; transform: translateX(-30%); display: flex; gap: 4px; padding: 6px; border-radius: 999px; background: var(--color-stage-raised); box-shadow: 0 8px 24px oklch(5% 0.01 200 / 0.5); }
+.react-pop button { width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; font-size: 1.375rem; cursor: pointer; }
+.react-pop button:hover { background: var(--color-stage-hover); }
+.float { position: absolute; left: 0; bottom: 96px; pointer-events: none; display: grid; justify-items: start; gap: 2px; animation: rise 3s var(--ease-out) forwards; }
+.float span:first-child { font-size: 2rem; } .float span:last-child { font-size: 0.6875rem; padding: 1px 6px; border-radius: 6px; background: oklch(10% 0.01 200 / 0.62); }
+@keyframes rise { to { transform: translateY(-300px); opacity: 0; } }
+html.reduce .float, html.reduce .live::before, html.reduce .wave i { animation: none; }
+@media (prefers-reduced-motion: reduce) { .float, .live::before, .wave i { animation: none; } }
+
+/* side panel inside the stage (chat / people): light surface, like the workspace */
+.panel { grid-row: 2 / 3; grid-column: 2; margin: 0 12px 0 0; border-radius: 16px; background: var(--color-raised); color: var(--color-ink); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; overflow: hidden; }
+.panel .ph { display: flex; align-items: center; gap: 4px; padding: 10px 8px 6px 16px; } .panel .ph b { flex: 1; font: 700 1rem/1 var(--font-display); }
+.ptabs { display: flex; gap: 4px; padding: 0 12px 8px; }
+.ptab { flex: 1; height: 34px; border: 0; border-radius: 8px; background: var(--color-sunk); color: var(--color-ink-muted); font: 600 0.8125rem/1 var(--font-body); cursor: pointer; }
+.ptab[aria-selected="true"] { background: var(--color-accent-wash); color: var(--color-ink); }
+.pbody { overflow: auto; padding: 4px 12px 12px; display: grid; align-content: start; gap: 10px; }
+.pm { display: grid; grid-template-columns: 24px minmax(0, 1fr); gap: 8px; font-size: 0.8125rem; } .pm b { font-weight: 600; } .pm time { color: var(--color-ink-muted); font-size: 0.6875rem; margin-left: 6px; }
+.pm .t { background: var(--color-sunk); border-radius: 12px; border-top-left-radius: 4px; padding: 6px 10px; margin-top: 2px; width: fit-content; }
+.pcomp { margin: 0 12px 12px; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 6px 0 14px; border-radius: 22px; background: var(--color-sunk); color: var(--color-ink-muted); }
+.pcomp span { flex: 1; }
+.prow { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 48px; }
+.prow b { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .prow small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.prow .st { display: flex; gap: 2px; color: var(--color-ink-muted); }
+.prow .st .off { color: var(--color-danger); }
+.plabel { color: var(--color-ink-muted); font: 600 0.75rem/1 var(--font-body); padding-top: 6px; }
+.handq { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: oklch(82% 0.13 85); color: oklch(22% 0.02 85); font: 700 0.6875rem/1 var(--font-body); }
+
+/* presenting */
+.present { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 10px; padding: 0 16px; min-height: 0; }
+.slide { border-radius: 14px; background: oklch(97% 0.005 190); color: oklch(23% 0.02 200); padding: 28px 32px; display: grid; align-content: start; gap: 14px; min-height: 0; position: relative; }
+.slide h3 { font-size: 1.5rem; } .slide .bars { display: flex; gap: 14px; align-items: flex-end; height: 160px; padding-top: 12px; }
+.slide .bars i { flex: 1; border-radius: 6px 6px 0 0; background: oklch(50% 0.1 180); } .slide .bars i:nth-child(even) { background: oklch(70% 0.08 180); }
+.slide .by { position: absolute; left: 12px; bottom: 12px; display: inline-flex; gap: 6px; align-items: center; height: 28px; padding: 0 10px; border-radius: 8px; background: oklch(10% 0.01 200 / 0.72); color: var(--color-on-stage); font: 600 0.8125rem/1 var(--font-body); }
+.strip { display: grid; gap: 10px; align-content: start; overflow: hidden; }
+.strip .tile { aspect-ratio: 16 / 10; }
+.prebar { position: absolute; top: 4px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 6px 0 16px; border-radius: 999px; background: var(--color-stage-accent); color: var(--color-stage); font-weight: 600; z-index: 2; }
+.prebar button { height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--color-stage); color: var(--color-on-stage); font: 600 0.8125rem/1 var(--font-body); cursor: pointer; }
+
+/* pre-join */
+.prejoin { min-width: 860px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px; align-items: center; padding: 40px 48px; background: var(--color-base); }
+.preview { position: relative; aspect-ratio: 16 / 10; border-radius: 18px; overflow: hidden; background: var(--color-stage); color: var(--color-on-stage); display: grid; place-items: center; }
+.preview .tile { position: absolute; inset: 0; border-radius: 0; aspect-ratio: auto; }
+.preview .pc { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; }
+.preview .meter { position: absolute; left: 14px; bottom: 22px; display: flex; gap: 3px; align-items: flex-end; height: 18px; }
+.preview .meter i { width: 4px; border-radius: 2px; background: var(--color-stage-accent); }
+.preview .camoff { display: grid; justify-items: center; gap: 10px; color: var(--color-on-stage-muted); }
+.pj { display: grid; gap: 16px; }
+.pj h3 { font-size: 1.5rem; }
+.pj .who-in { display: flex; align-items: center; gap: 10px; color: var(--color-ink-muted); }
+.sel { display: grid; gap: 6px; } .sel label { font-weight: 600; font-size: 0.8125rem; }
+.sel .box { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border-radius: 10px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); }
+.sel .box span { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .sel .box svg { color: var(--color-ink-muted); }
+.banner { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; padding: 12px 14px; border-radius: 12px; font-size: 0.875rem; }
+.banner.danger { background: var(--color-danger-wash); } .banner.danger svg { color: var(--color-danger); }
+.banner.info { background: var(--color-info-wash); } .banner.info svg { color: var(--color-info); }
+.banner b { display: block; }
+
+/* incoming (desktop toast) */
+.toast-in { width: 360px; padding: 16px; border-radius: 16px; background: var(--color-overlay); box-shadow: var(--shadow-overlay); display: grid; gap: 14px; }
+.toast-in .top { display: grid; grid-template-columns: 56px minmax(0, 1fr); gap: 12px; align-items: center; }
+.toast-in .top b { display: block; font-size: 1rem; } .toast-in .top small { color: var(--color-ink-muted); }
+.ring { position: relative; } .ring::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; box-shadow: 0 0 0 2px var(--color-success); animation: ring 1.4s var(--ease-out) infinite; }
+@keyframes ring { to { inset: -12px; opacity: 0; } }
+html.reduce .ring::after { animation: none; } @media (prefers-reduced-motion: reduce) { .ring::after { animation: none; } }
+.toast-in .acts { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.toast-in .acts .btn { padding: 0 8px; }
+.btn.accept { background: var(--color-success); color: var(--color-on-accent); }
+
+/* phone */
+.phone { width: min(390px, calc(100vw - 48px)); height: 800px; border-radius: 32px; overflow: hidden; position: relative; isolation: isolate; box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; background: var(--color-stage); color: var(--color-on-stage); display: grid; grid-template-rows: 34px auto minmax(0, 1fr) auto; }
+.phone.light { background: var(--color-base); color: var(--color-ink); }
+.sb { display: flex; align-items: center; justify-content: space-between; padding: 0 22px; font: 600 0.8125rem/1 var(--font-body); }
+.sb span:last-child { width: 22px; height: 10px; border-radius: 3px; background: currentColor; opacity: 0.8; }
+.ptop { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 8px; }
+.ptop .ti { flex: 1; min-width: 0; display: grid; } .ptop .ti b { font: 700 1rem/1.2 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .ptop .ti small { color: var(--color-on-stage-muted); font-size: 0.75rem; }
+.pib { width: 44px; height: 44px; border-radius: 50%; border: 0; display: grid; place-items: center; background: transparent; color: inherit; flex: none; }
+.pstage { position: relative; min-height: 0; padding: 0 8px; display: grid; }
+.pstage .tile { aspect-ratio: auto; height: 100%; border-radius: 20px; }
+.pstage .tile .nm { bottom: 14px; left: 14px; }
+.pip { position: absolute; right: 18px; bottom: 14px; width: 104px; height: 148px; border-radius: 14px; overflow: hidden; box-shadow: 0 6px 18px oklch(5% 0.01 200 / 0.6), 0 0 0 2px var(--color-stage); }
+.pip .tile { height: 100%; border-radius: 0; }
+.pgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; padding: 0 8px; min-height: 0; overflow: hidden; }
+.pgrid .tile { aspect-ratio: 3 / 4; border-radius: 14px; }
+.pgrid .tile .nm { font-size: 0.75rem; height: 24px; left: 8px; bottom: 8px; }
+.pgrid .tile .mic { width: 26px; height: 26px; right: 8px; top: 8px; }
+.dots { display: flex; justify-content: center; gap: 6px; padding: 8px 0 0; } .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--color-on-stage-muted); opacity: 0.5; } .dots i.on { opacity: 1; background: var(--color-on-stage); }
+.pctl { display: flex; justify-content: space-around; align-items: center; padding: 14px 12px 30px; }
+.pctl .cb { width: 56px; height: 56px; }
+.pctl .cb.end { width: 56px; }
+.ringscr { display: grid; justify-items: center; align-content: center; gap: 14px; text-align: center; padding: 0 24px; }
+.ringscr b { font: 700 1.625rem/1.2 var(--font-display); } .ringscr small { color: var(--color-on-stage-muted); font-size: 0.9375rem; }
+.ringact { display: flex; justify-content: space-around; padding: 0 28px 48px; }
+.ringact div { display: grid; justify-items: center; gap: 8px; font-size: 0.8125rem; color: var(--color-on-stage-muted); }
+.ringact .cb { width: 68px; height: 68px; }
+.cb.acc { background: oklch(62% 0.15 150); color: white; }
+.sheetd { position: absolute; left: 0; right: 0; bottom: 0; z-index: 5; background: var(--color-stage-tile); border-radius: 24px 24px 0 0; padding: 8px 8px 28px; display: grid; gap: 2px; box-shadow: 0 -8px 24px oklch(5% 0.01 200 / 0.5); }
+.sheetd .grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-stage-hover); justify-self: center; margin-bottom: 8px; }
+.sheetd .quick { display: flex; justify-content: space-between; padding: 4px 10px 10px; }
+.sheetd .quick button { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--color-stage-raised); font-size: 1.375rem; }
+.sheetd .it { display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 14px; border-radius: 12px; color: var(--color-on-stage); font: 500 1rem/1.2 var(--font-body); }
+.sheetd .it svg { color: var(--color-on-stage-muted); } .sheetd .it .n2 { margin-left: auto; color: var(--color-on-stage-muted); font-size: 0.8125rem; }
+.mini { position: absolute; right: 12px; bottom: 104px; z-index: 6; width: 132px; border-radius: 16px; overflow: hidden; background: var(--color-stage); color: var(--color-on-stage); box-shadow: var(--shadow-overlay); }
+.mini .tile { aspect-ratio: 3 / 4; border-radius: 0; }
+.mini .mbar { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; font: 600 0.75rem/1 var(--font-body); }
+.mini .mbar button { width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--color-stage-danger); color: white; display: grid; place-items: center; }
+.lchat { overflow: hidden; padding: 4px 12px; display: grid; gap: 12px; align-content: start; }
+.lchat .ccard { grid-template-columns: 40px minmax(0, 1fr); } .lchat .ccard .btn { grid-column: 1 / -1; }
+.lock { background: linear-gradient(180deg, oklch(35% 0.05 230), oklch(22% 0.04 260)); color: white; }
+.lock .clock { text-align: center; padding-top: 30px; } .lock .clock b { display: block; font: 300 4.5rem/1 var(--font-body); } .lock .clock small { opacity: 0.85; }
+.pushc { margin: 26px 12px 0; padding: 12px 14px; border-radius: 20px; background: oklch(100% 0 0 / 0.78); color: oklch(20% 0.01 250); -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px); display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; gap: 10px; }
+.pushc .app { width: 38px; height: 38px; border-radius: 9px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 1.125rem/1 var(--font-display); }
+.pushc b { display: block; font-size: 0.875rem; } .pushc small { font-size: 0.75rem; color: oklch(40% 0.01 250); } .pushc p { font-size: 0.875rem; }
+.pushc .acts { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pushc .acts span { display: grid; place-items: center; height: 36px; border-radius: 10px; background: oklch(100% 0 0 / 0.6); font-weight: 600; font-size: 0.8125rem; }
+
+/* states */
+.statebox { width: min(380px, 100%); padding: 18px; border-radius: 16px; display: grid; gap: 12px; }
+.statebox.stagebg { background: var(--color-stage); color: var(--color-on-stage); }
+.statebox.light { background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); }
+.statebox h3 { font-size: 1.0625rem; }
+.statebox .sub { color: var(--color-ink-muted); } .statebox.stagebg .sub { color: var(--color-on-stage-muted); }
+.spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--color-stage-raised); border-top-color: var(--color-stage-accent); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+html.reduce .spin { animation-duration: 3s; }
+.sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; } .sum div { padding: 10px; border-radius: 10px; background: var(--color-sunk); } .sum b { display: block; font: 700 1.125rem/1.2 var(--font-display); } .sum small { color: var(--color-ink-muted); font-size: 0.75rem; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-video" viewBox="0 0 24 24"><path d="m16 13 5.22 3.48a.5.5 0 0 0 .78-.42V7.94a.5.5 0 0 0-.76-.43L16 10.5"/><rect x="2" y="6" width="14" height="12" rx="2"/></symbol>
+  <symbol id="i-video-off" viewBox="0 0 24 24"><path d="M10.66 6H14a2 2 0 0 1 2 2v2.5l5.25-3.03a.5.5 0 0 1 .75.43v8.2"/><path d="M16 16a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+  <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7a2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91"/><path d="m22 2-20 20"/></symbol>
+  <symbol id="i-phone-missed" viewBox="0 0 24 24"><path d="m16 2 6 6"/><path d="m22 2-6 6"/><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+  <symbol id="i-mic-off" viewBox="0 0 24 24"><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><path d="M12 19v3"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-screen" viewBox="0 0 24 24"><rect width="20" height="14" x="2" y="3" rx="2"/><path d="M8 21h8"/><path d="M12 17v4"/><path d="m9 10 3-3 3 3"/><path d="M12 7v6"/></symbol>
+  <symbol id="i-hand" viewBox="0 0 24 24"><path d="M18 11V6a2 2 0 0 0-4 0v1"/><path d="M14 10V4a2 2 0 0 0-4 0v2"/><path d="M10 10.5V6a2 2 0 0 0-4 0v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></symbol>
+  <symbol id="i-smile" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01"/><path d="M15 9h.01"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="12" cy="19" r="1.2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-speaker" viewBox="0 0 24 24"><path d="M11 4.7a.7.7 0 0 0-1.2-.5L6.4 7.6A1.4 1.4 0 0 1 5.4 8H3a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2.4a1.4 1.4 0 0 1 1 .4l3.4 3.4a.7.7 0 0 0 1.2-.5z"/><path d="M16 9a5 5 0 0 1 0 6"/><path d="M19.36 18.36a9 9 0 0 0 0-12.73"/></symbol>
+  <symbol id="i-flip" viewBox="0 0 24 24"><path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/><path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"/><circle cx="12" cy="12" r="3"/><path d="m18 22-3-3 3-3"/><path d="m6 2 3 3-3 3"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/><path d="M2 8.82a15 15 0 0 1 4.17-2.65"/><path d="M10.66 5c4.01-.36 8.14.9 11.34 3.76"/><path d="M16.85 11.25a10 10 0 0 1 2.22 1.68"/><path d="M5 13a10 10 0 0 1 5.24-2.76"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-signal" viewBox="0 0 24 24"><path d="M2 20h.01"/><path d="M7 20v-4"/><path d="M12 20v-8"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="i-max" viewBox="0 0 24 24"><path d="M15 3h6v6"/><path d="M9 21H3v-6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></symbol>
+</svg>
+
+<div class="page">
+<header>
+  <h1>Cuộc gọi video và thoại</h1>
+  <p><b>Đã duyệt 2026-10-13.</b> Cuộc gọi luôn thuộc một cuộc trò chuyện. <b>Tin nhắn trực tiếp</b>: bấm gọi thì đổ chuông người kia. <b>Nhóm (≤ 20 người)</b>: bấm "Bắt đầu cuộc gọi" thì thẻ cuộc gọi hiện trong luồng, ai trong nhóm cũng Tham gia được, không đổ chuông cả nhóm. Đợt đầu có chia sẻ màn hình, chat trong cuộc gọi (chính luồng của cuộc trò chuyện), giơ tay và thả cảm xúc. Màn gọi luôn nền tối.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div>
+    <label class="check"><input type="checkbox" id="reduce">Giảm chuyển động</label>
+  </div>
+  <nav class="toc" aria-label="Các màn"><a href="#entry">1 · Bắt đầu và thẻ cuộc gọi</a><a href="#prejoin">2 · Kiểm tra trước khi vào</a><a href="#incoming">3 · Cuộc gọi đến</a><a href="#call">4 · Trong cuộc gọi</a><a href="#present">5 · Trình bày màn hình</a><a href="#phone">6 · Điện thoại</a><a href="#states">7 · Trạng thái</a></nav>
+</header>
+
+<!-- ============================ 1 ENTRY ============================ -->
+<section class="screen" id="entry" aria-labelledby="h-entry">
+  <div class="screen-head">
+    <h2 id="h-entry">1 · Bắt đầu cuộc gọi và thẻ cuộc gọi trong luồng</h2>
+    <p>Nút gọi ở thanh đầu cuộc trò chuyện. Mỗi cuộc gọi để lại một thẻ trong luồng chính: đang diễn ra (có Tham gia), đã kết thúc (thời lượng, ai đã tham gia), gọi nhỡ (chỉ tin nhắn trực tiếp).</p>
+  </div>
+  <div class="cap"><small>Tin nhắn trực tiếp · trước khi gọi</small>
+    <div class="frame"><div class="conv">
+      <div class="chead"><span class="av" style="--p:var(--color-person-3)">HY</span><span><b>Phạm Hải Yến</b><br><small>Đang hoạt động</small></span><span class="sp1"></span>
+        <button class="ibtn" type="button" aria-label="Gọi thoại" title="Gọi thoại"><svg class="i"><use href="#i-phone"/></svg></button>
+        <button class="ibtn" type="button" aria-label="Gọi video" title="Gọi video"><svg class="i"><use href="#i-video"/></svg></button>
+        <button class="ibtn" type="button" aria-label="Thông tin"><svg class="i"><use href="#i-info"/></svg></button></div>
+      <div class="stream">
+        <div class="m"><span class="av" style="--p:var(--color-person-3)">HY</span><div><div class="who"><b>Phạm Hải Yến</b><time>08:31</time></div><div class="txt">Chị gọi em 5 phút được không, em hỏi về khoản tạm ứng</div></div></div>
+        <div class="m"><span class="av" style="--p:var(--color-person-3)">HY</span><div><div class="ccard miss"><span class="ic"><svg class="i"><use href="#i-phone-missed"/></svg></span><span><b>Cuộc gọi video nhỡ</b><small>Phạm Hải Yến gọi lúc 08:33</small></span><button class="btn sm primary" type="button"><svg class="i s"><use href="#i-video"/></svg>Gọi lại</button></div></div></div>
+        <div class="m"><span class="av" style="--p:var(--color-person-2)">LH</span><div><div class="ccard"><span class="ic"><svg class="i"><use href="#i-video"/></svg></span><span><b>Cuộc gọi video</b><small><span class="tnum">8 phút 42 giây</span> · 08:40</small></span><span></span></div></div></div>
+      </div>
+    </div></div>
+  </div>
+  <div class="cap"><small>Nhóm · đang có cuộc gọi</small>
+    <div class="frame"><div class="conv">
+      <div class="chead"><span class="sp" style="--p:var(--color-person-4)">Đ</span><span><b>Đối soát giao dịch</b><br><small>12 thành viên</small></span><span class="sp1"></span>
+        <span class="live">Đang gọi · <span class="tnum">12:04</span></span>
+        <button class="callbtn join" type="button"><svg class="i s"><use href="#i-video"/></svg>Tham gia</button>
+        <button class="ibtn" type="button" aria-label="Thông tin"><svg class="i"><use href="#i-info"/></svg></button></div>
+      <div class="stream">
+        <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>14:02</time></div>
+          <div class="ccard on"><span class="ic"><svg class="i"><use href="#i-video"/></svg></span><span><b>Cuộc gọi đang diễn ra</b><small><span class="faces"><span class="av s20" style="--p:var(--color-person-5)">MĐ</span><span class="av s20" style="--p:var(--color-person-3)">QV</span><span class="av s20" style="--p:var(--color-person-6)">TL</span></span><span>Trần Minh Đức, Lê Quang Vinh và 1 người · <span class="tnum">12:04</span></span></small></span><button class="btn sm accept" type="button">Tham gia</button></div></div></div>
+        <div class="m"><span class="av" style="--p:var(--color-person-1)">QV</span><div><div class="who"><b>Lê Quang Vinh</b><time>Hôm qua</time></div>
+          <div class="ccard"><span class="ic"><svg class="i"><use href="#i-video"/></svg></span><span><b>Cuộc gọi đã kết thúc</b><small><span class="faces"><span class="av s20" style="--p:var(--color-person-1)">QV</span><span class="av s20" style="--p:var(--color-person-2)">LH</span><span class="av s20" style="--p:var(--color-person-6)">TL</span><span class="av s20" style="--p:var(--color-person-5)">MĐ</span></span><span>4 người · <span class="tnum">32 phút</span> · 15:10–15:42</span></small></span><span></span></div></div></div>
+      </div>
+    </div></div>
+  </div>
+  <ol class="notes">
+    <li><b>Tin nhắn trực tiếp</b>: hai IconButton Gọi thoại, Gọi video ở thanh đầu (trước Thông tin). Chạm: mở cửa sổ cuộc gọi, đổ chuông người kia 45 giây; không ai nghe → thẻ "Cuộc gọi nhỡ" cho cả hai, người gọi thấy "Không trả lời".</li>
+    <li><b>Nhóm</b>: một nút "Bắt đầu cuộc gọi" (callbtn, `--color-accent-wash`, icon video). Khi đang có cuộc gọi: nút đổi thành <b>Tham gia</b> (`--color-success`) + pill "Đang gọi · mm:ss" chấm xanh nhấp nháy. Không đổ chuông cả nhóm: người được @nhắc trong 2 phút đầu nhận thông báo "X mời bạn vào cuộc gọi".</li>
+    <li><b>Thẻ cuộc gọi</b> là tin hệ thống của người bắt đầu, nằm ở luồng chính, không có trả lời thread. Đang diễn ra: avatar người trong cuộc gọi (tối đa 3 + "và N người"), đồng hồ chạy, Tham gia. Kết thúc: số người, thời lượng, giờ bắt đầu–kết thúc. Nhỡ: icon đỏ, "Gọi lại". Trang chủ/xem trước hiện "📹 Cuộc gọi video · 32 phút" hoặc "📹 Cuộc gọi nhỡ".</li>
+    <li>Quyền: bắt đầu và tham gia cần quyền gửi tin trong cuộc trò chuyện (kiểm trên OA của kênh); người không còn quyền không thấy nút, không lấy được vé vào phòng.</li>
+  </ol>
+</section>
+
+<!-- ============================ 2 PRE-JOIN ============================ -->
+<section class="screen" id="prejoin" aria-labelledby="h-pj">
+  <div class="screen-head">
+    <h2 id="h-pj">2 · Kiểm tra trước khi vào</h2>
+    <p>Mở ở cửa sổ/tab cuộc gọi. Xem trước camera, đo micro, chọn thiết bị; vào với micro/camera đang bật hay tắt tuỳ người. Lần đầu trình duyệt hỏi quyền ngay tại đây.</p>
+  </div>
+  <div class="demo"><span class="k">Thử</span><button class="btn sm" type="button" data-pj="on">Camera bật</button><button class="btn sm" type="button" data-pj="off">Camera tắt</button><button class="btn sm" type="button" data-pj="denied">Bị chặn quyền</button></div>
+  <div class="frame"><div class="prejoin">
+    <div class="preview" id="pj-preview">
+      <div class="tile cam" style="--p:var(--color-person-2)" data-pjcam></div>
+      <div class="camoff" data-pjoff hidden><span class="av s88" style="--p:var(--color-person-2)">LH</span>Camera đang tắt</div>
+      <div class="meter" aria-hidden="true"><i style="height:6px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:10px"></i><i style="height:4px"></i></div>
+      <div class="pc"><button class="cb" type="button" aria-pressed="true" aria-label="Tắt micro"><svg class="i"><use href="#i-mic"/></svg></button><button class="cb" type="button" aria-pressed="true" aria-label="Tắt camera" data-pjcambtn><svg class="i"><use href="#i-video"/></svg></button></div>
+    </div>
+    <div class="pj">
+      <h3>Sẵn sàng tham gia?</h3>
+      <div class="who-in"><span class="faces"><span class="av s24" style="--p:var(--color-person-5)">MĐ</span><span class="av s24" style="--p:var(--color-person-1)">QV</span><span class="av s24" style="--p:var(--color-person-6)">TL</span></span>Trần Minh Đức, Lê Quang Vinh và 1 người đang trong cuộc gọi</div>
+      <div class="banner danger" data-pjdenied hidden><svg class="i"><use href="#i-lock"/></svg><span><b>Trình duyệt đang chặn camera và micro</b>Bấm biểu tượng ổ khoá cạnh địa chỉ trang → Camera, Micro → Cho phép, rồi tải lại. Bạn vẫn có thể vào để nghe và xem.</span></div>
+      <div class="sel"><label>Micro</label><div class="box"><svg class="i s"><use href="#i-mic"/></svg><span>Micro MacBook Air (mặc định)</span><svg class="i s"><use href="#i-down"/></svg></div></div>
+      <div class="sel"><label>Camera</label><div class="box"><svg class="i s"><use href="#i-video"/></svg><span>Camera FaceTime HD</span><svg class="i s"><use href="#i-down"/></svg></div></div>
+      <div class="sel"><label>Loa</label><div class="box"><svg class="i s"><use href="#i-speaker"/></svg><span>Loa MacBook Air</span><button class="btn sm" type="button" style="height:28px">Thử loa</button></div></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap"><button class="btn lg primary" type="button">Tham gia ngay</button><button class="btn lg" type="button">Huỷ</button></div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li>Vùng xem trước 16:10 trên nền stage, gương lật như soi gương; camera tắt → avatar 88 + "Camera đang tắt". Thanh đo micro 5 vạch accent theo âm lượng thật.</li>
+    <li>Chọn thiết bị là Select (không hiện ID thiết bị, chỉ tên do hệ điều hành đặt). "Thử loa" phát một tiếng chuông ngắn.</li>
+    <li>Nhớ lựa chọn micro/camera bật–tắt và thiết bị theo người trên thiết bị này (localStorage, try/catch).</li>
+    <li>Tin nhắn trực tiếp khi <b>gọi đi</b> bỏ qua bước này (vào thẳng, đổ chuông); khi <b>trả lời</b> cũng vào thẳng với lựa chọn đã nhớ.</li>
+    <li>Phòng đã đủ 20 người: nút thành "Cuộc gọi đã đầy (20/20)" disabled + một dòng giải thích.</li>
+  </ol>
+</section>
+
+<!-- ============================ 3 INCOMING ============================ -->
+<section class="screen" id="incoming" aria-labelledby="h-in">
+  <div class="screen-head">
+    <h2 id="h-in">3 · Cuộc gọi đến (tin nhắn trực tiếp)</h2>
+    <p>Máy tính: thẻ nổi góc trên phải ở mọi màn của Nexus + tiếng chuông. Điện thoại có app đang mở: màn đổ chuông toàn màn. App đóng: thông báo đẩy (OneSignal) — trình duyệt không cho web app đổ chuông như cuộc gọi điện thoại thật.</p>
+  </div>
+  <div class="row">
+    <div class="cap"><small>Máy tính · thẻ nổi</small>
+      <div class="toast-in" role="alertdialog" aria-label="Cuộc gọi video đến">
+        <div class="top"><span class="ring"><span class="av s56" style="--p:var(--color-person-3)">HY</span></span><span><b>Phạm Hải Yến</b><small>đang gọi video cho bạn…</small></span></div>
+        <div class="acts"><button class="btn danger" type="button"><svg class="i s"><use href="#i-phone-off"/></svg>Từ chối</button><button class="btn" type="button"><svg class="i s"><use href="#i-phone"/></svg>Thoại</button><button class="btn accept" type="button"><svg class="i s"><use href="#i-video"/></svg>Video</button></div>
+      </div>
+    </div>
+    <div class="cap"><small>Điện thoại · app đang mở</small>
+      <div class="phone"><div class="sb"><span>9:41</span><span></span></div><div></div>
+        <div class="ringscr"><span class="ring"><span class="av s112" style="--p:var(--color-person-3)">HY</span></span><b>Phạm Hải Yến</b><small>Cuộc gọi video đến · Nexus</small></div>
+        <div class="ringact"><div><button class="cb end" type="button" aria-label="Từ chối"><svg class="i l"><use href="#i-phone-off"/></svg></button>Từ chối</div><div><button class="cb" type="button" aria-label="Trả lời bằng thoại" style="width:68px;height:68px"><svg class="i l"><use href="#i-phone"/></svg></button>Thoại</div><div><button class="cb acc" type="button" aria-label="Trả lời bằng video"><svg class="i l"><use href="#i-video"/></svg></button>Video</div></div>
+      </div>
+    </div>
+    <div class="cap"><small>Điện thoại · app đóng (thông báo đẩy)</small>
+      <div class="phone lock"><div class="sb"><span></span><span></span></div>
+        <div class="clock"><b>9:41</b><small>Thứ Ba, 13 tháng 10</small></div>
+        <div><div class="pushc"><span class="app">N</span><span><b>Phạm Hải Yến</b><small>Nexus · Cuộc gọi video</small><p>đang gọi video cho bạn — chạm để trả lời</p></span><small>bây giờ</small><span class="acts"><span>Từ chối</span><span>Trả lời</span></span></div></div><div></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>Thẻ nổi: `--color-overlay`, radius 16, rộng 360, cách góc 16; avatar 56 có vòng xanh lan ra (giảm chuyển động: vòng tĩnh); ba nút Từ chối (danger) · Thoại · Video (success). Chuông lặp tới 45 giây; Esc = tắt chuông (không từ chối). Có cuộc gọi khác đang diễn ra: "Kết thúc và trả lời".</li>
+    <li>Nhiều thiết bị cùng một người: thiết bị nào trả lời trước thì các thiết bị khác ngừng đổ chuông và hiện "Đã trả lời trên thiết bị khác".</li>
+    <li>Thông báo đẩy: loại mới "Cuộc gọi đến" (bật mặc định, tắt được trong Cài đặt › Thông báo), tôn trọng giờ yên lặng; nút Trả lời mở app vào thẳng cuộc gọi; hết 45 giây thì thông báo đổi thành "Cuộc gọi nhỡ".</li>
+  </ol>
+</section>
+
+<!-- ============================ 4 IN CALL ============================ -->
+<section class="screen" id="call" aria-labelledby="h-call">
+  <div class="screen-head">
+    <h2 id="h-call">4 · Trong cuộc gọi (máy tính)</h2>
+    <p>Lưới tự xếp theo số người; người đang nói có viền accent. Thanh điều khiển dưới: micro · camera · trình bày · giơ tay · cảm xúc | chat · người tham gia · thêm | rời. Bấm thử các nút.</p>
+  </div>
+  <div class="demo"><span class="k">Thử</span><button class="btn sm" type="button" data-panel="chat">Mở Chat</button><button class="btn sm" type="button" data-panel="people">Mở Người tham gia</button><button class="btn sm" type="button" data-panel="">Đóng panel</button><button class="btn sm" type="button" data-act="react-demo">Thả 👏</button></div>
+  <div class="frame" style="max-width:1180px"><div class="stage" id="stage">
+    <div class="stop"><b>Đối soát giao dịch</b><span class="t tnum">12:04</span><span class="chip-s"><svg class="i xs"><use href="#i-users"/></svg>5</span><span class="sp1"></span><span class="chip-s"><svg class="i xs"><use href="#i-lock"/></svg>Chỉ thành viên nhóm</span><button class="cb sq" type="button" aria-label="Đổi bố cục" title="Bố cục"><svg class="i"><use href="#i-grid"/></svg></button></div>
+    <div class="grid g3" id="cgrid">
+      <div class="tile cam speaking" style="--p:var(--color-person-5)"><span class="mic"><span class="wave"><i></i><i></i><i></i></span></span><span class="nm">Trần Minh Đức</span></div>
+      <div class="tile cam" style="--p:var(--color-person-1)"><span class="hand"><svg class="i xs"><use href="#i-hand"/></svg>1</span><span class="mic off"><svg class="i s"><use href="#i-mic-off"/></svg></span><span class="nm">Lê Quang Vinh</span></div>
+      <div class="tile" style="--p:var(--color-person-6)"><span class="av s88" style="--p:var(--color-person-6)">TL</span><span class="poor"><svg class="i xs"><use href="#i-signal"/></svg>Mạng yếu</span><span class="mic"><svg class="i s"><use href="#i-mic"/></svg></span><span class="nm">Nguyễn Thu Lan</span></div>
+      <div class="tile cam" style="--p:var(--color-person-7)"><span class="mic off"><svg class="i s"><use href="#i-mic-off"/></svg></span><span class="nm">Võ Thanh Tâm</span></div>
+      <div class="tile cam" style="--p:var(--color-person-2)"><span class="mic"><svg class="i s"><use href="#i-mic"/></svg></span><span class="nm">Bạn (Lê Thị Hoa)</span></div>
+    </div>
+    <aside class="panel" id="panel" hidden aria-label="Bảng bên">
+      <div class="ph"><b id="panel-title">Chat trong cuộc gọi</b><button class="ibtn" type="button" data-panel="" aria-label="Đóng bảng"><svg class="i"><use href="#i-x"/></svg></button></div>
+      <div class="ptabs" role="tablist"><button class="ptab" role="tab" type="button" data-panel="chat" aria-selected="true">Chat</button><button class="ptab" role="tab" type="button" data-panel="people" aria-selected="false">Người tham gia · 5</button></div>
+      <div class="pbody" id="pb-chat">
+        <div class="pm"><span class="av s24" style="--p:var(--color-person-5)">MĐ</span><div><b>Trần Minh Đức</b><time>14:05</time><div class="t">Mọi người mở file đối soát tháng 10 nhé</div></div></div>
+        <div class="pm"><span class="av s24" style="--p:var(--color-person-1)">QV</span><div><b>Lê Quang Vinh</b><time>14:07</time><div class="t">📎 Doi-soat-T10.xlsx</div></div></div>
+        <div class="pm"><span class="av s24" style="--p:var(--color-person-2)">LH</span><div><b>Bạn</b><time>14:09</time><div class="t">Dòng 14 lệch phí chuyển khoản</div></div></div>
+      </div>
+      <div class="pbody" id="pb-people" hidden>
+        <div class="plabel">Đang giơ tay</div>
+        <div class="prow"><span class="av" style="--p:var(--color-person-1)">QV</span><span><b>Lê Quang Vinh</b><small>Giơ tay lúc 14:08</small></span><span class="handq">1</span></div>
+        <div class="plabel">Trong cuộc gọi · 5</div>
+        <div class="prow"><span class="av" style="--p:var(--color-person-5)">MĐ</span><span><b>Trần Minh Đức</b><small>Người bắt đầu · đang nói</small></span><span class="st"><svg class="i s"><use href="#i-mic"/></svg><svg class="i s"><use href="#i-video"/></svg></span></div>
+        <div class="prow"><span class="av" style="--p:var(--color-person-1)">QV</span><span><b>Lê Quang Vinh</b><small>Kế toán</small></span><span class="st"><svg class="i s off"><use href="#i-mic-off"/></svg><svg class="i s"><use href="#i-video"/></svg></span></div>
+        <div class="prow"><span class="av" style="--p:var(--color-person-6)">TL</span><span><b>Nguyễn Thu Lan</b><small>Mạng yếu</small></span><span class="st"><svg class="i s"><use href="#i-mic"/></svg><svg class="i s off"><use href="#i-video-off"/></svg></span></div>
+        <div class="prow"><span class="av" style="--p:var(--color-person-7)">TT</span><span><b>Võ Thanh Tâm</b><small>Kế toán</small></span><span class="st"><svg class="i s off"><use href="#i-mic-off"/></svg><svg class="i s"><use href="#i-video"/></svg></span></div>
+        <div class="prow"><span class="av" style="--p:var(--color-person-2)">LH</span><span><b>Bạn</b><small>Kế toán trưởng</small></span><span class="st"><svg class="i s"><use href="#i-mic"/></svg><svg class="i s"><use href="#i-video"/></svg></span></div>
+        <div class="plabel">Trong nhóm, chưa vào · 7</div>
+        <div class="prow"><span class="av" style="--p:var(--color-person-3)">HY</span><span><b>Phạm Hải Yến</b><small>Đang hoạt động</small></span><button class="btn sm" type="button">Mời</button></div>
+      </div>
+      <div class="pcomp" id="pb-comp"><span>Nhắn trong Đối soát giao dịch</span><button class="ibtn" type="button" aria-label="Gửi"><svg class="i s"><use href="#i-send"/></svg></button></div>
+    </aside>
+    <div class="sbar2">
+      <span class="left"><span class="tnum">14:16</span>·<span>Đối soát giao dịch</span></span>
+      <button class="cb" type="button" data-toggle="mic" aria-pressed="true" aria-label="Tắt micro (Ctrl+D)" title="Tắt micro · Ctrl+D"><svg class="i"><use href="#i-mic"/></svg></button>
+      <button class="cb" type="button" data-toggle="cam" aria-pressed="true" aria-label="Tắt camera (Ctrl+E)" title="Tắt camera · Ctrl+E"><svg class="i"><use href="#i-video"/></svg></button>
+      <button class="cb" type="button" aria-label="Trình bày màn hình" title="Trình bày"><svg class="i"><use href="#i-screen"/></svg></button>
+      <button class="cb" type="button" data-toggle="hand" aria-pressed="false" aria-label="Giơ tay" title="Giơ tay · Ctrl+Alt+H"><svg class="i"><use href="#i-hand"/></svg></button>
+      <button class="cb" type="button" data-act="react" aria-expanded="false" aria-label="Thả cảm xúc"><svg class="i"><use href="#i-smile"/></svg></button>
+      <button class="cb end" type="button" aria-label="Rời cuộc gọi"><svg class="i"><use href="#i-phone-off"/></svg></button>
+      <span class="right">
+        <button class="cb sq" type="button" data-panel="chat" aria-label="Chat"><svg class="i"><use href="#i-msg"/></svg><span class="n">2</span></button>
+        <button class="cb sq" type="button" data-panel="people" aria-label="Người tham gia"><svg class="i"><use href="#i-users"/></svg><span class="n">1</span></button>
+        <button class="cb sq" type="button" aria-label="Thêm"><svg class="i"><use href="#i-more"/></svg></button>
+      </span>
+      <div class="react-pop" id="react-pop" hidden role="menu" aria-label="Cảm xúc"><button type="button" data-emoji="👍" aria-label="Thích">👍</button><button type="button" data-emoji="❤️" aria-label="Thương">❤️</button><button type="button" data-emoji="😂" aria-label="Cười">😂</button><button type="button" data-emoji="😮" aria-label="Ngạc nhiên">😮</button><button type="button" data-emoji="👏" aria-label="Vỗ tay">👏</button><button type="button" data-emoji="🎉" aria-label="Chúc mừng">🎉</button></div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><b>Bố cục</b>: 1 người khác → người đó lớn + ô của bạn nhỏ góc phải dưới; 2–4 → lưới 2 cột; 5–9 → 3 cột; 10–20 → 4 cột, phân trang khi không vừa. "Bố cục" cho chọn Tự động / Người đang nói / Lưới. Ghim một người từ menu ô (⋯ khi trỏ chuột).</li>
+    <li><b>Ô người</b>: video hoặc avatar 88 trên `--color-stage-tile`, tên trong nhãn tối góc trái dưới, trạng thái micro góc phải trên (sóng accent khi nói, gạch đỏ khi tắt), "Mạng yếu" khi chất lượng kém, huy hiệu vàng "✋ thứ tự" khi giơ tay. Viền accent 3px quanh người đang nói.</li>
+    <li><b>Thanh điều khiển</b>: nút tròn 52, tắt micro/camera = nền đỏ nhạt; Rời 72×52 danger. Phím tắt Ctrl+D micro, Ctrl+E camera, Ctrl+Alt+H giơ tay (ghi trong tooltip và aria-keyshortcuts). Space giữ để nói khi đang tắt micro.</li>
+    <li><b>Chat</b> là luồng chính của chính cuộc trò chuyện (tin gửi ở đây hiện trong nhóm như bình thường); badge số tin mới khi panel đóng. <b>Người tham gia</b>: ai đang giơ tay (theo thứ tự), ai trong cuộc gọi kèm trạng thái micro/camera, ai trong nhóm chưa vào + "Mời" (gửi thông báo).</li>
+    <li><b>Cảm xúc</b>: 6 biểu tượng; bay lên từ góc trái dưới 3 giây kèm tên người thả (giảm chuyển động: hiện tĩnh 3 giây). Không lưu lại sau cuộc gọi. Giơ tay: người khác nghe một tiếng nhẹ; tự hạ khi người đó nói xong 2 giây hoặc bấm lại.</li>
+    <li>Không có quyền "chủ phòng" ở đợt này: ai trong cuộc gọi cũng như nhau (không tắt micro người khác, không mời ra).</li>
+  </ol>
+</section>
+
+<!-- ============================ 5 PRESENT ============================ -->
+<section class="screen" id="present" aria-labelledby="h-pr">
+  <div class="screen-head">
+    <h2 id="h-pr">5 · Trình bày màn hình</h2>
+    <p>Bản trình bày chiếm phần lớn, người tham gia thành dải bên phải. Người đang trình bày thấy thanh "Bạn đang trình bày" và nút dừng. Mỗi lúc một người trình bày; người sau bấm thì hỏi "Thay người đang trình bày?".</p>
+  </div>
+  <div class="frame"><div class="stage">
+    <div class="stop"><b>Đối soát giao dịch</b><span class="t tnum">18:40</span><span class="sp1"></span><span class="chip-s"><svg class="i xs"><use href="#i-users"/></svg>5</span></div>
+    <div class="prebar"><svg class="i s"><use href="#i-screen"/></svg>Bạn đang trình bày "Doi-soat-T10.xlsx"<button type="button">Dừng trình bày</button></div>
+    <div class="present">
+      <div class="slide"><h3>Đối soát tháng 10 — chênh lệch theo ngân hàng</h3><p style="color:oklch(46% 0.02 200)">Tổng chênh lệch 1.240.000 ₫ ở 2 dòng, đều do phí chuyển khoản liên ngân hàng.</p><div class="bars"><i style="height:62%"></i><i style="height:80%"></i><i style="height:45%"></i><i style="height:92%"></i><i style="height:58%"></i><i style="height:70%"></i></div><span class="by"><svg class="i xs"><use href="#i-screen"/></svg>Lê Thị Hoa đang trình bày</span></div>
+      <div class="strip">
+        <div class="tile cam speaking" style="--p:var(--color-person-5)"><span class="nm">Trần Minh Đức</span></div>
+        <div class="tile cam" style="--p:var(--color-person-1)"><span class="mic off"><svg class="i s"><use href="#i-mic-off"/></svg></span><span class="nm">Lê Quang Vinh</span></div>
+        <div class="tile" style="--p:var(--color-person-6)"><span class="av s40" style="--p:var(--color-person-6)">TL</span><span class="nm">Nguyễn Thu Lan</span></div>
+        <div class="tile cam" style="--p:var(--color-person-2)"><span class="nm">Bạn</span></div>
+      </div>
+    </div>
+    <div class="sbar2"><span class="left"><span class="tnum">14:22</span></span>
+      <button class="cb" type="button" aria-label="Tắt micro"><svg class="i"><use href="#i-mic"/></svg></button><button class="cb" type="button" aria-label="Tắt camera"><svg class="i"><use href="#i-video"/></svg></button><button class="cb on" type="button" aria-pressed="true" aria-label="Dừng trình bày"><svg class="i"><use href="#i-screen"/></svg></button><button class="cb" type="button" aria-label="Giơ tay"><svg class="i"><use href="#i-hand"/></svg></button><button class="cb" type="button" aria-label="Thả cảm xúc"><svg class="i"><use href="#i-smile"/></svg></button><button class="cb end" type="button" aria-label="Rời cuộc gọi"><svg class="i"><use href="#i-phone-off"/></svg></button>
+      <span class="right"><button class="cb sq" type="button" aria-label="Chat"><svg class="i"><use href="#i-msg"/></svg></button><button class="cb sq" type="button" aria-label="Người tham gia"><svg class="i"><use href="#i-users"/></svg></button><button class="cb sq" type="button" aria-label="Thêm"><svg class="i"><use href="#i-more"/></svg></button></span></div>
+  </div></div>
+  <ol class="notes">
+    <li>Chọn toàn màn hình, một cửa sổ hoặc một tab (hộp chọn của trình duyệt); tab có thể kèm âm thanh. Bản trình bày gửi ở chất lượng cao, ưu tiên nét hơn mượt.</li>
+    <li>Người xem: nhãn "X đang trình bày" góc trái dưới; bấm đúp hoặc nút phóng to để xem toàn màn hình. Dải bên phải hiện tối đa 4 ô + "N người khác".</li>
+    <li>Điện thoại không trình bày được (trình duyệt di động không hỗ trợ), nút Trình bày ẩn; vẫn xem bản trình bày được, xoay ngang để xem lớn.</li>
+  </ol>
+</section>
+
+<!-- ============================ 6 PHONE ============================ -->
+<section class="screen" id="phone" aria-labelledby="h-ph">
+  <div class="screen-head">
+    <h2 id="h-ph">6 · Trên điện thoại</h2>
+    <p>Cuộc gọi toàn màn. 1–1: người kia toàn màn + ô của bạn kéo được vào bốn góc. Nhóm: lưới 2 cột, vuốt ngang qua trang. Nút "Thêm" mở sheet cảm xúc, giơ tay, chat, người tham gia. Thu nhỏ để quay về chat mà vẫn trong cuộc gọi.</p>
+  </div>
+  <div class="row">
+    <div class="cap"><small>1–1 video</small>
+      <div class="phone"><div class="sb"><span>9:41</span><span></span></div>
+        <div class="ptop"><button class="pib" type="button" aria-label="Thu nhỏ cuộc gọi"><svg class="i"><use href="#i-down"/></svg></button><span class="ti"><b>Phạm Hải Yến</b><small class="tnum">04:12</small></span><button class="pib" type="button" aria-label="Loa ngoài"><svg class="i"><use href="#i-speaker"/></svg></button></div>
+        <div class="pstage"><div class="tile cam" style="--p:var(--color-person-3)"><span class="nm">Phạm Hải Yến</span></div><div class="pip"><div class="tile cam" style="--p:var(--color-person-2)"></div></div></div>
+        <div class="pctl"><button class="cb" type="button" aria-label="Tắt micro"><svg class="i"><use href="#i-mic"/></svg></button><button class="cb" type="button" aria-label="Tắt camera"><svg class="i"><use href="#i-video"/></svg></button><button class="cb" type="button" aria-label="Đổi camera trước/sau"><svg class="i"><use href="#i-flip"/></svg></button><button class="cb" type="button" aria-label="Thêm"><svg class="i"><use href="#i-more"/></svg></button><button class="cb end" type="button" aria-label="Rời cuộc gọi"><svg class="i"><use href="#i-phone-off"/></svg></button></div>
+      </div>
+    </div>
+    <div class="cap"><small>Nhóm · lưới + sheet Thêm</small>
+      <div class="phone"><div class="sb"><span>9:41</span><span></span></div>
+        <div class="ptop"><button class="pib" type="button" aria-label="Thu nhỏ cuộc gọi"><svg class="i"><use href="#i-down"/></svg></button><span class="ti"><b>Đối soát giao dịch</b><small class="tnum">12:04 · 5 người</small></span><button class="pib" type="button" aria-label="Loa ngoài"><svg class="i"><use href="#i-speaker"/></svg></button></div>
+        <div style="display:grid;grid-template-rows:minmax(0,1fr) auto;min-height:0"><div class="pgrid">
+          <div class="tile cam speaking" style="--p:var(--color-person-5)"><span class="mic"><span class="wave"><i></i><i></i><i></i></span></span><span class="nm">Trần Minh Đức</span></div>
+          <div class="tile cam" style="--p:var(--color-person-1)"><span class="hand" style="height:26px;left:8px;top:8px">✋ 1</span><span class="mic off"><svg class="i xs"><use href="#i-mic-off"/></svg></span><span class="nm">Lê Quang Vinh</span></div>
+          <div class="tile" style="--p:var(--color-person-6)"><span class="av s56" style="--p:var(--color-person-6)">TL</span><span class="nm">Nguyễn Thu Lan</span></div>
+          <div class="tile cam" style="--p:var(--color-person-2)"><span class="nm">Bạn</span></div>
+        </div><div class="dots"><i class="on"></i><i></i></div></div>
+        <div class="pctl"><button class="cb" type="button" aria-label="Tắt micro"><svg class="i"><use href="#i-mic"/></svg></button><button class="cb" type="button" aria-label="Tắt camera"><svg class="i"><use href="#i-video"/></svg></button><button class="cb" type="button" aria-label="Đổi camera"><svg class="i"><use href="#i-flip"/></svg></button><button class="cb" type="button" aria-label="Thêm" aria-expanded="true"><svg class="i"><use href="#i-more"/></svg></button><button class="cb end" type="button" aria-label="Rời cuộc gọi"><svg class="i"><use href="#i-phone-off"/></svg></button></div>
+        <div class="sheetd" role="dialog" aria-label="Thêm"><span class="grab"></span>
+          <div class="quick"><button type="button">👍</button><button type="button">❤️</button><button type="button">😂</button><button type="button">😮</button><button type="button">👏</button><button type="button">🎉</button></div>
+          <div class="it"><svg class="i"><use href="#i-hand"/></svg>Giơ tay</div>
+          <div class="it"><svg class="i"><use href="#i-msg"/></svg>Chat trong cuộc gọi<span class="n2">2 mới</span></div>
+          <div class="it"><svg class="i"><use href="#i-users"/></svg>Người tham gia<span class="n2">5</span></div>
+          <div class="it"><svg class="i"><use href="#i-settings"/></svg>Micro, camera, loa</div>
+        </div>
+      </div>
+    </div>
+    <div class="cap"><small>Thu nhỏ khi quay về chat</small>
+      <div class="phone light"><div class="sb"><span>9:41</span><span></span></div>
+        <div class="ptop" style="color:var(--color-ink)"><button class="pib" type="button" aria-label="Quay lại"><svg class="i"><use href="#i-back"/></svg></button><span class="ti"><b>Đối soát giao dịch</b><small style="color:var(--color-ink-muted)">12 thành viên</small></span><span class="live" style="margin-right:6px">Đang gọi</span></div>
+        <div class="lchat">
+          <div class="m"><span class="av" style="--p:var(--color-person-5)">MĐ</span><div><div class="who"><b>Trần Minh Đức</b><time>14:02</time></div><div class="ccard on"><span class="ic"><svg class="i"><use href="#i-video"/></svg></span><span><b>Cuộc gọi đang diễn ra</b><small>5 người · <span class="tnum">12:06</span></small></span><button class="btn sm" type="button" style="background:var(--color-accent-wash)">Mở lại cuộc gọi</button></div></div></div>
+          <div class="m"><span class="av" style="--p:var(--color-person-1)">QV</span><div><div class="who"><b>Lê Quang Vinh</b><time>14:07</time></div><div class="txt">📎 Doi-soat-T10.xlsx</div></div></div>
+        </div>
+        <div style="padding:6px 8px 22px"><div style="background:var(--color-raised);border-radius:22px;min-height:48px;display:flex;align-items:center;padding:0 16px;color:var(--color-ink-muted)">Nhắn tin cho Đối soát giao dịch</div></div>
+        <div class="mini" role="region" aria-label="Cuộc gọi đang thu nhỏ"><div class="tile cam speaking" style="--p:var(--color-person-5)"></div><div class="mbar"><span class="tnum">12:06</span><button type="button" aria-label="Rời cuộc gọi"><svg class="i s"><use href="#i-phone-off"/></svg></button></div></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>Nút tròn 56, vùng chạm ≥ 44, thanh dưới cách đáy safe-area. Chạm màn để ẩn/hiện thanh trên + điều khiển (tự ẩn sau 4 giây khi không chạm; không tự ẩn khi đang mở sheet hoặc dùng trình đọc màn hình).</li>
+    <li>"Thu nhỏ" (chevron xuống) hoặc vuốt xuống: cửa sổ nổi 132×176 người đang nói + đồng hồ + nút rời; kéo được về hai góc; chạm để mở lại. Trên máy tính: cùng ý tưởng, dùng Picture-in-Picture của trình duyệt khi rời tab.</li>
+    <li>Vào cuộc gọi khi app trên iPhone đang ở màn hình chính (PWA) cần một cú chạm để bật âm thanh (quy định của Safari) — nút "Chạm để bật âm thanh" phủ giữa màn.</li>
+    <li>Khoá màn hình hoặc chuyển app: âm thanh vẫn tiếp tục nếu trình duyệt cho phép; camera tự tắt (hệ điều hành) và bật lại khi quay về.</li>
+  </ol>
+</section>
+
+<!-- ============================ 7 STATES ============================ -->
+<section class="screen" id="states" aria-labelledby="h-st">
+  <div class="screen-head">
+    <h2 id="h-st">7 · Trạng thái</h2>
+    <p>Mọi trạng thái nói rõ chuyện gì đang xảy ra và người dùng làm gì tiếp.</p>
+  </div>
+  <div class="row">
+    <div class="statebox stagebg"><div class="spin" aria-hidden="true"></div><h3>Đang kết nối lại…</h3><p class="sub">Mạng vừa chập chờn. Cuộc gọi vẫn giữ chỗ cho bạn trong 30 giây.</p><button class="btn" type="button" style="justify-self:start;background:var(--color-stage-raised);color:var(--color-on-stage)">Rời cuộc gọi</button></div>
+    <div class="statebox stagebg"><svg class="i l" style="color:oklch(85% 0.12 75)"><use href="#i-wifi-off"/></svg><h3>Không kết nối được tới máy chủ cuộc gọi</h3><p class="sub">Mạng của bạn có thể đang chặn cuộc gọi (thường gặp ở mạng công ty). Thử mạng khác hoặc báo quản trị.</p><button class="btn primary" type="button" style="justify-self:start">Thử lại</button></div>
+    <div class="statebox light"><h3>Cuộc gọi đã kết thúc</h3><div class="sum"><div><b class="tnum">32:10</b><small>Thời lượng</small></div><div><b>4</b><small>Người tham gia</small></div><div><b>12</b><small>Tin trong lúc gọi</small></div></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="button">Về cuộc trò chuyện</button><button class="btn" type="button">Vào lại</button></div></div>
+    <div class="statebox light"><div class="banner info"><svg class="i"><use href="#i-info"/></svg><span><b>Bạn đang ở trong một cuộc gọi khác</b>Rời "Đối soát giao dịch" để vào cuộc gọi này?</span></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="button">Rời và vào</button><button class="btn" type="button">Ở lại</button></div></div>
+    <div class="statebox light"><div class="banner danger"><svg class="i"><use href="#i-alert"/></svg><span><b>Bạn không còn ở trong nhóm này</b>Cuộc gọi đã ngắt. Người quản trị nhóm có thể mời lại bạn.</span></div></div>
+  </div>
+  <ol class="notes">
+    <li>Mất kết nối: lớp phủ trên stage (giữ hình cuối mờ), tự nối lại; quá 30 giây → màn "Không kết nối được" + Thử lại. Mạng yếu kéo dài: tự hạ chất lượng video của người khác trước khi tắt hẳn, kèm chip "Mạng yếu" trên thanh trên.</li>
+    <li>Bị gỡ khỏi nhóm trong lúc gọi: bị ngắt ngay (máy chủ huỷ vé vào phòng), hiện thông báo trên.</li>
+    <li>Kết thúc: người cuối rời → phòng đóng sau 30 giây, thẻ trong luồng đổi thành "Cuộc gọi đã kết thúc". Màn tổng kết chỉ hiện ở cửa sổ cuộc gọi.</li>
+  </ol>
+</section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var root = document.documentElement;
+  function $(id) { return document.getElementById(id); }
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-theme-set');
+      if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+      document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+    });
+  });
+  $('reduce').addEventListener('change', function (e) { root.classList.toggle('reduce', e.target.checked); });
+
+  // Pre-join states
+  function pj(state) {
+    var cam = state === 'on';
+    document.querySelector('[data-pjcam]').hidden = !cam;
+    document.querySelector('[data-pjoff]').hidden = cam;
+    document.querySelector('[data-pjdenied]').hidden = state !== 'denied';
+    var b = document.querySelector('[data-pjcambtn]');
+    b.classList.toggle('off', !cam); b.setAttribute('aria-pressed', String(cam));
+    b.querySelector('use').setAttribute('href', cam ? '#i-video' : '#i-video-off');
+  }
+  document.querySelectorAll('[data-pj]').forEach(function (b) { b.addEventListener('click', function () { pj(b.getAttribute('data-pj')); }); });
+
+  // In-call side panel
+  function panel(which) {
+    var st = $('stage'), p = $('panel');
+    st.classList.toggle('withpanel', !!which); p.hidden = !which;
+    $('cgrid').className = 'grid ' + (which ? 'g2' : 'g3');
+    if (!which) return;
+    $('panel-title').textContent = which === 'chat' ? 'Chat trong cuộc gọi' : 'Người tham gia';
+    $('pb-chat').hidden = which !== 'chat'; $('pb-comp').hidden = which !== 'chat'; $('pb-people').hidden = which !== 'people';
+    p.querySelectorAll('.ptab').forEach(function (t) { t.setAttribute('aria-selected', String(t.getAttribute('data-panel') === which)); });
+  }
+  function floatEmoji(e) {
+    var st = $('stage');
+    var f = document.createElement('div'); f.className = 'float';
+    f.style.left = (40 + Math.random() * 120) + 'px';
+    f.innerHTML = '<span>' + e + '</span><span>Bạn</span>';
+    st.appendChild(f); setTimeout(function () { f.remove(); }, 3100);
+  }
+  document.addEventListener('click', function (e) {
+    var p = e.target.closest('[data-panel]'); if (p) { panel(p.getAttribute('data-panel')); return; }
+    var t = e.target.closest('[data-toggle]');
+    if (t) {
+      var on = t.getAttribute('aria-pressed') !== 'true';
+      t.setAttribute('aria-pressed', String(on));
+      var k = t.getAttribute('data-toggle');
+      if (k === 'hand') { t.classList.toggle('on', on); t.setAttribute('aria-label', on ? 'Hạ tay' : 'Giơ tay'); return; }
+      t.classList.toggle('off', !on);
+      t.querySelector('use').setAttribute('href', k === 'mic' ? (on ? '#i-mic' : '#i-mic-off') : (on ? '#i-video' : '#i-video-off'));
+      t.setAttribute('aria-label', (on ? 'Tắt ' : 'Bật ') + (k === 'mic' ? 'micro' : 'camera'));
+      return;
+    }
+    var a = e.target.closest('[data-act]');
+    if (a && a.getAttribute('data-act') === 'react') { var pop = $('react-pop'); pop.hidden = !pop.hidden; a.setAttribute('aria-expanded', String(!pop.hidden)); return; }
+    if (a && a.getAttribute('data-act') === 'react-demo') { floatEmoji('👏'); return; }
+    var em = e.target.closest('[data-emoji]'); if (em) { floatEmoji(em.getAttribute('data-emoji')); $('react-pop').hidden = true; }
+  });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') $('react-pop').hidden = true; });
+})();
+</script>
+</body>
+</html>
