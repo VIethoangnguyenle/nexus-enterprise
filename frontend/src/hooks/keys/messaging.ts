@@ -31,6 +31,8 @@ export const messagingKeys = {
   conversationActivity: () => ['conversation-activity'] as const,
   /** Threads the signed-in user follows, across every conversation they read. */
   followedThreads: () => ['followed-threads'] as const,
+  /** Search across every conversation the signed-in user reads. */
+  searchAll: (query: string, hasFile = false) => ['search-all', query, hasFile] as const,
   search: (channelId: string, query: string) => ['search', channelId, query] as const,
   tasksAll: () => ['tasks'] as const,
   /** Prefix of a channel's task lists, whatever the status filter. */

@@ -72,6 +72,7 @@ Verified against the codebase on 2026-07-31.
 | `chat-channel-integrity` | Matches code (added 2026-10-10) |
 | `chat-threads` | Matches code (added 2026-10-11; screens 2026-10-11; followed threads 2026-10-13) |
 | `chat-activity-feed` | Matches code for the API (added 2026-10-13; list previews follow) |
+| `chat-search` | Matches code for the API (added 2026-10-13; Search screen follows) |
 | `chat-attachments` | Matches code (added 2026-10-11; screens follow) |
 | `chat-rich-text` | Matches code (added 2026-10-11; toolbar follows) |
 | `chat-message-lifecycle` | Matches code (added 2026-10-11; screens follow) |

@@ -334,27 +334,6 @@ func (s *Store) GetUnreadCounts(ctx context.Context, userID string, channelIDs [
 	return results, rows.Err()
 }
 
-// --- Search Store ---
-
-// SearchMessages performs full-text search on messages in a channel.
-func (s *Store) SearchMessages(ctx context.Context, channelID, query string, limit int) ([]*Message, error) {
-	if limit <= 0 || limit > 50 {
-		limit = 20
-	}
-	rows, err := s.db.Query(ctx,
-		`SELECT `+messageCols+`
-		 FROM messages m LEFT JOIN users u ON m.sender_id = u.id
-		 WHERE m.channel_id = $1 AND m.deleted_at IS NULL AND m.search_vector @@ plainto_tsquery('english', $2)
-		 ORDER BY ts_rank(m.search_vector, plainto_tsquery('english', $2)) DESC
-		 LIMIT $3`,
-		channelID, query, limit)
-	if err != nil {
-		return nil, fmt.Errorf("search messages: %w", err)
-	}
-	defer rows.Close()
-	return scanMessages(rows)
-}
-
 // --- Helper to create store with external pool reference ---
 
 // This file extends Store with reaction/pin/read-receipt/search methods.

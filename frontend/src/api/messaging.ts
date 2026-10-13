@@ -308,6 +308,21 @@ export const messagingApi = {
   },
 
   // Search
+  /**
+   * Messages, main and thread replies, whose text matches `q`, across every conversation the
+   * signed-in user reads; newest first, paged like `followedThreads`. A `q` shorter than two
+   * characters answers an empty page. A reply names its thread in `parent_message_id`.
+   */
+  searchAll: (q: { q: string; hasFile?: boolean; before?: string; beforeId?: string; limit?: number }) => {
+    const qs = new URLSearchParams({ q: q.q })
+    if (q.hasFile) qs.set('has_file', 'true')
+    if (q.before) qs.set('before', q.before)
+    if (q.beforeId) qs.set('before_id', q.beforeId)
+    if (q.limit) qs.set('limit', String(q.limit))
+    return apiFetch<Partial<ThreadPage>>(`/messages/search?${qs}`).then(
+      (page): ThreadPage => ({ messages: page.messages ?? [], has_more: !!page.has_more }),
+    )
+  },
   searchMessages: (channelId: string, query: string, limit = 20) =>
     apiFetch<{ messages: Message[] }>(`/channels/${channelId}/search?q=${encodeURIComponent(query)}&limit=${limit}`),
 

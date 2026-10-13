@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "API tìm tin trên mọi cuộc trò chuyện"
-status: pending
+status: completed
 priority: P1
 effort: "1-1.5d"
 dependencies: [1]
@@ -41,9 +41,9 @@ Màn Tìm trong chat (mockup §6) tìm tin trên mọi cuộc trò chuyện. Hi�
 4. Client API. Spec `chat-search`.
 
 ## Success Criteria
-- [ ] Migration áp dụng trên DB thật, kiểm bằng truy vấn mẫu tiếng Việt; backup lưu đường dẫn trong report.
-- [ ] Test deny xanh; test tìm trong nhóm cũ vẫn xanh.
-- [ ] `make test s=messaging`, `check-layering`, `check-ngac`, `build-check` xanh.
+- [x] Migration áp dụng trên DB thật, kiểm bằng truy vấn mẫu tiếng Việt; backup lưu đường dẫn trong report.
+- [x] Test deny xanh; test tìm trong nhóm cũ vẫn xanh.
+- [x] `make test s=messaging`, `check-layering`, `check-ngac`, `build-check` xanh.
 
 ## Risk Assessment
 - Đổi generated column ghi lại cả bảng `messages` — chạy ở dev nhanh; với prod ghi vào `docs/deployment.md` là migration

@@ -234,6 +234,11 @@ came up. Work through:
   file and its ledger row, the next deploy runs the file again.
 - When anything was applied, `deploy.sh` restarts `policy` and `policy-read` after `up`, because
   they hold the authorization graph in memory and read the database only at start.
+- **`051_message_search_simple.sql` rewrites the `messages` table.** A generated column cannot change its
+  expression in place, so the migration drops `search_vector`, adds it back (every row recomputed) and rebuilds the
+  GIN index; `messages` is locked against writes for the duration (the rewrite grows with the table; 401 rows in dev
+  take milliseconds). Deploy it outside busy hours. The pre-migration dump is the rollback of record; the SQL
+  to return to the English configuration is in the migration header.
 - The migration files travel with each release into `releases/<tag>/db/` (not baked into an
   image), so they always match the commit being deployed and need no extra image.
 
