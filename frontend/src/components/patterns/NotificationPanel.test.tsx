@@ -16,15 +16,19 @@ import { NotificationPanel } from './NotificationPanel'
 vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn() }))
 const api = vi.mocked(apiFetch)
 
-const at = (daysAgo: number, hour = 9) => new Date(Date.now() - daysAgo * 86_400_000 + (hour - 9) * 3_600_000).toISOString()
+// Noon today: "5 minutes ago" and "2 hours ago" stay today whatever time the
+// suite runs (just after midnight they used to fall into yesterday).
+const NOON = new Date()
+NOON.setHours(12, 0, 0, 0)
+const at = (daysAgo: number, hour = 9) => new Date(NOON.getTime() - daysAgo * 86_400_000 + (hour - 9) * 3_600_000).toISOString()
 const N = (over: Record<string, unknown>) => ({
   id: 'n1', type: 'approval_approved', title: 'Request 6f1c0a4e approved', body: 'raw english body', read: false,
   created_at: at(0, 9), entity_type: 'approval', entity_id: '6f1c0a4e-1111-4222-8333-444455556666', ...over,
 })
 const PAGE: NotificationPage = {
   notifications: [
-    N({ id: 'n1', created_at: new Date(Date.now() - 5 * 60_000).toISOString() }),
-    N({ id: 'n2', type: 'asset_assigned', entity_type: 'asset', entity_id: '7a7a7a7a-1111-4222-8333-444455556666', created_at: new Date(Date.now() - 2 * 3_600_000).toISOString(), read: true }),
+    N({ id: 'n1', created_at: new Date(NOON.getTime() - 5 * 60_000).toISOString() }),
+    N({ id: 'n2', type: 'asset_assigned', entity_type: 'asset', entity_id: '7a7a7a7a-1111-4222-8333-444455556666', created_at: new Date(NOON.getTime() - 2 * 3_600_000).toISOString(), read: true }),
     N({ id: 'n3', type: 'asset_request_rejected', entity_type: 'asset_request', entity_id: 'q1', created_at: at(3) }),
   ],
   total: 3, unread_count: 2,
@@ -62,6 +66,7 @@ function serve(page: NotificationPage | Error = PAGE) {
 const posts = () => api.mock.calls.filter(([, o]) => (o as RequestInit | undefined)?.method === 'POST').map(([p]) => p)
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'], now: NOON })
   api.mockReset()
   onClose.mockReset()
   localStorage.clear()
@@ -72,6 +77,7 @@ afterEach(() => {
   cleanup()
   resetClient()
   switchPreferencesTo(undefined)
+  vi.useRealTimers()
 })
 
 describe('NotificationPanel', () => {
