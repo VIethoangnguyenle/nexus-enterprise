@@ -630,7 +630,10 @@ describe('ConversationStream: edit, delete and mark unread', () => {
     act(() => { vi.advanceTimersByTime(401) })
     fireEvent.click(within(screen.getByRole('dialog', { name: 'Thao tác với tin' })).getByRole('button', { name: 'Xoá tin' }))
     expect(askDelete).toHaveBeenCalledTimes(1)
-    return vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thao tác với tin' })).toBeNull())
+    // The sheet closes after its exit animation. Run its timers, then allow the
+    // wall clock enough room for a busy machine (the default second is not).
+    act(() => { vi.advanceTimersByTime(1000) })
+    return vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thao tác với tin' })).toBeNull(), { timeout: 5000 })
   })
 
   it('edits in place on a wide screen: the bubble becomes the editor', () => {
