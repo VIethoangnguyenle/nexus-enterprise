@@ -15,6 +15,9 @@ const (
 	// searchMinRunes is the shortest text worth searching for: one letter
 	// matches nearly every message.
 	searchMinRunes = 2
+	// searchMaxRunes caps the text put to the index: a pasted paragraph is not
+	// a search, and every extra word narrows the query without helping anyone.
+	searchMaxRunes = 200
 	// searchPageSize is a page of hits when the caller names no limit.
 	searchPageSize = 25
 )
@@ -42,6 +45,9 @@ func (s *Service) SearchAll(ctx context.Context, userID, userNodeID, workspaceID
 	}
 	if utf8.RuneCountInString(strings.TrimSpace(q.Text)) < searchMinRunes {
 		return &pb.MessageList{}, nil
+	}
+	if r := []rune(q.Text); len(r) > searchMaxRunes {
+		q.Text = string(r[:searchMaxRunes])
 	}
 	if q.Limit <= 0 {
 		q.Limit = searchPageSize

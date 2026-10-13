@@ -2,6 +2,7 @@ package domain_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -52,6 +53,13 @@ func TestSearchAll_ShortOrEmptyTextIsAnEmptyList(t *testing.T) {
 		assert.Empty(t, list.Messages, "%q", q)
 	}
 	assert.Equal(t, []string{k.msgID}, searchIDs(t, k, userNode, "ne"), "two characters is enough")
+}
+
+func TestSearchAll_CapsHowMuchTextReachesTheIndex(t *testing.T) {
+	k := newTalk(t, "search-cap")
+	long := "needle" + strings.Repeat(" ", 300) + "zzzzzz"
+	assert.Equal(t, []string{k.msgID}, searchIDs(t, k, userNode, long),
+		"words past the cap are not part of the query")
 }
 
 func TestSearchAll_PagesAndRejectsABadCursor(t *testing.T) {
@@ -146,6 +154,8 @@ func TestSearchAll_NeverReturnsAConversationTheCallerCannotRead(t *testing.T) {
 	t.Cleanup(func() { k.f.pool.Exec(ctx, `DELETE FROM messages WHERE channel_id = $1`, dmID) })
 	assert.Empty(t, searchIDs(t, k.talk, userNode, "secretword"), "a DM the caller has no read on is never searched")
 	k.f.read.allow[grant{userNode, dmOA, ngac.OpRead}] = true
+	assert.Empty(t, searchIDs(t, k.talk, userNode, "secretword"), "a DM the caller is not in is not a candidate even when the policy would allow it")
+	addDMMember(t, k.f, dmID, userNode)
 	assert.Equal(t, []string{"dm-msg-" + dmID}, searchIDs(t, k.talk, userNode, "secretword"), "the same DM is found once the caller may read it")
 	delete(k.f.read.allow, grant{userNode, dmOA, ngac.OpRead})
 

@@ -144,8 +144,10 @@ interface BuildInput {
   meta?: Record<string, ConversationMeta>
   /** What the server says each conversation last said; the base of every preview. */
   activity?: Record<string, ConversationActivity>
-  /** What live events announced this session; shown when newer than the server's answer. */
+  /** The newest main-stream message live events announced this session; shown when newer than the server's. */
   lastMessages: Record<string, LastMessage>
+  /** The newest thread reply live events announced this session, beside `lastMessages`. */
+  lastThreadMessages?: Record<string, LastMessage>
   me: { id?: string; username?: string }
   dir: PeopleDirectory
 }
@@ -182,48 +184,47 @@ const fromActivity = (m: ActivityMessage, me: BuildInput['me'], dir: PeopleDirec
 
 /**
  * The main-stream message and the newer thread reply of one conversation: the
- * server's answer, unless a live event is newer than everything it knows. A
- * live reply sits beside the server's main message; a live main message
- * leaves no older reply standing.
+ * server's answer, unless a live event is newer. The two sides are kept apart,
+ * each merged against its own server counterpart, so a live reply never hides
+ * a newer live main message. A reply is shown only when it is newer than the
+ * main message, as the server answers it.
  */
 function mergeLines(
   a: ConversationActivity | undefined,
-  live: LastMessage | undefined,
+  liveMain: LastMessage | undefined,
+  liveReply: LastMessage | undefined,
   me: BuildInput['me'],
   dir: PeopleDirectory,
 ): { main?: Line; reply?: Line & { parentId: string } } {
+  const liveLine = (live: LastMessage): Line => ({
+    ...lineFrom(
+      {
+        id: live.id, text: feedText(live.kind, live.content, live.attachmentName), at: toMillis(live.timestamp),
+        senderId: live.senderId, senderName: live.senderName, mentions: live.mentions,
+      },
+      me, dir,
+    ),
+    senderId: live.senderId,
+  })
   let main = a ? fromActivity(a.latest, me, dir) : undefined
   let reply = a?.latest_reply
     ? { ...fromActivity(a.latest_reply, me, dir), parentId: a.latest_reply.parent_message_id ?? '' }
     : undefined
-  const liveAt = live ? toMillis(live.timestamp) : 0
-  if (live && liveAt > Math.max(main?.at ?? 0, reply?.at ?? 0)) {
-    const line = {
-      ...lineFrom(
-        {
-          id: live.id, text: feedText(live.kind, live.content, live.attachmentName), at: liveAt,
-          senderId: live.senderId, senderName: live.senderName, mentions: live.mentions,
-        },
-        me, dir,
-      ),
-      senderId: live.senderId,
-    }
-    if (live.parentId) reply = { ...line, parentId: live.parentId }
-    else {
-      main = line
-      reply = undefined
-    }
+  if (liveMain && toMillis(liveMain.timestamp) > (main?.at ?? 0)) main = liveLine(liveMain)
+  if (liveReply && toMillis(liveReply.timestamp) > (reply?.at ?? 0)) {
+    reply = { ...liveLine(liveReply), parentId: liveReply.parentId ?? '' }
   }
+  if (reply && main && reply.at <= main.at) reply = undefined
   return { main, reply }
 }
 
-export function buildConversations({ spaces, dms, unread, meta = {}, activity = {}, lastMessages, me, dir }: BuildInput): Conversation[] {
+export function buildConversations({ spaces, dms, unread, meta = {}, activity = {}, lastMessages, lastThreadMessages = {}, me, dir }: BuildInput): Conversation[] {
   const seen = new Set<string>()
   const out: Conversation[] = []
   const push = (ch: Channel, kind: ConversationKind) => {
     if (seen.has(ch.id)) return
     seen.add(ch.id)
-    const { main, reply } = mergeLines(activity[ch.id], lastMessages[ch.id], me, dir)
+    const { main, reply } = mergeLines(activity[ch.id], lastMessages[ch.id], lastThreadMessages[ch.id], me, dir)
     const newest = reply ?? main
     const m = meta[ch.id]
     // A direct message has no middle level: "all" is read as the default there.

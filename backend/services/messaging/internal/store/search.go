@@ -9,11 +9,16 @@ import (
 	"unicode"
 )
 
+// searchPrefixMinRunes is the shortest last word read as a prefix.
+const searchPrefixMinRunes = 2
+
 // searchTerms splits what the user typed into the two inputs of one tsquery:
 // head, everything before the last word, read by plainto_tsquery — which takes
 // any text and never fails on punctuation or operators — and tail, the last
-// word when the text ends in one, matched as a prefix so a word still being
-// typed finds its message. The tail holds only letters, digits and marks, so
+// word when the text ends in one and has at least searchPrefixMinRunes letters,
+// matched as a prefix so a word still being typed finds its message (a shorter
+// word would match a large share of the whole index, so it stays in head as a
+// whole word). The tail holds only letters, digits and marks, so
 // it carries no tsquery syntax. ok is false when the text has no word at all.
 func searchTerms(q string) (head, tail string, ok bool) {
 	runes := []rune(strings.TrimSpace(q))
@@ -22,7 +27,7 @@ func searchTerms(q string) (head, tail string, ok bool) {
 	for start > 0 && isWord(runes[start-1]) {
 		start--
 	}
-	if start < len(runes) { // ends in a word: the prefix
+	if len(runes)-start >= searchPrefixMinRunes { // ends in a long enough word: the prefix
 		head, tail = string(runes[:start]), string(runes[start:])
 	} else {
 		head = string(runes)

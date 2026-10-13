@@ -88,7 +88,13 @@ func TestSearchAllMessages_LastWordMatchesAsPrefix(t *testing.T) {
 	got, _ := w.searchAll(t, "đối so", false, nil, "", 25)
 	assert.Equal(t, []string{hit.ID}, ids(got), "an unfinished last word still matches")
 	got, _ = w.searchAll(t, "đ", false, nil, "", 25)
-	assert.Equal(t, []string{hit.ID}, ids(got), "one letter is a prefix")
+	assert.Empty(t, got, "one letter is read as a whole word, not a prefix over the index")
+	got, _ = w.searchAll(t, "đối s", false, nil, "", 25)
+	assert.Empty(t, got, "a one-letter last word does not become a prefix either")
+	got, _ = w.searchAll(t, "đối sơ", false, nil, "", 25)
+	assert.Empty(t, got, "two letters are a prefix, and no word starts with them")
+	got, _ = w.searchAll(t, "đối so", false, nil, "", 25)
+	assert.Equal(t, []string{hit.ID}, ids(got), "two letters are enough for a prefix")
 	got, _ = w.searchAll(t, "so đối", false, nil, "", 25)
 	assert.Empty(t, got, "only the last word is a prefix; the others are whole words")
 	got, _ = w.searchAll(t, "đối soát ", false, nil, "", 25)
@@ -192,4 +198,30 @@ func TestSearchMessages_InAChannelUsesTheSameMatching(t *testing.T) {
 	got, err = w.st.SearchMessages(context.Background(), w.chID, "a & | ! :*", 20)
 	require.NoError(t, err)
 	assert.Empty(t, got)
+}
+
+func TestPinnedMessageIDsIn_CoversSeveralChannelsInOneCall(t *testing.T) {
+	a, b := newThreadWorld(t, 1), newThreadWorld(t, 1)
+	ctx := context.Background()
+	pinA, plainA, pinB := a.post(t, a.users[0], ""), a.post(t, a.users[0], ""), b.post(t, b.users[0], "")
+	for _, p := range []struct {
+		w *threadWorld
+		m *store.Message
+	}{{a, pinA}, {b, pinB}} {
+		_, err := p.w.pool.Exec(ctx, `INSERT INTO message_pins (channel_id, message_id, pinned_by) VALUES ($1, $2, $3)`,
+			p.w.chID, p.m.ID, p.w.users[0])
+		require.NoError(t, err)
+	}
+
+	got, err := a.st.PinnedMessageIDsIn(ctx, []string{a.chID, b.chID})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]bool{pinA.ID: true, pinB.ID: true}, got)
+	assert.NotContains(t, got, plainA.ID)
+
+	only, err := a.st.PinnedMessageIDsIn(ctx, []string{a.chID})
+	require.NoError(t, err)
+	assert.Equal(t, map[string]bool{pinA.ID: true}, only, "a channel not asked for is not read")
+	none, err := a.st.PinnedMessageIDsIn(ctx, nil)
+	require.NoError(t, err)
+	assert.Empty(t, none)
 }

@@ -142,7 +142,9 @@ func TestConversationActivity_FollowsReadAccess(t *testing.T) {
 	t.Cleanup(func() { k.f.pool.Exec(ctx, `DELETE FROM messages WHERE channel_id = $1`, dmID) })
 	assert.NotContains(t, activityOf(t, k, userNode), dmID, "a DM the caller has no read on is never named")
 	k.f.read.allow[grant{userNode, dmOA, ngac.OpRead}] = true
-	assert.Contains(t, activityOf(t, k, userNode), dmID, "the same DM appears once the caller may read it")
+	assert.NotContains(t, activityOf(t, k, userNode), dmID, "a DM the caller is not a member of is not even a candidate, whatever the policy says")
+	addDMMember(t, k.f, dmID, userNode)
+	assert.Contains(t, activityOf(t, k, userNode), dmID, "the same DM appears once the caller is in it and may read it")
 
 	// The policy service unreachable: fail closed, nothing named.
 	k.f.read.err = assert.AnError
@@ -211,4 +213,13 @@ func TestFollowedThreads_RejectsBadInput(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
 	_, err = k.f.svc.FollowedThreads(ctx, k.f.userID, userNode, k.f.wsID, "yesterday", "", 10)
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
+}
+
+// addDMMember records the caller in a DM's member cache, which is what narrows
+// the DMs a batch read has to put to the policy service.
+func addDMMember(t *testing.T, f *fixture, dmID, node string) {
+	t.Helper()
+	_, err := f.pool.Exec(context.Background(),
+		`INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, dmID, node)
+	require.NoError(t, err)
 }

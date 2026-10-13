@@ -27,6 +27,7 @@ describe('auth store logout', () => {
     useDraftsStore.getState().setEditing('c1', true)
     useWebSocketStore.setState({
       lastMessages: { c1: { senderId: 'u1', senderName: 'Lan', content: 'riêng tư', timestamp: 't' } as never },
+      lastThreadMessages: { c1: { senderId: 'u1', senderName: 'Lan', content: 'riêng tư', timestamp: 't', parentId: 'm1' } as never },
       typingUsers: { c1: ['Lan'] },
     })
 
@@ -35,7 +36,16 @@ describe('auth store logout', () => {
     expect(useDraftsStore.getState().drafts).toEqual({})
     expect(useDraftsStore.getState().editing).toEqual({})
     expect(useWebSocketStore.getState().lastMessages).toEqual({})
+    expect(useWebSocketStore.getState().lastThreadMessages).toEqual({})
     expect(useWebSocketStore.getState().typingUsers).toEqual({})
+  })
+
+  it('forgets what the person searched for in Chat on this device', () => {
+    localStorage.setItem('ngac-chat-recent-searches:u1', JSON.stringify(['đối soát']))
+
+    useAuthStore.getState().logout()
+
+    expect(localStorage.getItem('ngac-chat-recent-searches:u1')).toBeNull()
   })
 
   it('clears the session fields', () => {

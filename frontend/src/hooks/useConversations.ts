@@ -34,6 +34,7 @@ export function useConversations(workspaceId: string): ConversationsState {
   const activityQ = useConversationActivity()
   const people = usePeople(workspaceId)
   const lastMessages = useWebSocketStore((s) => s.lastMessages)
+  const lastThreadMessages = useWebSocketStore((s) => s.lastThreadMessages)
   const subscribeMany = useWebSocketStore((s) => s.subscribeMany)
   const user = useAuthStore((s) => s.user)
 
@@ -65,11 +66,12 @@ export function useConversations(workspaceId: string): ConversationsState {
           meta,
           activity: activityQ.data,
           lastMessages,
+          lastThreadMessages,
           me: { id: user?.id, username: user?.username },
           dir: people,
         }),
       ),
-    [spacesQ.data, dmsQ.data, unread, meta, activityQ.data, lastMessages, user, people],
+    [spacesQ.data, dmsQ.data, unread, meta, activityQ.data, lastMessages, lastThreadMessages, user, people],
   )
 
   const ids = useMemo(() => conversations.map((c) => c.id).sort().join(','), [conversations])

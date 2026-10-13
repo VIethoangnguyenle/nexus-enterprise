@@ -288,7 +288,7 @@ func (s *Service) UnreadThreads(ctx context.Context, userID, userNodeID, workspa
 	if err != nil {
 		return nil, err
 	}
-	if err := s.enrichAcrossChannels(ctx, msgs); err != nil {
+	if err := s.enrichMessagesAcrossChannels(ctx, msgs); err != nil {
 		return nil, err
 	}
 	return &pb.MessageList{Messages: messagesToProto(msgs)}, nil
@@ -322,25 +322,10 @@ func (s *Service) FollowedThreads(ctx context.Context, userID, userNodeID, works
 	if err != nil {
 		return nil, fmt.Errorf("followed threads: %w", err)
 	}
-	if err := s.enrichAcrossChannels(ctx, msgs); err != nil {
+	if err := s.enrichMessagesAcrossChannels(ctx, msgs); err != nil {
 		return nil, err
 	}
 	return &pb.MessageList{Messages: messagesToProto(msgs), HasMore: hasMore}, nil
-}
-
-// enrichAcrossChannels adds reactions, pins and attachments to messages that
-// come from several channels; those are loaded per channel.
-func (s *Service) enrichAcrossChannels(ctx context.Context, msgs []*store.Message) error {
-	byChannel := map[string][]*store.Message{}
-	for _, m := range msgs {
-		byChannel[m.ChannelID] = append(byChannel[m.ChannelID], m)
-	}
-	for ch, group := range byChannel {
-		if err := s.EnrichMessagesWithMetadata(ctx, group, ch); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // applyThreadStates fills the caller's thread summary into the root messages

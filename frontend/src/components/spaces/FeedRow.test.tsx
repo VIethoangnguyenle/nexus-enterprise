@@ -106,6 +106,22 @@ describe('FeedRow', () => {
       expect(screen.getByLabelText('nhắc tên bạn')).toBeInTheDocument()
       expect(screen.queryByLabelText('2 tin chưa đọc')).toBeNull()
     })
+
+    it('shows "@" when the newest message is a main message that names the reader', () => {
+      show(conv({ unread: 2, main: line({ id: 'm2', text: '@Lê Thị Hoa xem giúp', mentionsMe: true }) }))
+      expect(screen.getByLabelText('nhắc tên bạn')).toBeInTheDocument()
+      expect(screen.queryByLabelText('2 tin chưa đọc')).toBeNull()
+    })
+
+    it('shows the count, not "@", when a newer reply does not name the reader', () => {
+      show(conv({
+        unread: 2,
+        main: line({ id: 'm2', text: '@Lê Thị Hoa xem giúp', mentionsMe: true }),
+        reply: { ...line({ id: 'r1', author: 'Nguyễn Thu Lan', text: 'ok' }), parentId: 'm2' },
+      }))
+      expect(screen.queryByLabelText('nhắc tên bạn')).toBeNull()
+      expect(screen.getByLabelText('2 tin chưa đọc')).toBeInTheDocument()
+    })
   })
 
   describe('muted', () => {

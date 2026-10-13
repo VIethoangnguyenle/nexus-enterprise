@@ -59,7 +59,7 @@ export function FeedRow({ conversation: c, arrival, online }: {
 
   // What ends a line: the count, or "@" when the newest message names the reader; a muted row has no count and only the "@".
   const mark = unread
-    ? (reply?.mentionsMe
+    ? ((reply ?? main)?.mentionsMe
         ? <span className={PILL} aria-label="nhắc tên bạn">@</span>
         : <span className={PILL} aria-label={`${c.unread} tin chưa đọc`}>{formatCount(c.unread)}</span>)
     : mentions > 0 && <MentionPill n={mentions} />

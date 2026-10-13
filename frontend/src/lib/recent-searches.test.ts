@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { MAX_RECENT, addRecent, readRecent, removeRecent } from './recent-searches'
+import { MAX_RECENT, addRecent, clearAllRecent, readRecent, removeRecent } from './recent-searches'
 
 beforeEach(() => localStorage.clear())
 
@@ -56,5 +56,15 @@ describe('recent searches', () => {
     expect(readRecent('u1')).toEqual([])
     expect(addRecent('u1', 'đối soát')).toEqual(['đối soát'])
     vi.restoreAllMocks()
+  })
+
+  it('clears every person\'s searches and nothing else', () => {
+    addRecent('u1', 'tạm ứng')
+    addRecent('u2', 'đối soát')
+    localStorage.setItem('other-key', 'keep')
+    clearAllRecent()
+    expect(readRecent('u1')).toEqual([])
+    expect(readRecent('u2')).toEqual([])
+    expect(localStorage.getItem('other-key')).toBe('keep')
   })
 })

@@ -288,21 +288,22 @@ func (s *Store) FollowedThreads(ctx context.Context, userID string, channelIDs [
 		return nil, false, nil
 	}
 	rows, err := s.db.Query(ctx,
-		`WITH t AS (
-		   SELECT m.id, `+threadFollowingExpr+` AS following, `+threadUnreadExpr+` AS unread,
-		          `+threadParticipantsExpr+` AS participants
+		`WITH page AS (
+		   SELECT m.id
 		   FROM messages m `+threadFollowJoin+`
 		   WHERE m.channel_id = ANY($2::text[]) AND m.parent_message_id IS NULL AND m.reply_count > 0
 		     AND m.deleted_at IS NULL
 		     AND ($3::timestamptz IS NULL OR m.last_reply_at < $3
 		          OR ($5 <> '' AND m.last_reply_at = $3 AND m.id < $5))
+		     AND `+threadFollowingExpr+`
+		   ORDER BY m.last_reply_at DESC, m.id DESC
+		   LIMIT $4
 		 )
-		 SELECT `+messageCols+`, t.following, t.unread, t.participants
-		 FROM t JOIN messages m ON m.id = t.id
+		 SELECT `+messageCols+`, `+threadFollowingExpr+`, `+threadUnreadExpr+`,
+		        `+threadParticipantsExpr+`
+		 FROM page JOIN messages m ON m.id = page.id `+threadFollowJoin+`
 		 LEFT JOIN users u ON m.sender_id = u.id
-		 WHERE t.following
-		 ORDER BY m.last_reply_at DESC, m.id DESC
-		 LIMIT $4`, userID, channelIDs, before, limit+1, beforeID)
+		 ORDER BY m.last_reply_at DESC, m.id DESC`, userID, channelIDs, before, limit+1, beforeID)
 	if err != nil {
 		return nil, false, fmt.Errorf("followed threads: %w", err)
 	}

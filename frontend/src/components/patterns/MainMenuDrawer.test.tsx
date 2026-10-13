@@ -102,6 +102,18 @@ describe('destinations', () => {
     expect(bell).toHaveTextContent('99+')
   })
 
+  it('names the person with their role at the foot', async () => {
+    const { dialog } = await openDrawer()
+    expect(await within(dialog).findByText(/· Kế toán trưởng/)).toHaveTextContent('Lê Thị Hoa · Kế toán trưởng')
+  })
+
+  it('shows the Chat pill beside the Chat row', async () => {
+    server.unread = [unreadRow(GROUP, 3)]
+    const { dialog } = await openDrawer()
+    const chat = await within(dialog).findByRole('link', { name: 'Chat, 3 chưa đọc' })
+    expect(chat).toHaveTextContent('3')
+  })
+
   it('shows no number when nothing waits', async () => {
     server.pending = 0
     const { dialog } = await openDrawer()

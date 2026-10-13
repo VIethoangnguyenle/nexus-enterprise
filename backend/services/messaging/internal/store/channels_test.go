@@ -177,3 +177,38 @@ func TestInsertTaskWithMessage_StoresBothOrNeither(t *testing.T) {
 	require.Error(t, st.InsertTaskWithMessage(ctx, badMsg, bad))
 	assert.Equal(t, 0, count(t, `SELECT count(*) FROM messages WHERE id = $1`, badMsg.ID), "no announcement for a task that was not stored")
 }
+
+func TestListDMsOf_ListsOnlyTheDMsTheNodeIsIn(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	st := store.NewStore(pool)
+	ctx := context.Background()
+	user, _ := testutil.CreateUser(t, pool)
+
+	makeChannel := func(kind string, members ...string) *store.Channel {
+		oa, ua := "oa-"+uuid.NewString(), "ua-"+uuid.NewString()
+		for _, n := range [][2]string{{oa, "OA"}, {ua, "UA"}} {
+			_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, $2)`, n[0], n[1])
+			require.NoError(t, err)
+		}
+		ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: kind, ChannelType: kind, NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
+		require.NoError(t, st.InsertChannelWithMembers(ctx, ch, members...))
+		t.Cleanup(func() {
+			pool.Exec(ctx, `DELETE FROM channels WHERE id = $1`, ch.ID)
+			pool.Exec(ctx, `DELETE FROM ngac_nodes WHERE id IN ($1, $2)`, oa, ua)
+		})
+		return ch
+	}
+	me := "node-" + uuid.NewString()
+	mine := makeChannel("dm", me, "node-"+uuid.NewString())
+	makeChannel("dm", "node-"+uuid.NewString(), "node-"+uuid.NewString())
+	makeChannel("workspace", me)
+
+	got, err := st.ListDMsOf(ctx, me)
+	require.NoError(t, err)
+	require.Len(t, got, 1, "another pair's DM and a non-DM channel are not candidates")
+	assert.Equal(t, mine.ID, got[0].ID)
+
+	none, err := st.ListDMsOf(ctx, "node-"+uuid.NewString())
+	require.NoError(t, err)
+	assert.Empty(t, none)
+}

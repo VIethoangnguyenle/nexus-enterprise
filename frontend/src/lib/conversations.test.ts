@@ -130,7 +130,8 @@ describe('buildConversations with server activity', () => {
   const build = (
     activity: Record<string, ConversationActivity>,
     lastMessages: Record<string, LastMessage> = {},
-  ) => buildConversations({ spaces: SPACES, dms: DMS, unread, me, dir, activity, lastMessages })
+    lastThreadMessages: Record<string, LastMessage> = {},
+  ) => buildConversations({ spaces: SPACES, dms: DMS, unread, me, dir, activity, lastMessages, lastThreadMessages })
   const by = (list: Conversation[], id: string) => list.find((c) => c.id === id)!
 
   it('shows the server preview with no live event at all', () => {
@@ -214,6 +215,7 @@ describe('buildConversations with server activity', () => {
   it('a live thread reply becomes the reply line and leaves the main message alone', () => {
     const list = build(
       { [CH.hopdong]: { channel_id: CH.hopdong, latest: msg({ created_at: at(30) }) } },
+      {},
       {
         [CH.hopdong]: {
           id: 'live-r', content: 'Đã sửa xong', timestamp: at(1), senderName: 'lan', senderId: U.lan.id,
@@ -239,6 +241,43 @@ describe('buildConversations with server activity', () => {
     const c = by(list, CH.hopdong)
     expect(c.reply).toBeUndefined()
     expect(c.main?.text).toBe('Tin mới')
+  })
+
+  it('keeps a live main message and a newer live reply side by side', () => {
+    const list = build(
+      { [CH.hopdong]: { channel_id: CH.hopdong, latest: msg({ id: 'm1', created_at: at(30) }) } },
+      { [CH.hopdong]: { id: 'm2', content: 'Tin chính mới', timestamp: at(5), senderName: 'yen', senderId: U.yen.id } },
+      { [CH.hopdong]: { id: 'r1', content: 'Trả lời', timestamp: at(1), senderName: 'lan', senderId: U.lan.id, parentId: 'm1' } },
+    )
+    const c = by(list, CH.hopdong)
+    expect(c.main).toMatchObject({ id: 'm2', text: 'Tin chính mới' })
+    expect(c.reply).toMatchObject({ id: 'r1', text: 'Trả lời', parentId: 'm1' })
+  })
+
+  it('a live reply older than the live main message is not shown', () => {
+    const list = build(
+      { [CH.hopdong]: { channel_id: CH.hopdong, latest: msg({ id: 'm1', created_at: at(30) }) } },
+      { [CH.hopdong]: { id: 'm2', content: 'Tin chính mới', timestamp: at(1), senderName: 'yen', senderId: U.yen.id } },
+      { [CH.hopdong]: { id: 'r1', content: 'Trả lời cũ', timestamp: at(5), senderName: 'lan', senderId: U.lan.id, parentId: 'm1' } },
+    )
+    const c = by(list, CH.hopdong)
+    expect(c.main?.id).toBe('m2')
+    expect(c.reply).toBeUndefined()
+  })
+
+  it('a live reply that is not newer than the server reply leaves it standing', () => {
+    const t = at(3)
+    const list = build(
+      {
+        [CH.hopdong]: {
+          channel_id: CH.hopdong, latest: msg({ created_at: at(30) }),
+          latest_reply: msg({ id: 'r1', preview: 'Từ máy chủ', parent_message_id: 'root-1', created_at: t }),
+        },
+      },
+      {},
+      { [CH.hopdong]: { id: 'r1', content: 'Từ máy chủ', timestamp: t, senderName: 'yen', senderId: U.yen.id, parentId: 'root-1' } },
+    )
+    expect(by(list, CH.hopdong).reply).toMatchObject({ id: 'r1', text: 'Từ máy chủ' })
   })
 
   it('works from a live message alone (activity not loaded yet)', () => {

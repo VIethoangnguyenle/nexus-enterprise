@@ -8,7 +8,7 @@ import type {
   ReactionEvent,
   TaskUpdateEvent,
 } from '../generated/proto/messaging/ws'
-import type { Message, ReactionGroup, ChatTask } from '../api/messaging'
+import type { ActivityMessage, ConversationActivity, Message, ReactionGroup, ChatTask } from '../api/messaging'
 import type { LastMessage } from './conversations'
 import { useAuthStore } from '../stores/auth.store'
 
@@ -136,6 +136,55 @@ export function applyMessageEdited(ev: MessageEditedEvent): void {
           mentions: m.mentions ?? cur.mentions,
           edited_at: ev.editedAt,
         })
+  patchActivityPreview(m.channelId, m.id, (row) => ({
+    ...row,
+    preview: previewText(m.content),
+    mentions: m.mentions ?? row.mentions,
+  }))
+}
+
+/**
+ * Applies `fn` to the preview of a conversation's list entry that quotes
+ * message `id`, if it does. A message no preview shows changes nothing there,
+ * so the entries (and the list that reads them) stay as they are.
+ */
+function patchActivityPreview(channelId: string, id: string, fn: (row: ActivityMessage) => ActivityMessage): void {
+  queryClient.setQueryData(keys.messaging.conversationActivity(), (old: ConversationActivity[] | undefined) => {
+    if (!old?.some((c) => c.channel_id === channelId && (c.latest.id === id || c.latest_reply?.id === id))) return old
+    return old.map((c) => {
+      if (c.channel_id !== channelId) return c
+      return {
+        ...c,
+        latest: c.latest.id === id ? fn(c.latest) : c.latest,
+        latest_reply: c.latest_reply?.id === id ? fn(c.latest_reply) : c.latest_reply,
+      }
+    })
+  })
+}
+
+/** Whether a conversation's list entry quotes message `id` as its newest main message or thread reply. */
+function isShownInActivity(channelId: string, id: string): boolean {
+  const rows = queryClient.getQueryData<ConversationActivity[]>(keys.messaging.conversationActivity())
+  return !!rows?.some((c) => c.channel_id === channelId && (c.latest.id === id || c.latest_reply?.id === id))
+}
+
+/** The live preview slots of a channel without message `id`; the same object when it holds no such message. */
+export function withoutLiveMessage(slots: Record<string, LastMessage>, channelId: string, id: string): Record<string, LastMessage> {
+  if (slots[channelId]?.id !== id) return slots
+  const { [channelId]: _gone, ...rest } = slots
+  return rest
+}
+
+/** The live preview slots of a channel with the text of message `id` replaced by an edit; unchanged when it holds no such message. */
+export function withEditedLiveMessage(
+  slots: Record<string, LastMessage>,
+  channelId: string,
+  id: string,
+  edit: Pick<LastMessage, 'content' | 'mentions'>,
+): Record<string, LastMessage> {
+  const cur = slots[channelId]
+  if (cur?.id !== id) return slots
+  return { ...slots, [channelId]: { ...cur, ...edit } }
 }
 
 /**
@@ -199,6 +248,8 @@ export function applyMessageDeleted(ev: MessageDeletedEvent): void {
 
   queryClient.invalidateQueries({ queryKey: keys.messaging.threadsListOf(channelId) })
   queryClient.invalidateQueries({ queryKey: keys.messaging.unreadCounts() })
+  // Only a preview that quoted this message needs the one before it, which only the server knows.
+  if (isShownInActivity(channelId, id)) queryClient.invalidateQueries({ queryKey: keys.messaging.conversationActivity() })
 }
 
 /** The root's summary after a reply was deleted: the server's count, and nobody replied when it is zero. */

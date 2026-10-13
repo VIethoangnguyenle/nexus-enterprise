@@ -2,7 +2,8 @@ import { fold } from './search-text'
 
 export const MAX_RECENT = 8
 const MIN_CHARS = 2
-const keyOf = (userId: string) => `ngac-chat-recent-searches:${userId}`
+const KEY_PREFIX = 'ngac-chat-recent-searches:'
+const keyOf = (userId: string) => `${KEY_PREFIX}${userId}`
 
 /** What this person searched for lately in Chat on this device, newest first. Storage can be blocked: then nothing. */
 export function readRecent(userId: string): string[] {
@@ -35,4 +36,18 @@ export function addRecent(userId: string, query: string): string[] {
 
 export function removeRecent(userId: string, query: string): string[] {
   return write(userId, readRecent(userId).filter((x) => x !== query))
+}
+
+/** Forgets every person's recent searches on this device; run at sign-out so the next person on a shared device cannot read them. */
+export function clearAllRecent(): void {
+  try {
+    const keys: string[] = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k?.startsWith(KEY_PREFIX)) keys.push(k)
+    }
+    keys.forEach((k) => localStorage.removeItem(k))
+  } catch {
+    // Storage blocked: there is nothing stored to clear.
+  }
 }

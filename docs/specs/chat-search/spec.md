@@ -66,7 +66,7 @@ and no stop words) over the message's readable text with any `<...>` tag removed
 `messages.search_vector` (GIN index `idx_messages_search`). Vietnamese words match with their diacritics. The tag names
 of a formatted message are not words: searching `strong` does not find `<strong>kế hoạch</strong>`. A deleted message is
 never found. All words of `q` must occur (any order); the last word, when `q` does not end in a space or punctuation,
-matches as a prefix so a word still being typed finds its message.
+matches as a prefix so a word still being typed finds its message — only when it has at least two letters; a one-letter last word must match whole. `q` is read up to its first 200 characters.
 
 #### Scenario: Vietnamese with diacritics
 - **WHEN** a member searches for `đối soát`
