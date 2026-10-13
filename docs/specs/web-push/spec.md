@@ -8,8 +8,13 @@ at it — without ever telling someone about a conversation they can no longer r
 
 ### Requirement: Who a message is pushed to
 A stored chat message (not a system line) SHALL be pushed to: the other side of a direct message (`direct`), the
-users it mentions (`mention`), and the followers of the thread it replies in (`thread_reply`); never to its sender.
-Someone concerned for several reasons is pushed once, as the strongest: mention, then direct, then thread reply.
+users it mentions (`mention`), the followers of the thread it replies in (`thread_reply`), and — for a main message of
+a group — every member of the group (`message`); never to its sender. Someone concerned for several reasons is pushed
+once, as the strongest: mention, then direct, then thread reply, then group message.
+
+#### Scenario: A message in a group
+- **WHEN** a member posts a main message in a group
+- **THEN** every other member who reads the group is pushed, unless they set it `off`, are looking at it, or are in quiet hours; a reply in a thread reaches only its followers and the members who chose `all`
 
 A message edited to mention people it did not mention before SHALL be pushed as a `mention` to those people only
 (`chat-message-lifecycle`): not to anyone already mentioned, not to the direct-message or thread-follower audience,
@@ -41,7 +46,8 @@ of that conversation to the same person within 30 seconds become one follow-up, 
 device (`web_push_topic` on the web, `collapse_id` on mobile). The link is absolute, under `APP_BASE_URL`. Every
 request carries an `idempotency_key` kept across its retries, so a retry after a timeout does not deliver twice.
 The recipient's notification level for the conversation (`docs/specs/notifications/spec.md`) shapes this: under
-`all` every message of a group is pushed to them (no per-kind switch applies — the level is the wish); under `off`
+`main` (the default) every main message of a group is pushed to them, and under `all` every reply too (no per-kind
+switch applies to these — the level is the wish); under `off`
 nothing is pushed, except a mention in a group; a direct message under `off` is silent, mention or not. Quiet hours
 and the read check still apply to all of it.
 One message (or one edit) pushes to at most 20 mentioned people (the mention list comes from the client), and the delivery of one
