@@ -1,6 +1,7 @@
 package events
 
 import (
+	"context"
 	"encoding/json"
 	"sync"
 	"testing"
@@ -139,4 +140,46 @@ func TestHandle_PermissionEventsWaitForReplicasToSettle(t *testing.T) {
 		defer cap.mu.Unlock()
 		return len(cap.got) == 2
 	}, 2*time.Second, 20*time.Millisecond, "the permission event follows once the settle time has passed")
+}
+
+// evicting records each sweep of open calls it was asked for.
+type evicting struct {
+	mu    sync.Mutex
+	scope [][2]string // channel, workspace
+}
+
+func (e *evicting) EvictLostCallParticipants(_ context.Context, channelID, workspaceID string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.scope = append(e.scope, [2]string{channelID, workspaceID})
+	return nil
+}
+
+func (e *evicting) sweeps() [][2]string {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return append([][2]string(nil), e.scope...)
+}
+
+// Losing a channel or a workspace puts people out of its open calls, once the
+// policy replicas have learned of it — and again a little later for a replica
+// that is slower still. Other events sweep nothing.
+func TestHandle_MemberRemovedSweepsOpenCalls(t *testing.T) {
+	ev := &evicting{}
+	c := &RealtimeConsumer{pub: &capture{}, now: time.Now, evictor: ev, evictAfter: []time.Duration{10 * time.Millisecond, 40 * time.Millisecond}}
+	c.handle("channel.events", eventBytes(realtime.Event{
+		Domain: realtime.DomainChannel, Kind: realtime.KindMemberRemoved, TenantID: "t", WorkspaceID: "w", ChannelID: "ch-1",
+		At: time.Now().UnixMilli(),
+	}))
+	c.handle("workspace.events", eventBytes(realtime.Event{
+		Domain: realtime.DomainWorkspace, Kind: realtime.KindMemberRemoved, TenantID: "t", WorkspaceID: "w", IDs: []string{"n-1"},
+		At: time.Now().UnixMilli(),
+	}))
+	c.handle("channel.events", eventBytes(realtime.Event{
+		Domain: realtime.DomainChannel, Kind: realtime.KindMemberAdded, TenantID: "t", WorkspaceID: "w", ChannelID: "ch-1",
+		At: time.Now().UnixMilli(),
+	}))
+	require.Eventually(t, func() bool { return len(ev.sweeps()) == 4 }, time.Second, 5*time.Millisecond)
+	time.Sleep(60 * time.Millisecond)
+	assert.ElementsMatch(t, [][2]string{{"ch-1", ""}, {"ch-1", ""}, {"", "w"}, {"", "w"}}, ev.sweeps())
 }

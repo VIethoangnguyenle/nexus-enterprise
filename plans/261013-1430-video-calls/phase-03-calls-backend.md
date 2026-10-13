@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Backend cuộc gọi: dữ liệu, quyền, vé, webhook, thẻ"
-status: pending
+status: completed
 priority: P1
 effort: "2-2.5d"
 dependencies: [1]
@@ -72,3 +72,12 @@ LiveKit sau kiểm quyền, nhận webhook, thẻ cuộc gọi trong luồng, đ
   `empty_timeout` thì coi là kết thúc.
 - Nhiều thiết bị một người: identity = user id → thiết bị sau đẩy thiết bị trước ra (hành vi LiveKit) — chấp nhận, ghi
   vào spec ("một người một chỗ trong cuộc gọi").
+
+## Ghi chú triển khai (2026-10-13)
+- Thẻ là `message_type "system"` + `linked_entity_type "call"` (CHECK của `messages` chỉ cho `user|system`; đúng đường thẻ của poll/task).
+- Thêm bảng `call_access` (node + workspace lúc cấp vé): node NGAC theo workspace nằm ở `tenant_users`, nên webhook và việc
+  đá người kiểm lại bằng node của vé, **thay mặt chính người đó** (policy chỉ trả lời khi có người dùng trên context).
+- `server-sdk-go/v2` pin **v2.15.0** (bản ≥ 2.16 đòi Go 1.26, CI đang 1.25); `livekit/protocol` theo bản đó.
+- Khung WS `call_event` (phần của phase 04) làm luôn ở đây vì thẻ cần cập nhật realtime; phase 04 còn đẩy + tuỳ chọn.
+- Kiểm trên stack dev với LiveKit thật (`lk room join`): vé, deny người ngoài (403), webhook ghi người vào, người không
+  quyền bị đá, phòng đóng → `ended` + thẻ "📹 Cuộc gọi video · dưới 1 phút".

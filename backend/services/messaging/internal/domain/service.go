@@ -32,6 +32,9 @@ type Service struct {
 	revoker     SubscriptionRevoker
 	emitter     realtime.Emitter
 	push        *pushState // nil: web push off
+
+	media        CallMedia    // nil: calls unavailable
+	callObserver CallObserver // nil: call changes are not announced
 }
 
 // SetEmitter wires the announcer of committed channel changes. A nil emitter

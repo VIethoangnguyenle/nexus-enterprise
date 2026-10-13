@@ -57,6 +57,61 @@ type RealtimeConsumer struct {
 	cancel context.CancelFunc
 	now    func() time.Time
 	settle time.Duration
+
+	evictor    CallEvictor
+	evictAfter []time.Duration
+}
+
+// CallEvictor puts out of open calls the people who no longer hold the right to
+// be in them. *domain.Service does.
+type CallEvictor interface {
+	EvictLostCallParticipants(ctx context.Context, channelID, workspaceID string) error
+}
+
+// callEvictAfter is when, after a membership is withdrawn, the open calls it
+// touches are swept: once the policy replicas have likely learned of it, and
+// again for one that is slower still. Both are well inside the five seconds a
+// removed person may stay in a call.
+var callEvictAfter = []time.Duration{time.Second, 3 * time.Second}
+
+// SetCallEvictor wires the sweep of open calls on a withdrawn membership.
+func (c *RealtimeConsumer) SetCallEvictor(e CallEvictor) {
+	c.evictor, c.evictAfter = e, callEvictAfter
+}
+
+// sweepCalls schedules the sweeps of the open calls a withdrawn membership
+// touches: one conversation's, or every conversation of a workspace.
+func (c *RealtimeConsumer) sweepCalls(evt realtime.Event) {
+	if c.evictor == nil || evt.Kind != realtime.KindMemberRemoved {
+		return
+	}
+	var channelID, workspaceID string
+	switch evt.Domain {
+	case realtime.DomainChannel:
+		// The roster event and the one addressed to the person removed carry
+		// the same change; sweeping on the roster's is enough.
+		if evt.ChannelID == "" || len(evt.UserNodeIDs) > 0 {
+			return
+		}
+		channelID = evt.ChannelID
+	case realtime.DomainWorkspace:
+		if evt.WorkspaceID == "" {
+			return
+		}
+		workspaceID = evt.WorkspaceID
+	default:
+		return
+	}
+	for _, after := range c.evictAfter {
+		time.AfterFunc(after, func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			if err := c.evictor.EvictLostCallParticipants(ctx, channelID, workspaceID); err != nil {
+				slog.Warn("open calls not swept after a membership was withdrawn",
+					"channel", channelID, "workspace", workspaceID, "error", err)
+			}
+		})
+	}
 }
 
 // NewRealtimeConsumer starts consuming. Every messaging instance joins the same
@@ -127,6 +182,7 @@ func (c *RealtimeConsumer) handle(topic string, value []byte) {
 			}
 		}
 	}
+	c.sweepCalls(evt)
 	if evt.Domain == realtime.DomainPermission && c.settle > 0 {
 		time.AfterFunc(c.settle, func() { c.pub.PublishDomain(evt) })
 		return

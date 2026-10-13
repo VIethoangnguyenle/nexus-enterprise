@@ -79,6 +79,7 @@ Verified against the codebase on 2026-07-31.
 | `chat-sections` | Matches code (added 2026-10-11; screens follow) |
 | `chat-shortcuts` | Matches code (added 2026-10-11; screens follow) |
 | `chat-cards` | Matches code for polls and tasks (added 2026-10-11; cards follow) |
+| `chat-calls` | Matches code for the server part (added 2026-10-13; ringing push, call screens and entry points follow) |
 | `web-push` | Matches code for sending (added 2026-10-11; device sign-up follows) |
 
 **Installation and offline shell**

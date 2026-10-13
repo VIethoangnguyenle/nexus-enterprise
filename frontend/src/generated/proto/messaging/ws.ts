@@ -243,6 +243,12 @@ export interface ServerEnvelope {
          */
         messageDeleted: MessageDeletedEvent;
     } | {
+        oneofKind: "callEvent";
+        /**
+         * @generated from protobuf field: messaging.CallEvent call_event = 23
+         */
+        callEvent: CallEvent;
+    } | {
         oneofKind: undefined;
     };
 }
@@ -814,6 +820,64 @@ export interface MessageDeletedEvent {
      */
     replyCount: number; // The thread's count after a reply was deleted
 }
+/**
+ * CallEvent is a change of a call. ring, cancel, answered, declined and missed
+ * go to every device of the two people of a direct call (answered stops the
+ * other devices ringing); state goes to the conversation's subscribers, so a
+ * card or a "Join" button follows who is in the call.
+ *
+ * @generated from protobuf message messaging.CallEvent
+ */
+export interface CallEvent {
+    /**
+     * @generated from protobuf field: string type = 1
+     */
+    type: string; // ring | cancel | answered | declined | missed | state
+    /**
+     * @generated from protobuf field: string call_id = 2
+     */
+    callId: string;
+    /**
+     * @generated from protobuf field: string channel_id = 3
+     */
+    channelId: string;
+    /**
+     * @generated from protobuf field: string kind = 4
+     */
+    kind: string; // audio | video
+    /**
+     * @generated from protobuf field: string status = 5
+     */
+    status: string; // ringing | active | ended | missed | declined | cancelled
+    /**
+     * @generated from protobuf field: string caller_id = 6
+     */
+    callerId: string;
+    /**
+     * @generated from protobuf field: string caller_name = 7
+     */
+    callerName: string;
+    /**
+     * @generated from protobuf field: string caller_avatar_url = 8
+     */
+    callerAvatarUrl: string;
+    /**
+     * @generated from protobuf field: int32 participant_count = 9
+     */
+    participantCount: number;
+    /**
+     * @generated from protobuf field: repeated string participant_ids = 10
+     */
+    participantIds: string[];
+    /**
+     * @generated from protobuf field: google.protobuf.Timestamp started_at = 11
+     */
+    startedAt?: Timestamp;
+    /**
+     * @generated from protobuf field: google.protobuf.Timestamp ended_at = 12
+     */
+    endedAt?: Timestamp;
+}
 // @generated message type with reflection information, may provide speed optimized methods
 class ClientEnvelope$Type extends MessageType<ClientEnvelope> {
     constructor() {
@@ -1177,7 +1241,8 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
             { no: 19, name: "workspace_subscribed", kind: "message", oneof: "payload", T: () => WorkspaceSubscribed },
             { no: 20, name: "thread_state", kind: "message", oneof: "payload", T: () => ThreadStateEvent },
             { no: 21, name: "message_edited", kind: "message", oneof: "payload", T: () => MessageEditedEvent },
-            { no: 22, name: "message_deleted", kind: "message", oneof: "payload", T: () => MessageDeletedEvent }
+            { no: 22, name: "message_deleted", kind: "message", oneof: "payload", T: () => MessageDeletedEvent },
+            { no: 23, name: "call_event", kind: "message", oneof: "payload", T: () => CallEvent }
         ]);
     }
     create(value?: PartialMessage<ServerEnvelope>): ServerEnvelope {
@@ -1306,6 +1371,12 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
                         messageDeleted: MessageDeletedEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).messageDeleted)
                     };
                     break;
+                case /* messaging.CallEvent call_event */ 23:
+                    message.payload = {
+                        oneofKind: "callEvent",
+                        callEvent: CallEvent.internalBinaryRead(reader, reader.uint32(), options, (message.payload as any).callEvent)
+                    };
+                    break;
                 default:
                     let u = options.readUnknownField;
                     if (u === "throw")
@@ -1375,6 +1446,9 @@ class ServerEnvelope$Type extends MessageType<ServerEnvelope> {
         /* messaging.MessageDeletedEvent message_deleted = 22; */
         if (message.payload.oneofKind === "messageDeleted")
             MessageDeletedEvent.internalBinaryWrite(message.payload.messageDeleted, writer.tag(22, WireType.LengthDelimited).fork(), options).join();
+        /* messaging.CallEvent call_event = 23; */
+        if (message.payload.oneofKind === "callEvent")
+            CallEvent.internalBinaryWrite(message.payload.callEvent, writer.tag(23, WireType.LengthDelimited).fork(), options).join();
         let u = options.writeUnknownFields;
         if (u !== false)
             (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
@@ -3021,3 +3095,136 @@ class MessageDeletedEvent$Type extends MessageType<MessageDeletedEvent> {
  * @generated MessageType for protobuf message messaging.MessageDeletedEvent
  */
 export const MessageDeletedEvent = new MessageDeletedEvent$Type();
+// @generated message type with reflection information, may provide speed optimized methods
+class CallEvent$Type extends MessageType<CallEvent> {
+    constructor() {
+        super("messaging.CallEvent", [
+            { no: 1, name: "type", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 2, name: "call_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 3, name: "channel_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 4, name: "kind", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 5, name: "status", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 6, name: "caller_id", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 7, name: "caller_name", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 8, name: "caller_avatar_url", kind: "scalar", T: 9 /*ScalarType.STRING*/ },
+            { no: 9, name: "participant_count", kind: "scalar", T: 5 /*ScalarType.INT32*/ },
+            { no: 10, name: "participant_ids", kind: "scalar", repeat: 2 /*RepeatType.UNPACKED*/, T: 9 /*ScalarType.STRING*/ },
+            { no: 11, name: "started_at", kind: "message", T: () => Timestamp },
+            { no: 12, name: "ended_at", kind: "message", T: () => Timestamp }
+        ]);
+    }
+    create(value?: PartialMessage<CallEvent>): CallEvent {
+        const message = globalThis.Object.create((this.messagePrototype!));
+        message.type = "";
+        message.callId = "";
+        message.channelId = "";
+        message.kind = "";
+        message.status = "";
+        message.callerId = "";
+        message.callerName = "";
+        message.callerAvatarUrl = "";
+        message.participantCount = 0;
+        message.participantIds = [];
+        if (value !== undefined)
+            reflectionMergePartial<CallEvent>(this, message, value);
+        return message;
+    }
+    internalBinaryRead(reader: IBinaryReader, length: number, options: BinaryReadOptions, target?: CallEvent): CallEvent {
+        let message = target ?? this.create(), end = reader.pos + length;
+        while (reader.pos < end) {
+            let [fieldNo, wireType] = reader.tag();
+            switch (fieldNo) {
+                case /* string type */ 1:
+                    message.type = reader.string();
+                    break;
+                case /* string call_id */ 2:
+                    message.callId = reader.string();
+                    break;
+                case /* string channel_id */ 3:
+                    message.channelId = reader.string();
+                    break;
+                case /* string kind */ 4:
+                    message.kind = reader.string();
+                    break;
+                case /* string status */ 5:
+                    message.status = reader.string();
+                    break;
+                case /* string caller_id */ 6:
+                    message.callerId = reader.string();
+                    break;
+                case /* string caller_name */ 7:
+                    message.callerName = reader.string();
+                    break;
+                case /* string caller_avatar_url */ 8:
+                    message.callerAvatarUrl = reader.string();
+                    break;
+                case /* int32 participant_count */ 9:
+                    message.participantCount = reader.int32();
+                    break;
+                case /* repeated string participant_ids */ 10:
+                    message.participantIds.push(reader.string());
+                    break;
+                case /* google.protobuf.Timestamp started_at */ 11:
+                    message.startedAt = Timestamp.internalBinaryRead(reader, reader.uint32(), options, message.startedAt);
+                    break;
+                case /* google.protobuf.Timestamp ended_at */ 12:
+                    message.endedAt = Timestamp.internalBinaryRead(reader, reader.uint32(), options, message.endedAt);
+                    break;
+                default:
+                    let u = options.readUnknownField;
+                    if (u === "throw")
+                        throw new globalThis.Error(`Unknown field ${fieldNo} (wire type ${wireType}) for ${this.typeName}`);
+                    let d = reader.skip(wireType);
+                    if (u !== false)
+                        (u === true ? UnknownFieldHandler.onRead : u)(this.typeName, message, fieldNo, wireType, d);
+            }
+        }
+        return message;
+    }
+    internalBinaryWrite(message: CallEvent, writer: IBinaryWriter, options: BinaryWriteOptions): IBinaryWriter {
+        /* string type = 1; */
+        if (message.type !== "")
+            writer.tag(1, WireType.LengthDelimited).string(message.type);
+        /* string call_id = 2; */
+        if (message.callId !== "")
+            writer.tag(2, WireType.LengthDelimited).string(message.callId);
+        /* string channel_id = 3; */
+        if (message.channelId !== "")
+            writer.tag(3, WireType.LengthDelimited).string(message.channelId);
+        /* string kind = 4; */
+        if (message.kind !== "")
+            writer.tag(4, WireType.LengthDelimited).string(message.kind);
+        /* string status = 5; */
+        if (message.status !== "")
+            writer.tag(5, WireType.LengthDelimited).string(message.status);
+        /* string caller_id = 6; */
+        if (message.callerId !== "")
+            writer.tag(6, WireType.LengthDelimited).string(message.callerId);
+        /* string caller_name = 7; */
+        if (message.callerName !== "")
+            writer.tag(7, WireType.LengthDelimited).string(message.callerName);
+        /* string caller_avatar_url = 8; */
+        if (message.callerAvatarUrl !== "")
+            writer.tag(8, WireType.LengthDelimited).string(message.callerAvatarUrl);
+        /* int32 participant_count = 9; */
+        if (message.participantCount !== 0)
+            writer.tag(9, WireType.Varint).int32(message.participantCount);
+        /* repeated string participant_ids = 10; */
+        for (let i = 0; i < message.participantIds.length; i++)
+            writer.tag(10, WireType.LengthDelimited).string(message.participantIds[i]);
+        /* google.protobuf.Timestamp started_at = 11; */
+        if (message.startedAt)
+            Timestamp.internalBinaryWrite(message.startedAt, writer.tag(11, WireType.LengthDelimited).fork(), options).join();
+        /* google.protobuf.Timestamp ended_at = 12; */
+        if (message.endedAt)
+            Timestamp.internalBinaryWrite(message.endedAt, writer.tag(12, WireType.LengthDelimited).fork(), options).join();
+        let u = options.writeUnknownFields;
+        if (u !== false)
+            (u == true ? UnknownFieldHandler.onWrite : u)(this.typeName, message, writer);
+        return writer;
+    }
+}
+/**
+ * @generated MessageType for protobuf message messaging.CallEvent
+ */
+export const CallEvent = new CallEvent$Type();
