@@ -115,6 +115,61 @@ describe('thread events', () => {
   })
 })
 
+describe('the newest message of a conversation', () => {
+  const chat = (over: Record<string, unknown>) => ({
+    id: 'm1', channelId: 'c1', senderId: 'u2', senderName: 'B', content: '<p>chào</p>', messageType: 'user',
+    parentMessageId: '', replyCount: 0, contentFormat: 'html', mentions: [] as string[], linkedEntityType: '',
+    linkedEntityId: '', attachments: [] as { driveFileId: string; fileName: string; mimeType: string; sizeBytes: string; width: number; height: number }[],
+    ...over,
+  })
+  const last = () => useWebSocketStore.getState().lastMessages['c1']
+
+  it('keeps its id, the people it names and the root of a thread reply', () => {
+    deliver({
+      oneofKind: 'chatMessage',
+      chatMessage: chat({ id: 'm2', parentMessageId: 'root', mentions: ['u1'], content: '@A xem giúp' }),
+    })
+    expect(last()).toMatchObject({ id: 'm2', content: '@A xem giúp', parentId: 'root', mentions: ['u1'], kind: 'text' })
+  })
+
+  it('has no thread for a main-stream message', () => {
+    deliver({ oneofKind: 'chatMessage', chatMessage: chat({}) })
+    expect(last()?.parentId).toBeUndefined()
+  })
+
+  it('names the first file of a message with files, and the kind of a card', () => {
+    deliver({
+      oneofKind: 'chatMessage',
+      chatMessage: chat({
+        content: '',
+        attachments: [{ driveFileId: 'f1', fileName: 'ke-hoach.xlsx', mimeType: 'x', sizeBytes: '1', width: 0, height: 0 }],
+      }),
+    })
+    expect(last()).toMatchObject({ kind: 'attachment', attachmentName: 'ke-hoach.xlsx' })
+    deliver({
+      oneofKind: 'chatMessage',
+      chatMessage: chat({ id: 'm3', content: 'Họp?', linkedEntityType: 'poll', linkedEntityId: 'p1' }),
+    })
+    expect(last()).toMatchObject({ kind: 'poll' })
+    deliver({
+      oneofKind: 'chatMessage',
+      chatMessage: chat({ id: 'm4', content: '', linkedEntityType: 'document', linkedEntityId: 'd1' }),
+    })
+    expect(last()).toMatchObject({ kind: 'card' })
+  })
+
+  it('a thread reply frame also names its thread', () => {
+    deliver({
+      oneofKind: 'threadReply',
+      threadReply: {
+        parentMessageId: 'root', replyCount: 2, replyParticipantIds: ['u2'],
+        message: chat({ id: 'r9', parentMessageId: 'root', content: 'ok' }),
+      },
+    })
+    expect(last()).toMatchObject({ id: 'r9', parentId: 'root' })
+  })
+})
+
 describe('message lifecycle events', () => {
   const listOf = (c: string) =>
     queryClient.getQueryData<{ messages: { id: string; content: string; deleted?: boolean; edited_at?: unknown }[] }>(
@@ -128,6 +183,16 @@ describe('message lifecycle events', () => {
       ],
       has_more: false,
     })
+
+  it('an edit or a delete asks again for the previews of the conversation list', () => {
+    seedList()
+    seed(keys.messaging.conversationActivity())
+    deliver({
+      oneofKind: 'messageDeleted',
+      messageDeleted: { messageId: 'a', channelId: 'c1', parentMessageId: '', keepPlaceholder: false, replyCount: 0 },
+    })
+    expect(invalidated(keys.messaging.conversationActivity())).toBe(true)
+  })
 
   it('an edit changes the text in the cache and marks it edited, without a new-message preview', () => {
     seedList()
@@ -384,6 +449,17 @@ describe('resync', () => {
     deliver(domainEvent({ domain: 'document', kind: 'created', seq: '10' }))
     settle()
     expect(invalidated(keys.documents.list('ws-1'))).toBe(true)
+  })
+
+  it('a reconnect asks again for the previews and followed threads of the conversation list', () => {
+    useWebSocketStore.getState().followWorkspace('ws-1')
+    seed(keys.messaging.conversationActivity())
+    seed(keys.messaging.followedThreads())
+    authOk()
+    ackWorkspace('12')
+    settle()
+    expect(invalidated(keys.messaging.conversationActivity())).toBe(true)
+    expect(invalidated(keys.messaging.followedThreads())).toBe(true)
   })
 
   it('a hole in the sequence refreshes everything for the workspace', () => {

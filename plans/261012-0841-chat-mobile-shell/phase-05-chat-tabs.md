@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Tab Trang chủ, Trực tiếp, Mục, Thêm"
-status: pending
+status: completed
 priority: P0
 effort: "2d"
 dependencies: [2, 4]
@@ -50,9 +50,9 @@ dependencies: [2, 4]
 4. Làm, rồi gate frontend; ảnh Playwright 390 sáng/tối so với mockup.
 
 ## Success Criteria
-- [ ] Mở app lạnh (không WS event nào) vẫn thấy xem trước và dòng thread.
-- [ ] Bốn tab khớp mockup; máy tính không đổi (test HomeView máy tính xanh, không sửa kỳ vọng).
-- [ ] Gate frontend xanh.
+- [x] Mở app lạnh (không WS event nào) vẫn thấy xem trước và dòng thread.
+- [x] Bốn tab khớp mockup (theo CSS/markup mockup; ảnh Playwright 390 sáng/tối để phase kiểm chứng chụp); máy tính không đổi (test HomeView máy tính xanh, không sửa kỳ vọng; chỉ xoá test menu "Trò chuyện mới" ở đầu Trang chủ vì menu đó đã bỏ).
+- [x] Gate frontend xanh.
 
 ## Risk Assessment
 - Chip @ dựa trên khớp tên hiển thị trong văn bản thuần — tên trùng một phần có thể tô sai; chỉ tô khi khớp đúng

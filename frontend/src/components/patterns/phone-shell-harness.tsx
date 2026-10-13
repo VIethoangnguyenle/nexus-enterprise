@@ -67,6 +67,7 @@ export function answer(path: string, init?: RequestInit): Promise<unknown> {
     })) })
   }
   if (p === '/channels/unread') return ok({ channels: server.unread })
+  if (p === '/channels/activity') return ok({ channels: [] })
   if (p === '/approval/pending') return ok({ items: [], total: server.pending })
   if (p === '/notifications/unread-count') return ok({ count: server.notificationsUnread })
   if (p === '/notifications') {

@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react'
 import { personStyle } from '../../lib/person-hue'
 
 /** Pixel sizes from DESIGN.md §6. The letter names stay for older call sites. */
-type AvatarSize = 20 | 24 | 32 | 40 | 52 | 64 | 'sm' | 'md' | 'lg'
+type AvatarSize = 20 | 24 | 32 | 36 | 40 | 44 | 52 | 64 | 'sm' | 'md' | 'lg'
 
 interface AvatarProps {
   /** Display name. Initials come from here and nowhere else. */
@@ -22,22 +22,28 @@ interface AvatarProps {
   className?: string
 }
 
-const px: Record<AvatarSize, 20 | 24 | 32 | 40 | 52 | 64> = { 20: 20, 24: 24, 32: 32, 40: 40, 52: 52, 64: 64, sm: 24, md: 32, lg: 40 }
+const px: Record<AvatarSize, 20 | 24 | 32 | 36 | 40 | 44 | 52 | 64> = {
+  20: 20, 24: 24, 32: 32, 36: 36, 40: 40, 44: 44, 52: 52, 64: 64, sm: 24, md: 32, lg: 40,
+}
 
-const sizeStyles: Record<20 | 24 | 32 | 40 | 52 | 64, string> = {
+const sizeStyles: Record<20 | 24 | 32 | 36 | 40 | 44 | 52 | 64, string> = {
   20: 'w-5 h-5 text-micro',
   24: 'w-6 h-6 text-micro',
   32: 'w-8 h-8 text-xs',
+  36: 'w-9 h-9 text-small',
   40: 'w-10 h-10 text-sm',
+  44: 'w-11 h-11 text-sm',
   52: 'w-13 h-13 text-base',
   64: 'w-16 h-16 text-lg',
 }
 
-const dotStyles: Record<20 | 24 | 32 | 40 | 52 | 64, string> = {
+const dotStyles: Record<20 | 24 | 32 | 36 | 40 | 44 | 52 | 64, string> = {
   20: 'w-1.5 h-1.5',
   24: 'w-2 h-2',
   32: 'w-2 h-2',
+  36: 'w-2.5 h-2.5',
   40: 'w-2.5 h-2.5',
+  44: 'w-3 h-3',
   52: 'w-3 h-3',
   64: 'w-3 h-3',
 }

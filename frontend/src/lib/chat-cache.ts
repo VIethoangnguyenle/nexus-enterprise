@@ -9,6 +9,7 @@ import type {
   TaskUpdateEvent,
 } from '../generated/proto/messaging/ws'
 import type { Message, ReactionGroup, ChatTask } from '../api/messaging'
+import type { LastMessage } from './conversations'
 import { useAuthStore } from '../stores/auth.store'
 
 type MessageList = { messages: Message[]; has_more: boolean }
@@ -29,6 +30,33 @@ function refreshMentions(): void {
 /** Plain-text preview of a message body: tags stripped, whitespace folded, capped. */
 export function previewText(content: string): string {
   return content.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120)
+}
+
+/**
+ * What a list row remembers of a live message: its opening, who wrote it, whom it
+ * names, whether it opens a thread, and what kind of thing it is. `parentId` is
+ * the root of the thread a reply belongs to.
+ */
+export function lastMessageOf(
+  msg: Pick<WSChatMessage, 'id' | 'content' | 'createdAt' | 'senderName' | 'senderId' | 'mentions' | 'attachments' | 'linkedEntityType'>,
+  parentId?: string,
+): LastMessage {
+  const file = msg.attachments?.[0]
+  const linked = msg.linkedEntityType
+  const kind: LastMessage['kind'] = file
+    ? 'attachment'
+    : linked === 'poll' ? 'poll' : linked === 'task' ? 'task' : linked === 'document' || linked === 'approval' ? 'card' : 'text'
+  return {
+    id: msg.id,
+    content: previewText(msg.content),
+    timestamp: timestampToIso(msg.createdAt),
+    senderName: msg.senderName || '',
+    senderId: msg.senderId,
+    parentId: parentId || undefined,
+    mentions: msg.mentions?.length ? msg.mentions : undefined,
+    kind,
+    attachmentName: file?.fileName || undefined,
+  }
 }
 
 /** Proto Timestamp (or nothing) to ISO; "now" when the server omitted it. */

@@ -170,6 +170,8 @@ describe('workspaceResyncKeys', () => {
       keys.approval.all(),
       keys.assets.listsAll(),
       keys.messaging.channelsAll(),
+      keys.messaging.conversationActivity(),
+      keys.messaging.followedThreads(),
     ]) {
       expect(k.some((x) => JSON.stringify(x) === JSON.stringify(want))).toBe(true)
     }

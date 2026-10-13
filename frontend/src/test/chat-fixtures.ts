@@ -258,6 +258,8 @@ export function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
   if (p === `/workspaces/${WS_ID}/chat-sections` && method === 'GET') return ok({ sections: [] })
   if (p === '/dms' && method === 'GET') return ok({ channels: DMS })
   if (p === '/channels/unread') return ok({ channels: UNREAD })
+  if (p === '/channels/activity') return ok({ channels: [] })
+  if (p === '/threads/followed') return ok({ messages: [], has_more: false })
   if (p === `/channels/${CH.doisoat}/messages` && method === 'GET') return ok({ messages: MESSAGES, has_more: false })
   if (p === `/channels/${CH.doisoat}/members` && method === 'GET') return ok({ members: MEMBERS })
   if (p === `/channels/${CH.doisoat}/tasks`) return ok({ tasks: TASKS })

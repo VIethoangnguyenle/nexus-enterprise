@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  toDate, formatTime, formatDate, formatRelative, formatListTime, formatBytes, formatMoney, formatCount,
+  toDate, formatTime, formatDate, formatRelative, formatListTime, formatFeedTime, formatBytes, formatMoney, formatCount,
 } from './format'
 
 // Local-time constructor so the tests read the same in any timezone.
@@ -87,5 +87,21 @@ describe('formatCount', () => {
     expect(formatCount(3)).toBe('3')
     expect(formatCount(99)).toBe('99')
     expect(formatCount(100)).toBe('99+')
+  })
+})
+
+describe('formatFeedTime', () => {
+  it('counts the first hour in minutes, never below one', () => {
+    expect(formatFeedTime(at(2026, 10, 9, 14, 59, 40).getTime(), NOW)).toBe('1 phút')
+    expect(formatFeedTime(at(2026, 10, 9, 14, 55).getTime(), NOW)).toBe('5 phút')
+    expect(formatFeedTime(at(2026, 10, 9, 14, 1).getTime(), NOW)).toBe('59 phút')
+  })
+  it('then falls back to the list stamp', () => {
+    expect(formatFeedTime(at(2026, 10, 9, 9, 2).getTime(), NOW)).toBe('09:02')
+    expect(formatFeedTime(at(2026, 10, 8, 20, 0).getTime(), NOW)).toBe('Hôm qua')
+    expect(formatFeedTime(at(2026, 10, 1, 8, 0).getTime(), NOW)).toBe('01/10')
+  })
+  it('is empty for an unknown time', () => {
+    expect(formatFeedTime(0, NOW)).toBe('')
   })
 })

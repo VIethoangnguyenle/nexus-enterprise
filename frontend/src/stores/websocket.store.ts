@@ -13,8 +13,9 @@ import type {
 import type { Message } from '../api/messaging'
 import {
   applyMessageDeleted, applyMessageEdited, applyPin, applyReaction, applyTaskUpdate, convertChatMsgToMessage,
-  previewText, timestampToIso,
+  lastMessageOf, timestampToIso,
 } from '../lib/chat-cache'
+import type { LastMessage } from '../lib/conversations'
 import { applyThreadReplySummary, applyThreadState } from '../lib/thread-cache'
 import { invalidateUnreadThreadsFor } from '../lib/unread-threads-cache'
 import { mentionsMe } from '../lib/shortcut-feed'
@@ -96,7 +97,7 @@ function clearTimers() {
 /** Who last changed an entity, for the wash on its row; see `ChangeInfo`. */
 const CHANGE_TTL_MS = 10_000
 
-export interface LastMessageInfo { content: string; timestamp: string; senderName: string; senderId: string }
+export type LastMessageInfo = LastMessage
 export interface LastReplyInfo { senderId: string; senderName: string; timestamp: string }
 /** Who last acted on an approval request this session, for attributing realtime changes. */
 export interface ApprovalActivityInfo { actorNodeId: string; action: string; at: number }
@@ -397,17 +398,8 @@ function handleServerMessage(
 
     case 'chatMessage': {
       const msg = envelope.payload.chatMessage
-      const timestamp = timestampToIso(msg.createdAt)
       set((s) => ({
-        lastMessages: {
-          ...s.lastMessages,
-          [msg.channelId]: {
-            content: previewText(msg.content),
-            timestamp,
-            senderName: msg.senderName || '',
-            senderId: msg.senderId,
-          },
-        },
+        lastMessages: { ...s.lastMessages, [msg.channelId]: lastMessageOf(msg, msg.parentMessageId) },
       }))
       // The hub broadcasts thread replies as plain chat messages carrying a
       // parent id. Prepending those to the channel list would turn every reply
@@ -485,12 +477,7 @@ function handleServerMessage(
         set((s) => ({
           lastMessages: {
             ...s.lastMessages,
-            [m.channelId]: {
-              content: previewText(m.content),
-              timestamp: timestampToIso(m.createdAt),
-              senderName: m.senderName || '',
-              senderId: m.senderId,
-            },
+            [m.channelId]: lastMessageOf(m, m.parentMessageId || reply.parentMessageId),
           },
         }))
         injectReply({ ...m, parentMessageId: m.parentMessageId || reply.parentMessageId }, set)
@@ -512,10 +499,14 @@ function handleServerMessage(
 
     case 'messageEdited':
       applyMessageEdited(envelope.payload.messageEdited)
+      // The preview of the list quotes the text as it was.
+      queryClient.invalidateQueries({ queryKey: keys.messaging.conversationActivity() })
       break
 
     case 'messageDeleted':
       applyMessageDeleted(envelope.payload.messageDeleted)
+      // A deleted message leaves the preview: the one before it takes its place.
+      queryClient.invalidateQueries({ queryKey: keys.messaging.conversationActivity() })
       break
 
     case 'reactionEvent':

@@ -8,7 +8,7 @@ import { apiFetch } from '../../api/client'
 import { useChatNavigation } from '../../hooks/useChatNavigation'
 import { useToastStore } from '../primitives'
 import { useNavCollapseStore } from '../../stores/nav-collapse.store'
-import { PhoneChatList } from './PhoneChatList'
+import { PhoneSectionsList } from './PhoneSectionsList'
 import { useSectionOverlays } from './SectionOverlays'
 
 vi.mock('@tanstack/react-router', async () => (await import('../../test/router-mock')).routerMockFactory())
@@ -21,7 +21,7 @@ function Host() {
   const overlays = useSectionOverlays(nav.sectionsApi, true)
   return (
     <>
-      <PhoneChatList nav={nav} workspaceId={WS_ID} fresh={new Map()} overlays={overlays} />
+      <PhoneSectionsList nav={nav} workspaceId={WS_ID} overlays={overlays} />
       {overlays.node}
     </>
   )
@@ -167,25 +167,41 @@ describe('long press on a conversation', () => {
 })
 
 describe('the menu of a section on a phone', () => {
-  const open = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
-    await user.click(screen.getByRole('button', { name: `Tuỳ chọn cho mục ${name}` }))
+  const open = async (name: string) => {
+    pressLong(screen.getByRole('button', { name }).parentElement!)
     return screen.findByRole('dialog', { name: `Tuỳ chọn cho mục ${name}` })
   }
 
-  it('is a bottom sheet with rename, move and delete', async () => {
-    const user = userEvent.setup()
+  it('opens on a long press of the header: rename, move and delete', async () => {
     await ready()
-    const sheet = await open(user, 'Quyết toán quý 4')
+    const sheet = await open('Quyết toán quý 4')
     expect(within(sheet).getAllByRole('button').map((b) => b.textContent))
       .toEqual(['Đổi tên mục', 'Chuyển lên', 'Chuyển xuống', 'Xoá mục'])
     expect(within(sheet).getByRole('button', { name: 'Chuyển lên' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Tuỳ chọn cho mục Quyết toán quý 4' }).className).toContain('w-11')
+  })
+
+  it('opens from the keyboard too, and a plain tap on the header still folds it', async () => {
+    const user = userEvent.setup()
+    await ready()
+    const toggle = screen.getByRole('button', { name: 'Nội bộ kế toán' })
+    fireEvent.keyDown(toggle, { key: 'F10', shiftKey: true })
+    expect(await screen.findByRole('dialog', { name: 'Tuỳ chọn cho mục Nội bộ kế toán' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(toggle)
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('has no menu on the headers the app owns', async () => {
+    await ready()
+    pressLong(screen.getByRole('button', { name: 'Nhóm' }).parentElement!)
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('deletes and offers Hoàn tác', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     await ready()
-    const sheet = await open(user, 'Quyết toán quý 4')
+    const sheet = await open('Quyết toán quý 4')
     await user.click(within(sheet).getByRole('button', { name: 'Xoá mục' }))
     await waitFor(() => expect(screen.queryByRole('list', { name: 'Quyết toán quý 4' })).toBeNull())
     await waitFor(() => expect(useToastStore.getState().toasts.some((t) => t.action?.label === 'Hoàn tác')).toBe(true))
@@ -193,14 +209,71 @@ describe('the menu of a section on a phone', () => {
   })
 
   it('renames from a sheet', async () => {
-    const user = userEvent.setup()
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     await ready()
-    const sheet = await open(user, 'Nội bộ kế toán')
+    const sheet = await open('Nội bộ kế toán')
     await user.click(within(sheet).getByRole('button', { name: 'Đổi tên mục' }))
     const form = await screen.findByRole('dialog', { name: 'Đổi tên mục' })
     const field = within(form).getByLabelText('Đổi tên mục')
     await user.clear(field)
     await user.type(field, 'Nội bộ{Enter}')
     await screen.findByRole('button', { name: /^Nội bộ$/ })
+  })
+})
+
+describe('the header of a section', () => {
+  it('has its own unread-only pill, 36px high, that lists only what is unread in that section', async () => {
+    const user = userEvent.setup()
+    await ready()
+    const pill = screen.getByRole('button', { name: 'Chỉ hiện chưa đọc trong Quyết toán quý 4' })
+    expect(pill).toHaveAttribute('aria-pressed', 'false')
+    expect(pill.className).toContain('h-9')
+    await user.click(pill)
+    expect(pill).toHaveAttribute('aria-pressed', 'true')
+    // Only "Đối soát giao dịch" (3 unread) is left of the two in this section; the other sections are untouched.
+    expect(titles(sectionOf('Quyết toán quý 4'))).toEqual(['Đối soát giao dịch'])
+    expect(titles(sectionOf('Tin nhắn trực tiếp'))).toEqual(['Phạm Hải Yến'])
+    expect(titles(sectionOf('Nhóm'))).toEqual(['Vận hành chung'])
+    await user.click(pill)
+    expect(titles(sectionOf('Quyết toán quý 4')).sort()).toEqual(['Nguyễn Thu Lan', 'Đối soát giao dịch'])
+  })
+
+  it('says so when nothing in the section is unread', async () => {
+    const user = userEvent.setup()
+    await ready()
+    await user.click(screen.getByRole('button', { name: 'Chỉ hiện chưa đọc trong Nội bộ kế toán' }))
+    expect(screen.queryByRole('list', { name: 'Nội bộ kế toán' })).toBeNull()
+    expect(screen.getByText('Không có tin chưa đọc trong Nội bộ kế toán.')).toBeInTheDocument()
+  })
+
+  it('does not fold the section when the pill is tapped', async () => {
+    const user = userEvent.setup()
+    await ready()
+    await user.click(screen.getByRole('button', { name: 'Chỉ hiện chưa đọc trong Quyết toán quý 4' }))
+    expect(screen.getByRole('button', { name: 'Quyết toán quý 4' })).toHaveAttribute('aria-expanded', 'true')
+  })
+})
+
+describe('Mục on a phone: rows and the end of the list', () => {
+  it('has a title, 56px rows with the name only, and no preview text', async () => {
+    await ready()
+    expect(screen.getByRole('heading', { level: 1, name: 'Mục' })).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: 'Đối soát giao dịch' })
+    expect(link.className).toContain('min-h-14')
+    expect(link.textContent).toBe('Đ' + 'Đối soát giao dịch' + '3')
+  })
+
+  it('ends with "Mục mới", which asks for a name', async () => {
+    const user = userEvent.setup()
+    await ready()
+    await user.click(screen.getByRole('button', { name: 'Mục mới' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Tên mục mới' })
+    expect(within(sheet).getByLabelText('Tên mục mới')).toBeInTheDocument()
+  })
+
+  it('has no shortcut tiles and no followed-thread block: those moved to Thêm and Thread', async () => {
+    await ready()
+    expect(screen.queryByRole('link', { name: /Được nhắc tới/ })).toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Thread có tin mới' })).toBeNull()
   })
 })

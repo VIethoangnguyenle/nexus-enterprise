@@ -5,14 +5,16 @@ interface SpaceIconProps {
   name: string
   /** Stable key for the colour (channel id). Hashed, never rendered. */
   hueKey?: string
-  size?: 24 | 32 | 40
+  size?: 24 | 32 | 36 | 40 | 44
   className?: string
 }
 
 const sizeStyles = {
   24: 'w-6 h-6 rounded-md text-2xs',
   32: 'w-8 h-8 rounded-md text-small',
+  36: 'w-9 h-9 rounded-surface text-base',
   40: 'w-10 h-10 rounded-surface text-base',
+  44: 'w-11 h-11 rounded-lg text-md',
 } as const
 
 /** First letter of a space name, skipping leading punctuation like "#". */

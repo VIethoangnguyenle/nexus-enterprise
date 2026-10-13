@@ -1,8 +1,30 @@
-import type { Channel, ChannelUnread } from '../api/messaging'
+import type { ActivityMessage, Channel, ChannelUnread, ConversationActivity } from '../api/messaging'
 import type { NotificationLevel } from '../api/notification-levels'
+import { toMillis } from './format'
 import { displayName, type PeopleDirectory, type Person } from './people'
 
 export type ConversationKind = 'dm' | 'space'
+
+/** One message as a list row quotes it: who, what, when, and whom it names. */
+export interface FeedLine {
+  id: string
+  /** Display name of the sender ("Bạn" for me). */
+  author: string
+  /** What the row says: the opening of the text, or words for a file or card. */
+  text: string
+  /** Epoch ms. */
+  at: number
+  /** Display names of the people the message mentions, for the chips in `text`. */
+  mentionNames: string[]
+  /** The message names the caller. */
+  mentionsMe: boolean
+}
+
+/** A thread reply that is newer than the conversation's last main-stream message. */
+export interface FeedReply extends FeedLine {
+  /** The root message of the thread it belongs to; opens that thread. */
+  parentId: string
+}
 
 /**
  * One row of the navigator and of Home: a direct message or a space, joined
@@ -20,14 +42,18 @@ export interface Conversation {
   partner?: Person
   unread: number
   memberCount: number
-  /** Epoch ms of the latest message seen this session; 0 when unknown. */
+  /** Epoch ms of the newest message or thread reply; 0 when unknown. */
   lastActivity: number
-  /** Latest message preview text, when known. */
+  /** Preview text of the newest message, main stream or thread reply, when known. */
   preview?: string
   /** Display name of whoever wrote the preview ("Bạn" for me). */
   previewAuthor?: string
-  /** Who wrote the latest message, for realtime attribution. Not rendered. */
+  /** Who wrote the newest message, for realtime attribution. Not rendered. */
   lastSenderId?: string
+  /** The newest main-stream message. */
+  main?: FeedLine
+  /** The newest thread reply, only while it is newer than `main`. */
+  reply?: FeedReply
   /** The caller's notification level here; absent means the default, `main`. A DM is never `all`. */
   level?: NotificationLevel
   /** Unread main messages that mention the caller, at every level. */
@@ -48,11 +74,38 @@ export interface ConversationMeta {
 
 export type ConversationFilter = 'all' | 'unread' | 'spaces' | 'direct'
 
+/** The newest message a live event announced for a conversation. */
 export interface LastMessage {
+  id?: string
   content: string
   timestamp: string
   senderName: string
   senderId?: string
+  /** Set when the message is a thread reply: the root it belongs to. */
+  parentId?: string
+  /** User ids the message names. */
+  mentions?: string[]
+  kind?: ActivityMessage['kind']
+  attachmentName?: string
+}
+
+/**
+ * What a row says for a message: the words of a text, "📎 name" for a file,
+ * "Bình chọn: …" and "Công việc: …" for those cards.
+ */
+export function feedText(kind: ActivityMessage['kind'] | undefined, text: string, attachmentName?: string): string {
+  switch (kind) {
+    case 'attachment':
+      return `📎 ${attachmentName || 'Tệp đính kèm'}`
+    case 'poll':
+      return text ? `Bình chọn: ${text}` : 'Bình chọn'
+    case 'task':
+      return text ? `Công việc: ${text}` : 'Công việc'
+    case 'card':
+      return text || 'Thẻ đính kèm'
+    default:
+      return text
+  }
 }
 
 export function isDirect(ch: Pick<Channel, 'channel_type'>): boolean {
@@ -89,19 +142,89 @@ interface BuildInput {
   unread: Record<string, number>
   /** Level, @mentions and star per conversation, from the unread list. */
   meta?: Record<string, ConversationMeta>
+  /** What the server says each conversation last said; the base of every preview. */
+  activity?: Record<string, ConversationActivity>
+  /** What live events announced this session; shown when newer than the server's answer. */
   lastMessages: Record<string, LastMessage>
   me: { id?: string; username?: string }
   dir: PeopleDirectory
 }
 
-export function buildConversations({ spaces, dms, unread, meta = {}, lastMessages, me, dir }: BuildInput): Conversation[] {
+function lineFrom(
+  m: { id?: string; text: string; at: number; senderId?: string; senderName: string; mentions?: string[] },
+  me: BuildInput['me'],
+  dir: PeopleDirectory,
+): FeedLine {
+  const ids = m.mentions ?? []
+  return {
+    id: m.id ?? '',
+    author: me.id && m.senderId === me.id ? 'Bạn' : displayName(dir, m.senderId, m.senderName),
+    text: m.text,
+    at: m.at,
+    mentionNames: ids.flatMap((id) => dir.byUserId.get(id)?.name ?? []),
+    mentionsMe: !!me.id && ids.includes(me.id),
+  }
+}
+
+/** A line with who wrote it, for realtime attribution; the row itself never shows the id. */
+type Line = FeedLine & { senderId?: string }
+
+const fromActivity = (m: ActivityMessage, me: BuildInput['me'], dir: PeopleDirectory): Line => ({
+  ...lineFrom(
+    {
+      id: m.id, text: feedText(m.kind, m.preview, m.attachment_name), at: toMillis(m.created_at),
+      senderId: m.sender_id, senderName: m.sender_name, mentions: m.mentions,
+    },
+    me, dir,
+  ),
+  senderId: m.sender_id,
+})
+
+/**
+ * The main-stream message and the newer thread reply of one conversation: the
+ * server's answer, unless a live event is newer than everything it knows. A
+ * live reply sits beside the server's main message; a live main message
+ * leaves no older reply standing.
+ */
+function mergeLines(
+  a: ConversationActivity | undefined,
+  live: LastMessage | undefined,
+  me: BuildInput['me'],
+  dir: PeopleDirectory,
+): { main?: Line; reply?: Line & { parentId: string } } {
+  let main = a ? fromActivity(a.latest, me, dir) : undefined
+  let reply = a?.latest_reply
+    ? { ...fromActivity(a.latest_reply, me, dir), parentId: a.latest_reply.parent_message_id ?? '' }
+    : undefined
+  const liveAt = live ? toMillis(live.timestamp) : 0
+  if (live && liveAt > Math.max(main?.at ?? 0, reply?.at ?? 0)) {
+    const line = {
+      ...lineFrom(
+        {
+          id: live.id, text: feedText(live.kind, live.content, live.attachmentName), at: liveAt,
+          senderId: live.senderId, senderName: live.senderName, mentions: live.mentions,
+        },
+        me, dir,
+      ),
+      senderId: live.senderId,
+    }
+    if (live.parentId) reply = { ...line, parentId: live.parentId }
+    else {
+      main = line
+      reply = undefined
+    }
+  }
+  return { main, reply }
+}
+
+export function buildConversations({ spaces, dms, unread, meta = {}, activity = {}, lastMessages, me, dir }: BuildInput): Conversation[] {
   const seen = new Set<string>()
   const out: Conversation[] = []
   const push = (ch: Channel, kind: ConversationKind) => {
     if (seen.has(ch.id)) return
     seen.add(ch.id)
-    const last = lastMessages[ch.id]
-    const fromMe = !!last && !!me.id && last.senderId === me.id
+    const { main, reply } = mergeLines(activity[ch.id], lastMessages[ch.id], me, dir)
+    const newest = reply ?? main
     const m = meta[ch.id]
     // A direct message has no middle level: "all" is read as the default there.
     const level: NotificationLevel = kind === 'dm' && m?.level === 'all' ? 'main' : (m?.level ?? 'main')
@@ -115,10 +238,12 @@ export function buildConversations({ spaces, dms, unread, meta = {}, lastMessage
       starred: !!m?.starred,
       starredAt: m?.starred ? m.starredAt : undefined,
       memberCount: ch.member_count ?? 0,
-      lastActivity: last ? Date.parse(last.timestamp) || 0 : 0,
-      preview: last?.content || undefined,
-      previewAuthor: last ? (fromMe ? 'Bạn' : displayName(dir, last.senderId, last.senderName)) : undefined,
-      lastSenderId: last?.senderId,
+      lastActivity: newest?.at ?? 0,
+      preview: newest?.text || undefined,
+      previewAuthor: newest?.author,
+      lastSenderId: newest?.senderId,
+      main: main && stripSender(main),
+      reply: reply && stripSender(reply),
     }
     if (kind === 'dm') {
       const { title, partner } = dmPartner(ch, me, dir)
@@ -131,6 +256,10 @@ export function buildConversations({ spaces, dms, unread, meta = {}, lastMessage
   for (const ch of dms) push(ch, 'dm')
   for (const ch of spaces) push(ch, isDirect(ch) ? 'dm' : 'space')
   return out
+}
+
+function stripSender<T extends { senderId?: string }>({ senderId: _senderId, ...line }: T): Omit<T, 'senderId'> {
+  return line
 }
 
 const collator = new Intl.Collator('vi', { sensitivity: 'base' })

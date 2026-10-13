@@ -82,6 +82,22 @@ conversations included. A conversation the caller can no longer read contributes
 - **WHEN** a member who has unread mentions in a conversation loses `read` on it
 - **THEN** the count no longer includes them
 
+### Requirement: The shortcuts on a phone
+Below 1024px the navigator column is not on screen, so the shortcuts live in the tab Thêm of the phone's Chat
+(`/channels?tab=more`), 60px rows in this order: Được nhắc tới (a count pill of the unread mentions, from the mentions
+badge above) opening the mentions feed, Tin đã gắn sao opening the starred feed, Thread đang theo dõi (with "N có tin
+mới" when followed threads have unread replies) opening the Thread screen on its chip Đang theo dõi, and, after a
+divider, Thông báo của Chat opening Cài đặt › Thông báo. The tab repeats none of the ☰ menu's modules and offers no
+group browser (nothing serves one). They are no longer tiles at the head of the conversation list.
+
+#### Scenario: Mentions from the phone
+- **WHEN** a person has 3 unread mentions and opens Thêm
+- **THEN** Được nhắc tới shows 3 and opens the mentions feed; Tin đã gắn sao opens the starred feed
+
+#### Scenario: Followed threads from the phone
+- **WHEN** two followed threads have unread replies and the person chooses Thread đang theo dõi in Thêm
+- **THEN** the full-screen Thread list opens on Đang theo dõi, and the row says "2 có tin mới"
+
 ### Requirement: Stars leave sections alone
 Starring or unstarring a conversation SHALL NOT change its place in the caller's chat sections.
 
