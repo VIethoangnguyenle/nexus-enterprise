@@ -632,7 +632,7 @@ export function ChatEditor({
             aria-controls={barOpen ? barId : undefined}
             className={`max-md:w-11 max-md:h-11 ${barOpen ? '!bg-accent-wash !text-accent' : ''}`}
           >
-            <span aria-hidden="true" className="text-base font-semibold underline leading-none">A</span>
+            <span aria-hidden="true" className="text-16 font-semibold underline leading-none">A</span>
           </IconButton>
           <IconButton
             onClick={() => setShowEmoji((v) => !v)}

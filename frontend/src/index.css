@@ -33,6 +33,10 @@
   --text-md--line-height: 1.4375rem;
   --text-base: 1rem;
   --text-base--line-height: 1.5rem;
+  /* 16px text. Use text-16, never text-base: `base` is also a surface colour,
+     so text-base paints the text in the background colour too. */
+  --text-16: 1rem;
+  --text-16--line-height: 1.5rem;
   --text-lg: 1.1875rem;
   --text-lg--line-height: 1.625rem;
   --text-xl: 1.4375rem;

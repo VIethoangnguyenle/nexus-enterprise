@@ -33,7 +33,7 @@ const sizeStyles: Record<20 | 24 | 32 | 36 | 40 | 44 | 52 | 64, string> = {
   36: 'w-9 h-9 text-small',
   40: 'w-10 h-10 text-sm',
   44: 'w-11 h-11 text-sm',
-  52: 'w-13 h-13 text-base',
+  52: 'w-13 h-13 text-16',
   64: 'w-16 h-16 text-lg',
 }
 

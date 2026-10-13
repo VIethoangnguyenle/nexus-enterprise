@@ -144,7 +144,7 @@ function PollForm({ onClose, create }: { onClose: () => void; create: ReturnType
                   maxLength={QUESTION_MAX}
                   placeholder="Thêm lựa chọn"
                   onChange={(e) => setOption(i, e.target.value)}
-                  className={`flex-1 min-w-0 h-11 px-3 rounded-md bg-raised text-base text-ink outline-none
+                  className={`flex-1 min-w-0 h-11 px-3 rounded-md bg-raised text-16 text-ink outline-none
                     placeholder:text-ink-muted ${bad ? 'field-danger' : 'field-line'} focus:field-focus`}
                 />
                 <Pressable

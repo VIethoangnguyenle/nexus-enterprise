@@ -51,7 +51,7 @@ export const TextField = forwardRef<HTMLInputElement, TextFieldProps>(
               maxLength={maxLength}
               aria-invalid={!!error || undefined}
               aria-describedby={describedBy}
-              className={`flex-1 min-w-0 ${inputHeight} bg-transparent border-none outline-none text-base text-ink
+              className={`flex-1 min-w-0 ${inputHeight} bg-transparent border-none outline-none text-16 text-ink
                 placeholder:text-ink-muted`}
               {...props}
             />

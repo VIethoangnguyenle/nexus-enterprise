@@ -189,7 +189,7 @@ function ReadOnly({ label, value }: { label: string; value: string }) {
   return (
     <div className="grid gap-1.5">
       <span className="text-sm font-semibold text-ink">{label}</span>
-      <div className="flex items-center gap-2 min-h-10 px-3 py-2 rounded-md bg-sunk text-base text-ink-subtle whitespace-pre-wrap break-words">
+      <div className="flex items-center gap-2 min-h-10 px-3 py-2 rounded-md bg-sunk text-16 text-ink-subtle whitespace-pre-wrap break-words">
         {value}
       </div>
     </div>
@@ -257,7 +257,7 @@ function WorkspaceTypeCard({
             <User size={20} strokeWidth={1.75} />
           </span>
           <div className="grid gap-1 min-w-0">
-            <h3 id="workspace-type-title" className="font-semibold text-base text-ink m-0">
+            <h3 id="workspace-type-title" className="font-semibold text-16 text-ink m-0">
               Workspace cá nhân
             </h3>
             <span className="text-sm text-ink-muted">
@@ -309,7 +309,7 @@ function WorkspaceTypeCard({
           <Building2 size={20} strokeWidth={1.75} />
         </span>
         <div className="grid gap-1 min-w-0">
-          <h3 id="workspace-type-title" className="font-semibold text-base text-ink m-0">
+          <h3 id="workspace-type-title" className="font-semibold text-16 text-ink m-0">
             Workspace tổ chức
           </h3>
           <span className="text-sm text-ink-muted">

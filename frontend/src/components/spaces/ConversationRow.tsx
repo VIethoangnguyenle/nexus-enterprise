@@ -46,7 +46,7 @@ export function ConversationRow({ conversation: c, arrival, online }: {
         <ConversationIcon conversation={c} size={40} online={online} halo={byOther} />
       </span>
       <span className="grid gap-0.5 min-w-0">
-        <span className={`flex items-center gap-1.5 min-w-0 max-md:text-base md:text-md ${unread ? 'font-semibold' : 'font-medium'}`}>
+        <span className={`flex items-center gap-1.5 min-w-0 max-md:text-16 md:text-md ${unread ? 'font-semibold' : 'font-medium'}`}>
           <span className="truncate">{c.title}</span>
           {byOther && <span className="rt-tag shrink-0 text-xs font-semibold">vừa nhắn</span>}
         </span>

@@ -19,7 +19,7 @@ export function MessageContent({ content, contentFormat }: MessageContentProps) 
   if (contentFormat === 'html' || content.startsWith('<')) {
     return (
       <div
-        className="message-html text-base md:text-md text-ink break-words"
+        className="message-html text-16 md:text-md text-ink break-words"
         dangerouslySetInnerHTML={{ __html: sanitizeHtml(content) }}
       />
     )
@@ -27,7 +27,7 @@ export function MessageContent({ content, contentFormat }: MessageContentProps) 
 
   // Markdown rendering with custom code block component
   return (
-    <div className="message-markdown text-base md:text-md text-ink break-words [&_p]:m-0 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:my-1 [&_blockquote]:text-on-surface-variant [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-1 [&_a]:text-primary [&_a]:underline [&_strong]:text-on-surface">
+    <div className="message-markdown text-16 md:text-md text-ink break-words [&_p]:m-0 [&_blockquote]:border-l-2 [&_blockquote]:border-primary/30 [&_blockquote]:pl-3 [&_blockquote]:my-1 [&_blockquote]:text-on-surface-variant [&_ul]:pl-5 [&_ol]:pl-5 [&_li]:my-1 [&_a]:text-primary [&_a]:underline [&_strong]:text-on-surface">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{

@@ -53,7 +53,7 @@ export function NotificationLevelSheet({ conversation: c, level, onChoose, onClo
               <Icon size={20} strokeWidth={1.75} aria-hidden="true" className={`shrink-0 ${checked ? 'text-accent' : 'text-ink-muted'}`} />
               <span className="grid gap-0.5 min-w-0 flex-1">
                 <span className="flex items-center gap-2">
-                  <b className="text-base font-semibold text-ink">{o.title}</b>
+                  <b className="text-16 font-semibold text-ink">{o.title}</b>
                   {o.isDefault && <span className="px-1.5 rounded-sm bg-sunk text-2xs font-semibold text-ink-muted">Mặc định</span>}
                 </span>
                 <span className="text-small text-ink-muted">{o.description}</span>

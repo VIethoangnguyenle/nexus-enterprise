@@ -106,7 +106,7 @@ function Group({ id, workspaceId, title, items, overlays, own = false, empty }: 
           aria-expanded={open}
           aria-controls={listId}
           onClick={() => setCollapsed(key, open)}
-          className="flex-1 min-w-0 flex items-center gap-2 min-h-11 px-2 rounded-md text-base font-semibold text-ink"
+          className="flex-1 min-w-0 flex items-center gap-2 min-h-11 px-2 rounded-md text-16 font-semibold text-ink"
         >
           <ChevronDown
             size={20}
@@ -177,7 +177,7 @@ function SectionRow({ conversation: c }: { conversation: Conversation }) {
       <span className={muted ? 'opacity-[0.72] inline-flex' : 'inline-flex'}>
         <ConversationIcon conversation={c} size={36} online={online} />
       </span>
-      <span className={`truncate text-base ${unread ? 'font-bold' : ''}`}>{c.title}</span>
+      <span className={`truncate text-16 ${unread ? 'font-bold' : ''}`}>{c.title}</span>
       <span className="inline-flex items-center gap-1.5 text-ink-subtle">
         {unread && (
           <span

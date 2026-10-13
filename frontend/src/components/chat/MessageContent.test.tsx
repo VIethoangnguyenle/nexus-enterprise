@@ -70,13 +70,13 @@ describe('MessageContent HTML', () => {
     expect(container.textContent).toBe('@Lan')
   })
 
-  it('applies text-base on mobile (< md) and md:text-md on desktop to prevent font scale regressions', () => {
+  it('applies text-16 on mobile (< md) and md:text-md on desktop to prevent font scale regressions', () => {
     const { container: htmlContainer } = render(
       <MessageContent content="<p>Tin nhắn HTML</p>" contentFormat="html" />,
     )
     const htmlDiv = htmlContainer.querySelector('.message-html')
     expect(htmlDiv).not.toBeNull()
-    expect(htmlDiv?.classList.contains('text-base')).toBe(true)
+    expect(htmlDiv?.classList.contains('text-16')).toBe(true)
     expect(htmlDiv?.classList.contains('md:text-md')).toBe(true)
 
     const { container: mdContainer } = render(
@@ -84,7 +84,7 @@ describe('MessageContent HTML', () => {
     )
     const mdDiv = mdContainer.querySelector('.message-markdown')
     expect(mdDiv).not.toBeNull()
-    expect(mdDiv?.classList.contains('text-base')).toBe(true)
+    expect(mdDiv?.classList.contains('text-16')).toBe(true)
     expect(mdDiv?.classList.contains('md:text-md')).toBe(true)
   })
 })

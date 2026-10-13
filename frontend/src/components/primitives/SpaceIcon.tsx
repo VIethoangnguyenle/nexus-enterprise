@@ -12,8 +12,8 @@ interface SpaceIconProps {
 const sizeStyles = {
   24: 'w-6 h-6 rounded-md text-2xs',
   32: 'w-8 h-8 rounded-md text-small',
-  36: 'w-9 h-9 rounded-surface text-base',
-  40: 'w-10 h-10 rounded-surface text-base',
+  36: 'w-9 h-9 rounded-surface text-16',
+  40: 'w-10 h-10 rounded-surface text-16',
   44: 'w-11 h-11 rounded-lg text-md',
 } as const
 
