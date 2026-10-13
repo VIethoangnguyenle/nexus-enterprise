@@ -312,6 +312,30 @@ func TestGetCall_ReadersSeeWhoIsIn(t *testing.T) {
 	require.ErrorIs(t, err, domain.ErrAccessDenied)
 }
 
+// The conversation's open call, for its header's "Tham gia": readers see it,
+// an outsider does not, and an ended call is none.
+func TestOpenCall_ForReadersOnly(t *testing.T) {
+	w := newCallWorld(t)
+	ctx := context.Background()
+	c, err := w.f.svc.OpenCall(ctx, w.chID, w.readerNode)
+	require.NoError(t, err)
+	assert.Nil(t, c, "no call yet")
+
+	id := w.start(t, "video")
+	c, err = w.f.svc.OpenCall(ctx, w.chID, w.readerNode)
+	require.NoError(t, err)
+	require.NotNil(t, c)
+	assert.Equal(t, id, c.Id)
+
+	_, err = w.f.svc.OpenCall(ctx, w.chID, outsider)
+	require.ErrorIs(t, err, domain.ErrAccessDenied)
+
+	require.NoError(t, w.f.svc.HandleCallEvent(ctx, domain.CallEvent{Kind: domain.CallEventRoomFinished, Room: id}))
+	c, err = w.f.svc.OpenCall(ctx, w.chID, w.readerNode)
+	require.NoError(t, err)
+	assert.Nil(t, c, "an ended call is not open")
+}
+
 func TestDirectCall_AnsweredWhenThePeerJoins(t *testing.T) {
 	w := newCallWorld(t)
 	w.asDM(t)
@@ -328,6 +352,27 @@ func TestDirectCall_AnsweredWhenThePeerJoins(t *testing.T) {
 	assert.Equal(t, "active", c.Status)
 	assert.NotNil(t, c.StartedAt)
 	assert.Contains(t, w.calls.types(), domain.CallChangeAnswered)
+}
+
+// A direct call is two people: when one hangs up the call ends for both (its
+// room is closed). A group call goes on while anyone is in it.
+func TestDirectCall_EndsWhenOneHangsUp(t *testing.T) {
+	w := newCallWorld(t)
+	w.asDM(t)
+	ctx := context.Background()
+	id := w.start(t, "video")
+	w.joined(t, id, w.f.userID)
+	w.joined(t, id, w.peer)
+	require.True(t, w.media.rooms[id])
+	require.NoError(t, w.f.svc.HandleCallEvent(ctx, domain.CallEvent{Kind: domain.CallEventLeft, Room: id, Identity: w.peer}))
+	assert.False(t, w.media.rooms[id], "the room is closed; LiveKit's room_finished ends the call")
+
+	g := newCallWorld(t)
+	gid := g.start(t, "video")
+	g.joined(t, gid, g.f.userID)
+	g.joined(t, gid, g.peer)
+	require.NoError(t, g.f.svc.HandleCallEvent(ctx, domain.CallEvent{Kind: domain.CallEventLeft, Room: gid, Identity: g.peer}))
+	assert.True(t, g.media.rooms[gid], "a group call goes on")
 }
 
 func TestDeclineAndCancel(t *testing.T) {

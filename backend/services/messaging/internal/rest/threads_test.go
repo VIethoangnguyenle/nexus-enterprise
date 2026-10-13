@@ -80,6 +80,7 @@ func TestRegisterRoutes_MountsTheThreadRoutes(t *testing.T) {
 		"GET /api/me/push-preferences",
 		"PUT /api/me/push-preferences",
 		"POST /api/channels/:chId/calls",
+		"GET /api/channels/:chId/call",
 		"GET /api/calls/:callId",
 		"POST /api/calls/:callId/token",
 		"POST /api/calls/:callId/decline",

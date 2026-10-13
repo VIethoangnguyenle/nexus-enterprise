@@ -269,6 +269,19 @@ func (s *Service) GetCall(ctx context.Context, callID, userNodeID string) (*pb.C
 	return s.callProto(ctx, call)
 }
 
+// OpenCall returns the conversation's ringing or running call as a reader of it
+// sees it, or nil when there is none.
+func (s *Service) OpenCall(ctx context.Context, channelID, userNodeID string) (*pb.Call, error) {
+	if _, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead); err != nil {
+		return nil, err
+	}
+	call, err := s.store.OpenCall(ctx, channelID)
+	if err != nil || call == nil {
+		return nil, err
+	}
+	return s.callProto(ctx, call)
+}
+
 // DeclineCall is the other person turning down a ringing direct call.
 func (s *Service) DeclineCall(ctx context.Context, callID, userID, userNodeID string) (*pb.Call, error) {
 	call, err := s.authorizeCall(ctx, callID, userNodeID, ngac.OpWrite)
@@ -374,6 +387,9 @@ func (s *Service) HandleCallEvent(ctx context.Context, ev CallEvent) error {
 		if err := s.store.LeaveCall(ctx, call.ID, ev.Identity, ev.Participant); err != nil {
 			return err
 		}
+		if err := s.endDirectCallLeftAlone(ctx, call); err != nil {
+			return err
+		}
 		_, err := s.callChanged(ctx, call, CallChangeState, false)
 		return err
 	case CallEventRoomFinished:
@@ -407,6 +423,26 @@ func (s *Service) participantJoined(ctx context.Context, call *store.Call, userI
 	}
 	_, err := s.callChanged(ctx, call, CallChangeState, false)
 	return err
+}
+
+// endDirectCallLeftAlone closes the room of an answered direct call once fewer
+// than two people are in it: hanging up a call between two people ends it for
+// both. LiveKit's room_finished then marks it ended. A ringing call is left to
+// ring out or be cancelled; a group call goes on while anyone is in it.
+func (s *Service) endDirectCallLeftAlone(ctx context.Context, call *store.Call) error {
+	if call.Status != callActive {
+		return nil
+	}
+	ch, err := s.loadChannel(ctx, call.ChannelID)
+	if err != nil || ch.ChannelType != "dm" {
+		return err
+	}
+	present, err := s.store.CallPresent(ctx, call.ID)
+	if err != nil || len(present) >= 2 {
+		return err
+	}
+	s.closeRoom(call.ID)
+	return nil
 }
 
 // roomFinished closes a call whose room LiveKit closed: a call that was

@@ -35,6 +35,7 @@ func (h *Handler) SetCallWebhooks(w CallWebhooks) { h.webhooks = w }
 // no user session. The webhook is never routed from outside the network.
 func (h *Handler) registerCallRoutes(e *echo.Echo, api *echo.Group) {
 	api.POST("/channels/:chId/calls", h.StartCall)
+	api.GET("/channels/:chId/call", h.OpenCall)
 	api.GET("/calls/:callId", h.GetCall)
 	api.POST("/calls/:callId/token", h.CallToken)
 	api.POST("/calls/:callId/decline", h.DeclineCall)
@@ -97,6 +98,20 @@ func (h *Handler) GetCall(c echo.Context) error {
 		return callError(err)
 	}
 	return c.JSON(http.StatusOK, call)
+}
+
+// OpenCall handles GET /api/channels/:chId/call: the conversation's open call,
+// or {"call": null} when there is none.
+func (h *Handler) OpenCall(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	call, err := h.svc.OpenCall(c.Request().Context(), c.Param("chId"), claims.NGACNodeID)
+	if err != nil {
+		return callError(err)
+	}
+	return c.JSON(http.StatusOK, map[string]any{"call": call})
 }
 
 // CallToken handles POST /api/calls/:callId/token.

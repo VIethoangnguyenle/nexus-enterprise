@@ -76,7 +76,12 @@ func (c *Client) DeleteRoom(ctx context.Context, name string) error {
 
 // RemoveParticipant disconnects one person from a room.
 func (c *Client) RemoveParticipant(ctx context.Context, room, identity string) error {
-	if _, err := c.rooms.RemoveParticipant(ctx, &lkproto.RoomParticipantIdentity{Room: room, Identity: identity}); err != nil {
+	_, err := c.rooms.RemoveParticipant(ctx, &lkproto.RoomParticipantIdentity{Room: room, Identity: identity})
+	var terr twirp.Error
+	if errors.As(err, &terr) && terr.Code() == twirp.NotFound {
+		return nil // not in the room (or no room): already out
+	}
+	if err != nil {
 		return fmt.Errorf("livekit remove participant: %w", err)
 	}
 	return nil
