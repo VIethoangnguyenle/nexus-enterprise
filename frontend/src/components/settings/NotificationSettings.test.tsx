@@ -205,4 +205,52 @@ describe('NotificationSettings component', () => {
     const devSwitch = screen.getByRole('switch', { name: 'Thông báo đẩy trên thiết bị này' })
     expect(devSwitch).toBeDisabled()
   })
+
+  it('shows a retryable failure instead of staying on "checking" when the SDK cannot start', async () => {
+    const user = userEvent.setup()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const optedIn = vi
+      .spyOn(pushLib, 'isSubscriptionOptedIn')
+      .mockRejectedValueOnce(new Error('OneSignal init timed out'))
+      .mockResolvedValue(true)
+
+    renderWithQuery(<NotificationSettings />)
+
+    expect(await screen.findByText('Chưa kết nối được dịch vụ thông báo')).toBeInTheDocument()
+    expect(screen.queryByText(/Đang kiểm tra/)).not.toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Thông báo đẩy trên thiết bị này' })).toBeDisabled()
+    expect(warn).toHaveBeenCalledWith('[push] could not read device subscription', expect.any(Error))
+
+    await user.click(screen.getByRole('button', { name: 'Thử lại' }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('switch', { name: 'Thông báo đẩy trên thiết bị này' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      )
+    })
+    expect(optedIn).toHaveBeenCalledTimes(2)
+    expect(screen.queryByText('Chưa kết nối được dịch vụ thông báo')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).not.toBeInTheDocument()
+  })
+
+  it('shows the failure when wiring SDK listeners fails after the first read', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(pushLib, 'initOneSignal').mockRejectedValue(new Error('boom'))
+
+    renderWithQuery(<NotificationSettings />)
+
+    expect(await screen.findByText('Chưa kết nối được dịch vụ thông báo')).toBeInTheDocument()
+  })
+
+  it('keeps the blocked state without a retry action', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(pushLib, 'getNotificationPermission').mockReturnValue('denied')
+    vi.spyOn(pushLib, 'isSubscriptionOptedIn').mockRejectedValue(new Error('x'))
+
+    renderWithQuery(<NotificationSettings />)
+
+    expect(await screen.findByText('Trình duyệt đang chặn')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).not.toBeInTheDocument()
+  })
 })

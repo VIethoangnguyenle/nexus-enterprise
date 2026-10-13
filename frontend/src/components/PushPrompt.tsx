@@ -40,7 +40,8 @@ export function PushPrompt() {
       } else {
         toast.error('Trình duyệt đang chặn thông báo. Mở lại trong Cài đặt → Thông báo')
       }
-    } catch {
+    } catch (err) {
+      console.warn('[push] could not enable notifications', err)
       toast.error('Không bật được thông báo. Thử lại sau.')
     } finally {
       setEnabling(false)

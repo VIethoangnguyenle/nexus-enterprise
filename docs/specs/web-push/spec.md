@@ -60,6 +60,15 @@ message ends with its 30-second deadline, however many recipients remain.
 hours (`HH:MM` start and end, time zone). Without stored preferences every kind is on and there are no quiet hours.
 Invalid hours or an unknown time zone are refused (400).
 
+### Requirement: Device switch
+Settings › Notifications shows a per-device push switch whose state is read from the OneSignal SDK. The SDK is
+initialised at most once per page; a caller that stops waiting (20 s) leaves that init running and a later call
+receives its result. Turning the switch on while permission is undecided asks for permission inside the same tap.
+
+#### Scenario: The notification service cannot be reached
+- **WHEN** the SDK fails to load or does not finish starting while the switch is being read
+- **THEN** the switch is disabled with "Chưa kết nối được dịch vụ thông báo" and a "Thử lại" action, never an endless "Đang kiểm tra…"; "Thử lại" reads the state again and succeeds once the SDK has started
+
 ### Requirement: Configuration
 With neither `ONESIGNAL_APP_ID` nor `ONESIGNAL_REST_API_KEY` set nothing is sent; with only one set the service
 refuses to start. The REST API key is never logged, and neither is a message's text; a failed push is logged with the

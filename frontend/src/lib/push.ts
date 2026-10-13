@@ -73,8 +73,10 @@ export function getNotificationPermission(): NotificationPermission {
   return Notification.permission
 }
 
+// The one underlying init. OneSignal.init must run at most once per page (a second call
+// never settles), so this promise is kept even after a caller's wait has timed out.
 let initPromise: Promise<OneSignalSDK | null> | null = null
-const INIT_TIMEOUT_MS = 10_000
+const INIT_TIMEOUT_MS = 20_000
 
 /**
  * Returns true when running on localhost/127.0.0.1 without the explicit dev
@@ -90,67 +92,90 @@ export function isLocalDev(): boolean {
   return false
 }
 
-export async function initOneSignal(overrideAppId?: string): Promise<OneSignalSDK | null> {
-  const appId = overrideAppId !== undefined ? (overrideAppId || undefined) : getOneSignalAppId()
-  if (!appId) return null
-  // Don't load the SDK on localhost (domain mismatch → init throws) unless explicitly opted in.
-  if (isLocalDev()) return null
-  if (initPromise) return initPromise
+function startOneSignalInit(appId: string): Promise<OneSignalSDK | null> {
+  const initOptions = {
+    appId,
+    serviceWorkerPath: 'sw.js',
+    serviceWorkerParam: { scope: '/' },
+  }
 
-  initPromise = (async () => {
+  const run = async (): Promise<OneSignalSDK | null> => {
     if (window.OneSignal) {
-      await window.OneSignal.init({
-        appId,
-        serviceWorkerPath: 'sw.js',
-        serviceWorkerParam: { scope: '/' },
-      })
+      await window.OneSignal.init(initOptions)
       return window.OneSignal
     }
 
     if (typeof document === 'undefined') return null
 
-    await new Promise<void>((resolve, reject) => {
-      const existing = document.querySelector('script[src*="OneSignalSDK.page.js"]')
-      if (existing) {
-        resolve()
-        return
-      }
-      const script = document.createElement('script')
-      script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js'
-      script.defer = true
-      script.onload = () => resolve()
-      script.onerror = (e) => reject(new Error('Failed to load OneSignal SDK script: ' + String(e)))
-      document.head.appendChild(script)
-    })
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const existing = document.querySelector('script[src*="OneSignalSDK.page.js"]')
+        if (existing) {
+          resolve()
+          return
+        }
+        const script = document.createElement('script')
+        script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js'
+        script.defer = true
+        script.onload = () => resolve()
+        script.onerror = (e) => {
+          script.remove()
+          reject(new Error('Failed to load OneSignal SDK script: ' + String(e)))
+        }
+        document.head.appendChild(script)
+      })
+    } catch (err) {
+      // Nothing was initialised yet, so a later call may load the script again
+      // (e.g. after an ad-blocker is disabled or the network recovers).
+      initPromise = null
+      throw err
+    }
 
     return new Promise<OneSignalSDK>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        reject(new Error('OneSignal init timed out'))
-      }, INIT_TIMEOUT_MS)
-
       window.OneSignalDeferred = window.OneSignalDeferred || []
       window.OneSignalDeferred.push(async (OneSignal) => {
         try {
-          await OneSignal.init({
-            appId,
-            serviceWorkerPath: 'sw.js',
-            serviceWorkerParam: { scope: '/' },
-          })
-          clearTimeout(timer)
+          await OneSignal.init(initOptions)
           resolve(OneSignal)
         } catch (err) {
-          clearTimeout(timer)
           reject(err)
         }
       })
     })
-  })().catch((err) => {
-    // Clear so a later call can retry (e.g. after ad-blocker is disabled).
-    initPromise = null
-    throw err
-  })
+  }
 
-  return initPromise
+  return run()
+}
+
+/** Bounds one caller's wait without discarding the in-flight init. */
+function waitForInit<T>(promise: Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('OneSignal init timed out')), INIT_TIMEOUT_MS)
+    promise.then(
+      (v) => {
+        clearTimeout(timer)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(timer)
+        reject(e)
+      },
+    )
+  })
+}
+
+export async function initOneSignal(overrideAppId?: string): Promise<OneSignalSDK | null> {
+  const appId = overrideAppId !== undefined ? (overrideAppId || undefined) : getOneSignalAppId()
+  if (!appId) return null
+  // Don't load the SDK on localhost (domain mismatch → init throws) unless explicitly opted in.
+  if (isLocalDev()) return null
+  if (!initPromise) {
+    const started = startOneSignalInit(appId)
+    initPromise = started
+    // Keep a late rejection from surfacing as unhandled when every caller has already timed out.
+    started.catch(() => {})
+  }
+  return waitForInit(initPromise)
 }
 
 let unsubAuthSync: (() => void) | null = null
@@ -207,6 +232,11 @@ export async function setSubscriptionOptIn(optIn: boolean, overrideAppId?: strin
   const sdk = await initOneSignal(overrideAppId)
   if (!sdk) return
   if (optIn) {
+    // The permission prompt must start inside the tap that called us; iOS refuses it otherwise.
+    if (getNotificationPermission() === 'default' && sdk.Notifications?.requestPermission) {
+      await sdk.Notifications.requestPermission()
+      if (getNotificationPermission() !== 'granted') return
+    }
     await sdk.User.PushSubscription.optIn()
   } else {
     await sdk.User.PushSubscription.optOut()

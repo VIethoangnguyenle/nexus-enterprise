@@ -105,6 +105,18 @@ describe('PushPrompt card', () => {
     expect(screen.queryByText('Nhận thông báo khi có tin mới?')).not.toBeInTheDocument()
   })
 
+  it('shows a retry-later toast and logs when the notification service cannot start', async () => {
+    const user = userEvent.setup()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(pushLib, 'requestPushPermission').mockRejectedValue(new Error('OneSignal init timed out'))
+
+    render(<PushPrompt />)
+    await user.click(screen.getByRole('button', { name: 'Bật thông báo' }))
+
+    expect(toast.error).toHaveBeenCalledWith('Không bật được thông báo. Thử lại sau.')
+    expect(warn).toHaveBeenCalledWith('[push] could not enable notifications', expect.any(Error))
+  })
+
   it('shows iOS home screen hint instead of action button when iOS Safari not installed', () => {
     vi.spyOn(pushLib, 'isIosNotInstalled').mockReturnValue(true)
 
