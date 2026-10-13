@@ -4,18 +4,18 @@ import { ApiError } from '../../api/client'
 import { Room as FakeRoom, RoomEvent, DisconnectReason, createLocalVideoTrack } from '../../test/fake-livekit'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
-import { useCallStore } from '../../stores/call.store'
+import { stashTicket, useCallStore } from '../../stores/call.store'
 import type { Call, CallJoin } from '../../api/calls'
 
 const api = vi.hoisted(() => ({ get: vi.fn(), token: vi.fn() }))
 const convo = vi.hoisted(() => ({ kind: 'space' as 'space' | 'dm' }))
-const route = vi.hoisted(() => ({ search: {} as { answer?: 'video' | 'audio' } }))
+const route = vi.hoisted(() => ({ callId: 'c1', search: {} as { answer?: 'video' | 'audio' } }))
 
 vi.mock('livekit-client', async () => (await import('../../test/fake-livekit')).livekitMock)
 vi.mock('../../lib/call-sound', () => ({ playChime: vi.fn() }))
 vi.mock('@tanstack/react-router', async () => {
   const { routerMockFactory } = await import('../../test/router-mock')
-  return { ...routerMockFactory(), getRouteApi: () => ({ useParams: () => ({ callId: 'c1' }), useSearch: () => route.search }) }
+  return { ...routerMockFactory(), getRouteApi: () => ({ useParams: () => ({ callId: route.callId }), useSearch: () => route.search }) }
 })
 vi.mock('../../api/calls', async (orig) => ({ ...(await orig<object>()), callsApi: { get: api.get, token: api.token, invite: vi.fn() } }))
 vi.mock('../../hooks/useActiveWorkspace', () => ({ useActiveWorkspace: () => ({ workspaceId: 'w1' }) }))
@@ -56,6 +56,7 @@ describe('call screen', () => {
     api.token.mockReset().mockImplementation(async () => ticket())
     convo.kind = 'space'
     route.search = {}
+    route.callId = 'c1'
     routerState.navigate.mockReset()
     routerState.pathname = '/calls/c1'
     useCallStore.getState().clear()
@@ -231,6 +232,71 @@ describe('call screen', () => {
       expect(useCallStore.getState().phase).toBe('reconnecting')
       act(() => { room.emit(RoomEvent.Reconnected) })
       expect(screen.queryByText('Đang kết nối lại…')).toBeNull()
+    })
+  })
+
+  describe('what an earlier call left behind', () => {
+    it('does not stop a direct join: a finished call of another id is over', async () => {
+      useCallStore.getState().begin({ callId: 'old', channelId: 'ch9', kind: 'video', title: 'Cũ', isDm: false, joinedAt: 1, startedAt: 1 })
+      useCallStore.getState().finish({ durationMs: 1, people: 2, sinceMs: 1 }, 'ended')
+      route.search = { answer: 'video' }
+      mount()
+      expect(await screen.findByTestId('call-stage')).toBeInTheDocument()
+      expect(useCallStore.getState().session?.callId).toBe('c1')
+    })
+
+    it('does not stop a direct join: a refusal that belonged to another call', async () => {
+      useCallStore.getState().setRefusal('call_full', 'old')
+      route.search = { answer: 'video' }
+      mount()
+      expect(await screen.findByTestId('call-stage')).toBeInTheDocument()
+    })
+
+    it('still honours a refusal of this call', async () => {
+      useCallStore.getState().setRefusal('call_ended', 'c1')
+      route.search = { answer: 'video' }
+      mount()
+      expect(await screen.findByText('Cuộc gọi đã kết thúc')).toBeInTheDocument()
+      expect(api.token).not.toHaveBeenCalled()
+    })
+
+    it('joins the next call when the address changes without the screen being rebuilt', async () => {
+      route.search = { answer: 'video' }
+      api.get.mockImplementation(async (id: string) => call({ id }))
+      const { rerender } = mount()
+      await screen.findByTestId('call-stage')
+      expect(api.token).toHaveBeenCalledWith('c1')
+      await act(async () => { await useCallStore.getState().clear() })
+      route.callId = 'c2'
+      rerender(<CallProvider><CallRoute /></CallProvider>)
+      await waitFor(() => expect(api.token).toHaveBeenCalledWith('c2'))
+    })
+  })
+
+  describe('the ticket from starting the call', () => {
+    it('is used as it is: no second token is minted', async () => {
+      stashTicket(ticket())
+      route.search = { answer: 'video' }
+      mount()
+      expect(await screen.findByTestId('call-stage')).toBeInTheDocument()
+      expect(api.token).not.toHaveBeenCalled()
+      expect(latestRoom().connect).toHaveBeenCalledWith('ws://lk', 'tok')
+    })
+
+    it('is used by the check before joining too', async () => {
+      stashTicket(ticket())
+      mount()
+      fireEvent.click(await screen.findByRole('button', { name: 'Tham gia ngay' }))
+      await screen.findByTestId('call-stage')
+      expect(api.token).not.toHaveBeenCalled()
+    })
+
+    it('is ignored for another call', async () => {
+      stashTicket(ticket(call({ id: 'other' })))
+      route.search = { answer: 'video' }
+      mount()
+      await screen.findByTestId('call-stage')
+      expect(api.token).toHaveBeenCalledWith('c1')
     })
   })
 

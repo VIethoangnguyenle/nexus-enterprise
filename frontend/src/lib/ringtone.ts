@@ -5,9 +5,7 @@
  *
  * Safe when AudioContext is blocked by the browser or unavailable (tests).
  */
-
-/** How long the ring plays before auto-stopping (ms). */
-const MAX_RING_MS = 45_000
+import { RING_MS as MAX_RING_MS } from './call-model'
 
 /** Tone on duration (seconds). */
 const ON_S = 2
@@ -31,6 +29,8 @@ export function createRingtone(): Ringtone {
   /** Current active oscillators; cleared each cycle. */
   let oscs: OscillatorNode[] = []
   let gain: GainNode | null = null
+  /** Each tone's own "switch off" timer, so stopping the ring cancels them and a new ring is not cut short by an old one. */
+  const toneTimers = new Set<ReturnType<typeof setTimeout>>()
 
   function playTone() {
     if (!ctx) return
@@ -55,13 +55,15 @@ export function createRingtone(): Ringtone {
       oscs = [osc1, osc2]
 
       // Fade out and stop after ON_S
-      setTimeout(() => {
-        for (const o of oscs) {
+      const off = setTimeout(() => {
+        toneTimers.delete(off)
+        for (const o of [osc1, osc2]) {
           try { o.stop(); o.disconnect() } catch { /* already stopped */ }
         }
-        oscs = []
+        if (oscs[0] === osc1) oscs = []
         try { g.disconnect() } catch { /* ok */ }
       }, ON_S * 1000)
+      toneTimers.add(off)
     } catch {
       // AudioContext API error — degrade gracefully.
     }
@@ -96,6 +98,8 @@ export function createRingtone(): Ringtone {
   function stop() {
     if (!isPlaying && !timeoutId && !intervalId) return
     isPlaying = false
+    for (const t of toneTimers) clearTimeout(t)
+    toneTimers.clear()
     if (intervalId) { clearInterval(intervalId); intervalId = null }
     if (timeoutId) { clearTimeout(timeoutId); timeoutId = null }
     for (const o of oscs) {

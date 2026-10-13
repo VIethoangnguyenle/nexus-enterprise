@@ -125,7 +125,8 @@ The screens render DESIGN.md §6 "Cuộc gọi video và thoại" and `design/mo
 - A ringing direct call shows a floating card on a computer and a full-screen ring on a phone, with a WebAudio ring
   for up to 45 seconds (Esc silences it); answering on one device makes the others say "Đã trả lời trên thiết bị khác".
 - The call's card shows it live (people, clock, "Tham gia" / "Mở lại cuộc gọi"), ended (people · length · times) or
-  missed ("Gọi lại"). Settings › Thông báo has a "Cuộc gọi đến" switch (`incoming_call`).
+  missed ("Gọi lại"). Settings › Thông báo has a "Cuộc gọi đến" switch (`incoming_call`); it governs push
+  notifications only — an open app still rings (decided 2026-10-13).
 - Someone removed from the conversation is cut off with "Bạn không còn ở trong nhóm này". No id is ever shown.
 
 ### Requirement: Configuration

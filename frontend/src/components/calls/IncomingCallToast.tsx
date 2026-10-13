@@ -1,6 +1,7 @@
+import { useRef } from 'react'
 import { PhoneOff, Phone, Video } from 'lucide-react'
-import { useNavigate } from '@tanstack/react-router'
-import { callsApi } from '../../api/calls'
+import { useFocusIn } from '../../hooks/useFocusIn'
+import { useIncomingCallActions } from '../../hooks/useIncomingCallActions'
 import { Avatar, Button } from '../primitives'
 import type { IncomingCallInfo } from '../../stores/incoming-call.store'
 
@@ -17,34 +18,19 @@ interface Props {
  * spreading success ring, three buttons.
  */
 export function IncomingCallToast({ incoming, onClear }: Props) {
-  const navigate = useNavigate()
-  const { callId, kind, callerName, callerAvatarUrl, mode } = incoming
-
-  const handleDecline = () => {
-    void callsApi.decline(callId)
-    onClear(callId)
-  }
-
-  const handleAnswer = (answer: 'audio' | 'video') => {
-    void navigate({ to: '/calls/$callId', params: { callId }, search: { answer } })
-    onClear(callId)
-  }
-
-  const handleDismiss = () => {
-    onClear(callId)
-  }
-
-  const handleJoin = () => {
-    const answer = kind === 'audio' ? 'audio' : 'video'
-    void navigate({ to: '/calls/$callId', params: { callId }, search: { answer } })
-    onClear(callId)
-  }
+  const { kind, callerName, callerAvatarUrl, mode } = incoming
+  const { decline, answer, join, dismiss } = useIncomingCallActions(incoming, onClear)
+  const ref = useRef<HTMLDivElement>(null)
+  // The answer that matches the call takes the keyboard when the card appears, and gives it back when it goes.
+  useFocusIn(ref)
 
   if (mode === 'answered_elsewhere') {
     return (
       <div
+        ref={ref}
         role="alertdialog"
         aria-label="Cuộc gọi đã được trả lời"
+        tabIndex={-1}
         className="p-4 rounded-2xl bg-overlay shadow-overlay animate-fade-in"
         style={{ width: 360 }}
       >
@@ -56,6 +42,7 @@ export function IncomingCallToast({ incoming, onClear }: Props) {
   if (mode === 'invited') {
     return (
       <div
+        ref={ref}
         role="alertdialog"
         aria-label="Lời mời cuộc gọi"
         className="p-4 rounded-2xl bg-overlay shadow-overlay grid gap-3.5 animate-fade-in"
@@ -69,10 +56,10 @@ export function IncomingCallToast({ incoming, onClear }: Props) {
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2">
-          <Button variant="soft" size="sm" onClick={handleDismiss}>
+          <Button variant="soft" size="sm" onClick={dismiss}>
             Bỏ qua
           </Button>
-          <Button variant="success" size="sm" onClick={handleJoin}>
+          <Button variant="success" size="sm" onClick={join} data-primary>
             Tham gia
           </Button>
         </div>
@@ -84,6 +71,7 @@ export function IncomingCallToast({ incoming, onClear }: Props) {
   const callText = kind === 'video' ? 'đang gọi video cho bạn…' : 'đang gọi thoại cho bạn…'
   return (
     <div
+      ref={ref}
       role="alertdialog"
       aria-label={kind === 'video' ? 'Cuộc gọi video đến' : 'Cuộc gọi thoại đến'}
       className="p-4 rounded-2xl bg-overlay shadow-overlay grid gap-3.5 animate-fade-in"
@@ -107,15 +95,15 @@ export function IncomingCallToast({ incoming, onClear }: Props) {
         </div>
       </div>
       <div className="grid grid-cols-3 gap-2">
-        <Button variant="danger" size="sm" onClick={handleDecline}>
+        <Button variant="danger" size="sm" onClick={decline}>
           <PhoneOff size={16} strokeWidth={1.75} />
           Từ chối
         </Button>
-        <Button variant="soft" size="sm" onClick={() => handleAnswer('audio')}>
+        <Button variant="soft" size="sm" onClick={() => answer('audio')} data-primary={kind === 'audio' ? '' : undefined}>
           <Phone size={16} strokeWidth={1.75} />
           Thoại
         </Button>
-        <Button variant="success" size="sm" onClick={() => handleAnswer('video')}>
+        <Button variant="success" size="sm" onClick={() => answer('video')} data-primary={kind === 'video' ? '' : undefined}>
           <Video size={16} strokeWidth={1.75} />
           Video
         </Button>

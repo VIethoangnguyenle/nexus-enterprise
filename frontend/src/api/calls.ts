@@ -4,6 +4,11 @@ import { apiFetch, ApiError } from './client'
 export interface WireTimestamp { seconds: number | string; nanos?: number }
 
 export type CallKind = 'audio' | 'video'
+/** Reads a wire value as a call kind; anything but audio or video is not one. */
+export function asCallKind(v: unknown): CallKind | null {
+  return v === 'audio' || v === 'video' ? v : null
+}
+
 export type CallStatus = 'ringing' | 'active' | 'ended' | 'missed' | 'declined' | 'cancelled'
 
 export interface CallParticipant {

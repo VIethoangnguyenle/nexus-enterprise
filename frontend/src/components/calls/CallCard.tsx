@@ -1,23 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { Phone, PhoneMissed, Video } from 'lucide-react'
-import { callsApi, type Call, type CallKind, type CallStatus } from '../../api/calls'
-import { callKeys } from '../../hooks/keys/calls'
-import { useStartCall } from '../../hooks/useCalls'
+import type { Call, CallKind, CallStatus } from '../../api/calls'
+import { useCall, useStartCall } from '../../hooks/useCalls'
+import { useElapsed } from '../../hooks/useElapsed'
 import { useAuthStore } from '../../stores/auth.store'
+import { stashTicket } from '../../stores/call.store'
+import { callRoute } from '../../lib/call-nav'
 import { toDate, formatTime } from '../../lib/format'
 import { Avatar, Button } from '../primitives'
-import { CardSkeleton } from '../chat/ChatCard'
+import { CardSkeleton, UnavailableCard } from '../chat/ChatCard'
 
 const MAX_FACES = 3
-
-/** Format a duration in seconds to mm:ss */
-function formatDuration(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = Math.floor(seconds % 60)
-  return `${m}:${String(s).padStart(2, '0')}`
-}
 
 /** Format a duration for ended calls: "X phút Y giây", "X giờ Y phút", etc. */
 function formatDurationLong(seconds: number): string {
@@ -50,31 +43,6 @@ function CallIcon({ kind, state }: { kind: CallKind; state: CallState }) {
   return <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
 }
 
-/** Live elapsed time from a start timestamp. */
-function useLiveClock(startMs: number, active: boolean): string {
-  const [elapsed, setElapsed] = useState(() => active && startMs > 0 ? Math.max(0, Math.floor((Date.now() - startMs) / 1000)) : 0)
-  const rafRef = useRef(0)
-
-  useEffect(() => {
-    if (!active || startMs <= 0) return
-    const tick = () => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - startMs) / 1000)))
-      rafRef.current = requestAnimationFrame(tick)
-    }
-    // Update every second using requestAnimationFrame for smoothness
-    const id = setInterval(() => {
-      setElapsed(Math.max(0, Math.floor((Date.now() - startMs) / 1000)))
-    }, 1000)
-    tick()
-    return () => {
-      clearInterval(id)
-      cancelAnimationFrame(rafRef.current)
-    }
-  }, [active, startMs])
-
-  return formatDuration(elapsed)
-}
-
 interface CallCardProps {
   callId: string
   channelId: string
@@ -94,16 +62,22 @@ export function CallCard({ callId, channelId }: CallCardProps) {
   const navigate = useNavigate()
   const meId = useAuthStore((s) => s.user?.id)
 
-  const { data: call, isLoading } = useQuery({
-    queryKey: callKeys.detail(callId),
-    queryFn: () => callsApi.get(callId),
-  })
+  const { data: call, isError } = useCall(callId)
 
   const start = useStartCall()
 
-  if (isLoading || !call) {
-    return <CardSkeleton />
+  // A call that cannot be read (no access, gone), or one that belongs to another conversation than the message
+  // that links it (a message can name any call id), says so instead of showing a stranger's call or loading for ever.
+  if (isError || (call && call.channel_id !== channelId)) {
+    return (
+      <UnavailableCard
+        tone="warning"
+        icon={<Phone size={16} strokeWidth={1.75} aria-hidden="true" />}
+        title="Không xem được cuộc gọi này"
+      />
+    )
   }
+  if (!call) return <CardSkeleton />
 
   const state = callState(call.status)
   const kind = call.kind
@@ -116,7 +90,7 @@ export function CallCard({ callId, channelId }: CallCardProps) {
   const createdAtMs = toDate(call.created_at)?.getTime() ?? 0
 
   const handleJoin = () => {
-    void navigate({ to: '/calls/$callId', params: { callId }, search: {} })
+    void navigate(callRoute(callId))
   }
 
   // Calling back a missed direct call goes straight in, as calling does; a
@@ -124,7 +98,12 @@ export function CallCard({ callId, channelId }: CallCardProps) {
   const handleCallback = () =>
     start.mutate(
       { channelId, kind },
-      { onSuccess: ({ call }) => void navigate({ to: '/calls/$callId', params: { callId: call.id }, search: { answer: kind } }) },
+      {
+        onSuccess: (ticket) => {
+          stashTicket(ticket)
+          void navigate(callRoute(ticket.call.id, kind))
+        },
+      },
     )
 
   const kindLabel = kind === 'audio' ? 'thoại' : 'video'
@@ -236,7 +215,7 @@ function ActiveBody({
 }
 
 function LiveClock({ startMs }: { startMs: number }) {
-  const time = useLiveClock(startMs, true)
+  const time = useElapsed(startMs > 0 ? startMs : null)
   return <span className="tnum">{time}</span>
 }
 

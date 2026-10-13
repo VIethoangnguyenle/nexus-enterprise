@@ -10,6 +10,9 @@ export const REACTION_TOPIC = 'nexus.reaction'
 /** Sent when someone starts presenting, so a presenter already on air steps down. */
 export const SHARE_TOPIC = 'nexus.share'
 
+/** How long an incoming call rings before it counts as missed: the server's 45 s, shown and sounded by the client. */
+export const RING_MS = 45_000
+
 /** How long a reaction floats, and how long after speaking a raised hand comes down on its own (DESIGN.md §6). */
 export const REACTION_MS = 3000
 export const HAND_AUTO_LOWER_MS = 2000

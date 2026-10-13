@@ -39,17 +39,25 @@ export function IncomingCallLayer() {
     }
   }, [incoming?.mode, incoming?.callId])
 
-  // Esc silences the ring (does not decline)
+  // Esc silences a ringing call; Esc again (or on a card that is not ringing) puts the card away. Neither declines.
+  const silenced = useRef<string | null>(null)
+  const ringId = incoming?.callId
+  const mode = incoming?.mode
   useEffect(() => {
-    if (incoming?.mode !== 'ringing') return
+    if (!ringId) return
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      if (e.key !== 'Escape' || e.defaultPrevented) return
+      if (mode === 'ringing' && silenced.current !== ringId) {
+        silenced.current = ringId
         ringtoneRef.current?.stop()
+      } else {
+        silenced.current = null
+        clearCall(ringId)
       }
     }
     document.addEventListener('keydown', handler)
     return () => document.removeEventListener('keydown', handler)
-  }, [incoming?.mode])
+  }, [ringId, mode, clearCall])
 
   if (!incoming) return null
 

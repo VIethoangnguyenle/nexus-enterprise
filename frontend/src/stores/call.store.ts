@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import type { CallKind, CallRefusal } from '../api/calls'
+import type { CallJoin, CallKind, CallRefusal } from '../api/calls'
+import { onSessionEnd } from '../lib/session-end'
 
 /**
  * Client state of the call you are in. What the call is (its people, its
@@ -35,6 +36,8 @@ interface CallState {
   phase: CallPhase | null
   /** Why the last join was refused, for the screen that asked. */
   refusal: CallRefusal | null
+  /** The call that refusal was about: another call's refusal says nothing about this one. */
+  refusalCallId: string | null
   summary: CallSummary | null
   panel: CallPanel | null
   layout: CallLayoutMode
@@ -47,7 +50,7 @@ interface CallState {
 
   begin: (session: CallSession) => void
   setPhase: (phase: CallPhase) => void
-  setRefusal: (r: CallRefusal | null) => void
+  setRefusal: (r: CallRefusal | null, callId?: string) => void
   finish: (summary: CallSummary, phase: 'ended' | 'removed') => void
   clear: () => void
   setPanel: (p: CallPanel | null) => void
@@ -58,7 +61,7 @@ interface CallState {
 }
 
 const IDLE = {
-  session: null, phase: null, refusal: null, summary: null, panel: null, layout: 'auto' as CallLayoutMode,
+  session: null, phase: null, refusal: null, refusalCallId: null, summary: null, panel: null, layout: 'auto' as CallLayoutMode,
   pinnedId: null, chatSeenAt: 0, devicesOpen: false,
 }
 
@@ -66,9 +69,9 @@ export const useCallStore = create<CallState>()((set) => ({
   ...IDLE,
   begin: (session) => set({ ...IDLE, session, phase: 'connecting', chatSeenAt: Date.now() }),
   setPhase: (phase) => set({ phase }),
-  setRefusal: (refusal) => set({ refusal }),
+  setRefusal: (refusal, callId) => set({ refusal, refusalCallId: refusal ? (callId ?? null) : null }),
   finish: (summary, phase) => set({ summary, phase, panel: null, devicesOpen: false }),
-  clear: () => set({ ...IDLE }),
+  clear: () => { pending = null; set({ ...IDLE }) },
   setPanel: (panel) => set({ panel }),
   setLayout: (layout) => set({ layout, pinnedId: null }),
   togglePin: (userId) => set((s) => ({ pinnedId: s.pinnedId === userId ? null : userId })),
@@ -79,3 +82,23 @@ export const useCallStore = create<CallState>()((set) => ({
 /** True while a room is open or opening: the call can be minimised, and the floating tile shows. */
 export const isLive = (phase: CallPhase | null): boolean =>
   phase === 'connecting' || phase === 'connected' || phase === 'reconnecting'
+
+// What one person was in must not greet whoever signs in next in this tab.
+onSessionEnd(() => useCallStore.getState().clear())
+
+/** The ticket from starting a call, kept for the call screen the start navigates to. Not state: nothing renders from it. */
+let pending: { ticket: CallJoin; at: number } | null = null
+/** A ticket is good for ten minutes; one older than this is asked for afresh rather than risk joining on a stale one. */
+const TICKET_FRESH_MS = 60_000
+
+export function stashTicket(ticket: CallJoin): void {
+  pending = { ticket, at: Date.now() }
+}
+
+/** The stashed ticket if it is for `callId` and fresh; either way it is spent. */
+export function takeTicket(callId: string): CallJoin | null {
+  const p = pending
+  if (!p || p.ticket.call.id !== callId) return null
+  pending = null
+  return Date.now() - p.at <= TICKET_FRESH_MS ? p.ticket : null
+}

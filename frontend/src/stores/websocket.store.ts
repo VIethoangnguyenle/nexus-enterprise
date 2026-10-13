@@ -22,6 +22,8 @@ import { mentionsMe } from '../lib/shortcut-feed'
 import { onSessionEnd } from '../lib/session-end'
 import { invalidatePollOnVote } from '../hooks/usePolls'
 import { useIncomingCallStore } from './incoming-call.store'
+import { isLive, useCallStore } from './call.store'
+import { asCallKind } from '../api/calls'
 import { callKeys } from '../hooks/keys/calls'
 import {
   createBatcher,
@@ -653,50 +655,37 @@ function handleServerMessage(
       const ev = envelope.payload.callEvent
       const myId = useAuthStore.getState().user?.id
       const incoming = useIncomingCallStore.getState()
+      // A kind that is neither audio nor video is not a call this client knows how to ring or join.
+      const kind = asCallKind(ev.kind)
+      const who = { callId: ev.callId, channelId: ev.channelId, callerName: ev.callerName, callerAvatarUrl: ev.callerAvatarUrl }
 
       switch (ev.type) {
         case 'ring':
-          // Ring all devices of the callee — not the caller.
-          if (myId && ev.callerId !== myId) {
-            incoming.ring({
-              callId: ev.callId,
-              channelId: ev.channelId,
-              kind: ev.kind as 'audio' | 'video',
-              callerName: ev.callerName,
-              callerAvatarUrl: ev.callerAvatarUrl,
-            })
-          }
+          // Ring all devices of the callee, not the caller.
+          if (myId && ev.callerId !== myId && kind) incoming.ring({ ...who, kind })
           break
         case 'invited':
-          incoming.invite({
-            callId: ev.callId,
-            channelId: ev.channelId,
-            kind: ev.kind as 'audio' | 'video',
-            callerName: ev.callerName,
-            callerAvatarUrl: ev.callerAvatarUrl,
-          })
+          if (kind) incoming.invite({ ...who, kind })
           break
         case 'cancel':
         case 'missed':
         case 'declined':
           incoming.clear(ev.callId)
           break
-        case 'answered':
-          // If I am not in this call (URL is not /calls/<id>), show answered_elsewhere for 3 s.
-          if (!window.location.pathname.includes(`/calls/${ev.callId}`)) {
-            incoming.answeredElsewhere(ev.callId)
-          } else {
-            incoming.clear(ev.callId)
-          }
+        case 'answered': {
+          // Answered on this device (it is in that call, live): just stop ringing. Anywhere else: say so for 3 s.
+          const mine = useCallStore.getState()
+          if (mine.session?.callId === ev.callId && isLive(mine.phase)) incoming.clear(ev.callId)
+          else incoming.answeredElsewhere(ev.callId)
           break
+        }
         // 'state' and others: no incoming-call action, just invalidate.
       }
 
-      // Every call event invalidates the call detail and the channel's data.
+      // The call and the conversation's open call change with every event. The card in the stream arrives as an
+      // ordinary message edit, so the message list and the activity feed are left alone.
       invalidations.add([callKeys.detail(ev.callId)])
-      if (ev.channelId) {
-        invalidations.add([callKeys.open(ev.channelId), keys.messaging.messages(ev.channelId), keys.messaging.conversationActivity()])
-      }
+      if (ev.channelId) invalidations.add([callKeys.open(ev.channelId)])
 
       if (WS_DEBUG()) {
         console.log(`[WS] callEvent: ${ev.type} call=${ev.callId} kind=${ev.kind}`)

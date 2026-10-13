@@ -5,6 +5,9 @@ import { callsApi, type Call, type CallParticipant } from '../../api/calls'
 import { renderWithClient, resetClient } from '../../test/render'
 import { expectNoIds } from '../../test/no-ids'
 import { U, CH } from '../../test/chat-fixtures'
+import { expectCallRoute } from '../../test/call-nav'
+import { takeTicket } from '../../stores/call.store'
+import { ApiError } from '../../api/client'
 import { CallCard } from './CallCard'
 
 vi.mock('../../api/calls', () => ({
@@ -86,7 +89,7 @@ describe('CallCard', () => {
     vi.mocked(callsApi.get).mockResolvedValue(makeCall())
     renderWithClient(<CallCard callId={CALL_ID} channelId={CH.doisoat} />)
     await user.click(await screen.findByRole('button', { name: /Tham gia/ }))
-    expect(navigateMock).toHaveBeenCalledWith({ to: '/calls/$callId', params: { callId: CALL_ID }, search: {} })
+    expectCallRoute(navigateMock, CALL_ID)
   })
 
   it('shows an ended call with participant count, duration and time range', async () => {
@@ -147,9 +150,9 @@ describe('CallCard', () => {
     renderWithClient(<CallCard callId={CALL_ID} channelId={CH.doisoat} />)
     await user.click(await screen.findByRole('button', { name: /Gọi lại/ }))
     expect(callsApi.start).toHaveBeenCalledWith(CH.doisoat, 'video')
-    await waitFor(() =>
-      expect(navigateMock).toHaveBeenCalledWith(expect.objectContaining({ to: '/calls/$callId', params: { callId: newCallId } })),
-    )
+    await waitFor(() => expectCallRoute(navigateMock, newCallId, 'video'))
+    // The ticket that came with the new call is the one the call screen joins with.
+    expect(takeTicket(newCallId)?.token).toBe('tok')
   })
 
   it('shows a declined call as danger wash', async () => {
@@ -204,5 +207,36 @@ describe('CallCard', () => {
     )
     renderWithClient(<CallCard callId={CALL_ID} channelId={CH.doisoat} />)
     expect(await screen.findByText(/và 2 người/)).toBeInTheDocument()
+  })
+
+  it('the running clock reads like the one in the header: mm:ss from the start', async () => {
+    vi.mocked(callsApi.get).mockResolvedValue(makeCall({ started_at: ts(14, 2) }))
+    renderWithClient(<CallCard callId={CALL_ID} channelId={CH.doisoat} />)
+    expect(await screen.findByText('12:30')).toBeInTheDocument()
+    await vi.advanceTimersByTimeAsync(2000)
+    expect(screen.getByText('12:32')).toBeInTheDocument()
+  })
+
+  it('does not run an animation-frame loop for the clock', async () => {
+    const raf = vi.spyOn(window, 'requestAnimationFrame')
+    vi.mocked(callsApi.get).mockResolvedValue(makeCall())
+    renderWithClient(<CallCard callId={CALL_ID} channelId={CH.doisoat} />)
+    await screen.findByText('Cuộc gọi đang diễn ra')
+    expect(raf).not.toHaveBeenCalled()
+  })
+
+  it('says so when the call cannot be seen, instead of a skeleton for ever', async () => {
+    vi.mocked(callsApi.get).mockRejectedValue(new ApiError('forbidden', 403))
+    renderWithClient(<CallCard callId={CALL_ID} channelId={CH.doisoat} />)
+    expect(await screen.findByText('Không xem được cuộc gọi này')).toBeInTheDocument()
+    expect(document.querySelector('[aria-busy="true"]')).toBeNull()
+    expectNoIds()
+  })
+
+  it('refuses a card whose call belongs to another conversation', async () => {
+    vi.mocked(callsApi.get).mockResolvedValue(makeCall({ channel_id: CH.vanhanh }))
+    renderWithClient(<CallCard callId={CALL_ID} channelId={CH.doisoat} />)
+    expect(await screen.findByText('Không xem được cuộc gọi này')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Tham gia/ })).toBeNull()
   })
 })

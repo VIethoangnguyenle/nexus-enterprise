@@ -4,7 +4,10 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import { useNavigate, useRouterState } from '@tanstack/react-router'
-import { callsApi, refusalOf, type CallJoin, type CallKind } from '../../api/calls'
+import { callsApi, refusalOf, type Call, type CallJoin, type CallKind } from '../../api/calls'
+import { callRoute } from '../../lib/call-nav'
+import { queryClient } from '../../lib/query-client'
+import { keys } from '../../hooks/keys'
 import type { CallRoom, CallSnapshot } from '../../lib/call-room'
 import { EMPTY_SNAPSHOT } from '../../lib/call-room'
 import { loadCallPrefs, type CallPrefs } from '../../lib/call-prefs'
@@ -140,16 +143,18 @@ export function CallProvider({ children }: { children: ReactNode }) {
       if (attempt.current !== mine) return
       const refusal = refusalOf(err)
       if (refusal === 'unreachable') {
-        useCallStore.getState().setRefusal(refusal)
+        useCallStore.getState().setRefusal(refusal, req.callId)
         useCallStore.getState().setPhase('failed')
       } else {
         // Refused for a reason the pre-join screen explains: leave the call and tell it why.
         useCallStore.getState().clear()
-        useCallStore.getState().setRefusal(refusal)
+        useCallStore.getState().setRefusal(refusal, req.callId)
       }
       return
     }
     if (attempt.current !== mine) return
+    // What the ticket says of the call is as fresh as anything: hanging up reads it to know whether it still rings.
+    queryClient.setQueryData(keys.calls.detail(req.callId), ticket.call)
     useCallStore.setState((s) => (s.session ? { session: { ...s.session, startedAt: startedAtOf(ticket, now) } } : s))
 
     const prefs = req.prefs ?? loadCallPrefs(selfId)
@@ -167,7 +172,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
       useCallStore.getState().setPhase('connected')
     } catch {
       if (attempt.current !== mine) return
-      useCallStore.getState().setRefusal('unreachable')
+      useCallStore.getState().setRefusal('unreachable', req.callId)
       useCallStore.getState().setPhase('failed')
     }
   }, [follow, selfId, selfName, teardown])
@@ -176,13 +181,19 @@ export function CallProvider({ children }: { children: ReactNode }) {
     attempt.current++
     const cr = roomRef.current
     const store = useCallStore.getState()
+    // Hanging up a call you started before anyone picked up is cancelling it: the other person stops ringing.
+    const open = store.session && queryClient.getQueryData<Call>(keys.calls.detail(store.session.callId))
+    if (store.session && open && open.status === 'ringing' && open.started_by === selfId) {
+      // A call that stopped ringing meanwhile answers 409, and a lost network cannot be helped: hanging up goes on regardless.
+      await callsApi.cancel(store.session.callId).catch(() => {})
+    }
     if (!cr) { store.clear(); return }
     const joinedAt = store.session?.joinedAt ?? Date.now()
     const snap = cr.getSnapshot()
     await cr.disconnect().catch(() => {})
     store.finish({ durationMs: Date.now() - joinedAt, people: Math.max(snap.peak, cr.getSnapshot().peak), sinceMs: joinedAt }, 'ended')
     teardown()
-  }, [teardown])
+  }, [teardown, selfId])
 
   const retry = useCallback(async () => {
     const last = lastRef.current
@@ -205,13 +216,13 @@ export function CallProvider({ children }: { children: ReactNode }) {
   // Cut off for losing access while looking at another screen: bring up the call's own screen, which says why.
   useEffect(() => {
     if (phase === 'removed' && session && !onCallRoute) {
-      void navigate({ to: '/calls/$callId', params: { callId: session.callId }, search: (prev: { ws?: string }) => ({ ws: prev.ws }) })
+      void navigate(callRoute(session.callId))
     }
   }, [phase, session, onCallRoute, navigate])
 
   const open = useCallback(() => {
     if (!session) return
-    void navigate({ to: '/calls/$callId', params: { callId: session.callId }, search: (prev: { ws?: string }) => ({ ws: prev.ws }) })
+    void navigate(callRoute(session.callId))
   }, [navigate, session])
 
   const pip = useCallPictureInPicture(live && !phone)

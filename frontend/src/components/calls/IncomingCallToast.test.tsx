@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { ApiError } from '../../api/client'
+import { expectCallRoute } from '../../test/call-nav'
+import { useToastStore } from '../primitives'
 import { IncomingCallToast } from './IncomingCallToast'
 import type { IncomingCallInfo } from '../../stores/incoming-call.store'
 
@@ -75,9 +78,7 @@ describe('IncomingCallToast', () => {
     const user = userEvent.setup()
     render(<IncomingCallToast incoming={ringing} onClear={onClear} />)
     await user.click(screen.getByRole('button', { name: /^Thoại$/i }))
-    expect(navigate).toHaveBeenCalledWith(
-      expect.objectContaining({ to: '/calls/$callId', params: { callId: 'c1' }, search: { answer: 'audio' } }),
-    )
+    expectCallRoute(navigate, 'c1', 'audio')
     expect(onClear).toHaveBeenCalledWith('c1')
   })
 
@@ -85,9 +86,7 @@ describe('IncomingCallToast', () => {
     const user = userEvent.setup()
     render(<IncomingCallToast incoming={ringing} onClear={onClear} />)
     await user.click(screen.getByRole('button', { name: /^Video$/i }))
-    expect(navigate).toHaveBeenCalledWith(
-      expect.objectContaining({ to: '/calls/$callId', params: { callId: 'c1' }, search: { answer: 'video' } }),
-    )
+    expectCallRoute(navigate, 'c1', 'video')
     expect(onClear).toHaveBeenCalledWith('c1')
   })
 
@@ -114,5 +113,41 @@ describe('IncomingCallToast', () => {
   it('has role=alertdialog with an accessible label', () => {
     render(<IncomingCallToast incoming={ringing} onClear={onClear} />)
     expect(screen.getByRole('alertdialog')).toBeInTheDocument()
+  })
+
+  it('puts focus on the answer button when it opens, and gives it back when it goes', () => {
+    const opener = document.createElement('button')
+    document.body.appendChild(opener)
+    opener.focus()
+    const { unmount } = render(<IncomingCallToast incoming={ringing} onClear={onClear} />)
+    expect(screen.getByRole('button', { name: /^Video$/i })).toHaveFocus()
+    unmount()
+    expect(opener).toHaveFocus()
+    opener.remove()
+  })
+
+  it('an invitation focuses "Tham gia"', () => {
+    render(<IncomingCallToast incoming={invited} onClear={onClear} />)
+    expect(screen.getByRole('button', { name: /Tham gia/i })).toHaveFocus()
+  })
+
+  it('a refused decline for a call that no longer rings is not worth a word', async () => {
+    useToastStore.getState().clear()
+    decline.mockRejectedValueOnce(new ApiError('gone', 409, { code: 'call_ended' }))
+    const user = userEvent.setup()
+    render(<IncomingCallToast incoming={ringing} onClear={onClear} />)
+    await user.click(screen.getByRole('button', { name: /Từ chối/i }))
+    await Promise.resolve()
+    expect(onClear).toHaveBeenCalledWith('c1')
+    expect(useToastStore.getState().toasts).toHaveLength(0)
+  })
+
+  it('any other failed decline is told', async () => {
+    useToastStore.getState().clear()
+    decline.mockRejectedValueOnce(new ApiError('boom', 500))
+    const user = userEvent.setup()
+    render(<IncomingCallToast incoming={ringing} onClear={onClear} />)
+    await user.click(screen.getByRole('button', { name: /Từ chối/i }))
+    await vi.waitFor(() => expect(useToastStore.getState().toasts).toHaveLength(1))
   })
 })

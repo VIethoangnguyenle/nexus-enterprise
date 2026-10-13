@@ -1,5 +1,7 @@
 import { create } from 'zustand'
 import type { CallKind } from '../api/calls'
+import { RING_MS } from '../lib/call-model'
+import { onSessionEnd } from '../lib/session-end'
 
 export interface IncomingCallInfo {
   callId: string
@@ -21,8 +23,6 @@ interface IncomingCallState {
 /** Pending auto-clear timer; cancelled and replaced by each ring/invite/answeredElsewhere. */
 let autoClearTimer: ReturnType<typeof setTimeout> | null = null
 
-/** Ring timeout in ms. */
-const RING_TIMEOUT_MS = 45_000
 /** How long "answered elsewhere" stays on screen. */
 const ANSWERED_ELSEWHERE_MS = 3_000
 
@@ -39,7 +39,7 @@ export const useIncomingCallStore = create<IncomingCallState>()((set, get) => ({
     set({ incoming: { ...info, mode: 'ringing' } })
     autoClearTimer = setTimeout(() => {
       if (get().incoming?.callId === info.callId) set({ incoming: null })
-    }, RING_TIMEOUT_MS)
+    }, RING_MS)
   },
 
   invite: (info) => {
@@ -64,3 +64,9 @@ export const useIncomingCallStore = create<IncomingCallState>()((set, get) => ({
     set({ incoming: null })
   },
 }))
+
+// A ring that outlives the person it was for would greet whoever signs in next, and its timer would clear theirs.
+onSessionEnd(() => {
+  cancelTimer()
+  useIncomingCallStore.setState({ incoming: null })
+})

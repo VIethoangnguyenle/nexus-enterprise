@@ -7,7 +7,8 @@ import { statusOf } from '../../lib/errors'
 import { loadCallPrefs, type CallPrefs } from '../../lib/call-prefs'
 import { displayName } from '../../lib/people'
 import { useAuthStore } from '../../stores/auth.store'
-import { isLive, useCallStore } from '../../stores/call.store'
+import { callRoute } from '../../lib/call-nav'
+import { isLive, takeTicket, useCallStore } from '../../stores/call.store'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useCall, useMessagesSince } from '../../hooks/useCalls'
 import { useCallShortcuts } from '../../hooks/useCallShortcuts'
@@ -30,7 +31,8 @@ const route = getRouteApi('/_workspace/calls/$callId')
 export function CallRoute() {
   const { callId } = route.useParams()
   const { answer } = route.useSearch()
-  return <CallScreen callId={callId} answer={answer} />
+  // Keyed by the call: another address is another call, with nothing carried over from the one before.
+  return <CallScreen key={callId} callId={callId} answer={answer} />
 }
 
 const FINISHED = new Set(['ended', 'missed', 'declined', 'cancelled'])
@@ -49,7 +51,11 @@ export function CallScreen({ callId, answer }: { callId: string; answer?: 'video
   const user = useAuthStore((s) => s.user)
   const { workspaceId } = useActiveWorkspace()
   const people = usePeople(workspaceId)
-  const { session, phase, refusal, summary } = useCallStore()
+  const session = useCallStore((s) => s.session)
+  const phase = useCallStore((s) => s.phase)
+  const summary = useCallStore((s) => s.summary)
+  // A refusal counts only for the call it was about.
+  const refusal = useCallStore((s) => (s.refusalCallId === callId ? s.refusal : null))
   const sameCall = session?.callId === callId
 
   const callQ = useCall(callId, { poll: !sameCall })
@@ -78,8 +84,10 @@ export function CallScreen({ callId, answer }: { callId: string; answer?: 'video
 
   const enter = useCallback((prefs: CallPrefs, audio: boolean, video: boolean) => {
     if (!call) return
+    // The ticket that came with starting the call, if this screen is where that led.
+    const ticket = takeTicket(callId) ?? undefined
     void api.join({
-      callId, channelId: call.channel_id, kind: call.kind, title, isDm: !!isDm, audio, video, prefs,
+      callId, channelId: call.channel_id, kind: call.kind, title, isDm: !!isDm, audio, video, prefs, ticket,
     })
   }, [api, call, callId, title, isDm])
 
@@ -87,13 +95,15 @@ export function CallScreen({ callId, answer }: { callId: string; answer?: 'video
   const direct = !!answer || !!isDm
   const tried = useRef(false)
   const open = !!call && !FINISHED.has(call.status)
+  // Only this call's own session holds the screen back (its stage, or its summary); another call's leftovers do not.
+  const blocked = sameCall || (!!session && isLive(phase))
   useEffect(() => {
-    if (tried.current || !direct || !known || !open || session || refusal) return
+    if (tried.current || !direct || !known || !open || blocked || refusal) return
     tried.current = true
     const prefs = loadCallPrefs(user?.id)
     const video = answer ? answer === 'video' : prefs.camOn && call.kind === 'video'
     enter(prefs, answer ? true : prefs.micOn, video)
-  }, [direct, known, open, session, refusal, answer, user?.id, call, enter])
+  }, [direct, known, open, blocked, refusal, answer, user?.id, call, enter])
 
   const live = sameCall && isLive(phase)
   useCallShortcuts(api.callRoom, live && !phone)
@@ -113,8 +123,8 @@ export function CallScreen({ callId, answer }: { callId: string; answer?: 'video
       return (
         <OtherCallNotice
           currentTitle={session.title}
-          onSwitch={() => { void api.join({ callId, channelId: call.channel_id, kind: call.kind, title, isDm: !!isDm, audio: true, video: call.kind === 'video' }) }}
-          onStay={() => void navigate({ to: '/calls/$callId', params: { callId: session.callId }, search: (prev: { ws?: string }) => ({ ws: prev.ws }) })}
+          onSwitch={() => { void api.join({ callId, channelId: call.channel_id, kind: call.kind, title, isDm: !!isDm, audio: true, video: call.kind === 'video', ticket: takeTicket(callId) ?? undefined }) }}
+          onStay={() => void navigate(callRoute(session.callId))}
         />
       )
     }

@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, screen } from '@testing-library/react'
+import { useEffect } from 'react'
+import { ApiError } from '../../api/client'
+import { keys } from '../../hooks/keys'
+import { queryClient } from '../../lib/query-client'
+import { ME } from '../../test/chat-fixtures'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
 import { useCallStore, type CallSession } from '../../stores/call.store'
@@ -12,7 +17,17 @@ vi.mock('../../hooks/usePeople', async () => {
   return { usePeople: () => ({ ...EMPTY_DIRECTORY, isLoading: false }) }
 })
 
-import { CallProvider } from './CallProvider'
+const calls = vi.hoisted(() => ({ cancel: vi.fn() }))
+vi.mock('../../api/calls', async (orig) => ({ ...(await orig<object>()), callsApi: { cancel: calls.cancel, token: vi.fn(), get: vi.fn() } }))
+
+import { CallProvider, useCallApi } from './CallProvider'
+
+function Leaver({ onReady }: { onReady: (leave: () => Promise<void>) => void }) {
+  const { leave } = useCallApi()
+  useEffect(() => { onReady(leave) }, [leave, onReady])
+  return null
+}
+
 
 const session: CallSession = {
   callId: 'c1', channelId: 'ch1', kind: 'video', title: 'Đối soát giao dịch', isDm: false, joinedAt: 1, startedAt: 1,
@@ -60,5 +75,40 @@ describe('CallProvider', () => {
     renderWithClient(<CallProvider><p>x</p></CallProvider>)
     act(() => { useCallStore.getState().finish({ durationMs: 1, people: 2, sinceMs: 1 }, 'ended') })
     expect(routerState.navigate).not.toHaveBeenCalled()
+  })
+
+  describe('hanging up before anyone answered', () => {
+    const seedCall = (status: string, startedBy: string) =>
+      queryClient.setQueryData(keys.calls.detail('c1'), { id: 'c1', channel_id: 'ch1', kind: 'video', status, started_by: startedBy })
+
+    async function hangUp() {
+      let leave: () => Promise<void> = async () => {}
+      renderWithClient(<CallProvider><Leaver onReady={(l) => { leave = l }} /></CallProvider>)
+      useCallStore.getState().begin(session)
+      await act(async () => { await leave() })
+    }
+
+    beforeEach(() => { calls.cancel.mockReset().mockResolvedValue({}); queryClient.clear() })
+
+    it('cancels a call you started that still rings', async () => {
+            seedCall('ringing', ME.id)
+      await hangUp()
+      expect(calls.cancel).toHaveBeenCalledWith('c1')
+    })
+
+    it('does not cancel one that is running, or one somebody else started', async () => {
+            seedCall('active', ME.id)
+      await hangUp()
+      seedCall('ringing', 'someone-else')
+      await hangUp()
+      expect(calls.cancel).not.toHaveBeenCalled()
+    })
+
+    it('is quiet when the call had already stopped ringing', async () => {
+            calls.cancel.mockRejectedValue(new ApiError('gone', 409, { code: 'call_ended' }))
+      seedCall('ringing', ME.id)
+      await expect(hangUp()).resolves.toBeUndefined()
+      expect(useCallStore.getState().session).toBeNull()
+    })
   })
 })

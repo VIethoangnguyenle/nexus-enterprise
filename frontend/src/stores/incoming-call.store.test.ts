@@ -1,4 +1,6 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest'
+import { endSession } from '../lib/session-end'
+import { RING_MS } from '../lib/call-model'
 import { useIncomingCallStore } from './incoming-call.store'
 
 beforeEach(() => {
@@ -152,5 +154,23 @@ describe('incoming-call store', () => {
     })
     vi.advanceTimersByTime(120_000)
     expect(useIncomingCallStore.getState().incoming).not.toBeNull()
+  })
+
+  it('is wiped when the user signs out, and its timer with it', () => {
+    useIncomingCallStore.getState().ring({ callId: 'c1', channelId: 'ch1', kind: 'video', callerName: 'Yến', callerAvatarUrl: '' })
+    endSession()
+    expect(useIncomingCallStore.getState().incoming).toBeNull()
+    // The next person's ring must not be cleared by the previous person's timer.
+    vi.advanceTimersByTime(RING_MS - 10)
+    useIncomingCallStore.getState().ring({ callId: 'c2', channelId: 'ch2', kind: 'audio', callerName: 'Đức', callerAvatarUrl: '' })
+    vi.advanceTimersByTime(20)
+    expect(useIncomingCallStore.getState().incoming?.callId).toBe('c2')
+  })
+
+  it('rings for the shared 45 s and no longer', () => {
+    expect(RING_MS).toBe(45_000)
+    useIncomingCallStore.getState().ring({ callId: 'c1', channelId: 'ch1', kind: 'video', callerName: 'Yến', callerAvatarUrl: '' })
+    vi.advanceTimersByTime(RING_MS + 1)
+    expect(useIncomingCallStore.getState().incoming).toBeNull()
   })
 })

@@ -1,6 +1,5 @@
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { callsApi, type Call, type CallKind } from '../api/calls'
-import { queryClient } from '../lib/query-client'
 import { toMillis } from '../lib/format'
 import { useAuthStore } from '../stores/auth.store'
 import { useMessages } from './useMessages'
@@ -45,18 +44,6 @@ export function useInviteToCall(callId: string) {
     meta: { action: 'mời vào cuộc gọi' },
     mutationFn: (userIds: string[]) => callsApi.invite(callId, userIds),
   })
-}
-
-/** The part of a realtime `call_event` a call screen needs. */
-export interface CallEventLike { call_id?: string; type?: string; status?: string }
-
-/**
- * For the realtime layer: a `call_event` makes the cached call stale (its people, its status),
- * so the call screens refetch. Only calls already on screen are touched.
- */
-export function applyCallEvent(ev: CallEventLike): void {
-  if (!ev.call_id) return
-  void queryClient.invalidateQueries({ queryKey: keys.calls.detail(ev.call_id) })
 }
 
 /**

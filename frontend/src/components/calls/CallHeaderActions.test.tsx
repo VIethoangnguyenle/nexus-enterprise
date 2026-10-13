@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { callsApi, type CallJoin } from '../../api/calls'
 import { renderWithClient, resetClient } from '../../test/render'
 import { expectNoIds } from '../../test/no-ids'
+import { expectCallRoute } from '../../test/call-nav'
+import { takeTicket } from '../../stores/call.store'
 import { CallHeaderActions } from './CallHeaderActions'
 
 vi.mock('../../api/calls', () => ({
@@ -48,6 +50,15 @@ describe('CallHeaderActions', () => {
       expect(screen.getByRole('button', { name: 'Gọi video' })).toBeInTheDocument()
     })
 
+    it('hands the ticket from starting to the call screen, so no second one is minted', async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+      vi.mocked(callsApi.start).mockResolvedValue(joinResult)
+      renderWithClient(<CallHeaderActions channelId={CH_DM} kind="dm" />)
+      await user.click(screen.getByRole('button', { name: 'Gọi video' }))
+      await waitFor(() => expectCallRoute(navigateMock, CALL_ID, 'video'))
+      expect(takeTicket(CALL_ID)).toMatchObject({ token: 'tok', url: 'wss://lk' })
+    })
+
     it('starts an audio call and navigates with answer=audio', async () => {
       const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
       vi.mocked(callsApi.start).mockResolvedValue({
@@ -60,7 +71,7 @@ describe('CallHeaderActions', () => {
       await user.click(screen.getByRole('button', { name: 'Gọi thoại' }))
       expect(callsApi.start).toHaveBeenCalledWith(CH_DM, 'audio')
       await waitFor(() =>
-        expect(navigateMock).toHaveBeenCalledWith({ to: '/calls/$callId', params: { callId: CALL_ID }, search: { answer: 'audio' } }),
+        expectCallRoute(navigateMock, CALL_ID, 'audio'),
       )
     })
 
@@ -73,7 +84,7 @@ describe('CallHeaderActions', () => {
       await user.click(screen.getByRole('button', { name: 'Gọi video' }))
       expect(callsApi.start).toHaveBeenCalledWith(CH_DM, 'video')
       await waitFor(() =>
-        expect(navigateMock).toHaveBeenCalledWith({ to: '/calls/$callId', params: { callId: CALL_ID }, search: { answer: 'video' } }),
+        expectCallRoute(navigateMock, CALL_ID, 'video'),
       )
     })
   })
@@ -95,7 +106,7 @@ describe('CallHeaderActions', () => {
       await user.click(screen.getByRole('button', { name: /Bắt đầu cuộc gọi/ }))
       expect(callsApi.start).toHaveBeenCalledWith(CH_GROUP, 'video')
       await waitFor(() =>
-        expect(navigateMock).toHaveBeenCalledWith({ to: '/calls/$callId', params: { callId: CALL_ID }, search: {} }),
+        expectCallRoute(navigateMock, CALL_ID),
       )
     })
 
@@ -114,7 +125,7 @@ describe('CallHeaderActions', () => {
       vi.mocked(callsApi.open).mockResolvedValue(joinResult.call)
       renderWithClient(<CallHeaderActions channelId={CH_GROUP} kind="space" />)
       await user.click(await screen.findByRole('button', { name: /Tham gia/ }))
-      expect(navigateMock).toHaveBeenCalledWith({ to: '/calls/$callId', params: { callId: CALL_ID }, search: {} })
+      expectCallRoute(navigateMock, CALL_ID)
     })
   })
 

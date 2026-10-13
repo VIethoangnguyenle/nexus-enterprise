@@ -4,6 +4,8 @@ import type { CallKind } from '../../api/calls'
 import { useOpenCall, useStartCall } from '../../hooks/useCalls'
 import { useElapsed } from '../../hooks/useElapsed'
 import { toMillis } from '../../lib/format'
+import { callRoute } from '../../lib/call-nav'
+import { stashTicket } from '../../stores/call.store'
 import { Button, IconButton } from '../primitives'
 
 interface CallHeaderActionsProps {
@@ -30,12 +32,11 @@ export function CallHeaderActions({ channelId, kind }: CallHeaderActionsProps) {
       { channelId, kind: callKind },
       {
         // A direct call goes straight in; a group shows the pre-join first.
-        onSuccess: ({ call }) =>
-          void navigate({
-            to: '/calls/$callId',
-            params: { callId: call.id },
-            search: kind === 'dm' ? { answer: callKind } : {},
-          }),
+        onSuccess: (ticket) => {
+          // The ticket that came with starting is the one the call screen joins with: no second one is minted.
+          stashTicket(ticket)
+          void navigate(callRoute(ticket.call.id, kind === 'dm' ? callKind : undefined))
+        },
       },
     )
 
@@ -60,7 +61,7 @@ export function CallHeaderActions({ channelId, kind }: CallHeaderActionsProps) {
         <Button
           variant="success"
           size="sm"
-          onClick={() => void navigate({ to: '/calls/$callId', params: { callId: open.id }, search: {} })}
+          onClick={() => void navigate(callRoute(open.id))}
         >
           <Video size={16} strokeWidth={1.75} aria-hidden="true" />
           Tham gia
