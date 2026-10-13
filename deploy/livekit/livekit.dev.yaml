@@ -10,6 +10,8 @@ rtc:
   use_external_ip: false
   node_ip: 127.0.0.1
 room:
+  # Messaging opens each call's room; a stale ticket must not bring a closed one back.
+  auto_create: false
   max_participants: 20
   empty_timeout: 30
 webhook:

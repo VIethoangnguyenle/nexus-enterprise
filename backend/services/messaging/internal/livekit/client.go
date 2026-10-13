@@ -6,6 +6,7 @@ package livekit
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -14,6 +15,7 @@ import (
 	lkproto "github.com/livekit/protocol/livekit"
 	"github.com/livekit/protocol/webhook"
 	lksdk "github.com/livekit/server-sdk-go/v2"
+	"github.com/twitchtv/twirp"
 )
 
 // Config is where the LiveKit server is and the key pair it trusts.
@@ -83,6 +85,10 @@ func (c *Client) RemoveParticipant(ctx context.Context, room, identity string) e
 // Participants returns the identities connected to a room now.
 func (c *Client) Participants(ctx context.Context, room string) ([]string, error) {
 	res, err := c.rooms.ListParticipants(ctx, &lkproto.ListParticipantsRequest{Room: room})
+	var terr twirp.Error
+	if errors.As(err, &terr) && terr.Code() == twirp.NotFound {
+		return nil, nil // a room that does not exist has nobody in it
+	}
 	if err != nil {
 		return nil, fmt.Errorf("livekit list participants: %w", err)
 	}
@@ -118,6 +124,8 @@ type Event struct {
 	Kind     string // participant_joined | participant_left | room_finished | …
 	Room     string
 	Identity string // set for participant events
+	// Participant is the connection's sid, for participant events.
+	Participant string
 }
 
 // ReceiveWebhook verifies a webhook's signature (a token signed with the API
@@ -131,6 +139,7 @@ func (c *Client) ReceiveWebhook(r *http.Request) (Event, error) {
 	return Event{
 		Kind:     ev.GetEvent(),
 		Room:     ev.GetRoom().GetName(),
-		Identity: ev.GetParticipant().GetIdentity(),
+		Identity:    ev.GetParticipant().GetIdentity(),
+		Participant: ev.GetParticipant().GetSid(),
 	}, nil
 }

@@ -567,6 +567,7 @@ services:
           udp_port: 7882
           use_external_ip: true
         room:
+          auto_create: false
           max_participants: 20
           empty_timeout: 30
         webhook:
@@ -577,6 +578,8 @@ services:
           enabled: true
           domain: turn.nexus.zaneng.xyz
           tls_port: 443
+          # Only TURN/TLS through Traefik is reachable; no TURN/UDP listener to advertise.
+          udp_port: 0
           external_tls: true
     labels:
       - "traefik.enable=true"

@@ -36,8 +36,9 @@ const (
 	callTicketFor = 10 * time.Minute
 	// callRoomEmptyTimeout is how long LiveKit keeps a room nobody is in.
 	callRoomEmptyTimeout = 30 * time.Second
-	// callStaleAfter is how long an open call may have an empty room before it is
-	// taken as ended even though LiveKit's room_finished never arrived.
+	// callStaleAfter is how long an open call's room may stand empty (nobody
+	// arriving or leaving) before the call is taken as ended even though
+	// LiveKit's room_finished never arrived.
 	callStaleAfter = callRoomEmptyTimeout + time.Minute
 )
 
@@ -277,6 +278,14 @@ func (s *Service) DeclineCall(ctx context.Context, callID, userID, userNodeID st
 	if call.StartedBy == userID {
 		return nil, fmt.Errorf("%w: the caller cancels, not declines", ErrAccessDenied)
 	}
+	// The person rung is the direct message's other member, nobody else.
+	rung, err := s.store.DMOthers(ctx, call.ChannelID, call.StartedBy)
+	if err != nil {
+		return nil, err
+	}
+	if !slices.Contains(rung, userID) {
+		return nil, fmt.Errorf("%w: only the person called declines", ErrAccessDenied)
+	}
 	return s.endRinging(ctx, call, callDeclined, CallChangeDeclined)
 }
 
@@ -342,6 +351,9 @@ type CallEvent struct {
 	Kind     string
 	Room     string // the call id
 	Identity string // the user id, for participant events
+	// Participant is the connection (LiveKit participant sid), for participant
+	// events: one person may come through more than one in turn.
+	Participant string
 }
 
 // HandleCallEvent applies a webhook. Someone who enters a room without write
@@ -357,9 +369,9 @@ func (s *Service) HandleCallEvent(ctx context.Context, ev CallEvent) error {
 	}
 	switch ev.Kind {
 	case CallEventJoined:
-		return s.participantJoined(ctx, call, ev.Identity)
+		return s.participantJoined(ctx, call, ev.Identity, ev.Participant)
 	case CallEventLeft:
-		if err := s.store.LeaveCall(ctx, call.ID, ev.Identity); err != nil {
+		if err := s.store.LeaveCall(ctx, call.ID, ev.Identity, ev.Participant); err != nil {
 			return err
 		}
 		_, err := s.callChanged(ctx, call, CallChangeState, false)
@@ -370,7 +382,7 @@ func (s *Service) HandleCallEvent(ctx context.Context, ev CallEvent) error {
 	return nil
 }
 
-func (s *Service) participantJoined(ctx context.Context, call *store.Call, userID string) error {
+func (s *Service) participantJoined(ctx context.Context, call *store.Call, userID, sid string) error {
 	if !slices.Contains(openCallStatuses, call.Status) || !s.mayStayInCall(ctx, call, userID) {
 		if s.media != nil {
 			if err := s.media.RemoveParticipant(ctx, call.ID, userID); err != nil {
@@ -380,7 +392,7 @@ func (s *Service) participantJoined(ctx context.Context, call *store.Call, userI
 		}
 		return nil
 	}
-	if err := s.store.JoinCall(ctx, call.ID, userID); err != nil {
+	if err := s.store.JoinCall(ctx, call.ID, userID, sid); err != nil {
 		return err
 	}
 	if call.Status == callRinging && userID != call.StartedBy {
@@ -415,11 +427,12 @@ func (s *Service) roomFinished(ctx context.Context, call *store.Call) error {
 	return err
 }
 
-// EvictLostCallParticipants puts out of the open calls of a conversation (or of
-// every conversation of a workspace) each person in them who no longer holds
-// write on the conversation. It runs when a membership is withdrawn.
+// EvictLostCallParticipants puts out of the open calls of a conversation, of a
+// workspace, or — naming neither — of every conversation, each person in them
+// who no longer holds write on the conversation. It runs when a membership is
+// withdrawn, after a permission change, and periodically as a safety net.
 func (s *Service) EvictLostCallParticipants(ctx context.Context, channelID, workspaceID string) error {
-	if s.media == nil || (channelID == "" && workspaceID == "") {
+	if s.media == nil {
 		return nil
 	}
 	calls, err := s.store.OpenCallsIn(ctx, channelID, workspaceID)
@@ -440,7 +453,7 @@ func (s *Service) EvictLostCallParticipants(ctx context.Context, channelID, work
 				slog.Warn("could not remove a participant who lost access", "call", call.ID, "error", err)
 				continue
 			}
-			if err := s.store.LeaveCall(ctx, call.ID, p.UserID); err != nil {
+			if err := s.store.LeaveCall(ctx, call.ID, p.UserID, ""); err != nil {
 				return err
 			}
 		}
@@ -496,14 +509,23 @@ func (s *Service) liveOpenCall(ctx context.Context, channelID string) (*store.Ca
 	return open, nil
 }
 
-// reconcile ends a running call whose room has stood empty past the time
-// LiveKit would have closed it: the room_finished webhook never came.
+// reconcile ends a running call whose room has stood empty — nobody arriving
+// or leaving — past the time LiveKit would have closed it, and that LiveKit
+// confirms is empty: the room_finished webhook never came.
 func (s *Service) reconcile(ctx context.Context, call *store.Call) (*store.Call, error) {
-	if call.Status != callActive || time.Since(call.CreatedAt) < callStaleAfter {
+	if call.Status != callActive {
 		return call, nil
 	}
-	present, err := s.media.Participants(ctx, call.ID)
+	present, err := s.store.CallPresent(ctx, call.ID)
 	if err != nil || len(present) > 0 {
+		return call, err
+	}
+	lastSeen, err := s.store.CallLastSeen(ctx, call.ID)
+	if err != nil || time.Since(lastSeen) < callStaleAfter {
+		return call, err
+	}
+	inRoom, err := s.media.Participants(ctx, call.ID)
+	if err != nil || len(inRoom) > 0 {
 		return call, nil // unknown or occupied: leave it as it is
 	}
 	if err := s.roomFinished(ctx, call); err != nil {

@@ -245,18 +245,32 @@ func main() {
 // missed. The ring lasts 45 seconds; a few seconds late is not noticed.
 const ringSweepEvery = 5 * time.Second
 
-// expireRingingCalls marks unanswered direct calls missed until ctx ends. Every
-// instance sweeps; each call is expired by exactly one.
+// callEvictEvery is how often every open call is checked for people who no
+// longer hold the right to be in it.
+const callEvictEvery = 30 * time.Second
+
+// expireRingingCalls marks unanswered direct calls missed, and sweeps open
+// calls of people who lost access, until ctx ends. Every instance sweeps; each
+// call is expired by exactly one, and putting someone out twice is harmless.
 func expireRingingCalls(ctx context.Context, svc *domain.Service) {
-	tick := time.NewTicker(ringSweepEvery)
-	defer tick.Stop()
+	ring := time.NewTicker(ringSweepEvery)
+	defer ring.Stop()
+	evict := time.NewTicker(callEvictEvery)
+	defer evict.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case now := <-tick.C:
+		case now := <-ring.C:
 			if _, err := svc.ExpireRingingCalls(ctx, now); err != nil && ctx.Err() == nil {
 				slog.Warn("ringing calls not swept", "error", err)
+			}
+		case <-evict.C:
+			// The safety net behind the sweeps a lost right triggers: an event
+			// missed while this instance restarted still leaves nobody in a call
+			// they may no longer be in for longer than this.
+			if err := svc.EvictLostCallParticipants(ctx, "", ""); err != nil && ctx.Err() == nil {
+				slog.Warn("open calls not swept", "error", err)
 			}
 		}
 	}

@@ -106,6 +106,8 @@ func newCallWorld(t *testing.T) *callWorld {
 	w.nodes[k.f.userID], w.nodes[w.peer], w.nodes[w.reader] = userNode, w.peerNode, w.readerNode
 	t.Cleanup(func() {
 		k.f.pool.Exec(context.Background(), `DELETE FROM calls WHERE channel_id = $1`, k.chID)
+		// A card may be the peer's, who goes before the channel does.
+		k.f.pool.Exec(context.Background(), `DELETE FROM messages WHERE channel_id = $1`, k.chID)
 	})
 	return w
 }
@@ -476,6 +478,121 @@ func TestEvictLostCallParticipants_RemovesWhoLostWrite(t *testing.T) {
 	w.media.removed = nil
 	require.NoError(t, w.f.svc.EvictLostCallParticipants(ctx, "", w.f.wsID))
 	assert.Equal(t, []string{id + "/" + w.peer}, w.media.removed)
+}
+
+// A call is taken as over only when its room has stood empty long enough —
+// not because the call itself is old: someone reloading a long call must not
+// end it for everybody.
+func TestReconcile_LooksAtHowLongTheRoomStoodEmpty(t *testing.T) {
+	w := newCallWorld(t)
+	ctx := context.Background()
+	id := w.start(t, "video")
+	w.joined(t, id, w.f.userID)
+	require.NoError(t, w.f.svc.HandleCallEvent(ctx, domain.CallEvent{Kind: domain.CallEventLeft, Room: id, Identity: w.f.userID}))
+	_, err := w.f.pool.Exec(ctx, `UPDATE calls SET created_at = NOW() - INTERVAL '10 minutes' WHERE id = $1`, id)
+	require.NoError(t, err)
+
+	_, err = w.f.svc.CallToken(ctx, id, w.peer, w.peerNode)
+	require.NoError(t, err, "an old call whose last person just left is still open")
+
+	_, err = w.f.pool.Exec(ctx, `UPDATE call_participants SET joined_at = NOW() - INTERVAL '5 minutes', left_at = NOW() - INTERVAL '4 minutes' WHERE call_id = $1`, id)
+	require.NoError(t, err)
+	_, err = w.f.svc.CallToken(ctx, id, w.peer, w.peerNode)
+	require.ErrorIs(t, err, domain.ErrCallEnded, "a room empty for minutes, its webhook lost: the call is over")
+}
+
+// Two devices of one person: the second takes the first one's place, and its
+// join may arrive before the first one's leave. The person stays in the call.
+func TestParticipantStays_AreKeptPerConnection(t *testing.T) {
+	w := newCallWorld(t)
+	ctx := context.Background()
+	id := w.start(t, "video")
+	_, err := w.f.svc.CallToken(ctx, id, w.peer, w.peerNode)
+	require.NoError(t, err)
+	ev := func(kind, sid string) {
+		require.NoError(t, w.f.svc.HandleCallEvent(ctx, domain.CallEvent{Kind: kind, Room: id, Identity: w.peer, Participant: sid}))
+	}
+	present := func() int {
+		c, err := w.f.svc.GetCall(ctx, id, userNode)
+		require.NoError(t, err)
+		return len(c.Participants)
+	}
+	ev(domain.CallEventJoined, "PA_phone")
+	ev(domain.CallEventJoined, "PA_desk")
+	ev(domain.CallEventLeft, "PA_phone")
+	assert.Equal(t, 1, present(), "the desk is still in")
+	ev(domain.CallEventLeft, "PA_desk")
+	assert.Equal(t, 0, present())
+}
+
+// Removing someone from a workspace reaches the direct calls they joined from
+// that workspace too: a DM belongs to no workspace.
+func TestEvictLostCallParticipants_WorkspaceSweepReachesDirectCalls(t *testing.T) {
+	w := newCallWorld(t)
+	w.asDM(t)
+	ctx := context.Background()
+	id := w.start(t, "video")
+	asPeer := grpcauth.WithCaller(ctx, grpcauth.Caller{UserID: w.peer, NGACNodeID: w.peerNode, TenantID: w.f.wsID})
+	_, err := w.f.svc.CallToken(asPeer, id, w.peer, w.peerNode)
+	require.NoError(t, err)
+	require.NoError(t, w.f.svc.HandleCallEvent(ctx, domain.CallEvent{Kind: domain.CallEventJoined, Room: id, Identity: w.peer}))
+	delete(w.f.read.allow, grant{w.peerNode, w.oaID, ngac.OpWrite})
+
+	require.NoError(t, w.f.svc.EvictLostCallParticipants(ctx, "", w.f.wsID))
+	assert.Equal(t, []string{id + "/" + w.peer}, w.media.removed)
+}
+
+// With neither a conversation nor a workspace named, every open call is swept:
+// what a permission change or the periodic safety sweep asks for.
+func TestEvictLostCallParticipants_EveryOpenCall(t *testing.T) {
+	w := newCallWorld(t)
+	ctx := context.Background()
+	id := w.start(t, "video")
+	w.joined(t, id, w.peer)
+	delete(w.f.read.allow, grant{w.peerNode, w.oaID, ngac.OpWrite})
+	require.NoError(t, w.f.svc.EvictLostCallParticipants(ctx, "", ""))
+	assert.Contains(t, w.media.removed, id+"/"+w.peer)
+}
+
+// Deny: in a direct message only its other person declines; anyone else who
+// happens to hold write there does not.
+func TestDeclineCall_OnlyTheOtherPersonOfTheDM(t *testing.T) {
+	w := newCallWorld(t)
+	w.asDM(t)
+	id := w.start(t, "video")
+	third := w.member(t)
+	_, err := w.f.svc.DeclineCall(context.Background(), id, third, w.nodes[third])
+	require.ErrorIs(t, err, domain.ErrAccessDenied)
+}
+
+// Two people starting a call in the same conversation at once end up in one
+// call with one card.
+func TestStartCall_TwoAtOnceShareOneCall(t *testing.T) {
+	w := newCallWorld(t)
+	ctx := context.Background()
+	var wg sync.WaitGroup
+	ids := make([]string, 8)
+	for i := range ids {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			user, node := w.f.userID, userNode
+			if i%2 == 1 {
+				user, node = w.peer, w.peerNode
+			}
+			join, _, err := w.f.svc.StartCall(ctx, domain.StartCallInput{ChannelID: w.chID, UserID: user, UserNodeID: node, Kind: "video"})
+			if assert.NoError(t, err) {
+				ids[i] = join.Call.Id
+			}
+		}(i)
+	}
+	wg.Wait()
+	for _, id := range ids {
+		assert.Equal(t, ids[0], id)
+	}
+	var cards int
+	require.NoError(t, w.f.pool.QueryRow(ctx, `SELECT count(*) FROM messages WHERE channel_id = $1 AND linked_entity_type = 'call'`, w.chID).Scan(&cards))
+	assert.Equal(t, 1, cards)
 }
 
 func TestCallCardText(t *testing.T) {

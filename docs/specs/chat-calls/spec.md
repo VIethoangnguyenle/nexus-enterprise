@@ -45,8 +45,8 @@ call: `kind`, `status`, who started it (`started_by_name`, `started_by_avatar_ur
 ### Requirement: Ringing ends one way
 A ringing direct call SHALL end exactly once:
 - **answered** — the other person enters the room: `active`, `started_at` set;
-- **declined** — `POST /api/calls/{id}/decline` by someone other than the caller, with `write` (403 for the caller or
-  an outsider): `declined`;
+- **declined** — `POST /api/calls/{id}/decline` by the direct message's other person, with `write` (403 for the
+  caller, an outsider, or anyone else who happens to hold write there): `declined`;
 - **cancelled** — `POST /api/calls/{id}/cancel` by the caller, with `write` (403 for anyone else): `cancelled`;
 - **missed** — 45 seconds pass, or the room closes first: `missed`. Every instance sweeps every 5 seconds; each call is
   expired by exactly one.
@@ -61,21 +61,26 @@ signed with the LiveKit API secret over the body's SHA-256 SHALL be refused (401
   they were handed their last ticket as (recorded with the ticket; a person has one node per workspace), on their own
   behalf; without it — or with no ticket from this service at all — they are removed from the room and not recorded. Otherwise their stay is recorded, and a ringing call is answered when they are not
   the caller.
-- `participant_left`: the stay ends.
+- `participant_left`: the stay ends. A stay is one connection (LiveKit participant sid): a person's second device can
+  take the first one's place, and its arrival may be reported before the first one's departure — the person stays in.
 - `room_finished`: every stay ends; an `active` call becomes `ended` (`ended_at` set), a ringing one `missed`.
 Events for an unknown room are ignored.
 
 When someone is removed from a conversation or a workspace, the open calls of that conversation (or of every
-conversation of the workspace) SHALL be swept 1 second and again 3 seconds later, and each person in them who no
-longer holds `write` removed from the room — within 5 seconds of the change.
+conversation of the workspace, and every direct call someone took a ticket into from that workspace) SHALL be swept
+1 second and again 3 seconds later, and each person in them who no longer holds `write` removed from the room —
+within 5 seconds of the change. Any other permission change (an association, a prohibition, a role) sweeps every
+open call the same way, and every instance sweeps every open call each 30 seconds as a safety net.
 
 #### Scenario: Ticket signed before removal
 - **WHEN** a person removed from a group enters the room with a ticket signed before the removal
 - **THEN** they are removed from the room and do not appear among the participants
 
 ### Requirement: A lost webhook does not leave a call open forever
-An `active` call whose room has been empty in LiveKit for longer than its empty timeout plus a minute SHALL be taken
-as ended when someone starts a call or asks for a ticket, as if `room_finished` had arrived.
+An `active` call with nobody recorded in it, in which nobody arrived or left for longer than the room's empty timeout
+plus a minute, and whose room LiveKit reports empty (or gone), SHALL be taken as ended when someone starts a call or
+asks for a ticket, as if `room_finished` had arrived. The age of the call itself never ends it. LiveKit opens no room
+by itself (`auto_create: false`): a stale ticket cannot bring a closed call's room back.
 
 ### Requirement: The card
 Starting a call SHALL post a system message in the main stream of the conversation, sent by the caller, with

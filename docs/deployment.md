@@ -96,14 +96,18 @@ nexus-livekit --http://nexus-messaging:8080/internal/livekit/webhook--> messagin
 ```
 
 **Port exception.** `nexus-livekit` is the only container that publishes host ports: `7881/tcp` (ICE-TCP
-fallback) and `7882/udp` (all media on one UDP port, instead of a 50000-60000 range). Docker-published
-ports bypass ufw, so these are the only two to open and the check script allows nothing else.
+fallback) and `7882/udp` (all media on one UDP port, instead of a 50000-60000 range); the check script
+allows nothing else. Docker-published ports bypass ufw: they are reachable as soon as the container runs,
+whatever ufw says, so there is no ufw step — a host firewall in front (the provider's) must let them
+through. LiveKit is also on the shared `traefik` network for the TURN router, so its API (7880, every call
+needs a key-signed token) is reachable from other containers there; that is the accepted cost of TURN/TLS.
+Rooms are opened only by messaging (`room.auto_create: false`), and TURN listens on TLS only (`udp_port: 0`).
 `use_external_ip` makes LiveKit discover the VPS address through STUN; if it picks the wrong one behind
 NAT, set `rtc.node_ip: 160.187.146.173` in the inline config.
 
-**One-time steps on the server (done by hand; `server-bootstrap.sh` does not touch ufw or Traefik):**
+**One-time steps (done by hand; `server-bootstrap.sh` does not touch firewalls or Traefik):**
 
-1. `ufw allow 7881/tcp` and `ufw allow 7882/udp`.
+1. If the provider has a firewall in front of the VPS, open `7881/tcp` and `7882/udp` there.
 2. DNS: A record `turn.nexus.zaneng.xyz` -> `160.187.146.173`.
 3. The shared Traefik must have TCP routers enabled on its `websecure` entryPoint (it does by default
    with the docker provider). Without the TURN router, calls still work except on networks that block

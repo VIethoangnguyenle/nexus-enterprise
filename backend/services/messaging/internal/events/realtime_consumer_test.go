@@ -179,7 +179,12 @@ func TestHandle_MemberRemovedSweepsOpenCalls(t *testing.T) {
 		Domain: realtime.DomainChannel, Kind: realtime.KindMemberAdded, TenantID: "t", WorkspaceID: "w", ChannelID: "ch-1",
 		At: time.Now().UnixMilli(),
 	}))
-	require.Eventually(t, func() bool { return len(ev.sweeps()) == 4 }, time.Second, 5*time.Millisecond)
+	c.handle("permission.events", eventBytes(realtime.Event{
+		Domain: realtime.DomainPermission, Kind: realtime.KindChanged, TenantID: "t", WorkspaceID: "w", UserNodeIDs: []string{"n-2"},
+		At: time.Now().UnixMilli(),
+	}))
+	require.Eventually(t, func() bool { return len(ev.sweeps()) == 6 }, time.Second, 5*time.Millisecond)
 	time.Sleep(60 * time.Millisecond)
-	assert.ElementsMatch(t, [][2]string{{"ch-1", ""}, {"ch-1", ""}, {"", "w"}, {"", "w"}}, ev.sweeps())
+	assert.ElementsMatch(t, [][2]string{{"ch-1", ""}, {"ch-1", ""}, {"", "w"}, {"", "w"}, {"", ""}, {"", ""}}, ev.sweeps(),
+		"a permission change sweeps every open call")
 }

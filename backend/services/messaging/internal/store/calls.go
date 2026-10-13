@@ -111,12 +111,16 @@ func (s *Store) OpenCall(ctx context.Context, channelID string) (*Call, error) {
 
 // OpenCallsIn returns the ringing or running calls of the given conversation, or
 // of every conversation of a workspace when channelID is empty.
+// OpenCallsIn returns the ringing or running calls of a conversation; of a
+// workspace — its conversations, and the direct calls someone took a ticket
+// into from it (a DM belongs to no workspace); or, naming neither, all of them.
 func (s *Store) OpenCallsIn(ctx context.Context, channelID, workspaceID string) ([]Call, error) {
 	calls, err := collectCalls(s.db.Query(ctx,
 		`SELECT `+callCols+` FROM calls
 		 WHERE status IN ('ringing', 'active')
 		   AND ($1 = '' OR channel_id = $1)
-		   AND ($2 = '' OR channel_id IN (SELECT id FROM channels WHERE workspace_id = $2))`,
+		   AND ($2 = '' OR channel_id IN (SELECT id FROM channels WHERE workspace_id = $2)
+		                OR id IN (SELECT call_id FROM call_access WHERE tenant_id = $2))`,
 		channelID, workspaceID))
 	if err != nil {
 		return nil, fmt.Errorf("open calls: %w", err)
@@ -156,12 +160,16 @@ func (s *Store) ExpireRinging(ctx context.Context, now time.Time) ([]Call, error
 
 // JoinCall records that a person entered a call. Being in it already (a second
 // device took the first one's place) records nothing new.
-func (s *Store) JoinCall(ctx context.Context, callID, userID string) error {
+// JoinCall records that a person entered a call through one connection (its
+// LiveKit participant sid). The same connection reported twice records nothing
+// new; with no sid, being in the call already records nothing new.
+func (s *Store) JoinCall(ctx context.Context, callID, userID, sid string) error {
 	_, err := s.db.Exec(ctx,
-		`INSERT INTO call_participants (call_id, user_id)
-		 SELECT $1, $2
-		 WHERE NOT EXISTS (SELECT 1 FROM call_participants WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL)`,
-		callID, userID)
+		`INSERT INTO call_participants (call_id, user_id, participant_sid)
+		 SELECT $1, $2, $3
+		 WHERE NOT EXISTS (SELECT 1 FROM call_participants
+		                   WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL AND ($3 = '' OR participant_sid = $3))`,
+		callID, userID, sid)
 	if err != nil {
 		return fmt.Errorf("join call: %w", err)
 	}
@@ -169,10 +177,13 @@ func (s *Store) JoinCall(ctx context.Context, callID, userID string) error {
 }
 
 // LeaveCall records that a person left a call.
-func (s *Store) LeaveCall(ctx context.Context, callID, userID string) error {
+// LeaveCall records that a connection left a call; with no sid, every stay of
+// the person ends (they were put out).
+func (s *Store) LeaveCall(ctx context.Context, callID, userID, sid string) error {
 	if _, err := s.db.Exec(ctx,
-		`UPDATE call_participants SET left_at = NOW() WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL`,
-		callID, userID); err != nil {
+		`UPDATE call_participants SET left_at = NOW()
+		 WHERE call_id = $1 AND user_id = $2 AND left_at IS NULL AND ($3 = '' OR participant_sid = $3)`,
+		callID, userID, sid); err != nil {
 		return fmt.Errorf("leave call: %w", err)
 	}
 	return nil
@@ -185,6 +196,19 @@ func (s *Store) CloseCallStays(ctx context.Context, callID string) error {
 		return fmt.Errorf("close call stays: %w", err)
 	}
 	return nil
+}
+
+// CallLastSeen is when anyone was last seen in a call: the latest arrival or
+// departure, or its creation when nobody ever came.
+func (s *Store) CallLastSeen(ctx context.Context, callID string) (time.Time, error) {
+	var t time.Time
+	if err := s.db.QueryRow(ctx,
+		`SELECT GREATEST(c.created_at, COALESCE(MAX(p.joined_at), c.created_at), COALESCE(MAX(p.left_at), c.created_at))
+		 FROM calls c LEFT JOIN call_participants p ON p.call_id = c.id
+		 WHERE c.id = $1 GROUP BY c.created_at`, callID).Scan(&t); err != nil {
+		return time.Time{}, fmt.Errorf("call last seen: %w", err)
+	}
+	return t, nil
 }
 
 // CallPresent lists who is in a call now, by when they joined.
@@ -253,7 +277,6 @@ func (s *Store) SetCardText(ctx context.Context, messageID, text string) error {
 	return nil
 }
 
-// UserNodes maps user ids to their NGAC user nodes; unknown ids are left out.
 // GrantCallAccess records the node a person was checked as when handed a
 // ticket into a call, replacing an earlier one.
 func (s *Store) GrantCallAccess(ctx context.Context, callID, userID, nodeID, tenantID string) error {

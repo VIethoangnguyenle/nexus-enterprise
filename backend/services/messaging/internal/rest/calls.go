@@ -168,7 +168,7 @@ func (h *Handler) LiveKitWebhook(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "invalid webhook signature")
 	}
 	if err := h.svc.HandleCallEvent(c.Request().Context(), domain.CallEvent{
-		Kind: ev.Kind, Room: ev.Room, Identity: ev.Identity,
+		Kind: ev.Kind, Room: ev.Room, Identity: ev.Identity, Participant: ev.Participant,
 	}); err != nil {
 		return httputil.MapDomainError(err)
 	}
