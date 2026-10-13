@@ -103,6 +103,9 @@ export function feedText(kind: ActivityMessage['kind'] | undefined, text: string
       return text ? `Công việc: ${text}` : 'Công việc'
     case 'card':
       return text || 'Thẻ đính kèm'
+    case 'call':
+      // Server sends the full preview text: "📹 Cuộc gọi video · 32 phút", "📹 Cuộc gọi nhỡ".
+      return text || '📹 Cuộc gọi'
     default:
       return text
   }

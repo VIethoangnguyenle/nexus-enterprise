@@ -109,6 +109,24 @@ starting is invited the same way.
 A direct call's ringing, and the missed call that replaces it, SHALL be pushed to the other person as specified in
 `web-push`, besides the live `call_event`.
 
+### Requirement: One-to-one calls end for both
+When an answered direct call has fewer than two people left in it (one hung up), its room SHALL be closed, so
+LiveKit's `room_finished` ends it for both. A group call goes on while anyone is in it.
+
+### Requirement: The screens
+The screens render DESIGN.md §6 "Cuộc gọi video và thoại" and `design/mockups/video-call.html`:
+- `GET /api/channels/{id}/call` (read) answers `{"call": <open call> | null}`; the conversation header shows Gọi thoại /
+  Gọi video in a direct message, "Bắt đầu cuộc gọi" in a group, and "Tham gia" with "Đang gọi · mm:ss" while the
+  group's call is open, kept fresh by `call_event`.
+- The call lives at `/calls/{id}`; `?answer=video|audio` joins directly, a group call otherwise shows the pre-join
+  check (camera preview, microphone level, device choice remembered per person on the device). The room survives
+  moving to another screen (a floating tile; Picture-in-Picture when leaving the tab).
+- A ringing direct call shows a floating card on a computer and a full-screen ring on a phone, with a WebAudio ring
+  for up to 45 seconds (Esc silences it); answering on one device makes the others say "Đã trả lời trên thiết bị khác".
+- The call's card shows it live (people, clock, "Tham gia" / "Mở lại cuộc gọi"), ended (people · length · times) or
+  missed ("Gọi lại"). Settings › Thông báo has a "Cuộc gọi đến" switch (`incoming_call`).
+- Someone removed from the conversation is cut off with "Bạn không còn ở trong nhóm này". No id is ever shown.
+
 ### Requirement: Configuration
 Calls SHALL be on only when `LIVEKIT_URL`, `LIVEKIT_PUBLIC_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` are all
 set; otherwise starting a call or asking for a ticket answers 503 `calls_unavailable`, and the webhook 503.
@@ -119,5 +137,7 @@ set; otherwise starting a call or asking for a ticket answers 503 `calls_unavail
 - iOS home-screen apps cannot ring while closed (a notification only) and cannot present the screen.
 
 ## Status
-Added 2026-10-13 with the server part (lifecycle, tickets, webhook, card, live events, ringing notifications,
-invitations). The call screens and the entry points follow.
+Added 2026-10-13: server (lifecycle, tickets, webhook, card, live events, ringing notifications, invitations) and
+screens (entry points, pre-join, stage, phone, incoming ring, cards, settings). Verified on the dev stack with real
+LiveKit (`frontend/e2e/call-ui-live.mjs` 22/22, `frontend/e2e/call-ring-live.mjs` 12/12; removed member cut off in
+1.3 s). Real devices (iPhone PWA, Android), a UDP-blocked network and a load test on the VPS are still to be done.

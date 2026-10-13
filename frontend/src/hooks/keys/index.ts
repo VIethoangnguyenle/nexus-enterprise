@@ -1,5 +1,6 @@
 import { adminKeys } from './admin'
 import { authKeys } from './auth'
+import { callKeys } from './calls'
 import { approvalKeys } from './approval'
 import { assetKeys } from './assets'
 import { chatCardKeys } from './chat-cards'
@@ -26,6 +27,7 @@ export const keys = {
   approval: approvalKeys,
   assets: assetKeys,
   auth: authKeys,
+  calls: callKeys,
   chatCards: chatCardKeys,
   contacts: contactKeys,
   documents: documentKeys,

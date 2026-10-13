@@ -1,0 +1,327 @@
+/* ========================================================================= */
+/* Call screens: the stage, pre-join check, side panel, phone and states.    */
+/* Source of truth: design/mockups/video-call.html §2 and §4–§7 and DESIGN.md */
+/* §2 "Màn gọi", §6 "Cuộc gọi video và thoại". The stage is always dark and   */
+/* the same in both themes; the side panel is a light surface like the        */
+/* workspace.                                                                 */
+/* ========================================================================= */
+
+.cs-icon { width: 20px; height: 20px; flex: none; }
+.cs-icon-s { width: 16px; height: 16px; flex: none; }
+.cs-icon-xs { width: 13px; height: 13px; flex: none; }
+.cs-icon-l { width: 24px; height: 24px; flex: none; }
+
+/* ---- video ------------------------------------------------------------- */
+.cs-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: var(--color-stage-tile); }
+.cs-video-contain { object-fit: contain; background: var(--color-stage); }
+.cs-video-mirror { transform: scaleX(-1); }
+
+/* ---- stage ------------------------------------------------------------- */
+.cs-stage {
+  position: relative; flex: 1; min-height: 0; min-width: 0; overflow: hidden;
+  background: var(--color-stage); color: var(--color-on-stage);
+  display: grid; grid-template-rows: 52px minmax(0, 1fr) 84px; grid-template-columns: minmax(0, 1fr);
+  font-family: var(--font-body);
+}
+.cs-stage.cs-with-panel { grid-template-columns: minmax(0, 1fr) 340px; }
+.cs-stage.cs-with-panel > .cs-top, .cs-stage.cs-with-panel > .cs-bar { grid-column: 1 / -1; }
+
+.cs-top { display: flex; align-items: center; gap: 12px; padding: 0 16px 0 20px; min-width: 0; }
+.cs-top b { font: 700 1rem/1 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cs-top .cs-time { color: var(--color-on-stage-muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; }
+.cs-grow { flex: 1; min-width: 0; }
+.cs-chip {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; flex: none;
+  background: var(--color-stage-raised); color: var(--color-on-stage); font: 600 0.75rem/1 var(--font-body);
+}
+.cs-chip-warn { background: oklch(40% 0.08 70); }
+
+/* ---- tiles ------------------------------------------------------------- */
+.cs-grid { display: grid; gap: 10px; padding: 0 16px; min-height: 0; min-width: 0; align-content: center; position: relative; }
+.cs-cols-1 { grid-template-columns: 1fr; }
+.cs-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.cs-cols-3 { grid-template-columns: repeat(3, 1fr); }
+.cs-cols-4 { grid-template-columns: repeat(4, 1fr); }
+.cs-single-wrap { display: grid; min-height: 0; min-width: 0; padding: 0 16px; position: relative; }
+.cs-single-wrap .cs-tile { aspect-ratio: auto; height: 100%; }
+
+.cs-tile {
+  position: relative; aspect-ratio: 16 / 9; border-radius: 14px; overflow: hidden; min-height: 0; min-width: 0;
+  background: var(--color-stage-tile); display: grid; place-items: center; container-type: size;
+}
+.cs-tile-speaking { box-shadow: inset 0 0 0 3px var(--color-stage-accent); }
+.cs-tile-speaking::after { content: ""; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 3px var(--color-stage-accent); pointer-events: none; z-index: 2; }
+.cs-avatar { position: relative; z-index: 1; }
+.cs-name {
+  position: absolute; left: 10px; bottom: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 6px;
+  max-width: calc(100% - 20px); height: 28px; padding: 0 10px; border-radius: 8px;
+  background: oklch(10% 0.01 200 / 0.62); color: var(--color-on-stage); font: 600 0.8125rem/1 var(--font-body);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cs-mic {
+  position: absolute; right: 10px; top: 10px; z-index: 3; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; background: oklch(10% 0.01 200 / 0.62); color: var(--color-on-stage);
+}
+.cs-mic-off { color: oklch(78% 0.13 25); }
+.cs-hand {
+  position: absolute; left: 10px; top: 10px; z-index: 3; display: inline-flex; align-items: center; gap: 6px; height: 30px;
+  padding: 0 10px; border-radius: 999px; background: oklch(82% 0.13 85); color: oklch(22% 0.02 85); font: 700 0.8125rem/1 var(--font-body);
+}
+.cs-poor {
+  position: absolute; right: 46px; top: 10px; z-index: 3; height: 30px; padding: 0 8px; display: inline-flex; align-items: center; gap: 4px;
+  border-radius: 999px; background: oklch(10% 0.01 200 / 0.62); color: oklch(85% 0.12 75); font: 600 0.75rem/1 var(--font-body);
+}
+.cs-pin {
+  position: absolute; right: 46px; bottom: 10px; z-index: 3; width: 30px; height: 30px; border-radius: 50%; border: 0;
+  display: grid; place-items: center; background: oklch(10% 0.01 200 / 0.62); color: var(--color-on-stage); opacity: 0; cursor: pointer;
+}
+.cs-tile:hover .cs-pin, .cs-pin:focus-visible, .cs-pin[aria-pressed="true"] { opacity: 1; }
+.cs-wave { display: inline-flex; gap: 2px; align-items: center; height: 12px; }
+.cs-wave i { width: 3px; border-radius: 2px; background: var(--color-stage-accent); animation: cs-wave 0.9s ease-in-out infinite; }
+.cs-wave i:nth-child(1) { height: 6px; }
+.cs-wave i:nth-child(2) { height: 12px; animation-delay: 0.15s; }
+.cs-wave i:nth-child(3) { height: 8px; animation-delay: 0.3s; }
+@keyframes cs-wave { 50% { transform: scaleY(0.4); } }
+
+/* One other person large, you small in the corner */
+.cs-pip-self {
+  position: absolute; right: 28px; bottom: 12px; z-index: 4; width: 22%; min-width: 120px; max-width: 240px; aspect-ratio: 16 / 9;
+  border-radius: 12px; overflow: hidden; box-shadow: 0 6px 18px oklch(5% 0.01 200 / 0.6), 0 0 0 2px var(--color-stage);
+}
+.cs-pip-self .cs-tile { aspect-ratio: auto; height: 100%; border-radius: 0; }
+.cs-pip-self .cs-name { height: 22px; font-size: 0.6875rem; left: 6px; bottom: 6px; padding: 0 7px; }
+
+/* paging */
+.cs-pager { position: absolute; left: 50%; bottom: -2px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 4px; z-index: 5; }
+.cs-pager-text { color: var(--color-on-stage-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; min-width: 36px; text-align: center; }
+
+/* ---- presenting -------------------------------------------------------- */
+.cs-present { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 10px; padding: 0 16px; min-height: 0; min-width: 0; }
+.cs-slide { position: relative; border-radius: 14px; overflow: hidden; background: var(--color-stage-tile); min-height: 0; min-width: 0; container-type: size; }
+.cs-slide .cs-tile { height: 100%; aspect-ratio: auto; border-radius: 0; }
+.cs-by {
+  position: absolute; left: 12px; bottom: 12px; z-index: 3; display: inline-flex; gap: 6px; align-items: center; height: 28px; padding: 0 10px;
+  border-radius: 8px; background: oklch(10% 0.01 200 / 0.72); color: var(--color-on-stage); font: 600 0.8125rem/1 var(--font-body);
+}
+.cs-expand { position: absolute; right: 12px; top: 12px; z-index: 3; }
+.cs-strip { display: grid; gap: 10px; align-content: start; overflow: hidden; min-height: 0; }
+.cs-strip .cs-tile { aspect-ratio: 16 / 10; }
+.cs-strip .cs-name { font-size: 0.75rem; height: 24px; left: 6px; bottom: 6px; }
+.cs-more-people { display: grid; place-items: center; height: 40px; border-radius: 10px; background: var(--color-stage-raised); color: var(--color-on-stage-muted); font: 600 0.8125rem/1 var(--font-body); }
+.cs-prebar {
+  position: absolute; top: 4px; left: 50%; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 12px;
+  height: 44px; padding: 0 6px 0 16px; border-radius: 999px; background: var(--color-stage-accent); color: var(--color-stage); font-weight: 600;
+  max-width: calc(100% - 32px); white-space: nowrap;
+}
+.cs-prebar span { overflow: hidden; text-overflow: ellipsis; }
+.cs-prebar button { height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: var(--color-stage); color: var(--color-on-stage); font: 600 0.8125rem/1 var(--font-body); cursor: pointer; flex: none; }
+
+/* ---- control bar -------------------------------------------------------- */
+.cs-bar { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 0 16px; position: relative; min-width: 0; }
+.cs-bar .cs-left { position: absolute; left: 20px; color: var(--color-on-stage-muted); font-size: 0.8125rem; display: flex; gap: 10px; align-items: center; max-width: 24%; }
+.cs-bar .cs-left span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-bar .cs-right { position: absolute; right: 16px; display: flex; gap: 6px; }
+.cs-btn {
+  position: relative; width: 52px; height: 52px; border-radius: 999px; border: 0; display: grid; place-items: center; flex: none;
+  background: var(--color-stage-raised); color: var(--color-on-stage); cursor: pointer;
+}
+.cs-btn:hover { background: var(--color-stage-hover); }
+.cs-btn:focus-visible { outline: 2px solid var(--color-stage-accent); outline-offset: 2px; }
+.cs-btn-off { background: oklch(88% 0.04 25); color: oklch(30% 0.08 25); }
+.cs-btn-off:hover { background: oklch(84% 0.05 25); }
+.cs-btn-on { background: var(--color-stage-accent); color: var(--color-stage); }
+.cs-btn-on:hover { background: var(--color-stage-accent); }
+.cs-btn-end { width: 72px; background: var(--color-stage-danger); color: white; }
+.cs-btn-end:hover { background: var(--color-stage-danger); filter: brightness(1.08); }
+.cs-btn-sq { width: 44px; height: 44px; border-radius: 12px; background: transparent; }
+.cs-btn-sq:hover, .cs-btn-sq[aria-pressed="true"] { background: var(--color-stage-raised); }
+.cs-badge {
+  position: absolute; top: -2px; right: -2px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--color-stage-accent); color: var(--color-stage); font: 700 0.6875rem/18px var(--font-body); text-align: center;
+}
+.cs-react-pop {
+  position: absolute; bottom: 92px; left: 50%; transform: translateX(-30%); z-index: 8; display: flex; gap: 4px; padding: 6px; border-radius: 999px;
+  background: var(--color-stage-raised); box-shadow: 0 8px 24px oklch(5% 0.01 200 / 0.5);
+}
+.cs-react-pop button { width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; font-size: 1.375rem; cursor: pointer; }
+.cs-react-pop button:hover { background: var(--color-stage-hover); }
+.cs-notice {
+  position: absolute; bottom: 92px; left: 50%; transform: translateX(-50%); z-index: 8; padding: 8px 14px; border-radius: 10px;
+  background: var(--color-stage-raised); color: var(--color-on-stage); font-size: 0.8125rem; display: flex; gap: 12px; align-items: center;
+}
+.cs-notice button { border: 0; background: transparent; color: var(--color-stage-accent); font: 600 0.8125rem/1 var(--font-body); cursor: pointer; }
+
+/* floating reactions */
+.cs-floats { position: absolute; left: 16px; bottom: 96px; z-index: 7; pointer-events: none; width: 220px; height: 320px; }
+.cs-float { position: absolute; bottom: 0; display: grid; justify-items: start; gap: 2px; animation: cs-rise 3s var(--ease-out) forwards; }
+.cs-float span:first-child { font-size: 2rem; line-height: 1.1; }
+.cs-float span:last-child { font-size: 0.6875rem; padding: 1px 6px; border-radius: 6px; background: oklch(10% 0.01 200 / 0.62); color: var(--color-on-stage); }
+@keyframes cs-rise { to { transform: translateY(-300px); opacity: 0; } }
+
+/* ---- side panel (light, like the workspace) ----------------------------- */
+.cs-panel {
+  grid-row: 2 / 3; grid-column: 2; margin: 0 12px 0 0; border-radius: 16px; background: var(--color-raised); color: var(--color-ink);
+  display: grid; grid-template-rows: auto auto minmax(0, 1fr); overflow: hidden; min-height: 0; min-width: 0;
+}
+.cs-panel-head { display: flex; align-items: center; gap: 4px; padding: 10px 8px 6px 16px; }
+.cs-panel-head b { flex: 1; font: 700 1rem/1 var(--font-display); }
+.cs-tabs { display: flex; gap: 4px; padding: 0 12px 8px; }
+.cs-tab {
+  flex: 1; height: 34px; border: 0; border-radius: 8px; background: var(--color-sunk); color: var(--color-ink-muted);
+  font: 600 0.8125rem/1 var(--font-body); cursor: pointer;
+}
+.cs-tab[aria-selected="true"] { background: var(--color-accent-wash); color: var(--color-ink); }
+.cs-panel-body { min-height: 0; min-width: 0; display: flex; flex-direction: column; }
+.cs-chat { display: flex; flex-direction: column; min-height: 0; flex: 1; background: var(--color-base); }
+.cs-people { overflow: auto; padding: 4px 12px 12px; display: grid; align-content: start; gap: 10px; min-height: 0; }
+.cs-plabel { color: var(--color-ink-muted); font: 600 0.75rem/1 var(--font-body); padding-top: 6px; }
+.cs-prow { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 48px; }
+.cs-prow b { font-weight: 500; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-prow small { color: var(--color-ink-muted); font-size: 0.75rem; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-pstate { display: flex; gap: 2px; color: var(--color-ink-muted); }
+.cs-pstate .cs-off { color: var(--color-danger); }
+.cs-handq {
+  display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%;
+  background: oklch(82% 0.13 85); color: oklch(22% 0.02 85); font: 700 0.6875rem/1 var(--font-body);
+}
+
+/* ---- pre-join ------------------------------------------------------------ */
+.cs-prejoin-page { flex: 1; min-height: 0; overflow: auto; background: var(--color-base); display: grid; align-items: center; }
+.cs-prejoin {
+  width: 100%; max-width: 1080px; margin-inline: auto; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px;
+  align-items: center; padding: 40px 48px;
+}
+.cs-preview {
+  position: relative; aspect-ratio: 16 / 10; border-radius: 18px; overflow: hidden; background: var(--color-stage); color: var(--color-on-stage);
+  display: grid; place-items: center;
+}
+.cs-camoff { display: grid; justify-items: center; gap: 10px; color: var(--color-on-stage-muted); position: relative; z-index: 1; }
+.cs-meter { position: absolute; left: 14px; bottom: 22px; z-index: 2; display: flex; gap: 3px; align-items: flex-end; height: 18px; }
+.cs-meter i { width: 4px; border-radius: 2px; background: var(--color-stage-accent); transition: height 80ms linear; }
+.cs-preview-controls { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 10px; z-index: 2; }
+.cs-pj { display: grid; gap: 16px; min-width: 0; }
+.cs-pj h2 { font: 700 1.5rem/1.2 var(--font-display); margin: 0; text-wrap: balance; }
+.cs-who { display: flex; align-items: center; gap: 10px; color: var(--color-ink-muted); }
+.cs-faces { display: flex; flex: none; }
+.cs-faces > * { box-shadow: 0 0 0 2px var(--color-base); border-radius: 50%; }
+.cs-faces > * + * { margin-left: -6px; }
+.cs-field { display: grid; gap: 6px; }
+.cs-field label { font-weight: 600; font-size: 0.8125rem; }
+.cs-field-row { display: flex; align-items: center; gap: 10px; }
+.cs-field-row > :first-child { flex: 1; min-width: 0; }
+.cs-banner { display: grid; grid-template-columns: 20px minmax(0, 1fr); gap: 10px; padding: 12px 14px; border-radius: 12px; font-size: 0.875rem; color: var(--color-ink); }
+.cs-banner b { display: block; }
+.cs-banner-danger { background: var(--color-danger-wash); }
+.cs-banner-danger svg { color: var(--color-danger); }
+.cs-banner-info { background: var(--color-info-wash); }
+.cs-banner-info svg { color: var(--color-info); }
+.cs-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* ---- states -------------------------------------------------------------- */
+.cs-center { flex: 1; min-height: 0; display: grid; place-items: center; padding: 24px; background: var(--color-base); }
+.cs-center-stage { background: var(--color-stage); }
+.cs-state { width: min(380px, 100%); padding: 18px; border-radius: 16px; display: grid; gap: 12px; }
+.cs-state h2 { font: 700 1.0625rem/1.3 var(--font-display); margin: 0; }
+.cs-state-stage { background: var(--color-stage-tile); color: var(--color-on-stage); }
+.cs-state-light { background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); color: var(--color-ink); }
+.cs-sub { color: var(--color-ink-muted); }
+.cs-state-stage .cs-sub { color: var(--color-on-stage-muted); }
+.cs-spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--color-stage-raised); border-top-color: var(--color-stage-accent); animation: cs-spin 0.9s linear infinite; }
+@keyframes cs-spin { to { transform: rotate(360deg); } }
+.cs-overlay { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: oklch(10% 0.01 200 / 0.62); backdrop-filter: blur(6px); padding: 24px; }
+.cs-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.cs-sum div { padding: 10px; border-radius: 10px; background: var(--color-sunk); }
+.cs-sum b { display: block; font: 700 1.125rem/1.2 var(--font-display); font-variant-numeric: tabular-nums; }
+.cs-sum small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.cs-sound { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 30; }
+
+/* ---- phone ---------------------------------------------------------------- */
+.cs-phone {
+  position: relative; flex: 1; min-height: 0; min-width: 0; overflow: hidden; background: var(--color-stage); color: var(--color-on-stage);
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto; font-family: var(--font-body);
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.cs-ptop { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 0 8px; transition: opacity var(--duration-quick) var(--ease-out); }
+.cs-ptop .cs-ti { flex: 1; min-width: 0; display: grid; }
+.cs-ptop .cs-ti b { font: 700 1rem/1.2 var(--font-display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cs-ptop .cs-ti small { color: var(--color-on-stage-muted); font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.cs-pib { width: 44px; height: 44px; border-radius: 50%; border: 0; display: grid; place-items: center; background: transparent; color: inherit; flex: none; cursor: pointer; }
+.cs-pib:focus-visible { outline: 2px solid var(--color-stage-accent); }
+.cs-pstage { position: relative; min-height: 0; min-width: 0; padding: 0 8px; display: grid; }
+.cs-pstage .cs-tile { aspect-ratio: auto; height: 100%; border-radius: 20px; }
+.cs-pstage .cs-name { bottom: 14px; left: 14px; }
+.cs-pself {
+  position: absolute; width: 104px; height: 148px; border-radius: 14px; overflow: hidden; z-index: 4; touch-action: none; cursor: grab;
+  box-shadow: 0 6px 18px oklch(5% 0.01 200 / 0.6), 0 0 0 2px var(--color-stage); transition: left var(--duration-base) var(--ease-out), top var(--duration-base) var(--ease-out);
+}
+.cs-pself .cs-tile { height: 100%; border-radius: 0; }
+.cs-pgrid-wrap { display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; min-width: 0; }
+.cs-pgrid-pages { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; min-height: 0; scrollbar-width: none; }
+.cs-pgrid-pages::-webkit-scrollbar { display: none; }
+.cs-pgrid { flex: none; width: 100%; scroll-snap-align: start; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; padding: 0 8px; min-height: 0; }
+.cs-pgrid .cs-tile { aspect-ratio: 3 / 4; border-radius: 14px; }
+.cs-pgrid .cs-name { font-size: 0.75rem; height: 24px; left: 8px; bottom: 8px; }
+.cs-pgrid .cs-mic { width: 26px; height: 26px; right: 8px; top: 8px; }
+.cs-dots { display: flex; justify-content: center; gap: 6px; padding: 8px 0 0; }
+.cs-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--color-on-stage-muted); opacity: 0.5; }
+.cs-dots i.cs-dot-on { opacity: 1; background: var(--color-on-stage); }
+.cs-pctl { display: flex; justify-content: space-around; align-items: center; padding: 14px 12px calc(30px + env(safe-area-inset-bottom, 0px)); transition: opacity var(--duration-quick) var(--ease-out); }
+.cs-pctl .cs-btn { width: 56px; height: 56px; }
+.cs-phone-hidden .cs-ptop, .cs-phone-hidden .cs-pctl { opacity: 0; pointer-events: none; }
+.cs-sheet-scrim { position: absolute; inset: 0; z-index: 9; background: oklch(8% 0.01 200 / 0.5); border: 0; }
+.cs-sheet {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--color-stage-tile); color: var(--color-on-stage);
+  border-radius: 24px 24px 0 0; padding: 8px 8px calc(28px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 2px;
+  box-shadow: 0 -8px 24px oklch(5% 0.01 200 / 0.5);
+}
+.cs-grab { width: 36px; height: 4px; border-radius: 999px; background: var(--color-stage-hover); justify-self: center; margin-bottom: 8px; }
+.cs-quick { display: flex; justify-content: space-between; padding: 4px 10px 10px; }
+.cs-quick button { width: 48px; height: 48px; border-radius: 50%; border: 0; background: var(--color-stage-raised); font-size: 1.375rem; cursor: pointer; }
+.cs-item {
+  display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 14px; border-radius: 12px; border: 0; width: 100%; text-align: left;
+  background: transparent; color: var(--color-on-stage); font: 500 1rem/1.2 var(--font-body); cursor: pointer;
+}
+.cs-item svg { color: var(--color-on-stage-muted); }
+.cs-item .cs-n2 { margin-left: auto; color: var(--color-on-stage-muted); font-size: 0.8125rem; }
+.cs-item[aria-pressed="true"] { color: var(--color-stage-accent); }
+.cs-item[aria-pressed="true"] svg { color: var(--color-stage-accent); }
+.cs-fullpanel { position: absolute; inset: 0; z-index: 11; padding: env(safe-area-inset-top, 0px) 0 0; background: var(--color-raised); color: var(--color-ink); display: grid; }
+.cs-fullpanel .cs-panel { grid-row: auto; grid-column: auto; margin: 0; border-radius: 0; }
+
+/* ---- floating mini tile ---------------------------------------------------- */
+.cs-mini {
+  position: fixed; right: 12px; bottom: calc(6.75rem + env(safe-area-inset-bottom, 0px)); z-index: 45; width: 132px; border-radius: 16px; overflow: hidden;
+  background: var(--color-stage); color: var(--color-on-stage); box-shadow: var(--shadow-overlay); touch-action: none;
+}
+.cs-mini-left { right: auto; left: 12px; }
+.cs-mini .cs-tile { aspect-ratio: 3 / 4; border-radius: 0; cursor: pointer; border: 0; padding: 0; width: 100%; }
+.cs-mini-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; font: 600 0.75rem/1 var(--font-body); font-variant-numeric: tabular-nums; }
+.cs-mini-end { width: 32px; height: 32px; border: 0; border-radius: 50%; background: var(--color-stage-danger); color: white; display: grid; place-items: center; cursor: pointer; }
+.cs-mini-pip { position: static; width: 100%; height: 100vh; border-radius: 0; box-shadow: none; display: grid; grid-template-rows: minmax(0, 1fr) auto; }
+.cs-mini-pip .cs-tile { aspect-ratio: auto; height: 100%; }
+.cs-pip-body { margin: 0; background: var(--color-stage); }
+
+/* ---- responsive: the desktop stage on a narrow window ----------------------- */
+@media (max-width: 1023.98px) {
+  .cs-prejoin { grid-template-columns: 1fr; gap: 24px; padding: 24px 20px; }
+}
+
+/* ---- motion (§7): reduced motion drops every transform; a fade stays ------- */
+@media (prefers-reduced-motion: reduce) {
+  .cs-wave i, .cs-float { animation: none; }
+  .cs-spin { animation-duration: 3s; }
+  .cs-pself, .cs-ptop, .cs-pctl { transition: none; }
+}
+:root[data-motion="reduce"] .cs-wave i, :root[data-motion="reduce"] .cs-float { animation: none; }
+:root[data-motion="reduce"] .cs-spin { animation-duration: 3s; }
+:root[data-motion="reduce"] .cs-pself, :root[data-motion="reduce"] .cs-ptop, :root[data-motion="reduce"] .cs-pctl { transition: none; }
+
+.cs-chip.cs-sound { height: 44px; padding: 0 18px; background: var(--color-stage-accent); color: var(--color-stage); font-size: 0.875rem; box-shadow: var(--shadow-overlay); cursor: pointer; }
+.cs-field select { height: 44px; }
+.cs-tab, .cs-btn, .cs-pib, .cs-mini-end, .cs-quick button { text-align: center; }
+
+/* device select with its icon and chevron */
+.cs-selwrap { position: relative; min-width: 0; }
+.cs-selwrap .cs-selicon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--color-ink-muted); display: grid; pointer-events: none; z-index: 1; }
+.cs-selwrap .cs-selchev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: var(--color-ink-muted); pointer-events: none; }
+.cs-selwrap select { text-overflow: ellipsis; }

@@ -21,6 +21,8 @@ import { invalidateUnreadThreadsFor } from '../lib/unread-threads-cache'
 import { mentionsMe } from '../lib/shortcut-feed'
 import { onSessionEnd } from '../lib/session-end'
 import { invalidatePollOnVote } from '../hooks/usePolls'
+import { useIncomingCallStore } from './incoming-call.store'
+import { callKeys } from '../hooks/keys/calls'
 import {
   createBatcher,
   emptySeq,
@@ -645,6 +647,60 @@ function handleServerMessage(
     case 'error': {
       const err = envelope.payload.error
       console.error(`[WS] server error (${err.code}):`, err.message)
+      break
+    }
+    case 'callEvent': {
+      const ev = envelope.payload.callEvent
+      const myId = useAuthStore.getState().user?.id
+      const incoming = useIncomingCallStore.getState()
+
+      switch (ev.type) {
+        case 'ring':
+          // Ring all devices of the callee — not the caller.
+          if (myId && ev.callerId !== myId) {
+            incoming.ring({
+              callId: ev.callId,
+              channelId: ev.channelId,
+              kind: ev.kind as 'audio' | 'video',
+              callerName: ev.callerName,
+              callerAvatarUrl: ev.callerAvatarUrl,
+            })
+          }
+          break
+        case 'invited':
+          incoming.invite({
+            callId: ev.callId,
+            channelId: ev.channelId,
+            kind: ev.kind as 'audio' | 'video',
+            callerName: ev.callerName,
+            callerAvatarUrl: ev.callerAvatarUrl,
+          })
+          break
+        case 'cancel':
+        case 'missed':
+        case 'declined':
+          incoming.clear(ev.callId)
+          break
+        case 'answered':
+          // If I am not in this call (URL is not /calls/<id>), show answered_elsewhere for 3 s.
+          if (!window.location.pathname.includes(`/calls/${ev.callId}`)) {
+            incoming.answeredElsewhere(ev.callId)
+          } else {
+            incoming.clear(ev.callId)
+          }
+          break
+        // 'state' and others: no incoming-call action, just invalidate.
+      }
+
+      // Every call event invalidates the call detail and the channel's data.
+      invalidations.add([callKeys.detail(ev.callId)])
+      if (ev.channelId) {
+        invalidations.add([callKeys.open(ev.channelId), keys.messaging.messages(ev.channelId), keys.messaging.conversationActivity()])
+      }
+
+      if (WS_DEBUG()) {
+        console.log(`[WS] callEvent: ${ev.type} call=${ev.callId} kind=${ev.kind}`)
+      }
       break
     }
 

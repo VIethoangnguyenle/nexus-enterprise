@@ -36,6 +36,7 @@ import { Route as WorkspaceDocumentsDocIdRouteImport } from './routes/_workspace
 import { Route as WorkspaceChannelsStarredRouteImport } from './routes/_workspace/channels.starred'
 import { Route as WorkspaceChannelsMentionsRouteImport } from './routes/_workspace/channels.mentions'
 import { Route as WorkspaceChannelsChannelIdRouteImport } from './routes/_workspace/channels.$channelId'
+import { Route as WorkspaceCallsCallIdRouteImport } from './routes/_workspace/calls.$callId'
 import { Route as WorkspaceAdminUsersRouteImport } from './routes/_workspace/admin/users'
 import { Route as WorkspaceAdminRolesRouteImport } from './routes/_workspace/admin/roles'
 
@@ -175,6 +176,11 @@ const WorkspaceChannelsChannelIdRoute =
     path: '/channels/$channelId',
     getParentRoute: () => WorkspaceRoute,
   } as any)
+const WorkspaceCallsCallIdRoute = WorkspaceCallsCallIdRouteImport.update({
+  id: '/calls/$callId',
+  path: '/calls/$callId',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
 const WorkspaceAdminUsersRoute = WorkspaceAdminUsersRouteImport.update({
   id: '/users',
   path: '/users',
@@ -205,6 +211,7 @@ export interface FileRoutesByFullPath {
   '/assets/types': typeof AssetsTypesRoute
   '/admin/roles': typeof WorkspaceAdminRolesRoute
   '/admin/users': typeof WorkspaceAdminUsersRoute
+  '/calls/$callId': typeof WorkspaceCallsCallIdRoute
   '/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
   '/channels/mentions': typeof WorkspaceChannelsMentionsRoute
   '/channels/starred': typeof WorkspaceChannelsStarredRoute
@@ -233,6 +240,7 @@ export interface FileRoutesByTo {
   '/assets/types': typeof AssetsTypesRoute
   '/admin/roles': typeof WorkspaceAdminRolesRoute
   '/admin/users': typeof WorkspaceAdminUsersRoute
+  '/calls/$callId': typeof WorkspaceCallsCallIdRoute
   '/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
   '/channels/mentions': typeof WorkspaceChannelsMentionsRoute
   '/channels/starred': typeof WorkspaceChannelsStarredRoute
@@ -265,6 +273,7 @@ export interface FileRoutesById {
   '/assets/types': typeof AssetsTypesRoute
   '/_workspace/admin/roles': typeof WorkspaceAdminRolesRoute
   '/_workspace/admin/users': typeof WorkspaceAdminUsersRoute
+  '/_workspace/calls/$callId': typeof WorkspaceCallsCallIdRoute
   '/_workspace/channels/$channelId': typeof WorkspaceChannelsChannelIdRoute
   '/_workspace/channels/mentions': typeof WorkspaceChannelsMentionsRoute
   '/_workspace/channels/starred': typeof WorkspaceChannelsStarredRoute
@@ -296,6 +305,7 @@ export interface FileRouteTypes {
     | '/assets/types'
     | '/admin/roles'
     | '/admin/users'
+    | '/calls/$callId'
     | '/channels/$channelId'
     | '/channels/mentions'
     | '/channels/starred'
@@ -324,6 +334,7 @@ export interface FileRouteTypes {
     | '/assets/types'
     | '/admin/roles'
     | '/admin/users'
+    | '/calls/$callId'
     | '/channels/$channelId'
     | '/channels/mentions'
     | '/channels/starred'
@@ -355,6 +366,7 @@ export interface FileRouteTypes {
     | '/assets/types'
     | '/_workspace/admin/roles'
     | '/_workspace/admin/users'
+    | '/_workspace/calls/$callId'
     | '/_workspace/channels/$channelId'
     | '/_workspace/channels/mentions'
     | '/_workspace/channels/starred'
@@ -570,6 +582,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceChannelsChannelIdRouteImport
       parentRoute: typeof WorkspaceRoute
     }
+    '/_workspace/calls/$callId': {
+      id: '/_workspace/calls/$callId'
+      path: '/calls/$callId'
+      fullPath: '/calls/$callId'
+      preLoaderRoute: typeof WorkspaceCallsCallIdRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
     '/_workspace/admin/users': {
       id: '/_workspace/admin/users'
       path: '/users'
@@ -626,6 +645,7 @@ interface WorkspaceRouteChildren {
   WorkspaceContactsRoute: typeof WorkspaceContactsRoute
   WorkspaceDriveRoute: typeof WorkspaceDriveRoute
   WorkspaceSettingsRoute: typeof WorkspaceSettingsRoute
+  WorkspaceCallsCallIdRoute: typeof WorkspaceCallsCallIdRoute
   WorkspaceChannelsChannelIdRoute: typeof WorkspaceChannelsChannelIdRoute
   WorkspaceChannelsMentionsRoute: typeof WorkspaceChannelsMentionsRoute
   WorkspaceChannelsStarredRoute: typeof WorkspaceChannelsStarredRoute
@@ -641,6 +661,7 @@ const WorkspaceRouteChildren: WorkspaceRouteChildren = {
   WorkspaceContactsRoute: WorkspaceContactsRoute,
   WorkspaceDriveRoute: WorkspaceDriveRoute,
   WorkspaceSettingsRoute: WorkspaceSettingsRoute,
+  WorkspaceCallsCallIdRoute: WorkspaceCallsCallIdRoute,
   WorkspaceChannelsChannelIdRoute: WorkspaceChannelsChannelIdRoute,
   WorkspaceChannelsMentionsRoute: WorkspaceChannelsMentionsRoute,
   WorkspaceChannelsStarredRoute: WorkspaceChannelsStarredRoute,

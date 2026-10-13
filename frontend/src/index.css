@@ -95,6 +95,16 @@
   --color-person-8: oklch(53% 0.13 355);
   --color-person-8-wash: oklch(94% 0.035 355);
 
+  /* --- Call stage (§2 "Màn gọi"): always dark, the same in both themes --- */
+  --color-stage: oklch(16% 0.012 200);
+  --color-stage-tile: oklch(23% 0.016 200);
+  --color-stage-raised: oklch(28% 0.018 200);
+  --color-stage-hover: oklch(33% 0.018 200);
+  --color-on-stage: oklch(95% 0.008 190);
+  --color-on-stage-muted: oklch(75% 0.014 195);
+  --color-stage-accent: oklch(76% 0.11 178);
+  --color-stage-danger: oklch(60% 0.19 25);
+
   /* ----------------------------------------------------------------------- */
   /* Legacy names, re-pointed. Screens not yet migrated keep their class     */
   /* names and pick up the new palette from here, so the whole app shifts    */

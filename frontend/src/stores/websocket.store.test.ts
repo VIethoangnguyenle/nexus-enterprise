@@ -3,6 +3,7 @@ import { queryClient } from '../lib/query-client'
 import { keys } from '../hooks/keys'
 import { useAuthStore } from './auth.store'
 import { useWebSocketStore } from './websocket.store'
+import { useIncomingCallStore } from './incoming-call.store'
 import { ClientEnvelope, ServerEnvelope } from '../generated/proto/messaging/ws'
 import { BATCH_MS } from '../lib/realtime'
 
@@ -896,3 +897,79 @@ describe('shortcut, poll and unread-thread frames', () => {
     expect(invalidated(keys.chatCards.poll('p1'))).toBe(false)
   })
 })
+describe('call events', () => {
+  const callEvent = (over: Partial<{
+    type: string; callId: string; channelId: string; kind: string; status: string
+    callerId: string; callerName: string; callerAvatarUrl: string
+    participantCount: number; participantIds: string[]; startedAt: undefined; endedAt: undefined
+  }> = {}) => ({
+    oneofKind: 'callEvent' as const,
+    callEvent: {
+      type: 'ring', callId: 'call-1', channelId: 'ch-1', kind: 'video', status: 'ringing',
+      callerId: 'u-caller', callerName: 'Phạm Hải Yến', callerAvatarUrl: '/yen.png',
+      participantCount: 1, participantIds: ['u-caller'],
+      startedAt: undefined, endedAt: undefined, ...over,
+    },
+  })
+
+  beforeEach(() => {
+    useAuthStore.setState({ user: { id: 'me', username: 'me' } as never })
+    useIncomingCallStore.setState({ incoming: null })
+  })
+  afterEach(() => {
+    useAuthStore.setState({ user: null })
+    useIncomingCallStore.setState({ incoming: null })
+  })
+
+  it('a ring event from someone else triggers the incoming call store', () => {
+    deliver(callEvent({ type: 'ring', callerId: 'u-caller' }))
+    const incoming = useIncomingCallStore.getState().incoming
+    expect(incoming).toMatchObject({
+      callId: 'call-1',
+      channelId: 'ch-1',
+      kind: 'video',
+      callerName: 'Phạm Hải Yến',
+      mode: 'ringing',
+    })
+  })
+
+  it('a ring event from myself does not trigger ringing', () => {
+    deliver(callEvent({ type: 'ring', callerId: 'me' }))
+    expect(useIncomingCallStore.getState().incoming).toBeNull()
+  })
+
+  it('a cancel event clears the incoming call', () => {
+    useIncomingCallStore.getState().ring({
+      callId: 'call-1', channelId: 'ch-1', kind: 'video' as const,
+      callerName: 'Yến', callerAvatarUrl: '',
+    })
+    deliver(callEvent({ type: 'cancel' }))
+    expect(useIncomingCallStore.getState().incoming).toBeNull()
+  })
+
+  it('an answered event sets answered_elsewhere when not in the call URL', () => {
+    useIncomingCallStore.getState().ring({
+      callId: 'call-1', channelId: 'ch-1', kind: 'video' as const,
+      callerName: 'Yến', callerAvatarUrl: '',
+    })
+    deliver(callEvent({ type: 'answered' }))
+    expect(useIncomingCallStore.getState().incoming?.mode).toBe('answered_elsewhere')
+  })
+
+  it('an invited event sets invited mode', () => {
+    deliver(callEvent({ type: 'invited' }))
+    expect(useIncomingCallStore.getState().incoming?.mode).toBe('invited')
+  })
+
+  it('every call event invalidates the call detail and the channel messages', () => {
+    seed(keys.calls.detail('call-1'))
+    seed(keys.messaging.messages('ch-1'))
+    seed(keys.messaging.conversationActivity())
+    deliver(callEvent({ type: 'state' }))
+    settle()
+    expect(invalidated(keys.calls.detail('call-1'))).toBe(true)
+    expect(invalidated(keys.messaging.messages('ch-1'))).toBe(true)
+    expect(invalidated(keys.messaging.conversationActivity())).toBe(true)
+  })
+})
+

@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Frontend điểm bắt đầu, thẻ, cuộc gọi đến, cài đặt"
-status: pending
+status: completed
 priority: P1
 effort: "1.5d"
 dependencies: [4, 5]

@@ -191,6 +191,9 @@ describe('buildConversations with server activity', () => {
     expect(one({ kind: 'task', preview: 'Gửi báo cáo' })).toBe('Công việc: Gửi báo cáo')
     expect(one({ kind: 'poll', preview: '' })).toBe('Bình chọn')
     expect(one({ kind: 'card', preview: '' })).toBe('Thẻ đính kèm')
+    expect(one({ kind: 'call', preview: '📹 Cuộc gọi video · 32 phút' })).toBe('📹 Cuộc gọi video · 32 phút')
+    expect(one({ kind: 'call', preview: '📹 Cuộc gọi nhỡ' })).toBe('📹 Cuộc gọi nhỡ')
+    expect(one({ kind: 'call', preview: '' })).toBe('📹 Cuộc gọi')
   })
 
   it('lets a live message newer than anything the server knows win', () => {

@@ -159,7 +159,7 @@ export interface ActivityMessage {
   sender_name: string
   /** Plain text, at most 140 characters; empty for a file or card sent without text. */
   preview: string
-  kind: 'text' | 'attachment' | 'poll' | 'task' | 'card'
+  kind: 'text' | 'attachment' | 'poll' | 'task' | 'card' | 'call'
   /** File name of the first attachment; only when `kind` is `attachment`. */
   attachment_name?: string
   mentions?: string[]

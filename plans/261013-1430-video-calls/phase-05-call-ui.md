@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Frontend lõi cuộc gọi: provider, kiểm tra trước, stage, điện thoại"
-status: pending
+status: completed
 priority: P1
 effort: "3d"
 dependencies: [2, 3]
@@ -51,9 +51,9 @@ Dựng theo DESIGN.md §6 "Cuộc gọi video và thoại" và mockup §2, §4�
    máy tính + 390px so mockup.
 
 ## Success Criteria
-- [ ] 2 tab trình duyệt gọi được nhau qua LiveKit dev, trình bày màn hình, giơ tay, cảm xúc, chat panel.
-- [ ] Thu nhỏ rồi đi màn khác không rớt cuộc gọi.
-- [ ] Gate frontend xanh; ảnh khớp mockup.
+- [x] 2 tab trình duyệt gọi được nhau qua LiveKit dev, trình bày màn hình, giơ tay, cảm xúc, chat panel.
+- [x] Thu nhỏ rồi đi màn khác không rớt cuộc gọi.
+- [x] Gate frontend xanh; ảnh khớp mockup.
 
 ## Risk Assessment
 - Bundle lớn (`livekit-client` ~ vài trăm KB) → lazy-load route cuộc gọi + provider chỉ nạp SDK khi có cuộc gọi.

@@ -39,6 +39,7 @@ import { SpaceSearchPanel } from './SpaceSearchPanel'
 import { SpaceInfoPanel } from './SpaceInfoPanel'
 import { SelfMentionStyle } from './SelfMentionStyle'
 import { EmptyState } from './EmptyState'
+import { CallHeaderActions } from '../calls/CallHeaderActions'
 import { keys } from '../../hooks/keys'
 
 type Tab = 'chat' | 'files' | 'tasks'
@@ -339,6 +340,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
                 <span className="max-sm:sr-only">Thêm người</span>
               </Button>
             )}
+            <CallHeaderActions channelId={channelId} kind={kind === 'dm' ? 'dm' : 'space'} />
             <IconButton
               aria-label={kind === 'space' ? 'Tìm trong nhóm' : 'Tìm trong cuộc trò chuyện'}
               title="Tìm kiếm"

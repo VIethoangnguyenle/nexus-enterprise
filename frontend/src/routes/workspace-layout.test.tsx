@@ -37,6 +37,8 @@ vi.mock('../components/patterns/MobileNav', () => ({ MobileNav: () => null }))
 vi.mock('../components/patterns/PhoneSearchBar', () => ({ PhoneSearchBar: () => null }))
 vi.mock('../components/app/OfflineBar', () => ({ OfflineBar: () => null }))
 vi.mock('../components/app/UpdateBar', () => ({ UpdateBar: () => null }))
+// The call room is not what these tests are about; the shell renders the same without it.
+vi.mock('../components/calls/CallProvider', () => ({ CallProvider: ({ children }: { children: React.ReactNode }) => <>{children}</> }))
 
 afterEach(() => {
   unreadTokens.length = 0
