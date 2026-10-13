@@ -12,11 +12,6 @@
 /* Video and voice calls in Chat (2026-10-13). Calls belong to a conversation: started from a DM or group header,
    shown in the stream as a call card, joined through a pre-join check. The call stage is always dark (video reads
    better on a dark surround, and it separates "in a call" from the workspace), using stage tokens below. */
-:root {
-  --color-stage: oklch(16% 0.012 200); --color-stage-tile: oklch(23% 0.016 200); --color-stage-raised: oklch(28% 0.018 200);
-  --color-stage-hover: oklch(33% 0.018 200); --color-on-stage: oklch(95% 0.008 190); --color-on-stage-muted: oklch(75% 0.014 195);
-  --color-stage-accent: oklch(76% 0.11 178); --color-stage-danger: oklch(60% 0.19 25);
-}
 * { box-sizing: border-box; }
 body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
 svg.i { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
@@ -287,7 +282,7 @@ html.reduce .spin { animation-duration: 3s; }
 <div class="page">
 <header>
   <h1>Cuộc gọi video và thoại</h1>
-  <p>Cuộc gọi luôn thuộc một cuộc trò chuyện. <b>Tin nhắn trực tiếp</b>: bấm gọi thì đổ chuông người kia. <b>Nhóm (≤ 20 người)</b>: bấm "Bắt đầu cuộc gọi" thì thẻ cuộc gọi hiện trong luồng, ai trong nhóm cũng Tham gia được, không đổ chuông cả nhóm. Đợt đầu có chia sẻ màn hình, chat trong cuộc gọi (chính luồng của cuộc trò chuyện), giơ tay và thả cảm xúc. Màn gọi luôn nền tối.</p>
+  <p><b>Đã duyệt 2026-10-13.</b> Cuộc gọi luôn thuộc một cuộc trò chuyện. <b>Tin nhắn trực tiếp</b>: bấm gọi thì đổ chuông người kia. <b>Nhóm (≤ 20 người)</b>: bấm "Bắt đầu cuộc gọi" thì thẻ cuộc gọi hiện trong luồng, ai trong nhóm cũng Tham gia được, không đổ chuông cả nhóm. Đợt đầu có chia sẻ màn hình, chat trong cuộc gọi (chính luồng của cuộc trò chuyện), giơ tay và thả cảm xúc. Màn gọi luôn nền tối.</p>
   <div class="controls">
     <div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div>
     <label class="check"><input type="checkbox" id="reduce">Giảm chuyển động</label>
