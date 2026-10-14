@@ -76,7 +76,9 @@ collapse id replaces it and opens the conversation; a declined or answered call 
 `incoming_call` on, outside quiet hours, and are not sent while the person has the conversation open (the app rings).
 A group call rings nobody. Inviting people to a call (`POST /api/calls/{id}/invite`), or @mentioning them in the main
 stream within two minutes of a group call starting, pushes "<name> mời bạn vào cuộc gọi" opening `/calls/{id}`, under
-the `mention` preference. See `chat-calls`.
+the `mention` preference. The ringing notification carries an action button "Trả lời" and the invitation one
+"Tham gia", each opening the same address as the notification (`web_buttons`; Chrome and Android show them, other
+browsers show the notification without buttons). See `chat-calls`.
 
 ### Requirement: Device switch
 Settings › Notifications shows a per-device push switch whose state is read from the OneSignal SDK. The SDK is

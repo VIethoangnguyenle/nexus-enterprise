@@ -30,6 +30,22 @@ type Message struct {
 	URL string
 	// CollapseID replaces an earlier notification with the same id on the device.
 	CollapseID string
+	// Buttons are actions shown on the notification (Chrome and Android: at most two;
+	// other browsers show none, so the notification's own URL must still make sense).
+	Buttons []Button
+}
+
+// Button is a notification action that opens an app path.
+type Button struct {
+	ID   string
+	Text string
+	URL  string
+}
+
+type webButton struct {
+	ID   string `json:"id"`
+	Text string `json:"text"`
+	URL  string `json:"url"`
 }
 
 // Sender sends push notifications.
@@ -118,9 +134,18 @@ type request struct {
 	WebURL         string              `json:"web_url,omitempty"`
 	// WebPushTopic replaces an earlier web notification with the same topic;
 	// CollapseID does the same on mobile.
-	WebPushTopic   string `json:"web_push_topic,omitempty"`
-	CollapseID     string `json:"collapse_id,omitempty"`
-	IdempotencyKey string `json:"idempotency_key"`
+	WebPushTopic   string      `json:"web_push_topic,omitempty"`
+	CollapseID     string      `json:"collapse_id,omitempty"`
+	WebButtons     []webButton `json:"web_buttons,omitempty"`
+	IdempotencyKey string      `json:"idempotency_key"`
+}
+
+// absolute makes an app path an address under the web app; web push opens only absolute ones.
+func (s *OneSignal) absolute(u string) string {
+	if strings.HasPrefix(u, "/") {
+		return s.appURL + u
+	}
+	return u
 }
 
 // Send delivers a notification, retrying a server error or a rate limit a
@@ -133,9 +158,9 @@ func (s *OneSignal) Send(ctx context.Context, m Message) error {
 	if err != nil {
 		return fmt.Errorf("push: idempotency key: %w", err)
 	}
-	webURL := m.URL
-	if strings.HasPrefix(webURL, "/") {
-		webURL = s.appURL + webURL
+	var buttons []webButton
+	for _, b := range m.Buttons {
+		buttons = append(buttons, webButton{ID: b.ID, Text: b.Text, URL: s.absolute(b.URL)})
 	}
 	body, err := json.Marshal(request{
 		AppID: s.appID, TargetChannel: "push",
@@ -143,9 +168,10 @@ func (s *OneSignal) Send(ctx context.Context, m Message) error {
 		// "en" is the language OneSignal requires; the text is the same for all.
 		Headings:       map[string]string{"en": m.Title, "vi": m.Title},
 		Contents:       map[string]string{"en": m.Body, "vi": m.Body},
-		WebURL:         webURL,
+		WebURL:         s.absolute(m.URL),
 		WebPushTopic:   m.CollapseID,
 		CollapseID:     m.CollapseID,
+		WebButtons:     buttons,
 		IdempotencyKey: idem,
 	})
 	if err != nil {

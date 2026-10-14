@@ -42,6 +42,7 @@ func (s *Service) pushCallChange(ctx context.Context, c CallChange) {
 					m.Body = "đang gọi video cho bạn"
 				}
 				m.URL = "/calls/" + call.Id + "?answer=" + call.Kind
+				m.Buttons = []push.Button{{ID: "answer", Text: "Trả lời", URL: m.URL}}
 			} else {
 				m.Body = CallCardText(call.Kind, callMissed, nil, nil)
 				m.URL = "/channels/" + call.ChannelId
@@ -121,6 +122,7 @@ func callInvitePush(ch *store.Channel, callID, inviter, userID string) push.Mess
 	return push.Message{
 		ExternalIDs: []string{userID}, CollapseID: "call-" + callID,
 		Title: ch.Name, Body: fmt.Sprintf("%s mời bạn vào cuộc gọi", inviter), URL: "/calls/" + callID,
+		Buttons: []push.Button{{ID: "join", Text: "Tham gia", URL: "/calls/" + callID}},
 	}
 }
 

@@ -76,10 +76,11 @@ export function CallHeaderActions({ channelId, kind }: CallHeaderActionsProps) {
       size="sm"
       disabled={start.isPending}
       onClick={() => startCall('video')}
-      className="!rounded-full !h-9 !px-3.5"
+      className="!rounded-full !h-9 !px-3.5 max-sm:!px-2.5"
     >
       <Video size={16} strokeWidth={1.75} className="text-accent" aria-hidden="true" />
-      Bắt đầu cuộc gọi
+      {/* A phone header has room for the icon only; the name stays for screen readers. */}
+      <span className="max-sm:sr-only">Bắt đầu cuộc gọi</span>
     </Button>
   )
 }
@@ -88,7 +89,8 @@ export function CallHeaderActions({ channelId, kind }: CallHeaderActionsProps) {
 function LivePill({ startMs }: { startMs: number | null }) {
   const elapsed = useElapsed(startMs)
   return (
-    <span className="inline-flex items-center gap-1.5 h-5.5 px-2 rounded-full bg-success-wash text-ink text-xs font-semibold">
+    // On a phone "Tham gia" alone says a call is on; the clock would push the name out.
+    <span className="max-sm:hidden inline-flex items-center gap-1.5 h-5.5 px-2 rounded-full bg-success-wash text-ink text-xs font-semibold">
       <span className="w-2 h-2 rounded-full bg-success animate-pulse motion-reduce:animate-none" aria-hidden="true" />
       Đang gọi · <span className="tnum">{elapsed}</span>
     </span>

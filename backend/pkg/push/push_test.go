@@ -58,6 +58,47 @@ func TestOneSignal_SendsOneRequestAddressedByExternalID(t *testing.T) {
 	}
 }
 
+func TestOneSignal_SendsActionButtonsWithAbsoluteAddresses(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &got)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	err := newOneSignal("app-1", "key-1", srv.URL, "https://nexus.example").Send(context.Background(), Message{
+		ExternalIDs: []string{"user-1"}, Title: "Lan", Body: "đang gọi video cho bạn", URL: "/calls/k1",
+		Buttons: []Button{{ID: "answer", Text: "Trả lời", URL: "/calls/k1?answer=video"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []any{map[string]any{"id": "answer", "text": "Trả lời", "url": "https://nexus.example/calls/k1?answer=video"}}
+	if !reflect.DeepEqual(got["web_buttons"], want) {
+		t.Errorf("web_buttons = %v, want %v", got["web_buttons"], want)
+	}
+}
+
+func TestOneSignal_SendsNoButtonsWhenThereAreNone(t *testing.T) {
+	var got map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		_ = json.Unmarshal(body, &got)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	if err := newOneSignal("app-1", "key-1", srv.URL, "https://nexus.example").Send(context.Background(), Message{
+		ExternalIDs: []string{"user-1"}, Title: "t", Body: "b",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := got["web_buttons"]; ok {
+		t.Errorf("web_buttons sent without buttons: %v", got["web_buttons"])
+	}
+}
+
 func TestOneSignal_RetriesAServerErrorThenGivesUp(t *testing.T) {
 	var calls atomic.Int32
 	var mu sync.Mutex
