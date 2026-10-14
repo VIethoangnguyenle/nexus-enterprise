@@ -228,6 +228,12 @@ An automatic rollback (health check failed) and `ROLLBACK=1` runs skip migration
 Migrations are forward-only: rolling back the images does not undo schema changes, so make
 migrations backward compatible with the previous release.
 
+Rolling back past the release that added profile pictures (migration `055_user_avatars.sql`)
+leaves `users.avatar_url` pointing at `/api/auth/avatars/...`, a route the older auth image does
+not have. Screens fall back to initials when a picture does not load, so nothing breaks; if the
+rollback is meant to last, clear the links:
+`UPDATE users SET avatar_url = '' WHERE avatar_url LIKE '/api/auth/avatars/%';`
+
 ## Working on the server
 
 ```bash

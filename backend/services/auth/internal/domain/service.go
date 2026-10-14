@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 
@@ -33,6 +34,14 @@ type AuthStore interface {
 	// ListWorkspaceSummaries lists the workspaces a person actively belongs to.
 	ListWorkspaceSummaries(ctx context.Context, userID string) ([]store.WorkspaceSummary, error)
 	ListContactsByWorkspace(ctx context.Context, workspaceID string, f store.ContactFilter) ([]store.User, int, *store.ContactCursor, error)
+
+	// Profile pictures. SetAvatar replaces the person's picture and points
+	// their profile at url; ClearAvatar removes it. Both return
+	// store.ErrNoSuchUser for an account that does not exist. GetAvatar
+	// returns nil when no picture or size matches.
+	SetAvatar(ctx context.Context, userID, token string, img store.AvatarImages, url string) error
+	ClearAvatar(ctx context.Context, userID string) error
+	GetAvatar(ctx context.Context, token string, size int) ([]byte, error)
 
 	// External identities (user_identities). Provider + subject is the key;
 	// email is recorded for audit only and never used to look a user up.
@@ -96,6 +105,10 @@ type Service struct {
 	msgClient   messagingpb.MessagingServiceClient
 	refresh     *RefreshStore
 	otp         OTPOptions
+
+	// avatarGate holds one slot: one profile picture is decoded at a time.
+	avatarGate chan struct{}
+	avatarWait time.Duration
 }
 
 // NewService creates an auth domain service.
@@ -116,7 +129,9 @@ func NewService(
 		msgClient:   msgClient,
 		refresh:     NewRefreshStore(rdb),
 		// Fixed-code test mode unless ConfigureOTP says otherwise.
-		otp: OTPOptions{FixedCode: DefaultFixedOTPCode, Secret: newOTPSecret()},
+		otp:        OTPOptions{FixedCode: DefaultFixedOTPCode, Secret: newOTPSecret()},
+		avatarGate: make(chan struct{}, 1),
+		avatarWait: avatarBusyWait,
 	}
 }
 

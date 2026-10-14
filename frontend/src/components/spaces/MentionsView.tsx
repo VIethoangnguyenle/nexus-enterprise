@@ -6,6 +6,8 @@ import type { Conversation } from '../../lib/conversations'
 import { toMillis } from '../../lib/format'
 import { groupByDay } from '../../lib/shortcut-feed'
 import { useArrivals } from '../../hooks/useArrivals'
+import { usePeople } from '../../hooks/usePeople'
+import { avatarOf } from '../../lib/people'
 import { useMentionsFeed, useMentionsUnreadCount, useOpenMention, useThreadRoots } from '../../hooks/useShortcuts'
 import { Heading } from '../primitives'
 import { BackBar, FeedCard, FeedEmpty, FeedError, FeedFooter, FeedSkeleton } from './FeedParts'
@@ -31,6 +33,7 @@ export function MentionsView({ workspaceId, conversationOf, onOpen, onHome, onBa
 }) {
   const me = useAuthStore((s) => s.user?.id)
   const feed = useMentionsFeed(workspaceId)
+  const people = usePeople(workspaceId)
   const unread = useMentionsUnreadCount(workspaceId).data
   const opened = useOpenMention()
   const items = useMemo(() => feed.data?.pages.flatMap((p) => p.messages) ?? [], [feed.data])
@@ -92,6 +95,7 @@ export function MentionsView({ workspaceId, conversationOf, onOpen, onHome, onBa
                         key={m.id}
                         item={m}
                         kind="mention"
+                        avatarUrl={avatarOf(people, m.sender_id)}
                         conversation={conversationOf(m.channel_id)}
                         me={me}
                         now={now}

@@ -49,6 +49,7 @@ type acctStore struct {
 	contactsTot int
 	contactsNxt *store.ContactCursor
 	lastFilter  *store.ContactFilter
+	avatars     map[string]acctAvatar // token -> picture
 }
 
 func newAcctStore() *acctStore {
@@ -725,7 +726,9 @@ func TestUserDirectoryRoutesDoNotExist(t *testing.T) {
 
 // --- fields a person may not write ---
 
-func TestProfile_RefusesAnAvatarUntilThereIsWhereToKeepOne(t *testing.T) {
+// A picture is uploaded to PUT /api/me/avatar and its address is made by the
+// server; a URL a person types would be loaded by every colleague's browser.
+func TestProfile_RefusesAnAvatarURL(t *testing.T) {
 	a := newAcctApp(t, false, nil)
 	a.st.add("u1", "a@example.test")
 	for _, body := range []string{

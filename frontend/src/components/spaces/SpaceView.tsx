@@ -23,7 +23,7 @@ import { messagingApi, type Message } from '../../api/messaging'
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads'
 import { statusOf, explain } from '../../lib/errors'
 import { dmPartner, type Conversation } from '../../lib/conversations'
-import { displayName } from '../../lib/people'
+import { avatarOf, displayName } from '../../lib/people'
 import { Avatar, Button, IconButton, Pressable, Spinner, TabBar, toast } from '../primitives'
 import { ChatEditor } from '../chat/ChatEditor'
 import { EmojiPicker } from '../chat/EmojiPicker'
@@ -328,6 +328,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
                     key={mm.user_id}
                     name={displayName(people, mm.user_id, mm.username)}
                     hueKey={mm.user_id}
+                    src={avatarOf(people, mm.user_id, mm.username)}
                     size={24}
                     className={`ring-2 ring-base animate-fade-in ${i > 0 ? '-ml-1.5' : ''}`}
                   />

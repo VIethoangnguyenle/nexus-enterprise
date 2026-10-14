@@ -98,7 +98,7 @@ export function ProfileScreen() {
       </div>
 
       <div className="flex items-center gap-4" data-testid="profile-preview">
-        <Avatar name={name} hueKey={account.id} size={64} />
+        <Avatar name={name} hueKey={account.id} src={account.avatar_url || undefined} size={64} />
         <Text variant="small" muted className="block">Ảnh đại diện lấy chữ cái đầu của tên.</Text>
       </div>
 

@@ -264,7 +264,9 @@ services:
       SMTP_TLS: ${SMTP_TLS:-}
       # X-Forwarded-For is believed only from the nginx edge (fixed address on the nexus network).
       AUTH_TRUSTED_PROXIES: 10.77.231.10/32
-      GOMEMLIMIT: 100MiB
+      # Profile pictures are decoded here, one at a time, within a 48 MB budget
+      # (domain/avatar.go); the rest is sign-in and refresh.
+      GOMEMLIMIT: 160MiB
     depends_on:
       policy: { condition: service_healthy }
       redis: { condition: service_healthy }
@@ -276,7 +278,7 @@ services:
       start_period: 20s
     deploy:
       resources:
-        limits: { memory: 128M }
+        limits: { memory: 192M }
 
   workspace:
     <<: *go-service

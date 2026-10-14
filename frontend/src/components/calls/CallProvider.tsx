@@ -12,7 +12,7 @@ import type { CallRoom, CallSnapshot } from '../../lib/call-room'
 import { EMPTY_SNAPSHOT } from '../../lib/call-room'
 import { loadCallPrefs, type CallPrefs } from '../../lib/call-prefs'
 import { toMillis } from '../../lib/format'
-import { displayName } from '../../lib/people'
+import { avatarOf, displayName } from '../../lib/people'
 import { useAuthStore } from '../../stores/auth.store'
 import { isLive, useCallStore } from '../../stores/call.store'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
@@ -81,6 +81,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user)
   const { workspaceId } = useActiveWorkspace()
   const people = usePeople(workspaceId)
+  const pictureOf = (userId: string) => avatarOf(people, userId)
   const phone = usePhone()
   const phase = useCallStore((s) => s.phase)
   const session = useCallStore((s) => s.session)
@@ -235,10 +236,10 @@ export function CallProvider({ children }: { children: ReactNode }) {
       {callRoom && <RemoteAudio items={snapshot.audio} />}
       <Suspense fallback={null}>
         {live && session && !onCallRoute && !pip.window && (
-          <MiniCall snapshot={snapshot} startedAt={session.startedAt} onOpen={open} onLeave={() => void leave()} />
+          <MiniCall snapshot={snapshot} startedAt={session.startedAt} avatarOf={pictureOf} onOpen={open} onLeave={() => void leave()} />
         )}
         {pip.window && session && createPortal(
-          <MiniCall pip snapshot={snapshot} startedAt={session.startedAt} onOpen={() => { window.focus(); pip.exit(); open() }} onLeave={() => { pip.exit(); void leave() }} />,
+          <MiniCall pip snapshot={snapshot} startedAt={session.startedAt} avatarOf={pictureOf} onOpen={() => { window.focus(); pip.exit(); open() }} onLeave={() => { pip.exit(); void leave() }} />,
           pip.window.document.body,
         )}
       </Suspense>

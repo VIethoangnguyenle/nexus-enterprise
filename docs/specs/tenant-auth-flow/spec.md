@@ -226,15 +226,47 @@ The system SHALL include `tenant_id` and `session_id` in all JWTs. All downstrea
 ### Requirement: Profile updates are partial, validated and the caller's own
 `PATCH /api/me/profile` SHALL change only the fields present in the body among `display_name`, `title` and `location`: an absent or null field is left as it is and an empty string clears it. The person edited is the token's user; nothing in the body can name another. Text is trimmed and refused (400, nothing written, including the valid fields of the same request) when: the display name is empty or over 80 characters, another field is over 120, or any contains a control character or an invisible formatting character (zero-width, bidirectional override). A body with no field is 400 and does not end the profile step. Limits count characters a person sees, not bytes.
 
-Two fields are refused by name, 400, writing nothing: `department` (`department_not_editable`: a department is assigned by a workspace administrator, per workspace, and a person who could write their own could present themselves under any department in the directory) and `avatar_url` (`avatar_not_supported`: there is no image store a profile could point at, and a URL a person typed would be loaded by every colleague's browser).
+Two fields are refused by name, 400, writing nothing: `department` (`department_not_editable`: a department is assigned by a workspace administrator, per workspace, and a person who could write their own could present themselves under any department in the directory) and `avatar_url` (`avatar_not_supported`: a URL a person typed would be loaded by every colleague's browser; a picture is uploaded to `PUT /api/me/avatar`, which makes the address itself).
 
 #### Scenario: Refused input writes nothing
 - **WHEN** a request carries a valid display name and a department
 - **THEN** the answer is 400 `department_not_editable`, the display name is unchanged and `needs_profile` is unchanged
 
-#### Scenario: An avatar
+#### Scenario: An avatar URL
 - **WHEN** a request carries `avatar_url`, even an empty one
 - **THEN** the answer is 400 `avatar_not_supported`
+
+### Requirement: A person uploads and removes their own picture
+`PUT /api/me/avatar` SHALL take a multipart form whose `file` part is a JPEG or PNG of at most 5 MiB, and make it the caller's picture; the person is always the token's. The kind is decided by the content, never the file name or declared type. Before decoding, the server SHALL estimate from the header the memory a decode takes (pixels by colour model, JPEG sampling factors and progressive coefficients) and refuse a picture over 48 MB, so a small file declaring a huge size is refused without being decoded. One picture is decoded at a time per auth process; an upload waits up to 5 seconds for the one before it. The centre square is kept, turned the way its EXIF Orientation says, laid on white where transparent, and re-encoded as JPEG (quality 85) at 64, 192 and 1024 pixels; nothing of the original file but its pixels is kept (no EXIF, no location). Each upload gets a new random 128-bit token, and `users.avatar_url` becomes `/api/auth/avatars/<token>`, written in the same transaction as the picture. The answer is `{"avatar_url": "…"}`. A person may upload 10 pictures per hour. `DELETE /api/me/avatar` SHALL remove the picture and clear `avatar_url`; having none is not an error.
+
+Refusals write nothing: 413 `avatar_too_large` (over 5 MiB, the body is cut off at the limit before parsing), 400 `avatar_missing` (no `file` part), 400 `invalid_input` (not a multipart form, or one cut off mid-upload), 400 `avatar_not_image`, 400 `avatar_too_many_pixels`, 503 `avatar_busy` with `Retry-After` (another picture did not finish within the wait), 429 `rate_limited` with `Retry-After`, 401 without a session, 404 `not_found` for an account that no longer exists.
+
+#### Scenario: A phone photo
+- **WHEN** a person uploads a 12 MP JPEG taken in portrait (stored landscape, Orientation 6, with a GPS position)
+- **THEN** the three sizes are upright and carry no EXIF, and the profile points at the new token
+
+#### Scenario: A decompression bomb
+- **WHEN** the file is a PNG header declaring 10000×10000 pixels
+- **THEN** the answer is 400 `avatar_too_many_pixels` and nothing is decoded
+
+#### Scenario: Text named .png
+- **WHEN** the file part is text with a `.png` name and an `image/png` type
+- **THEN** the answer is 400 `avatar_not_image` and the profile is unchanged
+
+#### Scenario: Replacing the picture
+- **WHEN** a person uploads a second picture, even the same file
+- **THEN** it gets a new token and the old address answers 404
+
+### Requirement: Pictures are served publicly, by an address that says nothing
+`GET /api/auth/avatars/:token` (192 px) and `GET /api/auth/avatars/:token/:size` (`size` 64, 192 or 1024) SHALL answer the stored JPEG without a session, since an `<img>` sends no bearer token. The token is random per upload, so the address cannot be worked out from a photo of the person, and a new picture gets a new address. A 200 carries `Content-Type: image/jpeg`, `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'`, `Cross-Origin-Resource-Policy: same-origin` and `Content-Disposition: inline; filename="avatar.jpg"`. A token that is not 32 lowercase hex characters, an unknown token, or any other size is 404 with `Cache-Control: public, max-age=60`. The route is limited per address at ten times the allowance of the public sign-in routes. Removing a picture does not purge copies a browser has already cached.
+
+#### Scenario: A list of small avatars
+- **WHEN** a screen shows avatars of 32 px or less
+- **THEN** it asks for the 64 px size, and never for 1024
+
+#### Scenario: Walking addresses
+- **WHEN** one address requests more than ten times the public allowance within the window
+- **THEN** further requests are 429
 
 #### Scenario: Naming another person
 - **WHEN** the body carries `user_id` or `id` of another account

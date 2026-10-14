@@ -53,12 +53,18 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	e.GET("/api/auth/providers", h.Providers)
 	e.GET("/api/auth/google/start", google.Start, h.publicLimiter("google-start"))
 	e.GET("/api/auth/google/callback", google.Callback)
+	// Profile pictures: public, since an <img> sends no token. Under
+	// /api/auth for the same reason as Google sign-in above.
+	e.GET("/api/auth/avatars/:token", h.ServeAvatar, h.avatarLimiter())
+	e.GET("/api/auth/avatars/:token/:size", h.ServeAvatar, h.avatarLimiter())
 
 	// Protected — JWT required
 	api := e.Group("/api", httputil.JWTMiddleware(jwtSecret))
 	api.POST("/auth/switch-tenant", h.SwitchTenant)
 	api.GET("/me", h.GetMe)
 	api.PATCH("/me/profile", h.UpdateProfile)
+	api.PUT("/me/avatar", h.UploadAvatar)
+	api.DELETE("/me/avatar", h.RemoveAvatar)
 	api.POST("/me/email/verify", h.VerifyEmail)
 	api.POST("/me/email/verify/google", func(c echo.Context) error { return h.googleHandler().StartVerification(c) })
 	api.GET("/me/workspaces", h.ListMyWorkspaces)
@@ -333,6 +339,12 @@ func mapError(err error) *echo.HTTPError {
 		return apiError(http.StatusForbidden, "email_unverified", err.Error())
 	case errors.Is(err, domain.ErrOTPUnavailable):
 		return apiError(http.StatusServiceUnavailable, "otp_unavailable", err.Error())
+	case errors.Is(err, domain.ErrAvatarNotImage):
+		return apiError(http.StatusBadRequest, "avatar_not_image", err.Error())
+	case errors.Is(err, domain.ErrAvatarTooManyPixels):
+		return apiError(http.StatusBadRequest, "avatar_too_many_pixels", err.Error())
+	case errors.Is(err, domain.ErrAvatarBusy):
+		return apiError(http.StatusServiceUnavailable, "avatar_busy", err.Error())
 	default:
 		// The text of an unexpected error names hosts, queries and downstream
 		// services. It goes to the log, never to the caller.

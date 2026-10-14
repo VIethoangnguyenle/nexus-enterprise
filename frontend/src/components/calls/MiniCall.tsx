@@ -12,8 +12,10 @@ import './call-stage.css'
  * is not, can be dragged to the left or right edge, and a tap opens the call
  * again. `pip` is the same tile filling a Picture-in-Picture window.
  */
-export function MiniCall({ snapshot, startedAt, onOpen, onLeave, pip = false }: {
+export function MiniCall({ snapshot, startedAt, onOpen, onLeave, avatarOf, pip = false }: {
   snapshot: CallSnapshot
+  /** The picture of a participant (by user id), from the directory. */
+  avatarOf?: (userId: string) => string | undefined
   startedAt: number
   onOpen: () => void
   onLeave: () => void
@@ -60,7 +62,7 @@ export function MiniCall({ snapshot, startedAt, onOpen, onLeave, pip = false }: 
       >
         {person?.camera
           ? <TrackVideo track={person.camera} speakerMark />
-          : <span className="cs-avatar"><Avatar name={person?.name ?? 'Cuộc gọi'} hueKey={person?.id} size={52} /></span>}
+          : <span className="cs-avatar"><Avatar name={person?.name ?? 'Cuộc gọi'} hueKey={person?.id} src={person ? avatarOf?.(person.id) : undefined} size={52} /></span>}
         {person && <span className="cs-name">{person.isLocal ? 'Bạn' : person.name}</span>}
       </Pressable>
       <div className="cs-mini-bar">

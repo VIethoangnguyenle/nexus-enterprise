@@ -5,7 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import { messagingApi } from '../../api/messaging'
 import { statusOf } from '../../lib/errors'
 import { loadCallPrefs, type CallPrefs } from '../../lib/call-prefs'
-import { displayName } from '../../lib/people'
+import { avatarOf, displayName } from '../../lib/people'
 import { useAuthStore } from '../../stores/auth.store'
 import { callRoute } from '../../lib/call-nav'
 import { isLive, takeTicket, useCallStore } from '../../stores/call.store'
@@ -157,7 +157,7 @@ export function CallScreen({ callId, answer }: { callId: string; answer?: 'video
     if (direct && !refusal) return <ConnectingState onCancel={toChat} />
     return (
       <PreJoin
-        call={call} selfId={user?.id} selfName={selfName} refusal={refusal} joining={false}
+        call={call} selfId={user?.id} selfName={selfName} selfAvatarUrl={avatarOf(people, user?.id, user?.username)} refusal={refusal} joining={false}
         onJoin={enter} onCancel={toChat}
       />
     )

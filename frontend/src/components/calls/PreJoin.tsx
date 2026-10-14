@@ -40,6 +40,8 @@ interface Props {
   call: Call | undefined
   selfId: string | undefined
   selfName: string
+  /** The person's own picture, shown while the camera is off. */
+  selfAvatarUrl?: string
   refusal: CallRefusal | null
   joining: boolean
   onJoin: (prefs: CallPrefs, audio: boolean, video: boolean) => void
@@ -51,7 +53,7 @@ interface Props {
  * device choices, then "Tham gia ngay". The microphone and camera are released
  * before joining so the room can take them.
  */
-export function PreJoin({ call, selfId, selfName, refusal, joining, onJoin, onCancel }: Props) {
+export function PreJoin({ call, selfId, selfName, selfAvatarUrl, refusal, joining, onJoin, onCancel }: Props) {
   const [prefs, setPrefs] = useState<CallPrefs>(() => loadCallPrefs(selfId))
   const [denied, setDenied] = useState(false)
   const [video, setVideo] = useState<LocalTrack | null>(null)
@@ -141,7 +143,7 @@ export function PreJoin({ call, selfId, selfName, refusal, joining, onJoin, onCa
         <div className="cs-preview" data-testid="preview">
           {videoOn && video ? <TrackVideo track={video as never} mirror /> : (
             <div className="cs-camoff">
-              <Avatar name={selfName} hueKey={selfId} size={64} className="cs-big-avatar" />
+              <Avatar name={selfName} hueKey={selfId} src={selfAvatarUrl} size={64} className="cs-big-avatar" />
               {audioCall ? 'Cuộc gọi thoại' : 'Camera đang tắt'}
             </div>
           )}

@@ -41,10 +41,16 @@ type fakeWorld struct {
 	channels   []string                           // workspace ids that got #general
 	callers    map[string]grpcauth.Caller         // downstream RPC -> caller on its context
 	seq        int
-	verified   map[string]bool // user id -> email proven
-	deleted    []string        // workspaces removed through DeleteWorkspace
-	deleteErr  error           // DeleteWorkspace fails with this
-	channelErr error           // CreateChannel fails with this
+	verified   map[string]bool       // user id -> email proven
+	deleted    []string              // workspaces removed through DeleteWorkspace
+	deleteErr  error                 // DeleteWorkspace fails with this
+	channelErr error                 // CreateChannel fails with this
+	avatars    map[string]fakeAvatar // token -> picture
+}
+
+type fakeAvatar struct {
+	userID string
+	img    store.AvatarImages
 }
 
 func newFakeWorld() *fakeWorld {
@@ -252,6 +258,61 @@ func (w *fakeWorld) UpdateProfile(_ context.Context, userID string, ch store.Pro
 	}
 	u.ProfileCompleted = true
 	return nil
+}
+
+func (w *fakeWorld) SetAvatar(_ context.Context, userID, token string, img store.AvatarImages, url string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	u := w.users[userID]
+	if u == nil {
+		return store.ErrNoSuchUser
+	}
+	if w.avatars == nil {
+		w.avatars = map[string]fakeAvatar{}
+	}
+	w.dropAvatarOf(userID)
+	w.avatars[token] = fakeAvatar{userID: userID, img: img}
+	u.AvatarURL = url
+	return nil
+}
+
+func (w *fakeWorld) ClearAvatar(_ context.Context, userID string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	u := w.users[userID]
+	if u == nil {
+		return store.ErrNoSuchUser
+	}
+	w.dropAvatarOf(userID)
+	u.AvatarURL = ""
+	return nil
+}
+
+// dropAvatarOf forgets userID's picture; the caller holds w.mu.
+func (w *fakeWorld) dropAvatarOf(userID string) {
+	for tok, a := range w.avatars {
+		if a.userID == userID {
+			delete(w.avatars, tok)
+		}
+	}
+}
+
+func (w *fakeWorld) GetAvatar(_ context.Context, token string, size int) ([]byte, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	a, ok := w.avatars[token]
+	if !ok {
+		return nil, nil
+	}
+	switch size {
+	case 64:
+		return a.img.Small, nil
+	case 192:
+		return a.img.Medium, nil
+	case 1024:
+		return a.img.Large, nil
+	}
+	return nil, nil
 }
 
 func (w *fakeWorld) ListWorkspaceSummaries(_ context.Context, userID string) ([]store.WorkspaceSummary, error) {

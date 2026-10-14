@@ -1,6 +1,6 @@
 import { motion } from 'motion/react'
 import type { Burst } from '../../hooks/useArrivals'
-import type { PeopleDirectory } from '../../lib/people'
+import { avatarOf, type PeopleDirectory } from '../../lib/people'
 import type { MotionPresets } from '../../lib/motion'
 import { Avatar } from '../primitives'
 
@@ -19,7 +19,7 @@ export function DriveBurstBanner({ burst, people, row }: {
       <div className="flex items-center gap-2.5 mb-2 px-3 py-2 rounded-surface bg-raised text-sm">
         <span className="flex items-center">
           {burst.authors.slice(0, 3).map((a, i) => (
-            <Avatar key={a} name={nameOfAuthor(a, people)} hueKey={a} size={20} className={`ring-2 ring-raised ${i > 0 ? '-ml-1.5' : ''}`} />
+            <Avatar key={a} name={nameOfAuthor(a, people)} hueKey={a} src={avatarOf(people, a)} size={20} className={`ring-2 ring-raised ${i > 0 ? '-ml-1.5' : ''}`} />
           ))}
         </span>
         <span>
