@@ -63,6 +63,8 @@ type pushState struct {
 
 	mu      sync.Mutex
 	batches map[string]*pushBatch // by user and conversation
+	// queues holds, per key, the last push started under it: the next one waits for it (see laterInOrder).
+	queues map[string]chan struct{}
 }
 
 type pushBatch struct {
@@ -76,7 +78,8 @@ func (s *Service) SetPush(sender push.Sender, viewing ViewingChecker) {
 		s.push = nil
 		return
 	}
-	s.push = &pushState{sender: sender, viewing: viewing, now: time.Now, window: pushWindow, batches: map[string]*pushBatch{}}
+	s.push = &pushState{sender: sender, viewing: viewing, now: time.Now, window: pushWindow, batches: map[string]*pushBatch{},
+		queues: map[string]chan struct{}{}}
 }
 
 // SetPushWindowForTest shortens the gathering window so a test need not wait.
@@ -334,6 +337,37 @@ func (s *Service) later(ctx context.Context, fn func(context.Context)) {
 		defer cancel()
 		fn(ctx)
 	}()
+}
+
+// laterInOrder is later for pushes that replace one another (same collapse id):
+// each waits until the previous one under the same key has been sent, so they
+// reach the device in the order they happened. Otherwise a call's ring could land
+// after its "missed" and leave a cancelled call ringing on the lock screen.
+func (s *Service) laterInOrder(ctx context.Context, key string, fn func(context.Context)) {
+	p := s.push
+	done := make(chan struct{})
+	p.mu.Lock()
+	prev := p.queues[key]
+	p.queues[key] = done
+	p.mu.Unlock()
+	s.later(ctx, func(ctx context.Context) {
+		defer func() {
+			close(done)
+			p.mu.Lock()
+			if p.queues[key] == done {
+				delete(p.queues, key)
+			}
+			p.mu.Unlock()
+		}()
+		if prev != nil {
+			select {
+			case <-prev:
+			case <-ctx.Done():
+				return
+			}
+		}
+		fn(ctx)
+	})
 }
 
 // notificationFor builds the push. Its link opens the conversation; a reply

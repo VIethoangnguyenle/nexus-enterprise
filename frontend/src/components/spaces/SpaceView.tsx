@@ -287,7 +287,10 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
           >
             <ArrowLeft size={18} strokeWidth={1.75} />
           </IconButton>
-          {conv ? <ConversationIcon conversation={conv} size={40} /> : <div className="skeleton w-10 h-10 rounded-surface" />}
+          {/* A phone header is back + name only (mockup "Trên điện thoại"): the room goes to the name and the call buttons. */}
+          <span className="max-sm:hidden inline-flex shrink-0">
+            {conv ? <ConversationIcon conversation={conv} size={40} /> : <div className="skeleton w-10 h-10 rounded-surface" />}
+          </span>
           <div className="grid gap-px min-w-0 flex-1">
             {conv ? (
               <ConversationTitleMenu

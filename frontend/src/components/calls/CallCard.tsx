@@ -112,9 +112,10 @@ export function CallCard({ callId, channelId }: CallCardProps) {
     <div
       role="group"
       aria-label={`Cuộc gọi ${kindLabel}`}
+      // On a phone the action takes its own full-width row under the text (mockup "Trên điện thoại"),
+      // so the text keeps the card's width instead of wrapping beside the button.
       className="w-full max-w-105 rounded-lg bg-raised ring-1 ring-inset ring-line px-3.5 py-3
-        grid gap-3 items-center"
-      style={{ gridTemplateColumns: '44px minmax(0,1fr) auto' }}
+        grid gap-3 items-center grid-cols-[44px_minmax(0,1fr)] sm:grid-cols-[44px_minmax(0,1fr)_auto]"
     >
       {/* Icon tile */}
       <span className={`grid place-items-center w-11 h-11 rounded-xl ${ICON_CLASS[state]}`}>
@@ -147,17 +148,17 @@ export function CallCard({ callId, channelId }: CallCardProps) {
 
       {/* Action */}
       {(state === 'active' || state === 'ringing') && (
-        <Button variant="success" size="sm" onClick={handleJoin}>
+        <Button variant="success" size="sm" onClick={handleJoin} className="max-sm:col-span-2">
           {userInCall ? 'Mở lại cuộc gọi' : 'Tham gia'}
         </Button>
       )}
       {state === 'missed' && (
-        <Button variant="primary" size="sm" onClick={handleCallback} loading={start.isPending}>
+        <Button variant="primary" size="sm" onClick={handleCallback} loading={start.isPending} className="max-sm:col-span-2">
           <CallIcon kind={kind} state="ended" />
           Gọi lại
         </Button>
       )}
-      {state === 'ended' && <span />}
+      {state === 'ended' && <span className="max-sm:hidden" />}
     </div>
   )
 }

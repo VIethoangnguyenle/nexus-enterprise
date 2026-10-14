@@ -39,6 +39,8 @@ func TestCallPush_RingsTheCalleeThenMissedReplacesIt(t *testing.T) {
 	assert.Equal(t, "đang gọi video cho bạn", ring.Body)
 	assert.Equal(t, "/calls/"+id+"?answer=video", ring.URL, "answering opens the call")
 	assert.Equal(t, "call-"+id, ring.CollapseID)
+	assert.Equal(t, []push.Button{{ID: "answer", Text: "Trả lời", URL: "/calls/" + id + "?answer=video"}}, ring.Buttons,
+		"the notification answers from its own button")
 
 	_, err := w.f.svc.ExpireRingingCalls(context.Background(), time.Now().Add(time.Minute))
 	require.NoError(t, err)
@@ -49,6 +51,7 @@ func TestCallPush_RingsTheCalleeThenMissedReplacesIt(t *testing.T) {
 	assert.Equal(t, "📹 Cuộc gọi nhỡ", missed.Body)
 	assert.Equal(t, "call-"+id, missed.CollapseID, "it replaces the ringing notification")
 	assert.Equal(t, "/channels/"+w.chID, missed.URL, "a missed call opens the conversation to call back")
+	assert.Empty(t, missed.Buttons, "nothing left to answer")
 }
 
 func TestCallPush_CancelledLeavesAMissedCallDeclinedNothing(t *testing.T) {
@@ -126,6 +129,7 @@ func TestInviteToCall_PushesWritersOnly(t *testing.T) {
 	assert.Equal(t, []string{w.peer}, sent[0].ExternalIDs)
 	assert.Equal(t, "testuser mời bạn vào cuộc gọi", sent[0].Body)
 	assert.Equal(t, "/calls/"+id, sent[0].URL)
+	assert.Equal(t, []push.Button{{ID: "join", Text: "Tham gia", URL: "/calls/" + id}}, sent[0].Buttons)
 
 	var invite *domain.CallChange
 	for i := range w.calls.changes {
