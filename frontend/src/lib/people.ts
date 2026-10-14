@@ -60,6 +60,13 @@ export function displayName(dir: PeopleDirectory, userId?: string, username?: st
   return username?.trim() || UNKNOWN_PERSON
 }
 
+
+/** The person's picture, found the way displayName finds their name; undefined when they have none. */
+export function avatarOf(dir: PeopleDirectory, userId?: string, username?: string): string | undefined {
+  const p = (userId && dir.byUserId.get(userId)) || (username && dir.byUsername.get(username.toLowerCase()))
+  return (p && p.avatarUrl) || undefined
+}
+
 /** Case- and accent-insensitive match for people search ("duc" finds "Đức"). */
 export function normalize(s: string): string {
   return s

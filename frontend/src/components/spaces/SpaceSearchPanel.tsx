@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { SearchX } from 'lucide-react'
 import { useSearch } from '../../hooks/useMessaging'
 import { formatListTime, formatDateTime } from '../../lib/format'
-import { displayName, type PeopleDirectory } from '../../lib/people'
+import { avatarOf, displayName, type PeopleDirectory } from '../../lib/people'
 import { Avatar, Pressable, SearchField } from '../primitives'
 import { SidePanel } from './SidePanel'
 import { EmptyState } from './EmptyState'
@@ -51,7 +51,7 @@ export function SpaceSearchPanel({ channelId, title, people, onOpenTopic, onClos
                   className="w-full grid grid-cols-[24px_minmax(0,1fr)] gap-2.5 px-3 py-2 rounded-surface hover:bg-hover
                     transition-colors duration-quick"
                 >
-                  <Avatar name={name} hueKey={r.sender_id || name} size={24} />
+                  <Avatar name={name} hueKey={r.sender_id || name} src={avatarOf(people, r.sender_id, r.sender_name)} size={24} />
                   <span className="grid gap-0.5 min-w-0">
                     <span className="flex items-baseline gap-2">
                       <span className="font-semibold text-ink truncate">{name}</span>

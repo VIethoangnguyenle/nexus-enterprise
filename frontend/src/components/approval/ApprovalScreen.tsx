@@ -12,6 +12,7 @@ import { useArrivals, type Arrival } from '../../hooks/useArrivals'
 import { usePeople } from '../../hooks/usePeople'
 import { requestSearch, editSearch, tabOf, tabSearch, templateSearch, type ApprovalSearch, type ApprovalTab } from '../../lib/approval-search'
 import { statusOf } from '../../lib/errors'
+import { avatarOf } from '../../lib/people'
 import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
@@ -372,7 +373,7 @@ export function ApprovalScreen() {
                 <div className="flex items-center gap-2.5 mb-1 px-3 py-2 rounded-surface bg-raised text-sm">
                   <span className="flex items-center">
                     {burst.authors.slice(0, 3).map((a, i) => (
-                      <Avatar key={a} name={people.byUserId.get(a)?.name ?? 'Một người'} hueKey={a} size={20} className={`ring-2 ring-raised ${i > 0 ? '-ml-1.5' : ''}`} />
+                      <Avatar key={a} name={people.byUserId.get(a)?.name ?? 'Một người'} hueKey={a} src={avatarOf(people, a)} size={20} className={`ring-2 ring-raised ${i > 0 ? '-ml-1.5' : ''}`} />
                     ))}
                   </span>
                   <span>

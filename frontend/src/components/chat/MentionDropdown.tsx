@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Avatar } from '../primitives'
-import { displayName, EMPTY_DIRECTORY, normalize, type PeopleDirectory } from '../../lib/people'
+import { avatarOf, displayName, EMPTY_DIRECTORY, normalize, type PeopleDirectory } from '../../lib/people'
 
 interface MentionUser {
   user_id: string
@@ -88,7 +88,7 @@ export function MentionDropdown({ members, people = EMPTY_DIRECTORY, query, onSe
             className={`flex items-center gap-2.5 px-2.5 py-1.5 rounded-md cursor-pointer text-sm
               ${i === selectedIndex ? 'bg-hover' : ''}`}
           >
-            <Avatar name={name} hueKey={m.user_id || m.username} size={24} />
+            <Avatar name={name} hueKey={m.user_id || m.username} src={avatarOf(people, m.user_id, m.username)} size={24} />
             <span className="truncate text-ink">{name}</span>
             <span className="ml-auto text-xs text-ink-muted">@{m.username}</span>
           </div>

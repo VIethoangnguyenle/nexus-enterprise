@@ -8,8 +8,8 @@ import (
 
 // ProfileChanges names the profile fields a person may write. A nil field is
 // left as it is; a pointer to "" clears it. The department is not one of them:
-// it is assigned by an administrator, per workspace. Nor is the avatar, until
-// there is an image store a profile could point at.
+// it is assigned by an administrator, per workspace. Nor is the avatar: it is
+// written with the picture itself, by SetAvatar and ClearAvatar.
 type ProfileChanges struct {
 	DisplayName *string
 	Title       *string

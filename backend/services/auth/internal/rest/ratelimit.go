@@ -34,9 +34,22 @@ func (h *Handler) publicLimit() PublicLimit {
 // out of refreshing its session. A counter that cannot be reached never blocks a
 // person: the limit is a flood guard, and the sign-in paths have their own limits.
 func (h *Handler) publicLimiter(route string) echo.MiddlewareFunc {
+	return h.limiterAt(route, h.publicLimit())
+}
+
+// avatarLimiter guards the public picture route. A page of the directory
+// shows dozens of avatars at once, so the allowance is ten times the
+// sign-in routes'; it stops a script walking addresses, not a busy page.
+func (h *Handler) avatarLimiter() echo.MiddlewareFunc {
+	lim := h.publicLimit()
+	lim.Max *= 10
+	return h.limiterAt("avatar", lim)
+}
+
+func (h *Handler) limiterAt(route string, lim PublicLimit) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			err := h.svc.TakePublicRequest(c.Request().Context(), route, c.RealIP(), h.publicLimit())
+			err := h.svc.TakePublicRequest(c.Request().Context(), route, c.RealIP(), lim)
 			if err == nil {
 				return next(c)
 			}

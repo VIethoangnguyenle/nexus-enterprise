@@ -5,6 +5,7 @@ import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { usePeople } from '../../hooks/usePeople'
 import { amountOfRequest, chainOf, entityLabel, requestPill, requestTitle, type Pill } from '../../lib/approval-model'
 import { statusOf } from '../../lib/errors'
+import { avatarOf } from '../../lib/people'
 import { formatMoney } from '../../lib/format'
 import { useAuthStore } from '../../stores/auth.store'
 import { Avatar } from '../primitives'
@@ -61,7 +62,7 @@ export function ApprovalCard({ requestId }: { requestId: string }) {
       <ol aria-label="Chuỗi phê duyệt" className="flex flex-wrap items-center gap-x-1.5 gap-y-1 m-0 p-0 list-none text-xs">
         {submitter && (
           <li className="inline-flex items-center gap-1.5">
-            <Avatar name={submitter} hueKey={request.created_by} size={20} />
+            <Avatar name={submitter} hueKey={request.created_by} src={avatarOf(people, request.created_by)} size={20} />
             <span className="font-medium text-ink">{submitter}</span>
             <small className="text-success">Đã gửi</small>
           </li>

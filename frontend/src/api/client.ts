@@ -181,6 +181,6 @@ export async function publicFetch<T>(path: string, options: RequestInit = {}): P
 }
 
 /** Authenticated FormData upload. Does NOT set Content-Type — browser handles multipart boundary. */
-export async function apiUpload<T>(path: string, body: FormData): Promise<T> {
-  return toResult<T>(await withRefreshRetry(path, { method: 'POST', body }, false))
+export async function apiUpload<T>(path: string, body: FormData, method: 'POST' | 'PUT' = 'POST'): Promise<T> {
+  return toResult<T>(await withRefreshRetry(path, { method, body }, false))
 }

@@ -35,7 +35,7 @@ The code is entered in one real input (numeric, `autocomplete="one-time-code"`) 
 - **THEN** the boxes empty and take the error colour, and the page says "Mã chưa đúng. Còn 4 lần thử."
 
 ### Requirement: A new person is asked one thing
-After a session exists the flow goes to the profile step if `needs_profile` is true (whichever route the account came in by, code or Google) and to workspace selection otherwise. The profile step asks for the display name (1 to 80 characters), optionally a title, and previews the avatar as the initials of the typed name on the person's own colour. It offers no photo upload: the server keeps no image store a profile could point at. It sends only the fields filled in. A person who has no profile owed is moved on.
+After a session exists the flow goes to the profile step if `needs_profile` is true (whichever route the account came in by, code or Google) and to workspace selection otherwise. The profile step asks for the display name (1 to 80 characters), optionally a title, and previews the avatar as the initials of the typed name on the person's own colour. It offers no photo upload, so the step stays one screen; the picture is changed later in Cài đặt → Hồ sơ. It sends only the fields filled in. A person who has no profile owed is moved on.
 
 #### Scenario: Google person with a name
 - **WHEN** an account created by Google already has the name Google gave

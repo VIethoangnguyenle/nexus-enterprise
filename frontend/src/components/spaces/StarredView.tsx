@@ -4,6 +4,8 @@ import { Star } from 'lucide-react'
 import { useAuthStore } from '../../stores/auth.store'
 import type { FeedMessage } from '../../api/shortcuts'
 import type { Conversation } from '../../lib/conversations'
+import { avatarOf } from '../../lib/people'
+import { usePeople } from '../../hooks/usePeople'
 import { formatCount } from '../../lib/format'
 import { feedItemMotion } from '../../lib/feed-motion'
 import { useMotionPresets } from '../../lib/motion'
@@ -40,6 +42,7 @@ export function StarredView({ workspaceId, starredConversations, conversationOf,
   const m = useMotionPresets()
   const me = useAuthStore((s) => s.user?.id)
   const feed = useStarredFeed(workspaceId)
+  const people = usePeople(workspaceId)
   const starMessage = useStarMessage()
   const starConversation = useStarConversation()
   const items = useMemo(() => feed.data?.pages.flatMap((p) => p.messages) ?? [], [feed.data])
@@ -138,6 +141,7 @@ export function StarredView({ workspaceId, starredConversations, conversationOf,
                         key={msg.id}
                         item={msg}
                         kind="star"
+                        avatarUrl={avatarOf(people, msg.sender_id)}
                         conversation={conversationOf(msg.channel_id)}
                         me={me}
                         now={now}

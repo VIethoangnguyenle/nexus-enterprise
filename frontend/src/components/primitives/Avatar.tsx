@@ -1,5 +1,18 @@
-import type { CSSProperties } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { personStyle } from '../../lib/person-hue'
+
+/** A picture the auth service keeps: `/api/auth/avatars/<token>`, with no size. */
+const STORED_AVATAR = /^\/api\/auth\/avatars\/[0-9a-f]{32}$/
+
+/**
+ * The address of the stored size that fits an avatar of `px` pixels: 64 up to
+ * 32 px (sharp at 2×), 192 above it (sharp at 3×), so a list of small avatars
+ * never downloads a large picture. Any other address is left as it is.
+ */
+export function avatarVariant(src: string, px: number): string {
+  if (!STORED_AVATAR.test(src)) return src
+  return `${src}/${px <= 32 ? 64 : 192}`
+}
 
 /** Pixel sizes from DESIGN.md §6. The letter names stay for older call sites. */
 type AvatarSize = 20 | 24 | 32 | 36 | 40 | 44 | 52 | 64 | 'sm' | 'md' | 'lg'
@@ -65,6 +78,10 @@ export function initialsOf(name: string): string {
 export function Avatar({ name, hueKey, size = 32, src, online, halo, className = '' }: AvatarProps) {
   const s = px[size]
   const style: CSSProperties = personStyle(hueKey || name)
+  // A picture that fails to load (replaced, removed, or a server that does not
+  // serve it) leaves the initials, never an empty circle. A new address tries again.
+  const [failed, setFailed] = useState<string | undefined>()
+  const shown = src && failed !== src ? avatarVariant(src, s) : undefined
   return (
     <span
       className={`relative inline-grid place-items-center shrink-0 rounded-full select-none
@@ -73,7 +90,9 @@ export function Avatar({ name, hueKey, size = 32, src, online, halo, className =
       title={name}
       aria-hidden="true"
     >
-      {src ? <img src={src} alt="" className="w-full h-full rounded-full object-cover" /> : initialsOf(name)}
+      {shown
+        ? <img src={shown} alt="" className="w-full h-full rounded-full object-cover" onError={() => setFailed(src)} />
+        : initialsOf(name)}
       {online && (
         <span
           className={`absolute -right-px -bottom-px rounded-full bg-success ring-2 ring-base ${dotStyles[s]}`}

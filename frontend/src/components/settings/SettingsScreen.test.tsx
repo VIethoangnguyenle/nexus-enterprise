@@ -8,7 +8,7 @@ import {
 import { renderWithClient, resetClient } from '../../test/render'
 import { CONTACTS, U, WS_ID } from '../../test/chat-fixtures'
 import { expectNoIds } from '../../test/no-ids'
-import { ApiError, apiFetch } from '../../api/client'
+import { ApiError, apiFetch, apiUpload } from '../../api/client'
 import type { WorkspaceDetails } from '../../api/workspaces'
 import { validateSettingsSearch } from '../../lib/settings-search'
 import { loadPreferences, switchPreferencesTo } from '../../lib/preferences'
@@ -19,8 +19,9 @@ import { AppSidebar } from '../patterns/AppSidebar'
 import { PhoneSearchBar } from '../patterns/PhoneSearchBar'
 import { SettingsScreen } from './SettingsScreen'
 
-vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn() }))
+vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn(), apiUpload: vi.fn() }))
 const api = vi.mocked(apiFetch)
+const upload = vi.mocked(apiUpload)
 
 interface Call { method: string; path: string; body?: Record<string, unknown> }
 const calls: Call[] = []
@@ -33,6 +34,24 @@ let detailsLoadFails = false
 let leaveFails: ApiError | null = null
 let convertFails: ApiError | null = null
 let assignedDepartment = 'Đối soát'
+let avatarFails: ApiError | null = null
+let removeFails: ApiError | null = null
+const PICTURE = '/api/auth/avatars/0123456789abcdef0123456789abcdef'
+
+const setHoaAvatar = (url: string) => {
+  profile = profile.map((c) => c.user_id === U.hoa.id ? { ...c, avatar_url: url } : c)
+}
+
+/** PUT /me/avatar goes through apiUpload, as a form. */
+function fixtureUpload(path: string, body: FormData, method = 'POST'): Promise<unknown> {
+  calls.push({ method, path })
+  if (path !== '/me/avatar' || method !== 'PUT' || !(body.get('file') instanceof File)) {
+    return Promise.reject(new Error(`unexpected upload ${method} ${path}`))
+  }
+  if (avatarFails) return Promise.reject(avatarFails)
+  setHoaAvatar(PICTURE)
+  return Promise.resolve({ avatar_url: PICTURE })
+}
 
 function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
   const method = (init?.method || 'GET').toUpperCase()
@@ -89,6 +108,11 @@ function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
     } : c)
     return ok({ status: 'updated' })
   }
+  if (path === '/me/avatar' && method === 'DELETE') {
+    if (removeFails) return Promise.reject(removeFails)
+    setHoaAvatar('')
+    return ok({ avatar_url: '' })
+  }
   if (path === `/workspaces/${WS_ID}/leave` && method === 'POST') return leaveFails ? Promise.reject(leaveFails) : ok({ status: 'left' })
   if (path === `/workspaces/${WS_ID}/admin/members`) return ok({ members: Array.from({ length: 6 }, (_, i) => ({ ngac_node_id: `n${i}` })) })
   if (path === `/workspaces/${WS_ID}/roles`) return ok({ roles: [{ id: 'r1', kind: 'custom', name: 'Kế toán', ngac_node_id: 'x', member_count: 2 }], system_roles: [{ id: 'r2', kind: 'owners', ngac_node_id: 'y', member_count: 1 }] })
@@ -124,6 +148,9 @@ beforeEach(() => {
   leaveFails = null
   convertFails = null
   assignedDepartment = 'Đối soát'
+  avatarFails = null
+  removeFails = null
+  upload.mockImplementation(fixtureUpload as typeof apiUpload)
   localStorage.clear()
   switchPreferencesTo(U.hoa.id)
   api.mockImplementation(fixtureApi)
@@ -182,7 +209,6 @@ describe('SettingsScreen: Hồ sơ', () => {
     // The department is the one an administrator assigned in this workspace.
     expect(within(form).getByText('Đối soát')).toBeInTheDocument()
     expect(within(form).queryByRole('textbox', { name: /Email/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /Đổi ảnh/ })).toBeNull() // there is no upload to offer
     expectNoIds()
   })
 
@@ -289,6 +315,102 @@ describe('SettingsScreen: Hồ sơ', () => {
     fail = false
     await user.click(screen.getByRole('button', { name: 'Thử lại' }))
     expect(await screen.findByLabelText('Tên hiển thị')).toBeInTheDocument()
+  })
+})
+
+describe('SettingsScreen: ảnh đại diện', () => {
+  const png = () => new File([new Uint8Array(2048)], 'anh.png', { type: 'image/png' })
+  const picker = () => screen.getByLabelText('Chọn ảnh đại diện') as HTMLInputElement
+  const sent = (method: string) => calls.filter((c) => c.method === method && c.path === '/me/avatar')
+
+  it('offers Đổi ảnh and a Bỏ ảnh that waits for a picture, as in the mockup', async () => {
+    await renderSettings()
+    expect(await screen.findByRole('button', { name: 'Đổi ảnh' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Bỏ ảnh' })).toBeDisabled()
+    expect(screen.getByText(/JPG hoặc PNG, tối đa 5 MB/)).toBeInTheDocument()
+    expect(picker()).toHaveAttribute('accept', 'image/jpeg,image/png')
+  })
+
+  it('uploads the chosen picture at once, says so, and the picture shows', async () => {
+    const user = userEvent.setup()
+    await renderSettings()
+    await screen.findByRole('button', { name: 'Đổi ảnh' })
+    await user.upload(picker(), png())
+
+    await waitFor(() => expect(sent('PUT')).toHaveLength(1))
+    await waitFor(() => expect(toasts()).toContain('Đã đổi ảnh'))
+    // The person's own record was read again and now carries the picture.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Bỏ ảnh' })).toBeEnabled())
+    expect(patch('/me/profile')).toHaveLength(0)
+    expectNoIds(document.body)
+  })
+
+  it('refuses a file that is not a JPG or PNG without sending anything', async () => {
+    const user = userEvent.setup({ applyAccept: false })
+    await renderSettings()
+    await screen.findByRole('button', { name: 'Đổi ảnh' })
+    await user.upload(picker(), new File(['GIF89a'], 'anh.gif', { type: 'image/gif' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/JPG hoặc PNG/)
+    expect(sent('PUT')).toHaveLength(0)
+  })
+
+  it('refuses a file over 5 MB without sending anything', async () => {
+    const user = userEvent.setup()
+    await renderSettings()
+    await screen.findByRole('button', { name: 'Đổi ảnh' })
+    await user.upload(picker(), new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'lon.png', { type: 'image/png' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/5 MB/)
+    expect(sent('PUT')).toHaveLength(0)
+  })
+
+  it('explains in words when the server refuses the picture', async () => {
+    avatarFails = new ApiError('the file is not a JPEG or PNG picture', 400, { code: 'avatar_not_image' })
+    const user = userEvent.setup()
+    await renderSettings()
+    await screen.findByRole('button', { name: 'Đổi ảnh' })
+    await user.upload(picker(), png())
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/JPG hoặc PNG/)
+    expect(screen.queryByText(/not a JPEG/)).toBeNull()
+    expect(toasts()).not.toContain('Đã đổi ảnh')
+  })
+
+  it('asks to come back when the server is busy with another picture', async () => {
+    avatarFails = new ApiError('busy', 503, { code: 'avatar_busy' })
+    const user = userEvent.setup()
+    await renderSettings()
+    await screen.findByRole('button', { name: 'Đổi ảnh' })
+    await user.upload(picker(), png())
+    expect(await screen.findByRole('alert')).toHaveTextContent(/bận/)
+  })
+
+  it('Bỏ ảnh removes the picture and says so', async () => {
+    setHoaAvatar(PICTURE)
+    const user = userEvent.setup()
+    await renderSettings()
+    const remove = await screen.findByRole('button', { name: 'Bỏ ảnh' })
+    await waitFor(() => expect(remove).toBeEnabled())
+    await user.click(remove)
+
+    await waitFor(() => expect(sent('DELETE')).toHaveLength(1))
+    await waitFor(() => expect(toasts()).toContain('Đã bỏ ảnh'))
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Bỏ ảnh' })).toBeDisabled())
+  })
+
+  it('keeps the picture and says why when removing it fails', async () => {
+    setHoaAvatar(PICTURE)
+    removeFails = new ApiError('boom', 500)
+    const user = userEvent.setup()
+    await renderSettings()
+    const remove = await screen.findByRole('button', { name: 'Bỏ ảnh' })
+    await waitFor(() => expect(remove).toBeEnabled())
+    await user.click(remove)
+
+    await waitFor(() => expect(toasts().some((m) => /bỏ ảnh đại diện/.test(m))).toBe(true))
+    expect(toasts()).not.toContain('Đã bỏ ảnh')
+    expect(screen.getByRole('button', { name: 'Bỏ ảnh' })).toBeEnabled()
   })
 })
 

@@ -62,8 +62,10 @@ const preview = (m: Message, me: string | undefined, max: number): string => {
  * star button outside the link, so no button sits inside a link. Inside an
  * `AnimatePresence`, a card that leaves collapses (220ms) rather than vanishing.
  */
-export function FeedCard({ item, kind, conversation, me, now, root, href, arrival, onOpen, onUnstar }: {
+export function FeedCard({ item, kind, conversation, me, now, root, href, arrival, avatarUrl, onOpen, onUnstar }: {
   item: FeedMessage
+  /** The sender's picture, from the directory; their initials without one. */
+  avatarUrl?: string
   kind: 'mention' | 'star'
   conversation: Conversation | undefined
   me: string | undefined
@@ -123,7 +125,7 @@ export function FeedCard({ item, kind, conversation, me, now, root, href, arriva
             <span className="truncate">{rootLine}</span>
           </span>
         )}
-        <Avatar name={author} hueKey={item.sender_id} size={32} />
+        <Avatar name={author} hueKey={item.sender_id} src={avatarUrl} size={32} />
         <span className="col-span-2 grid gap-0.5 min-w-0">
           <span className="flex items-baseline gap-2 min-w-0">
             <span className={`truncate text-sm ${unread ? 'font-semibold' : 'font-medium'}`}>

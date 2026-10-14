@@ -4,7 +4,7 @@ import { useUpdateChannel } from '../../hooks/useMessaging'
 import { usePins } from '../../hooks/useMessages'
 import { explain } from '../../lib/errors'
 import { formatDateTime, formatListTime } from '../../lib/format'
-import { displayName, type PeopleDirectory, type Person } from '../../lib/people'
+import { avatarOf, displayName, type PeopleDirectory, type Person } from '../../lib/people'
 import type { NotificationLevel } from '../../api/notification-levels'
 import { optionFor } from '../../lib/notification-level-copy'
 import { Avatar, Button, PersonChip, Pressable, Spinner, TextField, toast } from '../primitives'
@@ -134,7 +134,7 @@ export function SpaceInfoPanel({ channelId, kind, title, memberCount, partner, p
                       onClick={() => onOpenTopic(msg.parent_message_id || msg.id)}
                       className="w-full grid grid-cols-[24px_minmax(0,1fr)] gap-2.5 px-2 py-2 rounded-surface hover:bg-hover"
                     >
-                      <Avatar name={name} hueKey={msg.sender_id || name} size={24} />
+                      <Avatar name={name} hueKey={msg.sender_id || name} src={avatarOf(people, msg.sender_id, msg.sender_name)} size={24} />
                       <span className="grid gap-0.5 min-w-0">
                         <span className="flex items-baseline gap-2">
                           <span className="font-semibold text-ink truncate">{name}</span>

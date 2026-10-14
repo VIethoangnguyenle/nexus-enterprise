@@ -26,7 +26,8 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 		DisplayName *string `json:"display_name"`
 		Title       *string `json:"title"`
 		Location    *string `json:"location"`
-		// The two fields below are read only to be refused by name.
+		// The two fields below are read only to be refused by name. A picture
+		// is uploaded to PUT /api/me/avatar, which makes its address itself.
 		Department *string `json:"department"`
 		AvatarURL  *string `json:"avatar_url"`
 	}
@@ -41,10 +42,9 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 		return apiError(http.StatusBadRequest, "department_not_editable",
 			"the department is assigned by a workspace administrator")
 	}
-	// There is nowhere to keep a picture yet, and a URL the person typed would
-	// be loaded by every colleague's browser.
+	// A URL the person typed would be loaded by every colleague's browser.
 	if body.AvatarURL != nil {
-		return apiError(http.StatusBadRequest, "avatar_not_supported", "profile pictures are not supported yet")
+		return apiError(http.StatusBadRequest, "avatar_not_supported", "upload the picture to PUT /api/me/avatar")
 	}
 
 	if err := h.svc.UpdateProfile(c.Request().Context(), claims.UserID, domain.ProfileUpdateInput{
