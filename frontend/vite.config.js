@@ -3,6 +3,27 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { TanStackRouterVite } from '@tanstack/router-plugin/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { versionWorkerImport } from './src/lib/worker-version'
+
+// Writes this build's id into the copied OneSignalSDKWorker.js (see src/lib/worker-version.ts):
+// without it an installed iPhone app keeps the first version it ever loaded.
+function versionOneSignalWorker() {
+  let outDir = 'dist'
+  const version = process.env.GITHUB_SHA || Date.now().toString(36)
+  return {
+    name: 'version-onesignal-worker',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir
+    },
+    writeBundle() {
+      const file = join(outDir, 'OneSignalSDKWorker.js')
+      writeFileSync(file, versionWorkerImport(readFileSync(file, 'utf8'), version))
+    },
+  }
+}
 
 // Dev mode: proxy directly to native Go services (each on unique port)
 // Docker mode: proxy to Traefik on :80 (single entrypoint)
@@ -119,6 +140,7 @@ export default defineConfig({
     TanStackRouterVite({ routesDirectory: './src/routes', generatedRouteTree: './src/routeTree.gen.ts' }),
     tailwindcss(),
     react(),
+    versionOneSignalWorker(),
     // App shell only: the worker is src/sw.ts (injectManifest) and registers in production builds only.
     VitePWA({
       strategies: 'injectManifest',
