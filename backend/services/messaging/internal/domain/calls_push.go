@@ -30,7 +30,7 @@ func (s *Service) pushCallChange(ctx context.Context, c CallChange) {
 		return
 	}
 	call := c.Call
-	s.later(ctx, func(ctx context.Context) {
+	s.laterInOrder(ctx, "call-"+call.Id, func(ctx context.Context) {
 		for _, userID := range c.Users {
 			if userID == "" || userID == call.StartedBy || !s.wantsCallPush(ctx, userID, call.ChannelId) {
 				continue
