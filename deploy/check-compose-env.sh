@@ -3,7 +3,8 @@
 #   - every service sets the environment variables its cmd/main.go reads (derived from the source,
 #     so a variable added to a service later fails here until the compose file sets it);
 #   - every *_ADDR points at a service that exists;
-#   - no published port except nexus-livekit's 7881/tcp and 7882/udp, no host networking; only the
+#   - no published port except nexus-livekit's 7881/tcp, 7882/udp and TURN relay 30000-30049/udp, no
+#     host networking; only the
 #     nginx edge, MinIO and LiveKit (TURN/TLS router) are on `traefik`;
 #   - the OTP test code is off and auth trusts proxy headers from the nginx edge only.
 # Run from the repository root. Needs docker compose and jq.
@@ -38,9 +39,11 @@ bad() { printf 'FAIL: %s\n' "$*" >&2; fail=1; }
 # --- structure ----------------------------------------------------------------------------
 publishers=$(jq -r '[.services | to_entries[] | select(.value | has("ports")) | .key] | sort | join(" ")' <<<"$cfg")
 [[ -z $publishers || $publishers == "nexus-livekit" ]] || bad "services publishing ports: '$publishers' (only nexus-livekit may)"
-# WebRTC media cannot go through the HTTP edge, so LiveKit publishes exactly these two ports.
+# WebRTC media cannot go through the HTTP edge, so LiveKit publishes exactly these ports: ICE-TCP, the
+# one media UDP port, and the TURN relay range (turn.relay_range_* in its inline config).
 livekit_ports=$(jq -r '[.services["nexus-livekit"].ports // [] | .[] | "\(.published)/\(.protocol)"] | sort | join(" ")' <<<"$cfg")
-[[ $livekit_ports == "7881/tcp 7882/udp" ]] || bad "nexus-livekit publishes '$livekit_ports' (want exactly: 7881/tcp 7882/udp)"
+livekit_want=$(jq -rn '[["7881/tcp", "7882/udp"][], (range(30000; 30050) | "\(.)/udp")] | sort | join(" ")')
+[[ $livekit_ports == "$livekit_want" ]] || bad "nexus-livekit publishes '$livekit_ports' (want exactly: 7881/tcp 7882/udp 30000-30049/udp)"
 [[ $(jq '[.services[] | select(has("network_mode"))] | length' <<<"$cfg") -eq 0 ]] || bad "a service sets network_mode"
 on_traefik=$(jq -r '[.services | to_entries[] | select(.value.networks | has("traefik")) | .key] | sort | join(" ")' <<<"$cfg")
 [[ $on_traefik == "nexus-frontend nexus-livekit nexus-minio" ]] || bad "services on the traefik network: '$on_traefik' (want: nexus-frontend nexus-livekit nexus-minio)"
