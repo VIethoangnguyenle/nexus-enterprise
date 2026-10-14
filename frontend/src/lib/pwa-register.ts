@@ -40,10 +40,15 @@ export async function registerPwa(): Promise<void> {
       })
       usePwaStore.setState({
         applyUpdate: () => {
-          if (reg.waiting) {
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' })
+          const waiting = reg.waiting
+          if (!waiting) {
+            window.location.reload()
+            return
           }
-          window.location.reload()
+          // Reload only once the new worker controls the page: until then every navigation is
+          // answered with the old worker's app shell, so an early reload lands on the old version.
+          navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true })
+          waiting.postMessage({ type: 'SKIP_WAITING' })
         },
       })
     } catch (err) {

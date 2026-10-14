@@ -14,6 +14,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': '/src',
+      'virtual:pwa-register': '/src/test/pwa-register-stub.ts',
     },
   },
 })

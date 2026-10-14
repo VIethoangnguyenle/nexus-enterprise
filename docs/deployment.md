@@ -56,7 +56,7 @@ and joins the shared external network `traefik` with exactly three containers:
   `drive`, and has no route out; see "File previews" below.
 
 Everything else is on `nexus` alone. No container publishes a host port (Docker-published ports
-bypass ufw) except `nexus-livekit`: `7881/tcp` and `7882/udp`, exactly, because WebRTC media cannot go
+bypass ufw) except `nexus-livekit`: `7881/tcp`, `7882/udp` and the TURN relay range `30000-30049/udp`, exactly, because WebRTC media cannot go
 through an HTTP edge. `deploy/check-compose-env.sh` fails if any other service, or LiveKit with other ports, publishes. Names on the shared network are `nexus-` prefixed, and nginx reaches the services by
 `nexus-<service>` aliases, so another app cannot shadow them. Same-origin traffic means there is no
 CORS middleware.
@@ -96,8 +96,9 @@ nexus-livekit --http://nexus-messaging:8080/internal/livekit/webhook--> messagin
 ```
 
 **Port exception.** `nexus-livekit` is the only container that publishes host ports: `7881/tcp` (ICE-TCP
-fallback) and `7882/udp` (all media on one UDP port, instead of a 50000-60000 range); the check script
-allows nothing else. Docker-published ports bypass ufw: they are reachable as soon as the container runs,
+fallback), `7882/udp` (all media on one UDP port, instead of a 50000-60000 range) and `30000-30049/udp`
+(TURN relay ports, `turn.relay_range_*`: a client behind TURN is reached at the public IP plus one of these, one
+port per relayed client, so 50 at once); the check script allows nothing else. Docker-published ports bypass ufw: they are reachable as soon as the container runs,
 whatever ufw says, so there is no ufw step — a host firewall in front (the provider's) must let them
 through. LiveKit is also on the shared `traefik` network for the TURN router, so its API (7880, every call
 needs a key-signed token) is reachable from other containers there; that is the accepted cost of TURN/TLS.
@@ -109,7 +110,7 @@ NAT, set `rtc.node_ip: 160.187.146.173` in the inline config.
 
 **One-time steps (done by hand; `server-bootstrap.sh` does not touch firewalls or Traefik):**
 
-1. If the provider has a firewall in front of the VPS, open `7881/tcp` and `7882/udp` there.
+1. If the provider has a firewall in front of the VPS, open `7881/tcp`, `7882/udp` and `30000-30049/udp` there.
 2. DNS: A record `turn.nexus.zaneng.xyz` -> `160.187.146.173`.
 3. The shared Traefik must have TCP routers enabled on its `websecure` entryPoint (it does by default
    with the docker provider). Without the TURN router, calls still work except on networks that block
