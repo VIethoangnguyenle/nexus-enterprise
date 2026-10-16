@@ -8,8 +8,8 @@ import { createChatStateServer } from '../test/chat-state-server'
 import { apiFetch } from '../api/client'
 import type { FeedMessage } from '../api/shortcuts'
 import { useToastStore } from '../components/primitives'
-import { MentionsRoute } from './_workspace/channels.mentions'
-import { StarredRoute } from './_workspace/channels.starred'
+import { MentionsRoute } from './_workspace/-mentions-route'
+import { StarredRoute } from './_workspace/-starred-route'
 
 vi.mock('@tanstack/react-router', async () => {
   const mock = (await import('../test/router-mock')).routerMockFactory()

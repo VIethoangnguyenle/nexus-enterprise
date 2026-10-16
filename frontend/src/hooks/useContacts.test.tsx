@@ -33,9 +33,9 @@ describe('useContacts: the directory wire', () => {
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
 
     expect(api.mock.calls.map((c) => c[0])).toEqual([
-      '/workspaces/w1/contacts',
-      '/workspaces/w1/contacts?cursor=c1',
-      '/workspaces/w1/contacts?cursor=c2',
+      '/workspaces/w1/contacts?limit=500',
+      '/workspaces/w1/contacts?limit=500&cursor=c1',
+      '/workspaces/w1/contacts?limit=500&cursor=c2',
     ])
     expect(result.current.data?.contacts.map((c) => c.user_id)).toEqual(['u1', 'u2', 'u3', 'u4', 'u5'])
     expect(result.current.data?.total).toBe(5)
@@ -65,6 +65,13 @@ describe('useContacts: the directory wire', () => {
     const { result } = renderHook(() => useContacts('w1'), { wrapper })
     await waitFor(() => expect(result.current.isSuccess).toBe(true))
     expect(result.current.data?.contacts.map((c) => c.department)).toEqual(['Đối soát', ''])
+  })
+
+  it('asks for the largest page the server allows', async () => {
+    api.mockResolvedValueOnce({ contacts: [person(1)], total: 1 })
+    const { result } = renderHook(() => useContacts('w1'), { wrapper })
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(new URL(String(api.mock.calls[0]![0]), 'http://x').searchParams.get('limit')).toBe('500')
   })
 
   it('is one request when the directory fits one page', async () => {

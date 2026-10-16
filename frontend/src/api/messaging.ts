@@ -1,4 +1,4 @@
-import { apiFetch } from './client'
+import { apiFetch, apiUpload } from './client'
 
 /**
  * A conversation. `channel_type` is `dm` for a direct message and
@@ -19,6 +19,8 @@ export interface Channel {
   created_at?: unknown
   /** The signed-in user starred this conversation; omitted when not. */
   starred?: boolean
+  /** The group's picture (`/api/channels/avatars/<token>`); empty or omitted when it has none. Never set on a DM. */
+  avatar_url?: string
 }
 
 /** A channel member as the messaging service returns it. Ids are for API calls only. */
@@ -204,6 +206,16 @@ export const messagingApi = {
   getChannel: (channelId: string) => apiFetch<Channel>(`/channels/${channelId}`),
   updateChannel: (channelId: string, data: { name: string }) =>
     apiFetch<Channel>(`/channels/${channelId}`, { method: 'PATCH', body: JSON.stringify(data) }),
+
+  /** Makes `file` the group's picture; the server re-encodes it and answers the address the channel now points at. */
+  uploadChannelAvatar: (channelId: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return apiUpload<{ avatar_url: string }>(`/channels/${channelId}/avatar`, form, 'PUT')
+  },
+  /** Removes the group's picture; its initials show again. */
+  removeChannelAvatar: (channelId: string) =>
+    apiFetch<{ avatar_url: string }>(`/channels/${channelId}/avatar`, { method: 'DELETE' }),
 
   // Messages
   listMessages: (channelId: string, before?: string) => {

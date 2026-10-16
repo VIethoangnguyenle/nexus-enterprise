@@ -1,4 +1,4 @@
-import { act, screen, waitFor, within, fireEvent } from '@testing-library/react'
+import { act, cleanup, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -11,6 +11,8 @@ import { ApiError, apiFetch } from '../../api/client'
 import { driveApi } from '../../api/drive'
 import { useToastStore } from '../primitives'
 import { useWebSocketStore } from '../../stores/websocket.store'
+import { useFileViewStore } from '../../stores/file-view.store'
+import { useDriveStore } from '../../stores/drive.store'
 import { queryClient } from '../../lib/query-client'
 import { keys } from '../../hooks/keys'
 import { DriveScreen } from './DriveScreen'
@@ -38,7 +40,27 @@ async function renderDrive(url = '/drive') {
   return router
 }
 
+/** The width and pointer the screen is judged at; jsdom has no layout, so the media queries are answered by hand. */
+type Viewport = 'desktop' | 'tablet' | 'phone'
+function mockViewport(viewport: Viewport, coarse = viewport !== 'desktop') {
+  vi.stubGlobal('matchMedia', (query: string) => ({
+    matches:
+      query.includes('767') ? viewport === 'phone'
+        : query.includes('1023') ? viewport !== 'desktop'
+          : query.includes('coarse') ? coarse
+            : false,
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }))
+}
+
 beforeEach(() => {
+  // The table is what most of this file is about; the gallery has its own describes below.
+  useFileViewStore.setState({ modes: { drive: 'list', 'space-files': 'grid' } })
+  useDriveStore.setState({ selectedItemId: null })
+  // Pictures never arrive in these tests; the screen is judged around them.
+  vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
   // The router restores scroll on navigation; jsdom has no scrollTo.
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   resetFixtures()
@@ -47,6 +69,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
   resetClient()
   useToastStore.getState().clear()
 })
@@ -90,27 +113,27 @@ describe('DriveScreen: listing', () => {
     noIds()
   })
 
-  it('has no file-type chips: the mockup shows only the search', async () => {
+  it('narrows the table by file type from the toolbar chips, keeping the folders', async () => {
+    const user = userEvent.setup()
     await renderDrive(`/drive?folder=${D.doisoat}`)
     await within(table()).findByText('doi-soat-08-10.xlsx')
-    expect(screen.queryByRole('button', { name: 'PDF' })).toBeNull()
+    await user.click(within(screen.getByRole('radiogroup', { name: 'Loại tệp' })).getByRole('radio', { name: 'PDF' }))
+    await waitFor(() => expect(rowNames()).toEqual(['2026', 'sao-ke-ngan-hang-10-2026.pdf']))
   })
 
-  it('puts the search at the top of the list panel, under the title', async () => {
+  it('puts the search in the toolbar, hinting at the open folder, and not in the tree', async () => {
     await renderDrive()
     await within(table()).findByText('Hợp đồng')
     const panel = screen.getByRole('navigation', { name: 'Thư mục' })
-    expect(within(panel).getByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' })).toBeInTheDocument()
+    expect(within(panel).queryByRole('searchbox')).toBeNull()
+    expect(screen.getByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' })).toHaveAttribute('placeholder', 'Tìm trong Tài liệu')
   })
 
   it('narrows the folder by name from the search box, ignoring accents', async () => {
     const user = userEvent.setup()
     await renderDrive()
     await within(table()).findByText('Hợp đồng')
-    await user.type(
-      within(screen.getByRole('navigation', { name: 'Thư mục' })).getByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' }),
-      'hop dong',
-    )
+    await user.type(screen.getByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' }), 'hop dong')
     await waitFor(() => expect(rowNames()).toEqual(['Hợp đồng']))
   })
 
@@ -260,7 +283,8 @@ describe('DriveScreen: detail panel', () => {
     const user = userEvent.setup()
     const panel = await openXlsx(user)
     expect(within(panel).getByRole('heading', { name: 'doi-soat-08-10.xlsx' })).toBeInTheDocument()
-    expect(within(panel).getByText('Bảng tính · 412 KB')).toBeInTheDocument()
+    expect(within(panel).getByText('Bảng tính')).toBeInTheDocument()
+    expect(within(panel).getByText('412 KB')).toBeInTheDocument()
 
     const people = await within(panel).findByRole('list', { name: 'Người có quyền' })
     await within(people).findByText('Nguyễn Thu Lan')
@@ -443,11 +467,11 @@ describe('DriveScreen: FileViewer', () => {
     noIds()
   })
 
-  it('DriveDetailPanel gets a "Xem trước" action that opens FileViewer, keeping download action', async () => {
+  it('DriveDetailPanel gets a "Mở" action that opens FileViewer, keeping download action', async () => {
     const user = userEvent.setup()
     const panel = await openXlsx(user)
 
-    const previewBtn = within(panel).getByRole('button', { name: /Xem trước/ })
+    const previewBtn = within(panel).getByRole('button', { name: 'Mở' })
     expect(previewBtn).toBeInTheDocument()
     expect(within(panel).getByRole('button', { name: 'Tải xuống' })).toBeInTheDocument()
 
@@ -627,7 +651,8 @@ describe('DriveScreen: actions', () => {
   it('creates a folder inside the open folder, and rejects an empty name', async () => {
     const user = userEvent.setup()
     await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await screen.findByRole('button', { name: 'Thư mục mới' }))
+    await user.click(await screen.findByRole('button', { name: 'Tải lên' }))
+    await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Thư mục mới' }))
     const dialog = await screen.findByRole('dialog', { name: 'Thư mục mới' })
 
     await user.click(within(dialog).getByRole('button', { name: 'Tạo' }))
@@ -717,6 +742,349 @@ describe('DriveScreen: actions', () => {
     await waitFor(() => expect(click).toHaveBeenCalled())
     expect(calls.some((c) => c.path === `/drive/files/${D.xlsx}/download`)).toBe(true)
     click.mockRestore()
+  })
+})
+
+/** The gallery: cards and tiles instead of the table. Pictures never arrive here; the screen is judged around them. */
+describe('DriveScreen: gallery', () => {
+  beforeEach(() => {
+    useFileViewStore.setState({ modes: { drive: 'grid', 'space-files': 'grid' } })
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+  })
+
+  const files = () => screen.getByRole('group', { name: 'Tệp' })
+  const folders = () => screen.getByRole('group', { name: 'Thư mục' })
+  const card = (name: string) => within(files()).getByRole('button', { name })
+  const cardNames = () =>
+    within(files()).getAllByRole('button').filter((b) => b.hasAttribute('data-grid-item')).map((b) => b.getAttribute('aria-label'))
+  const ready = async (name: string) => {
+    await within(await screen.findByRole('group', { name: 'Tệp' })).findByRole('button', { name })
+  }
+
+  it('opens as a grid: folders first as real links, then the files as cards, each naming its owner', async () => {
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await ready('doi-soat-08-10.xlsx')
+
+    expect(screen.queryByRole('table')).toBeNull()
+    const tile = within(folders()).getByRole('link', { name: /2026/ })
+    expect(tile.getAttribute('href')).toContain(`folder=${D.y2026}`)
+    expect(folders().compareDocumentPosition(files()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(cardNames()).toEqual(['doi-soat-08-10.xlsx', 'sao-ke-ngan-hang-10-2026.pdf', 'bien-ban-chenh-lech.docx'])
+    expect(within(card('doi-soat-08-10.xlsx')).getByText(/Minh Đức/)).toBeInTheDocument()
+    noIds()
+  })
+
+  it('opens a folder tile into the URL', async () => {
+    const user = userEvent.setup()
+    const router = await renderDrive(`/drive?folder=${D.doisoat}`)
+    await user.click(await within(await screen.findByRole('group', { name: 'Thư mục' })).findByRole('link', { name: /2026/ }))
+    await screen.findByRole('heading', { level: 1, name: '2026' })
+    expect(search(router).folder).toBe(D.y2026)
+  })
+
+  it('switches to the list and back, and remembers the choice', async () => {
+    const user = userEvent.setup()
+    await renderDrive()
+    await screen.findByRole('group', { name: 'Tệp' })
+    const toggle = screen.getByRole('group', { name: 'Kiểu hiển thị' })
+    expect(within(toggle).getByRole('button', { name: 'Lưới' })).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(within(toggle).getByRole('button', { name: 'Danh sách' }))
+    await within(await screen.findByRole('table')).findByText('Hợp đồng')
+    expect(screen.queryByRole('group', { name: 'Tệp' })).toBeNull()
+    expect(JSON.parse(localStorage.getItem('ngac-file-view')!).state.modes.drive).toBe('list')
+    // The list carries a small picture before each name.
+    expect(within(table()).getAllByTestId('file-thumb').length).toBeGreaterThan(0)
+
+    cleanup()
+    await renderDrive()
+    await within(await screen.findByRole('table')).findByText('Hợp đồng')
+
+    await user.click(screen.getByRole('button', { name: 'Lưới' }))
+    expect(await screen.findByRole('group', { name: 'Tệp' })).toBeInTheDocument()
+  })
+
+  it('narrows the files by type and keeps the folders', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await ready('doi-soat-08-10.xlsx')
+    const chips = screen.getByRole('radiogroup', { name: 'Loại tệp' })
+    expect(within(chips).getAllByRole('radio').map((r) => r.textContent)).toEqual(['Tất cả', 'Tài liệu', 'Bảng tính', 'Ảnh & video', 'PDF'])
+    expect(within(chips).getByRole('radio', { name: 'Tất cả' })).toBeChecked()
+
+    await user.click(within(chips).getByRole('radio', { name: 'PDF' }))
+    await waitFor(() => expect(cardNames()).toEqual(['sao-ke-ngan-hang-10-2026.pdf']))
+    expect(within(folders()).getByRole('link', { name: /2026/ })).toBeInTheDocument()
+  })
+
+  it('sorts the files by size, biggest first, and by name', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await ready('doi-soat-08-10.xlsx')
+    // Last change first is where it starts.
+    expect(cardNames()).toEqual(['doi-soat-08-10.xlsx', 'sao-ke-ngan-hang-10-2026.pdf', 'bien-ban-chenh-lech.docx'])
+
+    await user.click(screen.getByRole('button', { name: /Sắp xếp/ }))
+    await user.click(within(await screen.findByRole('menu')).getByRole('menuitemradio', { name: 'Dung lượng' }))
+    await waitFor(() => expect(cardNames()).toEqual(['sao-ke-ngan-hang-10-2026.pdf', 'doi-soat-08-10.xlsx', 'bien-ban-chenh-lech.docx']))
+
+    await user.click(screen.getByRole('button', { name: /Sắp xếp/ }))
+    await user.click(within(await screen.findByRole('menu')).getByRole('menuitemradio', { name: 'Tên' }))
+    await waitFor(() => expect(cardNames()).toEqual(['bien-ban-chenh-lech.docx', 'doi-soat-08-10.xlsx', 'sao-ke-ngan-hang-10-2026.pdf']))
+  })
+
+  it('searches inside the open folder from the toolbar', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await ready('doi-soat-08-10.xlsx')
+    await user.type(screen.getByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' }), 'bien-ban')
+    await waitFor(() => expect(cardNames()).toEqual(['bien-ban-chenh-lech.docx']))
+  })
+
+  it('Space opens the viewer over the files that are showing, and the arrows stop at their ends', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await ready('doi-soat-08-10.xlsx')
+    await user.type(screen.getByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' }), '10')
+    await waitFor(() => expect(cardNames()).toHaveLength(2))
+
+    card('doi-soat-08-10.xlsx').focus()
+    await user.keyboard(' ')
+    const viewer = await screen.findByRole('dialog', { name: /doi-soat-08-10\.xlsx/i })
+    await user.keyboard('{ArrowRight}')
+    expect(within(viewer).getByTitle('sao-ke-ngan-hang-10-2026.pdf')).toBeInTheDocument()
+    await user.keyboard('{ArrowRight}')
+    expect(within(viewer).queryByTitle('bien-ban-chenh-lech.docx')).toBeNull()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  })
+
+  it('the arrows move between cards and Enter opens a folder tile', async () => {
+    const user = userEvent.setup()
+    const router = await renderDrive(`/drive?folder=${D.doisoat}`)
+    await ready('doi-soat-08-10.xlsx')
+    card('doi-soat-08-10.xlsx').focus()
+    await user.keyboard('{ArrowRight}')
+    expect(card('sao-ke-ngan-hang-10-2026.pdf')).toHaveFocus()
+
+    within(folders()).getByRole('link', { name: /2026/ }).focus()
+    await user.keyboard('{Enter}')
+    await screen.findByRole('heading', { level: 1, name: '2026' })
+    expect(search(router).folder).toBe(D.y2026)
+  })
+
+  it('selecting a card shows its preview and Mở, Tải xuống and Chia sẻ in the panel', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await ready('doi-soat-08-10.xlsx')
+    await user.click(card('doi-soat-08-10.xlsx'))
+
+    const panel = await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
+    expect(within(panel).getByTestId('file-thumb')).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: 'Tải xuống' })).toBeInTheDocument()
+    expect(within(panel).getByRole('button', { name: 'Chia sẻ' })).toBeInTheDocument()
+    expect(within(panel).getByText('Chủ sở hữu')).toBeInTheDocument()
+    expect(within(panel).getByText('Vị trí')).toBeInTheDocument()
+    noIds()
+
+    await user.click(within(panel).getByRole('button', { name: 'Mở' }))
+    expect(await screen.findByRole('dialog', { name: /doi-soat-08-10\.xlsx/i })).toBeInTheDocument()
+  })
+
+  it('opens the item menu with Shift+F10 and with a right click', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await ready('doi-soat-08-10.xlsx')
+
+    card('sao-ke-ngan-hang-10-2026.pdf').focus()
+    await user.keyboard('{Shift>}{F10}{/Shift}')
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getByRole('menuitem', { name: 'Đổi tên' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+
+    fireEvent.contextMenu(card('bien-ban-chenh-lech.docx'))
+    await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Xoá' }))
+    expect(await screen.findByRole('dialog', { name: 'Xoá tệp' })).toHaveTextContent('bien-ban-chenh-lech.docx')
+  })
+
+  it('keeps permsOf: a file I can only read has no rename or delete in its menu', async () => {
+    const user = userEvent.setup()
+    await renderDrive()
+    await ready('huong-dan.pdf')
+    await user.click(within(card('huong-dan.pdf')).getByRole('button', { name: 'Tùy chọn cho huong-dan.pdf' }))
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getByRole('menuitem', { name: 'Tải xuống' })).toBeInTheDocument()
+    expect(within(menu).queryByRole('menuitem', { name: 'Xoá' })).toBeNull()
+    expect(within(menu).queryByRole('menuitem', { name: 'Đổi tên' })).toBeNull()
+  })
+
+  it('creates a folder from the Tải lên menu', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await screen.findByRole('group', { name: 'Tệp' })
+    await user.click(screen.getByRole('button', { name: 'Tải lên' }))
+    await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Thư mục mới' }))
+    expect(await screen.findByRole('dialog', { name: 'Thư mục mới' })).toBeInTheDocument()
+  })
+
+  it('uploads files dropped on the grid', async () => {
+    const put = vi.spyOn(driveApi, 'uploadToStorage').mockResolvedValue()
+    await renderDrive()
+    await screen.findByRole('group', { name: 'Tệp' })
+    fireEvent.drop(screen.getByTestId('drive-dropzone'), {
+      dataTransfer: { files: [new File(['abc'], 'ban-ve.pdf', { type: 'application/pdf' })], types: ['Files'] },
+    })
+    await waitFor(() => expect(calls.some((c) => c.path === '/drive/files/new-file/confirm')).toBe(true))
+    expect(put).toHaveBeenCalledTimes(1)
+  })
+
+  it('washes a card in the owner colour when someone else changes the file', async () => {
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await ready('doi-soat-08-10.xlsx')
+    const later = { seconds: Math.floor(new Date(2026, 9, 10, 10, 30).getTime() / 1000), nanos: 0 }
+    const saved = structuredClone(ITEMS[D.xlsx]!)
+    try {
+      ITEMS[D.xlsx]!.updated_at = later
+      await act(async () => { await queryClient.invalidateQueries({ queryKey: keys.drive.all(WS_ID) }) })
+      const cell = await waitFor(() => {
+        const el = card('doi-soat-08-10.xlsx').closest('[data-arrival]') as HTMLElement
+        expect(el).toHaveClass('rt-wash')
+        return el
+      })
+      expect(within(cell).getByText('vừa cập nhật')).toBeInTheDocument()
+    } finally {
+      ITEMS[D.xlsx] = saved
+    }
+  })
+})
+
+describe('DriveScreen: tablet', () => {
+  beforeEach(() => {
+    mockViewport('tablet')
+    useFileViewStore.setState({ modes: { drive: 'grid', 'space-files': 'grid' } })
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+  })
+
+  it('puts the folder tree in a drawer opened from the menu button before the breadcrumb', async () => {
+    const user = userEvent.setup()
+    const router = await renderDrive(`/drive?folder=${D.doisoat}`)
+    await screen.findByRole('group', { name: 'Tệp' })
+    expect(screen.queryByRole('tree', { name: 'Thư mục' })).toBeNull()
+
+    const crumbs = screen.getByRole('navigation', { name: 'Đường dẫn' })
+    const menu = screen.getByRole('button', { name: 'Mở cây thư mục' })
+    expect(menu.compareDocumentPosition(crumbs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await user.click(menu)
+
+    const drawer = await screen.findByRole('dialog', { name: 'Cây thư mục' })
+    await user.click(await within(drawer).findByRole('treeitem', { name: 'Hợp đồng' }))
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Cây thư mục' })).toBeNull())
+    expect(search(router).folder).toBe(D.hopdong)
+  })
+
+  it('closes the drawer with Escape', async () => {
+    const user = userEvent.setup()
+    await renderDrive()
+    await screen.findByRole('group', { name: 'Tệp' })
+    await user.click(screen.getByRole('button', { name: 'Mở cây thư mục' }))
+    await screen.findByRole('dialog', { name: 'Cây thư mục' })
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Cây thư mục' })).toBeNull())
+  })
+
+  it('shows the detail panel over the grid with a scrim that closes it', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    const grid = await screen.findByRole('group', { name: 'Tệp' })
+    expect(screen.queryByTestId('drive-scrim')).toBeNull()
+    await user.click(await within(grid).findByRole('button', { name: 'doi-soat-08-10.xlsx' }))
+    await screen.findByRole('complementary', { name: 'Chi tiết tệp' })
+    await user.click(screen.getByTestId('drive-scrim'))
+    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Chi tiết tệp' })).toBeNull())
+  })
+
+  it('has no floating add button: the toolbar carries Tải lên', async () => {
+    await renderDrive()
+    await screen.findByRole('group', { name: 'Tệp' })
+    expect(screen.queryByRole('button', { name: 'Thêm mới' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Tải lên' })).toBeInTheDocument()
+  })
+})
+
+describe('DriveScreen: phone', () => {
+  beforeEach(() => {
+    mockViewport('phone')
+    useFileViewStore.setState({ modes: { drive: 'grid', 'space-files': 'grid' } })
+    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
+  })
+
+  const cardIn = async (name: string) => within(await screen.findByRole('group', { name: 'Tệp' })).findByRole('button', { name })
+
+  it('opens the viewer straight from a tap on a card', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await user.click(await cardIn('doi-soat-08-10.xlsx'))
+    expect(await screen.findByRole('dialog', { name: /doi-soat-08-10\.xlsx/i })).toBeInTheDocument()
+    expect(screen.queryByRole('complementary', { name: 'Chi tiết tệp' })).toBeNull()
+  })
+
+  it('opens a bottom sheet from the card menu with the file facts and the actions', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await user.click(within(await cardIn('doi-soat-08-10.xlsx')).getByRole('button', { name: 'Tùy chọn cho doi-soat-08-10.xlsx' }))
+
+    const sheet = await screen.findByRole('dialog', { name: 'Thao tác với doi-soat-08-10.xlsx' })
+    expect(within(sheet).getByText(/Bảng tính · 412 KB · Trần Minh Đức/)).toBeInTheDocument()
+    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Mở', 'Tải xuống', 'Chia sẻ', 'Chuyển tới thư mục…', 'Đổi tên', 'Xoá',
+    ])
+    noIds()
+
+    await user.click(within(sheet).getByRole('button', { name: 'Xoá' }))
+    expect(await screen.findByRole('dialog', { name: 'Xoá tệp' })).toHaveTextContent('doi-soat-08-10.xlsx')
+  })
+
+  it('leaves out of the sheet what I may not do', async () => {
+    const user = userEvent.setup()
+    await renderDrive()
+    await user.click(within(await cardIn('huong-dan.pdf')).getByRole('button', { name: 'Tùy chọn cho huong-dan.pdf' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Thao tác với huong-dan.pdf' })
+    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual(['Mở', 'Tải xuống'])
+  })
+
+  it('moves a file from the sheet', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await user.click(within(await cardIn('bien-ban-chenh-lech.docx')).getByRole('button', { name: 'Tùy chọn cho bien-ban-chenh-lech.docx' }))
+    await user.click(within(await screen.findByRole('dialog', { name: 'Thao tác với bien-ban-chenh-lech.docx' })).getByRole('button', { name: 'Chuyển tới thư mục…' }))
+    expect(await screen.findByRole('dialog', { name: 'Di chuyển tới' })).toBeInTheDocument()
+  })
+
+  it('floats an add button that offers upload, camera and a new folder', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await screen.findByRole('group', { name: 'Tệp' })
+    // The toolbar's upload button gives way to it.
+    expect(screen.queryByRole('button', { name: 'Tải lên' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Thêm mới' }))
+
+    const sheet = await screen.findByRole('dialog', { name: 'Thêm mới' })
+    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tải tệp lên', 'Chụp ảnh', 'Thư mục mới'])
+    await user.click(within(sheet).getByRole('button', { name: 'Thư mục mới' }))
+    expect(await screen.findByRole('dialog', { name: 'Thư mục mới' })).toBeInTheDocument()
+  })
+
+  it('has no add button in the shared view, where nothing can be added', async () => {
+    await renderDrive('/drive?view=shared')
+    await cardIn('ke-hoach-quy-4.xlsx')
+    expect(screen.queryByRole('button', { name: 'Thêm mới' })).toBeNull()
+  })
+
+  it('scrolls the type chips sideways instead of wrapping them', async () => {
+    await renderDrive()
+    await screen.findByRole('group', { name: 'Tệp' })
+    expect(screen.getByRole('radiogroup', { name: 'Loại tệp' })).toHaveClass('overflow-x-auto')
   })
 })
 

@@ -7,6 +7,7 @@ import {
   type ChatSection,
 } from '../lib/chat-sections'
 import { keys } from './keys'
+import { startupPart } from './useChatState'
 
 /** The conversation a toast names; the id is for the call only. */
 export interface ConversationRef {
@@ -29,7 +30,8 @@ export function useChatSections(wsId: string) {
   const key = keys.messaging.sections(wsId)
   const list = useQuery({
     queryKey: key,
-    queryFn: async () => bySavedOrder((await sectionsApi.list(wsId)).sections ?? []),
+    queryFn: () =>
+      startupPart(key, wsId, (s) => bySavedOrder(s.sections ?? []), async () => bySavedOrder((await sectionsApi.list(wsId)).sections ?? [])),
     enabled: !!wsId,
   })
 

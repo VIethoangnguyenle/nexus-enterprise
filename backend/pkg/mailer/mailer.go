@@ -21,6 +21,7 @@ import (
 	"net/smtp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -35,6 +36,7 @@ const (
 const (
 	defaultDialTimeout = 10 * time.Second
 	defaultSendTimeout = 30 * time.Second
+	defaultIdleTimeout = 30 * time.Second
 	maxAddressLen      = 254
 )
 
@@ -54,6 +56,9 @@ type Config struct {
 	// Zero values use 10s and 30s.
 	DialTimeout time.Duration
 	SendTimeout time.Duration
+	// IdleTimeout is how long an authenticated connection is kept for the next
+	// message. Zero uses 30s.
+	IdleTimeout time.Duration
 	// TLSConfig overrides the TLS settings (a private CA, in tests). ServerName
 	// defaults to Host.
 	TLSConfig *tls.Config
@@ -72,6 +77,11 @@ type Message struct {
 type Sender struct {
 	cfg  Config
 	from mail.Address
+
+	// mu serialises transactions and guards the kept session and its idle timer.
+	mu   sync.Mutex
+	sess *session
+	idle *time.Timer
 }
 
 // New validates the configuration and returns a sender.
@@ -106,6 +116,9 @@ func New(cfg Config) (*Sender, error) {
 	}
 	if cfg.SendTimeout <= 0 {
 		cfg.SendTimeout = defaultSendTimeout
+	}
+	if cfg.IdleTimeout <= 0 {
+		cfg.IdleTimeout = defaultIdleTimeout
 	}
 	if strings.ContainsAny(cfg.From, "\r\n") {
 		return nil, errors.New("smtp: from address contains a line break")
@@ -164,11 +177,22 @@ func (s *Sender) tlsConfig() *tls.Config {
 	return c
 }
 
-// deliver runs one SMTP transaction under the send timeout.
-func (s *Sender) deliver(ctx context.Context, rcpt string, msg []byte) error {
-	ctx, cancel := context.WithTimeout(ctx, s.cfg.SendTimeout)
-	defer cancel()
+// session is one authenticated SMTP connection, kept between sends.
+type session struct {
+	conn net.Conn
+	c    *smtp.Client
+}
 
+func (ss *session) close(polite bool) {
+	if polite {
+		_ = ss.c.Quit()
+	}
+	_ = ss.c.Close()
+	_ = ss.conn.Close()
+}
+
+// connect dials, secures and authenticates a fresh session under ctx.
+func (s *Sender) connect(ctx context.Context) (*session, error) {
 	addr := net.JoinHostPort(s.cfg.Host, s.cfg.Port)
 	dialer := &net.Dialer{Timeout: s.cfg.DialTimeout}
 	var (
@@ -181,35 +205,43 @@ func (s *Sender) deliver(ctx context.Context, rcpt string, msg []byte) error {
 		conn, err = dialer.DialContext(ctx, "tcp", addr)
 	}
 	if err != nil {
-		return fmt.Errorf("smtp: connect: %w", err)
+		return nil, fmt.Errorf("smtp: connect: %w", err)
 	}
-	defer conn.Close()
 	// A server that stops answering must not hold the caller: every read and
 	// write ends at the deadline.
 	deadline, _ := ctx.Deadline()
 	if err := conn.SetDeadline(deadline); err != nil {
-		return fmt.Errorf("smtp: set deadline: %w", err)
+		_ = conn.Close()
+		return nil, fmt.Errorf("smtp: set deadline: %w", err)
 	}
-
 	c, err := smtp.NewClient(conn, s.cfg.Host)
 	if err != nil {
-		return fmt.Errorf("smtp: greeting: %w", err)
+		_ = conn.Close()
+		return nil, fmt.Errorf("smtp: greeting: %w", err)
 	}
-	defer c.Close()
-
+	ss := &session{conn: conn, c: c}
 	if s.cfg.TLS == TLSStartTLS {
 		if ok, _ := c.Extension("STARTTLS"); !ok {
+			ss.close(false)
 			// Refuse rather than send credentials in the clear.
-			return errors.New("smtp: server does not offer STARTTLS")
+			return nil, errors.New("smtp: server does not offer STARTTLS")
 		}
 		if err := c.StartTLS(s.tlsConfig()); err != nil {
-			return fmt.Errorf("smtp: starttls: %w", err)
+			ss.close(false)
+			return nil, fmt.Errorf("smtp: starttls: %w", err)
 		}
 	}
 	if err := c.Auth(smtp.PlainAuth("", s.cfg.Username, s.cfg.Password, s.cfg.Host)); err != nil {
-		return fmt.Errorf("smtp: auth: %w", err)
+		ss.close(false)
+		return nil, fmt.Errorf("smtp: auth: %w", err)
 	}
-	if err := c.Mail(s.from.Address); err != nil {
+	return ss, nil
+}
+
+// transact runs one mail transaction on an open session.
+func (ss *session) transact(from, rcpt string, msg []byte) error {
+	c := ss.c
+	if err := c.Mail(from); err != nil {
 		return fmt.Errorf("smtp: mail from: %w", err)
 	}
 	if err := c.Rcpt(rcpt); err != nil {
@@ -225,8 +257,76 @@ func (s *Sender) deliver(ctx context.Context, rcpt string, msg []byte) error {
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("smtp: message not accepted: %w", err)
 	}
-	// The message is accepted; a failing QUIT changes nothing.
-	_ = c.Quit()
+	return nil
+}
+
+// deliver runs one SMTP transaction under the send timeout. The authenticated
+// connection stays open for IdleTimeout afterwards, so a burst of messages pays
+// the TCP, TLS and login round trips once. A kept connection that no longer
+// answers is replaced; a failed transaction drops the connection, so the next
+// send starts from a clean state.
+func (s *Sender) deliver(ctx context.Context, rcpt string, msg []byte) error {
+	ctx, cancel := context.WithTimeout(ctx, s.cfg.SendTimeout)
+	defer cancel()
+	deadline, _ := ctx.Deadline()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.idle != nil {
+		s.idle.Stop()
+		s.idle = nil
+	}
+
+	ss := s.sess
+	s.sess = nil
+	if ss != nil {
+		// The server may have closed an idle connection; one NOOP finds out.
+		if err := ss.conn.SetDeadline(deadline); err != nil || ss.c.Noop() != nil {
+			ss.close(false)
+			ss = nil
+		}
+	}
+	if ss == nil {
+		var err error
+		if ss, err = s.connect(ctx); err != nil {
+			return err
+		}
+	}
+	if err := ss.transact(s.from.Address, rcpt, msg); err != nil {
+		ss.close(false)
+		return err
+	}
+	s.sess = ss
+	s.idle = time.AfterFunc(s.cfg.IdleTimeout, s.closeIdle)
+	return nil
+}
+
+// closeIdle ends a kept connection nobody has used for IdleTimeout.
+func (s *Sender) closeIdle() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.sess != nil {
+		_ = s.sess.conn.SetDeadline(time.Now().Add(2 * time.Second))
+		s.sess.close(true)
+		s.sess = nil
+	}
+	s.idle = nil
+}
+
+// Close ends the kept connection, if any. The sender stays usable: the next
+// Send connects again.
+func (s *Sender) Close() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.idle != nil {
+		s.idle.Stop()
+		s.idle = nil
+	}
+	if s.sess != nil {
+		_ = s.sess.conn.SetDeadline(time.Now().Add(2 * time.Second))
+		s.sess.close(true)
+		s.sess = nil
+	}
 	return nil
 }
 

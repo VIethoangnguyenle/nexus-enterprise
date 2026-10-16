@@ -22,6 +22,7 @@ export function validateAvatarFile(file: File): string | null {
 /** A failed upload, in words that say what to do. Server text is never shown. */
 export function avatarErrorMessage(err: unknown): string {
   if (!(err instanceof ApiError)) return 'Chưa đổi được ảnh. Kiểm tra kết nối mạng rồi thử lại.'
+  if (err.status === 403) return 'Bạn không có quyền đổi ảnh này.'
   const code = (err.body as { code?: unknown } | undefined)?.code
   switch (code) {
     case 'avatar_not_image': return AVATAR_NOT_IMAGE

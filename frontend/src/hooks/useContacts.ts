@@ -33,6 +33,9 @@ interface ContactsResponse {
   next_cursor?: string
 }
 
+/** The largest page the contacts endpoint serves; a workspace that fits needs one request. */
+const PAGE_SIZE = 500
+
 /** A directory that never ends is a bug somewhere; stop asking after this many pages. */
 const MAX_PAGES = 100
 
@@ -45,7 +48,7 @@ export function useContacts(workspaceId: string, filters?: ContactFilters) {
   return useQuery<ContactsResponse>({
     queryKey: keys.contacts.list(workspaceId, filters),
     queryFn: async () => {
-      const base = new URLSearchParams()
+      const base = new URLSearchParams({ limit: String(PAGE_SIZE) })
       if (filters?.department) base.set('department', filters.department)
       if (filters?.location) base.set('location', filters.location)
       if (filters?.search) base.set('search', filters.search)

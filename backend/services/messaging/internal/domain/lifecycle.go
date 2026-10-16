@@ -72,6 +72,7 @@ func (s *Service) EditMessage(ctx context.Context, messageID, userID, userNodeID
 		}
 		return nil, err
 	}
+	s.bumpChannel(ctx, ch)
 	msgs, err := s.store.GetThread(ctx, messageID)
 	if err != nil || len(msgs) == 0 {
 		return nil, fmt.Errorf("reload message: %w", err)
@@ -122,7 +123,8 @@ func (s *Service) DeleteMessage(ctx context.Context, messageID, userID, userNode
 	if f.SenderID == userID {
 		op = ngac.OpWrite
 	}
-	if _, err := s.authorizeChannel(ctx, f.ChannelID, userNodeID, op); err != nil {
+	ch, err := s.authorizeChannel(ctx, f.ChannelID, userNodeID, op)
+	if err != nil {
 		return nil, err
 	}
 	d, err := s.store.SoftDeleteMessage(ctx, messageID, userID)
@@ -132,6 +134,7 @@ func (s *Service) DeleteMessage(ctx context.Context, messageID, userID, userNode
 		}
 		return nil, err
 	}
+	s.bumpChannel(ctx, ch)
 	out := &DeleteOutcome{Event: &pb.MessageDeletedEvent{
 		MessageId: messageID, ChannelId: d.ChannelID, ParentMessageId: d.ParentMessageID,
 		KeepPlaceholder: d.KeepPlaceholder, ReplyCount: d.ParentReplyCount,

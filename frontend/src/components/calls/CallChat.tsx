@@ -10,7 +10,7 @@ import { usePeople } from '../../hooks/usePeople'
 import { explain } from '../../lib/errors'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { ChatEditor } from '../chat/ChatEditor'
+import { LazyChatEditor } from '../chat/lazy-parts'
 import { ConversationStream } from '../spaces/ConversationStream'
 import { toast } from '../primitives'
 
@@ -100,7 +100,7 @@ export function CallChat({ channelId, title }: { channelId: string; title: strin
         onAtEndChange={setAtEnd}
         lifecycle={lifecycle}
       />
-      <ChatEditor
+      <LazyChatEditor
         channelId={channelId}
         people={people}
         tone="base"

@@ -62,7 +62,10 @@ type OTPResult struct {
 // RequestOTP validates the identifier, enforces the per-identifier rate
 // limit, and opens an OTP session. In fixed-code test mode the session accepts
 // OTPOptions.FixedCode; otherwise a random code is generated and handed to the
-// CodeSender. The code is never logged here.
+// CodeSender. The code is never logged here. With a QueuedSender the call
+// returns as soon as the code is stored and queued; delivery failures happen
+// later, are logged and counted, and never change this answer (so the answer
+// never says whether an address exists).
 func (s *Service) RequestOTP(ctx context.Context, identifier, identType string) (string, error) {
 	if !s.OTPEnabled() {
 		return "", ErrOTPUnavailable

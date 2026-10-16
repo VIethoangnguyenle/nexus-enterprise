@@ -112,6 +112,26 @@ export async function logoutSession(): Promise<void> {
   useAuthStore.getState().logout()
 }
 
+/**
+ * Settles once the session restore started at page load is over; at once when
+ * none is running or a token is already there. While it runs the screen may already show the copy kept on
+ * the device, and requests wait here so none leaves without a token and races
+ * the boot refresh with a 401.
+ */
+function sessionRestored(): Promise<void> {
+  const store = useAuthStore
+  const waiting = (s: { bootstrapping?: boolean; accessToken: string | null }) => !!s.bootstrapping && !s.accessToken
+  if (!waiting(store.getState()) || typeof store.subscribe !== 'function') return Promise.resolve()
+  return new Promise((resolve) => {
+    const stop = store.subscribe((s) => {
+      if (!waiting(s)) {
+        stop()
+        resolve()
+      }
+    })
+  })
+}
+
 /** Sends a request with the current access token attached. */
 function send(path: string, options: RequestInit, jsonBody: boolean): Promise<Response> {
   const token = useAuthStore.getState().accessToken
@@ -131,6 +151,7 @@ function send(path: string, options: RequestInit, jsonBody: boolean): Promise<Re
  * and retrying further would just loop.
  */
 async function withRefreshRetry(path: string, options: RequestInit, jsonBody: boolean): Promise<Response> {
+  await sessionRestored()
   let res = await send(path, options, jsonBody)
   if (res.status !== 401) return res
 
@@ -157,6 +178,23 @@ async function toResult<T>(res: Response): Promise<T> {
 /** Authenticated fetch wrapper. Injects the access token and handles JSON. */
 export async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
   return toResult<T>(await withRefreshRetry(path, options, true))
+}
+
+/** The answer to a request that asked "has this changed since the copy I hold?". */
+export type Revalidated<T> =
+  | { changed: false }
+  | { changed: true; data: T; /** The version to ask with next time; null when the server issued none. */ etag: string | null }
+
+/**
+ * A GET that sends `If-None-Match` when the caller holds a copy. A 304 means the
+ * copy is current: nothing is parsed and the caller keeps what it has. Any other
+ * answer is `apiFetch`'s, including the sign-in handling of a 401.
+ */
+export async function apiFetchIfChanged<T>(path: string, etag: string | null): Promise<Revalidated<T>> {
+  const res = await withRefreshRetry(path, etag ? { headers: { 'If-None-Match': etag } } : {}, true)
+  if (res.status === 304) return { changed: false }
+  const data = await toResult<T>(res)
+  return { changed: true, data, etag: res.headers.get('ETag') }
 }
 
 /**

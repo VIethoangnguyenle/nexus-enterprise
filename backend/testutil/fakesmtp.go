@@ -170,6 +170,8 @@ func (f *FakeSMTP) serve(c net.Conn, tlsCfg *tls.Config) {
 			}
 			f.record(&f.messages, sb.String())
 			say("250 queued")
+		case up == "NOOP", up == "RSET":
+			say("250 ok")
 		case up == "QUIT":
 			say("221 bye")
 			return

@@ -1,31 +1,35 @@
-import { useState } from 'react'
-import { Download, Eye, Share2 } from 'lucide-react'
+import { Download, Share2 } from 'lucide-react'
 import type { DriveItem } from '../../api/drive'
 import type { ObjectPerms } from '../../api/access'
-import { useDownloadFile, useDownloadUrl } from '../../hooks/useDownloadUrl'
+import { useDownloadFile } from '../../hooks/useDownloadUrl'
 import { useDriveShares } from '../../hooks/useDrive'
 import { formatBytes, formatDateTime, formatRelative } from '../../lib/format'
 import type { PeopleDirectory } from '../../lib/people'
 import { Avatar, Button, PersonChip } from '../primitives'
 import { SidePanel } from '../spaces/SidePanel'
-import { kindOf, ownerOf, sharePermissionLabel, shareTargetName } from './drive-model'
+import { FileThumb } from '../files/FileThumb'
+import { itemVersion, kindOf, ownerOf, sharePermissionLabel, shareTargetName } from './drive-model'
 import { SharePermissionSelect } from './SharePermissionSelect'
-import { isImageFile } from '../patterns/ImagePreviewCard'
 
 interface DriveDetailPanelProps {
   item: DriveItem
   perms: ObjectPerms
   people: PeopleDirectory
+  /** Name of the folder the item is in; unknown in the shared view. */
+  location?: string
   onClose: () => void
   onShare: (item: DriveItem) => void
-  onPreview?: (item: DriveItem, el?: HTMLElement) => void
+  /** Open the file in the viewer; `el` is where focus returns to. */
+  onOpen?: (item: DriveItem, el?: HTMLElement) => void
 }
 
 /**
- * Right panel of Tài liệu (mockup §2): what the item is, who may open it, and
- * what happened to it. Only people who may share an item can see its shares.
+ * Right panel of Tài liệu (DESIGN.md "Tài liệu: lưới, danh sách, panel xem
+ * trước"): the file's picture, Mở · Tải xuống · Chia sẻ, what it is, who may
+ * open it, and what happened to it. Only people who may share an item can see
+ * its shares.
  */
-export function DriveDetailPanel({ item, perms, people, onClose, onShare, onPreview }: DriveDetailPanelProps) {
+export function DriveDetailPanel({ item, perms, people, location, onClose, onShare, onOpen }: DriveDetailPanelProps) {
   const folder = item.item_type === 'folder'
   const kind = kindOf(item)
   const Icon = kind.icon
@@ -33,51 +37,74 @@ export function DriveDetailPanel({ item, perms, people, onClose, onShare, onPrev
   const { download, isDownloading } = useDownloadFile()
   const shares = useDriveShares(item.id, perms.share)
 
-  const sub = folder ? kind.label : `${kind.label} · ${formatBytes(item.size_bytes)}`
-
   return (
-    <SidePanel
-      label="Chi tiết tệp"
-      title={item.name}
-      sub={sub}
-      closeLabel="chi tiết"
-      onClose={onClose}
-      actions={
-        !folder ? (
-          <div className="flex items-center gap-1.5">
-            {onPreview && (
-              <Button
-                variant="soft"
-                size="sm"
-                onClick={(e) => onPreview(item, e.currentTarget)}
-                aria-label={`Xem trước ${item.name}`}
-              >
-                <Eye size={16} strokeWidth={1.75} aria-hidden="true" />
-                Xem trước
-              </Button>
-            )}
-            <Button variant="soft" size="sm" loading={isDownloading} onClick={() => void download(item)}>
+    <SidePanel label="Chi tiết tệp" title={item.name} closeLabel="chi tiết" onClose={onClose}>
+      <div className="grid gap-4 px-3 pt-1 pb-3">
+        {!folder && (
+          <FileThumb
+            fileId={item.id}
+            name={item.name}
+            mimeType={item.mime_type}
+            version={itemVersion(item)}
+            size="panel"
+            aspect="4 / 3"
+            radius={10}
+          />
+        )}
+
+        <div className="flex items-center gap-1.5">
+          {!folder && onOpen && (
+            <Button size="sm" className="flex-1 max-lg:h-11" onClick={(e) => onOpen(item, e.currentTarget)}>
+              Mở
+            </Button>
+          )}
+          {!folder && (
+            <Button
+              variant="soft"
+              size="sm"
+              className="max-lg:h-11"
+              loading={isDownloading}
+              onClick={() => void download(item)}
+            >
               <Download size={16} strokeWidth={1.75} aria-hidden="true" />
               Tải xuống
             </Button>
-          </div>
-        ) : undefined
-      }
-    >
-      <div className="grid gap-5 px-3 pt-1 pb-3">
-        <div className="flex items-center gap-3">
-          <span className={`grid place-items-center w-10 h-10 rounded-surface shrink-0 ${kind.tile}`} aria-hidden="true">
-            <Icon size={20} strokeWidth={1.75} />
-          </span>
-          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-small m-0 min-w-0">
-            <dt className="text-ink-muted">Tạo lúc</dt>
-            <dd className="m-0 tnum">{formatDateTime(item.created_at)}</dd>
-            <dt className="text-ink-muted">Sửa lúc</dt>
-            <dd className="m-0 tnum">{formatDateTime(item.updated_at)}</dd>
-          </dl>
+          )}
+          {perms.share && (
+            <Button variant="soft" size="sm" className="max-lg:h-11" onClick={() => onShare(item)}>
+              <Share2 size={16} strokeWidth={1.75} aria-hidden="true" />
+              Chia sẻ
+            </Button>
+          )}
         </div>
 
-        {!folder && isImageFile(item.name) && <ImagePreview item={item} />}
+        <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-2 text-small m-0">
+          <dt className="text-ink-muted">Loại</dt>
+          <dd className="m-0 flex items-center gap-2 min-w-0">
+            <span className={`grid place-items-center w-5 h-5 rounded-sm shrink-0 ${kind.tile}`} aria-hidden="true">
+              <Icon size={12} />
+            </span>
+            <span className="truncate">{kind.label}</span>
+          </dd>
+          {!folder && (
+            <>
+              <dt className="text-ink-muted">Dung lượng</dt>
+              <dd className="m-0 tnum">{formatBytes(item.size_bytes)}</dd>
+            </>
+          )}
+          <dt className="text-ink-muted">Chủ sở hữu</dt>
+          <dd className="m-0 min-w-0">
+            <PersonChip name={owner.name} hueKey={owner.hueKey} avatarUrl={owner.avatarUrl} />
+          </dd>
+          <dt className="text-ink-muted">Sửa lần cuối</dt>
+          <dd className="m-0 tnum">{formatDateTime(item.updated_at)}</dd>
+          {location && (
+            <>
+              <dt className="text-ink-muted">Vị trí</dt>
+              <dd className="m-0 truncate">{location}</dd>
+            </>
+          )}
+        </dl>
 
         <section className="grid gap-2.5">
           <h3 className="m-0 text-label text-ink-muted">Người có quyền</h3>
@@ -102,12 +129,6 @@ export function DriveDetailPanel({ item, perms, people, onClose, onShare, onPrev
           </ul>
           {shares.isLoading && <div className="skeleton h-5 w-2/3 rounded-sm" aria-busy="true" />}
           {shares.isError && <p className="m-0 text-small text-danger">Không tải được danh sách người có quyền.</p>}
-          {perms.share && (
-            <Button variant="soft" size="sm" className="justify-self-start" onClick={() => onShare(item)}>
-              <Share2 size={16} strokeWidth={1.75} aria-hidden="true" />
-              Chia sẻ
-            </Button>
-          )}
         </section>
 
         <section className="grid gap-2.5">
@@ -126,21 +147,5 @@ export function DriveDetailPanel({ item, perms, people, onClose, onShare, onPrev
         </section>
       </div>
     </SidePanel>
-  )
-}
-
-function ImagePreview({ item }: { item: DriveItem }) {
-  const url = useDownloadUrl(item.id)
-  const [broken, setBroken] = useState(false)
-  if (url.isError || broken) return null
-  if (!url.data) return <div className="skeleton h-40 rounded-surface" aria-busy="true" />
-  return (
-    <img
-      src={url.data}
-      alt={`Xem trước ${item.name}`}
-      loading="lazy"
-      onError={() => setBroken(true)}
-      className="w-full max-h-72 object-contain rounded-surface bg-sunk"
-    />
   )
 }

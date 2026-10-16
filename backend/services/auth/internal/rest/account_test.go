@@ -836,12 +836,25 @@ func TestContacts_DefaultsToFiftyAndNoCursorOnTheOnlyPage(t *testing.T) {
 	}
 }
 
+// One request carries a whole ordinary directory: the largest page the server
+// allows is 500, and the store is asked for exactly that.
+func TestContacts_APageOfFiveHundredIsAllowed(t *testing.T) {
+	a := contactsApp(t)
+	rec := a.do(http.MethodGet, "/api/workspaces/w1/contacts?limit=500", a.token("member"), "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("%d %s", rec.Code, rec.Body)
+	}
+	if f := a.st.lastFilter; f == nil || f.Limit != 500 {
+		t.Errorf("store filter = %+v, want Limit 500", f)
+	}
+}
+
 func TestContacts_RefusesPagingThatIsNotPaging(t *testing.T) {
 	a := contactsApp(t)
 	notJSON := base64.RawURLEncoding.EncodeToString([]byte("not json"))
 	noID := base64.RawURLEncoding.EncodeToString([]byte(`{"k":"a"}`))
 	for _, q := range []string{
-		"limit=0", "limit=-5", "limit=abc", "limit=201", "limit=1000000",
+		"limit=0", "limit=-5", "limit=abc", "limit=501", "limit=1000000",
 		"cursor=%25%25", "cursor=" + notJSON, "cursor=" + noID, "cursor=" + strings.Repeat("A", 600),
 		"search=" + strings.Repeat("x", 101),
 	} {

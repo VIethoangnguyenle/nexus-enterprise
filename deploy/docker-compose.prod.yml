@@ -381,6 +381,8 @@ services:
       REST_PORT: "8080"
       DRIVE_SERVICE_ADDR: drive:50057
       APP_ENV: production
+      # Public picture limits count the client the nginx edge saw, not the edge itself.
+      MESSAGING_TRUSTED_PROXIES: 10.77.231.10/32
       INTERNAL_IDENTITY_SECRET: ${INTERNAL_IDENTITY_SECRET:?INTERNAL_IDENTITY_SECRET missing from .env}
       INTERNAL_IDENTITY_SECRET_PREVIOUS: ${INTERNAL_IDENTITY_SECRET_PREVIOUS:-}
       # Web push through OneSignal. Both empty: push off. Only one set: messaging refuses to start.
@@ -478,7 +480,9 @@ services:
       start_period: 20s
     deploy:
       resources:
-        limits: { memory: 128M }
+        # The Go process stays under GOMEMLIMIT; the rest is room for pdftoppm and ffmpeg, which draw
+        # thumbnails inside this container and count against the same limit.
+        limits: { memory: 512M }
 
   approval:
     <<: *go-service

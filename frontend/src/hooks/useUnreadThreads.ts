@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { notificationLevelApi } from '../api/notification-levels'
 import { keys } from './keys'
+import { startupPart } from './useChatState'
 
 /** Enough for "Xem thêm N thread" to be honest without paging. */
 export const UNREAD_THREADS_LIMIT = 20
@@ -13,7 +14,9 @@ export const UNREAD_THREADS_LIMIT = 20
 export function useUnreadThreads(enabled = true) {
   return useQuery({
     queryKey: keys.notificationLevels.unreadThreads(),
-    queryFn: () => notificationLevelApi.unreadThreads(UNREAD_THREADS_LIMIT),
+    queryFn: () =>
+      startupPart(keys.notificationLevels.unreadThreads(), undefined, (s) => ({ messages: s.unread_threads }), () =>
+        notificationLevelApi.unreadThreads(UNREAD_THREADS_LIMIT)),
     select: (answer) => answer.messages,
     enabled,
   })

@@ -72,6 +72,7 @@ type Channel struct {
 	Description   string                 `protobuf:"bytes,10,opt,name=description,proto3" json:"description,omitempty"`                     // Longer channel description
 	MemberCount   int32                  `protobuf:"varint,11,opt,name=member_count,json=memberCount,proto3" json:"member_count,omitempty"` // Denormalized member count
 	Starred       bool                   `protobuf:"varint,12,opt,name=starred,proto3" json:"starred,omitempty"`                            // The caller starred this conversation (set where a caller is known)
+	AvatarUrl     string                 `protobuf:"bytes,13,opt,name=avatar_url,json=avatarUrl,proto3" json:"avatar_url,omitempty"`        // The group's picture address ("" when it has none); never set on a DM
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -188,6 +189,13 @@ func (x *Channel) GetStarred() bool {
 		return x.Starred
 	}
 	return false
+}
+
+func (x *Channel) GetAvatarUrl() string {
+	if x != nil {
+		return x.AvatarUrl
+	}
+	return ""
 }
 
 type CreateChannelRequest struct {
@@ -4612,7 +4620,7 @@ var File_proto_messaging_messaging_proto protoreflect.FileDescriptor
 const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\n" +
 	"\x1fproto/messaging/messaging.proto\x12\tmessaging\x1a\x1fgoogle/protobuf/timestamp.proto\"\a\n" +
-	"\x05Empty\"\xfe\x02\n" +
+	"\x05Empty\"\x9d\x03\n" +
 	"\aChannel\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04name\x18\x02 \x01(\tR\x04name\x12!\n" +
@@ -4630,7 +4638,9 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\vdescription\x18\n" +
 	" \x01(\tR\vdescription\x12!\n" +
 	"\fmember_count\x18\v \x01(\x05R\vmemberCount\x12\x18\n" +
-	"\astarred\x18\f \x01(\bR\astarred\"\xbc\x01\n" +
+	"\astarred\x18\f \x01(\bR\astarred\x12\x1d\n" +
+	"\n" +
+	"avatar_url\x18\r \x01(\tR\tavatarUrl\"\xbc\x01\n" +
 	"\x14CreateChannelRequest\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12!\n" +
 	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x1b\n" +

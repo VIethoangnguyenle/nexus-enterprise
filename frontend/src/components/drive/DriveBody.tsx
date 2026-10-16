@@ -18,19 +18,19 @@ interface Props {
   total: number
   /** Rows left after the search filter. */
   visible: number
-  /** Keeps the table up while the last row folds away. */
+  /** Keeps the list up while the last row folds away. */
   holdTable: boolean
   onClearQuery: () => void
   onPickFiles: () => void
   view: string
   route: MotionPresets['route']
-  /** The table itself, rendered by the screen. */
-  table: ReactNode
+  /** The gallery or the table, rendered by the screen. */
+  content: ReactNode
 }
 
-/** What fills the scroll area of Tài liệu: an explanation, or the table. */
+/** What fills the scroll area of Tài liệu: an explanation, or the files. */
 export function DriveBody({
-  missing, isError, onRetry, loading, shared, total, visible, holdTable, onClearQuery, onPickFiles, view, route, table,
+  missing, isError, onRetry, loading, shared, total, visible, holdTable, onClearQuery, onPickFiles, view, route, content,
 }: Props) {
   if (missing) {
     return (
@@ -93,7 +93,7 @@ export function DriveBody({
   }
   return (
     <motion.div key={view} {...route}>
-      {table}
+      {content}
     </motion.div>
   )
 }

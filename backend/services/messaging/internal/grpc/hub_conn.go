@@ -3,6 +3,7 @@ package grpc
 import (
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -38,6 +39,12 @@ type Client struct {
 	// viewing is the conversation this session has on screen, "" for none.
 	// Guarded by hub.mu.
 	viewing string
+
+	// While a workspace replay runs, live frames of that workspace are set
+	// aside in held (hub_replay.go) so the replay reaches the session first.
+	holdMu sync.Mutex
+	holdWS string
+	held   [][]byte
 }
 
 // WSClaims are JWT claims for WebSocket authentication.
@@ -185,9 +192,10 @@ func (c *Client) readPump() {
 			continue
 		}
 
-		// Text frames were the retired JSON protocol; they are logged and dropped.
+		// Text frames carry JSON control messages (sync cursors); every
+		// domain frame stays binary protobuf.
 		if msgType == websocket.TextMessage {
-			slog.Warn("received text WebSocket frame, ignoring (binary protobuf only)", "userID", c.userID)
+			c.handleTextMessage(message)
 		}
 	}
 }
@@ -266,7 +274,11 @@ func (c *Client) handleBinaryMessage(data []byte, authTimer *time.Timer) {
 func (c *Client) writePump() {
 	defer c.conn.Close()
 	for msg := range c.send {
-		if err := c.conn.WriteMessage(websocket.BinaryMessage, msg); err != nil {
+		kind := websocket.BinaryMessage
+		if isControl(msg) {
+			kind = websocket.TextMessage
+		}
+		if err := c.conn.WriteMessage(kind, msg); err != nil {
 			return
 		}
 	}

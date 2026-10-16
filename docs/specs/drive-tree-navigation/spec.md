@@ -6,7 +6,7 @@ Let the user see and traverse the folder hierarchy without loading the whole tre
 ## Requirements
 
 ### Requirement: Folder Tree Sidebar
-The Drive UI SHALL render a folder tree in the list panel (column 2, desktop widths) showing the workspace's folder hierarchy under the workspace name. The tree SHALL lazy-load children on expand. Below 1024px the list panel is not shown; the breadcrumb and the folder rows are the way to move.
+The Drive UI SHALL render a folder tree in the list panel (column 2, desktop widths) showing the workspace's folder hierarchy under the workspace name. The tree SHALL lazy-load children on expand. Below 1024px the list panel is not shown in the layout; the tree moves into a drawer opened by a menu button ("Mở cây thư mục") placed before the breadcrumb, from 768px up and on a phone alike. The drawer is a modal layer from the left edge over a scrim: focus moves in, Escape and the scrim close it, focus returns to the button, and opening a folder (or any link in the tree) closes it. The tree has no search box of its own in Tài liệu; the toolbar searches the open folder.
 
 #### Scenario: Initial tree load
 - **WHEN** user navigates to Drive
@@ -19,6 +19,14 @@ The Drive UI SHALL render a folder tree in the list panel (column 2, desktop wid
 #### Scenario: Collapse folder
 - **WHEN** user clicks the collapse arrow on an expanded folder
 - **THEN** children are hidden (but cached, not refetched on re-expand)
+
+#### Scenario: Tree in a drawer
+- **WHEN** the window is under 1024px and the user presses "Mở cây thư mục"
+- **THEN** a dialog "Cây thư mục" shows the same tree, and choosing a folder opens it in the URL and closes the drawer
+
+#### Scenario: Drawer closes with Escape
+- **WHEN** the drawer is open and the user presses Escape
+- **THEN** the drawer closes and focus returns to the menu button
 
 #### Scenario: Keyboard
 - **WHEN** a tree item has focus and the user presses ↑/↓, →, ← or Enter
@@ -45,7 +53,7 @@ The open folder SHALL be part of the URL (`/drive?folder=<folder id>`; no `folde
 
 #### Scenario: Shared with me
 - **WHEN** user opens "Được chia sẻ với tôi"
-- **THEN** the URL carries `view=shared` and the table lists the items shared with the user, with each owner shown by name
+- **THEN** the URL carries `view=shared` and the files (as cards or as rows) list the items shared with the user, with each owner shown by name
 
 ### Requirement: Folders That Cannot Be Opened Or Filled
 The drive SHALL answer NotFound for a folder that is trashed, for a parent folder that belongs to another workspace than the one in the route, and for a parent that is not a folder, in `ListFolder`, `CreateFolder` and `CreateFile`. `GetItem` answers NotFound for a trashed item. Restoring an item makes it open again.

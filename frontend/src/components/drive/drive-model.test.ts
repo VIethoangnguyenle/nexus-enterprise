@@ -3,7 +3,7 @@ import type { DriveItem, DriveShare } from '../../api/drive'
 import { buildDirectory } from '../../lib/people'
 import { CONTACTS, U } from '../../test/chat-fixtures'
 import {
-  kindOf, matchesName, ownerOf, shareTargetName, sharePermissionLabel, sortItems,
+  filterByType, kindOf, matchesName, ownerOf, shareTargetName, sharePermissionLabel, sortItems,
 } from './drive-model'
 
 const people = buildDirectory(CONTACTS)
@@ -73,5 +73,47 @@ describe('listing helpers', () => {
     expect(sharePermissionLabel(['write'])).toBe('Có thể sửa')
     expect(sharePermissionLabel(['read'])).toBe('Có thể xem')
     expect(sharePermissionLabel(undefined)).toBe('Có thể xem')
+  })
+})
+
+describe('filterByType', () => {
+  const items = [
+    folder('Hợp đồng'), file('a.pdf'), file('b.xlsx'), file('c.docx'), file('d.png'), file('e.mp4'), file('f.pptx'),
+  ]
+  const names = (f: Parameters<typeof filterByType>[1]) => filterByType(items, f).map((i) => i.name)
+
+  it('keeps everything for "all"', () => {
+    expect(names('all')).toHaveLength(items.length)
+  })
+
+  it('keeps folders so the user can still move on, and only the files of the kind', () => {
+    expect(names('pdf')).toEqual(['Hợp đồng', 'a.pdf'])
+    expect(names('sheets')).toEqual(['Hợp đồng', 'b.xlsx'])
+    expect(names('docs')).toEqual(['Hợp đồng', 'c.docx', 'f.pptx'])
+    expect(names('media')).toEqual(['Hợp đồng', 'd.png', 'e.mp4'])
+  })
+})
+
+describe('sortItems by key', () => {
+  const at = (s: number) => ({ seconds: s, nanos: 0 })
+  const items = [
+    file('b.txt', { updated_at: at(100), size_bytes: 5 }),
+    file('a.txt', { updated_at: at(300), size_bytes: 1 }),
+    file('c.txt', { updated_at: at(200), size_bytes: 9 }),
+    folder('Z'),
+  ]
+  const names = (k: Parameters<typeof sortItems>[1]) => sortItems(items, k).map((i) => i.name)
+
+  it('puts folders first whatever the key', () => {
+    for (const k of ['recent', 'name', 'size'] as const) expect(names(k)[0]).toBe('Z')
+  })
+
+  it('orders files by last change, newest first', () => {
+    expect(names('recent')).toEqual(['Z', 'a.txt', 'c.txt', 'b.txt'])
+  })
+
+  it('orders files by name, or by size with the biggest first', () => {
+    expect(names('name')).toEqual(['Z', 'a.txt', 'b.txt', 'c.txt'])
+    expect(names('size')).toEqual(['Z', 'c.txt', 'b.txt', 'a.txt'])
   })
 })

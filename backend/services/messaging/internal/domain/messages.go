@@ -150,6 +150,7 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 		}
 		return nil, fmt.Errorf("send message: %w", err)
 	}
+	s.bumpChannel(ctx, ch)
 
 	msg.SenderName = s.lookupUsername(ctx, in.SenderID)
 	if err := s.attachQuotes(ctx, []*store.Message{msg}); err != nil {

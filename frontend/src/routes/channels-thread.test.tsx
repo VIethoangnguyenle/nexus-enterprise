@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import { validateChannelSearch, ChannelRoute, Route } from './_workspace/channels.$channelId'
+import { validateChannelSearch, Route } from './_workspace/channels.$channelId'
+import { ChannelRoute } from './_workspace/-channel-route'
 
 let currentSearch: { ws?: string; thread?: string; message?: string } = {}
 

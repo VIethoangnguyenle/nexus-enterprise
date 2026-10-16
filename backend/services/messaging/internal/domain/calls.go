@@ -662,6 +662,7 @@ func (s *Service) rewriteCard(ctx context.Context, call *store.Call) *pb.Message
 		slog.Warn("call card not updated", "call", call.ID, "error", err)
 		return nil
 	}
+	s.bumpChannelID(ctx, call.ChannelID)
 	msgs, err := s.store.GetThread(ctx, call.MessageID)
 	if err != nil || len(msgs) == 0 {
 		return nil

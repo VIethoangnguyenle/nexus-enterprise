@@ -97,6 +97,74 @@ answer is not remembered, so the next view tries again.
 - **WHEN** two conversions run and a third document is previewed and no slot frees in time
 - **THEN** the answer is `unavailable` / `conversion_busy` and that document is not marked as failed
 
+### Requirement: A file has a thumbnail
+`GET /api/drive/files/{id}/thumbnail?size=320|640` (default 320) SHALL answer 200 with a JPEG whose longest side
+is `size` pixels, proportions kept (never cropped, never enlarged past the original). Pictures (JPEG, PNG, GIF,
+WebP) are scaled in-process, upright and on white where transparent; a PDF is its first page (`pdftoppm`); a video is
+the frame a second in, or the first frame of a shorter one (`ffmpeg`); Word, PowerPoint, OpenDocument, RTF and
+spreadsheet files are drawn from the PDF that the preview already makes and keeps. Other kinds, a source over the
+size limit (picture 25 MB, PDF 50 MB, video 100 MB, Office PDF the preview limit) and a picture of more than 16
+million pixels have none. The answer carries `Cache-Control: private, max-age=86400` and an `ETag` that changes
+with the file's content and the size; a matching `If-None-Match` is answered 304 with no body. A bad `size` is 400.
+
+The right is the preview's, checked first: read on the file. A caller who may not read is refused 403 in the words a
+download uses, whatever the file is, so a refusal reveals neither its name nor whether it has a thumbnail, and a
+stored thumbnail is never served without the check or on the strength of an `ETag`.
+
+A thumbnail is drawn on the first request and kept in the object store under `thumbs/<file>/<content>/<size>.jpg`;
+replaced content is a new key. Concurrent first requests share one drawing. External tools run without a shell, in
+a private temporary directory that is removed afterwards, each under a 10 second limit (an Office file keeps its
+conversion limit). At most four are drawn at once in a drive process; a request that finds no slot within five
+seconds is answered 503 with `Retry-After`, which the client treats as temporary and asks again. A file that has no
+thumbnail, could not be drawn, or needs a tool that is not installed is answered 404 with reason
+`thumbnail_unavailable` (the client shows the file's icon), and the cause is logged. A file that could not be drawn
+is left alone for ten minutes; a converter or storage failure is not remembered against the file.
+
+Pictures are decoded in the drive process under a memory budget judged from the header alone, before anything is
+allocated: 64 MiB, using the same estimate as the avatar path (decoded pixels, a progressive JPEG's coefficients, a
+working copy; GIF and WebP count 5 bytes a pixel). A 24 MP baseline photo fits; a progressive JPEG of 12 MP or more,
+or a small file that claims a huge size, does not and is answered `thumbnail_unavailable`. At most two pictures are
+decoded at once however many thumbnails are being drawn, so decoding stays well inside the container's memory.
+
+`pdftoppm` and `ffmpeg` are treated as handling hostile input. When the drive runs as root they run as an
+unprivileged user (uid and gid 65534; `THUMBNAIL_TOOL_UID` / `THUMBNAIL_TOOL_GID`, uid 0 keeps root), with no
+supplementary groups, their own work directory as `HOME`, and only the source and that directory in reach; as any
+other user nothing changes. ffmpeg opens the local file protocol only and only the MP4/MOV/3GP, Matroska/WebM and AVI
+containers, so a file named `.mp4` that is really an HLS playlist or concat script is refused instead of followed to
+other files or addresses. The tools get a reduced environment without the service's secrets.
+
+#### Scenario: A playlist named like a video
+- **WHEN** the file is an HLS playlist or concat script saved as `clip.mp4`
+- **THEN** ffmpeg refuses it, the answer is 404 `thumbnail_unavailable`, and nothing it names is read
+
+#### Scenario: A progressive photo too large to decode
+- **WHEN** a reader asks for the thumbnail of a 4000x4000 progressive JPEG
+- **THEN** the answer is 404 `thumbnail_unavailable` and the picture is never decoded
+
+#### Scenario: A photo
+- **WHEN** a reader asks for the 320 thumbnail of a 4000x3000 JPEG
+- **THEN** the answer is a 320x240 JPEG, and asking again draws nothing
+
+#### Scenario: A stranger
+- **WHEN** a caller without read on the file asks for its thumbnail
+- **THEN** the answer is 403, nothing is drawn, and a thumbnail already kept is not served
+
+#### Scenario: A new version
+- **WHEN** the file's content is replaced
+- **THEN** the next request draws a thumbnail from the new content under a new key, with a new `ETag`
+
+#### Scenario: A zip
+- **WHEN** a reader asks for the thumbnail of a zip
+- **THEN** the answer is 404 `thumbnail_unavailable`
+
+#### Scenario: Too many at once
+- **WHEN** four thumbnails are being drawn and a fifth cannot start within five seconds
+- **THEN** the answer is 503 with `Retry-After`, and that file is not marked as failed
+
+#### Scenario: Permanent delete
+- **WHEN** a file is deleted for good
+- **THEN** its thumbnails are deleted with it
+
 ### Requirement: The conversion service is internal
 Gotenberg SHALL be reachable only by the drive service. In production it sits on an internal network with no route
 out, so a link inside an uploaded document cannot be fetched; it publishes no port, runs only its LibreOffice
@@ -109,3 +177,5 @@ Native previews are signed like downloads, so the browser may be told to save ra
 (the storage service does not yet pass a content-disposition override). The client part of this capability
 (the viewer, including the table for `sheet`) is not yet written. The viewer contract: `native` text is fetched and
 shown as text, never put in a frame.
+Thumbnails need `pdftoppm` (poppler-utils) and `ffmpeg` where the drive runs; the drive image installs them. Without them
+PDFs and videos have no thumbnail and nothing else changes. Tuning: `THUMBNAIL_MAX_CONCURRENT` (4).

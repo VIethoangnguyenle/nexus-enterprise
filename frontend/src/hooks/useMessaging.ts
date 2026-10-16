@@ -2,11 +2,16 @@ import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
 import { messagingApi, type CreateChannelInput, type ChannelMember } from '../api/messaging'
 import { queryClient } from '../lib/query-client'
 import { keys } from './keys'
+import { startupPart } from './useChatState'
 
 // --- Channels ---
 
 export const channelsQueryOptions = (wsId: string) =>
-  queryOptions({ queryKey: keys.messaging.channels(wsId), queryFn: () => messagingApi.listChannels(wsId), enabled: !!wsId })
+  queryOptions({
+    queryKey: keys.messaging.channels(wsId),
+    queryFn: () => startupPart(keys.messaging.channels(wsId), wsId, (s) => ({ channels: s.channels }), () => messagingApi.listChannels(wsId)),
+    enabled: !!wsId,
+  })
 
 export function useChannels(wsId: string) { return useQuery(channelsQueryOptions(wsId)) }
 
@@ -21,7 +26,10 @@ export function useCreateChannel(wsId: string) {
 // --- Direct messages ---
 
 export const directMessagesQueryOptions = () =>
-  queryOptions({ queryKey: keys.messaging.dms(), queryFn: () => messagingApi.listDMs() })
+  queryOptions({
+    queryKey: keys.messaging.dms(),
+    queryFn: () => startupPart(keys.messaging.dms(), undefined, (s) => ({ channels: s.dms }), () => messagingApi.listDMs()),
+  })
 
 /** DM channels the user can read. Not workspace-scoped on the backend. */
 export function useDirectMessages() { return useQuery(directMessagesQueryOptions()) }
@@ -50,7 +58,7 @@ export function useUpdateChannel(channelId: string) {
 export function useUnreadCounts() {
   return useQuery({
     queryKey: keys.messaging.unreadCounts(),
-    queryFn: () => messagingApi.getUnreadCounts(),
+    queryFn: () => startupPart(keys.messaging.unreadCounts(), undefined, (s) => ({ channels: s.unread }), () => messagingApi.getUnreadCounts()),
     // No polling — WS unreadCount event handles real-time updates
   })
 }

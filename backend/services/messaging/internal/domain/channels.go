@@ -292,5 +292,6 @@ func channelToProto(ch *store.Channel) *pb.Channel {
 		Topic:       ch.Topic,
 		Description: ch.Description,
 		MemberCount: ch.MemberCount,
+		AvatarUrl:   ch.AvatarURL,
 	}
 }

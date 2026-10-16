@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/policyclient"
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/store"
@@ -77,6 +78,8 @@ func (s *Service) FindOrCreateDM(ctx context.Context, userID, userNodeID, target
 	if err != nil {
 		return nil, fmt.Errorf("create DM channel: %w", err)
 	}
+	// Both people have a new conversation, whichever workspace they look from.
+	s.BumpChat(grpcauth.CallerFrom(ctx).TenantID, userID, targetUserID)
 
 	return ch, nil
 }

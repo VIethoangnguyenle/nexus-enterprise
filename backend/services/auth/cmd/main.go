@@ -115,6 +115,14 @@ func main() {
 		os.Exit(1)
 	}
 	svc.ConfigureOTP(otpOpts)
+	if q, ok := otpOpts.Sender.(*domain.QueuedSender); ok {
+		// Runs after the servers have drained, so no request meets a closed queue.
+		defer func() {
+			if dropped := q.Close(otpQueueGrace); dropped > 0 {
+				slog.Warn("sign-in emails not sent at shutdown", "dropped", dropped)
+			}
+		}()
+	}
 
 	// gRPC server (service-to-service)
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort))
@@ -141,7 +149,7 @@ func main() {
 	}))
 	// Who is asking, for the per-address limits. Nothing is trusted unless the
 	// proxy networks are listed: X-Forwarded-For is a header any client writes.
-	extractIP, err := rest.NewIPExtractor(strings.Split(os.Getenv("AUTH_TRUSTED_PROXIES"), ","))
+	extractIP, err := httputil.NewIPExtractor(strings.Split(os.Getenv("AUTH_TRUSTED_PROXIES"), ","))
 	if err != nil {
 		slog.Error("refusing to start", "error", err)
 		os.Exit(1)
@@ -175,6 +183,9 @@ func main() {
 
 	bootstrap.Shutdown{GRPC: srv, Health: healthSrv, HTTP: []bootstrap.HTTPServer{e}, Cancel: cancel}.Wait()
 }
+
+// otpQueueGrace is how long shutdown waits for queued sign-in emails.
+const otpQueueGrace = 5 * time.Second
 
 var otpCodeFormat = regexp.MustCompile(`^[0-9]{6}$`)
 
@@ -234,7 +245,9 @@ func smtpSender() (domain.CodeSender, error) {
 	}
 	// Host and from address are not secrets; the password never is logged.
 	slog.Info("OTP codes delivered by email over SMTP", "host", os.Getenv("SMTP_HOST"), "port", os.Getenv("SMTP_PORT"))
-	return domain.NewEmailCodeSender(m), nil
+	// Mail goes out from a background worker: a sign-in request answers once its
+	// code is stored, not when the mail server does.
+	return domain.NewQueuedSender(domain.NewEmailCodeSender(m), domain.QueueOptions{}), nil
 }
 
 // googleOptions configures "Sign in with Google" from the environment.

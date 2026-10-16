@@ -20,9 +20,13 @@ interface DriveTreeProps {
   sharedActive: boolean
   /** The Văn bản group open, when the body is the documents rather than files. */
   textsActive?: TextGroup | null
-  /** The name filter for the open folder (or for the documents), kept by the screen. */
-  query: string
-  onQuery: (query: string) => void
+  /**
+   * The name filter for the open folder (or for the documents), kept by the
+   * screen. Without `onQuery` the tree has no search box: Tài liệu searches
+   * from its own toolbar.
+   */
+  query?: string
+  onQuery?: (query: string) => void
   /** Name of the search box; defaults to the files one. */
   searchLabel?: string
   /** Open a folder; no id is the root. */
@@ -72,12 +76,14 @@ export function DriveTree({
     <nav aria-label="Thư mục" className="flex flex-col min-h-0 h-full bg-base">
       <div className="grid gap-3 px-4 pt-4 pb-3">
         <Heading as="h2" look="panel">Tài liệu</Heading>
-        <SearchField
-          label={searchLabel}
-          tone="sunk"
-          value={query}
-          onChange={(e) => onQuery(e.target.value)}
-        />
+        {onQuery && (
+          <SearchField
+            label={searchLabel}
+            tone="sunk"
+            value={query ?? ''}
+            onChange={(e) => onQuery(e.target.value)}
+          />
+        )}
       </div>
       <div className="flex-1 min-h-0 overflow-y-auto px-2 pb-4">
         <div className="px-2.5 pb-1 text-label text-ink-muted">Văn bản</div>

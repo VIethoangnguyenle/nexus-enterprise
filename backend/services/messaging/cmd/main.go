@@ -121,6 +121,13 @@ func main() {
 	rt := realtime.Connect("messaging")
 	defer rt.Close()
 	domainSvc.SetEmitter(rt)
+	// Group picture uploads and downloads are rate limited through Redis.
+	domainSvc.SetRedis(rdb)
+	// The chat state is revalidated by ETag; its version counters live in Redis
+	// and move where changes are announced. No Redis, no ETag.
+	if rdb != nil {
+		domainSvc.SetVersions(redisconn.NewVersions(rdb))
+	}
 	// Removing a channel member also ends their live subscriptions.
 	domainSvc.SetSubscriptionRevoker(hub)
 	// Web push through OneSignal; without ONESIGNAL_* set it stays off. The hub
@@ -202,6 +209,9 @@ func main() {
 	}
 	if rtConsumer != nil {
 		defer rtConsumer.Close()
+		// Changes announced by other services (membership, permissions) reach
+		// the chat state without a messaging request: they move its version too.
+		rtConsumer.SetChatVersions(domainSvc)
 		// Someone removed from a conversation or a workspace leaves its calls.
 		if lkClient != nil {
 			rtConsumer.SetCallEvictor(domainSvc)
@@ -214,6 +224,14 @@ func main() {
 
 	// REST server (client-facing)
 	e := httputil.NewEcho("messaging", echomw.Logger())
+	// Who is asking, for the per-address limits. Nothing is trusted unless the
+	// proxy networks are listed: X-Forwarded-For is a header any client writes.
+	extractIP, err := httputil.NewIPExtractor(strings.Split(os.Getenv("MESSAGING_TRUSTED_PROXIES"), ","))
+	if err != nil {
+		slog.Error("refusing to start", "error", err)
+		os.Exit(1)
+	}
+	e.IPExtractor = extractIP
 	restHandler := rest.NewHandler(domainSvc, notifications, hub)
 	restHandler.RegisterRoutes(e, jwtSecret)
 	if lkClient != nil {

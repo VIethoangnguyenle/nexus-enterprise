@@ -38,6 +38,8 @@ export interface Conversation {
   title: string
   /** Key for the avatar / space-icon colour. Never rendered. */
   hueKey: string
+  /** A space's own picture; absent when it has none, and always absent for a DM. */
+  avatarUrl?: string
   /** The other person in a DM, when the directory knows them. */
   partner?: Person
   unread: number
@@ -253,7 +255,7 @@ export function buildConversations({ spaces, dms, unread, meta = {}, activity = 
       const { title, partner } = dmPartner(ch, me, dir)
       out.push({ ...base, title, partner, hueKey: partner?.userId || ch.id })
     } else {
-      out.push({ ...base, title: ch.name, hueKey: ch.id })
+      out.push({ ...base, title: ch.name, hueKey: ch.id, avatarUrl: ch.avatar_url || undefined })
     }
   }
   // A DM can only be a DM; a space list that ever includes one still files it correctly.

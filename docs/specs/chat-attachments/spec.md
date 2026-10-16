@@ -47,3 +47,14 @@ drive_file`) SHALL read as that one attachment. A deleted message carries none.
 - **Note on Drive Picker**: "Chọn từ Tài liệu" from mockups is intentionally omitted from the composer attach menu because no drive file picker exists in `components/drive`.
 
 
+
+## Tệp tab of a space
+
+**Status: matches code** (`components/spaces/SpaceFiles.tsx`).
+
+- Source: the space's channel drive (`useChannelDrive` plus its inner folder); active files only, newest first. Error state and the fully empty state ("Chưa có tệp nào…" with "Đính kèm trong Trò chuyện") are unchanged.
+- Toolbar: radio chips Tất cả · Ảnh & video · Tài liệu · Khác (a file's kind decides: pictures and videos; Văn bản, PDF, Bảng tính, Trình chiếu; everything else), a Lưới/Danh sách toggle remembered separately as `space-files`, and "Mở trong Tài liệu" (ghost, last) that opens the space's folder in Tài liệu.
+- Files are grouped Hôm nay · Tuần này · Tháng này · Cũ hơn (`lib/file-groups`), headings sticky on a phone. In grid mode a group made only of pictures and videos is a `MediaGrid` of square tiles (3 columns on a phone); any other group is `FileCard`s. List mode is compact rows (name, sharer, updated, size) under the same headings.
+- A chip with nothing in it says "Chưa có ảnh hay video nào trong nhóm." / "Chưa có tài liệu nào trong nhóm." / "Chưa có tệp loại khác nào trong nhóm.".
+- Item menu (⋯, right click, Shift+F10, long press): Xem trước, Mở trong Tài liệu. **"Tới tin nhắn" is not offered**: a drive item carries neither message nor thread id, so the current data cannot locate the message.
+- `FileViewer` receives the filtered, grouped sequence in display order, so ←/→ never reaches a hidden file; Esc returns focus to the tile or row that was opened. People appear by name; no id reaches the screen.

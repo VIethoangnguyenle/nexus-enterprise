@@ -8,6 +8,7 @@ import { useTenantSync } from '../hooks/useTenantSync'
 import { usePreferencesSync } from '../hooks/usePreferences'
 import { useWorkspaceRealtime } from '../hooks/useWorkspaceRealtime'
 import { useUnreadCounts } from '../hooks/useMessaging'
+import { useChatState } from '../hooks/useChatState'
 import { validateWorkspaceSearch, workspaceDisplayName } from '../lib/workspace'
 import { isChatListPath } from '../lib/nav-destinations'
 import { unreadByLevel } from '../lib/conversations'
@@ -19,6 +20,7 @@ import { MobileNav } from '../components/patterns/MobileNav'
 import { PhoneSearchBar } from '../components/patterns/PhoneSearchBar'
 import { OfflineBar } from '../components/app/OfflineBar'
 import { UpdateBar } from '../components/app/UpdateBar'
+import { UpdatingBar } from '../components/app/UpdatingBar'
 import { Button, Spinner, Text } from '../components/primitives'
 import { ErrorBoundary } from '../components/ErrorBoundary'
 import { CallProvider } from '../components/calls/CallProvider'
@@ -35,6 +37,9 @@ export const Route = createFileRoute('/_workspace')({
 
 function WorkspaceLayout() {
   const token = useAuthStore((s) => s.accessToken)
+  // While the boot refresh runs the shell may already render from the device copy;
+  // only once it has failed is there no session.
+  const restoring = useAuthStore((s) => s.bootstrapping)
   const { workspaces, isLoading, isError } = useActiveWorkspace()
   const { syncing } = useTenantSync()
   usePreferencesSync()
@@ -48,7 +53,7 @@ function WorkspaceLayout() {
     }
   }, [isLoading, workspaces, token])
 
-  if (!token) return <Navigate to="/login" search={Object.fromEntries(new URLSearchParams(window.location.search))} />
+  if (!token && !restoring) return <Navigate to="/login" search={Object.fromEntries(new URLSearchParams(window.location.search))} />
 
   if (isError) {
     return (
@@ -107,6 +112,9 @@ function WorkspaceShell() {
   const disconnect = useWebSocketStore((s) => s.disconnect)
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
   useWorkspaceRealtime(wsId, !!token)
+  // One request for the navigator's state when the app opens; the 304 on the
+  // next visit keeps what the cache holds.
+  useChatState(wsId)
   const { data: unreadData } = useUnreadCounts()
   // By notification level: a muted conversation adds only the times someone named the reader.
   const unreadMessages = unreadByLevel(unreadData?.channels)
@@ -186,6 +194,7 @@ function WorkspaceShell() {
         <main className={`flex-1 flex flex-col min-w-0 ${chatBarShown ? 'pb-[calc(6.75rem+env(safe-area-inset-bottom,0px))]' : ''} lg:pb-0 isolate overflow-hidden`}>
           <PhoneSearchBar scope={screenEl} />
           <OfflineBar />
+          <UpdatingBar />
           <div ref={setScreenEl} className="flex-1 flex flex-col min-h-0 min-w-0">
             <ErrorBoundary moduleName="workspace-content">
               <Outlet />

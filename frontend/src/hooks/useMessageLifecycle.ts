@@ -1,6 +1,6 @@
 import { useMutation } from '@tanstack/react-query'
 import { messagingApi, type EditMessageInput, type Message } from '../api/messaging'
-import { mentionsFromHtml } from '../components/chat/chat-extensions'
+import { mentionsFromHtml } from '../components/chat/chat-html'
 import { applyMessageDeleted, patchMessage } from '../lib/chat-cache'
 import { queryClient } from '../lib/query-client'
 import { keys } from './keys'

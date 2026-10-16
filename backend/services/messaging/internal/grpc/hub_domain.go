@@ -3,6 +3,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"hash/fnv"
 	"log/slog"
 	"strings"
 	"sync"
@@ -48,9 +49,31 @@ type domainState struct {
 	seqMu sync.Mutex
 	seqs  map[string]uint64 // local counters, used when there is no Redis
 
+	// userLocks give the same guarantee per user: a user's number and its
+	// publication are one step, but only that user's events wait for it, so a
+	// slow append for one of up to hundreds of recipients never holds up a
+	// workspace event or another user. Users share a lock by hash; a collision
+	// costs a little waiting, never order.
+	userLocks [userLockStripes]sync.Mutex
+
+	// streamKeys are the event-log streams this instance has written to, for
+	// the length metric.
+	streamKeys sync.Map
+
 	presenceMu    sync.Mutex
 	presenceGrace time.Duration
 	pendingAbsent map[string]*time.Timer // tenant|user → offline announcement not yet sent
+}
+
+const userLockStripes = 64
+
+// userLock is the lock that orders one user's stream within a tenant.
+func (d *domainState) userLock(tenantID, node string) *sync.Mutex {
+	h := fnv.New32a()
+	h.Write([]byte(tenantID))
+	h.Write([]byte{0})
+	h.Write([]byte(node))
+	return &d.userLocks[h.Sum32()%userLockStripes]
 }
 
 func newDomainState() domainState {
@@ -132,8 +155,8 @@ func (h *Hub) PublishDomain(e realtime.Event) {
 	}
 	switch e.Level() {
 	case realtime.LevelUser:
-		data := marshalEnvelope(domainEnvelope(e, 0))
-		if data == nil {
+		frame := marshalEnvelope(domainEnvelope(e, 0))
+		if frame == nil {
 			return
 		}
 		perm := e.Domain == realtime.DomainPermission
@@ -141,13 +164,12 @@ func (h *Hub) PublishDomain(e realtime.Event) {
 		if perm {
 			prefix = permEventPrefix
 		}
+		// Taking a user's number and publishing it are one step, as for a
+		// workspace, so a user's stream reaches the wire in order. The step
+		// is ordered per user, not globally: numbers only mean something
+		// within one user's stream.
 		for _, node := range dedupe(e.UserNodeIDs) {
-			h.route(prefix+e.TenantID+":"+node, data, func() {
-				h.deliverToUserNode(e.TenantID, node, data)
-				if perm {
-					go h.recheckWorkspaceAccess(e.TenantID, node)
-				}
-			})
+			h.publishToUser(e, prefix, perm, node, frame)
 		}
 	case realtime.LevelChannel:
 		data := marshalEnvelope(domainEnvelope(e, 0))
@@ -158,13 +180,35 @@ func (h *Hub) PublishDomain(e realtime.Event) {
 	default:
 		h.dom.seqMu.Lock()
 		defer h.dom.seqMu.Unlock()
-		seq := h.nextSeq(e.WorkspaceID)
+		base := marshalEnvelope(domainEnvelope(e, 0))
+		if base == nil {
+			return
+		}
+		seq := h.nextSeq(e.WorkspaceID, base)
 		data := marshalEnvelope(domainEnvelope(e, seq))
 		if data == nil {
 			return
 		}
 		h.route(workspaceEventPrefix+e.TenantID+":"+e.WorkspaceID, data, func() { h.deliverToWorkspace(e.TenantID, e.WorkspaceID, data) })
 	}
+}
+
+// publishToUser numbers one recipient's frame and publishes it, holding only
+// that user's lock.
+func (h *Hub) publishToUser(e realtime.Event, prefix string, perm bool, node string, frame []byte) {
+	lock := h.dom.userLock(e.TenantID, node)
+	lock.Lock()
+	defer lock.Unlock()
+	data := frame
+	if useq := h.nextUserSeq(e.TenantID, node, frame); useq > 0 {
+		data = wrapUserSeq(useq, frame)
+	}
+	h.route(prefix+e.TenantID+":"+node, data, func() {
+		h.deliverToUserNode(e.TenantID, node, data)
+		if perm {
+			go h.recheckWorkspaceAccess(e.TenantID, node)
+		}
+	})
 }
 
 // RevokeWorkspaceSubscriptions ends, on every hub instance, what the user (by
@@ -250,12 +294,14 @@ func (h *Hub) route(redisChannel string, data []byte, local func()) {
 	local()
 }
 
-// nextSeq issues the workspace's next sequence number. Callers hold seqMu.
-func (h *Hub) nextSeq(workspaceID string) uint64 {
+// nextSeq issues the workspace's next sequence number and, with Redis, logs
+// the frame (built without its number) in the workspace's stream in the same
+// atomic step. Callers hold seqMu.
+func (h *Hub) nextSeq(workspaceID string, frame []byte) uint64 {
 	if h.rdb != nil {
-		n, err := h.rdb.Incr(h.ctx, workspaceSeqPrefix+workspaceID).Result()
+		n, err := h.appendEvent(workspaceSeqPrefix+workspaceID, wsStreamPrefix+workspaceID, frame)
 		if err == nil {
-			return uint64(n)
+			return n
 		}
 		slog.Warn("redis seq failed, using the local counter", "error", err)
 	}
@@ -305,7 +351,7 @@ func (h *Hub) deliverToWorkspace(tenantID, workspaceID string, data []byte) {
 	defer h.mu.RUnlock()
 	for c := range h.dom.workspaces[workspaceID] {
 		if c.tenantID == tenantID {
-			offer(c, data)
+			c.offerWorkspace(workspaceID, data)
 		}
 	}
 }
@@ -323,16 +369,50 @@ func (h *Hub) deliverToChannel(tenantID, channelID string, data []byte) {
 	}
 }
 
-func (h *Hub) deliverToUserNode(tenantID, nodeID string, data []byte) {
+// offerNumbered hands a numbered frame and the control message carrying its
+// number to a session, both or neither: a frame whose number is lost is just a
+// missed hint, but a number that arrives without its frame would move the
+// session's cursor past a loss. Dropping both leaves a hole in the numbers,
+// which the session sees on the next one and fills by syncing.
+func offerNumbered(c *Client, data, cursor []byte) {
+	if cap(c.send)-len(c.send) < 2 {
+		return
+	}
+	select {
+	case c.send <- data:
+	default:
+		return
+	}
+	// The room was checked above; if another producer took it meanwhile the
+	// number is lost with nothing skipped, which the next number reveals.
+	select {
+	case c.send <- cursor:
+	default:
+	}
+}
+
+// deliverToUserNode hands a frame to every session of the user in the tenant.
+// A numbered frame (see wrapUserSeq) is followed by a control message carrying
+// its number, so a session can keep its cursor in the user's stream.
+func (h *Hub) deliverToUserNode(tenantID, nodeID string, payload []byte) {
 	if tenantID == "" || nodeID == "" {
 		return
+	}
+	data, useq := unwrapUserSeq(payload)
+	var cursor []byte
+	if useq > 0 {
+		cursor = marshalControl(controlMessage{Type: "user_seq", Seq: useq})
 	}
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 	for _, sessions := range h.users {
 		for c := range sessions {
 			if c.ngacNodeID == nodeID && c.tenantID == tenantID {
-				offer(c, data)
+				if cursor != nil {
+					offerNumbered(c, data, cursor)
+				} else {
+					offer(c, data)
+				}
 			}
 		}
 	}
@@ -383,19 +463,29 @@ func dedupe(in []string) []string {
 	return out
 }
 
+// authorizeWorkspaceOrDeny checks the session may follow the workspace. A
+// refusal is answered with a 403 and a denied acknowledgement, so a client
+// waiting on the subscription is released; nothing is subscribed or replayed.
+func (c *Client) authorizeWorkspaceOrDeny(workspaceID string) bool {
+	who := grpcauth.Caller{UserID: c.userID, NGACNodeID: c.ngacNodeID, TenantID: c.tenantID}
+	err := c.hub.authorizeWorkspaceSubscribe(workspaceID, who)
+	if err == nil {
+		return true
+	}
+	slog.Warn("websocket workspace subscribe denied",
+		"user_id", c.userID, "workspace_id", workspaceID, "error", err)
+	c.sendError(403, "not allowed to subscribe to this workspace")
+	if data := marshalEnvelope(&pb.ServerEnvelope{Payload: &pb.ServerEnvelope_WorkspaceSubscribed{
+		WorkspaceSubscribed: &pb.WorkspaceSubscribed{WorkspaceId: workspaceID, Denied: true},
+	}}); data != nil {
+		offer(c, data)
+	}
+	return false
+}
+
 // handleWorkspaceSubscribe processes a workspace SubscribeRequest.
 func (c *Client) handleWorkspaceSubscribe(workspaceID string) {
-	who := grpcauth.Caller{UserID: c.userID, NGACNodeID: c.ngacNodeID, TenantID: c.tenantID}
-	if err := c.hub.authorizeWorkspaceSubscribe(workspaceID, who); err != nil {
-		slog.Warn("websocket workspace subscribe denied",
-			"user_id", c.userID, "workspace_id", workspaceID, "error", err)
-		c.sendError(403, "not allowed to subscribe to this workspace")
-		// Answer as well, so a client waiting on the subscription is released.
-		if data := marshalEnvelope(&pb.ServerEnvelope{Payload: &pb.ServerEnvelope_WorkspaceSubscribed{
-			WorkspaceSubscribed: &pb.WorkspaceSubscribed{WorkspaceId: workspaceID, Denied: true},
-		}}); data != nil {
-			offer(c, data)
-		}
+	if !c.authorizeWorkspaceOrDeny(workspaceID) {
 		return
 	}
 	seq := c.hub.subscribeWorkspace(workspaceID, c)

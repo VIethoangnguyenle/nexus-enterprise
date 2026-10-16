@@ -60,6 +60,31 @@ type RealtimeConsumer struct {
 
 	evictor    CallEvictor
 	evictAfter []time.Duration
+
+	chat ChatVersions
+}
+
+// ChatVersions moves the counters that tell clients their copy of the chat state
+// is out of date. *domain.Service does.
+type ChatVersions interface {
+	BumpChat(tenantID string, userIDs ...string)
+}
+
+// SetChatVersions wires the counters moved by changes other services announce
+// (a member leaving a workspace, a permission changing), which reach the chat
+// state without passing through any messaging request.
+func (c *RealtimeConsumer) SetChatVersions(v ChatVersions) { c.chat = v }
+
+// bumpChat moves the tenant's chat counter for an event that can change what a
+// person's conversations list shows. Drive and document changes cannot.
+func (c *RealtimeConsumer) bumpChat(evt realtime.Event) {
+	if c.chat == nil {
+		return
+	}
+	switch evt.Domain {
+	case realtime.DomainChannel, realtime.DomainWorkspace, realtime.DomainPermission:
+		c.chat.BumpChat(evt.TenantID)
+	}
 }
 
 // CallEvictor puts out of open calls the people who no longer hold the right to
@@ -190,9 +215,16 @@ func (c *RealtimeConsumer) handle(topic string, value []byte) {
 	}
 	c.sweepCalls(evt)
 	if evt.Domain == realtime.DomainPermission && c.settle > 0 {
-		time.AfterFunc(c.settle, func() { c.pub.PublishDomain(evt) })
+		// The counter moves when the clients are told, not before: a refetch
+		// answered by a replica that has not learned of the change yet would
+		// otherwise be kept under the new version.
+		time.AfterFunc(c.settle, func() {
+			c.bumpChat(evt)
+			c.pub.PublishDomain(evt)
+		})
 		return
 	}
+	c.bumpChat(evt)
 	c.pub.PublishDomain(evt)
 }
 

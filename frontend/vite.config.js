@@ -7,11 +7,13 @@ import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { versionWorkerImport } from './src/lib/worker-version'
 
+// This build's id: names the worker import below and busts the device cache (src/lib/query-persist.ts).
+const version = process.env.GITHUB_SHA || Date.now().toString(36)
+
 // Writes this build's id into the copied OneSignalSDKWorker.js (see src/lib/worker-version.ts):
 // without it an installed iPhone app keeps the first version it ever loaded.
 function versionOneSignalWorker() {
   let outDir = 'dist'
-  const version = process.env.GITHUB_SHA || Date.now().toString(36)
   return {
     name: 'version-onesignal-worker',
     apply: 'build',
@@ -65,8 +67,8 @@ const devProxy = {
         if (/^\/api\/workspaces\/[^/]+\/documents/.test(url)) {
           return originalWeb(req, res, { ...opts, target: 'http://localhost:8182' })
         }
-        // /api/workspaces/:id/channels/* and /chat-sections/* → messaging service
-        if (/^\/api\/workspaces\/[^/]+\/(channels|chat-sections)/.test(url)) {
+        // /api/workspaces/:id/channels/*, /chat-sections/* and /chat-state → messaging service
+        if (/^\/api\/workspaces\/[^/]+\/(channels|chat-sections|chat-state)/.test(url)) {
           return originalWeb(req, res, { ...opts, target: 'http://localhost:8183' })
         }
         // /api/workspaces/:id/contacts → auth service
@@ -135,9 +137,10 @@ export default defineConfig({
   // to the injectManifest SW build, but `define` constants are.
   define: {
     __ONESIGNAL__: JSON.stringify(!!process.env.VITE_ONESIGNAL_APP_ID),
+    __APP_VERSION__: JSON.stringify(version),
   },
   plugins: [
-    TanStackRouterVite({ routesDirectory: './src/routes', generatedRouteTree: './src/routeTree.gen.ts' }),
+    TanStackRouterVite({ routesDirectory: './src/routes', generatedRouteTree: './src/routeTree.gen.ts', autoCodeSplitting: true }),
     tailwindcss(),
     react(),
     versionOneSignalWorker(),
@@ -151,7 +154,7 @@ export default defineConfig({
       manifestFilename: 'manifest.webmanifest',
       injectManifest: {
         rollupFormat: 'iife',
-        // The app is one ~2 MB entry chunk; it is the shell and must be precached whole.
+        // The largest chunk (the conversation stream with its editor) stays well under this.
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         globPatterns: ['**/*.{html,js,css,woff2,svg,png,webmanifest}'],
         globIgnores: ['**/favicon-*.png', 'OneSignalSDKWorker.js'],
@@ -176,6 +179,21 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rolldownOptions: {
+      output: {
+        // Stable vendors get their own files, so a deploy that only touches app code
+        // leaves them in the browser cache (their hashes do not change).
+        codeSplitting: {
+          groups: [
+            { name: 'vendor-react', test: /node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 30 },
+            { name: 'vendor-tanstack', test: /node_modules[\\/]@tanstack[\\/]/, priority: 20 },
+            { name: 'vendor-motion', test: /node_modules[\\/](motion|motion-dom|motion-utils|framer-motion)[\\/]/, priority: 10 },
+          ],
+        },
+      },
+    },
+  },
   server: {
     proxy: isDev ? devProxy : dockerProxy,
   },

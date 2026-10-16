@@ -1,4 +1,5 @@
-import { apiFetch } from './client'
+import { apiFetch, refreshAccessToken } from './client'
+import { useAuthStore } from '../stores/auth.store'
 
 /** A protobuf Timestamp as the REST layer serialises it, or an ISO string. `lib/format` reads both. */
 export type DriveTimestamp = string | { seconds: number | string; nanos?: number }
@@ -90,7 +91,39 @@ export type FilePreview =
   | { kind: 'sheet'; url: string; mime: string }
   | { kind: 'unavailable'; reason: PreviewUnavailableReason }
 
+/** The two sizes the server renders a file's thumbnail at. */
+export type ThumbnailSize = 320 | 640
+
+/** The server has no picture for this file (unsupported, too large, still busy, or no access). */
+export class ThumbnailUnavailableError extends Error {
+  constructor(public status: number) {
+    super(`thumbnail unavailable (${status})`)
+    this.name = 'ThumbnailUnavailableError'
+  }
+}
+
+/**
+ * Fetches a file's thumbnail as a blob. The session is a bearer token, which an
+ * `<img src>` cannot send, so the picture is requested here and shown from an
+ * object URL. Anything but a 200 (404 not renderable, 503 busy, 403) throws
+ * `ThumbnailUnavailableError`; a 304 is answered by the browser's cache.
+ */
+async function fetchThumbnail(fileId: string, size: ThumbnailSize, signal?: AbortSignal): Promise<Blob> {
+  const url = `/api/drive/files/${encodeURIComponent(fileId)}/thumbnail?size=${size}`
+  const get = () => {
+    const token = useAuthStore.getState().accessToken
+    return fetch(url, { signal, headers: token ? { Authorization: `Bearer ${token}` } : {} })
+  }
+  let res = await get()
+  // One refresh, like apiFetch, but a thumbnail never ends the session on its own.
+  if (res.status === 401 && (await refreshAccessToken())) res = await get()
+  if (res.status !== 200) throw new ThumbnailUnavailableError(res.status)
+  return res.blob()
+}
+
 export const driveApi = {
+  fetchThumbnail,
+
   // — Folders —
   listRoot: (wsId: string) =>
     apiFetch<DriveListing>(`/workspaces/${wsId}/drive`),

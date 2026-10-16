@@ -5,10 +5,9 @@ import Italic from '@tiptap/extension-italic'
 import Strike from '@tiptap/extension-strike'
 import { markInputRule, Node, type Editor } from '@tiptap/core'
 
-/** Links the composer may write; the server keeps the same three schemes (docs/specs/chat-rich-text). */
-export const ALLOWED_LINK = /^(?:https?:\/\/|mailto:)\S+$/i
+import { isAllowedLink } from './chat-html'
 
-export const isAllowedLink = (url: string): boolean => ALLOWED_LINK.test(url.trim())
+export { ALLOWED_LINK, isAllowedLink, mentionsFromHtml } from './chat-html'
 
 /** `*x*`, `_x_` and `~x~` as the quick syntax of Google Chat: one mark character on each side. */
 const around = (c: string) => new RegExp(`(?:^|\\s)(${c}(?!\\s+${c})((?:[^${c}]+))${c}(?!\\s+${c}))$`)
@@ -64,18 +63,6 @@ export function mentionsOf(editor: Editor): string[] {
   const ids: string[] = []
   editor.state.doc.descendants((n) => {
     const id = n.type.name === 'mention' ? (n.attrs.id as string) : ''
-    if (id && !ids.includes(id)) ids.push(id)
-  })
-  return ids
-}
-
-/** The people mentioned in saved html (an edit's text), by user id: each once, in the order they appear. */
-export function mentionsFromHtml(html: string): string[] {
-  if (!html) return []
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  const ids: string[] = []
-  doc.querySelectorAll('[data-mention]').forEach((el) => {
-    const id = el.getAttribute('data-mention') ?? ''
     if (id && !ids.includes(id)) ids.push(id)
   })
   return ids

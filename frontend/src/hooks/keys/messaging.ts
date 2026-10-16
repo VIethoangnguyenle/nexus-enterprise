@@ -7,6 +7,8 @@ export const messagingKeys = {
   /** Prefix of every workspace's channel list. */
   channelsAll: () => ['channels'] as const,
   channels: (wsId: string) => ['channels', wsId] as const,
+  /** The whole chat navigator state of one workspace, as the start-up fetches it. */
+  chatState: (wsId: string) => ['chat-state', wsId] as const,
   /** The user's personal navigator sections in one workspace. */
   sections: (wsId: string) => ['chat-sections', wsId] as const,
   /** Direct messages are not workspace-scoped on the backend. */

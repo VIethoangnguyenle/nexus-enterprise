@@ -17,7 +17,7 @@ import { cardKindOf, toEditorHtml } from '../../lib/message-model'
 import { MessageBlock } from './MessageBlock'
 import { MessageActionSheet } from './MessageActionSheet'
 import { MessageMenu, type MessageMenuTarget } from './MessageMenu'
-import { MessageEditBox } from './MessageEditBox'
+import { LazyMessageEditBox } from '../chat/lazy-parts'
 import { DeleteMessageDialog } from './DeleteMessageDialog'
 import { ThreadSummary } from './ThreadSummary'
 import { EmptyState } from './EmptyState'
@@ -282,7 +282,7 @@ export function ConversationStream(props: ConversationStreamProps) {
           onEdit={can?.edit ? (m) => lifecycle!.startEdit(m) : undefined}
           onOpenQuote={t.quoted && loadedIds.has(t.quoted.id) ? openQuote : undefined}
           editor={editingHere ? (
-            <MessageEditBox
+            <LazyMessageEditBox
               initialHtml={lifecycle!.editing!.draft ?? toEditorHtml(t)}
               onSave={lifecycle!.saveEdit}
               onCancel={lifecycle!.cancelEdit}

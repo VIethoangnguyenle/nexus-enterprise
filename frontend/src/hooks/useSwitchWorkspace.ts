@@ -3,6 +3,7 @@ import { useMutation } from '@tanstack/react-query'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { authApi } from '../api/auth'
 import { queryClient } from '../lib/query-client'
+import { wipeDeviceCache } from '../lib/query-persist'
 import { tenantIdFromToken, useAuthStore } from '../stores/auth.store'
 import { useDriveStore } from '../stores/drive.store'
 import { useActiveWorkspace } from './useActiveWorkspace'
@@ -29,6 +30,8 @@ export function moduleRootOf(pathname: string): ModuleRoot {
  */
 export function resetTenantScopedState() {
   queryClient.clear()
+  // The copy on the device is the old workspace's too.
+  void wipeDeviceCache()
   useDriveStore.setState({ selectedItemId: null, expandedFolders: new Set<string>() })
 }
 
@@ -38,16 +41,18 @@ export function resetTenantScopedState() {
  * and the previous workspace's data dropped. A refusal throws and leaves the
  * token and the cache as they were. Shared by the switcher and by the layout's
  * tenant sync, so both re-scope identically.
+ *
+ * When the token already speaks for the workspace nothing changed, so nothing
+ * is dropped: clearing the cache then would only throw away the lists the app
+ * has just fetched (the workspace list first) and fetch them again.
  */
 export async function rescopeSession(workspaceId: string) {
   const { accessToken, setAccessToken } = useAuthStore.getState()
-  let token: string | null = null
-  if (tenantIdFromToken(accessToken) !== workspaceId) {
-    token = (await authApi.switchTenant(workspaceId)).access_token
-    // Requests still in flight were made for the old workspace.
-    await queryClient.cancelQueries()
-  }
-  if (token) setAccessToken(token)
+  if (tenantIdFromToken(accessToken) === workspaceId) return
+  const token = (await authApi.switchTenant(workspaceId)).access_token
+  // Requests still in flight were made for the old workspace.
+  await queryClient.cancelQueries()
+  setAccessToken(token)
   resetTenantScopedState()
 }
 

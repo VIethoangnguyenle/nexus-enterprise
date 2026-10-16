@@ -2,6 +2,7 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { messagingApi, type ConversationActivity } from '../api/messaging'
 import { timestampToRfc3339 } from '../lib/stream-model'
 import { keys } from './keys'
+import { startupPart } from './useChatState'
 
 const FOLLOWED_PAGE = 20
 
@@ -13,7 +14,7 @@ const FOLLOWED_PAGE = 20
 export function useConversationActivity() {
   return useQuery({
     queryKey: keys.messaging.conversationActivity(),
-    queryFn: () => messagingApi.conversationActivity(),
+    queryFn: () => startupPart(keys.messaging.conversationActivity(), undefined, (s) => s.activity, () => messagingApi.conversationActivity()),
     select: (rows): Record<string, ConversationActivity> => Object.fromEntries(rows.map((r) => [r.channel_id, r])),
   })
 }

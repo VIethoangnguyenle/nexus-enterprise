@@ -73,6 +73,22 @@ The create screen has one field, the name (1 to 80 characters), and no URL, slug
 - **WHEN** a person submits "Tổ Đối soát"
 - **THEN** the request body is exactly `{"name":"Tổ Đối soát"}`
 
+### Requirement: A copy shown while it refreshes says so
+When the app starts from the copy kept on the device (`docs/specs/pwa-install/spec.md`), a quiet strip "Đang cập nhật…"
+(28px high, `--color-sunk`, `text-xs`, `--color-ink-muted`, a slowly turning refresh icon that stops under reduced motion)
+SHALL appear under the top bar, in the connection bar's place, inside a `role="status"` `aria-live="polite"` region that
+exists before the text. It disappears when the chat state has been fetched after the start, when that fetch fails, when
+the connection bar is shown, or after 15 seconds. It has no button and no toast, and never shows when the app started
+without a copy (first visit, after sign-out or a workspace switch). Design: `DESIGN.md`, "Đang cập nhật".
+
+#### Scenario: Start from a copy
+- **WHEN** the app opens with a saved copy and the fresh chat state has not arrived
+- **THEN** the strip reads "Đang cập nhật…" and is announced politely, and it is gone once the fresh state arrives
+
+#### Scenario: No copy
+- **WHEN** the app opens with nothing saved
+- **THEN** the strip never appears and the screens show their loading skeletons as usual
+
 ### Requirement: Routes and sessions
 Moving from the profile step to workspace selection or creation keeps the `ws` the person arrived with. The sign-in page turns away a signed-in person to workspace selection; the profile, workspace-selection and create-workspace pages turn away a signed-out person to the sign-in page. Both checks run when navigation starts, not whenever the session changes. "Đổi tài khoản" ends the session through the one logout path (`logoutSession`: the server revokes the refresh token, then the local session and every cached query are dropped). There is no welcome page and no timed redirect.
 

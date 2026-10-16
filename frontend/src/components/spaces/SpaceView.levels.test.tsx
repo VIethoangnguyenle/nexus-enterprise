@@ -1,13 +1,17 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
 import { CH, UUID_RE } from '../../test/chat-fixtures'
 import { createChatStateServer } from '../../test/chat-state-server'
 import { apiFetch } from '../../api/client'
 import { useToastStore } from '../primitives'
+import { prefetchChatParts } from '../chat/lazy-parts'
 import { SpaceView } from './SpaceView'
+
+// The composer, picker and editor load on first use; fetch them once so each test sees them at once.
+beforeAll(() => prefetchChatParts(), 60_000)
 
 vi.mock('@tanstack/react-router', async () => (await import('../../test/router-mock')).routerMockFactory())
 vi.mock('../../api/client', async (orig) => ({ ...(await orig<typeof import('../../api/client')>()), apiFetch: vi.fn() }))

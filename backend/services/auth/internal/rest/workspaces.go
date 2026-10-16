@@ -111,7 +111,7 @@ func (h *Handler) CreateMyWorkspace(c echo.Context) error {
 
 // ListContacts handles GET /api/workspaces/:id/contacts: one page of the
 // workspace directory. Query: department, location, search, limit (default 50,
-// at most 200) and cursor (the next_cursor of the page before). The answer
+// at most 500) and cursor (the next_cursor of the page before). The answer
 // carries the true total, and next_cursor when more people follow.
 func (h *Handler) ListContacts(c echo.Context) error {
 	wsID := c.Param("id")

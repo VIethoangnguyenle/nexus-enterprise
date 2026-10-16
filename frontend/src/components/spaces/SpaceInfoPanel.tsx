@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { ChevronRight, Pin } from 'lucide-react'
+import { useRemoveChannelAvatar, useUploadChannelAvatar } from '../../hooks/useChannelAvatar'
+import { useCanManageChannel } from '../../hooks/useCanManageChannel'
 import { useUpdateChannel } from '../../hooks/useMessaging'
 import { usePins } from '../../hooks/useMessages'
+import { avatarErrorMessage } from '../../lib/avatar-file'
 import { explain } from '../../lib/errors'
 import { formatDateTime, formatListTime } from '../../lib/format'
 import { avatarOf, displayName, type PeopleDirectory, type Person } from '../../lib/people'
 import type { NotificationLevel } from '../../api/notification-levels'
 import { optionFor } from '../../lib/notification-level-copy'
+import { AvatarEdit } from '../patterns/AvatarEdit'
 import { Avatar, Button, PersonChip, Pressable, Spinner, TextField, toast } from '../primitives'
 import { LEVEL_ICON } from './ConversationTitleMenu'
 import { NotificationLevelSheet } from './NotificationLevelSheet'
@@ -28,11 +32,13 @@ export interface InfoNotification {
  * About a conversation: on a phone the Thông báo row first (it opens the level
  * sheet), then the name (renamable for spaces), and pinned messages.
  */
-export function SpaceInfoPanel({ channelId, kind, title, memberCount, partner, people, notification, onOpenTopic, onClose }: {
+export function SpaceInfoPanel({ channelId, kind, title, memberCount, avatarUrl, partner, people, notification, onOpenTopic, onClose }: {
   channelId: string
   kind: 'dm' | 'space'
   title: string
   memberCount: number
+  /** A space's own picture; absent when it has none. */
+  avatarUrl?: string
   partner?: Person
   people: PeopleDirectory
   /** Phone only: the desktop sets the level from the header menu. */
@@ -44,6 +50,12 @@ export function SpaceInfoPanel({ channelId, kind, title, memberCount, partner, p
   const rename = useUpdateChannel(channelId)
   const [editing, setEditing] = useState(false)
   const [levelSheet, setLevelSheet] = useState(false)
+  const upload = useUploadChannelAvatar(channelId)
+  const removePicture = useRemoveChannelAvatar(channelId)
+  const [pictureError, setPictureError] = useState<string | null>(null)
+  // The same right as renaming: the server decides in the end, this keeps the
+  // change from being offered where it would be refused.
+  const canManage = useCanManageChannel(channelId)
   const [name, setName] = useState(title)
   const list = pins.data?.pins ?? []
 
@@ -65,6 +77,27 @@ export function SpaceInfoPanel({ channelId, kind, title, memberCount, partner, p
     )
   }
 
+  const changePicture = async (file: File) => {
+    setPictureError(null)
+    try {
+      await upload.mutateAsync(file)
+    } catch (err) {
+      setPictureError(avatarErrorMessage(err))
+      return
+    }
+    toast('Đã đổi ảnh nhóm')
+  }
+  const clearPicture = async () => {
+    setPictureError(null)
+    try {
+      await removePicture.mutateAsync()
+    } catch (err) {
+      setPictureError(avatarErrorMessage(err))
+      return
+    }
+    toast('Đã bỏ ảnh nhóm')
+  }
+
   return (
     <SidePanel
       label="Thông tin"
@@ -84,6 +117,22 @@ export function SpaceInfoPanel({ channelId, kind, title, memberCount, partner, p
             onChoose={notification.onChoose}
             onClose={() => setLevelSheet(false)}
           />
+        )}
+        {kind === 'space' && (
+          <div className="grid justify-items-center">
+            <AvatarEdit
+              shape="square"
+              name={title}
+              hueKey={channelId}
+              src={avatarUrl}
+              label={`Đổi ảnh nhóm ${title}`}
+              canEdit={canManage}
+              busy={upload.isPending || removePicture.isPending}
+              error={pictureError}
+              onUpload={changePicture}
+              onRemove={clearPicture}
+            />
+          </div>
         )}
         {kind === 'space' ? (
           editing ? (

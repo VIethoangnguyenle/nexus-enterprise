@@ -95,6 +95,7 @@ message Channel {
   string description = 10;    // Longer channel description
   int32 member_count = 11;    // Denormalized member count
   bool starred = 12;          // The caller starred this conversation (set where a caller is known)
+  string avatar_url = 13;     // The group's picture address ("" when it has none); never set on a DM
 }
 
 message CreateChannelRequest {
