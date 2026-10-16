@@ -241,3 +241,38 @@ describe('MessageBlock: starred', () => {
     expect(screen.queryByRole('img', { name: 'Bạn đã gắn sao' })).toBeNull()
   })
 })
+
+describe('MessageBlock: your own lines on a phone', () => {
+  const mine: Message = { id: 'm-mine', channel_id: 'ch-1', sender_id: ME.id, content: '<p>xin chào</p>', content_format: 'html', created_at: '2026-10-10T09:31:00Z' }
+  const rowOf = (idBase: string) => document.getElementById(`${idBase}-text`)!.closest('.group')!
+  const columnOf = (idBase: string) => document.getElementById(`${idBase}-text`)!.parentElement!
+
+  it('keeps no empty time column at the right edge below md, only from md up', () => {
+    renderWithClient(<MessageBlock message={mine} people={people} idBase="m-mine" me={ME.id} mine />)
+    const cls = rowOf('m-mine').className.split(/\s+/)
+    expect(cls).toContain('grid-cols-[minmax(0,1fr)]')
+    expect(cls).toContain('md:grid-cols-[minmax(0,1fr)_2rem]')
+    expect(cls).not.toContain('grid-cols-[minmax(0,1fr)_2rem]')
+  })
+
+  it('leaves the other side as it was: avatar column on the left', () => {
+    renderWithClient(<MessageBlock message={{ ...mine, sender_id: U.lan.id }} people={people} idBase="m-other" me={ME.id} />)
+    expect(rowOf('m-other').className.split(/\s+/)).toContain('grid-cols-[2rem_minmax(0,1fr)]')
+  })
+
+  it('shows a grouped line\'s time above the bubble when tapped, and the edge column only from md up', async () => {
+    const user = userEvent.setup()
+    renderWithClient(<MessageBlock message={mine} people={people} idBase="m-grp" me={ME.id} mine grouped />)
+    const gutter = rowOf('m-grp').querySelector(':scope > span time')!.parentElement!
+    expect(gutter.className.split(/\s+/)).toEqual(expect.arrayContaining(['max-md:hidden', 'md:col-start-2']))
+    expect(columnOf('m-grp').querySelector('time')).toBeNull()
+
+    await user.click(document.getElementById('m-grp-text')!)
+    const inline = columnOf('m-grp').querySelector('time')!
+    expect(inline).toHaveTextContent(/\d{2}:\d{2}/)
+    expect(inline.parentElement!.className).toContain('md:hidden')
+
+    await user.click(document.getElementById('m-grp-text')!)
+    expect(columnOf('m-grp').querySelector('time')).toBeNull()
+  })
+})
