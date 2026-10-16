@@ -186,8 +186,23 @@ func newRedisRig(t *testing.T, access grpcserver.WorkspaceAccessChecker) *redisR
 }
 
 func (r *redisRig) publish(n int) {
+	key := "wsseq:" + r.workspace // the hub's workspace counter key
+	before, _ := r.rdb.Get(context.Background(), key).Int64()
 	for i := 0; i < n; i++ {
 		r.hub.PublishDomain(driveEvent(r.tenant, r.workspace, fmt.Sprintf("f%d", i)))
+	}
+	// Events reach the hub through Redis pub/sub; wait until it has numbered all of
+	// them, so a session dialled next does not receive them as live frames.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got, err := r.rdb.Get(context.Background(), key).Int64()
+		if err == nil && got >= before+int64(n) {
+			return
+		}
+		if time.Now().After(deadline) {
+			panic(fmt.Sprintf("workspace counter %s = %d after 5s, want %d", key, got, before+int64(n)))
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -499,6 +514,8 @@ func TestUserStream_ReplaysOwnFramesOnly(t *testing.T) {
 	rig.hub.PublishDomain(perm("n-a2"))
 	rig.hub.PublishDomain(perm("n-a1"))
 	rig.hub.PublishDomain(perm("n-a1"))
+	rig.waitForUserNumber(t, "n-a1", 3)
+	rig.waitForUserNumber(t, "n-a2", 1)
 
 	own := dialSync(t, rig.url, rig.id("n-a1"))
 	own.syncUser(t, 1)
@@ -535,6 +552,9 @@ func TestUserStream_TooFarOutsideTheWindow(t *testing.T) {
 	rig := newRedisRig(t, access)
 	rig.hub.PublishDomain(realtime.Event{Domain: realtime.DomainPermission, Kind: realtime.KindChanged,
 		TenantID: rig.tenant, WorkspaceID: rig.workspace, UserNodeIDs: []string{"n-a1"}})
+	// The event reaches the hub through Redis pub/sub; dialling before the hub has
+	// numbered it would let it arrive as a live frame on the new session.
+	rig.waitForUserNumber(t, "n-a1", 1)
 
 	c := dialSync(t, rig.url, rig.id("n-a1"))
 	c.syncUser(t, 40)
@@ -563,4 +583,22 @@ func TestSync_RequiresAuthAndAWellFormedRequest(t *testing.T) {
 	assert.NotNil(t, c.wait(t, func(f frame) bool { return f.env.GetError() != nil && f.env.GetError().Code == 400 }, 2*time.Second))
 	c.sendJSON(t, map[string]any{"type": "bogus", "since": 0})
 	assert.NotNil(t, c.wait(t, func(f frame) bool { return f.env.GetError() != nil && f.env.GetError().Code == 400 }, 2*time.Second))
+}
+
+// waitForUserNumber waits until the hub has numbered n events for node's user
+// stream (the counter is taken when the hub handles the event, after pub/sub).
+func (r *redisRig) waitForUserNumber(t *testing.T, node string, n int64) {
+	t.Helper()
+	key := "useq:" + r.tenant + ":" + node // the hub's user counter key
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		got, err := r.rdb.Get(context.Background(), key).Int64()
+		if err == nil && got >= n {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("user counter %s = %d (err %v) after 5s, want %d", key, got, err, n)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
