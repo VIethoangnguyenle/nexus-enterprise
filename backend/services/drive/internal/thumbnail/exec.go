@@ -36,6 +36,17 @@ type Exec struct {
 	// toolUID/toolGID when it is 0, since only root may change identity.
 	euid             int
 	toolUID, toolGID uint32
+	// chown hands the work dir and the staged source to the tool user; nil
+	// means os.Chown. Tests replace it so staging can be checked without root.
+	chown func(name string, uid, gid int) error
+}
+
+func (e *Exec) setOwner(name string) error {
+	chown := e.chown
+	if chown == nil {
+		chown = os.Chown
+	}
+	return chown(name, int(e.toolUID), int(e.toolGID))
 }
 
 // NewExec returns the production Renderer. When the service runs as root, the
@@ -99,7 +110,7 @@ func (e *Exec) workDir(srcPath string) (dir, src string, err error) {
 		return dir, srcPath, nil
 	}
 	src = filepath.Join(dir, "input")
-	if err := os.Chown(dir, int(e.toolUID), int(e.toolGID)); err != nil {
+	if err := e.setOwner(dir); err != nil {
 		os.RemoveAll(dir)
 		return "", "", fmt.Errorf("work dir owner: %w", err)
 	}
@@ -109,7 +120,7 @@ func (e *Exec) workDir(srcPath string) (dir, src string, err error) {
 			return "", "", fmt.Errorf("stage source: %w", err)
 		}
 	}
-	if err := os.Chown(src, int(e.toolUID), int(e.toolGID)); err != nil {
+	if err := e.setOwner(src); err != nil {
 		os.RemoveAll(dir)
 		return "", "", fmt.Errorf("source owner: %w", err)
 	}

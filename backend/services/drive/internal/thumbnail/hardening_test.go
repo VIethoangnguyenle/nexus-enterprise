@@ -156,15 +156,16 @@ func TestVideo_AllowedContainersStillWork(t *testing.T) {
 }
 
 func TestExec_StagesTheSourceForADroppedTool(t *testing.T) {
-	if os.Geteuid() != 0 {
-		t.Skip("staging for another user only happens when running as root")
-	}
 	src := writeFile(t, "a.pdf", []byte(minimalPDF))
-	e := &Exec{euid: 0, toolUID: 65534, toolGID: 65534}
+	owned := map[string][2]int{}
+	e := &Exec{euid: 0, toolUID: 65534, toolGID: 65534,
+		chown: func(name string, uid, gid int) error { owned[name] = [2]int{uid, gid}; return nil }}
 	dir, staged, err := e.workDir(src)
 	require.NoError(t, err)
 	defer os.RemoveAll(dir)
 	assert.Equal(t, filepath.Join(dir, "input"), staged)
 	_, err = os.Stat(staged)
 	assert.NoError(t, err)
+	// Both the work dir and the staged copy go to the tool user, nothing else.
+	assert.Equal(t, map[string][2]int{dir: {65534, 65534}, staged: {65534, 65534}}, owned)
 }
