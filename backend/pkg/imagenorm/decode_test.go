@@ -1,4 +1,4 @@
-package domain
+package imagenorm
 
 import (
 	"encoding/binary"
@@ -42,9 +42,9 @@ func TestDecodedBytes_FollowsWhatTheDecoderAllocates(t *testing.T) {
 		{"jpeg 4:4:4", jpegHeader(0xC0, w, h, 0x11, 0x11, 0x11), px*3 + px},
 		// A progressive decode also keeps a 4-byte coefficient per sample.
 		{"progressive 4:2:0", jpegHeader(0xC2, w, h, 0x22, 0x11, 0x11), px*3/2*5 + px},
-		{"png rgba 8-bit", PNGHeaderForTest(w, h, 8, 6), px*4 + px},
-		{"png rgba 16-bit", PNGHeaderForTest(w, h, 16, 6), px*8 + px},
-		{"png gray", PNGHeaderForTest(w, h, 8, 0), px + px},
+		{"png rgba 8-bit", pngHeader(w, h, 8, 6), px*4 + px},
+		{"png rgba 16-bit", pngHeader(w, h, 16, 6), px*8 + px},
+		{"png gray", pngHeader(w, h, 8, 0), px + px},
 	}
 	for _, tc := range cases {
 		got, err := decodedBytes(tc.b)
@@ -67,10 +67,10 @@ func TestDecodedBytes_BudgetEdges(t *testing.T) {
 	}{
 		{"12 MP phone JPEG", jpegHeader(0xC0, 4032, 3024, 0x22, 0x11, 0x11), true},
 		{"12 MP progressive JPEG", jpegHeader(0xC2, 4032, 3024, 0x22, 0x11, 0x11), false},
-		{"3000² RGBA PNG", PNGHeaderForTest(3000, 3000, 8, 6), true},
-		{"3300² RGBA PNG", PNGHeaderForTest(3300, 3300, 8, 6), false},
-		{"2200² 16-bit PNG", PNGHeaderForTest(2200, 2200, 16, 6), true},
-		{"2500² 16-bit PNG", PNGHeaderForTest(2500, 2500, 16, 6), false},
+		{"3000² RGBA PNG", pngHeader(3000, 3000, 8, 6), true},
+		{"3300² RGBA PNG", pngHeader(3300, 3300, 8, 6), false},
+		{"2200² 16-bit PNG", pngHeader(2200, 2200, 16, 6), true},
+		{"2500² 16-bit PNG", pngHeader(2500, 2500, 16, 6), false},
 		// Fill bytes (0xFF) may precede any marker; a parser that loses its
 		// place on them must not end up estimating a progressive picture as
 		// baseline.
@@ -81,8 +81,8 @@ func TestDecodedBytes_BudgetEdges(t *testing.T) {
 		if tc.ok && err != nil {
 			t.Errorf("%s: refused: %v", tc.name, err)
 		}
-		if !tc.ok && !errors.Is(err, ErrAvatarTooManyPixels) {
-			t.Errorf("%s: err = %v, want ErrAvatarTooManyPixels", tc.name, err)
+		if !tc.ok && !errors.Is(err, ErrTooManyPixels) {
+			t.Errorf("%s: err = %v, want ErrTooManyPixels", tc.name, err)
 		}
 	}
 }

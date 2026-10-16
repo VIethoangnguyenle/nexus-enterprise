@@ -26,6 +26,8 @@ interface AvatarProps {
    */
   hueKey?: string
   size?: AvatarSize
+  /** `square` is a group's: corners a quarter of the side, the picture follows. */
+  shape?: 'circle' | 'square'
   /** Profile picture, when the person has one. */
   src?: string
   /** Show the green presence dot. */
@@ -75,23 +77,25 @@ export function initialsOf(name: string): string {
 }
 
 /** Round avatar on the person's hue, with presence and the realtime halo. */
-export function Avatar({ name, hueKey, size = 32, src, online, halo, className = '' }: AvatarProps) {
+export function Avatar({ name, hueKey, size = 32, shape = 'circle', src, online, halo, className = '' }: AvatarProps) {
   const s = px[size]
-  const style: CSSProperties = personStyle(hueKey || name)
+  const square = shape === 'square'
+  const style: CSSProperties = { ...personStyle(hueKey || name), ...(square ? { borderRadius: s / 4 } : {}) }
+  const round = square ? 'rounded-[inherit]' : 'rounded-full'
   // A picture that fails to load (replaced, removed, or a server that does not
   // serve it) leaves the initials, never an empty circle. A new address tries again.
   const [failed, setFailed] = useState<string | undefined>()
   const shown = src && failed !== src ? avatarVariant(src, s) : undefined
   return (
     <span
-      className={`relative inline-grid place-items-center shrink-0 rounded-full select-none
+      className={`relative inline-grid place-items-center shrink-0 ${square ? '' : 'rounded-full'} select-none
         bg-(--p) text-on-person font-semibold leading-none ${sizeStyles[s]} ${halo ? 'rt-halo' : ''} ${className}`}
       style={style}
       title={name}
       aria-hidden="true"
     >
       {shown
-        ? <img src={shown} alt="" className="w-full h-full rounded-full object-cover" onError={() => setFailed(src)} />
+        ? <img src={shown} alt="" className={`w-full h-full ${round} object-cover`} onError={() => setFailed(src)} />
         : initialsOf(name)}
       {online && (
         <span

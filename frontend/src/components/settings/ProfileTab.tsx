@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Camera, CircleAlert, LogOut } from 'lucide-react'
+import { CircleAlert, LogOut } from 'lucide-react'
 import { logoutSession } from '../../api/client'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useMyProfile } from '../../hooks/useMyProfile'
 import { useRemoveAvatar, useUpdateProfile, useUploadAvatar } from '../../hooks/useProfile'
+import { avatarErrorMessage } from '../../lib/avatar-file'
 import { UNKNOWN_PERSON } from '../../lib/people'
 import { useAuthStore } from '../../stores/auth.store'
-import { Avatar, Button, TextField, toast } from '../primitives'
+import { Button, TextField, toast } from '../primitives'
+import { AvatarEdit } from '../patterns/AvatarEdit'
 import { EmptyState } from '../spaces/EmptyState'
 import { ReadOnlyField } from './ReadOnlyField'
-import {
-  AVATAR_TYPES, FIELD_MAX, NAME_MAX, avatarErrorMessage, profileChanges, profileOf, validateAvatarFile, validateProfile,
-  type ProfileErrors, type ProfileForm,
-} from './settings-model'
+import { FIELD_MAX, NAME_MAX, profileChanges, profileOf, validateProfile, type ProfileErrors, type ProfileForm } from './settings-model'
 
 /**
  * Cài đặt → Hồ sơ (mockup §4): the three things a person can change about
@@ -24,6 +23,9 @@ export function ProfileTab() {
   const me = useAuthStore((s) => s.user)
   const q = useMyProfile(wsId)
   const save = useUpdateProfile()
+  const uploadAvatar = useUploadAvatar()
+  const removeAvatar = useRemoveAvatar()
+  const [avatarError, setAvatarError] = useState<string | null>(null)
 
   // The person's own record (GET /api/me), not a search of the directory.
   const person = q.data?.user
@@ -88,6 +90,28 @@ export function ProfileTab() {
   }
 
   const shownName = form.displayName.trim() || initial.displayName || UNKNOWN_PERSON
+  const subtitle = [initial.title, department].filter(Boolean).join(' · ')
+
+  // A chosen picture is sent at once; it is not part of the form's Lưu thay đổi.
+  const changePicture = async (file: File) => {
+    setAvatarError(null)
+    try {
+      await uploadAvatar.mutateAsync(file)
+    } catch (err) {
+      setAvatarError(avatarErrorMessage(err))
+      return
+    }
+    toast('Đã đổi ảnh')
+  }
+  const clearPicture = async () => {
+    setAvatarError(null)
+    try {
+      await removeAvatar.mutateAsync()
+    } catch {
+      return // told by the shared handler
+    }
+    toast('Đã bỏ ảnh')
+  }
 
   return (
     <form
@@ -96,7 +120,23 @@ export function ProfileTab() {
       onSubmit={(e) => { e.preventDefault(); void submit() }}
       className="grid gap-5 max-w-130"
     >
-      <AvatarEdit name={shownName} hueKey={me?.id} src={person?.avatar_url || undefined} />
+      <div className="flex items-center gap-4">
+        <AvatarEdit
+          name={shownName}
+          hueKey={me?.id}
+          src={person?.avatar_url || undefined}
+          label="Đổi ảnh đại diện"
+          canEdit
+          busy={uploadAvatar.isPending || removeAvatar.isPending}
+          error={avatarError}
+          onUpload={changePicture}
+          onRemove={clearPicture}
+        />
+        <div className="grid gap-0.5 min-w-0">
+          <b className="text-16 font-semibold text-ink truncate">{shownName}</b>
+          {subtitle && <span className="text-sm text-ink-muted truncate">{subtitle}</span>}
+        </div>
+      </div>
 
       <TextField
         ref={nameRef}
@@ -163,77 +203,3 @@ export function ProfileTab() {
   )
 }
 
-
-/**
- * The picture row of Hồ sơ (mockup §4, callout 2): the 64 px avatar, Đổi ảnh,
- * Bỏ ảnh and what the server takes. A chosen picture is uploaded at once; it is
- * not part of the form's Lưu thay đổi.
- */
-function AvatarEdit({ name, hueKey, src }: { name: string; hueKey?: string; src?: string }) {
-  const upload = useUploadAvatar()
-  const remove = useRemoveAvatar()
-  const [error, setError] = useState<string | null>(null)
-  const fileRef = useRef<HTMLInputElement>(null)
-  const busy = upload.isPending || remove.isPending
-
-  const choose = async (file: File | undefined) => {
-    if (!file) return
-    const refused = validateAvatarFile(file)
-    setError(refused)
-    if (refused) return
-    try {
-      await upload.mutateAsync(file)
-    } catch (err) {
-      setError(avatarErrorMessage(err))
-      return
-    }
-    toast('Đã đổi ảnh')
-  }
-
-  const clear = async () => {
-    setError(null)
-    try {
-      await remove.mutateAsync()
-    } catch {
-      return // told by the shared handler
-    }
-    toast('Đã bỏ ảnh')
-  }
-
-  return (
-    <div className="flex items-center gap-4">
-      <Avatar name={name} hueKey={hueKey} src={src} size={64} />
-      <div className="grid gap-1.5 min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="soft" size="sm" loading={upload.isPending} disabled={busy} onClick={() => fileRef.current?.click()}>
-            {!upload.isPending && <Camera size={16} strokeWidth={1.75} aria-hidden="true" />}
-            {upload.isPending ? 'Đang tải ảnh…' : 'Đổi ảnh'}
-          </Button>
-          <Button type="button" variant="ghost" size="sm" loading={remove.isPending} disabled={!src || busy} onClick={() => void clear()}>
-            Bỏ ảnh
-          </Button>
-        </div>
-        {/* Chooses the picture for Đổi ảnh. Nothing models a hidden file input in
-            the primitives (as in DriveScreen); the visible control is the Button. */}
-        {/* eslint-disable-next-line no-restricted-syntax */}
-        <input
-          ref={fileRef}
-          type="file"
-          accept={AVATAR_TYPES.join(',')}
-          aria-label="Chọn ảnh đại diện"
-          className="sr-only"
-          tabIndex={-1}
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            e.target.value = '' // choosing the same file again still uploads it
-            void choose(file)
-          }}
-        />
-        <span className="text-xs text-ink-muted">
-          JPG hoặc PNG, tối đa 5 MB. Không có ảnh thì dùng chữ cái đầu trên màu riêng của bạn.
-        </span>
-        {error && <p role="alert" className="m-0 text-xs text-error">{error}</p>}
-      </div>
-    </div>
-  )
-}

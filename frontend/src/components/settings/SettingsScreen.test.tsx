@@ -320,27 +320,49 @@ describe('SettingsScreen: Hồ sơ', () => {
 
 describe('SettingsScreen: ảnh đại diện', () => {
   const png = () => new File([new Uint8Array(2048)], 'anh.png', { type: 'image/png' })
-  const picker = () => screen.getByLabelText('Chọn ảnh đại diện') as HTMLInputElement
+  const picker = () => screen.getByLabelText('Tệp ảnh từ máy') as HTMLInputElement
   const sent = (method: string) => calls.filter((c) => c.method === method && c.path === '/me/avatar')
+  const picture = () => screen.findByRole('button', { name: 'Đổi ảnh đại diện' })
+  /** Waits for the picture to show, then opens the menu: it offers Bỏ ảnh. */
+  const openWithPicture = async (user: ReturnType<typeof userEvent.setup>) => {
+    await waitFor(() => expect(document.querySelector('img[src^="/api/auth/avatars/"]')).not.toBeNull())
+    await user.click(await picture())
+    expect(await screen.findByRole('menuitem', { name: 'Bỏ ảnh' })).toBeInTheDocument()
+  }
 
-  it('offers Đổi ảnh and a Bỏ ảnh that waits for a picture, as in the mockup', async () => {
+  it('changes the picture by touching it: no Đổi ảnh or Bỏ ảnh buttons beside it, no hint line', async () => {
     await renderSettings()
-    expect(await screen.findByRole('button', { name: 'Đổi ảnh' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Bỏ ảnh' })).toBeDisabled()
-    expect(screen.getByText(/JPG hoặc PNG, tối đa 5 MB/)).toBeInTheDocument()
+    expect(await picture()).toHaveAttribute('aria-haspopup', 'menu')
+    expect(screen.queryByRole('button', { name: 'Đổi ảnh' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Bỏ ảnh' })).toBeNull()
+    expect(screen.queryByText(/JPG hoặc PNG, tối đa 5 MB/)).toBeNull()
     expect(picker()).toHaveAttribute('accept', 'image/jpeg,image/png')
+  })
+
+  it('shows the name beside the picture', async () => {
+    await renderSettings()
+    const button = await picture()
+    expect(within(button.parentElement!.parentElement!).getByText('Lê Thị Hoa')).toBeInTheDocument()
+  })
+
+  it('offers only Tải ảnh lên while there is no picture', async () => {
+    const user = userEvent.setup()
+    await renderSettings()
+    await user.click(await picture())
+    const items = await screen.findAllByRole('menuitem')
+    expect(items.map((i) => i.textContent)).toEqual(['Tải ảnh lên'])
   })
 
   it('uploads the chosen picture at once, says so, and the picture shows', async () => {
     const user = userEvent.setup()
     await renderSettings()
-    await screen.findByRole('button', { name: 'Đổi ảnh' })
+    await picture()
     await user.upload(picker(), png())
 
     await waitFor(() => expect(sent('PUT')).toHaveLength(1))
     await waitFor(() => expect(toasts()).toContain('Đã đổi ảnh'))
-    // The person's own record was read again and now carries the picture.
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Bỏ ảnh' })).toBeEnabled())
+    // The person's own record was read again and now carries the picture: the menu offers Bỏ ảnh.
+    await openWithPicture(user)
     expect(patch('/me/profile')).toHaveLength(0)
     expectNoIds(document.body)
   })
@@ -348,7 +370,7 @@ describe('SettingsScreen: ảnh đại diện', () => {
   it('refuses a file that is not a JPG or PNG without sending anything', async () => {
     const user = userEvent.setup({ applyAccept: false })
     await renderSettings()
-    await screen.findByRole('button', { name: 'Đổi ảnh' })
+    await picture()
     await user.upload(picker(), new File(['GIF89a'], 'anh.gif', { type: 'image/gif' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/JPG hoặc PNG/)
@@ -358,7 +380,7 @@ describe('SettingsScreen: ảnh đại diện', () => {
   it('refuses a file over 5 MB without sending anything', async () => {
     const user = userEvent.setup()
     await renderSettings()
-    await screen.findByRole('button', { name: 'Đổi ảnh' })
+    await picture()
     await user.upload(picker(), new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'lon.png', { type: 'image/png' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/5 MB/)
@@ -369,7 +391,7 @@ describe('SettingsScreen: ảnh đại diện', () => {
     avatarFails = new ApiError('the file is not a JPEG or PNG picture', 400, { code: 'avatar_not_image' })
     const user = userEvent.setup()
     await renderSettings()
-    await screen.findByRole('button', { name: 'Đổi ảnh' })
+    await picture()
     await user.upload(picker(), png())
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/JPG hoặc PNG/)
@@ -381,7 +403,7 @@ describe('SettingsScreen: ảnh đại diện', () => {
     avatarFails = new ApiError('busy', 503, { code: 'avatar_busy' })
     const user = userEvent.setup()
     await renderSettings()
-    await screen.findByRole('button', { name: 'Đổi ảnh' })
+    await picture()
     await user.upload(picker(), png())
     expect(await screen.findByRole('alert')).toHaveTextContent(/bận/)
   })
@@ -390,13 +412,15 @@ describe('SettingsScreen: ảnh đại diện', () => {
     setHoaAvatar(PICTURE)
     const user = userEvent.setup()
     await renderSettings()
-    const remove = await screen.findByRole('button', { name: 'Bỏ ảnh' })
-    await waitFor(() => expect(remove).toBeEnabled())
-    await user.click(remove)
+    await openWithPicture(user)
+    await user.click(screen.getByRole('menuitem', { name: 'Bỏ ảnh' }))
 
     await waitFor(() => expect(sent('DELETE')).toHaveLength(1))
     await waitFor(() => expect(toasts()).toContain('Đã bỏ ảnh'))
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Bỏ ảnh' })).toBeDisabled())
+    // The picture is gone, so the menu is back to Tải ảnh lên.
+    await waitFor(() => expect(document.querySelector('img[src^="/api/auth/avatars/"]')).toBeNull())
+    await user.click(await picture())
+    expect((await screen.findAllByRole('menuitem')).map((i) => i.textContent)).toEqual(['Tải ảnh lên'])
   })
 
   it('keeps the picture and says why when removing it fails', async () => {
@@ -404,13 +428,12 @@ describe('SettingsScreen: ảnh đại diện', () => {
     removeFails = new ApiError('boom', 500)
     const user = userEvent.setup()
     await renderSettings()
-    const remove = await screen.findByRole('button', { name: 'Bỏ ảnh' })
-    await waitFor(() => expect(remove).toBeEnabled())
-    await user.click(remove)
+    await openWithPicture(user)
+    await user.click(screen.getByRole('menuitem', { name: 'Bỏ ảnh' }))
 
     await waitFor(() => expect(toasts().some((m) => /bỏ ảnh đại diện/.test(m))).toBe(true))
     expect(toasts()).not.toContain('Đã bỏ ảnh')
-    expect(screen.getByRole('button', { name: 'Bỏ ảnh' })).toBeEnabled()
+    await openWithPicture(user)
   })
 })
 

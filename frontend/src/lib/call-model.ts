@@ -4,6 +4,8 @@
  * message may say. Everything here is plain data so it is tested directly.
  */
 
+import type { CallSnapshot } from './call-room'
+
 /** Data-message topics inside a room. Both stay inside the session; nothing is stored. */
 export const HAND_TOPIC = 'nexus.hand'
 export const REACTION_TOPIC = 'nexus.reaction'
@@ -120,4 +122,14 @@ export function parseReaction(payload: Uint8Array): ReactionMessage | null {
 export function parseShare(payload: Uint8Array): ShareMessage | null {
   const v = parse(payload)
   return v && v.action === 'start' ? { action: 'start' } : null
+}
+
+/**
+ * The snapshot before a room exists. It lives here, not in `call-room`, so the app shell can
+ * read it without importing the LiveKit SDK that `call-room` pulls in.
+ */
+export const EMPTY_SNAPSHOT: CallSnapshot = {
+  link: 'connecting', end: null, participants: [], presenterId: null, speakerId: null, audio: [],
+  audioBlocked: false, micOn: false, camOn: false, sharing: false, handUp: false, reactions: [],
+  mediaProblem: null, notice: null, peak: 0, facing: 'user',
 }
