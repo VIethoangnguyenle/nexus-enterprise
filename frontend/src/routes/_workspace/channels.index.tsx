@@ -1,9 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { HomeView } from '../../components/spaces/HomeView'
 import { PushPrompt } from '../../components/PushPrompt'
+import { useConversationPrefetch } from './-idle-prefetch'
 import { validateChannelsSearch } from '../../lib/nav-destinations'
 
 function ChannelsIndex() {
+  useConversationPrefetch()
   return (
     <div className="flex-1 flex flex-col min-h-0 min-w-0">
       <PushPrompt />

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
-import { useNavigate, useSearch } from '@tanstack/react-router'
-import { AnimatePresence } from 'motion/react'
-import { Plus, Upload, WifiOff } from 'lucide-react'
+import { useNavigate, useRouter, useSearch } from '@tanstack/react-router'
+import { AnimatePresence, motion } from 'motion/react'
+import { Menu, Plus, WifiOff } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useArrivals } from '../../hooks/useArrivals'
 import { useConnectionLost } from '../../hooks/useConnectionLost'
@@ -11,29 +11,36 @@ import { usePeople } from '../../hooks/usePeople'
 import { usePermissions } from '../../hooks/usePermissions'
 import { NO_PERMS, type ObjectPerms } from '../../api/access'
 import type { DriveItem } from '../../api/drive'
-import { folderSearch, sharedSearch, textsSearch, type DriveSearch } from '../../lib/drive-search'
+import { folderSearch, type DriveSearch } from '../../lib/drive-search'
 import { statusOf } from '../../lib/errors'
 import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { useDriveStore } from '../../stores/drive.store'
+import { useFileViewMode } from '../../stores/file-view.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { Button, FilterChip, Heading, SearchField } from '../primitives'
+import { Heading, IconButton, Pressable } from '../primitives'
 import { DeleteItemDialog } from './DeleteItemDialog'
 import { DriveBody } from './DriveBody'
 import { DriveBreadcrumbs, type Crumb } from './DriveBreadcrumbs'
 import { DriveBurstBanner } from './DriveBurstBanner'
 import { DriveDetailPanel } from './DriveDetailPanel'
+import { DriveGallery, GallerySkeleton } from './DriveGallery'
+import { DriveAddSheet, DriveItemMenu, DriveItemSheet, type MenuTarget } from './DriveItemMenu'
 import { DriveTable, type RowActions } from './DriveTable'
+import { DriveToolbar } from './DriveToolbar'
 import { DriveTree } from './DriveTree'
+import { DriveTreeDrawer } from './DriveTreeDrawer'
 import { MoveItemDialog } from './MoveItemDialog'
 import { NameDialog } from './NameDialog'
 import { ShareDialog } from './ShareDialog'
 import { useDriveActions } from './useDriveActions'
+import { useDriveLayout } from './use-drive-layout'
 import {
-  itemVersion, matchesName, ownerOf, sortItems,
+  filterByType, itemVersion, matchesName, ownerOf, sortItems, type SortKey, type TypeFilter,
 } from './drive-model'
 import { FileViewer, type ViewerFile } from '../files/FileViewer'
+import type { MenuAnchor } from '../files/use-long-press'
 
 /** Items without an NGAC node are never checked; they can be seen and nothing else. */
 const READ_ONLY: ObjectPerms = { ...NO_PERMS, read: true }
@@ -41,22 +48,30 @@ const READ_ONLY: ObjectPerms = { ...NO_PERMS, read: true }
 /** How long after my own change the same change from the server still counts as mine. */
 const MINE_MS = 15_000
 
+/** The element that has focus now: where focus returns to when the viewer closes. */
+const focused = () => (document.activeElement instanceof HTMLElement ? document.activeElement : null)
+
 /**
- * Tài liệu (design/mockups/core-screens.html §2): folder tree, the hairline
- * table of the open folder, and a detail panel for the selected item.
+ * Tài liệu (DESIGN.md "Tài liệu: lưới, danh sách, panel xem trước"): folder
+ * tree, a toolbar, the files of the open folder as a gallery or the hairline
+ * table, and a detail panel for the selected item.
  *
  * Where the user is — workspace, folder, shared view — is the URL's business:
  * `?folder=<id>` makes reload, Back/Forward and a pasted link land in the same
- * folder. Only the selection and the tree's open nodes are client state.
+ * folder. Only the selection, the filters and the tree's open nodes are client state.
  */
 export function DriveScreen() {
   const search = useSearch({ strict: false }) as DriveSearch
   const navigate = useNavigate()
+  const router = useRouter()
   const m = useMotionPresets()
+  const layout = useDriveLayout()
+  const phone = layout === 'phone'
   const connectionLost = useConnectionLost()
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
   const people = usePeople(wsId)
   const me = useAuthStore((s) => s.user)
+  const [mode, setMode] = useFileViewMode('drive')
 
   const shared = search.view === 'shared'
   const folderId = shared ? undefined : search.folder
@@ -84,12 +99,19 @@ export function DriveScreen() {
   const expandFolders = useDriveStore((s) => s.expandFolders)
 
   const [query, setQuery] = useState('')
+  const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
+  const [sort, setSort] = useState<SortKey>('recent')
   const [dragging, setDragging] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [menu, setMenu] = useState<MenuTarget | null>(null)
+  const [sheetItem, setSheetItem] = useState<DriveItem | null>(null)
+  const [addOpen, setAddOpen] = useState(false)
   // Deleting the last row: keep the table up until the row has folded away,
   // then show the empty state (reduced motion swaps at once).
   const [holdTable, setHoldTable] = useState(false)
   const rowsSeen = useRef({ scope: '', n: 0 })
   const fileInput = useRef<HTMLInputElement>(null)
+  const cameraInput = useRef<HTMLInputElement>(null)
 
   const { download } = useDownloadFile()
 
@@ -99,7 +121,11 @@ export function DriveScreen() {
   useEffect(() => {
     selectItem(null)
     setQuery('')
+    setTypeFilter('all')
     setHoldTable(false)
+    setDrawerOpen(false)
+    setMenu(null)
+    setSheetItem(null)
   }, [scope, selectItem])
 
   const trail = useMemo(() => (folderQ.data?.breadcrumb ?? []).map((c) => c.id), [folderQ.data])
@@ -108,9 +134,13 @@ export function DriveScreen() {
     if (!shared && trail.length > 1) expandFolders(trail.slice(0, -1))
   }, [shared, trail, expandFolders])
 
-  const items = useMemo(() => sortItems(all.filter((i) => matchesName(i, query))), [all, query])
+  const items = useMemo(
+    () => sortItems(filterByType(all.filter((i) => matchesName(i, query)), typeFilter), sort),
+    [all, query, typeFilter, sort],
+  )
   if (rowsSeen.current.scope !== scope) rowsSeen.current = { scope, n: 0 }
-  if (all.length === 0 && rowsSeen.current.n > 0 && !m.reduced && !holdTable) setHoldTable(true)
+  // Only the table folds rows away; the gallery has nothing to wait for.
+  if (all.length === 0 && rowsSeen.current.n > 0 && !m.reduced && mode === 'list' && !holdTable) setHoldTable(true)
   rowsSeen.current.n = all.length
   const selected = selectedId ? all.find((i) => i.id === selectedId) : undefined
 
@@ -159,6 +189,8 @@ export function DriveScreen() {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
   const previewOpenerRef = useRef<HTMLElement | null>(null)
 
+  const folderItems = useMemo(() => items.filter((i) => i.item_type === 'folder'), [items])
+  // What the viewer pages through: the files that are showing, not the whole folder.
   const folderFiles = useMemo(() => items.filter((i) => i.item_type === 'file'), [items])
 
   const viewerFiles = useMemo<ViewerFile[]>(() => {
@@ -182,7 +214,7 @@ export function DriveScreen() {
     (item: DriveItem, openerEl?: HTMLElement | null) => {
       const idx = folderFiles.findIndex((f) => f.id === item.id)
       if (idx >= 0) {
-        if (openerEl) previewOpenerRef.current = openerEl
+        previewOpenerRef.current = openerEl ?? focused()
         setPreviewIndex(idx)
       }
     },
@@ -192,6 +224,10 @@ export function DriveScreen() {
   const openFolder = useCallback(
     (id?: string) => void navigate({ to: '/drive', search: (prev: DriveSearch) => folderSearch(prev, id) }),
     [navigate],
+  )
+  const hrefOf = useCallback(
+    (id: string) => router.buildLocation({ to: '/drive', search: (prev: DriveSearch) => folderSearch(prev, id) }).href,
+    [router],
   )
 
   const actions: RowActions = useMemo(
@@ -204,7 +240,23 @@ export function DriveScreen() {
       onDelete: (item) => setDialog({ kind: 'delete', item }),
       onPreview: (item, el) => openPreview(item, el),
     }),
-    [selectItem, download, openPreview],
+    [selectItem, download, openPreview, setDialog],
+  )
+
+  // Gallery: a tap opens on a phone (no hover, no room for a panel) and selects elsewhere.
+  const onSelectFile = useCallback(
+    (file: DriveItem) => (phone ? openPreview(file) : selectItem(file.id)),
+    [phone, openPreview, selectItem],
+  )
+  const onOpenFile = useCallback((file: DriveItem) => openPreview(file), [openPreview])
+  const onOpenFolder = useCallback((folder: DriveItem) => openFolder(folder.id), [openFolder])
+  const onMenu = useCallback(
+    (item: DriveItem, anchor: MenuAnchor) => (phone ? setSheetItem(item) : setMenu({ item, anchor })),
+    [phone],
+  )
+  const openItem = useCallback(
+    (item: DriveItem) => (item.item_type === 'folder' ? openFolder(item.id) : openPreview(item)),
+    [openFolder, openPreview],
   )
 
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
@@ -229,24 +281,65 @@ export function DriveScreen() {
       : [{ label: workspaceLabel }]
   // Until the workspace is known the query is idle, and that is still loading.
   const loading = !active.data && !active.isError
+  const canAdd = !shared && !missing
+  const newFolder = () => setDialog({ kind: 'new-folder' })
+
+  const tree = (onOpen: (folderId?: string) => void) => (
+    <DriveTree
+      workspaceId={wsId}
+      workspaceLabel={workspaceLabel}
+      currentFolderId={folderId}
+      trail={trail}
+      sharedActive={shared}
+      onOpen={onOpen}
+    />
+  )
+
+  const content =
+    mode === 'grid' ? (
+      loading ? (
+        <GallerySkeleton />
+      ) : (
+        <DriveGallery
+          folders={folderItems}
+          files={folderFiles}
+          people={people}
+          selectedId={selected?.id ?? null}
+          fresh={fresh}
+          hrefOf={hrefOf}
+          onOpenFolder={onOpenFolder}
+          onSelectFile={onSelectFile}
+          onOpenFile={onOpenFile}
+          onMenu={onMenu}
+        />
+      )
+    ) : (
+      <DriveTable
+        label={`Tệp trong ${title ?? 'thư mục'}`}
+        items={items}
+        loading={loading}
+        people={people}
+        permsOf={permsOf}
+        selectedId={selected?.id ?? null}
+        scope={view}
+        fresh={fresh}
+        versionOf={itemVersion}
+        actions={actions}
+        onRowsGone={() => setHoldTable(false)}
+      />
+    )
 
   return (
     <div className="relative flex flex-1 min-h-0 min-w-0">
-      <div className="hidden lg:block w-70 shrink-0 min-h-0">
-        <DriveTree
-          workspaceId={wsId}
-          workspaceLabel={workspaceLabel}
-          currentFolderId={folderId}
-          trail={trail}
-          query={query}
-          onQuery={setQuery}
-          sharedActive={shared}
-          onOpen={openFolder}
-        />
-      </div>
+      {layout === 'desktop' && <div className="w-70 shrink-0 min-h-0">{tree(openFolder)}</div>}
 
       <section className="flex-1 flex flex-col min-w-0 min-h-0 bg-base" aria-label="Tệp">
-        <header className="flex items-center gap-4 px-5 pt-4 pb-3 min-w-0">
+        <header className="flex items-center gap-2 px-5 pt-4 pb-3 min-w-0 max-sm:px-4">
+          {layout !== 'desktop' && (
+            <IconButton aria-label="Mở cây thư mục" aria-haspopup="dialog" className="max-lg:w-11 max-lg:h-11 -ml-2" onClick={() => setDrawerOpen(true)}>
+              <Menu size={20} strokeWidth={1.75} />
+            </IconButton>
+          )}
           <div className="grid gap-0.5 min-w-0">
             <DriveBreadcrumbs crumbs={crumbs} />
             {title ? (
@@ -255,40 +348,26 @@ export function DriveScreen() {
               <div className="skeleton h-6 w-40 rounded-sm" aria-busy="true" />
             )}
           </div>
-          {!shared && !missing && (
-            <div className="ml-auto flex items-center gap-2 shrink-0">
-              <Button variant="soft" size="sm" onClick={() => setDialog({ kind: 'new-folder' })}>
-                <Plus size={16} strokeWidth={1.75} aria-hidden="true" />
-                <span className="max-sm:sr-only">Thư mục mới</span>
-              </Button>
-              <Button size="sm" loading={uploading} onClick={() => fileInput.current?.click()}>
-                <Upload size={16} strokeWidth={1.75} aria-hidden="true" />
-                <span className="max-sm:sr-only">Tải lên</span>
-              </Button>
-            </div>
-          )}
         </header>
 
-        <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
-          <div className="flex gap-2 lg:hidden">
-            <FilterChip pressed={!shared} onClick={() => openFolder()}>Tất cả tệp</FilterChip>
-            <FilterChip pressed={shared} onClick={() => void navigate({ to: '/drive', search: (p: DriveSearch) => sharedSearch(p) })}>
-              Chia sẻ với tôi
-            </FilterChip>
-            <FilterChip pressed={false} onClick={() => void navigate({ to: '/drive', search: (p: DriveSearch) => textsSearch(p) })}>
-              Văn bản
-            </FilterChip>
-          </div>
-          {/* The list panel carries the search from lg up; below that it sits here. */}
-          <SearchField
-            label="Tìm tệp hoặc thư mục"
-            moduleSearch
-            tone="sunk"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="ml-auto w-full sm:w-64 lg:hidden"
+        {!missing && (
+          <DriveToolbar
+            layout={layout}
+            folderLabel={title ?? 'thư mục'}
+            query={query}
+            onQuery={setQuery}
+            typeFilter={typeFilter}
+            onTypeFilter={setTypeFilter}
+            sort={sort}
+            onSort={setSort}
+            mode={mode}
+            onMode={setMode}
+            canAdd={canAdd}
+            uploading={uploading}
+            onPickFiles={() => fileInput.current?.click()}
+            onNewFolder={newFolder}
           />
-        </div>
+        )}
 
         {connectionLost && (
           <div role="status" className="mx-5 mb-2 flex items-center gap-2.5 px-3 py-2 rounded-surface bg-warning-wash text-sm">
@@ -324,29 +403,28 @@ export function DriveScreen() {
             total={all.length}
             visible={items.length}
             holdTable={holdTable}
-            onClearQuery={() => setQuery('')}
+            onClearQuery={() => { setQuery(''); setTypeFilter('all') }}
             onPickFiles={() => fileInput.current?.click()}
             view={view}
             route={m.route}
-            table={
-              <DriveTable
-                label={`Tệp trong ${title ?? 'thư mục'}`}
-                items={items}
-                loading={loading}
-                people={people}
-                permsOf={permsOf}
-                selectedId={selected?.id ?? null}
-                scope={view}
-                fresh={fresh}
-                versionOf={itemVersion}
-                actions={actions}
-                onRowsGone={() => setHoldTable(false)}
-              />
-            }
+            content={content}
           />
         </div>
       </section>
 
+      {/* On a tablet the panel floats over the files, so the files behind it step back. */}
+      <AnimatePresence>
+        {selected && layout === 'tablet' && (
+          <motion.div
+            key="scrim"
+            data-testid="drive-scrim"
+            {...m.scrim}
+            className="absolute inset-0 z-dropdown bg-scrim"
+            aria-hidden="true"
+            onClick={() => selectItem(null)}
+          />
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {selected && (
           <DriveDetailPanel
@@ -354,14 +432,56 @@ export function DriveScreen() {
             item={selected}
             perms={permsOf(selected)}
             people={people}
+            location={shared ? undefined : folderId ? folderName : workspaceLabel}
             onClose={() => selectItem(null)}
             onShare={actions.onShare}
-            onPreview={openPreview}
+            onOpen={openPreview}
           />
         )}
       </AnimatePresence>
 
-      {/* Chooses files for the Tải lên buttons. Nothing models a hidden file
+      <AnimatePresence>
+        {drawerOpen && layout !== 'desktop' && (
+          <DriveTreeDrawer onClose={() => setDrawerOpen(false)}>
+            {tree((id) => { setDrawerOpen(false); openFolder(id) })}
+          </DriveTreeDrawer>
+        )}
+      </AnimatePresence>
+
+      {phone && canAdd && (
+        <Pressable
+          aria-label="Thêm mới"
+          aria-haspopup="dialog"
+          onClick={() => setAddOpen(true)}
+          style={{ borderRadius: 18 }}
+          className="absolute right-4 bottom-4 z-sticky grid place-items-center w-14 h-14 bg-accent
+            text-on-accent shadow-overlay"
+        >
+          <Plus size={24} strokeWidth={1.75} aria-hidden="true" />
+        </Pressable>
+      )}
+      {addOpen && (
+        <DriveAddSheet
+          onPickFiles={() => fileInput.current?.click()}
+          onTakePhoto={() => cameraInput.current?.click()}
+          onNewFolder={newFolder}
+          onClose={() => setAddOpen(false)}
+        />
+      )}
+
+      <DriveItemMenu target={menu} perms={menu ? permsOf(menu.item) : NO_PERMS} actions={actions} onClose={() => setMenu(null)} />
+      {sheetItem && (
+        <DriveItemSheet
+          item={sheetItem}
+          perms={permsOf(sheetItem)}
+          people={people}
+          actions={actions}
+          onOpen={openItem}
+          onClose={() => setSheetItem(null)}
+        />
+      )}
+
+      {/* Choose files for the Tải lên controls. Nothing models a hidden file
           input in the primitives, and wrapping one in a form-field adds chrome
           that `sr-only` would then have to hide again. */}
       {/* eslint-disable-next-line no-restricted-syntax */}
@@ -370,6 +490,22 @@ export function DriveScreen() {
         type="file"
         multiple
         aria-label="Chọn tệp để tải lên"
+        tabIndex={-1}
+        className="sr-only"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? [])
+          e.target.value = ''
+          if (files.length) void uploadFiles(files)
+        }}
+      />
+      {/* The phone's "Chụp ảnh": the same upload, with the camera asked for first. */}
+      {/* eslint-disable-next-line no-restricted-syntax */}
+      <input
+        ref={cameraInput}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        aria-label="Chụp ảnh để tải lên"
         tabIndex={-1}
         className="sr-only"
         onChange={(e) => {

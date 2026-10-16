@@ -41,13 +41,14 @@ func NewHandler(svc *domain.Service, notifs *domain.NotificationService, hub Bro
 
 // RegisterRoutes mounts messaging endpoints on the Echo instance.
 func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
-	api := e.Group("/api", httputil.JWTMiddleware(jwtSecret))
+	api := e.Group("/api", httputil.JWTMiddleware(jwtSecret), h.bumpChatOnWrite())
 
 	// Channels
 	api.POST("/workspaces/:id/channels", h.CreateChannel)
 	api.GET("/workspaces/:id/channels", h.ListChannels)
 	api.GET("/channels/:chId", h.GetChannel)
 	api.PATCH("/channels/:chId", h.UpdateChannel)
+	h.registerAvatarRoutes(e, api)
 
 	// Messages
 	api.POST("/channels/:chId/messages", h.SendMessage)
@@ -76,6 +77,9 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// The caller's push preferences (the rest of /api/me is the auth service's)
 	api.GET("/me/push-preferences", h.GetPushPreferences)
 	api.PUT("/me/push-preferences", h.PutPushPreferences)
+
+	// The navigator's whole state in one answer, revalidated by ETag
+	api.GET("/workspaces/:id/chat-state", h.ChatState, h.chatStateETag())
 
 	// Personal navigator sections
 	api.GET("/workspaces/:id/chat-sections", h.ListSections)

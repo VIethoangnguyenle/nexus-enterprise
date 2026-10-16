@@ -1,6 +1,7 @@
 import { act, fireEvent, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { prefetchChatParts } from '../chat/lazy-parts'
 import { MotionGlobalConfig } from 'motion/react'
 import { renderWithClient, resetClient } from '../../test/render'
 import { buildDirectory } from '../../lib/people'
@@ -9,6 +10,9 @@ import { CONTACTS, MESSAGES, MSG, U, CH, ME } from '../../test/chat-fixtures'
 import type { Message } from '../../api/messaging'
 import type { MessageLifecycle } from '../../hooks/useMessageActions'
 import { ConversationStream, type ConversationStreamProps } from './ConversationStream'
+
+// The in-place editor loads on first use; fetch it once so each test sees it at once.
+beforeAll(() => prefetchChatParts(), 60_000)
 
 // The card reads its own poll from the server; these tests are about the stream around it.
 vi.mock('../chat/PollCard', () => ({ PollCard: () => <div data-testid="poll-card" /> }))
@@ -639,11 +643,11 @@ describe('ConversationStream: edit, delete and mark unread', () => {
     return vi.waitFor(() => expect(screen.queryByRole('dialog', { name: 'Thao tác với tin' })).toBeNull())
   })
 
-  it('edits in place on a wide screen: the bubble becomes the editor', () => {
+  it('edits in place on a wide screen: the bubble becomes the editor', async () => {
     const m = mineMsg({ content: '<p>Tin của tôi</p>', content_format: 'html' })
     renderWithClient(stream([m], { lifecycle: lifecycleStub({ editing: { message: m } }) }))
     const a = article(/Bạn/)
-    expect(within(a).getByRole('textbox', { name: 'Sửa tin' })).toHaveTextContent('Tin của tôi')
+    expect(await within(a).findByRole('textbox', { name: 'Sửa tin' })).toHaveTextContent('Tin của tôi')
     expect(within(a).getByText('Esc huỷ · Enter lưu')).toBeInTheDocument()
   })
 

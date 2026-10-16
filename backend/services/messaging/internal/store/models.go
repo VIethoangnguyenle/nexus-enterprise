@@ -15,6 +15,7 @@ type Channel struct {
 	Topic       string
 	Description string
 	MemberCount int32
+	AvatarURL   string // the group's picture, "" when it has none
 }
 
 // Message represents a row in the messages table.

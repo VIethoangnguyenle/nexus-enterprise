@@ -13,7 +13,8 @@ import { useMotionPresets, staggerDelay, withDelay } from '../../lib/motion'
 import { personStyle } from '../../lib/person-hue'
 import type { PeopleDirectory } from '../../lib/people'
 import { IconButton, MenuItem, MenuSeparator, PersonChip, Popover, Pressable } from '../primitives'
-import { kindOf, ownerOf } from './drive-model'
+import { FileThumb } from '../files/FileThumb'
+import { itemVersion, kindOf, ownerOf } from './drive-model'
 
 /**
  * Name · owner · modified · size · actions (DESIGN.md §6 Table, mockup §2).
@@ -183,9 +184,24 @@ const DriveRow = memo(function DriveRow({ item, perms, people, selected, arrival
         ${selected ? 'bg-accent-wash' : 'hover:bg-hover'} ${byOther ? 'rt-wash' : ''}`}
     >
       <span role="cell" className="flex items-center gap-2.5 min-w-0 row-start-1">
-        <span className={`grid place-items-center w-7 h-7 rounded-md shrink-0 ${kind.tile}`} aria-hidden="true">
-          <Icon size={16} strokeWidth={1.75} />
-        </span>
+        {folder ? (
+          <span className={`grid place-items-center w-7 h-7 rounded-md shrink-0 ${kind.tile}`} aria-hidden="true">
+            <Icon size={16} strokeWidth={1.75} />
+          </span>
+        ) : (
+          // 36 x 24: the same picture as the card, small enough to keep the row at 44.
+          <span className="block w-9 shrink-0" aria-hidden="true">
+            <FileThumb
+              fileId={item.id}
+              name={item.name}
+              mimeType={item.mime_type}
+              version={itemVersion(item)}
+              aspect="3 / 2"
+              radius={4}
+              iconSize={14}
+            />
+          </span>
+        )}
         {folder ? (
           <Link
             data-row
@@ -262,7 +278,7 @@ const DriveRow = memo(function DriveRow({ item, perms, people, selected, arrival
   )
 })
 
-function RowMenu({ item, perms, actions }: { item: DriveItem; perms: ObjectPerms; actions: RowActions }) {
+export function RowMenu({ item, perms, actions }: { item: DriveItem; perms: ObjectPerms; actions: RowActions }) {
   const folder = item.item_type === 'folder'
   // Moving, renaming and deleting are all a write on the item's object
   // attribute (trash, restore and remove included): there is no separate

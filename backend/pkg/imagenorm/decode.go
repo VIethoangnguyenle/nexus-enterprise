@@ -71,12 +71,19 @@ func orient(img *image.RGBA, o int) *image.RGBA {
 // checkDecodeBudget refuses, from the header alone, a picture whose decode
 // would take more than DecodeBudget. A file that is not a JPEG or PNG
 // is ErrNotImage.
-func checkDecodeBudget(b []byte) error {
+func checkDecodeBudget(b []byte) error { return CheckDecodeBudget(b, DecodeBudget) }
+
+// CheckDecodeBudget is checkDecodeBudget with the caller's own budget in bytes,
+// for services whose memory and concurrency differ from the avatar path's. It
+// estimates a decode from the header (decoded pixels, a progressive JPEG's
+// coefficients, the first working copy), so a small file that claims a huge
+// picture is refused before anything is allocated.
+func CheckDecodeBudget(b []byte, budget int64) error {
 	n, err := decodedBytes(b)
 	if err != nil {
 		return err
 	}
-	if n > DecodeBudget {
+	if n > budget {
 		return ErrTooManyPixels
 	}
 	return nil
@@ -243,3 +250,8 @@ func exifOrientation(t []byte) int {
 	}
 	return 1
 }
+
+// JPEGOrientation reports the EXIF Orientation (1-8) of a JPEG; anything missing
+// or malformed reads as 1, upright. Shared so other image code turns pictures
+// the same way the normaliser does.
+func JPEGOrientation(b []byte) int { return jpegOrientation(b) }

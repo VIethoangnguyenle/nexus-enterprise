@@ -25,8 +25,7 @@ import { statusOf, explain } from '../../lib/errors'
 import { dmPartner, type Conversation } from '../../lib/conversations'
 import { avatarOf, displayName } from '../../lib/people'
 import { Avatar, Button, IconButton, Pressable, Spinner, TabBar, toast } from '../primitives'
-import { ChatEditor } from '../chat/ChatEditor'
-import { EmojiPicker } from '../chat/EmojiPicker'
+import { LazyChatEditor, LazyEmojiPicker } from '../chat/lazy-parts'
 import { ThreadPanel } from '../chat/ThreadPanel'
 import { ConversationIcon } from './ConversationIcon'
 import { ConversationTitleMenu } from './ConversationTitleMenu'
@@ -460,7 +459,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
 
               {emojiTarget && (
                 <div className="absolute bottom-28 left-1/2 -translate-x-1/2 z-dropdown">
-                  <EmojiPicker
+                  <LazyEmojiPicker
                     onSelect={(emoji) => {
                       toggleReaction.mutate({ messageId: emojiTarget, emoji, hasReacted: false })
                       setEmojiTarget(null)
@@ -475,7 +474,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
                 <div className="absolute bottom-full left-6 pb-1 text-xs text-ink-muted" aria-live="polite">
                   {typingNames.length > 0 && <TypingLine names={typingNames} />}
                 </div>
-              <ChatEditor
+              <LazyChatEditor
                 channelId={channelId}
                 people={people}
                 placeholder={title ? `Tin nhắn cho ${title}` : 'Viết tin nhắn'}
@@ -567,6 +566,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
             kind={kind}
             title={title}
             memberCount={memberCount}
+            avatarUrl={conv.avatarUrl}
             partner={conv.partner}
             people={people}
             notification={phone ? { level, saving: savingLate, onChoose: notify.setLevel } : undefined}

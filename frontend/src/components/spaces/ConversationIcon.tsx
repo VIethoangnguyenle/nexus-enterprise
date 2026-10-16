@@ -1,9 +1,13 @@
 import type { Conversation } from '../../lib/conversations'
 import { Avatar, SpaceIcon } from '../primitives'
 
-/** A DM shows the other person's avatar (round); a space its icon (rounded square). */
+/**
+ * A DM shows the other person's avatar (round); a space its picture or, without
+ * one, its letter (rounded square). Every list, header and chip draws a
+ * conversation through here.
+ */
 export function ConversationIcon({ conversation: c, size, online, halo }: {
-  conversation: Pick<Conversation, 'kind' | 'title' | 'hueKey' | 'partner'>
+  conversation: Pick<Conversation, 'kind' | 'title' | 'hueKey' | 'partner' | 'avatarUrl'>
   size: 24 | 32 | 36 | 40 | 44
   online?: boolean
   halo?: boolean
@@ -11,5 +15,5 @@ export function ConversationIcon({ conversation: c, size, online, halo }: {
   if (c.kind === 'dm') {
     return <Avatar name={c.title} hueKey={c.hueKey} src={c.partner?.avatarUrl} size={size} online={online} halo={halo} />
   }
-  return <SpaceIcon name={c.title} hueKey={c.hueKey} size={size} />
+  return <SpaceIcon name={c.title} hueKey={c.hueKey} src={c.avatarUrl} size={size} />
 }

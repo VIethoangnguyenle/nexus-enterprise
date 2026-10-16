@@ -26,6 +26,7 @@ import (
 	driveGRPC "ngac-platform/services/drive/internal/grpc"
 	"ngac-platform/services/drive/internal/rest"
 	"ngac-platform/services/drive/internal/store"
+	"ngac-platform/services/drive/internal/thumbnail"
 )
 
 func main() {
@@ -77,6 +78,13 @@ func main() {
 		MaxConcurrent:   envInt("PREVIEW_MAX_CONCURRENT", domain.DefaultMaxConcurrent),
 		ConvertTimeout:  time.Duration(envInt("PREVIEW_CONVERT_TIMEOUT_SECONDS", int(domain.DefaultConvertTimeout/time.Second))) * time.Second,
 		FailureTTL:      time.Duration(envInt("PREVIEW_FAILURE_TTL_MINUTES", int(domain.DefaultFailureTTL/time.Minute))) * time.Minute,
+		StorageDialAddr: bootstrap.Env("PREVIEW_STORAGE_DIAL_ADDR", ""),
+	})
+
+	// Thumbnails need pdftoppm and ffmpeg; where they are not installed those
+	// kinds answer "no thumbnail", never an error.
+	svc.SetThumbnailer(thumbnail.NewExec(), domain.ThumbnailConfig{
+		MaxConcurrent:   envInt("THUMBNAIL_MAX_CONCURRENT", domain.DefaultThumbConcurrent),
 		StorageDialAddr: bootstrap.Env("PREVIEW_STORAGE_DIAL_ADDR", ""),
 	})
 

@@ -87,6 +87,19 @@ func TestDecodedBytes_BudgetEdges(t *testing.T) {
 	}
 }
 
+func TestCheckDecodeBudget_UsesTheCallersBudget(t *testing.T) {
+	b := jpegHeader(0xC2, 4000, 4000, 0x22, 0x11, 0x11)
+	if err := CheckDecodeBudget(b, 64<<20); !errors.Is(err, ErrTooManyPixels) {
+		t.Errorf("progressive 4000² under 64 MiB: err = %v, want ErrTooManyPixels", err)
+	}
+	if err := CheckDecodeBudget(b, 256<<20); err != nil {
+		t.Errorf("progressive 4000² under 256 MiB: refused: %v", err)
+	}
+	if err := CheckDecodeBudget([]byte("junk"), 64<<20); !errors.Is(err, ErrNotImage) {
+		t.Errorf("junk: err = %v, want ErrNotImage", err)
+	}
+}
+
 func TestJPEGOrientation_ReadsTheTagAndToleratesJunk(t *testing.T) {
 	if got := jpegOrientation([]byte{0xFF, 0xD8, 0xFF, 0xE1, 0x00, 0x04, 'E', 'x'}); got != 1 {
 		t.Errorf("a cut-off EXIF block reads as upright, got %d", got)

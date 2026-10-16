@@ -10,11 +10,48 @@ export function matchesName(item: DriveItem, query: string): boolean {
   return !q || normalize(item.name).includes(q)
 }
 
-/** Folders first, then files, each by name the way Vietnamese is collated. */
-export function sortItems(items: DriveItem[]): DriveItem[] {
+/** What the type chips of the toolbar narrow the files to. */
+export type TypeFilter = 'all' | 'docs' | 'sheets' | 'media' | 'pdf'
+
+export const TYPE_FILTERS: { id: TypeFilter; label: string }[] = [
+  { id: 'all', label: 'Tất cả' },
+  { id: 'docs', label: 'Tài liệu' },
+  { id: 'sheets', label: 'Bảng tính' },
+  { id: 'media', label: 'Ảnh & video' },
+  { id: 'pdf', label: 'PDF' },
+]
+
+const KIND_LABELS: Record<Exclude<TypeFilter, 'all'>, string[]> = {
+  docs: ['Văn bản', 'Trình chiếu'],
+  sheets: ['Bảng tính'],
+  media: ['Ảnh', 'Video'],
+  pdf: ['PDF'],
+}
+
+/** Files of the chosen kind; folders always stay, they are how the user moves on. */
+export function filterByType(items: DriveItem[], filter: TypeFilter): DriveItem[] {
+  if (filter === 'all') return items
+  const labels = KIND_LABELS[filter]
+  return items.filter((i) => i.item_type === 'folder' || labels.includes(kindOf(i).label))
+}
+
+export type SortKey = 'recent' | 'name' | 'size'
+
+export const SORT_OPTIONS: { id: SortKey; label: string }[] = [
+  { id: 'recent', label: 'Sửa gần nhất' },
+  { id: 'name', label: 'Tên' },
+  { id: 'size', label: 'Dung lượng' },
+]
+
+const byName = (a: DriveItem, b: DriveItem) => a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' })
+
+/** Folders first, then files, each in the order `key` asks for (name by default, the way Vietnamese is collated). */
+export function sortItems(items: DriveItem[], key: SortKey = 'name'): DriveItem[] {
   return [...items].sort((a, b) => {
     if (a.item_type !== b.item_type) return a.item_type === 'folder' ? -1 : 1
-    return a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' })
+    if (key === 'recent') return toMillis(b.updated_at) - toMillis(a.updated_at) || byName(a, b)
+    if (key === 'size') return (b.size_bytes ?? 0) - (a.size_bytes ?? 0) || byName(a, b)
+    return byName(a, b)
   })
 }
 

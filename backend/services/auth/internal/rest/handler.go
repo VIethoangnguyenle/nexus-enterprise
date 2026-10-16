@@ -339,6 +339,8 @@ func mapError(err error) *echo.HTTPError {
 		return apiError(http.StatusForbidden, "email_unverified", err.Error())
 	case errors.Is(err, domain.ErrOTPUnavailable):
 		return apiError(http.StatusServiceUnavailable, "otp_unavailable", err.Error())
+	case errors.Is(err, domain.ErrOTPBusy):
+		return apiError(http.StatusServiceUnavailable, "otp_busy", err.Error())
 	case errors.Is(err, domain.ErrAvatarNotImage):
 		return apiError(http.StatusBadRequest, "avatar_not_image", err.Error())
 	case errors.Is(err, domain.ErrAvatarTooManyPixels):

@@ -70,7 +70,7 @@ type ContactQuery struct {
 // Directory page sizes: the default, and the most one request may ask for.
 const (
 	DefaultContactsLimit = 50
-	MaxContactsLimit     = 200
+	MaxContactsLimit     = 500
 	maxCursorBytes       = 512
 )
 

@@ -52,6 +52,8 @@ on_traefik=$(jq -r '[.services | to_entries[] | select(.value.networks | has("tr
 edge_ip=$(jq -r '.services["nexus-frontend"].networks.nexus.ipv4_address' <<<"$cfg")
 [[ $(jq -r '.services.auth.environment.AUTH_TRUSTED_PROXIES' <<<"$cfg") == "$edge_ip/32" ]] ||
   bad "auth: AUTH_TRUSTED_PROXIES must be exactly the edge address $edge_ip/32"
+[[ $(jq -r '.services.messaging.environment.MESSAGING_TRUSTED_PROXIES' <<<"$cfg") == "$edge_ip/32" ]] ||
+  bad "messaging: MESSAGING_TRUSTED_PROXIES must be exactly the edge address $edge_ip/32"
 
 # One SMTP account and one app URL serve both the auth service (sign-in codes) and the workspace
 # service (invitation emails): they must be wired identically. workspace's SMTP_* are read in

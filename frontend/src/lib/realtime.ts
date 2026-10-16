@@ -166,13 +166,94 @@ export type SeqVerdict = 'apply' | 'duplicate' | 'resync'
 export interface SeqState {
   /** Last sequence number seen, per workspace. */
   last: Record<string, number>
+  /** Last position of the user's own stream, once known. */
+  user?: number
+  /** Whose cursors these are (user and tenant); cursors never cross to another owner. */
+  owner?: string
 }
 
 export const emptySeq = (): SeqState => ({ last: {} })
 
 /** A subscription acknowledgement fixes where the stream stands. */
 export function resetSeq(state: SeqState, wsId: string, seq: number): SeqState {
-  return { last: { ...state.last, [wsId]: seq } }
+  return { ...state, last: { ...state.last, [wsId]: seq } }
+}
+
+/** Forgets one workspace's cursor; every other cursor stays. */
+export function dropWorkspaceSeq(state: SeqState, wsId: string): SeqState {
+  const { [wsId]: _gone, ...rest } = state.last
+  return { ...state, last: rest }
+}
+
+/** Moves the user-stream cursor. */
+export function setUserSeq(state: SeqState, seq: number): SeqState {
+  return { ...state, user: seq }
+}
+
+/**
+ * Keeps the cursors only for the owner they were earned under. A different
+ * user, or the same user in another tenant, starts from nothing.
+ */
+export function adoptOwner(state: SeqState, owner: string): SeqState {
+  return state.owner === owner ? state : { last: {}, owner }
+}
+
+/** What survives a reload: plain data, for a device cache to store. */
+export interface SyncSnapshot {
+  owner?: string
+  user?: number
+  workspaces: Record<string, number>
+}
+
+export function snapshotSeq(state: SeqState): SyncSnapshot {
+  return { owner: state.owner, user: state.user, workspaces: { ...state.last } }
+}
+
+const isCursor = (n: unknown): n is number => typeof n === 'number' && Number.isSafeInteger(n) && n >= 0
+
+/** Rebuilds state from stored data; anything malformed is dropped, never trusted. */
+export function restoreSeq(raw: unknown): SeqState {
+  if (!raw || typeof raw !== 'object') return emptySeq()
+  const r = raw as Partial<SyncSnapshot>
+  const last: Record<string, number> = {}
+  if (r.workspaces && typeof r.workspaces === 'object') {
+    for (const [ws, n] of Object.entries(r.workspaces)) if (isCursor(n)) last[ws] = n
+  }
+  return {
+    last,
+    user: isCursor(r.user) ? r.user : undefined,
+    owner: typeof r.owner === 'string' ? r.owner : undefined,
+  }
+}
+
+// --- control frames (JSON text beside the binary protobuf frames) ----------
+
+export const syncFrame = (workspaceId: string, since: number) =>
+  JSON.stringify({ type: 'sync', workspace_id: workspaceId, since })
+export const userSyncFrame = (since: number) => JSON.stringify({ type: 'user_sync', since })
+
+export type ControlMessage =
+  | { type: 'synced' | 'too_far'; scope: 'workspace' | 'user'; workspaceId: string; seq: number; replayed: number }
+  | { type: 'user_seq'; seq: number }
+
+/** Parses a server control frame; anything unrecognised is null. */
+export function parseControl(text: string): ControlMessage | null {
+  let m: Record<string, unknown>
+  try {
+    const v: unknown = JSON.parse(text)
+    if (!v || typeof v !== 'object') return null
+    m = v as Record<string, unknown>
+  } catch {
+    return null
+  }
+  if (!isCursor(m.seq)) return null
+  if (m.type === 'user_seq') return { type: 'user_seq', seq: m.seq }
+  if ((m.type === 'synced' || m.type === 'too_far') && (m.scope === 'workspace' || m.scope === 'user')) {
+    const workspaceId = typeof m.workspace_id === 'string' ? m.workspace_id : ''
+    if (m.scope === 'workspace' && !workspaceId) return null
+    return { type: m.type, scope: m.scope, workspaceId, seq: m.seq, replayed: isCursor(m.replayed) ? m.replayed : 0 }
+  }
+  return null
 }
 
 /**

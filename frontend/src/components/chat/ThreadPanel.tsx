@@ -16,13 +16,12 @@ import { buildStream, firstUnreadReplyId } from '../../lib/stream-model'
 import type { PeopleDirectory } from '../../lib/people'
 import type { Message } from '../../api/messaging'
 import { Button, toast } from '../primitives'
-import { ChatEditor } from './ChatEditor'
+import { LazyChatEditor, LazyMessageEditBox } from './lazy-parts'
 import { SidePanel } from '../spaces/SidePanel'
 import { MessageBlock } from '../spaces/MessageBlock'
 import { EmptyState } from '../spaces/EmptyState'
 import { MessageMenu, type MessageMenuTarget } from '../spaces/MessageMenu'
 import { MessageActionSheet } from '../spaces/MessageActionSheet'
-import { MessageEditBox } from '../spaces/MessageEditBox'
 import { DeleteMessageDialog } from '../spaces/DeleteMessageDialog'
 import { keys } from '../../hooks/keys'
 import { threadScope } from '../../stores/drafts.store'
@@ -218,7 +217,7 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
       footer={
         <>
           <p className="sr-only" role="status" aria-live="polite">{announce}</p>
-          <ChatEditor
+          <LazyChatEditor
             channelId={channelId}
             people={people}
             tone="base"
@@ -341,7 +340,7 @@ export function ThreadPanel({ channelId, workspaceId, messageId, spaceName, peop
                       }}
                       onOpenSheet={(m) => setSheetFor(m)}
                       editor={lifecycle.editing?.message.id === r.id && !phone ? (
-                        <MessageEditBox
+                        <LazyMessageEditBox
                           initialHtml={lifecycle.editing.draft ?? toEditorHtml(r)}
                           onSave={lifecycle.saveEdit}
                           onCancel={lifecycle.cancelEdit}

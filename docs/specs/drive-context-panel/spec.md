@@ -6,33 +6,56 @@ Give the user file details, sharing, and history without leaving the file list, 
 ## Requirements
 
 ### Requirement: Context Panel Layout
-The Drive UI SHALL include a right-side detail panel that slides in when an item is selected. The panel SHALL NOT cause a full-page navigation. Below 768px the panel is a full-screen sheet.
+The Drive UI SHALL include a right-side detail panel that slides in when an item is selected, and no panel when nothing is selected. The panel SHALL NOT cause a full-page navigation. From 1280px it sits beside the files; from 768px to 1279px it floats over them, and from 768px to 1023px the files behind it are covered by a scrim that closes the panel when pressed. Below 768px the panel is a full-screen sheet. On a phone a tap on a card opens the viewer instead of selecting it, so the panel is reached there only from the list layout.
 
-#### Scenario: Select file in list
-- **WHEN** user activates a file row
-- **THEN** the detail panel slides in from the right showing the file's name, kind and size
+#### Scenario: Select file in the grid
+- **WHEN** user clicks a file card (or activates a file row in the list layout, or chooses "Chi tiết" in an item's menu)
+- **THEN** the detail panel slides in from the right showing the file's name and picture
 
 #### Scenario: Deselect
-- **WHEN** user presses Escape or the panel's close button, or leaves the folder
+- **WHEN** user presses Escape or the panel's close button, presses the scrim, or leaves the folder
 - **THEN** the detail panel slides out
 
+#### Scenario: Tablet
+- **WHEN** a file is selected between 768px and 1023px
+- **THEN** the panel floats over the grid and a scrim covers the grid; pressing the scrim closes the panel
+
 ### Requirement: Context Panel Content
-The detail panel SHALL show, in one scrolling column: the item's name with its kind and size, the creation and modification times, an image preview when the file is an image, "Người có quyền" and "Hoạt động".
+The detail panel SHALL show, in one scrolling column: the file's server-made picture (4:3, rendition 640; the file-kind icon on a quiet ground when the server has none), "Mở" (opens the viewer), "Tải xuống" and, only with `share`, "Chia sẻ"; then a table of Loại (kind), Dung lượng (files), Chủ sở hữu, Sửa lần cuối and Vị trí (the name of the folder the item is in, the workspace name at the root, omitted in the shared view); then "Người có quyền" and "Hoạt động". A folder has no picture, no "Mở" and no "Tải xuống".
+
+#### Scenario: Preview and actions
+- **WHEN** the panel is open for a file
+- **THEN** it shows the picture, and Mở, Tải xuống and (with `share`) Chia sẻ; Mở opens the viewer over the files of the folder that are showing, and closing the viewer returns focus to Mở
 
 #### Scenario: Metadata
 - **WHEN** the panel is open for a file
-- **THEN** it shows type, size, created and modified times, formatted in the Vietnamese display formats
+- **THEN** it shows kind, size, owner, last change and location, formatted in the Vietnamese display formats
 
 #### Scenario: Owner by name
 - **WHEN** the panel shows the owner of an item
-- **THEN** the owner is a person chip (avatar and display name) labelled "chủ sở hữu"; no user id, node id or other identifier appears. An owner outside the workspace is named by the display name the drive REST returns (`owner_name`)
+- **THEN** the owner is a person chip (avatar and display name), and labelled "chủ sở hữu" in "Người có quyền"; no user id, node id or other identifier appears. An owner outside the workspace is named by the display name the drive REST returns (`owner_name`)
 
 #### Scenario: Activity names the actor
 - **WHEN** the panel lists activity
 - **THEN** each entry shows who (avatar and display name), what they did (a verb) and when (relative time, full time in the tooltip). The drive records who created an item and when; later edits are not yet recorded and are not listed
 
+### Requirement: Item Actions Where The Pointer Is
+The actions on an item (Xem trước, Tải xuống, Chi tiết, Chia sẻ, Di chuyển, Đổi tên, Xoá) SHALL open from the ⋯ on its card or row, from a right click, and, on a card, from Shift+F10 or the menu key. Each action is offered only with the permission it needs (`share`, or `write` for moving, renaming and deleting). On a phone the ⋯ and a long press on a card or folder tile open a bottom sheet instead: a small picture, "Loại · dung lượng · người · giờ", then Mở, Tải xuống, Chia sẻ, Chuyển tới thư mục…, Đổi tên and Xoá in 52px rows. On a phone, outside the shared view, a floating + opens a sheet with Tải tệp lên, Chụp ảnh and Thư mục mới. The ⋯ of a card is always shown on a coarse pointer.
+
+#### Scenario: Menu from the keyboard
+- **WHEN** a card has focus and the user presses Shift+F10
+- **THEN** its menu opens, and Escape closes it and returns focus to the card
+
+#### Scenario: Read-only file
+- **WHEN** the menu or sheet is opened for a file the user can only read
+- **THEN** it offers Mở and Tải xuống only
+
+#### Scenario: Phone sheet
+- **WHEN** the user presses the ⋯ of a card on a phone
+- **THEN** a bottom sheet names the file with its facts and offers the actions the user's permissions allow; choosing one closes the sheet and starts that action
+
 ### Requirement: Permission-Gated Sharing
-The list of people with access beyond the owner, and the Chia sẻ button, SHALL only be available if the user has `share` permission on the selected item.
+The list of people with access beyond the owner, and the Chia sẻ buttons, SHALL only be available if the user has `share` permission on the selected item.
 
 #### Scenario: No share permission
 - **WHEN** user selects a file where share=false

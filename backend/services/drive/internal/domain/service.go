@@ -33,6 +33,7 @@ type Service struct {
 	docStorage  docpb.DocumentStorageServiceClient
 	emitter     realtime.Emitter
 	preview     *previewer
+	thumbs      *thumbnailer
 }
 
 // NewService creates the drive service with all required dependencies.

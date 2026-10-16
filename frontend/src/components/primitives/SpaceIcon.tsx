@@ -1,10 +1,14 @@
+import { useState } from 'react'
 import { personStyle } from '../../lib/person-hue'
+import { avatarVariant } from './Avatar'
 
 interface SpaceIconProps {
   /** Space name; the icon shows its first letter. */
   name: string
   /** Stable key for the colour (channel id). Hashed, never rendered. */
   hueKey?: string
+  /** The space's own picture; the letter shows while there is none or it does not load. */
+  src?: string
   size?: 24 | 32 | 36 | 40 | 44
   className?: string
 }
@@ -25,9 +29,13 @@ export function spaceLetter(name: string): string {
 
 /**
  * A space (nhóm) is a rounded square so it never reads as a person, who is a
- * circle. The fill is a person hue fixed per space.
+ * circle. The fill is a person hue fixed per space; its picture, when it has
+ * one, replaces the letter and follows the same corners.
  */
-export function SpaceIcon({ name, hueKey, size = 32, className = '' }: SpaceIconProps) {
+export function SpaceIcon({ name, hueKey, src, size = 32, className = '' }: SpaceIconProps) {
+  // A picture that fails to load leaves the letter, never an empty square. A new address tries again.
+  const [failed, setFailed] = useState<string | undefined>()
+  const shown = src && failed !== src ? avatarVariant(src, size) : undefined
   return (
     <span
       className={`inline-grid place-items-center shrink-0 select-none bg-(--p) text-on-person
@@ -35,7 +43,9 @@ export function SpaceIcon({ name, hueKey, size = 32, className = '' }: SpaceIcon
       style={personStyle(hueKey || name)}
       aria-hidden="true"
     >
-      {spaceLetter(name)}
+      {shown
+        ? <img src={shown} alt="" className="w-full h-full rounded-[inherit] object-cover" onError={() => setFailed(src)} />
+        : spaceLetter(name)}
     </span>
   )
 }

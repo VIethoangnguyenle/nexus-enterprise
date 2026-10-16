@@ -186,10 +186,18 @@ describe('TextsScreen: states', () => {
 })
 
 describe('reaching Văn bản without the list panel', () => {
-  it('Tài liệu has a Văn bản chip, which opens the documents', async () => {
+  it('on a tablet the folder drawer of Tài liệu has Tất cả văn bản, which opens the documents', async () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('1023') || query.includes('coarse'),
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
     const user = userEvent.setup()
     const router = await renderTexts('/drive')
-    await user.click(await screen.findByRole('button', { name: 'Văn bản' }))
+    await user.click(await screen.findByRole('button', { name: 'Mở cây thư mục' }))
+    await user.click(await within(await screen.findByRole('dialog', { name: 'Cây thư mục' })).findByRole('link', { name: 'Tất cả văn bản' }))
+    vi.unstubAllGlobals()
     await waitFor(() => expect(router.state.location.search).toEqual({ view: 'texts' }))
     await within(await screen.findByRole('table', { name: /Văn bản/ })).findByText('Quy trình đối soát cuối ngày')
   })

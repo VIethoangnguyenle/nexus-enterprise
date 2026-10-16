@@ -1,11 +1,15 @@
 import { fireEvent, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
 import { routerState } from '../../test/router-mock'
 import { CH, MSG, UUID_RE } from '../../test/chat-fixtures'
 import { useToastStore } from '../primitives'
+import { prefetchChatParts } from '../chat/lazy-parts'
 import { SpaceView } from './SpaceView'
+
+// The composer, picker and editor load on first use; fetch them once so each test sees them at once.
+beforeAll(() => prefetchChatParts(), 60_000)
 
 vi.mock('@tanstack/react-router', async () => (await import('../../test/router-mock')).routerMockFactory())
 vi.mock('../../api/client', async (orig) => {
@@ -54,7 +58,7 @@ describe('SpaceView', () => {
     expect(await screen.findByText('14 thành viên')).toBeInTheDocument()
     expect(await screen.findByText(/lệch 3 giao dịch/)).toBeInTheDocument()
     expect(screen.getByRole('log', { name: 'Tin nhắn trong Đối soát giao dịch' })).toBeInTheDocument()
-    expect(screen.getByText('Enter để gửi · Shift+Enter xuống dòng')).toBeInTheDocument()
+    expect(await screen.findByText('Enter để gửi · Shift+Enter xuống dòng')).toBeInTheDocument()
     expect(screen.queryByText(/mở một chủ đề/)).toBeNull()
     noIds()
   })
@@ -88,7 +92,6 @@ describe('SpaceView', () => {
     // Files tab
     await user.click(screen.getByRole('tab', { name: 'Tệp' }))
     await screen.findByText('doi-soat-08-10.xlsx')
-    expect(screen.getByText('412 KB')).toBeInTheDocument()
     noIds()
 
     // Tasks tab

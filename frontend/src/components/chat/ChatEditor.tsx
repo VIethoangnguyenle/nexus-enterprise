@@ -1,7 +1,7 @@
 import { useEditor, EditorContent } from '@tiptap/react'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Paperclip, Plus, Smile, SendHorizontal, Check, Upload, Camera, Image as ImageIcon } from 'lucide-react'
-import { EmojiPicker } from './EmojiPicker'
+import { LazyEmojiPicker } from './lazy-parts'
 import { MentionDropdown } from './MentionDropdown'
 import { FormattingToolbar } from './FormattingToolbar'
 import { LinkDialog } from './LinkDialog'
@@ -11,6 +11,7 @@ import { useChannelMembers } from '../../hooks/useMessaging'
 import { useAuthStore } from '../../stores/auth.store'
 import { displayName, EMPTY_DIRECTORY, type PeopleDirectory } from '../../lib/people'
 import { usePhone } from '../../hooks/usePhone'
+import { useKeyboardOpen } from '../../hooks/useKeyboardOpen'
 import { AttachmentTray } from './AttachmentTray'
 import { type useAttachmentUploads } from '../../hooks/useAttachmentUploads'
 import { useDraftsStore } from '../../stores/drafts.store'
@@ -105,6 +106,8 @@ export function ChatEditor({
   const boxRef = useRef<HTMLDivElement>(null)
   const userId = useAuthStore((s) => s.user?.id)
   const phone = usePhone()
+  // On a phone with the keyboard up the composer docks flush to it, like Google Chat (DESIGN.md "Ô soạn").
+  const docked = useKeyboardOpen()
   const [showEmoji, setShowEmoji] = useState(false)
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [showAttachSheet, setShowAttachSheet] = useState(false)
@@ -477,7 +480,12 @@ export function ChatEditor({
   }
 
   return (
-    <div className={`relative ${tone === 'raised' ? 'mx-4 mb-4' : 'mx-3 mb-3'}`}>
+    <div
+      data-composer-root
+      data-docked={docked || undefined}
+      className={docked ? 'relative' : `relative ${tone === 'raised' ? 'mx-4 mb-4' : 'mx-3 mb-3'}
+        max-md:mb-[max(0.75rem,env(safe-area-inset-bottom))]`}
+    >
       {error && (
         <div role="alert" className="mb-2 px-3 py-2 rounded-md bg-danger-wash text-danger text-small">
           {error}
@@ -497,7 +505,10 @@ export function ChatEditor({
       <p className="sr-only" aria-live="polite" data-composer-live>{announce}</p>
       <div
         ref={boxRef}
-        className={`grid gap-2 py-2.5 pr-2.5 pl-3.5 rounded-lg focus-within:field-focus
+        data-composer-box
+        className={docked
+          ? 'grid gap-2 py-1.5 px-2.5 rounded-none border-t border-line bg-base'
+          : `grid gap-2 py-2.5 pr-2.5 pl-3.5 rounded-lg focus-within:field-focus
           ${tone === 'raised' ? 'bg-raised' : 'bg-base'}`}
       >
         {quote && !editing && (
@@ -666,7 +677,7 @@ export function ChatEditor({
 
       {showEmoji && (
         <div className="absolute bottom-full left-0 mb-2 z-dropdown">
-          <EmojiPicker onSelect={handleEmojiSelect} onClose={() => setShowEmoji(false)} />
+          <LazyEmojiPicker onSelect={handleEmojiSelect} onClose={() => setShowEmoji(false)} />
         </div>
       )}
 

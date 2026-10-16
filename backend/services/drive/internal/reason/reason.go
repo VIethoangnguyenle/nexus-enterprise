@@ -14,3 +14,8 @@ const QuotaExceeded = "quota_exceeded"
 
 // ItemChanged: another request changed the item first; the caller may retry.
 const ItemChanged = "item_changed"
+
+// ThumbnailUnavailable: the file has no thumbnail (its kind has none, or it
+// could not be drawn). It is the `reason` of a REST 404; the screen shows the
+// file's icon instead.
+const ThumbnailUnavailable = "thumbnail_unavailable"

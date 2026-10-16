@@ -144,7 +144,7 @@ Addresses SHALL be trimmed and lower-cased at sign-in and OTP, and an address th
 ### Requirement: OTP sign-in codes
 `POST /api/auth/otp/request` opens a 5-minute session for an email or phone and `POST /api/auth/otp/verify` exchanges its code for the same session as other sign-ins. The code's mode is set by `AUTH_FIXED_OTP_CODE`:
 - **Fixed-code test mode (default).** Unset → `999999`; any six digits → that code. Every OTP session accepts that code, so anyone who knows it can sign in as any email or phone. This is a documented TEST-ONLY mode for testers on deployed builds, and the auth service logs a warning at startup while it is on. `GET /api/auth/providers` reports `otp: true, otp_fixed_code: true, otp_proves_email: false`. The flag is for operators and API users: no screen prints the code or a "test mode" line, in any build (see `sign-in-screens`).
-- **Random-code mode.** Setting `AUTH_FIXED_OTP_CODE` explicitly empty (`AUTH_FIXED_OTP_CODE=`) turns the test mode off. Each request then gets a uniformly random six-digit code from `crypto/rand` (rejection sampling, no modulo bias), stored only as an HMAC-SHA256 keyed by a secret derived from the JWT secret and bound to the session, compared in constant time, and handed to a `CodeSender` for delivery. If delivery fails, the request fails and the session is removed. The only sender today is a log sender that runs only when `APP_ENV=dev` or `AUTH_DEV_OTP=1` and refuses otherwise. With no sender, OTP is disabled: request and verify return 503, `/api/auth/providers` reports `otp: false`, and the login page hides the code form. `otp_proves_email` is true only when random codes are delivered by a sender that declares it reaches only the owner of the address; the fixed code and the log sender never make it true.
+- **Random-code mode.** Setting `AUTH_FIXED_OTP_CODE` explicitly empty (`AUTH_FIXED_OTP_CODE=`) turns the test mode off. Each request then gets a uniformly random six-digit code from `crypto/rand` (rejection sampling, no modulo bias), stored only as an HMAC-SHA256 keyed by a secret derived from the JWT secret and bound to the session, compared in constant time, and handed to a `CodeSender` for delivery. The email sender (SMTP) hands each code to a bounded in-process queue and `POST /api/auth/otp/request` answers 200 as soon as the session is stored, without waiting for the mail server. One background worker sends the queue over a reused SMTP connection and retries a failed send 3 times (1 s, 2 s, 4 s apart); a code older than its 5-minute life is dropped unsent. A delivery that still fails is logged and counted (never with the code, the address or the message) and does not change the answer, so the answer never says whether an address exists; the person asks again with the resend button. If the queue is full or closed the request is refused softly, without waiting: `503 otp_busy`, no session is left behind. On shutdown the service stops taking requests, gives the queue up to 5 seconds to empty, then drops what is left and logs how many. A sender that is called directly (the log sender, tests) still fails the request and removes the session when it cannot deliver. The only sender today is a log sender that runs only when `APP_ENV=dev` or `AUTH_DEV_OTP=1` and refuses otherwise. With no sender, OTP is disabled: request and verify return 503, `/api/auth/providers` reports `otp: false`, and the login page hides the code form. `otp_proves_email` is true only when random codes are delivered by a sender that declares it reaches only the owner of the address; the fixed code and the log sender never make it true.
 
 In both modes: at most 5 verification attempts per session (counted atomically, the 6th fails even with the right code), a code works once, at most 5 code requests per identifier per 15 minutes (429), and the service never logs the code.
 
@@ -179,12 +179,35 @@ A wrong code answers `401 {"code":"otp_invalid","attempts_left":N}`, where N is 
 - **WHEN** a code is requested for an address that has an account and for one that has none
 - **THEN** both answers are 200 with the same shape; only a successful verification says whether the account is new (`is_new_user`)
 
+#### Scenario: A slow mail server does not hold the request
+- **WHEN** random-code mode is on and the mail server takes 5 seconds to accept a message
+- **THEN** `POST /api/auth/otp/request` answers 200 in under 100 ms and the code is still delivered
+
+#### Scenario: A failing mail server does not change the answer
+- **WHEN** every delivery attempt fails
+- **THEN** the request answers 200, the failure is counted once after the retries, and no log line contains the code or the address
+
+#### Scenario: A full queue refuses without hanging
+- **WHEN** the delivery queue is full
+- **THEN** the request answers `503 otp_busy` immediately and leaves no session in Redis
+
 ### Requirement: Sign-in issues a session scoped to a default tenant
 A successful sign-in (OTP or Google) SHALL issue an access token scoped to the person's default tenant (an owned tenant, else the first) and a refresh token that names the SAME tenant, so that trading the cookie for a new access token after a reload keeps the workspace. A person with no tenant gets a token with none.
 
 #### Scenario: Refresh keeps the workspace
 - **WHEN** a person with one workspace signs in by code and later refreshes
 - **THEN** both the first and the refreshed access token carry that workspace's `tenant_id`
+
+### Requirement: The client re-scopes only when the workspace changes
+The web client SHALL call the switch-tenant endpoint, clear its query cache and reset tenant-scoped client state only when the workspace to open differs from the one named by the access token. When they already agree (the usual start-up), nothing is cleared and the workspace list is fetched once. The session is restored by `POST /api/auth/refresh` started by the router before any route loads, so it runs alongside route matching and rendering, not after the first paint.
+
+#### Scenario: Same workspace
+- **WHEN** the access token already names the workspace being opened
+- **THEN** no switch request is sent, the cache is kept and `/api/workspaces` is not fetched again
+
+#### Scenario: Different workspace
+- **WHEN** the workspace to open differs from the token's
+- **THEN** the token is re-issued for it and only then is the previous workspace's cached data dropped
 
 ### Requirement: Switch tenant re-issues JWT
 The system SHALL provide a switch-tenant endpoint that verifies membership and issues a new JWT scoped to the target tenant.
@@ -325,7 +348,7 @@ Every error from the auth service's REST routes SHALL be a JSON object `{"messag
 - **THEN** each client has its own allowance, and a forged leading entry does not give one a new one
 
 ### Requirement: The directory is members-only, paged, and names no handle
-`GET /api/workspaces/:id/contacts` SHALL require the caller to be an ACTIVE member of that workspace (403 otherwise, including a `disabled` or `invited` one; nothing listed). It answers one page of at most `limit` people (default 50, at most 200; 400 otherwise) in a stable order, `{contacts, total, next_cursor?}`: `total` is the true number of people the filters match, not the page's length, and `next_cursor` (opaque, keyset: the sort key and ID of the last person) is present only when more follow and is passed back as `cursor`. A malformed cursor, or a search longer than 100 characters, is 400. Filters: `department` (the administrator-assigned department's name, exact), `location`, `search` (case-insensitive substring of name, title, department or email; `%` and `_` are literal). A person's `department` is the one assigned in THIS workspace (`tenant_users.department_id` joined to `departments`), never what they wrote about themselves. `display_name` is empty, not the login handle, for a person who has not yet saved their profile. The routes that listed every account (`GET /api/users`) or looked one up by username do not exist.
+`GET /api/workspaces/:id/contacts` SHALL require the caller to be an ACTIVE member of that workspace (403 otherwise, including a `disabled` or `invited` one; nothing listed). It answers one page of at most `limit` people (default 50, at most 500; 400 otherwise) in a stable order, `{contacts, total, next_cursor?}`: `total` is the true number of people the filters match, not the page's length, and `next_cursor` (opaque, keyset: the sort key and ID of the last person) is present only when more follow and is passed back as `cursor`. A malformed cursor, or a search longer than 100 characters, is 400. Filters: `department` (the administrator-assigned department's name, exact), `location`, `search` (case-insensitive substring of name, title, department or email; `%` and `_` are literal). A person's `department` is the one assigned in THIS workspace (`tenant_users.department_id` joined to `departments`), never what they wrote about themselves. `display_name` is empty, not the login handle, for a person who has not yet saved their profile. The routes that listed every account (`GET /api/users`) or looked one up by username do not exist.
 
 #### Scenario: Outsider or suspended member reads a directory
 - **WHEN** a signed-in person who is not an active member requests a workspace's contacts

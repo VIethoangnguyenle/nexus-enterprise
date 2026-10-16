@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { queryClient } from '../lib/query-client'
 import { keys } from '../hooks/keys'
 import { useAuthStore } from './auth.store'
-import { useWebSocketStore } from './websocket.store'
+import { useWebSocketStore, restoreSyncSnapshot } from './websocket.store'
 import { useIncomingCallStore } from './incoming-call.store'
 import { useCallStore } from './call.store'
 import { ClientEnvelope, ServerEnvelope } from '../generated/proto/messaging/ws'
@@ -22,8 +22,8 @@ class FakeSocket {
     FakeSocket.last = this
   }
   sent: ClientEnvelope[] = []
-  send(data: Uint8Array) {
-    this.sent.push(ClientEnvelope.fromBinary(data))
+  send(data: Uint8Array | string) {
+    if (typeof data !== 'string') this.sent.push(ClientEnvelope.fromBinary(data))
   }
   close() {}
 }
@@ -56,6 +56,7 @@ beforeEach(() => {
 
 afterEach(() => {
   useWebSocketStore.getState().disconnect()
+  restoreSyncSnapshot(null)
   vi.unstubAllGlobals()
   vi.useRealTimers()
   useWebSocketStore.setState({ ws: null, recentChanges: {}, onlineUsers: {} })
@@ -550,7 +551,7 @@ describe('resync', () => {
     expect(invalidated(keys.messaging.followedThreads())).toBe(true)
   })
 
-  it('a hole in the sequence refreshes everything for the workspace', () => {
+  it('a hole that the replay cannot repair refreshes everything for the workspace', () => {
     useWebSocketStore.getState().followWorkspace('ws-1')
     authOk()
     ackWorkspace('5')
@@ -559,6 +560,7 @@ describe('resync', () => {
     seed(keys.documents.list('ws-1'))
 
     deliver(domainEvent({ domain: 'document', kind: 'created', seq: '9' }))
+    FakeSocket.last!.onmessage!({ data: JSON.stringify({ type: 'too_far', scope: 'workspace', workspace_id: 'ws-1', seq: 9 }) } as never)
     settle()
 
     expect(invalidated(keys.admin.members('ws-1'))).toBe(true)

@@ -26,13 +26,23 @@ import { isLive, useCallStore } from './call.store'
 import { asCallKind } from '../api/calls'
 import { callKeys } from '../hooks/keys/calls'
 import {
+  adoptOwner,
   createBatcher,
+  dropWorkspaceSeq,
   emptySeq,
   observeSeq,
+  parseControl,
   planFor,
   resetSeq,
+  restoreSeq,
+  setUserSeq,
+  snapshotSeq,
+  syncFrame,
+  userSyncFrame,
   workspaceResyncKeys,
+  type ControlMessage,
   type SeqState,
+  type SyncSnapshot,
 } from '../lib/realtime'
 
 const WS_DEBUG = () => typeof localStorage !== 'undefined' && localStorage.getItem('WS_DEBUG') === '1'
@@ -56,8 +66,41 @@ const subscribedChannels = new Map<string, number>()
 
 /** The workspace whose live changes this tab follows; re-subscribed on reconnect. */
 let followedWorkspace: string | null = null
-/** Where each followed workspace's event stream stands. */
+/**
+ * Where each followed workspace's event stream stands, and the user's own
+ * stream. Held in memory; `getSyncSnapshot` / `restoreSyncSnapshot` let a
+ * device cache carry it across a reload.
+ */
 let seqState: SeqState = emptySeq()
+/**
+ * Per workspace, how a gap in the stream is being repaired:
+ *  - 'syncing': a sync was asked for and has not been answered; frames out of
+ *    order meanwhile are dropped, the replay brings them back;
+ *  - 'answered': the sync was answered; a gap before the next good frame means
+ *    replay cannot be trusted and everything is refreshed.
+ */
+const holeRepair = new Map<string, 'syncing' | 'answered'>()
+/** The same repair policy for the user's own stream. */
+let userRepair: 'syncing' | 'answered' | undefined
+
+/** The cursors, as plain data for a device cache. */
+export function getSyncSnapshot(): SyncSnapshot {
+  return snapshotSeq(seqState)
+}
+
+/** Loads cursors saved earlier. Takes effect at the next connection; a different owner's cursors are dropped then. */
+export function restoreSyncSnapshot(raw: unknown) {
+  seqState = restoreSeq(raw)
+  holeRepair.clear()
+  userRepair = undefined
+}
+
+/** Forgets every cursor: the next connection subscribes plainly and refreshes everything. */
+function clearCursors() {
+  seqState = emptySeq()
+  holeRepair.clear()
+  userRepair = undefined
+}
 /**
  * True from the moment the connection is made until the workspace
  * subscription is acknowledged: whatever happened while it was down has to be
@@ -82,6 +125,11 @@ const permissionRetries = new Set<ReturnType<typeof setTimeout>>()
 let subscribeRetryTimer: ReturnType<typeof setTimeout> | null = null
 let subscribeRetries = 0
 const SUBSCRIBE_RETRY_MS = [5_000, 15_000, 45_000]
+/**
+ * How long a sync request waits for any answer. A server that does not know
+ * the request (during a deploy or rollback) ignores it silently.
+ */
+const SYNC_ACK_MS = 5_000
 /**
  * A permission event is repeated once after this delay: policy read replicas
  * learn of a change from their own feed, and the first refetch can reach one
@@ -146,6 +194,12 @@ interface WebSocketState {
 function sendEnvelope(ws: WebSocket, envelope: Parameters<typeof ClientEnvelope.toBinary>[0]) {
   if (ws.readyState !== WebSocket.OPEN) return
   ws.send(ClientEnvelope.toBinary(envelope))
+}
+
+/** Send a JSON control frame (sync requests). */
+function sendControl(ws: WebSocket, text: string) {
+  if (ws.readyState !== WebSocket.OPEN) return
+  ws.send(text)
 }
 
 /** The conversation the screen shows, if any. Re-announced on reconnect. */
@@ -248,6 +302,11 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
     }
 
     ws.onmessage = (event: MessageEvent) => {
+      if (typeof event.data === 'string') {
+        const control = parseControl(event.data)
+        if (control) handleControl(control)
+        return
+      }
       if (!(event.data instanceof ArrayBuffer)) return
 
       const envelope = ServerEnvelope.fromBinary(new Uint8Array(event.data))
@@ -268,8 +327,11 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
     subscribedChannels.clear()
     // followedWorkspace stays: a disconnect is how a token refresh swaps the
     // socket, and the new one must resume following. The follower's release
-    // (unmount, sign-out, switching workspace) is what ends it.
-    seqState = emptySeq()
+    // (unmount, sign-out, switching workspace) is what ends it. The cursors
+    // stay for the same reason: the next connection resumes from them. Only
+    // the repairs in flight die with the socket.
+    holeRepair.clear()
+    userRepair = undefined
     invalidations.cancel()
     clearTimers()
     subscribeRetries = 0
@@ -324,9 +386,12 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
       sendEnvelope(ws, { payload: { oneofKind: 'subscribe', subscribe: { channelId: '', workspaceId } } })
     }
     return () => {
+      // Nothing is heard for this workspace from now on, so its cursor goes
+      // stale, even when another workspace is already being followed.
+      seqState = dropWorkspaceSeq(seqState, workspaceId)
+      holeRepair.delete(workspaceId)
       if (followedWorkspace !== workspaceId) return
       followedWorkspace = null
-      seqState = emptySeq()
       if (subscribeRetryTimer) clearTimeout(subscribeRetryTimer)
       subscribeRetryTimer = null
       subscribeRetries = 0
@@ -384,12 +449,29 @@ function handleServerMessage(
       const auth = envelope.payload.authResponse
       if (auth.ok) {
         set(() => ({ authenticated: true }))
+        // Cursors belong to one user in one tenant.
+        seqState = adoptOwner(seqState, `${auth.userId}|${useAuthStore.getState().tenantId ?? ''}`)
         // On reconnect: re-subscribe, then refetch what may have changed while
         // the socket was down. With a workspace followed the refetch waits for
         // its acknowledgement (see 'workspaceSubscribed').
         resubscribeChannels(ws)
         announceView(ws, true)
-        if (followedWorkspace) {
+        const wsCursor = followedWorkspace ? seqState.last[followedWorkspace] : undefined
+        const userCursor = seqState.user
+        if (userCursor !== undefined && (!followedWorkspace || wsCursor !== undefined)) {
+          // Both streams have a known position: ask for what came after it
+          // instead of refreshing everything. resyncPending stays set until
+          // the workspace answers (or is refused), so a refusal still refreshes.
+          userRepair = undefined
+          sendControl(ws, userSyncFrame(userCursor))
+          if (followedWorkspace && wsCursor !== undefined) {
+            sendControl(ws, syncFrame(followedWorkspace, wsCursor))
+            holeRepair.delete(followedWorkspace)
+            armSyncFallback(ws, followedWorkspace)
+          } else {
+            resyncPending = false
+          }
+        } else if (followedWorkspace) {
           sendEnvelope(ws, {
             payload: { oneofKind: 'subscribe', subscribe: { channelId: '', workspaceId: followedWorkspace } },
           })
@@ -556,6 +638,9 @@ function handleServerMessage(
           resyncPending = false
           resyncAfterReconnect()
         }
+        // The refusal is an answer: it replaces a pending sync deadline.
+        if (subscribeRetryTimer) clearTimeout(subscribeRetryTimer)
+        subscribeRetryTimer = null
         if (subscribeRetries < SUBSCRIBE_RETRY_MS.length && !subscribeRetryTimer) {
           const wait = SUBSCRIBE_RETRY_MS[subscribeRetries++]
           subscribeRetryTimer = setTimeout(() => {
@@ -585,15 +670,31 @@ function handleServerMessage(
       const d = envelope.payload.domainEvent
       const seq = Number(d.seq)
       if (seq && d.workspaceId) {
+        const beforeHole = seqState
         const seen = observeSeq(seqState, d.workspaceId, seq)
         seqState = seen.state
         if (seen.verdict === 'duplicate') break
         if (seen.verdict === 'resync') {
-          // Events were missed: nothing this tab holds for the workspace can be trusted.
+          // Events were missed. Ask for them once from the last good position;
+          // if that was already tried, nothing this tab holds can be trusted.
           if (WS_DEBUG()) console.warn(`[WS] sequence hole in ${d.workspaceId}, resynchronising`)
+          const repair = holeRepair.get(d.workspaceId)
+          if (repair === 'syncing') {
+            // Frames sent before the request was handled: the replay returns them.
+            seqState = beforeHole
+            break
+          }
+          if (repair === undefined) {
+            seqState = beforeHole
+            holeRepair.set(d.workspaceId, 'syncing')
+            sendControl(ws, syncFrame(d.workspaceId, beforeHole.last[d.workspaceId] ?? 0))
+            break
+          }
+          holeRepair.delete(d.workspaceId)
           resyncAfterReconnect()
           break
         }
+        if (holeRepair.get(d.workspaceId) === 'answered') holeRepair.delete(d.workspaceId)
       }
       const plan = planFor({
         domain: d.domain,
@@ -805,6 +906,82 @@ function injectReply(msg: WSChatMessage, set: (fn: (s: WebSocketState) => Partia
 }
 
 /**
+ * A user-addressed frame and its position arrive together or not at all, so a
+ * position that is not the next one means frames were lost. Same policy as a
+ * workspace hole: ask once from the last good position, and when that was
+ * already tried without a good frame since, refresh everything.
+ */
+function observeUserSeq(seq: number) {
+  const last = seqState.user
+  if (last === undefined || seq === last + 1) {
+    seqState = setUserSeq(seqState, seq)
+    if (userRepair === 'answered') userRepair = undefined
+    return
+  }
+  if (seq <= last) return // a repeat
+  if (userRepair === 'syncing') return // in flight before the request was handled; the replay returns them
+  if (userRepair === undefined) {
+    userRepair = 'syncing'
+    const ws = useWebSocketStore.getState().ws
+    if (ws) sendControl(ws, userSyncFrame(last))
+    return
+  }
+  userRepair = undefined
+  seqState = setUserSeq(seqState, seq)
+  resyncAfterReconnect()
+}
+
+/**
+ * If nothing answers a sync (a server that predates the request ignores it),
+ * subscribe the plain way and refresh everything once that is acknowledged.
+ */
+function armSyncFallback(ws: WebSocket, workspaceId: string) {
+  if (subscribeRetryTimer) clearTimeout(subscribeRetryTimer)
+  subscribeRetryTimer = setTimeout(() => {
+    subscribeRetryTimer = null
+    const state = useWebSocketStore.getState()
+    if (state.ws !== ws || !state.authenticated || followedWorkspace !== workspaceId || !resyncPending) return
+    sendEnvelope(ws, { payload: { oneofKind: 'subscribe', subscribe: { channelId: '', workspaceId } } })
+  }, SYNC_ACK_MS)
+}
+
+/** The server's answers to a sync request, and the user stream's position. */
+function handleControl(msg: ControlMessage) {
+  if (msg.type === 'user_seq') {
+    observeUserSeq(msg.seq)
+    return
+  }
+  const tooFar = msg.type === 'too_far'
+  if (msg.scope === 'user') {
+    seqState = setUserSeq(seqState, msg.seq)
+    if (tooFar) {
+      userRepair = undefined
+      resyncAfterReconnect()
+    } else {
+      if (userRepair) userRepair = 'answered'
+      if (followedWorkspace === null) resyncPending = false
+    }
+    return
+  }
+  if (msg.workspaceId !== followedWorkspace) return
+  subscribeRetries = 0
+  if (subscribeRetryTimer) clearTimeout(subscribeRetryTimer)
+  subscribeRetryTimer = null
+  // After a complete replay the cursor equals the answer; a difference means a
+  // frame was lost on the way.
+  const lost = !tooFar && seqState.last[msg.workspaceId] !== msg.seq
+  const repair = holeRepair.get(msg.workspaceId)
+  seqState = resetSeq(seqState, msg.workspaceId, msg.seq)
+  resyncPending = false
+  if (tooFar || lost) {
+    holeRepair.delete(msg.workspaceId)
+    resyncAfterReconnect()
+    return
+  }
+  if (repair) holeRepair.set(msg.workspaceId, 'answered')
+}
+
+/**
  * Re-sync everything after a reconnect or a hole in the event stream: whatever
  * happened while this tab was not listening is unknown, so every query family
  * is refreshed, immediately rather than in the next batch.
@@ -816,6 +993,9 @@ function resyncAfterReconnect() {
 
 // Previews, replies, typing and presence are what this user's session saw: the
 // next person to sign in on this tab must start without them.
-onSessionEnd(() => useWebSocketStore.setState({
-  lastMessages: {}, lastThreadMessages: {}, lastReplies: {}, typingUsers: {}, onlineUsers: {}, approvalActivity: {}, recentChanges: {},
-}))
+onSessionEnd(() => {
+  clearCursors()
+  useWebSocketStore.setState({
+    lastMessages: {}, lastThreadMessages: {}, lastReplies: {}, typingUsers: {}, onlineUsers: {}, approvalActivity: {}, recentChanges: {},
+  })
+})

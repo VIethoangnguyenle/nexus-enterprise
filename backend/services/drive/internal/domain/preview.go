@@ -138,28 +138,37 @@ func (s *Service) SetConverter(c Converter, cfg PreviewConfig) {
 	if cfg.FailureTTL <= 0 {
 		cfg.FailureTTL = DefaultFailureTTL
 	}
+	client, direct := storageClient(cfg.StorageDialAddr)
 	p := &previewer{
 		conv: c, cfg: cfg, slots: make(chan struct{}, cfg.MaxConcurrent),
-		failures: map[string]failure{}, http: &http.Client{},
-	}
-	if cfg.StorageDialAddr != "" {
-		p.direct = true
-		d := &net.Dialer{Timeout: 10 * time.Second}
-		p.http = &http.Client{Transport: &http.Transport{
-			DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
-				return d.DialContext(ctx, network, cfg.StorageDialAddr)
-			},
-		}}
+		failures: map[string]failure{}, http: client, direct: direct,
 	}
 	s.preview = p
 }
 
-// storageURL is the address to request for a signed storage URL. With a dial
+// storageClient is the HTTP client for signed storage URLs. With a dial address
+// the connection goes there (direct is true, see directURL); without one it is
+// an ordinary client.
+func storageClient(dialAddr string) (c *http.Client, direct bool) {
+	if dialAddr == "" {
+		return &http.Client{}, false
+	}
+	d := &net.Dialer{Timeout: 10 * time.Second}
+	return &http.Client{Transport: &http.Transport{
+		DialContext: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			return d.DialContext(ctx, network, dialAddr)
+		},
+	}}, true
+}
+
+func (p *previewer) storageURL(signed string) (string, error) { return directURL(signed, p.direct) }
+
+// directURL is the address to request for a signed storage URL. With a dial
 // override the hop is plain http (the object store listens in clear on the
 // internal network); the host stays, so the Host header is still the one the
 // signature covers.
-func (p *previewer) storageURL(signed string) (string, error) {
-	if !p.direct {
+func directURL(signed string, direct bool) (string, error) {
+	if !direct {
 		return signed, nil
 	}
 	u, err := url.Parse(signed)
@@ -207,19 +216,10 @@ func unavailablePreview(reason string) *Preview {
 // A conversion that cannot be done is an answer (unavailable), not an error:
 // the client then offers the download.
 func (s *Service) GetPreview(ctx context.Context, fileID string) (*Preview, error) {
-	item, err := s.store.GetItem(ctx, fileID)
-	if err != nil || item == nil {
-		return nil, notFound("file not found")
-	}
-	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpRead); err != nil {
+	item, err := s.readableFile(ctx, fileID)
+	if err != nil {
 		return nil, err
 	}
-	// Only a stored file has content: a folder, or an upload that was never
-	// confirmed, has nothing to show.
-	if item.ItemType != "file" || item.ObjectKey == nil || item.Status == "pending" {
-		return nil, notFound("file not found")
-	}
-
 	var mimeType string
 	if item.MimeType != nil {
 		mimeType = *item.MimeType
@@ -242,6 +242,25 @@ func (s *Service) GetPreview(ctx context.Context, fileID string) (*Preview, erro
 		return s.officePreview(ctx, item.WorkspaceID, item.ID, *item.ObjectKey, convName, mime, item.SizeBytes)
 	}
 	return unavailablePreview(ReasonUnsupported), nil
+}
+
+// readableFile loads the stored file fileID for a caller who may read it. The
+// right is the one a download takes — read on the file — and a refusal reads the
+// same everywhere, so a preview or thumbnail reveals nothing a download would
+// not. Only a stored file has content: a folder, or an upload that was never
+// confirmed, is not found.
+func (s *Service) readableFile(ctx context.Context, fileID string) (*store.DriveItem, error) {
+	item, err := s.store.GetItem(ctx, fileID)
+	if err != nil || item == nil {
+		return nil, notFound("file not found")
+	}
+	if err := s.checkAccess(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, item.NGACNodeID, ngac.OpRead); err != nil {
+		return nil, err
+	}
+	if item.ItemType != "file" || item.ObjectKey == nil || item.Status == "pending" {
+		return nil, notFound("file not found")
+	}
+	return item, nil
 }
 
 func (s *Service) downloadURL(ctx context.Context, workspaceID, objectKey string) (string, error) {

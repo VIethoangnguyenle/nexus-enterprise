@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"io"
 	"log/slog"
 	"time"
 
@@ -31,6 +32,14 @@ var (
 // NewEmailCodeSender sends codes through m.
 func NewEmailCodeSender(m Mailer) *EmailCodeSender {
 	return &EmailCodeSender{mail: m, validity: otpTTL}
+}
+
+// Close releases the mailer's kept connection, when it has one.
+func (s *EmailCodeSender) Close() error {
+	if c, ok := s.mail.(io.Closer); ok {
+		return c.Close()
+	}
+	return nil
 }
 
 // DeliversToOwner reports that codes sent here reach only the mailbox owner.

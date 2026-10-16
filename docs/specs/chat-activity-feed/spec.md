@@ -8,6 +8,20 @@ follow exactly the read access that unread counts follow.
 
 ## Requirements
 
+### Requirement: The conversation list opens on one request
+`GET /api/workspaces/:id/chat-state` SHALL return, in one answer, the spaces, direct messages, unread counts, this
+feed, the caller's chat sections, the unread mention count and the unread threads (`channels`, `dms`, `unread`,
+`activity`, `sections`, `mention_unread_count`, `unread_thread_count`, `unread_threads`), each part produced by the
+domain function of its own endpoint and so authorized exactly as that endpoint authorizes it: a conversation the
+caller cannot read is in none of the parts. The workspace SHALL be the caller's own tenant, else 403. The existing
+endpoints are unchanged. The answer is revalidated by ETag (see `realtime-event-delivery`). The frontend takes the
+start-up value of each of those queries from this one request, and asks the individual endpoints only to refresh a
+query that already holds data or when the chat state cannot be had.
+
+#### Scenario: Opening the app
+- **WHEN** the app opens for a signed-in member
+- **THEN** one request fetches the navigator's state, and a later visit with nothing changed is answered 304 and keeps the cache
+
 ### Requirement: One entry per readable conversation with a message
 `GET /api/channels/activity` SHALL return `{"channels": [...]}`, one entry for every conversation the caller reads
 that has at least one live main-stream message, in the workspace of the caller's session (tenant from the token) and

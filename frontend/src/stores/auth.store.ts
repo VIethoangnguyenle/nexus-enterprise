@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { queryClient } from '../lib/query-client'
 import { clearAllRecent } from '../lib/recent-searches'
+import { wipeDeviceCache } from '../lib/query-persist'
 import { endSession } from '../lib/session-end'
 
 interface User {
@@ -87,6 +88,8 @@ export const useAuthStore = create<AuthState>()(
         // person to sign in on this tab is served the previous user's data
         // until each query happens to refetch.
         queryClient.clear()
+        // And the copy on the device, which would otherwise outlive the session (401, refresh refused, sign-out alike).
+        void wipeDeviceCache()
         // Client stores holding chat content (drafts, previews) go the same way.
         endSession()
         // What the person searched for stays on the device, so it goes at sign-out too.

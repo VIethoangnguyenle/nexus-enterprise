@@ -8,7 +8,10 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/httputil"
 	"ngac-platform/pkg/realtime"
 	authpb "ngac-platform/proto/auth"
 	drivepb "ngac-platform/proto/drive"
@@ -38,7 +41,18 @@ type Service struct {
 	callObserver CallObserver // nil: call changes are not announced
 
 	callHangUpGrace time.Duration // 0: the default wait before a direct call left alone ends
+
+	versions httputil.Versions // nil: no ETags; see chat_state.go
+
+	rdb *redis.Client // nil: avatar uploads and downloads are not rate limited
+	// avatarGate holds one slot: one group picture is decoded at a time.
+	avatarGate chan struct{}
+	avatarWait time.Duration
 }
+
+// SetRedis wires the counters behind the avatar rate limits. Without it
+// (only unit tests run that way) nothing is counted.
+func (s *Service) SetRedis(rdb *redis.Client) { s.rdb = rdb }
 
 // SetEmitter wires the announcer of committed channel changes. A nil emitter
 // is valid and announces nothing.
@@ -46,6 +60,9 @@ func (s *Service) SetEmitter(e realtime.Emitter) { s.emitter = e }
 
 // emit announces a change that has already committed.
 func (s *Service) emit(e realtime.Event) {
+	// Whoever reads the chat state next must see this change, so the counters
+	// move where the change is announced.
+	s.BumpChat(e.TenantID)
 	if s.emitter != nil {
 		s.emitter.Emit(e)
 	}
@@ -90,6 +107,8 @@ func NewService(
 		policyWrite: pw,
 		authClient:  ac,
 		driveClient: dc,
+		avatarGate:  make(chan struct{}, 1),
+		avatarWait:  avatarBusyWait,
 	}
 }
 

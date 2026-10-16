@@ -2,7 +2,8 @@
 
 ## Purpose
 Nexus can be added to a phone's home screen and opened as an app, keeps its shell when the network drops, and tells the
-person plainly when it is offline or when a new version is waiting — without ever keeping their data on the device.
+person plainly when it is offline or when a new version is waiting. It opens from a short-lived copy of the last
+session's navigator data kept on the device, which is wiped when the session ends.
 
 ## Requirements
 
@@ -12,11 +13,11 @@ theme and background colour from the light `--color-base` token, icons 192 and 5
 service worker at `/sw.js`, whose scope is "/". `index.html` SHALL link the manifest and the 180px apple touch icon,
 declare `theme-color` for light and dark, and the web-app-capable metas that iOS Safari reads.
 
-### Requirement: The app shell is cached, data never
+### Requirement: The service worker caches the shell, never data
 The service worker SHALL precache the build's HTML, JavaScript, CSS, fonts and icons, and answer any page navigation
 with the cached shell (`/index.html`) — except paths under `/api/`. It SHALL NOT cache, intercept or answer any `/api/*`
-request or the WebSocket: messages, documents and every other response come from the network or fail. Nothing is stored
-for reading offline.
+request or the WebSocket: messages, documents and every other response come from the network or fail. The service worker stores
+nothing for reading offline; the only copy of data on the device is the one in the next requirement.
 
 #### Scenario: Offline navigation
 - **WHEN** the device is offline and a page of the app is opened
@@ -50,6 +51,45 @@ that exist before their text appears. If another tab already activated the new w
 #### Scenario: Changing one's mind
 - **WHEN** the person pressed "Tải lại sau khi gửi" and then "Để sau"
 - **THEN** the page is not reloaded, even after the text is sent
+
+### Requirement: The app opens from a copy kept on the device
+The app SHALL keep a copy of the TanStack Query cache in IndexedDB (database `nexus-device-cache`) so that the next
+start shows Trang chủ and the conversation list from it while fresh data loads. The copy holds only: the chat state and
+the queries seeded from it (channels, direct messages, unread counts, conversation activity, sections, mention and
+thread counts), the contact directory, `/me` and the workspace list, the newest page (at most 50 messages, newest
+first, nothing unsent) of the 20 conversations with the most recent message, and the delta-sync cursors, written and
+restored together with the cache so the replay after a start begins from what the cache shows. It SHALL NOT hold access
+or refresh tokens, one-time codes, file contents, thumbnails, download or presigned URLs, or any other query. The entry
+is keyed by person and workspace and records its owner; restoring reads only the entry of the person the app was left
+open for, and an entry whose owner differs is deleted unread. The copy is written at most every 1.5 seconds while the
+cache changes and when the page is hidden, and only once the session's person and workspace are known.
+
+The whole store SHALL be emptied when: the person signs out; any request ends the session (a 401 that the refresh does
+not repair, or the refresh refused with 401/403 — a failing server, 5xx, is not an answer about the session); the
+workspace is switched; the copy is older than 7 days; the copy was written by another build (the build id is the buster);
+or it cannot be read. A save that was waiting when the wipe came SHALL NOT write afterwards. If the session turns out to
+speak for another workspace than the copy, the restored data and cursors are dropped. Starting never waits more than
+1.5 seconds for the device, and a device without IndexedDB simply has no copy.
+
+Because the copy is business data on a possibly shared machine, these wipe conditions and the owner check are the
+whole boundary; the copy is not encrypted.
+
+#### Scenario: Next start
+- **WHEN** the app is opened again within 7 days by the same person with the same build
+- **THEN** the chat state, contacts and recent messages are in the cache before any request is answered, the restored
+  queries count as stale and are fetched again, and the cursors resume from the saved values
+
+#### Scenario: Another person on the same device
+- **WHEN** person B signs in on a device where person A used the app
+- **THEN** A's copy was already wiped at sign-out, and even if it were not, B's start never reads an entry owned by A
+
+#### Scenario: Session ends
+- **WHEN** the person signs out, the refresh is refused, or a request returns 401 that refresh cannot repair
+- **THEN** the store is empty and nothing is written back from a save that was pending
+
+#### Scenario: Old or foreign copy
+- **WHEN** the copy is older than 7 days or written by another build
+- **THEN** it is deleted and the app starts as it did before any copy existed
 
 ### Requirement: Production only, and always fresh
 The worker SHALL be registered by production builds only; the dev server (`make dev`) never installs one. The edge

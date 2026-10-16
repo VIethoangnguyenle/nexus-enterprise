@@ -26,6 +26,7 @@ type DriveService interface {
 	ConfirmFile(ctx context.Context, req *pb.ConfirmFileRequest) (*pb.DriveItem, error)
 	GetDownloadURL(ctx context.Context, req *pb.GetDownloadURLRequest) (*pb.GetDownloadURLResponse, error)
 	GetPreview(ctx context.Context, fileID string) (*domain.Preview, error)
+	GetThumbnail(ctx context.Context, fileID string, size int, ifNoneMatch string) (*domain.Thumbnail, error)
 	RenameItem(ctx context.Context, req *pb.RenameItemRequest) (*pb.DriveItem, error)
 	MoveItem(ctx context.Context, req *pb.MoveItemRequest) (*pb.DriveItem, error)
 	CopyItem(ctx context.Context, req *pb.CopyItemRequest) (*pb.DriveItem, error)
@@ -53,6 +54,10 @@ func mapError(err error) *echo.HTTPError {
 		return refusalWithReason(http.StatusRequestEntityTooLarge, err, reason.QuotaExceeded)
 	case errors.Is(err, domain.ErrAborted):
 		return refusalWithReason(http.StatusConflict, err, reason.ItemChanged)
+	case errors.Is(err, domain.ErrThumbnailUnavailable):
+		return refusalWithReason(http.StatusNotFound, err, reason.ThumbnailUnavailable)
+	case errors.Is(err, domain.ErrThumbnailBusy):
+		return echo.NewHTTPError(http.StatusServiceUnavailable, err.Error())
 	}
 	return httputil.MapDomainError(err)
 }
@@ -95,6 +100,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/drive/files/:fileId/confirm", h.ConfirmFile)
 	api.GET("/drive/files/:fileId/download", h.GetDownloadURL)
 	api.GET("/drive/files/:fileId/preview", h.GetPreview)
+	api.GET("/drive/files/:fileId/thumbnail", h.GetThumbnail)
 
 	// Sharing
 	api.POST("/drive/items/:itemId/share", h.CreateShare)

@@ -545,6 +545,12 @@ theo §5 "Điều hướng di động".
 - **Ô soạn:** bo 22, nút + (sheet: hàng đính kèm Máy ảnh / Ảnh / Tệp / Tài liệu, rồi Bình chọn / Công việc / Tài liệu mới /
   Đề nghị phê duyệt), chữ 16px (tránh iOS phóng to), nút định dạng, nút gửi tròn 40 accent khi có nội dung; dính đáy và
   đi lên cùng bàn phím ảo.
+  - **Bàn phím đóng:** ô bo 22 như trên, cách đáy `max(12px, safe-area-inset-bottom)` để không đè vạch home.
+  - **Bàn phím mở** (vùng nhìn thấy thấp hơn cửa sổ quá 120 px, chỉ dưới 768; mockup `design/mockups/avatar-edit.html` §6,
+    duyệt 2026-10-16): như Google Chat, ô soạn thành **thanh tràn ngang sát mép bàn phím** — không bo, không margin, nền
+    `--color-base`, viền trên 1px `--color-line`, padding 6 × 10; ô nhập dạng viên thuốc cao 38 (`--color-raised`, viền
+    trong 1px `--color-line`), nút + và Gửi tròn hai bên. Không hiệu ứng chuyển: thanh đi cùng bàn phím. Thanh "‹ › Xong"
+    phía trên bàn phím là của iOS cho mọi ô soạn trên web, app không tắt được.
 
 ### Thông báo đẩy, cài app, mất kết nối (mockup `design/mockups/push.html`, mobile trước)
 
@@ -570,6 +576,15 @@ theo §5 "Điều hướng di động".
   Thử lại) sau 2s mất WebSocket hoặc offline; có lại → "Đã kết nối lại" success 2s rồi ẩn. Dữ liệu đang hiện giữ nguyên,
   ô soạn khoá; không đọc offline. **Bản mới:** thanh nổi "Có bản mới của Nexus" + Để sau / Tải lại; đang soạn dở thì
   "Tải lại sau khi gửi".
+- **Đang cập nhật (mở app từ dữ liệu lần trước):** khi app mở bằng bản lưu trên máy, Trang chủ và danh sách hiện ngay
+  từ bản đó, và một dải nhỏ báo rằng đang hiện dữ liệu cũ trong lúc tải bản mới. Vị trí: ngay dưới thanh trên, trong
+  cùng chỗ với thanh mất kết nối (chiếm chỗ của nó, không chồng lên). Dải mảnh, cao 28 (không phải thanh 44 của mất
+  kết nối), nền `--color-sunk`, chữ `text-xs` 500 `--color-ink-muted` "Đang cập nhật…" đứng sau icon `RefreshCw` 14
+  `--color-ink-muted` xoay chậm (1,2s tuyến tính; bỏ xoay khi giảm chuyển động). Không nút, không toast, không màu
+  cảnh báo: đây là chờ bình thường, không phải lỗi. Vùng `role="status"` `aria-live="polite"` luôn có mặt, chỉ nội dung
+  đổi. Biến mất ngay khi bản mới về, hoặc khi tải bản mới thất bại (lúc đó thanh
+  mất kết nối hoặc lỗi từng khối nói thay); khi thanh mất kết nối đang hiện thì dải này không hiện. Không có bản lưu
+  (lần đầu, sau đăng xuất, đổi workspace) thì không bao giờ hiện: màn hình dùng Skeleton như thường.
 
 ### Chat: tạo trong chat — bình chọn, công việc, tài liệu, phê duyệt (mockup `spaces.html` §6)
 
@@ -651,6 +666,39 @@ thả cảm xúc; không ghi hình, không quyền chủ phòng.
 - **Trạng thái:** đang kết nối lại (lớp phủ, giữ chỗ 30 giây) → không kết nối được (gợi ý mạng công ty) + Thử lại; mạng
   yếu → hạ chất lượng trước, chip trên thanh trên; kết thúc → tổng kết (thời lượng, số người, số tin) + Về cuộc trò
   chuyện / Vào lại; đang ở cuộc gọi khác → "Rời và vào"; bị gỡ khỏi nhóm → ngắt ngay + banner danger.
+
+### Tài liệu: lưới, danh sách, panel xem trước (mockup `design/mockups/drive-gallery.html`, duyệt 2026-10-16)
+
+Tài liệu mở mặc định ở **Lưới**; **Danh sách** là bảng mảnh hiện có. Lựa chọn nhớ theo người dùng, riêng cho Tài liệu và
+cho tab Tệp của nhóm.
+- **Thanh công cụ** (một hàng): ô tìm viên thuốc 240 "Tìm trong <thư mục>" · chip loại (radio, kiểu `fchip`): Tất cả ·
+  Tài liệu · Bảng tính · Ảnh & video · PDF · khoảng trống · sắp xếp (ghost sm, "Sửa gần nhất" / Tên / Dung lượng) ·
+  nút đổi Lưới/Danh sách (seg 2 nút icon, `aria-pressed`) · **Tải lên** (primary sm; menu có Thư mục mới).
+- **Lưới:** nhãn nhóm "Thư mục" rồi "Tệp" (`k` 11px uppercase mờ). **Ô thư mục:** cao 48, `--color-raised`, bo 12, icon
+  thư mục mờ + tên 600 + số tệp mờ bên phải; là link thật vào thư mục. **Thẻ tệp:** `--color-raised`, bo 12, padding
+  6 6 10; thumbnail 16:10 bo 8 (ảnh do máy chủ sinh: ảnh, trang 1 PDF/Office, khung video có nút phát + thời lượng);
+  hàng tên: ô loại 20 theo `file-kind` + tên 600 cắt cuối; dòng "Avatar 20 + tên ngắn · thời gian" 12px mờ. Hover:
+  `--color-overlay` + `--shadow-overlay`, hiện ⋯ (28, góc trên phải). Chọn: nền `--color-accent-wash`, viền trong 2px
+  accent. Cột: lưới auto-fill tối thiểu 200, gap 12 (ô thư mục gap 10).
+- **Thumbnail:** khung 16:10 luôn giữ chỗ; đang tải = Skeleton chạy sáng (dừng khi giảm chuyển động); máy chủ không
+  sinh được hay đang bận = icon loại 34 `--color-ink-subtle` trên `--color-sunk`, không báo lỗi.
+- **Danh sách:** bảng hiện có + thumbnail 36 × 24 bo 4 trước tên.
+- **Panel chi tiết** (rộng 320, khi có tệp được chọn): tiêu đề (ô loại + tên + Đóng) · xem trước 4:3 bo 10 (ảnh 640) ·
+  **Mở** (primary, giãn) · Tải xuống · Chia sẻ · bảng thông tin (Loại, Dung lượng, Chủ sở hữu PersonChip, Sửa lần cuối,
+  Vị trí, Người có quyền cụm Avatar + "+ N") · Hoạt động (Avatar 20 + "**Tên** việc · thời gian"). Không chọn gì: panel ẩn.
+- **Bàn phím:** mũi tên đi trong lưới theo số cột; **Space/Enter** mở Trình xem tệp với các tệp của thư mục (đã lọc),
+  ←/→ trong đó; Shift+F10 mở ⋯; chuột phải mở cùng menu.
+- **Máy tính bảng (768–1023):** cây thư mục vào ngăn kéo (nút ☰ trước breadcrumb); lưới 3 cột; chip loại gọn thành một
+  chip có menu; panel thành sheet bên phải (rộng 340, cách mép 10, bo 16) phủ lên lưới với scrim; ⋯ luôn hiện; vùng chạm 44.
+- **Điện thoại (< 768):** thanh trên: Quay lại · tên thư mục · Tìm · đổi Lưới/Danh sách; chip loại cuộn ngang; lưới 2 cột
+  (gap 8, ô thư mục 44); chạm thẻ mở thẳng Trình xem tệp; nhấn giữ hoặc ⋯ mở bottom sheet (xem trước nhỏ + "Loại · dung
+  lượng · người · giờ" + Mở · Tải xuống · Chia sẻ · Chuyển tới thư mục… · Đổi tên · Xoá danger, hàng 48); nút + nổi 56 bo
+  18 accent góc dưới phải (sheet: Tải tệp lên · Chụp ảnh · Thư mục mới).
+- **Tab Tệp của nhóm:** cùng thẻ và lưới; chip Tất cả · Ảnh & video · Tài liệu · Khác; nhóm theo thời gian (Hôm nay · Tuần
+  này · Tháng này · Cũ hơn, tiêu đề dính khi cuộn trên điện thoại); nhóm toàn ảnh/video thành lưới vuông sát nhau (ô tối
+  thiểu 112, gap 4, bo 6; điện thoại 3 cột) như album; "Mở trong Tài liệu" ghost ở cuối thanh công cụ; menu ⋯ có thêm
+  "Tới tin nhắn". Trình xem tệp nhận danh sách đã lọc. Rỗng theo chip: "Chưa có ảnh hay video nào trong nhóm." / "Chưa
+  có tài liệu nào trong nhóm."; rỗng hẳn giữ câu hiện có + "Đính kèm trong Trò chuyện".
 
 ## 7. Motion
 

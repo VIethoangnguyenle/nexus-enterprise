@@ -6,6 +6,7 @@ import { toast } from '../components/primitives'
 import { feedCursor } from '../lib/shortcut-feed'
 import { queryClient } from '../lib/query-client'
 import { keys } from './keys'
+import { startupPart } from './useChatState'
 
 /** Items per feed page; the screens add "Tải thêm" for the next. */
 export const FEED_PAGE = 25
@@ -95,7 +96,8 @@ export function useStarredFeed(wsId: string) {
 export function useMentionsUnreadCount(wsId: string) {
   return useQuery({
     queryKey: keys.shortcuts.mentionsUnread(wsId),
-    queryFn: () => shortcutsApi.mentionsUnreadCount(),
+    queryFn: () =>
+      startupPart(keys.shortcuts.mentionsUnread(wsId), wsId, (s) => s.mention_unread_count, () => shortcutsApi.mentionsUnreadCount()),
     enabled: !!wsId,
   })
 }

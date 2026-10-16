@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Button, Popover, TextField } from '../primitives'
-import { isAllowedLink } from './chat-extensions'
+import { isAllowedLink } from './chat-html'
 
 interface LinkDialogProps {
   open: boolean

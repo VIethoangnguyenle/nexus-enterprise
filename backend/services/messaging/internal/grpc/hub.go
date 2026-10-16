@@ -57,6 +57,7 @@ func NewHub(rdb *redis.Client, access ChannelAccessChecker) *Hub {
 	}
 	if rdb != nil {
 		go h.subscribeRedis()
+		go h.reportStreams()
 	}
 	return h
 }

@@ -26,6 +26,9 @@ var (
 	// ErrOTPUnavailable means OTP sign-in is switched off: no fixed test
 	// code and no way to deliver a random one.
 	ErrOTPUnavailable = errors.New("otp sign-in is not available")
+	// ErrOTPBusy means the delivery queue cannot take another code right now;
+	// the caller should ask again in a moment.
+	ErrOTPBusy = errors.New("sign-in codes are busy, try again in a moment")
 	// ErrOTPRateLimited means too many codes were requested for one identifier.
 	ErrOTPRateLimited = errors.New("too many codes requested, try again later")
 	ErrUserExists     = errors.New("already exists")

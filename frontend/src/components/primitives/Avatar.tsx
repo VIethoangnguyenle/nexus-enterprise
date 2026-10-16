@@ -1,8 +1,8 @@
 import { useState, type CSSProperties } from 'react'
 import { personStyle } from '../../lib/person-hue'
 
-/** A picture the auth service keeps: `/api/auth/avatars/<token>`, with no size. */
-const STORED_AVATAR = /^\/api\/auth\/avatars\/[0-9a-f]{32}$/
+/** A picture the auth service (a person's) or the messaging service (a group's) keeps, with no size. */
+const STORED_AVATAR = /^\/api\/(?:auth|channels)\/avatars\/[0-9a-f]{32}$/
 
 /**
  * The address of the stored size that fits an avatar of `px` pixels: 64 up to

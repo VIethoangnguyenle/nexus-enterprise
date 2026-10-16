@@ -14,7 +14,8 @@ WORKDIR /app/services/drive
 RUN CGO_ENABLED=0 go build -o /drive ./cmd/
 
 FROM alpine:3.21
-RUN apk add --no-cache ca-certificates wget && \
+# poppler-utils (pdftoppm) and ffmpeg draw the thumbnails of PDFs and videos.
+RUN apk add --no-cache ca-certificates wget poppler-utils ffmpeg && \
     wget -qO/bin/grpc_health_probe https://github.com/grpc-ecosystem/grpc-health-probe/releases/download/v0.4.35/grpc_health_probe-linux-amd64 && \
     chmod +x /bin/grpc_health_probe
 COPY --from=builder /drive /drive
