@@ -51,3 +51,18 @@ describe('Avatar', () => {
     expect(container).toHaveTextContent('MĐ')
   })
 })
+
+describe('Avatar shape', () => {
+  it('is a circle unless a square is asked for', () => {
+    const { container } = render(<Avatar name="Lê Thị Hoa" size={64} />)
+    expect(container.firstElementChild?.className).toContain('rounded-full')
+  })
+
+  it('rounds a square by a quarter of its side and lets the picture follow', () => {
+    const { container } = render(<Avatar name="Đối soát" src={PIC} size={64} shape="square" />)
+    const box = container.firstElementChild as HTMLElement
+    expect(box.className).not.toContain('rounded-full')
+    expect(box.style.borderRadius).toBe('16px')
+    expect(container.querySelector('img')?.className).toContain('rounded-[inherit]')
+  })
+})

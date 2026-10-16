@@ -35,7 +35,7 @@ export function HoverActionBar({ onReply, onReact, onPin, isPinned, onEdit, onMo
 
   return (
     <div
-      className={`absolute -top-3.5 ${mine ? 'right-13' : 'right-3'} z-dropdown flex items-center gap-0.5 p-0.5 rounded-md
+      className={`absolute -top-3.5 ${mine ? 'right-3 md:right-13' : 'right-3'} z-dropdown flex items-center gap-0.5 p-0.5 rounded-md
         bg-overlay shadow-overlay opacity-0 pointer-events-none
         group-hover:opacity-100 group-hover:pointer-events-auto
         group-focus-within:opacity-100 group-focus-within:pointer-events-auto

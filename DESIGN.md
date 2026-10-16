@@ -243,6 +243,10 @@ mã backend, email và tài liệu kỹ thuật không đổi.
 
 Primitive sống ở `frontend/src/components/primitives/`; không component nào tự vẽ lại chúng.
 
+**Nguyên tắc tinh gọn:** thao tác nằm trên chính đối tượng. Muốn đổi ảnh thì chạm vào ảnh; muốn đổi tên thì chạm
+vào tên. Không thêm hàng nút "Đổi…" / "Bỏ…" cạnh đối tượng, không thêm dòng hướng dẫn chiếm chỗ (giới hạn tệp
+nằm ở `accept` và câu báo lỗi). Máy không có chuột không có hover, nên dấu hiệu sửa phải luôn hiện ở đó (`pointer: coarse`).
+
 - **Button:** `primary` (accent), `secondary` (`--color-hover` nền), `ghost`, `danger`. Cao 36
   (`sm` 32), padding ngang 14, radius 8, 14px/600. Hover: nền sáng/tối một bậc; press
   `scale(0.98)` 100ms; focus ring 2px `--color-focus` offset 2px. Loading: spinner thay icon,
@@ -252,6 +256,19 @@ Primitive sống ở `frontend/src/components/primitives/`; không component nà
   Label luôn có (không dùng placeholder làm label). Lỗi dưới ô, `aria-describedby`, validate khi blur.
 - **Avatar:** tròn, 20/24/32/40 (64 chỉ cho hồ sơ trong Danh bạ và Cài đặt), nền `--color-person-N`, 2 chữ cái đầu của **tên hiển thị**
   (không bao giờ của id). Có ảnh thì dùng ảnh. Presence: chấm 8px `success` ở góc dưới phải.
+- **AvatarEdit** (`patterns/AvatarEdit`, mockup `design/mockups/avatar-edit.html` §1, §2, §5): "chạm ảnh để đổi" cho
+  ảnh đại diện (`circle`) và ảnh nhóm (`square`, bo = 1/4 cạnh, 16 ở cỡ 64). Một `button` duy nhất bọc Avatar (44/52/64),
+  `aria-label` do nơi dùng đặt ("Đổi ảnh đại diện", "Đổi ảnh nhóm"), `aria-haspopup="menu"`, `aria-expanded`. Không có quyền
+  sửa thì chỉ là Avatar, không nút, không lớp phủ. Trạng thái: **nghỉ** không thêm gì; **hover / focus-visible / menu mở**
+  lớp phủ `--color-scrim` + icon máy ảnh 20, 160ms (`--duration-quick`); **cảm ứng** (`pointer: coarse`) huy hiệu máy ảnh 24
+  `--color-overlay` + `--shadow-overlay` ở góc dưới phải, luôn hiện; **đang tải** ảnh mờ 60%, vòng 3px `--color-line` với cung
+  `--color-accent` theo tiến độ (không có số thì nhấp nháy), tên nút thành "Đang tải ảnh, 64%", `aria-busy`, không mở được;
+  **lỗi** huy hiệu cảnh báo `--color-danger` và dòng chữ 12px `--color-danger` dưới ảnh, `role="alert"`, nối `aria-describedby`,
+  dùng đúng câu của `avatarErrorMessage` (không hiện chữ của máy chủ). Chọn xong tải lên ngay, không đợi "Lưu thay đổi".
+  Từ 768 trở lên là Popover `role="menu"`: "Đổi ảnh" (icon tải lên) và "Bỏ ảnh" (`danger`, chỉ khi đã có ảnh); chưa có ảnh thì
+  menu chỉ còn "Tải ảnh lên". Dưới 768 là bottom sheet (NavSheet) hàng 52: Chụp ảnh (ô nhập tệp `capture="user"`) · Chọn ảnh ·
+  Bỏ ảnh (chỉ khi có ảnh) · vạch · Huỷ. Bàn phím: Enter / Space mở, ↑↓ Home End đi trong menu, Esc đóng và trả focus về ảnh.
+  Tệp được kiểm (JPG/PNG, ≤ 5 MB) trước khi gửi.
 - **PersonChip:** avatar 20 + tên hiển thị (+ vai trò mờ). Là cách duy nhất hiển thị một người.
 - **Badge / StatusPill:** pill, 12px/600, nền wash semantic + chữ fg semantic. Nhãn đọc được
   ("Đang chờ"), không mã trạng thái.
@@ -347,7 +364,7 @@ này thì cái kia đóng.
   panel thread và tin nhắn trực tiếp.
 - **Gom tin:** tin liền sau của **cùng người gửi** trong **≤ 5 phút** kể từ tin trước của họ thì ẩn avatar và
   tên, padding trên 2; giờ của dòng đó hiện ở lề ngoài (cột avatar bên trái với người khác, cột 32 bên phải
-  với bạn; 11px mờ, tabular) khi hover hoặc focus. Ngắt nhóm khi:
+  với bạn — cột phải này chỉ có từ 768 trở lên; 11px mờ, tabular) khi hover hoặc focus. Ngắt nhóm khi:
   khác người, cách > 5 phút, có vạch ngày hoặc vạch "Tin mới" ở giữa, tin trước có hàng tóm tắt thread, hoặc tin
   trước là tin hệ thống (công việc, thành viên vào/ra). Gom chỉ là cách hiển thị: mỗi dòng vẫn là một tin riêng
   với hover actions, cảm xúc và thread riêng. Áp dụng như nhau trong panel thread.
@@ -517,7 +534,9 @@ theo §5 "Điều hướng di động".
   (người gửi · cuộc trò chuyện, đoạn có từ khớp tô `--color-warning-wash`, giờ), khi chưa gõ thì "Tìm gần đây". Chỉ
   trả tin trong cuộc trò chuyện còn quyền đọc.
 - **Luồng:** thanh trên có quay lại, icon nhóm 28, tên + "N thành viên", nút Thread (badge) và Thông tin; bong bóng tối đa
-  88%, chữ 16px; hàng tóm tắt thread cao 36. Không hover: chạm tin hiện giờ trong cụm.
+  88%, chữ 16px; hàng tóm tắt thread cao 36. Không hover: chạm tin hiện giờ trong cụm. Tin của bạn không chừa
+  cột giờ bên phải: bong bóng cách mép phải bằng khoảng avatar cách mép trái (14); chạm dòng gom cụm thì giờ hiện
+  ngay trên bong bóng, căn phải, chạm lần nữa thì ẩn.
 - **Thread và danh sách Thread:** màn toàn màn trượt lên (280ms), quay lại giữ vị trí cuộn của luồng; nút Theo dõi /
   Đang theo dõi (pill 36) trên thanh trên; danh sách Thread có chip lọc cuộn ngang (cao 36).
 - **Nhấn giữ tin (400ms):** sheet đáy có hàng 6 cảm xúc nhanh (48) + thao tác (hàng 52): Trả lời trong thread, Theo dõi /

@@ -38,16 +38,16 @@ Cài đặt SHALL have Hồ sơ, Workspace and Giao diện, with `?tab=workspace
 - **THEN** email and department are text in a sunk box with the reason beside it
 
 #### Scenario: Changing the picture
-- **WHEN** a person presses Đổi ảnh and chooses a JPG or PNG of at most 5 MB
+- **WHEN** a person touches their picture in Hồ sơ (one button around it, no Đổi ảnh button beside it), picks Đổi ảnh or Tải ảnh lên from the menu (Chụp ảnh or Chọn ảnh in the sheet below 768 px) and chooses a JPG or PNG of at most 5 MB
 - **THEN** it is uploaded at once (not with Lưu thay đổi), "Đã đổi ảnh" is said, and the new picture shows in Hồ sơ, the sidebar and the account sheet without a reload; elsewhere it shows from the next directory read
 
 #### Scenario: A picture that cannot be used
 - **WHEN** the chosen file is not a JPG or PNG, or is over 5 MB
-- **THEN** a sentence under the buttons says so and nothing is sent; a refusal from the server (`avatar_not_image`, `avatar_too_large`, `avatar_too_many_pixels`, `avatar_busy`, `rate_limited`) is said the same way, in words, never the server's text
+- **THEN** a sentence under the picture says so and nothing is sent; a refusal from the server (`avatar_not_image`, `avatar_too_large`, `avatar_too_many_pixels`, `avatar_busy`, `rate_limited`) is said the same way, in words, never the server's text
 
 #### Scenario: Removing the picture
-- **WHEN** a person has a picture and presses Bỏ ảnh
-- **THEN** it is removed, "Đã bỏ ảnh" is said and the initials show; without a picture Bỏ ảnh is shown disabled, as in the mockup
+- **WHEN** a person has a picture and picks Bỏ ảnh from the menu or sheet
+- **THEN** it is removed, "Đã bỏ ảnh" is said and the initials show; without a picture the menu offers only Tải ảnh lên
 
 #### Scenario: A picture that does not load
 - **WHEN** an avatar's picture fails to load (replaced, removed, or a server that does not serve it)

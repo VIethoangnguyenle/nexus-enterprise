@@ -9,6 +9,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 )
@@ -74,15 +75,66 @@ func Recovery(ctx context.Context, req any, info *grpc.UnaryServerInfo, h grpc.U
 	return h(ctx, req)
 }
 
+// dialIdleTimeout is how long a channel opened by Dial may sit without calls
+// before it idles; zero means never. An idle channel rebuilds its resolver and
+// connection on the next call, and in production that first call after half an
+// hour without traffic waited about 8 s, with every request queued behind it.
+var dialIdleTimeout time.Duration = 0
+
+// slowConnect is how long a channel may take to become ready before the wait
+// is logged as a warning.
+var slowConnect = time.Second
+
 // Dial opens a client connection to addr that forwards the caller on the
 // request context (ClientInterceptor, StreamClientInterceptor) and names the
 // dialling process as service. The transport is plaintext: the network between
-// services is internal (see the package comment). Extra options are applied last.
+// services is internal (see the package comment). The channel connects at once
+// and never idles, so no call pays for setting it up; a slow (re)connect is
+// logged. Extra options are applied last.
 func Dial(addr, service string, opts ...grpc.DialOption) (*grpc.ClientConn, error) {
 	base := []grpc.DialOption{
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithChainUnaryInterceptor(ClientInterceptor(service)),
 		grpc.WithChainStreamInterceptor(StreamClientInterceptor(service)),
+		grpc.WithIdleTimeout(dialIdleTimeout),
 	}
-	return grpc.NewClient(addr, append(base, opts...)...)
+	conn, err := grpc.NewClient(addr, append(base, opts...)...)
+	if err != nil {
+		return nil, err
+	}
+	go watchChannel(conn, addr, service, slowConnect)
+	conn.Connect()
+	return conn, nil
+}
+
+// watchChannel keeps the channel connected and logs its trouble until it is
+// closed. A dropped connection leaves the channel idle until the next call,
+// which would then pay for reconnecting, so an idle channel is reconnected at
+// once. A wait longer than slow between starting to connect and being ready,
+// and every failure to connect, are logged.
+func watchChannel(conn *grpc.ClientConn, target, service string, slow time.Duration) {
+	state := conn.GetState()
+	var since time.Time
+	for conn.WaitForStateChange(context.Background(), state) {
+		next := conn.GetState()
+		switch next {
+		case connectivity.Idle:
+			conn.Connect()
+		case connectivity.Connecting:
+			if since.IsZero() {
+				since = time.Now()
+			}
+		case connectivity.TransientFailure:
+			slog.Warn("grpc channel cannot connect", "target", target, "service", service)
+		case connectivity.Ready:
+			if waited := time.Since(since); !since.IsZero() && waited > slow {
+				slog.Warn("grpc channel slow to become ready",
+					"target", target, "service", service, "waited_ms", waited.Milliseconds())
+			}
+			since = time.Time{}
+		case connectivity.Shutdown:
+			return
+		}
+		state = next
+	}
 }

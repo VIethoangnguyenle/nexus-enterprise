@@ -13,6 +13,7 @@ import {
   REACTION_MS,
   REACTION_TOPIC,
   SHARE_TOPIC,
+  EMPTY_SNAPSHOT,
   encodeMessage,
   parseHand,
   parseReaction,
@@ -85,12 +86,6 @@ export interface CallSnapshot {
   /** Most people seen in the room at once, for the summary. */
   peak: number
   facing: 'user' | 'environment'
-}
-
-export const EMPTY_SNAPSHOT: CallSnapshot = {
-  link: 'connecting', end: null, participants: [], presenterId: null, speakerId: null, audio: [],
-  audioBlocked: false, micOn: false, camOn: false, sharing: false, handUp: false, reactions: [],
-  mediaProblem: null, notice: null, peak: 0, facing: 'user',
 }
 
 export interface CallRoomOptions {

@@ -131,18 +131,22 @@ export function MessageBlock({
         }
       }}
       className={`group relative grid gap-x-2 md:gap-x-3 px-1 md:px-3.5 rounded-surface pointer-coarse:select-none
-        ${mine ? 'grid-cols-[minmax(0,1fr)_2rem]' : 'grid-cols-[2rem_minmax(0,1fr)]'}
+        ${mine ? 'grid-cols-[minmax(0,1fr)] md:grid-cols-[minmax(0,1fr)_2rem]' : 'grid-cols-[2rem_minmax(0,1fr)]'}
         ${grouped ? 'pt-0.5' : 'pt-2'} ${pending ? 'opacity-70' : ''} ${className}`}
     >
       {!mine && (grouped
         ? <GutterTime shown={timeShown} className="col-start-1 row-start-1">{time}</GutterTime>
         : <Avatar name={name} hueKey={m.sender_id || name} src={avatarUrl} size={32} halo={halo} className="col-start-1 row-start-1" />)}
-      {mine && grouped && <GutterTime shown={timeShown} className="col-start-2 row-start-1">{time}</GutterTime>}
+      {/* Your side keeps an edge column for a grouped line's time only from md up; on a
+          phone the bubble sits as close to the right edge as the avatar does on the left. */}
+      {mine && grouped && <GutterTime shown={timeShown} className="max-md:hidden md:col-start-2 row-start-1">{time}</GutterTime>}
 
       <div className={`min-w-0 flex flex-col row-start-1 ${mine ? 'col-start-1 items-end' : 'col-start-2 items-start'}`}>
         {grouped ? (
           <>
             <span id={`${idBase}-who`} className="sr-only">{mine ? 'Bạn' : name}</span>
+            {/* Below md there is no edge column on your side: a tap shows the time above the bubble. */}
+            {mine && timeShown && <span className="md:hidden flex">{time}</span>}
             {pinned}
             {starred}
           </>
