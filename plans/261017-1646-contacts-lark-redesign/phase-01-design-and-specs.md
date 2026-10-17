@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Design + UI specs"
-status: pending
+status: completed
 priority: P1
 effort: "4h"
 dependencies: []
@@ -30,7 +30,7 @@ the screen specs. Code phases start only after Zane approves this phase.
   "Phòng ẩn khỏi danh bạ", "Chỉ thấy phòng của mình"; "Ẩn một phòng" opens DepartmentPicker; "Thêm vai trò hoặc phòng"
   opens a picker with Vai trò list + DepartmentPicker; Bỏ ẩn / Bỏ with confirm; empty, loading, error states; tablet + phone
   frames like sections 8/9). Admin nav gains "Danh bạ". Release-A state for a workspace whose directory is not ready
-  (rules endpoint 503): reuse the section's error state copy, no new layout (plan Q4).
+  (rules endpoint 503): ~~reuse the section's error state copy~~ **superseded by plan decision Q4 (2026-10-17): the "Danh bạ" tab is not shown at all; a pasted link lands on Tổng quan.** No new layout.
 - `contacts-lark.html` §5 last state: replace "Bạn vẫn xem được Tất cả thành viên" (removed category) with
   "Bạn vẫn tìm được người bằng ô tìm." and its note "Tất cả thành viên và Nhóm của tôi vẫn dùng được" →
   "Vai trò, Nhóm của tôi và ô tìm vẫn dùng được" (Zane decision C5, 2026-10-17).
@@ -68,3 +68,30 @@ Docs + static HTML only. No code.
 - Approval delay blocks everything (Med×Med): phases 02–05 (backend) may start in parallel once the admin mockup is
   approved, since UI copy does not affect them. Frontend phases wait.
 - Rollback: docs revert.
+
+## Todo
+- [x] DESIGN.md §5: list panel allowed in Danh bạ (280, `--color-base`, rows 40/15px, NavRow selection); categories-only
+      left column, tablet chips, phone category stack
+- [x] DESIGN.md §6: new subsection "Danh bạ" (categories, lazy load + row skeletons, breadcrumbs, department/person rows, sort,
+      search, profile card with avatar 64 and Nhắn tin/Gọi/Gửi email, own profile "Sửa hồ sơ", detail rows, visibility copy,
+      hidden-person card, states, Quản trị › Danh bạ); avatar line reads "thẻ hồ sơ"; no "no call" rule anywhere (Gọi always enabled)
+- [x] `design/mockups/admin.html` §7b "Danh bạ: phạm vi hiển thị": desktop (interactive pickers, confirm, toasts, load/error/
+      save-failure demos), tablet 820 with picker, two phone frames (bottom sheet); state cards incl. not-ready (Q4) and no access;
+      "Danh bạ" tab added to every Quản trị tab row; toc link
+- [x] `design/mockups/contacts-lark.html` §5 partial-failure copy (C5)
+- [x] `docs/specs/contacts-documents-settings-screens/spec.md`: Danh bạ requirements rewritten, "no call" removed, scenarios
+      (same-named departments, personal workspace, own profile, partial tree failure, call while offline, hidden person card),
+      Status note (specified ahead of code); search-suggestions requirement untouched
+- [x] `docs/specs/admin-screens/spec.md`: four tabs, "Quản trị › Danh bạ sets who sees whom" + scenarios, Status note
+- [x] Verified: headless Chromium (Playwright) — admin.html and contacts-lark.html, 1280/800/375 (+320 for admin), light and
+      dark: no JS errors, no horizontal page scroll; picker → confirm → row + toast, Esc closes topmost layer, reduced motion,
+      no UUID text. `make check-docs` green.
+- [x] Design gate
+
+## Design gate (2026-10-17)
+Self-approved by Claude per Zane's delegation ("Quyết định sau đồng bộ" in plan.md), checked against the approved mockup
+`design/mockups/contacts-lark.html` (§1–§7, §1c settings block). Zane may review DESIGN.md "Danh bạ" and admin.html §7b later;
+nothing here changes a decision Zane made. Phases 02–05 may start; frontend phases follow this design.
+
+Fixes made while verifying (review chrome only, admin.html): `.page`/`.screen` columns `minmax(0, 1fr)`, `.frames > div`
+and `.tablet` max-width, `.sheet` min column — the page scrolled sideways at 800 and 375 before this phase (860px wide).

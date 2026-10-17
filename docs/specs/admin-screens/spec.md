@@ -1,12 +1,12 @@
 # admin-screens
 
 ## Purpose
-Let a workspace's administrators see and shape their organisation from three screens (Tổng quan, Người dùng, Vai trò): the departments, the people with their roles, and what each role permits. Everything is shown by name, in words: no user, role, department or database identifier reaches the screen, and nothing is chosen by typing one.
+Let a workspace's administrators see and shape their organisation from four screens (Tổng quan, Người dùng, Vai trò, Danh bạ): the departments, the people with their roles, what each role permits, and who sees whom in Danh bạ. Everything is shown by name, in words: no user, role, department or database identifier reaches the screen, and nothing is chosen by typing one.
 
 ## Requirements
 
-### Requirement: Three screens, one frame, state in the URL
-Quản trị SHALL have the tabs Tổng quan, Người dùng and Vai trò under the workspace shell. The workspace (`?ws=`), the open department (`?dept=`), person (`?member=`), role (`?role=`) and the permission editor (`?edit=1`) SHALL be part of the URL, so a reload, Back/Forward or a pasted link lands in the same place. Moving to another tab keeps only the workspace. The key is `member`, not `user`: the auth store reads `?user=` as which account's session to use.
+### Requirement: Four screens, one frame, state in the URL
+Quản trị SHALL have the tabs Tổng quan, Người dùng, Vai trò and, in an organisation workspace whose directory scope is ready, Danh bạ under the workspace shell. The workspace (`?ws=`), the open department (`?dept=`), person (`?member=`), role (`?role=`) and the permission editor (`?edit=1`) SHALL be part of the URL, so a reload, Back/Forward or a pasted link lands in the same place. Moving to another tab keeps only the workspace. The key is `member`, not `user`: the auth store reads `?user=` as which account's session to use.
 
 #### Scenario: Reload keeps the place
 - **WHEN** an administrator opens a person on Người dùng and reloads
@@ -77,11 +77,39 @@ Vai trò SHALL list the two built-in roles ("Chủ sở hữu", "Thành viên", 
 - **WHEN** saving answers 409
 - **THEN** a toast explains that the role changed in the meantime and the editor shows what the server holds
 
+### Requirement: Quản trị › Danh bạ sets who sees whom
+Danh bạ SHALL say "Mặc định mọi thành viên thấy toàn bộ danh bạ. Quản trị viên luôn thấy tất cả." and list two kinds of rule, each with its count. "Phòng ẩn khỏi danh bạ": each hidden department by name, with its parent path and "Chỉ N người trong phòng và quản trị viên thấy", and "Bỏ ẩn". "Chỉ thấy phòng của mình": each limited role ("Vai trò X") or department ("Phòng Y") with "N người · thấy người trong phòng của họ" and "Bỏ". "Ẩn một phòng" opens the department picker (search plus tree); "Thêm vai trò hoặc phòng" opens a picker of the custom roles and the department tree. Entries that already carry the rule are shown but cannot be chosen ("Đã ẩn", "Ẩn theo <phòng cha>", "Đã giới hạn"). Every change asks first in a dialog that states the consequence in people, then says what was done in a toast; a refusal is said in a toast and the lists stay as they were. Nothing is chosen by typing a name or an identifier, and no identifier reaches the screen. Below 768 px the pickers are bottom sheets. The page has loading rows, a sentence per empty list ("Chưa ẩn phòng nào…", "Chưa giới hạn ai…") and an error state with "Thử lại".
+
+#### Scenario: Hiding a department with sub-departments
+- **WHEN** the administrator picks Kiểm soát nội bộ, which has one sub-department, and confirms
+- **THEN** the dialog had said that its 6 people would be seen only by people in it and administrators, including the department beneath, and that their names still show in chat, approvals and documents; the department is listed as hidden
+
+#### Scenario: Unhiding
+- **WHEN** the administrator chooses "Bỏ ẩn" on a department and confirms
+- **THEN** it leaves the list and every member sees its people again
+
+#### Scenario: Limiting a role or a department
+- **WHEN** the administrator adds the role Cộng tác viên, or a department, and confirms
+- **THEN** it is listed under "Chỉ thấy phòng của mình", and the people holding it see only their own department and the administrators
+
+#### Scenario: Built-in roles
+- **WHEN** the role picker opens
+- **THEN** Chủ sở hữu and Thành viên are not offered
+
+#### Scenario: A workspace whose directory scope is not ready
+- **WHEN** an administrator opens Quản trị in a workspace created before directory visibility existed and not yet migrated
+- **THEN** there is no Danh bạ tab and nothing mentions it; a pasted `/admin/directory` link lands on Tổng quan, keeping the workspace
+
+#### Scenario: Saving fails
+- **WHEN** hiding a department is refused or the network fails
+- **THEN** a toast says "Không ẩn được <phòng>. Kiểm tra mạng rồi thử lại." with "Thử lại", and the list is unchanged
+
 ### Requirement: Motion and layers follow the design system
 Panels and dialogs enter and leave through the shared presets; Esc closes only the topmost layer (a picker, then a dialog, then the panel); a dialog's state is reset each time it opens and a panel's per item (mounted keyed by the item). Rows are keyboard-reachable; pickers open in place, so they work inside dialogs and panels.
 
 ## Status
 Known gaps, recorded rather than resolved:
+- Quản trị › Danh bạ is specified ahead of the code (mockup `design/mockups/admin.html` §7b, 2026-10-17); the frame has three tabs until it lands.
 - No administrators' activity feed: nothing records who changed a role, a permission, a member or a department, so Tổng quan does not draw one.
 - The "Đã mời" filter of the mockup is a list under the table instead; the invite dialog has no message field. The invited address is emailed (see `workspace-admin-authorization`, "Inviting records an offer"), but the dialog does not report whether the mail went out: the answer is the same 202 either way, and the invitee finds the offer on their next verified sign-in, on a screen that belongs to the sign-in group.
 - No lock-account action: nothing in the backend can lock one. A person listed as disabled in `tenant_users` is shown as "Đã khoá".

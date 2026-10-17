@@ -5,8 +5,37 @@ The screens for finding people (Danh bạ), for the documents written in the app
 
 ## Requirements
 
-### Requirement: Danh bạ lists the workspace's people
-Danh bạ SHALL show everyone in the workspace as a hairline table (name with title, department, email, status in words) or as cards, the choice remembered for the signed-in person. It SHALL filter by name, title or email ignoring accents, by department (a chip listing the departments people belong to, with head counts) and by who is online. Choosing a person SHALL open a profile beside the list with their name, role, status, the details that exist (empty ones are left out), the colleagues of the same department, "Nhắn tin" (opens, or creates, the direct message) and "Gửi email". There SHALL be no button for a feature that does not exist (no call).
+### Requirement: Danh bạ is browsed by category
+Danh bạ SHALL open on its categories and list nobody until one is opened. An organisation workspace has Phòng ban (the department tree, its root named after the organisation and holding the people in no department), Vai trò (the administrator's roles, with Quản trị viên first and no "Thành viên" entry), Nhóm của tôi (the private chat groups the person is in; absent when there are none; `#general` is not one) and the shortcut Phòng của tôi; a personal workspace has Thành viên (its people, listed at once) and Nhóm của tôi, and nothing about departments or roles. There SHALL be no "Tất cả thành viên" category. Each category SHALL ask for its own data when opened (a group's members when that group is opened) and show skeleton rows of the same shape meanwhile, never a spinner; counts are muted text, not accent pills. On a desktop the categories are the list panel, on a tablet a row of chips, on a phone the first screen of a stack (category, then department, then profile).
+
+#### Scenario: Personal workspace
+- **WHEN** a person opens Danh bạ in a personal workspace
+- **THEN** the categories are Thành viên and Nhóm của tôi, and no row, profile line or filter mentions a department or a role
+
+#### Scenario: Partial tree failure
+- **WHEN** the department tree fails to load but the people did
+- **THEN** an inline error under Phòng ban says "Không tải được cây phòng ban. Bạn vẫn tìm được người bằng ô tìm." with "Thử lại", and Vai trò, Nhóm của tôi and the search box keep working
+
+### Requirement: Departments are browsed one level at a time
+Opening a department SHALL show its sub-departments first (folder tile, name, head count including everything beneath, "N phòng, nhóm bên dưới" when it has children) and then the people placed directly in it. A breadcrumb SHALL lead from the organisation (a building icon) through every level to the current one, each segment going up to that level; when it is too long the middle segments shrink with "…" and the last is never cut. There is no depth limit. People are placed by their department, never by its name. People rows show the avatar, the name, the title and the status in words ("Trực tuyến", "Ngoại tuyến"); outside the tree (search, a role, a group) the second line is the title and the full department path. People are sorted by given name (the last word), then by full name, the Vietnamese way.
+
+#### Scenario: Same-named departments
+- **WHEN** the organisation has a "Đối soát" under Khối Vận hành › Vận hành thanh toán and another under Khối Tài chính
+- **THEN** each person appears under the right one in the tree, in the breadcrumb and in their profile path, and search rows tell them apart by the path
+
+#### Scenario: An empty department
+- **WHEN** a department has nobody
+- **THEN** it says "<Phòng> chưa có ai" with a way back to its parent
+
+### Requirement: Danh bạ search covers everything the person may see
+The search box SHALL search names, titles and emails across the person's whole visible scope, not only the open department, ignoring case and accents, highlighting the match; it finds people, not departments. The header SHALL read "Kết quả trong cả <tổ chức>", or "Kết quả trong phạm vi bạn được xem" for a person limited to their own department, with the number of matches; ✕ or Esc returns to where the person was. A chip "Đang trực tuyến" filters the list on screen.
+
+#### Scenario: Nothing matches
+- **WHEN** the search finds nobody
+- **THEN** the screen says "Không có ai khớp “…”" with "Xoá tìm kiếm"
+
+### Requirement: The profile card acts for real
+Choosing a person SHALL open a profile card: a cover in the person's colour, a 64 avatar, name, title, status in words, then "Nhắn tin" (opens, or creates, the direct message), "Gọi" (a one-to-one call) and "Gửi email" (`mailto:`). "Gọi" SHALL always be enabled, whether or not the person is online. The details are Email (with "Sao chép"), Phòng ban as the full path that opens that department, Vai trò (each opens its list) and Nơi làm việc; empty ones are left out, and in a personal workspace there is no Phòng ban, Vai trò or Cùng phòng. "Cùng phòng" shows up to four faces and "<tên> và N người khác", opening the department. There is no phone number. The card is a side panel on desktop, a sheet on a tablet and a full screen with Back on a phone.
 
 #### Scenario: A person has no title or location
 - **WHEN** their profile opens
@@ -14,11 +43,22 @@ Danh bạ SHALL show everyone in the workspace as a hairline table (name with ti
 
 #### Scenario: One's own profile
 - **WHEN** the signed-in person opens themselves
-- **THEN** there is no "Nhắn tin"
+- **THEN** the three actions are replaced by "Sửa hồ sơ", which opens Cài đặt › Hồ sơ
+
+#### Scenario: Calling someone offline
+- **WHEN** the person is shown "Ngoại tuyến" and "Gọi" is pressed
+- **THEN** the call starts and rings their devices; the button was never disabled
 
 #### Scenario: The directory fails to load
 - **WHEN** the directory request errors
 - **THEN** the screen says so with "Thử lại"; it never lists members with their names missing
+
+### Requirement: Danh bạ shows only whom the person may see
+Danh bạ SHALL show only the departments and people the server returns for the person (decided by NGAC, see `contacts-visibility`); the screen never filters by itself and never says that someone is hidden. A person limited to their own department sees "Chỉ phòng của bạn" under Phòng ban. An administrator sees everything, a hidden department carrying the label "Ẩn khỏi danh bạ".
+
+#### Scenario: Hidden person card
+- **WHEN** a person clicks the name or avatar of someone they may no longer see, in chat, an approval, a document or the calendar
+- **THEN** a small card shows only that avatar, that name and "Hồ sơ này không còn hiển thị với bạn.", with no title, department, email, "Nhắn tin" or "Gọi"; replying in an existing conversation still works
 
 ### Requirement: Danh bạ and Tài liệu suggest before anything is typed
 Their search boxes SHALL follow `docs/specs/search-suggestions`. Danh bạ SHALL suggest "Tìm gần đây" and "Nhắn gần
@@ -96,6 +136,7 @@ The Giao diện tab SHALL offer the theme (Theo hệ thống, Sáng, Tối) as r
 - **THEN** the second sees their own choice, not the first's
 
 ## Status
+- Danh bạ (categories, department browsing, scope-wide search, profile card with Gọi, hidden person card) is specified ahead of the code (design approved 2026-10-17, `design/mockups/contacts-lark.html`): until the redesign lands the app shows the flat table with department chips and a profile without "Gọi".
 - Hồ sơ has no crop or zoom for a picture: the centre square is kept. There is no larger view of a picture yet; the 1024 px size is stored for it. An invitation and the "converted by" line name a person without an id, so they show initials only.
 - Hồ sơ saves Nơi làm việc where the mockup shows a phone number (the profile API has no phone). Department is the profile's free text, not the organisation's department.
 - Workspace cannot change the icon and shows no organisation field: neither has a server behind it.

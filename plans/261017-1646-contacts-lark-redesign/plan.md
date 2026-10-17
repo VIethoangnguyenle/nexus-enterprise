@@ -218,3 +218,4 @@ Consistency sweep (2026-10-17, `grep -rn` over plan.md + phase-01..11):
 - Q3: kiểm tra phía server của lịch (free/busy, thêm khách theo id) giữ theo tư cách thành viên workspace; chỉ bộ chọn người lọc theo phạm vi hiển thị.
 - Q4: giữa release A và B, ẩn mục Quản trị › Danh bạ (quy tắc phạm vi) ở workspace chưa có node danh bạ, thay vì trả 503.
 - Bước "Zane duyệt thiết kế" ở phase 01: Claude tự chốt theo mockup đã duyệt `design/mockups/contacts-lark.html`, ghi lại trong phase file để Zane xem sau.
+- Sau Phase 01: Danh bạ giữ chữ "Quản trị viên" cho nhóm owners (quyết định của Zane), màn Quản trị giữ "Chủ sở hữu"; các thao tác ẩn/giới hạn phòng giữ hộp xác nhận; chữ "Tất cả thành viên" còn sót trong mockup sửa ở phase frontend.

@@ -113,3 +113,6 @@ auth gets the scope over gRPC, and a dev script seeds a demo org with real graph
 - Batch size (Low×Low): 2×depts+2 objects per scope call; hundreds is fine for the batch PDP (`pdp_batch.go:20`).
 - Seed script mistaken for a prod tool (Low×Med): refuses unless fixed-OTP dev; lives under `scripts/` with a header saying so.
 - Rollback: revert; graph rules remain inert.
+
+## Carry-over from Phase 01 (Claude, 2026-10-17)
+- The scope and the rules endpoints return an explicit `ready: false` (HTTP 200) for a workspace whose directory nodes do not exist yet, so the frontend can hide Quản trị › Danh bạ (decision Q4) without confusing it with a real outage (503).
