@@ -64,6 +64,43 @@ jobs:
       - name: Test
         run: make test
 
+  # Tests behind the `realpolicy` tag run against the real policy service, started as a
+  # process by backend/testutil with an unreachable Redis and Kafka (see
+  # scripts/run-realpolicy-tests.sh). A fake that answers from a table cannot show the
+  # policy reacting to a graph write; this can.
+  realpolicy:
+    name: Go — real policy service
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ngac
+          POSTGRES_USER: ngac
+          POSTGRES_PASSWORD: ngac_secret
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ngac"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://ngac:ngac_secret@localhost:5432/ngac?sslmode=disable
+      PGPASSWORD: ngac_secret
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+          cache-dependency-path: backend/**/go.sum
+      - name: Apply schema
+        run: |
+          psql -h localhost -U ngac -d ngac -v ON_ERROR_STOP=1 -q -f data/init.sql
+          for f in $(ls data/migrations/*.sql | sort); do
+            psql -h localhost -U ngac -d ngac -v ON_ERROR_STOP=1 -q -f "$f"
+          done
+      - name: Test against the real policy service
+        run: make test-realpolicy
+
   frontend:
     name: Frontend — lint, typecheck, test, build
     runs-on: ubuntu-latest

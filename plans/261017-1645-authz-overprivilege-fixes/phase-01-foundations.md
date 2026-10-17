@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Foundations: legacy-workspace repair (059), real-policy harness, membership helper, cache invalidator, runbook"
-status: pending
+status: completed
 priority: P1
 effort: "6h"
 dependencies: []
@@ -118,3 +118,14 @@ domain: policyclient.IsWorkspaceMember ─> MembersUA (cached) + GetAncestors
 ## Rollback
 Code: revert. 059: `UPDATE ngac_nodes n SET name = r.old_name FROM ngac_node_renames r WHERE ...` for its renames;
 delete nodes listed in `_reconcile_059_nodes` as created; then recreate policy services + invalidate.
+
+## Implementation Status (2026-10-17)
+- [x] 059 repair migration (`data/migrations/059_ngac_workspace_id_keyed_repair.sql`) + `scripts/test-migration-059.sh` (scratch DB, twice, ambiguous refused)
+- [x] `ngac.WorkspaceIDFromMembersUAName` + round-trip/reject test
+- [x] `policyclient` membership helper (`MembersUA` cached, `IsWorkspaceMember`, `MemberWorkspaces`, `SharedWorkspaces`) + deny/allow tests
+- [x] Real-policy harness (`backend/testutil/policy_process*.go`, `policy_graph.go`, tag `realpolicy`), `make test-realpolicy`, CI `realpolicy` job
+- [x] `policy invalidate-cache --all-workspaces` (service identity `policy-ctl`, ServiceOK on `InvalidateCache`), `make policy-invalidate`, `deploy.sh` step
+- [x] Runbook in `docs/deployment.md`; spec `tenant-ngac-init` updated
+- [x] Dev DB: `make db-migrate` run 3x, 2 legacy workspaces repaired, later runs add no row to `_reconcile_059_*`
+
+Deviations: no `ngac_graph_version` / `ngac_materialized_access` exist in the current schema (023 referenced them), so 059 does not bump/truncate them; invalidation is the tool. `StartPolicy` starts the process lazily once per test binary; `RunMain` (TestMain) stops it. RPCs other than CreateNode/CreateAssignment/DeleteNode/FindNodeByName need `PolicyCaller`/`PolicyAdmin` on the ctx (policy refuses a bare service identity).

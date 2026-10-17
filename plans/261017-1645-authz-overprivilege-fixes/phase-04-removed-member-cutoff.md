@@ -156,3 +156,12 @@ approval ─> RequireMember (writer) ─✗─> 403
 Code: revert to release A / previous. 062: `UPDATE tenant_users t SET status = b.status, department_id = b.department_id,
 ngac_node_id = b.ngac_node_id FROM _reconcile_062_tenant_users b WHERE b.tenant_id = t.tenant_id AND b.user_id =
 t.user_id;` and delete rows inserted by step 5 (listed in the backup with a marker column). Constraint stays (superset).
+
+## Carry-over from Phase 01 review
+Decision (controller): migration 059 does NOT grant graph membership from `tenant_users`; it only repairs topology.
+So after 059 a repaired or created `<id>_Members` can have zero users under it (dev's two `test-ws-*` workspaces do:
+the graph holds no user for their one active `tenant_users` row). Migration 062 therefore MUST:
+- **skip and report** (RAISE NOTICE with the workspace ids and row counts; no tombstone) every workspace whose
+  `<id>_Members` has zero user descendants;
+- tombstone `tenant_users` drift (active row, no graph membership) only in workspaces that have at least one graph member.
+Tombstoning in a workspace with no graph members would remove every member of a workspace whose graph was simply never populated.

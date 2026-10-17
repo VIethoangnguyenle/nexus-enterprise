@@ -14,6 +14,8 @@
 #   make build-check         Local Go build verification (no Docker)
 #   make test                Run all Go tests
 #   make test s=drive        Run tests for one service
+#   make test-realpolicy     Run the tests that need the real policy service (needs TEST_DATABASE_URL)
+#   make policy-invalidate   Drop every workspace's cached decisions (after a graph-writing migration)
 #   make proto               Regenerate protobuf Go code
 #
 # Local Development:
@@ -27,7 +29,7 @@
 .PHONY: deploy redeploy down restart ps health logs \
         build-check test proto proto-install dev-frontend clean db-migrate help \
         dev dev-infra dev-stop dev-logs dev-all dev-restart dev-connect run stop \
-        agentkit-setup check-docs check-ngac check-layering
+        agentkit-setup check-docs check-ngac check-layering test-realpolicy policy-invalidate
 
 # ---------------------------------------------------------------------------
 # Auto-detect docker compose command (v2 plugin vs v1 standalone)
@@ -462,6 +464,19 @@ else
 	echo "✓ All service tests pass"
 endif
 
+## Run the tests behind the `realpolicy` build tag: they start the real policy service
+## (built once) against TEST_DATABASE_URL, with no Redis or Kafka. Use the ngac_ci database.
+test-realpolicy:
+	@./scripts/run-realpolicy-tests.sh
+
+## Drop the cached decisions of every workspace. Run after a migration that rewrites
+## ngac_* tables (such a migration bypasses EPP) once policy and policy-read have been
+## restarted. Reads DATABASE_URL and POLICY_SERVICE_ADDR from .env.dev when present.
+policy-invalidate:
+	@set -a; [ -f $(DEV_ENV) ] && . ./$(DEV_ENV); set +a; \
+	export PATH="/usr/local/go/bin:$$HOME/go/bin:$$PATH" APP_ENV="$${APP_ENV:-dev}"; \
+	cd backend/services/policy && go run ./cmd invalidate-cache --all-workspaces
+
 ## Run tests behind the `integration` build tag (needs `make dev-infra` first)
 test-integration:
 	@echo "▸ Running integration tests (requires a running database)..."
@@ -632,6 +647,8 @@ help:
 	@echo "    make build-check         Verify all services compile"
 	@echo "    make test                Run all tests"
 	@echo "    make test s=drive        Test one service"
+	@echo "    make test-realpolicy     Tests that need the real policy service (TEST_DATABASE_URL)"
+	@echo "    make policy-invalidate   Drop every workspace's cached decisions"
 	@echo "    make proto               Regen protobuf code"
 	@echo "    make dev-frontend        Start Vite dev server (standalone)"
 	@echo ""

@@ -129,3 +129,23 @@ func TestPolicyRefusesServicesOtherThanAuthAndForgedIdentity(t *testing.T) {
 	_, err = pb.NewPolicyReadServiceClient(raw).CheckAccess(testutil.ForgedIdentity(ctx), &pb.CheckAccessRequest{})
 	wantCode(t, "CheckAccess with forged identity", err, codes.Unauthenticated)
 }
+
+// The operator tool (`policy invalidate-cache`) dials as policy-ctl and may call
+// InvalidateCache with no user; it gets nothing else, and no other service gets it.
+func TestPolicyAdmitsOnlyThePolicyCtlToolToInvalidateTheCache(t *testing.T) {
+	ctx := context.Background()
+
+	w, _ := servePolicyAs(t, "policy-ctl")
+	_, err := w.InvalidateCache(ctx, &pb.InvalidateCacheRequest{})
+	wantCode(t, "InvalidateCache from policy-ctl", err, codes.Unimplemented)
+	_, err = w.CreateNode(ctx, &pb.CreateNodeRequest{})
+	wantCode(t, "CreateNode from policy-ctl", err, codes.Unauthenticated)
+	_, err = w.RemoveAssignment(ctx, &pb.RemoveAssignmentRequest{})
+	wantCode(t, "RemoveAssignment from policy-ctl", err, codes.Unauthenticated)
+
+	for _, svc := range []string{"workspace", "auth", "messaging"} {
+		w, _ := servePolicyAs(t, svc)
+		_, err := w.InvalidateCache(ctx, &pb.InvalidateCacheRequest{})
+		wantCode(t, "InvalidateCache from "+svc, err, codes.Unauthenticated)
+	}
+}

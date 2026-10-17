@@ -27,6 +27,9 @@ import (
 
 func main() {
 	bootstrap.InitLogger()
+	if len(os.Args) > 1 && os.Args[1] == "invalidate-cache" {
+		os.Exit(runInvalidateCache(os.Args[2:]))
+	}
 	if err := bootstrap.ConfigureInternalIdentity(); err != nil {
 		slog.Error("refusing to start", "error", err)
 		os.Exit(1)
