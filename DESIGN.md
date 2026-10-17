@@ -805,6 +805,10 @@ CSS. Biến thể dùng chung ở `frontend/src/lib/motion.ts`.
 WCAG 2.2 AA. Chữ ≥ 4.5:1, chữ lớn và UI ≥ 3:1 trên nền thật. Mọi phần tử tương tác là
 `button`/`a`/control thật, có hover, `:focus-visible`, active, disabled. Touch target ≥ 44px.
 Màu không bao giờ là kênh duy nhất (trạng thái có nhãn; lớp phủ realtime có nhãn chữ).
+Điện thoại **không phóng to trang** (người dùng chốt 2026-10-17, vì phóng to làm vỡ bố cục): viewport `maximum-scale=1,
+user-scalable=no`, `touch-action: manipulation` (không chạm đúp), cử chỉ chụm của iOS bị huỷ; ô nhập 16px trên màn cảm
+ứng để không tự phóng khi focus. Đánh đổi có chủ đích với WCAG 1.4.4: chữ đã đủ lớn (chat 16px trên điện thoại), và nội
+dung cần phóng (ảnh trong Trình xem tệp) có phóng riêng bằng chụm hai ngón.
 
 ## 10. Enforcement
 
