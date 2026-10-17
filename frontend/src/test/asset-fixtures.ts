@@ -264,6 +264,7 @@ export function assetFixtureApi(path: string, init?: RequestInit): Promise<unkno
     let list = visibleAssets()
     if (query.get('type_id')) list = list.filter((a) => a.type_id === query.get('type_id'))
     if (query.get('state')) list = list.filter((a) => a.state === query.get('state'))
+    if (query.get('assigned_to')) list = list.filter((a) => a.assigned_to_user_id === query.get('assigned_to'))
     const q = (query.get('search') ?? '').toLowerCase()
     if (q) list = list.filter((a) => a.name.toLowerCase().includes(q) || (a.assigned_to_name ?? '').toLowerCase().includes(q))
     const limit = Number(query.get('limit') || 25)

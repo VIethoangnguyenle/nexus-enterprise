@@ -1,11 +1,12 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { addRecent, readRecent, removeRecent, type SearchModule } from '../lib/recent-searches'
 import { useAuthStore } from '../stores/auth.store'
 import type { SuggestionGroup } from './useSuggestionPanel'
 
 /**
  * The signed-in person's recent searches in `module`, and the "Tìm gần đây" group of its search box. Keep a search
- * with `add` when the box is submitted or a result is opened; `group(pick)` runs a kept search again through `pick`.
+ * with `add` (stable, so handlers that call it need not change) when the box is submitted or a result is opened;
+ * `group(pick)` runs a kept search again through `pick`.
  */
 export function useRecentSearches(module: SearchModule) {
   const me = useAuthStore((s) => s.user?.id ?? '')
@@ -14,7 +15,7 @@ export function useRecentSearches(module: SearchModule) {
   if (state.me !== me) setState({ me, list: readRecent(module, me) })
   const { list } = state
 
-  const add = (query: string) => setState({ me, list: addRecent(module, me, query) })
+  const add = useCallback((query: string) => setState({ me, list: addRecent(module, me, query) }), [module, me])
   const remove = (query: string) => setState({ me, list: removeRecent(module, me, query) })
   const group = (pick: (query: string) => void): SuggestionGroup => ({
     label: 'Tìm gần đây',

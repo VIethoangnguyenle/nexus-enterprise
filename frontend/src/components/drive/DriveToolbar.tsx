@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react'
-import { ChevronDown, FolderPlus, LayoutGrid, List, Upload } from 'lucide-react'
+import { useRef, useState, type InputHTMLAttributes, type Ref } from 'react'
+import { ArrowLeft, ChevronDown, FolderPlus, LayoutGrid, List, Upload } from 'lucide-react'
 import type { FileViewMode } from '../../stores/file-view.store'
 import { Button, IconButton, MenuItem, Popover, Pressable, SearchField } from '../primitives'
 import { SORT_OPTIONS, TYPE_FILTERS, type SortKey, type TypeFilter } from './drive-model'
@@ -22,6 +22,12 @@ interface DriveToolbarProps {
   uploading: boolean
   onPickFiles: () => void
   onNewFolder: () => void
+  /** The search box, which the suggestions hang from. */
+  searchRef?: Ref<HTMLInputElement>
+  /** The suggestions' combobox props and key handling, spread on the search box. */
+  searchProps?: InputHTMLAttributes<HTMLInputElement>
+  /** On a phone, while the suggestions cover the files: only Quay lại and the box are shown. */
+  onBack?: () => void
 }
 
 const CHIP = `press shrink-0 h-8 px-3 rounded-md cursor-pointer text-small focus-ring max-lg:h-10`
@@ -39,17 +45,35 @@ export function DriveToolbar(props: DriveToolbarProps) {
   const typeLabel = TYPE_FILTERS.find((t) => t.id === typeFilter)!.label
   const sortLabel = SORT_OPTIONS.find((s) => s.id === sort)!.label
 
+  const box = (
+    <SearchField
+      ref={props.searchRef}
+      label="Tìm tệp hoặc thư mục"
+      placeholder={`Tìm trong ${props.folderLabel}`}
+      moduleSearch
+      tone="sunk"
+      value={props.query}
+      {...props.searchProps}
+      onChange={(e) => props.onQuery(e.target.value)}
+      className={`rounded-full max-lg:h-11 ${layout === 'desktop' ? 'w-60 shrink-0' : 'flex-1 min-w-0'}`}
+    />
+  )
+
+  // While the suggestions cover the files on a phone, the chips and the view switch would act on what cannot be seen.
+  if (props.onBack) {
+    return (
+      <div className="flex items-center gap-1 px-5 pb-3 max-sm:px-4">
+        <IconButton aria-label="Quay lại danh sách" title="Quay lại" shape="round" size="lg" className="w-11 h-11 -ml-2" onClick={props.onBack}>
+          <ArrowLeft size={20} strokeWidth={1.75} aria-hidden="true" />
+        </IconButton>
+        {box}
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-2 px-5 pb-3 max-sm:px-4">
-      <SearchField
-        label="Tìm tệp hoặc thư mục"
-        placeholder={`Tìm trong ${props.folderLabel}`}
-        moduleSearch
-        tone="sunk"
-        value={props.query}
-        onChange={(e) => props.onQuery(e.target.value)}
-        className={`rounded-full max-lg:h-11 ${layout === 'desktop' ? 'w-60 shrink-0' : 'flex-1 min-w-0'}`}
-      />
+      {box}
 
       {layout === 'tablet' ? (
         <MenuChip

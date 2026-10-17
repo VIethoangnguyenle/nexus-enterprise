@@ -141,6 +141,11 @@ export function useSuggestionPanel({ value, groups, variant, anchorRef, initiall
     onBlur: () => {
       if (popover) setEngaged(false)
     },
+    // A click into a box that kept the focus (after a choice or Esc) brings the suggestions back.
+    onClick: () => {
+      setEngaged(true)
+      setDismissed(false)
+    },
     onKeyDown,
   }
 

@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Tài liệu + Tài sản"
-status: pending
+status: completed
 priority: P2
 effort: "3h"
 dependencies: [2]
@@ -44,3 +44,17 @@ Gắn panel gợi ý vào ô tìm của Tài liệu (`DriveToolbar`) và danh s�
 ## Risk Assessment
 Nhóm của Drive sẽ khá ít nếu thư mục đang mở có ít tệp. Đây là điều đã chấp nhận ở phương án A. Nếu Zane thấy chưa đủ
 thì làm C (lưu ID tệp đã mở trên máy) trong một plan riêng.
+
+## Thực tế khi làm (2026-10-17)
+- Tài liệu: "Sửa gần đây trong <thư mục>" (chỉ tệp) và "Được chia sẻ với tôi" (tải khi ô được focus lần đầu; không
+  có trong view Được chia sẻ). Tệp không nằm trong thư mục đang mở thì mở một mình trong Trình xem tệp (`loneFile`).
+- Tài sản: "Bạn đang giữ" (`useAssets` với `assigned_to`, tải khi ô được focus lần đầu) và "Hoạt động gần đây"
+  (bước mới nhất của mỗi tài sản, bỏ quyết định về yêu cầu; mô tả bằng tên người, ví dụ "Trần Minh Đức đã thu hồi
+  từ Lê Quang Vinh").
+- Cả hai: trên điện thoại, gợi ý phủ lên danh sách; danh sách vẫn được giữ trong DOM. Bộ lọc ẩn đi. Esc và Quay lại
+  đóng gợi ý. Lần tìm được lưu khi bấm Enter (không tính Enter của bộ gõ) hoặc khi mở một kết quả.
+- Hook: bấm vào ô (vẫn đang focus) sau khi chọn gợi ý hoặc bấm Esc thì gợi ý mở lại. `useRecentSearches.add` ổn
+  định (`useCallback`).
+- Fixture tài sản giờ lọc theo `assigned_to`, như máy chủ.
+- Test cũ tìm ô theo nhãn (`getByLabelText`) thay vì role `searchbox`, vì trên máy tính ô là `combobox`.
+- Kiểm tra: vitest 3111/3111, lint ok, `typecheck:diff` không tăng lỗi, `vite build` ok. Review gộp với phase 05.

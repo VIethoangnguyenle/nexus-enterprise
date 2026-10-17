@@ -1,12 +1,13 @@
+import type { InputHTMLAttributes, ReactNode, Ref } from 'react'
 import { motion } from 'motion/react'
-import { Package, SearchX } from 'lucide-react'
+import { ArrowLeft, Package, SearchX } from 'lucide-react'
 import type { Asset, AssetType } from '../../api/assets'
 import type { Arrival } from '../../hooks/useArrivals'
 import type { PeopleDirectory } from '../../lib/people'
 import { ASSET_STATES, stateLabel } from '../../lib/asset-model'
 import { assetSearch, filterSearch, pageSearch, type AssetsSearch } from '../../lib/assets-search'
 import type { MotionPresets } from '../../lib/motion'
-import { Button, FilterChip, SearchField } from '../primitives'
+import { Button, FilterChip, IconButton, SearchField } from '../primitives'
 import { EmptyState } from '../spaces/EmptyState'
 import { AssetTable, type RealtimeTag } from './AssetTable'
 import type { Summary } from './AssetOverview'
@@ -36,12 +37,23 @@ interface Props {
   tagOf: (a: Asset, arrival: { author?: string }) => RealtimeTag | undefined
   route: MotionPresets['route']
   onAddAsset: () => void
+  /** The search box, which the suggestions hang from. */
+  searchRef?: Ref<HTMLInputElement>
+  /** The suggestions' combobox props and key handling, spread on the search box. */
+  searchProps?: InputHTMLAttributes<HTMLInputElement>
+  /** What the empty box suggests: a popover on a desktop, the rows over the table on a phone. */
+  suggestions?: ReactNode
+  /** On a phone, the suggestions cover the table: only Quay lại and the box are shown above them. */
+  covered?: boolean
+  onBack?: () => void
+  /** An asset was opened from the list: the search that found it is kept. */
+  onOpened?: () => void
 }
 
 /** The Danh sách tab: filters, the table or why it is empty, and the pager. */
 export function AssetListBody({
   search, go, typed, onTyped, summary, types, requestable, rows, total, page, loading, people, openId, scope,
-  fresh, versionOf, tagOf, route, onAddAsset,
+  fresh, versionOf, tagOf, route, onAddAsset, searchRef, searchProps, suggestions, covered = false, onBack, onOpened,
 }: Props) {
   const filtered = !!(search.state || search.kind || search.q)
   const counts = summary?.byState ?? {}
@@ -51,14 +63,24 @@ export function AssetListBody({
   return (
     <>
       <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
+        {covered && (
+          <IconButton aria-label="Quay lại danh sách" title="Quay lại" shape="round" size="lg" className="w-11 h-11 -ml-2" onClick={onBack}>
+            <ArrowLeft size={20} strokeWidth={1.75} aria-hidden="true" />
+          </IconButton>
+        )}
         <SearchField
+          ref={searchRef}
           label="Tìm tài sản"
           moduleSearch
           value={typed}
+          {...searchProps}
           onChange={(e) => onTyped(e.target.value)}
-          className="w-full sm:w-56"
+          className={covered ? 'flex-1 min-w-0' : 'w-full sm:w-56'}
           tone="sunk"
         />
+        {!covered && suggestions}
+        {/* While the suggestions cover the table on a phone, filters would change a list that cannot be seen. */}
+        {!covered && <>
         <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Lọc theo trạng thái">
           <FilterChip pressed={!search.state} onClick={() => go((p) => filterSearch(p, { state: undefined }))}>
             Tất cả {summary && <span className="font-normal text-ink-muted tnum">{summary.total}</span>}
@@ -76,7 +98,14 @@ export function AssetListBody({
             onChange={(kind) => go((p) => filterSearch(p, { kind }))}
           />
         )}
+        </>}
       </div>
+      <div className="relative">
+      {covered && (
+        // The table stays laid out under the phone's suggestions, so Quay lại finds it where it was scrolled.
+        <div className="absolute inset-x-0 top-0 z-sticky min-h-full bg-base">{suggestions}</div>
+      )}
+      <div className={covered ? 'invisible' : undefined} aria-hidden={covered || undefined} inert={covered}>
       {!loading && rows.length === 0 ? (
         filtered ? (
           <EmptyState
@@ -98,7 +127,10 @@ export function AssetListBody({
             loading={loading}
             people={people}
             openId={openId}
-            onOpen={(a) => go((p) => assetSearch(p, a.id))}
+            onOpen={(a) => {
+              onOpened?.()
+              go((p) => assetSearch(p, a.id))
+            }}
             scope={scope}
             fresh={fresh}
             versionOf={versionOf}
@@ -115,6 +147,8 @@ export function AssetListBody({
           )}
         </motion.div>
       )}
+      </div>
+      </div>
     </>
   )
 }
