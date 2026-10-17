@@ -882,6 +882,117 @@ describe('ApprovalScreen: template builder', () => {
   })
 })
 
+describe('ApprovalScreen: the search box', () => {
+  const box = () => screen.getByLabelText('Tìm đề nghị')
+  const RECENT_KEY = `ngac-recent-searches:approval:${U.hoa.id}`
+  beforeEach(() => localStorage.clear())
+
+  it('narrows the open tab by title, sender or kind, ignoring accents, and marks the words found', async () => {
+    const user = userEvent.setup()
+    const router = await renderApproval()
+    await within(table()).findByText('Tạm ứng công tác phí tháng 10')
+    await user.type(box(), 'cong tac')
+    await waitFor(() => expect(rowTitles()).toEqual(['Tạm ứng công tác phí tháng 10']))
+    expect(screen.getByText(/1 trong \d+ đề nghị/)).toBeInTheDocument()
+    expect(within(table()).getByText('công tác', { selector: 'mark' })).toBeInTheDocument()
+    await waitFor(() => expect(search(router).q).toBe('cong tac'))
+    await user.clear(box())
+    await user.type(box(), 'quang vinh')
+    await waitFor(() => expect(rowTitles()).toEqual(['Mua 4 màn hình cho tổ đối soát']))
+  })
+
+  it('says nothing matched, and clears the search', async () => {
+    const user = userEvent.setup()
+    await renderApproval()
+    await within(table()).findByText('Tạm ứng công tác phí tháng 10')
+    await user.type(box(), 'hợp đồng thuê')
+    expect(await screen.findByText(/Không có đề nghị nào khớp “hợp đồng thuê”/)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Xoá tìm kiếm' }))
+    expect(box()).toHaveValue('')
+    await waitFor(() => expect(rowTitles().length).toBeGreaterThan(1))
+  })
+
+  it('starts empty on another tab, and is not offered on the templates', async () => {
+    const user = userEvent.setup()
+    await renderApproval('/approval?q=cong')
+    await waitFor(() => expect(box()).toHaveValue('cong'))
+    await user.click(screen.getByRole('tab', { name: /Tôi đã gửi/ }))
+    await waitFor(() => expect(box()).toHaveValue(''))
+    await user.click(screen.getByRole('tab', { name: 'Mẫu' }))
+    await waitFor(() => expect(screen.queryByLabelText('Tìm đề nghị')).toBeNull())
+  })
+
+  it('suggests recent searches, what waits on me and my own requests, and opens one', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem(RECENT_KEY, JSON.stringify(['công tác']))
+    const router = await renderApproval()
+    await within(table()).findByText('Tạm ứng công tác phí tháng 10')
+    expect(calls.some((c) => c.path === '/approval/my-requests')).toBe(false)
+    await user.click(box())
+    const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
+    expect(within(list).getByRole('option', { name: 'công tác' })).toBeInTheDocument()
+    const waiting = within(list).getByRole('group', { name: 'Chờ bạn duyệt' })
+    expect(within(waiting).getAllByRole('option')[0]).toHaveTextContent('Tạm ứng công tác phí tháng 10')
+    const mine = await within(list).findByRole('group', { name: 'Đề nghị của bạn' })
+    await user.click(within(mine).getByRole('option', { name: /Mua văn phòng phẩm/ }))
+    await waitFor(() => expect(search(router).request).toBe(R.vpp))
+    noIds()
+  })
+
+  it('approves in a batch only the ticked requests the search shows', async () => {
+    const user = userEvent.setup()
+    await renderApproval()
+    await within(table()).findByText('Tạm ứng công tác phí tháng 10')
+    await user.click(screen.getByRole('checkbox', { name: 'Chọn Tạm ứng công tác phí tháng 10' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Chọn Mua 4 màn hình cho tổ đối soát' }))
+    await user.type(box(), 'cong tac')
+    await waitFor(() => expect(rowTitles()).toEqual(['Tạm ứng công tác phí tháng 10']))
+    expect(screen.getByText('Đã chọn 1 đề nghị')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Duyệt 1 đề nghị' }))
+    await waitFor(() => expect(posts('/approval/batch-approve')).toHaveLength(1))
+    expect(posts('/approval/batch-approve')[0]!.body).toMatchObject({ request_ids: [R.tamung] })
+  })
+
+  it('select-all clears the ticks of the rows the search shows', async () => {
+    const user = userEvent.setup()
+    await renderApproval()
+    await within(table()).findByText('Tạm ứng công tác phí tháng 10')
+    await user.click(screen.getByRole('checkbox', { name: 'Chọn Tạm ứng công tác phí tháng 10' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Chọn Mua 4 màn hình cho tổ đối soát' }))
+    await user.type(box(), 'cong tac')
+    await waitFor(() => expect(rowTitles()).toHaveLength(1))
+    const all = within(table()).getAllByRole('checkbox')[0]!
+    expect(all).toBeChecked()
+    await user.click(all)
+    await waitFor(() => expect(screen.queryByText(/Đã chọn/)).toBeNull())
+    expect(all).not.toBeChecked()
+  })
+
+  it('starts the next tab without the search, however soon after typing', async () => {
+    const user = userEvent.setup()
+    const router = await renderApproval()
+    await within(table()).findByText('Tạm ứng công tác phí tháng 10')
+    await user.type(box(), 'cong')
+    await user.click(screen.getByRole('tab', { name: /Tôi đã gửi/ }))
+    expect(box()).toHaveValue('')
+    await new Promise((r) => setTimeout(r, 400))
+    expect(search(router).q).toBeUndefined()
+  })
+
+  it('keeps a search on Enter, and when a request is opened from the results', async () => {
+    const user = userEvent.setup()
+    await renderApproval()
+    await within(table()).findByText('Tạm ứng công tác phí tháng 10')
+    await user.type(box(), 'màn hình{Enter}')
+    expect(JSON.parse(localStorage.getItem(RECENT_KEY)!)).toEqual(['màn hình'])
+    await user.clear(box())
+    await user.type(box(), 'tạm ứng')
+    // The words found are marked inside the title, so the title is found by the button's name.
+    await user.click(await within(table()).findByRole('button', { name: 'Tạm ứng công tác phí tháng 10' }))
+    expect(JSON.parse(localStorage.getItem(RECENT_KEY)!)).toEqual(['tạm ứng', 'màn hình'])
+  })
+})
+
 describe('ApprovalScreen: assignments keep their shape', () => {
   it('the fixtures hold an assignment for every request the lists show', () => {
     for (const id of Object.values(R)) expect(ASSIGNMENTS[id]?.length).toBeGreaterThan(0)

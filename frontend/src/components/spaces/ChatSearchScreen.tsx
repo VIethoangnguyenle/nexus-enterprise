@@ -16,12 +16,13 @@ import { messageText } from '../../lib/message-model'
 import { useMotionPresets } from '../../lib/motion'
 import { displayName, type PeopleDirectory, type Person } from '../../lib/people'
 import { recentConversations } from '../../lib/suggestions/chat'
-import { fold, highlight, matchesAll, snippet } from '../../lib/search-text'
+import { fold, matchesAll, snippet } from '../../lib/search-text'
 import type { Conversation } from '../../lib/conversations'
 import { useAuthStore } from '../../stores/auth.store'
 import { Avatar, Button, IconButton, Pressable, SearchField, toast } from '../primitives'
 import { ConversationIcon } from './ConversationIcon'
 import { EmptyState } from './EmptyState'
+import { Marked } from '../patterns/Marked'
 import { SearchSuggestions } from '../patterns/SearchSuggestions'
 
 type Filter = 'all' | 'people' | 'groups' | 'messages' | 'files'
@@ -38,16 +39,6 @@ const CHIPS: { id: Filter; label: string }[] = [
 const CLIENT_LIMIT = 10
 
 const ROW = 'grid grid-cols-[36px_minmax(0,1fr)] gap-3.5 items-center w-full min-h-14 px-4 py-1.5 text-ink no-underline focus-ring active:bg-hover'
-
-/** `text` with the words of `query` marked as in the mockup (`--color-warning-wash`). */
-function Marked({ text, query }: { text: string; query: string }) {
-  return (
-    <>
-      {highlight(text, query).map((p, i) =>
-        p.hit ? <mark key={i} className="bg-warning-wash text-inherit rounded-xs px-px">{p.text}</mark> : p.text)}
-    </>
-  )
-}
 
 const Label = ({ children }: { children: ReactNode }) => (
   <h2 className="m-0 px-4 pt-3.5 pb-1 text-small font-semibold text-ink-muted">{children}</h2>

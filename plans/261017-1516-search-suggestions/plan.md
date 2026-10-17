@@ -1,6 +1,6 @@
 ---
 title: "Gợi ý khi chưa gõ cho ô tìm"
-status: in-progress
+status: completed
 priority: P2
 mode: auto (client only, không có researcher)
 blockedBy: []
@@ -23,8 +23,8 @@ client (phương án A, Zane đã duyệt 2026-10-17): không thêm endpoint, mi
 | 02 | [Nền: lịch sử tìm theo module + panel gợi ý](phase-02-foundation.md) | completed (review xong, đã sửa H1/M1/M2/M3) | 01 |
 | 03 | [Chat + Danh bạ](phase-03-chat-contacts.md) | completed (review xong, đã sửa M1–M3) | 02 |
 | 04 | [Tài liệu + Tài sản](phase-04-drive-assets.md) | completed (review gộp với 05) | 02 |
-| 05 | [Phê duyệt: ô tìm + gợi ý](phase-05-approval.md) | pending | 02 |
-| 06 | [Spec + kiểm tra cuối](phase-06-specs-verify.md) | pending | 03, 04, 05 |
+| 05 | [Phê duyệt: ô tìm + gợi ý](phase-05-approval.md) | completed (review gộp với 04) | 02 |
+| 06 | [Spec + kiểm tra cuối](phase-06-specs-verify.md) | completed (chưa xem trên trình duyệt thật) | 03, 04, 05 |
 
 Phase 03, 04, 05 không dùng chung file, có thể làm song song sau phase 02.
 

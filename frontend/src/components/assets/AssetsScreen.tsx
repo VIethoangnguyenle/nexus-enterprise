@@ -112,7 +112,13 @@ export function AssetsScreen() {
 
   // ---- the search box: typed text is local; the URL follows after a pause ----
   const [typed, setTyped] = useState(search.q ?? '')
-  useEffect(() => setTyped(search.q ?? ''), [search.q])
+  // What this screen last wrote to `?q=`: the URL catching up with it must not undo letters typed since.
+  const writtenQ = useRef(search.q ?? '')
+  useEffect(() => {
+    if ((search.q ?? '') === writtenQ.current) return
+    writtenQ.current = search.q ?? ''
+    setTyped(search.q ?? '')
+  }, [search.q])
 
   // Before anything is typed: Tìm gần đây, what I hold and the assets something happened to lately (DESIGN.md
   // "Gợi ý trong ô tìm"). What I hold is asked for only once the box is focused.
@@ -151,7 +157,7 @@ export function AssetsScreen() {
           return {
             key: e.asset_id,
             title: e.asset_name,
-            meta: [stepText(e), formatListTime(e.created_at)].filter(Boolean).join(' · '),
+            meta: [stepText(e, actor.name), formatListTime(e.created_at)].filter(Boolean).join(' · '),
             icon: <Avatar name={actor.name} hueKey={actor.hueKey} src={actor.avatarUrl} size={phone ? 36 : 32} />,
             onSelect: () => openAsset(e.asset_id),
           }
@@ -168,7 +174,10 @@ export function AssetsScreen() {
   )
   useEffect(() => {
     if (typed.trim() === (search.q ?? '').trim()) return
-    const t = setTimeout(() => go((p) => filterSearch(p, { q: typed })), 300)
+    const t = setTimeout(() => {
+      writtenQ.current = typed.trim() ? typed : ''
+      go((p) => filterSearch(p, { q: typed }))
+    }, 300)
     return () => clearTimeout(t)
   }, [typed, search.q, go])
 
@@ -406,16 +415,19 @@ export function AssetsScreen() {
           </div>
         </header>
 
-        <ScrollFade className="px-5">
-          <TabBar
-            className="w-max"
-            label="Tài sản"
-            idPrefix="assets"
-            value={tab}
-            tabs={tabs}
-            onChange={(id) => go((p) => tabSearch(p, id as AssetsTab))}
-          />
-        </ScrollFade>
+        {/* While the suggestions cover the list on a phone, a tab would change what cannot be seen. */}
+        {!(covered && tab === 'list') && (
+          <ScrollFade className="px-5">
+            <TabBar
+              className="w-max"
+              label="Tài sản"
+              idPrefix="assets"
+              value={tab}
+              tabs={tabs}
+              onChange={(id) => go((p) => tabSearch(p, id as AssetsTab))}
+            />
+          </ScrollFade>
+        )}
 
         <div
           role="tabpanel"

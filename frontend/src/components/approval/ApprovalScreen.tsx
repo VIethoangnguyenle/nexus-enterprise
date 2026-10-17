@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { CircleAlert, ClipboardCheck, FileText, History, Plus, Settings2 } from 'lucide-react'
+import { ArrowLeft, CircleAlert, ClipboardCheck, FileText, History, Plus, SearchX, Settings2 } from 'lucide-react'
 import type { ApprovalRequest, ApprovalTemplate } from '../../api/approval'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import {
@@ -10,14 +10,23 @@ import {
 } from '../../hooks/useApproval'
 import { useArrivals, type Arrival } from '../../hooks/useArrivals'
 import { usePeople } from '../../hooks/usePeople'
-import { requestSearch, editSearch, tabOf, tabSearch, templateSearch, type ApprovalSearch, type ApprovalTab } from '../../lib/approval-search'
+import { useBottomBarLayout } from '../../hooks/usePhone'
+import { useRecentSearches } from '../../hooks/useRecentSearches'
+import { useSuggestionPanel } from '../../hooks/useSuggestionPanel'
+import { entityLabel, personFor, requestPill, requestTitle } from '../../lib/approval-model'
+import {
+  querySearch, requestSearch, editSearch, tabOf, tabSearch, templateSearch, type ApprovalSearch, type ApprovalTab,
+} from '../../lib/approval-search'
 import { statusOf } from '../../lib/errors'
+import { formatListTime } from '../../lib/format'
+import { RECENT_REQUESTS, matchesRequest } from '../../lib/suggestions/approval'
 import { avatarOf } from '../../lib/people'
 import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { Avatar, Button, Heading, ScrollFade, TabBar, toast, type TabItem } from '../primitives'
+import { Avatar, Button, Heading, IconButton, ScrollFade, SearchField, TabBar, toast, type TabItem } from '../primitives'
+import { SearchSuggestions } from '../patterns/SearchSuggestions'
 import { EmptyState } from '../spaces/EmptyState'
 import { ApprovalDetailPanel } from './ApprovalDetailPanel'
 import { ApprovalTable, type RealtimeTag } from './ApprovalTable'
@@ -84,7 +93,9 @@ export function ApprovalScreen() {
   const tab = tabOf(search) === 'templates' && !canManage && !permsPending ? 'pending' : tabOf(search)
   const editId = canManage ? search.edit : undefined
   const pending = useApprovalPending()
-  const mine = useApprovalMyRequests(tab === 'mine')
+  // My own requests are also a suggestion of the search box: asked for once the box is focused.
+  const [wantsMine, setWantsMine] = useState(false)
+  const mine = useApprovalMyRequests(tab === 'mine' || wantsMine)
   const history = useApprovalHistory(tab === 'history')
   const department = useApprovalDepartment(tab === 'department')
   const templates = useApprovalTemplates(undefined, false, tab === 'templates' && canManage)
@@ -115,14 +126,44 @@ export function ApprovalScreen() {
   const pendingCount = pending.data?.total ?? 0
   const templateList = useMemo(() => templates.data?.templates ?? [], [templates.data])
 
-  // A new tab starts with nothing ticked.
-  useEffect(() => setTicked(new Set()), [tab])
-  // A request that left the list (decided elsewhere) is no longer ticked.
+  // ---- the search box: the open tab narrowed in the browser to what it has loaded; the URL follows after a pause ----
+  const [typed, setTyped] = useState(search.q ?? '')
+  // What this screen last wrote to `?q=`: the URL catching up with it must not undo letters typed since.
+  const writtenQ = useRef(search.q ?? '')
+  useEffect(() => {
+    if ((search.q ?? '') === writtenQ.current) return
+    writtenQ.current = search.q ?? ''
+    setTyped(search.q ?? '')
+  }, [search.q])
+  useEffect(() => {
+    if (typed.trim() === (search.q ?? '').trim()) return
+    const t = setTimeout(() => {
+      writtenQ.current = typed.trim() ? typed : ''
+      void navigate({ search: (p: ApprovalSearch) => querySearch(p, typed), replace: true })
+    }, 300)
+    return () => clearTimeout(t)
+  }, [typed, search.q, navigate])
+  const shownRows = useMemo(
+    () => (typed.trim() ? rows.filter((r) => matchesRequest(r.request, typed, people)) : rows),
+    [rows, typed, people],
+  )
+
+  // A new tab starts with nothing ticked and nothing looked for, however soon after typing it is opened. The tab the
+  // screen opens on keeps the `?q=` of its link.
+  const shownTab = useRef(tab)
+  useEffect(() => {
+    setTicked(new Set())
+    if (shownTab.current === tab) return
+    shownTab.current = tab
+    setTyped('')
+  }, [tab])
+  // Only the rows showing count as ticked: a request that left the list (decided elsewhere) or that the search hides is
+  // never approved by the batch.
   const selection = useMemo(() => {
     if (tab !== 'pending') return new Set<string>()
-    const live = new Set(rows.map((r) => r.request.id))
+    const live = new Set(shownRows.map((r) => r.request.id))
     return new Set([...ticked].filter((id) => live.has(id)))
-  }, [ticked, rows, tab])
+  }, [ticked, shownRows, tab])
 
   const rowsSeen = useRef({ scope: '', n: 0 })
   if (rowsSeen.current.scope !== tab) rowsSeen.current = { scope: tab, n: 0 }
@@ -160,7 +201,57 @@ export function ApprovalScreen() {
     (to: (prev: ApprovalSearch) => ApprovalSearch) => void navigate({ search: to }),
     [navigate],
   )
-  const openRequest = (row: ApprovalRow) => go((p) => requestSearch(p, row.request.id))
+  const recent = useRecentSearches('approval')
+
+  const openRequest = (row: ApprovalRow) => {
+    // Opening a request the search found keeps that search.
+    if (typed.trim()) recent.add(typed)
+    go((p) => requestSearch(p, row.request.id))
+  }
+
+  // Before anything is typed: Tìm gần đây, what waits on me and my own requests (DESIGN.md "Gợi ý trong ô tìm").
+  const phone = useBottomBarLayout()
+  const searchRef = useRef<HTMLInputElement>(null)
+  const suggestRequest = (row: ApprovalRow, meta: string, icon: ReactNode) => ({
+    key: row.request.id,
+    title: requestTitle(row.request),
+    meta,
+    icon,
+    trailing: formatListTime(row.request.created_at),
+    onSelect: () => go((p) => requestSearch(p, row.request.id)),
+  })
+  const panel = useSuggestionPanel({
+    value: typed,
+    variant: phone ? 'screen' : 'popover',
+    anchorRef: searchRef,
+    groups: [
+      recent.group(setTyped),
+      {
+        label: 'Chờ bạn duyệt',
+        loading: pending.isLoading,
+        items: (pending.data?.rows ?? []).slice(0, RECENT_REQUESTS).map((row) => {
+          const who = personFor(people, row.request.created_by, row.request.created_by_name)
+          return suggestRequest(
+            row,
+            `${who.name} · ${entityLabel(row.request.entity_type)}`,
+            <Avatar name={who.name} hueKey={who.hueKey} src={who.avatarUrl} size={phone ? 36 : 32} />,
+          )
+        }),
+      },
+      {
+        label: 'Đề nghị của bạn',
+        loading: wantsMine && mine.isLoading,
+        items: (mine.data ?? []).slice(0, RECENT_REQUESTS).map((row) => suggestRequest(
+          row,
+          `${entityLabel(row.request.entity_type)} · ${requestPill(row).label}`,
+          <span className={`grid place-items-center rounded-md bg-sunk text-ink-muted ${phone ? 'size-9' : 'size-8'}`}>
+            <FileText size={16} strokeWidth={1.75} aria-hidden="true" />
+          </span>,
+        )),
+      },
+    ],
+  })
+  const covered = phone && panel.visible
   const closePanel = useCallback(() => go((p) => requestSearch(templateSearch(p))), [go])
 
   // A link to the templates or the builder, followed by someone who may not use
@@ -285,11 +376,21 @@ export function ApprovalScreen() {
         />
       )
     }
+    if (!loading && rows.length > 0 && shownRows.length === 0) {
+      return (
+        <EmptyState
+          icon={<SearchX size={24} strokeWidth={1.75} />}
+          text={`Không có đề nghị nào khớp “${typed.trim()}” trong tab này. Ô tìm chỉ tìm trong những đề nghị đã tải.`}
+          action={<Button variant="soft" size="sm" onClick={() => setTyped('')}>Xoá tìm kiếm</Button>}
+        />
+      )
+    }
     return (
       <motion.div key={tab} {...m.route}>
         <ApprovalTable
           label={TAB_LABEL[tab]}
-          rows={rows}
+          rows={shownRows}
+          highlight={typed}
           loading={loading}
           people={people}
           openId={openId}
@@ -299,7 +400,9 @@ export function ApprovalScreen() {
               ? {
                   ids: selection,
                   onToggle: (id) => setTicked((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n }),
-                  onToggleAll: () => setTicked(selection.size === rows.length ? new Set() : new Set(rows.map((r) => r.request.id))),
+                  // "All" is every row showing: a search narrows what one tick approves.
+                  onToggleAll: () => setTicked(selection.size === shownRows.length ? new Set() : new Set(shownRows.map((r) => r.request.id))),
+                  // `ids` above is already only the rows showing, so the box reads all/some/none of what is seen.
                 }
               : undefined
           }
@@ -356,16 +459,67 @@ export function ApprovalScreen() {
             </div>
           </header>
 
-          <ScrollFade className="px-5">
-            <TabBar
-              className="w-max"
-              label="Phê duyệt"
-              idPrefix="approval"
-              value={tab}
-              tabs={tabs}
-              onChange={(id) => go((p) => tabSearch(p, id as ApprovalTab))}
-            />
-          </ScrollFade>
+          {/* While the suggestions cover the list on a phone, a tab would change a list that cannot be seen. */}
+          {!covered && (
+            <ScrollFade className="px-5">
+              <TabBar
+                className="w-max"
+                label="Phê duyệt"
+                idPrefix="approval"
+                value={tab}
+                tabs={tabs}
+                onChange={(id) => go((p) => tabSearch(p, id as ApprovalTab))}
+              />
+            </ScrollFade>
+          )}
+
+          {tab !== 'templates' && !failed && (
+            <div className="flex flex-wrap items-center gap-2 px-5 pt-3">
+              {covered && (
+                <IconButton
+                  aria-label="Quay lại danh sách"
+                  title="Quay lại"
+                  shape="round"
+                  size="lg"
+                  className="w-11 h-11 -ml-2"
+                  onClick={() => {
+                    panel.close()
+                    searchRef.current?.blur()
+                  }}
+                >
+                  <ArrowLeft size={20} strokeWidth={1.75} aria-hidden="true" />
+                </IconButton>
+              )}
+              <SearchField
+                ref={searchRef}
+                label="Tìm đề nghị"
+                moduleSearch
+                tone="sunk"
+                value={typed}
+                {...panel.inputProps}
+                onFocus={() => {
+                  panel.inputProps.onFocus()
+                  setWantsMine(true)
+                }}
+                onKeyDown={(e) => {
+                  panel.inputProps.onKeyDown(e)
+                  if (e.defaultPrevented) return
+                  // The Enter that ends a word an input method is composing is not a search.
+                  if (e.key === 'Enter' && !e.nativeEvent.isComposing) recent.add(typed)
+                  else if (e.key === 'Escape' && covered) {
+                    e.preventDefault()
+                    panel.close()
+                  }
+                }}
+                onChange={(e) => setTyped(e.target.value)}
+                className={covered ? 'flex-1 min-w-0' : 'w-full sm:w-60'}
+              />
+              {!covered && typed.trim() && !loading && (
+                <span className="text-sm text-ink-muted tnum" aria-live="polite">{shownRows.length} trong {rows.length} đề nghị</span>
+              )}
+              {!phone && <SearchSuggestions panel={panel} />}
+            </div>
+          )}
 
           <AnimatePresence>
             {burst && (
@@ -396,13 +550,23 @@ export function ApprovalScreen() {
             )}
           </AnimatePresence>
 
-          <div
-            role="tabpanel"
-            id={`approval-panel-${tab}`}
-            aria-labelledby={`approval-tab-${tab}`}
-            className="flex-1 min-h-0 overflow-y-auto"
-          >
-            {body}
+          <div className="relative flex-1 min-h-0">
+            {covered && (
+              // The list stays mounted under the phone's suggestions, so Quay lại finds it where it was scrolled.
+              <div className="absolute inset-0 z-sticky grid bg-base">
+                <SearchSuggestions panel={panel} emptyText="Gõ tên đề nghị, người gửi hoặc loại để tìm." />
+              </div>
+            )}
+            <div
+              role="tabpanel"
+              id={`approval-panel-${tab}`}
+              aria-labelledby={`approval-tab-${tab}`}
+              aria-hidden={covered || undefined}
+              inert={covered}
+              className="h-full overflow-y-auto"
+            >
+              {body}
+            </div>
           </div>
         </section>
       )}
