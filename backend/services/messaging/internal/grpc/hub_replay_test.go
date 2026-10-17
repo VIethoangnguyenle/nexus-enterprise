@@ -151,6 +151,11 @@ type redisRig struct {
 	rdb       *redis.Client
 	tenant    string
 	workspace string
+	t         *testing.T
+	access    grpcserver.WorkspaceAccessChecker
+
+	mu    sync.Mutex
+	probe *syncClient // follows the workspace; proves delivery of what was published
 }
 
 // newRedisRig starts a hub on the dev Redis under tenant and workspace ids
@@ -167,7 +172,7 @@ func newRedisRig(t *testing.T, access grpcserver.WorkspaceAccessChecker) *redisR
 	}
 	t.Cleanup(func() { rdb.Close() })
 	run := fmt.Sprintf("%d", time.Now().UnixNano())
-	rig := &redisRig{rdb: rdb, tenant: "tenant-" + run, workspace: "tenant-" + run}
+	rig := &redisRig{rdb: rdb, tenant: "tenant-" + run, workspace: "tenant-" + run, t: t, access: access}
 	hub := grpcserver.NewHub(rdb, &fakeAccess{})
 	hub.SetWorkspaceAccess(access)
 	t.Cleanup(hub.Close)
@@ -185,24 +190,79 @@ func newRedisRig(t *testing.T, access grpcserver.WorkspaceAccessChecker) *redisR
 	return rig
 }
 
+// ensureProbe dials, once, a session that follows the workspace. Events reach
+// sessions only through Redis pub/sub, after the hub has numbered them, so the
+// counter alone proves nothing about delivery; a probe that has received a frame
+// proves the hub finished delivering it, and a session dialled afterwards sees it
+// only through replay. Call it before anything is published.
+func (r *redisRig) ensureProbe() *syncClient {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.probe != nil {
+		return r.probe
+	}
+	if fa, ok := r.access.(*fakeWorkspaceAccess); ok {
+		fa.mu.Lock()
+		fa.allow[[2]string{r.workspace, "n-probe"}] = true
+		fa.mu.Unlock()
+	}
+	p := dialSync(r.t, r.url, r.id("n-probe"))
+	p.syncWorkspace(r.t, r.workspace, 0)
+	_, outcome := p.collectUntilOutcome(r.t)
+	require.Equal(r.t, "synced", outcome["type"])
+	r.probe = p
+	return p
+}
+
+// awaitFrames waits until the probe has received n more workspace frames.
+func (r *redisRig) awaitFrames(n int) {
+	r.t.Helper()
+	p := r.ensureProbe()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i := 0; i < n; i++ {
+		f := p.wait(r.t, func(f frame) bool { return f.env != nil && f.env.GetDomainEvent() != nil }, 10*time.Second)
+		require.NotNil(r.t, f, "probe received %d of %d published frames", i, n)
+	}
+}
+
+// publish emits n workspace events and returns once they have all been
+// delivered on this hub.
 func (r *redisRig) publish(n int) {
-	key := "wsseq:" + r.workspace // the hub's workspace counter key
-	before, _ := r.rdb.Get(context.Background(), key).Int64()
+	r.t.Helper()
+	r.ensureProbe()
 	for i := 0; i < n; i++ {
 		r.hub.PublishDomain(driveEvent(r.tenant, r.workspace, fmt.Sprintf("f%d", i)))
 	}
-	// Events reach the hub through Redis pub/sub; wait until it has numbered all of
-	// them, so a session dialled next does not receive them as live frames.
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		got, err := r.rdb.Get(context.Background(), key).Int64()
-		if err == nil && got >= before+int64(n) {
-			return
+	r.awaitFrames(n)
+}
+
+// publishToUsers emits events addressed to users and returns once each
+// recipient's own probe session has received all of its frames.
+func (r *redisRig) publishToUsers(events ...realtime.Event) {
+	r.t.Helper()
+	want := map[string]int{}
+	for _, e := range events {
+		seen := map[string]bool{}
+		for _, node := range e.UserNodeIDs {
+			if !seen[node] {
+				seen[node] = true
+				want[node]++
+			}
 		}
-		if time.Now().After(deadline) {
-			panic(fmt.Sprintf("workspace counter %s = %d after 5s, want %d", key, got, before+int64(n)))
+	}
+	probes := map[string]*syncClient{}
+	for node := range want {
+		probes[node] = dialSync(r.t, r.url, r.id(node))
+	}
+	for _, e := range events {
+		r.hub.PublishDomain(e)
+	}
+	for node, n := range want {
+		for i := 0; i < n; i++ {
+			f := probes[node].wait(r.t, func(f frame) bool { return f.env != nil && f.env.GetDomainEvent() != nil }, 10*time.Second)
+			require.NotNil(r.t, f, "probe of %s received %d of %d frames", node, i, n)
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -418,12 +478,14 @@ func TestEventLog_NumberAndFrameAppendTogether(t *testing.T) {
 	rig := newRedisRig(t, access)
 	ctx := context.Background()
 
+	rig.ensureProbe()
 	var wg sync.WaitGroup
 	for i := 0; i < 40; i++ {
 		wg.Add(1)
-		go func() { defer wg.Done(); rig.publish(1) }()
+		go func() { defer wg.Done(); rig.hub.PublishDomain(driveEvent(rig.tenant, rig.workspace, "f")) }()
 	}
 	wg.Wait()
+	rig.awaitFrames(40)
 
 	counter, err := rig.rdb.Get(ctx, "wsseq:"+rig.workspace).Uint64()
 	require.NoError(t, err)
@@ -452,6 +514,7 @@ func TestEventLog_NumberAndFrameAppendTogether(t *testing.T) {
 func TestEventLog_AgeTrimDropsExpiredEntries(t *testing.T) {
 	access := &fakeWorkspaceAccess{allow: map[[2]string]bool{}}
 	rig := newRedisRig(t, access)
+	rig.ensureProbe()
 	ctx := context.Background()
 	key := "rt:ws:" + rig.workspace
 	old := time.Now().Add(-48 * time.Hour).UnixMilli()
@@ -510,12 +573,7 @@ func TestUserStream_ReplaysOwnFramesOnly(t *testing.T) {
 		return realtime.Event{Domain: realtime.DomainPermission, Kind: realtime.KindChanged,
 			TenantID: rig.tenant, WorkspaceID: rig.workspace, UserNodeIDs: nodes}
 	}
-	rig.hub.PublishDomain(perm("n-a1"))
-	rig.hub.PublishDomain(perm("n-a2"))
-	rig.hub.PublishDomain(perm("n-a1"))
-	rig.hub.PublishDomain(perm("n-a1"))
-	rig.waitForUserNumber(t, "n-a1", 3)
-	rig.waitForUserNumber(t, "n-a2", 1)
+	rig.publishToUsers(perm("n-a1"), perm("n-a2"), perm("n-a1"), perm("n-a1"))
 
 	own := dialSync(t, rig.url, rig.id("n-a1"))
 	own.syncUser(t, 1)
@@ -550,13 +608,15 @@ func TestUserStream_ReplaysOwnFramesOnly(t *testing.T) {
 func TestUserStream_TooFarOutsideTheWindow(t *testing.T) {
 	access := &fakeWorkspaceAccess{allow: map[[2]string]bool{}}
 	rig := newRedisRig(t, access)
+	c := dialSync(t, rig.url, rig.id("n-a1"))
 	rig.hub.PublishDomain(realtime.Event{Domain: realtime.DomainPermission, Kind: realtime.KindChanged,
 		TenantID: rig.tenant, WorkspaceID: rig.workspace, UserNodeIDs: []string{"n-a1"}})
-	// The event reaches the hub through Redis pub/sub; dialling before the hub has
-	// numbered it would let it arrive as a live frame on the new session.
-	rig.waitForUserNumber(t, "n-a1", 1)
+	// The session is already connected, so it receives the event live; once it has
+	// its number the event is behind it and only the sync below can be answered.
+	live := c.wait(t, isCtl("user_seq"), 5*time.Second)
+	require.NotNil(t, live, "the live frame never arrived")
+	require.EqualValues(t, 1, live.ctl["seq"])
 
-	c := dialSync(t, rig.url, rig.id("n-a1"))
 	c.syncUser(t, 40)
 	frames, outcome := c.collectUntilOutcome(t)
 	assert.Empty(t, frames)
@@ -583,22 +643,4 @@ func TestSync_RequiresAuthAndAWellFormedRequest(t *testing.T) {
 	assert.NotNil(t, c.wait(t, func(f frame) bool { return f.env.GetError() != nil && f.env.GetError().Code == 400 }, 2*time.Second))
 	c.sendJSON(t, map[string]any{"type": "bogus", "since": 0})
 	assert.NotNil(t, c.wait(t, func(f frame) bool { return f.env.GetError() != nil && f.env.GetError().Code == 400 }, 2*time.Second))
-}
-
-// waitForUserNumber waits until the hub has numbered n events for node's user
-// stream (the counter is taken when the hub handles the event, after pub/sub).
-func (r *redisRig) waitForUserNumber(t *testing.T, node string, n int64) {
-	t.Helper()
-	key := "useq:" + r.tenant + ":" + node // the hub's user counter key
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		got, err := r.rdb.Get(context.Background(), key).Int64()
-		if err == nil && got >= n {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("user counter %s = %d (err %v) after 5s, want %d", key, got, err, n)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
 }
