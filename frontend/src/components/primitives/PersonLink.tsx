@@ -12,6 +12,14 @@ interface PersonLinkProps {
   /** What to press: an avatar, a name. Defaults to the person's avatar and name. */
   children?: ReactNode
   className?: string
+  /** The name the caller shows (a message's sender, a server-given name); the directory's is the fallback, so label, text and card agree. */
+  name?: string
+  /** The picture the caller shows; the directory's is the fallback. */
+  avatarUrl?: string
+  /** A second target for a person whose name is already a link beside it: out of the tab order and the reading order. */
+  secondary?: boolean
+  /** Id of the text that names this person (name and role), used instead of a label of its own. */
+  labelledBy?: string
 }
 
 /**
@@ -20,12 +28,13 @@ interface PersonLinkProps {
  * hidden-person card, which gives the name and one sentence and nothing to act on. Ids stay out of
  * sight: the button is named by the person's name.
  */
-export function PersonLink({ userId, people, onOpenProfile, children, className = '' }: PersonLinkProps) {
+export function PersonLink({ userId, people, onOpenProfile, children, className = '', name: givenName, avatarUrl: givenAvatar, secondary, labelledBy }: PersonLinkProps) {
   const navigate = useNavigate()
   const anchorRef = useRef<HTMLButtonElement>(null)
   const [cardOpen, setCardOpen] = useState(false)
-  const name = displayName(people, userId)
+  const name = givenName?.trim() || displayName(people, userId)
   const person = people.byUserId.get(userId)
+  const avatarUrl = givenAvatar || person?.avatarUrl
 
   // Three states: until the directory is ready nobody can be called hidden, so the press waits.
   const state = !people.ready ? 'unknown' : people.isVisible(userId) ? 'visible' : 'hidden'
@@ -46,15 +55,19 @@ export function PersonLink({ userId, people, onOpenProfile, children, className 
       <button
         ref={anchorRef}
         type="button"
-        onClick={press}
-        aria-label={children ? name : undefined}
+        onClick={(e) => { e.stopPropagation(); press() }}
+        onContextMenu={(e) => e.stopPropagation()}
+        tabIndex={secondary ? -1 : undefined}
+        aria-hidden={secondary ? true : undefined}
+        aria-label={children && !labelledBy ? name : undefined}
+        aria-labelledby={labelledBy}
         aria-busy={state === 'unknown' ? true : undefined}
         aria-haspopup={state === 'hidden' ? 'dialog' : undefined}
         aria-expanded={state === 'hidden' ? cardOpen : undefined}
         className={`inline-flex items-center min-w-0 max-w-full p-0 border-none bg-transparent text-left cursor-pointer
           rounded-md focus-ring ${className}`}
       >
-        {children ?? <PersonChip name={name} hueKey={userId} avatarUrl={person?.avatarUrl} />}
+        {children ?? <PersonChip name={name} hueKey={userId} avatarUrl={avatarUrl} />}
       </button>
       <HiddenPersonCard
         open={cardOpen && state === 'hidden'}
@@ -62,7 +75,7 @@ export function PersonLink({ userId, people, onOpenProfile, children, className 
         anchorRef={anchorRef}
         name={name}
         hueKey={userId}
-        avatarUrl={person?.avatarUrl}
+        avatarUrl={avatarUrl}
       />
     </>
   )

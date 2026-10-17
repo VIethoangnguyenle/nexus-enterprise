@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { MoreVertical, MessageSquare, UserMinus, UserPlus, CircleAlert, Users } from 'lucide-react'
@@ -11,6 +11,7 @@ import type { ChannelMember } from '../../api/messaging'
 import {
   Avatar, Button, IconButton, MenuItem, MenuSeparator, PeoplePicker, Popover, SearchField, toast,
 } from '../primitives'
+import { PersonLink } from '../primitives/PersonLink'
 import { SidePanel } from './SidePanel'
 import { EmptyState } from './EmptyState'
 
@@ -198,6 +199,7 @@ export function MembersPanel({ channelId, kind, spaceName, people, me, startAddi
                 <motion.li key={r.member.ngac_node_id || r.member.user_id} {...m.row} className="overflow-hidden">
                   <MemberRow
                     row={r}
+                    people={people}
                     online={!!onlineUsers[r.person.userId]}
                     canRemove={mayRemove && !r.isMe}
                     onRemove={() => removeMember(r)}
@@ -212,8 +214,9 @@ export function MembersPanel({ channelId, kind, spaceName, people, me, startAddi
   )
 }
 
-function MemberRow({ row, online, canRemove, onRemove }: {
+function MemberRow({ row, people, online, canRemove, onRemove }: {
   row: Row
+  people: PeopleDirectory
   online: boolean
   canRemove: boolean
   onRemove: () => void
@@ -223,6 +226,8 @@ function MemberRow({ row, online, canRemove, onRemove }: {
   const moreRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
   const { person, isMe } = row
+  const nameId = useId()
+  const roleId = useId()
 
   const message = () =>
     createDM.mutate(
@@ -235,11 +240,18 @@ function MemberRow({ row, online, canRemove, onRemove }: {
 
   return (
     <div className="grid grid-cols-[32px_minmax(0,1fr)_auto] gap-2.5 items-center px-3 py-2 rounded-surface hover:bg-hover">
-      <Avatar name={person.name} hueKey={person.userId} src={person.avatarUrl} online={online} size={32} />
-      <span className="grid min-w-0">
-        <span className="font-medium text-ink truncate">{isMe ? `${person.name} (bạn)` : person.name}</span>
-        {person.role && <span className="text-xs text-ink-muted truncate">{person.role}</span>}
-      </span>
+      <PersonLink
+        userId={person.userId} people={people} name={person.name} avatarUrl={person.avatarUrl || undefined}
+        labelledBy={person.role ? `${nameId} ${roleId}` : nameId} className="col-span-2 w-full rounded-surface"
+      >
+        <span className="grid grid-cols-[32px_minmax(0,1fr)] gap-2.5 items-center w-full">
+          <Avatar name={person.name} hueKey={person.userId} src={person.avatarUrl} online={online} size={32} />
+          <span className="grid min-w-0">
+            <span id={nameId} className="font-medium text-ink truncate">{isMe ? `${person.name} (bạn)` : person.name}</span>
+            {person.role && <span id={roleId} className="text-xs text-ink-muted truncate">{person.role}</span>}
+          </span>
+        </span>
+      </PersonLink>
       {!isMe && (
         <>
           <IconButton

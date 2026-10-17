@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import type { RefObject, SyntheticEvent } from 'react'
 import { CircleAlert } from 'lucide-react'
 import { usePhone } from '../../hooks/usePhone'
 import { NavSheet } from '../spaces/NavSheet'
@@ -46,12 +46,22 @@ export function HiddenPersonCard({ open, onClose, anchorRef, name, hueKey, avata
     </div>
   )
 
-  if (phone) {
-    return <NavSheet label={name} onClose={onClose}>{body}</NavSheet>
+  // The card is drawn in a portal but its events still travel up the React tree: what is pressed in it
+  // must not reach the message, row or panel it hangs from (a long press, a context menu, a row click).
+  const own = {
+    onPointerDown: (e: SyntheticEvent) => e.stopPropagation(),
+    onClick: (e: SyntheticEvent) => e.stopPropagation(),
+    onContextMenu: (e: SyntheticEvent) => e.stopPropagation(),
   }
   return (
-    <Popover open onClose={onClose} anchorRef={anchorRef} label={name} className="max-w-75">
-      {body}
-    </Popover>
+    <div className="contents" {...own}>
+      {phone ? (
+        <NavSheet label={name} onClose={onClose}>{body}</NavSheet>
+      ) : (
+        <Popover open onClose={onClose} anchorRef={anchorRef} label={name} className="max-w-75">
+          {body}
+        </Popover>
+      )}
+    </div>
   )
 }

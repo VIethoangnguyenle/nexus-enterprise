@@ -163,6 +163,8 @@ export interface PersonView {
   /** Colour key (user id when the directory knows the person). Never rendered. */
   hueKey: string
   avatarUrl: string
+  /** The person's user id when the directory or the resolver knows the node; what a press on their name needs. Never rendered. */
+  userId?: string
   /** "Chuyên viên · Vận hành thanh toán", when the directory knows it. */
   role: string
 }
@@ -177,6 +179,7 @@ export function personFor(people: PeopleDirectory, nodeId: string, serverName?: 
     name: serverName?.trim() || known?.name || UNKNOWN_PERSON,
     hueKey: known?.userId || nodeId,
     avatarUrl: known?.avatarUrl ?? '',
+    ...(known?.userId ? { userId: known.userId } : {}),
     role: known?.role ?? '',
   }
 }
@@ -188,6 +191,8 @@ export interface ChainItem {
   name: string
   hueKey: string
   avatarUrl: string
+  /** Set when the directory or the resolver knows the approver as a person; never rendered. */
+  userId?: string
   /** The step this approver sits on ("Trưởng phòng"). */
   stepName: string
   pill: Pill
@@ -274,6 +279,7 @@ export function chainOf({ request, steps, assignments, meNodeId, canAct, people 
         name: assigneeName(a, people),
         hueKey: known?.userId || a.user_node_id,
         avatarUrl: known?.avatarUrl ?? '',
+        ...(known?.userId ? { userId: known.userId } : {}),
         stepName,
         pill: assignmentPill(a, request.current_step, request.status),
         isMe: (!!meNodeId && a.user_node_id === meNodeId) || (!!canAct && isGroupRow(a) && a.status === 'pending' && a.step_order === request.current_step),

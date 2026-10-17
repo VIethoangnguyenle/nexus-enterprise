@@ -6,6 +6,7 @@ import { useDriveShares } from '../../hooks/useDrive'
 import { formatBytes, formatDateTime, formatRelative } from '../../lib/format'
 import type { PeopleDirectory } from '../../lib/people'
 import { Avatar, Button, PersonChip } from '../primitives'
+import { LinkedPerson } from '../primitives/LinkedPerson'
 import { SidePanel } from '../spaces/SidePanel'
 import { FileThumb } from '../files/FileThumb'
 import { itemVersion, kindOf, ownerOf, sharePermissionLabel, shareTargetName } from './drive-model'
@@ -94,7 +95,9 @@ export function DriveDetailPanel({ item, perms, people, location, onClose, onSha
           )}
           <dt className="text-ink-muted">Chủ sở hữu</dt>
           <dd className="m-0 min-w-0">
-            <PersonChip name={owner.name} hueKey={owner.hueKey} avatarUrl={owner.avatarUrl} />
+            <LinkedPerson userId={owner.userId} people={people} name={owner.name} avatarUrl={owner.avatarUrl}>
+              <PersonChip name={owner.name} hueKey={owner.hueKey} avatarUrl={owner.avatarUrl} />
+            </LinkedPerson>
           </dd>
           <dt className="text-ink-muted">Sửa lần cuối</dt>
           <dd className="m-0 tnum">{formatDateTime(item.updated_at)}</dd>
@@ -110,15 +113,19 @@ export function DriveDetailPanel({ item, perms, people, location, onClose, onSha
           <h3 className="m-0 text-label text-ink-muted">Người có quyền</h3>
           <ul aria-label="Người có quyền" className="grid gap-2 m-0 p-0 list-none">
             <li className="flex items-center justify-between gap-2">
-              <PersonChip name={owner.name} hueKey={owner.hueKey} avatarUrl={owner.avatarUrl} role="chủ sở hữu" />
+              <LinkedPerson userId={owner.userId} people={people} name={owner.name} avatarUrl={owner.avatarUrl}>
+                <PersonChip name={owner.name} hueKey={owner.hueKey} avatarUrl={owner.avatarUrl} role="chủ sở hữu" />
+              </LinkedPerson>
             </li>
             {(shares.data ?? []).map((s) => (
               <li key={s.id} className="flex items-center justify-between gap-2">
-                <PersonChip
-                  name={shareTargetName(s, people)}
-                  hueKey={people.byNodeId.get(s.target_ngac_id)?.userId ?? s.target_ngac_id}
-                  avatarUrl={people.byNodeId.get(s.target_ngac_id)?.avatarUrl || undefined}
-                />
+                <LinkedPerson userId={s.share_type === 'user' ? people.byNodeId.get(s.target_ngac_id)?.userId : undefined} people={people} name={shareTargetName(s, people)}>
+                  <PersonChip
+                    name={shareTargetName(s, people)}
+                    hueKey={people.byNodeId.get(s.target_ngac_id)?.userId ?? s.target_ngac_id}
+                    avatarUrl={people.byNodeId.get(s.target_ngac_id)?.avatarUrl || undefined}
+                  />
+                </LinkedPerson>
                 {perms.share ? (
                   <SharePermissionSelect itemId={item.id} share={s} personName={shareTargetName(s, people)} />
                 ) : (
@@ -135,9 +142,11 @@ export function DriveDetailPanel({ item, perms, people, location, onClose, onSha
           <h3 className="m-0 text-label text-ink-muted">Hoạt động</h3>
           <ol aria-label="Hoạt động" className="grid gap-3 m-0 p-0 list-none">
             <li className="grid grid-cols-[24px_minmax(0,1fr)] gap-2.5 items-start">
-              <Avatar name={owner.name} hueKey={owner.hueKey} src={owner.avatarUrl} size={24} />
+              <LinkedPerson userId={owner.userId} people={people} name={owner.name} avatarUrl={owner.avatarUrl} secondary className="self-start rounded-full">
+                <Avatar name={owner.name} hueKey={owner.hueKey} src={owner.avatarUrl} size={24} />
+              </LinkedPerson>
               <p className="m-0 text-sm leading-snug">
-                <b className="font-semibold">{owner.name}</b> {folder ? 'đã tạo thư mục' : 'đã tải lên'}
+                <LinkedPerson userId={owner.userId} people={people} name={owner.name} avatarUrl={owner.avatarUrl}><b className="font-semibold">{owner.name}</b></LinkedPerson> {folder ? 'đã tạo thư mục' : 'đã tải lên'}
                 <time className="block text-xs text-ink-muted tnum" title={formatDateTime(item.created_at)}>
                   {formatRelative(item.created_at)}
                 </time>

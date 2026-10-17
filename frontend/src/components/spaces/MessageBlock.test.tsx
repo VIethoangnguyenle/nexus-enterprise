@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient } from '../../test/render'
@@ -8,12 +8,19 @@ import { MessageBlock } from './MessageBlock'
 import type { Message } from '../../api/messaging'
 import { driveApi } from '../../api/drive'
 
+const navigate = vi.fn()
+vi.mock('@tanstack/react-router', async (orig) => ({
+  ...(await orig<typeof import('@tanstack/react-router')>()),
+  useNavigate: () => navigate,
+}))
+
 vi.mock('../chat/PollCard', () => ({ PollCard: ({ pollId }: { pollId: string }) => <div data-testid="poll-card">poll:{pollId}</div> }))
 vi.mock('../chat/TaskCard', () => ({ TaskCard: (p: { taskId: string; channelId: string; onOpenTasks?: unknown }) => <div data-testid="task-card">task:{p.taskId}:{p.channelId}:{p.onOpenTasks ? 'link' : 'nolink'}</div> }))
 vi.mock('../chat/DocCard', () => ({ DocCard: ({ docId }: { docId: string }) => <div data-testid="doc-card">doc:{docId}</div> }))
 vi.mock('../chat/ApprovalCard', () => ({ ApprovalCard: ({ requestId }: { requestId: string }) => <div data-testid="approval-card">approval:{requestId}</div> }))
 
 beforeEach(() => {
+  navigate.mockReset()
   vi.spyOn(driveApi, 'getDownloadUrl').mockResolvedValue({ download_url: 'https://s.test/dl' })
   vi.spyOn(driveApi, 'preview').mockResolvedValue({ kind: 'native', url: 'https://s.test/x', mime: 'image/jpeg' })
 })
@@ -297,5 +304,86 @@ describe('MessageBlock: an author the directory does not list', () => {
     const request = vi.fn()
     renderWithClient(<MessageBlock message={hiddenAuthor} people={buildDirectory(CONTACTS, { request })} idBase="hidden2" me={ME.id} />)
     expect(request).toHaveBeenCalledWith(HIDDEN)
+  })
+})
+
+describe('MessageBlock: pressing the author', () => {
+  const HIDDEN = '11111111-aaaa-4bbb-8ccc-0000000000ff'
+  const hiddenDir = buildDirectory(CONTACTS, {
+    resolved: {
+      byUserId: new Map([[HIDDEN, { userId: HIDDEN, nodeId: 'n-hidden', name: 'Nguyễn Hữu Thành', avatarUrl: '' }]]),
+      byNodeId: new Map(),
+    },
+  })
+  const fromHidden: Message = { ...MESSAGES[0]!, sender_id: HIDDEN, sender_name: '' }
+
+  it('a hidden author opens the small card from the name, with the sentence and no actions', async () => {
+    const { container } = renderWithClient(<MessageBlock message={fromHidden} people={hiddenDir} idBase="h1" me={ME.id} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Nguyễn Hữu Thành' }))
+    const card = await screen.findByRole('dialog', { name: 'Nguyễn Hữu Thành' })
+    expect(within(card).getByText('Hồ sơ này không còn hiển thị với bạn.')).toBeInTheDocument()
+    expect(within(card).queryAllByRole('button')).toHaveLength(0)
+    expect(navigate).not.toHaveBeenCalled()
+    expect(container.textContent).not.toMatch(UUID_RE)
+  })
+
+  it('the avatar is a second target for the same card, but not a second control to tab to', async () => {
+    const { container } = renderWithClient(<MessageBlock message={fromHidden} people={hiddenDir} idBase="h2" me={ME.id} />)
+    expect(screen.getAllByRole('button', { name: 'Nguyễn Hữu Thành' })).toHaveLength(1)
+    const avatarLink = container.querySelector<HTMLElement>('button[aria-hidden="true"]')!
+    expect(avatarLink).toHaveAttribute('tabindex', '-1')
+    await userEvent.click(avatarLink)
+    expect(await screen.findByRole('dialog', { name: 'Nguyễn Hữu Thành' })).toBeInTheDocument()
+  })
+
+  it('a visible author opens their profile in Danh bạ', async () => {
+    const msg: Message = { ...MESSAGES[0]!, sender_id: U.duc.id }
+    renderWithClient(<MessageBlock message={msg} people={people} idBase="v1" me={ME.id} />)
+    await userEvent.click(screen.getByRole('button', { name: /Trần Minh Đức/ }))
+    expect(navigate).toHaveBeenCalledTimes(1)
+    expect(navigate.mock.calls[0]![0]).toMatchObject({ to: '/contacts' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('while the directory is not ready, pressing the author does nothing', async () => {
+    const notReady = { ...buildDirectory([]), ready: false }
+    renderWithClient(<MessageBlock message={fromHidden} people={notReady} idBase="u1" me={ME.id} />)
+    const btn = screen.getByRole('button')
+    expect(btn).toHaveAttribute('aria-busy', 'true')
+    await userEvent.click(btn)
+    expect(navigate).not.toHaveBeenCalled()
+    expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('your own message has nothing to press for the author', () => {
+    renderWithClient(<MessageBlock message={{ ...MESSAGES[0]!, sender_id: ME.id }} people={people} idBase="me1" me={ME.id} mine />)
+    expect(screen.queryByRole('button', { name: new RegExp(ME.username, 'i') })).toBeNull()
+  })
+
+  it('a grouped line has no author to press', () => {
+    renderWithClient(<MessageBlock message={fromHidden} people={hiddenDir} idBase="g1" me={ME.id} grouped />)
+    expect(screen.queryByRole('button', { name: 'Nguyễn Hữu Thành' })).toBeNull()
+  })
+
+  it('an author nobody can name yet is the same word in the label, on screen and in the card', async () => {
+    const stranger: Message = { ...MESSAGES[0]!, sender_id: '11111111-aaaa-4bbb-8ccc-000000000abc', sender_name: 'thanh.nh' }
+    renderWithClient(<MessageBlock message={stranger} people={people} idBase="s1" me={ME.id} />)
+    await userEvent.click(screen.getByRole('button', { name: 'thanh.nh' }))
+    expect(await screen.findByRole('dialog', { name: 'thanh.nh' })).toBeInTheDocument()
+  })
+
+  it('pressing inside the card does not start the message long press or open its action sheet', async () => {
+    const onOpenSheet = vi.fn()
+    renderWithClient(<MessageBlock message={fromHidden} people={hiddenDir} idBase="ls" me={ME.id} onOpenSheet={onOpenSheet} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Nguyễn Hữu Thành' }))
+    const card = await screen.findByRole('dialog', { name: 'Nguyễn Hữu Thành' })
+    vi.useFakeTimers()
+    try {
+      fireEvent.pointerDown(card, { pointerType: 'touch' })
+      vi.advanceTimersByTime(800)
+    } finally {
+      vi.useRealTimers()
+    }
+    expect(onOpenSheet).not.toHaveBeenCalled()
   })
 })

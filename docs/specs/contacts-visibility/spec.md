@@ -234,5 +234,9 @@ Whoever holds `manage` on the Mgmt OA SHALL be able to read and change the rules
 - **WHEN** more than 200 ids are sent, across both lists
 - **THEN** the answer is 400 and nothing is looked up
 
+#### Scenario: A hidden member of a shared group
+- **WHEN** a member opens the member list of a group they belong to that includes a person the directory hides
+- **THEN** that person is listed by the name the resolver returns, a press on them shows only the hidden-person card (name, avatar, one sentence, no actions), and the list's own "Nhắn tin trực tiếp" stays available, because the group is a relationship the caller already has with them; the directory (Danh bạ) still does not list them
+
 ## Status
 Built. The graph model and its names are verified by test vectors (`backend/services/policy/internal/ngac/pdp_contacts_visibility_test.go`, and on the real policy service by `backend/testutil/policy_contacts_visibility_test.go`). The workspace service creates the directory with each new workspace, mirrors departments and their people into it and tears it down (`directory_graph*.go`); migration 064 builds it for what predates the code (`scripts/test-migration-064.sh`). It computes each caller's scope, filters departments, members and role counts by it and serves the rules and `GetDirectoryScope` (`directory_scope*.go`, proved against the real policy service in `directory_scope_realpolicy_test.go`). The auth service lists Danh bạ through the scope and resolves names apart from it (`contacts_visibility_test.go`, `contacts_visibility_realpolicy_test.go`, `internal/rest/contacts_resolve_test.go`, and the SQL predicate against a real database in `internal/store/contacts_scope_test.go`); the screens do not yet read the new fields. `scripts/seed-contacts-demo.sh` builds a demo organization through the APIs for development.

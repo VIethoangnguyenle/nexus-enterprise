@@ -60,6 +60,8 @@ export interface Owner {
   /** Stable key for the person's colour. A user id when known; hashed, never shown. */
   hueKey: string
   avatarUrl?: string
+  /** Set when the directory or the resolver knows the owner as a person; what a press on their name needs. Never shown. */
+  userId?: string
 }
 
 /**
@@ -73,6 +75,7 @@ export function ownerOf(item: DriveItem, people: PeopleDirectory): Owner {
     name: item.owner_name || person?.name || UNKNOWN_PERSON,
     hueKey: person?.userId || item.owner_id || item.id,
     avatarUrl: person?.avatarUrl || undefined,
+    ...(person?.userId ? { userId: person.userId } : {}),
   }
 }
 

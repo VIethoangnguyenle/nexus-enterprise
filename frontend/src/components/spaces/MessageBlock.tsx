@@ -5,6 +5,7 @@ import { useLongPress } from '../../hooks/useLongPress'
 import { displayName, type PeopleDirectory } from '../../lib/people'
 import { formatDateTime, formatTime } from '../../lib/format'
 import { Avatar } from '../primitives'
+import { PersonLink } from '../primitives/PersonLink'
 import { MessageContent } from '../chat/MessageContent'
 import { ReactionBar } from '../chat/ReactionBar'
 import { HoverActionBar } from '../chat/HoverActionBar'
@@ -136,7 +137,11 @@ export function MessageBlock({
     >
       {!mine && (grouped
         ? <GutterTime shown={timeShown} className="col-start-1 row-start-1">{time}</GutterTime>
-        : <Avatar name={name} hueKey={m.sender_id || name} src={avatarUrl} size={32} halo={halo} className="col-start-1 row-start-1" />)}
+        : (
+          <PersonLink userId={m.sender_id} people={people} name={name} avatarUrl={avatarUrl} secondary className="col-start-1 row-start-1 self-start rounded-full">
+            <Avatar name={name} hueKey={m.sender_id || name} src={avatarUrl} size={32} halo={halo} />
+          </PersonLink>
+        ))}
       {/* Your side keeps an edge column for a grouped line's time only from md up; on a
           phone the bubble sits as close to the right edge as the avatar does on the left. */}
       {mine && grouped && <GutterTime shown={timeShown} className="max-md:hidden md:col-start-2 row-start-1">{time}</GutterTime>}
@@ -154,7 +159,11 @@ export function MessageBlock({
           <div className={`flex items-baseline gap-2 min-w-0 max-w-full ${mine ? 'justify-end' : ''}`}>
             {mine
               ? <span id={`${idBase}-who`} className="sr-only">Bạn</span>
-              : <span id={`${idBase}-who`} className="text-md font-semibold text-ink truncate">{name}</span>}
+              : (
+                <PersonLink userId={m.sender_id} people={people} name={name} avatarUrl={avatarUrl}>
+                  <span id={`${idBase}-who`} className="text-md font-semibold text-ink truncate">{name}</span>
+                </PersonLink>
+              )}
             {time}
             {pinned}
             {starred}

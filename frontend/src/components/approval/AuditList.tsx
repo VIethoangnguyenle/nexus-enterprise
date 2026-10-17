@@ -5,6 +5,7 @@ import { statusOf } from '../../lib/errors'
 import { formatDateTime, formatRelative } from '../../lib/format'
 import type { PeopleDirectory } from '../../lib/people'
 import { Avatar, Button } from '../primitives'
+import { LinkedPerson } from '../primitives/LinkedPerson'
 
 /**
  * The trail of a request: who did what and when, newest last. Each line names
@@ -55,10 +56,12 @@ export function AuditList({ requestId, people }: { requestId: string; people: Pe
                 <span className="w-1.5 h-1.5 rounded-full bg-ink-muted" />
               </span>
             ) : (
-              <Avatar name={who.name} hueKey={who.hueKey} src={who.avatarUrl} size={24} />
+              <LinkedPerson userId={who.userId} people={people} name={who.name} avatarUrl={who.avatarUrl} secondary className="self-start rounded-full">
+                <Avatar name={who.name} hueKey={who.hueKey} src={who.avatarUrl} size={24} />
+              </LinkedPerson>
             )}
             <p className="m-0 text-sm leading-snug">
-              {line.system ? line.text : <><b className="font-semibold">{who.name}</b> {line.text}</>}
+              {line.system ? line.text : <><LinkedPerson userId={who.userId} people={people} name={who.name} avatarUrl={who.avatarUrl}><b className="font-semibold">{who.name}</b></LinkedPerson> {line.text}</>}
               {line.comment && <q className="block text-ink-muted italic">{line.comment}</q>}
               <time className="block text-xs text-ink-muted tnum" title={formatDateTime(e.created_at)} dateTime={e.created_at}>
                 {formatRelative(e.created_at)}

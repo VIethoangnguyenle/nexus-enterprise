@@ -1,4 +1,4 @@
-import { act, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildDirectory, EMPTY_DIRECTORY } from '../../lib/people'
@@ -152,5 +152,71 @@ describe('PersonLink: before the directory is known', () => {
     rerender(<PersonLink userId={HIDDEN} people={people} onOpenProfile={onOpenProfile} />)
     expect(screen.getByRole('button')).toHaveAttribute('aria-haspopup', 'dialog')
     expect(screen.getByRole('button')).toHaveAttribute('aria-expanded', 'false')
+  })
+})
+
+describe('PersonLink: what it shows and how it is announced', () => {
+  const STRANGER = '11111111-aaaa-4bbb-8ccc-000000000abc'
+
+  it('uses the name the caller shows when the directory has none, in the label and in the card', async () => {
+    render(<PersonLink userId={STRANGER} people={people} name="thanh.nh"><span>thanh.nh</span></PersonLink>)
+    const link = screen.getByRole('button', { name: 'thanh.nh' })
+    await userEvent.click(link)
+    expect(await screen.findByRole('dialog', { name: 'thanh.nh' })).toBeInTheDocument()
+  })
+
+  it('prefers the directory over a missing name, and the given avatar reaches the card', async () => {
+    render(<PersonLink userId={HIDDEN} people={people} avatarUrl="/api/auth/avatars/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" />)
+    expect(screen.getByRole('button', { name: /Nguyễn Hữu Thành/ })).toBeInTheDocument()
+  })
+
+  it('a secondary link (an avatar beside a name) is out of the tab order and the reading order', () => {
+    render(<PersonLink userId={U.duc.id} people={people} secondary><span>DT</span></PersonLink>)
+    const link = screen.getByText('DT').closest('button')!
+    expect(link).toHaveAttribute('tabindex', '-1')
+    expect(link).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('can be named by the text beside it instead of by a label of its own', () => {
+    render(
+      <PersonLink userId={U.duc.id} people={people} labelledBy="who-1">
+        <span id="who-1">Trần Minh Đức Chuyên viên</span>
+      </PersonLink>,
+    )
+    const link = screen.getByRole('button')
+    expect(link).toHaveAttribute('aria-labelledby', 'who-1')
+    expect(link).not.toHaveAttribute('aria-label')
+    expect(link).toHaveAccessibleName('Trần Minh Đức Chuyên viên')
+  })
+})
+
+describe('PersonLink: presses stay with the person', () => {
+  it('nothing pressed inside the card reaches what the card sits in', async () => {
+    const seen = vi.fn()
+    render(
+      <div onPointerDown={seen} onClick={seen} onContextMenu={seen}>
+        <PersonLink userId={HIDDEN} people={people} />
+      </div>,
+    )
+    await userEvent.click(screen.getByRole('button'))
+    seen.mockClear()
+    const card = await screen.findByRole('dialog')
+    fireEvent.pointerDown(card)
+    fireEvent.click(card)
+    fireEvent.contextMenu(card)
+    expect(seen).not.toHaveBeenCalled()
+  })
+
+  it('a click or right-click on the name itself is not also a press on its row', async () => {
+    const seen = vi.fn()
+    render(
+      <div onClick={seen} onContextMenu={seen}>
+        <PersonLink userId={HIDDEN} people={people} />
+      </div>,
+    )
+    await userEvent.click(screen.getByRole('button'))
+    fireEvent.contextMenu(screen.getByRole('button'))
+    expect(seen).not.toHaveBeenCalled()
   })
 })

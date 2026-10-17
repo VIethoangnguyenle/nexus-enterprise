@@ -7,10 +7,13 @@ import type { Attendee, CalendarSummary, Occurrence, RsvpResponse } from '../../
 import { useEventDetail } from '../../hooks/useCalendar'
 import { useJoinEventCall } from '../../hooks/useCalendarCall'
 import { useNow } from '../../hooks/useNow'
+import { usePeople } from '../../hooks/usePeople'
+import type { PeopleDirectory } from '../../lib/people'
 import { callWindow } from '../../lib/calendar-call'
 import { colorTokens } from '../../lib/calendar-color'
 import { formatWhen, responseWord, spanOf } from '../../lib/calendar-format'
 import { Avatar, Button, Heading, IconButton, MenuItem, Popover, Pressable, Text } from '../primitives'
+import { LinkedPerson } from '../primitives/LinkedPerson'
 
 /** What a guest can answer. */
 const ANSWERS: { response: Exclude<RsvpResponse, 'needs_action'>; label: string }[] = [
@@ -48,15 +51,21 @@ function Badge({ response }: { response: RsvpResponse }) {
   )
 }
 
-function Guest({ a }: { a: Attendee }) {
+function Guest({ a, people }: { a: Attendee; people: PeopleDirectory }) {
+  // The calendar names people by node; the directory (or the resolver) says which person that is.
+  const userId = people.byNodeId.get(a.person.nodeId)?.userId
   return (
     <li className="flex items-center gap-2.5">
-      <span className="relative">
-        <Avatar name={a.person.displayName} hue={a.person.hue} src={a.person.avatarUrl} size={32} />
-        <Badge response={a.response} />
-      </span>
+      <LinkedPerson userId={userId} people={people} name={a.person.displayName} avatarUrl={a.person.avatarUrl} secondary className="rounded-full">
+        <span className="relative">
+          <Avatar name={a.person.displayName} hue={a.person.hue} src={a.person.avatarUrl} size={32} />
+          <Badge response={a.response} />
+        </span>
+      </LinkedPerson>
       <span className="grid leading-tight min-w-0">
-        <span className="truncate text-sm text-ink">{a.person.displayName}</span>
+        <LinkedPerson userId={userId} people={people} name={a.person.displayName} avatarUrl={a.person.avatarUrl}>
+          <span className="truncate text-sm text-ink">{a.person.displayName}</span>
+        </LinkedPerson>
         <span className="text-xs text-ink-muted">
           {a.isOrganizer ? 'Người tổ chức' : responseWord(a.response)}
         </span>
@@ -86,6 +95,7 @@ export function EventDetailBody({ wsId, occurrence: o, calendar, onClose, onEdit
   const [scope, setScope] = useState<'this' | 'all'>('this')
   const [moreOpen, setMoreOpen] = useState(false)
   const navigate = useNavigate()
+  const people = usePeople(wsId)
   const join = useJoinEventCall()
   const now = useNow()
 
@@ -214,7 +224,7 @@ export function EventDetailBody({ wsId, occurrence: o, calendar, onClose, onEdit
             )}
             {attendees.length > 0 && (
               <ul className="m-0 p-0 list-none grid gap-2">
-                {attendees.slice(0, SHOWN_GUESTS).map((a) => <Guest key={a.person.nodeId} a={a} />)}
+                {attendees.slice(0, SHOWN_GUESTS).map((a) => <Guest key={a.person.nodeId} a={a} people={people} />)}
                 {attendees.length > SHOWN_GUESTS && (
                   <li className="text-xs text-ink-muted">{`và ${attendees.length - SHOWN_GUESTS} người khác`}</li>
                 )}

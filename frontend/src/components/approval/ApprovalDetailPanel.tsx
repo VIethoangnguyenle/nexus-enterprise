@@ -10,6 +10,7 @@ import { EmptyState } from '../spaces/EmptyState'
 import { SidePanel } from '../spaces/SidePanel'
 import { ApprovalChain } from './ApprovalChain'
 import { AuditList } from './AuditList'
+import { LinkedPerson } from '../primitives/LinkedPerson'
 import { StatusPill } from './StatusPill'
 
 interface ApprovalDetailPanelProps {
@@ -116,7 +117,9 @@ function DetailBody({ detail, people, meNodeId }: { detail: ApprovalRequestDetai
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm m-0">
         <dt className="text-ink-muted">Người gửi</dt>
         <dd className="m-0 min-w-0">
-          <PersonChip className="max-w-full" name={requester.name} hueKey={requester.hueKey} avatarUrl={requester.avatarUrl} />
+          <LinkedPerson userId={requester.userId} people={people} name={requester.name} avatarUrl={requester.avatarUrl}>
+            <PersonChip className="max-w-full" name={requester.name} hueKey={requester.hueKey} avatarUrl={requester.avatarUrl} />
+          </LinkedPerson>
           {requester.role && <span className="block text-xs text-ink-muted">{requester.role}</span>}
         </dd>
         {request.department_name && (
@@ -147,7 +150,7 @@ function DetailBody({ detail, people, meNodeId }: { detail: ApprovalRequestDetai
 
       <section className="grid gap-2.5">
         <h3 className="m-0 text-label text-ink-muted">Chuỗi phê duyệt</h3>
-        <ApprovalChain items={chain} />
+        <ApprovalChain items={chain} people={people} />
       </section>
 
       <section className="grid gap-2.5">

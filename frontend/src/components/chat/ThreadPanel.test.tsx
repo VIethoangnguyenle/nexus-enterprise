@@ -4,7 +4,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { renderWithClient, resetClient } from '../../test/render'
 import { buildDirectory } from '../../lib/people'
 import { expectNoIds } from '../../test/no-ids'
-import { CONTACTS, MESSAGES, MSG, THREAD, CH, ME, MSG_IMG1, fixtureApi } from '../../test/chat-fixtures'
+import { CONTACTS, MESSAGES, MSG, THREAD, CH, ME, MSG_IMG1, U, fixtureApi } from '../../test/chat-fixtures'
 import { apiFetch } from '../../api/client'
 import { queryClient } from '../../lib/query-client'
 import { keys } from '../../hooks/keys'
@@ -385,5 +385,24 @@ describe('ThreadPanel: marking a reply unread inside the thread', () => {
     await waitFor(() => expect(calls()).toContain(`POST /messages/${MSG.r2}/unread`))
     act(() => unreadAgain())
     await waitFor(() => expect(readCalls()).toBe(2))
+  })
+})
+
+describe('ThreadPanel: a reply from someone the directory does not list', () => {
+  it('keeps their name, and pressing it opens the small card instead of a profile', async () => {
+    const lan = CONTACTS.find((c) => c.user_id === U.lan.id)!
+    const dir = buildDirectory(CONTACTS.filter((c) => c.user_id !== U.lan.id), {
+      resolved: {
+        byUserId: new Map([[U.lan.id, { userId: U.lan.id, nodeId: U.lan.node, name: lan.display_name, avatarUrl: '' }]]),
+        byNodeId: new Map(),
+      },
+    })
+    renderWithClient(panel({ people: dir }))
+    const links = await screen.findAllByRole('button', { name: lan.display_name })
+    await userEvent.click(links[links.length - 1]!)
+    const card = await screen.findByRole('dialog', { name: lan.display_name })
+    expect(within(card).getByText('Hồ sơ này không còn hiển thị với bạn.')).toBeInTheDocument()
+    expect(within(card).queryAllByRole('button')).toHaveLength(0)
+    expectNoIds()
   })
 })
