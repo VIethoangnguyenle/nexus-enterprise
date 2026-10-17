@@ -15,6 +15,8 @@ export interface ApprovalSearch {
   request?: string
   template?: string
   edit?: string
+  /** Words the open tab is narrowed to; another tab starts without them. */
+  q?: string
 }
 
 /** `validateSearch` for the route: unknown or malformed values are dropped, not rejected. */
@@ -25,16 +27,23 @@ export function validateApprovalSearch(search: Record<string, unknown>): Approva
     const v = search[key]
     if (typeof v === 'string' && v) out[key] = v
   }
+  if (typeof search.q === 'string' && search.q.trim()) out.q = search.q
   return out
 }
 
 /** The tab shown for this search (the first one when the URL names none). */
 export const tabOf = (s: ApprovalSearch): ApprovalTab => s.tab ?? 'pending'
 
-/** Search for moving to a tab: nothing open, builder closed, workspace kept. */
+/** Search for moving to a tab: nothing open, builder closed, no words looked for, workspace kept. */
 export function tabSearch(prev: ApprovalSearch, tab: ApprovalTab): ApprovalSearch {
-  const { tab: _t, request: _r, template: _m, edit: _e, ...rest } = prev
+  const { tab: _t, request: _r, template: _m, edit: _e, q: _q, ...rest } = prev
   return tab === 'pending' ? rest : { ...rest, tab }
+}
+
+/** Search for narrowing the open tab to `q`; blank words clear it. */
+export function querySearch(prev: ApprovalSearch, q: string): ApprovalSearch {
+  const { q: _q, ...rest } = prev
+  return q.trim() ? { ...rest, q } : rest
 }
 
 /** Search for opening (or, with no id, closing) a request on the current tab. */

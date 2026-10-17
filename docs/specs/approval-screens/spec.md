@@ -68,8 +68,22 @@ A user whose turn it is SHALL see "Duyệt" and "Trả lại" in the panel. "Duy
 - **WHEN** the server refuses an approval
 - **THEN** the request returns to the list and the user is told what failed
 
+### Requirement: Search the open tab
+Every tab but Mẫu SHALL have a search box ("Tìm đề nghị", the phone top bar's search goes to it) that narrows the
+requests the tab has loaded: every word in the title, the sender's name or the kind, ignoring case and accents, the
+words found marked in the titles, and "N trong M đề nghị" beside the box. The words SHALL be in the URL (`?q=`,
+replacing the entry after a pause) and moving to another tab SHALL clear them. Requests not loaded yet ("Xem thêm") are
+not searched. With nothing matching, the tab SHALL say so and offer "Xoá tìm kiếm". Before anything is typed the box
+SHALL follow `docs/specs/search-suggestions` with "Tìm gần đây", "Chờ bạn duyệt" and "Đề nghị của bạn" (asked for once
+the box is focused); choosing one opens the request.
+
+#### Scenario: Without accents
+- **WHEN** the user types `cong tac` on "Chờ tôi duyệt"
+- **THEN** only "Tạm ứng công tác phí tháng 10" is listed, with "công tác" marked
+
 ### Requirement: Batch approval
-On "Chờ tôi duyệt" each row SHALL have a tick box and the header a select-all box. With at least one ticked, a bar SHALL show the count and offer "Duyệt N đề nghị". If the server approves fewer than were ticked, the user is told how many.
+On "Chờ tôi duyệt" each row SHALL have a tick box and the header a select-all box; with a search, select-all ticks
+only the rows shown. With at least one ticked, a bar SHALL show the count and offer "Duyệt N đề nghị". If the server approves fewer than were ticked, the user is told how many.
 
 ### Requirement: Create a request
 "Tạo đề nghị" SHALL ask the user to choose an active template by its name, show that template's form and the names of its approval steps, and send the template and the answers. The client SHALL NOT make up any identifier: the server creates the request from the chosen template. Required fields that are empty are named and nothing is sent.

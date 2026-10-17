@@ -332,7 +332,7 @@ export function DriveScreen() {
     anchorRef: searchRef,
     groups: [
       recent.group(setQuery),
-      { label: `Sửa gần đây trong ${title ?? 'thư mục'}`, loading, items: recentlyEdited(all).map(suggestFile) },
+      { label: shared ? 'Sửa gần đây' : `Sửa gần đây trong ${title ?? 'thư mục'}`, loading, items: recentlyEdited(all).map(suggestFile) },
       ...(shared ? [] : [{
         label: 'Được chia sẻ với tôi',
         loading: sharedSuggestQ.isLoading,

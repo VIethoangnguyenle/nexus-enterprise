@@ -12,6 +12,13 @@ Tài sản SHALL be a route of the workspace shell (`/assets`) with the tabs T�
 - **WHEN** the user opens an asset on page 2 of a filtered list and reloads
 - **THEN** the same filter, page and open asset are shown
 
+### Requirement: The list's search box suggests before anything is typed
+The Danh sách search box SHALL follow `docs/specs/search-suggestions` with "Tìm gần đây", "Bạn đang giữ" (assets held
+by the person, asked for with `assigned_to` once the box is focused) and "Hoạt động gần đây" (the latest step of each
+asset from the activity feed, newest first, decisions on requests left out, told by name: "Trần Minh Đức đã thu hồi từ
+Lê Quang Vinh"). Choosing an asset opens it on the list; a search is kept on Enter or when an asset found by it is
+opened.
+
 ### Requirement: States follow the backend lifecycle
 The screens SHALL use exactly the states Chờ duyệt, Sẵn sàng, Đang giao, Bảo trì, Ngừng dùng and Đã thanh lý, and offer only the lifecycle steps the server says the caller may take from the current state, as Vietnamese verbs.
 

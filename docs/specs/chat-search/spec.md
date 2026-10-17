@@ -109,9 +109,11 @@ of the query required; the person using the app is never listed. A group opens i
 direct message that exists, or creates it. Messages come from `GET /api/messages/search` once typing pauses for 250 ms
 and the words reach 2 characters, 25 a page with "Tải thêm"; a row shows the sender (and the group for a group message),
 the opening of the text with the words found marked, and the time, and opens the conversation on that message (its
-thread when it is a reply). Before anything is typed the screen lists the person's recent searches (at most 8, newest
-first, kept per person on the device in `ngac-chat-recent-searches:<user>`, removable one by one); a search is kept when
-a result is opened or the box is submitted. No id reaches the screen.
+thread when it is a reply). Before anything is typed the screen shows its suggestions as it appears, without waiting
+for the box's focus (`docs/specs/search-suggestions`): "Tìm gần đây" (Chat's recent searches) and "Trò chuyện gần đây",
+at most 5 of the conversations in the list something was said in lately, newest first, each with who said what and
+when; a tap opens the conversation. A search is kept when a result is opened or the box is submitted. No id reaches the
+screen.
 
 #### Scenario: Group without accents
 - **WHEN** a member types `doi soat` on the screen
@@ -132,6 +134,10 @@ a result is opened or the box is submitted. No id reaches the screen.
 #### Scenario: Recent searches
 - **WHEN** the box is empty
 - **THEN** the person's recent searches are listed, a tap puts one in the box, and storage that is blocked leaves the list empty without an error
+
+#### Scenario: Conversations lately
+- **WHEN** the screen opens and something was said lately in "Hợp đồng đối tác" and earlier in "Đối soát giao dịch"
+- **THEN** "Trò chuyện gần đây" lists them in that order, and a conversation the person can no longer read is not listed
 
 ## Known limits
 - Search without diacritics does not work: `doi soat` does not find `đối soát`. It would need the `unaccent`

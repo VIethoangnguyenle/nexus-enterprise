@@ -22,10 +22,13 @@ export function recentAssetSteps(entries: ActivityEntry[], limit = RECENT_ASSETS
   return out
 }
 
-/** The step in one line, by name: "Trần Minh Đức đã giao cho Nguyễn Thu Lan". The asset is the row's title. */
-export function stepText(e: ActivityEntry): string {
+/**
+ * The step in one line, by name: "Trần Minh Đức đã giao cho Nguyễn Thu Lan". The asset is the row's title. `actor` is
+ * the name the screen resolved (server name, then the directory), so the line and the avatar beside it agree.
+ */
+export function stepText(e: ActivityEntry, actor = e.actor_name?.trim() || UNKNOWN_PERSON): string {
   const what = stepSegments(e)
     .map((s) => (typeof s === 'string' ? s : 'b' in s ? s.b : s.pill.label))
     .join('')
-  return `${e.actor_name?.trim() || UNKNOWN_PERSON} ${what}`
+  return `${actor} ${what}`
 }

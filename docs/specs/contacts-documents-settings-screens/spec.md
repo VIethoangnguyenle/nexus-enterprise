@@ -20,6 +20,19 @@ Danh bạ SHALL show everyone in the workspace as a hairline table (name with ti
 - **WHEN** the directory request errors
 - **THEN** the screen says so with "Thử lại"; it never lists members with their names missing
 
+### Requirement: Danh bạ and Tài liệu suggest before anything is typed
+Their search boxes SHALL follow `docs/specs/search-suggestions`. Danh bạ SHALL suggest "Tìm gần đây" and "Nhắn gần
+đây": up to 5 people of this workspace's directory the person has direct messages with, latest message first, never
+the person themselves; choosing one opens their profile. The direct messages are asked for once the box is focused,
+without a live subscription. Tài liệu SHALL suggest "Tìm gần đây", "Sửa gần đây trong <thư mục>" (the files, not
+folders, of the open listing, latest edit first) and, outside the shared view, "Được chia sẻ với tôi" (asked for once
+the box is focused); choosing a file opens the viewer, among the folder's files when it is one of them and on its own
+otherwise. A search is kept on Enter or when a profile or file found by it is opened.
+
+#### Scenario: Someone outside the workspace
+- **WHEN** the person has a direct message with someone who is not in this workspace's directory
+- **THEN** Danh bạ does not suggest them
+
 ### Requirement: Văn bản is a group of Tài liệu
 The list panel of Tài liệu SHALL carry a Văn bản group above the folder tree: Tất cả văn bản, Bản nháp của tôi (with a count) and Được chia sẻ. The group is `?view=texts` (and `&group=drafts|shared`) of `/drive`; the former `/documents` address SHALL land on it, keeping the workspace. The body SHALL be the hairline table of documents (title, owner, status in words, last edit) with "Văn bản mới", a row menu (Mở; Xoá only where the caller may write, after a confirmation that says it cannot be undone) and loading, empty and error states. A document SHALL open at its own address with the list panel hidden.
 

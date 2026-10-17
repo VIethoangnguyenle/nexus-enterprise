@@ -8,6 +8,7 @@ import { staggerDelay, useMotionPresets, withDelay } from '../../lib/motion'
 import type { PeopleDirectory } from '../../lib/people'
 import { personStyle } from '../../lib/person-hue'
 import { Checkbox, PersonChip, Pressable } from '../primitives'
+import { Marked } from '../patterns/Marked'
 import { StatusPill } from './StatusPill'
 
 /**
@@ -49,6 +50,8 @@ interface ApprovalTableProps {
   tagOf: (row: ApprovalRow, arrival: Arrival) => RealtimeTag | undefined
   /** Every row has finished folding away (the last one left). */
   onRowsGone?: () => void
+  /** Words looked for: marked in each title. */
+  highlight?: string
 }
 
 /**
@@ -145,6 +148,7 @@ export function ApprovalTable(props: ApprovalTableProps) {
                     selection={selection}
                     tag={arrival?.source === 'other' ? props.tagOf(row, arrival) : undefined}
                     onOpen={props.onOpen}
+                    highlight={props.highlight}
                   />
                 </motion.div>
               )
@@ -165,9 +169,10 @@ interface RowViewProps {
   selection: ApprovalTableProps['selection']
   tag?: RealtimeTag
   onOpen: (row: ApprovalRow) => void
+  highlight?: string
 }
 
-const ApprovalRowView = memo(function ApprovalRowView({ row, cols, people, open, ticked, selection, tag, onOpen }: RowViewProps) {
+const ApprovalRowView = memo(function ApprovalRowView({ row, cols, people, open, ticked, selection, tag, onOpen, highlight }: RowViewProps) {
   const { request } = row
   const requester = personFor(people, request.created_by, request.created_by_name)
   const amount = amountOfRequest(request)
@@ -196,7 +201,7 @@ const ApprovalRowView = memo(function ApprovalRowView({ row, cols, people, open,
               after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-focus
               focus-visible:after:-outline-offset-2"
           >
-            {title}
+            <Marked text={title} query={highlight} />
           </Pressable>
           {tag && <span className="rt-tag shrink-0 text-xs font-semibold">{tag.text}</span>}
         </span>
