@@ -91,6 +91,7 @@ func (s *Service) SetAvatar(ctx context.Context, userID string, b []byte) (strin
 		}
 		return "", fmt.Errorf("set avatar: %w", err)
 	}
+	s.announceProfileChanged(ctx, userID)
 	return url, nil
 }
 
@@ -105,6 +106,7 @@ func (s *Service) ClearAvatar(ctx context.Context, userID string) error {
 		}
 		return fmt.Errorf("clear avatar: %w", err)
 	}
+	s.announceProfileChanged(ctx, userID)
 	return nil
 }
 

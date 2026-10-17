@@ -24,6 +24,7 @@ import (
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/httputil"
 	"ngac-platform/pkg/mailer"
+	"ngac-platform/pkg/realtime"
 	pb "ngac-platform/proto/auth"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
@@ -109,6 +110,10 @@ func main() {
 
 	// Domain service — shared by gRPC and REST handlers
 	svc := domain.NewService(st, rdb, policyRead, policyWrite, wsClient, msgClient)
+	// Profile changes reach other people's open screens and cached chat state.
+	rt := realtime.Connect("auth")
+	defer rt.Close()
+	svc.WithEmitter(rt)
 	otpOpts, err := otpOptions(jwtSecret)
 	if err != nil {
 		slog.Error("refusing to start", "error", err)
