@@ -104,6 +104,11 @@ docker compose up -d --remove-orphans --wait --wait-timeout "$WAIT_TIMEOUT"
 if [[ -e $marker ]]; then
   log "migrations were applied: restarting policy services to reload the graph"
   docker compose up -d --force-recreate --no-deps --wait --wait-timeout "$WAIT_TIMEOUT" policy policy-read
+  # A restart reloads the graph but not the decisions cached in Redis, which still describe the
+  # graph as it was before the migration. Drop them for every workspace, through the running writer.
+  log "dropping cached decisions of every workspace"
+  docker compose exec -T policy /policy invalidate-cache --all-workspaces ||
+    die "could not invalidate cached decisions; rerun: docker compose exec -T policy /policy invalidate-cache --all-workspaces"
   rm -f "$marker"
 fi
 

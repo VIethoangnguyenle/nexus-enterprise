@@ -12,6 +12,36 @@ The system SHALL create one NGAC Policy Class per tenant (workspace). This is th
 - **WHEN** a new tenant is created during signup
 - **THEN** the system creates NGAC nodes: `PC_{tenant_id}`, `TenantOwner_{tenant_id}` (UA), `TenantMember_{tenant_id}` (UA), and base OA nodes for channels, documents, and management
 
+### Requirement: Every workspace has the ID-keyed topology
+The system SHALL give every workspace the nodes `PC_{workspace_id}`, `{workspace_id}_Owners` (UA), `{workspace_id}_Members` (UA) and `{workspace_id}_Channels` (OA), assigned `Members -> PC`, `Owners -> PC`, `Channels -> PC` and `Owners -> Members`. Migration `059_ngac_workspace_id_keyed_repair.sql` brings a workspace created earlier under another name, or without these nodes, to this shape, matching it through `workspaces.ngac_pc_id` and refusing to guess when more than one node could be its Members, Owners or Channels. Later migrations that reconcile membership abort if any workspace still lacks one.
+
+#### Scenario: Legacy workspace is repaired in place
+- **WHEN** a workspace's Members UA carries a legacy name and is the only candidate under its PC
+- **THEN** the node is renamed to `{workspace_id}_Members`, keeping its id and every association it had
+
+#### Scenario: Workspace with an empty policy class
+- **WHEN** a workspace's PC has no child node
+- **THEN** the migration creates Members, Owners and Channels with the assignments above and the Owners and Members associations on Channels
+
+#### Scenario: Ambiguous legacy workspace
+- **WHEN** two nodes under a PC could each be its Members UA
+- **THEN** the migration aborts and changes nothing
+
+### Requirement: Workspace membership is being under the Members UA
+The system SHALL treat a user as a member of a workspace if and only if the user's node has `{workspace_id}_Members` among its ancestors. Owners and TenantMember are assigned under Members and therefore count. A channel's Members UA, an event's guest UA, a role UA and a department UA are not under Members and do not confer membership. Services ask this through `policyclient.IsWorkspaceMember`, which fails closed: an error answers "unknown", and the caller denies.
+
+#### Scenario: Member, owner and tenant member
+- **WHEN** a user is under `{workspace_id}_Members`, `{workspace_id}_Owners` or `TenantMember_{workspace_id}`
+- **THEN** `IsWorkspaceMember` is true
+
+#### Scenario: Group, guest or other workspace only
+- **WHEN** a user is under only a channel's Members UA, an event guest UA, another workspace's Members UA, or a role or department UA
+- **THEN** `IsWorkspaceMember` is false
+
+#### Scenario: A UA named like a Members UA
+- **WHEN** a UA is named `{other_workspace_id}_Members` but is not the node that workspace owns
+- **THEN** it does not count: `MemberWorkspaces` accepts only the node `MembersUA` resolves for that workspace
+
 ### Requirement: User assignment on tenant join
 The system SHALL assign the user's NGAC node to the appropriate tenant UA when they join a tenant.
 

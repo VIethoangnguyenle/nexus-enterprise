@@ -151,6 +151,18 @@ func DraftDocsOAName(wsID WorkspaceID) string    { return fmt.Sprintf("%s_DraftD
 func ApprovedDocsOAName(wsID WorkspaceID) string { return fmt.Sprintf("%s_ApprovedDocs", wsID) }
 func ChannelsOAName(wsID WorkspaceID) string     { return fmt.Sprintf("%s_Channels", wsID) }
 
+// WorkspaceIDFromMembersUAName is the inverse of MembersUAName. It parses a name
+// only: a channel's "Ch_<id>_Members" is not a workspace's, but any other UA can
+// be given a "_Members" name, so a caller that trusts the result must confirm the
+// node is the one the workspace owns (see policyclient.MembersUA).
+func WorkspaceIDFromMembersUAName(name string) (WorkspaceID, bool) {
+	id, ok := strings.CutSuffix(name, "_Members")
+	if !ok || id == "" || strings.HasPrefix(id, "Ch_") {
+		return "", false
+	}
+	return WorkspaceID(id), true
+}
+
 // --- Department naming conventions ---
 
 // DeptUAName names a department's UA by the department's ID. The display name

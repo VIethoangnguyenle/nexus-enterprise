@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nexus · Danh bạ ba cột (kiểu Lark)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Danh bạ redesign (brainstorm 2026-10-17, layout A): rail + list panel (nav) + content (org browser) + detail (profile).
+   Same review chrome and primitives as contacts-documents-settings.html; the rail is the collapsed state of app-rail.html. */
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5;
+  padding-inline: 16px; padding-block: 0 64px; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+button { font: inherit; color: inherit; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-ink-muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[hidden] { display: none !important; }
+code { font-size: 0.8125rem; background: var(--color-sunk); padding: 1px 5px; border-radius: 4px; }
+.need { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--color-info-wash); color: var(--color-info); font: 600 0.6875rem/1 var(--font-body); margin-left: 4px; vertical-align: 1px; }
+.rule { display: inline-flex; align-items: center; height: 20px; padding: 0 7px; border-radius: 999px; background: var(--color-warning-wash); color: var(--color-warning); font: 600 0.6875rem/1 var(--font-body); margin-left: 4px; vertical-align: 1px; }
+
+/* ---------- review chrome (sibling of contacts-documents-settings.html) ---------- */
+.page { max-width: 1400px; margin-inline: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 65ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.controls { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; }
+.seg { display: inline-flex; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg button { font: 600 0.8125rem/1 var(--font-body); color: var(--color-ink-muted); background: transparent; border: 0; border-radius: 8px; padding: 9px 12px; cursor: pointer; min-height: 36px;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.seg button[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.check { display: inline-flex; gap: 8px; align-items: center; font-weight: 500; }
+.check input { width: 18px; height: 18px; accent-color: var(--color-accent); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.toc a:hover { background: var(--color-hover); }
+.screen { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+.screen-head { display: grid; gap: 6px; max-width: 75ch; }
+.screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.demo { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.demo span.k { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.06em; text-transform: uppercase; margin-right: 4px; }
+.scroll { overflow-x: auto; border-radius: 12px; }
+.notes { margin: 0; padding-left: 0; list-style: none; display: grid; gap: 6px; max-width: 80ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+.cx { position: absolute; z-index: 60; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: var(--color-info); color: var(--color-base);
+  font: 600 0.6875rem/1 var(--font-body); box-shadow: 0 0 0 2px var(--color-base); pointer-events: none; font-variant-numeric: tabular-nums; }
+.cxn { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; background: var(--color-info); color: var(--color-base); font: 600 0.6875rem/1 var(--font-body); margin-right: 6px; vertical-align: 1px; }
+html.no-cx .cx { display: none; }
+.wlabel { font: 600 0.75rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); margin-bottom: 8px; display: block; }
+
+/* ---------- primitives ---------- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0;
+  font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink); text-decoration: none;
+  transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-press) var(--ease-out); }
+.btn:hover { background: var(--color-line); }
+.btn:active { transform: scale(0.98); }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.primary:hover { background: var(--color-accent-hover); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.ibtn { position: relative; width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 8px; border: 0; background: transparent; color: var(--color-ink-muted); cursor: pointer; flex: none;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.ibtn:hover { background: var(--color-hover); color: var(--color-ink); }
+.ibtn.t44 { width: 44px; height: 44px; border-radius: 999px; }
+.av { --p: var(--color-person-1); width: 32px; height: 32px; border-radius: 50%; display: inline-grid; place-items: center; flex: none;
+  background: var(--p); color: var(--color-on-person); font: 600 0.75rem/1 var(--font-body); position: relative; }
+.av.s24 { width: 24px; height: 24px; font-size: 0.625rem; }
+.av.s40 { width: 40px; height: 40px; font-size: 0.875rem; }
+.av.s64 { width: 64px; height: 64px; font-size: 1.25rem; }
+.av .on { position: absolute; right: -1px; bottom: -1px; width: 9px; height: 9px; border-radius: 50%; background: var(--color-success); box-shadow: 0 0 0 2px var(--on-ring, var(--color-base)); }
+.av.s64 .on { width: 14px; height: 14px; right: 1px; bottom: 1px; box-shadow: 0 0 0 3px var(--color-raised); }
+.pill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font: 600 0.75rem/1 var(--font-body); white-space: nowrap; }
+.pill.ok { background: var(--color-success-wash); color: var(--color-success); }
+.pill.idle { background: var(--color-sunk); color: var(--color-ink-muted); }
+.pill.count { background: var(--color-accent); color: var(--color-on-accent); height: 18px; padding: 0 6px; font-size: 0.6875rem; min-width: 18px; justify-content: center; }
+.faces { display: flex; align-items: center; }
+.faces .av { box-shadow: 0 0 0 2px var(--color-raised); }
+.faces .av + .av { margin-left: -6px; }
+.fchip { white-space: nowrap; flex: none; height: 32px; padding: 0 12px; border-radius: 8px; border: 0; background: var(--color-sunk); color: var(--color-ink); font: 500 0.8125rem/1 var(--font-body); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.fchip:hover { background: var(--color-hover); }
+.fchip[aria-pressed="true"] { background: var(--color-accent-wash); font-weight: 600; }
+.fchip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--color-success); }
+.fchip .muted { font-weight: 400; }
+mark { background: var(--color-warning-wash); color: inherit; border-radius: 3px; padding: 0 1px; }
+
+/* ---------- desktop frame: rail 72 · list panel 280 · content ≥480 · detail 360 (DESIGN.md §5) ---------- */
+.app { display: grid; grid-template-columns: 72px 280px minmax(480px, 1fr) 360px; height: 760px; min-width: 1240px;
+  background: var(--color-base); border-radius: 12px; overflow: hidden; position: relative; isolation: isolate; }
+.app.closed { grid-template-columns: 72px 280px minmax(480px, 1fr) 0; }
+.app.closed .dwrap { display: none; }
+
+/* collapsed main menu (app-rail.html, default state) */
+.rail { background: var(--color-sunk); display: grid; grid-template-rows: auto 1fr auto; justify-items: center; padding: 12px 4px; gap: 12px; min-height: 0; }
+.rail .top { display: grid; gap: 8px; justify-items: center; }
+.rail .wsb { width: 48px; height: 48px; border: 0; border-radius: 10px; background: transparent; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.rail .wsb:hover { background: var(--color-hover); }
+.rail .logo { width: 40px; height: 40px; border-radius: 10px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 1.0625rem/1 var(--font-display); }
+.rail .logo.pers { background: var(--color-person-7); color: var(--color-on-person); }
+.rail .grp { display: grid; gap: 4px; align-content: start; justify-items: center; }
+.rail a { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; width: 64px; height: 56px; color: var(--color-ink-muted);
+  text-decoration: none; font: 500 0.6875rem/14px var(--font-body); text-align: center; }
+.rail a .ic { display: grid; place-items: center; width: 48px; height: 28px; border-radius: 10px; transition: background-color var(--duration-quick) var(--ease-out); }
+.rail a svg.i { width: 20px; height: 20px; }
+.rail a:hover .ic { background: var(--color-hover); }
+.rail a[aria-current="page"] { color: var(--color-ink); font-weight: 600; }
+.rail a[aria-current="page"] .ic { background: var(--color-accent-wash); color: var(--color-accent); }
+.rail a .pill { position: absolute; top: 2px; left: calc(50% + 4px); height: 16px; min-width: 16px; padding: 0 4px; font-size: 0.625rem; box-shadow: 0 0 0 2px var(--color-sunk); }
+.rail .meb { width: 48px; height: 48px; border: 0; border-radius: 10px; background: transparent; display: grid; place-items: center; cursor: pointer; padding: 0; --on-ring: var(--color-sunk); }
+.rail .meb:hover { background: var(--color-hover); }
+
+/* list panel = Danh bạ nav (pattern of .cnav in spaces.html) */
+.cnav { display: grid; grid-template-rows: auto 1fr; min-height: 0; background: var(--color-base); }
+.cnav .top { padding: 16px 16px 8px; }
+.cnav .top h3 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; }
+.cnav .body { overflow: auto; padding: 4px 8px 16px; display: grid; gap: 2px; align-content: start; }
+.sec { display: flex; align-items: center; gap: 6px; padding: 14px 10px 4px; color: var(--color-ink-muted); font: 600 0.8125rem/1 var(--font-body); }
+.rl { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 6px 10px; border-radius: 10px; color: var(--color-ink); border: 0; background: transparent; width: 100%;
+  text-align: left; cursor: pointer; font: 400 0.9375rem/1.3 var(--font-body); min-width: 0; transition: background-color var(--duration-quick) var(--ease-out); }
+.rl:hover { background: var(--color-hover); }
+.rl[aria-current="page"] { background: var(--color-raised); font-weight: 600; }
+.rl .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl .t2 { flex: 1; min-width: 0; display: grid; }
+.rl .t2 small { font: 400 0.75rem/1.3 var(--font-body); color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl .n { color: var(--color-ink-muted); font: 500 0.8125rem/1 var(--font-body); font-variant-numeric: tabular-nums; }
+.tile { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; flex: none; background: var(--color-sunk); color: var(--color-ink-muted); }
+.rl[aria-current="page"] .tile { background: var(--color-accent-wash); color: var(--color-accent); }
+.gtile { --p: var(--color-person-4); width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; flex: none; background: var(--p); color: var(--color-on-person); font: 600 0.6875rem/1 var(--font-body); }
+
+/* content = org browser */
+.mid { display: grid; grid-template-rows: auto 1fr; min-width: 0; min-height: 0; background: var(--color-base); position: relative; }
+.mhead { padding: 14px 20px 8px; display: grid; gap: 8px; min-width: 0; }
+.crumbs { display: flex; align-items: center; gap: 2px; min-width: 0; color: var(--color-ink-muted); font-size: 0.8125rem; }
+.crumbs .cr { border: 0; background: transparent; color: inherit; padding: 4px 6px; border-radius: 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+  transition: background-color var(--duration-quick) var(--ease-out), color var(--duration-quick) var(--ease-out); }
+.crumbs .cr:hover { background: var(--color-hover); color: var(--color-ink); }
+.crumbs .cr.root { display: inline-grid; place-items: center; padding: 4px; flex: none; }
+.crumbs .cur { color: var(--color-ink); font-weight: 600; cursor: default; flex: none; }
+.crumbs .cur:hover { background: transparent; }
+.crumbs .sep, .path .sep { color: var(--color-ink-subtle); flex: none; padding: 0 2px; }
+.ttlrow { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.ttlrow h3 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ttlrow .sub { color: var(--color-ink-muted); font-size: 0.8125rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ttlrow .end { margin-left: auto; align-self: center; }
+.tools { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.sf { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 4px 0 12px; border-radius: 8px; background: var(--color-sunk); color: var(--color-ink-muted); flex: 1; max-width: 340px; min-width: 0; }
+.sf:focus-within { box-shadow: 0 0 0 2px var(--color-focus); }
+.sf input { flex: 1; min-width: 0; border: 0; background: transparent; outline: none; color: var(--color-ink); font: 400 0.875rem/1 var(--font-body); height: 100%; }
+.sf input::placeholder { color: var(--color-ink-muted); }
+.sf .ibtn { width: 28px; height: 28px; }
+.mlist { overflow: auto; min-height: 0; padding: 0 12px 16px; display: grid; gap: 2px; align-content: start; }
+.mlist .sec { padding: 12px 8px 4px; }
+.orow, .prow { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; padding: 8px 8px; border: 0; border-radius: 10px; background: transparent; cursor: pointer; text-align: left; min-width: 0;
+  transition: background-color var(--duration-quick) var(--ease-out); }
+.orow:hover, .prow:hover { background: var(--color-hover); }
+.prow[aria-current="true"] { background: var(--color-accent-wash); --on-ring: var(--color-accent-wash); }
+.prow { --on-ring: var(--color-base); }
+.prow:hover { --on-ring: var(--color-hover); }
+.dtile { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; flex: none; background: var(--color-accent-wash); color: var(--color-accent); }
+.orow .t, .prow .t { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.orow b, .prow b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.orow small, .prow small { font-size: 0.8125rem; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; min-width: 0; gap: 4px; }
+.orow .n { color: var(--color-ink-muted); font-size: 0.8125rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.orow > svg:last-child { color: var(--color-ink-subtle); }
+.pres { font-size: 0.75rem; font-weight: 500; color: var(--color-ink-muted); white-space: nowrap; flex: none; }
+.pres.on { color: var(--color-success); }
+/* department path: earlier segments shrink with an ellipsis, the leaf never does, so "Đối soát" vs "Đối soát" stays readable */
+.path { display: inline-flex; align-items: center; min-width: 0; overflow: hidden; }
+.path .sg { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 1.5em; flex: 0 1 auto; }
+.path .sg:last-child { flex: none; min-width: 0; color: var(--color-ink); }
+.small-ttl { flex: none; }
+.st { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* detail = profile card */
+.dwrap { padding: 12px 12px 12px 0; min-height: 0; min-width: 0; }
+.prof { background: var(--color-raised); border-radius: 10px; height: 100%; overflow: auto; display: grid; align-content: start; position: relative; min-width: 0; }
+.prof .cover { height: 88px; background: linear-gradient(135deg, var(--pw) 0%, var(--pw) 45%, var(--color-accent-wash) 100%); border-radius: 10px 10px 0 0; position: relative; }
+.prof .cover .close { position: absolute; top: 8px; right: 8px; color: var(--color-ink); }
+.prof .cover .close:hover { background: var(--color-raised); }
+.prof .cover .back { position: absolute; top: 8px; left: 8px; color: var(--color-ink); }
+.prof .who { padding: 0 16px; display: grid; gap: 4px; justify-items: start; }
+.prof .who .av { margin-top: -32px; box-shadow: 0 0 0 4px var(--color-raised); }
+.prof .who h4 { font-size: 1.1875rem; line-height: 1.3; font-weight: 700; margin-top: 6px; }
+.prof .who .ttl2 { color: var(--color-ink-muted); }
+.pacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 16px; }
+.pacts.one { grid-template-columns: 1fr; }
+.act { display: grid; justify-items: center; align-content: center; gap: 6px; height: 64px; border-radius: 10px; border: 0; background: var(--color-hover); color: var(--color-ink); cursor: pointer;
+  font: 600 0.8125rem/1 var(--font-body); text-decoration: none; transition: background-color var(--duration-quick) var(--ease-out), transform var(--duration-press) var(--ease-out); }
+.act:hover { background: var(--color-line); }
+.act:active { transform: scale(0.98); }
+.act.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.act.primary:hover { background: var(--color-accent-hover); }
+.act svg.i { width: 20px; height: 20px; }
+.pdl { margin: 0; padding: 4px 16px 8px; display: grid; }
+.pdl > div { display: grid; grid-template-columns: 20px 84px minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 40px; border-top: 1px solid var(--color-line); }
+.pdl > div:first-child { border-top: 0; }
+.pdl dt { color: var(--color-ink-muted); }
+.pdl dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.pdl dd.one { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pdl .ic { color: var(--color-ink-muted); }
+.pdl .ibtn { width: 28px; height: 28px; }
+.plink { border: 0; background: transparent; padding: 0; text-align: left; color: var(--color-ink); cursor: pointer; font: inherit; border-radius: 4px; }
+.plink:hover { color: var(--color-accent); text-decoration: underline; }
+.same { padding: 8px 16px 16px; display: grid; gap: 8px; }
+.same .label { font: 600 0.75rem/1.3 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); }
+.same button { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; padding: 6px; margin: -6px; border-radius: 10px; cursor: pointer; text-align: left; color: var(--color-ink-muted); }
+.same button:hover { background: var(--color-hover); color: var(--color-ink); }
+.same button:hover .faces .av { box-shadow: 0 0 0 2px var(--color-hover); }
+
+/* states */
+.state { display: grid; justify-items: center; text-align: center; gap: 8px; padding: 48px 16px; }
+.state .ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--color-sunk); color: var(--color-ink-muted); }
+.state .ic.bad { background: var(--color-danger-wash); color: var(--color-danger); }
+.state p { max-width: 36ch; }
+.skel { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--color-sunk) 0%, var(--color-hover) 50%, var(--color-sunk) 100%); background-size: 200% 100%; animation: shimmer 1600ms linear infinite; }
+.skrow { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px; }
+.skrow > div:nth-child(2) { flex: 1; display: grid; gap: 6px; }
+@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.sheet { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.card { background: var(--color-raised); border-radius: 10px; padding: 16px; display: grid; gap: 8px; align-content: start; min-width: 0; }
+.card h3 { font-size: 1rem; font-weight: 700; }
+.card .state { padding: 20px 8px; }
+.inline-err { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: var(--color-danger-wash); font-size: 0.8125rem; }
+.inline-err svg { color: var(--color-danger); margin-top: 2px; }
+
+/* ---------- motion (DESIGN.md §7) ---------- */
+@keyframes fade { from { opacity: 0; } }
+@keyframes panel-in { from { opacity: 0; transform: translateX(16px) scale(0.985); } }
+@keyframes sheet-in { from { transform: translateX(100%); } }
+@keyframes push-in { from { opacity: 0; transform: translateX(24px); } }
+.prof.enter { animation: panel-in var(--duration-layout) var(--ease-out-expo) both; }
+.mlist.enter { animation: fade var(--duration-quick) var(--ease-out) both; }
+.ovl.enter { animation: fade var(--duration-base) var(--ease-out) both; }
+.sheet-r.enter { animation: sheet-in var(--duration-layout) var(--ease-out-expo) both; }
+.phone .scr.enter { animation: push-in var(--duration-layout) var(--ease-out-expo) both; }
+html.reduce .prof.enter, html.reduce .sheet-r.enter, html.reduce .phone .scr.enter { animation-name: fade; animation-duration: 120ms; }
+html.reduce .skel { animation: none; }
+html.reduce .act:active, html.reduce .btn:active { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .prof.enter, .sheet-r.enter, .phone .scr.enter { animation-name: fade; animation-duration: 120ms; }
+  .skel { animation: none; }
+  .act:active, .btn:active { transform: none; }
+}
+
+/* ---------- tablet 768–1023: phone shell top bar (DESIGN.md §5), nav becomes scope chips, profile = side sheet ---------- */
+.frames { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.frames > div { width: 836px; max-width: 100%; min-width: 0; }
+.tablet { width: 820px; max-width: calc(100% - 16px); height: 680px; border-radius: 20px; background: var(--color-base); overflow: hidden; position: relative; isolation: isolate;
+  box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; display: grid; grid-template-rows: auto auto auto 1fr; }
+.spill { display: flex; align-items: center; gap: 4px; height: 52px; margin: 12px 12px 0; padding: 0 4px; border-radius: 999px; background: var(--color-sunk); }
+.spill .q { flex: 1; min-width: 0; height: 44px; border: 0; background: transparent; text-align: left; padding: 0 6px; color: var(--color-ink-muted); font: 400 1rem/1 var(--font-body); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: text; }
+.spill .meb { width: 44px; height: 44px; border: 0; padding: 0; border-radius: 50%; background: transparent; display: grid; place-items: center; cursor: pointer; --on-ring: var(--color-sunk); }
+.pttl { display: flex; align-items: center; gap: 8px; padding: 14px 16px 6px; }
+.pttl h2 { flex: 1; min-width: 0; font-size: 1.625rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.scopes { display: flex; gap: 8px; padding: 4px 16px 4px; overflow-x: auto; scrollbar-width: none; }
+.scopes .fchip { height: 36px; }
+.tablet .mid .mhead { padding: 8px 16px 8px; }
+.tablet .mlist { padding: 0 8px 16px; }
+.tablet .sf input, .phone .sf input { font-size: 1rem; }
+.tablet .sf { height: 40px; max-width: none; }
+.ovl { position: absolute; inset: 0; background: var(--color-scrim); z-index: 30; border: 0; padding: 0; cursor: default; }
+.sheet-r { position: absolute; top: 0; right: 0; bottom: 0; width: 380px; max-width: calc(100% - 48px); padding: 12px; z-index: 40; }
+.sheet-r .prof { background: var(--color-overlay); box-shadow: var(--shadow-overlay); border-radius: 12px; }
+.sheet-r .prof .cover { border-radius: 12px 12px 0 0; }
+.sheet-r .prof .who .av, .sheet-r .faces .av { box-shadow: 0 0 0 4px var(--color-overlay); }
+.sheet-r .faces .av { box-shadow: 0 0 0 2px var(--color-overlay); }
+
+/* ---------- mobile < 768: drill-down stack, 16px gutters ---------- */
+.phones { display: flex; gap: 24px; flex-wrap: wrap; }
+.phones > div { width: 391px; max-width: 100%; min-width: 0; }
+.phone { width: min(375px, calc(100% - 16px)); height: 760px; border-radius: 28px; background: var(--color-base); overflow: hidden; position: relative; isolation: isolate;
+  box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; }
+.phone .scr { position: absolute; inset: 0; display: grid; grid-template-rows: auto 1fr; min-height: 0; overflow: hidden; }
+.phone .scr.l0 { grid-template-rows: auto auto 1fr; }
+.phone .pbody { overflow-y: auto; overflow-x: hidden; min-height: 0; padding: 0 0 24px; display: grid; align-content: start; }
+.bbar { display: flex; align-items: center; gap: 4px; padding: 12px 8px 4px; min-width: 0; }
+.bbar .t { min-width: 0; display: grid; }
+.bbar h3 { font-size: 1.0625rem; line-height: 1.3; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bbar small { font-size: 0.75rem; color: var(--color-ink-muted); min-width: 0; display: flex; }
+.phone .tools { padding: 4px 16px 8px; flex-wrap: wrap; }
+.phone .sf { height: 44px; max-width: none; flex-basis: 100%; }
+.phone .fchip { height: 36px; }
+.phone .mlist { padding: 0 8px 24px; overflow: visible; }
+.phone .rl, .phone .orow, .phone .prow { min-height: 56px; padding: 8px; }
+.phone .rl { font-size: 1rem; }
+.phone .orow b, .phone .prow b { font-size: 1rem; }
+.phone .sec { padding: 16px 8px 4px; }
+.phone .navlist { padding: 4px 8px; display: grid; gap: 2px; }
+.rl.cat { min-height: 56px; gap: 12px; }
+.phone .rl.cat { min-height: 64px; }
+.rl.cat:disabled { cursor: default; opacity: 0.6; }
+.rl.cat:disabled:hover { background: transparent; }
+.cnav .navlist { display: grid; gap: 2px; }
+.ctile { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; flex: none;
+  background: var(--color-person-1-wash); color: var(--color-person-1); }
+.ctile[style*="--h:2"] { background: var(--color-person-2-wash); color: var(--color-person-2); }
+.ctile[style*="--h:3"] { background: var(--color-person-3-wash); color: var(--color-person-3); }
+.ctile[style*="--h:5"] { background: var(--color-person-5-wash); color: var(--color-person-5); }
+.ctile[style*="--h:6"] { background: var(--color-person-6-wash); color: var(--color-person-6); }
+.phone .prof { border-radius: 0; height: auto; overflow: visible; background: var(--color-base); }
+.phone .prof .cover { border-radius: 0; height: 112px; }
+.phone .prof .who .av, .phone .faces .av { box-shadow: 0 0 0 4px var(--color-base); }
+.phone .faces .av { box-shadow: 0 0 0 2px var(--color-base); }
+.phone .prof .who h4 { font-size: 1.4375rem; }
+.phone .act { height: 64px; }
+.phone .prof .cover .back { background: var(--color-raised); }
+/* phone: label above value so a full email and a long department path never get cut */
+.phone .pdl > div { grid-template-columns: 20px minmax(0, 1fr) auto; column-gap: 12px; padding: 8px 0; }
+.phone .pdl > div > svg { grid-row: 1 / span 2; }
+.phone .pdl dt { grid-column: 2; font-size: 0.75rem; }
+.phone .pdl dd { grid-column: 2; font-size: 1rem; }
+.phone .pdl dd.one { white-space: normal; overflow-wrap: anywhere; }
+.phone .pdl > div > :last-child:not(dd) { grid-column: 3; grid-row: 1 / span 2; }
+.phone .scr.prof-scr { grid-template-rows: 1fr; }
+.phone .scr.prof-scr .pbody { padding: 0 0 24px; }
+.sfield { display: flex; align-items: center; gap: 4px; height: 52px; margin: 12px 12px 4px; padding: 0 4px; border-radius: 999px; background: var(--color-sunk); box-shadow: inset 0 0 0 2px var(--color-accent); }
+.sfield input { flex: 1; min-width: 0; height: 44px; border: 0; background: transparent; outline: none; color: var(--color-ink); font: 400 1rem/1 var(--font-body); }
+.sfield input::placeholder { color: var(--color-ink-muted); }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z"/><path d="M12 22V12"/><path d="m3.3 7 8.7 5 8.7-5"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></symbol>
+  <symbol id="i-sidebar" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+  <symbol id="i-building" viewBox="0 0 24 24"><rect width="16" height="20" x="4" y="2" rx="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-group" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.38 3.62a1 1 0 0 1 3 3L7.37 18.64a2 2 0 0 1-.85.5l-2.87.84a.5.5 0 0 1-.62-.62l.84-2.87a2 2 0 0 1 .5-.85z"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+</svg>
+
+<div class="page">
+<header>
+  <h1>Nexus · Danh bạ ba cột</h1>
+  <p>Danh bạ theo tinh thần Lark: cột trái chọn phạm vi (Tất cả thành viên, cây Phòng ban, Vai trò, Nhóm của tôi), cột giữa duyệt cây phòng ban có đường dẫn, cột phải là thẻ hồ sơ lớn với Nhắn tin, Gọi, Gửi email. Mọi khung đều bấm được. Chấm số xanh khớp với chú thích cùng số.</p>
+  <div class="controls"><div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div><label class="check"><input type="checkbox" id="reduce"> Giảm chuyển động</label><label class="check"><input type="checkbox" id="cxs" checked> Hiện chú thích số</label></div>
+  <nav class="toc" aria-label="Các màn"><a href="#s-desk">Máy tính</a><a href="#s-tree">Cây nhiều cấp</a><a href="#s-vis">Phạm vi hiển thị</a><a href="#s-search">Tìm kiếm</a><a href="#s-role">Vai trò</a><a href="#s-group">Nhóm của tôi</a><a href="#s-personal">Workspace cá nhân</a><a href="#s-states">Trạng thái</a><a href="#s-tablet">Máy tính bảng</a><a href="#s-mobile">Điện thoại</a><a href="#s-ext">Bên ngoài (đợt 2)</a></nav>
+</header>
+
+<!-- ============================ 1 · DESKTOP ============================ -->
+<section class="screen" id="s-desk" aria-labelledby="h-desk">
+  <div class="screen-head">
+    <h2 id="h-desk">1 · Máy tính (từ 1024): duyệt cây tổ chức</h2>
+    <p>Đang ở Khối Vận hành › Vận hành thanh toán, đã chọn Trần Minh Đức. Bấm phòng con để đi xuống, bấm đường dẫn để đi lên, bấm người để đổi hồ sơ. Thử vào Khối Tài chính › Đối soát để thấy hai phòng cùng tên.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-demo="loading" data-frame="f-desk">Tải lại (xem khung chờ)</button>
+    <button class="btn sm" type="button" data-demo="error" data-frame="f-desk">Mất kết nối khi tải</button>
+    <button class="btn sm" type="button" data-demo="reset" data-frame="f-desk">Về trạng thái đầu</button>
+  </div>
+  <div class="scroll"><div id="f-desk"></div></div>
+  <ol class="notes">
+    <li><span class="cxn">1</span><b>List panel trong Danh bạ</b> <span class="rule">đổi quy tắc</span>: DESIGN.md §5 đang ghi “List panel chỉ ở Tin nhắn và Tài liệu”. Thiết kế này cần sửa thành “Tin nhắn, Tài liệu và Danh bạ”. Rộng 280, nền <code>--color-base</code>, hàng 40 chữ 15px như cột điều hướng của Chat; mục đang chọn nền <code>--color-raised</code>, chữ 600 (NavRow).</li>
+    <li><span class="cxn">2</span><b>Cột trái chỉ có danh mục, giống điện thoại</b> (Zane, 2026-10-17: một màn không tải và không hiện quá nhiều): Phòng ban · Vai trò · Nhóm của tôi · [Bên ngoài · Danh bạ chia sẻ: đợt 2, mờ] và lối tắt Phòng của tôi. Không liệt kê cây, vai trò hay nhóm ở cột trái; bấm danh mục thì cột giữa mới gọi API của danh mục đó và hiện khung chờ (bấm thử Vai trò rồi Phòng ban). <i>Phòng ban</i> = cây từ <code>GET /workspaces/:id/departments</code> (thành viên thường đọc được, có <code>parent_id</code>, <code>member_count</code>), duyệt ở cột giữa bằng đường dẫn; “Toàn NovaPay” là gốc, gồm cả người chưa thuộc phòng nào. <i>Nhóm của tôi</i> = các nhóm chat bạn là thành viên; thành viên một nhóm chỉ tải khi mở nhóm đó. Số đếm ở đây là chữ mờ, không phải pill accent, vì pill accent nghĩa là “chưa đọc”.</li>
+    <li><span class="cxn">3</span><b>Đường dẫn</b>: icon toà nhà là gốc (Toàn NovaPay), mỗi đoạn là nút đi lên đúng cấp đó, đoạn cuối là trang hiện tại (<code>aria-current</code>). Đường dẫn dài thì các đoạn đầu co lại bằng dấu “…”, đoạn cuối không bao giờ bị cắt.</li>
+    <li><span class="cxn">4</span><b>Tìm luôn trong cả workspace</b>, không chỉ phòng đang mở (placeholder “Tên, chức danh hoặc email”, <code>aria-label</code> nói rõ “trong cả NovaPay”). Chip “Đang trực tuyến” lọc danh sách đang xem, kèm số người. Ô tìm này có gợi ý khi focus mà trống (Nhắn gần đây) theo §6 “Gợi ý trong ô tìm”.</li>
+    <li><span class="cxn">5</span><b>Phòng con trước, thành viên sau</b>. Hàng phòng: ô thư mục 32 <code>--color-accent-wash</code>, tên, số người (gồm cả phòng con), chevron. Người không thuộc phòng nào hiện ở gốc Toàn NovaPay, dưới các khối.</li>
+    <li><span class="cxn">6</span><b>Hàng người</b>: avatar 32 (chữ cái đầu của tên hiển thị trên <code>--color-person-N</code>, chấm presence), tên, chức danh, trạng thái bằng chữ (Trực tuyến / Ngoại tuyến), không chỉ bằng chấm màu. Hàng đang chọn nền <code>--color-accent-wash</code>. Xếp theo tên (chữ cuối) kiểu danh bạ Việt.</li>
+    <li><span class="cxn">7</span><b>Thẻ hồ sơ</b>: dải bìa mềm từ <code>--color-person-N-wash</code> sang <code>--color-accent-wash</code> (màu của chính người đó, không ảnh), <b>avatar 64</b> đè lên bìa. Cỡ 64 đã được §6 cho phép “chỉ cho hồ sơ trong Danh bạ và Cài đặt”, không thêm cỡ mới. Tên <code>text-lg</code>, chức danh, trạng thái có chữ. Đóng bằng ✕ hoặc Esc; 1024 đến 1279 thẻ này thành overlay bên phải như mọi detail panel.</li>
+    <li><span class="cxn">8</span><b>Ba hành động đều thật</b>: Nhắn tin (primary, mở tin nhắn trực tiếp), Gọi (cuộc gọi 1-1 qua <code>useCalls</code>, đã có), Gửi email (<code>mailto:</code>). Hồ sơ của chính bạn thay ba nút bằng “Sửa hồ sơ” (sang Cài đặt). Không có số điện thoại vì schema không có.</li>
+    <li><span class="cxn">9</span><b>Chi tiết</b>: Email (có nút Sao chép), Phòng ban là <b>đường dẫn đầy đủ</b> và bấm được để mở phòng đó ở cột giữa, Nơi làm việc. Trường trống thì bỏ cả dòng (thử Lê Quang Vinh: không có Nơi làm việc). “Cùng phòng” là chồng avatar 24 + câu có tên, bấm mở phòng.</li>
+    <li><b>Cần thêm <code>department_id</code></b> <span class="need">cần backend</span>: <code>Contact</code> hiện chỉ có <i>tên</i> phòng ban (<code>useContacts.ts</code>). Tên không duy nhất: NovaPay có hai phòng “Đối soát”. Gom người theo tên sẽ đổ người của Khối Tài chính vào Đối soát của Khối Vận hành. Response contacts cần thêm <code>department_id</code> để xếp người vào đúng nút cây và dựng đường dẫn; id này chỉ dùng để ghép, không bao giờ lên màn. Không đổi mô hình NGAC.</li>
+  </ol>
+</section>
+
+<!-- ============================ 1b · DEEP TREE ============================ -->
+<section class="screen" id="s-tree" aria-labelledby="h-tree">
+  <div class="screen-head">
+    <h2 id="h-tree">1b · Cây phòng ban nhiều cấp: Khối Công nghệ</h2>
+    <p>Khối Công nghệ có 5 phòng (DVNH, AI, Hạ tầng, An toàn thông tin, Kiểm thử); Phòng DVNH và Phòng AI lại chia nhóm. Mỗi cấp là một màn của cột giữa: phòng/nhóm con ở trên, người thuộc trực tiếp cấp đó ở dưới. Bấm vào Phòng AI rồi Nhóm Học máy để đi sâu, bấm đường dẫn để lên.</p>
+  </div>
+  <span class="wlabel">Cấp khối: Khối Công nghệ</span>
+  <div class="scroll"><div id="f-tree1"></div></div>
+  <span class="wlabel">Cấp nhóm (sâu 3): Khối Công nghệ › Phòng AI › Nhóm Học máy</span>
+  <div class="scroll"><div id="f-tree2"></div></div>
+  <div class="phones">
+    <div><span class="wlabel">Điện thoại: Khối Công nghệ</span><div id="f-tree3"></div></div>
+    <div><span class="wlabel">Điện thoại: Phòng AI</span><div id="f-tree4"></div></div>
+  </div>
+  <ol class="notes">
+    <li><span class="cxn">1</span><b>Một cấp mỗi màn</b>, không bung cả cây: Khối Công nghệ chỉ hiện 5 phòng và người thuộc thẳng khối (Giám đốc công nghệ). Người của Phòng AI không hiện ở đây; số “N người” trên hàng phòng là tổng cả các nhóm bên dưới. Đây cũng là cách giữ màn nhẹ khi công ty có hàng trăm phòng.</li>
+    <li><span class="cxn">2</span><b>Hàng phòng có dòng phụ “N phòng, nhóm bên dưới”</b> khi còn cấp con, để biết bấm vào sẽ còn đi tiếp hay ra người luôn. Phòng lá (Hạ tầng, Kiểm thử) không có dòng phụ.</li>
+    <li><span class="cxn">3</span><b>Đường dẫn đủ mọi cấp</b>: toà nhà (Toàn NovaPay) › Khối Công nghệ › Phòng AI › Nhóm Học máy, mỗi đoạn bấm lên đúng cấp đó. Cây sâu hơn thì các đoạn giữa co lại bằng “…”, đoạn cuối luôn đủ. Trên điện thoại thanh quay lại mang tên cấp hiện tại và đường dẫn cấp cha; quay lại là lên một cấp.</li>
+    <li><span class="cxn">4</span><b>Không giới hạn số cấp</b>: cây lấy từ <code>parent_id</code> của <code>GET /departments</code>, khối/phòng/nhóm chỉ là tên quản trị viên đặt, giao diện không phân biệt. Hồ sơ hiện đường dẫn đầy đủ (vd Khối Công nghệ › Phòng AI › Nhóm Học máy) và “Cùng phòng” là người cùng nhóm lá.</li>
+  </ol>
+</section>
+
+<!-- ============================ 1c · VISIBILITY ============================ -->
+<section class="screen" id="s-vis" aria-labelledby="h-vis">
+  <div class="screen-head">
+    <h2 id="h-vis">1c · Phạm vi hiển thị danh bạ (quản trị viên đặt, NGAC quyết)</h2>
+    <p>Mặc định ai trong workspace cũng thấy cả danh bạ. Quản trị viên có hai loại quy tắc: <b>ẩn một phòng</b> (chỉ người trong phòng và quản trị viên thấy) và <b>chỉ thấy phòng của mình</b> cho một vai trò hoặc một phòng. Bên dưới là màn cài đặt, rồi cùng một danh bạ nhìn từ ba người.</p>
+  </div>
+  <div class="sheet">
+    <div class="card" style="max-width:680px" data-static>
+      <h3>Quản trị › Danh bạ › Phạm vi hiển thị</h3>
+      <p class="muted">Mặc định mọi thành viên thấy toàn bộ danh bạ. Quản trị viên luôn thấy tất cả.</p>
+      <div class="sec">Phòng ẩn khỏi danh bạ · 1</div>
+      <div class="orow" style="cursor:default"><span class="dtile"><svg class="i s" aria-hidden="true"><use href="#i-folder"/></svg></span><span class="t"><b>Ban Tổng giám đốc</b><small>Chỉ 2 người trong phòng và quản trị viên thấy</small></span><button class="btn sm" type="button">Bỏ ẩn</button></div>
+      <button class="btn sm" type="button" style="justify-self:start"><svg class="i s" aria-hidden="true"><use href="#i-folder"/></svg>Ẩn một phòng</button>
+      <div class="sec">Chỉ thấy phòng của mình · 1</div>
+      <div class="orow" style="cursor:default"><span class="tile" style="width:32px;height:32px"><svg class="i s" aria-hidden="true"><use href="#i-group"/></svg></span><span class="t"><b>Vai trò Cộng tác viên</b><small>2 người · thấy người trong phòng của họ</small></span><button class="btn sm" type="button">Bỏ</button></div>
+      <button class="btn sm" type="button" style="justify-self:start"><svg class="i s" aria-hidden="true"><use href="#i-shield"/></svg>Thêm vai trò hoặc phòng</button>
+    </div>
+  </div>
+  <div class="sheet">
+    <div class="card" style="max-width:420px">
+      <h3>Người bị ẩn trong tin nhắn (Lê Thị Hoa xem)</h3>
+      <div style="display:flex;gap:10px;align-items:flex-start;padding:8px 0">
+        <span class="av" style="--p:var(--color-person-2)" aria-hidden="true">HT</span>
+        <div style="display:grid;gap:2px;min-width:0"><span><b>Nguyễn Hữu Thành</b> <span class="muted" style="font-size:0.75rem">09:12</span></span><span>Chiều nay chốt số liệu đối soát quý 3 nhé.</span></div>
+      </div>
+      <div role="dialog" aria-label="Nguyễn Hữu Thành" style="background:var(--color-overlay);box-shadow:var(--shadow-overlay);border-radius:12px;padding:16px;display:grid;gap:10px;justify-items:start;max-width:300px">
+        <span style="display:flex;gap:10px;align-items:center"><span class="av s40" style="--p:var(--color-person-2)" aria-hidden="true">HT</span><b>Nguyễn Hữu Thành</b></span>
+        <span style="display:flex;gap:8px;align-items:flex-start;color:var(--color-ink-muted)"><svg class="i s" aria-hidden="true" style="margin-top:3px"><use href="#i-alert"/></svg><span>Hồ sơ này không còn hiển thị với bạn.</span></span>
+      </div>
+      <p class="muted" style="font-size:0.8125rem">Bấm tên hoặc avatar ở tin nhắn, phê duyệt, tài liệu: thẻ nhỏ chỉ có tên, avatar và câu báo. Không chức danh, phòng ban, email, không nút Nhắn tin, Gọi. Trả lời trong cuộc trò chuyện đang có vẫn được như bình thường.</p>
+    </div>
+  </div>
+  <span class="wlabel">Quản trị viên (Lê Văn Phúc): thấy cả phòng bị ẩn, có nhãn</span>
+  <div class="scroll"><div id="f-vis-admin"></div></div>
+  <span class="wlabel">Nhân viên thường (Lê Thị Hoa): Ban Tổng giám đốc không có trong cây, không tìm thấy, không được đếm</span>
+  <div class="scroll"><div id="f-vis-member"></div></div>
+  <div class="phones">
+    <div><span class="wlabel">Cộng tác viên (Giang Văn Phong)</span><div id="f-vis-l0"></div></div>
+    <div><span class="wlabel">Cộng tác viên mở Phòng ban</span><div id="f-vis-l1"></div></div>
+  </div>
+  <ol class="notes">
+    <li><b>Hai loại quy tắc, quản trị viên đặt</b> ở Quản trị › Danh bạ (thêm vào <code>design/mockups/admin.html</code> khi lên plan). Chọn phòng bằng DepartmentPicker, chọn vai trò bằng danh sách vai trò; không gõ tên hay mã. Ẩn một phòng thì ẩn cả các phòng, nhóm bên dưới nó.</li>
+    <li><b>Ẩn nghĩa là</b>: không có trong cây, không ra khi tìm, không vào số đếm, không có trong danh sách vai trò. Tên và avatar của họ <b>vẫn hiện</b> ở nơi đã cùng làm việc (tin nhắn, phê duyệt, tài liệu được chia sẻ) (Zane, 2026-10-17); bấm vào thì thẻ nhỏ báo “Hồ sơ này không còn hiển thị với bạn”, không có chi tiết hay nút hành động (thẻ bên trên).</li>
+    <li><b>Quản trị viên</b> luôn thấy tất cả; phòng bị ẩn có nhãn “Ẩn khỏi danh bạ” để biết người khác không thấy.</li>
+    <li><b>Người bị giới hạn</b> (Cộng tác viên): danh mục Phòng ban ghi “Chỉ phòng của bạn”, mở ra chỉ có phòng của họ; Vai trò chỉ còn vai trò có người họ được thấy; tìm kiếm ghi “trong phạm vi bạn được xem”. Không hiện thông báo nào về người bị ẩn.</li>
+    <li><b>Quyết bằng NGAC, không lọc ở giao diện</b> <span class="need">cần backend</span>: API danh bạ, phòng ban, vai trò chỉ trả những gì người gọi được <code>read</code>. Hiện <code>ListContacts</code> chỉ kiểm tra <code>tenant_users</code>, không qua NGAC: phải chuyển sang. Mô hình (OA danh bạ theo phòng, cách giới hạn “chỉ phòng mình”) chốt ở plan theo skill <code>ngac-policy-change</code>, có spec, test vector và test cho nhánh bị từ chối.</li>
+  </ol>
+</section>
+
+<!-- ============================ 2 · SEARCH ============================ -->
+<section class="screen" id="s-search" aria-labelledby="h-search">
+  <div class="screen-head">
+    <h2 id="h-search">2 · Đang tìm: kết quả phẳng trên cả workspace</h2>
+    <p>Gõ “đối soát” khi đang đứng ở Vận hành thanh toán: kết quả lấy từ cả NovaPay, mỗi hàng có đường dẫn phòng ban ở dòng phụ nên hai phòng Đối soát không lẫn vào nhau. Sửa chữ trong ô để thử (không phân biệt dấu).</p>
+  </div>
+  <div class="scroll"><div id="f-search"></div></div>
+  <ol class="notes">
+    <li><span class="cxn">1</span><b>Đầu cột</b> đổi từ đường dẫn sang “Kết quả trong cả NovaPay” + số người khớp; ✕ trong ô hoặc Esc xoá tìm và trả về đúng phòng đang mở trước đó.</li>
+    <li><span class="cxn">2</span><b>Dòng phụ = chức danh · đường dẫn phòng ban đầy đủ</b>. Hai người cùng chức danh “Chuyên viên đối soát” phân biệt bằng Khối Vận hành › Vận hành thanh toán › <b>Đối soát</b> và Khối Tài chính › <b>Đối soát</b>. Đoạn cuối đậm màu chữ chính, không bao giờ bị cắt.</li>
+    <li><span class="cxn">3</span><b>Từ khớp</b> tô <code>--color-warning-wash</code> như ô tìm của Phê duyệt; so khớp bỏ hoa thường và dấu (“doi soat” cũng ra). Không hiện phòng ban như kết quả riêng: tìm là tìm người.</li>
+  </ol>
+</section>
+
+<!-- ============================ 2b · ROLES ============================ -->
+<section class="screen" id="s-role" aria-labelledby="h-role">
+  <div class="screen-head">
+    <h2 id="h-role">2b · Vai trò: ai giữ vai trò nào</h2>
+    <p>Bấm danh mục Vai trò ở cột trái, cột giữa liệt kê các vai trò; chọn “Duyệt chi”: cột giữa liệt kê người giữ vai trò này, từ nhiều phòng nên dòng phụ có đường dẫn phòng ban. Hồ sơ có thêm dòng Vai trò, bấm để mở danh sách vai trò đó.</p>
+  </div>
+  <div class="scroll"><div id="f-role"></div></div>
+  <ol class="notes">
+    <li><span class="cxn">1</span><b>Danh mục Vai trò</b> (Zane, 2026-10-17), mở ra là danh sách các vai trò ở cột giữa, đường dẫn Vai trò › tên vai trò: các vai trò quản trị viên tự tạo, cộng nhóm <b>Quản trị viên</b> (vai trò chủ workspace, icon khiên, luôn đứng đầu). Không liệt kê “Thành viên” vì ai cũng có. Workspace cá nhân không có mục này. Số là số người giữ vai trò.</li>
+    <li><span class="cxn">2</span><b>Đầu cột</b>: tên vai trò, số người; Quản trị viên có thêm “quản lý workspace”. Không hiện quyền của vai trò ở đây: danh bạ là để tìm người, quyền xem ở Quản trị.</li>
+    <li><span class="cxn">3</span><b>Hồ sơ có dòng Vai trò</b>, mỗi vai trò bấm được. <span class="need">cần backend</span> Hiện chỉ quản trị viên xem được ai giữ vai trò nào (<code>GetRoleDetail</code> cần quyền manage). Response contacts cần thêm danh sách vai trò hiển thị được của mỗi người (chỉ tên; id chỉ để ghép, không lên màn); thành viên thường đã đọc được danh sách vai trò (<code>ListRoles</code>).</li>
+  </ol>
+</section>
+
+<!-- ============================ 3 · MY GROUPS ============================ -->
+<section class="screen" id="s-group" aria-labelledby="h-group">
+  <div class="screen-head">
+    <h2 id="h-group">3 · Nhóm của tôi: thành viên một nhóm chat</h2>
+    <p>Bấm danh mục Nhóm của tôi rồi chọn “Đối soát liên khối”: cột giữa liệt kê thành viên của nhóm, người từ nhiều phòng nên dòng phụ có đường dẫn. “Mở nhóm” đưa sang cuộc trò chuyện.</p>
+  </div>
+  <div class="scroll"><div id="f-group"></div></div>
+  <ol class="notes">
+    <li><span class="cxn">1</span><b>Danh mục Nhóm của tôi</b> mở ra danh sách nhóm ở cột giữa, mỗi nhóm: ô nhóm vuông 32 (bo 1/4 cạnh, màu theo nhóm, chữ cái đầu của tên nhóm), tên, số thành viên. Chỉ nhóm bạn đang ở; nhóm bạn đã rời thì biến mất. Không có nhóm nào thì ẩn cả mục.</li>
+    <li><span class="cxn">2</span><b>Đầu cột</b>: tên nhóm, “N thành viên”, nút “Mở nhóm” (secondary, vì primary của màn là Nhắn tin trong hồ sơ). Không có đường dẫn vì nhóm không nằm trong cây.</li>
+    <li><span class="cxn">3</span><b>Hàng người</b> giống tìm kiếm: chức danh · đường dẫn phòng ban. <span class="need">cần xác nhận</span> endpoint kênh trả được thành viên của mọi nhóm trong một lần gọi (không gọi N lần), như brainstorm đã ghi.</li>
+  </ol>
+</section>
+
+<!-- ============================ 4 · PERSONAL ============================ -->
+<section class="screen" id="s-personal" aria-labelledby="h-personal">
+  <div class="screen-head">
+    <h2 id="h-personal">4 · Workspace cá nhân: không có cây tổ chức</h2>
+    <p>Workspace cá nhân không có phòng ban (§5). Danh mục chỉ còn Thành viên, Nhóm của tôi và Liên hệ (đợt 2); không có đường dẫn, dòng phụ phòng ban, “Cùng phòng” hay dòng Phòng ban trong hồ sơ. Menu chính không có Phê duyệt, Tài sản, Quản trị.</p>
+  </div>
+  <div class="scroll"><div id="f-personal"></div></div>
+  <ol class="notes">
+    <li><span class="cxn">1</span><b>Không có Phòng ban, Vai trò, Danh bạ chia sẻ, Phòng của tôi</b>; Thành viên là danh mục mặc định (ít người, liệt kê thẳng). Liên hệ (đợt 2) là bạn bè, đối tác ngoài không gian này.</li>
+    <li><span class="cxn">2</span><b>Hàng người</b> chỉ có tên, chức danh (nếu người đó có), trạng thái. Không cột phòng ban, không bộ lọc phòng ban.</li>
+    <li><span class="cxn">3</span><b>Hồ sơ</b> chỉ có Email và Nơi làm việc (khi có); bỏ Phòng ban và Cùng phòng chứ không hiện ô trống.</li>
+  </ol>
+</section>
+
+<!-- ============================ 5 · STATES ============================ -->
+<section class="screen" id="s-states" aria-labelledby="h-states">
+  <div class="screen-head">
+    <h2 id="h-states">5 · Trạng thái của cột giữa</h2>
+    <p>Mỗi trạng thái: icon 24 trong ô 40, một câu nói chuyện gì xảy ra, một hành động. Phòng trống và lọc trực tuyến không ra ai cũng bấm thử được ở khung 1 (Vận hành thanh toán › Hỗ trợ đối tác).</p>
+  </div>
+  <div class="sheet">
+    <div class="card"><h3>Đang tải</h3>
+      <div class="skrow"><div class="skel" style="width:32px;height:32px;border-radius:8px"></div><div><div class="skel" style="width:55%"></div><div class="skel" style="width:25%;height:10px"></div></div></div>
+      <div class="skrow"><div class="skel" style="width:32px;height:32px;border-radius:50%"></div><div><div class="skel" style="width:62%"></div><div class="skel" style="width:38%;height:10px"></div></div></div>
+      <div class="skrow"><div class="skel" style="width:32px;height:32px;border-radius:50%"></div><div><div class="skel" style="width:48%"></div><div class="skel" style="width:30%;height:10px"></div></div></div>
+      <p class="muted" style="font-size:0.8125rem">Cùng hình hàng thật: ô phòng vuông, avatar tròn. Không spinner.</p>
+    </div>
+    <div class="card"><h3>Phòng chưa có ai</h3>
+      <div class="state"><span class="ic"><svg class="i"><use href="#i-inbox"/></svg></span><b>Hỗ trợ đối tác chưa có ai</b><p class="muted">Khi quản trị viên xếp người vào phòng này, họ sẽ hiện ở đây.</p><button class="btn sm" type="button"><svg class="i s"><use href="#i-back"/></svg>Về Vận hành thanh toán</button></div>
+    </div>
+    <div class="card"><h3>Tìm không ra</h3>
+      <div class="state"><span class="ic"><svg class="i"><use href="#i-search"/></svg></span><b>Không có ai khớp “Hưng” trong cả NovaPay</b><p class="muted">Thử tên khác, chức danh hoặc email.</p><button class="btn sm" type="button">Xoá tìm kiếm</button></div>
+    </div>
+    <div class="card"><h3>Lọc trực tuyến không ra ai</h3>
+      <div class="state"><span class="ic"><svg class="i"><use href="#i-users"/></svg></span><b>Không ai ở Hành chính đang trực tuyến</b><p class="muted">Bạn vẫn nhắn được; họ thấy tin khi quay lại.</p><button class="btn sm" type="button">Hiện mọi người</button></div>
+    </div>
+    <div class="card"><h3>Lỗi tải danh bạ</h3>
+      <div class="state"><span class="ic bad"><svg class="i"><use href="#i-alert"/></svg></span><b>Không tải được danh bạ</b><p class="muted">Kết nối tới máy chủ bị gián đoạn. Kiểm tra mạng rồi thử lại.</p><button class="btn sm" type="button"><svg class="i s"><use href="#i-refresh"/></svg>Thử lại</button></div>
+    </div>
+    <div class="card"><h3>Cây phòng ban lỗi, người vẫn tải được</h3>
+      <div class="inline-err" role="alert"><svg class="i s"><use href="#i-alert"/></svg><span>Không tải được cây phòng ban. Bạn vẫn xem được Tất cả thành viên. <button class="plink" type="button" style="color:var(--color-danger);font-weight:600">Thử lại</button></span></div>
+      <p class="muted" style="font-size:0.8125rem">Hiện ngay dưới tiêu đề Phòng ban ở cột trái; Tất cả thành viên và Nhóm của tôi vẫn dùng được. Mỗi nguồn hỏng riêng, không chặn cả màn.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 6 · TABLET ============================ -->
+<section class="screen" id="s-tablet" aria-labelledby="h-tablet">
+  <div class="screen-head">
+    <h2 id="h-tablet">6 · Máy tính bảng (768 đến 1023)</h2>
+    <p>Dưới 1024 không có menu chính dạng cột (§5: vỏ điện thoại, ô tìm viên thuốc có ☰). Cột trái thu thành hàng chip phạm vi; cột giữa chiếm hết bề ngang; hồ sơ là sheet bên phải có nền mờ.</p>
+  </div>
+  <div class="frames"><div><span class="wlabel">820 px · hồ sơ mở</span><div id="f-tab"></div></div></div>
+  <ol class="notes">
+    <li><span class="cxn">1</span><b>Ô tìm viên thuốc</b> của vỏ điện thoại: ☰ mở menu chính, “Tìm trong danh bạ” chạm vào thì focus ô tìm của màn (tìm cả workspace), avatar mở sheet tài khoản.</li>
+    <li><span class="cxn">2</span><b>Chip danh mục</b> thay cho cột trái: Phòng ban · Vai trò · Nhóm của tôi (cá nhân: Thành viên · Nhóm của tôi). Cùng danh mục, cùng thứ tự, cùng kiểu bấm mới tải như máy tính và điện thoại.</li>
+    <li><span class="cxn">3</span><b>Hồ sơ là sheet bên phải</b> rộng 380, <code>--color-overlay</code>, <code>--shadow-overlay</code>, nền <code>--color-scrim</code>; vào 280ms expo. Chạm nền mờ, ✕ hoặc Esc thì đóng, focus trả về hàng người.</li>
+  </ol>
+</section>
+
+<!-- ============================ 7 · MOBILE ============================ -->
+<section class="screen" id="s-mobile" aria-labelledby="h-mobile">
+  <div class="screen-head">
+    <h2 id="h-mobile">7 · Điện thoại (dưới 768): xếp tầng</h2>
+    <p>Ba tầng: danh sách phạm vi → phòng ban (đi xuống tiếp được) → hồ sơ toàn màn có nút quay lại. Lề 16, không cuộn ngang. Mỗi khung bấm được, bắt đầu ở một tầng khác nhau.</p>
+  </div>
+  <div class="phones">
+    <div id="f-m0"></div>
+    <div id="f-m1"></div>
+    <div id="f-m2"></div>
+    <div><span class="wlabel">Workspace cá nhân</span><div id="f-m3"></div></div>
+  </div>
+  <ol class="notes">
+    <li><span class="cxn">1</span><b>Tầng 1 kiểu Lark: chỉ có danh mục</b>. Thanh trên của mọi màn danh sách (§5), tiêu đề “Danh bạ”, rồi các ô danh mục cao 64 (icon 40 trên nền <code>--color-person-N-wash</code>, tên, một dòng mô tả): Phòng ban · Vai trò · Nhóm của tôi · Bên ngoài · Danh bạ chia sẻ. Vào màn không liệt kê ai, không cây, không nhóm: chỉ 5 hàng và lối tắt Phòng của tôi. Bỏ “Tất cả thành viên”: muốn tìm người cụ thể thì gõ ô tìm (cả workspace), muốn xem cả công ty thì vào Phòng ban › Toàn NovaPay. Không có thanh đáy: thanh đáy chỉ thuộc về Chat.</li>
+    <li><span class="cxn">1</span><b>Bấm mới tải</b>: mỗi danh mục gọi API của riêng nó khi được mở (cây phòng ban, danh sách vai trò, các nhóm của bạn; thành viên một nhóm chỉ tải khi mở nhóm đó), hiện khung chờ cùng hình hàng thật. Bấm thử ở khung bên trái để thấy. Danh sách người (<code>useContacts</code>) thì app đã tải sẵn vì mọi màn đều cần tên người, nên mở danh mục chỉ tốn phần dữ liệu riêng của danh mục.</li>
+    <li><b>Bên ngoài và Danh bạ chia sẻ</b> <span class="need">đợt 2</span>: hiện mờ ở đây để thấy chỗ; bản đợt 1 không có hai hàng này. Danh bạ chia sẻ (Lark: Shared Contacts) là danh bạ một tổ chức đối tác chia sẻ cho mình, cùng nhóm tính năng xuyên tổ chức với Bên ngoài.</li>
+    <li><span class="cxn">5</span><b>Workspace cá nhân khác tổ chức</b> (khung phải): danh mục là <i>Thành viên</i> (những người bạn mời vào không gian này, ít người nên mở ra là liệt kê thẳng), <i>Nhóm của tôi</i>, <i>Liên hệ</i> <span class="need">đợt 2</span> (bạn bè, đối tác ngoài, cùng tính năng Bên ngoài của tổ chức nhưng gọi theo cách cá nhân). Không có Phòng ban, Vai trò, Danh bạ chia sẻ, Phòng của tôi; hồ sơ không có dòng Phòng ban, Vai trò, Cùng phòng (xem §4). Workspace tổ chức thì cơ cấu (Phòng ban, Vai trò) đứng đầu.</li>
+    <li><span class="cxn">4</span><b>Phòng của tôi</b>: lối tắt duy nhất có nội dung ở tầng 1 (như “My department” của Lark), vì đó là nơi người ta mở nhiều nhất; bấm vào thẳng phòng đó.</li>
+    <li><span class="cxn">2</span><b>Tầng 2</b>: thanh quay lại mang tên phòng và đường dẫn rút gọn (đoạn cuối luôn đủ). Quay lại = lên phòng cha, không nhảy thẳng về đầu. Ô tìm 16px (không tự phóng to) vẫn tìm cả workspace.</li>
+    <li><span class="cxn">3</span><b>Tầng 3</b>: hồ sơ toàn màn, nút quay lại nổi trên dải bìa (vùng chạm 44). Ba hành động cao 64, chia đều. Vuốt từ mép trái hoặc nút back của hệ điều hành cũng quay lại.</li>
+  </ol>
+</section>
+
+<!-- ============================ 8 · EXTERNAL (wave 2 placement only) ============================ -->
+<section class="screen" id="s-ext" aria-labelledby="h-ext">
+  <div class="screen-head">
+    <h2 id="h-ext">8 · Bên ngoài: chỗ dành sẵn cho đợt 2</h2>
+    <p>Liên hệ ngoài workspace là một tính năng riêng (thiết kế và plan riêng, đổi mô hình phân quyền). Đợt 1 <b>không</b> hiện mục này; ở đây chỉ chốt vị trí để cột trái không phải xếp lại khi nó đến.</p>
+  </div>
+  <div class="sheet">
+    <div class="card" style="max-width:300px">
+      <div class="cnav" style="background:transparent"><div class="body" style="padding:0">
+        <button class="rl" type="button"><span class="tile"><svg class="i s" aria-hidden="true"><use href="#i-building"/></svg></span><span class="t2"><span>Phòng ban</span><small>NovaPay</small></span></button>
+        <button class="rl" type="button"><span class="tile"><svg class="i s" aria-hidden="true"><use href="#i-users"/></svg></span><span class="t">Tất cả thành viên</span><span class="n">16</span></button>
+        <button class="rl" type="button" aria-current="page"><span class="tile"><svg class="i s" aria-hidden="true"><use href="#i-arrow"/></svg></span><span class="t">Bên ngoài</span><span class="n">5</span></button>
+        <div class="sec">Nhóm của tôi</div>
+        <button class="rl" type="button"><span class="gtile" style="--p:var(--color-person-6)" aria-hidden="true">Đ</span><span class="t">Đối soát liên khối</span><span class="n">6</span></button>
+      </div></div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Vị trí</b> <span class="need">đợt 2</span>: ngay dưới Tất cả thành viên, trên Nhóm của tôi; ở tablet/điện thoại là chip/hàng thứ ba. Workspace cá nhân cũng có mục này.</li>
+    <li><b>Hai loại người, một danh sách</b>: người dùng Nexus ở tổ chức khác (nhắn tin, gọi được sau khi họ chấp nhận lời mời kết nối; dòng phụ là tên tổ chức của họ) và người không dùng Nexus (thẻ liên hệ tự lưu: tên, công ty, email, số điện thoại, ghi chú; chỉ Gửi email/Gọi điện thoại, có nút mời vào Nexus).</li>
+    <li><b>Chỉ hiện khi tính năng có thật</b>: đợt 1 không có mục rỗng “Bên ngoài”, đúng quy tắc mọi mục phải có dữ liệu thật.</li>
+  </ol>
+</section>
+</div>
+
+<script>
+/* ---------------- data (sample, mirrors the existing NovaPay mockups; keys are internal and never rendered) ---------------- */
+var WS = {
+  org: {
+    name: 'NovaPay', letter: 'N', kind: 'org', me: 'hoa',
+    depts: {
+      kvh:  { n: 'Khối Vận hành', p: null },
+      vhtt: { n: 'Vận hành thanh toán', p: 'kvh' },
+      vhds: { n: 'Đối soát', p: 'vhtt' },
+      htdt: { n: 'Hỗ trợ đối tác', p: 'vhtt' },
+      hc:   { n: 'Hành chính', p: 'kvh' },
+      ktc:  { n: 'Khối Tài chính', p: null },
+      kt:   { n: 'Kế toán', p: 'ktc' },
+      tcds: { n: 'Đối soát', p: 'ktc' },
+      kcn:    { n: 'Khối Công nghệ', p: null },
+      dvnh:   { n: 'Phòng DVNH', p: 'kcn' },
+      dvcore: { n: 'Nhóm Core banking', p: 'dvnh' },
+      dvapp:  { n: 'Nhóm Ứng dụng di động', p: 'dvnh' },
+      ai:     { n: 'Phòng AI', p: 'kcn' },
+      aiml:   { n: 'Nhóm Học máy', p: 'ai' },
+      aidata: { n: 'Nhóm Dữ liệu', p: 'ai' },
+      aillm:  { n: 'Nhóm Trợ lý ảo', p: 'ai' },
+      hatang: { n: 'Phòng Hạ tầng', p: 'kcn' },
+      attt:   { n: 'Phòng An toàn thông tin', p: 'kcn' },
+      qa:     { n: 'Phòng Kiểm thử', p: 'kcn' }
+    },
+    people: [
+      { k: 'anh',  n: 'Hồ Quốc Anh',     t: 'Giám đốc khối',          d: 'kvh',  c: 4, e: 'anh.ho@novapay.vn',      l: 'Hà Nội, tầng 12', on: false },
+      { k: 'duc',  n: 'Trần Minh Đức',   t: 'Trưởng phòng',           d: 'vhtt', c: 5, e: 'duc.tran@novapay.vn',    l: 'Hà Nội, tầng 12', on: true },
+      { k: 'yen',  n: 'Phạm Hải Yến',    t: 'Chuyên viên vận hành',   d: 'vhtt', c: 3, e: 'yen.pham@novapay.vn',    l: 'Hà Nội, tầng 12', on: false },
+      { k: 'khai', n: 'Đỗ Văn Khải',     t: 'Chuyên viên vận hành',   d: 'vhtt', c: 4, e: 'khai.do@novapay.vn',     l: 'Hà Nội, tầng 12', on: true },
+      { k: 'mai',  n: 'Bùi Thanh Mai',   t: 'Chuyên viên vận hành',   d: 'vhtt', c: 8, e: 'mai.bui@novapay.vn',     l: 'Hà Nội, tầng 12', on: false },
+      { k: 'lan',  n: 'Nguyễn Thu Lan',  t: 'Chuyên viên đối soát',   d: 'vhds', c: 6, e: 'lan.nguyen@novapay.vn',  l: 'Hà Nội, tầng 12', on: true },
+      { k: 'vinh', n: 'Lê Quang Vinh',   t: 'Chuyên viên đối soát',   d: 'vhds', c: 1, e: 'vinh.le@novapay.vn',     l: '',                on: false },
+      { k: 'ngoc', n: 'Trần Bảo Ngọc',   t: 'Trưởng nhóm đối soát',   d: 'vhds', c: 2, e: 'ngoc.tran@novapay.vn',   l: 'Hà Nội, tầng 12', on: false },
+      { k: 'thu',  n: 'Vũ Anh Thư',      t: 'Chuyên viên hành chính', d: 'hc',   c: 8, e: 'thu.vu@novapay.vn',      l: 'Hà Nội, tầng 3',  on: false },
+      { k: 'long', n: 'Mai Đức Long',    t: 'Lễ tân',                 d: 'hc',   c: 2, e: 'long.mai@novapay.vn',    l: 'Hà Nội, tầng 1',  on: false },
+      { k: 'phuc', n: 'Lê Văn Phúc',     t: 'Giám đốc tài chính',     d: 'ktc',  c: 7, e: 'phuc.le@novapay.vn',     l: 'TP. Hồ Chí Minh, tầng 5', on: true },
+      { k: 'hoa',  n: 'Lê Thị Hoa',      t: 'Kế toán trưởng',         d: 'kt',   c: 7, e: 'hoa.le@novapay.vn',      l: 'TP. Hồ Chí Minh, tầng 5', on: true },
+      { k: 'nanh', n: 'Phan Ngọc Ánh',   t: 'Kế toán viên',           d: 'kt',   c: 3, e: 'anh.phan@novapay.vn',    l: 'TP. Hồ Chí Minh, tầng 5', on: false },
+      { k: 'tuan', n: 'Hoàng Minh Tuấn', t: 'Chuyên viên đối soát',   d: 'tcds', c: 5, e: 'tuan.hoang@novapay.vn',  l: 'TP. Hồ Chí Minh, tầng 5', on: true },
+      { k: 'ha',   n: 'Đặng Thu Hà',     t: 'Chuyên viên đối soát',   d: 'tcds', c: 1, e: 'ha.dang@novapay.vn',     l: 'TP. Hồ Chí Minh, tầng 5', on: false },
+      { k: 'bao',  n: 'Ngô Gia Bảo',     t: 'Cố vấn pháp lý',         d: null,   c: 6, e: 'bao.ngo@novapay.vn',     l: '',                on: false },
+      { k: 'son',  n: 'Trịnh Hoàng Sơn', t: 'Giám đốc công nghệ',     d: 'kcn',    c: 3, e: 'son.trinh@novapay.vn',  l: 'Hà Nội, tầng 8', on: true },
+      { k: 'quan', n: 'Lý Minh Quân',    t: 'Trưởng phòng DVNH',      d: 'dvnh',   c: 1, e: 'quan.ly@novapay.vn',    l: 'Hà Nội, tầng 8', on: true },
+      { k: 'trang',n: 'Đinh Thu Trang',  t: 'Kỹ sư core banking',     d: 'dvcore', c: 5, e: 'trang.dinh@novapay.vn', l: 'Hà Nội, tầng 8', on: false },
+      { k: 'hieu', n: 'Cao Văn Hiếu',    t: 'Kỹ sư core banking',     d: 'dvcore', c: 7, e: 'hieu.cao@novapay.vn',   l: 'Hà Nội, tầng 8', on: true },
+      { k: 'my',   n: 'Tạ Diễm My',      t: 'Kỹ sư di động',          d: 'dvapp',  c: 8, e: 'my.ta@novapay.vn',      l: 'Đà Nẵng',        on: false },
+      { k: 'kien', n: 'Phùng Trung Kiên',t: 'Trưởng phòng AI',        d: 'ai',     c: 2, e: 'kien.phung@novapay.vn', l: 'Hà Nội, tầng 9', on: true },
+      { k: 'nhi',  n: 'Hà Yến Nhi',      t: 'Kỹ sư học máy',          d: 'aiml',   c: 4, e: 'nhi.ha@novapay.vn',     l: 'Hà Nội, tầng 9', on: true },
+      { k: 'dat',  n: 'Lưu Tiến Đạt',    t: 'Kỹ sư học máy',          d: 'aiml',   c: 6, e: 'dat.luu@novapay.vn',    l: 'Hà Nội, tầng 9', on: false },
+      { k: 'vy',   n: 'Kiều Tường Vy',   t: 'Kỹ sư dữ liệu',          d: 'aidata', c: 3, e: 'vy.kieu@novapay.vn',    l: 'Hà Nội, tầng 9', on: false },
+      { k: 'tung', n: 'Âu Thanh Tùng',   t: 'Kỹ sư hạ tầng',          d: 'hatang', c: 1, e: 'tung.au@novapay.vn',    l: 'Hà Nội, tầng 8', on: true },
+      { k: 'hanh', n: 'Mạc Thị Hạnh',    t: 'Chuyên viên an toàn thông tin', d: 'attt', c: 5, e: 'hanh.mac@novapay.vn', l: 'Hà Nội, tầng 8', on: false },
+      { k: 'phong',n: 'Giang Văn Phong', t: 'Kỹ sư kiểm thử',         d: 'qa',     c: 7, e: 'phong.giang@novapay.vn',l: 'Đà Nẵng',        on: false }
+    ],
+    groups: [
+      { k: 'dslk', n: 'Đối soát liên khối', c: 6, m: ['hoa', 'lan', 'vinh', 'ngoc', 'tuan', 'ha'] },
+      { k: 'bdh',  n: 'Ban điều hành',      c: 4, m: ['anh', 'phuc', 'duc', 'hoa'] },
+      { k: 'an',   n: 'Ăn trưa tầng 12',    c: 2, m: ['duc', 'yen', 'khai', 'mai', 'thu', 'lan', 'hoa'] }
+    ],
+    /* custom roles + the owners group shown as "Quản trị viên"; the built-in "Thành viên" is everyone and is never listed */
+    roles: [
+      { k: 'qtv',  n: 'Quản trị viên', sys: true, m: ['anh', 'phuc'] },
+      { k: 'dc',   n: 'Duyệt chi',     m: ['anh', 'phuc', 'hoa', 'duc'] },
+      { k: 'kt',   n: 'Kế toán',       m: ['hoa', 'nanh', 'tuan', 'ha'] },
+      { k: 'tc',   n: 'Trưởng ca vận hành', m: ['duc', 'khai'] },
+      { k: 'ds',   n: 'Đối soát viên', m: ['lan', 'vinh', 'ngoc', 'tuan', 'ha'] }
+    ]
+  },
+  personal: {
+    name: 'Không gian của Hoa', letter: 'H', kind: 'personal', me: 'hoa',
+    depts: {},
+    people: [
+      { k: 'hoa',  n: 'Lê Thị Hoa',       t: 'Kế toán trưởng',   c: 7, e: 'hoa.le@novapay.vn',      l: '', on: true },
+      { k: 'lan',  n: 'Nguyễn Thu Lan',   t: '',                 c: 6, e: 'thulan.ng@gmail.com',    l: '', on: true },
+      { k: 'linh', n: 'Trịnh Khánh Linh', t: 'Thiết kế tự do',   c: 8, e: 'linh.trinh@gmail.com',   l: 'Đà Nẵng', on: false },
+      { k: 'nam',  n: 'Võ Hoàng Nam',     t: 'Kỹ sư phần mềm',   c: 5, e: 'nam.vo@outlook.com',     l: 'TP. Hồ Chí Minh', on: true }
+    ],
+    groups: [
+      { k: 'dl',   n: 'Chuyến đi Đà Lạt',   c: 3, m: ['hoa', 'lan', 'linh'] },
+      { k: 'sach', n: 'Sách hay mỗi tháng', c: 6, m: ['hoa', 'lan', 'linh', 'nam'] }
+    ],
+    roles: []
+  }
+};
+
+/* ---------------- contacts visibility (admin rules, NGAC-backed): each frame renders the directory as one viewer sees it ---------------- */
+(function () {
+  var ORG = WS.org;
+  ORG.depts.bgd = { n: 'Ban Tổng giám đốc', p: null };
+  ORG.people.push(
+    { k: 'ceo', n: 'Nguyễn Hữu Thành', t: 'Tổng giám đốc', d: 'bgd', c: 2, e: 'thanh.nguyen@novapay.vn', l: 'Hà Nội, tầng 15', on: false },
+    { k: 'tlg', n: 'Vương Thảo Linh', t: 'Trợ lý tổng giám đốc', d: 'bgd', c: 8, e: 'linh.vuong@novapay.vn', l: 'Hà Nội, tầng 15', on: true });
+  ORG.roles.push({ k: 'ctv', n: 'Cộng tác viên', m: ['phong', 'my'] });
+  ORG.visibility = { hidden: ['bgd'], limitedRoles: ['ctv'] };
+  function under(k, root) { while (k) { if (k === root) return true; k = ORG.depts[k].p; } return false; }
+  function view(me) {
+    var meP = ORG.people.filter(function (p) { return p.k === me; })[0];
+    var admin = ORG.roles[0].m.indexOf(me) >= 0;
+    var limited = !admin && ORG.roles.some(function (r) { return ORG.visibility.limitedRoles.indexOf(r.k) >= 0 && r.m.indexOf(me) >= 0; });
+    function deptVisible(k) {
+      if (admin) return true;
+      if (limited) return under(k, meP.d);
+      /* a hidden department stays visible to its own people */
+      return !ORG.visibility.hidden.some(function (h) { return under(k, h) && !under(meP.d || '', h); });
+    }
+    var depts = {};
+    Object.keys(ORG.depts).forEach(function (k) {
+      if (deptVisible(k)) depts[k] = { n: ORG.depts[k].n, p: limited && k === meP.d ? null : ORG.depts[k].p, h: admin && ORG.visibility.hidden.indexOf(k) >= 0 };
+    });
+    var people = ORG.people.filter(function (p) { return p.d ? !!depts[p.d] : !limited; });
+    function vis(k) { return people.some(function (p) { return p.k === k; }); }
+    return {
+      name: ORG.name, letter: ORG.letter, kind: 'org', me: me, depts: depts, people: people, limited: limited,
+      groups: ORG.groups.filter(function (g) { return g.m.indexOf(me) >= 0; }).map(function (g) { return { k: g.k, n: g.n, c: g.c, m: g.m.filter(vis) }; }),
+      roles: ORG.roles.map(function (r) { return { k: r.k, n: r.n, sys: r.sys, m: r.m.filter(vis) }; }).filter(function (r) { return r.m.length; })
+    };
+  }
+  WS.orgAdmin = view('phuc');
+  WS.orgLimited = view('phong');
+  WS.org = view('hoa');
+})();
+function rootName(w) { return w.limited ? 'Phạm vi của bạn' : 'Toàn ' + w.name; }
+
+/* ---------------- helpers ---------------- */
+function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+/* char-by-char fold so indexes in the folded string match the original (Vietnamese letters fold to one char each) */
+function fold(s) { return s.split('').map(function (ch) { return (ch === 'đ' || ch === 'Đ') ? 'd' : ch.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }).join(''); }
+function hl(text, q) {
+  if (!q) return esc(text);
+  var i = fold(text).indexOf(fold(q)); if (i < 0) return esc(text);
+  return esc(text.slice(0, i)) + '<mark>' + esc(text.slice(i, i + q.length)) + '</mark>' + esc(text.slice(i + q.length));
+}
+function ini(n) { var w = n.trim().split(/\s+/); return (w.length > 1 ? w[w.length - 2][0] + w[w.length - 1][0] : w[0].slice(0, 2)).toUpperCase(); }
+function given(n) { var w = n.trim().split(/\s+/); return w[w.length - 1]; }
+function byGiven(a, b) { return given(a.n).localeCompare(given(b.n), 'vi') || a.n.localeCompare(b.n, 'vi'); }
+function icon(id, s) { return '<svg class="i' + (s ? ' s' : '') + '" aria-hidden="true"><use href="#i-' + id + '"/></svg>'; }
+function av(p, cls) { return '<span class="av ' + (cls || '') + '" style="--p:var(--color-person-' + p.c + ')" aria-hidden="true">' + ini(p.n) + (p.on ? '<span class="on"></span>' : '') + '</span>'; }
+function person(w, k) { for (var i = 0; i < w.people.length; i++) if (w.people[i].k === k) return w.people[i]; return null; }
+function chain(w, id) { var out = []; while (id) { out.unshift(id); id = w.depts[id].p; } return out; }
+function kids(w, id) { return Object.keys(w.depts).filter(function (k) { return w.depts[k].p === (id || null); }); }
+function inTree(w, k, root) { while (k) { if (k === root) return true; k = w.depts[k].p; } return false; }
+function headCount(w, id) { return w.people.filter(function (p) { return p.d && inTree(w, p.d, id); }).length; }
+function pathHTML(w, id) {
+  return '<span class="path">' + chain(w, id).map(function (k) { return '<span class="sg">' + esc(w.depts[k].n) + '</span>'; })
+    .join('<span class="sep" aria-hidden="true">›</span><span class="sr">, </span>') + '</span>';
+}
+function pathText(w, id) { return chain(w, id).map(function (k) { return w.depts[k].n; }).join(' › '); }
+function group(w, k) { for (var i = 0; i < w.groups.length; i++) if (w.groups[i].k === k) return w.groups[i]; return null; }
+function role(w, k) { for (var i = 0; i < w.roles.length; i++) if (w.roles[i].k === k) return w.roles[i]; return null; }
+function rolesOf(w, k) { return w.roles.filter(function (r) { return r.m.indexOf(k) >= 0; }); }
+function roleTile(r, big) { return '<span class="tile"' + (big ? ' style="width:32px;height:32px"' : '') + '>' + icon(r.sys ? 'shield' : 'group', 1) + '</span>'; }
+function presWord(p) { return '<span class="pres' + (p.on ? ' on' : '') + '">' + (p.on ? 'Trực tuyến' : 'Ngoại tuyến') + '</span>'; }
+
+/* ---------------- frame rendering ---------------- */
+var FRAMES = {};
+function mount(id, init, cx) {
+  var el = document.getElementById(id);
+  FRAMES[id] = { el: el, s: Object.assign({ q: '', online: false, dept: null, sel: null, lvl: 0, lastCat: catOf(init.nav) }, init), init: init, cx: cx || {} };
+  render(id);
+  el.addEventListener('click', function (e) { onClick(id, e); });
+  el.addEventListener('input', function (e) { if (e.target.matches('[data-q]')) { var f = FRAMES[id]; f.s.q = e.target.value; render(id, { focusQ: true, list: true }); } });
+  el.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return; var f = FRAMES[id];
+    if (f.s.q) { f.s.q = ''; render(id, { focusQ: true }); } else if (f.s.sel && f.s.view !== 'mob') { f.s.sel = null; render(id); }
+  });
+}
+function cxa(f, key) { return f.cx[key] ? ' data-cx="' + f.cx[key] + '"' : ''; }
+
+/* What the content column shows for the current state */
+function model(f) {
+  var s = f.s, w = WS[s.ws], m = { w: w, depts: [], people: [], showPath: false };
+  if (s.loading || s.error) return m;
+  if (s.q) {
+    m.kind = 'search'; m.showPath = w.kind === 'org';
+    m.people = w.people.filter(function (p) { return [p.n, p.t, p.e].some(function (x) { return x && fold(x).indexOf(fold(s.q)) >= 0; }); });
+  } else if (s.nav === 'org') {
+    m.kind = 'dept'; m.depts = kids(w, s.dept);
+    m.people = w.people.filter(function (p) { return (p.d || null) === s.dept; });
+  } else if (s.nav === 'all') {
+    m.kind = 'all'; m.showPath = w.kind === 'org'; m.people = w.people.slice();
+  } else if (s.nav === 'groups') {
+    m.kind = 'groups';
+  } else if (s.nav === 'roles') {
+    m.kind = 'roles';
+  } else if (s.nav && s.nav.indexOf('r:') === 0) {
+    var r = role(w, s.nav.slice(2)); m.kind = 'role'; m.r = r; m.showPath = true;
+    m.people = r.m.map(function (k) { return person(w, k); });
+  } else if (s.nav && s.nav.indexOf('g:') === 0) {
+    var g = group(w, s.nav.slice(2)); m.kind = 'group'; m.g = g; m.showPath = w.kind === 'org';
+    m.people = g.m.map(function (k) { return person(w, k); });
+  }
+  m.total = m.people.length;
+  m.onlineN = m.people.filter(function (p) { return p.on; }).length;
+  if (s.online) m.people = m.people.filter(function (p) { return p.on; });
+  m.people.sort(byGiven);
+  return m;
+}
+
+function headHTML(f, m) {
+  var s = f.s, w = m.w, h = '';
+  if (m.kind === 'search') {
+    h += '<div class="crumbs"' + cxa(f, 'shead') + '>' + icon('search', 1) + '<span style="padding:4px 6px">' + (w.limited ? 'Kết quả trong phạm vi bạn được xem' : 'Kết quả trong cả ' + esc(w.name)) + '</span></div>';
+    h += '<div class="ttlrow"><h3>“' + esc(s.q) + '”</h3><span class="sub">' + m.total + ' người khớp</span></div>';
+  } else if (m.kind === 'dept') {
+    var ch = s.dept ? chain(w, s.dept) : [];
+    h += '<nav class="crumbs" aria-label="Đường dẫn phòng ban"' + cxa(f, 'crumbs') + '><button class="cr root" type="button" data-dept="" aria-label="' + esc(rootName(w)) + '"' + (ch.length ? '' : ' aria-current="page"') + '>' + icon('building', 1) + '</button>';
+    ch.forEach(function (k, i) {
+      h += '<span class="sep" aria-hidden="true">›</span>';
+      h += i === ch.length - 1 ? '<span class="cr cur" aria-current="page">' + esc(w.depts[k].n) + '</span>' : '<button class="cr" type="button" data-dept="' + k + '">' + esc(w.depts[k].n) + '</button>';
+    });
+    if (!ch.length) h += '<span class="sep" aria-hidden="true">›</span><span class="cr cur" aria-current="page">' + esc(rootName(w)) + '</span>';
+    h += '</nav>';
+    var sub = (s.dept ? headCount(w, s.dept) : w.people.length) + ' người' + (m.depts.length ? ' · ' + m.depts.length + (s.dept ? ' phòng con' : ' khối') : '');
+    h += '<div class="ttlrow"><h3>' + esc(s.dept ? w.depts[s.dept].n : w.name) + '</h3><span class="sub">' + sub + '</span></div>';
+  } else if (m.kind === 'all') {
+    h += '<div class="ttlrow"><h3>Tất cả thành viên</h3><span class="sub">' + w.people.length + ' người trong ' + esc(w.name) + '</span></div>';
+  } else if (m.kind === 'groups') {
+    h += '<div class="ttlrow"><h3>Nhóm của tôi</h3><span class="sub">' + w.groups.length + ' nhóm</span></div>';
+  } else if (m.kind === 'roles') {
+    h += '<div class="ttlrow"><h3>Vai trò</h3><span class="sub">' + w.roles.length + ' vai trò</span></div>';
+  } else if (m.kind === 'role') {
+    if (s.view !== 'mob') h += '<nav class="crumbs" aria-label="Đường dẫn"><button class="cr" type="button" data-nav="roles">Vai trò</button><span class="sep" aria-hidden="true">›</span><span class="cr cur" aria-current="page">' + esc(m.r.n) + '</span></nav>';
+    h += '<div class="ttlrow"' + cxa(f, 'rhead') + '><h3>' + esc(m.r.n) + '</h3><span class="sub">' + m.r.m.length + ' người' + (m.r.sys ? ' · quản lý workspace' : '') + '</span></div>';
+  } else if (m.kind === 'group') {
+    if (s.view !== 'mob') h += '<nav class="crumbs" aria-label="Đường dẫn"><button class="cr" type="button" data-nav="groups">Nhóm của tôi</button><span class="sep" aria-hidden="true">›</span><span class="cr cur" aria-current="page">' + esc(m.g.n) + '</span></nav>';
+    h += '<div class="ttlrow"' + cxa(f, 'ghead') + '><h3>' + esc(m.g.n) + '</h3><span class="sub">' + m.g.m.length + ' thành viên</span><span class="end"><button class="btn sm" type="button">' + icon('msg', 1) + 'Mở nhóm</button></span></div>';
+  }
+  if (m.kind !== 'groups' && m.kind !== 'roles') {
+    h += '<div class="tools"><label class="sf"' + cxa(f, 'search') + '>' + icon('search', 1) + '<input data-q type="search" value="' + esc(s.q) + '" placeholder="Tên, chức danh hoặc email" aria-label="Tìm người trong cả ' + esc(w.name) + '">' +
+      (s.q ? '<button class="ibtn" type="button" data-clear aria-label="Xoá tìm kiếm">' + icon('x', 1) + '</button>' : '') + '</label>' +
+      '<button class="fchip" type="button" data-online aria-pressed="' + s.online + '"><span class="dot" aria-hidden="true"></span>Đang trực tuyến' + (m.onlineN !== undefined && !s.loading && !s.error ? ' <span class="muted tnum">' + m.onlineN + '</span>' : '') + '</button></div>';
+  }
+  return h;
+}
+
+function listHTML(f, m) {
+  var s = f.s, w = m.w, h = '', first = true;
+  if (s.loading) {
+    return '<div class="sec"><span class="skel" style="width:80px;height:10px"></span></div>' +
+      [0, 1].map(function () { return '<div class="skrow"><div class="skel" style="width:32px;height:32px;border-radius:8px"></div><div><div class="skel" style="width:40%"></div><div class="skel" style="width:18%;height:10px"></div></div></div>'; }).join('') +
+      [60, 45, 52, 38].map(function (x) { return '<div class="skrow"><div class="skel" style="width:32px;height:32px;border-radius:50%"></div><div><div class="skel" style="width:' + x + '%"></div><div class="skel" style="width:' + (x / 2) + '%;height:10px"></div></div></div>'; }).join('');
+  }
+  if (s.error) return '<div class="state" role="alert"><span class="ic bad">' + icon('alert') + '</span><b>Không tải được danh bạ</b><p class="muted">Kết nối tới máy chủ bị gián đoạn. Kiểm tra mạng rồi thử lại.</p><button class="btn sm" type="button" data-retry>' + icon('refresh', 1) + 'Thử lại</button></div>';
+  if (m.kind === 'groups') {
+    return w.groups.map(function (g, i) { return '<button class="orow" type="button" data-nav="g:' + g.k + '"><span class="gtile" style="--p:var(--color-person-' + g.c + ');width:32px;height:32px;border-radius:8px" aria-hidden="true">' + esc(g.n[0]) + '</span><span class="t"><b>' + esc(g.n) + '</b></span><span class="n">' + g.m.length + ' thành viên</span>' + icon('right', 1) + '</button>'; }).join('');
+  }
+  if (m.kind === 'roles') {
+    return w.roles.map(function (r) { return '<button class="orow" type="button" data-nav="r:' + r.k + '">' + roleTile(r, true) + '<span class="t"><b>' + esc(r.n) + '</b></span><span class="n">' + r.m.length + ' người</span>' + icon('right', 1) + '</button>'; }).join('');
+  }
+  if (m.depts.length) {
+    h += '<div class="sec">' + (s.dept ? 'Phòng ban' : 'Khối') + ' · ' + m.depts.length + '</div>';
+    m.depts.forEach(function (k) {
+      h += '<button class="orow" type="button" data-dept="' + k + '"' + (first ? cxa(f, 'dept') : '') + '><span class="dtile">' + icon('folder', 1) + '</span><span class="t"><b>' + esc(w.depts[k].n) + (w.depts[k].h ? ' <span class="rule">Ẩn khỏi danh bạ</span>' : '') + '</b>' + (kids(w, k).length ? '<small' + (first ? cxa(f, 'sub') : '') + '>' + kids(w, k).length + ' phòng, nhóm bên dưới</small>' : '') + '</span><span class="n">' + headCount(w, k) + ' người</span>' + icon('right', 1) + '</button>';
+      first = false;
+    });
+  }
+  if (m.people.length) {
+    var lab = m.kind === 'search' ? 'Người' : (m.kind === 'dept' && !s.dept ? 'Chưa thuộc phòng ban nào' : 'Thành viên');
+    if (s.online) lab += ' đang trực tuyến';
+    h += '<div class="sec">' + lab + ' · ' + m.people.length + '</div>';
+    var firstP = true;
+    m.people.forEach(function (p) {
+      var sub = p.t ? hl(p.t, s.q) : '';
+      if (m.showPath && p.d) sub = '<span class="small-ttl">' + sub + (p.t ? ' ·' : '') + '</span>' + pathHTML(w, p.d);
+      else if (sub) sub = '<span class="st">' + sub + '</span>';
+      h += '<button class="prow" type="button" data-person="' + p.k + '"' + (s.sel === p.k ? ' aria-current="true"' : '') + (firstP ? cxa(f, 'person') : '') + '>' + av(p) +
+        '<span class="t"><b>' + hl(p.n, s.q) + (p.k === w.me ? ' <span class="muted" style="font-weight:400">(bạn)</span>' : '') + '</b>' + (sub ? '<small' + (firstP ? cxa(f, 'path') : '') + '>' + sub + '</small>' : '') + '</span>' + presWord(p) + '</button>';
+      firstP = false;
+    });
+  }
+  if (!m.depts.length && !m.people.length) {
+    if (m.kind === 'search') h += '<div class="state"><span class="ic">' + icon('search') + '</span><b>Không có ai khớp “' + esc(s.q) + '” trong cả ' + esc(w.name) + '</b><p class="muted">Thử tên khác, chức danh hoặc email.</p><button class="btn sm" type="button" data-clear>Xoá tìm kiếm</button></div>';
+    else if (s.online && m.total) h += '<div class="state"><span class="ic">' + icon('users') + '</span><b>Không ai ở ' + esc(m.kind === 'dept' && s.dept ? w.depts[s.dept].n : 'đây') + ' đang trực tuyến</b><p class="muted">Bạn vẫn nhắn được; họ thấy tin khi quay lại.</p><button class="btn sm" type="button" data-online>Hiện mọi người</button></div>';
+    else if (m.kind === 'dept' && s.dept) { var par = w.depts[s.dept].p; h += '<div class="state"><span class="ic">' + icon('inbox') + '</span><b>' + esc(w.depts[s.dept].n) + ' chưa có ai</b><p class="muted">Khi quản trị viên xếp người vào phòng này, họ sẽ hiện ở đây.</p><button class="btn sm" type="button" data-dept="' + (par || '') + '">' + icon('back', 1) + 'Về ' + esc(par ? w.depts[par].n : rootName(w)) + '</button></div>'; }
+  }
+  return h;
+}
+
+function profHTML(f, mode) {
+  var s = f.s, w = WS[s.ws], p = person(w, s.sel); if (!p) return '';
+  var self = p.k === w.me;
+  var h = '<aside class="prof" aria-label="Hồ sơ ' + esc(p.n) + '"><div class="cover" style="--pw:var(--color-person-' + p.c + '-wash)">';
+  if (mode === 'mob') h += '<button class="ibtn t44 back" type="button" data-back aria-label="Quay lại">' + icon('back') + '</button>';
+  else h += '<button class="ibtn close" type="button" data-close aria-label="Đóng hồ sơ">' + icon('x') + '</button>';
+  h += '</div><div class="who"' + cxa(f, 'prof') + '>' + av(p, 's64') + '<h4>' + esc(p.n) + '</h4>' + (p.t ? '<span class="ttl2">' + esc(p.t) + '</span>' : '') +
+    '<span class="pill ' + (p.on ? 'ok' : 'idle') + '" style="margin-top:4px">' + (p.on ? 'Trực tuyến' : 'Ngoại tuyến') + '</span></div>';
+  if (self) h += '<div class="pacts one"><a class="btn" href="#">' + icon('pen', 1) + 'Sửa hồ sơ</a></div>';
+  else h += '<div class="pacts"' + cxa(f, 'acts') + '><button class="act primary" type="button">' + icon('msg') + 'Nhắn tin</button><button class="act" type="button">' + icon('phone') + 'Gọi</button><a class="act" href="mailto:' + esc(p.e) + '">' + icon('mail') + 'Gửi email</a></div>';
+  h += '<dl class="pdl"' + cxa(f, 'dl') + '>';
+  h += '<div>' + icon('mail', 1).replace('class="i s"', 'class="i s ic"') + '<dt>Email</dt><dd class="one" title="' + esc(p.e) + '">' + esc(p.e) + '</dd><button class="ibtn" type="button" aria-label="Sao chép email">' + icon('copy', 1) + '</button></div>';
+  if (w.kind === 'org' && p.d) h += '<div>' + icon('building', 1).replace('class="i s"', 'class="i s ic"') + '<dt>Phòng ban</dt><dd><button class="plink" type="button" data-dept="' + p.d + '" aria-label="Mở phòng ' + esc(pathText(w, p.d)) + '">' + esc(pathText(w, p.d)) + '</button></dd><span></span></div>';
+  var prs = rolesOf(w, p.k);
+  if (prs.length) h += '<div' + cxa(f, 'prole') + '>' + icon('shield', 1).replace('class="i s"', 'class="i s ic"') + '<dt>Vai trò</dt><dd>' + prs.map(function (r) { return '<button class="plink" type="button" data-nav="r:' + r.k + '">' + esc(r.n) + '</button>'; }).join(', ') + '</dd><span></span></div>';
+  if (p.l) h += '<div>' + icon('pin', 1).replace('class="i s"', 'class="i s ic"') + '<dt>Nơi làm việc</dt><dd>' + esc(p.l) + '</dd><span></span></div>';
+  h += '</dl>';
+  if (w.kind === 'org' && p.d) {
+    var mates = w.people.filter(function (x) { return x.d === p.d && x.k !== p.k; }).sort(byGiven);
+    if (mates.length) {
+      h += '<section class="same"><span class="label">Cùng phòng</span><button type="button" data-dept="' + p.d + '"><span class="faces">' + mates.slice(0, 4).map(function (x) { return av(Object.assign({}, x, { on: false }), 's24'); }).join('') + '</span><span>' +
+        esc(mates[0].n) + (mates.length > 1 ? ' và ' + (mates.length - 1) + ' người khác' : '') + '</span></button></section>';
+    }
+  }
+  return h + '</aside>';
+}
+
+function railHTML(w) {
+  var org = w.kind === 'org';
+  var items = [['msg', 'Tin nhắn', 4], ['folder', 'Tài liệu']].concat(org ? [['check', 'Phê duyệt', 2], ['box', 'Tài sản']] : []).concat([['users', 'Danh bạ', 0, 1]]);
+  var foot = [['bell', 'Thông báo']].concat(org ? [['shield', 'Quản trị']] : []).concat([['gear', 'Cài đặt']]);
+  function a(it) { return '<a href="#"' + (it[3] ? ' aria-current="page"' : '') + '><span class="ic">' + icon(it[0]) + '</span><span class="lb">' + it[1] + '</span>' + (it[2] ? '<span class="pill count tnum" aria-hidden="true">' + it[2] + '</span><span class="sr">, ' + it[2] + ' chưa đọc</span>' : '') + '</a>'; }
+  return '<nav class="rail" aria-label="Điều hướng chính"><div class="top"><button class="ibtn" type="button" aria-label="Mở rộng menu chính" aria-expanded="false" aria-keyshortcuts="Control+Backslash">' + icon('sidebar') + '</button>' +
+    '<button class="wsb" type="button" aria-haspopup="true" aria-label="' + esc(w.name) + ', đổi workspace"><span class="logo' + (org ? '' : ' pers') + '">' + w.letter + '</span></button></div>' +
+    '<div class="grp">' + items.map(a).join('') + '</div><div class="grp">' + foot.map(a).join('') +
+    '<button class="meb" type="button" aria-label="Lê Thị Hoa, tài khoản">' + av(person(w, w.me)) + '</button></div></nav>';
+}
+
+/* The category a nav state belongs to: a role, a group or a department is inside its category */
+function catOf(nav) { return !nav ? null : nav.indexOf('r:') === 0 ? 'roles' : nav.indexOf('g:') === 0 ? 'groups' : nav; }
+
+/* Lark-style categories, the same on every width: nothing is listed until one is opened (each loads its own list then).
+   Tổ chức: structure first (Phòng ban, Vai trò). Cá nhân: no departments, roles or shared directories; few people, so Thành viên lists them. */
+function categoriesHTML(f, arrows) {
+  var s = f.s, w = WS[s.ws], cur = catOf(s.nav);
+  function cat(navKey, ic, hue, title, sub, wave2) {
+    return '<button class="rl cat" type="button"' + (wave2 ? ' disabled aria-disabled="true"' : ' data-nav="' + navKey + '"') + (!wave2 && cur === navKey ? ' aria-current="page"' : '') +
+      '><span class="ctile" style="--h:' + hue + '">' + icon(ic) + '</span>' +
+      '<span class="t2"><span>' + title + (wave2 ? ' <span class="need">đợt 2</span>' : '') + '</span><small>' + sub + '</small></span>' + (wave2 || !arrows ? '' : icon('right', 1)) + '</button>';
+  }
+  var h = '<div class="navlist"' + cxa(f, 'cats') + '>';
+  if (w.kind === 'org') {
+    h += cat('org', 'building', 1, 'Phòng ban', w.limited ? 'Chỉ phòng của bạn' : esc(w.name) + ' · ' + kids(w, null).length + ' khối');
+    if (w.roles.length) h += cat('roles', 'shield', 3, 'Vai trò', w.roles.length + ' vai trò');
+    h += cat('groups', 'group', 5, 'Nhóm của tôi', w.groups.length + ' nhóm');
+    h += cat('', 'arrow', 6, 'Bên ngoài', 'Người ở tổ chức khác và liên hệ tự lưu', true);
+    h += cat('', 'users', 2, 'Danh bạ chia sẻ', 'Danh bạ đối tác chia sẻ với ' + esc(w.name), true);
+  } else {
+    h += cat('all', 'users', 1, 'Thành viên', w.people.length + ' người trong không gian này');
+    h += cat('groups', 'group', 5, 'Nhóm của tôi', w.groups.length + ' nhóm');
+    h += cat('', 'arrow', 6, 'Liên hệ', 'Bạn bè, đối tác ngoài không gian này', true);
+  }
+  var myD = (person(w, w.me) || {}).d;
+  if (w.kind === 'org' && myD) h += '<div class="sec"' + cxa(f, 'mydept') + '>Phòng của tôi</div><button class="rl" type="button" data-dept="' + myD + '"' + (s.nav === 'org' && s.dept === myD ? ' aria-current="page"' : '') + '><span class="tile">' + icon('folder', 1) + '</span><span class="t2"><span>' + esc(w.depts[myD].n) + '</span><small>' + pathHTML(w, myD) + '</small></span><span class="n">' + headCount(w, myD) + '</span>' + (arrows ? icon('right', 1) : '') + '</button>';
+  return h + '</div>';
+}
+
+function navHTML(f) {
+  return '<div class="cnav"' + cxa(f, 'panel') + '><div class="top"><h3>Danh bạ</h3></div><div class="body">' + categoriesHTML(f, false) + '</div></div>';
+}
+
+function render(id, opt) {
+  opt = opt || {};
+  var f = FRAMES[id], s = f.s, w = WS[s.ws], m = model(f), el = f.el, html = '';
+  if (s.view === 'desk') {
+    if (opt.list && el.querySelector('.mlist')) { /* typing: refresh head + list only, keep the input */
+      var tmp = document.createElement('div'); tmp.innerHTML = headHTML(f, m);
+      var head = el.querySelector('.mhead');
+      head.querySelectorAll(':scope > :not(.tools)').forEach(function (n) { n.remove(); });
+      var newTools = tmp.querySelector('.tools'); tmp.querySelectorAll(':scope > :not(.tools)').forEach(function (n) { head.insertBefore(n, head.querySelector('.tools')); });
+      var oldTools = head.querySelector('.tools'); var inp = oldTools.querySelector('input');
+      var clear = newTools.querySelector('[data-clear]'), oc = oldTools.querySelector('[data-clear]');
+      if (clear && !oc) inp.parentNode.appendChild(clear); else if (!clear && oc) oc.remove();
+      oldTools.querySelector('.fchip').outerHTML = newTools.querySelector('.fchip').outerHTML;
+      el.querySelector('.mlist').innerHTML = listHTML(f, m);
+      return after(id);
+    }
+    html = '<div class="app' + (s.sel ? '' : ' closed') + '">' + railHTML(w) + navHTML(f) +
+      '<div class="mid"><div class="mhead">' + headHTML(f, m) + '</div><div class="mlist' + (opt.anim ? ' enter' : '') + '" role="list" aria-label="Danh sách">' + listHTML(f, m) + '</div></div>' +
+      '<div class="dwrap">' + profHTML(f) + '</div></div>';
+  } else if (s.view === 'tab') {
+    var scopes = (w.kind === 'org' ? [['org', 'Phòng ban']] : [['all', 'Thành viên']]).concat(w.roles.length ? [['roles', 'Vai trò']] : []).concat([['groups', 'Nhóm của tôi']]);
+    var cur = catOf(s.nav);
+    html = '<div class="tablet" aria-label="Danh bạ trên máy tính bảng">' +
+      '<div class="spill"' + cxa(f, 'spill') + '><button class="ibtn t44" type="button" aria-label="Mở menu chính" aria-haspopup="dialog">' + icon('menu') + '</button><button class="q" type="button" data-focusq>Tìm trong danh bạ</button><button class="meb" type="button" aria-label="Lê Thị Hoa, tài khoản">' + av(person(w, w.me)) + '</button></div>' +
+      '<div class="pttl"><h2>Danh bạ</h2></div>' +
+      '<div class="scopes" role="group" aria-label="Phạm vi"' + cxa(f, 'scopes') + '>' + scopes.map(function (x) { return '<button class="fchip" type="button" data-nav="' + x[0] + '" aria-pressed="' + (cur === x[0]) + '">' + x[1] + '</button>'; }).join('') + '</div>' +
+      '<div class="mid"><div class="mhead">' + headHTML(f, m) + '</div><div class="mlist' + (opt.anim ? ' enter' : '') + '">' + listHTML(f, m) + '</div></div>' +
+      (s.sel ? '<button class="ovl' + (opt.open ? ' enter' : '') + '" type="button" data-close aria-label="Đóng hồ sơ" tabindex="-1"></button><div class="sheet-r' + (opt.open ? ' enter' : '') + '"' + cxa(f, 'sheet') + '>' + profHTML(f) + '</div>' : '') + '</div>';
+  } else { /* mobile */
+    var scr = '';
+    if (s.lvl === 2 && s.sel) {
+      scr = '<div class="scr prof-scr' + (opt.anim ? ' enter' : '') + '"' + cxa(f, 'l2') + '><div class="pbody">' + profHTML(f, 'mob') + '</div></div>';
+    } else if (s.lvl === 1) {
+      var t = '', sub = '';
+      if (m.kind === 'dept') { t = s.dept ? w.depts[s.dept].n : 'Phòng ban'; sub = s.dept && w.depts[s.dept].p ? pathHTML(w, w.depts[s.dept].p) : esc(w.name); }
+      else if (m.kind === 'all') { t = w.kind === 'org' ? 'Tất cả thành viên' : 'Thành viên'; sub = w.people.length + ' người trong ' + esc(w.name); }
+      else if (m.kind === 'group') { t = m.g.n; sub = m.g.m.length + ' thành viên'; }
+      else if (m.kind === 'role') { t = m.r.n; sub = 'Vai trò · ' + m.r.m.length + ' người'; }
+      else if (m.kind === 'roles') { t = 'Vai trò'; sub = w.roles.length + ' vai trò'; }
+      else if (m.kind === 'groups') { t = 'Nhóm của tôi'; sub = w.groups.length + ' nhóm'; }
+      else if (m.kind === 'search') { t = 'Tìm trong danh bạ'; sub = 'Cả ' + esc(w.name); }
+      var mh = headHTML(f, m), ti = mh.indexOf('<div class="tools">'), tools = ti >= 0 ? mh.slice(ti) : '';
+      scr = '<div class="scr' + (opt.anim ? ' enter' : '') + '"><div class="bbar"' + cxa(f, 'l1') + '><button class="ibtn t44" type="button" data-back aria-label="Quay lại">' + icon('back') + '</button><div class="t"><h3>' + esc(t) + '</h3><small>' + sub + '</small></div></div>' +
+        '<div class="pbody">' + tools + '<div class="mlist">' + listHTML(f, m) + '</div></div></div>';
+    } else {
+      var nav = categoriesHTML(f, true);
+      scr = '<div class="scr l0' + (opt.anim ? ' enter' : '') + '"><div class="spill"' + cxa(f, 'l0') + '><button class="ibtn t44" type="button" aria-label="Mở menu chính" aria-haspopup="dialog">' + icon('menu') + '</button><button class="q" type="button" data-msearch>Tìm trong danh bạ</button><button class="meb" type="button" aria-label="Lê Thị Hoa, tài khoản">' + av(person(w, w.me)) + '</button></div>' +
+        '<div class="pttl"><h2>Danh bạ</h2></div><div class="pbody">' + nav + '</div></div>';
+    }
+    html = '<div class="phone" aria-label="Danh bạ trên điện thoại">' + scr + '</div>';
+  }
+  el.innerHTML = html;
+  if (opt.open && s.view === 'desk') { var pr = el.querySelector('.prof'); if (pr) pr.classList.add('enter'); }
+  if (opt.focusQ) { var q = el.querySelector('[data-q]'); if (q) { q.focus(); q.setSelectionRange(q.value.length, q.value.length); } }
+  after(id);
+}
+function after() { requestAnimationFrame(placeCx); }
+
+function onClick(id, e) {
+  var f = FRAMES[id], s = f.s, w = WS[s.ws], t;
+  if ((t = e.target.closest('[data-nav]'))) {
+    e.preventDefault(); s.nav = t.getAttribute('data-nav'); s.dept = null; s.q = ''; s.online = false;
+    /* a category's list is fetched when it is opened: skeleton first, then the rows (every width) */
+    var fresh = s.view === 'mob' ? s.lvl === 0 : catOf(s.nav) !== s.lastCat;
+    s.lastCat = catOf(s.nav);
+    if (s.view === 'mob') { s.lvl = 1; s.sel = null; }
+    if (fresh) { s.loading = true; render(id, { anim: true }); setTimeout(function () { s.loading = false; render(id); }, 450); return; }
+    return render(id, { anim: true });
+  }
+  if ((t = e.target.closest('[data-dept]'))) {
+    e.preventDefault(); s.nav = 'org'; s.dept = t.getAttribute('data-dept') || null; s.q = '';
+    if (s.view === 'mob') { s.lvl = 1; }
+    if (s.view === 'tab' && t.closest('.sheet-r')) s.sel = null;
+    return render(id, { anim: true });
+  }
+  if ((t = e.target.closest('[data-person]'))) {
+    var was = s.sel; s.sel = t.getAttribute('data-person');
+    if (s.view === 'mob') { s.lvl = 2; return render(id, { anim: true }); }
+    return render(id, { open: !was || s.view === 'tab' ? true : was !== s.sel });
+  }
+  if (e.target.closest('[data-close]')) { s.sel = null; return render(id); }
+  if (e.target.closest('[data-online]')) { s.online = !s.online; return render(id); }
+  if (e.target.closest('[data-clear]')) { s.q = ''; return render(id, { focusQ: true }); }
+  if (e.target.closest('[data-focusq]')) { var q = f.el.querySelector('[data-q]'); if (q) q.focus(); return; }
+  if (e.target.closest('[data-msearch]')) { s.lvl = 1; s.nav = 'all'; s.q = ''; s.msearch = true; return render(id, { anim: true, focusQ: true }); }
+  if (e.target.closest('[data-retry]')) { s.error = false; s.loading = true; render(id); setTimeout(function () { s.loading = false; render(id, { anim: true }); }, 1200); return; }
+  if (e.target.closest('[data-back]')) {
+    if (s.lvl === 2) { s.lvl = 1; s.sel = null; }
+    else if (s.lvl === 1) {
+      if (s.q) s.q = '';
+      else if (s.nav === 'org' && s.dept) s.dept = w.depts[s.dept].p;
+      else if (s.nav && s.nav.indexOf('r:') === 0) s.nav = 'roles';
+      else if (s.nav && s.nav.indexOf('g:') === 0) s.nav = 'groups';
+      else { s.lvl = 0; s.nav = null; }
+    }
+    return render(id, { anim: true });
+  }
+}
+
+/* ---------------- callouts (same mechanism as the sibling mockups) ---------------- */
+function placeCx() {
+  document.querySelectorAll('.cx.auto').forEach(function (n) { n.remove(); });
+  document.querySelectorAll('[data-cx]').forEach(function (t) {
+    var fr = t.closest('.app, .tablet, .phone'); if (!fr) return;
+    var r = t.getBoundingClientRect(); if (!r.width && !r.height) return;
+    var b = fr.getBoundingClientRect();
+    var s = document.createElement('span'); s.className = 'cx auto'; s.setAttribute('aria-hidden', 'true'); s.textContent = t.getAttribute('data-cx');
+    s.style.top = Math.max(2, Math.min(b.height - 22, r.top - b.top - 8)) + 'px';
+    s.style.left = Math.max(2, Math.min(b.width - 22, r.left - b.left - 8)) + 'px';
+    fr.appendChild(s);
+  });
+}
+
+/* ---------------- frames ---------------- */
+mount('f-desk', { view: 'desk', ws: 'org', nav: 'org', dept: 'vhtt', sel: 'duc', lastCat: 'org' },
+  { panel: 1, cats: 2, crumbs: 3, search: 4, dept: 5, person: 6, prof: 7, acts: 8, dl: 9 });
+mount('f-tree1', { view: 'desk', ws: 'org', nav: 'org', dept: 'kcn', sel: 'son' }, { dept: 1, sub: 2 });
+mount('f-tree2', { view: 'desk', ws: 'org', nav: 'org', dept: 'aiml', sel: 'nhi' }, { crumbs: 3, dl: 4 });
+mount('f-tree3', { view: 'mob', ws: 'org', nav: 'org', dept: 'kcn', lvl: 1 }, { l1: 3 });
+mount('f-tree4', { view: 'mob', ws: 'org', nav: 'org', dept: 'ai', lvl: 1 }, {});
+mount('f-vis-admin', { view: 'desk', ws: 'orgAdmin', nav: 'org', dept: null, sel: 'ceo' }, {});
+mount('f-vis-member', { view: 'desk', ws: 'org', nav: 'org', dept: null, sel: null }, {});
+mount('f-vis-l0', { view: 'mob', ws: 'orgLimited', nav: null, lvl: 0 }, {});
+mount('f-vis-l1', { view: 'mob', ws: 'orgLimited', nav: 'org', dept: null, lvl: 1 }, {});
+mount('f-search',{ view: 'desk', ws: 'org', nav: 'org', dept: 'vhtt', q: 'đối soát', sel: 'tuan' }, { shead: 1, path: 2, person: 3 });
+mount('f-role', { view: 'desk', ws: 'org', nav: 'r:dc', sel: 'hoa' }, { cats: 1, rhead: 2, prole: 3 });
+mount('f-group',{ view: 'desk', ws: 'org', nav: 'g:dslk', sel: 'lan' }, { cats: 1, ghead: 2, path: 3 });
+mount('f-personal', { view: 'desk', ws: 'personal', nav: 'all', sel: 'linh' }, { cats: 1, person: 2, dl: 3 });
+mount('f-tab', { view: 'tab', ws: 'org', nav: 'org', dept: 'vhtt', sel: 'duc' }, { spill: 1, scopes: 2, sheet: 3 });
+mount('f-m0', { view: 'mob', ws: 'org', nav: null, lvl: 0 }, { l0: 1, mydept: 4 });
+mount('f-m3', { view: 'mob', ws: 'personal', nav: null, lvl: 0 }, { l0: 5 });
+mount('f-m1', { view: 'mob', ws: 'org', nav: 'org', dept: 'vhtt', lvl: 1 }, { l1: 2 });
+mount('f-m2', { view: 'mob', ws: 'org', nav: 'org', dept: 'vhtt', sel: 'duc', lvl: 2 }, { l2: 3 });
+
+/* demo buttons */
+document.querySelectorAll('[data-demo]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var id = b.getAttribute('data-frame'), f = FRAMES[id], d = b.getAttribute('data-demo');
+    if (d === 'loading') { f.s.error = false; f.s.loading = true; render(id); setTimeout(function () { f.s.loading = false; render(id, { anim: true }); }, 1400); }
+    if (d === 'error') { f.s.loading = false; f.s.error = true; render(id); }
+    if (d === 'reset') { f.s = Object.assign({ q: '', online: false, dept: null, sel: null, lvl: 0 }, f.init); render(id); }
+  });
+});
+
+/* review chrome: theme, reduced motion, callouts */
+(function () {
+  var root = document.documentElement;
+  var qs = /[?&]theme=(light|dark)/.exec(location.search); if (qs) root.setAttribute('data-theme', qs[1]);
+  document.querySelectorAll('[data-theme-set]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-theme-set');
+      if (v === 'system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', v);
+      document.querySelectorAll('[data-theme-set]').forEach(function (o) { o.setAttribute('aria-pressed', String(o.getAttribute('data-theme-set') === v)); });
+    });
+  });
+  document.getElementById('reduce').addEventListener('change', function (e) { root.classList.toggle('reduce', e.target.checked); });
+  document.getElementById('cxs').addEventListener('change', function (e) { root.classList.toggle('no-cx', !e.target.checked); });
+  window.addEventListener('load', placeCx); window.addEventListener('resize', placeCx);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(placeCx);
+  document.addEventListener('click', function () { setTimeout(placeCx, 320); });
+})();
+</script>
+</body>
+</html>

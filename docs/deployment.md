@@ -296,7 +296,8 @@ came up. Work through:
   get their ledger row afterwards. **Such files must be idempotent**: if the run dies between the
   file and its ledger row, the next deploy runs the file again.
 - When anything was applied, `deploy.sh` restarts `policy` and `policy-read` after `up`, because
-  they hold the authorization graph in memory and read the database only at start.
+  they hold the authorization graph in memory and read the database only at start, and then runs
+  `policy invalidate-cache --all-workspaces` (see "Migrations that rewrite the authorization graph").
 - **`051_message_search_simple.sql` rewrites the `messages` table.** A generated column cannot change its
   expression in place, so the migration drops `search_vector`, adds it back (every row recomputed) and rebuilds the
   GIN index; the `ALTER TABLE` takes an ACCESS EXCLUSIVE lock, so `messages` blocks reads and writes (every message
@@ -309,6 +310,90 @@ came up. Work through:
   applied again.
 - The migration files travel with each release into `releases/<tag>/db/` (not baked into an
   image), so they always match the commit being deployed and need no extra image.
+
+### Migrations that rewrite the authorization graph
+
+A migration that writes `ngac_nodes`, `ngac_assignments` or `ngac_associations` bypasses EPP, so the
+running policy services and the decisions cached in Redis still describe the old graph. The rules
+for such a migration (the authz over-privilege fixes ship four: 059-062):
+
+1. **Two releases.** Release A carries code that works on both the old and the new data (it writes
+   the new shape and reads both); release B adds the migration file. A rollback from B to A is then
+   safe. Rolling back past A needs the migration's reverse SQL first (it is in the file header).
+   A migration whose old code tolerates it (059 only renames and adds nodes) ships alone, first.
+2. **Re-runnable.** Every statement is guarded (`IF NOT EXISTS`, `DROP ... IF EXISTS`, predicates
+   that match nothing the second time). On a dev database run `make db-migrate` twice; the second
+   run must change no row (check the `_reconcile_<NNN>_*` tables did not grow).
+3. **Guarded.** The file aborts, rolling back, when its assumption is false: a workspace lacks
+   `{id}_Members`, an ambiguous node could be either of two, or it would touch more rows than the
+   threshold stated in its header.
+4. **Backed up.** Before changing rows it copies them to `_reconcile_<NNN>_<what>` tables; the
+   reverse SQL is an `INSERT ... SELECT` / `UPDATE ... FROM` from them. The `pg_dump` that
+   `migrate.sh` takes first is the rollback of record.
+5. **Dry run on the server before approving the deploy.** The `migrate` service is a one-shot
+   container with `psql`; run a read-only SELECT through it against the live database and paste
+   the counts in the PR:
+   ```bash
+   cd /opt/nexus/releases/$(cat /opt/nexus/.deployed-tag)
+   export COMPOSE_ENV_FILES=/opt/nexus/.env NEXUS_HOME=/opt/nexus NEXUS_OWNER=<owner> NEXUS_TAG=$(cat /opt/nexus/.deployed-tag)
+   docker compose --profile tools run --rm --entrypoint psql migrate -X -c "<SELECT>"
+   ```
+   For `059_ngac_workspace_id_keyed_repair.sql`, run all four and paste the rows. Each must be
+   read-only and each must be empty, or understood, before the deploy is approved.
+   ```sql
+   -- (a) Workspaces it would repair. LEFT JOIN: a NULL or dangling ngac_pc_id shows up (it aborts the file).
+   SELECT w.id, w.ngac_pc_id, pc.name AS pc_name, pc.node_type AS pc_type, pc.properties->>'workspace_id' AS pc_claims,
+          EXISTS (SELECT 1 FROM ngac_nodes n WHERE n.name = w.id||'_Members'  AND n.node_type='UA') AS has_members,
+          EXISTS (SELECT 1 FROM ngac_nodes n WHERE n.name = w.id||'_Owners'   AND n.node_type='UA') AS has_owners,
+          EXISTS (SELECT 1 FROM ngac_nodes n WHERE n.name = w.id||'_Channels' AND n.node_type='OA') AS has_channels
+   FROM workspaces w LEFT JOIN ngac_nodes pc ON pc.id = w.ngac_pc_id
+   WHERE pc.id IS NULL OR pc.node_type <> 'PC' OR pc.name <> 'PC_'||w.id
+      OR COALESCE(pc.properties->>'workspace_id', w.id) <> w.id
+      OR NOT EXISTS (SELECT 1 FROM ngac_nodes n WHERE n.name = w.id||'_Members'  AND n.node_type='UA')
+      OR NOT EXISTS (SELECT 1 FROM ngac_nodes n WHERE n.name = w.id||'_Owners'   AND n.node_type='UA')
+      OR NOT EXISTS (SELECT 1 FROM ngac_nodes n WHERE n.name = w.id||'_Channels' AND n.node_type='OA');
+
+   -- (b) Rename candidates: the direct children of a repaired workspace's PC that the file would rename
+   -- (an Owners candidate may also sit under Members), with every association each has. A UA that
+   -- has an association to an OA other than that workspace's Channels/Documents/Mgmt aborts the file.
+   SELECT w.id AS workspace, n.id AS node_id, n.name, n.node_type,
+          (SELECT string_agg(o.name||' ['||array_to_string(s.operations, ',')||']', '; ')
+             FROM ngac_associations s JOIN ngac_nodes o ON o.id = s.oa_id WHERE s.ua_id = n.id) AS associations
+   FROM workspaces w
+   JOIN ngac_nodes pc ON pc.id = w.ngac_pc_id
+   JOIN ngac_assignments a ON a.parent_id = pc.id
+        OR a.parent_id IN (SELECT m.id FROM ngac_nodes m WHERE m.name ~* '(^|[_ -])members$' AND m.name !~ '^Ch_' AND m.node_type = 'UA'
+                            AND EXISTS (SELECT 1 FROM ngac_assignments x WHERE x.child_id = m.id AND x.parent_id = pc.id))
+   JOIN ngac_nodes n ON n.id = a.child_id
+   WHERE (n.name ~* '(^|[_ -])(members|owners)$' AND n.node_type = 'UA' OR n.name ~* '(^|[_ -])channels$' AND n.node_type = 'OA')
+     AND n.name !~ '^(Ch_|TenantMember_|TenantOwner_|Role_|Dept_|Cal_|CalEv_|CalEvGuests_)'
+     AND n.name NOT IN (w.id||'_Members', w.id||'_Owners', w.id||'_Channels')
+   ORDER BY w.id, n.name;
+
+   -- (c) Names the file needs to be unique (it then adds a unique index on them): must return no row.
+   SELECT name, count(*), array_agg(node_type) FROM ngac_nodes
+   WHERE name ~ '_(Members|Owners|Channels)$' GROUP BY name HAVING count(*) > 1;
+
+   -- (d) The same names held by a node of the wrong type: must return no row.
+   SELECT w.id, n.id, n.name, n.node_type FROM workspaces w JOIN ngac_nodes n
+     ON (n.name = w.id||'_Members' AND n.node_type <> 'UA') OR (n.name = w.id||'_Owners' AND n.node_type <> 'UA')
+     OR (n.name = w.id||'_Channels' AND n.node_type <> 'OA');
+   ```
+   (b) shows which node each legacy workspace's Members/Owners/Channels would be renamed from. More
+   than one row per role in a workspace aborts the file, as does an unexpected association: settle
+   those by hand first (rename the right node to `<id>_Members` and so on). A workspace whose
+   `ngac_pc_id` is NULL, is not a PC, or whose PC claims another `workspace_id` also aborts it.
+6. **After the migration.** `deploy.sh` recreates `policy` and `policy-read`, then runs
+   `docker compose exec -T policy /policy invalidate-cache --all-workspaces`, which asks the running
+   writer to drop every workspace's cached decisions (the restart reloads the graph, not the Redis
+   cache). A failure fails the deploy; run the same command by hand once the cause is fixed. In dev,
+   restart `policy`, `policy-read` and `messaging` (`make dev-restart s=<name>`), then
+   `make policy-invalidate`. There is no flush at service start-up.
+
+Tests that depend on a graph decision run against the real policy service
+(`make test-realpolicy`, build tag `realpolicy`, `TEST_DATABASE_URL` pointing at a disposable database
+such as `ngac_ci`, never the dev `ngac` one); CI runs the same target in the `realpolicy` job.
+`scripts/test-migration-059.sh` applies 059 to a scratch database twice and checks the repair.
 
 ## Backups and restore
 
