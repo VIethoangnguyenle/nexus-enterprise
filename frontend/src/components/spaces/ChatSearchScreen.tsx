@@ -69,7 +69,7 @@ export function ChatSearchScreen({ conversations, people, onClose }: {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
-  const [recent, setRecent] = useState(() => readRecent(me))
+  const [recent, setRecent] = useState(() => readRecent('chat', me))
   useModalFocus({ active: true, surfaceRef, onClose, initialFocusRef: inputRef })
 
   const typed = query.trim()
@@ -91,7 +91,7 @@ export function ChatSearchScreen({ conversations, people, onClose }: {
     [people.list, me, typed, filter],
   )
 
-  const remember = () => setRecent(addRecent(me, typed))
+  const remember = () => setRecent(addRecent('chat', me, typed))
   const reuse = (q: string) => {
     setQuery(q)
     inputRef.current?.focus()
@@ -207,7 +207,7 @@ export function ChatSearchScreen({ conversations, people, onClose }: {
                       title="Xoá"
                       shape="round"
                       size="lg"
-                      onClick={() => setRecent(removeRecent(me, q))}
+                      onClick={() => setRecent(removeRecent('chat', me, q))}
                     >
                       <X size={16} strokeWidth={1.75} />
                     </IconButton>

@@ -40,12 +40,16 @@ describe('auth store logout', () => {
     expect(useWebSocketStore.getState().typingUsers).toEqual({})
   })
 
-  it('forgets what the person searched for in Chat on this device', () => {
+  it('forgets what the person searched for in every module on this device', () => {
     localStorage.setItem('ngac-chat-recent-searches:u1', JSON.stringify(['đối soát']))
+    localStorage.setItem('ngac-recent-searches:drive:u1', JSON.stringify(['hợp đồng']))
+    localStorage.setItem('ngac-recent-searches:approval:u2', JSON.stringify(['công tác']))
 
     useAuthStore.getState().logout()
 
     expect(localStorage.getItem('ngac-chat-recent-searches:u1')).toBeNull()
+    expect(localStorage.getItem('ngac-recent-searches:drive:u1')).toBeNull()
+    expect(localStorage.getItem('ngac-recent-searches:approval:u2')).toBeNull()
   })
 
   it('clears the session fields', () => {
