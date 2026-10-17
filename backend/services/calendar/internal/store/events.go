@@ -137,11 +137,25 @@ func (s *Store) RangeEvents(ctx context.Context, calendarIDs []string, from, to 
 	if len(calendarIDs) == 0 {
 		return nil, nil, nil
 	}
+	return s.rangeEvents(ctx, `e.calendar_id = ANY($1)`, `e.calendar_id = ANY($1)`, calendarIDs, from, to)
+}
+
+// RangeAttended is RangeEvents for the events a person is an attendee of, wherever
+// they are kept.
+func (s *Store) RangeAttended(ctx context.Context, userNodeID string, from, to time.Time) (masters, overrides []*Event, err error) {
+	const attended = `(SELECT event_id FROM calendar_attendees WHERE user_node_id = $1)`
+	return s.rangeEvents(ctx, `e.id IN `+attended, `e.recurring_event_id IN `+attended, userNodeID, from, to)
+}
+
+// rangeEvents runs the range query for a way of choosing events: masterWhere picks
+// single events and series, movedWhere the exceptions that may have been moved
+// into the range from a series that is not itself in it. Both read $1 (scope).
+func (s *Store) rangeEvents(ctx context.Context, masterWhere, movedWhere string, scope any, from, to time.Time) (masters, overrides []*Event, err error) {
 	rows, err := s.pool.Query(ctx,
-		eventSelect+` WHERE e.calendar_id = ANY($1) AND e.recurring_event_id IS NULL AND e.starts_at < $3
+		eventSelect+` WHERE `+masterWhere+` AND e.recurring_event_id IS NULL AND e.starts_at < $3
 		   AND ((e.rrule IS NULL AND e.ends_at >= $2)
 		     OR (e.rrule IS NOT NULL AND (e.recurrence_until IS NULL OR e.recurrence_until >= $2)))
-		 ORDER BY e.starts_at, e.id`, calendarIDs, from, to)
+		 ORDER BY e.starts_at, e.id`, scope, from, to)
 	if err != nil {
 		return nil, nil, fmt.Errorf("range events: %w", err)
 	}
@@ -155,9 +169,9 @@ func (s *Store) RangeEvents(ctx context.Context, calendarIDs []string, from, to 
 		ids = append(ids, m.ID)
 	}
 	rows, err = s.pool.Query(ctx,
-		eventSelect+` WHERE e.recurring_event_id IS NOT NULL AND (e.recurring_event_id = ANY($1)
-		   OR (e.calendar_id = ANY($2) AND e.starts_at < $4 AND e.ends_at >= $3))
-		 ORDER BY e.original_start, e.id`, ids, calendarIDs, from, to)
+		eventSelect+` WHERE e.recurring_event_id IS NOT NULL AND (e.recurring_event_id = ANY($4)
+		   OR (`+movedWhere+` AND e.starts_at < $3 AND e.ends_at >= $2))
+		 ORDER BY e.original_start, e.id`, scope, from, to, ids)
 	if err != nil {
 		return nil, nil, fmt.Errorf("range overrides: %w", err)
 	}
@@ -208,12 +222,12 @@ func insertEventTx(ctx context.Context, tx pgx.Tx, e *Event, reminders []int, or
 	err := tx.QueryRow(ctx,
 		`INSERT INTO calendar_events (id, workspace_id, calendar_id, organizer_node_id, title, description, location,
 		    starts_at, ends_at, all_day, tzid, rrule, recurrence_until, recurring_event_id, original_start, cancelled,
-		    kind, transparency, visibility, guests_can_invite, guests_can_see_list, has_call)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,''),$13,NULLIF($14,''),$15,$16,$17,$18,$19,$20,$21,$22)
+		    kind, transparency, visibility, guests_can_invite, guests_can_see_list, has_call, ngac_oa_id, guests_ua_id)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,NULLIF($12,''),$13,NULLIF($14,''),$15,$16,$17,$18,$19,$20,$21,$22,NULLIF($23,''),NULLIF($24,''))
 		 RETURNING version, created_at, updated_at`,
 		e.ID, e.WorkspaceID, e.CalendarID, e.OrganizerNodeID, e.Title, e.Description, e.Location,
 		e.StartsAt, e.EndsAt, e.AllDay, e.TZID, e.RRule, e.RecurrenceUntil, e.RecurringEventID, e.OriginalStart, e.Cancelled,
-		e.Kind, e.Transparency, e.Visibility, e.GuestsCanInvite, e.GuestsCanSeeList, e.HasCall,
+		e.Kind, e.Transparency, e.Visibility, e.GuestsCanInvite, e.GuestsCanSeeList, e.HasCall, e.NgacOAID, e.GuestsUAID,
 	).Scan(&e.Version, &e.CreatedAt, &e.UpdatedAt)
 	if isUniqueViolation(err) {
 		return fmt.Errorf("insert event: %w", ErrStale)
@@ -251,6 +265,9 @@ type EventChange struct {
 	Originals map[string]time.Time
 	// DropOverrides deletes the exceptions of a series that stopped repeating.
 	DropOverrides bool
+	// DropAnswers deletes the guests' answers to single occurrences, which no
+	// longer name the same occurrences once the series was moved or re-ruled.
+	DropAnswers bool
 }
 
 // UpdateEvent writes the mutable columns of the row and bumps its version, only
@@ -274,6 +291,11 @@ func (s *Store) UpdateEvent(ctx context.Context, e *Event, version int, ch Event
 	if ch.DropOverrides {
 		if _, err := tx.Exec(ctx, `DELETE FROM calendar_events WHERE recurring_event_id = $1`, e.ID); err != nil {
 			return fmt.Errorf("drop exceptions: %w", err)
+		}
+	}
+	if ch.DropAnswers {
+		if _, err := tx.Exec(ctx, `DELETE FROM calendar_attendee_occurrences WHERE event_id = $1`, e.ID); err != nil {
+			return fmt.Errorf("drop answers: %w", err)
 		}
 	}
 	if len(ch.Originals) > 0 {
@@ -333,8 +355,10 @@ func updateEventTx(ctx context.Context, tx pgx.Tx, e *Event, version int) error 
 // CutSeries ends a series before cutFrom: it writes the series row (whose rule the
 // caller has already ended) at version, drops the exceptions from cutFrom on, and
 // stores tail, when there is one, as a new event that takes over the guests and,
-// unless tailReminders is set, the reminders.
-func (s *Store) CutSeries(ctx context.Context, series *Event, version int, cutFrom time.Time, tail *Event, tailReminders *[]int) error {
+// unless tailReminders is set, the reminders. The guests' answers to occurrences
+// from cutFrom on go to the tail when keepAnswers (its occurrences are the same
+// ones), else they are dropped.
+func (s *Store) CutSeries(ctx context.Context, series *Event, version int, cutFrom time.Time, tail *Event, tailReminders *[]int, keepAnswers bool) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("cut series: %w", err)
@@ -347,6 +371,12 @@ func (s *Store) CutSeries(ctx context.Context, series *Event, version int, cutFr
 		series.ID, cutFrom); err != nil {
 		return fmt.Errorf("drop later exceptions: %w", err)
 	}
+	if tail == nil || !keepAnswers {
+		if _, err := tx.Exec(ctx, `DELETE FROM calendar_attendee_occurrences WHERE event_id = $1 AND original_start >= $2`,
+			series.ID, cutFrom); err != nil {
+			return fmt.Errorf("drop later answers: %w", err)
+		}
+	}
 	if tail != nil {
 		if err := insertEventTx(ctx, tx, tail, nil, false); err != nil {
 			return err
@@ -356,6 +386,13 @@ func (s *Store) CutSeries(ctx context.Context, series *Event, version int, cutFr
 			 SELECT $2, user_node_id, response, comment, is_organizer, responded_at
 			   FROM calendar_attendees WHERE event_id = $1`, series.ID, tail.ID); err != nil {
 			return fmt.Errorf("copy guests: %w", err)
+		}
+		if keepAnswers {
+			if _, err := tx.Exec(ctx,
+				`UPDATE calendar_attendee_occurrences SET event_id = $2 WHERE event_id = $1 AND original_start >= $3`,
+				series.ID, tail.ID, cutFrom); err != nil {
+				return fmt.Errorf("move answers: %w", err)
+			}
 		}
 		if tailReminders != nil {
 			err = writeReminders(ctx, tx, tail.ID, *tailReminders)

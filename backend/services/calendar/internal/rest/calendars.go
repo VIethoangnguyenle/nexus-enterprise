@@ -31,6 +31,16 @@ type Calendars interface {
 	CreateEvent(ctx context.Context, wsID string, in domain.EventInput) (*domain.EventDetailView, error)
 	UpdateEvent(ctx context.Context, wsID, id string, q domain.ScopeQuery, p domain.EventPatch) (*domain.EventDetailView, error)
 	DeleteEvent(ctx context.Context, wsID, id string, q domain.ScopeQuery, version int) error
+	SearchEvents(ctx context.Context, wsID, q string) ([]*domain.OccurrenceView, error)
+
+	Rsvp(ctx context.Context, wsID, id string, in domain.RsvpInput) (*domain.EventDetailView, error)
+	AddGuests(ctx context.Context, wsID, id string, in domain.GuestsInput) (*domain.EventDetailView, error)
+
+	FreeBusy(ctx context.Context, wsID string, users []string, from, to string) ([]*domain.PersonFreeBusy, error)
+	SuggestSlots(ctx context.Context, wsID string, users []string, durationMin int, day string) ([]domain.TimeSlot, error)
+
+	GetSettings(ctx context.Context, wsID string) (*domain.SettingsView, error)
+	UpdateSettings(ctx context.Context, wsID string, in domain.SettingsView) (*domain.SettingsView, error)
 }
 
 // Handler serves the calendar REST endpoints.
@@ -57,9 +67,18 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 
 	g.GET("/events", h.ListEvents)
 	g.POST("/events", h.CreateEvent)
+	g.GET("/events/search", h.SearchEvents)
 	g.GET("/events/:id", h.GetEvent)
 	g.PATCH("/events/:id", h.UpdateEvent)
 	g.DELETE("/events/:id", h.DeleteEvent)
+	g.POST("/events/:id/rsvp", h.Rsvp)
+	g.POST("/events/:id/guests", h.AddGuests)
+
+	g.GET("/freebusy", h.FreeBusy)
+	g.GET("/freebusy/suggest", h.SuggestSlots)
+
+	g.GET("/settings", h.GetSettings)
+	g.PUT("/settings", h.UpdateSettings)
 }
 
 // mapError turns a domain refusal into its HTTP status; anything else is a

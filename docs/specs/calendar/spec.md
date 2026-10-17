@@ -179,7 +179,17 @@ guest SHALL create the event's OA `CalEv_<eventId>` (`ngac.CalendarEventOAName`)
 `ngac.CalendarGuestOps`: `read`, plus `invite` only when the host switched on "guests can invite others". Guests
 SHALL never hold `write`: they cannot edit, move or delete the event, nor read the host's calendar beyond it.
 Removing a guest SHALL remove the assignment, and the next decision is DENY. Deleting the event SHALL delete its OA
-and UA.
+and UA. An event that has a call keeps its OA and UA with no guest at all; one that has neither SHALL have no node, so
+removing the last guest (with no call) deletes them. Guests belong to the whole series: they are named when the event
+is made, in `attendees` of an edit (the whole list of guests wanted; the organizer is always one) or by
+`POST /events/:id/guests`, never for one occurrence (422). A group conversation MAY be invited (`inviteChannelId`): the
+caller needs `read` on its content OA, its members are expanded when the event is saved, and each is checked against
+the graph (the member table is only a cache). The guest rule is enforced twice: the event's `guests_can_invite` and the
+`invite` operation on its OA must both allow a guest to invite. A guest who has an out-of-office event over the time is
+added as having declined, with the note "Đang vắng mặt". A "this and following" edit gives the new event its own OA and
+UA with the same guests. An event appears in a guest's listing wherever its calendar is, when the guest holds `read`
+on the event's OA; a guest who may not see the guest list (`guestsCanSeeList` off) is shown themselves and the
+organizer.
 
 #### Scenario: A guest reads
 - **WHEN** a person is invited to an event
@@ -202,14 +212,17 @@ and UA.
 - **THEN** their next read of the event is 403
 
 #### Scenario: An outside address
-- **WHEN** an email address that is not a workspace member is given as a guest
-- **THEN** the answer is 400 and nobody is added
+- **WHEN** an email address, or a person who is not a member of the workspace, is given as a guest
+- **THEN** the answer is 422 for an address and 403 for a person, and nobody is added
 
 ### Requirement: A guest answers the invitation
 A guest SHALL answer `yes`, `no` or `maybe` with an optional short note, for themselves only (403 on anyone else's
 answer). The answer needs `read` on the event's OA. The host and other guests see each guest's answer; an answer to a
 repeating event applies to the occurrence, series or "this and following" the guest chooses. A removed guest's answer
-is removed with them.
+is removed with them. An answer to one occurrence is kept beside the series' answer (`calendar_attendee_occurrences`,
+by the occurrence's original start) and wins for that occurrence; an answer for all replaces them. Moving the whole
+series or changing its rule drops the single-occurrence answers; a "this and following" edit keeps those of the tail
+when its times are unchanged. An occurrence a guest declined stays on their listing, marked declined.
 
 #### Scenario: Answering
 - **WHEN** a guest answers "maybe" with a note
@@ -220,8 +233,26 @@ is removed with them.
 - **THEN** the answer is 403
 
 ### Requirement: Finding a time uses busy ranges
-Finding a free time for several people SHALL return busy ranges per person under the free/busy rule above. A person
-the caller may read in full may also show titles; everyone else shows ranges only.
+Free/busy for up to 20 people over at most 62 days (`GET /freebusy`) SHALL return, per person, busy ranges and working
+hours (`workStart`/`workEnd`, HH:mm in the person's own zone; 08:00 to 17:30 in Asia/Ho_Chi_Minh until they save
+settings with `PUT /settings`). Busy is an event on the person's personal calendar, or one they are invited to, that is
+marked busy and not declined (a tentative or unanswered invitation counts), repeating events expanded. A title is
+shown only when the caller reads the calendar the event is on or is a guest of it (a private event only to those who
+may read it in full); everyone else shows ranges only. A person who is not a member of the caller's workspace, by the
+database and by the graph, SHALL be refused (403) and nobody is answered about. `GET /freebusy/suggest` SHALL return
+at most three of the earliest half-hour-grid times on a day (a date in the caller's zone) of the asked duration (5 to
+720 minutes) inside everyone's working hours (each person's, on that date in their zone) when nobody is busy.
+
+#### Scenario: Another workspace
+- **WHEN** a person of another workspace is among the people asked about
+- **THEN** the answer is 403
+
+### Requirement: Events can be found by their text
+`GET /events/search?q=` SHALL find, among the events of the calendars the caller reads and those they are invited to,
+those whose title, place, description or a guest's name contains the text (case-insensitively; the characters of a
+pattern are literal), at most 50, each as its next occurrence (its last when the series is over), upcoming first. An
+event the caller may not read in full never matches, and a guest's name matches only where the caller sees the guest
+list.
 
 ### Requirement: Reminders arrive as notifications
 An event MAY carry reminders (minutes before). When one falls due, the calendar service SHALL publish it to the
@@ -281,11 +312,13 @@ Every guest, owner, sharer and organizer SHALL show as display name (with avatar
 person is picked from a list or search, never typed as an ID or email.
 
 ## Status
-Added 2026-10-17. Vocabulary, graph shape and PDP test vectors (`pdp_calendar_scenarios_test.go`) exist. The service
+Added 2026-10-17. Guests, answers, free/busy, suggestions, search and settings are implemented
+(`POST /events/:id/rsvp`, `POST /events/:id/guests`, `GET /freebusy`, `GET /freebusy/suggest`, `GET /events/search`,
+`GET/PUT /settings`; `data/migrations/058_calendar_occurrence_answers.sql`). Vocabulary, graph shape and PDP test vectors (`pdp_calendar_scenarios_test.go`) exist. The service
 (`backend/services/calendar`, REST 8187, schema `data/migrations/057_calendar.sql`) implements the three kinds of
 calendar, lazy creation, subscriptions and sharing (`GET /api/workspaces/:id/calendar/calendars`, shares, subscriptions,
 group calendar). Events (`GET/POST /events`, `GET/PATCH/DELETE /events/:id`, expansion of repeating events in their
 zone, exceptions, edit and delete scopes, versions, Vietnamese `recurrenceText`, busy-only occurrences, `calendar`
-realtime events for created/updated/deleted) are implemented in the same service. Guests, RSVP, free/busy lists, event
-search, reminders, notifications and calls are specified here ahead of their code; until guests exist an event is
-created with its organizer as the only attendee, and naming other attendees is refused (422).
+realtime events for created/updated/deleted) are implemented in the same service. Reminders, notifications and
+calls are specified here ahead of their code; until the notification service handles it, a guest's answer reaches the
+organizer's open screen as a realtime frame only.

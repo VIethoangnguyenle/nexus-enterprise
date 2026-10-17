@@ -1,6 +1,8 @@
 package domain
 
 import (
+	"time"
+
 	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
 )
@@ -13,11 +15,13 @@ type Service struct {
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
 	events      realtime.Emitter
+	// now is the clock, replaced in tests.
+	now func() time.Time
 }
 
 // NewService builds the domain over its dependencies. events may be nil.
 func NewService(st Store, read policypb.PolicyReadServiceClient, write policypb.PolicyWriteServiceClient, events realtime.Emitter) *Service {
-	return &Service{store: st, policyRead: read, policyWrite: write, events: events}
+	return &Service{store: st, policyRead: read, policyWrite: write, events: events, now: time.Now}
 }
 
 // emit announces a committed change. Safe without an emitter.

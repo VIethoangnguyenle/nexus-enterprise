@@ -49,8 +49,7 @@ type EventInput struct {
 	Transparency string `json:"transparency"`
 	Visibility   string `json:"visibility"`
 	// Attendees are guests' node ids, InviteChannelID a group whose members are
-	// all invited. Guests arrive with the guest model; until then both must be
-	// empty.
+	// all invited (expanded when the event is saved).
 	Attendees        []string         `json:"attendees"`
 	InviteChannelID  string           `json:"inviteChannelId"`
 	GuestsCanInvite  bool             `json:"guestsCanInvite"`
@@ -166,4 +165,51 @@ type EventDetailView struct {
 	// PreservedOverrides is how many individually edited occurrences an edit of
 	// the whole series left as they were.
 	PreservedOverrides int `json:"preservedOverrides,omitempty"`
+}
+
+// RsvpInput is the body of POST /events/:id/rsvp: the caller's answer, for one
+// occurrence ("this", naming it) or for the whole event or series ("all").
+type RsvpInput struct {
+	Response   string `json:"response"`
+	Comment    string `json:"comment"`
+	Scope      string `json:"scope"`
+	Occurrence string `json:"occurrence"`
+}
+
+// GuestsInput is the body of POST /events/:id/guests: people to invite and/or a
+// group whose members are all invited.
+type GuestsInput struct {
+	Attendees       []string `json:"attendees"`
+	InviteChannelID string   `json:"inviteChannelId"`
+}
+
+// BusySpan is a stretch of someone's time that is taken. The title is present only
+// when the caller may read the event behind it.
+type BusySpan struct {
+	Start string `json:"start"`
+	End   string `json:"end"`
+	Title string `json:"title,omitempty"`
+}
+
+// PersonFreeBusy is one person's busy time in a range, with their working hours.
+type PersonFreeBusy struct {
+	Person *PersonRef `json:"person"`
+	Busy   []BusySpan `json:"busy"`
+	// WorkStart and WorkEnd are HH:mm in the person's own zone.
+	WorkStart string `json:"workStart"`
+	WorkEnd   string `json:"workEnd"`
+}
+
+// TimeSlot is a stretch of time everyone asked about is free.
+type TimeSlot struct {
+	Start string `json:"start"`
+	End   string `json:"end"`
+}
+
+// SettingsView is a person's calendar settings (also the body of PUT /settings).
+type SettingsView struct {
+	TZID            string `json:"tzid"`
+	WorkStart       string `json:"workStart"`
+	WorkEnd         string `json:"workEnd"`
+	DefaultReminder int    `json:"defaultReminder"`
 }

@@ -14,6 +14,7 @@ import (
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/policyclient"
+	"ngac-platform/pkg/provision"
 	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/calendar/internal/store"
@@ -85,7 +86,18 @@ type viewData struct {
 	who       string
 	people    map[string]*store.Person
 	responses map[string]string // the caller's answer, by event
-	guests    map[string]int
+	// occurrences holds the caller's answers to single occurrences of a series.
+	occurrences map[store.OccKey]string
+	guests      map[string]int
+}
+
+// responseFor is the caller's answer to one occurrence: the one they gave for it,
+// else their answer to the event or series.
+func (v *viewData) responseFor(eventID string, original time.Time) string {
+	if r, ok := v.occurrences[store.OccKey{EventID: eventID, At: original.UnixNano()}]; ok {
+		return r
+	}
+	return v.responses[eventID]
 }
 
 // loadViewData reads, in one round trip per kind, the people, answers and guest
@@ -109,6 +121,9 @@ func (s *Service) loadViewData(ctx context.Context, wsID, who string, insts []in
 		return nil, internal("name organizers", err)
 	}
 	if v.responses, err = s.store.MyResponses(ctx, who, ids); err != nil {
+		return nil, internal("load answers", err)
+	}
+	if v.occurrences, err = s.store.OccurrenceResponses(ctx, who, ids); err != nil {
 		return nil, internal("load answers", err)
 	}
 	if v.guests, err = s.store.GuestCounts(ctx, ids); err != nil {
@@ -157,7 +172,7 @@ func occurrenceView(in instance, level string, detail bool, v *viewData) *Occurr
 		return o
 	}
 	o.Title, o.Location, o.Kind = row.Title, row.Location, row.Kind
-	o.MyResponse = v.responses[m.ID]
+	o.MyResponse = v.responseFor(m.ID, in.Original)
 	o.IsOrganizer = row.OrganizerNodeID == v.who
 	o.HasCall = row.HasCall
 	o.IsRecurring = m.RRule != ""
@@ -208,6 +223,16 @@ func (s *Service) ListEvents(ctx context.Context, wsID string, q ListEventsQuery
 	if err != nil {
 		return nil, internal("list events", err)
 	}
+	// The events the caller is invited to show wherever their calendar is.
+	invited, err := s.invitedEvents(ctx, ws, who, masters, from, to)
+	if err != nil {
+		return nil, err
+	}
+	masters, overrides = append(masters, invited.masters...), append(overrides, invited.overrides...)
+	for id, c := range invited.cals {
+		byID[id] = c
+		levels[id] = invited.levels[id]
+	}
 	insts, err := expandEvents(masters, overrides, from, to)
 	if err != nil {
 		return nil, internal("expand events", err)
@@ -221,11 +246,78 @@ func (s *Service) ListEvents(ctx context.Context, wsID string, q ListEventsQuery
 		cal := byID[in.Master.CalendarID]
 		level := levels[cal.ID]
 		_, guest := v.responses[in.Master.ID]
-		detail := showsDetail(level, in.Row, cal, who.NGACNodeID, guest)
+		detail := invited.reads[in.Master.ID] || showsDetail(level, in.Row, cal, who.NGACNodeID, guest)
 		if !detail && in.Row.Transparency == TransparencyFree {
 			continue // free time is not busy time
 		}
 		out = append(out, occurrenceView(in, level, detail, v))
+	}
+	return out, nil
+}
+
+// invitedEvents is what a listing adds for a guest: the events of calendars the
+// caller does not list that they are an attendee of, within the range. Each is
+// admitted by read on its own OA, the only access a guest holds there; one the
+// caller is attendee of but cannot read (their access was taken away) is left out.
+type invitedSet struct {
+	masters, overrides []*store.Event
+	cals               map[string]*store.Calendar
+	levels             map[string]string
+	reads              map[string]bool // by event: read on its OA
+}
+
+func (s *Service) invitedEvents(ctx context.Context, ws *store.Workspace, who grpcauth.Caller, listed []*store.Event, from, to time.Time) (*invitedSet, error) {
+	out := &invitedSet{cals: map[string]*store.Calendar{}, levels: map[string]string{}, reads: map[string]bool{}}
+	am, ao, err := s.store.RangeAttended(ctx, who.NGACNodeID, from, to)
+	if err != nil {
+		return nil, internal("list invitations", err)
+	}
+	known := map[string]bool{}
+	for _, m := range listed {
+		known[m.ID] = true
+	}
+	var cand []*store.Event
+	var oas []string
+	for _, m := range am {
+		if !known[m.ID] && m.NgacOAID != "" {
+			cand = append(cand, m)
+			oas = append(oas, m.NgacOAID)
+		}
+	}
+	if len(cand) == 0 {
+		return out, nil
+	}
+	perms, err := policyclient.New(s.policyRead).BatchCheck(ctx, who.NGACNodeID, oas, []string{ngac.OpRead})
+	if err != nil {
+		return nil, internal("check invitations", err)
+	}
+	var cals []*store.Calendar
+	for _, m := range cand {
+		if !perms.Has(m.NgacOAID, ngac.OpRead) {
+			continue
+		}
+		c := out.cals[m.CalendarID]
+		if c == nil {
+			if c, err = s.loadCalendar(ctx, ws.ID, m.CalendarID); err != nil {
+				return nil, err
+			}
+			out.cals[c.ID] = c
+			cals = append(cals, c)
+		}
+		out.masters = append(out.masters, m)
+		out.reads[m.ID] = true
+	}
+	for _, o := range ao {
+		if out.reads[o.RecurringEventID] {
+			out.overrides = append(out.overrides, o)
+		}
+	}
+	held, err := s.accessLevels(ctx, who.NGACNodeID, cals)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range cals {
+		out.levels[c.ID] = accessTo(held, c)
 	}
 	return out, nil
 }
@@ -411,23 +503,40 @@ func (s *Service) detailView(ctx context.Context, ws *store.Workspace, who grpca
 	for _, r := range rems {
 		d.Reminders = append(d.Reminders, ReminderInput{MinutesBefore: r})
 	}
-	if canWrite(level) || row.OrganizerNodeID == who.NGACNodeID || row.GuestsCanSeeList {
-		list, err := s.store.Attendees(ctx, m.ID)
-		if err != nil {
-			return nil, internal("load guests", err)
+	list, err := s.store.Attendees(ctx, m.ID)
+	if err != nil {
+		return nil, internal("load guests", err)
+	}
+	// A guest sees the whole list only when the host allows it; otherwise
+	// themselves and the organizer.
+	whole := canWrite(level) || row.OrganizerNodeID == who.NGACNodeID || row.GuestsCanSeeList
+	var answers map[string]*store.Attendee
+	if m.RRule != "" {
+		if answers, err = s.store.OccurrenceAnswers(ctx, m.ID, in.Original); err != nil {
+			return nil, internal("load answers", err)
 		}
-		nodes := make([]string, len(list))
-		for i, a := range list {
-			nodes[i] = a.UserNodeID
+	}
+	var shown []*store.Attendee
+	nodes := []string{}
+	for _, a := range list {
+		if !whole && !a.IsOrganizer && a.UserNodeID != who.NGACNodeID {
+			continue
 		}
-		people, err := s.store.People(ctx, ws.ID, nodes)
-		if err != nil {
-			return nil, internal("name guests", err)
+		if o := answers[a.UserNodeID]; o != nil {
+			c := *a
+			c.Response, c.Comment = o.Response, o.Comment
+			a = &c
 		}
-		v.people = people
-		for _, a := range list {
-			d.Attendees = append(d.Attendees, AttendeeView{Person: v.person(a.UserNodeID), Response: a.Response, Comment: a.Comment, IsOrganizer: a.IsOrganizer})
-		}
+		shown = append(shown, a)
+		nodes = append(nodes, a.UserNodeID)
+	}
+	people, err := s.store.People(ctx, ws.ID, nodes)
+	if err != nil {
+		return nil, internal("name guests", err)
+	}
+	v.people = people
+	for _, a := range shown {
+		d.Attendees = append(d.Attendees, AttendeeView{Person: v.person(a.UserNodeID), Response: a.Response, Comment: a.Comment, IsOrganizer: a.IsOrganizer})
 	}
 	return d, nil
 }
@@ -447,8 +556,9 @@ func (s *Service) CreateEvent(ctx context.Context, wsID string, in EventInput) (
 	if err := s.authorize(ctx, who.NGACNodeID, cal, ngac.OpWrite); err != nil {
 		return nil, err
 	}
-	if len(in.Attendees) > 0 || in.InviteChannelID != "" {
-		return nil, invalid("guests cannot be added yet")
+	guests, err := s.resolveGuests(ctx, ws, who, in.Attendees, in.InviteChannelID, nil)
+	if err != nil {
+		return nil, err
 	}
 	e := &store.Event{
 		ID: uuid.NewString(), WorkspaceID: ws.ID, CalendarID: cal.ID, OrganizerNodeID: who.NGACNodeID,
@@ -499,7 +609,18 @@ func (s *Service) CreateEvent(ctx context.Context, wsID string, in EventInput) (
 	if err := s.store.InsertEvent(ctx, e, minutes); err != nil {
 		return nil, internal("save event", err)
 	}
+	var invited []string
+	if len(guests) > 0 || e.HasCall {
+		if invited, err = s.addGuests(ctx, ws, cal, e, guests); err != nil {
+			// The event is not left behind without the guests it was made for.
+			if derr := s.store.DeleteEvent(ctx, e.ID); derr != nil {
+				slog.Error("could not remove an event whose guests could not be added", "event", e.ID, "error", derr)
+			}
+			return nil, err
+		}
+	}
 	s.announce(ctx, ws, cal, who.NGACNodeID, realtime.KindCreated, e.ID)
+	s.announceGuests(ctx, ws, cal, realtime.KindCreated, invited, e.ID)
 	level, err := s.levelOn(ctx, who, cal)
 	if err != nil {
 		return nil, err
@@ -659,10 +780,11 @@ func (s *Service) UpdateEvent(ctx context.Context, wsID, id string, q ScopeQuery
 	if p.Version <= 0 {
 		return nil, invalid("version is required")
 	}
-	if (p.Attendees != nil && len(*p.Attendees) > 0) || (p.InviteChannelID != nil && *p.InviteChannelID != "") {
-		return nil, invalid("guests cannot be changed yet")
-	}
 	scope, err := scopeOf(q, ed.e.RRule != "")
+	if err != nil {
+		return nil, err
+	}
+	plan, err := s.planGuests(ctx, ed, &p, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -699,7 +821,21 @@ func (s *Service) UpdateEvent(ctx context.Context, wsID, id string, q ScopeQuery
 	if err != nil {
 		return nil, err
 	}
+	home := ed.cal
+	if target != nil {
+		home = target
+	}
+	if plan.touched {
+		// The guests of the whole series, or of the tail a split started. The row
+		// is already saved; a failure here leaves the guests as they were.
+		added, err := s.changeGuests(ctx, ed.ws, home, in.Master, plan)
+		if err != nil {
+			return nil, err
+		}
+		s.announceGuests(ctx, ed.ws, home, realtime.KindUpdated, added, in.Master.ID)
+	}
 	s.announce(ctx, ed.ws, ed.cal, ed.who.NGACNodeID, realtime.KindUpdated, distinct(ed.e.ID, in.Master.ID)...)
+	s.announceGuests(ctx, ed.ws, ed.cal, realtime.KindUpdated, append(s.guestNodes(ctx, in.Master), plan.remove...), distinct(ed.e.ID, in.Master.ID)...)
 	if in.Master.CalendarID != ed.cal.ID {
 		moved, err := s.loadCalendar(ctx, ed.ws.ID, in.Master.CalendarID)
 		if err == nil {
@@ -961,6 +1097,7 @@ func (s *Service) updateSeries(ctx context.Context, ed *editing, scope, occurren
 				n.RRule = shiftWeekdays(n.RRule, int(d))
 			}
 		}
+		change.DropAnswers = true // the occurrences answers named are not the same ones now
 		change.Originals = map[string]time.Time{}
 		for _, o := range all {
 			if o.OriginalStart != nil {
@@ -976,6 +1113,7 @@ func (s *Service) updateSeries(ctx context.Context, ed *editing, scope, occurren
 		if n.RRule == "" {
 			change.DropOverrides, change.Originals, all = true, nil, nil // no series, no exceptions
 		}
+		change.DropAnswers = true
 	}
 	if target != nil {
 		n.CalendarID = target.ID
@@ -1062,8 +1200,36 @@ func (s *Service) splitSeries(ctx context.Context, ed *editing, orig time.Time, 
 	if err := finalizeEvent(&old); err != nil {
 		return instance{}, 0, internal("end the series", err)
 	}
-	if err := s.store.CutSeries(ctx, &old, m.Version, orig, &tail, minutes); err != nil {
+
+	// The tail is a new event with its own nodes: its guests are the series' guests,
+	// in the graph as in the rows. The nodes come first so the tail never exists
+	// with guests who cannot read it; a failed split removes them again.
+	var prov *provision.Creator
+	if m.NgacOAID != "" {
+		have, err := s.store.Attendees(ctx, m.ID)
+		if err != nil {
+			return instance{}, 0, internal("load guests", err)
+		}
+		members := make([]string, len(have))
+		for i, a := range have {
+			members[i] = a.UserNodeID
+		}
+		prov = provision.NewCreator(s.policyWrite)
+		if err := s.wireEventNodes(ctx, prov, ed.ws, ed.cal, &tail, members); err != nil {
+			return instance{}, 0, prov.Fail(ctx, err)
+		}
+	}
+	// The answers to single occurrences follow the tail only while its occurrences
+	// are the ones they were given for.
+	keepAnswers := !p.RRule.Set && pos.start.Equal(cur.start) && pos.end.Equal(cur.end)
+	if err := s.store.CutSeries(ctx, &old, m.Version, orig, &tail, minutes, keepAnswers); err != nil {
+		if prov != nil {
+			return instance{}, 0, prov.Fail(ctx, storeErr("split series", err))
+		}
 		return instance{}, 0, storeErr("split series", err)
+	}
+	if prov != nil {
+		prov.Done()
 	}
 	return instance{Row: &tail, Master: &tail, Original: tail.StartsAt, Start: tail.StartsAt, End: tail.EndsAt}, 0, nil
 }
@@ -1082,6 +1248,7 @@ func (s *Service) DeleteEvent(ctx context.Context, wsID, id string, q ScopeQuery
 		return err
 	}
 	m := ed.e
+	guests := s.guestNodes(ctx, m)
 	var orig time.Time
 	var override *store.Event
 	var sp span
@@ -1105,7 +1272,7 @@ func (s *Service) DeleteEvent(ctx context.Context, wsID, id string, q ScopeQuery
 		if err := finalizeEvent(&old); err != nil {
 			return internal("end the series", err)
 		}
-		if err := s.store.CutSeries(ctx, &old, m.Version, orig, nil, nil); err != nil {
+		if err := s.store.CutSeries(ctx, &old, m.Version, orig, nil, nil, false); err != nil {
 			return storeErr("end series", err)
 		}
 	default: // this occurrence only: it stays as a cancelled exception
@@ -1123,6 +1290,7 @@ func (s *Service) DeleteEvent(ctx context.Context, wsID, id string, q ScopeQuery
 		}
 	}
 	s.announce(ctx, ed.ws, ed.cal, ed.who.NGACNodeID, realtime.KindDeleted, m.ID)
+	s.announceGuests(ctx, ed.ws, ed.cal, realtime.KindDeleted, guests, m.ID)
 	return nil
 }
 

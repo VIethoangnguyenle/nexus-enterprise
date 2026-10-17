@@ -90,11 +90,25 @@ type Store interface {
 	OverrideOf(ctx context.Context, seriesID string, original time.Time) (*store.Event, error)
 	Overrides(ctx context.Context, seriesID string) ([]*store.Event, error)
 	RangeEvents(ctx context.Context, calendarIDs []string, from, to time.Time) (masters, overrides []*store.Event, err error)
+	RangeAttended(ctx context.Context, userNodeID string, from, to time.Time) (masters, overrides []*store.Event, err error)
+	SearchEvents(ctx context.Context, calendarIDs []string, userNodeID, term string, limit int) ([]*store.Event, error)
 	InsertEvent(ctx context.Context, e *store.Event, reminders []int) error
 	UpdateEvent(ctx context.Context, e *store.Event, version int, ch store.EventChange) error
-	CutSeries(ctx context.Context, series *store.Event, version int, cutFrom time.Time, tail *store.Event, tailReminders *[]int) error
+	CutSeries(ctx context.Context, series *store.Event, version int, cutFrom time.Time, tail *store.Event, tailReminders *[]int, keepAnswers bool) error
 	DeleteEvent(ctx context.Context, id string) error
 	Attendees(ctx context.Context, eventID string) ([]*store.Attendee, error)
+	Attendee(ctx context.Context, eventID, userNodeID string) (*store.Attendee, error)
+	AddAttendees(ctx context.Context, eventID string, add []store.Attendee) error
+	RemoveAttendees(ctx context.Context, eventID string, nodes []string) error
+	SetResponse(ctx context.Context, eventID, userNodeID, response, comment string) error
+	SetOccurrenceResponse(ctx context.Context, eventID, userNodeID string, original time.Time, response, comment string) error
+	OccurrenceResponses(ctx context.Context, userNodeID string, eventIDs []string) (map[store.OccKey]string, error)
+	OccurrenceAnswers(ctx context.Context, eventID string, original time.Time) (map[string]*store.Attendee, error)
+	SetEventNodes(ctx context.Context, eventID, oaID, uaID string) error
+	ChannelMembers(ctx context.Context, channelID string) ([]string, error)
+	OutOfOffice(ctx context.Context, workspaceID string, nodes []string, from, to time.Time) (map[string]bool, error)
+	Settings(ctx context.Context, workspaceID string, nodes []string) (map[string]store.Settings, error)
+	SaveSettings(ctx context.Context, workspaceID, userNodeID string, st store.Settings) error
 	MyResponses(ctx context.Context, userNodeID string, eventIDs []string) (map[string]string, error)
 	GuestCounts(ctx context.Context, eventIDs []string) (map[string]int, error)
 	Reminders(ctx context.Context, eventID string) ([]int, error)

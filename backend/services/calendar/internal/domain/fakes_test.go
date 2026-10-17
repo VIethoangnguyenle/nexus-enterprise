@@ -3,6 +3,7 @@ package domain
 import (
 	"context"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -24,6 +25,9 @@ type memStore struct {
 	events    map[string]*store.Event
 	attendees map[string][]*store.Attendee
 	reminders map[string][]int
+	// answers are the answers to single occurrences; settings the saved settings.
+	answers  map[store.OccKey]map[string]*store.Attendee
+	settings map[string]store.Settings
 	// onInsert runs inside InsertCalendar before the row is stored, to stage a race.
 	onInsert func(*store.Calendar)
 }
@@ -34,6 +38,7 @@ func newMemStore(ws *store.Workspace) *memStore {
 		members: map[string][]string{}, calendars: map[string]*store.Calendar{},
 		subs: map[[2]string]*store.Subscription{}, shares: map[[2]string]*store.Share{},
 		events: map[string]*store.Event{}, attendees: map[string][]*store.Attendee{}, reminders: map[string][]int{},
+		answers: map[store.OccKey]map[string]*store.Attendee{}, settings: map[string]store.Settings{},
 	}
 }
 
@@ -299,6 +304,72 @@ func (m *memStore) RangeEvents(_ context.Context, cals []string, from, to time.T
 	return masters, overrides, nil
 }
 
+// RangeAttended is RangeEvents over the events a person attends.
+func (m *memStore) RangeAttended(_ context.Context, node string, from, to time.Time) (masters, overrides []*store.Event, err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	attends := func(id string) bool {
+		for _, a := range m.attendees[id] {
+			if a.UserNodeID == node {
+				return true
+			}
+		}
+		return false
+	}
+	known := map[string]bool{}
+	for _, e := range m.events {
+		if e.RecurringEventID != "" || !attends(e.ID) || !e.StartsAt.Before(to) {
+			continue
+		}
+		if (e.RRule == "" && !e.EndsAt.Before(from)) || (e.RRule != "" && (e.RecurrenceUntil == nil || !e.RecurrenceUntil.Before(from))) {
+			masters = append(masters, cloneEvent(e))
+			known[e.ID] = true
+		}
+	}
+	for _, e := range m.events {
+		if e.RecurringEventID != "" && attends(e.RecurringEventID) && (known[e.RecurringEventID] || (e.StartsAt.Before(to) && !e.EndsAt.Before(from))) {
+			overrides = append(overrides, cloneEvent(e))
+			if !known[e.RecurringEventID] {
+				known[e.RecurringEventID] = true
+				masters = append(masters, cloneEvent(m.events[e.RecurringEventID]))
+			}
+		}
+	}
+	return masters, overrides, nil
+}
+
+func (m *memStore) SearchEvents(_ context.Context, cals []string, node, term string, limit int) ([]*store.Event, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	needle := strings.ToLower(term)
+	var out []*store.Event
+	for _, e := range m.events {
+		if e.RecurringEventID != "" {
+			continue
+		}
+		listed := false
+		for _, c := range cals {
+			listed = listed || c == e.CalendarID
+		}
+		attends := false
+		hit := strings.Contains(strings.ToLower(e.Title+"\n"+e.Location+"\n"+e.Description), needle)
+		for _, a := range m.attendees[e.ID] {
+			attends = attends || a.UserNodeID == node
+			if p := m.people[a.UserNodeID]; p != nil && strings.Contains(strings.ToLower(p.DisplayName), needle) {
+				hit = true
+			}
+		}
+		if hit && (listed || attends) {
+			out = append(out, cloneEvent(e))
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].StartsAt.After(out[j].StartsAt) })
+	if len(out) > limit {
+		out = out[:limit]
+	}
+	return out, nil
+}
+
 func (m *memStore) insertLocked(e *store.Event, reminders []int, organizer bool) error {
 	for _, x := range m.events {
 		if e.RecurringEventID != "" && x.RecurringEventID == e.RecurringEventID && x.OriginalStart != nil && e.OriginalStart != nil && x.OriginalStart.Equal(*e.OriginalStart) {
@@ -352,13 +423,20 @@ func (m *memStore) UpdateEvent(_ context.Context, e *store.Event, version int, c
 			x.OriginalStart = &at
 		}
 	}
+	if ch.DropAnswers {
+		for k := range m.answers {
+			if k.EventID == e.ID {
+				delete(m.answers, k)
+			}
+		}
+	}
 	if ch.Reminders != nil {
 		m.reminders[e.ID] = append([]int(nil), *ch.Reminders...)
 	}
 	return nil
 }
 
-func (m *memStore) CutSeries(_ context.Context, series *store.Event, version int, cutFrom time.Time, tail *store.Event, tailReminders *[]int) error {
+func (m *memStore) CutSeries(_ context.Context, series *store.Event, version int, cutFrom time.Time, tail *store.Event, tailReminders *[]int, keepAnswers bool) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if err := m.updateLocked(series, version); err != nil {
@@ -369,11 +447,24 @@ func (m *memStore) CutSeries(_ context.Context, series *store.Event, version int
 			delete(m.events, id)
 		}
 	}
+	for k := range m.answers {
+		if k.EventID == series.ID && k.At >= cutFrom.UnixNano() && (tail == nil || !keepAnswers) {
+			delete(m.answers, k)
+		}
+	}
 	if tail == nil {
 		return nil
 	}
 	if err := m.insertLocked(tail, nil, false); err != nil {
 		return err
+	}
+	if keepAnswers {
+		for k, v := range m.answers {
+			if k.EventID == series.ID && k.At >= cutFrom.UnixNano() {
+				m.answers[store.OccKey{EventID: tail.ID, At: k.At}] = v
+				delete(m.answers, k)
+			}
+		}
 	}
 	for _, a := range m.attendees[series.ID] {
 		c := *a
@@ -404,6 +495,161 @@ func (m *memStore) Attendees(_ context.Context, id string) ([]*store.Attendee, e
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return append([]*store.Attendee(nil), m.attendees[id]...), nil
+}
+
+func (m *memStore) Attendee(_ context.Context, id, node string) (*store.Attendee, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, a := range m.attendees[id] {
+		if a.UserNodeID == node {
+			c := *a
+			return &c, nil
+		}
+	}
+	return nil, store.ErrNotFound
+}
+
+func (m *memStore) AddAttendees(_ context.Context, id string, add []store.Attendee) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, n := range add {
+		dup := false
+		for _, a := range m.attendees[id] {
+			dup = dup || a.UserNodeID == n.UserNodeID
+		}
+		if !dup {
+			c := n
+			m.attendees[id] = append(m.attendees[id], &c)
+		}
+	}
+	return nil
+}
+
+func (m *memStore) RemoveAttendees(_ context.Context, id string, nodes []string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var kept []*store.Attendee
+	for _, a := range m.attendees[id] {
+		drop := false
+		for _, n := range nodes {
+			drop = drop || (n == a.UserNodeID && !a.IsOrganizer)
+		}
+		if drop {
+			for k := range m.answers {
+				delete(m.answers[k], a.UserNodeID)
+			}
+			continue
+		}
+		kept = append(kept, a)
+	}
+	m.attendees[id] = kept
+	return nil
+}
+
+func (m *memStore) SetResponse(_ context.Context, id, node, response, comment string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, a := range m.attendees[id] {
+		if a.UserNodeID == node {
+			a.Response, a.Comment = response, comment
+			for k, v := range m.answers {
+				if k.EventID == id {
+					delete(v, node)
+				}
+			}
+			return nil
+		}
+	}
+	return store.ErrNotFound
+}
+
+func (m *memStore) SetOccurrenceResponse(_ context.Context, id, node string, original time.Time, response, comment string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	k := store.OccKey{EventID: id, At: original.UnixNano()}
+	if m.answers[k] == nil {
+		m.answers[k] = map[string]*store.Attendee{}
+	}
+	m.answers[k][node] = &store.Attendee{UserNodeID: node, Response: response, Comment: comment}
+	return nil
+}
+
+func (m *memStore) OccurrenceResponses(_ context.Context, node string, ids []string) (map[store.OccKey]string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[store.OccKey]string{}
+	for k, v := range m.answers {
+		for _, id := range ids {
+			if a := v[node]; a != nil && k.EventID == id {
+				out[k] = a.Response
+			}
+		}
+	}
+	return out, nil
+}
+
+func (m *memStore) OccurrenceAnswers(_ context.Context, id string, original time.Time) (map[string]*store.Attendee, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]*store.Attendee{}
+	for n, a := range m.answers[store.OccKey{EventID: id, At: original.UnixNano()}] {
+		c := *a
+		out[n] = &c
+	}
+	return out, nil
+}
+
+func (m *memStore) SetEventNodes(_ context.Context, id, oa, ua string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	e, ok := m.events[id]
+	if !ok {
+		return store.ErrNotFound
+	}
+	e.NgacOAID, e.GuestsUAID = oa, ua
+	return nil
+}
+
+func (m *memStore) ChannelMembers(_ context.Context, ch string) ([]string, error) {
+	return append([]string(nil), m.members[ch]...), nil
+}
+
+func (m *memStore) OutOfOffice(_ context.Context, _ string, nodes []string, from, to time.Time) (map[string]bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]bool{}
+	for _, e := range m.events {
+		cal := m.calendars[e.CalendarID]
+		if e.Kind != "ooo" || e.RecurringEventID != "" || e.RRule != "" || cal == nil || cal.Kind != store.KindPersonal {
+			continue
+		}
+		for _, n := range nodes {
+			if cal.OwnerNodeID == n && e.StartsAt.Before(to) && e.EndsAt.After(from) {
+				out[n] = true
+			}
+		}
+	}
+	return out, nil
+}
+
+func (m *memStore) Settings(_ context.Context, _ string, nodes []string) (map[string]store.Settings, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string]store.Settings{}
+	for _, n := range nodes {
+		out[n] = store.DefaultSettings()
+		if st, ok := m.settings[n]; ok {
+			out[n] = st
+		}
+	}
+	return out, nil
+}
+
+func (m *memStore) SaveSettings(_ context.Context, _ string, node string, st store.Settings) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.settings[node] = st
+	return nil
 }
 
 func (m *memStore) MyResponses(_ context.Context, node string, ids []string) (map[string]string, error) {
@@ -442,7 +688,12 @@ func (m *memStore) Reminders(_ context.Context, id string) ([]int, error) {
 	return out, nil
 }
 
-func (m *memStore) DefaultReminder(context.Context, string, string) (int, error) {
+func (m *memStore) DefaultReminder(_ context.Context, _, node string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if st, ok := m.settings[node]; ok {
+		return st.DefaultReminder, nil
+	}
 	return store.DefaultReminderMinutes, nil
 }
 

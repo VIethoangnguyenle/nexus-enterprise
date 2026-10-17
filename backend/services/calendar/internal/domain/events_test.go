@@ -137,7 +137,7 @@ func TestCreateValidation(t *testing.T) {
 	bad("bad rule", func(in *EventInput) { in.RRule = sp("FREQ=HOURLY") })
 	bad("count too big", func(in *EventInput) { in.RRule = sp("FREQ=DAILY;COUNT=731") })
 	bad("negative reminder", func(in *EventInput) { in.Reminders = &[]ReminderInput{{MinutesBefore: -1}} })
-	bad("guests not yet", func(in *EventInput) { in.Attendees = []string{"n-bob"} })
+	bad("email guest", func(in *EventInput) { in.Attendees = []string{"bob@example.com"} })
 
 	_, err := f.svc.CreateEvent(callerCtx("n-alice"), ws, EventInput{CalendarID: "missing"})
 	requireKind(t, err, ErrNotFound)

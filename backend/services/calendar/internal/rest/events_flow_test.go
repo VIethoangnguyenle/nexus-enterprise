@@ -256,7 +256,7 @@ func TestEventValidationOverREST(t *testing.T) {
 		"bad zone":      strings.Replace(eventBody(cal, ""), `Asia/Ho_Chi_Minh`, `Nowhere/Land`, 1),
 		"hourly":        eventBody(cal, `,"rrule":"FREQ=HOURLY"`),
 		"too many":      eventBody(cal, `,"rrule":"FREQ=DAILY;COUNT=731"`),
-		"guests":        strings.Replace(eventBody(cal, ""), `"attendees":[]`, `"attendees":["x"]`, 1),
+		"email guest":   strings.Replace(eventBody(cal, ""), `"attendees":[]`, `"attendees":["x@example.com"]`, 1),
 		"bad reminders": eventBody(cal, `,"reminders":[{"minutesBefore":-5}]`),
 	} {
 		code, _, raw := f.createEvent("alice", body)

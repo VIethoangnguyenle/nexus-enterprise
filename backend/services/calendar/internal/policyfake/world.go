@@ -176,6 +176,22 @@ func (x writeClient) DeleteNode(_ context.Context, in *policypb.DeleteNodeReques
 	if n, ok := x.w.Nodes[in.NodeId]; ok {
 		delete(x.w.Nodes, in.NodeId)
 		delete(x.w.byName, n.NodeType+" "+n.Name)
+		// Deleting a node takes every edge on it, as the policy service does.
+		delete(x.w.Parents, in.NodeId)
+		for child, parents := range x.w.Parents {
+			kept := parents[:0:0]
+			for _, p := range parents {
+				if p != in.NodeId {
+					kept = append(kept, p)
+				}
+			}
+			x.w.Parents[child] = kept
+		}
+		for k := range x.w.Assocs {
+			if k[0] == in.NodeId || k[1] == in.NodeId {
+				delete(x.w.Assocs, k)
+			}
+		}
 		x.w.Log = append(x.w.Log, "delete "+n.Name)
 		if x.w.OnNodeDeleted != nil {
 			x.w.OnNodeDeleted(n.Id)
@@ -193,6 +209,23 @@ func (x writeClient) CreateAssignment(_ context.Context, in *policypb.CreateAssi
 	x.w.Assign(in.ChildId, in.ParentId)
 	x.w.Log = append(x.w.Log, fmt.Sprintf("assign %s>%s", x.w.label(in.ChildId), x.w.label(in.ParentId)))
 	return &policypb.Assignment{}, nil
+}
+
+func (x writeClient) RemoveAssignment(_ context.Context, in *policypb.RemoveAssignmentRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
+	x.w.mu.Lock()
+	defer x.w.mu.Unlock()
+	if err := x.w.step(); err != nil {
+		return nil, err
+	}
+	kept := x.w.Parents[in.ChildId][:0:0]
+	for _, p := range x.w.Parents[in.ChildId] {
+		if p != in.ParentId {
+			kept = append(kept, p)
+		}
+	}
+	x.w.Parents[in.ChildId] = kept
+	x.w.Log = append(x.w.Log, fmt.Sprintf("unassign %s>%s", x.w.label(in.ChildId), x.w.label(in.ParentId)))
+	return &policypb.Empty{}, nil
 }
 
 func (x writeClient) CreateAssociation(_ context.Context, in *policypb.CreateAssociationRequest, _ ...grpc.CallOption) (*policypb.Association, error) {
