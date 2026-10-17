@@ -212,6 +212,16 @@ describe('SettingsScreen: Hồ sơ', () => {
     expectNoIds()
   })
 
+  it('says nothing about departments in a personal workspace', async () => {
+    details = { ...details, type: 'personal' }
+    await renderSettings()
+    const form = await screen.findByRole('form', { name: 'Hồ sơ' })
+    await waitFor(() => expect(within(form).getByLabelText('Tên hiển thị')).toHaveValue('Lê Thị Hoa'))
+    expect(within(form).queryByText('Phòng ban')).toBeNull()
+    expect(screen.queryByText('Đối soát')).toBeNull()
+    expect(screen.getByText('Kế toán trưởng')).toBeInTheDocument()
+  })
+
   it('reads the person from their own record, never by searching the directory', async () => {
     await renderSettings()
     const form = await screen.findByRole('form', { name: 'Hồ sơ' })

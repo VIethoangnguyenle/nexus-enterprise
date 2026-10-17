@@ -231,8 +231,10 @@ export function ImageBody({ url, name, zoom, onZoom, onPrevious, onNext }: Image
     <div
       ref={box}
       data-testid="image-stage"
-      className={`h-full w-full overflow-hidden select-none grid place-items-center ${
-        isZoomed ? 'touch-none cursor-grab active:cursor-grabbing' : ''
+      // touch-none always: the page itself never zooms, so the first pinch on a
+      // fitted picture must reach these pointer handlers rather than the browser.
+      className={`h-full w-full overflow-hidden select-none grid place-items-center touch-none ${
+        isZoomed ? 'cursor-grab active:cursor-grabbing' : ''
       }`}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}

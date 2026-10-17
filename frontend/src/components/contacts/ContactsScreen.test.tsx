@@ -20,12 +20,13 @@ const api = vi.mocked(apiFetch)
 const DM_ID = '33333333-aaaa-4bbb-8ccc-0000000000ff'
 const calls: { method: string; path: string; body?: unknown }[] = []
 let contactsResult: () => Promise<unknown>
+let workspaceType: 'personal' | undefined
 
 function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
   const method = (init?.method || 'GET').toUpperCase()
   const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
   calls.push({ method, path, ...(body ? { body } : {}) })
-  if (path === '/workspaces') return Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành' }] })
+  if (path === '/workspaces') return Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành', ...(workspaceType ? { type: workspaceType } : {}) }] })
   if (path.startsWith(`/workspaces/${WS_ID}/contacts`)) return contactsResult()
   if (path === '/dms' && method === 'POST') return Promise.resolve({ id: DM_ID, channel_type: 'dm', name: 'dm' })
   return Promise.reject(new Error(`unexpected ${method} ${path}`))
@@ -47,6 +48,7 @@ async function renderContacts() {
 beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   calls.length = 0
+  workspaceType = undefined
   localStorage.clear()
   switchPreferencesTo(undefined)
   useWebSocketStore.setState({ onlineUsers: {} })
@@ -281,5 +283,31 @@ describe('ContactsScreen: layout', () => {
     switchPreferencesTo(undefined)
     await renderContacts()
     expect(await screen.findByRole('list', { name: /Người trong/ })).toBeInTheDocument()
+  })
+})
+
+describe('ContactsScreen: personal workspace', () => {
+  it('shows no department filter, column, panel row or colleagues', async () => {
+    workspaceType = 'personal'
+    const user = userEvent.setup()
+    await renderContacts()
+    await within(table()).findByText('Trần Minh Đức')
+
+    expect(screen.queryByRole('button', { name: /Phòng ban/ })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Phòng ban' })).toBeNull()
+    expect(screen.queryByText('Vận hành thanh toán')).toBeNull()
+
+    await user.click(within(table()).getByText('Lê Quang Vinh'))
+    const panel = await screen.findByRole('complementary', { name: 'Hồ sơ' })
+    expect(within(panel).queryByText('Phòng ban')).toBeNull()
+    expect(within(panel).queryByText('Đối soát')).toBeNull()
+    expect(within(panel).queryByText('Cùng phòng')).toBeNull()
+  })
+
+  it('keeps them in a company workspace', async () => {
+    await renderContacts()
+    await within(table()).findByText('Trần Minh Đức')
+    expect(screen.getByRole('button', { name: 'Phòng ban' })).toBeInTheDocument()
+    expect(screen.getAllByRole('columnheader').some((h) => h.textContent === 'Phòng ban')).toBe(true)
   })
 })

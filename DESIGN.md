@@ -192,6 +192,8 @@ mã backend, email và tài liệu kỹ thuật không đổi.
   - *Đổi workspace:* bấm ô chữ cái (hay tên khi mở rộng) mở cùng một menu; đầu menu ghi đầy đủ tên workspace
     đang mở (xuống dòng, không cắt) + dòng phụ ("Workspace cá nhân" hoặc tên tổ chức) · vai trò; danh sách
     "Chuyển sang" cũng xuống dòng thay vì cắt. Workspace cá nhân không có Tài sản, Phê duyệt, Quản trị.
+  - *Phòng ban chỉ có ở workspace tổ chức.* Workspace cá nhân không hiện trường, cột, bộ lọc, nhóm trong ô
+    chọn người hay dòng phụ nào nói về phòng ban (Hồ sơ, Danh bạ, ô chọn người).
   - *Tooltip* chỉ ở chỗ chữ bị ẩn (ô workspace, avatar, nút chuyển): `--color-overlay`, `--shadow-overlay`,
     radius 8, 12px, cách 8px bên phải, `--z-tooltip`; trỏ chuột 400ms, focus bàn phím hiện ngay, Esc ẩn.
     Tooltip không bao giờ là nguồn tên duy nhất.
@@ -805,6 +807,10 @@ CSS. Biến thể dùng chung ở `frontend/src/lib/motion.ts`.
 WCAG 2.2 AA. Chữ ≥ 4.5:1, chữ lớn và UI ≥ 3:1 trên nền thật. Mọi phần tử tương tác là
 `button`/`a`/control thật, có hover, `:focus-visible`, active, disabled. Touch target ≥ 44px.
 Màu không bao giờ là kênh duy nhất (trạng thái có nhãn; lớp phủ realtime có nhãn chữ).
+Điện thoại **không phóng to trang** (người dùng chốt 2026-10-17, vì phóng to làm vỡ bố cục): viewport `maximum-scale=1,
+user-scalable=no`, `touch-action: manipulation` (không chạm đúp), cử chỉ chụm của iOS bị huỷ; ô nhập 16px trên màn cảm
+ứng để không tự phóng khi focus. Đánh đổi có chủ đích với WCAG 1.4.4: chữ đã đủ lớn (chat 16px trên điện thoại), và nội
+dung cần phóng (ảnh trong Trình xem tệp) có phóng riêng bằng chụm hai ngón.
 
 ## 10. Enforcement
 

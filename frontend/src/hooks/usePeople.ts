@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { useContacts } from './useContacts'
+import { useWorkspaceTypeOf } from './useWorkspaceType'
 import { buildDirectory, EMPTY_DIRECTORY, type PeopleDirectory } from '../lib/people'
 
 /**
@@ -9,8 +10,9 @@ import { buildDirectory, EMPTY_DIRECTORY, type PeopleDirectory } from '../lib/pe
  */
 export function usePeople(workspaceId: string): PeopleDirectory & { isLoading: boolean } {
   const { data, isLoading } = useContacts(workspaceId)
+  const { isPersonal } = useWorkspaceTypeOf(workspaceId)
   return useMemo(() => {
-    const dir = data?.contacts ? buildDirectory(data.contacts) : EMPTY_DIRECTORY
+    const dir = data?.contacts ? buildDirectory(data.contacts, { departments: !isPersonal }) : EMPTY_DIRECTORY
     return { ...dir, isLoading }
-  }, [data, isLoading])
+  }, [data, isLoading, isPersonal])
 }

@@ -10,8 +10,12 @@ import { nameOf, roleLine } from './contacts-model'
  * columns are chosen by the table's own width, so with the profile panel open
  * the department and email fold under the name instead of squeezing it.
  */
-const COLS =
+const COLS_WITH_DEPARTMENT =
   `grid grid-cols-[minmax(0,1fr)_112px] @2xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_minmax(0,1.3fr)_112px]
+   gap-x-3 items-center px-2.5`
+/** Without the department column (a personal workspace): person · email · status. */
+const COLS_NO_DEPARTMENT =
+  `grid grid-cols-[minmax(0,1fr)_112px] @2xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1.3fr)_112px]
    gap-x-3 items-center px-2.5`
 
 interface ContactsTableProps {
@@ -23,9 +27,12 @@ interface ContactsTableProps {
   onSelect: (c: Contact) => void
   /** Changes when the filter does; rows enter in sequence for a new list. */
   scope: string
+  /** False in a personal workspace, which has no departments. */
+  showDepartment?: boolean
 }
 
-export function ContactsTable({ label, people, loading, selectedId, isOnline, onSelect, scope }: ContactsTableProps) {
+export function ContactsTable({ label, people, loading, selectedId, isOnline, onSelect, scope, showDepartment = true }: ContactsTableProps) {
+  const COLS = showDepartment ? COLS_WITH_DEPARTMENT : COLS_NO_DEPARTMENT
   const m = useMotionPresets()
   const bodyRef = useRef<HTMLDivElement>(null)
   const firstBatch = useRef<{ scope: string; ids: Map<string, number> } | null>(null)
@@ -49,7 +56,7 @@ export function ContactsTable({ label, people, loading, selectedId, isOnline, on
     <div role="table" aria-label={label} aria-busy={loading || undefined} className="@container grid content-start px-5 pb-4">
       <div role="row" className={`${COLS} h-9 text-xs font-semibold text-ink-muted border-b border-line`}>
         <span role="columnheader">Người</span>
-        <span role="columnheader" className="hidden @2xl:block">Phòng ban</span>
+        {showDepartment && <span role="columnheader" className="hidden @2xl:block">Phòng ban</span>}
         <span role="columnheader" className="hidden @2xl:block">Email</span>
         <span role="columnheader">Trạng thái</span>
       </div>
@@ -64,7 +71,7 @@ export function ContactsTable({ label, people, loading, selectedId, isOnline, on
                   <span className="skeleton h-3 w-2/5 rounded-sm" />
                 </span>
               </span>
-              <span className="skeleton h-3.5 w-3/4 rounded-sm hidden @2xl:block" />
+              {showDepartment && <span className="skeleton h-3.5 w-3/4 rounded-sm hidden @2xl:block" />}
               <span className="skeleton h-3.5 w-4/5 rounded-sm hidden @2xl:block" />
               <span className="skeleton h-3.5 w-2/3 rounded-sm" />
             </div>
@@ -83,7 +90,7 @@ export function ContactsTable({ label, people, loading, selectedId, isOnline, on
                   transition={m.layout}
                   className="overflow-hidden"
                 >
-                  <ContactRow contact={c} selected={selectedId === c.user_id} online={isOnline(c)} onSelect={onSelect} />
+                  <ContactRow cols={COLS} showDepartment={showDepartment} contact={c} selected={selectedId === c.user_id} online={isOnline(c)} onSelect={onSelect} />
                 </motion.div>
               )
             })}
@@ -103,7 +110,9 @@ export function PresenceLabel({ online }: { online: boolean }) {
   )
 }
 
-const ContactRow = memo(function ContactRow({ contact, selected, online, onSelect }: {
+const ContactRow = memo(function ContactRow({ cols, showDepartment, contact, selected, online, onSelect }: {
+  cols: string
+  showDepartment: boolean
   contact: Contact
   selected: boolean
   online: boolean
@@ -113,7 +122,7 @@ const ContactRow = memo(function ContactRow({ contact, selected, online, onSelec
   return (
     <div
       role="row"
-      className={`${COLS} row-lazy relative min-h-14 border-b border-line transition-colors duration-quick
+      className={`${cols} row-lazy relative min-h-14 border-b border-line transition-colors duration-quick
         ${selected ? 'bg-accent-wash' : 'hover:bg-hover'}`}
     >
       <span role="cell" className="flex items-center gap-2.5 min-w-0">
@@ -133,7 +142,7 @@ const ContactRow = memo(function ContactRow({ contact, selected, online, onSelec
           {contact.title && <span className="hidden @2xl:block truncate text-xs text-ink-muted">{contact.title}</span>}
         </span>
       </span>
-      <span role="cell" className="hidden @2xl:block truncate text-sm text-ink-muted">{contact.department}</span>
+      {showDepartment && <span role="cell" className="hidden @2xl:block truncate text-sm text-ink-muted">{contact.department}</span>}
       <span role="cell" className="hidden @2xl:block truncate text-sm text-ink-muted">{contact.email}</span>
       <span role="cell"><PresenceLabel online={online} /></span>
     </div>
