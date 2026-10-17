@@ -255,15 +255,31 @@ event the caller may not read in full never matches, and a guest's name matches 
 list.
 
 ### Requirement: Reminders arrive as notifications
-An event MAY carry reminders (minutes before). When one falls due, the calendar service SHALL publish it to the
-Redpanda topic `calendar.events`, and the messaging service SHALL store one notification of type `calendar_reminder`
-for each person who may see the event, and send a web push to them. A reminder SHALL fire once per occurrence and
-person. A person who lost access before it fell due gets none. Inviting someone SHALL notify them as
-`calendar_invitation`, and a guest's answer SHALL notify the host as `calendar_rsvp`.
+An event MAY carry reminders (minutes before; a person's own reminders replace the event's for them). Every 30 seconds
+the calendar service SHALL look for occurrences whose reminder falls due: now is at or past the occurrence's start
+minus the minutes, and not more than 10 minutes past it. For each such occurrence and each person it concerns it SHALL
+claim the reminder in `calendar_reminder_deliveries` (one row per event, person, occurrence and minutes; a second claim
+by any instance does nothing) and only then publish it to the Redpanda topic `calendar.events` (`event.reminder`). The
+people it concerns are the guests who have not declined that occurrence (an answer to the occurrence outranks the
+answer to the series), plus the owner of a personal calendar or the host of any other event unless they declined. The
+messaging service SHALL store one notification of type `calendar_reminder` for each, and send a web push
+(`docs/specs/notifications/spec.md`). A person who is not a guest, or lost access before it fell due, gets none. The
+service looks as far ahead as the longest reminder an event may carry (four weeks). Inviting someone SHALL notify them
+as `calendar_invitation`, a guest's answer the host as `calendar_rsvp`, a move of time or place the guests as
+`calendar_updated`, a cancellation the guests as `calendar_cancelled` and sharing a calendar the grantee as
+`calendar_shared`.
 
 #### Scenario: Reminder
 - **WHEN** an event with a 10-minute reminder is 10 minutes away
-- **THEN** each person who can read it has one new notification, with the event's title and start time
+- **THEN** each person who can read it and has not declined has one new notification, with the event's title and start time
+
+#### Scenario: Once only
+- **WHEN** the reminder falls due and two calendar services (or two passes) look for it
+- **THEN** each person is reminded once
+
+#### Scenario: Declined
+- **WHEN** a guest declined that occurrence of a repeating event
+- **THEN** they get no reminder for it, and still get one for the next occurrence
 
 #### Scenario: No longer allowed
 - **WHEN** a guest was removed after the event was created and its reminder falls due
@@ -319,6 +335,10 @@ Added 2026-10-17. Guests, answers, free/busy, suggestions, search and settings a
 calendar, lazy creation, subscriptions and sharing (`GET /api/workspaces/:id/calendar/calendars`, shares, subscriptions,
 group calendar). Events (`GET/POST /events`, `GET/PATCH/DELETE /events/:id`, expansion of repeating events in their
 zone, exceptions, edit and delete scopes, versions, Vietnamese `recurrenceText`, busy-only occurrences, `calendar`
-realtime events for created/updated/deleted) are implemented in the same service. Reminders, notifications and
-calls are specified here ahead of their code; until the notification service handles it, a guest's answer reaches the
-organizer's open screen as a realtime frame only.
+realtime events for created/updated/deleted) are implemented in the same service. Reminders (a 30 second scheduler,
+claimed in `calendar_reminder_deliveries`), the notices on `calendar.events` (`event.invited`, `event.updated`,
+`event.cancelled`, `event.rsvp`, `event.reminder`, `calendar.shared`, and `event.created` for an event on a group's
+calendar, which carries the group and notifies nobody) and the notifications and push they make in the messaging
+service are implemented. The call of an event (`POST /api/calendar-events/:eventId/call`) is served by the messaging
+service and needs the event to carry a call (`hasCall`). A person's own reminders are honoured when present but no
+route writes them yet.

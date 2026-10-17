@@ -45,6 +45,7 @@ func (c *chat) callsEcho(t *testing.T, withMedia bool) *echo.Echo {
 		}
 	}
 	e.POST("/api/channels/:chId/calls", h.StartCall, as)
+	e.POST("/api/calendar-events/:eventId/call", h.StartEventCall, as)
 	e.POST("/internal/livekit/webhook", h.LiveKitWebhook)
 	return e
 }
@@ -103,6 +104,13 @@ func TestStartCall_WithoutMediaAnswersUnavailable(t *testing.T) {
 	var n int
 	require.NoError(t, c.pool.QueryRow(context.Background(), `SELECT count(*) FROM calls WHERE channel_id = $1`, c.chID).Scan(&n))
 	assert.Zero(t, n)
+}
+
+func TestStartEventCall_WithoutMediaAnswersUnavailable(t *testing.T) {
+	c := newChat(t)
+	rec := call(c.callsEcho(t, false), http.MethodPost, "/api/calendar-events/some-event/call", "")
+	require.Equal(t, http.StatusServiceUnavailable, rec.Code, rec.Body.String())
+	assert.Equal(t, "calls_unavailable", decode(t, rec)["code"])
 }
 
 // A client that does not know incoming_call yet leaves it as it was; one that

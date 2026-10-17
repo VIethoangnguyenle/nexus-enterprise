@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"strings"
 	_ "time/tzdata" // zone data for event time zones, whatever the image carries
 
 	echomw "github.com/labstack/echo/v4/middleware"
@@ -19,6 +20,7 @@ import (
 	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/calendar/internal/domain"
+	"ngac-platform/services/calendar/internal/events"
 	"ngac-platform/services/calendar/internal/rest"
 	"ngac-platform/services/calendar/internal/store"
 )
@@ -58,8 +60,16 @@ func main() {
 	defer policyConn.Close()
 
 	// A broker that is down costs the realtime nudge, never a request.
-	events := realtime.Connect("calendar")
-	defer events.Close()
+	frames := realtime.Connect("calendar")
+	defer frames.Close()
+
+	// Notices to the people an event concerns, and reminders. Without a broker the
+	// calendar still works; nobody is notified.
+	notices, err := events.NewProducer(strings.Split(bootstrap.Env("KAFKA_BROKERS", "localhost:19092"), ","))
+	if err != nil {
+		slog.Warn("kafka unavailable, calendar notifications disabled", "error", err)
+	}
+	defer notices.Close()
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
@@ -78,8 +88,9 @@ func main() {
 		store.New(pool),
 		policypb.NewPolicyReadServiceClient(policyConn),
 		policypb.NewPolicyWriteServiceClient(policyConn),
-		events,
+		frames,
 	)
+	calendars.SetNotices(notices)
 	e := httputil.NewEcho("calendar", echomw.Logger())
 	rest.NewHandler(calendars).RegisterRoutes(e, jwtSecret)
 
@@ -96,5 +107,14 @@ func main() {
 		}
 	}()
 
+	// Due reminders are sent every 30 seconds until shutdown, and the pool is not
+	// closed under a pass that is still running.
+	reminders := make(chan struct{})
+	go func() {
+		defer close(reminders)
+		calendars.RunReminders(ctx)
+	}()
+
 	bootstrap.Shutdown{GRPC: srv, Health: healthSrv, HTTP: []bootstrap.HTTPServer{e}, Cancel: cancel}.Wait()
+	<-reminders
 }

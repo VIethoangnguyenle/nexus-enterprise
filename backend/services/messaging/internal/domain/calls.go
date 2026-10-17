@@ -109,6 +109,11 @@ type CallObserver interface {
 func (s *Service) SetCallObserver(o CallObserver) { s.callObserver = o }
 
 func (s *Service) announceCall(ctx context.Context, c CallChange) {
+	// The call of a calendar event has no conversation to tell; its people learn of
+	// it from the event.
+	if c.Call != nil && c.Call.ChannelId == "" {
+		return
+	}
 	if s.callObserver != nil {
 		s.callObserver.CallChanged(ctx, c)
 	}
@@ -430,7 +435,7 @@ func (s *Service) participantJoined(ctx context.Context, call *store.Call, userI
 // between two people ends it for both. LiveKit's room_finished then marks it ended. A ringing call is left to
 // ring out or be cancelled; a group call goes on while anyone is in it.
 func (s *Service) endDirectCallLeftAlone(ctx context.Context, call *store.Call) error {
-	if call.Status != callActive {
+	if call.Status != callActive || call.ChannelID == "" {
 		return nil
 	}
 	ch, err := s.loadChannel(ctx, call.ChannelID)
@@ -536,6 +541,10 @@ func (s *Service) mayStayInCall(ctx context.Context, call *store.Call, userID st
 	// The question is the participant's own standing, so it is asked as them:
 	// the policy service answers only on behalf of a person.
 	ctx = grpcauth.WithCaller(ctx, grpcauth.Caller{UserID: userID, NGACNodeID: node, TenantID: tenantID})
+	if call.CalendarEventID != "" {
+		_, err = s.authorizeEvent(ctx, call.CalendarEventID, node)
+		return err == nil
+	}
 	_, err = s.authorizeChannel(ctx, call.ChannelID, node, ngac.OpWrite)
 	return err == nil
 }
@@ -551,6 +560,14 @@ func (s *Service) authorizeCall(ctx context.Context, callID, userNodeID, op stri
 	}
 	if call == nil {
 		return nil, fmt.Errorf("%w: call not found", ErrNotFound)
+	}
+	if call.CalendarEventID != "" {
+		// An event's guests only read it, so reading it is the right to be in its
+		// call, to join and to see it, whatever op a conversation's call would ask.
+		if _, err := s.authorizeEvent(ctx, call.CalendarEventID, userNodeID); err != nil {
+			return nil, err
+		}
+		return call, nil
 	}
 	if _, err := s.authorizeChannel(ctx, call.ChannelID, userNodeID, op); err != nil {
 		return nil, err

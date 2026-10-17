@@ -5,6 +5,7 @@ import (
 
 	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/calendar/internal/events"
 )
 
 // Service is the calendar domain. Its policy reads decide every request; its
@@ -15,6 +16,8 @@ type Service struct {
 	policyRead  policypb.PolicyReadServiceClient
 	policyWrite policypb.PolicyWriteServiceClient
 	events      realtime.Emitter
+	// notices tells the people an event concerns what happened to it; may be nil.
+	notices events.Publisher
 	// now is the clock, replaced in tests.
 	now func() time.Time
 }

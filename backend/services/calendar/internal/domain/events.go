@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +18,7 @@ import (
 	"ngac-platform/pkg/provision"
 	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/calendar/internal/events"
 	"ngac-platform/services/calendar/internal/store"
 )
 
@@ -621,6 +623,10 @@ func (s *Service) CreateEvent(ctx context.Context, wsID string, in EventInput) (
 	}
 	s.announce(ctx, ws, cal, who.NGACNodeID, realtime.KindCreated, e.ID)
 	s.announceGuests(ctx, ws, cal, realtime.KindCreated, invited, e.ID)
+	s.notify(ctx, events.TypeInvited, ws, cal, e, invited, noticeExtras{actor: who})
+	if cal.Kind == store.KindChannel {
+		s.notify(ctx, events.TypeCreated, ws, cal, e, nil, noticeExtras{actor: who})
+	}
 	level, err := s.levelOn(ctx, who, cal)
 	if err != nil {
 		return nil, err
@@ -784,6 +790,7 @@ func (s *Service) UpdateEvent(ctx context.Context, wsID, id string, q ScopeQuery
 	if err != nil {
 		return nil, err
 	}
+	before := *ed.e
 	plan, err := s.planGuests(ctx, ed, &p, scope)
 	if err != nil {
 		return nil, err
@@ -825,17 +832,20 @@ func (s *Service) UpdateEvent(ctx context.Context, wsID, id string, q ScopeQuery
 	if target != nil {
 		home = target
 	}
+	var added []string
 	if plan.touched {
 		// The guests of the whole series, or of the tail a split started. The row
 		// is already saved; a failure here leaves the guests as they were.
-		added, err := s.changeGuests(ctx, ed.ws, home, in.Master, plan)
+		added, err = s.changeGuests(ctx, ed.ws, home, in.Master, plan)
 		if err != nil {
 			return nil, err
 		}
 		s.announceGuests(ctx, ed.ws, home, realtime.KindUpdated, added, in.Master.ID)
 	}
 	s.announce(ctx, ed.ws, ed.cal, ed.who.NGACNodeID, realtime.KindUpdated, distinct(ed.e.ID, in.Master.ID)...)
-	s.announceGuests(ctx, ed.ws, ed.cal, realtime.KindUpdated, append(s.guestNodes(ctx, in.Master), plan.remove...), distinct(ed.e.ID, in.Master.ID)...)
+	guests := s.guestNodes(ctx, in.Master)
+	s.announceGuests(ctx, ed.ws, ed.cal, realtime.KindUpdated, append(append([]string{}, guests...), plan.remove...), distinct(ed.e.ID, in.Master.ID)...)
+	s.notifyChange(ctx, ed, home, in, scope, before, guests, added, plan.remove)
 	if in.Master.CalendarID != ed.cal.ID {
 		moved, err := s.loadCalendar(ctx, ed.ws.ID, in.Master.CalendarID)
 		if err == nil {
@@ -1291,7 +1301,34 @@ func (s *Service) DeleteEvent(ctx context.Context, wsID, id string, q ScopeQuery
 	}
 	s.announce(ctx, ed.ws, ed.cal, ed.who.NGACNodeID, realtime.KindDeleted, m.ID)
 	s.announceGuests(ctx, ed.ws, ed.cal, realtime.KindDeleted, guests, m.ID)
+	x := noticeExtras{actor: ed.who}
+	if scope != ScopeAll {
+		x.occurrence = orig
+	}
+	s.notify(ctx, events.TypeCancelled, ed.ws, ed.cal, m, guests, x)
 	return nil
+}
+
+// notifyChange tells the guests what an edit did: the newly invited that they are,
+// the others that it moved (when it moved), and the ones taken off that they are
+// no longer on it.
+func (s *Service) notifyChange(ctx context.Context, ed *editing, home *store.Calendar, in instance, scope string, before store.Event, guests, added, removed []string) {
+	x := noticeExtras{actor: ed.who}
+	s.notify(ctx, events.TypeInvited, ed.ws, home, in.Master, added, x)
+	s.notify(ctx, events.TypeCancelled, ed.ws, home, in.Master, removed, x)
+	if !movedOrReplaced(before, scope, in) {
+		return
+	}
+	var others []string
+	for _, n := range guests {
+		if !slices.Contains(added, n) {
+			others = append(others, n)
+		}
+	}
+	if scope != ScopeAll {
+		x.occurrence, x.start, x.end = in.Original, in.Start, in.End
+	}
+	s.notify(ctx, events.TypeUpdated, ed.ws, home, in.Master, others, x)
 }
 
 // deleteWhole removes an event for good, with the graph nodes it made. The nodes

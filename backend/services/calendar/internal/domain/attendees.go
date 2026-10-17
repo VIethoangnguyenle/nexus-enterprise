@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"ngac-platform/ngac"
@@ -14,6 +15,7 @@ import (
 	"ngac-platform/pkg/provision"
 	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/calendar/internal/events"
 	"ngac-platform/services/calendar/internal/store"
 )
 
@@ -434,6 +436,7 @@ func (s *Service) AddGuests(ctx context.Context, wsID, id string, in GuestsInput
 		return nil, err
 	}
 	s.announceGuests(ctx, ws, cal, realtime.KindUpdated, distinct(append(added, who.NGACNodeID, e.OrganizerNodeID)...), e.ID)
+	s.notify(ctx, events.TypeInvited, ws, cal, e, added, noticeExtras{actor: who})
 	in2, err := s.instanceAt(ctx, e, "")
 	if err != nil {
 		in2 = instance{Row: e, Master: e, Original: e.StartsAt, Start: e.StartsAt, End: e.EndsAt}
@@ -502,6 +505,7 @@ func (s *Service) Rsvp(ctx context.Context, wsID, id string, in RsvpInput) (*Eve
 		return nil, denied("no read access")
 	}
 
+	var occurrence time.Time
 	switch {
 	case e.RRule == "" || in.Scope == ScopeAll:
 		err = s.store.SetResponse(ctx, e.ID, who.NGACNodeID, in.Response, in.Comment)
@@ -513,6 +517,7 @@ func (s *Service) Rsvp(ctx context.Context, wsID, id string, in RsvpInput) (*Eve
 		if oerr != nil {
 			return nil, oerr
 		}
+		occurrence = orig
 		err = s.store.SetOccurrenceResponse(ctx, e.ID, who.NGACNodeID, orig, in.Response, in.Comment)
 	case in.Scope == "":
 		return nil, invalid("scope is required for a repeating event")
@@ -529,6 +534,8 @@ func (s *Service) Rsvp(ctx context.Context, wsID, id string, in RsvpInput) (*Eve
 	// The host's screen learns of the answer; notifying them waits for the
 	// notification service.
 	s.announceGuests(ctx, ws, cal, realtime.KindUpdated, distinct(e.OrganizerNodeID, who.NGACNodeID), e.ID)
+	s.notify(ctx, events.TypeRsvp, ws, cal, e, []string{e.OrganizerNodeID},
+		noticeExtras{actor: who, response: in.Response, comment: in.Comment, occurrence: occurrence})
 
 	shown, err := s.instanceAt(ctx, e, in.Occurrence)
 	if err != nil {

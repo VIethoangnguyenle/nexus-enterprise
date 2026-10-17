@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"strings"
 	"sync"
@@ -25,6 +26,10 @@ type memStore struct {
 	events    map[string]*store.Event
 	attendees map[string][]*store.Attendee
 	reminders map[string][]int
+	// userReminders are a person's own reminders of an event, by event and person.
+	userReminders map[string]map[string][]int
+	// claimed holds the reminders already delivered.
+	claimed map[string]bool
 	// answers are the answers to single occurrences; settings the saved settings.
 	answers  map[store.OccKey]map[string]*store.Attendee
 	settings map[string]store.Settings
@@ -686,6 +691,61 @@ func (m *memStore) Reminders(_ context.Context, id string) ([]int, error) {
 	out := append([]int{}, m.reminders[id]...)
 	sort.Sort(sort.Reverse(sort.IntSlice(out)))
 	return out, nil
+}
+
+// ReminderEvents is the events that carry a reminder, wherever they are kept.
+func (m *memStore) ReminderEvents(ctx context.Context, from, to time.Time) (masters, overrides []*store.Event, err error) {
+	m.mu.Lock()
+	var cals []string
+	for id := range m.calendars {
+		cals = append(cals, id)
+	}
+	m.mu.Unlock()
+	all, overs, err := m.RangeEvents(ctx, cals, from, to)
+	if err != nil {
+		return nil, nil, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, e := range all {
+		if len(m.reminders[e.ID]) > 0 || len(m.userReminders[e.ID]) > 0 {
+			masters = append(masters, e)
+		}
+	}
+	return masters, overs, nil
+}
+
+func (m *memStore) ReminderSpecs(_ context.Context, ids []string) (map[string][]store.ReminderSpec, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := map[string][]store.ReminderSpec{}
+	for _, id := range ids {
+		for _, mins := range m.reminders[id] {
+			out[id] = append(out[id], store.ReminderSpec{Minutes: mins})
+		}
+		for node, list := range m.userReminders[id] {
+			for _, mins := range list {
+				out[id] = append(out[id], store.ReminderSpec{UserNodeID: node, Minutes: mins})
+			}
+		}
+	}
+	return out, nil
+}
+
+// ClaimReminder is the unique row of calendar_reminder_deliveries: the first
+// claim of a person, occurrence and minutes wins.
+func (m *memStore) ClaimReminder(_ context.Context, id, node string, occurrence time.Time, minutes int) (bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	key := fmt.Sprintf("%s|%s|%d|%d", id, node, occurrence.UnixNano(), minutes)
+	if m.claimed[key] {
+		return false, nil
+	}
+	if m.claimed == nil {
+		m.claimed = map[string]bool{}
+	}
+	m.claimed[key] = true
+	return true, nil
 }
 
 func (m *memStore) DefaultReminder(_ context.Context, _, node string) (int, error) {

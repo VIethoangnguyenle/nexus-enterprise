@@ -200,6 +200,8 @@ func main() {
 	}
 	if consumer != nil {
 		defer consumer.Close()
+		// Calendar notices are checked against the graph and pushed to devices.
+		consumer.SetCalendar(domainSvc)
 	}
 
 	// Every domain's committed changes reach the hub through this consumer.

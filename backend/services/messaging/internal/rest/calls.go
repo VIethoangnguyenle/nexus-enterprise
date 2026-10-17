@@ -36,6 +36,7 @@ func (h *Handler) SetCallWebhooks(w CallWebhooks) { h.webhooks = w }
 func (h *Handler) registerCallRoutes(e *echo.Echo, api *echo.Group) {
 	api.POST("/channels/:chId/calls", h.StartCall)
 	api.GET("/channels/:chId/call", h.OpenCall)
+	api.POST("/calendar-events/:eventId/call", h.StartEventCall)
 	api.GET("/calls/:callId", h.GetCall)
 	api.POST("/calls/:callId/token", h.CallToken)
 	api.POST("/calls/:callId/decline", h.DeclineCall)
@@ -85,6 +86,26 @@ func (h *Handler) StartCall(c echo.Context) error {
 		h.hub.BroadcastToChannel(card.ChannelId, card)
 	}
 	return c.JSON(http.StatusCreated, join)
+}
+
+// StartEventCall handles POST /api/calendar-events/:eventId/call: starts the
+// call of a calendar event, or joins the one already open, and answers like
+// StartCall: 201 for a call it opened, 200 for one already open.
+func (h *Handler) StartEventCall(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	join, created, err := h.svc.StartEventCall(c.Request().Context(), domain.StartEventCallInput{
+		EventID: c.Param("eventId"), UserID: claims.UserID, UserNodeID: claims.NGACNodeID,
+	})
+	if err != nil {
+		return callError(err)
+	}
+	if created {
+		return c.JSON(http.StatusCreated, join)
+	}
+	return c.JSON(http.StatusOK, join)
 }
 
 // GetCall handles GET /api/calls/:callId.

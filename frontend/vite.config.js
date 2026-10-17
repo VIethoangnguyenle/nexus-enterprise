@@ -113,6 +113,9 @@ const devProxy = {
   '/api/polls': { target: 'http://localhost:8183', changeOrigin: true },
   '/api/tasks': { target: 'http://localhost:8183', changeOrigin: true },
   '/api/calls': { target: 'http://localhost:8183', changeOrigin: true },
+  // The video call of a calendar event is served by messaging. Declared before
+  // '/api/calendar' below, whose prefix would otherwise swallow it.
+  '/api/calendar-events': { target: 'http://localhost:8183', changeOrigin: true },
 
   // Asset service — :8184
   '/api/assets': { target: 'http://localhost:8184', changeOrigin: true },

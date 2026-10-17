@@ -15,7 +15,7 @@ require (
 
 require (
 	github.com/teambition/rrule-go v1.8.2
-	github.com/twmb/franz-go v1.21.0 // indirect
+	github.com/twmb/franz-go v1.21.0
 	google.golang.org/protobuf v1.36.8 // indirect
 )
 

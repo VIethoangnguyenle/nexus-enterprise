@@ -10,6 +10,7 @@ import (
 	"ngac-platform/pkg/provision"
 	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
+	"ngac-platform/services/calendar/internal/events"
 	"ngac-platform/services/calendar/internal/store"
 )
 
@@ -119,6 +120,7 @@ func (s *Service) PutShare(ctx context.Context, wsID, calID, granteeNode, level 
 	e := realtime.For(ctx, realtime.DomainCalendar, realtime.KindShareCreated, ws.ID, cal.ID)
 	e.UserNodeIDs = distinct(cal.OwnerNodeID, granteeNode, who.NGACNodeID)
 	s.emit(e)
+	s.notify(ctx, events.TypeShared, ws, cal, nil, []string{granteeNode}, noticeExtras{actor: who})
 
 	saved, err := s.store.ShareOf(ctx, cal.ID, granteeNode)
 	if err != nil {

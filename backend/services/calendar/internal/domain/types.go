@@ -112,5 +112,8 @@ type Store interface {
 	MyResponses(ctx context.Context, userNodeID string, eventIDs []string) (map[string]string, error)
 	GuestCounts(ctx context.Context, eventIDs []string) (map[string]int, error)
 	Reminders(ctx context.Context, eventID string) ([]int, error)
+	ReminderEvents(ctx context.Context, from, to time.Time) (masters, overrides []*store.Event, err error)
+	ReminderSpecs(ctx context.Context, eventIDs []string) (map[string][]store.ReminderSpec, error)
+	ClaimReminder(ctx context.Context, eventID, userNodeID string, occurrence time.Time, minutes int) (bool, error)
 	DefaultReminder(ctx context.Context, workspaceID, userNodeID string) (int, error)
 }

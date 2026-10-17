@@ -133,9 +133,15 @@ The screens render DESIGN.md §6 "Cuộc gọi video và thoại" and `design/mo
 A call SHALL belong to a conversation or to a calendar event, exactly one of the two (`calls.calendar_event_id`,
 `channel_id` nullable, a CHECK for exactly one). A call of an event SHALL be started and joined only after `read` on
 the event's OA (`CalEv_<id>`) — checked when the ticket is asked for, never trusted from an earlier check — and a
-person without it SHALL get 403 and no ticket. An event in a group calendar uses that group's own call and its
-`write` rule above. A call of an event posts no card (there is no conversation); everything else — one open call per
-event, the 20-person limit, `call_ended`, `call_full` — applies unchanged. See `docs/specs/calendar/spec.md`.
+person without it SHALL get 403 and no ticket. `POST /api/calendar-events/{eventId}/call` (served by the messaging
+service) starts the call of an event that carries one (`hasCall`; 404 otherwise) or joins the one already open, and
+answers like starting a channel call: 201 with `{call, token, url}` for a call it opened, 200 for one already open; the
+call has no `channel_id`. `POST /api/calls/{id}/token` and `GET /api/calls/{id}` for such a call check `read` on the
+event's OA now, and a person put out of the event is put out of the room. An event with no OA of its own is checked on
+its calendar's. A repeating event's call belongs to its series. An event in a group calendar uses that group's own call
+and its `write` rule above. A call of an event posts no card and is announced to no conversation (there is none), and
+nobody is invited to it from a chat; everything else — one open call per event, the 20-person limit, `call_ended`,
+`call_full` — applies unchanged. See `docs/specs/calendar/spec.md`.
 
 #### Scenario: A guest joins
 - **WHEN** a guest of an event asks for its call ticket

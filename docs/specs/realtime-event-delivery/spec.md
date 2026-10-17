@@ -8,6 +8,8 @@ Show every change somebody else makes on the screen that is already open, withou
 ### Requirement: Events are announced after the change commits
 A service that changes state SHALL emit one event per committed change onto the Redpanda topic `<domain>.events` (domains: `drive`, `channel`, `workspace`, `document`, `permission`, `calendar`; assets keep `asset.lifecycle`, `asset.request`, `asset.assignment`; approvals keep `approval.events`). It SHALL emit only after the change is visible to readers, and SHALL NOT emit when the request is refused, fails, or is rolled back. The request path never calls the hub.
 
+The calendar's topic also carries notices for the notification consumer (`docs/specs/notifications/spec.md`): a record with `"record": "notice"`. The realtime consumer SHALL skip those and the notification consumer SHALL skip the frames.
+
 Every event SHALL carry `tenant_id` and `workspace_id`, taken from the verified caller or the stored row, never from the request body. An event without either is dropped by the producer.
 
 #### Scenario: A refused or failed change
