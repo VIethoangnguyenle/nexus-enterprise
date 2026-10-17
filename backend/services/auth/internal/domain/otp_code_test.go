@@ -53,3 +53,29 @@ func TestOTPCodeHash_BindsCodeToSessionAndKey(t *testing.T) {
 		t.Error("a session without a stored hash must never match")
 	}
 }
+
+func TestIsTestAccount(t *testing.T) {
+	for _, tc := range []struct {
+		name, ident, identType string
+		want                   bool
+	}{
+		{"example.test", "x@example.test", "email", true},
+		{"subdomain", "x@a.b.foo.test", "email", true},
+		{"bare tld host", "x@test", "email", true},
+		{"uppercase", "X@Example.TEST", "email", true},
+		{"test.com", "x@test.com", "email", false},
+		{"testing tld", "x@example.testing", "email", false},
+		{"suffix without dot", "x@footest", "email", false},
+		{"test in local part", "x.test@example.com", "email", false},
+		{"phone", "+84901234567", "phone", false},
+		{"phone type with .test text", "x@example.test", "phone", false},
+		{"no at sign", "example.test", "email", false},
+		{"empty", "", "email", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := isTestAccount(tc.ident, tc.identType); got != tc.want {
+				t.Errorf("isTestAccount(%q, %q) = %v, want %v", tc.ident, tc.identType, got, tc.want)
+			}
+		})
+	}
+}

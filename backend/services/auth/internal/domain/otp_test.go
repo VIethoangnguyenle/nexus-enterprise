@@ -73,6 +73,12 @@ func uniqueEmail() string {
 	return fmt.Sprintf("otp-%d@example.test", time.Now().UnixNano())
 }
 
+// uniqueRealEmail is an address on a domain that can receive mail, so it is
+// never a test account.
+func uniqueRealEmail() string {
+	return fmt.Sprintf("otp-%d@example.com", time.Now().UnixNano())
+}
+
 func TestOTP_DefaultConfigAcceptsFixedTestCode(t *testing.T) {
 	svc, _, _ := otpService(t, nil)
 	if !svc.OTPEnabled() || !svc.OTPFixedCodeActive() {
@@ -211,7 +217,7 @@ func TestOTP_RequestIsRateLimitedPerIdentifier(t *testing.T) {
 	} {
 		t.Run(mode.name, func(t *testing.T) {
 			svc, _, _ := otpService(t, &mode.opts)
-			email := uniqueEmail()
+			email := uniqueRealEmail()
 			for i := 0; i < 5; i++ {
 				if _, err := svc.RequestOTP(context.Background(), email, "email"); err != nil {
 					t.Fatalf("request %d: %v", i, err)
@@ -225,6 +231,29 @@ func TestOTP_RequestIsRateLimitedPerIdentifier(t *testing.T) {
 				t.Fatalf("other identifier: %v", err)
 			}
 		})
+	}
+}
+
+func TestOTP_TestAccountsAreNotRateLimitedWhileFixedCodeIsOn(t *testing.T) {
+	svc, _, _ := otpService(t, &domain.OTPOptions{FixedCode: "999999"})
+	email := uniqueEmail() // on the reserved .test TLD
+	for i := 0; i < 8; i++ {
+		if _, err := svc.RequestOTP(context.Background(), email, "email"); err != nil {
+			t.Fatalf("request %d: %v", i+1, err)
+		}
+	}
+}
+
+func TestOTP_TestAddressIsRateLimitedWhenCodesAreRandom(t *testing.T) {
+	svc, _, _ := otpService(t, &domain.OTPOptions{Sender: &recordingSender{}})
+	email := uniqueEmail()
+	for i := 0; i < 5; i++ {
+		if _, err := svc.RequestOTP(context.Background(), email, "email"); err != nil {
+			t.Fatalf("request %d: %v", i+1, err)
+		}
+	}
+	if _, err := svc.RequestOTP(context.Background(), email, "email"); !errors.Is(err, domain.ErrOTPRateLimited) {
+		t.Fatalf("6th request err = %v, want ErrOTPRateLimited", err)
 	}
 }
 

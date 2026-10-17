@@ -76,8 +76,10 @@ func (s *Service) RequestOTP(ctx context.Context, identifier, identType string) 
 		return "", fmt.Errorf("%w: %s", ErrInvalidInput, err.Error())
 	}
 
-	if err := s.checkOTPRate(ctx, identType, normalized); err != nil {
-		return "", err
+	if !(s.otp.FixedCode != "" && isTestAccount(normalized, identType)) {
+		if err := s.checkOTPRate(ctx, identType, normalized); err != nil {
+			return "", err
+		}
 	}
 
 	code := s.otp.FixedCode
@@ -110,6 +112,24 @@ func (s *Service) RequestOTP(ctx context.Context, identifier, identType string) 
 	slog.Info("OTP issued", "session_id", sessionID, "identifier", maskIdentifier(normalized, identType),
 		"fixed_code_mode", s.otp.FixedCode != "")
 	return sessionID, nil
+}
+
+// isTestAccount reports whether a normalized identifier is an email on the
+// reserved .test TLD (RFC 6761). Such an address can never receive mail, and
+// automated browser tests sign in with it repeatedly. RequestOTP skips the
+// per-identifier rate limit for it, but only while the fixed test code is on:
+// that code already lets anyone into any account, so the limit protects
+// nothing there. With random codes the limit applies to every address.
+func isTestAccount(normalized, identType string) bool {
+	if identType != "email" {
+		return false
+	}
+	at := strings.LastIndexByte(normalized, '@')
+	if at < 0 {
+		return false
+	}
+	host := strings.ToLower(normalized[at+1:])
+	return host == "test" || strings.HasSuffix(host, ".test")
 }
 
 // checkOTPRate counts a code request against the identifier's window.
