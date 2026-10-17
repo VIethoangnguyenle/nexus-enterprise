@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nexus · Tài liệu dạng lưới và tab Tệp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* PR 2 của plan 261016-1942: Tài liệu kiểu Google Drive (lưới thumbnail, danh sách, panel xem trước, phím tắt)
+   ở 1440 / 820 / 390, và tab Tệp của nhóm chat dùng cùng bộ hiển thị. Chrome trang lấy từ file-viewer.html.
+   Thumbnail trong mockup vẽ bằng CSS; trong app là ảnh thật do máy chủ sinh (ảnh, trang 1 PDF/Office, khung video). */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-ink-muted); }
+code { font: 400 0.8125rem/1 var(--font-mono); }
+.k { font-size: 0.6875rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+
+.page { max-width: 1440px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 74ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.toc a:hover { background: var(--color-hover); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+.screen-head { display: grid; gap: 6px; max-width: 82ch; }
+.screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 86ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+.scroll { overflow-x: auto; border-radius: 14px; }
+
+/* primitives */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0; font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink); }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.ghost { background: transparent; }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.ib { width: 32px; height: 32px; border-radius: 8px; display: inline-grid; place-items: center; color: var(--color-ink-muted); border: 0; background: none; flex: none; }
+.ib:hover { background: var(--color-hover); }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--color-sunk); font-weight: 600; font-size: 0.8125rem; color: var(--color-ink-muted); white-space: nowrap; }
+.chip[aria-checked="true"] { background: var(--color-accent-wash); color: var(--color-accent); }
+.seg { display: inline-flex; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg span { width: 34px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--color-ink-muted); }
+.seg span[aria-pressed="true"] { background: var(--color-raised); color: var(--color-ink); }
+.search { height: 36px; border-radius: 999px; background: var(--color-sunk); display: flex; align-items: center; gap: 8px; padding: 0 14px; color: var(--color-ink-subtle); min-width: 0; }
+.av { --s: 20px; width: var(--s); height: var(--s); border-radius: 999px; display: inline-grid; place-items: center; color: var(--color-on-person); font: 600 calc(var(--s) * 0.42)/1 var(--font-body); flex: none; }
+
+/* file kind tiles */
+.kind { width: 20px; height: 20px; border-radius: 5px; display: grid; place-items: center; flex: none; }
+.kind svg { width: 13px; height: 13px; }
+.k-pdf { background: var(--color-danger-wash); color: var(--color-danger); }
+.k-sheet { background: var(--color-success-wash); color: var(--color-success); }
+.k-doc { background: var(--color-info-wash); color: var(--color-info); }
+.k-img { background: var(--color-accent-wash); color: var(--color-accent); }
+.k-vid { background: var(--color-person-6-wash); color: var(--color-person-6); }
+.k-other { background: var(--color-sunk); color: var(--color-ink-muted); }
+
+/* thumbnails (stand-ins for server images) */
+.thumb { aspect-ratio: 16 / 10; max-width: 100%; border-radius: 8px; overflow: hidden; position: relative; background: var(--color-sunk); display: grid; place-items: center; }
+.t-photo { background: radial-gradient(circle at 70% 30%, oklch(88% 0.06 85) 0 9%, transparent 10%), linear-gradient(180deg, oklch(72% 0.07 230) 0 55%, oklch(55% 0.08 150) 55% 72%, oklch(45% 0.06 140) 72%); }
+.t-photo2 { background: linear-gradient(120deg, oklch(64% 0.09 40), oklch(52% 0.1 20) 45%, oklch(36% 0.05 260)); }
+.t-photo3 { background: radial-gradient(ellipse at 50% 120%, oklch(60% 0.08 70) 0 40%, transparent 41%), linear-gradient(180deg, oklch(84% 0.04 220), oklch(70% 0.06 220)); }
+.t-page { background: var(--color-sunk); padding: 10px 18% 0; place-items: start stretch; }
+.t-page .sheet-of { background: oklch(99.5% 0.002 190); height: 100%; border-radius: 3px 3px 0 0; box-shadow: 0 1px 3px oklch(23% 0.02 200 / 0.12); padding: 10px 10px 0; display: grid; gap: 5px; align-content: start; }
+.t-page .ln { height: 4px; border-radius: 2px; background: oklch(86% 0.008 200); }
+.t-page .ln.h { height: 7px; width: 60%; background: oklch(55% 0.02 200); }
+.t-page .ln.s { width: 70%; }
+.t-grid { background: oklch(99.5% 0.002 190); background-image: linear-gradient(oklch(88% 0.01 150) 1px, transparent 1px), linear-gradient(90deg, oklch(88% 0.01 150) 1px, transparent 1px); background-size: 100% 12px, 22% 100%; }
+.t-grid::before { content: ""; position: absolute; inset: 0 0 auto; height: 12px; background: oklch(93% 0.035 150); }
+.t-slide { background: var(--color-sunk); padding: 12% 12%; }
+.t-slide .sl { width: 100%; height: 100%; border-radius: 3px; background: linear-gradient(135deg, oklch(45% 0.1 180) 0 40%, oklch(99% 0.002 190) 40%); box-shadow: 0 1px 3px oklch(23% 0.02 200 / 0.12); }
+.t-video { background: linear-gradient(160deg, oklch(30% 0.03 230), oklch(20% 0.02 260)); }
+.play { width: 34px; height: 34px; border-radius: 999px; background: oklch(98% 0.003 190 / 0.9); display: grid; place-items: center; color: oklch(23% 0.02 200); }
+.dur { position: absolute; right: 6px; bottom: 6px; background: oklch(15% 0.01 200 / 0.75); color: oklch(98% 0.003 190); font: 600 0.6875rem/1 var(--font-body); padding: 3px 6px; border-radius: 4px; }
+.t-fallback svg { width: 34px; height: 34px; color: var(--color-ink-subtle); }
+.skel { background: linear-gradient(90deg, var(--color-sunk) 0 40%, var(--color-hover) 50%, var(--color-sunk) 60%); background-size: 300% 100%; animation: sh 1.4s linear infinite; }
+@keyframes sh { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+
+/* cards */
+.card { background: var(--color-raised); border-radius: 12px; padding: 6px 6px 10px; display: grid; gap: 8px; position: relative; min-width: 0; cursor: default; }
+.card:hover { background: var(--color-overlay); box-shadow: var(--shadow-overlay); }
+.card.sel { background: var(--color-accent-wash); box-shadow: inset 0 0 0 2px var(--color-accent); }
+.card .nm { display: flex; gap: 8px; align-items: center; min-width: 0; padding: 0 4px; }
+.card .nm b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 1; }
+.card .by { display: flex; gap: 6px; align-items: center; padding: 0 4px; font-size: 0.75rem; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; }
+.card .more { position: absolute; top: 10px; right: 10px; width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; background: var(--color-overlay); color: var(--color-ink); box-shadow: var(--shadow-overlay); opacity: 0; }
+.card:hover .more, .card.sel .more, .touch .card .more { opacity: 1; }
+.folder { background: var(--color-raised); border-radius: 12px; height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 12px; font-weight: 600; min-width: 0; }
+.folder svg.f { color: var(--color-ink-muted); }
+.folder span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.folder .cnt { font-weight: 500; font-size: 0.75rem; color: var(--color-ink-muted); flex: none; }
+.sec { display: grid; gap: 10px; }
+.sec > .k { padding: 0 2px; }
+.g-folders { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.g-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+
+/* desktop frame */
+.desk { min-width: 1180px; background: var(--color-sunk); border-radius: 14px; padding: 10px; display: grid; grid-template-columns: 64px 232px minmax(0, 1fr) 320px; gap: 0; height: 760px; }
+.rail { display: grid; align-content: start; justify-items: center; gap: 6px; padding-top: 6px; }
+.rail span { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--color-ink-muted); }
+.rail span.on { background: var(--color-accent-wash); color: var(--color-accent); }
+.tree { padding: 6px 10px; display: grid; align-content: start; gap: 2px; }
+.tree .h { font: 700 1.0625rem/1.2 var(--font-display); padding: 6px 8px 12px; }
+.trow { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; border-radius: 8px; color: var(--color-ink); font-weight: 500; }
+.trow.on { background: var(--color-raised); font-weight: 600; }
+.trow.sub { padding-left: 26px; }
+.trow svg { color: var(--color-ink-muted); }
+.main { background: var(--color-base); border-radius: 12px; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
+.mhead { padding: 16px 20px 0; display: grid; gap: 12px; }
+.crumbs { display: flex; gap: 6px; align-items: center; color: var(--color-ink-muted); font-weight: 500; }
+.crumbs b { color: var(--color-ink); font: 700 1.25rem/1.2 var(--font-display); }
+.tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tools .grow { flex: 1; }
+.mbody { padding: 16px 20px 20px; display: grid; gap: 18px; align-content: start; overflow: hidden; }
+.detail { padding: 14px 10px 10px 14px; display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.detail .dt { display: flex; gap: 8px; align-items: center; }
+.detail .dt b { flex: 1; min-width: 0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail .thumb { aspect-ratio: 4 / 3; border-radius: 10px; }
+.detail .acts { display: flex; gap: 8px; }
+.kv { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 8px 10px; font-size: 0.8125rem; }
+.kv dt { color: var(--color-ink-muted); }
+.kv dd { margin: 0; display: flex; gap: 6px; align-items: center; min-width: 0; }
+.ttl { font-weight: 600; font-size: 0.8125rem; }
+.act { display: grid; gap: 8px; font-size: 0.8125rem; }
+.act div { display: flex; gap: 8px; align-items: center; }
+
+/* list mode */
+.list { background: var(--color-base); border-radius: 12px; padding: 4px 16px 10px; }
+.lrow { display: grid; grid-template-columns: minmax(0, 1fr) 176px 96px 80px 32px; gap: 12px; align-items: center; height: 44px; border-bottom: 1px solid var(--color-line); padding: 0 6px; }
+.lrow.hd { height: 36px; font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); }
+.lrow .n { display: flex; gap: 10px; align-items: center; min-width: 0; font-weight: 500; }
+.lrow .n span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mini { width: 36px; height: 24px; border-radius: 4px; flex: none; aspect-ratio: auto; }
+
+/* tablet */
+.tab { width: 820px; height: 640px; border-radius: 24px; background: var(--color-base); box-shadow: 0 0 0 8px var(--color-ink), var(--shadow-overlay); overflow: hidden; position: relative; display: flex; flex-direction: column; flex: none; }
+.tab .mhead { padding: 18px 20px 0; }
+.tab .g-files { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.tab .g-folders { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.scrim { position: absolute; inset: 0; background: var(--color-scrim); }
+.side-sheet { position: absolute; top: 10px; right: 10px; bottom: 10px; width: 340px; background: var(--color-overlay); border-radius: 16px; box-shadow: var(--shadow-overlay); }
+
+/* phone */
+.phones { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+.phone { width: 300px; max-width: 100%; height: 640px; border-radius: 36px; background: var(--color-base); box-shadow: 0 0 0 8px var(--color-ink), var(--shadow-overlay); overflow: hidden; display: flex; flex-direction: column; position: relative; flex: none; }
+.ph-cap { display: grid; gap: 4px; width: 300px; max-width: 100%; }
+.ph-cap b { font-size: 0.875rem; }
+.ph-cap > span { font-size: 0.75rem; color: var(--color-ink-muted); }
+.status { height: 34px; flex: none; display: flex; justify-content: space-between; align-items: end; padding: 0 22px 4px; font: 600 0.75rem/1 var(--font-body); }
+.pbar { padding: 6px 12px 8px; display: grid; gap: 10px; flex: none; }
+.pbar .row { display: flex; gap: 8px; align-items: center; }
+.pbar h3 { font-size: 1.25rem; flex: 1; }
+.chips { display: flex; gap: 6px; overflow: hidden; }
+.pbody { flex: 1; min-height: 0; overflow: hidden; padding: 0 12px; display: grid; gap: 14px; align-content: start; }
+.phone .g-files { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.phone .g-folders { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.phone .folder { height: 44px; font-size: 0.8125rem; }
+.phone .card .nm b { font-size: 0.8125rem; }
+.fab { position: absolute; right: 16px; bottom: 30px; width: 56px; height: 56px; border-radius: 18px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; box-shadow: var(--shadow-overlay); }
+.btm { position: absolute; left: 0; right: 0; bottom: 0; background: var(--color-overlay); border-radius: 20px 20px 0 0; padding: 8px 12px 34px; display: grid; gap: 10px; box-shadow: var(--shadow-overlay); }
+.btm .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--color-line); justify-self: center; }
+.srow { display: flex; align-items: center; gap: 14px; height: 48px; padding: 0 8px; border-radius: 12px; font-size: 0.9375rem; font-weight: 500; }
+.srow.danger { color: var(--color-danger); }
+
+/* states board */
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+.board .card { cursor: default; }
+.board .lab { font-size: 0.75rem; color: var(--color-ink-muted); padding: 0 4px; }
+
+/* space files */
+.space { min-width: 1000px; background: var(--color-base); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--color-line); overflow: hidden; }
+.shead { display: flex; align-items: center; gap: 10px; padding: 14px 20px 0; }
+.shead b { font: 700 1.0625rem/1.2 var(--font-display); }
+.stabs { display: flex; gap: 18px; padding: 10px 20px 0; border-bottom: 1px solid var(--color-line); }
+.stabs span { padding-bottom: 10px; font-weight: 600; color: var(--color-ink-muted); }
+.stabs span.on { color: var(--color-ink); box-shadow: inset 0 -2px 0 var(--color-accent); }
+.sbody { padding: 14px 20px 20px; display: grid; gap: 18px; }
+.media { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 4px; }
+.media .thumb { aspect-ratio: 1; border-radius: 6px; }
+</style>
+</head>
+<body>
+<div class="page">
+<header>
+  <p class="k">Mockup · plan 261016-1942 · PR 2 · chờ duyệt</p>
+  <h1>Tài liệu dạng lưới, xem trước tệp và tab Tệp của nhóm</h1>
+  <p>Tài liệu mở mặc định ở dạng <b>lưới</b>: thư mục ở trên, tệp là thẻ có ảnh xem trước thật do máy chủ sinh (ảnh, trang 1 PDF và Office, khung video).
+    Chọn một tệp thì panel phải hiện bản xem trước lớn; Space hoặc Enter mở Trình xem tệp. Dạng <b>danh sách</b> giữ bảng hiện có.
+    Tab Tệp của nhóm chat dùng cùng bộ thẻ này.</p>
+  <nav class="toc" aria-label="Mục">
+    <a href="#web">1 · Web 1440</a><a href="#list">2 · Danh sách</a><a href="#states">3 · Thẻ và thumbnail</a>
+    <a href="#tablet">4 · Máy tính bảng 820</a><a href="#phone">5 · Điện thoại 390</a><a href="#space">6 · Tab Tệp của nhóm</a>
+  </nav>
+</header>
+
+<!-- 1 -->
+<section class="screen" id="web">
+  <div class="screen-head">
+    <h2>1 · Web ≥ 1024: cây thư mục, lưới, panel xem trước</h2>
+    <p>Thanh công cụ một hàng: tìm trong thư mục, chip loại tệp, sắp xếp, đổi Lưới / Danh sách, Tải lên. "Thư mục mới" nằm trong menu của nút Tải lên.</p>
+  </div>
+  <div class="scroll">
+  <div class="desk">
+    <div class="rail" aria-hidden="true">
+      <span><svg class="i" viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></svg></span>
+      <span class="on"><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></span>
+      <span><svg class="i" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></svg></span>
+      <span><svg class="i" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+    </div>
+    <nav class="tree" aria-label="Thư mục">
+      <div class="h">Tài liệu</div>
+      <div class="trow"><svg class="i s" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Công ty Minh An</div>
+      <div class="trow sub on"><svg class="i s" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Tài chính</div>
+      <div class="trow sub"><svg class="i s" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Nhân sự</div>
+      <div class="trow sub"><svg class="i s" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Pháp lý</div>
+      <div class="trow" style="margin-top:8px"><svg class="i s" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0M16 11a3 3 0 1 0 0-6M21 20a5 5 0 0 0-4-4.9"/></svg>Được chia sẻ với tôi</div>
+    </nav>
+    <div class="main">
+      <div class="mhead">
+        <div class="crumbs"><span>Công ty Minh An</span><span>/</span><b>Tài chính</b></div>
+        <div class="tools">
+          <span class="search" style="width:240px"><svg class="i s" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Tìm trong Tài chính</span>
+          <span role="radiogroup" aria-label="Loại tệp" style="display:flex;gap:6px"><span class="chip" role="radio" aria-checked="true">Tất cả</span><span class="chip" role="radio" aria-checked="false">Tài liệu</span><span class="chip" role="radio" aria-checked="false">Bảng tính</span><span class="chip" role="radio" aria-checked="false">Ảnh &amp; video</span><span class="chip" role="radio" aria-checked="false">PDF</span></span>
+          <span class="grow"></span>
+          <span class="btn ghost sm">Sửa gần nhất<svg class="i s" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+          <span class="seg" aria-label="Kiểu hiển thị"><span aria-pressed="true" title="Lưới"><svg class="i s" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span aria-pressed="false" title="Danh sách"><svg class="i s" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></span></span>
+          <span class="btn primary sm"><svg class="i s" viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Tải lên</span>
+        </div>
+      </div>
+      <div class="mbody">
+        <div class="sec"><span class="k">Thư mục</span>
+          <div class="g-folders">
+            <div class="folder"><svg class="i f" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Báo cáo quý</span><span class="cnt tnum">12</span></div>
+            <div class="folder"><svg class="i f" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Hoá đơn đầu vào 2026</span><span class="cnt tnum">148</span></div>
+            <div class="folder"><svg class="i f" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Hợp đồng ngân hàng</span><span class="cnt tnum">9</span></div>
+          </div>
+        </div>
+        <div class="sec"><span class="k">Tệp</span>
+          <div class="g-files">
+            <div class="card sel"><div class="thumb t-page"><div class="sheet-of"><span class="ln h"></span><span class="ln"></span><span class="ln"></span><span class="ln s"></span><span class="ln"></span></div></div><div class="nm"><span class="kind k-pdf"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></span><b>Báo cáo tài chính Q3.pdf</b></div><div class="by"><span class="av" style="background:var(--color-person-5)">TL</span>Thu Lan · 09:12</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+            <div class="card"><div class="thumb t-grid"></div><div class="nm"><span class="kind k-sheet"><svg class="i" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M10 4v16"/></svg></span><b>Đối soát giao dịch tháng 10.xlsx</b></div><div class="by"><span class="av" style="background:var(--color-person-1)">M</span>Minh · Hôm qua</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+            <div class="card"><div class="thumb t-photo"></div><div class="nm"><span class="kind k-img"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg></span><b>Biên lai chuyển khoản.jpg</b></div><div class="by"><span class="av" style="background:var(--color-person-3)">HN</span>Hà Ngân · 14/10</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+            <div class="card"><div class="thumb t-slide"><div class="sl"></div></div><div class="nm"><span class="kind k-doc"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg></span><b>Kế hoạch ngân sách 2027.pptx</b></div><div class="by"><span class="av" style="background:var(--color-person-7)">QA</span>Quốc Anh · 12/10</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+            <div class="card"><div class="thumb t-video"><span class="play"><svg class="i s" viewBox="0 0 24 24" style="fill:currentColor"><path d="M8 5v14l11-7z"/></svg></span><span class="dur tnum">03:42</span></div><div class="nm"><span class="kind k-vid"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg></span><b>Hướng dẫn nhập hoá đơn.mp4</b></div><div class="by"><span class="av" style="background:var(--color-person-5)">TL</span>Thu Lan · 10/10</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+            <div class="card"><div class="thumb t-page"><div class="sheet-of"><span class="ln h"></span><span class="ln s"></span><span class="ln"></span><span class="ln"></span></div></div><div class="nm"><span class="kind k-doc"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg></span><b>Quy chế chi tiêu nội bộ.docx</b></div><div class="by"><span class="av" style="background:var(--color-person-2)">PD</span>Phương Dung · 02/10</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+            <div class="card"><div class="thumb t-fallback"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M11 3v2m0 2v2m0 2v2"/></svg></div><div class="nm"><span class="kind k-other"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/></svg></span><b>Chứng từ gốc Q3.zip</b></div><div class="by"><span class="av" style="background:var(--color-person-1)">M</span>Minh · 01/10</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="detail" aria-label="Chi tiết tệp">
+      <div class="dt"><span class="kind k-pdf"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></span><b>Báo cáo tài chính Q3.pdf</b><span class="ib"><svg class="i s" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></span></div>
+      <div class="thumb t-page" style="padding-top:16px"><div class="sheet-of" style="padding:16px 16px 0;gap:8px"><span class="ln h"></span><span class="ln"></span><span class="ln"></span><span class="ln s"></span><span class="ln"></span><span class="ln"></span><span class="ln s"></span></div></div>
+      <div class="acts"><span class="btn primary sm" style="flex:1">Mở</span><span class="btn sm"><svg class="i s" viewBox="0 0 24 24"><path d="M12 4v12m0 0 4-4m-4 4-4-4M4 20h16"/></svg>Tải xuống</span><span class="btn sm"><svg class="i s" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0M19 8v6m-3-3h6"/></svg>Chia sẻ</span></div>
+      <dl class="kv">
+        <dt>Loại</dt><dd>PDF · 24 trang</dd>
+        <dt>Dung lượng</dt><dd class="tnum">2,4 MB</dd>
+        <dt>Chủ sở hữu</dt><dd><span class="av" style="background:var(--color-person-5)">TL</span>Trần Thu Lan</dd>
+        <dt>Sửa lần cuối</dt><dd class="tnum">16/10/2026 09:12</dd>
+        <dt>Vị trí</dt><dd>Tài chính</dd>
+        <dt>Người có quyền</dt><dd><span class="av" style="background:var(--color-person-5)">TL</span><span class="av" style="background:var(--color-person-1);margin-left:-6px">M</span><span class="av" style="background:var(--color-person-3);margin-left:-6px">HN</span>+ 6</dd>
+      </dl>
+      <div class="act"><span class="ttl">Hoạt động</span>
+        <div><span class="av" style="background:var(--color-person-5)">TL</span><span><b>Thu Lan</b> tải lên bản mới · 09:12</span></div>
+        <div><span class="av" style="background:var(--color-person-1)">M</span><span><b>Minh</b> chia sẻ với Ban giám đốc · Hôm qua</span></div>
+      </div>
+    </aside>
+  </div>
+  </div>
+  <ol class="notes">
+    <li><b>Thẻ tệp</b>: <code>--color-raised</code>, bo 12, thumbnail 16:10 bo 8, ô loại 20 theo <code>file-kind</code>, tên cắt cuối (giữ đuôi trong tooltip), "Người · thời gian" 12 px mờ. Hover: <code>--color-overlay</code> + bóng, hiện ⋯. Chọn: nền <code>--color-accent-wash</code>, viền trong 2px accent.</li>
+    <li><b>Thư mục</b>: ô cao 48, bấm là vào thư mục (link thật, giữ <code>?folder=</code>), số tệp bên phải. Kéo tệp thả vào ô thư mục = di chuyển (như hiện có).</li>
+    <li><b>Bàn phím</b>: mũi tên đi trong lưới theo số cột; <b>Space</b> hoặc <b>Enter</b> mở Trình xem tệp với các tệp trong thư mục (←/→ để chuyển); Shift+F10 mở menu ⋯.</li>
+    <li><b>Panel</b> rộng 320: bản xem trước lớn (thumbnail 640), Mở · Tải xuống · Chia sẻ, thông tin, người có quyền, hoạt động gần đây. Không chọn gì: panel ẩn, lưới giãn ra.</li>
+    <li>Không có mã hay ID nào trên màn: người hiện bằng tên + avatar, vị trí bằng tên thư mục.</li>
+  </ol>
+</section>
+
+<!-- 2 -->
+<section class="screen" id="list">
+  <div class="screen-head">
+    <h2>2 · Dạng danh sách</h2>
+    <p>Bảng hiện có giữ nguyên, thêm ảnh xem trước nhỏ 36 × 24 trước tên. Lựa chọn Lưới / Danh sách được nhớ cho từng người dùng.</p>
+  </div>
+  <div class="scroll"><div class="list" style="min-width:820px">
+    <div class="lrow hd"><span>Tên</span><span>Chủ sở hữu</span><span style="text-align:right">Sửa lần cuối</span><span style="text-align:right">Dung lượng</span><span></span></div>
+    <div class="lrow"><span class="n"><span class="thumb t-page mini" style="padding:3px 8px 0"><span class="sheet-of" style="padding:3px;gap:2px"></span></span><span>Báo cáo tài chính Q3.pdf</span></span><span style="display:flex;gap:6px;align-items:center"><span class="av" style="background:var(--color-person-5)">TL</span>Trần Thu Lan</span><span class="tnum muted" style="text-align:right">09:12</span><span class="tnum muted" style="text-align:right">2,4 MB</span><span class="ib"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+    <div class="lrow"><span class="n"><span class="thumb t-grid mini"></span><span>Đối soát giao dịch tháng 10.xlsx</span></span><span style="display:flex;gap:6px;align-items:center"><span class="av" style="background:var(--color-person-1)">M</span>Lê Minh</span><span class="tnum muted" style="text-align:right">Hôm qua</span><span class="tnum muted" style="text-align:right">412 KB</span><span class="ib"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+    <div class="lrow"><span class="n"><span class="thumb t-photo mini"></span><span>Biên lai chuyển khoản.jpg</span></span><span style="display:flex;gap:6px;align-items:center"><span class="av" style="background:var(--color-person-3)">HN</span>Đỗ Hà Ngân</span><span class="tnum muted" style="text-align:right">14/10</span><span class="tnum muted" style="text-align:right">1,1 MB</span><span class="ib"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+  </div></div>
+</section>
+
+<!-- 3 -->
+<section class="screen" id="states">
+  <div class="screen-head">
+    <h2>3 · Thẻ tệp: các loại và trạng thái thumbnail</h2>
+    <p>Khung 16:10 luôn giữ chỗ, nên lưới không nhảy khi ảnh về. Máy chủ không sinh được ảnh thì thẻ hiện icon loại tệp, không báo lỗi.</p>
+  </div>
+  <div class="board">
+    <div class="card"><div class="thumb skel"></div><div class="nm"><span class="kind k-pdf"></span><b>Đang tải.pdf</b></div><span class="lab">Đang tải: khung sáng chạy (dừng khi giảm chuyển động)</span></div>
+    <div class="card"><div class="thumb t-photo3"></div><div class="nm"><span class="kind k-img"></span><b>Ảnh.png</b></div><span class="lab">Ảnh: thu nhỏ giữ tỉ lệ, phủ kín khung</span></div>
+    <div class="card"><div class="thumb t-page"><div class="sheet-of"><span class="ln h"></span><span class="ln"></span><span class="ln s"></span></div></div><div class="nm"><span class="kind k-pdf"></span><b>Hợp đồng.pdf</b></div><span class="lab">PDF, Word: trang 1 đặt trên nền <code>--color-sunk</code></span></div>
+    <div class="card"><div class="thumb t-grid"></div><div class="nm"><span class="kind k-sheet"></span><b>Bảng lương.xlsx</b></div><span class="lab">Bảng tính: trang 1 của bản PDF</span></div>
+    <div class="card"><div class="thumb t-slide"><div class="sl"></div></div><div class="nm"><span class="kind k-doc"></span><b>Thuyết trình.pptx</b></div><span class="lab">PowerPoint: slide đầu</span></div>
+    <div class="card"><div class="thumb t-video"><span class="play"><svg class="i s" viewBox="0 0 24 24" style="fill:currentColor"><path d="M8 5v14l11-7z"/></svg></span><span class="dur tnum">12:05</span></div><div class="nm"><span class="kind k-vid"></span><b>Họp quý.mp4</b></div><span class="lab">Video: khung giây thứ 1 + nút phát + thời lượng</span></div>
+    <div class="card"><div class="thumb t-fallback"><svg class="i" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg></div><div class="nm"><span class="kind k-other"></span><b>Dữ liệu.zip</b></div><span class="lab">Không xem trước được, hoặc máy chủ đang bận: icon 34</span></div>
+  </div>
+</section>
+
+<!-- 4 -->
+<section class="screen" id="tablet">
+  <div class="screen-head">
+    <h2>4 · Máy tính bảng 768–1023 (820)</h2>
+    <p>Cây thư mục vào ngăn kéo (nút ☰ trước breadcrumb). Lưới 3 cột. Chọn tệp thì panel trượt ra thành sheet bên phải, phủ lên lưới thay vì ép lưới hẹp lại. ⋯ luôn hiện vì không có hover.</p>
+  </div>
+  <div class="scroll" style="padding:10px">
+  <div class="tab touch">
+    <div class="mhead">
+      <div class="crumbs"><span class="ib" style="color:var(--color-ink)"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg></span><span>Công ty Minh An</span><span>/</span><b>Tài chính</b></div>
+      <div class="tools">
+        <span class="search" style="flex:1"><svg class="i s" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>Tìm trong Tài chính</span>
+        <span class="chip" aria-checked="true">Tất cả<svg class="i s" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg></span>
+        <span class="seg"><span aria-pressed="true"><svg class="i s" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span><svg class="i s" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></span></span>
+        <span class="btn primary sm" style="height:40px"><svg class="i s" viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Tải lên</span>
+      </div>
+    </div>
+    <div class="mbody">
+      <div class="g-folders"><div class="folder"><svg class="i f" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Báo cáo quý</span><span class="cnt">12</span></div><div class="folder"><svg class="i f" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Hoá đơn đầu vào 2026</span><span class="cnt">148</span></div><div class="folder"><svg class="i f" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Hợp đồng ngân hàng</span><span class="cnt">9</span></div></div>
+      <div class="g-files">
+        <div class="card sel"><div class="thumb t-page"><div class="sheet-of"><span class="ln h"></span><span class="ln"></span><span class="ln s"></span></div></div><div class="nm"><span class="kind k-pdf"></span><b>Báo cáo tài chính Q3.pdf</b></div><div class="by">Thu Lan · 09:12</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+        <div class="card"><div class="thumb t-grid"></div><div class="nm"><span class="kind k-sheet"></span><b>Đối soát giao dịch.xlsx</b></div><div class="by">Minh · Hôm qua</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+        <div class="card"><div class="thumb t-photo"></div><div class="nm"><span class="kind k-img"></span><b>Biên lai chuyển khoản.jpg</b></div><div class="by">Hà Ngân · 14/10</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+      </div>
+    </div>
+    <div class="scrim"></div>
+    <aside class="side-sheet detail">
+      <div class="dt"><span class="kind k-pdf"></span><b>Báo cáo tài chính Q3.pdf</b><span class="ib" style="width:40px;height:40px"><svg class="i s" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></span></div>
+      <div class="thumb t-page" style="aspect-ratio:4/3;padding-top:16px"><div class="sheet-of" style="padding:14px;gap:7px"><span class="ln h"></span><span class="ln"></span><span class="ln"></span><span class="ln s"></span><span class="ln"></span></div></div>
+      <div class="acts"><span class="btn primary" style="flex:1;height:44px">Mở</span><span class="btn" style="height:44px">Tải xuống</span><span class="btn" style="height:44px">Chia sẻ</span></div>
+      <dl class="kv"><dt>Loại</dt><dd>PDF · 24 trang</dd><dt>Dung lượng</dt><dd>2,4 MB</dd><dt>Chủ sở hữu</dt><dd><span class="av" style="background:var(--color-person-5)">TL</span>Trần Thu Lan</dd></dl>
+    </aside>
+  </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="screen" id="phone">
+  <div class="screen-head">
+    <h2>5 · Điện thoại &lt; 768 (390)</h2>
+    <p>Lưới 2 cột, chip loại cuộn ngang, nút + nổi (Tải lên · Chụp ảnh · Thư mục mới). Chạm thẻ mở thẳng Trình xem tệp; nhấn giữ hoặc chạm ⋯ mở sheet thao tác có thông tin tệp.</p>
+  </div>
+  <div class="phones">
+    <div class="ph-cap"><b>Lưới</b><span>Thẻ 2 cột, ⋯ luôn hiện</span>
+      <div class="phone touch">
+        <div class="status"><span class="tnum">9:41</span><span>●●●</span></div>
+        <div class="pbar">
+          <div class="row"><span class="ib"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><h3>Tài chính</h3><span class="ib"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span><span class="ib"><svg class="i s" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></span></div>
+          <div class="chips"><span class="chip" aria-checked="true">Tất cả</span><span class="chip">Tài liệu</span><span class="chip">Bảng tính</span><span class="chip">Ảnh</span></div>
+        </div>
+        <div class="pbody">
+          <div class="g-folders"><div class="folder"><svg class="i s f" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Báo cáo quý</span></div><div class="folder"><svg class="i s f" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg><span>Hoá đơn 2026</span></div></div>
+          <div class="g-files">
+            <div class="card"><div class="thumb t-page"><div class="sheet-of"><span class="ln h"></span><span class="ln"></span><span class="ln s"></span></div></div><div class="nm"><b>Báo cáo Q3.pdf</b></div><div class="by">Thu Lan · 09:12</div><span class="more" style="top:8px;right:8px"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+            <div class="card"><div class="thumb t-grid"></div><div class="nm"><b>Đối soát T10.xlsx</b></div><div class="by">Minh · Hôm qua</div><span class="more" style="top:8px;right:8px"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+            <div class="card"><div class="thumb t-photo"></div><div class="nm"><b>Biên lai.jpg</b></div><div class="by">Hà Ngân · 14/10</div><span class="more" style="top:8px;right:8px"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+            <div class="card"><div class="thumb t-video"><span class="play"><svg class="i s" viewBox="0 0 24 24" style="fill:currentColor"><path d="M8 5v14l11-7z"/></svg></span></div><div class="nm"><b>Hướng dẫn.mp4</b></div><div class="by">Thu Lan · 10/10</div><span class="more" style="top:8px;right:8px"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+          </div>
+        </div>
+        <span class="fab"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+      </div>
+    </div>
+    <div class="ph-cap"><b>Nhấn giữ một thẻ</b><span>Sheet: xem trước, thông tin, thao tác</span>
+      <div class="phone">
+        <div class="status"><span class="tnum">9:41</span><span>●●●</span></div>
+        <div class="pbar"><div class="row"><span class="ib"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><h3>Tài chính</h3></div></div>
+        <div class="scrim"></div>
+        <div class="btm">
+          <span class="grab"></span>
+          <div style="display:flex;gap:12px;align-items:center"><span class="thumb t-page" style="width:88px;aspect-ratio:4/3;padding:6px 14px 0"><span class="sheet-of" style="padding:5px;gap:3px"><span class="ln h"></span><span class="ln"></span></span></span><div style="display:grid;min-width:0"><b>Báo cáo tài chính Q3.pdf</b><span class="muted" style="font-size:.75rem">PDF · 2,4 MB · Thu Lan · 09:12</span></div></div>
+          <div style="display:grid">
+            <div class="srow"><svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>Mở</div>
+            <div class="srow"><svg class="i" viewBox="0 0 24 24"><path d="M12 4v12m0 0 4-4m-4 4-4-4M4 20h16"/></svg>Tải xuống</div>
+            <div class="srow"><svg class="i" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0M19 8v6m-3-3h6"/></svg>Chia sẻ</div>
+            <div class="srow"><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5m-2.5-2.5h5"/></svg>Chuyển tới thư mục…</div>
+            <div class="srow"><svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>Đổi tên</div>
+            <div class="srow danger"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg>Xoá</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ph-cap"><b>Nút + nổi</b><span>Sheet tạo mới</span>
+      <div class="phone">
+        <div class="status"><span class="tnum">9:41</span><span>●●●</span></div>
+        <div class="pbar"><div class="row"><span class="ib"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><h3>Tài chính</h3></div></div>
+        <div class="scrim"></div>
+        <div class="btm">
+          <span class="grab"></span>
+          <div style="display:grid">
+            <div class="srow"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Tải tệp lên</div>
+            <div class="srow"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-3z"/><circle cx="12" cy="13" r="3.5"/></svg>Chụp ảnh</div>
+            <div class="srow"><svg class="i" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v5m-2.5-2.5h5"/></svg>Thư mục mới</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="screen" id="space">
+  <div class="screen-head">
+    <h2>6 · Tab Tệp của nhóm chat</h2>
+    <p>Cùng bộ thẻ với Tài liệu. Chip lọc: Tất cả · Ảnh &amp; video · Tài liệu · Khác. Nhóm theo thời gian. Ở chip "Ảnh &amp; video" (hoặc nhóm toàn ảnh), ảnh xếp lưới vuông sát nhau như album.</p>
+  </div>
+  <div class="scroll">
+  <div class="space">
+    <div class="shead"><span class="av" style="--s:28px;border-radius:8px;background:linear-gradient(135deg, oklch(70% 0.09 150) 0 30%, oklch(58% 0.1 170) 30% 62%, oklch(48% 0.08 200) 62%)"></span><b>Đối soát giao dịch</b></div>
+    <div class="stabs"><span>Trò chuyện</span><span class="on">Tệp</span><span>Công việc</span><span>Ghim</span></div>
+    <div class="sbody">
+      <div class="tools"><span role="radiogroup" aria-label="Loại tệp" style="display:flex;gap:6px"><span class="chip" role="radio" aria-checked="true">Tất cả</span><span class="chip" role="radio" aria-checked="false">Ảnh &amp; video</span><span class="chip" role="radio" aria-checked="false">Tài liệu</span><span class="chip" role="radio" aria-checked="false">Khác</span></span><span class="grow"></span><span class="seg"><span aria-pressed="true"><svg class="i s" viewBox="0 0 24 24"><rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/></svg></span><span><svg class="i s" viewBox="0 0 24 24"><path d="M8 6h12M8 12h12M8 18h12M4 6h.01M4 12h.01M4 18h.01"/></svg></span></span><span class="btn ghost sm">Mở trong Tài liệu</span></div>
+      <div class="sec"><span class="k">Hôm nay</span>
+        <div class="g-files">
+          <div class="card"><div class="thumb t-grid"></div><div class="nm"><span class="kind k-sheet"></span><b>Đối soát giao dịch tháng 10.xlsx</b></div><div class="by"><span class="av" style="background:var(--color-person-1)">M</span>Minh · 09:02</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+          <div class="card"><div class="thumb t-photo2"></div><div class="nm"><span class="kind k-img"></span><b>Ảnh chụp sao kê.jpg</b></div><div class="by"><span class="av" style="background:var(--color-person-3)">HN</span>Hà Ngân · 08:40</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+        </div>
+      </div>
+      <div class="sec"><span class="k">Tuần này · ảnh &amp; video</span>
+        <div class="media">
+          <div class="thumb t-photo"></div><div class="thumb t-photo2"></div><div class="thumb t-photo3"></div><div class="thumb t-video"><span class="play"><svg class="i s" viewBox="0 0 24 24" style="fill:currentColor"><path d="M8 5v14l11-7z"/></svg></span><span class="dur tnum">00:48</span></div><div class="thumb t-photo"></div><div class="thumb t-photo3"></div><div class="thumb t-photo2"></div>
+        </div>
+      </div>
+      <div class="sec"><span class="k">Tháng này</span>
+        <div class="g-files">
+          <div class="card"><div class="thumb t-page"><div class="sheet-of"><span class="ln h"></span><span class="ln"></span><span class="ln s"></span></div></div><div class="nm"><span class="kind k-pdf"></span><b>Biên bản đối soát Vietcombank.pdf</b></div><div class="by"><span class="av" style="background:var(--color-person-5)">TL</span>Thu Lan · 03/10</div><span class="more"><svg class="i s" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/></svg></span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+  <ol class="notes">
+    <li>Chạm tệp mở Trình xem tệp với <b>danh sách đã lọc</b>, nên ←/→ không nhảy sang tệp bị ẩn. Menu ⋯ có thêm "Tới tin nhắn" (cuộn tới tin chứa tệp).</li>
+    <li>Rỗng theo chip: "Chưa có ảnh hay video nào trong nhóm." / "Chưa có tài liệu nào trong nhóm." Rỗng hẳn giữ câu hiện có + "Đính kèm trong Trò chuyện".</li>
+    <li>Điện thoại: lưới 2 cột như Tài liệu, ảnh 3 cột vuông, nhóm thời gian là tiêu đề dính khi cuộn.</li>
+  </ol>
+</section>
+</div>
+</body>
+</html>
