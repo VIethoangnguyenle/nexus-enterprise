@@ -43,6 +43,10 @@ const mockPeople: PeopleDirectory = {
     ['duc', mockDuc],
     ['lan', mockLan],
   ]),
+  ready: true,
+  isVisible: () => true,
+  request: () => {},
+  requestNode: () => {},
 }
 
 const NOW = new Date('2026-10-16T12:00:00Z')

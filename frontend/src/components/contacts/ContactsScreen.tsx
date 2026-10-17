@@ -53,7 +53,7 @@ export function ContactsScreen() {
   // Departments are a company workspace's data: a personal workspace lists people without them.
   const all = useMemo(() => {
     const list = q.data?.contacts ?? []
-    return sortContacts(isPersonal ? list.map((c) => ({ ...c, department: '' })) : list)
+    return sortContacts(isPersonal ? list.map((c) => ({ ...c, department: '', department_id: '' })) : list)
   }, [q.data, isPersonal])
   const isOnline = useCallback(
     (c: Contact) => c.user_id === me?.id || c.user_id in onlineUsers,

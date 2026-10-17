@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { resolverFor } from '../lib/people-resolver'
 import { useAuthStore, tenantIdFromToken } from './auth.store'
 import { queryClient } from '../lib/query-client'
 import { keys } from '../hooks/keys'
@@ -19,6 +20,13 @@ describe('auth store logout', () => {
     useAuthStore.getState().logout()
 
     expect(queryClient.getQueryCache().getAll()).toHaveLength(0)
+  })
+
+  it('forgets the names the resolver found: a hidden person\'s name must not outlive the session that was allowed it', () => {
+    const clear = vi.spyOn(resolverFor('ws-1'), 'clear')
+    useAuthStore.getState().logout()
+    expect(clear).toHaveBeenCalled()
+    clear.mockRestore()
   })
 
   it('drops unsent drafts, pending quotes and what the socket learned of the messages', () => {

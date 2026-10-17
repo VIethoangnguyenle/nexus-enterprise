@@ -17,6 +17,8 @@ export const adminKeys = {
   role: (wsId: string, roleId: string) => ['admin', 'role', wsId, roleId] as const,
   /** Every cached role detail of a workspace. */
   roleDetails: (wsId: string) => ['admin', 'role', wsId] as const,
+  /** The rules that decide who sees whom in Danh bạ. */
+  directoryScope: (wsId: string) => ['admin', 'directory-scope', wsId] as const,
   /** The areas and, for each, the operations that apply there. */
   permissionAreas: (wsId: string) => ['admin', 'permission-areas', wsId] as const,
 }

@@ -177,7 +177,8 @@ export function ApprovalScreen() {
       // Nothing known about who acted: treat it as not news rather than blame someone.
       if (!a) return me?.id
       if (a.actorNodeId === me?.ngac_node_id) return me?.id
-      return people.byNodeId.get(a.actorNodeId)?.userId || a.actorNodeId
+      // By the node path: a node id is never a user id. Not found yet (queued) means no author, not a wrong one.
+      return people.byNodeId.get(a.actorNodeId)?.userId || undefined
     },
     [activity, me, people],
   )

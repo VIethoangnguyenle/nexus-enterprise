@@ -92,3 +92,36 @@ describe('people and role requests', () => {
     expect(lastCall().body).toEqual({ operations: [] })
   })
 })
+
+describe('directory scope requests (Quản trị › Danh bạ)', () => {
+  it('reads the rules from admin/directory-scope', async () => {
+    await adminApi.getDirectoryScope('w')
+    expect(lastCall()).toMatchObject({ url: '/api/workspaces/w/admin/directory-scope', method: 'GET' })
+  })
+
+  it('hides and unhides a department by PUT and DELETE on hidden/:deptId, with no body', async () => {
+    await adminApi.hideDepartment('w', 'd')
+    expect(lastCall()).toEqual({ url: '/api/workspaces/w/admin/directory-scope/hidden/d', method: 'PUT', body: undefined })
+    await adminApi.unhideDepartment('w', 'd')
+    expect(lastCall()).toEqual({ url: '/api/workspaces/w/admin/directory-scope/hidden/d', method: 'DELETE', body: undefined })
+  })
+
+  it('limits a role or a department on its own path, and lifts the limit with DELETE', async () => {
+    await adminApi.limitSubject('w', 'role', 'r')
+    expect(lastCall()).toEqual({ url: '/api/workspaces/w/admin/directory-scope/limited/roles/r', method: 'PUT', body: undefined })
+    await adminApi.limitSubject('w', 'department', 'd')
+    expect(lastCall().url).toBe('/api/workspaces/w/admin/directory-scope/limited/departments/d')
+    await adminApi.unlimitSubject('w', 'role', 'r')
+    expect(lastCall()).toEqual({ url: '/api/workspaces/w/admin/directory-scope/limited/roles/r', method: 'DELETE', body: undefined })
+    await adminApi.unlimitSubject('w', 'department', 'd')
+    expect(lastCall()).toMatchObject({ url: '/api/workspaces/w/admin/directory-scope/limited/departments/d', method: 'DELETE' })
+  })
+})
+
+describe('contacts requests', () => {
+  it('resolves names with user_ids and node_ids on /contacts/resolve', async () => {
+    const { contactsApi } = await import('./contacts')
+    await contactsApi.resolve('w', { user_ids: ['u'], node_ids: ['n'] })
+    expect(lastCall()).toEqual({ url: '/api/workspaces/w/contacts/resolve', method: 'POST', body: { user_ids: ['u'], node_ids: ['n'] } })
+  })
+})

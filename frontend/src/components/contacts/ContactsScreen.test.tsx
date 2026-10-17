@@ -87,7 +87,8 @@ describe('ContactsScreen: the directory', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Danh bạ' })).toBeInTheDocument()
     await within(table()).findByText('Trần Minh Đức')
 
-    expect(names()).toEqual(['Lê Quang Vinh', 'Lê Thị Hoa', 'Nguyễn Thu Lan', 'Phạm Hải Yến', 'Trần Bảo Ngọc', 'Trần Minh Đức'])
+    // By given name (the last word), then full name.
+    expect(names()).toEqual(['Trần Minh Đức', 'Lê Thị Hoa', 'Nguyễn Thu Lan', 'Trần Bảo Ngọc', 'Lê Quang Vinh', 'Phạm Hải Yến'])
     expect(screen.getByText('6 người trong Khối Vận hành')).toBeInTheDocument()
     expect(within(table()).getAllByText('Vận hành thanh toán').length).toBeGreaterThan(0)
     expect(within(table()).getByText('duc@novapay.vn')).toBeInTheDocument()
@@ -154,7 +155,7 @@ describe('ContactsScreen: the directory', () => {
       'Tất cả phòng ban', 'Đối soát2', 'Kiểm soát1', 'Vận hành thanh toán2',
     ])
     await user.click(within(list).getByRole('option', { name: /Đối soát/ }))
-    await waitFor(() => expect(names()).toEqual(['Lê Quang Vinh', 'Nguyễn Thu Lan']))
+    await waitFor(() => expect(names()).toEqual(['Nguyễn Thu Lan', 'Lê Quang Vinh']))
     expect(screen.getByRole('button', { name: 'Phòng ban: Đối soát' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Phòng ban: Đối soát' }))

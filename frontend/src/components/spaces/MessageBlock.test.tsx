@@ -2,7 +2,7 @@ import { screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient } from '../../test/render'
-import { CONTACTS, ME, MSG_LEGACY, MSG_NO_TEXT, U, UUID_RE } from '../../test/chat-fixtures'
+import { CONTACTS, ME, MESSAGES, MSG_LEGACY, MSG_NO_TEXT, U, UUID_RE } from '../../test/chat-fixtures'
 import { buildDirectory } from '../../lib/people'
 import { MessageBlock } from './MessageBlock'
 import type { Message } from '../../api/messaging'
@@ -274,5 +274,28 @@ describe('MessageBlock: your own lines on a phone', () => {
 
     await user.click(document.getElementById('m-grp-text')!)
     expect(columnOf('m-grp').querySelector('time')).toBeNull()
+  })
+})
+
+describe('MessageBlock: an author the directory does not list', () => {
+  const HIDDEN = '11111111-aaaa-4bbb-8ccc-0000000000ff'
+  const hiddenAuthor: Message = { ...MESSAGES[0]!, sender_id: HIDDEN, sender_name: '' }
+
+  it('shows the name the resolver found, never "Thành viên" or the id', () => {
+    const dir = buildDirectory(CONTACTS, {
+      resolved: {
+        byUserId: new Map([[HIDDEN, { userId: HIDDEN, nodeId: 'n-hidden', name: 'Phạm Ẩn Danh', avatarUrl: '' }]]),
+        byNodeId: new Map(),
+      },
+    })
+    const { container } = renderWithClient(<MessageBlock message={hiddenAuthor} people={dir} idBase="hidden" me={ME.id} />)
+    expect(screen.getByText('Phạm Ẩn Danh')).toBeInTheDocument()
+    expect(container.textContent).not.toMatch(UUID_RE)
+  })
+
+  it('asks the resolver for an author nobody has named yet', () => {
+    const request = vi.fn()
+    renderWithClient(<MessageBlock message={hiddenAuthor} people={buildDirectory(CONTACTS, { request })} idBase="hidden2" me={ME.id} />)
+    expect(request).toHaveBeenCalledWith(HIDDEN)
   })
 })

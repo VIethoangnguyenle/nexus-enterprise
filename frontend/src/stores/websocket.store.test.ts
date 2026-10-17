@@ -5,6 +5,7 @@ vi.mock('../api/client', async (original) => ({
   ...(await original<typeof import('../api/client')>()),
   refreshAccessToken: refresh,
 }))
+import { resolverFor } from '../lib/people-resolver'
 import { queryClient } from '../lib/query-client'
 import { keys } from '../hooks/keys'
 import { useAuthStore } from './auth.store'
@@ -85,6 +86,25 @@ const domainEvent = (over: Partial<{
 const authOk = () => deliver({ oneofKind: 'authResponse', authResponse: { ok: true, userId: 'u', reason: '' } })
 const ackWorkspace = (seq = '0', workspaceId = 'ws-1') =>
   deliver({ oneofKind: 'workspaceSubscribed', workspaceSubscribed: { workspaceId, seq, denied: false } })
+
+describe('profile events', () => {
+  it('a changed profile makes the resolver ask again for the names it holds', () => {
+    const refresh = vi.spyOn(resolverFor('ws-1'), 'refresh')
+    deliver(domainEvent({ domain: 'workspace', kind: 'profile_updated', ids: ['u-2'] }))
+    settle()
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(refresh).toHaveBeenCalledWith(['u-2'])
+    refresh.mockRestore()
+  })
+
+  it('another workspace event leaves the resolver alone', () => {
+    const refresh = vi.spyOn(resolverFor('ws-1'), 'refresh')
+    deliver(domainEvent({ domain: 'workspace', kind: 'department_changed', ids: ['d-1'] }))
+    settle()
+    expect(refresh).not.toHaveBeenCalled()
+    refresh.mockRestore()
+  })
+})
 
 describe('thread events', () => {
   it("a thread state reaches the root's cached summary and the unread counts", () => {

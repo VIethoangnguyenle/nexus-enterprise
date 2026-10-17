@@ -7,6 +7,8 @@ export interface Department {
   name: string
   parent_id: string
   member_count: number
+  /** Set for an administrator only: members do not see this department in Danh bạ. */
+  hidden?: boolean
 }
 
 export interface DepartmentTree extends Department {
@@ -90,7 +92,29 @@ export interface Invitation {
   expires_at: string
 }
 
+/** A department or role named by a directory rule, with the people it concerns. */
+export interface RuleSubject {
+  id: string
+  name: string
+  parent_id?: string
+  member_count: number
+}
+
+export type LimitedKind = 'role' | 'department'
+
+/**
+ * Who sees whom in Danh bạ. `ready: false` is a workspace whose directory has not been built
+ * yet: there are no rules to show and none can be set.
+ */
+export interface DirectoryRules {
+  ready: boolean
+  hidden_departments: RuleSubject[]
+  limited: (RuleSubject & { kind: LimitedKind })[]
+}
+
 // --- API ---
+
+const limitedPath = (kind: LimitedKind) => (kind === 'role' ? 'roles' : 'departments')
 
 export const adminApi = {
   // Departments
@@ -169,6 +193,22 @@ export const adminApi = {
 
   deleteRole: (wsId: string, roleId: string) =>
     apiFetch<void>(`/workspaces/${wsId}/roles/${roleId}`, { method: 'DELETE' }),
+
+  // Directory scope (Quản trị › Danh bạ)
+  getDirectoryScope: (wsId: string) => apiFetch<DirectoryRules>(`/workspaces/${wsId}/admin/directory-scope`),
+
+  hideDepartment: (wsId: string, deptId: string) =>
+    apiFetch<{ status: string }>(`/workspaces/${wsId}/admin/directory-scope/hidden/${deptId}`, { method: 'PUT' }),
+
+  unhideDepartment: (wsId: string, deptId: string) =>
+    apiFetch<{ status: string }>(`/workspaces/${wsId}/admin/directory-scope/hidden/${deptId}`, { method: 'DELETE' }),
+
+  /** Limits a role or a department's people to seeing their own department (and the owners). */
+  limitSubject: (wsId: string, kind: LimitedKind, id: string) =>
+    apiFetch<{ status: string }>(`/workspaces/${wsId}/admin/directory-scope/limited/${limitedPath(kind)}/${id}`, { method: 'PUT' }),
+
+  unlimitSubject: (wsId: string, kind: LimitedKind, id: string) =>
+    apiFetch<{ status: string }>(`/workspaces/${wsId}/admin/directory-scope/limited/${limitedPath(kind)}/${id}`, { method: 'DELETE' }),
 
   /** The areas a role can be granted on and which operations apply on each; the server's table. */
   listPermissionAreas: (wsId: string) =>

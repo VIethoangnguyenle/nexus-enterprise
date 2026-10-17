@@ -6,7 +6,7 @@ import { recentlyMessaged } from './contacts'
 
 const contact = (id: string, name: string): Contact => ({
   user_id: id, ngac_node_id: `n-${id}`, username: id, display_name: name, email: `${id}@novapay.vn`,
-  title: '', department: '', location: '', avatar_url: '', is_online: false,
+  title: '', department: '', department_id: '', roles: [], location: '', avatar_url: '', is_online: false,
 })
 
 const dm = (partnerId: string, lastActivity: number): Conversation => ({

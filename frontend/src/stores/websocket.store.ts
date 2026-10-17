@@ -27,6 +27,7 @@ import { isLive, useCallStore } from './call.store'
 import { asCallKind } from '../api/calls'
 import { callKeys } from '../hooks/keys/calls'
 import { chatStateCovers, revalidateChatState } from '../hooks/useChatState'
+import { resolverFor } from '../lib/people-resolver'
 import {
   adoptOwner,
   createBatcher,
@@ -766,6 +767,8 @@ function handleServerMessage(
         actorUserId: d.actorUserId,
       })
       invalidations.add(plan.invalidate)
+      // A name or picture changed: the names found for people the directory does not list are stale too.
+      if (d.domain === 'workspace' && d.kind === 'profile_updated') resolverFor(d.workspaceId).refresh(d.ids)
       if (d.domain === 'permission') {
         const retry = setTimeout(() => {
           permissionRetries.delete(retry)

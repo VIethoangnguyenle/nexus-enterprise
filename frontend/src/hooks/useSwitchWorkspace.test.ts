@@ -4,6 +4,7 @@ import { queryClient } from '../lib/query-client'
 import { useAuthStore } from '../stores/auth.store'
 import { useDriveStore } from '../stores/drive.store'
 import { jwtFor } from '../test/auth-fixtures'
+import { resolverFor } from '../lib/people-resolver'
 
 const switchTenant = vi.fn()
 vi.mock('../api/auth', () => ({ authApi: { switchTenant: (id: string) => switchTenant(id) } }))
@@ -65,6 +66,17 @@ describe('rescopeSession', () => {
     expect(useAuthStore.getState().accessToken).toBe(jwtFor('ws-2'))
     expect(queryClient.getQueryData(['workspaces'])).toBeUndefined()
     expect(useDriveStore.getState().selectedItemId).toBeNull()
+  })
+
+  it('forgets the names the resolver found in the old workspace', async () => {
+    useAuthStore.setState({ accessToken: jwtFor('ws-1') })
+    switchTenant.mockResolvedValue({ access_token: jwtFor('ws-2') })
+    const clear = vi.spyOn(resolverFor('ws-1'), 'clear')
+
+    await rescopeSession('ws-2')
+
+    expect(clear).toHaveBeenCalled()
+    clear.mockRestore()
   })
 
   it('leaves the token and the cache alone when the switch is refused', async () => {

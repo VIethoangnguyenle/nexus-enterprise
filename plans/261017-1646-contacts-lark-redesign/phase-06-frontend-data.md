@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Frontend data layer"
-status: pending
+status: "completed (not committed)"
 priority: P1
 effort: "6h"
 dependencies: [5]
@@ -85,3 +85,30 @@ store keyed per workspace and cleared on sign-out with other caches). No Zustand
   them in the PR; intended behaviour = visible only. Known on main: calendar pickers (`calendar/AddCalendarPicker.tsx:28`,
   `GuestsPanel.tsx:74`, `EventEditor.tsx:57`) become visibility-scoped (plan Q3).
 - Rollback: revert; API fields are additive.
+
+## Todo / Status (2026-10-18)
+- [x] Types: `Contact` gains `department_id`, `roles[{id,name,kind}]`; `useContacts` returns `{contacts, total, visibility}` and fills both fields for an older server. `Department.hidden?`, `DirectoryRules`, `ResolvedPersonWire`.
+- [x] `api/contacts.ts` (`resolve`) and `lib/people-resolver.ts`: one store per workspace, `request`/`requestNode` only queue, 50 ms batch, <= 200 ids per call (250 -> 2), found and not-found cached, in-flight de-duplicated, failure retried after a 2 s doubling backoff (max 60 s), `refresh()` (profile changed) keeps old names until the new ones land, `clear()` drops everything and ignores answers still in flight. Ids that are not UUIDs are never sent.
+- [x] `lib/people.ts`: `PeopleDirectory.isVisible` and `request`; resolved people are in `byUserId`/`byNodeId` and not in `list`; `displayName`/`avatarOf` queue a miss. `usePeople` merges contacts + resolver snapshot (`useSyncExternalStore`) and asks nobody until the directory has loaded. No `usePeople` call site changed.
+- [x] `contacts-model.ts`: `givenNameOf`/`sortContacts` (given name, then full name), `buildTree`, `pathOf`/`pathLabel`, `searchSubline`, `colleaguesOf` by `department_id`, `rolesOf` (Quản trị viên first, no Members), `privateGroups`; the old name-based `departmentsOf`/`department` filter stay for the current screen (phase 07 replaces them).
+- [x] `hooks/useContactCategories.ts`: `useDepartmentTree` (lazy), `useRoleGroups` (from loaded people), `useMyGroups` (lazy, private groups only), `useGroupMembers` (lazy per opened group, hidden members named by the resolver). `useDepartments`, `useChannels`, `useChannelMembers` gained an optional `enabled`.
+- [x] Admin: `useDirectoryScopeRules` (`ready:false` is data), `useHideDepartment`, `useUnhideDepartment`, `useLimitSubject`, `useUnlimitSubject` + `adminApi` calls + `keys.admin.directoryScope`; each write invalidates rules, departments and `keys.contacts.all(ws)`.
+- [x] `components/primitives/PersonLink.tsx`, `HiddenPersonCard.tsx` (popover >= 768, `NavSheet` bottom sheet below; Esc/outside closes, focus returns; only avatar, name and the sentence). Not re-exported from the primitives index (import cycle through `NavSheet`).
+- [x] Sign-out clears the resolver (`onSessionEnd`), a workspace switch clears it (`resetTenantScopedState`), `profile_updated` refreshes it (`websocket.store`).
+- [x] Tests written first (red for the right reason), then green: see the report; `npm test` 3534 pass, lint clean, typecheck:diff clean, build green.
+
+## Deviations
+- `PersonLink` takes the `people` directory as a prop (the caller has it, like `MessageBlock`) instead of reading the workspace itself.
+- Default `onOpenProfile` navigates with `search: { person }`; the `/contacts` route does not declare `person` yet (phase 07 adds `validateSearch`), so the call carries a documented `as never` cast.
+- Sign-out reaches the resolver through `lib/session-end` rather than an import in `auth.store`: the direct import made a cycle (`auth.store` -> resolver -> API client -> `auth.store`) that broke mocking of the client in tests. `query-persist.checkScope` is left alone: the resolver is memory only and empty at boot.
+- Touched outside the listed files: `ContactsScreen.tsx` (personal workspace also blanks `department_id`, since colleagues now follow the id) and its test (new sort order), `suggestions/contacts.test.ts` and `SpaceFiles.test.tsx` fixtures (new required fields), `chat-fixtures.ts` (department ids), `useMessaging.ts`, `websocket.store.ts`, `useSwitchWorkspace.ts`.
+- Direct `people.byUserId.get(id)` callers (about 25) see a resolved person only after something called `displayName`/`avatarOf` for that id (most render a name beside the avatar, so they do). Not changed, per "no call site changes".
+
+## Review fixes (2026-10-18)
+- [x] H1: `PeopleDirectory.ready` (`EMPTY_DIRECTORY` false, built from contacts true; `usePeople` serves the empty one while loading and on error). `PersonLink` has three states: unknown (press does nothing, `aria-busy`, no `aria-haspopup`/`aria-expanded`, no card), visible, hidden (only these get the popup attributes). `useGroupMembers().visible` is `undefined` until the directory is ready.
+- [x] M1+M2: `byUserId`/`byNodeId` are `AskingMap`s: `get` of a missing key queues `request`/`requestNode` (`has`, `peek`, iteration do not); answered and not-found ids are never asked again. `requestNode` is part of `DirectoryOptions`/`PeopleDirectory`. `ApprovalScreen` no longer returns a node id as a user id (`byNodeId` path, `undefined` while unresolved). The ~25 direct-map call sites resolve hidden people unchanged.
+- [x] M3: after a failure one timer fires when the earliest backoff ends and re-asks the due ids (up to 5 failures in a row, then only a new request retries); `clear()` cancels it.
+- [x] M4: `dmPartner(ch, me, dir, members?)` never titles a DM by a username: a partner the directory does not list is looked up by user id among the channel's members (`useConversations` loads members only for such DMs; `SpaceView` reuses its members query) and named by the resolver, "Thành viên" until then.
+- [x] L1: `refresh(ids?)`: ids in flight are marked stale and asked again when their answer lands; node-only entries refresh by node; with ids (the `profile_updated` event's) only those held people are asked about, without ids everyone held is.
+- [x] L2: `buildTree` drops departments unreachable from a root (parent cycle) and files their people at the organisation root.
+- Tests that failed first: `people.test` (ready, AskingMap), `PersonLink.test` (unknown state), `useContactCategories.test` (visible while loading/failed), `usePeople.resolver.test` (direct id/node lookups, not ready on error), `conversations.test` (username title, mentions request), `people-resolver.test` (auto retry, give-up, in-flight refresh, targeted refresh), `contacts-model.test` (cycle people), `websocket.store.test` (refresh with ids).
