@@ -25,6 +25,7 @@ const (
 	DomainDocument   = "document"
 	DomainAsset      = "asset"
 	DomainPermission = "permission"
+	DomainCalendar   = "calendar"
 )
 
 // Kinds of change. A domain uses the ones that make sense for it; the full
@@ -134,7 +135,7 @@ func Topic(domain string) string { return domain + ".events" }
 func Topics() []string {
 	return []string{
 		Topic(DomainDrive), Topic(DomainChannel), Topic(DomainWorkspace),
-		Topic(DomainDocument), Topic(DomainPermission),
+		Topic(DomainDocument), Topic(DomainPermission), Topic(DomainCalendar),
 	}
 }
 

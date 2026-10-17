@@ -240,5 +240,8 @@ Every guest, owner, sharer and organizer SHALL show as display name (with avatar
 person is picked from a list or search, never typed as an ID or email.
 
 ## Status
-Added 2026-10-17. Vocabulary, graph shape and PDP test vectors (`pdp_calendar_scenarios_test.go`) exist; the service,
-screens and notifications are specified here ahead of their code.
+Added 2026-10-17. Vocabulary, graph shape and PDP test vectors (`pdp_calendar_scenarios_test.go`) exist. The service
+(`backend/services/calendar`, REST 8187, schema `data/migrations/057_calendar.sql`) implements the three kinds of
+calendar, lazy creation, subscriptions and sharing (`GET /api/workspaces/:id/calendar/calendars`, shares, subscriptions,
+group calendar). Events, guests, free/busy, reminders, realtime fan-out to screens and calls are specified here ahead of
+their code.

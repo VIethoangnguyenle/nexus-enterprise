@@ -35,7 +35,7 @@
 COMPOSE := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
 # All backend services (order matters for build-check and dev startup)
-SERVICES := policy auth workspace document messaging asset drive approval
+SERVICES := policy auth workspace document messaging asset drive approval calendar
 
 # Service filter — use as: make redeploy s=drive
 s ?=
@@ -257,7 +257,16 @@ dev: dev-infra
 	GRPC_PORT=50058 \
 	REST_PORT=$$APPROVAL_REST_PORT \
 	setsid sh -c 'cd backend/services/approval && exec go run ./cmd/' > $(DEV_LOGS)/approval.log 2>&1 & echo $$! >> $(DEV_PIDS); \
-	echo "  approval     → gRPC :50058  REST :$$APPROVAL_REST_PORT"
+	echo "  approval     → gRPC :50058  REST :$$APPROVAL_REST_PORT"; \
+	\
+	DATABASE_URL=$$DATABASE_URL \
+	POLICY_SERVICE_ADDR=$$POLICY_SERVICE_ADDR \
+	KAFKA_BROKERS=$$KAFKA_BROKERS \
+	JWT_SECRET=$$JWT_SECRET \
+	GRPC_PORT=50059 \
+	REST_PORT=$$CALENDAR_REST_PORT \
+	setsid sh -c 'cd backend/services/calendar && exec go run ./cmd/' > $(DEV_LOGS)/calendar.log 2>&1 & echo $$! >> $(DEV_PIDS); \
+	echo "  calendar     → gRPC :50059  REST :$$CALENDAR_REST_PORT"
 	@echo ""
 	@echo "▸ Starting frontend dev server..."
 	@VITE_DEV_MODE=true setsid sh -c 'cd frontend && exec npm run dev -- --port 5173 --host' > $(DEV_LOGS)/frontend.log 2>&1 & echo $$! >> $(DEV_PIDS)

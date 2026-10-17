@@ -483,6 +483,40 @@ services:
       retries: 10
 
   # ============================================
+  # Calendar
+  # ============================================
+  calendar:
+    profiles: [app]
+    build:
+      context: ./backend
+      dockerfile: services/calendar/Dockerfile
+    environment:
+      APP_ENV: dev
+      DATABASE_URL: postgres://ngac:ngac_secret@postgres:5432/ngac?sslmode=disable
+      POLICY_SERVICE_ADDR: policy:50051
+      KAFKA_BROKERS: redpanda:9092
+      GRPC_PORT: "50059"
+      REST_PORT: "8080"
+      JWT_SECRET: ngac-super-secret-key-change-in-production
+    depends_on:
+      policy:
+        condition: service_healthy
+      redpanda:
+        condition: service_started
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.calendar.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/calendar`) || PathRegexp(`/api/workspaces/[^/]+/calendar`))"
+      - "traefik.http.routers.calendar.entrypoints=web"
+      - "traefik.http.routers.calendar.priority=120"
+      - "traefik.http.routers.calendar.middlewares=cors-all@docker"
+      - "traefik.http.services.calendar.loadbalancer.server.port=8080"
+    healthcheck:
+      test: ["CMD", "/bin/grpc_health_probe", "-addr=:50059"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # ============================================
   # Frontend
   # ============================================
   frontend:

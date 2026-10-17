@@ -97,6 +97,7 @@ jobs:
           - { image: asset,       context: backend,  file: backend/services/asset/Dockerfile }
           - { image: drive,       context: backend,  file: backend/services/drive/Dockerfile }
           - { image: approval,    context: backend,  file: backend/services/approval/Dockerfile }
+          - { image: calendar,    context: backend,  file: backend/services/calendar/Dockerfile }
           - { image: frontend,    context: frontend, file: frontend/Dockerfile }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

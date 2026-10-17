@@ -79,6 +79,10 @@ const devProxy = {
         if (/^\/api\/workspaces\/[^/]+\/asset/.test(url)) {
           return originalWeb(req, res, { ...opts, target: 'http://localhost:8184' })
         }
+        // /api/workspaces/:id/calendar* → calendar service
+        if (/^\/api\/workspaces\/[^/]+\/calendar/.test(url)) {
+          return originalWeb(req, res, { ...opts, target: 'http://localhost:8187' })
+        }
         return originalWeb(req, res, opts)
       }
     },
@@ -117,6 +121,9 @@ const devProxy = {
 
   // Drive service — :8185
   '/api/drive': { target: 'http://localhost:8185', changeOrigin: true },
+
+  // Calendar service — :8187 (the per-workspace routes are re-dispatched under /api/workspaces above)
+  '/api/calendar': { target: 'http://localhost:8187', changeOrigin: true },
 
   // Approval service — :8186
   '/api/approval': { target: 'http://localhost:8186', changeOrigin: true },
