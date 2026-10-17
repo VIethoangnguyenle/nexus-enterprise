@@ -134,9 +134,9 @@ describe('the Tìm trong chat screen', () => {
 describe('before anything is typed', () => {
   it('lists the recent searches of this person, and a tap fills the box', async () => {
     const user = userEvent.setup()
-    addRecent(ME.id, 'tạm ứng tháng 10')
-    addRecent(ME.id, 'hợp đồng')
-    addRecent('someone-else', 'không phải của tôi')
+    addRecent('chat', ME.id, 'tạm ứng tháng 10')
+    addRecent('chat', ME.id, 'hợp đồng')
+    addRecent('chat', 'someone-else', 'không phải của tôi')
     await open()
     expect(screen.getByText('Tìm gần đây')).toBeInTheDocument()
     const rows = screen.getAllByRole('button', { name: /^Tìm lại / })
@@ -149,13 +149,13 @@ describe('before anything is typed', () => {
 
   it('removes one recent search without touching the others', async () => {
     const user = userEvent.setup()
-    addRecent(ME.id, 'một')
-    addRecent(ME.id, 'hai')
+    addRecent('chat', ME.id, 'một')
+    addRecent('chat', ME.id, 'hai')
     await open()
     await user.click(screen.getByRole('button', { name: 'Xoá “một” khỏi tìm gần đây' }))
     expect(screen.queryByRole('button', { name: 'Tìm lại một' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Tìm lại hai' })).toBeInTheDocument()
-    expect(readRecent(ME.id)).toEqual(['hai'])
+    expect(readRecent('chat', ME.id)).toEqual(['hai'])
   })
 
   it('says nothing about recent searches when there are none', async () => {
@@ -213,7 +213,7 @@ describe('groups and people', () => {
     await open()
     await user.type(box(), 'doi soat')
     await user.click(await screen.findByRole('link', { name: /Đối soát giao dịch/ }))
-    expect(readRecent(ME.id)).toEqual(['doi soat'])
+    expect(readRecent('chat', ME.id)).toEqual(['doi soat'])
   })
 })
 
@@ -348,7 +348,7 @@ describe('the chips', () => {
 
   it('keeps the recent searches under every chip', async () => {
     const user = userEvent.setup()
-    addRecent(ME.id, 'hợp đồng')
+    addRecent('chat', ME.id, 'hợp đồng')
     await open()
     await user.click(chip('Người'))
     expect(screen.getByRole('button', { name: 'Tìm lại hợp đồng' })).toBeInTheDocument()

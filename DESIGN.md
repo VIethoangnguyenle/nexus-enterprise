@@ -533,8 +533,8 @@ theo §5 "Điều hướng di động".
   Duyệt nhóm (chỉ khi tính năng có, xem nút +) · divider · Thông báo của Chat. Module khác không lặp ở đây (đã ở menu ☰).
 - **Tìm trong chat:** chạm ô tìm mở màn toàn màn (fade 220ms): ô nhập viên thuốc viền accent 2px, quay lại và xoá; chip
   lọc Tất cả · Người · Nhóm · Tin nhắn · Có tệp (cao 36, cuộn ngang); kết quả theo nhóm "Nhóm và người", "Tin nhắn"
-  (người gửi · cuộc trò chuyện, đoạn có từ khớp tô `--color-warning-wash`, giờ), khi chưa gõ thì "Tìm gần đây". Chỉ
-  trả tin trong cuộc trò chuyện còn quyền đọc.
+  (người gửi · cuộc trò chuyện, đoạn có từ khớp tô `--color-warning-wash`, giờ), khi chưa gõ thì panel gợi ý của Chat
+  ("Tìm gần đây" + "Trò chuyện gần đây", xem "Gợi ý trong ô tìm"). Chỉ trả tin trong cuộc trò chuyện còn quyền đọc.
 - **Luồng:** thanh trên có quay lại, icon nhóm 28, tên + "N thành viên", nút Thread (badge) và Thông tin; bong bóng tối đa
   88%, chữ 16px; hàng tóm tắt thread cao 36. Không hover: chạm tin hiện giờ trong cụm. Tin của bạn không chừa
   cột giờ bên phải: bong bóng cách mép phải bằng khoảng avatar cách mép trái (14); chạm dòng gom cụm thì giờ hiện
@@ -791,6 +791,41 @@ thanh trên không có nút primary.
   **C** tạo · **E** sửa sự kiện chọn · **Delete** xoá · **/** tìm · Tab ↑ ↓ đi giữa sự kiện · Enter mở · Esc đóng · Ctrl S lưu.
 - **Quyền hiện ra:** không có quyền thì ẩn hành động, không báo lỗi: không kéo được, popover không Sửa/Xoá, không mục Chia sẻ,
   không dải trả lời; chỉ thấy "Bận" khi không đọc được chi tiết. Quy tắc quyền (NGAC, trên OA của lịch): mục 14 của mockup, sẽ chuyển vào spec của Lịch trong `docs/specs/`.
+
+### Gợi ý trong ô tìm (mockup `design/mockups/search-suggestions.html`, duyệt 2026-10-17)
+
+Ô tìm chính của Chat, Tài liệu, Danh bạ, Tài sản, Phê duyệt: khi ô **được focus mà còn trống**, hiện "Tìm gần đây" của
+module đó và 1–2 nhóm gợi ý. Gõ một chữ thì gợi ý nhường chỗ cho kết quả như cũ; xoá hết chữ thì gợi ý trở lại.
+- **Máy tính (≥ 1024):** popover neo dưới ô, cách 6, rộng bằng ô (tối thiểu 380), cao tối đa 480 rồi cuộn,
+  `--color-overlay`, radius 12, `--shadow-overlay`; không scrim, danh sách sau vẫn bấm được. Nhãn nhóm 12/600 mờ, không
+  divider giữa nhóm. Hàng cao 44, radius 8, icon 32, tên 14/500, dòng phụ 12 mờ; hàng đang chọn `--color-accent-wash`.
+  Chân popover: gợi ý phím ↑↓ · Enter · Esc (11px mono, mờ). Tối đa 5 "Tìm gần đây" và 3 mục mỗi nhóm khác.
+- **Điện thoại (< 1024):** không có popover. Ô tìm đổi sang viên thuốc 52 viền accent 2px có Quay lại, gợi ý phủ vùng
+  danh sách bên dưới (như Tìm trong chat). Hàng 52, icon 36, tên 15/500; ✕ luôn hiện, vùng chạm 44. Tối đa 8 "Tìm gần
+  đây" và 5 mục mỗi nhóm khác. Quay lại hoặc back: về danh sách, giữ vị trí cuộn.
+- **Nhóm theo module:** Chat: Trò chuyện gần đây (tin cuối, giờ). Danh bạ: Nhắn gần đây (người, chức danh · phòng ban;
+  không có chính mình). Tài liệu: Sửa gần đây trong <thư mục> (không có thư mục) · Được chia sẻ với tôi (chỉ tải khi gợi
+  ý mở lần đầu). Tài sản: Bạn đang giữ · Hoạt động gần đây ("**Tên** việc · thời gian"). Phê duyệt: Chờ bạn duyệt (pill
+  Khẩn khi có) · Đề nghị của bạn. Workspace cá nhân không có Tài sản và Phê duyệt.
+- **Icon hàng:** đồng hồ trên `--color-sunk` cho lần tìm cũ; ô loại tệp theo `file-kind`; Avatar người; ô nhóm vuông.
+  Dòng phụ luôn là tên người và thời gian, không bao giờ là ID.
+- **Chọn:** lần tìm cũ thì điền vào ô và tìm như vừa gõ. Thứ khác thì mở như bấm nó trong danh sách. Esc / bấm ngoài
+  thì đóng, focus ở lại ô.
+- **Tìm gần đây:** lưu chuỗi đã gõ (≥ 2 ký tự) khi người dùng bấm Enter hoặc mở một kết quả; theo người, theo module,
+  trên máy này; trùng khi bỏ hoa thường và dấu thì giữ cái mới; tối đa 8; ✕ (máy tính: hiện khi rê hoặc khi hàng được
+  chọn) hoặc Delete để xoá; đăng xuất thì xoá hết.
+- **Trạng thái:** nhóm đang tải hiện 2 hàng Skeleton; nhóm tải lỗi thì ẩn, không báo lỗi; không có gì để gợi ý thì
+  máy tính không mở popover, điện thoại hiện icon 24 + một câu hướng dẫn. Giảm chuyển động: không trượt, không chạy sáng.
+- **Quyền:** gợi ý chỉ lấy từ dữ liệu màn đã tải về qua kiểm tra quyền, tính lại mỗi lần mở; không nhớ thực thể theo tên
+  hay ID, nên thứ đã mất quyền thì tự biến mất.
+- **A11y:** máy tính: ô tìm là `combobox` (`aria-expanded`, `aria-controls`, `aria-activedescendant`); gợi ý là
+  `listbox` chia `group` theo nhóm có nhãn; focus luôn ở ô; ↑/↓ đi qua mọi mục, Enter chọn, Delete xoá lần tìm cũ (chân
+  popover ghi "Delete xoá"), Esc đóng; ✕ chỉ dành cho chuột (`aria-hidden`), tên của mục là chính chuỗi đã tìm. Điện
+  thoại: ô tìm vẫn là ô tìm thường; mỗi gợi ý là một nút ("Tìm lại …" cho lần tìm cũ) và ✕ là nút riêng có tên
+  ("Xoá “…” khỏi Tìm gần đây"), nên screen reader xoá được. Cất bàn phím không đóng gợi ý; chỉ gõ chữ hoặc Quay lại.
+- **Ô tìm của Phê duyệt (mới):** `SearchField` 240 đầu hàng dưới tab, `moduleSearch`; lọc danh sách của tab đang mở
+  (đã tải) theo tiêu đề, người gửi, tên mẫu; bỏ hoa thường và dấu, mọi từ phải khớp, từ khớp tô `--color-warning-wash`;
+  bên cạnh ghi "N trong M đề nghị"; giữ trong URL `?q=`, đổi tab thì xoá.
 
 ## 7. Motion
 
