@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/jackc/pgx/v5"
@@ -66,6 +67,20 @@ func (s *Store) ProfilesByNodeIDs(ctx context.Context, tenantID string, nodeIDs 
 		out[p.NodeID] = p
 	}
 	return out, rows.Err()
+}
+
+// TenantUserStatus is the status of a person's row in the workspace, "" when they have none.
+func (s *Store) TenantUserStatus(ctx context.Context, tenantID, userID string) (string, error) {
+	var status string
+	err := s.db.QueryRow(ctx,
+		`SELECT status FROM tenant_users WHERE tenant_id = $1 AND user_id = $2`, tenantID, userID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("tenant user status: %w", err)
+	}
+	return status, nil
 }
 
 // EnsureTenantUser lists a person as a member of the workspace, so contacts and

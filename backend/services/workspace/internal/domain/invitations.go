@@ -419,27 +419,51 @@ func (s *Service) AcceptInvitation(ctx context.Context, userID, callerNodeID, in
 
 // admit adds the person to the workspace and gives them what the inviter can
 // still give.
+//
+// The graph is written first and the directory row after it. The row is ensured
+// whether or not the person was already in the graph: the graph can hold someone the
+// table lost, and an acceptance is the moment to list them again (it reactivates a
+// tombstone, and nothing else). When listing fails, only an edge this call made is
+// taken back; the Members edge of someone who was already a member is theirs.
 func (s *Service) admit(ctx context.Context, ws *WorkspaceResult, inv *store.Invitation, userID, nodeID string) (*AcceptResult, error) {
 	res := &AcceptResult{WorkspaceID: ws.ID, WorkspaceName: ws.Name}
+	// An administrator's suspension is a decision an invitation does not undo: refused
+	// before the graph is touched. A removed person comes back; a new one joins.
+	if s.directory != nil {
+		status, err := s.directory.TenantUserStatus(ctx, ws.ID, userID)
+		if err != nil {
+			return nil, err
+		}
+		if status == "disabled" {
+			return nil, fmt.Errorf("%w: membership suspended", ErrAccessDenied)
+		}
+	}
 	already, err := s.isMember(ctx, ws, nodeID)
 	if err != nil {
 		return nil, err
 	}
+	membersUAID := ""
 	if !already {
-		membersUAID, err := s.FindUAByName(ctx, ws.ID, ngac.MembersUAName(ngac.WorkspaceID(ws.ID)))
+		membersUAID, err = s.FindUAByName(ctx, ws.ID, ngac.MembersUAName(ngac.WorkspaceID(ws.ID)))
 		if err != nil {
 			return nil, err
 		}
 		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: nodeID, ParentId: membersUAID}); err != nil {
 			return nil, fmt.Errorf("assign member: %w", err)
 		}
-		if s.directory != nil {
-			if err := s.directory.EnsureTenantUser(ctx, ws.ID, userID, nodeID); err != nil {
-				if _, undo := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{ChildId: nodeID, ParentId: membersUAID}); undo != nil {
+	}
+	if s.directory != nil {
+		if err := s.directory.EnsureTenantUser(ctx, ws.ID, userID, nodeID); err != nil {
+			if !already {
+				// Detached from the request: a cancelled request is the commonest reason
+				// the listing failed, and the undo must not die with it.
+				undoCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+				defer cancel()
+				if _, undo := s.policyWrite.RemoveAssignment(undoCtx, &policypb.RemoveAssignmentRequest{ChildId: nodeID, ParentId: membersUAID}); undo != nil {
 					slog.Error("could not undo an accepted invitation", "workspace", ws.ID, "error", undo)
 				}
-				return nil, err
 			}
+			return nil, err
 		}
 	}
 	// Joining is idempotent, so it also repairs a member admitted before the

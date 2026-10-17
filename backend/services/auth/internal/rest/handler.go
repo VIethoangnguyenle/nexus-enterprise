@@ -337,6 +337,10 @@ func mapError(err error) *echo.HTTPError {
 		return apiError(http.StatusForbidden, "email_not_verified_by_provider", err.Error())
 	case errors.Is(err, domain.ErrEmailUnverified):
 		return apiError(http.StatusForbidden, "email_unverified", err.Error())
+	case errors.Is(err, domain.ErrUnavailable):
+		// A dependency (the policy service) could not be asked: the answer is "try
+		// again", and says nothing about the caller's right.
+		return apiError(http.StatusServiceUnavailable, "unavailable", "try again in a moment").SetInternal(err)
 	case errors.Is(err, domain.ErrOTPUnavailable):
 		return apiError(http.StatusServiceUnavailable, "otp_unavailable", err.Error())
 	case errors.Is(err, domain.ErrOTPBusy):

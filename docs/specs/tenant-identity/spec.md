@@ -53,6 +53,51 @@ graph holds at least one member; a workspace whose graph holds none is reported 
 never populated, not emptied). Until 062 runs a removal still detaches the person (every decision and every refresh
 reads the graph) but reports that the listing could not be updated.
 
+### Requirement: tenant_users is a projection of the graph, written after it
+`tenant_users` SHALL be written only after the graph holds the person, and a tenant-scoped token SHALL be minted only for a person the graph holds.
+
+Membership is the edge under the workspace's own `<ws>_Members` UA (an owner: under `<ws>_Owners`, which is beneath it).
+Every workspace has them. `TenantMember_<ws>` and `TenantOwner_<ws>` are not required: the workspaces made at sign-up
+never had them, and some old organizations were never given any. A join assigns them as well only where they exist and
+sit under `Members`/`Owners`, and a missing one is never an error. A join therefore (1) checks `IsAssigned` for each
+target UA and assigns only where the edge is missing, (2) inserts the row, (3) if the row fails, removes only the edges
+this call made (an edge the person already had is theirs) and reports the failure. Joining by invitation does the same:
+the row is ensured even for someone the graph already holds (so a lost row catches up; it reactivates only `removed`),
+and a failed listing takes back only an edge that call made.
+
+A row that cannot be written after the edge leaves the graph holding a person with no row. The next sign-in lists
+them: a graph member with no row at all gets one (owner if under `<ws>_Owners`, else member); a row in any state
+(`removed`, `disabled`, `invited`) is never overwritten. Taking an edge back is guarded against racing joins: it is not
+done when the failure is a cancellation or deadline (the write may have committed), and after any undo the row is read
+again and, if another call has made it active, the edges are put back.
+
+An invitation is refused (403, the offer stays open, nothing written to the graph) for a person whose row is
+`disabled`; a `removed` person and a new one are admitted.
+
+#### Scenario: Joining a workspace that has no TenantMember UA
+- **WHEN** a person joins (sign-up, a Google `hd` domain join, an accepted invitation) a workspace without a `TenantMember_<ws>` UA
+- **THEN** they are assigned under the workspace's Members UA (Owners for an owner) and then listed, and they can sign in and refresh into it
+
+#### Scenario: The graph write fails
+- **WHEN** the edge cannot be written
+- **THEN** no active row is written and the join reports the failure; sign-in continues without that tenant
+
+#### Scenario: The row fails after the edge
+- **WHEN** the row cannot be written after the edge was made
+- **THEN** the edge this call made is removed; an edge that was there before the call stays
+
+#### Scenario: The row failed and the next sign-in
+- **WHEN** a join's edge was written but its row was not, and the person signs in again
+- **THEN** the row is written and the workspace is listed; a `removed` or `disabled` row is left alone
+
+#### Scenario: A suspended person is invited again
+- **WHEN** the person's row is `disabled` and they accept an invitation
+- **THEN** it is refused and they are not put under Members
+
+#### Scenario: Creating a workspace on purpose
+- **WHEN** a person creates a workspace and the owner edge or the row cannot be written
+- **THEN** the workspace is removed through the workspace service and no row remains
+
 #### Scenario: Invited user before signup
 - **WHEN** an admin invites an email that has no registered user
 - **THEN** the system creates a `tenant_users` record with status `invited`

@@ -3,7 +3,11 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"slices"
 	"time"
+
+	"ngac-platform/ngac"
 )
 
 const (
@@ -36,8 +40,34 @@ const (
 	WorkspaceOrganization = "organization"
 )
 
-// ListMyWorkspaces returns the workspaces userID is an active member of.
+// ListMyWorkspaces returns the workspaces userID is an active member of, for a
+// caller whose node is not at hand (it is read from the account).
+//
+// Deprecated: the routes use ListMyWorkspacesAt, which knows the caller's token. This
+// wrapper is kept for callers that have only a user id.
 func (s *Service) ListMyWorkspaces(ctx context.Context, userID string) ([]WorkspaceInfo, error) {
+	if userID == "" {
+		return nil, ErrInvalidInput
+	}
+	user, err := s.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get user: %w", err)
+	}
+	if user == nil {
+		return nil, ErrNotFound
+	}
+	return s.ListMyWorkspacesAt(ctx, userID, user.NGACNodeID, "")
+}
+
+// ListMyWorkspacesAt returns the workspaces the person is an active member of, for the
+// switcher: those their rows list that the graph also holds them in. A workspace they
+// can no longer enter is not offered.
+//
+// When the graph cannot be asked the list is the workspace the caller is in now
+// (currentTenantID, which their token vouches for), with a warning in the log, and
+// never the unfiltered rows. A caller whose token has no workspace has nothing to fall
+// back on: ErrUnavailable, so the screen offers a retry instead of an empty picker.
+func (s *Service) ListMyWorkspacesAt(ctx context.Context, userID, ngacNodeID, currentTenantID string) ([]WorkspaceInfo, error) {
 	if userID == "" {
 		return nil, ErrInvalidInput
 	}
@@ -45,9 +75,21 @@ func (s *Service) ListMyWorkspaces(ctx context.Context, userID string) ([]Worksp
 	if err != nil {
 		return nil, fmt.Errorf("list my workspaces: %w", err)
 	}
-	out := make([]WorkspaceInfo, len(rows))
-	for i, r := range rows {
-		out[i] = WorkspaceInfo{ID: r.ID, Name: r.Name, Role: r.Role, MemberCount: r.MemberCount, Domain: r.Domain, Type: r.Type}
+	inGraph, err := s.workspacesOfPerson(ctx, userID, ngacNodeID)
+	if err != nil {
+		slog.Warn("workspace list limited to the current workspace: the graph could not be asked",
+			"user", userID, "error", err)
+		if currentTenantID == "" {
+			return nil, err
+		}
+		inGraph = []ngac.WorkspaceID{ngac.WorkspaceID(currentTenantID)}
+	}
+	out := make([]WorkspaceInfo, 0, len(rows))
+	for _, r := range rows {
+		if !slices.Contains(inGraph, ngac.WorkspaceID(r.ID)) {
+			continue
+		}
+		out = append(out, WorkspaceInfo{ID: r.ID, Name: r.Name, Role: r.Role, MemberCount: r.MemberCount, Domain: r.Domain, Type: r.Type})
 	}
 	return out, nil
 }

@@ -52,6 +52,12 @@ func TestDirectoryStore(t *testing.T) {
 		got, err := st.ProfilesByNodeIDs(ctx, wsA, []string{nodeID})
 		require.NoError(t, err)
 		assert.Equal(t, "disabled", got[nodeID].Status)
+		status, err := st.TenantUserStatus(ctx, wsA, userID)
+		require.NoError(t, err)
+		assert.Equal(t, "disabled", status)
+		status, err = st.TenantUserStatus(ctx, wsB, userID)
+		require.NoError(t, err)
+		assert.Empty(t, status, "no row in the other workspace")
 
 		// The same person in another workspace has their own standing there.
 		got, err = st.ProfilesByNodeIDs(ctx, wsB, []string{nodeID})

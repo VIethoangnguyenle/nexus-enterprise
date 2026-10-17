@@ -28,7 +28,9 @@ type fakeDirectory struct {
 	listed   []string                  // EnsureTenantUser calls: tenant/node
 	removed  []string                  // MarkTenantUserRemoved calls: tenant/node
 	ensure   error
-	markErr  error // MarkTenantUserRemoved fails with this (the call is still recorded)
+	// status is the row's status by user id; absent means no row.
+	status  map[string]string
+	markErr error // MarkTenantUserRemoved fails with this (the call is still recorded)
 	// failFirst makes the first calls of MarkTenantUserRemoved fail, then lets them through.
 	failFirst int
 	mu        sync.Mutex // the repair runs in a goroutine
@@ -47,6 +49,10 @@ func (d *fakeDirectory) ProfilesByNodeIDs(_ context.Context, _ string, ids []str
 		}
 	}
 	return out, nil
+}
+
+func (d *fakeDirectory) TenantUserStatus(_ context.Context, _, userID string) (string, error) {
+	return d.status[userID], nil
 }
 
 func (d *fakeDirectory) EnsureTenantUser(_ context.Context, tenant, _, node string) error {

@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Graph-first tenant writes + graph-gated tenant-token mints (F7)"
-status: pending
+status: completed
 priority: P2
 effort: "4h"
 dependencies: [4]
@@ -84,3 +84,22 @@ truth: ngac_assignments ; tenant_users = projection (063 reconciles once)
 
 ## Rollback
 Code-only; revert. No migration in this phase (062 and 063 belong to Phase 04).
+
+## Implementation Status (2026-10-17)
+- [x] Deny tests first, each with an allow on the same fixture (fakes: `join_tenant_order_test.go`, `signin_tenant_gate_test.go`, `rest/switch_tenant_gate_test.go`; real policy: `join_tenant_order_realpolicy_test.go`, `signin_tenant_gate_realpolicy_test.go`, workspace `admit_directory_realpolicy_test.go`)
+- [x] `joinTenant` graph first: `IsAssigned` before assign, row after, undo only edges this call made; membership edge = `<ws>_Members` (owner `<ws>_Owners`), TenantMember/TenantOwner only where they exist and sit under Members/Owners
+- [x] strict `provisionTenant` reversed (assign, then row; failure undoes the workspace); `autoProvisionWorkspace` uses `joinTenant(..., "owner")`
+- [x] `admit` always ensures the row; undo only an edge it created
+- [x] Lenient callers (`joinTenantByDomain`, lenient provisioning) log and continue; sign-in never fails on it
+- [x] Sign-in (Google, OTP existing and new) filters tenants through the graph; policy error gives a tenant-less token; `SwitchTenant` checks the graph (403 / 503); switcher list filtered, outage shows the current workspace only
+- [x] Specs: `tenant-identity` (projection written after the graph), `tenant-auth-flow` (default tenant, switch, switcher, Google join)
+- Deviations: `membership.go` (helpers `workspacesOfPerson`, `graphMemberTenants`, `signinTenants`; `firstTenantWhereMember` reuses them), `rest/handler.go` (`ErrUnavailable` -> 503), `rest/workspaces.go` (passes node and token tenant) touched though not in the list; `ListMyWorkspaces(ctx, userID)` kept as a wrapper over the new `ListMyWorkspacesAt` so other branches' callers still compile.
+
+## Review fixes (2026-10-17)
+- [x] H1 sign-in writes the missing row of a graph member (never over an existing row); comments no longer claim 063 repairs post-deploy drift
+- [x] M1 switcher with no token tenant and the graph unreachable: 503 (the picker already has a retry branch, `mine.isError` with "Thử lại")
+- [x] M2 wording: a tenant-less session regains a tenant at the next sign-in or by choosing a workspace; no self-healing on refresh
+- [x] M3 no undo after a cancelled/timed-out write; after an undo the row is re-read and the edges restored if another call made it active
+- [x] admit refuses a `disabled` row (`DirectoryStore.TenantUserStatus`); removed and new are admitted
+- [x] L1 one row read in `SwitchTenant`; L2 wrapper kept, marked Deprecated; L4 admit's undo on a detached context
+- [ ] L3 not done: the switcher still asks the writer (the auth fakes' read client has no graph; SwitchTenant and sign-in need the writer anyway)

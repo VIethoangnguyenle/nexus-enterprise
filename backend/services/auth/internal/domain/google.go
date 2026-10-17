@@ -200,6 +200,7 @@ func (s *Service) signinResultFor(ctx context.Context, user *store.User, preferr
 	if err != nil {
 		return nil, fmt.Errorf("list tenants: %w", err)
 	}
+	tenants = s.signinTenants(ctx, user.ID, user.NGACNodeID, tenants)
 
 	defaultTenantID := ""
 	for _, t := range tenants {

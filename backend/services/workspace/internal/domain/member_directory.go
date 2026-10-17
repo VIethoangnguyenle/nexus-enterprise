@@ -19,6 +19,8 @@ import (
 // this knows what to call them.
 type DirectoryStore interface {
 	ProfilesByNodeIDs(ctx context.Context, tenantID string, nodeIDs []string) (map[string]*store.Profile, error)
+	// TenantUserStatus is the status of the person's row in the workspace, "" when there is none.
+	TenantUserStatus(ctx context.Context, tenantID, userID string) (string, error)
 	EnsureTenantUser(ctx context.Context, tenantID, userID, nodeID string) error
 	MarkTenantUserRemoved(ctx context.Context, tenantID, nodeID string) error
 }

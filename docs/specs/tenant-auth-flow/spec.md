@@ -115,6 +115,7 @@ The system SHALL place a Google user in a company tenant only on the basis of th
 - **WHEN** a Google user with `hd = 'acme.com'` signs in and a tenant has `domain = 'acme.com'`
 - **THEN** the user is added to that tenant as a `member` (an existing active membership is left unchanged; a removed or disabled one is not touched and is not the default tenant) and the session is scoped to it
 - **AND** a new user also gets a personal workspace of their own as `owner`: every new account has one, a company account included
+- **AND** the join works in an organization that has no `TenantMember_<ws>` UA (the person is assigned under its Members UA), and a join that fails is logged and leaves the person signed in without that tenant, never a failed sign-in
 
 #### Scenario: Hosted domain has no tenant yet
 - **WHEN** a Google user with `hd = 'newco.io'` signs in and no tenant has that domain
@@ -200,6 +201,16 @@ A wrong code answers `401 {"code":"otp_invalid","attempts_left":N}`, where N is 
 ### Requirement: Sign-in issues a session scoped to a default tenant
 A successful sign-in (OTP or Google) SHALL issue an access token scoped to the person's default tenant (an owned tenant, else the first) and a refresh token that names the SAME tenant, so that trading the cookie for a new access token after a reload keeps the workspace. A person with no tenant gets a token with none.
 
+The default tenant, and the tenants a sign-in lists, are those the person has an active row in **and** the graph holds them in (under the workspace's `<ws>_Members`, asked of the policy writer in one lookup). The row alone is not enough: a row can lag the graph, and a token scoped to a tenant is accepted by every service that reads the tenant from the token. When the policy service cannot be asked, sign-in still succeeds with a session that has no tenant and an empty tenant list (never the unfiltered rows). A graph member who has no row at all is listed by this sign-in (written as owner under `<ws>_Owners`, else member; a row in any state is left as it is); the person regains a tenant at the next sign-in or by choosing a workspace (a refresh does not repair it).
+
+#### Scenario: A tenant the graph does not hold the person in
+- **WHEN** a person has an active row, as owner, in workspace A that the graph does not hold them in, and a row and graph membership in workspace B
+- **THEN** sign-in (OTP or Google) scopes the session to B and lists only B; once the graph holds them in A it is the default again
+
+#### Scenario: The policy service is down at sign-in
+- **WHEN** the policy cannot be reached during sign-in
+- **THEN** the sign-in succeeds with a tenant-less token and no tenants listed, not an error
+
 #### Scenario: Refresh keeps the workspace
 - **WHEN** a person with one workspace signs in by code and later refreshes
 - **THEN** both the first and the refreshed access token carry that workspace's `tenant_id`
@@ -225,6 +236,14 @@ The system SHALL provide a switch-tenant endpoint that verifies membership and i
 #### Scenario: User not member of target tenant
 - **WHEN** user requests switch to tenant they do NOT belong to
 - **THEN** the system returns "access denied" error
+
+#### Scenario: A row without graph membership
+- **WHEN** the user's row in the target tenant is active but the graph does not hold them under its `<ws>_Members`
+- **THEN** the system returns "access denied" (403) and issues no token
+
+#### Scenario: The policy service cannot be asked
+- **WHEN** the graph cannot be consulted
+- **THEN** the system answers `503 unavailable` and issues no token: an outage is "try again", never a refusal and never a token
 
 #### Scenario: Suspended or unaccepted membership
 - **WHEN** the user's membership in the target tenant is `disabled` or `invited`
@@ -320,7 +339,7 @@ After a display name, title, location or picture change commits (`PATCH /api/me/
 - **THEN** `current_tenant` is absent and nothing about that workspace is revealed
 
 ### Requirement: A person lists and creates their own workspaces
-`GET /api/me/workspaces` SHALL list the workspaces the caller is an active member of, each with `id`, `name`, the caller's own `role`, the `member_count` of active members and the company `domain` the workspace claimed (empty for a personal one). It is exactly the set `POST /api/auth/switch-tenant` accepts. `POST /api/me/workspaces` SHALL create a workspace from `{"name"}` alone, with the caller as owner, provisioned as signup does (graph, owner and member attributes, `tenant_users` row, `#general`), and answer 201 with the same shape. Nothing else in the body is read: no slug, domain or owner. The name is trimmed and 1 to 80 characters with no control or invisible formatting characters (400 otherwise, nothing created). Each person may create 5 workspaces per hour (429 `rate_limited` with `Retry-After`), counted before anything is created and only for requests whose name is valid. The caller's address MUST be verified: an account whose address is unproved (or has none) is refused 403 `email_unverified`, before anything is created and without spending the budget. Unlike sign-in provisioning, any failure after the workspace exists (the tenant graph, the membership row, the owner's attachment, `#general`) removes the workspace through the workspace service's `DeleteWorkspace` (graph, rows, drive, channels, approval schema) and answers 500; the removal runs on a context detached from the request. The older `POST /api/workspaces` does not provision a `tenant_users` row and is not what the screens call.
+`GET /api/me/workspaces` SHALL list the workspaces the caller is an active member of, each with `id`, `name`, the caller's own `role`, the `member_count` of active members and the company `domain` the workspace claimed (empty for a personal one). It is exactly the set `POST /api/auth/switch-tenant` accepts: a workspace the person has an active row in that the graph also holds them in. When the graph cannot be asked the list is the workspace in the caller's token only (logged as a warning), never the unfiltered rows; a caller whose token names no workspace gets `503 unavailable`, so the picker offers a retry. `POST /api/me/workspaces` SHALL create a workspace from `{"name"}` alone, with the caller as owner, provisioned as signup does (graph, owner and member attributes, `tenant_users` row, `#general`), and answer 201 with the same shape. Nothing else in the body is read: no slug, domain or owner. The name is trimmed and 1 to 80 characters with no control or invisible formatting characters (400 otherwise, nothing created). Each person may create 5 workspaces per hour (429 `rate_limited` with `Retry-After`), counted before anything is created and only for requests whose name is valid. The caller's address MUST be verified: an account whose address is unproved (or has none) is refused 403 `email_unverified`, before anything is created and without spending the budget. Unlike sign-in provisioning, any failure after the workspace exists (the tenant graph, the membership row, the owner's attachment, `#general`) removes the workspace through the workspace service's `DeleteWorkspace` (graph, rows, drive, channels, approval schema) and answers 500; the removal runs on a context detached from the request. The older `POST /api/workspaces` does not provision a `tenant_users` row and is not what the screens call.
 
 #### Scenario: Creating from a name
 - **WHEN** a signed-in person posts `{"name":" Tổ Đối soát "}`

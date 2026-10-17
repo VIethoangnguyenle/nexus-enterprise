@@ -50,3 +50,8 @@ func (s *RefreshStore) SetGraceForTest(d time.Duration) { s.grace = d }
 
 // RefreshStoreForTest exposes the service's refresh store to the black-box tests.
 func (s *Service) RefreshStoreForTest() *RefreshStore { return s.refresh }
+
+// JoinTenantForTest exposes the graph-first tenant join to the black-box tests.
+func (s *Service) JoinTenantForTest(ctx context.Context, tenantID, userID, ngacNodeID, role string) error {
+	return s.joinTenant(ctx, tenantID, userID, ngacNodeID, role)
+}

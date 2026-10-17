@@ -266,6 +266,7 @@ func (s *Service) otpResultFromExistingUser(ctx context.Context, u *store.User, 
 	if err != nil {
 		return nil, fmt.Errorf("list tenants: %w", err)
 	}
+	tenants = s.signinTenants(ctx, u.ID, u.NGACNodeID, tenants)
 	defaultTenantID := s.selectDefaultTenant(tenants)
 
 	token, sessionID, err := auth.GenerateToken(u.ID, u.Username, u.NGACNodeID, defaultTenantID)
@@ -323,6 +324,7 @@ func (s *Service) createOTPUser(ctx context.Context, identifier, identType strin
 	if err != nil {
 		return nil, fmt.Errorf("list tenants: %w", err)
 	}
+	tenants = s.signinTenants(ctx, userID, ngacNode, tenants)
 	defaultTenantID := s.selectDefaultTenant(tenants)
 
 	token, sessionID, err := auth.GenerateToken(userID, username, ngacNode, defaultTenantID)

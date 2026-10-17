@@ -71,7 +71,7 @@ func (h *Handler) ListMyWorkspaces(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	list, err := h.svc.ListMyWorkspaces(c.Request().Context(), claims.UserID)
+	list, err := h.svc.ListMyWorkspacesAt(c.Request().Context(), claims.UserID, claims.NGACNodeID, claims.TenantID)
 	if err != nil {
 		return fail(c, err)
 	}
