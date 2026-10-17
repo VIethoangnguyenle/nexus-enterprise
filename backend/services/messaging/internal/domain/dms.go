@@ -8,9 +8,13 @@ import (
 	"fmt"
 	"log/slog"
 
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/policyclient"
+	authpb "ngac-platform/proto/auth"
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/store"
 )
@@ -54,8 +58,48 @@ func (s *Service) filterAccessible(ctx context.Context, channels []*store.Channe
 }
 
 // FindOrCreateDM finds an existing DM or creates a new one.
+//
+// The other person is named by user id alone: their node is read from the auth
+// service, never taken from the client, who may send one only to confirm it. The
+// node must be a person's and share a workspace with the caller, and that is
+// settled before any lookup, so asking for a DM answers nothing about who
+// already talks to whom.
 func (s *Service) FindOrCreateDM(ctx context.Context, userID, userNodeID, targetUserID, targetNodeID string) (*pb.Channel, error) {
-	existing, err := s.store.FindDMByMembers(ctx, userNodeID, targetNodeID)
+	if targetUserID == "" {
+		return nil, fmt.Errorf("%w: a direct message needs a person", ErrInvalidInput)
+	}
+	if targetUserID == userID {
+		return nil, fmt.Errorf("%w: a direct message is with someone else", ErrInvalidInput)
+	}
+	target, err := s.authClient.GetUserByID(ctx, &authpb.GetUserByIDRequest{UserId: targetUserID})
+	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, fmt.Errorf("%w: person", ErrNotFound)
+		}
+		return nil, fmt.Errorf("resolve DM target: %w", err)
+	}
+	node := target.GetNgacNodeId()
+	if node == "" {
+		return nil, fmt.Errorf("%w: person", ErrNotFound)
+	}
+	if targetNodeID != "" && targetNodeID != node {
+		return nil, fmt.Errorf("%w: the node does not belong to that person", ErrInvalidInput)
+	}
+	if node == userNodeID {
+		return nil, fmt.Errorf("%w: a direct message is with someone else", ErrInvalidInput)
+	}
+	// Asked of the writer: a person removed a moment ago must not be reachable
+	// because a replica still shows them as a colleague. Only a person (a U node)
+	// has workspaces, so a UA or any other node shares none.
+	shared, err := policyclient.SharedWorkspaces(ctx, s.policyWrite, userNodeID, node)
+	if err != nil {
+		return nil, fmt.Errorf("check DM relationship: %w", err)
+	}
+	if len(shared) == 0 {
+		return nil, fmt.Errorf("%w: you share no workspace with that person", ErrAccessDenied)
+	}
+
+	existing, err := s.store.FindDMByMembers(ctx, userNodeID, node)
 	if err == nil && existing != nil {
 		return channelToProto(existing), nil
 	}
@@ -70,11 +114,11 @@ func (s *Service) FindOrCreateDM(ctx context.Context, userID, userNodeID, target
 	// so a failure to add them removes the whole DM rather than leaving a
 	// one-person DM behind.
 	ch, err := s.createChannel(ctx, CreateChannelInput{
-		Name:        ngac.DMChannelName(s.lookupUsername(ctx, userID), s.lookupUsername(ctx, targetUserID)),
+		Name:        ngac.DMChannelName(s.lookupUsername(ctx, userID), target.GetUsername()),
 		ChannelType: ChannelTypeDM,
 		UserID:      userID,
 		UserNodeID:  userNodeID,
-	}, "", "", targetNodeID)
+	}, "", "", node)
 	if err != nil {
 		return nil, fmt.Errorf("create DM channel: %w", err)
 	}

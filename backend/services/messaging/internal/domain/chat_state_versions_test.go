@@ -69,6 +69,7 @@ func TestChatState_DirectMessageMovesTheOtherPersonsVersionInAnyWorkspace(t *tes
 		f.pool.Exec(ctx, `DELETE FROM channel_members WHERE channel_id = $1`, dm)
 	})
 	f.read.allow[grant{userNode, oaID, ngac.OpWrite}] = true
+	f.read.addMember(f.wsID, userNode, otherNode)
 	v := &memVersions{}
 	f.svc.SetVersions(v)
 

@@ -129,7 +129,8 @@ func TestPins_RefuseAMessageFromAnotherChannel(t *testing.T) {
 func TestListPins_SkipsAPinThatPointsOutsideTheChannel(t *testing.T) {
 	here := newTalk(t, "pins-legacy")
 	ctx := context.Background()
-	otherCh, _ := here.f.insertChannel(t, "pins-legacy-other")
+	otherCh, otherOA := here.f.insertChannel(t, "pins-legacy-other")
+	here.f.read.allow[grant{userNode, otherOA, ngac.OpWrite}] = true
 	foreign, err := here.f.svc.SendMessage(ctx, domain.SendMessageInput{
 		ChannelID: otherCh, SenderID: here.f.userID, SenderNodeID: userNode, Content: "elsewhere", MessageType: "system",
 	})

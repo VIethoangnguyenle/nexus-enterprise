@@ -472,8 +472,53 @@ func TestGetMessages_EmptyChannel(t *testing.T) {
 // 3.6: TestCreateDM — uses server (will fail FK but verifies flow)
 // ---------------------------------------------------------------------------
 
+// dbAuth resolves a user's node from the users table, as the auth service does.
+type dbAuth struct {
+	mockAuthClient
+	pool *pgxpool.Pool
+}
+
+func (a *dbAuth) GetUserByID(ctx context.Context, req *authpb.GetUserByIDRequest, _ ...grpc.CallOption) (*authpb.UserInfo, error) {
+	u := &authpb.UserInfo{Id: req.UserId, Username: "testuser"}
+	if err := a.pool.QueryRow(ctx, `SELECT COALESCE(ngac_node, '') FROM users WHERE id = $1`, req.UserId).Scan(&u.NgacNodeId); err != nil {
+		return nil, status.Error(codes.NotFound, "no such user")
+	}
+	return u, nil
+}
+
+// sameWorkspaceWriter reports every node as a person of one workspace, the view of
+// the writer that decides whether two people may talk directly.
+type sameWorkspaceWriter struct {
+	*mockPolicyWriteClient
+	ws string
+}
+
+func (w sameWorkspaceWriter) GetNode(_ context.Context, r *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return &policypb.NGACNode{Id: r.NodeId, Name: r.NodeId, NodeType: ngac.TypeU}, nil
+}
+
+func (w sameWorkspaceWriter) GetAncestors(context.Context, *policypb.GetAncestorsRequest, ...grpc.CallOption) (*policypb.NodeList, error) {
+	name := ngac.MembersUAName(ngac.WorkspaceID(w.ws))
+	return &policypb.NodeList{Nodes: []*policypb.NGACNode{{Id: "ua-" + name, Name: name, NodeType: ngac.TypeUA}}}, nil
+}
+
+func (w sameWorkspaceWriter) FindNodeByName(_ context.Context, r *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	prefix := "ua-"
+	if r.NodeType == ngac.TypePC {
+		prefix = "pc-"
+	}
+	return &policypb.NGACNode{Id: prefix + r.Name, Name: r.Name, NodeType: r.NodeType}, nil
+}
+
+func (w sameWorkspaceWriter) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return &policypb.BoolResponse{Value: true}, nil
+}
+
 func TestCreateDM_HappyPath(t *testing.T) {
-	srv, pool := setupTestServer(t)
+	pool := testPool(t)
+	svc := domain.NewService(store.NewStore(pool), &mockPolicyReadClient{},
+		sameWorkspaceWriter{mockPolicyWriteClient: &mockPolicyWriteClient{pool: pool}, ws: "dm-happy-ws"}, &dbAuth{pool: pool}, nil)
+	srv := grpcserver.NewMessagingServer(svc, nil, nil)
 	// channels.created_by is a foreign key onto users, so the participants have
 	// to be real rows rather than invented ids.
 	userA, userB := getTwoTestUserIDs(t, pool)
@@ -485,10 +530,12 @@ func TestCreateDM_HappyPath(t *testing.T) {
 		}
 	})
 
-	ch, err := srv.CreateDM(asCaller(userA, "ngac-user-1"), &pb.CreateDMRequest{
+	// The target's node is the auth service's word, not the request's: a node sent
+	// that is not theirs is refused, and one left out is filled in.
+	_, err := srv.CreateDM(asCaller(userA, "ngac-user-1"), &pb.CreateDMRequest{TargetUserId: userB, TargetNgacNodeId: "ngac-user-2"})
+	require.Equal(t, codes.InvalidArgument, status.Code(err), "a node that is not the target's")
 
-		TargetUserId: userB, TargetNgacNodeId: "ngac-user-2",
-	})
+	ch, err := srv.CreateDM(asCaller(userA, "ngac-user-1"), &pb.CreateDMRequest{TargetUserId: userB})
 	if ch != nil {
 		createdID = ch.Id
 	}

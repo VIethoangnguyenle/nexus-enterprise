@@ -52,20 +52,27 @@ type CreatePollInput struct {
 // authorizePoll authorizes an operation on the channel that owns a poll.
 // Polls, like messages, are not graph nodes — the check lands on the channel.
 func (s *Service) authorizePoll(ctx context.Context, pollID, userNodeID, operation string) (*store.Poll, []store.PollOption, error) {
+	poll, options, _, err := s.authorizePollIn(ctx, pollID, userNodeID, operation)
+	return poll, options, err
+}
+
+// authorizePollIn is authorizePoll that also returns the poll's channel.
+func (s *Service) authorizePollIn(ctx context.Context, pollID, userNodeID, operation string) (*store.Poll, []store.PollOption, *store.Channel, error) {
 	if pollID == "" {
-		return nil, nil, ErrInvalidInput
+		return nil, nil, nil, ErrInvalidInput
 	}
 	poll, options, err := s.store.GetPoll(ctx, pollID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("load poll: %w", err)
+		return nil, nil, nil, fmt.Errorf("load poll: %w", err)
 	}
 	if poll == nil {
-		return nil, nil, ErrNotFound
+		return nil, nil, nil, ErrNotFound
 	}
-	if _, err := s.authorizeChannel(ctx, poll.ChannelID, userNodeID, operation); err != nil {
-		return nil, nil, err
+	ch, err := s.authorizeChannel(ctx, poll.ChannelID, userNodeID, operation)
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	return poll, options, nil
+	return poll, options, ch, nil
 }
 
 // maxPollOptions is how many choices a poll offers at most.
@@ -172,9 +179,16 @@ func (s *Service) VotePoll(ctx context.Context, pollID, optionID, userNodeID, us
 		return ErrInvalidInput
 	}
 	// Voting is answering a question put to everyone who reads the channel.
-	poll, _, err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpRead)
+	poll, _, ch, err := s.authorizePollIn(ctx, pollID, userNodeID, ngac.OpRead)
 	if err != nil {
 		return err
+	}
+	// Answering changes what the other people of the conversation see, though it
+	// takes only read: in a DM it still needs the relationship.
+	if ch.ChannelType == ChannelTypeDM {
+		if err := s.requireDMRelationship(ctx, ch, userNodeID); err != nil {
+			return err
+		}
 	}
 	if pollClosed(poll) {
 		return fmt.Errorf("%w: the poll is closed", ErrInvalidInput)
@@ -196,6 +210,7 @@ func (s *Service) RemoveVote(ctx context.Context, pollID, optionID, userNodeID, 
 	if pollID == "" || optionID == "" {
 		return ErrInvalidInput
 	}
+	// Taking a vote back is backing out: it needs only read, with no relationship.
 	poll, _, err := s.authorizePoll(ctx, pollID, userNodeID, ngac.OpRead)
 	if err != nil {
 		return err
@@ -365,8 +380,15 @@ func (s *Service) UpdateTask(ctx context.Context, in UpdateTaskInput) (*pb.ChatT
 	if err != nil {
 		return nil, err
 	}
+	// Setting the status or handing the task on is a change to what both people see,
+	// though its owner needs only read: in a DM it needs the relationship.
+	if ch.ChannelType == ChannelTypeDM && (in.Status != "" || (in.AssigneeID != "" && in.AssigneeID != t.AssigneeID)) {
+		if err := s.requireDMRelationship(ctx, ch, in.UserNodeID); err != nil {
+			return nil, err
+		}
+	}
 	isOwner := in.UserID != "" && (in.UserID == t.AssigneeID || in.UserID == t.CreatedBy)
-	manages := func() error { return s.checkAccess(ctx, in.UserNodeID, ch.NGACOaID, ngac.OpManage) }
+	manages := func() error { return s.authorizeChannelOp(ctx, ch, in.UserNodeID, ngac.OpManage) }
 
 	if in.Status != "" && !isOwner {
 		if err := manages(); err != nil {
@@ -388,7 +410,7 @@ func (s *Service) UpdateTask(ctx context.Context, in UpdateTaskInput) (*pb.ChatT
 		}
 	}
 	if in.Title != "" || in.DueDate != "" {
-		if err := s.checkAccess(ctx, in.UserNodeID, ch.NGACOaID, ngac.OpWrite); err != nil {
+		if err := s.authorizeChannelOp(ctx, ch, in.UserNodeID, ngac.OpWrite); err != nil {
 			return nil, err
 		}
 	}

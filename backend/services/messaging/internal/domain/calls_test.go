@@ -154,6 +154,9 @@ func (w *callWorld) asDM(t *testing.T) {
 		_, err := w.f.pool.Exec(ctx, `INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, w.chID, node)
 		require.NoError(t, err)
 	}
+	// The two share the workspace, as the people of a direct message do; the nodes
+	// they act as and the ones the conversation records them by are all theirs.
+	w.f.read.addMember(w.f.wsID, userNode, callerNode, w.peerNode, peerTenantNode)
 	t.Cleanup(func() {
 		w.f.pool.Exec(ctx, `DELETE FROM channel_members WHERE channel_id = $1`, w.chID)
 		w.f.pool.Exec(ctx, `DELETE FROM tenant_users WHERE user_id = $1 AND ngac_node_id = $2`, w.peer, peerTenantNode)

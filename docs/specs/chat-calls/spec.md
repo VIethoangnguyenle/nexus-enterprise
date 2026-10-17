@@ -24,6 +24,38 @@ ticket: `{call, token, url}`.
 - **THEN** the answer is 403 and no room is opened and no ticket is signed, because a group is readable and writable only by the people in it (`tenant-ngac-init`, "Groups are private"); an owner outside the group is refused the same way
 - **AND** a member of the group in the same workspace gets 201 and a ticket
 
+### Requirement: A direct message and its calls need a shared workspace
+A direct message lives outside any workspace (under `PC_Global`), so the graph keeps granting its two people `write`
+after they stop sharing a workspace. Every write, invite and manage on a direct message — a message of any type, a poll,
+a vote, a task, a reaction, a pin, an edit or delete, starting a call, a ticket into a call, ringing or inviting into a
+call, declining — SHALL therefore also require that the person shares at least one workspace (both under the same
+`<ws>_Members`) with the conversation's other member, decided on each request at the one place that authorizes a
+channel operation. A policy service that cannot answer, or a conversation that records no other member, SHALL refuse.
+Backing out is exempt and checks the graph alone: declining or cancelling a call, deleting one's own message, taking back a reaction or a vote. Reading the conversation, its history and its calls is unchanged, so what was said stays readable. A person in an
+open direct call who no longer shares a workspace with the other is put out of the room by the same sweep that puts
+out anyone who lost `write` (and cannot join by the media server's webhook). The answer is 403.
+
+Opening a direct message (`POST /api/dms`) names the other person by `target_user_id` alone: the server reads their node
+from the auth service, a `target_ngac_node_id` that is sent must equal it (400 otherwise), the person must not be the
+caller (400), must exist (404), must be a user (U) node and must share a workspace with the caller (403 otherwise) —
+all before any direct message is looked up or created, so the answer tells nothing about who talks to whom.
+Opening an existing direct message between people who no longer share a workspace is refused the same way.
+
+Out of scope: files uploaded to a direct message's drive (the drive has no view of the relationship).
+
+#### Scenario: Colleagues only
+- **WHEN** a member opens a direct message with a person of another workspace, with a UA, or with someone who reaches the workspace only through a group
+- **THEN** the answer is 403, nothing is created, and the same member gets the direct message with a member of their workspace
+
+#### Scenario: A colleague who left
+- **WHEN** one of two people in a direct message is removed from the only workspace they share and the other sends, votes, reacts, pins, edits, starts a call, asks for a ticket, rings or invites
+- **THEN** each is 403, though the graph still grants `write`, and both can still read the history
+- **AND** if they share another workspace, or the person is added back, the same requests succeed
+
+#### Scenario: A call in progress
+- **WHEN** the two people of an open direct call stop sharing a workspace
+- **THEN** the next sweep removes both from the room
+
 ### Requirement: One open call per conversation
 A conversation SHALL have at most one call that is `ringing` or `active`. Starting a call while one is open SHALL
 answer (200) with a ticket into that call and post no card, including when two people start one in the same instant.
@@ -138,7 +170,10 @@ The screens render DESIGN.md §6 "Cuộc gọi video và thoại" and `design/mo
 A call SHALL belong to a conversation or to a calendar event, exactly one of the two (`calls.calendar_event_id`,
 `channel_id` nullable, a CHECK for exactly one). A call of an event SHALL be started and joined only after `read` on
 the event's OA (`CalEv_<id>`) — checked when the ticket is asked for, never trusted from an earlier check — and a
-person without it SHALL get 403 and no ticket. The event's OA sits beneath its calendar's, so for a **private** event
+person without it SHALL get 403 and no ticket. Reading is not membership, though: a guest's UA sits beneath the workspace's policy class
+and keeps its grant after the person has left the workspace, so the person must also be a member of the event's workspace
+(under its `<ws>_Members` UA), checked on every request (403 when not, or when the policy cannot say), and a removed member is put
+out of the room by the same sweep. The event's OA sits beneath its calendar's, so for a **private** event
 `read` alone is not enough: the person must also be on the event's guest list (an attendee row); a reader of the
 calendar who is not a guest gets 403. The event must belong to the caller's own workspace (the token's tenant); an
 event of another workspace, or a request with no workspace, is 404. `POST /api/calendar-events/{eventId}/call` (served by the messaging
@@ -162,6 +197,10 @@ nobody is invited to it from a chat; everything else — one open call per event
 #### Scenario: Private event
 - **WHEN** a person who reads the event's calendar but is not on the guest list of a private event asks to start, join, get a ticket for or see its call
 - **THEN** the answer is 403 and no token is signed; a guest on the list gets the ticket
+
+#### Scenario: Removed from the workspace
+- **WHEN** a guest who still reads the event in the graph has been removed from the event's workspace and asks to start, join or get a ticket for its call
+- **THEN** the answer is 403 and no token is signed; a guest who is a member gets the ticket
 
 #### Scenario: Another workspace
 - **WHEN** a person asks for the call of an event of a workspace other than the one their session is scoped to

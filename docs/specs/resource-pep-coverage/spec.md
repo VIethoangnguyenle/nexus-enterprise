@@ -27,6 +27,16 @@ the REST edge and from the signed identity token between services (see "Caller i
 | Create the workspace-wide channel (`ProvisionWorkspaceChannel`) | service identity `auth` only; the creator also needs `create_channel` | the workspace Channels OA |
 | Put a member in the workspace-wide channel (`JoinWorkspaceChannel`, also done for the caller when they list the workspace's channels) | service identity `auth` or `workspace` only (the handler checks the name again); the person must be under the workspace's Members UA | the channel's Members UA |
 
+#### Scenario: A direct conversation needs a shared workspace for any write
+- **WHEN** one of the two people of a direct message no longer shares a workspace with the other and sends a message of any type, votes, reacts, pins, edits, deletes, creates a poll or task, or starts, joins, rings or invites into a call
+- **THEN** the answer is 403, though the graph still grants them `write` on the conversation's OA
+- **AND** reading the history is unchanged, and the same requests succeed while they share a workspace
+- **AND** opening a direct message (`POST /api/dms`) names the other person by user id, takes their node from the auth service, and is refused (403) unless they are a user node sharing a workspace with the caller; a node sent that is not theirs is 400
+- **AND** backing out stays possible for them: declining or cancelling a call, deleting their own message, taking back a reaction or a vote check the graph alone
+- **AND** setting a task's status or handing it to someone else in a direct message needs the relationship too, though its owner holds only `read`
+- **AND** a message of type `system` sent by a client needs `write` like any other message (it used to skip the check), in a group as in a direct message; the service's own notices (a manager's "deleted a message" line) are stored directly and need no `write`
+- **AND** every `write`, `invite` or `manage` on a channel's OA goes through the one helper that adds this rule (`authorizeChannelOp`): no handler checks them directly. Uploading a file to a direct message's drive is not covered (the drive cannot see the relationship)
+
 #### Scenario: Subscribe without read
 - **WHEN** an authenticated WebSocket client sends `SubscribeRequest` for a channel whose OA it cannot read
 - **THEN** it receives an `ErrorEvent` with code 403

@@ -87,10 +87,10 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 	if err := s.requireApprovalsAvailable(ctx, ch, in.LinkedEntityType); err != nil {
 		return nil, err
 	}
-	if msgType == "user" {
-		if err := s.checkAccess(ctx, in.SenderNodeID, ch.NGACOaID, ngac.OpWrite); err != nil {
-			return nil, err
-		}
+	// Every type is judged, not only a person's: the type is the client's to name,
+	// and a "system" line must not be a way round the right to write.
+	if err := s.authorizeChannelOp(ctx, ch, in.SenderNodeID, ngac.OpWrite); err != nil {
+		return nil, err
 	}
 	if in.ParentMessageID != "" {
 		if err := s.checkReplyParent(ctx, in.ParentMessageID, in.ChannelID); err != nil {

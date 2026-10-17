@@ -9,7 +9,9 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"ngac-platform/ngac"
@@ -119,11 +121,12 @@ func (s *Service) DeleteMessage(ctx context.Context, messageID, userID, userNode
 	if err != nil {
 		return nil, err
 	}
-	op := ngac.OpManage
+	// Deleting one's own message is withdrawing it; deleting another's is moderation.
+	authorize, op := s.authorizeChannel, ngac.OpManage
 	if f.SenderID == userID {
-		op = ngac.OpWrite
+		authorize, op = s.authorizeBackOut, ngac.OpWrite
 	}
-	ch, err := s.authorizeChannel(ctx, f.ChannelID, userNodeID, op)
+	ch, err := authorize(ctx, f.ChannelID, userNodeID, op)
 	if err != nil {
 		return nil, err
 	}
@@ -148,16 +151,24 @@ func (s *Service) DeleteMessage(ctx context.Context, messageID, userID, userNode
 		if err != nil {
 			return nil, err
 		}
-		notice, err := s.SendMessage(ctx, SendMessageInput{
-			ChannelID: d.ChannelID, SenderID: userID, SenderNodeID: userNodeID, MessageType: "system",
-			ContentFormat:    "plain",
-			Content:          fmt.Sprintf("%s đã xoá một tin nhắn của %s", deleter, author),
-			LinkedEntityType: "message_deleted", LinkedEntityID: messageID,
-		})
+		// The line is the service's own record of an act already authorized by
+		// manage, so it is stored directly: the manager need not be able to write
+		// in the conversation, and it must not go through the user-facing send.
+		text := fmt.Sprintf("%s đã xoá một tin nhắn của %s", deleter, author)
+		content, contentText, format, err := prepareContent("plain", text)
 		if err != nil {
 			return nil, fmt.Errorf("record deletion: %w", err)
 		}
-		out.Notice = notice
+		msg := &store.Message{
+			ID: uuid.New().String(), ChannelID: d.ChannelID, SenderID: userID,
+			Content: content, ContentText: contentText, ContentFormat: format, MessageType: "system",
+			LinkedEntityType: "message_deleted", LinkedEntityID: messageID, CreatedAt: time.Now(),
+		}
+		if err := s.store.InsertMessage(ctx, msg); err != nil {
+			return nil, fmt.Errorf("record deletion: %w", err)
+		}
+		s.bumpChannel(ctx, ch)
+		out.Notice = s.announcementProto(ctx, msg)
 	}
 	return out, nil
 }

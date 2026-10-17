@@ -67,6 +67,9 @@ func newEventWorld(t *testing.T) *eventWorld {
 	w.guest2, w.guest2N = testutil.CreateUser(t, f.pool)
 	w.stranger, w.strangeN = testutil.CreateUser(t, f.pool)
 	w.readers(w.guestN, w.guest2N)
+	// Everyone here belongs to the workspace, the stranger included: what keeps the
+	// stranger out is the grant on the event, which these tests are about.
+	f.read.addMember(f.wsID, w.guestN, w.guest2N, w.strangeN)
 	return w
 }
 

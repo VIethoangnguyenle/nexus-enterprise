@@ -6,7 +6,9 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
+	"ngac-platform/ngac"
 	"ngac-platform/pkg/policyclient"
 	"ngac-platform/services/messaging/internal/store"
 )
@@ -51,10 +53,76 @@ func (s *Service) authorizeChannel(ctx context.Context, channelID, userNodeID, o
 	if err != nil {
 		return nil, err
 	}
+	if err := s.authorizeChannelOp(ctx, ch, userNodeID, operation); err != nil {
+		return nil, err
+	}
+	return ch, nil
+}
+
+// authorizeBackOut authorizes leaving a conversation on one's own terms —
+// declining or cancelling a call, deleting one's own message, taking back a
+// reaction or a vote. It asks the graph alone: someone who no longer shares a
+// workspace with the other person of a direct message may still withdraw what
+// they put there.
+func (s *Service) authorizeBackOut(ctx context.Context, channelID, userNodeID, operation string) (*store.Channel, error) {
+	if channelID == "" {
+		return nil, ErrInvalidInput
+	}
+	ch, err := s.loadChannel(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
 	if err := s.checkAccess(ctx, userNodeID, ch.NGACOaID, operation); err != nil {
 		return nil, err
 	}
 	return ch, nil
+}
+
+// authorizeChannelOp is the one place a write, invite or manage on a loaded
+// channel is decided. Beyond holding the operation in the graph, a direct message
+// needs its two people to share a workspace: a DM hangs under PC_Global, so its
+// grants outlive any workspace and would otherwise keep a removed colleague able
+// to write to, call and invite people into a conversation with the workspace's
+// members. Reads stay graph-only, so the history of such a DM remains readable.
+//
+// Every check of an operation on a channel's OA goes through here (or through
+// authorizeChannel / authorizeMessage, which call it); a direct checkAccess on a
+// channel OA would skip the relationship rule.
+func (s *Service) authorizeChannelOp(ctx context.Context, ch *store.Channel, userNodeID, operation string) error {
+	if err := s.checkAccess(ctx, userNodeID, ch.NGACOaID, operation); err != nil {
+		return err
+	}
+	if ch.ChannelType == ChannelTypeDM && dmRelationshipOps[operation] {
+		return s.requireDMRelationship(ctx, ch, userNodeID)
+	}
+	return nil
+}
+
+// dmRelationshipOps are the operations on a DM that need the two people to share
+// a workspace.
+var dmRelationshipOps = map[string]bool{ngac.OpWrite: true, ngac.OpInvite: true, ngac.OpManage: true}
+
+// requireDMRelationship refuses unless the user shares a workspace with the DM's
+// other member. It fails closed: a DM with no other member recorded, or a policy
+// service that cannot answer, is a refusal.
+func (s *Service) requireDMRelationship(ctx context.Context, ch *store.Channel, userNodeID string) error {
+	denied := fmt.Errorf("%w: a direct message needs a workspace in common", ErrAccessDenied)
+	peers, err := s.store.DMPeerNodes(ctx, ch.ID, userNodeID)
+	if err != nil {
+		slog.Error("direct message peers unknown; refusing", "channel", ch.ID, "error", err)
+		return denied
+	}
+	for _, peer := range peers {
+		shared, err := policyclient.SharedWorkspaces(ctx, s.policyRead, userNodeID, peer)
+		if err != nil {
+			slog.Error("direct message relationship unknown; refusing", "channel", ch.ID, "error", err)
+			return denied
+		}
+		if len(shared) > 0 {
+			return nil
+		}
+	}
+	return denied
 }
 
 // authorizeMessage authorizes an operation on the channel that owns a message.

@@ -21,10 +21,14 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 
+	"ngac-platform/ngac"
 	"ngac-platform/pkg/httputil"
+	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/messaging/internal/domain"
 	"ngac-platform/services/messaging/internal/store"
+	"ngac-platform/testutil"
 )
 
 func pngBytes(t *testing.T, w, h int) []byte {
@@ -43,7 +47,11 @@ func pngBytes(t *testing.T, w, h int) []byte {
 // avatarEcho serves the picture routes as the chat's user, with policy
 // answering every check with allow.
 func (c *chat) avatarEcho(allow bool, rdb *redis.Client) *echo.Echo {
-	svc := domain.NewService(store.NewStore(c.pool), answerPolicy{allow: allow}, nil, namedUser{}, nil)
+	return c.avatarEchoWith(answerPolicy{allow: allow}, rdb)
+}
+
+func (c *chat) avatarEchoWith(policy policypb.PolicyReadServiceClient, rdb *redis.Client) *echo.Echo {
+	svc := domain.NewService(store.NewStore(c.pool), policy, nil, namedUser{}, nil)
 	if rdb != nil {
 		svc.SetRedis(rdb)
 	}
@@ -146,11 +154,42 @@ func TestChannelAvatarRoutes_UploadRefusals(t *testing.T) {
 	assert.Zero(t, c.avatarRows(t))
 }
 
+// membersPolicy allows every check and puts every node in one workspace's Members
+// UA, so two people of a direct message share a workspace as far as the service
+// can tell.
+type membersPolicy struct {
+	answerPolicy
+	ws string
+}
+
+func (m membersPolicy) GetNode(_ context.Context, r *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return &policypb.NGACNode{Id: r.NodeId, Name: r.NodeId, NodeType: ngac.TypeU}, nil
+}
+
+func (m membersPolicy) GetAncestors(context.Context, *policypb.GetAncestorsRequest, ...grpc.CallOption) (*policypb.NodeList, error) {
+	name := ngac.MembersUAName(ngac.WorkspaceID(m.ws))
+	return &policypb.NodeList{Nodes: []*policypb.NGACNode{{Id: "ua-" + name, Name: name, NodeType: ngac.TypeUA}}}, nil
+}
+
+func (m membersPolicy) FindNodeByName(_ context.Context, r *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	prefix := "ua-"
+	if r.NodeType == ngac.TypePC {
+		prefix = "pc-"
+	}
+	return &policypb.NGACNode{Id: prefix + r.Name, Name: r.Name, NodeType: r.NodeType}, nil
+}
+
 func TestChannelAvatarRoutes_DirectMessageIsInvalidInput(t *testing.T) {
 	c := newChat(t)
-	_, err := c.pool.Exec(context.Background(), `UPDATE channels SET channel_type = 'dm' WHERE id = $1`, c.chID)
+	ctx := context.Background()
+	_, err := c.pool.Exec(ctx, `UPDATE channels SET channel_type = 'dm' WHERE id = $1`, c.chID)
 	require.NoError(t, err)
-	e := c.avatarEcho(true, nil)
+	// A direct message has two people; the one writing to it shares a workspace with the other.
+	_, peerNode := testutil.CreateUser(t, c.pool)
+	_, err = c.pool.Exec(ctx, `INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2)`, c.chID, peerNode)
+	require.NoError(t, err)
+	t.Cleanup(func() { c.pool.Exec(ctx, `DELETE FROM channel_members WHERE channel_id = $1`, c.chID) })
+	e := c.avatarEchoWith(membersPolicy{answerPolicy: answerPolicy{allow: true}, ws: c.ws}, nil)
 
 	rec := upload(t, e, "/api/channels/"+c.chID+"/avatar", "file", "x.png", pngBytes(t, 10, 10))
 
