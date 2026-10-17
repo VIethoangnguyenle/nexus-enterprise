@@ -4,6 +4,7 @@
 package rest
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -110,9 +111,11 @@ func (h *Handler) CreateMyWorkspace(c echo.Context) error {
 }
 
 // ListContacts handles GET /api/workspaces/:id/contacts: one page of the
-// workspace directory. Query: department, location, search, limit (default 50,
-// at most 500) and cursor (the next_cursor of the page before). The answer
-// carries the true total, and next_cursor when more people follow.
+// workspace directory, as the caller may see it (the workspace decides, auth
+// filters). Query: department_id, department (by name), location, search, limit
+// (default 50, at most 500) and cursor (the next_cursor of the page before). The
+// answer carries the true total, next_cursor when more people follow, and
+// visibility: "limited" when the caller sees only part of the workspace.
 func (h *Handler) ListContacts(c echo.Context) error {
 	wsID := c.Param("id")
 	if wsID == "" {
@@ -123,10 +126,11 @@ func (h *Handler) ListContacts(c echo.Context) error {
 		return err
 	}
 	q := domain.ContactQuery{
-		Department: c.QueryParam("department"),
-		Location:   c.QueryParam("location"),
-		Search:     c.QueryParam("search"),
-		Cursor:     c.QueryParam("cursor"),
+		DepartmentID: c.QueryParam("department_id"),
+		Department:   c.QueryParam("department"),
+		Location:     c.QueryParam("location"),
+		Search:       c.QueryParam("search"),
+		Cursor:       c.QueryParam("cursor"),
 	}
 	if v := c.QueryParam("limit"); v != "" {
 		n, err := strconv.Atoi(v)
@@ -136,7 +140,7 @@ func (h *Handler) ListContacts(c echo.Context) error {
 		q.Limit = n
 	}
 
-	contacts, total, next, err := h.svc.ListContacts(c.Request().Context(), claims.UserID, wsID, q)
+	page, err := h.svc.ListContacts(c.Request().Context(), claims.UserID, claims.NGACNodeID, wsID, q)
 	if err != nil {
 		return fail(c, err)
 	}
@@ -154,7 +158,12 @@ func (h *Handler) ListContacts(c echo.Context) error {
 		Department  string `json:"department"`
 		Location    string `json:"location"`
 		AvatarURL   string `json:"avatar_url"`
+		// DepartmentID is the department assigned in this workspace ("" for none).
+		DepartmentID string `json:"department_id"`
+		// Roles are the ones the caller may see this person hold; always a list.
+		Roles []roleJSON `json:"roles"`
 	}
+	contacts, total, next := page.Contacts, page.Total, page.NextCursor
 	result := make([]contactJSON, len(contacts))
 	for i, c := range contacts {
 		result[i] = contactJSON{
@@ -162,12 +171,75 @@ func (h *Handler) ListContacts(c echo.Context) error {
 			DisplayName: c.DisplayName, Email: c.Email,
 			Title: c.Title, Department: c.Department,
 			Location: c.Location, AvatarURL: c.AvatarURL,
+			DepartmentID: c.DepartmentID, Roles: rolesJSON(c.Roles),
 		}
 	}
 
-	out := map[string]any{"contacts": result, "total": total}
+	out := map[string]any{"contacts": result, "total": total, "visibility": page.Visibility}
 	if next != "" {
 		out["next_cursor"] = next
 	}
 	return c.JSON(http.StatusOK, out)
+}
+
+// roleJSON is a role on a person. The owners group has kind "owners" and no name: the
+// screen words it.
+type roleJSON struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+	Kind string `json:"kind"`
+}
+
+func rolesJSON(in []domain.ContactRole) []roleJSON {
+	out := make([]roleJSON, len(in))
+	for i, r := range in {
+		out[i] = roleJSON{ID: r.ID, Name: r.Name, Kind: r.Kind}
+	}
+	return out
+}
+
+// resolveBodyLimit is the most a resolve request may carry: 200 ids fit many times over.
+const resolveBodyLimit = 64 << 10
+
+// ResolveContacts handles POST /api/workspaces/:id/contacts/resolve. Body: user_ids and/or
+// node_ids (at most 200 in all). It answers {"people": [{user_id, ngac_node_id,
+// display_name, avatar_url}]}: a name and a picture for each person who ever belonged to
+// the workspace, whatever their status or directory visibility, and nothing else. Ids it
+// does not know are left out. Any member of the workspace may ask.
+func (h *Handler) ResolveContacts(c echo.Context) error {
+	wsID := c.Param("id")
+	if wsID == "" {
+		return apiError(http.StatusBadRequest, "invalid_input", "workspace id required")
+	}
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	var body struct {
+		UserIDs []string `json:"user_ids"`
+		NodeIDs []string `json:"node_ids"`
+	}
+	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, resolveBodyLimit)
+	if err := c.Bind(&body); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			return apiError(http.StatusRequestEntityTooLarge, "too_large", "request body too large")
+		}
+		return badBody()
+	}
+	people, err := h.svc.ResolvePeople(c.Request().Context(), claims.UserID, claims.NGACNodeID, wsID, body.UserIDs, body.NodeIDs)
+	if err != nil {
+		return fail(c, err)
+	}
+	type personJSON struct {
+		UserID      string `json:"user_id"`
+		NGACNodeID  string `json:"ngac_node_id"`
+		DisplayName string `json:"display_name"`
+		AvatarURL   string `json:"avatar_url"`
+	}
+	out := make([]personJSON, len(people))
+	for i, p := range people {
+		out[i] = personJSON{UserID: p.UserID, NGACNodeID: p.NGACNodeID, DisplayName: p.DisplayName, AvatarURL: p.AvatarURL}
+	}
+	return c.JSON(http.StatusOK, map[string]any{"people": out})
 }

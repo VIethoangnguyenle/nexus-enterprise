@@ -196,5 +196,43 @@ Whoever holds `manage` on the Mgmt OA SHALL be able to read and change the rules
 - **WHEN** an administrator opens the rules of a workspace that has no directory nodes
 - **THEN** the read answers `ready: false` and a write is refused as not ready, while every member still sees every member
 
+### Requirement: The auth service lists only what the scope allows
+`GET /api/workspaces/:id/contacts` SHALL answer from `tenant_users` rows that are `active`, narrowed by the caller's `DirectoryScope`, and by nothing weaker: the caller's row must be active, then the auth service asks the workspace service for the scope **as the caller** and a person is listed only if their department is in the scope's visible departments, or they have no department and people with no department are visible, or they are an owner and owners are visible, or they are the caller. An administrator, and a workspace whose scope is `ready: false`, see every active member. The list, the `total`, the keyset paging and every filter (`search` by name, e-mail, title or department; `department_id`; `department`; `location`) SHALL apply inside that one predicate, so a hidden person is neither listed nor counted nor found by searching, and an e-mail address reaches only a caller who may see its person. The answer carries `department_id` (the assigned one, or empty), `roles` (the roles of the scope the person holds directly; the owners group has kind `owners` and no name; always a list) and a top-level `visibility`, `"limited"` when the caller is limited to their own department (the scope's `limited`, for a caller who is not an administrator) and `"all"` otherwise. A department outside the scope SHALL NOT be named anywhere in the answer, even on a row the caller may see (an owner who sits in it): its name and id are empty there, and `department_id`, `department` and `search` match only departments the scope shows (the caller's own department excepted, on their own row). A query without a scope SHALL show nobody but the caller.
+
+#### Scenario: Hidden person
+- **WHEN** a member of an open department lists, counts and searches (by name and by e-mail) while another department is hidden
+- **THEN** none of the hidden department's people is listed, counted or found, the caller's own department, the owners and the caller are, and `visibility` is `all` or `limited` as the scope says
+
+#### Scenario: Limited caller
+- **WHEN** a person limited to their own department lists the directory
+- **THEN** they get their department's people, the owners wherever the owners sit, and themself; not a person of another department, and not people with no department unless the scope shows them
+
+#### Scenario: The workspace cannot say
+- **WHEN** the workspace service is unavailable, times out, fails, or answers no scope
+- **THEN** the answer is 503 and no row is read; when it answers PermissionDenied the answer is 403; the unfiltered list is never the fallback
+
+#### Scenario: Hidden department on a visible row
+- **WHEN** an owner who sits in a hidden department is listed to a limited caller, who also filters by that department's id or name, or searches for its name
+- **THEN** the owner's row carries no department name or id, and each of those three queries returns nothing and counts nothing; the same queries by an administrator find the owner
+
+#### Scenario: Not an active member
+- **WHEN** the caller has no membership row, or a `removed`, `disabled` or `invited` one
+- **THEN** the answer is 403 and the workspace service is not asked
+
+### Requirement: Names can be resolved apart from the directory
+`POST /api/workspaces/:id/contacts/resolve` with `{user_ids?, node_ids?}` (at most 200 in all) SHALL return `{people: [{user_id, ngac_node_id, display_name, avatar_url}]}` for the people named who have a `tenant_users` row in that workspace **with any status** (`active`, `invited`, `disabled`, `removed`) and for no one else: never an e-mail address, title or department, ids of another workspace or unknown ids are left out, and no one can be listed this way. This is a deliberate exception to "readers of `tenant_users` filter on `active`": a person the directory hides, or who left, keeps a name wherever their work stays (chat, approvals, documents, calendar). The caller SHALL pass `requireActiveMember`: a member in the graph (the membership helper over the policy writer, so a removal counts at once) whose row, when there is one, is not `removed`, `disabled` or `invited` (a graph member whose row is missing is let in, as in sign-in and refresh); a policy outage is 503, not a denial. A body over 64 KiB is 413. The workspace service is not asked, so names keep working when it is down. A display name is empty until the person saved their profile.
+
+#### Scenario: Hidden and removed people have names
+- **WHEN** a member resolves a person of a hidden department and one who was removed
+- **THEN** both come back with name and avatar, while the directory lists neither
+
+#### Scenario: Other workspace and non-members
+- **WHEN** a user of another workspace is named, or a person with an active row but no place under Members, or a removed or disabled member, asks
+- **THEN** the named user is omitted, and the asker gets 403 with no name in the body
+
+#### Scenario: Too many
+- **WHEN** more than 200 ids are sent, across both lists
+- **THEN** the answer is 400 and nothing is looked up
+
 ## Status
-Built. The graph model and its names are verified by test vectors (`backend/services/policy/internal/ngac/pdp_contacts_visibility_test.go`, and on the real policy service by `backend/testutil/policy_contacts_visibility_test.go`). The workspace service creates the directory with each new workspace, mirrors departments and their people into it and tears it down (`directory_graph*.go`); migration 064 builds it for what predates the code (`scripts/test-migration-064.sh`). It computes each caller's scope, filters departments, members and role counts by it and serves the rules and `GetDirectoryScope` (`directory_scope*.go`, proved against the real policy service in `directory_scope_realpolicy_test.go`). The auth service does not yet filter Danh bạ by the scope and the screens do not yet read it, so until they ship the filtered people/department reads of the workspace service are the only place the rules are enforced. `scripts/seed-contacts-demo.sh` builds a demo organization through the APIs for development.
+Built. The graph model and its names are verified by test vectors (`backend/services/policy/internal/ngac/pdp_contacts_visibility_test.go`, and on the real policy service by `backend/testutil/policy_contacts_visibility_test.go`). The workspace service creates the directory with each new workspace, mirrors departments and their people into it and tears it down (`directory_graph*.go`); migration 064 builds it for what predates the code (`scripts/test-migration-064.sh`). It computes each caller's scope, filters departments, members and role counts by it and serves the rules and `GetDirectoryScope` (`directory_scope*.go`, proved against the real policy service in `directory_scope_realpolicy_test.go`). The auth service lists Danh bạ through the scope and resolves names apart from it (`contacts_visibility_test.go`, `contacts_visibility_realpolicy_test.go`, `internal/rest/contacts_resolve_test.go`, and the SQL predicate against a real database in `internal/store/contacts_scope_test.go`); the screens do not yet read the new fields. `scripts/seed-contacts-demo.sh` builds a demo organization through the APIs for development.

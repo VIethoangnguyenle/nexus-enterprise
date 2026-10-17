@@ -103,14 +103,32 @@ type ContactCursor struct {
 	ID  string `json:"i"`
 }
 
+// ContactScope is which people of the workspace the caller may be shown. The zero
+// value shows the caller only themselves: a filter nobody scoped must not read as
+// "everyone". All lifts the restriction; it is for a caller who may see everyone.
+type ContactScope struct {
+	All bool
+	// CallerID is always visible to themselves.
+	CallerID string
+	// DepartmentIDs are the departments whose people are visible.
+	DepartmentIDs []string
+	// NoDepartment: people with no department are visible.
+	NoDepartment bool
+	// OwnerNodeIDs are the NGAC nodes of the owners; they are visible when OwnersVisible.
+	OwnerNodeIDs  []string
+	OwnersVisible bool
+}
+
 // ContactFilter narrows and pages the workspace directory. Zero values mean
-// "no filter"; Limit is required.
+// "no filter" except Scope, whose zero value is the narrowest; Limit is required.
 type ContactFilter struct {
-	Department string // an administrator-assigned department name, exact
-	Location   string
-	Search     string // case-insensitive substring of name, title, department or email
-	Limit      int
-	After      *ContactCursor // nil for the first page
+	Scope        ContactScope
+	DepartmentID string // a department by id (tenant_users.department_id)
+	Department   string // an administrator-assigned department name, exact
+	Location     string
+	Search       string // case-insensitive substring of name, title, department or email
+	Limit        int
+	After        *ContactCursor // nil for the first page
 }
 
 // likeEscaper makes a person's text literal inside ILIKE.
@@ -126,18 +144,48 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // before it, the stored name is the handle derived from their address, and a
 // handle is not a name.
 func (s *Store) ListContactsByWorkspace(ctx context.Context, workspaceID string, f ContactFilter) ([]User, int, *ContactCursor, error) {
+	args := []any{workspaceID}
+	// The department is joined, so it is named, filtered by and searched, only where the
+	// scope shows it: on an owner's row, or the caller's own, a department outside the
+	// scope stays unnamed and cannot be confirmed by a filter or a search.
+	deptJoin := ""
+	if !f.Scope.All {
+		visible := f.Scope.DepartmentIDs
+		if visible == nil {
+			visible = []string{}
+		}
+		args = append(args, visible, f.Scope.CallerID)
+		deptJoin = ` AND (tu.department_id = ANY($2) OR u.id = $3)`
+	}
 	from := ` FROM users u
 		 JOIN tenant_users tu ON tu.user_id = u.id AND tu.tenant_id = $1 AND tu.status = 'active'
-		 LEFT JOIN departments d ON d.id = tu.department_id AND d.workspace_id = tu.tenant_id`
+		 LEFT JOIN departments d ON d.id = tu.department_id AND d.workspace_id = tu.tenant_id` + deptJoin
 	name := `CASE WHEN u.profile_completed_at IS NOT NULL THEN COALESCE(u.display_name,'') ELSE '' END`
 	where := ""
-	args := []any{workspaceID}
 	add := func(cond string, vs ...any) {
 		for _, v := range vs {
 			args = append(args, v)
 			cond = strings.Replace(cond, "?", fmt.Sprintf("$%d", len(args)), 1)
 		}
 		where += " AND " + cond
+	}
+	// Who the caller may see comes first and is not optional: every other condition
+	// narrows what is left. The zero scope shows the caller themselves and no one else.
+	if !f.Scope.All {
+		departments := f.Scope.DepartmentIDs
+		if departments == nil {
+			departments = []string{}
+		}
+		owners := f.Scope.OwnerNodeIDs
+		if owners == nil {
+			owners = []string{}
+		}
+		add(`(tu.department_id = ANY(?) OR (tu.department_id IS NULL AND ?::boolean)
+			OR (u.ngac_node = ANY(?) AND ?::boolean) OR u.id = ?)`,
+			departments, f.Scope.NoDepartment, owners, f.Scope.OwnersVisible, f.Scope.CallerID)
+	}
+	if f.DepartmentID != "" {
+		add("d.id = ?", f.DepartmentID)
 	}
 	if f.Department != "" {
 		add("d.name = ?", f.Department)
@@ -167,7 +215,7 @@ func (s *Store) ListContactsByWorkspace(ctx context.Context, workspaceID string,
 	args = append(args, limit+1)
 	query := `SELECT u.id, u.username, COALESCE(u.ngac_node,''), COALESCE(u.email,''),
 			COALESCE(u.union_id,''), ` + name + `, COALESCE(u.phone,''),
-			COALESCE(u.title,''), COALESCE(d.name,''), COALESCE(u.location,''), COALESCE(u.avatar_url,''),
+			COALESCE(u.title,''), COALESCE(d.name,''), COALESCE(d.id,''), COALESCE(u.location,''), COALESCE(u.avatar_url,''),
 			lower(` + name + `)` +
 		from + " WHERE true" + where +
 		fmt.Sprintf(" ORDER BY lower(%s), u.id LIMIT $%d", name, len(args))
@@ -184,7 +232,7 @@ func (s *Store) ListContactsByWorkspace(ctx context.Context, workspaceID string,
 		var key string
 		if err := rows.Scan(&u.ID, &u.Username, &u.NGACNodeID, &u.Email,
 			&u.UnionID, &u.DisplayName, &u.Phone,
-			&u.Title, &u.Department, &u.Location, &u.AvatarURL, &key); err != nil {
+			&u.Title, &u.Department, &u.DepartmentID, &u.Location, &u.AvatarURL, &key); err != nil {
 			return nil, 0, nil, fmt.Errorf("scan contact: %w", err)
 		}
 		contacts = append(contacts, u)
@@ -199,4 +247,52 @@ func (s *Store) ListContactsByWorkspace(ctx context.Context, workspaceID string,
 		next = &ContactCursor{Key: keys[limit-1], ID: contacts[limit-1].ID}
 	}
 	return contacts, total, next, nil
+}
+
+// ResolvedPerson is what the name resolver knows of one person: a name and a picture.
+// Never an address, a title or a department.
+type ResolvedPerson struct {
+	UserID, NGACNodeID, DisplayName, AvatarURL string
+}
+
+// ResolvePeopleByWorkspace returns the name and picture of the people asked for by user id
+// or by NGAC node, who have a membership row in this workspace.
+//
+// This is a deliberate exception to "a reader of tenant_users filters status = 'active'":
+// whoever the workspace ever held, whatever the status of the row (active, invited,
+// disabled or removed), keeps a name where their work stays, in a chat, an approval, a
+// document or a calendar. It lists nobody, and is bound to the ids the caller already met.
+// A person of another workspace, or no one at all, is simply absent. The display name
+// follows the directory's rule: empty until the profile was saved.
+func (s *Store) ResolvePeopleByWorkspace(ctx context.Context, workspaceID string, userIDs, nodeIDs []string) ([]ResolvedPerson, error) {
+	if len(userIDs) == 0 && len(nodeIDs) == 0 {
+		return nil, nil
+	}
+	if userIDs == nil {
+		userIDs = []string{}
+	}
+	if nodeIDs == nil {
+		nodeIDs = []string{}
+	}
+	rows, err := s.db.Query(ctx,
+		`SELECT u.id, COALESCE(u.ngac_node,''),
+		        CASE WHEN u.profile_completed_at IS NOT NULL THEN COALESCE(u.display_name,'') ELSE '' END,
+		        COALESCE(u.avatar_url,'')
+		   FROM users u
+		   JOIN tenant_users tu ON tu.user_id = u.id AND tu.tenant_id = $1
+		  WHERE u.id = ANY($2) OR u.ngac_node = ANY($3)
+		  ORDER BY u.id`, workspaceID, userIDs, nodeIDs)
+	if err != nil {
+		return nil, fmt.Errorf("resolve people: %w", err)
+	}
+	defer rows.Close()
+	var out []ResolvedPerson
+	for rows.Next() {
+		var p ResolvedPerson
+		if err := rows.Scan(&p.UserID, &p.NGACNodeID, &p.DisplayName, &p.AvatarURL); err != nil {
+			return nil, fmt.Errorf("scan resolved person: %w", err)
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }

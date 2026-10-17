@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Auth: NGAC-decided contacts + name resolver"
-status: pending
+status: "completed (perf criterion and live Vite check deferred to phase 11)"
 priority: P1
 effort: "5h"
 dependencies: [4]
@@ -86,3 +86,20 @@ the writer, NotFound/`IsNotMembersUA` → denied, other errors → `ErrUnavailab
 - `tenant_users.department_id` drift from the graph would mis-file a person (Low×High): rows follow the graph
   (`applyDepartment`), 064 reconciles existing drift (phase 03 step 7).
 - Rollback: revert; old behaviour (tenant_users-only) returns — see plan rollback note.
+
+## Todo / Status (2026-10-18)
+- [x] Store: `ContactScope` (zero value = the caller only; `All` lifts it) in `ListContactsByWorkspace`, one predicate for list, count, search and paging; `DepartmentID` filter and column; `ResolvePeopleByWorkspace` (any status, name + avatar, `users.ngac_node` / user id).
+- [x] Domain: `ListContacts(ctx, callerID, callerNode, ws, q) -> *ContactPage` asks `GetDirectoryScope` as the caller (5 s bound); PermissionDenied -> `ErrAccessDenied`, anything else/nil scope/no client -> `ErrUnavailable`; admin or `ready:false` -> `All`; roles by holder node (owners: kind only); `visibility`. `ResolvePeople` via `requireActiveMember` (no workspace call, <= 200 ids).
+- [x] REST: `department_id`, `roles`, `visibility` on GET; `POST /contacts/resolve` (body capped at 64 KiB). No vite/nginx/Traefik change: all three match the `/contacts` prefix (`vite.config.js:75`, `default.conf:116`, `docker-compose.yml:246`).
+- [x] Tests (deny first, each paired with an allow on its fixture): `store/contacts_scope_test.go` (real DB), `domain/contacts_visibility_test.go`, `domain/contacts_visibility_realpolicy_test.go`, `rest/contacts_resolve_test.go`.
+- [x] Spec `contacts-visibility`: two requirements added (auth list, resolver), Status updated.
+- [ ] Live check through Vite on the seeded org and p95 of 200 ids (needs the dev stack; left to phase 11).
+
+## Deviations
+- `ContactFilter.Scope` is a value whose zero value shows only the caller, not a nil pointer meaning "everyone": an unscoped query cannot leak. Existing store tests now pass `Scope: allPeople`.
+- Scope call is bounded by a 5 s timeout (not in the phase text).
+
+## Review fixes (2026-10-18)
+- [x] H1: the department join is scoped in the store (`tu.department_id = ANY(visible) OR u.id = caller`), so name, id, `department`, `department_id` and `search` only see departments the scope shows. Tests: `TestListContacts_AnOutOfScopeDepartmentIsNotNamedOnAVisibleRow` (red first), caller's own department, limited paging, forged cursor.
+- [x] L1/L2 spec wording; L3 body over 64 KiB is 413; L4 `ngac.RoleKindOwners/Members/Custom` shared by auth and workspace; L5 `codes.Unimplemented` from `GetDirectoryScope` logged as "workspace service too old" (still 503).
+- Release coupling and the scope-cost check are recorded in phase 11.

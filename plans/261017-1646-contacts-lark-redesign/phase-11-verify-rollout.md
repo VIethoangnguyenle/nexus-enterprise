@@ -55,3 +55,7 @@ No new code beyond fixes found here.
 - Policy services serving pre-064 graph after B (Low×High): deploy recreates both and invalidates (runbook); smoke checks a
   rule end-to-end.
 - Rollback: plan.md rollback section.
+
+## Carried over from Phase 05 (review)
+- **Release coupling.** Phase 05 ships only together with Phases 06 and 09 (the frontend name resolver and the hidden-person card). After 05 alone, `GET /contacts` stops listing hidden people while the screens that still resolve names through it (chat, approvals, documents, calendar) show them as unknown. Deploy order inside the release: workspace, then auth, then frontend. Auth logs "workspace service too old" and answers 503 if it runs before workspace.
+- **Scope cost.** Every `/contacts` page makes one `GetDirectoryScope` call. Measure it against the seeded org (`scripts/seed-contacts-demo.sh`): p95 of `GET /contacts` and of `POST /contacts/resolve` with 200 ids (target < 50 ms), and the Vite live check (`:5173/api/workspaces/<id>/contacts/resolve`). If the scope is slow, the fallback is a short per-caller cache (seconds) in auth, invalidated by the workspace realtime events; do not add it before the numbers say so.

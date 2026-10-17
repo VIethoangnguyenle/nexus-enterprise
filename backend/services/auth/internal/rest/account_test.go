@@ -50,6 +50,8 @@ type acctStore struct {
 	contactsTot int
 	contactsNxt *store.ContactCursor
 	lastFilter  *store.ContactFilter
+	resolved    []store.ResolvedPerson
+	resolveCall int
 	avatars     map[string]acctAvatar // token -> picture
 }
 
@@ -148,6 +150,13 @@ func (s *acctStore) ListContactsByWorkspace(_ context.Context, _ string, f store
 	return []store.User{{ID: "c1", Username: "colleague", DisplayName: "Đồng nghiệp", Email: "c@example.test"}}, 1, nil, nil
 }
 
+func (s *acctStore) ResolvePeopleByWorkspace(context.Context, string, []string, []string) ([]store.ResolvedPerson, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.resolveCall++
+	return s.resolved, nil
+}
+
 func (s *acctStore) MarkEmailVerified(_ context.Context, id string) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -164,6 +173,22 @@ type acctWS struct {
 	workspacepb.WorkspaceServiceClient
 	n   int
 	err error
+	// scope is what GetDirectoryScope answers (a workspace with no directory rules by
+	// default), scopeErr fails it, scopeCalls counts the asks.
+	scope      *workspacepb.DirectoryScope
+	scopeErr   error
+	scopeCalls int
+}
+
+func (w *acctWS) GetDirectoryScope(context.Context, *workspacepb.GetDirectoryScopeRequest, ...grpc.CallOption) (*workspacepb.DirectoryScope, error) {
+	w.scopeCalls++
+	if w.scopeErr != nil {
+		return nil, w.scopeErr
+	}
+	if w.scope != nil {
+		return w.scope, nil
+	}
+	return &workspacepb.DirectoryScope{Ready: false}, nil
 }
 
 func (w *acctWS) CreateWorkspace(_ context.Context, req *workspacepb.CreateWorkspaceRequest, _ ...grpc.CallOption) (*workspacepb.Workspace, error) {

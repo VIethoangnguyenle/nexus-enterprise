@@ -394,6 +394,10 @@ func (w *fakeWorld) ListContactsByWorkspace(context.Context, string, store.Conta
 	return nil, 0, nil, nil
 }
 
+func (w *fakeWorld) ResolvePeopleByWorkspace(context.Context, string, []string, []string) ([]store.ResolvedPerson, error) {
+	return nil, nil
+}
+
 func (w *fakeWorld) FindUserByIdentity(_ context.Context, provider, subject string) (*store.User, error) {
 	w.mu.Lock()
 	id, ok := w.identities[provider+"|"+subject]

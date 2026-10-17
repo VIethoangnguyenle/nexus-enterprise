@@ -70,6 +70,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.GET("/me/workspaces", h.ListMyWorkspaces)
 	api.POST("/me/workspaces", h.CreateMyWorkspace)
 	api.GET("/workspaces/:id/contacts", h.ListContacts)
+	api.POST("/workspaces/:id/contacts/resolve", h.ResolveContacts)
 }
 
 // Providers handles GET /api/auth/providers — which sign-in methods the login

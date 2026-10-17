@@ -18,9 +18,9 @@ import (
 type RoleKind string
 
 const (
-	RoleOwners  RoleKind = "owners"
-	RoleMembers RoleKind = "members"
-	RoleCustom  RoleKind = "custom"
+	RoleOwners  RoleKind = ngac.RoleKindOwners
+	RoleMembers RoleKind = ngac.RoleKindMembers
+	RoleCustom  RoleKind = ngac.RoleKindCustom
 )
 
 // RoleSummary is a role as the list shows it. Name is the display name an
