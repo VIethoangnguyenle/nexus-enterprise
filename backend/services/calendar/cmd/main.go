@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	_ "time/tzdata" // zone data for event time zones, whatever the image carries
 
 	echomw "github.com/labstack/echo/v4/middleware"
 	"google.golang.org/grpc"

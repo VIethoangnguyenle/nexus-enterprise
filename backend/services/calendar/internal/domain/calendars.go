@@ -21,9 +21,6 @@ import (
 // two requests race, names the same OA and the same row.
 var calendarNamespace = uuid.MustParse("6f0c8c1e-3b0a-4d6e-9d5a-7f2f4c1b8a10")
 
-// Palette index a calendar starts with, by kind.
-var defaultColor = map[string]int16{store.KindPersonal: 0, store.KindWorkspace: 1, store.KindChannel: 2}
-
 // target is the calendar to find or create.
 type target struct {
 	kind    string
@@ -73,7 +70,7 @@ func (s *Service) ensureCalendar(ctx context.Context, ws *store.Workspace, t tar
 
 	row := &store.Calendar{
 		ID: string(id), WorkspaceID: ws.ID, Kind: t.kind, OwnerNodeID: t.owner, ChannelID: t.channelID(),
-		Color: defaultColor[t.kind], NgacOAID: oa.GetId(),
+		NgacOAID: oa.GetId(),
 	}
 	switch err := s.store.InsertCalendar(ctx, row); {
 	case err == nil:
@@ -146,15 +143,10 @@ func (s *Service) namedUA(ctx context.Context, name string) (string, error) {
 	return n.GetId(), nil
 }
 
-// ListCalendars returns the caller's calendars in a workspace: their own, the
-// workspace's, the group calendars of conversations they are in, and the ones
-// they added. Their own and the workspace's are created on first use.
-func (s *Service) ListCalendars(ctx context.Context, wsID string) ([]*CalendarView, error) {
-	who, ws, err := s.requireMember(ctx, wsID)
-	if err != nil {
-		return nil, err
-	}
-
+// callerCalendars gathers the calendars on the caller's list (their own and the
+// workspace's, created on first use; their groups'; the ones they added), with
+// their settings for each and what they hold on each.
+func (s *Service) callerCalendars(ctx context.Context, who grpcauth.Caller, ws *store.Workspace) ([]*store.Calendar, map[string]*store.Subscription, map[string]string, error) {
 	var cals []*store.Calendar
 	seen := map[string]bool{}
 	add := func(c *store.Calendar) {
@@ -166,18 +158,18 @@ func (s *Service) ListCalendars(ctx context.Context, wsID string) ([]*CalendarVi
 
 	own, _, err := s.ensureCalendar(ctx, ws, target{kind: store.KindPersonal, owner: who.NGACNodeID})
 	if err != nil {
-		return nil, err
+		return nil, nil, nil, err
 	}
 	add(own)
 	if ws.Type != workspaceTypePersonal {
 		shared, _, err := s.ensureCalendar(ctx, ws, target{kind: store.KindWorkspace})
 		if err != nil {
-			return nil, err
+			return nil, nil, nil, err
 		}
 		add(shared)
 		groups, err := s.store.MemberChannelCalendars(ctx, ws.ID, who.NGACNodeID)
 		if err != nil {
-			return nil, internal("list group calendars", err)
+			return nil, nil, nil, internal("list group calendars", err)
 		}
 		for _, c := range groups {
 			add(c)
@@ -185,15 +177,29 @@ func (s *Service) ListCalendars(ctx context.Context, wsID string) ([]*CalendarVi
 	}
 	subs, err := s.store.Subscriptions(ctx, ws.ID, who.NGACNodeID)
 	if err != nil {
-		return nil, internal("list subscriptions", err)
+		return nil, nil, nil, internal("list subscriptions", err)
 	}
 	settings := map[string]*store.Subscription{}
 	for _, sub := range subs {
 		settings[sub.Calendar.ID] = sub
 		add(sub.Calendar)
 	}
-
 	held, err := s.accessLevels(ctx, who.NGACNodeID, cals)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return cals, settings, held, nil
+}
+
+// ListCalendars returns the caller's calendars in a workspace: their own, the
+// workspace's, the group calendars of conversations they are in, and the ones
+// they added. Their own and the workspace's are created on first use.
+func (s *Service) ListCalendars(ctx context.Context, wsID string) ([]*CalendarView, error) {
+	who, ws, err := s.requireMember(ctx, wsID)
+	if err != nil {
+		return nil, err
+	}
+	cals, settings, held, err := s.callerCalendars(ctx, who, ws)
 	if err != nil {
 		return nil, err
 	}
@@ -206,12 +212,31 @@ func (s *Service) ListCalendars(ctx context.Context, wsID string) ([]*CalendarVi
 	return out, nil
 }
 
+// defaultColorOf is the colour a calendar has until the caller picks one: the
+// accent for the workspace's, the owner's hue for a personal one, the group's own
+// hue for a group's.
+func defaultColorOf(c *store.Calendar) int {
+	switch c.Kind {
+	case store.KindWorkspace:
+		return accentColor
+	case store.KindPersonal:
+		if c.Owner != nil {
+			return personHue(hueKey(c.Owner))
+		}
+		return personHue(c.OwnerNodeID)
+	}
+	return personHue(c.ChannelID)
+}
+
 // viewOf shapes a calendar for the caller, with their own colour and visibility
 // where they set any.
 func viewOf(c *store.Calendar, access string, sub *store.Subscription, callerNode string) *CalendarView {
 	v := &CalendarView{
-		ID: c.ID, Name: c.Name, Kind: c.Kind, Color: int(c.Color), Visible: true, Access: access,
-		Own: c.Kind == store.KindPersonal && c.OwnerNodeID == callerNode, Owner: c.Owner, ChannelID: c.ChannelID,
+		ID: c.ID, Name: c.Name, Kind: c.Kind, Color: defaultColorOf(c), Visible: true, Access: access,
+		IsMine: c.Kind == store.KindPersonal && c.OwnerNodeID == callerNode, Owner: refOf(c.Owner),
+	}
+	if c.Kind == store.KindChannel {
+		v.Channel = &ChannelRef{ID: c.ChannelID, Name: c.Name}
 	}
 	if sub != nil {
 		v.Visible = sub.Visible
@@ -253,8 +278,8 @@ func (s *Service) SetSubscription(ctx context.Context, wsID, calID string, in Su
 	if err != nil {
 		return nil, err
 	}
-	if in.Color != nil && (*in.Color < 0 || *in.Color > maxColor) {
-		return nil, invalid("color must be between 0 and %d", maxColor)
+	if in.Color != nil && (*in.Color < accentColor || *in.Color > maxColor) {
+		return nil, invalid("color must be between %d and %d", accentColor, maxColor)
 	}
 	if _, err := s.viewFor(ctx, who, cal); err != nil { // the caller must be able to see it
 		return nil, err

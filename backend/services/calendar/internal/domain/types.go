@@ -18,33 +18,43 @@ const (
 	AccessManage   = ngac.OpManage
 )
 
-// maxColor is the highest palette index a person may pick for a calendar.
-const maxColor = 31
+// Palette indexes a calendar may be drawn in: the eight person hues, or the
+// accent colour (accentColor), which workspace calendars use by default.
+const (
+	accentColor = -1
+	maxColor    = 7
+)
+
+// ChannelRef is the conversation a group calendar belongs to.
+type ChannelRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
 
 // CalendarView is a calendar as the caller's list shows it. It carries no
 // identifier a screen would display: Owner.NodeID is the key a picker sends back.
 type CalendarView struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID string `json:"id"`
 	// Kind is "personal", "workspace" or "channel".
-	Kind    string `json:"kind"`
-	Color   int    `json:"color"`
-	Visible bool   `json:"visible"`
+	Kind string `json:"kind"`
+	Name string `json:"name"`
+	// Color is a person hue index 0..7, or -1 for the accent.
+	Color   int  `json:"color"`
+	Visible bool `json:"visible"`
 	// Access is what the caller holds on the calendar (see the Access constants).
 	Access string `json:"access"`
-	// Own is true for the caller's own personal calendar.
-	Own bool `json:"own"`
+	// IsMine is true for the caller's own personal calendar.
+	IsMine bool `json:"isMine"`
 	// Owner is the person a personal calendar belongs to.
-	Owner *store.Person `json:"owner,omitempty"`
-	// ChannelID lets the conversation's Calendar tab find its calendar.
-	ChannelID string `json:"channelId,omitempty"`
+	Owner *PersonRef `json:"owner,omitempty"`
+	// Channel lets the conversation's Calendar tab find its calendar.
+	Channel *ChannelRef `json:"channel,omitempty"`
 }
 
 // ShareView is one share of a personal calendar.
 type ShareView struct {
-	Person    *store.Person `json:"person"`
-	Level     string        `json:"level"`
-	CreatedAt time.Time     `json:"createdAt"`
+	Grantee *PersonRef `json:"grantee"`
+	Level   string     `json:"level"`
 }
 
 // SubscriptionInput changes a person's settings for a calendar; nil fields stay.
@@ -75,4 +85,18 @@ type Store interface {
 	ShareOf(ctx context.Context, calendarID, granteeNodeID string) (*store.Share, error)
 	SaveShare(ctx context.Context, sh *store.Share) error
 	DeleteShare(ctx context.Context, calendarID, granteeNodeID string) (bool, error)
+
+	EventByID(ctx context.Context, id string) (*store.Event, error)
+	OverrideOf(ctx context.Context, seriesID string, original time.Time) (*store.Event, error)
+	Overrides(ctx context.Context, seriesID string) ([]*store.Event, error)
+	RangeEvents(ctx context.Context, calendarIDs []string, from, to time.Time) (masters, overrides []*store.Event, err error)
+	InsertEvent(ctx context.Context, e *store.Event, reminders []int) error
+	UpdateEvent(ctx context.Context, e *store.Event, version int, ch store.EventChange) error
+	CutSeries(ctx context.Context, series *store.Event, version int, cutFrom time.Time, tail *store.Event, tailReminders *[]int) error
+	DeleteEvent(ctx context.Context, id string) error
+	Attendees(ctx context.Context, eventID string) ([]*store.Attendee, error)
+	MyResponses(ctx context.Context, userNodeID string, eventIDs []string) (map[string]string, error)
+	GuestCounts(ctx context.Context, eventIDs []string) (map[string]int, error)
+	Reminders(ctx context.Context, eventID string) ([]int, error)
+	DefaultReminder(ctx context.Context, workspaceID, userNodeID string) (int, error)
 }

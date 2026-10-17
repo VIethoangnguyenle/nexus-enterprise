@@ -97,9 +97,13 @@ func TestListCreatesTheCallersCalendarsOnce(t *testing.T) {
 	assert.Equal(t, "Acme", workspace.Name)
 	assert.Equal(t, AccessManage, personal.Access)
 	assert.Equal(t, AccessRead, workspace.Access, "an ordinary member only reads the workspace calendar")
-	assert.True(t, personal.Own)
+	assert.True(t, personal.IsMine)
 	require.NotNil(t, personal.Owner)
 	assert.Equal(t, "Alice", personal.Owner.DisplayName)
+	assert.Equal(t, personHue("n-alice"), personal.Owner.Hue)
+	assert.Equal(t, personal.Owner.Hue, personal.Color, "a personal calendar starts in its owner's hue")
+	assert.Equal(t, -1, workspace.Color, "the workspace calendar starts in the accent colour")
+	assert.Nil(t, personal.Channel)
 
 	// The graph holds exactly what the spec says: an OA under the policy class,
 	// the owner's personal UA with the owner operations; Members read, Owners all.
@@ -196,7 +200,7 @@ func TestShareLevelsGrantExactlyTheirOperations(t *testing.T) {
 
 	sh, err := f.svc.PutShare(ctx, ws, mine.ID, "n-bob", ngac.CalendarShareView)
 	require.NoError(t, err)
-	assert.Equal(t, "Bob", sh.Person.DisplayName)
+	assert.Equal(t, "Bob", sh.Grantee.DisplayName)
 	assert.Equal(t, ngac.CalendarShareView, sh.Level)
 	assert.Contains(t, f.w.Log, "associate "+bobUA+">"+ngac.CalendarOAName(ngac.CalendarID(mine.ID))+" [read]")
 	assert.True(t, f.w.Allowed("n-bob", oa, ngac.OpRead))
@@ -218,7 +222,7 @@ func TestShareLevelsGrantExactlyTheirOperations(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, shares, 1, "one share per person")
 	assert.Equal(t, ngac.CalendarShareManage, shares[0].Level)
-	assert.Equal(t, "Bob", shares[0].Person.DisplayName)
+	assert.Equal(t, "Bob", shares[0].Grantee.DisplayName)
 
 	// The grantee now sees the calendar on their list at the level given, and
 	// has it subscribed.
@@ -231,7 +235,7 @@ func TestShareLevelsGrantExactlyTheirOperations(t *testing.T) {
 	}
 	require.NotNil(t, found, "a shared calendar is on the grantee's list")
 	assert.Equal(t, AccessManage, found.Access)
-	assert.False(t, found.Own)
+	assert.False(t, found.IsMine)
 	assert.NotNil(t, bobs[store.KindPersonal])
 }
 
@@ -347,7 +351,7 @@ func TestSubscribeToAColleagueNeedsTheSameWorkspace(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "Bob", got.Name)
 	assert.Equal(t, AccessFreeBusy, got.Access, "without a share a colleague shows busy ranges only")
-	assert.False(t, got.Own)
+	assert.False(t, got.IsMine)
 
 	// On the list from now on, and not twice.
 	n := 0
@@ -401,9 +405,13 @@ func TestSubscriptionSettings(t *testing.T) {
 	bad := 999
 	_, err = f.svc.SetSubscription(ctx, ws, mine.ID, SubscriptionInput{Color: &bad})
 	requireKind(t, err, ErrInvalidInput)
-	neg := -1
+	neg := -2
 	_, err = f.svc.SetSubscription(ctx, ws, mine.ID, SubscriptionInput{Color: &neg})
 	requireKind(t, err, ErrInvalidInput)
+	accent := -1 // the accent colour is a choice too
+	got, err = f.svc.SetSubscription(ctx, ws, mine.ID, SubscriptionInput{Color: &accent})
+	require.NoError(t, err)
+	assert.Equal(t, -1, got.Color)
 
 	// Deny: a calendar that does not exist.
 	_, err = f.svc.SetSubscription(ctx, ws, "missing", SubscriptionInput{Color: &color})

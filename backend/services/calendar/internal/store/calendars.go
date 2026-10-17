@@ -44,7 +44,7 @@ const calendarColumns = `c.id, c.workspace_id, c.kind, COALESCE(c.owner_node_id,
 			WHEN 'workspace' THEN w.name
 			ELSE COALESCE(ch.name, '') END),
 		c.color, c.ngac_oa_id, c.created_at,
-		COALESCE(otu.ngac_node_id, ''), COALESCE(NULLIF(ou.display_name, ''), ou.username, ''), COALESCE(ou.avatar_url, '')`
+		COALESCE(otu.ngac_node_id, ''), COALESCE(NULLIF(ou.display_name, ''), ou.username, ''), COALESCE(ou.avatar_url, ''), COALESCE(otu.user_id, '')`
 
 const calendarFrom = `
 	FROM calendars c
@@ -61,7 +61,7 @@ func scanCalendar(row interface{ Scan(...any) error }) (*Calendar, error) {
 	var p Person
 	if err := row.Scan(&c.ID, &c.WorkspaceID, &c.Kind, &c.OwnerNodeID, &c.ChannelID,
 		&c.Name, &c.Color, &c.NgacOAID, &c.CreatedAt,
-		&p.NodeID, &p.DisplayName, &p.AvatarURL); err != nil {
+		&p.NodeID, &p.DisplayName, &p.AvatarURL, &p.UserID); err != nil {
 		return nil, err
 	}
 	if p.NodeID != "" {
@@ -180,7 +180,7 @@ func (s *Store) Subscriptions(ctx context.Context, workspaceID, userNodeID strin
 		if err := rows.Scan(&sub.Color, &sub.Visible, &sub.Position,
 			&c.ID, &c.WorkspaceID, &c.Kind, &c.OwnerNodeID, &c.ChannelID,
 			&c.Name, &c.Color, &c.NgacOAID, &c.CreatedAt,
-			&p.NodeID, &p.DisplayName, &p.AvatarURL); err != nil {
+			&p.NodeID, &p.DisplayName, &p.AvatarURL, &p.UserID); err != nil {
 			return nil, fmt.Errorf("scan subscription: %w", err)
 		}
 		if p.NodeID != "" {

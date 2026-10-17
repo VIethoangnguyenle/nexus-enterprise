@@ -194,11 +194,16 @@ type calJSON struct {
 	Access  string `json:"access"`
 	Color   int    `json:"color"`
 	Visible bool   `json:"visible"`
-	Own     bool   `json:"own"`
+	IsMine  bool   `json:"isMine"`
 	Owner   *struct {
 		NodeID      string `json:"nodeId"`
 		DisplayName string `json:"displayName"`
+		Hue         int    `json:"hue"`
 	} `json:"owner"`
+	Channel *struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"channel"`
 }
 
 func (f *flow) list(who string) []calJSON {
@@ -233,9 +238,17 @@ func TestListCreatesCalendarsOnceAndLeaksNoNodeIDs(t *testing.T) {
 	assert.Equal(t, "personal", first[0].Kind)
 	assert.Equal(t, "Alice Nguyen", first[0].Name)
 	assert.Equal(t, "manage", first[0].Access)
-	assert.True(t, first[0].Own)
+	assert.True(t, first[0].IsMine)
+	require.NotNil(t, first[0].Owner)
+	assert.Equal(t, "Alice Nguyen", first[0].Owner.DisplayName)
+	assert.Equal(t, first[0].Color, first[0].Owner.Hue, "a personal calendar is drawn in its owner's hue")
+	assert.Equal(t, f.nodes["alice"], first[0].Owner.NodeID)
+	assert.Nil(t, first[0].Channel)
 	assert.Equal(t, "workspace", first[1].Kind)
 	assert.Equal(t, "read", first[1].Access)
+	assert.Equal(t, -1, first[1].Color, "the workspace calendar uses the accent colour")
+	assert.False(t, first[1].IsMine)
+	assert.Nil(t, first[1].Owner)
 
 	_, body := f.do(http.MethodGet, f.base()+"/calendars", "alice", "")
 	assert.NotContains(t, string(body), "node-"+f.sfx, "no calendar OA id may reach a client")
@@ -279,14 +292,15 @@ func TestShareFlow(t *testing.T) {
 	code, body := share("alice", "bob", "view")
 	require.Equal(t, http.StatusOK, code, string(body))
 	var got struct {
-		Level  string `json:"level"`
-		Person struct {
+		Level   string `json:"level"`
+		Grantee struct {
 			DisplayName string `json:"displayName"`
-		} `json:"person"`
+			Hue         int    `json:"hue"`
+		} `json:"grantee"`
 	}
 	require.NoError(t, json.Unmarshal(body, &got))
 	assert.Equal(t, "view", got.Level)
-	assert.Equal(t, "Bob Tran", got.Person.DisplayName)
+	assert.Equal(t, "Bob Tran", got.Grantee.DisplayName)
 
 	access := func(who string) string {
 		for _, c := range f.list(who) {
@@ -318,11 +332,11 @@ func TestShareFlow(t *testing.T) {
 	code, _ = f.do(http.MethodDelete, f.base()+"/calendars/"+mine.ID+"/shares/"+f.nodes["bob"], "carol", "")
 	assert.Equal(t, http.StatusForbidden, code)
 	code, _ = share("alice", "bob", "root")
-	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Equal(t, http.StatusUnprocessableEntity, code)
 	code, _ = share("alice", "gus", "view")
 	assert.Equal(t, http.StatusForbidden, code, "a person outside the workspace gets nothing")
 	code, _ = share("alice", "alice", "view")
-	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Equal(t, http.StatusUnprocessableEntity, code)
 	assert.Equal(t, 1, f.count(`SELECT COUNT(*) FROM calendar_shares WHERE calendar_id = $1`, mine.ID))
 
 	// Revoked: the next decision is DENY, and a colleague falls back to busy ranges.
@@ -344,7 +358,7 @@ func TestSubscriptions(t *testing.T) {
 	code, _ = f.do(http.MethodPost, f.base()+"/subscriptions", "alice", `{"userNodeId":"`+f.nodes["gus"]+`"}`)
 	assert.Equal(t, http.StatusForbidden, code, "someone outside the workspace cannot be subscribed to")
 	code, _ = f.do(http.MethodPost, f.base()+"/subscriptions", "alice", `{}`)
-	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Equal(t, http.StatusUnprocessableEntity, code)
 	code, _ = f.do(http.MethodPost, f.base()+"/subscriptions", "alice", `not json`)
 	assert.Equal(t, http.StatusBadRequest, code)
 
@@ -364,7 +378,7 @@ func TestSubscriptions(t *testing.T) {
 	}
 	assert.True(t, found)
 	code, _ = f.do(http.MethodPut, f.base()+"/calendars/"+bobs.ID+"/subscription", "alice", `{"color":500}`)
-	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Equal(t, http.StatusUnprocessableEntity, code)
 
 	code, _ = f.do(http.MethodDelete, f.base()+"/subscriptions/"+bobs.ID, "alice", "")
 	assert.Equal(t, http.StatusNoContent, code)
@@ -383,6 +397,9 @@ func TestGroupCalendar(t *testing.T) {
 	require.NoError(t, json.Unmarshal(body, &cal))
 	assert.Equal(t, "channel", cal.Kind)
 	assert.Equal(t, "Design team", cal.Name)
+	require.NotNil(t, cal.Channel)
+	assert.Equal(t, f.chat, cal.Channel.ID)
+	assert.Equal(t, "Design team", cal.Channel.Name)
 	assert.Equal(t, "write", cal.Access)
 
 	code, body = f.do(http.MethodPost, path, "alice", "")
@@ -405,7 +422,7 @@ func TestGroupCalendar(t *testing.T) {
 	code, _ = f.do(http.MethodPost, path, "carol", "")
 	assert.Equal(t, http.StatusForbidden, code)
 	code, _ = f.do(http.MethodPost, f.base()+"/channels/"+f.dm+"/calendar", "alice", "")
-	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Equal(t, http.StatusUnprocessableEntity, code)
 	assert.Equal(t, 0, f.count(`SELECT COUNT(*) FROM calendars WHERE channel_id = $1`, f.dm))
 	code, _ = f.do(http.MethodPost, f.base()+"/channels/nope/calendar", "alice", "")
 	assert.Equal(t, http.StatusNotFound, code)

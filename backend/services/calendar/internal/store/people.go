@@ -40,15 +40,18 @@ type Person struct {
 	NodeID      string `json:"nodeId"`
 	DisplayName string `json:"displayName"`
 	AvatarURL   string `json:"avatarUrl,omitempty"`
+	// UserID is the account (users.id) behind the node; it seeds the person's hue
+	// so it matches the one the rest of the app draws, and is never sent out.
+	UserID string `json:"-"`
 }
 
 // personColumns reads a person from tu (tenant_users) joined to u (users): the
 // display name, else the login, so a name is never empty.
-const personColumns = `tu.ngac_node_id, COALESCE(NULLIF(u.display_name, ''), u.username), COALESCE(u.avatar_url, '')`
+const personColumns = `tu.ngac_node_id, COALESCE(NULLIF(u.display_name, ''), u.username), COALESCE(u.avatar_url, ''), tu.user_id`
 
 func scanPerson(row interface{ Scan(...any) error }) (*Person, error) {
 	p := &Person{}
-	if err := row.Scan(&p.NodeID, &p.DisplayName, &p.AvatarURL); err != nil {
+	if err := row.Scan(&p.NodeID, &p.DisplayName, &p.AvatarURL, &p.UserID); err != nil {
 		return nil, err
 	}
 	return p, nil

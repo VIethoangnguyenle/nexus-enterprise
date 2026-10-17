@@ -59,11 +59,11 @@ func (s *Service) ListShares(ctx context.Context, wsID, calID string) ([]*ShareV
 	}
 	out := make([]*ShareView, 0, len(shares))
 	for _, sh := range shares {
-		p := people[sh.GranteeNodeID]
-		if p == nil {
-			p = &store.Person{NodeID: sh.GranteeNodeID, DisplayName: formerMember}
+		who := refOf(people[sh.GranteeNodeID])
+		if who == nil {
+			who = formerMemberRef(sh.GranteeNodeID)
 		}
-		out = append(out, &ShareView{Person: p, Level: sh.Level, CreatedAt: sh.CreatedAt})
+		out = append(out, &ShareView{Grantee: who, Level: sh.Level})
 	}
 	return out, nil
 }
@@ -124,7 +124,7 @@ func (s *Service) PutShare(ctx context.Context, wsID, calID, granteeNode, level 
 	if err != nil {
 		return nil, internal("load share", err)
 	}
-	return &ShareView{Person: person, Level: saved.Level, CreatedAt: saved.CreatedAt}, nil
+	return &ShareView{Grantee: refOf(person), Level: saved.Level}, nil
 }
 
 // restoreGrant puts the graph back as it was before a grant whose record could

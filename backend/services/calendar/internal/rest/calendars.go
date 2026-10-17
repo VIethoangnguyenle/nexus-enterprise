@@ -6,6 +6,7 @@ package rest
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -24,6 +25,12 @@ type Calendars interface {
 	ListShares(ctx context.Context, wsID, calID string) ([]*domain.ShareView, error)
 	PutShare(ctx context.Context, wsID, calID, granteeNode, level string) (*domain.ShareView, error)
 	DeleteShare(ctx context.Context, wsID, calID, granteeNode string) error
+
+	ListEvents(ctx context.Context, wsID string, q domain.ListEventsQuery) ([]*domain.OccurrenceView, error)
+	GetEvent(ctx context.Context, wsID, id, occurrence string) (*domain.EventDetailView, error)
+	CreateEvent(ctx context.Context, wsID string, in domain.EventInput) (*domain.EventDetailView, error)
+	UpdateEvent(ctx context.Context, wsID, id string, q domain.ScopeQuery, p domain.EventPatch) (*domain.EventDetailView, error)
+	DeleteEvent(ctx context.Context, wsID, id string, q domain.ScopeQuery, version int) error
 }
 
 // Handler serves the calendar REST endpoints.
@@ -47,11 +54,24 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	g.DELETE("/calendars/:calId/shares/:granteeNodeId", h.DeleteShare)
 
 	g.POST("/channels/:channelId/calendar", h.EnsureChannelCalendar)
+
+	g.GET("/events", h.ListEvents)
+	g.POST("/events", h.CreateEvent)
+	g.GET("/events/:id", h.GetEvent)
+	g.PATCH("/events/:id", h.UpdateEvent)
+	g.DELETE("/events/:id", h.DeleteEvent)
 }
 
 // mapError turns a domain refusal into its HTTP status; anything else is a
-// failure of ours and answers a generic 500.
-func mapError(err error) error { return httputil.MapDomainError(err) }
+// failure of ours and answers a generic 500. The calendar's clients read a
+// refused value as 422 (the screen shows the message and keeps the form), and a
+// stale edit as 409.
+func mapError(err error) error {
+	if errors.Is(err, domain.ErrInvalidInput) {
+		return echo.NewHTTPError(http.StatusUnprocessableEntity, err.Error())
+	}
+	return httputil.MapDomainError(err)
+}
 
 func badBody(c echo.Context, err error) error {
 	return echo.NewHTTPError(http.StatusBadRequest, "malformed request body")

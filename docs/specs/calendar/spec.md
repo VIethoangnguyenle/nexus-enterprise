@@ -111,12 +111,28 @@ caller, never the body.
 - **THEN** it has no graph node
 
 ### Requirement: An event can repeat, and an edit says how far it reaches
-An event SHALL carry its start with its time zone and MAY repeat by an RRULE (daily, weekly, monthly, yearly, every
-n, on chosen weekdays, ending never, on a date or after a count). Occurrences SHALL be expanded in the event's own
-time zone, so "09:00 every Monday" stays at 09:00 across a daylight-saving change. The server SHALL return a Vietnamese
-sentence describing the rule (`recurrence_text`); clients do not translate the rule. Changing or deleting an
-occurrence SHALL ask for a scope: **this one**, **this and following**, or **all**. A scope applied to a one-off event
-is the same as all.
+An event SHALL carry its start with its time zone and MAY repeat by an RRULE. Only `FREQ` DAILY, WEEKLY, MONTHLY and
+YEARLY are accepted (with INTERVAL, BYDAY, BYMONTHDAY, BYMONTH, BYSETPOS); `COUNT` is at most 730; `COUNT` and `UNTIL`
+are not both given; a rule with neither is expanded no further than five years after its start; sub-day parts are
+refused (422). Occurrences SHALL be expanded in the event's own time zone, so "09:00 every Monday" stays at 09:00
+across a daylight-saving change. The server SHALL return a Vietnamese sentence describing the rule
+(`recurrenceText`); clients do not translate the rule. Changing or deleting an occurrence SHALL ask for a scope
+(`scope=this|following|all` with `occurrence` = the `occurrenceStart` of the instance): **this one**, **this and
+following**, or **all**. A scope applied to a one-off event is the same as all; a repeating event without one is
+refused (422).
+
+- **this**: writes (or rewrites) an exception row for that occurrence; deleting it writes a cancelled exception.
+- **following**: ends the series with `UNTIL` one second before the occurrence and starts a new event there with the
+  change applied (the guests and reminders are copied; a `COUNT` becomes the number that remained); exceptions from
+  that occurrence on are dropped. From the first occurrence it is the same as **all**. The answer is the new event.
+- **all**: changes the series row. Exceptions edited on their own are kept (their number is answered as
+  `preservedOverrides`). When `start`/`end` are sent they are the new position of the named occurrence and the whole
+  series shifts by the same wall-clock distance in its zone (a weekly `BYDAY` follows a change of weekday).
+
+An edit SHALL carry the `version` it started from. A series, a single event or an exception row each has its own
+version; the one an occurrence shows is its exception's when it has one, else the series'. A stale version answers
+409 with the message "Sự kiện vừa được người khác sửa. Tải lại rồi thử lại.", and a lost race to create the same
+exception is the same 409. An occurrence is listed only when it overlaps the requested range (at most 400 days).
 
 #### Scenario: This and following
 - **WHEN** a weekly event is changed from one occurrence "this and following"
@@ -129,6 +145,31 @@ is the same as all.
 #### Scenario: Just this one
 - **WHEN** one occurrence is deleted with scope "this one"
 - **THEN** only that day disappears; the series continues
+
+#### Scenario: Stale edit
+- **WHEN** an edit arrives with a version that is no longer current
+- **THEN** the answer is 409 and nothing is changed
+
+#### Scenario: Rule out of bounds
+- **WHEN** a rule is hourly, or asks for more than 730 occurrences
+- **THEN** the answer is 422 and nothing is stored
+
+### Requirement: What a person sees of an occurrence depends on what they hold
+For each occurrence the service SHALL answer whether the caller may edit it (`canEdit`: `write` on the calendar and
+the right to read it). A caller who holds only free/busy of a calendar (a colleague of a personal calendar), or who
+may not read a `private` event, SHALL get `{start, end, busyOnly: true}` with the title "Bận" and no place, guests,
+organizer or call; an event marked free (`transparency: free`) is left out of such a list. A `private` event is read
+in full only by its organizer, its guests, the owner of a personal calendar and whoever holds `manage` on the
+calendar; a person who cannot read an event SHALL NOT change or delete it either. Reading one event (`GET
+/events/:id`) needs `read` on the calendar, or `read` on the event's own OA for a guest (403 otherwise).
+
+#### Scenario: Free/busy only
+- **WHEN** a colleague with no share lists another person's calendar
+- **THEN** each occurrence is a "Bận" block and fetching one event is refused (403)
+
+#### Scenario: Private event and a view share
+- **WHEN** a calendar is shared at `view` and holds a private event of its owner
+- **THEN** the grantee sees a "Bận" block, and reading the event is refused (403)
 
 ### Requirement: Guests are people of the workspace and see only their event
 Adding a guest SHALL require `write` on the calendar, or `invite` on the event's OA for a guest who was allowed to
@@ -243,5 +284,8 @@ person is picked from a list or search, never typed as an ID or email.
 Added 2026-10-17. Vocabulary, graph shape and PDP test vectors (`pdp_calendar_scenarios_test.go`) exist. The service
 (`backend/services/calendar`, REST 8187, schema `data/migrations/057_calendar.sql`) implements the three kinds of
 calendar, lazy creation, subscriptions and sharing (`GET /api/workspaces/:id/calendar/calendars`, shares, subscriptions,
-group calendar). Events, guests, free/busy, reminders, realtime fan-out to screens and calls are specified here ahead of
-their code.
+group calendar). Events (`GET/POST /events`, `GET/PATCH/DELETE /events/:id`, expansion of repeating events in their
+zone, exceptions, edit and delete scopes, versions, Vietnamese `recurrenceText`, busy-only occurrences, `calendar`
+realtime events for created/updated/deleted) are implemented in the same service. Guests, RSVP, free/busy lists, event
+search, reminders, notifications and calls are specified here ahead of their code; until guests exist an event is
+created with its organizer as the only attendee, and naming other attendees is refused (422).
