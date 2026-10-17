@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Frontend: lưới, popover, tạo nhanh, kéo thả"
-status: pending
+status: completed
 priority: P1
 effort: "2.5d"
 dependencies: [5]
@@ -33,5 +33,5 @@ dependencies: [5]
   `frontend/package.json`
 
 ## Success Criteria
-- [ ] Vitest: layout trùng giờ, tuần Thứ Hai, popover RSVP gọi API, kéo dời gọi PATCH đúng scope, nav có Lịch.
-- [ ] Lint + production bundle xanh; `routeTree.gen.ts` do generator sinh.
+- [x] Vitest: layout trùng giờ, tuần Thứ Hai, popover RSVP gọi API, kéo dời gọi PATCH đúng scope, nav có Lịch.
+- [x] Lint + production bundle xanh; `routeTree.gen.ts` do generator sinh.

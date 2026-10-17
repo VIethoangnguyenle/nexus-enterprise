@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Schema + khung service + đăng ký hạ tầng"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: [2]
@@ -54,5 +54,5 @@ Bảng dữ liệu và service Go `calendar` chạy được (health, REST rỗn
 3. Đăng ký hạ tầng; `docker compose config -q`.
 
 ## Success Criteria
-- [ ] Migration áp và quan sát trên DB; test messaging calls cũ vẫn xanh sau khi `channel_id` nullable.
-- [ ] `make build-check` gồm calendar.
+- [x] Migration áp và quan sát trên DB; test messaging calls cũ vẫn xanh sau khi `channel_id` nullable.
+- [x] `make build-check` gồm calendar.

@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "Sự kiện + lặp lại RRULE"
-status: pending
+status: completed
 priority: P1
 effort: "2d"
 dependencies: [4]
@@ -38,5 +38,5 @@ CRUD sự kiện, mở rộng lần lặp trong khoảng xem, ngoại lệ, sử
 3. Store + REST + flow test 3 phạm vi.
 
 ## Success Criteria
-- [ ] Unit test recurrence ≥ 10 case, recurrence_text ≥ 8 case xanh; flow test 3 phạm vi sửa và xoá.
-- [ ] Caller chỉ freebusy không thấy tiêu đề (test).
+- [x] Unit test recurrence ≥ 10 case, recurrence_text ≥ 8 case xanh; flow test 3 phạm vi sửa và xoá.
+- [x] Caller chỉ freebusy không thấy tiêu đề (test).

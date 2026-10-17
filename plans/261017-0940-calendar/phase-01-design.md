@@ -1,7 +1,7 @@
 ---
 phase: 1
 title: "Thiết kế: DESIGN.md + nav"
-status: pending
+status: completed
 priority: P1
 effort: "0.5d"
 dependencies: []
@@ -30,4 +30,4 @@ Ghi thiết kế Lịch đã có ở mockup vào `DESIGN.md` (nguồn thiết k�
 2. Sửa §5 danh sách mục chính (5 → 6 mục) ở cả rail và drawer.
 
 ## Success Criteria
-- [ ] DESIGN.md mô tả đủ để code render không cần đoán; ghi rõ ngoại lệ (đỏ, pill, khối đặc) và lý do.
+- [x] DESIGN.md mô tả đủ để code render không cần đoán; ghi rõ ngoại lệ (đỏ, pill, khối đặc) và lý do.

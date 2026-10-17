@@ -1,7 +1,7 @@
 ---
 phase: 7
 title: "Nhắc giờ, thông báo, realtime, cuộc gọi"
-status: pending
+status: completed
 priority: P1
 effort: "1.5d"
 dependencies: [6]
@@ -32,6 +32,6 @@ dependencies: [6]
   `deploy/nginx/default.conf`
 
 ## Success Criteria
-- [ ] Reminder không gửi trùng khi chạy 2 lần; declined không nhận.
-- [ ] Vé cuộc gọi sự kiện: deny khi không phải khách, allow khi là khách.
-- [ ] Consumer: `event.invited` tạo notification cho từng khách.
+- [x] Reminder không gửi trùng khi chạy 2 lần; declined không nhận.
+- [x] Vé cuộc gọi sự kiện: deny khi không phải khách, allow khi là khách.
+- [x] Consumer: `event.invited` tạo notification cho từng khách.

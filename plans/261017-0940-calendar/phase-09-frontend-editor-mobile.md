@@ -1,7 +1,7 @@
 ---
 phase: 9
 title: "Frontend: trình soạn, tìm giờ, lặp, chia sẻ, điện thoại"
-status: pending
+status: completed
 priority: P1
 effort: "2d"
 dependencies: [6, 8]
@@ -25,6 +25,6 @@ dependencies: [6, 8]
   trình soạn toàn màn. 768–1023: 3 ngày, sheet phải.
 
 ## Success Criteria
-- [ ] Vitest: editor validate giờ; rrule gửi đúng cho mỗi lựa chọn lặp; scope dialog; share đổi mức gọi API; điện thoại
+- [x] Vitest: editor validate giờ; rrule gửi đúng cho mỗi lựa chọn lặp; scope dialog; share đổi mức gọi API; điện thoại
   render Lịch biểu.
-- [ ] Không ô nhập ID; không UUID trên màn.
+- [x] Không ô nhập ID; không UUID trên màn.

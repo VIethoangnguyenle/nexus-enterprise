@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Khách, RSVP, bận/rảnh, tìm giờ, tìm kiếm"
-status: pending
+status: completed
 priority: P1
 effort: "1.5d"
 dependencies: [5]
@@ -27,6 +27,6 @@ dependencies: [5]
   `rest/{attendees.go,freebusy.go}` + tests
 
 ## Success Criteria
-- [ ] Deny: không phải khách RSVP → 403; khách không invite thêm khách → 403; freebusy người khác workspace → 403; khách bị
+- [x] Deny: không phải khách RSVP → 403; khách không invite thêm khách → 403; freebusy người khác workspace → 403; khách bị
   gỡ đọc sự kiện → 403.
-- [ ] Gợi ý giờ đúng với dữ liệu cố định.
+- [x] Gợi ý giờ đúng với dữ liệu cố định.

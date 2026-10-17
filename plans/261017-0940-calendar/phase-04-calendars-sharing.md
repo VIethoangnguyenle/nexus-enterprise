@@ -1,7 +1,7 @@
 ---
 phase: 4
 title: "Lịch, đăng ký xem, chia sẻ"
-status: pending
+status: completed
 priority: P1
 effort: "1.5d"
 dependencies: [3]
@@ -36,5 +36,5 @@ API lịch: tạo lười 3 loại lịch + node NGAC, danh sách Lịch của t
 2. Store + REST + flow test (DB thật, skip nếu không có DB).
 
 ## Success Criteria
-- [ ] Test deny: chia sẻ lịch của người khác → 403; đăng ký người ngoài workspace → 403; lịch nhóm khi không là thành viên → 403.
-- [ ] `GET /calendars` gọi hai lần không tạo node trùng.
+- [x] Test deny: chia sẻ lịch của người khác → 403; đăng ký người ngoài workspace → 403; lịch nhóm khi không là thành viên → 403.
+- [x] `GET /calendars` gọi hai lần không tạo node trùng.

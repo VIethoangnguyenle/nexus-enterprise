@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Spec + mô hình NGAC + test vector"
-status: pending
+status: completed
 priority: P1
 effort: "1d"
 dependencies: [1]
@@ -40,7 +40,7 @@ dependencies: [1]
 2. Viết spec.
 
 ## Success Criteria
-- [ ] `make test s=policy` xanh với ≥ 8 deny case; `make check-ngac` xanh.
+- [x] `make test s=policy` xanh với ≥ 8 deny case; `make check-ngac` xanh.
 
 ## Risk Assessment
 - PersonalUA (`User_<node>`, tạo lười như `drive/internal/domain/sharing.go:180-200`) có thể không nằm dưới PC workspace →

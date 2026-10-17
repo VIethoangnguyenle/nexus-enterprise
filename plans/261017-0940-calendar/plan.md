@@ -1,7 +1,7 @@
 ---
 title: "Lịch kiểu Google Calendar"
 description: "Service calendar thứ 9 + module Lịch: ngày/tuần/tháng/lịch biểu, kéo thả, khách + RSVP, lặp RRULE, nhắc giờ, bận/rảnh + tìm giờ, chia sẻ lịch, lịch workspace và lịch nhóm chat, cuộc gọi video của sự kiện. Phân quyền hoàn toàn NGAC."
-status: in-progress
+status: completed
 priority: P1
 effort: 12-14d
 issue:
@@ -56,17 +56,17 @@ Google Calendar" 2026-10-17; bản kiểu Google). Người dùng cho chạy pla
 ## Phases
 | # | Phase | Status | Effort | Depends |
 |---|---|---|---|---|
-| 01 | [Thiết kế: DESIGN.md + nav](phase-01-design.md) | pending | 0.5d | — |
-| 02 | [Spec + mô hình NGAC + test vector](phase-02-spec-ngac.md) | pending | 1d | 01 |
-| 03 | [Schema + khung service + đăng ký hạ tầng](phase-03-schema-scaffold.md) | pending | 1d | 02 |
-| 04 | [Lịch, đăng ký xem, chia sẻ](phase-04-calendars-sharing.md) | pending | 1.5d | 03 |
-| 05 | [Sự kiện + lặp lại RRULE](phase-05-events-recurrence.md) | pending | 2d | 04 |
-| 06 | [Khách, RSVP, bận/rảnh, tìm giờ, tìm kiếm](phase-06-guests-freebusy.md) | pending | 1.5d | 05 |
-| 07 | [Nhắc giờ, thông báo, realtime, cuộc gọi](phase-07-reminders-notify-calls.md) | pending | 1.5d | 06 |
-| 08 | [Frontend: lưới, popover, tạo nhanh, kéo thả](phase-08-frontend-views.md) | pending | 2.5d | 05 |
-| 09 | [Frontend: trình soạn, tìm giờ, lặp, chia sẻ, điện thoại](phase-09-frontend-editor-mobile.md) | pending | 2d | 06, 08 |
-| 10 | [Lịch nhóm chat + thẻ sự kiện](phase-10-space-calendar.md) | pending | 1d | 07, 09 |
-| 11 | [Kiểm chứng + tài liệu](phase-11-verification.md) | pending | 0.5d | all |
+| 01 | [Thiết kế: DESIGN.md + nav](phase-01-design.md) | completed | 0.5d | — |
+| 02 | [Spec + mô hình NGAC + test vector](phase-02-spec-ngac.md) | completed | 1d | 01 |
+| 03 | [Schema + khung service + đăng ký hạ tầng](phase-03-schema-scaffold.md) | completed | 1d | 02 |
+| 04 | [Lịch, đăng ký xem, chia sẻ](phase-04-calendars-sharing.md) | completed | 1.5d | 03 |
+| 05 | [Sự kiện + lặp lại RRULE](phase-05-events-recurrence.md) | completed | 2d | 04 |
+| 06 | [Khách, RSVP, bận/rảnh, tìm giờ, tìm kiếm](phase-06-guests-freebusy.md) | completed | 1.5d | 05 |
+| 07 | [Nhắc giờ, thông báo, realtime, cuộc gọi](phase-07-reminders-notify-calls.md) | completed | 1.5d | 06 |
+| 08 | [Frontend: lưới, popover, tạo nhanh, kéo thả](phase-08-frontend-views.md) | completed | 2.5d | 05 |
+| 09 | [Frontend: trình soạn, tìm giờ, lặp, chia sẻ, điện thoại](phase-09-frontend-editor-mobile.md) | completed | 2d | 06, 08 |
+| 10 | [Lịch nhóm chat + thẻ sự kiện](phase-10-space-calendar.md) | completed | 1d | 07, 09 |
+| 11 | [Kiểm chứng + tài liệu](phase-11-verification.md) | completed | 0.5d | all |
 
 ## Tiêu chí hoàn thành
 - `make build-check`, `make check-layering`, `make check-ngac`, `make test s=calendar`, `make test s=policy`,
@@ -83,3 +83,20 @@ Google Calendar" 2026-10-17; bản kiểu Google). Người dùng cho chạy pla
 - Phạm vi lớn → làm theo phase, mỗi phase commit riêng, build/test xanh trước khi qua phase sau.
 - RRULE + múi giờ + DST: lưu `dtstart` kèm `tzid`, mở rộng trong tz gốc; test cố định qua đổi giờ (America/New_York).
 - Graph phình vì OA theo sự kiện → chỉ tạo khi có khách/cuộc gọi; xoá sự kiện xoá OA/UA.
+
+## Kết quả (2026-10-17)
+Commit trên `feat/calendar`: b494b95 (plan+mockup) · 85fce0e (01) · 6d47d9b (02) · 95980df (03-04) · b1fd894 (05) ·
+2f77251 (06) · e24feb3 + 4a61ab7 (07) · e59501f (08) · e5888aa (09) · 24b9ed1 (10) · 73948da (11: sửa theo review).
+
+- Kiểm chứng: calendar 147 test (`-race`), policy 284, frontend vitest 3297, lint sạch, build-check 9/9, check-layering,
+  check-ngac xanh. Messaging chỉ còn 2 test lỗi sẵn có do DB dev thiếu `notifications.entity_type` (lỗi y hệt trên `main`).
+- Smoke API thật: lịch tạo lười, sự kiện lặp, RSVP, sửa "lần này và sau", kéo "chỉ lần này", 409, bận/rảnh, gợi ý giờ,
+  chia sẻ view → sửa 403, xoá. Smoke UI: tuần, tháng, popover, trình soạn, điện thoại 390.
+- Review: 1 critical (sự kiện riêng tư lộ cho người đọc lịch), 3 high (khách ở workspace khác 404; sửa "chỉ lần này" 422;
+  cuộc gọi sự kiện không kiểm tenant), 5 medium — đã sửa hết kèm test tái hiện.
+- Lệch plan: id TEXT (khớp khoá ngoại); id lịch tất định (UUIDv5); đổi mức chia sẻ = upsert association; URL dùng `mode`
+  (không `view`); migration 058 cho trả lời theo từng lần; nhắc giờ nhìn trước 4 tuần (nhắc dài nhất 40320 phút); bỏ đính
+  kèm tài liệu (chưa có picker tệp dùng lại được); mô tả là văn bản thuần.
+- Giới hạn đã biết (ghi trong spec): người tổ chức giữ quyền với sự kiện mình tạo có khách; node NGAC của lịch nhóm còn lại
+  khi xoá nhóm; phòng LiveKit không đóng ngay khi xoá sự kiện; `make db-migrate` từ worktree cần
+  `COMPOSE="docker compose -p nexus-enterprise"`.
