@@ -311,3 +311,16 @@ describe('ContactsScreen: personal workspace', () => {
     expect(screen.getAllByRole('columnheader').some((h) => h.textContent === 'Phòng ban')).toBe(true)
   })
 })
+
+describe('ContactsScreen: a company workspace where nobody has a department yet', () => {
+  it('hides the empty department column and the filter with no options', async () => {
+    contactsResult = () => {
+      const contacts = structuredClone(CONTACTS).map((c) => ({ ...c, department: '' }))
+      return Promise.resolve({ contacts, total: contacts.length })
+    }
+    await renderContacts()
+    await within(table()).findByText('Trần Minh Đức')
+    expect(screen.queryByRole('button', { name: /Phòng ban/ })).toBeNull()
+    expect(screen.queryByRole('columnheader', { name: 'Phòng ban' })).toBeNull()
+  })
+})

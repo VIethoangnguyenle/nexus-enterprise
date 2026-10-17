@@ -157,3 +157,12 @@ describe('a group picture changed by someone else', () => {
     expect(within(container).queryByText('Đ')).toBeNull()
   })
 })
+
+describe('SpaceInfoPanel pinned empty state', () => {
+  it('does not tell a touch screen to hover', async () => {
+    renderWithClient(panel())
+    const hint = await screen.findByText(/Chưa ghim tin nào/)
+    expect(hint).not.toHaveTextContent(/Di chuột/)
+    expect(hint).toHaveTextContent('Ghim')
+  })
+})

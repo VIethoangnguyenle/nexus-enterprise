@@ -983,6 +983,13 @@ describe('DriveScreen: tablet', () => {
     expect(search(router).folder).toBe(D.hopdong)
   })
 
+  it('does not draw a second hamburger beside the app shell\'s', async () => {
+    await renderDrive()
+    await screen.findByRole('group', { name: 'Tệp' })
+    expect(screen.getByRole('button', { name: 'Mở cây thư mục' })).toBeInTheDocument()
+    expect(document.querySelector('.lucide-menu')).toBeNull()
+  })
+
   it('closes the drawer with Escape', async () => {
     const user = userEvent.setup()
     await renderDrive()

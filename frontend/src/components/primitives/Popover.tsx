@@ -24,6 +24,8 @@ interface PopoverProps {
 
 const GAP = 6
 const SIDE_GAP = 8
+/** The least space left between a popover and the viewport's edge. */
+const EDGE_GUTTER = 16
 /** Rows the arrow keys visit: plain items and radio items (a "move to" list), not disabled ones. */
 const MENU_ITEMS = '[role="menuitem"]:not(:disabled), [role="menuitemradio"]:not(:disabled)'
 
@@ -49,16 +51,27 @@ export function Popover({
     else setPos({ top: a.bottom + GAP, left: a.left })
   }, [anchorRef, placement])
 
+  // After `place`, pull a left-anchored panel back inside the viewport (its width is known only once drawn).
+  const keepInside = useCallback(() => {
+    const width = panelRef.current?.offsetWidth ?? 0
+    setPos((p) => {
+      if (p.left === undefined || !width) return p
+      const left = Math.max(EDGE_GUTTER, Math.min(p.left, window.innerWidth - width - EDGE_GUTTER))
+      return left === p.left ? p : { ...p, left }
+    })
+  }, [])
+
   useLayoutEffect(() => {
     if (!open) return
-    place()
-    window.addEventListener('resize', place)
-    window.addEventListener('scroll', place, true)
+    const settle = () => { place(); keepInside() }
+    settle()
+    window.addEventListener('resize', settle)
+    window.addEventListener('scroll', settle, true)
     return () => {
-      window.removeEventListener('resize', place)
-      window.removeEventListener('scroll', place, true)
+      window.removeEventListener('resize', settle)
+      window.removeEventListener('scroll', settle, true)
     }
-  }, [open, place])
+  }, [open, place, keepInside])
 
   // Move focus into the surface: first menu item, or the first focusable.
   useEffect(() => {
