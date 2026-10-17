@@ -41,6 +41,7 @@ import { Route as WorkspaceCallsCallIdRouteImport } from './routes/_workspace/ca
 import { Route as WorkspaceCalendarNewRouteImport } from './routes/_workspace/calendar.new'
 import { Route as WorkspaceAdminUsersRouteImport } from './routes/_workspace/admin/users'
 import { Route as WorkspaceAdminRolesRouteImport } from './routes/_workspace/admin/roles'
+import { Route as WorkspaceAdminDirectoryRouteImport } from './routes/_workspace/admin/directory'
 import { Route as WorkspaceCalendarEventEventIdRouteImport } from './routes/_workspace/calendar.event.$eventId'
 
 const WorkspaceRoute = WorkspaceRouteImport.update({
@@ -204,6 +205,11 @@ const WorkspaceAdminRolesRoute = WorkspaceAdminRolesRouteImport.update({
   path: '/roles',
   getParentRoute: () => WorkspaceAdminRoute,
 } as any)
+const WorkspaceAdminDirectoryRoute = WorkspaceAdminDirectoryRouteImport.update({
+  id: '/directory',
+  path: '/directory',
+  getParentRoute: () => WorkspaceAdminRoute,
+} as any)
 const WorkspaceCalendarEventEventIdRoute =
   WorkspaceCalendarEventEventIdRouteImport.update({
     id: '/calendar/event/$eventId',
@@ -228,6 +234,7 @@ export interface FileRoutesByFullPath {
   '/assets/list': typeof AssetsListRoute
   '/assets/requests': typeof AssetsRequestsRoute
   '/assets/types': typeof AssetsTypesRoute
+  '/admin/directory': typeof WorkspaceAdminDirectoryRoute
   '/admin/roles': typeof WorkspaceAdminRolesRoute
   '/admin/users': typeof WorkspaceAdminUsersRoute
   '/calendar/new': typeof WorkspaceCalendarNewRoute
@@ -260,6 +267,7 @@ export interface FileRoutesByTo {
   '/assets/list': typeof AssetsListRoute
   '/assets/requests': typeof AssetsRequestsRoute
   '/assets/types': typeof AssetsTypesRoute
+  '/admin/directory': typeof WorkspaceAdminDirectoryRoute
   '/admin/roles': typeof WorkspaceAdminRolesRoute
   '/admin/users': typeof WorkspaceAdminUsersRoute
   '/calendar/new': typeof WorkspaceCalendarNewRoute
@@ -296,6 +304,7 @@ export interface FileRoutesById {
   '/assets/list': typeof AssetsListRoute
   '/assets/requests': typeof AssetsRequestsRoute
   '/assets/types': typeof AssetsTypesRoute
+  '/_workspace/admin/directory': typeof WorkspaceAdminDirectoryRoute
   '/_workspace/admin/roles': typeof WorkspaceAdminRolesRoute
   '/_workspace/admin/users': typeof WorkspaceAdminUsersRoute
   '/_workspace/calendar/new': typeof WorkspaceCalendarNewRoute
@@ -331,6 +340,7 @@ export interface FileRouteTypes {
     | '/assets/list'
     | '/assets/requests'
     | '/assets/types'
+    | '/admin/directory'
     | '/admin/roles'
     | '/admin/users'
     | '/calendar/new'
@@ -363,6 +373,7 @@ export interface FileRouteTypes {
     | '/assets/list'
     | '/assets/requests'
     | '/assets/types'
+    | '/admin/directory'
     | '/admin/roles'
     | '/admin/users'
     | '/calendar/new'
@@ -398,6 +409,7 @@ export interface FileRouteTypes {
     | '/assets/list'
     | '/assets/requests'
     | '/assets/types'
+    | '/_workspace/admin/directory'
     | '/_workspace/admin/roles'
     | '/_workspace/admin/users'
     | '/_workspace/calendar/new'
@@ -654,6 +666,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkspaceAdminRolesRouteImport
       parentRoute: typeof WorkspaceAdminRoute
     }
+    '/_workspace/admin/directory': {
+      id: '/_workspace/admin/directory'
+      path: '/directory'
+      fullPath: '/admin/directory'
+      preLoaderRoute: typeof WorkspaceAdminDirectoryRouteImport
+      parentRoute: typeof WorkspaceAdminRoute
+    }
     '/_workspace/calendar/event/$eventId': {
       id: '/_workspace/calendar/event/$eventId'
       path: '/calendar/event/$eventId'
@@ -681,12 +700,14 @@ const AuthRouteChildren: AuthRouteChildren = {
 const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 interface WorkspaceAdminRouteChildren {
+  WorkspaceAdminDirectoryRoute: typeof WorkspaceAdminDirectoryRoute
   WorkspaceAdminRolesRoute: typeof WorkspaceAdminRolesRoute
   WorkspaceAdminUsersRoute: typeof WorkspaceAdminUsersRoute
   WorkspaceAdminIndexRoute: typeof WorkspaceAdminIndexRoute
 }
 
 const WorkspaceAdminRouteChildren: WorkspaceAdminRouteChildren = {
+  WorkspaceAdminDirectoryRoute: WorkspaceAdminDirectoryRoute,
   WorkspaceAdminRolesRoute: WorkspaceAdminRolesRoute,
   WorkspaceAdminUsersRoute: WorkspaceAdminUsersRoute,
   WorkspaceAdminIndexRoute: WorkspaceAdminIndexRoute,

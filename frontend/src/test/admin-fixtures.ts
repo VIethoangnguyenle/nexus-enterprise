@@ -5,7 +5,7 @@
  * tests can assert that none reaches the screen.
  */
 import type {
-  Department, Invitation, Member, PermissionArea, RoleDetail, RoleSummary,
+  Department, DirectoryRules, Invitation, Member, PermissionArea, RoleDetail, RoleSummary,
 } from '../api/admin'
 import { CONTACTS, U, WS_ID } from './chat-fixtures'
 
@@ -132,8 +132,16 @@ export interface Mode {
   personal?: boolean
   /** What the server says the areas offer, instead of the real table (to prove the screen follows the answer). */
   areas: PermissionArea[] | null
+  /** The directory-scope read answers `ready: false` (a workspace with no directory nodes yet). */
+  rulesNotReady: boolean
+  /** The directory-scope read answers 500. */
+  rulesError: boolean
+  /** The directory-scope read never answers (loading state). */
+  rulesHang: boolean
+  /** A directory-scope write answers this status. */
+  ruleWriteStatus: number
 }
-const DEFAULT_MODE: Mode = { forbidden: false, membersError: false, empty: false, hang: false, listError: false, inviteStatus: 0, invitationsForbidden: false, saveStatus: 0, noAssets: false, personal: false, areas: null }
+const DEFAULT_MODE: Mode = { forbidden: false, membersError: false, empty: false, hang: false, listError: false, inviteStatus: 0, invitationsForbidden: false, saveStatus: 0, noAssets: false, personal: false, areas: null, rulesNotReady: false, rulesError: false, rulesHang: false, ruleWriteStatus: 0 }
 export const mode: Mode = { ...DEFAULT_MODE }
 
 let departments = structuredClone(DEPARTMENTS0)
@@ -143,7 +151,16 @@ let members = structuredClone(MEMBERS0)
 let invitations = structuredClone(INVITATIONS0)
 let extra = 0
 
+type Limited = { kind: 'role' | 'department'; id: string }
+/** Vận hành thanh toán is hidden (so Đối soát and Hỗ trợ đối tác are hidden by inheritance). */
+const HIDDEN0: string[] = [D.vanhanh]
+const LIMITED0: Limited[] = [{ kind: 'role', id: RID.taisan }, { kind: 'department', id: D.kiemsoat }]
+let hiddenIds = [...HIDDEN0]
+let limited = structuredClone(LIMITED0)
+
 export const resetFixtures = () => {
+  hiddenIds = [...HIDDEN0]
+  limited = structuredClone(LIMITED0)
   Object.assign(mode, DEFAULT_MODE)
   departments = structuredClone(DEPARTMENTS0)
   roles = structuredClone(ROLES0)
@@ -193,7 +210,7 @@ export function adminFixtureApi(path: string, init?: RequestInit): Promise<unkno
 
   if (rest === '/departments' && method === 'GET') {
     if (mode.empty) return ok({ departments: [] })
-    return ok({ departments })
+    return ok({ departments: departments.map((d) => (hiddenIds.includes(d.id) ? { ...d, hidden: true } : d)) })
   }
   if (rest === '/departments' && method === 'POST') {
     const d = dept(`44444444-aaaa-4bbb-8ccc-0000000001${String(++extra).padStart(2, '0')}`, String(body?.name), String(body?.parent_id ?? ''), 0)
@@ -209,6 +226,10 @@ export function adminFixtureApi(path: string, init?: RequestInit): Promise<unkno
     return ok(d)
   }
   if (m && method === 'DELETE') {
+    // A hidden department is not deleted around the people placed directly in it.
+    if (hiddenIds.includes(m[1]!) && members.some((x) => x.department?.id === m![1])) {
+      return fail('invalid input: Chuyển những người trong phòng này sang phòng khác trước khi xoá', 400)
+    }
     departments = departments.filter((x) => x.id !== m![1])
     members.forEach((x) => { if (x.department?.id === m![1]) x.department = null })
     return ok({})
@@ -220,6 +241,8 @@ export function adminFixtureApi(path: string, init?: RequestInit): Promise<unkno
     d.parent_id = String(body?.new_parent_id ?? '')
     return ok(d)
   }
+
+  if (rest.startsWith('/admin/directory-scope')) return directoryScope(rest, method, ok)
 
   if (rest === '/admin/members' && method === 'GET') {
     if (mode.hang) return new Promise(() => {})
@@ -326,4 +349,43 @@ export function adminFixtureApi(path: string, init?: RequestInit): Promise<unkno
   }
 
   return Promise.reject(new Error(`adminFixtureApi: unexpected ${method} ${path}`))
+}
+
+/** The admin directory-scope endpoints (internal/rest/directory_scope_handler.go). */
+function directoryScope(rest: string, method: string, ok: (v: unknown) => Promise<unknown>): Promise<unknown> {
+  if (rest === '/admin/directory-scope' && method === 'GET') {
+    if (mode.rulesHang) return new Promise(() => {})
+    if (mode.rulesError) return fail('boom', 500)
+    if (mode.rulesNotReady) return ok({ ready: false, hidden_departments: [], limited: [] } satisfies DirectoryRules)
+    const subject = (d: Department) => ({ id: d.id, name: d.name, parent_id: d.parent_id, member_count: d.member_count })
+    const rules: DirectoryRules = {
+      ready: true,
+      hidden_departments: hiddenIds.map((id) => subject(departments.find((d) => d.id === id)!)),
+      limited: limited.map((l) => {
+        if (l.kind === 'department') return { kind: l.kind, ...subject(departments.find((d) => d.id === l.id)!) }
+        const r = roles.find((x) => x.id === l.id)!
+        return { kind: l.kind, id: r.id, name: r.name!, member_count: summaryOf(r).member_count }
+      }),
+    }
+    return ok(rules)
+  }
+  if (mode.ruleWriteStatus) return fail('refused', mode.ruleWriteStatus)
+  let m = /^\/admin\/directory-scope\/hidden\/([^/]+)$/.exec(rest)
+  if (m && (method === 'PUT' || method === 'DELETE')) {
+    const id = m[1]!
+    if (!departments.some((d) => d.id === id)) return fail('not found', 404)
+    hiddenIds = method === 'PUT' ? [...new Set([...hiddenIds, id])] : hiddenIds.filter((x) => x !== id)
+    return ok({ status: 'ok' })
+  }
+  m = /^\/admin\/directory-scope\/limited\/(roles|departments)\/([^/]+)$/.exec(rest)
+  if (m && (method === 'PUT' || method === 'DELETE')) {
+    const kind = m[1] === 'roles' ? 'role' : 'department'
+    const id = m[2]!
+    const known = kind === 'role' ? roles.some((r) => r.id === id && r.kind === 'custom') : departments.some((d) => d.id === id)
+    if (!known) return fail('not found', 404)
+    limited = limited.filter((l) => !(l.kind === kind && l.id === id))
+    if (method === 'PUT') limited.push({ kind, id })
+    return ok({ status: 'ok' })
+  }
+  return Promise.reject(new Error(`adminFixtureApi: unexpected ${method} ${rest}`))
 }
