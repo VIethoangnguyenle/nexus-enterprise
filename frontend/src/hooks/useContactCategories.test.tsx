@@ -87,6 +87,16 @@ describe('Nhóm của tôi', () => {
     rerender({ on: true })
     await waitFor(() => expect(result.current.groups.map((g) => g.id)).toEqual(['nhom-a']))
   })
+
+  it('says whether the list is known: not before it was asked for, so "no groups" is not guessed', async () => {
+    vi.spyOn(messagingApi, 'listChannels').mockResolvedValue({ channels: [channel('general', 'workspace')] })
+    const { result, rerender } = renderHook(({ on }) => useMyGroups('w1', on), { wrapper, initialProps: { on: false } })
+    await idle()
+    expect(result.current.known).toBe(false)
+    rerender({ on: true })
+    await waitFor(() => expect(result.current.known).toBe(true))
+    expect(result.current.groups).toEqual([])
+  })
 })
 
 describe('members of a group', () => {
@@ -113,6 +123,17 @@ describe('members of a group', () => {
     const { result } = renderHook(() => useGroupMembers('w1', 'g1'), { wrapper })
     await waitFor(() => expect(result.current.members.map((m) => m.name)).toEqual(['Nguyễn Văn An', 'Trần Thị Bình', 'Võ Xuân']))
     expect(result.current.members.map((m) => m.visible)).toEqual([true, true, false])
+  })
+
+  it('never name a member the directory hides by their username while the resolver has not answered', async () => {
+    state.contacts = [person(id(1), 'Nguyễn Văn An')]
+    vi.spyOn(messagingApi, 'listMembers').mockResolvedValue({
+      members: [{ user_id: id(3), username: 'hidden_login', ngac_node_id: 'node-hidden' }],
+    })
+    vi.spyOn(contactsApi, 'resolve').mockReturnValue(new Promise(() => {}))
+    const { result } = renderHook(() => useGroupMembers('w1', 'g1'), { wrapper })
+    await waitFor(() => expect(result.current.members).toHaveLength(1))
+    expect(result.current.members[0]!.name).toBe('Thành viên')
   })
 
   it.each([['are still loading', 'loading'], ['failed to load', 'failed']] as const)(

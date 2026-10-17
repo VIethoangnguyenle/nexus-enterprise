@@ -35,7 +35,7 @@ export function PersonLink({ userId, people, onOpenProfile, children, className 
     if (state === 'visible') {
       if (onOpenProfile) onOpenProfile(userId)
       // `person` is the Danh bạ route's search key for the open profile; the route declares it with the Danh bạ screens.
-      else void navigate({ to: '/contacts', search: { person: userId } } as never)
+      else void navigate({ to: '/contacts', search: (prev: { ws?: string }) => ({ ...(prev.ws ? { ws: prev.ws } : {}), person: userId }) } as never)
       return
     }
     setCardOpen((open) => !open)

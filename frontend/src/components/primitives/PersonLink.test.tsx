@@ -43,7 +43,16 @@ describe('PersonLink: a person the directory lists', () => {
     render(<PersonLink userId={U.duc.id} people={people} />)
     await userEvent.click(screen.getByRole('button', { name: /Trần Minh Đức/ }))
     expect(navigate).toHaveBeenCalledTimes(1)
-    expect(navigate.mock.calls[0]![0]).toMatchObject({ to: '/contacts', search: { person: U.duc.id } })
+    expect(navigate.mock.calls[0]![0]).toMatchObject({ to: '/contacts' })
+  })
+
+  it('keeps the workspace the reader is in when it goes to Danh bạ', async () => {
+    render(<PersonLink userId={U.duc.id} people={people} />)
+    await userEvent.click(screen.getByRole('button', { name: /Trần Minh Đức/ }))
+    const { search } = navigate.mock.calls[0]![0] as { search: (prev: { ws?: string }) => unknown }
+    expect(typeof search).toBe('function')
+    expect(search({ ws: 'w1' })).toEqual({ ws: 'w1', person: U.duc.id })
+    expect(search({})).toEqual({ person: U.duc.id })
   })
 
   it('wraps whatever the caller shows, and still names the button', () => {

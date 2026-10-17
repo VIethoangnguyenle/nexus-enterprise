@@ -14,6 +14,9 @@ interface ModalFocusOptions {
   initialFocusRef?: RefObject<HTMLElement | null>
 }
 
+/** How many modal layers are open over the app now. */
+let openLayers = 0
+
 /** The surface of the modal layer that opened last: only it answers the keyboard. */
 const isTopmost = (surface: HTMLElement | null) => {
   const all = document.querySelectorAll('[aria-modal="true"]')
@@ -37,9 +40,15 @@ export function useModalFocus({ active, surfaceRef, onClose, initialFocusRef }: 
   useEffect(() => {
     const app = document.getElementById('root')
     if (!active || !app) return
+    openLayers += 1
     app.inert = true
     return () => {
-      app.inert = false
+      // Another layer may still be open (a profile over a level of a phone's stack): the page is freed by the last one.
+      openLayers -= 1
+      if (openLayers <= 0) {
+        openLayers = 0
+        app.inert = false
+      }
     }
   }, [active])
 

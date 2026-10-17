@@ -136,7 +136,7 @@ The Giao diện tab SHALL offer the theme (Theo hệ thống, Sáng, Tối) as r
 - **THEN** the second sees their own choice, not the first's
 
 ## Status
-- Danh bạ (categories, department browsing, scope-wide search, profile card with Gọi, hidden person card) is specified ahead of the code (design approved 2026-10-17, `design/mockups/contacts-lark.html`): until the redesign lands the app shows the flat table with department chips and a profile without "Gọi".
+- Danh bạ (categories, department browsing, scope-wide search, profile card with Gọi, hidden person card) is built on desktop, tablet and phone (design approved 2026-10-17, `design/mockups/contacts-lark.html`). The place is in the address: `?cat=` (`org`, `roles`, `groups`, `members`; `search` is the phone's search screen), the open place (`dept`, `role`, `chat` for a group), the open profile (`person`) and the search (`q`); a phone has one history entry per level, so the system back climbs the stack one level at a time. "Gọi" starts a voice call (the call screen offers the camera). On a phone the top bar keeps its hint "Tìm người", and a group's screen has "Mở nhóm" at the end of its bar.
 - Hồ sơ has no crop or zoom for a picture: the centre square is kept. There is no larger view of a picture yet; the 1024 px size is stored for it. An invitation and the "converted by" line name a person without an id, so they show initials only.
 - Hồ sơ saves Nơi làm việc where the mockup shows a phone number (the profile API has no phone). Department is the profile's free text, not the organisation's department.
 - Workspace cannot change the icon and shows no organisation field: neither has a server behind it.

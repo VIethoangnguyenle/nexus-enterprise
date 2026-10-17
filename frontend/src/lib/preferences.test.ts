@@ -21,9 +21,9 @@ describe('parsePreferences', () => {
     expect(parsePreferences(JSON.stringify({ theme: 'neon', motion: 'wild', sidebarCollapsed: 'yes' }))).toEqual(DEFAULT_PREFERENCES)
   })
 
-  it('remembers the card layout of Danh bạ and ignores anything else', () => {
-    expect(parsePreferences(JSON.stringify({ contactsView: 'cards' })).contactsView).toBe('cards')
-    expect(parsePreferences(JSON.stringify({ contactsView: 'mosaic' })).contactsView).toBe('table')
+  it('no longer keeps a table/card layout for Danh bạ: a value stored by an older build is dropped', () => {
+    expect(parsePreferences(JSON.stringify({ theme: 'dark', contactsView: 'cards' }))).not.toHaveProperty('contactsView')
+    expect(DEFAULT_PREFERENCES).not.toHaveProperty('contactsView')
   })
 
   it('starts with the main menu collapsed, and keeps an explicit choice to expand it', () => {
@@ -34,7 +34,7 @@ describe('parsePreferences', () => {
 
   it('keeps valid values', () => {
     const raw = JSON.stringify({ theme: 'dark', motion: 'reduce', sidebarCollapsed: true })
-    expect(parsePreferences(raw)).toEqual({ theme: 'dark', motion: 'reduce', sidebarCollapsed: true, contactsView: 'table' })
+    expect(parsePreferences(raw)).toEqual({ theme: 'dark', motion: 'reduce', sidebarCollapsed: true })
   })
 })
 

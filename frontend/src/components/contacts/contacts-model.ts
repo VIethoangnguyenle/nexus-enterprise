@@ -1,5 +1,6 @@
 import type { Department } from '../../api/admin'
 import type { Channel } from '../../api/messaging'
+import type { ContactsCat } from '../../lib/contacts-search'
 import type { Contact } from '../../hooks/useContacts'
 import { normalize, UNKNOWN_PERSON } from '../../lib/people'
 
@@ -34,38 +35,21 @@ export function sortContacts(list: Contact[]): Contact[] {
 
 export interface ContactFilter {
   query: string
-  /** A department name; empty is everyone. */
-  department: string
-  /** A department id; empty is everyone. Unlike the name, it tells apart two departments called the same. */
-  departmentId?: string
   onlineOnly: boolean
 }
 
-export const NO_FILTER: ContactFilter = { query: '', department: '', onlineOnly: false }
+export const NO_FILTER: ContactFilter = { query: '', onlineOnly: false }
 
-export const isFiltering = (f: ContactFilter) => !!(f.query.trim() || f.department || f.departmentId || f.onlineOnly)
+export const isFiltering = (f: ContactFilter) => !!(f.query.trim() || f.onlineOnly)
 
 /** Matches name, title and email, ignoring case and accents ("duc" finds "Đức"). */
 export function filterContacts(list: Contact[], f: ContactFilter, isOnline: (c: Contact) => boolean): Contact[] {
   const q = normalize(f.query)
   return list.filter((c) => {
-    if (f.department && c.department !== f.department) return false
-    if (f.departmentId && c.department_id !== f.departmentId) return false
     if (f.onlineOnly && !isOnline(c)) return false
     if (!q) return true
     return [nameOf(c), c.title, c.email].some((part) => normalize(part ?? '').includes(q))
   })
-}
-
-export interface DepartmentCount { name: string; count: number }
-
-/** Departments that have people, with how many, by name. */
-export function departmentsOf(list: Contact[]): DepartmentCount[] {
-  const counts = new Map<string, number>()
-  for (const c of list) if (c.department) counts.set(c.department, (counts.get(c.department) ?? 0) + 1)
-  return [...counts]
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' }))
 }
 
 /** Others in the same department as `of` (by id, never by name), never `of` themselves. */
@@ -165,9 +149,27 @@ export function pathLabel(tree: DirectoryTree, deptId: string): string {
   return pathOf(tree, deptId).map((n) => n.name).join(PATH_SEPARATOR)
 }
 
+export interface PathSegment { id: string; name: string }
+
+/**
+ * The department path of a person, root first. From the tree when it is there; without it (not
+ * loaded, failed, or a department the caller cannot see in it) the department they sit in is still
+ * known by id and name, so a row never goes without a path it could have.
+ */
+export function pathSegments(tree: DirectoryTree | undefined, c: Pick<Contact, 'department_id' | 'department'>): PathSegment[] {
+  const nodes = tree ? pathOf(tree, c.department_id) : []
+  if (nodes.length > 0) return nodes.map((n) => ({ id: n.id, name: n.name }))
+  return c.department ? [{ id: c.department_id, name: c.department }] : []
+}
+
 /** A search result's second line: "Chuyên viên · Khối Tài chính › Đối soát". */
-export function searchSubline(c: Pick<Contact, 'title' | 'department_id'>, tree: DirectoryTree): string {
-  return [c.title, pathLabel(tree, c.department_id)].filter(Boolean).join(' · ')
+export function searchSubline(c: Pick<Contact, 'title' | 'department_id' | 'department'>, tree: DirectoryTree | undefined): string {
+  return [c.title, pathSegments(tree, c).map((s) => s.name).join(PATH_SEPARATOR)].filter(Boolean).join(' · ')
+}
+
+/** The name of the top of Phòng ban: the organisation, or just the part of it a limited caller sees. */
+export function rootLabel(workspaceName: string, limited: boolean): string {
+  return limited ? 'Phạm vi của bạn' : `Toàn ${workspaceName}`
 }
 
 // --- Roles ---------------------------------------------------------------------------------
@@ -214,4 +216,56 @@ export function rolesOf(contacts: Contact[]): RoleGroup[] {
  */
 export function privateGroups(channels: Channel[] | undefined): Channel[] {
   return (channels ?? []).filter((c) => c.channel_type === 'private')
+}
+
+// --- Categories ----------------------------------------------------------------------------
+
+export interface CategoryDef {
+  id: Exclude<ContactsCat, 'search'>
+  title: string
+  /** One muted line of what is inside. */
+  sub: string
+  /** Which of the eight person hues the icon square wears. */
+  hue: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+}
+
+interface CategoryInputs {
+  isPersonal: boolean
+  workspaceName: string
+  /** The caller sees only part of the workspace. */
+  limited: boolean
+  memberCount: number
+  /** Roles with someone in them; undefined while the people are not loaded. */
+  roleCount: number | undefined
+  /** The caller's groups; undefined until the chat list is known (it is not asked for here). */
+  groupCount: number | undefined
+  /** Top-level departments; undefined until Phòng ban has been opened. */
+  rootCount: number | undefined
+}
+
+/**
+ * The categories of Danh bạ, the same on every width (DESIGN.md "Danh bạ"). An organisation: Phòng ban,
+ * Vai trò, Nhóm của tôi. A personal workspace: Thành viên, Nhóm của tôi. A category known to be empty
+ * is left out; one not yet known stays, and does not claim a count it has not loaded.
+ */
+export function categoriesOf(i: CategoryInputs): CategoryDef[] {
+  const groups: CategoryDef | undefined = i.groupCount === 0 ? undefined : {
+    id: 'groups', title: 'Nhóm của tôi', hue: 5,
+    sub: i.groupCount === undefined ? 'Nhóm chat bạn đang ở' : `${i.groupCount} nhóm`,
+  }
+  if (i.isPersonal) {
+    return [
+      { id: 'members', title: 'Thành viên', hue: 1, sub: `${i.memberCount} người trong không gian này` },
+      ...(groups ? [groups] : []),
+    ]
+  }
+  const org: CategoryDef = {
+    id: 'org', title: 'Phòng ban', hue: 1,
+    sub: i.limited ? 'Chỉ phòng của bạn' : i.rootCount === undefined ? i.workspaceName : `${i.workspaceName} · ${i.rootCount} khối`,
+  }
+  const roles: CategoryDef | undefined = i.roleCount === 0 ? undefined : {
+    id: 'roles', title: 'Vai trò', hue: 3,
+    sub: i.roleCount === undefined ? 'Ai giữ vai trò nào' : `${i.roleCount} vai trò`,
+  }
+  return [org, ...(roles ? [roles] : []), ...(groups ? [groups] : [])]
 }

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useMemo } from 'react'
 import type { Channel } from '../api/messaging'
 import {
   buildTree, givenNameOf, privateGroups, rolesOf, type DirectoryTree, type RoleGroup,
@@ -27,11 +27,15 @@ export function useDepartmentTree(wsId: string, enabled: boolean) {
     () => (flat && people ? buildTree(flat, people) : undefined),
     [flat, people],
   )
+  const refetchDepartments = departments.refetch
+  const refetchContacts = contacts.refetch
+  // Stable, so what depends on it does not recompute with every render.
+  const refetch = useCallback(() => { void refetchDepartments(); void refetchContacts() }, [refetchDepartments, refetchContacts])
   return {
     tree,
     isLoading: departments.isLoading || contacts.isLoading,
     isError: departments.isError || contacts.isError,
-    refetch: () => { void departments.refetch(); void contacts.refetch() },
+    refetch,
   }
 }
 
@@ -45,10 +49,14 @@ export function useRoleGroups(wsId: string): { groups: RoleGroup[]; isLoading: b
 /** Nhóm của tôi: the private groups the signed-in user can read; not #general, not a direct message. */
 export function useMyGroups(wsId: string, enabled: boolean): {
   groups: Channel[]; isLoading: boolean; isError: boolean; refetch: () => void
+  /** The list has been asked for (here or by the chat list): an empty `groups` then means no groups, not "not known yet". */
+  known: boolean
 } {
   const q = useChannels(wsId, enabled)
   const groups = useMemo(() => privateGroups(q.data?.channels), [q.data])
-  return { groups, isLoading: q.isLoading, isError: q.isError, refetch: () => { void q.refetch() } }
+  const queryRefetch = q.refetch
+  const refetch = useCallback(() => { void queryRefetch() }, [queryRefetch])
+  return { groups, isLoading: q.isLoading, isError: q.isError, known: !!q.data, refetch }
 }
 
 export interface GroupMember {
@@ -78,12 +86,15 @@ export function useGroupMembers(wsId: string, channelId: string | null): {
     const out = (raw ?? []).map((m): GroupMember => ({
       userId: m.user_id,
       nodeId: m.ngac_node_id,
-      name: displayName(people, m.user_id, m.username),
+      // Not the login name: until the resolver answers, a hidden member is just "Thành viên".
+      name: displayName(people, m.user_id),
       avatarUrl: people.byUserId.get(m.user_id)?.avatarUrl ?? '',
       visible: people.ready ? people.isVisible(m.user_id) : undefined,
     }))
     return out.sort((a, b) => givenNameOf(a.name).localeCompare(givenNameOf(b.name), 'vi', { sensitivity: 'base' })
       || a.name.localeCompare(b.name, 'vi', { sensitivity: 'base' }))
   }, [raw, people])
-  return { members, isLoading: !!channelId && q.isLoading, isError: q.isError, refetch: () => { void q.refetch() } }
+  const queryRefetch = q.refetch
+  const refetch = useCallback(() => { void queryRefetch() }, [queryRefetch])
+  return { members, isLoading: !!channelId && q.isLoading, isError: q.isError, refetch }
 }

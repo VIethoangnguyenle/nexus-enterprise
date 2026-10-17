@@ -4,8 +4,8 @@ import type { Department } from '../../api/admin'
 import type { Contact } from '../../hooks/useContacts'
 import { CONTACTS, DEPT_ID } from '../../test/chat-fixtures'
 import {
-  NO_FILTER, OWNERS_LABEL, buildTree, colleaguesOf, departmentsOf, filterContacts, givenNameOf, isFiltering, nameOf,
-  pathLabel, pathOf, privateGroups, roleLine, rolesOf, searchSubline, sortContacts,
+  NO_FILTER, OWNERS_LABEL, buildTree, colleaguesOf, filterContacts, givenNameOf, isFiltering, nameOf,
+  categoriesOf, pathLabel, pathOf, pathSegments, privateGroups, rootLabel, roleLine, rolesOf, searchSubline, sortContacts,
 } from './contacts-model'
 
 const offline = () => false
@@ -31,14 +31,11 @@ describe('contacts model', () => {
     expect(find('khong ai')).toEqual([])
   })
 
-  it('narrows to a department and to who is online', () => {
-    const doisoat = filterContacts(CONTACTS, { ...NO_FILTER, department: 'Đối soát' }, offline)
-    expect(doisoat.map(nameOf).sort()).toEqual(['Lê Quang Vinh', 'Nguyễn Thu Lan'])
-
+  it('narrows to who is online', () => {
     const online = filterContacts(CONTACTS, { ...NO_FILTER, onlineOnly: true }, (c) => c.username === 'lan')
     expect(online.map(nameOf)).toEqual(['Nguyễn Thu Lan'])
 
-    const both = filterContacts(CONTACTS, { query: 'vinh', department: 'Đối soát', onlineOnly: true }, (c) => c.username === 'lan')
+    const both = filterContacts(CONTACTS, { query: 'vinh', onlineOnly: true }, (c) => c.username === 'lan')
     expect(both).toEqual([])
   })
 
@@ -46,14 +43,6 @@ describe('contacts model', () => {
     expect(isFiltering(NO_FILTER)).toBe(false)
     expect(isFiltering({ ...NO_FILTER, query: '  ' })).toBe(false)
     expect(isFiltering({ ...NO_FILTER, onlineOnly: true })).toBe(true)
-  })
-
-  it('counts departments with people and sorts them', () => {
-    expect(departmentsOf(CONTACTS)).toEqual([
-      { name: 'Đối soát', count: 2 },
-      { name: 'Kiểm soát', count: 1 },
-      { name: 'Vận hành thanh toán', count: 2 },
-    ])
   })
 
   it('lists colleagues without the person themselves, and none for someone with no department', () => {
@@ -188,6 +177,21 @@ describe('the department tree', () => {
     expect(searchSubline(person('x', 'X', { title: 'Chuyên viên' }), tree)).toBe('Chuyên viên')
     expect(searchSubline(person('y', 'Y', { department_id: 'ds2' }), tree)).toBe('Khối Vận hành › Đối soát')
   })
+
+  it('a person\'s path is the tree\'s, or just their own department\'s name while the tree is not there', () => {
+    const an = person('an', 'An', { department_id: 'ds1', department: 'Đối soát' })
+    expect(pathSegments(tree, an)).toEqual([{ id: 'tc', name: 'Khối Tài chính' }, { id: 'ds1', name: 'Đối soát' }])
+    // The tree failed to load, or has not yet: the leaf is still known by name and id.
+    expect(pathSegments(undefined, an)).toEqual([{ id: 'ds1', name: 'Đối soát' }])
+    // A department the caller cannot see in the tree keeps its name too.
+    expect(pathSegments(tree, person('z', 'Z', { department_id: 'gone', department: 'Pháp chế' }))).toEqual([{ id: 'gone', name: 'Pháp chế' }])
+    expect(pathSegments(tree, person('e', 'E'))).toEqual([])
+  })
+
+  it('names the root of the tree: the organisation, or the scope of someone who sees only part of it', () => {
+    expect(rootLabel('NovaPay', false)).toBe('Toàn NovaPay')
+    expect(rootLabel('NovaPay', true)).toBe('Phạm vi của bạn')
+  })
 })
 
 describe('colleagues by department id', () => {
@@ -244,5 +248,45 @@ describe('groups', () => {
   it('are the private groups: not #general (everyone), not a direct message', () => {
     expect(privateGroups([ch('general', 'workspace'), ch('nhom', 'private'), ch('dm', 'dm')]).map((c) => c.id)).toEqual(['nhom'])
     expect(privateGroups(undefined)).toEqual([])
+  })
+})
+
+describe('the categories', () => {
+  const base = { isPersonal: false, workspaceName: 'NovaPay', limited: false, memberCount: 16, roleCount: 4, groupCount: 3, rootCount: 3 }
+  const view = (over: Partial<Parameters<typeof categoriesOf>[0]> = {}) => categoriesOf({ ...base, ...over }).map((c) => [c.id, c.title, c.sub])
+
+  it('an organisation leads with its structure: Phòng ban, Vai trò, Nhóm của tôi; nothing for the second wave', () => {
+    expect(view()).toEqual([
+      ['org', 'Phòng ban', 'NovaPay · 3 khối'],
+      ['roles', 'Vai trò', '4 vai trò'],
+      ['groups', 'Nhóm của tôi', '3 nhóm'],
+    ])
+    const titles = categoriesOf(base).map((c) => c.title).join('|')
+    expect(titles).not.toMatch(/Tất cả thành viên|Bên ngoài|Danh bạ chia sẻ/)
+  })
+
+  it('a personal workspace has Thành viên and Nhóm của tôi, no departments or roles', () => {
+    expect(view({ isPersonal: true })).toEqual([
+      ['members', 'Thành viên', '16 người trong không gian này'],
+      ['groups', 'Nhóm của tôi', '3 nhóm'],
+    ])
+  })
+
+  it('says what a limited caller sees, and does not claim a count of departments it has not loaded', () => {
+    expect(view({ limited: true })[0]).toEqual(['org', 'Phòng ban', 'Chỉ phòng của bạn'])
+    expect(view({ rootCount: undefined })[0]).toEqual(['org', 'Phòng ban', 'NovaPay'])
+  })
+
+  it('hides a category with nothing in it, but not one that is still unknown', () => {
+    expect(view({ roleCount: 0 }).map((c) => c[0])).toEqual(['org', 'groups'])
+    expect(view({ groupCount: 0 }).map((c) => c[0])).toEqual(['org', 'roles'])
+    expect(view({ groupCount: undefined })[2]).toEqual(['groups', 'Nhóm của tôi', 'Nhóm chat bạn đang ở'])
+    expect(view({ roleCount: undefined })[1]).toEqual(['roles', 'Vai trò', 'Ai giữ vai trò nào'])
+  })
+
+  it('counts one group and one role in the singular-free Vietnamese', () => {
+    expect(view({ roleCount: 1, groupCount: 1 })).toEqual([
+      ['org', 'Phòng ban', 'NovaPay · 3 khối'], ['roles', 'Vai trò', '1 vai trò'], ['groups', 'Nhóm của tôi', '1 nhóm'],
+    ])
   })
 })
