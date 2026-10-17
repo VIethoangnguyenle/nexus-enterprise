@@ -6,6 +6,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"ngac-platform/pkg/realtime"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
 	workspacepb "ngac-platform/proto/workspace"
@@ -105,6 +106,7 @@ type Service struct {
 	msgClient   messagingpb.MessagingServiceClient
 	refresh     *RefreshStore
 	otp         OTPOptions
+	emitter     realtime.Emitter
 
 	// avatarGate holds one slot: one profile picture is decoded at a time.
 	avatarGate chan struct{}

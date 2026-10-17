@@ -114,6 +114,14 @@ describe('planFor: workspace', () => {
     }
   })
 
+  it('a profile change refreshes the people directory and the conversation lists that show them', () => {
+    const p = planFor(ev({ domain: 'workspace', kind: 'profile_updated', ids: ['n-1'] }))
+    expect(has(p, keys.contacts.every())).toBe(true)
+    expect(has(p, keys.messaging.dms())).toBe(true)
+    expect(has(p, keys.messaging.channels('ws-1'))).toBe(true)
+    expect(has(p, keys.permissions.all())).toBe(false)
+  })
+
   it('an accepted invitation refreshes the roster and the pending invitations', () => {
     const p = planFor(ev({ domain: 'workspace', kind: 'invitation_accepted' }))
     expect(has(p, keys.admin.everything())).toBe(true)
