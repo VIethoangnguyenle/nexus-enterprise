@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Workspace: directory nodes, upkeep, migration 064"
-status: pending
+status: completed
 priority: P1
 effort: "9h"
 dependencies: [2]
@@ -134,7 +134,7 @@ Pattern: `059_ngac_workspace_id_keyed_repair.sql` (node creation in SQL, backup 
 ## Risk Assessment
 | Risk | L×I | Mitigation |
 |---|---|---|
-| 064 runs while release-A code creates a department | L×M | fixpoint by name; code and SQL write the same names; second run picks up anything missed |
+| 064 runs while release-A code creates a department | L×M | fixpoint by name; code and SQL write the same names; the unique index makes the loser fail (rolled back, retried); a department missed by 064 is built lazily by the first operation that needs it (`deptDirNodes`), so nothing waits for a second run |
 | SQL names drift from helpers | M×H | test script compares every created name with the Go helper output (`go run` a tiny printer or a table in the test) |
 | Prohibition loaded late by policy-read | M×M | deploy recreates both policy services, then invalidate-cache (runbook) |
 | Partial failure mid-department create leaves orphan nodes | M×L | same `prov.Fail` rollback as today |
@@ -145,3 +145,49 @@ Pattern: `059_ngac_workspace_id_keyed_repair.sql` (node creation in SQL, backup 
 Code: revert (nodes made by release A stay, inert). 064: reverse SQL from `_reconcile_064_*`, then policy + policy-read
 restart and `policy invalidate-cache --all-workspaces`. Rolling back past release A requires 064's reverse first only if
 rules must disappear; otherwise the graph is harmless to old code.
+
+## Implementation status (2026-10-17)
+**Completed.** Nothing committed. Migration 064 applied twice to dev `ngac` and to `ngac_ci` (see below).
+
+- [x] `directory_graph.go`: lookups by ID-keyed name (marked `type=directory` + this workspace, hits cached on the `Service`, misses/errors never cached,
+  any lookup error but NotFound fails closed), `createDirectory` / `createDirectoryRule` (rule created last and removed by hand when the row cannot be
+  stored), `createDeptDirectory`, `planDeptMirror` (every lookup before the first write), `moveDeptDirectory`, `reparentSubDepartments`,
+  `deleteDeptDirectory`, `peersFor` / `stalePeers`.
+- [x] Hooks: `CreateWorkspace` (both types), `CreateDepartment`, `MoveDepartment`, `DeleteDepartment`, `applyDepartment` (add new peers edge before leaving the old
+  department, undo on failure, stale peers edges removed after), `DeleteWorkspace` (`RemoveProhibition` by name before the graph, NotFound tolerated),
+  `guardDelegation` (`manage` stands in for `read` of an OA marked `directory`, nothing else). `detachMember` needed no code: test added.
+- [x] Binding notes from the phase-02 review: hidden department keeps `Dir` **and** `DirPeer` under `Directory` on move; a department created under a hidden one nests
+  under the hidden Dir/DirPeer; removal/detach removes the department, peers and Limited edges (real-policy test with a stale department edge on a hidden Dir);
+  a limited person with no department is not widened (no peers edge is written for a person without a department).
+- [x] `data/migrations/064_directory_visibility.sql` + `scripts/test-migration-064.sh` (fixture: release-A workspace with a hidden department and a department without
+  nodes, legacy workspace without Mgmt, drifted rows, stale peers edge, nodes renamed by 023; guards, thresholds, dry run, apply, second run, reverse from the header,
+  re-apply). Specs: `tenant-ngac-init`, `contacts-visibility`, `workspace-admin-authorization`; `docs/deployment.md` (064's own dry run).
+- Tests that failed first (red for the right reason, then green): `TestRealPolicy_*` directory tests (node `Directory_<ws>` / `Dir_<d>` missing), `TestCreateWorkspace_Succeeds`
+  (8 nodes, not 13), `TestCreateDepartment_*`, `TestDirectoryLookup_*`, `TestUpdateMemberDepartment_WritesAndUndoesThePeersEdge`, `TestDeleteDepartment_MovesTheDirectoryUp...`,
+  `TestGuardDelegation_*`, `TestDeleteWorkspace_RemovesItsDirectoryProhibition...`; migration script red against a no-op stub, and again with fixture nodes renamed by 023.
+  Mutations that each turned a test red: no rule cleanup on a failed insert, hidden check off, stale peers not removed, manage standing in for any operation, hidden
+  sub-departments published on delete; in the migration: touching an existing Dir, not removing a stale edge, not syncing rows.
+
+### Deviations from the phase text
+- **Directory-node cache is a field of `Service`**, not a package-level map: same life as the process in production, and tests with fixed workspace ids do not share it.
+- **`FakePolicyWrite`** (`backend/testutil/policy_fake.go`) gained `CreateProhibition`/`RemoveProhibition`/`Prohibitions()` and finds its own nodes by name; the grpc test
+  mock gained the two prohibition calls and keeps node properties. Needed so the existing provisioning/rollback tests can run `CreateWorkspace`.
+- **Deleting a hidden department with people placed directly in it is refused** (400, "Chuyển những người trong phòng này sang phòng khác trước khi xoá"; no frontend message map exists to extend), controller decision after review. Once empty of people it keeps its sub-departments hidden (their nodes go under `Directory`, their UA gets `read` on their Dir) instead of re-parenting them to
+  the deleted one's parent, which would have published what an administrator hid. Specified in `tenant-ngac-init` / `contacts-visibility`.
+- **064 additions**: a unique index on directory node names; a soft skip (reported, threshold) of a workspace with no Mgmt OA instead of aborting (dev has two such
+  test leftovers; 059 does not guarantee Mgmt); stale `DeptPeers` edges are removed (and backed up) as well as added; and **step 1b, restoring names that migration 023
+  takes back**: `make db-migrate` re-applies the whole chain on dev, and 023 renames the directory's nodes to `Folder_<id>` / `Role_<id>` (it takes them for folders and
+  roles), after which 064 aborted and the rules were gone. Found by running `make db-migrate` twice on dev. A server applies each file once, so 023 never re-runs there and
+  1b finds nothing; on dev each `make db-migrate` now renames and restores the same nodes (546 on dev), net no change. Long-term fix, outside this phase: make
+  `db-migrate` use the ledger `migrate.sh` uses.
+- Release-B file shipped as designed (alone, graph-writing); it was drafted before its test script, so the script was shown red against a no-op stub rather than against
+  an absent file.
+
+### Review fixes (2026-10-18)
+- **H1** hidden department with people placed directly in it: delete refused, nothing changed (tests: deny, then allow on the same fixture).
+- **M1** `deptDirNodes` builds a missing department's nodes lazily, parent first, per the parent's hidden state, people already in it get the peers edge; idempotent, a race loser looks the node up; the old test comment ("a child of a department without nodes gets none yet") and the risk row were wrong and are fixed.
+- **M2** `Service.fresh`: a NotFound from a write drops the cached ids and the operation (create, move, delete, change department) is run once more; header and `docs/deployment.md` reverse steps say to restart `workspace`.
+- **M3** the `Dept_sub -> Dir_sub {read}` grant is made before the nodes move and whether or not they already sit under Directory (retry test).
+- **M4** `MoveDepartment` takes the department move (and any directory nodes already moved) back when the directory cannot follow; row untouched (tested at every write).
+- **M5** the migration script drops `_reconcile_064_*` and the unique index in its scratch database first.
+- **Low** header and runbook: the unique-index build blocks graph writes briefly (run off-peak); thresholds are placeholders set by the release manager from the prod dry-run.

@@ -34,7 +34,9 @@ type teardownStore interface {
 // What it removes: the rows (membership, drive, channels, departments, approval
 // schema, the workspace itself), the MinIO bucket, and every attribute under the
 // workspace's policy class and the policy class itself, newest first through
-// the policy service so each deletion takes the EPP path. It removes the people
+// the policy service so each deletion takes the EPP path, and the workspace's
+// directory prohibition, which has no foreign key to the nodes and so is removed
+// by name. It removes the people
 // nodes' assignments with the attributes and leaves the people. It is
 // idempotent: when nothing is left it succeeds.
 func (s *Service) DeleteWorkspace(ctx context.Context, callerNodeID, callerUserID, wsID string) error {
@@ -89,6 +91,13 @@ func (s *Service) DeleteWorkspace(ctx context.Context, callerNodeID, callerUserI
 		return err
 	}
 	s.removeBucket(ctx, wsID)
+
+	// The directory's prohibition names nodes by id but has no foreign key to them,
+	// so deleting the nodes leaves it behind. It goes before the graph does: a failure
+	// here stops the teardown with the class still in place for a retry to find.
+	if err := s.removeDirectoryRule(ctx, wsID); err != nil {
+		return err
+	}
 
 	if pcID == "" {
 		return nil

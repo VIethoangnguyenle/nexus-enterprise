@@ -74,6 +74,7 @@ func newWriteFixture(t *testing.T, w *testutil.FakePolicyWrite) *fixture {
 func assertNothingLeft(t *testing.T, w *testutil.FakePolicyWrite, what string) {
 	t.Helper()
 	assert.Empty(t, w.LiveNodes(), "%s: nodes left behind", what)
+	assert.Empty(t, w.Prohibitions(), "%s: a prohibition has no foreign key to its nodes and must be removed explicitly", what)
 	assert.Equal(t, reversed(created(w.Log())), deleted(w.Log()), "%s: rolled back newest first", what)
 }
 
@@ -84,7 +85,32 @@ func TestCreateWorkspace_Succeeds(t *testing.T) {
 	ws, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", Type: domain.TypeOrganization, UserID: "u1", UserNGACNodeID: owner})
 
 	require.NoError(t, err)
-	assert.Len(t, w.LiveNodes(), 8, "PC, Owners, Members, Mgmt, Documents, DraftDocs, ApprovedDocs, Channels")
+	assert.Len(t, w.LiveNodes(), 13, "PC, Owners, Members, Mgmt, Documents, DraftDocs, ApprovedDocs, Channels, and the five directory nodes")
+	id := ngac.WorkspaceID(ws.ID)
+	for _, name := range []string{ngac.DirectoryOAName(id), ngac.DirectoryOpenOAName(id), ngac.DirectoryNoDeptOAName(id), ngac.DirectoryOwnersOAName(id)} {
+		assert.Contains(t, w.LiveNodes(), "OA "+name)
+	}
+	assert.Contains(t, w.LiveNodes(), "UA "+ngac.DirectoryLimitedUAName(id))
+	byName := func(name, typ string) *policypb.NGACNode {
+		n, err := w.FindNodeByName(context.Background(), &policypb.FindNodeByNameRequest{Name: name, NodeType: typ})
+		require.NoError(t, err, name)
+		return n
+	}
+	open, limited := byName(ngac.DirectoryOpenOAName(id), ngac.TypeOA), byName(ngac.DirectoryLimitedUAName(id), ngac.TypeUA)
+	for _, n := range []*policypb.NGACNode{open, limited, byName(ngac.DirectoryOAName(id), ngac.TypeOA)} {
+		assert.Equal(t, ngac.DirectoryProps(id), n.Properties, "%s is marked as a directory node of this workspace", n.Name)
+	}
+	rule, ok := w.Prohibitions()[ngac.DirectoryLimitedProhibitionName(id)]
+	require.True(t, ok, "the workspace's one directory rule exists")
+	assert.Equal(t, limited.Id, rule.SubjectId)
+	assert.Equal(t, []string{ngac.OpRead}, rule.Operations)
+	assert.Equal(t, []string{open.Id}, rule.TargetOaIds)
+	assert.False(t, rule.Intersection)
+	assert.Contains(t, w.Log(), "associate "+ngac.MembersUAName(id)+">"+ngac.DirectoryOpenOAName(id)+" [read]")
+	assert.Contains(t, w.Log(), "associate "+ngac.MembersUAName(id)+">"+ngac.DirectoryOwnersOAName(id)+" [read]")
+	assert.Contains(t, w.Log(), "assign "+ngac.DirectoryOAName(id)+">"+ngac.MgmtOAName(id))
+	assert.Contains(t, w.Log(), "assign "+ngac.DirectoryLimitedUAName(id)+">"+ngac.PCName(id))
+	assert.NotContains(t, w.Log(), "assign "+ngac.DirectoryLimitedUAName(id)+">"+ngac.MembersUAName(id), "no directory node sits under Members")
 	row := f.wsStore.ws[ws.ID]
 	require.NotNil(t, row)
 	assert.Equal(t, ws.DocumentsOaID, row.DocumentsOAID, "the Documents OA is stored on the workspace so nothing has to guess it from a name")

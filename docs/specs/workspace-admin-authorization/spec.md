@@ -143,7 +143,7 @@ The workspace service SHALL answer, for a workspace, which resource areas a role
 - **THEN** the answer is 404 and nothing is written
 
 ### Requirement: Assigning a role or a department is a delegation
-`PUT` and `DELETE /api/workspaces/:id/members/:nodeId/roles/:roleId` SHALL require `manage` on the Mgmt OA, a role created by an administrator in this workspace, and a person who already belongs to the workspace (a user node under its Members UA): holding `manage` SHALL NOT bring a stranger in, which is what `invite` is for. Assigning SHALL add one assignment and detach nothing else. Assigning a role, or a person's department, SHALL also require the caller to hold every operation the role (or the department's UA) confers, **including what it inherits from the UAs above it** (a person under a sub-department holds every grant of the departments above it); a grant or an ancestry that cannot be read is treated as not held. Moving a department under a parent is the same delegation, checked against the new parent's whole chain; moving to the root grants nothing. Removing a role needs only `manage`. A person is in at most one department: choosing one detaches the previous department and, if that fails, takes the new assignment back.
+`PUT` and `DELETE /api/workspaces/:id/members/:nodeId/roles/:roleId` SHALL require `manage` on the Mgmt OA, a role created by an administrator in this workspace, and a person who already belongs to the workspace (a user node under its Members UA): holding `manage` SHALL NOT bring a stranger in, which is what `invite` is for. Assigning SHALL add one assignment and detach nothing else. Assigning a role, or a person's department, SHALL also require the caller to hold every operation the role (or the department's UA) confers, **including what it inherits from the UAs above it** (a person under a sub-department holds every grant of the departments above it); a grant or an ancestry that cannot be read is treated as not held. Moving a department under a parent is the same delegation, checked against the new parent's whole chain; moving to the root grants nothing. One grant is held through another operation: a department UA of a hidden department reads its directory OA (`contacts-visibility`), and a caller who holds `manage` on that OA (a directory administrator, through Mgmt) hands out that `read`; `manage` stands in for `read` of an OA that carries the directory mark and for nothing else, and an OA whose mark cannot be read is not assumed to be one. Removing a role needs only `manage`. A person is in at most one department: choosing one detaches the previous department and, if that fails, takes the new assignment back.
 
 #### Scenario: Role that confers more than the caller holds
 - **WHEN** a manager who cannot `write` Documents assigns a role that grants `write` on Documents
@@ -152,6 +152,10 @@ The workspace service SHALL answer, for a workspace, which resource areas a role
 #### Scenario: Assigning to a non-member
 - **WHEN** a manager assigns a role, or a department, to a user who is not in the workspace
 - **THEN** the answer is 404 and nothing is written
+
+#### Scenario: Hidden department
+- **WHEN** a manager who holds `manage` and `invite` on Mgmt and no `read` of a hidden department's directory OA puts a member in that department
+- **THEN** it succeeds; if the department's UA instead granted `write` there, or `read` on an OA that is not a directory node, the request is rejected with 403
 
 #### Scenario: Moving department
 - **WHEN** a member of department A is put in department B

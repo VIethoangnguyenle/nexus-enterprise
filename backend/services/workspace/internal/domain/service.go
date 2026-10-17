@@ -73,6 +73,8 @@ type Service struct {
 	emitter realtime.Emitter
 	// channelJoiner puts a new member into the workspace's #general; see WithChannelJoiner.
 	channelJoiner ChannelJoiner
+	// dirIDs remembers the ids of directory nodes found by name (name -> id); see directoryNode.
+	dirIDs sync.Map
 }
 
 // ChannelJoiner puts a member of a workspace into its workspace-wide channel
@@ -251,10 +253,28 @@ func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) 
 		}
 	}
 
+	// The contacts directory: every workspace, whatever its type, carries one.
+	dir, err := s.createDirectory(ctx, prov, id, pc.Id, membersUA.Id, mgmtOA.Id)
+	if err != nil {
+		return nil, prov.Fail(ctx, err)
+	}
+	// The rule has no foreign key to the nodes it names, so the rollback does not
+	// reach it: it is created last and taken back by hand if the row cannot be stored.
+	if err := s.createDirectoryRule(ctx, id, dir); err != nil {
+		// An answer lost on the way back may still have stored the rule.
+		if rmErr := s.removeDirectoryRule(ctx, wsID); rmErr != nil {
+			slog.Error("directory rule of a workspace that was not created could not be removed", "workspace", wsID, "error", rmErr)
+		}
+		return nil, prov.Fail(ctx, err)
+	}
+
 	// Persist to DB
 	if err := s.store.Insert(ctx, &store.Workspace{
 		ID: wsID, Name: in.Name, Desc: "", OwnerID: in.UserID, NGACPcID: pc.Id, DocumentsOAID: docsOA.Id, Type: in.Type,
 	}); err != nil {
+		if rmErr := s.removeDirectoryRule(ctx, wsID); rmErr != nil {
+			slog.Error("directory rule of a workspace that was not created could not be removed", "workspace", wsID, "error", rmErr)
+		}
 		return nil, prov.Fail(ctx, err)
 	}
 	prov.Done()

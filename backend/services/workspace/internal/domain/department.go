@@ -49,6 +49,15 @@ type CreateDepartmentInput struct {
 // caller must hold manage on the workspace's Mgmt OA; a parent, if given, must
 // be a department of the same workspace.
 func (s *Service) CreateDepartment(ctx context.Context, callerNodeID string, in CreateDepartmentInput) (*DepartmentResult, error) {
+	var out *DepartmentResult
+	err := s.fresh(func() (err error) {
+		out, err = s.createDepartment(ctx, callerNodeID, in)
+		return err
+	})
+	return out, err
+}
+
+func (s *Service) createDepartment(ctx context.Context, callerNodeID string, in CreateDepartmentInput) (*DepartmentResult, error) {
 	if in.Name == "" {
 		return nil, fmt.Errorf("%w: department name required", ErrInvalidInput)
 	}
@@ -63,6 +72,24 @@ func (s *Service) CreateDepartment(ctx context.Context, callerNodeID string, in 
 		parentDept, err = s.departmentInWorkspace(ctx, in.WorkspaceID, in.ParentID)
 		if err != nil {
 			return nil, err
+		}
+	}
+
+	// The directory mirror is resolved before the first write: a lookup that fails
+	// stops here with nothing to undo. A workspace without a directory, or a parent
+	// without nodes, is skipped (migration 064 builds them).
+	dir, hasDir, err := s.directoryNodes(ctx, in.WorkspaceID)
+	if err != nil {
+		return nil, err
+	}
+	var parentDir *deptDir
+	if hasDir && parentDept != nil {
+		var ok bool
+		if parentDir, ok, err = s.deptDirNodes(ctx, in.WorkspaceID, parentDept.ID); err != nil {
+			return nil, err
+		} else if !ok {
+			skipDept(in.WorkspaceID, parentDept.ID, "parent of a new department")
+			hasDir = false
 		}
 	}
 
@@ -92,6 +119,11 @@ func (s *Service) CreateDepartment(ctx context.Context, callerNodeID string, in 
 	}
 	if err := prov.Assign(ctx, node.Id, parentNGACID); err != nil {
 		return nil, prov.Fail(ctx, fmt.Errorf("assign dept UA: %w", err))
+	}
+	if hasDir {
+		if err := s.createDeptDirectory(ctx, prov, ngac.WorkspaceID(in.WorkspaceID), deptID, ws.PcNodeID, dir, parentDir); err != nil {
+			return nil, prov.Fail(ctx, err)
+		}
 	}
 
 	// Persist to DB
@@ -201,6 +233,15 @@ type MoveDepartmentInput struct {
 // The caller must hold manage on the workspace's Mgmt OA, and both the
 // department and its new parent must belong to that workspace.
 func (s *Service) MoveDepartment(ctx context.Context, callerNodeID string, in MoveDepartmentInput) (*DepartmentResult, error) {
+	var out *DepartmentResult
+	err := s.fresh(func() (err error) {
+		out, err = s.moveDepartment(ctx, callerNodeID, in)
+		return err
+	})
+	return out, err
+}
+
+func (s *Service) moveDepartment(ctx context.Context, callerNodeID string, in MoveDepartmentInput) (*DepartmentResult, error) {
 	ws, err := s.authorizeAdmin(ctx, callerNodeID, in.WorkspaceID, ngac.OpManage)
 	if err != nil {
 		return nil, err
@@ -242,12 +283,20 @@ func (s *Service) MoveDepartment(ctx context.Context, callerNodeID string, in Mo
 		}
 	}
 
+	// Where the department's directory nodes go, resolved before the first write.
+	mirror, err := s.planDeptMirror(ctx, in.WorkspaceID, dept, newParent)
+	if err != nil {
+		return nil, err
+	}
+
 	// Update NGAC assignments
 	// Remove old assignment
 	oldParentNGACID := ws.PcNodeID
+	var oldParentDept *store.Department
 	if dept.ParentID != nil && *dept.ParentID != "" {
 		if oldParent, err := s.deptStore.GetDepartment(ctx, *dept.ParentID); err == nil {
 			oldParentNGACID = oldParent.NGACUaID
+			oldParentDept = oldParent
 		}
 	}
 	// If the old edge survives, the department hangs under both parents and
@@ -267,6 +316,11 @@ func (s *Service) MoveDepartment(ctx context.Context, callerNodeID string, in Mo
 		ChildId: dept.NGACUaID, ParentId: newParentNGACID,
 	}); err != nil {
 		return nil, fmt.Errorf("move dept assignment: %w", err)
+	}
+	if err := s.moveDeptDirectory(ctx, mirror); err != nil {
+		// Graph, directory and row stay one thing: the department goes back where it was.
+		s.undoDepartmentMove(ctx, in.WorkspaceID, dept, oldParentNGACID, newParentNGACID, mirror, oldParentDept)
+		return nil, err
 	}
 
 	// Update DB
@@ -298,6 +352,10 @@ func (s *Service) MoveDepartment(ctx context.Context, callerNodeID string, in Mo
 // table said otherwise. Moving them up grants nothing new: they already reached
 // the parent's grants through this department.
 func (s *Service) DeleteDepartment(ctx context.Context, callerNodeID, wsID, deptID string) error {
+	return s.fresh(func() error { return s.deleteDepartment(ctx, callerNodeID, wsID, deptID) })
+}
+
+func (s *Service) deleteDepartment(ctx context.Context, callerNodeID, wsID, deptID string) error {
 	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
 	if err != nil {
 		return err
@@ -308,9 +366,9 @@ func (s *Service) DeleteDepartment(ctx context.Context, callerNodeID, wsID, dept
 	}
 
 	parentUA := ws.PcNodeID
+	var parent *store.Department
 	if dept.ParentID != nil {
-		parent, err := s.departmentInWorkspace(ctx, wsID, *dept.ParentID)
-		if err != nil {
+		if parent, err = s.departmentInWorkspace(ctx, wsID, *dept.ParentID); err != nil {
 			return err
 		}
 		parentUA = parent.NGACUaID
@@ -318,6 +376,28 @@ func (s *Service) DeleteDepartment(ctx context.Context, callerNodeID, wsID, dept
 	all, err := s.deptStore.ListDepartmentsByWorkspace(ctx, wsID)
 	if err != nil {
 		return err
+	}
+	// The directory's side of the same move, resolved before the first write.
+	mirror, err := s.planDeptMirror(ctx, wsID, dept, parent)
+	if err != nil {
+		return err
+	}
+	// A hidden department is not deleted around the people placed directly in it: they would
+	// land in a visible parent, or in none, and be published. They are moved out first.
+	if mirror != nil && mirror.hidden {
+		kids, err := s.policyWrite.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: dept.NGACUaID})
+		if err != nil {
+			return fmt.Errorf("%w: cannot tell who is in the department: %v", ErrUnavailable, err)
+		}
+		if len(userNodes(kids.GetNodes())) > 0 {
+			return fmt.Errorf("%w: Chuyển những người trong phòng này sang phòng khác trước khi xoá", ErrInvalidInput)
+		}
+	}
+	var subs []subDeptMirror
+	if mirror != nil {
+		if subs, err = s.planSubDepartments(ctx, wsID, deptID, mirror.dir, all); err != nil {
+			return err
+		}
 	}
 	for _, d := range all {
 		if d.ParentID != nil && *d.ParentID == deptID {
@@ -335,6 +415,17 @@ func (s *Service) DeleteDepartment(ctx context.Context, callerNodeID, wsID, dept
 			if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: u.Id, ParentId: parentUA}); err != nil {
 				return fmt.Errorf("move member up: %w", err)
 			}
+			// They are the parent's own people now: its peers, not this department's.
+			if mirror != nil && mirror.parent != nil {
+				if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: u.Id, ParentId: mirror.parent.Peers}); err != nil {
+					return fmt.Errorf("move member's peers edge up: %w", err)
+				}
+			}
+		}
+	}
+	if mirror != nil {
+		if err := s.reparentSubDepartments(ctx, mirror, subs); err != nil {
+			return err
 		}
 	}
 
@@ -346,6 +437,14 @@ func (s *Service) DeleteDepartment(ctx context.Context, callerNodeID, wsID, dept
 	// Reassign users to parent
 	if err := s.deptStore.ReassignDepartmentUsers(ctx, deptID, dept.ParentID); err != nil {
 		return err
+	}
+
+	// Its directory nodes go before the department's UA: a failure here stops the
+	// delete with the department still findable, so it can be run again.
+	if mirror != nil {
+		if err := s.deleteDeptDirectory(ctx, wsID, deptID, mirror.dept); err != nil {
+			return err
+		}
 	}
 
 	// Remove NGAC node
@@ -399,6 +498,10 @@ func (s *Service) UpdateMemberDepartment(ctx context.Context, callerNodeID, wsID
 // applyDepartment puts a person in a department (nil: out of any), taking them
 // out of the one they were in. It performs no authorization.
 func (s *Service) applyDepartment(ctx context.Context, ws *WorkspaceResult, userNGACNodeID string, dept *store.Department) error {
+	return s.fresh(func() error { return s.applyDepartmentOnce(ctx, ws, userNGACNodeID, dept) })
+}
+
+func (s *Service) applyDepartmentOnce(ctx context.Context, ws *WorkspaceResult, userNGACNodeID string, dept *store.Department) error {
 	wsID := ws.ID
 	deptID := ""
 	if dept != nil {
@@ -424,16 +527,52 @@ func (s *Service) applyDepartment(ctx context.Context, ws *WorkspaceResult, user
 		}
 	}
 
-	// New edge first, then the old ones: if leaving fails the person is not
-	// left in no department, and the new edge is taken back.
-	joined := false
+	// The peers UA of the new department (empty: none to write) and the peers
+	// UAs of any other department the person sits under, which must go with
+	// their department edge. Resolved before the first write.
+	peers, err := s.peersFor(ctx, wsID, dept)
+	if err != nil {
+		return err
+	}
+	stale := stalePeers(parents.GetNodes(), all, peers)
+	hasPeers := false
+	for _, p := range parents.GetNodes() {
+		if p.GetId() == peers {
+			hasPeers = true
+		}
+	}
+
+	// New edges first, then the old ones: if leaving fails the person is not
+	// left in no department, and the new edges are taken back.
+	undo := func(parent string) {
+		if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+			ChildId: userNGACNodeID, ParentId: parent,
+		}); err != nil {
+			slog.Error("could not undo a department move", "workspace", wsID, "error", err)
+		}
+	}
+	var added []string
+	undoAll := func() {
+		for _, p := range added {
+			undo(p)
+		}
+	}
 	if dept != nil && !slices.Contains(current, dept.NGACUaID) {
 		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
 			ChildId: userNGACNodeID, ParentId: dept.NGACUaID,
 		}); err != nil {
 			return fmt.Errorf("assign user to dept: %w", err)
 		}
-		joined = true
+		added = append(added, dept.NGACUaID)
+	}
+	if peers != "" && !hasPeers {
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
+			ChildId: userNGACNodeID, ParentId: peers,
+		}); err != nil {
+			undoAll()
+			return fmt.Errorf("assign user to department peers: %w", err)
+		}
+		added = append(added, peers)
 	}
 	for _, old := range current {
 		if dept != nil && old == dept.NGACUaID {
@@ -442,14 +581,19 @@ func (s *Service) applyDepartment(ctx context.Context, ws *WorkspaceResult, user
 		if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
 			ChildId: userNGACNodeID, ParentId: old,
 		}); err != nil {
-			if joined {
-				if _, undo := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
-					ChildId: userNGACNodeID, ParentId: dept.NGACUaID,
-				}); undo != nil {
-					slog.Error("could not undo a department move", "workspace", wsID, "error", undo)
-				}
-			}
+			undoAll()
 			return fmt.Errorf("leave previous department: %w", err)
+		}
+	}
+	// Whatever peers edge they held in another department goes now. A failure here
+	// is reported and not undone: the person is already where they were put, the
+	// edge that is left is idempotent to remove, and running the same change again
+	// finishes it.
+	for _, old := range stale {
+		if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
+			ChildId: userNGACNodeID, ParentId: old,
+		}); err != nil {
+			return fmt.Errorf("leave previous department's peers: %w", err)
 		}
 	}
 
@@ -496,4 +640,33 @@ func isDescendant(depts []*store.Department, parentID, targetID string) bool {
 		}
 	}
 	return false
+}
+
+// undoDepartmentMove takes a move back after its directory nodes could not follow: the
+// department's edge to the new parent goes, the one to the old parent returns, and the
+// directory nodes are put back under the old parent's. It is best effort, and says so when a
+// step fails: the move is retried by running it again.
+func (s *Service) undoDepartmentMove(ctx context.Context, wsID string, dept *store.Department, oldParentUA, newParentUA string, mirror *deptMirror, oldParent *store.Department) {
+	if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{ChildId: dept.NGACUaID, ParentId: newParentUA}); err != nil {
+		slog.Error("could not take a department move back", "workspace", wsID, "department", dept.ID, "error", err)
+	}
+	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: dept.NGACUaID, ParentId: oldParentUA}); err != nil {
+		slog.Error("could not take a department move back", "workspace", wsID, "department", dept.ID, "error", err)
+	}
+	if mirror == nil {
+		return
+	}
+	back := *mirror
+	back.parent = nil
+	if oldParent != nil {
+		p, ok, err := s.deptDirNodes(ctx, wsID, oldParent.ID)
+		if err != nil || !ok {
+			slog.Error("could not put a department's directory nodes back", "workspace", wsID, "department", dept.ID, "error", err)
+			return
+		}
+		back.parent = p
+	}
+	if err := s.moveDeptDirectory(ctx, &back); err != nil {
+		slog.Error("could not put a department's directory nodes back", "workspace", wsID, "department", dept.ID, "error", err)
+	}
 }

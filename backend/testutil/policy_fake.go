@@ -32,20 +32,34 @@ type FakePolicyWrite struct {
 	NextIDs []string
 
 	// FailAt is the 1-based number of the mutating call (CreateNode,
-	// CreateAssignment, CreateAssociation, RemoveAssignment) that returns an
-	// error; 0 never fails. Deletions are never failed: they are the compensation
-	// under test.
+	// CreateAssignment, CreateAssociation, RemoveAssignment, CreateProhibition)
+	// that returns an error; 0 never fails. Deletions (DeleteNode,
+	// RemoveProhibition) are never failed: they are the compensation under test.
 	FailAt int
 
 	calls int
 	seq   int
 	nodes map[string]*policypb.NGACNode // live nodes by ID
 	log   []string
+	// prohibitions are the live deny overrides by name (they have no foreign key
+	// to the nodes they name, so deleting a node never removes one).
+	prohibitions map[string]*policypb.CreateProhibitionRequest
 }
 
 // NewFakePolicyWrite returns an empty fake.
 func NewFakePolicyWrite() *FakePolicyWrite {
-	return &FakePolicyWrite{nodes: map[string]*policypb.NGACNode{}}
+	return &FakePolicyWrite{nodes: map[string]*policypb.NGACNode{}, prohibitions: map[string]*policypb.CreateProhibitionRequest{}}
+}
+
+// Prohibitions returns the live prohibitions by name.
+func (f *FakePolicyWrite) Prohibitions() map[string]*policypb.CreateProhibitionRequest {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make(map[string]*policypb.CreateProhibitionRequest, len(f.prohibitions))
+	for k, v := range f.prohibitions {
+		out[k] = v
+	}
+	return out
 }
 
 // Calls reports how many mutating calls have been made.
@@ -157,6 +171,31 @@ func (f *FakePolicyWrite) CreateAssociation(_ context.Context, in *policypb.Crea
 	return &policypb.Association{Id: "x", UaId: in.UaId, OaId: in.OaId, Operations: in.Operations}, nil
 }
 
+func (f *FakePolicyWrite) CreateProhibition(_ context.Context, in *policypb.CreateProhibitionRequest, _ ...grpc.CallOption) (*policypb.Prohibition, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.step(); err != nil {
+		return nil, err
+	}
+	if _, dup := f.prohibitions[in.Name]; dup {
+		return nil, status.Errorf(codes.AlreadyExists, "prohibition %q exists", in.Name)
+	}
+	f.prohibitions[in.Name] = in
+	f.log = append(f.log, "prohibit "+in.Name)
+	return &policypb.Prohibition{Id: "p", Name: in.Name, SubjectId: in.SubjectId, Operations: in.Operations, TargetOaIds: in.TargetOaIds}, nil
+}
+
+func (f *FakePolicyWrite) RemoveProhibition(_ context.Context, in *policypb.RemoveProhibitionRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if _, ok := f.prohibitions[in.Name]; !ok {
+		return nil, status.Errorf(codes.NotFound, "prohibition %q not found", in.Name)
+	}
+	delete(f.prohibitions, in.Name)
+	f.log = append(f.log, "unprohibit "+in.Name)
+	return &policypb.Empty{}, nil
+}
+
 // label names a node for the log; an ID the fake does not know stands for itself.
 func (f *FakePolicyWrite) label(id string) string {
 	if n, ok := f.nodes[id]; ok {
@@ -172,7 +211,17 @@ func (f *FakePolicyWrite) GetNode(ctx context.Context, in *policypb.GetNodeReque
 	return f.Reads.GetNode(ctx, in, o...)
 }
 
+// FindNodeByName answers from the nodes this fake holds (created or seeded), then
+// from Reads: a lookup finds what an earlier step of the same run created.
 func (f *FakePolicyWrite) FindNodeByName(ctx context.Context, in *policypb.FindNodeByNameRequest, o ...grpc.CallOption) (*policypb.NGACNode, error) {
+	f.mu.Lock()
+	for _, n := range f.nodes {
+		if n.Name == in.Name && n.NodeType == in.NodeType {
+			f.mu.Unlock()
+			return n, nil
+		}
+	}
+	f.mu.Unlock()
 	if f.Reads == nil {
 		return nil, status.Errorf(codes.NotFound, "node %s not found", in.Name)
 	}

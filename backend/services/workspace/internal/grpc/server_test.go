@@ -109,7 +109,7 @@ func (m *mockPolicyWriteClient) CreateNode(_ context.Context, req *policypb.Crea
 		"INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
 		nodeID, req.Name, req.NodeType,
 	)
-	node := &policypb.NGACNode{Id: nodeID, Name: req.Name, NodeType: req.NodeType}
+	node := &policypb.NGACNode{Id: nodeID, Name: req.Name, NodeType: req.NodeType, Properties: req.Properties}
 	m.nodes[nodeID] = node
 	return node, nil
 }
@@ -135,6 +135,15 @@ func (m *mockPolicyWriteClient) CreateAssociation(_ context.Context, _ *policypb
 }
 
 func (m *mockPolicyWriteClient) DeleteNode(_ context.Context, _ *policypb.DeleteNodeRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
+	return &policypb.Empty{}, nil
+}
+
+// The mock keeps no prohibitions: it only has to accept the rule a new workspace creates.
+func (m *mockPolicyWriteClient) CreateProhibition(_ context.Context, req *policypb.CreateProhibitionRequest, _ ...grpc.CallOption) (*policypb.Prohibition, error) {
+	return &policypb.Prohibition{Id: "p-" + req.Name, Name: req.Name}, nil
+}
+
+func (m *mockPolicyWriteClient) RemoveProhibition(context.Context, *policypb.RemoveProhibitionRequest, ...grpc.CallOption) (*policypb.Empty, error) {
 	return &policypb.Empty{}, nil
 }
 

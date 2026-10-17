@@ -121,5 +121,31 @@ The prohibition SHALL be applied on the single check, on the batch check, wherev
 ### Requirement: A workspace without a directory has no rules
 A workspace that has no `Directory_{workspace_id}` node SHALL have no visibility rules: every member sees every member, as before the directory existed, and nothing is denied for want of the nodes.
 
+### Requirement: The workspace service keeps the directory in step
+The workspace service SHALL create the directory with every new workspace and mirror every department into it, as `tenant-ngac-init` specifies, so that the rules above hold without anyone maintaining the nodes by hand. Hiding a department moves both its `Dir` and its `DirPeer` and a department that is moved or created keeps that shape; a person removed from the workspace, or put in another department, loses the department edge and the peers edge with it; deleting a hidden department is refused while people are placed directly in it (they would be published in the parent), and once it is empty of people keeps its sub-departments hidden; a department whose directory nodes are missing is given them, per its parent's hidden state, by the first operation that needs them; moving a department whose directory nodes cannot follow takes the move back. Placing a person in a hidden department, or moving a department under one, hands out the `read` its UA holds on the hidden `Dir`: a directory administrator holds `manage` on that OA through Mgmt and SHALL be allowed to hand it out, and nobody else lacking `read` SHALL (`manage` stands in for `read` of a directory OA only, never for another operation or another OA).
+
+#### Scenario: Ex-member
+- **WHEN** a person who sat in a hidden department is removed from the workspace
+- **THEN** they hold no edge to the department, its peers UA, `DirectoryLimited` or Members, and `read` of the hidden `Dir`, its `DirPeer` and `DirectoryOwners` is DENY
+
+#### Scenario: Hidden department and the structure around it
+- **WHEN** a hidden department is moved under another, or a sub-department is created under it
+- **THEN** its `Dir` and `DirPeer` stay directly under `Directory` (the sub-department's under the hidden ones), and a person placed directly in the new parent still reads neither
+
+#### Scenario: Deleting a hidden department
+- **WHEN** a hidden department with a person placed directly in it is deleted
+- **THEN** the request is refused and nothing changes; with nobody placed directly in it the department goes and its sub-departments stay hidden, their people still reading them
+
+#### Scenario: A department without nodes
+- **WHEN** a department of a workspace that has a directory has no directory nodes and a person is placed in it
+- **THEN** its nodes are built (its parent's first) under the parent's, a hidden parent's making it hidden, and the people already in it get its peers edge
+
+#### Scenario: Directory administrator places a person in a hidden department
+- **WHEN** a role holding `manage` and `invite` on Mgmt, without `read` of the hidden `Dir`, puts a member in the hidden department
+- **THEN** it succeeds; a department whose UA grants `write` on the hidden `Dir`, or `read` on an OA that is not a directory node, is still refused
+
+### Requirement: Existing workspaces get their directory from a migration
+Workspaces and departments that exist when the code ships have no directory nodes, and so no rules; migration 064 (`tenant-ngac-init`) builds them in a later release, leaving what the code already made as it is. The code works before and after: a workspace without the directory is skipped by every operation above.
+
 ## Status
-Specified ahead of the code, in part (no known divergence). The graph model, its names and the decisions above are verified by test vectors (`backend/services/policy/internal/ngac/pdp_contacts_visibility_test.go`, and on the real policy service by `backend/testutil/policy_contacts_visibility_test.go`); no service creates the directory nodes or the prohibition yet, and no endpoint filters Danh bạ by them.
+Specified and built in part. The graph model and its names are verified by test vectors (`backend/services/policy/internal/ngac/pdp_contacts_visibility_test.go`, and on the real policy service by `backend/testutil/policy_contacts_visibility_test.go`). The workspace service creates the directory with each new workspace, mirrors departments and their people into it and tears it down (`backend/services/workspace/internal/domain/directory_graph*.go`, with `directory_graph_realpolicy_test.go` against the real policy service); migration 064 builds it for what predates the code (`scripts/test-migration-064.sh`). No endpoint reads or writes the rules yet and Danh bạ is not yet filtered by them. A workspace's hidden departments and limited roles can be set only by writing the graph directly until the rules API ships.
