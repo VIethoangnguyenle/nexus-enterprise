@@ -115,6 +115,17 @@ Pattern: `059_ngac_workspace_id_keyed_repair.sql` (node creation in SQL, backup 
    every workspace has `Directory_<id>`, every department its triple, `ngac_prohibitions` one row per workspace.
 5. `make check-layering`, `make check-ngac`, `make build-check`.
 
+## Notes from the phase-02 review (binding for this phase)
+- **Hiding moves the peer OA too.** Hide/unhide in the department upkeep and in migration 064 (and its fixpoint, and the reverse SQL) must move
+  both `Dir_<h>` (out of / back into Open) and `DirPeer_<h>` (between `Directory_W` and `DirPeer_<parent>`), with their subtrees. A `DirPeer_<h>`
+  left under its parent's lets anyone placed directly in the parent, or a limited person whose department contains `h`, read the hidden people
+  (vectors: `peer_h`, `peer_h1`, `peer_a1y` in `pdp_contacts_visibility_test.go`). Creating a department that is born hidden, and moving a hidden
+  department, keep the same shape. Test on the real policy: DENY before the move is applied would be the bug; ALLOW for the hidden department's own people.
+- **Removal/detach must remove the department edge.** A person removed from the workspace (`detachMember`) or moved out of a department must lose
+  `U -> Dept_<d>` as well as `DeptPeers_<d>` and Members; a stale department edge keeps `read` on a hidden `Dir_h` (the association is on `Dept_h`) after
+  they are gone. Test: ex-member with a stale `Dept_h` edge reads `Dir_h` (DENY once all three edges are gone, and the test asserts the department edge is removed).
+- A limited person with no department sees only the owners and themself (spec `contacts-visibility`); the scope code must not widen that.
+
 ## Success Criteria
 - Tests above green; second 064 run changes 0 rows; dev DB shows per-department triples for every department.
 - Every new service graph write is a `policyWrite` call (grep: no SQL on `ngac_*` in workspace code).

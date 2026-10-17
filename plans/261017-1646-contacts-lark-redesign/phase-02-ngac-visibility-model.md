@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "NGAC visibility model + test vectors"
-status: pending
+status: completed
 priority: P1
 effort: "5h"
 dependencies: [1]
@@ -11,7 +11,7 @@ dependencies: [1]
 
 ## Overview
 Policy-model change (skill `ngac-policy-change`). Defines the graph shape for contacts visibility, the name helpers, and
-PDP test vectors with DENY cases first. No PDP code change: the model uses associations and the existing prohibition
+PDP test vectors with DENY cases first. One PDP change, the SQL-fallback prohibition rule below (rollback: revert it; harmless while no prohibition exists). Otherwise the model uses associations and the existing prohibition
 deny-override (`backend/services/policy/internal/ngac/pdp_decision_engine.go:66` `Decide` → `:150` `checkProhibitions`
 (prohibitions from the global graph, `:160`) → `:187` `matchProhibitions`; batch path `pdp_decision_batch.go:87`
 `applyProhibitionsBatch`). Prohibition writes already take the EPP path (`policy/internal/grpc/write_server.go:350-369`,
@@ -118,3 +118,28 @@ Helpers to add in `backend/ngac/ngac_ops.go` (ID-typed, next to `DeptUAName` at 
   decision path needing its own deny tests).
 - Shard/global prohibition source mismatch (Low×High): covered by `checkProhibitions` reading `e.graph` (global, `:159`).
 - Rollback: helpers unused until phase 03; revert commit.
+
+## Implementation status (2026-10-17)
+**Completed.** Nothing committed.
+
+- [x] Helpers in `backend/ngac/ngac_ops.go`: `DirectoryOAName`, `DirectoryOpenOAName`, `DirectoryNoDeptOAName`, `DirectoryOwnersOAName`,
+  `DirectoryLimitedUAName`, `DirectoryLimitedProhibitionName` (`DirectoryLimitedRule_<ws>`), `DeptDirOAName`, `DeptPeerOAName`,
+  `DeptPeersUAName`, `PropTypeDirectory`, `DirectoryProps`; the eight directory prefixes added to `ValidateRoleName`; tests in `ngac_ops_test.go`.
+- [x] `pdp_contacts_visibility_test.go`: DENY-first matrix on single + batch paths (each deny paired with an allow on the same fixture), membership
+  helper over the real graph, ex-member, department limit/move, limited-inside-hidden (C1), owners-always-visible, per-workspace rule, cross-workspace
+  association, decision-cache freshness (Redis, three cases), and `VectorsCatchABrokenModel` (six deliberate model mistakes, each turns a vector red).
+- [x] `backend/testutil/policy_contacts_visibility_test.go` (realpolicy): the prohibition on the real policy service, `CheckAccess` + `BatchCheckAccess`,
+  create then remove (not in the file list above: added because the phase asks for a first production use of prohibitions to be proven end to end).
+- [x] Specs: `docs/specs/contacts-visibility/spec.md` (new, with a Status section), `tenant-ngac-init` (new requirement, reserved prefixes, helper list),
+  `docs/specs/README.md` index row.
+- [x] **CTE fallback** (decision, controller under Zane's delegation, option a after review): when `tryCTEFallback` / `applyCTEFallbackBatch` would promote
+  DENY to ALLOW, the PDP resolves the subject's and the object's ancestors from the database where the node is missing from memory (`CTEChecker.Ancestors`,
+  `cteProhibited`) and runs `matchProhibitions` (intersection included); it denies only on a real match, so a drive OA or a user no prohibition covers keeps
+  the CTE ALLOW. Nothing is looked up when the graph holds no prohibition; a failed lookup is an error-derived, uncached DENY; a prohibition DENY is a normal
+  cacheable DENY (30 s, dropped by the graph-change invalidation). The batch path computes it lazily, once per batch. Specs: `policy-decision-freshness`,
+  `contacts-visibility`; CLAUDE.md §3. **Rollback:** revert the PDP change (`pdp_decision_engine.go`, `pdp_decision_batch.go`, `pip_cte.go`, `CTEChecker`);
+  harmless while no prohibition exists, but it re-opens the window for a directory OA / ghost user not yet in memory.
+- [x] Review fixes: hidden departments also move their `DirPeer` OA (C1; dirFlaw `peerUnderParent`; phase 03 notes), `ValidateRoleName` folds NFKC and strips
+  format characters (L1), a limited person with no department sees only the owners (L2; spec line + vectors).
+- Success criterion "mutate the fixture": satisfied by `TestContactsVisibility_VectorsCatchABrokenModel`. An OA cannot be assigned under a UA
+  (`ValidAssignments`), so "Dir OAs hung under Members" is modelled as the UAs that matter (`DeptPeers` under Members).

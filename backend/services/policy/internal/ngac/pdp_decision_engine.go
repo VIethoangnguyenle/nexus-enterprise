@@ -22,6 +22,9 @@ type DecisionEngine interface {
 // for objects that are not in the in-memory graph. *CTEEvaluator implements it.
 type CTEChecker interface {
 	CheckAccess(ctx context.Context, userNodeID, objectNodeID, operation string) (bool, error)
+	// Ancestors returns what the database holds above a node (id → node type),
+	// for the one question the SQL check cannot answer: prohibitions.
+	Ancestors(ctx context.Context, nodeID string) (map[string]string, error)
 }
 
 // Compile-time check: the concrete store satisfies the PDP's dependency.
@@ -71,7 +74,7 @@ func (e *decisionEngine) Decide(ctx context.Context, req AccessRequest) *AccessD
 	decision := graph.CheckAccess(req.UserNodeID, req.ObjectNodeID, req.Operation)
 
 	// Step 3: CTE fallback for O nodes (not loaded into in-memory graph)
-	e.tryCTEFallback(ctx, req, decision)
+	e.tryCTEFallback(ctx, graph, req, decision)
 
 	// Step 4: Prohibition check (in memory): if BFS says ALLOW, check for deny overrides.
 	if decision.Decision == DecisionAllow {
@@ -88,11 +91,12 @@ func (e *decisionEngine) Decide(ctx context.Context, req AccessRequest) *AccessD
 	return decision
 }
 
-// tryCTEFallback promotes DENY→ALLOW when CTE succeeds for O nodes not loaded in graph.
+// tryCTEFallback promotes DENY→ALLOW when CTE succeeds for O nodes not loaded in graph,
+// unless a prohibition matches (see cteProhibited).
 //
 // A CTE failure leaves the decision DENY but marks it error-derived: that DENY
 // reflects a failed query, not the policy, and must not be cached.
-func (e *decisionEngine) tryCTEFallback(ctx context.Context, req AccessRequest, decision *AccessDecision) {
+func (e *decisionEngine) tryCTEFallback(ctx context.Context, graph GraphReader, req AccessRequest, decision *AccessDecision) {
 	if decision.Decision != DecisionDeny || decision.Explanation.Reason != DenyReasonNodeNotFound {
 		return
 	}
@@ -108,6 +112,22 @@ func (e *decisionEngine) tryCTEFallback(ctx context.Context, req AccessRequest, 
 		return
 	}
 	if !allowed {
+		return
+	}
+	// The SQL answer knows nothing of prohibitions, and an object (or user) missing
+	// from memory has no ancestors here to match their subjects and targets
+	// against. Resolve both from the database and deny only on a real match.
+	denied, prohibName, subjectID, err := e.cteProhibited(ctx, graph, req.UserNodeID, req.ObjectNodeID, req.Operation)
+	if err != nil {
+		slog.Warn("CTE prohibition lookup failed; denying",
+			"user_node_id", req.UserNodeID, "object_node_id", req.ObjectNodeID,
+			"operation", req.Operation, "error", err)
+		decision.failClosed(DenyReasonCTEFallbackFailed, err)
+		return
+	}
+	if denied {
+		decision.Explanation.Reason = fmt.Sprintf("Denied by prohibition %q", prohibName)
+		decision.Explanation.ProhibitionDenied = &ProhibitionDenial{ProhibitionName: prohibName, SubjectID: subjectID}
 		return
 	}
 	decision.Decision = DecisionAllow
@@ -208,4 +228,86 @@ func matchProhibitions(prohibitions []*Prohibition, objectOAIDs map[string]bool)
 		}
 	}
 	return false, "", ""
+}
+
+// cteProhibited decides, for an ALLOW the SQL fallback is about to hand out,
+// whether a prohibition denies it. The fallback cannot evaluate prohibitions, so
+// this does with database ancestors what checkProhibitions does with memory's:
+//
+//   - subjects: the user and their UA ancestors (memory when the user is in the
+//     graph, the database when not);
+//   - targets: the object and its OA ancestors (memory when the object is in the
+//     graph, the database when not);
+//   - the same matching, intersection included (matchProhibitions).
+//
+// Nothing is looked up unless the graph holds a prohibition, and the object is
+// looked up only when a prohibition covers the user for the operation, so the
+// fallback is untouched for everyone no prohibition reaches. An error is
+// returned, never swallowed: the caller fails closed.
+func (e *decisionEngine) cteProhibited(
+	ctx context.Context, graph GraphReader, userNodeID, objectNodeID, operation string,
+) (bool, string, string, error) {
+	covering, err := e.cteCoveringProhibitions(ctx, graph, userNodeID, operation)
+	if err != nil || len(covering) == 0 {
+		return false, "", "", err
+	}
+	targets, err := e.cteTargetSet(ctx, graph, objectNodeID)
+	if err != nil {
+		return false, "", "", err
+	}
+	denied, name, subject := matchProhibitions(covering, targets)
+	return denied, name, subject, nil
+}
+
+// cteCoveringProhibitions returns the prohibitions whose subject is the user or
+// one of their user attributes, for the operation.
+func (e *decisionEngine) cteCoveringProhibitions(
+	ctx context.Context, graph GraphReader, userNodeID, operation string,
+) ([]*Prohibition, error) {
+	if e.graph.ProhibitionCount() == 0 {
+		return nil, nil
+	}
+	subjectIDs := []string{userNodeID}
+	if graph.GetNode(userNodeID) != nil {
+		for id, node := range graph.GetAncestors(userNodeID) {
+			if node.NodeType == NodeTypeUserAttribute {
+				subjectIDs = append(subjectIDs, id)
+			}
+		}
+	} else {
+		above, err := e.cte.Ancestors(ctx, userNodeID)
+		if err != nil {
+			return nil, fmt.Errorf("subject ancestors of %s: %w", userNodeID, err)
+		}
+		for id, nodeType := range above {
+			if nodeType == NodeTypeUserAttribute {
+				subjectIDs = append(subjectIDs, id)
+			}
+		}
+	}
+	return e.graph.ProhibitionsForSubjects(subjectIDs, operation), nil
+}
+
+// cteTargetSet is the object and its OA ancestors: what a prohibition's targets
+// are matched against.
+func (e *decisionEngine) cteTargetSet(ctx context.Context, graph GraphReader, objectNodeID string) (map[string]bool, error) {
+	targets := map[string]bool{objectNodeID: true}
+	if graph.GetNode(objectNodeID) != nil {
+		for id, node := range graph.GetAncestors(objectNodeID) {
+			if node.NodeType == NodeTypeObjectAttr {
+				targets[id] = true
+			}
+		}
+		return targets, nil
+	}
+	above, err := e.cte.Ancestors(ctx, objectNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("object ancestors of %s: %w", objectNodeID, err)
+	}
+	for id, nodeType := range above {
+		if nodeType == NodeTypeObjectAttr {
+			targets[id] = true
+		}
+	}
+	return targets, nil
 }

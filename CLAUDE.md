@@ -89,7 +89,7 @@ Only what is not derivable in ten seconds:
   approve, share, manage, invite, create_channel`. They stay generic verbs — context comes from
   the OA the association targets, and is never encoded into an operation name.
 - **Decision order** (`pdp_decision_engine.go`): resolve graph (shard → global) → BFS →
-  CTE SQL fallback for OAs not in memory → prohibitions as deny-overrides applied **only** to an
+  CTE SQL fallback for OAs not in memory (before promoting an ALLOW it matches prohibitions against the database's ancestors and stays DENY on a match) → prohibitions as deny-overrides applied **only** to an
   ALLOW. Default is DENY.
 - **Runtime checks never touch the DB.** They run against the in-memory graph; the DB is read at
   startup and when the graph changes. Any graph mutation must go through the EPP invalidation

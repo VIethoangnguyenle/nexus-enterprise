@@ -41,6 +41,29 @@ read prohibitions, SHALL leave the previous graph and prohibitions in place.
 - **WHEN** the graph already denies the request
 - **THEN** the decision is the graph's DENY and carries no prohibition denial
 
+### Requirement: The SQL fallback never overrides a prohibition
+The SQL fallback (for an object or a user that is not in the in-memory graph) cannot evaluate prohibitions, and a node missing from memory has no ancestors there to match a prohibition against. Before the PDP promotes a DENY to ALLOW through the fallback, on the single and the batch path, it SHALL evaluate the prohibitions with the database's ancestors: the subjects are the user and their user attributes (from memory when the user is in the graph, from the database when not), the targets are the object and its object attributes (from memory when the object is in the graph, from the database when not), and the matching is the in-memory matching, intersection included. It SHALL deny only on a real match. Nothing is looked up when the graph holds no prohibition, and the object is looked up only when a prohibition covers the user for the requested operation, so a user, an operation or an object no prohibition reaches keeps the fallback's ALLOW exactly as before. A lookup that fails SHALL close the decision to an error-derived DENY that is not cached. A DENY from a matching prohibition is a policy answer: it is cached like any other DENY (30 s) and dropped by the invalidation that follows the graph change, so it does not outlive the replica catching up. The batch path computes this lazily, only when a node it needs is missing from memory, once per batch, and falls back for every object when the user is the missing node, as the single check does, so the two agree.
+
+#### Scenario: Covered user, directory object missing from memory
+- **WHEN** a prohibition covers the user's `read` of a subtree and the SQL fallback would answer ALLOW for an OA in that subtree that is not in memory
+- **THEN** the decision is DENY on the single and the batch path
+
+#### Scenario: Covered user, other object missing from memory
+- **WHEN** the same user reads an OA missing from memory that the prohibition does not target (a drive OA)
+- **THEN** the fallback's ALLOW stands
+
+#### Scenario: User missing from memory
+- **WHEN** a user absent from the in-memory graph is, in the database, under the prohibition's subject
+- **THEN** the decision is DENY on both paths
+
+#### Scenario: Uncovered operation or no prohibition
+- **WHEN** no prohibition covers the user for the requested operation, or the graph holds none
+- **THEN** the fallback's ALLOW stands and the database is not asked for ancestors
+
+#### Scenario: Ancestor lookup fails
+- **WHEN** the database cannot give the ancestors needed to match a covering prohibition
+- **THEN** the decision is DENY, error-derived and not cached
+
 ### Requirement: Prohibition mutations write the database before memory and reach every replica
 Creating or removing a prohibition SHALL write the database first, update the writer's in-memory
 graph only after that write succeeds, then invalidate caches and publish `ngac.graph.mutated`

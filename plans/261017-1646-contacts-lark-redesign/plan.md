@@ -53,7 +53,7 @@ From `261017-1645-authz-overprivilege-fixes` (all on main):
    only" = one static **prohibition** (subject `DirectoryLimited` UA, read, target DirectoryOpen) + a parallel peer-OA tree
    reached through a flat per-department `DeptPeers` UA; **owners always visible** = `DirectoryOwners` OA (under Directory,
    not under Open) with `<ws>_Members → DirectoryOwners {read}`, so the prohibition never reaches it; directory admins =
-   `manage` on the Directory OA (inherited from Mgmt). No PDP code change, no new operation. No directory UA sits under
+   `manage` on the Directory OA (inherited from Mgmt). One PDP change (the SQL fallback matches prohibitions with database ancestors before promoting an ALLOW, phase 02), no new operation. No directory UA sits under
    `<ws>_Members`, so none of them can make anyone a member.
 2. **Workspace owns the scope, auth owns the people rows**: workspace computes `DirectoryScope` (NGAC checks, after its
    graph membership check) and serves it to auth over gRPC; auth filters `tenant_users` by it. One implementation of the
@@ -149,7 +149,7 @@ Test env (no credentials in files): `export PATH="/usr/local/go/bin:$HOME/go/bin
 - Workspace: revert leaves directory nodes/edges/prohibition; nothing else reads them; the prohibition affects only
   directory OAs. Re-deploy restores behaviour with rules intact (rules live in the graph).
 - 064: reverse SQL from `_reconcile_064_*` (phase 03), then policy restart + `invalidate-cache`.
-- No PDP code change to roll back.
+- PDP: reverting the CTE-fallback change re-opens a window where a limited person reads a directory OA (or a ghost user is unlimited) that memory has not loaded yet; revert it only together with the directory rules (it does nothing while the graph holds no prohibition).
 
 ## Unresolved questions (original Q1–Q9: answered, see "Quyết định" below)
 New after the sync (Claude defaults applied, confirm or override):
