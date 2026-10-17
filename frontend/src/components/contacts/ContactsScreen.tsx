@@ -57,6 +57,8 @@ export function ContactsScreen() {
   const departments = useMemo(() => departmentsOf(all), [all])
   const selected = selectedId ? all.find((c) => c.user_id === selectedId) : undefined
   const loading = !q.data && !q.isError
+  // A company workspace where nobody has a department yet has nothing to show or filter by.
+  const hasDepartments = !isPersonal && departments.length > 0
   const workspace = workspaceDisplayName(workspaceName)
   const scope = `${wsId}:${filter.department}:${filter.onlineOnly}:${filter.query}`
 
@@ -131,7 +133,7 @@ export function ContactsScreen() {
             isOnline={isOnline}
             onSelect={(c) => setSelectedId(c.user_id)}
             scope={scope}
-            showDepartment={!isPersonal}
+            showDepartment={loading ? !isPersonal : hasDepartments}
           />
         )}
       </motion.div>
@@ -174,7 +176,7 @@ export function ContactsScreen() {
             onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
             className="w-full sm:w-72"
           />
-          {!isPersonal && (
+          {hasDepartments && (
             <DepartmentFilter
               departments={departments}
               value={filter.department}

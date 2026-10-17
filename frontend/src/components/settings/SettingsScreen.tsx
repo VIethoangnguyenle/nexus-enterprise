@@ -1,6 +1,6 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { SETTINGS_TABS, tabOf, tabSearch, type SettingsSearch, type SettingsTab } from '../../lib/settings-search'
-import { Heading, TabBar, type TabItem } from '../primitives'
+import { Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
 import { AppearanceTab } from './AppearanceTab'
 import { ProfileTab } from './ProfileTab'
 import { WorkspaceTab } from './WorkspaceTab'
@@ -33,9 +33,9 @@ export function SettingsScreen() {
       <header className="px-5 pt-4 pb-1">
         <Heading as="h1" look="page">Cài đặt</Heading>
       </header>
-      <div className="px-5 overflow-x-auto">
+      <ScrollFade className="px-5">
         <TabBar className="w-max" label="Cài đặt" idPrefix="settings" value={tab} tabs={TABS} onChange={go} />
-      </div>
+      </ScrollFade>
       <div
         role="tabpanel"
         id={`settings-panel-${tab}`}

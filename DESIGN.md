@@ -811,6 +811,7 @@ Màu không bao giờ là kênh duy nhất (trạng thái có nhãn; lớp phủ
 user-scalable=no`, `touch-action: manipulation` (không chạm đúp), cử chỉ chụm của iOS bị huỷ; ô nhập 16px trên màn cảm
 ứng để không tự phóng khi focus. Đánh đổi có chủ đích với WCAG 1.4.4: chữ đã đủ lớn (chat 16px trên điện thoại), và nội
 dung cần phóng (ảnh trong Trình xem tệp) có phóng riêng bằng chụm hai ngón.
+Hàng cuộn ngang (tab, chip) phải cho thấy còn nội dung: dùng `ScrollFade` (mép còn nội dung mờ dần), không để một mục bị cắt cụt mà không có dấu hiệu. Popover không bao giờ sát mép màn: luôn cách mép viewport ≥ 16px.
 
 ## 10. Enforcement
 

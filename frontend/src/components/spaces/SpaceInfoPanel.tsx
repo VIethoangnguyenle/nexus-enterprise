@@ -171,7 +171,7 @@ export function SpaceInfoPanel({ channelId, kind, title, memberCount, avatarUrl,
           {pins.isLoading ? (
             <div className="skeleton h-12 rounded-surface" />
           ) : list.length === 0 ? (
-            <span className="text-small text-ink-muted">Chưa ghim tin nào. Di chuột lên một tin rồi chọn Ghim.</span>
+            <span className="text-small text-ink-muted">Chưa ghim tin nào. Mở menu của một tin rồi chọn Ghim.</span>
           ) : (
             <ul className="grid gap-0.5 list-none m-0 p-0">
               {list.map((p) => {

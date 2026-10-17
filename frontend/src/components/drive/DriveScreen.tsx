@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { useNavigate, useRouter, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { Menu, Plus, WifiOff } from 'lucide-react'
+import { FolderTree, Plus, WifiOff } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useArrivals } from '../../hooks/useArrivals'
 import { useConnectionLost } from '../../hooks/useConnectionLost'
@@ -337,7 +337,7 @@ export function DriveScreen() {
         <header className="flex items-center gap-2 px-5 pt-4 pb-3 min-w-0 max-sm:px-4">
           {layout !== 'desktop' && (
             <IconButton aria-label="Mở cây thư mục" aria-haspopup="dialog" className="max-lg:w-11 max-lg:h-11 -ml-2" onClick={() => setDrawerOpen(true)}>
-              <Menu size={20} strokeWidth={1.75} />
+              <FolderTree size={20} strokeWidth={1.75} />
             </IconButton>
           )}
           <div className="grid gap-0.5 min-w-0">
