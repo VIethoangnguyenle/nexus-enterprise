@@ -48,6 +48,7 @@ type scriptedPolicyRead struct {
 	childrenErr error                      // GetChildren fails
 	people      map[string]string          // user node -> workspace it belongs to (under its Members UA)
 	getNodeErr  error                      // GetNode fails
+	edges       map[[2]string]bool         // child, parent: assignments IsAssigned reports (besides a Members UA under its PC)
 	ancErr      error                      // GetAncestors fails
 }
 
@@ -132,7 +133,10 @@ func (p *scriptedPolicyRead) BatchCheckAccess(_ context.Context, req *policypb.B
 // The one edge it knows is a Members UA under its workspace's PC, which is what
 // the membership helper checks before it trusts a UA by its name.
 func (p *scriptedPolicyRead) IsAssigned(_ context.Context, req *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
-	return &policypb.BoolResponse{Value: strings.HasPrefix(req.ChildId, "ua-") && strings.HasPrefix(req.ParentId, "pc-")}, nil
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return &policypb.BoolResponse{Value: p.edges[[2]string{req.ChildId, req.ParentId}] ||
+		strings.HasPrefix(req.ChildId, "ua-") && strings.HasPrefix(req.ParentId, "pc-")}, nil
 }
 
 func (p *scriptedPolicyRead) GetChildren(_ context.Context, req *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {

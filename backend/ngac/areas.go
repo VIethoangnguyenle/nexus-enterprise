@@ -36,7 +36,8 @@ func IsArea(a Area) bool { return slices.Contains(Areas(), a) }
 // actually checks it on that kind of OA:
 //
 //   - management: manage (roles, departments, permissions, quotas, approval
-//     templates) and invite (add and remove members).
+//     templates) and invite (add and remove members;
+//     removing someone who holds manage on any area takes manage on Mgmt too).
 //   - documents:  read, write and share on the drive. An upload is gated on
 //     write (CreateFile and ConfirmFile both check it), so `upload` is not
 //     offered: no service checks it, and a switch that changes nothing would

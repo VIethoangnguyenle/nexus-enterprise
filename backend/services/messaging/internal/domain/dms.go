@@ -19,9 +19,11 @@ import (
 	"ngac-platform/services/messaging/internal/store"
 )
 
-// ListDMs returns DM channels the user has access to.
+// ListDMs returns the DM channels the user has access to. Only the DMs the member
+// cache records the user in are put to the policy service; the graph then decides
+// which of them are readable, so a stale cache can hide a DM but never show one.
 func (s *Service) ListDMs(ctx context.Context, userNodeID string) ([]*pb.Channel, error) {
-	channels, err := s.store.ListAllDMs(ctx)
+	channels, err := s.store.ListDMsOf(ctx, userNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("list DMs: %w", err)
 	}

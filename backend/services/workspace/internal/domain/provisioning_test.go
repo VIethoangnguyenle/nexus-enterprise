@@ -339,7 +339,7 @@ func TestListFolders_ShowsDisplayNames(t *testing.T) {
 	f := newWriteFixture(t, w)
 	f.read.descendants[pc1] = append(f.read.descendants[pc1], &policypb.NGACNode{
 		Id: "oa-new", Name: "Folder_9a1b", NodeType: ngac.TypeOA,
-		Properties: map[string]string{ngac.PropDisplayName: "Legal"},
+		Properties: ngac.AdminFolderProps(ws1, "Legal"),
 	})
 
 	folders, err := f.svc.ListFolders(context.Background(), owner, ws1)
@@ -350,7 +350,9 @@ func TestListFolders_ShowsDisplayNames(t *testing.T) {
 		names = append(names, fo.Name)
 	}
 	assert.Contains(t, names, "Legal")
-	assert.Contains(t, names, "Engineering", "a folder written before names were ID-keyed is listed by its node name")
+	assert.Contains(t, names, "Engineering")
+	assert.NotContains(t, names, "Finance", "another workspace's folder is not listed")
+	assert.NotContains(t, names, ngac.MgmtOAName(ws1), "a container is not a folder")
 	assert.NotContains(t, names, "Folder_9a1b")
 }
 

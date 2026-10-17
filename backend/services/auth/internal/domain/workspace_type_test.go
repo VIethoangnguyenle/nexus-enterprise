@@ -3,7 +3,9 @@ package domain_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
+	"time"
 
 	"ngac-platform/services/auth/internal/domain"
 )
@@ -36,7 +38,8 @@ func TestPersonalWorkspace_IsNamedAfterThePerson(t *testing.T) {
 	}
 
 	svc, ow, _ := otpService(t, nil)
-	sid, err := svc.RequestOTP(context.Background(), "lan@example.org", "email")
+	// A fresh address per run: OTP requests are rate-limited per address in Redis, which outlives the test.
+	sid, err := svc.RequestOTP(context.Background(), fmt.Sprintf("lan-%d@example.org", time.Now().UnixNano()), "email")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/realtime"
 	authpb "ngac-platform/proto/auth"
@@ -122,16 +123,56 @@ func (s *Service) announceMembership(ctx context.Context, kind string, ch *store
 	s.emit(person)
 }
 
-// RemoveMember removes a user from a channel's NGAC members UA.
+// RemoveMember takes a person out of a group's Members UA.
+//
+// Invite, which every member holds, is what lets people in; it does not let them
+// put others out. Removal is for the person themselves (leaving), for the person
+// who made the group, and for a holder of manage on it (the workspace's owners).
+// A direct message is a fixed pair and #general's people are the workspace's, so
+// neither loses anyone this way.
+//
+// The caller must be inside the conversation (read) or a manager of it before
+// anything about it is answered, so a stranger learns nothing of its kind or
+// roster. The target must be a person directly in the group, not a UA or a
+// node that merely exists. The graph is the membership: it is changed first, and
+// the channel_members copy follows; a copy that cannot be deleted is reported after
+// the live feed has been cut and the roster announced, and a repeat is harmless.
 func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, targetNodeID string) error {
-	ch, err := s.authorizeChannel(ctx, channelID, requesterNodeID, ngac.OpInvite)
+	if channelID == "" || targetNodeID == "" {
+		return ErrInvalidInput
+	}
+	ch, err := s.loadChannel(ctx, channelID)
 	if err != nil {
+		return err
+	}
+	// Inside the conversation, or its manager.
+	manages := false
+	if err := s.checkAccess(ctx, requesterNodeID, ch.NGACOaID, ngac.OpRead); err != nil {
+		if merr := s.checkAccess(ctx, requesterNodeID, ch.NGACOaID, ngac.OpManage); merr != nil {
+			return err
+		}
+		manages = true
+	}
+	if ch.ChannelType == ChannelTypeDM || ch.ChannelType == ChannelTypeWorkspace {
+		return fmt.Errorf("%w: people cannot be removed from a direct message or the workspace channel", ErrInvalidInput)
+	}
+	if requesterNodeID != targetNodeID && !s.isChannelCreator(ctx, ch, requesterNodeID) && !manages {
+		if err := s.checkAccess(ctx, requesterNodeID, ch.NGACOaID, ngac.OpManage); err != nil {
+			return fmt.Errorf("%w: only the person themselves, the group's creator or a manager removes someone", ErrAccessDenied)
+		}
+	}
+	if err := s.requireInChannel(ctx, ch, targetNodeID); err != nil {
 		return err
 	}
 	if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{
 		ChildId: targetNodeID, ParentId: ch.NGACUaID,
 	}); err != nil {
 		return fmt.Errorf("remove member: %w", err)
+	}
+	cacheErr := s.members.DeleteChannelMember(ctx, channelID, targetNodeID)
+	if cacheErr != nil {
+		slog.Error("member removed from the graph but their channel_members row remains; repeating the removal clears it",
+			"channel", channelID, "member", targetNodeID, "error", cacheErr)
 	}
 	// Losing membership must also end the live feed. The subscription was
 	// authorized when it was opened; without this the removed user keeps
@@ -140,7 +181,66 @@ func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, 
 		s.revoker.RevokeChannelSubscriptions(channelID, targetNodeID)
 	}
 	s.announceMembership(ctx, realtime.KindMemberRemoved, ch, targetNodeID)
+	if cacheErr != nil {
+		return fmt.Errorf("remove member: %w", cacheErr)
+	}
 	return nil
+}
+
+// isChannelCreator reports whether the requester made the channel. The creator is
+// recorded by user id; the verified caller on ctx links that to the node asking.
+func (s *Service) isChannelCreator(ctx context.Context, ch *store.Channel, requesterNodeID string) bool {
+	who := grpcauth.CallerFrom(ctx)
+	return ch.CreatedBy != "" && who.UserID == ch.CreatedBy && who.NGACNodeID == requesterNodeID
+}
+
+// requireInChannel confirms the target is a person sitting directly under the
+// channel's Members UA, asking the writer so a change made a moment ago is seen.
+func (s *Service) requireInChannel(ctx context.Context, ch *store.Channel, targetNodeID string) error {
+	notIn := fmt.Errorf("%w: not a member of this channel", ErrNotFound)
+	n, err := s.policyWrite.GetNode(ctx, &policypb.GetNodeRequest{NodeId: targetNodeID})
+	if err != nil {
+		if policyclient.IsNotFound(err) {
+			return notIn
+		}
+		return fmt.Errorf("remove member: resolve target: %w", err)
+	}
+	if n.GetNodeType() != ngac.TypeU {
+		return notIn
+	}
+	res, err := s.policyWrite.IsAssigned(ctx, &policypb.IsAssignedRequest{ChildId: targetNodeID, ParentId: ch.NGACUaID})
+	if err != nil {
+		return fmt.Errorf("remove member: check membership: %w", err)
+	}
+	if !res.GetValue() {
+		return notIn
+	}
+	return nil
+}
+
+// Roster is a channel's people as one reader sees them, with what that reader may do.
+type Roster struct {
+	Members []*pb.ChannelMember
+	// CanRemove: the reader may take others out of this channel (RemoveMember would
+	// not refuse them for who they are). It is false in a DM and the workspace-wide
+	// channel, whose people are not removed this way. The screen shows its remove
+	// action by this, not by comparing ids.
+	CanRemove bool
+}
+
+// MemberRoster is ListMembers plus whether the reader may remove people.
+func (s *Service) MemberRoster(ctx context.Context, channelID, userNodeID string) (*Roster, error) {
+	members, err := s.ListMembers(ctx, channelID, userNodeID)
+	if err != nil {
+		return nil, err
+	}
+	ch, err := s.loadChannel(ctx, channelID)
+	if err != nil {
+		return nil, err
+	}
+	canRemove := ch.ChannelType != ChannelTypeDM && ch.ChannelType != ChannelTypeWorkspace &&
+		(s.isChannelCreator(ctx, ch, userNodeID) || s.checkAccess(ctx, userNodeID, ch.NGACOaID, ngac.OpManage) == nil)
+	return &Roster{Members: members, CanRemove: canRemove}, nil
 }
 
 // ListMembers returns the members of a channel via NGAC graph traversal: the user

@@ -35,6 +35,7 @@ the REST edge and from the signed identity token between services (see "Caller i
 - **AND** backing out stays possible for them: declining or cancelling a call, deleting their own message, taking back a reaction or a vote check the graph alone
 - **AND** setting a task's status or handing it to someone else in a direct message needs the relationship too, though its owner holds only `read`
 - **AND** a message of type `system` sent by a client needs `write` like any other message (it used to skip the check), in a group as in a direct message; the service's own notices (a manager's "deleted a message" line) are stored directly and need no `write`
+- **AND** the gRPC `SendMessage` does not read `message_type` from the request: whatever it names, the message is a person's (`user`) and is held to a person's rules (text or a file is required, its linked entity is validated), so a client cannot post a line that looks like the service's; system lines are made inside the service only (the `message_type` field stays in the proto and is ignored)
 - **AND** every `write`, `invite` or `manage` on a channel's OA goes through the one helper that adds this rule (`authorizeChannelOp`): no handler checks them directly. Uploading a file to a direct message's drive is not covered (the drive cannot see the relationship)
 
 #### Scenario: Subscribe without read

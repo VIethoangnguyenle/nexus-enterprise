@@ -120,6 +120,8 @@ func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRe
 	for _, a := range req.Attachments {
 		attachments = append(attachments, domain.AttachmentInput{DriveFileID: a.DriveFileId, Width: a.Width, Height: a.Height})
 	}
+	// MessageType is deliberately not read from the request: a message sent over the
+	// wire is a person's ("user"); system lines are made inside the service.
 	msg, err := s.svc.SendMessage(ctx, domain.SendMessageInput{
 		Attachments:      attachments,
 		QuotedMessageID:  req.QuotedMessageId,
@@ -129,7 +131,6 @@ func (s *MessagingServer) SendMessage(ctx context.Context, req *pb.SendMessageRe
 		SenderID:         grpcauth.CallerFrom(ctx).UserID,
 		SenderNodeID:     grpcauth.CallerFrom(ctx).NGACNodeID,
 		Content:          req.Content,
-		MessageType:      req.MessageType,
 		ParentMessageID:  req.ParentMessageId,
 		LinkedEntityType: req.LinkedEntityType,
 		LinkedEntityID:   req.LinkedEntityId,

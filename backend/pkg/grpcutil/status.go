@@ -50,6 +50,8 @@ func Status(err error, extra ...Mapping) error {
 		return status.Error(codes.AlreadyExists, err.Error())
 	case errors.Is(err, httputil.ErrInvalidInput):
 		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, httputil.ErrUnavailable):
+		return status.Error(codes.Unavailable, err.Error())
 	}
 	return grpcauth.Internal(err)
 }

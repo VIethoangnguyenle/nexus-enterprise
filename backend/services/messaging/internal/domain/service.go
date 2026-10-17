@@ -24,6 +24,7 @@ import (
 // the source of truth for membership; this is its denormalised copy.
 type memberCache interface {
 	InsertChannelMember(ctx context.Context, channelID, ngacNodeID string) error
+	DeleteChannelMember(ctx context.Context, channelID, ngacNodeID string) error
 }
 
 // Service orchestrates messaging business logic.

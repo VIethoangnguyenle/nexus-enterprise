@@ -78,6 +78,7 @@ type fakePolicyRead struct {
 	assocs      map[string][]*policypb.Association
 	assocErr    error
 	checkErr    error
+	batchErr    error // BatchCheckAccess fails with it; CheckAccess is unaffected
 	ancErr      error
 	mu          sync.Mutex // guards checks: concurrent service calls record into it
 	checks      []*policypb.CheckAccessRequest
@@ -94,6 +95,22 @@ func (f *fakePolicyRead) CheckAccess(_ context.Context, req *policypb.CheckAcces
 		return &policypb.AccessDecision{Decision: ngac.DecisionAllow}, nil
 	}
 	return &policypb.AccessDecision{Decision: ngac.DecisionDeny}, nil
+}
+
+// BatchCheckAccess answers from the same grants as CheckAccess.
+func (f *fakePolicyRead) BatchCheckAccess(_ context.Context, req *policypb.BatchCheckAccessRequest, _ ...grpc.CallOption) (*policypb.BatchAccessResult, error) {
+	if f.batchErr != nil {
+		return nil, f.batchErr
+	}
+	out := &policypb.BatchAccessResult{Results: map[string]*policypb.ObjectPermissions{}}
+	for _, obj := range req.ObjectIds {
+		perms := map[string]bool{}
+		for _, op := range req.Operations {
+			perms[op] = f.grants[grant{req.UserNodeId, obj, op}]
+		}
+		out.Results[obj] = &policypb.ObjectPermissions{Permissions: perms}
+	}
+	return out, nil
 }
 
 func (f *fakePolicyRead) GetChildren(_ context.Context, req *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
@@ -432,7 +449,7 @@ func newFixture(t *testing.T) *fixture {
 		node(docs1, ngac.DocumentsOAName(ws1), ngac.TypeOA),
 		node(chat1, ngac.ChannelsOAName(ws1), ngac.TypeOA),
 		node(assets1, ngac.AssetsOAName(ws1), ngac.TypeOA),
-		node(folder1, "Engineering", ngac.TypeOA),
+		{Id: folder1, Name: ngac.FolderNodeName("f-1"), NodeType: ngac.TypeOA, Properties: map[string]string{ngac.PropDisplayName: "Engineering", "workspace_id": ws1}},
 		{Id: roleRead, Name: ngac.RoleUAName("r-read"), NodeType: ngac.TypeUA, Properties: map[string]string{ngac.PropType: ngac.PropTypeRole, ngac.PropDisplayName: "Người đọc"}},
 		{Id: roleEdit, Name: ngac.RoleUAName("r-edit"), NodeType: ngac.TypeUA, Properties: map[string]string{ngac.PropType: ngac.PropTypeRole, ngac.PropDisplayName: "Biên tập"}},
 	}

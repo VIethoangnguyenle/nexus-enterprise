@@ -1,7 +1,7 @@
 ---
 phase: 6
 title: "Workspace admin guards (F6, F10)"
-status: pending
+status: completed
 priority: P2
 effort: "2h"
 dependencies: [4]
@@ -54,3 +54,15 @@ DeleteFolder: manage(Mgmt) ─> node in PC, OA ─> IsFolderNodeName ∧ workspa
 
 ## Rollback
 Code-only; revert.
+
+## Status (implemented, not committed)
+- [x] Deny tests first, each paired with an allow on the same fixture (`admin_guards_realpolicy_test.go`; fake-based `admin_guards_test.go`; `TestIsFolderNodeName`), seen red before the change.
+- [x] F6: `requireManageToRemoveManager` in `RemoveMember` (one `BatchCheckAccess` on the target over the area OAs; any error denies).
+- [x] F10: `DeleteFolder` accepts `ngac.IsFolderNodeName` + `workspace_id == wsID`, else `ErrInvalidInput`; `ngac.IsFolderNodeName` added.
+- [x] `areas.go` comment; `workspace-admin-authorization` spec updated.
+- Deviation: the unit fixture folder (`authz_test.go`) is now a real folder (`Folder_<id>` with `workspace_id`), and the fake read client gained `BatchCheckAccess`.
+
+### Review fixes (same worktree, uncommitted)
+- [x] M1: admin folders carry `type: admin_folder` (`ngac.AdminFolderProps`, set by `CreateFolder`); `DeleteFolder` and `ListFolders` use `ngac.IsAdminFolder` (name + `workspace_id` + type `admin_folder` or none). Dev check: Folder_ nodes are 78 without a type (admin folders made earlier) and 13 `drive_folder`, so untyped ones stay deletable and the drive's are refused. Real-policy refusals for a Documents drive folder and a group's drive folder, paired with the admin-folder allow.
+- [x] L1: spec line that the rule covers area-level manage only.
+- [x] L2: `requireManageToRemoveManager` reuses `areaOAs` (no extra `GetChildren`); a policy that cannot answer is `ErrUnavailable` (503 / gRPC Unavailable, new shared sentinel in `httputil`/`grpcutil`), still fail-closed.

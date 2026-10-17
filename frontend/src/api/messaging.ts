@@ -26,6 +26,13 @@ export interface Channel {
 /** A channel member as the messaging service returns it. Ids are for API calls only. */
 export interface ChannelMember { user_id: string; username: string; ngac_node_id: string }
 
+/**
+ * A conversation's people, with whether the signed-in user may take others out.
+ * The server decides (the group's creator or a manager, never in a DM or the
+ * workspace-wide channel); a response without the flag means no.
+ */
+export interface ChannelMembersResponse { members: ChannelMember[] | null; can_remove_members?: boolean }
+
 export interface ReactionGroup { emoji: string; count: number; user_ids: string[] }
 
 export interface MessageAttachment {
@@ -272,7 +279,7 @@ export const messagingApi = {
 
   // Members
   listMembers: (channelId: string) =>
-    apiFetch<{ members: ChannelMember[] | null }>(`/channels/${channelId}/members`),
+    apiFetch<ChannelMembersResponse>(`/channels/${channelId}/members`),
   addMember: (channelId: string, ngacNodeId: string) =>
     apiFetch<{ status: string }>(`/channels/${channelId}/members`, {
       method: 'POST',

@@ -120,6 +120,16 @@ func (m *mockPolicyWriteClient) DeleteNode(ctx context.Context, req *policypb.De
 	return &policypb.Empty{}, nil
 }
 
+// GetNode and IsAssigned answer the writer reads RemoveMember makes about its
+// target: a person who is in the channel.
+func (m *mockPolicyWriteClient) GetNode(_ context.Context, req *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return &policypb.NGACNode{Id: req.NodeId, Name: req.NodeId, NodeType: ngac.TypeU}, nil
+}
+
+func (m *mockPolicyWriteClient) IsAssigned(_ context.Context, _ *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return &policypb.BoolResponse{Value: true}, nil
+}
+
 func (m *mockPolicyWriteClient) CreateAssignment(_ context.Context, _ *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
 	return &policypb.Assignment{Id: "assign-1"}, nil
 }

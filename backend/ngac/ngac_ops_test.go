@@ -256,3 +256,68 @@ func TestCalendarNamesAndOps(t *testing.T) {
 		t.Error("role names in the calendar namespace must be rejected")
 	}
 }
+
+// Only a folder's OA is a folder. The names of the workspace's own containers and
+// of the OAs beneath them are not, whatever properties the node carries.
+func TestIsFolderNodeName(t *testing.T) {
+	ws := ngac.WorkspaceID("w1")
+	yes := map[string]string{
+		"a folder":      ngac.FolderNodeName("f1"),
+		"a uuid folder": ngac.FolderNodeName("0b1c2d3e-0000-4000-8000-000000000001"),
+	}
+	no := map[string]string{
+		"Mgmt":                ngac.MgmtOAName(ws),
+		"Documents":           ngac.DocumentsOAName(ws),
+		"Channels":            ngac.ChannelsOAName(ws),
+		"Assets":              ngac.AssetsOAName(ws),
+		"an asset type":       ngac.AssetTypeOAName(ws, "t1"),
+		"an asset category":   ngac.AssetCategoryOAName(ws, "c1"),
+		"a channel's content": ngac.ChannelContentOAName("c1"),
+		"a share":             ngac.ShareOAName("s1"),
+		"the prefix alone":    ngac.FolderNodeName(""),
+		"empty":               "",
+		"prefix not first":    "x" + ngac.FolderNodeName("f1"),
+	}
+	for name, n := range yes {
+		if !ngac.IsFolderNodeName(n) {
+			t.Errorf("%s (%q) must be a folder", name, n)
+		}
+	}
+	for name, n := range no {
+		if ngac.IsFolderNodeName(n) {
+			t.Errorf("%s (%q) must not be a folder", name, n)
+		}
+	}
+}
+
+// An admin folder is a Folder_ OA of this workspace that the admin screen made (or
+// made before folders were typed). The drive's folders share the name pattern and
+// the workspace, and are not admin folders.
+func TestIsAdminFolder(t *testing.T) {
+	ws := ngac.WorkspaceID("w1")
+	name := ngac.FolderNodeName("f1")
+	props := func(t string) map[string]string {
+		p := map[string]string{"workspace_id": "w1"}
+		if t != "" {
+			p[ngac.PropType] = t
+		}
+		return p
+	}
+	for label, c := range map[string]struct {
+		name  string
+		props map[string]string
+		want  bool
+	}{
+		"made by the admin screen":       {name, ngac.AdminFolderProps(ws, "Legal"), true},
+		"made before folders were typed": {name, props(""), true},
+		"a drive folder":                 {name, props("drive_folder"), false},
+		"another workspace's":            {name, map[string]string{"workspace_id": "w2", ngac.PropType: ngac.PropTypeAdminFolder}, false},
+		"no workspace":                   {name, map[string]string{ngac.PropType: ngac.PropTypeAdminFolder}, false},
+		"not named like a folder":        {ngac.MgmtOAName(ws), ngac.AdminFolderProps(ws, "x"), false},
+		"nil properties":                 {name, nil, false},
+	} {
+		if got := ngac.IsAdminFolder(c.name, c.props, ws); got != c.want {
+			t.Errorf("%s: got %v, want %v", label, got, c.want)
+		}
+	}
+}

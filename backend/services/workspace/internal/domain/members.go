@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/realtime"
 	policypb "ngac-platform/proto/policy"
 )
@@ -64,8 +65,47 @@ func requireOwner(owners []*policypb.NGACNode, callerNodeID string) error {
 	return nil
 }
 
+// requireManageToRemoveManager holds back a removal that invite alone must not
+// make: a person who holds manage on any area of the workspace (management,
+// documents, channels, assets) is removed only by a caller holding manage on Mgmt.
+// manage is grantable per area, so an invite-only role could otherwise remove the
+// people above it. If the policy cannot say what the target holds, the removal is
+// refused.
+func (s *Service) requireManageToRemoveManager(ctx context.Context, callerNodeID string, ws *WorkspaceResult, targetNodeID string) error {
+	// Every refusal here is fail-closed; one that comes from the policy service not
+	// answering is 503, not a denial, so the caller retries instead of giving up.
+	unavailable := func(what string, err error) error {
+		slog.Warn("could not tell whether the person being removed manages an area; refusing", "workspace", ws.ID, "step", what, "error", err)
+		return fmt.Errorf("%w: cannot tell what the member manages", ErrUnavailable)
+	}
+	oas, err := s.areaOAs(ctx, ws)
+	if err != nil {
+		return unavailable("resolve areas", err)
+	}
+	ids := make([]string, 0, len(oas))
+	for _, id := range oas {
+		ids = append(ids, id)
+	}
+	held, err := policyclient.New(s.policyRead).BatchCheck(ctx, targetNodeID, ids, []string{ngac.OpManage})
+	if err != nil {
+		return unavailable("batch check", err)
+	}
+	for _, id := range ids {
+		if !held.Has(id, ngac.OpManage) {
+			continue
+		}
+		mgmtID, ok := oas[ngac.AreaManagement]
+		if !ok {
+			return fmt.Errorf("%w: workspace has no management attribute", ErrAccessDenied)
+		}
+		return s.checkAccess(ctx, callerNodeID, mgmtID, ngac.OpManage)
+	}
+	return nil
+}
+
 // RemoveMember removes a user from all UAs under the workspace PC. The caller
-// must hold invite on the workspace's Mgmt OA.
+// must hold invite on the workspace's Mgmt OA, and manage on it too when the
+// person holds manage on any area.
 //
 // Removing someone in the Owners UA takes being an Owner and holding manage, and
 // the last owner stays. That rule is checked and acted on under the workspace's
@@ -94,6 +134,8 @@ func (s *Service) RemoveMember(ctx context.Context, callerNodeID, wsID, targetNG
 			if len(owners) <= 1 {
 				return fmt.Errorf("%w: cannot remove last owner", ErrInvalidInput)
 			}
+		} else if err := s.requireManageToRemoveManager(ctx, callerNodeID, ws, targetNGACNodeID); err != nil {
+			return err
 		}
 		return s.detachMember(ctx, ws, targetNGACNodeID)
 	}

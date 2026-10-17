@@ -87,6 +87,10 @@ func (g *graphLog) RemoveAssignment(_ context.Context, r *policypb.RemoveAssignm
 
 type failingCache struct{ calls int }
 
+func (f *failingCache) DeleteChannelMember(context.Context, string, string) error {
+	return errors.New(`ERROR: deadlock detected (SQLSTATE 40P01)`)
+}
+
 func (f *failingCache) InsertChannelMember(context.Context, string, string) error {
 	f.calls++
 	return errors.New(`ERROR: deadlock detected (SQLSTATE 40P01)`)
@@ -94,6 +98,10 @@ func (f *failingCache) InsertChannelMember(context.Context, string, string) erro
 
 // seedChannel stores a channel whose OA and UA exist, so AddMember has something to act on.
 func seedChannel(t *testing.T) (*store.Store, *store.Channel) {
+	return seedChannelOfType(t, "workspace")
+}
+
+func seedChannelOfType(t *testing.T, channelType string) (*store.Store, *store.Channel) {
 	t.Helper()
 	pool := testutil.SetupTestDB(t)
 	st := store.NewStore(pool)
@@ -103,7 +111,7 @@ func seedChannel(t *testing.T) (*store.Store, *store.Channel) {
 		require.NoError(t, err)
 	}
 	user, _ := testutil.CreateUser(t, pool)
-	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general", ChannelType: "workspace", NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
+	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general", ChannelType: channelType, NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
 	require.NoError(t, st.InsertChannelWithMembers(context.Background(), ch, "creator-node"))
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), `DELETE FROM channels WHERE id = $1`, ch.ID)
@@ -163,4 +171,45 @@ func TestAddMember_NeverWithdrawsAnEdgeThatWasAlreadyThere(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Empty(t, g.withdrawn, "the pre-existing membership edge is left alone")
+}
+
+// Taking someone out of a group changes the graph first; when the copy in
+// channel_members cannot be deleted, the removal has still happened and the caller
+// is told, so that repeating it clears the row.
+func TestRemoveMember_ReportsACacheRowThatCouldNotBeDeleted(t *testing.T) {
+	st, ch := seedChannelOfType(t, "private")
+	g := &graphLog{alreadyAssigned: true}
+	svc := NewService(st, allowAll{}, g, nil, nil)
+	svc.members = &failingCache{}
+
+	err := svc.RemoveMember(context.Background(), ch.ID, "requester", "member")
+
+	require.Error(t, err)
+	assert.Equal(t, []string{"member>" + ch.NGACUaID}, g.withdrawn, "the graph is already correct")
+}
+
+func TestRemoveMember_DeletesTheCacheRowOnSuccess(t *testing.T) {
+	st, ch := seedChannelOfType(t, "private")
+	require.NoError(t, st.InsertChannelMember(context.Background(), ch.ID, "member"))
+	g := &graphLog{alreadyAssigned: true}
+	svc := NewService(st, allowAll{}, g, nil, nil)
+
+	require.NoError(t, svc.RemoveMember(context.Background(), ch.ID, "requester", "member"))
+
+	assert.Equal(t, []string{"member>" + ch.NGACUaID}, g.withdrawn)
+	dms, err := st.ListDMsOf(context.Background(), "member")
+	require.NoError(t, err)
+	assert.Empty(t, dms)
+}
+
+// A person who is not in the group is not removed from it, and nothing is written.
+func TestRemoveMember_NobodyToRemoveWritesNothing(t *testing.T) {
+	st, ch := seedChannelOfType(t, "private")
+	g := &graphLog{alreadyAssigned: false}
+	svc := NewService(st, allowAll{}, g, nil, nil)
+
+	err := svc.RemoveMember(context.Background(), ch.ID, "requester", "stranger")
+
+	require.ErrorIs(t, err, ErrNotFound)
+	assert.Empty(t, g.withdrawn)
 }

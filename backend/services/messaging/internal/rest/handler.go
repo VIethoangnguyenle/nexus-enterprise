@@ -353,11 +353,11 @@ func (h *Handler) ListChannelMembers(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	members, err := h.svc.ListMembers(c.Request().Context(), c.Param("chId"), claims.NGACNodeID)
+	roster, err := h.svc.MemberRoster(c.Request().Context(), c.Param("chId"), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
-	return c.JSON(http.StatusOK, map[string]any{"members": members})
+	return c.JSON(http.StatusOK, map[string]any{"members": roster.Members, "can_remove_members": roster.CanRemove})
 }
 
 // RemoveChannelMember handles DELETE /api/channels/:chId/members/:nodeId.

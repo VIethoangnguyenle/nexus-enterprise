@@ -1,7 +1,7 @@
 ---
 phase: 8
 title: "Messaging low items: channel RemoveMember, gRPC message type, DM listing (F8, F9, P1)"
-status: pending
+status: completed
 priority: P3
 effort: "2h"
 dependencies: [3, 5]
@@ -73,3 +73,15 @@ ListDMs: channel_members(node) ─> BatchCheck read
 
 ## Rollback
 Code-only; revert.
+
+## Status (implemented, not committed)
+- [x] Deny tests first, paired allows (`remove_member_realpolicy_test.go`, `send_message_type_test.go`, store `TestDeleteChannelMember_DropsOnlyThatRow`, fake-based tests in `member_cache_test.go`), seen red before the change.
+- [x] F8: `RemoveMember` = inside-or-manager gate, DM/`#general` refused (`ErrInvalidInput`), self | creator | manage, target a `U` directly in the group (`ErrNotFound`), then `RemoveAssignment`, `DeleteChannelMember` (new), revoke, announce; a cache failure is returned after the announce.
+- [x] F9: gRPC `SendMessage` no longer maps `message_type`.
+- [x] P1: `ListDMs` reads `ListDMsOf`; `ListAllDMs` deleted (`grep` = 0).
+- [x] Specs: `tenant-ngac-init` (removal rule), `resource-pep-coverage` (message type ignored over gRPC).
+- Deviations: (1) a DM cannot be removed from, so "`FindDMByMembers` no longer returns a removed DM" is tested as "a refused removal leaves the DM found". (2) Owners hold `manage`, not `invite`/`read`, so the gate is read-or-manage and the old `authorizeChannel(invite)` is not used. (3) Fixtures: `mockPolicyWriteClient` gained `GetNode`/`IsAssigned`; two older RemoveMember tests now use a private group and script the edge.
+
+### Review fixes (same worktree, uncommitted)
+- [x] M2: members list returns `can_remove_members` (creator or `manage`; false in DM and `#general`); `MembersPanel` shows "Xoá khỏi nhóm" only by it; optimistic add/remove keep the flag; 400 on removal reads in words (`explainRemoval`). vitest + backend deny/allow tests.
+- Follow-up (not done on purpose): **Leave group action needs a DESIGN.md/mockup entry first.** The API already lets a member leave; the screen has no action for it.

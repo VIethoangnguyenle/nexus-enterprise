@@ -106,17 +106,6 @@ func (s *Store) ListChannelsByWorkspace(ctx context.Context, workspaceID string)
 	return collectChannels(rows)
 }
 
-// ListAllDMs returns all DM channels (for filtering by membership).
-func (s *Store) ListAllDMs(ctx context.Context) ([]*Channel, error) {
-	rows, err := s.db.Query(ctx,
-		`SELECT `+channelCols+` FROM channels c WHERE c.channel_type = 'dm'`)
-	if err != nil {
-		return nil, fmt.Errorf("list DMs: %w", err)
-	}
-	defer rows.Close()
-	return collectChannels(rows)
-}
-
 // ListDMsOf returns the DM channels the node is recorded in. The member cache
 // only narrows the candidates a caller puts to the policy service: the access
 // decision itself stays with NGAC.
@@ -159,6 +148,16 @@ func (s *Store) InsertChannelMember(ctx context.Context, channelID, ngacNodeID s
 		`INSERT INTO channel_members (channel_id, ngac_node_id) VALUES ($1, $2)
 		 ON CONFLICT DO NOTHING`, channelID, ngacNodeID); err != nil {
 		return fmt.Errorf("record channel member: %w", err)
+	}
+	return nil
+}
+
+// DeleteChannelMember drops a member's row from the channel_members table. It is
+// idempotent: a row already gone is not an error.
+func (s *Store) DeleteChannelMember(ctx context.Context, channelID, ngacNodeID string) error {
+	if _, err := s.db.Exec(ctx,
+		`DELETE FROM channel_members WHERE channel_id = $1 AND ngac_node_id = $2`, channelID, ngacNodeID); err != nil {
+		return fmt.Errorf("forget channel member: %w", err)
 	}
 	return nil
 }

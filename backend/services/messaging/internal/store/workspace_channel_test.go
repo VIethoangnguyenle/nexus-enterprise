@@ -162,3 +162,29 @@ func TestWorkspaceWideChannel_AfterTheIndexIsTheWorkspacesOnlyWorkspaceChannel(t
 	require.NotNil(t, got, "the workspace's workspace-typed channel is found by its type, whatever it is now called")
 	assert.Equal(t, renamed.ID, got.ID)
 }
+
+// Taking someone out of a channel drops their cache row there, and only that one:
+// the same person in another channel and another person in this one keep theirs.
+// Doing it again is not an error.
+func TestDeleteChannelMember_DropsOnlyThatRow(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	st := store.NewStore(pool)
+	ctx := context.Background()
+	owner, _ := testutil.CreateUser(t, pool)
+	wsID, _ := testutil.CreateWorkspace(t, pool, owner)
+
+	group := wsChannel(t, pool, st, wsID, owner, "design", "private", time.Time{}, "leaver", "stayer")
+	other := wsChannel(t, pool, st, wsID, owner, "ops", "private", time.Time{}, "leaver")
+	has := func(ch *store.Channel, node string) bool {
+		var c int
+		require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM channel_members WHERE channel_id = $1 AND ngac_node_id = $2`, ch.ID, node).Scan(&c))
+		return c == 1
+	}
+
+	require.NoError(t, st.DeleteChannelMember(ctx, group.ID, "leaver"))
+
+	assert.False(t, has(group, "leaver"))
+	assert.True(t, has(group, "stayer"), "another person keeps theirs")
+	assert.True(t, has(other, "leaver"), "another channel keeps theirs")
+	require.NoError(t, st.DeleteChannelMember(ctx, group.ID, "leaver"), "again is not an error")
+}

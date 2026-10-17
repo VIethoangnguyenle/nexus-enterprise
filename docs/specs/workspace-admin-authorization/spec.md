@@ -15,7 +15,7 @@ from the request body.
 
 | Operation | Required op |
 |---|---|
-| Invite member, remove member | `invite` |
+| Invite member, remove member | `invite` (and `manage` when the person removed holds `manage` on any area) |
 | Create role, create folder | `manage` |
 | Department create / update / delete / move / member assignment | `manage` |
 | Update member roles, transfer or add owner, remove owner, delete role, delete folder, delete permission | `manage` |
@@ -36,6 +36,32 @@ from the request body.
 #### Scenario: Body carries a forged requester
 - **WHEN** the request body names another user as the requester
 - **THEN** the service ignores it and authorizes the caller from the JWT
+
+### Requirement: Removing a manager takes manage, and only folders are deleted as folders
+`invite` is enough to remove an ordinary member and not enough to remove a person who holds `manage` on any
+area of the workspace (Mgmt, Documents, Channels, Assets), because `manage` is grantable per area and an
+invite-only role would otherwise remove the people above it. Removing such a person SHALL also require `manage`
+on the Mgmt OA. The target's holdings are asked of the PDP in one batch check; if it cannot answer, the removal
+is refused as unavailable (503, not a denial), so the caller retries. The rule covers `manage` on an area as a whole (Mgmt, Documents, Channels, Assets); `manage` held on a single asset type, folder or group is not an area grant and does not trigger it. Removing an Owner keeps its stricter rule (Owner plus `manage`, and never the last Owner).
+
+Deleting a folder SHALL delete only an admin folder (`ngac.IsAdminFolder`): an OA under the workspace's PC named like a folder, whose `workspace_id` is the route's workspace and whose `type` is `admin_folder` (`CreateFolder` sets it) or absent (folders made before the type existed; the drive always sets one). The drive's own folders have the same name pattern and `type` `drive_folder`, under Documents and inside every group's drive: they, Mgmt, Documents, Channels, Assets, a group's content OA and an asset type's OA are refused with 400 and stay. `ListFolders` lists exactly the admin folders.
+
+#### Scenario: Invite-only role removes a manager
+- **WHEN** a caller holding `invite` but not `manage` on Mgmt removes a person who holds `manage` on Mgmt, Documents, Channels or Assets
+- **THEN** the request is refused with 403 and the person is still a member
+
+#### Scenario: The same removals, allowed
+- **WHEN** the same caller removes an ordinary member, or a caller holding `manage` and `invite` on Mgmt removes each of those managers
+- **THEN** the person is removed
+
+#### Scenario: The policy cannot say what the person manages
+- **WHEN** the batch check fails
+- **THEN** the removal is refused and nothing is detached
+
+#### Scenario: Deleting a container as a folder
+- **WHEN** an owner calls the gRPC `DeleteFolder` with the ID of Mgmt, Channels, Documents, Assets, a group's content OA, an asset type's OA, a drive folder under Documents or inside a group's drive, or a node named like a folder that belongs to another workspace
+- **THEN** it is refused (400; 404 for a node outside the workspace) and the node stays
+- **AND** a folder made by `CreateFolder` is deleted
 
 ### Requirement: There is no free-form permission grant
 The workspace service SHALL NOT offer a route or RPC that associates an arbitrary UA with an arbitrary OA (`POST /api/workspaces/:id/permissions` and the gRPC `CreatePermission` are removed). It checked `manage` on the route's workspace but not that the UA and OA belonged to it, so, with re-grants replacing operations, an owner of one workspace could rewrite another's Members or Owners grants. What a role holds is changed only through the per-area route below, which resolves the OA from the area inside the route's workspace and takes only a role of that workspace.

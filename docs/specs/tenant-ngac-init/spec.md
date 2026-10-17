@@ -86,7 +86,7 @@ The system SHALL assign the Owners UA under the Members UA, never the reverse. N
 - **THEN** every operation on this workspace's OAs resolves to DENY, even where an association exists, because the object's PC is not among the user's PCs
 
 ### Requirement: Channel membership is authorized per channel
-The system SHALL authorize adding and removing channel members with the `invite` operation on that channel's Content OA. The channel's Members UA SHALL hold `invite` on its own Content OA, so that belonging to a channel is what permits bringing someone else into it. The grant SHALL confer nothing on any other channel and nothing at the workspace level.
+The system SHALL authorize adding channel members with the `invite` operation on that channel's Content OA (removing them has its own rule, below). The channel's Members UA SHALL hold `invite` on its own Content OA, so that belonging to a channel is what permits bringing someone else into it. The grant SHALL confer nothing on any other channel and nothing at the workspace level.
 
 #### Scenario: Member adds someone to their own channel
 - **WHEN** a user assigned to `Ch_{channel_id}_Members` adds another user to that channel
@@ -119,6 +119,30 @@ A group's Members UA sits under the workspace's policy class (the intersection r
 #### Scenario: Target was removed from the workspace
 - **WHEN** the target is still under a group's UA but no longer under `{workspace_id}_Members`
 - **THEN** adding them to another group is denied, so a group cannot be used to undo a removal
+
+### Requirement: Only the person, the creator or a manager removes someone from a group
+`invite`, which every member of a group holds, lets people in; it SHALL NOT let a member put others out. Removing a person from a group (`DELETE /api/channels/:chId/members/:nodeId`, gRPC `RemoveChannelMember`) SHALL be allowed to: the person themselves (leaving); the person who made the group (`channels.created_by`, matched to the verified caller); and a holder of `manage` on the group's Content OA (the workspace's owners, who are not in the group). Anyone else is denied. The caller SHALL first be inside the conversation (`read`) or a manager of it, so a stranger is denied before anything about the channel is answered. The target SHALL be a user (`U`) node directly under the group's Members UA, read from the writer, else `404`; a UA nested there, a person not in the group and a node that does not exist are never removed.
+
+A direct message and the workspace-wide channel SHALL NOT lose people this way (`400`, for the person themselves and for a manager alike): a DM is a fixed pair, and the workspace-wide channel's people are the workspace's, so they leave it by leaving the workspace. After the assignment is withdrawn, the `channel_members` row SHALL be deleted; the member's live subscriptions are revoked and the roster announced even if that delete fails, and the failure is returned so that repeating the removal (which is idempotent) clears the row.
+
+The members list (`GET /api/channels/:chId/members`) carries `can_remove_members`, computed for the reader by the same rule (the creator, or a holder of `manage`, in a group; false in a DM and the workspace-wide channel), so a screen offers the remove action by it and never by comparing ids. A 400 from removal reads in words on screen, not as invalid information.
+
+#### Scenario: A member removes another member
+- **WHEN** a member of a group who did not make it, and holds no `manage`, removes another member or the creator
+- **THEN** the answer is 403, the person is still in the group and their `channel_members` row is kept
+- **AND** a workspace member outside the group, or a person of another workspace, is denied the same way
+
+#### Scenario: The allowed removals
+- **WHEN** a member leaves, or the creator removes a member, or an owner (not in the group) removes a member or the creator
+- **THEN** the person is out of the group, their cache row is gone, and they can no longer read it
+
+#### Scenario: Targets that are not members
+- **WHEN** an authorized caller names a UA nested under the group's UA, a workspace member who is not in the group, or a node that does not exist
+- **THEN** the answer is 404 and nothing is written
+
+#### Scenario: Direct message and workspace-wide channel
+- **WHEN** either person of a DM removes the other or leaves, or anyone (an owner, or the person themselves) removes a person from the workspace-wide channel
+- **THEN** the answer is 400, the edge and the cache row stay, and the DM is still found for the pair
 
 ### Requirement: Migration 061 removes what the old AddMember let into groups
 Migration `061_channel_membership_reconcile.sql` SHALL delete, for every non-DM group, the edges `child -> Ch_{id}_Members` where the child is a user not under the workspace's `{workspace_id}_Members` or is a UA of any kind (the workspace-wide channel's direct edges are among them: they are written only for members, so a leftover belongs to someone detached since), and the `channel_members` rows of those edges and of non-DM groups with no matching edge. It SHALL abort if a workspace lacks its PC, Members, Owners or Channels node, or if more edges or cache rows than its stated limits would be removed; it SHALL back up what it deletes (`_reconcile_061_assignments`, `_reconcile_061_channel_members`) and be re-runnable (a second run changes nothing). Direct messages are not touched. Like the other direct graph writes it bypasses EPP invalidation, so `policy` and `policy-read` are recreated, `policy invalidate-cache --all-workspaces` is run and messaging restarted after it is applied. Its pre-flight queries and reverse SQL are in the file's header.
