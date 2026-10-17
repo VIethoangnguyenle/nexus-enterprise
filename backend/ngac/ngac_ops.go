@@ -31,9 +31,23 @@ func AllOwnerOps() []string {
 	}
 }
 
-// MemberChannelOps returns operations granted to regular members on channels.
+// MemberChannelOps returns operations granted to regular members on the
+// workspace's Channels OA: starting a group, nothing else.
+//
+// A grant on Channels is inherited by every channel's Content OA beneath it (and
+// by that channel's drive and calendar), so read, write or invite here would make
+// every group readable by the whole workspace. Groups are private: access comes
+// only from the channel's own Members UA (ChannelMemberOps, ChannelDriveOps).
 func MemberChannelOps() []string {
-	return []string{OpRead, OpWrite, OpCreateChannel}
+	return []string{OpCreateChannel}
+}
+
+// OwnerChannelOps returns operations granted to workspace owners on the
+// workspace's Channels OA: starting a group, and manage so an owner can rename a
+// group or remove someone from it without being in it. Not read, write or
+// invite: an owner reads a group only by being one of its members.
+func OwnerChannelOps() []string {
+	return []string{OpManage, OpCreateChannel}
 }
 
 // ChannelMemberOps returns operations granted to channel members on content.

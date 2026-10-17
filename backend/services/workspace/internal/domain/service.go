@@ -5,6 +5,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -65,6 +66,35 @@ type Service struct {
 	notifier InvitationNotifier
 	// emitter announces committed changes to live clients; see WithEmitter.
 	emitter realtime.Emitter
+	// channelJoiner puts a new member into the workspace's #general; see WithChannelJoiner.
+	channelJoiner ChannelJoiner
+}
+
+// ChannelJoiner puts a member of a workspace into its workspace-wide channel
+// (#general). Being under the Members UA does not open that channel by itself: it
+// is readable through a direct edge each admission writes. The messaging service
+// does the writing; the implementation goes to it on this service's own identity.
+type ChannelJoiner interface {
+	JoinWorkspaceChannel(ctx context.Context, workspaceID, userID, userNodeID string) error
+}
+
+// WithChannelJoiner wires the #general join on admission. Without it (only unit
+// tests run that way) admission puts nobody in the channel.
+func (s *Service) WithChannelJoiner(j ChannelJoiner) *Service {
+	s.channelJoiner = j
+	return s
+}
+
+// joinWorkspaceChannel is the channel half of admitting a member. The person is a
+// member of the workspace whether or not it succeeds, so a failure is logged for
+// an operator (re-running migration 060 repairs the edge), not returned.
+func (s *Service) joinWorkspaceChannel(ctx context.Context, workspaceID, userID, userNodeID string) {
+	if s.channelJoiner == nil {
+		return
+	}
+	if err := s.channelJoiner.JoinWorkspaceChannel(ctx, workspaceID, userID, userNodeID); err != nil {
+		slog.Error("member not put into the workspace channel", "workspace", workspaceID, "error", err)
+	}
 }
 
 // NewService creates a workspace domain service.
@@ -205,7 +235,7 @@ func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) 
 	}{
 		{ownersUA.Id, mgmtOA.Id, ngac.AllOwnerOps()},
 		{ownersUA.Id, docsOA.Id, ngac.AllOwnerOps()},
-		{ownersUA.Id, channelsOA.Id, ngac.AllOwnerOps()},
+		{ownersUA.Id, channelsOA.Id, ngac.OwnerChannelOps()},
 		{membersUA.Id, docsOA.Id, ngac.MemberDocumentOps()},
 		{membersUA.Id, channelsOA.Id, ngac.MemberChannelOps()},
 	}

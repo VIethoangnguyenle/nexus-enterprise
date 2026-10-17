@@ -1,7 +1,7 @@
 ---
 phase: 2
 title: "Private groups (F1): graph model, #general direct edges, calendar vectors, migration 060"
-status: pending
+status: completed
 priority: P1
 effort: "8h"
 dependencies: [1]
@@ -157,3 +157,68 @@ UPDATE channels c SET channel_type = b.channel_type FROM _reconcile_060_channels
 COMMIT;
 ```
 `#general` direct edges are harmless under the old model and stay.
+
+## Implementation status (2026-10-17)
+
+Implemented on `fix/authz-overprivilege`, not yet committed (controller reviews).
+
+- [x] 1. Deny vectors first, each paired with an allow on the same graph: `pdp_private_groups_test.go` (member / owner /
+  custom role / cross-PC / `#general` direct edges / prohibition), `pdp_calendar_scenarios_test.go` (channel calendar private
+  to its group; the graph now carries the workspace's Channels grants), `pdp_workspace_topology_test.go` (op lists come from
+  `ngac.*Ops()`).
+- [x] 2. Real-policy tests (`private_groups_realpolicy_test.go`, tag `realpolicy`): non-member `ListChannels` omits G,
+  `GetChannel`, `SendMessage`, `ListMembers`, `CallToken`, `AddMember` denied, creator allowed; owner outside G: manage yes,
+  read no; `#general` roster / `member_count` / push recipient / removal; only one workspace-wide channel.
+- [x] 3. Code: op sets, `OwnerChannelOps`, `AreaOps(AreaChannels)`, `CreateWorkspace`, private-only `CreateChannel` (REST + gRPC),
+  `ProvisionWorkspaceChannel` / `JoinWorkspaceChannel` (proto + `make proto` + `npm run proto:gen`; no TS diff, the TS
+  generator only reads `ws.proto`), auth `provisionChannel` / `joinTenant`, workspace `admit`, realtime consumer cache cleanup.
+- [x] 4. `data/migrations/060_private_groups.sql`; `make db-migrate` run twice on dev, second run 0 rows; reverse SQL
+  exercised on dev (restored 254 read/write/invite associations, 127 `workspace` channels, no index) and 060 re-applied.
+- [x] 5. Observed on dev with the real policy process over the migrated DB: member outside a throwaway group DENY
+  read/write/invite and its drive (ALLOW before 060), group member ALLOW, three real members ALLOW `#general`, person of
+  another workspace DENY; 0 `*_Channels` associations with read/write/invite; every `#general` member has the direct edge.
+- [x] 6. `make test s=policy|messaging|drive|workspace|calendar|auth`, `make test-realpolicy`, `make check-ngac`,
+  `make check-layering`, `make check-docs`, `make build-check`, `cd frontend && npm run build`.
+- [x] Specs: `tenant-ngac-init`, `resource-pep-coverage`, `chat-calls`, `calendar`, `workspace-admin-authorization`.
+
+Deviations from the file list (all needed to make the change work or keep suites green):
+- `workspace/cmd/main.go`, new `workspace/internal/chat/joiner.go`, `docker-compose.yml`, `deploy/docker-compose.prod.yml`
+  (`MESSAGING_SERVICE_ADDR` for workspace): workspace had no messaging client.
+- `messaging/internal/grpc/policy.go` (`ServerPolicy()`, used by `cmd/main.go`) instead of an inline policy, so tests run the
+  production allow-list.
+- `backend/testutil/policy_graph.go` + `policy_process_test.go` (seeded topology follows `OwnerChannelOps`),
+  `scripts/run-realpolicy-tests.sh` (the shared module no longer tries to run the service module's tagged package),
+  test helpers in messaging / drive that inserted several `workspace`-typed channels per workspace (the new unique index).
+- Step 6 of 060 covers every `<id>_Channels` OA, including those of workspaces deleted long ago (38 such associations in dev).
+- `ngac_ci` was behind the migration chain (no `messages.content_text`, no calendar tables); it was brought to HEAD with
+  `data/init.sql` + migrations (dump kept in the session scratchpad) so `make test` could run.
+
+### Review fixes (2026-10-17, coordinator review: approve with fixes)
+
+- [x] H1 calendar: `accessLevels` holds a level only when the person can also `read` the calendar (an owner's inherited
+  `manage` on a group no longer reads its calendar). `private_group_calendar_test.go`: owner outside the group denied (list
+  events, get event, ensure calendar, not listed), plain member denied, group member allowed, owner still manages the
+  workspace calendar. `docs/specs/calendar` updated.
+- [x] H2 `#general` by type: `Store.WorkspaceWideChannel` asks (lazily, positive kept) whether `channels_one_workspace_wide`
+  is valid; if so the workspace's one `workspace`-typed channel is it, else the name+owner heuristic. 060 runs the heuristic
+  only while the index is absent (`_m060_state`), and its closing retype is skipped once the index exists.
+  `scripts/test-migration-060-rerun.sh` (scratch copy of dev, rename a `#general`, re-run 060: unchanged). The "no
+  workspace-wide channel" log is a Warn.
+- [x] H3 two-release rule: nothing needs 060 at start-up; the same build was exercised on both sides (store tests force the
+  index state; first-run 060 replayed from the pre-060 dev dump: 105 general, 22 retyped, index created; migration
+  commit stands alone: it touches no code).
+- [x] M1 `Unimplemented` from `ProvisionWorkspaceChannel` falls back to the old `CreateChannel` (type `workspace`, as the
+  owner); from `JoinWorkspaceChannel` it is a Warn (auth, workspace joiner). Other failures are not swallowed by the fallback.
+- [x] M2 both calls bounded by a 5 s context (auth, `workspace/internal/chat/joiner.go`); `JoinWorkspaceChannel` now carries
+  `user_id` (proto regenerated both sides, no TS diff). Self-healing: `ListChannels` joins a workspace member who lacks the edge
+  (membership verified first; a person of another workspace is not joined); a positive is memoised per instance.
+- [x] M3 (reverted by the coordinator): joining writes no notification level; members joined via the workspace path keep the
+  default. Not done: batching the per-recipient lookups in `push.go` (the policy batch API is per user, not per object).
+- [x] M4 phase-03 file notes that 061 also strips `#general` edges and cache rows of non-members.
+- [x] L1 `requireService(ctx, "auth", "workspace")` (provision: `auth`) in the handler, tested with a deliberately loose policy.
+- [x] L2 `actingAs` uses the real `users.id` (no node id in `UserID`).
+
+Test helper additions: `answerPolicy.IsAssigned` in the messaging REST tests (listing now asks it).
+
+### Open follow-ups
+- #general push volume: needs a 'mentions only' level (schema change) - follow-up, not in this plan.

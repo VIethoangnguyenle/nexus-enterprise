@@ -23,6 +23,9 @@ the REST edge and from the signed identity token between services (see "Caller i
 | Create channel | `create_channel` | the workspace Channels OA (`ngac.ChannelsOAName(wsID)`), ID-keyed only |
 | Update channel (`PATCH /api/channels/:chId`) | `manage` | the channel's content OA |
 | WebSocket subscribe to a channel | `read` | the channel's content OA |
+| Read, list members of, post in, start or join a call of a channel | `read`, `read`, `write`, `write` | the channel's content OA |
+| Create the workspace-wide channel (`ProvisionWorkspaceChannel`) | service identity `auth` only; the creator also needs `create_channel` | the workspace Channels OA |
+| Put a member in the workspace-wide channel (`JoinWorkspaceChannel`, also done for the caller when they list the workspace's channels) | service identity `auth` or `workspace` only (the handler checks the name again); the person must be under the workspace's Members UA | the channel's Members UA |
 
 #### Scenario: Subscribe without read
 - **WHEN** an authenticated WebSocket client sends `SubscribeRequest` for a channel whose OA it cannot read
@@ -45,6 +48,17 @@ the REST edge and from the signed identity token between services (see "Caller i
 #### Scenario: Create channel without create_channel
 - **WHEN** a caller with no `create_channel` grant on the workspace Channels OA creates a channel
 - **THEN** the request is denied and no graph node is written
+
+#### Scenario: Workspace member outside a group
+- **WHEN** a workspace member (or owner) who is not in group G lists channels, opens G, lists its members, posts in it, asks for a ticket into its call or subscribes to it over WebSocket
+- **THEN** G is not listed and every other request is denied, because groups are private (see `tenant-ngac-init`, "Groups are private")
+- **AND** the same requests from G's own members succeed
+- **AND** the same member's read of a file in G's drive, and of G's calendar, is denied
+
+#### Scenario: A person asks for a workspace-wide channel
+- **WHEN** a person creates a channel, over REST or gRPC, and names the type `workspace`
+- **THEN** the channel is stored as `private`
+- **AND** a person's identity on `ProvisionWorkspaceChannel` or `JoinWorkspaceChannel`, or the identity of a service not listed for the method, is refused before any handler runs or inside it
 
 ### Requirement: Live events stay within their audience
 Presence events SHALL be delivered only to sessions of the same tenant. Approval events SHALL

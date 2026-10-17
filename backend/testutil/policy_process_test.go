@@ -28,24 +28,33 @@ func TestSeededWorkspaceDecisions(t *testing.T) {
 	elsewhere := testutil.NewUser(t, write, other.Members)
 
 	// Allow.
-	if !testutil.Allowed(t, read, member, ws.Channels, ngac.OpRead) {
-		t.Error("member must read Channels")
+	if !testutil.Allowed(t, read, member, ws.Channels, ngac.OpCreateChannel) {
+		t.Error("member must be able to start a group on Channels")
 	}
 	if !testutil.Allowed(t, read, owner, ws.Mgmt, ngac.OpManage) {
 		t.Error("owner must manage Mgmt")
 	}
+	if !testutil.Allowed(t, read, owner, ws.Channels, ngac.OpManage) {
+		t.Error("owner must moderate groups (manage on Channels)")
+	}
 	// Deny, on the same fixture.
+	if testutil.Allowed(t, read, owner, ws.Channels, ngac.OpRead) {
+		t.Error("an owner must not read groups through Channels")
+	}
 	if testutil.Allowed(t, read, member, ws.Mgmt, ngac.OpRead) {
 		t.Error("member must not read Mgmt")
 	}
-	if testutil.Allowed(t, read, stranger, ws.Channels, ngac.OpRead) {
-		t.Error("a user in no workspace must not read Channels")
+	if testutil.Allowed(t, read, member, ws.Channels, ngac.OpRead) {
+		t.Error("a member must not read Channels: a grant there reaches every group, and groups are private")
 	}
-	if testutil.Allowed(t, read, elsewhere, ws.Channels, ngac.OpRead) {
-		t.Error("a member of another workspace must not read this one's Channels (different PC)")
+	if testutil.Allowed(t, read, stranger, ws.Channels, ngac.OpCreateChannel) {
+		t.Error("a user in no workspace must not start a group on Channels")
 	}
-	if !testutil.Allowed(t, read, elsewhere, other.Channels, ngac.OpRead) {
-		t.Error("the same user must read the Channels of the workspace they belong to")
+	if testutil.Allowed(t, read, elsewhere, ws.Channels, ngac.OpCreateChannel) {
+		t.Error("a member of another workspace must not start a group in this one (different PC)")
+	}
+	if !testutil.Allowed(t, read, elsewhere, other.Channels, ngac.OpCreateChannel) {
+		t.Error("the same user must start groups in the workspace they belong to")
 	}
 }
 

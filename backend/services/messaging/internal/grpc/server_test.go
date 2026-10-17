@@ -269,26 +269,28 @@ func cleanTestData(t *testing.T, pool *pgxpool.Pool, channelIDs ...string) {
 }
 
 // ---------------------------------------------------------------------------
-// 3.1: TestCreateChannel — invalid type produces error
+// 3.1: TestCreateChannel — the requested type is not read
 // ---------------------------------------------------------------------------
 
-func TestCreateChannel_InvalidType(t *testing.T) {
-	// The request has to be authorized for the invalid type to reach the
-	// database constraint: creation now takes create_channel on the
-	// workspace's Channels OA, and a workspace-less request is refused before
-	// any write. So this runs in a real workspace whose Channels OA resolves.
+func TestCreateChannel_RequestedTypeIsIgnored(t *testing.T) {
+	// A group made by a user is private whatever type the request names: the
+	// workspace-wide channel and DMs have their own paths. So a type the table
+	// does not allow cannot reach the database constraint either.
 	pool := testPool(t)
 	wsID := getTestWorkspaceID(t, pool)
+	userID, userNode := testutil.CreateUser(t, pool)
 	srv, _ := setupTestServerWithPolicy(t, &mockPolicyReadWithChannelsOA{wsID: wsID})
 
-	_, err := srv.CreateChannel(asCaller("user-1", "ngac-user-1"), &pb.CreateChannelRequest{
+	ch, err := srv.CreateChannel(asCaller(userID, userNode), &pb.CreateChannelRequest{
 		Name: "test_bad_type", ChannelType: "invalid_type", WorkspaceId: wsID,
 	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM channels WHERE id = $1`, ch.Id)
+		pool.Exec(context.Background(), `DELETE FROM ngac_nodes WHERE id IN ($1, $2)`, ch.NgacOaId, ch.NgacUaId)
+	})
 
-	require.Error(t, err)
-	st, ok := status.FromError(err)
-	require.True(t, ok)
-	assert.Equal(t, codes.Internal, st.Code())
+	assert.Equal(t, "private", ch.ChannelType)
 }
 
 // ---------------------------------------------------------------------------

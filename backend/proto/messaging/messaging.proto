@@ -12,6 +12,13 @@ service MessagingService {
   rpc ListChannels(ListChannelsRequest) returns (ChannelList);
   rpc GetChannel(GetChannelRequest) returns (Channel);
 
+  // Workspace-wide channel (#general). Service-to-service only: neither is
+  // reachable by a user. The first is the only way a channel of type
+  // 'workspace' is made (auth service); the second puts a member of the
+  // workspace into it (auth and workspace services).
+  rpc ProvisionWorkspaceChannel(ProvisionWorkspaceChannelRequest) returns (Channel);
+  rpc JoinWorkspaceChannel(JoinWorkspaceChannelRequest) returns (Empty);
+
   // Channel members
   rpc AddChannelMember(AddChannelMemberRequest) returns (Empty);
   rpc RemoveChannelMember(RemoveChannelMemberRequest) returns (Empty);
@@ -104,6 +111,25 @@ message CreateChannelRequest {
   string user_id = 3 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string user_ngac_node_id = 4 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string channel_type = 5;
+}
+
+// ProvisionWorkspaceChannelRequest names the workspace-wide channel to create and
+// the person creating it (the workspace's owner, who becomes its first member).
+// Accepted on the auth service's identity only.
+message ProvisionWorkspaceChannelRequest {
+  string workspace_id = 1;
+  string name = 2;
+  string creator_user_id = 3;
+  string creator_ngac_node_id = 4;
+}
+
+// JoinWorkspaceChannelRequest names a member of the workspace to put into its
+// workspace-wide channel. Accepted on the auth or workspace service's identity
+// only; the person must already be a member of the workspace.
+message JoinWorkspaceChannelRequest {
+  string workspace_id = 1;
+  string user_ngac_node_id = 2;
+  string user_id = 3; // the person's users.id; the policy answers on their behalf
 }
 
 message ListChannelsRequest {

@@ -442,6 +442,9 @@ func (s *Service) admit(ctx context.Context, ws *WorkspaceResult, inv *store.Inv
 			}
 		}
 	}
+	// Joining is idempotent, so it also repairs a member admitted before the
+	// channel could be reached.
+	s.joinWorkspaceChannel(ctx, ws.ID, userID, nodeID)
 
 	// What rode along, as the inviter's rights stand now.
 	extras := InviteInput{RoleID: inv.RoleID, DepartmentID: inv.DepartmentID}

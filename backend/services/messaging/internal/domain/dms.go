@@ -71,7 +71,7 @@ func (s *Service) FindOrCreateDM(ctx context.Context, userID, userNodeID, target
 	// one-person DM behind.
 	ch, err := s.createChannel(ctx, CreateChannelInput{
 		Name:        ngac.DMChannelName(s.lookupUsername(ctx, userID), s.lookupUsername(ctx, targetUserID)),
-		ChannelType: "dm",
+		ChannelType: ChannelTypeDM,
 		UserID:      userID,
 		UserNodeID:  userNodeID,
 	}, "", "", targetNodeID)

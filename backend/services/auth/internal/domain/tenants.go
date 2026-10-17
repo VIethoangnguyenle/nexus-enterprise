@@ -135,7 +135,15 @@ func (s *Service) joinTenant(ctx context.Context, tenantID, userID, ngacNodeID, 
 	if err := s.store.InsertTenantUser(ctx, tenantID, userID, role, "active", ngacNodeID); err != nil {
 		return fmt.Errorf("insert tenant user: %w", err)
 	}
-	s.assignUserToTenantNGAC(ctx, tenantID, ngacNodeID, role == "owner")
+	if err := s.assignTenantNGAC(ctx, tenantID, ngacNodeID, role == "owner"); err != nil {
+		slog.Error("assign user to tenant UAs failed", "tenant", tenantID, "error", err)
+		return nil
+	}
+	// A member of the workspace is a member of its #general; the owner of a
+	// workspace being made is put there when the channel is created.
+	if role != "owner" {
+		s.joinWorkspaceChannel(ctx, tenantID, userID, ngacNodeID)
+	}
 	return nil
 }
 

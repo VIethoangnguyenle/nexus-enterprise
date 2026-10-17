@@ -45,7 +45,7 @@ func TestAreaOpsPerArea(t *testing.T) {
 	cases := map[ngac.Area][]string{
 		ngac.AreaManagement: {ngac.OpManage, ngac.OpInvite},
 		ngac.AreaDocuments:  {ngac.OpRead, ngac.OpWrite, ngac.OpShare},
-		ngac.AreaChannels:   {ngac.OpRead, ngac.OpWrite, ngac.OpManage, ngac.OpInvite, ngac.OpCreateChannel},
+		ngac.AreaChannels:   {ngac.OpCreateChannel},
 		ngac.AreaAssets:     {ngac.OpRead, ngac.OpWrite, ngac.OpApprove, ngac.OpManage},
 	}
 	for a, want := range cases {

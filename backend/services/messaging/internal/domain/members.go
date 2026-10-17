@@ -19,9 +19,10 @@ import (
 // AddMember adds a user to a channel's NGAC members UA.
 //
 // Membership is a graph mutation, so it takes OpInvite on the channel — the
-// operation the vocabulary reserves for exactly this. Workspace owners hold it
-// through the Channels OA; plain channel members hold only read/write and
-// therefore cannot pull other people into a channel.
+// operation the vocabulary reserves for exactly this. A group is private, so only
+// its own members hold it (ChannelMemberOps): a workspace owner who is not in the
+// group holds manage there, not invite, and a member of the workspace who is not
+// in it holds nothing.
 func (s *Service) AddMember(ctx context.Context, channelID, requesterNodeID, targetNodeID string) error {
 	ch, err := s.authorizeChannel(ctx, channelID, requesterNodeID, ngac.OpInvite)
 	if err != nil {
@@ -103,7 +104,9 @@ func (s *Service) RemoveMember(ctx context.Context, channelID, requesterNodeID, 
 	return nil
 }
 
-// ListMembers returns the members of a channel via NGAC graph traversal.
+// ListMembers returns the members of a channel via NGAC graph traversal: the user
+// nodes directly under its Members UA. That includes the workspace-wide channel,
+// whose members are direct edges for exactly this reason.
 func (s *Service) ListMembers(ctx context.Context, channelID, userNodeID string) ([]*pb.ChannelMember, error) {
 	ch, err := s.authorizeChannel(ctx, channelID, userNodeID, ngac.OpRead)
 	if err != nil {

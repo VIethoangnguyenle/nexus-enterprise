@@ -19,7 +19,13 @@ and never twice, including under concurrent first use. A calendar's graph shape 
 - **workspace**: OA under the policy class; `<ws>_Members` is associated with `read`, `<ws>_Owners` with
   `read write share manage`;
 - **group**: OA assigned beneath the conversation's `Ch_<id>_Content` OA, so that members inherit
-  `read write invite` (`ngac.ChannelMemberOps`) and nobody else has anything.
+  `read write invite` (`ngac.ChannelMemberOps`) and nobody else has anything. Nothing the workspace's own UAs hold on
+  the Channels OA reaches it: `<ws>_Members` has `create_channel` only and `<ws>_Owners` `manage create_channel`
+  there (`ngac.MemberChannelOps`, `ngac.OwnerChannelOps`), so a workspace member or owner who is not in the group
+  has no right on its calendar (vectors in `pdp_calendar_scenarios_test.go`). `manage` is inherited by the group's
+  calendar from the Content OA the owners hold it on, so the service SHALL NOT read `manage` (or `write`) as access
+  to a calendar the person cannot also `read`: every access level includes reading, and a calendar one cannot read
+  is not held at all.
 
 No operation is added to the vocabulary of eight. All names come from `backend/ngac` and are keyed by ID, never by a
 name a tenant chooses.
@@ -39,6 +45,8 @@ name a tenant chooses.
 #### Scenario: Group calendar, outsider
 - **WHEN** a person who is not in the group conversation asks for its calendar or its events
 - **THEN** the answer is 403 and nothing is returned
+- **AND** this holds for a member of the workspace and for a workspace owner alike (the owner's `manage` on the group does not make its calendar readable, and the calendar is not listed for them); the group's own member reads and writes it
+- **AND** the same owner still manages the workspace calendar
 
 ### Requirement: A personal calendar is shared at one of three levels
 Sharing a personal calendar SHALL require `share` on its OA (403 otherwise) and name a person of the same workspace

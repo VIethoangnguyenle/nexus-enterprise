@@ -72,6 +72,11 @@ The workspace service SHALL answer, for a workspace, which resource areas a role
 - **WHEN** a member asks for the areas
 - **THEN** documents lists `read`, `write` and `share`, and does not list `upload` (the drive gates an upload on `write`, so no service checks `upload`), `approve` or `manage`
 
+#### Scenario: Channels
+- **WHEN** a member asks for the areas
+- **THEN** channels lists `create_channel` and nothing else: a grant on the Channels OA is inherited by every group's messages, files and calendar, and groups are private, so a role cannot be given `read`, `write`, `invite` or `manage` there (only the Owners hold `manage` on groups they are not in)
+- **AND** setting a role's permissions on channels to `read` answers 400 and writes nothing
+
 #### Scenario: A workspace with no assets yet
 - **WHEN** the workspace has no Assets OA
 - **THEN** the assets area is not listed

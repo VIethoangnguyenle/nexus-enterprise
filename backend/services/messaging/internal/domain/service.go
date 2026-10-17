@@ -6,6 +6,7 @@ package domain
 import (
 	"context"
 	"log/slog"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -43,6 +44,11 @@ type Service struct {
 	callHangUpGrace time.Duration // 0: the default wait before a direct call left alone ends
 
 	versions httputil.Versions // nil: no ETags; see chat_state.go
+
+	// hasWideEdge remembers who was seen with their workspace-wide channel edge
+	// (key: workspace|node), so listing channels does not ask the policy each time.
+	// Only a positive is kept, and leaving the workspace removes the entry.
+	hasWideEdge sync.Map
 
 	rdb *redis.Client // nil: avatar uploads and downloads are not rate limited
 	// avatarGate holds one slot: one group picture is decoded at a time.

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 
@@ -33,19 +34,29 @@ func (w *fakeWorld) recordCaller(rpc string, ctx context.Context) {
 }
 
 type fakeWorld struct {
-	mu         sync.Mutex
-	users      map[string]*store.User // by id
-	identities map[string]string      // provider|subject -> user id
-	workspaces map[string]*store.Tenant
-	members    map[string]*store.TenantMembership // tenant|user -> membership
-	channels   []string                           // workspace ids that got #general
-	callers    map[string]grpcauth.Caller         // downstream RPC -> caller on its context
-	seq        int
-	verified   map[string]bool       // user id -> email proven
-	deleted    []string              // workspaces removed through DeleteWorkspace
-	deleteErr  error                 // DeleteWorkspace fails with this
-	channelErr error                 // CreateChannel fails with this
-	avatars    map[string]fakeAvatar // token -> picture
+	mu          sync.Mutex
+	users       map[string]*store.User // by id
+	identities  map[string]string      // provider|subject -> user id
+	workspaces  map[string]*store.Tenant
+	members     map[string]*store.TenantMembership // tenant|user -> membership
+	channels    []string                           // workspace ids that got #general
+	callers     map[string]grpcauth.Caller         // downstream RPC -> caller on its context
+	seq         int
+	verified    map[string]bool // user id -> email proven
+	deleted     []string        // workspaces removed through DeleteWorkspace
+	deleteErr   error           // DeleteWorkspace fails with this
+	channelErr  error           // ProvisionWorkspaceChannel fails with this
+	joinErr     error           // JoinWorkspaceChannel fails with this
+	provisioned []*messagingpb.ProvisionWorkspaceChannelRequest
+	joins       [][2]string // workspace id, user node: who was put into #general
+	joinUsers   []string    // the users.id sent with each join
+	// provisionErr makes ProvisionWorkspaceChannel fail with this; joinUnimplemented
+	// makes JoinWorkspaceChannel answer as a messaging service that predates it.
+	provisionErr      error
+	joinUnimplemented bool
+	legacyCreates     []*messagingpb.CreateChannelRequest
+	rpcDeadlines      map[string]time.Duration // time left on the context of each downstream call
+	avatars           map[string]fakeAvatar    // token -> picture
 }
 
 type fakeAvatar struct {
@@ -55,11 +66,12 @@ type fakeAvatar struct {
 
 func newFakeWorld() *fakeWorld {
 	return &fakeWorld{
-		users:      map[string]*store.User{},
-		identities: map[string]string{},
-		workspaces: map[string]*store.Tenant{},
-		members:    map[string]*store.TenantMembership{},
-		verified:   map[string]bool{},
+		users:        map[string]*store.User{},
+		identities:   map[string]string{},
+		workspaces:   map[string]*store.Tenant{},
+		members:      map[string]*store.TenantMembership{},
+		verified:     map[string]bool{},
+		rpcDeadlines: map[string]time.Duration{},
 	}
 }
 
@@ -442,15 +454,55 @@ type fakeMessaging struct {
 	w *fakeWorld
 }
 
-func (f *fakeMessaging) CreateChannel(ctx context.Context, req *messagingpb.CreateChannelRequest, _ ...grpc.CallOption) (*messagingpb.Channel, error) {
+// ProvisionWorkspaceChannel is the only way auth makes #general. The fake has no
+// CreateChannel on purpose: a call to it would panic on the embedded nil client.
+func (f *fakeMessaging) ProvisionWorkspaceChannel(ctx context.Context, req *messagingpb.ProvisionWorkspaceChannelRequest, _ ...grpc.CallOption) (*messagingpb.Channel, error) {
 	f.w.mu.Lock()
 	defer f.w.mu.Unlock()
-	f.w.recordCaller("CreateChannel", ctx)
+	f.w.recordCaller("ProvisionWorkspaceChannel", ctx)
+	f.w.provisioned = append(f.w.provisioned, req)
+	f.w.rpcDeadlines["ProvisionWorkspaceChannel"] = deadlineIn(ctx)
+	if f.w.provisionErr != nil {
+		return nil, f.w.provisionErr
+	}
 	if f.w.channelErr != nil {
 		return nil, f.w.channelErr
 	}
 	f.w.channels = append(f.w.channels, req.WorkspaceId)
+	return &messagingpb.Channel{Id: "ch-" + req.WorkspaceId, Name: req.Name, ChannelType: "workspace"}, nil
+}
+
+// JoinWorkspaceChannel records who auth put into a workspace's #general.
+func (f *fakeMessaging) JoinWorkspaceChannel(ctx context.Context, req *messagingpb.JoinWorkspaceChannelRequest, _ ...grpc.CallOption) (*messagingpb.Empty, error) {
+	f.w.mu.Lock()
+	defer f.w.mu.Unlock()
+	f.w.recordCaller("JoinWorkspaceChannel", ctx)
+	f.w.joins = append(f.w.joins, [2]string{req.WorkspaceId, req.UserNgacNodeId})
+	f.w.joinUsers = append(f.w.joinUsers, req.UserId)
+	f.w.rpcDeadlines["JoinWorkspaceChannel"] = deadlineIn(ctx)
+	if f.w.joinUnimplemented {
+		return nil, status.Error(codes.Unimplemented, "unknown method JoinWorkspaceChannel")
+	}
+	return &messagingpb.Empty{}, f.w.joinErr
+}
+
+// CreateChannel is what a messaging service from before ProvisionWorkspaceChannel
+// answers #general with; auth falls back to it only when the new method is unknown.
+func (f *fakeMessaging) CreateChannel(ctx context.Context, req *messagingpb.CreateChannelRequest, _ ...grpc.CallOption) (*messagingpb.Channel, error) {
+	f.w.mu.Lock()
+	defer f.w.mu.Unlock()
+	f.w.recordCaller("CreateChannel", ctx)
+	f.w.legacyCreates = append(f.w.legacyCreates, req)
+	f.w.channels = append(f.w.channels, req.WorkspaceId)
 	return &messagingpb.Channel{Id: "ch-" + req.WorkspaceId, Name: req.Name}, nil
+}
+
+// deadlineIn reports how long the context has left, or 0 when it has no deadline.
+func deadlineIn(ctx context.Context) time.Duration {
+	if d, ok := ctx.Deadline(); ok {
+		return time.Until(d)
+	}
+	return 0
 }
 
 type fakePolicyRead struct {

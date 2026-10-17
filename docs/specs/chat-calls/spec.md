@@ -19,6 +19,11 @@ ticket: `{call, token, url}`.
 - **WHEN** someone with `read` but not `write` on the channel starts a call
 - **THEN** the answer is 403, no room is opened and no ticket is signed
 
+#### Scenario: Workspace member outside a group
+- **WHEN** a member of the workspace who is not in a group starts a call in it, asks for a ticket into one of its calls, or reads it
+- **THEN** the answer is 403 and no room is opened and no ticket is signed, because a group is readable and writable only by the people in it (`tenant-ngac-init`, "Groups are private"); an owner outside the group is refused the same way
+- **AND** a member of the group in the same workspace gets 201 and a ticket
+
 ### Requirement: One open call per conversation
 A conversation SHALL have at most one call that is `ringing` or `active`. Starting a call while one is open SHALL
 answer (200) with a ticket into that call and post no card, including when two people start one in the same instant.

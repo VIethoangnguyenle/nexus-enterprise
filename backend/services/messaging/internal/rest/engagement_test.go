@@ -52,6 +52,12 @@ func (a answerPolicy) BatchCheckAccess(_ context.Context, req *policypb.BatchChe
 	return &policypb.BatchAccessResult{Results: results}, nil
 }
 
+// IsAssigned says the caller already holds the edge to the workspace-wide channel,
+// so listing channels has nothing to repair.
+func (answerPolicy) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return &policypb.BoolResponse{Value: true}, nil
+}
+
 type namedUser struct{ authpb.AuthServiceClient }
 
 func (namedUser) GetUserByID(_ context.Context, r *authpb.GetUserByIDRequest, _ ...grpc.CallOption) (*authpb.UserInfo, error) {

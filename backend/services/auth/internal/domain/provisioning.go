@@ -5,6 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
@@ -63,16 +67,67 @@ func (s *Service) autoProvisionChannel(ctx context.Context, workspaceID, userID,
 	slog.Info("auto-provisioned #general channel", "workspace_id", workspaceID)
 }
 
+// asService returns ctx with no end user on it, so a downstream call is signed
+// with this service's own identity. A call that arrives with a signed-in person on
+// the context would otherwise be made as that person, and messaging refuses a
+// person on the methods meant for services.
+func asService(ctx context.Context) context.Context {
+	return grpcauth.WithCaller(ctx, grpcauth.Caller{})
+}
+
+// channelRPCTimeout bounds each call auth makes to messaging for a workspace's
+// #general: a messaging service that never answers must not hold a sign-in or a
+// workspace creation for as long as the request lives.
+const channelRPCTimeout = 5 * time.Second
+
 // provisionChannel creates #general and reports a failure. Without a messaging
 // client there is nothing to create and nothing failed.
+//
+// The workspace-wide channel is made by this service alone (messaging refuses a
+// person's identity for it), so the call goes out as the service and names the
+// owner as its creator in the request. A messaging service that predates the method
+// (the window of a rolling deploy) answers "unimplemented"; the channel is then made
+// the way it used to be, as the owner, so the workspace is not left without one.
 func (s *Service) provisionChannel(ctx context.Context, workspaceID, userID, ngacNodeID string) error {
 	if s.msgClient == nil {
 		return nil
 	}
-	_, err := s.msgClient.CreateChannel(actingAs(ctx, userID, ngacNodeID), &messagingpb.CreateChannelRequest{
+	callCtx, cancel := context.WithTimeout(ctx, channelRPCTimeout)
+	defer cancel()
+	_, err := s.msgClient.ProvisionWorkspaceChannel(asService(callCtx), &messagingpb.ProvisionWorkspaceChannelRequest{
+		WorkspaceId: workspaceID, Name: "general", CreatorUserId: userID, CreatorNgacNodeId: ngacNodeID,
+	})
+	if status.Code(err) != codes.Unimplemented {
+		return err
+	}
+	slog.Warn("messaging predates ProvisionWorkspaceChannel; making #general the old way", "workspace", workspaceID)
+	_, err = s.msgClient.CreateChannel(actingAs(callCtx, userID, ngacNodeID), &messagingpb.CreateChannelRequest{
 		Name: "general", WorkspaceId: workspaceID, ChannelType: "workspace",
 	})
 	return err
+}
+
+// joinWorkspaceChannel puts a member just admitted to a workspace into its
+// #general. It is a convenience of joining, not a condition of it: a failure is
+// logged and the person stays a member (listing channels repairs the edge the
+// next time they open the app). A messaging service that does not know the method
+// yet is not an error worth more than a warning.
+func (s *Service) joinWorkspaceChannel(ctx context.Context, workspaceID, userID, ngacNodeID string) {
+	if s.msgClient == nil {
+		return
+	}
+	callCtx, cancel := context.WithTimeout(ctx, channelRPCTimeout)
+	defer cancel()
+	_, err := s.msgClient.JoinWorkspaceChannel(asService(callCtx), &messagingpb.JoinWorkspaceChannelRequest{
+		WorkspaceId: workspaceID, UserNgacNodeId: ngacNodeID, UserId: userID,
+	})
+	switch {
+	case err == nil:
+	case status.Code(err) == codes.Unimplemented:
+		slog.Warn("messaging predates JoinWorkspaceChannel; the member joins #general when they next list channels", "workspace", workspaceID)
+	default:
+		slog.Error("member not put into the workspace channel", "workspace", workspaceID, "error", err)
+	}
 }
 
 // newUser is everything needed to create an account and its graph node.
@@ -193,14 +248,6 @@ func (s *Service) initTenantNGAC(ctx context.Context, tenantID, pcNodeID, owners
 
 	slog.Info("tenant NGAC initialized", "tenant", tenantID, "member_ua", memberUA.Id, "owner_ua", ownerUA.Id)
 	return nil
-}
-
-// assignUserToTenantNGAC assigns a user's NGAC node to the tenant's member/owner
-// UAs. A failure is logged, not returned: see assignTenantNGAC for the strict form.
-func (s *Service) assignUserToTenantNGAC(ctx context.Context, tenantID, userNodeID string, isOwner bool) {
-	if err := s.assignTenantNGAC(ctx, tenantID, userNodeID, isOwner); err != nil {
-		slog.Error("assign user to tenant UAs failed", "tenant", tenantID, "error", err)
-	}
 }
 
 // assignTenantNGAC puts the user under the tenant's TenantMember UA, and under

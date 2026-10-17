@@ -373,3 +373,31 @@ func TestListMembers_ShowsUsernamesNotNodeNames(t *testing.T) {
 	assert.Contains(t, names, "owner", "a user node written before names were ID-keyed carries the username as its name")
 	assert.NotContains(t, names, "U_5d2e")
 }
+
+// Groups are private, so what the workspace's own UAs hold on the Channels OA must
+// not reach a group's content: members may only start a group, owners may also
+// moderate (manage) one they are not in. The same fixture shows what stays: both
+// keep create_channel, owners keep everything on Mgmt and Documents.
+func TestCreateWorkspace_ChannelsGrantsDoNotReachGroupContent(t *testing.T) {
+	w := testutil.NewFakePolicyWrite()
+	f := newWriteFixture(t, w)
+
+	ws, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", Type: domain.TypeOrganization, UserID: "u1", UserNGACNodeID: owner})
+	require.NoError(t, err)
+	id := ngac.WorkspaceID(ws.ID)
+
+	log := w.Log()
+	channels := ngac.ChannelsOAName(id)
+	assert.Contains(t, log, fmt.Sprintf("associate %s>%s %v", ngac.MembersUAName(id), channels, ngac.MemberChannelOps()))
+	assert.Contains(t, log, fmt.Sprintf("associate %s>%s %v", ngac.OwnersUAName(id), channels, ngac.OwnerChannelOps()))
+	assert.Contains(t, log, fmt.Sprintf("associate %s>%s %v", ngac.OwnersUAName(id), ngac.MgmtOAName(id), ngac.AllOwnerOps()), "owners keep full rights on Mgmt")
+
+	for _, l := range log {
+		if !strings.HasPrefix(l, "associate ") || !strings.Contains(l, ">"+channels+" ") {
+			continue
+		}
+		for _, op := range []string{ngac.OpRead, ngac.OpWrite, ngac.OpInvite} {
+			assert.NotContainsf(t, l[strings.Index(l, "["):], op, "no workspace grant on Channels may carry %q: %s", op, l)
+		}
+	}
+}

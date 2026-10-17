@@ -233,7 +233,7 @@ func (f *fixture) insertChannel(t *testing.T, name string) (chID, oaID string) {
 		oaID, ngac.ChannelContentOAName(ngac.ChannelID(chID)), ngac.TypeOA)
 	require.NoError(t, err)
 	_, err = f.pool.Exec(ctx,
-		`INSERT INTO channels (id, name, channel_type, workspace_id, ngac_oa_id, created_at) VALUES ($1, $2, 'workspace', $3, $4, now())`,
+		`INSERT INTO channels (id, name, channel_type, workspace_id, ngac_oa_id, created_at) VALUES ($1, $2, 'private', $3, $4, now())`,
 		chID, name, f.wsID, oaID)
 	require.NoError(t, err)
 	t.Cleanup(func() {

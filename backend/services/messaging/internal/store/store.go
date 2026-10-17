@@ -5,6 +5,7 @@ package store
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -15,6 +16,9 @@ import (
 // Store provides database access for channels, messages, and threads.
 type Store struct {
 	db *pgxpool.Pool
+	// wideIndex remembers whether channels_one_workspace_wide exists; see
+	// workspaceChannelsIndexed.
+	wideIndex atomic.Int32
 }
 
 // NewStore creates a Store backed by the given connection pool.
@@ -45,7 +49,7 @@ func (s *Store) InsertChannelWithMembers(ctx context.Context, ch *Channel, membe
 		}
 		return nil
 	})
-	return err
+	return asWorkspaceChannelExists(err)
 }
 
 // UpdateChannelName renames a channel.

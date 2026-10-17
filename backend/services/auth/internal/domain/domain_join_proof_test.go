@@ -9,6 +9,7 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
+	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/services/auth/internal/auth"
 	"ngac-platform/services/auth/internal/domain"
 )
@@ -116,10 +117,16 @@ func TestSignIn_DownstreamRPCsCarryTheNewUserAsCaller(t *testing.T) {
 
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	for _, rpc := range []string{"CreateWorkspace", "CreateChannel"} {
-		got := w.callers[rpc]
-		if got.UserID != res.UserID || got.NGACNodeID != res.NGACNodeID || !got.Authenticated() {
-			t.Errorf("%s caller = %+v, want user %s node %s", rpc, got, res.UserID, res.NGACNodeID)
-		}
+	got := w.callers["CreateWorkspace"]
+	if got.UserID != res.UserID || got.NGACNodeID != res.NGACNodeID || !got.Authenticated() {
+		t.Errorf("CreateWorkspace caller = %+v, want user %s node %s", got, res.UserID, res.NGACNodeID)
+	}
+	// #general is made on the auth service's own identity, naming the new user as
+	// its creator in the request: messaging refuses a person's identity there.
+	if c := w.callers["ProvisionWorkspaceChannel"]; c != (grpcauth.Caller{}) {
+		t.Errorf("ProvisionWorkspaceChannel went out as %+v, want the service identity (no caller)", c)
+	}
+	if len(w.provisioned) != 1 || w.provisioned[0].CreatorUserId != res.UserID || w.provisioned[0].CreatorNgacNodeId != res.NGACNodeID {
+		t.Errorf("provisioned = %+v, want one request naming user %s node %s", w.provisioned, res.UserID, res.NGACNodeID)
 	}
 }

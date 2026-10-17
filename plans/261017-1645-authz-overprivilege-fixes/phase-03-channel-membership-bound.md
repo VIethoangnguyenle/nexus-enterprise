@@ -83,3 +83,14 @@ member? (workspace, calendar, messaging): <W>_Members id ∈ ancestors(user)
 ## Rollback
 Code: revert (release A). Data: `INSERT INTO ngac_assignments SELECT * FROM _reconcile_061_assignments ON CONFLICT DO
 NOTHING;` and same for `channel_members`; recreate policy services + invalidate.
+
+## Added by the Phase 02 review (2026-10-17)
+
+Migration 061 also strips the `#general` direct edges (`U -> Ch_<general>_Members`) and the `channel_members` cache
+rows of anyone who is not a real workspace member, i.e. whose user node does not reach `<ws>_Members`. Phase 02's 060 and
+`JoinWorkspaceChannel` only ever write the edge for a member, but an edge written while someone was a member survives if
+they were detached without the consumer's cache cleanup running; 061 is the reconcile that removes them. Same rules as
+the rest of 061: backup into `_reconcile_061_*` first, guard and threshold, re-runnable (second run 0 rows). Add its
+deny/allow pair to Phase 03's real-policy tests: a detached person with a leftover `#general` edge is removed and denied;
+a member keeps theirs. The workspace-wide channel is identified by `channel_type = 'workspace'` alone once
+`channels_one_workspace_wide` exists (Phase 02 review), so 061 must not use the name heuristic.

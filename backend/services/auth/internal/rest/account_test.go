@@ -178,8 +178,12 @@ type acctMsg struct {
 	messagingpb.MessagingServiceClient
 }
 
-func (acctMsg) CreateChannel(context.Context, *messagingpb.CreateChannelRequest, ...grpc.CallOption) (*messagingpb.Channel, error) {
+func (acctMsg) ProvisionWorkspaceChannel(context.Context, *messagingpb.ProvisionWorkspaceChannelRequest, ...grpc.CallOption) (*messagingpb.Channel, error) {
 	return &messagingpb.Channel{Id: "ch"}, nil
+}
+
+func (acctMsg) JoinWorkspaceChannel(context.Context, *messagingpb.JoinWorkspaceChannelRequest, ...grpc.CallOption) (*messagingpb.Empty, error) {
+	return &messagingpb.Empty{}, nil
 }
 
 type acctRead struct {

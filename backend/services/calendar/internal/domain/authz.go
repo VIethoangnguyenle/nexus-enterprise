@@ -45,12 +45,20 @@ func (s *Service) accessLevels(ctx context.Context, userNodeID string, cals []*s
 		return nil, internal("check calendar access", err)
 	}
 	for _, c := range cals {
+		// Every level includes reading: a calendar one cannot read is not held at
+		// all. `manage` alone is not a level. An owner holds manage on every
+		// group (through the Channels OA, to moderate it) and that is inherited by
+		// the group's calendar beneath; read as a level, it would let an owner
+		// read a private group's calendar.
+		if !perms.Has(c.NgacOAID, ngac.OpRead) {
+			continue
+		}
 		switch {
 		case perms.Has(c.NgacOAID, ngac.OpManage):
 			out[c.ID] = AccessManage
 		case perms.Has(c.NgacOAID, ngac.OpWrite):
 			out[c.ID] = AccessWrite
-		case perms.Has(c.NgacOAID, ngac.OpRead):
+		default:
 			out[c.ID] = AccessRead
 		}
 	}

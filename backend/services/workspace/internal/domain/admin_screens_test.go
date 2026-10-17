@@ -106,6 +106,21 @@ func TestListPermissionAreas_ListsEachAreaWithItsOperations(t *testing.T) {
 	assert.Equal(t, ngac.Areas()[0], areas[0].Area, "order is the ngac package's")
 }
 
+// Groups are private: a grant on the Channels OA reaches every group's content, so
+// the screen offers create_channel there and nothing a role could read a group with.
+func TestListPermissionAreas_ChannelsOffersOnlyCreateChannel(t *testing.T) {
+	f := newAdminFixture(t)
+	areas, err := f.svc.ListPermissionAreas(ctx(), member, ws1)
+	require.NoError(t, err)
+	var got []string
+	for _, a := range areas {
+		if a.Area == ngac.AreaChannels {
+			got = a.Operations
+		}
+	}
+	assert.Equal(t, []string{ngac.OpCreateChannel}, got)
+}
+
 func TestListPermissionAreas_OmitsAnAreaThisWorkspaceDoesNotHave(t *testing.T) {
 	f := newAdminFixture(t)
 	// A workspace that has never used assets has no Assets OA.
@@ -345,6 +360,9 @@ func TestSetRolePermissions_RejectsOperationsTheAreaDoesNotOffer(t *testing.T) {
 		"unknown area":          {"payroll", []string{ngac.OpRead}},
 		"an empty area name":    {"", []string{ngac.OpRead}},
 		"create_channel on doc": {ngac.AreaDocuments, []string{ngac.OpCreateChannel}},
+		"read on channels":      {ngac.AreaChannels, []string{ngac.OpRead}},
+		"manage on channels":    {ngac.AreaChannels, []string{ngac.OpManage}},
+		"invite on channels":    {ngac.AreaChannels, []string{ngac.OpInvite}},
 	} {
 		_, err := f.svc.SetRolePermissions(ctx(), owner, ws1, roleRead, tc.area, tc.ops)
 		assert.ErrorIs(t, err, domain.ErrInvalidInput, name)

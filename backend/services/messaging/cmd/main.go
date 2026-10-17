@@ -187,7 +187,7 @@ func main() {
 		defer producer.Close()
 	}
 
-	srv := grpc.NewServer(grpcauth.ServerOptions(grpcauth.ServerPolicy{Exempt: grpcauth.HealthExempt()})...)
+	srv := grpc.NewServer(grpcauth.ServerOptions(mgrpc.ServerPolicy())...)
 	pb.RegisterMessagingServiceServer(srv, mgrpc.NewMessagingServer(domainSvc, hub, producer))
 
 	notifications := domain.NewNotificationService(msgStore, hub)
@@ -214,6 +214,9 @@ func main() {
 		// Changes announced by other services (membership, permissions) reach
 		// the chat state without a messaging request: they move its version too.
 		rtConsumer.SetChatVersions(domainSvc)
+		// Someone who leaves a workspace leaves its channels: their rows in the
+		// member cache go with them.
+		rtConsumer.SetMemberCache(domainSvc)
 		// Someone removed from a conversation or a workspace leaves its calls.
 		if lkClient != nil {
 			rtConsumer.SetCallEvictor(domainSvc)

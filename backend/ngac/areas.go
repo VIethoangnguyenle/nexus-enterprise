@@ -41,8 +41,9 @@ func IsArea(a Area) bool { return slices.Contains(Areas(), a) }
 //     write (CreateFile and ConfirmFile both check it), so `upload` is not
 //     offered: no service checks it, and a switch that changes nothing would
 //     mislead. Members and channel members are still granted it (harmless).
-//   - channels:   read and write messages, create_channel, invite someone into
-//     a channel and manage (rename) it.
+//   - channels:   create_channel only. Groups are private, so a grant on the
+//     Channels OA must not carry read, write, invite or manage into groups
+//     the role's holders are not in.
 //   - assets:     read, write and manage assets and their types, approve
 //     requests for them.
 //
@@ -55,7 +56,11 @@ func AreaOps(a Area) []string {
 	case AreaDocuments:
 		want = []string{OpRead, OpWrite, OpShare}
 	case AreaChannels:
-		want = []string{OpRead, OpWrite, OpManage, OpInvite, OpCreateChannel}
+		// Only create_channel: a grant here is inherited by every group's content,
+		// drive and calendar, and groups are private. Reading or posting in a group
+		// comes from being in the group; moderating unseen groups (manage) is the
+		// Owners' alone.
+		want = []string{OpCreateChannel}
 	case AreaAssets:
 		want = []string{OpRead, OpWrite, OpApprove, OpManage}
 	default:

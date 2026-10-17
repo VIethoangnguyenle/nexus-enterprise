@@ -33,21 +33,49 @@ func (s *MessagingServer) CreateChannel(ctx context.Context, req *pb.CreateChann
 	if req.Name == "" {
 		return nil, status.Error(codes.InvalidArgument, "channel name required")
 	}
-	chType := req.ChannelType
-	if chType == "" {
-		chType = "workspace"
-	}
+	// req.ChannelType is not read: a group made by a user is private, and the
+	// workspace-wide channel has its own method.
 	ch, err := s.svc.CreateChannel(ctx, domain.CreateChannelInput{
 		Name:        req.Name,
 		WorkspaceID: req.WorkspaceId,
 		UserID:      grpcauth.CallerFrom(ctx).UserID,
 		UserNodeID:  grpcauth.CallerFrom(ctx).NGACNodeID,
-		ChannelType: chType,
 	})
 	if err != nil {
 		return nil, domainError("create channel", err)
 	}
 	return ch, nil
+}
+
+// ProvisionWorkspaceChannel makes the workspace's workspace-wide channel. Only the
+// auth service may call it (see ServerPolicy); a person's identity is refused even
+// though the interceptor would admit it.
+func (s *MessagingServer) ProvisionWorkspaceChannel(ctx context.Context, req *pb.ProvisionWorkspaceChannelRequest) (*pb.Channel, error) {
+	if err := requireService(ctx, "auth"); err != nil {
+		return nil, err
+	}
+	ch, err := s.svc.ProvisionWorkspaceChannel(ctx, domain.ProvisionWorkspaceChannelInput{
+		WorkspaceID:   req.WorkspaceId,
+		Name:          req.Name,
+		CreatorUserID: req.CreatorUserId,
+		CreatorNodeID: req.CreatorNgacNodeId,
+	})
+	if err != nil {
+		return nil, domainError("provision workspace channel", err)
+	}
+	return ch, nil
+}
+
+// JoinWorkspaceChannel puts a member of the workspace into its workspace-wide
+// channel. Services only.
+func (s *MessagingServer) JoinWorkspaceChannel(ctx context.Context, req *pb.JoinWorkspaceChannelRequest) (*pb.Empty, error) {
+	if err := requireService(ctx, "auth", "workspace"); err != nil {
+		return nil, err
+	}
+	if err := s.svc.JoinWorkspaceChannel(ctx, req.WorkspaceId, req.UserId, req.UserNgacNodeId); err != nil {
+		return nil, domainError("join workspace channel", err)
+	}
+	return &pb.Empty{}, nil
 }
 
 // ListChannels delegates to domain.Service.ListChannels.
