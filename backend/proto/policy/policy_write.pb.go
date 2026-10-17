@@ -24,7 +24,8 @@ var File_proto_policy_policy_write_proto protoreflect.FileDescriptor
 
 const file_proto_policy_policy_write_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/policy/policy_write.proto\x12\x06policy\x1a\x19proto/policy/policy.proto\x1a\x1eproto/policy/policy_read.proto2\xbb\t\n" +
+	"\x1fproto/policy/policy_write.proto\x12\x06policy\x1a\x19proto/policy/policy.proto\x1a\x1eproto/policy/policy_read.proto2\xbd\n" +
+	"\n" +
 	"\x12PolicyWriteService\x129\n" +
 	"\n" +
 	"CreateNode\x12\x19.policy.CreateNodeRequest\x1a\x10.policy.NGACNode\x126\n" +
@@ -39,7 +40,10 @@ const file_proto_policy_policy_write_proto_rawDesc = "" +
 	"\x12RegisterOperations\x12!.policy.RegisterOperationsRequest\x1a\".policy.RegisterOperationsResponse\x12R\n" +
 	"\x0fInvalidateCache\x12\x1e.policy.InvalidateCacheRequest\x1a\x1f.policy.InvalidateCacheResponse\x12J\n" +
 	"\x0fGetAssociations\x12\x1e.policy.GetAssociationsRequest\x1a\x17.policy.AssociationList\x123\n" +
-	"\aGetNode\x12\x16.policy.GetNodeRequest\x1a\x10.policy.NGACNode\x12;\n" +
+	"\aGetNode\x12\x16.policy.GetNodeRequest\x1a\x10.policy.NGACNode\x12A\n" +
+	"\x0eFindNodeByName\x12\x1d.policy.FindNodeByNameRequest\x1a\x10.policy.NGACNode\x12=\n" +
+	"\n" +
+	"IsAssigned\x12\x19.policy.IsAssignedRequest\x1a\x14.policy.BoolResponse\x12;\n" +
 	"\vGetChildren\x12\x1a.policy.GetChildrenRequest\x1a\x10.policy.NodeList\x129\n" +
 	"\n" +
 	"GetParents\x12\x19.policy.GetParentsRequest\x1a\x10.policy.NodeList\x12=\n" +
@@ -62,19 +66,22 @@ var file_proto_policy_policy_write_proto_goTypes = []any{
 	(*InvalidateCacheRequest)(nil),     // 9: policy.InvalidateCacheRequest
 	(*GetAssociationsRequest)(nil),     // 10: policy.GetAssociationsRequest
 	(*GetNodeRequest)(nil),             // 11: policy.GetNodeRequest
-	(*GetChildrenRequest)(nil),         // 12: policy.GetChildrenRequest
-	(*GetParentsRequest)(nil),          // 13: policy.GetParentsRequest
-	(*GetAncestorsRequest)(nil),        // 14: policy.GetAncestorsRequest
-	(*GetDescendantsRequest)(nil),      // 15: policy.GetDescendantsRequest
-	(*Empty)(nil),                      // 16: policy.Empty
-	(*NGACNode)(nil),                   // 17: policy.NGACNode
-	(*Assignment)(nil),                 // 18: policy.Assignment
-	(*Association)(nil),                // 19: policy.Association
-	(*Prohibition)(nil),                // 20: policy.Prohibition
-	(*RegisterOperationsResponse)(nil), // 21: policy.RegisterOperationsResponse
-	(*InvalidateCacheResponse)(nil),    // 22: policy.InvalidateCacheResponse
-	(*AssociationList)(nil),            // 23: policy.AssociationList
-	(*NodeList)(nil),                   // 24: policy.NodeList
+	(*FindNodeByNameRequest)(nil),      // 12: policy.FindNodeByNameRequest
+	(*IsAssignedRequest)(nil),          // 13: policy.IsAssignedRequest
+	(*GetChildrenRequest)(nil),         // 14: policy.GetChildrenRequest
+	(*GetParentsRequest)(nil),          // 15: policy.GetParentsRequest
+	(*GetAncestorsRequest)(nil),        // 16: policy.GetAncestorsRequest
+	(*GetDescendantsRequest)(nil),      // 17: policy.GetDescendantsRequest
+	(*Empty)(nil),                      // 18: policy.Empty
+	(*NGACNode)(nil),                   // 19: policy.NGACNode
+	(*Assignment)(nil),                 // 20: policy.Assignment
+	(*Association)(nil),                // 21: policy.Association
+	(*Prohibition)(nil),                // 22: policy.Prohibition
+	(*RegisterOperationsResponse)(nil), // 23: policy.RegisterOperationsResponse
+	(*InvalidateCacheResponse)(nil),    // 24: policy.InvalidateCacheResponse
+	(*AssociationList)(nil),            // 25: policy.AssociationList
+	(*BoolResponse)(nil),               // 26: policy.BoolResponse
+	(*NodeList)(nil),                   // 27: policy.NodeList
 }
 var file_proto_policy_policy_write_proto_depIdxs = []int32{
 	0,  // 0: policy.PolicyWriteService.CreateNode:input_type -> policy.CreateNodeRequest
@@ -89,32 +96,36 @@ var file_proto_policy_policy_write_proto_depIdxs = []int32{
 	9,  // 9: policy.PolicyWriteService.InvalidateCache:input_type -> policy.InvalidateCacheRequest
 	10, // 10: policy.PolicyWriteService.GetAssociations:input_type -> policy.GetAssociationsRequest
 	11, // 11: policy.PolicyWriteService.GetNode:input_type -> policy.GetNodeRequest
-	12, // 12: policy.PolicyWriteService.GetChildren:input_type -> policy.GetChildrenRequest
-	13, // 13: policy.PolicyWriteService.GetParents:input_type -> policy.GetParentsRequest
-	14, // 14: policy.PolicyWriteService.GetAncestors:input_type -> policy.GetAncestorsRequest
-	15, // 15: policy.PolicyWriteService.GetDescendants:input_type -> policy.GetDescendantsRequest
-	16, // 16: policy.PolicyWriteService.InitSchema:input_type -> policy.Empty
-	16, // 17: policy.PolicyWriteService.LoadGraph:input_type -> policy.Empty
-	17, // 18: policy.PolicyWriteService.CreateNode:output_type -> policy.NGACNode
-	16, // 19: policy.PolicyWriteService.DeleteNode:output_type -> policy.Empty
-	18, // 20: policy.PolicyWriteService.CreateAssignment:output_type -> policy.Assignment
-	16, // 21: policy.PolicyWriteService.RemoveAssignment:output_type -> policy.Empty
-	19, // 22: policy.PolicyWriteService.CreateAssociation:output_type -> policy.Association
-	16, // 23: policy.PolicyWriteService.RemoveAssociation:output_type -> policy.Empty
-	20, // 24: policy.PolicyWriteService.CreateProhibition:output_type -> policy.Prohibition
-	16, // 25: policy.PolicyWriteService.RemoveProhibition:output_type -> policy.Empty
-	21, // 26: policy.PolicyWriteService.RegisterOperations:output_type -> policy.RegisterOperationsResponse
-	22, // 27: policy.PolicyWriteService.InvalidateCache:output_type -> policy.InvalidateCacheResponse
-	23, // 28: policy.PolicyWriteService.GetAssociations:output_type -> policy.AssociationList
-	17, // 29: policy.PolicyWriteService.GetNode:output_type -> policy.NGACNode
-	24, // 30: policy.PolicyWriteService.GetChildren:output_type -> policy.NodeList
-	24, // 31: policy.PolicyWriteService.GetParents:output_type -> policy.NodeList
-	24, // 32: policy.PolicyWriteService.GetAncestors:output_type -> policy.NodeList
-	24, // 33: policy.PolicyWriteService.GetDescendants:output_type -> policy.NodeList
-	16, // 34: policy.PolicyWriteService.InitSchema:output_type -> policy.Empty
-	16, // 35: policy.PolicyWriteService.LoadGraph:output_type -> policy.Empty
-	18, // [18:36] is the sub-list for method output_type
-	0,  // [0:18] is the sub-list for method input_type
+	12, // 12: policy.PolicyWriteService.FindNodeByName:input_type -> policy.FindNodeByNameRequest
+	13, // 13: policy.PolicyWriteService.IsAssigned:input_type -> policy.IsAssignedRequest
+	14, // 14: policy.PolicyWriteService.GetChildren:input_type -> policy.GetChildrenRequest
+	15, // 15: policy.PolicyWriteService.GetParents:input_type -> policy.GetParentsRequest
+	16, // 16: policy.PolicyWriteService.GetAncestors:input_type -> policy.GetAncestorsRequest
+	17, // 17: policy.PolicyWriteService.GetDescendants:input_type -> policy.GetDescendantsRequest
+	18, // 18: policy.PolicyWriteService.InitSchema:input_type -> policy.Empty
+	18, // 19: policy.PolicyWriteService.LoadGraph:input_type -> policy.Empty
+	19, // 20: policy.PolicyWriteService.CreateNode:output_type -> policy.NGACNode
+	18, // 21: policy.PolicyWriteService.DeleteNode:output_type -> policy.Empty
+	20, // 22: policy.PolicyWriteService.CreateAssignment:output_type -> policy.Assignment
+	18, // 23: policy.PolicyWriteService.RemoveAssignment:output_type -> policy.Empty
+	21, // 24: policy.PolicyWriteService.CreateAssociation:output_type -> policy.Association
+	18, // 25: policy.PolicyWriteService.RemoveAssociation:output_type -> policy.Empty
+	22, // 26: policy.PolicyWriteService.CreateProhibition:output_type -> policy.Prohibition
+	18, // 27: policy.PolicyWriteService.RemoveProhibition:output_type -> policy.Empty
+	23, // 28: policy.PolicyWriteService.RegisterOperations:output_type -> policy.RegisterOperationsResponse
+	24, // 29: policy.PolicyWriteService.InvalidateCache:output_type -> policy.InvalidateCacheResponse
+	25, // 30: policy.PolicyWriteService.GetAssociations:output_type -> policy.AssociationList
+	19, // 31: policy.PolicyWriteService.GetNode:output_type -> policy.NGACNode
+	19, // 32: policy.PolicyWriteService.FindNodeByName:output_type -> policy.NGACNode
+	26, // 33: policy.PolicyWriteService.IsAssigned:output_type -> policy.BoolResponse
+	27, // 34: policy.PolicyWriteService.GetChildren:output_type -> policy.NodeList
+	27, // 35: policy.PolicyWriteService.GetParents:output_type -> policy.NodeList
+	27, // 36: policy.PolicyWriteService.GetAncestors:output_type -> policy.NodeList
+	27, // 37: policy.PolicyWriteService.GetDescendants:output_type -> policy.NodeList
+	18, // 38: policy.PolicyWriteService.InitSchema:output_type -> policy.Empty
+	18, // 39: policy.PolicyWriteService.LoadGraph:output_type -> policy.Empty
+	20, // [20:40] is the sub-list for method output_type
+	0,  // [0:20] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name

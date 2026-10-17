@@ -69,9 +69,10 @@ func (s *Service) authorizeAdmin(ctx context.Context, callerNodeID, wsID, op str
 }
 
 // authorizeMember loads the workspace and requires the caller to belong to it:
-// the workspace's PC must be among the caller's ancestors. This is the same
-// test ListAccessibleWorkspaces uses to decide which workspaces a user sees,
-// so anyone who can see a workspace in their list can read it.
+// the caller must be a user under the workspace's Members UA. Reaching the policy
+// class is not enough — a group's UA and an event's guest UA sit beneath it too,
+// and being in one of them is not membership. ListAccessibleWorkspaces uses the
+// same test, so anyone who can see a workspace in their list can read it.
 func (s *Service) authorizeMember(ctx context.Context, callerNodeID, wsID string) (*WorkspaceResult, error) {
 	if callerNodeID == "" {
 		return nil, fmt.Errorf("%w: requires an authenticated caller", ErrAccessDenied)
@@ -80,16 +81,38 @@ func (s *Service) authorizeMember(ctx context.Context, callerNodeID, wsID string
 	if err != nil {
 		return nil, err
 	}
-	anc, err := s.policyWrite.GetAncestors(ctx, &policypb.GetAncestorsRequest{NodeId: callerNodeID})
+	member, err := s.isMember(ctx, ws, callerNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: cannot resolve membership", ErrAccessDenied)
 	}
-	for _, n := range anc.GetNodes() {
-		if n.Id == ws.PcNodeID {
-			return ws, nil
-		}
+	if !member {
+		return nil, fmt.Errorf("%w: not a member of this workspace", ErrAccessDenied)
 	}
-	return nil, fmt.Errorf("%w: not a member of this workspace", ErrAccessDenied)
+	return ws, nil
+}
+
+// isMember reports whether the node is a user under the workspace's Members UA
+// (see policyclient.IsWorkspaceMember). The writer answers: it sees a removal made
+// a moment ago, which a read replica may not. An error means the answer is unknown
+// and the caller denies.
+func (s *Service) isMember(ctx context.Context, ws *WorkspaceResult, nodeID string) (bool, error) {
+	if nodeID == "" {
+		return false, nil
+	}
+	return policyclient.IsWorkspaceMember(ctx, s.policyWrite, nodeID, ngac.WorkspaceID(ws.ID))
+}
+
+// memberUsers lists the user nodes under the workspace's Members UA, each once.
+func (s *Service) memberUsers(ctx context.Context, ws *WorkspaceResult) ([]*policypb.NGACNode, error) {
+	membersID, err := policyclient.MembersUA(ctx, s.policyWrite, ngac.WorkspaceID(ws.ID))
+	if err != nil {
+		return nil, err
+	}
+	desc, err := s.policyWrite.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: membersID})
+	if err != nil {
+		return nil, fmt.Errorf("get descendants: %w", err)
+	}
+	return uniqueNodes(userNodes(desc.GetNodes())), nil
 }
 
 // requireInWorkspace confirms nodeID is a node of the given type under the

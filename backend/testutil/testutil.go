@@ -12,6 +12,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	"ngac-platform/ngac"
 )
 
 // DatabaseURL returns the test database URL, defaulting to the Docker-internal address.
@@ -91,24 +93,41 @@ func CreateUser(t *testing.T, pool *pgxpool.Pool) (userID, ngacNodeID string) {
 	return userID, ngacNodeID
 }
 
-// CreateWorkspace inserts a workspace owned by ownerID, with its own policy
-// class node, and removes both when the test ends. Register any rows that
-// reference the workspace after this call so their cleanup runs first.
+// CreateWorkspace inserts a workspace owned by ownerID with the ID-keyed topology
+// production builds: its policy class (PC_<id>), the Members UA under the class, the
+// Owners UA under both, and the Channels OA. It removes them all when the test ends.
+// Register any rows that reference the workspace after this call so their cleanup
+// runs first.
 func CreateWorkspace(t *testing.T, pool *pgxpool.Pool, ownerID string) (wsID, pcID string) {
 	t.Helper()
 	wsID = uniqueID("test-ws")
-	pcID = "pc-" + wsID
-	exec(t, pool, `INSERT INTO ngac_nodes (id, name, node_type, properties) VALUES ($1, $1, 'PC', '{}')`, pcID)
-	// The name differs from the ID on purpose: name-keyed and ID-keyed NGAC
+	id := ngac.WorkspaceID(wsID)
+	// The node ids differ from the names on purpose: name-keyed and ID-keyed NGAC
 	// node names must not coincide, or a test cannot tell them apart.
+	pcID = "pc-" + wsID
+	membersID, ownersID, channelsID := "members-"+wsID, "owners-"+wsID, "channels-"+wsID
+	for _, n := range []struct{ id, name, typ string }{
+		{pcID, ngac.PCName(id), "PC"},
+		{membersID, ngac.MembersUAName(id), "UA"},
+		{ownersID, ngac.OwnersUAName(id), "UA"},
+		{channelsID, ngac.ChannelsOAName(id), "OA"},
+	} {
+		exec(t, pool, `INSERT INTO ngac_nodes (id, name, node_type, properties) VALUES ($1, $2, $3, '{}')`, n.id, n.name, n.typ)
+	}
+	for i, e := range [][2]string{{membersID, pcID}, {ownersID, pcID}, {channelsID, pcID}, {ownersID, membersID}} {
+		exec(t, pool, `INSERT INTO ngac_assignments (id, child_id, parent_id) VALUES ($1, $2, $3)`, fmt.Sprintf("%s-a%d", wsID, i), e[0], e[1])
+	}
 	exec(t, pool, `INSERT INTO workspaces (id, name, owner_id, ngac_pc_id, type) VALUES ($1, $2, $3, $4, 'organization')`, wsID, "Workspace "+wsID, ownerID, pcID)
 	t.Cleanup(func() {
 		ctx := context.Background()
 		if _, err := pool.Exec(ctx, `DELETE FROM workspaces WHERE id = $1`, wsID); err != nil {
 			t.Errorf("cleanup workspace %s: %v", wsID, err)
 		}
-		if _, err := pool.Exec(ctx, `DELETE FROM ngac_nodes WHERE id = $1`, pcID); err != nil {
-			t.Errorf("cleanup node %s: %v", pcID, err)
+		// Assignments go with their nodes (ON DELETE CASCADE).
+		for _, n := range []string{channelsID, ownersID, membersID, pcID} {
+			if _, err := pool.Exec(ctx, `DELETE FROM ngac_nodes WHERE id = $1`, n); err != nil {
+				t.Errorf("cleanup node %s: %v", n, err)
+			}
 		}
 	})
 	return wsID, pcID

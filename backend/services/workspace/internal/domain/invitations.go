@@ -421,7 +421,7 @@ func (s *Service) AcceptInvitation(ctx context.Context, userID, callerNodeID, in
 // still give.
 func (s *Service) admit(ctx context.Context, ws *WorkspaceResult, inv *store.Invitation, userID, nodeID string) (*AcceptResult, error) {
 	res := &AcceptResult{WorkspaceID: ws.ID, WorkspaceName: ws.Name}
-	already, err := s.reachesPC(ctx, ws, nodeID)
+	already, err := s.isMember(ctx, ws, nodeID)
 	if err != nil {
 		return nil, err
 	}

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/realtime"
 	authpb "ngac-platform/proto/auth"
 	pb "ngac-platform/proto/messaging"
@@ -23,6 +24,12 @@ import (
 // its own members hold it (ChannelMemberOps): a workspace owner who is not in the
 // group holds manage there, not invite, and a member of the workspace who is not
 // in it holds nothing.
+//
+// The channel's Members UA sits under the workspace's policy class (the
+// intersection rule needs it there), so whoever is put under it reaches that class.
+// The target is therefore held to the workspace's own standard: a user node that is
+// already under the workspace's Members UA. Without that, any group member could
+// make anyone, or a whole UA, a member of the workspace, or undo a removal.
 func (s *Service) AddMember(ctx context.Context, channelID, requesterNodeID, targetNodeID string) error {
 	ch, err := s.authorizeChannel(ctx, channelID, requesterNodeID, ngac.OpInvite)
 	if err != nil {
@@ -36,12 +43,15 @@ func (s *Service) AddMember(ctx context.Context, channelID, requesterNodeID, tar
 	if ch.ChannelType == "dm" {
 		return fmt.Errorf("%w: cannot add members to a direct message", ErrInvalidInput)
 	}
+	if err := s.requireAddableMember(ctx, ch, targetNodeID); err != nil {
+		return err
+	}
 	// CreateAssignment is idempotent, so an edge that was already there is
 	// indistinguishable afterwards from one this call made. Ask first: only an
 	// edge this call creates may be withdrawn again. If the question cannot be
 	// answered, assume the edge may be older and never withdraw it.
 	existed := true
-	if res, err := s.policyRead.IsAssigned(ctx, &policypb.IsAssignedRequest{ChildId: targetNodeID, ParentId: ch.NGACUaID}); err == nil {
+	if res, err := s.policyWrite.IsAssigned(ctx, &policypb.IsAssignedRequest{ChildId: targetNodeID, ParentId: ch.NGACUaID}); err == nil {
 		existed = res.GetValue()
 	}
 	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
@@ -66,6 +76,35 @@ func (s *Service) AddMember(ctx context.Context, channelID, requesterNodeID, tar
 		return fmt.Errorf("add member: %w", err)
 	}
 	s.announceMembership(ctx, realtime.KindMemberAdded, ch, targetNodeID)
+	return nil
+}
+
+// requireAddableMember asks the writer, not the read replica: a removal made a
+// moment ago must be seen, or the removed person could be put back. It refuses a target who is not a user node, or is a user who
+// does not belong to the channel's workspace. A policy service that cannot answer
+// denies: the answer is unknown, and a group edge is hard to take back once other
+// services have acted on it.
+func (s *Service) requireAddableMember(ctx context.Context, ch *store.Channel, targetNodeID string) error {
+	if targetNodeID == "" {
+		return fmt.Errorf("%w: a person is required", ErrInvalidInput)
+	}
+	n, err := s.policyWrite.GetNode(ctx, &policypb.GetNodeRequest{NodeId: targetNodeID})
+	if err != nil {
+		if policyclient.IsNotFound(err) {
+			return fmt.Errorf("%w: not a person", ErrInvalidInput)
+		}
+		return fmt.Errorf("add member: resolve target: %w", err)
+	}
+	if n.GetNodeType() != ngac.TypeU {
+		return fmt.Errorf("%w: not a person", ErrInvalidInput)
+	}
+	member, err := policyclient.IsWorkspaceMember(ctx, s.policyWrite, targetNodeID, ngac.WorkspaceID(ch.WorkspaceID))
+	if err != nil {
+		return fmt.Errorf("add member: check workspace membership: %w", err)
+	}
+	if !member {
+		return fmt.Errorf("%w: not a member of this workspace", ErrAccessDenied)
+	}
 	return nil
 }
 

@@ -21,8 +21,28 @@ type allowAll struct {
 	assigned bool // the target is already in the channel's members UA
 }
 
-func (a allowAll) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {
+func (a allowAll) IsAssigned(_ context.Context, r *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	if r.ChildId == "ua-members" { // the Members UA sits under its workspace's PC
+		return &policypb.BoolResponse{Value: true}, nil
+	}
 	return &policypb.BoolResponse{Value: a.assigned}, nil
+}
+
+// The target is a user under the Members UA of the channel's workspace (the seeded
+// channel has none, so its name is "_Members").
+func (allowAll) GetNode(_ context.Context, r *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return &policypb.NGACNode{Id: r.NodeId, NodeType: ngac.TypeU}, nil
+}
+
+func (allowAll) GetAncestors(context.Context, *policypb.GetAncestorsRequest, ...grpc.CallOption) (*policypb.NodeList, error) {
+	return &policypb.NodeList{Nodes: []*policypb.NGACNode{{Id: "ua-members", NodeType: ngac.TypeUA}}}, nil
+}
+
+func (allowAll) FindNodeByName(_ context.Context, r *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if r.NodeType == ngac.TypeUA {
+		return &policypb.NGACNode{Id: "ua-members", Name: r.Name, NodeType: r.NodeType}, nil
+	}
+	return &policypb.NGACNode{Id: "pc-1", Name: r.Name, NodeType: r.NodeType}, nil
 }
 
 func (allowAll) CheckAccess(context.Context, *policypb.CheckAccessRequest, ...grpc.CallOption) (*policypb.AccessDecision, error) {
@@ -34,6 +54,23 @@ type graphLog struct {
 	assigned     []string
 	withdrawn    []string
 	failWithdraw bool
+	// alreadyAssigned: the target is already in the channel's members UA.
+	alreadyAssigned bool
+}
+
+// The writer answers the graph reads AddMember makes about its target.
+func (g *graphLog) view() allowAll { return allowAll{assigned: g.alreadyAssigned} }
+func (g *graphLog) GetNode(c context.Context, r *policypb.GetNodeRequest, o ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return g.view().GetNode(c, r, o...)
+}
+func (g *graphLog) GetAncestors(c context.Context, r *policypb.GetAncestorsRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {
+	return g.view().GetAncestors(c, r, o...)
+}
+func (g *graphLog) FindNodeByName(c context.Context, r *policypb.FindNodeByNameRequest, o ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return g.view().FindNodeByName(c, r, o...)
+}
+func (g *graphLog) IsAssigned(c context.Context, r *policypb.IsAssignedRequest, o ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return g.view().IsAssigned(c, r, o...)
 }
 
 func (g *graphLog) CreateAssignment(_ context.Context, r *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
@@ -118,8 +155,8 @@ func TestAddMember_RecordsTheMemberOnSuccess(t *testing.T) {
 // while the cache cannot be written must not delete the edge that was there.
 func TestAddMember_NeverWithdrawsAnEdgeThatWasAlreadyThere(t *testing.T) {
 	st, ch := seedChannel(t)
-	g := &graphLog{}
-	svc := NewService(st, allowAll{assigned: true}, g, nil, nil)
+	g := &graphLog{alreadyAssigned: true}
+	svc := NewService(st, allowAll{}, g, nil, nil)
 	svc.members = &failingCache{}
 
 	err := svc.AddMember(context.Background(), ch.ID, "requester", "existing-member")

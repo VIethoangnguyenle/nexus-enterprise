@@ -357,7 +357,7 @@ func TestListFolders_ShowsDisplayNames(t *testing.T) {
 func TestListMembers_ShowsUsernamesNotNodeNames(t *testing.T) {
 	w := testutil.NewFakePolicyWrite()
 	f := newWriteFixture(t, w)
-	f.read.descendants[pc1] = append(f.read.descendants[pc1], &policypb.NGACNode{
+	f.read.descendants[members1] = append(f.read.descendants[members1], &policypb.NGACNode{
 		Id: "u-new", Name: "U_5d2e", NodeType: ngac.TypeU,
 		Properties: map[string]string{ngac.PropDisplayName: "alice"},
 	})

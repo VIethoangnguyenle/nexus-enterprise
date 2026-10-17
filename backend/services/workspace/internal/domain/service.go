@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/minio/minio-go/v7"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/provision"
 	"ngac-platform/pkg/realtime"
 	drivepb "ngac-platform/proto/drive"
@@ -292,32 +294,23 @@ func (s *Service) ListAccessibleWorkspaces(ctx context.Context, userNGACNodeID s
 		return nil, nil
 	}
 
-	// Ask from the user's side, once.
-	//
-	// This used to walk every workspace's entire subtree looking for the user —
-	// one GetDescendants per workspace in the system, each returning every node
-	// under that policy class. Walking up from the user instead is a single
-	// call whose payload is just that user's attributes, and it answers the
-	// same question: a workspace is accessible exactly when its policy class is
-	// among the user's ancestors.
-	ancestors, err := s.policyWrite.GetAncestors(ctx, &policypb.GetAncestorsRequest{
-		NodeId: userNGACNodeID,
-	})
+	// Ask from the user's side: a workspace is accessible when the user sits under
+	// its Members UA. Its policy class is not the test: a group's UA and an event's
+	// guest UA sit beneath the class too, and being in one is not membership. One
+	// ancestor lookup, plus one cached Members-UA lookup per workspace the user's
+	// ancestors name (see policyclient.MemberWorkspaces).
+	mine, err := policyclient.MemberWorkspaces(ctx, s.policyWrite, userNGACNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("resolve user attributes: %w", err)
 	}
-
-	reachable := make(map[string]bool, len(ancestors.GetNodes()))
-	for _, n := range ancestors.GetNodes() {
-		reachable[n.Id] = true
+	if len(mine) == 0 {
+		return nil, nil
 	}
 
 	var accessible []*WorkspaceResult
 	for _, ws := range allWS {
-		if reachable[ws.NGACPcID] {
-			accessible = append(accessible, &WorkspaceResult{
-				ID: ws.ID, Name: ws.Name, PcNodeID: ws.NGACPcID, Type: ws.Type,
-			})
+		if slices.Contains(mine, ngac.WorkspaceID(ws.ID)) {
+			accessible = append(accessible, &WorkspaceResult{ID: ws.ID, Name: ws.Name, PcNodeID: ws.NGACPcID, Type: ws.Type})
 		}
 	}
 	return accessible, nil

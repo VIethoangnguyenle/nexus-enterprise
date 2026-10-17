@@ -179,3 +179,33 @@ func TestPrivateGroup_ProhibitionOverridesGroupMembership(t *testing.T) {
 	assert.Equal(t, "ALLOW", decide("chUser", vocab.OpRead), "only the prohibited operation")
 	assert.Equal(t, "DENY", decide("invitee", vocab.OpRead), "and a non-member stays denied")
 }
+
+// A group's UA sits under the policy class, so its people reach the class; what
+// they do not get is anything a workspace member holds through the Members UA.
+// That is why "member of the workspace" cannot mean "the policy class is among my
+// ancestors": the group member reaches the class and holds nothing on the
+// workspace's areas, while a member of the same workspace holds them. The same
+// holds for a UA put under the class for an event's guests.
+func TestPrivateGroup_ReachingThePolicyClassThroughAGroupConfersNoWorkspaceRights(t *testing.T) {
+	g := privateGroupGraph(t)
+	g.AddNode(&ngac.NGACNode{ID: "evGuests", Name: vocab.CalendarEventGuestsUAName("ev1"), NodeType: "UA"})
+	g.AddNode(&ngac.NGACNode{ID: "guest", Name: "Guest", NodeType: "U"})
+	require.NoError(t, g.AddAssignment(&ngac.Assignment{ID: "eg1", ChildID: "evGuests", ParentID: "pc"}))
+	require.NoError(t, g.AddAssignment(&ngac.Assignment{ID: "eg2", ChildID: "guest", ParentID: "evGuests"}))
+
+	for _, tc := range []struct{ name, oa, op string }{
+		{"read the workspace's documents", "docs", vocab.OpRead},
+		{"write the workspace's documents", "docs", vocab.OpWrite},
+		{"start a group", "channels", vocab.OpCreateChannel},
+		{"manage the workspace", "mgmt", vocab.OpManage},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			assert.Equal(t, "DENY", decideOn(g, "chUser", tc.oa, tc.op), "a person who is only in a group")
+			assert.Equal(t, "DENY", decideOn(g, "guest", tc.oa, tc.op), "a person who is only on an event's guest list")
+		})
+	}
+	assert.Equal(t, "ALLOW", decideOn(g, "invitee", "docs", vocab.OpRead), "a member of the same workspace reads its documents")
+	assert.Equal(t, "ALLOW", decideOn(g, "invitee", "channels", vocab.OpCreateChannel), "and may start a group")
+	assert.Equal(t, "ALLOW", decideOn(g, "creator", "mgmt", vocab.OpManage), "an owner manages it")
+	assert.Equal(t, "ALLOW", decideOn(g, "chUser", "chContent", vocab.OpRead), "the group member keeps their group")
+}

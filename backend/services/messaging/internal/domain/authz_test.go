@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
@@ -41,8 +44,50 @@ type scriptedPolicyRead struct {
 	children    map[string][]*policypb.NGACNode
 	checks      []grant
 	callers     map[string]grpcauth.Caller // the caller on the context of the last check, by user node
-	noGlobal    bool  // PC_Global cannot be found
-	childrenErr error // GetChildren fails
+	noGlobal    bool                       // PC_Global cannot be found
+	childrenErr error                      // GetChildren fails
+	people      map[string]string          // user node -> workspace it belongs to (under its Members UA)
+	getNodeErr  error                      // GetNode fails
+	ancErr      error                      // GetAncestors fails
+}
+
+// addMember scripts a user node who belongs to the workspace: it is a U node, and
+// the workspace's Members UA (which sits under its PC) is among its ancestors.
+func (p *scriptedPolicyRead) addMember(wsID string, nodes ...string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.people == nil {
+		p.people = map[string]string{}
+	}
+	for _, n := range nodes {
+		p.people[n] = wsID
+	}
+}
+
+func (p *scriptedPolicyRead) GetNode(_ context.Context, req *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.getNodeErr != nil {
+		return nil, p.getNodeErr
+	}
+	if _, ok := p.people[req.NodeId]; ok {
+		return &policypb.NGACNode{Id: req.NodeId, Name: req.NodeId, NodeType: ngac.TypeU}, nil
+	}
+	return nil, status.Error(codes.NotFound, "no such node")
+}
+
+func (p *scriptedPolicyRead) GetAncestors(_ context.Context, req *policypb.GetAncestorsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.ancErr != nil {
+		return nil, p.ancErr
+	}
+	ws, ok := p.people[req.NodeId]
+	if !ok {
+		return &policypb.NodeList{}, nil
+	}
+	name := ngac.MembersUAName(ngac.WorkspaceID(ws))
+	return &policypb.NodeList{Nodes: []*policypb.NGACNode{{Id: "ua-" + name, Name: name, NodeType: ngac.TypeUA}}}, nil
 }
 
 func (p *scriptedPolicyRead) CheckAccess(ctx context.Context, req *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
@@ -84,8 +129,10 @@ func (p *scriptedPolicyRead) BatchCheckAccess(_ context.Context, req *policypb.B
 }
 
 // IsAssigned reports no existing edges: the scripted world starts empty.
-func (p *scriptedPolicyRead) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {
-	return &policypb.BoolResponse{}, nil
+// The one edge it knows is a Members UA under its workspace's PC, which is what
+// the membership helper checks before it trusts a UA by its name.
+func (p *scriptedPolicyRead) IsAssigned(_ context.Context, req *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return &policypb.BoolResponse{Value: strings.HasPrefix(req.ChildId, "ua-") && strings.HasPrefix(req.ParentId, "pc-")}, nil
 }
 
 func (p *scriptedPolicyRead) GetChildren(_ context.Context, req *policypb.GetChildrenRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
@@ -98,6 +145,12 @@ func (p *scriptedPolicyRead) GetChildren(_ context.Context, req *policypb.GetChi
 func (p *scriptedPolicyRead) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
 	if req.Name == ngac.NodePCGlobal && req.NodeType == ngac.TypePC && !p.noGlobal {
 		return &policypb.NGACNode{Id: "pc-global", Name: req.Name, NodeType: req.NodeType}, nil
+	}
+	switch {
+	case req.NodeType == ngac.TypeUA && strings.HasSuffix(req.Name, "_Members"):
+		return &policypb.NGACNode{Id: "ua-" + req.Name, Name: req.Name, NodeType: req.NodeType}, nil
+	case req.NodeType == ngac.TypePC && strings.HasPrefix(req.Name, "PC_"):
+		return &policypb.NGACNode{Id: "pc-" + req.Name, Name: req.Name, NodeType: req.NodeType}, nil
 	}
 	return nil, errors.New("not found")
 }

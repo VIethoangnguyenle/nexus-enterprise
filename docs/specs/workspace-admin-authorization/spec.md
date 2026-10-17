@@ -58,8 +58,16 @@ SHALL confer nothing on another.
 - **THEN** the request is rejected with 404 and B is unchanged
 
 ### Requirement: Workspace reads require membership
-Reading a workspace, its members, roles, departments and folders SHALL require the workspace's
-PC to be among the caller's ancestors (the same test the workspace list uses).
+Reading a workspace, its members, roles, departments and folders SHALL require the caller to be a user under the
+workspace's Members UA (the same test the workspace list uses, and `policyclient.IsWorkspaceMember`). Reaching the
+workspace's policy class is not enough: a group's UA and an event's guest UA sit under the class too, and being in
+one of them is not membership. The member list and the people table list the users under the Members UA, not every
+user under the class. A policy service that cannot answer denies.
+
+#### Scenario: Reaches the policy class only through a group or an event
+- **WHEN** a user whose only path to the workspace's policy class is a group's Members UA or an event's guest UA reads the workspace, its members or its departments
+- **THEN** the request is rejected with 403, the workspace is absent from their workspace list, and they are absent from the member list
+- **AND** an owner, an ordinary member and a tenant member of the same workspace are allowed
 
 #### Scenario: Non-member reads members
 - **WHEN** a user who does not belong to the workspace calls `GET /api/workspaces/:id/members`
@@ -109,7 +117,7 @@ The workspace service SHALL answer, for a workspace, which resource areas a role
 - **THEN** the answer is 404 and nothing is written
 
 ### Requirement: Assigning a role or a department is a delegation
-`PUT` and `DELETE /api/workspaces/:id/members/:nodeId/roles/:roleId` SHALL require `manage` on the Mgmt OA, a role created by an administrator in this workspace, and a person who already belongs to the workspace (a user node under its PC): holding `manage` SHALL NOT bring a stranger in, which is what `invite` is for. Assigning SHALL add one assignment and detach nothing else. Assigning a role, or a person's department, SHALL also require the caller to hold every operation the role (or the department's UA) confers, **including what it inherits from the UAs above it** (a person under a sub-department holds every grant of the departments above it); a grant or an ancestry that cannot be read is treated as not held. Moving a department under a parent is the same delegation, checked against the new parent's whole chain; moving to the root grants nothing. Removing a role needs only `manage`. A person is in at most one department: choosing one detaches the previous department and, if that fails, takes the new assignment back.
+`PUT` and `DELETE /api/workspaces/:id/members/:nodeId/roles/:roleId` SHALL require `manage` on the Mgmt OA, a role created by an administrator in this workspace, and a person who already belongs to the workspace (a user node under its Members UA): holding `manage` SHALL NOT bring a stranger in, which is what `invite` is for. Assigning SHALL add one assignment and detach nothing else. Assigning a role, or a person's department, SHALL also require the caller to hold every operation the role (or the department's UA) confers, **including what it inherits from the UAs above it** (a person under a sub-department holds every grant of the departments above it); a grant or an ancestry that cannot be read is treated as not held. Moving a department under a parent is the same delegation, checked against the new parent's whole chain; moving to the root grants nothing. Removing a role needs only `manage`. A person is in at most one department: choosing one detaches the previous department and, if that fails, takes the new assignment back.
 
 #### Scenario: Role that confers more than the caller holds
 - **WHEN** a manager who cannot `write` Documents assigns a role that grants `write` on Documents

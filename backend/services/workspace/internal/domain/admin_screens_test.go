@@ -542,7 +542,7 @@ func TestListMemberDirectory_NeverFallsBackToAnIdentifier(t *testing.T) {
 	f := newAdminFixture(t)
 	// Nobody has a profile row; a U node's own name is all there is.
 	f.dir.profiles = map[string]*store.Profile{}
-	f.read.descendants[pc1] = append(f.read.descendants[pc1], &policypb.NGACNode{
+	f.read.descendants[members1] = append(f.read.descendants[members1], &policypb.NGACNode{
 		Id: "4b0f6c7e-1111-4222-8333-444455556666", Name: "U_4b0f6c7e-1111-4222-8333-444455556666", NodeType: ngac.TypeU,
 		Properties: map[string]string{ngac.PropDisplayName: "dung.pham"},
 	})
@@ -559,7 +559,7 @@ func TestListMemberDirectory_NodeNameWithoutDisplayNameIsReplacedByANeutralWord(
 	f := newAdminFixture(t)
 	f.dir.profiles = map[string]*store.Profile{}
 	id := "4b0f6c7e-1111-4222-8333-444455556666"
-	f.read.descendants[pc1] = []*policypb.NGACNode{{Id: id, Name: "U_" + id, NodeType: ngac.TypeU}}
+	f.read.descendants[members1] = []*policypb.NGACNode{{Id: id, Name: "U_" + id, NodeType: ngac.TypeU}}
 	people, err := f.svc.ListMemberDirectory(ctx(), owner, ws1)
 	require.NoError(t, err)
 	require.Len(t, people, 1)

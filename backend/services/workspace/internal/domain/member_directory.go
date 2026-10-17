@@ -9,9 +9,6 @@ import (
 	"sort"
 	"strings"
 
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
-
 	"ngac-platform/ngac"
 	policypb "ngac-platform/proto/policy"
 	"ngac-platform/services/workspace/internal/store"
@@ -115,29 +112,14 @@ func (s *Service) peopleFor(ctx context.Context, wsID string, nodes []*policypb.
 }
 
 // requireMemberUser confirms nodeID is a user who already belongs to the
-// workspace: a U node whose ancestors include the workspace's PC. The role and
-// department routes take node IDs from the client, and holding manage must not
-// be a way to bring somebody in; inviting is the invite operation's job.
+// workspace: a U node under its Members UA. The role and department routes take
+// node IDs from the client, and holding manage must not be a way to bring somebody
+// in; inviting is the invite operation's job.
 func (s *Service) requireMemberUser(ctx context.Context, ws *WorkspaceResult, nodeID string) error {
 	if nodeID == "" {
 		return fmt.Errorf("%w: person required", ErrInvalidInput)
 	}
-	n, err := s.policyWrite.GetNode(ctx, &policypb.GetNodeRequest{NodeId: nodeID})
-	if err != nil {
-		if status.Code(err) == codes.NotFound {
-			return fmt.Errorf("%w: person not in this workspace", ErrNotFound)
-		}
-		return fmt.Errorf("resolve person: %w", err)
-	}
-	if n.GetNodeType() != ngac.TypeU {
-		return fmt.Errorf("%w: person not in this workspace", ErrNotFound)
-	}
-	return s.requireInPC(ctx, ws, nodeID)
-}
-
-// requireInPC confirms the workspace's PC is among the node's ancestors.
-func (s *Service) requireInPC(ctx context.Context, ws *WorkspaceResult, nodeID string) error {
-	member, err := s.reachesPC(ctx, ws, nodeID)
+	member, err := s.isMember(ctx, ws, nodeID)
 	if err != nil {
 		return err
 	}
@@ -145,19 +127,6 @@ func (s *Service) requireInPC(ctx context.Context, ws *WorkspaceResult, nodeID s
 		return fmt.Errorf("%w: person not in this workspace", ErrNotFound)
 	}
 	return nil
-}
-
-func (s *Service) reachesPC(ctx context.Context, ws *WorkspaceResult, nodeID string) (bool, error) {
-	anc, err := s.policyWrite.GetAncestors(ctx, &policypb.GetAncestorsRequest{NodeId: nodeID})
-	if err != nil {
-		return false, fmt.Errorf("resolve membership: %w", err)
-	}
-	for _, n := range anc.GetNodes() {
-		if n.Id == ws.PcNodeID {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 // ListMemberDirectory returns every person of the workspace as a row: name,
@@ -168,11 +137,10 @@ func (s *Service) ListMemberDirectory(ctx context.Context, callerNodeID, wsID st
 	if err != nil {
 		return nil, err
 	}
-	desc, err := s.policyWrite.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
+	people, err := s.memberUsers(ctx, ws)
 	if err != nil {
-		return nil, fmt.Errorf("get descendants: %w", err)
+		return nil, err
 	}
-	people := uniqueNodes(userNodes(desc.GetNodes()))
 
 	children, err := s.policyWrite.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: ws.PcNodeID})
 	if err != nil {

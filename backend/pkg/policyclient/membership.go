@@ -14,8 +14,10 @@ import (
 )
 
 // GraphReader is the part of the policy read API membership needs. Both
-// policypb.PolicyReadServiceClient and PolicyWriteServiceClient satisfy it; a
-// caller that must see a membership change made a moment ago passes the writer.
+// policypb.PolicyReadServiceClient and PolicyWriteServiceClient satisfy it (the writer
+// carries FindNodeByName, IsAssigned, GetNode and GetAncestors for this). A read
+// replica may be behind a change made a moment ago, so a caller that decides a write
+// from membership, or must see a removal at once, passes the writer.
 type GraphReader interface {
 	FindNodeByName(ctx context.Context, in *policypb.FindNodeByNameRequest, opts ...grpc.CallOption) (*policypb.NGACNode, error)
 	GetAncestors(ctx context.Context, in *policypb.GetAncestorsRequest, opts ...grpc.CallOption) (*policypb.NodeList, error)

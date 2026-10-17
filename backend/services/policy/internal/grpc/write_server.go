@@ -224,6 +224,14 @@ func (s *WriteServer) GetNode(ctx context.Context, req *pb.GetNodeRequest) (*pb.
 	return s.reads().GetNode(ctx, req)
 }
 
+func (s *WriteServer) FindNodeByName(ctx context.Context, req *pb.FindNodeByNameRequest) (*pb.NGACNode, error) {
+	return s.reads().FindNodeByName(ctx, req)
+}
+
+func (s *WriteServer) IsAssigned(ctx context.Context, req *pb.IsAssignedRequest) (*pb.BoolResponse, error) {
+	return s.reads().IsAssigned(ctx, req)
+}
+
 func (s *WriteServer) GetChildren(ctx context.Context, req *pb.GetChildrenRequest) (*pb.NodeList, error) {
 	return s.reads().GetChildren(ctx, req)
 }

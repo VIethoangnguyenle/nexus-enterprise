@@ -65,7 +65,11 @@ func (m *mockPolicyReadClient) GetAncestors(_ context.Context, req *policypb.Get
 			continue
 		}
 		seen[id] = true
-		out = append(out, &policypb.NGACNode{Id: id})
+		if n, ok := m.w.nodes[id]; ok {
+			out = append(out, n)
+		} else {
+			out = append(out, &policypb.NGACNode{Id: id})
+		}
 		queue = append(queue, m.w.parents[id]...)
 	}
 	return &policypb.NodeList{Nodes: out}, nil
@@ -116,6 +120,11 @@ func (m *mockPolicyWriteClient) CreateAssignment(_ context.Context, req *policyp
 		"INSERT INTO ngac_assignments (id, child_id, parent_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
 		asgID, req.ChildId, req.ParentId,
 	)
+	// A child the mock never created is a person: users are made by the auth
+	// service, not by CreateNode here, and membership is a property of a user node.
+	if _, ok := m.nodes[req.ChildId]; !ok {
+		m.nodes[req.ChildId] = &policypb.NGACNode{Id: req.ChildId, Name: req.ChildId, NodeType: ngac.TypeU}
+	}
 	m.children[req.ParentId] = append(m.children[req.ParentId], req.ChildId)
 	m.parents[req.ChildId] = append(m.parents[req.ChildId], req.ParentId)
 	return &policypb.Assignment{Id: asgID}, nil
@@ -428,6 +437,24 @@ func (m *mockPolicyWriteClient) GetNode(_ context.Context, req *policypb.GetNode
 		return n, nil
 	}
 	return nil, grpcstatus.Error(codes.NotFound, "node not found")
+}
+
+func (m *mockPolicyWriteClient) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	for _, n := range m.nodes {
+		if n.Name == req.Name && n.NodeType == req.NodeType {
+			return n, nil
+		}
+	}
+	return nil, grpcstatus.Error(codes.NotFound, "node not found")
+}
+
+func (m *mockPolicyWriteClient) IsAssigned(_ context.Context, req *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	for _, p := range m.parents[req.ChildId] {
+		if p == req.ParentId {
+			return &policypb.BoolResponse{Value: true}, nil
+		}
+	}
+	return &policypb.BoolResponse{}, nil
 }
 
 func (m *mockPolicyWriteClient) GetAssociations(_ context.Context, _ *policypb.GetAssociationsRequest, _ ...grpc.CallOption) (*policypb.AssociationList, error) {

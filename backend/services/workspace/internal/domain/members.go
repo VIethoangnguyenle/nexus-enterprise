@@ -148,24 +148,20 @@ type Member struct {
 	Username   string
 }
 
-// ListMembers returns all unique users under the workspace PC. The caller must
-// belong to the workspace.
+// ListMembers returns the users under the workspace's Members UA, each once. The
+// caller must belong to the workspace.
 func (s *Service) ListMembers(ctx context.Context, callerNodeID, wsID string) ([]*Member, error) {
 	ws, err := s.authorizeMember(ctx, callerNodeID, wsID)
 	if err != nil {
 		return nil, err
 	}
-	desc, err := s.policyWrite.GetDescendants(ctx, &policypb.GetDescendantsRequest{NodeId: ws.PcNodeID})
+	people, err := s.memberUsers(ctx, ws)
 	if err != nil {
-		return nil, fmt.Errorf("get descendants: %w", err)
+		return nil, err
 	}
-	seen := make(map[string]bool)
-	var members []*Member
-	for _, n := range desc.Nodes {
-		if n.NodeType == ngac.TypeU && !seen[n.Id] {
-			seen[n.Id] = true
-			members = append(members, &Member{NGACNodeID: n.Id, Username: ngac.DisplayName(n.Name, n.Properties)})
-		}
+	members := make([]*Member, 0, len(people))
+	for _, n := range people {
+		members = append(members, &Member{NGACNodeID: n.Id, Username: ngac.DisplayName(n.Name, n.Properties)})
 	}
 	return members, nil
 }

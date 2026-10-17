@@ -1,7 +1,7 @@
 ---
 phase: 3
 title: "Channel, workspace and calendar membership bound to <W>_Members (F2), migration 061"
-status: pending
+status: completed (code + 061 applied on dev and ngac_ci; prod dry-run and release order pending)
 priority: P1
 effort: "5h"
 dependencies: [1, 2]
@@ -94,3 +94,22 @@ the rest of 061: backup into `_reconcile_061_*` first, guard and threshold, re-r
 deny/allow pair to Phase 03's real-policy tests: a detached person with a leftover `#general` edge is removed and denied;
 a member keeps theirs. The workspace-wide channel is identified by `channel_type = 'workspace'` alone once
 `channels_one_workspace_wide` exists (Phase 02 review), so 061 must not use the name heuristic.
+
+## Implementation status (2026-10-17)
+
+- [x] AddMember: invite, DM guard, target is a `U` node (else `ErrInvalidInput`), `IsWorkspaceMember` (else `ErrAccessDenied`; policy error denies); shared with gRPC `AddChannelMember`
+- [x] Workspace: `authorizeMember`, `isMember` (replaces `reachesPC`; used by `requireMemberUser` and `admit`), `ListMembers`, `ListMemberDirectory`, `ListAccessibleWorkspaces` via the Members UA with a mandatory process-wide id cache
+- [x] Calendar: `inWorkspace` via `policyclient.IsWorkspaceMember` (so `requireMember` and `requirePerson`)
+- [x] Migration 061 (`data/migrations/061_channel_membership_reconcile.sql`), `scripts/test-migration-061.sh`
+- [x] Real-policy tests (messaging, workspace, calendar) and a PDP vector; specs updated
+- [ ] Prod: run the pre-flight in the migrate container, set the 061 thresholds from it, release A (code) before B (061)
+
+Code review fixes (2026-10-17):
+- [x] M1: `PolicyWriteService` gained `FindNodeByName` and `IsAssigned` (proto + `make proto`; the TS `proto:gen` covers only `messaging/ws.proto`, no frontend diff); messaging `AddMember` (target check and the `existed` probe) and calendar named-person checks (`requirePerson`, group expansion) ask the writer, so a removal is seen at once
+- [x] M2: workspace uses `policyclient.IsWorkspaceMember`, `MembersUA` and `MemberWorkspaces` over `policyWrite`; helper comment fixed; runbook line in `docs/deployment.md`
+- [x] L2: `AddMember` refuses and writes nothing when `GetNode` or `GetAncestors` fails
+- [x] L3: 061 guard and `_m061_below` require the Members UA to sit under `PC_<id>`
+- [x] L4: reverse SQL filters on existing nodes and channels
+- [x] L6: `testutil.CreateWorkspace` builds PC_<id>, Members, Owners, Channels and their edges
+
+061 skips DM channels (Phase 05 owns the DM rule).

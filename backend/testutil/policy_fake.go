@@ -6,6 +6,8 @@ import (
 	"sync"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	policypb "ngac-platform/proto/policy"
 )
@@ -168,6 +170,20 @@ func (f *FakePolicyWrite) GetNode(ctx context.Context, in *policypb.GetNodeReque
 		return nil, fmt.Errorf("node %s not found", in.NodeId)
 	}
 	return f.Reads.GetNode(ctx, in, o...)
+}
+
+func (f *FakePolicyWrite) FindNodeByName(ctx context.Context, in *policypb.FindNodeByNameRequest, o ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if f.Reads == nil {
+		return nil, status.Errorf(codes.NotFound, "node %s not found", in.Name)
+	}
+	return f.Reads.FindNodeByName(ctx, in, o...)
+}
+
+func (f *FakePolicyWrite) IsAssigned(ctx context.Context, in *policypb.IsAssignedRequest, o ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	if f.Reads == nil {
+		return &policypb.BoolResponse{}, nil
+	}
+	return f.Reads.IsAssigned(ctx, in, o...)
 }
 
 func (f *FakePolicyWrite) GetChildren(ctx context.Context, in *policypb.GetChildrenRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {

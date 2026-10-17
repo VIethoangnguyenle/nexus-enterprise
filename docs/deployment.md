@@ -390,6 +390,11 @@ for such a migration (the authz over-privilege fixes ship four: 059-062):
    restart `policy`, `policy-read` and `messaging` (`make dev-restart s=<name>`), then
    `make policy-invalidate`. There is no flush at service start-up.
 
+   A migration that replaces or recreates a workspace's Members UA (a new node id) must also
+   restart `workspace`, `calendar` and `messaging`: each keeps the Members-UA id per workspace
+   in memory for the life of the process (`policyclient.MembersUA`), and a stale id would answer
+   "not a member" for everyone until restart. Migrations 059-061 keep the node ids, so they need only the steps above.
+
 Tests that depend on a graph decision run against the real policy service
 (`make test-realpolicy`, build tag `realpolicy`, `TEST_DATABASE_URL` pointing at a disposable database
 such as `ngac_ci`, never the dev `ngac` one); CI runs the same target in the `realpolicy` job.

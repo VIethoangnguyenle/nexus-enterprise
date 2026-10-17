@@ -118,6 +118,31 @@ func (f *fakePolicyRead) GetNode(_ context.Context, req *policypb.GetNodeRequest
 	return nil, status.Error(codes.NotFound, "node not found")
 }
 
+// FindNodeByName looks among every node the fixture scripts, by name and type.
+func (f *fakePolicyRead) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	lists := []map[string][]*policypb.NGACNode{f.children, f.descendants, f.ancestors}
+	for _, l := range lists {
+		for _, ns := range l {
+			for _, n := range ns {
+				if n.Name == req.Name && n.NodeType == req.NodeType {
+					return n, nil
+				}
+			}
+		}
+	}
+	return nil, status.Error(codes.NotFound, "node not found")
+}
+
+// IsAssigned is true when the child is listed among the parent's children.
+func (f *fakePolicyRead) IsAssigned(_ context.Context, req *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	for _, n := range f.children[req.ParentId] {
+		if n.Id == req.ChildId {
+			return &policypb.BoolResponse{Value: true}, nil
+		}
+	}
+	return &policypb.BoolResponse{}, nil
+}
+
 func (f *fakePolicyRead) GetParents(_ context.Context, req *policypb.GetParentsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
 	return &policypb.NodeList{Nodes: f.parents[req.NodeId]}, nil
 }
@@ -185,6 +210,14 @@ func (f *fakePolicyWrite) GetParents(ctx context.Context, req *policypb.GetParen
 
 func (f *fakePolicyWrite) GetNode(ctx context.Context, req *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
 	return f.src.GetNode(ctx, req)
+}
+
+func (f *fakePolicyWrite) FindNodeByName(ctx context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return f.src.FindNodeByName(ctx, req)
+}
+
+func (f *fakePolicyWrite) IsAssigned(ctx context.Context, req *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return f.src.IsAssigned(ctx, req)
 }
 
 func (f *fakePolicyWrite) record(s string) { f.mutations = append(f.mutations, s) }
@@ -404,12 +437,14 @@ func newFixture(t *testing.T) *fixture {
 		{Id: roleEdit, Name: ngac.RoleUAName("r-edit"), NodeType: ngac.TypeUA, Properties: map[string]string{ngac.PropType: ngac.PropTypeRole, ngac.PropDisplayName: "Biên tập"}},
 	}
 	pc1Desc := append([]*policypb.NGACNode{}, pc1Children...)
-	pc1Desc = append(pc1Desc,
+	// The people of the workspace are who sits under its Members UA.
+	pc1Users := []*policypb.NGACNode{
 		node(owner, "owner", ngac.TypeU),
 		node(member, "member", ngac.TypeU),
 		node(target, "target", ngac.TypeU),
 		node(leaver, "leaver", ngac.TypeU),
-	)
+	}
+	pc1Desc = append(pc1Desc, pc1Users...)
 	pc2Children := []*policypb.NGACNode{
 		node(owners2, ngac.OwnersUAName(ws2), ngac.TypeUA),
 		node(mgmt2, ngac.MgmtOAName(ws2), ngac.TypeOA),
@@ -422,7 +457,7 @@ func newFixture(t *testing.T) *fixture {
 	read := &fakePolicyRead{
 		grants:      grants,
 		children:    map[string][]*policypb.NGACNode{pc1: pc1Children, pc2: pc2Children, owners1: {node(owner, "owner", ngac.TypeU), node(target, "target", ngac.TypeU)}},
-		descendants: map[string][]*policypb.NGACNode{pc1: pc1Desc, pc2: pc2Children},
+		descendants: map[string][]*policypb.NGACNode{pc1: pc1Desc, pc2: pc2Children, members1: pc1Users},
 		ancestors: map[string][]*policypb.NGACNode{
 			owner: inPC1, member: inPC1, inviter: inPC1, manager: inPC1, delegator: inPC1,
 			target: inPC1, leaver: inPC1,

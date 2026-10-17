@@ -105,6 +105,32 @@ The system SHALL authorize adding and removing channel members with the `invite`
 - **THEN** the request is rejected before any graph mutation, because a DM is a fixed two-party conversation
 - **AND** this guard lives in the messaging service, not in the graph, since the graph cannot express "exactly two sides"
 
+A group's Members UA sits under the workspace's policy class (the intersection rule needs it there), so whoever is assigned beneath it reaches that class. Adding a member SHALL therefore check the target, after the `invite` check and the DM guard and before any graph write: the target SHALL be a user (`U`) node, else the request is rejected as invalid input; and it SHALL be a member of the channel's workspace (`policyclient.IsWorkspaceMember`, that is, under `{workspace_id}_Members`), else access is denied. A policy service that cannot answer denies. Any member of the group may add people, as `invite` already lets them. The same rule applies to the gRPC `AddChannelMember`, which shares the domain method.
+
+#### Scenario: Target is a person of another workspace
+- **WHEN** a member of a group adds a user who belongs to another workspace
+- **THEN** access is denied and no assignment is written
+- **AND** the same member adds an active member of this workspace and the target joins
+
+#### Scenario: Target is a UA
+- **WHEN** the target is a Members UA (this workspace's or another's), an Owners UA or another group's UA
+- **THEN** the request is rejected as invalid input and nothing is written
+
+#### Scenario: Target was removed from the workspace
+- **WHEN** the target is still under a group's UA but no longer under `{workspace_id}_Members`
+- **THEN** adding them to another group is denied, so a group cannot be used to undo a removal
+
+### Requirement: Migration 061 removes what the old AddMember let into groups
+Migration `061_channel_membership_reconcile.sql` SHALL delete, for every non-DM group, the edges `child -> Ch_{id}_Members` where the child is a user not under the workspace's `{workspace_id}_Members` or is a UA of any kind (the workspace-wide channel's direct edges are among them: they are written only for members, so a leftover belongs to someone detached since), and the `channel_members` rows of those edges and of non-DM groups with no matching edge. It SHALL abort if a workspace lacks its PC, Members, Owners or Channels node, or if more edges or cache rows than its stated limits would be removed; it SHALL back up what it deletes (`_reconcile_061_assignments`, `_reconcile_061_channel_members`) and be re-runnable (a second run changes nothing). Direct messages are not touched. Like the other direct graph writes it bypasses EPP invalidation, so `policy` and `policy-read` are recreated, `policy invalidate-cache --all-workspaces` is run and messaging restarted after it is applied. Its pre-flight queries and reverse SQL are in the file's header.
+
+#### Scenario: Run twice
+- **WHEN** the migration is applied a second time
+- **THEN** it changes no row and adds no backup row
+
+#### Scenario: Detached person with a leftover edge
+- **WHEN** a person who is no longer under the workspace's Members UA still has a direct edge into #general or a group
+- **THEN** the edge and its cache row are removed, while a member's edge and a DM's participants stay
+
 ### Requirement: Groups are private
 The system SHALL let only the people in a group's own Members UA read, write or invite in it, read or write its files, or read its calendar. A grant on the workspace's Channels OA is inherited by every group's Content OA and by the drive and calendar beneath it, so the workspace-level UAs SHALL hold nothing there that reaches group content: `{workspace_id}_Members` is associated with Channels for `create_channel` only (`ngac.MemberChannelOps`), `{workspace_id}_Owners` for `manage` and `create_channel` (`ngac.OwnerChannelOps`), and the Channels area of the permissions screen offers `create_channel` alone (`ngac.AreaOps`), so no custom role can be given more there. `manage` is the Owners' alone: an owner can rename a group or remove someone from it without being in it, and cannot read it. Group access comes only from `Ch_{channel_id}_Members`, associated with `ngac.ChannelMemberOps` on the Content OA and `ngac.ChannelDriveOps` on the drive; a channel's calendar sits beneath its Content OA and so is the group's alone.
 
