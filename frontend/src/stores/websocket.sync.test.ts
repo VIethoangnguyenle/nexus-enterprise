@@ -6,6 +6,13 @@ import { useWebSocketStore, getSyncSnapshot, restoreSyncSnapshot } from './webso
 import { endSession } from '../lib/session-end'
 import { ClientEnvelope, ServerEnvelope } from '../generated/proto/messaging/ws'
 import { BATCH_MS } from '../lib/realtime'
+import { chatStateCovers, revalidateChatState } from '../hooks/useChatState'
+
+vi.mock('../hooks/useChatState', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../hooks/useChatState')>()),
+  chatStateCovers: vi.fn(() => false),
+  revalidateChatState: vi.fn(async () => false),
+}))
 
 /** Stands in for the browser WebSocket; keeps binary and JSON frames the client sent apart. */
 class FakeSocket {
@@ -415,5 +422,37 @@ describe('lifetime of the cursors', () => {
     expect(getSyncSnapshot()).toEqual({ owner: 'u|t', user: 7, workspaces: { a: 1 } })
     restoreSyncSnapshot('junk')
     expect(getSyncSnapshot().workspaces).toEqual({})
+  })
+})
+
+describe('the chat navigator after a reconnect', () => {
+  const chatParts = [keys.messaging.channels('ws-1'), keys.messaging.dms(), keys.messaging.unreadCounts(), keys.messaging.conversationActivity()]
+
+  beforeEach(() => vi.mocked(chatStateCovers).mockReturnValue(true))
+  afterEach(() => vi.mocked(chatStateCovers).mockReturnValue(false))
+
+  it('asks the chat state whether anything changed instead of refetching each part', async () => {
+    vi.mocked(revalidateChatState).mockResolvedValueOnce(true)
+    useWebSocketStore.getState().followWorkspace('ws-1')
+    for (const key of chatParts) seed(key)
+    seed(keys.admin.members('ws-1'))
+    authOk()
+    ack(12)
+    await vi.advanceTimersByTimeAsync(BATCH_MS + 1)
+
+    expect(revalidateChatState).toHaveBeenCalledWith('ws-1')
+    for (const key of chatParts) expect(invalidated(key)).toBe(false)
+    expect(invalidated(keys.admin.members('ws-1'))).toBe(true)
+  })
+
+  it('refetches each part when the chat state cannot answer', async () => {
+    vi.mocked(revalidateChatState).mockResolvedValueOnce(false)
+    useWebSocketStore.getState().followWorkspace('ws-1')
+    for (const key of chatParts) seed(key)
+    authOk()
+    ack(12)
+    await vi.advanceTimersByTimeAsync(BATCH_MS + 1)
+
+    for (const key of chatParts) expect(invalidated(key)).toBe(true)
   })
 })

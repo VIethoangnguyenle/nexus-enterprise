@@ -52,11 +52,15 @@ export interface Loaded {
  * copy and `changed: false`. Callers that ask while a request is in flight share
  * it, which is what makes the start-up one request however many screens ask.
  * Only one copy is kept, so a different person or workspace starts clean.
+ *
+ * `revalidate` asks the server however recently the copy was confirmed, and
+ * does not share a request already in flight: after a reconnect, an answer the
+ * server gave before the subscription was live may predate a change.
  */
-export function loadChatState(owner: string, workspaceId: string): Promise<Loaded> {
-  if (inflight?.owner === owner) return inflight.promise
+export function loadChatState(owner: string, workspaceId: string, opts: { revalidate?: boolean } = {}): Promise<Loaded> {
+  if (!opts.revalidate && inflight?.owner === owner) return inflight.promise
   if (held && held.owner !== owner) held = null
-  if (held && Date.now() - held.confirmedAt < RECENT_MS) {
+  if (!opts.revalidate && held && Date.now() - held.confirmedAt < RECENT_MS) {
     return Promise.resolve({ state: held.state, changed: false })
   }
 

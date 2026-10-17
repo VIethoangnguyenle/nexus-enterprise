@@ -51,6 +51,33 @@ export function seedFromChatState(wsId: string, state: ChatState) {
   queryClient.setQueryData(keys.notificationLevels.unreadThreads(), { messages: state.unread_threads })
 }
 
+/** Whether the session can ask the chat state of this workspace: only of the one it speaks for. */
+export function chatStateCovers(wsId: string): boolean {
+  return sessionScope()?.tenant === wsId
+}
+
+/**
+ * After a reconnect: asks whether the chat state changed since the copy held
+ * (a 304 when not) and puts a changed one under the keys of its parts, so the
+ * navigator is caught up with one small request instead of one per part. False
+ * when it cannot answer (another workspace than the session's, a failure): the
+ * caller then refetches each part.
+ */
+export async function revalidateChatState(wsId: string): Promise<boolean> {
+  const scope = sessionScope()
+  if (!scope || !chatStateCovers(wsId)) return false
+  try {
+    const { state, changed } = await loadChatState(scope.owner, scope.tenant, { revalidate: true })
+    if (changed) {
+      seedFromChatState(wsId, state)
+      queryClient.setQueryData(keys.messaging.chatState(wsId), state)
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * The chat navigator's state, revalidated when the app opens or comes back. A
  * state that changed since the copy held is put under the keys the rest of the
