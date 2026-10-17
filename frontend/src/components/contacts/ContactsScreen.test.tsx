@@ -192,6 +192,22 @@ describe('Danh bạ: Phòng ban', () => {
     expect(rows(/^Thành viên · 1$/)).toEqual([expect.stringMatching(/^Lê Thị Hoa/)])
   })
 
+  it('words the Phòng của tôi shortcut with the department and the path above it, never its own name twice', async () => {
+    await renderContacts()
+    const mine = await within(nav()).findByRole('button', { name: /^Kế toán/ })
+    await waitFor(() => expect(textOf(mine)).toBe('Kế toánKhối Tài chính1'))
+  })
+
+  it('leaves the Phòng của tôi sub-label out when the department has nothing above it', async () => {
+    // A limited caller is served their own department with the parent blanked.
+    server.departments = () => Promise.resolve({
+      departments: DEPARTMENTS.filter((d) => d.id === D.kt).map((d) => ({ ...d, parent_id: '' })),
+    })
+    await renderContacts()
+    const mine = await within(nav()).findByRole('button', { name: /^Kế toán/ })
+    await waitFor(() => expect(textOf(mine)).toBe('Kế toán1'))
+  })
+
   it('marks a department an administrator hid, and nobody else sees the mark', async () => {
     server.departments = () => Promise.resolve({
       departments: DEPARTMENTS.map((d) => (d.id === D.ktc ? { ...d, hidden: true } : d)),
@@ -730,5 +746,15 @@ describe('Danh bạ: typing and focus', () => {
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('complementary', { name: /Hồ sơ/ })).toBeNull())
     await waitFor(() => expect(screen.getByRole('heading', { level: 2, name: 'Đối soát' })).toHaveFocus())
+  })
+})
+
+describe('Danh bạ: one directory request per load', () => {
+  it('asks for the directory once, however many parts of the screen read it', async () => {
+    await renderContacts()
+    await within(nav()).findByRole('button', { name: /Kế toán/ })
+    await screen.findByRole('region', { name: 'Danh sách' })
+    await new Promise((r) => setTimeout(r, 50))
+    expect(asked(/\/contacts\?/)).toHaveLength(1)
   })
 })

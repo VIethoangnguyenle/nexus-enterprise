@@ -149,6 +149,11 @@ export function pathLabel(tree: DirectoryTree, deptId: string): string {
   return pathOf(tree, deptId).map((n) => n.name).join(PATH_SEPARATOR)
 }
 
+/** The path above a department ("Khối Tài chính" for Kế toán); empty at the top, where there is nothing above it. */
+export function parentPathLabel(tree: DirectoryTree, deptId: string): string {
+  return pathOf(tree, deptId).slice(0, -1).map((n) => n.name).join(PATH_SEPARATOR)
+}
+
 export interface PathSegment { id: string; name: string }
 
 /**

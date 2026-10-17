@@ -71,6 +71,8 @@ export function useMemberDirectory(wsId: string) {
     enabled: !!wsId,
     select: (d): Member[] => d.members ?? [],
     retry: retryUnlessAnswered,
+    // A refusal stands: showing a screen again must not ask again (and log a second 403). Retry is a button.
+    retryOnMount: false,
   })
 }
 

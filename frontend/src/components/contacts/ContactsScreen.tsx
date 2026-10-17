@@ -37,7 +37,7 @@ import { ContactsChips } from './ContactsChips'
 import { ContactsNav } from './ContactsNav'
 import { PhoneBackBar, PhoneLayer, phonePush } from './ContactsPhone'
 import { PathTrail } from './PathTrail'
-import { categoriesOf, colleaguesOf, nameOf, pathLabel, pathSegments, roleLine } from './contacts-model'
+import { categoriesOf, colleaguesOf, nameOf, parentPathLabel, pathSegments, roleLine } from './contacts-model'
 import { phoneBarOf } from './phone-bar'
 
 /** The category the address names, if it names one this workspace has. */
@@ -296,7 +296,7 @@ export function ContactsScreen() {
       return {
         id: meContact.department_id,
         name: node?.name ?? meContact.department,
-        path: node && facts.tree ? pathLabel(facts.tree, node.id) : undefined,
+        path: node && facts.tree ? parentPathLabel(facts.tree, node.id) || undefined : undefined,
         count: node?.peopleCount,
       }
     })()

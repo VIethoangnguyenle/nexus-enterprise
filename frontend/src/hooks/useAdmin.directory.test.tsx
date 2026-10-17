@@ -3,9 +3,10 @@ import type { ReactNode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { adminApi } from '../api/admin'
+import { ApiError } from '../api/client'
 import { keys } from './keys'
 import {
-  useDeleteDepartment, useDepartments, useDirectoryScopeRules, useHideDepartment, useLimitSubject, useUnhideDepartment, useUnlimitSubject,
+  useDeleteDepartment, useDepartments, useDirectoryScopeRules, useHideDepartment, useLimitSubject, useMemberDirectory, useUnhideDepartment, useUnlimitSubject,
 } from './useAdmin'
 
 vi.mock('../api/admin', async (orig) => {
@@ -15,6 +16,7 @@ vi.mock('../api/admin', async (orig) => {
     adminApi: {
       ...real.adminApi,
       listDepartments: vi.fn(),
+      listMembers: vi.fn(),
       deleteDepartment: vi.fn(),
       getDirectoryScope: vi.fn(),
       hideDepartment: vi.fn(),
@@ -119,5 +121,28 @@ describe('deleting a department', () => {
     await waitFor(() => expect(spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey))).toEqual(
       expect.arrayContaining([JSON.stringify(keys.admin.directoryScope('w1')), JSON.stringify(keys.contacts.all('w1'))]),
     ))
+  })
+})
+
+describe('the people list a manager reads', () => {
+  it('is not asked for again when the screen is shown again after a refusal', async () => {
+    api.listMembers.mockRejectedValue(new ApiError('forbidden', 403))
+    const first = renderHook(() => useMemberDirectory('w1'), { wrapper })
+    await waitFor(() => expect(first.result.current.isError).toBe(true))
+    first.unmount()
+
+    const second = renderHook(() => useMemberDirectory('w1'), { wrapper })
+    await new Promise((r) => setTimeout(r, 30))
+    expect(second.result.current.isError).toBe(true)
+    expect(api.listMembers).toHaveBeenCalledTimes(1)
+  })
+
+  it('is still asked for again when the person presses retry', async () => {
+    api.listMembers.mockRejectedValueOnce(new ApiError('forbidden', 403)).mockResolvedValue({ members: [] })
+    const { result } = renderHook(() => useMemberDirectory('w1'), { wrapper })
+    await waitFor(() => expect(result.current.isError).toBe(true))
+    void result.current.refetch()
+    await waitFor(() => expect(result.current.isSuccess).toBe(true))
+    expect(api.listMembers).toHaveBeenCalledTimes(2)
   })
 })

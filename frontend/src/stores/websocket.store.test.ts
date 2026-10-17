@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { endSession } from '../lib/session-end'
 
 const refresh = vi.hoisted(() => vi.fn())
 vi.mock('../api/client', async (original) => ({
@@ -536,6 +537,34 @@ describe('resync', () => {
     settle()
     expect(invalidated(keys.documents.list('ws-1'))).toBe(true)
     expect(invalidated(keys.admin.members('ws-1'))).toBe(true)
+  })
+
+  it('the first connection of a load leaves a directory that was just fetched alone, but a later reconnect refreshes it', () => {
+    endSession() // a fresh page load: no resync has run yet
+    useWebSocketStore.getState().followWorkspace('ws-1')
+    seed(keys.contacts.list('ws-1'))
+    seed(keys.documents.list('ws-1'))
+    authOk()
+    ackWorkspace('12')
+    settle()
+    expect(invalidated(keys.documents.list('ws-1'))).toBe(true)
+    expect(invalidated(keys.contacts.list('ws-1'))).toBe(false)
+
+    // A change heard live still refreshes it.
+    deliver(domainEvent({ domain: 'workspace', kind: 'member_added', seq: '13' }))
+    settle()
+    expect(invalidated(keys.contacts.list('ws-1'))).toBe(true)
+
+    // And what a dropped connection may have missed is fetched again, however new the copy.
+    queryClient.setQueryData(keys.contacts.list('ws-1'), { seeded: true })
+    expect(invalidated(keys.contacts.list('ws-1'))).toBe(false)
+    FakeSocket.last!.onclose!({ code: 1006 })
+    vi.advanceTimersByTime(30_000)
+    FakeSocket.last!.onopen!()
+    authOk()
+    ackWorkspace('20')
+    settle()
+    expect(invalidated(keys.contacts.list('ws-1'))).toBe(true)
   })
 
   it('a 30 second outage ends with every workspace query refreshed and the stream resumed', () => {
