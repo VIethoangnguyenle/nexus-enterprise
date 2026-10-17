@@ -131,6 +131,8 @@ function WorkspaceShell() {
   useEffect(() => {
     if (currentPath.includes('/channels')) {
       if (activeModule !== 'messaging') setActiveModule('messaging')
+    } else if (currentPath.includes('/calendar')) {
+      if (activeModule !== 'calendar') setActiveModule('calendar')
     } else if (currentPath.includes('/admin')) {
       if (activeModule !== 'admin') setActiveModule('admin')
     } else if (currentPath.includes('/contacts')) {
@@ -174,7 +176,7 @@ function WorkspaceShell() {
         <AppSidebar workspaceName={workspaceDisplayName(workspaceName)} unreadCounts={{ messaging: unreadMessages }} />
 
         {/* Column 2: ListPanel — only for messaging, documents, and workspace modules */}
-        {activeModule !== 'contacts' && activeModule !== 'drive' && activeModule !== 'approval' && activeModule !== 'assets' && activeModule !== 'settings' && activeModule !== 'admin' && (
+        {activeModule !== 'calendar' && activeModule !== 'contacts' && activeModule !== 'drive' && activeModule !== 'approval' && activeModule !== 'assets' && activeModule !== 'settings' && activeModule !== 'admin' && (
           <>
             {/* Tin nhắn's navigator column: desktop only. On a phone its job is done by Trang chủ. */}
             <div style={{ width: size, flexShrink: 0 }} className="h-full hidden lg:block">

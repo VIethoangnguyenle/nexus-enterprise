@@ -66,7 +66,7 @@ describe('AppSidebar, expanded', () => {
     await renderSidebar()
     const nav = await screen.findByRole('navigation', { name: 'Điều hướng chính' })
     expect(screen.getAllByRole('navigation')).toHaveLength(1)
-    expect(mainLinks(nav)).toEqual(['Tin nhắn, 3 chưa đọc', 'Tài liệu', 'Phê duyệt', 'Tài sản', 'Danh bạ', 'Quản trị', 'Cài đặt'])
+    expect(mainLinks(nav)).toEqual(['Tin nhắn, 3 chưa đọc', 'Lịch', 'Tài liệu', 'Phê duyệt', 'Tài sản', 'Danh bạ', 'Quản trị', 'Cài đặt'])
     expect(within(nav).getByRole('link', { name: 'Tin nhắn, 3 chưa đọc' })).toBeInTheDocument()
     expect(within(nav).getByRole('button', { name: 'Thông báo' })).toBeInTheDocument()
     expect(nav).not.toHaveAttribute('data-rail')
@@ -111,7 +111,7 @@ describe('AppSidebar, expanded', () => {
 
     await renderSidebar()
     const nav = await screen.findByRole('navigation', { name: 'Điều hướng chính' })
-    expect(mainLinks(nav)).toEqual(['Tin nhắn, 3 chưa đọc', 'Tài liệu', 'Danh bạ', 'Cài đặt'])
+    expect(mainLinks(nav)).toEqual(['Tin nhắn, 3 chưa đọc', 'Lịch', 'Tài liệu', 'Danh bạ', 'Cài đặt'])
     expect(within(nav).queryByRole('link', { name: /Phê duyệt/ })).toBeNull()
     expect(within(nav).queryByRole('link', { name: /Tài sản/ })).toBeNull()
     expect(await screen.findByText('Workspace cá nhân')).toBeInTheDocument()
@@ -187,7 +187,7 @@ describe('AppSidebar, collapsed rail', () => {
     const nav = await screen.findByRole('navigation', { name: 'Điều hướng chính' })
     expect(nav).toHaveAttribute('data-rail', 'true')
     expect(nav).toHaveClass('w-18')
-    for (const name of ['Tài liệu', 'Phê duyệt', 'Tài sản', 'Danh bạ', 'Quản trị', 'Cài đặt']) {
+    for (const name of ['Lịch', 'Tài liệu', 'Phê duyệt', 'Tài sản', 'Danh bạ', 'Quản trị', 'Cài đặt']) {
       const link = within(nav).getByRole('link', { name })
       expect(link).toHaveTextContent(name)
       expect(link).not.toHaveAttribute('title')

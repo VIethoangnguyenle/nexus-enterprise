@@ -33,7 +33,7 @@ export interface Plan {
 }
 
 /** Domains whose frames this module understands; anything else is ignored. */
-export const DOMAINS = ['drive', 'channel', 'workspace', 'document', 'asset', 'permission'] as const
+export const DOMAINS = ['drive', 'channel', 'workspace', 'document', 'asset', 'permission', 'calendar'] as const
 
 /**
  * Every query family that belongs to a workspace's data. After a reconnect or a
@@ -55,6 +55,7 @@ export function workspaceResyncKeys(wsId: string): QueryKey[] {
     keys.assets.requestsAll(),
     keys.assets.requestDetailsAll(),
     keys.approval.all(),
+    keys.calendar.all(wsId),
     keys.messaging.channelsAll(),
     keys.messaging.dms(),
     keys.messaging.messagesAll(),
@@ -141,6 +142,14 @@ export function planFor(e: DomainChange): Plan {
           inv.push(keys.assets.asset(id), keys.assets.history(id), keys.assets.transitions(id))
         }
       }
+      break
+    }
+
+    case 'calendar': {
+      // An event changed, was answered or removed, or a calendar was shared or unshared. The event names
+      // only itself, but a recurring event touches many ranges and a share changes which calendars exist.
+      inv.push(keys.calendar.eventsAll(ws), keys.calendar.calendars(ws))
+      for (const id of ids) inv.push(keys.calendar.event(ws, id))
       break
     }
 

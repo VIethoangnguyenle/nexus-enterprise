@@ -59,12 +59,12 @@ afterEach(() => {
 const labelsOf = (nav: HTMLElement) => within(nav).getAllByRole('link').map((a) => a.textContent)
 
 describe('destinations', () => {
-  it('lists Chat, Tài liệu, Phê duyệt, Tài sản, Danh bạ, then Thông báo, Quản trị, Cài đặt, with the person last', async () => {
+  it('lists Chat, Lịch, Tài liệu, Phê duyệt, Tài sản, Danh bạ, then Thông báo, Quản trị, Cài đặt, with the person last', async () => {
     const { dialog } = await openDrawer()
     expect(dialog).toHaveAttribute('aria-modal', 'true')
     const nav = within(dialog).getByRole('navigation', { name: 'Các phần của Nexus' })
     await within(nav).findByRole('link', { name: /Phê duyệt/ })
-    expect(labelsOf(nav)).toEqual(['Chat', 'Tài liệu', 'Phê duyệt2 chờ bạn', 'Tài sản', 'Danh bạ', 'Quản trị', 'Cài đặt'])
+    expect(labelsOf(nav)).toEqual(['Chat', 'Lịch', 'Tài liệu', 'Phê duyệt2 chờ bạn', 'Tài sản', 'Danh bạ', 'Quản trị', 'Cài đặt'])
     expect(within(nav).getByRole('button', { name: 'Thông báo' })).toBeInTheDocument()
     expect(await within(dialog).findByText(/Lê Thị Hoa/)).toBeInTheDocument()
   })
@@ -73,7 +73,7 @@ describe('destinations', () => {
     server.personal = true
     const { dialog } = await openDrawer()
     const nav = within(dialog).getByRole('navigation', { name: 'Các phần của Nexus' })
-    await waitFor(() => expect(labelsOf(nav)).toEqual(['Chat', 'Tài liệu', 'Danh bạ', 'Cài đặt']))
+    await waitFor(() => expect(labelsOf(nav)).toEqual(['Chat', 'Lịch', 'Tài liệu', 'Danh bạ', 'Cài đặt']))
     expect(api).not.toHaveBeenCalledWith('/approval/pending')
   })
 

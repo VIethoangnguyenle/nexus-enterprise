@@ -20,6 +20,7 @@ import { Route as AssetsAssetIdRouteImport } from './routes/assets/$assetId'
 import { Route as WorkspaceSettingsRouteImport } from './routes/_workspace/settings'
 import { Route as WorkspaceDriveRouteImport } from './routes/_workspace/drive'
 import { Route as WorkspaceContactsRouteImport } from './routes/_workspace/contacts'
+import { Route as WorkspaceCalendarRouteImport } from './routes/_workspace/calendar'
 import { Route as WorkspaceAssetsRouteImport } from './routes/_workspace/assets'
 import { Route as WorkspaceApprovalRouteImport } from './routes/_workspace/approval'
 import { Route as WorkspaceAdminRouteImport } from './routes/_workspace/admin'
@@ -91,6 +92,11 @@ const WorkspaceDriveRoute = WorkspaceDriveRouteImport.update({
 const WorkspaceContactsRoute = WorkspaceContactsRouteImport.update({
   id: '/contacts',
   path: '/contacts',
+  getParentRoute: () => WorkspaceRoute,
+} as any)
+const WorkspaceCalendarRoute = WorkspaceCalendarRouteImport.update({
+  id: '/calendar',
+  path: '/calendar',
   getParentRoute: () => WorkspaceRoute,
 } as any)
 const WorkspaceAssetsRoute = WorkspaceAssetsRouteImport.update({
@@ -201,6 +207,7 @@ export interface FileRoutesByFullPath {
   '/admin': typeof WorkspaceAdminRouteWithChildren
   '/approval': typeof WorkspaceApprovalRoute
   '/assets': typeof WorkspaceAssetsRoute
+  '/calendar': typeof WorkspaceCalendarRoute
   '/contacts': typeof WorkspaceContactsRoute
   '/drive': typeof WorkspaceDriveRoute
   '/settings': typeof WorkspaceSettingsRoute
@@ -230,6 +237,7 @@ export interface FileRoutesByTo {
   '/workspace-select': typeof AuthWorkspaceSelectRoute
   '/approval': typeof WorkspaceApprovalRoute
   '/assets': typeof WorkspaceAssetsRoute
+  '/calendar': typeof WorkspaceCalendarRoute
   '/contacts': typeof WorkspaceContactsRoute
   '/drive': typeof WorkspaceDriveRoute
   '/settings': typeof WorkspaceSettingsRoute
@@ -263,6 +271,7 @@ export interface FileRoutesById {
   '/_workspace/admin': typeof WorkspaceAdminRouteWithChildren
   '/_workspace/approval': typeof WorkspaceApprovalRoute
   '/_workspace/assets': typeof WorkspaceAssetsRoute
+  '/_workspace/calendar': typeof WorkspaceCalendarRoute
   '/_workspace/contacts': typeof WorkspaceContactsRoute
   '/_workspace/drive': typeof WorkspaceDriveRoute
   '/_workspace/settings': typeof WorkspaceSettingsRoute
@@ -295,6 +304,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/approval'
     | '/assets'
+    | '/calendar'
     | '/contacts'
     | '/drive'
     | '/settings'
@@ -324,6 +334,7 @@ export interface FileRouteTypes {
     | '/workspace-select'
     | '/approval'
     | '/assets'
+    | '/calendar'
     | '/contacts'
     | '/drive'
     | '/settings'
@@ -356,6 +367,7 @@ export interface FileRouteTypes {
     | '/_workspace/admin'
     | '/_workspace/approval'
     | '/_workspace/assets'
+    | '/_workspace/calendar'
     | '/_workspace/contacts'
     | '/_workspace/drive'
     | '/_workspace/settings'
@@ -468,6 +480,13 @@ declare module '@tanstack/react-router' {
       path: '/contacts'
       fullPath: '/contacts'
       preLoaderRoute: typeof WorkspaceContactsRouteImport
+      parentRoute: typeof WorkspaceRoute
+    }
+    '/_workspace/calendar': {
+      id: '/_workspace/calendar'
+      path: '/calendar'
+      fullPath: '/calendar'
+      preLoaderRoute: typeof WorkspaceCalendarRouteImport
       parentRoute: typeof WorkspaceRoute
     }
     '/_workspace/assets': {
@@ -642,6 +661,7 @@ interface WorkspaceRouteChildren {
   WorkspaceAdminRoute: typeof WorkspaceAdminRouteWithChildren
   WorkspaceApprovalRoute: typeof WorkspaceApprovalRoute
   WorkspaceAssetsRoute: typeof WorkspaceAssetsRoute
+  WorkspaceCalendarRoute: typeof WorkspaceCalendarRoute
   WorkspaceContactsRoute: typeof WorkspaceContactsRoute
   WorkspaceDriveRoute: typeof WorkspaceDriveRoute
   WorkspaceSettingsRoute: typeof WorkspaceSettingsRoute
@@ -658,6 +678,7 @@ const WorkspaceRouteChildren: WorkspaceRouteChildren = {
   WorkspaceAdminRoute: WorkspaceAdminRouteWithChildren,
   WorkspaceApprovalRoute: WorkspaceApprovalRoute,
   WorkspaceAssetsRoute: WorkspaceAssetsRoute,
+  WorkspaceCalendarRoute: WorkspaceCalendarRoute,
   WorkspaceContactsRoute: WorkspaceContactsRoute,
   WorkspaceDriveRoute: WorkspaceDriveRoute,
   WorkspaceSettingsRoute: WorkspaceSettingsRoute,
