@@ -1,0 +1,402 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nexus · Đổi ảnh tại chỗ và ô soạn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* PR 1 của plan 261016-1942: UI tinh gọn. AvatarEdit (Hồ sơ + ảnh nhóm), icon nhóm có ảnh,
+   ô soạn khi bàn phím iPhone mở, lề phải luồng chat trên điện thoại. Chrome trang lấy từ file-viewer.html. */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-ink-muted); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 72ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.toc a:hover { background: var(--color-hover); }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+.screen-head { display: grid; gap: 6px; max-width: 80ch; }
+.screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 84ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+code { font: 400 0.8125rem/1 var(--font-mono); }
+.k { font-size: 0.6875rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+
+/* primitives */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0; font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink); }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.ghost { background: transparent; }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.field { display: grid; gap: 6px; }
+.field label { font-weight: 600; font-size: 0.8125rem; }
+.input { height: 40px; border-radius: 8px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); padding: 0 12px; display: flex; align-items: center; }
+
+/* specimen board: states in a row */
+.board { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
+.spec { background: var(--color-raised); border-radius: 12px; padding: 20px 16px 16px; display: grid; gap: 14px; justify-items: center; align-content: start; min-height: 220px; position: relative; }
+.spec .k { justify-self: start; }
+.spec p { font-size: 0.75rem; color: var(--color-ink-muted); text-align: center; max-width: 24ch; }
+
+/* avatar */
+.av { --s: 64px; width: var(--s); height: var(--s); border-radius: 999px; display: grid; place-items: center; color: var(--color-on-person); font: 600 calc(var(--s) * 0.36)/1 var(--font-body); position: relative; flex: none; background: var(--color-person-5); overflow: hidden; }
+.av.sq { border-radius: 16px; }
+.av.photo { background: radial-gradient(circle at 38% 34%, oklch(78% 0.06 60) 0 18%, transparent 19%), linear-gradient(160deg, oklch(62% 0.08 230), oklch(44% 0.07 200) 60%, oklch(36% 0.05 180)); }
+.av.photo.grp { background: linear-gradient(135deg, oklch(70% 0.09 150) 0 30%, oklch(58% 0.1 170) 30% 62%, oklch(48% 0.08 200) 62%); }
+.edit { border: 0; padding: 0; background: none; border-radius: 999px; cursor: pointer; position: relative; display: inline-grid; }
+.edit.sq { border-radius: 16px; }
+.edit .veil { position: absolute; inset: 0; border-radius: inherit; display: grid; place-items: center; background: var(--color-scrim); color: oklch(98.5% 0.005 180); opacity: 0; transition: opacity var(--duration-quick) var(--ease-out); }
+.edit:hover .veil, .edit:focus-visible .veil, .edit.show .veil { opacity: 1; }
+.edit .badge { position: absolute; right: -2px; bottom: -2px; width: 24px; height: 24px; border-radius: 999px; display: grid; place-items: center; background: var(--color-overlay); color: var(--color-ink); box-shadow: var(--shadow-overlay); }
+.edit .badge svg { width: 14px; height: 14px; }
+.edit.sq .badge { right: -4px; bottom: -4px; }
+.ring { position: absolute; inset: -4px; }
+.ring circle { fill: none; stroke-width: 3; }
+.err { font-size: 0.75rem; color: var(--color-danger); text-align: center; max-width: 26ch; }
+
+/* menu */
+.menu { background: var(--color-overlay); box-shadow: var(--shadow-overlay); border-radius: 12px; padding: 4px; min-width: 180px; display: grid; }
+.menu button { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border: 0; border-radius: 8px; background: none; font: 500 0.875rem/1 var(--font-body); color: var(--color-ink); cursor: pointer; text-align: left; }
+.menu button:hover, .menu button.hot { background: var(--color-hover); }
+.menu button.danger { color: var(--color-danger); }
+
+/* settings panel (desktop) */
+.compare { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); gap: 16px; }
+.frame { background: var(--color-sunk); border-radius: 14px; padding: 12px; display: grid; gap: 10px; min-width: 0; }
+.frame > .cap { display: flex; gap: 8px; align-items: center; padding: 2px 4px; }
+.pill { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font: 600 0.6875rem/1 var(--font-body); }
+.pill.old { background: var(--color-danger-wash); color: var(--color-danger); }
+.pill.new { background: var(--color-success-wash); color: var(--color-success); }
+.panel { background: var(--color-raised); border-radius: 10px; padding: 24px; display: grid; gap: 18px; }
+.prow { display: flex; gap: 16px; align-items: center; }
+.prow .who { display: grid; gap: 2px; min-width: 0; }
+.prow .who b { font-size: 1rem; }
+.strike { position: relative; }
+.strike::after { content: ""; position: absolute; inset: -6px; border-radius: 10px; box-shadow: inset 0 0 0 2px var(--color-danger); }
+
+/* phones */
+.phones { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+.phone { width: 300px; max-width: 100%; height: 620px; border-radius: 36px; background: var(--color-base); box-shadow: 0 0 0 8px var(--color-ink), var(--shadow-overlay); overflow: hidden; display: flex; flex-direction: column; position: relative; flex: none; }
+.ph-cap { width: 300px; max-width: 100%; display: grid; gap: 4px; }
+.ph-cap b { font-size: 0.875rem; }
+.ph-cap span { font-size: 0.75rem; color: var(--color-ink-muted); }
+.status { height: 34px; flex: none; display: flex; justify-content: space-between; align-items: end; padding: 0 22px 4px; font: 600 0.75rem/1 var(--font-body); }
+.topbar { height: 48px; flex: none; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-bottom: 1px solid var(--color-line); }
+.topbar .t { display: grid; line-height: 1.2; min-width: 0; }
+.topbar .t b { font-size: 0.9375rem; }
+.topbar .t span { font-size: 0.6875rem; color: var(--color-ink-muted); }
+.ic { width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center; color: var(--color-ink-muted); flex: none; }
+.stream { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; gap: 4px; padding: 8px 10px; }
+.msg { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 8px; padding: 2px 4px; }
+.msg.me { grid-template-columns: minmax(0, 1fr); justify-items: end; }
+.msg .av { --s: 28px; }
+.bub { max-width: 88%; padding: 7px 12px; border-radius: 16px; background: var(--color-sunk); font-size: 0.9375rem; line-height: 1.4; width: fit-content; }
+.me .bub { background: var(--color-accent-wash); border-top-right-radius: 4px; }
+.msg:not(.me) .bub { border-top-left-radius: 4px; }
+.meta { font-size: 0.6875rem; color: var(--color-ink-muted); }
+.edge { position: absolute; top: 82px; bottom: 260px; width: 0; border-left: 1px dashed var(--color-danger); }
+.measure { position: absolute; font: 600 0.625rem/1 var(--font-mono); color: var(--color-danger); background: var(--color-danger-wash); padding: 3px 5px; border-radius: 4px; }
+
+.comp { margin: 0 10px 10px; background: var(--color-raised); border-radius: 22px; padding: 8px 8px 8px 14px; display: flex; align-items: center; gap: 6px; box-shadow: inset 0 0 0 1px var(--color-line); }
+.comp .ph { flex: 1; color: var(--color-ink-subtle); font-size: 1rem; }
+.send { width: 36px; height: 36px; border-radius: 999px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; flex: none; }
+.comp.flush { margin: 0; border-radius: 0; box-shadow: none; border-top: 1px solid var(--color-line); background: var(--color-base); padding: 6px 6px 6px 10px; }
+.comp.flush .field-pill { flex: 1; min-height: 38px; border-radius: 19px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); display: flex; align-items: center; padding: 0 14px; color: var(--color-ink); font-size: 1rem; }
+.home { height: 34px; flex: none; display: grid; place-items: center; }
+.home::after { content: ""; width: 120px; height: 5px; border-radius: 3px; background: var(--color-ink); }
+.acc { height: 44px; flex: none; background: oklch(86% 0.006 250); display: flex; align-items: center; gap: 18px; padding: 0 14px; color: oklch(48% 0.12 250); font: 600 0.875rem/1 var(--font-body); }
+.acc .grow { flex: 1; }
+.kbd { height: 216px; flex: none; background: oklch(80% 0.006 250); display: grid; grid-template-rows: repeat(4, 1fr); gap: 8px; padding: 8px 4px 30px; }
+.kbd .r { display: flex; gap: 5px; justify-content: center; }
+.kbd .r span { flex: 1; max-width: 26px; border-radius: 5px; background: oklch(98% 0.003 250); box-shadow: 0 1px 0 oklch(60% 0.01 250); }
+.kbd .r span.w { max-width: 150px; flex: 6; }
+.gap { flex: none; height: 16px; background: repeating-linear-gradient(-45deg, var(--color-danger-wash) 0 6px, transparent 6px 12px); position: relative; }
+.gap .measure { right: 8px; top: 2px; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .acc { background: oklch(32% 0.008 250); color: oklch(78% 0.1 250); } :root:not([data-theme="light"]) .kbd { background: oklch(26% 0.008 250); } :root:not([data-theme="light"]) .kbd .r span { background: oklch(42% 0.008 250); box-shadow: none; } }
+:root[data-theme="dark"] .acc { background: oklch(32% 0.008 250); color: oklch(78% 0.1 250); }
+:root[data-theme="dark"] .kbd { background: oklch(26% 0.008 250); }
+:root[data-theme="dark"] .kbd .r span { background: oklch(42% 0.008 250); box-shadow: none; }
+
+/* sheet */
+.scrim { position: absolute; inset: 0; background: var(--color-scrim); }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--color-overlay); border-radius: 20px 20px 0 0; padding: 8px 8px 34px; display: grid; gap: 2px; box-shadow: var(--shadow-overlay); }
+.sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--color-line); justify-self: center; margin: 2px 0 8px; }
+.sheet .row { display: flex; align-items: center; gap: 14px; height: 52px; padding: 0 14px; border-radius: 12px; font-size: 1rem; font-weight: 500; }
+.sheet .row.danger { color: var(--color-danger); }
+.sheet hr { border: 0; border-top: 1px solid var(--color-line); margin: 4px 8px; }
+
+/* nav rows with group icons */
+.lists { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 16px; }
+.nav { background: var(--color-sunk); border-radius: 12px; padding: 8px; display: grid; gap: 2px; }
+.nrow { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px; border-radius: 8px; font-weight: 500; }
+.nrow.on { background: var(--color-raised); font-weight: 600; }
+.nrow .av { --s: 24px; border-radius: 7px; font-size: 0.6875rem; }
+.nrow .n { margin-left: auto; min-width: 18px; height: 18px; border-radius: 999px; background: var(--color-accent); color: var(--color-on-accent); font: 600 0.6875rem/18px var(--font-body); text-align: center; padding: 0 5px; }
+.home-list { background: var(--color-base); border-radius: 12px; display: grid; }
+.hrow { display: flex; gap: 12px; padding: 10px 12px; align-items: center; }
+.hrow .av { --s: 44px; border-radius: 12px; font-size: 0.9375rem; }
+.hrow .txt { display: grid; min-width: 0; flex: 1; }
+.hrow .txt b { font-size: 1rem; }
+.hrow .txt span { color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<div class="page">
+<header>
+  <p class="k">Mockup · plan 261016-1942 · PR 1 · chờ duyệt</p>
+  <h1>Đổi ảnh tại chỗ, ảnh nhóm và ô soạn trên iPhone</h1>
+  <p>Nguyên tắc mới cho DESIGN.md §6: <b>thao tác nằm trên chính đối tượng</b>. Muốn đổi ảnh thì chạm vào ảnh; không còn hàng nút
+    "Đổi ảnh" / "Bỏ ảnh" bên cạnh. Trên thiết bị không có chuột, dấu hiệu sửa (huy hiệu máy ảnh) luôn hiện thay cho hover.</p>
+  <nav class="toc" aria-label="Mục">
+    <a href="#profile">1 · Hồ sơ</a><a href="#states">2 · Trạng thái</a><a href="#group">3 · Ảnh nhóm</a>
+    <a href="#icons">4 · Icon nhóm có ảnh</a><a href="#phone">5 · Điện thoại</a><a href="#composer">6 · Ô soạn và bàn phím</a><a href="#margin">7 · Lề phải chat</a>
+  </nav>
+</header>
+
+<!-- 1 -->
+<section class="screen" id="profile">
+  <div class="screen-head">
+    <h2>1 · Cài đặt → Hồ sơ</h2>
+    <p>Bỏ hai nút bên cạnh avatar. Tên và chức danh chuyển lên cạnh ảnh, nên hàng đầu đọc như danh thiếp; dòng hướng dẫn JPG/PNG chỉ
+      hiện trong menu khi cần.</p>
+  </div>
+  <div class="compare">
+    <div class="frame">
+      <div class="cap"><span class="pill old">Hiện tại</span><span class="muted">ProfileTab.tsx · AvatarEdit</span></div>
+      <div class="panel">
+        <div class="prow">
+          <span class="av">TL</span>
+          <div style="display:grid;gap:6px">
+            <div style="display:flex;gap:8px" class="strike"><span class="btn sm"><svg class="i s" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-3z"/><circle cx="12" cy="13" r="3.5"/></svg>Đổi ảnh</span><span class="btn sm ghost">Bỏ ảnh</span></div>
+            <span class="muted" style="font-size:.75rem">JPG hoặc PNG, tối đa 5 MB. Không có ảnh thì dùng chữ cái đầu trên màu riêng của bạn.</span>
+          </div>
+        </div>
+        <div class="field"><label>Tên hiển thị</label><div class="input">Trần Thu Lan</div></div>
+      </div>
+    </div>
+    <div class="frame">
+      <div class="cap"><span class="pill new">Đề xuất</span><span class="muted">patterns/AvatarEdit · shape circle</span></div>
+      <div class="panel">
+        <div class="prow">
+          <button class="edit" aria-label="Đổi ảnh đại diện" aria-haspopup="menu">
+            <span class="av">TL</span>
+            <span class="veil"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-3z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
+          </button>
+          <div class="who"><b>Trần Thu Lan</b><span class="muted">Kế toán trưởng · Phòng Tài chính</span></div>
+        </div>
+        <div class="field"><label>Tên hiển thị</label><div class="input">Trần Thu Lan</div></div>
+      </div>
+      <ol class="notes">
+        <li><b>Rê chuột vào ảnh</b> (thử ngay ở đây): lớp phủ <code>--color-scrim</code> + icon máy ảnh 20, 160ms. Con trỏ tay.</li>
+        <li><b>Một nút duy nhất</b> bọc ảnh, nhãn "Đổi ảnh đại diện", <code>aria-haspopup="menu"</code>. Enter / Space mở menu, Esc đóng và trả focus về ảnh.</li>
+      </ol>
+    </div>
+  </div>
+</section>
+
+<!-- 2 -->
+<section class="screen" id="states">
+  <div class="screen-head">
+    <h2>2 · Trạng thái của AvatarEdit</h2>
+    <p>Cùng một component cho người (tròn) và nhóm (vuông bo 16). Ảnh chọn xong được tải lên ngay, không đợi "Lưu thay đổi" (như hiện nay).</p>
+  </div>
+  <div class="board">
+    <div class="spec"><span class="k">Nghỉ</span><button class="edit" aria-label="Đổi ảnh đại diện"><span class="av">TL</span><span class="veil"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-3z"/><circle cx="12" cy="13" r="3.5"/></svg></span></button><p>Máy có chuột: không dấu hiệu gì thêm cho tới khi rê chuột.</p></div>
+    <div class="spec"><span class="k">Hover / focus</span><button class="edit show" aria-label="Đổi ảnh đại diện" style="outline:2px solid var(--color-focus);outline-offset:3px"><span class="av photo"></span><span class="veil"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-3z"/><circle cx="12" cy="13" r="3.5"/></svg></span></button><p>Focus bằng bàn phím: vòng focus + cùng lớp phủ.</p></div>
+    <div class="spec"><span class="k">Cảm ứng</span><button class="edit" aria-label="Đổi ảnh đại diện"><span class="av photo"></span><span class="badge"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-3z"/><circle cx="12" cy="13" r="3.5"/></svg></span></button><p><code>pointer: coarse</code> (máy tính bảng, điện thoại): huy hiệu 24 <code>--color-overlay</code> luôn hiện.</p></div>
+    <div class="spec"><span class="k">Menu mở</span>
+      <div style="display:grid;justify-items:center;gap:6px"><button class="edit show" aria-expanded="true"><span class="av photo"></span><span class="veil"></span></button>
+      <div class="menu" role="menu"><button role="menuitem" class="hot"><svg class="i s" viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>Đổi ảnh</button><button role="menuitem" class="danger"><svg class="i s" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg>Bỏ ảnh</button></div></div>
+    </div>
+    <div class="spec"><span class="k">Đang tải 64%</span><button class="edit" aria-label="Đang tải ảnh, 64%" aria-busy="true"><span class="av photo" style="opacity:.6"></span><svg class="ring" viewBox="0 0 72 72"><circle cx="36" cy="36" r="34" stroke="var(--color-line)"/><circle cx="36" cy="36" r="34" stroke="var(--color-accent)" stroke-dasharray="137 214" transform="rotate(-90 36 36)" stroke-linecap="round"/></svg></button><p>Vòng 3px <code>--color-accent</code> quanh ảnh, ảnh mới mờ 60%. Xong: toast "Đã đổi ảnh".</p></div>
+    <div class="spec"><span class="k">Lỗi</span><button class="edit" aria-label="Đổi ảnh đại diện" aria-describedby="e1"><span class="av">TL</span><span class="badge" style="color:var(--color-danger)"><svg class="i" viewBox="0 0 24 24"><path d="M12 8v5m0 3h.01M10.3 3.9 2.6 17a2 2 0 0 0 1.7 3h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg></span></button><p class="err" id="e1" role="alert">Ảnh lớn hơn 5 MB. Chọn ảnh nhỏ hơn.</p></div>
+    <div class="spec"><span class="k">Không có quyền</span><span class="av sq photo grp"></span><p>Ảnh nhóm khi bạn không có quyền quản lý nhóm: chỉ là ảnh, không nút, không lớp phủ.</p></div>
+  </div>
+  <ol class="notes">
+    <li><b>Bỏ ảnh</b> chỉ có khi đã có ảnh. Không có ảnh, menu chỉ còn "Tải ảnh lên".</li>
+    <li>Lỗi dùng đúng câu của <code>avatarErrorMessage</code> hiện có; không hiện chữ của máy chủ.</li>
+    <li>Gợi ý "JPG hoặc PNG, tối đa 5 MB" chuyển thành dòng phụ trong hộp chọn tệp của hệ thống (thuộc tính <code>accept</code>) và câu lỗi; không chiếm chỗ trên màn.</li>
+  </ol>
+</section>
+
+<!-- 3 -->
+<section class="screen" id="group">
+  <div class="screen-head">
+    <h2>3 · Ảnh nhóm trong panel thông tin</h2>
+    <p>Mới. Ai đổi được tên nhóm (quyền quản lý nhóm) thì đổi được ảnh nhóm. Tin nhắn trực tiếp không có ảnh nhóm.</p>
+  </div>
+  <div class="compare">
+    <div class="frame">
+      <div class="cap"><span class="pill new">Người quản lý nhóm</span></div>
+      <div class="panel" style="justify-items:center;text-align:center">
+        <button class="edit sq show" aria-label="Đổi ảnh nhóm Đối soát giao dịch" aria-haspopup="menu"><span class="av sq photo grp"></span><span class="veil"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-3z"/><circle cx="12" cy="13" r="3.5"/></svg></span></button>
+        <div style="display:grid;gap:2px"><b style="font-size:1.0625rem">Đối soát giao dịch</b><span class="muted">Nhóm · 14 thành viên</span></div>
+      </div>
+    </div>
+    <div class="frame">
+      <div class="cap"><span class="pill" style="background:var(--color-hover)">Thành viên</span></div>
+      <div class="panel" style="justify-items:center;text-align:center">
+        <span class="av sq photo grp"></span>
+        <div style="display:grid;gap:2px"><b style="font-size:1.0625rem">Đối soát giao dịch</b><span class="muted">Nhóm · 14 thành viên</span></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li>Đổi xong, mọi thành viên thấy ảnh mới ngay (realtime), không cần tải lại.</li>
+    <li>Nhóm chưa có ảnh: ô chữ cái trên màu riêng như hiện nay; người quản lý thấy menu "Tải ảnh lên".</li>
+  </ol>
+</section>
+
+<!-- 4 -->
+<section class="screen" id="icons">
+  <div class="screen-head">
+    <h2>4 · Icon nhóm có ảnh ở mọi nơi</h2>
+    <p>Cột điều hướng (24, bo 7), Trang chủ điện thoại (44, bo 12), header cuộc trò chuyện (28), tìm kiếm, thông báo. Có ảnh thì dùng ảnh, không thì giữ chữ cái.</p>
+  </div>
+  <div class="lists">
+    <div class="nav" aria-label="Cột điều hướng chat">
+      <div class="nrow on"><span class="av photo grp"></span>Đối soát giao dịch<span class="n tnum">3</span></div>
+      <div class="nrow"><span class="av" style="background:var(--color-person-3)">KT</span>Kế toán tổng hợp</div>
+      <div class="nrow"><span class="av photo"></span>Ban giám đốc</div>
+      <div class="nrow"><span class="av" style="background:var(--color-person-7)">PL</span>Pháp lý hợp đồng</div>
+    </div>
+    <div class="home-list">
+      <div class="hrow"><span class="av photo grp"></span><div class="txt"><b>Đối soát giao dịch</b><span>Minh: Đã gửi bảng đối soát tháng 10</span></div><span class="meta">09:02</span></div>
+      <div class="hrow"><span class="av" style="background:var(--color-person-3)">KT</span><div class="txt"><b>Kế toán tổng hợp</b><span>Bạn: Mình xem rồi nhé</span></div><span class="meta">Hôm qua</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 -->
+<section class="screen" id="phone">
+  <div class="screen-head">
+    <h2>5 · Điện thoại: chạm ảnh mở sheet</h2>
+    <p>Dưới 768 menu đổi thành sheet đáy, thêm "Chụp ảnh" (mở máy ảnh qua <code>capture</code>). Máy tính bảng dùng menu như máy tính, có huy hiệu luôn hiện.</p>
+  </div>
+  <div class="phones">
+    <div class="ph-cap"><b>Hồ sơ</b><span>Huy hiệu máy ảnh luôn hiện ở góc ảnh</span>
+      <div class="phone">
+        <div class="status"><span class="tnum">9:41</span><span>●●●</span></div>
+        <div class="topbar"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><div class="t"><b>Hồ sơ</b></div></div>
+        <div style="padding:24px 16px;display:grid;gap:18px;justify-items:center">
+          <button class="edit" aria-label="Đổi ảnh đại diện"><span class="av" style="--s:88px">TL</span><span class="badge" style="width:30px;height:30px"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-3z"/><circle cx="12" cy="13" r="3.5"/></svg></span></button>
+          <div style="text-align:center"><b style="font-size:1.0625rem">Trần Thu Lan</b><p class="muted">Kế toán trưởng</p></div>
+          <div class="field" style="width:100%"><label>Tên hiển thị</label><div class="input">Trần Thu Lan</div></div>
+          <div class="field" style="width:100%"><label>Chức danh</label><div class="input">Kế toán trưởng</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="ph-cap"><b>Sau khi chạm ảnh</b><span>Sheet đáy, hàng 52, Huỷ tách bằng vạch</span>
+      <div class="phone">
+        <div class="status"><span class="tnum">9:41</span><span>●●●</span></div>
+        <div class="topbar"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><div class="t"><b>Hồ sơ</b></div></div>
+        <div style="padding:24px 16px;display:grid;justify-items:center"><span class="av" style="--s:88px">TL</span></div>
+        <div class="scrim"></div>
+        <div class="sheet" role="menu" aria-label="Ảnh đại diện">
+          <span class="grab"></span>
+          <div class="row"><svg class="i" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V8a1 1 0 0 0-1-1h-3z"/><circle cx="12" cy="13" r="3.5"/></svg>Chụp ảnh</div>
+          <div class="row"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m21 16-5-5-9 9"/></svg>Chọn ảnh</div>
+          <div class="row danger"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg>Bỏ ảnh</div>
+          <hr><div class="row" style="justify-content:center;font-weight:600">Huỷ</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 -->
+<section class="screen" id="composer">
+  <div class="screen-head">
+    <h2>6 · Ô soạn khi bàn phím mở (iPhone, app đã cài)</h2>
+    <p>Hiện tại ô soạn luôn cách đáy 16 px (<code>mb-4</code>) kể cả khi bàn phím mở, nên có một dải trống cố định. Đề xuất làm như Google Chat: bàn phím mở thì
+      ô soạn thành một thanh tràn ngang, sát ngay trên bàn phím.</p>
+  </div>
+  <div class="phones">
+    <div class="ph-cap"><b>Hiện tại · bàn phím mở</b><span>Dải 16 px trống giữa ô soạn và thanh phụ iOS</span>
+      <div class="phone">
+        <div class="status"><span class="tnum">9:41</span><span>●●●</span></div>
+        <div class="topbar"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><span class="av sq photo grp" style="--s:28px;border-radius:8px"></span><div class="t"><b>Đối soát giao dịch</b><span>14 thành viên</span></div></div>
+        <div class="stream"><div class="msg"><span class="av" style="background:var(--color-person-1)">M</span><div><span class="meta">Minh · 09:02</span><div class="bub">Đã gửi bảng đối soát tháng 10</div></div></div><div class="msg me"><span class="meta">09:04</span><div class="bub">Mình xem ngay</div></div></div>
+        <div class="comp" style="margin-bottom:0"><span class="ph">Tin nhắn cho Đối soát…</span><span class="send"><svg class="i s" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></span></div>
+        <div class="gap"><span class="measure">mb-4 · 16px</span></div>
+        <div class="acc"><span>‹</span><span>›</span><span class="grow"></span><span>Xong</span></div>
+        <div class="kbd"><div class="r"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="r"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="r"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="r"><span></span><span class="w"></span><span></span></div></div>
+      </div>
+    </div>
+    <div class="ph-cap"><b>Đề xuất · bàn phím mở</b><span>Thanh tràn ngang, viền trên 1px, không margin</span>
+      <div class="phone">
+        <div class="status"><span class="tnum">9:41</span><span>●●●</span></div>
+        <div class="topbar"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><span class="av sq photo grp" style="--s:28px;border-radius:8px"></span><div class="t"><b>Đối soát giao dịch</b><span>14 thành viên</span></div></div>
+        <div class="stream"><div class="msg"><span class="av" style="background:var(--color-person-1)">M</span><div><span class="meta">Minh · 09:02</span><div class="bub">Đã gửi bảng đối soát tháng 10</div></div></div><div class="msg me"><span class="meta">09:04</span><div class="bub">Mình xem ngay</div></div></div>
+        <div class="comp flush"><span class="ic" style="width:38px;height:38px"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span class="field-pill">Mình xem ngay|</span><span class="send"><svg class="i s" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></svg></span></div>
+        <div class="acc"><span>‹</span><span>›</span><span class="grow"></span><span>Xong</span></div>
+        <div class="kbd"><div class="r"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="r"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="r"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div><div class="r"><span></span><span class="w"></span><span></span></div></div>
+      </div>
+    </div>
+    <div class="ph-cap"><b>Đề xuất · bàn phím đóng</b><span>Ô bo 22 như cũ, đứng trên vạch home</span>
+      <div class="phone">
+        <div class="status"><span class="tnum">9:41</span><span>●●●</span></div>
+        <div class="topbar"><span class="ic"><svg class="i" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg></span><span class="av sq photo grp" style="--s:28px;border-radius:8px"></span><div class="t"><b>Đối soát giao dịch</b><span>14 thành viên</span></div></div>
+        <div class="stream"><div class="msg"><span class="av" style="background:var(--color-person-1)">M</span><div><span class="meta">Minh · 09:02</span><div class="bub">Đã gửi bảng đối soát tháng 10</div></div></div><div class="msg me"><span class="meta">09:04</span><div class="bub">Mình xem ngay</div></div></div>
+        <div class="comp" style="margin-bottom:0"><span class="ic" style="width:32px;height:32px"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span class="ph">Tin nhắn cho Đối soát…</span></div>
+        <div class="home"></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes">
+    <li><b>Bàn phím mở</b> (vùng nhìn thấy thấp hơn màn hình quá 120 px, chỉ dưới 768): thanh <code>--color-base</code>, viền trên <code>--color-line</code>, padding 6 × 10, ô nhập dạng viên thuốc 38, nút + và Gửi tròn hai bên. Không hiệu ứng chuyển, đi cùng bàn phím.</li>
+    <li><b>Bàn phím đóng</b>: ô bo 22 như hiện tại, cách đáy <code>max(12px, safe-area-inset-bottom)</code> để không đè vạch home.</li>
+    <li><b>Thanh "‹ › Xong"</b> là của iOS, gắn trên bàn phím cho mọi ô soạn trên web. Web không có cách tắt; Google Chat không có vì là app native. Phần app làm được là bỏ dải 16 px.</li>
+    <li>Trước khi sửa: đo trên iPhone của anh (dải số nhỏ trên màn, bật bằng <code>?kbdebug=1</code>) để chắc dải trống chỉ là 16 px, không có lệch nào khác từ <code>visualViewport</code>.</li>
+  </ol>
+</section>
+
+<!-- 7 -->
+<section class="screen" id="margin">
+  <div class="screen-head">
+    <h2>7 · Lề phải luồng chat trên điện thoại (đã sửa trong code, chờ anh xem trên máy)</h2>
+    <p>Tin của bạn từng chừa một cột 32 px bên phải để đặt giờ, nên bong bóng cách mép 54 px trong khi bên trái chỉ 14 px. Nay dưới 768 bỏ cột đó; chạm một tin trong cụm thì giờ hiện ngay trên bong bóng.</p>
+  </div>
+  <div class="phones">
+    <div class="ph-cap"><b>Trước</b><span>54 px bên phải · 14 px bên trái</span>
+      <div class="phone" style="height:330px">
+        <div class="status"><span class="tnum">9:41</span><span>●●●</span></div>
+        <div class="stream" style="padding-right:54px">
+          <div class="msg"><span class="av" style="background:var(--color-person-1)">M</span><div><span class="meta">Minh · 09:02</span><div class="bub">Đã gửi bảng đối soát tháng 10 cho cả nhóm</div></div></div>
+          <div class="msg me"><span class="meta">09:04</span><div class="bub">Mình xem ngay, chiều nay gửi lại góp ý nhé</div></div>
+          <div class="msg me"><div class="bub" style="border-top-right-radius:16px">Có gì khác tháng 9 không?</div></div>
+        </div>
+        <span class="measure" style="right:6px;bottom:40px">54px</span>
+      </div>
+    </div>
+    <div class="ph-cap"><b>Sau</b><span>14 px hai bên, chạm tin trong cụm để xem giờ</span>
+      <div class="phone" style="height:330px">
+        <div class="status"><span class="tnum">9:41</span><span>●●●</span></div>
+        <div class="stream">
+          <div class="msg"><span class="av" style="background:var(--color-person-1)">M</span><div><span class="meta">Minh · 09:02</span><div class="bub">Đã gửi bảng đối soát tháng 10 cho cả nhóm</div></div></div>
+          <div class="msg me"><span class="meta">09:04</span><div class="bub">Mình xem ngay, chiều nay gửi lại góp ý nhé</div></div>
+          <div class="msg me"><span class="meta">09:05</span><div class="bub" style="border-top-right-radius:16px">Có gì khác tháng 9 không?</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+</div>
+</body>
+</html>
