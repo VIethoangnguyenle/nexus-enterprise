@@ -259,6 +259,13 @@ dev: dev-infra
 	setsid sh -c 'cd backend/services/approval && exec go run ./cmd/' > $(DEV_LOGS)/approval.log 2>&1 & echo $$! >> $(DEV_PIDS); \
 	echo "  approval     → gRPC :50058  REST :$$APPROVAL_REST_PORT"
 	@echo ""
+	@# A lockfile newer than what npm last installed means dependencies changed
+	@# (a pull or a merge): install them, or Vite answers 500 for every module
+	@# that imports a new package and the app renders blank.
+	@if [ ! -f frontend/node_modules/.package-lock.json ] || [ frontend/package-lock.json -nt frontend/node_modules/.package-lock.json ]; then \
+		echo "▸ Installing frontend dependencies (package-lock.json changed)..."; \
+		(cd frontend && npm ci --no-audit --no-fund) || exit 1; \
+	fi
 	@echo "▸ Starting frontend dev server..."
 	@VITE_DEV_MODE=true setsid sh -c 'cd frontend && exec npm run dev -- --port 5173 --host' > $(DEV_LOGS)/frontend.log 2>&1 & echo $$! >> $(DEV_PIDS)
 	@echo "  frontend     → http://localhost:5173"

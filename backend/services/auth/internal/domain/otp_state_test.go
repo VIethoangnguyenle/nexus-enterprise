@@ -43,7 +43,7 @@ func TestOTP_OtherFailuresCarryNoAttemptCount(t *testing.T) {
 
 func TestOTP_RateLimitSaysWhenToComeBack(t *testing.T) {
 	svc, _, _ := otpService(t, &domain.OTPOptions{FixedCode: "999999"})
-	email := uniqueEmail()
+	email := uniqueRealEmail()
 	for i := 0; i < 5; i++ {
 		if _, err := svc.RequestOTP(context.Background(), email, "email"); err != nil {
 			t.Fatal(err)

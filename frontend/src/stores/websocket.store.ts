@@ -25,6 +25,7 @@ import { useIncomingCallStore } from './incoming-call.store'
 import { isLive, useCallStore } from './call.store'
 import { asCallKind } from '../api/calls'
 import { callKeys } from '../hooks/keys/calls'
+import { chatStateCovers, revalidateChatState } from '../hooks/useChatState'
 import {
   adoptOwner,
   createBatcher,
@@ -982,13 +983,41 @@ function handleControl(msg: ControlMessage) {
 }
 
 /**
+ * The chat navigator's parts that one chat-state revalidation answers for.
+ * Only the open workspace's channel list is held: a switch clears the others.
+ */
+const CHAT_STATE_PARTS = [
+  keys.messaging.channelsAll(),
+  keys.messaging.dms(),
+  keys.messaging.unreadCounts(),
+  keys.messaging.conversationActivity(),
+].map((key) => JSON.stringify(key))
+
+/**
  * Re-sync everything after a reconnect or a hole in the event stream: whatever
  * happened while this tab was not listening is unknown, so every query family
  * is refreshed, immediately rather than in the next batch.
+ *
+ * The chat navigator is asked through the chat state's version instead: a 304
+ * proves nothing changed, so a first connection does not fetch again the lists
+ * the start-up has just fetched. When it cannot answer, each part is refetched.
  */
 function resyncAfterReconnect() {
-  invalidations.add(workspaceResyncKeys(followedWorkspace ?? ''))
+  const workspaceId = followedWorkspace ?? ''
+  const all = workspaceResyncKeys(workspaceId)
+  if (!workspaceId || !chatStateCovers(workspaceId)) {
+    invalidations.add(all)
+    invalidations.flush()
+    return
+  }
+  const isPart = (key: readonly unknown[]) => CHAT_STATE_PARTS.includes(JSON.stringify(key))
+  invalidations.add(all.filter((key) => !isPart(key)))
   invalidations.flush()
+  void revalidateChatState(workspaceId).then((answered) => {
+    if (answered) return
+    invalidations.add(all.filter(isPart))
+    invalidations.flush()
+  })
 }
 
 // Previews, replies, typing and presence are what this user's session saw: the

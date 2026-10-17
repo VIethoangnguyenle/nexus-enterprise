@@ -148,6 +148,8 @@ Addresses SHALL be trimmed and lower-cased at sign-in and OTP, and an address th
 
 In both modes: at most 5 verification attempts per session (counted atomically, the 6th fails even with the right code), a code works once, at most 5 code requests per identifier per 15 minutes (429), and the service never logs the code.
 
+Test accounts are exempt from the per-identifier request limit (5 codes per 15 minutes) while, and only while, the fixed test code is on: an email whose domain is `.test` or ends in `.test` (the reserved TLD of RFC 6761, which can never receive mail; `x@example.test`, not `x@test.com` or `x@example.testing`; never a phone number) may request codes without bound, so automated browser tests can sign in repeatedly. The fixed code already lets anyone into any account, so the limit protects nothing there. In random-code mode every address, `.test` included, is limited, and the per-session verify attempt limit and the per-address public limiter on `POST /api/auth/otp/request` apply to test accounts too.
+
 A wrong code answers `401 {"code":"otp_invalid","attempts_left":N}`, where N is what is left of this session's 5 tries; an unknown or expired session is `401 otp_expired`; the 6th try is `429 otp_too_many_attempts`. A refused code request is `429 otp_rate_limited` with `Retry-After` (seconds) and `retry_after_seconds` in the body. The count and the wait belong to the session and the identifier, never to an account, so nothing in them says whether an account exists.
 
 #### Scenario: Default configuration accepts the fixed test code

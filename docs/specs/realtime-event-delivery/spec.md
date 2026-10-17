@@ -89,6 +89,12 @@ The hub SHALL stamp each workspace-level event with the workspace's next sequenc
 ### Requirement: The screen resynchronises only when it cannot be caught up
 The frontend SHALL track the last sequence number per followed workspace. A repeat is ignored; the next number is applied. After any reconnect the frontend SHALL re-authenticate and ask to be caught up from its last numbers (workspace and user stream, see "Missed events are replayed from a log"); it refreshes every query family of the workspace only when the answer is `too_far`, when it holds no number yet, or when a hole or a number lower than the last (the counter was lost) shows up in live frames that replay cannot repair.
 
+A refresh asks the chat navigator (channel list, direct messages, unread counts, previews) through the chat state's version instead of refetching each part: `chat-state` is asked with `If-None-Match` however recently it was confirmed, a 304 leaves those parts as they are, and a changed answer replaces them. When the session cannot ask (the open workspace is not the one the token speaks for) or the request fails, each part is refetched. A first connection therefore does not fetch again the lists the start-up has just fetched; the other families are still refetched, since they carry no version that could prove nothing changed in the moment between their fetch and the subscription.
+
+#### Scenario: First connection after the start-up
+- **WHEN** the app opens with no number held, fetches the navigator, then the workspace subscription is acknowledged with nothing changed
+- **THEN** the chat state is asked once and answers 304, and the channel list, direct messages, unread counts and previews are not fetched again
+
 #### Scenario: A hole
 - **WHEN** a frame arrives with a number more than one above the last and a replay from the last number answers `too_far`
 - **THEN** all workspace queries are refreshed

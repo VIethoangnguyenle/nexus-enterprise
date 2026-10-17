@@ -6,7 +6,7 @@ import { queryClient } from '../lib/query-client'
 import { useAuthStore } from '../stores/auth.store'
 import { forgetChatState, loadChatState, RECENT_MS, type ChatState } from '../api/chat-state'
 import { keys } from './keys'
-import { useChatState } from './useChatState'
+import { revalidateChatState, useChatState } from './useChatState'
 import { useChannels, useDirectMessages, useUnreadCounts } from './useMessaging'
 import { useConversationActivity } from './useConversationActivity'
 import { useChatSections } from './useChatSections'
@@ -217,5 +217,57 @@ describe('loadChatState', () => {
   it('shares one request among callers that ask at once', async () => {
     await Promise.all([loadChatState('u1:ws-1', WS), loadChatState('u1:ws-1', WS), loadChatState('u1:ws-1', WS)])
     expect(stateCalls()).toHaveLength(1)
+  })
+
+  it('a revalidation asks about a copy confirmed a moment ago, with its version', async () => {
+    await loadChatState('u1:ws-1', WS)
+    respond = () => new Response(null, { status: 304 })
+
+    const answer = await loadChatState('u1:ws-1', WS, { revalidate: true })
+
+    expect(stateCalls()).toHaveLength(2)
+    expect(stateCalls()[1]?.ifNoneMatch).toBe('"v1"')
+    expect(answer.changed).toBe(false)
+  })
+
+  it('a revalidation does not ride on a request that started before it', async () => {
+    const earlier = loadChatState('u1:ws-1', WS)
+    const later = loadChatState('u1:ws-1', WS, { revalidate: true })
+    await Promise.all([earlier, later])
+    expect(stateCalls()).toHaveLength(2)
+  })
+})
+
+describe('revalidateChatState', () => {
+  it('a 304 leaves the parts as the cache holds them', async () => {
+    await loadChatState('u1:ws-1', WS)
+    queryClient.setQueryData(keys.messaging.unreadCounts(), { channels: [] })
+    respond = () => new Response(null, { status: 304 })
+
+    expect(await revalidateChatState(WS)).toBe(true)
+
+    expect(queryClient.getQueryData(keys.messaging.unreadCounts())).toEqual({ channels: [] })
+    expect(stateCalls()).toHaveLength(2)
+  })
+
+  it('a changed state replaces the parts and the state itself', async () => {
+    await loadChatState('u1:ws-1', WS)
+    const next = { ...state, unread: [{ channel_id: 'c1', unread_count: 9, last_read_message_id: '' }] }
+    respond = () => json(next, { headers: { ETag: '"v2"' } })
+
+    expect(await revalidateChatState(WS)).toBe(true)
+
+    expect(queryClient.getQueryData(keys.messaging.unreadCounts())).toEqual({ channels: next.unread })
+    expect(queryClient.getQueryData(keys.messaging.chatState(WS))).toEqual(next)
+  })
+
+  it('cannot answer for a workspace the session does not speak for', async () => {
+    expect(await revalidateChatState('ws-2')).toBe(false)
+    expect(stateCalls()).toHaveLength(0)
+  })
+
+  it('cannot answer when the chat state fails', async () => {
+    respond = () => json({}, { status: 500 })
+    expect(await revalidateChatState(WS)).toBe(false)
   })
 })

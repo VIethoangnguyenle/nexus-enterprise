@@ -613,7 +613,7 @@ func TestOTP_RequestAnswersTheSameForKnownAndUnknownAddresses(t *testing.T) {
 
 func TestOTP_RateLimitedRequestCarriesRetryAfter(t *testing.T) {
 	a := newAcctApp(t, true, &domain.OTPOptions{FixedCode: "999999"})
-	email := uniq("burst") + "@example.test"
+	email := uniq("burst") + "@example.com"
 	body := fmt.Sprintf(`{"identifier":%q,"type":"email"}`, email)
 	for i := 0; i < 5; i++ {
 		if rec := a.do(http.MethodPost, "/api/auth/otp/request", "", body); rec.Code != http.StatusOK {
