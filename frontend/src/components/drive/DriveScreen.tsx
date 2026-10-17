@@ -9,10 +9,15 @@ import { useDownloadFile } from '../../hooks/useDownloadUrl'
 import { useDriveFolder, useDriveItem, useSharedWithMe } from '../../hooks/useDrive'
 import { usePeople } from '../../hooks/usePeople'
 import { usePermissions } from '../../hooks/usePermissions'
+import { useRecentSearches } from '../../hooks/useRecentSearches'
+import { useSuggestionPanel, type SuggestionItem } from '../../hooks/useSuggestionPanel'
 import { NO_PERMS, type ObjectPerms } from '../../api/access'
 import type { DriveItem } from '../../api/drive'
 import { folderSearch, type DriveSearch } from '../../lib/drive-search'
 import { statusOf } from '../../lib/errors'
+import { formatListTime } from '../../lib/format'
+import type { PeopleDirectory } from '../../lib/people'
+import { recentlyEdited } from '../../lib/suggestions/drive'
 import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
@@ -20,6 +25,7 @@ import { useDriveStore } from '../../stores/drive.store'
 import { useFileViewMode } from '../../stores/file-view.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { Heading, IconButton, Pressable } from '../primitives'
+import { SearchSuggestions } from '../patterns/SearchSuggestions'
 import { DeleteItemDialog } from './DeleteItemDialog'
 import { DriveBody } from './DriveBody'
 import { DriveBreadcrumbs, type Crumb } from './DriveBreadcrumbs'
@@ -37,7 +43,7 @@ import { ShareDialog } from './ShareDialog'
 import { useDriveActions } from './useDriveActions'
 import { useDriveLayout } from './use-drive-layout'
 import {
-  filterByType, itemVersion, matchesName, ownerOf, sortItems, type SortKey, type TypeFilter,
+  filterByType, itemVersion, kindOf, matchesName, ownerOf, sortItems, type SortKey, type TypeFilter,
 } from './drive-model'
 import { FileViewer, type ViewerFile } from '../files/FileViewer'
 import type { MenuAnchor } from '../files/use-long-press'
@@ -47,6 +53,22 @@ const READ_ONLY: ObjectPerms = { ...NO_PERMS, read: true }
 
 /** How long after my own change the same change from the server still counts as mine. */
 const MINE_MS = 15_000
+
+/** What the viewer shows of a file: its name, kind, size, who put it there and when. */
+function toViewerFile(f: DriveItem, people: PeopleDirectory): ViewerFile {
+  const owner = ownerOf(f, people)
+  return {
+    id: f.id,
+    name: f.name,
+    mime: f.mime_type,
+    size: f.size_bytes,
+    uploaderName: owner.name,
+    uploaderAvatarUrl: owner.avatarUrl,
+    uploaderId: f.owner_id,
+    time: f.updated_at ?? f.created_at,
+    parentFolderId: f.parent_id,
+  }
+}
 
 /** The element that has focus now: where focus returns to when the viewer closes. */
 const focused = () => (document.activeElement instanceof HTMLElement ? document.activeElement : null)
@@ -99,6 +121,10 @@ export function DriveScreen() {
   const expandFolders = useDriveStore((s) => s.expandFolders)
 
   const [query, setQuery] = useState('')
+  const recent = useRecentSearches('drive')
+  // Read when a file is opened, without making every handler that opens one change with each keystroke.
+  const queryRef = useRef(query)
+  queryRef.current = query
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all')
   const [sort, setSort] = useState<SortKey>('recent')
   const [dragging, setDragging] = useState(false)
@@ -187,38 +213,28 @@ export function DriveScreen() {
   }, [selected, selectItem])
 
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  /** A file opened from the suggestions that is not in the open folder (shared with me): the viewer shows it alone. */
+  const [loneFile, setLoneFile] = useState<ViewerFile | null>(null)
   const previewOpenerRef = useRef<HTMLElement | null>(null)
 
   const folderItems = useMemo(() => items.filter((i) => i.item_type === 'folder'), [items])
   // What the viewer pages through: the files that are showing, not the whole folder.
   const folderFiles = useMemo(() => items.filter((i) => i.item_type === 'file'), [items])
 
-  const viewerFiles = useMemo<ViewerFile[]>(() => {
-    return folderFiles.map((f) => {
-      const owner = ownerOf(f, people)
-      return {
-        id: f.id,
-        name: f.name,
-        mime: f.mime_type,
-        size: f.size_bytes,
-        uploaderName: owner.name,
-        uploaderAvatarUrl: owner.avatarUrl,
-        uploaderId: f.owner_id,
-        time: f.updated_at ?? f.created_at,
-        parentFolderId: f.parent_id,
-      }
-    })
-  }, [folderFiles, people])
+  const viewerFiles = useMemo<ViewerFile[]>(() => folderFiles.map((f) => toViewerFile(f, people)), [folderFiles, people])
 
+  const { add: keepSearch } = recent
   const openPreview = useCallback(
     (item: DriveItem, openerEl?: HTMLElement | null) => {
       const idx = folderFiles.findIndex((f) => f.id === item.id)
       if (idx >= 0) {
+        // Opening a file the search found keeps that search.
+        if (queryRef.current.trim()) keepSearch(queryRef.current)
         previewOpenerRef.current = openerEl ?? focused()
         setPreviewIndex(idx)
       }
     },
-    [folderFiles],
+    [folderFiles, keepSearch],
   )
 
   const openFolder = useCallback(
@@ -283,6 +299,48 @@ export function DriveScreen() {
   const loading = !active.data && !active.isError
   const canAdd = !shared && !missing
   const newFolder = () => setDialog({ kind: 'new-folder' })
+
+  // Before anything is typed: Tìm gần đây, the files of this folder edited lately and what was shared with me
+  // (DESIGN.md "Gợi ý trong ô tìm"). The shared list is asked for only once the box is focused.
+  const searchRef = useRef<HTMLInputElement>(null)
+  const [wantsShared, setWantsShared] = useState(false)
+  const sharedSuggestQ = useSharedWithMe(wantsShared && !shared)
+  const suggestFile = (f: DriveItem): SuggestionItem => {
+    const kind = kindOf(f)
+    return {
+      key: f.id,
+      title: f.name,
+      meta: [ownerOf(f, people).name, formatListTime(f.updated_at ?? f.created_at)].filter(Boolean).join(' · '),
+      icon: (
+        <span className={`grid place-items-center rounded-md ${phone ? 'size-9' : 'size-8'} ${kind.tile}`}>
+          <kind.icon size={16} strokeWidth={1.75} aria-hidden="true" />
+        </span>
+      ),
+      // A file of this folder opens among its neighbours; one from elsewhere opens on its own.
+      onSelect: () => {
+        if (folderFiles.some((x) => x.id === f.id)) openPreview(f, searchRef.current)
+        else {
+          previewOpenerRef.current = searchRef.current
+          setLoneFile(toViewerFile(f, people))
+        }
+      },
+    }
+  }
+  const panel = useSuggestionPanel({
+    value: query,
+    variant: phone ? 'screen' : 'popover',
+    anchorRef: searchRef,
+    groups: [
+      recent.group(setQuery),
+      { label: `Sửa gần đây trong ${title ?? 'thư mục'}`, loading, items: recentlyEdited(all).map(suggestFile) },
+      ...(shared ? [] : [{
+        label: 'Được chia sẻ với tôi',
+        loading: sharedSuggestQ.isLoading,
+        items: recentlyEdited(sharedSuggestQ.data?.items ?? []).map(suggestFile),
+      }]),
+    ],
+  })
+  const covered = phone && panel.visible
 
   const tree = (onOpen: (folderId?: string) => void) => (
     <DriveTree
@@ -356,6 +414,28 @@ export function DriveScreen() {
             folderLabel={title ?? 'thư mục'}
             query={query}
             onQuery={setQuery}
+            searchRef={searchRef}
+            searchProps={{
+              ...panel.inputProps,
+              onFocus: () => {
+                panel.inputProps.onFocus()
+                setWantsShared(true)
+              },
+              onKeyDown: (e) => {
+                panel.inputProps.onKeyDown(e)
+                if (e.defaultPrevented) return
+                // The Enter that ends a word an input method is composing is not a search.
+                if (e.key === 'Enter' && !e.nativeEvent.isComposing) recent.add(query)
+                else if (e.key === 'Escape' && covered) {
+                  e.preventDefault()
+                  panel.close()
+                }
+              },
+            }}
+            onBack={covered ? () => {
+              panel.close()
+              searchRef.current?.blur()
+            } : undefined}
             typeFilter={typeFilter}
             onTypeFilter={setTypeFilter}
             sort={sort}
@@ -380,7 +460,17 @@ export function DriveScreen() {
           {burst && <DriveBurstBanner burst={burst} people={people} row={m.row} />}
         </AnimatePresence>
 
+        {!phone && <SearchSuggestions panel={panel} />}
+        <div className="relative flex-1 min-h-0 flex flex-col">
+        {covered && (
+          // The files stay mounted under the phone's suggestions, so Quay lại finds them where they were scrolled.
+          <div className="absolute inset-0 z-sticky grid bg-base">
+            <SearchSuggestions panel={panel} emptyText="Gõ tên tệp hoặc thư mục để tìm." />
+          </div>
+        )}
         <div
+          aria-hidden={covered || undefined}
+          inert={covered}
           data-testid="drive-dropzone"
           onDragEnter={(e) => { if (!shared && isFileDrag(e)) { e.preventDefault(); setDragging(true) } }}
           onDragOver={(e) => { if (!shared && isFileDrag(e)) e.preventDefault() }}
@@ -409,6 +499,7 @@ export function DriveScreen() {
             route={m.route}
             content={content}
           />
+        </div>
         </div>
       </section>
 
@@ -549,12 +640,15 @@ export function DriveScreen() {
         onClose={closeDialog}
       />
 
-      {previewIndex !== null && (
+      {(previewIndex !== null || loneFile) && (
         <FileViewer
-          files={viewerFiles}
-          index={previewIndex}
+          files={loneFile ? [loneFile] : viewerFiles}
+          index={loneFile ? 0 : previewIndex!}
           origin="drive"
-          onClose={() => setPreviewIndex(null)}
+          onClose={() => {
+            setPreviewIndex(null)
+            setLoneFile(null)
+          }}
           returnFocusRef={previewOpenerRef}
         />
       )}

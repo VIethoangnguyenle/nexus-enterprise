@@ -1,23 +1,28 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { CircleAlert, ClipboardList, Plus, Tag } from 'lucide-react'
+import { CircleAlert, ClipboardList, Package, Plus, Tag } from 'lucide-react'
 import type { Asset, AssetType } from '../../api/assets'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useAssetActivity, useAssetRequests, useAssetSummary, useAssetTypes, useAssets } from '../../hooks/useAssets'
 import { useArrivals } from '../../hooks/useArrivals'
 import { usePeople } from '../../hooks/usePeople'
+import { useBottomBarLayout } from '../../hooks/usePhone'
+import { useRecentSearches } from '../../hooks/useRecentSearches'
+import { useSuggestionPanel } from '../../hooks/useSuggestionPanel'
 import { parseFields } from '../../lib/asset-fields'
-import { REQUEST_FILTERS, requestFilterStatuses, type RequestFilter } from '../../lib/asset-model'
+import { REQUEST_FILTERS, assetPerson, requestFilterStatuses, type RequestFilter } from '../../lib/asset-model'
+import { RECENT_ASSETS, recentAssetSteps, stepText } from '../../lib/suggestions/assets'
 import {
   assetSearch, composeSearch, filterSearch, requestSearch, showSearch, tabOf, tabSearch, typeSearch,
   type AssetsSearch, type AssetsTab,
 } from '../../lib/assets-search'
-import { toMillis } from '../../lib/format'
+import { formatListTime, toMillis } from '../../lib/format'
 import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
-import { Button, FilterChip, Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
+import { Avatar, Button, FilterChip, Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
+import { SearchSuggestions } from '../patterns/SearchSuggestions'
 import { CountPill } from '../approval/StatusPill'
 import { EmptyState } from '../spaces/EmptyState'
 import { ApproveDialog } from './ApproveDialog'
@@ -108,6 +113,53 @@ export function AssetsScreen() {
   // ---- the search box: typed text is local; the URL follows after a pause ----
   const [typed, setTyped] = useState(search.q ?? '')
   useEffect(() => setTyped(search.q ?? ''), [search.q])
+
+  // Before anything is typed: Tìm gần đây, what I hold and the assets something happened to lately (DESIGN.md
+  // "Gợi ý trong ô tìm"). What I hold is asked for only once the box is focused.
+  const phone = useBottomBarLayout()
+  const searchRef = useRef<HTMLInputElement>(null)
+  const recent = useRecentSearches('assets')
+  const [wantsHeld, setWantsHeld] = useState(false)
+  const heldQ = useAssets(wsId, { assigned_to: me?.id, limit: RECENT_ASSETS }, wantsHeld && !!me?.id && tab === 'list')
+  const openAsset = (id: string) => go((p) => assetSearch(p, id))
+  const panel = useSuggestionPanel({
+    value: typed,
+    variant: phone ? 'screen' : 'popover',
+    anchorRef: searchRef,
+    groups: [
+      recent.group(setTyped),
+      {
+        label: 'Bạn đang giữ',
+        loading: wantsHeld && heldQ.isLoading,
+        items: (heldQ.data?.assets ?? []).map((a) => ({
+          key: a.id,
+          title: a.name,
+          meta: a.type_name,
+          icon: (
+            <span className={`grid place-items-center rounded-md bg-sunk text-ink-muted ${phone ? 'size-9' : 'size-8'}`}>
+              <Package size={16} strokeWidth={1.75} aria-hidden="true" />
+            </span>
+          ),
+          onSelect: () => openAsset(a.id),
+        })),
+      },
+      {
+        label: 'Hoạt động gần đây',
+        loading: activityQ.isLoading,
+        items: recentAssetSteps(activityQ.data ?? []).map((e) => {
+          const actor = assetPerson(people, e.actor_id, e.actor_name)
+          return {
+            key: e.asset_id,
+            title: e.asset_name,
+            meta: [stepText(e), formatListTime(e.created_at)].filter(Boolean).join(' · '),
+            icon: <Avatar name={actor.name} hueKey={actor.hueKey} src={actor.avatarUrl} size={phone ? 36 : 32} />,
+            onSelect: () => openAsset(e.asset_id),
+          }
+        }),
+      },
+    ],
+  })
+  const covered = phone && panel.visible
 
   // ---- URL ----
   const go = useCallback(
@@ -238,6 +290,31 @@ export function AssetsScreen() {
           tagOf={tagOf}
           route={m.route}
           onAddAsset={() => setCreatingAsset(true)}
+          searchRef={searchRef}
+          searchProps={{
+            ...panel.inputProps,
+            onFocus: () => {
+              panel.inputProps.onFocus()
+              setWantsHeld(true)
+            },
+            onKeyDown: (e) => {
+              panel.inputProps.onKeyDown(e)
+              if (e.defaultPrevented) return
+              // The Enter that ends a word an input method is composing is not a search.
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) recent.add(typed)
+              else if (e.key === 'Escape' && covered) {
+                e.preventDefault()
+                panel.close()
+              }
+            },
+          }}
+          suggestions={<SearchSuggestions panel={panel} emptyText="Gõ tên tài sản hoặc người giữ để tìm." />}
+          covered={covered}
+          onBack={() => {
+            panel.close()
+            searchRef.current?.blur()
+          }}
+          onOpened={() => { if (typed.trim()) recent.add(typed) }}
         />
       )
     }

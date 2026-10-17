@@ -126,14 +126,14 @@ describe('DriveScreen: listing', () => {
     await within(table()).findByText('Hợp đồng')
     const panel = screen.getByRole('navigation', { name: 'Thư mục' })
     expect(within(panel).queryByRole('searchbox')).toBeNull()
-    expect(screen.getByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' })).toHaveAttribute('placeholder', 'Tìm trong Tài liệu')
+    expect(screen.getByLabelText('Tìm tệp hoặc thư mục')).toHaveAttribute('placeholder', 'Tìm trong Tài liệu')
   })
 
   it('narrows the folder by name from the search box, ignoring accents', async () => {
     const user = userEvent.setup()
     await renderDrive()
     await within(table()).findByText('Hợp đồng')
-    await user.type(screen.getByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' }), 'hop dong')
+    await user.type(screen.getByLabelText('Tìm tệp hoặc thư mục'), 'hop dong')
     await waitFor(() => expect(rowNames()).toEqual(['Hợp đồng']))
   })
 
@@ -837,7 +837,7 @@ describe('DriveScreen: gallery', () => {
     const user = userEvent.setup()
     await renderDrive(`/drive?folder=${D.doisoat}`)
     await ready('doi-soat-08-10.xlsx')
-    await user.type(screen.getByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' }), 'bien-ban')
+    await user.type(screen.getByLabelText('Tìm tệp hoặc thư mục'), 'bien-ban')
     await waitFor(() => expect(cardNames()).toEqual(['bien-ban-chenh-lech.docx']))
   })
 
@@ -845,7 +845,7 @@ describe('DriveScreen: gallery', () => {
     const user = userEvent.setup()
     await renderDrive(`/drive?folder=${D.doisoat}`)
     await ready('doi-soat-08-10.xlsx')
-    await user.type(screen.getByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' }), '10')
+    await user.type(screen.getByLabelText('Tìm tệp hoặc thư mục'), '10')
     await waitFor(() => expect(cardNames()).toHaveLength(2))
 
     card('doi-soat-08-10.xlsx').focus()
@@ -1092,6 +1092,66 @@ describe('DriveScreen: phone', () => {
     await renderDrive()
     await screen.findByRole('group', { name: 'Tệp' })
     expect(screen.getByRole('radiogroup', { name: 'Loại tệp' })).toHaveClass('overflow-x-auto')
+  })
+})
+
+describe('DriveScreen: suggestions in the empty search box', () => {
+  const box = () => screen.getByLabelText('Tìm tệp hoặc thư mục')
+  beforeEach(() => localStorage.clear())
+
+  it('offers recent searches, the files of this folder edited lately and what was shared with me', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem(`ngac-recent-searches:drive:${U.hoa.id}`, JSON.stringify(['sao kê']))
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await within(table()).findByText('doi-soat-08-10.xlsx')
+    expect(calls.some((c) => c.path === '/drive/shared-with-me')).toBe(false)
+    await user.click(box())
+    const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
+    expect(within(list).getByRole('option', { name: 'sao kê' })).toBeInTheDocument()
+    const edited = within(list).getByRole('group', { name: 'Sửa gần đây trong Đối soát' })
+    const names = within(edited).getAllByRole('option').map((o) => o.querySelector('.font-medium')?.textContent)
+    expect(names[0]).toBe('doi-soat-08-10.xlsx')
+    expect(names).not.toContain('2026')
+    const shared = await within(list).findByRole('group', { name: 'Được chia sẻ với tôi' })
+    expect(within(shared).getByRole('option', { name: /ke-hoach-quy-4\.xlsx/ })).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(UUID_RE)
+  })
+
+  it('opens a suggested file of the folder in the viewer, and one shared with me too', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await within(table()).findByText('doi-soat-08-10.xlsx')
+    await user.click(box())
+    await user.click(await screen.findByRole('option', { name: /doi-soat-08-10\.xlsx/ }))
+    expect(await screen.findByRole('dialog', { name: /doi-soat-08-10\.xlsx/i })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: /doi-soat-08-10\.xlsx/i })).toBeNull())
+    await user.click(box())
+    await user.click(await screen.findByRole('option', { name: /ke-hoach-quy-4\.xlsx/ }))
+    expect(await screen.findByRole('dialog', { name: /ke-hoach-quy-4\.xlsx/i })).toBeInTheDocument()
+  })
+
+  it('runs a recent search again, and keeps a search on Enter', async () => {
+    const user = userEvent.setup()
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await within(table()).findByText('doi-soat-08-10.xlsx')
+    await user.type(box(), 'bien{Enter}')
+    expect(JSON.parse(localStorage.getItem(`ngac-recent-searches:drive:${U.hoa.id}`)!)).toEqual(['bien'])
+    await user.clear(box())
+    await user.click(await screen.findByRole('option', { name: 'bien' }))
+    expect(box()).toHaveValue('bien')
+  })
+
+  it('on a phone, covers the files until Quay lại', async () => {
+    const user = userEvent.setup()
+    mockViewport('phone')
+    localStorage.setItem(`ngac-recent-searches:drive:${U.hoa.id}`, JSON.stringify(['sao kê']))
+    await renderDrive(`/drive?folder=${D.doisoat}`)
+    await user.click(await screen.findByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' }))
+    expect(await screen.findByRole('button', { name: 'Tìm lại sao kê' })).toBeInTheDocument()
+    expect(screen.getByTestId('drive-dropzone')).toHaveAttribute('aria-hidden', 'true')
+    await user.click(screen.getByRole('button', { name: 'Quay lại danh sách' }))
+    expect(screen.queryByRole('button', { name: 'Tìm lại sao kê' })).toBeNull()
   })
 })
 

@@ -96,6 +96,20 @@ describe('opening and closing', () => {
     expect(outer).not.toHaveBeenCalled()
   })
 
+  it('opens again on a click into the box after a choice or Esc, the box having kept the focus', async () => {
+    const user = userEvent.setup()
+    render(<Harness groups={[files(['A.xlsx'])]} />)
+    await user.click(box())
+    await user.click(screen.getByRole('option', { name: /A\.xlsx/ }))
+    expect(screen.queryByRole('listbox')).toBeNull()
+    expect(box()).toHaveFocus()
+    await user.click(box())
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await user.click(box())
+    expect(screen.getByRole('listbox')).toBeInTheDocument()
+  })
+
   it('closes when the box is left', async () => {
     const user = userEvent.setup()
     render(<Harness groups={[recent(['hợp đồng'])]} />)

@@ -266,7 +266,7 @@ describe('AssetsScreen: list', () => {
     const user = userEvent.setup()
     const router = await renderAssets('/assets?section=list')
     await within(table('Tài sản')).findByText(MAC7)
-    await user.type(screen.getByRole('searchbox', { name: 'Tìm tài sản' }), 'vinh')
+    await user.type(screen.getByLabelText('Tìm tài sản'), 'vinh')
     await waitFor(() => expect(search(router).q).toBe('vinh'))
     await waitFor(() => expect(rowNames('Tài sản')).toEqual(['Màn hình Dell 27 inch, bàn 12']))
     expect(calls.some((c) => c.query.get('search') === 'vinh')).toBe(true)
@@ -1053,5 +1053,61 @@ describe('AssetsScreen: scrolling tab row', () => {
     } finally {
       vi.restoreAllMocks()
     }
+  })
+})
+
+describe('AssetsScreen: suggestions in the empty search box', () => {
+  const box = () => screen.getByLabelText('Tìm tài sản')
+  const RECENT_KEY = `ngac-recent-searches:assets:${U.hoa.id}`
+  beforeEach(() => localStorage.clear())
+
+  it('offers recent searches, what I hold and the assets something happened to lately, by name', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem(RECENT_KEY, JSON.stringify(['macbook']))
+    ASSETS[A.dell13] = { ...ASSETS[A.dell13]!, state: 'assigned', assigned_to_user_id: U.hoa.id, assigned_to_name: 'Lê Thị Hoa' }
+    await renderAssets('/assets?section=list')
+    await within(table('Tài sản')).findByText(MAC7)
+    await user.click(box())
+    const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
+    expect(within(list).getByRole('option', { name: 'macbook' })).toBeInTheDocument()
+    const held = await within(list).findByRole('group', { name: 'Bạn đang giữ' })
+    expect(within(held).getAllByRole('option').map((o) => o.querySelector('.font-medium')?.textContent)).toEqual(['Màn hình Dell 24 inch, kho'])
+    expect(calls.some((c) => c.query.get('assigned_to') === U.hoa.id)).toBe(true)
+    const lately = within(list).getByRole('group', { name: 'Hoạt động gần đây' })
+    expect(within(lately).getAllByRole('option').map((o) => o.querySelector('.font-medium')?.textContent))
+      .toEqual([ASSETS[A.mac4]!.name, MAC7, 'Máy in HP LaserJet tầng 3'])
+    expect(within(lately).getByText(/Trần Minh Đức đã thu hồi từ/)).toBeInTheDocument()
+    noIds()
+  })
+
+  it('asks for what I hold only once the box is focused', async () => {
+    await renderAssets('/assets?section=list')
+    await within(table('Tài sản')).findByText(MAC7)
+    expect(calls.some((c) => c.query.has('assigned_to'))).toBe(false)
+  })
+
+  it('opens a suggested asset, and runs a recent search again', async () => {
+    const user = userEvent.setup()
+    localStorage.setItem(RECENT_KEY, JSON.stringify(['vinh']))
+    const router = await renderAssets('/assets?section=list')
+    await within(table('Tài sản')).findByText(MAC7)
+    await user.click(box())
+    await user.click(await screen.findByRole('option', { name: /Máy in HP LaserJet tầng 3/ }))
+    await waitFor(() => expect(search(router).asset).toBe(A.printer))
+    await user.click(box())
+    await user.click(await screen.findByRole('option', { name: 'vinh' }))
+    await waitFor(() => expect(search(router).q).toBe('vinh'))
+  })
+
+  it('keeps a search on Enter, and when an asset is opened from the results', async () => {
+    const user = userEvent.setup()
+    await renderAssets('/assets?section=list')
+    await within(table('Tài sản')).findByText(MAC7)
+    await user.type(box(), 'dell{Enter}')
+    expect(JSON.parse(localStorage.getItem(RECENT_KEY)!)).toEqual(['dell'])
+    await user.clear(box())
+    await user.type(box(), 'máy in')
+    await user.click(await within(table('Tài sản')).findByText('Máy in HP LaserJet tầng 3'))
+    expect(JSON.parse(localStorage.getItem(RECENT_KEY)!)).toEqual(['máy in', 'dell'])
   })
 })
