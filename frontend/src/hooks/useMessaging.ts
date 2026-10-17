@@ -13,7 +13,11 @@ export const channelsQueryOptions = (wsId: string) =>
     enabled: !!wsId,
   })
 
-export function useChannels(wsId: string) { return useQuery(channelsQueryOptions(wsId)) }
+/** `enabled` is false for a screen that needs the list only once a section is open. */
+export function useChannels(wsId: string, enabled = true) {
+  const options = channelsQueryOptions(wsId)
+  return useQuery({ ...options, enabled: !!wsId && enabled })
+}
 
 export function useCreateChannel(wsId: string) {
   return useMutation({
@@ -102,11 +106,11 @@ export function useSearch(channelId: string, query: string) {
 
 // --- Members ---
 
-export function useChannelMembers(channelId: string) {
+export function useChannelMembers(channelId: string, enabled = true) {
   return useQuery({
     queryKey: keys.messaging.members(channelId),
     queryFn: () => messagingApi.listMembers(channelId),
-    enabled: !!channelId,
+    enabled: !!channelId && enabled,
   })
 }
 

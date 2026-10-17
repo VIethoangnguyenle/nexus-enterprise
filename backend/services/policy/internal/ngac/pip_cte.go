@@ -57,3 +57,17 @@ func (e *CTEEvaluator) GetAncestors(ctx context.Context, nodeID string) ([]ances
 	}
 	return results, rows.Err()
 }
+
+// Ancestors returns what the database holds above a node as id → node type. It
+// is what the PDP needs to match a prohibition for a node that is not in memory.
+func (e *CTEEvaluator) Ancestors(ctx context.Context, nodeID string) (map[string]string, error) {
+	rows, err := e.GetAncestors(ctx, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[string]string, len(rows))
+	for _, r := range rows {
+		out[r.NodeID] = r.NodeType
+	}
+	return out, nil
+}

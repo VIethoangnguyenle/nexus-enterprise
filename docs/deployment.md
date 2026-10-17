@@ -315,7 +315,7 @@ came up. Work through:
 
 A migration that writes `ngac_nodes`, `ngac_assignments` or `ngac_associations` bypasses EPP, so the
 running policy services and the decisions cached in Redis still describe the old graph. The rules
-for such a migration (the authz over-privilege fixes ship five: 059-063):
+for such a migration (the authz over-privilege fixes ship five: 059-063; the contacts directory ships 064):
 
 1. **Two releases.** Release A carries code that works on both the old and the new data (it writes
    the new shape and reads both); release B adds the migration file. A rollback from B to A is then
@@ -338,6 +338,15 @@ for such a migration (the authz over-privilege fixes ship five: 059-063):
    export COMPOSE_ENV_FILES=/opt/nexus/.env NEXUS_HOME=/opt/nexus NEXUS_OWNER=<owner> NEXUS_TAG=$(cat /opt/nexus/.deployed-tag)
    docker compose --profile tools run --rm --entrypoint psql migrate -X -c "<SELECT>"
    ```
+   `064_directory_visibility.sql` (the contacts directory) carries its own dry run: the whole file with
+   its `COMMIT` turned into `ROLLBACK` (command in its header) prints in `NOTICE` lines how many nodes,
+   edges, prohibitions and `department_id` values it would create or change, and which workspaces it
+   skips; paste those and set its thresholds from them (the ones in the file are placeholders; the
+   release manager sets them at release B). Release B is that file alone; the deploy recreates
+   `policy` and `policy-read` and runs `policy invalidate-cache --all-workspaces`. The file (and its
+   dry run) builds a unique index on `ngac_nodes`, which blocks graph writes for the seconds it takes:
+   run both off-peak. Reversing it also needs the `workspace` service restarted, because it caches
+   directory node ids for the life of its process.
    For `059_ngac_workspace_id_keyed_repair.sql`, run all four and paste the rows. Each must be
    read-only and each must be empty, or understood, before the deploy is approved.
    ```sql

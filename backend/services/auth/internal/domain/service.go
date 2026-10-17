@@ -35,6 +35,8 @@ type AuthStore interface {
 	// ListWorkspaceSummaries lists the workspaces a person actively belongs to.
 	ListWorkspaceSummaries(ctx context.Context, userID string) ([]store.WorkspaceSummary, error)
 	ListContactsByWorkspace(ctx context.Context, workspaceID string, f store.ContactFilter) ([]store.User, int, *store.ContactCursor, error)
+	// ResolvePeopleByWorkspace names people of the workspace whatever the status of their row.
+	ResolvePeopleByWorkspace(ctx context.Context, workspaceID string, userIDs, nodeIDs []string) ([]store.ResolvedPerson, error)
 
 	// Profile pictures. SetAvatar replaces the person's picture and points
 	// their profile at url; ClearAvatar removes it. Both return

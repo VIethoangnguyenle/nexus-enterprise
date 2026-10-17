@@ -35,6 +35,10 @@ type tdGraph struct {
 	deleted []string
 	failOn  string // node id whose deletion fails once
 	clock   time.Time
+	// rules are the live prohibitions by name; they have no foreign key to the
+	// nodes they name, so deleting nodes never removes one.
+	rules   map[string]bool
+	ruleErr error // RemoveProhibition fails with it
 }
 
 func newTDGraph() *tdGraph {
@@ -101,6 +105,17 @@ func (g *tdGraph) GetChildren(_ context.Context, in *policypb.GetChildrenRequest
 		}
 	}
 	return &policypb.NodeList{Nodes: out}, nil
+}
+
+func (g *tdGraph) RemoveProhibition(_ context.Context, in *policypb.RemoveProhibitionRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
+	if g.ruleErr != nil {
+		return nil, g.ruleErr
+	}
+	if !g.rules[in.Name] {
+		return nil, status.Errorf(codes.NotFound, "prohibition %q not found", in.Name)
+	}
+	delete(g.rules, in.Name)
+	return &policypb.Empty{}, nil
 }
 
 func (g *tdGraph) DeleteNode(_ context.Context, in *policypb.DeleteNodeRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
@@ -234,6 +249,45 @@ func TestDeleteWorkspace_RemovesEverythingNewestFirst(t *testing.T) {
 	assert.Equal(t, []string{"w1"}, f.st.purged)
 	assert.Empty(t, f.st.rows, "no workspace row remains")
 	assert.Empty(t, f.st.members["w1"])
+}
+
+// The workspace's directory prohibition names nodes by id but has no foreign key to
+// them, so tearing the graph down leaves it behind unless it is removed by name.
+func TestDeleteWorkspace_RemovesItsDirectoryProhibitionAndOnlyThat(t *testing.T) {
+	rule := func(ws string) string { return ngac.DirectoryLimitedProhibitionName(ngac.WorkspaceID(ws)) }
+	setup := func(t *testing.T) *tdFixture {
+		f := newTDFixture(t)
+		f.workspaceGraph("w1")
+		f.workspaceGraph("w2")
+		f.join(meNode, "own-w1")
+		f.g.rules = map[string]bool{rule("w1"): true, rule("w2"): true}
+		return f
+	}
+
+	t.Run("refused: nothing is removed", func(t *testing.T) {
+		f := setup(t)
+		err := f.svc.DeleteWorkspace(context.Background(), otherNode, otherUser, "w1")
+		require.ErrorIs(t, err, domain.ErrAccessDenied)
+		assert.True(t, f.g.rules[rule("w1")], "the rule stays while the workspace does")
+	})
+	t.Run("deleted: its rule goes, another workspace's stays, a retry is harmless", func(t *testing.T) {
+		f := setup(t)
+		require.NoError(t, f.svc.DeleteWorkspace(context.Background(), meNode, meUser, "w1"))
+		assert.False(t, f.g.rules[rule("w1")], "the workspace's rule is removed with it")
+		assert.True(t, f.g.rules[rule("w2")], "another workspace's rule is untouched")
+		require.NoError(t, f.svc.DeleteWorkspace(context.Background(), meNode, meUser, "w1"), "NotFound on the rule is tolerated")
+	})
+	t.Run("the rule cannot be removed: the graph stays so a retry finds the workspace", func(t *testing.T) {
+		f := setup(t)
+		f.g.ruleErr = errors.New("policy down")
+		err := f.svc.DeleteWorkspace(context.Background(), meNode, meUser, "w1")
+		require.Error(t, err)
+		assert.Empty(t, f.g.deleted, "no node was deleted around a rule that is still there")
+		f.g.ruleErr = nil
+		require.NoError(t, f.svc.DeleteWorkspace(context.Background(), meNode, meUser, "w1"))
+		assert.False(t, f.g.rules[rule("w1")])
+		assert.Contains(t, f.g.deleted, "pc-w1")
+	})
 }
 
 func TestDeleteWorkspace_IsIdempotent(t *testing.T) {

@@ -7,6 +7,9 @@ package ngac
 import (
 	"fmt"
 	"strings"
+	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // --- Operations ---
@@ -184,6 +187,57 @@ func WorkspaceIDFromMembersUAName(name string) (WorkspaceID, bool) {
 // never renames a node and two tenants may both have a "Sales".
 func DeptUAName(deptID DeptID) string { return fmt.Sprintf("Dept_%s", deptID) }
 
+// --- Contacts directory naming conventions ---
+//
+// The directory is the part of a workspace's graph that decides who may see whom
+// in Danh bạ (docs/specs/contacts-visibility). It hangs under the workspace's Mgmt
+// OA and no node of it is ever placed under the Members UA, so none of them can
+// make anyone a member. Per-department nodes are keyed by the department's ID,
+// never by its name.
+
+// DirectoryOAName names the root OA of a workspace's directory. Whoever holds
+// manage on it is a directory administrator and sees everyone.
+func DirectoryOAName(wsID WorkspaceID) string { return fmt.Sprintf("Directory_%s", wsID) }
+
+// DirectoryOpenOAName names the OA whose subtree every member of the workspace
+// reads. The "own department only" prohibition targets this OA.
+func DirectoryOpenOAName(wsID WorkspaceID) string { return fmt.Sprintf("DirectoryOpen_%s", wsID) }
+
+// DirectoryNoDeptOAName names the OA for people who have no department. It sits
+// under DirectoryOpen.
+func DirectoryNoDeptOAName(wsID WorkspaceID) string { return fmt.Sprintf("DirectoryNoDept_%s", wsID) }
+
+// DirectoryOwnersOAName names the OA that stands for the workspace's owners. It
+// sits beside DirectoryOpen, not under it, so the limit never reaches it and a
+// limited person still sees the owners.
+func DirectoryOwnersOAName(wsID WorkspaceID) string { return fmt.Sprintf("DirectoryOwners_%s", wsID) }
+
+// DirectoryLimitedUAName names the UA a role or department is assigned to (as an
+// extra parent) to be limited to its own department. It carries no association,
+// so it grants nothing; the prohibition is aimed at it.
+func DirectoryLimitedUAName(wsID WorkspaceID) string { return fmt.Sprintf("DirectoryLimited_%s", wsID) }
+
+// DirectoryLimitedProhibitionName names the workspace's one directory
+// prohibition. Prohibitions have no foreign key to the graph, so a workspace's
+// teardown removes it by this name.
+func DirectoryLimitedProhibitionName(wsID WorkspaceID) string {
+	return fmt.Sprintf("DirectoryLimitedRule_%s", wsID)
+}
+
+// DeptDirOAName names a department's directory OA. The tree of these mirrors the
+// department tree; a hidden department's is moved out of DirectoryOpen.
+func DeptDirOAName(deptID DeptID) string { return fmt.Sprintf("Dir_%s", deptID) }
+
+// DeptPeerOAName names a department's OA in the peer tree, the one a limited
+// person reads their own department's subtree through. The prohibition cannot
+// reach it because it is not under DirectoryOpen.
+func DeptPeerOAName(deptID DeptID) string { return fmt.Sprintf("DirPeer_%s", deptID) }
+
+// DeptPeersUAName names the flat UA of the people directly in a department. It
+// sits under the policy class, never under Members and never under another
+// department's UA, so it reaches only its own department's peer subtree.
+func DeptPeersUAName(deptID DeptID) string { return fmt.Sprintf("DeptPeers_%s", deptID) }
+
 // --- Channel naming conventions ---
 
 func ChannelContentOAName(chID ChannelID) string { return fmt.Sprintf("Ch_%s_Content", chID) }
@@ -236,8 +290,16 @@ const (
 	PropType           = "type"
 	PropTypePersonalUA = "personal_ua"
 	PropTypeRole       = "role"
-	PropUserNodeID     = "user_node_id"
+	// PropTypeDirectory marks a node of the contacts directory (see DirectoryProps).
+	PropTypeDirectory = "directory"
+	PropUserNodeID    = "user_node_id"
 )
+
+// DirectoryProps returns the properties every directory node is created with:
+// the directory type and the workspace it belongs to.
+func DirectoryProps(wsID WorkspaceID) map[string]string {
+	return map[string]string{PropType: PropTypeDirectory, "workspace_id": string(wsID)}
+}
 
 // PersonalUAProperties returns the properties a personal UA is created with.
 func PersonalUAProperties(userNodeID string) map[string]string {
@@ -262,6 +324,8 @@ var (
 		"User_", "PC_", "TenantMember_", "TenantOwner_", "Dept_", "Ch_",
 		"DriveRoot_", "Folder_", "Share_", "Asset_", "Role_", "U_",
 		"Cal_", "CalEv_", "CalEvGuests_",
+		"Directory_", "DirectoryOpen_", "DirectoryNoDept_", "DirectoryOwners_", "DirectoryLimited_",
+		"Dir_", "DirPeer_", "DeptPeers_",
 	}
 	reservedRoleSuffixes = []string{
 		"_Owners", "_Members", "_Mgmt", "_Documents", "_DraftDocs", "_ApprovedDocs",
@@ -270,10 +334,26 @@ var (
 	reservedRoleNames = []string{NodePCGlobal, NodePublicUsers}
 )
 
+// foldRoleName is the name as a reader sees it: compatibility forms (fullwidth
+// letters, ligatures) folded to the plain ones (NFKC) and invisible format
+// characters (zero width space and joiners, BOM, soft hyphen) removed, so neither
+// can hide a reserved prefix or suffix. The role keeps the name that was typed;
+// this is only what the reserved-namespace check compares.
+func foldRoleName(name string) string {
+	folded := norm.NFKC.String(name)
+	folded = strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, folded)
+	return strings.TrimSpace(folded)
+}
+
 // ValidateRoleName rejects a role name that is empty or falls inside a
 // namespace the platform reserves for its own nodes (case-insensitively).
 func ValidateRoleName(name string) error {
-	n := strings.TrimSpace(name)
+	n := foldRoleName(name)
 	if n == "" {
 		return fmt.Errorf("role name is required")
 	}

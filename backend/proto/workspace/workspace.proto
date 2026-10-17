@@ -21,6 +21,15 @@ service WorkspaceService {
   rpc RemoveMember(RemoveMemberRequest) returns (Empty);
   rpc ListMembers(ListMembersRequest) returns (MemberList);
 
+  // GetDirectoryScope says which people of the workspace the caller may see in Danh bạ
+  // (docs/specs/contacts-visibility). The caller is the verified person on the call, as
+  // for every method here; a service speaking only for itself is refused, because the
+  // scope is a person's. The auth service asks it on behalf of the person whose contacts
+  // it is about to list and filters its rows by the answer. A caller who is not a member
+  // gets PermissionDenied; a decision that cannot be made gets Unavailable, never a
+  // wider scope.
+  rpc GetDirectoryScope(GetDirectoryScopeRequest) returns (DirectoryScope);
+
   // Ownership
   rpc TransferOwnership(TransferOwnershipRequest) returns (Empty);
   rpc AddOwner(AddOwnerRequest) returns (Empty);
@@ -195,4 +204,38 @@ message DeletePermissionRequest {
   string workspace_id = 1;
   string requester_ngac_node_id = 2 [deprecated = true]; // ignored: the caller comes from request metadata (pkg/grpcauth)
   string permission_id = 3;
+}
+
+message GetDirectoryScopeRequest {
+  string workspace_id = 1;
+}
+
+// DirectoryScope is what one member may see of the workspace's people.
+message DirectoryScope {
+  // false: the workspace has no directory nodes yet (it predates migration 064). No rule
+  // exists there, so every other field describes "everyone is visible".
+  bool ready = 1;
+  // The caller holds manage on the directory: they see everyone, hidden departments included.
+  bool admin = 2;
+  // The caller is limited to their own department (display only; the policy decides).
+  bool limited = 3;
+  // Departments whose people the caller may see, by department id.
+  repeated string visible_department_ids = 4;
+  // People with no department are visible.
+  bool no_department_visible = 5;
+  // The owners are visible (they always are for a member).
+  bool owners_visible = 6;
+  // The users directly in the owners group, by NGAC node id.
+  repeated string owner_node_ids = 7;
+  // Departments hidden from the directory; set for an administrator only.
+  repeated string hidden_department_ids = 8;
+  // The owners group and the custom roles, with who holds each directly. Never Members.
+  repeated DirectoryRole roles = 9;
+}
+
+message DirectoryRole {
+  string id = 1;
+  string name = 2;  // empty for the owners group
+  string kind = 3;  // "owners" or "custom"
+  repeated string holder_node_ids = 4;
 }

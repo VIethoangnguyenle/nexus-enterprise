@@ -21,8 +21,11 @@ type User struct {
 	Phone       string
 	Title       string
 	Department  string
-	Location    string
-	AvatarURL   string
+	// DepartmentID is the id of the department assigned in the workspace a directory
+	// read came from; empty elsewhere.
+	DepartmentID string
+	Location     string
+	AvatarURL    string
 	// EmailVerified: the owner of Email has proved it (Google, or a code a real
 	// sender delivered to it). An unverified address is only a claim.
 	EmailVerified bool

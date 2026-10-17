@@ -1634,6 +1634,237 @@ func (x *DeletePermissionRequest) GetPermissionId() string {
 	return ""
 }
 
+type GetDirectoryScopeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	WorkspaceId   string                 `protobuf:"bytes,1,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetDirectoryScopeRequest) Reset() {
+	*x = GetDirectoryScopeRequest{}
+	mi := &file_proto_workspace_workspace_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetDirectoryScopeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetDirectoryScopeRequest) ProtoMessage() {}
+
+func (x *GetDirectoryScopeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workspace_workspace_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetDirectoryScopeRequest.ProtoReflect.Descriptor instead.
+func (*GetDirectoryScopeRequest) Descriptor() ([]byte, []int) {
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *GetDirectoryScopeRequest) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
+// DirectoryScope is what one member may see of the workspace's people.
+type DirectoryScope struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// false: the workspace has no directory nodes yet (it predates migration 064). No rule
+	// exists there, so every other field describes "everyone is visible".
+	Ready bool `protobuf:"varint,1,opt,name=ready,proto3" json:"ready,omitempty"`
+	// The caller holds manage on the directory: they see everyone, hidden departments included.
+	Admin bool `protobuf:"varint,2,opt,name=admin,proto3" json:"admin,omitempty"`
+	// The caller is limited to their own department (display only; the policy decides).
+	Limited bool `protobuf:"varint,3,opt,name=limited,proto3" json:"limited,omitempty"`
+	// Departments whose people the caller may see, by department id.
+	VisibleDepartmentIds []string `protobuf:"bytes,4,rep,name=visible_department_ids,json=visibleDepartmentIds,proto3" json:"visible_department_ids,omitempty"`
+	// People with no department are visible.
+	NoDepartmentVisible bool `protobuf:"varint,5,opt,name=no_department_visible,json=noDepartmentVisible,proto3" json:"no_department_visible,omitempty"`
+	// The owners are visible (they always are for a member).
+	OwnersVisible bool `protobuf:"varint,6,opt,name=owners_visible,json=ownersVisible,proto3" json:"owners_visible,omitempty"`
+	// The users directly in the owners group, by NGAC node id.
+	OwnerNodeIds []string `protobuf:"bytes,7,rep,name=owner_node_ids,json=ownerNodeIds,proto3" json:"owner_node_ids,omitempty"`
+	// Departments hidden from the directory; set for an administrator only.
+	HiddenDepartmentIds []string `protobuf:"bytes,8,rep,name=hidden_department_ids,json=hiddenDepartmentIds,proto3" json:"hidden_department_ids,omitempty"`
+	// The owners group and the custom roles, with who holds each directly. Never Members.
+	Roles         []*DirectoryRole `protobuf:"bytes,9,rep,name=roles,proto3" json:"roles,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DirectoryScope) Reset() {
+	*x = DirectoryScope{}
+	mi := &file_proto_workspace_workspace_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DirectoryScope) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DirectoryScope) ProtoMessage() {}
+
+func (x *DirectoryScope) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workspace_workspace_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DirectoryScope.ProtoReflect.Descriptor instead.
+func (*DirectoryScope) Descriptor() ([]byte, []int) {
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *DirectoryScope) GetReady() bool {
+	if x != nil {
+		return x.Ready
+	}
+	return false
+}
+
+func (x *DirectoryScope) GetAdmin() bool {
+	if x != nil {
+		return x.Admin
+	}
+	return false
+}
+
+func (x *DirectoryScope) GetLimited() bool {
+	if x != nil {
+		return x.Limited
+	}
+	return false
+}
+
+func (x *DirectoryScope) GetVisibleDepartmentIds() []string {
+	if x != nil {
+		return x.VisibleDepartmentIds
+	}
+	return nil
+}
+
+func (x *DirectoryScope) GetNoDepartmentVisible() bool {
+	if x != nil {
+		return x.NoDepartmentVisible
+	}
+	return false
+}
+
+func (x *DirectoryScope) GetOwnersVisible() bool {
+	if x != nil {
+		return x.OwnersVisible
+	}
+	return false
+}
+
+func (x *DirectoryScope) GetOwnerNodeIds() []string {
+	if x != nil {
+		return x.OwnerNodeIds
+	}
+	return nil
+}
+
+func (x *DirectoryScope) GetHiddenDepartmentIds() []string {
+	if x != nil {
+		return x.HiddenDepartmentIds
+	}
+	return nil
+}
+
+func (x *DirectoryScope) GetRoles() []*DirectoryRole {
+	if x != nil {
+		return x.Roles
+	}
+	return nil
+}
+
+type DirectoryRole struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"` // empty for the owners group
+	Kind          string                 `protobuf:"bytes,3,opt,name=kind,proto3" json:"kind,omitempty"` // "owners" or "custom"
+	HolderNodeIds []string               `protobuf:"bytes,4,rep,name=holder_node_ids,json=holderNodeIds,proto3" json:"holder_node_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DirectoryRole) Reset() {
+	*x = DirectoryRole{}
+	mi := &file_proto_workspace_workspace_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DirectoryRole) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DirectoryRole) ProtoMessage() {}
+
+func (x *DirectoryRole) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_workspace_workspace_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DirectoryRole.ProtoReflect.Descriptor instead.
+func (*DirectoryRole) Descriptor() ([]byte, []int) {
+	return file_proto_workspace_workspace_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *DirectoryRole) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *DirectoryRole) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *DirectoryRole) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *DirectoryRole) GetHolderNodeIds() []string {
+	if x != nil {
+		return x.HolderNodeIds
+	}
+	return nil
+}
+
 var File_proto_workspace_workspace_proto protoreflect.FileDescriptor
 
 const file_proto_workspace_workspace_proto_rawDesc = "" +
@@ -1754,14 +1985,32 @@ const file_proto_workspace_workspace_proto_rawDesc = "" +
 	"\x17DeletePermissionRequest\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x127\n" +
 	"\x16requester_ngac_node_id\x18\x02 \x01(\tB\x02\x18\x01R\x13requesterNgacNodeId\x12#\n" +
-	"\rpermission_id\x18\x03 \x01(\tR\fpermissionId2\xa6\t\n" +
+	"\rpermission_id\x18\x03 \x01(\tR\fpermissionId\"=\n" +
+	"\x18GetDirectoryScopeRequest\x12!\n" +
+	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\"\xf1\x02\n" +
+	"\x0eDirectoryScope\x12\x14\n" +
+	"\x05ready\x18\x01 \x01(\bR\x05ready\x12\x14\n" +
+	"\x05admin\x18\x02 \x01(\bR\x05admin\x12\x18\n" +
+	"\alimited\x18\x03 \x01(\bR\alimited\x124\n" +
+	"\x16visible_department_ids\x18\x04 \x03(\tR\x14visibleDepartmentIds\x122\n" +
+	"\x15no_department_visible\x18\x05 \x01(\bR\x13noDepartmentVisible\x12%\n" +
+	"\x0eowners_visible\x18\x06 \x01(\bR\rownersVisible\x12$\n" +
+	"\x0eowner_node_ids\x18\a \x03(\tR\fownerNodeIds\x122\n" +
+	"\x15hidden_department_ids\x18\b \x03(\tR\x13hiddenDepartmentIds\x12.\n" +
+	"\x05roles\x18\t \x03(\v2\x18.workspace.DirectoryRoleR\x05roles\"o\n" +
+	"\rDirectoryRole\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04kind\x18\x03 \x01(\tR\x04kind\x12&\n" +
+	"\x0fholder_node_ids\x18\x04 \x03(\tR\rholderNodeIds2\xfb\t\n" +
 	"\x10WorkspaceService\x12J\n" +
 	"\x0fCreateWorkspace\x12!.workspace.CreateWorkspaceRequest\x1a\x14.workspace.Workspace\x12L\n" +
 	"\x0eListWorkspaces\x12 .workspace.ListWorkspacesRequest\x1a\x18.workspace.WorkspaceList\x12D\n" +
 	"\fGetWorkspace\x12\x1e.workspace.GetWorkspaceRequest\x1a\x14.workspace.Workspace\x12F\n" +
 	"\x0fDeleteWorkspace\x12!.workspace.DeleteWorkspaceRequest\x1a\x10.workspace.Empty\x12@\n" +
 	"\fRemoveMember\x12\x1e.workspace.RemoveMemberRequest\x1a\x10.workspace.Empty\x12C\n" +
-	"\vListMembers\x12\x1d.workspace.ListMembersRequest\x1a\x15.workspace.MemberList\x12J\n" +
+	"\vListMembers\x12\x1d.workspace.ListMembersRequest\x1a\x15.workspace.MemberList\x12S\n" +
+	"\x11GetDirectoryScope\x12#.workspace.GetDirectoryScopeRequest\x1a\x19.workspace.DirectoryScope\x12J\n" +
 	"\x11TransferOwnership\x12#.workspace.TransferOwnershipRequest\x1a\x10.workspace.Empty\x128\n" +
 	"\bAddOwner\x12\x1a.workspace.AddOwnerRequest\x1a\x10.workspace.Empty\x12>\n" +
 	"\vRemoveOwner\x12\x1d.workspace.RemoveOwnerRequest\x1a\x10.workspace.Empty\x12;\n" +
@@ -1788,7 +2037,7 @@ func file_proto_workspace_workspace_proto_rawDescGZIP() []byte {
 	return file_proto_workspace_workspace_proto_rawDescData
 }
 
-var file_proto_workspace_workspace_proto_msgTypes = make([]protoimpl.MessageInfo, 28)
+var file_proto_workspace_workspace_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_proto_workspace_workspace_proto_goTypes = []any{
 	(*Empty)(nil),                    // 0: workspace.Empty
 	(*Workspace)(nil),                // 1: workspace.Workspace
@@ -1818,6 +2067,9 @@ var file_proto_workspace_workspace_proto_goTypes = []any{
 	(*ListPermissionsRequest)(nil),   // 25: workspace.ListPermissionsRequest
 	(*PermissionList)(nil),           // 26: workspace.PermissionList
 	(*DeletePermissionRequest)(nil),  // 27: workspace.DeletePermissionRequest
+	(*GetDirectoryScopeRequest)(nil), // 28: workspace.GetDirectoryScopeRequest
+	(*DirectoryScope)(nil),           // 29: workspace.DirectoryScope
+	(*DirectoryRole)(nil),            // 30: workspace.DirectoryRole
 }
 var file_proto_workspace_workspace_proto_depIdxs = []int32{
 	1,  // 0: workspace.WorkspaceList.workspaces:type_name -> workspace.Workspace
@@ -1826,45 +2078,48 @@ var file_proto_workspace_workspace_proto_depIdxs = []int32{
 	15, // 3: workspace.RoleList.roles:type_name -> workspace.Role
 	20, // 4: workspace.FolderList.folders:type_name -> workspace.Folder
 	24, // 5: workspace.PermissionList.permissions:type_name -> workspace.Permission
-	2,  // 6: workspace.WorkspaceService.CreateWorkspace:input_type -> workspace.CreateWorkspaceRequest
-	3,  // 7: workspace.WorkspaceService.ListWorkspaces:input_type -> workspace.ListWorkspacesRequest
-	4,  // 8: workspace.WorkspaceService.GetWorkspace:input_type -> workspace.GetWorkspaceRequest
-	5,  // 9: workspace.WorkspaceService.DeleteWorkspace:input_type -> workspace.DeleteWorkspaceRequest
-	7,  // 10: workspace.WorkspaceService.RemoveMember:input_type -> workspace.RemoveMemberRequest
-	8,  // 11: workspace.WorkspaceService.ListMembers:input_type -> workspace.ListMembersRequest
-	11, // 12: workspace.WorkspaceService.TransferOwnership:input_type -> workspace.TransferOwnershipRequest
-	12, // 13: workspace.WorkspaceService.AddOwner:input_type -> workspace.AddOwnerRequest
-	13, // 14: workspace.WorkspaceService.RemoveOwner:input_type -> workspace.RemoveOwnerRequest
-	14, // 15: workspace.WorkspaceService.CreateRole:input_type -> workspace.CreateRoleRequest
-	16, // 16: workspace.WorkspaceService.ListRoles:input_type -> workspace.ListRolesRequest
-	18, // 17: workspace.WorkspaceService.DeleteRole:input_type -> workspace.DeleteRoleRequest
-	19, // 18: workspace.WorkspaceService.CreateFolder:input_type -> workspace.CreateFolderRequest
-	21, // 19: workspace.WorkspaceService.ListFolders:input_type -> workspace.ListFoldersRequest
-	23, // 20: workspace.WorkspaceService.DeleteFolder:input_type -> workspace.DeleteFolderRequest
-	25, // 21: workspace.WorkspaceService.ListPermissions:input_type -> workspace.ListPermissionsRequest
-	27, // 22: workspace.WorkspaceService.DeletePermission:input_type -> workspace.DeletePermissionRequest
-	1,  // 23: workspace.WorkspaceService.CreateWorkspace:output_type -> workspace.Workspace
-	6,  // 24: workspace.WorkspaceService.ListWorkspaces:output_type -> workspace.WorkspaceList
-	1,  // 25: workspace.WorkspaceService.GetWorkspace:output_type -> workspace.Workspace
-	0,  // 26: workspace.WorkspaceService.DeleteWorkspace:output_type -> workspace.Empty
-	0,  // 27: workspace.WorkspaceService.RemoveMember:output_type -> workspace.Empty
-	10, // 28: workspace.WorkspaceService.ListMembers:output_type -> workspace.MemberList
-	0,  // 29: workspace.WorkspaceService.TransferOwnership:output_type -> workspace.Empty
-	0,  // 30: workspace.WorkspaceService.AddOwner:output_type -> workspace.Empty
-	0,  // 31: workspace.WorkspaceService.RemoveOwner:output_type -> workspace.Empty
-	15, // 32: workspace.WorkspaceService.CreateRole:output_type -> workspace.Role
-	17, // 33: workspace.WorkspaceService.ListRoles:output_type -> workspace.RoleList
-	0,  // 34: workspace.WorkspaceService.DeleteRole:output_type -> workspace.Empty
-	20, // 35: workspace.WorkspaceService.CreateFolder:output_type -> workspace.Folder
-	22, // 36: workspace.WorkspaceService.ListFolders:output_type -> workspace.FolderList
-	0,  // 37: workspace.WorkspaceService.DeleteFolder:output_type -> workspace.Empty
-	26, // 38: workspace.WorkspaceService.ListPermissions:output_type -> workspace.PermissionList
-	0,  // 39: workspace.WorkspaceService.DeletePermission:output_type -> workspace.Empty
-	23, // [23:40] is the sub-list for method output_type
-	6,  // [6:23] is the sub-list for method input_type
-	6,  // [6:6] is the sub-list for extension type_name
-	6,  // [6:6] is the sub-list for extension extendee
-	0,  // [0:6] is the sub-list for field type_name
+	30, // 6: workspace.DirectoryScope.roles:type_name -> workspace.DirectoryRole
+	2,  // 7: workspace.WorkspaceService.CreateWorkspace:input_type -> workspace.CreateWorkspaceRequest
+	3,  // 8: workspace.WorkspaceService.ListWorkspaces:input_type -> workspace.ListWorkspacesRequest
+	4,  // 9: workspace.WorkspaceService.GetWorkspace:input_type -> workspace.GetWorkspaceRequest
+	5,  // 10: workspace.WorkspaceService.DeleteWorkspace:input_type -> workspace.DeleteWorkspaceRequest
+	7,  // 11: workspace.WorkspaceService.RemoveMember:input_type -> workspace.RemoveMemberRequest
+	8,  // 12: workspace.WorkspaceService.ListMembers:input_type -> workspace.ListMembersRequest
+	28, // 13: workspace.WorkspaceService.GetDirectoryScope:input_type -> workspace.GetDirectoryScopeRequest
+	11, // 14: workspace.WorkspaceService.TransferOwnership:input_type -> workspace.TransferOwnershipRequest
+	12, // 15: workspace.WorkspaceService.AddOwner:input_type -> workspace.AddOwnerRequest
+	13, // 16: workspace.WorkspaceService.RemoveOwner:input_type -> workspace.RemoveOwnerRequest
+	14, // 17: workspace.WorkspaceService.CreateRole:input_type -> workspace.CreateRoleRequest
+	16, // 18: workspace.WorkspaceService.ListRoles:input_type -> workspace.ListRolesRequest
+	18, // 19: workspace.WorkspaceService.DeleteRole:input_type -> workspace.DeleteRoleRequest
+	19, // 20: workspace.WorkspaceService.CreateFolder:input_type -> workspace.CreateFolderRequest
+	21, // 21: workspace.WorkspaceService.ListFolders:input_type -> workspace.ListFoldersRequest
+	23, // 22: workspace.WorkspaceService.DeleteFolder:input_type -> workspace.DeleteFolderRequest
+	25, // 23: workspace.WorkspaceService.ListPermissions:input_type -> workspace.ListPermissionsRequest
+	27, // 24: workspace.WorkspaceService.DeletePermission:input_type -> workspace.DeletePermissionRequest
+	1,  // 25: workspace.WorkspaceService.CreateWorkspace:output_type -> workspace.Workspace
+	6,  // 26: workspace.WorkspaceService.ListWorkspaces:output_type -> workspace.WorkspaceList
+	1,  // 27: workspace.WorkspaceService.GetWorkspace:output_type -> workspace.Workspace
+	0,  // 28: workspace.WorkspaceService.DeleteWorkspace:output_type -> workspace.Empty
+	0,  // 29: workspace.WorkspaceService.RemoveMember:output_type -> workspace.Empty
+	10, // 30: workspace.WorkspaceService.ListMembers:output_type -> workspace.MemberList
+	29, // 31: workspace.WorkspaceService.GetDirectoryScope:output_type -> workspace.DirectoryScope
+	0,  // 32: workspace.WorkspaceService.TransferOwnership:output_type -> workspace.Empty
+	0,  // 33: workspace.WorkspaceService.AddOwner:output_type -> workspace.Empty
+	0,  // 34: workspace.WorkspaceService.RemoveOwner:output_type -> workspace.Empty
+	15, // 35: workspace.WorkspaceService.CreateRole:output_type -> workspace.Role
+	17, // 36: workspace.WorkspaceService.ListRoles:output_type -> workspace.RoleList
+	0,  // 37: workspace.WorkspaceService.DeleteRole:output_type -> workspace.Empty
+	20, // 38: workspace.WorkspaceService.CreateFolder:output_type -> workspace.Folder
+	22, // 39: workspace.WorkspaceService.ListFolders:output_type -> workspace.FolderList
+	0,  // 40: workspace.WorkspaceService.DeleteFolder:output_type -> workspace.Empty
+	26, // 41: workspace.WorkspaceService.ListPermissions:output_type -> workspace.PermissionList
+	0,  // 42: workspace.WorkspaceService.DeletePermission:output_type -> workspace.Empty
+	25, // [25:43] is the sub-list for method output_type
+	7,  // [7:25] is the sub-list for method input_type
+	7,  // [7:7] is the sub-list for extension type_name
+	7,  // [7:7] is the sub-list for extension extendee
+	0,  // [0:7] is the sub-list for field type_name
 }
 
 func init() { file_proto_workspace_workspace_proto_init() }
@@ -1878,7 +2133,7 @@ func file_proto_workspace_workspace_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_workspace_workspace_proto_rawDesc), len(file_proto_workspace_workspace_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   28,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -25,6 +25,7 @@ const (
 	WorkspaceService_DeleteWorkspace_FullMethodName   = "/workspace.WorkspaceService/DeleteWorkspace"
 	WorkspaceService_RemoveMember_FullMethodName      = "/workspace.WorkspaceService/RemoveMember"
 	WorkspaceService_ListMembers_FullMethodName       = "/workspace.WorkspaceService/ListMembers"
+	WorkspaceService_GetDirectoryScope_FullMethodName = "/workspace.WorkspaceService/GetDirectoryScope"
 	WorkspaceService_TransferOwnership_FullMethodName = "/workspace.WorkspaceService/TransferOwnership"
 	WorkspaceService_AddOwner_FullMethodName          = "/workspace.WorkspaceService/AddOwner"
 	WorkspaceService_RemoveOwner_FullMethodName       = "/workspace.WorkspaceService/RemoveOwner"
@@ -56,6 +57,14 @@ type WorkspaceServiceClient interface {
 	// Members
 	RemoveMember(ctx context.Context, in *RemoveMemberRequest, opts ...grpc.CallOption) (*Empty, error)
 	ListMembers(ctx context.Context, in *ListMembersRequest, opts ...grpc.CallOption) (*MemberList, error)
+	// GetDirectoryScope says which people of the workspace the caller may see in Danh bạ
+	// (docs/specs/contacts-visibility). The caller is the verified person on the call, as
+	// for every method here; a service speaking only for itself is refused, because the
+	// scope is a person's. The auth service asks it on behalf of the person whose contacts
+	// it is about to list and filters its rows by the answer. A caller who is not a member
+	// gets PermissionDenied; a decision that cannot be made gets Unavailable, never a
+	// wider scope.
+	GetDirectoryScope(ctx context.Context, in *GetDirectoryScopeRequest, opts ...grpc.CallOption) (*DirectoryScope, error)
 	// Ownership
 	TransferOwnership(ctx context.Context, in *TransferOwnershipRequest, opts ...grpc.CallOption) (*Empty, error)
 	AddOwner(ctx context.Context, in *AddOwnerRequest, opts ...grpc.CallOption) (*Empty, error)
@@ -133,6 +142,16 @@ func (c *workspaceServiceClient) ListMembers(ctx context.Context, in *ListMember
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(MemberList)
 	err := c.cc.Invoke(ctx, WorkspaceService_ListMembers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *workspaceServiceClient) GetDirectoryScope(ctx context.Context, in *GetDirectoryScopeRequest, opts ...grpc.CallOption) (*DirectoryScope, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DirectoryScope)
+	err := c.cc.Invoke(ctx, WorkspaceService_GetDirectoryScope_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -267,6 +286,14 @@ type WorkspaceServiceServer interface {
 	// Members
 	RemoveMember(context.Context, *RemoveMemberRequest) (*Empty, error)
 	ListMembers(context.Context, *ListMembersRequest) (*MemberList, error)
+	// GetDirectoryScope says which people of the workspace the caller may see in Danh bạ
+	// (docs/specs/contacts-visibility). The caller is the verified person on the call, as
+	// for every method here; a service speaking only for itself is refused, because the
+	// scope is a person's. The auth service asks it on behalf of the person whose contacts
+	// it is about to list and filters its rows by the answer. A caller who is not a member
+	// gets PermissionDenied; a decision that cannot be made gets Unavailable, never a
+	// wider scope.
+	GetDirectoryScope(context.Context, *GetDirectoryScopeRequest) (*DirectoryScope, error)
 	// Ownership
 	TransferOwnership(context.Context, *TransferOwnershipRequest) (*Empty, error)
 	AddOwner(context.Context, *AddOwnerRequest) (*Empty, error)
@@ -307,6 +334,9 @@ func (UnimplementedWorkspaceServiceServer) RemoveMember(context.Context, *Remove
 }
 func (UnimplementedWorkspaceServiceServer) ListMembers(context.Context, *ListMembersRequest) (*MemberList, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListMembers not implemented")
+}
+func (UnimplementedWorkspaceServiceServer) GetDirectoryScope(context.Context, *GetDirectoryScopeRequest) (*DirectoryScope, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDirectoryScope not implemented")
 }
 func (UnimplementedWorkspaceServiceServer) TransferOwnership(context.Context, *TransferOwnershipRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method TransferOwnership not implemented")
@@ -466,6 +496,24 @@ func _WorkspaceService_ListMembers_Handler(srv interface{}, ctx context.Context,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(WorkspaceServiceServer).ListMembers(ctx, req.(*ListMembersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _WorkspaceService_GetDirectoryScope_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDirectoryScopeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(WorkspaceServiceServer).GetDirectoryScope(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: WorkspaceService_GetDirectoryScope_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(WorkspaceServiceServer).GetDirectoryScope(ctx, req.(*GetDirectoryScopeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -698,6 +746,10 @@ var WorkspaceService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListMembers",
 			Handler:    _WorkspaceService_ListMembers_Handler,
+		},
+		{
+			MethodName: "GetDirectoryScope",
+			Handler:    _WorkspaceService_GetDirectoryScope_Handler,
 		},
 		{
 			MethodName: "TransferOwnership",

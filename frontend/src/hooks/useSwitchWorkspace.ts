@@ -2,6 +2,7 @@ import { useCallback } from 'react'
 import { useMutation } from '@tanstack/react-query'
 import { useLocation, useNavigate } from '@tanstack/react-router'
 import { authApi } from '../api/auth'
+import { clearResolvers } from '../lib/people-resolver'
 import { queryClient } from '../lib/query-client'
 import { wipeDeviceCache } from '../lib/query-persist'
 import { tenantIdFromToken, useAuthStore } from '../stores/auth.store'
@@ -30,6 +31,8 @@ export function moduleRootOf(pathname: string): ModuleRoot {
  */
 export function resetTenantScopedState() {
   queryClient.clear()
+  // Names found for people the old workspace's directory did not list.
+  clearResolvers()
   // The copy on the device is the old workspace's too.
   void wipeDeviceCache()
   useDriveStore.setState({ selectedItemId: null, expandedFolders: new Set<string>() })

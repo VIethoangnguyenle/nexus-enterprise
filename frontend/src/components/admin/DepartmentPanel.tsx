@@ -3,12 +3,25 @@ import { Pencil, Trash2 } from 'lucide-react'
 import type { Department, Member } from '../../api/admin'
 import { useDeleteDepartment, useMoveDepartment, useUpdateDepartment, useUpdateMemberDepartment } from '../../hooks/useAdmin'
 import { deptWithDescendants, personFromMember } from '../../lib/admin-model'
+import { explain, HIDDEN_DEPARTMENT_HAS_PEOPLE, reasonOf, statusOf } from '../../lib/errors'
 import { formatCount } from '../../lib/format'
 import { Button, PeoplePicker, PersonChip, toast } from '../primitives'
 import { ConfirmDialog } from '../composites/ConfirmDialog'
 import { NameDialog } from '../drive/NameDialog'
 import { SidePanel } from '../spaces/SidePanel'
 import { DepartmentPicker } from './DepartmentPicker'
+
+/**
+ * Why a department was not deleted. The server refuses (400, with its reason) to delete a
+ * department hidden from Danh bạ while people sit directly in it, because they would land in a
+ * visible parent and be published; any other failure, any other 400 included, keeps the usual sentence.
+ */
+function explainDelete(err: unknown, name: string): string {
+  if (statusOf(err) === 400 && reasonOf(err) === HIDDEN_DEPARTMENT_HAS_PEOPLE) {
+    return `Chưa xoá được phòng ${name}: phòng đang ẩn khỏi danh bạ và còn người ở trực tiếp trong phòng. Chuyển họ sang phòng khác trước, rồi xoá phòng.`
+  }
+  return explain(err, 'xoá phòng ban')
+}
 
 /** People listed by name before "Xem cả N người". */
 const SHOWN = 8
@@ -151,7 +164,10 @@ export function DepartmentPanel({ workspaceId, dept, departments, members, onClo
               toast(`Đã xoá phòng ${dept.name}`)
               onClose()
             },
-            onError: () => setConfirming(false),
+            onError: (err) => {
+              setConfirming(false)
+              toast.error(explainDelete(err, dept.name))
+            },
           })
         }
       />

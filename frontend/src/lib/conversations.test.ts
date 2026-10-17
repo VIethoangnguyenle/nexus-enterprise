@@ -1,10 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   buildConversations, dmPartner, filterConversations, sortConversations, totalUnread, unreadByLevel, unreadOf,
   type Conversation, type LastMessage,
 } from './conversations'
 import type { ActivityMessage, ConversationActivity } from '../api/messaging'
-import { buildDirectory } from './people'
+import { buildDirectory, UNKNOWN_PERSON } from './people'
 import { CONTACTS, DMS, SPACES, CH, U, ME, UUID_RE } from '../test/chat-fixtures'
 
 const dir = buildDirectory(CONTACTS)
@@ -18,6 +18,55 @@ describe('dmPartner', () => {
   })
   it('falls back to the channel name when the name does not split cleanly', () => {
     expect(dmPartner({ name: 'Một cuộc trò chuyện' }, me, dir).title).toBe('Một cuộc trò chuyện')
+  })
+})
+
+describe('dmPartner: a partner the directory does not list', () => {
+  const HIDDEN = '11111111-aaaa-4bbb-8ccc-0000000000ff'
+  const resolved = {
+    byUserId: new Map([[HIDDEN, { userId: HIDDEN, nodeId: 'n-h', name: 'Võ Ẩn Danh', avatarUrl: '' }]]),
+    byNodeId: new Map(),
+  }
+  const members = [
+    { user_id: ME.id, username: 'hoa', ngac_node_id: ME.ngac_node_id },
+    { user_id: HIDDEN, username: 'ghost', ngac_node_id: 'n-h' },
+  ]
+
+  it('is never titled by their username: "Thành viên" until they are found', () => {
+    expect(dmPartner({ name: 'hoa, ghost' }, me, dir).title).toBe(UNKNOWN_PERSON)
+    expect(dmPartner({ name: 'ghost, hoa' }, me, dir).title).not.toMatch(/ghost/)
+  })
+
+  it('asks for them by the id the channel\'s members give, and shows the name once found', () => {
+    const request = vi.fn()
+    const unresolved = dmPartner({ name: 'hoa, ghost' }, me, buildDirectory(CONTACTS, { request }), members)
+    expect(unresolved.title).toBe(UNKNOWN_PERSON)
+    expect(request).toHaveBeenCalledWith(HIDDEN)
+
+    const found = dmPartner({ name: 'hoa, ghost' }, me, buildDirectory(CONTACTS, { resolved }), members)
+    expect(found.title).toBe('Võ Ẩn Danh')
+    expect(found.partner?.userId).toBe(HIDDEN)
+  })
+
+  it('prefers the directory when it lists them', () => {
+    expect(dmPartner({ name: 'hoa, yen' }, me, dir, members).title).toBe('Phạm Hải Yến')
+  })
+})
+
+describe('a message that names a hidden person', () => {
+  it('asks for the name of a mentioned person the directory lacks', () => {
+    const request = vi.fn()
+    const list = buildConversations({
+      spaces: SPACES, dms: [], unread: {}, me, dir: buildDirectory(CONTACTS, { request }), lastMessages: {},
+      activity: {
+        [CH.hopdong]: {
+          channel_id: CH.hopdong,
+          latest: { id: 'm', kind: 'text', preview: 'x', sender_id: U.yen.id, sender_name: 'yen', created_at: { seconds: 1, nanos: 0 }, mentions: ['11111111-aaaa-4bbb-8ccc-0000000000ff'] },
+        },
+      } as never,
+    })
+    expect(list.length).toBeGreaterThan(0)
+    expect(request).toHaveBeenCalledWith('11111111-aaaa-4bbb-8ccc-0000000000ff')
   })
 })
 

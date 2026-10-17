@@ -8,6 +8,7 @@ import { staggerDelay, useMotionPresets, withDelay } from '../../lib/motion'
 import { UNKNOWN_PERSON, type PeopleDirectory } from '../../lib/people'
 import { personStyle } from '../../lib/person-hue'
 import type { Arrival } from '../../hooks/useArrivals'
+import { LinkedPerson } from '../primitives/LinkedPerson'
 import { IconButton, MenuItem, MenuSeparator, PersonChip, Popover } from '../primitives'
 import { StatusPill } from '../approval/StatusPill'
 import { statusPill, textVersion, titleOf } from './document-model'
@@ -143,7 +144,10 @@ const TextRow = memo(function TextRow({ doc, people, arrival, onDelete }: {
         {byOther && <span className="rt-tag shrink-0 text-xs font-semibold">vừa cập nhật</span>}
       </span>
       <span role="cell" className="flex items-center gap-1.5 min-w-0 text-xs @2xl:text-sm row-start-2 @2xl:row-start-1">
-        <PersonChip name={owner} hueKey={doc.owner_id} avatarUrl={person?.avatarUrl || undefined} />
+        {/* Above the row's whole-row link, so the owner can be pressed on its own. */}
+        <LinkedPerson userId={person?.userId} people={people} name={owner} avatarUrl={person?.avatarUrl || undefined} className="relative z-10">
+          <PersonChip name={owner} hueKey={doc.owner_id} avatarUrl={person?.avatarUrl || undefined} />
+        </LinkedPerson>
         <span className="shrink-0 text-ink-muted tnum @2xl:hidden" title={formatDateTime(doc.updated_at)}>
           · {formatListTime(doc.updated_at)}
         </span>

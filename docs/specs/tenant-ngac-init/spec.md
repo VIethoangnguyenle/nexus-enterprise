@@ -69,6 +69,58 @@ Members hold `write` on Documents, not only `read`, because the drive gates file
 
 Permissions attach to the folder attribute rather than to individual files, so a member with `write` may also rename, move and delete files in Documents that they did not create. Narrowing that requires per-item attributes, not a smaller grant.
 
+### Requirement: The directory hangs under Mgmt and nothing of it is under Members
+A workspace that carries contacts visibility SHALL have, besides the topology above, the directory nodes of `contacts-visibility`: the OA `Directory_{workspace_id}` assigned under `{workspace_id}_Mgmt`, with `DirectoryOpen_{workspace_id}` (and `DirectoryNoDept_{workspace_id}` beneath it) and `DirectoryOwners_{workspace_id}` beneath it; the UA `DirectoryLimited_{workspace_id}` assigned under the policy class; and, for every department, `Dir_{department id}` and `DirPeer_{department id}` (OAs; a hidden department's two sit directly under `Directory`, not under its parent's) and `DeptPeers_{department id}` (a UA assigned directly under the policy class). Members holds `read` on `DirectoryOpen` and on `DirectoryOwners` and on nothing else of the directory. Every one of these nodes carries the property `type=directory` and its `workspace_id`. No directory node SHALL be assigned under `{workspace_id}_Members`, `{workspace_id}_Owners` or a department UA: membership is being under Members, and a node of the directory that sat beneath it would make its people members. Creating a department creates its three nodes with the department; a failure removes them with it, as every provisioning run does.
+
+The workspace service keeps this in step, and every write is a policy-service call (so each takes the EPP invalidation path): it creates the workspace's directory, of either type, with the workspace (`Directory`, `DirectoryOpen`, `DirectoryNoDept`, `DirectoryOwners`, `DirectoryLimited`, the two grants of Members, and the one prohibition `DirectoryLimitedProhibitionName(workspace id)`); it re-parents a department's `Dir` and `DirPeer` when the department moves, leaving a hidden department's two directly under `Directory`; when a department is deleted it moves its sub-departments' nodes and its people's peers edges up to the parent's, keeping a hidden department's sub-departments hidden, and removes the three nodes; it gives a person placed directly in a department the edge to that department's `DeptPeers` and takes it away, with the department edge, when they change department or leave the workspace; and it removes the workspace's prohibition by name when the workspace is torn down, because a prohibition has no foreign key to the nodes it names. A directory node is trusted only when it carries `type=directory` and this workspace's `workspace_id`; a lookup that fails for any reason but "not found" fails the operation, never reads as "there is no directory".
+
+#### Scenario: A new workspace gets its directory
+- **WHEN** a workspace of either type is created
+- **THEN** the five directory nodes exist with their edges, `{workspace_id}_Members` holds `read` on `DirectoryOpen` and `DirectoryOwners`, `DirectoryLimited` sits under the policy class and not under Members, and the prohibition on `read` of `DirectoryOpen` for `DirectoryLimited` exists; if any step fails nothing of it is left, the prohibition included
+
+#### Scenario: A department moves
+- **WHEN** an administrator moves a department under another, or to the root
+- **THEN** its `Dir` has exactly one parent, the new parent's `Dir` (or `DirectoryOpen`), and its `DirPeer` the new parent's `DirPeer` (or `Directory`), unless the department is hidden, in which case both stay directly under `Directory`
+
+#### Scenario: A department is deleted
+- **WHEN** an administrator deletes a department
+- **THEN** its sub-departments' nodes and its people's peers edges move to the parent's (the people of a top-level department keep none), the three nodes are removed, and the sub-departments of a hidden department stay hidden
+
+#### Scenario: A hidden department with people in it
+- **WHEN** an administrator deletes a hidden department that still has people placed directly in it
+- **THEN** the request is refused (400, "Chuyển những người trong phòng này sang phòng khác trước khi xoá") and nothing changes: those people would otherwise land in a visible parent, or in none
+
+#### Scenario: A person changes department or leaves
+- **WHEN** a person is put in another department, in none, or removed from the workspace
+- **THEN** they hold the peers edge of their new department only, and removing them from the workspace removes their department edge, their peers edge and their `DirectoryLimited` edge with Members: a stale department edge alone would keep `read` on a hidden `Dir`
+
+#### Scenario: A workspace is deleted
+- **WHEN** a workspace is torn down
+- **THEN** its directory prohibition is removed by name before its nodes, another workspace's is untouched, and a repeated teardown succeeds
+
+#### Scenario: A directory node is never under Members
+- **WHEN** the ancestors of any directory node are listed
+- **THEN** `{workspace_id}_Members` is not among them, and a person reaching only `DeptPeers_{id}` or `DirectoryLimited_{workspace_id}` is not a workspace member
+
+#### Scenario: A workspace created before the directory existed
+- **WHEN** a workspace has no `Directory_{workspace_id}` node
+- **THEN** it has no directory rules and every member sees every member, as before; creating, moving and deleting its departments and placing its people write no directory node. A department of a workspace that has a directory but has no nodes of its own (created while the migration ran, or before it) gets them built the first time an operation needs them (create under it, move, delete, placing a person in it), its parent's first and under the parent's `Dir` and `DirPeer`, so it is hidden when its parent is; the people already directly in it get its peers edge. The migration builds them in bulk, and a run of both is harmless: a node that exists is never made twice (the loser of a race looks it up). A cached node id whose node has been deleted and rebuilt is dropped when a write answers NotFound, and the operation is tried once more
+
+### Requirement: Migration 064 builds the directory for what predates it
+`data/migrations/064_directory_visibility.sql` SHALL give every workspace that has a policy class, a Members UA under it and an `{workspace_id}_Mgmt` OA under it, and every department of such a workspace, the nodes, edges and prohibition above, by name, parents first, in one transaction. It SHALL leave alone every node that already exists, hidden or not, and every department whose nodes exist; reconcile the workspace's own fixed edges; add the peers edge of every user directly under a department's UA and remove (and back up) a peers edge whose user is no longer there; and set `tenant_users.department_id` to the department whose UA the person sits directly under. A workspace with no Mgmt OA SHALL be reported and skipped. It SHALL abort, changing nothing, on a workspace without its policy class or Members UA, a department that cannot be reached from a root of its own workspace, a department without a UA, a node named like a directory node that is not this workspace's, a person directly under two departments, a prohibition of the rule's name that is not the rule, and any count above its thresholds. It SHALL keep a backup of every node, edge, prohibition and row it changes, carry its reverse SQL in its header, and be a no-op the second time. Because it writes the graph tables directly, the policy services are recreated and the decision caches dropped (`policy invalidate-cache --all-workspaces`) after it runs.
+
+#### Scenario: Release-A nodes are not touched
+- **WHEN** the migration runs over a workspace whose directory and a hidden department were made by the workspace service
+- **THEN** every node keeps its id and its parents, the hidden department's `Dir` and `DirPeer` stay directly under `Directory`, and only a department that had no nodes gets them
+
+#### Scenario: A graph it does not recognise
+- **WHEN** a guard or a threshold fails
+- **THEN** the migration aborts and the database is as it was
+
+#### Scenario: Second run and reverse
+- **WHEN** it is run again, or its reverse SQL is applied
+- **THEN** the second run creates, removes and changes nothing and adds no backup row, and the reverse restores the nodes, edges, prohibitions and department values from before the first run
+
 ### Requirement: Privilege inheritance runs owner-to-member only
 The system SHALL assign the Owners UA under the Members UA, never the reverse. NGAC derives privilege by walking child → parent, so the direction of this single assignment decides who inherits whom. Assigning Members under Owners gives every member the full owner association set and silently voids the member-scoped associations.
 
@@ -298,14 +350,14 @@ Workspace Owners hold `share` (with every other owner operation) on the Document
 - **THEN** they have `read` and `write` on it and `share`, `manage`, `approve` resolve to DENY
 
 ### Requirement: Role names stay out of the platform's namespaces
-A role's node is named by a generated ID (`ngac.RoleUAName`, `Role_{id}`); the name the administrator typed is the node's `display_name` property, and role listings show it. A role (a UA created by a workspace administrator) SHALL still be refused when its name is empty or starts or ends like a name the platform builds itself (`ngac.ValidateRoleName`): the prefixes `User_`, `PC_`, `TenantMember_`, `TenantOwner_`, `Dept_`, `Ch_`, `DriveRoot_`, `Folder_`, `Share_`, `Asset_`, `Role_`, `U_`, the suffixes `_Owners`, `_Members`, `_Mgmt`, `_Documents`, `_DraftDocs`, `_ApprovedDocs`, `_Channels`, `_Assets`, `_Content`, `_Drive`, and the names `PC_Global` and `PublicUsers`, compared case-insensitively. This is display-name hygiene: a role's node is named by a generated ID, so the typed name can no longer become a node name, but a role listed as `Dept_Sales` would read as a platform node on screen and in logs (nodes written before names were ID-keyed still carry their display name as the node name).
+A role's node is named by a generated ID (`ngac.RoleUAName`, `Role_{id}`); the name the administrator typed is the node's `display_name` property, and role listings show it. A role (a UA created by a workspace administrator) SHALL still be refused when its name is empty or starts or ends like a name the platform builds itself (`ngac.ValidateRoleName`): the prefixes `User_`, `PC_`, `TenantMember_`, `TenantOwner_`, `Dept_`, `Ch_`, `DriveRoot_`, `Folder_`, `Share_`, `Asset_`, `Role_`, `U_`, `Cal_`, `CalEv_`, `CalEvGuests_`, the directory names `Directory_`, `DirectoryOpen_`, `DirectoryNoDept_`, `DirectoryOwners_`, `DirectoryLimited_`, `Dir_`, `DirPeer_`, `DeptPeers_`, the suffixes `_Owners`, `_Members`, `_Mgmt`, `_Documents`, `_DraftDocs`, `_ApprovedDocs`, `_Channels`, `_Assets`, `_Content`, `_Drive`, and the names `PC_Global` and `PublicUsers`, compared case-insensitively after Unicode compatibility folding (NFKC) and with invisible format characters (zero width space and joiners, BOM, soft hyphen) removed. This is display-name hygiene: a role's node is named by a generated ID, so the typed name can no longer become a node name, but a role listed as `Dept_Sales` would read as a platform node on screen and in logs (nodes written before names were ID-keyed still carry their display name as the node name).
 
 #### Scenario: Reserved role name
 - **WHEN** an administrator creates a role named like a personal UA, a workspace's Owners UA or a policy class
 - **THEN** the request fails with InvalidArgument and no node is written
 
 ### Requirement: Platform-built node names are keyed by IDs
-Every node name the platform builds SHALL come from a helper in `backend/ngac` that takes an ID of the entity, never a name a tenant chooses: `DeptUAName(department id)`, `FolderNodeName(folder id)`, `ShareOAName(share id)`, `RoleUAName(role id)`, `UserNodeName(user id)`, `ChannelDriveName(channel id)`, `AssetTypeOAName(workspace id, type id)`, `PersonalUAName(user node id)` and the workspace- and channel-keyed helpers. The helpers take distinct types (`ngac.DeptID`, `ngac.WorkspaceID`, ...) so that passing a display name is a compile error and the conversion that remains is visible in review; `scripts/check-ngac-identifiers.sh` fails CI on an operation literal or a hand-built node name outside `backend/ngac`. What a screen shows is kept in the node's `display_name` property (`ngac.DisplayName` falls back to the node name for a node written before names were ID-keyed). Nodes written with the old names are renamed by migration `023_ngac_id_keyed_names.sql`, matching each node through the foreign key that ties it to its entity and checking the entity's own workspace; the old name is recorded in `ngac_node_renames`, which is also the rollback. Like the other direct graph writes it bypasses EPP invalidation, so the services must be restarted after it is applied.
+Every node name the platform builds SHALL come from a helper in `backend/ngac` that takes an ID of the entity, never a name a tenant chooses: `DeptUAName(department id)`, `FolderNodeName(folder id)`, `ShareOAName(share id)`, `RoleUAName(role id)`, `UserNodeName(user id)`, `ChannelDriveName(channel id)`, `AssetTypeOAName(workspace id, type id)`, `PersonalUAName(user node id)`, the directory helpers (`DirectoryOAName(workspace id)`, `DeptDirOAName(department id)`, `DeptPeerOAName(department id)`, `DeptPeersUAName(department id)` and their workspace-keyed siblings, see `contacts-visibility`) and the workspace- and channel-keyed helpers. The helpers take distinct types (`ngac.DeptID`, `ngac.WorkspaceID`, ...) so that passing a display name is a compile error and the conversion that remains is visible in review; `scripts/check-ngac-identifiers.sh` fails CI on an operation literal or a hand-built node name outside `backend/ngac`. What a screen shows is kept in the node's `display_name` property (`ngac.DisplayName` falls back to the node name for a node written before names were ID-keyed). Nodes written with the old names are renamed by migration `023_ngac_id_keyed_names.sql`, matching each node through the foreign key that ties it to its entity and checking the entity's own workspace; the old name is recorded in `ngac_node_renames`, which is also the rollback. Like the other direct graph writes it bypasses EPP invalidation, so the services must be restarted after it is applied.
 
 #### Scenario: Two tenants, one department name
 - **WHEN** two tenants each create a department called "Sales"

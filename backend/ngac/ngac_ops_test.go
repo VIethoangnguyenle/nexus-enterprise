@@ -321,3 +321,139 @@ func TestIsAdminFolder(t *testing.T) {
 		}
 	}
 }
+
+// The directory nodes are named by IDs, so two workspaces (or departments) never
+// share one, and none of them can be mistaken for the node another helper builds:
+// a name is matched exactly and a clash would silently re-aim an association.
+func TestDirectoryNamesAreIDKeyedAndDistinct(t *testing.T) {
+	names := map[string]string{}
+	for what, name := range map[string]string{
+		"directory w1":  ngac.DirectoryOAName("w1"),
+		"directory w2":  ngac.DirectoryOAName("w2"),
+		"open w1":       ngac.DirectoryOpenOAName("w1"),
+		"open w2":       ngac.DirectoryOpenOAName("w2"),
+		"no dept w1":    ngac.DirectoryNoDeptOAName("w1"),
+		"no dept w2":    ngac.DirectoryNoDeptOAName("w2"),
+		"owners w1":     ngac.DirectoryOwnersOAName("w1"),
+		"owners w2":     ngac.DirectoryOwnersOAName("w2"),
+		"limited w1":    ngac.DirectoryLimitedUAName("w1"),
+		"limited w2":    ngac.DirectoryLimitedUAName("w2"),
+		"rule w1":       ngac.DirectoryLimitedProhibitionName("w1"),
+		"rule w2":       ngac.DirectoryLimitedProhibitionName("w2"),
+		"dept dir d1":   ngac.DeptDirOAName("d1"),
+		"dept dir d2":   ngac.DeptDirOAName("d2"),
+		"dept peer d1":  ngac.DeptPeerOAName("d1"),
+		"dept peer d2":  ngac.DeptPeerOAName("d2"),
+		"dept peers d1": ngac.DeptPeersUAName("d1"),
+		"dept peers d2": ngac.DeptPeersUAName("d2"),
+		"dept ua d1":    ngac.DeptUAName("d1"),
+		"members w1":    ngac.MembersUAName("w1"),
+		"mgmt w1":       ngac.MgmtOAName("w1"),
+	} {
+		if prev, dup := names[name]; dup {
+			t.Errorf("%s and %s share the node name %q", what, prev, name)
+		}
+		names[name] = what
+	}
+}
+
+func TestDirectoryNamesSurviveShortInput(t *testing.T) {
+	for _, in := range []string{"", "a", "ab"} {
+		for what, name := range map[string]string{
+			"directory":  ngac.DirectoryOAName(ngac.WorkspaceID(in)),
+			"open":       ngac.DirectoryOpenOAName(ngac.WorkspaceID(in)),
+			"no dept":    ngac.DirectoryNoDeptOAName(ngac.WorkspaceID(in)),
+			"owners":     ngac.DirectoryOwnersOAName(ngac.WorkspaceID(in)),
+			"limited":    ngac.DirectoryLimitedUAName(ngac.WorkspaceID(in)),
+			"rule":       ngac.DirectoryLimitedProhibitionName(ngac.WorkspaceID(in)),
+			"dept dir":   ngac.DeptDirOAName(ngac.DeptID(in)),
+			"dept peer":  ngac.DeptPeerOAName(ngac.DeptID(in)),
+			"dept peers": ngac.DeptPeersUAName(ngac.DeptID(in)),
+		} {
+			if name == "" {
+				t.Errorf("%s(%q) returned an empty name", what, in)
+			}
+		}
+	}
+}
+
+// No directory node may parse as a workspace's Members UA: the membership helper
+// trusts that name, and the directory must never be able to pose as it.
+func TestDirectoryNamesAreNeverAMembersUA(t *testing.T) {
+	for _, name := range []string{
+		ngac.DirectoryOAName("w1"), ngac.DirectoryOpenOAName("w1"), ngac.DirectoryNoDeptOAName("w1"),
+		ngac.DirectoryOwnersOAName("w1"), ngac.DirectoryLimitedUAName("w1"),
+		ngac.DeptDirOAName("d1"), ngac.DeptPeerOAName("d1"), ngac.DeptPeersUAName("d1"),
+	} {
+		if ws, ok := ngac.WorkspaceIDFromMembersUAName(name); ok {
+			t.Errorf("%q parses as the Members UA of workspace %q", name, ws)
+		}
+	}
+}
+
+func TestDirectoryPropsMarkEveryNodeAsDirectory(t *testing.T) {
+	props := ngac.DirectoryProps("w1")
+	if props[ngac.PropType] != ngac.PropTypeDirectory || ngac.PropTypeDirectory != "directory" {
+		t.Errorf("type = %q, want directory", props[ngac.PropType])
+	}
+	if props["workspace_id"] != "w1" {
+		t.Errorf("workspace_id = %q", props["workspace_id"])
+	}
+	// A directory UA is not a role: roles are recognised by type=role alone.
+	if props[ngac.PropType] == ngac.PropTypeRole {
+		t.Error("a directory node must not read as a role")
+	}
+	// The caller owns its copy.
+	props["workspace_id"] = "other"
+	if ngac.DirectoryProps("w1")["workspace_id"] != "w1" {
+		t.Error("DirectoryProps shares its map between calls")
+	}
+}
+
+// A role may not be named like a directory node on screen or in logs.
+func TestValidateRoleNameRejectsDirectoryNamespaces(t *testing.T) {
+	for _, bad := range []string{
+		"Directory_w1", "DirectoryOpen_w1", "DirectoryNoDept_w1", "DirectoryOwners_w1", "DirectoryLimited_w1",
+		"Dir_d1", "DirPeer_d1", "DeptPeers_d1", "dir_d1",
+	} {
+		if err := ngac.ValidateRoleName(bad); err == nil {
+			t.Errorf("ValidateRoleName(%q) accepted, want rejected", bad)
+		}
+	}
+	for _, ok := range []string{"Directory admins", "Director", "Dirk"} {
+		if err := ngac.ValidateRoleName(ok); err != nil {
+			t.Errorf("ValidateRoleName(%q) = %v, want accepted", ok, err)
+		}
+	}
+}
+
+// A name is compared as people read it: compatibility forms (fullwidth letters)
+// fold to the plain ones and invisible format characters (zero width space and
+// joiners, BOM, soft hyphen) are dropped before the reserved-namespace check, so
+// neither can smuggle a platform-looking name past it.
+func TestValidateRoleNameSeesThroughLookalikes(t *testing.T) {
+	for name, bad := range map[string]string{
+		"zero width space inside the prefix": "Dep\u200bt_Sales",
+		"zero width joiner":                  "D\u200dept_Sales",
+		"BOM first":                          "\ufeffUser_abc",
+		"soft hyphen":                        "Dir\u00adectory_w1",
+		"fullwidth letters and underscore":   "Ｄｅｐｔ＿Sales",
+		"fullwidth suffix":                   "ws1＿Owners",
+		"invisible inside a suffix":          "ws1_Mem\u2060bers",
+		"BOM and padding":                    " \ufeff PC_Global",
+	} {
+		if err := ngac.ValidateRoleName(bad); err == nil {
+			t.Errorf("%s: ValidateRoleName(%q) accepted, want rejected", name, bad)
+		}
+	}
+	// A name that is only invisible is empty.
+	if err := ngac.ValidateRoleName("\u200b\ufeff"); err == nil {
+		t.Error("a name of invisible characters only must be refused as empty")
+	}
+	// Ordinary names, accents and Vietnamese included, are untouched.
+	for _, ok := range []string{"Kế toán trưởng", "Editor", "Người duyệt", "Directory admins"} {
+		if err := ngac.ValidateRoleName(ok); err != nil {
+			t.Errorf("ValidateRoleName(%q) = %v, want accepted", ok, err)
+		}
+	}
+}

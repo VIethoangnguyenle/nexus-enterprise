@@ -20,6 +20,13 @@ export const U = {
 
 export const ME = { id: U.hoa.id, username: 'hoa', ngac_node_id: U.hoa.node }
 
+/** The departments the fixture people sit in, by name. Ids are UUID-shaped so a test can assert none reaches the screen. */
+export const DEPT_ID: Record<string, string> = {
+  'Đối soát': '55555555-aaaa-4bbb-8ccc-000000000001',
+  'Vận hành thanh toán': '55555555-aaaa-4bbb-8ccc-000000000002',
+  'Kiểm soát': '55555555-aaaa-4bbb-8ccc-000000000003',
+}
+
 const contact = (
   key: keyof typeof U, username: string, display: string, title: string, department: string,
 ): Contact => ({
@@ -30,6 +37,8 @@ const contact = (
   email: `${username}@novapay.vn`,
   title,
   department,
+  department_id: DEPT_ID[department] ?? '',
+  roles: [],
   location: '',
   avatar_url: '',
   is_online: false,

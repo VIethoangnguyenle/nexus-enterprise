@@ -46,6 +46,9 @@ func (f *flakyCTE) CheckAccess(context.Context, string, string, string) (bool, e
 	return f.err == nil, f.err
 }
 
+// Ancestors is not reached here: the fixture holds no prohibition.
+func (f *flakyCTE) Ancestors(context.Context, string) (map[string]string, error) { return nil, nil }
+
 func (f *flakyCTE) setErr(err error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -85,6 +88,9 @@ type blockingCTE struct {
 	calls    atomic.Int64
 	sawCtxOK atomic.Bool
 }
+
+// Ancestors is not reached here: the fixture holds no prohibition.
+func (b *blockingCTE) Ancestors(context.Context, string) (map[string]string, error) { return nil, nil }
 
 func (b *blockingCTE) CheckAccess(ctx context.Context, _, _, _ string) (bool, error) {
 	if b.calls.Add(1) == 1 {

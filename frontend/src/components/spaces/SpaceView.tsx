@@ -84,18 +84,20 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
     queryFn: () => messagingApi.getChannel(channelId),
     enabled: !listLoading && !listed,
   })
+  // The same members request the member panel makes (one cache entry); a DM opened by link needs it to name a partner the directory does not list.
+  const dmMembers = useChannelMembers(channelId, !listed).data?.members ?? undefined
   const conv: Conversation | undefined = useMemo(() => {
     if (listed) return listed
     const ch = single.data
     if (!ch) return undefined
     const dm = ch.channel_type === 'dm'
-    const p = dm ? dmPartner(ch, { username: me?.username }, people) : undefined
+    const p = dm ? dmPartner(ch, { id: me?.id, username: me?.username }, people, dmMembers) : undefined
     return {
       id: ch.id, kind: dm ? 'dm' : 'space', title: p?.title ?? ch.name, partner: p?.partner,
       hueKey: p?.partner?.userId || ch.id, unread: 0, memberCount: ch.member_count ?? 0, lastActivity: 0,
       starred: !!ch.starred,
     }
-  }, [listed, single.data, me?.username, people])
+  }, [listed, single.data, me?.id, me?.username, people, dmMembers])
 
   const messagesQ = useMessages(channelId)
   const phone = usePhone()

@@ -18,7 +18,7 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .muted { color: var(--color-ink-muted); }
 
 /* ---------- review chrome ---------- */
-.page { max-width: 1400px; margin-inline: auto; display: grid; gap: 56px; }
+.page { max-width: 1400px; margin-inline: auto; display: grid; grid-template-columns: minmax(0, 1fr); gap: 56px; } /* minmax(0) so a wide frame scrolls in its .scroll, not the page */
 .page > header { padding-block: 40px 0; display: grid; gap: 16px; }
 .page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
 .page > header p { max-width: 65ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
@@ -32,7 +32,7 @@ h1, h2, h3, h4 { margin: 0; font-family: var(--font-display); text-wrap: balance
 .toc { display: flex; gap: 6px; flex-wrap: wrap; }
 .toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
 .toc a:hover { background: var(--color-hover); }
-.screen { display: grid; gap: 16px; scroll-margin-top: 16px; }
+.screen { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; scroll-margin-top: 16px; min-width: 0; }
 .screen-head { display: grid; gap: 6px; max-width: 75ch; }
 .screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
 .screen-head p { color: var(--color-ink-muted); }
@@ -280,7 +280,7 @@ html.reduce .btn:active { transform: none; }
 }
 
 /* ---------- states sheet ---------- */
-.sheet { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+.sheet { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 16px; }
 .card { background: var(--color-raised); border-radius: 10px; padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0; }
 .card h3 { font-size: 1rem; font-weight: 700; }
 .skel { height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--color-sunk) 0%, var(--color-hover) 50%, var(--color-sunk) 100%); background-size: 200% 100%; animation: shimmer 1600ms linear infinite; }
@@ -336,8 +336,9 @@ html.no-cx .cx { display: none; }
 
 /* frames for the three widths */
 .frames { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.frames > div { max-width: 100%; min-width: 0; }
 .wlabel { font: 600 0.75rem/1 var(--font-body); letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-ink-muted); margin-bottom: 8px; display: block; }
-.tablet { width: 820px; max-width: 100%; height: 640px; border-radius: 20px; background: var(--color-base); overflow: hidden; position: relative; isolation: isolate;
+.tablet { width: 820px; max-width: calc(100% - 16px); height: 640px; border-radius: 20px; background: var(--color-base); overflow: hidden; position: relative; isolation: isolate;
   box-shadow: 0 0 0 8px var(--color-sunk); margin: 8px; display: grid; grid-template-columns: 64px minmax(0, 1fr); }
 .phone { isolation: isolate; }
 .phone .pbody { overflow: auto; min-height: 0; padding: 0 12px 12px; display: grid; align-content: start; gap: 8px; }
@@ -572,6 +573,55 @@ html.reduce .ovl.enter { animation-duration: 120ms; }
 .mobile-ops .srow { padding: 10px 0; }
 .savebar.enter { animation: toast-in var(--duration-base) var(--ease-out) both; }
 html.reduce .savebar.enter { animation-name: fade; animation-duration: 120ms; }
+
+/* Quản trị › Danh bạ › Phạm vi hiển thị (contacts-lark.html §1c): two rule lists, pickers, confirm with the consequence in people */
+.dsgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr)); gap: 12px; align-items: start; }
+.ds-intro { color: var(--color-ink-muted); max-width: 65ch; }
+.panel > .ph .cnt { color: var(--color-ink-muted); font-variant-numeric: tabular-nums; font-weight: 500; }
+.panel > .dsc { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.rrows { display: grid; min-width: 0; }
+.rrow { display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 8px 0; border-top: 1px solid var(--color-line); min-width: 0; }
+.rrow:first-child { border-top: 0; }
+.rrows > .ins .rrow { border-top: 1px solid var(--color-line); }
+.rrows > .ins:first-child .rrow { border-top: 0; }
+.rrow .t { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.rrow .t b { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rrow .t small { font-size: 0.8125rem; color: var(--color-ink-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dtile, .rtile { width: 32px; height: 32px; border-radius: 8px; display: grid; place-items: center; flex: none; }
+.dtile { background: var(--color-accent-wash); color: var(--color-accent); }
+.rtile { background: var(--color-sunk); color: var(--color-ink-muted); }
+.dtile.s24, .rtile.s24 { width: 24px; height: 24px; border-radius: 6px; }
+.rnone { color: var(--color-ink-muted); padding: 8px 0; }
+.addw { position: relative; justify-self: start; }
+.pop.dpick { right: auto; width: min(340px, calc(100vw - 64px)); max-height: 380px; overflow: auto; }
+.pop .o { border: 0; background: transparent; width: 100%; text-align: left; font: inherit; color: inherit; min-height: 40px; }
+.pop .o[aria-disabled="true"] { cursor: default; color: var(--color-ink-muted); }
+.pop .o[aria-disabled="true"]:hover { background: transparent; }
+.pop .o .why, .sheetp .o .why { grid-row: 1 / span 2; grid-column: 3; font-size: 0.75rem; color: var(--color-ink-muted); white-space: nowrap; }
+.pop .o > span:nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pop .foot { padding: 6px 10px 4px; font-size: 0.75rem; color: var(--color-ink-muted); }
+.inp input { flex: 1; min-width: 0; height: 36px; border: 0; background: transparent; outline: none; font: inherit; color: inherit; }
+.inp:focus-within { box-shadow: inset 0 0 0 1px var(--color-line), 0 0 0 2px var(--color-focus); }
+.modal p { line-height: 1.55; }
+.phone .ovl { z-index: 30; }
+.sheetp { z-index: 40; max-height: 85%; overflow: auto; }
+.sheetp h4 { font-size: 1.0625rem; font-weight: 700; }
+.sheetp .o { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 10px; align-items: center; min-height: 52px; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent;
+  width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.sheetp .o small { grid-column: 2; color: var(--color-ink-muted); font-size: 0.75rem; }
+.sheetp .o:hover { background: var(--color-hover); }
+.sheetp .o[aria-disabled="true"] { color: var(--color-ink-muted); cursor: default; }
+.sheetp .o[aria-disabled="true"]:hover { background: transparent; }
+.sheetp.enter { animation: sheet-up var(--duration-layout) var(--ease-out-expo) both; }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+html.reduce .sheetp.enter { animation-name: fade; animation-duration: 120ms; }
+@media (prefers-reduced-motion: reduce) { .sheetp.enter { animation-name: fade; animation-duration: 120ms; } }
+#directory .tabs { overflow-x: auto; scrollbar-width: none; }
+#directory .tabs button { white-space: nowrap; flex: none; }
+.phone .tabs { overflow-x: auto; padding: 0 12px 8px; scrollbar-width: none; }
+.phone .tabs button { height: 44px; flex: none; }
+.phone .rrow .btn, .phone .addw .btn { height: 44px; }
+[data-ds-ovl] { display: contents; } /* overlay slot: its scrim/sheet position against the frame, never take a grid cell */
 </style>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -646,15 +696,16 @@ html.reduce .savebar.enter { animation-name: fade; animation-duration: 120ms; }
   <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></symbol>
   <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-group" viewBox="0 0 24 24"><path d="M18 21a8 8 0 0 0-16 0"/><circle cx="10" cy="8" r="5"/><path d="M22 20c0-3.37-2-6.5-4-8a5 5 0 0 0-.45-8.3"/></symbol>
   <symbol id="i-history" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></symbol>
 </svg>
 
 <div class="page">
 <header>
   <h1>Nexus Hub · Quản trị</h1>
-  <p>Tổng quan tổ chức, người dùng (mời, gán phòng ban và vai trò bằng picker), vai trò và quyền. Vai trò hiện bằng tên đọc được; 8 thao tác NGAC hiện bằng nhãn tiếng Việt, trên từng vùng tài nguyên có tên. Chấm số xanh khớp với chú thích cùng số.</p>
+  <p>Tổng quan tổ chức, người dùng (mời, gán phòng ban và vai trò bằng picker), vai trò và quyền, phạm vi hiển thị của Danh bạ. Vai trò hiện bằng tên đọc được; 8 thao tác NGAC hiện bằng nhãn tiếng Việt, trên từng vùng tài nguyên có tên. Chấm số xanh khớp với chú thích cùng số.</p>
   <div class="controls"><div class="seg" role="group" aria-label="Theme"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div><label class="check"><input type="checkbox" id="reduce"> Giảm chuyển động</label><label class="check"><input type="checkbox" id="cxs" checked> Hiện chú thích số</label></div>
-  <nav class="toc" aria-label="Các màn"><a href="#overview">Tổng quan</a><a href="#users">Người dùng</a><a href="#invite">Mời thành viên</a><a href="#roles">Vai trò</a><a href="#matrix">Sửa quyền</a><a href="#ops">Nhãn thao tác</a><a href="#states">Trạng thái</a><a href="#tablet">Máy tính bảng</a><a href="#mobile">Di động</a></nav>
+  <nav class="toc" aria-label="Các màn"><a href="#overview">Tổng quan</a><a href="#users">Người dùng</a><a href="#invite">Mời thành viên</a><a href="#roles">Vai trò</a><a href="#matrix">Sửa quyền</a><a href="#ops">Nhãn thao tác</a><a href="#states">Trạng thái</a><a href="#directory">Danh bạ · phạm vi</a><a href="#tablet">Máy tính bảng</a><a href="#mobile">Di động</a></nav>
 </header>
 
 <!-- ============================ OVERVIEW ============================ -->
@@ -673,7 +724,7 @@ html.reduce .savebar.enter { animation-name: fade; animation-duration: 120ms; }
       <div class="pg">
         <div>
           <div class="chead"><div class="t"><h3>Quản trị</h3><div class="sub">Khối Vận hành · NovaPay</div></div><div class="end"><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-user-plus"/></svg>Mời thành viên</button></div></div>
-          <div class="tabs" role="tablist" data-cx="1"><button role="tab" aria-selected="true" type="button">Tổng quan</button><button role="tab" aria-selected="false" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button></div>
+          <div class="tabs" role="tablist" data-cx="1"><button role="tab" aria-selected="true" type="button">Tổng quan</button><button role="tab" aria-selected="false" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button><button role="tab" aria-selected="false" type="button">Danh bạ</button></div>
         </div>
         <div class="body">
           <div class="stats stagger">
@@ -749,7 +800,7 @@ html.reduce .savebar.enter { animation-name: fade; animation-duration: 120ms; }
       <div class="pg">
         <div>
           <div class="chead"><div class="t"><h3>Quản trị</h3><div class="sub">64 thành viên, 3 lời mời</div></div><div class="end"><button class="btn primary sm" type="button" data-act="inv-open"><svg class="i s"><use href="#i-user-plus"/></svg>Mời thành viên</button></div></div>
-          <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Tổng quan</button><button role="tab" aria-selected="true" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button></div>
+          <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Tổng quan</button><button role="tab" aria-selected="true" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button><button role="tab" aria-selected="false" type="button">Danh bạ</button></div>
           <div class="toolbar">
             <div class="search" style="width:200px"><svg class="i s"><use href="#i-search"/></svg>Tên hoặc email</div>
             <button class="fchip" type="button" aria-pressed="true">Tất cả <span class="muted tnum">67</span></button>
@@ -836,7 +887,7 @@ html.reduce .savebar.enter { animation-name: fade; animation-duration: 120ms; }
       <div class="pg">
         <div>
           <div class="chead"><div class="t"><h3>Quản trị</h3><div class="sub">5 vai trò</div></div><div class="end"><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-plus"/></svg>Tạo vai trò</button></div></div>
-          <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Tổng quan</button><button role="tab" aria-selected="false" type="button">Người dùng</button><button role="tab" aria-selected="true" type="button">Vai trò</button></div>
+          <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Tổng quan</button><button role="tab" aria-selected="false" type="button">Người dùng</button><button role="tab" aria-selected="true" type="button">Vai trò</button><button role="tab" aria-selected="false" type="button">Danh bạ</button></div>
         </div>
         <div class="tbl rl" role="table" aria-label="Vai trò">
           <div class="tr th" role="row"><span role="columnheader">Vai trò</span><span role="columnheader">Loại</span><span role="columnheader" class="r">Thành viên</span></div>
@@ -967,6 +1018,115 @@ html.reduce .savebar.enter { animation-name: fade; animation-duration: 120ms; }
   </div>
 </section>
 
+<!-- ============================ DIRECTORY SCOPE (contacts-lark.html §1c) ============================ -->
+<section class="screen" id="directory" aria-labelledby="h-dir">
+  <div class="screen-head">
+    <h2 id="h-dir">7b · Danh bạ: phạm vi hiển thị</h2>
+    <p>Tab thứ tư của Quản trị, dựng từ khối cài đặt ở mục 1c của <code>contacts-lark.html</code> (đã duyệt). Mặc định ai trong workspace cũng thấy cả danh bạ; quản trị viên có hai loại quy tắc: <b>ẩn một phòng</b> và <b>chỉ thấy phòng của mình</b> cho một vai trò hoặc một phòng. Mọi nút trong khung đều bấm được: mở picker, chọn, xác nhận, bỏ.</p>
+  </div>
+  <div class="demo"><span class="k">Demo</span>
+    <button class="btn sm" type="button" data-ds-demo="loading">Tải lại (xem khung chờ)</button>
+    <button class="btn sm" type="button" data-ds-demo="error">Mất kết nối khi tải</button>
+    <button class="btn sm" type="button" data-ds-demo="fail">Lần lưu tới bị lỗi</button>
+    <button class="btn sm" type="button" data-ds-demo="reset">Về trạng thái đầu</button>
+  </div>
+  <div class="scroll">
+    <div class="app no-list detail-closed" id="ds-desk">
+      <aside class="side" aria-label="Điều hướng chính"><div class="ws"><span class="logo">V</span><div><div class="n">Khối Vận hành</div><div class="s">NovaPay</div></div><svg class="i s" style="margin-left:auto;color:var(--color-ink-muted)"><use href="#i-down"/></svg></div><nav class="nav"><a href="#"><svg class="i"><use href="#i-msg"/></svg>Tin nhắn<span class="pill count tnum">4</span></a><a href="#"><svg class="i"><use href="#i-folder"/></svg>Tài liệu</a><a href="#"><svg class="i"><use href="#i-check"/></svg>Phê duyệt<span class="pill count tnum">2</span></a><a href="#"><svg class="i"><use href="#i-box"/></svg>Tài sản</a><a href="#"><svg class="i"><use href="#i-users"/></svg>Danh bạ</a></nav><div class="nav"><a href="#" aria-current="page"><svg class="i"><use href="#i-shield"/></svg>Quản trị</a><a href="#"><svg class="i"><use href="#i-gear"/></svg>Cài đặt</a><div class="me"><span class="av" style="--p:var(--color-person-7)">TH<span class="on"></span></span><div><div style="font-weight:600">Lê Thị Hoa</div><div class="r">Kế toán trưởng</div></div></div></div></aside>
+      <div class="pg" style="grid-template-rows:auto 1fr">
+        <div>
+          <div class="chead"><div class="t"><h3>Quản trị</h3><div class="sub">Khối Vận hành · NovaPay</div></div></div>
+          <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Tổng quan</button><button role="tab" aria-selected="false" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button><button role="tab" aria-selected="true" type="button" data-cx="1">Danh bạ</button></div>
+        </div>
+        <div class="body" data-ds-body></div>
+        <div class="toasts" data-ds-toasts aria-live="polite"></div>
+      </div>
+      <aside class="detail" aria-hidden="true"></aside>
+      <div data-ds-ovl></div>
+    </div>
+  </div>
+  <ol class="notes cxl">
+    <li><span class="cxn">1</span><b>Tab Danh bạ</b> chỉ có ở workspace tổ chức, cho người có <code>manage</code> (khung Quản trị đã trả 403 cho người khác, xem mục 7). Workspace chưa có dữ liệu phạm vi (giữa hai bản phát hành) thì <b>không hiện tab</b>, không báo lỗi; link dán vào thì về Tổng quan, giữ workspace (thẻ “Chưa sẵn sàng” bên dưới).</li>
+    <li><span class="cxn">2</span><b>Câu đầu</b> nói luật mặc định và luật không đổi được: “Mặc định mọi thành viên thấy toàn bộ danh bạ. Quản trị viên luôn thấy tất cả.” Quản trị viên ở đây là mọi người giữ <code>manage</code>; quy tắc không bao giờ che họ.</li>
+    <li><span class="cxn">3</span><b>Phòng ẩn</b>: ô thư mục 32 <code>--color-accent-wash</code>, tên, dòng phụ “đường dẫn cha · Chỉ N người trong phòng và quản trị viên thấy” (N gồm cả cây con; đường dẫn để hai phòng trùng tên khác nhánh không lẫn). “Bỏ ẩn” hỏi lại trước khi làm.</li>
+    <li><span class="cxn">4</span><b>Ẩn một phòng</b> mở DepartmentPicker tại chỗ: ô tìm (bỏ dấu) + Tree thụt 16px mỗi cấp, mỗi phòng có số người. Phòng đã ẩn ghi “Đã ẩn”, phòng con của nó ghi “Ẩn theo …” và không chọn được. Ẩn một phòng là ẩn cả các phòng, nhóm bên dưới. Không gõ tên hay mã.</li>
+    <li><span class="cxn">5</span><b>Chỉ thấy phòng của mình</b>: một hàng mỗi vai trò (ô 32 <code>--color-sunk</code>, icon nhóm) hoặc mỗi phòng (ô thư mục), “Vai trò X” / “Phòng Y”, “N người · thấy người trong phòng của họ”. Người bị giới hạn luôn thấy quản trị viên (Zane, 2026-10-17). “Bỏ” hỏi lại.</li>
+    <li><span class="cxn">6</span><b>Thêm vai trò hoặc phòng</b> mở một picker hai nhóm: Vai trò (chỉ vai trò tự tạo; Chủ sở hữu và Thành viên không có ở đây) và Phòng ban (Tree). Mục đã giới hạn ghi “Đã giới hạn”.</li>
+    <li><span class="cxn">7</span><b>Hỏi lại nói hệ quả bằng người</b> (Modal, Esc / Huỷ / bấm nền đóng, focus trả về nút đã mở): “6 người của phòng này chỉ còn được người trong phòng và quản trị viên thấy, kể cả 1 phòng, nhóm bên dưới. Tên và avatar của họ vẫn hiện ở tin nhắn, phê duyệt và tài liệu.” Xong thì hàng chèn 220ms + toast nói việc đã làm; lỗi thì toast nói cách sửa, danh sách giữ nguyên. Danh bạ của thành viên đổi theo ở lần tải sau hoặc sự kiện realtime.</li>
+    <li><b>Quyết bằng NGAC ở API</b> <span class="need">cần backend</span>: danh sách và các lệnh ghi đi qua <code>/api/workspaces/:id/admin/directory-scope</code> (phase 04 của plan), ghi qua đường EPP. Giao diện không tự lọc ai thấy ai; id phòng, vai trò chỉ để gọi API, không bao giờ lên màn.</li>
+  </ol>
+
+  <div class="frames">
+    <div><span class="wlabel">Máy tính bảng 820 px · picker phòng mở</span>
+      <div class="tablet" id="ds-tab">
+        <aside class="rail" aria-label="Điều hướng chính"><span class="logo" aria-label="Khối Vận hành">V</span><nav><a href="#" aria-label="Tin nhắn" title="Tin nhắn"><svg class="i"><use href="#i-msg"/></svg><span class="dotc"></span></a><a href="#" aria-label="Tài liệu" title="Tài liệu"><svg class="i"><use href="#i-folder"/></svg></a><a href="#" aria-label="Phê duyệt" title="Phê duyệt"><svg class="i"><use href="#i-check"/></svg><span class="dotc"></span></a><a href="#" aria-label="Tài sản" title="Tài sản"><svg class="i"><use href="#i-box"/></svg></a><a href="#" aria-label="Danh bạ" title="Danh bạ"><svg class="i"><use href="#i-users"/></svg></a></nav><nav><a href="#" aria-current="page" aria-label="Quản trị" title="Quản trị"><svg class="i"><use href="#i-shield"/></svg></a><a href="#" aria-label="Cài đặt" title="Cài đặt"><svg class="i"><use href="#i-gear"/></svg></a><a href="#" aria-label="Lê Thị Hoa"><span class="av" style="--p:var(--color-person-7)">TH</span></a></nav></aside>
+        <div class="pg" style="grid-template-rows:auto 1fr">
+          <div>
+            <div class="chead"><div class="t"><h3>Quản trị</h3></div></div>
+            <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Tổng quan</button><button role="tab" aria-selected="false" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button><button role="tab" aria-selected="true" type="button">Danh bạ</button></div>
+          </div>
+          <div class="body" data-ds-body></div>
+          <div class="toasts" data-ds-toasts aria-live="polite"></div>
+        </div>
+        <div data-ds-ovl></div>
+      </div>
+    </div>
+  </div>
+  <div class="phones">
+    <div><span class="wlabel">Điện thoại</span>
+      <div class="phone" id="ds-ph1" aria-label="Phạm vi danh bạ trên điện thoại">
+        <div><div class="ph-head"><button class="ibtn" type="button" aria-label="Quay lại" style="width:44px;height:44px"><svg class="i"><use href="#i-back"/></svg></button><div><h3>Quản trị</h3><div class="muted" style="font-size:0.75rem">Khối Vận hành</div></div></div>
+          <div class="tabs" role="tablist" data-cx="10"><button role="tab" aria-selected="false" type="button">Tổng quan</button><button role="tab" aria-selected="false" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button><button role="tab" aria-selected="true" type="button">Danh bạ</button></div></div>
+        <div class="pbody" data-ds-body></div>
+        <div class="toasts" data-ds-toasts aria-live="polite" style="left:16px;right:16px"></div>
+        <div data-ds-ovl></div>
+      </div>
+    </div>
+    <div><span class="wlabel">Điện thoại · thêm vai trò hoặc phòng</span>
+      <div class="phone" id="ds-ph2" aria-label="Chọn vai trò hoặc phòng trên điện thoại">
+        <div><div class="ph-head"><button class="ibtn" type="button" aria-label="Quay lại" style="width:44px;height:44px"><svg class="i"><use href="#i-back"/></svg></button><div><h3>Quản trị</h3><div class="muted" style="font-size:0.75rem">Khối Vận hành</div></div></div>
+          <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Tổng quan</button><button role="tab" aria-selected="false" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button><button role="tab" aria-selected="true" type="button">Danh bạ</button></div></div>
+        <div class="pbody" data-ds-body></div>
+        <div class="toasts" data-ds-toasts aria-live="polite" style="left:16px;right:16px"></div>
+        <div data-ds-ovl></div>
+      </div>
+    </div>
+  </div>
+  <ol class="notes cxl" start="8">
+    <li><span class="cxn">8</span><b>Máy tính bảng</b>: cùng hai danh sách, rail 64 như mục 8; picker vẫn là popover tại chỗ (đủ chỗ), cách mép khung ≥ 16.</li>
+    <li><span class="cxn">9</span><b>Điện thoại</b>: picker là bottom sheet (<code>--color-overlay</code>, radius 20 trên, nền <code>--color-scrim</code>, vào 280ms expo), hàng 52, nút và tab cao 44. Vuốt xuống, chạm nền mờ hoặc back đóng sheet.</li>
+    <li><span class="cxn">10</span><b>Tab Quản trị</b> thành hàng cuộn ngang dưới tiêu đề; hai danh sách xếp chồng, Bỏ ẩn / Bỏ là nút 44 cạnh hàng.</li>
+  </ol>
+
+  <div class="sheet">
+    <div class="card"><h3>Đang tải</h3>
+      <div class="rrows">
+        <div class="rrow"><div class="skel" style="width:32px;height:32px;border-radius:8px;flex:none"></div><div style="flex:1;display:grid;gap:6px"><div class="skel" style="width:50%"></div><div class="skel" style="width:72%;height:10px"></div></div><div class="skel" style="width:64px;height:32px;border-radius:8px"></div></div>
+        <div class="rrow"><div class="skel" style="width:32px;height:32px;border-radius:8px;flex:none"></div><div style="flex:1;display:grid;gap:6px"><div class="skel" style="width:42%"></div><div class="skel" style="width:60%;height:10px"></div></div><div class="skel" style="width:64px;height:32px;border-radius:8px"></div></div>
+      </div>
+      <p class="muted" style="font-size:0.8125rem">Cùng hình hàng thật trong mỗi danh sách. Không spinner, không flash trạng thái trống trước khi có câu trả lời.</p>
+    </div>
+    <div class="card"><h3>Chưa có quy tắc nào (mặc định)</h3>
+      <div class="panel" style="padding:0;background:transparent"><div class="ph"><h4 style="font-size:1rem">Phòng ẩn khỏi danh bạ</h4><span class="cnt">0</span></div><p class="rnone">Chưa ẩn phòng nào. Mọi thành viên thấy mọi phòng.</p><button class="btn sm" type="button" style="justify-self:start"><svg class="i s"><use href="#i-folder"/></svg>Ẩn một phòng</button></div>
+      <p class="muted" style="font-size:0.8125rem">Không có màn trống riêng: mỗi danh sách nói một câu và giữ nút thêm. Danh sách kia cũng vậy (“Chưa giới hạn ai. Mọi thành viên thấy toàn bộ danh bạ.”).</p>
+    </div>
+    <div class="card"><h3>Lỗi tải</h3>
+      <div class="state"><span class="ic bad"><svg class="i"><use href="#i-alert"/></svg></span><b>Không tải được phạm vi hiển thị</b><p class="muted">Kết nối tới máy chủ bị gián đoạn. Kiểm tra mạng rồi thử lại.</p><button class="btn sm" type="button"><svg class="i s"><use href="#i-refresh"/></svg>Thử lại</button></div>
+    </div>
+    <div class="card"><h3>Lỗi lưu</h3>
+      <div class="toast"><svg class="i bad"><use href="#i-alert"/></svg><span>Không ẩn được Kiểm soát nội bộ. Kiểm tra mạng rồi thử lại.</span><button class="btn ghost sm" type="button">Thử lại</button></div>
+      <p class="muted" style="font-size:0.8125rem">Danh sách giữ nguyên như trước khi bấm; không cập nhật lạc quan cho quy tắc che người.</p>
+    </div>
+    <div class="card"><h3>Chưa sẵn sàng (workspace cũ, giữa hai bản phát hành)</h3>
+      <div class="tabs" role="tablist" style="padding:0"><button role="tab" aria-selected="true" type="button">Tổng quan</button><button role="tab" aria-selected="false" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button></div>
+      <p class="muted" style="font-size:0.8125rem">Không có tab Danh bạ và không câu nào nhắc tới nó (Zane uỷ quyền, quyết định Q4). Mọi thành viên vẫn thấy toàn bộ danh bạ như hôm nay. Link <code>/admin/directory</code> dán vào thì về Tổng quan. Workspace cá nhân không có Quản trị nên cũng không có tab này.</p>
+    </div>
+    <div class="card"><h3>Không có quyền</h3>
+      <p class="muted" style="font-size:0.8125rem">Dùng đúng trạng thái “Bạn chưa có quyền quản trị …” của mục 7: khung Quản trị hỏi danh sách người một lần, 403 thì mọi tab nói như vậy, không có danh sách hay nút nào.</p>
+    </div>
+  </div>
+</section>
+
 <!-- ============================ TABLET ============================ -->
 <section class="screen" id="tablet" aria-labelledby="h-tablet">
   <div class="screen-head">
@@ -986,7 +1146,7 @@ html.reduce .savebar.enter { animation-name: fade; animation-duration: 120ms; }
         <div class="pg">
           <div>
             <div class="chead"><div class="t"><h3>Quản trị</h3></div><div class="end"><button class="btn primary sm" type="button"><svg class="i s"><use href="#i-user-plus"/></svg>Mời</button></div></div>
-            <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Tổng quan</button><button role="tab" aria-selected="true" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button></div>
+            <div class="tabs" role="tablist"><button role="tab" aria-selected="false" type="button">Tổng quan</button><button role="tab" aria-selected="true" type="button">Người dùng</button><button role="tab" aria-selected="false" type="button">Vai trò</button><button role="tab" aria-selected="false" type="button">Danh bạ</button></div>
           </div>
           <div class="tbl us" role="table" aria-label="Thành viên">
             <div class="tr th" role="row" style="grid-template-columns:minmax(0,1fr) 140px 120px"><span>Thành viên</span><span>Vai trò</span><span>Trạng thái</span></div>
@@ -1194,5 +1354,205 @@ html.reduce .savebar.enter { animation-name: fade; animation-duration: 120ms; }
     document.getElementById('mx-cell').setAttribute('aria-pressed', 'true'); document.getElementById('mx-cell').innerHTML = '<span class="cb on"><svg class="i"><use href="#i-checkmark"/></svg></span>';
     M.toast(document.getElementById('mx-toasts'), M.OK + '<span>Đã lưu quyền của Kế toán</span><button class="btn ghost sm" type="button">Hoàn tác</button>', 5000);
   };
+})();
+</script>
+<script>
+/* 7b · Quản trị › Danh bạ › Phạm vi hiển thị. One state per frame; the body and the overlay slot re-render from it.
+   Names only on screen; keys below stand in for the ids the API takes. */
+(function () {
+  var M = window.MK;
+  var DEPTS = {
+    bgd: { n: 'Ban Tổng giám đốc', p: null, c: 2 },
+    vhtt: { n: 'Vận hành thanh toán', p: null, c: 31 },
+    ds: { n: 'Đối soát', p: 'vhtt', c: 12 },
+    ht: { n: 'Hỗ trợ đối tác', p: 'vhtt', c: 9 },
+    kt: { n: 'Kế toán', p: null, c: 14 },
+    cn: { n: 'Công nợ', p: 'kt', c: 6 },
+    ks: { n: 'Kiểm soát nội bộ', p: null, c: 6 },
+    kto: { n: 'Kiểm toán', p: 'ks', c: 3 },
+    hc: { n: 'Hành chính', p: null, c: 13 }
+  };
+  var ORDER = ['bgd', 'vhtt', 'ds', 'ht', 'kt', 'cn', 'ks', 'kto', 'hc'];
+  /* custom roles only: the built-in Chủ sở hữu and Thành viên cannot be limited */
+  var ROLES = { ketoan: { n: 'Kế toán', c: 14 }, ksnb: { n: 'Kiểm soát nội bộ', c: 6 }, qlts: { n: 'Quản lý tài sản', c: 3 }, ctv: { n: 'Cộng tác viên', c: 2 } };
+  var RORDER = ['ketoan', 'ksnb', 'qlts', 'ctv'];
+
+  function esc(t) { return String(t).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function fold(t) { return t.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/Đ/g, 'D').toLowerCase(); }
+  function icon(id, s) { return '<svg class="i' + (s ? ' s' : '') + '" aria-hidden="true"><use href="#i-' + id + '"/></svg>'; }
+  function depth(k) { var d = 0; while (DEPTS[k].p) { d++; k = DEPTS[k].p; } return d; }
+  function parentPath(k) { var out = [], p = DEPTS[k].p; while (p) { out.unshift(DEPTS[p].n); p = DEPTS[p].p; } return out.join(' › '); }
+  function below(k) { return ORDER.filter(function (x) { var p = DEPTS[x].p; while (p) { if (p === k) return true; p = DEPTS[p].p; } return false; }).length; }
+  function hiddenBy(s, k) { var p = DEPTS[k].p; while (p) { if (s.hidden.indexOf(p) >= 0) return p; p = DEPTS[p].p; } return null; }
+  function isLimited(s, t, k) { return s.limited.some(function (x) { return x.t === t && x.k === k; }); }
+  function init(extra) { var s = { hidden: ['bgd'], limited: [{ t: 'r', k: 'ctv' }, { t: 'd', k: 'ht' }], mode: 'ok', pop: null, confirm: null, fresh: null, failNext: false };
+    for (var x in extra) s[x] = extra[x]; return s; }
+
+  var FR = {};
+  [['ds-desk', 'desk', {}], ['ds-tab', 'tab', { pop: 'dept' }], ['ds-ph1', 'ph', {}], ['ds-ph2', 'ph', { pop: 'lim' }]].forEach(function (d) {
+    var el = document.getElementById(d[0]); if (!el) return;
+    FR[d[0]] = { id: d[0], kind: d[1], el: el, s: init(d[2]), body: el.querySelector('[data-ds-body]'), ovl: el.querySelector('[data-ds-ovl]'), toasts: el.querySelector('[data-ds-toasts]') };
+  });
+  var active = FR['ds-desk'];
+
+  function cx(f, n) { return f.kind === 'desk' ? ' data-cx="' + n + '"' : ''; }
+
+  function hiddenRow(f, k, first) {
+    var d = DEPTS[k], pp = parentPath(k);
+    return '<div class="rrow"' + (first ? cx(f, 3) : '') + '><span class="dtile">' + icon('folder', 1) + '</span><span class="t"><b>' + esc(d.n) + '</b><small>' +
+      (pp ? esc(pp) + ' · ' : '') + 'Chỉ ' + d.c + ' người trong phòng và quản trị viên thấy</small></span>' +
+      '<button class="btn sm" type="button" data-ds="ask-unhide" data-k="' + k + '" aria-label="Bỏ ẩn ' + esc(d.n) + '">Bỏ ẩn</button></div>';
+  }
+  function limitedRow(f, x, first) {
+    var role = x.t === 'r', it = role ? ROLES[x.k] : DEPTS[x.k], pp = role ? '' : parentPath(x.k);
+    var title = (role ? 'Vai trò ' : 'Phòng ') + it.n;
+    return '<div class="rrow"' + (first ? cx(f, 5) : '') + '>' + (role ? '<span class="rtile">' + icon('group', 1) + '</span>' : '<span class="dtile">' + icon('folder', 1) + '</span>') +
+      '<span class="t"><b>' + esc(title) + '</b><small>' + (pp ? esc(pp) + ' · ' : '') + it.c + ' người · thấy người trong phòng của họ</small></span>' +
+      '<button class="btn sm" type="button" data-ds="ask-unlimit" data-t="' + x.t + '" data-k="' + x.k + '" aria-label="Bỏ giới hạn cho ' + esc(title.charAt(0).toLowerCase() + title.slice(1)) + '">Bỏ</button></div>';
+  }
+  function wrapFresh(f, key, html) { return f.s.fresh === key ? '<div class="ins"><div>' + html + '</div></div>' : html; }
+
+  function deptOption(s, k, mode) {
+    var d = DEPTS[k], why = '';
+    if (mode === 'dept') { var hb = hiddenBy(s, k); why = s.hidden.indexOf(k) >= 0 ? 'Đã ẩn' : hb ? 'Ẩn theo ' + DEPTS[hb].n : ''; }
+    else why = isLimited(s, 'd', k) ? 'Đã giới hạn' : '';
+    return '<button type="button" class="o" role="option" aria-selected="false" data-q="' + esc(fold(d.n)) + '" style="padding-left:' + (10 + 16 * depth(k)) + 'px"' +
+      (why ? ' aria-disabled="true"' : ' data-ds="' + (mode === 'dept' ? 'pick-hide' : 'pick-limit') + '" data-t="d" data-k="' + k + '"') + '>' +
+      '<span class="dtile s24">' + icon('folder', 1) + '</span><span>' + esc(d.n) + '</span><small>' + d.c + ' người</small>' + (why ? '<span class="why">' + esc(why) + '</span>' : '') + '</button>';
+  }
+  function roleOption(s, k) {
+    var r = ROLES[k], dis = isLimited(s, 'r', k);
+    return '<button type="button" class="o" role="option" aria-selected="false" data-q="' + esc(fold(r.n)) + '"' + (dis ? ' aria-disabled="true"' : ' data-ds="pick-limit" data-t="r" data-k="' + k + '"') + '>' +
+      '<span class="rtile s24">' + icon('group', 1) + '</span><span>' + esc(r.n) + '</span><small>' + r.c + ' người</small>' + (dis ? '<span class="why">Đã giới hạn</span>' : '') + '</button>';
+  }
+  function pickerInner(f) {
+    var s = f.s, h = '<div class="inp" style="margin:2px 2px 6px;min-height:36px">' + icon('search', 1) + '<input type="search" data-ds-q placeholder="' + (s.pop === 'dept' ? 'Tìm phòng' : 'Tìm vai trò hoặc phòng') + '" aria-label="' + (s.pop === 'dept' ? 'Tìm phòng' : 'Tìm vai trò hoặc phòng') + '"></div>';
+    if (s.pop === 'dept') {
+      h += '<div role="listbox" aria-label="Phòng ban">' + ORDER.map(function (k) { return deptOption(s, k, 'dept'); }).join('') + '</div>';
+    } else {
+      h += '<div role="listbox" aria-label="Vai trò hoặc phòng"><div class="grp label" role="presentation">Vai trò</div>' + RORDER.map(function (k) { return roleOption(s, k); }).join('') +
+        '<div class="grp label" role="presentation">Phòng ban</div>' + ORDER.map(function (k) { return deptOption(s, k, 'lim'); }).join('') + '</div>' +
+        '<p class="foot">Chủ sở hữu và Thành viên không giới hạn được. Quản trị viên luôn thấy tất cả.</p>';
+    }
+    return h;
+  }
+  function popHTML(f, which) {
+    if (f.s.pop !== which || f.kind === 'ph') return '';
+    var n = f.kind === 'tab' ? 8 : which === 'dept' ? 4 : 6;
+    return '<div class="pop dpick enter" role="dialog" aria-label="' + (which === 'dept' ? 'Chọn phòng để ẩn' : 'Chọn vai trò hoặc phòng') + '"' + (f.kind === 'tab' ? ' data-cx="8"' : '') + '>' + pickerInner(f) + '</div>';
+  }
+
+  function bodyHTML(f) {
+    var s = f.s;
+    if (s.mode === 'loading') {
+      var sk = '<div class="rrow"><div class="skel" style="width:32px;height:32px;border-radius:8px;flex:none"></div><div style="flex:1;display:grid;gap:6px"><div class="skel" style="width:50%"></div><div class="skel" style="width:72%;height:10px"></div></div><div class="skel" style="width:64px;height:32px;border-radius:8px"></div></div>';
+      return '<p class="ds-intro">Mặc định mọi thành viên thấy toàn bộ danh bạ. Quản trị viên luôn thấy tất cả.</p><div class="dsgrid" aria-busy="true"><div class="panel"><div class="ph"><h4>Phòng ẩn khỏi danh bạ</h4></div><div class="rrows">' + sk + sk + '</div></div><div class="panel"><div class="ph"><h4>Chỉ thấy phòng của mình</h4></div><div class="rrows">' + sk + sk + '</div></div></div>';
+    }
+    if (s.mode === 'error') {
+      return '<div class="state" style="padding-top:48px"><span class="ic bad">' + icon('alert') + '</span><b>Không tải được phạm vi hiển thị</b><p class="muted">Kết nối tới máy chủ bị gián đoạn. Kiểm tra mạng rồi thử lại.</p><button class="btn sm" type="button" data-ds="retry">' + icon('refresh', 1) + 'Thử lại</button></div>';
+    }
+    var h = '<p class="ds-intro"' + cx(f, 2) + '>Mặc định mọi thành viên thấy toàn bộ danh bạ. Quản trị viên luôn thấy tất cả.</p><div class="dsgrid">';
+    h += '<div class="panel"><div class="ph"><h4>Phòng ẩn khỏi danh bạ</h4><span class="cnt">' + s.hidden.length + '</span></div><p class="dsc">Chỉ người trong phòng (cả các phòng bên dưới) và quản trị viên thấy.</p><div class="rrows">' +
+      (s.hidden.length ? s.hidden.map(function (k, i) { return wrapFresh(f, 'h:' + k, hiddenRow(f, k, i === 0)); }).join('') : '<p class="rnone">Chưa ẩn phòng nào. Mọi thành viên thấy mọi phòng.</p>') +
+      '</div><div class="addw"><button class="btn sm" type="button" data-ds="open-dept" aria-haspopup="dialog" aria-expanded="' + (s.pop === 'dept') + '"' + cx(f, 4) + '>' + icon('folder', 1) + 'Ẩn một phòng</button>' + popHTML(f, 'dept') + '</div></div>';
+    h += '<div class="panel"><div class="ph"><h4>Chỉ thấy phòng của mình</h4><span class="cnt">' + s.limited.length + '</span></div><p class="dsc">Người giữ vai trò hoặc ở phòng này chỉ thấy người trong phòng của họ và quản trị viên.</p><div class="rrows">' +
+      (s.limited.length ? s.limited.map(function (x, i) { return wrapFresh(f, 'l:' + x.t + x.k, limitedRow(f, x, i === 0)); }).join('') : '<p class="rnone">Chưa giới hạn ai. Mọi thành viên thấy toàn bộ danh bạ.</p>') +
+      '</div><div class="addw"><button class="btn sm" type="button" data-ds="open-lim" aria-haspopup="dialog" aria-expanded="' + (s.pop === 'lim') + '"' + cx(f, 6) + '>' + icon('shield', 1) + 'Thêm vai trò hoặc phòng</button>' + popHTML(f, 'lim') + '</div></div>';
+    return h + '</div>';
+  }
+
+  function confirmText(c) {
+    var d, r;
+    if (c.kind === 'hide') { d = DEPTS[c.k]; var b = below(c.k);
+      return { t: 'Ẩn ' + d.n + ' khỏi danh bạ?', p: d.c + ' người của phòng này chỉ còn được người trong phòng và quản trị viên thấy' + (b ? ', kể cả ' + b + ' phòng, nhóm bên dưới' : '') + '. Tên và avatar của họ vẫn hiện ở tin nhắn, phê duyệt và tài liệu.', v: 'Ẩn phòng', ok: 'Đã ẩn ' + d.n + ' khỏi danh bạ', bad: 'Không ẩn được ' + d.n + '. Kiểm tra mạng rồi thử lại.' }; }
+    if (c.kind === 'unhide') { d = DEPTS[c.k];
+      return { t: 'Bỏ ẩn ' + d.n + '?', p: 'Mọi thành viên sẽ lại thấy ' + d.c + ' người của phòng này trong danh bạ.', v: 'Bỏ ẩn', ok: 'Đã bỏ ẩn ' + d.n, bad: 'Không bỏ ẩn được ' + d.n + '. Kiểm tra mạng rồi thử lại.' }; }
+    r = c.t === 'r' ? ROLES[c.k] : DEPTS[c.k];
+    var who = (c.t === 'r' ? 'vai trò ' : 'phòng ') + r.n;
+    if (c.kind === 'limit') return { t: 'Giới hạn ' + who + '?', p: r.c + (c.t === 'r' ? ' người giữ vai trò này' : ' người của phòng này (cả các phòng bên dưới)') + ' chỉ còn thấy người trong phòng của họ và quản trị viên. Ai là quản trị viên thì vẫn thấy tất cả.', v: 'Giới hạn', ok: 'Đã giới hạn ' + who, bad: 'Không giới hạn được ' + who + '. Kiểm tra mạng rồi thử lại.' };
+    return { t: 'Bỏ giới hạn cho ' + who + '?', p: r.c + ' người sẽ lại thấy toàn bộ danh bạ, trừ các phòng bị ẩn.', v: 'Bỏ giới hạn', ok: 'Đã bỏ giới hạn cho ' + who, bad: 'Không bỏ giới hạn được cho ' + who + '. Kiểm tra mạng rồi thử lại.' };
+  }
+  function ovlHTML(f) {
+    var s = f.s, h = '';
+    if (f.kind === 'ph' && s.pop) {
+      h += '<div class="ovl" data-ds="close-pop"></div><div class="sheetp enter" role="dialog" aria-modal="true" aria-label="' + (s.pop === 'dept' ? 'Chọn phòng để ẩn' : 'Chọn vai trò hoặc phòng') + '"' + (f.id === 'ds-ph2' ? ' data-cx="9"' : '') + '><div class="grab"></div><h4>' +
+        (s.pop === 'dept' ? 'Ẩn một phòng' : 'Thêm vai trò hoặc phòng') + '</h4><div class="pop" style="position:static;box-shadow:none;background:transparent;padding:0">' + pickerInner(f) + '</div></div>';
+    }
+    if (s.confirm) {
+      var c = confirmText(s.confirm);
+      h += '<div class="scrim enter" data-ds-scrim><div class="modal" role="dialog" aria-modal="true" aria-labelledby="' + f.id + '-ct"' + cx(f, 7) + '><h4 id="' + f.id + '-ct">' + esc(c.t) + '</h4><p>' + esc(c.p) + '</p>' +
+        '<div class="row" style="justify-content:flex-end"><button class="btn ghost" type="button" data-ds="cancel">Huỷ</button><button class="btn primary" type="button" data-ds="confirm">' + esc(c.v) + '</button></div></div></div>';
+    }
+    return h;
+  }
+
+  function render(f, focusSel) {
+    f.body.innerHTML = bodyHTML(f);
+    f.ovl.innerHTML = ovlHTML(f);
+    f.s.fresh = null;
+    var t = focusSel && f.el.querySelector(focusSel);
+    if (t) t.focus({ preventScroll: true });
+    setTimeout(M.placeCx, 30);
+  }
+  function retSel(f) { var r = f.s.ret; return r ? '[data-ds="' + r.ds + '"]' + (r.k ? '[data-k="' + r.k + '"]' : '') : null; }
+
+  function apply(f) {
+    var c = f.s.confirm, s = f.s, txt = confirmText(c);
+    s.confirm = null;
+    if (s.failNext) { s.failNext = false; render(f, retSel(f)); M.toast(f.toasts, M.BAD + '<span>' + esc(txt.bad) + '</span><button class="btn ghost sm" type="button">Thử lại</button>', 6000); return; }
+    if (c.kind === 'hide') { s.hidden.push(c.k); s.hidden.sort(function (a, b) { return ORDER.indexOf(a) - ORDER.indexOf(b); }); s.fresh = 'h:' + c.k; s.ret = { ds: 'open-dept' }; }
+    if (c.kind === 'unhide') { s.hidden = s.hidden.filter(function (k) { return k !== c.k; }); s.ret = { ds: 'open-dept' }; }
+    if (c.kind === 'limit') { s.limited.push({ t: c.t, k: c.k }); s.fresh = 'l:' + c.t + c.k; s.ret = { ds: 'open-lim' }; }
+    if (c.kind === 'unlimit') { s.limited = s.limited.filter(function (x) { return !(x.t === c.t && x.k === c.k); }); s.ret = { ds: 'open-lim' }; }
+    render(f, retSel(f));
+    M.toast(f.toasts, M.OK + '<span>' + esc(txt.ok) + '</span>', 4000);
+  }
+
+  function load(f) {
+    f.s.mode = 'loading'; f.s.pop = null; f.s.confirm = null; render(f);
+    setTimeout(function () { if (f.s.mode === 'loading') { f.s.mode = 'ok'; render(f); } }, 1400);
+  }
+
+  document.addEventListener('click', function (e) {
+    var demo = e.target.closest('[data-ds-demo]');
+    if (demo) {
+      var d = FR['ds-desk'], v = demo.getAttribute('data-ds-demo'); active = d;
+      if (v === 'loading') load(d);
+      if (v === 'error') { d.s = init({ mode: 'error' }); render(d); }
+      if (v === 'fail') { d.s.failNext = true; M.toast(d.toasts, '<span>Lần ẩn, bỏ ẩn hay giới hạn tới sẽ báo lỗi.</span>', 3000); }
+      if (v === 'reset') { d.s = init({}); render(d); }
+      return;
+    }
+    var frameEl = e.target.closest('#ds-desk, #ds-tab, #ds-ph1, #ds-ph2'); if (!frameEl) return;
+    var f = FR[frameEl.id]; active = f;
+    if (e.target.matches('[data-ds-scrim]')) { f.s.confirm = null; render(f, retSel(f)); return; }
+    var b = e.target.closest('[data-ds]'); if (!b) {
+      if (f.s.pop && !e.target.closest('.pop, .sheetp')) { f.s.pop = null; render(f); }
+      return;
+    }
+    var a = b.getAttribute('data-ds'), k = b.getAttribute('data-k'), t = b.getAttribute('data-t'), s = f.s;
+    if (a === 'open-dept' || a === 'open-lim') { var w = a === 'open-dept' ? 'dept' : 'lim'; s.pop = s.pop === w ? null : w; s.ret = { ds: a }; render(f, s.pop ? '[data-ds-q]' : retSel(f)); }
+    else if (a === 'close-pop') { s.pop = null; render(f, retSel(f)); }
+    else if (a === 'pick-hide') { s.pop = null; s.confirm = { kind: 'hide', k: k }; render(f, '[data-ds="cancel"]'); }
+    else if (a === 'pick-limit') { s.pop = null; s.confirm = { kind: 'limit', t: t, k: k }; render(f, '[data-ds="cancel"]'); }
+    else if (a === 'ask-unhide') { s.ret = { ds: a, k: k }; s.confirm = { kind: 'unhide', k: k }; render(f, '[data-ds="cancel"]'); }
+    else if (a === 'ask-unlimit') { s.ret = { ds: a, k: k }; s.confirm = { kind: 'unlimit', t: t, k: k }; render(f, '[data-ds="cancel"]'); }
+    else if (a === 'cancel') { s.confirm = null; render(f, retSel(f)); }
+    else if (a === 'confirm') apply(f);
+    else if (a === 'retry') load(f);
+  });
+  /* picker search: accent-insensitive filter in place (no re-render, so the field keeps focus) */
+  document.addEventListener('input', function (e) {
+    if (!e.target.matches('[data-ds-q]')) return;
+    var q = fold(e.target.value.trim()), box = e.target.closest('.pop');
+    box.querySelectorAll('.o').forEach(function (o) { o.hidden = !!q && o.getAttribute('data-q').indexOf(q) < 0; });
+  });
+  /* Esc closes only the topmost layer of the frame last used: the confirm, then the picker */
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape' || !active) return;
+    if (active.s.confirm) { active.s.confirm = null; render(active, retSel(active)); }
+    else if (active.s.pop) { active.s.pop = null; render(active, retSel(active)); }
+  });
+  Object.keys(FR).forEach(function (id) { render(FR[id]); });
 })();
 </script>

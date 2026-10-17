@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { ApprovalAssignment, ApprovalRequest } from '../api/approval'
 import {
   APPROVER_KINDS, amountOfRequest, assignmentPill, auditLine, chainOf, entityLabel, parseFormData, parseSnapshot,
-  requestPill, stepOf,
+  personFor, requestPill, stepOf,
 } from './approval-model'
+import { buildDirectory } from './people'
 
 const SNAPSHOT = JSON.stringify({
   steps: [
@@ -178,5 +179,31 @@ describe('labels', () => {
 
   it('offers only approver kinds the server can resolve', () => {
     expect(APPROVER_KINDS.map((k) => k.type)).toEqual(['specific_user', 'role_in_dept', 'department'])
+  })
+})
+
+describe('who a person is, for pressing their name', () => {
+  const dir = buildDirectory([], {
+    resolved: {
+      byUserId: new Map(),
+      byNodeId: new Map([['n-thanh', { userId: 'u-thanh', nodeId: 'n-thanh', name: 'Nguyễn Hữu Thành', avatarUrl: '' }]]),
+    },
+  })
+
+  it('personFor carries the user id once the directory or the resolver knows the node', () => {
+    expect(personFor(dir, 'n-thanh', 'Nguyễn Hữu Thành').userId).toBe('u-thanh')
+    expect(personFor(dir, 'n-nobody', 'Ai Đó').userId).toBeUndefined()
+  })
+
+  it('an approver carries it too, and a step nobody holds yet has none', () => {
+    const chain = chainOf({
+      request: req(), meNodeId: 'x', people: dir,
+      steps: [
+        { id: '', step_order: 1, name: 'Trưởng phòng', approver_type: 'specific_user', approver_value: 'n-thanh', approver_name: 'Nguyễn Hữu Thành', required_count: 1, timeout_hours: 0 },
+        { id: '', step_order: 2, name: 'Giám đốc', approver_type: 'specific_user', approver_value: 'n-khai', approver_name: 'Đỗ Văn Khải', required_count: 1, timeout_hours: 0 },
+      ],
+      assignments: [asg({ id: 'a1', step_order: 1, user_node_id: 'n-thanh', user_name: 'Nguyễn Hữu Thành' })],
+    })
+    expect(chain.map((i) => i.userId)).toEqual(['u-thanh', undefined])
   })
 })

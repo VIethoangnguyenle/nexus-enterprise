@@ -3,6 +3,7 @@ import {
   adminApi,
   type Department,
   type Invitation,
+  type LimitedKind,
   type DepartmentTree,
   type Member,
   type PermissionArea,
@@ -41,12 +42,16 @@ const retryUnlessAnswered = (count: number, err: unknown) => {
 
 // --- Queries ---
 
-/** Fetch all departments for a workspace, returned as both flat list and tree. */
-export function useDepartments(wsId: string) {
+/**
+ * Fetch all departments for a workspace, returned as both flat list and tree. A member gets the
+ * ones Danh bạ shows them; an administrator gets all, the hidden ones marked. `enabled` is false
+ * until the screen that needs them is open.
+ */
+export function useDepartments(wsId: string, enabled = true) {
   return useQuery({
     queryKey: keys.admin.departments(wsId),
     queryFn: () => adminApi.listDepartments(wsId),
-    enabled: !!wsId,
+    enabled: !!wsId && enabled,
     select: (data) => ({
       flat: data.departments || [],
       tree: buildDepartmentTree(data.departments || []),
@@ -66,6 +71,8 @@ export function useMemberDirectory(wsId: string) {
     enabled: !!wsId,
     select: (d): Member[] => d.members ?? [],
     retry: retryUnlessAnswered,
+    // A refusal stands: showing a screen again must not ask again (and log a second 403). Retry is a button.
+    retryOnMount: false,
   })
 }
 
@@ -147,10 +154,16 @@ export function useUpdateDepartment(wsId: string) {
 /** Delete a department. */
 export function useDeleteDepartment(wsId: string) {
   const refresh = useRefreshPeople(wsId)
+  // A hidden or limited department leaves its rule list with it, and the directory loses its people.
+  const refreshRules = useRefreshDirectoryScope(wsId)
   return useMutation({
-    meta: { action: 'xoá phòng ban' },
+    // The panel words the refusal of a hidden department that still has people in it.
+    meta: { action: 'xoá phòng ban', silentError: true },
     mutationFn: (deptId: string) => adminApi.deleteDepartment(wsId, deptId),
-    onSuccess: () => refresh(),
+    onSuccess: () => {
+      refresh()
+      refreshRules()
+    },
   })
 }
 
@@ -324,5 +337,81 @@ export function useSaveRolePermissions(wsId: string, roleId: string) {
         return { ...cur, permissions: [...kept, ...set] }
       }),
     onSettled: () => void qc.invalidateQueries({ queryKey: keys.admin.role(wsId, roleId) }),
+  })
+}
+
+// --- Directory scope (Quản trị › Danh bạ) ---
+
+/**
+ * The rules that decide who sees whom in Danh bạ. The server answers only a caller who may
+ * manage the workspace; `ready: false` (still a 200) is a workspace with no directory yet.
+ */
+export function useDirectoryScopeRules(wsId: string, enabled = true) {
+  return useQuery({
+    queryKey: keys.admin.directoryScope(wsId),
+    queryFn: () => adminApi.getDirectoryScope(wsId),
+    enabled: !!wsId && enabled,
+    retry: retryUnlessAnswered,
+  })
+}
+
+/**
+ * The rules, asked only once the people list has answered: a person who may not manage the
+ * workspace is refused there first, and never sends this request. The admin frame (which shows
+ * the tab only for a ready workspace) and the screen share this one query.
+ */
+export function useManagerDirectoryScope(wsId: string) {
+  const people = useMemberDirectory(wsId)
+  return useDirectoryScopeRules(wsId, people.isSuccess)
+}
+
+/** After a rule changes, the rules, the department list and the directory itself are stale. */
+function useRefreshDirectoryScope(wsId: string) {
+  const qc = useQueryClient()
+  return () => {
+    void qc.invalidateQueries({ queryKey: keys.admin.directoryScope(wsId) })
+    void qc.invalidateQueries({ queryKey: keys.admin.departments(wsId) })
+    void qc.invalidateQueries({ queryKey: keys.contacts.all(wsId) })
+  }
+}
+
+/**
+ * Takes a department (and everything beneath it) out of Danh bạ for members. The four rule
+ * mutations are silent: the screen names the department in the failure and offers a retry.
+ */
+export function useHideDepartment(wsId: string) {
+  const refresh = useRefreshDirectoryScope(wsId)
+  return useMutation({
+    meta: { action: 'ẩn phòng ban khỏi danh bạ', silentError: true },
+    mutationFn: (deptId: string) => adminApi.hideDepartment(wsId, deptId),
+    onSuccess: refresh,
+  })
+}
+
+export function useUnhideDepartment(wsId: string) {
+  const refresh = useRefreshDirectoryScope(wsId)
+  return useMutation({
+    meta: { action: 'hiện lại phòng ban trong danh bạ', silentError: true },
+    mutationFn: (deptId: string) => adminApi.unhideDepartment(wsId, deptId),
+    onSuccess: refresh,
+  })
+}
+
+/** Limits a role's or a department's people to their own department (and the owners). */
+export function useLimitSubject(wsId: string) {
+  const refresh = useRefreshDirectoryScope(wsId)
+  return useMutation({
+    meta: { action: 'giới hạn phạm vi xem danh bạ', silentError: true },
+    mutationFn: ({ kind, id }: { kind: LimitedKind; id: string }) => adminApi.limitSubject(wsId, kind, id),
+    onSuccess: refresh,
+  })
+}
+
+export function useUnlimitSubject(wsId: string) {
+  const refresh = useRefreshDirectoryScope(wsId)
+  return useMutation({
+    meta: { action: 'bỏ giới hạn phạm vi xem danh bạ', silentError: true },
+    mutationFn: ({ kind, id }: { kind: LimitedKind; id: string }) => adminApi.unlimitSubject(wsId, kind, id),
+    onSuccess: refresh,
   })
 }

@@ -1,7 +1,7 @@
-import type { ActivityMessage, Channel, ChannelUnread, ConversationActivity } from '../api/messaging'
+import type { ActivityMessage, Channel, ChannelMember, ChannelUnread, ConversationActivity } from '../api/messaging'
 import type { NotificationLevel } from '../api/notification-levels'
 import { toMillis } from './format'
-import { displayName, type PeopleDirectory, type Person } from './people'
+import { displayName, UNKNOWN_PERSON, type PeopleDirectory, type Person } from './people'
 
 export type ConversationKind = 'dm' | 'space'
 
@@ -124,8 +124,10 @@ export function isDirect(ch: Pick<Channel, 'channel_type'>): boolean {
  */
 export function dmPartner(
   ch: Pick<Channel, 'name'>,
-  me: { username?: string },
+  me: { id?: string; username?: string },
   dir: PeopleDirectory,
+  /** The conversation's members, when known: the only way to find a partner the directory does not list. */
+  members?: ChannelMember[],
 ): { title: string; partner?: Person } {
   const parts = ch.name.split(',').map((s) => s.trim()).filter(Boolean)
   const mine = me.username?.toLowerCase()
@@ -134,9 +136,16 @@ export function dmPartner(
   // Only trust the split when exactly one other name is left; otherwise the
   // channel name itself is the safest title.
   const other = others.length === 1 ? others[0] : undefined
-  if (other) {
-    const partner = dir.byUsername.get(other.toLowerCase())
-    return { title: partner?.name ?? other, partner }
+  // A name that is one word is not "a, b": it is a title in its own right.
+  if (other && parts.length > 1) {
+    const listed = dir.byUsername.get(other.toLowerCase())
+    if (listed) return { title: listed.name, partner: listed }
+    // A username is a login handle, never a title. A partner the directory does not list (hidden,
+    // removed) is found by id among the members and named by the resolver.
+    const member = members?.find((m) => m.user_id !== me.id && m.username.toLowerCase() === other.toLowerCase())
+      ?? members?.find((m) => m.user_id !== me.id)
+    const found = member ? dir.byUserId.get(member.user_id) : undefined
+    return { title: found?.name ?? UNKNOWN_PERSON, partner: found }
   }
   return { title: ch.name }
 }
@@ -155,6 +164,8 @@ interface BuildInput {
   lastThreadMessages?: Record<string, LastMessage>
   me: { id?: string; username?: string }
   dir: PeopleDirectory
+  /** Members of the DMs whose partner the directory does not list, by channel id. */
+  dmMembers?: Record<string, ChannelMember[]>
 }
 
 function lineFrom(
@@ -223,7 +234,7 @@ function mergeLines(
   return { main, reply }
 }
 
-export function buildConversations({ spaces, dms, unread, meta = {}, activity = {}, lastMessages, lastThreadMessages = {}, me, dir }: BuildInput): Conversation[] {
+export function buildConversations({ spaces, dms, unread, meta = {}, activity = {}, lastMessages, lastThreadMessages = {}, me, dir, dmMembers }: BuildInput): Conversation[] {
   const seen = new Set<string>()
   const out: Conversation[] = []
   const push = (ch: Channel, kind: ConversationKind) => {
@@ -252,7 +263,7 @@ export function buildConversations({ spaces, dms, unread, meta = {}, activity = 
       reply: reply && stripSender(reply),
     }
     if (kind === 'dm') {
-      const { title, partner } = dmPartner(ch, me, dir)
+      const { title, partner } = dmPartner(ch, me, dir, dmMembers?.[ch.id])
       out.push({ ...base, title, partner, hueKey: partner?.userId || ch.id })
     } else {
       out.push({ ...base, title: ch.name, hueKey: ch.id, avatarUrl: ch.avatar_url || undefined })

@@ -17,6 +17,20 @@ type fakeCTE struct {
 	allowed map[string]bool // "user|object|op" → allowed
 	err     error
 	calls   atomic.Int64
+
+	// ancestors is what the database holds above a node (id → node type); a node
+	// not listed has none. ancErr fails the lookup; ancCalls counts lookups.
+	ancestors map[string]map[string]string
+	ancErr    error
+	ancCalls  atomic.Int64
+}
+
+func (f *fakeCTE) Ancestors(_ context.Context, nodeID string) (map[string]string, error) {
+	f.ancCalls.Add(1)
+	if f.ancErr != nil {
+		return nil, f.ancErr
+	}
+	return f.ancestors[nodeID], nil
 }
 
 func (f *fakeCTE) CheckAccess(_ context.Context, user, object, op string) (bool, error) {

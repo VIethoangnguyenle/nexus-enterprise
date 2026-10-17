@@ -228,7 +228,9 @@ type Member struct {
 	Username   string
 }
 
-// ListMembers returns the users under the workspace's Members UA, each once. The
+// ListMembers returns the users under the workspace's Members UA, each once, that the
+// caller may see in Danh bạ: everyone for an administrator or a workspace with no rules,
+// otherwise the people of the departments in their scope, the owners and themself. The
 // caller must belong to the workspace.
 func (s *Service) ListMembers(ctx context.Context, callerNodeID, wsID string) ([]*Member, error) {
 	ws, err := s.authorizeMember(ctx, callerNodeID, wsID)
@@ -239,6 +241,15 @@ func (s *Service) ListMembers(ctx context.Context, callerNodeID, wsID string) ([
 	if err != nil {
 		return nil, err
 	}
+	sc, err := s.scopeFor(ctx, ws, callerNodeID, false, false)
+	if err != nil {
+		return nil, err
+	}
+	set, err := s.visibleSet(ctx, sc, callerNodeID, func() ([]*policypb.NGACNode, error) { return people, nil })
+	if err != nil {
+		return nil, err
+	}
+	people = onlyVisible(people, set)
 	members := make([]*Member, 0, len(people))
 	for _, n := range people {
 		members = append(members, &Member{NGACNodeID: n.Id, Username: ngac.DisplayName(n.Name, n.Properties)})

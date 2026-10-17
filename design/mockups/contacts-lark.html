@@ -360,7 +360,7 @@ html.reduce .act:active, html.reduce .btn:active { transform: none; }
 <div class="page">
 <header>
   <h1>Nexus · Danh bạ ba cột</h1>
-  <p>Danh bạ theo tinh thần Lark: cột trái chọn phạm vi (Tất cả thành viên, cây Phòng ban, Vai trò, Nhóm của tôi), cột giữa duyệt cây phòng ban có đường dẫn, cột phải là thẻ hồ sơ lớn với Nhắn tin, Gọi, Gửi email. Mọi khung đều bấm được. Chấm số xanh khớp với chú thích cùng số.</p>
+  <p>Danh bạ theo tinh thần Lark: cột trái chọn danh mục (Phòng ban, Vai trò, Nhóm của tôi), cột giữa duyệt cây phòng ban có đường dẫn, cột phải là thẻ hồ sơ lớn với Nhắn tin, Gọi, Gửi email. Mọi khung đều bấm được. Chấm số xanh khớp với chú thích cùng số.</p>
   <div class="controls"><div class="seg" role="group" aria-label="Giao diện"><button type="button" data-theme-set="system" aria-pressed="true">Theo hệ thống</button><button type="button" data-theme-set="light" aria-pressed="false">Sáng</button><button type="button" data-theme-set="dark" aria-pressed="false">Tối</button></div><label class="check"><input type="checkbox" id="reduce"> Giảm chuyển động</label><label class="check"><input type="checkbox" id="cxs" checked> Hiện chú thích số</label></div>
   <nav class="toc" aria-label="Các màn"><a href="#s-desk">Máy tính</a><a href="#s-tree">Cây nhiều cấp</a><a href="#s-vis">Phạm vi hiển thị</a><a href="#s-search">Tìm kiếm</a><a href="#s-role">Vai trò</a><a href="#s-group">Nhóm của tôi</a><a href="#s-personal">Workspace cá nhân</a><a href="#s-states">Trạng thái</a><a href="#s-tablet">Máy tính bảng</a><a href="#s-mobile">Điện thoại</a><a href="#s-ext">Bên ngoài (đợt 2)</a></nav>
 </header>
@@ -544,8 +544,8 @@ html.reduce .act:active, html.reduce .btn:active { transform: none; }
       <div class="state"><span class="ic bad"><svg class="i"><use href="#i-alert"/></svg></span><b>Không tải được danh bạ</b><p class="muted">Kết nối tới máy chủ bị gián đoạn. Kiểm tra mạng rồi thử lại.</p><button class="btn sm" type="button"><svg class="i s"><use href="#i-refresh"/></svg>Thử lại</button></div>
     </div>
     <div class="card"><h3>Cây phòng ban lỗi, người vẫn tải được</h3>
-      <div class="inline-err" role="alert"><svg class="i s"><use href="#i-alert"/></svg><span>Không tải được cây phòng ban. Bạn vẫn xem được Tất cả thành viên. <button class="plink" type="button" style="color:var(--color-danger);font-weight:600">Thử lại</button></span></div>
-      <p class="muted" style="font-size:0.8125rem">Hiện ngay dưới tiêu đề Phòng ban ở cột trái; Tất cả thành viên và Nhóm của tôi vẫn dùng được. Mỗi nguồn hỏng riêng, không chặn cả màn.</p>
+      <div class="inline-err" role="alert"><svg class="i s"><use href="#i-alert"/></svg><span>Không tải được cây phòng ban. Bạn vẫn tìm được người bằng ô tìm. <button class="plink" type="button" style="color:var(--color-danger);font-weight:600">Thử lại</button></span></div>
+      <p class="muted" style="font-size:0.8125rem">Hiện ngay dưới tiêu đề Phòng ban ở cột trái; Vai trò, Nhóm của tôi và ô tìm vẫn dùng được. Mỗi nguồn hỏng riêng, không chặn cả màn.</p>
     </div>
   </div>
 </section>
@@ -577,7 +577,7 @@ html.reduce .act:active, html.reduce .btn:active { transform: none; }
     <div><span class="wlabel">Workspace cá nhân</span><div id="f-m3"></div></div>
   </div>
   <ol class="notes">
-    <li><span class="cxn">1</span><b>Tầng 1 kiểu Lark: chỉ có danh mục</b>. Thanh trên của mọi màn danh sách (§5), tiêu đề “Danh bạ”, rồi các ô danh mục cao 64 (icon 40 trên nền <code>--color-person-N-wash</code>, tên, một dòng mô tả): Phòng ban · Vai trò · Nhóm của tôi · Bên ngoài · Danh bạ chia sẻ. Vào màn không liệt kê ai, không cây, không nhóm: chỉ 5 hàng và lối tắt Phòng của tôi. Bỏ “Tất cả thành viên”: muốn tìm người cụ thể thì gõ ô tìm (cả workspace), muốn xem cả công ty thì vào Phòng ban › Toàn NovaPay. Không có thanh đáy: thanh đáy chỉ thuộc về Chat.</li>
+    <li><span class="cxn">1</span><b>Tầng 1 kiểu Lark: chỉ có danh mục</b>. Thanh trên của mọi màn danh sách (§5), tiêu đề “Danh bạ”, rồi các ô danh mục cao 64 (icon 40 trên nền <code>--color-person-N-wash</code>, tên, một dòng mô tả): Phòng ban · Vai trò · Nhóm của tôi · Bên ngoài · Danh bạ chia sẻ. Vào màn không liệt kê ai, không cây, không nhóm: chỉ 5 hàng và lối tắt Phòng của tôi. Không có hàng liệt kê mọi thành viên: muốn tìm người cụ thể thì gõ ô tìm (cả workspace), muốn xem cả công ty thì vào Phòng ban › Toàn NovaPay. Không có thanh đáy: thanh đáy chỉ thuộc về Chat.</li>
     <li><span class="cxn">1</span><b>Bấm mới tải</b>: mỗi danh mục gọi API của riêng nó khi được mở (cây phòng ban, danh sách vai trò, các nhóm của bạn; thành viên một nhóm chỉ tải khi mở nhóm đó), hiện khung chờ cùng hình hàng thật. Bấm thử ở khung bên trái để thấy. Danh sách người (<code>useContacts</code>) thì app đã tải sẵn vì mọi màn đều cần tên người, nên mở danh mục chỉ tốn phần dữ liệu riêng của danh mục.</li>
     <li><b>Bên ngoài và Danh bạ chia sẻ</b> <span class="need">đợt 2</span>: hiện mờ ở đây để thấy chỗ; bản đợt 1 không có hai hàng này. Danh bạ chia sẻ (Lark: Shared Contacts) là danh bạ một tổ chức đối tác chia sẻ cho mình, cùng nhóm tính năng xuyên tổ chức với Bên ngoài.</li>
     <li><span class="cxn">5</span><b>Workspace cá nhân khác tổ chức</b> (khung phải): danh mục là <i>Thành viên</i> (những người bạn mời vào không gian này, ít người nên mở ra là liệt kê thẳng), <i>Nhóm của tôi</i>, <i>Liên hệ</i> <span class="need">đợt 2</span> (bạn bè, đối tác ngoài, cùng tính năng Bên ngoài của tổ chức nhưng gọi theo cách cá nhân). Không có Phòng ban, Vai trò, Danh bạ chia sẻ, Phòng của tôi; hồ sơ không có dòng Phòng ban, Vai trò, Cùng phòng (xem §4). Workspace tổ chức thì cơ cấu (Phòng ban, Vai trò) đứng đầu.</li>
@@ -597,15 +597,14 @@ html.reduce .act:active, html.reduce .btn:active { transform: none; }
     <div class="card" style="max-width:300px">
       <div class="cnav" style="background:transparent"><div class="body" style="padding:0">
         <button class="rl" type="button"><span class="tile"><svg class="i s" aria-hidden="true"><use href="#i-building"/></svg></span><span class="t2"><span>Phòng ban</span><small>NovaPay</small></span></button>
-        <button class="rl" type="button"><span class="tile"><svg class="i s" aria-hidden="true"><use href="#i-users"/></svg></span><span class="t">Tất cả thành viên</span><span class="n">16</span></button>
+        <button class="rl" type="button"><span class="tile"><svg class="i s" aria-hidden="true"><use href="#i-shield"/></svg></span><span class="t">Vai trò</span><span class="n">4</span></button>
+        <button class="rl" type="button"><span class="tile"><svg class="i s" aria-hidden="true"><use href="#i-group"/></svg></span><span class="t">Nhóm của tôi</span><span class="n">3</span></button>
         <button class="rl" type="button" aria-current="page"><span class="tile"><svg class="i s" aria-hidden="true"><use href="#i-arrow"/></svg></span><span class="t">Bên ngoài</span><span class="n">5</span></button>
-        <div class="sec">Nhóm của tôi</div>
-        <button class="rl" type="button"><span class="gtile" style="--p:var(--color-person-6)" aria-hidden="true">Đ</span><span class="t">Đối soát liên khối</span><span class="n">6</span></button>
       </div></div>
     </div>
   </div>
   <ol class="notes">
-    <li><b>Vị trí</b> <span class="need">đợt 2</span>: ngay dưới Tất cả thành viên, trên Nhóm của tôi; ở tablet/điện thoại là chip/hàng thứ ba. Workspace cá nhân cũng có mục này.</li>
+    <li><b>Vị trí</b> <span class="need">đợt 2</span>: ngay dưới Nhóm của tôi (hàng mờ ở §7); ở tablet/điện thoại là chip/hàng cuối. Workspace cá nhân cũng có mục này.</li>
     <li><b>Hai loại người, một danh sách</b>: người dùng Nexus ở tổ chức khác (nhắn tin, gọi được sau khi họ chấp nhận lời mời kết nối; dòng phụ là tên tổ chức của họ) và người không dùng Nexus (thẻ liên hệ tự lưu: tên, công ty, email, số điện thoại, ghi chú; chỉ Gửi email/Gọi điện thoại, có nút mời vào Nexus).</li>
     <li><b>Chỉ hiện khi tính năng có thật</b>: đợt 1 không có mục rỗng “Bên ngoài”, đúng quy tắc mọi mục phải có dữ liệu thật.</li>
   </ol>
@@ -829,7 +828,7 @@ function headHTML(f, m) {
     var sub = (s.dept ? headCount(w, s.dept) : w.people.length) + ' người' + (m.depts.length ? ' · ' + m.depts.length + (s.dept ? ' phòng con' : ' khối') : '');
     h += '<div class="ttlrow"><h3>' + esc(s.dept ? w.depts[s.dept].n : w.name) + '</h3><span class="sub">' + sub + '</span></div>';
   } else if (m.kind === 'all') {
-    h += '<div class="ttlrow"><h3>Tất cả thành viên</h3><span class="sub">' + w.people.length + ' người trong ' + esc(w.name) + '</span></div>';
+    h += '<div class="ttlrow"><h3>' + (w.kind === 'org' ? 'Tìm trong danh bạ' : 'Thành viên') + '</h3><span class="sub">' + w.people.length + ' người trong ' + esc(w.name) + '</span></div>';
   } else if (m.kind === 'groups') {
     h += '<div class="ttlrow"><h3>Nhóm của tôi</h3><span class="sub">' + w.groups.length + ' nhóm</span></div>';
   } else if (m.kind === 'roles') {
@@ -998,7 +997,7 @@ function render(id, opt) {
     } else if (s.lvl === 1) {
       var t = '', sub = '';
       if (m.kind === 'dept') { t = s.dept ? w.depts[s.dept].n : 'Phòng ban'; sub = s.dept && w.depts[s.dept].p ? pathHTML(w, w.depts[s.dept].p) : esc(w.name); }
-      else if (m.kind === 'all') { t = w.kind === 'org' ? 'Tất cả thành viên' : 'Thành viên'; sub = w.people.length + ' người trong ' + esc(w.name); }
+      else if (m.kind === 'all') { t = w.kind === 'org' ? 'Tìm trong danh bạ' : 'Thành viên'; sub = w.people.length + ' người trong ' + esc(w.name); }
       else if (m.kind === 'group') { t = m.g.n; sub = m.g.m.length + ' thành viên'; }
       else if (m.kind === 'role') { t = m.r.n; sub = 'Vai trò · ' + m.r.m.length + ' người'; }
       else if (m.kind === 'roles') { t = 'Vai trò'; sub = w.roles.length + ' vai trò'; }

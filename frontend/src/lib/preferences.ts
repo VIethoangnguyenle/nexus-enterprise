@@ -6,18 +6,14 @@
 export type ThemePref = 'system' | 'light' | 'dark'
 export type MotionPref = 'system' | 'reduce'
 
-export type ContactsView = 'table' | 'cards'
-
 export interface Preferences {
   theme: ThemePref
   motion: MotionPref
   sidebarCollapsed: boolean
-  /** How Danh bạ lays people out. */
-  contactsView: ContactsView
 }
 
 export const DEFAULT_PREFERENCES: Preferences = {
-  theme: 'system', motion: 'system', sidebarCollapsed: true, contactsView: 'table',
+  theme: 'system', motion: 'system', sidebarCollapsed: true,
 }
 
 const THEMES: readonly ThemePref[] = ['system', 'light', 'dark']
@@ -38,7 +34,6 @@ export function parsePreferences(raw: string | null): Preferences {
       theme: THEMES.includes(v.theme as ThemePref) ? (v.theme as ThemePref) : DEFAULT_PREFERENCES.theme,
       motion: MOTIONS.includes(v.motion as MotionPref) ? (v.motion as MotionPref) : DEFAULT_PREFERENCES.motion,
       sidebarCollapsed: typeof v.sidebarCollapsed === 'boolean' ? v.sidebarCollapsed : DEFAULT_PREFERENCES.sidebarCollapsed,
-      contactsView: v.contactsView === 'cards' ? 'cards' : 'table',
     }
   } catch {
     return DEFAULT_PREFERENCES

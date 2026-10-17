@@ -293,7 +293,7 @@ func TestListContacts_NamesTheAdminAssignedDepartmentAndNoHandleAsAName(t *testi
 	_, err := d.pool.Exec(d.ctx, `UPDATE users SET department = 'Tự khai' WHERE id = $1`, lan)
 	require.NoError(t, err)
 
-	got, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Limit: 50})
+	got, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Limit: 50})
 	require.NoError(t, err)
 	assert.Equal(t, 2, total)
 	byID := map[string]store.User{}
@@ -313,7 +313,7 @@ func TestListContacts_OnlyActiveMembersOfThisWorkspace(t *testing.T) {
 	d.join(t, "c1", "Chi", "invited", true, "", d.ws)
 	d.join(t, "d1", "Dũng", "active", true, "", d.other)
 
-	got, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Limit: 50})
+	got, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Limit: 50})
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
 	require.Len(t, got, 1)
@@ -326,18 +326,18 @@ func TestListContacts_PagesByCursorAndReportsTheTrueTotal(t *testing.T) {
 		d.join(t, fmt.Sprintf("p%d", i), fmt.Sprintf("Người %02d", i), "active", true, "", d.ws)
 	}
 
-	first, total, next, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Limit: 3})
+	first, total, next, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Limit: 3})
 	require.NoError(t, err)
 	assert.Equal(t, 7, total, "the total counts everyone, not the page")
 	require.Len(t, first, 3)
 	require.NotNil(t, next, "more people follow")
 
-	second, total2, next2, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Limit: 3, After: next})
+	second, total2, next2, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Limit: 3, After: next})
 	require.NoError(t, err)
 	assert.Equal(t, 7, total2, "and it is the same on every page")
 	require.Len(t, second, 3)
 	require.NotNil(t, next2)
-	last, _, next3, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Limit: 3, After: next2})
+	last, _, next3, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Limit: 3, After: next2})
 	require.NoError(t, err)
 	require.Len(t, last, 1)
 	assert.Nil(t, next3, "the last page has no next cursor")
@@ -360,7 +360,7 @@ func TestListContacts_AnExactMultipleOfThePageSizeEndsCleanly(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		d.join(t, fmt.Sprintf("q%d", i), fmt.Sprintf("Bạn %02d", i), "active", true, "", d.ws)
 	}
-	_, _, next, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Limit: 4})
+	_, _, next, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Limit: 4})
 	require.NoError(t, err)
 	assert.Nil(t, next, "four people in pages of four: there is no fifth page to offer")
 }
@@ -370,12 +370,12 @@ func TestListContacts_APersonWhoJoinsBetweenPagesMovesNothingAlreadyRead(t *test
 	for i := 0; i < 4; i++ {
 		d.join(t, fmt.Sprintf("m%d", i), fmt.Sprintf("Bạn %02d", i+1), "active", true, "", d.ws)
 	}
-	first, _, next, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Limit: 2})
+	first, _, next, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Limit: 2})
 	require.NoError(t, err)
 	require.NotNil(t, next)
 	d.join(t, "new", "Bạn 00", "active", true, "", d.ws) // sorts before everything already read
 
-	rest, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Limit: 10, After: next})
+	rest, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Limit: 10, After: next})
 	require.NoError(t, err)
 	assert.Equal(t, 5, total)
 	for _, u := range rest {
@@ -393,22 +393,22 @@ func TestListContacts_Filters(t *testing.T) {
 	_, err := d.pool.Exec(d.ctx, `UPDATE users SET location = 'Hà Nội' WHERE id = (SELECT user_id FROM tenant_users WHERE tenant_id = $1 AND ngac_node_id = $2)`, d.ws, d.node("f2"))
 	require.NoError(t, err)
 
-	byDept, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Department: "Đối soát", Limit: 50})
+	byDept, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Department: "Đối soát", Limit: 50})
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
 	assert.Equal(t, "Nguyễn Thu Lan", byDept[0].DisplayName)
 
-	byPlace, _, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Location: "Hà Nội", Limit: 50})
+	byPlace, _, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Location: "Hà Nội", Limit: 50})
 	require.NoError(t, err)
 	require.Len(t, byPlace, 1)
 	assert.Equal(t, "Lê Quang Vinh", byPlace[0].DisplayName)
 
-	bySearch, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Search: "quang", Limit: 50})
+	bySearch, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Search: "quang", Limit: 50})
 	require.NoError(t, err)
 	assert.Equal(t, 1, total)
 	assert.Equal(t, "Lê Quang Vinh", bySearch[0].DisplayName)
 
-	wildcard, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Search: "%", Limit: 50})
+	wildcard, total, _, err := d.st.ListContactsByWorkspace(d.ctx, d.ws, store.ContactFilter{Scope: allPeople, Search: "%", Limit: 50})
 	require.NoError(t, err)
 	assert.Zero(t, total, "a % in the search is a character, not a wildcard")
 	assert.Empty(t, wildcard)

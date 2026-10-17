@@ -99,6 +99,17 @@ user under the class. A policy service that cannot answer denies.
 - **WHEN** a user who does not belong to the workspace calls `GET /api/workspaces/:id/members`
 - **THEN** the request is rejected with 403
 
+### Requirement: Directory rules are managed by Mgmt managers and filter member reads
+`GET`, `PUT` and `DELETE` under `/api/workspaces/:id/admin/directory-scope` SHALL require `manage` on the workspace's Mgmt OA (403 otherwise), in an organization workspace whose directory exists, and SHALL accept only a department or a custom role of the workspace in the route (404 for anything else, including the Owners and Members UAs). The reads a plain member may make of the workspace's people and departments (`GET .../departments`, `GET .../members`, the member counts of `GET .../roles`) SHALL return only what the caller's directory scope allows (`contacts-visibility`); an outage of the policy service answers 503, never the unfiltered list. The people table and role detail stay `manage`-only and unfiltered.
+
+#### Scenario: Plain member writes a rule
+- **WHEN** a member without `manage` calls `PUT .../admin/directory-scope/hidden/:deptId`
+- **THEN** it is 403 and the department stays visible to everyone
+
+#### Scenario: Manager from another workspace
+- **WHEN** the owner of workspace B calls a rule endpoint of workspace A
+- **THEN** it is 403, and naming A's department in B's route is 404
+
 ### Requirement: Permission areas and their operations come from the server
 The workspace service SHALL answer, for a workspace, which resource areas a role can be granted on (management, documents, channels, assets) and, for each, the operations that apply there (`GET /api/workspaces/:id/permission-areas`). The answer SHALL be derived from the constants in `backend/ngac` (`ngac.Areas`, `ngac.AreaOps`), listing an operation on an area only where a service checks it on that kind of OA (a test fails if an area offers `upload`), and SHALL omit an area whose OA the workspace does not have. Clients SHALL NOT keep their own table of which operation fits which area. The caller must belong to the workspace.
 
@@ -143,7 +154,7 @@ The workspace service SHALL answer, for a workspace, which resource areas a role
 - **THEN** the answer is 404 and nothing is written
 
 ### Requirement: Assigning a role or a department is a delegation
-`PUT` and `DELETE /api/workspaces/:id/members/:nodeId/roles/:roleId` SHALL require `manage` on the Mgmt OA, a role created by an administrator in this workspace, and a person who already belongs to the workspace (a user node under its Members UA): holding `manage` SHALL NOT bring a stranger in, which is what `invite` is for. Assigning SHALL add one assignment and detach nothing else. Assigning a role, or a person's department, SHALL also require the caller to hold every operation the role (or the department's UA) confers, **including what it inherits from the UAs above it** (a person under a sub-department holds every grant of the departments above it); a grant or an ancestry that cannot be read is treated as not held. Moving a department under a parent is the same delegation, checked against the new parent's whole chain; moving to the root grants nothing. Removing a role needs only `manage`. A person is in at most one department: choosing one detaches the previous department and, if that fails, takes the new assignment back.
+`PUT` and `DELETE /api/workspaces/:id/members/:nodeId/roles/:roleId` SHALL require `manage` on the Mgmt OA, a role created by an administrator in this workspace, and a person who already belongs to the workspace (a user node under its Members UA): holding `manage` SHALL NOT bring a stranger in, which is what `invite` is for. Assigning SHALL add one assignment and detach nothing else. Assigning a role, or a person's department, SHALL also require the caller to hold every operation the role (or the department's UA) confers, **including what it inherits from the UAs above it** (a person under a sub-department holds every grant of the departments above it); a grant or an ancestry that cannot be read is treated as not held. Moving a department under a parent is the same delegation, checked against the new parent's whole chain; moving to the root grants nothing. One grant is held through another operation: a department UA of a hidden department reads its directory OA (`contacts-visibility`), and a caller who holds `manage` on that OA (a directory administrator, through Mgmt) hands out that `read`; `manage` stands in for `read` of an OA that carries the directory mark and for nothing else, and an OA whose mark cannot be read is not assumed to be one. Removing a role needs only `manage`. A person is in at most one department: choosing one detaches the previous department and, if that fails, takes the new assignment back.
 
 #### Scenario: Role that confers more than the caller holds
 - **WHEN** a manager who cannot `write` Documents assigns a role that grants `write` on Documents
@@ -152,6 +163,10 @@ The workspace service SHALL answer, for a workspace, which resource areas a role
 #### Scenario: Assigning to a non-member
 - **WHEN** a manager assigns a role, or a department, to a user who is not in the workspace
 - **THEN** the answer is 404 and nothing is written
+
+#### Scenario: Hidden department
+- **WHEN** a manager who holds `manage` and `invite` on Mgmt and no `read` of a hidden department's directory OA puts a member in that department
+- **THEN** it succeeds; if the department's UA instead granted `write` there, or `read` on an OA that is not a directory node, the request is rejected with 403
 
 #### Scenario: Moving department
 - **WHEN** a member of department A is put in department B

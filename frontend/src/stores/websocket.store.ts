@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { QueryKey } from '@tanstack/react-query'
 import { queryClient } from '../lib/query-client'
 import { keys } from '../hooks/keys'
 import { useAuthStore } from './auth.store'
@@ -27,6 +28,7 @@ import { isLive, useCallStore } from './call.store'
 import { asCallKind } from '../api/calls'
 import { callKeys } from '../hooks/keys/calls'
 import { chatStateCovers, revalidateChatState } from '../hooks/useChatState'
+import { resolverFor } from '../lib/people-resolver'
 import {
   adoptOwner,
   createBatcher,
@@ -766,6 +768,8 @@ function handleServerMessage(
         actorUserId: d.actorUserId,
       })
       invalidations.add(plan.invalidate)
+      // A name or picture changed: the names found for people the directory does not list are stale too.
+      if (d.domain === 'workspace' && d.kind === 'profile_updated') resolverFor(d.workspaceId).refresh(d.ids)
       if (d.domain === 'permission') {
         const retry = setTimeout(() => {
           permissionRetries.delete(retry)
@@ -1060,9 +1064,27 @@ const CHAT_STATE_PARTS = [
  * proves nothing changed, so a first connection does not fetch again the lists
  * the start-up has just fetched. When it cannot answer, each part is refetched.
  */
+/**
+ * True until the first workspace resync of a session. That one runs moments after the page loaded, so the
+ * directory (up to 500 people, the largest list the app loads) was fetched a moment ago and a second
+ * request would return the same people; later resyncs follow a real outage and refresh everything.
+ */
+let firstWorkspaceResync = true
+onSessionEnd(() => { firstWorkspaceResync = true })
+
+/** How recently the directory must have been fetched for the first resync to trust it. */
+const FRESH_DIRECTORY_MS = 10_000
+function isFreshDirectory(key: QueryKey): boolean {
+  if (key[0] !== keys.contacts.every()[0]) return false
+  const found = queryClient.getQueryCache().findAll({ queryKey: key })
+  return found.length > 0 && found.every((q) => !q.state.isInvalidated && Date.now() - q.state.dataUpdatedAt < FRESH_DIRECTORY_MS)
+}
+
 function resyncAfterReconnect() {
   const workspaceId = followedWorkspace ?? ''
-  const all = workspaceResyncKeys(workspaceId)
+  const firstOfSession = firstWorkspaceResync && !!workspaceId
+  if (workspaceId) firstWorkspaceResync = false
+  const all = workspaceResyncKeys(workspaceId).filter((key) => !(firstOfSession && isFreshDirectory(key)))
   if (!workspaceId || !chatStateCovers(workspaceId)) {
     invalidations.add(all)
     invalidations.flush()

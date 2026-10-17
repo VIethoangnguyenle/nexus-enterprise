@@ -28,6 +28,7 @@ type WorkspaceDomainService interface {
 	ListAccessibleWorkspaces(ctx context.Context, userNGACNodeID string) ([]*domain.WorkspaceResult, error)
 	RemoveMember(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error
 	ListMembers(ctx context.Context, callerNodeID, wsID string) ([]*domain.Member, error)
+	DirectoryScope(ctx context.Context, callerNodeID, wsID string) (*domain.DirectoryScope, error)
 	TransferOwnership(ctx context.Context, callerNodeID, wsID, newOwnerNGACNodeID string) error
 	RemoveOwner(ctx context.Context, callerNodeID, wsID, targetNGACNodeID string) error
 	CreateRole(ctx context.Context, callerNodeID, wsID, roleName string) (*domain.Role, error)
@@ -96,6 +97,21 @@ func (s *WorkspaceServer) ListMembers(ctx context.Context, req *pb.ListMembersRe
 		return nil, mapError(err)
 	}
 	return wire.Members(members), nil
+}
+
+// GetDirectoryScope says which people of the workspace the caller may see in Danh bạ. The
+// caller is the verified person on the call: this method is in no ServerPolicy.ServiceOK, so
+// a service speaking only for itself is refused before it gets here, and the domain makes the
+// caller prove membership before it decides anything.
+func (s *WorkspaceServer) GetDirectoryScope(ctx context.Context, req *pb.GetDirectoryScopeRequest) (*pb.DirectoryScope, error) {
+	if req.WorkspaceId == "" {
+		return nil, status.Error(codes.InvalidArgument, "workspace_id required")
+	}
+	sc, err := s.svc.DirectoryScope(ctx, grpcauth.CallerFrom(ctx).NGACNodeID, req.WorkspaceId)
+	if err != nil {
+		return nil, mapError(err)
+	}
+	return wire.DirectoryScope(sc), nil
 }
 
 // TransferOwnership adds a new owner to the workspace.

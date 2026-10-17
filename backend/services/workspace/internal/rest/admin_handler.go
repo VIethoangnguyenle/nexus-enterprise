@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -29,6 +30,7 @@ type AdminService interface {
 	DepartmentService
 	PeopleService
 	WorkspaceDetailsService
+	DirectoryScopeService
 }
 
 // AdminHandler serves admin organization endpoints.
@@ -51,6 +53,7 @@ func (h *AdminHandler) RegisterAdminRoutes(api *echo.Group) {
 	api.PUT("/workspaces/:id/members/:nodeId/department", h.UpdateMemberDepartment)
 	h.registerPeopleRoutes(api)
 	h.registerWorkspaceDetailsRoutes(api)
+	h.registerDirectoryScopeRoutes(api)
 }
 
 // CreateDepartment handles POST /api/workspaces/:id/departments.
@@ -99,6 +102,8 @@ func (h *AdminHandler) ListDepartments(c echo.Context) error {
 		Name        string `json:"name"`
 		ParentID    string `json:"parent_id"`
 		MemberCount int    `json:"member_count"`
+		// Hidden is set only for a caller who administers the directory.
+		Hidden bool `json:"hidden,omitempty"`
 	}
 
 	depts := make([]deptJSON, 0, len(results))
@@ -108,6 +113,7 @@ func (h *AdminHandler) ListDepartments(c echo.Context) error {
 			Name:        r.Name,
 			ParentID:    r.ParentID,
 			MemberCount: r.MemberCount,
+			Hidden:      r.Hidden,
 		})
 	}
 
@@ -139,6 +145,10 @@ func (h *AdminHandler) UpdateDepartment(c echo.Context) error {
 	})
 }
 
+// ReasonHiddenDepartmentHasPeople is the `reason` of the 400 that refuses to delete a department
+// hidden from Danh bạ while people sit directly in it; the frontend names it in lib/errors.ts.
+const ReasonHiddenDepartmentHasPeople = "hidden_department_has_people"
+
 // DeleteDepartment handles DELETE /api/workspaces/:id/departments/:deptId.
 func (h *AdminHandler) DeleteDepartment(c echo.Context) error {
 	claims, err := httputil.RequireClaims(c)
@@ -146,6 +156,13 @@ func (h *AdminHandler) DeleteDepartment(c echo.Context) error {
 		return err
 	}
 	if err := h.domain.DeleteDepartment(c.Request().Context(), claims.NGACNodeID, c.Param("id"), c.Param("deptId")); err != nil {
+		if errors.Is(err, domain.ErrHiddenDepartmentHasPeople) {
+			// The screen words this refusal itself; the reason is what it branches on.
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"message": "Chuyển những người trong phòng này sang phòng khác trước khi xoá",
+				"reason":  ReasonHiddenDepartmentHasPeople,
+			})
+		}
 		return httputil.MapDomainError(err)
 	}
 	return c.NoContent(http.StatusNoContent)

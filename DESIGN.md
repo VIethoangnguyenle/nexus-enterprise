@@ -200,7 +200,12 @@ mã backend, email và tài liệu kỹ thuật không đổi.
   - *Chuyển trạng thái:* nội dung cột fade ra 100ms `--ease-in`, bề rộng cột 280ms `--ease-out-expo`, nội dung
     fade vào 120ms; giảm chuyển động thì đổi ngay. Không còn "xem tạm" khi trỏ chuột vào dải.
   - Dưới 1024 không có menu này: vỏ điện thoại (ô tìm có ☰, menu ☰, thanh đáy Chat) như dưới đây.
-- **List panel** chỉ ở Tin nhắn và Tài liệu. **Detail panel** mở bằng chọn mục, đóng bằng Esc.
+- **List panel** chỉ ở Tin nhắn, Tài liệu và Danh bạ: rộng 280, nền `--color-base`, hàng 40 chữ 15px như cột điều
+  hướng của Chat, mục đang chọn theo NavRow (nền `--color-raised`, chữ 600). **Detail panel** mở bằng chọn mục, đóng bằng Esc.
+  - *Danh bạ* (§6 "Danh bạ"): list panel **chỉ có danh mục** (Phòng ban · Vai trò · Nhóm của tôi + lối tắt Phòng của
+    tôi; workspace cá nhân: Thành viên · Nhóm của tôi), không liệt kê cây, vai trò, nhóm hay người; nội dung của danh
+    mục mở ở cột content. Tablet (768–1023): list panel thành hàng chip danh mục dưới tiêu đề, cùng thứ tự. Điện thoại:
+    màn đầu là chồng ô danh mục (tầng 1), rồi danh mục / phòng (tầng 2), rồi hồ sơ toàn màn (tầng 3).
 - **Breakpoints:** ≥ 1280 đủ 4 cột · 1024–1279 detail panel thành overlay bên phải ·
   768–1023 sidebar thành rail, list panel thành cột thay thế content (rail chưa làm: dưới 1024 dùng vỏ điện thoại
   bên dưới) · < 768 vỏ điện thoại: ô tìm viên thuốc có ☰, mỗi màn một cột, detail panel thành sheet từ dưới lên.
@@ -256,7 +261,7 @@ nằm ở `accept` và câu báo lỗi). Máy không có chuột không có hove
 - **IconButton:** 32×32 hit area ≥ 44 trên touch (`::before` inset −6px), `aria-label` bắt buộc.
 - **Input / Select / Textarea:** cao 40, 16px, nền `--color-raised`, không viền; focus = ring.
   Label luôn có (không dùng placeholder làm label). Lỗi dưới ô, `aria-describedby`, validate khi blur.
-- **Avatar:** tròn, 20/24/32/40 (64 chỉ cho hồ sơ trong Danh bạ và Cài đặt), nền `--color-person-N`, 2 chữ cái đầu của **tên hiển thị**
+- **Avatar:** tròn, 20/24/32/40 (64 chỉ cho thẻ hồ sơ trong Danh bạ và Cài đặt), nền `--color-person-N`, 2 chữ cái đầu của **tên hiển thị**
   (không bao giờ của id). Có ảnh thì dùng ảnh. Presence: chấm 8px `success` ở góc dưới phải.
 - **AvatarEdit** (`patterns/AvatarEdit`, mockup `design/mockups/avatar-edit.html` §1, §2, §5): "chạm ảnh để đổi" cho
   ảnh đại diện (`circle`) và ảnh nhóm (`square`, bo = 1/4 cạnh, 16 ở cỡ 64). Một `button` duy nhất bọc Avatar (44/52/64),
@@ -826,6 +831,71 @@ module đó và 1–2 nhóm gợi ý. Gõ một chữ thì gợi ý nhường ch
 - **Ô tìm của Phê duyệt (mới):** `SearchField` 240 đầu hàng dưới tab, `moduleSearch`; lọc danh sách của tab đang mở
   (đã tải) theo tiêu đề, người gửi, tên mẫu; bỏ hoa thường và dấu, mọi từ phải khớp, từ khớp tô `--color-warning-wash`;
   bên cạnh ghi "N trong M đề nghị"; giữ trong URL `?q=`, đổi tab thì xoá.
+
+### Danh bạ (mockup `design/mockups/contacts-lark.html`, duyệt 2026-10-17)
+
+Danh bạ kiểu Lark: list panel chọn danh mục (§5), content duyệt danh mục có đường dẫn, detail panel là thẻ hồ sơ. Mục đích
+(Zane, 2026-10-17): một màn không tải và không hiện quá nhiều. Thay bảng phẳng + chip phòng ban của
+`contacts-documents-settings.html` §1.
+- **Danh mục:** workspace tổ chức: **Phòng ban** (gốc là tên tổ chức, gồm cả người chưa thuộc phòng nào) · **Vai trò**
+  (vai trò quản trị viên tạo + "Quản trị viên" đứng đầu, icon khiên; không liệt kê "Thành viên") · **Nhóm của tôi** (nhóm
+  chat riêng bạn đang ở; không có nhóm nào thì ẩn mục) + lối tắt **Phòng của tôi** (vào thẳng phòng mình). Workspace cá
+  nhân: **Thành viên** (liệt kê thẳng) · **Nhóm của tôi**; không Phòng ban, Vai trò, Phòng của tôi. Không có mục "Tất cả
+  thành viên": tìm người thì dùng ô tìm, xem cả công ty thì vào Phòng ban › gốc. "Bên ngoài" và "Danh bạ chia sẻ" là đợt
+  2, không hiện mục rỗng. Ô danh mục: hàng 56 (điện thoại 64), ô icon 40 radius 12 trên `--color-person-N-wash` icon
+  `--color-person-N`, tên + một dòng mô tả mờ. Số đếm là **chữ mờ** (`--color-ink-muted`, `tabular-nums`), không phải pill
+  accent (pill accent nghĩa là chưa đọc).
+- **Bấm mới tải:** mỗi danh mục gọi API của nó khi được mở (cây phòng ban, danh sách vai trò, nhóm của bạn; thành viên một
+  nhóm khi mở nhóm đó). Đang tải: Skeleton **cùng hình hàng thật** (ô phòng vuông, avatar tròn), không spinner. Danh sách
+  người thì app đã tải sẵn.
+- **Đường dẫn:** icon toà nhà là gốc (`aria-label` = tên tổ chức), mỗi đoạn là nút lên đúng cấp đó, đoạn cuối là trang hiện
+  tại (`aria-current="page"`, chữ 600). Dài thì các đoạn giữa co lại bằng "…", **đoạn cuối không bao giờ bị cắt**. Vai trò và
+  nhóm: "Vai trò › X", "Nhóm của tôi › X". Không giới hạn số cấp; một cấp mỗi màn.
+- **Hàng phòng** (trước hàng người): ô thư mục 32 radius 8 `--color-accent-wash` icon accent, tên, "N người" mờ (tính cả
+  cây con), chevron; còn cấp con thì dòng phụ "N phòng, nhóm bên dưới". Nhãn mục "Khối · N" / "Phòng ban · N".
+- **Hàng người:** cao 52, avatar 32 (chữ cái đầu của tên hiển thị trên `--color-person-N`, chấm presence), tên, chức danh,
+  **trạng thái bằng chữ** ("Trực tuyến" `--color-success` / "Ngoại tuyến" mờ). Ngoài cây (tìm, vai trò, nhóm) dòng phụ là
+  chức danh · đường dẫn phòng đầy đủ, đoạn đầu co bằng "…", đoạn cuối luôn đủ và màu chữ chính (hai phòng trùng tên khác
+  nhánh vẫn phân biệt). Hàng đang chọn `--color-accent-wash`. Chính mình có "(bạn)" mờ. **Xếp theo tên (chữ cuối)** rồi cả
+  họ tên, so sánh tiếng Việt.
+- **Tìm:** luôn tìm trong toàn bộ phạm vi được xem, không chỉ phòng đang mở; placeholder "Tên, chức danh hoặc email",
+  bỏ hoa thường và dấu, từ khớp tô `--color-warning-wash`, chỉ tìm người. Đầu cột "Kết quả trong cả <tổ chức>" + "N người
+  khớp"; ✕ hoặc Esc trả về đúng chỗ trước đó. Chip "Đang trực tuyến · N" lọc danh sách đang xem. Gợi ý khi trống theo
+  "Gợi ý trong ô tìm".
+- **Thẻ hồ sơ** (detail panel 360; 1024–1279 overlay phải; tablet sheet phải 380 `--color-overlay` trên `--color-scrim`;
+  điện thoại toàn màn, nút quay lại 44 nổi trên bìa): dải bìa cao 88 (điện thoại 112) chuyển từ `--color-person-N-wash` sang
+  `--color-accent-wash` (màu của chính người đó, không ảnh); **avatar 64** đè lên bìa, viền 4px màu nền thẻ; tên `text-lg`
+  700, chức danh mờ, StatusPill "Trực tuyến" / "Ngoại tuyến". Ba nút cao 64 chia đều: **Nhắn tin** (primary, mở hoặc tạo
+  tin nhắn trực tiếp) · **Gọi** (cuộc gọi 1-1) · **Gửi email** (`mailto:`). **Gọi luôn bấm được**, kể cả khi người kia ngoại
+  tuyến (đổ chuông thiết bị của họ). Hồ sơ của chính bạn: một nút **"Sửa hồ sơ"** (sang Cài đặt › Hồ sơ) thay cho ba nút. Không
+  có số điện thoại.
+- **Dòng chi tiết** (hàng 40, icon 16 mờ, nhãn 84, divider `--color-line`; điện thoại nhãn trên giá trị): Email + IconButton
+  "Sao chép email" · Phòng ban = **đường dẫn đầy đủ, bấm mở phòng đó** · Vai trò (mỗi vai trò bấm mở danh sách của nó) · Nơi
+  làm việc. Trường trống thì bỏ cả dòng. **Cùng phòng:** nhãn 12/600 hoa, chồng avatar 24 (tối đa 4) + "<tên> và N người
+  khác", bấm mở phòng. Workspace cá nhân: không Phòng ban, Vai trò, Cùng phòng.
+- **Phạm vi hiển thị** (quản trị viên đặt ở Quản trị › Danh bạ, NGAC quyết ở API, giao diện không tự lọc): người bị ẩn
+  không có trong cây, kết quả tìm, số đếm, danh sách vai trò. Người bị giới hạn: danh mục Phòng ban ghi **"Chỉ phòng của
+  bạn"**, tìm ghi **"Kết quả trong phạm vi bạn được xem"**; không câu nào nói có người bị ẩn. Quản trị viên thấy tất cả; phòng
+  bị ẩn có pill `--color-warning-wash` **"Ẩn khỏi danh bạ"** sau tên.
+- **Thẻ người bị ẩn:** tên và avatar của họ vẫn hiện ở nơi đã cùng làm việc (tin nhắn, phê duyệt, tài liệu, lịch); bấm tên
+  hoặc avatar mở popover nhỏ (`--color-overlay`, `--shadow-overlay`, radius 12, padding 16, tối đa 300): avatar 40 + tên, rồi
+  icon cảnh báo mờ + **"Hồ sơ này không còn hiển thị với bạn."** Không chức danh, phòng, email, không Nhắn tin hay Gọi. Trả
+  lời trong cuộc trò chuyện đang có vẫn được.
+- **Trạng thái content:** Đang tải (Skeleton trên) · Phòng trống ("<Phòng> chưa có ai" + "Về <phòng cha>") · Tìm không ra
+  ("Không có ai khớp “…” trong cả <tổ chức>" + "Xoá tìm kiếm") · Lọc trực tuyến không ra ai ("Bạn vẫn nhắn được; họ thấy tin
+  khi quay lại." + "Hiện mọi người") · Lỗi ("Không tải được danh bạ" + "Thử lại"). Mỗi nguồn hỏng riêng: cây phòng ban lỗi
+  thì báo lỗi tại chỗ dưới danh mục Phòng ban ("Không tải được cây phòng ban. Bạn vẫn tìm được người bằng ô tìm." + Thử lại),
+  Vai trò, Nhóm của tôi và ô tìm vẫn dùng được.
+- **Quản trị › Danh bạ** (mockup `design/mockups/admin.html` §7b; Claude chốt 2026-10-17 theo uỷ quyền của Zane, khớp
+  §1c của mockup đã duyệt): tab thứ tư của Quản trị, chỉ ở workspace tổ chức và chỉ khi workspace đã có dữ liệu phạm vi
+  (chưa có thì không hiện tab, không báo lỗi). Câu đầu "Mặc định mọi thành viên thấy toàn bộ danh bạ. Quản trị viên luôn thấy
+  tất cả." Hai Panel: **Phòng ẩn khỏi danh bạ · N** (hàng phòng như trên, dòng phụ "đường dẫn cha · Chỉ N người trong phòng
+  và quản trị viên thấy", Button sm "Bỏ ẩn"; cuối panel "Ẩn một phòng" mở DepartmentPicker) và **Chỉ thấy phòng của mình · N**
+  (ô vai trò 32 hoặc ô phòng 32, "Vai trò X" / "Phòng Y", "N người · thấy người trong phòng của họ", "Bỏ"; cuối panel "Thêm
+  vai trò hoặc phòng" mở picker hai nhóm: Vai trò (chỉ vai trò tự tạo) và Phòng ban (Tree)). Ẩn, Bỏ ẩn, Bỏ đều hỏi lại bằng
+  Modal nói hệ quả bằng người ("18 người chỉ còn được người trong khối và quản trị viên thấy"; ẩn một phòng là ẩn cả cây con),
+  xong thì toast. Trong picker, mục đã có quy tắc bị vô hiệu kèm nhãn ("Đã ẩn", "Ẩn theo <phòng cha>", "Đã giới hạn").
+  Dưới 768 picker là bottom sheet.
 
 ## 7. Motion
 

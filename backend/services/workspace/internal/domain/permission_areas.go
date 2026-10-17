@@ -137,11 +137,31 @@ func (s *Service) guardDelegation(ctx context.Context, callerNodeID, uaID string
 					continue
 				}
 				if err := s.checkAccess(ctx, callerNodeID, a.OaId, op); err != nil {
-					return fmt.Errorf("cannot hand out an operation you do not hold: %w", err)
+					if !s.administersDirectoryOA(ctx, callerNodeID, a.OaId, op) {
+						return fmt.Errorf("cannot hand out an operation you do not hold: %w", err)
+					}
 				}
 				held[[2]string{a.OaId, op}] = true
 			}
 		}
 	}
 	return nil
+}
+
+// administersDirectoryOA reports whether the caller may hand out read of a
+// directory OA by holding manage on it. A hidden department's UA reads its Dir OA,
+// so placing a person in it, or a department under it, hands that read out; the
+// caller holds manage on every directory OA through Mgmt, but manage is not read.
+// The stand-in covers read and nothing else, and only a node that carries the
+// directory mark: an OA that cannot be read to check its mark is not assumed to be
+// one.
+func (s *Service) administersDirectoryOA(ctx context.Context, callerNodeID, oaID, op string) bool {
+	if op != ngac.OpRead {
+		return false
+	}
+	n, err := s.policyWrite.GetNode(ctx, &policypb.GetNodeRequest{NodeId: oaID})
+	if err != nil || n.GetNodeType() != ngac.TypeOA || n.GetProperties()[ngac.PropType] != ngac.PropTypeDirectory {
+		return false
+	}
+	return s.checkAccess(ctx, callerNodeID, oaID, ngac.OpManage) == nil
 }

@@ -56,6 +56,7 @@ export function GuestsPanel({ wsId, form, onChange, organizer, busy, span }: Pro
     <li key={g.nodeId} className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-2.5 min-h-10">
       <Avatar name={g.displayName} hue={g.hue} src={g.avatarUrl} size={32} />
       <span className="grid min-w-0 leading-tight">
+        {/* Plain on purpose: a press here must not take the editor away from unsaved edits. */}
         <span className="truncate text-sm text-ink">{g.displayName}</span>
         {sub && <span className={`truncate text-xs ${sub.warn ? 'text-warning' : 'text-ink-muted'}`}>{sub.text}</span>}
       </span>

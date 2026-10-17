@@ -1,4 +1,7 @@
 import { useEffect, useMemo } from 'react'
+import { useQueries } from '@tanstack/react-query'
+import { messagingApi, type ChannelMember } from '../api/messaging'
+import { keys } from './keys'
 import { useChannels, useDirectMessages, useUnreadCounts } from './useMessaging'
 import { useConversationActivity } from './useConversationActivity'
 import { usePeople } from './usePeople'
@@ -6,7 +9,7 @@ import { useAuthStore } from '../stores/auth.store'
 import { useWebSocketStore } from '../stores/websocket.store'
 import { timestampToRfc3339 } from '../lib/stream-model'
 import {
-  buildConversations, sortConversations, totalUnread, type Conversation, type ConversationMeta,
+  buildConversations, dmPartner, sortConversations, totalUnread, type Conversation, type ConversationMeta,
 } from '../lib/conversations'
 
 export interface ConversationsState {
@@ -56,6 +59,24 @@ export function useConversations(workspaceId: string): ConversationsState {
     return map
   }, [unreadQ.data])
 
+  // A DM whose partner the directory does not list (hidden, removed) can only be titled from its
+  // members; one request for each such DM, none once the partner is listed.
+  const unlisted = useMemo(
+    () => (people.ready ? (dmsQ.data?.channels ?? []).filter((ch) => !dmPartner(ch, { id: user?.id, username: user?.username }, people).partner) : []),
+    [people, dmsQ.data, user],
+  )
+  const memberQs = useQueries({
+    queries: unlisted.map((ch) => ({
+      queryKey: keys.messaging.members(ch.id),
+      queryFn: () => messagingApi.listMembers(ch.id),
+    })),
+  })
+  const dmMembers = useMemo(() => {
+    const map: Record<string, ChannelMember[]> = {}
+    unlisted.forEach((ch, i) => { const m = memberQs[i]?.data?.members; if (m) map[ch.id] = m })
+    return map
+  }, [unlisted, ...memberQs.map((q) => q.data)])
+
   const conversations = useMemo(
     () =>
       sortConversations(
@@ -69,9 +90,10 @@ export function useConversations(workspaceId: string): ConversationsState {
           lastThreadMessages,
           me: { id: user?.id, username: user?.username },
           dir: people,
+          dmMembers,
         }),
       ),
-    [spacesQ.data, dmsQ.data, unread, meta, activityQ.data, lastMessages, lastThreadMessages, user, people],
+    [spacesQ.data, dmsQ.data, unread, meta, activityQ.data, lastMessages, lastThreadMessages, user, people, dmMembers],
   )
 
   const ids = useMemo(() => conversations.map((c) => c.id).sort().join(','), [conversations])

@@ -22,6 +22,9 @@ interface PopoverProps {
   className?: string
 }
 
+/** The popovers open now, the last one on top: only it answers Esc, and a press in a panel above is not "outside" for the ones below. */
+const openStack: symbol[] = []
+
 const GAP = 6
 const SIDE_GAP = 8
 /** The least space left between a popover and the viewport's edge. */
@@ -87,13 +90,18 @@ export function Popover({
 
   useEffect(() => {
     if (!open) return
+    const me = Symbol('popover')
+    openStack.push(me)
+    const onTop = () => openStack[openStack.length - 1] === me
     const onPointer = (e: PointerEvent) => {
       const t = e.target as Node
       if (panelRef.current?.contains(t) || anchorRef.current?.contains(t)) return
+      // A press inside a popover opened from this one is not outside it.
+      if (!onTop() && (t as Element).closest?.('[data-popover]')) return
       onClose()
     }
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key !== 'Escape') return
+      if (e.key !== 'Escape' || !onTop()) return
       e.preventDefault()
       e.stopPropagation()
       onClose()
@@ -102,6 +110,8 @@ export function Popover({
     document.addEventListener('pointerdown', onPointer)
     document.addEventListener('keydown', onKey)
     return () => {
+      const at = openStack.indexOf(me)
+      if (at >= 0) openStack.splice(at, 1)
       document.removeEventListener('pointerdown', onPointer)
       document.removeEventListener('keydown', onKey)
     }
@@ -128,6 +138,7 @@ export function Popover({
         <motion.div
           ref={panelRef}
           role={role}
+          data-popover=""
           aria-label={label}
           onKeyDown={onMenuKeys}
           {...m.popover}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Department, Member, PermissionArea } from '../api/admin'
 import {
-  areaLabel, changeCount, deptAncestors, changesBetween, childrenIndex, consequenceLine, deptDepth, deptPath, deptPathLabel,
+  areaLabel, changeCount, deptHeadcount, deptAncestors, changesBetween, childrenIndex, consequenceLine, deptDepth, deptPath, deptPathLabel,
   deptWithDescendants, grantsOf, matchesMember, matrixColumns, opLabel, roleLine, roleName, rolePills, setOp, statusLabel,
 } from './admin-model'
 
@@ -153,5 +153,21 @@ describe('the permission matrix', () => {
 
   it('counts one change per operation', () => {
     expect(changeCount([{ area: 'a', added: ['read', 'write'], removed: ['share'] }, { area: 'b', added: [], removed: ['manage'] }])).toBe(4)
+  })
+})
+
+describe('deptHeadcount', () => {
+  const counted = (id: string, parent: string, n: number): Department => ({ id, name: id, parent_id: parent, member_count: n })
+  const tree = [counted('a', '', 2), counted('b', 'a', 3), counted('c', 'b', 4), counted('x', '', 10)]
+
+  it('adds the people placed directly to those in every department beneath', () => {
+    expect(deptHeadcount(tree, 'a')).toBe(9)
+    expect(deptHeadcount(tree, 'b')).toBe(7)
+    expect(deptHeadcount(tree, 'c')).toBe(4)
+  })
+
+  it('leaves out a department that is not beneath it, and counts nothing for an unknown one', () => {
+    expect(deptHeadcount(tree, 'x')).toBe(10)
+    expect(deptHeadcount(tree, 'nope')).toBe(0)
   })
 })
