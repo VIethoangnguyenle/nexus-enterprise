@@ -21,7 +21,8 @@ Admin screen for the two rule types, rendered from the admin.html section approv
   (say so in the confirm).
 - List "Chỉ thấy phòng của mình · N": "Vai trò X" / "Phòng Y", "N người · thấy người trong phòng của họ", Bỏ.
   "Thêm vai trò hoặc phòng" → `RolePicker` (custom roles only) or `DepartmentPicker`.
-- Loading, empty, error (+ Thử lại) states; success/failure toasts in words; never IDs, never typed names.
+- Loading, empty, error (+ Thử lại) states; success/failure toasts in words; never IDs, never typed names. A 503 from the
+  rules endpoint (workspace without directory nodes, release-A window before 064) renders the error state (plan Q4).
 - Mutations from `hooks/useAdmin.ts` (phase 06) invalidate departments, contacts, rules.
 
 ## Architecture
@@ -32,13 +33,14 @@ Admin screen for the two rule types, rendered from the admin.html section approv
 ## Related Code Files
 - Create: `frontend/src/components/admin/DirectoryScopeScreen.tsx`, `DirectoryScopeScreen.test.tsx`,
   `frontend/src/routes/_workspace/admin/directory.tsx`
-- Modify: `frontend/src/components/admin/AdminFrame.tsx` (nav), `AdminScreens.test.tsx` (nav item)
+- Modify: `frontend/src/components/admin/AdminFrame.tsx` (nav), `AdminScreens.test.tsx` (nav item). Existing sibling routes:
+  `routes/_workspace/admin/{index,roles,users}.tsx`.
 
 ## Implementation Steps (TDD)
 1. Tests: lists render names and counts; hide via picker calls PUT and the list updates; Bỏ ẩn confirm → DELETE; role
    picker excludes Quản trị viên/Thành viên; 403 → frame's no-access state; personal workspace → no nav entry; no UUID text.
 2. Implement; `npm test`, `npm run lint`, `npm run build`.
-3. `/browse` at 1280/800/390 against admin.html new section.
+3. `/browse` at 1280/800/390 against admin.html new section, signed in as the seeded owner (phase 04).
 
 ## Success Criteria
 - An admin hides a department and a plain member's Danh bạ (another browser) loses it after refetch/realtime event.

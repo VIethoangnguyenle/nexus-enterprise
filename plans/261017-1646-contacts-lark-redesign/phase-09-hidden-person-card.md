@@ -11,7 +11,8 @@ dependencies: [6]
 
 ## Overview
 People outside the caller's visibility keep their name + avatar wherever the caller already works with them (resolver,
-phase 06). Clicking them shows the small card, never details or actions. Spec: `contacts-visibility` (UI scenarios).
+phase 06). Clicking them shows the small card, never details or actions. Specs: `contacts-visibility` (UI scenarios),
+`calendar` (guest rows).
 
 ## Requirements
 - Wrap author/actor/owner name+avatar with `PersonLink` (phase 06) in:
@@ -20,11 +21,16 @@ phase 06). Clicking them shows the small card, never details or actions. Spec: `
   - Approvals: `components/approval/ApprovalDetailPanel.tsx` (requester, approvers), `components/approval/AuditList.tsx`
     (actor).
   - Documents: `components/documents/TextsTable.tsx` (owner), `components/drive/DriveDetailPanel.tsx` (owner/sharer).
-- Visible person → open Danh bạ profile (plan Q7 default); hidden → `HiddenPersonCard`.
+  - Calendar: `components/calendar/EventPopover.tsx` `Guest` (:51-60, name/avatar come from the calendar payload
+    `a.person.*`, so names already render; wrap for the click) and `GuestsPanel.tsx` guest rows. Pickers there read
+    `usePeople().list` (:74) and so offer only visible people after phase 06 (plan Q3).
+- Visible person → open Danh bạ profile (C7, Zane 2026-10-17); hidden → `HiddenPersonCard`.
 - Replying in an existing conversation with a hidden person stays possible (no change to composer/DM).
-- Mentions: candidates in a channel come from channel members; if `MentionDropdown` builds from `dir.list`, hidden members
-  of the same group are not offered — verify and, if so, source candidates from channel members + resolver (plan Q-open:
-  keep consistent with "trả lời vẫn được").
+- Mentions: verified on main — `MentionDropdown` already lists channel members by display name
+  (`components/chat/MentionDropdown.tsx:13-21`), so hidden members of a shared group stay offered (C9). Only check that
+  their names resolve through the resolver (test), no code change expected.
+- `MembersPanel` keeps "Xoá khỏi nhóm" gated by `can_remove_members` (security phase 08 review fix); `PersonLink` wraps only
+  avatar + name, never that action.
 - No raw IDs; card has no Nhắn tin/Gọi.
 
 ## Architecture
@@ -32,8 +38,8 @@ Callsite-only edits; `PersonLink` does visibility via `usePeople().isVisible`. N
 
 ## Related Code Files
 - Modify: `frontend/src/components/spaces/MessageBlock.tsx`, `spaces/MembersPanel.tsx`, `chat/ThreadPanel.tsx` (verify),
-  `chat/MentionDropdown.tsx` (only if verification says so), `approval/ApprovalDetailPanel.tsx`, `approval/AuditList.tsx`,
-  `documents/TextsTable.tsx`, `drive/DriveDetailPanel.tsx`, and their existing tests
+  `approval/ApprovalDetailPanel.tsx`, `approval/AuditList.tsx`, `documents/TextsTable.tsx`, `drive/DriveDetailPanel.tsx`,
+  `calendar/EventPopover.tsx`, `calendar/GuestsPanel.tsx`, and their existing tests
 
 ## Implementation Steps (TDD)
 1. Tests per callsite: hidden author shows real name (resolver mock) and click opens the card with the exact sentence and

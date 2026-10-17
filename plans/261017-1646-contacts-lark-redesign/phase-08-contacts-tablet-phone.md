@@ -43,7 +43,7 @@ route search params; only layout differs. Spec: `contacts-documents-settings-scr
    contacts; opening a tile enables only that query; back from A1 goes to A then home; profile full screen with three
    actions; tablet chips switch categories; sheet closes on Esc and returns focus; input font-size 16px.
 2. Implement; `npm test`, `npm run lint`, `npm run build`.
-3. `/browse` at 800 and 390 against mockup §6/§7; `make dev-stop` after.
+3. `/browse` at 800 and 390 against mockup §6/§7 with the seeded org (phase 04); `make dev-stop` after.
 
 ## Success Criteria
 - Screens at 800 and 390 match mockup; OS back walks the stack one level at a time.

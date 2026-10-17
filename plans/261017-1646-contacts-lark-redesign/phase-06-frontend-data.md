@@ -3,7 +3,7 @@ phase: 6
 title: "Frontend data layer"
 status: pending
 priority: P1
-effort: "5h"
+effort: "6h"
 dependencies: [5]
 ---
 
@@ -20,22 +20,25 @@ from "resolve names" (`usePeople` falls back to a batched resolver) without touc
 - Resolver `frontend/src/lib/people-resolver.ts`: per-workspace store; `request(id)` idempotent, batches misses in a
   microtask/50 ms window, `POST /workspaces/:id/contacts/resolve` (≤200 per call), caches results and "not found";
   subscribe via `useSyncExternalStore`. Never fetches during render synchronously (enqueue only).
-- `lib/people.ts`: `PeopleDirectory` gains `isVisible(userId)` and `request`; `displayName`/`avatarOf` (`people.ts:63`,
-  `:70`) call `dir.request(userId)` on a miss and read resolved entries from `byUserId`/`byNodeId`; resolved people are
+- `lib/people.ts`: `PeopleDirectory` (`people.ts:17`) gains `isVisible(userId)` and `request`; `displayName`/`avatarOf`
+  (`people.ts:60`, `:68`) call `dir.request(userId)` on a miss and read resolved entries from `byUserId`/`byNodeId`; resolved people are
   **not** added to `list` (pickers, mentions, suggestions keep showing only visible people).
 - `usePeople` (`hooks/usePeople.ts`) merges contacts + resolver snapshot.
 - Category hooks (lazy, `enabled` only when the category is open): departments — reuse `useDepartments`
-  (`hooks/useAdmin.ts:45`, same endpoint; extend `Department` type with `hidden?: boolean`); groups — `useChannels`
-  (`hooks/useMessaging.ts:16`, filter `channel_type` group, `member_count` already in payload, `api/messaging.ts:16`);
-  group members — `useChannelMembers` (`useMessaging.ts:105`) only when a group is opened.
+  (`hooks/useAdmin.ts:45`, same endpoint; extend `Department` type (`api/admin.ts:5`) with `hidden?: boolean`); groups —
+  `useChannels` (`hooks/useMessaging.ts:16`; `ListChannels` returns only channels the caller can read since the private-groups
+  fix; keep `channel_type === 'private'`, which drops `#general` (`workspace` type, everyone) — plan Q2; `member_count`
+  already in payload, `api/messaging.ts:16`); group members — `useChannelMembers` (`useMessaging.ts:105`) only when a group
+  is opened (members-only read; `can_remove_members` ignored here).
 - `components/contacts/contacts-model.ts` rewrite (pure, unit-tested):
   - `sortContacts`: given name = last whitespace word, `localeCompare(…,'vi',{sensitivity:'base'})`, then full name
     (`contacts-model.ts:16` today sorts by full name).
   - `buildTree(departments, contacts)` → nodes by **id** with children, direct people, subtree count (visible people),
     sub-department count; roots = departments whose parent is absent (limited users get their own dept as a root);
     org root "Toàn <workspace>" holds people with empty `department_id`.
-  - `pathOf(deptId)` full ancestry by id; `colleaguesOf` by `department_id` (leaf), not name (`:61`).
+  - `pathOf(deptId)` full ancestry by id; `colleaguesOf` by `department_id` (leaf), not name (`:54-56`).
   - `rolesOf(contacts)` → Quản trị viên first (kind owners), then custom by name, each with visible holders; no Members.
+    Owners are always in the payload (plan decision), so a limited user's Vai trò still lists Quản trị viên.
   - `filterContacts` keeps accent-insensitive name/title/email + online filter; search result sub-line = title · full path.
 - Admin hooks for phase 10 in `hooks/useAdmin.ts`: `useDirectoryScopeRules`, `useHideDepartment`, `useUnhideDepartment`,
   `useLimitSubject`, `useUnlimitSubject` (+ `api/admin.ts` calls), invalidating departments + contacts keys.
@@ -43,8 +46,10 @@ from "resolve names" (`usePeople` falls back to a batched resolver) without touc
   around avatar/name for a user id: visible → `onOpenProfile` (default: navigate to `/contacts?person=…`); not visible →
   opens `HiddenPersonCard.tsx` (popover ≥768, bottom sheet <768): avatar, name, "Hồ sơ này không còn hiển thị với bạn.",
   no title/department/email, no actions; Esc/outside closes, focus returns.
-- Realtime: department/role change events already invalidate admin keys — make them also invalidate `keys.contacts`
-  (find the handler for `department_changed`/`role_changed` in `stores/websocket.store.ts` or its hook; verify).
+- Realtime: nothing to add. `frontend/src/lib/realtime.ts:122-123` already invalidates `keys.contacts.every()` and
+  `keys.admin.everything()` on every workspace event (incl. `department_changed`, `role_changed`); the phase-04 rule
+  writes announce those kinds. Resolver cache is not invalidated by them (names do not depend on rules); `profile_updated`
+  refreshes it.
 
 ## Architecture
 TanStack Query = server state (contacts, departments, channels, members, resolver results are cached in the resolver
@@ -55,7 +60,7 @@ store keyed per workspace and cleared on sign-out with other caches). No Zustand
   `frontend/src/components/primitives/PersonLink.tsx`, `HiddenPersonCard.tsx`, `PersonLink.test.tsx`
 - Modify: `frontend/src/hooks/useContacts.ts`, `hooks/usePeople.ts`, `lib/people.ts`, `lib/people.test.ts` (if present),
   `components/contacts/contacts-model.ts`, `contacts-model.test.ts`, `hooks/useAdmin.ts`, `api/admin.ts`,
-  `api/admin.test.ts`, `hooks/keys/contacts.ts`, realtime invalidation file (verify path)
+  `api/admin.test.ts`, `hooks/keys/contacts.ts`
 - Leave untouched: `lib/suggestions/contacts.ts` (works on the visible directory — hidden people correctly not suggested;
   owned by 261017-1516)
 
@@ -77,5 +82,6 @@ store keyed per workspace and cleared on sign-out with other caches). No Zustand
 ## Risk Assessment
 - Render-time enqueue causing render loops (Med×Med): enqueue does not notify synchronously; notify only after fetch.
 - Many components using `dir.list` for "everyone" semantics (Low×Med): grep `\.list` usages of PeopleDirectory and list
-  them in the PR; intended behaviour = visible only.
+  them in the PR; intended behaviour = visible only. Known on main: calendar pickers (`calendar/AddCalendarPicker.tsx:28`,
+  `GuestsPanel.tsx:74`, `EventEditor.tsx:57`) become visibility-scoped (plan Q3).
 - Rollback: revert; API fields are additive.

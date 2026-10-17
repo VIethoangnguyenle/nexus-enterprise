@@ -25,17 +25,20 @@ middle column browsing with breadcrumbs, profile card. Spec: `contacts-documents
 - Breadcrumb: building icon = root, every segment a button to that level, last `aria-current`, collapse middle to "…".
 - Vai trò: list (Quản trị viên first with shield icon + "quản lý workspace", then custom), open → holders (title · path);
   header name + count, no permissions shown. Hidden in personal workspaces.
-- Nhóm của tôi: groups (square 32 avatar via existing group avatar, name, `member_count`), open → members loaded then
+- Nhóm của tôi: private groups the caller is in (`channel_type === 'private'`; `#general` excluded, plan Q2) (square 32
+  avatar via existing group avatar, name, `member_count`), open → members loaded then
   ("Mở nhóm" secondary navigates to the channel), rows title · path; members that are hidden render via resolver name and
   open `HiddenPersonCard` (via `PersonLink`, built in phase 06) instead of the profile.
 - Search (SearchField, placeholder "Tên, chức danh hoặc email", aria-label "…trong cả <ws>" or
   "…trong phạm vi bạn được xem" when limited): flat results across loaded contacts, header "Kết quả trong cả <ws>" + count,
   sub-line title · full path (last segment bold, never cut), match highlight `--color-warning-wash`, ✕/Esc returns to the
-  previous level. Keep the existing `SearchSuggestions` panel + `recentlyMessaged` exactly as 261017-1516 built it.
+  previous level. Keep the existing `SearchSuggestions` panel (`components/patterns/SearchSuggestions.tsx`) +
+  `lib/suggestions/contacts.ts` exactly as 261017-1516 shipped them (main 43a1509).
 - Chip "Đang trực tuyến" filters the current view with count.
 - Profile card (detail panel; overlay at 1024–1279): cover gradient, avatar 64, name text-lg, title, status in words;
-  actions Nhắn tin (primary, `useCreateDM` then navigate), Gọi (`useCreateDM` → `useStartCall`
-  (`hooks/useCalls.ts:34`) → call screen; **always enabled**, even offline), Gửi email (`mailto:`); own profile →
+  actions Nhắn tin (primary, `useCreateDM({userId, ngacNodeId})` (`hooks/useMessaging.ts:38`; the DM gate needs
+  `target_user_id` and a shared workspace, always true here) then navigate), Gọi (`useCreateDM` → `useStartCall({channelId,
+  kind})` (`hooks/useCalls.ts:34`) → call screen; **always enabled**, even offline), Gửi email (`mailto:`); own profile →
   "Sửa hồ sơ" (Cài đặt). Rows: Email + Sao chép, Phòng ban full path (each segment opens that department), Nơi làm việc,
   Vai trò (each opens the role), Cùng phòng (stack 24 + sentence, opens the department). Empty rows omitted; personal
   workspace omits Phòng ban, Vai trò, Cùng phòng. Esc / ✕ closes, focus returns to the row.
@@ -67,7 +70,8 @@ middle column browsing with breadcrumbs, profile card. Spec: `contacts-documents
    person and starts DM + call; own profile shows Sửa hồ sơ; personal workspace categories; limited copy; admin hidden
    label; every state; no element text matches a UUID regex.
 2. Build components to green; `npm test`, `npm run lint`, `npm run build`.
-3. `make dev`, compare with mockup at 1280 and 1024 via `/browse`; `make dev-stop`.
+3. `make dev`, sign in as the seeded accounts (`scripts/seed-contacts-demo.sh`, phase 04), compare with mockup at 1280 and
+   1024 via `/browse`; `make dev-stop`.
 
 ## Success Criteria
 - Screenshots at 1280/1024 match mockup §1, §1b, §2, §2b, §3, §4, §5.
