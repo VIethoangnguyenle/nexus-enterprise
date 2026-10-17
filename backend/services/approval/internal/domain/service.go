@@ -21,6 +21,10 @@ type PolicyClient interface {
 	GetAncestors(ctx context.Context, nodeID string) ([]string, error)
 	// GetMembers returns the people (user nodes) under a role or department.
 	GetMembers(ctx context.Context, uaNodeID string) ([]string, error)
+	// IsWorkspaceMember reports whether the person is a member of the workspace in
+	// the graph right now, including a removal made a moment ago. An error is an
+	// unknown, never a yes.
+	IsWorkspaceMember(ctx context.Context, userNodeID, workspaceID string) (bool, error)
 }
 
 // Store defines the data access methods the domain service needs.

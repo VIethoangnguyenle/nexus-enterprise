@@ -201,9 +201,10 @@ func TestGuard_FailsClosed(t *testing.T) {
 // A new exported method without a row in entryPoints is an entry point nobody
 // proved refuses in a personal workspace.
 func TestEntryPointTableCoversEveryExportedMethod(t *testing.T) {
-	// Guard and event helpers that are not entry points: RequireOrganization is
-	// the guard; EventAudience runs only after a decision that was guarded.
-	notEntryPoints := map[string]bool{"RequireOrganization": true, "EventAudience": true}
+	// Guard and event helpers that are not entry points: RequireOrganization and
+	// RequireMember are the guards; EventAudience runs only after a decision that
+	// was guarded.
+	notEntryPoints := map[string]bool{"RequireOrganization": true, "RequireMember": true, "EventAudience": true}
 	var want, got []string
 	typ := reflect.TypeOf(&Service{})
 	for i := 0; i < typ.NumMethod(); i++ {

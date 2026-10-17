@@ -116,6 +116,10 @@ func main() {
 	defer hub.Close()
 	// Following a workspace's live changes is a read of the workspace.
 	hub.SetWorkspaceAccess(domainSvc)
+	// A token names a tenant and outlives the membership it was issued for, so a
+	// connecting session is checked against the graph, through the policy writer
+	// (the read replica may be behind a removal made a moment ago).
+	hub.SetMembership(mgrpc.NewPolicyMembership(policypb.NewPolicyWriteServiceClient(policyConn)))
 	// Channel changes (create, rename, members) are announced like every other
 	// domain's: through Redpanda, after the commit.
 	rt := realtime.Connect("messaging")

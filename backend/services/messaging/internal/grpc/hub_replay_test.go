@@ -174,6 +174,7 @@ func newRedisRig(t *testing.T, access grpcserver.WorkspaceAccessChecker) *redisR
 	run := fmt.Sprintf("%d", time.Now().UnixNano())
 	rig := &redisRig{rdb: rdb, tenant: "tenant-" + run, workspace: "tenant-" + run, t: t, access: access}
 	hub := grpcserver.NewHub(rdb, &fakeAccess{})
+	hub.SetMembership(everyoneIsAMember{})
 	hub.SetWorkspaceAccess(access)
 	t.Cleanup(hub.Close)
 	srv := httptest.NewServer(hub.HandleWebSocket(hubTestSecret))

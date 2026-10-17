@@ -178,12 +178,12 @@ export function leaveFor(url: string): void {
  * session could be established.
  */
 export async function completeGoogleSignIn(): Promise<{ needsProfile: boolean } | null> {
-  const token = await refreshAccessToken()
-  if (!token) return null
+  const refreshed = await refreshAccessToken()
+  if (refreshed.status !== 'ok') return null
   try {
     const me = await authApi.me()
     // apiFetch may itself have refreshed; use whatever token is current now.
-    useAuthStore.getState().login(useAuthStore.getState().accessToken ?? token, sessionUser(me.user))
+    useAuthStore.getState().login(useAuthStore.getState().accessToken ?? refreshed.token, sessionUser(me.user))
     return { needsProfile: me.user.needs_profile }
   } catch {
     useAuthStore.getState().logout()

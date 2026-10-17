@@ -14,8 +14,10 @@ import (
 // joinTenantByDomain adds the user as a member of the tenant that owns
 // companyDomain and returns that tenant with the user's role in it. It returns a
 // nil tenant when the domain is empty, is a public mailbox provider, or is owned
-// by no tenant. A user who already has a membership there keeps it unchanged —
-// including a disabled one, which signing in must not re-activate.
+// by no tenant. A user who already has a membership there keeps it unchanged and
+// is not joined again: a removed or disabled one stays as it is (nil tenant),
+// because the domain claim is proof of an address, not an invitation, and signing
+// in must not undo a removal or a suspension.
 //
 // This is the one place a domain turns into tenant membership. Callers must
 // hold proof that the user controls an address at companyDomain — today only
@@ -40,6 +42,9 @@ func (s *Service) joinTenantByDomain(ctx context.Context, companyDomain, userID,
 		return nil, "", fmt.Errorf("get tenant user: %w", err)
 	}
 	if existing != nil {
+		if existing.Status != "active" {
+			return nil, "", nil
+		}
 		return tenant, existing.Role, nil
 	}
 

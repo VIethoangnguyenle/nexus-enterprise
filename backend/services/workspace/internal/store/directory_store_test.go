@@ -60,6 +60,10 @@ func TestDirectoryStore(t *testing.T) {
 	})
 
 	t.Run("department is set and cleared in one workspace only", func(t *testing.T) {
+		// The department counts active members, so the person is active here (the
+		// subtest above left them disabled in wsA).
+		_, err := pool.Exec(ctx, `UPDATE tenant_users SET status = 'active' WHERE tenant_id = $1 AND user_id = $2`, wsA, userID)
+		require.NoError(t, err)
 		require.NoError(t, st.EnsureTenantUser(ctx, wsB, userID, nodeID))
 		deptA := "dept-" + uuid.NewString()[:8]
 		deptB := "dept-" + uuid.NewString()[:8]
@@ -86,13 +90,102 @@ func TestDirectoryStore(t *testing.T) {
 		assert.Equal(t, 1, n, "the other workspace is untouched")
 	})
 
-	t.Run("removing a person drops their listing in that workspace only", func(t *testing.T) {
+	status := func(ws string) (string, bool) {
+		var s string
+		var dept *string
+		err := pool.QueryRow(ctx, `SELECT status, department_id FROM tenant_users WHERE tenant_id = $1 AND user_id = $2`, ws, userID).Scan(&s, &dept)
+		if err != nil {
+			return "", false
+		}
+		return s, true
+	}
+
+	t.Run("removing a person tombstones their listing in that workspace only", func(t *testing.T) {
+		_, err := pool.Exec(ctx, `UPDATE tenant_users SET status = 'active' WHERE tenant_id = $1 AND user_id = $2`, wsA, userID)
+		require.NoError(t, err)
 		require.NoError(t, st.EnsureTenantUser(ctx, wsA, userID, nodeID))
-		require.NoError(t, st.RemoveTenantUser(ctx, wsA, nodeID))
-		var a, b int
-		require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM tenant_users WHERE tenant_id = $1 AND user_id = $2`, wsA, userID).Scan(&a))
-		require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM tenant_users WHERE tenant_id = $1 AND user_id = $2`, wsB, userID).Scan(&b))
-		assert.Equal(t, 0, a)
-		assert.Equal(t, 1, b)
+		require.NoError(t, st.MarkTenantUserRemoved(ctx, wsA, nodeID))
+
+		a, found := status(wsA)
+		require.True(t, found, "the row stays: a deleted row is what let a domain sign-in re-add the person")
+		assert.Equal(t, "removed", a)
+		b, _ := status(wsB)
+		assert.Equal(t, "active", b, "the other workspace is untouched")
+
+		var dept *string
+		require.NoError(t, pool.QueryRow(ctx, `SELECT department_id FROM tenant_users WHERE tenant_id = $1 AND user_id = $2`, wsA, userID).Scan(&dept))
+		assert.Nil(t, dept, "a removed person is in no department")
+
+		require.NoError(t, st.MarkTenantUserRemoved(ctx, wsA, nodeID), "removing twice is not an error")
 	})
+
+	t.Run("an invitation brings a removed person back, and only a removed one", func(t *testing.T) {
+		// They were an owner when they left; coming back they are a member until someone says otherwise.
+		_, err := pool.Exec(ctx, `UPDATE tenant_users SET role = 'owner' WHERE tenant_id = $1 AND user_id = $2`, wsA, userID)
+		require.NoError(t, err)
+		require.NoError(t, st.EnsureTenantUser(ctx, wsA, userID, nodeID))
+		got, _ := status(wsA)
+		assert.Equal(t, "active", got, "removed -> active on a new invitation")
+		var role string
+		require.NoError(t, pool.QueryRow(ctx, `SELECT role FROM tenant_users WHERE tenant_id = $1 AND user_id = $2`, wsA, userID).Scan(&role))
+		assert.Equal(t, "member", role, "a returning person does not get back the role they left with")
+
+		for _, standing := range []string{"disabled", "invited"} {
+			_, err := pool.Exec(ctx, `UPDATE tenant_users SET status = $3, role = 'admin' WHERE tenant_id = $1 AND user_id = $2`, wsA, userID, standing)
+			require.NoError(t, err)
+			require.NoError(t, st.EnsureTenantUser(ctx, wsA, userID, nodeID))
+			got, _ = status(wsA)
+			assert.Equal(t, standing, got, "an invitation must not lift %q", standing)
+			require.NoError(t, pool.QueryRow(ctx, `SELECT role FROM tenant_users WHERE tenant_id = $1 AND user_id = $2`, wsA, userID).Scan(&role))
+			assert.Equal(t, "admin", role, "and leaves the role of a person who did not leave")
+		}
+	})
+}
+
+// People who are no longer in the workspace are not members for the two counts
+// the service takes: who else is in a workspace being deleted, and who is in a
+// department.
+func TestDirectoryStore_RemovedPeopleAreNotCounted(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	ctx := context.Background()
+	st := store.New(pool)
+
+	ownerID, ownerNode := testutil.CreateUser(t, pool)
+	ws, _ := testutil.CreateWorkspace(t, pool, ownerID)
+	stayID, stayNode := testutil.CreateUser(t, pool)
+	goneID, goneNode := testutil.CreateUser(t, pool)
+	t.Cleanup(func() { pool.Exec(context.Background(), `DELETE FROM tenant_users WHERE tenant_id = $1`, ws) })
+
+	dept := "dept-" + uuid.NewString()[:8]
+	_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type, properties) VALUES ($1, $1, 'UA', '{}')`, "ua-"+dept)
+	require.NoError(t, err)
+	require.NoError(t, st.InsertDepartment(ctx, &store.Department{ID: dept, WorkspaceID: ws, Name: dept, NGACUaID: "ua-" + dept}))
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `UPDATE tenant_users SET department_id = NULL WHERE department_id = $1`, dept)
+		pool.Exec(context.Background(), `DELETE FROM departments WHERE id = $1`, dept)
+		pool.Exec(context.Background(), `DELETE FROM ngac_nodes WHERE id = $1`, "ua-"+dept)
+	})
+
+	for _, p := range []struct{ user, node string }{{ownerID, ownerNode}, {stayID, stayNode}, {goneID, goneNode}} {
+		require.NoError(t, st.EnsureTenantUser(ctx, ws, p.user, p.node))
+		require.NoError(t, st.UpdateUserDepartment(ctx, ws, p.node, &dept))
+	}
+	n, err := st.OtherMembers(ctx, ws, ownerID)
+	require.NoError(t, err)
+	assert.Equal(t, 2, n, "before the removal both others are members")
+	n, err = st.CountMembersByDepartment(ctx, dept)
+	require.NoError(t, err)
+	assert.Equal(t, 3, n)
+
+	// A removal clears the department itself; a row that kept one (written by an
+	// older release) must not count either.
+	_, err = pool.Exec(ctx, `UPDATE tenant_users SET status = 'removed' WHERE tenant_id = $1 AND user_id = $2`, ws, goneID)
+	require.NoError(t, err)
+
+	n, err = st.OtherMembers(ctx, ws, ownerID)
+	require.NoError(t, err)
+	assert.Equal(t, 1, n, "the removed person is not another member: the workspace can be deleted once everyone else has gone")
+	n, err = st.CountMembersByDepartment(ctx, dept)
+	require.NoError(t, err)
+	assert.Equal(t, 2, n, "a removed person does not keep a department occupied")
 }

@@ -29,7 +29,10 @@ func testRedis(t *testing.T) *redis.Client {
 
 func newRefreshStore(t *testing.T) *domain.RefreshStore {
 	t.Helper()
-	return domain.NewRefreshStore(testRedis(t))
+	rs := domain.NewRefreshStore(testRedis(t))
+	// These tests are about replay detection: no spent token is honoured.
+	rs.SetGraceForTest(0)
+	return rs
 }
 
 var identity = domain.RefreshIdentity{

@@ -80,7 +80,7 @@ func TestGoogleLinkByEmail_RevokesExistingSessions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("google sign in: %v", err)
 	}
-	if _, _, err := svc.RefreshSession(ctx, oldRefresh); err == nil {
+	if _, _, _, err := svc.RefreshSession(ctx, oldRefresh); err == nil {
 		t.Fatal("a refresh token issued before Google linking still works")
 	}
 
@@ -92,7 +92,7 @@ func TestGoogleLinkByEmail_RevokesExistingSessions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("attach new: %v", err)
 	}
-	if _, _, err := svc.RefreshSession(ctx, fresh); err != nil {
+	if _, _, _, err := svc.RefreshSession(ctx, fresh); err != nil {
 		t.Fatalf("the new session must refresh: %v", err)
 	}
 }
@@ -112,7 +112,7 @@ func TestGoogleReturningUserBySubject_KeepsSessions(t *testing.T) {
 	if _, err := svc.SignInWithGoogle(ctx, googleIdentity("alice-sub", "alice@acme.com", "")); err != nil {
 		t.Fatal(err)
 	}
-	if _, _, err := svc.RefreshSession(ctx, laptop); err != nil {
+	if _, _, _, err := svc.RefreshSession(ctx, laptop); err != nil {
 		t.Fatalf("signing in on another device must not end existing sessions: %v", err)
 	}
 }

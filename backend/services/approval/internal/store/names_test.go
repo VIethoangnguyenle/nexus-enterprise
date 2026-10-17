@@ -166,3 +166,31 @@ func TestCanonicalApprover_OnlyThingsOfTheTenant(t *testing.T) {
 	bad("department", "")
 	bad("creator_manager", a.person)
 }
+
+// A person who was removed from the workspace cannot be named as an approver of a
+// step, however the template refers to them (by node id on the row, or only by the
+// user's node). The same fixture, the same call, answers for a member who stays.
+func TestCanonicalApprover_ARemovedMemberIsNotAnApprover(t *testing.T) {
+	pool := testutil.SetupTestDB(t)
+	s := store.NewStore(pool)
+	ctx := context.Background()
+	a := seedTenant(t, pool, "A")
+
+	for _, node := range []string{a.person, a.bare} {
+		got, err := s.CanonicalApprover(ctx, a.ws, "specific_user", node)
+		if err != nil || got != node {
+			t.Fatalf("a member %q = %q, %v; want accepted", node, got, err)
+		}
+	}
+
+	if _, err := pool.Exec(ctx, `UPDATE tenant_users tu SET status = 'removed' FROM users u
+		WHERE tu.user_id = u.id AND tu.tenant_id = $1 AND u.ngac_node = $2`, a.ws, a.person); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := s.CanonicalApprover(ctx, a.ws, "specific_user", a.person); err == nil {
+		t.Errorf("a removed member accepted as %q; want ErrInvalidInput", got)
+	}
+	if got, err := s.CanonicalApprover(ctx, a.ws, "specific_user", a.bare); err != nil || got != a.bare {
+		t.Errorf("another member = %q, %v; want still accepted", got, err)
+	}
+}

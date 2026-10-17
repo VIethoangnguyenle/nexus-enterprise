@@ -23,16 +23,47 @@ export class ApiError extends Error {
  * punishes by killing the whole session. Coalescing is not an optimisation
  * here; it is what keeps rotation from logging the user out.
  */
-let refreshInFlight: Promise<string | null> | null = null
+let refreshInFlight: Promise<RefreshResult> | null = null
+
+/**
+ * What a refresh came to:
+ *  - `ok`: a new access token, already stored;
+ *  - `ended`: the server refused the session (it is over, and has been cleared);
+ *  - `unavailable`: the server could not be asked (down, or the policy/database
+ *    behind it is). That says nothing about the session, which is kept.
+ */
+export type RefreshResult =
+  | { status: 'ok'; token: string }
+  | { status: 'ended' }
+  | { status: 'unavailable' }
+
+/** A refresh moved the session from one workspace to another (or to none). */
+export interface TenantMove {
+  from: string
+  /** The workspace the session is in now; null when the person has none left. */
+  to: string | null
+}
+
+const tenantMovedListeners = new Set<(move: TenantMove) => void>()
+
+/**
+ * Registers what to do when a refresh puts the session in another workspace
+ * than the one it was in: the person was removed from that workspace, and the
+ * server moved them to the one they still belong to. Returns the unregister.
+ */
+export function onTenantMoved(listener: (move: TenantMove) => void): () => void {
+  tenantMovedListeners.add(listener)
+  return () => { tenantMovedListeners.delete(listener) }
+}
 
 /**
  * Exchanges the httpOnly refresh cookie for a new access token.
- * Resolves to the new token, or null if the session is over.
+ * See RefreshResult for the three ways it can end.
  */
-export function refreshAccessToken(): Promise<string | null> {
+export function refreshAccessToken(): Promise<RefreshResult> {
   if (refreshInFlight) return refreshInFlight
 
-  refreshInFlight = (async () => {
+  refreshInFlight = underRefreshLock(async (): Promise<RefreshResult> => {
     try {
       const res = await fetch(`${API_BASE}/auth/refresh`, {
         method: 'POST',
@@ -42,25 +73,62 @@ export function refreshAccessToken(): Promise<string | null> {
       })
       if (!res.ok) {
         // Only the server refusing the session ends it. A failing server
-        // (5xx) is not an answer about the session: keep it and try later.
-        if (res.status === 401 || res.status === 403) useAuthStore.getState().logout()
-        return null
+        // (5xx, 503 included) is not an answer about the session: keep it and
+        // try later.
+        if (res.status === 401 || res.status === 403) {
+          useAuthStore.getState().logout()
+          return { status: 'ended' }
+        }
+        return { status: 'unavailable' }
       }
-      const { access_token } = (await res.json()) as { access_token: string }
+      const { access_token, tenant_id, moved } = (await res.json()) as { access_token: string; tenant_id?: string; moved?: boolean }
+      const before = useAuthStore.getState().tenantId ?? null
       useAuthStore.getState().setAccessToken(access_token)
-      return access_token
+      // Only the server's word that the person was moved because they no longer belong
+      // counts. A different tenant on its own is another tab having switched workspace
+      // on purpose (the cookie is shared), and says nothing about removal.
+      if (moved === true && tenant_id !== undefined && before && tenant_id !== before) {
+        const move: TenantMove = { from: before, to: tenant_id || null }
+        for (const listener of tenantMovedListeners) {
+          try { listener(move) } catch (err) { console.error('[session] tenant move handler failed', err) }
+        }
+      }
+      return { status: 'ok', token: access_token }
     } catch {
       // No network (the installed app opened offline): the session is not
       // over, the server simply cannot be asked. Keep it — the shell shows
       // with the connection bar — and refresh once the network is back.
       retryWhenOnline()
-      return null
+      return { status: 'unavailable' }
     } finally {
       refreshInFlight = null
     }
-  })()
+  })
 
   return refreshInFlight
+}
+
+/** The name every tab of the browser takes before it refreshes. */
+const REFRESH_LOCK = 'nexus-refresh'
+
+/**
+ * Runs a refresh so that no other tab of this browser is refreshing at the same time.
+ *
+ * Tabs share the refresh cookie, so they all rotate the same token chain. The coalescing
+ * above keeps one tab from asking twice; this keeps two tabs from asking together (a
+ * removal closes every tab's socket at once and each asks for a new token). Under the
+ * lock the second tab presents the cookie the first has already replaced. Where the
+ * browser has no Web Locks, a small random delay spreads the tabs out, and the server
+ * answers a token spent a few seconds ago with the successor it already made.
+ */
+function underRefreshLock<T>(run: () => Promise<T>): Promise<T> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined
+  if (locks && typeof locks.request === 'function') {
+    return locks.request(REFRESH_LOCK, run) as Promise<T>
+  }
+  return new Promise((resolve, reject) => {
+    setTimeout(() => { run().then(resolve, reject) }, Math.random() * 250)
+  })
 }
 
 let waitingForNetwork = false
@@ -155,8 +223,11 @@ async function withRefreshRetry(path: string, options: RequestInit, jsonBody: bo
   let res = await send(path, options, jsonBody)
   if (res.status !== 401) return res
 
-  const token = await refreshAccessToken()
-  if (!token) return res
+  const refreshed = await refreshAccessToken()
+  // The session was kept but could not be renewed right now: say so, rather than
+  // hand back the 401 that `toResult` reads as "signed out".
+  if (refreshed.status === 'unavailable') throw new ApiError('Service unavailable', 503)
+  if (refreshed.status === 'ended') return res
 
   res = await send(path, options, jsonBody)
   return res

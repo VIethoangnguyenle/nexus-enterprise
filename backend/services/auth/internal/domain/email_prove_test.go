@@ -64,10 +64,10 @@ func TestEmailCode_KeepsTheCurrentSessionAndEndsTheOthers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, _, err := svc.RefreshSession(ctx, theirs); err == nil {
+	if _, _, _, err := svc.RefreshSession(ctx, theirs); err == nil {
 		t.Error("a session that existed before the address was proved must end: whoever opened it never held the mailbox")
 	}
-	if _, _, err := svc.RefreshSession(ctx, mine); err != nil {
+	if _, _, _, err := svc.RefreshSession(ctx, mine); err != nil {
 		t.Errorf("the session that proved the address must go on: %v", err)
 	}
 	if passwordOf(w, u.ID) != "" {

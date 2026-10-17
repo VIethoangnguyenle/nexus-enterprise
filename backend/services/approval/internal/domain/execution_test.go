@@ -338,6 +338,17 @@ type mockPolicy struct {
 	ancestorsErr error
 	// allowedBy, when set, decides CheckAccess per "user|object|op".
 	allowedBy map[string]bool
+	// notMembers are the people the graph no longer holds in the workspace; everyone
+	// else is a member. memberErr makes the membership question itself fail.
+	notMembers map[string]bool
+	memberErr  error
+}
+
+func (m *mockPolicy) IsWorkspaceMember(_ context.Context, node, _ string) (bool, error) {
+	if m.memberErr != nil {
+		return false, m.memberErr
+	}
+	return !m.notMembers[node], nil
 }
 
 func (m *mockPolicy) ResolveAccessibleScopes(_ context.Context, _, _ string) ([]string, error) {

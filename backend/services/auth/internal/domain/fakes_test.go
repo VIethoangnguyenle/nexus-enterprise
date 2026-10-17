@@ -10,6 +10,7 @@ import (
 
 	"google.golang.org/grpc"
 
+	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
@@ -57,6 +58,10 @@ type fakeWorld struct {
 	legacyCreates     []*messagingpb.CreateChannelRequest
 	rpcDeadlines      map[string]time.Duration // time left on the context of each downstream call
 	avatars           map[string]fakeAvatar    // token -> picture
+	// graph is who sits under which workspace's Members UA, as the policy writer
+	// would answer; policyDown makes every membership read fail with this.
+	graph      map[string]map[string]bool // user node -> workspace ids
+	policyDown error
 }
 
 type fakeAvatar struct {
@@ -525,7 +530,76 @@ func (f *fakePolicyWrite) CreateNode(_ context.Context, req *policypb.CreateNode
 }
 
 func (f *fakePolicyWrite) CreateAssignment(_ context.Context, req *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
+	// Joining a tenant puts the user under TenantMember_<ws>, which sits under <ws>_Members.
+	if ws, ok := strings.CutPrefix(req.ParentId, "node-"+ngac.TenantMemberUAName("")); ok {
+		f.w.attach(req.ChildId, ws)
+	}
 	return &policypb.Assignment{Id: "asg-" + req.ChildId + "-" + req.ParentId}, nil
+}
+
+// attach puts the user node under the workspace's Members UA in the fake graph.
+func (w *fakeWorld) attach(node, ws string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.graph == nil {
+		w.graph = map[string]map[string]bool{}
+	}
+	if w.graph[node] == nil {
+		w.graph[node] = map[string]bool{}
+	}
+	w.graph[node][ws] = true
+}
+
+// detach takes the user node out from under the workspace's Members UA.
+func (w *fakeWorld) detach(node, ws string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	delete(w.graph[node], ws)
+}
+
+func (f *fakePolicyWrite) down() error {
+	f.w.mu.Lock()
+	defer f.w.mu.Unlock()
+	return f.w.policyDown
+}
+
+func (f *fakePolicyWrite) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if err := f.down(); err != nil {
+		return nil, err
+	}
+	return &policypb.NGACNode{Id: "node-" + req.Name, Name: req.Name, NodeType: req.NodeType}, nil
+}
+
+func (f *fakePolicyWrite) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	if err := f.down(); err != nil {
+		return nil, err
+	}
+	return &policypb.BoolResponse{Value: true}, nil
+}
+
+func (f *fakePolicyWrite) GetNode(_ context.Context, req *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if err := f.down(); err != nil {
+		return nil, err
+	}
+	nodeType := ngac.TypeU
+	if strings.HasPrefix(req.NodeId, "node-") {
+		nodeType = ngac.TypeUA
+	}
+	return &policypb.NGACNode{Id: req.NodeId, NodeType: nodeType}, nil
+}
+
+func (f *fakePolicyWrite) GetAncestors(_ context.Context, req *policypb.GetAncestorsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	if err := f.down(); err != nil {
+		return nil, err
+	}
+	f.w.mu.Lock()
+	defer f.w.mu.Unlock()
+	var out []*policypb.NGACNode
+	for ws := range f.w.graph[req.NodeId] {
+		name := ngac.MembersUAName(ngac.WorkspaceID(ws))
+		out = append(out, &policypb.NGACNode{Id: "node-" + name, Name: name, NodeType: ngac.TypeUA})
+	}
+	return &policypb.NodeList{Nodes: out}, nil
 }
 
 // MarkEmailVerified records proof of the address; false when it already was.

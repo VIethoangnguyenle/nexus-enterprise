@@ -43,3 +43,10 @@ func PNGHeaderForTest(w, h int, bitDepth, colorType byte) []byte {
 	binary.Write(&out, binary.BigEndian, crc32.ChecksumIEEE(ihdr.Bytes()))
 	return out.Bytes()
 }
+
+// SetGraceForTest sets how long after a refresh token is spent presenting it again still
+// returns the same successor (see RefreshStore.grace).
+func (s *RefreshStore) SetGraceForTest(d time.Duration) { s.grace = d }
+
+// RefreshStoreForTest exposes the service's refresh store to the black-box tests.
+func (s *Service) RefreshStoreForTest() *RefreshStore { return s.refresh }

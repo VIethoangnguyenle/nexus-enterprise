@@ -27,6 +27,9 @@ func (p everyoneIsInTheRole) GetAncestors(context.Context, string) ([]string, er
 	return []string{p.role}, nil
 }
 func (p everyoneIsInTheRole) GetMembers(context.Context, string) ([]string, error) { return nil, nil }
+func (p everyoneIsInTheRole) IsWorkspaceMember(context.Context, string, string) (bool, error) {
+	return true, nil
+}
 
 // twoApprovalsTemplate stores a one-step template for a role whose step needs two approvals.
 func twoApprovalsTemplate(t *testing.T, ctx context.Context, role string, st *store.Store) {

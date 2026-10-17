@@ -234,9 +234,13 @@ func (h *Hub) RevokeWorkspaceSubscriptions(workspaceID, userNodeID string) {
 
 // revokeWorkspaceLocal drops this instance's subscriptions of the user to the
 // workspace and to the channels of its tenant (a workspace is its own tenant).
+//
+// It also closes the user's connections for that tenant with CloseNotMember: the
+// socket was admitted on a membership that no longer holds, and a client that
+// reconnects with the same token is turned away at authentication. Connections
+// of the same person for another tenant stay.
 func (h *Hub) revokeWorkspaceLocal(workspaceID, userNodeID string) {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	for c := range h.dom.workspaces[workspaceID] {
 		if c.ngacNodeID == userNodeID {
 			delete(h.dom.workspaces[workspaceID], c)
@@ -248,6 +252,19 @@ func (h *Hub) revokeWorkspaceLocal(workspaceID, userNodeID string) {
 				delete(subscribers, c)
 			}
 		}
+	}
+	var sockets []*Client
+	for _, clients := range h.users {
+		for c := range clients {
+			if c.ngacNodeID == userNodeID && c.tenantID == workspaceID {
+				sockets = append(sockets, c)
+			}
+		}
+	}
+	h.mu.Unlock()
+	// Closed outside the lock: closing ends readPump, which takes it.
+	for _, c := range sockets {
+		c.closeWith(CloseNotMember, "no longer a member of this workspace")
 	}
 }
 

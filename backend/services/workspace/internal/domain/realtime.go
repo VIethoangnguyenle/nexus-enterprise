@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"ngac-platform/pkg/grpcauth"
 	"ngac-platform/pkg/realtime"
@@ -55,4 +56,12 @@ func (s *Service) announceAccessChanged(ctx context.Context, wsID string, userNo
 		TenantID: wsID, WorkspaceID: wsID,
 		UserNodeIDs: nodes, ActorUserID: grpcauth.CallerFrom(ctx).UserID,
 	})
+}
+
+// WithRepairBackoff sets the delays between the background attempts to mark a removed
+// person's listing when the first attempt failed (see recordRemoval). Nil turns the
+// repair off.
+func (s *Service) WithRepairBackoff(delays []time.Duration) *Service {
+	s.repairBackoff = delays
+	return s
 }

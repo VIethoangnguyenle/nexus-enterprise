@@ -315,7 +315,7 @@ came up. Work through:
 
 A migration that writes `ngac_nodes`, `ngac_assignments` or `ngac_associations` bypasses EPP, so the
 running policy services and the decisions cached in Redis still describe the old graph. The rules
-for such a migration (the authz over-privilege fixes ship four: 059-062):
+for such a migration (the authz over-privilege fixes ship five: 059-063):
 
 1. **Two releases.** Release A carries code that works on both the old and the new data (it writes
    the new shape and reads both); release B adds the migration file. A rollback from B to A is then

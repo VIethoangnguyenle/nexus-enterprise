@@ -299,7 +299,8 @@ at most three of the earliest half-hour-grid times on a day (a date in the calle
 those whose title, place, description or a guest's name contains the text (case-insensitively; the characters of a
 pattern are literal), at most 50, each as its next occurrence (its last when the series is over), upcoming first. An
 event the caller may not read in full never matches, and a guest's name matches only where the caller sees the guest
-list.
+list. A guest's name matches only while that person is an active member of the workspace: someone who was removed
+(`tenant_users.status = 'removed'`) is no longer found by their name, though the event keeps its other text.
 
 ### Requirement: Reminders arrive as notifications
 An event MAY carry reminders (minutes before; a person's own reminders replace the event's for them). Every 30 seconds

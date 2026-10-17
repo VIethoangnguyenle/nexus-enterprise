@@ -26,9 +26,14 @@ import (
 type fakeDirectory struct {
 	profiles map[string]*store.Profile // by node ID
 	listed   []string                  // EnsureTenantUser calls: tenant/node
-	removed  []string                  // RemoveTenantUser calls: tenant/node
+	removed  []string                  // MarkTenantUserRemoved calls: tenant/node
 	ensure   error
-	profErr  error
+	markErr  error // MarkTenantUserRemoved fails with this (the call is still recorded)
+	// failFirst makes the first calls of MarkTenantUserRemoved fail, then lets them through.
+	failFirst int
+	mu        sync.Mutex // the repair runs in a goroutine
+	attempts  int
+	profErr   error
 }
 
 func (d *fakeDirectory) ProfilesByNodeIDs(_ context.Context, _ string, ids []string) (map[string]*store.Profile, error) {
@@ -49,9 +54,23 @@ func (d *fakeDirectory) EnsureTenantUser(_ context.Context, tenant, _, node stri
 	return d.ensure
 }
 
-func (d *fakeDirectory) RemoveTenantUser(_ context.Context, tenant, node string) error {
+func (d *fakeDirectory) MarkTenantUserRemoved(_ context.Context, tenant, node string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.attempts++
+	if d.failFirst > 0 {
+		d.failFirst--
+		return errors.New("database unavailable")
+	}
 	d.removed = append(d.removed, tenant+"/"+node)
-	return nil
+	return d.markErr
+}
+
+// marked is what has been marked removed so far, safe to read while a repair runs.
+func (d *fakeDirectory) marked() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]string(nil), d.removed...)
 }
 
 const (

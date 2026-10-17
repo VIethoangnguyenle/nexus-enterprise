@@ -20,7 +20,7 @@ import (
 type DirectoryStore interface {
 	ProfilesByNodeIDs(ctx context.Context, tenantID string, nodeIDs []string) (map[string]*store.Profile, error)
 	EnsureTenantUser(ctx context.Context, tenantID, userID, nodeID string) error
-	RemoveTenantUser(ctx context.Context, tenantID, nodeID string) error
+	MarkTenantUserRemoved(ctx context.Context, tenantID, nodeID string) error
 }
 
 // WithDirectory wires in the people directory. Operations that show or invite

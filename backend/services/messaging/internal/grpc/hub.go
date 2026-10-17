@@ -26,6 +26,11 @@ type Hub struct {
 	// every subscription.
 	access ChannelAccessChecker
 
+	// members answers whether a session's person still belongs to the tenant of the
+	// token it presents. Guarded by mu. Left nil, no session that names a tenant is
+	// let in.
+	members MembershipChecker
+
 	// dom holds workspace subscriptions, sequence numbers and the presence
 	// grace timers (hub_domain.go). Its maps are guarded by mu.
 	dom domainState
@@ -60,6 +65,14 @@ func NewHub(rdb *redis.Client, access ChannelAccessChecker) *Hub {
 		go h.reportStreams()
 	}
 	return h
+}
+
+// SetMembership installs the check every authenticating session that names a
+// tenant goes through (see Client.handleAuth).
+func (h *Hub) SetMembership(m MembershipChecker) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.members = m
 }
 
 // Close shuts down the Hub and its Redis subscription.

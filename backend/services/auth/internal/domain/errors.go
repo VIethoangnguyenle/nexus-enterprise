@@ -22,7 +22,12 @@ var (
 	ErrOTPExpired         = errors.New("otp expired or not found")
 	ErrOTPInvalid         = errors.New("invalid otp code")
 	ErrTenantNotFound     = errors.New("tenant not found")
-	ErrTooManyAttempts    = errors.New("too many attempts")
+	// ErrUnavailable means an answer could not be had right now (the policy
+	// service, the database or Redis did not respond). It is a refusal to guess:
+	// the caller reports 503 and keeps whatever it holds, instead of treating the
+	// outage as a "no".
+	ErrUnavailable     = errors.New("service temporarily unavailable")
+	ErrTooManyAttempts = errors.New("too many attempts")
 	// ErrOTPUnavailable means OTP sign-in is switched off: no fixed test
 	// code and no way to deliver a random one.
 	ErrOTPUnavailable = errors.New("otp sign-in is not available")

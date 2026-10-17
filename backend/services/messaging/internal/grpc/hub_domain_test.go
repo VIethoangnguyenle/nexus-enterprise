@@ -309,6 +309,7 @@ func TestDomainEvent_SeqAndDeliveryAcrossInstancesViaRedis(t *testing.T) {
 	access := allowAll([2]string{workspace, "n-a1"})
 	start := func() (*grpcserver.Hub, string) {
 		hub := grpcserver.NewHub(rdb, &fakeAccess{})
+		hub.SetMembership(everyoneIsAMember{})
 		hub.SetWorkspaceAccess(access)
 		t.Cleanup(hub.Close)
 		srv := httptest.NewServer(hub.HandleWebSocket(hubTestSecret))
@@ -399,6 +400,7 @@ func TestRevokeWorkspaceSubscriptions_AcrossInstancesViaRedis(t *testing.T) {
 	access := allowAll([2]string{tenant, "n-a1"})
 	start := func() (*grpcserver.Hub, string) {
 		hub := grpcserver.NewHub(rdb, &fakeAccess{})
+		hub.SetMembership(everyoneIsAMember{})
 		hub.SetWorkspaceAccess(access)
 		t.Cleanup(hub.Close)
 		srv := httptest.NewServer(hub.HandleWebSocket(hubTestSecret))

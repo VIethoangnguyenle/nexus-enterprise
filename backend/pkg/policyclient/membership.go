@@ -29,6 +29,11 @@ type GraphReader interface {
 // assigned under that workspace's policy class, so it is not the workspace's.
 var errNotMembersUA = errors.New("not the workspace's Members UA")
 
+// IsNotMembersUA reports whether err says a node is named like a workspace's Members UA but
+// is not that workspace's. It is a "no" about the workspace (it has no usable Members UA),
+// not a failure to ask.
+func IsNotMembersUA(err error) bool { return errors.Is(err, errNotMembersUA) }
+
 // membersUAIDs caches workspace id -> id of its "<ws>_Members" UA for the life
 // of the process. A node's id never changes (a rename keeps it) and a workspace
 // id is never reused, so an entry cannot go stale into a wrong answer; at worst

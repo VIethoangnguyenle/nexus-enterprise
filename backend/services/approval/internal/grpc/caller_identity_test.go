@@ -48,6 +48,9 @@ func (p *scopePolicy) CheckAccess(context.Context, string, string, string) (bool
 }
 func (p *scopePolicy) GetAncestors(context.Context, string) ([]string, error) { return nil, nil }
 func (p *scopePolicy) GetMembers(context.Context, string) ([]string, error)   { return nil, nil }
+func (p *scopePolicy) IsWorkspaceMember(context.Context, string, string) (bool, error) {
+	return true, nil
+}
 
 func (p *pendingStore) ListPending(_ context.Context, userNodeID string, _ []string) ([]*domain.RequestWithAssignment, error) {
 	p.asked = append(p.asked, userNodeID)

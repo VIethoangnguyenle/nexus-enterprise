@@ -34,6 +34,10 @@ The system SHALL add a user to a tenant on the basis of that tenant's `domain` o
 - **WHEN** a user signs in with Google and the verified ID token has `hd = 'acme.com'`, and a tenant has `domain = 'acme.com'`
 - **THEN** the user is added to that tenant as a `member`
 
+#### Scenario: A removed or suspended person is not brought back by the domain
+- **WHEN** a user whose `tenant_users` row in that tenant is `removed` or `disabled` signs in with the same proof
+- **THEN** the row is left as it is, the graph is not touched, and the tenant is not their default tenant: the domain claim is proof of an address, not an invitation, and signing in does not undo a removal or a suspension
+
 ### Requirement: Public email domains never place a user in a tenant
 The system SHALL keep one list of public mailbox domains (gmail.com, googlemail.com, outlook.com, hotmail.com, live.com, yahoo.com, icloud.com, proton.me, protonmail.com, gmx.com, yandex.com, mail.ru, aol.com, zoho.com and similar) in `backend/services/auth/internal/domain/public_domains.go`. A domain on that list SHALL never auto-join a user to a tenant and SHALL never be claimed as a tenant's `domain`, on any sign-in path. Domains are compared case-insensitively, and `workspaces.domain` is unique case-insensitively.
 
@@ -109,7 +113,7 @@ The system SHALL place a Google user in a company tenant only on the basis of th
 
 #### Scenario: Hosted domain matches a tenant
 - **WHEN** a Google user with `hd = 'acme.com'` signs in and a tenant has `domain = 'acme.com'`
-- **THEN** the user is added to that tenant as a `member` (an existing membership is left unchanged, including a disabled one) and the session is scoped to it
+- **THEN** the user is added to that tenant as a `member` (an existing active membership is left unchanged; a removed or disabled one is not touched and is not the default tenant) and the session is scoped to it
 - **AND** a new user also gets a personal workspace of their own as `owner`: every new account has one, a company account included
 
 #### Scenario: Hosted domain has no tenant yet

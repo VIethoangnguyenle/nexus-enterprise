@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/realtime"
@@ -99,17 +100,54 @@ func (s *Service) RemoveMember(ctx context.Context, callerNodeID, wsID, targetNG
 	if err := s.store.WithOwnerLock(ctx, ws.ID, remove); err != nil {
 		return err
 	}
-	s.withdrawOffers(ctx, ws.ID, targetNGACNodeID)
-	if s.directory != nil {
-		// Access is already gone; a listing left behind only keeps the person in
-		// contacts, so a failure is reported but does not undo the removal.
-		if err := s.directory.RemoveTenantUser(ctx, ws.ID, targetNGACNodeID); err != nil {
-			slog.Warn("member removed but their listing remains", "workspace", ws.ID, "error", err)
-		}
-	}
+	// Access is gone the moment the detach succeeded: tell everyone who is
+	// connected before anything that can fail again.
 	s.announce(ctx, realtime.KindMemberRemoved, ws.ID, targetNGACNodeID)
 	s.announceAccessChanged(ctx, ws.ID, targetNGACNodeID)
-	return nil
+	s.withdrawOffers(ctx, ws.ID, targetNGACNodeID)
+	return s.recordRemoval(ctx, ws.ID, targetNGACNodeID)
+}
+
+// recordRemoval tombstones the person's listing once access is already gone. The
+// failure is returned, not swallowed: a listing left active keeps the person in
+// contacts. The graph, which every access decision and every session refresh reads,
+// no longer lists them either way.
+//
+// Nobody retries the call (a person who left cannot be asked to leave again), so a
+// failed write is repaired here: tried again in the background on the Service's
+// schedule, which ends. Marking is idempotent, so a repair that overlaps a retry by an
+// administrator does no harm.
+func (s *Service) recordRemoval(ctx context.Context, wsID, nodeID string) error {
+	if s.directory == nil {
+		return nil
+	}
+	err := s.directory.MarkTenantUserRemoved(ctx, wsID, nodeID)
+	if err == nil {
+		return nil
+	}
+	slog.Error("member removed but their listing was not updated; will retry", "workspace", wsID, "error", err)
+	if len(s.repairBackoff) > 0 {
+		go s.repairRemoval(context.WithoutCancel(ctx), wsID, nodeID, s.repairBackoff)
+	}
+	return fmt.Errorf("member removed but their listing could not be updated: %w", err)
+}
+
+// repairRemoval marks the listing removed, waiting out each delay before an attempt, and
+// stops at the first success or when the delays run out (then it says so loudly).
+func (s *Service) repairRemoval(ctx context.Context, wsID, nodeID string, delays []time.Duration) {
+	for _, d := range delays {
+		time.Sleep(d)
+		attempt, cancel := context.WithTimeout(ctx, 10*time.Second)
+		err := s.directory.MarkTenantUserRemoved(attempt, wsID, nodeID)
+		cancel()
+		if err == nil {
+			slog.Info("listing of a removed member repaired", "workspace", wsID)
+			return
+		}
+		slog.Warn("repair of a removed member's listing failed", "workspace", wsID, "error", err)
+	}
+	slog.Error("a removed member's listing is still active; migration 063's predicate repairs it",
+		"workspace", wsID, "user_node_id", nodeID)
 }
 
 // detachMember removes a user from every UA under the workspace PC. It performs

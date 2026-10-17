@@ -103,7 +103,7 @@ func (s *Store) UpdateUserDepartment(ctx context.Context, tenantID, nodeID strin
 func (s *Store) CountMembersByDepartment(ctx context.Context, deptID string) (int, error) {
 	var count int
 	err := s.db.QueryRow(ctx,
-		`SELECT COUNT(*) FROM tenant_users WHERE department_id = $1`, deptID,
+		`SELECT COUNT(*) FROM tenant_users WHERE department_id = $1 AND status = 'active'`, deptID,
 	).Scan(&count)
 	if err != nil {
 		return 0, fmt.Errorf("count department members: %w", err)

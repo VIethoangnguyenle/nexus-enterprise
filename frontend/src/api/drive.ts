@@ -116,7 +116,7 @@ async function fetchThumbnail(fileId: string, size: ThumbnailSize, signal?: Abor
   }
   let res = await get()
   // One refresh, like apiFetch, but a thumbnail never ends the session on its own.
-  if (res.status === 401 && (await refreshAccessToken())) res = await get()
+  if (res.status === 401 && (await refreshAccessToken()).status === 'ok') res = await get()
   if (res.status !== 200) throw new ThumbnailUnavailableError(res.status)
   return res.blob()
 }

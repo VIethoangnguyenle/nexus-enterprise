@@ -10,7 +10,7 @@ dependencies: [4]
 
 ## Overview
 Decision 6: contacts and workspace switching agree with the graph; `ngac_*` is the truth. One mechanism (choice 7):
-**graph-first writes** + **062 reconcile** (Phase 04) + **graph check at every tenant-token mint** (sign-in, switch,
+**graph-first writes** + **063 reconcile** (Phase 04) + **graph check at every tenant-token mint** (sign-in, switch,
 refresh). No GetMe gate, no ListContacts gate (contacts reads the reconciled projection; email scoping belongs to
 `261017-1646-contacts-lark-redesign`).
 
@@ -48,7 +48,7 @@ Drift sources today (origin/main):
 ```
 join: IsAssigned? ─no─> assign <ws>_Members|Owners (+TenantMember* if exists) ─> insert row ─✗─> undo only new edges
 mint (sign-in / switch / refresh): ListTenantsByUser ∩ requireActiveMember ─> default tenant | tenant-less
-truth: ngac_assignments ; tenant_users = projection (062 reconciles once)
+truth: ngac_assignments ; tenant_users = projection (063 reconciles once)
 ```
 
 ## Related Code Files
@@ -72,7 +72,7 @@ truth: ngac_assignments ; tenant_users = projection (062 reconciles once)
 
 ## Success Criteria
 - No path writes an active row before the graph edge (`grep -n "InsertTenantUser\|EnsureTenantUser"` reviewed in PR).
-- After 062 + this phase, dev queries stay at 0 drift after a sign-up, a domain join, an invite accept and a removal.
+- After 063 + this phase, dev queries stay at 0 drift after a sign-up, a domain join, an invite accept and a removal.
 
 ## Risk Assessment
 | Risk | L×I | Mitigation |
@@ -83,4 +83,4 @@ truth: ngac_assignments ; tenant_users = projection (062 reconciles once)
 | Switcher shows only the current workspace during policy outage | M×L | logged; next load retries; never fail-open |
 
 ## Rollback
-Code-only; revert. No migration in this phase (062 belongs to Phase 04).
+Code-only; revert. No migration in this phase (062 and 063 belong to Phase 04).

@@ -36,7 +36,22 @@ The system SHALL support a user belonging to multiple tenants via the `tenant_us
 - **AND** each membership has its own `open_id`, `role`, and `status`
 
 ### Requirement: Tenant membership has status tracking
-The system SHALL track membership status as one of: `active`, `invited`, `disabled`.
+The system SHALL track membership status as one of: `active`, `invited`, `disabled`, `removed`.
+
+`removed` is a tombstone: a person taken out of the workspace (by an administrator, or by leaving) keeps their
+`tenant_users` row with `status = 'removed'` and no department, instead of the row being deleted. Deleting it made
+"removed" look like "never invited", so a Google Workspace sign-in for the company's domain joined them again.
+Only `active` is membership: every reader that means "who is in this workspace" (contacts, approvers, free/busy
+names, the department head-count, "anyone else left in a workspace being deleted") filters `status = 'active'`.
+Display-only readers (a name on an old approval) keep the person. The row is deleted only when the workspace is.
+
+An invitation reactivates only a `removed` row. A `disabled` person (an administrator's decision) and an `invited`
+one stay as they are. The graph (`ngac_*`) is the truth for what a person may do; `tenant_users` is its listing and is
+written after the graph. Migration 062 widens the CHECK constraint (it ships with or before the code that writes `removed`); migration 063 gives every row its `ngac_node_id`, lists the graph
+members who had no row, and tombstones `active` rows whose person is not under `<ws>_Members` (only in workspaces whose
+graph holds at least one member; a workspace whose graph holds none is reported and left alone, because its graph was
+never populated, not emptied). Until 062 runs a removal still detaches the person (every decision and every refresh
+reads the graph) but reports that the listing could not be updated.
 
 #### Scenario: Invited user before signup
 - **WHEN** an admin invites an email that has no registered user
@@ -45,6 +60,65 @@ The system SHALL track membership status as one of: `active`, `invited`, `disabl
 #### Scenario: Invited user completes signup
 - **WHEN** an invited user registers with the invited email
 - **THEN** the system updates the `tenant_users` status from `invited` to `active`
+
+#### Scenario: A removal leaves a tombstone
+- **WHEN** an administrator removes a member, or a member leaves
+- **THEN** the person is detached in the graph first, `member_removed` is announced at once, and then the row is set to `removed` with no department
+- **AND** if the row cannot be written the announcement has already gone out and the failure is returned
+
+#### Scenario: An invitation brings back a removed person only
+- **WHEN** a removed person accepts a new invitation
+- **THEN** their row becomes `active` again
+- **BUT** a `disabled` or `invited` row is left as it is
+
+### Requirement: A refresh checks that the person still belongs to its tenant
+`POST /api/auth/refresh` SHALL look the refresh token up without spending it, then check that the person is a
+member of the tenant the token names, then rotate. A member is a person who sits under `<ws>_Members` in the graph
+(asked of the policy writer, so a removal made a moment ago counts) and whose row, if there is one, is not `removed`,
+`disabled` or `invited`; a graph member with no row is allowed until migration 063 lists them. A tenant that no longer
+exists, or that has no Members UA, holds nobody.
+
+- A member gets a token for the same tenant, as before.
+- A person who is not a member keeps their session: the successor refresh token names the tenant they still belong to
+  (the default one, an owned workspace first, as at sign-in), or none, and the answer carries `tenant_id` and
+  `moved: true` so the client can follow. `moved` is present only for such a membership move; a client reacts to
+  that flag and never to a mere difference of tenants (another tab may have switched workspace on purpose). The
+  session family stays; their other tenants are unaffected. A tenant whose Members UA is gone or is only a lookalike
+  (not under the workspace's policy class) holds nobody: that is a denial, not an outage.
+- A refresh token that was spent a few seconds ago (10 s) answers with the successor it already produced, and the
+  same `moved` answer, instead of being treated as a replay: two tabs of one browser share the cookie and a removal
+  makes both ask at once. One spent longer ago is a replay and revokes the whole family. Which of the two it is
+  is decided by the refresh store alone, without asking the policy. The SPA also takes a browser-wide lock
+  (`navigator.locks`, name `nexus-refresh`) around a refresh, so the second tab presents the cookie the first has
+  replaced; without Web Locks it waits a small random time first.
+- When the answer cannot be had (the policy, the database or Redis does not respond) the response is `503` with code
+  `unavailable`, the refresh cookie is neither cleared nor changed and the token is not spent, so the same cookie works
+  once the service is back. Only a token that is actually refused (`401`) clears the cookie.
+
+The SPA treats `401`/`403` from refresh as the end of the session, and anything else (a `5xx`, a network failure) as
+"could not be asked": the session is kept and the request that wanted a new token fails with a `503` of its own instead
+of signing the person out. When a refresh puts the session in another workspace, the SPA drops what it holds of the old
+one, opens the new one and says so without naming an id. A WebSocket closed with code `4403` (see `resource-pep-coverage`)
+is not reconnected with the same token; the client asks for a new one (once a minute at most, backing off while the server cannot answer). A person who left on purpose is not told they were removed.
+
+The exposure of a removed person is bounded by the access-token lifetime (15 minutes) for services that trust the
+tenant in the JWT; it is zero for approval and for WebSocket connections, which ask the graph on every call/connect.
+
+#### Scenario: A removed person is moved to their other workspace
+- **WHEN** a person detached from workspace W refreshes with a token for W and still belongs to V
+- **THEN** the new access token is for V, the answer says `tenant_id: V`, and the next refresh keeps them in V
+
+#### Scenario: A removed person with no other workspace
+- **WHEN** a person removed from W, which was their only workspace, refreshes
+- **THEN** the session continues without a tenant
+
+#### Scenario: The graph and the table disagree
+- **WHEN** the row says `active` but the graph no longer holds the person, or the graph holds them but the row says `removed`, `disabled` or `invited`
+- **THEN** they are treated as not a member of that tenant
+
+#### Scenario: The policy is down during a refresh
+- **WHEN** a refresh arrives while the policy cannot answer
+- **THEN** it answers 503, the cookie is untouched, and the same cookie refreshes once the policy is back
 
 ### Requirement: A workspace's type is decided when it is made
 Every workspace SHALL have a type, `personal` or `organization` (`workspaces.type`, NOT NULL,

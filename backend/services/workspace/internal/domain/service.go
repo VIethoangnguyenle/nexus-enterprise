@@ -58,6 +58,9 @@ type Service struct {
 	invitations   InvitationStore
 	now           func() time.Time
 	inviteLimiter *windowLimiter
+	// repairBackoff is the schedule on which a listing that could not be marked removed
+	// is tried again in the background; empty turns the repair off.
+	repairBackoff []time.Duration
 	// mail sends the invitation email; nil sends none. See WithInviteMail.
 	mail       InviteMailer
 	appBaseURL string
@@ -111,6 +114,7 @@ func NewService(
 	svc := &Service{store: st, deptStore: ds, policyRead: pr, policyWrite: pw, minioClient: mc, driveClient: dc,
 		mailResend: DefaultInviteResendWindow, mailSlots: make(chan struct{}, inviteMailInFlight)}
 	svc.inviteLimiter = newWindowLimiter(defaultInviteMax, defaultInviteWindow, svc.clock)
+	svc.repairBackoff = []time.Duration{2 * time.Second, 10 * time.Second, 30 * time.Second, 2 * time.Minute, 10 * time.Minute}
 	return svc
 }
 

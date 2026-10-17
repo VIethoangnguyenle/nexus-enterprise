@@ -1,4 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+
+const refresh = vi.hoisted(() => vi.fn())
+vi.mock('../api/client', async (original) => ({
+  ...(await original<typeof import('../api/client')>()),
+  refreshAccessToken: refresh,
+}))
 import { queryClient } from '../lib/query-client'
 import { keys } from '../hooks/keys'
 import { useAuthStore } from './auth.store'
@@ -12,6 +18,7 @@ import { BATCH_MS } from '../lib/realtime'
 class FakeSocket {
   static OPEN = 1
   static last: FakeSocket | null = null
+  static opened = 0
   readyState = FakeSocket.OPEN
   binaryType = ''
   onopen: (() => void) | null = null
@@ -20,6 +27,7 @@ class FakeSocket {
   onmessage: ((e: { data: ArrayBuffer }) => void) | null = null
   constructor() {
     FakeSocket.last = this
+    FakeSocket.opened++
   }
   sent: ClientEnvelope[] = []
   send(data: Uint8Array | string) {
@@ -47,6 +55,8 @@ const settle = () => vi.advanceTimersByTime(BATCH_MS + 1)
 
 beforeEach(() => {
   vi.useFakeTimers()
+  refresh.mockReset()
+  FakeSocket.opened = 0
   queryClient.clear()
   vi.stubGlobal('WebSocket', FakeSocket)
   useAuthStore.setState({ tenantId: 'tenant-1', accessToken: 'token' })
@@ -1015,5 +1025,142 @@ describe('call events', () => {
     // The card's text reaches the stream as a message edit; refetching on every call event only adds requests.
     expect(invalidated(keys.messaging.messages('ch-1'))).toBe(false)
     expect(invalidated(keys.messaging.conversationActivity())).toBe(false)
+  })
+})
+
+
+// The hub closes a connection with 4403 when the person no longer belongs to the
+// workspace of its token. The token is valid for minutes yet, so reconnecting with
+// it would be refused again, in a loop; the client asks for a fresh token once.
+describe('a connection closed because the person left the workspace', () => {
+  const NOT_A_MEMBER = 4403
+
+  beforeEach(() => {
+    FakeSocket.opened = 1 // the connection made in the outer beforeEach
+    authOk() // accepted: a refusal after this is a first one
+    refresh.mockResolvedValue({ status: 'ok', token: 'moved-token' })
+  })
+
+  it('is not reconnected on a timer, and the session is asked for a new token once', async () => {
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    expect(FakeSocket.opened).toBe(1)
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(useWebSocketStore.getState().connected).toBe(false)
+  })
+
+  // The paired allow: any other drop is the network's, and is retried as before.
+  it('whereas an ordinary drop reconnects on a timer and does not ask for a token', async () => {
+    FakeSocket.last!.onclose!({ code: 1006 })
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    expect(FakeSocket.opened).toBe(2)
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('an outage (the hub says try again later) is retried like any drop', async () => {
+    FakeSocket.last!.onclose!({ code: 1013 })
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    expect(FakeSocket.opened).toBe(2)
+    expect(refresh).not.toHaveBeenCalled()
+  })
+
+  it('stops there when the session has ended', async () => {
+    refresh.mockResolvedValue({ status: 'ended' })
+
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    expect(FakeSocket.opened).toBe(1)
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  // The server could not answer (the policy was down): the socket must not stay dead
+  // until the page is reloaded, so the question is asked again, backing off.
+  it('asks again, backing off, while the session cannot be renewed yet', async () => {
+    refresh.mockResolvedValueOnce({ status: 'unavailable' }).mockResolvedValueOnce({ status: 'unavailable' })
+
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(2_000)
+    expect(refresh).toHaveBeenCalledTimes(2)
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(refresh).toHaveBeenCalledTimes(3)
+
+    // It answered (ok): the token change reconnects, nothing more is asked.
+    await vi.advanceTimersByTimeAsync(120_000)
+    expect(refresh).toHaveBeenCalledTimes(3)
+    expect(FakeSocket.opened).toBe(1)
+  })
+
+  it('stops asking when the connection is given up', async () => {
+    refresh.mockResolvedValue({ status: 'unavailable' })
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(1)
+
+    useWebSocketStore.getState().disconnect()
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    expect(refresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not loop: a second refusal without an accepted connection in between asks for nothing', async () => {
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    // The component reconnects with the new token (a token change does that); refused again.
+    useWebSocketStore.getState().connect('moved-token')
+    FakeSocket.last!.onopen!()
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(120_000)
+
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(FakeSocket.opened).toBe(2)
+  })
+
+  it('may ask again once a minute has passed, and right after signing out', async () => {
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    useWebSocketStore.getState().connect('moved-token')
+    FakeSocket.last!.onopen!()
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(61_000)
+    useWebSocketStore.getState().connect('moved-token-2')
+    FakeSocket.last!.onopen!()
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(refresh).toHaveBeenCalledTimes(2)
+
+    // And a new session starts clean.
+    useAuthStore.getState().logout()
+    useAuthStore.setState({ tenantId: 'tenant-1', accessToken: 'token' })
+    useWebSocketStore.getState().connect('token')
+    FakeSocket.last!.onopen!()
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(1)
+    expect(refresh).toHaveBeenCalledTimes(3)
+  })
+
+  it('may ask again after a connection was accepted', async () => {
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(1)
+    useWebSocketStore.getState().connect('moved-token')
+    FakeSocket.last!.onopen!()
+    authOk()
+
+    FakeSocket.last!.onclose!({ code: NOT_A_MEMBER })
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(refresh).toHaveBeenCalledTimes(2)
   })
 })

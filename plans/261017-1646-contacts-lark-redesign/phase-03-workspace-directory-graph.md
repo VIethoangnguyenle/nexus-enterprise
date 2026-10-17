@@ -25,7 +25,7 @@ Build and maintain the phase-02 graph from the workspace service. All writes go 
 - Workspace delete removes the directory nodes and the prohibition.
 
 ## Architecture
-- Migration `data/migrations/063_directory_visibility.sql` (nullable FKs to `ngac_nodes(id)`, `ON DELETE SET NULL`):
+- Migration `data/migrations/064_directory_visibility.sql` (nullable FKs to `ngac_nodes(id)`, `ON DELETE SET NULL`):
   `workspaces.directory_oa_id`, `workspaces.directory_open_oa_id`, `workspaces.directory_nodept_oa_id`,
   `workspaces.directory_limited_ua_id`; `departments.dir_oa_id`, `departments.peer_oa_id`, `departments.peers_ua_id`,
   `departments.directory_hidden BOOLEAN NOT NULL DEFAULT false` (cache of "Dir OA parent is Directory_W"; graph is truth,
@@ -55,7 +55,7 @@ Build and maintain the phase-02 graph from the workspace service. All writes go 
     `type=directory`) and op is `read`, accept `manage` on that OA (directory admin) — test both branches.
 
 ## Related Code Files
-- Create: `data/migrations/063_directory_visibility.sql`, `backend/services/workspace/internal/domain/directory_graph.go`,
+- Create: `data/migrations/064_directory_visibility.sql`, `backend/services/workspace/internal/domain/directory_graph.go`,
   `.../domain/directory_graph_test.go`
 - Modify: `data/init.sql`, `backend/services/workspace/internal/domain/{service.go,department.go,permission_areas.go,workspace_delete.go}`,
   `.../internal/store/` (workspace + department structs, insert/select of new columns), `backend/services/workspace/cmd/main.go`

@@ -225,8 +225,9 @@ func (allowPolicy) ResolveAccessibleScopes(context.Context, string, string) ([]s
 func (allowPolicy) CheckAccess(context.Context, string, string, string) (bool, error) {
 	return true, nil
 }
-func (allowPolicy) GetAncestors(context.Context, string) ([]string, error) { return nil, nil }
-func (allowPolicy) GetMembers(context.Context, string) ([]string, error)   { return nil, nil }
+func (allowPolicy) GetAncestors(context.Context, string) ([]string, error)          { return nil, nil }
+func (allowPolicy) GetMembers(context.Context, string) ([]string, error)            { return nil, nil }
+func (allowPolicy) IsWorkspaceMember(context.Context, string, string) (bool, error) { return true, nil }
 
 type capturePublisher struct {
 	mu  sync.Mutex

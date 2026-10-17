@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,7 +31,15 @@ const (
 	// userKeepKeyPrefix holds the one session a user-wide revocation spares: the
 	// session of the person who has just proved the address.
 	userKeepKeyPrefix = "refresh_user_keep:"
-	refreshTokenBytes = 32
+	// refreshClaimPrefix holds, per token being rotated, the successor chosen for it.
+	refreshClaimPrefix = "refresh_claim:"
+	refreshTokenBytes  = 32
+
+	// RefreshGrace is how long a spent refresh token still answers with its successor.
+	// Two tabs of one browser share the cookie and are told to refresh at the same
+	// moment (a removal closes every tab's socket), so the second one arrives with a
+	// token the first has just spent; that is not theft. Beyond the window it is.
+	RefreshGrace = 10 * time.Second
 )
 
 // ErrRefreshRejected is returned for any refresh token that is unknown,
@@ -37,6 +47,8 @@ const (
 // deliberately not distinguished in the error: telling a caller *why* their
 // token failed tells an attacker which of their guesses was closer.
 var ErrRefreshRejected = errors.New("refresh token rejected")
+
+func isDenied(err error) bool { return errors.Is(err, ErrAccessDenied) }
 
 // RefreshIdentity is the subject a refresh token stands for. It is everything
 // needed to mint a new access token without touching the database.
@@ -70,17 +82,21 @@ type refreshRecord struct {
 type RefreshStore struct {
 	rdb *redis.Client
 	ttl time.Duration
+	// grace is how long after a token is spent presenting it again returns the
+	// successor it already produced instead of counting as a replay.
+	grace time.Duration
 }
 
 // NewRefreshStore creates a refresh token store backed by Redis.
 func NewRefreshStore(rdb *redis.Client) *RefreshStore {
-	return &RefreshStore{rdb: rdb, ttl: RefreshTokenTTL}
+	return &RefreshStore{rdb: rdb, ttl: RefreshTokenTTL, grace: RefreshGrace}
 }
 
 func refreshKey(token string) string  { return refreshKeyPrefix + token }
 func sessionKey(sid string) string    { return sessionKeyPrefix + sid }
 func userCutoffKey(uid string) string { return userCutoffKeyPrefix + uid }
 func userKeepKey(uid string) string   { return userKeepKeyPrefix + uid }
+func claimKey(token string) string    { return refreshClaimPrefix + token }
 
 // Issue starts a new session and returns its first refresh token.
 func (s *RefreshStore) Issue(ctx context.Context, id RefreshIdentity) (token, sessionID string, err error) {
@@ -100,28 +116,49 @@ func (s *RefreshStore) Issue(ctx context.Context, id RefreshIdentity) (token, se
 	return token, id.SessionID, nil
 }
 
-// mint stores a fresh token for an existing identity and files it under the
-// session family so the family can be revoked wholesale.
-func (s *RefreshStore) mint(ctx context.Context, id RefreshIdentity) (string, error) {
+// newRefreshToken returns a fresh opaque token string.
+func newRefreshToken() (string, error) {
 	raw := make([]byte, refreshTokenBytes)
 	if _, err := rand.Read(raw); err != nil {
 		return "", fmt.Errorf("generate refresh token: %w", err)
 	}
-	token := base64.RawURLEncoding.EncodeToString(raw)
+	return base64.RawURLEncoding.EncodeToString(raw), nil
+}
 
+// mint stores a fresh token for an existing identity and files it under the
+// session family so the family can be revoked wholesale.
+func (s *RefreshStore) mint(ctx context.Context, id RefreshIdentity) (string, error) {
+	token, err := newRefreshToken()
+	if err != nil {
+		return "", err
+	}
+	if err := s.mintAs(ctx, token, id, nil); err != nil {
+		return "", err
+	}
+	return token, nil
+}
+
+// mintAs stores the given token for the identity. spent, when set, is a record
+// written in the same transaction (the predecessor marked spent), so the family
+// never holds a spent token without its successor or the other way round.
+func (s *RefreshStore) mintAs(ctx context.Context, token string, id RefreshIdentity, spent func(pipe redis.Pipeliner) error) error {
 	payload, err := json.Marshal(refreshRecord{RefreshIdentity: id})
 	if err != nil {
-		return "", fmt.Errorf("encode refresh record: %w", err)
+		return fmt.Errorf("encode refresh record: %w", err)
 	}
-
 	pipe := s.rdb.TxPipeline()
+	if spent != nil {
+		if err := spent(pipe); err != nil {
+			return err
+		}
+	}
 	pipe.Set(ctx, refreshKey(token), payload, s.ttl)
 	pipe.SAdd(ctx, sessionKey(id.SessionID), token)
 	pipe.Expire(ctx, sessionKey(id.SessionID), s.ttl)
 	if _, err := pipe.Exec(ctx); err != nil {
-		return "", fmt.Errorf("store refresh token: %w", err)
+		return fmt.Errorf("%w: store refresh token: %v", ErrUnavailable, err)
 	}
-	return token, nil
+	return nil
 }
 
 // Rotate exchanges a refresh token for a new one, returning the identity it
@@ -130,57 +167,197 @@ func (s *RefreshStore) mint(ctx context.Context, id RefreshIdentity) (string, er
 // Presenting a token that has already been spent means two parties hold the
 // same token — the legitimate client and whoever copied it. There is no way to
 // tell which one is calling, so the entire session family is revoked and both
-// are forced to sign in again.
+// are forced to sign in again. The exception is a token spent moments ago (see
+// RefreshGrace), which answers with the successor it already produced.
 func (s *RefreshStore) Rotate(ctx context.Context, token string) (string, RefreshIdentity, error) {
+	r, err := s.rotate(ctx, token, nil)
+	return r.next, r.identity, err
+}
+
+// RotateTo is Rotate for a successor that names another tenant ("" for none): the
+// session family stays, only the tenant its tokens stand for changes. It is how a
+// person removed from a workspace keeps their session in the one they still have.
+func (s *RefreshStore) RotateTo(ctx context.Context, token, tenantID string) (string, RefreshIdentity, error) {
+	r, err := s.rotate(ctx, token, &tenantID)
+	return r.next, r.identity, err
+}
+
+// rotation is the result of spending a token.
+type rotation struct {
+	next     string
+	identity RefreshIdentity
+	// moved is set when the successor names another tenant because the person was
+	// moved (RotateTo), also for a duplicate request that got the same successor.
+	moved bool
+}
+
+// claimValue is what the claim on a token holds: the successor chosen for it, whether
+// it was a move, and when (unix nanoseconds).
+func claimValue(next string, moved bool, at time.Time) string {
+	m := "0"
+	if moved {
+		m = "1"
+	}
+	return next + "|" + m + "|" + strconv.FormatInt(at.UnixNano(), 10)
+}
+
+func parseClaim(v string) (next string, moved bool, at time.Time, ok bool) {
+	parts := strings.Split(v, "|")
+	if len(parts) != 3 {
+		return "", false, time.Time{}, false
+	}
+	n, err := strconv.ParseInt(parts[2], 10, 64)
+	if err != nil {
+		return "", false, time.Time{}, false
+	}
+	return parts[0], parts[1] == "1", time.Unix(0, n), true
+}
+
+func (s *RefreshStore) rotate(ctx context.Context, token string, tenantID *string) (rotation, error) {
 	if s == nil || s.rdb == nil {
-		return "", RefreshIdentity{}, fmt.Errorf("refresh store unavailable")
+		return rotation{}, fmt.Errorf("%w: refresh store unavailable", ErrUnavailable)
 	}
 	if token == "" {
-		return "", RefreshIdentity{}, ErrRefreshRejected
+		return rotation{}, ErrRefreshRejected
 	}
 
-	payload, err := s.rdb.Get(ctx, refreshKey(token)).Bytes()
+	rec, err := s.read(ctx, token)
 	if err != nil {
-		return "", RefreshIdentity{}, ErrRefreshRejected
-	}
-
-	var rec refreshRecord
-	if err := json.Unmarshal(payload, &rec); err != nil {
-		return "", RefreshIdentity{}, ErrRefreshRejected
+		return rotation{}, err
 	}
 
 	revoked, err := s.revokedForUser(ctx, rec.RefreshIdentity)
 	if err != nil {
-		return "", RefreshIdentity{}, err
+		return rotation{}, fmt.Errorf("%w: %v", ErrUnavailable, err)
 	}
 	if revoked {
 		s.revokeLogged(ctx, rec.SessionID, "identity revoked")
-		return "", RefreshIdentity{}, ErrRefreshRejected
+		return rotation{}, ErrRefreshRejected
 	}
 
 	if rec.Spent {
+		// Spent moments ago: another tab of the same browser got here first, and
+		// this one is told what that one was. Spent longer ago it is a replay.
+		if r, ok, err := s.successorWithinGrace(ctx, token, true); err != nil {
+			return rotation{}, err
+		} else if ok {
+			return r, nil
+		}
 		// Replay detected — burn the family, including the token the honest
 		// client is holding right now.
 		s.revokeLogged(ctx, rec.SessionID, "refresh token replayed")
-		return "", RefreshIdentity{}, ErrRefreshRejected
+		return rotation{}, ErrRefreshRejected
 	}
 
-	// Mark spent before minting the successor, so a crash in between costs the
-	// user a re-login rather than leaving a token that can be replayed.
-	rec.Spent = true
-	spentPayload, err := json.Marshal(rec)
+	// Whoever claims the token first rotates it; a concurrent caller takes the
+	// successor the winner chose. SET NX is the one atomic step that decides.
+	next, err := newRefreshToken()
 	if err != nil {
-		return "", RefreshIdentity{}, fmt.Errorf("encode spent record: %w", err)
+		return rotation{}, err
 	}
-	if err := s.rdb.Set(ctx, refreshKey(token), spentPayload, redis.KeepTTL).Err(); err != nil {
-		return "", RefreshIdentity{}, fmt.Errorf("mark refresh token spent: %w", err)
+	moved := tenantID != nil
+	now := time.Now()
+	won, err := s.rdb.SetNX(ctx, claimKey(token), claimValue(next, moved, now), s.grace+claimSlack).Result()
+	if err != nil {
+		return rotation{}, fmt.Errorf("%w: claim refresh token: %v", ErrUnavailable, err)
+	}
+	if !won {
+		r, ok, err := s.successorWithinGrace(ctx, token, false)
+		if err != nil {
+			return rotation{}, err
+		}
+		if !ok {
+			return rotation{}, fmt.Errorf("%w: refresh token is being rotated", ErrUnavailable)
+		}
+		return r, nil
 	}
 
-	next, err := s.mint(ctx, rec.RefreshIdentity)
-	if err != nil {
-		return "", RefreshIdentity{}, err
+	issued := rec.RefreshIdentity
+	if tenantID != nil {
+		issued.TenantID = *tenantID
 	}
-	return next, rec.RefreshIdentity, nil
+	spent := rec
+	spent.Spent = true
+	spentPayload, err := json.Marshal(spent)
+	if err != nil {
+		s.rdb.Del(ctx, claimKey(token))
+		return rotation{}, fmt.Errorf("encode spent record: %w", err)
+	}
+	// Spent record and successor are written together: a crash cannot leave a spent
+	// token with no successor (a re-login) or two live tokens (a replayable one).
+	err = s.mintAs(ctx, next, issued, func(pipe redis.Pipeliner) error {
+		pipe.Set(ctx, refreshKey(token), spentPayload, redis.KeepTTL)
+		return nil
+	})
+	if err != nil {
+		s.rdb.Del(ctx, claimKey(token))
+		return rotation{}, err
+	}
+	return rotation{next: next, identity: issued, moved: moved}, nil
+}
+
+// claimSlack keeps a claim alive a little past the grace window, so a claim made with
+// no grace at all still serialises the callers racing for the same token.
+const claimSlack = 5 * time.Second
+
+// successorWithinGrace returns the successor the token's claim names, waiting for it to
+// be stored if the winner has not finished. spentEarlier is true for a token already
+// marked spent: then the claim only counts within the grace window. A caller that lost the
+// race for an unspent token always takes the winner's successor.
+func (s *RefreshStore) successorWithinGrace(ctx context.Context, token string, spentEarlier bool) (rotation, bool, error) {
+	v, err := s.rdb.Get(ctx, claimKey(token)).Result()
+	if errors.Is(err, redis.Nil) {
+		return rotation{}, false, nil
+	}
+	if err != nil {
+		return rotation{}, false, fmt.Errorf("%w: read claim: %v", ErrUnavailable, err)
+	}
+	next, moved, at, ok := parseClaim(v)
+	if !ok {
+		return rotation{}, false, nil
+	}
+	if spentEarlier && time.Since(at) > s.grace {
+		return rotation{}, false, nil
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		succ, err := s.read(ctx, next)
+		if err == nil {
+			if succ.Spent {
+				// The successor was itself spent already: the family has moved on.
+				return rotation{}, false, nil
+			}
+			return rotation{next: next, identity: succ.RefreshIdentity, moved: moved}, true, nil
+		}
+		if !errors.Is(err, ErrRefreshRejected) {
+			return rotation{}, false, err
+		}
+		if time.Now().After(deadline) {
+			return rotation{}, false, nil
+		}
+		select {
+		case <-ctx.Done():
+			return rotation{}, false, fmt.Errorf("%w: %v", ErrUnavailable, ctx.Err())
+		case <-time.After(15 * time.Millisecond):
+		}
+	}
+}
+
+// read loads the record a token stands for. A token that is not there is rejected;
+// Redis not answering is not a verdict on the token.
+func (s *RefreshStore) read(ctx context.Context, token string) (refreshRecord, error) {
+	payload, err := s.rdb.Get(ctx, refreshKey(token)).Bytes()
+	if errors.Is(err, redis.Nil) {
+		return refreshRecord{}, ErrRefreshRejected
+	}
+	if err != nil {
+		return refreshRecord{}, fmt.Errorf("%w: read refresh token: %v", ErrUnavailable, err)
+	}
+	var rec refreshRecord
+	if err := json.Unmarshal(payload, &rec); err != nil {
+		return refreshRecord{}, ErrRefreshRejected
+	}
+	return rec, nil
 }
 
 // AttachRefreshToken issues the refresh token for a session that already has
@@ -197,18 +374,69 @@ func (s *Service) AttachRefreshToken(ctx context.Context, id RefreshIdentity) (s
 	return token, nil
 }
 
-// RefreshSession exchanges a refresh token for a new access/refresh pair.
-func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (newAccess, newRefresh string, err error) {
-	next, id, err := s.refresh.Rotate(ctx, refreshToken)
+// RefreshOutcome is what a refresh produced.
+type RefreshOutcome struct {
+	Access   string
+	Refresh  string
+	TenantID string
+	// Moved is set only when the person was moved out of the tenant their token named
+	// because they no longer belong to it. A client acts on this, never on a mere
+	// difference of tenants (another tab may have switched workspace on purpose).
+	Moved bool
+}
+
+// RefreshSession exchanges a refresh token for a new access/refresh pair and says
+// which tenant the access token is for ("" for none).
+func (s *Service) RefreshSession(ctx context.Context, refreshToken string) (newAccess, newRefresh, tenantID string, err error) {
+	out, err := s.RefreshSessionFull(ctx, refreshToken)
+	return out.Access, out.Refresh, out.TenantID, err
+}
+
+// RefreshSessionFull is RefreshSession with the whole outcome.
+//
+// The order is the point: the token is looked up without being spent, the person's
+// membership of its tenant is checked, and only then is the token rotated. A
+// policy or database outage therefore returns ErrUnavailable with the token still
+// good, instead of spending it and leaving the person holding a dead cookie.
+//
+// A person who is no longer a member of the tenant the token names is not signed
+// out of the session: the successor names the tenant they still belong to (the
+// default one, as at sign-in), or none, and Moved says so.
+//
+// A token that is already spent is not asked about membership: it is either a
+// duplicate of a refresh made moments ago (answered with the same successor) or a
+// replay (the family is revoked), and the store alone decides which.
+func (s *Service) RefreshSessionFull(ctx context.Context, refreshToken string) (RefreshOutcome, error) {
+	rec, err := s.refresh.read(ctx, refreshToken)
 	if err != nil {
-		return "", "", err
+		return RefreshOutcome{}, err
 	}
 
-	access, err := auth.GenerateTokenForSession(id.UserID, id.Username, id.NGACNodeID, id.TenantID, id.SessionID)
-	if err != nil {
-		return "", "", fmt.Errorf("generate access token: %w", err)
+	var r rotation
+	if rec.Spent || rec.TenantID == "" {
+		r, err = s.refresh.rotate(ctx, refreshToken, nil)
+	} else {
+		err = s.requireActiveMember(ctx, rec.TenantID, rec.UserID, rec.NGACNodeID)
+		switch {
+		case err == nil:
+			r, err = s.refresh.rotate(ctx, refreshToken, nil)
+		case isDenied(err):
+			var target string
+			target, err = s.firstTenantWhereMember(ctx, rec.UserID, rec.NGACNodeID, rec.TenantID)
+			if err == nil {
+				r, err = s.refresh.rotate(ctx, refreshToken, &target)
+			}
+		}
 	}
-	return access, next, nil
+	if err != nil {
+		return RefreshOutcome{}, err
+	}
+
+	access, err := auth.GenerateTokenForSession(r.identity.UserID, r.identity.Username, r.identity.NGACNodeID, r.identity.TenantID, r.identity.SessionID)
+	if err != nil {
+		return RefreshOutcome{}, fmt.Errorf("generate access token: %w", err)
+	}
+	return RefreshOutcome{Access: access, Refresh: r.next, TenantID: r.identity.TenantID, Moved: r.moved}, nil
 }
 
 // EndSession revokes the refresh family behind a session. The access token
@@ -233,16 +461,15 @@ func (s *Service) EndSessionByRefreshToken(ctx context.Context, refreshToken str
 // Lookup resolves a refresh token to its identity without spending it.
 // It is used by logout, which needs the session ID and nothing else.
 func (s *RefreshStore) Lookup(ctx context.Context, token string) (RefreshIdentity, error) {
-	if s == nil || s.rdb == nil || token == "" {
+	if s == nil || s.rdb == nil {
+		return RefreshIdentity{}, fmt.Errorf("%w: refresh store unavailable", ErrUnavailable)
+	}
+	if token == "" {
 		return RefreshIdentity{}, ErrRefreshRejected
 	}
-	payload, err := s.rdb.Get(ctx, refreshKey(token)).Bytes()
+	rec, err := s.read(ctx, token)
 	if err != nil {
-		return RefreshIdentity{}, ErrRefreshRejected
-	}
-	var rec refreshRecord
-	if err := json.Unmarshal(payload, &rec); err != nil {
-		return RefreshIdentity{}, ErrRefreshRejected
+		return RefreshIdentity{}, err
 	}
 	return rec.RefreshIdentity, nil
 }
