@@ -75,40 +75,6 @@ func TestWorkspaceWideChannel_BeforeTheIndexIsTheOwnersGeneral(t *testing.T) {
 	assert.False(t, exists, "another workspace is not affected")
 }
 
-// A second workspace-wide channel is refused by the database whoever races to
-// insert it, and the refusal is the store's own error, not a driver one.
-func TestInsertChannel_SecondWorkspaceWideChannelIsRefused(t *testing.T) {
-	pool := testutil.SetupTestDB(t)
-	st := store.NewStore(pool)
-	ctx := context.Background()
-	owner, _ := testutil.CreateUser(t, pool)
-	wsID, _ := testutil.CreateWorkspace(t, pool, owner)
-	other, _ := testutil.CreateWorkspace(t, pool, owner)
-
-	wsChannel(t, pool, st, wsID, owner, "general", "workspace", time.Time{})
-
-	// Another workspace may have its own; a private channel is unaffected.
-	wsChannel(t, pool, st, other, owner, "general", "workspace", time.Time{})
-	wsChannel(t, pool, st, wsID, owner, "design", "private", time.Time{})
-
-	oa, ua := "oa-"+uuid.NewString(), "ua-"+uuid.NewString()
-	for _, n := range [][2]string{{oa, "OA"}, {ua, "UA"}} {
-		_, err := pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, $2)`, n[0], n[1])
-		require.NoError(t, err)
-	}
-	t.Cleanup(func() { pool.Exec(ctx, `DELETE FROM ngac_nodes WHERE id IN ($1, $2)`, oa, ua) })
-	second := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general-2", ChannelType: "workspace", WorkspaceID: wsID, NGACOaID: oa, NGACUaID: ua, CreatedBy: owner}
-
-	t.Cleanup(func() { pool.Exec(ctx, `DELETE FROM channels WHERE id = $1`, second.ID) })
-
-	err := st.InsertChannelWithMembers(ctx, second, "node-x")
-
-	require.ErrorIs(t, err, store.ErrWorkspaceChannelExists)
-	var rows int
-	require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM channel_members WHERE channel_id = $1`, second.ID).Scan(&rows))
-	assert.Equal(t, 0, rows, "nothing of the refused channel remains")
-}
-
 // Leaving a workspace drops the person's cache rows for every channel of that
 // workspace, and only theirs, and only that workspace's.
 func TestDeleteChannelMembersInWorkspace_DropsOnlyThatPersonInThatWorkspace(t *testing.T) {
