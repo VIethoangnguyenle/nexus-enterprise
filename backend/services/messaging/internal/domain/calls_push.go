@@ -72,6 +72,9 @@ func (s *Service) InviteToCall(ctx context.Context, callID, userID, userNodeID s
 	if err != nil {
 		return err
 	}
+	if call.CalendarEventID != "" {
+		return fmt.Errorf("%w: an event's call is joined from the event", ErrInvalidInput)
+	}
 	if !slices.Contains(openCallStatuses, call.Status) {
 		return ErrCallEnded
 	}

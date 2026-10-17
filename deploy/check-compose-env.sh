@@ -28,6 +28,7 @@ declare -A MAIN=(
   [asset]=backend/services/asset/cmd/main.go
   [drive]=backend/services/drive/cmd/main.go
   [approval]=backend/services/approval/cmd/main.go
+  [calendar]=backend/services/calendar/cmd/main.go
 )
 
 cfg=$(NEXUS_HOME=/opt/nexus docker compose -f deploy/docker-compose.prod.yml \

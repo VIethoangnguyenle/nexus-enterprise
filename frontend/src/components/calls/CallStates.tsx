@@ -56,9 +56,14 @@ export function FailedState({ onRetry, onLeave }: { onRetry: () => void; onLeave
   )
 }
 
-export function EndedSummary({ summary, messages, onBack, onRejoin }: {
+/** What a call came out of: a conversation, or a calendar event (which has no chat to go back to). */
+export type CallAbout = 'chat' | 'event'
+
+export function EndedSummary({ summary, messages, about = 'chat', onBack, onRejoin }: {
   summary: CallSummary
-  messages: number
+  /** Messages written during the call; absent for a call that has no conversation. */
+  messages?: number
+  about?: CallAbout
   onBack: () => void
   onRejoin: () => void
 }) {
@@ -68,10 +73,10 @@ export function EndedSummary({ summary, messages, onBack, onRejoin }: {
       <div className="cs-sum">
         <div><b>{formatElapsed(summary.durationMs)}</b><small>Thời lượng</small></div>
         <div><b>{summary.people}</b><small>Người tham gia</small></div>
-        <div><b>{messages}</b><small>Tin trong lúc gọi</small></div>
+        {messages !== undefined && <div><b>{messages}</b><small>Tin trong lúc gọi</small></div>}
       </div>
       <div className="cs-actions">
-        <Button variant="primary" onClick={onBack}>Về cuộc trò chuyện</Button>
+        <Button variant="primary" onClick={onBack}>{about === 'event' ? 'Về sự kiện' : 'Về cuộc trò chuyện'}</Button>
         <Button variant="soft" onClick={onRejoin}>Vào lại</Button>
       </div>
     </LightCenter>
@@ -108,22 +113,24 @@ export function OtherCallNotice({ currentTitle, onSwitch, onStay }: { currentTit
 }
 
 /** Opening a call that is already over, or that no longer exists. */
-export function CallOverState({ onBack }: { onBack: () => void }) {
+export function CallOverState({ onBack, about = 'chat' }: { onBack: () => void; about?: CallAbout }) {
+  const event = about === 'event'
   return (
     <LightCenter>
       <h2>Cuộc gọi đã kết thúc</h2>
-      <p className="cs-sub">Không còn ai trong cuộc gọi này. Bạn có thể bắt đầu một cuộc gọi mới từ cuộc trò chuyện.</p>
-      <div className="cs-actions"><Button variant="primary" onClick={onBack}>Về cuộc trò chuyện</Button></div>
+      <p className="cs-sub">{`Không còn ai trong cuộc gọi này. Bạn có thể bắt đầu một cuộc gọi mới từ ${event ? 'sự kiện' : 'cuộc trò chuyện'}.`}</p>
+      <div className="cs-actions"><Button variant="primary" onClick={onBack}>{event ? 'Về sự kiện' : 'Về cuộc trò chuyện'}</Button></div>
     </LightCenter>
   )
 }
 
-export function NoAccessState({ onBack }: { onBack: () => void }) {
+export function NoAccessState({ onBack, about = 'chat' }: { onBack: () => void; about?: CallAbout }) {
+  const event = about === 'event'
   return (
     <LightCenter>
-      <h2>Bạn không ở trong cuộc trò chuyện này</h2>
-      <p className="cs-sub">Nhờ một thành viên thêm bạn vào nhóm rồi vào lại cuộc gọi.</p>
-      <div className="cs-actions"><Button variant="primary" onClick={onBack}>Về danh sách trò chuyện</Button></div>
+      <h2>{event ? 'Bạn không còn là khách của sự kiện này' : 'Bạn không ở trong cuộc trò chuyện này'}</h2>
+      <p className="cs-sub">{event ? 'Nhờ người tổ chức mời bạn lại vào sự kiện rồi vào lại cuộc gọi.' : 'Nhờ một thành viên thêm bạn vào nhóm rồi vào lại cuộc gọi.'}</p>
+      <div className="cs-actions"><Button variant="primary" onClick={onBack}>{event ? 'Về lịch' : 'Về danh sách trò chuyện'}</Button></div>
     </LightCenter>
   )
 }

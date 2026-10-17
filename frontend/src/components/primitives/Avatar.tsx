@@ -1,5 +1,5 @@
 import { useState, type CSSProperties } from 'react'
-import { personStyle } from '../../lib/person-hue'
+import { hueStyle, personStyle } from '../../lib/person-hue'
 
 /** A picture the auth service (a person's) or the messaging service (a group's) keeps, with no size. */
 const STORED_AVATAR = /^\/api\/(?:auth|channels)\/avatars\/[0-9a-f]{32}$/
@@ -25,6 +25,11 @@ interface AvatarProps {
    * eight person hues and never rendered. Defaults to the name.
    */
   hueKey?: string
+  /**
+   * The colour as an index 0..7 that a server already worked out with the same hash from the user id
+   * (the calendar's `PersonRef.hue`). Wins over `hueKey`.
+   */
+  hue?: number
   size?: AvatarSize
   /** `square` is a group's: corners a quarter of the side, the picture follows. */
   shape?: 'circle' | 'square'
@@ -77,10 +82,10 @@ export function initialsOf(name: string): string {
 }
 
 /** Round avatar on the person's hue, with presence and the realtime halo. */
-export function Avatar({ name, hueKey, size = 32, shape = 'circle', src, online, halo, className = '' }: AvatarProps) {
+export function Avatar({ name, hueKey, hue, size = 32, shape = 'circle', src, online, halo, className = '' }: AvatarProps) {
   const s = px[size]
   const square = shape === 'square'
-  const style: CSSProperties = { ...personStyle(hueKey || name), ...(square ? { borderRadius: s / 4 } : {}) }
+  const style: CSSProperties = { ...(hue !== undefined && Number.isInteger(hue) && hue >= 0 && hue <= 7 ? hueStyle(hue + 1) : personStyle(hueKey || name)), ...(square ? { borderRadius: s / 4 } : {}) }
   const round = square ? 'rounded-[inherit]' : 'rounded-full'
   // A picture that fails to load (replaced, removed, or a server that does not
   // serve it) leaves the initials, never an empty circle. A new address tries again.

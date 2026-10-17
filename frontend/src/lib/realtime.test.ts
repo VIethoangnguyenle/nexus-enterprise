@@ -21,6 +21,22 @@ const ev = (over: Partial<DomainChange>): DomainChange => ({
 const has = (plan: { invalidate: QueryKey[] }, key: QueryKey) =>
   plan.invalidate.some((k) => JSON.stringify(k) === JSON.stringify(key))
 
+describe('planFor: calendar', () => {
+  it('an event change refreshes every range of the workspace, the calendar list and that event', () => {
+    const p = planFor(ev({ domain: 'calendar', kind: 'updated', ids: ['evt-1'] }))
+    expect(has(p, keys.calendar.eventsAll('ws-1'))).toBe(true)
+    expect(has(p, keys.calendar.calendars('ws-1'))).toBe(true)
+    expect(has(p, keys.calendar.event('ws-1', 'evt-1'))).toBe(true)
+    expect(p.touched).toEqual(['evt-1'])
+  })
+
+  it('leaves another workspace alone, and is part of a full resync', () => {
+    const p = planFor(ev({ domain: 'calendar', ids: ['evt-1'] }))
+    expect(has(p, keys.calendar.eventsAll('ws-2'))).toBe(false)
+    expect(workspaceResyncKeys('ws-1').some((k) => JSON.stringify(k) === JSON.stringify(keys.calendar.all('ws-1')))).toBe(true)
+  })
+})
+
 describe('planFor: drive', () => {
   it('a created item refreshes the folder it sits in and the quota, not other folders', () => {
     const p = planFor(ev({ kind: 'created', parentId: 'folder-9' }))

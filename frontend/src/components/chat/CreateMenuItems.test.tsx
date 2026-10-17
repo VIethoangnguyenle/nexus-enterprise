@@ -21,6 +21,21 @@ describe('CreateMenuItems', () => {
     ])
   })
 
+  it('adds Sự kiện after Công việc where the conversation has a calendar', () => {
+    render(<CreateMenuItems onSelect={vi.fn()} withEvent />)
+    expect(screen.getAllByRole('menuitem').map((i) => i.textContent)).toEqual([
+      'Bình chọn', 'Công việc', 'Sự kiện', 'Tài liệu mới', 'Đề nghị phê duyệt',
+    ])
+  })
+
+  it('reports an event as the kind chosen', async () => {
+    const user = userEvent.setup()
+    const onSelect = vi.fn()
+    render(<CreateMenuItems onSelect={onSelect} withEvent />)
+    await user.click(screen.getByRole('menuitem', { name: 'Sự kiện' }))
+    expect(onSelect).toHaveBeenCalledWith('event')
+  })
+
   it('hides the approval request in a personal workspace', () => {
     isPersonal = true
     render(<CreateMenuItems onSelect={vi.fn()} />)

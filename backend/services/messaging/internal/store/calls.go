@@ -15,8 +15,11 @@ var ErrCallOpen = errors.New("a call is already open in this conversation")
 
 // Call is a row of the calls table.
 type Call struct {
-	ID            string
-	ChannelID     string
+	ID string
+	// ChannelID is the conversation the call is in; empty for the call of a
+	// calendar event, which has CalendarEventID instead (exactly one is set).
+	ChannelID       string
+	CalendarEventID string
 	Kind          string // audio | video
 	Status        string // ringing | active | ended | missed | declined | cancelled
 	StartedBy     string
@@ -35,12 +38,12 @@ type CallPerson struct {
 	JoinedAt    time.Time
 }
 
-const callCols = `id, channel_id, kind, status, started_by, COALESCE(message_id, ''),
+const callCols = `id, COALESCE(channel_id, ''), COALESCE(calendar_event_id, ''), kind, status, started_by, COALESCE(message_id, ''),
 	created_at, started_at, ended_at, ring_expires_at`
 
 func scanCall(row pgx.Row) (*Call, error) {
 	var c Call
-	err := row.Scan(&c.ID, &c.ChannelID, &c.Kind, &c.Status, &c.StartedBy, &c.MessageID,
+	err := row.Scan(&c.ID, &c.ChannelID, &c.CalendarEventID, &c.Kind, &c.Status, &c.StartedBy, &c.MessageID,
 		&c.CreatedAt, &c.StartedAt, &c.EndedAt, &c.RingExpiresAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
@@ -86,6 +89,73 @@ func (s *Store) InsertCallWithMessage(ctx context.Context, msg *Message, c *Call
 	}
 	if err != nil {
 		return fmt.Errorf("create call: %w", err)
+	}
+	return nil
+}
+
+// ErrEventCallOpen: the event already has a call ringing or running.
+var ErrEventCallOpen = errors.New("a call is already open for this event")
+
+// EventCallRef is what the call of a calendar event needs to know of the event.
+type EventCallRef struct {
+	// ID is the series (or single event) the guests and the call belong to.
+	ID          string
+	WorkspaceID string
+	Title       string
+	HasCall     bool
+	// Private: only the event's guest list may be in its call.
+	Private bool
+	// OAID is the node a person must read to be in the call: the event's own,
+	// else the one of the calendar it is on.
+	OAID string
+	// Attending: the person asking is on the event's guest list.
+	Attending bool
+}
+
+// EventCallRef reads the event a call belongs to as userNodeID stands to it, nil
+// when there is no such event. An exception of a repeating event stands for its
+// series.
+func (s *Store) EventCallRef(ctx context.Context, eventID, userNodeID string) (*EventCallRef, error) {
+	var r EventCallRef
+	err := s.db.QueryRow(ctx,
+		`SELECT m.id, m.workspace_id, m.title, m.has_call, m.visibility = 'private', COALESCE(m.ngac_oa_id, c.ngac_oa_id, ''),
+		        EXISTS (SELECT 1 FROM calendar_attendees a WHERE a.event_id = m.id AND a.user_node_id = $2)
+		 FROM calendar_events e
+		 JOIN calendar_events m ON m.id = COALESCE(e.recurring_event_id, e.id)
+		 JOIN calendars c ON c.id = m.calendar_id
+		 WHERE e.id = $1`, eventID, userNodeID).Scan(&r.ID, &r.WorkspaceID, &r.Title, &r.HasCall, &r.Private, &r.OAID, &r.Attending)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("event call ref: %w", err)
+	}
+	return &r, nil
+}
+
+// OpenEventCall returns the event's ringing or running call, nil when none.
+func (s *Store) OpenEventCall(ctx context.Context, eventID string) (*Call, error) {
+	c, err := scanCall(s.db.QueryRow(ctx,
+		`SELECT `+callCols+` FROM calls WHERE calendar_event_id = $1 AND status IN ('ringing', 'active')`, eventID))
+	if err != nil {
+		return nil, fmt.Errorf("open event call: %w", err)
+	}
+	return c, nil
+}
+
+// InsertEventCall stores the call of a calendar event. A second open call for
+// the same event is ErrEventCallOpen.
+func (s *Store) InsertEventCall(ctx context.Context, c *Call) error {
+	_, err := s.db.Exec(ctx,
+		`INSERT INTO calls (id, calendar_event_id, kind, status, started_by, created_at, started_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		c.ID, c.CalendarEventID, c.Kind, c.Status, c.StartedBy, c.CreatedAt, c.StartedAt)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_calls_one_open_per_event" {
+		return ErrEventCallOpen
+	}
+	if err != nil {
+		return fmt.Errorf("create event call: %w", err)
 	}
 	return nil
 }

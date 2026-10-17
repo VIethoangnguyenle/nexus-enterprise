@@ -101,6 +101,8 @@ type Consumer struct {
 	client    *kgo.Client
 	notifSv   NotificationCreator
 	broadcast ApprovalBroadcaster
+	calendar  CalendarGate
+	announcer MessageAnnouncer
 	cancel    context.CancelFunc
 }
 
@@ -109,7 +111,7 @@ func NewConsumer(brokers []string, notifSv NotificationCreator, broadcast Approv
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup("messaging-notification-consumer"),
-		kgo.ConsumeTopics("asset.lifecycle", "asset.request", "asset.assignment", "approval.events", InvitationTopic),
+		kgo.ConsumeTopics("asset.lifecycle", "asset.request", "asset.assignment", "approval.events", InvitationTopic, CalendarTopic),
 		kgo.AllowAutoTopicCreation(),
 	)
 	if err != nil {
@@ -123,6 +125,9 @@ func NewConsumer(brokers []string, notifSv NotificationCreator, broadcast Approv
 		broadcast: broadcast,
 		cancel:    cancel,
 	}
+	// The hub both pushes approval changes and shows a new message to the people
+	// who have the conversation open.
+	c.announcer, _ = broadcast.(MessageAnnouncer)
 	go c.run(ctx)
 	return c, nil
 }
@@ -163,6 +168,8 @@ func (c *Consumer) run(ctx context.Context) {
 				c.handleApprovalEvent(ctx, record.Value)
 			case InvitationTopic:
 				c.handleInvitationEvent(ctx, record.Value)
+			case CalendarTopic:
+				c.handleCalendarEvent(ctx, record.Value)
 			}
 		})
 	}

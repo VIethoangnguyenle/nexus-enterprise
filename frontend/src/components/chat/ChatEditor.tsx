@@ -62,6 +62,8 @@ interface ChatEditorProps {
    * key for the session. Defaults to the conversation; a thread passes its own.
    */
   draftKey?: string
+  /** The conversation is a group with a calendar: the "+" menu offers "Sự kiện". Not in a thread's reply box. */
+  canCreateEvent?: boolean
 }
 
 /** Whether the formatting bar is open is remembered per person, on this device. */
@@ -99,6 +101,7 @@ export function ChatEditor({
   uploads: propUploads,
   parentMessageId,
   draftKey,
+  canCreateEvent,
 }: ChatEditorProps) {
   const fileRef = useRef<HTMLInputElement>(null)
   const cameraRef = useRef<HTMLInputElement>(null)
@@ -550,6 +553,7 @@ export function ChatEditor({
                 placement="top-start"
               >
                 <CreateMenuItems
+                withEvent={!!canCreateEvent && !parentMessageId}
                   separator={false}
                   onSelect={(k) => {
                     setShowCreateMenu(false)
@@ -731,6 +735,7 @@ export function ChatEditor({
             </div>}
             <div className="flex flex-col">
               <CreateMenuItems
+                withEvent={!!canCreateEvent && !parentMessageId}
                 separator={canAttach}
                 onSelect={(k) => {
                   setShowAttachSheet(false)

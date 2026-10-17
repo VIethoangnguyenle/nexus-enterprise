@@ -66,3 +66,18 @@ describe('Avatar shape', () => {
     expect(container.querySelector('img')?.className).toContain('rounded-[inherit]')
   })
 })
+
+describe('Avatar hue', () => {
+  const fill = (el: Element | null) => (el as HTMLElement).style.getPropertyValue('--p')
+
+  it('uses a hue index worked out elsewhere with the same hash, ahead of the key', () => {
+    const { container } = render(<Avatar name="Lê Thị Hoa" hueKey="some-user" hue={2} />)
+    expect(fill(container.firstElementChild)).toBe('var(--color-person-3)')
+  })
+
+  it('falls back to the key when the index is not one of the eight', () => {
+    const a = render(<Avatar name="A" hueKey="k" hue={9} />)
+    const b = render(<Avatar name="A" hueKey="k" />)
+    expect(fill(a.container.firstElementChild)).toBe(fill(b.container.firstElementChild))
+  })
+})

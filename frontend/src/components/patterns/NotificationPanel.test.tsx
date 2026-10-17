@@ -48,7 +48,7 @@ async function renderPanel(open = true) {
       </>
     ),
   })
-  const pages = ['/approval', '/assets', '/channels', '/workspace-select'].map((path) => createRoute({ getParentRoute: () => root, path, component: () => null }))
+  const pages = ['/approval', '/assets', '/channels', '/workspace-select', '/calendar'].map((path) => createRoute({ getParentRoute: () => root, path, component: () => null }))
   const router = createRouter({ routeTree: root.addChildren(pages), history: createMemoryHistory({ initialEntries: ['/channels'] }) })
   await router.load()
   renderWithClient(<RouterProvider router={router} />)
@@ -149,6 +149,31 @@ describe('NotificationPanel', () => {
     await userEvent.setup().click(link)
     await waitFor(() => expect(router.state.location.pathname).toBe('/workspace-select'))
     await waitFor(() => expect(posts()).toEqual(['/notifications/n9/read']))
+  })
+
+  it('writes a calendar row from names and times, labels it Lịch and opens that week of the calendar', async () => {
+    const eventId = '9c9c9c9c-1111-4222-8333-444455556666'
+    const start = new Date(NOON)
+    start.setHours(9, 0, 0, 0)
+    serve({
+      notifications: [N({
+        id: 'n8', type: 'calendar_invitation', title: 'Họp giao ban', entity_type: 'calendar_event', entity_id: eventId,
+        body: JSON.stringify({ ws: 'w1', actor: 'Lê Thị Hoa', start: start.toISOString() }),
+      })],
+      total: 1, unread_count: 1,
+    })
+    const router = await renderPanel()
+    const panel = await screen.findByRole('dialog', { name: 'Thông báo' })
+    const link = (await within(panel).findByText('Lê Thị Hoa mời bạn tới Họp giao ban')).closest('a')!
+    expect(within(panel).getByText('Lịch')).toBeInTheDocument()
+    expect(panel.textContent).not.toContain(eventId)
+    expect(panel.textContent).not.toContain('"actor"')
+    const day = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
+    expect(link.getAttribute('href')).toBe(`/calendar?mode=week&date=${day}&ws=w1`)
+
+    await userEvent.setup().click(link)
+    await waitFor(() => expect(router.state.location.pathname).toBe('/calendar'))
+    await waitFor(() => expect(posts()).toEqual(['/notifications/n8/read']))
   })
 
   it('clicking an unread row marks it read and closes the panel; a read row only closes it', async () => {

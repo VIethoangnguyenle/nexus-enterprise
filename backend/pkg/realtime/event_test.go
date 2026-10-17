@@ -99,3 +99,12 @@ func TestEmitDoesNotBlockWhenTheBrokerIsDown(t *testing.T) {
 		t.Fatalf("emit blocked for %v with the broker down", d)
 	}
 }
+
+func TestTopicsIncludeCalendar(t *testing.T) {
+	for _, topic := range Topics() {
+		if topic == "calendar.events" {
+			return
+		}
+	}
+	t.Fatalf("calendar.events missing from %v", Topics())
+}

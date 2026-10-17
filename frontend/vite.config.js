@@ -79,6 +79,10 @@ const devProxy = {
         if (/^\/api\/workspaces\/[^/]+\/asset/.test(url)) {
           return originalWeb(req, res, { ...opts, target: 'http://localhost:8184' })
         }
+        // /api/workspaces/:id/calendar* → calendar service
+        if (/^\/api\/workspaces\/[^/]+\/calendar/.test(url)) {
+          return originalWeb(req, res, { ...opts, target: 'http://localhost:8187' })
+        }
         return originalWeb(req, res, opts)
       }
     },
@@ -109,6 +113,8 @@ const devProxy = {
   '/api/polls': { target: 'http://localhost:8183', changeOrigin: true },
   '/api/tasks': { target: 'http://localhost:8183', changeOrigin: true },
   '/api/calls': { target: 'http://localhost:8183', changeOrigin: true },
+  // The video call of a calendar event is served by messaging.
+  '/api/calendar-events': { target: 'http://localhost:8183', changeOrigin: true },
 
   // Asset service — :8184
   '/api/assets': { target: 'http://localhost:8184', changeOrigin: true },
@@ -117,6 +123,9 @@ const devProxy = {
 
   // Drive service — :8185
   '/api/drive': { target: 'http://localhost:8185', changeOrigin: true },
+
+  // Calendar service — :8187. It has no flat prefix: every route lives under
+  // /api/workspaces/:id/calendar and is re-dispatched by the /api/workspaces block above.
 
   // Approval service — :8186
   '/api/approval': { target: 'http://localhost:8186', changeOrigin: true },

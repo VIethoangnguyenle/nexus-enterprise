@@ -95,6 +95,7 @@ export function PhoneCallView({ callRoom, snapshot, session, call, onLeave, onMi
   const { workspaceId } = useActiveWorkspace()
   const people = usePeople(workspaceId)
   const clock = useElapsed(session.startedAt)
+  const hasChat = !!session.channelId
   const newMessages = useMessagesSince(session.channelId, store.chatSeenAt)
   const [sheet, setSheet] = useState(false)
   const [hidden, setHidden] = useState(false)
@@ -218,10 +219,12 @@ export function PhoneCallView({ callRoom, snapshot, session, call, onLeave, onMi
             <Pressable className="cs-item" aria-pressed={handUp} onClick={() => { void callRoom.toggleHand(); setSheet(false) }}>
               <Hand className="cs-icon" />{handUp ? 'Hạ tay' : 'Giơ tay'}
             </Pressable>
-            <Pressable className="cs-item" onClick={() => { store.setPanel('chat'); setSheet(false) }}>
-              <MessageSquare className="cs-icon" />Chat trong cuộc gọi
-              {newMessages > 0 && <span className="cs-n2">{`${newMessages} mới`}</span>}
-            </Pressable>
+            {hasChat && (
+              <Pressable className="cs-item" onClick={() => { store.setPanel('chat'); setSheet(false) }}>
+                <MessageSquare className="cs-icon" />Chat trong cuộc gọi
+                {newMessages > 0 && <span className="cs-n2">{`${newMessages} mới`}</span>}
+              </Pressable>
+            )}
             <Pressable className="cs-item" onClick={() => { store.setPanel('people'); setSheet(false) }}>
               <Users className="cs-icon" />Người tham gia<span className="cs-n2">{participants.length}</span>
             </Pressable>

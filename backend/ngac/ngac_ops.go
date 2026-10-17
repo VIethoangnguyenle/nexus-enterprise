@@ -235,6 +235,7 @@ var (
 	reservedRolePrefixes = []string{
 		"User_", "PC_", "TenantMember_", "TenantOwner_", "Dept_", "Ch_",
 		"DriveRoot_", "Folder_", "Share_", "Asset_", "Role_", "U_",
+		"Cal_", "CalEv_", "CalEvGuests_",
 	}
 	reservedRoleSuffixes = []string{
 		"_Owners", "_Members", "_Mgmt", "_Documents", "_DraftDocs", "_ApprovedDocs",
@@ -321,3 +322,58 @@ const (
 	DecisionAllow = "ALLOW"
 	DecisionDeny  = "DENY"
 )
+
+// --- Calendar naming conventions ---
+//
+// Events are not nodes. A calendar is authorized on its OA; an event that has
+// guests or a call gets an OA of its own beneath the calendar's, so whoever can
+// reach the calendar reaches its events and a guest reaches only theirs.
+
+// Calendar share levels. They are the only vocabulary clients may use to say how
+// much a calendar share lets the grantee do; the operations are decided here.
+const (
+	CalendarShareView   = "view"
+	CalendarShareEdit   = "edit"
+	CalendarShareManage = "manage"
+)
+
+// CalendarOAName names a calendar's OA by the calendar's ID.
+func CalendarOAName(calID CalendarID) string { return fmt.Sprintf("Cal_%s", calID) }
+
+// CalendarEventOAName names the OA of one event that has guests or a call.
+func CalendarEventOAName(evID CalendarEventID) string { return fmt.Sprintf("CalEv_%s", evID) }
+
+// CalendarEventGuestsUAName names the UA that holds one event's guests.
+func CalendarEventGuestsUAName(evID CalendarEventID) string {
+	return fmt.Sprintf("CalEvGuests_%s", evID)
+}
+
+// CalendarOwnerOps returns what a calendar's owner holds on it. Reused for the
+// workspace calendar's owners and for the "edit and manage" share level.
+func CalendarOwnerOps() []string {
+	return []string{OpRead, OpWrite, OpShare, OpManage}
+}
+
+// CalendarShareOps maps a share level to the operations the share grants.
+// Anything but a known level is refused, so a caller cannot name an operation.
+func CalendarShareOps(level string) ([]string, bool) {
+	switch level {
+	case CalendarShareView:
+		return []string{OpRead}, true
+	case CalendarShareEdit:
+		return []string{OpRead, OpWrite}, true
+	case CalendarShareManage:
+		return CalendarOwnerOps(), true
+	}
+	return nil, false
+}
+
+// CalendarGuestOps returns what a guest holds on the event they were invited to.
+// Guests never edit; invite is added only when the host allowed guests to bring
+// others.
+func CalendarGuestOps(canInvite bool) []string {
+	if canInvite {
+		return []string{OpRead, OpInvite}
+	}
+	return []string{OpRead}
+}

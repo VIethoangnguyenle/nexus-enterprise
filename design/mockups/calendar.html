@@ -1,0 +1,1200 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nexus · Lịch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Bricolage+Grotesque:opsz,wght@12..96,600..700&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<style>
+/* Lịch kiểu Google Calendar trong Nexus: tuần, ngày, tháng, lịch biểu, soạn sự kiện, tìm giờ, lặp lại, chia sẻ,
+   nhắc giờ, lịch nhóm chat, máy tính bảng và điện thoại. Lưới giờ trong mockup dựng bằng JS cuối trang để dữ liệu
+   chỉ khai một lần; trong app mỗi khối là một button thật. "Hôm nay" trong mockup là Thứ Tư 14/10/2026, 10:40. */
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { background: var(--color-base); color: var(--color-ink); font-family: var(--font-body); font-size: 0.875rem; line-height: 1.5; padding-inline: 16px; padding-block: 0 64px; margin: 0; }
+svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
+svg.i.s { width: 16px; height: 16px; }
+svg.i.xs { width: 14px; height: 14px; }
+:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+p { margin: 0; }
+h1, h2, h3 { margin: 0; font-family: var(--font-display); text-wrap: balance; }
+.tnum { font-variant-numeric: tabular-nums; }
+.muted { color: var(--color-ink-muted); }
+.k { font-size: 0.6875rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.06em; text-transform: uppercase; }
+.row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.grow { flex: 1; min-width: 0; }
+
+.page { max-width: 1440px; margin-inline: auto; display: grid; gap: 56px; }
+.page > header { padding-block: 40px 0; display: grid; gap: 16px; }
+.page > header h1 { font-size: 1.75rem; line-height: 1.2; font-weight: 700; letter-spacing: -0.01em; }
+.page > header p { max-width: 80ch; font-size: 1rem; line-height: 1.6; color: var(--color-ink-muted); }
+.toc { display: flex; gap: 6px; flex-wrap: wrap; }
+.toc a { color: var(--color-ink); text-decoration: none; font-weight: 600; padding: 6px 12px; border-radius: 999px; background: var(--color-sunk); }
+.toc a:hover { background: var(--color-hover); }
+.themebar { display: flex; gap: 8px; align-items: center; }
+.screen { display: grid; gap: 16px; scroll-margin-top: 16px; min-width: 0; }
+.screen-head { display: grid; gap: 6px; max-width: 86ch; }
+.screen-head h2 { font-size: 1.4375rem; line-height: 1.3; font-weight: 700; }
+.screen-head p { color: var(--color-ink-muted); }
+.notes { margin: 0; padding-left: 1.3em; display: grid; gap: 6px; max-width: 92ch; color: var(--color-ink-muted); }
+.notes b { color: var(--color-ink); font-weight: 600; }
+.scroll { overflow-x: auto; border-radius: 14px; }
+.duo { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+.cap { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); margin-bottom: 8px; }
+.open-q { background: var(--color-warning-wash); color: var(--color-ink); border-radius: 10px; padding: 12px 16px; max-width: 92ch; display: grid; gap: 4px; }
+.open-q b { color: var(--color-warning); }
+
+/* primitives */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 36px; padding: 0 14px; border-radius: 8px; border: 0; font: 600 0.875rem/1 var(--font-body); cursor: pointer; white-space: nowrap; background: var(--color-hover); color: var(--color-ink); }
+.btn.primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn.ghost { background: transparent; }
+.btn.danger { background: var(--color-danger); color: var(--color-on-accent); }
+.btn.sm { height: 32px; padding: 0 12px; font-size: 0.8125rem; }
+.btn.create { height: 48px; padding: 0 20px 0 16px; border-radius: 14px; background: var(--color-raised); box-shadow: var(--shadow-overlay); font-size: 0.9375rem; }
+.btn.create svg { color: var(--color-accent); width: 22px; height: 22px; }
+.ib { width: 32px; height: 32px; border-radius: 8px; display: inline-grid; place-items: center; color: var(--color-ink-muted); border: 0; background: none; flex: none; }
+.ib:hover { background: var(--color-hover); }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 12px; border-radius: 999px; background: var(--color-sunk); font-weight: 600; font-size: 0.8125rem; color: var(--color-ink-muted); white-space: nowrap; }
+.chip[aria-checked="true"], .chip.on { background: var(--color-accent-wash); color: var(--color-accent); }
+.seg { display: inline-flex; background: var(--color-sunk); border-radius: 10px; padding: 3px; gap: 2px; }
+.seg span { height: 30px; padding: 0 12px; border-radius: 8px; display: grid; place-items: center; color: var(--color-ink-muted); font-weight: 600; font-size: 0.8125rem; }
+.seg span[aria-pressed="true"], .seg span[aria-checked="true"] { background: var(--color-raised); color: var(--color-ink); }
+.search { height: 36px; border-radius: 999px; background: var(--color-sunk); display: flex; align-items: center; gap: 8px; padding: 0 14px; color: var(--color-ink-subtle); min-width: 0; }
+.av { --s: 20px; --p: var(--color-person-1); width: var(--s); height: var(--s); border-radius: 999px; display: inline-grid; place-items: center; background: var(--p); color: var(--color-on-person); font: 600 calc(var(--s) * 0.42)/1 var(--font-body); flex: none; position: relative; }
+.av.s24 { --s: 24px; } .av.s32 { --s: 32px; } .av.s40 { --s: 40px; }
+.av .rs { position: absolute; right: -3px; bottom: -3px; width: 13px; height: 13px; border-radius: 999px; display: grid; place-items: center; box-shadow: 0 0 0 2px var(--bg, var(--color-overlay)); }
+.rs svg { width: 9px; height: 9px; stroke-width: 3; }
+.rs.yes { background: var(--color-success); color: var(--color-on-accent); }
+.rs.no { background: var(--color-danger); color: var(--color-on-accent); }
+.rs.maybe { background: var(--color-raised); color: var(--color-ink-muted); box-shadow: 0 0 0 2px var(--bg, var(--color-overlay)), inset 0 0 0 1px var(--color-line); }
+.pill { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 999px; font: 600 0.75rem/1 var(--font-body); white-space: nowrap; }
+.pill.ok { background: var(--color-success-wash); color: var(--color-success); }
+.pill.warn { background: var(--color-warning-wash); color: var(--color-warning); }
+.pill.no { background: var(--color-danger-wash); color: var(--color-danger); }
+.pill.info { background: var(--color-info-wash); color: var(--color-info); }
+.pill.mute { background: var(--color-sunk); color: var(--color-ink-muted); }
+.field { display: grid; gap: 6px; }
+.field > label { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); }
+.input { height: 40px; border-radius: 8px; background: var(--color-raised); display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 1rem; color: var(--color-ink); min-width: 0; }
+.input.sunk { background: var(--color-sunk); }
+.input .ph { color: var(--color-ink-muted); }
+.input.ring { box-shadow: 0 0 0 2px var(--color-focus); }
+.check { width: 18px; height: 18px; border-radius: 5px; display: inline-grid; place-items: center; flex: none; background: var(--c, var(--color-accent)); color: var(--color-on-accent); }
+.check svg { width: 12px; height: 12px; stroke-width: 3; }
+.check.off { background: transparent; box-shadow: inset 0 0 0 2px var(--c, var(--color-ink-muted)); }
+.radio { width: 18px; height: 18px; border-radius: 999px; box-shadow: inset 0 0 0 2px var(--color-ink-muted); flex: none; }
+.radio.on { box-shadow: inset 0 0 0 2px var(--color-accent), inset 0 0 0 5px var(--color-overlay), inset 0 0 0 9px var(--color-accent); }
+.dot { width: 10px; height: 10px; border-radius: 3px; background: var(--c); flex: none; }
+
+/* calendar colours: --c fg, --w wash. Lịch cá nhân mặc định mang màu người của chủ lịch. */
+.c-me { --c: var(--color-person-6); --w: var(--color-person-6-wash); }
+.c-ws { --c: var(--color-accent); --w: var(--color-accent-wash); }
+.c-vh { --c: var(--color-person-3); --w: var(--color-person-3-wash); }
+.c-tt { --c: var(--color-person-2); --w: var(--color-person-2-wash); }
+.c-duc { --c: var(--color-person-5); --w: var(--color-person-5-wash); }
+.c-yen { --c: var(--color-person-3); --w: var(--color-person-3-wash); }
+.c-vinh { --c: var(--color-person-1); --w: var(--color-person-1-wash); }
+
+/* desktop frame */
+.desk { min-width: 1240px; background: var(--color-sunk); border-radius: 14px; padding: 10px; display: grid; grid-template-columns: 64px 256px minmax(0, 1fr); height: 820px; position: relative; }
+.desk.noside { grid-template-columns: 64px minmax(0, 1fr); }
+.rail { display: grid; align-content: start; justify-items: center; gap: 4px; padding-top: 6px; }
+.rail .ws { width: 40px; height: 40px; border-radius: 10px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; font: 700 1rem/1 var(--font-display); margin-bottom: 8px; }
+.rail a { width: 60px; display: grid; justify-items: center; gap: 2px; padding: 4px 0; color: var(--color-ink-muted); text-decoration: none; font-size: 0.6875rem; font-weight: 500; }
+.rail a span { width: 48px; height: 28px; border-radius: 10px; display: grid; place-items: center; }
+.rail a.on { color: var(--color-ink); font-weight: 600; }
+.rail a.on span { background: var(--color-accent-wash); color: var(--color-accent); }
+.rail a .new { position: absolute; }
+.side { padding: 6px 12px 12px 4px; display: grid; align-content: start; gap: 18px; overflow: hidden; }
+.main { background: var(--color-base); border-radius: 12px; display: flex; flex-direction: column; min-width: 0; overflow: hidden; position: relative; }
+.mhead { padding: 14px 20px 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.mhead .title { font: 700 1.4375rem/1.2 var(--font-display); white-space: nowrap; }
+.mhead .title small { font: 500 0.875rem/1 var(--font-body); color: var(--color-ink-muted); margin-left: 8px; }
+
+/* mini month */
+.mini { display: grid; gap: 4px; padding: 0 4px; }
+.mini .hd { display: flex; align-items: center; font-weight: 600; padding-left: 6px; }
+.mini .g { display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 0.75rem; row-gap: 2px; }
+.mini .g b { font-weight: 600; color: var(--color-ink-muted); font-size: 0.6875rem; height: 24px; line-height: 24px; }
+.mini .g span { width: 28px; height: 28px; line-height: 28px; margin: auto; border-radius: 999px; font-variant-numeric: tabular-nums; }
+.mini .g span.o { color: var(--color-ink-subtle); }
+.mini .g span.wk { background: var(--color-hover); border-radius: 0; width: 100%; }
+.mini .g span.wk.first { border-radius: 999px 0 0 999px; } .mini .g span.wk.last { border-radius: 0 999px 999px 0; }
+.mini .g span.t { background: var(--color-accent); color: var(--color-on-accent); font-weight: 600; width: 28px; border-radius: 999px; }
+.callist { display: grid; gap: 2px; }
+.callist .h { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 4px 8px; font-weight: 600; }
+.calrow { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 6px 0 8px; border-radius: 8px; font-weight: 500; }
+.calrow:hover { background: var(--color-hover); }
+.calrow .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.calrow .sub { color: var(--color-ink-muted); font-size: 0.75rem; font-weight: 500; }
+
+/* time grid */
+.tg { --hh: 48px; --cols: 7; display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 0; flex: 1; }
+.tg-days { display: grid; grid-template-columns: 56px repeat(var(--cols), minmax(0, 1fr)); padding-right: 8px; }
+.tg-day { display: grid; justify-items: center; gap: 2px; padding: 4px 0 8px; }
+.tg-day .w { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; color: var(--color-ink-muted); }
+.tg-day .n { width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center; font: 600 1.375rem/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.tg-day.today .w { color: var(--color-accent); }
+.tg-day.today .n { background: var(--color-accent); color: var(--color-on-accent); }
+.tg-day.off .n { color: var(--color-ink-muted); }
+.tg-tz { font-size: 0.6875rem; color: var(--color-ink-muted); align-self: end; padding: 0 0 6px 6px; }
+.tg-all { display: grid; grid-template-columns: 56px repeat(var(--cols), minmax(0, 1fr)); padding: 0 8px 4px 0; box-shadow: inset 0 -1px 0 var(--color-line); position: relative; min-height: 30px; }
+.tg-all .lb { font-size: 0.6875rem; color: var(--color-ink-muted); padding: 6px 6px 0 0; text-align: right; }
+.tg-all .ad { margin: 2px 2px; height: 22px; border-radius: 6px; background: var(--w); color: var(--color-ink); font-weight: 600; font-size: 0.75rem; padding: 0 8px; display: flex; align-items: center; gap: 6px; box-shadow: inset 3px 0 0 var(--c); white-space: nowrap; overflow: hidden; }
+.tg-body { overflow: hidden; position: relative; }
+.tg-scroll { display: grid; grid-template-columns: 56px repeat(var(--cols), minmax(0, 1fr)); padding-right: 8px; position: relative; }
+.tg-hours { display: grid; }
+.tg-hours span { height: var(--hh); font-size: 0.6875rem; color: var(--color-ink-muted); text-align: right; padding-right: 8px; transform: translateY(-7px); font-variant-numeric: tabular-nums; }
+.tg-col { position: relative; box-shadow: inset 1px 0 0 var(--color-line); background-image: repeating-linear-gradient(to bottom, var(--color-line) 0 1px, transparent 1px var(--hh)); }
+.tg-col.today { background-color: oklch(from var(--color-accent-wash) l c h / 0.35); }
+.tg-col.off { background-color: oklch(from var(--color-sunk) l c h / 0.55); }
+.ev { position: absolute; border-radius: 6px; background: var(--w); box-shadow: inset 3px 0 0 var(--c); padding: 3px 6px 3px 9px; font-size: 0.75rem; line-height: 1.3; overflow: hidden; color: var(--color-ink); display: grid; align-content: start; gap: 1px; z-index: 1; }
+.ev b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ev .t { color: var(--color-ink-muted); font-variant-numeric: tabular-nums; white-space: nowrap; display: flex; gap: 4px; align-items: center; }
+.ev .t svg { width: 11px; height: 11px; }
+.ev.one { display: flex; gap: 4px; align-items: center; padding-top: 0; padding-bottom: 0; white-space: nowrap; }
+.ev.one .t { flex: none; }
+.ev.pending { background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--c), inset 3px 0 0 var(--c); }
+.ev.declined { background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line), inset 3px 0 0 var(--color-ink-subtle); }
+.ev.declined b { text-decoration: line-through; color: var(--color-ink-muted); font-weight: 500; }
+.ev.busy { background: repeating-linear-gradient(135deg, var(--w) 0 6px, oklch(from var(--w) l c h / 0.45) 6px 12px); }
+.ev.busy b { font-weight: 500; color: var(--color-ink-muted); }
+.ev.is-sel { box-shadow: inset 3px 0 0 var(--c), 0 0 0 2px var(--c), var(--shadow-overlay); z-index: 3; }
+.ev.ghost { background: oklch(from var(--color-accent-wash) l c h / 0.9); box-shadow: inset 0 0 0 2px var(--color-accent), var(--shadow-overlay); z-index: 4; }
+.ev.ghost::after { content: ""; position: absolute; left: 50%; bottom: 2px; width: 18px; height: 3px; margin-left: -9px; border-radius: 2px; background: var(--color-accent); }
+.ev.rt { animation: none; background: var(--color-person-5-wash); box-shadow: inset 3px 0 0 var(--c), 0 0 0 2px var(--color-person-5); }
+.ev .rtl { color: var(--color-person-5); font-weight: 600; font-size: 0.6875rem; }
+.now { position: absolute; left: -5px; right: 0; height: 2px; background: var(--color-accent); z-index: 0; }
+.now::before { content: ""; position: absolute; left: 0; top: -4px; width: 10px; height: 10px; border-radius: 999px; background: var(--color-accent); }
+
+/* overlays */
+.pop { position: absolute; background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); z-index: 20; --bg: var(--color-overlay); }
+.pop-ev { width: 420px; padding: 8px 8px 12px; display: grid; gap: 4px; }
+.pop-ev .tools { display: flex; justify-content: flex-end; gap: 2px; }
+.pop-ev .ln { display: grid; grid-template-columns: 40px 1fr; align-items: start; padding: 4px 12px 4px 4px; }
+.pop-ev .ln > :first-child { display: grid; place-items: center; height: 24px; color: var(--color-ink-muted); }
+.pop-ev .ttl { font: 600 1.1875rem/1.3 var(--font-display); }
+.pop-ev .meta { color: var(--color-ink-muted); }
+.gl { display: grid; gap: 8px; padding-top: 6px; }
+.gl .p { display: flex; align-items: center; gap: 10px; }
+.gl .p .grow { display: grid; line-height: 1.3; }
+.gl .p small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.rsvp { display: flex; align-items: center; gap: 8px; padding: 10px 12px 0 16px; box-shadow: inset 0 1px 0 var(--color-line); margin-top: 6px; }
+.rsvp .seg span { padding: 0 14px; }
+.rsvp .seg span[aria-checked="true"] { background: var(--color-success-wash); color: var(--color-success); }
+.modal { background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 20px; display: grid; gap: 16px; --bg: var(--color-overlay); }
+.modal h3 { font-size: 1.1875rem; font-weight: 600; }
+.modal .foot { display: flex; justify-content: flex-end; gap: 8px; }
+.scrimbox { background: var(--color-scrim); border-radius: 14px; padding: 40px; display: grid; place-items: center; }
+.menu { background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 6px; display: grid; min-width: 260px; }
+.menu > span { height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 12px; border-radius: 8px; }
+.menu > span.on { background: var(--color-accent-wash); color: var(--color-ink); font-weight: 600; }
+.menu > span:hover { background: var(--color-hover); }
+.menu hr { border: 0; height: 1px; background: var(--color-line); margin: 4px 6px; }
+.toast { background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 12px 12px 12px 16px; display: flex; align-items: center; gap: 12px; width: 420px; }
+.toast .grow { display: grid; line-height: 1.35; }
+.toast small { color: var(--color-ink-muted); font-size: 0.75rem; }
+
+/* month */
+.mg { flex: 1; display: grid; grid-template-rows: auto repeat(5, minmax(0, 1fr)); padding: 0 8px 8px; min-height: 0; }
+.mg-w { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); text-align: center; font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; color: var(--color-ink-muted); padding-bottom: 6px; }
+.mg-r { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); box-shadow: inset 0 1px 0 var(--color-line); }
+.mg-c { box-shadow: inset 1px 0 0 var(--color-line); padding: 4px 4px 2px; display: grid; align-content: start; gap: 2px; min-width: 0; overflow: hidden; }
+.mg-r .mg-c:first-child { box-shadow: none; }
+.mg-c .d { justify-self: center; width: 26px; height: 26px; border-radius: 999px; display: grid; place-items: center; font-size: 0.75rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mg-c.o .d { color: var(--color-ink-subtle); }
+.mg-c.t .d { background: var(--color-accent); color: var(--color-on-accent); }
+.mc { display: flex; align-items: center; gap: 6px; height: 22px; padding: 0 6px; border-radius: 6px; font-size: 0.75rem; white-space: nowrap; overflow: hidden; min-width: 0; }
+.mc:hover { background: var(--color-hover); }
+.mc .dot { width: 8px; height: 8px; border-radius: 999px; }
+.mc .t { color: var(--color-ink-muted); font-variant-numeric: tabular-nums; flex: none; }
+.mc b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.mc.ad { background: var(--w); box-shadow: inset 3px 0 0 var(--c); font-weight: 600; }
+.mc.dec b { text-decoration: line-through; color: var(--color-ink-muted); font-weight: 500; }
+.mc.more { color: var(--color-ink-muted); font-weight: 600; }
+
+/* agenda */
+.ag { display: grid; padding: 0 20px 20px; overflow: hidden; align-content: start; }
+.ag-day { display: grid; grid-template-columns: 120px 1fr; gap: 12px; padding: 12px 0; box-shadow: inset 0 1px 0 var(--color-line); }
+.ag-day .dd { display: flex; gap: 10px; align-items: baseline; }
+.ag-day .dd b { font: 600 1.375rem/1 var(--font-display); font-variant-numeric: tabular-nums; width: 32px; }
+.ag-day.today .dd b { color: var(--color-accent); }
+.ag-day .dd span { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); letter-spacing: 0.04em; }
+.ag-list { display: grid; gap: 2px; }
+.ag-ev { display: grid; grid-template-columns: 14px 128px 1fr auto; gap: 10px; align-items: center; min-height: 36px; padding: 4px 8px; border-radius: 8px; }
+.ag-ev:hover { background: var(--color-hover); }
+.ag-ev .dot { width: 10px; height: 10px; border-radius: 999px; }
+.ag-ev .t { color: var(--color-ink-muted); font-variant-numeric: tabular-nums; }
+.ag-ev b { font-weight: 600; }
+.ag-ev.dec b { text-decoration: line-through; color: var(--color-ink-muted); font-weight: 500; }
+.ag-ev .m { display: flex; gap: 8px; align-items: center; color: var(--color-ink-muted); font-size: 0.75rem; }
+.nowrow { display: flex; align-items: center; gap: 6px; color: var(--color-accent); font-size: 0.6875rem; font-weight: 600; padding: 0 8px; }
+.nowrow::before { content: ""; width: 8px; height: 8px; border-radius: 999px; background: var(--color-accent); }
+.nowrow::after { content: ""; flex: 1; height: 2px; background: var(--color-accent); }
+
+/* editor */
+.ed { display: grid; grid-template-rows: auto auto minmax(0, 1fr); height: 100%; }
+.ed-top { display: flex; align-items: center; gap: 12px; padding: 14px 20px; }
+.ed-title { flex: 1; height: 48px; border-radius: 8px; background: var(--color-raised); display: flex; align-items: center; padding: 0 14px; font: 600 1.375rem/1 var(--font-display); }
+.ed-when { padding: 0 20px 0 64px; display: grid; gap: 10px; }
+.ed-when .row { flex-wrap: wrap; }
+.ed-tabs { display: flex; gap: 4px; padding: 16px 20px 0 64px; box-shadow: inset 0 -1px 0 var(--color-line); }
+.ed-tabs span { padding: 10px 14px; font-weight: 600; color: var(--color-ink-muted); border-radius: 8px 8px 0 0; }
+.ed-tabs span.on { color: var(--color-accent); box-shadow: inset 0 -2px 0 var(--color-accent); }
+.ed-body { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 24px; padding: 16px 20px 20px; overflow: hidden; }
+.ed-form { display: grid; gap: 12px; align-content: start; }
+.ed-ln { display: grid; grid-template-columns: 32px 1fr; gap: 12px; align-items: center; }
+.ed-ln > svg { color: var(--color-ink-muted); justify-self: center; }
+.ed-ln.top { align-items: start; } .ed-ln.top > svg { margin-top: 11px; }
+.callbox { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: var(--color-raised); }
+.callbox .ic { width: 36px; height: 36px; border-radius: 10px; background: var(--color-success-wash); color: var(--color-success); display: grid; place-items: center; flex: none; }
+.callbox .grow { display: grid; line-height: 1.35; }
+.callbox small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.textarea { min-height: 104px; border-radius: 8px; background: var(--color-raised); padding: 8px 12px; display: grid; align-content: start; gap: 8px; font-size: 1rem; }
+.textarea .fmt { display: flex; gap: 2px; color: var(--color-ink-muted); padding-bottom: 6px; box-shadow: inset 0 -1px 0 var(--color-line); }
+.guests { background: var(--color-raised); border-radius: 10px; padding: 16px; display: grid; gap: 12px; align-content: start; position: relative; --bg: var(--color-raised); }
+.guests h3 { font: 600 1rem/1.3 var(--font-body); }
+.sugg { position: absolute; left: 16px; right: 16px; top: 98px; z-index: 6; padding: 6px; display: grid; gap: 2px; }
+.sugg .p { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; }
+.sugg .p.on { background: var(--color-hover); }
+.sugg .p .grow { display: grid; line-height: 1.3; }
+.sugg small { font-size: 0.75rem; color: var(--color-ink-muted); }
+
+/* find a time */
+.ft { display: grid; grid-template-columns: 56px repeat(5, minmax(0, 1fr)); padding: 0 20px; gap: 0; }
+.ft-h { display: grid; justify-items: center; gap: 4px; padding: 8px 0 10px; text-align: center; font-size: 0.75rem; font-weight: 600; }
+.ft-h small { color: var(--color-ink-muted); font-weight: 500; }
+.slot { position: absolute; left: 0; right: 0; background: oklch(from var(--color-accent-wash) l c h / 0.75); box-shadow: inset 0 2px 0 var(--color-accent), inset 0 -2px 0 var(--color-accent); z-index: 4; pointer-events: none; }
+.slot-col { box-shadow: inset 2px 0 0 var(--color-accent), inset -2px 0 0 var(--color-accent); }
+
+/* settings / share */
+.share { width: 560px; }
+.prow { display: grid; grid-template-columns: 32px 1fr auto auto; gap: 12px; align-items: center; min-height: 52px; box-shadow: inset 0 -1px 0 var(--color-line); }
+.prow:last-child { box-shadow: none; }
+.prow .grow { display: grid; line-height: 1.3; }
+.prow small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.sel { height: 32px; border-radius: 8px; background: var(--color-sunk); display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; font-weight: 600; font-size: 0.8125rem; white-space: nowrap; }
+.lvl { display: grid; gap: 2px; width: 320px; }
+.lvl > span { height: auto; display: grid; grid-template-columns: 18px 1fr; gap: 10px; padding: 8px 12px; border-radius: 8px; align-items: start; }
+.lvl > span.on { background: var(--color-accent-wash); }
+.lvl > span b { font-weight: 600; display: block; }
+.lvl > span small { color: var(--color-ink-muted); font-size: 0.75rem; }
+.lvl > span svg { margin-top: 2px; color: var(--color-accent); }
+
+/* notifications & chat */
+.nrow { display: grid; grid-template-columns: 32px 1fr 10px; gap: 12px; padding: 12px; border-radius: 10px; align-items: start; }
+.nrow:hover { background: var(--color-hover); }
+.nrow .grow { display: grid; gap: 6px; }
+.nrow .m { font-size: 0.75rem; color: var(--color-ink-muted); display: flex; gap: 6px; align-items: center; }
+.nrow .udot { width: 8px; height: 8px; border-radius: 999px; background: var(--color-accent); margin-top: 8px; }
+.npanel { width: 400px; background: var(--color-overlay); border-radius: 12px; box-shadow: var(--shadow-overlay); padding: 12px; display: grid; gap: 2px; --bg: var(--color-overlay); }
+.push { width: 360px; border-radius: 18px; background: oklch(from var(--color-overlay) l c h / 0.92); box-shadow: var(--shadow-overlay); padding: 12px 14px; display: grid; grid-template-columns: 36px 1fr; gap: 10px; }
+.push .app { width: 36px; height: 36px; border-radius: 9px; background: var(--color-accent); display: grid; place-items: center; color: var(--color-on-accent); font: 700 1rem/1 var(--font-display); }
+.push .h { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--color-ink-muted); }
+.push .acts { grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.push .acts span { height: 34px; border-radius: 10px; background: var(--color-sunk); display: grid; place-items: center; font-weight: 600; }
+.chatwin { width: 720px; background: var(--color-base); border-radius: 14px; overflow: hidden; display: grid; }
+.chat-h { display: flex; align-items: center; gap: 10px; padding: 12px 16px 0; }
+.chat-h .nm { font: 700 1.1875rem/1.2 var(--font-display); }
+.chat-tabs { display: flex; gap: 2px; padding: 8px 12px 0; box-shadow: inset 0 -1px 0 var(--color-line); }
+.chat-tabs span { padding: 8px 12px; font-weight: 600; color: var(--color-ink-muted); }
+.chat-tabs span.on { color: var(--color-accent); box-shadow: inset 0 -2px 0 var(--color-accent); }
+.msg { display: grid; grid-template-columns: 32px 1fr; gap: 10px; padding: 12px 16px; }
+.msg .who { font-size: 0.9375rem; font-weight: 600; } .msg .who small { font-weight: 500; color: var(--color-ink-muted); font-size: 0.75rem; margin-left: 6px; }
+.evcard { background: var(--color-raised); border-radius: 14px; box-shadow: inset 0 0 0 1px var(--color-line); padding: 12px; display: grid; gap: 10px; max-width: 440px; margin-top: 6px; --bg: var(--color-raised); }
+.evcard .top { display: grid; grid-template-columns: 52px 1fr; gap: 12px; align-items: center; }
+.datebox { width: 52px; height: 56px; border-radius: 12px; background: var(--w); color: var(--c); display: grid; place-items: center; align-content: center; line-height: 1; }
+.datebox small { font-size: 0.6875rem; font-weight: 600; letter-spacing: 0.06em; }
+.datebox b { font: 700 1.5rem/1.1 var(--font-display); color: var(--color-ink); }
+.evcard .acts { display: flex; gap: 6px; align-items: center; }
+.stack { display: flex; } .stack .av { box-shadow: 0 0 0 2px var(--bg, var(--color-raised)); } .stack .av + .av { margin-left: -6px; }
+
+/* tablet & phone */
+.tab { width: 820px; height: 1060px; background: var(--color-base); border-radius: 24px; overflow: hidden; display: grid; grid-template-rows: auto auto minmax(0, 1fr); position: relative; box-shadow: inset 0 0 0 1px var(--color-line); }
+.phone { width: 390px; height: 820px; background: var(--color-base); border-radius: 36px; overflow: hidden; display: grid; grid-template-rows: auto auto minmax(0, 1fr); position: relative; box-shadow: inset 0 0 0 1px var(--color-line); flex: none; }
+.ptop { padding: 52px 12px 0; }
+.pill-search { height: 52px; border-radius: 999px; background: var(--color-sunk); display: flex; align-items: center; gap: 4px; padding: 0 4px; }
+.pill-search .ib { width: 44px; height: 44px; border-radius: 999px; }
+.pill-search .ph { flex: 1; color: var(--color-ink-muted); font-size: 1rem; }
+.ptitle { display: flex; align-items: center; gap: 8px; padding: 16px 16px 8px; }
+.ptitle h3 { font: 700 1.625rem/1.2 var(--font-display); flex: 1; display: flex; align-items: center; gap: 4px; }
+.fab { position: absolute; right: 16px; bottom: 28px; width: 56px; height: 56px; border-radius: 18px; background: var(--color-accent); color: var(--color-on-accent); display: grid; place-items: center; box-shadow: var(--shadow-overlay); z-index: 8; }
+.fab svg { width: 26px; height: 26px; }
+.strip { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 8px 8px; text-align: center; }
+.strip span { display: grid; gap: 2px; justify-items: center; font-size: 0.6875rem; font-weight: 600; color: var(--color-ink-muted); }
+.strip span b { width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center; font: 600 1rem/1 var(--font-body); color: var(--color-ink); font-variant-numeric: tabular-nums; }
+.strip span.t b { background: var(--color-accent); color: var(--color-on-accent); }
+.strip span i { width: 4px; height: 4px; border-radius: 999px; background: var(--color-ink-subtle); }
+.strip span i.no { visibility: hidden; }
+.pag { padding: 0 12px 100px; display: grid; align-content: start; overflow: hidden; }
+.pag .dh { font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); padding: 14px 4px 6px; letter-spacing: 0.04em; }
+.pag .dh.t { color: var(--color-accent); }
+.pcard { display: grid; grid-template-columns: 4px 1fr auto; gap: 12px; padding: 10px 12px; border-radius: 12px; background: var(--color-raised); margin-bottom: 6px; align-items: center; --bg: var(--color-raised); }
+.pcard .bar { align-self: stretch; border-radius: 2px; background: var(--c); }
+.pcard b { font-size: 1rem; font-weight: 600; display: block; }
+.pcard small { color: var(--color-ink-muted); font-size: 0.8125rem; }
+.pcard.dec b { text-decoration: line-through; color: var(--color-ink-muted); font-weight: 500; }
+.sheet { position: absolute; left: 0; right: 0; bottom: 0; background: var(--color-overlay); border-radius: 24px 24px 0 0; box-shadow: var(--shadow-overlay); padding: 8px 16px 28px; display: grid; gap: 10px; z-index: 10; --bg: var(--color-overlay); }
+.sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--color-line); justify-self: center; margin-bottom: 4px; }
+.pscrim { position: absolute; inset: 0; background: var(--color-scrim); z-index: 9; }
+.prow2 { display: flex; gap: 14px; align-items: flex-start; min-height: 32px; }
+.prow2 > svg { color: var(--color-ink-muted); margin-top: 3px; }
+.skel { background: linear-gradient(90deg, var(--color-sunk) 0 40%, var(--color-hover) 50%, var(--color-sunk) 60%); background-size: 300% 100%; animation: sh 1.4s linear infinite; border-radius: 6px; }
+@keyframes sh { from { background-position: 100% 0; } to { background-position: 0 0; } }
+@media (prefers-reduced-motion: reduce) { .skel { animation: none; } }
+.state { background: var(--color-raised); border-radius: 12px; padding: 24px; width: 340px; display: grid; gap: 10px; justify-items: start; }
+.state > svg { width: 24px; height: 24px; color: var(--color-ink-muted); }
+.kbd { display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px; background: var(--color-sunk); box-shadow: inset 0 -1px 0 var(--color-line); font: 600 0.75rem/1 var(--font-body); }
+.keys { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 6px 24px; max-width: 980px; }
+.keys > span { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; box-shadow: inset 0 -1px 0 var(--color-line); }
+table.map { border-collapse: collapse; max-width: 980px; width: 100%; }
+table.map th { text-align: left; font-size: 0.75rem; font-weight: 600; color: var(--color-ink-muted); padding: 8px 12px; box-shadow: inset 0 -1px 0 var(--color-line); }
+table.map td { padding: 10px 12px; box-shadow: inset 0 -1px 0 var(--color-line); vertical-align: top; }
+table.map code { font: 400 0.8125rem/1.4 var(--font-mono); background: var(--color-sunk); padding: 1px 5px; border-radius: 4px; }
+
+/* ===== Google Calendar look (người dùng yêu cầu 2026-10-17: "giống Google Calendar") =====
+   Khối sự kiện tô đặc màu lịch + chữ trắng (person hue L≈50% nên chữ trắng đạt 4.5:1, như avatar);
+   sự kiện đã qua nhạt về wash; vạch giờ hiện tại đỏ; nút dạng pill; thanh trên trải ngang như Google. */
+.btn { border-radius: 999px; }
+.btn.create { border-radius: 16px; }
+.gbtn { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 16px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--color-line); font-weight: 600; white-space: nowrap; color: var(--color-ink); background: var(--color-raised); }
+.gbtn svg { width: 16px; height: 16px; }
+.desk.gc { grid-template-columns: 64px 256px minmax(0, 1fr); grid-template-rows: 60px minmax(0, 1fr); }
+.desk.gc .rail { grid-row: 1 / -1; }
+.gtop { grid-column: 2 / -1; display: flex; align-items: center; gap: 6px; padding: 0 8px 8px 0; min-width: 0; }
+.gtop .brand { display: flex; align-items: center; gap: 10px; width: 236px; font: 500 1.375rem/1 var(--font-body); color: var(--color-ink-muted); flex: none; }
+.glogo { width: 38px; height: 38px; border-radius: 9px; background: var(--color-raised); box-shadow: inset 0 0 0 1px var(--color-line); display: grid; grid-template-rows: 11px 1fr; overflow: hidden; }
+.glogo i { background: var(--color-accent); }
+.glogo b { display: grid; place-items: center; font: 700 0.9375rem/1 var(--font-display); color: var(--color-ink); }
+.gtop .title { font: 400 1.375rem/1 var(--font-body); color: var(--color-ink); margin-left: 8px; white-space: nowrap; }
+.gtop .ib { width: 40px; height: 40px; border-radius: 999px; }
+.callist .h .ib { width: 28px; height: 28px; }
+
+/* day header & grid like Google: no column tints, big regular day numbers */
+.tg-day .n { width: 46px; height: 46px; font: 400 1.625rem/1 var(--font-body); color: var(--color-ink); }
+.tg-day.off .n { color: var(--color-ink); }
+.tg-col.today, .tg-col.off { background-color: transparent; }
+.now { background: var(--color-danger); z-index: 6; }
+.now::before { background: var(--color-danger); width: 12px; height: 12px; top: -5px; left: -1px; }
+.nowrow { color: var(--color-danger); } .nowrow::before, .nowrow::after { background: var(--color-danger); }
+
+/* solid events */
+.ev { background: var(--c); color: var(--color-on-person); box-shadow: 0 0 0 1px var(--color-base); border-radius: 6px; padding: 3px 7px; }
+.ev b { font-weight: 500; }
+.ev .t { color: oklch(from var(--color-on-person) l c h / 0.88); }
+.ev.past { background: var(--w); color: var(--color-ink); }
+.ev.past .t { color: var(--color-ink-muted); }
+.ev.pending { background: var(--color-raised); color: var(--c); box-shadow: inset 0 0 0 1px var(--c), 0 0 0 1px var(--color-base); }
+.ev.pending .t { color: var(--c); }
+.ev.declined { background: var(--color-raised); color: var(--color-ink-muted); box-shadow: inset 0 0 0 1px var(--color-line), 0 0 0 1px var(--color-base); }
+.ev.declined .t { color: var(--color-ink-muted); }
+.ev.busy { background: repeating-linear-gradient(135deg, var(--w) 0 6px, oklch(from var(--w) l c h / 0.4) 6px 12px); color: var(--color-ink-muted); box-shadow: inset 0 0 0 1px var(--w), 0 0 0 1px var(--color-base); }
+.ev.busy .t { color: var(--color-ink-muted); }
+.ev.is-sel { box-shadow: 0 0 0 1px var(--color-base), var(--shadow-overlay); }
+.ev.ghost { background: var(--color-accent); color: var(--color-on-accent); box-shadow: var(--shadow-overlay); }
+.ev.ghost .t { color: oklch(from var(--color-on-accent) l c h / 0.88); }
+.ev.ghost::after { background: var(--color-on-accent); }
+.ev.rt { background: var(--c); box-shadow: 0 0 0 3px var(--color-person-5-wash), 0 0 0 5px var(--color-person-5); }
+.ev .rtl { color: var(--color-on-person); }
+.tg-all .ad { background: var(--c); color: var(--color-on-person); box-shadow: none; font-weight: 500; }
+.mc.ad { background: var(--c); color: var(--color-on-person); box-shadow: none; }
+.mc.ad b { font-weight: 500; }
+.mg-c .d { font-weight: 500; }
+
+/* popover like Google */
+.pop-ev .ttl { font: 400 1.375rem/1.3 var(--font-body); }
+.rsvp .gp { display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 14px; border-radius: 999px; box-shadow: inset 0 0 0 1px var(--color-line); font-weight: 600; font-size: 0.8125rem; }
+.rsvp .gp.on { background: var(--color-accent-wash); color: var(--color-accent); box-shadow: none; }
+.rsvp .gp svg { width: 14px; height: 14px; }
+
+/* phone schedule cards: solid like the Google app */
+.pcard { background: var(--c); color: var(--color-on-person); grid-template-columns: 1fr auto; --bg: var(--c); }
+.pcard .bar { display: none; }
+.pcard small { color: oklch(from var(--color-on-person) l c h / 0.88); }
+.pcard .muted { color: var(--color-on-person); }
+.pcard.past { background: var(--w); color: var(--color-ink); } .pcard.past small, .pcard.past .muted { color: var(--color-ink-muted); }
+.pcard.pend { background: var(--color-raised); color: var(--c); box-shadow: inset 0 0 0 1px var(--c); } .pcard.pend small { color: var(--c); }
+.pcard.dec { background: var(--color-raised); color: var(--color-ink-muted); box-shadow: inset 0 0 0 1px var(--color-line); } .pcard.dec small { color: var(--color-ink-muted); }
+.pcard .pill { background: var(--color-raised); }
+.viewmenu { position: absolute; z-index: 30; width: 240px; }
+.viewmenu .k2 { margin-left: auto; color: var(--color-ink-muted); font-size: 0.75rem; }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-msg" viewBox="0 0 24 24"><path d="M4 5h16v11H8l-4 4z"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="m9 12 2 2 4-4M12 3l8 4v5c0 5-3.5 8-8 9-4.5-1-8-4-8-9V7z"/></symbol>
+  <symbol id="i-box" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0M16 11a3 3 0 1 0 0-6M21 20a5 5 0 0 0-4-4.9"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 9a6 6 0 1 1 12 0c0 6 2.5 7.5 2.5 7.5h-17S6 15 6 9M10 20a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.6 15H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.1-2.7l-.1-.1A2 2 0 1 1 7 5.4l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V4a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.1l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 6-6 6 6 6"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-q" viewBox="0 0 24 24"><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5h.01"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-repeat" viewBox="0 0 24 24"><path d="M17 3l3 3-3 3M4 11V9a3 3 0 0 1 3-3h13M7 21l-3-3 3-3M20 13v2a3 3 0 0 1-3 3H4"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="3" y="6" width="13" height="12" rx="2.5"/><path d="m16 10.5 5-3v9l-5-3"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></symbol>
+  <symbol id="i-text" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><path d="M12 6h.01M12 12h.01M12 18h.01"/></symbol>
+  <symbol id="i-more-h" viewBox="0 0 24 24"><path d="M6 12h.01M12 12h.01M18 12h.01"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 20a6 6 0 0 1 9.5-4.9M18 14v6M15 17h6"/></symbol>
+  <symbol id="i-hash" viewBox="0 0 24 24"><path d="M5 9h14M5 15h14M10 4 8 20M16 4l-2 16"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4 2.5 20h19zM12 10v4.5M12 17.5h.01"/></symbol>
+  <symbol id="i-busy" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8 12h8"/></symbol>
+  <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M9 4v16"/></symbol>
+</svg>
+
+<div class="page">
+<header>
+  <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <h1>Lịch</h1>
+    <div class="themebar"><span class="muted">Giao diện</span>
+      <span class="seg" role="radiogroup" aria-label="Giao diện" id="theme"><span role="radio" aria-checked="true" data-t="">Theo máy</span><span role="radio" aria-checked="false" data-t="light">Sáng</span><span role="radio" aria-checked="false" data-t="dark">Tối</span></span>
+    </div>
+  </div>
+  <p>Lịch kiểu Google Calendar cho mọi workspace: lịch cá nhân, lịch workspace và lịch của từng nhóm chat. Xem theo ngày, tuần, tháng hoặc lịch biểu. Kéo để tạo sự kiện, mời người, khách trả lời Có / Không / Có thể, có lặp lại, có nhắc giờ và có cuộc gọi video Nexus. Mỗi lịch cá nhân mang màu người của chủ lịch, nên nhìn lưới là biết lịch của ai.</p>
+  <nav class="toc" aria-label="Mục lục">
+    <a href="#week">1 · Tuần</a><a href="#quick">2 · Tạo nhanh</a><a href="#editor">3 · Soạn sự kiện</a><a href="#findtime">4 · Tìm giờ</a><a href="#repeat">5 · Lặp lại</a><a href="#month">6 · Tháng</a><a href="#day">7 · Ngày &amp; Lịch biểu</a><a href="#others">8 · Lịch người khác &amp; chia sẻ</a><a href="#remind">9 · Nhắc giờ &amp; realtime</a><a href="#space">10 · Lịch nhóm chat</a><a href="#tablet">11 · Máy tính bảng</a><a href="#phone">12 · Điện thoại</a><a href="#states">13 · Trạng thái</a><a href="#spec">14 · Phím tắt &amp; quyền</a>
+  </nav>
+</header>
+
+<!-- 1 · WEEK -->
+<section class="screen" id="week">
+  <div class="screen-head">
+    <h2>1 · Web ≥ 1280: xem tuần, chi tiết sự kiện</h2>
+    <p>Mục mới <b>Lịch</b> trong menu chính, ngay sau Tin nhắn. Cột trái: nút Tạo, lịch tháng nhỏ, danh sách lịch có ô chọn màu. Bấm một sự kiện mở popover chi tiết cạnh khối, không rời màn.</p>
+  </div>
+  <div class="scroll">
+  <div class="desk gc" id="desk-week">
+    <nav class="rail" aria-label="Điều hướng chính" data-rail="cal"></nav>
+    <header class="gtop" data-gtop="Tuần"></header>
+    <aside class="side" data-side></aside>
+    <div class="main">
+      <div class="tg" data-week="full"></div>
+      <div class="pop pop-ev" style="left:470px;top:130px" role="dialog" aria-label="Duyệt ngân sách tháng 11">
+        <div class="tools">
+          <button class="ib" aria-label="Sửa sự kiện"><svg class="i s"><use href="#i-pen"/></svg></button>
+          <button class="ib" aria-label="Xoá sự kiện"><svg class="i s"><use href="#i-trash"/></svg></button>
+          <button class="ib" aria-label="Nhắn tin cho khách"><svg class="i s"><use href="#i-msg"/></svg></button>
+          <button class="ib" aria-label="Thêm"><svg class="i s"><use href="#i-more"/></svg></button>
+          <button class="ib" aria-label="Đóng"><svg class="i s"><use href="#i-x"/></svg></button>
+        </div>
+        <div class="ln c-me"><span><span class="dot" style="width:14px;height:14px;border-radius:4px"></span></span><div><div class="ttl">Duyệt ngân sách tháng 11</div><div class="meta tnum">Thứ Tư, 14 tháng 10 · 09:00 – 10:00</div><div class="meta">Hằng tháng vào thứ Tư thứ hai</div></div></div>
+        <div class="ln"><span><svg class="i"><use href="#i-video"/></svg></span><div class="row" style="justify-content:space-between"><div style="display:grid;line-height:1.3"><b style="font-weight:600">Cuộc gọi video Nexus</b><small class="muted" style="font-size:.75rem">Chỉ khách của sự kiện vào được</small></div><span class="btn primary sm">Tham gia cuộc gọi</span></div></div>
+        <div class="ln"><span><svg class="i"><use href="#i-pin"/></svg></span><div>Phòng họp tầng 3</div></div>
+        <div class="ln"><span><svg class="i"><use href="#i-users"/></svg></span><div>
+          <div class="row" style="justify-content:space-between"><b style="font-weight:600">6 khách</b><span class="muted" style="font-size:.75rem">3 có · 1 không · 2 chưa trả lời</span></div>
+          <div class="gl">
+            <div class="p"><span class="av s32" style="--p:var(--color-person-5)">MĐ<span class="rs yes"><svg class="i"><use href="#i-check"/></svg></span></span><span class="grow"><span>Trần Minh Đức</span><small>Người tổ chức · Kế toán trưởng</small></span></div>
+            <div class="p"><span class="av s32" style="--p:var(--color-person-6)">TL<span class="rs yes"><svg class="i"><use href="#i-check"/></svg></span></span><span class="grow"><span>Nguyễn Thu Lan (bạn)</span></span></div>
+            <div class="p"><span class="av s32" style="--p:var(--color-person-3)">HY<span class="rs yes"><svg class="i"><use href="#i-check"/></svg></span></span><span class="grow"><span>Phạm Hải Yến</span></span></div>
+            <div class="p"><span class="av s32" style="--p:var(--color-person-1)">QV<span class="rs no"><svg class="i"><use href="#i-x"/></svg></span></span><span class="grow"><span>Lê Quang Vinh</span><small>“Trùng lịch gặp ngân hàng, mình gửi số liệu trước”</small></span></div>
+            <div class="p muted" style="padding-left:2px">+ 2 người chưa trả lời</div>
+          </div>
+        </div></div>
+        <div class="ln"><span><svg class="i"><use href="#i-bell"/></svg></span><div>Nhắc 10 phút trước</div></div>
+        <div class="ln"><span><svg class="i"><use href="#i-cal"/></svg></span><div class="row"><span>Nguyễn Thu Lan</span><span class="muted">· Bận</span></div></div>
+        <div class="rsvp"><span class="grow" style="font-weight:600">Tham gia?</span><span class="row" role="radiogroup" aria-label="Trả lời" style="gap:6px"><span class="gp on" role="radio" aria-checked="true"><svg class="i"><use href="#i-check"/></svg>Có</span><span class="gp" role="radio" aria-checked="false">Không</span><span class="gp" role="radio" aria-checked="false">Có thể<svg class="i"><use href="#i-down"/></svg></span></span></div>
+      </div>
+    </div>
+  </div>
+  </div>
+  <ul class="notes">
+    <li><b>Thanh trên:</b> Hôm nay (secondary sm) · ‹ › · tiêu đề tháng (display 23, “Tuần 42” mờ) · khoảng trống · ô tìm viên thuốc “Tìm sự kiện” · seg <b>Ngày · Tuần · Tháng · Lịch biểu</b> (nhớ theo người trên máy) · Cài đặt lịch. Không có nút primary ở thanh này; nút <b>Tạo</b> ở cột trái là hành động chính.</li>
+    <li><b>Lưới giờ:</b> tuần bắt đầu từ Thứ Hai; 1 giờ = 48px; mở ra cuộn tới 1 giờ trước giờ hiện tại; cột giờ 56 bên trái, giờ 24h <code>09:00</code> tabular. Cuối tuần nền chìm nhẹ, hôm nay nền accent-wash 35% và số ngày trong tròn accent. Vạch giờ hiện tại 2px accent có chấm đầu vạch, chỉ ở cột hôm nay.</li>
+    <li><b>Khối sự kiện:</b> nền wash của lịch + vạch trái 3px màu lịch, tiêu đề 12px/600 + giờ mờ. ≤ 30 phút: một dòng “tiêu đề, 09:00”. Trùng giờ: chia cột theo thứ tự bắt đầu, khối sau chồng 50% sang phải như Google. <b>Chưa trả lời</b>: nền raised + viền 1px màu lịch. <b>Đã từ chối</b>: gạch ngang, chữ mờ. Màu không là kênh duy nhất: tên của button đọc “Phỏng vấn kế toán viên, 15:00 đến 16:00, chưa trả lời”.</li>
+    <li><b>Hàng cả ngày:</b> dưới tiêu đề ngày, khối kéo dài qua nhiều ngày; quá 3 hàng thì thu lại “+ N” có chevron.</li>
+    <li><b>Popover chi tiết</b> (rộng 420, Popover API, Esc đóng và trả focus về khối): công cụ Sửa · Xoá · Sao chép liên kết · ⋯ (Nhân bản, In, Mở cuộc trò chuyện của sự kiện) · Đóng. Dòng tiêu đề display 19 + giờ + quy tắc lặp bằng chữ. Cuộc gọi video là nút <b>primary duy nhất</b>, chỉ hiện từ 15 phút trước giờ bắt đầu tới lúc kết thúc (ngoài khoảng đó là “Sao chép liên kết cuộc gọi”). Khách: tổng + tóm tắt trả lời, Avatar 32 + huy hiệu trả lời (✓ success, × danger, ? mờ), lời nhắn kèm trả lời in nghiêng mờ. Dải “Bạn sẽ tham gia?” chỉ hiện với khách; người tổ chức thấy “Bạn là người tổ chức”.</li>
+    <li><b>Kéo thả:</b> kéo khối để dời (bước 15 phút, Alt giữ để bước 5 phút), kéo mép dưới để đổi độ dài, kéo sang ngày khác được. Thả xong lưu ngay + toast “Đã dời sang 10:00 · Hoàn tác”. Sự kiện lặp thì hỏi phạm vi (§5). Không có quyền sửa thì khối không kéo được và con trỏ là mặc định.</li>
+  </ul>
+</section>
+
+<!-- 2 · QUICK CREATE -->
+<section class="screen" id="quick">
+  <div class="screen-head">
+    <h2>2 · Tạo nhanh: kéo một khoảng giờ</h2>
+    <p>Kéo trên ô trống (hoặc bấm một lần để lấy 30 phút) vẽ khối tạm và mở popover tạo nhanh. Enter là lưu; “Tùy chọn khác” mở trình soạn đầy đủ, giữ mọi thứ đã nhập.</p>
+  </div>
+  <div class="scroll">
+  <div class="desk noside" style="height:560px;min-width:1100px">
+    <nav class="rail" aria-label="Điều hướng chính" data-rail="cal"></nav>
+    <div class="main">
+      <div class="tg" data-week="quick" style="--hh:44px"></div>
+      <div class="pop" style="left:120px;top:96px;width:440px;padding:16px;display:grid;gap:12px" role="dialog" aria-label="Tạo sự kiện">
+        <div class="row" style="justify-content:space-between"><span class="k">Sự kiện mới</span><button class="ib" aria-label="Đóng"><svg class="i s"><use href="#i-x"/></svg></button></div>
+        <div class="input ring" style="font-size:1.1875rem;height:48px;font-family:var(--font-display);font-weight:600">Họp chốt số liệu thuế<span style="width:1.5px;height:22px;background:var(--color-ink)"></span></div>
+        <div class="row" role="radiogroup" aria-label="Loại"><span class="chip on" role="radio" aria-checked="true">Sự kiện</span><span class="chip" role="radio" aria-checked="false">Giờ làm việc riêng</span><span class="chip" role="radio" aria-checked="false">Vắng mặt</span></div>
+        <div class="row"><svg class="i muted"><use href="#i-clock"/></svg><span class="tnum">Thứ Năm, 15 tháng 10 · <b style="font-weight:600">13:30 – 15:00</b></span><span class="muted">· Không lặp lại</span></div>
+        <div class="row"><svg class="i muted"><use href="#i-users"/></svg><div class="input sunk grow" style="height:36px;font-size:.875rem"><span class="ph">Thêm khách</span></div></div>
+        <div class="row"><svg class="i muted"><use href="#i-video"/></svg><span class="btn sm" style="background:var(--color-success-wash);color:var(--color-success)">Thêm cuộc gọi video Nexus</span></div>
+        <div class="row c-me"><svg class="i muted"><use href="#i-cal"/></svg><span class="sel"><span class="dot"></span>Nguyễn Thu Lan<svg class="i xs"><use href="#i-down"/></svg></span><span class="muted">· Bận · Mặc định</span></div>
+        <div class="row" style="justify-content:flex-end;gap:8px;padding-top:4px"><span class="btn ghost">Tùy chọn khác</span><span class="btn primary">Lưu</span></div>
+      </div>
+    </div>
+  </div>
+  </div>
+  <ul class="notes">
+    <li><b>Khối tạm:</b> nền accent-wash, viền 2px accent, tay nắm ở mép dưới; giờ đi theo con trỏ theo bước 15 phút, nhãn giờ hiện trong khối. Esc huỷ, bấm ra ngoài khi tiêu đề trống cũng huỷ (không hỏi).</li>
+    <li><b>Loại:</b> Sự kiện · Giờ làm việc riêng (khối tập trung, người khác thấy Bận, tự từ chối lời mời trùng nếu bật) · Vắng mặt (cả ngày hoặc nhiều ngày, tự từ chối lời mời; nối với đề nghị nghỉ phép là việc sau).</li>
+    <li>Ô tiêu đề autofocus, 19/600 display. Lịch mặc định là lịch cá nhân của bạn; ở trong tab Lịch của một nhóm chat thì mặc định lịch của nhóm đó.</li>
+    <li>Lưu xong: popover đóng, khối thật thay khối tạm (không lớp phủ màu vì là việc của chính mình), toast “Đã tạo sự kiện · Hoàn tác”. Có khách thì toast thêm “Đã gửi lời mời cho 3 người”.</li>
+  </ul>
+</section>
+
+<!-- 3 · EDITOR -->
+<section class="screen" id="editor">
+  <div class="screen-head">
+    <h2>3 · Soạn sự kiện đầy đủ</h2>
+    <p>Mở từ “Tùy chọn khác”, phím <span class="kbd">E</span> trên sự kiện, hoặc Sửa trong popover. Chiếm vùng nội dung (cột lịch ẩn), có route riêng nên Quay lại của trình duyệt về đúng lưới. Hai tab: Chi tiết sự kiện · Tìm giờ.</p>
+  </div>
+  <div class="scroll">
+  <div class="desk noside" style="height:860px">
+    <nav class="rail" aria-label="Điều hướng chính" data-rail="cal"></nav>
+    <div class="main"><div class="ed">
+      <div>
+        <div class="ed-top"><button class="ib" aria-label="Đóng trình soạn"><svg class="i"><use href="#i-x"/></svg></button><div class="ed-title">Duyệt ngân sách tháng 11</div><span class="btn primary">Lưu</span><button class="ib" aria-label="Thêm"><svg class="i"><use href="#i-more"/></svg></button></div>
+        <div class="ed-when">
+          <div class="row"><span class="input sunk tnum" style="height:36px;font-size:.875rem">14/10/2026</span><span class="input sunk tnum" style="height:36px;font-size:.875rem">09:00</span><span class="muted">đến</span><span class="input sunk tnum" style="height:36px;font-size:.875rem">10:00</span><span class="input sunk tnum" style="height:36px;font-size:.875rem">14/10/2026</span><span class="btn ghost sm">Múi giờ</span></div>
+          <div class="row"><span class="row" style="gap:8px"><span class="check off"></span>Cả ngày</span><span class="sel" style="margin-left:12px"><svg class="i xs"><use href="#i-repeat"/></svg>Hằng tháng vào thứ Tư thứ hai<svg class="i xs"><use href="#i-down"/></svg></span></div>
+        </div>
+      </div>
+      <div class="ed-tabs" role="tablist"><span class="on" role="tab" aria-selected="true">Chi tiết sự kiện</span><span role="tab" aria-selected="false">Tìm giờ</span></div>
+      <div class="ed-body">
+        <div class="ed-form">
+          <div class="ed-ln"><svg class="i"><use href="#i-video"/></svg><div class="callbox"><span class="ic"><svg class="i"><use href="#i-video"/></svg></span><span class="grow"><b style="font-weight:600">Cuộc gọi video Nexus</b><small>Phòng gọi riêng của sự kiện · chỉ khách vào được · mở từ 15 phút trước</small></span><button class="ib" aria-label="Bỏ cuộc gọi video"><svg class="i s"><use href="#i-x"/></svg></button></div></div>
+          <div class="ed-ln"><svg class="i"><use href="#i-pin"/></svg><div class="input">Phòng họp tầng 3</div></div>
+          <div class="ed-ln top"><svg class="i"><use href="#i-bell"/></svg><div style="display:grid;gap:8px">
+            <div class="row"><span class="sel">Thông báo<svg class="i xs"><use href="#i-down"/></svg></span><span class="input sunk tnum" style="width:64px;height:32px;font-size:.875rem">10</span><span class="sel">phút<svg class="i xs"><use href="#i-down"/></svg></span><span class="muted">trước</span><button class="ib" aria-label="Bỏ lời nhắc"><svg class="i s"><use href="#i-x"/></svg></button></div>
+            <div class="row"><span class="sel">Thông báo<svg class="i xs"><use href="#i-down"/></svg></span><span class="input sunk tnum" style="width:64px;height:32px;font-size:.875rem">1</span><span class="sel">ngày<svg class="i xs"><use href="#i-down"/></svg></span><span class="muted">trước, lúc 17:00</span><button class="ib" aria-label="Bỏ lời nhắc"><svg class="i s"><use href="#i-x"/></svg></button></div>
+            <span class="btn ghost sm" style="justify-self:start;padding-left:0"><svg class="i s"><use href="#i-plus"/></svg>Thêm lời nhắc</span>
+          </div></div>
+          <div class="ed-ln c-me"><svg class="i"><use href="#i-cal"/></svg><div class="row"><span class="sel"><span class="dot"></span>Nguyễn Thu Lan<svg class="i xs"><use href="#i-down"/></svg></span><span class="sel">Màu của lịch<svg class="i xs"><use href="#i-down"/></svg></span></div></div>
+          <div class="ed-ln"><svg class="i"><use href="#i-busy"/></svg><div class="row"><span class="sel">Hiển thị: Bận<svg class="i xs"><use href="#i-down"/></svg></span><span class="sel"><svg class="i xs"><use href="#i-lock"/></svg>Quyền xem: Mặc định<svg class="i xs"><use href="#i-down"/></svg></span></div></div>
+          <div class="ed-ln top"><svg class="i"><use href="#i-text"/></svg><div class="textarea"><div class="fmt"><span class="ib" style="width:28px;height:28px"><b>B</b></span><span class="ib" style="width:28px;height:28px"><i>I</i></span><span class="ib" style="width:28px;height:28px"><u>U</u></span><span class="ib" style="width:28px;height:28px"><svg class="i s"><use href="#i-text"/></svg></span><span class="ib" style="width:28px;height:28px"><svg class="i s"><use href="#i-link"/></svg></span></div><span>Mỗi phòng ban gửi bảng dự toán trước 17:00 thứ Hai. Tài liệu: <a href="#" style="color:var(--color-accent);font-weight:600">Dự toán tháng 11.xlsx</a></span></div></div>
+          <div class="ed-ln"><svg class="i"><use href="#i-folder"/></svg><div class="row"><span class="btn sm"><svg class="i s"><use href="#i-plus"/></svg>Đính kèm từ Tài liệu</span><span class="muted">Khách chưa có quyền xem tệp sẽ được hỏi khi lưu</span></div></div>
+        </div>
+        <div class="guests">
+          <h3>Khách</h3>
+          <div class="input sunk ring"><svg class="i s muted"><use href="#i-search"/></svg><span>Hải</span><span style="width:1.5px;height:18px;background:var(--color-ink)"></span></div>
+          <div class="pop sugg" role="listbox" aria-label="Gợi ý khách">
+            <div class="p on"><span class="av s32" style="--p:var(--color-person-3)">HY</span><span class="grow"><span>Phạm Hải Yến</span><small>Kế toán viên · Rảnh lúc này</small></span><span class="pill ok">Rảnh</span></div>
+            <div class="p"><span class="av s32" style="--p:var(--color-person-4)">HN</span><span class="grow"><span>Đỗ Hải Nam</span><small>Vận hành · Bận 09:00 – 09:30</small></span><span class="pill warn">Trùng giờ</span></div>
+            <div class="p"><span class="av s32" style="--p:var(--color-person-2)"><svg class="i xs"><use href="#i-hash"/></svg></span><span class="grow"><span>Vận hành thanh toán</span><small>Nhóm · 8 thành viên</small></span><span class="pill mute">Mời cả nhóm</span></div>
+          </div>
+          <div style="height:150px"></div>
+          <div class="gl" style="gap:10px">
+            <div class="p"><span class="av s32" style="--p:var(--color-person-5);--bg:var(--color-raised)">MĐ</span><span class="grow"><span>Trần Minh Đức</span><small>Người tổ chức</small></span></div>
+            <div class="p"><span class="av s32" style="--p:var(--color-person-6);--bg:var(--color-raised)">TL</span><span class="grow"><span>Nguyễn Thu Lan</span></span><button class="ib" aria-label="Bỏ Nguyễn Thu Lan"><svg class="i s"><use href="#i-x"/></svg></button></div>
+            <div class="p"><span class="av s32" style="--p:var(--color-person-1);--bg:var(--color-raised)">QV</span><span class="grow"><span>Lê Quang Vinh</span><small style="color:var(--color-warning)">Bận lúc này · Gặp ngân hàng</small></span><button class="ib" aria-label="Bỏ Lê Quang Vinh"><svg class="i s"><use href="#i-x"/></svg></button></div>
+          </div>
+          <div style="display:grid;gap:8px;padding-top:8px;box-shadow:inset 0 1px 0 var(--color-line)">
+            <span class="k" style="padding-top:8px">Khách có thể</span>
+            <span class="row"><span class="check"><svg class="i"><use href="#i-check"/></svg></span>Mời người khác</span>
+            <span class="row"><span class="check"><svg class="i"><use href="#i-check"/></svg></span>Xem danh sách khách</span>
+          </div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+  </div>
+  <ul class="notes">
+    <li><b>Giờ:</b> ô ngày mở lịch tháng nhỏ; ô giờ là Select gõ được với bước 15 phút, cột “đến” ghi kèm độ dài (“10:00 · 1 giờ”). Đổi giờ bắt đầu thì giữ nguyên độ dài. <b>Múi giờ</b> ẩn mặc định; bấm thì hiện hai Select múi giờ bắt đầu/kết thúc. Giờ lưu ở UTC kèm múi giờ gốc để lặp lại qua đổi giờ mùa vẫn đúng giờ địa phương.</li>
+    <li><b>Khách</b> là Picker (DESIGN §6): gõ tên ra PersonChip + chức danh + trạng thái rảnh/bận của khoảng giờ đang chọn. Mời được cả <b>nhóm chat</b> (mọi thành viên lúc mời thành khách). Không bao giờ có ô nhập email hay ID. Khách trùng giờ có dòng warning ngay dưới tên.</li>
+    <li><b>Cuộc gọi video Nexus:</b> tạo một phòng gọi riêng của sự kiện, quyền vào = khách của sự kiện. Sự kiện trong lịch của một nhóm dùng luôn cuộc gọi của nhóm đó.</li>
+    <li><b>Hiển thị</b> Bận / Rảnh (Rảnh thì không tính vào tìm giờ). <b>Quyền xem</b> Mặc định / Riêng tư (người chỉ xem được bận/rảnh, hay xem chi tiết nhưng không phải khách, chỉ thấy “Bận”).</li>
+    <li><b>Lưu:</b> kiểm khi blur (kết thúc trước bắt đầu → “Giờ kết thúc phải sau giờ bắt đầu”). Đóng khi có thay đổi chưa lưu → hỏi “Bỏ thay đổi?” (Tiếp tục sửa / Bỏ). Lưu sự kiện có khách → toast “Đã lưu. Đã báo 4 khách.”; không gửi gì khi chỉ đổi lời nhắc hay màu.</li>
+    <li><b>Đính kèm từ Tài liệu:</b> chọn bằng cây thư mục; khách chưa có quyền xem tệp thì khi lưu hỏi “Chia sẻ quyền xem cho 2 khách?” (Chia sẻ / Không chia sẻ). Đính kèm không tự cấp quyền.</li>
+  </ul>
+</section>
+
+<!-- 4 · FIND A TIME -->
+<section class="screen" id="findtime">
+  <div class="screen-head">
+    <h2>4 · Tìm giờ</h2>
+    <p>Tab thứ hai của trình soạn: mỗi khách một cột trong cùng một ngày, khoảng giờ đang chọn là dải accent cắt ngang mọi cột. Người chỉ chia sẻ bận/rảnh hiện khối “Bận” sọc, không có tiêu đề.</p>
+  </div>
+  <div class="scroll">
+  <div class="desk noside" style="height:640px;min-width:1100px">
+    <nav class="rail" aria-label="Điều hướng chính" data-rail="cal"></nav>
+    <div class="main">
+      <div class="ed-tabs" style="padding-left:20px"><span role="tab" aria-selected="false">Chi tiết sự kiện</span><span class="on" role="tab" aria-selected="true">Tìm giờ</span></div>
+      <div class="mhead"><span class="gbtn">Hôm nay</span><button class="ib" aria-label="Ngày trước"><svg class="i"><use href="#i-left"/></svg></button><button class="ib" aria-label="Ngày sau"><svg class="i"><use href="#i-right"/></svg></button><span class="title" style="font-size:1.1875rem">Thứ Tư, 14 tháng 10</span><span class="grow"></span><span class="muted">Giờ gợi ý</span><span class="chip">11:30 – 12:30</span><span class="chip">17:00 – 18:00</span></div>
+      <div class="tg" data-week="find" style="--cols:5;--hh:40px"></div>
+    </div>
+  </div>
+  </div>
+  <ul class="notes">
+    <li>Đầu mỗi cột: Avatar 32 + tên + một dòng trạng thái (“Có thể tham gia”, “Trùng 1 sự kiện”, “Chỉ thấy bận/rảnh”). Cột của bạn đứng đầu. Bỏ chọn một khách bằng nút × nhỏ trên đầu cột (chỉ ẩn khỏi tìm giờ, không bỏ khách).</li>
+    <li><b>Giờ gợi ý:</b> 3 khoảng sớm nhất trong giờ làm việc mà mọi khách đều rảnh, độ dài bằng sự kiện; bấm chip thì dải accent nhảy tới đó. Không có khoảng nào: “Không có giờ nào mọi người cùng rảnh hôm nay · Xem ngày mai”.</li>
+    <li>Kéo dải accent để đổi giờ ngay trên lưới; khi dải chạm khối bận của ai, đầu cột người đó đổi sang pill warning “Trùng giờ”. Khối “Ngoài giờ làm việc” sọc xám theo giờ làm việc của từng người (Cài đặt).</li>
+    <li>Bận/rảnh chỉ trả <b>khoảng thời gian</b>, không tiêu đề, không địa điểm, trừ khi bạn có quyền xem chi tiết lịch đó hoặc cũng là khách của sự kiện đó.</li>
+  </ul>
+</section>
+
+<!-- 5 · REPEAT -->
+<section class="screen" id="repeat">
+  <div class="screen-head">
+    <h2>5 · Lặp lại, sửa và xoá sự kiện lặp</h2>
+    <p>Select lặp lại đưa ra các lựa chọn tính sẵn từ ngày đang chọn; “Tùy chọn…” mở hộp lặp lại tùy chỉnh. Sửa, kéo hoặc xoá một lần của chuỗi luôn hỏi phạm vi.</p>
+  </div>
+  <div class="duo">
+    <div><div class="cap">Select lặp lại</div>
+      <div class="menu" role="listbox" aria-label="Lặp lại">
+        <span>Không lặp lại</span><span>Hằng ngày</span><span>Hằng tuần vào thứ Tư</span><span class="on">Hằng tháng vào thứ Tư thứ hai</span><span>Hằng năm vào ngày 14 tháng 10</span><span>Mọi ngày trong tuần (thứ Hai đến thứ Sáu)</span><hr><span>Tùy chọn…</span>
+      </div>
+    </div>
+    <div><div class="cap">Lặp lại tùy chỉnh (Modal 440)</div>
+      <div class="scrimbox"><div class="modal" style="width:440px" role="dialog" aria-label="Lặp lại tùy chỉnh">
+        <h3>Lặp lại tùy chỉnh</h3>
+        <div class="row"><span>Lặp lại mỗi</span><span class="input sunk tnum" style="width:64px;height:36px">1</span><span class="sel" style="height:36px">tuần<svg class="i xs"><use href="#i-down"/></svg></span></div>
+        <div style="display:grid;gap:8px"><span class="muted" style="font-size:.75rem;font-weight:600">Vào các ngày</span>
+          <div class="row" role="group" aria-label="Ngày trong tuần" style="gap:6px"><span class="chip">T2</span><span class="chip">T3</span><span class="chip on" aria-pressed="true">T4</span><span class="chip">T5</span><span class="chip on" aria-pressed="true">T6</span><span class="chip">T7</span><span class="chip">CN</span></div></div>
+        <div style="display:grid;gap:10px"><span class="muted" style="font-size:.75rem;font-weight:600">Kết thúc</span>
+          <span class="row"><span class="radio"></span>Không bao giờ</span>
+          <span class="row"><span class="radio on"></span><span style="width:76px">Vào ngày</span><span class="input sunk tnum" style="height:36px;font-size:.875rem">31/12/2026</span></span>
+          <span class="row"><span class="radio"></span><span style="width:76px">Sau</span><span class="input sunk tnum" style="height:36px;width:64px;font-size:.875rem;color:var(--color-ink-subtle)">13</span><span class="muted">lần</span></span>
+        </div>
+        <p class="muted" style="font-size:.8125rem">Hằng tuần vào thứ Tư và thứ Sáu, đến hết 31/12/2026 · 23 lần</p>
+        <div class="foot"><span class="btn ghost">Huỷ</span><span class="btn primary">Xong</span></div>
+      </div></div>
+    </div>
+    <div><div class="cap">Sửa hoặc kéo một lần của chuỗi</div>
+      <div class="scrimbox"><div class="modal" style="width:380px" role="dialog" aria-label="Sửa sự kiện lặp lại">
+        <h3>Sửa sự kiện lặp lại</h3>
+        <div style="display:grid;gap:12px">
+          <span class="row"><span class="radio on"></span>Chỉ sự kiện này</span>
+          <span class="row"><span class="radio"></span>Sự kiện này và các sự kiện sau</span>
+          <span class="row"><span class="radio"></span>Tất cả sự kiện</span>
+        </div>
+        <div class="foot"><span class="btn ghost">Huỷ</span><span class="btn primary">Lưu</span></div>
+      </div></div>
+      <div class="cap" style="margin-top:20px">Xoá: cùng hộp, nút danger “Xoá”</div>
+      <div class="toast"><span class="grow"><span>Đã xoá “Họp giao ban đầu tuần” từ 19/10 trở đi</span><small>Đã báo 12 khách</small></span><span class="btn ghost sm">Hoàn tác</span></div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li>Lưu dạng quy tắc RRULE (RFC 5545) + danh sách ngoại lệ; lưới chỉ mở rộng các lần trong khoảng đang xem. Câu mô tả quy tắc luôn viết bằng chữ tiếng Việt, không hiện chuỗi RRULE.</li>
+    <li>“Tất cả sự kiện” khi đổi giờ giữ các lần đã sửa riêng (Google cũng vậy) và nói rõ trong toast: “Đã cập nhật 23 lần · 2 lần đã sửa riêng giữ nguyên”.</li>
+    <li>Sự kiện không lặp: <b>xoá không hỏi</b>, toast có Hoàn tác 5s (DESIGN §6 “Modal là lựa chọn cuối”). Sự kiện có khách khi xoá: khách nhận thông báo “… đã huỷ …”.</li>
+    <li>Khách (không phải người tổ chức) không thấy hộp này: họ chỉ trả lời cho “Chỉ sự kiện này” hoặc “Tất cả sự kiện” ngay trong dải trả lời.</li>
+  </ul>
+</section>
+
+<!-- 6 · MONTH -->
+<section class="screen" id="month">
+  <div class="screen-head">
+    <h2>6 · Xem tháng</h2>
+    <p>Lưới 7 cột, mỗi ô tối đa 3 dòng; quá thì “+ N nữa” mở popover danh sách của ngày đó. Sự kiện cả ngày là thanh màu, sự kiện có giờ là chấm + giờ + tiêu đề.</p>
+  </div>
+  <div class="scroll">
+  <div class="desk gc" style="height:780px">
+    <nav class="rail" aria-label="Điều hướng chính" data-rail="cal"></nav>
+    <header class="gtop" data-gtop="Tháng"></header>
+    <aside class="side" data-side></aside>
+    <div class="main">
+      <div class="mg" data-month></div>
+      <div class="menu viewmenu" style="right:8px;top:4px" role="menu" aria-label="Kiểu xem">
+        <span>Ngày<span class="k2">D</span></span><span>Tuần<span class="k2">W</span></span><span class="on">Tháng<span class="k2">M</span></span><span>Lịch biểu<span class="k2">A</span></span><span>4 ngày<span class="k2">X</span></span><hr>
+        <span><span class="check"><svg class="i"><use href="#i-check"/></svg></span>Hiện cuối tuần</span><span><span class="check"><svg class="i"><use href="#i-check"/></svg></span>Hiện sự kiện đã từ chối</span>
+      </div>
+      <div class="pop" style="left:560px;top:250px;width:280px;padding:12px;display:grid;gap:4px" role="dialog" aria-label="Thứ Năm 15 tháng 10">
+        <div class="row" style="justify-content:space-between"><span style="display:grid;line-height:1.2"><span class="k">Thứ Năm</span><b style="font:600 1.5rem/1.2 var(--font-display)">15</b></span><button class="ib" aria-label="Đóng"><svg class="i s"><use href="#i-x"/></svg></button></div>
+        <span class="mc c-tt"><span class="dot"></span><span class="t">08:30</span><b>Đối chiếu sao kê</b></span>
+        <span class="mc c-tt"><span class="dot"></span><span class="t">11:00</span><b>Gặp đối tác VNPay</b></span>
+        <span class="mc c-me"><span class="dot"></span><span class="t">13:30</span><b>Họp chốt số liệu thuế</b></span>
+        <span class="mc c-vh"><span class="dot"></span><span class="t">16:00</span><b>Kiểm kê tài sản quý</b></span>
+        <span class="mc c-ws"><span class="dot"></span><span class="t">17:30</span><b>Sinh nhật tháng 10</b></span>
+      </div>
+    </div>
+  </div>
+  </div>
+  <ul class="notes">
+    <li>Bấm số ngày → xem Ngày của ngày đó. Bấm khoảng trống trong ô → tạo nhanh sự kiện cả ngày. Kéo thả dòng sang ô khác để dời ngày (giữ giờ).</li>
+    <li>Số dòng mỗi ô tự tính theo chiều cao (tối thiểu 2); “+ N nữa” là button có tên đầy đủ “Thêm 2 sự kiện ngày 15 tháng 10”.</li>
+    <li>Ngày của tháng khác chữ mờ; tuần bắt đầu Thứ Hai; hôm nay số trong tròn accent.</li>
+  </ul>
+</section>
+
+<!-- 7 · DAY & AGENDA -->
+<section class="screen" id="day">
+  <div class="screen-head">
+    <h2>7 · Xem ngày và lịch biểu</h2>
+    <p>Ngày: một cột rộng, khối hiện cả địa điểm và khách. Lịch biểu: danh sách liên tục theo ngày từ hôm nay, đọc nhanh nhất, là mặc định trên điện thoại.</p>
+  </div>
+  <div class="scroll">
+  <div class="desk noside" style="height:640px">
+    <nav class="rail" aria-label="Điều hướng chính" data-rail="cal"></nav>
+    <div class="main" style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0">
+      <div style="display:flex;flex-direction:column;min-height:0;box-shadow:inset -1px 0 0 var(--color-line)">
+        <div class="mhead"><span class="gbtn">Hôm nay</span><button class="ib" aria-label="Ngày trước"><svg class="i"><use href="#i-left"/></svg></button><button class="ib" aria-label="Ngày sau"><svg class="i"><use href="#i-right"/></svg></button><span class="title" style="font-size:1.1875rem">Thứ Tư, 14 tháng 10</span></div>
+        <div class="tg" data-week="day" style="--cols:1;--hh:60px"></div>
+      </div>
+      <div style="display:flex;flex-direction:column;min-height:0">
+        <div class="mhead"><span class="gbtn">Hôm nay</span><span class="title" style="font-size:1.1875rem">Lịch biểu</span><span class="grow"></span><span class="gbtn">Lịch biểu<svg class="i"><use href="#i-down"/></svg></span></div>
+        <div class="ag" data-agenda></div>
+      </div>
+    </div>
+  </div>
+  </div>
+  <ul class="notes">
+    <li>Lịch biểu: cột ngày 120 (số display 22 + “T4, TH 10”), hàng 36: chấm màu lịch · giờ “09:00 – 10:00” tabular · tiêu đề 600 · meta phải (icon video nếu có cuộc gọi, cụm Avatar khách tối đa 3, trạng thái trả lời của bạn nếu chưa trả lời). Vạch “Bây giờ” chèn giữa hai sự kiện của hôm nay.</li>
+    <li>Ngày không có gì không hiện hàng (giống Google); tháng mới chèn tiêu đề tháng display 19. Cuộn tới cuối tải thêm 30 ngày.</li>
+  </ul>
+</section>
+
+<!-- 8 · OTHERS & SHARE -->
+<section class="screen" id="others">
+  <div class="screen-head">
+    <h2>8 · Xem lịch người khác, chia sẻ lịch</h2>
+    <p>“Lịch khác” trong cột trái: thêm bằng Picker người hoặc nhóm. Lịch của người khác hiện chồng lên lưới với màu người của họ; chỉ có quyền bận/rảnh thì là khối sọc “Bận”.</p>
+  </div>
+  <div class="duo">
+    <div>
+      <div class="cap">Cột lịch: thêm lịch người khác</div>
+      <div style="background:var(--color-sunk);border-radius:14px;padding:12px;width:300px;display:grid;gap:12px;position:relative">
+        <div class="callist" data-callist-only></div>
+        <div class="pop" style="position:relative;padding:8px;display:grid;gap:4px;--bg:var(--color-overlay)">
+          <div class="input sunk ring" style="height:36px;font-size:.875rem"><svg class="i s muted"><use href="#i-search"/></svg>Hoa</div>
+          <div class="row" style="padding:6px 8px;border-radius:8px;background:var(--color-hover)"><span class="av s24" style="--p:var(--color-person-7)">TH</span><span class="grow" style="display:grid;line-height:1.25"><span>Lê Thị Hoa</span><small class="muted" style="font-size:.75rem">Đã chia sẻ: xem chi tiết</small></span></div>
+          <div class="row" style="padding:6px 8px"><span class="av s24" style="--p:var(--color-person-8)">HP</span><span class="grow" style="display:grid;line-height:1.25"><span>Nguyễn Hoa Phượng</span><small class="muted" style="font-size:.75rem">Chỉ thấy bận/rảnh</small></span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="cap">Chia sẻ lịch “Nguyễn Thu Lan” (Modal 560)</div>
+      <div class="scrimbox" style="padding:32px"><div class="modal share" role="dialog" aria-label="Chia sẻ lịch">
+        <div class="row c-me"><span class="dot" style="width:14px;height:14px;border-radius:4px"></span><h3 class="grow">Chia sẻ lịch “Nguyễn Thu Lan”</h3><button class="ib" aria-label="Đóng"><svg class="i s"><use href="#i-x"/></svg></button></div>
+        <div class="input sunk"><svg class="i s muted"><use href="#i-search"/></svg><span class="ph">Thêm người hoặc nhóm</span></div>
+        <div>
+          <div class="prow"><span class="av s32" style="--p:var(--color-accent)">M</span><span class="grow"><span>Mọi người trong Công ty Minh An</span><small>42 thành viên</small></span><span class="muted" style="font-weight:600;font-size:.8125rem;padding-right:10px">Thấy bận/rảnh</span><span style="width:32px"></span></div>
+          <div class="prow"><span class="av s32" style="--p:var(--color-person-5)">MĐ</span><span class="grow"><span>Trần Minh Đức</span><small>Kế toán trưởng</small></span><span class="sel">Xem mọi chi tiết<svg class="i xs"><use href="#i-down"/></svg></span><button class="ib" aria-label="Bỏ chia sẻ với Trần Minh Đức"><svg class="i s"><use href="#i-x"/></svg></button></div>
+          <div class="prow"><span class="av s32" style="--p:var(--color-person-3)">HY</span><span class="grow"><span>Phạm Hải Yến</span><small>Trợ lý · có thể sắp lịch giúp bạn</small></span><span class="sel">Sửa sự kiện<svg class="i xs"><use href="#i-down"/></svg></span><button class="ib" aria-label="Bỏ chia sẻ với Phạm Hải Yến"><svg class="i s"><use href="#i-x"/></svg></button></div>
+        </div>
+        <div class="foot"><span class="btn ghost"><svg class="i s"><use href="#i-link"/></svg>Sao chép liên kết lịch</span><span class="grow"></span><span class="btn primary">Xong</span></div>
+      </div></div>
+    </div>
+    <div>
+      <div class="cap">Mức chia sẻ (menu của Select)</div>
+      <div class="menu lvl" role="listbox" aria-label="Mức chia sẻ">
+        <span class="on"><svg class="i s"><use href="#i-check"/></svg><span><b>Xem mọi chi tiết</b><small>Thấy tiêu đề, địa điểm, khách; trừ sự kiện riêng tư</small></span></span>
+        <span><span></span><span><b>Sửa sự kiện</b><small>Tạo, sửa, xoá sự kiện trên lịch này</small></span></span>
+        <span><span></span><span><b>Sửa và quản lý chia sẻ</b><small>Như trên, và đổi ai được xem lịch</small></span></span>
+      </div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li>Lịch người khác trên lưới: màu người của chủ lịch (Trần Minh Đức = lam). Khối của lịch chỉ xem bận/rảnh: sọc chéo + chữ “Bận”, không bấm mở chi tiết (popover chỉ ghi “Trần Minh Đức bận 10:00 – 11:00”).</li>
+    <li>Lịch workspace: mọi thành viên xem chi tiết, người có quyền quản lý workspace sửa. Lịch nhóm: thành viên nhóm xem và tạo; chỉ người tạo sự kiện và người quản lý nhóm sửa được sự kiện của người khác.</li>
+    <li>Đổi mức hay bỏ chia sẻ có hiệu lực ngay (quyền mất trên mọi thiết bị đang mở, khối biến khỏi lưới của họ). Toast “Đã chia sẻ với Phạm Hải Yến”, người được chia sẻ nhận thông báo + lịch tự vào “Lịch khác” của họ.</li>
+  </ul>
+</section>
+
+<!-- 9 · REMINDERS & REALTIME -->
+<section class="screen" id="remind">
+  <div class="screen-head">
+    <h2>9 · Nhắc giờ, lời mời, cập nhật realtime</h2>
+    <p>Nhắc giờ đến qua ba đường theo đúng mẫu thông báo đã duyệt: toast trong app, thông báo đẩy khi app đóng, và hàng trong bảng Thông báo. Lời mời trả lời được ngay tại chỗ.</p>
+  </div>
+  <div class="duo">
+    <div style="display:grid;gap:20px">
+      <div><div class="cap">Toast nhắc giờ (máy tính, đáy phải, không tự tắt tới khi bắt đầu)</div>
+        <div class="toast c-me"><span class="dot" style="width:12px;height:12px;border-radius:4px"></span><span class="grow"><span style="font-weight:600">Duyệt ngân sách tháng 11</span><small class="tnum">Bắt đầu sau 10 phút · 09:00 – 10:00 · Phòng họp tầng 3</small></span><span class="btn primary sm"><svg class="i s"><use href="#i-video"/></svg>Tham gia</span><button class="ib" aria-label="Tắt nhắc"><svg class="i s"><use href="#i-x"/></svg></button></div>
+      </div>
+      <div><div class="cap">Thông báo đẩy (điện thoại, app đóng)</div>
+        <div class="push"><span class="app">N</span><span style="display:grid;gap:2px"><span class="h"><span>Nexus · Lịch</span><span>8:50</span></span><b style="font-weight:600">Duyệt ngân sách tháng 11 lúc 09:00</b><span class="muted" style="font-size:.8125rem">Sau 10 phút · Phòng họp tầng 3 · có cuộc gọi video</span></span><div class="acts"><span>Tham gia</span><span>Nhắc lại sau 5 phút</span></div></div>
+      </div>
+      <div><div class="cap">Realtime: người khác dời giờ sự kiện bạn đang xem</div>
+        <div style="background:var(--color-base);border-radius:12px;padding:12px;width:360px;height:140px;position:relative">
+          <div class="ev c-ws rt" style="left:12px;right:12px;top:16px;height:72px"><b>Đào tạo hệ thống mới</b><span class="t">11:00 – 12:00 (trước: 10:30)</span><span class="rtl">Trần Minh Đức vừa dời giờ</span></div>
+        </div>
+      </div>
+    </div>
+    <div><div class="cap">Bảng Thông báo: hàng của Lịch</div>
+      <div class="npanel">
+        <div class="row" style="padding:4px 8px 8px"><b style="font:600 1.1875rem/1.2 var(--font-display)" class="grow">Thông báo</b><span class="muted">3 chưa đọc</span></div>
+        <div class="nrow"><span class="av s32" style="--p:var(--color-person-5)">MĐ</span><span class="grow"><span><b style="font-weight:600">Trần Minh Đức</b> mời bạn tới <b style="font-weight:600">Duyệt ngân sách tháng 11</b></span><span class="muted tnum" style="font-size:.8125rem">Thứ Tư 14/10, 09:00 – 10:00 · lặp hằng tháng</span><span class="row"><span class="btn sm" style="background:var(--color-success-wash);color:var(--color-success)">Có</span><span class="btn sm">Không</span><span class="btn sm">Có thể</span></span><span class="m"><svg class="i xs"><use href="#i-cal"/></svg>Lịch · 5 phút trước</span></span><span class="udot"></span></div>
+        <div class="nrow"><span class="av s32" style="--p:var(--color-person-3)">HY</span><span class="grow"><span><b style="font-weight:600">Phạm Hải Yến</b> đã nhận lời <b style="font-weight:600">Họp chốt số liệu thuế</b></span><span class="m"><svg class="i xs"><use href="#i-cal"/></svg>Lịch · 12 phút trước</span></span><span class="udot"></span></div>
+        <div class="nrow"><span class="av s32" style="--p:var(--color-person-1)">QV</span><span class="grow"><span><b style="font-weight:600">Lê Quang Vinh</b> đã từ chối <b style="font-weight:600">Duyệt ngân sách tháng 11</b></span><span style="background:var(--color-sunk);border-radius:8px;padding:6px 10px;font-size:.8125rem">Trùng lịch gặp ngân hàng, mình gửi số liệu trước</span><span class="m"><svg class="i xs"><use href="#i-cal"/></svg>Lịch · 1 giờ trước</span></span><span class="udot"></span></div>
+        <div class="nrow" style="color:var(--color-ink-muted)"><span class="av s32" style="--p:var(--color-person-7)">TH</span><span class="grow"><span>Lê Thị Hoa đã huỷ <b style="font-weight:600">Họp marketing</b></span><span class="m"><svg class="i xs"><use href="#i-cal"/></svg>Lịch · Hôm qua</span></span><span></span></div>
+      </div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li>Loại thông báo mới: lời mời, sự kiện đổi giờ/địa điểm, sự kiện bị huỷ, khách trả lời (chỉ người tổ chức nhận), được chia sẻ lịch, nhắc giờ. Mỗi loại có mức trong Cài đặt thông báo như các phân hệ khác.</li>
+    <li>Nhắc giờ dùng giờ máy chủ, gửi đúng một lần cho mỗi người dù mở nhiều thiết bị; đẩy có hai hành động “Tham gia” (chỉ khi có cuộc gọi) và “Nhắc lại sau 5 phút”. Sự kiện đã từ chối không nhắc.</li>
+    <li>Realtime theo §7: thay đổi của người khác phủ wash màu người 2400ms + nhãn “vừa dời giờ / vừa nhận lời / vừa thêm”; ≥ 3 thay đổi trong 2 giây gộp thành một dòng. Dời giờ thì khối trượt tới chỗ mới (FLIP 280ms), giảm chuyển động thì nhảy thẳng.</li>
+  </ul>
+</section>
+
+<!-- 10 · SPACE CALENDAR -->
+<section class="screen" id="space">
+  <div class="screen-head">
+    <h2>10 · Lịch của nhóm chat</h2>
+    <p>Mỗi nhóm có tab <b>Lịch</b> cạnh Trò chuyện · Tệp · Công việc. Sự kiện tạo trong nhóm thì cả nhóm là khách, cuộc gọi của sự kiện là cuộc gọi của nhóm. Tạo sự kiện cũng có trong menu “Tạo trong chat”, và để lại một thẻ trong luồng.</p>
+  </div>
+  <div class="duo">
+    <div><div class="cap">Thẻ sự kiện trong luồng chat</div>
+      <div class="chatwin">
+        <div class="chat-h"><span class="av s32" style="--p:var(--color-person-2);border-radius:8px"><svg class="i xs"><use href="#i-hash"/></svg></span><span class="nm grow">Vận hành thanh toán</span><button class="ib" aria-label="Gọi video"><svg class="i"><use href="#i-video"/></svg></button></div>
+        <div class="chat-tabs"><span class="on">Trò chuyện</span><span>Tệp</span><span>Công việc</span><span>Lịch</span></div>
+        <div class="msg"><span class="av s32" style="--p:var(--color-person-1)">QV</span><div><div class="who">Lê Quang Vinh <small>09:12</small></div><div style="font-size:.9375rem">Lên lịch gặp VNPay để chốt phí giao dịch quý 4 nhé mọi người</div>
+          <div class="evcard c-tt">
+            <div class="top"><span class="datebox"><small>T5</small><b>15</b></span><span style="display:grid;gap:2px"><b style="font-weight:600;font-size:.9375rem">Gặp đối tác VNPay</b><span class="muted tnum">Thứ Năm 15/10 · 11:00 – 12:00 · Phòng khách tầng 1</span><span class="row" style="gap:6px"><span class="stack"><span class="av" style="--p:var(--color-person-1)">QV</span><span class="av" style="--p:var(--color-person-6)">TL</span><span class="av" style="--p:var(--color-person-5)">MĐ</span></span><span class="muted" style="font-size:.75rem">5 có · 3 chưa trả lời</span></span></span></div>
+            <div class="acts"><span class="seg" role="radiogroup" aria-label="Trả lời"><span role="radio" aria-checked="true" style="background:var(--color-success-wash);color:var(--color-success)">Có</span><span role="radio" aria-checked="false">Không</span><span role="radio" aria-checked="false">Có thể</span></span><span class="grow"></span><span class="btn ghost sm">Mở trong Lịch</span></div>
+          </div>
+        </div></div>
+      </div>
+    </div>
+    <div><div class="cap">Tab Lịch của nhóm</div>
+      <div class="chatwin" style="width:520px">
+        <div class="chat-h"><span class="av s32" style="--p:var(--color-person-2);border-radius:8px"><svg class="i xs"><use href="#i-hash"/></svg></span><span class="nm grow">Vận hành thanh toán</span></div>
+        <div class="chat-tabs"><span>Trò chuyện</span><span>Tệp</span><span>Công việc</span><span class="on">Lịch</span></div>
+        <div class="row" style="padding:12px 16px"><span class="seg"><span aria-pressed="true">Sắp tới</span><span aria-pressed="false">Tháng</span></span><span class="grow"></span><span class="btn ghost sm">Mở trong Lịch</span><span class="btn primary sm"><svg class="i s"><use href="#i-plus"/></svg>Tạo sự kiện</span></div>
+        <div class="ag" style="padding:0 16px 16px" data-agenda-space></div>
+      </div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li>Lịch nhóm tự có trong “Lịch của tôi” của mọi thành viên (bỏ chọn để ẩn khỏi lưới, không rời được lịch mà vẫn ở trong nhóm). Rời nhóm thì lịch biến mất và không còn là khách của các sự kiện sau đó.</li>
+    <li>Thẻ trong luồng là tin hệ thống của người tạo, có thread bình thường để bàn. Sự kiện đổi giờ → thẻ cập nhật tại chỗ + tin hệ thống nhỏ “Lê Quang Vinh đã dời sang 14:00”. Sự kiện bị huỷ → thẻ mờ, nhãn “Đã huỷ”.</li>
+    <li>Đến giờ, nút gọi ở đầu nhóm đổi thành “Tham gia” như mẫu cuộc gọi nhóm đã duyệt; thẻ sự kiện cũng hiện “Đang diễn ra · Tham gia”.</li>
+  </ul>
+</section>
+
+<!-- 11 · TABLET -->
+<section class="screen" id="tablet">
+  <div class="screen-head">
+    <h2>11 · Máy tính bảng 768–1023 (820)</h2>
+    <p>Vỏ điện thoại theo DESIGN §5: ô tìm viên thuốc có ☰, cột lịch vào ngăn kéo. Mặc định xem 3 ngày ở dọc, tuần ở ngang; chi tiết sự kiện là sheet bên phải.</p>
+  </div>
+  <div class="scroll" style="border-radius:24px">
+  <div class="tab">
+    <div class="ptop" style="padding-top:24px"><div class="pill-search"><button class="ib" aria-label="Mở menu chính"><svg class="i"><use href="#i-menu"/></svg></button><span class="ph">Tìm sự kiện</span><span class="av s32" style="--p:var(--color-person-6);margin-right:6px">TL</span></div></div>
+    <div class="ptitle"><h3>Tháng 10<svg class="i"><use href="#i-down"/></svg></h3><span class="gbtn">Hôm nay</span><span class="gbtn">3 ngày<svg class="i"><use href="#i-down"/></svg></span><button class="ib" aria-label="Lịch đang hiện"><svg class="i"><use href="#i-panel"/></svg></button></div>
+    <div class="tg" data-week="tab3" style="--cols:3;--hh:56px"></div>
+    <span class="fab" aria-label="Tạo sự kiện"><svg class="i"><use href="#i-plus"/></svg></span>
+  </div>
+  </div>
+  <ul class="notes">
+    <li>Nút khung bên phải tiêu đề mở ngăn kéo cột lịch (lịch tháng nhỏ + các lịch có ô chọn). Nút + nổi 56 bo 18 thay nút Tạo. Vùng chạm ≥ 44; kéo thả sự kiện bằng nhấn giữ 400ms rồi kéo.</li>
+    <li>Chạm sự kiện: sheet bên phải rộng 360 (cách mép 10, bo 16) với cùng nội dung popover; chạm ô trống: sheet tạo nhanh.</li>
+  </ul>
+</section>
+
+<!-- 12 · PHONE -->
+<section class="screen" id="phone">
+  <div class="screen-head">
+    <h2>12 · Điện thoại &lt; 768 (390)</h2>
+    <p>Mặc định <b>Lịch biểu</b> với dải tuần ở trên; chạm tên tháng mở lịch tháng gấp xuống. Chạm sự kiện mở sheet chi tiết từ dưới lên. Trình soạn là màn toàn màn.</p>
+  </div>
+  <div class="duo" style="gap:20px">
+    <div class="phone">
+      <div class="ptop"><div class="pill-search"><button class="ib" aria-label="Mở menu chính"><svg class="i"><use href="#i-menu"/></svg></button><span class="ph">Tìm sự kiện</span><span class="av s32" style="--p:var(--color-person-6);margin-right:6px">TL</span></div></div>
+      <div><div class="ptitle"><h3>Tháng 10<svg class="i"><use href="#i-down"/></svg></h3><button class="ib" aria-label="Hôm nay" style="width:44px;height:44px"><svg class="i"><use href="#i-cal"/></svg></button><button class="ib" aria-label="Kiểu xem" style="width:44px;height:44px"><svg class="i"><use href="#i-more"/></svg></button></div>
+        <div class="strip" data-strip></div></div>
+      <div class="pag" data-phone-agenda></div>
+      <span class="fab" aria-label="Tạo sự kiện"><svg class="i"><use href="#i-plus"/></svg></span>
+    </div>
+    <div class="phone">
+      <div class="ptop"><div class="pill-search"><button class="ib" aria-label="Mở menu chính"><svg class="i"><use href="#i-menu"/></svg></button><span class="ph">Tìm sự kiện</span><span class="av s32" style="--p:var(--color-person-6);margin-right:6px">TL</span></div></div>
+      <div class="ptitle"><h3>Tháng 10<svg class="i"><use href="#i-down"/></svg></h3><span class="seg"><span aria-pressed="false">Lịch biểu</span><span aria-pressed="true">3 ngày</span></span></div>
+      <div class="tg" data-week="ph3" style="--cols:3;--hh:52px"></div>
+      <span class="fab" aria-label="Tạo sự kiện"><svg class="i"><use href="#i-plus"/></svg></span>
+    </div>
+    <div class="phone">
+      <div class="ptop"><div class="pill-search"><button class="ib" aria-label="Mở menu chính"><svg class="i"><use href="#i-menu"/></svg></button><span class="ph">Tìm sự kiện</span><span class="av s32" style="--p:var(--color-person-6);margin-right:6px">TL</span></div></div>
+      <div class="ptitle"><h3>Tháng 10</h3></div>
+      <div class="pag" data-phone-agenda></div>
+      <div class="pscrim"></div>
+      <div class="sheet c-me" role="dialog" aria-label="Duyệt ngân sách tháng 11">
+        <span class="grab"></span>
+        <div class="row" style="justify-content:flex-end;gap:4px"><button class="ib" style="width:44px;height:44px" aria-label="Sửa"><svg class="i"><use href="#i-pen"/></svg></button><button class="ib" style="width:44px;height:44px" aria-label="Xoá"><svg class="i"><use href="#i-trash"/></svg></button><button class="ib" style="width:44px;height:44px" aria-label="Thêm"><svg class="i"><use href="#i-more"/></svg></button></div>
+        <div class="prow2"><span class="dot" style="width:14px;height:14px;border-radius:4px;margin-top:6px"></span><div><div style="font:600 1.375rem/1.25 var(--font-display)">Duyệt ngân sách tháng 11</div><div class="muted tnum">Thứ Tư, 14/10 · 09:00 – 10:00</div><div class="muted">Hằng tháng vào thứ Tư thứ hai</div></div></div>
+        <span class="btn primary" style="height:44px"><svg class="i s"><use href="#i-video"/></svg>Tham gia cuộc gọi</span>
+        <div class="prow2"><svg class="i"><use href="#i-pin"/></svg><span>Phòng họp tầng 3</span></div>
+        <div class="prow2"><svg class="i"><use href="#i-users"/></svg><span style="display:grid;gap:6px"><span>6 khách · 3 có, 1 không</span><span class="stack" style="--bg:var(--color-overlay)"><span class="av s24" style="--p:var(--color-person-5)">MĐ</span><span class="av s24" style="--p:var(--color-person-6)">TL</span><span class="av s24" style="--p:var(--color-person-3)">HY</span><span class="av s24" style="--p:var(--color-person-1)">QV</span></span></span></div>
+        <div class="prow2"><svg class="i"><use href="#i-bell"/></svg><span>10 phút trước</span></div>
+        <div class="row" style="padding-top:10px;box-shadow:inset 0 1px 0 var(--color-line)"><span class="grow" style="font-weight:600">Tham gia?</span><span class="seg" role="radiogroup"><span role="radio" aria-checked="true" style="background:var(--color-success-wash);color:var(--color-success);height:38px">Có</span><span role="radio" aria-checked="false" style="height:38px">Không</span><span role="radio" aria-checked="false" style="height:38px">Có thể</span></span></div>
+      </div>
+    </div>
+  </div>
+  <ul class="notes">
+    <li>Lịch nằm trong menu ☰ (sau Chat) như mọi phân hệ; thanh trên là viên thuốc “Tìm sự kiện”. Không có thanh đáy (thanh đáy chỉ thuộc Chat).</li>
+    <li>Dải tuần: 7 ô 36, chấm nhỏ dưới ngày có sự kiện; vuốt ngang đổi tuần; chạm ngày thì lịch biểu cuộn tới ngày đó. Chạm “Tháng 10 ▾” gấp xuống lịch tháng đầy đủ (280ms expo).</li>
+    <li>Thẻ lịch biểu cao ≥ 56, vạch màu lịch 4px bên trái, tiêu đề 16/600, dòng giờ + địa điểm 13 mờ, meta phải (icon video, “Chưa trả lời” pill). Nút ⋯ cạnh tiêu đề mở sheet chọn kiểu xem: Lịch biểu · Ngày · 3 ngày · Tháng.</li>
+    <li>Sheet chi tiết theo DESIGN §5 (kéo xuống 25% để đóng, focus trap, nút quay lại hệ điều hành đóng). Nút + nổi mở trình soạn toàn màn, ô tiêu đề autofocus; Khách và Tìm giờ là màn con.</li>
+  </ul>
+</section>
+
+<!-- 13 · STATES -->
+<section class="screen" id="states">
+  <div class="screen-head">
+    <h2>13 · Trạng thái</h2>
+    <p>Mọi truy vấn có Skeleton, Rỗng và Lỗi. Mất quyền giữa chừng nói rõ chuyện gì đã xảy ra.</p>
+  </div>
+  <div class="duo">
+    <div><div class="cap">Đang tải tuần (Skeleton cùng hình lưới)</div>
+      <div style="background:var(--color-base);border-radius:12px;padding:12px;width:420px;height:260px;display:grid;grid-template-columns:repeat(5,1fr);gap:8px;align-content:start">
+        <span class="skel" style="height:14px;grid-column:span 5;width:40%"></span>
+        <span class="skel" style="height:56px;margin-top:20px"></span><span class="skel" style="height:90px;margin-top:60px"></span><span class="skel" style="height:40px;margin-top:10px"></span><span class="skel" style="height:72px;margin-top:80px"></span><span class="skel" style="height:48px;margin-top:30px"></span>
+      </div>
+    </div>
+    <div class="state"><svg class="i"><use href="#i-cal"/></svg><b style="font-weight:600">Tuần này bạn chưa có sự kiện nào.</b><span class="muted">Kéo trên lưới hoặc bấm Tạo để thêm sự kiện đầu tiên.</span><span class="btn primary sm"><svg class="i s"><use href="#i-plus"/></svg>Tạo sự kiện</span></div>
+    <div class="state"><svg class="i"><use href="#i-alert"/></svg><b style="font-weight:600">Không tải được lịch.</b><span class="muted">Kiểm tra kết nối rồi thử lại. Sự kiện đã lưu không bị mất.</span><span class="btn sm">Thử lại</span></div>
+    <div class="state"><svg class="i"><use href="#i-lock"/></svg><b style="font-weight:600">Bạn không còn quyền xem lịch “Kế hoạch nhân sự”.</b><span class="muted">Lê Thị Hoa đã ngừng chia sẻ lịch này với bạn. Lịch đã được gỡ khỏi danh sách.</span><span class="btn sm">Xem lịch của bạn</span></div>
+    <div class="state"><svg class="i"><use href="#i-alert"/></svg><b style="font-weight:600">Không lưu được sự kiện.</b><span class="muted">Phạm Hải Yến vừa sửa sự kiện này. Xem bản mới rồi sửa lại nhé.</span><span class="btn sm">Xem bản mới</span></div>
+    <div class="state" style="width:300px"><svg class="i"><use href="#i-search"/></svg><b style="font-weight:600">Không có sự kiện nào khớp “ngân hàng”.</b><span class="muted">Tìm trong tiêu đề, địa điểm, mô tả và tên khách của mọi lịch bạn xem được.</span><span class="btn ghost sm">Xoá tìm kiếm</span></div>
+  </div>
+</section>
+
+<!-- 14 · KEYS & PERMISSIONS -->
+<section class="screen" id="spec">
+  <div class="screen-head">
+    <h2>14 · Phím tắt và cách quyền hiện ra trên giao diện</h2>
+    <p>Phím tắt giống Google Calendar để người quen Google dùng ngay; ghi trong bảng phím tắt (?) như các phân hệ khác.</p>
+  </div>
+  <div class="keys">
+    <span>Xem ngày / tuần / tháng / lịch biểu <span><span class="kbd">D</span> <span class="kbd">W</span> <span class="kbd">M</span> <span class="kbd">A</span></span></span>
+    <span>Về hôm nay <span class="kbd">T</span></span>
+    <span>Khoảng trước / sau <span><span class="kbd">K</span> <span class="kbd">J</span></span></span>
+    <span>Tạo sự kiện <span class="kbd">C</span></span>
+    <span>Sửa sự kiện đang chọn <span class="kbd">E</span></span>
+    <span>Xoá sự kiện đang chọn <span class="kbd">Delete</span></span>
+    <span>Tìm sự kiện <span class="kbd">/</span></span>
+    <span>Đi giữa các sự kiện <span><span class="kbd">Tab</span> <span class="kbd">↑</span> <span class="kbd">↓</span></span></span>
+    <span>Mở chi tiết / đóng <span><span class="kbd">Enter</span> <span class="kbd">Esc</span></span></span>
+    <span>Lưu trong trình soạn <span><span class="kbd">Ctrl</span> <span class="kbd">S</span></span></span>
+  </div>
+  <table class="map">
+    <thead><tr><th>Điều người dùng thấy</th><th>Quyền đứng sau (NGAC, trên OA của lịch)</th><th>Không có quyền thì</th></tr></thead>
+    <tbody>
+      <tr><td>Thấy khối “Bận” của lịch cá nhân</td><td>cùng workspace: <code>read</code> trên OA của workspace</td><td>Người đó không có trong Picker</td></tr>
+      <tr><td>Thấy tiêu đề, khách, mở popover</td><td><code>read</code> trên lịch, hoặc là khách của sự kiện</td><td>Chỉ thấy “Bận”</td></tr>
+      <tr><td>Kéo thả, Sửa, Xoá, tạo trên lịch</td><td><code>write</code> trên lịch</td><td>Khối không kéo được, popover không có Sửa/Xoá</td></tr>
+      <tr><td>Chia sẻ lịch, đổi mức của người khác</td><td><code>share</code> + <code>manage</code> trên lịch</td><td>Không có mục Chia sẻ trong menu lịch</td></tr>
+      <tr><td>Trả lời Có / Không / Có thể, vào cuộc gọi</td><td>là khách: <code>read</code> trên OA khách của sự kiện (+ <code>invite</code> nếu được mời thêm người)</td><td>Không có dải trả lời, không có nút Tham gia</td></tr>
+      <tr><td>Lịch nhóm: xem và tạo</td><td>thành viên nhóm (Content OA của nhóm)</td><td>Tab Lịch không có trong nhóm</td></tr>
+    </tbody>
+  </table>
+  <div class="open-q" style="background:var(--color-success-wash)"><b style="color:var(--color-success)">Đã chốt 2026-10-17</b>
+    <span>1. Bận/rảnh: mọi thành viên cùng workspace thấy bận/rảnh của lịch cá nhân (kiểm <code>read</code> trên workspace), không có mức chia sẻ riêng. Chia sẻ còn 3 mức: Xem mọi chi tiết · Sửa sự kiện · Sửa và quản lý chia sẻ.</span>
+    <span>2. Đợt đầu khách không sửa được sự kiện; “Mời người khác” là <code>invite</code> trên OA khách của sự kiện; “Xem danh sách khách” là cờ hiển thị.</span>
+    <span>3. Không mời khách ngoài workspace bằng email.</span>
+  </div>
+</section>
+</div>
+
+<script>
+/* ---------- data ---------- */
+const CAL = { me:'c-me', ws:'c-ws', vh:'c-vh', tt:'c-tt', duc:'c-duc', yen:'c-yen', vinh:'c-vinh' };
+const DAYS = [['T2',12],['T3',13],['T4',14],['T5',15],['T6',16],['T7',17],['CN',18]];
+const TODAY = 2, NOW = 10 + 40/60;
+// d: day index, s/e: hours, c: calendar, l/w: column split, st: pending|declined|busy, v: video, r: repeat
+const EVENTS = [
+  {d:0,s:9,e:9.5,t:'Họp giao ban đầu tuần',c:'ws',r:1},
+  {d:0,s:14,e:15.5,t:'Đối soát công nợ quý 3',c:'me'},
+  {d:1,s:8.5,e:10,t:'Chốt lịch chi trả',c:'tt'},
+  {d:1,s:13.5,e:14,t:'1:1 với Minh Đức',c:'me',v:1},
+  {d:1,s:16,e:17,t:'Bận',c:'duc',st:'busy'},
+  {d:2,s:9,e:10,t:'Duyệt ngân sách tháng 11',c:'me',v:1,sel:1,r:1},
+  {d:2,s:10,e:11,t:'Rà soát hợp đồng',c:'duc',w:.6},
+  {d:2,s:10.5,e:11.25,t:'Đào tạo hệ thống mới',c:'ws',l:.4,w:.6},
+  {d:2,s:15,e:16,t:'Phỏng vấn kế toán viên',c:'me',st:'pending'},
+  {d:3,s:8.5,e:9,t:'Đối chiếu sao kê',c:'tt'},
+  {d:3,s:11,e:12,t:'Gặp đối tác VNPay',c:'tt',v:1},
+  {d:3,s:13.5,e:15,t:'Họp chốt số liệu thuế',c:'me'},
+  {d:3,s:16,e:17,t:'Kiểm kê tài sản quý',c:'vh'},
+  {d:4,s:9,e:9.25,t:'Đồng bộ nhanh',c:'vh'},
+  {d:4,s:14,e:15,t:'Tổng kết tuần',c:'ws',v:1},
+  {d:4,s:15.5,e:16.5,t:'Họp marketing',c:'me',st:'declined'},
+];
+const ALLDAY = [ {d:0,span:2,t:'Trần Minh Đức nghỉ phép',c:'duc'}, {d:4,span:1,t:'Hạn nộp báo cáo thuế',c:'ws'} ];
+const SPACE_EV = [
+  ['T5',15,[['11:00 – 12:00','Gặp đối tác VNPay','5 có · 3 chưa trả lời']]],
+  ['T2',19,[['08:30 – 10:00','Chốt lịch chi trả','Lặp hằng tuần']]],
+  ['T4',28,[['14:00 – 15:00','Đối soát phí giao dịch quý 4','Chưa trả lời']]],
+];
+
+/* ---------- helpers ---------- */
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+const hh = h => String(Math.floor(h)).padStart(2,'0') + ':' + String(Math.round((h%1)*60)).padStart(2,'0');
+const ico = (id, cls='i') => `<svg class="${cls}"><use href="#${id}"/></svg>`;
+
+function evBlock(e, H0, extra='') {
+  const one = (e.e - e.s) <= 0.5;
+  const past = !e.st && !e.ghost && (e.d < TODAY || (e.d === TODAY && e.e <= NOW));
+  const st = (e.st ? ' ' + e.st : '') + (e.ghost ? ' ghost' : '') + (past ? ' past' : '');
+  const left = (e.l||0)*100, w = (e.w||1)*100;
+  const style = `top:calc(var(--hh) * ${e.s - H0} + 1px);height:calc(var(--hh) * ${e.e - e.s} - 3px);left:calc(${left}% + 2px);width:calc(${w}% - 6px)`;
+  const label = `${e.t}, ${hh(e.s)} đến ${hh(e.e)}${e.st==='pending'?', chưa trả lời':''}${e.st==='declined'?', đã từ chối':''}`;
+  const time = `${hh(e.s)} – ${hh(e.e)}`;
+  const icons = (e.v?ico('i-video'):'') + (e.r?ico('i-repeat'):'');
+  return one
+    ? `<div class="ev one ${CAL[e.c]}${st}${e.sel?' is-sel':''}" style="${style}" role="button" aria-label="${label}"><b>${e.t}</b><span class="t">${hh(e.s)}</span></div>`
+    : `<div class="ev ${CAL[e.c]}${st}${e.sel?' is-sel':''}" style="${style}" role="button" aria-label="${label}"><b>${e.t}</b><span class="t">${time}${icons}</span>${extra}</div>`;
+}
+
+function timeGrid(el, {days, events, allday=[], H0=7, H1=19, tz=true, headers, today=TODAY}) {
+  const cols = days.length;
+  el.style.setProperty('--cols', cols);
+  const head = headers || days.map(([w,n,i]) => `<div class="tg-day${i===today?' today':''}${i>=5?' off':''}"><span class="w">${w}</span><span class="n">${n}</span></div>`).join('');
+  const ad = allday.length ? allday.map(a => {
+    const start = days.findIndex(d => d[2]===a.d); if (start<0) return '';
+    return `<div class="ad ${CAL[a.c]}" style="grid-column:${start+2} / span ${Math.min(a.span, cols-start)};grid-row:1">${a.t}</div>`;
+  }).join('') : '';
+  const hours = Array.from({length:H1-H0}, (_,k) => `<span>${k===0?'':hh(H0+k)}</span>`).join('');
+  const colsHtml = days.map(([w,n,i]) => {
+    const evs = events.filter(e => e.d===i).map(e => evBlock(e, H0, e.extra||'')).join('');
+    const now = (i===today && NOW>H0 && NOW<H1) ? `<div class="now" style="top:calc(var(--hh) * ${NOW-H0})" aria-label="Bây giờ 10:40"></div>` : '';
+    return `<div class="tg-col${i===today?' today':''}${i>=5?' off':''}" style="height:calc(var(--hh) * ${H1-H0})">${evs}${now}</div>`;
+  }).join('');
+  el.innerHTML = `<div class="tg-days"><span class="tg-tz">${tz?'GMT+7':''}</span>${head}</div>
+    <div class="tg-all"><span class="lb" style="grid-row:1">${allday.length?'Cả ngày':''}</span>${ad}</div>
+    <div class="tg-body"><div class="tg-scroll"><div class="tg-hours">${hours}</div>${colsHtml}</div></div>`;
+}
+
+/* ---------- shell ---------- */
+const RAIL = [['i-msg','Tin nhắn'],['i-cal','Lịch'],['i-folder','Tài liệu'],['i-shield','Phê duyệt'],['i-box','Tài sản'],['i-users','Danh bạ']];
+$$('[data-rail]').forEach(el => {
+  el.innerHTML = `<span class="ws" aria-label="Công ty Minh An">M</span>` + RAIL.map(([i,n]) =>
+    `<a href="#" class="${n==='Lịch'?'on':''}" ${n==='Lịch'?'aria-current="page"':''}><span>${ico(i)}</span>${n}</a>`).join('') +
+    `<a href="#" style="margin-top:24px"><span>${ico('i-bell')}</span>Thông báo</a><a href="#"><span>${ico('i-gear')}</span>Cài đặt</a>`;
+});
+
+function miniMonth() {
+  const cells = [28,29,30].map(n=>`<span class="o">${n}</span>`)
+    .concat(Array.from({length:31},(_,k)=>{ const n=k+1; let c='';
+      if (n>=12 && n<=18) c = 'wk' + (n===12?' first':'') + (n===18?' last':'');
+      if (n===14) c='t';
+      return `<span class="${c}">${n}</span>`; }))
+    .concat([`<span class="o">1</span>`]);
+  return `<div class="mini"><div class="hd"><span class="grow">Tháng 10, 2026</span><button class="ib" aria-label="Tháng trước">${ico('i-left','i s')}</button><button class="ib" aria-label="Tháng sau">${ico('i-right','i s')}</button></div>
+    <div class="g">${['T2','T3','T4','T5','T6','T7','CN'].map(w=>`<b>${w}</b>`).join('')}${cells.join('')}</div></div>`;
+}
+function calList() {
+  const row = (c, nm, on=true, sub='') => `<div class="calrow ${c}"><span class="check${on?'':' off'}">${on?ico('i-check'):''}</span><span class="nm">${nm}${sub?` <span class="sub">${sub}</span>`:''}</span></div>`;
+  return `<div class="callist"><div class="h"><span>Lịch của tôi</span></div>
+      ${row('c-me','Nguyễn Thu Lan')}${row('c-ws','Công ty Minh An',true,'workspace')}${row('c-tt','Vận hành thanh toán',true,'nhóm')}${row('c-vh','Vận hành chung',true,'nhóm')}
+    </div>
+    <div class="callist"><div class="h"><span>Lịch khác</span><button class="ib" aria-label="Thêm lịch của người khác">${ico('i-plus','i s')}</button></div>
+      ${row('c-duc','Trần Minh Đức')}${row('c-vinh','Lê Quang Vinh',false)}
+    </div>`;
+}
+$$('[data-side]').forEach(el => {
+  el.innerHTML = `<span class="btn create" style="justify-self:start">${ico('i-plus')}Tạo<svg class="i xs" style="color:var(--color-ink-muted);width:14px;height:14px"><use href="#i-down"/></svg></span>` + miniMonth() +
+    `<div class="input sunk" style="height:36px;font-size:.875rem;margin:0 4px">${ico('i-users','i s muted')}<span class="ph">Tìm người để xem lịch</span></div>` + calList();
+});
+$$('[data-callist-only]').forEach(el => el.outerHTML = calList());
+
+$$('[data-gtop]').forEach(el => el.innerHTML =
+  `<button class="ib" aria-label="Thu gọn cột lịch">${ico('i-menu')}</button>
+   <span class="brand"><span class="glogo" aria-hidden="true"><i></i><b>14</b></span>Lịch</span>
+   <span class="gbtn">Hôm nay</span><button class="ib" aria-label="Khoảng trước">${ico('i-left')}</button><button class="ib" aria-label="Khoảng sau">${ico('i-right')}</button>
+   <span class="title">Tháng 10 năm 2026</span><span class="grow"></span>
+   <button class="ib" aria-label="Tìm sự kiện">${ico('i-search')}</button><button class="ib" aria-label="Phím tắt và trợ giúp">${ico('i-q')}</button><button class="ib" aria-label="Cài đặt lịch">${ico('i-gear')}</button>
+   <span class="gbtn" aria-haspopup="menu" style="margin-left:6px">${el.dataset.gtop}${ico('i-down')}</span>`);
+
+/* ---------- grids ---------- */
+const W = DAYS.map((d,i)=>[d[0],d[1],i]);
+timeGrid(document.querySelector('[data-week="full"]'), {days:W, events:EVENTS, allday:ALLDAY});
+timeGrid(document.querySelector('[data-week="quick"]'), {days:W.slice(0,5), allday:[], H0:8, H1:18,
+  // the event being created is drawn as the accent ghost block, not yet on any calendar
+  events: EVENTS.filter(e => e.d<5 && !(e.d===3 && e.s===13.5)).map(e=>({...e,sel:0})).concat([{d:3,s:13.5,e:15,t:'Họp chốt số liệu thuế',c:'ws',ghost:1}])});
+
+// find a time: one column per person, same day
+const PEOPLE = [['TL','Nguyễn Thu Lan (bạn)','person-6','Có thể tham gia'],['MĐ','Trần Minh Đức','person-5','Có thể tham gia'],['HY','Phạm Hải Yến','person-3','Có thể tham gia'],['QV','Lê Quang Vinh','person-1','Trùng 1 sự kiện'],['HP','Nguyễn Hoa Phượng','person-8','Chỉ thấy bận/rảnh']];
+const FIND = [
+  {d:0,s:9,e:10,t:'Duyệt ngân sách tháng 11',c:'me'},{d:0,s:15,e:16,t:'Phỏng vấn kế toán viên',c:'me',st:'pending'},
+  {d:1,s:10,e:11,t:'Rà soát hợp đồng',c:'duc'},{d:1,s:9,e:10,t:'Duyệt ngân sách tháng 11',c:'duc'},
+  {d:2,s:9,e:10,t:'Duyệt ngân sách tháng 11',c:'yen'},{d:2,s:15,e:16.5,t:'Đào tạo nội bộ',c:'yen'},
+  {d:3,s:13,e:14.5,t:'Gặp ngân hàng',c:'vinh'},{d:3,s:8,e:8.5,t:'Đồng bộ nhanh',c:'vinh'},
+  {d:4,s:10,e:11.5,t:'Bận',c:'me',st:'busy'},{d:4,s:15.5,e:17,t:'Bận',c:'me',st:'busy'},
+];
+const findEl = document.querySelector('[data-week="find"]');
+timeGrid(findEl, {days:PEOPLE.map((p,i)=>[p[0],'',i]), events:FIND, H0:8, H1:18, tz:false, today:-1,
+  headers: PEOPLE.map(([a,n,p,s],i)=>`<div class="ft-h"><span class="av s32" style="--p:var(--color-${p})">${a}</span><span>${n}</span>${i===3?`<span class="pill warn">Trùng giờ</span>`:`<small>${s}</small>`}</div>`).join('')});
+// person-8 busy blocks use their own hue
+$$('.tg-col', findEl)[4].querySelectorAll('.ev').forEach(e => { e.classList.remove('c-me'); e.style.setProperty('--c','var(--color-person-8)'); e.style.setProperty('--w','var(--color-person-8-wash)'); });
+(() => { const body = findEl.querySelector('.tg-scroll'); const s = document.createElement('div'); s.className='slot';
+  s.style.cssText = `top:calc(var(--hh) * 5.5);height:calc(var(--hh) * 1);left:56px;right:8px`; s.setAttribute('aria-label','Khoảng đang chọn 13:30 đến 14:30'); body.appendChild(s); })();
+
+timeGrid(document.querySelector('[data-week="day"]'), {days:[['T4',14,2]], H0:8, H1:18,
+  events: EVENTS.filter(e=>e.d===2).map(e=>({...e, sel:0, extra: e.sel?'<span class="t">Phòng họp tầng 3 · 6 khách</span>':''}))});
+timeGrid(document.querySelector('[data-week="tab3"]'), {days:W.slice(2,5), events:EVENTS.map(e=>({...e,sel:0})), allday:ALLDAY, H0:8, H1:23});
+timeGrid(document.querySelector('[data-week="ph3"]'), {days:W.slice(2,5), events:EVENTS.map(e=>({...e,sel:0})), allday:ALLDAY, H0:8, H1:20, tz:false});
+
+/* ---------- month ---------- */
+(() => {
+  const el = document.querySelector('[data-month]');
+  const M = { // day of month -> entries
+    1:[['ws','ad','Ra mắt quy trình mới']], 5:[['ws','09:00','Họp giao ban']], 6:[['tt','08:30','Chốt lịch chi trả']],
+    9:[['me','14:00','Đối soát ngân hàng'],['vh','16:00','Kiểm tra kho']], 12:[['duc','ad','Trần Minh Đức nghỉ phép'],['ws','09:00','Họp giao ban đầu tuần'],['me','14:00','Đối soát công nợ quý 3']],
+    13:[['duc','ad','Trần Minh Đức nghỉ phép'],['tt','08:30','Chốt lịch chi trả'],['me','13:30','1:1 với Minh Đức']],
+    14:[['me','09:00','Duyệt ngân sách tháng 11'],['duc','10:00','Rà soát hợp đồng'],['ws','10:30','Đào tạo hệ thống mới'],['me','15:00','Phỏng vấn kế toán viên']],
+    15:[['tt','08:30','Đối chiếu sao kê'],['tt','11:00','Gặp đối tác VNPay'],['me','13:30','Họp chốt số liệu thuế'],['vh','16:00','Kiểm kê tài sản quý'],['ws','17:30','Sinh nhật tháng 10']],
+    16:[['ws','ad','Hạn nộp báo cáo thuế'],['ws','14:00','Tổng kết tuần'],['me','dec','Họp marketing']],
+    19:[['ws','09:00','Họp giao ban đầu tuần']], 20:[['tt','08:30','Chốt lịch chi trả']], 22:[['me','10:00','Gặp kiểm toán']],
+    26:[['ws','09:00','Họp giao ban đầu tuần']], 27:[['tt','08:30','Chốt lịch chi trả']], 28:[['tt','14:00','Đối soát phí giao dịch quý 4']],
+    30:[['ws','ad','Khoá sổ tháng 10'],['me','16:00','Báo cáo tháng']],
+  };
+  const cells = [[28,1],[29,1],[30,1]].concat(Array.from({length:31},(_,k)=>[k+1,0])).concat([[1,1]]);
+  const item = ([c,t,n]) => t==='ad' ? `<span class="mc ad ${CAL[c]}"><b>${n}</b></span>`
+    : t==='dec' ? `<span class="mc dec ${CAL[c]}"><span class="dot"></span><span class="t">15:30</span><b>${n}</b></span>`
+    : `<span class="mc ${CAL[c]}"><span class="dot"></span><span class="t">${t}</span><b>${n}</b></span>`;
+  let html = `<div class="mg-w">${['T2','T3','T4','T5','T6','T7','CN'].map(w=>`<span>${w}</span>`).join('')}</div>`;
+  for (let r=0;r<5;r++) {
+    html += '<div class="mg-r">' + cells.slice(r*7,r*7+7).map(([n,o]) => {
+      const list = o ? [] : (M[n]||[]); const shown = list.slice(0,3); const more = list.length-3;
+      return `<div class="mg-c${o?' o':''}${!o&&n===14?' t':''}"><span class="d">${n}</span>${shown.map(item).join('')}${more>0?`<span class="mc more" role="button" aria-label="Thêm ${more} sự kiện ngày ${n} tháng 10">+ ${more} nữa</span>`:''}</div>`;
+    }).join('') + '</div>';
+  }
+  el.innerHTML = html;
+})();
+
+/* ---------- agenda ---------- */
+function agendaHtml(rows) {
+  return rows.map(([w,n,list,today]) => `<div class="ag-day${today?' today':''}"><div class="dd"><b>${n}</b><span>${w}, TH 10</span></div><div class="ag-list">${list.map(x => x==='now' ? '<div class="nowrow">10:40</div>' :
+    `<div class="ag-ev ${CAL[x[0]]}${x[4]==='dec'?' dec':''}" role="button"><span class="dot"></span><span class="t">${x[1]}</span><b>${x[2]}</b><span class="m">${x[3]||''}</span></div>`).join('')}</div></div>`).join('');
+}
+const VID = ico('i-video','i xs');
+document.querySelector('[data-agenda]').innerHTML = agendaHtml([
+  ['T4',14,[['me','09:00 – 10:00','Duyệt ngân sách tháng 11',VID+' 6 khách'],['duc','10:00 – 11:00','Rà soát hợp đồng','Trần Minh Đức'],'now',['ws','10:30 – 11:15','Đào tạo hệ thống mới',''],['me','15:00 – 16:00','Phỏng vấn kế toán viên','<span class="pill warn">Chưa trả lời</span>']],true],
+  ['T5',15,[['tt','08:30 – 09:00','Đối chiếu sao kê',''],['tt','11:00 – 12:00','Gặp đối tác VNPay',VID],['me','13:30 – 15:00','Họp chốt số liệu thuế','3 khách'],['vh','16:00 – 17:00','Kiểm kê tài sản quý','']]],
+  ['T6',16,[['ws','Cả ngày','Hạn nộp báo cáo thuế',''],['vh','09:00 – 09:15','Đồng bộ nhanh',''],['ws','14:00 – 15:00','Tổng kết tuần',VID],['me','15:30 – 16:30','Họp marketing','Đã từ chối','dec']]],
+]);
+document.querySelector('[data-agenda-space]').innerHTML = SPACE_EV.map(([w,n,list]) => `<div class="ag-day" style="grid-template-columns:72px 1fr"><div class="dd"><b>${n}</b><span>${w}</span></div><div class="ag-list">${list.map(x=>`<div class="ag-ev c-tt" style="grid-template-columns:14px 104px 1fr"><span class="dot"></span><span class="t">${x[0]}</span><span style="display:grid;line-height:1.3"><b>${x[1]}</b><small class="muted" style="font-size:.75rem">${x[2]}</small></span></div>`).join('')}</div></div>`).join('');
+
+// phone
+document.querySelectorAll('[data-strip]').forEach(el => el.innerHTML = DAYS.map(([w,n],i)=>`<span class="${i===TODAY?'t':''}">${w}<b>${n}</b><i class="${i>=5?'no':''}"></i></span>`).join(''));
+const PH = [
+  ['HÔM NAY · THỨ TƯ 14/10',true,[['me','Duyệt ngân sách tháng 11','09:00 – 10:00 · Phòng họp tầng 3',VID,'past'],['duc','Rà soát hợp đồng','10:00 – 11:00 · Trần Minh Đức',''],['ws','Đào tạo hệ thống mới','10:30 – 11:15',''],['me','Phỏng vấn kế toán viên','15:00 – 16:00 · Chưa trả lời','','pend']]],
+  ['THỨ NĂM 15/10',false,[['tt','Gặp đối tác VNPay','11:00 – 12:00 · Phòng khách tầng 1',VID],['me','Họp chốt số liệu thuế','13:30 – 15:00','']]],
+  ['THỨ SÁU 16/10',false,[['ws','Hạn nộp báo cáo thuế','Cả ngày',''],['me','Họp marketing','15:30 – 16:30 · Đã từ chối','','dec']]],
+];
+document.querySelectorAll('[data-phone-agenda]').forEach(el => el.innerHTML = PH.map(([h,t,list]) => `<div class="dh${t?' t':''}">${h}</div>` + list.map(x=>`<div class="pcard ${CAL[x[0]]}${x[4]==='dec'?' dec':''}${x[4]==='past'?' past':''}${x[4]==='pend'?' pend':''}" role="button"><span class="bar"></span><span><b>${x[1]}</b><small>${x[2]}</small></span><span class="muted">${x[3]}</span></div>`).join('')).join(''));
+
+/* theme */
+$$('#theme [role=radio]').forEach(b => b.addEventListener('click', () => {
+  $$('#theme [role=radio]').forEach(x => x.setAttribute('aria-checked', x===b));
+  if (b.dataset.t) document.documentElement.dataset.theme = b.dataset.t; else delete document.documentElement.dataset.theme;
+}));
+</script>
+</body>
+</html>

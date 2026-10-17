@@ -171,8 +171,8 @@ mã backend, email và tài liệu kỹ thuật không đổi.
 └─────────┴──────────────┴───────────────────────────┴──────────────┘
 ```
 
-- **Sidebar** (`--color-sunk`): workspace switcher (tên + avatar, display font), 5 mục chính
-  **Tin nhắn · Tài liệu · Phê duyệt · Tài sản · Danh bạ**, đáy: **Thông báo** (mở NotificationPanel,
+- **Sidebar** (`--color-sunk`): workspace switcher (tên + avatar, display font), 6 mục chính
+  **Tin nhắn · Lịch · Tài liệu · Phê duyệt · Tài sản · Danh bạ**, đáy: **Thông báo** (mở NotificationPanel,
   §6), **Quản trị** (khi có quyền),
   **Cài đặt**, người dùng hiện tại. Tài sản nằm trong shell này, không có layout riêng.
 - **Menu chính: mở rộng hoặc dải icon** (mockup `design/mockups/app-rail.html`). Hai trạng thái, người dùng tự
@@ -191,7 +191,7 @@ mã backend, email và tài liệu kỹ thuật không đổi.
     khoản: tên, vai trò, trạng thái, Cài đặt tài khoản, Đăng xuất.
   - *Đổi workspace:* bấm ô chữ cái (hay tên khi mở rộng) mở cùng một menu; đầu menu ghi đầy đủ tên workspace
     đang mở (xuống dòng, không cắt) + dòng phụ ("Workspace cá nhân" hoặc tên tổ chức) · vai trò; danh sách
-    "Chuyển sang" cũng xuống dòng thay vì cắt. Workspace cá nhân không có Tài sản, Phê duyệt, Quản trị.
+    "Chuyển sang" cũng xuống dòng thay vì cắt. Workspace cá nhân không có Tài sản, Phê duyệt, Quản trị; vẫn có Lịch (chỉ lịch cá nhân).
   - *Phòng ban chỉ có ở workspace tổ chức.* Workspace cá nhân không hiện trường, cột, bộ lọc, nhóm trong ô
     chọn người hay dòng phụ nào nói về phòng ban (Hồ sơ, Danh bạ, ô chọn người).
   - *Tooltip* chỉ ở chỗ chữ bị ẩn (ô workspace, avatar, nút chuyển): `--color-overlay`, `--shadow-overlay`,
@@ -217,11 +217,11 @@ mã backend, email và tài liệu kỹ thuật không đổi.
     `--shadow-overlay`, nền sau `--color-scrim`. Từ trên: logo N 28 + **Nexus** · khối workspace (ô chữ cái 40,
     tên, dòng mờ "Workspace tổ chức · N thành viên" / "Workspace cá nhân · chỉ bạn", chevron; nền `--color-sunk`,
     radius 16; chạm mở danh sách workspace ngay dưới: dấu ✓ ở workspace đang mở, số chưa đọc của workspace khác,
-    "Tạo workspace" cuối) · **Chat · Tài liệu · Phê duyệt · Tài sản · Danh bạ** · divider · **Thông báo · Quản trị ·
+    "Tạo workspace" cuối) · **Chat · Lịch · Tài liệu · Phê duyệt · Tài sản · Danh bạ** · divider · **Thông báo · Quản trị ·
     Cài đặt** · cuối ngăn: tên hiển thị · vai trò (mờ). Hàng 52, radius full, icon lucide 20 + nhãn 15px/500; đang ở:
     nền `--color-accent-wash`, icon accent, `aria-current="page"`. Chat có pill số chưa đọc (theo mức thông báo),
     Phê duyệt có chữ "N chờ bạn", Thông báo có pill số chưa đọc. Workspace cá nhân: không Tài sản, Phê duyệt, Quản
-    trị; Quản trị chỉ hiện cho người có quyền. Chọn một mục: đóng ngăn kéo rồi chuyển màn; chọn workspace khác: gắn
+    trị (vẫn có Lịch); Quản trị chỉ hiện cho người có quyền. Chọn một mục: đóng ngăn kéo rồi chuyển màn; chọn workspace khác: gắn
     lại phiên, về Trang chủ Chat của workspace đó.
   - *Sheet tài khoản (chạm avatar):* avatar 52, tên, chức danh · workspace, pill trạng thái; Tạm dừng thông báo ·
     Cài đặt tài khoản · Cài đặt · divider · Đăng xuất (`--color-danger`). Hàng 56, ô icon 40 radius 12 `--color-sunk`.
@@ -702,6 +702,96 @@ cho tab Tệp của nhóm.
   "Tới tin nhắn". Trình xem tệp nhận danh sách đã lọc. Rỗng theo chip: "Chưa có ảnh hay video nào trong nhóm." / "Chưa
   có tài liệu nào trong nhóm."; rỗng hẳn giữ câu hiện có + "Đính kèm trong Trò chuyện".
 
+### Lịch (mockup `design/mockups/calendar.html`, duyệt 2026-10-17)
+
+Lịch là mục chính sau Tin nhắn (§5), cả ở workspace cá nhân (chỉ lịch cá nhân). Hành động chính là **Tạo** ở cột trái;
+thanh trên không có nút primary.
+
+**Ngoại lệ có chủ đích** (người dùng yêu cầu "giống Google Calendar", 2026-10-17); chỉ áp trong module Lịch:
+- Khối sự kiện **tô đặc** màu lịch, không phải wash + vạch trái như phần còn lại của hệ.
+- Vạch giờ hiện tại dùng `--color-danger` (đỏ), không phải accent; chấm đầu vạch 12px.
+- Nút dạng pill (radius full) cho Hôm nay, nút trên thanh, nút trong popover và trình soạn; riêng **Tạo** radius 16.
+- Bộ chọn kiểu xem là nút dropdown (không phải seg).
+
+- **Thanh trên (trải ngang, kiểu Google):** ☰ 40 · logo 38 + chữ "Lịch" · Hôm nay (`gbtn` 36) · ‹ › · tiêu đề tháng
+  (body 22/400, "Tuần N" mờ) · khoảng trống · tìm (icon, mở ô viên thuốc "Tìm sự kiện") · nút chọn kiểu xem
+  (**Ngày · Tuần · Tháng · Lịch biểu**, mỗi dòng ghi phím tắt, nhớ theo người trên từng máy) · Cài đặt lịch.
+- **Cột lịch (256):** nút **Tạo** (radius 16, icon + nhãn; mở trình soạn, loại chọn trong đó) · lịch tháng nhỏ (hôm nay tròn
+  accent, ngày đang xem nền wash) · **Tìm người** (Picker, thêm lịch của người/nhóm) · **Lịch của tôi** (lịch cá nhân, lịch
+  workspace, lịch nhóm) · **Lịch khác** (đã được chia sẻ hoặc thêm). Mỗi lịch một ô chọn màu lịch (bỏ chọn = ẩn khỏi lưới)
+  và menu ⋯ (đổi màu, Chia sẻ, Cài đặt).
+- **Lưới giờ:** tuần bắt đầu **Thứ Hai**; 1 giờ = **48px**; 24h `09:00` tabular; cột giờ 56 có nhãn múi giờ (`GMT+7`);
+  mở ra cuộn tới 1 giờ trước hiện tại. Số ngày 26/400 trong vòng 46, hôm nay vòng accent; không tô nền cột (kể cả
+  hôm nay, cuối tuần). Hàng cả ngày dưới tiêu đề ngày, khối kéo qua nhiều ngày, quá 3 hàng thì "+ N" có chevron.
+- **Màu lịch = 8 person hue** (§2). Lịch cá nhân mặc định hue của chủ lịch (lịch người khác hiện chồng bằng hue của họ);
+  lịch workspace dùng accent; lịch nhóm chọn từ 8 hue. Mỗi sự kiện kế thừa màu lịch, đổi riêng được.
+- **Khối sự kiện** (radius 6, đệm 3/7, viền 1px `--color-base` để tách khối kề nhau; tiêu đề 12/500 + giờ mờ):
+  - Mặc định: nền màu lịch, chữ `--color-on-person` (giờ ở alpha 0.88).
+  - **Đã qua:** nền `person-N-wash`, chữ `--color-ink`, giờ `--color-ink-muted`.
+  - **Chưa trả lời:** nền `--color-raised`, viền trong 1px màu lịch, chữ màu lịch.
+  - **Từ chối:** nền raised, chữ `--color-ink-muted` gạch ngang, viền `--color-line`.
+  - **Bận** (lịch chỉ xem bận/rảnh): sọc chéo 135° wash, chữ "Bận" mờ, không mở chi tiết.
+  - Đang chọn: `--shadow-overlay`. Khối tạm khi tạo/kéo: nền accent, `--color-on-accent`, tay nắm ở mép dưới.
+  - Realtime từ người khác: vòng 3px `person-N-wash` + 2px `person-N` + nhãn (§7). ≤ 30 phút: một dòng "tiêu đề, 09:00".
+    Trùng giờ chia cột theo giờ bắt đầu, khối sau chồng 50% sang phải. Không chỉ dựa vào màu: tên truy cập đọc đủ
+    "Phỏng vấn kế toán viên, 15:00 đến 16:00, chưa trả lời".
+- **Kéo thả:** kéo khối để dời (bước 15 phút, giữ Alt bước 5), kéo mép dưới đổi độ dài, kéo sang ngày khác được; thả là lưu
+  + toast "Đã dời sang 10:00 · Hoàn tác". Không có quyền sửa: không kéo được, con trỏ mặc định.
+- **Popover chi tiết** (rộng 420, Popover API, Esc đóng và trả focus về khối): công cụ Sửa · Xoá · Sao chép liên kết · ⋯
+  (Nhân bản, In, Mở cuộc trò chuyện của sự kiện) · Đóng. Tiêu đề body 22/400, giờ, quy tắc lặp bằng chữ. Cuộc gọi video là
+  **primary duy nhất**, chỉ từ 15 phút trước giờ bắt đầu tới lúc kết thúc (ngoài đó là "Sao chép liên kết cuộc gọi").
+  Khách: tổng + tóm tắt trả lời, Avatar 32 + huy hiệu (✓ success, × danger, ? mờ). Dải "Bạn sẽ tham gia?" (Có · Không ·
+  Có thể, pill 32) chỉ cho khách; người tổ chức thấy "Bạn là người tổ chức".
+- **Tạo nhanh:** kéo một khoảng giờ (bước 15 phút) hoặc bấm ô trống → khối tạm + popover tiêu đề (autofocus) · Loại (Sự kiện ·
+  Giờ làm việc riêng: người khác thấy Bận · Vắng mặt: cả ngày/nhiều ngày) · Khách · Lưu (mở trình soạn đầy đủ để thêm chi tiết). Lịch mặc định là lịch cá nhân;
+  trong tab Lịch của nhóm là lịch nhóm. Esc, hay bấm ra ngoài khi tiêu đề trống, huỷ không hỏi. Lưu: toast "Đã tạo sự kiện ·
+  Hoàn tác" (+ "Đã gửi lời mời cho 3 người").
+- **Trình soạn đầy đủ:** ngày (lịch nhỏ) · giờ (Select gõ được, bước 15 phút, "đến" ghi kèm độ dài, đổi giờ bắt đầu giữ độ dài) ·
+  múi giờ ẩn mặc định · Khách (Picker, PersonChip + trạng thái rảnh/bận; mời được cả nhóm chat; không bao giờ nhập email hay ID) ·
+  cuộc gọi video Nexus · địa điểm · mô tả · đính kèm từ Tài liệu (khách chưa có quyền thì hỏi "Chia sẻ quyền xem cho N khách?") ·
+  lời nhắc · màu · Hiển thị Bận/Rảnh · Quyền xem Mặc định/Riêng tư. Kiểm khi blur ("Giờ kết thúc phải sau giờ bắt đầu");
+  đóng khi chưa lưu thì hỏi "Bỏ thay đổi?"; lưu có khách: "Đã lưu. Đã báo 4 khách."
+- **Tìm giờ:** lưới mỗi cột một khách (Avatar 32 + tên + một dòng trạng thái: "Có thể tham gia" · "Trùng 1 sự kiện" · "Chỉ thấy
+  bận/rảnh"; cột của bạn đứng đầu; × ẩn khỏi tìm giờ, không bỏ khách). Dải accent kéo được; chạm khối bận thì đầu cột thành pill
+  warning "Trùng giờ"; ngoài giờ làm việc từng người = sọc xám. 3 chip giờ gợi ý sớm nhất mọi người cùng rảnh; không có thì
+  "Không có giờ nào mọi người cùng rảnh hôm nay · Xem ngày mai". Bận/rảnh chỉ trả khoảng thời gian, không tiêu đề/địa điểm.
+- **Lặp lại:** menu Không lặp lại · Hằng ngày · Hằng tuần vào thứ N · Hằng tháng vào thứ N thứ M · Hằng năm vào ngày D tháng M · Tuỳ chỉnh
+  (mỗi N tuần, chọn ngày T2…CN, kết thúc Không bao giờ / Vào ngày / Sau N lần; câu mô tả bằng chữ tiếng Việt, không lộ RRULE).
+  Sửa/kéo/xoá một lần của chuỗi mở **hộp phạm vi**: Chỉ sự kiện này · Sự kiện này và các sự kiện sau · Tất cả sự kiện (radio +
+  Huỷ/OK); "Tất cả" giữ các lần đã sửa riêng và nói rõ trong toast. Không lặp thì xoá không hỏi, toast Hoàn tác 5s. Khách
+  (không phải tổ chức) trả lời chọn phạm vi ngay trong dải trả lời.
+- **Tháng:** ô cao theo lưới, số dòng tự tính theo chiều cao (tối thiểu 2), "+ N nữa" là button tên đầy đủ ("Thêm 2 sự kiện
+  ngày 15 tháng 10"). Sự kiện cả ngày/nhiều ngày là thanh đặc; còn lại chấm màu + giờ + tiêu đề. Bấm số ngày → Ngày; bấm khoảng
+  trống → tạo nhanh cả ngày; kéo dòng sang ô khác dời ngày (giữ giờ). Ngày tháng khác mờ.
+- **Ngày và lịch biểu:** Ngày là lưới một cột. Lịch biểu: cột ngày 120 (số display 22 + "T4, TH 10"), hàng 36: chấm màu lịch ·
+  giờ tabular · tiêu đề 600 · meta phải (icon video, cụm Avatar khách ≤ 3, "chưa trả lời"). Ngày trống không có hàng; vạch "Bây giờ"
+  (`--color-danger`) giữa hai sự kiện hôm nay; tháng mới có tiêu đề display 19; cuộn cuối tải thêm 30 ngày.
+- **Chia sẻ lịch (Select, 3 mức):** **Xem mọi chi tiết** (tiêu đề, địa điểm, khách; trừ sự kiện riêng tư) · **Sửa sự kiện**
+  (tạo, sửa, xoá trên lịch này) · **Sửa và quản lý chia sẻ** (như trên + đổi ai được xem). Hàng cố định, không gỡ được:
+  **Mọi người trong workspace · Thấy bận/rảnh** (không có mức riêng). Có hiệu lực ngay trên mọi thiết bị; người được chia sẻ nhận
+  thông báo và lịch tự vào "Lịch khác". Lịch workspace: mọi thành viên xem, người quản lý workspace sửa. Lịch nhóm: thành viên
+  xem và tạo; chỉ người tạo và người quản lý nhóm sửa sự kiện của người khác.
+- **Nhắc giờ và thông báo:** toast trong app + thông báo đẩy ("Tham gia" khi có cuộc gọi · "Nhắc lại sau 5 phút") + hàng trong
+  NotificationPanel. Loại: lời mời, đổi giờ/địa điểm, huỷ, khách trả lời (chỉ tổ chức), được chia sẻ, nhắc giờ; mỗi loại có mức
+  trong Cài đặt thông báo. Từ chối thì không nhắc; mỗi người nhận một lần dù mở nhiều thiết bị.
+- **Lịch của nhóm chat:** tab **Lịch** trong nhóm (lưới tuần/tháng của lịch nhóm). Lịch nhóm tự vào "Lịch của tôi" của thành
+  viên; rời nhóm thì biến mất. Tạo sự kiện đăng **thẻ sự kiện** vào luồng (tin hệ thống của người tạo, có thread): đổi giờ thì
+  thẻ cập nhật tại chỗ + tin nhỏ "Lê Quang Vinh đã dời sang 14:00"; huỷ thì thẻ mờ, nhãn "Đã huỷ"; đến giờ hiện "Đang diễn
+  ra · Tham gia" và nút gọi ở đầu nhóm đổi thành "Tham gia".
+- **Máy tính bảng (768–1023):** cột lịch thành ngăn kéo (nút khung bên phải tiêu đề); nút + nổi 56 bo 18 thay Tạo; vùng chạm
+  ≥ 44; kéo thả bằng nhấn giữ 400ms; chạm sự kiện mở sheet phải rộng 360 (cách mép 10, bo 16), chạm ô trống mở sheet tạo nhanh.
+- **Điện thoại (< 768):** ☰ như mọi module, thanh trên viên thuốc "Tìm sự kiện", không thanh đáy. Dải tuần 7 ô 36 (chấm dưới
+  ngày có sự kiện, vuốt ngang đổi tuần); chạm "Tháng 10 ▾" gấp ra lịch tháng (280ms expo). Thẻ lịch biểu cao ≥ 56, nền đặc màu
+  lịch (đã qua / chưa trả lời / từ chối theo cùng quy tắc khối), tiêu đề 16/600, giờ + địa điểm 13 mờ. ⋯ cạnh tiêu đề chọn kiểu
+  xem: Lịch biểu · Ngày · 3 ngày · Tháng. Chi tiết là bottom sheet (§5); + nổi mở trình soạn toàn màn, Khách và Tìm giờ là màn con.
+- **Trạng thái:** mọi truy vấn có Skeleton (cùng hình lưới), Rỗng ("Tuần này bạn chưa có sự kiện nào…" + Tạo sự kiện), Lỗi ("Không
+  tải được lịch… Sự kiện đã lưu không bị mất" + Thử lại). Mất quyền giữa chừng: "Bạn không còn quyền xem lịch “…”" + lịch tự gỡ.
+  Xung đột lưu: "Phạm Hải Yến vừa sửa sự kiện này" + Xem bản mới. Tìm rỗng: "Không có sự kiện nào khớp “…”".
+- **Phím tắt** (giống Google, ghi trong bảng `?`): **D W M A** đổi kiểu xem · **T** hôm nay · **J / K** khoảng sau / trước ·
+  **C** tạo · **E** sửa sự kiện chọn · **Delete** xoá · **/** tìm · Tab ↑ ↓ đi giữa sự kiện · Enter mở · Esc đóng · Ctrl S lưu.
+- **Quyền hiện ra:** không có quyền thì ẩn hành động, không báo lỗi: không kéo được, popover không Sửa/Xoá, không mục Chia sẻ,
+  không dải trả lời; chỉ thấy "Bận" khi không đọc được chi tiết. Quy tắc quyền (NGAC, trên OA của lịch): mục 14 của mockup, sẽ chuyển vào spec của Lịch trong `docs/specs/`.
+
 ## 7. Motion
 
 Mọi duration/easing là token. Chỉ animate `transform` và `opacity` (cộng `background-color` cho
@@ -741,6 +831,8 @@ lớp phủ realtime). Không `transition: all`. Đóng chạy bằng ~75% thờ
 | Trình xem tệp | desktop: như Modal; điện thoại: scrim fade 220ms + `scale(.98)` → 1, 280ms expo | 210ms ease-in |
 | Bản xem trước sẵn sàng | fade 160ms | không |
 | Đổi tệp trong trình xem | `translateX(±16px)` + fade theo hướng, 160ms | không |
+| Khối sự kiện dời giờ (kéo thả / realtime) | FLIP `transform` tới chỗ mới, 280ms expo; giảm chuyển động: nhảy thẳng | không |
+| Khối sự kiện của người khác đổi (realtime) | lớp phủ `person-N-wash` 2400ms + nhãn "vừa dời giờ / vừa nhận lời / vừa thêm", như Realtime bên dưới | tan theo mẫu realtime |
 
 **Ngoại lệ: màn đăng nhập** (mockup `design/mockups/auth-motion.html`, duyệt 2026-10-11). Hai bước
 đăng nhập là một luồng đi tới, nên được trượt; mọi thứ vẫn dùng token ở trên, chỉ `transform` và `opacity`.

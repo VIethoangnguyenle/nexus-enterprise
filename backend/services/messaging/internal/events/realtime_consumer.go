@@ -195,6 +195,10 @@ func (c *RealtimeConsumer) run(ctx context.Context) {
 // handle translates one record and publishes it. A record that does not parse,
 // lacks its boundary, or is stale is dropped: there is nobody to tell.
 func (c *RealtimeConsumer) handle(topic string, value []byte) {
+	// The calendar's topic also carries notices for the notification consumer.
+	if topic == CalendarTopic && IsCalendarNotice(value) {
+		return
+	}
 	evt, err := Translate(topic, value)
 	if err != nil {
 		slog.Warn("realtime event skipped", "topic", topic, "error", err)

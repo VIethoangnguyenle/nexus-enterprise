@@ -41,6 +41,8 @@ export function CallStage({ callRoom, snapshot, session, call, onLeave }: Props)
   const { workspaceId } = useActiveWorkspace()
   const people = usePeople(workspaceId)
   const clock = useElapsed(session.startedAt)
+  // The call of an event is in no conversation: no chat to read or badge.
+  const hasChat = !!session.channelId
   const newMessages = useMessagesSince(session.channelId, store.chatSeenAt)
   const [page, setPage] = useState(0)
   const { markChatSeen } = store
@@ -139,7 +141,7 @@ export function CallStage({ callRoom, snapshot, session, call, onLeave }: Props)
         </span>
         <span className="cs-grow" />
         {selfPoor && <span className="cs-chip cs-chip-warn"><Signal className="cs-icon-xs" aria-hidden="true" />Mạng yếu</span>}
-        {!session.isDm && <span className="cs-chip"><Lock className="cs-icon-xs" aria-hidden="true" />Chỉ thành viên nhóm</span>}
+        {!session.isDm && <span className="cs-chip"><Lock className="cs-icon-xs" aria-hidden="true" />{hasChat ? 'Chỉ thành viên nhóm' : 'Chỉ khách của sự kiện'}</span>}
         <LayoutMenu layout={layout} onChange={store.setLayout} />
       </div>
 
@@ -160,7 +162,7 @@ export function CallStage({ callRoom, snapshot, session, call, onLeave }: Props)
       )}
 
       <CallControls
-        callRoom={callRoom} snapshot={snapshot} title={session.title} clock={clock} panel={panel} onPanel={store.setPanel}
+        callRoom={callRoom} snapshot={snapshot} title={session.title} clock={clock} panel={panel} onPanel={store.setPanel} hasChat={hasChat}
         newMessages={newMessages} handsUp={handsUp} otherPresenter={otherPresenter}
         onLeave={onLeave} onOpenDevices={() => store.setDevicesOpen(true)}
       />

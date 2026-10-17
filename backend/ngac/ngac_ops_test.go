@@ -219,3 +219,40 @@ func TestMembersKeepShareButShareGranteesDoNot(t *testing.T) {
 		}
 	}
 }
+
+func TestCalendarNamesAndOps(t *testing.T) {
+	if got := ngac.CalendarOAName("c1"); got != "Cal_c1" {
+		t.Errorf("calendar OA = %q", got)
+	}
+	if got := ngac.CalendarEventOAName("e1"); got != "CalEv_e1" {
+		t.Errorf("event OA = %q", got)
+	}
+	if got := ngac.CalendarEventGuestsUAName("e1"); got != "CalEvGuests_e1" {
+		t.Errorf("guests UA = %q", got)
+	}
+	want := map[string][]string{
+		ngac.CalendarShareView:   {ngac.OpRead},
+		ngac.CalendarShareEdit:   {ngac.OpRead, ngac.OpWrite},
+		ngac.CalendarShareManage: {ngac.OpRead, ngac.OpWrite, ngac.OpShare, ngac.OpManage},
+	}
+	for level, ops := range want {
+		got, ok := ngac.CalendarShareOps(level)
+		if !ok || strings.Join(got, ",") != strings.Join(ops, ",") {
+			t.Errorf("share %s = %v, %v", level, got, ok)
+		}
+	}
+	for _, bad := range []string{"", "owner", "read", "invite"} {
+		if _, ok := ngac.CalendarShareOps(bad); ok {
+			t.Errorf("share level %q must be refused", bad)
+		}
+	}
+	if g := ngac.CalendarGuestOps(false); len(g) != 1 || g[0] != ngac.OpRead {
+		t.Errorf("guest ops = %v", g)
+	}
+	if g := ngac.CalendarGuestOps(true); len(g) != 2 || g[1] != ngac.OpInvite {
+		t.Errorf("guest ops with invite = %v", g)
+	}
+	if err := ngac.ValidateRoleName("Cal_team"); err == nil {
+		t.Error("role names in the calendar namespace must be rejected")
+	}
+}

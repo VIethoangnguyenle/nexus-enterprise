@@ -1,10 +1,10 @@
 import {
-  MessageSquare, FolderOpen, Users, Package, ClipboardCheck, Settings, ShieldCheck,
+  MessageSquare, Calendar, FolderOpen, Users, Package, ClipboardCheck, Settings, ShieldCheck,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { isConversationPath, validateWorkspaceSearch } from './workspace'
 
-export type ModuleId = 'messaging' | 'documents' | 'drive' | 'assets' | 'contacts' | 'approval' | 'admin' | 'settings'
+export type ModuleId = 'messaging' | 'calendar' | 'documents' | 'drive' | 'assets' | 'contacts' | 'approval' | 'admin' | 'settings'
 
 export interface NavDestination {
   id: ModuleId
@@ -16,9 +16,10 @@ export interface NavDestination {
   to: string
 }
 
-/** DESIGN.md §5: five main destinations, then Thông báo, Quản trị and Cài đặt at the foot. */
+/** DESIGN.md §5: six main destinations, then Thông báo, Quản trị and Cài đặt at the foot. */
 export const mainNavItems: NavDestination[] = [
   { id: 'messaging', icon: MessageSquare, label: 'Tin nhắn', phoneLabel: 'Chat', to: '/channels' },
+  { id: 'calendar', icon: Calendar, label: 'Lịch', to: '/calendar' },
   { id: 'drive', icon: FolderOpen, label: 'Tài liệu', to: '/drive' },
   { id: 'approval', icon: ClipboardCheck, label: 'Phê duyệt', to: '/approval' },
   { id: 'assets', icon: Package, label: 'Tài sản', to: '/assets' },
@@ -52,6 +53,7 @@ export function moduleOfPath(pathname: string): ModuleId | undefined {
   if (pathname.includes('/drive')) return 'drive'
   if (pathname.includes('/approval')) return 'approval'
   if (pathname.includes('/channels')) return 'messaging'
+  if (pathname.includes('/calendar')) return 'calendar'
   if (pathname.includes('/assets')) return 'assets'
   if (pathname.includes('/settings')) return 'settings'
   if (pathname.includes('/documents')) return 'drive'
@@ -61,6 +63,7 @@ export function moduleOfPath(pathname: string): ModuleId | undefined {
 /** The hint the phone search bar shows for a module (DESIGN.md §5, Điều hướng di động). */
 const SEARCH_HINT: Partial<Record<ModuleId, string>> = {
   messaging: 'Tìm trong chat',
+  calendar: 'Tìm sự kiện',
   drive: 'Tìm tài liệu',
   documents: 'Tìm tài liệu',
   approval: 'Tìm đề nghị',
@@ -84,10 +87,10 @@ export const isChatListPath = (pathname: string) => /^\/channels\/?$/.test(pathn
 
 /**
  * A screen that carries its own header with a way back on a phone (one
- * conversation, one document), so the search bar steps aside for it.
+ * conversation, one document, the calendar editor), so the search bar steps aside for it.
  */
 export function isPhoneDetailPath(pathname: string): boolean {
-  return isConversationPath(pathname) || /^\/documents\/[^/]+\/?$/.test(pathname)
+  return isConversationPath(pathname) || /^\/documents\/[^/]+\/?$/.test(pathname) || /^\/calendar\/(new|event\/[^/]+)\/?$/.test(pathname)
 }
 
 /** The tabs of the phone Chat list; the desktop ignores them. */

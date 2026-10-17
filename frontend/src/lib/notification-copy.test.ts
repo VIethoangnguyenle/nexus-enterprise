@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  describeNotification, groupByDay, notificationTarget, notificationTime, type NotificationItem,
+  DOMAIN_LABEL, describeNotification, groupByDay, notificationTarget, notificationTime, type NotificationItem,
 } from './notification-copy'
 
 const item = (over: Partial<NotificationItem> = {}): NotificationItem => ({
@@ -35,6 +35,69 @@ describe('describeNotification', () => {
   it('does not print the title or body of the server, or any id', () => {
     const d = describeNotification(item({ type: 'something_new', title: 'Raw English', body: 'r1' }))
     expect(d).toEqual({ text: 'Bạn có một thông báo mới.', domain: null })
+  })
+})
+
+const calBody = (over: Record<string, unknown> = {}) =>
+  JSON.stringify({ ws: 'w1', actor: 'Lê Thị Hoa', start: new Date(2026, 9, 17, 9, 0).toISOString(), ...over })
+
+describe('calendar notifications', () => {
+  const cal = (type: string, over: Record<string, unknown> = {}, title = 'Họp giao ban') =>
+    item({ type, title, body: calBody(over), entity_type: 'calendar_event', entity_id: 'e1' })
+
+  it.each([
+    ['calendar_invitation', {}, 'Lê Thị Hoa mời bạn tới Họp giao ban'],
+    ['calendar_rsvp', { response: 'accepted' }, 'Lê Thị Hoa đã nhận lời Họp giao ban'],
+    ['calendar_rsvp', { response: 'declined' }, 'Lê Thị Hoa đã từ chối Họp giao ban'],
+    ['calendar_rsvp', { response: 'tentative' }, 'Lê Thị Hoa có thể tham gia Họp giao ban'],
+    ['calendar_reminder', {}, 'Họp giao ban bắt đầu lúc 09:00'],
+    ['calendar_updated', {}, 'Lê Thị Hoa đã dời Họp giao ban'],
+    ['calendar_cancelled', {}, 'Lê Thị Hoa đã huỷ Họp giao ban'],
+    ['calendar_shared', {}, 'Lê Thị Hoa đã chia sẻ lịch với bạn'],
+  ])('%s %j reads as a sentence of names and times', (type, over, text) => {
+    expect(describeNotification(cal(type, over))).toEqual({ text, domain: 'calendar' })
+  })
+
+  it('labels the domain Lịch', () => {
+    expect(DOMAIN_LABEL.calendar).toBe('Lịch')
+  })
+
+  it('gives the time of a reminder on the viewer clock and says so for an all-day event', () => {
+    expect(describeNotification(cal('calendar_reminder', { start: new Date(2026, 9, 17, 14, 30).toISOString() })).text)
+      .toBe('Họp giao ban bắt đầu lúc 14:30')
+    expect(describeNotification(cal('calendar_reminder', { allDay: true })).text).toBe('Họp giao ban diễn ra cả ngày hôm nay')
+    expect(describeNotification(cal('calendar_reminder', { start: undefined })).text).toBe('Họp giao ban sắp bắt đầu')
+  })
+
+  it('stays readable without a name, a title or a body, and never prints the raw body', () => {
+    expect(describeNotification(cal('calendar_invitation', { actor: undefined })).text).toBe('Bạn được mời tới Họp giao ban')
+    expect(describeNotification(cal('calendar_updated', { actor: undefined })).text).toBe('Họp giao ban đã được dời')
+    expect(describeNotification(cal('calendar_cancelled', { actor: undefined })).text).toBe('Họp giao ban đã bị huỷ')
+    expect(describeNotification(cal('calendar_rsvp', { actor: undefined, response: 'accepted' })).text).toBe('Một khách đã nhận lời Họp giao ban')
+    expect(describeNotification(cal('calendar_rsvp', { response: 'who-knows' })).text).toBe('Lê Thị Hoa đã trả lời Họp giao ban')
+    expect(describeNotification(cal('calendar_shared', { actor: undefined })).text).toBe('Một lịch đã được chia sẻ với bạn')
+    expect(describeNotification(cal('calendar_invitation', {}, '  ')).text).toBe('Lê Thị Hoa mời bạn tới một sự kiện')
+    const broken = describeNotification(item({ type: 'calendar_invitation', title: 'Họp', body: '{"ws":"w1","actor":' }))
+    expect(broken).toEqual({ text: 'Bạn được mời tới Họp', domain: 'calendar' })
+    expect(describeNotification(item({ type: 'calendar_invitation', title: 'Họp', body: '[1,2]' })).text).toBe('Bạn được mời tới Họp')
+    expect(describeNotification(item({ type: 'calendar_invitation', title: 'Họp', body: 'null' })).text).toBe('Bạn được mời tới Họp')
+  })
+
+  it('opens the week of the event, in its workspace', () => {
+    expect(notificationTarget(cal('calendar_invitation'))).toEqual({
+      to: '/calendar', search: { mode: 'week', date: '2026-10-17', ws: 'w1' },
+    })
+    expect(notificationTarget(cal('calendar_reminder'))).toEqual({
+      to: '/calendar', search: { mode: 'week', date: '2026-10-17', ws: 'w1' },
+    })
+  })
+
+  it('opens the current week when no day or workspace is named, and for a share', () => {
+    expect(notificationTarget(item({ type: 'calendar_shared', entity_type: 'calendar', entity_id: 'c1', body: '{"actor":"A"}' }))).toEqual({
+      to: '/calendar', search: { mode: 'week' },
+    })
+    expect(notificationTarget(item({ type: 'calendar_updated', body: 'not json' }))).toEqual({ to: '/calendar', search: { mode: 'week' } })
+    expect(notificationTarget(item({ type: 'calendar_updated', body: '{"start":"garbage"}' }))).toEqual({ to: '/calendar', search: { mode: 'week' } })
   })
 })
 

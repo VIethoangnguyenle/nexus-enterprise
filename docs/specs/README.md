@@ -81,6 +81,7 @@ Verified against the codebase on 2026-07-31.
 | `chat-shortcuts` | Matches code (added 2026-10-11; screens follow) |
 | `chat-cards` | Matches code for polls and tasks (added 2026-10-11; cards follow) |
 | `chat-calls` | Matches code (added 2026-10-13; device, TURN and VPS load checks pending under its Status) |
+| `calendar` | Specified ahead of code (added 2026-10-17; NGAC model and test vectors exist) |
 | `web-push` | Matches code for sending (added 2026-10-11; device sign-up follows) |
 
 **Installation and offline shell**

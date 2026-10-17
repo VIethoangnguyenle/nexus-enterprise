@@ -86,12 +86,21 @@ linked type with an empty `linked_entity_id`, is refused with 400 and stores not
 - **WHEN** a caller without write on the channel posts a document card
 - **THEN** the answer is 403 and nothing is stored
 
+### Requirement: Event cards
+An event of a group's calendar is shown in the group's conversation as a card of its creator (`linked_entity_type`
+`calendar_event`), posted by the calendar's announcement, never by the composer. It SHALL show the event's title, day,
+time, place, a few guests with "N có · M chưa trả lời" and, to a guest who is not the organizer, the three answers Có /
+Không / Có thể; "Mở trong Lịch" opens the calendar on its day, and while the event's call is open "Tham gia" joins the
+group's call. The details are fetched from the calendar under the viewer's own access (a viewer without access sees the
+kind and one plain line); an event that is gone shows dimmed with "Đã huỷ". The fallback text of the message is not
+printed beside the card. See `docs/specs/calendar/spec.md`.
+
 ### Requirement: Call cards
 A call's card is posted by the call itself, never by the composer: a system message with `linked_entity_type: "call"`
 whose text follows the call's state. It is specified in `chat-calls`.
 
 ### Requirement: The composer creates cards where the person is writing
-The composer SHALL offer "Tạo trong chat" — Bình chọn, Công việc, Tài liệu mới, Đề nghị phê duyệt — beside its attach
+The composer SHALL offer "Tạo trong chat" — Bình chọn, Công việc, (in a group, outside a thread: Sự kiện, which opens the event editor on the group's calendar), Tài liệu mới, Đề nghị phê duyệt — beside its attach
 control (one sheet with the attach rows on a phone), and not while a sent message is being edited. Created from a
 thread's reply box, a poll or a task is sent with that thread's root as `parent_message_id`, and a document or an
 approval request is posted as a reply in that thread; from the conversation's box they land in the main stream. The

@@ -129,6 +129,39 @@ The screens render DESIGN.md §6 "Cuộc gọi video và thoại" and `design/mo
   notifications only — an open app still rings (decided 2026-10-13).
 - Someone removed from the conversation is cut off with "Bạn không còn ở trong nhóm này". No id is ever shown.
 
+### Requirement: A calendar event can hold a call
+A call SHALL belong to a conversation or to a calendar event, exactly one of the two (`calls.calendar_event_id`,
+`channel_id` nullable, a CHECK for exactly one). A call of an event SHALL be started and joined only after `read` on
+the event's OA (`CalEv_<id>`) — checked when the ticket is asked for, never trusted from an earlier check — and a
+person without it SHALL get 403 and no ticket. The event's OA sits beneath its calendar's, so for a **private** event
+`read` alone is not enough: the person must also be on the event's guest list (an attendee row); a reader of the
+calendar who is not a guest gets 403. The event must belong to the caller's own workspace (the token's tenant); an
+event of another workspace, or a request with no workspace, is 404. `POST /api/calendar-events/{eventId}/call` (served by the messaging
+service) starts the call of an event that carries one (`hasCall`; 404 otherwise) or joins the one already open, and
+answers like starting a channel call: 201 with `{call, token, url}` for a call it opened, 200 for one already open; the
+call has no `channel_id` and carries `calendar_event_id`, by which the call screen names the call after the event, offers "Về sự kiện" instead of "Về cuộc trò chuyện", and shows no chat (the stage lists the people only). `POST /api/calls/{id}/token` and `GET /api/calls/{id}` for such a call check `read` on the
+event's OA now, and a person put out of the event is put out of the room. An event with no OA of its own is checked on
+its calendar's. A repeating event's call belongs to its series. An event in a group calendar uses that group's own call
+and its `write` rule above. A call of an event posts no card and is announced to no conversation (there is none), and
+nobody is invited to it from a chat; everything else — one open call per event, the 20-person limit, `call_ended`,
+`call_full` — applies unchanged. See `docs/specs/calendar/spec.md`.
+
+#### Scenario: A guest joins
+- **WHEN** a guest of an event asks for its call ticket
+- **THEN** they get a ticket for that event's room
+
+#### Scenario: Not a guest
+- **WHEN** a workspace member who cannot read the event asks for the ticket
+- **THEN** the answer is 403 and no token is signed
+
+#### Scenario: Private event
+- **WHEN** a person who reads the event's calendar but is not on the guest list of a private event asks to start, join, get a ticket for or see its call
+- **THEN** the answer is 403 and no token is signed; a guest on the list gets the ticket
+
+#### Scenario: Another workspace
+- **WHEN** a person asks for the call of an event of a workspace other than the one their session is scoped to
+- **THEN** the answer is 404 and no token is signed
+
 ### Requirement: Configuration
 Calls SHALL be on only when `LIVEKIT_URL`, `LIVEKIT_PUBLIC_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` are all
 set; otherwise starting a call or asking for a ticket answers 503 `calls_unavailable`, and the webhook 503.

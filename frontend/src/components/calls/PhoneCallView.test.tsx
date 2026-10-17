@@ -16,20 +16,20 @@ vi.mock('../../hooks/usePeople', async () => {
 vi.mock('../../hooks/useCalls', async (orig) => ({ ...(await orig<object>()), useMessagesSince: () => 2 }))
 vi.mock('./CallSidePanel', () => ({ CallSidePanel: ({ panel }: { panel: string }) => <aside aria-label="Bảng bên">{panel}</aside> }))
 
-const session = (isDm: boolean): CallSession => ({
-  callId: 'c1', channelId: 'ch1', kind: 'video', title: 'Đối soát giao dịch', isDm, joinedAt: Date.now(), startedAt: Date.now(),
+const session = (isDm: boolean, channelId = 'ch1'): CallSession => ({
+  callId: 'c1', channelId, kind: 'video', title: 'Đối soát giao dịch', isDm, joinedAt: Date.now(), startedAt: Date.now(),
 })
 
-function setup(others: number, isDm = others === 1) {
+function setup(others: number, isDm = others === 1, channelId = 'ch1') {
   const h = makeCallRoom()
   Array.from({ length: others }, (_, i) => h.room.join(`u${i + 1}`, `Người ${i + 1}`))
   const onLeave = vi.fn()
   const onMinimize = vi.fn()
   useCallStore.getState().clear()
-  useCallStore.getState().begin(session(isDm))
+  useCallStore.getState().begin(session(isDm, channelId))
   renderWithClient(
     <WithSnapshot callRoom={h.callRoom}>
-      {(snap) => <PhoneCallView callRoom={h.callRoom} snapshot={snap} session={session(isDm)} call={undefined} onLeave={onLeave} onMinimize={onMinimize} />}
+      {(snap) => <PhoneCallView callRoom={h.callRoom} snapshot={snap} session={session(isDm, channelId)} call={undefined} onLeave={onLeave} onMinimize={onMinimize} />}
     </WithSnapshot>,
   )
   return { ...h, onLeave, onMinimize }
@@ -87,6 +87,13 @@ describe('PhoneCallView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Vỗ tay' }))
     await waitFor(() => expect(room.localParticipant.publishData).toHaveBeenCalled())
     expect(screen.queryByRole('dialog', { name: 'Thêm' })).toBeNull()
+  })
+
+  it('has no chat in the sheet for the call of an event, which is in no conversation', () => {
+    setup(2, false, '')
+    fireEvent.click(screen.getByRole('button', { name: 'Thêm' }))
+    expect(screen.queryByRole('button', { name: /Chat trong cuộc gọi/ })).toBeNull()
+    expect(screen.getByRole('button', { name: /Người tham gia/ })).toBeInTheDocument()
   })
 
   it('opens the chat full screen from the sheet', () => {

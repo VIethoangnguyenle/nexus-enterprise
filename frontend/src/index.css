@@ -424,6 +424,10 @@ h1, h2, h3, h4 {
   @media (prefers-reduced-motion: reduce) { animation: none; }
 }
 
+/* Lịch: a block of busy-only time (DESIGN.md §6): diagonal stripes of the calendar's wash, read through --w. */
+@utility busy-stripes {
+  background-image: repeating-linear-gradient(135deg, var(--w) 0 6px, color-mix(in oklch, var(--w) 40%, transparent) 6px 12px);
+}
 
 /* ========================= */
 /* Typography Utility Roles  */

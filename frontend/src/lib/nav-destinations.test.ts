@@ -5,12 +5,12 @@ import {
 } from './nav-destinations'
 
 describe('destinations by workspace type', () => {
-  it('offers the five main destinations to an organization, in order', () => {
-    expect(mainDestinations(false).map((d) => d.to)).toEqual(['/channels', '/drive', '/approval', '/assets', '/contacts'])
+  it('offers the six main destinations to an organization, Lịch right after Tin nhắn', () => {
+    expect(mainDestinations(false).map((d) => d.to)).toEqual(['/channels', '/calendar', '/drive', '/approval', '/assets', '/contacts'])
   })
 
   it('leaves out Phê duyệt and Tài sản in a personal workspace', () => {
-    expect(mainDestinations(true).map((d) => d.id)).toEqual(['messaging', 'drive', 'contacts'])
+    expect(mainDestinations(true).map((d) => d.id)).toEqual(['messaging', 'calendar', 'drive', 'contacts'])
   })
 
   it('keeps Quản trị and Cài đặt at the foot', () => {
@@ -20,6 +20,21 @@ describe('destinations by workspace type', () => {
 
   it('leaves Quản trị out of a personal workspace', () => {
     expect(footDestinations(true).map((d) => d.label)).toEqual(['Cài đặt'])
+  })
+
+  it('names Lịch with the Calendar icon, in an organization and in a personal workspace', () => {
+    for (const personal of [false, true]) {
+      const lich = mainDestinations(personal).find((d) => d.id === 'calendar')
+      expect(lich).toMatchObject({ label: 'Lịch', to: '/calendar' })
+      expect(lich?.icon).toBeDefined()
+    }
+  })
+
+  it('knows the calendar paths as the Lịch module, with a search hint of its own', () => {
+    expect(moduleOfPath('/calendar')).toBe('calendar')
+    expect(moduleOfPath('/calendar/')).toBe('calendar')
+    expect(searchHintOf('calendar')).toBe('Tìm sự kiện')
+    expect(phoneNameOf('calendar')).toBe('Lịch')
   })
 
   it('calls the first destination Chat on the phone and Tin nhắn on the desktop', () => {

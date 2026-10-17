@@ -51,6 +51,21 @@ describe('SpaceView on a phone', () => {
   })
 })
 
+describe('SpaceView tabs', () => {
+  it('puts Lịch after Công việc in a group', async () => {
+    renderWithClient(<SpaceView channelId={CH.doisoat} />)
+    await screen.findByRole('heading', { name: 'Đối soát giao dịch' })
+    expect(screen.getAllByRole('tab').map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual(['Trò chuyện', 'Tệp', 'Công việc', 'Lịch'])
+  })
+
+  it('has no Lịch in a direct message, which has no calendar', async () => {
+    routerState.params = { channelId: CH.dmYen }
+    renderWithClient(<SpaceView channelId={CH.dmYen} />)
+    await screen.findByRole('tab', { name: 'Trò chuyện' })
+    expect(screen.queryByRole('tab', { name: 'Lịch' })).toBeNull()
+  })
+})
+
 describe('SpaceView', () => {
   it('shows the space by name with its member count, and its messages in a log', async () => {
     renderWithClient(<SpaceView channelId={CH.doisoat} />)

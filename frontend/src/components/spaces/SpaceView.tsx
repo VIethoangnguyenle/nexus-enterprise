@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { AnimatePresence } from 'motion/react'
 import { ArrowLeft, Info, MessagesSquare, Search, UserPlus, CircleAlert, Lock, Upload } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
+import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { useConversations } from '../../hooks/useConversations'
 import { usePeople } from '../../hooks/usePeople'
 import { usePhone } from '../../hooks/usePhone'
@@ -33,6 +34,7 @@ import { ConversationStream } from './ConversationStream'
 import { ThreadsPanel } from './ThreadsPanel'
 import { MembersPanel } from './MembersPanel'
 import { SpaceFiles } from './SpaceFiles'
+import { SpaceCalendar } from './SpaceCalendar'
 import { SpaceTasks } from './SpaceTasks'
 import { SpaceSearchPanel } from './SpaceSearchPanel'
 import { SpaceInfoPanel } from './SpaceInfoPanel'
@@ -41,7 +43,7 @@ import { EmptyState } from './EmptyState'
 import { CallHeaderActions } from '../calls/CallHeaderActions'
 import { keys } from '../../hooks/keys'
 
-type Tab = 'chat' | 'files' | 'tasks'
+type Tab = 'chat' | 'files' | 'tasks' | 'calendar'
 type Panel =
   | { kind: 'thread'; id: string; /** Opened from the thread list: the panel can go back to it. */ fromList?: boolean }
   | { kind: 'threads' }
@@ -51,7 +53,7 @@ type Panel =
 
 /**
  * A space or DM (design/mockups/spaces.html §2–§4): header, tabs Trò chuyện / Tệp /
- * Công việc, the in-line stream with its composer, and one right panel at a
+ * Công việc / Lịch (a group only), the in-line stream with its composer, and one right panel at a
  * time (thread, thread list, members, search, info). Esc closes the panel.
  *
  * A link can name where to land: `initialThreadId` opens that thread's panel,
@@ -65,6 +67,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
 }) {
   const navigate = useNavigate()
   const { workspaceId } = useActiveWorkspace()
+  const { isPersonal } = useWorkspaceType()
   const { conversations, isLoading: listLoading } = useConversations(workspaceId)
   const people = usePeople(workspaceId)
   const me = useAuthStore((s) => s.user)
@@ -404,6 +407,8 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
                 </span>
               ) : undefined,
             },
+            // A group has a calendar of its own; a direct message does not, nor does a personal workspace.
+            ...(conv?.kind === 'space' && !isPersonal ? [{ id: 'calendar', label: 'Lịch' }] : []),
           ]}
         />
         <div className="h-px bg-line mx-5" />
@@ -477,6 +482,7 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
                 </div>
               <LazyChatEditor
                 channelId={channelId}
+                canCreateEvent={conv?.kind === 'space' && !isPersonal}
                 people={people}
                 placeholder={title ? `Tin nhắn cho ${title}` : 'Viết tin nhắn'}
                 hint="Enter để gửi · Shift+Enter xuống dòng"
@@ -503,7 +509,8 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
               <SpaceFiles workspaceId={workspaceId} channelId={channelId} people={people} onGoToChat={() => setTab('chat')} />
             </div>
           )}
-          {tab === 'tasks' && (
+          {tab === 'calendar' && conv?.kind === 'space' && !isPersonal && <SpaceCalendar channelId={channelId} />}
+{tab === 'tasks' && (
             <div className="flex-1 min-h-0 overflow-y-auto">
               <SpaceTasks channelId={channelId} people={people} />
             </div>

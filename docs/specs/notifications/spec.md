@@ -27,6 +27,36 @@ When a workspace invitation is newly opened for an address that is the **verifie
 - **WHEN** an address that has no account, or whose account is unverified, is invited
 - **THEN** no notification exists for anyone
 
+### Requirement: Calendar events notify the people they concern
+The messaging service SHALL store one notification, and push it live, for each person a calendar event or calendar
+concerns, arriving from the calendar service on the Redpanda topic `calendar.events` (the topic also carries the
+realtime frames; a notice is the record whose `record` is `notice`, and the realtime consumer skips it). Types:
+`calendar_invitation` (a guest was added; to that guest), `calendar_reminder` (a reminder fell due; to each person it
+concerns, once per occurrence), `calendar_rsvp` (a guest answered; to the host), `calendar_updated` (time or place
+changed; to the guests), `calendar_cancelled` (the event or an occurrence was cancelled, or a guest was taken off it;
+to those guests) and `calendar_shared` (a calendar was shared; to the grantee). Whoever caused a notice is never told
+of it, except that a reminder is for them too. Each event notification has `entity_type` `calendar_event` and
+`entity_id` the event; `calendar_shared` has `entity_type` `calendar` and `entity_id` the calendar. The `title` is the
+event's title and the `body` is JSON of names and times only (`actor` as a display name, `start`, `end`, `allDay`,
+`occurrence`, `response`, and `ws`, the workspace the link opens, which is never shown); the client writes the sentence in
+its own clock. A reminder and an invitation also send web push, unless the person turned off pushes addressed to them or
+it is their quiet hours; the others do not. A record that names no person or no event creates nothing, a reminder that
+arrives more than 15 minutes late is dropped, and nobody who lacks `read` on the event's node at that moment is
+notified (a cancellation is the exception: the event is already gone). Opening one goes to the week of the event in the
+calendar. See `docs/specs/calendar/spec.md`.
+
+#### Scenario: Invited
+- **WHEN** a person is added as a guest
+- **THEN** their Thông báo shows "<host> mời bạn tới <event>" as unread, and opening it goes to that week of the calendar
+
+#### Scenario: No longer allowed
+- **WHEN** a reminder falls due for someone who has been removed from the event
+- **THEN** they get no notification
+
+#### Scenario: Not told of one's own doing
+- **WHEN** a host moves an event with guests
+- **THEN** the guests are notified and the host is not
+
 ### Requirement: Marking read is the caller's own
 `POST /api/notifications/{id}/read` and `POST /api/notifications/read-all` SHALL change only notifications belonging to the signed-in person. Marking another person's notification matches nothing and changes nothing, and still answers `{"status":"ok"}`. A request with no session is 401.
 
