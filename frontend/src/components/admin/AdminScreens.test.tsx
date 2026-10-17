@@ -956,3 +956,18 @@ describe('the tabs', () => {
     expect(within(grid).getByRole('rowheader', { name: /Tài sản/ })).toBeInTheDocument()
   })
 })
+
+describe('AdminFrame: scrolling tab row', () => {
+  it('fades the edge with more tabs beyond it, so a cut-off tab reads as scrollable', async () => {
+    vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(900)
+    vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(360)
+    try {
+      await renderAdmin()
+      const row = (await screen.findByRole('tablist')).parentElement
+      expect(row).toHaveAttribute('data-fade', 'end')
+      expect(row).toHaveClass('overflow-x-auto', 'scrollbar-none')
+    } finally {
+      vi.restoreAllMocks()
+    }
+  })
+})

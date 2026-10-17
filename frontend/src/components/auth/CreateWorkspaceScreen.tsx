@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import type { WorkspaceType } from '../../api/workspaces'
 import { keys } from '../../hooks/keys'
+import { useLeaveWhenSignedOut } from '../../hooks/useLeaveWhenSignedOut'
 import { usePhone } from '../../hooks/usePhone'
 import { useCreateMyWorkspace, useMe, useProviders, useSwitchToWorkspace } from '../../hooks/useAuth'
 import { queryClient } from '../../lib/query-client'
@@ -23,6 +24,7 @@ const NAME_MAX = 80
  */
 export function CreateWorkspaceScreen() {
   const navigate = useNavigate()
+  useLeaveWhenSignedOut()
   const router = useRouter()
   // Where the person was when they chose "Tạo workspace" (the switcher adds it);
   // opened from Chọn workspace there is none, and Back returns there.
