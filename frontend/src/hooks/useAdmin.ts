@@ -153,7 +153,8 @@ export function useUpdateDepartment(wsId: string) {
 export function useDeleteDepartment(wsId: string) {
   const refresh = useRefreshPeople(wsId)
   return useMutation({
-    meta: { action: 'xoá phòng ban' },
+    // The panel words the refusal of a hidden department that still has people in it.
+    meta: { action: 'xoá phòng ban', silentError: true },
     mutationFn: (deptId: string) => adminApi.deleteDepartment(wsId, deptId),
     onSuccess: () => refresh(),
   })
@@ -347,6 +348,16 @@ export function useDirectoryScopeRules(wsId: string, enabled = true) {
   })
 }
 
+/**
+ * The rules, asked only once the people list has answered: a person who may not manage the
+ * workspace is refused there first, and never sends this request. The admin frame (which shows
+ * the tab only for a ready workspace) and the screen share this one query.
+ */
+export function useManagerDirectoryScope(wsId: string) {
+  const people = useMemberDirectory(wsId)
+  return useDirectoryScopeRules(wsId, people.isSuccess)
+}
+
 /** After a rule changes, the rules, the department list and the directory itself are stale. */
 function useRefreshDirectoryScope(wsId: string) {
   const qc = useQueryClient()
@@ -357,11 +368,14 @@ function useRefreshDirectoryScope(wsId: string) {
   }
 }
 
-/** Takes a department (and everything beneath it) out of Danh bạ for members. */
+/**
+ * Takes a department (and everything beneath it) out of Danh bạ for members. The four rule
+ * mutations are silent: the screen names the department in the failure and offers a retry.
+ */
 export function useHideDepartment(wsId: string) {
   const refresh = useRefreshDirectoryScope(wsId)
   return useMutation({
-    meta: { action: 'ẩn phòng ban khỏi danh bạ' },
+    meta: { action: 'ẩn phòng ban khỏi danh bạ', silentError: true },
     mutationFn: (deptId: string) => adminApi.hideDepartment(wsId, deptId),
     onSuccess: refresh,
   })
@@ -370,7 +384,7 @@ export function useHideDepartment(wsId: string) {
 export function useUnhideDepartment(wsId: string) {
   const refresh = useRefreshDirectoryScope(wsId)
   return useMutation({
-    meta: { action: 'hiện lại phòng ban trong danh bạ' },
+    meta: { action: 'hiện lại phòng ban trong danh bạ', silentError: true },
     mutationFn: (deptId: string) => adminApi.unhideDepartment(wsId, deptId),
     onSuccess: refresh,
   })
@@ -380,7 +394,7 @@ export function useUnhideDepartment(wsId: string) {
 export function useLimitSubject(wsId: string) {
   const refresh = useRefreshDirectoryScope(wsId)
   return useMutation({
-    meta: { action: 'giới hạn phạm vi xem danh bạ' },
+    meta: { action: 'giới hạn phạm vi xem danh bạ', silentError: true },
     mutationFn: ({ kind, id }: { kind: LimitedKind; id: string }) => adminApi.limitSubject(wsId, kind, id),
     onSuccess: refresh,
   })
@@ -389,7 +403,7 @@ export function useLimitSubject(wsId: string) {
 export function useUnlimitSubject(wsId: string) {
   const refresh = useRefreshDirectoryScope(wsId)
   return useMutation({
-    meta: { action: 'bỏ giới hạn phạm vi xem danh bạ' },
+    meta: { action: 'bỏ giới hạn phạm vi xem danh bạ', silentError: true },
     mutationFn: ({ kind, id }: { kind: LimitedKind; id: string }) => adminApi.unlimitSubject(wsId, kind, id),
     onSuccess: refresh,
   })

@@ -2,21 +2,23 @@ import type { ReactNode } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { Lock } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
-import { useMemberDirectory } from '../../hooks/useAdmin'
+import { useManagerDirectoryScope, useMemberDirectory } from '../../hooks/useAdmin'
 import { statusOf } from '../../lib/errors'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
 import { EmptyState } from '../spaces/EmptyState'
 
-export type AdminSection = 'overview' | 'users' | 'roles'
+export type AdminSection = 'overview' | 'users' | 'roles' | 'directory'
 
-const SECTIONS: { id: AdminSection; label: string; to: '/admin' | '/admin/users' | '/admin/roles' }[] = [
+const SECTIONS: { id: AdminSection; label: string; to: '/admin' | '/admin/users' | '/admin/roles' | '/admin/directory' }[] = [
   { id: 'overview', label: 'Tổng quan', to: '/admin' },
   { id: 'users', label: 'Người dùng', to: '/admin/users' },
   { id: 'roles', label: 'Vai trò', to: '/admin/roles' },
+  { id: 'directory', label: 'Danh bạ', to: '/admin/directory' },
 ]
 
-const TABS: TabItem[] = SECTIONS.map(({ id, label }) => ({ id, label }))
+const tabsFor = (withDirectory: boolean): TabItem[] =>
+  SECTIONS.filter((s) => withDirectory || s.id !== 'directory').map(({ id, label }) => ({ id, label }))
 
 interface AdminFrameProps {
   section: AdminSection
@@ -33,6 +35,9 @@ interface AdminFrameProps {
  * a region with a condition, so the frame also asks the people list once: a 403
  * means this person may not manage the workspace, and every tab says so, in
  * words, instead of showing a broken table.
+ *
+ * The fourth tab, Danh bạ, exists only where the directory is ready (the rules
+ * read says so); a workspace without one has no tab and no word about it.
  */
 export function AdminFrame({ section, subtitle, action, children }: AdminFrameProps) {
   const navigate = useNavigate()
@@ -40,6 +45,8 @@ export function AdminFrame({ section, subtitle, action, children }: AdminFramePr
   const people = useMemberDirectory(wsId)
   const workspace = workspaceDisplayName(workspaceName)
   const forbidden = statusOf(people.error) === 403
+  const rules = useManagerDirectoryScope(wsId)
+  const tabs = tabsFor(!forbidden && (section === 'directory' || rules.data?.ready === true))
 
   const go = (id: string) => {
     const to = SECTIONS.find((s) => s.id === id)?.to
@@ -58,7 +65,7 @@ export function AdminFrame({ section, subtitle, action, children }: AdminFramePr
       </header>
 
       <ScrollFade className="px-5">
-        <TabBar className="w-max" label="Quản trị" idPrefix="admin" value={section} tabs={TABS} onChange={go} />
+        <TabBar className="w-max" label="Quản trị" idPrefix="admin" value={section} tabs={tabs} onChange={go} />
       </ScrollFade>
 
       <div
