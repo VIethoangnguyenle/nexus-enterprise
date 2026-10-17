@@ -4,7 +4,7 @@
 
 A multi-tenant workspace platform (documents, drive, chat, assets, approvals) whose entire
 authorization layer is NGAC — NIST Next Generation Access Control — rather than roles.
-Eight independent Go services behind no gateway, plus a React 19 SPA.
+Nine independent Go services behind no gateway, plus a React 19 SPA.
 Every access decision is a graph reachability question answered by the policy service.
 
 ## 2. Commands
@@ -12,7 +12,7 @@ Every access decision is a graph reachability question answered by the policy se
 Run from the repo root. `make help` lists everything.
 
 ```bash
-make dev            # infra + all 8 Go services + frontend; PIDs in .dev-pids, logs in .dev-logs/
+make dev            # infra + all 9 Go services + frontend; PIDs in .dev-pids, logs in .dev-logs/
 make dev-stop       # stop everything started by `make dev`
 make run            # same stack in the foreground via overmind (Procfile.dev)
 make dev-infra      # postgres/redis/redpanda/minio only, then applies schema
@@ -43,7 +43,7 @@ Postgres, Redis, Redpanda, MinIO, Traefik.
 
 Only what is not derivable in ten seconds:
 
-- **Nine Go modules, not one.** `backend/go.mod` holds shared code (`ngac`, `pkg/*`, `proto`,
+- **Ten Go modules, not one.** `backend/go.mod` holds shared code (`ngac`, `pkg/*`, `proto`,
   `testutil`); each service has its own `go.mod` with `replace ngac-platform => ../..`.
   There is no `go.work`. **`go test ./...` from `backend/` silently skips every service** and
   reports success having tested nothing — always run Go commands from inside a service directory.

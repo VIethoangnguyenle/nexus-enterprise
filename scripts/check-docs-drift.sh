@@ -23,10 +23,10 @@ fi
 
 # --- Module count -----------------------------------------------------------
 MODS=$(find . -name go.mod -not -path '*/node_modules/*' -not -path './.claude/worktrees/*' -not -path './.agentkit/*' | wc -l | tr -d ' ')
-if [ "$MODS" -eq 9 ] && grep -q 'Nine Go modules' CLAUDE.md; then
-  ok "module count ($MODS) matches the 'Nine Go modules' claim"
+if [ "$MODS" -eq 10 ] && grep -q 'Ten Go modules' CLAUDE.md; then
+  ok "module count ($MODS) matches the 'Ten Go modules' claim"
 else
-  bad "found $MODS go.mod files but CLAUDE.md claims nine — update both"
+  bad "found $MODS go.mod files but CLAUDE.md claims ten — update both"
 fi
 
 # --- Service list -----------------------------------------------------------
