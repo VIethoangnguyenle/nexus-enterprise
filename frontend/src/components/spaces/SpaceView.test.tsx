@@ -1,4 +1,4 @@
-import { fireEvent, screen, within, waitFor } from '@testing-library/react'
+import { act, fireEvent, screen, within, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
@@ -173,6 +173,24 @@ describe('SpaceView and push', () => {
       expect(release).toHaveBeenCalled()
     } finally {
       useWebSocketStore.setState({ viewChannel: original })
+    }
+  })
+})
+
+describe('SpaceView typing indicator', () => {
+  // The server echoes a typing frame to every session in the channel, the sender's own included.
+  it('names who else is typing, never the signed-in person', async () => {
+    const { useWebSocketStore } = await import('../../stores/websocket.store')
+    useWebSocketStore.setState({ typingUsers: { [CH.doisoat]: ['hoa'] } })
+    try {
+      renderWithClient(<SpaceView channelId={CH.doisoat} />)
+      await screen.findByRole('heading', { name: 'Đối soát giao dịch' })
+      expect(screen.queryByText(/đang nhập/)).toBeNull()
+
+      act(() => useWebSocketStore.setState({ typingUsers: { [CH.doisoat]: ['hoa', 'duc'] } }))
+      expect(await screen.findByText(/^Trần Minh Đức đang nhập…/)).toBeInTheDocument()
+    } finally {
+      useWebSocketStore.setState({ typingUsers: {} })
     }
   })
 })

@@ -468,6 +468,17 @@ describe('Workspace selection: an address nobody has proved', () => {
   })
 })
 
+describe('Workspace selection: an ended session', () => {
+  // A 401 that the refresh cannot repair logs the store out; the route guard ran
+  // only when the page was entered, so the screen itself must carry the person away.
+  it('goes to sign-in when the session is refused while the screen is open', async () => {
+    const router = await open()
+    await row(/Khối Vận hành/)
+    act(() => useAuthStore.getState().logout())
+    await waitFor(() => expect(where(router).path).toBe('/login'))
+  })
+})
+
 describe('Workspace selection: changing account', () => {
   it('ends the session through the one logout path and returns to sign-in', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null, { status: 204 }))

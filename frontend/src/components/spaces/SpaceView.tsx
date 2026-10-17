@@ -241,7 +241,8 @@ export function SpaceView({ channelId, initialThreadId, focusMessageId }: {
   const memberCount = conv?.memberCount ?? membersQ.data?.members?.length ?? 0
   const openTasks = (tasksQ.data?.tasks ?? []).filter((t) => t.status !== 'done').length
   const onlineMembers = (membersQ.data?.members ?? []).filter((mm) => mm.user_id !== me?.id && onlineUsers[mm.user_id])
-  const typingNames = (typingUsers ?? []).map((u) => displayName(people, undefined, u))
+  // A typing frame carries only the username, and the server echoes it back to the sender's own sessions.
+  const typingNames = (typingUsers ?? []).filter((u) => u !== me?.username).map((u) => displayName(people, undefined, u))
   const idPrefix = `space-${channelId}`
   // The unread list is the source of the level and the star; the hook's own answer covers a conversation it does not list yet.
   const level = conv?.level ?? notify.level
