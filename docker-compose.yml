@@ -361,7 +361,7 @@ services:
       # No strip-prefix: the hub serves /api/ws itself, as it does behind nginx in production.
       - "traefik.http.services.ws.loadbalancer.server.port=8081"
       # REST router — channels, messages, DMs, threads, notifications
-      - "traefik.http.routers.messaging.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/channels`) || PathPrefix(`/api/messages`) || PathPrefix(`/api/me/push-preferences`) || PathPrefix(`/api/dms`) || PathPrefix(`/api/threads`) || PathPrefix(`/api/notifications`) || PathPrefix(`/api/polls`) || PathPrefix(`/api/tasks`) || PathRegexp(`/api/workspaces/[^/]+/(channels|chat-sections|chat-state)`))"
+      - "traefik.http.routers.messaging.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/channels`) || PathPrefix(`/api/messages`) || PathPrefix(`/api/me/push-preferences`) || PathPrefix(`/api/dms`) || PathPrefix(`/api/threads`) || PathPrefix(`/api/notifications`) || PathPrefix(`/api/polls`) || PathPrefix(`/api/tasks`) || PathPrefix(`/api/calendar-events`) || PathRegexp(`/api/workspaces/[^/]+/(channels|chat-sections|chat-state)`))"
       - "traefik.http.routers.messaging.entrypoints=web"
       - "traefik.http.routers.messaging.priority=120"
       - "traefik.http.routers.messaging.service=messaging"
@@ -505,7 +505,7 @@ services:
         condition: service_started
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.calendar.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/calendar`) || PathRegexp(`/api/workspaces/[^/]+/calendar`))"
+      - "traefik.http.routers.calendar.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/calendar/`) || PathRegexp(`/api/workspaces/[^/]+/calendar`))"
       - "traefik.http.routers.calendar.entrypoints=web"
       - "traefik.http.routers.calendar.priority=120"
       - "traefik.http.routers.calendar.middlewares=cors-all@docker"
