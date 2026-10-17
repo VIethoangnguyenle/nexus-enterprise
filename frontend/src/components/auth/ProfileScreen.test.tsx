@@ -1,7 +1,8 @@
-import { screen, waitFor } from '@testing-library/react'
+import { act, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from '../../api/client'
+import { useAuthStore } from '../../stores/auth.store'
 import { ID, calls, apiError, world } from '../../test/auth-fixtures'
 import { renderAuthScreen, startAuthTest, where } from '../../test/auth-render'
 import { expectNoIds } from '../../test/no-ids'
@@ -193,5 +194,14 @@ describe('Profile step', () => {
     await open()
     await userEvent.type(await nameField(), 'Phạm Thuý An')
     expectNoIds()
+  })
+})
+
+describe('Profile step: an ended session', () => {
+  it('goes to sign-in when the session is refused while the screen is open', async () => {
+    const router = await open()
+    await nameField()
+    act(() => useAuthStore.getState().logout())
+    await waitFor(() => expect(where(router).path).toBe('/login'))
   })
 })

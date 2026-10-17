@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { RefreshCw, AlertCircle } from 'lucide-react'
+import { useLeaveWhenSignedOut } from '../../hooks/useLeaveWhenSignedOut'
 import { useMe, useSaveProfile } from '../../hooks/useAuth'
 import { describeAuthError, type DescribedError } from '../../lib/auth-flow'
 import { statusOf } from '../../lib/errors'
@@ -20,6 +21,7 @@ const TITLE_MAX = 120
  */
 export function ProfileScreen() {
   const navigate = useNavigate()
+  useLeaveWhenSignedOut()
   // The workspace a link named rides through the profile step to the list.
   const { ws } = useSearch({ strict: false }) as { ws?: string }
   const me = useMe()

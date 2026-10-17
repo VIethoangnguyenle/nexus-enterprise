@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react'
 import { AlertCircle, Building2, ChevronRight, Plus, RefreshCw } from 'lucide-react'
 import { logoutSession } from '../../api/client'
 import type { MyInvitation } from '../../api/invitations'
+import { useLeaveWhenSignedOut } from '../../hooks/useLeaveWhenSignedOut'
 import { useAcceptInvitation, useDeclineInvitation, useMyInvitations } from '../../hooks/useInvitations'
 import { useMe, useMyWorkspaces, useProviders, useSwitchToWorkspace } from '../../hooks/useAuth'
 import { describeAuthError, verifyErrorMessage, workspaceRowDetail, type DescribedError } from '../../lib/auth-flow'
@@ -11,7 +12,6 @@ import { staggerDelay, useMotionPresets, withDelay } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { keys } from '../../hooks/keys'
 import { queryClient } from '../../lib/query-client'
-import { useAuthStore } from '../../stores/auth.store'
 import { Button, Heading, Pressable, SpaceIcon, Spinner, Text, toast } from '../primitives'
 import { InvitationRow } from './InvitationRow'
 import { Notice } from './Notice'
@@ -73,13 +73,7 @@ export function WorkspaceSelectScreen() {
     [switchTo, navigate],
   )
 
-  // The route guard checked the session once, on the way in. When a request later
-  // finds the session over (refresh refused), the store is logged out but the
-  // address stays; leave for sign-in here.
-  const signedIn = useAuthStore((s) => !!s.user)
-  useEffect(() => {
-    if (!signedIn) void navigate({ to: '/login', replace: true })
-  }, [signedIn, navigate])
+  useLeaveWhenSignedOut()
 
   // Decide once, on first load, whether there is anything to choose. Deciding
   // again later would throw a person into a workspace the moment they decline
