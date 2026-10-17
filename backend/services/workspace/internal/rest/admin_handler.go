@@ -29,6 +29,7 @@ type AdminService interface {
 	DepartmentService
 	PeopleService
 	WorkspaceDetailsService
+	DirectoryScopeService
 }
 
 // AdminHandler serves admin organization endpoints.
@@ -51,6 +52,7 @@ func (h *AdminHandler) RegisterAdminRoutes(api *echo.Group) {
 	api.PUT("/workspaces/:id/members/:nodeId/department", h.UpdateMemberDepartment)
 	h.registerPeopleRoutes(api)
 	h.registerWorkspaceDetailsRoutes(api)
+	h.registerDirectoryScopeRoutes(api)
 }
 
 // CreateDepartment handles POST /api/workspaces/:id/departments.
@@ -99,6 +101,8 @@ func (h *AdminHandler) ListDepartments(c echo.Context) error {
 		Name        string `json:"name"`
 		ParentID    string `json:"parent_id"`
 		MemberCount int    `json:"member_count"`
+		// Hidden is set only for a caller who administers the directory.
+		Hidden bool `json:"hidden,omitempty"`
 	}
 
 	depts := make([]deptJSON, 0, len(results))
@@ -108,6 +112,7 @@ func (h *AdminHandler) ListDepartments(c echo.Context) error {
 			Name:        r.Name,
 			ParentID:    r.ParentID,
 			MemberCount: r.MemberCount,
+			Hidden:      r.Hidden,
 		})
 	}
 

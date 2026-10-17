@@ -75,6 +75,8 @@ type Service struct {
 	channelJoiner ChannelJoiner
 	// dirIDs remembers the ids of directory nodes found by name (name -> id); see directoryNode.
 	dirIDs sync.Map
+	// dirLocks holds one mutex per workspace for the directory writes; see lockDirectory.
+	dirLocks sync.Map
 }
 
 // ChannelJoiner puts a member of a workspace into its workspace-wide channel

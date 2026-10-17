@@ -99,6 +99,17 @@ user under the class. A policy service that cannot answer denies.
 - **WHEN** a user who does not belong to the workspace calls `GET /api/workspaces/:id/members`
 - **THEN** the request is rejected with 403
 
+### Requirement: Directory rules are managed by Mgmt managers and filter member reads
+`GET`, `PUT` and `DELETE` under `/api/workspaces/:id/admin/directory-scope` SHALL require `manage` on the workspace's Mgmt OA (403 otherwise), in an organization workspace whose directory exists, and SHALL accept only a department or a custom role of the workspace in the route (404 for anything else, including the Owners and Members UAs). The reads a plain member may make of the workspace's people and departments (`GET .../departments`, `GET .../members`, the member counts of `GET .../roles`) SHALL return only what the caller's directory scope allows (`contacts-visibility`); an outage of the policy service answers 503, never the unfiltered list. The people table and role detail stay `manage`-only and unfiltered.
+
+#### Scenario: Plain member writes a rule
+- **WHEN** a member without `manage` calls `PUT .../admin/directory-scope/hidden/:deptId`
+- **THEN** it is 403 and the department stays visible to everyone
+
+#### Scenario: Manager from another workspace
+- **WHEN** the owner of workspace B calls a rule endpoint of workspace A
+- **THEN** it is 403, and naming A's department in B's route is 404
+
 ### Requirement: Permission areas and their operations come from the server
 The workspace service SHALL answer, for a workspace, which resource areas a role can be granted on (management, documents, channels, assets) and, for each, the operations that apply there (`GET /api/workspaces/:id/permission-areas`). The answer SHALL be derived from the constants in `backend/ngac` (`ngac.Areas`, `ngac.AreaOps`), listing an operation on an area only where a service checks it on that kind of OA (a test fails if an area offers `upload`), and SHALL omit an area whose OA the workspace does not have. Clients SHALL NOT keep their own table of which operation fits which area. The caller must belong to the workspace.
 

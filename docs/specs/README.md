@@ -108,7 +108,7 @@ Verified against the codebase on 2026-07-31.
 |---|---|
 | `contacts-documents-settings-screens` | Matches code (added 2026-10-10; known gaps under its Status) |
 | `search-suggestions` | Matches code (added 2026-10-17; suggestions of the search boxes of Chat, Danh bạ, Tài liệu, Tài sản, Phê duyệt; known limits listed) |
-| `contacts-visibility` | Specified ahead of the code (added 2026-10-17; graph model verified by policy vectors, no service creates the nodes yet) |
+| `contacts-visibility` | Matches code for the policy model and the workspace service (added 2026-10-17; scope, filtered reads, rule endpoints and `GetDirectoryScope` built; auth filtering and screens follow) |
 
 **Assets**
 

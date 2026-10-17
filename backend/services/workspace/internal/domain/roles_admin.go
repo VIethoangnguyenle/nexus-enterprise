@@ -109,8 +109,8 @@ func uniqueNodes(nodes []*policypb.NGACNode) []*policypb.NGACNode {
 }
 
 // ListRoleSummaries returns the built-in roles first, then the administrator's
-// by name, each with how many people hold it. The caller must belong to the
-// workspace.
+// by name, each with how many people hold it, counting only the people the caller may see
+// in Danh bạ. The caller must belong to the workspace.
 func (s *Service) ListRoleSummaries(ctx context.Context, callerNodeID, wsID string) ([]*RoleSummary, error) {
 	ws, err := s.authorizeMember(ctx, callerNodeID, wsID)
 	if err != nil {
@@ -120,6 +120,25 @@ func (s *Service) ListRoleSummaries(ctx context.Context, callerNodeID, wsID stri
 	if err != nil {
 		return nil, fmt.Errorf("get children: %w", err)
 	}
+	sc, err := s.scopeFor(ctx, ws, callerNodeID, false, false)
+	if err != nil {
+		return nil, err
+	}
+	// The people of the workspace are read once, and only if something needs them.
+	var people []*policypb.NGACNode
+	var peopleErr error
+	var peopleRead bool
+	memberList := func() ([]*policypb.NGACNode, error) {
+		if !peopleRead {
+			people, peopleErr = s.memberUsers(ctx, ws)
+			peopleRead = true
+		}
+		return people, peopleErr
+	}
+	set, err := s.visibleSet(ctx, sc, callerNodeID, memberList)
+	if err != nil {
+		return nil, err
+	}
 	var owners, members *RoleSummary
 	var custom []*RoleSummary
 	for _, n := range children.GetNodes() {
@@ -127,10 +146,17 @@ func (s *Service) ListRoleSummaries(ctx context.Context, callerNodeID, wsID stri
 		if !ok {
 			continue
 		}
-		holders, err := s.roleHolders(ctx, kind, n.Id)
+		var holders []*policypb.NGACNode
+		var err error
+		if kind == RoleMembers {
+			holders, err = memberList() // everyone beneath Members UA: the people list already read
+		} else {
+			holders, err = s.roleHolders(ctx, kind, n.Id)
+		}
 		if err != nil {
 			return nil, err
 		}
+		holders = onlyVisible(holders, set)
 		r := &RoleSummary{ID: n.Id, Kind: kind, MemberCount: len(holders)}
 		switch kind {
 		case RoleOwners:

@@ -171,6 +171,16 @@ func (f *FakePolicyWrite) CreateAssociation(_ context.Context, in *policypb.Crea
 	return &policypb.Association{Id: "x", UaId: in.UaId, OaId: in.OaId, Operations: in.Operations}, nil
 }
 
+func (f *FakePolicyWrite) RemoveAssociation(_ context.Context, in *policypb.RemoveAssociationRequest, _ ...grpc.CallOption) (*policypb.Empty, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err := f.step(); err != nil {
+		return nil, err
+	}
+	f.log = append(f.log, fmt.Sprintf("disassociate %s>%s", f.label(in.UaId), f.label(in.OaId)))
+	return &policypb.Empty{}, nil
+}
+
 func (f *FakePolicyWrite) CreateProhibition(_ context.Context, in *policypb.CreateProhibitionRequest, _ ...grpc.CallOption) (*policypb.Prohibition, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

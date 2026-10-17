@@ -147,5 +147,54 @@ The workspace service SHALL create the directory with every new workspace and mi
 ### Requirement: Existing workspaces get their directory from a migration
 Workspaces and departments that exist when the code ships have no directory nodes, and so no rules; migration 064 (`tenant-ngac-init`) builds them in a later release, leaving what the code already made as it is. The code works before and after: a workspace without the directory is skipped by every operation above.
 
+### Requirement: The workspace serves each member's scope
+The workspace service SHALL compute, for the verified caller of a request, a `DirectoryScope` from the membership check and policy decisions alone, and serve it to the auth service as the gRPC method `GetDirectoryScope(workspace_id)`. The caller SHALL be a member (`policyclient.IsWorkspaceMember` over the writer) before any decision is asked; a caller who is not gets PermissionDenied. The scope SHALL say: whether the directory is `ready`; whether the caller is `admin` (holds `manage` on `Directory_{workspace_id}`); whether they are `limited` (display only: they sit beneath `DirectoryLimited_{workspace_id}`); the departments they may see; whether people with no department and the owners are visible; the owners' node ids; for an administrator the hidden departments; and the owners group and the custom roles with who holds each directly (never Members). For anyone who is not an administrator one batch of `read` decisions on `DirectoryNoDept`, `DirectoryOwners` and every department's `Dir_` and `DirPeer_` OA decides: a department is visible when either is ALLOW. A department of a workspace that has a directory but whose nodes are missing is not visible to a non-administrator (it is logged at error level), and an administrator sees every department. The method is in no `ServiceOK` list, so a service speaking only for itself, the auth service included, is refused (Unauthenticated): the scope is a person's, and the auth service asks it on behalf of the person whose contacts it is about to list. A decision or lookup that cannot be had, a directory missing one of its five nodes, and a limited caller with no prohibition behind the limit are an outage (Unavailable, 503 at the edge), never a wider scope. A workspace with no `Directory_{workspace_id}` is `ready: false`: no rule can exist there, so every department, the people with no department and the owners are visible and the caller is neither administrator nor limited.
+
+#### Scenario: Stranger and peers-only caller
+- **WHEN** a user of another workspace, or one who sits only under `DeptPeers_{id}`, asks for the scope
+- **THEN** the answer is PermissionDenied and no policy decision about the directory is asked for them
+
+#### Scenario: Service on its own identity
+- **WHEN** the auth service (or any service) calls `GetDirectoryScope` with no person on the call
+- **THEN** the answer is Unauthenticated; with the person's identity forwarded it is their scope
+
+#### Scenario: Limited caller
+- **WHEN** a person limited to their own department asks for the scope
+- **THEN** `limited` is true, the departments are their own and those beneath it, the owners are visible and people with no department are not; with the prohibition removed the answer is Unavailable
+
+#### Scenario: Outage is not a wide view
+- **WHEN** the batch check, the administrator check or the directory lookup fails
+- **THEN** the answer is Unavailable, not an empty or a full scope; a plain "not found" of `Directory_{workspace_id}` is `ready: false`
+
+### Requirement: Reads of people and departments follow the scope
+Every read of the workspace service that a member may make and that names people or departments SHALL return only what the caller's scope allows: `GET /api/workspaces/:id/departments` the visible departments (a department whose parent is not visible is a root in the caller's list; only an administrator gets the `hidden` flag, true for a department hidden from the directory); `GET /api/workspaces/:id/members` (and the gRPC `ListMembers`) the people of the visible departments, the people with no department when that is visible, the owners and the caller; `GET /api/workspaces/:id/roles` counts only the holders the caller may see. An administrator and a workspace that is not ready see everything. The admin people table (`GET /api/workspaces/:id/admin/members`) needs `manage` and is unchanged.
+
+#### Scenario: Hidden department
+- **WHEN** a member of an open department lists departments, members and role counts while another department is hidden
+- **THEN** the hidden department, its people and their share of the counts are absent, an owner who sits in it is present, and the same calls by a member of the hidden department, or by an administrator (who also sees the `hidden` flag), include them
+
+#### Scenario: Limited person
+- **WHEN** a person limited to their own department lists members and departments
+- **THEN** they get their department's people and subtree, the owners and themself, and no one from a sibling department or from no department
+
+### Requirement: Administrators set the rules through the workspace service
+Whoever holds `manage` on the Mgmt OA SHALL be able to read and change the rules in an organization workspace whose directory exists, and nobody else. `GET /api/workspaces/:id/admin/directory-scope` answers `{ready, hidden_departments: [{id, name, parent_id, member_count}], limited: [{kind: "role"|"department", id, name, parent_id, member_count}]}` (people counted beneath a department, directly in a role); `ready: false` with status 200 for a workspace that cannot carry rules yet (no directory nodes, or a personal workspace), which is not an outage. `PUT` and `DELETE` on `.../hidden/:deptId` hide and unhide a department (both its `Dir` and `DirPeer` move, with their subtrees, and its own UA is granted or loses `read` of its `Dir`; unhiding puts both back under the parent's nodes, or `DirectoryOpen` and `Directory` for a top-level department, also when that parent is itself hidden), and on `.../limited/roles/:roleId` and `.../limited/departments/:deptId` limit and free a custom role or a department by assigning its UA under, or removing it from, `DirectoryLimited_{workspace_id}`. The subject SHALL belong to this workspace: a department of another workspace, an unknown id, the Owners or Members UA, a department UA given as a role and the Limited UA itself are 404; a write on a workspace that cannot carry rules is 503 (no directory yet) or 400 (personal). Each write is idempotent, takes effect for the people concerned as soon as it returns (the policy write invalidates their cached decisions) and announces a workspace event so open Danh bạ screens refetch.
+
+#### Scenario: Plain member or another workspace's administrator
+- **WHEN** a plain member, a limited member, or the owner of another workspace calls any rule endpoint
+- **THEN** it is 403 and nothing in the graph changes
+
+#### Scenario: Foreign or built-in subject
+- **WHEN** an administrator names a department or role of another workspace, the Owners UA, the Members UA, or an id that does not exist
+- **THEN** it is 404 and neither workspace's graph changes
+
+#### Scenario: Hide, unhide and the exact parent
+- **WHEN** a department is hidden and unhidden, including a child of a hidden department hidden and unhidden before and after its parent
+- **THEN** each node returns to the parent it had, and a member who is not in it sees it only while it is not hidden
+
+#### Scenario: Before the migration
+- **WHEN** an administrator opens the rules of a workspace that has no directory nodes
+- **THEN** the read answers `ready: false` and a write is refused as not ready, while every member still sees every member
+
 ## Status
-Specified and built in part. The graph model and its names are verified by test vectors (`backend/services/policy/internal/ngac/pdp_contacts_visibility_test.go`, and on the real policy service by `backend/testutil/policy_contacts_visibility_test.go`). The workspace service creates the directory with each new workspace, mirrors departments and their people into it and tears it down (`backend/services/workspace/internal/domain/directory_graph*.go`, with `directory_graph_realpolicy_test.go` against the real policy service); migration 064 builds it for what predates the code (`scripts/test-migration-064.sh`). No endpoint reads or writes the rules yet and Danh bạ is not yet filtered by them. A workspace's hidden departments and limited roles can be set only by writing the graph directly until the rules API ships.
+Built. The graph model and its names are verified by test vectors (`backend/services/policy/internal/ngac/pdp_contacts_visibility_test.go`, and on the real policy service by `backend/testutil/policy_contacts_visibility_test.go`). The workspace service creates the directory with each new workspace, mirrors departments and their people into it and tears it down (`directory_graph*.go`); migration 064 builds it for what predates the code (`scripts/test-migration-064.sh`). It computes each caller's scope, filters departments, members and role counts by it and serves the rules and `GetDirectoryScope` (`directory_scope*.go`, proved against the real policy service in `directory_scope_realpolicy_test.go`). The auth service does not yet filter Danh bạ by the scope and the screens do not yet read it, so until they ship the filtered people/department reads of the workspace service are the only place the rules are enforced. `scripts/seed-contacts-demo.sh` builds a demo organization through the APIs for development.

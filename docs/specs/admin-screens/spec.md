@@ -109,7 +109,7 @@ Panels and dialogs enter and leave through the shared presets; Esc closes only t
 
 ## Status
 Known gaps, recorded rather than resolved:
-- Quản trị › Danh bạ is specified ahead of the code (mockup `design/mockups/admin.html` §7b, 2026-10-17); the frame has three tabs until it lands.
+- Quản trị › Danh bạ is specified ahead of the screen (mockup `design/mockups/admin.html` §7b, 2026-10-17); the frame has three tabs until it lands. Its API exists (`GET`, `PUT`, `DELETE /api/workspaces/:id/admin/directory-scope…`, `workspace-admin-authorization`): `ready: false` in the read is what hides the tab, and `GET /departments` carries `hidden: true` for an administrator.
 - No administrators' activity feed: nothing records who changed a role, a permission, a member or a department, so Tổng quan does not draw one.
 - The "Đã mời" filter of the mockup is a list under the table instead; the invite dialog has no message field. The invited address is emailed (see `workspace-admin-authorization`, "Inviting records an offer"), but the dialog does not report whether the mail went out: the answer is the same 202 either way, and the invitee finds the offer on their next verified sign-in, on a screen that belongs to the sign-in group.
 - No lock-account action: nothing in the backend can lock one. A person listed as disabled in `tenant_users` is shown as "Đã khoá".

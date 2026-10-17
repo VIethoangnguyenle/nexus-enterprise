@@ -36,6 +36,9 @@ type DepartmentResult struct {
 	ParentID    string
 	MemberCount int
 	NGACUaID    string
+	// Hidden is set only for a caller who administers the directory: the department
+	// has been hidden from Danh bạ (its Dir sits directly under Directory).
+	Hidden bool
 }
 
 // CreateDepartmentInput holds parameters for creating a department.
@@ -154,36 +157,44 @@ func (s *Service) createDepartment(ctx context.Context, callerNodeID string, in 
 	}, nil
 }
 
-// ListDepartments returns all departments for a workspace with member counts.
-// The caller must belong to the workspace.
+// ListDepartments returns the departments of a workspace the caller may see, with member
+// counts. The caller must belong to the workspace. A caller who administers the directory sees
+// every department and is told which are hidden from Danh bạ; anyone else gets the departments
+// their scope allows, and a department whose parent is not among them is a root in their list.
 func (s *Service) ListDepartments(ctx context.Context, callerNodeID, wsID string) ([]*DepartmentResult, error) {
-	if _, err := s.authorizeMember(ctx, callerNodeID, wsID); err != nil {
+	ws, err := s.authorizeMember(ctx, callerNodeID, wsID)
+	if err != nil {
 		return nil, err
 	}
-	deps, err := s.deptStore.ListDepartmentsByWorkspace(ctx, wsID)
+	sc, err := s.scopeFor(ctx, ws, callerNodeID, false, true)
 	if err != nil {
 		return nil, err
 	}
 
-	results := make([]*DepartmentResult, 0, len(deps))
-	for _, d := range deps {
-		// The people of a department are who is assigned to its UA in the graph,
-		// the same source as the people table; a cached column would drift from it.
-		kids, err := s.policyWrite.GetChildren(ctx, &policypb.GetChildrenRequest{NodeId: d.NGACUaID})
-		if err != nil {
-			return nil, fmt.Errorf("count department members: %w", err)
+	var visible []*store.Department
+	for _, d := range sc.depts {
+		if sc.VisibleDeptIDs[d.ID] {
+			visible = append(visible, d)
 		}
-		count := len(uniqueNodes(userNodes(kids.GetNodes())))
+	}
+	// The people of a department are who is assigned to its UA in the graph, the same
+	// source as the people table; a cached column would drift from it. Read once each.
+	if err := s.loadDeptUsers(ctx, sc, visible); err != nil {
+		return nil, fmt.Errorf("count department members: %w", err)
+	}
+	results := make([]*DepartmentResult, 0, len(visible))
+	for _, d := range visible {
 		parentID := ""
-		if d.ParentID != nil {
+		if d.ParentID != nil && sc.VisibleDeptIDs[*d.ParentID] {
 			parentID = *d.ParentID
 		}
 		results = append(results, &DepartmentResult{
 			ID:          d.ID,
 			Name:        d.Name,
 			ParentID:    parentID,
-			MemberCount: count,
+			MemberCount: len(sc.deptUsers[d.ID]),
 			NGACUaID:    d.NGACUaID,
+			Hidden:      sc.Admin && sc.HiddenDeptIDs[d.ID],
 		})
 	}
 	return results, nil
@@ -242,6 +253,8 @@ func (s *Service) MoveDepartment(ctx context.Context, callerNodeID string, in Mo
 }
 
 func (s *Service) moveDepartment(ctx context.Context, callerNodeID string, in MoveDepartmentInput) (*DepartmentResult, error) {
+	// Hidden or not is read while planning the directory move; a hide in between would be undone.
+	defer s.lockDirectory(in.WorkspaceID)()
 	ws, err := s.authorizeAdmin(ctx, callerNodeID, in.WorkspaceID, ngac.OpManage)
 	if err != nil {
 		return nil, err
