@@ -2,24 +2,27 @@ import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from '@tanstack/react-router'
 import { motion } from 'motion/react'
-import { ArrowLeft, CircleAlert, Clock, SearchX, X } from 'lucide-react'
+import { ArrowLeft, CircleAlert, SearchX, X } from 'lucide-react'
 import type { Message } from '../../api/messaging'
 import { useCreateDM } from '../../hooks/useMessaging'
 import { useMessageSearch } from '../../hooks/useMessageSearch'
 import { useModalFocus } from '../../hooks/useModalFocus'
 import { feedSearch } from '../../hooks/useShortcutScreen'
 import { explain } from '../../lib/errors'
-import { formatFeedTime, toMillis } from '../../lib/format'
+import { useRecentSearches } from '../../hooks/useRecentSearches'
+import { useSuggestionPanel } from '../../hooks/useSuggestionPanel'
+import { formatFeedTime, formatListTime, toMillis } from '../../lib/format'
 import { messageText } from '../../lib/message-model'
 import { useMotionPresets } from '../../lib/motion'
 import { displayName, type PeopleDirectory, type Person } from '../../lib/people'
-import { addRecent, readRecent, removeRecent } from '../../lib/recent-searches'
+import { recentConversations } from '../../lib/suggestions/chat'
 import { fold, highlight, matchesAll, snippet } from '../../lib/search-text'
 import type { Conversation } from '../../lib/conversations'
 import { useAuthStore } from '../../stores/auth.store'
 import { Avatar, Button, IconButton, Pressable, SearchField, toast } from '../primitives'
 import { ConversationIcon } from './ConversationIcon'
 import { EmptyState } from './EmptyState'
+import { SearchSuggestions } from '../patterns/SearchSuggestions'
 
 type Filter = 'all' | 'people' | 'groups' | 'messages' | 'files'
 
@@ -69,7 +72,7 @@ export function ChatSearchScreen({ conversations, people, onClose }: {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<Filter>('all')
-  const [recent, setRecent] = useState(() => readRecent('chat', me))
+  const recent = useRecentSearches('chat')
   useModalFocus({ active: true, surfaceRef, onClose, initialFocusRef: inputRef })
 
   const typed = query.trim()
@@ -91,11 +94,34 @@ export function ChatSearchScreen({ conversations, people, onClose }: {
     [people.list, me, typed, filter],
   )
 
-  const remember = () => setRecent(addRecent('chat', me, typed))
+  const remember = () => recent.add(typed)
   const reuse = (q: string) => {
     setQuery(q)
     inputRef.current?.focus()
   }
+
+  // Before anything is typed: Tìm gần đây, then the conversations something was said in lately (DESIGN.md "Gợi ý trong ô tìm").
+  const lately = useMemo(() => recentConversations(conversations), [conversations])
+  const panel = useSuggestionPanel({
+    value: query,
+    variant: 'screen',
+    anchorRef: inputRef,
+    initiallyOpen: true,
+    groups: [
+      recent.group(reuse),
+      {
+        label: 'Trò chuyện gần đây',
+        items: lately.map((c) => ({
+          key: c.id,
+          title: c.title,
+          meta: c.preview ? [c.previewAuthor, c.preview].filter(Boolean).join(': ') : undefined,
+          icon: <ConversationIcon conversation={c} size={36} />,
+          trailing: formatListTime(new Date(c.lastActivity)),
+          onSelect: () => void navigate({ to: '/channels/$channelId', params: { channelId: c.id } }),
+        })),
+      },
+    ],
+  })
 
   const openPerson = (p: Person) => {
     remember()
@@ -141,9 +167,9 @@ export function ChatSearchScreen({ conversations, people, onClose }: {
           ref={inputRef}
           label="Tìm trong chat"
           value={query}
+          {...panel.inputProps}
           onChange={(e) => setQuery(e.target.value)}
           enterKeyHint="search"
-          autoComplete="off"
           leading={
             <IconButton aria-label="Đóng tìm kiếm" title="Quay lại" shape="round" size="lg" onClick={onClose}>
               <ArrowLeft size={20} strokeWidth={1.75} />
@@ -186,36 +212,7 @@ export function ChatSearchScreen({ conversations, people, onClose }: {
 
       <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain pb-[calc(env(safe-area-inset-bottom,0px)+1rem)]">
         {noWords ? (
-          recent.length > 0 && (
-            <section>
-              <Label>Tìm gần đây</Label>
-              <ul className="list-none m-0 p-0">
-                {recent.map((q) => (
-                  <li key={q} className="flex items-center pr-2">
-                    <Pressable
-                      aria-label={`Tìm lại ${q}`}
-                      onClick={() => reuse(q)}
-                      className="flex-1 min-w-0 flex items-center gap-3.5 min-h-14 pl-4 pr-2 text-ink active:bg-hover"
-                    >
-                      <span className="grid place-items-center w-9 h-9 shrink-0 text-ink-muted" aria-hidden="true">
-                        <Clock size={18} strokeWidth={1.75} />
-                      </span>
-                      <span className="truncate text-md">{q}</span>
-                    </Pressable>
-                    <IconButton
-                      aria-label={`Xoá “${q}” khỏi tìm gần đây`}
-                      title="Xoá"
-                      shape="round"
-                      size="lg"
-                      onClick={() => setRecent(removeRecent('chat', me, q))}
-                    >
-                      <X size={16} strokeWidth={1.75} />
-                    </IconButton>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )
+          <SearchSuggestions panel={panel} emptyText="Gõ tên nhóm, tên người hoặc từ trong tin nhắn để tìm." />
         ) : (
           <>
             {showClient && !clientEmpty && (

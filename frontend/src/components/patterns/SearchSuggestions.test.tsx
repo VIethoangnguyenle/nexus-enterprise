@@ -14,10 +14,10 @@ interface HarnessProps {
 }
 
 /** A screen's search box with its suggestions, the way every module wires them. */
-function Harness({ groups, variant = 'popover', emptyText }: HarnessProps) {
+function Harness({ groups, variant = 'popover', emptyText, initiallyOpen }: HarnessProps & { initiallyOpen?: boolean }) {
   const [value, setValue] = useState('')
   const anchorRef = useRef<HTMLInputElement>(null)
-  const panel = useSuggestionPanel({ value, groups, variant, anchorRef })
+  const panel = useSuggestionPanel({ value, groups, variant, anchorRef, initiallyOpen })
   return (
     <>
       <SearchField ref={anchorRef} label="Tìm tài liệu" value={value} onChange={(e) => setValue(e.target.value)} {...panel.inputProps} />
@@ -242,6 +242,21 @@ describe('on the phone screen', () => {
     expect(phoneBox()).toHaveFocus()
     await user.click(screen.getByRole('button', { name: 'Tìm lại một' }))
     expect(pick).toHaveBeenCalledWith('một')
+  })
+
+  it('shows at once on a screen opened to search, before the box has the focus', () => {
+    render(<Harness variant="screen" initiallyOpen groups={[recent(['hợp đồng'])]} />)
+    expect(phoneBox()).not.toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Tìm lại hợp đồng' })).toBeInTheDocument()
+  })
+
+  it('leaves Esc to the screen, which closes as a whole', async () => {
+    const user = userEvent.setup()
+    const outer = vi.fn()
+    render(<div onKeyDown={(e) => e.key === 'Escape' && outer()}><Harness variant="screen" groups={[recent(['hợp đồng'])]} /></div>)
+    await user.click(phoneBox())
+    await user.keyboard('{Escape}')
+    expect(outer).toHaveBeenCalledTimes(1)
   })
 
   it('stays up when the keyboard is put away, until Quay lại', async () => {

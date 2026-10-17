@@ -11,8 +11,9 @@ const FOLLOWED_PAGE = 20
  * the previews of the conversation list, there from the moment the app opens.
  * Without it the list falls back to what live events carried this session.
  */
-export function useConversationActivity() {
+export function useConversationActivity(enabled = true) {
   return useQuery({
+    enabled,
     queryKey: keys.messaging.conversationActivity(),
     queryFn: () => startupPart(keys.messaging.conversationActivity(), undefined, (s) => s.activity, () => messagingApi.conversationActivity()),
     select: (rows): Record<string, ConversationActivity> => Object.fromEntries(rows.map((r) => [r.channel_id, r])),

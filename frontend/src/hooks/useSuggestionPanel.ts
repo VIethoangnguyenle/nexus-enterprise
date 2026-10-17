@@ -42,6 +42,11 @@ interface Options {
   variant: SuggestionVariant
   /** The search box; the popover lines up under the control around it. */
   anchorRef: RefObject<HTMLElement | null>
+  /**
+   * A screen opened only to search (Tìm trong chat) shows its suggestions at once instead of waiting for the box to
+   * take the focus, which a browser may give late or, on some phones, not at all.
+   */
+  initiallyOpen?: boolean
 }
 
 export type SuggestionPanel = ReturnType<typeof useSuggestionPanel>
@@ -57,9 +62,9 @@ export type SuggestionPanel = ReturnType<typeof useSuggestionPanel>
  *
  * A screen with its own key handling runs it after `inputProps.onKeyDown` and skips events marked `defaultPrevented`.
  */
-export function useSuggestionPanel({ value, groups, variant, anchorRef }: Options) {
+export function useSuggestionPanel({ value, groups, variant, anchorRef, initiallyOpen = false }: Options) {
   const id = useId()
-  const [engaged, setEngaged] = useState(false)
+  const [engaged, setEngaged] = useState(initiallyOpen)
   const [dismissed, setDismissed] = useState(false)
   const [activeUid, setActiveUid] = useState<string | null>(null)
 
@@ -117,8 +122,8 @@ export function useSuggestionPanel({ value, groups, variant, anchorRef }: Option
     } else if (popover && e.key === 'Delete' && active >= 0 && items[active]!.onRemove) {
       e.preventDefault()
       items[active]!.onRemove!()
-    } else if (e.key === 'Escape') {
-      // Close the list without letting a dialog behind the box close too.
+    } else if (popover && e.key === 'Escape') {
+      // Close the list without letting a dialog behind the box close too. The phone screen's Esc is its Quay lại.
       e.preventDefault()
       e.stopPropagation()
       e.nativeEvent.stopImmediatePropagation()

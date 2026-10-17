@@ -1,12 +1,13 @@
 import '@testing-library/jest-dom/vitest'
-import { act, cleanup, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter,
 } from '@tanstack/react-router'
 import { renderWithClient, resetClient } from '../../test/render'
-import { CONTACTS, U, WS_ID } from '../../test/chat-fixtures'
+import { CH, CONTACTS, DMS, ME, U, WS_ID } from '../../test/chat-fixtures'
+import { addRecent, readRecent } from '../../lib/recent-searches'
 import { expectNoIds } from '../../test/no-ids'
 import { apiFetch, ApiError } from '../../api/client'
 import { savePreferences, switchPreferencesTo, DEFAULT_PREFERENCES } from '../../lib/preferences'
@@ -21,6 +22,15 @@ const DM_ID = '33333333-aaaa-4bbb-8ccc-0000000000ff'
 const calls: { method: string; path: string; body?: unknown }[] = []
 let contactsResult: () => Promise<unknown>
 let workspaceType: 'personal' | undefined
+let activity: unknown[]
+/** The direct message `channelId` last said something `hoursAgo` hours ago. */
+const said = (channelId: string, hoursAgo: number) => ({
+  channel_id: channelId,
+  latest: {
+    id: `66666666-aaaa-4bbb-8ccc-00000000000${hoursAgo}`, sender_id: U.vinh.id, sender_name: 'vinh', preview: 'Chào chị', kind: 'text',
+    created_at: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(),
+  },
+})
 
 function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
   const method = (init?.method || 'GET').toUpperCase()
@@ -29,6 +39,11 @@ function fixtureApi(path: string, init?: RequestInit): Promise<unknown> {
   if (path === '/workspaces') return Promise.resolve({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành', ...(workspaceType ? { type: workspaceType } : {}) }] })
   if (path.startsWith(`/workspaces/${WS_ID}/contacts`)) return contactsResult()
   if (path === '/dms' && method === 'POST') return Promise.resolve({ id: DM_ID, channel_type: 'dm', name: 'dm' })
+  // What "Nhắn gần đây" is made of: the direct messages and when each last said something.
+  if (path === '/dms') return Promise.resolve({ channels: structuredClone(DMS) })
+  if (path === `/workspaces/${WS_ID}/channels`) return Promise.resolve({ channels: [] })
+  if (path === '/channels/unread') return Promise.resolve({ channels: [] })
+  if (path === '/channels/activity') return Promise.resolve({ channels: structuredClone(activity) })
   return Promise.reject(new Error(`unexpected ${method} ${path}`))
 }
 
@@ -49,6 +64,7 @@ beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {})
   calls.length = 0
   workspaceType = undefined
+  activity = []
   localStorage.clear()
   switchPreferencesTo(undefined)
   useWebSocketStore.setState({ onlineUsers: {} })
@@ -123,7 +139,7 @@ describe('ContactsScreen: the directory', () => {
     await renderContacts()
     await within(table()).findByText('Trần Minh Đức')
 
-    await user.type(screen.getByRole('searchbox', { name: 'Tên, chức danh hoặc email' }), 'duc')
+    await user.type(screen.getByRole('combobox', { name: 'Tên, chức danh hoặc email' }), 'duc')
     await waitFor(() => expect(names()).toEqual(['Trần Minh Đức']))
   })
 
@@ -161,7 +177,7 @@ describe('ContactsScreen: the directory', () => {
     await renderContacts()
     await within(table()).findByText('Trần Minh Đức')
 
-    await user.type(screen.getByRole('searchbox', { name: 'Tên, chức danh hoặc email' }), 'Hưng')
+    await user.type(screen.getByRole('combobox', { name: 'Tên, chức danh hoặc email' }), 'Hưng')
     expect(await screen.findByText(/Không có ai khớp “Hưng”/)).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Xoá bộ lọc' }))
     await waitFor(() => expect(names()).toHaveLength(6))
@@ -174,6 +190,119 @@ describe('ContactsScreen: the directory', () => {
     await screen.findByRole('complementary', { name: 'Hồ sơ' })
     expect(screen.queryByRole('button', { name: /gọi/i })).toBeNull()
     expect(screen.queryByText(/^Gọi/)).toBeNull()
+  })
+})
+
+describe('ContactsScreen: suggestions in the empty search box', () => {
+  const searchBox = () => screen.getByRole('combobox', { name: 'Tên, chức danh hoặc email' })
+
+  it('offers recent searches and the people one messaged lately, latest first, and never an id', async () => {
+    const user = userEvent.setup()
+    addRecent('contacts', ME.id, 'kế toán')
+    activity = [said(CH.dmLan, 3), said(CH.dmYen, 1)]
+    await renderContacts()
+    await within(table()).findByText('Trần Minh Đức')
+    await user.click(searchBox())
+    const list = await screen.findByRole('listbox', { name: 'Gợi ý tìm kiếm' })
+    expect(within(within(list).getByRole('group', { name: 'Tìm gần đây' })).getByRole('option', { name: 'kế toán' })).toBeInTheDocument()
+    const messaged = await within(list).findByRole('group', { name: 'Nhắn gần đây' })
+    expect(within(messaged).getAllByRole('option').map((o) => o.querySelector('.font-medium')?.textContent))
+      .toEqual(['Phạm Hải Yến', 'Nguyễn Thu Lan'])
+    expectNoIds()
+  })
+
+  it('runs a recent search again', async () => {
+    const user = userEvent.setup()
+    addRecent('contacts', ME.id, 'Thu Lan')
+    await renderContacts()
+    await within(table()).findByText('Trần Minh Đức')
+    await user.click(searchBox())
+    await user.click(await screen.findByRole('option', { name: 'Thu Lan' }))
+    expect(searchBox()).toHaveValue('Thu Lan')
+    await waitFor(() => expect(names()).toEqual(['Nguyễn Thu Lan']))
+  })
+
+  it('opens the profile of a suggested person', async () => {
+    const user = userEvent.setup()
+    activity = [said(CH.dmYen, 1)]
+    await renderContacts()
+    await within(table()).findByText('Trần Minh Đức')
+    await user.click(searchBox())
+    await user.click(await screen.findByRole('option', { name: /Phạm Hải Yến/ }))
+    const panel = await screen.findByRole('complementary', { name: 'Hồ sơ' })
+    expect(within(panel).getByText('Phạm Hải Yến')).toBeInTheDocument()
+  })
+
+  it('keeps a search when Enter is pressed or a profile is opened from the results', async () => {
+    const user = userEvent.setup()
+    await renderContacts()
+    await within(table()).findByText('Trần Minh Đức')
+    await user.type(searchBox(), 'vinh{Enter}')
+    expect(readRecent('contacts', ME.id)).toEqual(['vinh'])
+    await user.clear(searchBox())
+    await user.type(searchBox(), 'Thu Lan')
+    await user.click(await within(table()).findByRole('button', { name: 'Nguyễn Thu Lan' }))
+    expect(readRecent('contacts', ME.id)).toEqual(['Thu Lan', 'vinh'])
+  })
+
+  it('asks nothing about direct messages until the box is focused', async () => {
+    const user = userEvent.setup()
+    activity = [said(CH.dmYen, 1)]
+    await renderContacts()
+    await within(table()).findByText('Trần Minh Đức')
+    const chat = () => calls.filter((c) => c.method === 'GET' && ['/dms', '/channels/activity', '/channels/unread', `/workspaces/${WS_ID}/channels`].includes(c.path))
+    expect(chat()).toEqual([])
+    await user.click(searchBox())
+    expect(await screen.findByRole('option', { name: /Phạm Hải Yến/ })).toBeInTheDocument()
+    expect(chat().map((c) => c.path).sort()).toEqual(['/channels/activity', '/dms'])
+  })
+
+  it('does not keep a search on the Enter that ends a word being composed', async () => {
+    await renderContacts()
+    await within(table()).findByText('Trần Minh Đức')
+    const box = searchBox()
+    box.focus()
+    fireEvent.change(box, { target: { value: 'Đức' } })
+    fireEvent.keyDown(box, { key: 'Enter', isComposing: true })
+    expect(readRecent('contacts', ME.id)).toEqual([])
+    fireEvent.keyDown(box, { key: 'Enter' })
+    expect(readRecent('contacts', ME.id)).toEqual(['Đức'])
+  })
+
+  it('on a phone, covers the list without losing it, hides the filters, and closes on Esc', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+    }))
+    addRecent('contacts', ME.id, 'kế toán')
+    await renderContacts()
+    await user.click(await screen.findByRole('searchbox', { name: 'Tên, chức danh hoặc email' }))
+    expect(screen.getByRole('button', { name: 'Tìm lại kế toán' })).toBeInTheDocument()
+    // The list stays where it was under the suggestions, so going back lands at the same scroll.
+    expect(document.querySelector('[role="table"]')).not.toBeNull()
+    expect(screen.queryByRole('table')).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Đang trực tuyến' })).toBeNull()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('button', { name: 'Tìm lại kế toán' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Đang trực tuyến' })).toBeInTheDocument()
+    vi.unstubAllGlobals()
+  })
+
+  it('on a phone, covers the list until Quay lại, and the box stays a plain search box', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {},
+    }))
+    addRecent('contacts', ME.id, 'kế toán')
+    await renderContacts()
+    const box = await screen.findByRole('searchbox', { name: 'Tên, chức danh hoặc email' })
+    await user.click(box)
+    expect(screen.getByRole('button', { name: 'Tìm lại kế toán' })).toBeInTheDocument()
+    expect(screen.queryByRole('table')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Quay lại danh sách' }))
+    expect(screen.queryByRole('button', { name: 'Tìm lại kế toán' })).toBeNull()
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+    vi.unstubAllGlobals()
   })
 })
 
@@ -227,7 +356,7 @@ describe('ContactsScreen: a person\'s profile', () => {
     await user.click(await screen.findByRole('button', { name: 'Nhắn tin' }))
 
     await waitFor(() => expect(router.state.location.pathname).toBe(`/channels/${DM_ID}`))
-    expect(calls.find((c) => c.path === '/dms')?.body).toEqual({
+    expect(calls.find((c) => c.path === '/dms' && c.method === 'POST')?.body).toEqual({
       target_user_id: U.lan.id, target_ngac_node_id: U.lan.node,
     })
   })

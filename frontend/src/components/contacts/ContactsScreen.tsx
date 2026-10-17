@@ -1,11 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { CircleAlert, LayoutGrid, List, Users } from 'lucide-react'
+import { ArrowLeft, CircleAlert, LayoutGrid, List, Users } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useConnectionLost } from '../../hooks/useConnectionLost'
 import { useContacts, type Contact } from '../../hooks/useContacts'
 import { useCreateDM } from '../../hooks/useMessaging'
+import { useBottomBarLayout } from '../../hooks/usePhone'
+import { useRecentDirects } from '../../hooks/useRecentDirects'
+import { useRecentSearches } from '../../hooks/useRecentSearches'
+import { useSuggestionPanel } from '../../hooks/useSuggestionPanel'
+import { recentlyMessaged } from '../../lib/suggestions/contacts'
 import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { usePreferences } from '../../hooks/usePreferences'
 import { explain } from '../../lib/errors'
@@ -13,14 +18,15 @@ import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { Button, FilterChip, Heading, Pressable, SearchField, toast } from '../primitives'
+import { Avatar, Button, FilterChip, Heading, IconButton, Pressable, SearchField, toast } from '../primitives'
+import { SearchSuggestions } from '../patterns/SearchSuggestions'
 import { EmptyState } from '../spaces/EmptyState'
 import { ContactCards } from './ContactCards'
 import { ContactPanel } from './ContactPanel'
 import { ContactsTable } from './ContactsTable'
 import { DepartmentFilter } from './DepartmentFilter'
 import {
-  NO_FILTER, colleaguesOf, departmentsOf, filterContacts, nameOf, sortContacts, type ContactFilter,
+  NO_FILTER, colleaguesOf, departmentsOf, filterContacts, nameOf, roleLine, sortContacts, type ContactFilter,
 } from './contacts-model'
 
 /**
@@ -88,6 +94,39 @@ export function ContactsScreen() {
     )
   }
 
+  // Before anything is typed: Tìm gần đây and Nhắn gần đây (DESIGN.md "Gợi ý trong ô tìm").
+  const phone = useBottomBarLayout()
+  const searchRef = useRef<HTMLInputElement>(null)
+  const recent = useRecentSearches('contacts')
+  // The direct messages are asked for only once the box is focused: most visits never open the suggestions.
+  const [wantsDirects, setWantsDirects] = useState(false)
+  const { directs, isLoading: directsLoading } = useRecentDirects(wsId, wantsDirects)
+  const lately = useMemo(() => recentlyMessaged(directs, all, me?.id), [directs, all, me?.id])
+  const panel = useSuggestionPanel({
+    value: filter.query,
+    variant: phone ? 'screen' : 'popover',
+    anchorRef: searchRef,
+    groups: [
+      recent.group((query) => setFilter((f) => ({ ...f, query }))),
+      {
+        label: 'Nhắn gần đây',
+        loading: loading || directsLoading,
+        items: lately.map((c) => ({
+          key: c.user_id,
+          title: nameOf(c),
+          meta: roleLine(c) || undefined,
+          icon: <Avatar name={nameOf(c)} hueKey={c.user_id} src={c.avatar_url} size={phone ? 36 : 32} />,
+          onSelect: () => setSelectedId(c.user_id),
+        })),
+      },
+    ],
+  })
+  /** Opening a profile from the results keeps the search that found it. */
+  const openProfile = (c: Contact) => {
+    if (filter.query.trim()) recent.add(filter.query)
+    setSelectedId(c.user_id)
+  }
+
   const body = (() => {
     if (q.isError) {
       return (
@@ -123,7 +162,7 @@ export function ContactsScreen() {
     return (
       <motion.div key={prefs.contactsView} {...m.route}>
         {prefs.contactsView === 'cards' && !loading ? (
-          <ContactCards label={label} people={people} selectedId={selectedId} isOnline={isOnline} onSelect={(c) => setSelectedId(c.user_id)} />
+          <ContactCards label={label} people={people} selectedId={selectedId} isOnline={isOnline} onSelect={openProfile} />
         ) : (
           <ContactsTable
             label={label}
@@ -131,7 +170,7 @@ export function ContactsScreen() {
             loading={loading}
             selectedId={selectedId}
             isOnline={isOnline}
-            onSelect={(c) => setSelectedId(c.user_id)}
+            onSelect={openProfile}
             scope={scope}
             showDepartment={loading ? !isPersonal : hasDepartments}
           />
@@ -168,24 +207,60 @@ export function ContactsScreen() {
         </header>
 
         <div className="flex flex-wrap items-center gap-2 px-5 pb-3">
+          {phone && panel.visible && (
+            <IconButton
+              aria-label="Quay lại danh sách"
+              title="Quay lại"
+              shape="round"
+              size="lg"
+              className="w-11 h-11 -ml-2"
+              onClick={() => {
+                panel.close()
+                searchRef.current?.blur()
+              }}
+            >
+              <ArrowLeft size={20} strokeWidth={1.75} aria-hidden="true" />
+            </IconButton>
+          )}
           <SearchField
+            ref={searchRef}
             label="Tên, chức danh hoặc email"
             moduleSearch
             tone="sunk"
             value={filter.query}
+            {...panel.inputProps}
+            onFocus={() => {
+              panel.inputProps.onFocus()
+              setWantsDirects(true)
+            }}
+            onKeyDown={(e) => {
+              panel.inputProps.onKeyDown(e)
+              if (e.defaultPrevented) return
+              // The Enter that ends a word an input method is composing is not a search.
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) recent.add(filter.query)
+              // On a phone, a hardware keyboard's Esc is Quay lại.
+              else if (e.key === 'Escape' && phone && panel.visible) {
+                e.preventDefault()
+                panel.close()
+              }
+            }}
             onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
-            className="w-full sm:w-72"
+            className={phone && panel.visible ? 'flex-1 min-w-0' : 'w-full sm:w-72'}
           />
-          {hasDepartments && (
+          {!phone && <SearchSuggestions panel={panel} />}
+          {/* While the suggestions cover the list on a phone, filters would change a list that cannot be seen. */}
+          {!(phone && panel.visible) && hasDepartments && (
             <DepartmentFilter
               departments={departments}
               value={filter.department}
               onChange={(department) => setFilter((f) => ({ ...f, department }))}
             />
           )}
-          <FilterChip pressed={filter.onlineOnly} onClick={() => setFilter((f) => ({ ...f, onlineOnly: !f.onlineOnly }))}>
-            Đang trực tuyến
-          </FilterChip>
+          {!(phone && panel.visible) && (
+            <FilterChip pressed={filter.onlineOnly} onClick={() => setFilter((f) => ({ ...f, onlineOnly: !f.onlineOnly }))}>
+              Đang trực tuyến
+            </FilterChip>
+          )}
         </div>
 
         {connectionLost && (
@@ -194,7 +269,17 @@ export function ContactsScreen() {
           </div>
         )}
 
-        <div className="flex-1 min-h-0 overflow-y-auto">{body}</div>
+        <div className="relative flex-1 min-h-0">
+          {/* The list stays mounted under the phone's suggestions, so Quay lại finds it where it was scrolled. */}
+          <div className="h-full overflow-y-auto" aria-hidden={phone && panel.visible ? true : undefined} inert={phone && panel.visible}>
+            {body}
+          </div>
+          {phone && panel.visible && (
+            <div className="absolute inset-0 grid bg-base">
+              <SearchSuggestions panel={panel} emptyText="Gõ tên, chức danh hoặc email để tìm người." />
+            </div>
+          )}
+        </div>
       </section>
 
       <AnimatePresence>

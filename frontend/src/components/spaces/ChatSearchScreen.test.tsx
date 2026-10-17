@@ -26,7 +26,17 @@ const hit = (n: number, over: Partial<Message> = {}): Message => ({
 let searchPages: Array<Message[] | 'error'>
 let searchCalls: URLSearchParams[]
 let created: { id: string } | null
+let activity: unknown[]
+/** What a conversation last said, `hoursAgo` hours ago, as `/channels/activity` returns it. */
+const said = (channelId: string, hoursAgo: number, preview: string) => ({
+  channel_id: channelId,
+  latest: {
+    id: `66666666-aaaa-4bbb-8ccc-00000000000${hoursAgo}`, sender_id: U.vinh.id, sender_name: 'vinh', preview, kind: 'text',
+    created_at: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(),
+  },
+})
 const route = (path: string, init?: RequestInit): Promise<unknown> => {
+  if (path.split('?')[0] === '/channels/activity') return Promise.resolve({ channels: structuredClone(activity) })
   if (path.startsWith('/messages/search')) {
     searchCalls.push(new URLSearchParams(path.split('?')[1]))
     const page = searchPages[Math.min(searchCalls.length - 1, searchPages.length - 1)]
@@ -40,11 +50,13 @@ const route = (path: string, init?: RequestInit): Promise<unknown> => {
   return fixtureApi(path, init)
 }
 
-function Host({ close = onClose }: { close?: () => void }) {
+function Host({ close = onClose, unreadable }: { close?: () => void; unreadable?: string }) {
   const nav = useChatNavigation(WS_ID)
   const people = usePeople(WS_ID)
   if (nav.isLoading || people.isLoading) return null
-  return <ChatSearchScreen conversations={nav.conversations} people={people} onClose={close} />
+  // A conversation the caller lost read on is missing from what the server lists for them.
+  const conversations = unreadable ? nav.conversations.filter((c) => c.id !== unreadable) : nav.conversations
+  return <ChatSearchScreen conversations={conversations} people={people} onClose={close} />
 }
 
 const open = async () => {
@@ -52,7 +64,10 @@ const open = async () => {
     matches: query.includes('max-width'), media: query, addEventListener: () => {}, removeEventListener: () => {},
   }))
   renderWithClient(<Host />)
-  return screen.findByRole('dialog', { name: 'Tìm trong chat' })
+  const dialog = await screen.findByRole('dialog', { name: 'Tìm trong chat' })
+  // The screen is ready once its box has the focus: that is also when the suggestions show.
+  await waitFor(() => expect(screen.getByRole('searchbox', { name: 'Tìm trong chat' })).toHaveFocus())
+  return dialog
 }
 const box = () => screen.getByRole('searchbox', { name: 'Tìm trong chat' })
 const chip = (name: string) => screen.getByRole('radio', { name })
@@ -61,6 +76,7 @@ beforeEach(() => {
   searchPages = [[]]
   searchCalls = []
   created = null
+  activity = []
   localStorage.clear()
   onClose.mockClear()
   routerState.navigate.mockClear()
@@ -138,7 +154,8 @@ describe('before anything is typed', () => {
     addRecent('chat', ME.id, 'hợp đồng')
     addRecent('chat', 'someone-else', 'không phải của tôi')
     await open()
-    expect(screen.getByText('Tìm gần đây')).toBeInTheDocument()
+    // The suggestions come with the box's focus, which the screen gives as it opens.
+    expect(await screen.findByText('Tìm gần đây')).toBeInTheDocument()
     const rows = screen.getAllByRole('button', { name: /^Tìm lại / })
     expect(rows.map((r) => r.textContent)).toEqual(['hợp đồng', 'tạm ứng tháng 10'])
     expect(screen.queryByText('không phải của tôi')).toBeNull()
@@ -152,7 +169,7 @@ describe('before anything is typed', () => {
     addRecent('chat', ME.id, 'một')
     addRecent('chat', ME.id, 'hai')
     await open()
-    await user.click(screen.getByRole('button', { name: 'Xoá “một” khỏi tìm gần đây' }))
+    await user.click(screen.getByRole('button', { name: 'Xoá “một” khỏi Tìm gần đây' }))
     expect(screen.queryByRole('button', { name: 'Tìm lại một' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Tìm lại hai' })).toBeInTheDocument()
     expect(readRecent('chat', ME.id)).toEqual(['hai'])
@@ -162,6 +179,42 @@ describe('before anything is typed', () => {
     await open()
     expect(screen.queryByText('Tìm gần đây')).toBeNull()
     expect(searchCalls).toHaveLength(0)
+  })
+
+  it('lists the conversations something was said in lately, newest first, and a tap opens one', async () => {
+    const user = userEvent.setup()
+    activity = [said(CH.doisoat, 3, 'Bảng đối soát tháng 10'), said(CH.hopdong, 1, 'Ok mai chốt nhé')]
+    await open()
+    const group = await screen.findByRole('group', { name: 'Trò chuyện gần đây' })
+    const rows = within(group).getAllByRole('button')
+    expect(rows.map((r) => r.querySelector('.font-medium')?.textContent)).toEqual(['Hợp đồng đối tác', 'Đối soát giao dịch'])
+    expect(within(group).getByText(/Ok mai chốt nhé/)).toBeInTheDocument()
+    await user.click(rows[0]!)
+    expect(routerState.navigate).toHaveBeenCalledWith({ to: '/channels/$channelId', params: { channelId: CH.hopdong } })
+    expect(document.body.textContent).not.toMatch(UUID_RE)
+  })
+
+  it('never suggests a conversation the person can no longer read', async () => {
+    activity = [said(CH.doisoat, 1, 'Bảng đối soát tháng 10'), said(CH.hopdong, 2, 'Ok mai chốt nhé')]
+    renderWithClient(<Host unreadable={CH.doisoat} />)
+    const group = await screen.findByRole('group', { name: 'Trò chuyện gần đây' })
+    expect(within(group).queryByText('Đối soát giao dịch')).toBeNull()
+    expect(within(group).getByText('Hợp đồng đối tác')).toBeInTheDocument()
+  })
+
+  it('shows the suggestions as the screen appears, without waiting for the box to take the focus', async () => {
+    addRecent('chat', ME.id, 'hợp đồng')
+    renderWithClient(<Host />)
+    await screen.findByRole('dialog', { name: 'Tìm trong chat' })
+    expect(screen.getByRole('button', { name: 'Tìm lại hợp đồng' })).toBeInTheDocument()
+  })
+
+  it('keeps the suggestions up when the keyboard is put away', async () => {
+    addRecent('chat', ME.id, 'hợp đồng')
+    await open()
+    await waitFor(() => expect(box()).toHaveFocus())
+    box().blur()
+    expect(screen.getByRole('button', { name: 'Tìm lại hợp đồng' })).toBeInTheDocument()
   })
 })
 

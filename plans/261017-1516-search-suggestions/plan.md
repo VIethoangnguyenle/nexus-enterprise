@@ -21,7 +21,7 @@ client (phương án A, Zane đã duyệt 2026-10-17): không thêm endpoint, mi
 |---|---|---|---|
 | 01 | [Thiết kế: DESIGN.md + mockup](phase-01-design.md) | completed (duyệt 2026-10-17) | — |
 | 02 | [Nền: lịch sử tìm theo module + panel gợi ý](phase-02-foundation.md) | completed (review xong, đã sửa H1/M1/M2/M3) | 01 |
-| 03 | [Chat + Danh bạ](phase-03-chat-contacts.md) | pending | 02 |
+| 03 | [Chat + Danh bạ](phase-03-chat-contacts.md) | completed (review xong, đã sửa M1–M3) | 02 |
 | 04 | [Tài liệu + Tài sản](phase-04-drive-assets.md) | pending | 02 |
 | 05 | [Phê duyệt: ô tìm + gợi ý](phase-05-approval.md) | pending | 02 |
 | 06 | [Spec + kiểm tra cuối](phase-06-specs-verify.md) | pending | 03, 04, 05 |
