@@ -33,4 +33,8 @@ type (
 	UserID string
 	// UserNodeID is the ID of a user's U node in the graph (users.ngac_node).
 	UserNodeID string
+	// CalendarID is calendars.id.
+	CalendarID string
+	// CalendarEventID is calendar_events.id (the event, not one occurrence).
+	CalendarEventID string
 )

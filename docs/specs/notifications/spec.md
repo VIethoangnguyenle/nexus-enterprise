@@ -27,6 +27,24 @@ When a workspace invitation is newly opened for an address that is the **verifie
 - **WHEN** an address that has no account, or whose account is unverified, is invited
 - **THEN** no notification exists for anyone
 
+### Requirement: Calendar events notify the people they concern
+The messaging service SHALL store one notification, and push it live, for each person a calendar event concerns,
+arriving from the calendar service on the Redpanda topic `calendar.events`. Types: `calendar_invitation` (a guest was
+added; to that guest), `calendar_reminder` (a reminder fell due; to each person who may read the event then, once per
+occurrence), `calendar_rsvp` (a guest answered; to the host) and `calendar_updated` (time or place changed; to the
+guests). Each has `entity_type` `calendar_event` and `entity_id` the event; the title and body use names and
+times only. A reminder and an invitation also send web push; the others do not. A record that names no person or no
+event creates nothing, and nobody who lacks `read` on the event at that moment is notified. Opening one goes to
+the event in the calendar. See `docs/specs/calendar/spec.md`.
+
+#### Scenario: Invited
+- **WHEN** a person is added as a guest
+- **THEN** their Thông báo shows the invitation as unread, naming the host and the event
+
+#### Scenario: No longer allowed
+- **WHEN** a reminder falls due for someone who has been removed from the event
+- **THEN** they get no notification
+
 ### Requirement: Marking read is the caller's own
 `POST /api/notifications/{id}/read` and `POST /api/notifications/read-all` SHALL change only notifications belonging to the signed-in person. Marking another person's notification matches nothing and changes nothing, and still answers `{"status":"ok"}`. A request with no session is 401.
 

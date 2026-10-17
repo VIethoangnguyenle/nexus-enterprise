@@ -129,6 +129,22 @@ The screens render DESIGN.md §6 "Cuộc gọi video và thoại" and `design/mo
   notifications only — an open app still rings (decided 2026-10-13).
 - Someone removed from the conversation is cut off with "Bạn không còn ở trong nhóm này". No id is ever shown.
 
+### Requirement: A calendar event can hold a call
+A call SHALL belong to a conversation or to a calendar event, exactly one of the two (`calls.calendar_event_id`,
+`channel_id` nullable, a CHECK for exactly one). A call of an event SHALL be started and joined only after `read` on
+the event's OA (`CalEv_<id>`) — checked when the ticket is asked for, never trusted from an earlier check — and a
+person without it SHALL get 403 and no ticket. An event in a group calendar uses that group's own call and its
+`write` rule above. A call of an event posts no card (there is no conversation); everything else — one open call per
+event, the 20-person limit, `call_ended`, `call_full` — applies unchanged. See `docs/specs/calendar/spec.md`.
+
+#### Scenario: A guest joins
+- **WHEN** a guest of an event asks for its call ticket
+- **THEN** they get a ticket for that event's room
+
+#### Scenario: Not a guest
+- **WHEN** a workspace member who cannot read the event asks for the ticket
+- **THEN** the answer is 403 and no token is signed
+
 ### Requirement: Configuration
 Calls SHALL be on only when `LIVEKIT_URL`, `LIVEKIT_PUBLIC_URL`, `LIVEKIT_API_KEY` and `LIVEKIT_API_SECRET` are all
 set; otherwise starting a call or asking for a ticket answers 503 `calls_unavailable`, and the webhook 503.

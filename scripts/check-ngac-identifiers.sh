@@ -19,7 +19,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 OPS='read|write|upload|approve|share|manage|invite|create_channel'
-PREFIXES='PC|Dept|Ch|Folder|Share|Asset|User|DriveRoot|TenantMember|TenantOwner|Role|U'
+PREFIXES='CalEvGuests|CalEv|Cal|PC|Dept|Ch|Folder|Share|Asset|User|DriveRoot|TenantMember|TenantOwner|Role|U'
 SUFFIXES='Owners|Members|Mgmt|Documents|DraftDocs|ApprovedDocs|Channels|Assets|Content|Drive'
 
 # scan <root>... : prints "file:line: text" for every violation under the given roots.
