@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CircleAlert, LogOut } from 'lucide-react'
 import { logoutSession } from '../../api/client'
+import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useMyProfile } from '../../hooks/useMyProfile'
 import { useRemoveAvatar, useUpdateProfile, useUploadAvatar } from '../../hooks/useProfile'
@@ -21,6 +22,7 @@ import { FIELD_MAX, NAME_MAX, profileChanges, profileOf, validateProfile, type P
 export function ProfileTab() {
   const { workspaceId: wsId } = useActiveWorkspace()
   const me = useAuthStore((s) => s.user)
+  const { isPersonal } = useWorkspaceType()
   const q = useMyProfile(wsId)
   const save = useUpdateProfile()
   const uploadAvatar = useUploadAvatar()
@@ -29,7 +31,8 @@ export function ProfileTab() {
 
   // The person's own record (GET /api/me), not a search of the directory.
   const person = q.data?.user
-  const department = q.data?.current_tenant?.department ?? ''
+  // Departments belong to company workspaces; a personal one shows none.
+  const department = isPersonal ? '' : (q.data?.current_tenant?.department ?? '')
   const initial = useMemo(() => profileOf(person), [person])
 
   const [form, setForm] = useState<ProfileForm>(initial)
@@ -174,7 +177,7 @@ export function ProfileTab() {
       />
 
       <ReadOnlyField label="Email đăng nhập" value={person?.email ?? ''} reason="Dùng để nhận mã đăng nhập. Đổi email cần quản trị viên." />
-      <ReadOnlyField label="Phòng ban" value={department} reason="Do quản trị viên đặt." />
+      {!isPersonal && <ReadOnlyField label="Phòng ban" value={department} reason="Do quản trị viên đặt." />}
 
       <div className="flex items-center gap-2">
         <Button type="submit" loading={save.isPending} disabled={!changes}>Lưu thay đổi</Button>

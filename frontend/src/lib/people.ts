@@ -21,19 +21,22 @@ export interface PeopleDirectory {
   byUsername: Map<string, Person>
 }
 
-export function personFromContact(c: Contact): Person {
+/** Departments belong to company workspaces; a personal workspace passes `departments: false`. */
+export interface DirectoryOptions { departments?: boolean }
+
+export function personFromContact(c: Contact, { departments = true }: DirectoryOptions = {}): Person {
   return {
     userId: c.user_id,
     nodeId: c.ngac_node_id,
     username: c.username,
     name: c.display_name?.trim() || UNKNOWN_PERSON,
-    role: [c.title, c.department].filter(Boolean).join(' · '),
+    role: [c.title, departments ? c.department : ''].filter(Boolean).join(' · '),
     avatarUrl: c.avatar_url || '',
   }
 }
 
-export function buildDirectory(contacts: Contact[]): PeopleDirectory {
-  const list = contacts.map(personFromContact)
+export function buildDirectory(contacts: Contact[], options?: DirectoryOptions): PeopleDirectory {
+  const list = contacts.map((c) => personFromContact(c, options))
   const byUserId = new Map<string, Person>()
   const byNodeId = new Map<string, Person>()
   const byUsername = new Map<string, Person>()

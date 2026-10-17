@@ -6,6 +6,7 @@ import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useConnectionLost } from '../../hooks/useConnectionLost'
 import { useContacts, type Contact } from '../../hooks/useContacts'
 import { useCreateDM } from '../../hooks/useMessaging'
+import { useWorkspaceType } from '../../hooks/useWorkspaceType'
 import { usePreferences } from '../../hooks/usePreferences'
 import { explain } from '../../lib/errors'
 import { useMotionPresets } from '../../lib/motion'
@@ -33,6 +34,7 @@ export function ContactsScreen() {
   const m = useMotionPresets()
   const connectionLost = useConnectionLost()
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
+  const { isPersonal } = useWorkspaceType()
   const q = useContacts(wsId)
   const me = useAuthStore((s) => s.user)
   const onlineUsers = useWebSocketStore((s) => s.onlineUsers)
@@ -42,7 +44,11 @@ export function ContactsScreen() {
   const [filter, setFilter] = useState<ContactFilter>(NO_FILTER)
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
-  const all = useMemo(() => sortContacts(q.data?.contacts ?? []), [q.data])
+  // Departments are a company workspace's data: a personal workspace lists people without them.
+  const all = useMemo(() => {
+    const list = q.data?.contacts ?? []
+    return sortContacts(isPersonal ? list.map((c) => ({ ...c, department: '' })) : list)
+  }, [q.data, isPersonal])
   const isOnline = useCallback(
     (c: Contact) => c.user_id === me?.id || c.user_id in onlineUsers,
     [me?.id, onlineUsers],
@@ -125,6 +131,7 @@ export function ContactsScreen() {
             isOnline={isOnline}
             onSelect={(c) => setSelectedId(c.user_id)}
             scope={scope}
+            showDepartment={!isPersonal}
           />
         )}
       </motion.div>
@@ -167,11 +174,13 @@ export function ContactsScreen() {
             onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))}
             className="w-full sm:w-72"
           />
-          <DepartmentFilter
-            departments={departments}
-            value={filter.department}
-            onChange={(department) => setFilter((f) => ({ ...f, department }))}
-          />
+          {!isPersonal && (
+            <DepartmentFilter
+              departments={departments}
+              value={filter.department}
+              onChange={(department) => setFilter((f) => ({ ...f, department }))}
+            />
+          )}
           <FilterChip pressed={filter.onlineOnly} onClick={() => setFilter((f) => ({ ...f, onlineOnly: !f.onlineOnly }))}>
             Đang trực tuyến
           </FilterChip>

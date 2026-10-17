@@ -192,6 +192,8 @@ mã backend, email và tài liệu kỹ thuật không đổi.
   - *Đổi workspace:* bấm ô chữ cái (hay tên khi mở rộng) mở cùng một menu; đầu menu ghi đầy đủ tên workspace
     đang mở (xuống dòng, không cắt) + dòng phụ ("Workspace cá nhân" hoặc tên tổ chức) · vai trò; danh sách
     "Chuyển sang" cũng xuống dòng thay vì cắt. Workspace cá nhân không có Tài sản, Phê duyệt, Quản trị.
+  - *Phòng ban chỉ có ở workspace tổ chức.* Workspace cá nhân không hiện trường, cột, bộ lọc, nhóm trong ô
+    chọn người hay dòng phụ nào nói về phòng ban (Hồ sơ, Danh bạ, ô chọn người).
   - *Tooltip* chỉ ở chỗ chữ bị ẩn (ô workspace, avatar, nút chuyển): `--color-overlay`, `--shadow-overlay`,
     radius 8, 12px, cách 8px bên phải, `--z-tooltip`; trỏ chuột 400ms, focus bàn phím hiện ngay, Esc ẩn.
     Tooltip không bao giờ là nguồn tên duy nhất.
