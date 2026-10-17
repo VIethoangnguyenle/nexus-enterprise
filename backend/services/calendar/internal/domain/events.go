@@ -2,6 +2,8 @@ package domain
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"log/slog"
 	"slices"
@@ -152,6 +154,15 @@ func zoneOf(tzid string) *time.Location {
 	return loc
 }
 
+// busyKey is the id a busy block carries in place of its event's: the screen
+// needs a key to tell blocks apart, but the id of an event the caller may not read
+// is not theirs to hold. It is stable per occurrence and names nothing the API
+// answers to.
+func busyKey(eventID, occurrenceStart string) string {
+	sum := sha256.Sum256([]byte("busy|" + eventID + "|" + occurrenceStart))
+	return "busy-" + hex.EncodeToString(sum[:12])
+}
+
 // occurrenceView shapes one occurrence. detail says whether the caller may read
 // its details: without it only the time is real.
 func occurrenceView(in instance, level string, detail bool, v *viewData) *OccurrenceView {
@@ -171,6 +182,7 @@ func occurrenceView(in instance, level string, detail bool, v *viewData) *Occurr
 	}
 	if !detail {
 		o.Title, o.BusyOnly, o.Kind = busyTitle, true, KindEvent
+		o.EventID = busyKey(m.ID, o.OccurrenceStart)
 		return o
 	}
 	o.Title, o.Location, o.Kind = row.Title, row.Location, row.Kind
@@ -270,7 +282,7 @@ type invitedSet struct {
 
 func (s *Service) invitedEvents(ctx context.Context, ws *store.Workspace, who grpcauth.Caller, listed []*store.Event, from, to time.Time) (*invitedSet, error) {
 	out := &invitedSet{cals: map[string]*store.Calendar{}, levels: map[string]string{}, reads: map[string]bool{}}
-	am, ao, err := s.store.RangeAttended(ctx, who.NGACNodeID, from, to)
+	am, ao, err := s.store.RangeAttended(ctx, ws.ID, who.NGACNodeID, from, to)
 	if err != nil {
 		return nil, internal("list invitations", err)
 	}
@@ -395,14 +407,29 @@ func (s *Service) loadEvent(ctx context.Context, wsID, id string) (*store.Event,
 	return e, cal, nil
 }
 
-// isGuest reports whether the caller reads the event through its own OA: a guest
-// holds read there and nowhere else on the host's calendar.
-func (s *Service) isGuest(ctx context.Context, who string, e *store.Event) bool {
+// readsEventOA reports whether the caller holds read on the event's own OA. The
+// event's OA sits under its calendar's, so everyone who reads the calendar holds
+// read there too: on its own it does not make anyone a guest.
+func (s *Service) readsEventOA(ctx context.Context, who string, e *store.Event) bool {
 	if e.NgacOAID == "" {
 		return false
 	}
 	ok, _ := policyclient.New(s.policyRead).Check(ctx, who, e.NgacOAID, ngac.OpRead)
 	return ok
+}
+
+// isGuest reports whether the caller is a guest of the event: named on its guest
+// list (attendee row) and reading it through its own OA. The two together are
+// what the graph and the rows promise a guest; either alone is not enough.
+func (s *Service) isGuest(ctx context.Context, who string, e *store.Event) (bool, error) {
+	responses, err := s.store.MyResponses(ctx, who, []string{e.ID})
+	if err != nil {
+		return false, internal("load answers", err)
+	}
+	if _, listed := responses[e.ID]; !listed {
+		return false, nil
+	}
+	return s.readsEventOA(ctx, who, e), nil
 }
 
 // GetEvent returns an event in full. For a repeating event, occurrence names the
@@ -420,15 +447,13 @@ func (s *Service) GetEvent(ctx context.Context, wsID, id, occurrence string) (*E
 	if err != nil {
 		return nil, err
 	}
-	responses, err := s.store.MyResponses(ctx, who.NGACNodeID, []string{e.ID})
+	guest, err := s.isGuest(ctx, who.NGACNodeID, e)
 	if err != nil {
-		return nil, internal("load answers", err)
+		return nil, err
 	}
-	_, answered := responses[e.ID]
-	invited := s.isGuest(ctx, who.NGACNodeID, e)
 	switch {
-	case showsDetail(level, e, cal, who.NGACNodeID, answered || invited):
-	case invited && !canRead(level):
+	case showsDetail(level, e, cal, who.NGACNodeID, guest):
+	case guest && !canRead(level):
 		// A guest reads the event they were invited to, nothing else of the calendar.
 	default:
 		return nil, denied("no read access")
@@ -814,6 +839,12 @@ func (s *Service) UpdateEvent(ctx context.Context, wsID, id string, q ScopeQuery
 	if err != nil {
 		return nil, err
 	}
+	var oldReminders []int
+	if minutes != nil {
+		if oldReminders, err = s.store.Reminders(ctx, ed.e.ID); err != nil {
+			return nil, internal("load reminders", err)
+		}
+	}
 
 	var in instance
 	var preserved int
@@ -835,9 +866,10 @@ func (s *Service) UpdateEvent(ctx context.Context, wsID, id string, q ScopeQuery
 	var added []string
 	if plan.touched {
 		// The guests of the whole series, or of the tail a split started. The row
-		// is already saved; a failure here leaves the guests as they were.
+		// is already saved, so a failure here puts the event back as it was.
 		added, err = s.changeGuests(ctx, ed.ws, home, in.Master, plan)
 		if err != nil {
+			s.undoEdit(ctx, before, oldReminders, in)
 			return nil, err
 		}
 		s.announceGuests(ctx, ed.ws, home, realtime.KindUpdated, added, in.Master.ID)
@@ -853,6 +885,49 @@ func (s *Service) UpdateEvent(ctx context.Context, wsID, id string, q ScopeQuery
 		}
 	}
 	return s.detailView(ctx, ed.ws, ed.who, in, ed.level, true, preserved)
+}
+
+// undoEdit puts an event back as it was before an edit whose guest change failed,
+// so a refused request leaves no half-made edit behind. A split loses its tail
+// (with the tail's nodes); a series that was shifted gets its exceptions back
+// where they were. The version moves on rather than back: a screen that holds the
+// old one reloads. What the edit already destroyed cannot return: answers to
+// single occurrences of a moved series, exceptions a split cut off, guests a
+// partly applied change had already taken off (their access is gone, which is the
+// safe side). A failure here is logged for an operator.
+func (s *Service) undoEdit(ctx context.Context, before store.Event, reminders []int, in instance) {
+	split := in.Master.ID != before.ID
+	if split {
+		if err := s.deleteWhole(ctx, in.Master); err != nil {
+			slog.Error("could not remove the tail of a split that failed", "event", in.Master.ID, "error", err)
+		}
+	}
+	cur, err := s.store.EventByID(ctx, before.ID)
+	if err != nil {
+		slog.Error("could not reload an event to undo a failed edit", "event", before.ID, "error", err)
+		return
+	}
+	restored := before
+	var change store.EventChange
+	if reminders != nil && !split {
+		change.Reminders = &reminders
+	}
+	if before.RRule != "" && !split && !cur.StartsAt.Equal(before.StartsAt) {
+		overs, err := s.store.Overrides(ctx, before.ID)
+		if err != nil {
+			slog.Error("could not reload exceptions to undo a failed edit", "event", before.ID, "error", err)
+		}
+		loc := zoneOf(cur.TZID)
+		change.Originals = map[string]time.Time{}
+		for _, o := range overs {
+			if o.OriginalStart != nil {
+				change.Originals[o.ID] = shiftBy(*o.OriginalStart, cur.StartsAt, before.StartsAt, loc)
+			}
+		}
+	}
+	if err := s.store.UpdateEvent(ctx, &restored, cur.Version, change); err != nil {
+		slog.Error("could not undo a failed edit", "event", before.ID, "error", err)
+	}
 }
 
 func optionalReminders(in *[]ReminderInput) (*[]int, error) {
@@ -1010,7 +1085,9 @@ func (s *Service) occurrenceFor(ctx context.Context, m *store.Event, occurrence 
 // updateOccurrence changes one occurrence of a series: it writes (or rewrites) the
 // exception that replaces it.
 func (s *Service) updateOccurrence(ctx context.Context, ed *editing, occurrence string, p EventPatch) (instance, error) {
-	if p.RRule.Set || p.TZID != nil || p.AllDay != nil {
+	// A screen sends the zone and the all-day flag with every edit; restating the
+	// series' own is not a change.
+	if p.RRule.Set || (p.TZID != nil && *p.TZID != ed.e.TZID) || (p.AllDay != nil && *p.AllDay != ed.e.AllDay) {
 		return instance{}, invalid("the repeat rule, time zone and all-day setting belong to the whole series")
 	}
 	orig, override, sp, err := s.occurrenceFor(ctx, ed.e, occurrence)
@@ -1103,6 +1180,9 @@ func (s *Service) updateSeries(ctx context.Context, ed *editing, scope, occurren
 			n.EndsAt = fromWall(wall(n.StartsAt, loc).Add(wall(newEnd, loc).Sub(wall(newStart, loc))), loc)
 		}
 		if !p.RRule.Set {
+			if anchorMoves(n.RRule, wall(cur.start, loc), wall(newStart, loc)) {
+				return instance{}, 0, invalid(ordinalMoveRefusal)
+			}
 			if d := wall(newStart, loc).Weekday() - wall(cur.start, loc).Weekday(); d != 0 {
 				n.RRule = shiftWeekdays(n.RRule, int(d))
 			}
@@ -1195,6 +1275,9 @@ func (s *Service) splitSeries(ctx context.Context, ed *editing, orig time.Time, 
 	default:
 		if remaining > 0 {
 			body = withCount(body, remaining)
+		}
+		if anchorMoves(body, wall(cur.start, loc), wall(pos.start, loc)) {
+			return instance{}, 0, invalid(ordinalMoveRefusal)
 		}
 		if d := wall(pos.start, loc).Weekday() - wall(cur.start, loc).Weekday(); d != 0 {
 			body = shiftWeekdays(body, int(d))

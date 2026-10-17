@@ -261,3 +261,45 @@ func shiftWeekdays(body string, n int) string {
 	}
 	return strings.Join(parts, ";")
 }
+
+// ordinalMoveRefusal is what a person is told when they drag a series that
+// repeats on a day of the month somewhere else.
+const ordinalMoveRefusal = "Không dời được chuỗi lặp theo thứ trong tháng sang ngày khác. Hãy sửa quy tắc lặp."
+
+// anchorMoves reports whether dragging an occurrence from one wall-clock time to
+// another leaves behind a monthly or yearly rule that names its day: BYMONTHDAY,
+// BYMONTH, or an ordinal weekday such as 2WE (the second Wednesday). Such a rule
+// does not follow the drag the way a weekly BYDAY does, so the caller refuses.
+// Both times are wall clocks (see wall).
+func anchorMoves(body string, from, to time.Time) bool {
+	var monthly, ordinal, monthDay, month bool
+	for _, p := range ruleParts(body) {
+		key, v, _ := strings.Cut(p, "=")
+		switch key {
+		case "FREQ":
+			monthly = v == "MONTHLY" || v == "YEARLY"
+		case "BYMONTHDAY":
+			monthDay = true
+		case "BYMONTH":
+			month = true
+		case "BYDAY":
+			for _, d := range strings.Split(v, ",") {
+				ordinal = ordinal || len(d) > 2
+			}
+		}
+	}
+	if !monthly {
+		return false
+	}
+	lastDay := func(t time.Time) int { return time.Date(t.Year(), t.Month()+1, 0, 0, 0, 0, 0, time.UTC).Day() }
+	switch {
+	case monthDay && from.Day() != to.Day():
+		return true
+	case month && from.Month() != to.Month():
+		return true
+	case ordinal && (from.Weekday() != to.Weekday() || (from.Day()-1)/7 != (to.Day()-1)/7 ||
+		(lastDay(from)-from.Day())/7 != (lastDay(to)-to.Day())/7):
+		return true
+	}
+	return false
+}

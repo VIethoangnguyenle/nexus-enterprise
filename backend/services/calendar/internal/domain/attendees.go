@@ -501,7 +501,7 @@ func (s *Service) Rsvp(ctx context.Context, wsID, id string, in RsvpInput) (*Eve
 	if err != nil {
 		return nil, err
 	}
-	if !canRead(level) && !s.isGuest(ctx, who.NGACNodeID, e) {
+	if !canRead(level) && !s.readsEventOA(ctx, who.NGACNodeID, e) {
 		return nil, denied("no read access")
 	}
 

@@ -18,6 +18,7 @@ import (
 // eventWorld is a calendar event with a video call, a guest who reads it, a second
 // guest, and a person who has no grant on it.
 type eventWorld struct {
+	calOA    string
 	f        *fixture
 	media    *fakeMedia
 	eventID  string
@@ -35,10 +36,12 @@ func newEventWorld(t *testing.T) *eventWorld {
 	f := newFixture(t)
 	ctx := context.Background()
 	w := &eventWorld{f: f, media: newFakeMedia()}
+
 	f.svc.SetCallMedia(w.media)
 
 	n := time.Now().UnixNano()
 	calOA, calID := fmt.Sprintf("test-cal-oa-%d", n), fmt.Sprintf("test-cal-%d", n)
+	w.calOA = calOA
 	w.oaID, w.eventID = fmt.Sprintf("test-ev-oa-%d", n), fmt.Sprintf("test-ev-%d", n)
 	for id, name := range map[string]string{calOA: ngac.CalendarOAName(ngac.CalendarID(calID)), w.oaID: ngac.CalendarEventOAName(ngac.CalendarEventID(w.eventID))} {
 		_, err := f.pool.Exec(ctx, `INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $2, 'OA')`, id, name)
@@ -67,6 +70,28 @@ func newEventWorld(t *testing.T) *eventWorld {
 	return w
 }
 
+// tenantCtx is a request made in the event's workspace.
+func (w *eventWorld) tenantCtx() context.Context {
+	return grpcauth.WithCaller(context.Background(), grpcauth.Caller{TenantID: w.f.wsID})
+}
+
+// attend puts a person on the event's guest list.
+func (w *eventWorld) attend(t *testing.T, node string) {
+	t.Helper()
+	_, err := w.f.pool.Exec(context.Background(),
+		`INSERT INTO calendar_attendees (event_id, user_node_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, w.eventID, node)
+	require.NoError(t, err)
+}
+
+// calendarReader gives a person read on the calendar's OA and, through the
+// assignment beneath it, on the event's own: a view share, a group member.
+func (w *eventWorld) calendarReader(node string) {
+	w.f.read.mu.Lock()
+	defer w.f.read.mu.Unlock()
+	w.f.read.allow[grant{node, w.calOA, ngac.OpRead}] = true
+	w.f.read.allow[grant{node, w.oaID, ngac.OpRead}] = true
+}
+
 func (w *eventWorld) readers(nodes ...string) {
 	w.f.read.mu.Lock()
 	defer w.f.read.mu.Unlock()
@@ -83,7 +108,7 @@ func (w *eventWorld) remove(node string) {
 }
 
 func (w *eventWorld) start(user, node string) (callID string, created bool, err error) {
-	join, created, err := w.f.svc.StartEventCall(context.Background(), domain.StartEventCallInput{EventID: w.eventID, UserID: user, UserNodeID: node})
+	join, created, err := w.f.svc.StartEventCall(w.tenantCtx(), domain.StartEventCallInput{EventID: w.eventID, UserID: user, UserNodeID: node})
 	if err != nil {
 		return "", false, err
 	}
@@ -92,7 +117,7 @@ func (w *eventWorld) start(user, node string) (callID string, created bool, err 
 
 func TestEventCall_AGuestStartsItAndOthersJoinTheSameOne(t *testing.T) {
 	w := newEventWorld(t)
-	ctx := context.Background()
+	ctx := w.tenantCtx()
 	join, created, err := w.f.svc.StartEventCall(ctx, domain.StartEventCallInput{EventID: w.eventID, UserID: w.guest, UserNodeID: w.guestN})
 	require.NoError(t, err)
 	assert.True(t, created)
@@ -125,7 +150,7 @@ func TestEventCall_AGuestStartsItAndOthersJoinTheSameOne(t *testing.T) {
 
 func TestEventCall_Deny(t *testing.T) {
 	w := newEventWorld(t)
-	ctx := context.Background()
+	ctx := w.tenantCtx()
 	callID, _, err := w.start(w.guest, w.guestN)
 	require.NoError(t, err)
 	before := len(w.media.tokens)
@@ -169,7 +194,7 @@ func TestEventCall_Deny(t *testing.T) {
 
 func TestEventCall_AnEventWithNoNodeOfItsOwnReadsItsCalendar(t *testing.T) {
 	w := newEventWorld(t)
-	ctx := context.Background()
+	ctx := w.tenantCtx()
 	// The event keeps no OA (no guests): the owner of its calendar reads through the calendar's.
 	var calOA string
 	require.NoError(t, w.f.pool.QueryRow(ctx,
@@ -189,7 +214,7 @@ func TestEventCall_AnEventWithNoNodeOfItsOwnReadsItsCalendar(t *testing.T) {
 
 func TestEventCall_ASeriesCallBelongsToTheSeries(t *testing.T) {
 	w := newEventWorld(t)
-	ctx := context.Background()
+	ctx := w.tenantCtx()
 	exception := w.eventID + "-x"
 	_, err := w.f.pool.Exec(ctx,
 		`INSERT INTO calendar_events (id, workspace_id, calendar_id, organizer_node_id, title, starts_at, ends_at, recurring_event_id, original_start)
@@ -237,4 +262,67 @@ func TestEventCall_APersonWhoLostTheEventIsPutOutOfTheRoom(t *testing.T) {
 	for _, p := range got.Participants {
 		assert.NotEqual(t, w.guest2, p.UserId)
 	}
+}
+
+func TestEventCall_APrivateEventIsForItsAttendeesOnly(t *testing.T) {
+	w := newEventWorld(t)
+	ctx := w.tenantCtx()
+	_, err := w.f.pool.Exec(ctx, `UPDATE calendar_events SET visibility = 'private' WHERE id = $1`, w.eventID)
+	require.NoError(t, err)
+	w.attend(t, w.guestN)
+	// The event's OA sits under its calendar's, so a reader of the calendar reads
+	// it too; guest2 holds read on the OA but is not on the guest list.
+	w.calendarReader(w.strangeN)
+
+	// Allow: a guest who is on the list starts the call.
+	callID, created, err := w.start(w.guest, w.guestN)
+	require.NoError(t, err)
+	assert.True(t, created)
+	before := len(w.media.tokens)
+
+	// Deny: neither a reader of the calendar nor someone without a row starts,
+	// joins, gets a ticket for or sees it.
+	for _, p := range []struct{ user, node string }{{w.stranger, w.strangeN}, {w.guest2, w.guest2N}} {
+		_, _, err = w.start(p.user, p.node)
+		assert.ErrorIs(t, err, domain.ErrAccessDenied, p.node)
+		_, err = w.f.svc.CallToken(ctx, callID, p.user, p.node)
+		assert.ErrorIs(t, err, domain.ErrAccessDenied, p.node)
+		_, err = w.f.svc.GetCall(ctx, callID, p.node)
+		assert.ErrorIs(t, err, domain.ErrAccessDenied, p.node)
+	}
+	assert.Len(t, w.media.tokens, before, "no ticket was signed")
+
+	// An attendee row alone is not enough: the access must still be there.
+	w.attend(t, w.guest2N)
+	w.remove(w.guest2N)
+	_, err = w.f.svc.CallToken(ctx, callID, w.guest2, w.guest2N)
+	assert.ErrorIs(t, err, domain.ErrAccessDenied)
+
+	// Allow: the attendee gets a ticket; an event that is not private is open to
+	// whoever reads it, a reader of the calendar included.
+	_, err = w.f.svc.CallToken(ctx, callID, w.guest, w.guestN)
+	require.NoError(t, err)
+	_, err = w.f.pool.Exec(ctx, `UPDATE calendar_events SET visibility = 'default' WHERE id = $1`, w.eventID)
+	require.NoError(t, err)
+	_, err = w.f.svc.CallToken(ctx, callID, w.stranger, w.strangeN)
+	require.NoError(t, err)
+}
+
+func TestEventCall_OnlyTheEventsOwnWorkspaceMayJoin(t *testing.T) {
+	w := newEventWorld(t)
+	callID, _, err := w.start(w.guest, w.guestN)
+	require.NoError(t, err)
+	before := len(w.media.tokens)
+
+	elsewhere := grpcauth.WithCaller(context.Background(), grpcauth.Caller{TenantID: w.f.wsID + "-elsewhere"})
+	nowhere := context.Background()
+	for name, ctx := range map[string]context.Context{"another workspace": elsewhere, "no workspace": nowhere} {
+		_, _, err = w.f.svc.StartEventCall(ctx, domain.StartEventCallInput{EventID: w.eventID, UserID: w.guest, UserNodeID: w.guestN})
+		assert.ErrorIs(t, err, domain.ErrNotFound, name)
+		_, err = w.f.svc.CallToken(ctx, callID, w.guest, w.guestN)
+		assert.ErrorIs(t, err, domain.ErrNotFound, name)
+		_, err = w.f.svc.GetCall(ctx, callID, w.guestN)
+		assert.ErrorIs(t, err, domain.ErrNotFound, name)
+	}
+	assert.Len(t, w.media.tokens, before, "no ticket was signed")
 }

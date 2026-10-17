@@ -293,6 +293,29 @@ func (s *Store) SaveShare(ctx context.Context, sh *Share) error {
 	return nil
 }
 
+// WithShareLock runs fn while holding a lock on one share (calendar and grantee)
+// that every other WithShareLock of the same share waits for, in this process or
+// another. A share lives twice, as an association in the graph and as a record
+// here; changing both under the lock keeps two concurrent changes from leaving
+// the graph at one level and the record at the other.
+func (s *Store) WithShareLock(ctx context.Context, calendarID, granteeNodeID string, fn func(context.Context) error) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("lock share: %w", err)
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, calendarID+"|"+granteeNodeID); err != nil {
+		return fmt.Errorf("lock share: %w", err)
+	}
+	if err := fn(ctx); err != nil {
+		return err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("lock share: %w", err)
+	}
+	return nil
+}
+
 // DeleteShare removes a share record and reports whether there was one.
 func (s *Store) DeleteShare(ctx context.Context, calendarID, granteeNodeID string) (bool, error) {
 	tag, err := s.pool.Exec(ctx,

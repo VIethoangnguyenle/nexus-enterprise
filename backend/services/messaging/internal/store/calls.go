@@ -103,21 +103,27 @@ type EventCallRef struct {
 	WorkspaceID string
 	Title       string
 	HasCall     bool
+	// Private: only the event's guest list may be in its call.
+	Private bool
 	// OAID is the node a person must read to be in the call: the event's own,
 	// else the one of the calendar it is on.
 	OAID string
+	// Attending: the person asking is on the event's guest list.
+	Attending bool
 }
 
-// EventCallRef reads the event a call belongs to, nil when there is no such
-// event. An exception of a repeating event stands for its series.
-func (s *Store) EventCallRef(ctx context.Context, eventID string) (*EventCallRef, error) {
+// EventCallRef reads the event a call belongs to as userNodeID stands to it, nil
+// when there is no such event. An exception of a repeating event stands for its
+// series.
+func (s *Store) EventCallRef(ctx context.Context, eventID, userNodeID string) (*EventCallRef, error) {
 	var r EventCallRef
 	err := s.db.QueryRow(ctx,
-		`SELECT m.id, m.workspace_id, m.title, m.has_call, COALESCE(m.ngac_oa_id, c.ngac_oa_id, '')
+		`SELECT m.id, m.workspace_id, m.title, m.has_call, m.visibility = 'private', COALESCE(m.ngac_oa_id, c.ngac_oa_id, ''),
+		        EXISTS (SELECT 1 FROM calendar_attendees a WHERE a.event_id = m.id AND a.user_node_id = $2)
 		 FROM calendar_events e
 		 JOIN calendar_events m ON m.id = COALESCE(e.recurring_event_id, e.id)
 		 JOIN calendars c ON c.id = m.calendar_id
-		 WHERE e.id = $1`, eventID).Scan(&r.ID, &r.WorkspaceID, &r.Title, &r.HasCall, &r.OAID)
+		 WHERE e.id = $1`, eventID, userNodeID).Scan(&r.ID, &r.WorkspaceID, &r.Title, &r.HasCall, &r.Private, &r.OAID, &r.Attending)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}

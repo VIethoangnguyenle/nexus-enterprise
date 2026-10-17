@@ -90,7 +90,9 @@ func main() {
 		policypb.NewPolicyWriteServiceClient(policyConn),
 		frames,
 	)
-	calendars.SetNotices(notices)
+	if notices != nil {
+		calendars.SetNotices(notices)
+	}
 	e := httputil.NewEcho("calendar", echomw.Logger())
 	rest.NewHandler(calendars).RegisterRoutes(e, jwtSecret)
 

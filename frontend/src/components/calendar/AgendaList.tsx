@@ -66,7 +66,7 @@ export function AgendaList({
                 {`Tháng ${format(day, 'M')} năm ${format(day, 'yyyy')}`}
               </Heading>
             )}
-            <section aria-label={`Ngày ${format(day, 'd')} tháng ${format(day, 'M')}`} className="grid grid-cols-[7.5rem_1fr] gap-3 py-3 border-t border-line">
+            <section aria-label={`Ngày ${format(day, 'd')} tháng ${format(day, 'M')}`} className="grid grid-cols-1 sm:grid-cols-[7.5rem_1fr] gap-1.5 sm:gap-3 py-3 border-t border-line">
               <div className="flex items-baseline gap-2.5">
                 <span className={`w-8 font-display text-xl font-semibold tnum ${today ? 'text-accent' : 'text-ink'}`}>{format(day, 'd')}</span>
                 <span className="text-xs font-semibold tracking-wide text-ink-muted">{formatDayShort(day)}</span>
@@ -85,15 +85,24 @@ export function AgendaList({
                           aria-haspopup={r.o.busyOnly ? undefined : 'dialog'}
                           onClick={(e) => !r.o.busyOnly && onOpen(r.o, e.currentTarget)}
                           style={{ ...colorStyle(colorOf(r.o)), ...(rt ? personStyle(rt.author ?? '') : {}) }}
-                          className={`w-full grid grid-cols-[0.875rem_8rem_1fr_auto] items-center gap-2.5 min-h-9 px-2 py-1 rounded-lg
+                          className={`w-full grid grid-cols-[0.875rem_minmax(0,1fr)_auto] sm:grid-cols-[0.875rem_8rem_1fr_auto] items-center gap-2.5
+                            min-h-9 max-sm:min-h-14 px-2 max-sm:px-3 py-1 max-sm:py-2 rounded-lg max-sm:border max-sm:border-line
                             hover:bg-hover ${selectedKey === r.key ? 'bg-hover' : ''} ${rt ? 'rt-halo' : ''}`}
                         >
                           <span aria-hidden="true" className="size-2.5 rounded-full bg-(--c)" />
-                          <span className="text-sm text-ink-muted tnum">
-                            {r.o.allDay ? 'Cả ngày' : `${formatClock(r.start)} – ${formatClock(r.end)}`}
-                          </span>
-                          <span className={`truncate text-sm font-semibold ${tone === 'declined' ? 'line-through text-ink-muted font-medium' : 'text-ink'}`}>
-                            {r.o.title}
+                          {/* Phone: title on its own line, time and place under it. From `sm` up the two
+                              are separate columns of the row. */}
+                          <span className="min-w-0 grid sm:contents">
+                            <span className="text-sm text-ink-muted tnum max-sm:order-2" data-agenda-when>
+                              {r.o.allDay ? 'Cả ngày' : `${formatClock(r.start)} – ${formatClock(r.end)}`}
+                              {r.o.location && !r.o.busyOnly && <span className="sm:hidden">{` · ${r.o.location}`}</span>}
+                            </span>
+                            <span
+                              data-agenda-title
+                              className={`truncate text-sm max-sm:text-16 font-semibold max-sm:order-1 ${tone === 'declined' ? 'line-through text-ink-muted font-medium' : 'text-ink'}`}
+                            >
+                              {r.o.title}
+                            </span>
                           </span>
                           <span className="flex items-center gap-2 text-xs text-ink-muted">
                             {r.o.hasCall && <Video size={14} strokeWidth={1.75} aria-hidden="true" />}

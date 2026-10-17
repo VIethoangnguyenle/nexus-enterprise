@@ -74,7 +74,8 @@ func (s *Service) ListShares(ctx context.Context, wsID, calID string) ([]*ShareV
 // the operations come from package ngac, never from the request. The grant is an
 // association from the grantee's personal UA to the calendar's OA, and a second
 // grant to the same pair replaces the first in one step, so a change of level is
-// never a moment without the share.
+// never a moment without the share. The graph and the record of one share change
+// under one lock, the graph first.
 func (s *Service) PutShare(ctx context.Context, wsID, calID, granteeNode, level string) (*ShareView, error) {
 	who, ws, cal, err := s.authorizeSharing(ctx, wsID, calID)
 	if err != nil {
@@ -95,26 +96,34 @@ func (s *Service) PutShare(ctx context.Context, wsID, calID, granteeNode, level 
 		return nil, err
 	}
 
-	previous, err := s.store.ShareOf(ctx, cal.ID, granteeNode)
-	if err != nil && !errors.Is(err, store.ErrNotFound) {
-		return nil, internal("load share", err)
-	}
-	ua, err := provision.EnsurePersonalUA(ctx, s.policyRead, s.policyWrite, granteeNode)
+	// The graph is written first, then the record, both under the share's lock: two
+	// requests for the same share cannot interleave their halves.
+	err = s.store.WithShareLock(ctx, cal.ID, granteeNode, func(ctx context.Context) error {
+		previous, err := s.store.ShareOf(ctx, cal.ID, granteeNode)
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
+			return internal("load share", err)
+		}
+		ua, err := provision.EnsurePersonalUA(ctx, s.policyRead, s.policyWrite, granteeNode)
+		if err != nil {
+			return internal("find the grantee's attribute", err)
+		}
+		if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ua, OaId: cal.NgacOAID, Operations: ops}); err != nil {
+			return internal("grant the share", err)
+		}
+		rec := &store.Share{CalendarID: cal.ID, GranteeNodeID: granteeNode, Level: level, GrantedBy: who.NGACNodeID}
+		if err := s.store.SaveShare(ctx, rec); err != nil {
+			s.restoreGrant(ctx, ua, cal, previous)
+			return internal("record the share", err)
+		}
+		// The grantee finds the calendar on their list; an existing choice of colour
+		// or visibility is kept.
+		if err := s.store.SaveSubscription(ctx, granteeNode, cal.ID, nil, nil); err != nil {
+			return internal("subscribe the grantee", err)
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, internal("find the grantee's attribute", err)
-	}
-	if _, err := s.policyWrite.CreateAssociation(ctx, &policypb.CreateAssociationRequest{UaId: ua, OaId: cal.NgacOAID, Operations: ops}); err != nil {
-		return nil, internal("grant the share", err)
-	}
-	rec := &store.Share{CalendarID: cal.ID, GranteeNodeID: granteeNode, Level: level, GrantedBy: who.NGACNodeID}
-	if err := s.store.SaveShare(ctx, rec); err != nil {
-		s.restoreGrant(ctx, ua, cal, previous)
-		return nil, internal("record the share", err)
-	}
-	// The grantee finds the calendar on their list; an existing choice of colour
-	// or visibility is kept.
-	if err := s.store.SaveSubscription(ctx, granteeNode, cal.ID, nil, nil); err != nil {
-		return nil, internal("subscribe the grantee", err)
+		return nil, err
 	}
 
 	e := realtime.For(ctx, realtime.DomainCalendar, realtime.KindShareCreated, ws.ID, cal.ID)
@@ -155,17 +164,23 @@ func (s *Service) DeleteShare(ctx context.Context, wsID, calID, granteeNode stri
 	if granteeNode == "" || granteeNode == cal.OwnerNodeID {
 		return invalid("the owner's access is not a share")
 	}
-	ua, err := provision.FindPersonalUA(ctx, s.policyRead, s.policyWrite, granteeNode)
-	if err != nil {
-		return internal("find the grantee's attribute", err)
-	}
-	if ua != "" {
-		if _, err := s.policyWrite.RemoveAssociation(ctx, &policypb.RemoveAssociationRequest{UaId: ua, OaId: cal.NgacOAID}); err != nil {
-			return internal("revoke the share", err)
+	err = s.store.WithShareLock(ctx, cal.ID, granteeNode, func(ctx context.Context) error {
+		ua, err := provision.FindPersonalUA(ctx, s.policyRead, s.policyWrite, granteeNode)
+		if err != nil {
+			return internal("find the grantee's attribute", err)
 		}
-	}
-	if _, err := s.store.DeleteShare(ctx, cal.ID, granteeNode); err != nil {
-		return internal("forget the share", err)
+		if ua != "" {
+			if _, err := s.policyWrite.RemoveAssociation(ctx, &policypb.RemoveAssociationRequest{UaId: ua, OaId: cal.NgacOAID}); err != nil {
+				return internal("revoke the share", err)
+			}
+		}
+		if _, err := s.store.DeleteShare(ctx, cal.ID, granteeNode); err != nil {
+			return internal("forget the share", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	e := realtime.For(ctx, realtime.DomainCalendar, realtime.KindShareRevoked, ws.ID, cal.ID)

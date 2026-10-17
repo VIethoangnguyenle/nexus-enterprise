@@ -505,7 +505,7 @@ services:
         condition: service_started
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.calendar.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && (PathPrefix(`/api/calendar/`) || PathRegexp(`/api/workspaces/[^/]+/calendar`))"
+      - "traefik.http.routers.calendar.rule=(Host(`zump-biz.vn`) || Host(`localhost`)) && PathRegexp(`/api/workspaces/[^/]+/calendar`)"
       - "traefik.http.routers.calendar.entrypoints=web"
       - "traefik.http.routers.calendar.priority=120"
       - "traefik.http.routers.calendar.middlewares=cors-all@docker"

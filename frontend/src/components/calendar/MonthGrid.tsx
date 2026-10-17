@@ -198,7 +198,7 @@ export function MonthGrid({
                             ${realtime?.has(i.key) ? 'rt-halo' : ''}`}
                         >
                           <span aria-hidden="true" className="size-2 rounded-full bg-(--c) shrink-0" />
-                          {!i.o.busyOnly && <span className="text-ink-muted tnum shrink-0">{formatClock(i.start)}</span>}
+                          {!i.o.busyOnly && <span className="text-ink-muted tnum shrink-0 max-sm:hidden">{formatClock(i.start)}</span>}
                           <span className="truncate font-semibold">{i.o.title}</span>
                         </Pressable>
                       ))}

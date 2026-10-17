@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -259,4 +260,80 @@ func TestACancelledOccurrenceIsNotReminded(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, n)
 	assert.Empty(t, ofType(rec, events.TypeReminder))
+}
+
+func TestAReminderWhoseNoticeCouldNotBePublishedIsRetried(t *testing.T) {
+	f := newFixture(t)
+	rec := f.noticing()
+	cal := f.calOf(t, "n-alice", store.KindPersonal)
+	in := withGuests(cal, "n-bob")
+	in.Reminders = remindIn(10)
+	f.create(t, "n-alice", in)
+	f.at(standup.Add(-10 * time.Minute))
+
+	rec.Err = errors.New("broker down")
+	n, err := f.svc.FireReminders(context.Background())
+	require.NoError(t, err)
+	assert.Zero(t, n, "nothing was delivered")
+	assert.Empty(t, ofType(rec, events.TypeReminder))
+	assert.Empty(t, f.st.claimed, "and no claim is left behind to hide it")
+
+	// The broker is back on the next pass, still within the grace.
+	rec.Err = nil
+	f.at(standup.Add(-9 * time.Minute))
+	n, err = f.svc.FireReminders(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 2, n)
+	assert.ElementsMatch(t, []string{"n-alice", "n-bob"}, remindedNodes(ofType(rec, events.TypeReminder)))
+	n, err = f.svc.FireReminders(context.Background())
+	require.NoError(t, err)
+	assert.Zero(t, n, "and once delivered, not again")
+}
+
+func TestWithoutABrokerNoReminderIsClaimed(t *testing.T) {
+	f := newFixture(t)
+	cal := f.calOf(t, "n-alice", store.KindPersonal)
+	in := newInput(cal)
+	in.Reminders = remindIn(10)
+	f.create(t, "n-alice", in)
+	f.at(standup.Add(-10 * time.Minute))
+
+	n, err := f.svc.FireReminders(context.Background())
+	require.NoError(t, err)
+	assert.Zero(t, n)
+	assert.Empty(t, f.st.claimed, "a reminder nobody can send stays due")
+
+	rec := f.noticing()
+	n, err = f.svc.FireReminders(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+	assert.Len(t, ofType(rec, events.TypeReminder), 1)
+}
+
+func TestAPassLoadsOnlyEventsNearEnoughToBeDue(t *testing.T) {
+	f := newFixture(t)
+	rec := f.noticing()
+	cal := f.calOf(t, "n-alice", store.KindPersonal)
+	for i := 0; i < 30; i++ {
+		far := newInput(cal)
+		far.Start, far.End = "2026-12-15T09:00:00+07:00", "2026-12-15T10:00:00+07:00"
+		far.Reminders = remindIn(10)
+		f.create(t, "n-alice", far)
+	}
+	long := newInput(cal)
+	long.Title, long.Start, long.End = "Offsite", "2026-11-16T09:00:00+07:00", "2026-11-16T10:00:00+07:00"
+	long.Reminders = remindIn(14 * 24 * 60)
+	f.create(t, "n-alice", long)
+
+	// Two weeks before the offsite, the long reminder is due and only it is loaded.
+	f.at(time.Date(2026, 11, 16, 2, 0, 0, 0, time.UTC).Add(-14 * 24 * time.Hour))
+	n, err := f.svc.FireReminders(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, 1, n)
+	assert.Equal(t, 1, f.st.loaded, "the 30 events weeks away are left in the database")
+	got := ofType(rec, events.TypeReminder)
+	require.Len(t, got, 1)
+	assert.Equal(t, "Offsite", got[0].Title)
+	require.NotNil(t, got[0].MinutesBefore)
+	assert.Equal(t, 14*24*60, *got[0].MinutesBefore)
 }

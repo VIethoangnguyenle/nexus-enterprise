@@ -180,7 +180,7 @@ func (s *Service) eventsOf(ctx context.Context, ws *store.Workspace, node string
 	case !isNotFound(err):
 		return nil, nil, internal("find calendar", err)
 	}
-	am, ao, err := s.store.RangeAttended(ctx, node, from, to)
+	am, ao, err := s.store.RangeAttended(ctx, ws.ID, node, from, to)
 	if err != nil {
 		return nil, nil, internal("list invitations", err)
 	}

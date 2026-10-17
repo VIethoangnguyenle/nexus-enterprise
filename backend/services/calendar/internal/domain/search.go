@@ -54,7 +54,7 @@ func (s *Service) SearchEvents(ctx context.Context, wsID, q string) ([]*Occurren
 			readable = append(readable, c.ID)
 		}
 	}
-	rows, err := s.store.SearchEvents(ctx, readable, who.NGACNodeID, term, searchCandidates)
+	rows, err := s.store.SearchEvents(ctx, ws.ID, readable, who.NGACNodeID, term, searchCandidates)
 	if err != nil {
 		return nil, internal("search events", err)
 	}

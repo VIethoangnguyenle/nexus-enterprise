@@ -29,7 +29,10 @@ type memStore struct {
 	// userReminders are a person's own reminders of an event, by event and person.
 	userReminders map[string]map[string][]int
 	// claimed holds the reminders already delivered.
-	claimed map[string]bool
+	claimed    map[string]bool
+	shareLocks map[[2]string]*sync.Mutex
+	// loaded counts the events ReminderEvents handed out.
+	loaded int
 	// answers are the answers to single occurrences; settings the saved settings.
 	answers  map[store.OccKey]map[string]*store.Attendee
 	settings map[string]store.Settings
@@ -233,6 +236,23 @@ func (m *memStore) SaveShare(_ context.Context, sh *store.Share) error {
 	return nil
 }
 
+// WithShareLock serializes the callers of one share, as the advisory lock does.
+func (m *memStore) WithShareLock(ctx context.Context, cal, grantee string, fn func(context.Context) error) error {
+	m.mu.Lock()
+	if m.shareLocks == nil {
+		m.shareLocks = map[[2]string]*sync.Mutex{}
+	}
+	l := m.shareLocks[[2]string{cal, grantee}]
+	if l == nil {
+		l = &sync.Mutex{}
+		m.shareLocks[[2]string{cal, grantee}] = l
+	}
+	m.mu.Unlock()
+	l.Lock()
+	defer l.Unlock()
+	return fn(ctx)
+}
+
 func (m *memStore) DeleteShare(_ context.Context, cal, grantee string) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -310,7 +330,7 @@ func (m *memStore) RangeEvents(_ context.Context, cals []string, from, to time.T
 }
 
 // RangeAttended is RangeEvents over the events a person attends.
-func (m *memStore) RangeAttended(_ context.Context, node string, from, to time.Time) (masters, overrides []*store.Event, err error) {
+func (m *memStore) RangeAttended(_ context.Context, workspaceID, node string, from, to time.Time) (masters, overrides []*store.Event, err error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	attends := func(id string) bool {
@@ -323,7 +343,7 @@ func (m *memStore) RangeAttended(_ context.Context, node string, from, to time.T
 	}
 	known := map[string]bool{}
 	for _, e := range m.events {
-		if e.RecurringEventID != "" || !attends(e.ID) || !e.StartsAt.Before(to) {
+		if e.RecurringEventID != "" || e.WorkspaceID != workspaceID || !attends(e.ID) || !e.StartsAt.Before(to) {
 			continue
 		}
 		if (e.RRule == "" && !e.EndsAt.Before(from)) || (e.RRule != "" && (e.RecurrenceUntil == nil || !e.RecurrenceUntil.Before(from))) {
@@ -332,7 +352,7 @@ func (m *memStore) RangeAttended(_ context.Context, node string, from, to time.T
 		}
 	}
 	for _, e := range m.events {
-		if e.RecurringEventID != "" && attends(e.RecurringEventID) && (known[e.RecurringEventID] || (e.StartsAt.Before(to) && !e.EndsAt.Before(from))) {
+		if e.RecurringEventID != "" && e.WorkspaceID == workspaceID && attends(e.RecurringEventID) && (known[e.RecurringEventID] || (e.StartsAt.Before(to) && !e.EndsAt.Before(from))) {
 			overrides = append(overrides, cloneEvent(e))
 			if !known[e.RecurringEventID] {
 				known[e.RecurringEventID] = true
@@ -343,13 +363,13 @@ func (m *memStore) RangeAttended(_ context.Context, node string, from, to time.T
 	return masters, overrides, nil
 }
 
-func (m *memStore) SearchEvents(_ context.Context, cals []string, node, term string, limit int) ([]*store.Event, error) {
+func (m *memStore) SearchEvents(_ context.Context, workspaceID string, cals []string, node, term string, limit int) ([]*store.Event, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	needle := strings.ToLower(term)
 	var out []*store.Event
 	for _, e := range m.events {
-		if e.RecurringEventID != "" {
+		if e.RecurringEventID != "" || e.WorkspaceID != workspaceID {
 			continue
 		}
 		listed := false
@@ -693,23 +713,34 @@ func (m *memStore) Reminders(_ context.Context, id string) ([]int, error) {
 	return out, nil
 }
 
-// ReminderEvents is the events that carry a reminder, wherever they are kept.
-func (m *memStore) ReminderEvents(ctx context.Context, from, to time.Time) (masters, overrides []*store.Event, err error) {
+// ReminderEvents is the events that carry a reminder and start no later than
+// their longest reminder before now, wherever they are kept.
+func (m *memStore) ReminderEvents(ctx context.Context, from, now time.Time) (masters, overrides []*store.Event, err error) {
 	m.mu.Lock()
 	var cals []string
 	for id := range m.calendars {
 		cals = append(cals, id)
 	}
 	m.mu.Unlock()
-	all, overs, err := m.RangeEvents(ctx, cals, from, to)
+	all, overs, err := m.RangeEvents(ctx, cals, from, now.Add(maxReminderMinutes*time.Minute))
 	if err != nil {
 		return nil, nil, err
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, e := range all {
-		if len(m.reminders[e.ID]) > 0 || len(m.userReminders[e.ID]) > 0 {
+		longest, any := 0, false
+		for _, v := range m.reminders[e.ID] {
+			longest, any = max(longest, v), true
+		}
+		for _, list := range m.userReminders[e.ID] {
+			for _, v := range list {
+				longest, any = max(longest, v), true
+			}
+		}
+		if any && !e.StartsAt.After(now.Add(time.Duration(longest)*time.Minute)) {
 			masters = append(masters, e)
+			m.loaded++
 		}
 	}
 	return masters, overs, nil
@@ -746,6 +777,13 @@ func (m *memStore) ClaimReminder(_ context.Context, id, node string, occurrence 
 	}
 	m.claimed[key] = true
 	return true, nil
+}
+
+func (m *memStore) UnclaimReminder(_ context.Context, id, node string, occurrence time.Time, minutes int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	delete(m.claimed, fmt.Sprintf("%s|%s|%d|%d", id, node, occurrence.UnixNano(), minutes))
+	return nil
 }
 
 func (m *memStore) DefaultReminder(_ context.Context, _, node string) (int, error) {

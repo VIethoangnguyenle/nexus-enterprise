@@ -49,12 +49,17 @@ type reminderRound struct {
 // have not declined it, and the owner of a personal calendar (the host of any
 // other event). A reminder is sent once per person, occurrence and minutes, and
 // claimed in the database first, so any number of services running this at once
-// send it once. It returns how many it sent.
+// send it once. A reminder is published to the broker before the pass moves on,
+// and its claim is taken back when that fails, so a broker that is down delays
+// reminders (while their grace lasts) and does not lose them. It returns how
+// many it sent.
 func (s *Service) FireReminders(ctx context.Context) (int, error) {
+	if s.notices == nil {
+		return 0, nil // nobody to send through: nothing is claimed
+	}
 	now := s.now()
-	// An occurrence that starts after the longest reminder an event may carry
-	// cannot be due yet.
-	masters, overrides, err := s.store.ReminderEvents(ctx, now.Add(-reminderGrace), now.Add(maxReminderMinutes*time.Minute))
+	from := now.Add(-reminderGrace)
+	masters, overrides, err := s.store.ReminderEvents(ctx, from, now)
 	if err != nil {
 		return 0, internal("find events with reminders", err)
 	}
@@ -69,9 +74,23 @@ func (s *Service) FireReminders(ctx context.Context) (int, error) {
 	if err != nil {
 		return 0, internal("load reminders", err)
 	}
-	insts, err := expandEvents(masters, overrides, now.Add(-reminderGrace), now.Add(maxReminderMinutes*time.Minute))
-	if err != nil {
-		return 0, internal("expand events", err)
+	byMaster := map[string][]*store.Event{}
+	for _, o := range overrides {
+		byMaster[o.RecurringEventID] = append(byMaster[o.RecurringEventID], o)
+	}
+	var insts []instance
+	for _, m := range masters {
+		// An occurrence that starts after the longest reminder this event carries
+		// cannot be due yet.
+		longest := 0
+		for _, sp := range specs[m.ID] {
+			longest = max(longest, sp.Minutes)
+		}
+		more, err := expandEvents([]*store.Event{m}, byMaster[m.ID], from, now.Add(time.Duration(longest+1)*time.Minute)) // +1: the window is half open
+		if err != nil {
+			return 0, internal("expand events", err)
+		}
+		insts = append(insts, more...)
 	}
 	round := &reminderRound{workspaces: map[string]*store.Workspace{}, calendars: map[string]*store.Calendar{}}
 	sent := 0
@@ -151,7 +170,18 @@ func (s *Service) remindOccurrence(ctx context.Context, round *reminderRound, in
 				continue
 			}
 			mins := minutes
-			s.notify(ctx, events.TypeReminder, ws, cal, &shown, []string{node}, noticeExtras{occurrence: in.Original, minutes: &mins, toActor: true})
+			n, ok := s.buildNotice(ctx, events.TypeReminder, ws, cal, &shown, []string{node}, noticeExtras{occurrence: in.Original, minutes: &mins, toActor: true})
+			if ok {
+				if err := s.notices.PublishSync(ctx, n); err != nil {
+					if uerr := s.store.UnclaimReminder(ctx, m.ID, node, in.Original, minutes); uerr != nil {
+						slog.Error("could not take back a reminder claim after a failed publish", "event", m.ID, "error", uerr)
+					}
+					if firstErr == nil {
+						firstErr = internal("publish reminder", err)
+					}
+					continue
+				}
+			}
 			sent++
 		}
 	}

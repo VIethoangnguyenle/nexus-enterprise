@@ -137,25 +137,48 @@ func (s *Store) RangeEvents(ctx context.Context, calendarIDs []string, from, to 
 	if len(calendarIDs) == 0 {
 		return nil, nil, nil
 	}
-	return s.rangeEvents(ctx, `e.calendar_id = ANY($1)`, `e.calendar_id = ANY($1)`, calendarIDs, from, to)
+	return s.rangeEvents(ctx, rangeSpec{
+		masterWhere: `e.calendar_id = ANY($1)`, movedWhere: `e.calendar_id = ANY($1)`, scope: calendarIDs, from: from, to: to,
+	})
 }
 
-// RangeAttended is RangeEvents for the events a person is an attendee of, wherever
-// they are kept.
-func (s *Store) RangeAttended(ctx context.Context, userNodeID string, from, to time.Time) (masters, overrides []*Event, err error) {
+// RangeAttended is RangeEvents for the events of a workspace a person is an
+// attendee of, wherever in it they are kept.
+func (s *Store) RangeAttended(ctx context.Context, workspaceID, userNodeID string, from, to time.Time) (masters, overrides []*Event, err error) {
 	const attended = `(SELECT event_id FROM calendar_attendees WHERE user_node_id = $1)`
-	return s.rangeEvents(ctx, `e.id IN `+attended, `e.recurring_event_id IN `+attended, userNodeID, from, to)
+	return s.rangeEvents(ctx, rangeSpec{
+		masterWhere: `e.id IN ` + attended, movedWhere: `e.recurring_event_id IN ` + attended,
+		scope: userNodeID, workspaceID: workspaceID, from: from, to: to,
+	})
 }
 
-// rangeEvents runs the range query for a way of choosing events: masterWhere picks
-// single events and series, movedWhere the exceptions that may have been moved
-// into the range from a series that is not itself in it. Both read $1 (scope).
-func (s *Store) rangeEvents(ctx context.Context, masterWhere, movedWhere string, scope any, from, to time.Time) (masters, overrides []*Event, err error) {
+// rangeSpec is a way of choosing events for rangeEvents. Every condition reads
+// $1 (scope), $2 (from) and $3 (to).
+type rangeSpec struct {
+	// masterWhere picks single events and series, movedWhere the exceptions that
+	// may have been moved into the range from a series that is not itself in it.
+	masterWhere, movedWhere string
+	scope                   any
+	workspaceID             string
+	from, to                time.Time
+	// masterBefore and movedBefore say how late a master or an exception may start
+	// and still matter; empty is before $3.
+	masterBefore, movedBefore string
+}
+
+// rangeEvents runs the range query for a way of choosing events.
+func (s *Store) rangeEvents(ctx context.Context, q rangeSpec) (masters, overrides []*Event, err error) {
+	if q.masterBefore == "" {
+		q.masterBefore = `e.starts_at < $3`
+	}
+	if q.movedBefore == "" {
+		q.movedBefore = `e.starts_at < $3`
+	}
 	rows, err := s.pool.Query(ctx,
-		eventSelect+` WHERE `+masterWhere+` AND e.recurring_event_id IS NULL AND e.starts_at < $3
+		eventSelect+` WHERE `+q.masterWhere+` AND ($4::text = '' OR e.workspace_id = $4::text) AND e.recurring_event_id IS NULL AND `+q.masterBefore+`
 		   AND ((e.rrule IS NULL AND e.ends_at >= $2)
 		     OR (e.rrule IS NOT NULL AND (e.recurrence_until IS NULL OR e.recurrence_until >= $2)))
-		 ORDER BY e.starts_at, e.id`, scope, from, to)
+		 ORDER BY e.starts_at, e.id`, q.scope, q.from, q.to, q.workspaceID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("range events: %w", err)
 	}
@@ -169,9 +192,9 @@ func (s *Store) rangeEvents(ctx context.Context, masterWhere, movedWhere string,
 		ids = append(ids, m.ID)
 	}
 	rows, err = s.pool.Query(ctx,
-		eventSelect+` WHERE e.recurring_event_id IS NOT NULL AND (e.recurring_event_id = ANY($4)
-		   OR (`+movedWhere+` AND e.starts_at < $3 AND e.ends_at >= $2))
-		 ORDER BY e.original_start, e.id`, scope, from, to, ids)
+		eventSelect+` WHERE e.recurring_event_id IS NOT NULL AND ($5::text = '' OR e.workspace_id = $5::text) AND (e.recurring_event_id = ANY($4)
+		   OR (`+q.movedWhere+` AND `+q.movedBefore+` AND e.ends_at >= $2))
+		 ORDER BY e.original_start, e.id`, q.scope, q.from, q.to, ids, q.workspaceID)
 	if err != nil {
 		return nil, nil, fmt.Errorf("range overrides: %w", err)
 	}

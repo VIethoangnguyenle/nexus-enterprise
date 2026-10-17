@@ -280,6 +280,7 @@ func TestAGuestReadsTheEventThroughItsOwnOA(t *testing.T) {
 	f.w.Assign("oa-ev", f.st.calendars[cal].NgacOAID)
 	f.st.events[d.EventID].NgacOAID = "oa-ev"
 	f.w.Allow("n-carol", "oa-ev", ngac.OpRead)
+	f.st.attendees[d.EventID] = append(f.st.attendees[d.EventID], &store.Attendee{UserNodeID: "n-carol", Response: ResponseNeedsAction})
 
 	got, err := f.svc.GetEvent(callerCtx("n-carol"), ws, d.EventID, "")
 	require.NoError(t, err)

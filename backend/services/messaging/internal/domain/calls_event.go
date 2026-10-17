@@ -3,8 +3,9 @@
 // An event's call belongs to the event, not to a conversation. Like everything of
 // an event it is authorized on the event's OA (its calendar's, for an event that
 // has no OA of its own): a guest, the owner of the calendar and anyone it is shared
-// with hold read there, and read is the right to be in the call. Nobody else is
-// handed a ticket. There is one open call per event; asking again joins it.
+// with hold read there, and read is the right to be in the call — except for a
+// private event, whose call is for its guest list alone. Nobody else is handed a
+// ticket, and nobody of another workspace. There is one open call per event; asking again joins it.
 package domain
 
 import (
@@ -17,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/grpcauth"
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/store"
 )
@@ -29,21 +31,29 @@ type StartEventCallInput struct {
 	UserNodeID string
 }
 
-// authorizeEvent loads the event a call belongs to and verifies the user holds
-// read on its OA, now. It is fail-closed: an event with no node to check, or a
-// policy error, is a refusal.
+// authorizeEvent loads the event a call belongs to and verifies the user may be
+// in its call, now. The event must be of the caller's own workspace. The user
+// holds read on the event's OA (its calendar's, for an event with none of its
+// own) and, when the event is private, is also on its guest list: the OA sits
+// under the calendar's, so read there is held by everyone who reads the calendar,
+// which a private event does not open to. It is fail-closed: an event with no
+// node to check, no workspace on the request, or a policy error is a refusal.
 func (s *Service) authorizeEvent(ctx context.Context, eventID, userNodeID string) (*store.EventCallRef, error) {
 	if eventID == "" {
 		return nil, ErrInvalidInput
 	}
-	ref, err := s.store.EventCallRef(ctx, eventID)
+	ref, err := s.store.EventCallRef(ctx, eventID, userNodeID)
 	if err != nil {
 		return nil, err
 	}
 	if ref == nil {
 		return nil, fmt.Errorf("%w: event not found", ErrNotFound)
 	}
-	if ref.OAID == "" {
+	if tenant := grpcauth.CallerFrom(ctx).TenantID; tenant == "" || tenant != ref.WorkspaceID {
+		// Another workspace's event is not there for this one.
+		return nil, fmt.Errorf("%w: event not found", ErrNotFound)
+	}
+	if ref.OAID == "" || (ref.Private && !ref.Attending) {
 		return nil, fmt.Errorf("%w: %s on event", ErrAccessDenied, ngac.OpRead)
 	}
 	if err := s.checkAccess(ctx, userNodeID, ref.OAID, ngac.OpRead); err != nil {

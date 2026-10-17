@@ -52,18 +52,25 @@ func (s *Service) notify(ctx context.Context, typ string, ws *store.Workspace, c
 	if s.notices == nil {
 		return
 	}
+	if n, ok := s.buildNotice(ctx, typ, ws, cal, e, nodes, x); ok {
+		s.notices.Publish(n)
+	}
+}
+
+// buildNotice makes the notice notify would send; false when there is none to send.
+func (s *Service) buildNotice(ctx context.Context, typ string, ws *store.Workspace, cal *store.Calendar, e *store.Event, nodes []string, x noticeExtras) (events.Notice, bool) {
 	if typ == events.TypeCreated {
 		x.announce = true
 	}
 	if x.announce && (cal.Kind != store.KindChannel || e == nil || e.Visibility == VisibilityPrivate) {
-		return
+		return events.Notice{}, false
 	}
 	var recipients []events.Recipient
 	if nodes = distinct(nodes...); len(nodes) > 0 {
 		people, err := s.store.People(ctx, ws.ID, nodes)
 		if err != nil {
 			slog.Warn("could not name the people to notify", "type", typ, "event", eventID(e), "error", err)
-			return
+			return events.Notice{}, false
 		}
 		for _, n := range nodes {
 			if p := people[n]; p != nil && p.UserID != "" && (x.toActor || n != x.actor.NGACNodeID) {
@@ -72,7 +79,7 @@ func (s *Service) notify(ctx context.Context, typ string, ws *store.Workspace, c
 		}
 	}
 	if len(recipients) == 0 && !x.announce {
-		return
+		return events.Notice{}, false
 	}
 	n := events.Notice{
 		Type: typ, TenantID: ws.ID, WorkspaceID: ws.ID, CalendarID: cal.ID, OAID: oaOf(cal, e),
@@ -95,7 +102,7 @@ func (s *Service) notify(ctx context.Context, typ string, ws *store.Workspace, c
 	if !x.start.IsZero() {
 		n.Start, n.End = x.start.UTC().Format(time.RFC3339), x.end.UTC().Format(time.RFC3339)
 	}
-	s.notices.Publish(n)
+	return n, true
 }
 
 func eventID(e *store.Event) string {

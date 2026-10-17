@@ -7,6 +7,7 @@ package events
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -83,7 +84,13 @@ type Notice struct {
 // Kafka-backed one; a nil *Producer discards everything.
 type Publisher interface {
 	Publish(Notice)
+	// PublishSync sends the notice and answers only once the broker has it, with
+	// the error when it does not: for a notice whose loss must not go unseen.
+	PublishSync(context.Context, Notice) error
 }
+
+// ErrNoBroker: there is no broker to publish to.
+var ErrNoBroker = errors.New("no broker to publish to")
 
 var _ Publisher = (*Producer)(nil)
 
@@ -92,6 +99,8 @@ type Producer struct {
 	client *kgo.Client
 	// send hands a serialized notice to the broker. Tests replace it.
 	send func(key string, data []byte)
+	// sendSync hands one to the broker and waits for it. Tests replace it.
+	sendSync func(ctx context.Context, key string, data []byte) error
 }
 
 // NewProducer connects to the brokers.
@@ -115,6 +124,7 @@ func NewProducer(brokers []string) (*Producer, error) {
 	slog.Info("kafka producer connected for calendar service")
 	p := &Producer{client: client}
 	p.send = p.produce
+	p.sendSync = p.produceSync
 	return p, nil
 }
 
@@ -147,6 +157,27 @@ func (p *Producer) Publish(n Notice) {
 	p.send(n.WorkspaceID, data)
 }
 
+// PublishSync is Publish that waits for the broker and reports its refusal. A nil
+// producer is ErrNoBroker.
+func (p *Producer) PublishSync(ctx context.Context, n Notice) error {
+	if p == nil || p.sendSync == nil {
+		return ErrNoBroker
+	}
+	n.Record = RecordNotice
+	if n.At == 0 {
+		n.At = time.Now().UnixMilli()
+	}
+	data, err := json.Marshal(n)
+	if err != nil {
+		return err
+	}
+	return p.sendSync(ctx, n.WorkspaceID, data)
+}
+
+func (p *Producer) produceSync(ctx context.Context, key string, data []byte) error {
+	return p.client.ProduceSync(ctx, &kgo.Record{Topic: Topic, Key: []byte(key), Value: data}).FirstErr()
+}
+
 func (p *Producer) produce(key string, data []byte) {
 	p.client.TryProduce(context.Background(), &kgo.Record{Topic: Topic, Key: []byte(key), Value: data},
 		func(_ *kgo.Record, err error) {
@@ -160,6 +191,19 @@ func (p *Producer) produce(key string, data []byte) {
 type Recorder struct {
 	mu      sync.Mutex
 	notices []Notice
+	// Err, when set, is what PublishSync refuses with (the notice is not kept).
+	Err error
+}
+
+// PublishSync records the notice unless Err is set.
+func (r *Recorder) PublishSync(_ context.Context, n Notice) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.Err != nil {
+		return r.Err
+	}
+	r.notices = append(r.notices, n)
+	return nil
 }
 
 // Publish records the notice.

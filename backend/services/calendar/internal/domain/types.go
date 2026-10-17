@@ -85,13 +85,14 @@ type Store interface {
 	ShareOf(ctx context.Context, calendarID, granteeNodeID string) (*store.Share, error)
 	SaveShare(ctx context.Context, sh *store.Share) error
 	DeleteShare(ctx context.Context, calendarID, granteeNodeID string) (bool, error)
+	WithShareLock(ctx context.Context, calendarID, granteeNodeID string, fn func(context.Context) error) error
 
 	EventByID(ctx context.Context, id string) (*store.Event, error)
 	OverrideOf(ctx context.Context, seriesID string, original time.Time) (*store.Event, error)
 	Overrides(ctx context.Context, seriesID string) ([]*store.Event, error)
 	RangeEvents(ctx context.Context, calendarIDs []string, from, to time.Time) (masters, overrides []*store.Event, err error)
-	RangeAttended(ctx context.Context, userNodeID string, from, to time.Time) (masters, overrides []*store.Event, err error)
-	SearchEvents(ctx context.Context, calendarIDs []string, userNodeID, term string, limit int) ([]*store.Event, error)
+	RangeAttended(ctx context.Context, workspaceID, userNodeID string, from, to time.Time) (masters, overrides []*store.Event, err error)
+	SearchEvents(ctx context.Context, workspaceID string, calendarIDs []string, userNodeID, term string, limit int) ([]*store.Event, error)
 	InsertEvent(ctx context.Context, e *store.Event, reminders []int) error
 	UpdateEvent(ctx context.Context, e *store.Event, version int, ch store.EventChange) error
 	CutSeries(ctx context.Context, series *store.Event, version int, cutFrom time.Time, tail *store.Event, tailReminders *[]int, keepAnswers bool) error
@@ -112,8 +113,9 @@ type Store interface {
 	MyResponses(ctx context.Context, userNodeID string, eventIDs []string) (map[string]string, error)
 	GuestCounts(ctx context.Context, eventIDs []string) (map[string]int, error)
 	Reminders(ctx context.Context, eventID string) ([]int, error)
-	ReminderEvents(ctx context.Context, from, to time.Time) (masters, overrides []*store.Event, err error)
+	ReminderEvents(ctx context.Context, from, now time.Time) (masters, overrides []*store.Event, err error)
 	ReminderSpecs(ctx context.Context, eventIDs []string) (map[string][]store.ReminderSpec, error)
 	ClaimReminder(ctx context.Context, eventID, userNodeID string, occurrence time.Time, minutes int) (bool, error)
+	UnclaimReminder(ctx context.Context, eventID, userNodeID string, occurrence time.Time, minutes int) error
 	DefaultReminder(ctx context.Context, workspaceID, userNodeID string) (int, error)
 }

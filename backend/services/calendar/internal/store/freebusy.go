@@ -70,13 +70,13 @@ func likePattern(term string) string {
 	return "%" + r.Replace(term) + "%"
 }
 
-// SearchEvents finds single events and series whose title, place, description or
-// guests' names contain the term, among those kept on the calendars or attended by
-// the person, newest first. It makes no access decision: the caller keeps only
-// what the person may read.
-func (s *Store) SearchEvents(ctx context.Context, calendarIDs []string, userNodeID, term string, limit int) ([]*Event, error) {
+// SearchEvents finds single events and series of a workspace whose title, place,
+// description or guests' names contain the term, among those kept on the calendars
+// or attended by the person, newest first. It makes no access decision: the caller
+// keeps only what the person may read.
+func (s *Store) SearchEvents(ctx context.Context, workspaceID string, calendarIDs []string, userNodeID, term string, limit int) ([]*Event, error) {
 	rows, err := s.pool.Query(ctx,
-		eventSelect+` WHERE e.recurring_event_id IS NULL
+		eventSelect+` WHERE e.recurring_event_id IS NULL AND e.workspace_id = $5
 		   AND (e.calendar_id = ANY($1)
 		        OR e.id IN (SELECT event_id FROM calendar_attendees WHERE user_node_id = $2))
 		   AND (e.title ILIKE $3 ESCAPE '\' OR e.location ILIKE $3 ESCAPE '\' OR e.description ILIKE $3 ESCAPE '\'
@@ -85,7 +85,7 @@ func (s *Store) SearchEvents(ctx context.Context, calendarIDs []string, userNode
 		                     JOIN users u ON u.id = tu.user_id
 		                    WHERE a.event_id = e.id
 		                      AND (u.display_name ILIKE $3 ESCAPE '\' OR u.username ILIKE $3 ESCAPE '\')))
-		 ORDER BY e.starts_at DESC, e.id LIMIT $4`, calendarIDs, userNodeID, likePattern(term), limit)
+		 ORDER BY e.starts_at DESC, e.id LIMIT $4`, calendarIDs, userNodeID, likePattern(term), limit, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("search events: %w", err)
 	}

@@ -127,7 +127,17 @@ refused (422).
   that occurrence on are dropped. From the first occurrence it is the same as **all**. The answer is the new event.
 - **all**: changes the series row. Exceptions edited on their own are kept (their number is answered as
   `preservedOverrides`). When `start`/`end` are sent they are the new position of the named occurrence and the whole
-  series shifts by the same wall-clock distance in its zone (a weekly `BYDAY` follows a change of weekday).
+  series shifts by the same wall-clock distance in its zone (a weekly `BYDAY` follows a change of weekday). A
+  monthly or yearly rule that names its day (`BYMONTHDAY`, `BYMONTH`, or an ordinal weekday such as `2WE`) does not
+  follow: moving such a series (all, or following) to another day of the month, month, or week of the month is
+  refused (422, "Không dời được chuỗi lặp theo thứ trong tháng sang ngày khác. Hãy sửa quy tắc lặp.") and the rule is
+  edited instead; moving it within the same day, to another time, is allowed.
+
+A change to one occurrence (**this**) MAY restate the series' `allDay` and `tzid` (screens send them with every edit);
+only a value that differs from the series' is refused (422). When changing the guests, the call or the invite flag
+fails after the event row was saved, the row, its reminders and (for a shifted series) its exceptions are written
+back, a split's new tail is removed, and the version moves on; answers to single occurrences of a shifted series and
+exceptions cut off by a split cannot be restored.
 
 An edit SHALL carry the `version` it started from. A series, a single event or an exception row each has its own
 version; the one an occurrence shows is its exception's when it has one, else the series'. A stale version answers
@@ -163,6 +173,13 @@ in full only by its organizer, its guests, the owner of a personal calendar and 
 calendar; a person who cannot read an event SHALL NOT change or delete it either. Reading one event (`GET
 /events/:id`) needs `read` on the calendar, or `read` on the event's own OA for a guest (403 otherwise).
 
+The event's OA sits beneath its calendar's, so everyone who reads the calendar also holds `read` on the event's OA.
+"Guest" therefore means both an attendee row *and* `read` on the event's OA; `read` on the OA alone makes nobody a
+guest. A private event is read by its guests, its organizer, the owner of a personal calendar and whoever holds
+`manage` — never by a reader of the calendar who is none of those, with or without guests or a call. A busy-only
+occurrence SHALL NOT carry the event's id: it carries an opaque key (stable per occurrence, `busy-…`) the screen uses
+to tell blocks apart, which no route answers to (404).
+
 #### Scenario: Free/busy only
 - **WHEN** a colleague with no share lists another person's calendar
 - **THEN** each occurrence is a "Bận" block and fetching one event is refused (403)
@@ -170,6 +187,14 @@ calendar; a person who cannot read an event SHALL NOT change or delete it either
 #### Scenario: Private event and a view share
 - **WHEN** a calendar is shared at `view` and holds a private event of its owner
 - **THEN** the grantee sees a "Bận" block, and reading the event is refused (403)
+
+#### Scenario: Private event with guests and a call
+- **WHEN** a private event has guests and a call, and a view-share reader who is not one of them reads it or asks for its call
+- **THEN** both are refused (403), the listing shows a "Bận" block with an opaque key, and a guest still reads and joins
+
+#### Scenario: Every query stays in its workspace
+- **WHEN** a person who is a guest of an event in workspace A lists, searches or asks free/busy in workspace B
+- **THEN** the answer is 200 without that event and without a busy block for it; in A the event is there
 
 ### Requirement: Guests are people of the workspace and see only their event
 Adding a guest SHALL require `write` on the calendar, or `invite` on the event's OA for a guest who was allowed to
@@ -259,12 +284,17 @@ An event MAY carry reminders (minutes before; a person's own reminders replace t
 the calendar service SHALL look for occurrences whose reminder falls due: now is at or past the occurrence's start
 minus the minutes, and not more than 10 minutes past it. For each such occurrence and each person it concerns it SHALL
 claim the reminder in `calendar_reminder_deliveries` (one row per event, person, occurrence and minutes; a second claim
-by any instance does nothing) and only then publish it to the Redpanda topic `calendar.events` (`event.reminder`). The
+by any instance does nothing) and then publish it to the Redpanda topic `calendar.events` (`event.reminder`) and wait
+for the broker's answer. A publish that fails gives the claim back, so the next pass retries it while the 10 minutes
+of grace last; with no broker nothing is claimed. Delivery is therefore at least once (a broker timeout may repeat a
+reminder), never silently lost. The
 people it concerns are the guests who have not declined that occurrence (an answer to the occurrence outranks the
 answer to the series), plus the owner of a personal calendar or the host of any other event unless they declined. The
 messaging service SHALL store one notification of type `calendar_reminder` for each, and send a web push
 (`docs/specs/notifications/spec.md`). A person who is not a guest, or lost access before it fell due, gets none. The
-service looks as far ahead as the longest reminder an event may carry (four weeks). Inviting someone SHALL notify them
+service loads, in the database, only the events that can be due: a single event whose start is within its own longest
+reminder of now (two weeks for a two-week reminder) and not over, and a repeating series that has begun and not
+finished, whose near occurrences are then expanded in memory. Inviting someone SHALL notify them
 as `calendar_invitation`, a guest's answer the host as `calendar_rsvp`, a move of time or place the guests as
 `calendar_updated`, a cancellation the guests as `calendar_cancelled` and sharing a calendar the grantee as
 `calendar_shared`.
@@ -303,7 +333,9 @@ client refetches under its own permission.
 ### Requirement: An event can carry a call, authorized by read on the event
 An event MAY have a video call (`docs/specs/chat-calls/spec.md`). The ticket SHALL be granted only after `read` on the
 event's OA (for a group-calendar event, on the group's content OA as for any call in that group), checked at the
-moment of asking. A person who is not a guest, not the owner and not shared with is refused (403).
+moment of asking. A person who is not a guest, not the owner and not shared with is refused (403). The call of a
+private event is for its guest list alone (an attendee row and `read` on the OA): a reader of the calendar is refused.
+The call is also refused to a caller whose workspace is not the event's.
 
 #### Scenario: A guest joins
 - **WHEN** a guest asks for the call ticket
@@ -372,6 +404,14 @@ deletable. Deleting a graph node SHALL go through the policy write service so th
 ### Requirement: The screens show people and titles, never identifiers
 Every guest, owner, sharer and organizer SHALL show as display name (with avatar), calendars as their name, and a
 person is picked from a list or search, never typed as an ID or email.
+
+## Known limits
+- The organizer stays in the event's guest UA (an attendee row, `accepted`) on purpose: they keep access to an event
+  they created even after losing access to its calendar.
+- Deleting a group conversation does not delete its calendar's nodes or events (messaging has no hook for it yet).
+  The orphaned calendar is unreachable (nobody holds anything on it) but its OA, rows and events remain.
+- A share is two records, the association in the graph and `calendar_shares`; both change under one lock per
+  (calendar, grantee), the graph first.
 
 ## Status
 Added 2026-10-17. Guests, answers, free/busy, suggestions, search and settings are implemented
