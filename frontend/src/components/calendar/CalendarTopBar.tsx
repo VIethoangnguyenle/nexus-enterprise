@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Calendar, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Calendar, ChevronDown, ChevronLeft, ChevronRight, Search, Settings } from 'lucide-react'
 import { CALENDAR_VIEWS, VIEW_LABEL, titleOf, weekLabel, type CalendarView } from '../../lib/calendar-format'
 import { Button, Heading, IconButton, MenuItem, Popover } from '../primitives'
 
@@ -16,13 +16,15 @@ interface CalendarTopBarProps {
   onToday: () => void
   /** One step back (-1) or forward (+1) in the unit of the view. */
   onStep: (steps: -1 | 1) => void
+  onSearch?: () => void
+  onSettings?: () => void
 }
 
 /**
  * The wide bar over the calendar (DESIGN.md §6 Lịch): Hôm nay, the two arrows, the heading of the range and
  * the view menu. No primary button here: Tạo lives in the side column.
  */
-export function CalendarTopBar({ view, date, onView, onToday, onStep }: CalendarTopBarProps) {
+export function CalendarTopBar({ view, date, onView, onToday, onStep, onSearch, onSettings }: CalendarTopBarProps) {
   const [open, setOpen] = useState(false)
   const menuRef = useRef<HTMLButtonElement>(null)
   const unit = view === 'month' ? 'tháng' : view === 'day' ? 'ngày' : view === 'agenda' ? '30 ngày' : view === '3day' ? '3 ngày' : 'tuần'
@@ -44,6 +46,11 @@ export function CalendarTopBar({ view, date, onView, onToday, onStep }: Calendar
         {(view === 'week' || view === '3day') && <span className="ml-2 text-sm text-ink-muted">{weekLabel(date)}</span>}
       </Heading>
       <span className="flex-1" />
+      {onSearch && (
+        <IconButton size="lg" shape="round" aria-label="Tìm sự kiện" aria-keyshortcuts="/" onClick={onSearch}>
+          <Search size={20} strokeWidth={1.75} />
+        </IconButton>
+      )}
       <Button
         ref={menuRef}
         variant="secondary"
@@ -70,6 +77,11 @@ export function CalendarTopBar({ view, date, onView, onToday, onStep }: Calendar
           </MenuItem>
         ))}
       </Popover>
+      {onSettings && (
+        <IconButton size="lg" shape="round" aria-label="Cài đặt lịch" onClick={onSettings}>
+          <Settings size={20} strokeWidth={1.75} />
+        </IconButton>
+      )}
     </header>
   )
 }

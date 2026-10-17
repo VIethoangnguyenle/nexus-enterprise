@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react'
 import { addMinutes } from 'date-fns'
 import type { Occurrence } from '../../api/calendar'
+import { LONG_PRESS_MS } from '../../hooks/useLongPress'
 import { SNAP_MINUTES, SNAP_MINUTES_FINE, dragResult, timeAt } from '../../lib/calendar-layout'
 
 /** Pointer travel under which a press is still a click. */
 const THRESHOLD = 4
+/** Travel of a finger under which a press may still become a long press; beyond it the touch is a scroll. */
+const TOUCH_SLOP = 10
 /** A click on an empty slot makes an hour-long draft. */
 const CLICK_MINUTES = 60
 
@@ -49,7 +52,8 @@ interface Options {
 /**
  * Pointer handling of the time grid, on `pointermove`/`pointerup` of the document so a drag survives leaving
  * the block. A press only becomes a drag after 4px of travel; before that the click that follows still opens
- * the event. Touch is left to scrolling and taps (the tablet's press-and-hold arrives with its layout).
+ * the event. A finger scrolls and taps; holding it 400ms on a block picks it up to move or resize, and from
+ * then on the page does not scroll under it. A tap on empty time makes the draft, as a click does.
  */
 export function useGridPointer({ days, columns, onMove, onSelect }: Options) {
   const [preview, setPreview] = useState<MovePreview | null>(null)
@@ -74,11 +78,24 @@ export function useGridPointer({ days, columns, onMove, onSelect }: Options) {
 
   const start = useCallback(
     (e: ReactPointerEvent<HTMLElement>, init: Omit<Press, 'pointerId' | 'x' | 'y' | 'moved' | 'rects'>) => {
-      if (e.pointerType === 'touch' || e.button !== 0) return
+      const touch = e.pointerType === 'touch'
+      if (!touch && e.button !== 0) return
       cleanup.current?.()
       const rects = (columns.current ?? []).map((el) => el?.getBoundingClientRect() ?? new DOMRect())
       const p: Press = { ...init, pointerId: e.pointerId, x: e.clientX, y: e.clientY, moved: false, rects }
       press.current = p
+
+      // A finger drags a block only after holding; a draft is only made by a tap.
+      let armed = !touch
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const blockScroll = (ev: Event) => ev.preventDefault()
+      if (touch && p.kind !== 'create') {
+        timer = setTimeout(() => {
+          armed = true
+          navigator.vibrate?.(10)
+          document.addEventListener('touchmove', blockScroll, { passive: false })
+        }, LONG_PRESS_MS)
+      }
 
       const colAt = (x: number) => {
         const i = p.rects.findIndex((r) => x >= r.left && x < r.right)
@@ -89,6 +106,11 @@ export function useGridPointer({ days, columns, onMove, onSelect }: Options) {
         if (ev.pointerId !== p.pointerId) return
         const dx = ev.clientX - p.x
         const dy = ev.clientY - p.y
+        if (!armed) {
+          // Moved before the hold was over: the person is scrolling.
+          if (Math.hypot(dx, dy) > TOUCH_SLOP) stop()
+          return
+        }
         if (!p.moved && Math.hypot(dx, dy) < THRESHOLD) return
         p.moved = true
         const step = ev.altKey ? SNAP_MINUTES_FINE : SNAP_MINUTES
@@ -108,6 +130,10 @@ export function useGridPointer({ days, columns, onMove, onSelect }: Options) {
 
       const finish = (ev: PointerEvent) => {
         if (ev.pointerId !== p.pointerId) return
+        if (!armed && p.kind !== 'create') {
+          stop()
+          return
+        }
         const { onMove: move, onSelect: select, days: dayList } = latest.current
         if (p.moved) {
           swallowClick.current = true
@@ -146,6 +172,8 @@ export function useGridPointer({ days, columns, onMove, onSelect }: Options) {
       document.addEventListener('pointercancel', stop)
       document.addEventListener('keydown', onKey)
       cleanup.current = () => {
+        clearTimeout(timer)
+        document.removeEventListener('touchmove', blockScroll)
         document.removeEventListener('pointermove', onMovePointer)
         document.removeEventListener('pointerup', finish)
         document.removeEventListener('pointercancel', stop)

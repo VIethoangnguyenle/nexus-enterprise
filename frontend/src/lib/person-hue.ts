@@ -30,7 +30,11 @@ export function personHue(key: string): PersonHue {
  * keyframes in index.css.
  */
 export function personStyle(key: string): CSSProperties {
-  const n = personHue(key)
+  return hueStyle(personHue(key))
+}
+
+/** The same properties for a hue already known (1..8). */
+export function hueStyle(n: number): CSSProperties {
   return {
     ['--p' as string]: `var(--color-person-${n})`,
     ['--pw' as string]: `var(--color-person-${n}-wash)`,

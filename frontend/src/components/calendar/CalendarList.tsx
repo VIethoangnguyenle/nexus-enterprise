@@ -1,19 +1,26 @@
 import { useRef, useState } from 'react'
-import { Check, MoreHorizontal } from 'lucide-react'
+import { Check, MoreHorizontal, Share2, X } from 'lucide-react'
 import type { CalendarSummary } from '../../api/calendar'
 import { ACCENT_COLOR, CALENDAR_HUES, colorName, colorStyle } from '../../lib/calendar-color'
-import { Heading, IconButton, Popover, Pressable, Text } from '../primitives'
+import { Heading, IconButton, MenuItem, Popover, Pressable, Text } from '../primitives'
 
 interface CalendarListProps {
   calendars: CalendarSummary[]
   onToggle: (calendar: CalendarSummary, visible: boolean) => void
   onColor: (calendar: CalendarSummary, color: number) => void
+  /** Opens Chia sẻ lịch; offered only for a calendar the person manages. */
+  onShare?: (calendar: CalendarSummary) => void
+  /** Takes a calendar that somebody else owns out of the list. */
+  onRemove?: (calendar: CalendarSummary) => void
 }
+
+/** Whether the person may change who sees this calendar: their own, or one they were given management of. */
+const canShare = (c: CalendarSummary) => c.kind === 'personal' && c.access === 'manage'
 
 /** Lịch của tôi holds the person's own, the workspace's and the groups'; Lịch khác what others share or the person added. */
 export const isMineGroup = (c: CalendarSummary) => c.isMine || c.kind !== 'personal'
 
-function Row({ calendar, onToggle, onColor }: { calendar: CalendarSummary } & Omit<CalendarListProps, 'calendars'>) {
+function Row({ calendar, onToggle, onColor, onShare, onRemove }: { calendar: CalendarSummary } & Omit<CalendarListProps, 'calendars'>) {
   const [open, setOpen] = useState(false)
   const moreRef = useRef<HTMLButtonElement>(null)
   return (
@@ -59,29 +66,35 @@ function Row({ calendar, onToggle, onColor }: { calendar: CalendarSummary } & Om
             </Pressable>
           ))}
         </div>
+        {onShare && canShare(calendar) && (
+          <MenuItem icon={<Share2 size={16} strokeWidth={1.75} />} onClick={() => onShare(calendar)}>Chia sẻ</MenuItem>
+        )}
+        {onRemove && !calendar.isMine && calendar.kind === 'personal' && (
+          <MenuItem icon={<X size={16} strokeWidth={1.75} />} onClick={() => onRemove(calendar)}>Bỏ khỏi danh sách</MenuItem>
+        )}
       </Popover>
     </li>
   )
 }
 
-function Group({ title, calendars, onToggle, onColor }: { title: string } & CalendarListProps) {
+function Group({ title, calendars, ...rest }: { title: string } & CalendarListProps) {
   if (calendars.length === 0) return null
   return (
     <section aria-label={title} className="grid gap-0.5">
       <Heading as="h3" className="px-2 pb-1 text-sm! font-semibold! font-body!">{title}</Heading>
       <ul className="m-0 p-0 list-none grid gap-px">
-        {calendars.map((c) => <Row key={c.id} calendar={c} onToggle={onToggle} onColor={onColor} />)}
+        {calendars.map((c) => <Row key={c.id} calendar={c} {...rest} />)}
       </ul>
     </section>
   )
 }
 
 /** The side list of calendars (DESIGN.md §6 Lịch): a coloured tick shows or hides each on the grid. */
-export function CalendarList({ calendars, onToggle, onColor }: CalendarListProps) {
+export function CalendarList({ calendars, ...rest }: CalendarListProps) {
   return (
     <div className="grid gap-4.5">
-      <Group title="Lịch của tôi" calendars={calendars.filter(isMineGroup)} onToggle={onToggle} onColor={onColor} />
-      <Group title="Lịch khác" calendars={calendars.filter((c) => !isMineGroup(c))} onToggle={onToggle} onColor={onColor} />
+      <Group title="Lịch của tôi" calendars={calendars.filter(isMineGroup)} {...rest} />
+      <Group title="Lịch khác" calendars={calendars.filter((c) => !isMineGroup(c))} {...rest} />
     </div>
   )
 }

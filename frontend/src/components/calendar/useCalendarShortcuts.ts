@@ -7,6 +7,8 @@ interface Handlers {
   /** J is forward, K is back. */
   onStep: (steps: -1 | 1) => void
   onCreate: () => void
+  /** / opens the search. */
+  onSearch?: () => void
   /** E and Delete act on the event that is open; absent when none is. */
   onEdit?: () => void
   onDelete?: () => void
@@ -43,6 +45,7 @@ export function useCalendarShortcuts(handlers: Handlers, enabled: boolean) {
       else if (key === 'j') h.onStep(1)
       else if (key === 'k') h.onStep(-1)
       else if (key === 'c') h.onCreate()
+      else if (key === '/' && h.onSearch) h.onSearch()
       else if (key === 'e' && h.onEdit) h.onEdit()
       else if ((key === 'Delete' || key === 'Backspace') && h.onDelete) h.onDelete()
       else return

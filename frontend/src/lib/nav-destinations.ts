@@ -87,10 +87,10 @@ export const isChatListPath = (pathname: string) => /^\/channels\/?$/.test(pathn
 
 /**
  * A screen that carries its own header with a way back on a phone (one
- * conversation, one document), so the search bar steps aside for it.
+ * conversation, one document, the calendar editor), so the search bar steps aside for it.
  */
 export function isPhoneDetailPath(pathname: string): boolean {
-  return isConversationPath(pathname) || /^\/documents\/[^/]+\/?$/.test(pathname)
+  return isConversationPath(pathname) || /^\/documents\/[^/]+\/?$/.test(pathname) || /^\/calendar\/(new|event\/[^/]+)\/?$/.test(pathname)
 }
 
 /** The tabs of the phone Chat list; the desktop ignores them. */

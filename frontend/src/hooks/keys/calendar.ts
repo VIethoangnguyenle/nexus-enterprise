@@ -15,6 +15,9 @@ export const calendarKeys = {
   shares: (wsId: string, calId: string) => ['calendar', wsId, 'shares', calId] as const,
   freeBusy: (wsId: string, users: readonly string[], from: string, to: string) =>
     ['calendar', wsId, 'freebusy', users, from, to] as const,
+  freeBusyAll: (wsId: string) => ['calendar', wsId, 'freebusy'] as const,
+  suggest: (wsId: string, users: readonly string[], durationMin: number, day: string) =>
+    ['calendar', wsId, 'suggest', users, durationMin, day] as const,
   settings: (wsId: string) => ['calendar', wsId, 'settings'] as const,
   /** Every calendar query of every workspace, for a resync after a reconnect. */
   everything: () => ['calendar'] as const,

@@ -9,7 +9,7 @@ import { renderWithClient, resetClient } from '../../test/render'
 import {
   CAL, E, NOW, UUID_RE, calendarFixtureApi, calls, mode, resetFixtures,
 } from '../../test/calendar-fixtures'
-import { validateCalendarSearch } from '../../lib/calendar-search'
+import { validateCalendarSearch, validateEditEventSearch, validateNewEventSearch } from '../../lib/calendar-search'
 import { apiFetch } from '../../api/client'
 import { useToastStore } from '../primitives'
 import { CalendarScreen } from './CalendarScreen'
@@ -31,8 +31,11 @@ async function renderCalendar(url = '/calendar') {
   const route = createRoute({
     getParentRoute: () => root, path: '/calendar', validateSearch: validateCalendarSearch, component: CalendarScreen,
   })
+  // The editor has its own file; here a marker stands for it so the address it was sent to can be read.
+  const newRoute = createRoute({ getParentRoute: () => root, path: '/calendar/new', validateSearch: validateNewEventSearch, component: () => <p>Trình soạn</p> })
+  const editRoute = createRoute({ getParentRoute: () => root, path: '/calendar/event/$eventId', validateSearch: validateEditEventSearch, component: () => <p>Trình soạn</p> })
   const router = createRouter({
-    routeTree: root.addChildren([route]),
+    routeTree: root.addChildren([route, newRoute, editRoute]),
     history: createMemoryHistory({ initialEntries: [url] }),
   })
   await router.load()
@@ -438,16 +441,31 @@ describe('quick create', () => {
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tạo nhanh' })).toBeNull())
   })
 
-  it('opens from Tạo and from the C key', async () => {
+  it('opens the full editor from Tạo and from the C key, on the next hour', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    await renderCalendar()
+    const router = await renderCalendar()
     await block(/^Báo cáo tuần/)
     await user.click(screen.getByRole('button', { name: 'Tạo' }))
-    await screen.findByRole('dialog', { name: 'Tạo nhanh' })
-    await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tạo nhanh' })).toBeNull())
+    await waitFor(() => expect(router.state.location.pathname).toBe('/calendar/new'))
+    expect(router.state.location.search).toMatchObject({ date: '2026-10-14', start: '11:00', end: '12:00' })
+    await router.navigate({ to: '/calendar' })
+    await block(/^Báo cáo tuần/)
     await user.keyboard('c')
-    expect(await screen.findByRole('dialog', { name: 'Tạo nhanh' })).toBeInTheDocument()
+    await waitFor(() => expect(router.state.location.pathname).toBe('/calendar/new'))
+  })
+
+  it('carries the title and the span to the editor from Tùy chọn khác', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const router = await renderCalendar()
+    await block(/^Báo cáo tuần/)
+    const col = document.querySelector('[data-day="2026-10-13"]')!
+    press(col, 120, 9 * 48)
+    release(120, 9 * 48)
+    const card = await screen.findByRole('dialog', { name: 'Tạo nhanh' })
+    await user.type(within(card).getByRole('textbox', { name: /Tiêu đề/ }), 'Họp mới')
+    await user.click(within(card).getByRole('button', { name: 'Tùy chọn khác' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/calendar/new'))
+    expect(router.state.location.search).toMatchObject({ date: '2026-10-13', start: '09:00', title: 'Họp mới' })
   })
 })
 
@@ -481,10 +499,10 @@ describe('views and keys', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const router = await renderCalendar()
     await block(/^Báo cáo tuần/)
-    await user.keyboard('c')
-    const title = await screen.findByRole('textbox', { name: /Tiêu đề/ })
-    await user.type(title, 'mad')
-    expect(title).toHaveValue('mad')
+    await user.keyboard('/')
+    const box = await screen.findByRole('searchbox', { name: 'Tìm sự kiện' })
+    await user.type(box, 'mad')
+    expect(box).toHaveValue('mad')
     expect(router.state.location.search.mode).toBeUndefined()
   })
 

@@ -20,7 +20,8 @@ interface AgendaListProps {
   keyOf: (o: Occurrence) => string
   colorOf: (o: Occurrence) => number
   onOpen: (o: Occurrence, el: HTMLElement) => void
-  onLoadMore: () => void
+  /** Absent for a fixed list, such as search results. */
+  onLoadMore?: () => void
 }
 
 /** The red line between the events that are over and those to come, in today's list. */
@@ -110,9 +111,11 @@ export function AgendaList({
           </Fragment>
         )
       })}
-      <div className="flex justify-center pt-4">
-        <Button variant="soft" size="sm" className="rounded-full" onClick={onLoadMore}>Tải thêm 30 ngày</Button>
-      </div>
+      {onLoadMore && (
+        <div className="flex justify-center pt-4">
+          <Button variant="soft" size="sm" className="rounded-full" onClick={onLoadMore}>Tải thêm 30 ngày</Button>
+        </div>
+      )}
     </div>
   )
 }

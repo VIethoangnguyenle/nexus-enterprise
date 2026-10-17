@@ -259,6 +259,9 @@ export const calendarApi = {
     apiFetch<Record<string, never>>(`/workspaces/${ws}/calendar/events/${id}${query({ ...scope })}`, { method: 'DELETE' }),
   rsvp: (ws: string, id: string, input: RsvpInput) =>
     apiFetch<EventDetail>(`/workspaces/${ws}/calendar/events/${id}/rsvp`, json('POST', input)),
+  /** Guests who may invite add people: the whole body is the additions (`attendees` are node ids). */
+  addGuests: (ws: string, id: string, body: { attendees: string[]; inviteChannelId?: string }) =>
+    apiFetch<EventDetail>(`/workspaces/${ws}/calendar/events/${id}/guests`, json('POST', body)),
   searchEvents: (ws: string, q: string) =>
     apiFetch<{ occurrences: Occurrence[] }>(`/workspaces/${ws}/calendar/events/search${query({ q })}`),
 

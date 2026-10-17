@@ -24,6 +24,8 @@ interface QuickCreateProps {
   /** Resolves once the event is saved (or refused); the popover closes on success only. */
   onSave: (input: EventInput) => Promise<boolean>
   onCancel: () => void
+  /** Tùy chọn khác: carry the draft, the title typed and the calendar to the full editor. */
+  onMore?: (draft: QuickDraft & { title: string; calendarId: string }) => void
 }
 
 /** Writable calendars, the person's own personal one first. */
@@ -36,7 +38,7 @@ export function defaultCalendar(calendars: CalendarSummary[]): CalendarSummary |
  * the calendar when there is a choice, and Lưu. Esc cancels; a click outside cancels while the title is empty
  * and otherwise keeps the card open so nothing typed is lost.
  */
-export function QuickCreate({ draft, anchorRef, calendars, onSave, onCancel }: QuickCreateProps) {
+export function QuickCreate({ draft, anchorRef, calendars, onSave, onCancel, onMore }: QuickCreateProps) {
   // Whether the title has text; a click outside must not throw that away.
   const dirty = useRef(false)
   return (
@@ -57,13 +59,14 @@ export function QuickCreate({ draft, anchorRef, calendars, onSave, onCancel }: Q
           dirty={dirty}
           onSave={onSave}
           onCancel={onCancel}
+          onMore={onMore}
         />
       )}
     </Popover>
   )
 }
 
-function QuickForm({ draft, calendars, dirty, onSave, onCancel }: Omit<QuickCreateProps, 'anchorRef' | 'draft'> & { draft: QuickDraft; dirty: RefObject<boolean> }) {
+function QuickForm({ draft, calendars, dirty, onSave, onCancel, onMore }: Omit<QuickCreateProps, 'anchorRef' | 'draft'> & { draft: QuickDraft; dirty: RefObject<boolean> }) {
   const [title, setTitle] = useState('')
   const [kind, setKind] = useState<EventKind>('event')
   const [calendarId, setCalendarId] = useState(() => defaultCalendar(calendars)?.id ?? '')
@@ -147,6 +150,14 @@ function QuickForm({ draft, calendars, dirty, onSave, onCancel }: Omit<QuickCrea
         </label>
       )}
       <div className="flex justify-end gap-2">
+        {onMore && (
+          <Button
+            type="button" variant="ghost" size="sm" className="rounded-full mr-auto"
+            onClick={() => onMore({ start: span.start, end: span.end, allDay: span.allDay, title: title.trim(), calendarId })}
+          >
+            Tùy chọn khác
+          </Button>
+        )}
         <Button type="button" variant="soft" size="sm" className="rounded-full" onClick={onCancel}>Huỷ</Button>
         <Button type="submit" size="sm" className="rounded-full" loading={saving} disabled={!calendarId}>Lưu</Button>
       </div>

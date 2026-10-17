@@ -4,8 +4,8 @@
  * depend on the machine's zone. Every id is a real-looking UUID so tests can assert none reaches the screen.
  */
 import { formatISO } from 'date-fns'
-import type { CalendarSummary, EventDetail, Occurrence, PersonRef } from '../api/calendar'
-import { U, WS_ID } from './chat-fixtures'
+import type { CalendarSettings, CalendarSummary, EventDetail, Occurrence, PersonFreeBusy, PersonRef, Share } from '../api/calendar'
+import { CONTACTS, SPACES, U, WS_ID } from './chat-fixtures'
 
 export { UUID_RE, WS_ID } from './chat-fixtures'
 
@@ -78,14 +78,31 @@ export const DETAIL_ATTENDEES = [
 export interface ApiCall { method: string; path: string; query: URLSearchParams; body?: Record<string, unknown> }
 export const calls: ApiCall[] = []
 
+let settings: CalendarSettings = { tzid: 'Asia/Ho_Chi_Minh', workStart: '08:00', workEnd: '17:00', defaultReminder: 10 }
+let shares: Share[] = []
+export const SLOTS = [
+  { start: at(14, 11, 30), end: at(14, 12, 30) },
+  { start: at(14, 17), end: at(14, 18) },
+]
+/** Yến is busy 09:00-09:30 on the 14th with a title; everyone else is free. */
+function freeBusyOf(nodeId: string, from: string): PersonFreeBusy {
+  const person = Object.values(PEOPLE).find((x) => x.nodeId === nodeId) ?? { nodeId, displayName: 'Lê Thị Hoa', hue: 5 }
+  const busy = nodeId === PEOPLE.yen.nodeId && from.startsWith('2026-10-14')
+    ? [{ start: at(14, 9), end: at(14, 9, 30), title: 'Gặp ngân hàng' }]
+    : []
+  return { person, busy, workStart: '08:00', workEnd: '17:00' }
+}
+
 export interface Mode {
   calendarsError: boolean
   eventsError: boolean
   noEvents: boolean
   /** Status the next write answers with, once. */
   writeStatus: number | null
+  /** Tìm giờ finds no common slot. */
+  noSlots: boolean
 }
-const DEFAULT_MODE: Mode = { calendarsError: false, eventsError: false, noEvents: false, writeStatus: null }
+const DEFAULT_MODE: Mode = { calendarsError: false, eventsError: false, noEvents: false, writeStatus: null, noSlots: false }
 export const mode: Mode = { ...DEFAULT_MODE }
 
 /** The fake server's copy of the occurrences; PATCH and DELETE change it. */
@@ -96,6 +113,8 @@ export function resetFixtures() {
   calls.length = 0
   store = structuredClone(OCCURRENCES)
   calendars = structuredClone(CALENDARS)
+  shares = []
+  settings = { tzid: 'Asia/Ho_Chi_Minh', workStart: '08:00', workEnd: '17:00', defaultReminder: 10 }
 }
 resetFixtures()
 
@@ -118,7 +137,12 @@ export function calendarFixtureApi(path: string, init?: RequestInit): Promise<un
   }
 
   if (p === '/workspaces') return ok({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành' }] })
-  if (p === `/workspaces/${WS_ID}/contacts`) return ok({ contacts: [], total: 0 })
+  if (p === `/workspaces/${WS_ID}/contacts`) return ok({ contacts: CONTACTS, total: CONTACTS.length })
+  if (p === `/workspaces/${WS_ID}/channels`) return ok({ channels: SPACES })
+  const eventCall = p.match(/^\/calendar-events\/([^/]+)\/call$/)
+  if (eventCall && method === 'POST') {
+    return ok({ call: { id: 'ca110000-aaaa-4bbb-8ccc-000000000001', channel_id: 'x', kind: 'video', status: 'active' }, token: 't', url: 'wss://x' })
+  }
 
   const root = `/workspaces/${WS_ID}/calendar`
   if (!p.startsWith(root)) return Promise.reject(new Error(`unexpected ${method} ${path}`))
@@ -138,6 +162,39 @@ export function calendarFixtureApi(path: string, init?: RequestInit): Promise<un
     const target = calendars.find((c) => c.id === sub[1])!
     Object.assign(target, body)
     return ok(target)
+  }
+
+  if (rest === '/settings') {
+    if (method === 'PUT') settings = { ...(body as unknown as CalendarSettings) }
+    return ok(settings)
+  }
+  if (rest === '/freebusy' && method === 'GET') {
+    const asked = query.get('users')?.split(',') ?? []
+    return ok({ people: asked.map((n) => freeBusyOf(n, query.get('from') ?? '')) })
+  }
+  if (rest === '/freebusy/suggest' && method === 'GET') return ok({ slots: mode.noSlots ? [] : SLOTS })
+  if (rest === '/events/search' && method === 'GET') {
+    const q = (query.get('q') ?? '').toLowerCase()
+    return ok({ occurrences: store.filter((o) => o.title.toLowerCase().includes(q)) })
+  }
+  if (rest === '/subscriptions' && method === 'POST') {
+    const added: CalendarSummary = { id: 'c0000000-aaaa-4bbb-8ccc-0000000000aa', kind: 'personal', name: 'Phạm Hải Yến', color: 2, visible: true, access: 'freebusy', isMine: false, owner: PEOPLE.yen }
+    calendars = [...calendars, added]
+    return ok(added)
+  }
+  const shareRow = rest.match(/^\/calendars\/([^/]+)\/shares(?:\/([^/]+))?$/)
+  if (shareRow) {
+    const grantee = shareRow[2]
+    if (method === 'GET') return ok({ shares })
+    if (method === 'PUT') {
+      const person = Object.values(PEOPLE).find((x) => x.nodeId === grantee)!
+      shares = [...shares.filter((x) => x.grantee.nodeId !== grantee), { grantee: person, level: (body as { level: Share['level'] }).level }]
+      return ok(shares.find((x) => x.grantee.nodeId === grantee))
+    }
+    if (method === 'DELETE') {
+      shares = shares.filter((x) => x.grantee.nodeId !== grantee)
+      return ok({})
+    }
   }
 
   if (rest === '/events' && method === 'GET') {
@@ -165,7 +222,12 @@ export function calendarFixtureApi(path: string, init?: RequestInit): Promise<un
     if (!target) return fail(404)
     if (method === 'GET') return ok(detailOf(target))
     if (method === 'PATCH') {
-      Object.assign(target, { start: body?.start, end: body?.end }, { version: target.version + 1 })
+      Object.assign(target, {
+        ...(body?.start ? { start: body.start } : {}),
+        ...(body?.end ? { end: body.end } : {}),
+        ...(typeof body?.title === 'string' ? { title: body.title } : {}),
+        version: target.version + 1,
+      })
       return ok(detailOf(target))
     }
     if (method === 'DELETE') {
