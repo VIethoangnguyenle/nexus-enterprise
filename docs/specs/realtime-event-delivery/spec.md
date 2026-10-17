@@ -214,10 +214,11 @@ A counter SHALL be bumped by the code that announces the change, not by a separa
 - `Service.emit` in the messaging domain (every channel event), and the sites that change a conversation's content without an event (`SendMessage`, edit, delete, a call card rewritten, a new direct message), bump the tenant, and the people of a direct message individually, since a direct message is read from every workspace of its people;
 - the messaging REST group bumps the tenant and the caller after any request that changed something and succeeded, just before the status line is written, so the client's next read sees the new version; a refused or failed request bumps nothing;
 - the realtime consumer bumps the tenant for `channel`, `workspace` and `permission` events announced by other services, a permission event only after the settle delay at which clients are told.
+  This includes the `workspace` / `profile_updated` event the auth service emits when a person changes their display name or picture, once per workspace they belong to: a direct message shows the other person's name and picture, so every ETag in that tenant must stop matching. Only that tenant's counter moves; the counter of a workspace the person is not in does not.
 
 The tag is computed before the data is read, so data read across a concurrent write is labelled with the older version and the next request refetches. A tag SHALL expire after five minutes even if nothing moved, so a forgotten bump costs a stale list for that long, never indefinitely. Without Redis, or when the counters cannot be read, no `ETag` is sent and every answer is a full 200. An answer other than 200 carries no `ETag`.
 
-`/api/workspaces/:id/contacts`, `/api/me/workspaces` and `/api/workspaces` are not revalidated this way: their data changes through paths that announce nothing (presence in `is_online`, profile edits, invitation acceptance, role and membership changes across the auth and workspace services, graph-derived reachability), so a counter could not be guaranteed to move with every write.
+`/api/workspaces/:id/contacts`, `/api/me/workspaces` and `/api/workspaces` are not revalidated this way: their data changes through paths that announce nothing (presence in `is_online`, invitation acceptance, role and membership changes across the auth and workspace services, graph-derived reachability), so a counter could not be guaranteed to move with every write.
 
 #### Scenario: Nothing changed
 - **WHEN** a client repeats `GET /api/workspaces/:id/chat-state` with the `ETag` it was given and nothing was announced
@@ -226,6 +227,10 @@ The tag is computed before the data is read, so data read across a concurrent wr
 #### Scenario: A change was announced
 - **WHEN** a message is sent, a mark-read succeeds, or a permission event settles
 - **THEN** the next `If-None-Match` with the old tag gets a full 200 with a new tag
+
+#### Scenario: Someone changes their name or picture
+- **WHEN** a person edits their display name or picture and a colleague then repeats `GET /api/workspaces/:id/chat-state` with the tag they held
+- **THEN** the colleague gets a full 200 with a new tag, and a person in a workspace the editor does not belong to still gets 304
 
 #### Scenario: Another person or workspace
 - **WHEN** a tag is presented by a different user, for a different workspace, or for a workspace that is not the caller's own tenant
@@ -238,7 +243,7 @@ The tag is computed before the data is read, so data read across a concurrent wr
 | `drive` | `created`, `updated`, `moved`, `deleted`, `share_created`, `share_revoked` | the item | workspace; a share only refreshes the share list and the item, the people it concerns learn their permissions from the permission event |
 | `document` | `created`, `updated`, `deleted` | the document (list level only) | workspace |
 | `channel` | `created`, `renamed`, `member_added`, `member_removed` | the channel | user (created: the people who can read it at birth, the creator and any DM participant), channel (renamed, roster), user (the person added or removed) |
-| `workspace` | `invitation_accepted`, `member_removed`, `role_changed`, `department_changed`, `updated` | member node, role, department or workspace | workspace |
+| `workspace` | `invitation_accepted`, `member_removed`, `role_changed`, `department_changed`, `updated`, `profile_updated` | member node, role, department or workspace; for `profile_updated` the person's node (no name, no picture) | workspace; `profile_updated` is sent by the auth service to each workspace the person belongs to, and the screen refreshes the people directory and the conversation lists |
 | `asset` | `updated`, `request_changed`, `assigned` | asset or request | workspace |
 | `permission` | `changed` | none | user (the users whose own standing the write changed; see "Permission events are narrow") |
 | approval (`ApprovalEvent`) | created, approved, rejected, step_advanced | the request | the people the request names |

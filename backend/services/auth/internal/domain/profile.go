@@ -59,5 +59,6 @@ func (s *Service) UpdateProfile(ctx context.Context, userID string, in ProfileUp
 		}
 		return fmt.Errorf("update profile: %w", err)
 	}
+	s.announceProfileChanged(ctx, userID)
 	return nil
 }

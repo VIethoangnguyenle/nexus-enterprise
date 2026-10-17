@@ -280,6 +280,17 @@ Refusals write nothing: 413 `avatar_too_large` (over 5 MiB, the body is cut off 
 - **WHEN** a person uploads a second picture, even the same file
 - **THEN** it gets a new token and the old address answers 404
 
+### Requirement: A profile change is announced to the person's workspaces
+After a display name, title, location or picture change commits (`PATCH /api/me/profile`, `PUT` or `DELETE /api/me/avatar`), the auth service SHALL emit one `workspace` / `profile_updated` event for each workspace the person actively belongs to, with `tenant_id` and `workspace_id` set to that workspace and `ids` holding the person's NGAC user node id in it. The event carries no name or picture. Nothing is emitted for a refused or failed change, nor for a workspace the person does not belong to; a person with no workspace emits nothing. The consumers are described in `realtime-event-delivery`.
+
+#### Scenario: A name change
+- **WHEN** a person who belongs to workspaces A and B saves a new display name
+- **THEN** one event is produced for A and one for B, naming only ids, and none for any other workspace
+
+#### Scenario: A refused change
+- **WHEN** the display name is blank, or the picture is not an image
+- **THEN** no event is produced
+
 ### Requirement: Pictures are served publicly, by an address that says nothing
 `GET /api/auth/avatars/:token` (192 px) and `GET /api/auth/avatars/:token/:size` (`size` 64, 192 or 1024) SHALL answer the stored JPEG without a session, since an `<img>` sends no bearer token. The token is random per upload, so the address cannot be worked out from a photo of the person, and a new picture gets a new address. A 200 carries `Content-Type: image/jpeg`, `Cache-Control: public, max-age=31536000, immutable`, `X-Content-Type-Options: nosniff`, `Content-Security-Policy: default-src 'none'`, `Cross-Origin-Resource-Policy: same-origin` and `Content-Disposition: inline; filename="avatar.jpg"`. A token that is not 32 lowercase hex characters, an unknown token, or any other size is 404 with `Cache-Control: public, max-age=60`. The route is limited per address at ten times the allowance of the public sign-in routes. Removing a picture does not purge copies a browser has already cached.
 

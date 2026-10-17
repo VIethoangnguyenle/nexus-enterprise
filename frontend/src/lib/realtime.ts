@@ -123,6 +123,8 @@ export function planFor(e: DomainChange): Plan {
       if (e.kind === 'member_removed' || e.kind === 'role_changed' || e.kind === 'department_changed') {
         inv.push(keys.permissions.all())
       }
+      // A name or picture is shown in the lists of direct messages and groups.
+      if (e.kind === 'profile_updated') inv.push(keys.messaging.dms(), keys.messaging.channels(ws))
       break
     }
 
