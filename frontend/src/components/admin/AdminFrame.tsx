@@ -5,7 +5,7 @@ import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useMemberDirectory } from '../../hooks/useAdmin'
 import { statusOf } from '../../lib/errors'
 import { workspaceDisplayName } from '../../lib/workspace'
-import { Heading, TabBar, type TabItem } from '../primitives'
+import { Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
 import { EmptyState } from '../spaces/EmptyState'
 
 export type AdminSection = 'overview' | 'users' | 'roles'
@@ -57,9 +57,9 @@ export function AdminFrame({ section, subtitle, action, children }: AdminFramePr
         {!forbidden && action && <div className="ml-auto flex items-center gap-2 shrink-0">{action}</div>}
       </header>
 
-      <div className="px-5 overflow-x-auto">
+      <ScrollFade className="px-5">
         <TabBar className="w-max" label="Quản trị" idPrefix="admin" value={section} tabs={TABS} onChange={go} />
-      </div>
+      </ScrollFade>
 
       <div
         role="tabpanel"

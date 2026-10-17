@@ -17,7 +17,7 @@ import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { useWebSocketStore } from '../../stores/websocket.store'
-import { Avatar, Button, Heading, TabBar, toast, type TabItem } from '../primitives'
+import { Avatar, Button, Heading, ScrollFade, TabBar, toast, type TabItem } from '../primitives'
 import { EmptyState } from '../spaces/EmptyState'
 import { ApprovalDetailPanel } from './ApprovalDetailPanel'
 import { ApprovalTable, type RealtimeTag } from './ApprovalTable'
@@ -356,7 +356,7 @@ export function ApprovalScreen() {
             </div>
           </header>
 
-          <div className="px-5 overflow-x-auto">
+          <ScrollFade className="px-5">
             <TabBar
               className="w-max"
               label="Phê duyệt"
@@ -365,7 +365,7 @@ export function ApprovalScreen() {
               tabs={tabs}
               onChange={(id) => go((p) => tabSearch(p, id as ApprovalTab))}
             />
-          </div>
+          </ScrollFade>
 
           <AnimatePresence>
             {burst && (

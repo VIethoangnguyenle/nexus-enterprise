@@ -17,7 +17,7 @@ import { toMillis } from '../../lib/format'
 import { useMotionPresets } from '../../lib/motion'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
-import { Button, FilterChip, Heading, TabBar, type TabItem } from '../primitives'
+import { Button, FilterChip, Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
 import { CountPill } from '../approval/StatusPill'
 import { EmptyState } from '../spaces/EmptyState'
 import { ApproveDialog } from './ApproveDialog'
@@ -329,7 +329,7 @@ export function AssetsScreen() {
           </div>
         </header>
 
-        <div className="px-5 overflow-x-auto">
+        <ScrollFade className="px-5">
           <TabBar
             className="w-max"
             label="Tài sản"
@@ -338,7 +338,7 @@ export function AssetsScreen() {
             tabs={tabs}
             onChange={(id) => go((p) => tabSearch(p, id as AssetsTab))}
           />
-        </div>
+        </ScrollFade>
 
         <div
           role="tabpanel"
