@@ -8,8 +8,10 @@ import { loadCallPrefs, type CallPrefs } from '../../lib/call-prefs'
 import { avatarOf, displayName } from '../../lib/people'
 import { useAuthStore } from '../../stores/auth.store'
 import { callRoute } from '../../lib/call-nav'
+import { toDateKey } from '../../lib/calendar-format'
 import { isLive, takeTicket, useCallStore } from '../../stores/call.store'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
+import { useEventDetail } from '../../hooks/useCalendar'
 import { useCall, useMessagesSince } from '../../hooks/useCalls'
 import { useCallShortcuts } from '../../hooks/useCallShortcuts'
 import { useConversations } from '../../hooks/useConversations'
@@ -61,6 +63,9 @@ export function CallScreen({ callId, answer }: { callId: string; answer?: 'video
   const callQ = useCall(callId, { poll: !sameCall })
   const call = callQ.data
   const channelId = call?.channel_id ?? ''
+  // The call of a calendar event is in no conversation: it is named after the event and goes back to it.
+  const eventId = call?.calendar_event_id ?? ''
+  const eventQ = useEventDetail(workspaceId, eventId || undefined)
 
   // The conversation's name and kind: from the lists the navigator already holds, else its own record.
   const { conversations, isLoading: listLoading } = useConversations(workspaceId)
@@ -71,25 +76,32 @@ export function CallScreen({ callId, answer }: { callId: string; answer?: 'video
     enabled: !!channelId && !listLoading && !listed,
   })
   const isDm = listed ? listed.kind === 'dm' : single.data?.channel_type === 'dm'
-  const title = listed?.title
-    ?? (isDm ? (call?.started_by === user?.id ? 'Cuộc gọi' : call?.started_by_name) : single.data?.name)
-    ?? ''
-  const known = !!call && (!!listed || single.isSuccess || single.isError)
+  const title = eventId
+    ? (eventQ.data?.title ?? 'Sự kiện')
+    : listed?.title ?? (isDm ? (call?.started_by === user?.id ? 'Cuộc gọi' : call?.started_by_name) : single.data?.name) ?? ''
+  // An event that cannot be read still lets a guest in, under a plain name.
+  const known = !!call && (eventId ? eventQ.isSuccess || eventQ.isError : !!listed || single.isSuccess || single.isError)
+  const about = eventId ? 'event' : 'chat'
 
   const selfName = displayName(people, user?.id, user?.username)
+  const eventDay = eventQ.data ? toDateKey(new Date(eventQ.data.start)) : undefined
   const toChat = useCallback(() => {
+    if (eventId) {
+      void navigate({ to: '/calendar', search: (prev: { ws?: string }) => ({ ws: prev.ws, ...(eventDay ? { date: eventDay } : {}) }) })
+      return
+    }
     if (!channelId) { void navigate({ to: '/channels' }); return }
     void navigate({ to: '/channels/$channelId', params: { channelId }, search: (prev: { ws?: string }) => ({ ws: prev.ws }) })
-  }, [navigate, channelId])
+  }, [navigate, channelId, eventId, eventDay])
 
   const enter = useCallback((prefs: CallPrefs, audio: boolean, video: boolean) => {
     if (!call) return
     // The ticket that came with starting the call, if this screen is where that led.
     const ticket = takeTicket(callId) ?? undefined
     void api.join({
-      callId, channelId: call.channel_id, kind: call.kind, title, isDm: !!isDm, audio, video, prefs, ticket,
+      callId, channelId, eventId: eventId || undefined, kind: call.kind, title, isDm: !!isDm, audio, video, prefs, ticket,
     })
-  }, [api, call, callId, title, isDm])
+  }, [api, call, callId, channelId, eventId, title, isDm])
 
   // A direct call, or an answer from a notification, skips the check and joins with what was remembered.
   const direct = !!answer || !!isDm
@@ -123,7 +135,7 @@ export function CallScreen({ callId, answer }: { callId: string; answer?: 'video
       return (
         <OtherCallNotice
           currentTitle={session.title}
-          onSwitch={() => { void api.join({ callId, channelId: call.channel_id, kind: call.kind, title, isDm: !!isDm, audio: true, video: call.kind === 'video', ticket: takeTicket(callId) ?? undefined }) }}
+          onSwitch={() => { void api.join({ callId, channelId, eventId: eventId || undefined, kind: call.kind, title, isDm: !!isDm, audio: true, video: call.kind === 'video', ticket: takeTicket(callId) ?? undefined }) }}
           onStay={() => void navigate(callRoute(session.callId))}
         />
       )
@@ -132,7 +144,7 @@ export function CallScreen({ callId, answer }: { callId: string; answer?: 'video
       if (phase === 'ended' && summary) {
         return (
           <EndedSummary
-            summary={summary} messages={messages} onBack={() => { useCallStore.getState().clear(); toChat() }}
+            summary={summary} messages={eventId ? undefined : messages} about={about} onBack={() => { useCallStore.getState().clear(); toChat() }}
             onRejoin={() => { tried.current = false; useCallStore.getState().clear() }}
           />
         )
@@ -149,11 +161,13 @@ export function CallScreen({ callId, answer }: { callId: string; answer?: 'video
     // No call of ours yet.
     if (callQ.isError) {
       const s = statusOf(callQ.error)
-      return s === 403 ? <NoAccessState onBack={() => void navigate({ to: '/channels' })} /> : <CallOverState onBack={toChat} />
+      return s === 403
+        ? <NoAccessState about={about} onBack={() => void navigate(eventId ? { to: '/calendar' } : { to: '/channels' })} />
+        : <CallOverState about={about} onBack={toChat} />
     }
     if (!call || !known) return <ConnectingState onCancel={toChat} />
-    if (FINISHED.has(call.status) || refusal === 'call_ended') return <CallOverState onBack={toChat} />
-    if (refusal === 'forbidden') return <NoAccessState onBack={() => void navigate({ to: '/channels' })} />
+    if (FINISHED.has(call.status) || refusal === 'call_ended') return <CallOverState about={about} onBack={toChat} />
+    if (refusal === 'forbidden') return <NoAccessState about={about} onBack={() => void navigate(eventId ? { to: '/calendar' } : { to: '/channels' })} />
     if (direct && !refusal) return <ConnectingState onCancel={toChat} />
     return (
       <PreJoin

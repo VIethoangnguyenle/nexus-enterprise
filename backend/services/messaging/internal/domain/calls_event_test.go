@@ -99,6 +99,7 @@ func TestEventCall_AGuestStartsItAndOthersJoinTheSameOne(t *testing.T) {
 	assert.Equal(t, "active", join.Call.Status)
 	assert.Equal(t, "video", join.Call.Kind)
 	assert.Empty(t, join.Call.ChannelId, "an event's call is in no conversation")
+	assert.Equal(t, w.eventID, join.Call.CalendarEventId, "the screen names the call after its event")
 	assert.Equal(t, "token-for-"+w.guest, join.Token)
 	assert.Equal(t, "wss://calls.test/livekit", join.Url)
 	assert.True(t, w.media.hasRoom(join.Call.Id), "the room is opened ahead of the first person")

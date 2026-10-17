@@ -236,6 +236,10 @@ export const calendarApi = {
   unsubscribe: (ws: string, calId: string) =>
     apiFetch<Record<string, never>>(`/workspaces/${ws}/calendar/subscriptions/${calId}`, { method: 'DELETE' }),
 
+  /** The calendar of a group conversation, made the first time it is asked for (members only; 403 otherwise). */
+  ensureChannelCalendar: (ws: string, channelId: string) =>
+    apiFetch<CalendarSummary>(`/workspaces/${ws}/calendar/channels/${channelId}/calendar`, { method: 'POST' }),
+
   // Sharing
   listShares: (ws: string, calId: string) =>
     apiFetch<{ shares: Share[] }>(`/workspaces/${ws}/calendar/calendars/${calId}/shares`),
@@ -250,7 +254,9 @@ export const calendarApi = {
     apiFetch<{ occurrences: Occurrence[] }>(
       `/workspaces/${ws}/calendar/events${query({ from, to, calendars: calendarIds?.join(',') })}`,
     ),
-  getEvent: (ws: string, id: string) => apiFetch<EventDetail>(`/workspaces/${ws}/calendar/events/${id}`),
+  /** The event; for a recurring one `occurrence` names the instance to read (its own start, end and overrides). */
+  getEvent: (ws: string, id: string, occurrence?: string) =>
+    apiFetch<EventDetail>(`/workspaces/${ws}/calendar/events/${id}${query({ occurrence })}`),
   createEvent: (ws: string, input: EventInput) =>
     apiFetch<EventDetail>(`/workspaces/${ws}/calendar/events`, json('POST', input)),
   updateEvent: (ws: string, id: string, patch: EventPatch, scope: ScopeQuery = {}) =>

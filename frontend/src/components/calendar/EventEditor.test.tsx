@@ -5,7 +5,8 @@ import {
   RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter, useParams, useSearch,
 } from '@tanstack/react-router'
 import { renderWithClient, resetClient } from '../../test/render'
-import { E, NOW, PEOPLE, UUID_RE, calendarFixtureApi, calls, mode, resetFixtures } from '../../test/calendar-fixtures'
+import { CAL, E, NOW, PEOPLE, UUID_RE, calendarFixtureApi, calls, enableGroupCalendar, mode, resetFixtures } from '../../test/calendar-fixtures'
+import { CH } from '../../test/chat-fixtures'
 import { validateEditEventSearch, validateNewEventSearch, type EditEventSearch, type NewEventSearch } from '../../lib/calendar-search'
 import { apiFetch } from '../../api/client'
 import { useToastStore } from '../primitives'
@@ -257,6 +258,30 @@ describe('guests', () => {
     expect(writes('POST')[0]!.body).toHaveProperty('inviteChannelId')
   })
 
+  it('invites the whole group when the event is made on the calendar of a group', async () => {
+    enableGroupCalendar(false)
+    const user = setup()
+    await renderEditor(`/calendar/new?calendar=${CAL.group}&date=2026-10-14&start=09:00&end=10:00`)
+    await ready()
+    expect(screen.getByLabelText('Lịch')).toHaveValue(CAL.group)
+    expect(screen.getByRole('button', { name: 'Bỏ Đối soát giao dịch' })).toBeInTheDocument()
+    await save(user)
+    await waitFor(() => expect(writes('POST')).toHaveLength(1))
+    expect(writes('POST')[0]!.body).toMatchObject({ calendarId: CAL.group, inviteChannelId: CH.doisoat })
+  })
+
+  it('follows the calendar that is chosen: the group comes with the group\'s calendar and goes with it', async () => {
+    enableGroupCalendar(false)
+    const user = setup()
+    await renderEditor(NEW)
+    await ready()
+    expect(screen.queryByRole('button', { name: 'Bỏ Đối soát giao dịch' })).toBeNull()
+    await user.selectOptions(screen.getByLabelText('Lịch'), CAL.group)
+    expect(screen.getByRole('button', { name: 'Bỏ Đối soát giao dịch' })).toBeInTheDocument()
+    await user.selectOptions(screen.getByLabelText('Lịch'), CAL.mine)
+    expect(screen.queryByRole('button', { name: 'Bỏ Đối soát giao dịch' })).toBeNull()
+  })
+
   it('has no field that takes an email or an id', async () => {
     await renderEditor(NEW)
     await ready()
@@ -354,6 +379,46 @@ describe('editing an event', () => {
     expect(call.query.get('occurrence')).toBe('2026-10-16T09:00:00+07:00')
     expect(call.body).toMatchObject({ title: 'Standup mới' })
     expect(call.body).not.toHaveProperty('start')
+  })
+
+  it('opens on the instance the server describes when the address names only the occurrence', async () => {
+    await renderEditor(`/calendar/event/${E.standup}?occurrence=2026-10-23T09:00:00%2B07:00`)
+    await ready()
+    expect(screen.getByLabelText('Ngày bắt đầu')).toHaveValue('2026-10-23')
+    expect(screen.getByLabelText('Giờ bắt đầu')).toHaveValue('09:00')
+    expect(screen.getByLabelText('Giờ kết thúc')).toHaveValue('09:15')
+    const read = calls.find((c) => c.method === 'GET' && c.path.endsWith(`/events/${E.standup}`))!
+    expect(read.query.get('occurrence')).toBe('2026-10-23T09:00:00+07:00')
+  })
+
+  it('does not offer "only this one" once the guests changed, and says why', async () => {
+    const user = setup()
+    await renderEditor(standup)
+    await ready()
+    await user.type(screen.getByRole('combobox', { name: 'Thêm khách' }), 'Yến')
+    await user.click(await screen.findByRole('option', { name: /Phạm Hải Yến/ }))
+    await save(user)
+    const ask = await screen.findByRole('dialog', { name: 'Sửa sự kiện lặp lại' })
+    const only = within(ask).getByRole('radio', { name: /Chỉ sự kiện này/ })
+    expect(only).toHaveAttribute('aria-disabled', 'true')
+    expect(within(ask).getByText('Đổi khách áp dụng cho cả chuỗi')).toBeInTheDocument()
+    expect(within(ask).getByRole('radio', { name: 'Tất cả sự kiện' })).toBeChecked()
+    await user.click(only)
+    expect(only).not.toBeChecked()
+    await user.click(within(ask).getByRole('button', { name: 'OK' }))
+    await waitFor(() => expect(writes('PATCH')).toHaveLength(1))
+    expect(writes('PATCH')[0]!.query.get('scope')).toBe('all')
+  })
+
+  it('still offers "only this one" when the guests are untouched', async () => {
+    const user = setup()
+    await renderEditor(standup)
+    const title = await ready()
+    await user.type(title, '!')
+    await save(user)
+    const ask = await screen.findByRole('dialog', { name: 'Sửa sự kiện lặp lại' })
+    expect(within(ask).getByRole('radio', { name: 'Chỉ sự kiện này' })).not.toHaveAttribute('aria-disabled', 'true')
+    expect(within(ask).queryByText('Đổi khách áp dụng cho cả chuỗi')).toBeNull()
   })
 
   it('does not ask when nothing changed', async () => {

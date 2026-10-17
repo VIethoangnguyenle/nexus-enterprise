@@ -4419,8 +4419,9 @@ type Call struct {
 	StartedAt          *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=started_at,json=startedAt,proto3" json:"started_at,omitempty"`
 	EndedAt            *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=ended_at,json=endedAt,proto3" json:"ended_at,omitempty"`
 	RingExpiresAt      *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=ring_expires_at,json=ringExpiresAt,proto3" json:"ring_expires_at,omitempty"`
-	Participants       []*CallPerson          `protobuf:"bytes,13,rep,name=participants,proto3" json:"participants,omitempty"`                // in the call now
-	TakerCount         int32                  `protobuf:"varint,14,opt,name=taker_count,json=takerCount,proto3" json:"taker_count,omitempty"` // everyone who was ever in it
+	Participants       []*CallPerson          `protobuf:"bytes,13,rep,name=participants,proto3" json:"participants,omitempty"`                                // in the call now
+	TakerCount         int32                  `protobuf:"varint,14,opt,name=taker_count,json=takerCount,proto3" json:"taker_count,omitempty"`                 // everyone who was ever in it
+	CalendarEventId    string                 `protobuf:"bytes,15,opt,name=calendar_event_id,json=calendarEventId,proto3" json:"calendar_event_id,omitempty"` // the event a calendar event's call belongs to; channel_id is empty then
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -4551,6 +4552,13 @@ func (x *Call) GetTakerCount() int32 {
 		return x.TakerCount
 	}
 	return 0
+}
+
+func (x *Call) GetCalendarEventId() string {
+	if x != nil {
+		return x.CalendarEventId
+	}
+	return ""
 }
 
 // CallJoin is a ticket into a call's room: a LiveKit token valid for a few
@@ -5005,7 +5013,7 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x1d\n" +
 	"\n" +
 	"avatar_url\x18\x03 \x01(\tR\tavatarUrl\x127\n" +
-	"\tjoined_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\bjoinedAt\"\xc7\x04\n" +
+	"\tjoined_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\bjoinedAt\"\xf3\x04\n" +
 	"\x04Call\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x1d\n" +
 	"\n" +
@@ -5027,7 +5035,8 @@ const file_proto_messaging_messaging_proto_rawDesc = "" +
 	"\x0fring_expires_at\x18\f \x01(\v2\x1a.google.protobuf.TimestampR\rringExpiresAt\x129\n" +
 	"\fparticipants\x18\r \x03(\v2\x15.messaging.CallPersonR\fparticipants\x12\x1f\n" +
 	"\vtaker_count\x18\x0e \x01(\x05R\n" +
-	"takerCount\"W\n" +
+	"takerCount\x12*\n" +
+	"\x11calendar_event_id\x18\x0f \x01(\tR\x0fcalendarEventId\"W\n" +
 	"\bCallJoin\x12#\n" +
 	"\x04call\x18\x01 \x01(\v2\x0f.messaging.CallR\x04call\x12\x14\n" +
 	"\x05token\x18\x02 \x01(\tR\x05token\x12\x10\n" +

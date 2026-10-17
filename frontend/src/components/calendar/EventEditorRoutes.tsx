@@ -77,10 +77,14 @@ export function NewEventEditor({ search }: { search: NewEventSearch }) {
       const moved = blankForm({ start, end, allDay: copy.data.allDay, calendarId: chosen?.id ?? copy.data.calendarId })
       return { ...copied, calendarId: chosen?.id ?? copied.calendarId, startDate: moved.startDate, endDate: copy.data.allDay ? moved.endDate : moved.endDate, guests: [] }
     }
-    return blankForm({
+    const blank = blankForm({
       start: allDay ? day : start, end: allDay ? new Date(day.getTime() + 86_400_000) : end, allDay,
       calendarId: chosen?.id ?? '', title: search.title,
     })
+    // An event made on a group's calendar is for the whole group.
+    return chosen?.kind === 'channel' && chosen.channel
+      ? { ...blank, inviteChannelId: chosen.channel.id, inviteChannelName: chosen.channel.name }
+      : blank
   }, [calendarsQuery.isSuccess, copy.isSuccess, copy.isError, copy.data, search, writable, now])
 
   if (calendarsQuery.isError) return <CalendarError onRetry={() => void calendarsQuery.refetch()} />
@@ -93,12 +97,12 @@ export function NewEventEditor({ search }: { search: NewEventSearch }) {
 export function EditEventEditor({ eventId, search }: { eventId: string; search: EditEventSearch }) {
   const { workspaceId: wsId } = useActiveWorkspace()
   const calendarsQuery = useQuery(calendarsQueryOptions(wsId))
-  const detail = useQuery(eventQueryOptions(wsId, eventId))
+  const detail = useQuery(eventQueryOptions(wsId, eventId, search.occurrence))
   const [round, setRound] = useState(0)
   const calendars = useMemo(() => calendarsQuery.data ?? [], [calendarsQuery.data])
 
   const reload = () => {
-    void queryClient.invalidateQueries({ queryKey: keys.calendar.event(wsId, eventId) })
+    void queryClient.invalidateQueries({ queryKey: keys.calendar.event(wsId, eventId, search.occurrence) })
     setRound((n) => n + 1)
   }
 
@@ -112,7 +116,9 @@ export function EditEventEditor({ eventId, search }: { eventId: string; search: 
   const d = detail.data
   if (!d.canEdit) return <Gone text="Bạn không có quyền sửa sự kiện này." />
 
-  const at = search.start && search.end ? { start: search.start, end: search.end } : undefined
+  // The server describes the instance that was named; the address's own start and end are only for a reply that is not about it.
+  const describesInstance = !search.occurrence || d.occurrenceStart === search.occurrence
+  const at = !describesInstance && search.start && search.end ? { start: search.start, end: search.end } : undefined
   const organizer = d.attendees.find((a) => a.isOrganizer)?.person ?? d.organizer
   // The calendar of the event stays offered even if it is not one the person can write to (a shared one they may only move events within).
   const own = calendars.find((c) => c.id === d.calendarId)

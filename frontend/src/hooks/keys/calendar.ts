@@ -9,7 +9,9 @@ export const calendarKeys = {
   eventsAll: (wsId: string) => ['calendar', wsId, 'events'] as const,
   events: (wsId: string, from: string, to: string, calendarIds: readonly string[]) =>
     ['calendar', wsId, 'events', from, to, calendarIds] as const,
-  event: (wsId: string, id: string) => ['calendar', wsId, 'event', id] as const,
+  /** One event; an occurrence of a recurring one is a key of its own under the event's, so the event's key covers both. */
+  event: (wsId: string, id: string, occurrence?: string) =>
+    (occurrence ? ['calendar', wsId, 'event', id, occurrence] : ['calendar', wsId, 'event', id]) as readonly string[],
   eventDetailsAll: (wsId: string) => ['calendar', wsId, 'event'] as const,
   search: (wsId: string, q: string) => ['calendar', wsId, 'search', q] as const,
   shares: (wsId: string, calId: string) => ['calendar', wsId, 'shares', calId] as const,

@@ -23,7 +23,10 @@ import { RemoteAudio } from './media'
 
 export interface JoinRequest {
   callId: string
+  /** Empty for the call of a calendar event. */
   channelId: string
+  /** The event whose call this is, when it is one. */
+  eventId?: string
   kind: CallKind
   /** The conversation's name. */
   title: string
@@ -133,7 +136,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     const store = useCallStore.getState()
     const now = Date.now()
     store.begin({
-      callId: req.callId, channelId: req.channelId, kind: req.kind, title: req.title, isDm: req.isDm,
+      callId: req.callId, channelId: req.channelId, eventId: req.eventId, kind: req.kind, title: req.title, isDm: req.isDm,
       joinedAt: now, startedAt: startedAtOf(req.ticket, now),
     })
 

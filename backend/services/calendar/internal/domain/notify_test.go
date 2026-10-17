@@ -191,6 +191,51 @@ func TestAnEventOnAGroupCalendarIsAnnouncedWithItsGroup(t *testing.T) {
 	assert.Len(t, ofType(rec, events.TypeCreated), 1, "only a group's calendar announces creation")
 }
 
+func TestAGroupCalendarAnnouncesAMoveAndACancellationToItsGroup(t *testing.T) {
+	f := newFixture(t)
+	rec := f.noticing()
+	cal := f.groupCal(t)
+	d := f.create(t, "n-alice", newInput(cal))
+	created := ofType(rec, events.TypeCreated)
+	require.Len(t, created, 1)
+	assert.True(t, created[0].Announce)
+	assert.NotEmpty(t, created[0].Tzid)
+
+	title := "Renamed"
+	_, err := f.svc.UpdateEvent(callerCtx("n-alice"), ws, d.EventID, ScopeQuery{}, EventPatch{Version: 1, Title: &title})
+	require.NoError(t, err)
+	assert.Empty(t, ofType(rec, events.TypeUpdated), "a rename is not a move")
+
+	start, end := "2026-11-02T10:00:00+07:00", "2026-11-02T11:00:00+07:00"
+	_, err = f.svc.UpdateEvent(callerCtx("n-alice"), ws, d.EventID, ScopeQuery{}, EventPatch{Version: 2, Start: &start, End: &end})
+	require.NoError(t, err)
+	moved := ofType(rec, events.TypeUpdated)
+	require.Len(t, moved, 1)
+	assert.True(t, moved[0].Announce)
+	assert.Equal(t, "ch-team", moved[0].ChannelID)
+	assert.Equal(t, "2026-11-02T03:00:00Z", moved[0].Start)
+	assert.Equal(t, "user-n-alice", moved[0].ActorUserID)
+
+	require.NoError(t, f.svc.DeleteEvent(callerCtx("n-alice"), ws, d.EventID, ScopeQuery{}, 0))
+	gone := ofType(rec, events.TypeCancelled)
+	require.Len(t, gone, 1)
+	assert.True(t, gone[0].Announce)
+	assert.Equal(t, "ch-team", gone[0].ChannelID)
+	assert.Empty(t, gone[0].OccurrenceStart)
+}
+
+func TestAPrivateEventOnAGroupCalendarIsNotAnnouncedToTheGroup(t *testing.T) {
+	f := newFixture(t)
+	rec := f.noticing()
+	cal := f.groupCal(t)
+	in := newInput(cal)
+	in.Visibility = VisibilityPrivate
+	d := f.create(t, "n-alice", in)
+	assert.Empty(t, ofType(rec, events.TypeCreated))
+	require.NoError(t, f.svc.DeleteEvent(callerCtx("n-alice"), ws, d.EventID, ScopeQuery{}, 0))
+	assert.Empty(t, rec.Notices(), "nothing of a private event reaches the chat")
+}
+
 func TestSomeoneWithoutAnAccountIsSkippedAndNoNoticesWithoutAPublisher(t *testing.T) {
 	f := newFixture(t)
 	rec := f.noticing()
@@ -218,4 +263,24 @@ func TestRealtimeFramesNameTheirActor(t *testing.T) {
 		assert.NotEmpty(t, e.ActorUserID, "the screen draws the other-person wash only when it knows the actor: %s %v", e.Kind, e.IDs)
 		assert.Contains(t, e.IDs, d.EventID)
 	}
+}
+
+func TestAGroupsEventIsNotForOutsidersAndNoGuestAnswersWithoutBeingInvited(t *testing.T) {
+	f := newFixture(t)
+	cal := f.groupCal(t)
+	d := f.create(t, "n-alice", newInput(cal))
+
+	// A member reads the group's event but, not being invited, cannot answer it.
+	_, err := f.svc.GetEvent(callerCtx("n-olga"), ws, d.EventID, "")
+	require.NoError(t, err)
+	_, err = f.svc.Rsvp(callerCtx("n-olga"), ws, d.EventID, RsvpInput{Response: ResponseAccepted})
+	requireKind(t, err, ErrAccessDenied)
+
+	// Someone outside the group sees neither the event nor the group's calendar.
+	_, err = f.svc.GetEvent(callerCtx("n-carol"), ws, d.EventID, "")
+	requireKind(t, err, ErrAccessDenied)
+	_, err = f.svc.ListEvents(callerCtx("n-carol"), ws, ListEventsQuery{From: rangeStart, To: rangeEnd, Calendars: []string{cal}})
+	requireKind(t, err, ErrAccessDenied)
+	_, err = f.svc.Rsvp(callerCtx("n-carol"), ws, d.EventID, RsvpInput{Response: ResponseAccepted})
+	requireKind(t, err, ErrAccessDenied)
 }

@@ -28,20 +28,25 @@ interface Props {
 /** The right panel of the stage (340 wide): Chat, and Người tham gia with raised hands, who is in, and who to invite. */
 export function CallSidePanel({ panel, onPanel, channelId, callId, title, isDm, call, snapshot }: Props) {
   const inCall = snapshot.participants.length
+  // The call of an event is in no conversation: the panel is the list of people and nothing else.
+  const hasChat = !!channelId
+  const shown = hasChat ? panel : 'people'
   return (
     <aside className="cs-panel" aria-label="Bảng bên">
       <div className="cs-panel-head">
-        <b>{panel === 'chat' ? 'Chat trong cuộc gọi' : 'Người tham gia'}</b>
+        <b>{shown === 'chat' ? 'Chat trong cuộc gọi' : 'Người tham gia'}</b>
         <IconButton aria-label="Đóng bảng" onClick={() => onPanel(null)}><X size={18} /></IconButton>
       </div>
-      <div className="cs-tabs" role="tablist">
-        <Pressable role="tab" className="cs-tab" aria-selected={panel === 'chat'} onClick={() => onPanel('chat')}>Chat</Pressable>
-        <Pressable role="tab" className="cs-tab" aria-selected={panel === 'people'} onClick={() => onPanel('people')}>
-          {`Người tham gia · ${inCall}`}
-        </Pressable>
-      </div>
+      {hasChat && (
+        <div className="cs-tabs" role="tablist">
+          <Pressable role="tab" className="cs-tab" aria-selected={panel === 'chat'} onClick={() => onPanel('chat')}>Chat</Pressable>
+          <Pressable role="tab" className="cs-tab" aria-selected={panel === 'people'} onClick={() => onPanel('people')}>
+            {`Người tham gia · ${inCall}`}
+          </Pressable>
+        </div>
+      )}
       <div className="cs-panel-body">
-        {panel === 'chat'
+        {shown === 'chat'
           ? <CallChat channelId={channelId} title={title} />
           : <PeopleTab channelId={channelId} callId={callId} isDm={isDm} call={call} snapshot={snapshot} />}
       </div>

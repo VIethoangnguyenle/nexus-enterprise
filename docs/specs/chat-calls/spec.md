@@ -136,7 +136,7 @@ the event's OA (`CalEv_<id>`) — checked when the ticket is asked for, never tr
 person without it SHALL get 403 and no ticket. `POST /api/calendar-events/{eventId}/call` (served by the messaging
 service) starts the call of an event that carries one (`hasCall`; 404 otherwise) or joins the one already open, and
 answers like starting a channel call: 201 with `{call, token, url}` for a call it opened, 200 for one already open; the
-call has no `channel_id`. `POST /api/calls/{id}/token` and `GET /api/calls/{id}` for such a call check `read` on the
+call has no `channel_id` and carries `calendar_event_id`, by which the call screen names the call after the event, offers "Về sự kiện" instead of "Về cuộc trò chuyện", and shows no chat (the stage lists the people only). `POST /api/calls/{id}/token` and `GET /api/calls/{id}` for such a call check `read` on the
 event's OA now, and a person put out of the event is put out of the room. An event with no OA of its own is checked on
 its calendar's. A repeating event's call belongs to its series. An event in a group calendar uses that group's own call
 and its `write` rule above. A call of an event posts no card and is announced to no conversation (there is none), and

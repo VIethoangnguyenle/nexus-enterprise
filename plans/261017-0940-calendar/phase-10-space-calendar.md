@@ -1,7 +1,7 @@
 ---
 phase: 10
 title: "Lịch nhóm chat + thẻ sự kiện"
-status: pending
+status: completed
 priority: P2
 effort: "1d"
 dependencies: [7, 9]
@@ -19,5 +19,12 @@ dependencies: [7, 9]
 - Sự kiện lịch nhóm có cuộc gọi → Tham gia dùng cuộc gọi của nhóm.
 
 ## Success Criteria
-- [ ] Test consumer tạo tin có thẻ; test frontend tab Lịch render + RSVP từ thẻ.
-- [ ] Rời nhóm → không thấy lịch nhóm (deny ở phase 02/04).
+- [x] Test consumer tạo tin có thẻ (idempotent); test frontend tab Lịch render + RSVP từ thẻ.
+- [x] Rời nhóm → không thấy lịch nhóm (deny ở phase 02/04; 403 → câu thông báo, không có sự kiện).
+
+## Done
+- Producer: notice `announce` + `tzid` (created / dời giờ / huỷ của sự kiện lịch nhóm, không gửi cho sự kiện riêng tư).
+- Messaging: `PostCalendarChat` (id tin suy ra từ thông báo → một tin dù giao lại), thẻ `calendar_event`, dòng "đã dời / đã huỷ".
+- Frontend: tab Lịch (`SpaceCalendar`), thẻ `EventChatCard`, "Sự kiện" trong menu +, mời cả nhóm khi tạo trên lịch nhóm,
+  Tham gia dùng cuộc gọi của nhóm, `GET /events/:id?occurrence`, chặn "Chỉ sự kiện này" khi đổi khách, cuộc gọi sự kiện
+  không có kênh (`Call.calendar_event_id`).

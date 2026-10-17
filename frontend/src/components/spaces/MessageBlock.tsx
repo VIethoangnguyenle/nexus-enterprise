@@ -87,10 +87,10 @@ export function MessageBlock({
         }]
       : []
 
-  // A poll, task or call message carries a fallback line of text for clients without cards; the card replaces it.
+  // A poll, task, call or event message carries a fallback line of text for clients without cards; the card replaces it.
   const card = deleted ? undefined : cardKindOf(m)
   const isCallCard = card === 'call'
-  const hasText = !deleted && !card?.match(/^(poll|task|call)$/) && !!m.content && !legacyFilename && m.content.trim() !== '' && m.content.trim() !== '<p></p>'
+  const hasText = !deleted && !card?.match(/^(poll|task|call|calendar_event)$/) && !!m.content && !legacyFilename && m.content.trim() !== '' && m.content.trim() !== '<p></p>'
   const hasBubble = hasText || (!deleted && !!m.quoted)
   const pending = !!m._optimistic
   const [timeShown, setTimeShown] = useState(false)

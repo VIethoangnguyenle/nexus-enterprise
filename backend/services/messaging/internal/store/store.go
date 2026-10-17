@@ -211,6 +211,13 @@ type execer interface {
 
 // insertMessage writes one message row.
 func insertMessage(ctx context.Context, x execer, msg *Message) error {
+	_, err := insertMessageRow(ctx, x, msg, "")
+	return err
+}
+
+// insertMessageRow writes one message row and says how many rows it wrote;
+// onConflict is appended to the statement ("" for none).
+func insertMessageRow(ctx context.Context, x execer, msg *Message, onConflict string) (int64, error) {
 	contentFormat := msg.ContentFormat
 	if contentFormat == "" {
 		contentFormat = "markdown"
@@ -219,17 +226,26 @@ func insertMessage(ctx context.Context, x execer, msg *Message) error {
 	if text == "" {
 		text = msg.Content
 	}
-	if _, err := x.Exec(ctx,
+	tag, err := x.Exec(ctx,
 		`INSERT INTO messages (id, channel_id, sender_id, content, message_type,
 		 parent_message_id, linked_entity_type, linked_entity_id,
 		 content_format, mentions, created_at, content_text, quoted_message_id)
-		 VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), $9, $10, $11, $12, NULLIF($13, ''))`,
+		 VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), NULLIF($7, ''), NULLIF($8, ''), $9, $10, $11, $12, NULLIF($13, ''))`+onConflict,
 		msg.ID, msg.ChannelID, msg.SenderID, msg.Content, msg.MessageType,
 		msg.ParentMessageID, msg.LinkedEntityType, msg.LinkedEntityID,
-		contentFormat, msg.Mentions, msg.CreatedAt, text, msg.QuotedMessageID); err != nil {
-		return fmt.Errorf("insert message: %w", err)
+		contentFormat, msg.Mentions, msg.CreatedAt, text, msg.QuotedMessageID)
+	if err != nil {
+		return 0, fmt.Errorf("insert message: %w", err)
 	}
-	return nil
+	return tag.RowsAffected(), nil
+}
+
+// InsertMessageOnce stores a main-stream message whose id the caller derived from
+// what it announces, so that the same announcement delivered twice stores one
+// message. It says whether this call stored it.
+func (s *Store) InsertMessageOnce(ctx context.Context, msg *Message) (bool, error) {
+	n, err := insertMessageRow(ctx, s.db, msg, " ON CONFLICT (id) DO NOTHING")
+	return n == 1, err
 }
 
 // InsertMessage persists a new message. A reply is counted on its parent, moves

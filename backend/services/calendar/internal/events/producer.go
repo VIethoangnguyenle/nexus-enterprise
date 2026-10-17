@@ -52,6 +52,12 @@ type Notice struct {
 	CalendarID  string `json:"calendar_id"`
 	// ChannelID is the group of a group calendar.
 	ChannelID string `json:"channel_id,omitempty"`
+	// Announce marks a notice for the group's chat itself (TypeCreated, and the
+	// TypeUpdated / TypeCancelled of the event as a whole): it has no audience of its
+	// own and the messaging service posts it into ChannelID.
+	Announce bool `json:"announce,omitempty"`
+	// Tzid is the zone the event was made in, to write its times in.
+	Tzid string `json:"tzid,omitempty"`
 	// OAID is the node a recipient must still be able to read for the notice to
 	// reach them: the event's own, else its calendar's.
 	OAID string `json:"oa_id,omitempty"`

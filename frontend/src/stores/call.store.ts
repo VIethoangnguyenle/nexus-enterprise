@@ -11,7 +11,10 @@ import { onSessionEnd } from '../lib/session-end'
 
 export interface CallSession {
   callId: string
+  /** Empty for the call of a calendar event: no conversation, so no chat. */
   channelId: string
+  /** The event whose call this is, when it is one. */
+  eventId?: string
   kind: CallKind
   /** The conversation's name: shown in the bars, never an id. */
   title: string

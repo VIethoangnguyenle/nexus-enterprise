@@ -1306,6 +1306,8 @@ func (s *Service) DeleteEvent(ctx context.Context, wsID, id string, q ScopeQuery
 		x.occurrence = orig
 	}
 	s.notify(ctx, events.TypeCancelled, ed.ws, ed.cal, m, guests, x)
+	x.announce = true
+	s.notify(ctx, events.TypeCancelled, ed.ws, ed.cal, m, nil, x)
 	return nil
 }
 
@@ -1316,6 +1318,14 @@ func (s *Service) notifyChange(ctx context.Context, ed *editing, home *store.Cal
 	x := noticeExtras{actor: ed.who}
 	s.notify(ctx, events.TypeInvited, ed.ws, home, in.Master, added, x)
 	s.notify(ctx, events.TypeCancelled, ed.ws, home, in.Master, removed, x)
+	if movedInTime(before, scope, in) {
+		xa := x
+		if scope != ScopeAll {
+			xa.occurrence, xa.start, xa.end = in.Original, in.Start, in.End
+		}
+		xa.announce = true
+		s.notify(ctx, events.TypeUpdated, ed.ws, home, in.Master, nil, xa)
+	}
 	if !movedOrReplaced(before, scope, in) {
 		return
 	}

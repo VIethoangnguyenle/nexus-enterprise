@@ -44,6 +44,8 @@ interface Props {
   onPanel: (p: CallPanel | null) => void
   /** Messages in the conversation since the chat panel was last open. */
   newMessages: number
+  /** The call has a conversation; the call of a calendar event has none, and so no Chat button. */
+  hasChat?: boolean
   /** Hands up, to badge the people button. */
   handsUp: number
   /** Someone else is presenting right now (the confirm "Thay người đang trình bày?"). */
@@ -54,7 +56,7 @@ interface Props {
 
 /** The bottom bar of the desktop stage (mockup §4): micro · camera · trình bày · giơ tay · cảm xúc | rời, with chat, people and more at the right. */
 export function CallControls({
-  callRoom, snapshot, title, clock, panel, onPanel, newMessages, handsUp, otherPresenter, onLeave, onOpenDevices,
+  callRoom, snapshot, title, clock, panel, onPanel, newMessages, hasChat = true, handsUp, otherPresenter, onLeave, onOpenDevices,
 }: Props) {
   const [reactOpen, setReactOpen] = useState(false)
   const [moreOpen, setMoreOpen] = useState(false)
@@ -128,10 +130,12 @@ export function CallControls({
       </Pressable>
 
       <span className="cs-right">
-        <Pressable className="cs-btn cs-btn-sq" aria-label="Chat" aria-pressed={panel === 'chat'} onClick={() => onPanel(panel === 'chat' ? null : 'chat')}>
-          <MessageSquare className="cs-icon" />
-          {newMessages > 0 && panel !== 'chat' && <span className="cs-badge" aria-label={`${newMessages} tin mới`}>{newMessages}</span>}
-        </Pressable>
+        {hasChat && (
+          <Pressable className="cs-btn cs-btn-sq" aria-label="Chat" aria-pressed={panel === 'chat'} onClick={() => onPanel(panel === 'chat' ? null : 'chat')}>
+            <MessageSquare className="cs-icon" />
+            {newMessages > 0 && panel !== 'chat' && <span className="cs-badge" aria-label={`${newMessages} tin mới`}>{newMessages}</span>}
+          </Pressable>
+        )}
         <Pressable className="cs-btn cs-btn-sq" aria-label="Người tham gia" aria-pressed={panel === 'people'} onClick={() => onPanel(panel === 'people' ? null : 'people')}>
           <Users className="cs-icon" />
           {handsUp > 0 && <span className="cs-badge" aria-label={`${handsUp} người giơ tay`}>{handsUp}</span>}

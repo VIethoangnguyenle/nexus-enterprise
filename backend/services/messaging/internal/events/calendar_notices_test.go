@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"ngac-platform/pkg/realtime"
+	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/domain"
 )
 
@@ -20,7 +21,23 @@ type fakeGate struct {
 	names  map[string]string
 	pushed []domain.CalendarPush
 	pushTo []string
+	posts  []domain.CalendarChatPost
+	// postErr and postNil make PostCalendarChat refuse or report a repeat.
+	postErr error
+	postNil bool
 }
+
+func (g *fakeGate) PostCalendarChat(_ context.Context, p domain.CalendarChatPost) (*pb.Message, error) {
+	g.posts = append(g.posts, p)
+	if g.postErr != nil || g.postNil {
+		return nil, g.postErr
+	}
+	return &pb.Message{Id: "m1", ChannelId: p.ChannelID}, nil
+}
+
+type fakeAnnouncer struct{ sent []*pb.Message }
+
+func (a *fakeAnnouncer) BroadcastToChannel(_ string, m *pb.Message) { a.sent = append(a.sent, m) }
 
 func (g *fakeGate) CanRead(_ context.Context, node, oa string) bool     { return g.reads[node+"|"+oa] }
 func (g *fakeGate) UserDisplayName(_ context.Context, id string) string { return g.names[id] }
@@ -194,3 +211,62 @@ func TestTheRealtimeConsumerSkipsNoticesAndKeepsFrames(t *testing.T) {
 type capturePublisher struct{ got []realtime.Event }
 
 func (p *capturePublisher) PublishDomain(e realtime.Event) { p.got = append(p.got, e) }
+
+func groupNotice(typ, extra string) []byte {
+	return []byte(fmt.Sprintf(`{"record":"notice","type":%q,"workspace_id":"w1","event_id":"e1","calendar_id":"c1","channel_id":"ch1",
+		"announce":true,"oa_id":"oa1","actor_user_id":"u-alice","actor_node_id":"n-alice","title":"Họp tuần","tzid":"Asia/Ho_Chi_Minh",
+		"start":"2026-11-02T03:00:00Z","end":"2026-11-02T04:00:00Z","at":1700000000000%s}`, typ, extra))
+}
+
+func TestAGroupCalendarAnnouncementIsPostedIntoTheGroupChatAndShown(t *testing.T) {
+	c, n, g := calendarConsumer()
+	live := &fakeAnnouncer{}
+	c.announcer = live
+
+	c.handleCalendarEvent(context.Background(), groupNotice("event.created", ""))
+	require.Len(t, g.posts, 1)
+	p := g.posts[0]
+	assert.Equal(t, domain.CalendarChatCard, p.Kind)
+	assert.Equal(t, "ch1", p.ChannelID)
+	assert.Equal(t, "e1", p.EventID)
+	assert.Equal(t, "u-alice", p.ActorUserID)
+	assert.Equal(t, "n-alice", p.ActorNodeID)
+	assert.Equal(t, "Alice Nguyen", p.ActorName)
+	assert.Equal(t, "Asia/Ho_Chi_Minh", p.Zone)
+	assert.EqualValues(t, 1700000000000, p.Stamp)
+	require.Len(t, live.sent, 1, "people with the group open see it at once")
+	assert.Empty(t, n.got, "an announcement makes no notification")
+
+	c.handleCalendarEvent(context.Background(), groupNotice("event.updated", ""))
+	c.handleCalendarEvent(context.Background(), groupNotice("event.cancelled", `,"occurrence_start":"2026-11-09T02:00:00Z"`))
+	require.Len(t, g.posts, 3)
+	assert.Equal(t, domain.CalendarChatMoved, g.posts[1].Kind)
+	assert.Equal(t, time.Date(2026, 11, 2, 3, 0, 0, 0, time.UTC), g.posts[1].Start)
+	assert.Equal(t, domain.CalendarChatCancelled, g.posts[2].Kind)
+	assert.Equal(t, time.Date(2026, 11, 9, 2, 0, 0, 0, time.UTC), g.posts[2].Occurrence)
+}
+
+func TestARepeatedOrRefusedAnnouncementIsNotShownTwice(t *testing.T) {
+	c, _, g := calendarConsumer()
+	live := &fakeAnnouncer{}
+	c.announcer = live
+
+	g.postNil = true // the same notice was posted before
+	c.handleCalendarEvent(context.Background(), groupNotice("event.created", ""))
+	assert.Empty(t, live.sent)
+
+	g.postNil, g.postErr = false, fmt.Errorf("the actor does not read this group")
+	c.handleCalendarEvent(context.Background(), groupNotice("event.created", ""))
+	assert.Empty(t, live.sent, "a refused post is not announced")
+
+	// A notice that is not for the chat, or has nobody to speak as, posts nothing.
+	g.postErr = nil
+	before := len(g.posts)
+	c.handleCalendarEvent(context.Background(), groupNotice("event.invited", ""))
+	c.handleCalendarEvent(context.Background(), groupNotice("event.rsvp", ""))
+	assert.Equal(t, before, len(g.posts), "only a creation, a move and a cancellation are said in the chat")
+
+	c.calendar = nil
+	c.handleCalendarEvent(context.Background(), groupNotice("event.created", ""))
+	assert.Empty(t, live.sent, "without a gate nothing is posted unchecked")
+}

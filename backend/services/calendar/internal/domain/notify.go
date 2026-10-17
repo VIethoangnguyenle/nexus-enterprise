@@ -25,6 +25,9 @@ type noticeExtras struct {
 	minutes    *int
 	// actor stands for whoever caused it; zero for a reminder.
 	actor grpcauth.Caller
+	// announce makes the notice one for the group's chat, not for people: it is
+	// sent with no recipients, and only for a group calendar's event that is not private.
+	announce bool
 	// toActor keeps the actor among the recipients (a reminder is for them too).
 	toActor bool
 }
@@ -49,6 +52,12 @@ func (s *Service) notify(ctx context.Context, typ string, ws *store.Workspace, c
 	if s.notices == nil {
 		return
 	}
+	if typ == events.TypeCreated {
+		x.announce = true
+	}
+	if x.announce && (cal.Kind != store.KindChannel || e == nil || e.Visibility == VisibilityPrivate) {
+		return
+	}
 	var recipients []events.Recipient
 	if nodes = distinct(nodes...); len(nodes) > 0 {
 		people, err := s.store.People(ctx, ws.ID, nodes)
@@ -62,19 +71,19 @@ func (s *Service) notify(ctx context.Context, typ string, ws *store.Workspace, c
 			}
 		}
 	}
-	if len(recipients) == 0 && typ != events.TypeCreated {
+	if len(recipients) == 0 && !x.announce {
 		return
 	}
 	n := events.Notice{
 		Type: typ, TenantID: ws.ID, WorkspaceID: ws.ID, CalendarID: cal.ID, OAID: oaOf(cal, e),
 		ActorNodeID: x.actor.NGACNodeID, ActorUserID: x.actor.UserID, Recipients: recipients,
-		Response: x.response, Comment: x.comment, MinutesBefore: x.minutes,
+		Response: x.response, Comment: x.comment, MinutesBefore: x.minutes, Announce: x.announce,
 	}
 	if cal.Kind == store.KindChannel {
 		n.ChannelID = cal.ChannelID
 	}
 	if e != nil {
-		n.EventID, n.Title, n.AllDay = e.ID, e.Title, e.AllDay
+		n.EventID, n.Title, n.AllDay, n.Tzid = e.ID, e.Title, e.AllDay, e.TZID
 		n.Start, n.End = e.StartsAt.UTC().Format(time.RFC3339), e.EndsAt.UTC().Format(time.RFC3339)
 	}
 	if !x.occurrence.IsZero() && e != nil {
@@ -108,4 +117,16 @@ func movedOrReplaced(before store.Event, scope string, in instance) bool {
 		startNow, endNow, place = in.Start, in.End, in.Row.Location
 	}
 	return !startNow.Equal(startWas) || !endNow.Equal(endWas) || place != before.Location
+}
+
+// movedInTime reports whether a change moved an event or one of its occurrences
+// in time (not merely in place): what a group's chat is told.
+func movedInTime(before store.Event, scope string, in instance) bool {
+	startWas, endWas := before.StartsAt, before.EndsAt
+	startNow, endNow := in.Master.StartsAt, in.Master.EndsAt
+	if before.RRule != "" && scope != ScopeAll {
+		startWas, endWas = in.Original, in.Original.Add(before.EndsAt.Sub(before.StartsAt))
+		startNow, endNow = in.Start, in.End
+	}
+	return !startNow.Equal(startWas) || !endNow.Equal(endWas)
 }

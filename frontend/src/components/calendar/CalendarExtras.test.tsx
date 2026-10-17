@@ -6,8 +6,9 @@ import {
 } from '@tanstack/react-router'
 import { renderWithClient, resetClient } from '../../test/render'
 import {
-  CAL, E, NOW, OCCURRENCES, PEOPLE, UUID_RE, calendarFixtureApi, calls, resetFixtures,
+  CAL, E, NOW, OCCURRENCES, PEOPLE, UUID_RE, calendarFixtureApi, calls, enableGroupCalendar, resetFixtures,
 } from '../../test/calendar-fixtures'
+import { CH } from '../../test/chat-fixtures'
 import { validateCalendarSearch, validateEditEventSearch, validateNewEventSearch } from '../../lib/calendar-search'
 import { apiFetch } from '../../api/client'
 import type { CalendarSummary } from '../../api/calendar'
@@ -168,6 +169,19 @@ describe('the video call of an event', () => {
     await user.click(screen.getByRole('button', { name: 'Tham gia cuộc gọi' }))
     await waitFor(() => expect(writes('POST').some((c) => c.path === `/calendar-events/${E.giaoBan}/call`)).toBe(true))
     await waitFor(() => expect(router.state.location.pathname).toBe('/calls/ca110000-aaaa-4bbb-8ccc-000000000001'))
+  })
+
+  it('uses the call of the group for an event on a group calendar', async () => {
+    enableGroupCalendar()
+    vi.setSystemTime(new Date(2026, 9, 15, 13, 20))
+    const user = setup()
+    const router = await renderCalendar()
+    await user.click(await block(/^Gặp đối tác VNPay/))
+    await screen.findByRole('dialog', { name: 'Gặp đối tác VNPay' })
+    await user.click(screen.getByRole('button', { name: 'Tham gia cuộc gọi' }))
+    await waitFor(() => expect(router.state.location.pathname).toBe('/calls/ca110000-aaaa-4bbb-8ccc-000000000002'))
+    expect(writes('POST').some((c) => c.path === `/channels/${CH.doisoat}/calls`)).toBe(true)
+    expect(writes('POST').some((c) => c.path.startsWith('/calendar-events/'))).toBe(false)
   })
 
   it('stays while the event runs and goes at its end', async () => {

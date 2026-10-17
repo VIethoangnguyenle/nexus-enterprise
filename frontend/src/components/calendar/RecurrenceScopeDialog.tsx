@@ -15,19 +15,22 @@ interface Props {
   title: string
   onClose: () => void
   onConfirm: (scope: EditScope) => void
+  /** Why "Chỉ sự kiện này" cannot be chosen, when it cannot (the change belongs to the whole series). */
+  thisBlockedBecause?: string
 }
 
 /**
  * Which occurrences of a recurring event a change covers (DESIGN.md §6, Lặp lại). Chỉ sự kiện này is the
  * safe default. The editor reuses it for its own save.
  */
-export function RecurrenceScopeDialog({ open, title, onClose, onConfirm }: Props) {
-  const [scope, setScope] = useState<EditScope>('this')
+export function RecurrenceScopeDialog({ open, title, onClose, onConfirm, thisBlockedBecause }: Props) {
+  const first: EditScope = thisBlockedBecause ? 'all' : 'this'
+  const [scope, setScope] = useState<EditScope>(first)
   const groupId = useId()
   // Each time it opens it offers the narrowest change again.
   useEffect(() => {
-    if (open) setScope('this')
-  }, [open])
+    if (open) setScope(first)
+  }, [open, first])
 
   return (
     <Dialog
@@ -44,13 +47,17 @@ export function RecurrenceScopeDialog({ open, title, onClose, onConfirm }: Props
       }
     >
       <div role="radiogroup" aria-label="Phạm vi thay đổi" id={groupId} className="grid gap-1">
-        {CHOICES.map((c) => (
+        {CHOICES.map((c) => {
+          const blocked = c.scope === 'this' && !!thisBlockedBecause
+          return (
           <Pressable
             key={c.scope}
             role="radio"
             aria-checked={scope === c.scope}
-            onClick={() => setScope(c.scope)}
-            className="flex items-center gap-3 h-10 px-2 rounded-lg text-sm text-ink hover:bg-hover"
+            aria-disabled={blocked || undefined}
+            onClick={() => !blocked && setScope(c.scope)}
+            className={`flex items-center gap-3 h-10 px-2 rounded-lg text-sm hover:bg-hover
+              ${blocked ? 'text-ink-subtle cursor-not-allowed' : 'text-ink'}`}
           >
             <span
               aria-hidden="true"
@@ -61,7 +68,9 @@ export function RecurrenceScopeDialog({ open, title, onClose, onConfirm }: Props
             </span>
             {c.label}
           </Pressable>
-        ))}
+          )
+        })}
+        {thisBlockedBecause && <p className="m-0 px-2 text-xs text-ink-muted">{thisBlockedBecause}</p>}
       </div>
     </Dialog>
   )

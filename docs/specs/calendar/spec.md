@@ -309,6 +309,52 @@ moment of asking. A person who is not a guest, not the owner and not shared with
 - **WHEN** a guest asks for the call ticket
 - **THEN** they get it, and a stranger asking gets 403
 
+### Requirement: A group's calendar speaks in the group's chat
+An event created on a group's calendar SHALL post a message of its creator into the group's conversation: a system message
+carrying an event card (`linked_entity_type` `calendar_event`, the event's id and nothing else). The card is read live from
+the calendar under each viewer's own access, so a move shows at once and a viewer who may no longer read the event sees no
+details. A move in time of such an event (the whole event, or one occurrence) SHALL post a short line of the person who
+moved it ("<Tên> đã dời “<tiêu đề>” sang <giờ>", worded in the event's own zone), and a cancellation a line of the person
+who cancelled it; a cancelled event's card is dimmed and says "Đã huỷ". A rename, a change of place or of guests posts
+nothing. A private event is never announced to the chat. Messaging reads these as notices with `announce` on
+`calendar.events` (`event.created`, `event.updated`, `event.cancelled`, with `channel_id`, `actor_user_id`,
+`actor_node_id` and `tzid`), which have no recipients and make no notification. The topic delivers at least once and the
+announcement SHALL make one message: the message id is derived from what is announced. Nothing is posted into a direct
+message or a conversation of another workspace, nor in the name of someone who can no longer read the group.
+
+#### Scenario: A new event
+- **WHEN** a member creates an event on the group's calendar
+- **THEN** the group's stream shows a card of it from the creator, and the same notice delivered twice stores one message
+
+#### Scenario: A move
+- **WHEN** the event is moved to another time
+- **THEN** the card shows the new time and a line "<Tên> đã dời … sang <giờ>" follows it
+
+#### Scenario: Someone who left the group
+- **WHEN** the creator no longer reads the group when the notice arrives
+- **THEN** nothing is posted
+
+#### Scenario: A card answered by a non-guest
+- **WHEN** a member who was not invited answers the card
+- **THEN** the answer is 403; the card offers no answer to someone who is not a guest
+
+### Requirement: A group has a Lịch tab
+A group conversation (not a direct message, not a personal workspace) SHALL have a **Lịch** tab beside Trò chuyện, Tệp and
+Công việc: what is coming up on the group's calendar, a small month, "Tạo sự kiện" and "Mở trong Lịch". "Tạo sự kiện" (also
+"Sự kiện" in the composer's "Tạo trong chat" menu, except in a thread's reply box) opens the editor on the group's
+calendar, making the calendar first if it does not exist, and an event made there invites the whole group. Someone who is
+not in the group is refused by the calendar's API (403) and the tab shows a sentence, never events. The video call of an
+event on a group's calendar is the group's own call.
+
+#### Scenario: Outsider
+- **WHEN** a person who is not in the group asks for the group calendar's events
+- **THEN** the answer is 403
+
+### Requirement: An occurrence can be read
+`GET /events/{id}?occurrence=<occurrenceStart>` SHALL answer for that instance of a repeating event: its own start and end,
+and the data of its exception when it has one. An instant the series never produces, or a cancelled occurrence, is 404.
+Changing the guests of a repeating event belongs to the whole series: the editor does not offer "only this one" for it.
+
 ### Requirement: Deleting removes what the event created
 Deleting an event SHALL be allowed with `write` on the calendar and SHALL remove its guests, reminders, its OA and
 UA, and end any call it opened. Deleting a calendar SHALL need `manage` and delete all events and the calendar's
@@ -341,4 +387,6 @@ claimed in `calendar_reminder_deliveries`), the notices on `calendar.events` (`e
 calendar, which carries the group and notifies nobody) and the notifications and push they make in the messaging
 service are implemented. The call of an event (`POST /api/calendar-events/:eventId/call`) is served by the messaging
 service and needs the event to carry a call (`hasCall`). A person's own reminders are honoured when present but no
-route writes them yet.
+route writes them yet. A group calendar's announcements (`announce` notices) are posted by the messaging service into the
+group's chat (`backend/services/messaging/internal/domain/calendar_chat.go`), and the group's Lịch tab, the event card and
+"Sự kiện" in the composer are in the frontend (`components/spaces/SpaceCalendar.tsx`, `components/calendar/EventChatCard.tsx`).

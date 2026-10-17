@@ -597,6 +597,7 @@ message Call {
   google.protobuf.Timestamp ring_expires_at = 12;
   repeated CallPerson participants = 13;  // in the call now
   int32 taker_count = 14;                 // everyone who was ever in it
+  string calendar_event_id = 15;          // the event a calendar event's call belongs to; channel_id is empty then
 }
 
 // CallJoin is a ticket into a call's room: a LiveKit token valid for a few

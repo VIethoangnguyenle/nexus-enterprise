@@ -457,6 +457,36 @@ func TestFollowingKeepsTheRemainingCount(t *testing.T) {
 	assert.Equal(t, []string{"Standup@2026-11-02T09:00", "Standup@2026-11-09T09:00", "Standup@2026-11-16T09:00", "Tail@2026-11-23T09:00", "Tail@2026-11-30T09:00"}, titles(f.list(t, "n-alice", cal)))
 }
 
+func TestReadingAnOccurrenceGivesThatInstanceNotTheSeries(t *testing.T) {
+	f := newFixture(t)
+	cal := f.calOf(t, "n-alice", store.KindPersonal)
+	ctx := callerCtx("n-alice")
+	d := f.create(t, "n-alice", weekly(cal))
+	occ := f.list(t, "n-alice", cal)
+
+	// A later instance reads at its own times, not the series' first.
+	third, err := f.svc.GetEvent(ctx, ws, d.EventID, occ[2].OccurrenceStart)
+	require.NoError(t, err)
+	assert.Equal(t, occ[2].Start, third.Start)
+	assert.Equal(t, occ[2].End, third.End)
+	assert.Equal(t, occ[2].OccurrenceStart, third.OccurrenceStart)
+
+	// A moved instance reads at its new times and its own override data.
+	start, end, place := "2026-11-10T14:00:00+07:00", "2026-11-10T15:00:00+07:00", "Phòng 2"
+	_, err = f.svc.UpdateEvent(ctx, ws, d.EventID, ScopeQuery{Scope: ScopeThis, Occurrence: occ[1].OccurrenceStart},
+		EventPatch{Version: 1, Start: &start, End: &end, Location: &place})
+	require.NoError(t, err)
+	moved, err := f.svc.GetEvent(ctx, ws, d.EventID, occ[1].OccurrenceStart)
+	require.NoError(t, err)
+	assert.Equal(t, "Phòng 2", moved.Location)
+	assert.Equal(t, occ[1].OccurrenceStart, moved.OccurrenceStart)
+	assert.NotEqual(t, occ[1].Start, moved.Start)
+
+	// An instant the series never produces is not an occurrence.
+	_, err = f.svc.GetEvent(ctx, ws, d.EventID, "2026-11-04T09:00:00+07:00")
+	requireKind(t, err, ErrNotFound)
+}
+
 func TestDeleteScopes(t *testing.T) {
 	f := newFixture(t)
 	cal := f.calOf(t, "n-alice", store.KindPersonal)

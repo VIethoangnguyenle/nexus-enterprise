@@ -54,10 +54,10 @@ export function useOccurrences(wsId: string, from: Date, to: Date, calendarIds: 
   })
 }
 
-export const eventQueryOptions = (wsId: string, id: string) =>
+export const eventQueryOptions = (wsId: string, id: string, occurrence?: string) =>
   queryOptions({
-    queryKey: keys.calendar.event(wsId, id),
-    queryFn: () => calendarApi.getEvent(wsId, id),
+    queryKey: keys.calendar.event(wsId, id, occurrence),
+    queryFn: () => calendarApi.getEvent(wsId, id, occurrence),
     enabled: !!wsId && !!id,
     // 403 and 404 are answers ("not yours any more", "gone"), not hiccups.
     retry: (count, err) => ![403, 404].includes(statusOf(err) ?? 0) && count < 1,

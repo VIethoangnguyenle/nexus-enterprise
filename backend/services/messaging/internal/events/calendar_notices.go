@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/domain"
 )
 
@@ -24,6 +25,7 @@ const (
 	calendarRsvp      = "event.rsvp"
 	calendarReminder  = "event.reminder"
 	calendarShared    = "calendar.shared"
+	calendarCreated   = "event.created"
 )
 
 // Notification types stored for them.
@@ -53,6 +55,12 @@ type CalendarNotice struct {
 	WorkspaceID string `json:"workspace_id"`
 	EventID     string `json:"event_id"`
 	CalendarID  string `json:"calendar_id"`
+	// ChannelID is the group of a group calendar; Announce marks a notice for that
+	// group's chat (it has no recipients).
+	ChannelID   string `json:"channel_id"`
+	Announce    bool   `json:"announce"`
+	Tzid        string `json:"tzid"`
+	ActorNodeID string `json:"actor_node_id"`
 	OAID        string `json:"oa_id"`
 	ActorUserID string `json:"actor_user_id"`
 	Recipients  []struct {
@@ -76,6 +84,13 @@ type CalendarGate interface {
 	CanRead(ctx context.Context, userNodeID, nodeID string) bool
 	UserDisplayName(ctx context.Context, userID string) string
 	PushCalendar(ctx context.Context, userID string, p domain.CalendarPush)
+	PostCalendarChat(ctx context.Context, p domain.CalendarChatPost) (*pb.Message, error)
+}
+
+// MessageAnnouncer sends a new message to the people who have the conversation
+// open. The WebSocket hub implements it.
+type MessageAnnouncer interface {
+	BroadcastToChannel(channelID string, msg *pb.Message)
 }
 
 // SetCalendar wires the checks and the push. Without them calendar notices are
@@ -118,6 +133,10 @@ func (c *Consumer) handleCalendarEvent(ctx context.Context, data []byte) {
 	var n CalendarNotice
 	if err := json.Unmarshal(data, &n); err != nil {
 		slog.Warn("failed to unmarshal calendar notice", "error", err)
+		return
+	}
+	if n.Announce {
+		c.postCalendarChat(ctx, n)
 		return
 	}
 	notifType, entityType, entityID, ok := calendarEntity(n)
@@ -189,4 +208,42 @@ func calendarEntity(n CalendarNotice) (notifType, entityType, entityID string, o
 		return "", "", "", false
 	}
 	return notifType, entityCalendarEvent, n.EventID, n.EventID != ""
+}
+
+// postCalendarChat writes a group calendar's announcement into the group's chat
+// and tells the people who have it open. A notice posted before (the topic
+// delivers at least once) makes no second message; one that cannot be posted is
+// logged and dropped, as no retry would change the answer.
+func (c *Consumer) postCalendarChat(ctx context.Context, n CalendarNotice) {
+	if c.calendar == nil {
+		slog.Warn("calendar announcement dropped: no gate wired", "type", n.Type)
+		return
+	}
+	post := domain.CalendarChatPost{
+		WorkspaceID: n.WorkspaceID, ChannelID: n.ChannelID, EventID: n.EventID, Title: n.Title,
+		ActorUserID: n.ActorUserID, ActorNodeID: n.ActorNodeID, ActorName: c.calendar.UserDisplayName(ctx, n.ActorUserID),
+		AllDay: n.AllDay, Zone: n.Tzid, Stamp: n.At,
+	}
+	if n.OccurrenceStart != "" {
+		post.Occurrence, _ = time.Parse(time.RFC3339, n.OccurrenceStart)
+	}
+	switch n.Type {
+	case calendarCreated:
+		post.Kind = domain.CalendarChatCard
+	case calendarUpdated:
+		post.Kind = domain.CalendarChatMoved
+		post.Start, _ = time.Parse(time.RFC3339, n.Start)
+	case calendarCancelled:
+		post.Kind = domain.CalendarChatCancelled
+	default:
+		return
+	}
+	msg, err := c.calendar.PostCalendarChat(ctx, post)
+	if err != nil {
+		slog.Warn("calendar announcement not posted", "type", n.Type, "event", n.EventID, "error", err)
+		return
+	}
+	if msg != nil && c.announcer != nil {
+		c.announcer.BroadcastToChannel(msg.ChannelId, msg)
+	}
 }

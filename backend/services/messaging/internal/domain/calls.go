@@ -721,7 +721,7 @@ func (s *Service) callProtoWith(ctx context.Context, call *store.Call, present [
 	}
 	out := &pb.Call{
 		Id: call.ID, ChannelId: call.ChannelID, Kind: call.Kind, Status: call.Status,
-		StartedBy: call.StartedBy, MessageId: call.MessageID,
+		StartedBy: call.StartedBy, MessageId: call.MessageID, CalendarEventId: call.CalendarEventID,
 		CreatedAt:     timestamppb.New(call.CreatedAt),
 		StartedAt:     optionalTimestamp(call.StartedAt),
 		EndedAt:       optionalTimestamp(call.EndedAt),

@@ -5,7 +5,7 @@
  */
 import { formatISO } from 'date-fns'
 import type { CalendarSettings, CalendarSummary, EventDetail, Occurrence, PersonFreeBusy, PersonRef, Share } from '../api/calendar'
-import { CONTACTS, SPACES, U, WS_ID } from './chat-fixtures'
+import { CH, CONTACTS, SPACES, U, WS_ID } from './chat-fixtures'
 
 export { UUID_RE, WS_ID } from './chat-fixtures'
 
@@ -18,6 +18,8 @@ export const CAL = {
   mine: 'c0000000-aaaa-4bbb-8ccc-000000000001',
   ws: 'c0000000-aaaa-4bbb-8ccc-000000000002',
   vinh: 'c0000000-aaaa-4bbb-8ccc-000000000003',
+  /** The calendar of the group "Đối soát giao dịch"; present only after `enableGroupCalendar`. */
+  group: 'c0000000-aaaa-4bbb-8ccc-000000000004',
 }
 
 const person = (key: keyof typeof U, name: string, hue: number): PersonRef => ({ nodeId: U[key].node, displayName: name, hue })
@@ -44,6 +46,17 @@ export const E = {
   a: 'e0000000-aaaa-4bbb-8ccc-000000000008',
   b: 'e0000000-aaaa-4bbb-8ccc-000000000009',
   c: 'e0000000-aaaa-4bbb-8ccc-00000000000a',
+  /** Events of the group's calendar. */
+  teamSync: 'e0000000-aaaa-4bbb-8ccc-000000000010',
+  teamLater: 'e0000000-aaaa-4bbb-8ccc-000000000011',
+  /** A group event nobody was invited to: the group reads it, none can answer it. */
+  teamOpen: 'e0000000-aaaa-4bbb-8ccc-000000000012',
+}
+
+/** The group's calendar as the caller sees it. */
+export const GROUP_CALENDAR: CalendarSummary = {
+  id: CAL.group, kind: 'channel', name: 'Đối soát giao dịch', color: 3, visible: true, access: 'write', isMine: false,
+  channel: { id: CH.doisoat, name: 'Đối soát giao dịch' },
 }
 
 const base = {
@@ -67,6 +80,14 @@ export const OCCURRENCES: Occurrence[] = [
   occ(E.b, 'Việc B', at(15, 11), at(15, 12)),
   occ(E.c, 'Việc C', at(15, 16), at(15, 17)),
   occ(E.standup, 'Standup', at(16, 9), at(16, 9, 15), { isRecurring: true, recurrenceText: 'Hằng tuần vào thứ Sáu' }),
+]
+
+export const GROUP_OCCURRENCES: Occurrence[] = [
+  occ(E.teamSync, 'Gặp đối tác VNPay', at(15, 13, 30), at(15, 14, 30), {
+    calendarId: CAL.group, guestCount: 3, hasCall: true, myResponse: 'needs_action', organizer: PEOPLE.yen, location: 'Phòng khách tầng 1',
+  }),
+  occ(E.teamLater, 'Chốt phí giao dịch', at(20, 10), at(20, 11), { calendarId: CAL.group, guestCount: 3, myResponse: 'accepted' }),
+  occ(E.teamOpen, 'Họp nhóm mở', at(21, 9), at(21, 10), { calendarId: CAL.group }),
 ]
 
 export const DETAIL_ATTENDEES = [
@@ -101,8 +122,10 @@ export interface Mode {
   writeStatus: number | null
   /** Tìm giờ finds no common slot. */
   noSlots: boolean
+  /** The caller is not in the group: its calendar answers 403. */
+  groupForbidden: boolean
 }
-const DEFAULT_MODE: Mode = { calendarsError: false, eventsError: false, noEvents: false, writeStatus: null, noSlots: false }
+const DEFAULT_MODE: Mode = { calendarsError: false, eventsError: false, noEvents: false, writeStatus: null, noSlots: false, groupForbidden: false }
 export const mode: Mode = { ...DEFAULT_MODE }
 
 /** The fake server's copy of the occurrences; PATCH and DELETE change it. */
@@ -117,6 +140,13 @@ export function resetFixtures() {
   settings = { tzid: 'Asia/Ho_Chi_Minh', workStart: '08:00', workEnd: '17:00', defaultReminder: 10 }
 }
 resetFixtures()
+
+/** The group's calendar exists already (with its events when asked), as after someone made the first event. */
+export function enableGroupCalendar(withEvents = true) {
+  calendars = [...calendars.filter((c) => c.id !== CAL.group), structuredClone(GROUP_CALENDAR)]
+  store = store.filter((o) => o.calendarId !== CAL.group)
+  if (withEvents) store = [...store, ...structuredClone(GROUP_OCCURRENCES)]
+}
 
 const detailOf = (o: Occurrence): EventDetail => ({
   ...o, tzid: 'Asia/Ho_Chi_Minh', transparency: 'busy', visibility: 'default', guestsCanInvite: false, guestsCanSeeList: true,
@@ -144,6 +174,11 @@ export function calendarFixtureApi(path: string, init?: RequestInit): Promise<un
     return ok({ call: { id: 'ca110000-aaaa-4bbb-8ccc-000000000001', channel_id: 'x', kind: 'video', status: 'active' }, token: 't', url: 'wss://x' })
   }
 
+  const groupCall = p.match(/^\/channels\/([^/]+)\/calls$/)
+  if (groupCall && method === 'POST') {
+    return ok({ call: { id: 'ca110000-aaaa-4bbb-8ccc-000000000002', channel_id: groupCall[1], kind: 'video', status: 'active' }, token: 't', url: 'wss://x' })
+  }
+
   const root = `/workspaces/${WS_ID}/calendar`
   if (!p.startsWith(root)) return Promise.reject(new Error(`unexpected ${method} ${path}`))
   const rest = p.slice(root.length)
@@ -154,6 +189,12 @@ export function calendarFixtureApi(path: string, init?: RequestInit): Promise<un
     return fail(status)
   }
 
+  const ensure = rest.match(/^\/channels\/([^/]+)\/calendar$/)
+  if (ensure && method === 'POST') {
+    if (mode.groupForbidden || ensure[1] !== CH.doisoat) return fail(403)
+    if (!calendars.some((c) => c.id === CAL.group)) enableGroupCalendar(false)
+    return ok(calendars.find((c) => c.id === CAL.group))
+  }
   if (rest === '/calendars' && method === 'GET') {
     return mode.calendarsError ? fail(500) : ok({ calendars })
   }
@@ -201,6 +242,7 @@ export function calendarFixtureApi(path: string, init?: RequestInit): Promise<un
     if (mode.eventsError) return fail(500)
     // Only the calendars asked for, as the server does.
     const asked = query.get('calendars')?.split(',')
+    if (mode.groupForbidden && asked?.includes(CAL.group)) return fail(403)
     return ok({ occurrences: mode.noEvents ? [] : store.filter((o) => !asked || asked.includes(o.calendarId)) })
   }
   if (rest === '/events' && method === 'POST') {
@@ -220,7 +262,17 @@ export function calendarFixtureApi(path: string, init?: RequestInit): Promise<un
   if (one) {
     const target = store.find((o) => o.eventId === one[1])
     if (!target) return fail(404)
-    if (method === 'GET') return ok(detailOf(target))
+    if (mode.groupForbidden && target.calendarId === CAL.group) return fail(403)
+    if (method === 'GET') {
+      // A recurring event read at an occurrence is that instance: the same length from the named start.
+      const at = query.get('occurrence')
+      if (at && target.isRecurring) {
+        const length = new Date(target.end).getTime() - new Date(target.start).getTime()
+        const start = formatISO(new Date(at))
+        return ok(detailOf({ ...target, occurrenceStart: at, start, end: formatISO(new Date(new Date(at).getTime() + length)) }))
+      }
+      return ok(detailOf(target))
+    }
     if (method === 'PATCH') {
       Object.assign(target, {
         ...(body?.start ? { start: body.start } : {}),

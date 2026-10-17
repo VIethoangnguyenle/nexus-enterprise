@@ -21,7 +21,10 @@ export interface CallParticipant {
 /** Absent fields are omitted by the server, so everything optional here may be missing. */
 export interface Call {
   id: string
-  channel_id: string
+  /** Absent for the call of a calendar event, which is in no conversation. */
+  channel_id?: string
+  /** The event a calendar event's call belongs to; the screen names the call after it. */
+  calendar_event_id?: string
   kind: CallKind
   status: CallStatus
   started_by?: string

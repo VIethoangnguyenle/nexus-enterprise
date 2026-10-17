@@ -173,7 +173,7 @@ export function EventDetailBody({ wsId, occurrence: o, calendar, onClose, onEdit
                 <Button
                   className={`rounded-full ${large ? 'h-11 px-5' : ''}`}
                   loading={join.isPending}
-                  onClick={() => join.mutate(o.eventId)}
+                  onClick={() => join.mutate({ eventId: o.eventId, channelId: channel?.id })}
                 >
                   <Video size={16} strokeWidth={1.75} aria-hidden="true" />
                   Tham gia cuộc gọi

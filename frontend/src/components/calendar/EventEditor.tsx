@@ -69,7 +69,20 @@ export function EventEditor({ wsId, initial, original, occurrence, calendars, or
   const [conflict, setConflict] = useState(false)
   const titleRef = useRef<HTMLInputElement>(null)
 
-  const patch = useCallback((p: Partial<EditorForm>) => setForm((f) => ({ ...f, ...p })), [])
+  // A new event on a group's calendar invites the whole group; moving it to another calendar takes that back.
+  const patch = useCallback(
+    (p: Partial<EditorForm>) =>
+      setForm((f) => {
+        if (original || p.calendarId === undefined || p.calendarId === f.calendarId) return { ...f, ...p }
+        const was = calendars.find((c) => c.id === f.calendarId)
+        const now = calendars.find((c) => c.id === p.calendarId)
+        let invite = {}
+        if (now?.kind === 'channel' && now.channel) invite = { inviteChannelId: now.channel.id, inviteChannelName: now.channel.name }
+        else if (was?.kind === 'channel' && f.inviteChannelId === was.channel?.id) invite = { inviteChannelId: null, inviteChannelName: null }
+        return { ...f, ...p, ...invite }
+      }),
+    [original, calendars],
+  )
   const errors = useMemo(() => validateForm(form), [form])
   const show = { start: attempted || left.start, end: attempted || left.end }
   const span = useMemo(() => spanOfForm(form), [form])
@@ -169,6 +182,12 @@ export function EventEditor({ wsId, initial, original, occurrence, calendars, or
     ],
     [self, form.guests],
   )
+  // Guests belong to the whole series: once they changed, "only this one" would be refused by the server.
+  const guestsChanged = useMemo(() => {
+    if (!original?.isRecurring) return false
+    const changes = toPatch(form, base.current, original.version)
+    return !!changes && ('attendees' in changes || 'inviteChannelId' in changes)
+  }, [form, original])
   const hasOthers = form.guests.length > 0 || !!form.inviteChannelId
 
   const guestsPanel = (
@@ -275,6 +294,7 @@ export function EventEditor({ wsId, initial, original, occurrence, calendars, or
       <RecurrenceScopeDialog
         open={scopeOpen}
         title="Sửa sự kiện lặp lại"
+        thisBlockedBecause={guestsChanged ? 'Đổi khách áp dụng cho cả chuỗi' : undefined}
         onClose={() => setScopeOpen(false)}
         onConfirm={(scope) => {
           setScopeOpen(false)

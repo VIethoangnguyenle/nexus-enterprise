@@ -102,6 +102,7 @@ type Consumer struct {
 	notifSv   NotificationCreator
 	broadcast ApprovalBroadcaster
 	calendar  CalendarGate
+	announcer MessageAnnouncer
 	cancel    context.CancelFunc
 }
 
@@ -124,6 +125,9 @@ func NewConsumer(brokers []string, notifSv NotificationCreator, broadcast Approv
 		broadcast: broadcast,
 		cancel:    cancel,
 	}
+	// The hub both pushes approval changes and shows a new message to the people
+	// who have the conversation open.
+	c.announcer, _ = broadcast.(MessageAnnouncer)
 	go c.run(ctx)
 	return c, nil
 }
