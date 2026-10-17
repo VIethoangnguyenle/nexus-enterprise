@@ -24,7 +24,7 @@ func TestSendMessage_ARefusedQuoteSaysSo(t *testing.T) {
 
 	// Another channel's message, and a deleted one of this channel.
 	otherCh := fmt.Sprintf("rest-other-%d", time.Now().UnixNano())
-	_, err := c.pool.Exec(ctx, `INSERT INTO channels (id, name, channel_type, workspace_id, created_at) VALUES ($1, 'other', 'workspace', $2, now())`, otherCh, c.ws)
+	_, err := c.pool.Exec(ctx, `INSERT INTO channels (id, name, channel_type, workspace_id, created_at) VALUES ($1, 'other', 'private', $2, now())`, otherCh, c.ws)
 	require.NoError(t, err)
 	foreign := otherCh + "-msg"
 	_, err = c.pool.Exec(ctx, `INSERT INTO messages (id, channel_id, sender_id, content, content_format, message_type, created_at) VALUES ($1, $2, $3, 'bí mật', 'plain', 'user', now())`, foreign, otherCh, c.user)

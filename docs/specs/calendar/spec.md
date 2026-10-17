@@ -19,7 +19,13 @@ and never twice, including under concurrent first use. A calendar's graph shape 
 - **workspace**: OA under the policy class; `<ws>_Members` is associated with `read`, `<ws>_Owners` with
   `read write share manage`;
 - **group**: OA assigned beneath the conversation's `Ch_<id>_Content` OA, so that members inherit
-  `read write invite` (`ngac.ChannelMemberOps`) and nobody else has anything.
+  `read write invite` (`ngac.ChannelMemberOps`) and nobody else has anything. Nothing the workspace's own UAs hold on
+  the Channels OA reaches it: `<ws>_Members` has `create_channel` only and `<ws>_Owners` `manage create_channel`
+  there (`ngac.MemberChannelOps`, `ngac.OwnerChannelOps`), so a workspace member or owner who is not in the group
+  has no right on its calendar (vectors in `pdp_calendar_scenarios_test.go`). `manage` is inherited by the group's
+  calendar from the Content OA the owners hold it on, so the service SHALL NOT read `manage` (or `write`) as access
+  to a calendar the person cannot also `read`: every access level includes reading, and a calendar one cannot read
+  is not held at all.
 
 No operation is added to the vocabulary of eight. All names come from `backend/ngac` and are keyed by ID, never by a
 name a tenant chooses.
@@ -39,6 +45,21 @@ name a tenant chooses.
 #### Scenario: Group calendar, outsider
 - **WHEN** a person who is not in the group conversation asks for its calendar or its events
 - **THEN** the answer is 403 and nothing is returned
+- **AND** this holds for a member of the workspace and for a workspace owner alike (the owner's `manage` on the group does not make its calendar readable, and the calendar is not listed for them); the group's own member reads and writes it
+- **AND** the same owner still manages the workspace calendar
+
+### Requirement: Calendar membership is being under the workspace's Members UA
+Every calendar request SHALL be admitted only for a caller who is a user under `<ws>_Members` of the workspace their
+token is scoped to (`policyclient.IsWorkspaceMember`), and every person a request names (a guest, a grantee, someone to
+subscribe to) SHALL be one too, by the graph and by the people table. Reaching the workspace's policy class is not
+membership: an event's guest UA (`CalEvGuests_<eventId>`) and a group's UA sit under the class so that the intersection
+rule holds, and a person who is only a guest of an event or only in a group gets nothing of the workspace's calendars.
+A policy service that cannot answer denies.
+
+#### Scenario: Guest of an event or member of a group only
+- **WHEN** a user whose only path to the workspace's policy class is an event's guest UA or a group's Members UA lists calendars or is named as a guest
+- **THEN** the request is refused (403)
+- **AND** an owner and an ordinary member of the same workspace are admitted
 
 ### Requirement: A personal calendar is shared at one of three levels
 Sharing a personal calendar SHALL require `share` on its OA (403 otherwise) and name a person of the same workspace
@@ -83,8 +104,9 @@ write. A person never shares with themselves, and there is no "free/busy only" l
 
 ### Requirement: Colleagues see when someone is busy, never why
 For any person of the same workspace, the service SHALL answer free/busy for their personal calendar as time
-ranges only (no title, place, guests or description). The check SHALL be that the workspace's policy class is an
-ancestor of both people, the same test the workspace uses for membership; it does not use a calendar share. A person
+ranges only (no title, place, guests or description). The check SHALL be that both people are users under the
+workspace's Members UA, the same test the workspace uses for membership (a person who only reaches the policy class
+through an event's guest UA or a group's UA is not a member); it does not use a calendar share. A person
 of another workspace SHALL be refused. A private event SHALL count as busy like any other and show no detail to
 anyone who is not allowed to read the calendar.
 
@@ -277,7 +299,8 @@ at most three of the earliest half-hour-grid times on a day (a date in the calle
 those whose title, place, description or a guest's name contains the text (case-insensitively; the characters of a
 pattern are literal), at most 50, each as its next occurrence (its last when the series is over), upcoming first. An
 event the caller may not read in full never matches, and a guest's name matches only where the caller sees the guest
-list.
+list. A guest's name matches only while that person is an active member of the workspace: someone who was removed
+(`tenant_users.status = 'removed'`) is no longer found by their name, though the event keeps its other text.
 
 ### Requirement: Reminders arrive as notifications
 An event MAY carry reminders (minutes before; a person's own reminders replace the event's for them). Every 30 seconds

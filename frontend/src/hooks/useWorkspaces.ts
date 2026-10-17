@@ -1,6 +1,7 @@
 import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
 import { workspaceApi } from '../api/workspaces'
 import { queryClient } from '../lib/query-client'
+import { noteSelfLeave } from '../lib/self-leave'
 import { keys } from './keys'
 
 export const workspacesQueryOptions = () =>
@@ -38,7 +39,11 @@ export function useUpdateWorkspaceDetails(wsId: string) {
 export function useLeaveWorkspace(wsId: string) {
   return useMutation({
     meta: { silentError: true },
-    mutationFn: () => workspaceApi.leave(wsId),
+    mutationFn: () => {
+      // The session is moved and the sockets close as for a removal; this is not one.
+      noteSelfLeave(wsId)
+      return workspaceApi.leave(wsId)
+    },
     onSuccess: async () => {
       queryClient.removeQueries({ predicate: (q) => JSON.stringify(q.queryKey).includes(wsId) })
       await queryClient.invalidateQueries({ queryKey: keys.workspaces.all() })

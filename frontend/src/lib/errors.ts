@@ -39,3 +39,15 @@ export function explain(err: unknown, action: string): string {
   if (status && status >= 500) return `Máy chủ đang gặp sự cố nên chưa ${action} được. Thử lại sau ít phút.`
   return `Chưa ${action} được. Kiểm tra kết nối mạng rồi thử lại.`
 }
+
+/**
+ * explain for taking someone out of a conversation. A 400 there means this
+ * conversation keeps its people (the workspace-wide channel, a direct message);
+ * "invalid information" would send the user looking for a typo that is not there.
+ */
+export function explainRemoval(err: unknown, action: string): string {
+  if (statusOf(err) === 400) {
+    return `Chưa ${action}: nhóm chung của workspace và tin nhắn trực tiếp giữ nguyên thành viên, không xoá được thành viên.`
+  }
+  return explain(err, action)
+}

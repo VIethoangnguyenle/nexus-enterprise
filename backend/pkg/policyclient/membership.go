@@ -14,8 +14,10 @@ import (
 )
 
 // GraphReader is the part of the policy read API membership needs. Both
-// policypb.PolicyReadServiceClient and PolicyWriteServiceClient satisfy it; a
-// caller that must see a membership change made a moment ago passes the writer.
+// policypb.PolicyReadServiceClient and PolicyWriteServiceClient satisfy it (the writer
+// carries FindNodeByName, IsAssigned, GetNode and GetAncestors for this). A read
+// replica may be behind a change made a moment ago, so a caller that decides a write
+// from membership, or must see a removal at once, passes the writer.
 type GraphReader interface {
 	FindNodeByName(ctx context.Context, in *policypb.FindNodeByNameRequest, opts ...grpc.CallOption) (*policypb.NGACNode, error)
 	GetAncestors(ctx context.Context, in *policypb.GetAncestorsRequest, opts ...grpc.CallOption) (*policypb.NodeList, error)
@@ -26,6 +28,11 @@ type GraphReader interface {
 // errNotMembersUA means a node is named like a workspace's Members UA but is not
 // assigned under that workspace's policy class, so it is not the workspace's.
 var errNotMembersUA = errors.New("not the workspace's Members UA")
+
+// IsNotMembersUA reports whether err says a node is named like a workspace's Members UA but
+// is not that workspace's. It is a "no" about the workspace (it has no usable Members UA),
+// not a failure to ask.
+func IsNotMembersUA(err error) bool { return errors.Is(err, errNotMembersUA) }
 
 // membersUAIDs caches workspace id -> id of its "<ws>_Members" UA for the life
 // of the process. A node's id never changes (a rename keeps it) and a workspace

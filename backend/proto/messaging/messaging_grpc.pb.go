@@ -19,42 +19,44 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	MessagingService_CreateChannel_FullMethodName       = "/messaging.MessagingService/CreateChannel"
-	MessagingService_ListChannels_FullMethodName        = "/messaging.MessagingService/ListChannels"
-	MessagingService_GetChannel_FullMethodName          = "/messaging.MessagingService/GetChannel"
-	MessagingService_AddChannelMember_FullMethodName    = "/messaging.MessagingService/AddChannelMember"
-	MessagingService_RemoveChannelMember_FullMethodName = "/messaging.MessagingService/RemoveChannelMember"
-	MessagingService_ListChannelMembers_FullMethodName  = "/messaging.MessagingService/ListChannelMembers"
-	MessagingService_SendMessage_FullMethodName         = "/messaging.MessagingService/SendMessage"
-	MessagingService_GetMessages_FullMethodName         = "/messaging.MessagingService/GetMessages"
-	MessagingService_GetThread_FullMethodName           = "/messaging.MessagingService/GetThread"
-	MessagingService_FindThreadsByEntity_FullMethodName = "/messaging.MessagingService/FindThreadsByEntity"
-	MessagingService_FollowThread_FullMethodName        = "/messaging.MessagingService/FollowThread"
-	MessagingService_UnfollowThread_FullMethodName      = "/messaging.MessagingService/UnfollowThread"
-	MessagingService_MarkThreadRead_FullMethodName      = "/messaging.MessagingService/MarkThreadRead"
-	MessagingService_ListThreads_FullMethodName         = "/messaging.MessagingService/ListThreads"
-	MessagingService_EditMessage_FullMethodName         = "/messaging.MessagingService/EditMessage"
-	MessagingService_DeleteMessage_FullMethodName       = "/messaging.MessagingService/DeleteMessage"
-	MessagingService_MarkMessageUnread_FullMethodName   = "/messaging.MessagingService/MarkMessageUnread"
-	MessagingService_CreateDM_FullMethodName            = "/messaging.MessagingService/CreateDM"
-	MessagingService_ListDMs_FullMethodName             = "/messaging.MessagingService/ListDMs"
-	MessagingService_AddReaction_FullMethodName         = "/messaging.MessagingService/AddReaction"
-	MessagingService_RemoveReaction_FullMethodName      = "/messaging.MessagingService/RemoveReaction"
-	MessagingService_ListReactions_FullMethodName       = "/messaging.MessagingService/ListReactions"
-	MessagingService_PinMessage_FullMethodName          = "/messaging.MessagingService/PinMessage"
-	MessagingService_UnpinMessage_FullMethodName        = "/messaging.MessagingService/UnpinMessage"
-	MessagingService_ListPins_FullMethodName            = "/messaging.MessagingService/ListPins"
-	MessagingService_MarkChannelRead_FullMethodName     = "/messaging.MessagingService/MarkChannelRead"
-	MessagingService_GetUnreadCounts_FullMethodName     = "/messaging.MessagingService/GetUnreadCounts"
-	MessagingService_SearchMessages_FullMethodName      = "/messaging.MessagingService/SearchMessages"
-	MessagingService_CreatePoll_FullMethodName          = "/messaging.MessagingService/CreatePoll"
-	MessagingService_VotePoll_FullMethodName            = "/messaging.MessagingService/VotePoll"
-	MessagingService_RemoveVote_FullMethodName          = "/messaging.MessagingService/RemoveVote"
-	MessagingService_GetPoll_FullMethodName             = "/messaging.MessagingService/GetPoll"
-	MessagingService_ClosePoll_FullMethodName           = "/messaging.MessagingService/ClosePoll"
-	MessagingService_CreateTask_FullMethodName          = "/messaging.MessagingService/CreateTask"
-	MessagingService_UpdateTask_FullMethodName          = "/messaging.MessagingService/UpdateTask"
-	MessagingService_ListTasks_FullMethodName           = "/messaging.MessagingService/ListTasks"
+	MessagingService_CreateChannel_FullMethodName             = "/messaging.MessagingService/CreateChannel"
+	MessagingService_ListChannels_FullMethodName              = "/messaging.MessagingService/ListChannels"
+	MessagingService_GetChannel_FullMethodName                = "/messaging.MessagingService/GetChannel"
+	MessagingService_ProvisionWorkspaceChannel_FullMethodName = "/messaging.MessagingService/ProvisionWorkspaceChannel"
+	MessagingService_JoinWorkspaceChannel_FullMethodName      = "/messaging.MessagingService/JoinWorkspaceChannel"
+	MessagingService_AddChannelMember_FullMethodName          = "/messaging.MessagingService/AddChannelMember"
+	MessagingService_RemoveChannelMember_FullMethodName       = "/messaging.MessagingService/RemoveChannelMember"
+	MessagingService_ListChannelMembers_FullMethodName        = "/messaging.MessagingService/ListChannelMembers"
+	MessagingService_SendMessage_FullMethodName               = "/messaging.MessagingService/SendMessage"
+	MessagingService_GetMessages_FullMethodName               = "/messaging.MessagingService/GetMessages"
+	MessagingService_GetThread_FullMethodName                 = "/messaging.MessagingService/GetThread"
+	MessagingService_FindThreadsByEntity_FullMethodName       = "/messaging.MessagingService/FindThreadsByEntity"
+	MessagingService_FollowThread_FullMethodName              = "/messaging.MessagingService/FollowThread"
+	MessagingService_UnfollowThread_FullMethodName            = "/messaging.MessagingService/UnfollowThread"
+	MessagingService_MarkThreadRead_FullMethodName            = "/messaging.MessagingService/MarkThreadRead"
+	MessagingService_ListThreads_FullMethodName               = "/messaging.MessagingService/ListThreads"
+	MessagingService_EditMessage_FullMethodName               = "/messaging.MessagingService/EditMessage"
+	MessagingService_DeleteMessage_FullMethodName             = "/messaging.MessagingService/DeleteMessage"
+	MessagingService_MarkMessageUnread_FullMethodName         = "/messaging.MessagingService/MarkMessageUnread"
+	MessagingService_CreateDM_FullMethodName                  = "/messaging.MessagingService/CreateDM"
+	MessagingService_ListDMs_FullMethodName                   = "/messaging.MessagingService/ListDMs"
+	MessagingService_AddReaction_FullMethodName               = "/messaging.MessagingService/AddReaction"
+	MessagingService_RemoveReaction_FullMethodName            = "/messaging.MessagingService/RemoveReaction"
+	MessagingService_ListReactions_FullMethodName             = "/messaging.MessagingService/ListReactions"
+	MessagingService_PinMessage_FullMethodName                = "/messaging.MessagingService/PinMessage"
+	MessagingService_UnpinMessage_FullMethodName              = "/messaging.MessagingService/UnpinMessage"
+	MessagingService_ListPins_FullMethodName                  = "/messaging.MessagingService/ListPins"
+	MessagingService_MarkChannelRead_FullMethodName           = "/messaging.MessagingService/MarkChannelRead"
+	MessagingService_GetUnreadCounts_FullMethodName           = "/messaging.MessagingService/GetUnreadCounts"
+	MessagingService_SearchMessages_FullMethodName            = "/messaging.MessagingService/SearchMessages"
+	MessagingService_CreatePoll_FullMethodName                = "/messaging.MessagingService/CreatePoll"
+	MessagingService_VotePoll_FullMethodName                  = "/messaging.MessagingService/VotePoll"
+	MessagingService_RemoveVote_FullMethodName                = "/messaging.MessagingService/RemoveVote"
+	MessagingService_GetPoll_FullMethodName                   = "/messaging.MessagingService/GetPoll"
+	MessagingService_ClosePoll_FullMethodName                 = "/messaging.MessagingService/ClosePoll"
+	MessagingService_CreateTask_FullMethodName                = "/messaging.MessagingService/CreateTask"
+	MessagingService_UpdateTask_FullMethodName                = "/messaging.MessagingService/UpdateTask"
+	MessagingService_ListTasks_FullMethodName                 = "/messaging.MessagingService/ListTasks"
 )
 
 // MessagingServiceClient is the client API for MessagingService service.
@@ -65,6 +67,12 @@ type MessagingServiceClient interface {
 	CreateChannel(ctx context.Context, in *CreateChannelRequest, opts ...grpc.CallOption) (*Channel, error)
 	ListChannels(ctx context.Context, in *ListChannelsRequest, opts ...grpc.CallOption) (*ChannelList, error)
 	GetChannel(ctx context.Context, in *GetChannelRequest, opts ...grpc.CallOption) (*Channel, error)
+	// Workspace-wide channel (#general). Service-to-service only: neither is
+	// reachable by a user. The first is the only way a channel of type
+	// 'workspace' is made (auth service); the second puts a member of the
+	// workspace into it (auth and workspace services).
+	ProvisionWorkspaceChannel(ctx context.Context, in *ProvisionWorkspaceChannelRequest, opts ...grpc.CallOption) (*Channel, error)
+	JoinWorkspaceChannel(ctx context.Context, in *JoinWorkspaceChannelRequest, opts ...grpc.CallOption) (*Empty, error)
 	// Channel members
 	AddChannelMember(ctx context.Context, in *AddChannelMemberRequest, opts ...grpc.CallOption) (*Empty, error)
 	RemoveChannelMember(ctx context.Context, in *RemoveChannelMemberRequest, opts ...grpc.CallOption) (*Empty, error)
@@ -143,6 +151,26 @@ func (c *messagingServiceClient) GetChannel(ctx context.Context, in *GetChannelR
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(Channel)
 	err := c.cc.Invoke(ctx, MessagingService_GetChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) ProvisionWorkspaceChannel(ctx context.Context, in *ProvisionWorkspaceChannelRequest, opts ...grpc.CallOption) (*Channel, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Channel)
+	err := c.cc.Invoke(ctx, MessagingService_ProvisionWorkspaceChannel_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *messagingServiceClient) JoinWorkspaceChannel(ctx context.Context, in *JoinWorkspaceChannelRequest, opts ...grpc.CallOption) (*Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Empty)
+	err := c.cc.Invoke(ctx, MessagingService_JoinWorkspaceChannel_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -487,6 +515,12 @@ type MessagingServiceServer interface {
 	CreateChannel(context.Context, *CreateChannelRequest) (*Channel, error)
 	ListChannels(context.Context, *ListChannelsRequest) (*ChannelList, error)
 	GetChannel(context.Context, *GetChannelRequest) (*Channel, error)
+	// Workspace-wide channel (#general). Service-to-service only: neither is
+	// reachable by a user. The first is the only way a channel of type
+	// 'workspace' is made (auth service); the second puts a member of the
+	// workspace into it (auth and workspace services).
+	ProvisionWorkspaceChannel(context.Context, *ProvisionWorkspaceChannelRequest) (*Channel, error)
+	JoinWorkspaceChannel(context.Context, *JoinWorkspaceChannelRequest) (*Empty, error)
 	// Channel members
 	AddChannelMember(context.Context, *AddChannelMemberRequest) (*Empty, error)
 	RemoveChannelMember(context.Context, *RemoveChannelMemberRequest) (*Empty, error)
@@ -549,6 +583,12 @@ func (UnimplementedMessagingServiceServer) ListChannels(context.Context, *ListCh
 }
 func (UnimplementedMessagingServiceServer) GetChannel(context.Context, *GetChannelRequest) (*Channel, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetChannel not implemented")
+}
+func (UnimplementedMessagingServiceServer) ProvisionWorkspaceChannel(context.Context, *ProvisionWorkspaceChannelRequest) (*Channel, error) {
+	return nil, status.Error(codes.Unimplemented, "method ProvisionWorkspaceChannel not implemented")
+}
+func (UnimplementedMessagingServiceServer) JoinWorkspaceChannel(context.Context, *JoinWorkspaceChannelRequest) (*Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method JoinWorkspaceChannel not implemented")
 }
 func (UnimplementedMessagingServiceServer) AddChannelMember(context.Context, *AddChannelMemberRequest) (*Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddChannelMember not implemented")
@@ -720,6 +760,42 @@ func _MessagingService_GetChannel_Handler(srv interface{}, ctx context.Context, 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(MessagingServiceServer).GetChannel(ctx, req.(*GetChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_ProvisionWorkspaceChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProvisionWorkspaceChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).ProvisionWorkspaceChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_ProvisionWorkspaceChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).ProvisionWorkspaceChannel(ctx, req.(*ProvisionWorkspaceChannelRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MessagingService_JoinWorkspaceChannel_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(JoinWorkspaceChannelRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MessagingServiceServer).JoinWorkspaceChannel(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MessagingService_JoinWorkspaceChannel_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MessagingServiceServer).JoinWorkspaceChannel(ctx, req.(*JoinWorkspaceChannelRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1336,6 +1412,14 @@ var MessagingService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetChannel",
 			Handler:    _MessagingService_GetChannel_Handler,
+		},
+		{
+			MethodName: "ProvisionWorkspaceChannel",
+			Handler:    _MessagingService_ProvisionWorkspaceChannel_Handler,
+		},
+		{
+			MethodName: "JoinWorkspaceChannel",
+			Handler:    _MessagingService_JoinWorkspaceChannel_Handler,
 		},
 		{
 			MethodName: "AddChannelMember",

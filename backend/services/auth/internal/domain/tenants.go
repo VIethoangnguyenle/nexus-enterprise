@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -14,8 +15,13 @@ import (
 // joinTenantByDomain adds the user as a member of the tenant that owns
 // companyDomain and returns that tenant with the user's role in it. It returns a
 // nil tenant when the domain is empty, is a public mailbox provider, or is owned
-// by no tenant. A user who already has a membership there keeps it unchanged —
-// including a disabled one, which signing in must not re-activate.
+// by no tenant. A user who already has a membership there keeps it unchanged and
+// is not joined again: a removed or disabled one stays as it is (nil tenant),
+// because the domain claim is proof of an address, not an invitation, and signing
+// in must not undo a removal or a suspension.
+//
+// A join that fails (the graph or the table cannot be written) is logged and
+// answered with a nil tenant, never an error: signing in does not depend on it.
 //
 // This is the one place a domain turns into tenant membership. Callers must
 // hold proof that the user controls an address at companyDomain — today only
@@ -40,11 +46,17 @@ func (s *Service) joinTenantByDomain(ctx context.Context, companyDomain, userID,
 		return nil, "", fmt.Errorf("get tenant user: %w", err)
 	}
 	if existing != nil {
+		if existing.Status != "active" {
+			return nil, "", nil
+		}
 		return tenant, existing.Role, nil
 	}
 
 	if err := s.joinTenant(ctx, tenant.ID, userID, ngacNodeID, "member"); err != nil {
-		return nil, "", fmt.Errorf("join tenant: %w", err)
+		// Signing in does not depend on being joined: the person gets their own
+		// workspace, and the next sign-in tries the join again.
+		slog.Error("could not join the tenant that owns the domain", "tenant", tenant.ID, "error", err)
+		return nil, "", nil
 	}
 	return tenant, "member", nil
 }
@@ -94,11 +106,14 @@ func (s *Service) provisionTenant(ctx context.Context, name, wsType, userID, nga
 	}
 
 	if strict {
+		// Graph first, row after: the owner edge already exists (the workspace service
+		// made it) and is confirmed here; a failure of either step undoes the whole
+		// workspace, edges included.
+		if _, err := s.assignTenantNGAC(ctx, ws.Id, userID, ngacNodeID, true); err != nil {
+			return fail("assign owner", err)
+		}
 		if err := s.store.InsertTenantUser(ctx, ws.Id, userID, "owner", "active", ngacNodeID); err != nil {
 			return fail("insert tenant user", err)
-		}
-		if err := s.assignTenantNGAC(ctx, ws.Id, ngacNodeID, true); err != nil {
-			return fail("assign owner", err)
 		}
 		if err := s.provisionChannel(ctx, ws.Id, userID, ngacNodeID); err != nil {
 			return fail("create #general", err)
@@ -107,7 +122,9 @@ func (s *Service) provisionTenant(ctx context.Context, name, wsType, userID, nga
 	}
 
 	if err := s.joinTenant(ctx, ws.Id, userID, ngacNodeID, "owner"); err != nil {
-		return "", "", "", fmt.Errorf("join as owner: %w", err)
+		// The lenient path: the workspace exists and the owner is in its graph, so the
+		// person still gets in; the row is what is missing and the next sign-in writes it.
+		slog.Error("owner not listed in the new workspace", "tenant", ws.Id, "error", err)
 	}
 	s.autoProvisionChannel(ctx, ws.Id, userID, ngacNodeID)
 	return ws.Id, name, "owner", nil
@@ -130,12 +147,51 @@ func (s *Service) undoWorkspace(ctx context.Context, workspaceID, userID, ngacNo
 	slog.Warn("removed a workspace whose provisioning failed", "workspace", workspaceID)
 }
 
-// joinTenant creates the tenant_users record and assigns the user in NGAC.
+// takeBackEdges answers a row that could not be written after the edges were. Three
+// cases keep it from damaging what another call built:
+//   - a cancelled or timed-out write may have committed, so nothing is taken back (an
+//     edge without a row is repaired at the next sign-in; a row without its edge would
+//     be a person listed in a workspace the graph denies them);
+//   - an edge the person already had is never in the list (assignTenantNGAC reports only
+//     the edges it made);
+//   - after taking edges back the row is read again: a racing join may have written an
+//     active row in the meantime, and then its edges are put back.
+func (s *Service) takeBackEdges(ctx context.Context, tenantID, userID, nodeID string, created []graphEdge, cause error) {
+	if len(created) == 0 {
+		return
+	}
+	if errors.Is(cause, context.Canceled) || errors.Is(cause, context.DeadlineExceeded) || ctx.Err() != nil {
+		slog.Warn("row write ended by its context; the edges are kept", "tenant", tenantID, "user", userID)
+		return
+	}
+	s.undoEdges(ctx, userID, nodeID, created)
+	row, err := s.store.GetTenantUser(ctx, tenantID, userID)
+	if err != nil || row == nil || row.Status != "active" {
+		return
+	}
+	s.restoreEdges(ctx, userID, nodeID, created)
+}
+
+// joinTenant puts the user in the tenant: the graph first, the tenant_users row after.
+//
+// The graph is the truth and the row follows it, so a failure never leaves an active
+// row for someone the graph does not hold. If the row cannot be written, the edges
+// this call made are taken back (an edge the person already had stays). A join that
+// fails is returned; lenient callers (sign-in) log it and carry on.
 func (s *Service) joinTenant(ctx context.Context, tenantID, userID, ngacNodeID, role string) error {
+	created, err := s.assignTenantNGAC(ctx, tenantID, userID, ngacNodeID, role == "owner")
+	if err != nil {
+		return fmt.Errorf("assign user to tenant UAs: %w", err)
+	}
 	if err := s.store.InsertTenantUser(ctx, tenantID, userID, role, "active", ngacNodeID); err != nil {
+		s.takeBackEdges(ctx, tenantID, userID, ngacNodeID, created, err)
 		return fmt.Errorf("insert tenant user: %w", err)
 	}
-	s.assignUserToTenantNGAC(ctx, tenantID, ngacNodeID, role == "owner")
+	// A member of the workspace is a member of its #general; the owner of a
+	// workspace being made is put there when the channel is created.
+	if role != "owner" {
+		s.joinWorkspaceChannel(ctx, tenantID, userID, ngacNodeID)
+	}
 	return nil
 }
 
@@ -146,14 +202,16 @@ func (s *Service) joinTenant(ctx context.Context, tenantID, userID, ngacNodeID, 
 // would mean the next refresh silently handed back a token for the tenant the
 // user just left.
 func (s *Service) SwitchTenant(ctx context.Context, userID, ngacNodeID, username, targetTenantID string) (string, string, *TenantInfo, error) {
-	membership, err := s.store.GetTenantUser(ctx, targetTenantID, userID)
+	// Only an active member may act as the tenant. A suspended or not yet accepted
+	// membership still has a row, and a token scoped to the tenant would be accepted by
+	// every service that reads the tenant from the token. The row is a projection of the
+	// graph and can lag it, so the graph has the last word; when it cannot be asked the
+	// answer is "unavailable", never a token. One read of the row serves both.
+	membership, err := s.activeMemberRow(ctx, targetTenantID, userID, ngacNodeID)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("get tenant user: %w", err)
+		return "", "", nil, err
 	}
-	// Only an active member may act as the tenant. A suspended or not yet
-	// accepted membership still has a row, and a token scoped to the tenant
-	// would be accepted by every service that reads the tenant from the token.
-	if membership == nil || membership.Status != "active" {
+	if membership == nil {
 		return "", "", nil, ErrAccessDenied
 	}
 

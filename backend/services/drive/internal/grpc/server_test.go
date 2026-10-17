@@ -710,7 +710,7 @@ func insertTestChannel(t *testing.T, pool *pgxpool.Pool, name, wsID string) stri
 	t.Helper()
 	id := fmt.Sprintf("test-ch-%s-%d", name, time.Now().UnixNano())
 	_, err := pool.Exec(context.Background(),
-		"INSERT INTO channels (id, name, channel_type, workspace_id, created_at) VALUES ($1, $2, 'workspace', $3, NOW())",
+		"INSERT INTO channels (id, name, channel_type, workspace_id, created_at) VALUES ($1, $2, 'private', $3, NOW())",
 		id, name, wsID)
 	require.NoError(t, err)
 	return id

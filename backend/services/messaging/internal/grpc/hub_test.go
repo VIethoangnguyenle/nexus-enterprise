@@ -74,6 +74,7 @@ type identity struct{ userID, username, nodeID, tenantID string }
 func startHub(t *testing.T, access grpcserver.ChannelAccessChecker) (*grpcserver.Hub, string) {
 	t.Helper()
 	hub := grpcserver.NewHub(nil, access)
+	hub.SetMembership(everyoneIsAMember{})
 	t.Cleanup(hub.Close)
 	srv := httptest.NewServer(hub.HandleWebSocket(hubTestSecret))
 	t.Cleanup(srv.Close)
@@ -354,6 +355,7 @@ func TestPresence_ScopedToTenantAcrossInstancesViaRedis(t *testing.T) {
 
 	startInstance := func() string {
 		hub := grpcserver.NewHub(rdb, &fakeAccess{})
+		hub.SetMembership(everyoneIsAMember{})
 		t.Cleanup(hub.Close)
 		srv := httptest.NewServer(hub.HandleWebSocket(hubTestSecret))
 		t.Cleanup(srv.Close)
@@ -574,6 +576,7 @@ func TestRevokeChannelSubscriptions_AcrossInstancesViaRedis(t *testing.T) {
 	}}
 	startInstance := func() (*grpcserver.Hub, string) {
 		hub := grpcserver.NewHub(rdb, access)
+		hub.SetMembership(everyoneIsAMember{})
 		t.Cleanup(hub.Close)
 		srv := httptest.NewServer(hub.HandleWebSocket(hubTestSecret))
 		t.Cleanup(srv.Close)
@@ -598,7 +601,7 @@ func TestRevokeChannelSubscriptions_AcrossInstancesViaRedis(t *testing.T) {
 func TestRemoveChannelMember_EndsLiveSubscription(t *testing.T) {
 	pool := testPool(t)
 	wsID := getTestWorkspaceID(t, pool)
-	chID := insertTestChannel(t, pool, "revokelive", "workspace", wsID)
+	chID := insertTestChannel(t, pool, "revokelive", "private", wsID)
 	t.Cleanup(func() { cleanTestData(t, pool, chID) })
 
 	access := &fakeAccess{allow: map[[3]string]bool{

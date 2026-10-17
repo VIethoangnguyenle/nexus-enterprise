@@ -19,8 +19,10 @@ import (
 	"ngac-platform/pkg/httputil"
 	"ngac-platform/pkg/realtime"
 	drivepb "ngac-platform/proto/drive"
+	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
 	pb "ngac-platform/proto/workspace"
+	"ngac-platform/services/workspace/internal/chat"
 	"ngac-platform/services/workspace/internal/domain"
 	"ngac-platform/services/workspace/internal/events"
 	wgrpc "ngac-platform/services/workspace/internal/grpc"
@@ -111,6 +113,18 @@ func main() {
 		driveClient = drivepb.NewDriveServiceClient(driveConn)
 	}
 
+	// Connect to the Messaging Service (optional): a member admitted to a workspace
+	// is put into its #general through it.
+	var channelJoiner domain.ChannelJoiner
+	messagingAddr := bootstrap.Env("MESSAGING_SERVICE_ADDR", "localhost:50055")
+	messagingConn, err := grpcauth.Dial(messagingAddr, "workspace")
+	if err != nil {
+		slog.Warn("messaging service unavailable, new members will not be put into #general", "address", messagingAddr, "error", err)
+	} else {
+		defer messagingConn.Close()
+		channelJoiner = chat.NewJoiner(messagingpb.NewMessagingServiceClient(messagingConn))
+	}
+
 	// --- Wire clean architecture layers ---
 	// The read client is the PDP: every admin route checks the caller against it
 	// (see domain/authz.go). It must be wired — a nil client would panic, and the
@@ -126,6 +140,9 @@ func main() {
 
 	wsStore := store.New(pool)
 	wsSvc := domain.NewService(wsStore, wsStore, policyReadClient, policyWriteClient, minioClient, driveClient).WithDirectory(wsStore).WithInvitations(wsStore).WithEmitter(rt).WithInvitationNotifier(invitationNotices)
+	if channelJoiner != nil {
+		wsSvc = wsSvc.WithChannelJoiner(channelJoiner)
+	}
 	if err := configureInviteMail(wsSvc); err != nil {
 		slog.Error("refusing to start", "error", err)
 		os.Exit(1)

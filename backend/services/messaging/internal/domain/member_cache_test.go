@@ -21,8 +21,28 @@ type allowAll struct {
 	assigned bool // the target is already in the channel's members UA
 }
 
-func (a allowAll) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {
+func (a allowAll) IsAssigned(_ context.Context, r *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	if r.ChildId == "ua-members" { // the Members UA sits under its workspace's PC
+		return &policypb.BoolResponse{Value: true}, nil
+	}
 	return &policypb.BoolResponse{Value: a.assigned}, nil
+}
+
+// The target is a user under the Members UA of the channel's workspace (the seeded
+// channel has none, so its name is "_Members").
+func (allowAll) GetNode(_ context.Context, r *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return &policypb.NGACNode{Id: r.NodeId, NodeType: ngac.TypeU}, nil
+}
+
+func (allowAll) GetAncestors(context.Context, *policypb.GetAncestorsRequest, ...grpc.CallOption) (*policypb.NodeList, error) {
+	return &policypb.NodeList{Nodes: []*policypb.NGACNode{{Id: "ua-members", NodeType: ngac.TypeUA}}}, nil
+}
+
+func (allowAll) FindNodeByName(_ context.Context, r *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	if r.NodeType == ngac.TypeUA {
+		return &policypb.NGACNode{Id: "ua-members", Name: r.Name, NodeType: r.NodeType}, nil
+	}
+	return &policypb.NGACNode{Id: "pc-1", Name: r.Name, NodeType: r.NodeType}, nil
 }
 
 func (allowAll) CheckAccess(context.Context, *policypb.CheckAccessRequest, ...grpc.CallOption) (*policypb.AccessDecision, error) {
@@ -34,6 +54,23 @@ type graphLog struct {
 	assigned     []string
 	withdrawn    []string
 	failWithdraw bool
+	// alreadyAssigned: the target is already in the channel's members UA.
+	alreadyAssigned bool
+}
+
+// The writer answers the graph reads AddMember makes about its target.
+func (g *graphLog) view() allowAll { return allowAll{assigned: g.alreadyAssigned} }
+func (g *graphLog) GetNode(c context.Context, r *policypb.GetNodeRequest, o ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return g.view().GetNode(c, r, o...)
+}
+func (g *graphLog) GetAncestors(c context.Context, r *policypb.GetAncestorsRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {
+	return g.view().GetAncestors(c, r, o...)
+}
+func (g *graphLog) FindNodeByName(c context.Context, r *policypb.FindNodeByNameRequest, o ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return g.view().FindNodeByName(c, r, o...)
+}
+func (g *graphLog) IsAssigned(c context.Context, r *policypb.IsAssignedRequest, o ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return g.view().IsAssigned(c, r, o...)
 }
 
 func (g *graphLog) CreateAssignment(_ context.Context, r *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
@@ -50,6 +87,10 @@ func (g *graphLog) RemoveAssignment(_ context.Context, r *policypb.RemoveAssignm
 
 type failingCache struct{ calls int }
 
+func (f *failingCache) DeleteChannelMember(context.Context, string, string) error {
+	return errors.New(`ERROR: deadlock detected (SQLSTATE 40P01)`)
+}
+
 func (f *failingCache) InsertChannelMember(context.Context, string, string) error {
 	f.calls++
 	return errors.New(`ERROR: deadlock detected (SQLSTATE 40P01)`)
@@ -57,6 +98,10 @@ func (f *failingCache) InsertChannelMember(context.Context, string, string) erro
 
 // seedChannel stores a channel whose OA and UA exist, so AddMember has something to act on.
 func seedChannel(t *testing.T) (*store.Store, *store.Channel) {
+	return seedChannelOfType(t, "workspace")
+}
+
+func seedChannelOfType(t *testing.T, channelType string) (*store.Store, *store.Channel) {
 	t.Helper()
 	pool := testutil.SetupTestDB(t)
 	st := store.NewStore(pool)
@@ -66,7 +111,7 @@ func seedChannel(t *testing.T) (*store.Store, *store.Channel) {
 		require.NoError(t, err)
 	}
 	user, _ := testutil.CreateUser(t, pool)
-	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general", ChannelType: "workspace", NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
+	ch := &store.Channel{ID: "ch-" + uuid.NewString(), Name: "general", ChannelType: channelType, NGACOaID: oa, NGACUaID: ua, CreatedBy: user}
 	require.NoError(t, st.InsertChannelWithMembers(context.Background(), ch, "creator-node"))
 	t.Cleanup(func() {
 		pool.Exec(context.Background(), `DELETE FROM channels WHERE id = $1`, ch.ID)
@@ -118,12 +163,53 @@ func TestAddMember_RecordsTheMemberOnSuccess(t *testing.T) {
 // while the cache cannot be written must not delete the edge that was there.
 func TestAddMember_NeverWithdrawsAnEdgeThatWasAlreadyThere(t *testing.T) {
 	st, ch := seedChannel(t)
-	g := &graphLog{}
-	svc := NewService(st, allowAll{assigned: true}, g, nil, nil)
+	g := &graphLog{alreadyAssigned: true}
+	svc := NewService(st, allowAll{}, g, nil, nil)
 	svc.members = &failingCache{}
 
 	err := svc.AddMember(context.Background(), ch.ID, "requester", "existing-member")
 
 	require.Error(t, err)
 	assert.Empty(t, g.withdrawn, "the pre-existing membership edge is left alone")
+}
+
+// Taking someone out of a group changes the graph first; when the copy in
+// channel_members cannot be deleted, the removal has still happened and the caller
+// is told, so that repeating it clears the row.
+func TestRemoveMember_ReportsACacheRowThatCouldNotBeDeleted(t *testing.T) {
+	st, ch := seedChannelOfType(t, "private")
+	g := &graphLog{alreadyAssigned: true}
+	svc := NewService(st, allowAll{}, g, nil, nil)
+	svc.members = &failingCache{}
+
+	err := svc.RemoveMember(context.Background(), ch.ID, "requester", "member")
+
+	require.Error(t, err)
+	assert.Equal(t, []string{"member>" + ch.NGACUaID}, g.withdrawn, "the graph is already correct")
+}
+
+func TestRemoveMember_DeletesTheCacheRowOnSuccess(t *testing.T) {
+	st, ch := seedChannelOfType(t, "private")
+	require.NoError(t, st.InsertChannelMember(context.Background(), ch.ID, "member"))
+	g := &graphLog{alreadyAssigned: true}
+	svc := NewService(st, allowAll{}, g, nil, nil)
+
+	require.NoError(t, svc.RemoveMember(context.Background(), ch.ID, "requester", "member"))
+
+	assert.Equal(t, []string{"member>" + ch.NGACUaID}, g.withdrawn)
+	dms, err := st.ListDMsOf(context.Background(), "member")
+	require.NoError(t, err)
+	assert.Empty(t, dms)
+}
+
+// A person who is not in the group is not removed from it, and nothing is written.
+func TestRemoveMember_NobodyToRemoveWritesNothing(t *testing.T) {
+	st, ch := seedChannelOfType(t, "private")
+	g := &graphLog{alreadyAssigned: false}
+	svc := NewService(st, allowAll{}, g, nil, nil)
+
+	err := svc.RemoveMember(context.Background(), ch.ID, "requester", "stranger")
+
+	require.ErrorIs(t, err, ErrNotFound)
+	assert.Empty(t, g.withdrawn)
 }

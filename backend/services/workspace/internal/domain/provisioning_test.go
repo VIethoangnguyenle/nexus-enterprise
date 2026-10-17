@@ -339,7 +339,7 @@ func TestListFolders_ShowsDisplayNames(t *testing.T) {
 	f := newWriteFixture(t, w)
 	f.read.descendants[pc1] = append(f.read.descendants[pc1], &policypb.NGACNode{
 		Id: "oa-new", Name: "Folder_9a1b", NodeType: ngac.TypeOA,
-		Properties: map[string]string{ngac.PropDisplayName: "Legal"},
+		Properties: ngac.AdminFolderProps(ws1, "Legal"),
 	})
 
 	folders, err := f.svc.ListFolders(context.Background(), owner, ws1)
@@ -350,14 +350,16 @@ func TestListFolders_ShowsDisplayNames(t *testing.T) {
 		names = append(names, fo.Name)
 	}
 	assert.Contains(t, names, "Legal")
-	assert.Contains(t, names, "Engineering", "a folder written before names were ID-keyed is listed by its node name")
+	assert.Contains(t, names, "Engineering")
+	assert.NotContains(t, names, "Finance", "another workspace's folder is not listed")
+	assert.NotContains(t, names, ngac.MgmtOAName(ws1), "a container is not a folder")
 	assert.NotContains(t, names, "Folder_9a1b")
 }
 
 func TestListMembers_ShowsUsernamesNotNodeNames(t *testing.T) {
 	w := testutil.NewFakePolicyWrite()
 	f := newWriteFixture(t, w)
-	f.read.descendants[pc1] = append(f.read.descendants[pc1], &policypb.NGACNode{
+	f.read.descendants[members1] = append(f.read.descendants[members1], &policypb.NGACNode{
 		Id: "u-new", Name: "U_5d2e", NodeType: ngac.TypeU,
 		Properties: map[string]string{ngac.PropDisplayName: "alice"},
 	})
@@ -372,4 +374,32 @@ func TestListMembers_ShowsUsernamesNotNodeNames(t *testing.T) {
 	assert.Contains(t, names, "alice")
 	assert.Contains(t, names, "owner", "a user node written before names were ID-keyed carries the username as its name")
 	assert.NotContains(t, names, "U_5d2e")
+}
+
+// Groups are private, so what the workspace's own UAs hold on the Channels OA must
+// not reach a group's content: members may only start a group, owners may also
+// moderate (manage) one they are not in. The same fixture shows what stays: both
+// keep create_channel, owners keep everything on Mgmt and Documents.
+func TestCreateWorkspace_ChannelsGrantsDoNotReachGroupContent(t *testing.T) {
+	w := testutil.NewFakePolicyWrite()
+	f := newWriteFixture(t, w)
+
+	ws, err := f.svc.CreateWorkspace(context.Background(), domain.CreateWorkspaceInput{Name: "Acme", Type: domain.TypeOrganization, UserID: "u1", UserNGACNodeID: owner})
+	require.NoError(t, err)
+	id := ngac.WorkspaceID(ws.ID)
+
+	log := w.Log()
+	channels := ngac.ChannelsOAName(id)
+	assert.Contains(t, log, fmt.Sprintf("associate %s>%s %v", ngac.MembersUAName(id), channels, ngac.MemberChannelOps()))
+	assert.Contains(t, log, fmt.Sprintf("associate %s>%s %v", ngac.OwnersUAName(id), channels, ngac.OwnerChannelOps()))
+	assert.Contains(t, log, fmt.Sprintf("associate %s>%s %v", ngac.OwnersUAName(id), ngac.MgmtOAName(id), ngac.AllOwnerOps()), "owners keep full rights on Mgmt")
+
+	for _, l := range log {
+		if !strings.HasPrefix(l, "associate ") || !strings.Contains(l, ">"+channels+" ") {
+			continue
+		}
+		for _, op := range []string{ngac.OpRead, ngac.OpWrite, ngac.OpInvite} {
+			assert.NotContainsf(t, l[strings.Index(l, "["):], op, "no workspace grant on Channels may carry %q: %s", op, l)
+		}
+	}
 }

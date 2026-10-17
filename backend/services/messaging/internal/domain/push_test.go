@@ -62,6 +62,7 @@ func newPushWorld(t *testing.T, dm bool) *pushWorld {
 			require.NoError(t, err)
 		}
 		t.Cleanup(func() { k.f.pool.Exec(ctx, `DELETE FROM channel_members WHERE channel_id = $1`, k.chID) })
+		k.f.read.addMember(k.f.wsID, userNode, "u-"+k.f.userID, otherNode)
 	}
 	w := &pushWorld{talk: k, other: other, otherNode: otherNode, sender: &recordingSender{}, view: viewing{}}
 	k.f.svc.SetPush(w.sender, w.view)

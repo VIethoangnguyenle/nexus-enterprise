@@ -24,6 +24,8 @@ func TestMapDomainError(t *testing.T) {
 		{"access denied", httputil.ErrAccessDenied, http.StatusForbidden},
 		{"already exists", httputil.ErrAlreadyExists, http.StatusConflict},
 		{"invalid input", httputil.ErrInvalidInput, http.StatusBadRequest},
+		{"unavailable", httputil.ErrUnavailable, http.StatusServiceUnavailable},
+		{"wrapped unavailable", fmt.Errorf("%w: policy: connection refused", httputil.ErrUnavailable), http.StatusServiceUnavailable},
 
 		// Services wrap with %w to add context; the class must survive that.
 		{"wrapped denial", fmt.Errorf("%w: read on oa-1", httputil.ErrAccessDenied), http.StatusForbidden},

@@ -30,7 +30,14 @@ func (s *Service) RemoveReaction(ctx context.Context, messageID, userNodeID, use
 	if messageID == "" || emoji == "" {
 		return ErrInvalidInput
 	}
-	if err := s.authorizeMessage(ctx, messageID, userNodeID, ngac.OpWrite); err != nil {
+	channelID, err := s.store.GetChannelIDForMessage(ctx, messageID)
+	if err != nil {
+		return fmt.Errorf("load message: %w", err)
+	}
+	if channelID == "" {
+		return fmt.Errorf("%w: message not found", ErrNotFound)
+	}
+	if _, err := s.authorizeBackOut(ctx, channelID, userNodeID, ngac.OpWrite); err != nil {
 		return err
 	}
 	return s.store.DeleteReaction(ctx, messageID, userID, emoji)

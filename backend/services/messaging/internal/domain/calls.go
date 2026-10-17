@@ -289,7 +289,7 @@ func (s *Service) OpenCall(ctx context.Context, channelID, userNodeID string) (*
 
 // DeclineCall is the other person turning down a ringing direct call.
 func (s *Service) DeclineCall(ctx context.Context, callID, userID, userNodeID string) (*pb.Call, error) {
-	call, err := s.authorizeCall(ctx, callID, userNodeID, ngac.OpWrite)
+	call, err := s.authorizeCallBackOut(ctx, callID, userNodeID, ngac.OpWrite)
 	if err != nil {
 		return nil, err
 	}
@@ -309,7 +309,7 @@ func (s *Service) DeclineCall(ctx context.Context, callID, userID, userNodeID st
 
 // CancelCall is the caller hanging up a direct call before it was answered.
 func (s *Service) CancelCall(ctx context.Context, callID, userID, userNodeID string) (*pb.Call, error) {
-	call, err := s.authorizeCall(ctx, callID, userNodeID, ngac.OpWrite)
+	call, err := s.authorizeCallBackOut(ctx, callID, userNodeID, ngac.OpWrite)
 	if err != nil {
 		return nil, err
 	}
@@ -551,6 +551,17 @@ func (s *Service) mayStayInCall(ctx context.Context, call *store.Call, userID st
 
 // authorizeCall loads a call and checks op on its conversation's OA.
 func (s *Service) authorizeCall(ctx context.Context, callID, userNodeID, op string) (*store.Call, error) {
+	return s.authorizeCallWith(ctx, callID, userNodeID, op, s.authorizeChannel)
+}
+
+// authorizeCallBackOut is authorizeCall for leaving a call on one's own terms
+// (declining, cancelling): the graph alone, with no direct-message relationship.
+func (s *Service) authorizeCallBackOut(ctx context.Context, callID, userNodeID, op string) (*store.Call, error) {
+	return s.authorizeCallWith(ctx, callID, userNodeID, op, s.authorizeBackOut)
+}
+
+func (s *Service) authorizeCallWith(ctx context.Context, callID, userNodeID, op string,
+	authorize func(ctx context.Context, channelID, userNodeID, op string) (*store.Channel, error)) (*store.Call, error) {
 	if callID == "" {
 		return nil, ErrInvalidInput
 	}
@@ -569,7 +580,7 @@ func (s *Service) authorizeCall(ctx context.Context, callID, userNodeID, op stri
 		}
 		return call, nil
 	}
-	if _, err := s.authorizeChannel(ctx, call.ChannelID, userNodeID, op); err != nil {
+	if _, err := authorize(ctx, call.ChannelID, userNodeID, op); err != nil {
 		return nil, err
 	}
 	return call, nil

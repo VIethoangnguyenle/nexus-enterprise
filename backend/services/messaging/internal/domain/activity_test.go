@@ -217,6 +217,20 @@ func TestFollowedThreads_RejectsBadInput(t *testing.T) {
 
 // addDMMember records the caller in a DM's member cache, which is what narrows
 // the DMs a batch read has to put to the policy service.
+// withDMPeer makes the channel a direct message with one other person, who with
+// the caller shares the fixture's workspace in the scripted policy, as the two
+// people of a direct message do. Writing to a direct message needs that.
+func (f *fixture) withDMPeer(t *testing.T, chID string) (peerNode string) {
+	t.Helper()
+	_, peerNode = testutil.CreateUser(t, f.pool)
+	_, err := f.pool.Exec(context.Background(), `UPDATE channels SET channel_type = 'dm' WHERE id = $1`, chID)
+	require.NoError(t, err)
+	addDMMember(t, f, chID, peerNode)
+	f.read.addMember(f.wsID, userNode, peerNode)
+	t.Cleanup(func() { f.pool.Exec(context.Background(), `DELETE FROM channel_members WHERE channel_id = $1`, chID) })
+	return peerNode
+}
+
 func addDMMember(t *testing.T, f *fixture, dmID, node string) {
 	t.Helper()
 	_, err := f.pool.Exec(context.Background(),

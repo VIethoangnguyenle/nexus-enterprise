@@ -23,6 +23,20 @@ the REST edge and from the signed identity token between services (see "Caller i
 | Create channel | `create_channel` | the workspace Channels OA (`ngac.ChannelsOAName(wsID)`), ID-keyed only |
 | Update channel (`PATCH /api/channels/:chId`) | `manage` | the channel's content OA |
 | WebSocket subscribe to a channel | `read` | the channel's content OA |
+| Read, list members of, post in, start or join a call of a channel | `read`, `read`, `write`, `write` | the channel's content OA |
+| Create the workspace-wide channel (`ProvisionWorkspaceChannel`) | service identity `auth` only; the creator also needs `create_channel` | the workspace Channels OA |
+| Put a member in the workspace-wide channel (`JoinWorkspaceChannel`, also done for the caller when they list the workspace's channels) | service identity `auth` or `workspace` only (the handler checks the name again); the person must be under the workspace's Members UA | the channel's Members UA |
+
+#### Scenario: A direct conversation needs a shared workspace for any write
+- **WHEN** one of the two people of a direct message no longer shares a workspace with the other and sends a message of any type, votes, reacts, pins, edits, deletes, creates a poll or task, or starts, joins, rings or invites into a call
+- **THEN** the answer is 403, though the graph still grants them `write` on the conversation's OA
+- **AND** reading the history is unchanged, and the same requests succeed while they share a workspace
+- **AND** opening a direct message (`POST /api/dms`) names the other person by user id, takes their node from the auth service, and is refused (403) unless they are a user node sharing a workspace with the caller; a node sent that is not theirs is 400
+- **AND** backing out stays possible for them: declining or cancelling a call, deleting their own message, taking back a reaction or a vote check the graph alone
+- **AND** setting a task's status or handing it to someone else in a direct message needs the relationship too, though its owner holds only `read`
+- **AND** a message of type `system` sent by a client needs `write` like any other message (it used to skip the check), in a group as in a direct message; the service's own notices (a manager's "deleted a message" line) are stored directly and need no `write`
+- **AND** the gRPC `SendMessage` does not read `message_type` from the request: whatever it names, the message is a person's (`user`) and is held to a person's rules (text or a file is required, its linked entity is validated), so a client cannot post a line that looks like the service's; system lines are made inside the service only (the `message_type` field stays in the proto and is ignored)
+- **AND** every `write`, `invite` or `manage` on a channel's OA goes through the one helper that adds this rule (`authorizeChannelOp`): no handler checks them directly. Uploading a file to a direct message's drive is not covered (the drive cannot see the relationship)
 
 #### Scenario: Subscribe without read
 - **WHEN** an authenticated WebSocket client sends `SubscribeRequest` for a channel whose OA it cannot read
@@ -46,6 +60,17 @@ the REST edge and from the signed identity token between services (see "Caller i
 - **WHEN** a caller with no `create_channel` grant on the workspace Channels OA creates a channel
 - **THEN** the request is denied and no graph node is written
 
+#### Scenario: Workspace member outside a group
+- **WHEN** a workspace member (or owner) who is not in group G lists channels, opens G, lists its members, posts in it, asks for a ticket into its call or subscribes to it over WebSocket
+- **THEN** G is not listed and every other request is denied, because groups are private (see `tenant-ngac-init`, "Groups are private")
+- **AND** the same requests from G's own members succeed
+- **AND** the same member's read of a file in G's drive, and of G's calendar, is denied
+
+#### Scenario: A person asks for a workspace-wide channel
+- **WHEN** a person creates a channel, over REST or gRPC, and names the type `workspace`
+- **THEN** the channel is stored as `private`
+- **AND** a person's identity on `ProvisionWorkspaceChannel` or `JoinWorkspaceChannel`, or the identity of a service not listed for the method, is refused before any handler runs or inside it
+
 ### Requirement: Live events stay within their audience
 Presence events SHALL be delivered only to sessions of the same tenant. Approval events SHALL
 carry the acting user's `tenant_id`, the requester (`created_by`) and the approvers still pending
@@ -55,6 +80,37 @@ actor, within that tenant.
 #### Scenario: Approval event in another tenant
 - **WHEN** an approval event for tenant A is consumed
 - **THEN** no session of tenant B receives it
+
+### Requirement: A token does not outlive the membership it was issued for
+An access token names a tenant and is valid for its lifetime (15 minutes), so a person removed from a workspace
+holds a token for it for that long. The services that decide for the token's tenant without asking the graph are
+bounded by that lifetime; two surfaces ask the graph every time, through the policy **writer** (never the read replica,
+which may be a moment behind a removal), and fail closed:
+
+- **Approval.** Every route of the approval service (the tenant-scoped ones and the admin one) first asks whether
+  the caller's user node sits under `<ws>_Members` of the tenant in the token; a person the graph does not hold gets
+  `403`, and an answer that cannot be had stops the call (a 503, never a pass). A named approver (a direct
+  assignment) is checked again when they approve or reject, because nothing else ties that row to the workspace.
+- **WebSocket.** A connection authenticating with a token that names a tenant is checked the same way. A person who
+  is not a member is refused and the connection is closed with code `4403` ("not a member"; a workspace that no longer
+  exists holds nobody, so it is 4403 too); a check that could not be
+  made closes it with `1013` (try again later), so an outage neither lets anybody in nor bans anybody. A session
+  with no tenant is not asked. When a person is detached (the `member_removed` announcement), their open connections
+  of that workspace are closed with `4403`; their connections of other workspaces stay. The client does not reconnect
+  with the same token after `4403`: it asks the session for a new one once (see `tenant-identity`).
+
+#### Scenario: A removed person calls approval
+- **WHEN** a person detached from the workspace calls any approval route with a still-valid token for it
+- **THEN** it is refused with 403 and nothing is read or changed
+- **AND** the same call by a member of the workspace is decided as before
+
+#### Scenario: The policy cannot be asked
+- **WHEN** the approval gate or the WebSocket check cannot get an answer from the policy
+- **THEN** the call is not allowed (approval: 503; WebSocket: close code 1013)
+
+#### Scenario: A removed person reconnects the socket
+- **WHEN** a person detached from the workspace connects a WebSocket with a token that is still valid
+- **THEN** authentication fails and the connection closes with 4403
 
 ### Requirement: Drive sharing and quota are guarded
 

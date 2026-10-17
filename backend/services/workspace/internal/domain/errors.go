@@ -15,6 +15,7 @@ var (
 	ErrAccessDenied  = httputil.ErrAccessDenied
 	ErrAlreadyExists = httputil.ErrAlreadyExists
 	ErrInvalidInput  = httputil.ErrInvalidInput
+	ErrUnavailable   = httputil.ErrUnavailable
 )
 
 // ErrAlreadyOrganization means the workspace is an organization already. Turning

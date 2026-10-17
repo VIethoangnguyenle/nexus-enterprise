@@ -15,7 +15,7 @@ from the request body.
 
 | Operation | Required op |
 |---|---|
-| Invite member, remove member | `invite` |
+| Invite member, remove member | `invite` (and `manage` when the person removed holds `manage` on any area) |
 | Create role, create folder | `manage` |
 | Department create / update / delete / move / member assignment | `manage` |
 | Update member roles, transfer or add owner, remove owner, delete role, delete folder, delete permission | `manage` |
@@ -36,6 +36,32 @@ from the request body.
 #### Scenario: Body carries a forged requester
 - **WHEN** the request body names another user as the requester
 - **THEN** the service ignores it and authorizes the caller from the JWT
+
+### Requirement: Removing a manager takes manage, and only folders are deleted as folders
+`invite` is enough to remove an ordinary member and not enough to remove a person who holds `manage` on any
+area of the workspace (Mgmt, Documents, Channels, Assets), because `manage` is grantable per area and an
+invite-only role would otherwise remove the people above it. Removing such a person SHALL also require `manage`
+on the Mgmt OA. The target's holdings are asked of the PDP in one batch check; if it cannot answer, the removal
+is refused as unavailable (503, not a denial), so the caller retries. The rule covers `manage` on an area as a whole (Mgmt, Documents, Channels, Assets); `manage` held on a single asset type, folder or group is not an area grant and does not trigger it. Removing an Owner keeps its stricter rule (Owner plus `manage`, and never the last Owner).
+
+Deleting a folder SHALL delete only an admin folder (`ngac.IsAdminFolder`): an OA under the workspace's PC named like a folder, whose `workspace_id` is the route's workspace and whose `type` is `admin_folder` (`CreateFolder` sets it) or absent (folders made before the type existed; the drive always sets one). The drive's own folders have the same name pattern and `type` `drive_folder`, under Documents and inside every group's drive: they, Mgmt, Documents, Channels, Assets, a group's content OA and an asset type's OA are refused with 400 and stay. `ListFolders` lists exactly the admin folders.
+
+#### Scenario: Invite-only role removes a manager
+- **WHEN** a caller holding `invite` but not `manage` on Mgmt removes a person who holds `manage` on Mgmt, Documents, Channels or Assets
+- **THEN** the request is refused with 403 and the person is still a member
+
+#### Scenario: The same removals, allowed
+- **WHEN** the same caller removes an ordinary member, or a caller holding `manage` and `invite` on Mgmt removes each of those managers
+- **THEN** the person is removed
+
+#### Scenario: The policy cannot say what the person manages
+- **WHEN** the batch check fails
+- **THEN** the removal is refused and nothing is detached
+
+#### Scenario: Deleting a container as a folder
+- **WHEN** an owner calls the gRPC `DeleteFolder` with the ID of Mgmt, Channels, Documents, Assets, a group's content OA, an asset type's OA, a drive folder under Documents or inside a group's drive, or a node named like a folder that belongs to another workspace
+- **THEN** it is refused (400; 404 for a node outside the workspace) and the node stays
+- **AND** a folder made by `CreateFolder` is deleted
 
 ### Requirement: There is no free-form permission grant
 The workspace service SHALL NOT offer a route or RPC that associates an arbitrary UA with an arbitrary OA (`POST /api/workspaces/:id/permissions` and the gRPC `CreatePermission` are removed). It checked `manage` on the route's workspace but not that the UA and OA belonged to it, so, with re-grants replacing operations, an owner of one workspace could rewrite another's Members or Owners grants. What a role holds is changed only through the per-area route below, which resolves the OA from the area inside the route's workspace and takes only a role of that workspace.
@@ -58,8 +84,16 @@ SHALL confer nothing on another.
 - **THEN** the request is rejected with 404 and B is unchanged
 
 ### Requirement: Workspace reads require membership
-Reading a workspace, its members, roles, departments and folders SHALL require the workspace's
-PC to be among the caller's ancestors (the same test the workspace list uses).
+Reading a workspace, its members, roles, departments and folders SHALL require the caller to be a user under the
+workspace's Members UA (the same test the workspace list uses, and `policyclient.IsWorkspaceMember`). Reaching the
+workspace's policy class is not enough: a group's UA and an event's guest UA sit under the class too, and being in
+one of them is not membership. The member list and the people table list the users under the Members UA, not every
+user under the class. A policy service that cannot answer denies.
+
+#### Scenario: Reaches the policy class only through a group or an event
+- **WHEN** a user whose only path to the workspace's policy class is a group's Members UA or an event's guest UA reads the workspace, its members or its departments
+- **THEN** the request is rejected with 403, the workspace is absent from their workspace list, and they are absent from the member list
+- **AND** an owner, an ordinary member and a tenant member of the same workspace are allowed
 
 #### Scenario: Non-member reads members
 - **WHEN** a user who does not belong to the workspace calls `GET /api/workspaces/:id/members`
@@ -71,6 +105,11 @@ The workspace service SHALL answer, for a workspace, which resource areas a role
 #### Scenario: Documents
 - **WHEN** a member asks for the areas
 - **THEN** documents lists `read`, `write` and `share`, and does not list `upload` (the drive gates an upload on `write`, so no service checks `upload`), `approve` or `manage`
+
+#### Scenario: Channels
+- **WHEN** a member asks for the areas
+- **THEN** channels lists `create_channel` and nothing else: a grant on the Channels OA is inherited by every group's messages, files and calendar, and groups are private, so a role cannot be given `read`, `write`, `invite` or `manage` there (only the Owners hold `manage` on groups they are not in)
+- **AND** setting a role's permissions on channels to `read` answers 400 and writes nothing
 
 #### Scenario: A workspace with no assets yet
 - **WHEN** the workspace has no Assets OA
@@ -104,7 +143,7 @@ The workspace service SHALL answer, for a workspace, which resource areas a role
 - **THEN** the answer is 404 and nothing is written
 
 ### Requirement: Assigning a role or a department is a delegation
-`PUT` and `DELETE /api/workspaces/:id/members/:nodeId/roles/:roleId` SHALL require `manage` on the Mgmt OA, a role created by an administrator in this workspace, and a person who already belongs to the workspace (a user node under its PC): holding `manage` SHALL NOT bring a stranger in, which is what `invite` is for. Assigning SHALL add one assignment and detach nothing else. Assigning a role, or a person's department, SHALL also require the caller to hold every operation the role (or the department's UA) confers, **including what it inherits from the UAs above it** (a person under a sub-department holds every grant of the departments above it); a grant or an ancestry that cannot be read is treated as not held. Moving a department under a parent is the same delegation, checked against the new parent's whole chain; moving to the root grants nothing. Removing a role needs only `manage`. A person is in at most one department: choosing one detaches the previous department and, if that fails, takes the new assignment back.
+`PUT` and `DELETE /api/workspaces/:id/members/:nodeId/roles/:roleId` SHALL require `manage` on the Mgmt OA, a role created by an administrator in this workspace, and a person who already belongs to the workspace (a user node under its Members UA): holding `manage` SHALL NOT bring a stranger in, which is what `invite` is for. Assigning SHALL add one assignment and detach nothing else. Assigning a role, or a person's department, SHALL also require the caller to hold every operation the role (or the department's UA) confers, **including what it inherits from the UAs above it** (a person under a sub-department holds every grant of the departments above it); a grant or an ancestry that cannot be read is treated as not held. Moving a department under a parent is the same delegation, checked against the new parent's whole chain; moving to the root grants nothing. Removing a role needs only `manage`. A person is in at most one department: choosing one detaches the previous department and, if that fails, takes the new assignment back.
 
 #### Scenario: Role that confers more than the caller holds
 - **WHEN** a manager who cannot `write` Documents assigns a role that grants `write` on Documents

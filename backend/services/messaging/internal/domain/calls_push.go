@@ -92,7 +92,7 @@ func (s *Service) InviteToCall(ctx context.Context, callID, userID, userNodeID s
 	var invited []string
 	for _, id := range invitees {
 		node := nodes[id]
-		if id == userID || node == "" || slices.Contains(invited, id) || s.checkAccess(ctx, node, ch.NGACOaID, ngac.OpWrite) != nil {
+		if id == userID || node == "" || slices.Contains(invited, id) || s.authorizeChannelOp(ctx, ch, node, ngac.OpWrite) != nil {
 			continue
 		}
 		invited = append(invited, id)

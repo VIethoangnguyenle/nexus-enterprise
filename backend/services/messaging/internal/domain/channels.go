@@ -5,6 +5,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -21,6 +22,17 @@ import (
 	"ngac-platform/services/messaging/internal/store"
 )
 
+// The kinds of channel, as stored in channels.channel_type.
+const (
+	// ChannelTypePrivate is a group: only the people in its Members UA read it.
+	ChannelTypePrivate = "private"
+	// ChannelTypeWorkspace is the one channel (#general) a workspace has that
+	// every member of the workspace is in. Only ProvisionWorkspaceChannel makes it.
+	ChannelTypeWorkspace = "workspace"
+	// ChannelTypeDM is a conversation between two people, outside any workspace.
+	ChannelTypeDM = "dm"
+)
+
 // CreateChannelInput holds validated parameters for channel creation.
 type CreateChannelInput struct {
 	Name        string
@@ -30,14 +42,26 @@ type CreateChannelInput struct {
 	ChannelType string
 }
 
-// CreateChannel creates a workspace channel with NGAC nodes, permissions, and
+// CreateChannel creates a private group with NGAC nodes, permissions, and
 // optional drive.
+//
+// A group made by a user is always private, whatever ChannelType the request
+// names: the workspace-wide channel is made by the auth service alone, and a
+// "dm" is made by FindOrCreateDM. So a caller cannot turn a group into a second
+// #general or a workspace-typed conversation by choosing a type.
 //
 // The caller must hold create_channel on the workspace's Channels OA. The check
 // runs before anything is written, so a denied request leaves no orphan nodes
 // in the graph. A channel with no workspace has no Channels OA to authorize
 // against, so it is refused here — direct messages go through FindOrCreateDM.
 func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb.Channel, error) {
+	in.ChannelType = ChannelTypePrivate
+	return s.createInWorkspace(ctx, in)
+}
+
+// createInWorkspace checks that the creator holds create_channel on the
+// workspace's Channels OA and then creates the channel with the type in carries.
+func (s *Service) createInWorkspace(ctx context.Context, in CreateChannelInput) (*pb.Channel, error) {
 	if in.WorkspaceID == "" {
 		return nil, fmt.Errorf("%w: a channel must belong to a workspace", ErrInvalidInput)
 	}
@@ -70,11 +94,6 @@ func (s *Service) CreateChannel(ctx context.Context, in CreateChannelInput) (*pb
 // them removes the nodes already created, newest first, so a channel that could
 // not be completed leaves nothing in the graph.
 func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID, channelsOAID string, extraMemberNodeIDs ...string) (*pb.Channel, error) {
-	// Normalize channel type: "group" maps to "workspace" for DB constraint.
-	if in.ChannelType == "group" {
-		in.ChannelType = "workspace"
-	}
-
 	chID := uuid.New().String()
 	prov := provision.NewCreator(s.policyWrite)
 
@@ -110,6 +129,9 @@ func (s *Service) createChannel(ctx context.Context, in CreateChannelInput, pcID
 	// a channel without them is a DM nobody can find, created again on the next try.
 	members := append([]string{in.UserNodeID}, extraMemberNodeIDs...)
 	if err := s.store.InsertChannelWithMembers(ctx, ch, members...); err != nil {
+		if errors.Is(err, store.ErrWorkspaceChannelExists) {
+			return nil, prov.Fail(ctx, fmt.Errorf("%w: the workspace already has its workspace-wide channel", ErrAlreadyExists))
+		}
 		return nil, prov.Fail(ctx, fmt.Errorf("create channel: %w", err))
 	}
 	prov.Done()
@@ -236,6 +258,9 @@ func (s *Service) findChildByName(ctx context.Context, parentID, name, nodeType 
 
 // ListChannels returns channels the user has read access to.
 func (s *Service) ListChannels(ctx context.Context, workspaceID, userNodeID string) ([]*pb.Channel, error) {
+	// Opening the app lists channels: the moment to give a member of the workspace
+	// the #general edge they are missing, before deciding what they may read.
+	s.ensureWorkspaceChannelMembership(ctx, workspaceID, userNodeID)
 	channels, err := s.store.ListChannelsByWorkspace(ctx, workspaceID)
 	if err != nil {
 		return nil, fmt.Errorf("list channels: %w", err)

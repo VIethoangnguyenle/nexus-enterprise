@@ -94,3 +94,35 @@ func TestSearchEventsStaysInItsWorkspace(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, got, "pattern characters in the term are literal")
 }
+
+// Searching events by a guest's name matches the people who are in the workspace;
+// a guest who was removed from it can no longer be found by their name.
+func TestSearchEventsByGuestNameSkipsRemovedMembers(t *testing.T) {
+	w := newWorld(t)
+	ctx := context.Background()
+	guestUser, guestNode := "st-guest-"+w.sfx, "st-gnode-"+w.sfx
+	w.exec(`INSERT INTO ngac_nodes (id, name, node_type) VALUES ($1, $1, 'U')`, guestNode)
+	w.exec(`INSERT INTO users (id, username, password, ngac_node, display_name) VALUES ($1, $1, '', $2, $3)`, guestUser, guestNode, "Zorbaline "+w.sfx)
+	w.exec(`INSERT INTO tenant_users (tenant_id, user_id, ngac_node_id) VALUES ($1, $2, $3)`, w.ws[0], guestUser, guestNode)
+	t.Cleanup(func() {
+		c := context.Background()
+		w.pool.Exec(c, `DELETE FROM tenant_users WHERE user_id = $1`, guestUser)
+		w.pool.Exec(c, `DELETE FROM users WHERE id = $1`, guestUser)
+		w.pool.Exec(c, `DELETE FROM ngac_nodes WHERE id = $1`, guestNode)
+	})
+	ev := w.event(0, "Planning", day, "")
+	w.exec(`INSERT INTO calendar_attendees (event_id, user_node_id) VALUES ($1, $2)`, ev.ID, guestNode)
+
+	got, err := w.st.SearchEvents(ctx, w.ws[0], []string{w.cal[0]}, w.node, "Zorbaline", 10)
+	require.NoError(t, err)
+	assert.Equal(t, []string{ev.ID}, ids(got), "a member guest is found by name")
+
+	w.exec(`UPDATE tenant_users SET status = 'removed' WHERE tenant_id = $1 AND user_id = $2`, w.ws[0], guestUser)
+	got, err = w.st.SearchEvents(ctx, w.ws[0], []string{w.cal[0]}, w.node, "Zorbaline", 10)
+	require.NoError(t, err)
+	assert.Empty(t, got, "a removed guest is no longer found by name")
+
+	got, err = w.st.SearchEvents(ctx, w.ws[0], []string{w.cal[0]}, w.node, "Planning", 10)
+	require.NoError(t, err)
+	assert.Equal(t, []string{ev.ID}, ids(got), "the event is still found by its title")
+}

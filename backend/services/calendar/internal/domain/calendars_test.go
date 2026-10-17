@@ -37,6 +37,7 @@ func newFixtureOfType(t *testing.T, wsType string) *fixture {
 	w.Seed("ua-owners", ngac.OwnersUAName(ws), "UA", nil)
 	w.Assign("ua-members", "pc1")
 	w.Assign("ua-owners", "pc1")
+	w.Assign("ua-owners", "ua-members") // as CreateWorkspace builds it: owners are members
 	for _, p := range []struct{ node, name, group string }{
 		{"n-alice", "Alice", "ua-members"}, {"n-bob", "Bob", "ua-members"},
 		{"n-carol", "Carol", "ua-members"}, {"n-olga", "Olga", "ua-owners"},

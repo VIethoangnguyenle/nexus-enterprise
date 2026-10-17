@@ -26,11 +26,12 @@ func (s *Store) WorkspaceCreator(ctx context.Context, id string) (string, bool, 
 	return owner, true, nil
 }
 
-// OtherMembers counts the people listed in the workspace besides userID.
+// OtherMembers counts the people in the workspace besides userID. A person who was
+// removed is not one: the workspace can be deleted once everyone else has gone.
 func (s *Store) OtherMembers(ctx context.Context, id, userID string) (int, error) {
 	var n int
 	err := s.db.QueryRow(ctx,
-		"SELECT count(*) FROM tenant_users WHERE tenant_id = $1 AND user_id <> $2", id, userID).Scan(&n)
+		"SELECT count(*) FROM tenant_users WHERE tenant_id = $1 AND user_id <> $2 AND status = 'active'", id, userID).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("count other members of %s: %w", id, err)
 	}

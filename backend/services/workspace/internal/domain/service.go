@@ -5,6 +5,8 @@ package domain
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"slices"
 	"sync"
 	"time"
 
@@ -12,6 +14,7 @@ import (
 	"github.com/minio/minio-go/v7"
 
 	"ngac-platform/ngac"
+	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/provision"
 	"ngac-platform/pkg/realtime"
 	drivepb "ngac-platform/proto/drive"
@@ -55,6 +58,9 @@ type Service struct {
 	invitations   InvitationStore
 	now           func() time.Time
 	inviteLimiter *windowLimiter
+	// repairBackoff is the schedule on which a listing that could not be marked removed
+	// is tried again in the background; empty turns the repair off.
+	repairBackoff []time.Duration
 	// mail sends the invitation email; nil sends none. See WithInviteMail.
 	mail       InviteMailer
 	appBaseURL string
@@ -65,6 +71,35 @@ type Service struct {
 	notifier InvitationNotifier
 	// emitter announces committed changes to live clients; see WithEmitter.
 	emitter realtime.Emitter
+	// channelJoiner puts a new member into the workspace's #general; see WithChannelJoiner.
+	channelJoiner ChannelJoiner
+}
+
+// ChannelJoiner puts a member of a workspace into its workspace-wide channel
+// (#general). Being under the Members UA does not open that channel by itself: it
+// is readable through a direct edge each admission writes. The messaging service
+// does the writing; the implementation goes to it on this service's own identity.
+type ChannelJoiner interface {
+	JoinWorkspaceChannel(ctx context.Context, workspaceID, userID, userNodeID string) error
+}
+
+// WithChannelJoiner wires the #general join on admission. Without it (only unit
+// tests run that way) admission puts nobody in the channel.
+func (s *Service) WithChannelJoiner(j ChannelJoiner) *Service {
+	s.channelJoiner = j
+	return s
+}
+
+// joinWorkspaceChannel is the channel half of admitting a member. The person is a
+// member of the workspace whether or not it succeeds, so a failure is logged for
+// an operator (re-running migration 060 repairs the edge), not returned.
+func (s *Service) joinWorkspaceChannel(ctx context.Context, workspaceID, userID, userNodeID string) {
+	if s.channelJoiner == nil {
+		return
+	}
+	if err := s.channelJoiner.JoinWorkspaceChannel(ctx, workspaceID, userID, userNodeID); err != nil {
+		slog.Error("member not put into the workspace channel", "workspace", workspaceID, "error", err)
+	}
 }
 
 // NewService creates a workspace domain service.
@@ -79,6 +114,7 @@ func NewService(
 	svc := &Service{store: st, deptStore: ds, policyRead: pr, policyWrite: pw, minioClient: mc, driveClient: dc,
 		mailResend: DefaultInviteResendWindow, mailSlots: make(chan struct{}, inviteMailInFlight)}
 	svc.inviteLimiter = newWindowLimiter(defaultInviteMax, defaultInviteWindow, svc.clock)
+	svc.repairBackoff = []time.Duration{2 * time.Second, 10 * time.Second, 30 * time.Second, 2 * time.Minute, 10 * time.Minute}
 	return svc
 }
 
@@ -205,7 +241,7 @@ func (s *Service) CreateWorkspace(ctx context.Context, in CreateWorkspaceInput) 
 	}{
 		{ownersUA.Id, mgmtOA.Id, ngac.AllOwnerOps()},
 		{ownersUA.Id, docsOA.Id, ngac.AllOwnerOps()},
-		{ownersUA.Id, channelsOA.Id, ngac.AllOwnerOps()},
+		{ownersUA.Id, channelsOA.Id, ngac.OwnerChannelOps()},
 		{membersUA.Id, docsOA.Id, ngac.MemberDocumentOps()},
 		{membersUA.Id, channelsOA.Id, ngac.MemberChannelOps()},
 	}
@@ -262,32 +298,23 @@ func (s *Service) ListAccessibleWorkspaces(ctx context.Context, userNGACNodeID s
 		return nil, nil
 	}
 
-	// Ask from the user's side, once.
-	//
-	// This used to walk every workspace's entire subtree looking for the user —
-	// one GetDescendants per workspace in the system, each returning every node
-	// under that policy class. Walking up from the user instead is a single
-	// call whose payload is just that user's attributes, and it answers the
-	// same question: a workspace is accessible exactly when its policy class is
-	// among the user's ancestors.
-	ancestors, err := s.policyWrite.GetAncestors(ctx, &policypb.GetAncestorsRequest{
-		NodeId: userNGACNodeID,
-	})
+	// Ask from the user's side: a workspace is accessible when the user sits under
+	// its Members UA. Its policy class is not the test: a group's UA and an event's
+	// guest UA sit beneath the class too, and being in one is not membership. One
+	// ancestor lookup, plus one cached Members-UA lookup per workspace the user's
+	// ancestors name (see policyclient.MemberWorkspaces).
+	mine, err := policyclient.MemberWorkspaces(ctx, s.policyWrite, userNGACNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("resolve user attributes: %w", err)
 	}
-
-	reachable := make(map[string]bool, len(ancestors.GetNodes()))
-	for _, n := range ancestors.GetNodes() {
-		reachable[n.Id] = true
+	if len(mine) == 0 {
+		return nil, nil
 	}
 
 	var accessible []*WorkspaceResult
 	for _, ws := range allWS {
-		if reachable[ws.NGACPcID] {
-			accessible = append(accessible, &WorkspaceResult{
-				ID: ws.ID, Name: ws.Name, PcNodeID: ws.NGACPcID, Type: ws.Type,
-			})
+		if slices.Contains(mine, ngac.WorkspaceID(ws.ID)) {
+			accessible = append(accessible, &WorkspaceResult{ID: ws.ID, Name: ws.Name, PcNodeID: ws.NGACPcID, Type: ws.Type})
 		}
 	}
 	return accessible, nil

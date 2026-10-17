@@ -113,7 +113,7 @@ func (s *Store) CanonicalApprover(ctx context.Context, tenantID, approverType, v
 		err := s.db.QueryRow(ctx, `
 			SELECT EXISTS (
 				SELECT 1 FROM tenant_users tu JOIN users u ON u.id = tu.user_id
-				WHERE tu.tenant_id = $1 AND (tu.ngac_node_id = $2 OR u.ngac_node = $2))`,
+				WHERE tu.tenant_id = $1 AND tu.status = 'active' AND (tu.ngac_node_id = $2 OR u.ngac_node = $2))`,
 			tenantID, value).Scan(&ok)
 		if err != nil {
 			return "", err

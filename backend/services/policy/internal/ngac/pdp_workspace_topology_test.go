@@ -47,16 +47,17 @@ func buildWorkspaceBootstrapGraph(t *testing.T) *ngac.Graph {
 		}))
 	}
 
-	allOwnerOps := []string{"read", "write", "approve", "upload", "share", "manage", "invite", "create_channel"}
+	// Operation sets come from the vocabulary, as CreateWorkspace takes them, so a
+	// change to one is felt by every vector here instead of drifting silently.
 	for i, a := range []struct {
 		ua, oa string
 		ops    []string
 	}{
-		{"owners", "mgmt", allOwnerOps},
-		{"owners", "docs", allOwnerOps},
-		{"owners", "channels", allOwnerOps},
+		{"owners", "mgmt", vocab.AllOwnerOps()},
+		{"owners", "docs", vocab.AllOwnerOps()},
+		{"owners", "channels", vocab.OwnerChannelOps()},
 		{"members", "docs", vocab.MemberDocumentOps()},
-		{"members", "channels", []string{"read", "write", "create_channel"}},
+		{"members", "channels", vocab.MemberChannelOps()},
 	} {
 		require.NoError(t, g.AddAssociation(&ngac.Association{
 			ID: "assoc" + string(rune('a'+i)), UAID: a.ua, OAID: a.oa, Operations: a.ops,

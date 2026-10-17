@@ -26,6 +26,9 @@ var (
 	// (disabled, migrating or still provisioning); it is not created over.
 	ErrSchemaNotActive = errors.New("tenant schema is not active")
 
+	// ErrUnavailable: something this call needs (the policy) did not answer; the caller
+	// may try again (HTTP 503). It is never a pass.
+	ErrUnavailable = errors.New("service temporarily unavailable")
 	// ErrStale: the template changed since the caller read it (HTTP 409).
 	ErrStale = errors.New("template changed since it was read")
 )

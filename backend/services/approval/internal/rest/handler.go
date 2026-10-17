@@ -25,6 +25,8 @@ func mapDomainError(err error) *echo.HTTPError {
 		return echo.NewHTTPError(http.StatusConflict, err.Error())
 	case errors.Is(err, domain.ErrNoMatchingTemplate):
 		return echo.NewHTTPError(http.StatusNotFound, err.Error())
+	case errors.Is(err, domain.ErrUnavailable):
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "try again in a moment").SetInternal(err)
 	case errors.Is(err, domain.ErrStale):
 		return echo.NewHTTPError(http.StatusConflict, "template changed since it was read")
 	default:
@@ -58,6 +60,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	admin := e.Group("/api/admin",
 		httputil.JWTMiddleware(jwtSecret),
 		httputil.TenantMiddleware(),
+		h.memberMiddleware(),
 	)
 	admin.POST("/tenants/:id/provision", h.ProvisionTenant)
 
@@ -65,6 +68,7 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api := e.Group("/api",
 		httputil.JWTMiddleware(jwtSecret),
 		httputil.TenantMiddleware(),
+		h.memberMiddleware(),
 		h.tenantSchemaMiddleware(),
 	)
 
@@ -92,6 +96,26 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// Audit
 	approval.GET("/requests/:id", h.GetRequest)
 	approval.GET("/requests/:id/audit", h.GetAuditLog)
+}
+
+// memberMiddleware refuses a person the graph no longer holds in the tenant of
+// their token. The token outlives the membership it was issued for, so this asks
+// the policy writer (never the read replica, which may be a moment behind a
+// removal) on every call: a removed person is refused at once, not when the token
+// expires. It runs before anything is resolved or read for the tenant.
+func (h *Handler) memberMiddleware() echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			claims := httputil.GetClaims(c)
+			if claims == nil {
+				return httputil.CodedError(http.StatusUnauthorized, httputil.CodeSessionRequired, "authentication required")
+			}
+			if err := h.svc.RequireMember(c.Request().Context(), claims.NGACNodeID, claims.TenantID); err != nil {
+				return mapDomainError(err)
+			}
+			return next(c)
+		}
+	}
 }
 
 // tenantSchemaMiddleware resolves the tenant's schema and stores it in context.

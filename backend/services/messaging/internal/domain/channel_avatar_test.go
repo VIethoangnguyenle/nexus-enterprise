@@ -179,11 +179,10 @@ func TestClearChannelAvatar_RemovesThePictureAndItsAddress(t *testing.T) {
 func TestSetChannelAvatar_DirectMessageHasNoGroupPicture(t *testing.T) {
 	f := newFixture(t)
 	chID, oaID := f.insertChannel(t, "av-dm")
-	_, err := f.pool.Exec(context.Background(), `UPDATE channels SET channel_type = 'dm' WHERE id = $1`, chID)
-	require.NoError(t, err)
+	f.withDMPeer(t, chID)
 	f.allowManage(oaID)
 
-	_, err = f.svc.SetChannelAvatar(f.callerCtx(), chID, f.userID, userNode, pngOf(t, 80, 80))
+	_, err := f.svc.SetChannelAvatar(f.callerCtx(), chID, f.userID, userNode, pngOf(t, 80, 80))
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
 	require.ErrorIs(t, f.svc.ClearChannelAvatar(f.callerCtx(), chID, userNode), domain.ErrInvalidInput)
 

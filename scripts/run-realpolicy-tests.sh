@@ -35,7 +35,11 @@ FAIL=0
 RAN=0
 for mod in "$ROOT/backend" "$ROOT"/backend/services/*; do
 	[ -f "$mod/go.mod" ] || continue
-	pkgs="$(cd "$mod" && grep -rl --include='*_test.go' '^//go:build .*realpolicy' . 2>/dev/null | xargs -r -n1 dirname | sort -u)"
+	# The shared module holds the services' directories, each its own module (run on their own below).
+	skip=""
+	[ "$mod" = "$ROOT/backend" ] && skip="--exclude-dir=services"
+	# shellcheck disable=SC2086 # skip is one optional flag
+	pkgs="$(cd "$mod" && grep -rl --include='*_test.go' $skip '^//go:build .*realpolicy' . 2>/dev/null | xargs -r -n1 dirname | sort -u)"
 	[ -n "$pkgs" ] || continue
 	RAN=1
 	echo "=== ${mod#"$ROOT"/} ==="

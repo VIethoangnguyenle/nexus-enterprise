@@ -26,7 +26,7 @@ throughout; see "Red Team Review" below. User decisions are binding and are not 
 - Branch `fix/authz-overprivilege` cut from **`origin/main` (43a1509)**, not local `main` (97e2317, 317 files behind).
   origin/main adds `backend/services/calendar` and migrations `057_calendar.sql`, `058_calendar_occurrence_answers.sql`.
 - At branch cut: `git ls-tree --name-only origin/main data/migrations | tail -1` must still be `058_*`; if not,
-  renumber this plan's migrations and the contacts plan's `063`.
+  renumber this plan's migrations and the contacts plan's `064`.
 - File:line citations in phase files refer to origin/main unless marked "(local)"; re-check line numbers at cut.
 
 ## Outcome / acceptance
@@ -55,7 +55,7 @@ throughout; see "Red Team Review" below. User decisions are binding and are not 
 | 01 | [Foundations: legacy-workspace repair 059, real-policy harness, membership helper, cache invalidator, runbook](phase-01-foundations.md) | prereq | P1 | 6h | — |
 | 02 | [Private groups + #general direct edges + calendar vectors (060)](phase-02-private-groups.md) | F1 | P1 | 8h | 01 |
 | 03 | [Channel/workspace/calendar membership bound to `<W>_Members` (061)](phase-03-channel-membership-bound.md) | F2 | P1 | 5h | 01, 02 |
-| 04 | [Removed member loses access: refresh, WS auth, approval, tombstone + tenant_users backfill (062)](phase-04-removed-member-cutoff.md) | F3, F5 | P1 | 8h | 01, 03 |
+| 04 | [Removed member loses access: refresh, WS auth, approval, tombstone + tenant_users backfill (062, 063)](phase-04-removed-member-cutoff.md) | F3, F5 | P1 | 8h | 01, 03 |
 | 05 | [DM and call gate centralised (DM, event calls)](phase-05-dm-call-relationship.md) | F4 | P2 | 4h | 01, 03 |
 | 06 | [Workspace admin guards](phase-06-workspace-admin-guards.md) | F6, F10 | P2 | 2h | 04 |
 | 07 | [Graph-first tenant writes + graph-gated token mints](phase-07-tenant-users-graph-reconcile.md) | F7 | P2 | 4h | 04 |
@@ -71,9 +71,10 @@ parallel to 04 (disjoint files). 06 and 07 serialize after 04.
 | `059_ngac_workspace_id_keyed_repair.sql` | 01 | create/rename `PC_<id>`, `<id>_Members`, `<id>_Owners`, `<id>_Channels` for legacy workspaces (pattern 023), relink TenantMember/Owner | R0, alone, before any new code |
 | `060_private_groups.sql` | 02 | channel types, #general direct edges + cache, Channels associations, unique index (CONCURRENTLY, separate file statement outside txn) | after the release carrying Phase 02 code |
 | `061_channel_membership_reconcile.sql` | 03 | remove injected channel edges, stale cache rows | after Phase 03 code |
-| `062_tenant_users_tombstone_reconcile.sql` | 04 | `removed` status, `ngac_node_id` backfill, insert-missing rows for graph members, tombstone active rows with no graph membership | after Phase 04 code |
+| `062_tenant_users_removed_status.sql` | 04 | the `tenant_users.status` CHECK allows `removed` (nothing else; the code before it never writes `removed`) | with or before the release carrying Phase 04 code |
+| `063_tenant_users_tombstone_reconcile.sql` | 04 | `ngac_node_id` backfill, insert-missing rows for graph members, tombstone active rows with no graph membership (guards: tenant UAs under Members/Owners, per-workspace half rule) | after Phase 04 code and 062 |
 
-Contacts plan reserves `063`. All tenant_users SQL lives in 062 (Phase 04) so the security plan stays at 059–062.
+Contacts plan reserves `064`. All tenant_users SQL lives in 062 and 063 (Phase 04) so the security plan stays at 059–063.
 
 Rules (red-team #6, #15):
 - **Release A / Release B per migration**: release A ships code that works on both pre- and post-migration data
@@ -81,7 +82,7 @@ Rules (red-team #6, #15):
   the phase's reverse SQL first. 059 ships alone first (old code tolerates it, like 023).
 - **Re-runnable**: `IF NOT EXISTS` / `DROP ... IF EXISTS` / fixpoint predicates; every phase runs `make db-migrate`
   **twice** and the second run must be a no-op.
-- **Guarded**: 060–062 start with `RAISE EXCEPTION` if any workspace lacks `<id>_Members` (pattern
+- **Guarded**: 060–063 start with `RAISE EXCEPTION` if any workspace lacks `<id>_Members` (pattern
   `025_node_and_drive_root_uniqueness.sql:32-43`) and if affected-row count exceeds a stated threshold.
 - **Backed up**: each data-changing migration first copies affected rows to `_reconcile_<NNN>_<what>` tables; reverse
   SQL = `INSERT ... SELECT` / `UPDATE ... FROM` from them.
@@ -134,8 +135,8 @@ Claude's choices (accepted with the red team):
 4. Pre-flight for 060 lists drive shares of channel-drive files whose grantee is not the group's own UA.
 5. DM drive uploads by an ex-colleague are **out of scope** (drive has no DM-relationship context; DM content OA
    write is gated in messaging). Follow-up item for the contacts/cross-org work.
-6. All tenant_users SQL (status constraint, backfill, insert-missing, drift tombstone) in 062 owned by Phase 04.
-7. F7 single mechanism: graph-first writes + 062 reconcile + graph check at every tenant-token mint (sign-in,
+6. All tenant_users SQL owned by Phase 04: the status constraint alone in 062 (ships before or with the code), backfill, insert-missing and drift tombstone in 063.
+7. F7 single mechanism: graph-first writes + 063 reconcile + graph check at every tenant-token mint (sign-in,
    switch, refresh). No GetMe or ListContacts gate.
 
 ## Overlap
@@ -143,7 +144,7 @@ Claude's choices (accepted with the red team):
 - `plans/261017-1516-search-suggestions` (frontend, in-progress): no shared files. Phase 04 edits
   `frontend/src/api/client.ts` and `frontend/src/stores/websocket.store.ts`; search-suggestions does not.
   Behavioural only: chat suggestions list fewer groups after 060.
-- `261017-1646-contacts-lark-redesign`: blocked by this plan; uses `063`; its `phase-06-frontend-data.md` touches
+- `261017-1646-contacts-lark-redesign`: blocked by this plan; uses `064`; its `phase-06-frontend-data.md` touches
   `websocket.store.ts` → must rebase after Phase 04. It should use the Phase 01 membership helper.
 
 ## Red Team Review
@@ -153,9 +154,9 @@ Session 2026-10-17. Four reviewers (security adversary, failure modes, assumptio
 
 | # | Finding | Severity | Disposition | Applied to |
 |---|---------|----------|-------------|------------|
-| 1 | Plan based on stale local main; 057/058 already exist on origin/main | Critical | Accepted: base origin/main 43a1509, migrations 059–062 | plan.md, all phases |
+| 1 | Plan based on stale local main; 057/058 already exist on origin/main | Critical | Accepted: base origin/main 43a1509, migrations 059–063 | plan.md, all phases |
 | 2 | Refresh check after `Rotate` spends the token → 503 path still logs out; SPA logs out on refresh 5xx | Critical | Accepted: Lookup → check → Rotate; cookie untouched on 503; frontend keeps session | Phase 04 |
-| 3 | Legacy workspaces without ID-keyed `<id>_Members`/`PC_<id>` wiped by reconcilers | Critical | Accepted: repair 059 first; 060–062 abort if any remain | Phase 01, 02, 03, 04 |
+| 3 | Legacy workspaces without ID-keyed `<id>_Members`/`PC_<id>` wiped by reconcilers | Critical | Accepted: repair 059 first; 060–063 abort if any remain | Phase 01, 02, 03, 04 |
 | 4 | Graph-first join depends on `TenantMember_<ws>` (missing in 83 personal + 8 org) | Critical | Accepted: assign under `<ws>_Members`/Owners; TenantMember optional; IsAssigned undo; strict path reordered | Phase 07 |
 | 5 | Calendar keeps reaches-PC membership; no calendar spec/vector | Critical | Accepted: calendar membership via helper; vector; spec | Phase 02, 03, 05 |
 | 6 | Old images run between migrate and up, and after rollback → drift, 500s | High | Accepted: release A/B split; CONCURRENTLY IF NOT EXISTS; risk H×H | plan.md, Phase 02, 03, 04 |
@@ -165,7 +166,7 @@ Session 2026-10-17. Four reviewers (security adversary, failure modes, assumptio
 | 10 | Removal event suppressed when tombstone write fails | High | Accepted: event right after detach, then return error | Phase 04 |
 | 11 | DM gate misses polls, tasks, reactions, pins, edits, call join/ring | High | Accepted: centralised in authorizeChannel/authorizeMessage + mayStayInCall; DM drive declared out of scope | Phase 05 |
 | 12 | #general via UA→UA invisible to roster, push, count, RemoveMember | High | Accepted: direct per-user edges written on admit/join, removed on detach | Phase 02 |
-| 13 | Phase 04 gate before Phase 07 repairs rows; removal logs out of every tenant | Medium | Accepted: backfill/insert-missing in 062 (Phase 04); re-mint default tenant | Phase 04, 07 |
+| 13 | Phase 04 gate before Phase 07 repairs rows; removal logs out of every tenant | Medium | Accepted: backfill/insert-missing in 063 (Phase 04); re-mint default tenant | Phase 04, 07 |
 | 14 | Harness hits dev Redis/Kafka, builds inside 60 s timeout, t.Skip fails strict runner, SQL fixtures invisible | High | Accepted: unreachable Redis/Kafka, prebuilt binary, build tag, harness-only graph fixtures, paired tests | Phase 01 |
 | 15 | Migrations not re-runnable; no backup/threshold; prod dry-run impossible as written | Medium | Accepted: idempotent, `_reconcile_NNN_*`, RAISE threshold, migrate-container dry-run doc | plan.md, Phase 01–04 |
 
@@ -180,8 +181,8 @@ Run 2026-10-17 over plan.md + phase-01..08 (`grep -n`):
 | Search | Result |
 |--------|--------|
 | `057_` / `058_` as this plan's migrations | none; only references to origin/main's calendar files |
-| `059`–`062` | each defined once (table above) and referenced consistently by owning phase |
-| `063` / `060_tenant` (old Phase 07 migration) | `063` only as contacts plan's reservation; no `060_tenant` |
+| `059`–`063` | each defined once (table above) and referenced consistently by owning phase |
+| `064` / `060_tenant` (old Phase 07 migration) | `064` only as contacts plan's reservation; no `060_tenant` |
 | `after \`Rotate\`` / Rotate-then-check | none; Phase 04 states Lookup → check → Rotate |
 | `TenantMember` as a dependency | only "optional"/"not required" (Phase 07) and the existing chain description (Phase 01 helper) |
 | `startup flush` / `InvalidateAll` at start | only in Red Team table as dropped |
@@ -197,7 +198,7 @@ Run 2026-10-17 over plan.md + phase-01..08 (`grep -n`):
 Unresolved contradictions: none blocking. Two points recorded for the implementer:
 - Choice 3 (auth-only workspace channel) needs a messaging proto change (two service-only RPCs) → `make proto` +
   `npm run proto:gen` in Phase 02.
-- Phase 04's refresh gate deliberately treats "graph member with no row" as allowed until 062 backfills, so release A
+- Phase 04's refresh gate deliberately treats "graph member with no row" as allowed until 063 backfills, so release A
   does not lock out the 15 NULL-node / missing-row users; the deny side is "not a graph member" or row
   `removed|disabled|invited`.
 
@@ -212,4 +213,4 @@ Unresolved contradictions: none blocking. Two points recorded for the implemente
    none. OK?
 4. Existing DMs whose two people no longer share a workspace: writes blocked, history readable. Confirm.
 5. Voluntary leave also tombstones → domain auto-join will not bring a leaver back. Confirm.
-6. Thresholds for 061/062 `RAISE EXCEPTION` guards: plan proposes 50 rows each; set from the prod dry-run.
+6. Thresholds for 061/063 `RAISE EXCEPTION` guards: plan proposes 50 rows each; set from the prod dry-run.

@@ -31,6 +31,8 @@ const (
 	PolicyWriteService_InvalidateCache_FullMethodName    = "/policy.PolicyWriteService/InvalidateCache"
 	PolicyWriteService_GetAssociations_FullMethodName    = "/policy.PolicyWriteService/GetAssociations"
 	PolicyWriteService_GetNode_FullMethodName            = "/policy.PolicyWriteService/GetNode"
+	PolicyWriteService_FindNodeByName_FullMethodName     = "/policy.PolicyWriteService/FindNodeByName"
+	PolicyWriteService_IsAssigned_FullMethodName         = "/policy.PolicyWriteService/IsAssigned"
 	PolicyWriteService_GetChildren_FullMethodName        = "/policy.PolicyWriteService/GetChildren"
 	PolicyWriteService_GetParents_FullMethodName         = "/policy.PolicyWriteService/GetParents"
 	PolicyWriteService_GetAncestors_FullMethodName       = "/policy.PolicyWriteService/GetAncestors"
@@ -69,6 +71,8 @@ type PolicyWriteServiceClient interface {
 	// reads who an owner is, where a node sits or what a UA reaches must see the
 	// write that was just made, not a replica that has not applied it yet.
 	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*NGACNode, error)
+	FindNodeByName(ctx context.Context, in *FindNodeByNameRequest, opts ...grpc.CallOption) (*NGACNode, error)
+	IsAssigned(ctx context.Context, in *IsAssignedRequest, opts ...grpc.CallOption) (*BoolResponse, error)
 	GetChildren(ctx context.Context, in *GetChildrenRequest, opts ...grpc.CallOption) (*NodeList, error)
 	GetParents(ctx context.Context, in *GetParentsRequest, opts ...grpc.CallOption) (*NodeList, error)
 	GetAncestors(ctx context.Context, in *GetAncestorsRequest, opts ...grpc.CallOption) (*NodeList, error)
@@ -206,6 +210,26 @@ func (c *policyWriteServiceClient) GetNode(ctx context.Context, in *GetNodeReque
 	return out, nil
 }
 
+func (c *policyWriteServiceClient) FindNodeByName(ctx context.Context, in *FindNodeByNameRequest, opts ...grpc.CallOption) (*NGACNode, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(NGACNode)
+	err := c.cc.Invoke(ctx, PolicyWriteService_FindNodeByName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *policyWriteServiceClient) IsAssigned(ctx context.Context, in *IsAssignedRequest, opts ...grpc.CallOption) (*BoolResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BoolResponse)
+	err := c.cc.Invoke(ctx, PolicyWriteService_IsAssigned_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *policyWriteServiceClient) GetChildren(ctx context.Context, in *GetChildrenRequest, opts ...grpc.CallOption) (*NodeList, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(NodeList)
@@ -296,6 +320,8 @@ type PolicyWriteServiceServer interface {
 	// reads who an owner is, where a node sits or what a UA reaches must see the
 	// write that was just made, not a replica that has not applied it yet.
 	GetNode(context.Context, *GetNodeRequest) (*NGACNode, error)
+	FindNodeByName(context.Context, *FindNodeByNameRequest) (*NGACNode, error)
+	IsAssigned(context.Context, *IsAssignedRequest) (*BoolResponse, error)
 	GetChildren(context.Context, *GetChildrenRequest) (*NodeList, error)
 	GetParents(context.Context, *GetParentsRequest) (*NodeList, error)
 	GetAncestors(context.Context, *GetAncestorsRequest) (*NodeList, error)
@@ -348,6 +374,12 @@ func (UnimplementedPolicyWriteServiceServer) GetAssociations(context.Context, *G
 }
 func (UnimplementedPolicyWriteServiceServer) GetNode(context.Context, *GetNodeRequest) (*NGACNode, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetNode not implemented")
+}
+func (UnimplementedPolicyWriteServiceServer) FindNodeByName(context.Context, *FindNodeByNameRequest) (*NGACNode, error) {
+	return nil, status.Error(codes.Unimplemented, "method FindNodeByName not implemented")
+}
+func (UnimplementedPolicyWriteServiceServer) IsAssigned(context.Context, *IsAssignedRequest) (*BoolResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IsAssigned not implemented")
 }
 func (UnimplementedPolicyWriteServiceServer) GetChildren(context.Context, *GetChildrenRequest) (*NodeList, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetChildren not implemented")
@@ -604,6 +636,42 @@ func _PolicyWriteService_GetNode_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _PolicyWriteService_FindNodeByName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FindNodeByNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyWriteServiceServer).FindNodeByName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyWriteService_FindNodeByName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyWriteServiceServer).FindNodeByName(ctx, req.(*FindNodeByNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _PolicyWriteService_IsAssigned_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IsAssignedRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(PolicyWriteServiceServer).IsAssigned(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: PolicyWriteService_IsAssigned_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(PolicyWriteServiceServer).IsAssigned(ctx, req.(*IsAssignedRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _PolicyWriteService_GetChildren_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetChildrenRequest)
 	if err := dec(in); err != nil {
@@ -766,6 +834,14 @@ var PolicyWriteService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetNode",
 			Handler:    _PolicyWriteService_GetNode_Handler,
+		},
+		{
+			MethodName: "FindNodeByName",
+			Handler:    _PolicyWriteService_FindNodeByName_Handler,
+		},
+		{
+			MethodName: "IsAssigned",
+			Handler:    _PolicyWriteService_IsAssigned_Handler,
 		},
 		{
 			MethodName: "GetChildren",

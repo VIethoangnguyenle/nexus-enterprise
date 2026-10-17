@@ -81,7 +81,7 @@ func (s *Store) SearchEvents(ctx context.Context, workspaceID string, calendarID
 		        OR e.id IN (SELECT event_id FROM calendar_attendees WHERE user_node_id = $2))
 		   AND (e.title ILIKE $3 ESCAPE '\' OR e.location ILIKE $3 ESCAPE '\' OR e.description ILIKE $3 ESCAPE '\'
 		        OR EXISTS (SELECT 1 FROM calendar_attendees a
-		                     JOIN tenant_users tu ON tu.ngac_node_id = a.user_node_id AND tu.tenant_id = e.workspace_id
+		                     JOIN tenant_users tu ON tu.ngac_node_id = a.user_node_id AND tu.tenant_id = e.workspace_id AND tu.status = 'active'
 		                     JOIN users u ON u.id = tu.user_id
 		                    WHERE a.event_id = e.id
 		                      AND (u.display_name ILIKE $3 ESCAPE '\' OR u.username ILIKE $3 ESCAPE '\')))

@@ -148,6 +148,24 @@ type writeClient struct {
 	w *World
 }
 
+// The writer answers the graph reads the services make about who belongs where,
+// from the same world.
+func (x writeClient) GetNode(ctx context.Context, in *policypb.GetNodeRequest, o ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return readClient{w: x.w}.GetNode(ctx, in, o...)
+}
+
+func (x writeClient) FindNodeByName(ctx context.Context, in *policypb.FindNodeByNameRequest, o ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return readClient{w: x.w}.FindNodeByName(ctx, in, o...)
+}
+
+func (x writeClient) IsAssigned(ctx context.Context, in *policypb.IsAssignedRequest, o ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return readClient{w: x.w}.IsAssigned(ctx, in, o...)
+}
+
+func (x writeClient) GetAncestors(ctx context.Context, in *policypb.GetAncestorsRequest, o ...grpc.CallOption) (*policypb.NodeList, error) {
+	return readClient{w: x.w}.GetAncestors(ctx, in, o...)
+}
+
 func (x writeClient) CreateNode(_ context.Context, in *policypb.CreateNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
 	x.w.mu.Lock()
 	defer x.w.mu.Unlock()
@@ -285,6 +303,27 @@ func (x readClient) FindNodeByName(_ context.Context, in *policypb.FindNodeByNam
 		return n, nil
 	}
 	return nil, status.Errorf(codes.NotFound, "node %s not found", in.Name)
+}
+
+func (x readClient) GetNode(_ context.Context, in *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	x.w.mu.Lock()
+	defer x.w.mu.Unlock()
+	if n, ok := x.w.Nodes[in.NodeId]; ok {
+		return n, nil
+	}
+	return nil, status.Errorf(codes.NotFound, "node %s not found", in.NodeId)
+}
+
+// IsAssigned reports a direct edge, as the policy service does.
+func (x readClient) IsAssigned(_ context.Context, in *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	x.w.mu.Lock()
+	defer x.w.mu.Unlock()
+	for _, p := range x.w.Parents[in.ChildId] {
+		if p == in.ParentId {
+			return &policypb.BoolResponse{Value: true}, nil
+		}
+	}
+	return &policypb.BoolResponse{}, nil
 }
 
 func (x readClient) GetAncestors(_ context.Context, in *policypb.GetAncestorsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {

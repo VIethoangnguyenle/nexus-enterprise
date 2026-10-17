@@ -19,6 +19,7 @@ import (
 	"github.com/redis/go-redis/v9"
 	"google.golang.org/grpc"
 
+	"ngac-platform/ngac"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
 	workspacepb "ngac-platform/proto/workspace"
@@ -178,8 +179,12 @@ type acctMsg struct {
 	messagingpb.MessagingServiceClient
 }
 
-func (acctMsg) CreateChannel(context.Context, *messagingpb.CreateChannelRequest, ...grpc.CallOption) (*messagingpb.Channel, error) {
+func (acctMsg) ProvisionWorkspaceChannel(context.Context, *messagingpb.ProvisionWorkspaceChannelRequest, ...grpc.CallOption) (*messagingpb.Channel, error) {
 	return &messagingpb.Channel{Id: "ch"}, nil
+}
+
+func (acctMsg) JoinWorkspaceChannel(context.Context, *messagingpb.JoinWorkspaceChannelRequest, ...grpc.CallOption) (*messagingpb.Empty, error) {
+	return &messagingpb.Empty{}, nil
 }
 
 type acctRead struct {
@@ -188,6 +193,41 @@ type acctRead struct {
 
 func (acctRead) FindNodeByName(_ context.Context, req *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
 	return &policypb.NGACNode{Id: "n-" + req.Name, Name: req.Name, NodeType: req.NodeType}, nil
+}
+
+// acctGraph is the policy writer these routes see: it holds a person in every workspace
+// the store lists them in, which is all the routes ask of the graph.
+type acctGraph struct {
+	*testutil.FakePolicyWrite
+	st *acctStore
+}
+
+func (acctGraph) FindNodeByName(ctx context.Context, in *policypb.FindNodeByNameRequest, o ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return acctRead{}.FindNodeByName(ctx, in, o...)
+}
+
+func (acctGraph) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return &policypb.BoolResponse{Value: true}, nil
+}
+
+func (acctGraph) GetNode(_ context.Context, in *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return &policypb.NGACNode{Id: in.NodeId, NodeType: ngac.TypeU}, nil
+}
+
+func (g acctGraph) GetAncestors(_ context.Context, in *policypb.GetAncestorsRequest, _ ...grpc.CallOption) (*policypb.NodeList, error) {
+	g.st.mu.Lock()
+	defer g.st.mu.Unlock()
+	var out []*policypb.NGACNode
+	for id, u := range g.st.users {
+		if u.NGACNodeID != in.NodeId {
+			continue
+		}
+		for _, w := range g.st.members[id] {
+			name := ngac.MembersUAName(ngac.WorkspaceID(w.ID))
+			out = append(out, &policypb.NGACNode{Id: "n-" + name, Name: name, NodeType: ngac.TypeUA})
+		}
+	}
+	return &policypb.NodeList{Nodes: out}, nil
 }
 
 type acctApp struct {
@@ -216,7 +256,7 @@ func newAcctApp(t *testing.T, withRedis bool, opts *domain.OTPOptions) *acctApp 
 	}
 	st := newAcctStore()
 	ws := &acctWS{}
-	svc := domain.NewService(st, rdb, acctRead{}, testutil.NewFakePolicyWrite(), ws, acctMsg{})
+	svc := domain.NewService(st, rdb, acctRead{}, acctGraph{FakePolicyWrite: testutil.NewFakePolicyWrite(), st: st}, ws, acctMsg{})
 	if opts != nil {
 		svc.ConfigureOTP(*opts)
 	}

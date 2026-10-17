@@ -40,7 +40,7 @@ func (s *Service) CreateFolder(ctx context.Context, callerNodeID, wsID, name, pa
 	node, err := prov.Node(ctx, &policypb.CreateNodeRequest{
 		Name:       ngac.FolderNodeName(ngac.FolderID(uuid.New().String())),
 		NodeType:   ngac.TypeOA,
-		Properties: map[string]string{ngac.PropDisplayName: name, "workspace_id": wsID},
+		Properties: ngac.AdminFolderProps(ngac.WorkspaceID(wsID), name),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create folder: %w", err)
@@ -56,8 +56,9 @@ func (s *Service) CreateFolder(ctx context.Context, callerNodeID, wsID, name, pa
 	return &Folder{ID: node.Id, Name: name, NGACNodeID: node.Id}, nil
 }
 
-// ListFolders returns all OA folders under the workspace PC. The caller must
-// belong to the workspace.
+// ListFolders returns the workspace's admin folders: the ones DeleteFolder can
+// delete. The workspace's own containers and the drive's folders are OAs under the
+// PC too, and are not listed. The caller must belong to the workspace.
 func (s *Service) ListFolders(ctx context.Context, callerNodeID, wsID string) ([]*Folder, error) {
 	ws, err := s.authorizeMember(ctx, callerNodeID, wsID)
 	if err != nil {
@@ -69,7 +70,7 @@ func (s *Service) ListFolders(ctx context.Context, callerNodeID, wsID string) ([
 	}
 	var folders []*Folder
 	for _, n := range desc.Nodes {
-		if n.NodeType == ngac.TypeOA {
+		if n.NodeType == ngac.TypeOA && ngac.IsAdminFolder(n.Name, n.Properties, ngac.WorkspaceID(ws.ID)) {
 			folders = append(folders, &Folder{ID: n.Id, Name: ngac.DisplayName(n.Name, n.Properties), NGACNodeID: n.Id})
 		}
 	}
@@ -77,14 +78,23 @@ func (s *Service) ListFolders(ctx context.Context, callerNodeID, wsID string) ([
 }
 
 // DeleteFolder removes a folder (NGAC OA node). The caller must hold manage on
-// the workspace's Mgmt OA, and the folder must be an OA of this workspace.
+// the workspace's Mgmt OA, and the folder must be an admin folder of this
+// workspace (ngac.IsAdminFolder): an OA under its policy class named like a folder,
+// made for it by CreateFolder. The workspace's own containers (Mgmt, Documents,
+// Channels, Assets), a group's content, an asset type, and the drive's folders
+// (same name pattern, type "drive_folder", also inside groups' drives) are OAs too,
+// and are not deletable here.
 func (s *Service) DeleteFolder(ctx context.Context, callerNodeID, wsID, folderID string) error {
 	ws, err := s.authorizeAdmin(ctx, callerNodeID, wsID, ngac.OpManage)
 	if err != nil {
 		return err
 	}
-	if err := s.requireInWorkspace(ctx, ws, folderID, ngac.TypeOA); err != nil {
+	node, err := s.nodeInWorkspace(ctx, ws, folderID, ngac.TypeOA)
+	if err != nil {
 		return err
+	}
+	if !ngac.IsAdminFolder(node.GetName(), node.GetProperties(), ngac.WorkspaceID(ws.ID)) {
+		return fmt.Errorf("%w: not a folder of this workspace", ErrInvalidInput)
 	}
 	if _, err := s.policyWrite.DeleteNode(ctx, &policypb.DeleteNodeRequest{NodeId: folderID}); err != nil {
 		return fmt.Errorf("delete folder: %w", err)

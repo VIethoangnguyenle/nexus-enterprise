@@ -83,8 +83,8 @@ func reversed(in []string) []string {
 	return out
 }
 
-// The graph writes all succeed and the row insert is refused (a channel type
-// the table does not allow). The nodes written before it must go.
+// The graph writes all succeed and the row insert is refused (a creator the users
+// table does not know). The nodes written before it must go.
 func TestCreateChannel_RollsBackWhenTheRowIsRefused(t *testing.T) {
 	f := newFixture(t)
 	channelsOA := f.withChannelsOA()
@@ -92,7 +92,7 @@ func TestCreateChannel_RollsBackWhenTheRowIsRefused(t *testing.T) {
 	w := testutil.NewFakePolicyWrite()
 	f.withFakeWrite(w)
 	in := f.createInput(fmt.Sprintf("prov-row-%d", time.Now().UnixNano()))
-	in.ChannelType = "not-a-channel-type"
+	in.UserID = "no-such-user"
 
 	_, err := f.svc.CreateChannel(context.Background(), in)
 

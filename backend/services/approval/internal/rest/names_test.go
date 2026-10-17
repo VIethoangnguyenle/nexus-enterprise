@@ -101,6 +101,7 @@ func (noScopes) ResolveAccessibleScopes(context.Context, string, string) ([]stri
 func (noScopes) CheckAccess(context.Context, string, string, string) (bool, error) { return true, nil }
 func (noScopes) GetAncestors(context.Context, string) ([]string, error)            { return nil, nil }
 func (noScopes) GetMembers(context.Context, string) ([]string, error)              { return nil, nil }
+func (noScopes) IsWorkspaceMember(context.Context, string, string) (bool, error)   { return true, nil }
 
 func newHandler(st *fakeStore, names NameResolver) *Handler {
 	h := &Handler{svc: domain.NewService(st, noScopes{})}

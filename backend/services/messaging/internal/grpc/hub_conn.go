@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/policyclient"
 	pb "ngac-platform/proto/messaging"
 )
 
@@ -19,6 +21,12 @@ var upgrader = websocket.Upgrader{
 }
 
 const authTimeout = 5 * time.Second
+
+// CloseNotMember is the WebSocket close code for "you no longer belong to the
+// workspace this connection is for". The client must not reconnect with the same
+// token (the browser's reconnect loop would otherwise hammer the hub with a token
+// that is still valid for another 15 minutes); it asks for a fresh one once.
+const CloseNotMember = 4403
 
 // Client represents a connected WebSocket user.
 type Client struct {
@@ -110,6 +118,16 @@ func (c *Client) handleAuth(req *pb.AuthRequest) bool {
 	}
 	claims := token.Claims.(*WSClaims)
 
+	// A token names a tenant and outlives the membership it was issued for, so
+	// a person removed from the workspace could reconnect with it. Ask the graph.
+	if claims.TenantID != "" {
+		if code, reason := c.hub.checkMember(claims); code != 0 {
+			c.sendAuthResponse(false, "", reason)
+			c.closeWith(code, reason)
+			return false
+		}
+	}
+
 	c.userID = claims.UserID
 	c.username = claims.Username
 	c.ngacNodeID = claims.NGACNodeID
@@ -135,6 +153,47 @@ func (c *Client) handleAuth(req *pb.AuthRequest) bool {
 	c.sendAuthResponse(true, claims.UserID, "")
 	c.hub.userCameOnline(c)
 	return true
+}
+
+// checkMember asks whether the token's person still belongs to its tenant. It
+// returns 0 when they do, else the close code to refuse them with: CloseNotMember
+// when the graph says they do not, and "try again later" when it could not say, so
+// an outage neither lets anybody in nor bans anybody.
+func (h *Hub) checkMember(claims *WSClaims) (int, string) {
+	h.mu.RLock()
+	members := h.members
+	h.mu.RUnlock()
+	if members == nil {
+		slog.Error("websocket refused: no membership check is configured", "tenant_id", claims.TenantID)
+		return websocket.CloseTryAgainLater, "membership cannot be checked"
+	}
+	who := grpcauth.Caller{UserID: claims.UserID, NGACNodeID: claims.NGACNodeID, TenantID: claims.TenantID}
+	ctx, cancel := context.WithTimeout(grpcauth.WithCaller(h.ctx, who), subscribeCheckTimeout)
+	defer cancel()
+	ok, err := members.IsWorkspaceMember(ctx, claims.NGACNodeID, claims.TenantID)
+	if err != nil && (policyclient.IsNotFound(err) || policyclient.IsNotMembersUA(err)) {
+		// The workspace has no Members UA to be under (it is gone): nobody belongs.
+		return CloseNotMember, "not a member of this workspace"
+	}
+	if err != nil {
+		slog.Warn("websocket refused: membership could not be checked",
+			"user_id", claims.UserID, "tenant_id", claims.TenantID, "error", err)
+		return websocket.CloseTryAgainLater, "membership cannot be checked"
+	}
+	if !ok {
+		slog.Info("websocket refused: not a member of the workspace",
+			"user_id", claims.UserID, "tenant_id", claims.TenantID)
+		return CloseNotMember, "not a member of this workspace"
+	}
+	return 0, ""
+}
+
+// closeWith ends the connection with a close frame carrying code and reason, so
+// the client can tell why from the code. The frame is a control write, which may
+// be made while writePump is writing.
+func (c *Client) closeWith(code int, reason string) {
+	_ = c.conn.WriteControl(websocket.CloseMessage, websocket.FormatCloseMessage(code, reason), time.Now().Add(time.Second))
+	_ = c.conn.Close()
 }
 
 // sendAuthResponse sends an AuthResponse to the client.

@@ -5,9 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/policyclient"
 	"ngac-platform/pkg/provision"
 	messagingpb "ngac-platform/proto/messaging"
 	policypb "ngac-platform/proto/policy"
@@ -41,9 +46,11 @@ func (s *Service) autoProvisionWorkspace(ctx context.Context, userID, username, 
 	}
 	slog.Info("auto-provisioned workspace", "workspace_id", ws.Id, "user", username)
 
-	// Create tenant_users record for the owner
-	if err := s.store.InsertTenantUser(ctx, ws.Id, userID, "owner", "active", ngacNodeID); err != nil {
-		slog.Error("auto-provision tenant_users failed", "workspace", ws.Id, "error", err)
+	// The owner is listed the way every join is: the graph first (the workspace service
+	// has already put them under Owners, which this confirms), then the row. A failure
+	// is logged and tolerated: the next sign-in lists a graph member whose row is missing.
+	if err := s.joinTenant(ctx, ws.Id, userID, ngacNodeID, "owner"); err != nil {
+		slog.Error("auto-provision tenant membership failed", "workspace", ws.Id, "error", err)
 	}
 
 	s.autoProvisionChannel(ctx, ws.Id, userID, ngacNodeID)
@@ -63,16 +70,67 @@ func (s *Service) autoProvisionChannel(ctx context.Context, workspaceID, userID,
 	slog.Info("auto-provisioned #general channel", "workspace_id", workspaceID)
 }
 
+// asService returns ctx with no end user on it, so a downstream call is signed
+// with this service's own identity. A call that arrives with a signed-in person on
+// the context would otherwise be made as that person, and messaging refuses a
+// person on the methods meant for services.
+func asService(ctx context.Context) context.Context {
+	return grpcauth.WithCaller(ctx, grpcauth.Caller{})
+}
+
+// channelRPCTimeout bounds each call auth makes to messaging for a workspace's
+// #general: a messaging service that never answers must not hold a sign-in or a
+// workspace creation for as long as the request lives.
+const channelRPCTimeout = 5 * time.Second
+
 // provisionChannel creates #general and reports a failure. Without a messaging
 // client there is nothing to create and nothing failed.
+//
+// The workspace-wide channel is made by this service alone (messaging refuses a
+// person's identity for it), so the call goes out as the service and names the
+// owner as its creator in the request. A messaging service that predates the method
+// (the window of a rolling deploy) answers "unimplemented"; the channel is then made
+// the way it used to be, as the owner, so the workspace is not left without one.
 func (s *Service) provisionChannel(ctx context.Context, workspaceID, userID, ngacNodeID string) error {
 	if s.msgClient == nil {
 		return nil
 	}
-	_, err := s.msgClient.CreateChannel(actingAs(ctx, userID, ngacNodeID), &messagingpb.CreateChannelRequest{
+	callCtx, cancel := context.WithTimeout(ctx, channelRPCTimeout)
+	defer cancel()
+	_, err := s.msgClient.ProvisionWorkspaceChannel(asService(callCtx), &messagingpb.ProvisionWorkspaceChannelRequest{
+		WorkspaceId: workspaceID, Name: "general", CreatorUserId: userID, CreatorNgacNodeId: ngacNodeID,
+	})
+	if status.Code(err) != codes.Unimplemented {
+		return err
+	}
+	slog.Warn("messaging predates ProvisionWorkspaceChannel; making #general the old way", "workspace", workspaceID)
+	_, err = s.msgClient.CreateChannel(actingAs(callCtx, userID, ngacNodeID), &messagingpb.CreateChannelRequest{
 		Name: "general", WorkspaceId: workspaceID, ChannelType: "workspace",
 	})
 	return err
+}
+
+// joinWorkspaceChannel puts a member just admitted to a workspace into its
+// #general. It is a convenience of joining, not a condition of it: a failure is
+// logged and the person stays a member (listing channels repairs the edge the
+// next time they open the app). A messaging service that does not know the method
+// yet is not an error worth more than a warning.
+func (s *Service) joinWorkspaceChannel(ctx context.Context, workspaceID, userID, ngacNodeID string) {
+	if s.msgClient == nil {
+		return
+	}
+	callCtx, cancel := context.WithTimeout(ctx, channelRPCTimeout)
+	defer cancel()
+	_, err := s.msgClient.JoinWorkspaceChannel(asService(callCtx), &messagingpb.JoinWorkspaceChannelRequest{
+		WorkspaceId: workspaceID, UserNgacNodeId: ngacNodeID, UserId: userID,
+	})
+	switch {
+	case err == nil:
+	case status.Code(err) == codes.Unimplemented:
+		slog.Warn("messaging predates JoinWorkspaceChannel; the member joins #general when they next list channels", "workspace", workspaceID)
+	default:
+		slog.Error("member not put into the workspace channel", "workspace", workspaceID, "error", err)
+	}
 }
 
 // newUser is everything needed to create an account and its graph node.
@@ -195,45 +253,129 @@ func (s *Service) initTenantNGAC(ctx context.Context, tenantID, pcNodeID, owners
 	return nil
 }
 
-// assignUserToTenantNGAC assigns a user's NGAC node to the tenant's member/owner
-// UAs. A failure is logged, not returned: see assignTenantNGAC for the strict form.
-func (s *Service) assignUserToTenantNGAC(ctx context.Context, tenantID, userNodeID string, isOwner bool) {
-	if err := s.assignTenantNGAC(ctx, tenantID, userNodeID, isOwner); err != nil {
-		slog.Error("assign user to tenant UAs failed", "tenant", tenantID, "error", err)
+// graphEdge is one assignment: child sits under parent.
+type graphEdge struct{ child, parent string }
+
+// assignTenantNGAC puts the user in the tenant's graph and returns the edges this
+// call made, so that a caller whose next step fails can take back those and no others.
+//
+// Membership is the edge under the workspace's own Members UA (Owners, which sits
+// beneath Members, for an owner). That UA exists in every workspace; the TenantMember
+// and TenantOwner UAs do not (workspaces made at sign-up never had them, and some old
+// ones were never given any), so they are assigned as well only where they exist and
+// are themselves under Members/Owners. A missing one is not an error.
+//
+// An edge the person already has is left alone and not reported as created: the
+// workspace service has put an owner under Owners, an invitation under Members. If
+// anything fails part-way the edges made so far are taken back before returning.
+//
+// The graph is asked through the policy writer, as the person: a read replica can be
+// behind the write that made the Members UA a moment ago.
+func (s *Service) assignTenantNGAC(ctx context.Context, tenantID, userID, userNodeID string, isOwner bool) ([]graphEdge, error) {
+	ctx = actingAs(ctx, userID, userNodeID)
+	ws := ngac.WorkspaceID(tenantID)
+
+	membersID, err := policyclient.MembersUA(ctx, s.policyWrite, ws)
+	if err != nil {
+		return nil, fmt.Errorf("workspace %s has no usable Members UA: %w", tenantID, err)
+	}
+	// The UA a membership edge goes under, and the UA each optional one must sit beneath.
+	var targets []graphEdge
+	if isOwner {
+		ownersID, err := s.tenantUA(ctx, ngac.OwnersUAName(ws), membersID)
+		if err != nil {
+			return nil, fmt.Errorf("find Owners UA of workspace %s: %w", tenantID, err)
+		}
+		if ownersID == "" {
+			return nil, fmt.Errorf("workspace %s has no Owners UA under its Members UA", tenantID)
+		}
+		targets = append(targets, graphEdge{userNodeID, ownersID})
+	} else {
+		targets = append(targets, graphEdge{userNodeID, membersID})
+	}
+	optional := []struct{ name, under string }{{ngac.TenantMemberUAName(ws), membersID}}
+	if isOwner {
+		optional = append(optional, struct{ name, under string }{ngac.TenantOwnerUAName(ws), targets[0].parent})
+	}
+	for _, o := range optional {
+		id, err := s.tenantUA(ctx, o.name, o.under)
+		if err != nil {
+			return nil, fmt.Errorf("find %s: %w", o.name, err)
+		}
+		if id != "" {
+			targets = append(targets, graphEdge{userNodeID, id})
+		}
+	}
+
+	var created []graphEdge
+	for _, e := range targets {
+		have, err := s.policyWrite.IsAssigned(ctx, &policypb.IsAssignedRequest{ChildId: e.child, ParentId: e.parent})
+		if err != nil {
+			s.undoEdges(ctx, userID, userNodeID, created)
+			return nil, fmt.Errorf("check assignment: %w", err)
+		}
+		if have.GetValue() {
+			continue
+		}
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: e.child, ParentId: e.parent}); err != nil {
+			s.undoEdges(ctx, userID, userNodeID, created)
+			return nil, fmt.Errorf("assign to tenant UA: %w", err)
+		}
+		created = append(created, e)
+	}
+	return created, nil
+}
+
+// tenantUA returns the id of the UA with this name when it sits directly under the
+// given parent, "" when there is no such UA (or the name belongs to a node that is not
+// the workspace's), and an error only when the graph could not be asked.
+func (s *Service) tenantUA(ctx context.Context, name, parentID string) (string, error) {
+	n, err := s.policyWrite.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{Name: name, NodeType: ngac.TypeUA})
+	if err != nil {
+		if policyclient.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	under, err := s.policyWrite.IsAssigned(ctx, &policypb.IsAssignedRequest{ChildId: n.GetId(), ParentId: parentID})
+	if err != nil {
+		return "", err
+	}
+	if !under.GetValue() {
+		slog.Warn("a UA named like the workspace's is not under it; ignored", "name", name)
+		return "", nil
+	}
+	return n.GetId(), nil
+}
+
+// restoreEdges puts back edges taken back a moment ago, on a detached context. A failure
+// is logged: the person is listed without the edge until the next join repairs it.
+func (s *Service) restoreEdges(ctx context.Context, userID, userNodeID string, edges []graphEdge) {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	ctx = actingAs(ctx, userID, userNodeID)
+	for _, e := range edges {
+		if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{ChildId: e.child, ParentId: e.parent}); err != nil {
+			slog.Error("could not restore a tenant assignment an active row depends on", "child", e.child, "parent", e.parent, "error", err)
+		}
 	}
 }
 
-// assignTenantNGAC puts the user under the tenant's TenantMember UA, and under
-// TenantOwner when isOwner. A UA that does not exist is an error, not a skip:
-// without them every check for the user denies.
-func (s *Service) assignTenantNGAC(ctx context.Context, tenantID, userNodeID string, isOwner bool) error {
-	memberUA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: ngac.TenantMemberUAName(ngac.WorkspaceID(tenantID)), NodeType: ngac.TypeUA,
-	})
-	if err != nil {
-		return fmt.Errorf("TenantMember UA not found — was initTenantNGAC called?: %w", err)
+// undoEdges takes back edges this service has just made. It runs on a context detached
+// from the request (the commonest reason a join fails is that the request was
+// cancelled) and logs what it cannot remove: that edge is left for the reconcile.
+func (s *Service) undoEdges(ctx context.Context, userID, userNodeID string, edges []graphEdge) {
+	if len(edges) == 0 {
+		return
 	}
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: userNodeID, ParentId: memberUA.Id,
-	}); err != nil {
-		return fmt.Errorf("assign to tenant member UA: %w", err)
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 10*time.Second)
+	defer cancel()
+	ctx = actingAs(ctx, userID, userNodeID)
+	for _, e := range edges {
+		if _, err := s.policyWrite.RemoveAssignment(ctx, &policypb.RemoveAssignmentRequest{ChildId: e.child, ParentId: e.parent}); err != nil {
+			slog.Error("could not take back a tenant assignment", "child", e.child, "parent", e.parent, "error", err)
+		}
 	}
-
-	if !isOwner {
-		return nil
-	}
-	ownerUA, err := s.policyRead.FindNodeByName(ctx, &policypb.FindNodeByNameRequest{
-		Name: ngac.TenantOwnerUAName(ngac.WorkspaceID(tenantID)), NodeType: ngac.TypeUA,
-	})
-	if err != nil {
-		return fmt.Errorf("TenantOwner UA not found — was initTenantNGAC called?: %w", err)
-	}
-	if _, err := s.policyWrite.CreateAssignment(ctx, &policypb.CreateAssignmentRequest{
-		ChildId: userNodeID, ParentId: ownerUA.Id,
-	}); err != nil {
-		return fmt.Errorf("assign to tenant owner UA: %w", err)
-	}
-	return nil
 }
 
 // emailToUsername derives a username from email.

@@ -112,6 +112,11 @@ func buildCalendarGraph(t *testing.T) *calGraph {
 	// Channel calendar beneath the channel's content OA; erin is in the channel.
 	c.node("oa-channels", vocab.ChannelsOAName(calWS), "OA")
 	c.assign("oa-channels", "pc-ws1")
+	// The workspace's own grants on Channels, as CreateWorkspace makes them. They
+	// are inherited by every channel beneath, calendar included, so they are what
+	// keeps a group's calendar private to the group.
+	c.associate("ua-members", "oa-channels", vocab.MemberChannelOps())
+	c.associate("ua-owners", "oa-channels", vocab.OwnerChannelOps())
 	c.node("oa-ch-content", vocab.ChannelContentOAName(calCh), "OA")
 	c.assign("oa-ch-content", "oa-channels")
 	c.node("ua-ch-members", vocab.ChannelMembersUAName(calCh), "UA")
@@ -185,6 +190,9 @@ func TestCalendar_Deny(t *testing.T) {
 		{"member cannot share workspace calendar", "u-dan", "oa-cal-ws", vocab.OpShare},
 		{"non-channel member cannot read channel calendar", "u-dan", "oa-cal-chan", vocab.OpRead},
 		{"non-channel member cannot write channel calendar", "u-dan", "oa-cal-chan", vocab.OpWrite},
+		{"workspace owner outside the group cannot read its calendar", "u-olga", "oa-cal-chan", vocab.OpRead},
+		{"workspace owner outside the group cannot write its calendar", "u-olga", "oa-cal-chan", vocab.OpWrite},
+		{"member of another workspace cannot read channel calendar", "u-gus", "oa-cal-chan", vocab.OpRead},
 		{"guest cannot write the event", "u-frank", "oa-ev", vocab.OpWrite},
 		{"guest cannot read the host's calendar", "u-frank", "oa-cal-alice", vocab.OpRead},
 		{"guest without invite flag cannot invite", "u-frank", "oa-ev", vocab.OpInvite},
@@ -196,6 +204,20 @@ func TestCalendar_Deny(t *testing.T) {
 			assert.Equal(t, "DENY", c.decide(tc.user, tc.oa, tc.op))
 		})
 	}
+}
+
+// A workspace member who is not in group G is denied G's calendar while the group's
+// own member keeps it, on the same graph; owners keep manage on the Channels area
+// (moderation) without gaining the calendar.
+func TestCalendar_ChannelCalendarIsPrivateToItsGroup(t *testing.T) {
+	c := buildCalendarGraph(t)
+	for _, op := range []string{vocab.OpRead, vocab.OpWrite} {
+		assert.Equal(t, "ALLOW", c.decide("u-erin", "oa-cal-chan", op), "group member: "+op)
+		assert.Equal(t, "DENY", c.decide("u-dan", "oa-cal-chan", op), "member not in group: "+op)
+		assert.Equal(t, "DENY", c.decide("u-olga", "oa-cal-chan", op), "owner not in group: "+op)
+	}
+	assert.Equal(t, "ALLOW", c.decide("u-olga", "oa-ch-content", vocab.OpManage), "owners moderate unseen groups")
+	assert.Equal(t, "DENY", c.decide("u-dan", "oa-ch-content", vocab.OpManage), "plain members do not")
 }
 
 func TestCalendar_GuestRemovedLosesAccessAtOnce(t *testing.T) {

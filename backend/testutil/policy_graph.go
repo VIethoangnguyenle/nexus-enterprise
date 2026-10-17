@@ -90,7 +90,7 @@ func NewUser(t testing.TB, write policypb.PolicyWriteServiceClient, parents ...s
 // to either follows into every test:
 //
 //	PC -> Owners, Members, Mgmt, Documents, Channels;  Owners -> Members
-//	Owners:  Mgmt, Documents, Channels (owner ops)
+//	Owners:  Mgmt, Documents (owner ops), Channels (owner channel ops)
 //	Members: Documents (member document ops), Channels (member channel ops)
 //
 // Owners is assigned under Members, so an owner inherits the member grants.
@@ -119,7 +119,7 @@ func SeedWorkspaceGraph(t testing.TB, write policypb.PolicyWriteServiceClient) W
 	}
 	Associate(t, write, g.Owners, g.Mgmt, ngac.AllOwnerOps())
 	Associate(t, write, g.Owners, g.Documents, ngac.AllOwnerOps())
-	Associate(t, write, g.Owners, g.Channels, ngac.AllOwnerOps())
+	Associate(t, write, g.Owners, g.Channels, ngac.OwnerChannelOps())
 	Associate(t, write, g.Members, g.Documents, ngac.MemberDocumentOps())
 	Associate(t, write, g.Members, g.Channels, ngac.MemberChannelOps())
 	return g

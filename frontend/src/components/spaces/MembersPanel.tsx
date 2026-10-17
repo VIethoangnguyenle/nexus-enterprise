@@ -5,7 +5,7 @@ import { MoreVertical, MessageSquare, UserMinus, UserPlus, CircleAlert, Users } 
 import { useAddChannelMember, useChannelMembers, useCreateDM, useRemoveChannelMember } from '../../hooks/useMessaging'
 import { useWebSocketStore } from '../../stores/websocket.store'
 import { useMotionPresets } from '../../lib/motion'
-import { isForbidden, explain } from '../../lib/errors'
+import { explain, explainRemoval, isForbidden } from '../../lib/errors'
 import { displayName, matchesPerson, type PeopleDirectory, type Person } from '../../lib/people'
 import type { ChannelMember } from '../../api/messaging'
 import {
@@ -49,6 +49,7 @@ export function MembersPanel({ channelId, kind, spaceName, people, me, startAddi
   const [picked, setPicked] = useState<Person[]>([])
   const [saving, setSaving] = useState(false)
   const editable = kind === 'space'
+  const mayRemove = editable && data?.can_remove_members === true
 
   const rows: Row[] = useMemo(() => {
     const list = (data?.members ?? []).map((mem) => {
@@ -100,7 +101,7 @@ export function MembersPanel({ channelId, kind, spaceName, people, me, startAddi
           toast.error(
             isForbidden(err)
               ? `Bạn chưa có quyền xoá người khỏi nhóm này. Nhờ quản lý nhóm làm giúp.`
-              : explain(err, `xoá ${row.person.name} khỏi nhóm`),
+              : explainRemoval(err, `xoá ${row.person.name} khỏi nhóm`),
           ),
       },
     )
@@ -198,7 +199,7 @@ export function MembersPanel({ channelId, kind, spaceName, people, me, startAddi
                   <MemberRow
                     row={r}
                     online={!!onlineUsers[r.person.userId]}
-                    canRemove={editable && !r.isMe}
+                    canRemove={mayRemove && !r.isMe}
                     onRemove={() => removeMember(r)}
                   />
                 </motion.li>

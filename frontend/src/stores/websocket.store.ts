@@ -2,6 +2,7 @@ import { create } from 'zustand'
 import { queryClient } from '../lib/query-client'
 import { keys } from '../hooks/keys'
 import { useAuthStore } from './auth.store'
+import { refreshAccessToken } from '../api/client'
 import {
   ClientEnvelope,
   ServerEnvelope,
@@ -117,6 +118,49 @@ let resyncPending = true
 const invalidations = createBatcher((queryKey) => {
   void queryClient.invalidateQueries({ queryKey })
 })
+
+/**
+ * The hub closes a connection with this code when the person no longer belongs to
+ * the workspace of the token they presented (messaging's CloseNotMember). The
+ * token stays valid for minutes yet, so it must not be presented again.
+ */
+const CLOSE_NOT_MEMBER = 4403
+/**
+ * When a refusal was last answered by asking for a new token (0: none since a connection was
+ * accepted or the session ended). A second refusal within REFUSAL_WINDOW_MS means the new
+ * token fared no better, and asking again would loop. A time window, not a flag cleared on
+ * disconnect: the workspace shell disconnects on every token change, which would reopen the
+ * loop it is there to stop.
+ */
+let askedForTokenAt = 0
+const REFUSAL_WINDOW_MS = 60_000
+/** Failed attempts to get that token because the server could not be asked; drives the backoff. */
+let refusalRetries = 0
+
+onSessionEnd(() => {
+  askedForTokenAt = 0
+  refusalRetries = 0
+})
+
+/**
+ * Asks the session for a token after a refusal. A token that comes back is a change of
+ * token, which is what reconnects the socket (the workspace shell connects on every token
+ * it is given). If the server could not be asked, ask again later, backing off; if the
+ * session has ended there is nothing to connect with.
+ */
+function askForTokenAfterRefusal(stillDown: () => boolean) {
+  void refreshAccessToken().then((result) => {
+    if (result.status !== 'unavailable') {
+      refusalRetries = 0
+      return
+    }
+    if (reconnectTimer) clearTimeout(reconnectTimer)
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null
+      if (useAuthStore.getState().accessToken && stillDown()) askForTokenAfterRefusal(stillDown)
+    }, reconnectDelay(refusalRetries++))
+  })
+}
 
 /** Pending reconnect after a dropped socket; cleared by a disconnect. */
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -281,6 +325,19 @@ export const useWebSocketStore = create<WebSocketState>()((set, get) => ({
 
       // Don't reconnect on intentional close (code 1000)
       if (event.code === 1000) return
+
+      // Refused because the person left this workspace: the same token would be
+      // refused again. Ask the session for another once. A token that comes back
+      // is a change of token, which is what reconnects the socket (the workspace
+      // shell connects on every token it is given), so no timer here; and if the
+      // session cannot be renewed there is nothing to connect with.
+      if (event.code === CLOSE_NOT_MEMBER) {
+        if (askedForTokenAt && Date.now() - askedForTokenAt < REFUSAL_WINDOW_MS) return
+        askedForTokenAt = Date.now()
+        refusalRetries = 0
+        askForTokenAfterRefusal(() => get().ws === null)
+        return
+      }
 
       const delay = reconnectDelay(attempt)
       if (WS_DEBUG()) {
@@ -449,6 +506,7 @@ function handleServerMessage(
     case 'authResponse': {
       const auth = envelope.payload.authResponse
       if (auth.ok) {
+        askedForTokenAt = 0
         set(() => ({ authenticated: true }))
         // Cursors belong to one user in one tenant.
         seqState = adoptOwner(seqState, `${auth.userId}|${useAuthStore.getState().tenantId ?? ''}`)

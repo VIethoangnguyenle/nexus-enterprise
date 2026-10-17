@@ -120,6 +120,16 @@ func (m *mockPolicyWriteClient) DeleteNode(ctx context.Context, req *policypb.De
 	return &policypb.Empty{}, nil
 }
 
+// GetNode and IsAssigned answer the writer reads RemoveMember makes about its
+// target: a person who is in the channel.
+func (m *mockPolicyWriteClient) GetNode(_ context.Context, req *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return &policypb.NGACNode{Id: req.NodeId, Name: req.NodeId, NodeType: ngac.TypeU}, nil
+}
+
+func (m *mockPolicyWriteClient) IsAssigned(_ context.Context, _ *policypb.IsAssignedRequest, _ ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return &policypb.BoolResponse{Value: true}, nil
+}
+
 func (m *mockPolicyWriteClient) CreateAssignment(_ context.Context, _ *policypb.CreateAssignmentRequest, _ ...grpc.CallOption) (*policypb.Assignment, error) {
 	return &policypb.Assignment{Id: "assign-1"}, nil
 }
@@ -269,26 +279,28 @@ func cleanTestData(t *testing.T, pool *pgxpool.Pool, channelIDs ...string) {
 }
 
 // ---------------------------------------------------------------------------
-// 3.1: TestCreateChannel — invalid type produces error
+// 3.1: TestCreateChannel — the requested type is not read
 // ---------------------------------------------------------------------------
 
-func TestCreateChannel_InvalidType(t *testing.T) {
-	// The request has to be authorized for the invalid type to reach the
-	// database constraint: creation now takes create_channel on the
-	// workspace's Channels OA, and a workspace-less request is refused before
-	// any write. So this runs in a real workspace whose Channels OA resolves.
+func TestCreateChannel_RequestedTypeIsIgnored(t *testing.T) {
+	// A group made by a user is private whatever type the request names: the
+	// workspace-wide channel and DMs have their own paths. So a type the table
+	// does not allow cannot reach the database constraint either.
 	pool := testPool(t)
 	wsID := getTestWorkspaceID(t, pool)
+	userID, userNode := testutil.CreateUser(t, pool)
 	srv, _ := setupTestServerWithPolicy(t, &mockPolicyReadWithChannelsOA{wsID: wsID})
 
-	_, err := srv.CreateChannel(asCaller("user-1", "ngac-user-1"), &pb.CreateChannelRequest{
+	ch, err := srv.CreateChannel(asCaller(userID, userNode), &pb.CreateChannelRequest{
 		Name: "test_bad_type", ChannelType: "invalid_type", WorkspaceId: wsID,
 	})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		pool.Exec(context.Background(), `DELETE FROM channels WHERE id = $1`, ch.Id)
+		pool.Exec(context.Background(), `DELETE FROM ngac_nodes WHERE id IN ($1, $2)`, ch.NgacOaId, ch.NgacUaId)
+	})
 
-	require.Error(t, err)
-	st, ok := status.FromError(err)
-	require.True(t, ok)
-	assert.Equal(t, codes.Internal, st.Code())
+	assert.Equal(t, "private", ch.ChannelType)
 }
 
 // ---------------------------------------------------------------------------
@@ -470,8 +482,53 @@ func TestGetMessages_EmptyChannel(t *testing.T) {
 // 3.6: TestCreateDM — uses server (will fail FK but verifies flow)
 // ---------------------------------------------------------------------------
 
+// dbAuth resolves a user's node from the users table, as the auth service does.
+type dbAuth struct {
+	mockAuthClient
+	pool *pgxpool.Pool
+}
+
+func (a *dbAuth) GetUserByID(ctx context.Context, req *authpb.GetUserByIDRequest, _ ...grpc.CallOption) (*authpb.UserInfo, error) {
+	u := &authpb.UserInfo{Id: req.UserId, Username: "testuser"}
+	if err := a.pool.QueryRow(ctx, `SELECT COALESCE(ngac_node, '') FROM users WHERE id = $1`, req.UserId).Scan(&u.NgacNodeId); err != nil {
+		return nil, status.Error(codes.NotFound, "no such user")
+	}
+	return u, nil
+}
+
+// sameWorkspaceWriter reports every node as a person of one workspace, the view of
+// the writer that decides whether two people may talk directly.
+type sameWorkspaceWriter struct {
+	*mockPolicyWriteClient
+	ws string
+}
+
+func (w sameWorkspaceWriter) GetNode(_ context.Context, r *policypb.GetNodeRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	return &policypb.NGACNode{Id: r.NodeId, Name: r.NodeId, NodeType: ngac.TypeU}, nil
+}
+
+func (w sameWorkspaceWriter) GetAncestors(context.Context, *policypb.GetAncestorsRequest, ...grpc.CallOption) (*policypb.NodeList, error) {
+	name := ngac.MembersUAName(ngac.WorkspaceID(w.ws))
+	return &policypb.NodeList{Nodes: []*policypb.NGACNode{{Id: "ua-" + name, Name: name, NodeType: ngac.TypeUA}}}, nil
+}
+
+func (w sameWorkspaceWriter) FindNodeByName(_ context.Context, r *policypb.FindNodeByNameRequest, _ ...grpc.CallOption) (*policypb.NGACNode, error) {
+	prefix := "ua-"
+	if r.NodeType == ngac.TypePC {
+		prefix = "pc-"
+	}
+	return &policypb.NGACNode{Id: prefix + r.Name, Name: r.Name, NodeType: r.NodeType}, nil
+}
+
+func (w sameWorkspaceWriter) IsAssigned(context.Context, *policypb.IsAssignedRequest, ...grpc.CallOption) (*policypb.BoolResponse, error) {
+	return &policypb.BoolResponse{Value: true}, nil
+}
+
 func TestCreateDM_HappyPath(t *testing.T) {
-	srv, pool := setupTestServer(t)
+	pool := testPool(t)
+	svc := domain.NewService(store.NewStore(pool), &mockPolicyReadClient{},
+		sameWorkspaceWriter{mockPolicyWriteClient: &mockPolicyWriteClient{pool: pool}, ws: "dm-happy-ws"}, &dbAuth{pool: pool}, nil)
+	srv := grpcserver.NewMessagingServer(svc, nil, nil)
 	// channels.created_by is a foreign key onto users, so the participants have
 	// to be real rows rather than invented ids.
 	userA, userB := getTwoTestUserIDs(t, pool)
@@ -483,10 +540,12 @@ func TestCreateDM_HappyPath(t *testing.T) {
 		}
 	})
 
-	ch, err := srv.CreateDM(asCaller(userA, "ngac-user-1"), &pb.CreateDMRequest{
+	// The target's node is the auth service's word, not the request's: a node sent
+	// that is not theirs is refused, and one left out is filled in.
+	_, err := srv.CreateDM(asCaller(userA, "ngac-user-1"), &pb.CreateDMRequest{TargetUserId: userB, TargetNgacNodeId: "ngac-user-2"})
+	require.Equal(t, codes.InvalidArgument, status.Code(err), "a node that is not the target's")
 
-		TargetUserId: userB, TargetNgacNodeId: "ngac-user-2",
-	})
+	ch, err := srv.CreateDM(asCaller(userA, "ngac-user-1"), &pb.CreateDMRequest{TargetUserId: userB})
 	if ch != nil {
 		createdID = ch.Id
 	}

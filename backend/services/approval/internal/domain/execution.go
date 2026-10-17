@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"ngac-platform/pkg/grpcauth"
 )
 
 // CreateRequestInput contains the fields to create a new approval request.
@@ -158,7 +160,7 @@ func (s *Service) CreateApprovalRequest(ctx context.Context, in CreateRequestInp
 //
 //   - The caller's own pending row (a named approver, or one added by
 //     reconciliation): if it came from a role or department, the caller must
-//     still belong to it.
+//     still belong to it; a named approver must still belong to the workspace.
 //   - Otherwise a role or department row of the current step whose group is
 //     among the caller's ancestors right now. Membership is read at the moment
 //     of acting, so a member removed since the request was made cannot act, and
@@ -174,6 +176,13 @@ func (s *Service) actingRow(ctx context.Context, req *Request, userNodeID string
 		}
 		if own.GrantSource != "direct" {
 			if err := s.verifyMember(ctx, userNodeID, groupOf(own.GrantSource)); err != nil {
+				return nil, false, err
+			}
+		} else if tenant := grpcauth.CallerFrom(ctx).TenantID; tenant != "" {
+			// Nothing else ties a named approver to the workspace once they have
+			// been removed from it. (Every HTTP call already passed the same check
+			// at the door; a tenant on the context is how this finds the workspace.)
+			if err := s.RequireMember(ctx, userNodeID, tenant); err != nil {
 				return nil, false, err
 			}
 		}

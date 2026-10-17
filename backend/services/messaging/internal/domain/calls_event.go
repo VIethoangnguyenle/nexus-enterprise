@@ -12,6 +12,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"slices"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 
 	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
+	"ngac-platform/pkg/policyclient"
 	pb "ngac-platform/proto/messaging"
 	"ngac-platform/services/messaging/internal/store"
 )
@@ -55,6 +57,17 @@ func (s *Service) authorizeEvent(ctx context.Context, eventID, userNodeID string
 	}
 	if ref.OAID == "" || (ref.Private && !ref.Attending) {
 		return nil, fmt.Errorf("%w: %s on event", ErrAccessDenied, ngac.OpRead)
+	}
+	// Reading the event is not membership: a guest's UA sits beneath the
+	// workspace's policy class and keeps its grant after the person has left the
+	// workspace. Being in the call is for members.
+	member, err := policyclient.IsWorkspaceMember(ctx, s.policyRead, userNodeID, ngac.WorkspaceID(ref.WorkspaceID))
+	if err != nil {
+		slog.Error("event call membership unknown; refusing", "event", ref.ID, "error", err)
+		return nil, fmt.Errorf("%w: %s on event", ErrAccessDenied, ngac.OpRead)
+	}
+	if !member {
+		return nil, fmt.Errorf("%w: not a member of the event's workspace", ErrAccessDenied)
 	}
 	if err := s.checkAccess(ctx, userNodeID, ref.OAID, ngac.OpRead); err != nil {
 		return nil, err

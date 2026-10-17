@@ -3,11 +3,11 @@ package domain
 import (
 	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 
+	"ngac-platform/ngac"
 	"ngac-platform/pkg/grpcauth"
-	policypb "ngac-platform/proto/policy"
+	"ngac-platform/pkg/policyclient"
 	"ngac-platform/services/calendar/internal/store"
 )
 
@@ -17,8 +17,7 @@ const workspaceTypePersonal = "personal"
 // requireMember admits the caller to a workspace. The workspace is the one the
 // verified token is scoped to, never one a request names for itself: a token for
 // another workspace gets nothing here. The caller must also belong to it, which
-// is the workspace's own test for membership — its policy class is among the
-// caller's ancestors. Every failure denies, including a policy service that
+// is the workspace's own test for membership — being under its Members UA. Every failure denies, including a policy service that
 // cannot answer.
 func (s *Service) requireMember(ctx context.Context, wsID string) (grpcauth.Caller, *store.Workspace, error) {
 	who := grpcauth.CallerFrom(ctx)
@@ -34,7 +33,7 @@ func (s *Service) requireMember(ctx context.Context, wsID string) (grpcauth.Call
 	case ws.PCNodeID == "":
 		return who, nil, internal("load workspace", errors.New("workspace has no policy class"))
 	}
-	in, err := s.inWorkspace(ctx, ws, who.NGACNodeID)
+	in, err := s.inWorkspace(ctx, s.policyRead, ws, who.NGACNodeID)
 	if err != nil {
 		slog.Warn("cannot resolve workspace membership; denying", "workspace", wsID, "error", err)
 		return who, nil, denied("not a member of this workspace")
@@ -45,22 +44,18 @@ func (s *Service) requireMember(ctx context.Context, wsID string) (grpcauth.Call
 	return who, ws, nil
 }
 
-// inWorkspace reports whether the workspace's policy class is among the
-// ancestors of the user node.
-func (s *Service) inWorkspace(ctx context.Context, ws *store.Workspace, userNodeID string) (bool, error) {
+// inWorkspace reports whether the user node is a user under the workspace's
+// Members UA. Reaching the workspace's policy class is not enough: an event's
+// guest UA and a group's UA sit beneath the class too (the intersection rule needs
+// them there), and being a guest or a group member does not make a person a member
+// of the workspace. The reader is the replica for the caller (their token is the
+// evidence) and the writer for a person a request names: a removal made a moment ago
+// must be seen, or a removed person could be invited.
+func (s *Service) inWorkspace(ctx context.Context, r policyclient.GraphReader, ws *store.Workspace, userNodeID string) (bool, error) {
 	if userNodeID == "" {
 		return false, nil
 	}
-	anc, err := s.policyRead.GetAncestors(ctx, &policypb.GetAncestorsRequest{NodeId: userNodeID})
-	if err != nil {
-		return false, fmt.Errorf("ancestors of %s: %w", userNodeID, err)
-	}
-	for _, n := range anc.GetNodes() {
-		if n.GetId() == ws.PCNodeID {
-			return true, nil
-		}
-	}
-	return false, nil
+	return policyclient.IsWorkspaceMember(ctx, r, userNodeID, ngac.WorkspaceID(ws.ID))
 }
 
 // requirePerson admits a person the caller names (a guest, a grantee, someone to
@@ -77,7 +72,7 @@ func (s *Service) requirePerson(ctx context.Context, ws *store.Workspace, nodeID
 	case err != nil:
 		return nil, internal("load person", err)
 	}
-	in, err := s.inWorkspace(ctx, ws, nodeID)
+	in, err := s.inWorkspace(ctx, s.policyWrite, ws, nodeID)
 	if err != nil {
 		slog.Warn("cannot resolve membership of a named person; denying", "workspace", ws.ID, "error", err)
 		return nil, denied("not a member of this workspace")

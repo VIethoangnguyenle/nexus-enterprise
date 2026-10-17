@@ -26,6 +26,7 @@ func TestStatusKeepsTheDomainsOwnRefusals(t *testing.T) {
 		{"denied", httputil.ErrAccessDenied, codes.PermissionDenied},
 		{"exists", httputil.ErrAlreadyExists, codes.AlreadyExists},
 		{"invalid", httputil.ErrInvalidInput, codes.InvalidArgument},
+		{"unavailable", httputil.ErrUnavailable, codes.Unavailable},
 		{"wrapped", fmt.Errorf("create channel: %w", httputil.ErrAccessDenied), codes.PermissionDenied},
 	}
 	for _, tc := range cases {

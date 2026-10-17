@@ -26,9 +26,16 @@ import (
 type fakeDirectory struct {
 	profiles map[string]*store.Profile // by node ID
 	listed   []string                  // EnsureTenantUser calls: tenant/node
-	removed  []string                  // RemoveTenantUser calls: tenant/node
+	removed  []string                  // MarkTenantUserRemoved calls: tenant/node
 	ensure   error
-	profErr  error
+	// status is the row's status by user id; absent means no row.
+	status  map[string]string
+	markErr error // MarkTenantUserRemoved fails with this (the call is still recorded)
+	// failFirst makes the first calls of MarkTenantUserRemoved fail, then lets them through.
+	failFirst int
+	mu        sync.Mutex // the repair runs in a goroutine
+	attempts  int
+	profErr   error
 }
 
 func (d *fakeDirectory) ProfilesByNodeIDs(_ context.Context, _ string, ids []string) (map[string]*store.Profile, error) {
@@ -44,14 +51,32 @@ func (d *fakeDirectory) ProfilesByNodeIDs(_ context.Context, _ string, ids []str
 	return out, nil
 }
 
+func (d *fakeDirectory) TenantUserStatus(_ context.Context, _, userID string) (string, error) {
+	return d.status[userID], nil
+}
+
 func (d *fakeDirectory) EnsureTenantUser(_ context.Context, tenant, _, node string) error {
 	d.listed = append(d.listed, tenant+"/"+node)
 	return d.ensure
 }
 
-func (d *fakeDirectory) RemoveTenantUser(_ context.Context, tenant, node string) error {
+func (d *fakeDirectory) MarkTenantUserRemoved(_ context.Context, tenant, node string) error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.attempts++
+	if d.failFirst > 0 {
+		d.failFirst--
+		return errors.New("database unavailable")
+	}
 	d.removed = append(d.removed, tenant+"/"+node)
-	return nil
+	return d.markErr
+}
+
+// marked is what has been marked removed so far, safe to read while a repair runs.
+func (d *fakeDirectory) marked() []string {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return append([]string(nil), d.removed...)
 }
 
 const (
@@ -104,6 +129,21 @@ func TestListPermissionAreas_ListsEachAreaWithItsOperations(t *testing.T) {
 	}
 	require.Len(t, areas, len(ngac.Areas()))
 	assert.Equal(t, ngac.Areas()[0], areas[0].Area, "order is the ngac package's")
+}
+
+// Groups are private: a grant on the Channels OA reaches every group's content, so
+// the screen offers create_channel there and nothing a role could read a group with.
+func TestListPermissionAreas_ChannelsOffersOnlyCreateChannel(t *testing.T) {
+	f := newAdminFixture(t)
+	areas, err := f.svc.ListPermissionAreas(ctx(), member, ws1)
+	require.NoError(t, err)
+	var got []string
+	for _, a := range areas {
+		if a.Area == ngac.AreaChannels {
+			got = a.Operations
+		}
+	}
+	assert.Equal(t, []string{ngac.OpCreateChannel}, got)
 }
 
 func TestListPermissionAreas_OmitsAnAreaThisWorkspaceDoesNotHave(t *testing.T) {
@@ -345,6 +385,9 @@ func TestSetRolePermissions_RejectsOperationsTheAreaDoesNotOffer(t *testing.T) {
 		"unknown area":          {"payroll", []string{ngac.OpRead}},
 		"an empty area name":    {"", []string{ngac.OpRead}},
 		"create_channel on doc": {ngac.AreaDocuments, []string{ngac.OpCreateChannel}},
+		"read on channels":      {ngac.AreaChannels, []string{ngac.OpRead}},
+		"manage on channels":    {ngac.AreaChannels, []string{ngac.OpManage}},
+		"invite on channels":    {ngac.AreaChannels, []string{ngac.OpInvite}},
 	} {
 		_, err := f.svc.SetRolePermissions(ctx(), owner, ws1, roleRead, tc.area, tc.ops)
 		assert.ErrorIs(t, err, domain.ErrInvalidInput, name)
@@ -524,7 +567,7 @@ func TestListMemberDirectory_NeverFallsBackToAnIdentifier(t *testing.T) {
 	f := newAdminFixture(t)
 	// Nobody has a profile row; a U node's own name is all there is.
 	f.dir.profiles = map[string]*store.Profile{}
-	f.read.descendants[pc1] = append(f.read.descendants[pc1], &policypb.NGACNode{
+	f.read.descendants[members1] = append(f.read.descendants[members1], &policypb.NGACNode{
 		Id: "4b0f6c7e-1111-4222-8333-444455556666", Name: "U_4b0f6c7e-1111-4222-8333-444455556666", NodeType: ngac.TypeU,
 		Properties: map[string]string{ngac.PropDisplayName: "dung.pham"},
 	})
@@ -541,7 +584,7 @@ func TestListMemberDirectory_NodeNameWithoutDisplayNameIsReplacedByANeutralWord(
 	f := newAdminFixture(t)
 	f.dir.profiles = map[string]*store.Profile{}
 	id := "4b0f6c7e-1111-4222-8333-444455556666"
-	f.read.descendants[pc1] = []*policypb.NGACNode{{Id: id, Name: "U_" + id, NodeType: ngac.TypeU}}
+	f.read.descendants[members1] = []*policypb.NGACNode{{Id: id, Name: "U_" + id, NodeType: ngac.TypeU}}
 	people, err := f.svc.ListMemberDirectory(ctx(), owner, ws1)
 	require.NoError(t, err)
 	require.Len(t, people, 1)

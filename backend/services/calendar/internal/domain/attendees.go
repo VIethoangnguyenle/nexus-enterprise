@@ -116,7 +116,7 @@ func (s *Service) channelGuests(ctx context.Context, ws *store.Workspace, who gr
 		if people[m] == nil {
 			continue
 		}
-		in, err := s.inWorkspace(ctx, ws, m)
+		in, err := s.inWorkspace(ctx, s.policyWrite, ws, m)
 		if err != nil {
 			return nil, internal("check group member", err)
 		}

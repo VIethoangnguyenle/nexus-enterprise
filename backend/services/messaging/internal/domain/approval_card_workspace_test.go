@@ -78,8 +78,9 @@ func TestSendMessage_ApprovalCardAllowedInOrganization(t *testing.T) {
 // signed in to decides.
 func TestSendMessage_ApprovalCardInDMFollowsTheSignedInWorkspace(t *testing.T) {
 	k := newTalk(t, "approval-card-dm")
-	_, err := k.f.pool.Exec(context.Background(), `UPDATE channels SET workspace_id = NULL, channel_type = 'dm' WHERE id = $1`, k.chID)
+	_, err := k.f.pool.Exec(context.Background(), `UPDATE channels SET workspace_id = NULL WHERE id = $1`, k.chID)
 	require.NoError(t, err)
+	k.f.withDMPeer(t, k.chID)
 	k.setWorkspaceType(t, "personal")
 	inWorkspace := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: k.f.userID, NGACNodeID: userNode, TenantID: k.f.wsID})
 
@@ -92,8 +93,9 @@ func TestSendMessage_ApprovalCardInDMFollowsTheSignedInWorkspace(t *testing.T) {
 
 func TestSendMessage_ApprovalCardFailsClosedOnAnUnknownWorkspace(t *testing.T) {
 	k := newTalk(t, "approval-card-unknown")
-	_, err := k.f.pool.Exec(context.Background(), `UPDATE channels SET workspace_id = NULL, channel_type = 'dm' WHERE id = $1`, k.chID)
+	_, err := k.f.pool.Exec(context.Background(), `UPDATE channels SET workspace_id = NULL WHERE id = $1`, k.chID)
 	require.NoError(t, err)
+	k.f.withDMPeer(t, k.chID)
 	ctx := grpcauth.WithCaller(context.Background(), grpcauth.Caller{UserID: k.f.userID, NGACNodeID: userNode, TenantID: "no-such-workspace"})
 
 	require.ErrorIs(t, k.sendApprovalCard(ctx), domain.ErrAccessDenied)

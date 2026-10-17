@@ -272,6 +272,7 @@ services:
       JWT_SECRET: ngac-super-secret-key-change-in-production
       KAFKA_BROKERS: redpanda:9092
       DRIVE_SERVICE_ADDR: drive:50057
+      MESSAGING_SERVICE_ADDR: messaging:50055
     depends_on:
       policy:
         condition: service_healthy

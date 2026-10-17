@@ -31,9 +31,23 @@ func AllOwnerOps() []string {
 	}
 }
 
-// MemberChannelOps returns operations granted to regular members on channels.
+// MemberChannelOps returns operations granted to regular members on the
+// workspace's Channels OA: starting a group, nothing else.
+//
+// A grant on Channels is inherited by every channel's Content OA beneath it (and
+// by that channel's drive and calendar), so read, write or invite here would make
+// every group readable by the whole workspace. Groups are private: access comes
+// only from the channel's own Members UA (ChannelMemberOps, ChannelDriveOps).
 func MemberChannelOps() []string {
-	return []string{OpRead, OpWrite, OpCreateChannel}
+	return []string{OpCreateChannel}
+}
+
+// OwnerChannelOps returns operations granted to workspace owners on the
+// workspace's Channels OA: starting a group, and manage so an owner can rename a
+// group or remove someone from it without being in it. Not read, write or
+// invite: an owner reads a group only by being one of its members.
+func OwnerChannelOps() []string {
+	return []string{OpManage, OpCreateChannel}
 }
 
 // ChannelMemberOps returns operations granted to channel members on content.
@@ -292,7 +306,39 @@ func PersonalUAName(userNodeID UserNodeID) string { return fmt.Sprintf("User_%s"
 
 // FolderNodeName names a folder's OA by the folder's ID, never by what the
 // folder is called: sibling folders in different tenants share names freely.
-func FolderNodeName(folderID FolderID) string { return fmt.Sprintf("Folder_%s", folderID) }
+func FolderNodeName(folderID FolderID) string { return folderNodePrefix + string(folderID) }
+
+const folderNodePrefix = "Folder_"
+
+// PropTypeAdminFolder marks a folder made by the workspace's admin screen
+// (CreateFolder). The drive makes folder OAs with the same name pattern
+// ("Folder_<id>", type "drive_folder"), under Documents and under every group's
+// drive: they are not the admin folders and the admin routes never delete them.
+const PropTypeAdminFolder = "admin_folder"
+
+// AdminFolderProps are the properties of a folder made by the admin screen.
+func AdminFolderProps(wsID WorkspaceID, displayName string) map[string]string {
+	return map[string]string{PropType: PropTypeAdminFolder, PropDisplayName: displayName, "workspace_id": string(wsID)}
+}
+
+// IsAdminFolder reports whether an OA with this name and these properties is an
+// admin folder of the workspace. Folders made before the type existed carry no
+// type at all and count; the drive always sets one, so a typed folder of another
+// kind never does.
+func IsAdminFolder(name string, props map[string]string, wsID WorkspaceID) bool {
+	if !IsFolderNodeName(name) || props["workspace_id"] != string(wsID) {
+		return false
+	}
+	t := props[PropType]
+	return t == PropTypeAdminFolder || t == ""
+}
+
+// IsFolderNodeName reports whether name is a folder's OA name (FolderNodeName of
+// some ID). The workspace's own containers (Mgmt, Documents, Channels, Assets),
+// a group's content OA and an asset type's OA are not folders.
+func IsFolderNodeName(name string) bool {
+	return len(name) > len(folderNodePrefix) && strings.HasPrefix(name, folderNodePrefix)
+}
 
 // ShareOAName names the OA that wraps one shared item, by the share's ID.
 func ShareOAName(shareID ShareID) string { return fmt.Sprintf("Share_%s", shareID) }

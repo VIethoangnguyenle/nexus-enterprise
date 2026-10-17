@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"ngac-platform/pkg/realtime"
 )
@@ -22,9 +21,11 @@ var ErrLastOwner = errors.New("last owner")
 // changes take: two Owners leaving at once cannot both be "the other Owner".
 //
 // Access goes through the policy writer (every UA of the workspace the person
-// is assigned to, so the change reaches every decision point), then the listing
-// in the directory, and last any invitation still open to their verified
-// address, so an old offer cannot bring them straight back.
+// is assigned to, so the change reaches every decision point), then the
+// announcement to everyone connected, then any invitation still open to their
+// verified address (so an old offer cannot bring them straight back), and last the
+// tombstone in the directory. The announcement does not wait for the tombstone: a
+// failure to write it is returned after the others have been told.
 func (s *Service) LeaveWorkspace(ctx context.Context, callerNodeID, wsID string) error {
 	ws, err := s.authorizeMember(ctx, callerNodeID, wsID)
 	if err != nil {
@@ -43,12 +44,7 @@ func (s *Service) LeaveWorkspace(ctx context.Context, callerNodeID, wsID string)
 	if err := s.store.WithOwnerLock(ctx, ws.ID, leave); err != nil {
 		return err
 	}
-	s.withdrawOffers(ctx, ws.ID, callerNodeID)
-	if s.directory != nil {
-		if err := s.directory.RemoveTenantUser(ctx, ws.ID, callerNodeID); err != nil {
-			slog.Warn("member left but their listing remains", "workspace", ws.ID, "error", err)
-		}
-	}
 	s.announce(ctx, realtime.KindMemberRemoved, ws.ID, callerNodeID)
-	return nil
+	s.withdrawOffers(ctx, ws.ID, callerNodeID)
+	return s.recordRemoval(ctx, ws.ID, callerNodeID)
 }

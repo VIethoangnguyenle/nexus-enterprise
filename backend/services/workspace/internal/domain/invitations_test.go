@@ -561,14 +561,32 @@ func TestAcceptInvitation_RoleAndDepartmentAreRecheckedAgainstTheInviterNow(t *t
 	assert.False(t, res.RoleApplied)
 }
 
-func TestAcceptInvitation_AlreadyAMemberJustAnswers(t *testing.T) {
+// A person the graph already holds gets no second edge, but the directory is still
+// told: the graph can hold someone the table lost (a row never written, or a
+// tombstone), and accepting is the moment to list them again.
+func TestAcceptInvitation_AlreadyAMemberIsListedAndGainsNoEdge(t *testing.T) {
 	f := newInviteFixture(t)
 	f.inv.emails["user-lan"] = "lan@novapay.vn"
 	id := f.invite(t, inviter, domain.InviteInput{Email: "lan@novapay.vn"})
 	_, err := f.svc.AcceptInvitation(ctx(), "user-lan", target, id)
 	require.NoError(t, err)
 	assert.Empty(t, f.write.mutations, "target already reaches the workspace")
-	assert.Empty(t, f.dir.listed)
+	assert.Equal(t, []string{ws1 + "/" + target}, f.dir.listed, "and is listed in the workspace")
+}
+
+// The edge a person already had is not this call's to take back: when listing them
+// fails the invitation is reopened and the edge stays.
+func TestAcceptInvitation_AlreadyAMemberWhoCannotBeListedKeepsTheirEdge(t *testing.T) {
+	f := newInviteFixture(t)
+	f.inv.emails["user-lan"] = "lan@novapay.vn"
+	f.dir.ensure = fmt.Errorf("db down")
+	id := f.invite(t, inviter, domain.InviteInput{Email: "lan@novapay.vn"})
+
+	_, err := f.svc.AcceptInvitation(ctx(), "user-lan", target, id)
+
+	require.Error(t, err)
+	assert.Empty(t, f.write.mutations, "nothing was created, so nothing is undone: the person is still a member")
+	assert.Equal(t, []string{store.InvitationPending}, f.inv.status("lan@novapay.vn"), "it can be accepted again")
 }
 
 func TestAcceptInvitation_ListingFailureUndoesAndReopens(t *testing.T) {
@@ -582,6 +600,31 @@ func TestAcceptInvitation_ListingFailureUndoesAndReopens(t *testing.T) {
 		"RemoveAssignment " + newbie + "->" + members1,
 	}, f.write.mutations)
 	assert.Equal(t, []string{store.InvitationPending}, f.inv.status(newbieMail), "it can be accepted again")
+}
+
+// An administrator's suspension is not undone by an invitation: a person whose row is
+// disabled is refused before anything is written to the graph, and the offer stays open.
+// A removed person, and a new one, are admitted.
+func TestAcceptInvitation_ADisabledMemberIsRefusedAndRemovedOrNewOnesAreAdmitted(t *testing.T) {
+	f := newInviteFixture(t)
+	f.dir.status = map[string]string{newbieUser: "disabled"}
+	id := f.invite(t, inviter, domain.InviteInput{})
+
+	_, err := f.svc.AcceptInvitation(ctx(), newbieUser, newbie, id)
+
+	assert.ErrorIs(t, err, domain.ErrAccessDenied)
+	assert.Empty(t, f.write.mutations, "a suspended person is not put under Members")
+	assert.Empty(t, f.dir.listed)
+	assert.Equal(t, []string{store.InvitationPending}, f.inv.status(newbieMail), "the offer can be answered later")
+
+	for _, status := range []string{"removed", ""} {
+		f = newInviteFixture(t)
+		f.dir.status = map[string]string{newbieUser: status}
+		id = f.invite(t, inviter, domain.InviteInput{})
+		_, err = f.svc.AcceptInvitation(ctx(), newbieUser, newbie, id)
+		require.NoError(t, err, "status %q", status)
+		assert.Equal(t, []string{"CreateAssignment " + newbie + "->" + members1}, f.write.mutations)
+	}
 }
 
 func TestDeclineInvitation_OnlyMineAndOnlyWhileOpen(t *testing.T) {

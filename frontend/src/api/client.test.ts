@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockFetch = vi.fn()
 vi.stubGlobal('fetch', mockFetch)
@@ -7,6 +7,8 @@ vi.stubGlobal('fetch', mockFetch)
 // refresh logic rather than Zustand.
 const state = {
   accessToken: 'expired-token' as string | null,
+  /** The tenant the held token speaks for: derived from the token in the real store. */
+  tenantId: 'ws-1' as string | null,
   user: { id: 'u1', username: 'alice' } as { id: string; username: string } | null,
   setAccessToken: vi.fn((t: string | null) => { state.accessToken = t }),
   setBootstrapped: vi.fn(),
@@ -17,7 +19,7 @@ vi.mock('../stores/auth.store', () => ({
   useAuthStore: { getState: () => state },
 }))
 
-const { apiFetch, publicFetch, ApiError, refreshAccessToken, bootstrapSession } = await import('./client')
+const { apiFetch, publicFetch, ApiError, refreshAccessToken, bootstrapSession, onTenantMoved } = await import('./client')
 
 /** A 401 followed by whatever the caller queues next. */
 function unauthorized() {
@@ -30,6 +32,7 @@ function ok(body: unknown = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   state.accessToken = 'expired-token'
+  state.tenantId = 'ws-1'
   state.user = { id: 'u1', username: 'alice' }
 })
 
@@ -107,9 +110,9 @@ describe('refresh coalescing', () => {
       refreshAccessToken(),
     ])
 
-    expect(a).toBe('fresh-token')
-    expect(b).toBe('fresh-token')
-    expect(c).toBe('fresh-token')
+    expect(a).toEqual({ status: 'ok', token: 'fresh-token' })
+    expect(b).toEqual({ status: 'ok', token: 'fresh-token' })
+    expect(c).toEqual({ status: 'ok', token: 'fresh-token' })
 
     const refreshCalls = mockFetch.mock.calls.filter((call) => call[0] === '/api/auth/refresh')
     expect(refreshCalls).toHaveLength(1)
@@ -160,11 +163,11 @@ describe('bootstrapSession', () => {
 
   it('keeps the session when the server is failing, and ends it only when the server refuses it', async () => {
     mockFetch.mockResolvedValueOnce({ ok: false, status: 503, json: () => Promise.resolve({}) })
-    expect(await refreshAccessToken()).toBeNull()
+    expect(await refreshAccessToken()).toEqual({ status: 'unavailable' })
     expect(state.logout).not.toHaveBeenCalled()
 
     mockFetch.mockResolvedValueOnce(unauthorized())
-    expect(await refreshAccessToken()).toBeNull()
+    expect(await refreshAccessToken()).toEqual({ status: 'ended' })
     expect(state.logout).toHaveBeenCalled()
   })
 
@@ -176,6 +179,168 @@ describe('bootstrapSession', () => {
 
     expect(mockFetch).not.toHaveBeenCalled()
     expect(state.setBootstrapped).toHaveBeenCalled()
+  })
+})
+
+// An outage is not an answer about the session. The refresh endpoint answers 503
+// when the policy or the database cannot be asked (and leaves the cookie, so the
+// next try can work); a request that only wanted a new token must not end the
+// session on that.
+describe('a refresh that cannot be answered', () => {
+  const unavailable = () => ({ ok: false, status: 503, json: () => Promise.resolve({ code: 'unavailable' }) })
+
+  it('surfaces a 503 and keeps the session, instead of logging out on the original 401', async () => {
+    mockFetch
+      .mockResolvedValueOnce(unauthorized()) // the request, with an expired token
+      .mockResolvedValueOnce(unavailable())  // the refresh
+
+    await expect(apiFetch('/documents')).rejects.toMatchObject({ status: 503 })
+    expect(state.logout).not.toHaveBeenCalled()
+    expect(state.user).not.toBeNull()
+  })
+
+  it('does the same when the network is down at that moment', async () => {
+    mockFetch
+      .mockResolvedValueOnce(unauthorized())
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    await expect(apiFetch('/documents')).rejects.toMatchObject({ status: 503 })
+    expect(state.logout).not.toHaveBeenCalled()
+  })
+
+  it('still ends the session when the server refuses it', async () => {
+    mockFetch.mockResolvedValueOnce(unauthorized()).mockResolvedValueOnce(unauthorized())
+
+    await expect(apiFetch('/documents')).rejects.toMatchObject({ status: 401 })
+    expect(state.logout).toHaveBeenCalled()
+  })
+
+  it('works again once the server answers', async () => {
+    mockFetch
+      .mockResolvedValueOnce(unauthorized())
+      .mockResolvedValueOnce(unavailable())
+      .mockResolvedValueOnce(unauthorized())
+      .mockResolvedValueOnce(ok({ access_token: 'fresh-token', tenant_id: 'ws-1' }))
+      .mockResolvedValueOnce(ok({ data: 'payload' }))
+
+    await expect(apiFetch('/documents')).rejects.toMatchObject({ status: 503 })
+    await expect(apiFetch<{ data: string }>('/documents')).resolves.toEqual({ data: 'payload' })
+    expect(state.logout).not.toHaveBeenCalled()
+  })
+})
+
+// A person removed from the workspace of their token keeps their session: the
+// server moves it to the workspace they still belong to (or to none) and says so
+// with `moved: true`. Only that flag is a membership move; a different tenant on its
+// own is just another tab having switched workspace on purpose.
+describe('a refresh that moves the session to another workspace', () => {
+  const moved = vi.fn()
+  let stop: () => void
+  beforeEach(() => { stop = onTenantMoved(moved) })
+  afterEach(() => { stop(); moved.mockReset() })
+
+  it('tells the app which workspace it left and which it is in now', async () => {
+    mockFetch.mockResolvedValueOnce(ok({ access_token: 'fresh-token', tenant_id: 'ws-2', moved: true }))
+
+    expect(await refreshAccessToken()).toEqual({ status: 'ok', token: 'fresh-token' })
+
+    expect(state.setAccessToken).toHaveBeenCalledWith('fresh-token')
+    expect(moved).toHaveBeenCalledExactlyOnceWith({ from: 'ws-1', to: 'ws-2' })
+  })
+
+  it('says "to: null" when no workspace is left', async () => {
+    mockFetch.mockResolvedValueOnce(ok({ access_token: 'fresh-token', tenant_id: '', moved: true }))
+
+    await refreshAccessToken()
+
+    expect(moved).toHaveBeenCalledExactlyOnceWith({ from: 'ws-1', to: null })
+  })
+
+  // The paired allow: another tab switched workspace on purpose, the cookie followed,
+  // and this tab's refresh lands in a different tenant. That is not a removal.
+  it('says nothing when the tenant differs but the server did not say the person was moved', async () => {
+    mockFetch.mockResolvedValueOnce(ok({ access_token: 'fresh-token', tenant_id: 'ws-2' }))
+
+    await refreshAccessToken()
+
+    expect(state.setAccessToken).toHaveBeenCalledWith('fresh-token')
+    expect(moved).not.toHaveBeenCalled()
+  })
+
+  it('says nothing for an ordinary refresh, for a session that had no workspace to leave, or for an older server', async () => {
+    mockFetch.mockResolvedValueOnce(ok({ access_token: 'fresh-token', tenant_id: 'ws-1' }))
+    await refreshAccessToken()
+    state.tenantId = null
+    mockFetch.mockResolvedValueOnce(ok({ access_token: 'fresh-token', tenant_id: 'ws-2', moved: true }))
+    await refreshAccessToken()
+    state.tenantId = 'ws-1'
+    mockFetch.mockResolvedValueOnce(ok({ access_token: 'fresh-token-2' }))
+    await refreshAccessToken()
+
+    expect(moved).not.toHaveBeenCalled()
+  })
+})
+
+// Two tabs of one browser share the refresh cookie, and a removal tells every tab's
+// socket to ask for a new token at the same moment. A refresh therefore runs under a
+// browser-wide lock: the second tab waits, then presents the cookie the first one has
+// already replaced, instead of the token the first has just spent.
+describe('refresh across tabs', () => {
+  /** One Web Locks manager shared by every "tab" (module instance) below. */
+  function fakeLocks() {
+    const queues = new Map<string, Promise<unknown>>()
+    const names: string[] = []
+    return {
+      names,
+      request: vi.fn(async (name: string, cb: () => Promise<unknown>) => {
+        names.push(name)
+        const previous = queues.get(name) ?? Promise.resolve()
+        const run = previous.then(cb, cb)
+        queues.set(name, run.catch(() => undefined))
+        return run
+      }),
+    }
+  }
+
+  afterEach(() => { vi.unstubAllGlobals(); vi.stubGlobal('fetch', mockFetch) })
+
+  it('serialises the refreshes of two tabs under one named lock', async () => {
+    const locks = fakeLocks()
+    vi.stubGlobal('navigator', { ...navigator, locks })
+    let inFlight = 0
+    let overlapped = false
+    mockFetch.mockImplementation(async () => {
+      inFlight++
+      if (inFlight > 1) overlapped = true
+      await new Promise((r) => setTimeout(r, 15))
+      inFlight--
+      return ok({ access_token: 'fresh-token', tenant_id: 'ws-1' })
+    })
+    vi.resetModules()
+    const otherTab = await import('./client')
+
+    const results = await Promise.all([refreshAccessToken(), otherTab.refreshAccessToken()])
+
+    expect(results.map((r) => r.status)).toEqual(['ok', 'ok'])
+    expect(overlapped, 'the two tabs refreshed at the same time').toBe(false)
+    expect(locks.names).toEqual(['nexus-refresh', 'nexus-refresh'])
+  })
+
+  it('still refreshes where the browser has no Web Locks', async () => {
+    vi.stubGlobal('navigator', { ...navigator, locks: undefined })
+    mockFetch.mockResolvedValueOnce(ok({ access_token: 'fresh-token', tenant_id: 'ws-1' }))
+
+    expect(await refreshAccessToken()).toEqual({ status: 'ok', token: 'fresh-token' })
+  })
+
+  it('a refresh that fails inside the lock releases it for the next', async () => {
+    const locks = fakeLocks()
+    vi.stubGlobal('navigator', { ...navigator, locks })
+    mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    expect(await refreshAccessToken()).toEqual({ status: 'unavailable' })
+
+    mockFetch.mockResolvedValueOnce(ok({ access_token: 'fresh-token', tenant_id: 'ws-1' }))
+    expect(await refreshAccessToken()).toEqual({ status: 'ok', token: 'fresh-token' })
   })
 })
 

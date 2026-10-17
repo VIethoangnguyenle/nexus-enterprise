@@ -62,7 +62,7 @@ func main() {
 		os.Exit(1)
 	}
 	defer policyConn.Close()
-	policyClient := newPolicyAdapter(policypb.NewPolicyReadServiceClient(policyConn))
+	policyClient := newPolicyAdapter(policypb.NewPolicyReadServiceClient(policyConn), policypb.NewPolicyWriteServiceClient(policyConn))
 
 	// Tenant schema resolver — caches tenant_id → schema_name lookups
 	resolver := httputil.NewTenantSchemaResolver(db)
@@ -142,10 +142,13 @@ func main() {
 type policyGRPCAdapter struct {
 	client policypb.PolicyReadServiceClient
 	checks *policyclient.Client
+	// graph is the writer's connection (POLICY_SERVICE_ADDR), used for the
+	// membership questions that must see a change made a moment ago.
+	graph policyclient.GraphReader
 }
 
-func newPolicyAdapter(c policypb.PolicyReadServiceClient) *policyGRPCAdapter {
-	return &policyGRPCAdapter{client: c, checks: policyclient.New(c)}
+func newPolicyAdapter(c policypb.PolicyReadServiceClient, graph policyclient.GraphReader) *policyGRPCAdapter {
+	return &policyGRPCAdapter{client: c, checks: policyclient.New(c), graph: graph}
 }
 
 // ResolveAccessibleScopes delegates to the Policy Service gRPC call.
@@ -195,4 +198,11 @@ func (a *policyGRPCAdapter) GetMembers(ctx context.Context, uaNodeID string) ([]
 		}
 	}
 	return ids, nil
+}
+
+// IsWorkspaceMember asks the policy writer whether the person sits under the
+// workspace's Members UA. It is the writer, never the read replica: the answer must
+// include a removal made a moment ago.
+func (a *policyGRPCAdapter) IsWorkspaceMember(ctx context.Context, userNodeID, workspaceID string) (bool, error) {
+	return policyclient.IsWorkspaceMember(ctx, a.graph, userNodeID, ngac.WorkspaceID(workspaceID))
 }

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
-import { messagingApi, type CreateChannelInput, type ChannelMember } from '../api/messaging'
+import { messagingApi, type CreateChannelInput, type ChannelMembersResponse } from '../api/messaging'
 import { queryClient } from '../lib/query-client'
 import { keys } from './keys'
 import { startupPart } from './useChatState'
@@ -121,7 +121,8 @@ export function useAddChannelMember(channelId: string) {
       const previous = queryClient.getQueryData(keys.messaging.members(channelId))
       queryClient.setQueryData(
         keys.messaging.members(channelId),
-        (old: { members: ChannelMember[] | null } | undefined) => ({
+        (old: ChannelMembersResponse | undefined) => ({
+          ...old,
           members: [
             ...(old?.members || []),
             { user_id: userId || '', username: username || '', ngac_node_id: ngacNodeId },
@@ -151,7 +152,8 @@ export function useRemoveChannelMember(channelId: string) {
       const previous = queryClient.getQueryData(keys.messaging.members(channelId))
       queryClient.setQueryData(
         keys.messaging.members(channelId),
-        (old: { members: ChannelMember[] | null } | undefined) => ({
+        (old: ChannelMembersResponse | undefined) => ({
+          ...old,
           members: (old?.members || []).filter((m) => m.ngac_node_id !== nodeId),
         }),
       )

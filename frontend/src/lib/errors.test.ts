@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api/client'
-import { explain, FOLDER_HAS_DOCUMENTS, QUOTA_EXCEEDED, isForbidden, reasonOf, statusOf } from './errors'
+import { explain, explainRemoval, FOLDER_HAS_DOCUMENTS, QUOTA_EXCEEDED, isForbidden, reasonOf, statusOf } from './errors'
 
 const fail = (status: number, body?: unknown) => new ApiError('server text with id 123', status, body)
 
@@ -47,5 +47,19 @@ describe('errors', () => {
     const text = explain(new Error('boom'), 'lưu')
     expect(text).toMatch(/kết nối mạng/)
     expect(explain(fail(500), 'lưu')).not.toContain('123')
+  })
+})
+
+describe('explainRemoval', () => {
+  const err = (status: number) => fail(status)
+
+  it('says in words that this conversation keeps its people, not "invalid information"', () => {
+    const text = explainRemoval(err(400), 'xoá Yến khỏi nhóm')
+    expect(text).toContain('không xoá được thành viên')
+    expect(text).not.toContain('thông tin chưa hợp lệ')
+  })
+
+  it('leaves the other statuses to explain', () => {
+    expect(explainRemoval(err(403), 'xoá Yến khỏi nhóm')).toBe(explain(err(403), 'xoá Yến khỏi nhóm'))
   })
 })

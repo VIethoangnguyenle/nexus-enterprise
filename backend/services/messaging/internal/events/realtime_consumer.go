@@ -38,6 +38,35 @@ type WorkspaceRevoker interface {
 	RevokeWorkspaceSubscriptions(workspaceID, userNodeID string)
 }
 
+// MemberCache drops the channel_members cache rows of someone who left a
+// workspace. *domain.Service does.
+type MemberCache interface {
+	ForgetWorkspaceMember(ctx context.Context, workspaceID, userNodeID string) error
+}
+
+// SetMemberCache wires the cleanup of the member cache on a workspace departure.
+// The graph needs none: leaving strips every UA under the workspace, the
+// channels' Members UAs included. The cache (member_count, push recipients) is
+// messaging's own and is only cleaned here.
+func (c *RealtimeConsumer) SetMemberCache(m MemberCache) { c.memberCache = m }
+
+// forgetWorkspaceMembers drops the cache rows of each person the event names. A
+// failure is logged and the event still goes out: clients must hear the person
+// left, and the stale row only inflates a count until the next departure sweep.
+func (c *RealtimeConsumer) forgetWorkspaceMembers(evt realtime.Event) {
+	if c.memberCache == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	for _, node := range evt.IDs {
+		if err := c.memberCache.ForgetWorkspaceMember(ctx, evt.WorkspaceID, node); err != nil {
+			slog.Warn("channel member cache not cleaned after a workspace departure",
+				"workspace", evt.WorkspaceID, "member", node, "error", err)
+		}
+	}
+}
+
 // permissionSettle is how long a permission event is held before delivery.
 // Policy read replicas learn of a graph change from their own Kafka consumer,
 // separately from this event, so a client that refetched the instant it was
@@ -60,6 +89,8 @@ type RealtimeConsumer struct {
 
 	evictor    CallEvictor
 	evictAfter []time.Duration
+
+	memberCache MemberCache
 
 	chat ChatVersions
 }
@@ -216,6 +247,7 @@ func (c *RealtimeConsumer) handle(topic string, value []byte) {
 				r.RevokeWorkspaceSubscriptions(evt.WorkspaceID, node)
 			}
 		}
+		c.forgetWorkspaceMembers(evt)
 	}
 	c.sweepCalls(evt)
 	if evt.Domain == realtime.DomainPermission && c.settle > 0 {

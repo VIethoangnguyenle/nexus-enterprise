@@ -128,8 +128,16 @@ func TestMembership_AnnouncesToTheRosterAndThePerson(t *testing.T) {
 	f := newFixture(t)
 	chID, oaID := f.insertChannel(t, "rt-members")
 	f.read.allow[grant{userNode, oaID, ngac.OpInvite}] = true
+	// Removing someone takes manage (or being them, or the creator) and the person
+	// being in the group; the scripted channel has no Members UA, so its id is "".
+	f.read.allow[grant{userNode, oaID, ngac.OpRead}] = true
+	f.read.allow[grant{userNode, oaID, ngac.OpManage}] = true
+	f.read.edges = map[[2]string]bool{{"ngac-user-newcomer", ""}: true}
+	f.read.addMember(f.wsID, "ngac-user-newcomer")
 	rec := &realtime.Recorder{}
-	f.withFakeWrite(testutil.NewFakePolicyWrite())
+	w := testutil.NewFakePolicyWrite()
+	w.Reads = f.read
+	f.withFakeWrite(w)
 	f.svc.SetEmitter(rec)
 
 	require.NoError(t, f.svc.AddMember(f.callerCtx(), chID, userNode, "ngac-user-newcomer"))
@@ -157,7 +165,9 @@ func TestMembership_AnnouncesNothingWhenRefusedOrFailed(t *testing.T) {
 	require.ErrorIs(t, f.svc.RemoveMember(f.callerCtx(), chID, userNode, "ngac-user-x"), domain.ErrAccessDenied)
 
 	f.read.allow[grant{userNode, oaID, ngac.OpInvite}] = true
+	f.read.addMember(f.wsID, "ngac-user-x") // so it is the failing write, not the target, that refuses
 	w := testutil.NewFakePolicyWrite()
+	w.Reads = f.read
 	w.FailAt = 1
 	f.withFakeWrite(w)
 	f.svc.SetEmitter(rec)

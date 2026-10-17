@@ -63,7 +63,7 @@ The system SHALL create associations between tenant UAs and OAs so that members 
 
 #### Scenario: TenantMember association
 - **WHEN** a tenant is initialized
-- **THEN** `TenantMember_{tenant_id}` has association to tenant OAs with member operations: `read, write, upload, share` on Documents and `read, write, create_channel` on Channels
+- **THEN** `TenantMember_{tenant_id}` has association to tenant OAs with member operations: `read, write, upload, share` on Documents and `create_channel` on Channels (a workspace member can start a group but reads none by being a member: see "Groups are private")
 
 Members hold `write` on Documents, not only `read`, because the drive gates file creation on it — an upload is CreateFile followed by ConfirmFile and both check `write` on the destination folder. A read-only member sees the Upload button and can never complete an upload. This matches what a member already holds on any channel drive they belong to.
 
@@ -79,14 +79,14 @@ The system SHALL assign the Owners UA under the Members UA, never the reverse. N
 #### Scenario: Member does not inherit owner grants
 - **WHEN** a user is assigned to `{workspace_id}_Members` and to no other UA
 - **THEN** `manage`, `invite` and `approve` on the workspace's Mgmt, Documents and Channels OAs all resolve to DENY, and so does `share` on Mgmt and Channels
-- **AND** only the member operations (read, write, upload and share on Documents, and the channel operations) resolve to ALLOW
+- **AND** only the member operations (read, write, upload and share on Documents, and `create_channel` on Channels) resolve to ALLOW
 
 #### Scenario: Member of another workspace
 - **WHEN** a user's attributes reach only a different workspace's Policy Class
 - **THEN** every operation on this workspace's OAs resolves to DENY, even where an association exists, because the object's PC is not among the user's PCs
 
 ### Requirement: Channel membership is authorized per channel
-The system SHALL authorize adding and removing channel members with the `invite` operation on that channel's Content OA. The channel's Members UA SHALL hold `invite` on its own Content OA, so that belonging to a channel is what permits bringing someone else into it. The grant SHALL confer nothing on any other channel and nothing at the workspace level.
+The system SHALL authorize adding channel members with the `invite` operation on that channel's Content OA (removing them has its own rule, below). The channel's Members UA SHALL hold `invite` on its own Content OA, so that belonging to a channel is what permits bringing someone else into it. The grant SHALL confer nothing on any other channel and nothing at the workspace level.
 
 #### Scenario: Member adds someone to their own channel
 - **WHEN** a user assigned to `Ch_{channel_id}_Members` adds another user to that channel
@@ -104,6 +104,126 @@ The system SHALL authorize adding and removing channel members with the `invite`
 - **WHEN** a participant of a DM attempts to add another user to it
 - **THEN** the request is rejected before any graph mutation, because a DM is a fixed two-party conversation
 - **AND** this guard lives in the messaging service, not in the graph, since the graph cannot express "exactly two sides"
+
+A group's Members UA sits under the workspace's policy class (the intersection rule needs it there), so whoever is assigned beneath it reaches that class. Adding a member SHALL therefore check the target, after the `invite` check and the DM guard and before any graph write: the target SHALL be a user (`U`) node, else the request is rejected as invalid input; and it SHALL be a member of the channel's workspace (`policyclient.IsWorkspaceMember`, that is, under `{workspace_id}_Members`), else access is denied. A policy service that cannot answer denies. Any member of the group may add people, as `invite` already lets them. The same rule applies to the gRPC `AddChannelMember`, which shares the domain method.
+
+#### Scenario: Target is a person of another workspace
+- **WHEN** a member of a group adds a user who belongs to another workspace
+- **THEN** access is denied and no assignment is written
+- **AND** the same member adds an active member of this workspace and the target joins
+
+#### Scenario: Target is a UA
+- **WHEN** the target is a Members UA (this workspace's or another's), an Owners UA or another group's UA
+- **THEN** the request is rejected as invalid input and nothing is written
+
+#### Scenario: Target was removed from the workspace
+- **WHEN** the target is still under a group's UA but no longer under `{workspace_id}_Members`
+- **THEN** adding them to another group is denied, so a group cannot be used to undo a removal
+
+### Requirement: Only the person, the creator or a manager removes someone from a group
+`invite`, which every member of a group holds, lets people in; it SHALL NOT let a member put others out. Removing a person from a group (`DELETE /api/channels/:chId/members/:nodeId`, gRPC `RemoveChannelMember`) SHALL be allowed to: the person themselves (leaving); the person who made the group (`channels.created_by`, matched to the verified caller); and a holder of `manage` on the group's Content OA (the workspace's owners, who are not in the group). Anyone else is denied. The caller SHALL first be inside the conversation (`read`) or a manager of it, so a stranger is denied before anything about the channel is answered. The target SHALL be a user (`U`) node directly under the group's Members UA, read from the writer, else `404`; a UA nested there, a person not in the group and a node that does not exist are never removed.
+
+A direct message and the workspace-wide channel SHALL NOT lose people this way (`400`, for the person themselves and for a manager alike): a DM is a fixed pair, and the workspace-wide channel's people are the workspace's, so they leave it by leaving the workspace. After the assignment is withdrawn, the `channel_members` row SHALL be deleted; the member's live subscriptions are revoked and the roster announced even if that delete fails, and the failure is returned so that repeating the removal (which is idempotent) clears the row.
+
+The members list (`GET /api/channels/:chId/members`) carries `can_remove_members`, computed for the reader by the same rule (the creator, or a holder of `manage`, in a group; false in a DM and the workspace-wide channel), so a screen offers the remove action by it and never by comparing ids. A 400 from removal reads in words on screen, not as invalid information.
+
+#### Scenario: A member removes another member
+- **WHEN** a member of a group who did not make it, and holds no `manage`, removes another member or the creator
+- **THEN** the answer is 403, the person is still in the group and their `channel_members` row is kept
+- **AND** a workspace member outside the group, or a person of another workspace, is denied the same way
+
+#### Scenario: The allowed removals
+- **WHEN** a member leaves, or the creator removes a member, or an owner (not in the group) removes a member or the creator
+- **THEN** the person is out of the group, their cache row is gone, and they can no longer read it
+
+#### Scenario: Targets that are not members
+- **WHEN** an authorized caller names a UA nested under the group's UA, a workspace member who is not in the group, or a node that does not exist
+- **THEN** the answer is 404 and nothing is written
+
+#### Scenario: Direct message and workspace-wide channel
+- **WHEN** either person of a DM removes the other or leaves, or anyone (an owner, or the person themselves) removes a person from the workspace-wide channel
+- **THEN** the answer is 400, the edge and the cache row stay, and the DM is still found for the pair
+
+### Requirement: Migration 061 removes what the old AddMember let into groups
+Migration `061_channel_membership_reconcile.sql` SHALL delete, for every non-DM group, the edges `child -> Ch_{id}_Members` where the child is a user not under the workspace's `{workspace_id}_Members` or is a UA of any kind (the workspace-wide channel's direct edges are among them: they are written only for members, so a leftover belongs to someone detached since), and the `channel_members` rows of those edges and of non-DM groups with no matching edge. It SHALL abort if a workspace lacks its PC, Members, Owners or Channels node, or if more edges or cache rows than its stated limits would be removed; it SHALL back up what it deletes (`_reconcile_061_assignments`, `_reconcile_061_channel_members`) and be re-runnable (a second run changes nothing). Direct messages are not touched. Like the other direct graph writes it bypasses EPP invalidation, so `policy` and `policy-read` are recreated, `policy invalidate-cache --all-workspaces` is run and messaging restarted after it is applied. Its pre-flight queries and reverse SQL are in the file's header.
+
+#### Scenario: Run twice
+- **WHEN** the migration is applied a second time
+- **THEN** it changes no row and adds no backup row
+
+#### Scenario: Detached person with a leftover edge
+- **WHEN** a person who is no longer under the workspace's Members UA still has a direct edge into #general or a group
+- **THEN** the edge and its cache row are removed, while a member's edge and a DM's participants stay
+
+### Requirement: Groups are private
+The system SHALL let only the people in a group's own Members UA read, write or invite in it, read or write its files, or read its calendar. A grant on the workspace's Channels OA is inherited by every group's Content OA and by the drive and calendar beneath it, so the workspace-level UAs SHALL hold nothing there that reaches group content: `{workspace_id}_Members` is associated with Channels for `create_channel` only (`ngac.MemberChannelOps`), `{workspace_id}_Owners` for `manage` and `create_channel` (`ngac.OwnerChannelOps`), and the Channels area of the permissions screen offers `create_channel` alone (`ngac.AreaOps`), so no custom role can be given more there. `manage` is the Owners' alone: an owner can rename a group or remove someone from it without being in it, and cannot read it. Group access comes only from `Ch_{channel_id}_Members`, associated with `ngac.ChannelMemberOps` on the Content OA and `ngac.ChannelDriveOps` on the drive; a channel's calendar sits beneath its Content OA and so is the group's alone.
+
+A group made by a person SHALL be stored as channel type `private`, whatever type the request names (REST and gRPC alike). Creating one SHALL still require `create_channel` on the Channels OA.
+
+#### Scenario: Workspace member outside the group
+- **WHEN** a user under `{workspace_id}_Members` who is not in group G's Members UA asks for `read`, `write` or `invite` on `Ch_{G}_Content`, `read`, `write` or `upload` on its drive, or `read` or `write` on its calendar
+- **THEN** every check resolves to DENY
+- **AND** the same checks for a user in G's Members UA resolve to ALLOW (read, write and invite on the content; read, write, upload and share on the drive)
+
+#### Scenario: Owner outside the group
+- **WHEN** a user under `{workspace_id}_Owners` who is not in G's Members UA asks for `read`, `write` or `invite` on G's content, drive or calendar
+- **THEN** every check resolves to DENY
+- **AND** `manage` on G's Content OA resolves to ALLOW, and to DENY for a plain member and for a member of G who is not an owner
+
+#### Scenario: A role given every operation of the Channels area
+- **WHEN** a custom role is associated with the Channels OA for every operation `ngac.AreaOps(AreaChannels)` returns
+- **THEN** its holders get ALLOW for `create_channel` on Channels and DENY for `read`, `write`, `invite` and `manage` on any group's content, drive or calendar
+
+#### Scenario: Group member reaching the content through another policy class
+- **WHEN** a user in G's Members UA is checked against a Content OA that reaches a different workspace's policy class
+- **THEN** the check resolves to DENY, because the user side and the object side share no policy class
+
+#### Scenario: Prohibition on a group member
+- **WHEN** a prohibition denies `write` to a member of G
+- **THEN** `write` on G's content resolves to DENY while `read` still resolves to ALLOW
+
+#### Scenario: A type named in the request
+- **WHEN** a person creates a group and the request names type `workspace`, `group`, `dm`, an empty type or one the table does not allow
+- **THEN** the group is stored as `private`
+
+### Requirement: The workspace-wide channel has direct member edges
+A workspace SHALL have at most one workspace-wide channel (#general; channel type `workspace`, enforced by the unique index `channels_one_workspace_wide`). Every member of the workspace SHALL be a member of it through a **direct edge** from the person's user node to the channel's Members UA, with a `channel_members` row beside it; no UA is assigned beneath the channel's Members UA, because the roster (`ListMembers`), the push recipients and `member_count` all read people at that level. Being a member of the workspace alone opens nothing in it.
+
+The channel is identified by its type alone once `channels_one_workspace_wide` exists (a valid unique index), so renaming it changes nothing; before the index exists (data from before migration 060) it is the oldest `workspace`-typed channel named `general` that the workspace's owner created, which is also the only rule migration 060 applies, and only on its first run. The code asks the database which side it is on and needs the migration at no point to start. A member found without the edge when they list the workspace's channels SHALL be joined then (the join at admission is best effort), after membership of the workspace is verified; a person who is not a member is not joined by asking.
+
+Only the auth service SHALL create it (`ProvisionWorkspaceChannel`, on the auth service's identity; the creator, the workspace's owner, still needs `create_channel`). A second one is refused with already-exists. The auth and workspace services SHALL put a person into it when they admit them (`JoinWorkspaceChannel`, on a service identity): the person must be a member of the workspace (a user node under its Members UA), the call is safe to repeat, and it does nothing in a workspace that has none. A user-scoped call can do neither. Leaving the workspace strips every UA under the policy class, the channel's Members UA included, and the messaging service drops the person's `channel_members` rows for every channel of that workspace when it consumes the workspace's `member_removed` event.
+
+#### Scenario: Admitted member
+- **WHEN** a person is admitted to a workspace that has a workspace-wide channel
+- **THEN** after `JoinWorkspaceChannel` they read and post in it, appear in its member list, count in its `member_count` and are a push recipient
+- **AND** before it, `read` on its Content OA resolves to DENY for them
+
+#### Scenario: Not a member of the workspace
+- **WHEN** `JoinWorkspaceChannel` names a person of another workspace, or a node that is not a user
+- **THEN** it is refused and no edge is written
+
+#### Scenario: A second workspace-wide channel
+- **WHEN** a workspace that has one is asked to provision another
+- **THEN** the answer is already-exists and nothing is written to the graph
+
+#### Scenario: Missing edge repaired by listing
+- **WHEN** a member of the workspace whose `#general` edge is missing lists the workspace's channels
+- **THEN** they are joined and the channel is listed; a person of another workspace asking the same is not joined and sees nothing
+
+#### Scenario: Leaving the workspace
+- **WHEN** a member is removed from the workspace
+- **THEN** they lose access to the channel, and are gone from its member list and `member_count`
+
+### Requirement: Migration 060 makes existing groups private
+Migration `060_private_groups.sql` SHALL bring existing data to the shape above and be re-runnable (a second run changes nothing): it aborts if a workspace lacks its PC, Members, Owners or Channels node, or if more rows than its stated limits would be reduced, removed or retyped; it backs up what it changes (`_reconcile_060_associations`, `_reconcile_060_channels`); it repairs a group whose Members UA holds nothing on its Content OA; it retypes every `workspace`-typed channel other than the workspace's #general to `private` (on its first run #general is the oldest named `general` that the owner created; once the unique index exists the workspace's one `workspace`-typed channel is it, so a re-run never retypes a renamed #general); it writes the direct edges and cache rows into #general for everyone under the workspace's Members UA; it sets the associations on every `{id}_Channels` OA to the operations above (any other UA keeps `create_channel` if it had it and loses the association otherwise); and, outside its transaction, creates `channels_one_workspace_wide` concurrently. Like the other direct graph writes it bypasses EPP invalidation, so `policy` and `policy-read` are recreated, `policy invalidate-cache --all-workspaces` is run and messaging restarted after it is applied. Its pre-flight queries and reverse SQL are in the file's header.
+
+#### Scenario: Run twice
+- **WHEN** the migration is applied a second time
+- **THEN** it changes no row
+
+#### Scenario: Legacy workspace without ID-keyed nodes
+- **WHEN** a workspace still lacks one of the four nodes
+- **THEN** the migration aborts and changes nothing
 
 ### Requirement: Policy enforcement points fail closed
 Every service that consults the Policy Service SHALL treat anything other than an explicit ALLOW as a denial — including a transport error, an unreachable Policy Service, an empty response, and any unrecognised decision string. Enforcement points SHALL NOT compare against the DENY constant, because that grants access for every value that is neither ALLOW nor DENY.
@@ -265,7 +385,7 @@ The policy writer SHALL likewise answer `GetNode`, `GetChildren`, `GetParents`, 
 - **THEN** the answer is InvalidArgument
 
 ### Requirement: Members hold share on Documents and on channel drives
-The workspace's Members UA SHALL hold `share` with `read`, `write` and `upload` on Documents (the permissions screens list only the operations an area offers, and no area offers `upload`: the drive gates an upload on `write`), and channel members SHALL hold `share` on their channel's drive. The permissions screens SHALL show this: a role listing for Members under Tài liệu includes "Chia sẻ", and the permission areas offered for Documents and Channels include `share` and the channel operations members hold.
+The workspace's Members UA SHALL hold `share` with `read`, `write` and `upload` on Documents (the permissions screens list only the operations an area offers, and no area offers `upload`: the drive gates an upload on `write`), and channel members SHALL hold `share` on their channel's drive. The permissions screens SHALL show this: a role listing for Members under Tài liệu includes "Chia sẻ", and the permission areas offered for Documents include `share`. The Channels area offers only `create_channel` (see "Groups are private").
 
 #### Scenario: Members on Documents
 - **WHEN** an administrator opens the Members role

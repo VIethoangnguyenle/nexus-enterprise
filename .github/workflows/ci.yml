@@ -83,8 +83,17 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U ngac"
           --health-interval 5s --health-timeout 5s --health-retries 10
+      # The auth tests that prove a refresh against the real policy keep their refresh
+      # tokens in Redis, as production does.
+      redis:
+        image: redis:7-alpine
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgres://ngac:ngac_secret@localhost:5432/ngac?sslmode=disable
+      REDIS_ADDR: localhost:6379
       PGPASSWORD: ngac_secret
     steps:
       - uses: actions/checkout@v4

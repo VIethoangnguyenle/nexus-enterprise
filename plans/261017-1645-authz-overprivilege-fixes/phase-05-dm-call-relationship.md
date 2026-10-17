@@ -1,7 +1,7 @@
 ---
 phase: 5
 title: "DM and call gate centralised: DMs, calls, event calls only between workspace-mates (F4)"
-status: pending
+status: completed
 priority: P2
 effort: "4h"
 dependencies: [1, 3]
@@ -79,3 +79,22 @@ Cost per DM write: `MemberWorkspaces` ×2 (2 `GetAncestors`, cached Members ids)
 
 ## Rollback
 Code-only; revert.
+
+## Implementation Status (2026-10-17)
+- [x] Deny tests first (paired allows), seen red for the right reason, then implemented
+      (`dm_relationship_realpolicy_test.go`, `dm_relationship_test.go`).
+- [x] `FindOrCreateDM`: target resolved from the user id (`GetUserByID`), sent node must match, no self-DM, must exist,
+      shared workspace (writer) before any lookup. `store.DMPeerNodes` (new file `store/dm_peers.go`) reads the other member.
+- [x] One choke point `authorizeChannelOp` (`authz.go`), used by `authorizeChannel`/`authorizeMessage`, `SendMessage`
+      (all message types, not only `user`), `UpdateTask` manage/write, `InviteToCall` invitees; votes (read-level) get
+      `requireDMRelationshipIn`. `mayStayInCall` follows through `authorizeChannel`.
+- [x] Event calls: `IsWorkspaceMember` before the read check (`calls_event.go`).
+- [x] Specs: `chat-calls`, `resource-pep-coverage`.
+- [x] Review fixes: a manager's deletion notice is stored directly (no `write` needed); task status/reassignment in a DM
+      needs the relationship; backing out (decline, cancel, delete own message, remove own reaction/vote) is exempt.
+- Decisions: the per-write gate uses the same policy connection as the `write` check beside it. Messaging dials `POLICY_SERVICE_ADDR`
+  (the writer) for both its read and write clients today, so there is no replica lag now; if it moves to `policy-read`, the
+  DM gate should ask the writer.
+  `handler.go`/`server.go` unchanged: the domain enforces `target_user_id` (400). Frontend unchanged: a 403 already reads as words.
+- Not done (declared): DM drive uploads (choice 5).
+- Follow-up (not done): `DMPeerNodes` filters `tenant_users` by `ngac_node_id`; add an index on `tenant_users.ngac_node_id` if it shows up in profiles.

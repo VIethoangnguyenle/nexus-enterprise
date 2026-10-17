@@ -25,6 +25,11 @@ var (
 	ErrAccessDenied  = errors.New("access denied")
 	ErrAlreadyExists = errors.New("already exists")
 	ErrInvalidInput  = errors.New("invalid input")
+	// ErrUnavailable: a service this one depends on (the policy service, say)
+	// could not answer, so the request was refused without being judged. The
+	// refusal is fail-closed; the answer is 503 so a client retries instead of
+	// reading it as a denial.
+	ErrUnavailable = errors.New("temporarily unavailable")
 )
 
 // InternalMessage is the whole of what a client learns about a 500. The cause
@@ -56,6 +61,8 @@ func MapDomainError(err error) *echo.HTTPError {
 		return echo.NewHTTPError(http.StatusConflict, err.Error())
 	case errors.Is(err, ErrInvalidInput):
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	case errors.Is(err, ErrUnavailable):
+		return echo.NewHTTPError(http.StatusServiceUnavailable, err.Error())
 	default:
 		return Internal(err)
 	}

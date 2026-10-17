@@ -25,6 +25,7 @@ import { trackAppHeight } from './lib/app-height'
 import { preventPageZoom } from './lib/no-page-zoom'
 import { registerPwa } from './lib/pwa-register'
 import { startPushAuthSync } from './lib/push'
+import { installTenantMoved } from './lib/tenant-moved'
 
 const router = createRouter({ routeTree, context: { queryClient } })
 
@@ -38,6 +39,12 @@ preventPageZoom()
 
 void registerPwa()
 startPushAuthSync()
+
+// A refresh can move the session to another workspace (the person was removed from
+// the one they had open): the app follows by opening the one they still have.
+installTenantMoved((destination) => {
+  void router.navigate(destination as never)
+})
 
 // The copy of the last session kept on the device: the first screen is built from
 // it while the fresh data loads. Cleared at sign-out, 401 and workspace switch

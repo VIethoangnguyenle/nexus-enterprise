@@ -13,7 +13,7 @@ Shared pieces every later phase needs:
 1. **059 repair migration** — runs before anything else. Dev has 2 workspaces (`test-ws-561b804a5443`,
    `test-ws-c56ed191dc29`) with no ID-keyed `<id>_Members` / `PC_<id>` (their PCs are named `pc-test-ws-*` and have
    no child nodes at all; each has 1 active tenant_users row and 1 channel). Every later membership check and reconcile
-   keys on those names; without the repair, 061/062 would wipe those tenants and 060 would miss them.
+   keys on those names; without the repair, 061/063 would wipe those tenants and 060 would miss them.
 2. A test harness running the **real policy service** (build tag `realpolicy`).
 3. One membership predicate: "U is under `<W>_Members`", with a mandatory Members-UA-id cache.
 4. A cache-invalidation tool calling the existing `InvalidateCache` RPC, used after graph-writing migrations.

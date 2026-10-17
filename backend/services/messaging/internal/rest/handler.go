@@ -153,15 +153,13 @@ func (h *Handler) CreateChannel(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+	// Only the name is read. A client may still send channel_type (older ones
+	// send "workspace"); a group made by a user is always private.
 	var body struct {
-		Name        string `json:"name"`
-		ChannelType string `json:"channel_type"`
+		Name string `json:"name"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
-	}
-	if body.ChannelType == "" {
-		body.ChannelType = "workspace"
 	}
 
 	ch, err := h.svc.CreateChannel(c.Request().Context(), domain.CreateChannelInput{
@@ -169,7 +167,6 @@ func (h *Handler) CreateChannel(c echo.Context) error {
 		WorkspaceID: c.Param("id"),
 		UserID:      claims.UserID,
 		UserNodeID:  claims.NGACNodeID,
-		ChannelType: body.ChannelType,
 	})
 	if err != nil {
 		return httputil.MapDomainError(err)
@@ -356,11 +353,11 @@ func (h *Handler) ListChannelMembers(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	members, err := h.svc.ListMembers(c.Request().Context(), c.Param("chId"), claims.NGACNodeID)
+	roster, err := h.svc.MemberRoster(c.Request().Context(), c.Param("chId"), claims.NGACNodeID)
 	if err != nil {
 		return httputil.MapDomainError(err)
 	}
-	return c.JSON(http.StatusOK, map[string]any{"members": members})
+	return c.JSON(http.StatusOK, map[string]any{"members": roster.Members, "can_remove_members": roster.CanRemove})
 }
 
 // RemoveChannelMember handles DELETE /api/channels/:chId/members/:nodeId.

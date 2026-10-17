@@ -3,7 +3,9 @@ package rest
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
@@ -101,24 +103,44 @@ func issueSessionWith(c echo.Context, a refreshAttacher, id domain.RefreshIdenti
 // Refresh handles POST /api/auth/refresh.
 //
 // It reads the refresh token from the cookie, rotates it, and returns a new
-// access token. The client never sees either refresh token.
+// access token with the tenant it is for. The client never sees either refresh
+// token. The tenant is the one in the old token unless the person no longer
+// belongs to it, in which case it is the one they still do (or empty), and the
+// client follows.
+//
+// Only a token that is actually refused clears the cookie. When the answer could
+// not be had (the policy service, the database or Redis is down) the response is
+// a 503 and the cookie is left as it was: the token has not been spent, and
+// clearing it would sign the person out for an outage.
 func (h *Handler) Refresh(c echo.Context) error {
 	cookie, err := c.Cookie(refreshCookieName)
 	if err != nil || cookie.Value == "" {
 		return apiError(http.StatusUnauthorized, "session_required", "no refresh token")
 	}
 
-	access, next, err := h.svc.RefreshSession(c.Request().Context(), cookie.Value)
-	if err != nil {
+	out, err := h.svc.RefreshSessionFull(c.Request().Context(), cookie.Value)
+	switch {
+	case err == nil:
+	case errors.Is(err, domain.ErrRefreshRejected):
 		// The token is spent, unknown, or its session was revoked — possibly
 		// because this very call tripped reuse detection. Either way the client
 		// must stop presenting it.
 		clearRefreshCookie(c)
 		return apiError(http.StatusUnauthorized, "session_invalid", "refresh rejected")
+	case errors.Is(err, domain.ErrUnavailable):
+		slog.Warn("refresh unavailable", "request_id", c.Response().Header().Get(echo.HeaderXRequestID), "error", err)
+		return apiError(http.StatusServiceUnavailable, "unavailable", "try again in a moment").SetInternal(err)
+	default:
+		return internalFailure(fmt.Errorf("refresh: %w", err))
 	}
 
-	setRefreshCookie(c, next)
-	return c.JSON(http.StatusOK, map[string]string{"access_token": access})
+	setRefreshCookie(c, out.Refresh)
+	body := map[string]any{"access_token": out.Access, "tenant_id": out.TenantID}
+	if out.Moved {
+		// Present only when the person was moved out of a tenant they no longer belong to.
+		body["moved"] = true
+	}
+	return c.JSON(http.StatusOK, body)
 }
 
 // Logout handles POST /api/auth/logout.
