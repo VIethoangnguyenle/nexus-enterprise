@@ -2,6 +2,7 @@ package domain
 
 import (
 	"errors"
+	"fmt"
 
 	"ngac-platform/pkg/httputil"
 )
@@ -21,3 +22,8 @@ var (
 // ErrAlreadyOrganization means the workspace is an organization already. Turning
 // a personal workspace into one is a single step that is not undone.
 var ErrAlreadyOrganization = errors.New("workspace is already an organization")
+
+// ErrHiddenDepartmentHasPeople refuses to delete a department hidden from Danh bạ while people
+// sit directly in it: they would land in a visible parent and be published. It is an invalid
+// input like any other, but carries its own identity so the REST layer can name the reason.
+var ErrHiddenDepartmentHasPeople = fmt.Errorf("%w: Chuyển những người trong phòng này sang phòng khác trước khi xoá", ErrInvalidInput)

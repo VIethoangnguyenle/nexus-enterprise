@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { CircleAlert, Folder, RefreshCw, Shield, Users } from 'lucide-react'
 import type { Department, LimitedKind, RuleSubject } from '../../api/admin'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import {
-  useDepartments, useHideDepartment, useLimitSubject, useManagerDirectoryScope, useRoles, useUnhideDepartment, useUnlimitSubject,
+  useDepartments, useHideDepartment, useLimitSubject, useManagerDirectoryScope, useMemberDirectory, useRoles, useUnhideDepartment, useUnlimitSubject,
 } from '../../hooks/useAdmin'
-import { childrenIndex, deptPath, deptWithDescendants, DEPT_SEPARATOR, roleName } from '../../lib/admin-model'
+import { childrenIndex, deptHeadcount, deptPath, deptWithDescendants, DEPT_SEPARATOR, roleName } from '../../lib/admin-model'
 import { explain, statusOf } from '../../lib/errors'
 import { Button, Heading, toast } from '../primitives'
 import { ConfirmDialog } from '../composites/ConfirmDialog'
@@ -141,6 +141,7 @@ function treeOrder(departments: Department[]): { dept: Department; depth: number
 export function DirectoryScopeScreen() {
   const navigate = useNavigate()
   const { workspaceId: wsId } = useActiveWorkspace()
+  const people = useMemberDirectory(wsId)
   const rules = useManagerDirectoryScope(wsId)
   const departments = useDepartments(wsId)
   const roles = useRoles(wsId)
@@ -149,6 +150,15 @@ export function DirectoryScopeScreen() {
   const limit = useLimitSubject(wsId)
   const unlimit = useUnlimitSubject(wsId)
   const [ask, setAsk] = useState<Ask | null>(null)
+  // A removed rule takes its button with it; focus goes to the list's own button instead of the page.
+  const [refocus, setRefocus] = useState<'hide' | 'limit' | null>(null)
+  const hideAddRef = useRef<HTMLButtonElement>(null)
+  const limitAddRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!refocus) return
+    ;(refocus === 'hide' ? hideAddRef : limitAddRef).current?.focus()
+    setRefocus(null)
+  }, [refocus])
 
   const notReady = rules.data?.ready === false
   useEffect(() => {
@@ -159,8 +169,11 @@ export function DirectoryScopeScreen() {
   const data = rules.data?.ready ? rules.data : undefined
   const hidden = data?.hidden_departments ?? []
   const limited = data?.limited ?? []
-  const loading = rules.isPending
-  const failed = rules.isError && !rules.data
+  // The rules wait for the people list (a person who may not manage is refused there); if that fails
+  // for any other reason the screen says so instead of staying as skeletons.
+  const peopleFailed = people.isError && statusOf(people.error) !== 403
+  const loading = rules.isPending && !peopleFailed
+  const failed = peopleFailed || (rules.isError && !rules.data)
 
   const hiddenIds = useMemo(() => new Set(hidden.map((d) => d.id)), [hidden])
   const limitedKey = useMemo(() => new Set(limited.map((l) => `${l.kind}:${l.id}`)), [limited])
@@ -177,7 +190,7 @@ export function DirectoryScopeScreen() {
           if (hiddenIds.has(p.id)) { why = `Ẩn theo ${p.name}`; break }
         }
       }
-      return { kind: 'department' as const, id: dept.id, name: dept.name, hint: `${dept.member_count} người`, depth, why }
+      return { kind: 'department' as const, id: dept.id, name: dept.name, hint: `${deptHeadcount(all, dept.id)} người`, depth, why }
     }),
   }], [all, byId, hiddenIds])
 
@@ -192,7 +205,7 @@ export function DirectoryScopeScreen() {
     {
       label: 'Phòng ban',
       options: treeOrder(all).map(({ dept, depth }): ScopeOption => ({
-        kind: 'department', id: dept.id, name: dept.name, hint: `${dept.member_count} người`, depth,
+        kind: 'department', id: dept.id, name: dept.name, hint: `${deptHeadcount(all, dept.id)} người`, depth,
         why: limitedKey.has(`department:${dept.id}`) ? 'Đã giới hạn' : undefined,
       })),
     },
@@ -203,13 +216,16 @@ export function DirectoryScopeScreen() {
     const done = () => {
       setAsk(null)
       toast(w.done)
+      if (a.rule === 'unhide') setRefocus('hide')
+      else if (a.rule === 'unlimit') setRefocus('limit')
     }
     const failed = (err: unknown) => {
       setAsk(null)
-      // A refusal has its own sentence; only a lost connection or a server fault is "check the network".
       const status = statusOf(err)
-      const network = status === undefined || status >= 500
-      toast.error(network ? `${w.fail} Kiểm tra mạng rồi thử lại.` : explain(err, w.action), {
+      // The session ended: the sign-in takes over and a toast on top of it is noise.
+      if (status === 401) return
+      // Only a connection that gave no answer is "check the network"; a refusal or a server fault has its own sentence.
+      toast.error(status === undefined ? `${w.fail} Kiểm tra mạng rồi thử lại.` : explain(err, w.action), {
         action: { label: 'Thử lại', onClick: () => run(a) },
       })
     }
@@ -221,12 +237,11 @@ export function DirectoryScopeScreen() {
   }, [hide, unhide, limit, unlimit])
 
   const askHide = (o: ScopeOption) => {
-    const d = byId.get(o.id)
-    setAsk({ rule: 'hide', id: o.id, name: o.name, people: d?.member_count ?? 0, below: Math.max(0, deptWithDescendants(all, o.id).size - 1) })
+    setAsk({ rule: 'hide', id: o.id, name: o.name, people: deptHeadcount(all, o.id), below: Math.max(0, deptWithDescendants(all, o.id).size - 1) })
   }
   const askLimit = (o: ScopeOption) => {
-    const people = o.kind === 'role' ? (roles.data?.custom.find((r) => r.id === o.id)?.member_count ?? 0) : (byId.get(o.id)?.member_count ?? 0)
-    setAsk({ rule: 'limit', kind: o.kind, id: o.id, name: o.name, people })
+    const count = o.kind === 'role' ? (roles.data?.custom.find((r) => r.id === o.id)?.member_count ?? 0) : deptHeadcount(all, o.id)
+    setAsk({ rule: 'limit', kind: o.kind, id: o.id, name: o.name, people: count })
   }
 
   const pending = hide.isPending || unhide.isPending || limit.isPending || unlimit.isPending
@@ -242,7 +257,7 @@ export function DirectoryScopeScreen() {
             </span>
             <b>Không tải được phạm vi hiển thị</b>
             <p className="m-0 text-sm text-ink-muted max-w-80">Kết nối tới máy chủ bị gián đoạn. Kiểm tra mạng rồi thử lại.</p>
-            <Button variant="soft" size="sm" className="max-sm:h-11" onClick={() => void rules.refetch()}>
+            <Button variant="soft" size="sm" className="max-sm:h-11" onClick={() => void (peopleFailed ? people.refetch() : rules.refetch())}>
               <RefreshCw size={16} strokeWidth={1.75} aria-hidden="true" />
               Thử lại
             </Button>
@@ -267,6 +282,7 @@ export function DirectoryScopeScreen() {
                     sheetTitle="Ẩn một phòng"
                     searchLabel="Tìm phòng"
                     listLabel="Phòng ban"
+                    triggerRef={hideAddRef}
                     groups={hideOptions}
                     disabled={loading || !departments.data}
                     onPick={askHide}
@@ -311,6 +327,7 @@ export function DirectoryScopeScreen() {
                     sheetTitle="Thêm vai trò hoặc phòng"
                     searchLabel="Tìm vai trò hoặc phòng"
                     listLabel="Vai trò hoặc phòng"
+                    triggerRef={limitAddRef}
                     groups={limitOptions}
                     footer="Chủ sở hữu và Thành viên không giới hạn được. Quản trị viên luôn thấy tất cả."
                     disabled={loading || !departments.data || !roles.data}

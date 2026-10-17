@@ -600,6 +600,24 @@ func TestWorkspaceCreationRoute_IsGoneAndCreatesNothing(t *testing.T) {
 	_ = rec2
 }
 
+func TestDeleteDepartmentRoute_GivesTheHiddenDepartmentRefusalAReasonAndKeepsOtherInvalidInputPlain(t *testing.T) {
+	r := find("DeleteDepartment")
+	hidden := &fakeDeptService{err: domain.ErrHiddenDepartmentHasPeople}
+	c, rec := newCtx(t, route2(r), true)
+	require.NoError(t, r.handler(NewAdminHandler(hidden))(c))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"reason":"hidden_department_has_people"`)
+
+	// DENY side: any other invalid input stays a plain 400 with no reason to act on.
+	other := &fakeDeptService{err: fmt.Errorf("%w: something else", domain.ErrInvalidInput)}
+	c, rec = newCtx(t, route2(r), true)
+	var herr *echo.HTTPError
+	err := r.handler(NewAdminHandler(other))(c)
+	require.ErrorAs(t, err, &herr)
+	assert.Equal(t, http.StatusBadRequest, herr.Code)
+	assert.NotContains(t, rec.Body.String(), "hidden_department_has_people")
+}
+
 func TestLeaveRoute_TakesTheCallerFromClaimsAndMapsTheLastOwner(t *testing.T) {
 	r := find("LeaveWorkspace")
 	f := &fakeDeptService{}

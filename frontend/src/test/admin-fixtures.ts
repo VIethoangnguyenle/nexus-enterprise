@@ -140,8 +140,10 @@ export interface Mode {
   rulesHang: boolean
   /** A directory-scope write answers this status. */
   ruleWriteStatus: number
+  /** Deleting a department answers this status with no reason (0: the real answer). */
+  deleteDepartmentStatus: number
 }
-const DEFAULT_MODE: Mode = { forbidden: false, membersError: false, empty: false, hang: false, listError: false, inviteStatus: 0, invitationsForbidden: false, saveStatus: 0, noAssets: false, personal: false, areas: null, rulesNotReady: false, rulesError: false, rulesHang: false, ruleWriteStatus: 0 }
+const DEFAULT_MODE: Mode = { forbidden: false, membersError: false, empty: false, hang: false, listError: false, inviteStatus: 0, invitationsForbidden: false, saveStatus: 0, noAssets: false, personal: false, areas: null, rulesNotReady: false, rulesError: false, rulesHang: false, ruleWriteStatus: 0, deleteDepartmentStatus: 0 }
 export const mode: Mode = { ...DEFAULT_MODE }
 
 let departments = structuredClone(DEPARTMENTS0)
@@ -174,8 +176,8 @@ export const resetFixtures = () => {
 export interface ApiCall { method: string; path: string; body?: Record<string, unknown> }
 export const calls: ApiCall[] = []
 
-const fail = (message: string, status: number): Promise<never> =>
-  import('../api/client').then(({ ApiError }) => { throw new ApiError(message, status) })
+const fail = (message: string, status: number, body?: unknown): Promise<never> =>
+  import('../api/client').then(({ ApiError }) => { throw new ApiError(message, status, body) })
 
 const areas = () => mode.areas ?? (mode.noAssets ? AREAS.filter((a) => a.area !== 'assets') : AREAS)
 
@@ -226,9 +228,12 @@ export function adminFixtureApi(path: string, init?: RequestInit): Promise<unkno
     return ok(d)
   }
   if (m && method === 'DELETE') {
+    if (mode.deleteDepartmentStatus) return fail('refused', mode.deleteDepartmentStatus)
     // A hidden department is not deleted around the people placed directly in it.
     if (hiddenIds.includes(m[1]!) && members.some((x) => x.department?.id === m![1])) {
-      return fail('invalid input: Chuyển những người trong phòng này sang phòng khác trước khi xoá', 400)
+      return fail('invalid input: Chuyển những người trong phòng này sang phòng khác trước khi xoá', 400, {
+        message: 'Chuyển những người trong phòng này sang phòng khác trước khi xoá', reason: 'hidden_department_has_people',
+      })
     }
     departments = departments.filter((x) => x.id !== m![1])
     members.forEach((x) => { if (x.department?.id === m![1]) x.department = null })
@@ -357,7 +362,10 @@ function directoryScope(rest: string, method: string, ok: (v: unknown) => Promis
     if (mode.rulesHang) return new Promise(() => {})
     if (mode.rulesError) return fail('boom', 500)
     if (mode.rulesNotReady) return ok({ ready: false, hidden_departments: [], limited: [] } satisfies DirectoryRules)
-    const subject = (d: Department) => ({ id: d.id, name: d.name, parent_id: d.parent_id, member_count: d.member_count })
+    // /departments counts people placed directly; a rule counts everyone beneath the department too.
+    const below = (id: string): number => departments.filter((x) => x.parent_id === id).reduce((n, x) => n + x.member_count + below(x.id), 0)
+    const subtree = (d: Department): number => d.member_count + below(d.id)
+    const subject = (d: Department) => ({ id: d.id, name: d.name, parent_id: d.parent_id, member_count: subtree(d) })
     const rules: DirectoryRules = {
       ready: true,
       hidden_departments: hiddenIds.map((id) => subject(departments.find((d) => d.id === id)!)),
@@ -369,6 +377,8 @@ function directoryScope(rest: string, method: string, ok: (v: unknown) => Promis
     }
     return ok(rules)
   }
+  // -1: the connection drops, no answer at all.
+  if (mode.ruleWriteStatus === -1) return Promise.reject(new TypeError('Failed to fetch'))
   if (mode.ruleWriteStatus) return fail('refused', mode.ruleWriteStatus)
   let m = /^\/admin\/directory-scope\/hidden\/([^/]+)$/.exec(rest)
   if (m && (method === 'PUT' || method === 'DELETE')) {

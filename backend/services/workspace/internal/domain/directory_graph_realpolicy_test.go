@@ -679,6 +679,7 @@ func TestRealPolicy_ADeletedHiddenDepartmentMustBeEmptyOfPeople(t *testing.T) {
 
 	err := w.svc.DeleteDepartment(w.as(w.owner), w.owner.node, w.ws.ID, h.ID)
 	require.ErrorIs(t, err, domain.ErrInvalidInput)
+	require.ErrorIs(t, err, domain.ErrHiddenDepartmentHasPeople, "the screen needs to tell this refusal from any other 400")
 	assert.Contains(t, err.Error(), "Chuyển những người trong phòng này sang phòng khác trước khi xoá")
 	assert.True(t, w.nodeExists(w.dirName(h), ngac.TypeOA), "nothing was deleted")
 	assert.True(t, w.under(pH.node, h.NGACUaID), "the person is where they were")

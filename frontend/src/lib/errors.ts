@@ -14,6 +14,9 @@ export function reasonOf(err: unknown): string | undefined {
 /** Drive refuses to delete a folder that still holds text documents. */
 export const FOLDER_HAS_DOCUMENTS = 'folder_has_documents'
 
+/** A department hidden from Danh bạ is not deleted while people sit directly in it (400). */
+export const HIDDEN_DEPARTMENT_HAS_PEOPLE = 'hidden_department_has_people'
+
 /** The workspace's drive is full: the server answers 413 with this reason. */
 export const QUOTA_EXCEEDED = 'quota_exceeded'
 

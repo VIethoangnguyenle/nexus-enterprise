@@ -167,6 +167,15 @@ export function deptWithDescendants(depts: Department[], id: string): Set<string
   return out
 }
 
+/**
+ * Everyone in a department and in every department beneath it. A department's own `member_count`
+ * is only those placed directly in it; what a rule hides or limits is the whole subtree.
+ */
+export function deptHeadcount(depts: Department[], id: string): number {
+  const inside = deptWithDescendants(depts, id)
+  return depts.reduce((n, d) => (inside.has(d.id) && depts.some((x) => x.id === id) ? n + d.member_count : n), 0)
+}
+
 // --- The permission matrix --------------------------------------------------
 
 /** area → the operations held there, in the order the server lists them. */

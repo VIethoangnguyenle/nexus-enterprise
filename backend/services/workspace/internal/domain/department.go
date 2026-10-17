@@ -403,7 +403,7 @@ func (s *Service) deleteDepartment(ctx context.Context, callerNodeID, wsID, dept
 			return fmt.Errorf("%w: cannot tell who is in the department: %v", ErrUnavailable, err)
 		}
 		if len(userNodes(kids.GetNodes())) > 0 {
-			return fmt.Errorf("%w: Chuyển những người trong phòng này sang phòng khác trước khi xoá", ErrInvalidInput)
+			return ErrHiddenDepartmentHasPeople
 		}
 	}
 	var subs []subDeptMirror

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { adminApi } from '../api/admin'
 import { keys } from './keys'
 import {
-  useDepartments, useDirectoryScopeRules, useHideDepartment, useLimitSubject, useUnhideDepartment, useUnlimitSubject,
+  useDeleteDepartment, useDepartments, useDirectoryScopeRules, useHideDepartment, useLimitSubject, useUnhideDepartment, useUnlimitSubject,
 } from './useAdmin'
 
 vi.mock('../api/admin', async (orig) => {
@@ -15,6 +15,7 @@ vi.mock('../api/admin', async (orig) => {
     adminApi: {
       ...real.adminApi,
       listDepartments: vi.fn(),
+      deleteDepartment: vi.fn(),
       getDirectoryScope: vi.fn(),
       hideDepartment: vi.fn(),
       unhideDepartment: vi.fn(),
@@ -105,5 +106,18 @@ describe('changing the rules', () => {
       JSON.stringify(keys.admin.departments('w1')),
       JSON.stringify(keys.contacts.all('w1')),
     ])))
+  })
+})
+
+describe('deleting a department', () => {
+  it('also refreshes the rules: a hidden or limited department leaves its list with it, and the directory loses it', async () => {
+    const spy = vi.spyOn(client, 'invalidateQueries')
+    api.deleteDepartment.mockResolvedValue(undefined as never)
+    const { result } = renderHook(() => useDeleteDepartment('w1'), { wrapper })
+    result.current.mutate('d')
+    await waitFor(() => expect(api.deleteDepartment).toHaveBeenCalledWith('w1', 'd'))
+    await waitFor(() => expect(spy.mock.calls.map((c) => JSON.stringify((c[0] as { queryKey: unknown }).queryKey))).toEqual(
+      expect.arrayContaining([JSON.stringify(keys.admin.directoryScope('w1')), JSON.stringify(keys.contacts.all('w1'))]),
+    ))
   })
 })

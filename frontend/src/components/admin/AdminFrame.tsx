@@ -71,7 +71,8 @@ export function AdminFrame({ section, subtitle, action, children }: AdminFramePr
       <div
         role="tabpanel"
         id={`admin-panel-${section}`}
-        aria-labelledby={`admin-tab-${section}`}
+        // A person who may not see the Danh bạ tab can still land on its address: name the panel itself then.
+        {...(tabs.some((t) => t.id === section) ? { 'aria-labelledby': `admin-tab-${section}` } : { 'aria-label': 'Quản trị' })}
         className="relative flex-1 flex min-h-0 min-w-0"
       >
         {forbidden ? (

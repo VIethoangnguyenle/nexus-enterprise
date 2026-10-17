@@ -152,11 +152,16 @@ export function useUpdateDepartment(wsId: string) {
 /** Delete a department. */
 export function useDeleteDepartment(wsId: string) {
   const refresh = useRefreshPeople(wsId)
+  // A hidden or limited department leaves its rule list with it, and the directory loses its people.
+  const refreshRules = useRefreshDirectoryScope(wsId)
   return useMutation({
     // The panel words the refusal of a hidden department that still has people in it.
     meta: { action: 'xoá phòng ban', silentError: true },
     mutationFn: (deptId: string) => adminApi.deleteDepartment(wsId, deptId),
-    onSuccess: () => refresh(),
+    onSuccess: () => {
+      refresh()
+      refreshRules()
+    },
   })
 }
 

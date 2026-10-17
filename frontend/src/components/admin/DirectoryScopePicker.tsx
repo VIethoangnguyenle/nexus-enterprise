@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent, type ReactNode, type RefObject } from 'react'
 import { Folder, Users } from 'lucide-react'
 import { usePhone } from '../../hooks/usePhone'
 import { normalize } from '../../lib/people'
@@ -37,6 +37,8 @@ interface DirectoryScopePickerProps {
   footer?: string
   onPick: (option: ScopeOption) => void
   disabled?: boolean
+  /** The caller's handle on the trigger, to put focus back on it when the row it came from is gone. */
+  triggerRef?: RefObject<HTMLButtonElement | null>
 }
 
 const Tile = ({ kind }: { kind: ScopeOption['kind'] }) => (
@@ -56,18 +58,21 @@ const Tile = ({ kind }: { kind: ScopeOption['kind'] }) => (
  * returns focus there too.
  */
 export function DirectoryScopePicker({
-  label, icon, dialogLabel, sheetTitle, searchLabel, listLabel, groups, footer, onPick, disabled,
+  label, icon, dialogLabel, sheetTitle, searchLabel, listLabel, groups, footer, onPick, disabled, triggerRef: outerRef,
 }: DirectoryScopePickerProps) {
   const phone = usePhone()
   const listId = useId()
   const rootRef = useRef<HTMLDivElement>(null)
-  const triggerRef = useRef<HTMLButtonElement>(null)
+  const ownRef = useRef<HTMLButtonElement>(null)
+  const triggerRef = outerRef ?? ownRef
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [active, setActive] = useState(0)
 
   const close = () => {
     setOpen(false)
     setQuery('')
+    setActive(0)
   }
 
   useEffect(() => {
@@ -86,11 +91,34 @@ export function DirectoryScopePicker({
       .filter((g) => g.options.length > 0)
   }, [groups, query])
 
+  // The arrows visit the rows that can be chosen, in the order they are listed.
+  const choosable = useMemo(() => shown.flatMap((g) => g.options).filter((o) => !o.why), [shown])
+  const activeOption = choosable[Math.min(active, choosable.length - 1)]
+  const optionId = (o: ScopeOption) => `${listId}-${o.kind}-${o.id}`
+
   const choose = (o: ScopeOption) => {
     if (o.why) return
     close()
     triggerRef.current?.focus()
     onPick(o)
+  }
+
+  const onSearchKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown' && choosable.length) {
+      e.preventDefault()
+      setActive((i) => (Math.min(i, choosable.length - 1) + 1) % choosable.length)
+    } else if (e.key === 'ArrowUp' && choosable.length) {
+      e.preventDefault()
+      setActive((i) => (Math.min(i, choosable.length - 1) - 1 + choosable.length) % choosable.length)
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (activeOption) choose(activeOption)
+    }
+  }
+
+  // Tabbing out of the open picker closes it, so nothing stays open behind the focus.
+  const onBlur = (e: FocusEvent<HTMLDivElement>) => {
+    if (open && !phone && !rootRef.current?.contains(e.relatedTarget as Node | null)) close()
   }
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -106,12 +134,14 @@ export function DirectoryScopePicker({
     <Pressable
       key={`${o.kind}:${o.id}`}
       role="option"
-      aria-selected="false"
+      id={optionId(o)}
+      aria-selected={o === activeOption}
       aria-disabled={o.why ? true : undefined}
       onClick={() => choose(o)}
       style={{ paddingLeft: 10 + 16 * (o.depth ?? 0) }}
       className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 w-full pr-2.5 py-1.5 rounded-surface text-sm
-        ${phone ? 'min-h-13' : 'min-h-10'} ${o.why ? 'cursor-default text-ink-muted' : 'hover:bg-hover'}`}
+        ${phone ? 'min-h-13' : 'min-h-10'} ${o.why ? 'cursor-default text-ink-muted' : 'hover:bg-hover'}
+        ${o === activeOption ? 'bg-hover' : ''}`}
     >
       <span className="row-span-2"><Tile kind={o.kind} /></span>
       <span data-name className="truncate text-ink">{o.name}</span>
@@ -123,12 +153,24 @@ export function DirectoryScopePicker({
   const body = (
     <>
       <div className="px-0.5 pb-1.5">
-        <SearchField label={searchLabel} tone="sunk" value={query} onChange={(e) => setQuery(e.target.value)} autoFocus />
+        <SearchField
+          label={searchLabel}
+          tone="sunk"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setActive(0)
+          }}
+          onKeyDown={onSearchKey}
+          aria-controls={`${listId}-list`}
+          aria-activedescendant={activeOption ? optionId(activeOption) : undefined}
+          autoFocus
+        />
       </div>
       {shown.length === 0 ? (
         <p className="m-0 px-2.5 py-2 text-sm text-ink-muted">Không có mục nào khớp.</p>
       ) : (
-        <div role="listbox" aria-label={listLabel} className="grid gap-px content-start">
+        <div id={`${listId}-list`} role="listbox" aria-label={listLabel} className="grid gap-px content-start">
           {shown.map((g, i) =>
             g.label ? (
               <div key={g.label} role="group" aria-label={g.label} className="grid gap-px">
@@ -146,7 +188,7 @@ export function DirectoryScopePicker({
   )
 
   return (
-    <div ref={rootRef} className="relative justify-self-start" onKeyDown={onKeyDown}>
+    <div ref={rootRef} className="relative justify-self-start" onKeyDown={onKeyDown} onBlur={onBlur}>
       <Button
         ref={triggerRef}
         variant="soft"

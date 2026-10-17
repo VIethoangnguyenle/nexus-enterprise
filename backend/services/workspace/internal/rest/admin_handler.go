@@ -2,6 +2,7 @@ package rest
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -144,6 +145,10 @@ func (h *AdminHandler) UpdateDepartment(c echo.Context) error {
 	})
 }
 
+// ReasonHiddenDepartmentHasPeople is the `reason` of the 400 that refuses to delete a department
+// hidden from Danh bạ while people sit directly in it; the frontend names it in lib/errors.ts.
+const ReasonHiddenDepartmentHasPeople = "hidden_department_has_people"
+
 // DeleteDepartment handles DELETE /api/workspaces/:id/departments/:deptId.
 func (h *AdminHandler) DeleteDepartment(c echo.Context) error {
 	claims, err := httputil.RequireClaims(c)
@@ -151,6 +156,13 @@ func (h *AdminHandler) DeleteDepartment(c echo.Context) error {
 		return err
 	}
 	if err := h.domain.DeleteDepartment(c.Request().Context(), claims.NGACNodeID, c.Param("id"), c.Param("deptId")); err != nil {
+		if errors.Is(err, domain.ErrHiddenDepartmentHasPeople) {
+			// The screen words this refusal itself; the reason is what it branches on.
+			return c.JSON(http.StatusBadRequest, map[string]string{
+				"message": "Chuyển những người trong phòng này sang phòng khác trước khi xoá",
+				"reason":  ReasonHiddenDepartmentHasPeople,
+			})
+		}
 		return httputil.MapDomainError(err)
 	}
 	return c.NoContent(http.StatusNoContent)
