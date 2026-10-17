@@ -157,17 +157,18 @@ describe('ImageBody pinch and zoom gestures', () => {
     expect(onPrevious).not.toHaveBeenCalled()
   })
 
-  it('applies touch-action: none only when zoomed', () => {
+  it('keeps every touch for its own gestures, and shows the grab cursor only when zoomed', () => {
     const onZoom = vi.fn()
     const { rerender } = render(<ImageBody url="https://s.test/p.png" name="p.png" zoom="fit" onZoom={onZoom} />)
     const stage = screen.getByTestId('image-stage')
 
-    // At fit: no touch-none
-    expect(stage.className).not.toContain('touch-none')
+    // At fit the first pinch must reach the handlers too: the page never zooms on its own.
+    expect(stage.className).toContain('touch-none')
+    expect(stage.className).not.toContain('cursor-grab')
 
-    // Zoomed: touch-none is present
     rerender(<ImageBody url="https://s.test/p.png" name="p.png" zoom="one" onZoom={onZoom} />)
     expect(stage.className).toContain('touch-none')
+    expect(stage.className).toContain('cursor-grab')
   })
 
   it('disables animated transitions when prefers-reduced-motion is active', () => {

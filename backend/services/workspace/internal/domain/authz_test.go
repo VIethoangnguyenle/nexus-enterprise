@@ -79,11 +79,14 @@ type fakePolicyRead struct {
 	assocErr    error
 	checkErr    error
 	ancErr      error
+	mu          sync.Mutex // guards checks: concurrent service calls record into it
 	checks      []*policypb.CheckAccessRequest
 }
 
 func (f *fakePolicyRead) CheckAccess(_ context.Context, req *policypb.CheckAccessRequest, _ ...grpc.CallOption) (*policypb.AccessDecision, error) {
+	f.mu.Lock()
 	f.checks = append(f.checks, req)
+	f.mu.Unlock()
 	if f.checkErr != nil {
 		return nil, f.checkErr
 	}

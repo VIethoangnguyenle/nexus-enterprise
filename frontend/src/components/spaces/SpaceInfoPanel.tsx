@@ -156,7 +156,7 @@ export function SpaceInfoPanel({ channelId, kind, title, memberCount, avatarUrl,
                 <span className="font-semibold text-ink truncate">{title}</span>
                 <span className="text-xs text-ink-muted tnum">{memberCount} thành viên</span>
               </div>
-              <Button variant="soft" size="sm" onClick={() => setEditing(true)}>Đổi tên</Button>
+              {canManage && <Button variant="soft" size="sm" onClick={() => setEditing(true)}>Đổi tên</Button>}
             </div>
           )
         ) : partner ? (

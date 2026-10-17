@@ -45,6 +45,10 @@ const (
 	KindRoleChanged        = "role_changed"
 	KindDepartmentChanged  = "department_changed"
 	KindInvitationAccepted = "invitation_accepted"
+	// KindProfileUpdated: a person changed their display name or picture. It
+	// is announced to every workspace they belong to, naming them by their NGAC
+	// user node id there.
+	KindProfileUpdated = "profile_updated"
 
 	KindRequestChanged = "request_changed"
 	KindAssigned       = "assigned"

@@ -213,6 +213,7 @@ services:
       POLICY_SERVICE_ADDR: policy:50051
       WORKSPACE_SERVICE_ADDR: workspace:50053
       MESSAGING_SERVICE_ADDR: messaging:50055
+      KAFKA_BROKERS: redpanda:9092
       REDIS_URL: redis://redis:6379/1
       JWT_SECRET: ngac-super-secret-key-change-in-production
       GRPC_PORT: "50052"

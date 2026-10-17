@@ -300,6 +300,11 @@ html, body {
   color: var(--color-ink);
   font-family: var(--font-body);
 }
+/* No double-tap zoom on phones: zooming breaks the layout (DESIGN.md §9). Taps
+   also fire at once instead of waiting to see whether a second one follows. */
+html {
+  touch-action: manipulation;
+}
 body {
   font-size: 0.875rem;
   line-height: 1.5;

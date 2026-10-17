@@ -10,6 +10,8 @@ Same shape as a person's profile picture: re-encoded server side, three sizes, a
 Setting or removing a group's picture SHALL require `manage` on the channel's content OA, checked through the policy
 service exactly as a rename is; the check fails closed (policy unreachable means no change). Without it the answer is
 403 and nothing is stored or announced. A direct message has no group picture: the answer is 400 whoever asks.
+The group info panel offers the picture change and the rename only to someone who holds `manage` (the same check the
+server makes); other members see the name and picture without a control.
 
 #### Scenario: A member who may only read and write
 - **WHEN** a member holding `read` and `write` but not `manage` uploads or removes the picture

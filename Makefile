@@ -327,6 +327,7 @@ stop:
 	@# 7. Clean dev-pids (from 'make dev' mode)
 	@if [ -f $(DEV_PIDS) ]; then \
 		while read pid; do \
+			case "$$pid" in ''|*[!0-9]*|0) continue;; esac; \
 			env kill -TERM -- -$$pid 2>/dev/null || kill $$pid 2>/dev/null && echo "  stopped $$pid (dev-pids)" || true; \
 		done < $(DEV_PIDS); \
 		rm -f $(DEV_PIDS); \
@@ -373,7 +374,10 @@ dev-stop:
 	@# is a process-group leader: signalling the group reaches the compiled server
 	@# behind `go run` and the node process behind `npm`, not just the wrapper.
 	@# `env kill` is the external kill: the shell builtin cannot signal a group.
+	@# A line that is not a positive PID is skipped: `kill -- -0` would signal this
+	@# very shell's own group and stop dev-stop (and whatever ran it) midway.
 	@while read pid; do \
+		case "$$pid" in ''|*[!0-9]*|0) continue;; esac; \
 		if env kill -0 -- -$$pid 2>/dev/null; then \
 			env kill -TERM -- -$$pid 2>/dev/null && echo "  stopping process group $$pid"; \
 		else \
@@ -382,10 +386,11 @@ dev-stop:
 	done < $(DEV_PIDS)
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do \
 		LIVE=0; \
-		while read pid; do env kill -0 -- -$$pid 2>/dev/null && LIVE=1; done < $(DEV_PIDS); \
+		while read pid; do case "$$pid" in ''|*[!0-9]*|0) continue;; esac; env kill -0 -- -$$pid 2>/dev/null && LIVE=1; done < $(DEV_PIDS); \
 		[ $$LIVE = 0 ] && break; sleep 0.5; \
 	done
 	@while read pid; do \
+		case "$$pid" in ''|*[!0-9]*|0) continue;; esac; \
 		if env kill -0 -- -$$pid 2>/dev/null; then \
 			env kill -KILL -- -$$pid 2>/dev/null && echo "  force-killed process group $$pid"; \
 		fi; \

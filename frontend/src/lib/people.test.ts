@@ -46,3 +46,16 @@ describe('people search', () => {
     expect(matchesPerson(p, 'zzz')).toBe(false)
   })
 })
+
+describe('buildDirectory without departments (personal workspace)', () => {
+  it('leaves the department out of the role line and out of search', () => {
+    const [p] = buildDirectory([contact({ department: 'Vận hành' })], { departments: false }).list
+    expect(p!.role).toBe('Trưởng phòng')
+    expect(matchesPerson(p!, 'vận hành')).toBe(false)
+  })
+
+  it('keeps it by default', () => {
+    const [p] = buildDirectory([contact({ department: 'Vận hành' })]).list
+    expect(p!.role).toBe('Trưởng phòng · Vận hành')
+  })
+})
