@@ -43,7 +43,7 @@ const LIMITS: Record<SuggestionVariant, readonly [number, number]> = { popover: 
 
 /** A shown row, with a key unique across groups so a marked row is found again after the list changes. */
 export type ShownItem = SuggestionItem & { uid: string }
-export type ShownGroup = Omit<SuggestionGroup, 'items'> & { uid: string; items: ShownItem[] }
+export type ShownGroup = Omit<SuggestionGroup, 'items'> & { uid: string; domId: string; items: ShownItem[] }
 
 interface Options {
   /** What the box holds now: suggestions only show while it is empty, unless `typing` is set. */
@@ -104,17 +104,27 @@ export function useSuggestionPanel({
 
   const shown = useMemo<ShownGroup[]>(() => {
     const [recentMax, otherMax] = LIMITS[variant]
+    // A group is known by its label (and which of the same label it is), not by its place: one appearing above it,
+    // as Người does while words are typed, must not make it a different group (rebuilt, or folded away and redrawn).
+    const seen = new Map<string, number>()
     return groups
-      .map((g, gi) => ({
-        ...g,
-        uid: `${gi}`,
-        items: g.items.slice(0, g.recent ? recentMax : otherMax).map((it) => ({
-          ...it,
-          // A kept search is named for what choosing it does.
-          label: it.label ?? (g.recent ? `Tìm lại ${it.title}` : undefined),
-          uid: `${gi}:${it.key}`,
-        })),
-      }))
+      .map((g) => {
+        const nth = seen.get(g.label) ?? 0
+        seen.set(g.label, nth + 1)
+        const uid = `${g.label}#${nth}`
+        return {
+          ...g,
+          uid,
+          /** For `id`s of the DOM (aria-labelledby): no spaces, unlike `uid`. */
+          domId: `g_${uid.replace(/[^\p{L}\p{N}]/gu, '_')}`,
+          items: g.items.slice(0, g.recent ? recentMax : otherMax).map((it) => ({
+            ...it,
+            // A kept search is named for what choosing it does.
+            label: it.label ?? (g.recent ? `Tìm lại ${it.title}` : undefined),
+            uid: `${uid}:${it.key}`,
+          })),
+        }
+      })
       .filter((g) => g.items.length > 0 || g.loading)
   }, [groups, variant])
   const items = useMemo(() => shown.flatMap((g) => g.items), [shown])

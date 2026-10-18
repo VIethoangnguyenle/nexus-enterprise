@@ -37,14 +37,16 @@ function rowMotion(m: MotionPresets, index: number, typing: boolean, phone: bool
     ? { opacity: 0, transition: { duration: fade } }
     : { opacity: 0, height: 0, overflow: 'hidden', transition: { duration: DURATION.quick, ease: EASE.in } }
   if (m.reduced || typing) {
-    return { initial: { opacity: 0 }, animate: { opacity: 1, transition: { duration: fade, ease: EASE.out } }, exit }
+    return { initial: { opacity: 0 }, animate: { opacity: 1, height: 'auto', transition: { duration: fade, ease: EASE.out } }, exit }
   }
   return {
     // A phone's whole panel slides; its rows only fade, one after another.
     initial: phone ? { opacity: 0 } : { opacity: 0, y: -4 },
+    // `height: auto` brings a row back to its full height when it returns while folding away (it would otherwise stay as folded as it got).
     animate: {
       opacity: 1,
       y: 0,
+      height: 'auto',
       transition: { duration: DURATION.quick, ease: EASE.out, delay: ROW_DELAY + Math.min(index, STAGGER_ROWS) * ROW_STEP },
     },
     exit,
@@ -116,7 +118,7 @@ function Groups({ panel, m, phone = false }: { panel: SuggestionPanel; m: Motion
   return (
     <AnimatePresence initial>
       {panel.groups.map((g) => (
-        <GroupShell key={g.uid} m={m} labelId={`${panel.id}-g${g.uid}`} busy={g.loading}>
+        <GroupShell key={g.uid} m={m} labelId={`${panel.id}-${g.domId}`} busy={g.loading}>
           <GroupLabel group={g} panel={panel} phone={phone} />
           {g.items.length === 0 && g.loading ? (
             [0, 1].map((n) => <SkeletonRow key={n} phone={phone} />)
@@ -149,6 +151,8 @@ function GroupShell({ m, labelId, busy, children }: { m: MotionPresets; labelId:
       aria-labelledby={labelId}
       aria-busy={busy || undefined}
       aria-hidden={!present || undefined}
+      // A group that comes back while folding away returns to its full height, not the one it had got to.
+      animate={{ opacity: 1, height: 'auto' }}
       exit={m.reduced
         ? { opacity: 0, transition: { duration: DURATION.reducedFade } }
         : { opacity: 0, height: 0, overflow: 'hidden', transition: { duration: DURATION.quick, ease: EASE.in } }}
@@ -177,7 +181,7 @@ function RowShell({ m, index, typing, phone, children }: {
 }
 
 function GroupLabel({ group, panel, phone }: { group: ShownGroup; panel: SuggestionPanel; phone: boolean }) {
-  const labelId = `${panel.id}-g${group.uid}`
+  const labelId = `${panel.id}-${group.domId}`
   const clearable = !!group.onClearAll && group.items.length >= 2
   if (group.hideLabel && !clearable) return <span id={labelId} className="sr-only">{group.label}</span>
   return (

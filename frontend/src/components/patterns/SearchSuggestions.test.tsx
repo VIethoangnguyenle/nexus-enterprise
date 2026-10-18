@@ -528,3 +528,32 @@ describe('with nothing to suggest on a desktop', () => {
     expect(box()).not.toHaveAttribute('aria-controls')
   })
 })
+
+describe('a row that leaves and comes back', () => {
+  it('is not left folded: typing past a suggestion and back to it must not shrink it under the row below', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<Harness groups={[files(['A.xlsx', 'B.pdf'])]} />)
+    await user.click(box())
+    rerender(<Harness groups={[files(['A.xlsx'])]} />)
+    rerender(<Harness groups={[files(['A.xlsx', 'B.pdf'])]} />)
+    await new Promise((r) => setTimeout(r, 400))
+    for (const row of screen.getAllByRole('option')) {
+      const shell = row.parentElement!
+      expect(shell.style.height === '' || shell.style.height === 'auto', `height ${shell.style.height}`).toBe(true)
+      expect(shell.style.overflow).not.toBe('hidden')
+    }
+  })
+})
+
+describe('groups that come and go around one', () => {
+  it('leave the others in place: a group appearing above does not rebuild the one below', async () => {
+    const user = userEvent.setup()
+    const { rerender } = render(<Harness groups={[files(['A.xlsx'], vi.fn(), 'Tin nhắn')]} />)
+    await user.click(box())
+    const before = screen.getByRole('group', { name: 'Tin nhắn' })
+    rerender(<Harness groups={[files(['P.pdf'], vi.fn(), 'Người'), files(['A.xlsx'], vi.fn(), 'Tin nhắn')]} />)
+    expect(screen.getByRole('group', { name: 'Tin nhắn' })).toBe(before)
+    rerender(<Harness groups={[files(['A.xlsx'], vi.fn(), 'Tin nhắn')]} />)
+    expect(screen.getByRole('group', { name: 'Tin nhắn' })).toBe(before)
+  })
+})
