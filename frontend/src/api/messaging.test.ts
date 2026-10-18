@@ -40,6 +40,23 @@ describe('messagingApi', () => {
     expect(mockFetch.mock.calls[1]?.[0]).toBe('/api/messages/search?q=k%E1%BA%BF+ho%E1%BA%A1ch')
   })
 
+  it('searchAll sends each filter under the one name the server reads it by', async () => {
+    await messagingApi.searchAll({
+      q: 'đối soát', from: 'u-1', channelId: 'c-9', after: '2026-10-01', beforeDate: '2026-10-15',
+      hasFile: true, hasLink: true, mentionsMe: true,
+    })
+    const qs = new URLSearchParams((mockFetch.mock.calls[0]?.[0] as string).split('?')[1] ?? '')
+    expect(Object.fromEntries(qs)).toEqual({
+      q: 'đối soát', from: 'u-1', channel_id: 'c-9', after: '2026-10-01', before_date: '2026-10-15',
+      has_file: 'true', has_link: 'true', mentions_me: 'true', tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    })
+  })
+
+  it('searchAll leaves a filter out when it is off, and names no zone without a date', async () => {
+    await messagingApi.searchAll({ q: 'kế hoạch', hasFile: false, hasLink: false, mentionsMe: false })
+    expect(mockFetch.mock.calls[0]?.[0]).toBe('/api/messages/search?q=k%E1%BA%BF+ho%E1%BA%A1ch')
+  })
+
   it('listChannels builds correct URL', async () => {
     await messagingApi.listChannels('ws-123')
     expect(mockFetch).toHaveBeenCalledWith(

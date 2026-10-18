@@ -72,7 +72,7 @@ export function ChatSearchScreen({ conversations, people, onClose }: {
   const typed = query.trim()
   const showClient = filter === 'all' || filter === 'people' || filter === 'groups'
   const showMessages = filter === 'all' || filter === 'messages' || filter === 'files'
-  const search = useMessageSearch(query, filter === 'files', showMessages)
+  const search = useMessageSearch(query, { hasFile: filter === 'files' }, { enabled: showMessages })
 
   const byId = useMemo(() => new Map(conversations.map((c) => [c.id, c])), [conversations])
   const groups = useMemo(

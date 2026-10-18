@@ -205,6 +205,51 @@ export interface SendMessageInput {
 
 export interface EditMessageInput { content: string; content_format: string; mentions?: string[] }
 
+/** What Chat's results can be narrowed by; the names the server reads them under are in `messageSearchParams`. */
+export interface MessageSearchFilters {
+  /** Sender's user id. */
+  from?: string
+  /** Conversation id. */
+  channelId?: string
+  /** First day, `YYYY-MM-DD` in the reader's zone. */
+  after?: string
+  /** Last day, inclusive, `YYYY-MM-DD` in the reader's zone. */
+  beforeDate?: string
+  hasFile?: boolean
+  hasLink?: boolean
+  mentionsMe?: boolean
+}
+
+export interface MessageSearchQuery extends MessageSearchFilters {
+  q: string
+  /** Paging cursor: send time (RFC 3339) and id of the last message of the previous page. */
+  before?: string
+  beforeId?: string
+  limit?: number
+}
+
+/**
+ * The one place that maps a search to `GET /api/messages/search`. A filter that is off sends nothing. The day
+ * filters mean days in the reader's zone, so they travel with that zone's IANA name as `tz`. `from`,
+ * `channel_id`, `after`, `before_date`, `has_link`, `mentions_me` and `tz` are read by the server only once it
+ * supports them; until then it ignores them and answers without those narrowings.
+ */
+export function messageSearchParams(q: MessageSearchQuery): URLSearchParams {
+  const qs = new URLSearchParams({ q: q.q })
+  if (q.from) qs.set('from', q.from)
+  if (q.channelId) qs.set('channel_id', q.channelId)
+  if (q.after) qs.set('after', q.after)
+  if (q.beforeDate) qs.set('before_date', q.beforeDate)
+  if (q.after || q.beforeDate) qs.set('tz', Intl.DateTimeFormat().resolvedOptions().timeZone)
+  if (q.hasFile) qs.set('has_file', 'true')
+  if (q.hasLink) qs.set('has_link', 'true')
+  if (q.mentionsMe) qs.set('mentions_me', 'true')
+  if (q.before) qs.set('before', q.before)
+  if (q.beforeId) qs.set('before_id', q.beforeId)
+  if (q.limit) qs.set('limit', String(q.limit))
+  return qs
+}
+
 export const messagingApi = {
   // Channels
   listChannels: (wsId: string) => apiFetch<{ channels: Channel[] }>(`/workspaces/${wsId}/channels`),
@@ -332,16 +377,10 @@ export const messagingApi = {
    * signed-in user reads; newest first, paged like `followedThreads`. A `q` shorter than two
    * characters answers an empty page. A reply names its thread in `parent_message_id`.
    */
-  searchAll: (q: { q: string; hasFile?: boolean; before?: string; beforeId?: string; limit?: number }) => {
-    const qs = new URLSearchParams({ q: q.q })
-    if (q.hasFile) qs.set('has_file', 'true')
-    if (q.before) qs.set('before', q.before)
-    if (q.beforeId) qs.set('before_id', q.beforeId)
-    if (q.limit) qs.set('limit', String(q.limit))
-    return apiFetch<Partial<ThreadPage>>(`/messages/search?${qs}`).then(
+  searchAll: (q: MessageSearchQuery) =>
+    apiFetch<Partial<ThreadPage>>(`/messages/search?${messageSearchParams(q)}`).then(
       (page): ThreadPage => ({ messages: page.messages ?? [], has_more: !!page.has_more }),
-    )
-  },
+    ),
   searchMessages: (channelId: string, query: string, limit = 20) =>
     apiFetch<{ messages: Message[] }>(`/channels/${channelId}/search?q=${encodeURIComponent(query)}&limit=${limit}`),
 
