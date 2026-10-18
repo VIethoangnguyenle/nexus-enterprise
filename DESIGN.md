@@ -189,6 +189,10 @@ mã backend, email và tài liệu kỹ thuật không đổi.
     `--color-hover`. Số đếm: pill 16 ở góc trên phải icon, viền 2px `--color-sunk`, `99+`, ẩn khi 0; chữ ẩn
     ", N chưa đọc" trong link. Đáy: Thông báo · Quản trị · Cài đặt, rồi avatar 32 (presence) mở menu tài
     khoản: tên, vai trò, trạng thái, Cài đặt tài khoản, Đăng xuất.
+  - *Phiên bản (2026-10-18):* để người dùng biết máy mình đã nhận bản mới sau một lần triển khai. Dạng
+    `2026.10.18 · 6368e8e` (ngày build giờ Việt Nam · 7 ký tự commit), chạy máy dev ghi `dev`. Một dòng "Phiên bản …"
+    `text-xs` `--color-ink-muted`, chọn chép được, ở cuối màn Cài đặt (mọi tab), cuối menu tài khoản (máy tính, sau
+    divider) và cuối sheet tài khoản (điện thoại, dưới Đăng xuất). Thanh "Có bản mới" không đổi.
   - *Đổi workspace:* bấm ô chữ cái (hay tên khi mở rộng) mở cùng một menu; đầu menu ghi đầy đủ tên workspace
     đang mở (xuống dòng, không cắt) + dòng phụ ("Workspace cá nhân" hoặc tên tổ chức) · vai trò; danh sách
     "Chuyển sang" cũng xuống dòng thay vì cắt. Workspace cá nhân không có Tài sản, Phê duyệt, Quản trị; vẫn có Lịch (chỉ lịch cá nhân).

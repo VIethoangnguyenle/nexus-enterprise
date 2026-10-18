@@ -12,6 +12,7 @@ import { useOpenInvitationCount } from '../../hooks/useInvitations'
 import { logoutSession } from '../../api/client'
 import { workspaceRowDetail } from '../../lib/auth-flow'
 import { workspaceDisplayName } from '../../lib/workspace'
+import { appVersionLabel } from '../../lib/app-version'
 import { formatCount } from '../../lib/format'
 import { DURATION, useMotionPresets } from '../../lib/motion'
 import { UNKNOWN_PERSON } from '../../lib/people'
@@ -388,6 +389,8 @@ export function AppSidebar({ workspaceName, unreadCounts = {} }: AppSidebarProps
               <MenuItem icon={<LogOut size={16} strokeWidth={1.75} aria-hidden="true" />} onClick={() => void logoutSession()}>
                 Đăng xuất
               </MenuItem>
+              <MenuSeparator />
+              <p className="px-2.5 py-1.5 text-xs text-ink-muted select-text">{appVersionLabel()}</p>
             </Popover>
           </>
         ) : (

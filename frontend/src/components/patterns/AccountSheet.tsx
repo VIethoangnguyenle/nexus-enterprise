@@ -2,6 +2,7 @@ import { Bell, LogOut, Settings, User } from 'lucide-react'
 import { logoutSession } from '../../api/client'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { usePeople } from '../../hooks/usePeople'
+import { appVersionLabel } from '../../lib/app-version'
 import { UNKNOWN_PERSON } from '../../lib/people'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
@@ -63,6 +64,7 @@ export function AccountSheet({ onClose }: { onClose: () => void }) {
       >
         Đăng xuất
       </PhoneSheetRow>
+      <p className="px-3.5 pt-2 pb-1 text-xs text-ink-muted select-text">{appVersionLabel()}</p>
     </NavSheet>
   )
 }

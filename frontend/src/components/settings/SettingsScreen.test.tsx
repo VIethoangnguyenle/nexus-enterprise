@@ -156,6 +156,7 @@ beforeEach(() => {
   api.mockImplementation(fixtureApi)
 })
 afterEach(() => {
+  vi.unstubAllEnvs()
   cleanup() // unmount first, so nothing mounted refetches into the cleared cache
   vi.restoreAllMocks()
   resetClient()
@@ -173,6 +174,12 @@ describe('SettingsScreen: tabs', () => {
     expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Hồ sơ', 'Workspace', 'Giao diện', 'Thông báo'])
     expect(screen.getByRole('tab', { name: 'Hồ sơ' })).toHaveAttribute('aria-selected', 'true')
     expect(await screen.findByRole('form', { name: 'Hồ sơ' })).toBeInTheDocument()
+  })
+
+  it('ends with the build the person is running, on every tab', async () => {
+    vi.stubEnv('VITE_APP_VERSION', '2026.10.18 · 6368e8e')
+    await renderSettings()
+    expect(await screen.findByText('Phiên bản 2026.10.18 · 6368e8e')).toBeInTheDocument()
   })
 
   it('keeps the tab in the address, so a link or reload lands on it', async () => {
