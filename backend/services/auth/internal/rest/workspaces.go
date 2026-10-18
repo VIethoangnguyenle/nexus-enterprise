@@ -27,6 +27,7 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 		DisplayName *string `json:"display_name"`
 		Title       *string `json:"title"`
 		Location    *string `json:"location"`
+		Language    *string `json:"language"`
 		// The two fields below are read only to be refused by name. A picture
 		// is uploaded to PUT /api/me/avatar, which makes its address itself.
 		Department *string `json:"department"`
@@ -52,6 +53,7 @@ func (h *Handler) UpdateProfile(c echo.Context) error {
 		DisplayName: body.DisplayName,
 		Title:       body.Title,
 		Location:    body.Location,
+		Language:    body.Language,
 	}); err != nil {
 		return fail(c, err)
 	}

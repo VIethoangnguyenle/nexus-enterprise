@@ -46,9 +46,11 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// Channels
 	api.POST("/workspaces/:id/channels", h.CreateChannel)
 	api.GET("/workspaces/:id/channels", h.ListChannels)
+	api.GET("/workspaces/:id/channels/in-common", h.GroupsInCommon)
 	api.GET("/channels/:chId", h.GetChannel)
 	api.PATCH("/channels/:chId", h.UpdateChannel)
 	h.registerAvatarRoutes(e, api)
+	h.registerGroupManagementRoutes(api)
 
 	// Messages
 	api.POST("/channels/:chId/messages", h.SendMessage)
@@ -77,6 +79,10 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// The caller's push preferences (the rest of /api/me is the auth service's)
 	api.GET("/me/push-preferences", h.GetPushPreferences)
 	api.PUT("/me/push-preferences", h.PutPushPreferences)
+
+	// The caller's Chat options in a workspace (own row; the caller must be in it)
+	api.GET("/workspaces/:id/chat-settings", h.GetChatSettings)
+	api.PUT("/workspaces/:id/chat-settings", h.PutChatSettings)
 
 	// The navigator's whole state in one answer, revalidated by ETag
 	api.GET("/workspaces/:id/chat-state", h.ChatState, h.chatStateETag())

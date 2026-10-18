@@ -81,6 +81,9 @@ Verified against the codebase on 2026-07-31.
 | `chat-shortcuts` | Matches code (added 2026-10-11; screens follow) |
 | `chat-cards` | Matches code for polls and tasks (added 2026-10-11; cards follow) |
 | `chat-calls` | Matches code (added 2026-10-13; device, TURN and VPS load checks pending under its Status) |
+| `chat-group-management` | Specified ahead of code (added 2026-10-19; plan `261018-1742-mobile-ux-overhaul` phase 07) |
+| `chat-mention-all` | Specified ahead of code (added 2026-10-19; phase 07) |
+| `conversation-settings` | Specified ahead of code (added 2026-10-19; phase 06) |
 | `calendar` | Specified ahead of code (added 2026-10-17; NGAC model and test vectors exist) |
 | `web-push` | Matches code for sending (added 2026-10-11; device sign-up follows) |
 
@@ -89,6 +92,8 @@ Verified against the codebase on 2026-07-31.
 | Capability | State |
 |---|---|
 | `pwa-install` | Matches code except the gaps under its Status (added 2026-10-11) |
+| `mobile-shell` | Specified ahead of code (added 2026-10-19; phases 02–03) |
+| `mobile-gestures` | Specified ahead of code (added 2026-10-19; phases 09–10) |
 
 **Approval**
 
@@ -109,6 +114,8 @@ Verified against the codebase on 2026-07-31.
 | `contacts-documents-settings-screens` | Matches code (added 2026-10-10; known gaps under its Status) |
 | `search-suggestions` | Matches code (added 2026-10-17; suggestions of the search boxes of Chat, Danh bạ, Tài liệu, Tài sản, Phê duyệt; known limits listed) |
 | `contacts-visibility` | Matches code for the policy model and the workspace service (added 2026-10-17; scope, filtered reads, rule endpoints and `GetDirectoryScope` built; auth filtering and screens follow) |
+| `user-settings` | Specified ahead of code (added 2026-10-19; phases 04–05) |
+| `unified-search` | Specified ahead of code (added 2026-10-19; phase 08) |
 
 **Assets**
 

@@ -54,6 +54,10 @@ func (s *Service) EditMessage(ctx context.Context, messageID, userID, userNodeID
 	if f.SenderID != userID {
 		return nil, fmt.Errorf("%w: only its sender edits a message", ErrAccessDenied)
 	}
+	// An edit that adds @Tất cả to a restricted group is refused.
+	if err := s.checkEditMentionAllRestriction(ctx, ch, userNodeID, f.Mentions, mentions); err != nil {
+		return nil, err
+	}
 	if f.LinkedEntityType != "" && f.LinkedEntityType != "drive_file" {
 		return nil, fmt.Errorf("%w: a card is not edited as text", ErrInvalidInput)
 	}
@@ -122,13 +126,34 @@ func (s *Service) DeleteMessage(ctx context.Context, messageID, userID, userNode
 		return nil, err
 	}
 	// Deleting one's own message is withdrawing it; deleting another's is moderation.
-	authorize, op := s.authorizeChannel, ngac.OpManage
 	if f.SenderID == userID {
-		authorize, op = s.authorizeBackOut, ngac.OpWrite
+		ch, err := s.authorizeBackOut(ctx, f.ChannelID, userNodeID, ngac.OpWrite)
+		if err != nil {
+			return nil, err
+		}
+		d, err := s.store.SoftDeleteMessage(ctx, messageID, userID)
+		if err != nil {
+			if errors.Is(err, store.ErrMessageGone) {
+				return nil, fmt.Errorf("%w: message not found", ErrNotFound)
+			}
+			return nil, err
+		}
+		s.bumpChannel(ctx, ch)
+		return &DeleteOutcome{Event: &pb.MessageDeletedEvent{
+			MessageId: messageID, ChannelId: d.ChannelID, ParentMessageId: d.ParentMessageID,
+			KeepPlaceholder: d.KeepPlaceholder, ReplyCount: d.ParentReplyCount,
+		}}, nil
 	}
-	ch, err := authorize(ctx, f.ChannelID, userNodeID, op)
+	// Moderating another's message: workspace owner (manage) or group owner/manager (read).
+	ch, err := s.authorizeChannel(ctx, f.ChannelID, userNodeID, ngac.OpManage)
 	if err != nil {
-		return nil, err
+		ch, err = s.authorizeChannel(ctx, f.ChannelID, userNodeID, ngac.OpRead)
+		if err != nil {
+			return nil, err
+		}
+		if !s.isGroupOwnerOrManager(ctx, ch, userNodeID) {
+			return nil, fmt.Errorf("%w: only the sender, group owner/manager or workspace administrator may delete a message", ErrAccessDenied)
+		}
 	}
 	d, err := s.store.SoftDeleteMessage(ctx, messageID, userID)
 	if err != nil {

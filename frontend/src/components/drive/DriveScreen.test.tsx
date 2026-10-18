@@ -5,6 +5,7 @@ import {
   RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter,
 } from '@tanstack/react-router'
 import { renderWithClient, resetClient } from '../../test/render'
+import { pointer, swipe as swipeGesture } from '../../test/gesture-events'
 import { D, ITEMS, U, UUID_RE, WS_ID, calls, driveFixtureApi, resetFixtures } from '../../test/drive-fixtures'
 import { validateDriveSearch } from '../../lib/drive-search'
 import { ApiError, apiFetch } from '../../api/client'
@@ -16,6 +17,9 @@ import { useDriveStore } from '../../stores/drive.store'
 import { queryClient } from '../../lib/query-client'
 import { keys } from '../../hooks/keys'
 import { DriveScreen } from './DriveScreen'
+import { CreateActionFab } from '../patterns/ModuleBar'
+import { clearCreateActions } from '../../hooks/useModuleCreateAction'
+import { resetUploadQueueForTests } from '../../stores/upload-queue.store'
 
 vi.mock('../../api/client', async (orig) => {
   const { driveFixtureApi } = await import('../../test/drive-fixtures')
@@ -72,6 +76,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   resetClient()
   useToastStore.getState().clear()
+  clearCreateActions()
 })
 
 /** No identifier in anything a person reads: text, names, tooltips, placeholders. */
@@ -1019,82 +1024,6 @@ describe('DriveScreen: tablet', () => {
   })
 })
 
-describe('DriveScreen: phone', () => {
-  beforeEach(() => {
-    mockViewport('phone')
-    useFileViewStore.setState({ modes: { drive: 'grid', 'space-files': 'grid' } })
-    vi.stubGlobal('fetch', vi.fn(() => new Promise(() => {})))
-  })
-
-  const cardIn = async (name: string) => within(await screen.findByRole('group', { name: 'Tệp' })).findByRole('button', { name })
-
-  it('opens the viewer straight from a tap on a card', async () => {
-    const user = userEvent.setup()
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await cardIn('doi-soat-08-10.xlsx'))
-    expect(await screen.findByRole('dialog', { name: /doi-soat-08-10\.xlsx/i })).toBeInTheDocument()
-    expect(screen.queryByRole('complementary', { name: 'Chi tiết tệp' })).toBeNull()
-  })
-
-  it('opens a bottom sheet from the card menu with the file facts and the actions', async () => {
-    const user = userEvent.setup()
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(within(await cardIn('doi-soat-08-10.xlsx')).getByRole('button', { name: 'Tùy chọn cho doi-soat-08-10.xlsx' }))
-
-    const sheet = await screen.findByRole('dialog', { name: 'Thao tác với doi-soat-08-10.xlsx' })
-    expect(within(sheet).getByText(/Bảng tính · 412 KB · Trần Minh Đức/)).toBeInTheDocument()
-    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual([
-      'Mở', 'Tải xuống', 'Chia sẻ', 'Chuyển tới thư mục…', 'Đổi tên', 'Xoá',
-    ])
-    noIds()
-
-    await user.click(within(sheet).getByRole('button', { name: 'Xoá' }))
-    expect(await screen.findByRole('dialog', { name: 'Xoá tệp' })).toHaveTextContent('doi-soat-08-10.xlsx')
-  })
-
-  it('leaves out of the sheet what I may not do', async () => {
-    const user = userEvent.setup()
-    await renderDrive()
-    await user.click(within(await cardIn('huong-dan.pdf')).getByRole('button', { name: 'Tùy chọn cho huong-dan.pdf' }))
-    const sheet = await screen.findByRole('dialog', { name: 'Thao tác với huong-dan.pdf' })
-    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual(['Mở', 'Tải xuống'])
-  })
-
-  it('moves a file from the sheet', async () => {
-    const user = userEvent.setup()
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(within(await cardIn('bien-ban-chenh-lech.docx')).getByRole('button', { name: 'Tùy chọn cho bien-ban-chenh-lech.docx' }))
-    await user.click(within(await screen.findByRole('dialog', { name: 'Thao tác với bien-ban-chenh-lech.docx' })).getByRole('button', { name: 'Chuyển tới thư mục…' }))
-    expect(await screen.findByRole('dialog', { name: 'Di chuyển tới' })).toBeInTheDocument()
-  })
-
-  it('floats an add button that offers upload, camera and a new folder', async () => {
-    const user = userEvent.setup()
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await screen.findByRole('group', { name: 'Tệp' })
-    // The toolbar's upload button gives way to it.
-    expect(screen.queryByRole('button', { name: 'Tải lên' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Thêm mới' }))
-
-    const sheet = await screen.findByRole('dialog', { name: 'Thêm mới' })
-    expect(within(sheet).getAllByRole('button').map((b) => b.textContent)).toEqual(['Tải tệp lên', 'Chụp ảnh', 'Thư mục mới'])
-    await user.click(within(sheet).getByRole('button', { name: 'Thư mục mới' }))
-    expect(await screen.findByRole('dialog', { name: 'Thư mục mới' })).toBeInTheDocument()
-  })
-
-  it('has no add button in the shared view, where nothing can be added', async () => {
-    await renderDrive('/drive?view=shared')
-    await cardIn('ke-hoach-quy-4.xlsx')
-    expect(screen.queryByRole('button', { name: 'Thêm mới' })).toBeNull()
-  })
-
-  it('scrolls the type chips sideways instead of wrapping them', async () => {
-    await renderDrive()
-    await screen.findByRole('group', { name: 'Tệp' })
-    expect(screen.getByRole('radiogroup', { name: 'Loại tệp' })).toHaveClass('overflow-x-auto')
-  })
-})
-
 describe('DriveScreen: suggestions in the empty search box', () => {
   const box = () => screen.getByLabelText('Tìm tệp hoặc thư mục')
   beforeEach(() => localStorage.clear())
@@ -1158,23 +1087,412 @@ describe('DriveScreen: suggestions in the empty search box', () => {
     await user.click(await screen.findByRole('option', { name: 'Tìm lại bien' }))
     expect(box()).toHaveValue('bien')
   })
-
-  it('on a phone, covers the files until Quay lại', async () => {
-    const user = userEvent.setup()
-    mockViewport('phone')
-    localStorage.setItem(`ngac-recent-searches:drive:${U.hoa.id}`, JSON.stringify(['sao kê']))
-    await renderDrive(`/drive?folder=${D.doisoat}`)
-    await user.click(await screen.findByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' }))
-    expect(await screen.findByRole('button', { name: 'Tìm lại sao kê' })).toBeInTheDocument()
-    expect(screen.getByTestId('drive-dropzone')).toHaveAttribute('aria-hidden', 'true')
-    await user.click(screen.getByRole('button', { name: 'Quay lại danh sách' }))
-    expect(screen.queryByRole('button', { name: 'Tìm lại sao kê' })).toBeNull()
-  })
 })
 
 describe('fixtures', () => {
   it('cover a folder whose owner is a node id and a file whose owner is a user id', () => {
     expect(ITEMS[D.doisoat]!.owner_id).toBe(U.lan.node)
     expect(ITEMS[D.xlsx]!.owner_id).toBe(U.duc.id)
+  })
+})
+
+describe('DriveScreen: phone (390px, mockup §10)', () => {
+  const starred = new Set<string>()
+  let personal = false
+  const at = '2026-10-09T09:12:00Z'
+
+  /** The drive fixtures, plus what only the phone asks for: stars, recent files, Truy cập nhanh, copies, new texts. */
+  function phoneApi(path: string, init?: RequestInit): Promise<unknown> {
+    const method = (init?.method || 'GET').toUpperCase()
+    const p = path.split('?')[0]!
+    const ok = (v: unknown) => Promise.resolve(structuredClone(v))
+    const note = () => calls.push({ method, path: p })
+    if (p === '/workspaces' && personal) return ok({ workspaces: [{ id: WS_ID, name: 'Khối Vận hành', type: 'personal' }] })
+    if (p === '/drive/starred') { note(); return ok({ items: [...starred].map((id) => ITEMS[id]) }) }
+    if (p === '/drive/recent') { note(); return ok({ items: [ITEMS[D.xlsx], ITEMS[D.sakePdf], ITEMS[D.huongdan]] }) }
+    if (p === '/drive/quick-access') {
+      note()
+      return ok({ entries: [
+        { item: ITEMS[D.chiaSe], reason: 'shared', shared_by_name: 'Nguyễn Thu Lan', at },
+        { item: ITEMS[D.bienban], reason: 'starred', at },
+      ] })
+    }
+    let m = /^\/drive\/items\/([^/]+)\/star$/.exec(p)
+    if (m) {
+      note()
+      if (method === 'POST') starred.add(m[1]!)
+      else starred.delete(m[1]!)
+      return ok(undefined)
+    }
+    m = /^\/drive\/items\/([^/]+)\/copy$/.exec(p)
+    if (m) {
+      calls.push({ method, path: p, body: JSON.parse(String(init?.body)) })
+      return ok({ ...ITEMS[m[1]!], id: 'copy-1', name: `Bản sao của ${ITEMS[m[1]!]!.name}` })
+    }
+    if (p === `/workspaces/${WS_ID}/documents/texts` && method === 'POST') {
+      calls.push({ method, path: p, body: JSON.parse(String(init?.body)) })
+      return ok({ id: 'doc-1', title: '', version: 1, status: 'draft' })
+    }
+    return driveFixtureApi(path, init)
+  }
+
+  beforeEach(() => {
+    mockViewport('phone')
+    Object.defineProperty(window, 'innerWidth', { value: 390, configurable: true, writable: true })
+    useFileViewStore.setState({ modes: { drive: 'list', 'space-files': 'grid' } })
+    starred.clear()
+    personal = false
+    api.mockImplementation(phoneApi)
+    resetUploadQueueForTests()
+  })
+
+  /** The screen with the ModuleBar's + (CreateActionFab), as the shell mounts it. */
+  async function renderPhone(url = '/drive') {
+    const root = createRootRoute()
+    const drive = createRoute({
+      getParentRoute: () => root, path: '/drive', validateSearch: validateDriveSearch,
+      component: () => <><DriveScreen /><CreateActionFab /></>,
+    })
+    const router = createRouter({
+      routeTree: root.addChildren([drive]),
+      history: createMemoryHistory({ initialEntries: [url] }),
+    })
+    await router.load()
+    renderWithClient(<RouterProvider router={router} />)
+    return router
+  }
+
+  const list = (name: string | RegExp) => screen.findByRole('list', { name })
+  const rowNamesIn = (ul: HTMLElement) => within(ul).getAllByRole('listitem').map((li) => li.querySelector('[data-name]')?.textContent)
+  async function controlOf(name: string) {
+    return within(await screen.findByRole('list', { name: /^Tệp trong|^Sửa|^Đã gắn sao/ })).findByText(name)
+  }
+  const rowOf = async (name: string) => (await controlOf(name)).closest('[data-swipe-row]')!.lastElementChild!
+  const sheetOf = (name: string) => screen.findByRole('dialog', { name: `Thao tác với ${name}` })
+  const buttonsIn = (el: HTMLElement) => within(el).getAllByRole('button').map((b) => b.textContent)
+  const hold = async (el: Element) => {
+    pointer(el, 'pointerdown', { x: 120, t: 0 })
+    await act(() => new Promise((r) => setTimeout(r, 560)))
+    pointer(el, 'pointerup', { x: 120, t: 600 })
+  }
+
+  it('opens on Gần đây: entry chips instead of the tree, Truy cập nhanh with reasons, files grouped by time', async () => {
+    await renderPhone()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Tài liệu' })).toBeInTheDocument()
+    const chips = screen.getByRole('navigation', { name: 'Lối vào Tài liệu' })
+    expect(within(chips).getAllByRole('button').map((b) => b.textContent)).toEqual(['Gần đây', 'Thư mục', 'Gắn sao', 'Chia sẻ với tôi', 'Bản nháp'])
+    expect(within(chips).getByRole('button', { name: 'Gần đây' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('button', { name: 'Mở cây thư mục' })).toBeNull()
+
+    const quick = await screen.findByRole('region', { name: 'Truy cập nhanh' })
+    expect(within(quick).getByRole('button', { name: 'ke-hoach-quy-4.xlsx, Nguyễn Thu Lan chia sẻ' })).toBeInTheDocument()
+    expect(within(quick).getByText('Bạn gắn sao')).toBeInTheDocument()
+
+    expect(rowNamesIn(await list(/^Sửa/))).toEqual(['doi-soat-08-10.xlsx', 'sao-ke-ngan-hang-10-2026.pdf', 'huong-dan.pdf'])
+    noIds()
+  })
+
+  it('a row reads "Loại · ai sửa · khi nào"; a quick card opens the viewer', async () => {
+    const user = userEvent.setup()
+    await renderPhone()
+    const ul = await list(/^Sửa/)
+    expect(within(ul).getByText(/^Bảng tính · Trần Minh Đức · /)).toBeInTheDocument()
+    await user.click(within(await screen.findByRole('region', { name: 'Truy cập nhanh' })).getByRole('button', { name: /ke-hoach-quy-4/ }))
+    expect(await screen.findByRole('dialog', { name: /ke-hoach-quy-4\.xlsx/i })).toBeInTheDocument()
+  })
+
+  it('Thư mục opens the workspace top level, folders first', async () => {
+    const user = userEvent.setup()
+    await renderPhone()
+    await user.click(await screen.findByRole('button', { name: 'Thư mục' }))
+    expect(rowNamesIn(await list('Tệp trong Tài liệu'))).toEqual(['Đối soát', 'Hợp đồng', 'Thư mục trống', 'huong-dan.pdf'])
+    expect(screen.queryByRole('region', { name: 'Truy cập nhanh' })).toBeNull()
+  })
+
+  it('Gắn sao lists what I starred, and says so when nothing is', async () => {
+    const user = userEvent.setup()
+    await renderPhone()
+    await user.click(await screen.findByRole('button', { name: 'Gắn sao' }))
+    expect(await screen.findByText(/Chưa có mục nào được gắn sao/)).toBeInTheDocument()
+
+    starred.add(D.sakePdf)
+    await act(() => queryClient.invalidateQueries({ queryKey: keys.drive.starred(WS_ID) }))
+    expect(rowNamesIn(await list('Đã gắn sao'))).toEqual(['sao-ke-ngan-hang-10-2026.pdf'])
+    expect(within(await list('Đã gắn sao')).getByLabelText('Đã gắn sao')).toBeInTheDocument()
+  })
+
+  it('Chia sẻ với tôi is the one shared view; Bản nháp opens the drafts of Văn bản', async () => {
+    const user = userEvent.setup()
+    const router = await renderPhone()
+    await user.click(await screen.findByRole('button', { name: 'Chia sẻ với tôi' }))
+    await waitFor(() => expect(search(router).view).toBe('shared'))
+    expect(rowNamesIn(await list(/^Tệp trong Được chia sẻ/))).toEqual(['ke-hoach-quy-4.xlsx'])
+    expect(screen.getByRole('button', { name: 'Chia sẻ với tôi' })).toHaveAttribute('aria-current', 'page')
+
+    await user.click(screen.getByRole('button', { name: 'Bản nháp' }))
+    await waitFor(() => expect(search(router)).toMatchObject({ view: 'texts', group: 'drafts' }))
+  })
+
+  it('in a folder: ← goes to the parent, the path jumps on a tap, sort and view share one row', async () => {
+    const user = userEvent.setup()
+    const router = await renderPhone(`/drive?folder=${D.y2026}`)
+    expect(await screen.findByRole('heading', { level: 1, name: '2026' })).toBeInTheDocument()
+    const path = screen.getByRole('navigation', { name: 'Vị trí' })
+    expect(within(path).getByRole('button', { name: 'Khối Vận hành' })).toBeInTheDocument()
+    expect(within(path).getByRole('button', { name: 'Đối soát' })).toBeInTheDocument()
+    expect(within(path).getByText('2026')).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Sắp xếp: Sửa gần nhất' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Xem dạng lưới' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Lên thư mục cha' }))
+    await waitFor(() => expect(search(router).folder).toBe(D.doisoat))
+    // From a top-level folder, up is the drive's folders, not the home.
+    await user.click(await screen.findByRole('button', { name: 'Lên thư mục cha' }))
+    await waitFor(() => expect(search(router).folder).toBeUndefined())
+    expect(await screen.findByRole('button', { name: 'Thư mục' })).toHaveAttribute('aria-current', 'page')
+    await list('Tệp trong Tài liệu')
+  })
+
+  it('a personal workspace names its top level "Tài liệu của tôi"', async () => {
+    personal = true
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    const path = await screen.findByRole('navigation', { name: 'Vị trí' })
+    expect(await within(path).findByRole('button', { name: 'Tài liệu của tôi' })).toBeInTheDocument()
+  })
+
+  it('the ⋯ on the title opens Cài đặt Tài liệu from its first row', async () => {
+    const user = userEvent.setup()
+    const router = await renderPhone('/drive')
+    await user.click(await screen.findByRole('button', { name: 'Thêm tuỳ chọn Tài liệu' }))
+    const menu = await screen.findByRole('menu', { name: 'Tuỳ chọn Tài liệu' })
+    await user.click(within(menu).getAllByRole('menuitem')[0]!)
+    // The settings page is not part of this router; the address is what matters here.
+    await waitFor(() => expect(router.state.location.pathname).toBe('/settings/drive'))
+  })
+
+  it('the magnifier opens the search scoped to the folder; Quay lại closes it', async () => {
+    const user = userEvent.setup()
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    await user.click(await screen.findByRole('button', { name: 'Tìm trong Đối soát' }))
+    const box = await screen.findByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' })
+    expect(box).toHaveAttribute('placeholder', 'Tìm trong Đối soát')
+    await user.click(screen.getByRole('button', { name: 'Quay lại danh sách' }))
+    expect(screen.queryByRole('searchbox', { name: 'Tìm tệp hoặc thư mục' })).toBeNull()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Đối soát' })).toBeInTheDocument()
+  })
+
+  it('the item sheet: four shortcuts, then the rows; only what I may do', async () => {
+    const user = userEvent.setup()
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    await user.click(await screen.findByRole('button', { name: 'Thao tác với doi-soat-08-10.xlsx' }))
+    const sheet = await sheetOf('doi-soat-08-10.xlsx')
+    expect(within(sheet).getByText(/Bảng tính · 412 KB · Trần Minh Đức/)).toBeInTheDocument()
+    expect(buttonsIn(within(sheet).getByRole('group', { name: 'Lối tắt' }))).toEqual(['Chia sẻ', 'Sao chép liên kết', 'Gắn sao', 'Tải xuống'])
+    expect(buttonsIn(sheet).slice(4)).toEqual(['Chuyển tới thư mục…', 'Tạo bản sao', 'Thông tin và hoạt động', 'Đổi tên', 'Chuyển vào thùng rác'])
+    noIds()
+    await user.click(within(sheet).getByRole('button', { name: 'Chuyển vào thùng rác' }))
+    expect(await screen.findByRole('dialog', { name: 'Xoá tệp' })).toHaveTextContent('doi-soat-08-10.xlsx')
+  })
+
+  it('leaves out of the sheet what I may not do', async () => {
+    const user = userEvent.setup()
+    await renderPhone()
+    await user.click(await screen.findByRole('button', { name: 'Thư mục' }))
+    await user.click(await screen.findByRole('button', { name: 'Thao tác với huong-dan.pdf' }))
+    const sheet = await sheetOf('huong-dan.pdf')
+    expect(buttonsIn(sheet)).toEqual(['Sao chép liên kết', 'Gắn sao', 'Tải xuống', 'Thông tin và hoạt động'])
+  })
+
+  it('stars from the sheet, and the row shows the star', async () => {
+    const user = userEvent.setup()
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    await user.click(await screen.findByRole('button', { name: 'Thao tác với sao-ke-ngan-hang-10-2026.pdf' }))
+    await user.click(within(await sheetOf('sao-ke-ngan-hang-10-2026.pdf')).getByRole('button', { name: 'Gắn sao' }))
+    await waitFor(() => expect(calls).toContainEqual({ method: 'POST', path: `/drive/items/${D.sakePdf}/star` }))
+    const row = (await controlOf('sao-ke-ngan-hang-10-2026.pdf')).closest('li')!
+    await waitFor(() => expect(within(row).getByLabelText('Đã gắn sao')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Thao tác với sao-ke-ngan-hang-10-2026.pdf' }))
+    await user.click(within(await sheetOf('sao-ke-ngan-hang-10-2026.pdf')).getByRole('button', { name: 'Bỏ sao' }))
+    await waitFor(() => expect(calls).toContainEqual({ method: 'DELETE', path: `/drive/items/${D.sakePdf}/star` }))
+  })
+
+  it('Tạo bản sao copies next to the file; Sao chép liên kết copies a link to its folder', async () => {
+    const user = userEvent.setup()
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    await user.click(await screen.findByRole('button', { name: 'Thao tác với doi-soat-08-10.xlsx' }))
+    await user.click(within(await sheetOf('doi-soat-08-10.xlsx')).getByRole('button', { name: 'Tạo bản sao' }))
+    await waitFor(() => expect(calls).toContainEqual({ method: 'POST', path: `/drive/items/${D.xlsx}/copy`, body: { target_folder_id: D.doisoat } }))
+    await waitFor(() => expect(useToastStore.getState().toasts.map((t) => t.message)).toContain('Đã tạo “Bản sao của doi-soat-08-10.xlsx”'))
+
+    await user.click(screen.getByRole('button', { name: 'Thao tác với doi-soat-08-10.xlsx' }))
+    await user.click(within(await sheetOf('doi-soat-08-10.xlsx')).getByRole('button', { name: 'Sao chép liên kết' }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(expect.stringContaining(`folder=${D.doisoat}`)))
+  })
+
+  it('Thông tin và hoạt động opens the details of the item', async () => {
+    const user = userEvent.setup()
+    await renderPhone()
+    await user.click(await screen.findByRole('button', { name: 'Thao tác với huong-dan.pdf' }))
+    await user.click(within(await sheetOf('huong-dan.pdf')).getByRole('button', { name: 'Thông tin và hoạt động' }))
+    // Under 768 the details are a full-screen sheet.
+    expect(await screen.findByRole('dialog', { name: 'Chi tiết tệp' })).toHaveTextContent('huong-dan.pdf')
+  })
+
+  it('a swipe left reveals Chia sẻ · Gắn sao · Thêm; Gắn sao stars, Thêm opens the sheet, nothing deletes', async () => {
+    const user = userEvent.setup()
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    const swipeLeft = (el: Element) => swipeGesture(el, [{ x: 300, t: 0 }, { x: 288, t: 16 }, { x: 120, t: 400 }])
+    // Chia sẻ is offered once the policy has answered for the row's folder.
+    await waitFor(() => expect(calls.some((c) => c.path === '/drive/batch-access')).toBe(true))
+    await act(() => new Promise((r) => setTimeout(r, 30)))
+    let row = await rowOf('doi-soat-08-10.xlsx')
+    swipeLeft(row)
+    let revealed = within(row.parentElement!)
+    for (const name of ['Chia sẻ', 'Gắn sao', 'Thêm']) expect(revealed.getByRole('button', { name })).toBeInTheDocument()
+    expect(revealed.queryByRole('button', { name: /Xoá/ })).toBeNull()
+    await user.click(revealed.getByRole('button', { name: 'Gắn sao' }))
+    await waitFor(() => expect(calls).toContainEqual({ method: 'POST', path: `/drive/items/${D.xlsx}/star` }))
+
+    row = await rowOf('doi-soat-08-10.xlsx')
+    swipeLeft(row)
+    revealed = within(row.parentElement!)
+    await user.click(revealed.getByRole('button', { name: 'Thêm' }))
+    expect(await sheetOf('doi-soat-08-10.xlsx')).toBeInTheDocument()
+    expect(calls.filter((c) => c.method === 'DELETE')).toEqual([])
+  })
+
+  it('a long press enters selection: check boxes, "Đã chọn N", Chọn tất cả, and the dark bar in place of the bottom bar', async () => {
+    const user = userEvent.setup()
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    await hold(await controlOf('doi-soat-08-10.xlsx'))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Đã chọn 1' })).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /doi-soat-08-10\.xlsx/ })).toHaveAttribute('aria-checked', 'true')
+    const bar = screen.getByRole('navigation', { name: 'Thao tác với 1 mục đã chọn' })
+    expect(within(bar).getAllByRole('button').map((b) => b.textContent)).toEqual(['Chia sẻ', 'Chuyển', 'Tải xuống', 'Gắn sao', 'Xoá'])
+    // The + gives way while choosing.
+    expect(screen.queryByRole('button', { name: 'Thêm mới' })).toBeNull()
+
+    await user.click(screen.getByRole('checkbox', { name: /sao-ke-ngan-hang/ }))
+    expect(screen.getByRole('heading', { level: 1, name: 'Đã chọn 2' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Chọn tất cả' }))
+    expect(screen.getByRole('heading', { level: 1, name: 'Đã chọn 4' })).toBeInTheDocument()
+
+    // A folder is chosen: Tải xuống stays, dimmed, and says why.
+    const download = within(screen.getByRole('navigation', { name: 'Thao tác với 4 mục đã chọn' })).getByRole('button', { name: 'Tải xuống' })
+    expect(download).toHaveAttribute('aria-disabled', 'true')
+    await user.click(download)
+    expect(useToastStore.getState().toasts.map((t) => t.message)).toContain('Chỉ tải xuống được tệp, không tải được thư mục')
+
+    await user.click(screen.getByRole('button', { name: 'Thoát chọn' }))
+    expect(screen.queryByRole('navigation', { name: /mục đã chọn/ })).toBeNull()
+    expect(await screen.findByRole('heading', { level: 1, name: 'Đối soát' })).toBeInTheDocument()
+  })
+
+  it('the bar offers only what every chosen item allows; Esc leaves the selection', async () => {
+    const user = userEvent.setup()
+    await renderPhone()
+    await user.click(await screen.findByRole('button', { name: 'Thư mục' }))
+    await hold(await controlOf('huong-dan.pdf'))
+    const bar = await screen.findByRole('navigation', { name: 'Thao tác với 1 mục đã chọn' })
+    for (const name of ['Chia sẻ', 'Chuyển', 'Xoá']) expect(within(bar).getByRole('button', { name })).toHaveAttribute('aria-disabled', 'true')
+    expect(within(bar).getByRole('button', { name: 'Tải xuống' })).not.toHaveAttribute('aria-disabled')
+    await user.click(within(bar).getByRole('button', { name: 'Xoá' }))
+    expect(useToastStore.getState().toasts.map((t) => t.message)).toContain('Bạn không có quyền xoá mọi mục đã chọn')
+    expect(calls.filter((c) => c.method === 'DELETE')).toEqual([])
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('navigation', { name: /mục đã chọn/ })).toBeNull())
+  })
+
+  it('deletes a selection together, with one Hoàn tác', async () => {
+    const user = userEvent.setup()
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    await hold(await controlOf('doi-soat-08-10.xlsx'))
+    await user.click(await screen.findByRole('checkbox', { name: /sao-ke-ngan-hang/ }))
+    await user.click(within(screen.getByRole('navigation', { name: 'Thao tác với 2 mục đã chọn' })).getByRole('button', { name: 'Xoá' }))
+    const confirm = await screen.findByRole('dialog', { name: 'Xoá 2 mục' })
+    await user.click(within(confirm).getByRole('button', { name: 'Xoá' }))
+    await waitFor(() => expect(calls.filter((c) => c.method === 'DELETE').map((c) => c.path)).toEqual([
+      `/drive/items/${D.xlsx}`, `/drive/items/${D.sakePdf}`,
+    ]))
+    const toast = useToastStore.getState().toasts.find((t) => t.message === 'Đã xoá 2 mục')
+    expect(toast?.action?.label).toBe('Hoàn tác')
+    expect(screen.queryByRole('navigation', { name: /mục đã chọn/ })).toBeNull()
+  })
+
+  it('the + sheet adds to the open folder: upload, photo, new folder, new text', async () => {
+    const user = userEvent.setup()
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    await list('Tệp trong Đối soát')
+    await user.click(screen.getByRole('button', { name: 'Thêm mới' }))
+    const sheet = await screen.findByRole('dialog', { name: 'Thêm vào “Đối soát”' })
+    expect(buttonsIn(sheet)).toEqual(['Tải tệp lên', 'Chụp ảnh', 'Thư mục mới', 'Văn bản mới'])
+    await user.click(within(sheet).getByRole('button', { name: 'Văn bản mới' }))
+    await waitFor(() => expect(calls).toContainEqual({
+      method: 'POST', path: `/workspaces/${WS_ID}/documents/texts`, body: { folder_id: D.doisoat },
+    }))
+  })
+
+  it('has no + in the shared view, where nothing can be added', async () => {
+    await renderPhone('/drive?view=shared')
+    await list(/^Tệp trong Được chia sẻ/)
+    expect(screen.queryByRole('button', { name: 'Thêm mới' })).toBeNull()
+  })
+
+  it('uploads in the background with a progress card, then says where it went', async () => {
+    const user = userEvent.setup()
+    let finish: () => void = () => {}
+    vi.spyOn(driveApi, 'putWithProgress').mockImplementation((_u, blob, onProgress) => {
+      onProgress(blob.size / 2, blob.size)
+      return new Promise<void>((resolve) => { finish = resolve })
+    })
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    await list('Tệp trong Đối soát')
+    await user.upload(screen.getByLabelText('Chọn tệp để tải lên'), new File(['abcd'], 'sao-ke-T9.pdf', { type: 'application/pdf' }))
+
+    const card = await screen.findByRole('status', { name: 'Tải lên' })
+    await waitFor(() => expect(card).toHaveTextContent('Đang tải lên 1 tệp'))
+    expect(card).toHaveTextContent('50%')
+    expect(card).toHaveTextContent('sao-ke-T9.pdf')
+    act(() => finish())
+    await waitFor(() => expect(useToastStore.getState().toasts.map((t) => t.message)).toContain('Đã tải lên “sao-ke-T9.pdf” vào Đối soát'))
+    await waitFor(() => expect(screen.queryByRole('status', { name: 'Tải lên' })).toBeNull())
+    expect(calls.some((c) => c.method === 'POST' && /\/drive\/files\/[^/]+\/confirm$/.test(c.path))).toBe(true)
+  })
+
+  it('a failed upload stays on the card with its reason and Thử lại', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(driveApi, 'putWithProgress').mockRejectedValueOnce(new Error('Storage upload failed: 500'))
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    await list('Tệp trong Đối soát')
+    await user.upload(screen.getByLabelText('Chọn tệp để tải lên'), new File(['abcd'], 'hong.pdf', { type: 'application/pdf' }))
+    const card = await screen.findByRole('status', { name: 'Tải lên' })
+    await waitFor(() => expect(card).toHaveTextContent('Tải lên không thành công'))
+    expect(within(card).getByRole('button', { name: 'Thử lại hong.pdf' })).toBeInTheDocument()
+  })
+
+  it('pulling down from the top of the files reloads them', async () => {
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    await list('Tệp trong Đối soát')
+    const listings = () => api.mock.calls.filter(([p]) => String(p).includes(`/drive/folders/${D.doisoat}`)).length
+    const before = listings()
+    const zone = screen.getByTestId('drive-dropzone')
+    const pt = (y: number) => ({ touches: [{ clientX: 100, clientY: y }], changedTouches: [{ clientX: 100, clientY: y }] })
+    fireEvent.touchStart(zone, pt(100))
+    fireEvent.touchMove(zone, pt(130))
+    fireEvent.touchMove(zone, pt(320))
+    fireEvent.touchEnd(zone, pt(320))
+    await waitFor(() => expect(listings()).toBeGreaterThan(before))
+  })
+
+  it('a desktop list does not swipe and keeps its table', async () => {
+    mockViewport('desktop')
+    await renderPhone(`/drive?folder=${D.doisoat}`)
+    const t = await screen.findByRole('table')
+    await within(t).findByText('doi-soat-08-10.xlsx')
+    expect(t.querySelector('[data-swipe-row]')).toBeNull()
+    expect(calls.some((c) => c.path === '/drive/starred')).toBe(false)
   })
 })

@@ -172,6 +172,11 @@ route and is limited in memory, CPU and processes. Configuration: `GOTENBERG_URL
 reaches the object store over the internal network when `PREVIEW_STORAGE_DIAL_ADDR` is set, with the public host
 still sent as `Host` so the signed URL holds.
 
+### Requirement: The phone's Tài liệu reuses previews and thumbnails
+Truy cập nhanh cards (16:10, radius 9) and the item sheet show the file's thumbnail through the same endpoint and
+rules as the gallery; a file without one shows its kind icon. A file opened from Gần đây, Gắn sao or Truy cập nhanh
+opens in the same viewer, paging through the files of the list it was opened from.
+
 ## Status
 Native previews are signed like downloads, so the browser may be told to save rather than show some types
 (the storage service does not yet pass a content-disposition override). The client part of this capability
@@ -179,3 +184,6 @@ Native previews are signed like downloads, so the browser may be told to save ra
 shown as text, never put in a frame.
 Thumbnails need `pdftoppm` (poppler-utils) and `ffmpeg` where the drive runs; the drive image installs them. Without them
 PDFs and videos have no thumbnail and nothing else changes. Tuning: `THUMBNAIL_MAX_CONCURRENT` (4).
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 10: the viewer swipes between a conversation's images, zooms by pinch or double-tap and closes by dragging down. See `mobile-gestures`. Plan: `plans/261018-1742-mobile-ux-overhaul`.

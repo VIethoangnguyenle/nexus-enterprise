@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -13,11 +14,24 @@ type Settings struct {
 	WorkStart       string
 	WorkEnd         string
 	DefaultReminder int
+	// New fields from migration 068.
+	DefaultView      string   // agenda, day, week, month
+	WeekStart        int      // 0 = Sunday, 1 = Monday
+	VisibleCalendars []string // nil = every calendar
+	DefaultDuration  int      // minutes 5..1440
+	NotifyInvites    bool
+	NotifyChanges    bool
+	NotifyReminders  bool
 }
 
 // DefaultSettings are what a person who never saved any has.
 func DefaultSettings() Settings {
-	return Settings{TZID: "Asia/Ho_Chi_Minh", WorkStart: "08:00", WorkEnd: "17:30", DefaultReminder: DefaultReminderMinutes}
+	return Settings{
+		TZID: "Asia/Ho_Chi_Minh", WorkStart: "08:00", WorkEnd: "17:30",
+		DefaultReminder: DefaultReminderMinutes,
+		DefaultView:     "agenda", WeekStart: 1, DefaultDuration: 30,
+		NotifyInvites: true, NotifyChanges: true, NotifyReminders: true,
+	}
 }
 
 // Settings reads the settings of the people, keyed by node; someone who never saved
@@ -31,7 +45,9 @@ func (s *Store) Settings(ctx context.Context, workspaceID string, nodes []string
 		return out, nil
 	}
 	rows, err := s.pool.Query(ctx,
-		`SELECT user_node_id, tzid, to_char(work_start, 'HH24:MI'), to_char(work_end, 'HH24:MI'), default_reminder
+		`SELECT user_node_id, tzid, to_char(work_start, 'HH24:MI'), to_char(work_end, 'HH24:MI'), default_reminder,
+		        default_view, week_start, visible_calendars, default_duration,
+		        notify_invites, notify_changes, notify_reminders
 		   FROM calendar_user_settings WHERE workspace_id = $1 AND user_node_id = ANY($2)`, workspaceID, nodes)
 	if err != nil {
 		return nil, fmt.Errorf("settings: %w", err)
@@ -40,8 +56,16 @@ func (s *Store) Settings(ctx context.Context, workspaceID string, nodes []string
 	for rows.Next() {
 		var node string
 		var st Settings
-		if err := rows.Scan(&node, &st.TZID, &st.WorkStart, &st.WorkEnd, &st.DefaultReminder); err != nil {
+		var visibleJSON []byte
+		if err := rows.Scan(&node, &st.TZID, &st.WorkStart, &st.WorkEnd, &st.DefaultReminder,
+			&st.DefaultView, &st.WeekStart, &visibleJSON, &st.DefaultDuration,
+			&st.NotifyInvites, &st.NotifyChanges, &st.NotifyReminders); err != nil {
 			return nil, fmt.Errorf("scan settings: %w", err)
+		}
+		if visibleJSON != nil {
+			if err := json.Unmarshal(visibleJSON, &st.VisibleCalendars); err != nil {
+				return nil, fmt.Errorf("parse visible_calendars: %w", err)
+			}
 		}
 		out[node] = st
 	}
@@ -50,13 +74,29 @@ func (s *Store) Settings(ctx context.Context, workspaceID string, nodes []string
 
 // SaveSettings stores a person's settings for a workspace.
 func (s *Store) SaveSettings(ctx context.Context, workspaceID, userNodeID string, st Settings) error {
+	var visibleJSON []byte
+	if st.VisibleCalendars != nil {
+		var err error
+		visibleJSON, err = json.Marshal(st.VisibleCalendars)
+		if err != nil {
+			return fmt.Errorf("marshal visible_calendars: %w", err)
+		}
+	}
 	_, err := s.pool.Exec(ctx,
-		`INSERT INTO calendar_user_settings (user_node_id, workspace_id, tzid, work_start, work_end, default_reminder)
-		 VALUES ($1, $2, $3, $4::time, $5::time, $6)
+		`INSERT INTO calendar_user_settings (user_node_id, workspace_id, tzid, work_start, work_end, default_reminder,
+		        default_view, week_start, visible_calendars, default_duration,
+		        notify_invites, notify_changes, notify_reminders)
+		 VALUES ($1, $2, $3, $4::time, $5::time, $6, $7, $8, $9, $10, $11, $12, $13)
 		 ON CONFLICT (user_node_id, workspace_id) DO UPDATE
 		   SET tzid = EXCLUDED.tzid, work_start = EXCLUDED.work_start, work_end = EXCLUDED.work_end,
-		       default_reminder = EXCLUDED.default_reminder`,
-		userNodeID, workspaceID, st.TZID, st.WorkStart, st.WorkEnd, st.DefaultReminder)
+		       default_reminder = EXCLUDED.default_reminder,
+		       default_view = EXCLUDED.default_view, week_start = EXCLUDED.week_start,
+		       visible_calendars = EXCLUDED.visible_calendars, default_duration = EXCLUDED.default_duration,
+		       notify_invites = EXCLUDED.notify_invites, notify_changes = EXCLUDED.notify_changes,
+		       notify_reminders = EXCLUDED.notify_reminders`,
+		userNodeID, workspaceID, st.TZID, st.WorkStart, st.WorkEnd, st.DefaultReminder,
+		st.DefaultView, st.WeekStart, visibleJSON, st.DefaultDuration,
+		st.NotifyInvites, st.NotifyChanges, st.NotifyReminders)
 	if err != nil {
 		return fmt.Errorf("save settings: %w", err)
 	}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useNavigate } from '@tanstack/react-router'
+import { LogOut } from 'lucide-react'
 import { ApiError } from '../../api/client'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useLeaveWorkspace } from '../../hooks/useWorkspaces'
@@ -7,6 +8,7 @@ import { explain } from '../../lib/errors'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { Button, toast } from '../primitives'
 import { ConfirmDialog } from '../composites/ConfirmDialog'
+import { SettingsGroup, SettingsRow } from './SettingsGroup'
 
 const isLastOwner = (err: unknown) =>
   err instanceof ApiError && err.status === 409 && (err.body as { reason?: string } | undefined)?.reason === 'last_owner'
@@ -15,9 +17,10 @@ const isLastOwner = (err: unknown) =>
  * "Rời workspace" (mockup §6): always available, and said plainly: leaving
  * cannot be undone from here, and the last Owner stays. A confirm dialog states
  * the consequence (one sentence and a red button; no retyping of the name).
- * After leaving, the person goes to the workspace picker.
+ * After leaving, the person goes to the workspace picker. `row` is the phone's
+ * form, a danger row of Cài đặt workspace (mockup mobile-shell.html §11).
  */
-export function LeaveWorkspace() {
+export function LeaveWorkspace({ variant = 'section' }: { variant?: 'section' | 'row' }) {
   const navigate = useNavigate()
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
   const leave = useLeaveWorkspace(wsId)
@@ -45,6 +48,17 @@ export function LeaveWorkspace() {
 
   return (
     <>
+      {variant === 'row' ? (
+        <SettingsGroup>
+          <SettingsRow
+            icon={<LogOut size={18} strokeWidth={1.75} />}
+            label={`Rời ${name}`}
+            hint="Chủ sở hữu cuối cùng phải chuyển quyền trước"
+            danger
+            onPress={() => setOpen(true)}
+          />
+        </SettingsGroup>
+      ) : (<>
       <hr className="w-full m-0 border-0 border-t border-line" />
       <div className="flex items-center gap-4">
         <div className="grid flex-1 min-w-0">
@@ -55,6 +69,7 @@ export function LeaveWorkspace() {
         </div>
         <Button type="button" variant="danger" onClick={() => setOpen(true)}>Rời workspace</Button>
       </div>
+      </>)}
       <ConfirmDialog
         open={open}
         onClose={close}

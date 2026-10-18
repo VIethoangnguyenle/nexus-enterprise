@@ -7,14 +7,19 @@ import { DURATION, useMotionPresets } from '../../lib/motion'
 import { personStyle } from '../../lib/person-hue'
 import { formatTime, toMillis } from '../../lib/format'
 import { displayName, type PeopleDirectory } from '../../lib/people'
+import { canQuote } from '../../lib/message-actions'
 import {
   buildStream, keyOfMessage, unreadStartId, type StreamItem, type StreamMessage,
 } from '../../lib/stream-model'
 import { Pressable, Spinner } from '../primitives'
 import { usePhone } from '../../hooks/usePhone'
+import { useQuickReaction } from '../../hooks/useQuickReaction'
+import { useKeyboardDismissDrag } from '../../hooks/useKeyboardDismissDrag'
+import { isImageAttachment } from '../../lib/file-kind'
 import type { MessageLifecycle } from '../../hooks/useMessageActions'
 import { cardKindOf, toEditorHtml } from '../../lib/message-model'
-import { MessageBlock } from './MessageBlock'
+import { quoteMessage } from '../../stores/drafts.store'
+import { MessageBlock, viewerFileOf } from './MessageBlock'
 import { MessageActionSheet } from './MessageActionSheet'
 import { MessageMenu, type MessageMenuTarget } from './MessageMenu'
 import { LazyMessageEditBox } from '../chat/lazy-parts'
@@ -24,6 +29,8 @@ import { EmptyState } from './EmptyState'
 
 export interface ConversationStreamProps {
   channelId: string
+  /** The workspace the conversation is in: whose Chat settings (the double-tap reaction) apply. */
+  workspaceId?: string
   /** Accessible name of the log, e.g. "Tin nhắn trong Đối soát giao dịch". */
   label: string
   /** Root messages of the conversation, oldest first. */
@@ -80,12 +87,23 @@ const INITIAL_VIEW: ViewState = { end: true, far: false, dividerAbove: false }
  */
 export function ConversationStream(props: ConversationStreamProps) {
   const {
-    channelId, label, messages, ready, hasMore, loadingOlder, olderFailed, onLoadOlder, me, people, unread,
+    channelId, workspaceId, label, messages, ready, hasMore, loadingOlder, olderFailed, onLoadOlder, me, people, unread,
     activeThreadId, onOpenThread, onReact, onToggleReaction, onPin, onFollow, onAtEndChange, lifecycle,
   } = props
   const phone = usePhone()
   const motionPresets = useMotionPresets()
   const scroller = useRef<HTMLDivElement>(null)
+  const quickReaction = useQuickReaction(workspaceId)
+  // Dragging the stream down with the keyboard up puts the keyboard away (DESIGN.md §6 "Vuốt").
+  useKeyboardDismissDrag(scroller)
+
+  // The conversation's pictures, oldest first: the viewer swipes through all of them, not one message's.
+  const gallery = useMemo(
+    () => messages.flatMap((x) => (x.deleted || x._optimistic || !x.attachments?.length
+      ? []
+      : x.attachments.filter(isImageAttachment).map(viewerFileOf(displayName(people, x.sender_id, x.sender_name), x)))),
+    [messages, people],
+  )
 
   // What this visit is anchored to is decided once, when both the messages and
   // the read position are known, and kept: reading moves the position, but the
@@ -278,6 +296,9 @@ export function ConversationStream(props: ConversationStreamProps) {
           onToggleReaction={onToggleReaction}
           onPin={onPin}
           onReply={onOpenThread}
+          onQuote={canQuote(t) ? (msg) => quoteMessage(msg) : undefined}
+          quickReaction={quickReaction}
+          gallery={gallery}
           onMore={openMenu}
           onEdit={can?.edit ? (m) => lifecycle!.startEdit(m) : undefined}
           onOpenQuote={t.quoted && loadedIds.has(t.quoted.id) ? openQuote : undefined}

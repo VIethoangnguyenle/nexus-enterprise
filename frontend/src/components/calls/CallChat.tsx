@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Message } from '../../api/messaging'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
+import { useEnterSends } from '../../hooks/useModuleSettings'
 import { useAttachmentUploads } from '../../hooks/useAttachmentUploads'
 import { useMessageActions } from '../../hooks/useMessageActions'
 import { useMarkRead, useUnreadCounts } from '../../hooks/useMessaging'
@@ -22,6 +23,7 @@ import { toast } from '../primitives'
  */
 export function CallChat({ channelId, title }: { channelId: string; title: string }) {
   const { workspaceId } = useActiveWorkspace()
+  const enterSends = useEnterSends(workspaceId)
   const people = usePeople(workspaceId)
   const me = useAuthStore((s) => s.user)
   const messagesQ = useMessages(channelId)
@@ -105,6 +107,7 @@ export function CallChat({ channelId, title }: { channelId: string; title: strin
         people={people}
         tone="base"
         placeholder={`Nhắn trong ${title}`}
+        enterSends={enterSends}
         onSend={handleSend}
         onTyping={() => sendTyping(channelId)}
         uploads={uploads}

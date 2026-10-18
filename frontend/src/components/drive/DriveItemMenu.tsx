@@ -1,10 +1,10 @@
-import { useEffect, useRef } from 'react'
-import { Camera, Download, FolderInput, FolderOpen, FolderPlus, Pencil, Share2, Trash2, Upload } from 'lucide-react'
+import { useEffect, useRef, type ReactNode } from 'react'
+import { Camera, Copy, Download, FilePlus2, FolderInput, FolderPlus, Info, Link2, Pencil, Star, StarOff, Trash2, Upload, UserPlus } from 'lucide-react'
 import type { DriveItem } from '../../api/drive'
 import type { ObjectPerms } from '../../api/access'
 import { formatBytes, formatListTime } from '../../lib/format'
 import type { PeopleDirectory } from '../../lib/people'
-import { Popover } from '../primitives'
+import { Popover, Pressable } from '../primitives'
 import { NavSheet, SheetItem, SheetSeparator } from '../spaces/NavSheet'
 import { FileThumb } from '../files/FileThumb'
 import type { MenuAnchor } from '../files/use-long-press'
@@ -71,16 +71,33 @@ interface DriveItemSheetProps {
   perms: ObjectPerms
   people: PeopleDirectory
   actions: RowActions
-  /** Opens the file in the viewer, or the folder in the list. */
-  onOpen: (item: DriveItem) => void
+  starred: boolean
+  onStar: (item: DriveItem) => void
+  onCopyLink: (item: DriveItem) => void
+  /** "Tạo bản sao" next to the file. */
+  onDuplicate: (item: DriveItem) => void
+  /** "Thông tin và hoạt động": who has access, what changed. */
+  onInfo: (item: DriveItem) => void
   onClose: () => void
 }
 
+/** One of the four shortcuts at the top of the item sheet: a 16-radius tile with its label. */
+function QuickTile({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <Pressable onClick={onClick} className="press grid justify-items-center gap-1.5 py-2.5 rounded-2xl bg-sunk text-xs font-medium text-ink">
+      <span aria-hidden="true" className="text-ink-muted">{icon}</span>
+      {label}
+    </Pressable>
+  )
+}
+
 /**
- * The phone's version of the item menu (long press or ⋯): a bottom sheet with
- * a small preview, "Loại · dung lượng · người · giờ", and the actions in 52px rows.
+ * The phone's item menu (⋯ or long press; DESIGN.md "Tài liệu", "Menu tệp"):
+ * the item's row with "Loại · dung lượng · ai sửa", four shortcuts (Chia sẻ ·
+ * Sao chép liên kết · Gắn sao · Tải xuống), then rows of 52. Only what the
+ * person may do on the item's folder is offered.
  */
-export function DriveItemSheet({ item, perms, people, actions, onOpen, onClose }: DriveItemSheetProps) {
+export function DriveItemSheet({ item, perms, people, actions, starred, onStar, onCopyLink, onDuplicate, onInfo, onClose }: DriveItemSheetProps) {
   const folder = item.item_type === 'folder'
   const kind = kindOf(item)
   const owner = ownerOf(item, people)
@@ -89,16 +106,24 @@ export function DriveItemSheet({ item, perms, people, actions, onOpen, onClose }
     .join(' · ')
   // The sheet goes first, then the action: a dialog it opens must not meet a modal layer still up.
   const then = (run: () => void) => () => { onClose(); run() }
+  const quick: { key: string; icon: ReactNode; label: string; run: () => void }[] = []
+  if (perms.share) quick.push({ key: 'share', icon: <UserPlus size={20} strokeWidth={1.75} />, label: 'Chia sẻ', run: () => actions.onShare(item) })
+  quick.push({ key: 'link', icon: <Link2 size={20} strokeWidth={1.75} />, label: 'Sao chép liên kết', run: () => onCopyLink(item) })
+  quick.push({
+    key: 'star', icon: starred ? <StarOff size={20} strokeWidth={1.75} /> : <Star size={20} strokeWidth={1.75} />,
+    label: starred ? 'Bỏ sao' : 'Gắn sao', run: () => onStar(item),
+  })
+  if (!folder) quick.push({ key: 'download', icon: <Download size={20} strokeWidth={1.75} />, label: 'Tải xuống', run: () => actions.onDownload(item) })
 
   return (
     <NavSheet label={`Thao tác với ${item.name}`} onClose={onClose}>
       <div className="flex items-center gap-3 px-3.5 pb-2">
         {folder ? (
-          <span className={`grid place-items-center w-22 aspect-[4/3] rounded-lg shrink-0 ${kind.tile}`} aria-hidden="true">
-            <kind.icon size={28} strokeWidth={1.75} />
+          <span className={`grid place-items-center size-10 rounded-surface shrink-0 bg-sunk text-ink-muted`} aria-hidden="true">
+            <kind.icon size={20} strokeWidth={1.75} />
           </span>
         ) : (
-          <div className="w-22 shrink-0">
+          <div className="w-14 shrink-0">
             <FileThumb
               fileId={item.id}
               name={item.name}
@@ -106,7 +131,7 @@ export function DriveItemSheet({ item, perms, people, actions, onOpen, onClose }
               version={itemVersion(item)}
               aspect="4 / 3"
               radius={8}
-              iconSize={24}
+              iconSize={20}
             />
           </div>
         )}
@@ -115,28 +140,30 @@ export function DriveItemSheet({ item, perms, people, actions, onOpen, onClose }
           <span className="text-xs text-ink-muted truncate">{facts}</span>
         </div>
       </div>
-      <SheetItem icon={<FolderOpen size={20} strokeWidth={1.75} />} onClick={then(() => onOpen(item))}>Mở</SheetItem>
-      {!folder && (
-        <SheetItem icon={<Download size={20} strokeWidth={1.75} />} onClick={then(() => actions.onDownload(item))}>
-          Tải xuống
+      <div role="group" aria-label="Lối tắt" className="grid gap-2 px-3.5 pb-2" style={{ gridTemplateColumns: `repeat(${quick.length}, minmax(0, 1fr))` }}>
+        {quick.map((q) => <QuickTile key={q.key} icon={q.icon} label={q.label} onClick={then(q.run)} />)}
+      </div>
+      {perms.write && (
+        <SheetItem icon={<FolderInput size={20} strokeWidth={1.75} />} onClick={then(() => actions.onMove(item))}>
+          Chuyển tới thư mục…
         </SheetItem>
       )}
-      {perms.share && (
-        <SheetItem icon={<Share2 size={20} strokeWidth={1.75} />} onClick={then(() => actions.onShare(item))}>
-          Chia sẻ
+      {perms.write && !folder && (
+        <SheetItem icon={<Copy size={20} strokeWidth={1.75} />} onClick={then(() => onDuplicate(item))}>
+          Tạo bản sao
         </SheetItem>
       )}
+      <SheetItem icon={<Info size={20} strokeWidth={1.75} />} onClick={then(() => onInfo(item))}>
+        Thông tin và hoạt động
+      </SheetItem>
       {perms.write && (
         <>
-          <SheetItem icon={<FolderInput size={20} strokeWidth={1.75} />} onClick={then(() => actions.onMove(item))}>
-            Chuyển tới thư mục…
-          </SheetItem>
           <SheetItem icon={<Pencil size={20} strokeWidth={1.75} />} onClick={then(() => actions.onRename(item))}>
             Đổi tên
           </SheetItem>
           <SheetSeparator />
           <SheetItem tone="danger" icon={<Trash2 size={20} strokeWidth={1.75} />} onClick={then(() => actions.onDelete(item))}>
-            Xoá
+            Chuyển vào thùng rác
           </SheetItem>
         </>
       )}
@@ -144,19 +171,34 @@ export function DriveItemSheet({ item, perms, people, actions, onOpen, onClose }
   )
 }
 
-/** The phone's floating + opens this: what can be added to the open folder. */
-export function DriveAddSheet({ onPickFiles, onTakePhoto, onNewFolder, onClose }: {
+/** The + of a phone or tablet opens this (DESIGN.md "Nút +"): what can be added to the open folder. */
+export function DriveAddSheet({ folderLabel, onPickFiles, onTakePhoto, onNewFolder, onNewText, onClose }: {
+  folderLabel: string
   onPickFiles: () => void
   onTakePhoto: () => void
   onNewFolder: () => void
+  onNewText: () => void
   onClose: () => void
 }) {
   const then = (run: () => void) => () => { onClose(); run() }
+  const tiles = [
+    { label: 'Tải tệp lên', icon: <Upload size={22} strokeWidth={1.75} />, tone: 'bg-sunk text-ink', run: onPickFiles },
+    { label: 'Chụp ảnh', icon: <Camera size={22} strokeWidth={1.75} />, tone: 'bg-sunk text-ink', run: onTakePhoto },
+    { label: 'Thư mục mới', icon: <FolderPlus size={22} strokeWidth={1.75} />, tone: 'bg-sunk text-ink', run: onNewFolder },
+    { label: 'Văn bản mới', icon: <FilePlus2 size={22} strokeWidth={1.75} />, tone: 'bg-info-wash text-info', run: onNewText },
+  ]
+  const title = `Thêm vào “${folderLabel}”`
   return (
-    <NavSheet label="Thêm mới" onClose={onClose}>
-      <SheetItem icon={<Upload size={20} strokeWidth={1.75} />} onClick={then(onPickFiles)}>Tải tệp lên</SheetItem>
-      <SheetItem icon={<Camera size={20} strokeWidth={1.75} />} onClick={then(onTakePhoto)}>Chụp ảnh</SheetItem>
-      <SheetItem icon={<FolderPlus size={20} strokeWidth={1.75} />} onClick={then(onNewFolder)}>Thư mục mới</SheetItem>
+    <NavSheet label={title} onClose={onClose}>
+      <h3 className="px-3.5 pb-3 font-semibold">{title}</h3>
+      <div className="grid grid-cols-4 gap-2 px-3.5 pb-3">
+        {tiles.map((t) => (
+          <Pressable key={t.label} onClick={then(t.run)} className="press grid justify-items-center gap-1.5 text-xs font-medium text-ink">
+            <span aria-hidden="true" className={`grid place-items-center size-14 rounded-2xl ${t.tone}`}>{t.icon}</span>
+            {t.label}
+          </Pressable>
+        ))}
+      </div>
     </NavSheet>
   )
 }

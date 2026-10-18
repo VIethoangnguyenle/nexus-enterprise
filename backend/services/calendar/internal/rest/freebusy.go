@@ -61,9 +61,10 @@ func (h *Handler) GetSettings(c echo.Context) error {
 	return c.JSON(http.StatusOK, got)
 }
 
-// UpdateSettings saves the caller's calendar settings.
+// UpdateSettings saves the caller's calendar settings; fields the body leaves
+// out keep their stored value.
 func (h *Handler) UpdateSettings(c echo.Context) error {
-	var in domain.SettingsView
+	var in domain.SettingsPatch
 	if err := c.Bind(&in); err != nil {
 		return badBody(c, err)
 	}

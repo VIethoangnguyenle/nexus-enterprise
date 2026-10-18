@@ -92,6 +92,9 @@ type refreshAttacher interface {
 // directly. Every sign-in path — password, OTP, Google — goes through it, so
 // they all establish the same session.
 func issueSessionWith(c echo.Context, a refreshAttacher, id domain.RefreshIdentity) error {
+	if id.Device == "" {
+		id.Device = domain.DeviceLabel(c.Request().UserAgent())
+	}
 	refreshToken, err := a.AttachRefreshToken(c.Request().Context(), id)
 	if err != nil {
 		return internalFailure(fmt.Errorf("establish session: %w", err))
@@ -163,4 +166,34 @@ func (h *Handler) Logout(c echo.Context) error {
 
 	clearRefreshCookie(c)
 	return c.JSON(http.StatusOK, map[string]string{"status": "logged out"})
+}
+
+// ListSessions handles GET /api/auth/sessions: the caller's own sessions only
+// (the user comes from the verified claims, never the request), each with a flag
+// saying which one is the current one.
+func (h *Handler) ListSessions(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	sessions, err := h.svc.ListSessions(c.Request().Context(), claims.UserID, claims.SessionID)
+	if err != nil {
+		return fail(c, err)
+	}
+	return c.JSON(http.StatusOK, map[string]any{"sessions": sessions})
+}
+
+// RevokeOwnSession handles DELETE /api/auth/sessions/:id: ends one of the
+// caller's other sessions. Someone else's session answers 404, like an unknown
+// one; the session in use answers 400.
+func (h *Handler) RevokeOwnSession(c echo.Context) error {
+	claims, err := httputil.RequireClaims(c)
+	if err != nil {
+		return err
+	}
+	err = h.svc.RevokeOwnSession(c.Request().Context(), claims.UserID, claims.SessionID, c.Param("id"))
+	if err != nil {
+		return fail(c, err)
+	}
+	return c.JSON(http.StatusOK, map[string]string{"status": "revoked"})
 }

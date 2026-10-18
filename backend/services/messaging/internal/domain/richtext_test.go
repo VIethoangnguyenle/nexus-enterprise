@@ -28,6 +28,26 @@ func TestSanitizeHTML_KeepsTheToolbarsFormatting(t *testing.T) {
 
 // HTML sent straight to the API is filtered on the server, whatever the
 // client does: nothing that runs script or restyles the page survives.
+// The @Tất cả marker is the one mention that is not an ID. Exactly that text is
+// kept, so an edit still finds it; anything longer, and any other attribute
+// riding along, is dropped.
+func TestSanitizeHTML_KeepsTheMentionAllMarkerExactly(t *testing.T) {
+	marker := `<span data-mention="` + MentionAll + `">` + MentionAll + `</span>`
+	assert.Contains(t, sanitizeHTML(`<p>`+marker+` họp lúc 9h</p>`), marker)
+
+	out := sanitizeHTML(`<p><span data-mention="` + MentionAll + `" onclick="steal()" style="color:red">` + MentionAll + `</span></p>`)
+	assert.Contains(t, out, `data-mention="`+MentionAll+`"`, "the marker survives its companions")
+	assert.NotContains(t, out, "onclick")
+	assert.NotContains(t, out, "steal")
+	assert.NotContains(t, out, "style")
+
+	for _, v := range []string{MentionAll + " x", MentionAll + "x", "x" + MentionAll, "@Tất", "@Tất  cả", "@TẤT CẢ"} {
+		out := sanitizeHTML(`<span data-mention="` + v + `">a</span>`)
+		assert.NotContains(t, out, "data-mention", "only the exact marker: %q", v)
+		assert.NotContains(t, out, "onclick")
+	}
+}
+
 func TestSanitizeHTML_DropsWhatCouldRunOrRestyle(t *testing.T) {
 	for name, in := range map[string]string{
 		"script tag":      `<p>hi</p><script>alert(1)</script>`,

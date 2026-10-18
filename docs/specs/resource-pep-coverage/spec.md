@@ -360,3 +360,6 @@ Text documents follow the table in `text-documents` (read or write on the OA of 
 #### Scenario: Editing two fields at once
 - **WHEN** one manager sets the name while another sets the description
 - **THEN** both land, because each is a single statement that sets only the fields it names
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phases 08 and 11: new routes `GET /api/approval/search`, `GET /api/drive/search`, drive star and quick-access routes, each with its deny cases. See `unified-search`. Plan: `plans/261018-1742-mobile-ux-overhaul`.

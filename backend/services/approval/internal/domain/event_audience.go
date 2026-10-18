@@ -13,6 +13,18 @@ type EventAudience struct {
 	// AssigneeNodeIDs are the approvers still pending on the current step —
 	// the people who must act next. Empty once the request is terminal.
 	AssigneeNodeIDs []string
+	// acted holds who has already decided on the current step.
+	acted map[string]bool
+}
+
+// StepAdvancedBy reports whether an approval by actor moved the request on:
+// it did unless the request is still pending on the very step the actor's
+// decision is recorded on. A terminal request advanced (it completed).
+func (a *EventAudience) StepAdvancedBy(actor string) bool {
+	if a == nil || a.Request == nil || a.Request.Status != "pending" {
+		return true
+	}
+	return !a.acted[actor]
 }
 
 // EventAudience resolves the audience of an event about requestID: the
@@ -49,6 +61,7 @@ func (s *Service) EventAudience(ctx context.Context, requestID string) (*EventAu
 			acted[a.UserNodeID] = true
 		}
 	}
+	aud.acted = acted
 	seen := map[string]bool{}
 	for _, id := range assignees {
 		members, err := s.policy.GetMembers(ctx, id)

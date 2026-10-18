@@ -148,3 +148,6 @@ The Giao diện tab SHALL offer the theme (Theo hệ thống, Sáng, Tối) as r
 #### Scenario: A file not pending
 - **WHEN** the drive refuses a confirmation because the file is no longer pending
 - **THEN** the proxy answers 409, not 500
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 05: on phones settings move to the Tôi page (Tài khoản / Trong workspace này) and per-module settings pages; the workspace conversion block of Cài đặt → Workspace is removed. See `user-settings`. Plan: `plans/261018-1742-mobile-ux-overhaul`.

@@ -92,6 +92,11 @@ func (s *Service) SendMessage(ctx context.Context, in SendMessageInput) (*pb.Mes
 	if err := s.authorizeChannelOp(ctx, ch, in.SenderNodeID, ngac.OpWrite); err != nil {
 		return nil, err
 	}
+	// Group management restrictions: system-line spoofing, restricted posting,
+	// restricted @Tất cả, and workspace-wide @all for admins only.
+	if err := s.checkGroupPostingRestrictions(ctx, ch, in.SenderNodeID, in); err != nil {
+		return nil, err
+	}
 	if in.ParentMessageID != "" {
 		if err := s.checkReplyParent(ctx, in.ParentMessageID, in.ChannelID); err != nil {
 			return nil, err

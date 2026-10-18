@@ -1,20 +1,22 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useCanGoBack, useNavigate, useRouter, useRouterState, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
-import { ArrowLeft, MessageSquare, X } from 'lucide-react'
+import { ArrowLeft, MessageSquare, Phone, Search, X } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useDeviceBack } from '../../hooks/useDeviceBack'
 import { useConnectionLost } from '../../hooks/useConnectionLost'
-import { levelContacts, useContactsBrowse } from '../../hooks/useContactsBrowse'
+import { levelContacts, useContactsBrowse, type BrowseView } from '../../hooks/useContactsBrowse'
+import { useDepartmentTree, useGroupMembers } from '../../hooks/useContactCategories'
 import type { Contact } from '../../hooks/useContacts'
 import { useStartCall } from '../../hooks/useCalls'
 import { useCreateDM } from '../../hooks/useMessaging'
 import { usePeople } from '../../hooks/usePeople'
 import { useBottomBarLayout, usePhone } from '../../hooks/usePhone'
-import { useRecentDirects } from '../../hooks/useRecentDirects'
+import { useFrequentContacts, useRecentDirects } from '../../hooks/useRecentDirects'
 import { useRecentSearches } from '../../hooks/useRecentSearches'
 import { useSuggestionPanel } from '../../hooks/useSuggestionPanel'
 import { useWorkspaceType } from '../../hooks/useWorkspaceType'
+import { useWorkspaceDetails } from '../../hooks/useWorkspaces'
 import { callRoute } from '../../lib/call-nav'
 import {
   categorySearch, closePersonSearch, deptSearch, groupSearch, homeSearch, openPersonSearch, roleSearch,
@@ -30,17 +32,23 @@ import { useWebSocketStore } from '../../stores/websocket.store'
 import { Avatar, FilterChip, IconButton, toast } from '../primitives'
 import { SearchBox } from '../patterns/SearchBox'
 import { SearchSuggestions } from '../patterns/SearchSuggestions'
+import { ModuleHeader } from '../patterns/ModuleHeader'
+import type { SwipeAction } from '../patterns/SwipeRow'
+import { ALPHABET_FROM } from './alphabet'
 import type { MyDepartment } from './CategoryItem'
 import { ContactProfile, type ProfileMode } from './ContactProfile'
+import { ContactPhoneProfile } from './ContactPhoneProfile'
 import { ContactProfileSheet } from './ContactProfileSheet'
 import { ContactsBrowser } from './ContactsBrowser'
 import { ContactsCategoryHome } from './ContactsCategoryHome'
 import { ContactsChips } from './ContactsChips'
 import { ContactsNav } from './ContactsNav'
+import { ContactsSearchFilters } from './ContactsSearchFilters'
 import { PhoneBackBar, PhoneLayer, phonePush } from './ContactsPhone'
 import { PathTrail } from './PathTrail'
 import { categoriesOf, colleaguesOf, nameOf, parentPathLabel, pathSegments, roleLine } from './contacts-model'
 import { phoneBarOf } from './phone-bar'
+import { inPlace, placeOfLevel, type PlaceFilter } from './place-filter'
 
 /** What the open search says while there is nothing to suggest. */
 const SEARCH_HINT = 'Gõ tên, chức danh hoặc email để tìm người.'
@@ -94,12 +102,19 @@ export function ContactsScreen() {
   // The phone's first screen has no category open: it is asked for nothing (the search with nothing typed is that).
   const cat: ContactsCat = phone ? named ?? 'search' : named === 'search' ? fallback : named ?? fallback
   const inCategory = phone && !!named
+  // The phone's search screen (the pill's, or a level's search icon): not its first screen, which is also `search`.
+  const onSearchScreen = phone && named === 'search'
 
   // --- the search box: typing is local, the address follows a moment later ---
   const urlQuery = search.q ?? ''
   const [query, setQuery] = useState(urlQuery)
   const written = useRef(urlQuery)
   const [onlineOnly, setOnlineOnly] = useState(false)
+  // A phone's people search narrowed to a place (the level its search icon was pressed on, or a picked chip).
+  const [place, setPlace] = useState<PlaceFilter | undefined>()
+  useEffect(() => {
+    if (!onSearchScreen) setPlace(undefined)
+  }, [onSearchScreen])
   useEffect(() => {
     // The address changed from outside (a link, back, forward): the box follows it.
     if (urlQuery !== written.current) {
@@ -125,6 +140,7 @@ export function ContactsScreen() {
       setQuery('')
       written.current = ''
       setOnlineOnly(false)
+      setPlace(undefined)
     }
     previousWs.current = wsId
   }, [wsId])
@@ -151,12 +167,25 @@ export function ContactsScreen() {
     setQuery('')
     written.current = ''
     setOnlineOnly(false)
+    setPlace(undefined)
   }
   const openCategory = (c: Exclude<ContactsCat, 'search'>) => { resetFilters(); void go((prev) => categorySearch(prev, c)) }
   const openDept = (id: string | undefined) => { resetFilters(); void go((prev) => deptSearch(prev, id)) }
   const openRole = (id: string) => { resetFilters(); void go((prev) => roleSearch(prev, id)) }
   const openGroup = (id: string) => { resetFilters(); void go((prev) => groupSearch(prev, id)) }
   const openSearchScreen = () => { resetFilters(); void go((prev) => categorySearch(prev, 'search')) }
+  /** The search icon of a level: the search screen, narrowed to the department, role or group the level shows. */
+  const openPlaceSearch = () => {
+    resetFilters()
+    setPlace(placeOfLevel(view.level, search))
+    void go((prev) => categorySearch(prev, 'search'))
+  }
+  /** Xem tất cả under Đang trực tuyến: the search screen listing everyone online the viewer may see. */
+  const seeAllOnline = () => {
+    resetFilters()
+    setOnlineOnly(true)
+    void go((prev) => categorySearch(prev, 'search'))
+  }
   const clearSearch = () => {
     setQuery('')
     setOnlineOnly(false)
@@ -283,11 +312,13 @@ export function ContactsScreen() {
   const [wantsDirects, setWantsDirects] = useState(false)
   const { directs, isLoading: directsLoading } = useRecentDirects(wsId, wantsDirects)
   const lately = useMemo(() => recentlyMessaged(directs, view.all, me?.id), [directs, view.all, me?.id])
+  // On a phone's search screen a place or the online filter lists people with nothing typed: no suggestions over them.
+  const listing = onSearchScreen && (!!place || onlineOnly)
   const panel = useSuggestionPanel({
     value: query,
     variant: bottomBar ? 'screen' : 'popover',
     anchorRef: searchRef,
-    showWhenEmpty: true,
+    showWhenEmpty: !listing,
     groups: [
       recent.group((q) => setQuery(q)),
       {
@@ -320,21 +351,56 @@ export function ContactsScreen() {
       }
     })()
     : undefined
+  const frequent = useFrequentContacts(wsId, view.all, phone)
+  const onlineNow = useMemo(
+    () => (phone ? view.all.filter((c) => c.user_id !== me?.id && c.user_id in onlineUsers) : []),
+    [phone, view.all, me?.id, onlineUsers],
+  )
+  const details = useWorkspaceDetails(phone && !isPersonal ? wsId : '')
+  const canInvite = !isPersonal && details.data?.can_manage === true
   const searching = query.trim() !== ''
   const mineIsCurrent = !!myDepartment && cat === 'org' && search.dept === myDepartment.id && !searching
   const openMine = () => { if (myDepartment) openDept(myDepartment.id) }
 
+  const placeTree = useDepartmentTree(wsId, onSearchScreen && !isPersonal).tree
+  const placeGroup = useGroupMembers(wsId, place?.kind === 'group' ? place.id : null)
+  const groupMembers = useMemo(
+    () => (place?.kind === 'group' && !placeGroup.isLoading && !placeGroup.isError ? new Set(placeGroup.members.map((mm) => mm.userId)) : undefined),
+    [place, placeGroup.members, placeGroup.isLoading, placeGroup.isError],
+  )
+  const shown: BrowseView = useMemo(() => {
+    if (!onSearchScreen || view.kind !== 'search') return view
+    const typed = deferredQuery.trim() !== ''
+    let found = typed ? view.people : listing ? view.all.filter((c) => c.user_id !== me?.id) : []
+    if (place) found = inPlace(found, place, { tree: placeTree ?? facts.tree, groupMembers })
+    return { ...view, people: found, sub: `${found.length} người khớp` }
+  }, [onSearchScreen, view, deferredQuery, listing, me?.id, place, placeTree, facts.tree, groupMembers])
+  const searchHint = onSearchScreen && (deferredQuery.trim() !== '' || listing)
+    ? `${place ? `Kết quả trong ${place.label}` : view.limited ? 'Kết quả trong phạm vi bạn được xem'
+      : isPersonal ? `Kết quả trong ${workspace}` : `Kết quả trong cả ${workspace}`} · ${
+      (onlineOnly ? shown.people.filter(isOnline) : shown.people).length} người khớp`
+    : undefined
+
   const searchLabel = view.limited
     ? 'Tìm người trong phạm vi bạn được xem' : isPersonal ? `Tìm người trong ${workspace}` : `Tìm người trong cả ${workspace}`
-  const onlineN = levelContacts(view).filter(isOnline).length
+  const onlineN = levelContacts(shown).filter(isOnline).length
   const showTools = view.kind !== 'roles' && view.kind !== 'groups'
   // While the suggestions cover the list of a phone or a tablet, filters would change a list that cannot be seen.
-  const covering = bottomBar && panel.visible
+  // A phone's search listing a place or everyone online is not covered by suggestions.
+  const covering = bottomBar && panel.visible && !listing
   const clearButton = (
     <IconButton aria-label="Xoá tìm kiếm" title="Xoá tìm kiếm" size="sm" onClick={clearSearch}
       className={bottomBar ? 'absolute right-1 top-1/2 -translate-y-1/2' : ''}>
       <X size={16} strokeWidth={1.75} aria-hidden="true" />
     </IconButton>
+  )
+  const onlineChip = (
+    <FilterChip pressed={onlineOnly} onClick={() => setOnlineOnly((on) => !on)}>
+      <span className="inline-flex items-center gap-1.5">
+        <span aria-hidden="true" className="w-2 h-2 rounded-full bg-success" />
+        Đang trực tuyến{view.status === 'ready' && <span className="font-normal text-ink-muted tnum">{onlineN}</span>}
+      </span>
+    </FilterChip>
   )
   const tools = showTools ? (
     <div className={`flex items-center gap-2 min-w-0 ${phone ? 'flex-wrap' : ''}`}>
@@ -382,21 +448,31 @@ export function ContactsScreen() {
         />
         {query && bottomBar && clearButton}
       </div>
-      {!covering && (
-        <FilterChip pressed={onlineOnly} onClick={() => setOnlineOnly((on) => !on)}>
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden="true" className="w-2 h-2 rounded-full bg-success" />
-            Đang trực tuyến{view.status === 'ready' && <span className="font-normal text-ink-muted tnum">{onlineN}</span>}
-          </span>
-        </FilterChip>
-      )}
+      {/* The search screen's chips stay over its suggestions: picking a place lists its people with nothing typed. */}
+      {(!covering || onSearchScreen) && (phone ? (
+        <ContactsSearchFilters
+          isPersonal={isPersonal}
+          filter={place}
+          onFilter={setPlace}
+          tree={placeTree ?? facts.tree}
+          roles={view.roles}
+          onlineOnly={onlineOnly}
+          onToggleOnline={() => setOnlineOnly((on) => !on)}
+          onlineCount={view.status === 'ready' ? onlineN : undefined}
+        />
+      ) : onlineChip)}
     </div>
   ) : null
+  const levelTools = showTools ? <div className="flex items-center gap-2 min-w-0">{onlineChip}</div> : null
   const cover = covering ? <SearchSuggestions panel={panel} emptyText={SEARCH_HINT} /> : null
 
+  const rowActions = (c: Contact): SwipeAction[] => [
+    { key: 'message', label: 'Nhắn tin', tone: 'accent', icon: <MessageSquare size={20} strokeWidth={1.75} aria-hidden="true" />, onAction: () => message(c) },
+    { key: 'call', label: 'Gọi', tone: 'success', icon: <Phone size={20} strokeWidth={1.75} aria-hidden="true" />, onAction: () => call(c) },
+  ]
   const browser = (variant: 'column' | 'phone') => (
     <ContactsBrowser
-      view={view}
+      view={variant === 'phone' ? shown : view}
       variant={variant}
       workspaceName={workspace}
       isPersonal={isPersonal}
@@ -406,8 +482,13 @@ export function ContactsScreen() {
       meId={me?.id}
       selectedId={selected?.user_id}
       people={people}
-      tools={tools}
+      tools={variant === 'phone' && cat !== 'search' ? levelTools : tools}
       cover={cover}
+      tallRows={variant === 'phone'}
+      rowActions={variant === 'phone' ? rowActions : undefined}
+      alphabetFrom={variant === 'phone' ? ALPHABET_FROM : undefined}
+      listWithoutQuery={variant === 'phone' && listing}
+      searchHint={variant === 'phone' ? searchHint : undefined}
       retryTreeHere={bottomBar}
       onOpenDept={openDept}
       onOpenRoles={() => openCategory('roles')}
@@ -421,24 +502,22 @@ export function ContactsScreen() {
       onShowEveryone={() => setOnlineOnly(false)}
     />
   )
+  const profileProps = (contact: Contact) => ({
+    contact,
+    online: isOnline(contact),
+    isMe: contact.user_id === me?.id,
+    isPersonal,
+    path: isPersonal ? [] : pathSegments(facts.tree, contact),
+    colleagues: colleaguesOf(view.all, contact),
+    busy,
+    onMessage: () => message(contact),
+    onCall: () => call(contact),
+    onClose: closePerson,
+    onOpenDept: (id: string) => { if (phone) void go((prev) => deptSearch(closePersonSearch(prev), id)); else openDept(id) },
+    onOpenRole: (id: string) => { if (phone) void go((prev) => roleSearch(closePersonSearch(prev), id)); else openRole(id) },
+  })
   const profile = (mode: ProfileMode, contact: Contact) => (
-    <ContactProfile
-      contact={contact}
-      online={isOnline(contact)}
-      isMe={contact.user_id === me?.id}
-      isPersonal={isPersonal}
-      path={isPersonal ? [] : pathSegments(facts.tree, contact)}
-      colleagues={colleaguesOf(view.all, contact)}
-      mode={mode}
-      focusHeading={mode === 'panel'}
-      busy={busy}
-      onMessage={() => message(contact)}
-      onCall={() => call(contact)}
-      onEdit={editProfile}
-      onClose={closePerson}
-      onOpenDept={(id) => { if (phone) void go((prev) => deptSearch(closePersonSearch(prev), id)); else openDept(id) }}
-      onOpenRole={(id) => { if (phone) void go((prev) => roleSearch(closePersonSearch(prev), id)); else openRole(id) }}
-    />
+    <ContactProfile {...profileProps(contact)} mode={mode} focusHeading={mode === 'panel'} onEdit={editProfile} />
   )
   const banner = connectionLost && (
     <div role="status" className="mx-5 mt-2 px-3 py-2 rounded-surface bg-warning-wash text-sm">
@@ -449,6 +528,7 @@ export function ContactsScreen() {
   // --- a phone: the first screen, and the screens stacked over it ---
   if (phone) {
     const bar = phoneBarOf(view, workspace)
+    const levelPlace = placeOfLevel(view.level, search)
     return (
       <>
         <ContactsCategoryHome
@@ -457,6 +537,14 @@ export function ContactsScreen() {
           myDepartment={myDepartment}
           onOpenMine={openMine}
           onSearch={openSearchScreen}
+          frequent={frequent}
+          online={onlineNow}
+          isOnline={isOnline}
+          onOpenPerson={(c) => openPerson(c)}
+          onMessagePerson={message}
+          onSeeAllOnline={seeAllOnline}
+          canInvite={canInvite}
+          onInvite={() => void navigate({ to: '/settings/$section', params: { section: 'workspace' }, search: (prev: { ws?: string }) => (prev.ws ? { ws: prev.ws } : {}) })}
         />
         <AnimatePresence custom={byDevice}>
           {inCategory && (
@@ -467,12 +555,22 @@ export function ContactsScreen() {
                   title={bar.title}
                   sub={bar.above.length > 0 ? <PathTrail segments={bar.above} /> : bar.text}
                   onBack={backOneLevel}
-                  end={view.level.kind === 'group' && view.group ? (
-                    <IconButton aria-label="Mở nhóm" title="Mở nhóm" shape="round" size="lg" className="w-11 h-11"
-                      onClick={() => openChat(view.group!.id)}>
-                      <MessageSquare size={20} strokeWidth={1.75} aria-hidden="true" />
-                    </IconButton>
-                  ) : undefined}
+                  end={cat === 'search' ? undefined : (
+                    <span className="flex items-center">
+                      <IconButton
+                        aria-label={levelPlace ? `Tìm người trong ${levelPlace.label}` : 'Tìm người'} title="Tìm người"
+                        shape="round" size="lg" className="w-11 h-11" onClick={openPlaceSearch}
+                      >
+                        <Search size={20} strokeWidth={1.75} aria-hidden="true" />
+                      </IconButton>
+                      {view.level.kind === 'group' && view.group && (
+                        <IconButton aria-label="Mở nhóm" title="Mở nhóm" shape="round" size="lg" className="w-11 h-11"
+                          onClick={() => openChat(view.group!.id)}>
+                          <MessageSquare size={20} strokeWidth={1.75} aria-hidden="true" />
+                        </IconButton>
+                      )}
+                    </span>
+                  )}
                 />
                 {banner}
                 {browser('phone')}
@@ -481,7 +579,9 @@ export function ContactsScreen() {
           )}
           {selected && (
             <PhoneLayer key="profile" label={`Hồ sơ ${nameOf(selected)}`} onBack={closePerson}>
-              <div className="flex-1 min-h-0 overflow-y-auto pb-6">{profile('screen', selected)}</div>
+              <div className="flex-1 min-h-0 overflow-y-auto pb-6">
+                <ContactPhoneProfile {...profileProps(selected)} wsId={wsId} onOpenChat={openChat} />
+              </div>
             </PhoneLayer>
           )}
         </AnimatePresence>
@@ -493,17 +593,16 @@ export function ContactsScreen() {
   if (bottomBar) {
     return (
       <div className="relative flex flex-col flex-1 min-h-0 min-w-0 bg-base">
-        <div className="px-4 pt-3.5 pb-1.5">
-          <h1 className="m-0 font-display text-[1.625rem] leading-tight font-bold tracking-tight text-ink">Danh bạ</h1>
-        </div>
-        <ContactsChips
-          categories={categories}
-          current={cat}
-          onOpen={openCategory}
-          myDepartment={myDepartment}
-          mineIsCurrent={mineIsCurrent}
-          onOpenMine={openMine}
-        />
+        <ModuleHeader moduleId="contacts" title="Danh bạ">
+          <ContactsChips
+            categories={categories}
+            current={cat}
+            onOpen={openCategory}
+            myDepartment={myDepartment}
+            mineIsCurrent={mineIsCurrent}
+            onOpenMine={openMine}
+          />
+        </ModuleHeader>
         {banner}
         {browser('column')}
         <AnimatePresence>

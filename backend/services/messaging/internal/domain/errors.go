@@ -15,6 +15,7 @@ var (
 	ErrAccessDenied  = httputil.ErrAccessDenied
 	ErrAlreadyExists = httputil.ErrAlreadyExists
 	ErrInvalidInput  = httputil.ErrInvalidInput
+	ErrUnavailable   = httputil.ErrUnavailable
 )
 
 // ReasonQuotedMessageUnavailable is the machine-readable reason of a send refused

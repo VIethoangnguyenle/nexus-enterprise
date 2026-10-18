@@ -38,6 +38,8 @@ interface TimeGridProps {
   onSelect: (start: Date, end: Date) => void
   /** The day number was pressed. */
   onOpenDay: (day: Date) => void
+  /** How long the draft a click on empty time makes is, in minutes; an hour when absent. */
+  newEventMinutes?: number
 }
 
 /** The red line of the present moment (DESIGN.md §6); named so a screen reader and a test can find it. */
@@ -60,11 +62,11 @@ function NowLine({ now }: { now: Date }) {
  * resizes it, and dragging across empty time draws a draft.
  */
 export function TimeGrid({
-  days, occurrences, now, selectedKey, draft, draftRef, realtime, keyOf, colorOf, onOpen, onMove, onSelect, onOpenDay,
+  days, occurrences, now, selectedKey, draft, draftRef, realtime, keyOf, colorOf, onOpen, onMove, onSelect, onOpenDay, newEventMinutes,
 }: TimeGridProps) {
   const columns = useRef<(HTMLElement | null)[]>([])
   const scroller = useRef<HTMLDivElement>(null)
-  const pointer = useGridPointer({ days, columns, onMove, onSelect })
+  const pointer = useGridPointer({ days, columns, onMove, onSelect, clickMinutes: newEventMinutes })
 
   // Open on the hour before now, once per view; moving between ranges keeps the place.
   useEffect(() => {

@@ -76,6 +76,14 @@ type ApprovalBroadcaster interface {
 	BroadcastApprovalEvent(n ApprovalNotice)
 }
 
+// NodeResolver translates an NGAC user-attribute node ID into the real user
+// UUID stored in the users table. The consumer uses it so that approval
+// notifications are stored and pushed under the account's ID, not under the
+// graph node ID that only the policy engine knows.
+type NodeResolver interface {
+	UserIDByNode(ctx context.Context, nodeID string) (string, error)
+}
+
 // ApprovalEvent matches the event structure from approval service.
 //
 // TenantID and WorkspaceID come from the acting request's token; delivery is
@@ -93,7 +101,15 @@ type ApprovalEvent struct {
 	TenantID        string   `json:"tenant_id"`
 	WorkspaceID     string   `json:"workspace_id"`
 	Comment         string   `json:"comment"`
-	Timestamp       int64    `json:"timestamp"`
+	// NotifyResult is the requester's switch for the result of their request;
+	// absent (an older producer) means on.
+	NotifyResult *bool `json:"notify_result,omitempty"`
+	// PendingNotifyOff lists the approvers who turned "đề nghị chờ bạn" off.
+	PendingNotifyOff []string `json:"pending_notify_off,omitempty"`
+	// StepAdvanced says, on an approval, whether it moved the request on to
+	// its next step; absent (an older producer) means it did.
+	StepAdvanced *bool `json:"step_advanced,omitempty"`
+	Timestamp    int64 `json:"timestamp"`
 }
 
 // Consumer listens to Kafka topics and creates notifications from asset and approval events.
@@ -101,13 +117,14 @@ type Consumer struct {
 	client    *kgo.Client
 	notifSv   NotificationCreator
 	broadcast ApprovalBroadcaster
+	resolver  NodeResolver
 	calendar  CalendarGate
 	announcer MessageAnnouncer
 	cancel    context.CancelFunc
 }
 
 // NewConsumer creates a Kafka consumer subscribing to asset and approval event topics.
-func NewConsumer(brokers []string, notifSv NotificationCreator, broadcast ApprovalBroadcaster) (*Consumer, error) {
+func NewConsumer(brokers []string, notifSv NotificationCreator, broadcast ApprovalBroadcaster, resolver NodeResolver) (*Consumer, error) {
 	client, err := kgo.NewClient(
 		kgo.SeedBrokers(brokers...),
 		kgo.ConsumerGroup("messaging-notification-consumer"),
@@ -123,6 +140,7 @@ func NewConsumer(brokers []string, notifSv NotificationCreator, broadcast Approv
 		client:    client,
 		notifSv:   notifSv,
 		broadcast: broadcast,
+		resolver:  resolver,
 		cancel:    cancel,
 	}
 	// The hub both pushes approval changes and shows a new message to the people
@@ -246,6 +264,25 @@ func (c *Consumer) handleAssignmentEvent(ctx context.Context, data []byte) {
 	}
 }
 
+// resolveUserID translates an NGAC node ID into the real user UUID. When no
+// resolver is wired (tests, graceful degradation) it returns nodeID unchanged.
+// An error or a miss returns "" so the caller skips the notification.
+func (c *Consumer) resolveUserID(ctx context.Context, nodeID string) string {
+	if c.resolver == nil || nodeID == "" {
+		return nodeID
+	}
+	userID, err := c.resolver.UserIDByNode(ctx, nodeID)
+	if err != nil {
+		slog.Warn("failed to resolve node to user", "node_id", nodeID, "error", err)
+		return ""
+	}
+	if userID == "" {
+		slog.Warn("no user found for node", "node_id", nodeID)
+		return ""
+	}
+	return userID
+}
+
 func (c *Consumer) handleApprovalEvent(ctx context.Context, data []byte) {
 	var evt ApprovalEvent
 	if err := json.Unmarshal(data, &evt); err != nil {
@@ -256,26 +293,36 @@ func (c *Consumer) handleApprovalEvent(ctx context.Context, data []byte) {
 	slog.Info("approval event received",
 		"request_id", evt.RequestID, "action", evt.Action, "actor", evt.ActorNodeID)
 
-	// 1. Create notification for the request creator (if someone else acted)
+	// 1. Tell the requester the result (if someone else decided and their
+	// notify_result switch is on), and tell each approver the request now
+	// waits on (unless they turned "đề nghị chờ bạn" off).
+	notifyResult := evt.NotifyResult == nil || *evt.NotifyResult
+	c.notifyPendingApprovers(ctx, evt)
 	switch evt.Action {
 	case "approved":
-		if evt.CreatedBy != "" && evt.CreatedBy != evt.ActorNodeID {
-			title := fmt.Sprintf("Approval request: %s", evt.TemplateName)
-			body := "Your approval request has been approved"
-			c.notify(ctx,
-				evt.CreatedBy, "approval_approved", title, body, "approval", evt.RequestID,
-			)
+		if notifyResult && evt.CreatedBy != "" && evt.CreatedBy != evt.ActorNodeID {
+			userID := c.resolveUserID(ctx, evt.CreatedBy)
+			if userID != "" {
+				title := fmt.Sprintf("Approval request: %s", evt.TemplateName)
+				body := "Your approval request has been approved"
+				c.notify(ctx,
+					userID, "approval_approved", title, body, "approval", evt.RequestID,
+				)
+			}
 		}
 	case "rejected":
-		if evt.CreatedBy != "" && evt.CreatedBy != evt.ActorNodeID {
-			title := fmt.Sprintf("Approval request: %s", evt.TemplateName)
-			body := "Your approval request has been rejected"
-			if evt.Comment != "" {
-				body += ": " + evt.Comment
+		if notifyResult && evt.CreatedBy != "" && evt.CreatedBy != evt.ActorNodeID {
+			userID := c.resolveUserID(ctx, evt.CreatedBy)
+			if userID != "" {
+				title := fmt.Sprintf("Approval request: %s", evt.TemplateName)
+				body := "Your approval request has been rejected"
+				if evt.Comment != "" {
+					body += ": " + evt.Comment
+				}
+				c.notify(ctx,
+					userID, "approval_rejected", title, body, "approval", evt.RequestID,
+				)
 			}
-			c.notify(ctx,
-				evt.CreatedBy, "approval_rejected", title, body, "approval", evt.RequestID,
-			)
 		}
 	}
 
@@ -294,6 +341,39 @@ func (c *Consumer) handleApprovalEvent(ctx context.Context, data []byte) {
 		ActorNodeID: evt.ActorNodeID, TemplateName: evt.TemplateName,
 		TenantID: evt.TenantID, WorkspaceID: evt.WorkspaceID, RecipientNodeIDs: recipients,
 	})
+}
+
+// notifyPendingApprovers tells the approvers a request now waits on — after it
+// is created, or after an approval moved it to the next step — that it is
+// their turn. The actor is not told of their own doing, and an approver who
+// turned "đề nghị chờ bạn" off is not told at all. An approval that left the
+// step where it was (a co-approver of a step that needs everyone) tells
+// nobody: the approvers still pending were told when the step began.
+func (c *Consumer) notifyPendingApprovers(ctx context.Context, evt ApprovalEvent) {
+	if evt.Action != "created" && evt.Action != "approved" {
+		return
+	}
+	if evt.Action == "approved" && evt.StepAdvanced != nil && !*evt.StepAdvanced {
+		return
+	}
+	off := make(map[string]bool, len(evt.PendingNotifyOff))
+	for _, n := range evt.PendingNotifyOff {
+		off[n] = true
+	}
+	seen := map[string]bool{}
+	for _, n := range evt.AssigneeNodeIDs {
+		if n == "" || n == evt.ActorNodeID || off[n] || seen[n] {
+			continue
+		}
+		seen[n] = true
+		userID := c.resolveUserID(ctx, n)
+		if userID == "" {
+			continue
+		}
+		c.notify(ctx, userID, "approval_pending",
+			fmt.Sprintf("Approval request: %s", evt.TemplateName), "An approval request is waiting for you",
+			"approval", evt.RequestID)
+	}
 }
 
 // approvalRecipients lists, without duplicates or blanks, the user nodes an

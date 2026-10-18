@@ -164,6 +164,7 @@ func main() {
 	adminHandler := rest.NewAdminHandler(wsSvc)
 	adminAPI := e.Group("/api", httputil.JWTMiddleware(jwtSecret))
 	adminHandler.RegisterAdminRoutes(adminAPI)
+	rest.NewSettingsHandler(wsSvc).RegisterRoutes(adminAPI)
 
 	// Start both servers
 	go func() {

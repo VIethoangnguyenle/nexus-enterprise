@@ -1,0 +1,103 @@
+# Red-team: scope and cross-phase contracts
+
+Plan: `plans/261018-1742-mobile-ux-overhaul/` (plan.md + phase-01..12). Perspective: scope and complexity critic,
+contract verifier. Requested scope (brainstorm decisions 1-13, mockup §1-§10) is treated as a constraint.
+All paths are relative to the repo root.
+
+## Finding 1: Removing `write` from the Members association to restrict posting breaks every other member action
+- **Severity:** Critical
+- **Location:** phase-07 §Architecture bullet "Ai được gửi tin = quản trị: Members association drops `write`"; §Implementation step 2 (test vectors)
+- **Flaw:** In messaging, `write` on the Content OA is not a "post a message" permission. It gates almost every member action. If you take it away, members lose far more than top-level posting. The plan also lets thread replies through on "`read` + `replies_open` column". That is a new allow path outside the PDP, inside a send path that today checks `write` before it even looks at the parent message.
+- **Failure scenario:** An owner sets "Chỉ chủ nhóm và quản trị nhóm". Members then can no longer react, pin, start or join a call, create a poll or task, edit their own message, or withdraw their own message (`authorizeBackOut` with `write`). None of the phase 07 test vectors check these paths, so CI stays green. Separately, a reply passes only if the column says "open". A bug or a stale value in that column turns into an authorization bypass that no NGAC test vector covers.
+- **Evidence:** `backend/services/messaging/internal/domain/reactions_pins_receipts.go:22` (AddReaction → OpWrite), `:78` and `:98` (Pin/Unpin → OpWrite); `polls_tasks.go:112` (CreatePollMessage), `:280` (CreateTaskMessage); `calls.go:188` (StartCall → OpWrite); `lifecycle.go:50` (EditMessage → OpWrite), `:125-127` (deleting your own message → authorizeBackOut OpWrite); `messages.go:92-95` (the OpWrite check runs before the `ParentMessageID` branch).
+- **Suggested fix:** Before phase 01 writes the spec, list every `ngac.OpWrite` call site in messaging and decide, path by path, what a restricted member keeps. Then pick one of two designs. (a) Model the restriction as a second association. For example, a per-channel `Ch_<id>_Posters` UA holds `write` and the reply path keeps `write`. (b) Keep Members' `write` and enforce "top-level post requires manage when restricted" as one explicit check in SendMessage. Either way, add deny and allow vectors for reaction, pin, call, poll, edit and withdraw, both with and without the restriction.
+
+## Finding 2: Workspace owners inherit `manage` on every group, so `manage`-keyed group rules leak to non-members
+- **Severity:** Critical
+- **Location:** phase-07 §Architecture ("@Tất cả = quản trị: messaging requires `manage` on the Content OA"; Managers → Content OA `{manage, write, invite}`); §Requirements Non-functional ("workspace owners keep `manage` on Channels OA")
+- **Flaw:** `manage` on the Channels OA is inherited by every channel's Content OA. Workspace owners hold it today so they can rename a group or remove people without reading it. Phase 07 uses `manage` as the test for "is a group manager". Two holes follow. (1) A workspace owner passes the @all restriction in any group they belong to. (2) The plan does not name the operation that gates "add/remove group manager". If that is `manage`, which is the natural choice, a workspace owner who is not in the group can promote themselves into `Ch_<id>_Managers`. That UA sits under Members, so they gain `read` on a private group. The spec forbids exactly this. There is also a side effect: Managers silently get the existing moderation rights that `manage` already unlocks (delete others' messages, close others' polls, change the avatar), and the spec does not mention it.
+- **Failure scenario:** An org owner, not a member of "Ban giám đốc", calls the new make-manager route on themselves. The `manage` check passes through inheritance. They are assigned under Managers, then under Members, and can read the whole group. The only regression vector the plan lists is "workspace owner not in group cannot read". That vector is evaluated before any self-promotion, so it passes.
+- **Evidence:** `backend/ngac/ngac_ops.go:40` ("A grant on Channels is inherited by every channel's Content OA beneath it"), `:48-53` (`OwnerChannelOps` = manage, create_channel); `docs/specs/tenant-ngac-init/spec.md:211` ("an owner can rename a group or remove someone from it without being in it, and cannot read it"); `messaging/internal/domain/lifecycle.go:125` (deleting another person's message needs manage), `polls_tasks.go:231`, `channel_avatar.go:88`.
+- **Suggested fix:** Do not reuse `manage` as the group-manager test. Gate group-management actions on membership in `Ch_<id>_Managers` (an assignment check through the policy client), or on `manage` **plus** `read`. Add deny vectors: "workspace owner not in group promotes self → DENY", "workspace owner who is a member sends @all while restricted → DENY", "workspace owner changes Ai được gửi tin → DENY". State in the spec which existing `manage` rights (moderation delete, close poll) Managers gain.
+
+## Finding 3: Nesting `Ch_<id>_Managers` under `Ch_<id>_Members` breaks the membership invariants and the reconciler
+- **Severity:** High
+- **Location:** phase-07 §Architecture first bullet ("New per-channel UA `Ch_<id>_Managers` … assigned into `Ch_<id>_Members`")
+- **Flaw:** Existing code and the spec assume that a group's members are user nodes sitting directly under the Members UA, and that any UA child there is invalid. The plan never says whether a promoted user is moved, or also assigned directly under Members.
+- **Failure scenario:** Suppose a manager is moved under Managers. They disappear from `ListMembers`. `requireInChannel` then returns 404, so they cannot be removed and cannot leave. The `channel_members` cache drifts. Now suppose the reconcile rule from migration 061 is re-run, or copied into a later reconcile. It deletes the `Ch_<id>_Managers → Ch_<id>_Members` edge as "a UA of any kind", and every manager silently loses their rights.
+- **Evidence:** `messaging/internal/domain/members.go:197-199` (target must sit directly under the Members UA), `:247-249` (ListMembers = user nodes directly under Members); `docs/specs/tenant-ngac-init/spec.md:160` (an add target SHALL be a `U` node), `:176` (a nested UA is never removed), `:200` (061 deletes `child -> Ch_{id}_Members` edges whose child is a UA).
+- **Suggested fix:** Make Managers a sibling UA, assigned to the channel's PC path and not into Members. Keep every user a direct child of Members, and add the manager edge on top. Update `tenant-ngac-init` §160/§176/§200 to match.
+
+## Finding 4: `channels.owner_id` duplicates `created_by`, and the existing creator bypass survives an ownership transfer
+- **Severity:** High
+- **Location:** phase-07 §Architecture ("Owner = a manager whose user is recorded as `channels.owner_id`"); §Requirements (transfer ownership, disband); plan.md Key decision 5 ("Group management rights are NGAC decisions")
+- **Flaw:** `channels.created_by` already exists. Messaging already grants the creator a non-NGAC right to remove anyone (`isChannelCreator`). The plan adds a second owner column, does not retire the creator bypass, and makes transfer and disband business-column checks. That contradicts its own claim that "Every rule is a PDP decision".
+- **Failure scenario:** A transfers ownership to B. A is now an ordinary member, but `isChannelCreator` still matches `created_by == A`. A keeps the power to remove any member, including B. No test vector catches this, because transfer and disband never reach the PDP.
+- **Evidence:** `data/init.sql:96` (`created_by TEXT REFERENCES users(id)`); `messaging/internal/domain/members.go:159` (creator may remove others), `:192-195` (`isChannelCreator` reads `ch.CreatedBy`), `:242` (`CanRemove` includes creator); phase-07 Overview line 14.
+- **Suggested fix:** Either use `created_by` as the owner (the transfer rewrites it), or add `owner_id` and change `isChannelCreator` to read it in the same commit. Add a vector "former owner removes member after transfer → DENY". Reword the plan to say that owner-only decisions are business checks, or model the owner as a UA.
+
+## Finding 5: The spec that owns the group-access model is missing from the plan's spec contract
+- **Severity:** High
+- **Location:** plan.md frontmatter `specs.modified`; phase-01 §Related Code Files "Modify specs"; phase-04 (create-groups lock); phase-07; phase-11 §Related ("Modify specs: … `drive-permission-engine`")
+- **Flaw:** The normative text for `ChannelMemberOps` (read, write, invite), `OwnerChannelOps`, "any member may add people", creator removal, and `create_channel` for Members lives in `docs/specs/tenant-ngac-init/spec.md`. Phases 04 and 07 both change that model, but `tenant-ngac-init` is not in plan.md or in phase 01. In the other direction, phase 11 modifies `drive-permission-engine`, which plan.md and phase 01 do not list. CLAUDE.md §5 treats a policy-model change without its spec update as incomplete.
+- **Failure scenario:** Phase 07 lands with `chat-group-management/spec.md`. `tenant-ngac-init/spec.md:160` still says "Any member of the group may add people", and `:211` still says "Group access comes only from `Ch_{channel_id}_Members`". The next policy change is reviewed against the stale spec, and someone "fixes" the Managers association back out.
+- **Evidence:** `docs/specs/tenant-ngac-init/spec.md:66` (Members get `create_channel`), `:160`, `:176`, `:211`; plan.md:18-19 (neither list contains `tenant-ngac-init`; `drive-permission-engine` is absent); phase-11 line 37.
+- **Suggested fix:** Add `tenant-ngac-init` and `drive-permission-engine` to plan.md `specs.modified` and to the phase 01 list. Have phases 04 and 07 each name the exact sections they rewrite.
+
+## Finding 6: Phase 04's preference store collides with existing stores and owners and cannot be built as written
+- **Severity:** High
+- **Location:** phase-04 §Architecture (table DDL, "Auth service owns account-scope prefs … workspace service owns workspace-scope prefs"), §Requirements Non-functional ("the registry maps their keys to them"), §Related ("Modify `frontend/src/hooks/usePreferences.ts`"); phase-05 Giao diện row
+- **Flaw:** There are four problems.
+  - The DDL is invalid. Postgres does not allow an expression (`coalesce(workspace_id,'')`) inside a PRIMARY KEY.
+  - The tables the registry "maps to" are owned by other services. `push_preferences` belongs to messaging (it is proxied to 8183) and is keyed by user. `calendar_user_settings` belongs to calendar and is keyed by `user_node_id`. Auth and workspace cannot write them without crossing service ownership, and the plan names no gRPC.
+  - `push_preferences` has fixed columns (direct, mention, thread_reply, quiet hours). The new `notify.<module>.<event>` keys have nothing behind them that the push sender reads, so those switches would save and then have no effect.
+  - `usePreferences` already exists as a device-local hook (theme, motion, sidebar) with live callers. `usePreferences(scope)` changes its signature, and theme and motion (the phase 05 Giao diện rows) are not in the registry. That breaks the "one source per option" rule from plan.md decision 3.
+- **Failure scenario:** The migration fails on `make db-migrate`. If someone instead "fixes" it with a unique index, the phase 05 Thông báo rows still write `notify.approval.*` to `user_preferences` while pushes keep reading `push_preferences`. The person turns a notification off and still receives it.
+- **Evidence:** phase-04 line 29 (the DDL); `frontend/vite.config.js:49-50` (`/api/me/push-preferences` → messaging :8183); `data/migrations/043_push_preferences.sql:5-13`; `data/migrations/057_calendar.sql:125-133`; `frontend/src/hooks/usePreferences.ts:9-13` and `frontend/src/lib/preferences.ts:1-17` (local-only, "Nothing here is sent to the server"); callers in `frontend/src/routes/_workspace.tsx`, `components/settings/AppearanceTab.tsx`, `hooks/useSidebarCollapsed.ts`.
+- **Suggested fix:** Give the new table one owner service. Use a surrogate key or two partial unique indexes (`WHERE workspace_id IS NULL` / `IS NOT NULL`). Leave existing keys in their owning service and have the frontend registry route each key to its endpoint, with no server-side mapping. Extend `push_preferences`, or route the push sender to the new keys, before any per-module notify switch ships. Name the new hook differently (for example `useServerPreference`) and state that theme and motion stay device-local.
+
+## Finding 7: The "Ai được tạo nhóm" lock rewrites a grant the codebase declares non-editable and duplicates the roles screen
+- **Severity:** High
+- **Location:** phase-04 §Architecture ("'Ai được tạo nhóm' lock is applied by adjusting the Channels OA association (create_channel for members) through the EPP path"); §Implementation step 2
+- **Flaw:** The workspace service explicitly refuses to edit the Owners and Members grants. "Who may create groups" is already expressed through custom roles on the Channels permission area. A lock that strips `create_channel` from Members adds a second, parallel mechanism. It also keeps two sources of truth: the `workspace_setting_locks` row and the graph association, with no reconcile between them.
+- **Failure scenario:** An admin locks "chỉ quản trị". A custom role "Trưởng nhóm" that holds `create_channel` on Channels still creates groups, so the lock reads "admins only" while non-admins create groups. In a second case, the EPP write fails after the lock row commits. The UI then shows "locked by Lan" while every member can still create groups. Or the reverse happens and nobody can see why creation is denied.
+- **Evidence:** `backend/services/workspace/internal/domain/roles_admin.go:231` ("Owners and Members are not editable"); `workspace/internal/domain/service.go:250` (Members → Channels with `MemberChannelOps`); `permission_areas.go:57-69` (Channels area ops); `docs/specs/tenant-ngac-init/spec.md:211` ("the Channels area of the permissions screen offers `create_channel` alone"); `messaging/internal/domain/channels.go:84` (the only enforcement point).
+- **Suggested fix:** Define the lock's meaning against roles: does "admins only" mean Owners, or anyone with a role that holds `create_channel`? Make the graph the only source. The lock row stores only who set it and when, and its value is derived from the association. Write both in one domain operation, with a compensating rollback and a test where the EPP call fails.
+
+## Finding 8: The new search, star and copy routes do not match the existing service route shapes or the vite regex block
+- **Severity:** High
+- **Location:** phase-08 §Architecture (approval `GET /api/workspaces/:id/approvals/search`; "regex block for the three nested routes"); phase-11 §Architecture (`POST .../drive/items/:id/star`, `POST .../drive/items/:id/copy` → vite regex block) and §Requirements ("Tạo bản sao if not present"); phase-11 step 1 ("copy without write on target → DENY")
+- **Flaw:**
+  - Approval: the service serves only `/api/approval/*` behind tenant-schema middleware, and the regex block has no approval branch. A route under `/api/workspaces/:id/approvals` falls through to the workspace service.
+  - Drive: item routes are flat (`/api/drive/items/:itemId/...`), not under `/api/workspaces/:id/`. Copy already exists. `shared-with-me` and `batch-access` already exist. Phase 11 re-plans copy as new work, with a new route, new tests and a "migration".
+- **Failure scenario:** In native dev, approval search returns 404 from :8181, while in Docker it may route differently. Phase 08's own success criterion "work in native dev" fails. In phase 11, a second copy endpoint is created next to `POST /api/drive/items/:itemId/copy`, so two copy contracts drift.
+- **Evidence:** `backend/services/approval/internal/rest/handler.go:68-76` (`/api` group with `tenantSchemaMiddleware`, `api.Group("/approval")`); `frontend/vite.config.js:62-86` (no approval branch), `:131` (`/api/approval` flat → 8186); `backend/services/drive/internal/rest/handler.go:90-96` (flat item routes), `:92` (CopyItem exists), `:109` (shared-with-me), `:115` (batch-access).
+- **Suggested fix:** Put approval search at `GET /api/approval/search` (it is covered by the flat proxy entry) and asset search at `/api/workspaces/:id/assets/search` (it is covered by the `/asset` regex). Put star at `POST/DELETE /api/drive/items/:itemId/star` and starred at `/api/drive/starred` (covered by the flat `/api/drive`). Remove "Tạo bản sao" from the backend work and reuse `CopyItem`. Its deny test belongs in phase 11 only if the existing tests lack one.
+
+## Finding 9: The dependency table and the parallel-execution note contradict each other and the phase file lists
+- **Severity:** Medium
+- **Location:** plan.md lines 54-70 (Phases table, "Parallel after 02 + 04" note); phase-11 frontmatter `dependencies: [3, 9]`; phase-05 and phase-08 §Related Code Files
+- **Flaw:**
+  - Phase 11 needs "search scoped to folder (phase 08)" but does not depend on 08.
+  - plan.md says phases 02, 03 and 09 "do not run in parallel", yet the parallel sets place 03 (in `{03→08, 03+09→11}`) and 09 (in `{09→10}`) in concurrent branches.
+  - Phases 05 and 08 both modify `PhoneSearchBar.tsx` (avatar → Tôi, and the search overlay) and are declared parallel.
+  - Phase 08's Requirements list a new "people" search endpoint while its Architecture says to reuse contacts. Contacts already support `search`.
+- **Failure scenario:** Phase 11 is cooked before 08 and has to build its own folder search, or stub one. Two worktrees edit `PhoneSearchBar.tsx` concurrently and merge-conflict on the same JSX.
+- **Evidence:** phase-11 line 7 and line 19; plan.md:69-70; phase-05 line 34 and phase-08 line 34 (both list `PhoneSearchBar.tsx`); phase-08 line 22 vs line 28; `backend/services/auth/internal/rest/workspaces.go:132` (`Search: c.QueryParam("search")`).
+- **Suggested fix:** Set phase 11 dependencies to `[3, 8, 9]`. Rewrite the parallel note as explicit lanes that never share `MobileNav` or `PhoneSearchBar`, and serialize 05 and 08 on `PhoneSearchBar`. Remove "people" from phase 08's new-endpoint list.
+
+## Finding 10: Requested settings and Drive rows have no backing contract in any phase
+- **Severity:** Medium
+- **Location:** phase-05 §Requirements (Tôi rows "Tạm dừng thông báo", "Giao diện và ngôn ngữ", "Thiết bị và phiên"); phase-04 key registry; phase-11 §Requirements (chip "Bản nháp"; Truy cập nhanh reason "Vinh nhắc bạn"; "activity view/index")
+- **Flaw:** The mockup asks for these rows, so they are in scope. But no phase owns their data:
+  - Phase 04's registry has no pause, language or session keys.
+  - Auth has no endpoint that lists sessions; it can only revoke one.
+  - Drive has no draft concept. Drafts are document-service `texts`.
+  - "nhắc bạn" mentions live in messaging, which drive cannot read without a new cross-service call.
+  - Phase 11's "activity view/index" is a new store whose source is not named.
+- **Failure scenario:** At phase 05 or 11 the cook agent meets a row with no API. It either fakes it, which development-rules forbid, or quietly invents an endpoint, table or cross-service dependency without a spec or a deny test. The "Thiết bị và phiên" page then lists nothing, or lists sessions with no per-user ownership check.
+- **Evidence:** `design/mockups/mobile-shell.html:683` (Tạm dừng thông báo), `:690-691` (Ngôn ngữ, Thiết bị và phiên), `:1460` (Bản nháp), `:1465` (Vinh nhắc bạn); `backend/services/auth/internal/domain/refresh.go:445` (only `RevokeSession`; there is no list route in `auth/internal/rest/handler.go:64-73`); `backend/services/drive/internal/rest/handler.go:85-115` (no draft or recent route); drafts in `backend/services/document/internal/texts/service.go`.
+- **Suggested fix:** Add the missing keys to the phase 04 registry (pause-until, language), with their owners. Add an auth "list my sessions" endpoint, with an own-sessions-only deny test, to phase 05. Define "Bản nháp" as a document-service query, routed `/api/workspaces/:id/documents` (it is in the regex block). Name where each Truy cập nhanh reason comes from, and drop "nhắc bạn" from the drive service unless messaging exposes it over gRPC.
+
+Status: DONE
+Summary: 10 findings (2 Critical, 6 High, 2 Medium). The most serious: phase 07's group restrictions reuse `write` and `manage`, which today gate most member actions and are inherited by workspace owners. Phases 04 and 11 also conflict with existing stores, route shapes and spec ownership.

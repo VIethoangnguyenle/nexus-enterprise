@@ -298,6 +298,15 @@ export function sortConversations(list: Conversation[]): Conversation[] {
   })
 }
 
+/**
+ * The list in the order Cài đặt Chat → Sắp xếp names: `activity` keeps it as it comes (newest activity first),
+ * `name` puts it in Vietnamese alphabetical order of the title.
+ */
+export function orderConversations(list: Conversation[], sort: 'activity' | 'name'): Conversation[] {
+  if (sort !== 'name') return list
+  return [...list].sort((a, b) => collator.compare(a.title, b.title))
+}
+
 export function filterConversations(list: Conversation[], filter: ConversationFilter): Conversation[] {
   switch (filter) {
     case 'unread':

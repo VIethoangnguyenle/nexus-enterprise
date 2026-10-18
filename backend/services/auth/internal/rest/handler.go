@@ -61,6 +61,8 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	// Protected — JWT required
 	api := e.Group("/api", httputil.JWTMiddleware(jwtSecret))
 	api.POST("/auth/switch-tenant", h.SwitchTenant)
+	api.GET("/auth/sessions", h.ListSessions)
+	api.DELETE("/auth/sessions/:id", h.RevokeOwnSession)
 	api.GET("/me", h.GetMe)
 	api.PATCH("/me/profile", h.UpdateProfile)
 	api.PUT("/me/avatar", h.UploadAvatar)
@@ -155,6 +157,7 @@ func (h *Handler) GetMe(c echo.Context) error {
 			"union_id": user.UnionID, "display_name": user.DisplayName,
 			"title": user.Title, "location": user.Location, "avatar_url": user.AvatarURL,
 			"email_verified": user.EmailVerified, "needs_profile": user.NeedsProfile,
+			"language": user.Language,
 		},
 	}
 	if tenant != nil {

@@ -1,5 +1,5 @@
 import {
-  MessageSquare, Calendar, FolderOpen, Users, Package, ClipboardCheck, Settings, ShieldCheck,
+  MessageSquare, Calendar, FolderOpen, Users, Package, ClipboardCheck, Settings, ShieldCheck, Bell,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { parseChatSearch, type ChatSearchUrl } from './chat-search'
@@ -83,8 +83,63 @@ export function phoneNameOf(module: ModuleId | undefined): string {
   return item?.phoneLabel ?? item?.label ?? 'Nexus'
 }
 
-/** The list of conversations (`/channels`), where the Chat bottom bar lives. */
-export const isChatListPath = (pathname: string) => /^\/channels\/?$/.test(pathname)
+/**
+ * Where the phone's bottom bar is drawn: every list screen. Not on a screen with a header of its own and a
+ * way back (`isPhoneDetailPath`, which includes the full screens `/channels/mentions` and `/channels/starred`),
+ * not on the settings pages, and not on the administration screens (on a phone they open from Cài đặt
+ * workspace and go back there).
+ */
+export function isModuleBarPath(pathname: string): boolean {
+  if (isPhoneDetailPath(pathname)) return false
+  return !/^\/(settings|admin)(\/|$)/.test(pathname)
+}
+
+/** A module the bottom bar can hold, as the `mobile.bar` setting names it. */
+export const BAR_MODULE_IDS = ['chat', 'calendar', 'drive', 'approval', 'assets', 'contacts', 'notifications'] as const
+export type BarModuleId = (typeof BAR_MODULE_IDS)[number]
+
+export const BAR_SLOTS = 4
+
+export interface BarModule {
+  id: BarModuleId
+  icon: LucideIcon
+  /** The name under the icon, on the phone. */
+  label: string
+  /** Where it goes; Thông báo opens a screen instead. */
+  to?: string
+  /** The module the path belongs to, to mark the slot you are in. */
+  module?: ModuleId
+}
+
+const BAR_ID_OF: Partial<Record<ModuleId, BarModuleId>> = {
+  messaging: 'chat', calendar: 'calendar', drive: 'drive', approval: 'approval', assets: 'assets', contacts: 'contacts',
+}
+
+/** What the bar can hold in this kind of workspace, in menu order: the main destinations, then Thông báo. */
+export function barModules(isPersonal: boolean): BarModule[] {
+  const modules = mainDestinations(isPersonal).map((d) => ({
+    id: BAR_ID_OF[d.id]!, icon: d.icon, label: d.phoneLabel ?? d.label, to: d.to, module: d.id,
+  }))
+  return [...modules, { id: 'notifications' as const, icon: Bell, label: 'Thông báo' }]
+}
+
+/** Chat · Lịch · Tài liệu, then Phê duyệt, or Danh bạ where there is nothing to approve. */
+export function defaultBar(isPersonal: boolean): BarModuleId[] {
+  return ['chat', 'calendar', 'drive', isPersonal ? 'contacts' : 'approval']
+}
+
+/**
+ * The four slots to draw: the stored choice when it names four different modules this kind of workspace
+ * offers, the defaults otherwise (unset, damaged, or naming one the workspace does not have).
+ */
+export function resolveBar(stored: unknown, isPersonal: boolean): BarModuleId[] {
+  const allowed = barModules(isPersonal).map((m) => m.id)
+  if (
+    Array.isArray(stored) && stored.length === BAR_SLOTS && new Set(stored).size === BAR_SLOTS &&
+    stored.every((id): id is BarModuleId => allowed.includes(id as BarModuleId))
+  ) return stored
+  return defaultBar(isPersonal)
+}
 
 /**
  * A screen that carries its own header with a way back on a phone (one
@@ -94,14 +149,14 @@ export function isPhoneDetailPath(pathname: string): boolean {
   return isConversationPath(pathname) || /^\/documents\/[^/]+\/?$/.test(pathname) || /^\/calendar\/(new|event\/[^/]+)\/?$/.test(pathname)
 }
 
-/** The tabs of the phone Chat list; the desktop ignores them. */
-export const CHAT_TABS = ['home', 'direct', 'sections', 'more'] as const
+/** The chips of the phone Chat list, in order (Tất cả · Mục · Chưa đọc · Được nhắc · Trực tiếp · Nhóm); the desktop ignores them. */
+export const CHAT_TABS = ['all', 'sections', 'unread', 'mentions', 'direct', 'spaces'] as const
 export type ChatTab = (typeof CHAT_TABS)[number]
 
 export interface ChannelsSearch extends ChatSearchUrl {
   ws?: string
-  /** Absent means Trang chủ. */
-  tab?: Exclude<ChatTab, 'home'>
+  /** Absent means the chip the device remembers (Tất cả on a new one). */
+  tab?: ChatTab
   /** The Tìm trong chat screen is open. */
   search?: 1
   /** The Thread screen is open, on Có tin mới (`new`) or Đang theo dõi (`followed`). */
@@ -117,7 +172,9 @@ export type ChatOverlay = { kind: 'search' } | { kind: 'threads'; chip: 'unread'
  */
 export function validateChannelsSearch(search: Record<string, unknown>): ChannelsSearch {
   const out: ChannelsSearch = { ...validateWorkspaceSearch(search) }
-  if (search.tab === 'direct' || search.tab === 'sections' || search.tab === 'more') out.tab = search.tab
+  if ((CHAT_TABS as readonly unknown[]).includes(search.tab)) out.tab = search.tab as ChatTab
+  // Thêm, the old fourth tab, held the mentions first.
+  else if (search.tab === 'more') out.tab = 'mentions'
   if (search.search === 1 || search.search === '1' || search.search === true) out.search = 1
   // The words and filters of the search screen (a phone's results live in this address).
   if (out.search) Object.assign(out, parseChatSearch(search))
@@ -133,6 +190,8 @@ export function chatOverlayOf(s: { search?: unknown; threads?: unknown }): ChatO
   return null
 }
 
-/** The tab to show; Trang chủ unless the address names another that exists. */
-export const chatTabOf = (s: { tab?: unknown }): ChatTab =>
-  (CHAT_TABS as readonly unknown[]).includes(s.tab) ? (s.tab as ChatTab) : 'home'
+/** The chip to show: the one the address names if it exists, else `remembered` (the one last chosen on this device). */
+export const chatTabOf = (s: { tab?: unknown }, remembered: ChatTab = 'all'): ChatTab => {
+  if (s.tab === 'more') return 'mentions'
+  return (CHAT_TABS as readonly unknown[]).includes(s.tab) ? (s.tab as ChatTab) : remembered
+}

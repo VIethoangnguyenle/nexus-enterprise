@@ -206,10 +206,34 @@ type TimeSlot struct {
 	End   string `json:"end"`
 }
 
-// SettingsView is a person's calendar settings (also the body of PUT /settings).
+// SettingsPatch is the body of PUT /settings: a field left out (nil) keeps its
+// stored value, so a client that knows only some of the settings cannot reset
+// the others. An empty visibleCalendars list means every calendar.
+type SettingsPatch struct {
+	TZID             *string   `json:"tzid"`
+	WorkStart        *string   `json:"workStart"`
+	WorkEnd          *string   `json:"workEnd"`
+	DefaultReminder  *int      `json:"defaultReminder"`
+	DefaultView      *string   `json:"defaultView"`
+	WeekStart        *int      `json:"weekStart"`
+	VisibleCalendars *[]string `json:"visibleCalendars"`
+	DefaultDuration  *int      `json:"defaultDuration"`
+	NotifyInvites    *bool     `json:"notifyInvites"`
+	NotifyChanges    *bool     `json:"notifyChanges"`
+	NotifyReminders  *bool     `json:"notifyReminders"`
+}
+
+// SettingsView is a person's calendar settings, as GET /settings answers them.
 type SettingsView struct {
-	TZID            string `json:"tzid"`
-	WorkStart       string `json:"workStart"`
-	WorkEnd         string `json:"workEnd"`
-	DefaultReminder int    `json:"defaultReminder"`
+	TZID             string   `json:"tzid"`
+	WorkStart        string   `json:"workStart"`
+	WorkEnd          string   `json:"workEnd"`
+	DefaultReminder  int      `json:"defaultReminder"`
+	DefaultView      string   `json:"defaultView"`
+	WeekStart        int      `json:"weekStart"`
+	VisibleCalendars []string `json:"visibleCalendars,omitempty"`
+	DefaultDuration  int      `json:"defaultDuration"`
+	NotifyInvites    bool     `json:"notifyInvites"`
+	NotifyChanges    bool     `json:"notifyChanges"`
+	NotifyReminders  bool     `json:"notifyReminders"`
 }

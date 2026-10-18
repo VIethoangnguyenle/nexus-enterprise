@@ -45,10 +45,16 @@ export const SORT_OPTIONS: { id: SortKey; label: string }[] = [
 
 const byName = (a: DriveItem, b: DriveItem) => a.name.localeCompare(b.name, 'vi', { numeric: true, sensitivity: 'base' })
 
-/** Folders first, then files, each in the order `key` asks for (name by default, the way Vietnamese is collated). */
-export function sortItems(items: DriveItem[], key: SortKey = 'name'): DriveItem[] {
+/** The list order of Cài đặt Tài liệu → Sắp xếp, as the screen's own sort names it. */
+export const SORT_OF_SETTING: Record<'modified' | 'name' | 'size', SortKey> = { modified: 'recent', name: 'name', size: 'size' }
+
+/**
+ * Folders first, then files, each in the order `key` asks for (name by default, the way Vietnamese is collated).
+ * With `foldersFirst` off (Cài đặt Tài liệu → Thư mục trước tệp) folders and files share the one order.
+ */
+export function sortItems(items: DriveItem[], key: SortKey = 'name', foldersFirst = true): DriveItem[] {
   return [...items].sort((a, b) => {
-    if (a.item_type !== b.item_type) return a.item_type === 'folder' ? -1 : 1
+    if (foldersFirst && a.item_type !== b.item_type) return a.item_type === 'folder' ? -1 : 1
     if (key === 'recent') return toMillis(b.updated_at) - toMillis(a.updated_at) || byName(a, b)
     if (key === 'size') return (b.size_bytes ?? 0) - (a.size_bytes ?? 0) || byName(a, b)
     return byName(a, b)

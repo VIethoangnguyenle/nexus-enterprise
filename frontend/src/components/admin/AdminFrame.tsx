@@ -1,12 +1,14 @@
 import type { ReactNode } from 'react'
 import { useNavigate } from '@tanstack/react-router'
-import { Lock } from 'lucide-react'
+import { ChevronLeft, Lock } from 'lucide-react'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useManagerDirectoryScope, useMemberDirectory } from '../../hooks/useAdmin'
+import { useBottomBarLayout } from '../../hooks/usePhone'
 import { statusOf } from '../../lib/errors'
 import { workspaceDisplayName } from '../../lib/workspace'
-import { Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
+import { Heading, Pressable, ScrollFade, TabBar, type TabItem } from '../primitives'
 import { EmptyState } from '../spaces/EmptyState'
+import { useSettingsNav } from '../settings/settings-nav'
 
 export type AdminSection = 'overview' | 'users' | 'roles' | 'directory'
 
@@ -38,9 +40,15 @@ interface AdminFrameProps {
  *
  * The fourth tab, Danh bạ, exists only where the directory is ready (the rules
  * read says so); a workspace without one has no tab and no word about it.
+ *
+ * Below 1024 Quản trị is reached from Cài đặt workspace (DESIGN.md §6), so the
+ * header leads with the way back there; the tables fold to one column by their
+ * own width and a detail panel becomes a full-screen sheet (SidePanel).
  */
 export function AdminFrame({ section, subtitle, action, children }: AdminFrameProps) {
   const navigate = useNavigate()
+  const phoneLayout = useBottomBarLayout()
+  const settings = useSettingsNav()
   const { workspaceId: wsId, workspaceName } = useActiveWorkspace()
   const people = useMemberDirectory(wsId)
   const workspace = workspaceDisplayName(workspaceName)
@@ -56,7 +64,16 @@ export function AdminFrame({ section, subtitle, action, children }: AdminFramePr
 
   return (
     <section className="relative flex-1 flex flex-col min-w-0 min-h-0 bg-base" aria-label="Quản trị">
-      <header className="flex items-center gap-4 px-5 pt-4 pb-1 min-w-0">
+      <header className={`flex items-center gap-4 pt-4 pb-1 min-w-0 ${phoneLayout ? 'pl-2 pr-5 gap-1' : 'px-5'}`}>
+        {phoneLayout && (
+          <Pressable
+            aria-label="Quay lại Cài đặt workspace"
+            onClick={() => settings.back('workspace')}
+            className="grid place-items-center w-11 h-11 shrink-0 rounded-full text-ink hover:bg-hover transition-colors duration-quick"
+          >
+            <ChevronLeft size={24} strokeWidth={1.75} aria-hidden="true" />
+          </Pressable>
+        )}
         <div className="grid gap-0.5 min-w-0">
           <Heading as="h1" look="page" className="truncate">Quản trị</Heading>
           <span className="text-sm text-ink-muted truncate">{subtitle ? `${workspace} · ${subtitle}` : workspace}</span>

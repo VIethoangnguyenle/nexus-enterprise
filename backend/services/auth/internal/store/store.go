@@ -31,6 +31,8 @@ type User struct {
 	EmailVerified bool
 	// ProfileCompleted: the person has been asked for, and saved, their profile.
 	ProfileCompleted bool
+	// Language is the UI language the person chose: "vi", "en" or "" (app default).
+	Language string
 }
 
 // TenantMembership represents a user's membership in a tenant.
@@ -62,7 +64,7 @@ type Tenant struct {
 // scanUser reads it. One list, so a lookup cannot forget the account state.
 const userColumns = `id, username, COALESCE(password,''), COALESCE(ngac_node,''), COALESCE(email,''), COALESCE(union_id,''),
 	COALESCE(display_name,''), COALESCE(phone,''), email_verified_at IS NOT NULL, profile_completed_at IS NOT NULL,
-	COALESCE(title,''), COALESCE(location,''), COALESCE(avatar_url,'')`
+	COALESCE(title,''), COALESCE(location,''), COALESCE(avatar_url,''), COALESCE(language,'')`
 
 // ErrNoSuchUser is returned when a write names an account that does not exist.
 var ErrNoSuchUser = errors.New("no such user")
@@ -225,7 +227,7 @@ func (s *Store) FindTenantByDomain(ctx context.Context, domain string) (*Tenant,
 func (s *Store) scanUser(row pgx.Row) (*User, error) {
 	var u User
 	err := row.Scan(&u.ID, &u.Username, &u.Password, &u.NGACNodeID, &u.Email, &u.UnionID, &u.DisplayName, &u.Phone,
-		&u.EmailVerified, &u.ProfileCompleted, &u.Title, &u.Location, &u.AvatarURL)
+		&u.EmailVerified, &u.ProfileCompleted, &u.Title, &u.Location, &u.AvatarURL, &u.Language)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}

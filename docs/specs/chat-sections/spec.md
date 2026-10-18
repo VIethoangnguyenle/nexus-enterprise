@@ -62,3 +62,6 @@ that used to head the list are gone from it (see `chat-shortcuts`, `chat-activit
 `PUT /api/workspaces/{id}/chat-sections/{sectionId}/channels/{channelId}` and
 `DELETE /api/workspaces/{id}/chat-sections/channels/{channelId}`, routed to messaging in the dev proxy, Docker
 (Traefik) and production (nginx).
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 02: on phones, sections are the "Mục" chip of Chat and can be its opening view; moving a conversation into a section uses one picker from long-press, swipe and conversation settings. See `mobile-shell`, `conversation-settings`. Plan: `plans/261018-1742-mobile-ux-overhaul`.

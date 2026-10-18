@@ -5,6 +5,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
@@ -134,6 +135,23 @@ func (s *Service) lookupUsername(ctx context.Context, userID string) string {
 		return user.Username
 	}
 	return ""
+}
+
+// ResolveUserNode resolves a user ID to its NGAC node ID. The REST layer calls
+// this so transfer/appoint/remove endpoints that receive a user_id in the body
+// can pass a node_id to the domain methods.
+func (s *Service) ResolveUserNode(ctx context.Context, userID string) (string, error) {
+	if userID == "" {
+		return "", fmt.Errorf("%w: user ID is required", ErrInvalidInput)
+	}
+	nodeID, err := s.store.UserNode(ctx, userID)
+	if err != nil {
+		return "", fmt.Errorf("resolve user: %w", err)
+	}
+	if nodeID == "" {
+		return "", fmt.Errorf("%w: user not found", ErrNotFound)
+	}
+	return nodeID, nil
 }
 
 // --- Proto conversions ---

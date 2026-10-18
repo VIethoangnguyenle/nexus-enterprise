@@ -1,15 +1,18 @@
-import { Children, isValidElement, useId, type ReactNode, type Ref } from 'react'
+import { Children, isValidElement, useId, useRef, type ReactNode, type Ref } from 'react'
 import { ArrowLeft, MessageSquare, RefreshCw, Search } from 'lucide-react'
 import type { BrowseView } from '../../hooks/useContactsBrowse'
 import type { Contact } from '../../hooks/useContacts'
 import type { PeopleDirectory } from '../../lib/people'
 import { Button } from '../primitives'
+import { SwipeRow, SwipeRowGroup, type SwipeAction } from '../patterns/SwipeRow'
+import { AlphabetIndex } from './AlphabetIndex'
+import { indexLettersOf, letterOf } from './alphabet'
 import { ContactsBreadcrumb } from './ContactsBreadcrumb'
 import { DepartmentRow } from './DepartmentRow'
 import { GroupRow, HiddenMemberRow, RoleRow } from './ListRows'
 import { InlineAlert, RowSkeletons, StateCard } from './ContactsStates'
 import { PersonRow } from './PersonRow'
-import { pathSegments, rootLabel } from './contacts-model'
+import { nameOf, pathSegments, rootLabel } from './contacts-model'
 
 interface ContactsBrowserProps {
   view: BrowseView
@@ -42,6 +45,16 @@ interface ContactsBrowserProps {
   onSelectPerson: (c: Contact, opener: HTMLElement) => void
   onClearSearch: () => void
   onShowEveryone: () => void
+  /** A phone's rows: 60 high with avatar 40. */
+  tallRows?: boolean
+  /** What a swipe to the left on a person's row reveals (a phone: Nhắn tin · Gọi); the signed-in user's own row has none. */
+  rowActions?: (c: Contact) => SwipeAction[]
+  /** From this many people a list of a level gets the A–Z column; never when absent. */
+  alphabetFrom?: number
+  /** A search with nothing typed still lists what its filters keep (a phone's place or online filter). */
+  listWithoutQuery?: boolean
+  /** A line over a phone's search results ("Kết quả trong … · N người khớp"). */
+  searchHint?: ReactNode
 }
 
 /** A labelled group of rows: "Khối · 2", "Thành viên · 14". */
@@ -68,17 +81,42 @@ export function ContactsBrowser(p: ContactsBrowserProps) {
   const searchQuery = view.kind === 'search' ? p.query : undefined
   const scopeWords = view.limited ? 'trong phạm vi bạn được xem' : `trong cả ${p.workspaceName}`
 
-  const personRow = (c: Contact) => (
-    <PersonRow
-      person={c}
-      online={p.isOnline(c)}
-      path={showPath ? pathSegments(view.tree, c) : undefined}
-      selected={c.user_id === p.selectedId}
-      isMe={c.user_id === p.meId}
-      query={searchQuery}
-      onSelect={p.onSelectPerson}
-    />
-  )
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  const personRow = (c: Contact) => {
+    const row = (
+      <PersonRow
+        person={c}
+        online={p.isOnline(c)}
+        path={showPath ? pathSegments(view.tree, c) : undefined}
+        selected={c.user_id === p.selectedId}
+        isMe={c.user_id === p.meId}
+        query={searchQuery}
+        onSelect={p.onSelectPerson}
+        tall={p.tallRows}
+      />
+    )
+    const actions = c.user_id !== p.meId ? p.rowActions?.(c) : undefined
+    return actions && actions.length > 0 ? <SwipeRow id={c.user_id} end={actions}>{row}</SwipeRow> : row
+  }
+
+  // --- the A–Z column: the first row of each letter carries it, and the column jumps there ---
+  let letters: string[] = []
+  const marked = (names: string[]) => {
+    const seen = new Set<string>()
+    return names.map((n) => {
+      const letter = letterOf(n)
+      if (seen.has(letter)) return undefined
+      seen.add(letter)
+      return letter
+    })
+  }
+  const alphabetOn = (count: number) => p.alphabetFrom !== undefined && count >= p.alphabetFrom
+    && (view.kind === 'dept' || view.kind === 'role' || view.kind === 'group' || view.kind === 'members')
+  const jump = (letter: string) => {
+    const target = scrollRef.current?.querySelector<HTMLElement>(`[data-az="${CSS.escape(letter)}"]`)
+    target?.scrollIntoView?.({ block: 'start' })
+  }
 
   // --- header (a column only: the phone's back bar carries the title) ---
   const header = (() => {
@@ -115,7 +153,7 @@ export function ContactsBrowser(p: ContactsBrowserProps) {
   // --- body ---
   const body = (() => {
     // Nothing typed lists nobody (there is no list of everyone to fall back on), and there is nothing to wait for.
-    if (view.kind === 'search' && !p.query.trim()) {
+    if (view.kind === 'search' && !p.query.trim() && !p.listWithoutQuery) {
       return <p className="m-0 px-2 pt-6 text-center text-ink-muted">Gõ tên, chức danh hoặc email để tìm người.</p>
     }
     if (view.status === 'loading') {
@@ -169,12 +207,17 @@ export function ContactsBrowser(p: ContactsBrowserProps) {
             ? <OnlineEmpty where={view.title} onShowEveryone={p.onShowEveryone} />
             : <StateCard icon="users" title={`${view.title} chưa có ai`} text="Khi có người vào nhóm, họ sẽ hiện ở đây." />
         }
+        const groupMarks = alphabetOn(shown.length) ? marked(shown.map((m) => m.name)) : []
+        if (groupMarks.length > 0) letters = indexLettersOf(shown.map((m) => m.name))
         return (
           <Section label={p.onlineOnly ? 'Thành viên đang trực tuyến' : 'Thành viên'} count={shown.length}>
-            {shown.map((m) => {
+            {shown.map((m, i) => {
               const c = byId.get(m.userId)
-              return c ? <span key={m.userId} className="contents">{personRow(c)}</span>
-                : <HiddenMemberRow key={m.userId} member={m} people={p.people} />
+              return (
+                <div key={m.userId} data-az={groupMarks[i]}>
+                  {c ? personRow(c) : <HiddenMemberRow member={m} people={p.people} />}
+                </div>
+              )
             })}
           </Section>
         )
@@ -194,9 +237,11 @@ export function ContactsBrowser(p: ContactsBrowserProps) {
     }
     if (shownPeople.length > 0) {
       const base = view.kind === 'search' ? 'Người' : view.kind === 'dept' && view.atRoot ? 'Chưa thuộc phòng ban nào' : 'Thành viên'
+      const marks = alphabetOn(shownPeople.length) ? marked(shownPeople.map(nameOf)) : []
+      if (marks.length > 0) letters = indexLettersOf(shownPeople.map(nameOf))
       parts.push(
         <Section key="people" label={p.onlineOnly ? `${base} đang trực tuyến` : base} count={shownPeople.length}>
-          {shownPeople.map((c) => <span key={c.user_id} className="contents">{personRow(c)}</span>)}
+          {shownPeople.map((c, i) => <div key={c.user_id} data-az={marks[i]}>{personRow(c)}</div>)}
         </Section>,
       )
     }
@@ -237,14 +282,17 @@ export function ContactsBrowser(p: ContactsBrowserProps) {
     <section aria-label="Danh sách" className="flex flex-col flex-1 min-w-0 min-h-0 bg-base">
       {header}
       {p.variant === 'phone' && p.tools && <div className="px-4 pt-1 pb-2">{p.tools}</div>}
+      {p.variant === 'phone' && p.searchHint && !p.cover && <p className="m-0 px-4 pb-1 text-small text-ink-muted">{p.searchHint}</p>}
       <div className="relative flex-1 min-h-0">
         <div
-          className="h-full overflow-y-auto overflow-x-hidden px-3 pb-4"
+          ref={scrollRef}
+          className={`h-full overflow-y-auto overflow-x-hidden px-3 pb-4 ${letters.length > 0 ? 'pr-6' : ''}`}
           aria-hidden={p.cover ? true : undefined}
           inert={p.cover ? true : undefined}
         >
-          {body}
+          {p.rowActions ? <SwipeRowGroup>{body}</SwipeRowGroup> : body}
         </div>
+        {letters.length > 0 && !p.cover && <AlphabetIndex letters={letters} onJump={jump} />}
         {p.cover && <div className="absolute inset-0 grid bg-base">{p.cover}</div>}
       </div>
     </section>

@@ -130,6 +130,26 @@ func StartPolicy(t testing.TB) (policypb.PolicyReadServiceClient, policypb.Polic
 	return policyProc.read, policyProc.write
 }
 
+// DialPolicyAs returns a writer client of the running policy process (StartPolicy
+// first) that signs its calls as the given service and carries no user, which
+// is how an operator command dials. It shows what the real server's service
+// allowlist admits.
+func DialPolicyAs(t testing.TB, service string) policypb.PolicyWriteServiceClient {
+	t.Helper()
+	policyMu.Lock()
+	p := policyProc
+	policyMu.Unlock()
+	if p == nil {
+		t.Fatalf("DialPolicyAs before StartPolicy")
+	}
+	conn, err := grpcauth.Dial(p.conn.Target(), service, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatalf("dial policy as %s: %v", service, err)
+	}
+	t.Cleanup(func() { _ = conn.Close() })
+	return policypb.NewPolicyWriteServiceClient(conn)
+}
+
 // PolicyLog returns what the policy process has logged so far, for assertions
 // about what it did and did not connect to.
 func PolicyLog() string {

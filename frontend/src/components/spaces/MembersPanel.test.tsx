@@ -6,6 +6,10 @@ import { buildDirectory } from '../../lib/people'
 import { CONTACTS, CH, U, UUID_RE } from '../../test/chat-fixtures'
 import { renderWithClient, resetClient } from '../../test/render'
 import { MembersPanel } from './MembersPanel'
+import { ApiError } from '../../api/client'
+import { groupManagementApi } from '../../api/group-management'
+import { useToastStore } from '../primitives'
+import { seedGroup } from './group-management/seed-group'
 
 const navigate = vi.fn()
 vi.mock('@tanstack/react-router', async (orig) => ({
@@ -149,5 +153,90 @@ describe('MembersPanel: pressing a member', () => {
     expect(link).not.toHaveAttribute('aria-label')
     expect(link).toHaveAttribute('aria-labelledby')
     expect(link).toHaveAccessibleName('Phạm Hải Yến Chuyên viên · Vận hành thanh toán')
+  })
+})
+
+describe('MembersPanel: group roles', () => {
+  // Every role test seeds the group so nothing reaches the network.
+  const group = (management: Parameters<typeof seedGroup>[2]) => seedGroup(CH.doisoat, 'private', management)
+
+  it('names each person’s role in the group, and no ids', async () => {
+    roster(false)
+    group({ owner_id: U.yen.id, manager_ids: [U.yen.id, U.lan.id] })
+    renderWithClient(panel())
+    expect(await screen.findByRole('button', { name: /^Phạm Hải Yến Chủ nhóm · Chuyên viên/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Nguyễn Thu Lan Quản trị nhóm · / })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Lê Thị Hoa \(bạn\) Thành viên · Kế toán trưởng/ })).toBeInTheDocument()
+    expect(document.body.textContent).not.toMatch(UUID_RE)
+  })
+
+  it('lets a manager appoint a plain member', async () => {
+    roster(false)
+    group({ owner_id: U.lan.id, manager_ids: [U.lan.id, U.hoa.id] })
+    const appoint = vi.spyOn(groupManagementApi, 'appointManager').mockResolvedValue({ status: 'ok' })
+    renderWithClient(panel())
+    await openMenuOf('Phạm Hải Yến')
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Đặt làm quản trị nhóm' }))
+    expect(appoint).toHaveBeenCalledWith(CH.doisoat, U.yen.id)
+  })
+
+  it('lets a manager demote another manager but never offers to demote the owner', async () => {
+    roster(false)
+    group({ owner_id: U.lan.id, manager_ids: [U.lan.id, U.hoa.id, U.yen.id] })
+    const demote = vi.spyOn(groupManagementApi, 'removeManager').mockResolvedValue({ status: 'ok' })
+    renderWithClient(panel())
+    await openMenuOf('Nguyễn Thu Lan')
+    await screen.findByRole('menuitem', { name: 'Nhắn tin trực tiếp' })
+    expect(screen.queryByRole('menuitem', { name: /quản trị nhóm/ })).toBeNull()
+    await userEvent.keyboard('{Escape}')
+    await openMenuOf('Phạm Hải Yến')
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Gỡ quyền quản trị nhóm' }))
+    expect(demote).toHaveBeenCalledWith(CH.doisoat, U.yen.id)
+  })
+
+  it('offers a plain member neither appoint nor demote', async () => {
+    roster(false)
+    group({ owner_id: U.lan.id, manager_ids: [U.lan.id] })
+    renderWithClient(panel())
+    await openMenuOf('Phạm Hải Yến')
+    await screen.findByRole('menuitem', { name: 'Nhắn tin trực tiếp' })
+    expect(screen.queryByRole('menuitem', { name: 'Đặt làm quản trị nhóm' })).toBeNull()
+    expect(screen.queryByRole('menuitem', { name: 'Gỡ quyền quản trị nhóm' })).toBeNull()
+  })
+
+  it('a refused appointment reads "Bạn không còn quyền làm việc này"', async () => {
+    roster(false)
+    group({ owner_id: U.lan.id, manager_ids: [U.lan.id, U.hoa.id] })
+    vi.spyOn(groupManagementApi, 'appointManager').mockRejectedValue(new ApiError('forbidden', 403))
+    renderWithClient(panel())
+    await openMenuOf('Phạm Hải Yến')
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Đặt làm quản trị nhóm' }))
+    await waitFor(() =>
+      expect(useToastStore.getState().toasts.map((t) => t.message)).toContain('Bạn không còn quyền làm việc này'),
+    )
+  })
+
+  it('tells the owner to transfer first instead of leaving', async () => {
+    roster(false)
+    group({ owner_id: U.hoa.id, manager_ids: [U.hoa.id] })
+    const onLeave = vi.fn()
+    renderWithClient(
+      <MembersPanel channelId={CH.doisoat} kind="space" spaceName="Đối soát giao dịch" people={people} me={U.hoa.id} canLeave onLeave={onLeave} onClose={() => {}} />,
+    )
+    await userEvent.click(await screen.findByRole('button', { name: 'Rời nhóm' }))
+    expect(onLeave).not.toHaveBeenCalled()
+    expect(screen.getByRole('dialog', { name: 'Chuyển quyền chủ nhóm trước khi rời' })).toBeInTheDocument()
+  })
+
+  it('lets a non-owner leave as before', async () => {
+    roster(false)
+    group({ owner_id: U.lan.id, manager_ids: [U.lan.id] })
+    const onLeave = vi.fn()
+    renderWithClient(
+      <MembersPanel channelId={CH.doisoat} kind="space" spaceName="Đối soát giao dịch" people={people} me={U.hoa.id} canLeave onLeave={onLeave} onClose={() => {}} />,
+    )
+    await screen.findByRole('button', { name: /^Phạm Hải Yến/ })
+    await userEvent.click(screen.getByRole('button', { name: 'Rời nhóm' }))
+    expect(onLeave).toHaveBeenCalledTimes(1)
   })
 })

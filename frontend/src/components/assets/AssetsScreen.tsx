@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useSearch } from '@tanstack/react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { CircleAlert, ClipboardList, Package, Plus, Tag } from 'lucide-react'
+import { useRegisterCreateAction } from '../../hooks/useModuleCreateAction'
 import type { Asset, AssetType } from '../../api/assets'
 import { useActiveWorkspace } from '../../hooks/useActiveWorkspace'
 import { useAssetActivity, useAssetRequests, useAssetSummary, useAssetTypes, useAssets } from '../../hooks/useAssets'
@@ -9,6 +10,7 @@ import { useArrivals } from '../../hooks/useArrivals'
 import { usePeople } from '../../hooks/usePeople'
 import { useBottomBarLayout } from '../../hooks/usePhone'
 import { useRecentSearches } from '../../hooks/useRecentSearches'
+import { useServerSettings } from '../../hooks/useServerSettings'
 import { useSuggestionPanel } from '../../hooks/useSuggestionPanel'
 import { parseFields } from '../../lib/asset-fields'
 import { REQUEST_FILTERS, assetPerson, requestFilterStatuses, type RequestFilter } from '../../lib/asset-model'
@@ -19,9 +21,13 @@ import {
 } from '../../lib/assets-search'
 import { formatListTime, toMillis } from '../../lib/format'
 import { useMotionPresets } from '../../lib/motion'
+import { ASSET_DEFAULTS } from '../../lib/settings-defaults'
 import { workspaceDisplayName } from '../../lib/workspace'
 import { useAuthStore } from '../../stores/auth.store'
 import { Avatar, Button, FilterChip, Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
+import { ModuleHeader } from '../patterns/ModuleHeader'
+import { ScrollTabs } from '../patterns/ScrollTabs'
+import { PullToRefresh } from '../patterns/PullToRefresh'
 import { SearchSuggestions } from '../patterns/SearchSuggestions'
 import { CountPill } from '../approval/StatusPill'
 import { EmptyState } from '../spaces/EmptyState'
@@ -53,6 +59,9 @@ const REQUEST_EMPTY: Record<RequestFilter, string> = {
   mine: 'Bạn chưa gửi yêu cầu nào. Tạo yêu cầu để người duyệt nhận được ngay.',
 }
 
+/** The tab of Cài đặt Tài sản → Tab mở đầu, as the screen names it. */
+const TAB_OF_SETTING: Record<'overview' | 'inventory' | 'requests', AssetsTab> = { overview: 'overview', inventory: 'list', requests: 'requests' }
+
 const SUBTITLE: Record<AssetsTab, string> = {
   overview: 'Thiết bị, giấy phép và nội thất',
   list: 'Tài sản',
@@ -67,6 +76,9 @@ const SUBTITLE: Record<AssetsTab, string> = {
  * request or type, the new-request form — is the URL's business, so reload,
  * Back/Forward and a pasted link land in the same place. Only the open dialogs
  * are client state.
+ *
+ * Opened without a tab in the address, it moves (in place, no history entry) to the tab of Cài đặt Tài sản →
+ * Tab mở đầu once the settings answer; until then, and by default, it shows Tổng quan.
  */
 export function AssetsScreen() {
   const search = useSearch({ strict: false }) as AssetsSearch
@@ -109,6 +121,13 @@ export function AssetsScreen() {
     deciding, rejecting, decisionError, decidePending, rejectPending, anyPending,
     closeDecision, closeReject, doApprove, startApprove, startReject, startAssign, doReject,
   } = useRequestDecisions()
+
+  // Register the create action for the ModuleBar + button.
+  const assetsCreateAction = useMemo(
+    () => requestable.length > 0 ? { label: 'Thêm tài sản', handler: () => setCreatingAsset(true) } : null,
+    [requestable.length],
+  )
+  useRegisterCreateAction('assets', assetsCreateAction)
 
   // ---- the search box: typed text is local; the URL follows after a pause ----
   const [typed, setTyped] = useState(search.q ?? '')
@@ -173,6 +192,17 @@ export function AssetsScreen() {
     (to: (prev: AssetsSearch) => AssetsSearch) => void navigate({ to: '/assets', search: to }),
     [navigate],
   )
+
+  // The opening tab, decided once per visit: a tab chosen afterwards (Tổng quan included) is left alone.
+  const options = useServerSettings('asset', wsId, ASSET_DEFAULTS)
+  const opened = useRef(false)
+  useEffect(() => {
+    if (opened.current || !wsId || options.isLoading) return
+    opened.current = true
+    const first = TAB_OF_SETTING[options.settings.default_tab ?? 'overview'] ?? 'overview'
+    if (search.section || first === 'overview') return
+    void navigate({ to: '/assets', search: (p: AssetsSearch) => tabSearch(p, first), replace: true })
+  }, [wsId, options.isLoading, options.settings.default_tab, search.section, navigate])
   useEffect(() => {
     if (typed.trim() === (search.q ?? '').trim()) return
     const t = setTimeout(() => {
@@ -252,6 +282,14 @@ export function AssetsScreen() {
   const retryOf = (q: { refetch: () => unknown }) => <Button variant="soft" size="sm" onClick={() => void q.refetch()}>Thử lại</Button>
   const failed = (text: string, q: { refetch: () => unknown }) => (
     <EmptyState icon={<CircleAlert size={24} strokeWidth={1.75} />} text={text} action={retryOf(q)} />
+  )
+
+  // Pull to refresh on a phone (DESIGN.md §6 "Vuốt"): what the open tab shows, asked for again.
+  const refresh = () => Promise.all(
+    tab === 'overview' ? [summaryQ.refetch(), activityQ.refetch(), pendingQ.refetch()]
+      : tab === 'list' ? [listQ.refetch(), summaryQ.refetch()]
+        : tab === 'requests' ? [requestsQ.refetch(), pendingQ.refetch()]
+          : [typesQ.refetch()],
   )
 
   const body = (() => {
@@ -395,7 +433,20 @@ export function AssetsScreen() {
   return (
     <div className="relative flex flex-1 min-h-0 min-w-0">
       <section className="flex-1 flex flex-col min-w-0 min-h-0 bg-base" aria-label="Tài sản">
-        <header className="flex items-center gap-4 px-5 pt-4 pb-1 min-w-0">
+        {/* Mobile header (< 1024px) */}
+        {!(covered && tab === 'list') && (
+          <ModuleHeader moduleId="assets" title="Tài sản">
+            <ScrollTabs
+              label="Tài sản"
+              tabs={tabs.map((t) => ({ id: t.id, label: t.label }))}
+              activeTab={tab}
+              onTabChange={(id) => go((p) => tabSearch(p, id as AssetsTab))}
+            />
+          </ModuleHeader>
+        )}
+
+        {/* Desktop header (≥ 1024px) */}
+        <header className="flex items-center gap-4 px-5 pt-4 pb-1 min-w-0 max-lg:hidden">
           <div className="grid gap-0.5 min-w-0">
             <Heading as="h1" look="page" className="truncate">Tài sản</Heading>
             <span className="text-sm text-ink-muted truncate">{sub}</span>
@@ -417,9 +468,9 @@ export function AssetsScreen() {
           </div>
         </header>
 
-        {/* While the suggestions cover the list on a phone, a tab would change what cannot be seen. */}
+        {/* Desktop tabs (≥ 1024px) */}
         {!(covered && tab === 'list') && (
-          <ScrollFade className="px-5">
+          <ScrollFade className="px-5 max-lg:hidden">
             <TabBar
               className="w-max"
               label="Tài sản"
@@ -431,14 +482,16 @@ export function AssetsScreen() {
           </ScrollFade>
         )}
 
-        <div
+        <PullToRefresh
           role="tabpanel"
           id={`assets-panel-${tab}`}
           aria-labelledby={`assets-tab-${tab}`}
+          enabled={phone && !covered}
+          onRefresh={refresh}
           className="@container flex-1 min-h-0 overflow-y-auto pt-3"
         >
           {body}
-        </div>
+        </PullToRefresh>
       </section>
 
       <AnimatePresence>

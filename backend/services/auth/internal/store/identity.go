@@ -21,7 +21,8 @@ func (s *Store) FindUserByIdentity(ctx context.Context, provider, subject string
 		 RETURNING u.id, u.username, COALESCE(u.password,''), COALESCE(u.ngac_node,''), COALESCE(u.email,''),
 		           COALESCE(u.union_id,''), COALESCE(u.display_name,''), COALESCE(u.phone,''),
 		           u.email_verified_at IS NOT NULL, u.profile_completed_at IS NOT NULL,
-		           COALESCE(u.title,''), COALESCE(u.location,''), COALESCE(u.avatar_url,'')`,
+		           COALESCE(u.title,''), COALESCE(u.location,''), COALESCE(u.avatar_url,''),
+		           COALESCE(u.language,'')`,
 		provider, subject))
 	if err != nil {
 		return nil, fmt.Errorf("find user by identity: %w", err)

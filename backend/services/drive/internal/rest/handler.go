@@ -37,8 +37,17 @@ type DriveService interface {
 	RevokeShare(ctx context.Context, req *pb.RevokeShareRequest) (*pb.Empty, error)
 	ListShares(ctx context.Context, req *pb.ListSharesRequest) (*pb.ShareList, error)
 	GetSharedWithMe(ctx context.Context, req *pb.GetSharedWithMeRequest) (*pb.DriveItemList, error)
+	SharedWithMeBy(ctx context.Context, workspaceID, ownerUserID string) (*pb.DriveItemList, error)
 	GetChannelDrive(ctx context.Context, req *pb.GetChannelDriveRequest) (*pb.DriveItem, error)
 	GetQuota(ctx context.Context, req *pb.GetQuotaRequest) (*pb.Quota, error)
+	GetDriveSettings(ctx context.Context, userID, workspaceID string) (*domain.DriveSettings, error)
+	UpdateDriveSettings(ctx context.Context, userID, workspaceID string, in *domain.DriveSettingsPatch) (*domain.DriveSettings, error)
+	SearchItems(ctx context.Context, workspaceID, query string, limit int) (*pb.DriveItemList, error)
+	StarItem(ctx context.Context, itemID string) error
+	UnstarItem(ctx context.Context, itemID string) error
+	ListStarredItems(ctx context.Context, workspaceID string) (*pb.DriveItemList, error)
+	RecentFiles(ctx context.Context, workspaceID string) (*pb.DriveItemList, error)
+	QuickAccessItems(ctx context.Context, workspaceID string) ([]*domain.QuickAccessEntry, error)
 }
 
 // mapError answers a domain error with its HTTP status. A conflict is a 409; a
@@ -107,12 +116,27 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.DELETE("/drive/shares/:shareId", h.RevokeShare)
 	api.GET("/drive/items/:itemId/shares", h.ListShares)
 	api.GET("/drive/shared-with-me", h.SharedWithMe)
+	api.GET("/workspaces/:id/drive/shared-with-me", h.SharedWithMeBy)
 
 	// Quota
 	api.GET("/workspaces/:id/drive/quota", h.GetQuota)
 
 	// Batch permission check
 	api.POST("/drive/batch-access", h.BatchAccess)
+
+	// Search
+	api.GET("/drive/search", h.Search)
+
+	// Settings
+	api.GET("/drive/settings", h.GetDriveSettings)
+	api.PUT("/drive/settings", h.UpdateDriveSettings)
+
+	// Stars, quick access and recent files (the phone's Tài liệu home)
+	api.POST("/drive/items/:itemId/star", h.StarItem)
+	api.DELETE("/drive/items/:itemId/star", h.UnstarItem)
+	api.GET("/drive/starred", h.ListStarred)
+	api.GET("/drive/quick-access", h.QuickAccess)
+	api.GET("/drive/recent", h.RecentFiles)
 }
 
 // CreateFolder handles POST /api/workspaces/:id/drive/folders.

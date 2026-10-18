@@ -277,9 +277,9 @@ describe('the header of a section', () => {
 })
 
 describe('Mục on a phone: rows and the end of the list', () => {
-  it('has a title, 56px rows with the name only, and no preview text', async () => {
+  it('has 56px rows with the name only, and no preview text (the title is Chat\'s)', async () => {
     await ready()
-    expect(screen.getByRole('heading', { level: 1, name: 'Mục' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
     const link = screen.getByRole('link', { name: 'Đối soát giao dịch' })
     expect(link.className).toContain('min-h-14')
     expect(link.textContent).toBe('Đ' + 'Đối soát giao dịch' + '3')

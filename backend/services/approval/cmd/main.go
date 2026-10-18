@@ -68,6 +68,12 @@ func main() {
 	resolver := httputil.NewTenantSchemaResolver(db)
 
 	st := store.NewStore(db)
+	// Tenant schemas provisioned before one of the service's tables existed get
+	// it now, before any request needs it (new schemas get it when provisioned).
+	if err := st.EnsureTenantTables(ctx); err != nil {
+		slog.Error("refusing to start: tenant schemas could not be brought up to date", "error", err)
+		os.Exit(1)
+	}
 	svc := domain.NewService(st, policyClient)
 	srv := approvalGRPC.NewServer(svc)
 

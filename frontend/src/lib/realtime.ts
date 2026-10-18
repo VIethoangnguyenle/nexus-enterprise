@@ -116,6 +116,9 @@ export function planFor(e: DomainChange): Plan {
       inv.push(keys.messaging.channels(ws), keys.messaging.dms())
       for (const id of ids) inv.push(keys.messaging.channel(id), keys.messaging.members(id))
       if (e.channelId) inv.push(keys.messaging.channel(e.channelId), keys.messaging.members(e.channelId))
+      // A role or a group rule changed: what this user may do in the group (add people, manage) is
+      // stale, and the group's management record sits under the channel key refreshed above.
+      if (e.kind === 'management_changed') inv.push(keys.permissions.all())
       break
     }
 

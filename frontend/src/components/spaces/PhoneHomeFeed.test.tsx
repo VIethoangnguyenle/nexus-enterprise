@@ -1,8 +1,7 @@
 import { act, cleanup, fireEvent, screen, waitFor, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { renderWithClient, resetClient } from '../../test/render'
-import { CH, ME, U, UUID_RE, WS_ID } from '../../test/chat-fixtures'
+import { CH, U, UUID_RE, WS_ID } from '../../test/chat-fixtures'
 import { createChatStateServer } from '../../test/chat-state-server'
 import { apiFetch } from '../../api/client'
 import type { ActivityMessage, ConversationActivity } from '../../api/messaging'
@@ -22,28 +21,20 @@ const entry = (channel_id: string, latest: Partial<ActivityMessage>, reply?: Par
   channel_id, latest: msg(latest), ...(reply ? { latest_reply: msg({ id: 'r', parent_message_id: 'root-1', ...reply }) } : {}),
 })
 
-const onOpenThreads = vi.fn()
 let server: ReturnType<typeof createChatStateServer>
 const serve = (...args: Parameters<typeof createChatStateServer>) => {
   server = createChatStateServer(...args)
   vi.mocked(apiFetch).mockImplementation(server.api as never)
 }
 
-function Host({ scope = 'home', news = 0 }: { scope?: FeedScope; news?: number }) {
+function Host({ scope = 'all' }: { scope?: FeedScope }) {
   const nav = useChatNavigation(WS_ID)
   const overlays = useSectionOverlays(nav.sectionsApi, true)
   // As in Chat itself: the feed is mounted once the lists are in (a skeleton stands in until then).
   if (nav.isLoading) return null
   return (
     <>
-      <PhoneHomeFeed
-        scope={scope}
-        conversations={scope === 'direct' ? nav.directs : nav.conversations}
-        fresh={new Map()}
-        overlays={overlays}
-        threadsWithNews={news}
-        onOpenThreads={onOpenThreads}
-      />
+      <PhoneHomeFeed scope={scope} conversations={nav.conversations} fresh={new Map()} overlays={overlays} />
       {overlays.node}
     </>
   )
@@ -51,7 +42,6 @@ function Host({ scope = 'home', news = 0 }: { scope?: FeedScope; news?: number }
 
 beforeEach(() => {
   localStorage.clear()
-  onOpenThreads.mockClear()
   serve()
 })
 afterEach(() => {
@@ -65,7 +55,7 @@ afterEach(() => {
 const rows = () => within(screen.getByRole('list', { name: 'Cuộc trò chuyện' })).getAllByRole('listitem')
 const names = () => rows().map((li) => within(li).getAllByRole('link')[0]!.getAttribute('aria-label'))
 
-describe('Trang chủ on a phone', () => {
+describe('Tất cả on a phone', () => {
   it('draws every row at full size the moment it mounts, so coming back to it by the device back is not a flash', async () => {
     renderWithClient(<Host />)
     await waitFor(() => expect(rows().length).toBeGreaterThan(0))
@@ -121,28 +111,6 @@ describe('Trang chủ on a phone', () => {
     expect(screen.queryByText(/cũ$/)).toBeNull()
   })
 
-  it('has a Thread button that counts the threads with news and opens the Thread screen', async () => {
-    const user = userEvent.setup()
-    renderWithClient(<Host news={3} />)
-    const button = await screen.findByRole('button', { name: 'Thread, 3 thread có tin mới' })
-    await user.click(button)
-    expect(onOpenThreads).toHaveBeenCalledTimes(1)
-  })
-
-  it('has a plain Thread button with no count when no thread has news', async () => {
-    renderWithClient(<Host news={0} />)
-    expect(await screen.findByRole('button', { name: 'Thread' })).toBeInTheDocument()
-  })
-
-  it('has a title, and the Thread button is only Trang chủ\'s', async () => {
-    const { unmount } = renderWithClient(<Host />)
-    expect(await screen.findByRole('heading', { level: 1, name: 'Trang chủ' })).toBeInTheDocument()
-    unmount()
-    renderWithClient(<Host scope="direct" />)
-    expect(await screen.findByRole('heading', { level: 1, name: 'Trực tiếp' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^Thread/ })).toBeNull()
-  })
-
   it('says it is empty when there is no conversation at all', async () => {
     serve()
     vi.mocked(apiFetch).mockImplementation((async (path: string, init?: RequestInit) => {
@@ -163,62 +131,29 @@ describe('Trực tiếp on a phone', () => {
   })
 })
 
-describe('the unread-only pill', () => {
-  const pill = () => screen.findByRole('button', { name: 'Chỉ hiện chưa đọc' })
-
-  it('is 52 by 40 and off at first', async () => {
-    renderWithClient(<Host />)
-    const button = await pill()
-    expect(button).toHaveAttribute('aria-pressed', 'false')
-    expect(button.className).toContain('w-13')
-    expect(button.className).toContain('h-10')
+describe('Nhóm on a phone', () => {
+  it('lists the groups only', async () => {
+    renderWithClient(<Host scope="spaces" />)
+    await waitFor(() => expect(rows()).toHaveLength(3))
+    expect(names()).not.toContain('Phạm Hải Yến')
+    expect(names()).not.toContain('Nguyễn Thu Lan')
   })
+})
 
+describe('Chưa đọc on a phone', () => {
   it('lists only the conversations with unread messages', async () => {
-    const user = userEvent.setup()
-    renderWithClient(<Host />)
-    await waitFor(() => expect(rows()).toHaveLength(5))
-    await user.click(await pill())
+    renderWithClient(<Host scope="unread" />)
+    await waitFor(() => expect(rows()).toHaveLength(2))
     expect(names().sort()).toEqual(['Phạm Hải Yến', 'Đối soát giao dịch'])
-    expect(await pill()).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('is remembered on this device for this person, and for each tab on its own', async () => {
-    const user = userEvent.setup()
-    const { unmount } = renderWithClient(<Host />)
-    await waitFor(() => expect(rows()).toHaveLength(5))
-    await user.click(await pill())
-    unmount()
-    expect(localStorage.getItem(`ngac-feed-unread-only:${ME.id}:home`)).toBe('1')
-    renderWithClient(<Host />)
-    await waitFor(() => expect(rows()).toHaveLength(2))
-    resetClient()
-    document.body.innerHTML = ''
-    renderWithClient(<Host scope="direct" />)
-    await waitFor(() => expect(rows()).toHaveLength(2))
-    expect(await pill()).toHaveAttribute('aria-pressed', 'false')
-  })
-
-  it('says "Bạn đã đọc hết" when nothing is unread, and turning it off brings the list back', async () => {
-    const user = userEvent.setup()
+  it('says "Bạn đã đọc hết" when nothing is unread', async () => {
     serve({ [CH.doisoat]: { unread_count: 0 }, [CH.dmYen]: { unread_count: 0 } })
     server.state(CH.doisoat).unread_count = 0
     server.state(CH.dmYen).unread_count = 0
-    localStorage.setItem(`ngac-feed-unread-only:${ME.id}:home`, '1')
-    renderWithClient(<Host />)
+    renderWithClient(<Host scope="unread" />)
     expect(await screen.findByText('Bạn đã đọc hết')).toBeInTheDocument()
-    expect(screen.getByText('Tắt bộ lọc để xem mọi cuộc trò chuyện.')).toBeInTheDocument()
-    await user.click(await pill())
-    await waitFor(() => expect(rows()).toHaveLength(5))
-  })
-
-  it('still works when the device refuses to remember', async () => {
-    const user = userEvent.setup()
-    renderWithClient(<Host />)
-    await waitFor(() => expect(rows()).toHaveLength(5))
-    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('full') })
-    await user.click(await pill())
-    expect(rows()).toHaveLength(2)
+    expect(screen.getByText('Chọn Tất cả để xem mọi cuộc trò chuyện.')).toBeInTheDocument()
   })
 })
 

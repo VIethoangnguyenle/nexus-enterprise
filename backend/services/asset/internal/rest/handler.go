@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/labstack/echo/v4"
@@ -20,7 +21,7 @@ import (
 type AssetService interface {
 	CreateAsset(ctx context.Context, req *pb.CreateAssetRequest) (*pb.Asset, error)
 	GetAsset(ctx context.Context, req *pb.GetAssetRequest) (*pb.Asset, error)
-	ListAssets(ctx context.Context, req *pb.ListAssetsRequest) (*pb.AssetList, error)
+	ListAssets(ctx context.Context, req *pb.ListAssetsRequest, sort ...string) (*pb.AssetList, error)
 	UpdateAsset(ctx context.Context, req *pb.UpdateAssetRequest) (*pb.Asset, error)
 	DeleteAsset(ctx context.Context, req *pb.DeleteAssetRequest) (*pb.Empty, error)
 	TransitionAsset(ctx context.Context, req *pb.TransitionRequest) (*pb.Asset, error)
@@ -50,16 +51,29 @@ type AssetRequestService interface {
 	GetRequest(ctx context.Context, req *pb.GetRequestReq) (*pb.AssetRequest, error)
 }
 
+// AssetSettingsService defines asset user settings operations.
+type AssetSettingsService interface {
+	GetAssetSettings(ctx context.Context, userID, workspaceID string) (*domain.AssetSettings, error)
+	UpdateAssetSettings(ctx context.Context, userID, workspaceID string, in *domain.AssetSettingsPatch) (*domain.AssetSettings, error)
+}
+
 // Handler serves asset REST endpoints.
 type Handler struct {
-	assetSvc   AssetService
-	typeSvc    AssetTypeService
-	requestSvc AssetRequestService
+	assetSvc    AssetService
+	typeSvc     AssetTypeService
+	requestSvc  AssetRequestService
+	settingsSvc AssetSettingsService
 }
 
 // NewHandler creates an asset REST handler.
 func NewHandler(a AssetService, t AssetTypeService, r AssetRequestService) *Handler {
 	return &Handler{assetSvc: a, typeSvc: t, requestSvc: r}
+}
+
+// WithSettings sets an optional settings service on the handler.
+func (h *Handler) WithSettings(s AssetSettingsService) *Handler {
+	h.settingsSvc = s
+	return h
 }
 
 // RegisterRoutes mounts asset endpoints on the Echo instance.
@@ -95,6 +109,12 @@ func (h *Handler) RegisterRoutes(e *echo.Echo, jwtSecret string) {
 	api.POST("/asset-requests/:reqId/reject", h.RejectAssetRequest)
 	api.POST("/asset-requests/:reqId/assign", h.AssignAsset)
 	api.POST("/assets/:assetId/return", h.ReturnAsset)
+
+	// User Settings
+	if h.settingsSvc != nil {
+		api.GET("/workspaces/:id/asset-settings", h.GetAssetSettings)
+		api.PUT("/workspaces/:id/asset-settings", h.UpdateAssetSettings)
+	}
 }
 
 // --- Asset Summary ---
@@ -183,6 +203,10 @@ func (h *Handler) CreateAsset(c echo.Context) error {
 }
 
 func (h *Handler) ListAssets(c echo.Context) error {
+	sort := c.QueryParam("sort")
+	if sort != "" && !slices.Contains(domain.ValidAssetSorts, sort) {
+		return echo.NewHTTPError(http.StatusBadRequest, "sort must be one of: name, created, updated, status")
+	}
 	limit, err := intQuery(c, "limit")
 	if err != nil {
 		return err
@@ -199,7 +223,7 @@ func (h *Handler) ListAssets(c echo.Context) error {
 		Search:      c.QueryParam("search"),
 		Limit:       limit,
 		Offset:      offset,
-	})
+	}, sort)
 	if err != nil {
 		return mapError(err)
 	}

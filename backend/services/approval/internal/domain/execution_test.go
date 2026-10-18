@@ -311,6 +311,9 @@ func (m *mockStore) ListMyRequests(_ context.Context, _, _ string, _ int) ([]*Re
 func (m *mockStore) ListByScopes(_ context.Context, _ []string, _ string, _ int) ([]*Request, string, error) {
 	return nil, "", nil
 }
+func (m *mockStore) SearchRequests(_ context.Context, _ SearchParams) ([]*Request, int, error) {
+	return nil, 0, nil
+}
 func (m *mockStore) InsertAuditEntry(_ context.Context, e *AuditEntry) error {
 	m.auditLog = append(m.auditLog, e)
 	return nil

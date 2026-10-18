@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { addMonths, format, isSameDay, isSameMonth, startOfWeek } from 'date-fns'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
-import { WEEK_OPTIONS, formatDayMonth, monthWeeks, weekdayShort } from '../../lib/calendar-format'
+import { formatDayMonth, monthWeeks, weekOptions, weekdayShort, type WeekStart } from '../../lib/calendar-format'
 import { IconButton, Pressable } from '../primitives'
 
 interface MiniMonthProps {
@@ -9,10 +9,12 @@ interface MiniMonthProps {
   date: Date
   now: Date
   onPick: (day: Date) => void
+  /** The first column: Monday unless the person chose Sunday. */
+  weekStart?: WeekStart
 }
 
 /** The small month of the side column: today in accent, the viewed week in wash. */
-export function MiniMonth({ date, now, onPick }: MiniMonthProps) {
+export function MiniMonth({ date, now, onPick, weekStart = 1 }: MiniMonthProps) {
   // The month shown follows the main view, and can be paged without moving it.
   const [shown, setShown] = useState(date)
   const [followed, setFollowed] = useState(date)
@@ -20,8 +22,8 @@ export function MiniMonth({ date, now, onPick }: MiniMonthProps) {
     setFollowed(date)
     if (!isSameMonth(shown, date)) setShown(date)
   }
-  const weeks = monthWeeks(shown)
-  const week0 = startOfWeek(date, WEEK_OPTIONS)
+  const weeks = monthWeeks(shown, weekStart)
+  const week0 = startOfWeek(date, weekOptions(weekStart))
 
   return (
     <section aria-label="Lịch tháng nhỏ" className="grid gap-1 px-1">

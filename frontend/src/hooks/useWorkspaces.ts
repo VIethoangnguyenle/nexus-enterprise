@@ -1,5 +1,5 @@
 import { useQuery, useMutation, queryOptions } from '@tanstack/react-query'
-import { workspaceApi } from '../api/workspaces'
+import { workspaceApi, type WorkspaceLocks } from '../api/workspaces'
 import { queryClient } from '../lib/query-client'
 import { noteSelfLeave } from '../lib/self-leave'
 import { keys } from './keys'
@@ -51,23 +51,28 @@ export function useLeaveWorkspace(wsId: string) {
   })
 }
 
-/** Converts a personal workspace to an organization workspace. */
-export function useConvertToOrganization(wsId: string) {
+/** The workspace's admin-controlled rules (group creation lock). */
+export function useWorkspaceLocks(wsId: string) {
+  return useQuery({
+    queryKey: [...keys.workspaces.details(wsId), 'locks'] as const,
+    queryFn: () => workspaceApi.getLocks(wsId),
+    enabled: !!wsId,
+  })
+}
+
+
+/**
+ * Sets "Ai được tạo nhóm" (organization only, administrators only). Locking takes the right away from Members and
+ * custom roles on the server, so the roles screen is read again too. A refusal is put back by the server's answer
+ * and told by the shared handler.
+ */
+export function useSetGroupCreation(wsId: string) {
   return useMutation({
-    meta: { silentError: true },
-    mutationFn: () => workspaceApi.convertToOrganization(wsId),
-    onSuccess: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: keys.workspaces.all() }),
-        queryClient.invalidateQueries({ queryKey: keys.workspaces.details(wsId) }),
-        queryClient.invalidateQueries({ queryKey: keys.auth.workspaces() }),
-        queryClient.invalidateQueries({ queryKey: keys.auth.me() }),
-        queryClient.invalidateQueries({ queryKey: keys.approval.all() }),
-        queryClient.invalidateQueries({ queryKey: keys.assets.listsAll() }),
-        queryClient.invalidateQueries({ queryKey: keys.assets.typesAll() }),
-        queryClient.invalidateQueries({ queryKey: keys.assets.summaries() }),
-        queryClient.invalidateQueries({ queryKey: keys.assets.requestsAll() }),
-      ])
+    meta: { action: 'đổi quy định tạo nhóm' },
+    mutationFn: (group_creation: WorkspaceLocks['group_creation']) => workspaceApi.putLocks(wsId, { group_creation }),
+    onSuccess: (locks) => {
+      queryClient.setQueryData([...keys.workspaces.details(wsId), 'locks'], locks)
+      void queryClient.invalidateQueries({ queryKey: keys.admin.roles(wsId) })
     },
   })
 }

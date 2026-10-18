@@ -48,9 +48,13 @@ Every operation on one asset SHALL be a check of the corresponding operation on 
 | Lifecycle transition | the transition's `ngac_permission` | the type's OA |
 | Available transitions | each transition's `ngac_permission`, in one batch | the type's OA |
 | Assign / return an asset | `manage` | the type's OA |
-| List assets | `read`, in one batch over the workspace's types | each type's OA; unreadable types are filtered out |
+| List assets | `read`, in one batch over the workspace's types | each type's OA; unreadable types are filtered out; optional `sort` query param (`name`, `created`, `updated`, `status`; default `updated`) |
 
 A grant on the workspace's Assets OA or on a category OA reaches the type OAs beneath it, so it reaches the assets of every type below.
+
+#### Scenario: List assets with sort
+- **WHEN** a caller lists assets with an optional `sort` parameter (`name`, `created`, `updated`, or `status`)
+- **THEN** only assets of readable types are returned in the requested order (with stable tiebreak by id); unreadable types are never returned or counted, and any unknown sort value is refused with Bad Request (400)
 
 #### Scenario: Reader of one type
 - **WHEN** a caller holds `read` on the OA of type A and asks for an asset of type A

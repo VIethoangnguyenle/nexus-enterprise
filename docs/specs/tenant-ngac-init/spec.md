@@ -63,7 +63,7 @@ The system SHALL create associations between tenant UAs and OAs so that members 
 
 #### Scenario: TenantMember association
 - **WHEN** a tenant is initialized
-- **THEN** `TenantMember_{tenant_id}` has association to tenant OAs with member operations: `read, write, upload, share` on Documents and `create_channel` on Channels (a workspace member can start a group but reads none by being a member: see "Groups are private")
+- **THEN** `TenantMember_{tenant_id}` has association to tenant OAs with member operations: `read, write, upload, share` on Documents and `create_channel` on Channels (a workspace member can start a group but reads none by being a member: see "Groups are private"; the operation is removed while an administrator has locked group creation, see `user-settings`)
 
 Members hold `write` on Documents, not only `read`, because the drive gates file creation on it — an upload is CreateFile followed by ConfirmFile and both check `write` on the destination folder. A read-only member sees the Upload button and can never complete an upload. This matches what a member already holds on any channel drive they belong to.
 
@@ -157,7 +157,7 @@ The system SHALL authorize adding channel members with the `invite` operation on
 - **THEN** the request is rejected before any graph mutation, because a DM is a fixed two-party conversation
 - **AND** this guard lives in the messaging service, not in the graph, since the graph cannot express "exactly two sides"
 
-A group's Members UA sits under the workspace's policy class (the intersection rule needs it there), so whoever is assigned beneath it reaches that class. Adding a member SHALL therefore check the target, after the `invite` check and the DM guard and before any graph write: the target SHALL be a user (`U`) node, else the request is rejected as invalid input; and it SHALL be a member of the channel's workspace (`policyclient.IsWorkspaceMember`, that is, under `{workspace_id}_Members`), else access is denied. A policy service that cannot answer denies. Any member of the group may add people, as `invite` already lets them. The same rule applies to the gRPC `AddChannelMember`, which shares the domain method.
+A group's Members UA sits under the workspace's policy class (the intersection rule needs it there), so whoever is assigned beneath it reaches that class. Adding a member SHALL therefore check the target, after the `invite` check and the DM guard and before any graph write: the target SHALL be a user (`U`) node, else the request is rejected as invalid input; and it SHALL be a member of the channel's workspace (`policyclient.IsWorkspaceMember`, that is, under `{workspace_id}_Members`), else access is denied. A policy service that cannot answer denies. A group may restrict adding people to its owner and managers (see `chat-group-management`): when "Ai được thêm người" is restricted, the Members → Content association loses `invite` and only the Managers UA keeps it, so the PDP refuses a plain member's invite. The same rule applies to the gRPC `AddChannelMember`, which shares the domain method.
 
 #### Scenario: Target is a person of another workspace
 - **WHEN** a member of a group adds a user who belongs to another workspace
@@ -172,12 +172,12 @@ A group's Members UA sits under the workspace's policy class (the intersection r
 - **WHEN** the target is still under a group's UA but no longer under `{workspace_id}_Members`
 - **THEN** adding them to another group is denied, so a group cannot be used to undo a removal
 
-### Requirement: Only the person, the creator or a manager removes someone from a group
-`invite`, which every member of a group holds, lets people in; it SHALL NOT let a member put others out. Removing a person from a group (`DELETE /api/channels/:chId/members/:nodeId`, gRPC `RemoveChannelMember`) SHALL be allowed to: the person themselves (leaving); the person who made the group (`channels.created_by`, matched to the verified caller); and a holder of `manage` on the group's Content OA (the workspace's owners, who are not in the group). Anyone else is denied. The caller SHALL first be inside the conversation (`read`) or a manager of it, so a stranger is denied before anything about the channel is answered. The target SHALL be a user (`U`) node directly under the group's Members UA, read from the writer, else `404`; a UA nested there, a person not in the group and a node that does not exist are never removed.
+### Requirement: Only the person, the owner, a manager or a workspace owner removes someone from a group
+`invite`, which every member of a group holds, lets people in; it SHALL NOT let a member put others out. Removing a person from a group (`DELETE /api/channels/:chId/members/:nodeId`, gRPC `RemoveChannelMember`) SHALL be allowed to: the person themselves (leaving); the group's owner (`channels.created_by`); a group manager (assigned to `Ch_{id}_Managers`); and a holder of `manage` on the group's Content OA (the workspace's owners, who are not in the group). Anyone else is denied. The owner cannot be removed except by a workspace owner (who holds `manage`). The caller SHALL first be inside the conversation (`read`) or a manager of it, so a stranger is denied before anything about the channel is answered. The target SHALL be a user (`U`) node directly under the group's Members UA, read from the writer, else `404`; a UA nested there, a person not in the group and a node that does not exist are never removed.
 
-A direct message and the workspace-wide channel SHALL NOT lose people this way (`400`, for the person themselves and for a manager alike): a DM is a fixed pair, and the workspace-wide channel's people are the workspace's, so they leave it by leaving the workspace. After the assignment is withdrawn, the `channel_members` row SHALL be deleted; the member's live subscriptions are revoked and the roster announced even if that delete fails, and the failure is returned so that repeating the removal (which is idempotent) clears the row.
+A direct message and the workspace-wide channel SHALL NOT lose people this way (`400`, for the person themselves and for a manager alike): a DM is a fixed pair, and the workspace-wide channel's people are the workspace's, so they leave it by leaving the workspace. When removing a member, the Managers edge is withdrawn first, then the Members edge; a failure in between leaves the person as a member (and still a manager), and repeating the removal finishes it. After the Members assignment is withdrawn, the `channel_members` row SHALL be deleted; the member's live subscriptions are revoked and the roster announced even if that delete fails, and the failure is returned so that repeating the removal (which is idempotent) clears the row.
 
-The members list (`GET /api/channels/:chId/members`) carries `can_remove_members`, computed for the reader by the same rule (the creator, or a holder of `manage`, in a group; false in a DM and the workspace-wide channel), so a screen offers the remove action by it and never by comparing ids. A 400 from removal reads in words on screen, not as invalid information.
+The members list (`GET /api/channels/:chId/members`) carries `can_remove_members`, computed for the reader by the same rule (the owner, a manager or a holder of `manage`, in a group; false in a DM and the workspace-wide channel), so a screen offers the remove action by it and never by comparing ids. A 400 from removal reads in words on screen, not as invalid information.
 
 #### Scenario: A member removes another member
 - **WHEN** a member of a group who did not make it, and holds no `manage`, removes another member or the creator
@@ -208,7 +208,7 @@ Migration `061_channel_membership_reconcile.sql` SHALL delete, for every non-DM 
 - **THEN** the edge and its cache row are removed, while a member's edge and a DM's participants stay
 
 ### Requirement: Groups are private
-The system SHALL let only the people in a group's own Members UA read, write or invite in it, read or write its files, or read its calendar. A grant on the workspace's Channels OA is inherited by every group's Content OA and by the drive and calendar beneath it, so the workspace-level UAs SHALL hold nothing there that reaches group content: `{workspace_id}_Members` is associated with Channels for `create_channel` only (`ngac.MemberChannelOps`), `{workspace_id}_Owners` for `manage` and `create_channel` (`ngac.OwnerChannelOps`), and the Channels area of the permissions screen offers `create_channel` alone (`ngac.AreaOps`), so no custom role can be given more there. `manage` is the Owners' alone: an owner can rename a group or remove someone from it without being in it, and cannot read it. Group access comes only from `Ch_{channel_id}_Members`, associated with `ngac.ChannelMemberOps` on the Content OA and `ngac.ChannelDriveOps` on the drive; a channel's calendar sits beneath its Content OA and so is the group's alone.
+The system SHALL let only the people in a group's own Members UA read, write or invite in it, read or write its files, or read its calendar. A grant on the workspace's Channels OA is inherited by every group's Content OA and by the drive and calendar beneath it, so the workspace-level UAs SHALL hold nothing there that reaches group content: `{workspace_id}_Members` is associated with Channels for `create_channel` only (`ngac.MemberChannelOps`), `{workspace_id}_Owners` for `manage` and `create_channel` (`ngac.OwnerChannelOps`), and the Channels area of the permissions screen offers `create_channel` alone (`ngac.AreaOps`), so no custom role can be given more there. `manage` is the Owners' alone: an owner can rename a group or remove someone from it without being in it, and cannot read it; workspace owners keep these moderation checks but gain no group-management power from `manage` (see `chat-group-management`). Group access comes only from `Ch_{channel_id}_Members`, associated with `ngac.ChannelMemberOps` on the Content OA and `ngac.ChannelDriveOps` on the drive; a channel's calendar sits beneath its Content OA and so is the group's alone. The group's Managers UA (`Ch_{channel_id}_Managers`) is associated with `ChannelManagerOps` (invite) on the Content OA, so managers keep `invite` even when the group restricts adding to managers only.
 
 A group made by a person SHALL be stored as channel type `private`, whatever type the request names (REST and gRPC alike). Creating one SHALL still require `create_channel` on the Channels OA.
 
@@ -443,3 +443,36 @@ The workspace's Members UA SHALL hold `share` with `read`, `write` and `upload` 
 - **WHEN** an administrator opens the Members role
 - **THEN** its Documents permissions read Xem, Sửa, Chia sẻ and cannot be edited
 
+### Requirement: Group creation can be locked to administrators by removing the right
+An organization workspace MAY be locked so that only administrators create groups ("Ai được tạo nhóm"). The lock SHALL be implemented by removing `create_channel`, never by a prohibition: it is removed from the `{workspace_id}_Members` → Channels association (which, holding that operation alone, is removed) and from every custom role's Channels grant, while `{workspace_id}_Owners` keeps its own association. Unlocking SHALL restore `create_channel` on the Members association only (`ngac.UnlockedMemberChannelOps`); custom roles are not restored and an administrator grants them again. The lock state SHALL be read from the graph (`ngac.GroupCreationRule` over what the Members association holds on Channels): there is no lock row and no actor. Every write goes through the policy write client (`RemoveAssociation` / `CreateAssociation`), which invalidates the decision caches (the EPP path); a lock removes the custom roles' grants first and Members' last, so a write that fails half-way still reads as unlocked and the same request finishes it. The operation sets come from `backend/ngac` (`LockedChannelOps`, `UnlockedMemberChannelOps`). The endpoints and who may call them are in `workspace-admin-authorization`; the person-facing rule is in `user-settings`. Test vectors: `backend/services/policy/internal/ngac/pdp_group_creation_lock_test.go`.
+
+#### Scenario: Plain member while locked
+- **WHEN** group creation is locked and a user under `{workspace_id}_Members` asks for `create_channel` on Channels
+- **THEN** the check resolves to DENY, and ALLOW again after unlocking
+
+#### Scenario: Member holding a custom Channels role while locked
+- **WHEN** group creation is locked and a user whose only route to Channels is a custom role that held `create_channel` asks for it
+- **THEN** the check resolves to DENY, and stays DENY after unlocking until an administrator grants the role again
+
+#### Scenario: Owner while locked
+- **WHEN** group creation is locked and a user under `{workspace_id}_Owners` asks for `create_channel` or `manage` on Channels
+- **THEN** both resolve to ALLOW
+
+#### Scenario: User of another workspace
+- **WHEN** a user whose attributes reach another workspace's policy class asks for `create_channel` on this workspace's Channels, locked or not
+- **THEN** the check resolves to DENY
+
+### Requirement: Channel management UAs are created during group creation
+When a private group is created, the system SHALL create a `Ch_{channel_id}_Managers` UA beside the group's Members UA
+(never inside it), assigned under the workspace's policy class, and associated with the group's Content OA for
+`ChannelManagerOps` (invite). The group's owner (`channels.created_by`) SHALL be assigned to the Managers UA. The owner
+is resolved from `channels.created_by`, not from the graph; manager authority is "the caller is assigned to
+`Ch_{id}_Managers`", read from the graph, and never by a `manage` decision (workspace owners hold `manage` on every
+group through the Channels OA and must not gain group powers from it). The creator rule ("Only the person, the creator
+or a holder of `manage` removes someone") is superseded: the owner and managers remove people, and the creator shortcut
+moves with ownership transfer. See `chat-group-management`.
+
+#### Scenario: New group gets its management nodes
+- **WHEN** a person creates a private group
+- **THEN** the group has a Members UA, a Managers UA (holding the owner) and a Content OA, and the owner is recorded in
+  `channels.created_by`

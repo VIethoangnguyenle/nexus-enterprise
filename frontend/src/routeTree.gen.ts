@@ -27,12 +27,14 @@ import { Route as AuthWorkspaceSelectRouteImport } from './routes/_auth/workspac
 import { Route as AuthRegisterRouteImport } from './routes/_auth/register'
 import { Route as AuthOnboardingRouteImport } from './routes/_auth/onboarding'
 import { Route as AuthLoginRouteImport } from './routes/_auth/login'
+import { Route as WorkspaceSettingsIndexRouteImport } from './routes/_workspace/settings/index'
 import { Route as WorkspaceDocumentsIndexRouteImport } from './routes/_workspace/documents.index'
 import { Route as WorkspaceChannelsIndexRouteImport } from './routes/_workspace/channels.index'
 import { Route as WorkspaceCalendarIndexRouteImport } from './routes/_workspace/calendar.index'
 import { Route as WorkspaceAdminIndexRouteImport } from './routes/_workspace/admin/index'
 import { Route as AuthGoogleDoneRouteImport } from './routes/auth.google.done'
 import { Route as AssetsRequestNewRouteImport } from './routes/assets/request/new'
+import { Route as WorkspaceSettingsSectionRouteImport } from './routes/_workspace/settings/$section'
 import { Route as WorkspaceDocumentsDocIdRouteImport } from './routes/_workspace/documents.$docId'
 import { Route as WorkspaceChannelsStarredRouteImport } from './routes/_workspace/channels.starred'
 import { Route as WorkspaceChannelsSearchRouteImport } from './routes/_workspace/channels.search'
@@ -133,6 +135,11 @@ const AuthLoginRoute = AuthLoginRouteImport.update({
   path: '/login',
   getParentRoute: () => AuthRoute,
 } as any)
+const WorkspaceSettingsIndexRoute = WorkspaceSettingsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WorkspaceSettingsRoute,
+} as any)
 const WorkspaceDocumentsIndexRoute = WorkspaceDocumentsIndexRouteImport.update({
   id: '/documents/',
   path: '/documents/',
@@ -163,6 +170,12 @@ const AssetsRequestNewRoute = AssetsRequestNewRouteImport.update({
   path: '/assets/request/new',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkspaceSettingsSectionRoute =
+  WorkspaceSettingsSectionRouteImport.update({
+    id: '/$section',
+    path: '/$section',
+    getParentRoute: () => WorkspaceSettingsRoute,
+  } as any)
 const WorkspaceDocumentsDocIdRoute = WorkspaceDocumentsDocIdRouteImport.update({
   id: '/documents/$docId',
   path: '/documents/$docId',
@@ -234,7 +247,7 @@ export interface FileRoutesByFullPath {
   '/assets': typeof WorkspaceAssetsRoute
   '/contacts': typeof WorkspaceContactsRoute
   '/drive': typeof WorkspaceDriveRoute
-  '/settings': typeof WorkspaceSettingsRoute
+  '/settings': typeof WorkspaceSettingsRouteWithChildren
   '/assets/$assetId': typeof AssetsAssetIdRoute
   '/assets/dashboard': typeof AssetsDashboardRoute
   '/assets/list': typeof AssetsListRoute
@@ -250,12 +263,14 @@ export interface FileRoutesByFullPath {
   '/channels/search': typeof WorkspaceChannelsSearchRoute
   '/channels/starred': typeof WorkspaceChannelsStarredRoute
   '/documents/$docId': typeof WorkspaceDocumentsDocIdRoute
+  '/settings/$section': typeof WorkspaceSettingsSectionRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
   '/auth/google/done': typeof AuthGoogleDoneRoute
   '/admin/': typeof WorkspaceAdminIndexRoute
   '/calendar/': typeof WorkspaceCalendarIndexRoute
   '/channels/': typeof WorkspaceChannelsIndexRoute
   '/documents/': typeof WorkspaceDocumentsIndexRoute
+  '/settings/': typeof WorkspaceSettingsIndexRoute
   '/calendar/event/$eventId': typeof WorkspaceCalendarEventEventIdRoute
 }
 export interface FileRoutesByTo {
@@ -268,7 +283,6 @@ export interface FileRoutesByTo {
   '/assets': typeof WorkspaceAssetsRoute
   '/contacts': typeof WorkspaceContactsRoute
   '/drive': typeof WorkspaceDriveRoute
-  '/settings': typeof WorkspaceSettingsRoute
   '/assets/$assetId': typeof AssetsAssetIdRoute
   '/assets/dashboard': typeof AssetsDashboardRoute
   '/assets/list': typeof AssetsListRoute
@@ -284,12 +298,14 @@ export interface FileRoutesByTo {
   '/channels/search': typeof WorkspaceChannelsSearchRoute
   '/channels/starred': typeof WorkspaceChannelsStarredRoute
   '/documents/$docId': typeof WorkspaceDocumentsDocIdRoute
+  '/settings/$section': typeof WorkspaceSettingsSectionRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
   '/auth/google/done': typeof AuthGoogleDoneRoute
   '/admin': typeof WorkspaceAdminIndexRoute
   '/calendar': typeof WorkspaceCalendarIndexRoute
   '/channels': typeof WorkspaceChannelsIndexRoute
   '/documents': typeof WorkspaceDocumentsIndexRoute
+  '/settings': typeof WorkspaceSettingsIndexRoute
   '/calendar/event/$eventId': typeof WorkspaceCalendarEventEventIdRoute
 }
 export interface FileRoutesById {
@@ -306,7 +322,7 @@ export interface FileRoutesById {
   '/_workspace/assets': typeof WorkspaceAssetsRoute
   '/_workspace/contacts': typeof WorkspaceContactsRoute
   '/_workspace/drive': typeof WorkspaceDriveRoute
-  '/_workspace/settings': typeof WorkspaceSettingsRoute
+  '/_workspace/settings': typeof WorkspaceSettingsRouteWithChildren
   '/assets/$assetId': typeof AssetsAssetIdRoute
   '/assets/dashboard': typeof AssetsDashboardRoute
   '/assets/list': typeof AssetsListRoute
@@ -322,12 +338,14 @@ export interface FileRoutesById {
   '/_workspace/channels/search': typeof WorkspaceChannelsSearchRoute
   '/_workspace/channels/starred': typeof WorkspaceChannelsStarredRoute
   '/_workspace/documents/$docId': typeof WorkspaceDocumentsDocIdRoute
+  '/_workspace/settings/$section': typeof WorkspaceSettingsSectionRoute
   '/assets/request/new': typeof AssetsRequestNewRoute
   '/auth/google/done': typeof AuthGoogleDoneRoute
   '/_workspace/admin/': typeof WorkspaceAdminIndexRoute
   '/_workspace/calendar/': typeof WorkspaceCalendarIndexRoute
   '/_workspace/channels/': typeof WorkspaceChannelsIndexRoute
   '/_workspace/documents/': typeof WorkspaceDocumentsIndexRoute
+  '/_workspace/settings/': typeof WorkspaceSettingsIndexRoute
   '/_workspace/calendar/event/$eventId': typeof WorkspaceCalendarEventEventIdRoute
 }
 export interface FileRouteTypes {
@@ -359,12 +377,14 @@ export interface FileRouteTypes {
     | '/channels/search'
     | '/channels/starred'
     | '/documents/$docId'
+    | '/settings/$section'
     | '/assets/request/new'
     | '/auth/google/done'
     | '/admin/'
     | '/calendar/'
     | '/channels/'
     | '/documents/'
+    | '/settings/'
     | '/calendar/event/$eventId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -377,7 +397,6 @@ export interface FileRouteTypes {
     | '/assets'
     | '/contacts'
     | '/drive'
-    | '/settings'
     | '/assets/$assetId'
     | '/assets/dashboard'
     | '/assets/list'
@@ -393,12 +412,14 @@ export interface FileRouteTypes {
     | '/channels/search'
     | '/channels/starred'
     | '/documents/$docId'
+    | '/settings/$section'
     | '/assets/request/new'
     | '/auth/google/done'
     | '/admin'
     | '/calendar'
     | '/channels'
     | '/documents'
+    | '/settings'
     | '/calendar/event/$eventId'
   id:
     | '__root__'
@@ -430,12 +451,14 @@ export interface FileRouteTypes {
     | '/_workspace/channels/search'
     | '/_workspace/channels/starred'
     | '/_workspace/documents/$docId'
+    | '/_workspace/settings/$section'
     | '/assets/request/new'
     | '/auth/google/done'
     | '/_workspace/admin/'
     | '/_workspace/calendar/'
     | '/_workspace/channels/'
     | '/_workspace/documents/'
+    | '/_workspace/settings/'
     | '/_workspace/calendar/event/$eventId'
   fileRoutesById: FileRoutesById
 }
@@ -580,6 +603,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthLoginRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_workspace/settings/': {
+      id: '/_workspace/settings/'
+      path: '/'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof WorkspaceSettingsIndexRouteImport
+      parentRoute: typeof WorkspaceSettingsRoute
+    }
     '/_workspace/documents/': {
       id: '/_workspace/documents/'
       path: '/documents'
@@ -621,6 +651,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/assets/request/new'
       preLoaderRoute: typeof AssetsRequestNewRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/_workspace/settings/$section': {
+      id: '/_workspace/settings/$section'
+      path: '/$section'
+      fullPath: '/settings/$section'
+      preLoaderRoute: typeof WorkspaceSettingsSectionRouteImport
+      parentRoute: typeof WorkspaceSettingsRoute
     }
     '/_workspace/documents/$docId': {
       id: '/_workspace/documents/$docId'
@@ -736,13 +773,26 @@ const WorkspaceAdminRouteWithChildren = WorkspaceAdminRoute._addFileChildren(
   WorkspaceAdminRouteChildren,
 )
 
+interface WorkspaceSettingsRouteChildren {
+  WorkspaceSettingsSectionRoute: typeof WorkspaceSettingsSectionRoute
+  WorkspaceSettingsIndexRoute: typeof WorkspaceSettingsIndexRoute
+}
+
+const WorkspaceSettingsRouteChildren: WorkspaceSettingsRouteChildren = {
+  WorkspaceSettingsSectionRoute: WorkspaceSettingsSectionRoute,
+  WorkspaceSettingsIndexRoute: WorkspaceSettingsIndexRoute,
+}
+
+const WorkspaceSettingsRouteWithChildren =
+  WorkspaceSettingsRoute._addFileChildren(WorkspaceSettingsRouteChildren)
+
 interface WorkspaceRouteChildren {
   WorkspaceAdminRoute: typeof WorkspaceAdminRouteWithChildren
   WorkspaceApprovalRoute: typeof WorkspaceApprovalRoute
   WorkspaceAssetsRoute: typeof WorkspaceAssetsRoute
   WorkspaceContactsRoute: typeof WorkspaceContactsRoute
   WorkspaceDriveRoute: typeof WorkspaceDriveRoute
-  WorkspaceSettingsRoute: typeof WorkspaceSettingsRoute
+  WorkspaceSettingsRoute: typeof WorkspaceSettingsRouteWithChildren
   WorkspaceCalendarNewRoute: typeof WorkspaceCalendarNewRoute
   WorkspaceCallsCallIdRoute: typeof WorkspaceCallsCallIdRoute
   WorkspaceChannelsChannelIdRoute: typeof WorkspaceChannelsChannelIdRoute
@@ -762,7 +812,7 @@ const WorkspaceRouteChildren: WorkspaceRouteChildren = {
   WorkspaceAssetsRoute: WorkspaceAssetsRoute,
   WorkspaceContactsRoute: WorkspaceContactsRoute,
   WorkspaceDriveRoute: WorkspaceDriveRoute,
-  WorkspaceSettingsRoute: WorkspaceSettingsRoute,
+  WorkspaceSettingsRoute: WorkspaceSettingsRouteWithChildren,
   WorkspaceCalendarNewRoute: WorkspaceCalendarNewRoute,
   WorkspaceCallsCallIdRoute: WorkspaceCallsCallIdRoute,
   WorkspaceChannelsChannelIdRoute: WorkspaceChannelsChannelIdRoute,

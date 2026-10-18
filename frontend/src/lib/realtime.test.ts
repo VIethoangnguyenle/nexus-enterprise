@@ -107,6 +107,17 @@ describe('planFor: document', () => {
 })
 
 describe('planFor: channel', () => {
+  it('a role or rule change refreshes the group record and the permission answers', () => {
+    const p = planFor(ev({ domain: 'channel', kind: 'management_changed', ids: ['c-1'], channelId: 'c-1' }))
+    expect(has(p, keys.messaging.channel('c-1'))).toBe(true)
+    expect(has(p, keys.permissions.all())).toBe(true)
+  })
+
+  it('an ordinary channel change leaves the permission answers alone', () => {
+    const p = planFor(ev({ domain: 'channel', kind: 'member_added', ids: ['c-1'], channelId: 'c-1' }))
+    expect(has(p, keys.permissions.all())).toBe(false)
+  })
+
   it('refreshes the channel lists, the channel and its members', () => {
     const p = planFor(ev({ domain: 'channel', kind: 'member_added', ids: ['c-1'], channelId: 'c-1' }))
     expect(has(p, keys.messaging.channels('ws-1'))).toBe(true)

@@ -102,3 +102,6 @@ liệu still appear next to the bar; "Thử lại" calls the socket store's `con
 socket while one is connecting (the store needs a `retryNow`); the manifest carries only the light theme colour (the
 `theme-color` metas follow the theme in the browser); uploads that are not TanStack Query requests are not seen as in
 flight; the standalone `frontend/nginx.conf` does not yet mirror the no-cache rule for `sw.js`.
+
+## Planned change (mobile-ux-overhaul, 2026-10-19)
+Phase 09: the installed app makes its own edge-swipe back, since iOS gives a standalone web app none. See `mobile-gestures`. Plan: `plans/261018-1742-mobile-ux-overhaul`.

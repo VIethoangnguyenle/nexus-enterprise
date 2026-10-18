@@ -1,4 +1,5 @@
 import { useNavigate, useSearch } from '@tanstack/react-router'
+import { useBottomBarLayout } from '../../hooks/usePhone'
 import { appVersionLabel } from '../../lib/app-version'
 import { SETTINGS_TABS, tabOf, tabSearch, type SettingsSearch, type SettingsTab } from '../../lib/settings-search'
 import { Heading, ScrollFade, TabBar, type TabItem } from '../primitives'
@@ -6,6 +7,10 @@ import { AppearanceTab } from './AppearanceTab'
 import { ProfileTab } from './ProfileTab'
 import { WorkspaceTab } from './WorkspaceTab'
 import { NotificationSettings } from './NotificationSettings'
+import { AppearanceScreen } from './AppearanceScreen'
+import { MeScreen } from './MeScreen'
+import { NotificationsScreen } from './NotificationsScreen'
+import { WorkspaceSettingsScreen } from './WorkspaceSettingsScreen'
 
 const TABS: TabItem[] = [
   { id: 'ho-so', label: 'Hồ sơ' },
@@ -15,12 +20,27 @@ const TABS: TabItem[] = [
 ]
 
 /**
- * Cài đặt (design/mockups/contacts-documents-settings.html §4–6): three tabs,
- * the open one kept in the URL (`?tab=giao-dien`) so reload, Back and a link
- * land on it. There is no list panel here.
+ * Cài đặt. On a wide screen (design/mockups/contacts-documents-settings.html
+ * §4–6): tabs, the open one kept in the URL (`?tab=giao-dien`) so reload, Back
+ * and a link land on it. Below 1024 there are no tabs: `/settings` is Tôi
+ * (DESIGN.md §6 "Cài đặt"), and an old link to a tab opens the page that holds
+ * the same options now.
  */
 export function SettingsScreen() {
+  const phone = useBottomBarLayout()
   const search = useSearch({ strict: false }) as SettingsSearch
+  if (phone) {
+    switch (tabOf(search)) {
+      case 'thong-bao': return <NotificationsScreen />
+      case 'giao-dien': return <AppearanceScreen />
+      case 'workspace': return <WorkspaceSettingsScreen />
+      default: return <MeScreen />
+    }
+  }
+  return <SettingsTabs search={search} />
+}
+
+function SettingsTabs({ search }: { search: SettingsSearch }) {
   const navigate = useNavigate({ from: '/settings' })
   const tab = tabOf(search)
 

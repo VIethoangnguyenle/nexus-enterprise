@@ -111,6 +111,10 @@ type RequestStore interface {
 	ListHistory(ctx context.Context, userNodeID, cursor string, limit int) ([]*RequestWithAssignment, string, error)
 	ListMyRequests(ctx context.Context, userNodeID, cursor string, limit int) ([]*Request, string, error)
 	ListByScopes(ctx context.Context, scopeOAIDs []string, cursor string, limit int) ([]*Request, string, error)
+	// SearchRequests finds requests matching a text query, filtered by access
+	// control (the caller's own requests, assignments, and department scopes)
+	// and optional status/template/date filters. Returns matching items and total count.
+	SearchRequests(ctx context.Context, p SearchParams) ([]*Request, int, error)
 
 	// Batch
 }

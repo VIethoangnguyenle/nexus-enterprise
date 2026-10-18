@@ -145,3 +145,81 @@ The drive root of a workspace SHALL hang on the Documents OA recorded on the wor
 - **WHEN** workspace B asks for a drive for a channel that belongs to workspace A, or for a channel that does not exist
 - **THEN** the request is refused with PermissionDenied and no node, association or row is written
 
+### Requirement: Tài liệu on a phone
+Under 768px the folder tree gives way to entry chips (DESIGN.md "Tài liệu", mockup `design/mockups/mobile-shell.html`
+§10). Tablets (768–1023) keep the tree in its drawer; desktops are unchanged. The chips are **Gần đây · Thư mục · Gắn
+sao · Chia sẻ với tôi · Bản nháp**. Which chip is open is client state, except Chia sẻ với tôi, which is the URL's
+`view=shared`, and Bản nháp, which opens Văn bản's drafts (`view=texts&group=drafts`).
+
+#### Scenario: Gần đây
+- **WHEN** a person opens Tài liệu on a phone
+- **THEN** Gần đây is open: Truy cập nhanh (up to six cards, each with the reason the server gave) above the files of
+  the workspace they can read, last edited first, grouped Hôm nay · Tuần này · Tháng này · Cũ hơn
+
+#### Scenario: Thư mục
+- **WHEN** they tap Thư mục
+- **THEN** the drive's top level is listed, folders first; its name is "Tài liệu của tôi" in a personal workspace and
+  the organisation's name otherwise
+
+#### Scenario: Inside a folder
+- **WHEN** a folder is open
+- **THEN** the bar shows ← (up to the parent; from a top-level folder, to Thư mục, never to Gần đây), the folder's
+  name, a magnifier that opens the search scoped to the folder, and ⋯ (the folder's sheet); below it the path, whose
+  every segment opens its folder, then the sort and the grid/list switch on one row
+
+#### Scenario: List by default
+- **WHEN** a phone lists files
+- **THEN** rows are 60 high: a 40px kind tile, the name (with a star when the person starred it), "Loại · ai sửa ·
+  khi nào", and a ⋯ that opens the item sheet; a swipe to the left reveals Chia sẻ (when allowed) · Gắn sao · Thêm, and
+  no swipe deletes
+
+#### Scenario: Item sheet
+- **WHEN** the ⋯ of a row is tapped
+- **THEN** a sheet shows the item, four shortcuts (Chia sẻ · Sao chép liên kết · Gắn sao · Tải xuống) and then
+  Chuyển tới thư mục… · Tạo bản sao · Thông tin và hoạt động · Đổi tên · Chuyển vào thùng rác; each appears only when
+  the policy allows it on the item's folder (Chia sẻ needs share; moving, copying, renaming and trashing need write;
+  Tải xuống and Tạo bản sao are for files). Sao chép liên kết copies a link to the folder (for a file, the folder it
+  is in); opening the link is checked again
+
+#### Scenario: Multi-select
+- **WHEN** a row is long-pressed
+- **THEN** the selection mode starts with it chosen: check boxes replace the kind tiles, a tap (or a finger drawn down
+  the check column) chooses more, the bar reads "Đã chọn N" with ✕ and Chọn tất cả, and a dark bar replaces the bottom
+  bar with Chia sẻ · Chuyển · Tải xuống · Gắn sao · Xoá; Esc or ✕ leaves it
+
+#### Scenario: Adding on a phone
+- **WHEN** the + is tapped where something can be added (not in the shared view)
+- **THEN** "Thêm vào <thư mục>" offers Tải tệp lên · Chụp ảnh · Thư mục mới · Văn bản mới; a new text is created in
+  the open folder and opened
+
+### Requirement: Background uploads survive navigation and reload
+Below 1024px uploads run in a queue (`frontend/src/stores/upload-queue.store.ts`), one file at a time, kept in
+IndexedDB with the file itself. A desktop keeps the toolbar's upload.
+
+#### Scenario: Progress
+- **WHEN** files are uploading
+- **THEN** a card above the bottom bar shows "Đang tải lên N tệp", the share sent, a 4px bar and the file on its way
+  with the time left; while the list scrolls down it folds to a ring with the percentage
+
+#### Scenario: Done
+- **WHEN** the queue runs dry
+- **THEN** one toast says "Đã tải lên N tệp vào <thư mục>" with Xem, which opens that folder
+
+#### Scenario: A file fails
+- **WHEN** creating, sending or confirming a file fails
+- **THEN** it stays on the card with its reason (quota, no right, folder gone, or a generic failure) and Thử lại;
+  the rest of the queue goes on
+
+#### Scenario: Reload or app update
+- **WHEN** the page is reloaded with files still queued or on their way
+- **THEN** they are sent again from the start; one whose file the device no longer has is reported as interrupted,
+  to be chosen again; the abandoned server row is removed by the stale-upload cleanup (see `drive-permission-engine`)
+
+#### Scenario: Sign-out
+- **WHEN** the person signs out
+- **THEN** the upload in flight stops and the queue, files included, is wiped from the device
+
+### Requirement: Recent files
+`GET /api/drive/recent?workspace_id=` lists up to 50 active files of the workspace, last edited first. The caller
+must be an active member of the workspace (403 otherwise), and read is re-checked on every file through one batch
+check; a file the caller cannot read is left out, and a failed check fails the request.
