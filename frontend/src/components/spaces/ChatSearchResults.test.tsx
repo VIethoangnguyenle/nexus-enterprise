@@ -424,9 +424,16 @@ describe('on a phone', () => {
 
 describe('motion', () => {
   it('lifts the first cards 8px as they fade in, one after another', async () => {
-    await render()
-    const cards = (await screen.findAllByRole('link', { name: /Lê Quang Vinh/ })).map((l) => l.parentElement!)
-    expect(cards[0]!.style.transform).toContain('translateY(8px)')
+    // Hold the clock still so the animation cannot leave its first frame while the test looks.
+    const frozen = performance.now()
+    const clock = vi.spyOn(performance, 'now').mockReturnValue(frozen)
+    try {
+      await render()
+      const cards = (await screen.findAllByRole('link', { name: /Lê Quang Vinh/ })).map((l) => l.parentElement!)
+      expect(cards[0]!.style.transform).toContain('translateY(8px)')
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it('under reduced motion only fades', async () => {
